@@ -1,0 +1,478 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The letter, as it lands</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;1,400&family=Inter:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400&family=Hanken+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ── SPEC §A1. Tokens — the page ground only ────────────────────────── */
+:root {
+  color-scheme: light dark;
+
+  /* — paper, three stocks — */
+  --paper:            #FAF7F2;  /* the ground */
+  --paper-doc:        #FCFAF6;  /* a document laid on the ground */
+  --rail:             #E8E3DB;  /* the rail / deeper sheet */
+
+  /* — ink — */
+  --ink:              #2C2926;  /* 13.53:1 on paper */
+  --ink-muted:        #4E4339;  /* 9.22:1 on paper-doc */
+  --ink-subtle:       #5A4E43;  /* 7.73:1 */
+  --ink-faint:        #65594E;  /* 6.51:1 — also the disabled ink */
+  --ink-paper:        #FAF7F2;  /* ink ON charcoal */
+
+  /* — hairlines — */
+  --hairline:         #E8E3DB;
+  --hairline-strong:  rgba(44, 41, 38, .14);
+
+  /* — the rest rule pigment (4.20:1 on paper) — */
+  --oak:              #8B7355;
+
+  /* — state pigments: material value / paper ink — */
+  --clay:             #C4A57B;   --clay-ink:      #7C5E30;
+  --golden:           #E8C547;   --golden-ink:    #79651E;
+  --terracotta:       #D4A090;   --terracotta-ink:#9C5340;
+  --sage:             #A8B5A0;   --sage-ink:      #5F6B57;
+
+  /* — the seven stage plates (white label 5.22–8.20:1) — */
+  --tab-brief:     #497093;
+  --tab-discovery: #307063;
+  --tab-direction: #366A3A;
+  --tab-proposal:  #575D1D;
+  --tab-project:   #6D4E24;
+  --tab-install:   #823832;
+  --tab-care:      #823832;   /* Care has no pigment of its own */
+
+  /* — the one depth token. Permitted on a temporary sheet ONLY. — */
+  --elevation-sheet: 0 1px 2px rgba(44, 41, 38, .08);
+
+  /* — rhythm — */
+  --module: 24px;
+  --radius-hair: 2px;
+  --radius-box:  3px;
+
+  /* — motion — */
+  --press-in:  70ms;
+  --press-out: 240ms;
+  --ease: cubic-bezier(.22, 1, .36, 1);
+
+  --font-display: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  --font-body:    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-meta:    'DM Mono', 'SF Mono', 'Fira Code', ui-monospace, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper:           #2A2622;
+    --paper-doc:       #26221E;
+    --rail:            #3A3530;
+    --ink:             #F2EDE6;
+    --ink-muted:       #D6CEC4;
+    --ink-subtle:      #C7BEB3;
+    --ink-faint:       #B8AEA2;
+    --ink-paper:       #2A2622;
+    --hairline:        rgba(242, 237, 230, .14);
+    --hairline-strong: rgba(242, 237, 230, .22);
+    --oak:             #B39572;
+    --clay-ink:        #D8B98A;
+    --golden-ink:      #E0C963;
+    --terracotta-ink:  #E2A895;
+    --sage-ink:        #AFC0A6;
+  }
+}
+
+:root[data-theme="dark"] {
+  --paper:           #2A2622;
+  --paper-doc:       #26221E;
+  --rail:            #3A3530;
+  --ink:             #F2EDE6;
+  --ink-muted:       #D6CEC4;
+  --ink-subtle:      #C7BEB3;
+  --ink-faint:       #B8AEA2;
+  --ink-paper:       #2A2622;
+  --hairline:        rgba(242, 237, 230, .14);
+  --hairline-strong: rgba(242, 237, 230, .22);
+  --oak:             #B39572;
+  --clay-ink:        #D8B98A;
+  --golden-ink:      #E0C963;
+  --terracotta-ink:  #E2A895;
+  --sage-ink:        #AFC0A6;
+}
+
+body { margin: 0; background: var(--paper); color: var(--ink); }
+
+/* ══ .spec-letter — everything below is scoped ═══════════════════════ */
+
+/* The email system's own tokens (branded-email.ts). The single permitted
+   exception to SPEC §A1: an email client does not theme a letter, so the
+   card holds this palette in light and dark alike. Declared once. */
+.spec-letter {
+  --e-paper:        #F5F0E6;
+  --e-card:         #FCF9F2;
+  --e-card-alt:     #FFFFFF;
+  --e-line:         #E6DDCC;
+  --e-ink:          #1F1B16;
+  --e-ink2:         #4B463E;
+  --e-ink3:         #8C8578;
+  --e-verd:         #4E7A66;
+  --e-brass:        #B08A46;
+  --e-brass-border: #8A6A30;
+  --e-rust:         #A24E2E;
+  --e-button-ink:   #F5F0E6;
+
+  --e-serif: 'Fraunces', Georgia, 'Times New Roman', serif;
+  --e-sans:  'Hanken Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  --e-mono:  'IBM Plex Mono', ui-monospace, SFMono-Regular, 'Courier New', monospace;
+
+  box-sizing: border-box;
+  width: 100%;
+  padding: 48px 24px;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  overflow-wrap: break-word;
+}
+.spec-letter *, .spec-letter *::before, .spec-letter *::after { box-sizing: border-box; }
+.spec-letter h2, .spec-letter h3, .spec-letter p, .spec-letter dl,
+.spec-letter dt, .spec-letter dd, .spec-letter pre { margin: 0; padding: 0; }
+.spec-letter img, .spec-letter svg { display: block; max-width: 100%; }
+.spec-letter hr { border: 0; border-top: 1px solid var(--e-line); margin: 0; }
+
+/* SPEC §A3 — the type scale, for the page furniture around the card */
+.spec-letter .t-d3   { font-family: var(--font-display); font-size: 20px; line-height: 1.30; font-weight: 500; letter-spacing: 0; }
+.spec-letter .t-meta { font-family: var(--font-meta); font-size: 12px; line-height: 1.50; font-weight: 400; letter-spacing: .08em; }
+.spec-letter .t-head { font-family: var(--font-meta); font-size: 11px; line-height: 1.50; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; }
+
+.spec-letter .sheet { max-width: 720px; margin: 0 auto; }
+.spec-letter .sheet + .sheet { margin-top: 72px; }
+.spec-letter .spec-title { color: var(--ink-muted); }
+.spec-letter .plate-caption { margin-top: 12px; color: var(--ink-subtle); }
+.spec-letter .plate-head { color: var(--ink-muted); margin-bottom: 12px; }
+
+/* ── the envelope strip — page furniture, not the letter ───────────── */
+.spec-letter .envelope {
+  margin: 24px 0 0;
+  padding: 12px 0 0;
+  border-top: 1px solid var(--hairline-strong);
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 16px;
+  font-family: var(--font-meta);
+  font-size: 11px;
+  line-height: 1.6;
+  letter-spacing: .04em;
+}
+.spec-letter .envelope dt { color: var(--ink-faint); text-transform: uppercase; }
+.spec-letter .envelope dd { color: var(--ink-subtle); min-width: 0; }
+
+/* ── the card ───────────────────────────────────────────────────────── */
+.spec-letter .mail { margin-top: 24px; background: var(--e-paper); padding: 24px 12px; border-radius: var(--radius-box); }
+.spec-letter .card {
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto;
+  background: var(--e-card);
+  border: 1px solid var(--e-line);
+  border-radius: 12px;
+  overflow: hidden;
+  color: var(--e-ink2);
+}
+.spec-letter .card--solo { max-width: 480px; }
+.spec-letter .bar { display: flex; height: 4px; }
+.spec-letter .bar i { display: block; height: 4px; flex: 1 1 33.33%; }
+.spec-letter .bar .bar-verd  { background: var(--e-verd); }
+.spec-letter .bar .bar-brass { background: var(--e-brass); }
+.spec-letter .bar .bar-rust  { background: var(--e-rust); }
+.spec-letter .card .px { padding: 0 40px; }
+
+/* letterhead — two-sided (PP-1 / SPEC §A8) */
+.spec-letter .lh {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px 24px;
+  padding-top: 26px;
+}
+.spec-letter .lh-left { display: flex; align-items: flex-start; gap: 10px; min-width: 0; }
+.spec-letter .monogram { width: 24px; height: 24px; flex: none; color: var(--e-ink); }
+.spec-letter .monogram text { font-family: var(--e-mono); font-size: 9px; font-weight: 500; letter-spacing: .06em; fill: currentColor; }
+.spec-letter .lh-studio {
+  font-family: var(--e-mono);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.5;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--e-ink);
+}
+.spec-letter .lh-locality {
+  margin-top: 4px;
+  font-family: var(--e-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  letter-spacing: .06em;
+  color: var(--e-ink3);
+}
+.spec-letter .lh-for {
+  font-family: var(--e-mono);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.5;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--e-ink3);
+  text-align: right;
+}
+.spec-letter .lh-rule { margin-top: 22px; }
+
+/* body */
+.spec-letter .standing {
+  margin-top: 22px;
+  font-family: var(--e-sans);
+  font-size: 16px;
+  line-height: 1.62;
+  color: var(--e-ink2);
+}
+.spec-letter .callout {
+  margin-top: 22px;
+  border-left: 3px solid var(--e-brass);
+  background: var(--e-card-alt);
+  padding: 14px 18px;
+  font-family: var(--e-serif);
+  font-size: 15px;
+  font-style: italic;
+  line-height: 1.5;
+  color: var(--e-ink2);
+}
+.spec-letter .cta { margin-top: 26px; }
+.spec-letter .cta a {
+  display: inline-block;
+  padding: 15px 32px;
+  border: 1px solid var(--e-brass-border);
+  border-radius: 7px;
+  background: var(--e-brass);
+  color: var(--e-button-ink);
+  font-family: var(--e-sans);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: .01em;
+  text-decoration: none;
+}
+.spec-letter .cta a:focus-visible { outline: 2px solid var(--e-brass-border); outline-offset: 3px; }
+.spec-letter .expiry {
+  margin-top: 22px;
+  font-family: var(--e-sans);
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--e-ink2);
+}
+.spec-letter .signoff {
+  margin-top: 22px;
+  font-family: var(--e-sans);
+  font-size: 16px;
+  line-height: 1.62;
+  color: var(--e-ink2);
+}
+.spec-letter .foot-rule { margin-top: 30px; }
+.spec-letter .colophon {
+  padding: 20px 40px 30px;
+  font-family: var(--e-sans);
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--e-ink3);
+}
+.spec-letter .colophon p + p { margin-top: 2px; }
+.spec-letter .colophon .paste { word-break: break-all; }
+.spec-letter .colophon a { color: var(--e-verd); text-decoration: none; }
+
+/* ── images off — the plain-text part ───────────────────────────────── */
+.spec-letter .plaintext-wrap {
+  margin-top: 12px;
+  overflow-x: auto;
+  background: var(--paper-doc);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-box);
+  padding: 20px 24px;
+}
+.spec-letter pre {
+  font-family: var(--font-meta);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ink-muted);
+  white-space: pre;
+}
+
+/* ── ≤600px — the letterhead's two sides stack ──────────────────────── */
+@media (max-width: 600px) {
+  .spec-letter { padding: 32px 16px; }
+  .spec-letter .card .px { padding: 0 24px; }
+  .spec-letter .colophon { padding: 20px 24px 26px; }
+  .spec-letter .lh { flex-direction: column; align-items: flex-start; gap: 4px; }
+  .spec-letter .lh-for { text-align: left; }
+  .spec-letter .envelope { grid-template-columns: 1fr; gap: 0 0; }
+  .spec-letter .envelope dd { margin-bottom: 8px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spec-letter *, .spec-letter *::before, .spec-letter *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
+@media (forced-colors: active) {
+  .spec-letter .cta a { border: 2px solid ButtonText; }
+  .spec-letter hr, .spec-letter .plaintext-wrap { border-color: CanvasText; }
+  .spec-letter .cta a:focus-visible { outline: 2px solid Highlight; }
+}
+</style>
+</head>
+<body>
+
+<div class="spec-letter">
+
+  <div class="sheet">
+    <h2 class="spec-title t-head">The letter, as it lands</h2>
+
+    <dl class="envelope">
+      <dt>From</dt><dd>Middle West Studio via Patina &lt;hello@patina.cloud&gt;</dd>
+      <dt>Reply-to</dt><dd>leah@middleweststudio.com</dd>
+      <dt>Subject</dt><dd>Leah Hartwell added you to the Van Hise kitchen and back hall</dd>
+      <dt>Preheader</dt><dd>Where Middle West Studio keeps the record of your job.</dd>
+    </dl>
+
+    <div class="mail">
+      <div class="card">
+        <div class="bar" aria-hidden="true"><i class="bar-verd"></i><i class="bar-brass"></i><i class="bar-rust"></i></div>
+
+        <div class="px">
+          <div class="lh">
+            <div class="lh-left">
+              <svg class="monogram" viewBox="0 0 24 24" role="img" aria-label="Middle West Studio">
+                <rect x=".5" y=".5" width="23" height="23" rx="2" fill="none" stroke="currentColor"></rect>
+                <text x="12" y="15.5" text-anchor="middle">MW</text>
+              </svg>
+              <div>
+                <p class="lh-studio">Middle West Studio</p>
+                <p class="lh-locality">Madison · 8 September 2026</p>
+              </div>
+            </div>
+            <p class="lh-for">Prepared for Dave Okonkwo</p>
+          </div>
+          <hr class="lh-rule">
+
+          <p class="standing">Leah Hartwell of Middle West Studio added you to the Van Hise kitchen and back hall on 8 September. The page below holds the studio&rsquo;s record of the job &mdash; the plans, the papers, and the numbers.</p>
+
+          <blockquote class="callout">Dave &mdash; this is the same file I work from, not a summary of it. The kitchen cabinet drawings are in there now; the back hall isn&rsquo;t drawn yet. Anything you want changed, say so on the page and I&rsquo;ll see it.</blockquote>
+
+          <p class="cta"><a href="https://client.patina.cloud/auth/invite/{token}">Open the project</a></p>
+
+          <p class="expiry">The link works until 15 September; Leah can send another.</p>
+
+          <p class="signoff">&mdash; Leah Hartwell · Middle West Studio · Madison</p>
+
+          <hr class="foot-rule">
+        </div>
+
+        <div class="colophon">
+          <p>Prepared by Middle West Studio · Sent through Patina</p>
+          <p>Sent to dave@okonkwo.net at the request of Middle West Studio.</p>
+          <p>If this isn&rsquo;t for you, nothing happens &mdash; ignore it and the link lapses on its own.</p>
+          <p class="paste">Button not working? Paste this link into your browser: <a href="https://client.patina.cloud/auth/invite/{token}">https://client.patina.cloud/auth/invite/{token}</a></p>
+        </div>
+      </div>
+    </div>
+
+    <p class="plate-caption t-meta">The letter · Middle West Studio · 8 September 2026</p>
+  </div>
+
+  <div class="sheet">
+    <h3 class="plate-head t-head">Images off · the plain-text part</h3>
+    <div class="plaintext-wrap">
+<pre>MIDDLE WEST STUDIO                              Prepared for Dave Okonkwo
+Madison · 8 September 2026
+─────────────────────────────────────────────────────────────────────────
+
+Leah Hartwell of Middle West Studio added you to the Van Hise kitchen and
+back hall on 8 September. The page below holds the studio's record of the
+job — the plans, the papers, and the numbers.
+
+  "Dave — this is the same file I work from, not a summary of it. The
+  kitchen cabinet drawings are in there now; the back hall isn't drawn
+  yet. Anything you want changed, say so on the page and I'll see it."
+
+Open the project: https://client.patina.cloud/auth/invite/{token}
+
+The link works until 15 September; Leah can send another.
+
+— Leah Hartwell · Middle West Studio · Madison
+
+─────────────────────────────────────────────────────────────────────────
+Prepared by Middle West Studio · Sent through Patina
+Sent to dave@okonkwo.net at the request of Middle West Studio.
+If this isn't for you, nothing happens — ignore it and the link lapses on
+its own.</pre>
+    </div>
+    <p class="plate-caption t-meta">The same letter with images off · text/plain part · 8 September 2026</p>
+  </div>
+
+  <div class="sheet">
+    <h3 class="plate-head t-head">The solo fixture · no studio, no city, no project</h3>
+
+    <dl class="envelope">
+      <dt>From</dt><dd>Nora Feld via Patina &lt;hello@patina.cloud&gt;</dd>
+      <dt>Reply-to</dt><dd>nora@norafeld.com</dd>
+      <dt>Subject</dt><dd>Nora Feld set up a page for your work together</dd>
+      <dt>Preheader</dt><dd>Where Nora keeps the record of your work.</dd>
+    </dl>
+
+    <div class="mail">
+      <div class="card card--solo">
+        <div class="bar" aria-hidden="true"><i class="bar-verd"></i><i class="bar-brass"></i><i class="bar-rust"></i></div>
+
+        <div class="px">
+          <div class="lh">
+            <div class="lh-left">
+              <div>
+                <p class="lh-studio">Nora Feld</p>
+                <p class="lh-locality">8 September 2026</p>
+              </div>
+            </div>
+            <p class="lh-for">Prepared for Priya Raman</p>
+          </div>
+          <hr class="lh-rule">
+
+          <p class="standing">Nora Feld set up a page for your work together on 8 September. It&rsquo;s where she keeps the record &mdash; the plans, the papers, and the numbers, as they come.</p>
+
+          <blockquote class="callout">Priya &mdash; nothing&rsquo;s in here yet. I set it up so we have one place for the drawings and the numbers when they start. Send me those photos of the sunroom whenever you get a minute and I&rsquo;ll put them in.</blockquote>
+
+          <p class="cta"><a href="https://client.patina.cloud/auth/invite/{token}">Open the page</a></p>
+
+          <p class="expiry">The link works until 15 September; Nora can send another.</p>
+
+          <p class="signoff">&mdash; Nora Feld</p>
+
+          <hr class="foot-rule">
+        </div>
+
+        <div class="colophon">
+          <p>Prepared by Nora Feld · Sent through Patina</p>
+          <p>Sent to priya@ramanhouse.com at the request of Nora Feld.</p>
+          <p>If this isn&rsquo;t for you, nothing happens &mdash; ignore it and the link lapses on its own.</p>
+          <p class="paste">Button not working? Paste this link into your browser: <a href="https://client.patina.cloud/auth/invite/{token}">https://client.patina.cloud/auth/invite/{token}</a></p>
+        </div>
+      </div>
+    </div>
+
+    <p class="plate-caption t-meta">The same skeleton · no logo, no city, no project · slots with no fact print nothing</p>
+  </div>
+
+</div>
+
+</body>
+</html>

@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Page two of the letter</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;1,400&family=Inter:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ── SPEC §A1. Tokens ───────────────────────────────────────────────── */
+:root {
+  color-scheme: light dark;
+
+  /* — paper, three stocks — */
+  --paper:            #FAF7F2;  /* the ground */
+  --paper-doc:        #FCFAF6;  /* a document laid on the ground */
+  --rail:             #E8E3DB;  /* the rail / deeper sheet */
+
+  /* — ink — */
+  --ink:              #2C2926;  /* 13.53:1 on paper */
+  --ink-muted:        #4E4339;  /* 9.22:1 on paper-doc */
+  --ink-subtle:       #5A4E43;  /* 7.73:1 */
+  --ink-faint:        #65594E;  /* 6.51:1 — also the disabled ink */
+  --ink-paper:        #FAF7F2;  /* ink ON charcoal */
+
+  /* — hairlines — */
+  --hairline:         #E8E3DB;
+  --hairline-strong:  rgba(44, 41, 38, .14);
+
+  /* — the rest rule pigment (4.20:1 on paper) — */
+  --oak:              #8B7355;
+
+  /* — state pigments: material value / paper ink — */
+  --clay:             #C4A57B;   --clay-ink:      #7C5E30;
+  --golden:           #E8C547;   --golden-ink:    #79651E;
+  --terracotta:       #D4A090;   --terracotta-ink:#9C5340;
+  --sage:             #A8B5A0;   --sage-ink:      #5F6B57;
+
+  /* — the seven stage plates (white label 5.22–8.20:1) — */
+  --tab-brief:     #497093;
+  --tab-discovery: #307063;
+  --tab-direction: #366A3A;
+  --tab-proposal:  #575D1D;
+  --tab-project:   #6D4E24;
+  --tab-install:   #823832;
+  --tab-care:      #823832;   /* Care has no pigment of its own */
+
+  /* — the one depth token. Permitted on a temporary sheet ONLY. — */
+  --elevation-sheet: 0 1px 2px rgba(44, 41, 38, .08);
+
+  /* — rhythm — */
+  --module: 24px;
+  --radius-hair: 2px;
+  --radius-box:  3px;
+
+  /* — motion — */
+  --press-in:  70ms;
+  --press-out: 240ms;
+  --ease: cubic-bezier(.22, 1, .36, 1);
+
+  --font-display: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  --font-body:    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-meta:    'DM Mono', 'SF Mono', 'Fira Code', ui-monospace, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper:           #2A2622;
+    --paper-doc:       #26221E;
+    --rail:            #3A3530;
+    --ink:             #F2EDE6;
+    --ink-muted:       #D6CEC4;
+    --ink-subtle:      #C7BEB3;
+    --ink-faint:       #B8AEA2;
+    --ink-paper:       #2A2622;
+    --hairline:        rgba(242, 237, 230, .14);
+    --hairline-strong: rgba(242, 237, 230, .22);
+    --oak:             #B39572;
+    --clay-ink:        #D8B98A;
+    --golden-ink:      #E0C963;
+    --terracotta-ink:  #E2A895;
+    --sage-ink:        #AFC0A6;
+  }
+}
+
+:root[data-theme="dark"] {
+  --paper:           #2A2622;
+  --paper-doc:       #26221E;
+  --rail:            #3A3530;
+  --ink:             #F2EDE6;
+  --ink-muted:       #D6CEC4;
+  --ink-subtle:      #C7BEB3;
+  --ink-faint:       #B8AEA2;
+  --ink-paper:       #2A2622;
+  --hairline:        rgba(242, 237, 230, .14);
+  --hairline-strong: rgba(242, 237, 230, .22);
+  --oak:             #B39572;
+  --clay-ink:        #D8B98A;
+  --golden-ink:      #E0C963;
+  --terracotta-ink:  #E2A895;
+  --sage-ink:        #AFC0A6;
+}
+
+body { margin: 0; background: var(--paper); color: var(--ink); }
+
+/* ══ .spec-arrival — everything below is scoped ══════════════════════ */
+.spec-arrival {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 48px 24px;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  overflow-wrap: break-word;
+}
+.spec-arrival *, .spec-arrival *::before, .spec-arrival *::after { box-sizing: border-box; }
+.spec-arrival h2, .spec-arrival h3, .spec-arrival h4, .spec-arrival p, .spec-arrival blockquote { margin: 0; padding: 0; }
+.spec-arrival svg { display: block; max-width: 100%; }
+.spec-arrival hr { border: 0; border-top: 1px solid var(--hairline); margin: 0; }
+
+/* SPEC §A3 — the type scale */
+.spec-arrival .t-d1 { font-family: var(--font-display); font-size: 34px; line-height: 1.15; font-weight: 500; letter-spacing: 0; }
+.spec-arrival .t-d2 { font-family: var(--font-display); font-size: 26px; line-height: 1.20; font-weight: 500; letter-spacing: 0; }
+.spec-arrival .t-d3 { font-family: var(--font-display); font-size: 20px; line-height: 1.30; font-weight: 500; letter-spacing: 0; }
+.spec-arrival .t-body    { font-family: var(--font-body); font-size: 16px; line-height: 1.55; font-weight: 400; letter-spacing: 0; }
+.spec-arrival .t-body-sm { font-family: var(--font-body); font-size: 14px; line-height: 1.50; font-weight: 400; letter-spacing: 0; }
+.spec-arrival .t-meta { font-family: var(--font-meta); font-size: 12px; line-height: 1.50; font-weight: 400; letter-spacing: .08em; }
+.spec-arrival .t-head { font-family: var(--font-meta); font-size: 11px; line-height: 1.50; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; }
+.spec-arrival .t-authorship { font-family: var(--font-display); font-size: 20px; line-height: 1.30; font-weight: 400; font-style: italic; letter-spacing: 0; }
+
+/* SPEC §A5 — the action tiers */
+.spec-arrival .act {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 4px 6px 10px;
+  border: 0;
+  background: none;
+  font-family: var(--font-meta);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.spec-arrival .act .label { position: relative; display: inline-block; line-height: 13px; }
+.spec-arrival .act .label::before, .spec-arrival .act .label::after {
+  content: ''; position: absolute; left: 0; right: 0;
+  transform-origin: left center;
+  transition: background-color 150ms linear, height 150ms var(--ease);
+}
+.spec-arrival .act .label::before { bottom: -5px; height: 1px; }
+.spec-arrival .act .label::after  { bottom: -8.5px; height: 1px; }
+
+.spec-arrival .act--tertiary { color: var(--ink-subtle); }
+.spec-arrival .act--tertiary .label::before { background: var(--oak); }
+.spec-arrival .act--tertiary .label::after  { content: none; }
+.spec-arrival .act--tertiary:hover .label::before { background: var(--ink-faint); height: 1.5px; }
+.spec-arrival .act--tertiary:active { color: var(--ink); transition-duration: var(--press-in); }
+
+.spec-arrival .act--terminal {
+  padding: 13px 22px;
+  min-height: 48px;
+  border-radius: var(--radius-box);
+  background: var(--ink);
+  color: var(--ink-paper);
+  letter-spacing: .06em;
+  white-space: normal;
+}
+.spec-arrival .act--terminal .label::before,
+.spec-arrival .act--terminal .label::after { content: none; }
+.spec-arrival .act--terminal:active { transform: translateY(1px); transition-duration: var(--press-in); }
+/* SPEC §F-C — the terminal label is Inter 500, 16px, sentence case */
+.spec-arrival .act--terminal .label {
+  font-family: var(--font-body);
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: 0;
+  text-transform: none;
+  font-variant-numeric: tabular-nums;
+}
+.spec-arrival .act:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+
+/* SPEC §A6 — the consequence sentence */
+.spec-arrival .consequence {
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--ink);
+  max-width: 56ch;
+  margin: 0 0 12px;
+}
+
+/* ── plates ─────────────────────────────────────────────────────────── */
+.spec-arrival .stack { max-width: 720px; margin: 0 auto; }
+.spec-arrival .plate + .plate { margin-top: 72px; }
+.spec-arrival .plate-caption { margin-top: 12px; color: var(--ink-subtle); }
+.spec-arrival .spec-title { color: var(--ink-muted); margin-bottom: 24px; }
+
+.spec-arrival .page {
+  background: var(--paper-doc);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-box);
+  padding: 32px;
+}
+
+/* SPEC §A8 — letterhead */
+.spec-arrival .lh-heads {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 12px 24px;
+  color: var(--ink-muted);
+}
+.spec-arrival .lh-studio .locality { color: var(--ink-subtle); margin-top: 12px; }
+.spec-arrival .lh-title { margin-top: 24px; }
+.spec-arrival .lh-title .sub { color: var(--ink-subtle); margin-top: 12px; }
+.spec-arrival .lh-rule { margin-top: 24px; }
+
+.spec-arrival .standing { margin-top: 24px; max-width: 65ch; }
+
+/* the note, quoted — the letter's callout in the house's own pigment */
+.spec-arrival .note {
+  margin-top: 24px;
+  padding: 8px 0 8px 16px;
+  border-left: 3px solid var(--clay);
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-style: italic;
+  line-height: 1.5;
+  color: var(--ink-muted);
+  max-width: 56ch;
+}
+
+/* the standing note on the Threshold (lens 4 §C.3) */
+.spec-arrival .standing-note { margin-top: 24px; }
+.spec-arrival .standing-note .byline { color: var(--ink-muted); }
+.spec-arrival .standing-note p + p { margin-top: 12px; max-width: 56ch; }
+
+.spec-arrival .doorstep { margin-top: 48px; }
+.spec-arrival .doorstep p { margin-top: 12px; max-width: 65ch; color: var(--ink-subtle); }
+
+/* SPEC §A10 — the empty record below */
+.spec-arrival .record { margin-top: 48px; }
+.spec-arrival .empty { padding: 0 0 24px; }
+.spec-arrival .empty .floor { height: 1px; background: var(--rail); margin: 12px 0; }
+.spec-arrival .empty p { font-family: var(--font-body); font-size: 16px; line-height: 1.55;
+                         color: var(--ink-subtle); max-width: 56ch; }
+.spec-arrival .empty h4 { color: var(--ink-faint); }
+
+.spec-arrival .cta { margin-top: 24px; padding: 2px; }
+.spec-arrival .stale-line { margin-top: 24px; }
+.spec-arrival .colophon-rule { margin-top: 48px; }
+.spec-arrival .colophon { margin-top: 24px; color: var(--ink-faint); }
+
+@media (max-width: 600px) {
+  .spec-arrival { padding: 32px 16px; }
+  .spec-arrival .page { padding: 24px 20px; }
+  .spec-arrival .t-d1 { font-size: 27px; }
+  .spec-arrival .lh-heads { flex-direction: column; align-items: flex-start; gap: 4px; }
+  .spec-arrival .lh-studio .locality { margin-top: 4px; }
+  .spec-arrival .act--terminal { width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spec-arrival *, .spec-arrival *::before, .spec-arrival *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
+@media (forced-colors: active) {
+  .spec-arrival .act--terminal { border: 2px solid ButtonText; }
+  .spec-arrival .act .label::before, .spec-arrival .act .label::after { forced-color-adjust: none; background: ButtonText; }
+  .spec-arrival hr, .spec-arrival .page, .spec-arrival .empty .floor { border-color: CanvasText; }
+  .spec-arrival .act:focus-visible { outline: 2px solid Highlight; }
+}
+</style>
+</head>
+<body>
+
+<div class="spec-arrival">
+ <div class="stack">
+
+  <h2 class="spec-title t-head">The arrival · page two of the letter, and the door it opens</h2>
+
+  <!-- ── (i) the token landing page ────────────────────────────────── -->
+  <section class="plate" aria-label="Plate one">
+    <div class="page">
+      <header>
+        <div class="lh-heads">
+          <div class="lh-studio">
+            <p class="t-head">Middle West Studio</p>
+            <p class="locality t-meta">Madison · 8 September 2026</p>
+          </div>
+          <p class="t-head">Prepared for Dave Okonkwo</p>
+        </div>
+        <div class="lh-title">
+          <h3 class="t-d1">The Van Hise kitchen and back hall</h3>
+        </div>
+        <hr class="lh-rule">
+      </header>
+
+      <p class="standing t-body">Leah Hartwell of Middle West Studio added you to the Van Hise kitchen and back hall on 8 September. The page below holds the studio&rsquo;s record of the job &mdash; the plans, the papers, and the numbers.</p>
+
+      <blockquote class="note">Dave &mdash; this is the same file I work from, not a summary of it. The kitchen cabinet drawings are in there now; the back hall isn&rsquo;t drawn yet. Anything you want changed, say so on the page and I&rsquo;ll see it.</blockquote>
+
+      <p class="cta">
+        <button type="button" class="act act--terminal"><span class="label">Open the project</span></button>
+      </p>
+
+      <hr class="colophon-rule">
+      <p class="colophon t-meta">Prepared by Middle West Studio · Sent through Patina</p>
+    </div>
+    <p class="plate-caption t-meta">One · the token page · the same letterhead, the same sentence, the same note, no password</p>
+  </section>
+
+  <!-- ── (ii) the first Threshold visit ────────────────────────────── -->
+  <section class="plate" aria-label="Plate two">
+    <div class="page">
+      <header>
+        <div class="lh-heads">
+          <div class="lh-studio">
+            <p class="t-head">Middle West Studio</p>
+            <p class="locality t-meta">Madison · prepared by Leah Hartwell</p>
+          </div>
+          <p class="t-head">Prepared for Dave Okonkwo</p>
+        </div>
+        <div class="lh-title">
+          <h3 class="t-d1">The Van Hise kitchen and back hall</h3>
+          <p class="sub t-meta">Drawings · September 2026</p>
+        </div>
+        <hr class="lh-rule">
+      </header>
+
+      <div class="standing-note">
+        <p class="byline t-meta">&mdash; From Leah Hartwell · Middle West Studio · 8 September</p>
+        <p class="t-authorship">This is the same file I work from, not a summary of it. The kitchen cabinet drawings are in there now; the back hall isn&rsquo;t drawn yet. Anything you want changed, say so on the page and I&rsquo;ll see it.</p>
+      </div>
+
+      <section class="doorstep" aria-label="The doorstep">
+        <h4 class="t-d2">Nothing needs you today.</h4>
+        <p class="t-body">The record fills as the studio adds to it. When there is something for you, it appears here with its date.</p>
+      </section>
+
+      <section class="record" aria-label="The record">
+        <div class="empty">
+          <h4 class="t-d3">The papers</h4>
+          <div class="floor"></div>
+          <p>Nothing is filed yet. Papers appear here as they are drawn up, each with the day it was signed.</p>
+        </div>
+        <div class="empty">
+          <h4 class="t-d3">The numbers</h4>
+          <div class="floor"></div>
+          <p>Nothing has been agreed yet. Figures appear here once the studio has priced the work.</p>
+        </div>
+      </section>
+
+      <hr class="colophon-rule">
+      <p class="colophon t-meta">Prepared by Middle West Studio · Sent through Patina</p>
+    </div>
+    <p class="plate-caption t-meta">Two · the first visit · the note stands where every standing note stands, frozen at send</p>
+  </section>
+
+  <!-- ── (iii) the lapsed link ─────────────────────────────────────── -->
+  <section class="plate" aria-label="Plate three">
+    <div class="page">
+      <h3 class="t-d1">This letter&rsquo;s gone stale.</h3>
+      <p class="consequence stale-line">A fresh letter goes to dave@okonkwo.net with a new link and the same words; nothing else changes.</p>
+      <p class="cta">
+        <button type="button" class="act act--terminal"><span class="label">Send a fresh letter</span></button>
+      </p>
+
+      <hr class="colophon-rule">
+      <p class="colophon t-meta">Prepared by Middle West Studio · Sent through Patina</p>
+    </div>
+    <p class="plate-caption t-meta">Three · the lapsed link · one sentence, one tap, nothing in the studio&rsquo;s queue</p>
+  </section>
+
+ </div>
+</div>
+
+</body>
+</html>

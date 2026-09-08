@@ -1,0 +1,1787 @@
+<title>The First Letter</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;1,400&family=Inter:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400&family=Hanken+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+/* ── SPEC §A1. Tokens — pasted verbatim. No hex literal outside this block
+      and the .spec-letter email block that arrives with the specimen. ──── */
+:root {
+  color-scheme: light dark;
+
+  /* — paper, three stocks — */
+  --paper:            #FAF7F2;  /* the ground */
+  --paper-doc:        #FCFAF6;  /* a document laid on the ground */
+  --rail:             #E8E3DB;  /* the rail / deeper sheet */
+
+  /* — ink — */
+  --ink:              #2C2926;  /* 13.53:1 on paper */
+  --ink-muted:        #4E4339;  /* 9.22:1 on paper-doc */
+  --ink-subtle:       #5A4E43;  /* 7.73:1 */
+  --ink-faint:        #65594E;  /* 6.51:1 — also the disabled ink */
+  --ink-paper:        #FAF7F2;  /* ink ON charcoal */
+
+  /* — hairlines — */
+  --hairline:         #E8E3DB;
+  --hairline-strong:  rgba(44, 41, 38, .14);
+
+  /* — the rest rule pigment (4.20:1 on paper) — */
+  --oak:              #8B7355;
+
+  /* — state pigments: material value / paper ink — */
+  --clay:             #C4A57B;   --clay-ink:      #7C5E30;
+  --golden:           #E8C547;   --golden-ink:    #79651E;
+  --terracotta:       #D4A090;   --terracotta-ink:#9C5340;
+  --sage:             #A8B5A0;   --sage-ink:      #5F6B57;
+
+  /* — the seven stage plates (white label 5.22–8.20:1) — */
+  --tab-brief:     #497093;
+  --tab-discovery: #307063;
+  --tab-direction: #366A3A;
+  --tab-proposal:  #575D1D;
+  --tab-project:   #6D4E24;
+  --tab-install:   #823832;
+  --tab-care:      #823832;   /* Care has no pigment of its own */
+
+  /* — the one depth token. Permitted on a temporary sheet ONLY. — */
+  --elevation-sheet: 0 1px 2px rgba(44, 41, 38, .08);
+
+  /* — rhythm — */
+  --module: 24px;
+  --radius-hair: 2px;
+  --radius-box:  3px;
+
+  /* — motion — */
+  --press-in:  70ms;
+  --press-out: 240ms;
+  --ease: cubic-bezier(.22, 1, .36, 1);
+
+  --font-display: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  --font-body:    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-meta:    'DM Mono', 'SF Mono', 'Fira Code', ui-monospace, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper:           #2A2622;
+    --paper-doc:       #26221E;
+    --rail:            #3A3530;
+    --ink:             #F2EDE6;
+    --ink-muted:       #D6CEC4;
+    --ink-subtle:      #C7BEB3;
+    --ink-faint:       #B8AEA2;
+    --ink-paper:       #2A2622;
+    --hairline:        rgba(242, 237, 230, .14);
+    --hairline-strong: rgba(242, 237, 230, .22);
+    --oak:             #B39572;
+    --clay-ink:        #D8B98A;
+    --golden-ink:      #E0C963;
+    --terracotta-ink:  #E2A895;
+    --sage-ink:        #AFC0A6;
+  }
+}
+
+:root[data-theme="dark"] {
+  --paper:           #2A2622;
+  --paper-doc:       #26221E;
+  --rail:            #3A3530;
+  --ink:             #F2EDE6;
+  --ink-muted:       #D6CEC4;
+  --ink-subtle:      #C7BEB3;
+  --ink-faint:       #B8AEA2;
+  --ink-paper:       #2A2622;
+  --hairline:        rgba(242, 237, 230, .14);
+  --hairline-strong: rgba(242, 237, 230, .22);
+  --oak:             #B39572;
+  --clay-ink:        #D8B98A;
+  --golden-ink:      #E0C963;
+  --terracotta-ink:  #E2A895;
+  --sage-ink:        #AFC0A6;
+}
+
+/* ══════════════════ the deck ══════════════════════════════════════════ */
+body{
+  background:var(--paper);
+  color:var(--ink-muted);
+  font-family:var(--font-body);
+  font-size:16px;
+  line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+}
+.shell{max-width:1360px;margin:0 auto;padding:0 20px 8rem;box-sizing:border-box;}
+main{max-width:none;}
+a{color:var(--clay-ink);text-decoration:none;border-bottom:1px solid var(--hairline-strong);}
+a:hover{border-bottom-color:var(--clay-ink);}
+a:focus-visible{outline:2px solid var(--clay-ink);outline-offset:3px;}
+/* inside a specimen the specimen governs; the deck's link and measure rules stand off */
+.mock a{color:inherit;border-bottom:none;}
+.mock p,.mock li{max-width:none;}
+
+/* ---------- running index ---------- */
+.index{
+  font-family:var(--font-meta);font-size:12px;letter-spacing:.06em;line-height:1.5;
+  padding:2rem 0 1rem;border-bottom:1px solid var(--hairline);margin-bottom:2.5rem;
+}
+.index .idxhead{
+  font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);
+  margin:0 0 .9rem;font-weight:500;
+}
+.index ol{list-style:none;margin:0;padding:0;display:grid;gap:.5rem;}
+.index li{max-width:none;margin:0;}
+.index a{color:var(--ink-subtle);border-bottom:none;display:grid;grid-template-columns:1.9rem 1fr;gap:.3rem;}
+.index a:hover{color:var(--ink);}
+.index .n{color:var(--ink-faint);font-variant-numeric:tabular-nums;}
+
+/* ---------- masthead ---------- */
+.masthead{padding:3.5rem 0 2.5rem;border-bottom:1.5px solid var(--ink);}
+.masthead .eyebrow{margin:0 0 1.4rem;}
+.masthead h1{
+  font-family:var(--font-display);font-size:clamp(2.3rem,5.4vw,4rem);line-height:1.06;
+  font-weight:500;color:var(--ink);margin:0 0 1.4rem;text-wrap:balance;letter-spacing:-.01em;
+}
+.masthead h1 .sub{
+  display:block;font-size:.44em;line-height:1.22;font-weight:400;font-style:italic;
+  color:var(--ink-muted);letter-spacing:0;margin-top:.7rem;
+}
+.standing{
+  font-family:var(--font-display);font-style:italic;
+  font-size:clamp(1.08rem,2.2vw,1.4rem);line-height:1.45;color:var(--ink-muted);
+  max-width:48ch;margin:0 0 2.2rem;
+}
+.masthead-meta{
+  display:flex;flex-wrap:wrap;gap:2rem 3rem;
+  font-family:var(--font-meta);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-subtle);
+}
+.masthead-meta div{max-width:28ch;}
+.masthead-meta b{display:block;color:var(--ink-faint);font-weight:400;margin-bottom:.45rem;}
+.masthead-meta span{display:block;text-transform:none;letter-spacing:.02em;color:var(--ink-muted);}
+
+/* ---------- sections ---------- */
+.eyebrow{
+  font-family:var(--font-meta);font-size:12px;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--ink-faint);margin:0;
+}
+section{padding-top:4.5rem;scroll-margin-top:1.5rem;}
+.opener{border-top:1px solid var(--hairline);padding-top:1.1rem;margin-bottom:2rem;}
+.opener h2{
+  font-family:var(--font-display);font-size:clamp(1.65rem,3.3vw,2.45rem);line-height:1.12;
+  font-weight:500;color:var(--ink);margin:.7rem 0 0;text-wrap:balance;max-width:24ch;
+}
+section > h3{
+  font-family:var(--font-display);font-size:1.3rem;line-height:1.25;font-weight:500;
+  color:var(--ink);margin:2.6rem 0 .8rem;text-wrap:balance;
+}
+section > h3.mono-head,.qgroup > h3{
+  font-family:var(--font-meta);font-size:12px;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--ink-faint);font-weight:500;margin:2.2rem 0 .7rem;
+}
+section > p{margin:0 0 1rem;max-width:68ch;}
+.lede{font-size:1.06rem;color:var(--ink-muted);}
+section > ul{margin:1rem 0 1.4rem;padding-left:1.15rem;}
+section > ul > li{margin-bottom:.5rem;max-width:68ch;color:var(--ink-muted);}
+section > ul > li strong,section > ul > li b{color:var(--ink);font-weight:600;}
+
+/* ---------- utilities ---------- */
+.mono{font-family:var(--font-meta);font-size:max(12px,.82em);letter-spacing:.02em;color:var(--ink-subtle);overflow-wrap:anywhere;}
+.ref{font-family:var(--font-meta);font-size:max(12px,.74em);letter-spacing:.02em;color:var(--ink-faint);overflow-wrap:anywhere;}
+.quote{font-style:italic;color:var(--ink-muted);}
+.caption{font-family:var(--font-meta);font-size:12px;line-height:1.7;color:var(--ink-faint);margin:.7rem 0 0;max-width:80ch;letter-spacing:.01em;}
+.stamp{
+  display:inline-block;border:1.5px solid var(--ink-subtle);border-radius:var(--radius-hair);
+  padding:.5rem .9rem;margin:1.8rem 0 0;max-width:none;
+  font-family:var(--font-meta);font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-subtle);
+}
+
+/* ---------- tables ---------- */
+.tablewrap{overflow-x:auto;margin:1.4rem 0;border-top:1.5px solid var(--ink);border-bottom:1px solid var(--hairline-strong);}
+table{border-collapse:collapse;width:100%;font-size:14px;line-height:1.45;}
+th,td{text-align:left;vertical-align:top;padding:.72rem .9rem .72rem 0;border-bottom:1px solid var(--hairline);}
+th{
+  font-family:var(--font-meta);font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--ink-faint);font-weight:500;white-space:nowrap;
+}
+td{color:var(--ink-muted);}
+td strong{color:var(--ink);font-weight:600;}
+tbody th{
+  font-family:var(--font-body);font-size:inherit;text-transform:none;letter-spacing:normal;
+  color:var(--ink);font-weight:600;white-space:normal;
+}
+tbody tr:last-child td,tbody tr:last-child th{border-bottom:none;}
+.tight td,.tight th{font-size:13.5px;}
+.num{font-family:var(--font-meta);font-variant-numeric:tabular-nums;color:var(--ink-faint);white-space:nowrap;}
+.w-name{min-width:12rem;}
+.w-what{min-width:17rem;}
+.min720{min-width:720px;}
+.min900{min-width:900px;}
+
+/* ---------- mockups ---------- */
+.mock{
+  margin:2rem 0 2.4rem;border:1px solid var(--hairline);border-radius:var(--radius-hair);
+  background:var(--paper-doc);padding:1.5rem 1.4rem 1.2rem;
+}
+.mock .mock-cap{
+  font-family:var(--font-meta);font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--ink-faint);margin:0 0 1.1rem;
+}
+.mock figcaption{
+  font-family:var(--font-meta);font-size:12px;line-height:1.7;color:var(--ink-subtle);
+  border-top:1px solid var(--hairline);margin-top:1.2rem;padding-top:.8rem;letter-spacing:.01em;
+}
+.mock figcaption b{color:var(--ink);font-weight:500;}
+.mock .specframe{margin:0 -1.4rem;}
+
+/* ---------- the grey-paper plate (today's letter) ---------- */
+.greyplate{
+  background:var(--rail);border:1px solid var(--hairline-strong);border-radius:var(--radius-hair);
+  padding:1.4rem 1.3rem;max-width:44rem;
+}
+.greyplate + .greyplate{margin-top:1.2rem;}
+.greyplate p{margin:0 0 .35rem;}
+.greyplate .gp-lab{
+  font-family:var(--font-meta);font-size:11px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--ink-faint);display:inline-block;min-width:7rem;
+}
+.greyplate .gp-line{font-size:14px;color:var(--ink-muted);}
+.greyplate .gp-rule{border:none;border-top:1px solid var(--hairline-strong);margin:1rem 0;}
+.greyplate .gp-head{font-family:var(--font-display);font-size:1.2rem;color:var(--ink);margin:0 0 .7rem;}
+.greyplate .gp-body{font-size:15px;color:var(--ink-muted);margin:0 0 1rem;max-width:58ch;}
+.greyplate .gp-cta{
+  display:inline-block;border:1px solid var(--ink-faint);border-radius:var(--radius-hair);
+  padding:.4rem .9rem;margin:0 0 1rem;
+  font-family:var(--font-meta);font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-subtle);
+}
+.greyplate .gp-foot{font-family:var(--font-meta);font-size:11px;line-height:1.7;color:var(--ink-faint);margin:0;}
+.greyplate .gp-check{font-size:15px;color:var(--ink);}
+.greyplate .gp-box{
+  display:inline-block;width:.8rem;height:.8rem;border:1px solid var(--ink-faint);
+  border-radius:var(--radius-hair);background:var(--ink);margin-right:.5rem;
+}
+
+/* ---------- vision test ---------- */
+.ftest{border-left:2px solid var(--hairline-strong);padding-left:1.1rem;margin:1.4rem 0 2.4rem;}
+.ftest p{font-family:var(--font-meta);font-size:12px;letter-spacing:.01em;line-height:1.75;color:var(--ink-subtle);margin:0 0 .55rem;max-width:74ch;}
+.ftest b{color:var(--ink);font-weight:500;}
+
+/* ---------- questions ---------- */
+.qgroup{border-top:1px solid var(--hairline);padding:1.2rem 0 .4rem;margin-top:2rem;}
+.qgroup h3{margin:0 0 .8rem;}
+.qgroup ol{margin:0;padding-left:1.4rem;}
+.qgroup li{margin-bottom:.6rem;color:var(--ink);max-width:68ch;}
+
+/* ---------- citations ---------- */
+.citelist{list-style:none;margin:1rem 0 0;padding:0;display:grid;gap:.4rem;}
+.citelist li{max-width:none;font-family:var(--font-meta);font-size:12px;line-height:1.7;color:var(--ink-subtle);overflow-wrap:anywhere;}
+.citelist li b{color:var(--ink);font-weight:500;}
+
+@media (max-width:600px){
+  .shell{padding:0 14px 6rem;}
+  .mock{padding:1.1rem 1rem .9rem;}
+  .mock .specframe{margin:0 -1rem;}
+  .w-name,.w-what{min-width:9rem;}
+}
+@media (min-width:1100px){
+  .shell{display:grid;grid-template-columns:210px minmax(0,1fr);gap:0 4.5rem;}
+  .index{
+    grid-column:1;grid-row:1 / span 2;position:sticky;top:0;align-self:start;
+    max-height:100vh;overflow-y:auto;border-bottom:none;border-right:1px solid var(--hairline);
+    padding:3.9rem 1.5rem 3rem 0;margin-bottom:0;
+  }
+  .masthead{grid-column:2;grid-row:1;}
+  main{grid-column:2;grid-row:2;min-width:0;}
+}
+@media (max-width:1099px){
+  .index{border-top:1px solid var(--hairline);padding-top:1.6rem;margin:2.4rem 0 2.5rem;}
+}
+@media (prefers-reduced-motion: reduce){
+  *{animation:none !important;transition:none !important;}
+}
+
+/* ══ .spec-letter — everything below is scoped ═══════════════════════ */
+
+/* The email system's own tokens (branded-email.ts). The single permitted
+   exception to SPEC §A1: an email client does not theme a letter, so the
+   card holds this palette in light and dark alike. Declared once. */
+.spec-letter {
+  --e-paper:        #F5F0E6;
+  --e-card:         #FCF9F2;
+  --e-card-alt:     #FFFFFF;
+  --e-line:         #E6DDCC;
+  --e-ink:          #1F1B16;
+  --e-ink2:         #4B463E;
+  --e-ink3:         #8C8578;
+  --e-verd:         #4E7A66;
+  --e-brass:        #B08A46;
+  --e-brass-border: #8A6A30;
+  --e-rust:         #A24E2E;
+  --e-button-ink:   #F5F0E6;
+
+  --e-serif: 'Fraunces', Georgia, 'Times New Roman', serif;
+  --e-sans:  'Hanken Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  --e-mono:  'IBM Plex Mono', ui-monospace, SFMono-Regular, 'Courier New', monospace;
+
+  box-sizing: border-box;
+  width: 100%;
+  padding: 48px 24px;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  overflow-wrap: break-word;
+}
+.spec-letter *, .spec-letter *::before, .spec-letter *::after { box-sizing: border-box; }
+.spec-letter h2, .spec-letter h3, .spec-letter p, .spec-letter dl,
+.spec-letter dt, .spec-letter dd, .spec-letter pre { margin: 0; padding: 0; }
+.spec-letter img, .spec-letter svg { display: block; max-width: 100%; }
+.spec-letter hr { border: 0; border-top: 1px solid var(--e-line); margin: 0; }
+
+/* SPEC §A3 — the type scale, for the page furniture around the card */
+.spec-letter .t-d3   { font-family: var(--font-display); font-size: 20px; line-height: 1.30; font-weight: 500; letter-spacing: 0; }
+.spec-letter .t-meta { font-family: var(--font-meta); font-size: 12px; line-height: 1.50; font-weight: 400; letter-spacing: .08em; }
+.spec-letter .t-head { font-family: var(--font-meta); font-size: 11px; line-height: 1.50; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; }
+
+.spec-letter .sheet { max-width: 720px; margin: 0 auto; }
+.spec-letter .sheet + .sheet { margin-top: 72px; }
+.spec-letter .spec-title { color: var(--ink-muted); }
+.spec-letter .plate-caption { margin-top: 12px; color: var(--ink-subtle); }
+.spec-letter .plate-head { color: var(--ink-muted); margin-bottom: 12px; }
+
+/* ── the envelope strip — page furniture, not the letter ───────────── */
+.spec-letter .envelope {
+  margin: 24px 0 0;
+  padding: 12px 0 0;
+  border-top: 1px solid var(--hairline-strong);
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 16px;
+  font-family: var(--font-meta);
+  font-size: 11px;
+  line-height: 1.6;
+  letter-spacing: .04em;
+}
+.spec-letter .envelope dt { color: var(--ink-faint); text-transform: uppercase; }
+.spec-letter .envelope dd { color: var(--ink-subtle); min-width: 0; }
+
+/* ── the card ───────────────────────────────────────────────────────── */
+.spec-letter .mail { margin-top: 24px; background: var(--e-paper); padding: 24px 12px; border-radius: var(--radius-box); }
+.spec-letter .card {
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto;
+  background: var(--e-card);
+  border: 1px solid var(--e-line);
+  border-radius: 12px;
+  overflow: hidden;
+  color: var(--e-ink2);
+}
+.spec-letter .card--solo { max-width: 480px; }
+.spec-letter .bar { display: flex; height: 4px; }
+.spec-letter .bar i { display: block; height: 4px; flex: 1 1 33.33%; }
+.spec-letter .bar .bar-verd  { background: var(--e-verd); }
+.spec-letter .bar .bar-brass { background: var(--e-brass); }
+.spec-letter .bar .bar-rust  { background: var(--e-rust); }
+.spec-letter .card .px { padding: 0 40px; }
+
+/* letterhead — two-sided (PP-1 / SPEC §A8) */
+.spec-letter .lh {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px 24px;
+  padding-top: 26px;
+}
+.spec-letter .lh-left { display: flex; align-items: flex-start; gap: 10px; min-width: 0; }
+.spec-letter .monogram { width: 24px; height: 24px; flex: none; color: var(--e-ink); }
+.spec-letter .monogram text { font-family: var(--e-mono); font-size: 9px; font-weight: 500; letter-spacing: .06em; fill: currentColor; }
+.spec-letter .lh-studio {
+  font-family: var(--e-mono);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.5;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--e-ink);
+}
+.spec-letter .lh-locality {
+  margin-top: 4px;
+  font-family: var(--e-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  letter-spacing: .06em;
+  color: var(--e-ink3);
+}
+.spec-letter .lh-for {
+  font-family: var(--e-mono);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.5;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--e-ink3);
+  text-align: right;
+}
+.spec-letter .lh-rule { margin-top: 22px; }
+
+/* body */
+.spec-letter .standing {
+  margin-top: 22px;
+  font-family: var(--e-sans);
+  font-size: 16px;
+  line-height: 1.62;
+  color: var(--e-ink2);
+}
+.spec-letter .callout {
+  margin-top: 22px;
+  border-left: 3px solid var(--e-brass);
+  background: var(--e-card-alt);
+  padding: 14px 18px;
+  font-family: var(--e-serif);
+  font-size: 15px;
+  font-style: italic;
+  line-height: 1.5;
+  color: var(--e-ink2);
+}
+.spec-letter .cta { margin-top: 26px; }
+.spec-letter .cta a {
+  display: inline-block;
+  padding: 15px 32px;
+  border: 1px solid var(--e-brass-border);
+  border-radius: 7px;
+  background: var(--e-brass);
+  color: var(--e-button-ink);
+  font-family: var(--e-sans);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: .01em;
+  text-decoration: none;
+}
+.spec-letter .cta a:focus-visible { outline: 2px solid var(--e-brass-border); outline-offset: 3px; }
+.spec-letter .expiry {
+  margin-top: 22px;
+  font-family: var(--e-sans);
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--e-ink2);
+}
+.spec-letter .signoff {
+  margin-top: 22px;
+  font-family: var(--e-sans);
+  font-size: 16px;
+  line-height: 1.62;
+  color: var(--e-ink2);
+}
+.spec-letter .foot-rule { margin-top: 30px; }
+.spec-letter .colophon {
+  padding: 20px 40px 30px;
+  font-family: var(--e-sans);
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--e-ink3);
+}
+.spec-letter .colophon p + p { margin-top: 2px; }
+.spec-letter .colophon .paste { word-break: break-all; }
+.spec-letter .colophon a { color: var(--e-verd); text-decoration: none; }
+
+/* ── images off — the plain-text part ───────────────────────────────── */
+.spec-letter .plaintext-wrap {
+  margin-top: 12px;
+  overflow-x: auto;
+  background: var(--paper-doc);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-box);
+  padding: 20px 24px;
+}
+.spec-letter pre {
+  font-family: var(--font-meta);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ink-muted);
+  white-space: pre;
+}
+
+/* ── ≤600px — the letterhead's two sides stack ──────────────────────── */
+@media (max-width: 600px) {
+  .spec-letter { padding: 32px 16px; }
+  .spec-letter .card .px { padding: 0 24px; }
+  .spec-letter .colophon { padding: 20px 24px 26px; }
+  .spec-letter .lh { flex-direction: column; align-items: flex-start; gap: 4px; }
+  .spec-letter .lh-for { text-align: left; }
+  .spec-letter .envelope { grid-template-columns: 1fr; gap: 0 0; }
+  .spec-letter .envelope dd { margin-bottom: 8px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spec-letter *, .spec-letter *::before, .spec-letter *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
+@media (forced-colors: active) {
+  .spec-letter .cta a { border: 2px solid ButtonText; }
+  .spec-letter hr, .spec-letter .plaintext-wrap { border-color: CanvasText; }
+  .spec-letter .cta a:focus-visible { outline: 2px solid Highlight; }
+}
+/* ══ .spec-composer — everything below is scoped ═════════════════════ */
+.spec-composer {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 48px 24px;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  overflow-wrap: break-word;
+}
+.spec-composer *, .spec-composer *::before, .spec-composer *::after { box-sizing: border-box; }
+.spec-composer h2, .spec-composer h3, .spec-composer p, .spec-composer ul, .spec-composer li { margin: 0; padding: 0; }
+.spec-composer ul { list-style: none; }
+.spec-composer svg { display: block; max-width: 100%; }
+.spec-composer hr { border: 0; border-top: 1px solid var(--hairline); margin: 0; }
+
+/* SPEC §A3 — the type scale */
+.spec-composer .t-d1 { font-family: var(--font-display); font-size: 34px; line-height: 1.15; font-weight: 500; letter-spacing: 0; }
+.spec-composer .t-d3 { font-family: var(--font-display); font-size: 20px; line-height: 1.30; font-weight: 500; letter-spacing: 0; }
+.spec-composer .t-body    { font-family: var(--font-body); font-size: 16px; line-height: 1.55; font-weight: 400; letter-spacing: 0; }
+.spec-composer .t-body-sm { font-family: var(--font-body); font-size: 14px; line-height: 1.50; font-weight: 400; letter-spacing: 0; }
+.spec-composer .t-meta { font-family: var(--font-meta); font-size: 12px; line-height: 1.50; font-weight: 400; letter-spacing: .08em; }
+.spec-composer .t-head { font-family: var(--font-meta); font-size: 11px; line-height: 1.50; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; }
+.spec-composer .t-authorship { font-family: var(--font-display); font-size: 20px; line-height: 1.30; font-weight: 400; font-style: italic; letter-spacing: 0; }
+
+/* SPEC §A5 — the action tiers */
+.spec-composer .act {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 4px 6px 10px;
+  border: 0;
+  background: none;
+  font-family: var(--font-meta);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.spec-composer .act .label { position: relative; display: inline-block; line-height: 13px; }
+.spec-composer .act .label::before, .spec-composer .act .label::after {
+  content: ''; position: absolute; left: 0; right: 0;
+  transform-origin: left center;
+  transition: background-color 150ms linear, height 150ms var(--ease);
+}
+.spec-composer .act .label::before { bottom: -5px; height: 1px; }
+.spec-composer .act .label::after  { bottom: -8.5px; height: 1px; }
+
+.spec-composer .act--tertiary { color: var(--ink-subtle); }
+.spec-composer .act--tertiary .label::before { background: var(--oak); }
+.spec-composer .act--tertiary .label::after  { content: none; }
+.spec-composer .act--tertiary:hover .label::before { background: var(--ink-faint); height: 1.5px; }
+.spec-composer .act--tertiary:active { color: var(--ink); transition-duration: var(--press-in); }
+
+.spec-composer .act--inline {
+  display: inline; min-height: 0; min-width: 0; padding: 0;
+  font-family: inherit; font-size: inherit; font-weight: inherit;
+  letter-spacing: inherit; text-transform: none; white-space: normal;
+  color: var(--ink); border-bottom: 1px solid var(--oak);
+}
+.spec-composer .act--inline .label::before,
+.spec-composer .act--inline .label::after { content: none; }
+.spec-composer .act--inline:hover { border-bottom-color: var(--ink-faint); }
+
+.spec-composer .act--terminal {
+  padding: 13px 22px;
+  min-height: 48px;
+  border-radius: var(--radius-box);
+  background: var(--ink);
+  color: var(--ink-paper);
+  letter-spacing: .06em;
+}
+.spec-composer .act--terminal .label::before,
+.spec-composer .act--terminal .label::after { content: none; }
+.spec-composer .act--terminal:active { transform: translateY(1px); transition-duration: var(--press-in); }
+
+.spec-composer .act:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+
+.spec-composer .act[aria-pressed="true"] { color: var(--ink); }
+.spec-composer .act[aria-pressed="true"] .label::before { height: 1.5px; background: var(--ink); }
+.spec-composer .act[aria-pressed="true"] .label::after  { content: ''; background: var(--clay); }
+.spec-composer .act[aria-pressed="false"] { color: var(--ink-subtle); }
+.spec-composer .act[aria-pressed="false"] .label::before { height: 1px; background: var(--oak); }
+.spec-composer .act[aria-pressed="false"] .label::after  { content: none; }
+
+/* ── plates ─────────────────────────────────────────────────────────── */
+.spec-composer .stack { max-width: 720px; margin: 0 auto; }
+.spec-composer .plate + .plate { margin-top: 72px; }
+.spec-composer .plate-caption { margin-top: 12px; color: var(--ink-subtle); }
+.spec-composer .spec-title { color: var(--ink-muted); margin-bottom: 24px; }
+
+/* ── the sheet ──────────────────────────────────────────────────────── */
+.spec-composer .sheet {
+  background: var(--paper-doc);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-box);
+  padding: 32px;
+}
+.spec-composer .eyebrow { color: var(--clay-ink); }
+.spec-composer .sheet-title { margin-top: 12px; }
+.spec-composer .sheet-sub { margin-top: 12px; color: var(--ink-subtle); max-width: 56ch; }
+
+.spec-composer .roles { display: flex; flex-wrap: wrap; gap: 0 20px; margin-top: 12px; padding: 2px; }
+.spec-composer .roles .act { font-size: 11px; letter-spacing: .08em; }
+.spec-composer .roles-rule { margin-top: 12px; }
+
+.spec-composer .field { margin-top: 24px; }
+.spec-composer .field > label,
+.spec-composer .field > .field-label { display: block; color: var(--ink-muted); }
+.spec-composer .field .opt { color: var(--ink-faint); }
+.spec-composer input[type="text"],
+.spec-composer input[type="email"],
+.spec-composer textarea {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  padding: 12px 14px;
+  background: var(--paper);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius-box);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.spec-composer textarea { min-height: 96px; resize: vertical; }
+.spec-composer input::placeholder,
+.spec-composer textarea::placeholder { color: var(--ink-faint); }
+.spec-composer input:focus-visible,
+.spec-composer textarea:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+
+/* the uneditable facts line (B.2) */
+.spec-composer .facts {
+  margin-top: 24px;
+  color: var(--ink-faint);
+  font-family: var(--font-meta);
+  font-size: 11px;
+  line-height: 1.6;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.spec-composer .counter { margin-top: 12px; color: var(--ink-subtle); }
+
+/* the glance check — the letter's callout, small */
+.spec-composer .glance { margin-top: 24px; padding-top: 12px; border-top: 1px solid var(--hairline); }
+.spec-composer .glance .facts { margin-top: 0; }
+.spec-composer .glance blockquote {
+  margin: 12px 0 0;
+  padding: 8px 0 8px 14px;
+  border-left: 3px solid var(--clay);
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-style: italic;
+  line-height: 1.5;
+  color: var(--ink-muted);
+  max-width: 56ch;
+}
+
+/* the checkbox — a mark, never a tick */
+.spec-composer .send { margin-top: 24px; }
+.spec-composer .send-row { display: flex; align-items: center; gap: 12px; }
+.spec-composer input[type="checkbox"] {
+  appearance: none; -webkit-appearance: none;
+  flex: none; width: 18px; height: 18px; margin: 0;
+  background: var(--paper);
+  border: 1px solid var(--ink-faint);
+  border-radius: var(--radius-hair);
+  cursor: pointer;
+}
+.spec-composer input[type="checkbox"]:checked { background: var(--ink); border-color: var(--ink); }
+.spec-composer input[type="checkbox"]:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+.spec-composer .send-row label { cursor: pointer; }
+.spec-composer .helper { margin-top: 12px; color: var(--ink-subtle); max-width: 56ch; }
+
+.spec-composer .escape { margin-top: 24px; color: var(--ink-subtle); }
+.spec-composer .acts { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; margin-top: 24px; padding: 2px; }
+
+/* the collapsed disclosure (state three) */
+.spec-composer .disclosure { margin-top: 24px; }
+
+/* ── the People Room rows ───────────────────────────────────────────── */
+.spec-composer .rows { margin-top: 24px; }
+.spec-composer .rows li { padding: 12px 0; border-top: 1px solid var(--hairline); }
+.spec-composer .rows li:last-child { border-bottom: 1px solid var(--hairline); }
+.spec-composer .rows .who { color: var(--ink); }
+.spec-composer .rows .state { color: var(--ink-subtle); margin-top: 4px; }
+
+@media (max-width: 600px) {
+  .spec-composer { padding: 32px 16px; }
+  .spec-composer .sheet { padding: 24px 20px; }
+  .spec-composer .t-d1 { font-size: 27px; }
+  .spec-composer .acts { flex-direction: column; align-items: flex-start; }
+  .spec-composer .acts .act--terminal { width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spec-composer *, .spec-composer *::before, .spec-composer *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
+@media (forced-colors: active) {
+  .spec-composer .act--terminal { border: 2px solid ButtonText; }
+  .spec-composer .act .label::before, .spec-composer .act .label::after { forced-color-adjust: none; background: ButtonText; }
+  .spec-composer hr, .spec-composer .sheet { border-color: CanvasText; }
+  .spec-composer .act:focus-visible { outline: 2px solid Highlight; }
+}
+/* ══ .spec-arrival — everything below is scoped ══════════════════════ */
+.spec-arrival {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 48px 24px;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  overflow-wrap: break-word;
+}
+.spec-arrival *, .spec-arrival *::before, .spec-arrival *::after { box-sizing: border-box; }
+.spec-arrival h2, .spec-arrival h3, .spec-arrival h4, .spec-arrival p, .spec-arrival blockquote { margin: 0; padding: 0; }
+.spec-arrival svg { display: block; max-width: 100%; }
+.spec-arrival hr { border: 0; border-top: 1px solid var(--hairline); margin: 0; }
+
+/* SPEC §A3 — the type scale */
+.spec-arrival .t-d1 { font-family: var(--font-display); font-size: 34px; line-height: 1.15; font-weight: 500; letter-spacing: 0; }
+.spec-arrival .t-d2 { font-family: var(--font-display); font-size: 26px; line-height: 1.20; font-weight: 500; letter-spacing: 0; }
+.spec-arrival .t-d3 { font-family: var(--font-display); font-size: 20px; line-height: 1.30; font-weight: 500; letter-spacing: 0; }
+.spec-arrival .t-body    { font-family: var(--font-body); font-size: 16px; line-height: 1.55; font-weight: 400; letter-spacing: 0; }
+.spec-arrival .t-body-sm { font-family: var(--font-body); font-size: 14px; line-height: 1.50; font-weight: 400; letter-spacing: 0; }
+.spec-arrival .t-meta { font-family: var(--font-meta); font-size: 12px; line-height: 1.50; font-weight: 400; letter-spacing: .08em; }
+.spec-arrival .t-head { font-family: var(--font-meta); font-size: 11px; line-height: 1.50; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; }
+.spec-arrival .t-authorship { font-family: var(--font-display); font-size: 20px; line-height: 1.30; font-weight: 400; font-style: italic; letter-spacing: 0; }
+
+/* SPEC §A5 — the action tiers */
+.spec-arrival .act {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 4px 6px 10px;
+  border: 0;
+  background: none;
+  font-family: var(--font-meta);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.spec-arrival .act .label { position: relative; display: inline-block; line-height: 13px; }
+.spec-arrival .act .label::before, .spec-arrival .act .label::after {
+  content: ''; position: absolute; left: 0; right: 0;
+  transform-origin: left center;
+  transition: background-color 150ms linear, height 150ms var(--ease);
+}
+.spec-arrival .act .label::before { bottom: -5px; height: 1px; }
+.spec-arrival .act .label::after  { bottom: -8.5px; height: 1px; }
+
+.spec-arrival .act--tertiary { color: var(--ink-subtle); }
+.spec-arrival .act--tertiary .label::before { background: var(--oak); }
+.spec-arrival .act--tertiary .label::after  { content: none; }
+.spec-arrival .act--tertiary:hover .label::before { background: var(--ink-faint); height: 1.5px; }
+.spec-arrival .act--tertiary:active { color: var(--ink); transition-duration: var(--press-in); }
+
+.spec-arrival .act--terminal {
+  padding: 13px 22px;
+  min-height: 48px;
+  border-radius: var(--radius-box);
+  background: var(--ink);
+  color: var(--ink-paper);
+  letter-spacing: .06em;
+  white-space: normal;
+}
+.spec-arrival .act--terminal .label::before,
+.spec-arrival .act--terminal .label::after { content: none; }
+.spec-arrival .act--terminal:active { transform: translateY(1px); transition-duration: var(--press-in); }
+/* SPEC §F-C — the terminal label is Inter 500, 16px, sentence case */
+.spec-arrival .act--terminal .label {
+  font-family: var(--font-body);
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: 0;
+  text-transform: none;
+  font-variant-numeric: tabular-nums;
+}
+.spec-arrival .act:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+
+/* SPEC §A6 — the consequence sentence */
+.spec-arrival .consequence {
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--ink);
+  max-width: 56ch;
+  margin: 0 0 12px;
+}
+
+/* ── plates ─────────────────────────────────────────────────────────── */
+.spec-arrival .stack { max-width: 720px; margin: 0 auto; }
+.spec-arrival .plate + .plate { margin-top: 72px; }
+.spec-arrival .plate-caption { margin-top: 12px; color: var(--ink-subtle); }
+.spec-arrival .spec-title { color: var(--ink-muted); margin-bottom: 24px; }
+
+.spec-arrival .page {
+  background: var(--paper-doc);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-box);
+  padding: 32px;
+}
+
+/* SPEC §A8 — letterhead */
+.spec-arrival .lh-heads {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 12px 24px;
+  color: var(--ink-muted);
+}
+.spec-arrival .lh-studio .locality { color: var(--ink-subtle); margin-top: 12px; }
+.spec-arrival .lh-title { margin-top: 24px; }
+.spec-arrival .lh-title .sub { color: var(--ink-subtle); margin-top: 12px; }
+.spec-arrival .lh-rule { margin-top: 24px; }
+
+.spec-arrival .standing { margin-top: 24px; max-width: 65ch; }
+
+/* the note, quoted — the letter's callout in the house's own pigment */
+.spec-arrival .note {
+  margin-top: 24px;
+  padding: 8px 0 8px 16px;
+  border-left: 3px solid var(--clay);
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-style: italic;
+  line-height: 1.5;
+  color: var(--ink-muted);
+  max-width: 56ch;
+}
+
+/* the standing note on the Threshold (lens 4 §C.3) */
+.spec-arrival .standing-note { margin-top: 24px; }
+.spec-arrival .standing-note .byline { color: var(--ink-muted); }
+.spec-arrival .standing-note p + p { margin-top: 12px; max-width: 56ch; }
+
+.spec-arrival .doorstep { margin-top: 48px; }
+.spec-arrival .doorstep p { margin-top: 12px; max-width: 65ch; color: var(--ink-subtle); }
+
+/* SPEC §A10 — the empty record below */
+.spec-arrival .record { margin-top: 48px; }
+.spec-arrival .empty { padding: 0 0 24px; }
+.spec-arrival .empty .floor { height: 1px; background: var(--rail); margin: 12px 0; }
+.spec-arrival .empty p { font-family: var(--font-body); font-size: 16px; line-height: 1.55;
+                         color: var(--ink-subtle); max-width: 56ch; }
+.spec-arrival .empty h4 { color: var(--ink-faint); }
+
+.spec-arrival .cta { margin-top: 24px; padding: 2px; }
+.spec-arrival .stale-line { margin-top: 24px; }
+.spec-arrival .colophon-rule { margin-top: 48px; }
+.spec-arrival .colophon { margin-top: 24px; color: var(--ink-faint); }
+
+@media (max-width: 600px) {
+  .spec-arrival { padding: 32px 16px; }
+  .spec-arrival .page { padding: 24px 20px; }
+  .spec-arrival .t-d1 { font-size: 27px; }
+  .spec-arrival .lh-heads { flex-direction: column; align-items: flex-start; gap: 4px; }
+  .spec-arrival .lh-studio .locality { margin-top: 4px; }
+  .spec-arrival .act--terminal { width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spec-arrival *, .spec-arrival *::before, .spec-arrival *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
+@media (forced-colors: active) {
+  .spec-arrival .act--terminal { border: 2px solid ButtonText; }
+  .spec-arrival .act .label::before, .spec-arrival .act .label::after { forced-color-adjust: none; background: ButtonText; }
+  .spec-arrival hr, .spec-arrival .page, .spec-arrival .empty .floor { border-color: CanvasText; }
+  .spec-arrival .act:focus-visible { outline: 2px solid Highlight; }
+}
+</style>
+
+<body data-prose-total="1100">
+
+<div class="shell">
+
+<header class="masthead">
+  <p class="eyebrow">Patina &middot; The Document &middot; proposal for the Patina and Middle West Studio team &middot; 8 September 2026</p>
+  <h1>The First Letter<span class="sub">a client&rsquo;s first touch, written by the studio</span></h1>
+  <p class="standing">Leah writes to Dave; Patina carries it and says so once, small, at the bottom.</p>
+  <div class="masthead-meta">
+    <div><b>Prepared for</b><span>Kody &middot; build, infrastructure, operations</span><span>Leah and the Middle West Studio team &middot; design and practice. The mockups draw their studio by name.</span></div>
+    <div><b>Lanes</b><span>L1 The send leg</span><span>L2 The composer</span><span>L3 The arrival</span><span>L4 The designer&rsquo;s account</span><span>&asymp;10.5 engineer-days</span></div>
+    <div><b>Standing</b><span>Nothing here is built</span><span>One recommendation, thirteen rulings</span></div>
+  </div>
+</header>
+
+<nav class="index" aria-label="Contents">
+  <p class="idxhead">Contents</p>
+  <ol>
+    <li><a href="#wound"><span class="n">00</span><span>The wound</span></a></li>
+    <li><a href="#rule"><span class="n">01</span><span>The one rule</span></a></li>
+    <li><a href="#panel"><span class="n">02</span><span>The panel</span></a></li>
+    <li><a href="#moment"><span class="n">03</span><span>The moment</span></a></li>
+    <li><a href="#composer"><span class="n">04</span><span>The composer</span></a></li>
+    <li><a href="#letter"><span class="n">05</span><span>The letter</span></a></li>
+    <li><a href="#arrival"><span class="n">06</span><span>The arrival</span></a></li>
+    <li><a href="#after"><span class="n">07</span><span>After send</span></a></li>
+    <li><a href="#takes"><span class="n">08</span><span>What it takes</span></a></li>
+    <li><a href="#rulings"><span class="n">09</span><span>Rulings</span></a></li>
+    <li><a href="#out"><span class="n">10</span><span>What stays out</span></a></li>
+    <li><a href="#respond"><span class="n">11</span><span>How to respond</span></a></li>
+    <li><a href="#appendix"><span class="n">&mdash;</span><span>Appendix</span></a></li>
+  </ol>
+</nav>
+
+<main>
+
+<!-- ============================================================ 00 -->
+<section id="wound" data-prose-cap="90">
+  <div class="opener"><p class="eyebrow">Zero</p><h2>The wound</h2></div>
+
+  <figure class="mock">
+    <p class="mock-cap">M0 &middot; Today &middot; the email a homeowner receives &middot; quoted verbatim</p>
+
+    <div class="greyplate">
+      <p class="gp-line"><span class="gp-lab">Subject</span> You&rsquo;re invited to Patina</p>
+      <p class="gp-line"><span class="gp-lab">Preheader</span> You&rsquo;ve been invited to join Patina.</p>
+      <hr class="gp-rule">
+      <p class="gp-head">You&rsquo;re invited to Patina.</p>
+      <p class="gp-body">You&rsquo;ve been invited to join Patina &mdash; a workshop for interior designers, their clients, and the makers they trust. Accept below to set up your account. This invitation expires in 60 minutes.</p>
+      <p class="gp-cta">Accept invitation</p>
+      <p class="gp-foot">Button not working? Paste this link into your browser: &hellip;<br>
+        Not expecting this? You can safely ignore this email.<br>
+        Patina &mdash; A workshop for interior designers, their clients, and the makers they trust.<br>
+        Sent to {{ .Email }} &middot; Patina</p>
+    </div>
+
+    <div class="greyplate">
+      <p class="gp-lab">And on the designer&rsquo;s side, the act she ticks</p>
+      <p class="gp-check"><span class="gp-box" aria-hidden="true"></span>Send a magic-link invite to Patina</p>
+    </div>
+
+    <figcaption><b>Sources.</b> <span class="ref">supabase/templates/invite.html</span> registered at <span class="ref">supabase/config.toml:213-215</span>; expiry from <span class="ref">config.toml:183</span> (<span class="ref">otp_expiry = 3600</span>). The checkbox: <span class="ref">add-person-sheet.tsx</span>. No studio, no designer, no project, no note &mdash; one shared template serves designer, admin and client invites alike.</figcaption>
+  </figure>
+
+  <p class="lede">A homeowner&rsquo;s first contact with Patina is the letter above. It names no studio, no designer, no project, and carries no note. The only reason it gives for arriving is a product description, and it allows her sixty minutes to act on it.</p>
+
+  <p>A better sender exists in the codebase, studio-branded with a seven-day token and a personal message, and has never had a caller. Lens 1 graded the live letter F for a cold recipient; lens 3 called the one-hour expiry a textbook phishing tell.</p>
+</section>
+
+<!-- ============================================================ 01 -->
+<section id="rule" data-prose-cap="60">
+  <div class="opener"><p class="eyebrow">One</p><h2>The one rule</h2></div>
+
+  <p class="lede">The studio is the author; Patina is the press. The email is the first client surface, so PP-1&rsquo;s letterhead and colophon law reach it.</p>
+
+  <div class="tablewrap">
+    <table class="tight">
+      <thead><tr><th class="w-name" scope="col">The law</th><th class="w-what" scope="col">On this letter</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">Two-sided letterhead</th><td><strong>MIDDLE WEST STUDIO</strong> / Madison &middot; 8 September 2026 left; <strong>Prepared for Dave Okonkwo</strong> right. Studio logo &le;24px beside the name when one exists.</td></tr>
+        <tr><th scope="row">No Patina wordmark above the colophon</th><td>None on the letter, none on the page it opens.</td></tr>
+        <tr><th scope="row">Colophon</th><td><strong>Prepared by Middle West Studio &middot; Sent through Patina</strong> &mdash; the one place the name appears.</td></tr>
+        <tr><th scope="row">Never a placeholder identity</th><td>A missing city, logo or project prints nothing. The solo designer&rsquo;s own name is the letterhead.</td></tr>
+        <tr><th scope="row">Copy in the studio&rsquo;s voice</th><td>The system sentence is truth-framed and dated; first person appears only inside her quoted note. R7 signs it.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>Patina&rsquo;s name appears once in the whole letter, in the colophon at the foot. Whether the shell is a client surface is unruled; <a href="#r2">R2</a> asks for that ruling before the send leg is written.</p>
+</section>
+
+<!-- ============================================================ 02 -->
+<section id="panel" data-prose-cap="60">
+  <div class="opener"><p class="eyebrow">Two</p><h2>The panel</h2></div>
+
+  <p class="lede">Six lenses read the same wound; where they disagreed, the disagreement became a ruling.</p>
+
+  <div class="tablewrap">
+    <table class="tight">
+      <thead><tr><th class="w-name" scope="col">Lens</th><th class="w-what" scope="col">The line it holds</th></tr></thead>
+      <tbody>
+        <tr><th scope="row"><a href="panel/lens-1-homeowner.md">1 &middot; The homeowner</a></th><td>The first three seconds are From, subject, preheader, first line &mdash; and today&rsquo;s letter closes none of the &ldquo;why am I getting this&rdquo; gap. Graded <strong>F</strong> for a cold recipient.</td></tr>
+        <tr><th scope="row"><a href="panel/lens-2-composer.md">2 &middot; The composer</a></th><td>One field component, three renderings; scaffolded, never pre-written, and never asked for twice in one send.</td></tr>
+        <tr><th scope="row"><a href="panel/lens-3-envelope.md">3 &middot; The envelope</a></th><td>The business name leads and &ldquo;via&rdquo; discloses the relay; a personal name in front of a domain that is not hers is the shape filters catch.</td></tr>
+        <tr><th scope="row"><a href="panel/lens-4-voice.md">4 &middot; The voice</a></th><td>Leah writes to Dave; Patina carries it and says so once, small, at the bottom. Every word of the letter is written here.</td></tr>
+        <tr><th scope="row"><a href="panel/lens-5-arrival.md">5 &middot; The arrival</a></th><td>The note needs a place to land and one already exists &mdash; the house&rsquo;s standing note &mdash; but its byline has to be frozen at send.</td></tr>
+        <tr><th scope="row"><a href="panel/lens-6-systems.md">6 &middot; Systems</a></th><td>The durable thing and the auth thing are different objects, and only one of them can be seven days. It has to be ours.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="caption no-prose">Synthesis: <a href="panel/synthesis.md">panel/synthesis.md</a>. Research: <a href="research/01-invite-flow.md">01-invite-flow</a> &middot; <a href="research/02-email-system.md">02-email-system</a> &middot; <a href="research/03-rulings-and-voice.md">03-rulings-and-voice</a>.</p>
+</section>
+
+<!-- ============================================================ 03 -->
+<section id="moment" data-prose-cap="60">
+  <div class="opener"><p class="eyebrow">Three</p><h2>The moment</h2></div>
+
+  <p class="lede">A client comes through one of three doors. One field component serves all three; only its rendering changes, and nobody writes the same sentence twice in one send.</p>
+
+  <div class="tablewrap">
+    <table class="tight">
+      <thead><tr><th class="w-name" scope="col">Door</th><th scope="col">Where it is</th><th class="w-what" scope="col">What it gets</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">Add someone to your people</th><td>People Room &rarr; a client <span class="ref">add-person-sheet.tsx</span></td><td>The full field: label, placeholder, counter, facts line, glance check.</td></tr>
+        <tr><th scope="row">ClientPicker, armed row</th><td>Invite-and-link on a captured household <span class="ref">client-picker.tsx:200-230</span></td><td>A collapsed <strong>+ A line for Dave</strong> disclosure that expands the same field in place. The row stays a row until she asks it not to.</td></tr>
+        <tr><th scope="row">Send sheet</th><td>A proposal to a household with no account <span class="ref">send-sheet.tsx:573-600</span></td><td><strong>No second field.</strong> The proposal&rsquo;s existing personal message is the note.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ============================================================ 04 -->
+<section id="composer" data-prose-cap="110">
+  <div class="opener"><p class="eyebrow">Four</p><h2>The composer</h2></div>
+
+  <figure class="mock">
+    <p class="mock-cap">M1 &middot; The composer &middot; four states &middot; specimen <span class="ref">specimens/composer-sheet.html</span></p>
+    <div class="specframe">
+<div class="spec-composer">
+ <div class="stack">
+
+  <h2 class="spec-title t-head">The composer · add a person to your roster</h2>
+
+  <!-- ── (i) the field empty ───────────────────────────────────────── -->
+  <section class="plate" aria-label="State one">
+    <div class="sheet">
+      <p class="eyebrow t-head">Add · to your roster</p>
+      <h3 class="sheet-title t-d1">Bring someone in</h3>
+      <p class="sheet-sub t-body">Add a client to your directory. They appear on your roster at once; the letter signs them in.</p>
+
+      <div class="roles" role="group" aria-label="Role">
+        <button type="button" class="act act--tertiary" aria-pressed="true"><span class="label">A client</span></button>
+        <button type="button" class="act act--tertiary" aria-pressed="false"><span class="label">A maker</span></button>
+        <button type="button" class="act act--tertiary" aria-pressed="false"><span class="label">A GC</span></button>
+        <button type="button" class="act act--tertiary" aria-pressed="false"><span class="label">A sub</span></button>
+        <button type="button" class="act act--tertiary" aria-pressed="false"><span class="label">An installer</span></button>
+        <button type="button" class="act act--tertiary" aria-pressed="false"><span class="label">A receiver</span></button>
+      </div>
+      <hr class="roles-rule">
+
+      <div class="field">
+        <label class="t-head" for="s1-name">Full name <span class="opt">(optional)</span></label>
+        <input id="s1-name" type="text" value="Dave Okonkwo">
+      </div>
+      <div class="field">
+        <label class="t-head" for="s1-email">Email</label>
+        <input id="s1-email" type="email" value="dave@okonkwo.net">
+      </div>
+
+      <p class="facts">Dave Okonkwo · dave@okonkwo.net · Van Hise kitchen and back hall · Added today</p>
+
+      <div class="field">
+        <label class="t-head" for="s1-note">A line for Dave</label>
+        <textarea id="s1-note" maxlength="280" placeholder="Say why you added them and what they'll find. Two lines is plenty."></textarea>
+        <p class="counter t-meta">Up to 280 characters</p>
+      </div>
+
+      <div class="send">
+        <div class="send-row">
+          <input id="s1-send" type="checkbox" checked>
+          <label class="t-body" for="s1-send">Send Dave the letter</label>
+        </div>
+        <p class="helper t-body-sm">He gets one email from Middle West Studio with your line in it and a link that signs him in. Leave it off and he&rsquo;s on your roster only &mdash; you can write later.</p>
+      </div>
+
+      <p class="escape t-body-sm">Not a client yet? <button type="button" class="act act--inline"><span class="label">Add a lead in the pipeline</span></button>.</p>
+
+      <div class="acts">
+        <button type="button" class="act act--terminal"><span class="label">Add and send the letter</span></button>
+        <button type="button" class="act act--tertiary"><span class="label">Cancel</span></button>
+      </div>
+    </div>
+    <p class="plate-caption t-meta">One · the field empty, the letter armed · nothing pre-written</p>
+  </section>
+
+  <!-- ── (ii) typed ────────────────────────────────────────────────── -->
+  <section class="plate" aria-label="State two">
+    <div class="sheet">
+      <p class="eyebrow t-head">Add · to your roster</p>
+      <h3 class="sheet-title t-d1">Bring someone in</h3>
+      <p class="sheet-sub t-body">Add a client to your directory. They appear on your roster at once; the letter signs them in.</p>
+
+      <div class="roles" role="group" aria-label="Role">
+        <button type="button" class="act act--tertiary" aria-pressed="true"><span class="label">A client</span></button>
+        <button type="button" class="act act--tertiary" aria-pressed="false"><span class="label">A maker</span></button>
+        <button type="button" class="act act--tertiary" aria-pressed="false"><span class="label">A GC</span></button>
+        <button type="button" class="act act--tertiary" aria-pressed="false"><span class="label">A sub</span></button>
+        <button type="button" class="act act--tertiary" aria-pressed="false"><span class="label">An installer</span></button>
+        <button type="button" class="act act--tertiary" aria-pressed="false"><span class="label">A receiver</span></button>
+      </div>
+      <hr class="roles-rule">
+
+      <div class="field">
+        <label class="t-head" for="s2-name">Full name <span class="opt">(optional)</span></label>
+        <input id="s2-name" type="text" value="Dave Okonkwo">
+      </div>
+      <div class="field">
+        <label class="t-head" for="s2-email">Email</label>
+        <input id="s2-email" type="email" value="dave@okonkwo.net">
+      </div>
+
+      <p class="facts">Dave Okonkwo · dave@okonkwo.net · Van Hise kitchen and back hall · Added today</p>
+
+      <div class="field">
+        <label class="t-head" for="s2-note">A line for Dave</label>
+        <textarea id="s2-note" maxlength="280" rows="4">Dave — this is the same file I work from, not a summary of it. The kitchen cabinet drawings are in there now; the back hall isn't drawn yet. Anything you want changed, say so on the page and I'll see it.</textarea>
+        <p class="counter t-meta">77 left</p>
+      </div>
+
+      <div class="glance">
+        <p class="facts">Dave Okonkwo · dave@okonkwo.net · Van Hise kitchen and back hall · Added today</p>
+        <blockquote>Dave &mdash; this is the same file I work from, not a summary of it. The kitchen cabinet drawings are in there now; the back hall isn&rsquo;t drawn yet. Anything you want changed, say so on the page and I&rsquo;ll see it.</blockquote>
+      </div>
+
+      <div class="send">
+        <div class="send-row">
+          <input id="s2-send" type="checkbox" checked>
+          <label class="t-body" for="s2-send">Send Dave the letter</label>
+        </div>
+        <p class="helper t-body-sm">He gets one email from Middle West Studio with your line in it and a link that signs him in. Leave it off and he&rsquo;s on your roster only &mdash; you can write later.</p>
+      </div>
+
+      <p class="escape t-body-sm">Not a client yet? <button type="button" class="act act--inline"><span class="label">Add a lead in the pipeline</span></button>.</p>
+
+      <div class="acts">
+        <button type="button" class="act act--terminal"><span class="label">Add and send the letter</span></button>
+        <button type="button" class="act act--tertiary"><span class="label">Cancel</span></button>
+      </div>
+    </div>
+    <p class="plate-caption t-meta">Two · her words typed, 203 of 280 · the glance check under the field</p>
+  </section>
+
+  <!-- ── (iii) the letter left off ─────────────────────────────────── -->
+  <section class="plate" aria-label="State three">
+    <div class="sheet">
+      <p class="eyebrow t-head">Add · to your roster</p>
+      <h3 class="sheet-title t-d1">Bring someone in</h3>
+      <p class="sheet-sub t-body">Add a client to your directory. They appear on your roster at once; the letter signs them in.</p>
+
+      <div class="roles" role="group" aria-label="Role">
+        <button type="button" class="act act--tertiary" aria-pressed="true"><span class="label">A client</span></button>
+        <button type="button" class="act act--tertiary" aria-pressed="false"><span class="label">A maker</span></button>
+        <button type="button" class="act act--tertiary" aria-pressed="false"><span class="label">A GC</span></button>
+        <button type="button" class="act act--tertiary" aria-pressed="false"><span class="label">A sub</span></button>
+        <button type="button" class="act act--tertiary" aria-pressed="false"><span class="label">An installer</span></button>
+        <button type="button" class="act act--tertiary" aria-pressed="false"><span class="label">A receiver</span></button>
+      </div>
+      <hr class="roles-rule">
+
+      <div class="field">
+        <label class="t-head" for="s3-name">Full name <span class="opt">(optional)</span></label>
+        <input id="s3-name" type="text" value="Dave Okonkwo">
+      </div>
+      <div class="field">
+        <label class="t-head" for="s3-email">Email</label>
+        <input id="s3-email" type="email" value="dave@okonkwo.net">
+      </div>
+
+      <p class="facts">Dave Okonkwo · dave@okonkwo.net · Van Hise kitchen and back hall · Added today</p>
+
+      <p class="disclosure">
+        <button type="button" class="act act--tertiary" aria-expanded="false"><span class="label">+ A line for Dave</span></button>
+      </p>
+
+      <div class="send">
+        <div class="send-row">
+          <input id="s3-send" type="checkbox">
+          <label class="t-body" for="s3-send">Send Dave the letter</label>
+        </div>
+        <p class="helper t-body-sm">He gets one email from Middle West Studio with your line in it and a link that signs him in. Leave it off and he&rsquo;s on your roster only &mdash; you can write later.</p>
+      </div>
+
+      <p class="escape t-body-sm">Not a client yet? <button type="button" class="act act--inline"><span class="label">Add a lead in the pipeline</span></button>.</p>
+
+      <div class="acts">
+        <button type="button" class="act act--terminal"><span class="label">Add to your people</span></button>
+        <button type="button" class="act act--tertiary"><span class="label">Cancel</span></button>
+      </div>
+    </div>
+    <p class="plate-caption t-meta">Three · the letter left off · the field folds to a line, the button says what it does</p>
+  </section>
+
+  <!-- ── the People Room, afterwards ───────────────────────────────── -->
+  <section class="plate" aria-label="The People Room afterwards">
+    <div class="sheet">
+      <p class="eyebrow t-head">The People Room</p>
+      <ul class="rows">
+        <li>
+          <p class="who t-d3">Dave Okonkwo</p>
+          <p class="state t-body-sm">Letter sent 8 Sept</p>
+        </li>
+        <li>
+          <p class="who t-d3">Priya Raman</p>
+          <p class="state t-body-sm">Link lapsed 15 Sept · <button type="button" class="act act--inline"><span class="label">Write again</span></button></p>
+        </li>
+      </ul>
+    </div>
+    <p class="plate-caption t-meta">Four · the row afterwards · a dated sentence and, where there is one, the remedy beside it</p>
+  </section>
+
+ </div>
+</div>
+    </div>
+    <figcaption><b>Four states.</b> The field empty with the letter armed &middot; her words typed with the glance check beneath &middot; the letter left off, the field folds to a line and the button renamed &middot; the People Room row afterwards.</figcaption>
+  </figure>
+
+  <p class="lede">One field component, rendered three ways. It is optional, capped at 280 characters, and nothing in it is pre-written.</p>
+
+  <p>Above the field sits an uneditable facts line in mono &mdash; who, where, when &mdash; assembled from the row, never invented; a fact that is missing prints as <span class="mono">NO PROJECT YET</span> rather than a guess. Below it, the field is blank.</p>
+
+  <p>The checkbox today reads <span class="quote">Send a magic-link invite to Patina</span>; it becomes <strong>Send Dave the letter</strong>, and the button names both acts: <strong>ADD AND SEND THE LETTER</strong>, or <strong>ADD TO YOUR PEOPLE</strong> when it is off. Nothing sends under a label that did not say so.</p>
+
+  <h3 class="mono-head">Behaviour</h3>
+  <ul>
+    <li><strong>Optional, 280 characters</strong> &mdash; send works with an empty note and the letter reads whole without it. The precedent is the studio handoff note&rsquo;s <span class="ref">char_length &le; 280</span> CHECK, migration 00560. <a href="#r4">R4</a>.</li>
+    <li><strong>The counter</strong> reads <span class="mono">Up to 280 characters</span>, then <span class="mono">96 left</span>, then <span class="mono">That&rsquo;s the whole 280.</span> No colour change, no red.</li>
+    <li><strong>The facts line</strong> is hers to read, not to edit: <span class="mono">DAVE OKONKWO &middot; dave@okonkwo.net &middot; VAN HISE KITCHEN AND BACK HALL &middot; ADDED TODAY</span>. Missing facts print <span class="mono">NO PROJECT YET</span> or <span class="mono">NO NAME</span>.</li>
+    <li><strong>The placeholder is an instruction, not a draft</strong> &mdash; <span class="quote">Say why you added them and what they&rsquo;ll find. Two lines is plenty.</span> A placeholder that sounds sendable teaches the wrong thing. The Arrival Arc settled this shape once already: a context line the system owns, and words that are hers.</li>
+    <li><strong>The label</strong> is <span class="quote">A line for Dave</span>, falling back to <span class="quote">A line to send with it</span> when there is no name.</li>
+    <li><strong>The helper</strong> under the checkbox: <span class="quote">He gets one email from Middle West Studio with your line in it and a link that signs him in. Leave it off and he&rsquo;s on your roster only &mdash; you can write later.</span> A gender-free variant when no name is known.</li>
+    <li><strong>Checkbox off:</strong> the field folds to a single line, <span class="quote">+ A line for Dave</span>; opening it turns the letter back on. The ClientPicker&rsquo;s armed row starts folded the same way <span class="ref">client-picker.tsx:200-230</span>.</li>
+    <li><strong>As she types</strong>, her words appear beneath the field in the letter&rsquo;s callout style with the facts line above &mdash; a glance check, not a rendered-email preview.</li>
+    <li><strong>The success line</strong> tells the truth about both acts: <span class="quote">Dave is on your roster. Your letter is on its way to dave@okonkwo.net.</span> &middot; <span class="quote">&hellip;Nothing was sent.</span> &middot; <span class="quote">Dave was already on Patina. He&rsquo;s linked to you now; a short letter tells him so.</span></li>
+    <li><strong>The activity log</strong> records an author, not a system: <span class="quote">Leah wrote to Dave Okonkwo</span> &mdash; <span class="quote">Letter sent to dave@okonkwo.net &middot; with a note</span>.</li>
+    <li><strong>Any studio member may write, and the writer signs</strong> &mdash; owner-only signing for juniors is a business call, not a default. <a href="#r11">R11</a>.</li>
+    <li><strong>The rename ships regardless of the rest</strong> &mdash; &ldquo;invite&rdquo;, &ldquo;magic-link&rdquo; and &ldquo;to Patina&rdquo; leave the designer&rsquo;s side; the house word is <em>the letter</em>. <a href="#r12">R12</a>.</li>
+  </ul>
+</section>
+
+<!-- ============================================================ 05 -->
+<section id="letter" data-prose-cap="110">
+  <div class="opener"><p class="eyebrow">Five</p><h2>The letter</h2></div>
+
+  <figure class="mock">
+    <p class="mock-cap">M2 &middot; The letter, as it lands &middot; specimen <span class="ref">specimens/email-letter.html</span></p>
+    <div class="specframe">
+<div class="spec-letter">
+
+  <div class="sheet">
+    <h2 class="spec-title t-head">The letter, as it lands</h2>
+
+    <dl class="envelope">
+      <dt>From</dt><dd>Middle West Studio via Patina &lt;hello@patina.cloud&gt;</dd>
+      <dt>Reply-to</dt><dd>leah@middleweststudio.com</dd>
+      <dt>Subject</dt><dd>Leah Hartwell added you to the Van Hise kitchen and back hall</dd>
+      <dt>Preheader</dt><dd>Where Middle West Studio keeps the record of your job.</dd>
+    </dl>
+
+    <div class="mail">
+      <div class="card">
+        <div class="bar" aria-hidden="true"><i class="bar-verd"></i><i class="bar-brass"></i><i class="bar-rust"></i></div>
+
+        <div class="px">
+          <div class="lh">
+            <div class="lh-left">
+              <svg class="monogram" viewBox="0 0 24 24" role="img" aria-label="Middle West Studio">
+                <rect x=".5" y=".5" width="23" height="23" rx="2" fill="none" stroke="currentColor"></rect>
+                <text x="12" y="15.5" text-anchor="middle">MW</text>
+              </svg>
+              <div>
+                <p class="lh-studio">Middle West Studio</p>
+                <p class="lh-locality">Madison · 8 September 2026</p>
+              </div>
+            </div>
+            <p class="lh-for">Prepared for Dave Okonkwo</p>
+          </div>
+          <hr class="lh-rule">
+
+          <p class="standing">Leah Hartwell of Middle West Studio added you to the Van Hise kitchen and back hall on 8 September. The page below holds the studio&rsquo;s record of the job &mdash; the plans, the papers, and the numbers.</p>
+
+          <blockquote class="callout">Dave &mdash; this is the same file I work from, not a summary of it. The kitchen cabinet drawings are in there now; the back hall isn&rsquo;t drawn yet. Anything you want changed, say so on the page and I&rsquo;ll see it.</blockquote>
+
+          <p class="cta"><a href="https://client.patina.cloud/auth/invite/{token}">Open the project</a></p>
+
+          <p class="expiry">The link works until 15 September; Leah can send another.</p>
+
+          <p class="signoff">&mdash; Leah Hartwell · Middle West Studio · Madison</p>
+
+          <hr class="foot-rule">
+        </div>
+
+        <div class="colophon">
+          <p>Prepared by Middle West Studio · Sent through Patina</p>
+          <p>Sent to dave@okonkwo.net at the request of Middle West Studio.</p>
+          <p>If this isn&rsquo;t for you, nothing happens &mdash; ignore it and the link lapses on its own.</p>
+          <p class="paste">Button not working? Paste this link into your browser: <a href="https://client.patina.cloud/auth/invite/{token}">https://client.patina.cloud/auth/invite/{token}</a></p>
+        </div>
+      </div>
+    </div>
+
+    <p class="plate-caption t-meta">The letter · Middle West Studio · 8 September 2026</p>
+  </div>
+
+  <div class="sheet">
+    <h3 class="plate-head t-head">Images off · the plain-text part</h3>
+    <div class="plaintext-wrap">
+<pre>MIDDLE WEST STUDIO                              Prepared for Dave Okonkwo
+Madison · 8 September 2026
+─────────────────────────────────────────────────────────────────────────
+
+Leah Hartwell of Middle West Studio added you to the Van Hise kitchen and
+back hall on 8 September. The page below holds the studio's record of the
+job — the plans, the papers, and the numbers.
+
+  "Dave — this is the same file I work from, not a summary of it. The
+  kitchen cabinet drawings are in there now; the back hall isn't drawn
+  yet. Anything you want changed, say so on the page and I'll see it."
+
+Open the project: https://client.patina.cloud/auth/invite/{token}
+
+The link works until 15 September; Leah can send another.
+
+— Leah Hartwell · Middle West Studio · Madison
+
+─────────────────────────────────────────────────────────────────────────
+Prepared by Middle West Studio · Sent through Patina
+Sent to dave@okonkwo.net at the request of Middle West Studio.
+If this isn't for you, nothing happens — ignore it and the link lapses on
+its own.</pre>
+    </div>
+    <p class="plate-caption t-meta">The same letter with images off · text/plain part · 8 September 2026</p>
+  </div>
+
+  <div class="sheet">
+    <h3 class="plate-head t-head">The solo fixture · no studio, no city, no project</h3>
+
+    <dl class="envelope">
+      <dt>From</dt><dd>Nora Feld via Patina &lt;hello@patina.cloud&gt;</dd>
+      <dt>Reply-to</dt><dd>nora@norafeld.com</dd>
+      <dt>Subject</dt><dd>Nora Feld set up a page for your work together</dd>
+      <dt>Preheader</dt><dd>Where Nora keeps the record of your work.</dd>
+    </dl>
+
+    <div class="mail">
+      <div class="card card--solo">
+        <div class="bar" aria-hidden="true"><i class="bar-verd"></i><i class="bar-brass"></i><i class="bar-rust"></i></div>
+
+        <div class="px">
+          <div class="lh">
+            <div class="lh-left">
+              <div>
+                <p class="lh-studio">Nora Feld</p>
+                <p class="lh-locality">8 September 2026</p>
+              </div>
+            </div>
+            <p class="lh-for">Prepared for Priya Raman</p>
+          </div>
+          <hr class="lh-rule">
+
+          <p class="standing">Nora Feld set up a page for your work together on 8 September. It&rsquo;s where she keeps the record &mdash; the plans, the papers, and the numbers, as they come.</p>
+
+          <blockquote class="callout">Priya &mdash; nothing&rsquo;s in here yet. I set it up so we have one place for the drawings and the numbers when they start. Send me those photos of the sunroom whenever you get a minute and I&rsquo;ll put them in.</blockquote>
+
+          <p class="cta"><a href="https://client.patina.cloud/auth/invite/{token}">Open the page</a></p>
+
+          <p class="expiry">The link works until 15 September; Nora can send another.</p>
+
+          <p class="signoff">&mdash; Nora Feld</p>
+
+          <hr class="foot-rule">
+        </div>
+
+        <div class="colophon">
+          <p>Prepared by Nora Feld · Sent through Patina</p>
+          <p>Sent to priya@ramanhouse.com at the request of Nora Feld.</p>
+          <p>If this isn&rsquo;t for you, nothing happens &mdash; ignore it and the link lapses on its own.</p>
+          <p class="paste">Button not working? Paste this link into your browser: <a href="https://client.patina.cloud/auth/invite/{token}">https://client.patina.cloud/auth/invite/{token}</a></p>
+        </div>
+      </div>
+    </div>
+
+    <p class="plate-caption t-meta">The same skeleton · no logo, no city, no project · slots with no fact print nothing</p>
+  </div>
+
+</div>
+    </div>
+    <figcaption><b>Body length.</b> 96 words with her note, 55 without &mdash; and it reads whole either way. Three plates: the letter, the same letter with images off as the text/plain part, and the solo fixture where no studio, no city and no project each print nothing.</figcaption>
+  </figure>
+
+  <p class="lede">The letter is 96 words with her note and 55 without, and it reads whole either way.</p>
+
+  <div class="tablewrap">
+    <table class="tight">
+      <thead><tr><th class="w-name" scope="col">The envelope</th><th class="w-what" scope="col">Value</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">From</th><td><span class="mono">Middle West Studio via Patina &lt;hello@patina.cloud&gt;</span> &mdash; business name leads, &ldquo;via&rdquo; discloses the relay. Fallback with no studio: <span class="mono">Leah Hartwell via Patina</span>. <a href="#r1">R1</a></td></tr>
+        <tr><th scope="row">Reply-to</th><td>The designer&rsquo;s own address. Unanimous; the precedent already runs in four senders.</td></tr>
+        <tr><th scope="row">Subject</th><td><span class="mono">Leah Hartwell added you to the Van Hise kitchen and back hall</span>. Solo fixture: <span class="mono">Nora Feld set up a page for your work together</span>.</td></tr>
+        <tr><th scope="row">Preheader</th><td><span class="mono">Where Middle West Studio keeps the record of your job.</span> It answers what happens if she opens it, rather than repeating the subject.</td></tr>
+        <tr><th scope="row">Category</th><td>Transactional, through <span class="ref">sendCompliantEmail</span> with an idempotency key. No unsubscribe footer.</td></tr>
+        <tr><th scope="row">Plain-text part</th><td>Mandatory, not optional &mdash; the same letter, laid out for a reader with images off.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>It opens with the studio&rsquo;s letterhead and closes with one colophon. Between them: a standing sentence the system writes and never disguises as hers, her note in a brass-ruled callout, one button, and a date the link works until. There is no <span class="quote">Accept invitation</span> and no countdown.</p>
+
+  <p>The subject says added, not invited: added is what happened, and invited would make Patina the host. Three lenses disagreed on the From name; <a href="#r1">R1</a> records the disagreement and the recommendation both, and <a href="#r2">R2</a> the letterhead. <a href="#r3">R3</a> owns the copy, <a href="#r7b">R7&prime;</a> the sign-off.</p>
+
+  <h3 class="mono-head">The body, line by line</h3>
+  <ul>
+    <li><strong>Standing sentence</strong>, system-written and truth-framed, always present: <span class="quote">Leah Hartwell of Middle West Studio added you to the Van Hise kitchen and back hall on 8 September. The page below holds the studio&rsquo;s record of the job &mdash; the plans, the papers, and the numbers.</span> Two sentences deliberately: the second tells a stranger what he has been handed.</li>
+    <li><strong>The note</strong>, a brass-ruled callout, first person, hers alone. With no note the callout does not print.</li>
+    <li><strong>One button</strong>: <span class="quote">Open the project</span>, or <span class="quote">Open the page</span> when there is no project.</li>
+    <li><strong>The expiry line</strong>: <span class="quote">The link works until 15 September; Leah can send another.</span> A date, once, with the remedy beside it.</li>
+    <li><strong>Sign-off</strong>: <span class="quote">&mdash; Leah Hartwell &middot; Middle West Studio &middot; Madison</span>. Full name on the first letter; R7&rsquo;s given name on every letter after. <a href="#r7b">R7&prime;</a>.</li>
+    <li><strong>Footer</strong>, three lines and a paste-link: the colophon, <span class="quote">Sent to dave@okonkwo.net at the request of Middle West Studio.</span>, and <span class="quote">If this isn&rsquo;t for you, nothing happens &mdash; ignore it and the link lapses on its own.</span></li>
+  </ul>
+</section>
+
+<!-- ============================================================ 06 -->
+<section id="arrival" data-prose-cap="110">
+  <div class="opener"><p class="eyebrow">Six</p><h2>The arrival</h2></div>
+
+  <figure class="mock">
+    <p class="mock-cap">M3 &middot; The arrival &middot; specimen <span class="ref">specimens/arrival.html</span></p>
+    <div class="specframe">
+<div class="spec-arrival">
+ <div class="stack">
+
+  <h2 class="spec-title t-head">The arrival · page two of the letter, and the door it opens</h2>
+
+  <!-- ── (i) the token landing page ────────────────────────────────── -->
+  <section class="plate" aria-label="Plate one">
+    <div class="page">
+      <header>
+        <div class="lh-heads">
+          <div class="lh-studio">
+            <p class="t-head">Middle West Studio</p>
+            <p class="locality t-meta">Madison · 8 September 2026</p>
+          </div>
+          <p class="t-head">Prepared for Dave Okonkwo</p>
+        </div>
+        <div class="lh-title">
+          <h3 class="t-d1">The Van Hise kitchen and back hall</h3>
+        </div>
+        <hr class="lh-rule">
+      </header>
+
+      <p class="standing t-body">Leah Hartwell of Middle West Studio added you to the Van Hise kitchen and back hall on 8 September. The page below holds the studio&rsquo;s record of the job &mdash; the plans, the papers, and the numbers.</p>
+
+      <blockquote class="note">Dave &mdash; this is the same file I work from, not a summary of it. The kitchen cabinet drawings are in there now; the back hall isn&rsquo;t drawn yet. Anything you want changed, say so on the page and I&rsquo;ll see it.</blockquote>
+
+      <p class="cta">
+        <button type="button" class="act act--terminal"><span class="label">Open the project</span></button>
+      </p>
+
+      <hr class="colophon-rule">
+      <p class="colophon t-meta">Prepared by Middle West Studio · Sent through Patina</p>
+    </div>
+    <p class="plate-caption t-meta">One · the token page · the same letterhead, the same sentence, the same note, no password</p>
+  </section>
+
+  <!-- ── (ii) the first Threshold visit ────────────────────────────── -->
+  <section class="plate" aria-label="Plate two">
+    <div class="page">
+      <header>
+        <div class="lh-heads">
+          <div class="lh-studio">
+            <p class="t-head">Middle West Studio</p>
+            <p class="locality t-meta">Madison · prepared by Leah Hartwell</p>
+          </div>
+          <p class="t-head">Prepared for Dave Okonkwo</p>
+        </div>
+        <div class="lh-title">
+          <h3 class="t-d1">The Van Hise kitchen and back hall</h3>
+          <p class="sub t-meta">Drawings · September 2026</p>
+        </div>
+        <hr class="lh-rule">
+      </header>
+
+      <div class="standing-note">
+        <p class="byline t-meta">&mdash; From Leah Hartwell · Middle West Studio · 8 September</p>
+        <p class="t-authorship">This is the same file I work from, not a summary of it. The kitchen cabinet drawings are in there now; the back hall isn&rsquo;t drawn yet. Anything you want changed, say so on the page and I&rsquo;ll see it.</p>
+      </div>
+
+      <section class="doorstep" aria-label="The doorstep">
+        <h4 class="t-d2">Nothing needs you today.</h4>
+        <p class="t-body">The record fills as the studio adds to it. When there is something for you, it appears here with its date.</p>
+      </section>
+
+      <section class="record" aria-label="The record">
+        <div class="empty">
+          <h4 class="t-d3">The papers</h4>
+          <div class="floor"></div>
+          <p>Nothing is filed yet. Papers appear here as they are drawn up, each with the day it was signed.</p>
+        </div>
+        <div class="empty">
+          <h4 class="t-d3">The numbers</h4>
+          <div class="floor"></div>
+          <p>Nothing has been agreed yet. Figures appear here once the studio has priced the work.</p>
+        </div>
+      </section>
+
+      <hr class="colophon-rule">
+      <p class="colophon t-meta">Prepared by Middle West Studio · Sent through Patina</p>
+    </div>
+    <p class="plate-caption t-meta">Two · the first visit · the note stands where every standing note stands, frozen at send</p>
+  </section>
+
+  <!-- ── (iii) the lapsed link ─────────────────────────────────────── -->
+  <section class="plate" aria-label="Plate three">
+    <div class="page">
+      <h3 class="t-d1">This letter&rsquo;s gone stale.</h3>
+      <p class="consequence stale-line">A fresh letter goes to dave@okonkwo.net with a new link and the same words; nothing else changes.</p>
+      <p class="cta">
+        <button type="button" class="act act--terminal"><span class="label">Send a fresh letter</span></button>
+      </p>
+
+      <hr class="colophon-rule">
+      <p class="colophon t-meta">Prepared by Middle West Studio · Sent through Patina</p>
+    </div>
+    <p class="plate-caption t-meta">Three · the lapsed link · one sentence, one tap, nothing in the studio&rsquo;s queue</p>
+  </section>
+
+ </div>
+</div>
+    </div>
+    <figcaption><b>Three plates.</b> The token page as page two of the letter &middot; the first Threshold visit, where the note stands as the house&rsquo;s first standing note with its byline frozen &middot; the lapsed link, one sentence and one tap.</figcaption>
+  </figure>
+
+  <p class="lede">Every link GoTrue mints expires at <span class="mono">otp_expiry</span>, one hour, a value shared with password recovery across three portals. The letter can promise seven days only if the link is ours.</p>
+
+  <p>The page that link opens is page two of the letter: the same letterhead, the same sentence, the same note, one button, no password. The button POSTs, because a scanner following links on GET would burn the token; the server marks it accepted, mints a fresh magic link and redirects. She lands signed in on her house.</p>
+
+  <p>Her note is seeded as the house&rsquo;s first standing note, its byline frozen at send. With no note, nothing prints.</p>
+
+  <h3 class="mono-head">What that buys, and what it still owes</h3>
+  <ul>
+    <li><strong>The link is ours</strong> &mdash; <span class="ref">client_invitations.expires_at</span> already defaults to seven days (migration 00118). GoTrue&rsquo;s own link is minted at send and discarded; the letter never carries it. <a href="#r5">R5</a>.</li>
+    <li><strong>Page two, not an auth form</strong> &mdash; the password fields retire. This also closes the split where the email names the studio and today&rsquo;s landing page names the person: both now read the same frozen snapshot, so they cannot disagree even if the studio renames itself between send and click. <a href="#r6">R6</a>.</li>
+    <li><strong>Mint on POST, never on GET</strong> &mdash; mail scanners prefetch links. Single-use on <span class="ref">accepted_at</span>, and the existing email-match guard stays fail-closed.</li>
+    <li><strong>The frozen byline</strong> &mdash; <span class="quote">&mdash; From Leah Hartwell &middot; Middle West Studio &middot; 8 September</span>, from the snapshot, never live-resolved. A live studio name would silently relabel her note on a rename.</li>
+    <li><strong>It recedes as standing notes do</strong> &mdash; superseded by the studio&rsquo;s next note, dimmed once read, never on a calendar; retired, it becomes the first dated entry in the house&rsquo;s record. <a href="#r8">R8</a>.</li>
+    <li><strong>The no-project gap</strong> &mdash; with no project there is no house for the note to land in. It lives on the letter page she has just read and on the client record, and nowhere else, until a project exists. <a href="#r8">R8</a> owns it.</li>
+    <li><strong>The lapsed link</strong> &mdash; <span class="quote">This letter&rsquo;s gone stale.</span> and one tap, <span class="quote">Send a fresh letter</span>: the identical frozen letter with a new date, sent by the system. Nothing lands in the studio&rsquo;s queue for a thing it did not do wrong.</li>
+  </ul>
+</section>
+
+<!-- ============================================================ 07 -->
+<section id="after" data-prose-cap="110">
+  <div class="opener"><p class="eyebrow">Seven</p><h2>After send</h2></div>
+
+  <p class="lede">Three row states, all of them things that happened: Letter sent 8 Sept, Signed in 9 Sept, Link lapsed 15 Sept, with the remedy beside the last.</p>
+
+  <div class="tablewrap">
+    <table class="tight">
+      <thead><tr><th class="w-name" scope="col">Row reads</th><th scope="col">Read from</th><th class="w-what" scope="col">Why this wording</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">Letter sent 8 Sept</th><td><span class="ref">client_invitations.sent_at</span> + <span class="ref">notification_log</span></td><td>An act with a date. Never &ldquo;pending&rdquo;, never a state she is waiting in.</td></tr>
+        <tr><th scope="row">Signed in 9 Sept</th><td><span class="ref">accepted_at</span></td><td>The only thing worth knowing: he arrived.</td></tr>
+        <tr><th scope="row">Link lapsed 15 Sept &middot; Write again</th><td><span class="ref">expires_at</span></td><td>The remedy sits beside the fact, so the row is never a reproach.</td></tr>
+        <tr><th scope="row"><em>Opened</em></th><td>&mdash;</td><td><strong>Withheld.</strong> Never as an absence, never on a client surface. <a href="#r9">R9</a>.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>Opened is withheld. A read receipt in a studio&rsquo;s hands has one use, and that use is pressure.</p>
+
+  <p>Resend ships in v1 against today&rsquo;s silent no-op: a new token, the same frozen letter with a new date, one in flight, one per hour. The lapsed-link page offers it as one tap. <a href="#r10">R10</a>.</p>
+
+  <p>Where the person already has an account, the designer is told a letter went and the homeowner gets nothing; a short notice letter goes instead. <a href="#r13">R13</a>.</p>
+
+  <h3 class="mono-head">The notice letter</h3>
+  <ul>
+    <li>Same letterhead, same note, same colophon &mdash; <span class="ref">kind='notice'</span> on the same snapshot.</li>
+    <li>The button goes straight to the house. There is no expiry line and nothing to accept.</li>
+    <li>The silent link, where the designer is told an email went that never went, ends with it.</li>
+  </ul>
+</section>
+
+<!-- ============================================================ 08 -->
+<section id="takes" data-prose-cap="110">
+  <div class="opener"><p class="eyebrow">Eight</p><h2>What it takes</h2></div>
+
+  <p class="lede">Three delivery paths were priced. The recommendation is (c): GoTrue mints the account, we write and send the letter, and the link in it is our own seven-day token.</p>
+
+  <div class="tablewrap">
+    <table class="tight min900">
+      <thead><tr><th class="w-name" scope="col">Path</th><th class="w-what" scope="col">Shape</th><th scope="col">Total days</th><th class="w-what" scope="col">Cannot do</th></tr></thead>
+      <tbody>
+        <tr>
+          <th scope="row">(a) Revive <span class="ref">client-invite</span></th>
+          <td>Route the three hooks through the dormant function; swap its raw Resend fetch for <span class="ref">sendCompliantEmail</span>; keep the seven-day token; the auth user is minted at accept by a password signup.</td>
+          <td class="num">10</td>
+          <td>Cannot escape the password step without rewriting the accept leg &mdash; which is the same work as (c). Leaves two live invite mechanisms in one route. Zero tests today, and a send leg that has never had a caller.</td>
+        </tr>
+        <tr>
+          <th scope="row">(b) Enrich the GoTrue path</th>
+          <td>Pass studio, designer, project and note through <span class="ref">inviteUserByEmail({ data })</span> and render <span class="ref">{{ .Data.* }}</span> in the shared template.</td>
+          <td class="num">5</td>
+          <td>Cannot fix expiry (shared <span class="ref">otp_expiry</span>). Cannot log &mdash; no <span class="ref">notification_log</span> row, so no status rail. Cannot snapshot. Cannot separate audiences &mdash; one template serves designer, admin and client. And <span class="ref">.Data</span> is user metadata the homeowner can overwrite.</td>
+        </tr>
+        <tr>
+          <th scope="row"><strong>(c) Hybrid &mdash; GoTrue mints, we write</strong></th>
+          <td><span class="ref">generateLink({type:'invite'})</span> with <span class="ref">role:'homeowner'</span>, a <span class="ref">client_invitations</span> snapshot row, the letter rendered through an additive <span class="ref">audience:'client-letter'</span> branch, sent through <span class="ref">sendCompliantEmail</span>. The CTA points at our token. The pattern already ships in <span class="ref">designer-invite</span>.</td>
+          <td class="num">10.5</td>
+          <td>Nothing the panel asked for. It costs the most because it does the most.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>Four lanes, about ten and a half engineer-days: two engineers for a week.</p>
+
+  <div class="tablewrap">
+    <table class="tight min720">
+      <thead><tr><th scope="col">Lane</th><th scope="col">Size</th><th scope="col">One-way?</th><th class="w-what" scope="col">What</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">L1 &middot; The send leg</th><td class="num">M</td><td><strong>Yes</strong> &mdash; migration <span class="ref">00581_client_invite_letter.sql</span>, additive</td><td>The body-driven branch in <span class="ref">/api/clients/invite</span>; snapshot insert; the letter render; <span class="ref">sendCompliantEmail</span> with an idempotency key; the notice letter; the Deno tests the <span class="ref">client-invite</span> edge function has never had.</td></tr>
+        <tr><th scope="row">L2 &middot; The composer</th><td class="num">S</td><td>No</td><td>The field on three entry points, gated on the flag; the counter; <span class="ref">has_note</span> analytics.</td></tr>
+        <tr><th scope="row">L3 &middot; The arrival</th><td class="num">M</td><td>No</td><td>The token page becomes page two of the letter; mint-and-redirect on POST; the seeded standing note with its frozen byline.</td></tr>
+        <tr><th scope="row">L4 &middot; The designer&rsquo;s account</th><td class="num">S</td><td>No</td><td>Row prose from <span class="ref">client_invitations</span> + <span class="ref">notification_log</span>; the resend act; the one <span class="ref">SECURITY DEFINER</span> read a designer needs to see her own send&rsquo;s status.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <ul>
+    <li><strong>Migration <span class="mono">00581</span> is additive throughout</strong> &mdash; snapshot columns, <span class="ref">designer_client_id</span>, <span class="ref">kind</span>, <span class="ref">email_log_id</span>, <span class="ref">resend_count</span>, and a 280 CHECK on <span class="ref">personal_message</span>. Nothing existing is altered or dropped.</li>
+    <li><strong>The flag is <span class="mono">client-invite-letter</span>, fail-closed</strong> &mdash; when the new body field is absent the route falls through to today&rsquo;s exact code, so the off state is byte-identical to today. Body-driven, not caller-driven: an old client that does not know the field cannot half-enter the new path.</li>
+  </ul>
+
+  <p>The top risk is not the migration but the shell. <span class="ref">renderBrandedShell</span> puts the Patina wordmark atop every client email by deliberate decision, and some twenty-one senders import it. An additive client-letter audience branch contains that, so only this sender changes. Rule <a href="#r2">R2</a> before L1 starts, or L1 rules it by accident.</p>
+</section>
+
+<!-- ============================================================ 09 -->
+<section id="rulings" data-prose-cap="30">
+  <div class="opener"><p class="eyebrow">Nine</p><h2>Rulings</h2></div>
+
+  <p class="lede">Each of these is a recommendation, not a decision. The owner column names who rules; disagreement is the useful response.</p>
+
+  <div class="tablewrap">
+    <table class="tight min900">
+      <thead><tr><th scope="col">#</th><th class="w-name" scope="col">Ruling</th><th class="w-what" scope="col">Recommendation</th><th scope="col">Owner</th><th scope="col">Blocks</th></tr></thead>
+      <tbody>
+        <tr><th class="num" scope="row" id="r1">R1</th><td><strong>The envelope: From display name for homeowner letters.</strong></td><td><span class="mono">Middle West Studio via Patina &lt;hello@patina.cloud&gt;</span> &mdash; business name leads, &ldquo;via&rdquo; discloses the relay (the Gmail-Groups pattern), which reads as a legitimate relay rather than display-name spoofing; a personal name in front of a domain that is not hers is the shape filters catch. Fallback with no studio: <span class="mono">Leah Hartwell via Patina</span>. Alternative for the ear: bare <span class="mono">Middle West Studio</span>. Reply-to the designer either way.</td><td>Kody</td><td class="num">L1</td></tr>
+        <tr><th class="num" scope="row" id="r2">R2</th><td><strong>Is the email a client surface under PP-1?</strong></td><td>Yes. Studio letterhead on top, Patina once in the colophon. Implemented as an additive <span class="ref">audience:'client-letter'</span> shell branch so only this sender changes; the wholesale shell change is its own program. Solo designer: her name is the letterhead (lens 3 dissents: keep the Patina wordmark when there is no studio). Record with the owed PP-6 V9 amendment.</td><td>Kody</td><td class="num">L1, L3</td></tr>
+        <tr><th class="num" scope="row" id="r3">R3</th><td><strong>The letter&rsquo;s copy.</strong></td><td>Lens 4&rsquo;s letter as written: subject &ldquo;added you to&rdquo;, the two-sentence standing sentence, <span class="quote">Open the project</span>, the dated expiry line, the three-line footer.</td><td>Leah (ear)</td><td class="num">L1</td></tr>
+        <tr><th class="num" scope="row" id="r4">R4</th><td><strong>The note: optional or required; cap.</strong></td><td>Optional, 280 characters. The letter reads whole without it.</td><td>Leah (practice)</td><td class="num">L1, L2</td></tr>
+        <tr><th class="num" scope="row" id="r5">R5</th><td><strong>Delivery path.</strong></td><td>(c): GoTrue mints, we write; the letter&rsquo;s link is our seven-day token; the GoTrue link is minted at click, on a button POST.</td><td>Kody</td><td class="num">L1</td></tr>
+        <tr><th class="num" scope="row" id="r6">R6</th><td><strong>The landing.</strong></td><td>Page two of the letter, no password, one button. Retire the password form.</td><td>Kody</td><td class="num">L3</td></tr>
+        <tr><th class="num" scope="row" id="r7b">R7&prime;</th><td><strong>Full name or given name in the sign-off.</strong></td><td>Full name on the first letter and the first-visit note; R7&rsquo;s given name on every letter after.</td><td>Leah (ear)</td><td class="num">L1</td></tr>
+        <tr><th class="num" scope="row" id="r8">R8</th><td><strong>The note&rsquo;s afterlife.</strong></td><td>Seeded as the house&rsquo;s first standing note from the frozen snapshot; recedes as standing notes do; with no project it lives on the letter page and the client record only.</td><td>Leah (practice)</td><td class="num">L3</td></tr>
+        <tr><th class="num" scope="row" id="r9">R9</th><td><strong>Row states.</strong></td><td>Three: Letter sent &middot; Signed in &middot; Link lapsed. <span class="quote">Opened</span> withheld &mdash; a read receipt in a studio&rsquo;s hands has one use, pressure. If kept, never as an absence, never on a client surface.</td><td>Leah (practice)</td><td class="num">L4</td></tr>
+        <tr><th class="num" scope="row" id="r10">R10</th><td><strong>Resend in v1.</strong></td><td>Yes: same frozen letter, new date, one in flight, one per hour. The lapsed-link page offers one tap.</td><td>Kody</td><td class="num">L4</td></tr>
+        <tr><th class="num" scope="row" id="r11">R11</th><td><strong>Who may write, whose name signs.</strong></td><td>Any studio member; the writer signs. (Owner-only signing for juniors is a business call, not a default.)</td><td>Leah (practice)</td><td class="num">L2</td></tr>
+        <tr><th class="num" scope="row" id="r12">R12</th><td><strong>Retire &ldquo;invite&rdquo;, &ldquo;magic-link&rdquo;, &ldquo;to Patina&rdquo; on the designer&rsquo;s side.</strong></td><td>Ship the checkbox rename and helper regardless of the rest. The house word is <em>the letter</em>.</td><td>Kody</td><td class="num">L2</td></tr>
+        <tr><th class="num" scope="row" id="r13">R13</th><td><strong>The already-has-account case.</strong></td><td>The notice letter goes; the silent link ends.</td><td>Kody</td><td class="num">L1</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ============================================================ 10 -->
+<section id="out" data-prose-cap="60">
+  <div class="opener"><p class="eyebrow">Ten</p><h2>What stays out</h2></div>
+
+  <p class="lede">Each of these is recommended out, and the ruling or programme that owns it is named.</p>
+
+  <ul>
+    <li><strong>Household co-approver invitations</strong>, the &ldquo;loop in a family member&rdquo; case &mdash; approvals <strong>P-29</strong>, its own programme, deferred twelve months.</li>
+    <li><strong>SMS to homeowners</strong> &mdash; the Field rail is for trades.</li>
+    <li><strong>Studio brand colours or a studio sending domain</strong> &mdash; no schema supports either; the envelope stays <span class="mono">patina.cloud</span>. <a href="#r1">R1</a> owns the display name, which is the only lever there is.</li>
+    <li><strong>Rich text in the note, translations, a marketing drip to homeowners</strong> &mdash; none of them is the first letter; the vision refuses the last outright.</li>
+    <li><strong>The wholesale PP-1 change to <span class="ref">renderBrandedShell</span></strong> for every client email &mdash; <a href="#r2">R2</a> contains this feature to one additive audience branch and leaves the rest its own programme.</li>
+    <li><strong>The ambiguous-send reconciliation sweep</strong> for <span class="ref">provider_id</span> NULL rows &mdash; L1 stores the idempotency key; the sweep is built elsewhere.</li>
+    <li><strong>Open-tracking as a designer-facing signal</strong> &mdash; <a href="#r9">R9</a>.</li>
+  </ul>
+</section>
+
+<!-- ============================================================ 11 -->
+<section id="respond" data-prose-cap="80">
+  <div class="opener"><p class="eyebrow">Eleven</p><h2>How to respond</h2></div>
+
+  <p class="lede">Everything above is a recommendation. The useful response is disagreement, on the line it concerns.</p>
+
+  <ul>
+    <li><strong>Comment on the Artifact</strong> on the line it concerns.</li>
+    <li><strong>Rule <a href="#rulings">R1&ndash;R13</a></strong> &mdash; Kody owns <a href="#r1">R1</a>, <a href="#r2">R2</a>, <a href="#r5">R5</a>, <a href="#r6">R6</a>, <a href="#r10">R10</a>, <a href="#r12">R12</a> and <a href="#r13">R13</a>; Leah owns <a href="#r3">R3</a>, <a href="#r4">R4</a>, <a href="#r7b">R7&prime;</a>, <a href="#r8">R8</a>, <a href="#r9">R9</a> and <a href="#r11">R11</a>.</li>
+    <li><strong>Walk the People Room add-client sheet today</strong> and read the letter your own client would get &mdash; Mailpit locally. Ten minutes gets further than reading.</li>
+  </ul>
+
+  <div class="qgroup">
+    <h3 class="mono-head">Four questions for Middle West Studio</h3>
+    <ol>
+      <li>Does &ldquo;Middle West Studio via Patina&rdquo; read right in your clients&rsquo; inboxes, or would you rather the bare studio name?</li>
+      <li>Should a junior&rsquo;s letter sign with the junior&rsquo;s name?</li>
+      <li>Would you ever want to see &ldquo;Opened&rdquo; &mdash; and if so, what would you do with it?</li>
+      <li>Full name or given name on the first letter?</li>
+    </ol>
+  </div>
+
+  <p class="stamp">Nothing was built &middot; the document is the deliverable</p>
+</section>
+
+<!-- ============================================================ appendix -->
+<section id="appendix" data-prose-cap="60">
+  <div class="opener"><p class="eyebrow">Appendix</p><h2>Citations, the vision test, the panel record</h2></div>
+
+  <h3 class="mono-head">A &middot; Citations</h3>
+  <ul class="citelist">
+    <li><b>Today&rsquo;s letter</b> supabase/templates/invite.html; registered supabase/config.toml:213-215; expiry config.toml:183</li>
+    <li><b>The live send</b> apps/designer-portal/src/app/api/clients/invite/route.ts:134-145 (three branches; activity log :261)</li>
+    <li><b>The three doors</b> apps/designer-portal/src/components/document/people/directory/add-person-sheet.tsx &middot; components/portal/client-picker.tsx:200-230 &middot; components/document/overlays/send-sheet.tsx:573-600, :799-812</li>
+    <li><b>The dormant sender</b> supabase/functions/client-invite/index.ts:129-169 (no caller for its send leg); accept leg apps/client-portal/src/app/api/auth/invite/accept/route.ts:27</li>
+    <li><b>The seven-day token</b> supabase/migrations/00118_client_invitations.sql:13 (expires_at DEFAULT now() + 7 days; personal_message)</li>
+    <li><b>The role hint</b> supabase/migrations/00313_handle_new_user_client_role_hint.sql:47-48, :64</li>
+    <li><b>The shipped generateLink pattern</b> supabase/functions/designer-invite/index.ts:202-209, :230, :263-273</li>
+    <li><b>The shell and the chokepoint</b> supabase/functions/_shared/branded-email.ts (renderBrandedShell, callout) &middot; _shared/send-email.ts (sendCompliantEmail) &middot; _shared/studio-identity.ts</li>
+    <li><b>The landing today</b> apps/client-portal/src/app/auth/invite/[token]/page.tsx &middot; components/auth/AcceptInviteForm.tsx (the password form this proposal retires)</li>
+    <li><b>Where the note lands</b> apps/client-portal/src/components/threshold/the-note.tsx &middot; lib/threshold/derive.ts</li>
+    <li><b>The 280 precedent</b> supabase/migrations/00560_invite_handoff_note.sql; the composer apps/designer-portal/src/components/document/account/studio-invite-modal.tsx:417-440</li>
+    <li><b>PP-1, PP-6, PP-9</b> artifacts/portal-polish-review-2026-09-08/rulings.md; synthesis.md &sect;3.1</li>
+    <li><b>Tokens and type</b> artifacts/portal-polish-review-2026-09-08/specimens/SPEC.md &sect;A1&ndash;A3</li>
+    <li><b>R7 and the homeowner vocabulary</b> artifacts/client-approval-experience-2026-09-03/build/rulings-2026-09-04.md; ux/03-behavior-and-copy.md &sect;6</li>
+    <li><b>The scaffolded composer precedent</b> docs/design/the-document/the-document-arrival-arc-package.md</li>
+    <li><b>Vision</b> docs/vision/VISION.md &sect;2, &sect;4, &sect;6; docs/vision/VISION-DECISIONS.md V8, S2, S4</li>
+    <li><b>This folder</b> research/01-invite-flow.md &middot; research/02-email-system.md &middot; research/03-rulings-and-voice.md &middot; panel/lens-1&hellip;6 &middot; panel/synthesis.md &middot; specimens/</li>
+  </ul>
+
+  <h3 class="mono-head">B &middot; The vision test</h3>
+  <div class="ftest">
+    <p><b>Surface</b> &mdash; The Document&rsquo;s client-facing face, V8. The letter is the client page&rsquo;s first page.</p>
+    <p><b>Studio moment</b> &mdash; bringing a client in. Zero seconds added; fifteen to thirty when she writes.</p>
+    <p><b>Stream</b> &mdash; the subscription floor: a homeowner who understands her letter signs in.</p>
+    <p><b>Promise</b> &mdash; one agreed direction, from the first line, in the designer&rsquo;s words.</p>
+  </div>
+
+  <h3 class="mono-head">C &middot; The panel record</h3>
+  <ul class="citelist">
+    <li><b>Lens 1 &middot; the homeowner&rsquo;s first touch</b> panel/lens-1-homeowner.md</li>
+    <li><b>Lens 2 &middot; the designer&rsquo;s moment, the composer</b> panel/lens-2-composer.md</li>
+    <li><b>Lens 3 &middot; email craft and the envelope</b> panel/lens-3-envelope.md</li>
+    <li><b>Lens 4 &middot; brand voice and copy</b> panel/lens-4-voice.md</li>
+    <li><b>Lens 5 &middot; continuity and arrival</b> panel/lens-5-arrival.md</li>
+    <li><b>Lens 6 &middot; systems, what it takes</b> panel/lens-6-systems.md</li>
+    <li><b>Synthesis</b> panel/synthesis.md &mdash; the design, the rulings, the vision test, what stays out</li>
+  </ul>
+
+  <p class="caption no-prose">Fixtures throughout: Leah Hartwell &middot; Middle West Studio (Madison) &middot; Dave Okonkwo &middot; &ldquo;Van Hise kitchen and back hall&rdquo;; and the solo fixture, Nora Feld &middot; Priya Raman &middot; no studio, no project. Every date is 8 September 2026 with a 15 September lapse.</p>
+</section>
+
+</main>
+</div>

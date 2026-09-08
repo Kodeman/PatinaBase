@@ -1,0 +1,514 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bring someone in — the composer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;1,400&family=Inter:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ── SPEC §A1. Tokens ───────────────────────────────────────────────── */
+:root {
+  color-scheme: light dark;
+
+  /* — paper, three stocks — */
+  --paper:            #FAF7F2;  /* the ground */
+  --paper-doc:        #FCFAF6;  /* a document laid on the ground */
+  --rail:             #E8E3DB;  /* the rail / deeper sheet */
+
+  /* — ink — */
+  --ink:              #2C2926;  /* 13.53:1 on paper */
+  --ink-muted:        #4E4339;  /* 9.22:1 on paper-doc */
+  --ink-subtle:       #5A4E43;  /* 7.73:1 */
+  --ink-faint:        #65594E;  /* 6.51:1 — also the disabled ink */
+  --ink-paper:        #FAF7F2;  /* ink ON charcoal */
+
+  /* — hairlines — */
+  --hairline:         #E8E3DB;
+  --hairline-strong:  rgba(44, 41, 38, .14);
+
+  /* — the rest rule pigment (4.20:1 on paper) — */
+  --oak:              #8B7355;
+
+  /* — state pigments: material value / paper ink — */
+  --clay:             #C4A57B;   --clay-ink:      #7C5E30;
+  --golden:           #E8C547;   --golden-ink:    #79651E;
+  --terracotta:       #D4A090;   --terracotta-ink:#9C5340;
+  --sage:             #A8B5A0;   --sage-ink:      #5F6B57;
+
+  /* — the seven stage plates (white label 5.22–8.20:1) — */
+  --tab-brief:     #497093;
+  --tab-discovery: #307063;
+  --tab-direction: #366A3A;
+  --tab-proposal:  #575D1D;
+  --tab-project:   #6D4E24;
+  --tab-install:   #823832;
+  --tab-care:      #823832;   /* Care has no pigment of its own */
+
+  /* — the one depth token. Permitted on a temporary sheet ONLY. — */
+  --elevation-sheet: 0 1px 2px rgba(44, 41, 38, .08);
+
+  /* — rhythm — */
+  --module: 24px;
+  --radius-hair: 2px;
+  --radius-box:  3px;
+
+  /* — motion — */
+  --press-in:  70ms;
+  --press-out: 240ms;
+  --ease: cubic-bezier(.22, 1, .36, 1);
+
+  --font-display: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  --font-body:    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-meta:    'DM Mono', 'SF Mono', 'Fira Code', ui-monospace, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper:           #2A2622;
+    --paper-doc:       #26221E;
+    --rail:            #3A3530;
+    --ink:             #F2EDE6;
+    --ink-muted:       #D6CEC4;
+    --ink-subtle:      #C7BEB3;
+    --ink-faint:       #B8AEA2;
+    --ink-paper:       #2A2622;
+    --hairline:        rgba(242, 237, 230, .14);
+    --hairline-strong: rgba(242, 237, 230, .22);
+    --oak:             #B39572;
+    --clay-ink:        #D8B98A;
+    --golden-ink:      #E0C963;
+    --terracotta-ink:  #E2A895;
+    --sage-ink:        #AFC0A6;
+  }
+}
+
+:root[data-theme="dark"] {
+  --paper:           #2A2622;
+  --paper-doc:       #26221E;
+  --rail:            #3A3530;
+  --ink:             #F2EDE6;
+  --ink-muted:       #D6CEC4;
+  --ink-subtle:      #C7BEB3;
+  --ink-faint:       #B8AEA2;
+  --ink-paper:       #2A2622;
+  --hairline:        rgba(242, 237, 230, .14);
+  --hairline-strong: rgba(242, 237, 230, .22);
+  --oak:             #B39572;
+  --clay-ink:        #D8B98A;
+  --golden-ink:      #E0C963;
+  --terracotta-ink:  #E2A895;
+  --sage-ink:        #AFC0A6;
+}
+
+body { margin: 0; background: var(--paper); color: var(--ink); }
+
+/* ══ .spec-composer — everything below is scoped ═════════════════════ */
+.spec-composer {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 48px 24px;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  overflow-wrap: break-word;
+}
+.spec-composer *, .spec-composer *::before, .spec-composer *::after { box-sizing: border-box; }
+.spec-composer h2, .spec-composer h3, .spec-composer p, .spec-composer ul, .spec-composer li { margin: 0; padding: 0; }
+.spec-composer ul { list-style: none; }
+.spec-composer svg { display: block; max-width: 100%; }
+.spec-composer hr { border: 0; border-top: 1px solid var(--hairline); margin: 0; }
+
+/* SPEC §A3 — the type scale */
+.spec-composer .t-d1 { font-family: var(--font-display); font-size: 34px; line-height: 1.15; font-weight: 500; letter-spacing: 0; }
+.spec-composer .t-d3 { font-family: var(--font-display); font-size: 20px; line-height: 1.30; font-weight: 500; letter-spacing: 0; }
+.spec-composer .t-body    { font-family: var(--font-body); font-size: 16px; line-height: 1.55; font-weight: 400; letter-spacing: 0; }
+.spec-composer .t-body-sm { font-family: var(--font-body); font-size: 14px; line-height: 1.50; font-weight: 400; letter-spacing: 0; }
+.spec-composer .t-meta { font-family: var(--font-meta); font-size: 12px; line-height: 1.50; font-weight: 400; letter-spacing: .08em; }
+.spec-composer .t-head { font-family: var(--font-meta); font-size: 11px; line-height: 1.50; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; }
+.spec-composer .t-authorship { font-family: var(--font-display); font-size: 20px; line-height: 1.30; font-weight: 400; font-style: italic; letter-spacing: 0; }
+
+/* SPEC §A5 — the action tiers */
+.spec-composer .act {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 4px 6px 10px;
+  border: 0;
+  background: none;
+  font-family: var(--font-meta);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.spec-composer .act .label { position: relative; display: inline-block; line-height: 13px; }
+.spec-composer .act .label::before, .spec-composer .act .label::after {
+  content: ''; position: absolute; left: 0; right: 0;
+  transform-origin: left center;
+  transition: background-color 150ms linear, height 150ms var(--ease);
+}
+.spec-composer .act .label::before { bottom: -5px; height: 1px; }
+.spec-composer .act .label::after  { bottom: -8.5px; height: 1px; }
+
+.spec-composer .act--tertiary { color: var(--ink-subtle); }
+.spec-composer .act--tertiary .label::before { background: var(--oak); }
+.spec-composer .act--tertiary .label::after  { content: none; }
+.spec-composer .act--tertiary:hover .label::before { background: var(--ink-faint); height: 1.5px; }
+.spec-composer .act--tertiary:active { color: var(--ink); transition-duration: var(--press-in); }
+
+.spec-composer .act--inline {
+  display: inline; min-height: 0; min-width: 0; padding: 0;
+  font-family: inherit; font-size: inherit; font-weight: inherit;
+  letter-spacing: inherit; text-transform: none; white-space: normal;
+  color: var(--ink); border-bottom: 1px solid var(--oak);
+}
+.spec-composer .act--inline .label::before,
+.spec-composer .act--inline .label::after { content: none; }
+.spec-composer .act--inline:hover { border-bottom-color: var(--ink-faint); }
+
+.spec-composer .act--terminal {
+  padding: 13px 22px;
+  min-height: 48px;
+  border-radius: var(--radius-box);
+  background: var(--ink);
+  color: var(--ink-paper);
+  letter-spacing: .06em;
+}
+.spec-composer .act--terminal .label::before,
+.spec-composer .act--terminal .label::after { content: none; }
+.spec-composer .act--terminal:active { transform: translateY(1px); transition-duration: var(--press-in); }
+
+.spec-composer .act:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+
+.spec-composer .act[aria-pressed="true"] { color: var(--ink); }
+.spec-composer .act[aria-pressed="true"] .label::before { height: 1.5px; background: var(--ink); }
+.spec-composer .act[aria-pressed="true"] .label::after  { content: ''; background: var(--clay); }
+.spec-composer .act[aria-pressed="false"] { color: var(--ink-subtle); }
+.spec-composer .act[aria-pressed="false"] .label::before { height: 1px; background: var(--oak); }
+.spec-composer .act[aria-pressed="false"] .label::after  { content: none; }
+
+/* ── plates ─────────────────────────────────────────────────────────── */
+.spec-composer .stack { max-width: 720px; margin: 0 auto; }
+.spec-composer .plate + .plate { margin-top: 72px; }
+.spec-composer .plate-caption { margin-top: 12px; color: var(--ink-subtle); }
+.spec-composer .spec-title { color: var(--ink-muted); margin-bottom: 24px; }
+
+/* ── the sheet ──────────────────────────────────────────────────────── */
+.spec-composer .sheet {
+  background: var(--paper-doc);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-box);
+  padding: 32px;
+}
+.spec-composer .eyebrow { color: var(--clay-ink); }
+.spec-composer .sheet-title { margin-top: 12px; }
+.spec-composer .sheet-sub { margin-top: 12px; color: var(--ink-subtle); max-width: 56ch; }
+
+.spec-composer .roles { display: flex; flex-wrap: wrap; gap: 0 20px; margin-top: 12px; padding: 2px; }
+.spec-composer .roles .act { font-size: 11px; letter-spacing: .08em; }
+.spec-composer .roles-rule { margin-top: 12px; }
+
+.spec-composer .field { margin-top: 24px; }
+.spec-composer .field > label,
+.spec-composer .field > .field-label { display: block; color: var(--ink-muted); }
+.spec-composer .field .opt { color: var(--ink-faint); }
+.spec-composer input[type="text"],
+.spec-composer input[type="email"],
+.spec-composer textarea {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  padding: 12px 14px;
+  background: var(--paper);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius-box);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.spec-composer textarea { min-height: 96px; resize: vertical; }
+.spec-composer input::placeholder,
+.spec-composer textarea::placeholder { color: var(--ink-faint); }
+.spec-composer input:focus-visible,
+.spec-composer textarea:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+
+/* the uneditable facts line (B.2) */
+.spec-composer .facts {
+  margin-top: 24px;
+  color: var(--ink-faint);
+  font-family: var(--font-meta);
+  font-size: 11px;
+  line-height: 1.6;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.spec-composer .counter { margin-top: 12px; color: var(--ink-subtle); }
+
+/* the glance check — the letter's callout, small */
+.spec-composer .glance { margin-top: 24px; padding-top: 12px; border-top: 1px solid var(--hairline); }
+.spec-composer .glance .facts { margin-top: 0; }
+.spec-composer .glance blockquote {
+  margin: 12px 0 0;
+  padding: 8px 0 8px 14px;
+  border-left: 3px solid var(--clay);
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-style: italic;
+  line-height: 1.5;
+  color: var(--ink-muted);
+  max-width: 56ch;
+}
+
+/* the checkbox — a mark, never a tick */
+.spec-composer .send { margin-top: 24px; }
+.spec-composer .send-row { display: flex; align-items: center; gap: 12px; }
+.spec-composer input[type="checkbox"] {
+  appearance: none; -webkit-appearance: none;
+  flex: none; width: 18px; height: 18px; margin: 0;
+  background: var(--paper);
+  border: 1px solid var(--ink-faint);
+  border-radius: var(--radius-hair);
+  cursor: pointer;
+}
+.spec-composer input[type="checkbox"]:checked { background: var(--ink); border-color: var(--ink); }
+.spec-composer input[type="checkbox"]:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+.spec-composer .send-row label { cursor: pointer; }
+.spec-composer .helper { margin-top: 12px; color: var(--ink-subtle); max-width: 56ch; }
+
+.spec-composer .escape { margin-top: 24px; color: var(--ink-subtle); }
+.spec-composer .acts { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; margin-top: 24px; padding: 2px; }
+
+/* the collapsed disclosure (state three) */
+.spec-composer .disclosure { margin-top: 24px; }
+
+/* ── the People Room rows ───────────────────────────────────────────── */
+.spec-composer .rows { margin-top: 24px; }
+.spec-composer .rows li { padding: 12px 0; border-top: 1px solid var(--hairline); }
+.spec-composer .rows li:last-child { border-bottom: 1px solid var(--hairline); }
+.spec-composer .rows .who { color: var(--ink); }
+.spec-composer .rows .state { color: var(--ink-subtle); margin-top: 4px; }
+
+@media (max-width: 600px) {
+  .spec-composer { padding: 32px 16px; }
+  .spec-composer .sheet { padding: 24px 20px; }
+  .spec-composer .t-d1 { font-size: 27px; }
+  .spec-composer .acts { flex-direction: column; align-items: flex-start; }
+  .spec-composer .acts .act--terminal { width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spec-composer *, .spec-composer *::before, .spec-composer *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
+@media (forced-colors: active) {
+  .spec-composer .act--terminal { border: 2px solid ButtonText; }
+  .spec-composer .act .label::before, .spec-composer .act .label::after { forced-color-adjust: none; background: ButtonText; }
+  .spec-composer hr, .spec-composer .sheet { border-color: CanvasText; }
+  .spec-composer .act:focus-visible { outline: 2px solid Highlight; }
+}
+</style>
+</head>
+<body>
+
+<div class="spec-composer">
+ <div class="stack">
+
+  <h2 class="spec-title t-head">The composer · add a person to your roster</h2>
+
+  <!-- ── (i) the field empty ───────────────────────────────────────── -->
+  <section class="plate" aria-label="State one">
+    <div class="sheet">
+      <p class="eyebrow t-head">Add · to your roster</p>
+      <h3 class="sheet-title t-d1">Bring someone in</h3>
+      <p class="sheet-sub t-body">Add a client to your directory. They appear on your roster at once; the letter signs them in.</p>
+
+      <div class="roles" role="group" aria-label="Role">
+        <button type="button" class="act act--tertiary" aria-pressed="true"><span class="label">A client</span></button>
+        <button type="button" class="act act--tertiary" aria-pressed="false"><span class="label">A maker</span></button>
+        <button type="button" class="act act--tertiary" aria-pressed="false"><span class="label">A GC</span></button>
+        <button type="button" class="act act--tertiary" aria-pressed="false"><span class="label">A sub</span></button>
+        <button type="button" class="act act--tertiary" aria-pressed="false"><span class="label">An installer</span></button>
+        <button type="button" class="act act--tertiary" aria-pressed="false"><span class="label">A receiver</span></button>
+      </div>
+      <hr class="roles-rule">
+
+      <div class="field">
+        <label class="t-head" for="s1-name">Full name <span class="opt">(optional)</span></label>
+        <input id="s1-name" type="text" value="Dave Okonkwo">
+      </div>
+      <div class="field">
+        <label class="t-head" for="s1-email">Email</label>
+        <input id="s1-email" type="email" value="dave@okonkwo.net">
+      </div>
+
+      <p class="facts">Dave Okonkwo · dave@okonkwo.net · Van Hise kitchen and back hall · Added today</p>
+
+      <div class="field">
+        <label class="t-head" for="s1-note">A line for Dave</label>
+        <textarea id="s1-note" maxlength="280" placeholder="Say why you added them and what they'll find. Two lines is plenty."></textarea>
+        <p class="counter t-meta">Up to 280 characters</p>
+      </div>
+
+      <div class="send">
+        <div class="send-row">
+          <input id="s1-send" type="checkbox" checked>
+          <label class="t-body" for="s1-send">Send Dave the letter</label>
+        </div>
+        <p class="helper t-body-sm">He gets one email from Middle West Studio with your line in it and a link that signs him in. Leave it off and he&rsquo;s on your roster only &mdash; you can write later.</p>
+      </div>
+
+      <p class="escape t-body-sm">Not a client yet? <button type="button" class="act act--inline"><span class="label">Add a lead in the pipeline</span></button>.</p>
+
+      <div class="acts">
+        <button type="button" class="act act--terminal"><span class="label">Add and send the letter</span></button>
+        <button type="button" class="act act--tertiary"><span class="label">Cancel</span></button>
+      </div>
+    </div>
+    <p class="plate-caption t-meta">One · the field empty, the letter armed · nothing pre-written</p>
+  </section>
+
+  <!-- ── (ii) typed ────────────────────────────────────────────────── -->
+  <section class="plate" aria-label="State two">
+    <div class="sheet">
+      <p class="eyebrow t-head">Add · to your roster</p>
+      <h3 class="sheet-title t-d1">Bring someone in</h3>
+      <p class="sheet-sub t-body">Add a client to your directory. They appear on your roster at once; the letter signs them in.</p>
+
+      <div class="roles" role="group" aria-label="Role">
+        <button type="button" class="act act--tertiary" aria-pressed="true"><span class="label">A client</span></button>
+        <button type="button" class="act act--tertiary" aria-pressed="false"><span class="label">A maker</span></button>
+        <button type="button" class="act act--tertiary" aria-pressed="false"><span class="label">A GC</span></button>
+        <button type="button" class="act act--tertiary" aria-pressed="false"><span class="label">A sub</span></button>
+        <button type="button" class="act act--tertiary" aria-pressed="false"><span class="label">An installer</span></button>
+        <button type="button" class="act act--tertiary" aria-pressed="false"><span class="label">A receiver</span></button>
+      </div>
+      <hr class="roles-rule">
+
+      <div class="field">
+        <label class="t-head" for="s2-name">Full name <span class="opt">(optional)</span></label>
+        <input id="s2-name" type="text" value="Dave Okonkwo">
+      </div>
+      <div class="field">
+        <label class="t-head" for="s2-email">Email</label>
+        <input id="s2-email" type="email" value="dave@okonkwo.net">
+      </div>
+
+      <p class="facts">Dave Okonkwo · dave@okonkwo.net · Van Hise kitchen and back hall · Added today</p>
+
+      <div class="field">
+        <label class="t-head" for="s2-note">A line for Dave</label>
+        <textarea id="s2-note" maxlength="280" rows="4">Dave — this is the same file I work from, not a summary of it. The kitchen cabinet drawings are in there now; the back hall isn't drawn yet. Anything you want changed, say so on the page and I'll see it.</textarea>
+        <p class="counter t-meta">77 left</p>
+      </div>
+
+      <div class="glance">
+        <p class="facts">Dave Okonkwo · dave@okonkwo.net · Van Hise kitchen and back hall · Added today</p>
+        <blockquote>Dave &mdash; this is the same file I work from, not a summary of it. The kitchen cabinet drawings are in there now; the back hall isn&rsquo;t drawn yet. Anything you want changed, say so on the page and I&rsquo;ll see it.</blockquote>
+      </div>
+
+      <div class="send">
+        <div class="send-row">
+          <input id="s2-send" type="checkbox" checked>
+          <label class="t-body" for="s2-send">Send Dave the letter</label>
+        </div>
+        <p class="helper t-body-sm">He gets one email from Middle West Studio with your line in it and a link that signs him in. Leave it off and he&rsquo;s on your roster only &mdash; you can write later.</p>
+      </div>
+
+      <p class="escape t-body-sm">Not a client yet? <button type="button" class="act act--inline"><span class="label">Add a lead in the pipeline</span></button>.</p>
+
+      <div class="acts">
+        <button type="button" class="act act--terminal"><span class="label">Add and send the letter</span></button>
+        <button type="button" class="act act--tertiary"><span class="label">Cancel</span></button>
+      </div>
+    </div>
+    <p class="plate-caption t-meta">Two · her words typed, 203 of 280 · the glance check under the field</p>
+  </section>
+
+  <!-- ── (iii) the letter left off ─────────────────────────────────── -->
+  <section class="plate" aria-label="State three">
+    <div class="sheet">
+      <p class="eyebrow t-head">Add · to your roster</p>
+      <h3 class="sheet-title t-d1">Bring someone in</h3>
+      <p class="sheet-sub t-body">Add a client to your directory. They appear on your roster at once; the letter signs them in.</p>
+
+      <div class="roles" role="group" aria-label="Role">
+        <button type="button" class="act act--tertiary" aria-pressed="true"><span class="label">A client</span></button>
+        <button type="button" class="act act--tertiary" aria-pressed="false"><span class="label">A maker</span></button>
+        <button type="button" class="act act--tertiary" aria-pressed="false"><span class="label">A GC</span></button>
+        <button type="button" class="act act--tertiary" aria-pressed="false"><span class="label">A sub</span></button>
+        <button type="button" class="act act--tertiary" aria-pressed="false"><span class="label">An installer</span></button>
+        <button type="button" class="act act--tertiary" aria-pressed="false"><span class="label">A receiver</span></button>
+      </div>
+      <hr class="roles-rule">
+
+      <div class="field">
+        <label class="t-head" for="s3-name">Full name <span class="opt">(optional)</span></label>
+        <input id="s3-name" type="text" value="Dave Okonkwo">
+      </div>
+      <div class="field">
+        <label class="t-head" for="s3-email">Email</label>
+        <input id="s3-email" type="email" value="dave@okonkwo.net">
+      </div>
+
+      <p class="facts">Dave Okonkwo · dave@okonkwo.net · Van Hise kitchen and back hall · Added today</p>
+
+      <p class="disclosure">
+        <button type="button" class="act act--tertiary" aria-expanded="false"><span class="label">+ A line for Dave</span></button>
+      </p>
+
+      <div class="send">
+        <div class="send-row">
+          <input id="s3-send" type="checkbox">
+          <label class="t-body" for="s3-send">Send Dave the letter</label>
+        </div>
+        <p class="helper t-body-sm">He gets one email from Middle West Studio with your line in it and a link that signs him in. Leave it off and he&rsquo;s on your roster only &mdash; you can write later.</p>
+      </div>
+
+      <p class="escape t-body-sm">Not a client yet? <button type="button" class="act act--inline"><span class="label">Add a lead in the pipeline</span></button>.</p>
+
+      <div class="acts">
+        <button type="button" class="act act--terminal"><span class="label">Add to your people</span></button>
+        <button type="button" class="act act--tertiary"><span class="label">Cancel</span></button>
+      </div>
+    </div>
+    <p class="plate-caption t-meta">Three · the letter left off · the field folds to a line, the button says what it does</p>
+  </section>
+
+  <!-- ── the People Room, afterwards ───────────────────────────────── -->
+  <section class="plate" aria-label="The People Room afterwards">
+    <div class="sheet">
+      <p class="eyebrow t-head">The People Room</p>
+      <ul class="rows">
+        <li>
+          <p class="who t-d3">Dave Okonkwo</p>
+          <p class="state t-body-sm">Letter sent 8 Sept</p>
+        </li>
+        <li>
+          <p class="who t-d3">Priya Raman</p>
+          <p class="state t-body-sm">Link lapsed 15 Sept · <button type="button" class="act act--inline"><span class="label">Write again</span></button></p>
+        </li>
+      </ul>
+    </div>
+    <p class="plate-caption t-meta">Four · the row afterwards · a dated sentence and, where there is one, the remedy beside it</p>
+  </section>
+
+ </div>
+</div>
+
+</body>
+</html>
