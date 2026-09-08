@@ -36,21 +36,29 @@ import { makingEvents } from '@/lib/analytics/events';
    one-primary-per-region dev warning are not ported; The Making's regions are
    composed by hand and each names its own region key. ────────────────────── */
 
+/* `terminal` is the only filled tier: money moves, or a paper is signed. Its
+   label carries the amount, and it appears at exactly three sites — the wall
+   gate, the door gate and /pay/<token> (R139, sheet §A5 as amended by §F-C). */
 export type ScoredActionVariant =
   | 'primary'
   | 'secondary'
   | 'tertiary'
-  | 'danger';
+  | 'danger'
+  | 'terminal';
 export type ScoredActionPresentation = 'inline' | 'mobile_dock';
 
+/* No `opacity-50` on either unavailable state: quiet ink at half opacity is
+   2.21:1 and is not a state anyone can read. Unavailability is a colour and a
+   hairline, drawn in the Scored Ink block. */
 const BASE_CLASS =
-  'da-act relative inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center gap-2 whitespace-nowrap px-[6px] pt-[4px] pb-[10px] font-mono text-[12px] uppercase no-underline disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50';
+  'da-act relative inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center gap-2 whitespace-nowrap px-[6px] pt-[4px] pb-[10px] font-mono text-[12px] uppercase no-underline disabled:cursor-not-allowed aria-disabled:cursor-not-allowed';
 
 const VARIANT_CLASS: Record<ScoredActionVariant, string> = {
   primary: 'da-primary font-medium tracking-[0.12em]',
   secondary: 'da-secondary font-normal tracking-[0.1em]',
   tertiary: 'da-tertiary font-light tracking-[0.1em]',
   danger: 'da-danger font-medium tracking-[0.12em]',
+  terminal: 'da-terminal font-medium',
 };
 
 interface ScoredActionBaseProps {
@@ -357,6 +365,18 @@ export interface HoldActionProps
   loading?: boolean;
   loadingLabel?: ReactNode;
   disabled?: boolean;
+  /**
+   * Why the act cannot be taken yet, in the gate's own words. Announced in
+   * this act's `role="status"` line when the client tries anyway.
+   */
+  unmetReason?: string;
+  /**
+   * The id of the unmet control — the name rule, the consent tick — that
+   * activation sends focus to. An id rather than a ref because the gates
+   * already thread this one through `aria-describedby` and the rule itself
+   * is drawn by SignatureLine, which forwards nothing.
+   */
+  unmetFocusId?: string;
   restoreFocusRef?: RefObject<HTMLElement | null>;
   children: ReactNode;
   /** Classes for the word itself. */
@@ -379,6 +399,8 @@ export const HoldAction = forwardRef<HTMLButtonElement, HoldActionProps>(
       loading = false,
       loadingLabel,
       disabled = false,
+      unmetReason,
+      unmetFocusId,
       restoreFocusRef,
       children,
       className,
@@ -388,6 +410,7 @@ export const HoldAction = forwardRef<HTMLButtonElement, HoldActionProps>(
     ref,
   ) {
     const unavailable = disabled || loading;
+    const [said, setSaid] = useState('');
     const [holding, setHolding] = useState(false);
     const [keyboardHint, setKeyboardHint] = useState(false);
     // Read after mount, never during render: the server has no media query to
@@ -404,6 +427,20 @@ export const HoldAction = forwardRef<HTMLButtonElement, HoldActionProps>(
 
     useEffect(() => retainModality(), []);
     useEffect(() => setStill(stilled()), []);
+    /* An armed act has nothing to refuse, so the line it refused with clears
+       itself rather than being cleared by an effect. */
+    const saying = disabled ? said : '';
+
+    /* The act is `aria-disabled`, not `disabled`, so it keeps its place in
+       the tab order and answers when it is reached. Answering is the whole
+       point: name what is missing, and put the client in front of it. */
+    const refuse = useCallback(() => {
+      if (loading) return;
+      if (unmetReason) setSaid(unmetReason);
+      if (unmetFocusId && typeof document !== 'undefined') {
+        document.getElementById(unmetFocusId)?.focus();
+      }
+    }, [loading, unmetFocusId, unmetReason]);
 
     useEffect(() => {
       if (shown.current.has(shownKey)) return;
@@ -488,6 +525,10 @@ export const HoldAction = forwardRef<HTMLButtonElement, HoldActionProps>(
       // reach the act: the only way through this control is the hold.
       event.preventDefault();
       if (event.repeat) return;
+      if (unavailable) {
+        refuse();
+        return;
+      }
       start();
     }
 
@@ -500,115 +541,134 @@ export const HoldAction = forwardRef<HTMLButtonElement, HoldActionProps>(
     }
 
     return (
-      <span
-        data-hold-dock={presentation === 'mobile_dock' ? '' : undefined}
-        className={[
-          'inline-flex flex-wrap items-center gap-x-3 gap-y-1',
-          presentation === 'mobile_dock'
-            ? 'max-[600px]:sticky max-[600px]:bottom-0 max-[600px]:z-20 max-[600px]:flex max-[600px]:border-t max-[600px]:border-[var(--border-default)] max-[600px]:bg-[var(--bg-surface)] max-[600px]:py-2'
-            : '',
-          wrapperClassName ?? '',
-        ].join(' ')}
-      >
-        <button
-          {...rest}
-          ref={(node) => {
-            control.current = node;
-            if (typeof ref === 'function') ref(node);
-            else if (ref) ref.current = node;
-          }}
-          type={rest.type ?? 'button'}
-          disabled={unavailable}
-          data-action-key={actionKey}
-          data-action-variant={variant}
-          data-action-region={regionKey}
-          data-hold-state={holding ? 'holding' : 'idle'}
-          data-hold-ms={holdMs}
-          aria-busy={loading || undefined}
-          aria-describedby={
-            [rest['aria-describedby'], saidId].filter(Boolean).join(' ') || undefined
-          }
+      <span className="block">
+        <span
+          data-hold-dock={presentation === 'mobile_dock' ? '' : undefined}
           className={[
-            BASE_CLASS,
-            VARIANT_CLASS[variant],
-            'da-hold',
-            still ? 'da-hold-still' : '',
-            className ?? '',
+            'inline-flex flex-wrap items-center gap-x-3 gap-y-1',
+            presentation === 'mobile_dock'
+              ? 'max-[600px]:sticky max-[600px]:bottom-0 max-[600px]:z-20 max-[600px]:flex max-[600px]:border-t max-[600px]:border-[var(--border-default)] max-[600px]:bg-[var(--bg-surface)] max-[600px]:py-2'
+              : '',
+            wrapperClassName ?? '',
           ].join(' ')}
-          onPointerDown={(event) => {
-            pointerAt.current = Date.now();
-            markInkPoint(event);
-            start();
-          }}
-          onPointerUp={(event) => {
-            pointerAt.current = Date.now();
-            stop();
-            rest.onPointerUp?.(event);
-          }}
-          onPointerLeave={(event) => {
-            pointerAt.current = Date.now();
-            stop();
-            rest.onPointerLeave?.(event);
-          }}
-          onPointerCancel={(event) => {
-            pointerAt.current = Date.now();
-            stop();
-            rest.onPointerCancel?.(event);
-          }}
-          onKeyDown={onKeyDown}
-          onKeyUp={onKeyUp}
-          onBlur={(event) => {
-            setKeyboardHint(false);
-            stop();
-            rest.onBlur?.(event);
-          }}
-          onFocus={(event) => {
-            setKeyboardHint(keyboardModality);
-            rest.onFocus?.(event);
-          }}
-          /* A hold is the only way in for a hand. Assistive technology has no
-             hand: VoiceOver, Voice Control and switch access take an act by
-             dispatching a click, and there is nothing to press and hold. That
-             click IS the deliberate gesture — it costs several steps to reach
-             — so it takes the act at once, exactly as the iOS HoldableModifier
-             answers its "Activate" action.
-
-             The pointer tail is the whole guard, and `isTrusted` is deliberately
-             NOT consulted: a screen reader activates through the platform
-             accessibility API (AXPress / kDoDefault / doAction) and the browser
-             then dispatches the click ITSELF, trusted — which is why activating
-             a button with VoiceOver or Voice Control counts as user activation
-             at all. Testing `isTrusted` would therefore refuse every real
-             assistive activation and admit only a scripted one. What separates
-             a hand from assistive technology is not trust but history: a hand
-             always leaves a pointerdown/pointerup on THIS control within
-             POINTER_TAIL_MS before its click, and a physical-keyboard hold
-             produces no click at all (both keydown and keyup are prevented). A
-             click with no pointer behind it is not a hand. */
-          onClick={(event) => {
-            event.preventDefault();
-            if (unavailable || running.current) return;
-            if (Date.now() - pointerAt.current < POINTER_TAIL_MS) return;
-            take();
-          }}
         >
-          {variant !== 'tertiary' && <span aria-hidden className="da-pool" />}
-          <span className="da-label">
-            {loading && loadingLabel ? loadingLabel : children}
-          </span>
-          <span aria-hidden="true" data-action-hit className="da-hit" />
-        </button>
-        {keyboardHint && !unavailable && (
-          <span
-            aria-hidden="true"
-            data-testid={`${actionKey}-key-hint`}
-            className="font-mono text-[11px] leading-none tracking-[0.06em] text-[var(--text-muted)]"
+          <button
+            {...rest}
+            ref={(node) => {
+              control.current = node;
+              if (typeof ref === 'function') ref(node);
+              else if (ref) ref.current = node;
+            }}
+            type={rest.type ?? 'button'}
+            aria-disabled={unavailable || undefined}
+            data-action-key={actionKey}
+            data-action-variant={variant}
+            data-action-region={regionKey}
+            data-hold-state={holding ? 'holding' : 'idle'}
+            data-hold-ms={holdMs}
+            aria-busy={loading || undefined}
+            aria-describedby={
+              [rest['aria-describedby'], saidId].filter(Boolean).join(' ') || undefined
+            }
+            className={[
+              BASE_CLASS,
+              VARIANT_CLASS[variant],
+              'da-hold',
+              still ? 'da-hold-still' : '',
+              className ?? '',
+            ].join(' ')}
+            onPointerDown={(event) => {
+              pointerAt.current = Date.now();
+              markInkPoint(event);
+              start();
+            }}
+            onPointerUp={(event) => {
+              pointerAt.current = Date.now();
+              stop();
+              rest.onPointerUp?.(event);
+            }}
+            onPointerLeave={(event) => {
+              pointerAt.current = Date.now();
+              stop();
+              rest.onPointerLeave?.(event);
+            }}
+            onPointerCancel={(event) => {
+              pointerAt.current = Date.now();
+              stop();
+              rest.onPointerCancel?.(event);
+            }}
+            onKeyDown={onKeyDown}
+            onKeyUp={onKeyUp}
+            onBlur={(event) => {
+              setKeyboardHint(false);
+              stop();
+              rest.onBlur?.(event);
+            }}
+            onFocus={(event) => {
+              setKeyboardHint(keyboardModality);
+              rest.onFocus?.(event);
+            }}
+            /* A hold is the only way in for a hand. Assistive technology has no
+               hand: VoiceOver, Voice Control and switch access take an act by
+               dispatching a click, and there is nothing to press and hold. That
+               click IS the deliberate gesture — it costs several steps to reach
+               — so it takes the act at once, exactly as the iOS HoldableModifier
+               answers its "Activate" action.
+
+               The pointer tail is the whole guard, and `isTrusted` is deliberately
+               NOT consulted: a screen reader activates through the platform
+               accessibility API (AXPress / kDoDefault / doAction) and the browser
+               then dispatches the click ITSELF, trusted — which is why activating
+               a button with VoiceOver or Voice Control counts as user activation
+               at all. Testing `isTrusted` would therefore refuse every real
+               assistive activation and admit only a scripted one. What separates
+               a hand from assistive technology is not trust but history: a hand
+               always leaves a pointerdown/pointerup on THIS control within
+               POINTER_TAIL_MS before its click, and a physical-keyboard hold
+               produces no click at all (both keydown and keyup are prevented). A
+               click with no pointer behind it is not a hand. */
+            onClick={(event) => {
+              event.preventDefault();
+              if (unavailable) {
+                refuse();
+                return;
+              }
+              if (running.current) return;
+              if (Date.now() - pointerAt.current < POINTER_TAIL_MS) return;
+              take();
+            }}
           >
-            or press and hold Enter
-          </span>
-        )}
-        <span id={saidId} className="sr-only">
+            {variant !== 'tertiary' && <span aria-hidden className="da-pool" />}
+            <span className="da-label">
+              {loading && loadingLabel ? loadingLabel : children}
+            </span>
+            <span aria-hidden="true" data-action-hit className="da-hit" />
+          </button>
+          {keyboardHint && !unavailable && (
+            <span
+              aria-hidden="true"
+              data-testid={`${actionKey}-key-hint`}
+              className="font-mono text-[11px] leading-none tracking-[0.06em] text-[var(--text-muted)]"
+            >
+              or press and hold Enter
+            </span>
+          )}
+        </span>
+        {/* A pointer user who cannot see the gesture cannot perform it, so the
+            sentence that names it is drawn rather than only announced. */}
+        <span
+          id={saidId}
+          data-testid={`${actionKey}-hold-caption`}
+          className="t-meta mt-3 block text-[var(--ink-subtle)]"
+        >
           {`Press and hold to ${verb}.`}
+        </span>
+        <span
+          role="status"
+          data-testid={`${actionKey}-status`}
+          className="mt-2 block text-[15px] leading-normal text-[var(--text-body)] empty:hidden"
+        >
+          {saying}
         </span>
       </span>
     );

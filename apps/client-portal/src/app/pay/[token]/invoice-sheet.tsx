@@ -760,22 +760,40 @@ export function InvoiceSheet({ token, payload }: InvoiceSheetProps) {
             </section>
 
             {showChooser && (
-              <div data-pay-print="hide">
+              <div data-pay-print="hide" aria-busy={submitting || undefined}>
                 {method === "check" && checkNotified ? (
                   <p className="flex min-h-[50px] items-center text-[14px] text-[var(--text-muted)]">
                     {designerFirst} has been notified.
                   </p>
                 ) : (
+                  // The terminal tier (R139), not a fourth grammar: the same
+                  // filled act the wall and the door carry, so the product
+                  // stops shipping three ways to say "this one is heavy".
+                  //
+                  // No native `disabled` (sheet §A5): the unavailable rule and
+                  // the loading state would otherwise share one face, and a
+                  // payment in flight would read as a payment refused. Working
+                  // stays filled and says what it is doing; `handleAct` already
+                  // refuses a second press while one is open.
                   <button
                     type="button"
                     onClick={() => void handleAct()}
-                    disabled={submitting}
+                    aria-disabled={submitting || undefined}
                     data-testid="pay-act"
-                    className="block min-h-[50px] w-full border border-[var(--pay-act-bg)] bg-[var(--pay-act-bg)] px-[18px] py-3.5 text-[15px] font-medium text-[var(--pay-act-fg)] transition-colors hover:border-[var(--pay-act-bg-hover)] hover:bg-[var(--pay-act-bg-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-[var(--color-clay-ink)] disabled:opacity-70"
+                    className={`da-act da-terminal flex w-full shrink-0 items-center justify-center gap-2 font-medium${
+                      submitting ? " is-loading" : ""
+                    }`}
                   >
-                    {method === "check"
-                      ? `Let ${designerFirst} know a check is coming`
-                      : `Pay ${formatCurrency(totalToPayCents, currency)}`}
+                    <span className="da-label">
+                      {submitting
+                        ? method === "check"
+                          ? `Letting ${designerFirst} know`
+                          : "Opening payment"
+                        : method === "check"
+                          ? `Let ${designerFirst} know a check is coming`
+                          : `Pay ${formatCurrency(totalToPayCents, currency)}`}
+                    </span>
+                    <span aria-hidden="true" data-action-hit className="da-hit" />
                   </button>
                 )}
                 {refusal && (

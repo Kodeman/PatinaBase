@@ -1933,7 +1933,7 @@ describe('the ask in the house’s vocabulary', () => {
 
     expect(screen.getByLabelText('Tell Leah what to change.')).toBeInTheDocument();
     const submit = screen.getByRole('button', { name: /submit response/i });
-    expect(submit).toBeDisabled();
+    expect(submit).toHaveAttribute('aria-disabled', 'true');
 
     // Instruction, never validation: nothing on the page reports a failure,
     // and no refusal ink is spent on a note she has not written yet.
@@ -1953,7 +1953,7 @@ describe('the ask in the house’s vocabulary', () => {
     fireEvent.click(screen.getByRole('button', { name: /^return$/i }));
     fireEvent.change(screen.getByTestId('approval-change-note'), { target: { value: '   ' } });
 
-    expect(screen.getByRole('button', { name: /submit response/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /submit response/i })).toHaveAttribute('aria-disabled', 'true');
     await hold(screen.getByRole('button', { name: /submit response/i }));
     expect(respondMutate).not.toHaveBeenCalled();
     expect(commentMutateAsync).not.toHaveBeenCalled();
@@ -2031,12 +2031,12 @@ describe('the ask in the house’s vocabulary', () => {
     fireEvent.click(screen.getByRole('button', { name: /^approve$/i }));
     expect(screen.queryByTestId('approval-change-note')).not.toBeInTheDocument();
     sign();
-    expect(screen.getByRole('button', { name: /submit response/i })).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: /submit response/i })).not.toHaveAttribute('aria-disabled');
 
     fireEvent.click(screen.getByRole('button', { name: /choose another outcome/i }));
     fireEvent.click(screen.getByRole('button', { name: /^hold$/i }));
     expect(screen.queryByTestId('approval-change-note')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /submit response/i })).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: /submit response/i })).not.toHaveAttribute('aria-disabled');
   });
 
   it('holds the approval, not the gate, when the client keeps it open', () => {
@@ -2365,18 +2365,18 @@ describe('the outcome is signed and held (P-18)', () => {
     fireEvent.click(screen.getByRole('button', { name: /^approve$/i }));
 
     const submit = screen.getByRole('button', { name: /submit response/i });
-    expect(submit).toBeDisabled();
+    expect(submit).toHaveAttribute('aria-disabled', 'true');
 
     sign('H');
-    expect(submit).toBeDisabled();
+    expect(submit).toHaveAttribute('aria-disabled', 'true');
 
     sign('  ');
-    expect(submit).toBeDisabled();
+    expect(submit).toHaveAttribute('aria-disabled', 'true');
     await hold(submit);
     expect(respondMutate).not.toHaveBeenCalled();
 
     sign('Harper Vale');
-    expect(submit).not.toBeDisabled();
+    expect(submit).not.toHaveAttribute('aria-disabled');
   });
 
   it('records nothing on a tap, and only on a hold held to its length', async () => {
@@ -2438,7 +2438,7 @@ describe('the outcome is signed and held (P-18)', () => {
     expect(screen.queryByTestId('approval-signature')).not.toBeInTheDocument();
     // Nothing to type, so the act is armed the moment it is chosen.
     const submit = screen.getByRole('button', { name: /submit response/i });
-    expect(submit).not.toBeDisabled();
+    expect(submit).not.toHaveAttribute('aria-disabled');
     await hold(submit);
 
     await waitFor(() => expect(respondMutate).toHaveBeenCalledTimes(1));

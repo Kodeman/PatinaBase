@@ -619,6 +619,40 @@ describe("the states", () => {
 });
 
 describe("the act", () => {
+  /* PP-3 — WORKING IS NOT BLOCKED.
+     The terminal tier draws `:disabled` and `[aria-disabled]` the same way:
+     rail ground, faint ink, a hairline border — the face of "you cannot do
+     this". A payment in flight must not borrow it. The act stays filled, says
+     what it is doing, and `aria-busy` sits on the wrapper (sheet §A5). */
+  it("stays filled and says what it is doing while the payment opens", async () => {
+    let openCheckout: (() => void) | undefined;
+    global.fetch = jest.fn().mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          openCheckout = () =>
+            resolve({
+              ok: true,
+              json: async () => ({ url: "https://checkout.stripe.com/c/pay/x" }),
+            } as Response);
+        }),
+    ) as unknown as typeof fetch;
+
+    render(<InvoiceSheet token={TOKEN} payload={vale()} />);
+    fireEvent.click(screen.getByRole("radio", { name: /^card/i }));
+    fireEvent.click(screen.getByTestId("pay-act"));
+
+    const button = await screen.findByTestId("pay-act");
+    expect(button).toHaveTextContent("Opening payment");
+    expect(button).toHaveClass("is-loading");
+    expect(button).not.toBeDisabled();
+    expect(button).toHaveAttribute("aria-disabled", "true");
+    expect(button.parentElement).toHaveAttribute("aria-busy", "true");
+
+    await act(async () => {
+      openCheckout?.();
+    });
+  });
+
   it("opens Checkout with the chosen method and follows the URL", async () => {
     render(<InvoiceSheet token={TOKEN} payload={vale()} />);
     fireEvent.click(screen.getByRole("radio", { name: /^card/i }));
