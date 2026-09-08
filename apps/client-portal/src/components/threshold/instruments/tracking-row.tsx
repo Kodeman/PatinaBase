@@ -98,7 +98,7 @@ export function TrackingRow({ name, imageUrl, priceCents, status }: TrackingRowP
     <div
       data-testid="tracking-row"
       data-journey-stop={stage}
-      className="flex items-start gap-4 border-b border-[var(--border-subtle)] py-3.5"
+      className="material-tracking-row flex items-start gap-4 border-b border-[var(--border-subtle)] py-3.5"
     >
       {drawImage ? (
         // eslint-disable-next-line @next/next/no-img-element
