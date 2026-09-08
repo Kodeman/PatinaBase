@@ -1,0 +1,31 @@
+{
+  "captures": [
+    {
+      "file": "deck-dark-slide-1-1440-dark.png",
+      "width": 1440,
+      "hash": "slide-1",
+      "state": null,
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "deck-dark-slide-10-1440-dark.png",
+      "width": 1440,
+      "hash": "slide-10",
+      "state": null,
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "deck-dark-slide-14-1440-dark.png",
+      "width": 1440,
+      "hash": "slide-14",
+      "state": null,
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    }
+  ]
+}

@@ -1,0 +1,58 @@
+{
+  "captures": [
+    {
+      "file": "decision-moment-noted-1440.png",
+      "width": 1440,
+      "hash": null,
+      "state": "noted",
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "decision-moment-accepted-1440.png",
+      "width": 1440,
+      "hash": null,
+      "state": "accepted",
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "decision-moment-failed-1440.png",
+      "width": 1440,
+      "hash": null,
+      "state": "failed",
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "decision-moment-noted-390.png",
+      "width": 390,
+      "hash": null,
+      "state": "noted",
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "decision-moment-accepted-390.png",
+      "width": 390,
+      "hash": null,
+      "state": "accepted",
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "decision-moment-failed-390.png",
+      "width": 390,
+      "hash": null,
+      "state": "failed",
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    }
+  ]
+}

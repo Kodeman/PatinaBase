@@ -1,0 +1,328 @@
+{
+  "captures": [
+    {
+      "file": "deck-slide-1-1440.png",
+      "width": 1440,
+      "hash": "slide-1",
+      "state": null,
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "deck-slide-1-390.png",
+      "width": 390,
+      "hash": "slide-1",
+      "state": null,
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "deck-slide-2-1440.png",
+      "width": 1440,
+      "hash": "slide-2",
+      "state": null,
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "deck-slide-2-390.png",
+      "width": 390,
+      "hash": "slide-2",
+      "state": null,
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "deck-slide-3-1440.png",
+      "width": 1440,
+      "hash": "slide-3",
+      "state": null,
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "deck-slide-3-390.png",
+      "width": 390,
+      "hash": "slide-3",
+      "state": null,
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "deck-slide-4-1440.png",
+      "width": 1440,
+      "hash": "slide-4",
+      "state": null,
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "deck-slide-4-390.png",
+      "width": 390,
+      "hash": "slide-4",
+      "state": null,
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "deck-slide-5-1440.png",
+      "width": 1440,
+      "hash": "slide-5",
+      "state": null,
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "deck-slide-5-390.png",
+      "width": 390,
+      "hash": "slide-5",
+      "state": null,
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "deck-slide-6-1440.png",
+      "width": 1440,
+      "hash": "slide-6",
+      "state": null,
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "deck-slide-6-390.png",
+      "width": 390,
+      "hash": "slide-6",
+      "state": null,
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "deck-slide-7-1440.png",
+      "width": 1440,
+      "hash": "slide-7",
+      "state": null,
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "deck-slide-7-390.png",
+      "width": 390,
+      "hash": "slide-7",
+      "state": null,
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "deck-slide-8-1440.png",
+      "width": 1440,
+      "hash": "slide-8",
+      "state": null,
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "deck-slide-8-390.png",
+      "width": 390,
+      "hash": "slide-8",
+      "state": null,
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "deck-slide-9-1440.png",
+      "width": 1440,
+      "hash": "slide-9",
+      "state": null,
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "deck-slide-9-390.png",
+      "width": 390,
+      "hash": "slide-9",
+      "state": null,
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "deck-slide-10-1440.png",
+      "width": 1440,
+      "hash": "slide-10",
+      "state": null,
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "deck-slide-10-390.png",
+      "width": 390,
+      "hash": "slide-10",
+      "state": null,
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "deck-slide-11-1440.png",
+      "width": 1440,
+      "hash": "slide-11",
+      "state": null,
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "deck-slide-11-390.png",
+      "width": 390,
+      "hash": "slide-11",
+      "state": null,
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "deck-slide-12-1440.png",
+      "width": 1440,
+      "hash": "slide-12",
+      "state": null,
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "deck-slide-12-390.png",
+      "width": 390,
+      "hash": "slide-12",
+      "state": null,
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "deck-slide-13-1440.png",
+      "width": 1440,
+      "hash": "slide-13",
+      "state": null,
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "deck-slide-13-390.png",
+      "width": 390,
+      "hash": "slide-13",
+      "state": null,
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "deck-slide-14-1440.png",
+      "width": 1440,
+      "hash": "slide-14",
+      "state": null,
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "deck-slide-14-390.png",
+      "width": 390,
+      "hash": "slide-14",
+      "state": null,
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "deck-slide-15-1440.png",
+      "width": 1440,
+      "hash": "slide-15",
+      "state": null,
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "deck-slide-15-390.png",
+      "width": 390,
+      "hash": "slide-15",
+      "state": null,
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "deck-slide-16-1440.png",
+      "width": 1440,
+      "hash": "slide-16",
+      "state": null,
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "deck-slide-16-390.png",
+      "width": 390,
+      "hash": "slide-16",
+      "state": null,
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "deck-slide-17-1440.png",
+      "width": 1440,
+      "hash": "slide-17",
+      "state": null,
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "deck-slide-17-390.png",
+      "width": 390,
+      "hash": "slide-17",
+      "state": null,
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "deck-slide-18-1440.png",
+      "width": 1440,
+      "hash": "slide-18",
+      "state": null,
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "deck-slide-18-390.png",
+      "width": 390,
+      "hash": "slide-18",
+      "state": null,
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    }
+  ]
+}

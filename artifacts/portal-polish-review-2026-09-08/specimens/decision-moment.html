@@ -1,0 +1,974 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Two Acts, Two Weights</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;1,400&family=Inter:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  color-scheme: light dark;
+
+  /* — paper, three stocks — */
+  --paper:            #FAF7F2;  /* the ground */
+  --paper-doc:        #FCFAF6;  /* a document laid on the ground */
+  --rail:             #E8E3DB;  /* the rail / deeper sheet */
+
+  /* — ink — */
+  --ink:              #2C2926;  /* 13.53:1 on paper */
+  --ink-muted:        #4E4339;  /* 9.22:1 on paper-doc */
+  --ink-subtle:       #5A4E43;  /* 7.73:1 */
+  --ink-faint:        #65594E;  /* 6.51:1 — also the disabled ink */
+  --ink-paper:        #FAF7F2;  /* ink ON charcoal */
+
+  /* — hairlines — */
+  --hairline:         #E8E3DB;
+  --hairline-strong:  rgba(44, 41, 38, .14);
+
+  /* — the rest rule pigment (4.20:1 on paper) — */
+  --oak:              #8B7355;
+
+  /* — state pigments: material value / paper ink — */
+  --clay:             #C4A57B;   --clay-ink:      #7C5E30;
+  --golden:           #E8C547;   --golden-ink:    #79651E;
+  --terracotta:       #D4A090;   --terracotta-ink:#9C5340;
+  --sage:             #A8B5A0;   --sage-ink:      #5F6B57;
+
+  /* — the seven stage plates (white label 5.22–8.20:1) — */
+  --tab-brief:     #497093;
+  --tab-discovery: #307063;
+  --tab-direction: #366A3A;
+  --tab-proposal:  #575D1D;
+  --tab-project:   #6D4E24;
+  --tab-install:   #823832;
+  --tab-care:      #823832;   /* Care has no pigment of its own */
+
+  /* — the one depth token. Permitted on a temporary sheet ONLY.
+       None of the three specimens uses it. — */
+  --elevation-sheet: 0 1px 2px rgba(44, 41, 38, .08);
+
+  /* — rhythm — */
+  --module: 24px;
+  --radius-hair: 2px;
+  --radius-box:  3px;
+
+  /* — motion — */
+  --press-in:  70ms;
+  --press-out: 240ms;
+  --ease: cubic-bezier(.22, 1, .36, 1);
+
+  --font-display: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  --font-body:    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-meta:    'DM Mono', 'SF Mono', 'Fira Code', ui-monospace, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper:           #2A2622;
+    --paper-doc:       #26221E;
+    --rail:            #3A3530;
+    --ink:             #F2EDE6;
+    --ink-muted:       #D6CEC4;
+    --ink-subtle:      #C7BEB3;
+    --ink-faint:       #B8AEA2;
+    --ink-paper:       #2A2622;
+    --hairline:        rgba(242, 237, 230, .14);
+    --hairline-strong: rgba(242, 237, 230, .22);
+    --oak:             #B39572;
+    --clay-ink:        #D8B98A;
+    --golden-ink:      #E0C963;
+    --terracotta-ink:  #E2A895;
+    --sage-ink:        #AFC0A6;
+    /* material values keep their hue; the plates lift one step */
+    --tab-brief: #5B85AA; --tab-discovery: #3E8878; --tab-direction: #4A8450;
+    --tab-proposal: #6E7529; --tab-project: #8A6531; --tab-install: #9E4A43;
+    --tab-care: #9E4A43;
+  }
+}
+
+:root[data-theme="dark"] {
+  --paper:           #2A2622;
+  --paper-doc:       #26221E;
+  --rail:            #3A3530;
+  --ink:             #F2EDE6;
+  --ink-muted:       #D6CEC4;
+  --ink-subtle:      #C7BEB3;
+  --ink-faint:       #B8AEA2;
+  --ink-paper:       #2A2622;
+  --hairline:        rgba(242, 237, 230, .14);
+  --hairline-strong: rgba(242, 237, 230, .22);
+  --oak:             #B39572;
+  --clay-ink:        #D8B98A;
+  --golden-ink:      #E0C963;
+  --terracotta-ink:  #E2A895;
+  --sage-ink:        #AFC0A6;
+  --tab-brief: #5B85AA; --tab-discovery: #3E8878; --tab-direction: #4A8450;
+  --tab-proposal: #6E7529; --tab-project: #8A6531; --tab-install: #9E4A43;
+  --tab-care: #9E4A43;
+}
+
+/* ——— ground ——— */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+}
+
+/* ——— the seven steps ——— */
+
+.t-d1 { font-family: var(--font-display); font-size: 34px; line-height: 1.15; font-weight: 500; letter-spacing: 0; margin: 0; }
+.t-d2 { font-family: var(--font-display); font-size: 26px; line-height: 1.20; font-weight: 500; letter-spacing: 0; margin: 0; }
+.t-d3 { font-family: var(--font-display); font-size: 20px; line-height: 1.30; font-weight: 500; letter-spacing: 0; margin: 0; }
+.t-body { font-family: var(--font-body); font-size: 16px; line-height: 1.55; font-weight: 400; margin: 0; }
+.t-body-sm { font-family: var(--font-body); font-size: 14px; line-height: 1.50; font-weight: 400; margin: 0; }
+.t-meta { font-family: var(--font-meta); font-size: 12px; line-height: 1.50; font-weight: 400; letter-spacing: .08em; margin: 0; }
+.t-head { font-family: var(--font-meta); font-size: 11px; line-height: 1.50; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; margin: 0; }
+
+.t-authorship { font-family: var(--font-display); font-size: 20px; line-height: 1.30; font-weight: 400; font-style: italic; letter-spacing: 0; margin: 0; }
+
+/* amendment B — money is never smaller than 15px */
+.t-money {
+  font-family: var(--font-meta);
+  font-size: 15px; line-height: 1.5;
+  font-weight: 400; letter-spacing: .02em;
+  font-variant-numeric: tabular-nums;
+  margin: 0;
+}
+/* the one announced figure at the head of a money block */
+.announced { font-variant-numeric: tabular-nums; }
+
+/* ——— the control box ——— */
+
+.act {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 4px 6px 10px;
+  border: 0;
+  background: none;
+  font-family: var(--font-meta);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.act .label { position: relative; display: inline-block; line-height: 13px; }
+.act .label::before, .act .label::after {
+  content: ''; position: absolute; left: 0; right: 0;
+  transform-origin: left center;
+  transition: background-color 150ms linear, height 150ms var(--ease);
+}
+.act .label::before { bottom: -5px; height: 1px; }
+.act .label::after  { bottom: -8.5px; height: 1px; }
+
+.act--tertiary { color: var(--ink-subtle); }
+.act--tertiary .label::before { background: var(--oak); }
+.act--tertiary .label::after  { content: none; }
+.act--tertiary:hover .label::before { background: var(--ink-faint); height: 1.5px; }
+.act--tertiary:active { color: var(--ink); transition-duration: var(--press-in); }
+
+.act--secondary { color: var(--ink); }
+.act--secondary .label::before { height: 1.5px; background: var(--ink); }
+.act--secondary .label::after  { background: var(--clay); }
+.act--secondary:hover .label::after { height: 2px; }
+.act--secondary:active { transition-duration: var(--press-in); }
+
+/* ——— shared block: inline tier + pressed state (byte-identical in all three specimens) ——— */
+.act--inline{display:inline;min-height:0;min-width:0;padding:0 0 3px;font:inherit;letter-spacing:inherit;text-transform:inherit;color:inherit;white-space:normal;background:none;border:0;border-bottom:1px solid var(--oak);cursor:pointer;text-decoration:none;-webkit-box-decoration-break:clone;box-decoration-break:clone}
+.act--inline .label{display:inline;line-height:inherit}
+.act--inline .label::before,.act--inline .label::after,.act--inline::after{content:none}
+.act--inline:hover{border-bottom-color:var(--ink-faint);border-bottom-width:1.5px;padding-bottom:2.5px}
+.act--inline:focus-visible{outline:2px solid var(--clay-ink);outline-offset:2px}
+.act[aria-pressed="true"]{color:var(--ink)}
+.act[aria-pressed="true"] .label::before{height:1.5px;background:var(--ink)}
+.act[aria-pressed="true"] .label::after{content:'';background:var(--clay)}
+.act[aria-pressed="false"]{color:var(--ink-subtle)}
+.act[aria-pressed="false"] .label::before{height:1px;background:var(--oak)}
+.act[aria-pressed="false"] .label::after{content:none}
+
+.act--terminal {
+  padding: 13px 22px;
+  min-height: 48px;
+  border-radius: var(--radius-box);
+  background: var(--ink);
+  color: var(--ink-paper);
+  letter-spacing: .06em;
+  overflow: hidden;
+}
+.act--terminal .label::before,
+.act--terminal .label::after { content: none; }
+.act--terminal:hover  { background: #1F1D1A; }
+.act--terminal:active { transform: translateY(1px); transition-duration: var(--press-in); }
+
+/* amendment C — the terminal label is body type, sentence case, at 16px */
+.act--terminal .label {
+  font-family: var(--font-body);
+  font-size: 16px; line-height: 20px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.act:focus-visible {
+  outline: 2px solid var(--clay-ink);
+  outline-offset: 2px;
+}
+.act::after {
+  content: '\2038' / ''; position: absolute; left: 1px; top: 50%;
+  font-size: 14px; line-height: 1; color: var(--ink-faint);
+  opacity: 0; transform: translateY(-50%);
+  transition: opacity 140ms linear; pointer-events: none;
+}
+.act:focus-visible::after { opacity: 1; }
+.act--terminal:focus-visible::after { color: var(--ink-paper); }
+
+.act[aria-disabled="true"] { cursor: not-allowed; }
+.act--tertiary[aria-disabled="true"],
+.act--secondary[aria-disabled="true"] { color: var(--ink-faint); }
+.act--tertiary[aria-disabled="true"] .label::before,
+.act--secondary[aria-disabled="true"] .label::before,
+.act--secondary[aria-disabled="true"] .label::after { background: var(--hairline-strong); }
+.act--terminal[aria-disabled="true"] {
+  background: var(--rail);
+  color: var(--ink-faint);
+  border: 1px solid var(--hairline-strong);
+}
+
+/* the ink that fills the terminal act as it is held */
+.act--terminal .fill {
+  position: absolute; inset: 0;
+  transform: scaleX(0); transform-origin: left center;
+  background: var(--ink-faint);
+  transition: transform var(--press-out) linear;
+  pointer-events: none;
+}
+.act--terminal.is-holding .fill {
+  transform: scaleX(1);
+  transition: transform 900ms linear;
+}
+.act--terminal .label { z-index: 1; }
+
+/* the legend's inert specimens — they wrap inside the 200px rail */
+.act--specimen { cursor: default; white-space: normal; max-width: 100%; text-align: center; }
+.act--specimen .label { line-height: 1.35; }
+.legend .act--terminal { padding: 13px 14px; }
+
+/* ——— the consequence sentence ——— */
+
+.consequence {
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--ink);
+  max-width: 56ch;
+  margin: 0 0 12px;
+}
+
+/* ——— the stamp ——— */
+
+.stamp {
+  display: inline-block;
+  position: relative;
+  padding: 6px 10px 4px;
+  border: 1px solid currentColor;
+  border-radius: var(--radius-hair);
+  transform: rotate(-2deg);
+  font-family: var(--font-meta);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  line-height: 1.4;
+}
+.stamp::before {
+  content: ''; position: absolute; inset: 2.5px;
+  border: 1px solid currentColor; opacity: .42; pointer-events: none;
+}
+.stamp--noted    { color: var(--clay-ink); }
+.stamp--accepted { color: var(--sage-ink); }
+
+/* ——— the specimen frame ——— */
+
+.specimen-meta {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px;
+  padding: 10px 24px;
+  background: var(--rail);
+  color: var(--ink-muted);
+  font-family: var(--font-meta);
+  font-size: 11px;
+  letter-spacing: .04em;
+  border-bottom: 1px solid var(--hairline-strong);
+}
+.switcher { display: flex; flex-wrap: wrap; align-items: center; gap: 0 16px; padding: 2px; }
+.switcher .act { min-height: 34px; font-size: 11px; }
+
+/* ——— page skeleton ——— */
+
+.frame {
+  position: relative;
+  max-width: 1392px;
+  margin: 0 auto;
+  padding: 48px 24px 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  column-gap: 48px;
+  align-items: start;
+}
+.column { min-width: 0; grid-column: 1; }
+
+.status { min-height: 28px; margin: 0 0 24px; color: var(--ink); max-width: 56ch; }
+
+.doc { margin: 0 0 72px; }
+.doc__body { display: flex; flex-direction: column; }
+
+/* letterhead */
+.letterhead { margin: 0 0 24px; }
+.letterhead__heads { display: flex; justify-content: space-between; align-items: baseline; gap: 24px; color: var(--ink-muted); }
+.letterhead__title { margin-top: 12px; }
+.letterhead__sub { margin-top: 4px; color: var(--ink-subtle); }
+.letterhead__rule { height: 1px; background: var(--hairline); margin-top: 24px; }
+
+.block { margin: 0 0 24px; }
+.block--wide { margin-bottom: 48px; }
+.measure { max-width: 56ch; }
+.authorship { margin-top: 12px; color: var(--ink-muted); }
+.scope-label { margin-top: 12px; color: var(--ink-muted); }
+.scope-figure { margin-top: 4px; }
+
+/* the drawn plate */
+.plate {
+  width: 120px; height: 120px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-box);
+  background: var(--paper-doc);
+}
+.plate svg { width: 100%; height: 100%; display: block; }
+.piece { display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap; }
+.piece__name { margin-bottom: 4px; }
+.piece__dims { color: var(--ink-subtle); }
+.caption { margin-top: 12px; color: var(--ink-subtle); }
+
+/* amendment A — every meaning-carrying stroke is ink, never rail */
+.dw          { fill: none; stroke: var(--ink-faint); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.dw-detail   { fill: none; stroke: var(--ink-faint); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.hatch-line  { stroke: var(--ink-faint); stroke-width: 1; stroke-opacity: .5; vector-effect: non-scaling-stroke; }
+.hatched     { fill: url(#wallHatch); stroke: var(--ink-faint); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.wall { width: 100%; height: auto; display: block; }
+.wall .notch-fill { fill: url(#wallHatch); stroke: none; display: none; }
+.wall.is-closed .notch-fill { display: inline; }
+.wall.is-closed .notch-outline { display: none; }
+.wall.is-closed .hatched { stroke: none; }
+
+/* finish chips — amendment E */
+.chips { display: flex; flex-wrap: wrap; gap: 12px; padding: 2px; }
+.chip{min-height:44px;padding:10px 14px;border-radius:var(--radius-box);font-family:var(--font-body);font-size:14px;color:var(--ink);background:var(--paper);border:1px solid var(--hairline-strong);cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--rail);border-color:var(--ink-faint)}
+.chip:focus-visible{outline:2px solid var(--clay-ink);outline-offset:2px}
+.chips__note { margin-top: 12px; color: var(--ink-subtle); }
+
+/* the ledger — amendment I: the document's own measure, not the page edge */
+.ledger { width: 100%; max-width: 56ch; border-collapse: collapse; }
+.ledger th, .ledger td { padding: 6px 0; text-align: left; font-weight: 400; vertical-align: baseline; }
+.ledger td.figure { text-align: right; }
+.ledger .total th, .ledger .total td { border-top: 1px solid var(--hairline-strong); padding-top: 12px; }
+.ledger .total th { font-weight: 500; }
+.ledger__after { margin-top: 12px; max-width: 56ch; }
+.ledger__after .t-money { display: inline; }
+
+/* typed name — amendment I */
+.sign { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 24px; }
+.sign__field { flex: 0 1 360px; max-width: 360px; min-width: 0; }
+.sign input {
+  width: 100%;
+  margin-top: 4px;
+  padding: 6px 0 8px;
+  border: 0;
+  border-bottom: 1px solid var(--hairline-strong);
+  border-radius: 0;
+  background: none;
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 20px;
+  line-height: 1.30;
+  font-weight: 500;
+}
+.sign input:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+.sign__date { color: var(--ink-subtle); padding-bottom: 8px; }
+.reason { margin-top: 12px; color: var(--ink-subtle); }
+
+.acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; padding: 2px; }
+.hold-caption { margin-top: 12px; color: var(--ink-subtle); }
+
+/* the failure panel */
+.failure { border-top: 1px solid var(--hairline-strong); padding-top: 24px; margin: 24px 0; }
+.failure p { max-width: 56ch; }
+.failure .acts { margin-top: 12px; }
+
+/* the record block */
+.record { border-top: 1px solid var(--hairline-strong); padding-top: 24px; margin: 24px 0; }
+.record .stamp { margin-bottom: 24px; }
+.record__subject { margin-bottom: 4px; }
+.record__subject:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+.record__ref { color: var(--ink-muted); margin-bottom: 12px; }
+.record__party, .record__when { color: var(--ink-subtle); }
+.record__signature { margin: 24px 0 0; }
+.record__signature-rule { height: 1px; background: var(--hairline-strong); margin: 4px 0 0; max-width: 360px; }
+.record__next { margin-top: 24px; max-width: 56ch; }
+.record__way { margin-top: 12px; }
+
+/* the legend rail */
+.legend {
+  position: sticky; top: 24px;
+  grid-column: 2; grid-row: 1;
+  padding: 24px;
+  min-width: 0;
+}
+.legend h2 { color: var(--ink-muted); margin-bottom: 24px; }
+.legend__row { margin-bottom: 24px; }
+.legend__tier { margin-bottom: 4px; }
+.legend__rule { color: var(--ink-subtle); margin-top: 12px; max-width: 40ch; }
+.legend__specimen { padding: 2px; }
+
+/* colophon — the last block of the page at every width */
+.colophon { grid-column: 1; }
+.colophon__rule { height: 1px; background: var(--hairline); }
+.colophon p { margin-top: 24px; margin-bottom: 48px; color: var(--ink-faint); }
+
+/* ——— wide: the rail's edge runs the whole page ——— */
+
+@media (min-width: 1201px) {
+  .frame::after {
+    content: ''; position: absolute; top: 0; bottom: 0; right: 224px;
+    width: 1px; background: var(--hairline); pointer-events: none;
+  }
+}
+
+/* ——— narrow ——— */
+
+@media (max-width: 1200px) {
+  .frame { grid-template-columns: minmax(0, 1fr); }
+  .legend {
+    position: static;
+    grid-column: 1; grid-row: auto;
+    border-top: 1px solid var(--hairline);
+    padding: 24px 0;
+  }
+}
+
+@media (max-width: 600px) {
+  .frame { padding: 24px 16px 0; }
+  .letterhead__heads { flex-direction: column; align-items: flex-start; gap: 4px; }
+  .doc { margin-bottom: 48px; }
+  .b-head { order: 1; }
+  .b-framing { order: 2; }
+  .b-piece { order: 3; }
+  .money-block { order: 4; }
+  .finish-block { order: 5; }
+  .b-close { order: 6; }
+
+  /* amendment L — the act docks, and only the act */
+  .dock-slot.is-docked > .acts--dock {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 3;
+    margin: 0;
+    padding: 12px 16px;
+    background: var(--paper);
+    border-top: 1px solid var(--hairline);
+  }
+  .dock-slot.is-docked > .acts--dock .act--terminal { width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .act--terminal .fill { display: none; }
+}
+
+@media (forced-colors: active) {
+  .act--terminal { border: 2px solid ButtonText; }
+  .act .label::before, .act .label::after { forced-color-adjust: none; background: ButtonText; }
+  .act--inline { border-bottom-color: LinkText; }
+  .stamp, .stamp::before { border-color: CanvasText; }
+  .plate, .empty .floor, hr { border-color: CanvasText; }
+  .act:focus-visible { outline: 2px solid Highlight; }
+}
+</style>
+</head>
+<body>
+
+<div class="specimen-meta" role="region" aria-label="Specimen controls">
+  <span>Specimen 3 · Two acts, two weights</span>
+  <span>Fixture: Cedar Lane Study · Nora Ellison · Local Dev Studio · fictional data</span>
+  <span>Every drawing is inline SVG · no photograph</span>
+  <div class="switcher" role="group" aria-label="State">
+    <button type="button" id="state-default" class="act act--tertiary" data-state="default" aria-pressed="true"><span class="label">Default</span></button>
+    <button type="button" id="state-noted" class="act act--tertiary" data-state="noted" aria-pressed="false"><span class="label">Noted</span></button>
+    <button type="button" id="state-accepted" class="act act--tertiary" data-state="accepted" aria-pressed="false"><span class="label">Accepted</span></button>
+    <button type="button" id="state-failed" class="act act--tertiary" data-state="failed" aria-pressed="false"><span class="label">Save failed</span></button>
+  </div>
+</div>
+
+<div class="frame">
+  <main class="column">
+
+    <!-- ——————————————— (A) Selection No. 3 ——————————————— -->
+    <section class="doc" id="paperA" aria-labelledby="docA-heading">
+      <div class="letterhead">
+        <div class="letterhead__heads">
+          <span class="t-head">Local Dev Studio</span>
+          <span class="t-head">Prepared for Nora Ellison</span>
+        </div>
+        <h1 class="t-d1 letterhead__title">Cedar Lane Study</h1>
+        <p class="t-meta letterhead__sub">Selection No. 3 · 8 September 2026</p>
+        <div class="letterhead__rule"></div>
+      </div>
+
+      <p class="t-body status" id="status" role="status"></p>
+
+      <div class="doc__body">
+        <div class="block b-head">
+          <h2 class="t-d2" id="docA-heading">The table for the Study</h2>
+        </div>
+
+        <div class="block block--wide b-framing">
+          <p class="t-body measure">The round oak keeps the walk between the chair and the shelving clear, and the 42-inch top still seats four when your sister visits. I have set out two finishes; the natural reads warmer against the shearling.</p>
+          <p class="t-authorship authorship">Leah Hartwell · Local Dev Studio · 8 September 2026</p>
+        </div>
+
+        <div class="block block--wide b-piece">
+          <div class="piece">
+            <div class="plate">
+              <svg viewBox="0 0 120 120" role="img" aria-label="Drawing of a round coffee table, seen in plan above a side elevation." focusable="false">
+                <circle class="dw" cx="60" cy="42" r="24"/>
+                <line class="dw-detail" x1="36" y1="42" x2="84" y2="42"/>
+                <rect class="dw" x="30" y="79" width="60" height="6"/>
+                <line class="dw" x1="39" y1="85" x2="39" y2="101"/>
+                <line class="dw" x1="81" y1="85" x2="81" y2="101"/>
+                <line class="dw" x1="22" y1="101" x2="98" y2="101"/>
+              </svg>
+            </div>
+            <div>
+              <h3 class="t-d3 piece__name">Round oak coffee table</h3>
+              <p class="t-meta piece__dims">42″ × 16″ · solid oak</p>
+            </div>
+          </div>
+          <p class="t-meta caption">Round oak coffee table · drawing by Local Dev Studio · 8 September 2026</p>
+        </div>
+
+        <div class="block block--wide finish-block">
+          <div class="chips" role="group" aria-label="Finish">
+            <button type="button" class="chip" data-chip="Natural oak" aria-pressed="true">Natural oak</button>
+            <button type="button" class="chip" data-chip="Smoked oak" aria-pressed="false">Smoked oak</button>
+          </div>
+          <p class="t-meta chips__note">Physical samples at your next meeting; screens do not show grain truly.</p>
+        </div>
+
+        <div class="block block--wide money-block">
+          <table class="ledger">
+            <tbody>
+              <tr>
+                <th scope="row" class="t-body-sm">Piece</th>
+                <td class="t-money figure">$2,100.00</td>
+              </tr>
+              <tr>
+                <th scope="row" class="t-body-sm">Delivery</th>
+                <td class="t-money figure">$180.00</td>
+              </tr>
+              <tr class="total">
+                <th scope="row" class="t-body-sm">Total</th>
+                <td class="t-d2 announced figure">$2,280.00</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="t-body ledger__after">Allowance <span class="t-money">$2,600.00</span> · <span class="t-money">$320.00</span> remaining.</p>
+        </div>
+
+        <div id="closeA" class="b-close">
+          <p class="consequence">Noting your choice tells Leah which finish to price. It is not an order and nothing is charged.</p>
+          <div class="acts">
+            <button type="button" class="act act--secondary" data-act="note"><span class="label" id="noteLabel">Note my choice — Natural oak</span></button>
+            <button type="button" class="act act--tertiary" data-act="ask"><span class="label">Ask Leah for a change</span></button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ——————————————— (B) Authorization No. 8 ——————————————— -->
+    <section class="doc" id="paperB" aria-labelledby="docB-heading">
+      <div class="letterhead">
+        <div class="letterhead__heads">
+          <span class="t-head">Local Dev Studio</span>
+          <span class="t-head">Prepared for Nora Ellison</span>
+        </div>
+        <p class="t-d1 letterhead__title">Cedar Lane Study</p>
+        <p class="t-meta letterhead__sub">Authorization No. 8 · 8 September 2026</p>
+        <div class="letterhead__rule"></div>
+      </div>
+
+      <div class="doc__body">
+        <div class="block block--wide">
+          <h2 class="t-d2" id="docB-heading">Built-in shelving, north wall</h2>
+          <p class="t-head scope-label">Trade scope</p>
+          <p class="t-d2 announced scope-figure">$2,980.00</p>
+        </div>
+
+        <div class="block block--wide">
+          <svg class="wall" id="wallDrawing" viewBox="0 0 1100 150" role="img" aria-label="Elevation of the north wall, hatched, with one square notch open where your acceptance is owed." focusable="false">
+            <defs>
+              <pattern id="wallHatch" width="13" height="13" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                <line class="hatch-line" x1="0" y1="0" x2="0" y2="13"/>
+              </pattern>
+            </defs>
+            <rect class="dw" x="60" y="30" width="960" height="100"/>
+            <path class="hatched" fill-rule="evenodd" d="M60 30 H1020 V130 H60 Z M770 35 H860 V125 H770 Z"/>
+            <rect class="notch-fill" x="770" y="35" width="90" height="90"/>
+            <rect class="dw-detail notch-outline" x="770" y="35" width="90" height="90"/>
+            <line class="dw" x1="20" y1="134" x2="1080" y2="134"/>
+          </svg>
+          <p class="t-meta caption">North wall · drawing by Local Dev Studio · 3 September 2026</p>
+        </div>
+
+        <div id="closeB">
+          <p class="consequence">Accepting releases $2,980.00 to Marta Voss for the finished shelving. It does not close the project or change your invoice.</p>
+
+          <div class="block block--wide">
+            <div class="sign">
+              <div class="sign__field">
+                <label class="t-head" for="signName">Type your full name</label>
+                <input type="text" id="signName" name="name" autocomplete="name">
+              </div>
+              <p class="t-money sign__date">8 September 2026</p>
+            </div>
+            <p class="t-meta reason" id="acceptReason">Type your full name to accept.</p>
+          </div>
+
+          <div class="dock-slot" id="dockSlot">
+            <div class="acts acts--dock" id="acceptDock">
+              <button type="button" class="act act--terminal" id="acceptAct" aria-disabled="true" aria-describedby="acceptReason">
+                <span class="fill" aria-hidden="true"></span>
+                <span class="label">Accept the finished work · $2,980.00</span>
+              </button>
+            </div>
+          </div>
+          <p class="t-meta hold-caption">Press and hold to accept</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <aside class="legend" aria-labelledby="legend-heading">
+    <h2 class="t-head" id="legend-heading">The three tiers</h2>
+
+    <div class="legend__row">
+      <p class="t-body-sm legend__tier">Tertiary</p>
+      <div class="legend__specimen" aria-hidden="true">
+        <span class="act act--tertiary act--specimen"><span class="label">Ask Leah for a change</span></span>
+      </div>
+      <p class="t-meta legend__rule">Opens or navigates. Nothing changes.</p>
+    </div>
+
+    <div class="legend__row">
+      <p class="t-body-sm legend__tier">Secondary</p>
+      <div class="legend__specimen" aria-hidden="true">
+        <span class="act act--secondary act--specimen"><span class="label">Note my choice</span></span>
+      </div>
+      <p class="t-meta legend__rule">A reversible record. Nothing is charged.</p>
+    </div>
+
+    <div class="legend__row">
+      <p class="t-body-sm legend__tier">Terminal</p>
+      <div class="legend__specimen" aria-hidden="true">
+        <span class="act act--terminal act--specimen"><span class="label">Accept the finished work</span></span>
+      </div>
+      <p class="t-meta legend__rule">Money moves or a paper is signed.</p>
+    </div>
+  </aside>
+
+  <footer class="colophon">
+    <div class="colophon__rule"></div>
+    <p class="t-meta">Prepared by Local Dev Studio · Sent through Patina</p>
+  </footer>
+</div>
+
+<script>
+(function () {
+  var closeA = document.getElementById('closeA');
+  var closeB = document.getElementById('closeB');
+  var wall = document.getElementById('wallDrawing');
+  var status = document.getElementById('status');
+  var restA = closeA.innerHTML;
+  var restB = closeB.innerHTML;
+
+  var WALL_OPEN = 'Elevation of the north wall, hatched, with one square notch open where your acceptance is owed.';
+  var WALL_CLOSED = 'Elevation of the north wall, hatched, with the square notch now closed where you accepted the work.';
+
+  var finish = 'Natural oak';
+  var armed = false;
+  var holdTimer = null;
+  var holding = false;
+
+  function say(text) { status.textContent = text; }
+
+  function acceptAct() { return document.getElementById('acceptAct'); }
+  function nameField() { return document.getElementById('signName'); }
+
+  function setArmed(next) {
+    armed = next;
+    var act = acceptAct();
+    if (act) { act.setAttribute('aria-disabled', next ? 'false' : 'true'); }
+  }
+
+  function reset() {
+    cancelHold();
+    setDocked(false);
+    closeA.innerHTML = restA;
+    closeB.innerHTML = restB;
+    wall.classList.remove('is-closed');
+    wall.setAttribute('aria-label', WALL_OPEN);
+    finish = 'Natural oak';
+    setArmed(false);
+    say('');
+  }
+
+  function setFinish(value) {
+    finish = value;
+    var chips = document.querySelectorAll('.chip');
+    for (var i = 0; i < chips.length; i++) {
+      chips[i].setAttribute('aria-pressed', chips[i].getAttribute('data-chip') === value ? 'true' : 'false');
+    }
+    var label = document.getElementById('noteLabel');
+    if (label) { label.textContent = 'Note my choice — ' + value; }
+  }
+
+  function ways(filed) {
+    return '<p class="t-body-sm record__way"><a class="act act--inline" href="#">' + filed + '</a></p>' +
+           '<p class="t-body-sm record__way"><a class="act act--inline" href="#">Back to the house</a></p>';
+  }
+
+  function noteRecord() {
+    return '<div class="record">' +
+      '<p class="stamp stamp--noted">Noted</p>' +
+      '<h3 class="t-d3 record__subject" tabindex="-1">Selection No. 3 · Cedar Lane Study</h3>' +
+      '<p class="t-meta record__party">Nora Ellison · Local Dev Studio</p>' +
+      '<p class="t-meta record__when">Noted 8 September 2026, 12:41 pm</p>' +
+      '<p class="t-body record__next">Leah will confirm the maker’s price by 12 September.</p>' +
+      ways('Filed under Previously') +
+    '</div>';
+  }
+
+  function acceptRecord() {
+    return '<div class="record">' +
+      '<p class="stamp stamp--accepted">Accepted</p>' +
+      '<h3 class="t-d3 record__subject" tabindex="-1">Built-in shelving, north wall</h3>' +
+      '<p class="t-head record__ref">Authorization No. 8 · Cedar Lane Study</p>' +
+      '<p class="t-meta record__party">Nora Ellison · Local Dev Studio</p>' +
+      '<p class="t-meta record__when">Accepted 8 September 2026, 2:14 pm</p>' +
+      '<p class="t-d3 record__signature"></p>' +
+      '<div class="record__signature-rule"></div>' +
+      '<p class="t-body record__next">Marta Voss is released to invoice $2,980.00 for the finished shelving.</p>' +
+      ways('Recorded in Previously') +
+    '</div>';
+  }
+
+  function landOn(scope) {
+    var head = scope.querySelector('.record__subject');
+    if (head) { head.focus(); }
+  }
+
+  function commitNote() {
+    closeA.innerHTML = noteRecord();
+    say('Selection noted: ' + finish + ', $2,280.00.');
+    landOn(closeA);
+  }
+
+  function commitAccept(typed) {
+    setDocked(false);
+    closeB.innerHTML = acceptRecord();
+    var line = closeB.querySelector('.record__signature');
+    if (line) { line.textContent = typed; }
+    wall.classList.add('is-closed');
+    wall.setAttribute('aria-label', WALL_CLOSED);
+    armed = false;
+    say('Finished work accepted: $2,980.00 released to Marta Voss.');
+    landOn(closeB);
+  }
+
+  function showFailure() {
+    if (closeA.querySelector('.failure')) { return; }
+    var panel = document.createElement('div');
+    panel.className = 'failure';
+    panel.setAttribute('role', 'alert');
+    panel.innerHTML = '<p class="t-body">Your choice wasn’t saved. It is still here — try again.</p>' +
+      '<div class="acts"><button type="button" class="act act--secondary" data-act="retry"><span class="label">Try again</span></button></div>';
+    var acts = closeA.querySelector('.acts');
+    closeA.insertBefore(panel, acts);
+    var retry = panel.querySelector('[data-act="retry"]');
+    if (retry) { retry.focus(); }
+  }
+
+  function cancelHold() {
+    holding = false;
+    if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+    var act = acceptAct();
+    if (act) { act.classList.remove('is-holding'); }
+  }
+
+  function startHold() {
+    var act = acceptAct();
+    if (!act || !armed || holding) { return; }
+    holding = true;
+    act.classList.add('is-holding');
+    holdTimer = setTimeout(function () {
+      holdTimer = null;
+      holding = false;
+      act.classList.remove('is-holding');
+      var field = nameField();
+      commitAccept(field ? field.value.trim() : 'Nora Ellison');
+    }, 900);
+  }
+
+  /* ——— the 390 dock: the act only, and never over its own paper's words ——— */
+
+  function setDocked(on) {
+    var slot = document.getElementById('dockSlot');
+    var bar = document.getElementById('acceptDock');
+    if (!slot || !bar) { document.documentElement.style.scrollPaddingBottom = ''; return; }
+    var isOn = slot.classList.contains('is-docked');
+    if (on && !isOn) {
+      slot.classList.add('is-docked');
+      var h = bar.offsetHeight;
+      slot.style.height = h + 'px';
+      document.documentElement.style.scrollPaddingBottom = h + 'px';
+    } else if (!on && isOn) {
+      slot.classList.remove('is-docked');
+      slot.style.height = '';
+      document.documentElement.style.scrollPaddingBottom = '';
+    }
+  }
+
+  function updateDock() {
+    var slot = document.getElementById('dockSlot');
+    var bar = document.getElementById('acceptDock');
+    var section = document.getElementById('paperB');
+    var cons = closeB.querySelector('.consequence');
+    var field = closeB.querySelector('.sign');
+    if (!slot || !bar || !section || !cons || !field || window.innerWidth > 600) { setDocked(false); return; }
+
+    var vh = window.innerHeight;
+    var docked = slot.classList.contains('is-docked');
+    var dh = docked ? slot.offsetHeight : bar.offsetHeight + 25;
+    var line = vh - dh;
+
+    var s = section.getBoundingClientRect();
+    var sl = slot.getBoundingClientRect();
+    var c = cons.getBoundingClientRect();
+    var f = field.getBoundingClientRect();
+
+    setDocked(s.top < vh && s.bottom > 0 && sl.top > line && c.bottom < line && f.bottom < line);
+  }
+
+  var pending = false;
+  function scheduleDock() {
+    if (pending) { return; }
+    pending = true;
+    requestAnimationFrame(function () { pending = false; updateDock(); });
+  }
+  window.addEventListener('scroll', scheduleDock, { passive: true });
+  window.addEventListener('resize', scheduleDock);
+
+  /* ——— states ——— */
+
+  function setState(state) {
+    var kept = finish;
+    reset();
+    if (state === 'noted') { commitNote(); }
+    if (state === 'accepted') {
+      var field = nameField();
+      if (field) { field.value = 'Nora Ellison'; }
+      setArmed(true);
+      commitAccept('Nora Ellison');
+    }
+    if (state === 'failed') {
+      setFinish(kept);
+      showFailure();
+    }
+    var buttons = document.querySelectorAll('.switcher [data-state]');
+    for (var i = 0; i < buttons.length; i++) {
+      buttons[i].setAttribute('aria-pressed', buttons[i].getAttribute('data-state') === state ? 'true' : 'false');
+    }
+    scheduleDock();
+  }
+
+  document.addEventListener('click', function (event) {
+    var stateBtn = event.target.closest('.switcher [data-state]');
+    if (stateBtn) { setState(stateBtn.getAttribute('data-state')); return; }
+
+    var chip = event.target.closest('.chip');
+    if (chip) { setFinish(chip.getAttribute('data-chip')); return; }
+
+    var act = event.target.closest('[data-act]');
+    if (act) {
+      var kind = act.getAttribute('data-act');
+      if (kind === 'note' || kind === 'retry') { commitNote(); }
+      if (kind === 'ask') { say('Leah has your request for a change on Selection No. 3. Nothing is ordered and nothing is charged.'); }
+      return;
+    }
+
+    if (event.target.closest('#acceptAct') && !armed) {
+      var field = nameField();
+      if (field) { field.focus(); }
+      say('Type your full name to accept.');
+    }
+  });
+
+  document.addEventListener('input', function (event) {
+    if (event.target.id !== 'signName') { return; }
+    setArmed(event.target.value.trim().toLowerCase() === 'nora ellison');
+  });
+
+  document.addEventListener('pointerdown', function (event) {
+    if (event.target.closest('#acceptAct')) { startHold(); }
+  });
+  document.addEventListener('pointerup', cancelHold);
+  document.addEventListener('pointercancel', cancelHold);
+  document.addEventListener('pointerleave', function (event) {
+    if (event.target.closest && event.target.closest('#acceptAct')) { cancelHold(); }
+  }, true);
+
+  document.addEventListener('keydown', function (event) {
+    if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'Spacebar') { return; }
+    if (!event.target.closest || !event.target.closest('#acceptAct')) { return; }
+    if (!armed) { return; }
+    event.preventDefault();
+    if (event.repeat) { return; }
+    startHold();
+  });
+  document.addEventListener('keyup', function (event) {
+    if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'Spacebar') { return; }
+    cancelHold();
+  });
+
+  scheduleDock();
+})();
+</script>
+</body>
+</html>

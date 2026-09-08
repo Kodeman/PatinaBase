@@ -1,0 +1,22 @@
+{
+  "captures": [
+    {
+      "file": "client-house-default-1440.png",
+      "width": 1440,
+      "hash": null,
+      "state": null,
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "client-house-default-390.png",
+      "width": 390,
+      "hash": null,
+      "state": null,
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    }
+  ]
+}

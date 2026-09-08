@@ -1,0 +1,829 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Desk</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;1,400&family=Inter:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  color-scheme: light dark;
+
+  /* — paper, three stocks — */
+  --paper:            #FAF7F2;  /* the ground */
+  --paper-doc:        #FCFAF6;  /* a document laid on the ground */
+  --rail:             #E8E3DB;  /* the rail / deeper sheet */
+
+  /* — ink — */
+  --ink:              #2C2926;
+  --ink-muted:        #4E4339;
+  --ink-subtle:       #5A4E43;
+  --ink-faint:        #65594E;
+  --ink-paper:        #FAF7F2;
+
+  /* — hairlines — */
+  --hairline:         #E8E3DB;
+  --hairline-strong:  rgba(44, 41, 38, .14);
+
+  /* — the rest rule pigment — */
+  --oak:              #8B7355;
+
+  /* — state pigments: material value / paper ink — */
+  --clay:             #C4A57B;   --clay-ink:      #7C5E30;
+  --golden:           #E8C547;   --golden-ink:    #79651E;
+  --terracotta:       #D4A090;   --terracotta-ink:#9C5340;
+  --sage:             #A8B5A0;   --sage-ink:      #5F6B57;
+
+  /* — the seven stage plates — */
+  --tab-brief:     #497093;
+  --tab-discovery: #307063;
+  --tab-direction: #366A3A;
+  --tab-proposal:  #575D1D;
+  --tab-project:   #6D4E24;
+  --tab-install:   #823832;
+  --tab-care:      #823832;
+
+  --elevation-sheet: 0 1px 2px rgba(44, 41, 38, .08);
+
+  /* — rhythm — */
+  --module: 24px;
+  --radius-hair: 2px;
+  --radius-box:  3px;
+
+  /* — motion — */
+  --press-in:  70ms;
+  --press-out: 240ms;
+  --ease: cubic-bezier(.22, 1, .36, 1);
+
+  /* — families — */
+  --font-display: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  --font-body:    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-meta:    'DM Mono', 'SF Mono', 'Fira Code', ui-monospace, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper:           #2A2622;
+    --paper-doc:       #26221E;
+    --rail:            #3A3530;
+    --ink:             #F2EDE6;
+    --ink-muted:       #D6CEC4;
+    --ink-subtle:      #C7BEB3;
+    --ink-faint:       #B8AEA2;
+    --ink-paper:       #2A2622;
+    --hairline:        rgba(242, 237, 230, .14);
+    --hairline-strong: rgba(242, 237, 230, .22);
+    --oak:             #B39572;
+    --clay-ink:        #D8B98A;
+    --golden-ink:      #E0C963;
+    --terracotta-ink:  #E2A895;
+    --sage-ink:        #AFC0A6;
+    /* J: the seven plates keep their light values in dark mode; lifting them
+       drops the white label to 3.90/4.20/4.46:1 (T01). */
+  }
+}
+
+:root[data-theme="dark"] {
+  --paper:           #2A2622;
+  --paper-doc:       #26221E;
+  --rail:            #3A3530;
+  --ink:             #F2EDE6;
+  --ink-muted:       #D6CEC4;
+  --ink-subtle:      #C7BEB3;
+  --ink-faint:       #B8AEA2;
+  --ink-paper:       #2A2622;
+  --hairline:        rgba(242, 237, 230, .14);
+  --hairline-strong: rgba(242, 237, 230, .22);
+  --oak:             #B39572;
+  --clay-ink:        #D8B98A;
+  --golden-ink:      #E0C963;
+  --terracotta-ink:  #E2A895;
+  --sage-ink:        #AFC0A6;
+  /* J: the seven plates keep their light values in dark mode (T01). */
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; scroll-padding-top: 60px; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+}
+h1, h2, h3, p, ul, ol, figure { margin: 0; padding: 0; }
+ul { list-style: none; }
+
+/* ——— A3. the type scale ——— */
+.t-d1      { font-family: var(--font-display); font-size: 34px; line-height: 1.15; font-weight: 500; letter-spacing: 0; }
+.t-d2      { font-family: var(--font-display); font-size: 26px; line-height: 1.20; font-weight: 500; letter-spacing: 0; }
+.t-d3      { font-family: var(--font-display); font-size: 20px; line-height: 1.30; font-weight: 500; letter-spacing: 0; }
+.t-body    { font-family: var(--font-body); font-size: 16px; line-height: 1.55; font-weight: 400; }
+.t-body-sm { font-family: var(--font-body); font-size: 14px; line-height: 1.50; font-weight: 400; }
+.t-meta    { font-family: var(--font-meta); font-size: 12px; line-height: 1.50; font-weight: 400; letter-spacing: .08em; }
+.t-head    { font-family: var(--font-meta); font-size: 11px; line-height: 1.50; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; }
+.t-authorship { font-family: var(--font-display); font-size: 20px; line-height: 1.30; font-style: italic; font-weight: 400; }
+.t-d1 .t-authorship { font-size: inherit; line-height: inherit; }
+
+/* ——— A5. the action tiers ——— */
+.act {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 4px 6px 10px;
+  border: 0;
+  background: none;
+  font-family: var(--font-meta);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.act .label { position: relative; display: inline-block; line-height: 13px; }
+.act .label::before, .act .label::after {
+  content: ''; position: absolute; left: 0; right: 0;
+  transform-origin: left center;
+  transition: background-color 150ms linear, height 150ms var(--ease);
+}
+.act .label::before { bottom: -5px; height: 1px; }
+.act .label::after  { bottom: -8.5px; height: 1px; }
+
+.act--tertiary { color: var(--ink-subtle); }
+.act--tertiary .label::before { background: var(--oak); }
+.act--tertiary .label::after  { content: none; }
+.act--tertiary:hover .label::before { background: var(--ink-faint); height: 1.5px; }
+.act--tertiary:active { color: var(--ink); transition-duration: var(--press-in); }
+
+.act--secondary { color: var(--ink); }
+.act--secondary .label::before { height: 1.5px; background: var(--ink); }
+.act--secondary .label::after  { background: var(--clay); }
+.act--secondary:hover .label::after { height: 2px; }
+.act--secondary:active { transition-duration: var(--press-in); }
+
+/* — shared block: inline tier, pressed state, chip (byte-identical in all three specimens) — */
+.act--inline{display:inline;min-height:0;min-width:0;padding:0 0 3px;font:inherit;letter-spacing:inherit;text-transform:inherit;color:inherit;white-space:normal;background:none;border:0;border-bottom:1px solid var(--oak);cursor:pointer;text-decoration:none;-webkit-box-decoration-break:clone;box-decoration-break:clone}
+.act--inline .label{display:inline;line-height:inherit}
+.act--inline .label::before,.act--inline .label::after,.act--inline::after{content:none}
+.act--inline:hover{border-bottom-color:var(--ink-faint);border-bottom-width:1.5px;padding-bottom:2.5px}
+.act--inline:focus-visible{outline:2px solid var(--clay-ink);outline-offset:2px}
+.act[aria-pressed="true"]{color:var(--ink)}
+.act[aria-pressed="true"] .label::before{height:1.5px;background:var(--ink)}
+.act[aria-pressed="true"] .label::after{content:'';background:var(--clay)}
+.act[aria-pressed="false"]{color:var(--ink-subtle)}
+.act[aria-pressed="false"] .label::before{height:1px;background:var(--oak)}
+.act[aria-pressed="false"] .label::after{content:none}
+.chip{min-height:44px;padding:10px 14px;border-radius:var(--radius-box);font-family:var(--font-body);font-size:14px;color:var(--ink);background:var(--paper);border:1px solid var(--hairline-strong);cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--rail);border-color:var(--ink-faint)}
+.chip:focus-visible{outline:2px solid var(--clay-ink);outline-offset:2px}
+
+.act:focus-visible {
+  outline: 2px solid var(--clay-ink);
+  outline-offset: 2px;
+}
+.act::after {
+  content: '\2038' / ''; position: absolute; left: 1px; top: 50%;
+  font-size: 14px; line-height: 1; color: var(--ink-faint);
+  opacity: 0; transform: translateY(-50%);
+  transition: opacity 140ms linear; pointer-events: none;
+}
+.act:focus-visible::after { opacity: 1; }
+
+/* ——— A12. the specimen frame ——— */
+.specimen-meta {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px;
+  padding: 10px 24px;
+  background: var(--rail);
+  color: var(--ink-muted);
+  font-family: var(--font-meta);
+  font-size: 11px;
+  letter-spacing: .04em;
+  border-bottom: 1px solid var(--hairline-strong);
+}
+.specimen-meta .switcher { display: flex; align-items: center; gap: 12px; }
+
+/* ——— the page ——— */
+.page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 48px 24px 0;
+}
+
+/* 1 + 2. greeting and the three acts */
+.greeting-row {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  gap: 24px; flex-wrap: wrap;
+}
+.greeting-row .date { color: var(--ink-muted); margin-top: 12px; }
+.acts { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; }
+.act-stack { display: flex; flex-direction: column; align-items: flex-start; }
+.act-stack .sub { color: var(--ink-subtle); }
+kbd.keycap {
+  font-family: var(--font-meta); font-size: 11px; font-weight: 500;
+  line-height: 1.5; letter-spacing: .08em; text-transform: uppercase;
+  border: 1px solid var(--hairline-strong); border-radius: var(--radius-hair);
+  background: var(--paper); padding: 2px 6px; color: var(--ink-subtle);
+}
+@media (max-width: 999px) {
+  .greeting-row { flex-direction: column; }
+  .acts { flex-direction: column; gap: 12px; }
+}
+
+/* 3. margin note */
+.margin-note { position: relative; margin-top: 24px; padding-left: 44px; }
+.margin-note p { color: var(--ink-muted); max-width: 65ch; }
+.margin-note .lead { font-style: italic; }
+.margin-note .note-head { color: var(--ink-muted); margin-top: 12px; }
+.note-dismiss { position: absolute; left: 0; top: -10px; }
+.note-dismiss .label { font-size: 16px; line-height: 16px; }
+@media (min-width: 1240px) {
+  .margin-note { padding-left: 0; }
+  .note-dismiss { left: -52px; }
+}
+
+/* the desk grid: roster left, boards right at 1200+ */
+.desk-grid { display: grid; grid-template-columns: minmax(0, 1fr); margin-top: 48px; }
+@media (min-width: 1200px) {
+  .desk-grid { grid-template-columns: minmax(0, 1fr) 260px; column-gap: 48px; }
+  .roster-region { grid-column: 1; grid-row: 1; }
+  .boards { grid-column: 2; grid-row: 1; }
+  .studio-index { grid-column: 1; grid-row: 2; }
+}
+.roster-region { display: flex; flex-direction: column; }
+
+/* 4. roster head */
+.roster-head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  flex-wrap: wrap; gap: 12px 24px;
+}
+.roster-head .head-left { display: flex; align-items: baseline; gap: 12px; flex: 1 1 auto; min-width: 0; }
+@media (min-width: 1000px) { .roster-head { flex-wrap: nowrap; } }
+.scored-mark {
+  flex: 0 0 24px; width: 24px; height: 5px; position: relative; align-self: baseline;
+  top: -3px;
+}
+.scored-mark::before, .scored-mark::after {
+  content: ''; position: absolute; left: 0; right: 0; height: 1px;
+}
+.scored-mark::before { top: 0; background: var(--ink); }
+.scored-mark::after  { top: 4px; background: var(--oak); }
+.facets { display: flex; align-items: baseline; gap: 24px; margin-left: auto; }
+
+/* 5. the day's line */
+.dayline { border-top: 1px solid var(--hairline-strong); padding-top: 12px; margin-top: 12px; }
+.dayline p { margin-bottom: 12px; color: var(--ink); }
+.dayline p:last-of-type { margin-bottom: 0; }
+.dayline .overdue-clause { color: var(--terracotta-ink); }
+.dayline-more { margin-top: 12px; }
+.status-line { color: var(--ink-subtle); margin-top: 12px; }
+.status-line:not(.is-shown) {
+  position: absolute; width: 1px; height: 1px; margin: -1px;
+  padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+}
+
+/* 6. boards */
+.boards { margin-top: 48px; }
+.boards h2 { color: var(--ink-muted); }
+.board-list { display: flex; flex-wrap: wrap; gap: 24px; margin-top: 12px; }
+.board figure { display: block; }
+.board svg {
+  display: block; width: 92px; height: 92px;
+  border: 1px solid var(--hairline); border-radius: var(--radius-box);
+  background: var(--paper-doc);
+}
+.board figcaption { color: var(--ink-subtle); margin-top: 12px; max-width: 22ch; }
+@media (min-width: 1200px) {
+  .boards { margin-top: 0; }
+  .board-list { flex-direction: column; gap: 24px; }
+  .board figcaption { max-width: none; }
+}
+
+/* 7. stage plates */
+.stage { }
+.stage-head {
+  position: static;
+  background: var(--paper);
+  padding: 24px 0 12px;
+  z-index: 2;
+}
+.stage-plate {
+  display: inline-flex; align-items: center;
+  padding: 3px 10px;
+  border-radius: var(--radius-box);
+  color: white;
+}
+.stage-plate--person { background: var(--rail); color: var(--ink); }
+.stage-plate--brief     { background: var(--tab-brief); }
+.stage-plate--discovery { background: var(--tab-discovery); }
+.stage-plate--direction { background: var(--tab-direction); }
+.stage-plate--proposal  { background: var(--tab-proposal); }
+.stage-plate--project   { background: var(--tab-project); }
+.stage-plate--install   { background: var(--tab-install); }
+.stage-plate--care      { background: var(--tab-care); }
+@media (min-width: 900px) {
+  .stage-head { position: sticky; top: 0; }
+}
+
+/* 8. a roster row */
+.row {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px;
+  min-height: 44px; padding: 12px 0;
+  border-bottom: 1px solid var(--hairline);
+}
+.mark {
+  flex: 0 0 7px; width: 7px; height: 7px; border-radius: 50%;
+  align-self: baseline; position: relative; top: -2px;
+}
+.mark--urgent { background: var(--terracotta-ink); }
+.mark--quiet  { background: var(--clay); }
+.mark--none   { border: 1px solid var(--ink-faint); }
+.row-name {
+  color: var(--ink); text-decoration: none;
+  border-bottom: 1px solid var(--oak);
+}
+.row-name:hover, .row-name:focus-visible { border-bottom-color: var(--clay); }
+.row-name:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+.row-state { flex: 0 1 auto; color: var(--ink-muted); }
+.row-overdue { display: block; color: var(--terracotta-ink); }
+.leader {
+  flex: 1 1 24px; min-width: 24px; height: 1px;
+  align-self: baseline;
+  border-bottom: 1px dotted var(--hairline-strong);
+}
+.row-act { flex: 0 0 96px; align-self: baseline; }
+.row-act .act { margin-block: -9px; }
+.roster-empty {
+  font-family: var(--font-body); font-size: 16px; line-height: 1.55;
+  color: var(--ink-subtle); max-width: 56ch; padding: 24px 0;
+}
+
+/* 9. the studio index */
+.studio-index { margin-top: 72px; }
+.studio-index > h2 { color: var(--ink-muted); }
+.index-cols {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 48px; margin-top: 24px;
+}
+.index-cols h3 { color: var(--ink-muted); margin-bottom: 12px; }
+.index-cols li { margin-bottom: 12px; }
+.idx { display: flex; align-items: baseline; gap: 12px; text-decoration: none; color: var(--ink); }
+.idx .idx-label { border-bottom: 1px solid var(--oak); }
+.idx:hover .idx-label, .idx:focus-visible .idx-label { border-bottom-color: var(--clay); }
+.idx:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+.doorway { flex: 0 0 13px; align-self: baseline; position: relative; top: 2px; }
+.idx--verb { gap: 8px; }
+@media (max-width: 899px) {
+  .index-cols { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+}
+
+/* 10. bottom bar */
+.bottom-bar {
+  margin-top: 72px;
+  background: var(--paper-doc);
+  border-top: 1px solid var(--hairline-strong);
+  color: var(--ink);
+}
+.bottom-bar .bar-inner {
+  max-width: 1100px; margin: 0 auto; padding: 24px;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px 24px; flex-wrap: wrap;
+}
+.bar-nav { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: baseline; }
+.bar-nav a {
+  color: var(--ink); text-decoration: none;
+  border-bottom: 1px solid var(--oak);
+}
+.bar-nav a:hover { border-bottom-color: var(--clay); }
+.bar-nav a:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+.bar-who { text-align: right; }
+.bar-who .studio { color: var(--ink-muted); display: block; margin-top: 4px; }
+
+@media (max-width: 700px) {
+  .page { padding: 24px 16px 0; }
+  .roster-region { display: flex; flex-direction: column; }
+  .roster-region .dayline { order: 1; margin-top: 0; border-top: 0; padding-top: 0; }
+  .roster-region .status-line { order: 2; }
+  .roster-region .roster-head { order: 3; margin-top: 24px; }
+  .roster-region .roster { order: 4; }
+  .row-act { flex: 0 0 100%; text-align: right; }
+  .row-act .act { margin-block: -6px; }
+  .stage-head { position: sticky; top: 0; }
+  .margin-note .note-tail { display: none; }
+  .bottom-bar .bar-inner { flex-direction: column; align-items: flex-start; }
+  .bar-who { text-align: left; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@media (forced-colors: active) {
+  .act .label::before, .act .label::after { forced-color-adjust: none; background: ButtonText; }
+  .act:focus-visible { outline: 2px solid Highlight; }
+  .leader, .row, .dayline { border-color: CanvasText; }
+}
+</style>
+</head>
+<body>
+
+<div class="specimen-meta" role="region" aria-label="Specimen controls">
+  <span>Specimen 2 &middot; The Desk at real load</span>
+  <span>Fixture: Leah Hartwell &middot; Local Dev Studio, Des Moines &middot; fictional data</span>
+  <span>Every board and glyph drawn &middot; no photographs</span>
+  <div class="switcher" role="group" aria-label="State">
+    <button type="button" class="chip" id="sw-16" aria-pressed="true">16 jobs</button>
+    <button type="button" class="chip" id="sw-43" aria-pressed="false">43 jobs</button>
+  </div>
+</div>
+
+<main class="page">
+
+  <header class="greeting-row">
+    <div>
+      <h1 class="t-d1">Good morning, <span class="t-authorship">Leah</span></h1>
+      <p class="t-head date">Tuesday &middot; 8 September</p>
+    </div>
+    <div class="acts">
+      <div class="act-stack">
+        <button type="button" class="act act--secondary"><span class="label">+ Capture a lead</span></button>
+        <span class="t-meta sub">Begin a brief</span>
+      </div>
+      <div class="act-stack">
+        <button type="button" class="act act--secondary"><span class="label">+ Open a project</span></button>
+        <span class="t-meta sub">No proposal needed</span>
+      </div>
+      <div class="act-stack">
+        <button type="button" class="act act--tertiary"><span class="label">Find anything</span><kbd class="keycap">&#8984;K</kbd></button>
+      </div>
+    </div>
+  </header>
+
+  <aside class="margin-note" id="margin-note">
+    <button type="button" class="act act--tertiary note-dismiss" id="note-dismiss" aria-label="Dismiss this note"><span class="label">&times;</span></button>
+    <p class="t-body"><span class="t-authorship lead">&mdash;</span> This is your Desk. Folders that need you gather here; the rest stays quiet.<span class="note-tail"> &#8984;K finds anything by name &mdash; try &lsquo;invoice&rsquo;.</span></p>
+    <p class="t-head note-head">Appears once &middot; recedes on use</p>
+  </aside>
+
+  <div class="desk-grid">
+
+    <div class="roster-region">
+
+      <div class="roster-head">
+        <div class="head-left">
+          <span class="scored-mark" aria-hidden="true"></span>
+          <h2 class="t-head" id="roster-head">Every job &middot; 16 live &middot; 1 overdue</h2>
+        </div>
+        <div class="facets">
+          <button type="button" class="act act--tertiary" id="facet-needsme" aria-pressed="false"><span class="label">Only what needs me</span></button>
+          <button type="button" class="act act--tertiary" id="facet-byperson" aria-pressed="false"><span class="label">By person</span></button>
+        </div>
+      </div>
+
+      <div class="dayline" id="dayline"></div>
+
+      <p class="t-meta status-line" role="status" id="desk-status"></p>
+
+      <div class="roster" id="roster"></div>
+
+    </div>
+
+    <aside class="boards">
+      <h2 class="t-head">Boards</h2>
+      <div class="board-list">
+
+        <div class="board">
+          <figure>
+            <svg viewBox="0 0 92 92" role="img" aria-label="Board for Cedar Lane Study: a drawn elevation plate, a scan card, two pigment swatches and a caption rule.">
+              <rect x="8.5" y="10.5" width="45" height="34" fill="var(--paper-doc)" stroke="var(--ink-faint)"/>
+              <path d="M13 36.5H49" stroke="var(--ink-faint)" stroke-opacity=".5" fill="none"/>
+              <path d="M20.5 36.5V25.5H31.5V36.5M23 25.5V19.5H29V25.5" stroke="var(--ink-faint)" stroke-opacity=".5" fill="none"/>
+              <rect x="59.5" y="10.5" width="24" height="34" fill="var(--rail)" stroke="var(--ink-faint)"/>
+              <path d="M63 19.5H80M63 25.5H76M63 31.5H80" stroke="var(--ink-faint)" stroke-opacity=".5" fill="none"/>
+              <rect x="8.5" y="52.5" width="18" height="18" fill="var(--clay)" stroke="var(--ink-faint)"/>
+              <rect x="30.5" y="52.5" width="18" height="18" fill="var(--sage)" stroke="var(--ink-faint)"/>
+              <path d="M53 58.5H83M53 65.5H74" stroke="var(--ink-faint)" stroke-opacity=".5" fill="none"/>
+              <path d="M8.5 79.5H83" stroke="var(--ink-faint)" fill="none"/>
+            </svg>
+            <figcaption class="t-meta">Cedar Lane Study &middot; 3 September</figcaption>
+          </figure>
+        </div>
+
+        <div class="board">
+          <figure>
+            <svg viewBox="0 0 92 92" role="img" aria-label="Board for Halvorsen townhouse: a drawn elevation plate, a scan card, two pigment swatches and a caption rule.">
+              <rect x="8.5" y="10.5" width="45" height="34" fill="var(--paper-doc)" stroke="var(--ink-faint)"/>
+              <path d="M13 36.5H49" stroke="var(--ink-faint)" stroke-opacity=".5" fill="none"/>
+              <path d="M18.5 36.5V22.5H34.5V36.5M18.5 29.5H34.5" stroke="var(--ink-faint)" stroke-opacity=".5" fill="none"/>
+              <rect x="59.5" y="10.5" width="24" height="34" fill="var(--rail)" stroke="var(--ink-faint)"/>
+              <path d="M63 19.5H80M63 25.5H76M63 31.5H80" stroke="var(--ink-faint)" stroke-opacity=".5" fill="none"/>
+              <rect x="8.5" y="52.5" width="18" height="18" fill="var(--golden)" stroke="var(--ink-faint)"/>
+              <rect x="30.5" y="52.5" width="18" height="18" fill="var(--oak)" stroke="var(--ink-faint)"/>
+              <path d="M53 58.5H83M53 65.5H74" stroke="var(--ink-faint)" stroke-opacity=".5" fill="none"/>
+              <path d="M8.5 79.5H83" stroke="var(--ink-faint)" fill="none"/>
+            </svg>
+            <figcaption class="t-meta">Halvorsen townhouse &middot; 2 September</figcaption>
+          </figure>
+        </div>
+
+        <div class="board">
+          <figure>
+            <svg viewBox="0 0 92 92" role="img" aria-label="Board for Reinhardt lake house: a drawn elevation plate, a scan card, two pigment swatches and a caption rule.">
+              <rect x="8.5" y="10.5" width="45" height="34" fill="var(--paper-doc)" stroke="var(--ink-faint)"/>
+              <path d="M13 36.5H49" stroke="var(--ink-faint)" stroke-opacity=".5" fill="none"/>
+              <path d="M17.5 36.5L26 21.5L34.5 36.5M22 36.5V29.5H30V36.5" stroke="var(--ink-faint)" stroke-opacity=".5" fill="none"/>
+              <rect x="59.5" y="10.5" width="24" height="34" fill="var(--rail)" stroke="var(--ink-faint)"/>
+              <path d="M63 19.5H80M63 25.5H76M63 31.5H80" stroke="var(--ink-faint)" stroke-opacity=".5" fill="none"/>
+              <rect x="8.5" y="52.5" width="18" height="18" fill="var(--terracotta)" stroke="var(--ink-faint)"/>
+              <rect x="30.5" y="52.5" width="18" height="18" fill="var(--clay)" stroke="var(--ink-faint)"/>
+              <path d="M53 58.5H83M53 65.5H74" stroke="var(--ink-faint)" stroke-opacity=".5" fill="none"/>
+              <path d="M8.5 79.5H83" stroke="var(--ink-faint)" fill="none"/>
+            </svg>
+            <figcaption class="t-meta">Reinhardt lake house &middot; 29 August</figcaption>
+          </figure>
+        </div>
+
+      </div>
+    </aside>
+
+    <section class="studio-index">
+    <h2 class="t-head">The studio index</h2>
+    <div class="index-cols">
+      <div>
+        <h3 class="t-head">Rooms</h3>
+        <ul>
+          <li><a class="idx" href="#"><span class="t-d3 idx-label">Library</span><span class="leader" aria-hidden="true"></span><svg class="doorway" viewBox="0 0 13 18" width="13" height="18" aria-hidden="true"><path d="M1.5 17.5V7.5a5 5 0 0 1 10 0v10" fill="none" stroke="var(--ink-faint)"/><path d="M0.5 17.5h12" stroke="var(--ink-faint)" fill="none"/><circle cx="9.5" cy="12" r="1" fill="var(--ink-faint)"/></svg></a></li>
+          <li><a class="idx" href="#"><span class="t-d3 idx-label">People</span><span class="leader" aria-hidden="true"></span><svg class="doorway" viewBox="0 0 13 18" width="13" height="18" aria-hidden="true"><path d="M1.5 17.5V7.5a5 5 0 0 1 10 0v10" fill="none" stroke="var(--ink-faint)"/><path d="M0.5 17.5h12" stroke="var(--ink-faint)" fill="none"/><circle cx="9.5" cy="12" r="1" fill="var(--ink-faint)"/></svg></a></li>
+          <li><a class="idx" href="#"><span class="t-d3 idx-label">The Scans</span><span class="leader" aria-hidden="true"></span><svg class="doorway" viewBox="0 0 13 18" width="13" height="18" aria-hidden="true"><path d="M1.5 17.5V7.5a5 5 0 0 1 10 0v10" fill="none" stroke="var(--ink-faint)"/><path d="M0.5 17.5h12" stroke="var(--ink-faint)" fill="none"/><circle cx="9.5" cy="12" r="1" fill="var(--ink-faint)"/></svg></a></li>
+          <li><a class="idx" href="#"><span class="t-d3 idx-label">The Post</span><span class="leader" aria-hidden="true"></span><svg class="doorway" viewBox="0 0 13 18" width="13" height="18" aria-hidden="true"><path d="M1.5 17.5V7.5a5 5 0 0 1 10 0v10" fill="none" stroke="var(--ink-faint)"/><path d="M0.5 17.5h12" stroke="var(--ink-faint)" fill="none"/><circle cx="9.5" cy="12" r="1" fill="var(--ink-faint)"/></svg></a></li>
+        </ul>
+      </div>
+      <div>
+        <h3 class="t-head">Ledgers</h3>
+        <ul>
+          <li><a class="idx" href="#"><span class="t-d3 idx-label">Orders</span><span class="leader" aria-hidden="true"></span><svg class="doorway" viewBox="0 0 13 18" width="13" height="18" aria-hidden="true"><path d="M1.5 17.5V7.5a5 5 0 0 1 10 0v10" fill="none" stroke="var(--ink-faint)"/><path d="M0.5 17.5h12" stroke="var(--ink-faint)" fill="none"/><circle cx="9.5" cy="12" r="1" fill="var(--ink-faint)"/></svg></a></li>
+          <li><a class="idx" href="#"><span class="t-d3 idx-label">Accounts</span><span class="leader" aria-hidden="true"></span><svg class="doorway" viewBox="0 0 13 18" width="13" height="18" aria-hidden="true"><path d="M1.5 17.5V7.5a5 5 0 0 1 10 0v10" fill="none" stroke="var(--ink-faint)"/><path d="M0.5 17.5h12" stroke="var(--ink-faint)" fill="none"/><circle cx="9.5" cy="12" r="1" fill="var(--ink-faint)"/></svg></a></li>
+          <li><a class="idx" href="#"><span class="t-d3 idx-label">Hours</span><span class="leader" aria-hidden="true"></span><svg class="doorway" viewBox="0 0 13 18" width="13" height="18" aria-hidden="true"><path d="M1.5 17.5V7.5a5 5 0 0 1 10 0v10" fill="none" stroke="var(--ink-faint)"/><path d="M0.5 17.5h12" stroke="var(--ink-faint)" fill="none"/><circle cx="9.5" cy="12" r="1" fill="var(--ink-faint)"/></svg></a></li>
+          <li><a class="idx" href="#"><span class="t-d3 idx-label">Contract Room</span><span class="leader" aria-hidden="true"></span><svg class="doorway" viewBox="0 0 13 18" width="13" height="18" aria-hidden="true"><path d="M1.5 17.5V7.5a5 5 0 0 1 10 0v10" fill="none" stroke="var(--ink-faint)"/><path d="M0.5 17.5h12" stroke="var(--ink-faint)" fill="none"/><circle cx="9.5" cy="12" r="1" fill="var(--ink-faint)"/></svg></a></li>
+        </ul>
+      </div>
+      <div>
+        <h3 class="t-head">Begin</h3>
+        <ul>
+          <li><a class="idx idx--verb" href="#"><span class="t-d3">&mdash;</span><span class="t-d3 idx-label">Capture a lead</span></a></li>
+          <li><a class="idx idx--verb" href="#"><span class="t-d3">&mdash;</span><span class="t-d3 idx-label">Open a project</span></a></li>
+          <li><a class="idx idx--verb" href="#"><span class="t-d3">&mdash;</span><span class="t-d3 idx-label">Draw a proposal</span></a></li>
+        </ul>
+      </div>
+    </div>
+    </section>
+
+  </div>
+
+
+</main>
+
+<footer class="bottom-bar">
+  <div class="bar-inner">
+    <nav class="bar-nav t-body-sm" aria-label="Desk">
+      <a href="#">Library</a>
+      <a href="#">People</a>
+      <a href="#">The Scans</a>
+      <a href="#">Ledgers &uarr;</a>
+      <a href="#">Find anything &#8984;K</a>
+      <a href="#">The Post</a>
+    </nav>
+    <p class="bar-who">
+      <span class="t-body-sm">Leah Hartwell</span>
+      <span class="t-head studio">Local Dev Studio</span>
+    </p>
+  </div>
+</footer>
+
+<script>
+(function () {
+  'use strict';
+
+  var PEOPLE = ['Leah Hartwell', 'Anneke Sund', 'Colin Brandt'];
+
+  var STAGES = [
+    { id: 'brief',     label: 'Brief' },
+    { id: 'discovery', label: 'Discovery' },
+    { id: 'direction', label: 'Direction' },
+    { id: 'proposal',  label: 'Proposal' },
+    { id: 'project',   label: 'Project' },
+    { id: 'install',   label: 'Install' },
+    { id: 'care',      label: 'Care' }
+  ];
+
+  /* n name · s stage · t state sentence · o overdue clause · m mark · p person · c in the core sixteen */
+  var JOBS = [
+    { n: 'Marcus Wright',          s: 'brief',     t: 'New lead · respond by 10 September',              o: null, m: 'quiet',  p: 0, c: true },
+    { n: 'Lily Tanaka',            s: 'brief',     t: 'New lead · respond by 12 September',              o: null, m: 'quiet',  p: 1, c: true },
+    { n: 'Elena Ruiz',             s: 'brief',     t: 'Consultation · quiet · nothing needs your hand', o: null, m: null, p: 2, c: true },
+    { n: 'Dana Kjelstrom',         s: 'brief',     t: 'New lead · respond by 12 September',              o: null, m: 'quiet',  p: 1, c: false },
+    { n: 'Peter Norgaard',         s: 'brief',     t: 'New lead · respond by 15 September',              o: null, m: null,     p: 2, c: false },
+    { n: 'Greta Lindahl',          s: 'brief',     t: 'Consultation booked 17 September',                     o: null, m: null,     p: 0, c: false },
+    { n: 'Amara Delacroix-Ryan',   s: 'brief',     t: 'New lead · respond by 16 September',              o: null, m: null,     p: 1, c: false },
+    { n: 'Theo Maartens',          s: 'brief',     t: 'Consultation · quiet',                            o: null, m: null,     p: 2, c: false },
+
+    { n: 'Reinhardt lake house',   s: 'discovery', t: 'Green Lake WI · initial site visit not yet scheduled', o: null, m: 'quiet', p: 1, c: true },
+    { n: 'Bergquist farmstead',    s: 'discovery', t: 'Ames IA · survey returned, notes owed',           o: null, m: 'quiet',  p: 0, c: false },
+    { n: 'Trestrail bungalow',     s: 'discovery', t: 'Dubuque IA · site visit 14 September',            o: null, m: null,     p: 2, c: false },
+    { n: 'Vireo Street rowhouse',  s: 'discovery', t: 'St Paul MN · measurements with the maker',        o: null, m: null,     p: 1, c: false },
+    { n: 'Ninth Ward loft',        s: 'discovery', t: 'Omaha NE · quiet',                                o: null, m: null,     p: 2, c: false },
+
+    { n: 'Sarah Chen',             s: 'direction', t: 'Direction reviewed · respond by 11 September',    o: null, m: 'quiet',  p: 0, c: true },
+    { n: 'David Nielsen',          s: 'direction', t: 'Direction reviewed · respond by 11 September',    o: null, m: 'quiet',  p: 2, c: true },
+    { n: 'Cedar Lane Study',       s: 'direction', t: 'Nora Ellison replied last night',                      o: null, m: 'quiet',  p: 0, c: true },
+    { n: 'Halloway orchard house', s: 'direction', t: 'Direction sent 5 September · with the client',    o: null, m: null,     p: 1, c: false },
+    { n: 'Petersen ridge cabin',   s: 'direction', t: 'Two rooms awaiting your mark-up',                      o: null, m: 'quiet',  p: 0, c: false },
+    { n: 'Sandvik townhome',       s: 'direction', t: 'Direction in draft · quiet',                      o: null, m: null,     p: 2, c: false },
+    { n: 'Oakhurst parsonage',     s: 'direction', t: 'Client asked for a second option',                     o: null, m: null,     p: 1, c: false },
+
+    { n: 'Halvorsen townhouse',    s: 'proposal',  t: 'Proposal sent 2 September · with the client',     o: null, m: null,     p: 0, c: true },
+    { n: 'Brekke farmhouse',       s: 'proposal',  t: 'Proposal in draft · nothing needed today',        o: null, m: null,     p: 1, c: true },
+    { n: 'Lindqvist bungalow',     s: 'proposal',  t: 'Proposal returned · one line queried',            o: null, m: 'quiet',  p: 0, c: false },
+    { n: 'Aster Hill house',       s: 'proposal',  t: 'Proposal awaiting your signature',                     o: null, m: 'quiet',  p: 0, c: false },
+    { n: 'Muirfield cottage',      s: 'proposal',  t: 'Proposal sent 6 September',                            o: null, m: null,     p: 2, c: false },
+    { n: 'Bellweather barn',       s: 'proposal',  t: 'Proposal in draft · quiet',                       o: null, m: null,     p: 1, c: false },
+
+    { n: 'Sonnenberg residence',   s: 'project',   t: 'Six pieces in production · nothing needed today', o: null, m: null,     p: 2, c: true },
+    { n: 'Aalborg loft',           s: 'project',   t: 'Awaiting maker acknowledgement',                       o: null, m: null,     p: 1, c: true },
+    { n: 'Whitcomb carriage house',s: 'project',   t: 'Procurement under way · quiet',                   o: null, m: null,     p: 2, c: true },
+    { n: 'Hollenbeck residence',   s: 'project',   t: 'Two orders placed · quiet',                       o: null, m: null,     p: 1, c: true },
+    { n: 'Thorsen mill house',     s: 'project',   t: 'Deposit owed on three orders',                         o: null, m: 'quiet',  p: 0, c: false },
+    { n: 'Larkspur farm',          s: 'project',   t: 'Maker queried a finish',                               o: null, m: 'quiet',  p: 1, c: false },
+    { n: 'Vanterpool residence',   s: 'project',   t: 'Eleven pieces in production · quiet',             o: null, m: null,     p: 2, c: false },
+    { n: 'Ridgeline studio',       s: 'project',   t: 'Freight quote returned',                               o: null, m: null,     p: 1, c: false },
+    { n: 'Blackhawk terrace',      s: 'project',   t: 'Shipping dates confirmed · quiet',                o: null, m: null,     p: 2, c: false },
+
+    { n: 'Vandersteen',            s: 'install',   t: 'Install',                                              o: 'Overdue since 4 September', m: 'urgent', p: 0, c: true },
+    { n: 'Lindgren lake cabin',    s: 'install',   t: 'Install scheduled 19 September',                        o: null, m: null,     p: 2, c: true },
+    { n: 'Kesselring residence',   s: 'install',   t: 'Install crew unconfirmed for 22 September',             o: null, m: 'quiet',  p: 0, c: false },
+    { n: 'Ottendorf house',        s: 'install',   t: 'Install 12 September · quiet',                     o: null, m: null,     p: 1, c: false },
+    { n: 'Ostrander boathouse',    s: 'install',   t: 'Punch list open, two items',                            o: null, m: null,     p: 2, c: false },
+
+    { n: 'Osterberg residence',    s: 'care',      t: 'In care · nothing needed today',                   o: null, m: null,     p: 1, c: true },
+    { n: 'Pemberton hall',         s: 'care',      t: 'Care visit due 30 September',                           o: null, m: null,     p: 2, c: false },
+    { n: 'Silvercrest residence',  s: 'care',      t: 'Warranty claim opened',                                 o: null, m: null,     p: 0, c: false }
+  ];
+
+  var state = { size: 16, needsMe: false, byPerson: false };
+  var lastSignature = null;
+
+  var rosterEl  = document.getElementById('roster');
+  var headEl    = document.getElementById('roster-head');
+  var daylineEl = document.getElementById('dayline');
+  var sw16      = document.getElementById('sw-16');
+  var sw43      = document.getElementById('sw-43');
+  var fNeeds    = document.getElementById('facet-needsme');
+  var fPerson   = document.getElementById('facet-byperson');
+  var statusEl  = document.getElementById('desk-status');
+
+  function slug(s) {
+    return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  }
+  function esc(s) {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+  function live() {
+    return JOBS.filter(function (j) { return state.size === 43 || j.c; });
+  }
+
+  function rowHTML(j) {
+    var markClass = j.m === 'urgent' ? 'mark--urgent' : (j.m === 'quiet' ? 'mark--quiet' : 'mark--none');
+    var overdue = j.o ? '<span class="row-overdue">' + esc(j.o) + '</span>' : '';
+    return '<li class="row" id="job-' + slug(j.n) + '">' +
+      '<span class="mark ' + markClass + '" aria-hidden="true"></span>' +
+      '<a class="row-name t-d3" href="#job-' + slug(j.n) + '">' + esc(j.n) + '</a>' +
+      '<span class="row-state t-body-sm">' + esc(j.t) + overdue + '</span>' +
+      '<span class="leader" aria-hidden="true"></span>' +
+      '<span class="row-act"><a class="act act--tertiary" href="#job-' + slug(j.n) + '" aria-label="Open ' + esc(j.n) + '"><span class="label">Open</span></a></span>' +
+      '</li>';
+  }
+
+  function render() {
+    var all = live();
+    var shown = state.needsMe ? all.filter(function (j) { return j.m; }) : all;
+
+    var headText = 'Every job · ' + all.length + ' live · 1 overdue';
+    if (state.needsMe) { headText += ' · showing what needs you'; }
+    if (state.byPerson) { headText += ' · by person'; }
+    headEl.textContent = headText;
+
+    var groups;
+    if (state.byPerson) {
+      groups = PEOPLE.map(function (name, i) {
+        return {
+          key: 'person-' + slug(name),
+          label: name,
+          plateClass: 'stage-plate--person',
+          jobs: shown.filter(function (j) { return j.p === i; })
+        };
+      });
+    } else {
+      groups = STAGES.map(function (st) {
+        return {
+          key: 'stage-' + st.id,
+          label: st.label,
+          plateClass: 'stage-plate--' + st.id,
+          jobs: shown.filter(function (j) { return j.s === st.id; })
+        };
+      });
+    }
+    groups = groups.filter(function (g) { return g.jobs.length > 0; });
+
+    if (!groups.length) {
+      rosterEl.innerHTML = '<p class="roster-empty">Nothing needs your hand today.</p>';
+    } else {
+      rosterEl.innerHTML = groups.map(function (g) {
+        return '<section class="stage">' +
+          '<div class="stage-head"><h3 class="stage-plate t-head ' + g.plateClass + '" id="' + g.key + '">' +
+          esc(g.label) + ' · ' + g.jobs.length + '</h3></div>' +
+          '<ul>' + g.jobs.map(rowHTML).join('') + '</ul>' +
+          '</section>';
+      }).join('');
+    }
+
+    var needing = all.filter(function (j) { return j.m; }).length;
+    var firstKey = groups.length ? groups[0].key : '';
+
+    if (needing === 0) {
+      daylineEl.innerHTML = '';
+      daylineEl.hidden = true;
+    } else {
+      daylineEl.hidden = false;
+      var more = needing - 3;
+      var moreLine = (more > 0 && firstKey)
+        ? '<p class="t-body dayline-more"><a class="act act--inline" href="#' + firstKey + '"><span class="label">and ' + more + ' more below</span></a></p>'
+        : '';
+      daylineEl.innerHTML =
+        '<p class="t-body">One thing is overdue &mdash; <a class="act act--inline" href="#job-vandersteen"><span class="label">Vandersteen</span></a><span class="overdue-clause">, install, since 4 September</span></p>' +
+        '<p class="t-body"><a class="act act--inline" href="#job-marcus-wright"><span class="label">Marcus Wright</span></a> · new lead &mdash; respond by 10 September</p>' +
+        '<p class="t-body">Nora Ellison replied last night &mdash; <a class="act act--inline" href="#job-cedar-lane-study"><span class="label">Cedar Lane Study</span></a></p>' +
+        moreLine;
+    }
+
+    statusEl.textContent = statusText(all, shown);
+
+    var signature = state.size + '|' + state.needsMe + '|' + state.byPerson;
+    if (lastSignature !== null && signature !== lastSignature) {
+      statusEl.classList.add('is-shown');
+    }
+    lastSignature = signature;
+  }
+
+  function statusText(all, shown) {
+    var s = state.needsMe
+      ? 'Showing what needs your hand · ' + shown.length + ' of ' + all.length + ' jobs'
+      : 'Showing all ' + all.length + ' jobs';
+    s += state.byPerson ? ' · grouped by person.' : ' · grouped by stage.';
+    return s;
+  }
+
+  function setSize(n) {
+    state.size = n;
+    sw16.setAttribute('aria-pressed', String(n === 16));
+    sw43.setAttribute('aria-pressed', String(n === 43));
+    render();
+  }
+
+  sw16.addEventListener('click', function () { setSize(16); });
+  sw43.addEventListener('click', function () { setSize(43); });
+
+  fNeeds.addEventListener('click', function () {
+    state.needsMe = !state.needsMe;
+    fNeeds.setAttribute('aria-pressed', String(state.needsMe));
+    render();
+  });
+
+  fPerson.addEventListener('click', function () {
+    state.byPerson = !state.byPerson;
+    fPerson.setAttribute('aria-pressed', String(state.byPerson));
+    render();
+  });
+
+  document.getElementById('note-dismiss').addEventListener('click', function () {
+    document.getElementById('margin-note').hidden = true;
+  });
+
+  render();
+})();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,22 @@
+{
+  "captures": [
+    {
+      "file": "deck-320-slide-12-320.png",
+      "width": 320,
+      "hash": "slide-12",
+      "state": null,
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "deck-320-slide-17-320.png",
+      "width": 320,
+      "hash": "slide-17",
+      "state": null,
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    }
+  ]
+}

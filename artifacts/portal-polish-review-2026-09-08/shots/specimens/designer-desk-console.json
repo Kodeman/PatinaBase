@@ -1,0 +1,76 @@
+{
+  "captures": [
+    {
+      "file": "designer-desk-default-1440.png",
+      "width": 1440,
+      "hash": null,
+      "state": "default",
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "designer-desk-43jobs-1440.png",
+      "width": 1440,
+      "hash": null,
+      "state": "43jobs",
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "designer-desk-needsme-1440.png",
+      "width": 1440,
+      "hash": null,
+      "state": "needsme",
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "designer-desk-byperson-1440.png",
+      "width": 1440,
+      "hash": null,
+      "state": "byperson",
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "designer-desk-default-390.png",
+      "width": 390,
+      "hash": null,
+      "state": "default",
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "designer-desk-43jobs-390.png",
+      "width": 390,
+      "hash": null,
+      "state": "43jobs",
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "designer-desk-needsme-390.png",
+      "width": 390,
+      "hash": null,
+      "state": "needsme",
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "designer-desk-byperson-390.png",
+      "width": 390,
+      "hash": null,
+      "state": "byperson",
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    }
+  ]
+}

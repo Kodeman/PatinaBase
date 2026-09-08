@@ -1,0 +1,40 @@
+{
+  "captures": [
+    {
+      "file": "client-house-quiet-1440.png",
+      "width": 1440,
+      "hash": null,
+      "state": "quiet",
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "client-house-accepted-1440.png",
+      "width": 1440,
+      "hash": null,
+      "state": "accepted",
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "client-house-quiet-390.png",
+      "width": 390,
+      "hash": null,
+      "state": "quiet",
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "client-house-accepted-390.png",
+      "width": 390,
+      "hash": null,
+      "state": "accepted",
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    }
+  ]
+}
