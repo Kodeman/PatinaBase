@@ -6,6 +6,7 @@ import type { ReactNode } from 'react';
 import { ScoredAction } from '@/components/threshold/instruments/scored-action';
 import { useMuteLetters, useWriteBack } from '@/hooks/use-project-correspondence';
 import type { CorrespondenceLetter, NoticeReceipt } from '@/lib/threshold/correspondence';
+import { DAY_MONTH_FORMAT as DAY_MONTH } from '@/lib/threshold/dates';
 
 import { isTruncated, oneLine } from './previously';
 
@@ -20,8 +21,6 @@ import { isTruncated, oneLine } from './previously';
    ABSENCE IS SILENCE, one region at a time: with no thread there is nothing to
    write to and nothing to mute, and each of these renders nothing at all
    rather than an empty field or a disabled act. ──────────────────────────── */
-
-const DAY_MONTH = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long' });
 
 const HEAD_CLASS =
   'font-mono text-[11px] font-normal uppercase leading-[1.5] tracking-[0.14em] text-[var(--text-muted)]';

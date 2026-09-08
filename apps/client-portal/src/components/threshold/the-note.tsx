@@ -4,6 +4,7 @@ import { useState } from 'react';
 import type { ReactNode } from 'react';
 
 import { ScoredAction } from '@/components/threshold/instruments/scored-action';
+import { DAY_MONTH_FORMAT as DAY_MONTH } from '@/lib/threshold/dates';
 import {
   parseSourceDate,
   type NoteModel,
@@ -20,8 +21,6 @@ import {
    ABSENCE IS SILENCE. With no standing note the section renders nothing at all
    — the Doorstep's sentence already carries the page, and an empty letter is
    worse than no letter. ──────────────────────────────────────────────────── */
-
-const DAY_MONTH = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long' });
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 

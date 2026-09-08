@@ -392,17 +392,17 @@ describe('Letterbox — one letter, half out of the slot', () => {
     expect(body).toHaveTextContent('Invoice No. 4');
     expect(body).toHaveTextContent('$18,250');
     expect(body).toHaveTextContent('$9,125');
-    expect(body).toHaveTextContent('due August 15');
+    expect(body).toHaveTextContent('due 15 August');
   });
 
   it('spells the year out once the letter falls in another one', async () => {
     render(<Letterbox invoice={invoice({ dueDate: '2027-01-15' })} today={TODAY} />);
 
-    expect(screen.getByTestId('letterbox-body')).toHaveTextContent('due January 15, 2027');
+    expect(screen.getByTestId('letterbox-body')).toHaveTextContent('due 15 January 2027');
 
     await userEvent.click(screen.getByRole('button', { name: /open the letterbox/i }));
     expect(within(screen.getByTestId('spine-toll')).getByTestId('spine-toll-due')).toHaveTextContent(
-      'due January 15, 2027',
+      'due 15 January 2027',
     );
   });
 

@@ -19,6 +19,8 @@ import type { Invoice } from '@patina/supabase';
 import type { FFEStageKey } from '@patina/types';
 import { invoiceBalanceCents } from '@patina/shared';
 
+import { DAY_MONTH_FORMAT, parseSourceDate } from './dates';
+
 // The ledger rollup owns which invoices count at all (drafts are pre-issue,
 // voids are cancelled). Imported rather than restated so the ledger and the
 // letterbox can never disagree about what is open.
@@ -260,8 +262,6 @@ export interface ThresholdModel {
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
-const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
-
 /**
  * A date off the database, as a Date the page can format.
  *
@@ -272,21 +272,14 @@ const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
  * read UTC midnight instead, and every client west of Greenwich would be told
  * the day before. A full timestamptz is a real instant and keeps its zone; the
  * page then formats it on the client's own wall clock.
+ *
+ * It lives in `dates.ts` now, beside the two idioms that print what it reads,
+ * and is re-exported here because the surface imports it from this module.
  */
-export function parseSourceDate(value: string | null | undefined): Date | null {
-  if (!value) return null;
-  const dateOnly = DATE_ONLY.exec(value);
-  const parsed = dateOnly
-    ? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
-    : new Date(value);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-}
+export { parseSourceDate } from './dates';
 
 /** "19 June" — the house's date idiom, read the same way everywhere. */
-export const DAY_MONTH = new Intl.DateTimeFormat('en-GB', {
-  day: 'numeric',
-  month: 'long',
-});
+export const DAY_MONTH = DAY_MONTH_FORMAT;
 
 function parseMoment(value: string | null | undefined): number | null {
   return parseSourceDate(value)?.getTime() ?? null;

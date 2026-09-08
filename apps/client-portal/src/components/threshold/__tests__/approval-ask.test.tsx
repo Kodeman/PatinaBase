@@ -228,8 +228,8 @@ describe('ApprovalAsk — the ask, answered where it stands', () => {
     // edge. The due date stands under the ask, not inside the picture.
     const plate = within(ask).getByTestId('approval-plate');
     expect(plate).toHaveTextContent('Library elevations');
-    expect(plate).toHaveTextContent(/Edition 3 · Issued August \d+/);
-    expect(screen.getByTestId('approval-due-line')).toHaveTextContent('Due August 20');
+    expect(plate).toHaveTextContent(/Edition 3 · Issued \d+ August/);
+    expect(screen.getByTestId('approval-due-line')).toHaveTextContent('Due 20 August');
     expect(screen.getByTestId('approval-rationale')).toHaveTextContent(
       'This releases the joinery package for pricing.',
     );
@@ -1015,7 +1015,7 @@ describe('ApprovalAsk — the thread', () => {
     render(<ApprovalAsk approval={SUCCESSOR} predecessor={ANSWERED_BEFORE} />);
 
     expect(screen.getByTestId('approval-continuation')).toHaveTextContent(
-      'Edition 4 replaces the edition you returned on August 12.',
+      'Edition 4 replaces the edition you returned on 12 August.',
     );
   });
 
@@ -1027,7 +1027,7 @@ describe('ApprovalAsk — the thread', () => {
       />,
     );
     expect(screen.getByTestId('approval-continuation')).toHaveTextContent(
-      'the edition you approved on August 12',
+      'the edition you approved on 12 August',
     );
 
     rerender(
@@ -1037,7 +1037,7 @@ describe('ApprovalAsk — the thread', () => {
       />,
     );
     expect(screen.getByTestId('approval-continuation')).toHaveTextContent(
-      'the edition you held on August 12',
+      'the edition you held on 12 August',
     );
   });
 
@@ -1130,7 +1130,7 @@ describe('the artifact, shown', () => {
     expect(within(plate).getByTestId('approval-plate-title')).toHaveTextContent(
       'Library elevations',
     );
-    expect(plate).toHaveTextContent(/Edition 3 · Issued August \d+/);
+    expect(plate).toHaveTextContent(/Edition 3 · Issued \d+ August/);
     // RULED 2026-09-05, at the Wave 2 walks: the maker's mark leaves the
     // doorstep. R6 keeps the twelve characters for the printed Record of
     // Decision only — and on screen they were a 3.13:1 string hidden from
@@ -2466,21 +2466,21 @@ describe('the outcome is signed and held (P-18)', () => {
   });
 });
 
-/* `W3W-R1-n2`. The date line read a plain "Due August 31" whether the date was
+/* `W3W-R1-n2`. The date line read a plain "Due 31 August" whether the date was
    ahead of her or a week behind it, so the one card whose reminders never stop
    was the one card that did not say so. Words, in body ink — the same refusal
    the money rail keeps with "Past due · {date}". */
 describe('the date line', () => {
   it('says what has become of a date that has passed', () => {
-    expect(dueLine(new Date(2026, 7, 31), true)).toBe('Due August 31 · past its date');
-    expect(dueLine(new Date(2026, 7, 31), false)).toBe('Due August 31');
+    expect(dueLine(new Date(2026, 7, 31), true)).toBe('Due 31 August · past its date');
+    expect(dueLine(new Date(2026, 7, 31), false)).toBe('Due 31 August');
   });
 
   it('never says the retired word, and never wears a colour', () => {
     render(<ApprovalAsk approval={{ ...APPROVAL, isOverdue: true }} />);
 
     const line = screen.getByTestId('approval-due-line');
-    expect(line).toHaveTextContent('Due August 20 · past its date');
+    expect(line).toHaveTextContent('Due 20 August · past its date');
     expect(line.textContent).not.toMatch(/overdue/i);
     expect(line.className).toContain('text-[var(--text-body)]');
     expect(line.className).not.toMatch(/red|terracotta/);

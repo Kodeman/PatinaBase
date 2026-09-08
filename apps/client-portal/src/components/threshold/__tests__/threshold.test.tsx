@@ -773,7 +773,7 @@ describe('Threshold — the five facts', () => {
     );
     // 4 · the balance and the day it falls due
     expect(screen.getByTestId('letterbox-body')).toHaveTextContent(
-      'Balance $9,125, due August 15',
+      'Balance $9,125, due 15 August',
     );
     // 5 · the chapter the house stands in
     expect(screen.getByTestId('doorplate-sub')).toHaveTextContent('Procurement');
@@ -968,7 +968,7 @@ describe('Threshold — the doorstep’s own asks', () => {
     // nothing — an edition is never dated with a day nobody recorded.
     expect(plate).toHaveTextContent('Edition 3');
     expect(plate).not.toHaveTextContent('Issued');
-    expect(gate).toHaveTextContent('Due August 20');
+    expect(gate).toHaveTextContent('Due 20 August');
     // The ask is answered where it stands — no link off the page.
     expect(screen.getByRole('button', { name: /^approve$/i })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /respond/i })).not.toBeInTheDocument();

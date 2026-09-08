@@ -186,7 +186,7 @@ describe('RoadOrders — the pieces she bought herself', () => {
     render(<RoadOrders orders={[]} closed={[REFUNDED]} today={new Date(2026, 8, 4)} />);
 
     expect(screen.getByTestId('road-orders-closed')).toHaveTextContent(
-      'Ceramic table lamp · Refunded · bought July 2 · $260',
+      'Ceramic table lamp · Refunded · bought 2 July · $260',
     );
   });
 

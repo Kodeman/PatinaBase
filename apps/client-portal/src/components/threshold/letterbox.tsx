@@ -15,6 +15,7 @@ import {
   useCheckoutReturn,
   useNamedInvoice,
 } from '@/lib/threshold/checkout-return';
+import { dayMonth, legalDate } from '@/lib/threshold/dates';
 import {
   parseSourceDate,
   toInvoiceModel,
@@ -44,13 +45,6 @@ import { Settlement } from './settlement';
    would take the open toll down with it, and money owed is exactly what the
    since-yesterday reading must not hide. ─────────────────────────────────── */
 
-const LONG_MONTH_DAY = new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric' });
-const LONG_MONTH_DAY_YEAR = new Intl.DateTimeFormat('en-US', {
-  month: 'long',
-  day: 'numeric',
-  year: 'numeric',
-});
-
 export interface LetterboxProps {
   /** The soonest-due open invoice, or null when nothing has come. */
   invoice: InvoiceModel | null;
@@ -72,13 +66,11 @@ export interface LetterboxProps {
   today?: Date;
 }
 
-/** "August 15", and the year too, once it is not this year. */
+/** "15 August", and the year too, once it is not this year. */
 function formatDue(dueDate: string | null, today?: Date): string | null {
   const due = parseSourceDate(dueDate);
   if (!due) return null;
-  return today && today.getFullYear() !== due.getFullYear()
-    ? LONG_MONTH_DAY_YEAR.format(due)
-    : LONG_MONTH_DAY.format(due);
+  return today && today.getFullYear() !== due.getFullYear() ? legalDate(due) : dayMonth(due);
 }
 
 function Drawing({ full }: { full: boolean }) {

@@ -16,6 +16,7 @@ import {
 } from '@/hooks/use-commercial-client';
 import { makingEvents } from '@/lib/analytics/events';
 import type { ClientSelection } from '@/lib/commercial-documents';
+import { DAY_MONTH_FORMAT as DAY_MONTH } from '@/lib/threshold/dates';
 import type { ThresholdMark } from '@/lib/threshold/derive';
 import { refusalSentence } from '@/lib/threshold/refusal';
 
@@ -35,8 +36,6 @@ import { KIND_LABEL } from './consent-copy';
    are deliberately not the same — the gate's accent, because off the spine
    there is no `useSpineInk` chapter colour to continue and SpineGate's own
    default is the honest reading; and the drawing, which is new. ─────────── */
-
-const DAY_MONTH = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long' });
 
 function capitalize(text: string): string {
   return text.length === 0 ? text : `${text[0].toUpperCase()}${text.slice(1)}`;
