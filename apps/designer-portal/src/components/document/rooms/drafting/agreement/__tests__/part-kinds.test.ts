@@ -1,6 +1,7 @@
 import type { AgreementPart } from "@patina/types";
 import {
   addPartOptions,
+  blankPayload,
   FEE_BASIS_VARIANTS,
   feeBasisParts,
   scheduleValueIsSet,
@@ -108,7 +109,66 @@ describe("scheduleValueIsSet — the Wave 2 fee schedules", () => {
     expect(scheduleValueIsSet(schedule(variant, payload))).toBe(false);
   });
 
+  // Wave 3 opened editors for the last three variants — `pricing_basis`,
+  // `draws` and `allowances` — so `draws` is no longer a variant the room
+  // cannot open, and this case moves to a variant outside the vocabulary
+  // entirely. The rule it pins is unchanged: a part this room cannot open
+  // never holds a send.
   it("still answers true for a variant the room opens no editor for", () => {
-    expect(scheduleValueIsSet(schedule("draws", {}))).toBe(true);
+    expect(scheduleValueIsSet(schedule("phases_of_the_moon", {}))).toBe(true);
+  });
+});
+
+describe("scheduleValueIsSet — the Wave 3 turnkey schedules", () => {
+  it.each([
+    [
+      "pricing_basis",
+      { costLines: [{ id: "a", label: "Cabinetry", basisCents: 1 }] },
+    ],
+    ["draws", { draws: [{ key: "deposit", label: "Deposit", pct: 100 }] }],
+    [
+      "allowances",
+      { allowances: [{ id: "tile", label: "Tile", amountCents: 1 }] },
+    ],
+  ])("reads a started %s as set", (variant, payload) => {
+    expect(scheduleValueIsSet(schedule(variant, payload))).toBe(true);
+  });
+
+  it.each([
+    ["pricing_basis", { costLines: [] }],
+    ["draws", { draws: [], retainageBps: 500 }],
+    ["allowances", { allowances: [] }],
+  ])("reads an empty %s as unset", (variant, payload) => {
+    expect(scheduleValueIsSet(schedule(variant, payload))).toBe(false);
+  });
+});
+
+describe("blankPayload — the Wave 3 turnkey schedules", () => {
+  it("opens a pricing basis with a shape and no figure in it (R21)", () => {
+    const payload = blankPayload("schedule", "pricing_basis");
+    expect(payload.costLines).toEqual([]);
+    expect(payload.costBasisCents).toBeNull();
+    expect(payload.gmpCents).toBeNull();
+    expect(payload.feeBps).toBeNull();
+    expect(payload.subMarkupBps).toBeNull();
+  });
+
+  it("opens with the basis and the disclosure mode UNCHOSEN", () => {
+    // Both are questions the send door asks by name, and closed-book is a
+    // term the homeowner reads — so a blank part answers neither for her.
+    const payload = blankPayload("schedule", "pricing_basis");
+    expect(payload.basis).toBeNull();
+    expect(payload.subDisclosure).toBeNull();
+  });
+
+  it("opens a draw schedule with the retainage the trade norm uses", () => {
+    expect(blankPayload("schedule", "draws")).toEqual({
+      draws: [],
+      retainageBps: 500,
+    });
+  });
+
+  it("opens allowances empty", () => {
+    expect(blankPayload("schedule", "allowances")).toEqual({ allowances: [] });
   });
 });

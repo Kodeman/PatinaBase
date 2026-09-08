@@ -82,6 +82,12 @@ jest.mock("@/hooks/use-clients", () => ({
 // R23 — one data layer. The composer reads and writes the parts through
 // `@patina/supabase`, so the hooks are stubbed in that factory.
 jest.mock("@patina/supabase", () => ({
+  // Wave 3 reads these; the room never renders a turnkey surface with the
+  // flag off, but the hooks still run, so the mock has to answer them.
+  useStudioLicenseAttestation: () => ({ data: null, isLoading: false }),
+  licenseAttestationIsLive: () => false,
+  useAgreementJurisdictionNotices: () => ({ data: [], isLoading: false }),
+  useAgreementDraws: () => ({ data: [], isLoading: false }),
   useSaveAgreementParts: () => ({
     mutateAsync: mockSaveParts,
     isPending: false,

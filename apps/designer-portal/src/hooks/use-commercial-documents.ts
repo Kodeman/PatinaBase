@@ -92,7 +92,11 @@ type StudioCommercialNotificationInput = {
     | "executed"
     | "budget_published"
     | "trade_scope_sent"
-    | "trade_draw_ready";
+    | "trade_draw_ready"
+    // W3, I-7 — a design-build draw was issued. Keyed on the
+    // `agreement_draw_invoices` row id, so `eventId` is required for it;
+    // `commercial-document-notify` routes it to `design_build` alone.
+    | "agreement_draw_ready";
   eventId?: string;
 };
 

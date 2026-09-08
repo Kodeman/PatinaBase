@@ -45,6 +45,7 @@ import { StudioLogoUploadField } from './studio-logo-upload-field';
 import { StudioSetupChecklist } from './studio-setup-checklist';
 import { MemberTitleLine } from './member-title-line';
 import { AgreementLibraryCard } from './agreement-library-card';
+import { LicensingAttestationCard } from './licensing-attestation-card';
 import { studioEvents } from '@/lib/analytics/studio-events';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
 import { RolodexSeedSheet } from '../people/directory/rolodex-seed-sheet';
@@ -162,6 +163,11 @@ export function AccountStudioPage() {
   // W2 (P4). Reads beside its wave-1 sibling; the card below Billing renders
   // only when BOTH are on, which is the program's fail-closed rule.
   const { value: agreementLibraryOn } = useFeatureFlag('agreement-library');
+  // W3 (P10 / R10). The Licensing card is the gate on the design-build
+  // template and exists only where all three flags have landed — the
+  // program's fail-closed rule, and the reason a studio the rollout has not
+  // reached sees the Account page it has today.
+  const { value: designBuildOn } = useFeatureFlag('design-build');
   const [seedReviewOpen, setSeedReviewOpen] = useState(false);
   const [skipSeedError, setSkipSeedError] = useState<string | null>(null);
 
@@ -1396,6 +1402,13 @@ export function AccountStudioPage() {
           Account page it has today. */}
       {agreementPartsOn && agreementLibraryOn && studio && (
         <AgreementLibraryCard studioId={studio.id} canManage={canManage} />
+      )}
+
+      {/* Licensing (Wave 3, M7). One insertion between Billing and Members,
+          below the two agreement cards that came before it. Billing is
+          untouched; this card copies its shell rather than restyling it. */}
+      {agreementPartsOn && agreementLibraryOn && designBuildOn && studio && (
+        <LicensingAttestationCard studioId={studio.id} canManage={canManage} />
       )}
 
       {/* Members */}

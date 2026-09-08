@@ -32,6 +32,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { DESIGN_BUILD_COPY } from "@patina/types";
 import type { AgreementPart } from "@patina/types";
 import { Input } from "@/components/ui/controls";
 import { AddPartMenu } from "./add-part-menu";
@@ -75,6 +76,12 @@ export interface PartsRailProps {
   onKeepInLibrary?: (part: AgreementPart) => void;
   /** Part ids already kept this session, so the act is offered once. */
   keptPartIds?: ReadonlySet<string>;
+  /**
+   * R39 — `design-build`, resolved by the composer. On, a row hidden from the
+   * client says so; off, the rail is Wave 2's rail exactly, because the act
+   * that can hide a part does not exist there either.
+   */
+  visibilityOn?: boolean;
 }
 
 export function PartsRail({
@@ -93,6 +100,7 @@ export function PartsRail({
   saveAsTemplate,
   onKeepInLibrary,
   keptPartIds,
+  visibilityOn = false,
 }: PartsRailProps) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -100,6 +108,27 @@ export function PartsRail({
       coordinateGetter: sortableKeyboardCoordinates,
     }),
   );
+
+  /**
+   * The rail lists the paper. Build sheet PART 13's eleventh entry —
+   * `patina.licensing_attestation`, kind `attestation` — is the GATE: a
+   * studio-level record materialized at compose, never editable here, and
+   * never read by the client. It rides in the composition and is saved with
+   * it; it is not a page, so it is not a row. Filtering it here rather than
+   * dropping it upstream is deliberate: the composer still holds it, and one
+   * `upsert_agreement_parts` still writes it back.
+   */
+  const rows = parts.filter((part) => part.kind !== "attestation");
+  const indexIn = (id: string) => parts.findIndex((part) => part.id === id);
+  /** Reorder is expressed in the WHOLE composition's indices — the rail's
+   *  neighbour is not necessarily the array's neighbour once a hidden row
+   *  sits between them. */
+  const moveRow = (from: number, to: number) => {
+    const moved = rows[from];
+    const target = rows[to];
+    if (!moved || !target) return;
+    onReorder(indexIn(moved.id), indexIn(target.id));
+  };
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
@@ -118,33 +147,34 @@ export function PartsRail({
         onDragEnd={handleDragEnd}
       >
         <SortableContext
-          items={parts.map((part) => part.id)}
+          items={rows.map((part) => part.id)}
           strategy={verticalListSortingStrategy}
         >
           <ul className="border-t border-[var(--doc-ink-border)]">
-            {parts.map((part, index) => (
+            {rows.map((part, index) => (
               <PartRow
                 key={part.id}
                 part={part}
                 index={index}
-                total={parts.length}
+                total={rows.length}
                 selected={part.id === selectedId}
                 blocked={blockedIds.has(part.id)}
                 readOnly={readOnly}
                 libraryOn={libraryOn}
                 onSelect={onSelect}
-                onReorder={onReorder}
+                onMove={moveRow}
                 onRename={onRename}
                 onRemove={onRemove}
                 onKeepInLibrary={onKeepInLibrary}
                 kept={keptPartIds?.has(part.id) === true}
+                visibilityOn={visibilityOn}
               />
             ))}
           </ul>
         </SortableContext>
       </DndContext>
 
-      {parts.length === 0 && (
+      {rows.length === 0 && (
         <p className="text-[12px] italic text-[var(--text-muted)]">
           This agreement has no parts yet.
         </p>
@@ -177,11 +207,12 @@ function PartRow({
   readOnly,
   libraryOn,
   onSelect,
-  onReorder,
+  onMove,
   onRename,
   onRemove,
   onKeepInLibrary,
   kept,
+  visibilityOn,
 }: {
   part: AgreementPart;
   index: number;
@@ -191,11 +222,15 @@ function PartRow({
   readOnly: boolean;
   libraryOn: boolean;
   onSelect: (id: string) => void;
-  onReorder: (fromIndex: number, toIndex: number) => void;
+  /** Both indices are the RAIL's, not the composition's — the rail owns the
+   *  translation, because a hidden gate row can sit between two visible
+   *  neighbours. */
+  onMove: (fromIndex: number, toIndex: number) => void;
   onRename: (id: string, title: string) => void;
   onRemove: (id: string) => void;
   onKeepInLibrary?: (part: AgreementPart) => void;
   kept: boolean;
+  visibilityOn: boolean;
 }) {
   const {
     attributes,
@@ -303,6 +338,14 @@ function PartRow({
                 </span>
               )}
             </span>
+            {visibilityOn && part.clientVisible === false && (
+              <span
+                data-client-visible="false"
+                className="block font-mono text-[10.5px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
+              >
+                {DESIGN_BUILD_COPY.hiddenFromClient}
+              </span>
+            )}
             {blocked && (
               <span className="block font-mono text-[10.5px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
                 needs attention
@@ -336,13 +379,13 @@ function PartRow({
                 </RowMenuItem>
                 <RowMenuItem
                   disabled={index === 0}
-                  onClick={() => act(() => onReorder(index, index - 1))}
+                  onClick={() => act(() => onMove(index, index - 1))}
                 >
                   Move up
                 </RowMenuItem>
                 <RowMenuItem
                   disabled={index === total - 1}
-                  onClick={() => act(() => onReorder(index, index + 1))}
+                  onClick={() => act(() => onMove(index, index + 1))}
                 >
                   Move down
                 </RowMenuItem>

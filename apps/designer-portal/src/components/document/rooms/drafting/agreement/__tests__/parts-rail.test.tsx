@@ -305,4 +305,66 @@ describe("PartsRail", () => {
       screen.getByText("This agreement has no parts yet."),
     ).toBeInTheDocument();
   });
+
+  /**
+   * Build sheet PART 13's eleventh entry — `patina.licensing_attestation`,
+   * kind `attestation` — is the GATE, not a page: materialized at compose,
+   * "never editable in the rail", and never read by the client. It rides in
+   * the composition and one Save writes it back; the rail simply does not
+   * list it, so it cannot be renamed, dragged, or removed.
+   */
+  describe("the licensing attestation", () => {
+    const withGate = () => [
+      part({
+        partKey: "patina.licensing_attestation",
+        kind: "attestation",
+        title: "Licensing attestation",
+        clientVisible: false,
+      }),
+      ...four(),
+    ];
+
+    it("is not a row in the rail", () => {
+      render(<Host initial={withGate()} />);
+      expect(rows()).toHaveLength(4);
+      expect(rows().join(" ")).not.toContain("Licensing attestation");
+      expect(
+        screen.queryByRole("button", {
+          name: "Part options for Licensing attestation",
+        }),
+      ).toBeNull();
+    });
+
+    it("does not make an all-gate composition look like a composed one", () => {
+      render(
+        <Host
+          initial={[
+            part({
+              partKey: "patina.licensing_attestation",
+              kind: "attestation",
+              title: "Licensing attestation",
+            }),
+          ]}
+        />,
+      );
+      expect(
+        screen.getByText("This agreement has no parts yet."),
+      ).toBeInTheDocument();
+    });
+
+    it("reorders in the composition's indices, not the rail's", () => {
+      // The gate sits FIRST in the array and nowhere in the rail. Moving the
+      // second visible row up must swap it with the first VISIBLE row, not
+      // trade places with a row nobody can see.
+      render(<Host initial={withGate()} />);
+      openMenu("Exclusions");
+      fireEvent.click(screen.getByRole("button", { name: "Move up" }));
+      expect(rows().map((row) => row.replace(/\s+/g, " "))).toEqual([
+        expect.stringContaining("Exclusions"),
+        expect.stringContaining("Services"),
+        expect.stringContaining("Ceiling"),
+        expect.stringContaining("Terms"),
+      ]);
+    });
+  });
 });

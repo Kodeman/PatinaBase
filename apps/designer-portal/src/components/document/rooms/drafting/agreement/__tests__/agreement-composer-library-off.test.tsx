@@ -106,6 +106,12 @@ jest.mock("@/hooks/use-feature-flag", () => ({
 // when the composer starts reading them — a snapshot pin that gets edited is
 // no longer a pin.
 jest.mock("@patina/supabase", () => ({
+  // Wave 3 reads these; the room never renders a turnkey surface with the
+  // flag off, but the hooks still run, so the mock has to answer them.
+  useStudioLicenseAttestation: () => ({ data: null, isLoading: false }),
+  licenseAttestationIsLive: () => false,
+  useAgreementJurisdictionNotices: () => ({ data: [], isLoading: false }),
+  useAgreementDraws: () => ({ data: [], isLoading: false }),
   useSaveAgreementParts: () => ({
     mutateAsync: jest.fn(),
     isPending: false,

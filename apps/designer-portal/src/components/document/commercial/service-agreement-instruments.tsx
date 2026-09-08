@@ -60,7 +60,11 @@ function CountersignAct({
   pending: boolean;
   onSubmit: (disclosedImpact: ScheduleDisclosedImpact | null) => void;
 }) {
-  const movesTheSchedule = documentKind === "design_services";
+  // W3 — a turnkey prime anchors the engagement-start phase exactly as a
+  // design-services agreement does (00566:712-726 reads the kind, not the
+  // class), so the countersign act discloses the same schedule impact.
+  const movesTheSchedule =
+    documentKind === "design_services" || documentKind === "design_build";
   return (
     <>
       <div className="mt-3 flex max-w-xl flex-col gap-2 sm:flex-row">
