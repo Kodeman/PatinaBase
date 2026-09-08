@@ -145,6 +145,10 @@ checks alone.
   The final failure snapshot shows the sign-in service temporarily unavailable.
   Authentication code is outside this change; this remains an unresolved
   local test-environment issue, not a demonstrated visual-regression cause.
+- Final browser rerun: **10 of 12 passed** after excluding the writing test and
+  known date mismatch. Both failures occurred during sign-in before the
+  multi-house and acceptance assertions; the acceptance scenario passed in
+  the initial run. These are not waived: final end-to-end sign-off is pending.
 - The auto-started test server explicitly reports its role check skipped
   because Playwright's process environment has no service key. These browser
   results therefore do **not** verify role-gate enforcement. The manual preview
