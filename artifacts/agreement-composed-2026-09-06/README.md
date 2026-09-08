@@ -2,9 +2,20 @@
 
 Kody's brief asked for four things: add and remove parts of the agreement, keep studio templates, work in more shapes, and hold trades under one roof. This program went and found out why—five research lanes across how designers contract, design-build turnkey patterns, e-sign and forms in software, Patina's own codebase, and a simulated designer panel—and turned the answer into one document: fifteen proposals in three waves, sixteen open rulings, and the core model (Agreement = Core + ordered Parts). The document is the deliverable. It exists to earn reactions and a set of rulings, not to authorize a build.
 
-## Nothing was built
+## What was built
 
-No migration was written or applied. No component, route, hook, edge function, or feature flag was created or changed. Nothing was deployed. The only files this program produced are the research notes, the document, and its review artifacts, all inside this folder.
+The proposal was adopted (as recommended, per rulings R1–R52) and built in three waves plus one hotfix, all shipped to production. Full detail — production state per wave, the rulings table, walk verdicts, what's owed to Kody, and the main-backlog carry list — is in `build/PROGRAM-REPORT.md`.
+
+| Wave | Shipped | Merge sha | Migrations | Flag | Designer portal | Client portal |
+|---|---|---|---|---|---|---|
+| W1 — loosen the room | 2026-09-07 | `61a68919d` | `00575_agreement_parts.sql` | `agreement-parts` — fail-closed, not created | `97bca77d-2b27-4e7c-ada3-78f8ba87ce32` | `48624f39-4013-4110-9262-171942bf8c26` |
+| Hotfix R30 — the origin agreement reaches the homeowner | 2026-09-07 | `253f7afcf` | none | none — ships live, unflagged | — | `9858b5a6-8b87-4f82-9173-ffde4a76bb35` |
+| W2 — the Library, fee schedules, the client's copy from parts | 2026-09-07 | `eeda45516` | `00576_agreement_library.sql`, `00577_agreement_fee_schedules.sql` | `agreement-library` — fail-closed, not created | `7a88a385-cc3e-4dc7-9a2d-0f5c1e737c5a` | `33a01d5a-61f4-440c-af2d-9197acda725a` |
+| W3 — turnkey: the design-build class, the Trade Agreement, the licensing gate | 2026-09-08 | `c784aad9d` | `00578_design_build_kind.sql`, `00579_trade_agreements.sql` | `design-build` — fail-closed, not created | `6987d9ff-9154-453f-ae89-c7ab4c714d48` | `f46e2e19-a806-45d1-853e-28a007533724` |
+
+All three feature flags are fail-closed and were never created, so every studio-facing and homeowner-facing surface above is dark in production until Kody creates each flag and verifies it against `/flags` with a real-browser UA (project memory: a flag has matched everyone before). The R30 hotfix is unflagged and live.
+
+The Artifact link below is dead — the published Artifact was deleted from the account after the proposal was adopted. `source/proposal.md` and `proposal.html` in this folder are the durable copy of what was proposed; `build/PROGRAM-REPORT.md` and `build/rulings-2026-09-06.md` are the durable record of what was decided and built.
 
 ## Folder map
 
