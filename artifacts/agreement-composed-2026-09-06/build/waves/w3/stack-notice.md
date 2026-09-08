@@ -262,3 +262,45 @@ the end. Nothing else was left running. The Supabase containers were left
 
 Next owner: whoever runs the Wave 3 fixes for round 2. Reset before a fresh
 walk, or expect to meet the rows above.
+
+---
+
+## Reset — walk fixes, round 2 (2026-09-08, walk-fix agent)
+
+The round-2 fix pass (rulings R48–R52 and the minors) edited
+`00578_design_build_kind.sql` in place again — `upsert_agreement_parts` (R48),
+`send_commercial_document`'s design-build arm (R48),
+`get_client_commercial_document_bundle` (R50's `designBuild.depositOffer`),
+`_countersign_design_services_agreement_impl` and a grafted
+`set_invoice_studio_id` (R52), and a new `rpc_start_agreement_thread` (R47).
+Both migrations are still unapplied on Strata, so editing in place is the
+correct remediation.
+
+**`supabase db reset --workdir /Users/kody/Code/patina-merged/.codex/worktrees/agent-agr-w3-integration` was run ONCE, after those edits, and this stack now carries them.** Every row the round-2 walk left — the proposals, the
+project, INV-0001…0004, the trade agreements and their tokens, the lien waiver,
+the `comms_threads` direct row listed above — was **destroyed by that reset**.
+Nothing in this pass depended on them: the walk's own shapes are reproduced
+inside `supabase/tests/commercial/design_build_test.sql` (T22–T25), which rolls
+back.
+
+- Ledger head after the reset: `00579` (probed:
+  `select version from supabase_migrations.schema_migrations order by version desc limit 3`
+  → `00579, 00578, 00577`).
+- `supabase/seed/00-legacy-grants.sql` was regenerated with
+  `python3 scripts/generate-legacy-grants.py` **before** the reset —
+  "baseline + **2570** replayed statements", two more than the 2568 the
+  close-out recorded, which are `rpc_start_agreement_thread`'s REVOKE/GRANT
+  pair — and it replayed clean as the first seed of that reset.
+- No scratch database was created; this pass owned the shared stack outright.
+- `packages/supabase/src/database.types.ts` was regenerated against this stack
+  with `SUPABASE_DB_URL` exported, twice; the second regen left the tree clean.
+- **No dev server was started.** No portal was booted, no Playwright run was
+  made. The gates this pass ran are psql suites, `tsc --noEmit`, jest and
+  vitest. The Supabase containers are left **up**.
+- `platform_acl_compatibility_test.sql` fails on this stack; it is a documented
+  known failure (`supabase/tests/KNOWN_FAILURES.md:51`) and this pass did not
+  change it either way.
+
+Next owner: whoever runs the Wave 3 walk for round 3. The stack is a clean
+`db reset` of `agreement/w3-integration` at `50d11f528` with the seeds — no
+walk rows of any kind stand on it.
