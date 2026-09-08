@@ -215,27 +215,45 @@ export function useIssueAgreementDrawInvoice(proposalId: string) {
   });
 }
 
+/**
+ * The seven arguments of
+ * `public.record_agreement_draw_lien_waiver(uuid, text, uuid, date, integer,
+ * text, timestamptz)`, one field each, in the RPC's own order. Nothing else
+ * belongs here: the trade's display name is snapshotted by the function off
+ * the studio's roster, and `recorded_by` is stamped from the session.
+ */
 export interface RecordAgreementDrawLienWaiverInput {
   drawId: string;
+  waiverType: LienWaiverType;
   /** The rolodex contact who gave the waiver, when there is one. */
   contactId: string | null;
-  /** Snapshot — the record outlives the roster row it was taken from. */
-  contactDisplayName: string;
-  waiverType: LienWaiverType;
   throughDate: string | null;
   amountCents: number | null;
   storagePath: string | null;
   receivedAt: string | null;
-  recordedBy: string;
+}
+
+/** A literal copy of the RPC's `jsonb_build_object` key list (00578 PART 5b). */
+export interface RecordAgreementDrawLienWaiverResult {
+  id: string;
+  drawId: string;
+  drawKey: string;
+  waiverType: LienWaiverType;
+  contactDisplayName: string | null;
+  throughDate: string | null;
+  amountCents: number | null;
+  receivedAt: string | null;
 }
 
 /**
- * Records one lien-waiver exchange against a draw (P12).
+ * Records one lien-waiver exchange against a draw (P12), through the one door
+ * the database opened for it.
  *
- * `contactDisplayName` is a snapshot on purpose: a waiver is evidence about a
- * past exchange, and it has to keep naming the trade that gave it after the
- * studio tidies its rolodex. `recordedBy` is required for the same reason the
- * attestation's `attested_by` is — a record with no author is not a record.
+ * R42 — `agreement_draw_lien_waivers` carries SELECT to `authenticated` and
+ * nothing else: no INSERT grant and no INSERT policy. A direct insert raises
+ * 42501 in production however green a client-mocked test looks. The RPC also
+ * snapshots the trade's name off `studio_contacts` itself and stamps
+ * `recorded_by` from `auth.uid()`, so neither is the caller's to send.
  */
 export function useRecordAgreementDrawLienWaiver(proposalId: string) {
   const queryClient = useQueryClient();
@@ -243,25 +261,19 @@ export function useRecordAgreementDrawLienWaiver(proposalId: string) {
     mutationKey: ['record-agreement-draw-lien-waiver', proposalId],
     mutationFn: async (
       input: RecordAgreementDrawLienWaiverInput
-    ): Promise<AgreementDrawLienWaiver> => {
+    ): Promise<RecordAgreementDrawLienWaiverResult> => {
       const supabase = getSupabase() as any;
-      const { data, error } = await supabase
-        .from('agreement_draw_lien_waivers')
-        .insert({
-          draw_id: input.drawId,
-          contact_id: input.contactId,
-          contact_display_name: input.contactDisplayName.trim(),
-          waiver_type: input.waiverType,
-          through_date: input.throughDate,
-          amount_cents: input.amountCents,
-          storage_path: input.storagePath,
-          received_at: input.receivedAt,
-          recorded_by: input.recordedBy,
-        })
-        .select()
-        .single();
+      const { data, error } = await supabase.rpc('record_agreement_draw_lien_waiver', {
+        p_draw_id: input.drawId,
+        p_waiver_type: input.waiverType,
+        p_contact_id: input.contactId,
+        p_through_date: input.throughDate,
+        p_amount_cents: input.amountCents,
+        p_storage_path: input.storagePath,
+        p_received_at: input.receivedAt,
+      });
       if (error) throw error;
-      return mapAgreementDrawLienWaiver(data as AgreementDrawLienWaiverRow);
+      return data as RecordAgreementDrawLienWaiverResult;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: designBuildKeys.draws(proposalId) });

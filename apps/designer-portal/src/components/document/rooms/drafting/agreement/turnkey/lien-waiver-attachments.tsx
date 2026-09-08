@@ -79,17 +79,17 @@ export function LienWaiverAttachments({
     }
     setNote(null);
     try {
+      // R42 — the RPC's seven arguments, and nothing else: it snapshots the
+      // trade's name off the studio's roster and stamps the recorder from the
+      // session itself.
       await record.mutateAsync({
         drawId: draw.id,
-        contactId: contact.id,
-        contactDisplayName:
-          contact.company_name || contact.full_name || "A trade",
         waiverType,
+        contactId: contact.id,
         throughDate: null,
         amountCents: draw.netCents,
         storagePath: null,
         receivedAt: new Date().toISOString(),
-        recordedBy,
       });
       documentEvents.agreementLienWaiverRecorded({
         proposal_id: proposalId,

@@ -195,7 +195,10 @@ describe("the draw ledger", () => {
 });
 
 describe("the lien-waiver strip", () => {
-  it("records a waiver with the trade's name snapshot onto it", async () => {
+  /* R42 — the act carries the RPC's seven arguments and nothing else: the
+     trade's display name is snapshotted server-side off the studio's roster
+     and the recorder is stamped from the session, so neither is sent. */
+  it("records a waiver through the RPC's own argument list", async () => {
     render(
       <LienWaiverAttachments
         proposalId="agreement-1"
@@ -216,9 +219,17 @@ describe("the lien-waiver strip", () => {
     await waitFor(() => expect(mockRecord).toHaveBeenCalled());
     const input = mockRecord.mock.calls[0][0];
     expect(input.drawId).toBe("draw-rough_in");
-    expect(input.contactDisplayName).toBe("Kestrel Cabinetry LLC");
+    expect(input.contactId).toBe("contact-1");
     expect(input.waiverType).toBe("unconditional_progress");
-    expect(input.recordedBy).toBe("designer-1");
+    expect(Object.keys(input).sort()).toEqual([
+      "amountCents",
+      "contactId",
+      "drawId",
+      "receivedAt",
+      "storagePath",
+      "throughDate",
+      "waiverType",
+    ]);
   });
 
   it("asks for the trade rather than recording an anonymous waiver", async () => {

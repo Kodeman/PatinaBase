@@ -210,24 +210,85 @@ describe('useIssueAgreementDrawInvoice', () => {
 });
 
 describe('useRecordAgreementDrawLienWaiver', () => {
-  it('snapshots the trade’s name onto the record', async () => {
-    single.mockResolvedValue({ data: drawRow.agreement_draw_lien_waivers![0], error: null });
+  /* R42 — THE DOOR THE BACKEND BUILT.
+     `agreement_draw_lien_waivers` holds SELECT to `authenticated` and nothing
+     else: 00578 drops the studio write policy and grants no INSERT. A direct
+     insert raises 42501 in production while a client-mocked test stays green,
+     so these cases pin the RPC name and its argument list — a literal copy of
+     `record_agreement_draw_lien_waiver(uuid, text, uuid, date, integer, text,
+     timestamptz)` (00578 PART 5b) — rather than an insert payload. */
+  const RPC_ANSWER = {
+    id: 'waiver-1',
+    drawId: 'draw-2',
+    drawKey: 'rough_in',
+    waiverType: 'conditional_progress',
+    contactDisplayName: 'Kestrel Cabinetry',
+    throughDate: '2026-09-30',
+    amountCents: 2397819,
+    receivedAt: '2026-09-07T13:00:00.000Z',
+  };
+
+  it('calls the RPC with exactly its seven arguments, and never writes the table', async () => {
+    rpc.mockResolvedValue({ data: RPC_ANSWER, error: null });
     const config = useRecordAgreementDrawLienWaiver('agreement-1') as any;
-    await config.mutationFn({
+    const result = await config.mutationFn({
       drawId: 'draw-2',
-      contactId: 'contact-1',
-      contactDisplayName: '  Kestrel Cabinetry  ',
       waiverType: 'conditional_progress',
+      contactId: 'contact-1',
       throughDate: '2026-09-30',
       amountCents: 2397819,
       storagePath: null,
       receivedAt: '2026-09-07T13:00:00.000Z',
-      recordedBy: 'designer-1',
     });
-    expect(from).toHaveBeenCalledWith('agreement_draw_lien_waivers');
-    const payload = (insert.mock.calls as unknown as any[][])[0][0];
-    expect(payload.contact_display_name).toBe('Kestrel Cabinetry');
-    expect(payload.recorded_by).toBe('designer-1');
-    expect(payload.waiver_type).toBe('conditional_progress');
+
+    expect(rpc).toHaveBeenCalledWith('record_agreement_draw_lien_waiver', {
+      p_draw_id: 'draw-2',
+      p_waiver_type: 'conditional_progress',
+      p_contact_id: 'contact-1',
+      p_through_date: '2026-09-30',
+      p_amount_cents: 2397819,
+      p_storage_path: null,
+      p_received_at: '2026-09-07T13:00:00.000Z',
+    });
+    // The keys are the RPC's own — no `contactDisplayName` and no
+    // `recordedBy` are sent, because the function writes both itself.
+    expect(Object.keys((rpc.mock.calls as unknown as any[][]).at(-1)![1])).toEqual([
+      'p_draw_id',
+      'p_waiver_type',
+      'p_contact_id',
+      'p_through_date',
+      'p_amount_cents',
+      'p_storage_path',
+      'p_received_at',
+    ]);
+    expect(from).not.toHaveBeenCalledWith('agreement_draw_lien_waivers');
+    expect(result).toEqual(RPC_ANSWER);
+  });
+
+  it('surfaces the refusal rather than reporting a waiver nobody recorded', async () => {
+    rpc.mockResolvedValue({
+      data: null,
+      error: { message: "that trade is not on this studio's roster" },
+    });
+    const config = useRecordAgreementDrawLienWaiver('agreement-1') as any;
+    await expect(
+      config.mutationFn({
+        drawId: 'draw-2',
+        waiverType: 'conditional_progress',
+        contactId: 'contact-9',
+        throughDate: null,
+        amountCents: null,
+        storagePath: null,
+        receivedAt: null,
+      }),
+    ).rejects.toEqual({ message: "that trade is not on this studio's roster" });
+  });
+
+  it('invalidates the draw ledger it just added a waiver to', () => {
+    const config = useRecordAgreementDrawLienWaiver('agreement-1') as any;
+    config.onSuccess();
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: designBuildKeys.draws('agreement-1'),
+    });
   });
 });

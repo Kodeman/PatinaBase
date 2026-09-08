@@ -637,6 +637,7 @@ export type {
   AgreementDrawLienWaiverRow,
   IssueAgreementDrawInvoiceResult,
   RecordAgreementDrawLienWaiverInput,
+  RecordAgreementDrawLienWaiverResult,
 } from "./use-design-build";
 
 // ═══════════════════════════════════════════════════════════════════════════
