@@ -744,6 +744,8 @@ CREATE OR REPLACE FUNCTION public._agreement_is_int(p_value jsonb)
 RETURNS boolean
 LANGUAGE sql
 IMMUTABLE
+-- R45: the migration rule is not optional, definer or not.
+SET search_path = public, pg_temp
 AS $$
   SELECT jsonb_typeof(p_value) = 'number'
      AND (p_value #>> '{}')::numeric = trunc((p_value #>> '{}')::numeric);
@@ -757,6 +759,8 @@ CREATE OR REPLACE FUNCTION public._validate_pricing_basis_payload(
 RETURNS text
 LANGUAGE plpgsql
 IMMUTABLE
+-- R45: the migration rule is not optional, definer or not.
+SET search_path = public, pg_temp
 AS $$
 DECLARE
   v_basis text;
@@ -932,6 +936,8 @@ CREATE OR REPLACE FUNCTION public._agreement_contract_sum_cents(p_payload jsonb)
 RETURNS bigint
 LANGUAGE plpgsql
 IMMUTABLE
+-- R45: the migration rule is not optional, definer or not.
+SET search_path = public, pg_temp
 AS $$
 DECLARE
   v_basis text;
@@ -972,6 +978,8 @@ CREATE OR REPLACE FUNCTION public._validate_draws_payload(p_payload jsonb)
 RETURNS text
 LANGUAGE plpgsql
 IMMUTABLE
+-- R45: the migration rule is not optional, definer or not.
+SET search_path = public, pg_temp
 AS $$
 DECLARE
   v_draw jsonb;
@@ -1071,6 +1079,8 @@ CREATE OR REPLACE FUNCTION public._validate_allowances_payload(
 RETURNS text
 LANGUAGE plpgsql
 IMMUTABLE
+-- R45: the migration rule is not optional, definer or not.
+SET search_path = public, pg_temp
 AS $$
 DECLARE
   v_allowance jsonb;
@@ -1150,6 +1160,8 @@ CREATE OR REPLACE FUNCTION public._validate_no_double_count(p_parts jsonb)
 RETURNS text
 LANGUAGE plpgsql
 IMMUTABLE
+-- R45: the migration rule is not optional, definer or not.
+SET search_path = public, pg_temp
 AS $$
 DECLARE
   v_part jsonb;
@@ -1235,6 +1247,8 @@ RETURNS TABLE(
   is_retainage_release boolean)
 LANGUAGE plpgsql
 IMMUTABLE
+-- R45: the migration rule is not optional, definer or not.
+SET search_path = public, pg_temp
 AS $$
 DECLARE
   v_retainage_bps numeric := COALESCE(
@@ -1370,6 +1384,8 @@ CREATE OR REPLACE FUNCTION public._agreement_schedule_of_values(
 RETURNS jsonb
 LANGUAGE plpgsql
 IMMUTABLE
+-- R45: the migration rule is not optional, definer or not.
+SET search_path = public, pg_temp
 AS $$
 DECLARE
   v_sum bigint;
@@ -1488,6 +1504,8 @@ CREATE OR REPLACE FUNCTION public._agreement_redact_client_payload(
 RETURNS jsonb
 LANGUAGE plpgsql
 STABLE
+-- R45: the migration rule is not optional, definer or not.
+SET search_path = public, pg_temp
 AS $$
 DECLARE
   v_payload jsonb := COALESCE(p_payload, '{}'::jsonb);
