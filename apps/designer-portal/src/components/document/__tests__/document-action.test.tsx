@@ -70,10 +70,31 @@ const VARIANTS = [
     weight: 'font-medium',
     hasPool: true,
   },
+  {
+    // R139 (2026-09-08) rules a fourth tier. The charcoal fill that is retired
+    // chrome for every row above is this row's correct grammar, so `terminal`
+    // retires nothing — this table is the one place that records the
+    // distinction. Lane D4 builds the variant and un-skips the todo below.
+    variant: 'terminal',
+    retiredChrome: null,
+    tracking: 'tracking-[0]',
+    weight: 'font-medium',
+    hasPool: true,
+  },
 ] as const;
 
+type BuiltVariant = Exclude<(typeof VARIANTS)[number], { variant: 'terminal' }>;
+
+const BUILT_VARIANTS = VARIANTS.filter(
+  (row): row is BuiltVariant => row.variant !== 'terminal',
+);
+
 describe('DocumentAction', () => {
-  it.each(VARIANTS)(
+  test.todo(
+    'renders the terminal variant in the scored-ink grammar — skipped because DocumentAction has no terminal variant yet; Wave 3 lane D4 adds it under R139 and folds this row back into the it.each',
+  );
+
+  it.each(BUILT_VARIANTS)(
     'renders the $variant variant in the scored-ink grammar',
     ({ variant, retiredChrome, tracking, weight }) => {
       render(
@@ -112,7 +133,7 @@ describe('DocumentAction', () => {
     },
   );
 
-  it.each(VARIANTS)(
+  it.each(BUILT_VARIANTS)(
     'gives the $variant variant one hit halo, a scored label, and its pool',
     ({ variant, hasPool }) => {
       render(
