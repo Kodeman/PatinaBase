@@ -24453,6 +24453,7 @@ export type Database = {
           expires_at: string
           id: string
           last_used_at: string | null
+          spent_at: string | null
           status: string
           token_hash: string
           updated_at: string
@@ -24465,6 +24466,7 @@ export type Database = {
           expires_at?: string
           id?: string
           last_used_at?: string | null
+          spent_at?: string | null
           status?: string
           token_hash: string
           updated_at?: string
@@ -24477,6 +24479,7 @@ export type Database = {
           expires_at?: string
           id?: string
           last_used_at?: string | null
+          spent_at?: string | null
           status?: string
           token_hash?: string
           updated_at?: string
@@ -29152,13 +29155,30 @@ export type Database = {
       _agreement_html_escape: { Args: { p_value: string }; Returns: string }
       _agreement_is_int: { Args: { p_value: Json }; Returns: boolean }
       _agreement_money: { Args: { p_cents: number }; Returns: string }
+      _agreement_money_to_the_cent: {
+        Args: { p_cents: number }
+        Returns: string
+      }
       _agreement_parts_json: { Args: { p_proposal_id: string }; Returns: Json }
+      _agreement_redact_client_payload: {
+        Args: {
+          p_disclosure: string
+          p_kind: string
+          p_payload: Json
+          p_variant: string
+        }
+        Returns: Json
+      }
       _agreement_requires_rate_card: {
         Args: { p_proposal_id: string }
         Returns: boolean
       }
       _agreement_restore_list_item_ids: {
         Args: { p_payload: Json }
+        Returns: Json
+      }
+      _agreement_schedule_of_values: {
+        Args: { p_disclosure: string; p_payload: Json }
         Returns: Json
       }
       _agreement_studio_id: {
@@ -34201,6 +34221,18 @@ export type Database = {
       record_activation_event: {
         Args: { p_event_name: string; p_properties?: Json; p_user_id: string }
         Returns: undefined
+      }
+      record_agreement_draw_lien_waiver: {
+        Args: {
+          p_amount_cents?: number
+          p_contact_id?: string
+          p_draw_id: string
+          p_received_at?: string
+          p_storage_path?: string
+          p_through_date?: string
+          p_waiver_type: string
+        }
+        Returns: Json
       }
       record_capture_enrichment_result: {
         Args: {

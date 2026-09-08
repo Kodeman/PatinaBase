@@ -15128,13 +15128,25 @@ END $g$;
 
 -- 00578_design_build_kind.sql
 DO $g$ BEGIN
-  GRANT SELECT, INSERT ON TABLE public.agreement_draw_lien_waivers TO authenticated;
+  GRANT SELECT ON TABLE public.agreement_draw_lien_waivers TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
 -- 00578_design_build_kind.sql
 DO $g$ BEGIN
   GRANT ALL ON TABLE public.agreement_draw_lien_waivers TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00578_design_build_kind.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.record_agreement_draw_lien_waiver( uuid, text, uuid, date, integer, text, timestamptz) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00578_design_build_kind.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.record_agreement_draw_lien_waiver( uuid, text, uuid, date, integer, text, timestamptz) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
@@ -15230,6 +15242,42 @@ END $g$;
 
 -- 00578_design_build_kind.sql
 DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._agreement_money_to_the_cent(numeric) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00578_design_build_kind.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._agreement_money_to_the_cent(numeric) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00578_design_build_kind.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._agreement_schedule_of_values(jsonb, text) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00578_design_build_kind.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._agreement_schedule_of_values(jsonb, text) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00578_design_build_kind.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._agreement_redact_client_payload(text, text, jsonb, text) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00578_design_build_kind.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._agreement_redact_client_payload(text, text, jsonb, text) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00578_design_build_kind.sql
+DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public._agreement_design_build_part(uuid, text) FROM PUBLIC, anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
@@ -15255,6 +15303,12 @@ END $g$;
 -- 00578_design_build_kind.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.issue_agreement_draw_invoice(uuid, text) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00578_design_build_kind.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._render_agreement_snapshot_html(uuid) FROM PUBLIC, anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
