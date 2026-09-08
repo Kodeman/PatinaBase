@@ -136,3 +136,87 @@ working tools. Nothing here licenses tabs, badges, shadows, or engagement chrome
 `docs/superpowers/plans/2026-09-04-client-page-completion.md`; `docs/design/the-client-page/README.md`).
 
 *Entries add: C1 · S1–S6 · V1–V7 · V8 · last id = V8*
+
+---
+
+## Ruled — 2026-09-08 (portal polish)
+
+### V9 · The five principles of polish are doctrine; P1 binds client pages only — 2026-09-08
+
+**Question:** A six-designer panel reviewed both portals against a professional-polish proposal and
+returned five principles, three built specimens and a hundred-odd findings
+(`artifacts/portal-polish-review-2026-09-08/synthesis.md`). Rules were deliberately off for the review
+itself, so the panel could argue with what shipped rather than with the log. Two things needed
+deciding before a line of build code: are the five principles doctrine or one design session's
+opinion — and does the first of them, *the studio is the author; Patina is the press*, bind the
+designer portal as well as the homeowner's page?
+
+**Decision:** **All five are adopted as doctrine, and P1 binds client pages only.** In the order the
+deck puts them (sheets 10–13):
+
+1. **The studio is the author; Patina is the press.** Every *client* surface — the house page, the
+   decision papers, the standalone invoice at `/pay/<token>` — opens with the studio's two-sided
+   letterhead and closes with a colophon reading *"Prepared by {studio} · Sent through Patina"*, and
+   no Patina wordmark stands above that colophon. Patina is the press: named once, at the foot, in the
+   place a printer signs a book. **The Desk is carved out by name** (PP-9): the designer portal keeps
+   its PATINA wordmark and its footer identity, because a designer's working tool is not a letter the
+   studio sends to a client. This is the same distinction V8 already drew between the two faces of
+   surface #1 — the studio keeps the record on one, the studio's own client reads it on the other —
+   applied now to whose name is on the paper.
+2. **Money, dates and names carry the largest true type.** A 15px floor in sentence case for money,
+   dates, party names and consequence sentences; running heads and captions stay 11–12px metadata; one
+   family for money (DM Mono, tabular); one date style, *11 September 2026*; the owed figure outranks
+   the agreed figure.
+3. **Every act shows its weight and its consequence.** Three tiers assigned by consequence and never by
+   page, plus a fourth — a filled charcoal `terminal` act carrying its own amount, spent only where
+   money moves or a paper is signed. One consequence sentence above every terminal act in every state;
+   `aria-disabled` with a named reason, never `disabled`; the act replaced by its dated record.
+4. **Honest imagery at real scale.** A source hierarchy enforced by caption — installed photograph,
+   then the studio's own board or scan, then the maker's product photograph, then a drawn silhouette.
+   Piece plates at 96–120px on desktop above a value threshold. An empty room is a name, a floor line
+   and one sentence, never an outlined rectangle. Never stock, never a gradient standing in for a
+   material.
+5. **One scale, one rhythm; absence is silence.** `docs/design/house-sheet/SPEC.md` is the type and
+   rhythm contract for both portals — seven type steps plus the money step, a 24px module, three radii,
+   three paper stocks, state pigments only — **applied surface by surface as each is touched**, not as
+   a licence to restyle a surface nobody is working on. Wrap, never truncate. A region with nothing to
+   say renders nothing.
+
+**And concept renders are admitted, under a fence** (PP-7). A render the studio uploads for that
+project, carrying a ≥14px label on the image itself reading *"Concept · not installed"*, may be the
+first image in a room band when no installed photograph of that room exists. Generated imagery from any
+other source is not permitted, and nothing generated is ever captioned as the client's home. This is the
+one place the five principles' honesty rule bends, and it bends because a studio's own concept work *is*
+honest work — it just has to say what it is, on the image, at a size a person reads.
+
+**Rules are back on.** They were off for the review; the amendments this ruling requires are written
+into `docs/design/the-document/DECISIONS.md` as **R139** (amending I107), **R140** (amending R126),
+**R141** (amending R135), **R142** (extending R107, the Room View entry) and **I153** (the house
+sheet's canonical home), and into `apps/designer-portal/CLAUDE.md`. Build starts on amended rules, not
+on a proposal (PP-6).
+
+**Consequence for the refusals in VISION §6 — what this does not license.** Nothing here relaxes a
+single refusal, and the whole of it is worth stating plainly because "polish" is the word under which
+chrome usually arrives:
+
+- **No shadows.** No depth was adopted anywhere in this program. R126's one `--elevation-sheet` token
+  stays at its three sites, the CSS-level shadow gate stays, and the eslint `no-restricted-syntax` D4
+  rules stay. A filled terminal act is flat charcoal, not a raised button.
+- **No badges, no status dots, no pills, no ✓ glyphs, no spinners, no green success fills.** The
+  `terminal` tier is one filled control at one kind of moment; it is not permission for a button
+  library.
+- **No dashboards, and no engagement metrics.** Nothing in these five principles asks a surface to
+  count anything at a person. The landmark ledger under the doorplate is a table of contents for the
+  page a reader is already on, not a header and not a nav; V8's carve-out that the *homeowner's* page
+  may be designed for daily return still does not license measuring her.
+- **No tab bars anywhere in The Document** (V7 · D1, unchanged), and no engagement chrome in the
+  studio's own working tools (S4, unchanged).
+
+**Source:** Kody, 2026-09-08 — `artifacts/portal-polish-review-2026-09-08/rulings.md` (**PP-1**…**PP-9**),
+the deck `artifacts/portal-polish-review-2026-09-08/deck/index.html` (sheets 10–13 the principles,
+14–16 the specimens, 17 the ruling), and the panel synthesis
+`artifacts/portal-polish-review-2026-09-08/synthesis.md`. Carried out in
+`docs/superpowers/specs/2026-09-08-portal-polish-build-design.md` and
+`docs/superpowers/plans/2026-09-08-portal-polish-build.md`.
+
+*Entries add: C1 · S1–S6 · V1–V7 · V8 · V9 · last id = V9*
