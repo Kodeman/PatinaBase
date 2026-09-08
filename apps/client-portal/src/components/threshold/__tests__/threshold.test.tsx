@@ -1157,6 +1157,44 @@ describe('Threshold — the doorstep’s own asks', () => {
       expect(container.querySelector('#door-door-prop-turnkey')).not.toBeNull();
       expect(screen.getByTestId('door-houseless')).toBeInTheDocument();
     });
+
+    /* R47 — A QUESTION FROM THE ORIGIN DOOR FILES TO THE AGREEMENT'S STUDIO.
+       A houseless paper stands on the doorstep of every house she owns, so
+       handing its acts the house she happens to be reading would file a
+       question about a brand new engagement into an unrelated project's
+       thread. `DoorActs` picks `rpc_start_direct_thread` when it is given a
+       studio and no project (door-acts.test.tsx:280-299); this is the wiring
+       that gives it one. */
+    it('hands the houseless door its studio, and no project to ask in', () => {
+      proposalsMock.mockReturnValue(
+        settled([
+          AUTHORIZATION,
+          {
+            ...ORIGIN_AGREEMENT,
+            designer_id: 'designer-nora',
+          } as unknown as Proposal,
+          SIGNED_AGREEMENT,
+        ]),
+      );
+
+      const { container } = renderThreshold();
+
+      const houselessActs = container.querySelector(
+        '#door-door-prop-origin [data-testid="door-acts-stub"]',
+      );
+      expect(houselessActs).not.toBeNull();
+      expect(houselessActs?.getAttribute('data-project-id')).toBe('');
+      expect(houselessActs?.getAttribute('data-studio-profile-id')).toBe(
+        'designer-nora',
+      );
+
+      // And the house's own paper still asks in the house's thread.
+      const housedActs = container.querySelector(
+        '#door [data-testid="door-acts-stub"]',
+      );
+      expect(housedActs?.getAttribute('data-project-id')).toBe(PROJECT_ID);
+      expect(housedActs?.getAttribute('data-studio-profile-id')).toBe('');
+    });
   });
 });
 

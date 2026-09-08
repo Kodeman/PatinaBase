@@ -469,6 +469,10 @@ export function Threshold({
         // does not carry the date, so it comes off the row.
         validUntil: proposal.valid_until ?? null,
         houseless,
+        // R47 — the studio this paper came from, carried so a houseless door
+        // can ask in the studio's own thread rather than in whichever house
+        // the reader happens to be standing in.
+        designerId: proposal.designer_id ?? null,
       },
     ];
   });
@@ -740,7 +744,14 @@ export function Threshold({
         // whose order sets the whole letter ABOVE the doors — there the pin's
         // way back would point at a paragraph read one section ago.
         note={!model.groundFloor && mark.id === firstDoorId ? model.note : null}
-        projectId={projectId}
+        // R47 — A QUESTION FROM THE ORIGIN DOOR FILES TO THE AGREEMENT'S
+        // STUDIO. A houseless paper belongs to no project, and it stands on
+        // the doorstep of EVERY house she owns — so handing it the house she
+        // happens to be reading would file her question about a brand new
+        // engagement into an unrelated project's thread. It is keyed by the
+        // studio instead, exactly as `letterbox-door.tsx` keys the same act.
+        projectId={paper.houseless ? null : projectId}
+        designerId={paper.houseless ? (paper.designerId ?? null) : null}
         first={mark.id === firstDoorId}
         studioName={studioName}
         onSigned={() => sealDoor(mark, paper)}

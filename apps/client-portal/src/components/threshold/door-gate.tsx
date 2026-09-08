@@ -96,6 +96,14 @@ export interface DoorProposal extends ThresholdProposal {
    * the house ledger leaves its figure out.
    */
   houseless?: boolean;
+  /**
+   * R47 — the designer whose studio sent this paper. Carried on the paper so a
+   * HOUSELESS door can hand it to `DoorActs`: with no project there is no
+   * project thread, and a question about a paper that comes before the house
+   * must reach the studio that sent it rather than an unrelated project's
+   * thread.
+   */
+  designerId?: string | null;
 }
 
 export interface DoorGateProps {
