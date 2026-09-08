@@ -152,3 +152,56 @@ off) and **all were killed**; both ports were confirmed clear at the end.
 
 Next owner: whoever runs Wave 3 round 2. Reset before a fresh walk, or expect
 to meet the rows above.
+
+---
+
+## Reset — walk fixes, round 1 (2026-09-08, walk-fix agent)
+
+The walk-fix agent took the stack and ran
+`supabase db reset --workdir /Users/kody/Code/patina-merged/.codex/worktrees/agent-agr-w3-integration`
+**twice**, because this pass edited `00578_design_build_kind.sql` in place
+(W3R1-06 — the seeded `patina.notice_of_cancellation` leaf is now
+`clientVisible: false`, and `send_commercial_document` refuses any
+client-visible attachment that asks to be acknowledged and carries no body).
+Both migrations are still unapplied on Strata, so editing in place remains the
+correct remediation.
+
+1. **First reset**, immediately after the migration edit and before any gate.
+   Finished clean. Everything measured afterwards — the SQL suites, the types
+   regen, the two Playwright specs — ran on that replay.
+2. **Second reset**, after the gates, so the next walk meets a clean stack: the
+   two client Playwright runs leave real fixture rows behind, and the walk
+   rows listed in the section above were still on the stack when this pass
+   started.
+
+Probed after the second reset, not inferred:
+
+- ledger head `00579, 00578, 00577`;
+- `studio_trade_agreements` count `0`; `proposals` with
+  `document_kind='design_build'` count `0` — every walk row from round 1 is
+  gone;
+- the seeded turnkey template carries
+  `{"partKey":"patina.notice_of_cancellation","clientVisible":false}` — the
+  migration edit is on this stack, verified by containment on
+  `agreement_templates.parts`, not by reading the file.
+
+Other notes for the next owner:
+
+- `python3 scripts/generate-legacy-grants.py` was re-run: "baseline + 2568
+  replayed statements", `git diff` on `supabase/seed/00-legacy-grants.sql`
+  **empty**. No grant moved in this pass.
+- `SUPABASE_DB_URL=… pnpm db:generate` was run and
+  `git diff --exit-code packages/supabase/src/database.types.ts` was clean —
+  this pass changed function bodies and a seeded template row, not schema. The
+  file is 1.2 MB (not truncated).
+- A `pnpm dev` client-portal server ran on :3002 with the three-flag override
+  for the two e2e specs the close-out rulings name, and was stopped; :3002 and
+  :3000 were both confirmed clear afterwards. The dev server needs
+  `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` exported from
+  `supabase status -o env` — that command's own names are `API_URL` /
+  `ANON_KEY`, and exporting them unrenamed gives "Your project's URL and Key
+  are required to create a Supabase client!" on every route.
+- No scratch database was made or dropped in this pass.
+
+Next owner: whoever runs Wave 3 round 2. The stack is at `00579`, freshly
+reset, with no walk, e2e or probe residue.
