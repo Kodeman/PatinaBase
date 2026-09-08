@@ -1,0 +1,210 @@
+=== ACCOUNT → STUDIO (before) ===
+Account
+PUT BACK · ESC
+LH
+Leah Hartwell
+
+designer@patina.dev
+
+LEAH HARTWELL · OWNER
+
+STATUS
+
+Online
+Away
+Busy
+Offline
+PROFILE
+NOTIFICATIONS
+SECURITY
+DEVICES
+EXTENSION
+STUDIO
+STILL TO DO
+4
+✓
+Name & brand the studio
+Set your own title
+Invite your crew
+Seed the rolodex
+The rolodex fills itself from your projects
+SKIP
+✓
+Open the first project
+Your first hire opened a document
+The mark follows her, not you.
+
+The marks follow the work. Nothing on this list is something you tick — do the thing and the box fills.
+
+Leah Hartwell
+
+LEAH-HARTWELL
+
+RENAME
+BRANDING
+
+Your studio’s logo and contact details appear on invoices, client-facing emails, and the client app.
+
+LOGO
+LH
+UPLOAD LOGO
+
+PNG, JPEG, WebP, or SVG — up to 2MB. Shown on invoices, client emails, and the client app.
+
+WEBSITE
+CONTACT EMAIL
+PHONE
+ADDRESS
+SAVE BRANDING
+SAVED
+BILLING
+
+The card fee and check remit-to instructions a client sees when paying an invoice from the client portal.
+
+CARD FEE (%)
+
+Default 3% — added to card payments to cover processing. Bank transfer (ACH) carries its own lower, fixed fee and isn’t affected by this setting.
+
+REMIT CHECKS TO
+
+Shown to clients who choose to mail a check instead of paying online.
+
+SAVE BILLING
+SAVED
+AGREEMENT DEFAULTS
+
+What a new agreement starts from. Every member composes from these; owners and admins change them.
+
+RATE CARD
++ Add a role
+FURNISHINGS DEPOSIT
+0%
+25%
+50%
+100%
+Other
+
+No deposit set — a new agreement leaves it open, and authorizations fall back to 50%.
+
+BILLING CADENCE
+Monthly
+Every two weeks
+At named milestones
+RETAINER CREDIT RULE
+Credited
+Non-refundable
+Replenishing
+
+Stored now; it starts appearing on new agreements in a later release.
+
+DEFAULT EXCLUSIONS
+
+One per line.
+
+SAVE AGREEMENT DEFAULTS
+SAVED
+AGREEMENT LIBRARY
+
+The Templates and Parts this studio composes agreements from. Patina's own are always here.
+
+TEMPLATES
+PATINA
+Consultation / hourly
+PATINA
+Design services (Patina standard)
+PATINA
+Design-build turnkey
+PATINA
+Furnishings only
+
+A template keeps the parts it was saved with. To change them, compose an agreement the way you want it and save that as a template.
+
+PARTS
+
+No parts saved yet. Compose an agreement, and what you write there can be kept here.
+
+LICENSING
+
+Before this studio can use the design-build template
+
+ON FILE
+WI Dwelling Contractor · 1234567 · WI
+CURRENT THROUGH
+2027-03-31
+CREDENTIAL TYPE
+WI Dwelling Contractor
+MN Residential Building Contractor
+CA CSLB
+Other
+NUMBER
+STATE
+EXPIRY
+I attest this credential is current and covers the work in this agreement.
+
+Patina helps you assemble and send agreements from parts you write and own. It is not a law firm and does not give legal advice — have an attorney review your templates before first use.
+
+SAVE ATTESTATION
+
+Patina stores this. Patina does not verify it.
+
+MEMBERS
+INVITE TEAMMATE
+LH
+
+Leah Hartwell (you)
+
+designer@patina.dev
+
+SET TITLE
+ACTIVE
+OWNER
+
+Transfer ownership to an active teammate before leaving the studio.
+
+⏻ SIGN OUT
+BANNED GLYPHS: ["✓"]
+EMOJI-RANGE HITS: ["✓","✓"]
+HEADINGS in order: ["STATUS","BRANDING","BILLING","AGREEMENT DEFAULTS","AGREEMENT LIBRARY","LICENSING","MEMBERS"]
+=== LICENSING after save ===
+
+
+Before this studio can use the design-build template
+
+ON FILE
+WI Dwelling Contractor · 1234567 · WI
+CURRENT THROUGH
+2027-03-31
+CREDENTIAL TYPE
+WI Dwelling Contractor
+MN Residential Building Contractor
+CA CSLB
+Other
+NUMBER
+STATE
+EXPIRY
+I attest this credential is current and covers the work in this agreement.
+
+Patina helps you assemble and send agreements from parts you write and own. It is not a law firm and does not give legal advice — have an attorney review your templates before first use.
+
+SAVE ATTESTATION
+
+Patina stores this. Patina does not verify it.
+
+Your attestation is on file.
+
+MEMBERS
+INVITE TEAMMATE
+LH
+
+Leah Hartwell (you)
+
+designer@patina.dev
+
+SET TITLE
+ACTIVE
+OWNER
+
+Transfer ownership to an active teammate before leaving the studio.
+
+⏻ SIGN OUT
+RE-READ: {"type":"WI Dwelling Contractor","number":"1234567","state":"WI","expiry":"2027-03-31"}

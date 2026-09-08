@@ -1,0 +1,3 @@
+services draft url: http://localhost:3000/drafting/b88e172c-ce87-4d66-8bf7-1786e9f686e3
+turnkey draft url: http://localhost:3000/drafting/c32f3185-cd0a-4d08-a45d-094b85c160f1
+ok

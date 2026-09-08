@@ -1,0 +1,35 @@
+NET POST rpc/rpc_start_agreement_thread 200 "67a1a1e1-3c00-474e-b83d-69e8824e5d29"
+NET POST comms_messages?select=*%2Csender%3Aprofiles%21sender_id%28id%2Cfull_name%2Cavata 201 {"id":"700a6f74-72a3-40e0-bb71-b1a6c172f53a","thread_id":"67a1a1e1-3c00-474e-b83d-69e8824e5d29","sender_id":"a0000000-0000-0000-0000-000000000005","body":"About Client User — design services agreement\n\nWalk round 3 — which draw covers the cabinetry?","attachments":[],"reply_to_message_id":null,"decision_id":null,"mentions":[],"system":false,"created_at":"2026-09-08T14:10:29.381723+00:00","edited
+door still shows the signable paper: true
+LEAH HARTWELL
+PREPARED FOR CLIENT USER
+
+Client User — design services agreement
+
+September 2026
+
+One door in this house is closed until you sign it.
+
+Previously — Design-build agreement · Client User — design services agreement, 8 September.
+
+WHAT CHANGED SINCE YESTERDAY
+Read here on the eighth of September.
+One thing moved since.
+Owed on the open invoice
+$23,978 · due 8 September
+Client User — design services agreement
+
+Shut since 8 September · it opens on your name
+
+This one comes before a house. It is addressed to you, so it waits on every door until you sign it.
+
+By signing, you accept the work described, guaranteed maximum price, schedule of values, draw schedule, retainage, and terms in “Client User — design services agreement”. The agreement becomes effective only after the studio countersigns.
+
+YOUR NAME IS NEEDED BEFORE THE LINE CONTINUES.
+
+Client User — design services agreement
+
+DESIGN-BUILD AGREEMENT · $84,134
+
+I received Lien waiver form.
+I agree to these design-build terms, the cost-plus pricing basis and its guaranteed maximum price, the schedule of values, the draw schedule, and the retainage withheld from each draw, and understand my signature alone does not author

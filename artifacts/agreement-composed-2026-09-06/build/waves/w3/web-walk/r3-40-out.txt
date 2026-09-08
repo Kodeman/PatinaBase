@@ -1,0 +1,42 @@
+second draft url: http://localhost:3000/drafting/017aa560-b6e9-4892-90a6-c436e1f47ee5
+NET materialize_agreement_template 200 10
+
+=== readiness (allowance lines, no allowances) ===
+0 OF 10 PARTS NEED ATTENTION
+
+The pricing basis carries allowance lines with no allowance behind them — Tile allowance, Plumbing fixtures allowance, Lighting allowance. Add them here, or give them another category.
+
+
+NET upsert_agreement_parts 200 {"parts": [{"id": "f4da2b1f-ae64-4e25-8fee-0a2104086a78", "kind": "schedule", "title": "Pricing basis", "payload": {"basis": "cost_plus_gmp", "feeBps": 1800, "gmpCents": 8413400, "costLines": [{"id": "line-1788876551611-0", "label": "Cabinetry & millwork", "category": "sub", "basisCents": 3800000}, 
+
+=== readiness after save ===
+0 OF 10 PARTS NEED ATTENTION
+
+The pricing basis carries allowance lines with no allowance behind them — Tile allowance, Plumbing fixtures allowance, Lighting allowance. Add them here, or give them another category.
+
+
+
+=== SEND SHEET (warning case) ===
+Send design-build agreement
+PUT BACK · ESC
+
+DESIGN-BUILD AGREEMENT
+
+Send for the client signature
+
+Client User receives the price, the schedule of values, the draw schedule, the allowances, who is doing the work, and the terms. Their signature preserves consent; the agreement still awaits the studio countersignature before work is authorized.
+
+RECIPIENT
+
+client@patina.dev
+
+The pricing basis carries allowance lines with no allowance behind them — Tile allowance, Plumbing fixtures allowance, Lighting allowance. Add them here, or give them another category.
+A NOTE TO THE CLIENT · OPTIONAL
+Send later
+Send agreement →
+
+W3R2-17 · sheet carries a warning: true
+W3R2-17 · sheet also says every facet is present: false
+NET send_commercial_document 200 {"sentAt": "2026-09-08T14:09:44.01799+00:00", "status": "sent", "updatedAt": "2026-09-08T14:09:44.01799+00:00", "proposalId": "017aa560-b6e9-4892-90a6-c436e1f47ee5", "documentKind": "design_build", "commercialState": "sent", "documentFingerprint": "b08c1e69c59221ac7c126ddc29564bdb1144d8e42925246d6f9
+
+url after send: http://localhost:3000/desk

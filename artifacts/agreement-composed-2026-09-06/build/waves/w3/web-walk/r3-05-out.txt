@@ -1,0 +1,270 @@
+
+=== STEP 5 · pricing basis (centre) ===
+PRICING BASIS · RECORD ONLY
+
+Pricing basis
+
+Choose whether the trades are shown open-book or closed-book.
+
+HOW THIS AGREEMENT IS PRICED
+
+Fixed price
+Cost-plus
+Cost-plus with GMP
+Time and materials with a not-to-exceed
+FEE · PERCENT
+MARKUP ON THE TRADES · PERCENT
+GMP · DOLLARS
+
+COST LINES
+
+Trade
+General conditions
+Allowance
+Remove
+Trade
+General conditions
+Allowance
+Remove
+Trade
+General conditions
+Allowance
+Remove
+Trade
+General conditions
+Allowance
+Remove
+Trade
+General conditions
+Allowance
+Remove
+Trade
+General conditions
+Allowance
+Remove
+Trade
+General conditions
+Allowance
+Remove
++ Add a cost line
+COST BASIS $71,300.00
+FEE 18% · $12,834.00
+GMP $84,134.00
+
+Choose whether the trades are shown open-book or closed-book.
+
+The schedule of values appears once the contract sum, the open-book or closed-book choice, and the lines beneath them are written.
+
+This is recorded on the agreement. It does not create billing authority yet.
+
+HISTORY
+
+Added · Leah · today
+Materialized from Design-build turnkey
+
+R48 · hide toggle on PRICING BASIS (expect 0): 1
+
+=== STEP 6 · draws (centre) ===
+DRAWS · RECORD ONLY
+
+Draw schedule
+RETAINAGE · PERCENT
+
+Retainage is withheld from each draw and returned on the final row. It is never billed on top. Up to 10%.
+
+DRAW
+%
+GROSS
+HELD
+NET PAID
+Acts
+$8,413.40
+$0.00
+$8,413.40
+Hold
+Remove
+$25,240.20
+$1,262.01
+$23,978.19
+Hold
+Remove
+$33,653.60
+$1,682.68
+$31,970.92
+Hold
+Remove
+$16,826.80
+$841.34
+$15,985.46
+Hold
+Remove
+Final · retainage release
+—
+$3,786.03
+—
+$3,786.03
++ Add a draw
+PAID ACROSS THE SCHEDULE
+$84,134.00
+
+This is recorded on the agreement. It does not create billing authority yet.
+
+HISTORY
+
+Added · Leah · today
+Materialized from Design-build turnkey
+R48 · hide toggle on DRAW SCHEDULE (expect 0): 1
+
+=== STEP 7 · allowances (centre) ===
+ALLOWANCES · RECORD ONLY
+
+Allowances
+Hidden from your client
+
+Each allowance carries its own cost line on the pricing basis. They are one number, written once here.
+
+Over: a change order
+Over: billed as it lands
+Under: credited back
+Under: kept by the studio
+Remove
+Over: a change order
+Over: billed as it lands
+Under: credited back
+Under: kept by the studio
+Remove
+Over: a change order
+Over: billed as it lands
+Under: credited back
+Under: kept by the studio
+Remove
++ Add an allowance
+
+This is recorded on the agreement. It does not create billing authority yet.
+
+HISTORY
+
+Added · Leah · today
+Materialized from Design-build turnkey
+cost lines BEFORE allowances: 0  AFTER: 7 ["Cabinetry & millwork","Electrical","Plumbing","General conditions / site","Tile allowance","Plumbing fixtures allowance","Lighting allowance"]
+
+=== STEP 8 · pricing basis with BOTH ===
+PRICING BASIS · RECORD ONLY
+
+Pricing basis
+
+Write the schedule of values your client will read.
+
+Supervision is paid once. You have a supervision fee and a markup on the trades. Bill supervision as its own line, fold it into overhead, or take it in the trade markup — one of the three, not two.
+
+HOW THIS AGREEMENT IS PRICED
+
+Fixed price
+Cost-plus
+Cost-plus with GMP
+Time and materials with a not-to-exceed
+FEE · PERCENT
+MARKUP ON THE TRADES · PERCENT
+GMP · DOLLARS
+
+COST LINES
+
+Trade
+General conditions
+Allowance
+Remove
+Trade
+General conditions
+Allowance
+Remove
+Trade
+General conditions
+Allowance
+Remove
+Trade
+General conditions
+Allowance
+Remove
+Trade
+General conditions
+Allowance
+Remove
+Trade
+General conditions
+Allowance
+Remove
+Trade
+General conditions
+Allowance
+Remove
++ Add a cost line
+COST BASIS $71,300.00
+FEE 18% · $12,834.00
+GMP $84,134.00
+
+SCHEDULE OF VALUES · WHAT YOUR CLIENT READS
+
+Your own division of the work — a room, a phase, or one line for the whole of it. It comes to the contract sum, and it is not the cost lines above.
+
++ Add a line
+Start with one line
+YOUR CLIENT’S TOTAL
+$0.00
+
+Write the schedule of values your client will read.
+
+The schedule of values appears once the contract sum, the open-book or closed-book choice, and the lines beneath them are written.
+
+This is recorded on the agreement. It does not create billing authority yet.
+
+HISTORY
+
+Added · Leah · today
+Materialized from Design-build turnkey
+
+=== STEP 8 · supervision with BOTH ===
+CLAUSE
+
+Supervision
+Hidden from your client
+
+Supervision is paid once. You have a supervision fee and a markup on the trades. Bill supervision as its own line, fold it into overhead, or take it in the trade markup — one of the three, not two.
+
+SUPERVISION FEE · DOLLARS
+SUPERVISION FEE · PERCENT
+BODY
+
+Supervision is paid once. You have a supervision fee and a markup on the trades. Bill supervision as its own line, fold it into overhead, or take it in the trade markup — one of the three, not two.
+
+Studios that do both are, in effect, charging twice for the same oversight.
+
+HISTORY
+
+Added · Leah · today
+Materialized from Design-build turnkey
+
+=== STEP 8 · READINESS with BOTH ===
+3 OF 10 PARTS NEED ATTENTION
+
+Supervision is paid once. You have a supervision fee and a markup on the trades. Bill supervision as its own line, fold it into overhead, or take it in the trade markup — one of the three, not two.
+
+
+STEP 8 · review&send {"disabled":false,"aria":null}
+RPC upsert_agreement_parts -> 400 {"code":"23514","details":null,"hint":null,"message":"Supervision is paid once. You have a supervision fee and a markup on the trades. Bill supervision as its own line, fold it into overhead, or take it in the trade markup — one of the three, not two."}
+
+=== SEND SHEET while the double-count stands ===
+null
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+locator.click: Timeout 30000ms exceeded.
+Call log:
+[2m  - waiting for locator('nav[aria-label="Agreement parts"] button').filter({ hasText: 'Pricing basis' }).first()[22m
+
+    at openPart (/Users/kody/Code/patina-merged/artifacts/agreement-composed-2026-09-06/build/waves/w3/web-walk/r3-05-compose.mjs:48:90)
+    at /Users/kody/Code/patina-merged/artifacts/agreement-composed-2026-09-06/build/waves/w3/web-walk/r3-05-compose.mjs:177:7 {
+  name: 'TimeoutError'
+}
+
+Node.js v24.12.0

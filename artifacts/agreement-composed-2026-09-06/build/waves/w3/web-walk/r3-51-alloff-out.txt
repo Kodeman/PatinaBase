@@ -1,0 +1,91 @@
+alloff servicesRoom bytes 82894 · turnkeyRoom bytes 82077 · door bytes 45121
+--- services room text ---
+Skip to the paper
+←
+THE DESK
+THE CONTRACT ROOM · DESIGN AGREEMENT
+· 4 of 7 facets written
+REVIEW & SEND
+→
+
+YES TO THE DESIGNER · PROFESSIONAL SERVICES ONLY
+
+Client User — design services agreement
+
+Write the work, rates, retainer, and authority boundary. Furnishings and purchasing stay outside this agreement.
+
+Preview client copy
+Save agreement
+
+CLIENT ACCOUNT
+
+Client User
+
+This agreement is composed from parts. It is edited in the Contract Room with parts on, where it can also be returned to the seven facets.
+
+01
+Services & deliverables
+
+Name the professional work and the concrete things the client receives.
+
+SCOPE OF SERVICES
+DELIVERABLES · ONE PER LINE
+02
+Exclusions
+
+Make the authority boundary plain—including purchasing and hard costs.
+
+NOT INCLUDED · ONE PER LINE
+03
+Role rates
+
+The signed rate schedule becomes the source of truth for billable design time.
+
++ Add a role
+04
+Rates & ceiling
+
+Actual time may accrue, but invoicing cannot cross this signed ceiling.
+
+DESIGN AUTHORIZATION CEILING · DOLLARS
+FURNISHINGS DEPOSIT · ON EACH AUTHORIZATION
+0%
+25%
+50%
+100%
+Other
+05
+Retainer
+
+Choose the amount and whether execution or payment activates work.
+
+RETAINER · DOLLARS
+ACTIVATION POLICY
+At countersignature
+When retainer is paid
+06
+Billing cadence
+
+Set the rhythm the client should expect.
+
+Monthly
+Every two weeks
+At named milestones
+07
+Terms
+
+The agreement language the client reads and signs.
+
+THE CLIENT'S COPY · LIVE
+
+DESIGN SERVICES AGREEMENT · V1
+
+Client User — design services agreement
+
+Prepared for Client User
+
+DRAFT
+
+Services
+
+Interior design services, including concept d

@@ -1,0 +1,28 @@
+
+===== axe · turnkey Contract Room (designer :3000) =====
+[
+ {
+  "id": "color-contrast",
+  "impact": "serious",
+  "help": "Elements must meet minimum color contrast ratio thresholds",
+  "nodes": 1,
+  "sample": [
+   "<p class=\"mb-4 font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]\">The client's copy · live</p>"
+  ]
+ },
+ {
+  "id": "meta-viewport",
+  "impact": "moderate",
+  "help": "Zooming and scaling must not be disabled",
+  "nodes": 1,
+  "sample": [
+   "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, maximum-scale=1\">"
+  ]
+ }
+]
+
+===== axe · homeowner's door (client :3002) =====
+[]
+
+===== axe · /trade/[token] =====
+[]

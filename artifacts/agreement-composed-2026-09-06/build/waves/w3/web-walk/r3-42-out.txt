@@ -1,0 +1,150 @@
+SERVICES RAIL: [
+ "⠿",
+ "CLAUSE | Services·",
+ "⋯",
+ "⠿",
+ "LIST | Deliverables",
+ "⋯",
+ "⠿",
+ "LIST | Exclusions",
+ "⋯",
+ "⠿",
+ "ROLE RATES · CREATES AUTHORITY | Role rates",
+ "⋯",
+ "⠿",
+ "CEILING · CREATES AUTHORITY | Ceiling",
+ "⋯",
+ "⠿",
+ "FURNISHINGS DEPOSIT · CREATES AUTHORITY · DEPOSIT ONLY | Furnishings deposit",
+ "⋯",
+ "⠿",
+ "RETAINER · CREATES AUTHORITY | Retainer | NEEDS ATTENTION",
+ "⋯",
+ "⠿",
+ "BILLING CADENCE · CREATES AUTHORITY | Billing cadence",
+ "⋯",
+ "⠿",
+ "CLAUSE | Terms· | NEEDS ATTENTION",
+ "⋯",
+ "+ Add a part",
+ "Start from a template…",
+ "Save as template…"
+]
+
+=== ROLE RATES editor ===
+ROLE RATES · CREATES AUTHORITY
+
+Role rates
+Hidden from your client
++ Add a role
+role inputs: 2
+LABELS: ["Role 1","Role 1 hourly rate"]
+
+=== readiness before hiding ===
+3 OF 9 PARTS NEED ATTENTION
+
+Every role on the rate card needs a name.
+This agreement names no fee. Add a rate card, a flat fee, or a per-phase fee.
+No furnishings deposit set — authorizations will default to 50%.
+
+THE CLIENT'S COPY · LIVE
+
+DESIGN SERVICES AGREEMENT · V1
+
+Client User — design services agreement
+
+Prepared for Client User
+
+DRAFT
+
+Services
+
+Interior design services, including concept development, design documentation, and selections.
+
+Deliverables
+— Concept presentation
+— Design documentation
+— Selection schedules
+Exclusions
+— Construction labor
+— Furnishings, freight, tax, and installation
+Role rates
+
+Recorded with your agreement.
+
+Ceiling
+
+No ceiling — professional time is billed as it is worked.
+
+Retainer
+
+Recorded with your agreement.
+
+Billing cadence
+
+Monthly
+
+Additional work requires written authorization before it can be invoiced.
+
+CLIENT SIGNATURE
+
+Awaiting
+
+STUDIO SIGNATURE
+
+Awaiting
+
+Furnishings, freight, tax, installation, and permission to purchase are outside this design services agreement.
+hide act on Role rates: 1
+
+=== readiness with the FEE hidden (R33) ===
+3 OF 9 PARTS NEED ATTENTION
+
+Every role on the rate card needs a name.
+This agreement names no fee. Add a rate card, a flat fee, or a per-phase fee.
+No furnishings deposit set — authorizations will default to 50%.
+
+THE CLIENT'S COPY · LIVE
+
+DESIGN SERVICES AGREEMENT · V1
+
+Client User — design services agreement
+
+Prepared for Client User
+
+DRAFT
+
+Services
+
+Interior design services, including concept development, design documentation, and selections.
+
+Deliverables
+— Concept presentation
+— Design documentation
+— Selection schedules
+Exclusions
+— Construction labor
+— Furnishings, freight, tax, and installation
+Ceiling
+
+No ceiling — professional time is billed as it is worked.
+
+Retainer
+
+Recorded with your agreement.
+
+Billing cadence
+
+Monthly
+
+Additional work requires written authorization before it can be invoiced.
+
+CLIENT SIGNATURE
+
+Awaiting
+
+STUDIO SIGNATURE
+
+Awaiting
+
+Furnishings, freight, tax, installation, and permission to purchase are outside this design services agreement.

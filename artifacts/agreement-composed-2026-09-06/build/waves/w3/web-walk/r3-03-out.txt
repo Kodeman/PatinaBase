@@ -1,0 +1,235 @@
+RPC 200 agreement_studio_context {"studioId": "55048ba5-9506-44d7-84cb-59c2c78950a3", "canManage": true}
+design-build disabled now? false
+confirm warning: "This replaces the parts on this agreement. Nothing else on the draft changes."
+RPC 200 materialize_agreement_template 10
+RAIL ( 33 ):
+[
+ "⠿",
+ "PRICING BASIS · RECORD ONLY | Pricing basis· | NEEDS ATTENTION",
+ "⋯",
+ "⠿",
+ "DRAWS · RECORD ONLY | Draw schedule· | NEEDS ATTENTION",
+ "⋯",
+ "⠿",
+ "ALLOWANCES · RECORD ONLY | Allowances",
+ "⋯",
+ "⠿",
+ "CLAUSE | Who does the work·",
+ "⋯",
+ "⠿",
+ "CLAUSE | Supervision·",
+ "⋯",
+ "⠿",
+ "CLAUSE | Change orders·",
+ "⋯",
+ "⠿",
+ "CLAUSE | Termination·",
+ "⋯",
+ "⠿",
+ "CLAUSE | Terms· | NEEDS ATTENTION",
+ "⋯",
+ "⠿",
+ "ATTACHMENT | Notice of cancellation | HIDDEN FROM YOUR CLIENT",
+ "⋯",
+ "⠿",
+ "ATTACHMENT | Lien waiver form",
+ "⋯",
+ "+ Add a part",
+ "Start from a template…",
+ "Save as template…"
+]
+--- room text ---
+Skip to the paper
+←
+THE DESK
+THE CONTRACT ROOM · DESIGN-BUILD AGREEMENT
+· 3 of 10 parts need attention
+REVIEW & SEND
+→
+
+YES TO THE STUDIO · DESIGN AND CONSTRUCTION
+
+Client User — design services agreement
+
+Compose the parts this agreement is made of. The price, the draws and the trades are inside it.
+
+Preview client copy
+Return to the seven facets
+Saved
+
+CLIENT ACCOUNT
+
+Client User
+
+The parts of Design-build turnkey are on this agreement.
+
+⠿
+PRICING BASIS · RECORD ONLY
+Pricing basis·
+NEEDS ATTENTION
+⋯
+⠿
+DRAWS · RECORD ONLY
+Draw schedule·
+NEEDS ATTENTION
+⋯
+⠿
+ALLOWANCES · RECORD ONLY
+Allowances
+⋯
+⠿
+CLAUSE
+Who does the work·
+⋯
+⠿
+CLAUSE
+Supervision·
+⋯
+⠿
+CLAUSE
+Change orders·
+⋯
+⠿
+CLAUSE
+Termination·
+⋯
+⠿
+CLAUSE
+Terms·
+NEEDS ATTENTION
+⋯
+⠿
+ATTACHMENT
+Notice of cancellation
+HIDDEN FROM YOUR CLIENT
+⋯
+⠿
+ATTACHMENT
+Lien waiver form
+⋯
++ Add a partStart from a template…
+Save as template…
+
+PRICING BASIS · RECORD ONLY
+
+Pricing basis
+
+Complete Pricing basis.
+
+Choose how this agreement is priced.
+
+HOW THIS AGREEMENT IS PRICED
+
+Fixed price
+Cost-plus
+Cost-plus with GMP
+Time and materials with a not-to-exceed
+MARKUP ON THE TRADES · PERCENT
+
+COST LINES
+
++ Add a cost line
+COST BASIS $0.00
+CONTRACT SUM —
+
+Choose how this agreement is priced.
+
+The schedule of values appears once the contract sum, the open-book or closed-book choice, and the lines beneath them are written.
+
+This is recorded on the agreement. It does not create billing authority yet.
+
+HISTORY
+
+Added · Leah · today
+Materialized from Design-build turnkey
+
+3 OF 10 PARTS NEED ATTENTION
+
+JURISDICTION NOTICES
+
+Notice of cancellation (Wisconsin)
+HELD FOR COUNSEL REVIEW
+Notice of cancellation (Minnesota)
+HELD FOR COUNSEL REVIEW
+Notice of cancellation (Illinois)
+HELD FOR COUNSEL REVIEW
+Notice of cancellation (California)
+HELD FOR COUNSEL REVIEW
+Notice of cancellation (New York)
+HELD FOR COUNSEL REVIEW
+Notice of cancellation (Massachusetts)
+HELD FOR COUNSEL REVIEW
+
+DRAWS
+
+The draw ledger opens when this agreement is sent.
+
+TRADE AGREEMENTS
+
+Trade Agreements open once this agreement is executed and its project exists.
+
+THE CLIENT'S COPY · LIVE
+
+DESIGN-BUILD AGREEMENT · V1
+
+Client User — design services agreement
+
+Prepared for Client User
+
+DRAFT
+
+Pricing basis
+
+Not yet set
+
+Draw schedule
+
+Recorded with your agreement.
+
+Who does the work
+
+The studio engages and directs the trades named in this agreement and remains responsible for their work.
+
+Supervision
+
+The studio supervises the trades, coordinates the sequence of work, and answers for the result.
+
+Change orders
+
+A change to the scope, the schedule or the sum is agreed in writing before the work is done, and is recorded against this agreement.
+
+Termination
+
+Either party may end this engagement in writing. Work performed and materials ordered to that date remain payable.
+
+ATTACHMENT A · LIEN WAIVER FORM
+
+Each trade exchanges a conditional waiver when a draw is requested and an unconditional waiver once that draw is paid. The final draw is released against unconditional final waivers.
+
+I received this
+
+CLIENT SIGNATURE
+
+Awaiting
+
+STUDIO SIGNATURE
+
+Awaiting
+
+This agreement covers the work described above, at the price shown. Anything added to it is a separate written change order before the work is done.
+
+ESTIMATE · ROM ESTIMATE
+PATINA
+/
+DRAFTING
+Library
+People
+The Scans
+Ledgers
+↑
+⌘K
+HANDS FREE
+THE POST
+LH
+Leah Hartwell
+LEAH HARTWELL

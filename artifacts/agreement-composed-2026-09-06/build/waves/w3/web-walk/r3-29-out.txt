@@ -1,0 +1,38 @@
+NET list_trade_agreements 200 [{"id": "f35ee37c-52e3-4074-90a2-d60505531933", "scope": "Fabricate and install the kitchen and mudroom cabinetry and millwork, per the issued drawings.", "state": "signed", "title": "Cabinetry & millwork", "trade": "Cabinetry", "sentAt": "2026-09-08T13:58:17.851284+00:00", "currency": "USD", "schedule": {"startOn": "2026-10-01", "sequencing": "After rough-in, before tile", "durationDays": 21}, "signedAt": "2026-09-08T13:59:39.522851+00:00", "voidedAt": null, "contactId": "c0000000-0000-4000-800
+trade options: ["=Pick a trade…","c0000000-0000-4000-8000-00000000ca03=Reyes Cabinetry"]
+waiver kinds: ["conditional_progress=Conditional · progress","unconditional_progress=Unconditional · progress","conditional_final=Conditional · final","unconditional_final=Unconditional · final"]
+chose waiver kind: conditional_progress
+NET record_agreement_draw_lien_waiver 200 {"id": "13e1547d-aa15-42ac-8afb-3c17a4071ef3", "drawId": "9ba52f44-1ad6-44f8-b925-4d2298c5a456", "drawKey": "draw_2", "receivedAt": "2026-09-08T14:01:20.643+00:00", "waiverType": "conditional_progress", "amountCents": 2397819, "throughDate": null, "contactDisplayName": "Marta Reyes"}
+=== LIEN WAIVERS after recording ===
+
+
+Deposit at signing
+$8,413.40
+Record a waiver
+Rough-in
+$23,978.19
+Marta Reyes · Conditional · progress
+Record a waiver
+Cabinets set
+$31,970.92
+Record a waiver
+Substantial completion
+$15,985.46
+Record a waiver
+Final · retainage release
+$3,786.03
+Record a waiver
+
+
+=== TRADE AGREEMENTS ===
+
+
+Reyes Cabinetry
+$38,000.00
+
+Cabinetry & millwork
+
+SIGNED BY MARTA REYES · SEP 8, 2026
++ New Trade Agreement
+
+

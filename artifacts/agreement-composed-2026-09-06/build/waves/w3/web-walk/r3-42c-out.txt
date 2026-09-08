@@ -1,0 +1,44 @@
+RAIL: [
+ "CLAUSE | Services·",
+ "LIST | Deliverables",
+ "LIST | Exclusions",
+ "ROLE RATES · CREATES AUTHORITY | Role rates",
+ "CEILING · CREATES AUTHORITY | Ceiling",
+ "FURNISHINGS DEPOSIT · CREATES AUTHORITY · DEPOSIT ONLY | Furnishings deposit",
+ "RETAINER · CREATES AUTHORITY | Retainer | NEEDS ATTENTION",
+ "BILLING CADENCE · CREATES AUTHORITY | Billing cadence",
+ "CLAUSE | Terms· | NEEDS ATTENTION",
+ "+ Add a part",
+ "Start from a template…",
+ "Save as template…"
+]
+=== ROLE RATES editor while hidden ===
+ROLE RATES · CREATES AUTHORITY
+
+Role rates
+Hidden from your client
++ Add a role
+=== SEND SHEET with the fee hidden ===
+Send design agreement
+PUT BACK · ESC
+
+YES TO THE DESIGNER
+
+Send for the client signature
+
+Client User receives the services, rates, retainer policy, billing cadence, ceiling, and terms. Their signature preserves consent; the agreement still awaits the studio countersignature before work is authorized.
+
+RECIPIENT
+
+client@patina.dev
+
+No furnishings deposit set — authorizations will default to 50%.
+
+FINISH BEFORE SENDING
+
+Set a valid retainer amount, including zero when none is due.
+Write Terms.
+This agreement names no fee. Add a rate card, a flat fee, or a per-phase fee.
+A NOTE TO THE CLIENT · OPTIONAL
+Send later
+Send agreement →
