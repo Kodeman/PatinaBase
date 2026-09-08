@@ -510,17 +510,6 @@ a:hover {
   transform: translateY(1px);
 }
 
-/* ── THE CONSEQUENCE SENTENCE (sheet §A6) ─────────────────────────────────
-   Its home is H2's type block; it is declared here so H4's gates have it
-   before H2 merges. The integration lane keeps one copy. */
-.consequence {
-  font-family: var(--font-body);
-  font-size: 15px;
-  line-height: 1.55;
-  color: var(--color-charcoal);
-  max-width: 56ch;
-  margin: 0 0 12px;
-}
 
 /* ── hover · the scoring answers, and a 3.5px bead gathers under the finger ─ */
 .da-act:hover .da-pool {
