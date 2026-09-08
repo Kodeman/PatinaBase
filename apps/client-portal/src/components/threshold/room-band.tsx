@@ -360,7 +360,10 @@ function ConceptRenderPlate({
   studioName: string | null | undefined;
 }) {
   const src = useSignedConceptRender(render.url);
-  if (!src) return null;
+  // A URL that signed but will not load — an hour-old TTL, an object replaced
+  // under it — must not fall through to the browser's broken-image glyph.
+  const [brokenSrc, setBrokenSrc] = useState<string | null>(null);
+  if (!src || brokenSrc === src) return null;
   const caption = conceptCaption(render, studioName);
 
   return (
@@ -369,6 +372,7 @@ function ConceptRenderPlate({
         <img
           src={src}
           alt={`Concept render of ${roomName}`}
+          onError={() => setBrokenSrc(src)}
           data-testid="room-band-concept-image"
           className="block aspect-[3/2] w-full rounded-[3px] border border-[var(--border-default)] object-cover"
         />

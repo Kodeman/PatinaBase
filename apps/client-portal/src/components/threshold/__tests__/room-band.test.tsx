@@ -467,6 +467,18 @@ describe('RoomBand', () => {
       expect(screen.queryByText(/Concept/)).not.toBeInTheDocument();
     });
 
+    it('prints nothing when a signed URL fails to load rather than a broken glyph', async () => {
+      // The signature holds for an hour; the object behind it may not.
+      signsWith('https://strata.test/signed/study.jpg');
+      render(<RoomBand band={band({ conceptRender: CONCEPT })} projectId="proj-1" />);
+
+      const image = await screen.findByTestId('room-band-concept-image');
+      fireEvent.error(image);
+
+      expect(screen.queryByTestId('room-band-concept')).not.toBeInTheDocument();
+      expect(screen.queryByText(/Concept/)).not.toBeInTheDocument();
+    });
+
     it('stands above the sentence in a room that is still empty', async () => {
       signsWith('https://strata.test/signed/study.jpg');
       render(

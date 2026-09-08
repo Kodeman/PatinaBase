@@ -67,18 +67,21 @@ const OUTLINES: Record<SilhouetteCategory, { paths: string[]; detail: string; ha
 
 export interface PieceSilhouetteProps {
   category: SilhouetteCategory;
-  /** The piece, so the drawing says whose outline it is. */
-  name: string;
 }
 
-export function PieceSilhouette({ category, name }: PieceSilhouetteProps) {
+/**
+ * DECORATION, like the photograph it stands in for: the row already prints the
+ * piece's name, and the caption beneath already says the plate holds a drawing
+ * and whose it is. An accessible name here would read the same fact a third
+ * time.
+ */
+export function PieceSilhouette({ category }: PieceSilhouetteProps) {
   const outline = OUTLINES[category];
   return (
     <svg
       data-testid="piece-silhouette"
       data-silhouette={category}
-      role="img"
-      aria-label={`A drawing of ${name}`}
+      aria-hidden="true"
       viewBox="0 0 96 96"
       className="block h-full w-full"
       style={{ fill: 'none', stroke: STROKE, strokeWidth: 1 }}

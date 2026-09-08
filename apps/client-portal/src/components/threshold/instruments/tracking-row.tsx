@@ -160,7 +160,7 @@ export function TrackingRow({
     <div
       data-testid="tracking-row"
       data-journey-stop={stage}
-      className="grid grid-cols-[auto_minmax(0,1fr)_auto] gap-x-4 gap-y-3 border-b border-[var(--border-subtle)] py-3.5"
+      className="grid grid-cols-[auto_minmax(0,1fr)_auto] gap-x-6 gap-y-3 border-b border-[var(--border-subtle)] py-3.5"
     >
       <div
         data-testid="tracking-row-plate"
@@ -181,7 +181,7 @@ export function TrackingRow({
             data-testid="tracking-row-thumb-placeholder"
             className="block h-full w-full"
           >
-            <PieceSilhouette category={silhouetteCategory(name, itemType)} name={name} />
+            <PieceSilhouette category={silhouetteCategory(name, itemType)} />
           </span>
         )}
       </div>

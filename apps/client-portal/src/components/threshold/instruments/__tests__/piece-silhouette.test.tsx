@@ -39,12 +39,14 @@ describe('PieceSilhouette', () => {
   const CATEGORIES: SilhouetteCategory[] = ['chair', 'table', 'case', 'light', 'textile'];
 
   it.each(CATEGORIES)('draws the %s in line work with one detail and one hatch', (category) => {
-    const { container } = render(<PieceSilhouette category={category} name="Reading chair" />);
+    const { container } = render(<PieceSilhouette category={category} />);
 
     const svg = screen.getByTestId('piece-silhouette');
     expect(svg).toHaveAttribute('data-silhouette', category);
     expect(svg).toHaveAttribute('viewBox', '0 0 96 96');
-    expect(svg).toHaveAccessibleName('A drawing of Reading chair');
+    // Decoration, like the photograph it stands in for: the row's own name and
+    // the caption beneath already say what this is and whose it is.
+    expect(svg).toHaveAttribute('aria-hidden', 'true');
 
     // Line work only: no fill anywhere, and the ink is the sheet's drawing ink.
     expect(svg.getAttribute('style')).toContain('fill: none');
@@ -62,7 +64,7 @@ describe('PieceSilhouette', () => {
   });
 
   it('stands on a floor line so the outline reads as a thing in a room', () => {
-    const { container } = render(<PieceSilhouette category="chair" name="Reading chair" />);
+    const { container } = render(<PieceSilhouette category="chair" />);
     expect(container.querySelectorAll('line')).toHaveLength(1);
   });
 });
