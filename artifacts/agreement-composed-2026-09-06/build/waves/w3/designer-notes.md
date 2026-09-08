@@ -259,3 +259,101 @@ shipped.
 
 9 files changed, 669 insertions(+), 55 deletions(-), plus one new 440-line test file
 (`__tests__/agreement-composer-turnkey.test.tsx`).
+
+---
+
+# Round 2 — the adversarial review's four findings
+
+## D6 (blocker) — the pricing basis never carried `costBasisCents`, so nothing could be saved
+
+`_validate_pricing_basis_payload` (00578) refuses a payload whose `costBasisCents` is not exactly
+Σ `costLines[].basisCents` — *"The cost basis must equal the cost lines beneath it, to the cent"* —
+and it judges the moment `basis` and `costLines` are both non-empty. `_agreement_contract_sum_cents`
+additionally DERIVES the cost-plus contract sum from that same key. The composer emitted the key
+nowhere: walk step 5 (pick a basis, type one cost line, Save) ended in `check_violation`.
+
+**Fix**: `withCostBasisCents(payload)` in `lib/document/design-build.ts` recomputes the key from the
+lines on the payload it is handed, and **all three** writers of the pricing-basis payload route
+through it — the pricing-basis editor's `write()`, the allowances editor's paired `writePart` of
+`costLines`, and the sub-disclosure clause's `writePart` of `subDisclosure`. The key is declared on
+`DesignBuildPricingBasisPayload` (`costBasisCents: number`, always derived, never typed) and
+`readPricingBasis` fills it from the lines. `blankPayload("schedule", "pricing_basis")` lays it down
+as `null`, exactly as the seeded template does.
+
+## D7 (blocker) — the Trade Agreement mapper read snake_case against a camelCase DTO
+
+`list_trade_agreements` (00579) builds `jsonb_build_object('id',…,'contactDisplayName',…,
+'priceCents',…,'signature',…)` — a camelCase DTO, not a table row: no `project_id`, no `studio_id`,
+no `created_at`, no `flow_down_clause_key`, and the sub's receipt under `signature`. The mapper read
+`row.price_cents`, `row.state`, `row.sub_signature`; every row would have rendered `$NaN`, an
+undefined state label, and — because `state` was neither `draft` nor `sent` — no Send, no Send-again
+and no Withdraw. Walk step 16 was unperformable.
+
+**Fix**: `TradeAgreementRow` is replaced by `TradeAgreementListItem`, a **literal copy of the RPC's
+key list in its order**; `mapTradeAgreement(item, projectId)` takes the project from the caller
+(the RPC does not project it). The domain `TradeAgreement` loses `studioId`, `createdAt` and
+`flowDownClauseKey` — three things the projection does not carry, so nothing downstream may claim to
+know them — and gains `hasLiveLink`, which it does. `packages/supabase/.../use-trade-agreements.test.ts`
+asserts `Object.keys(item)` equals the copied `RPC_KEYS` list and then reads every mapped field, so a
+future change to the projection fails here rather than in the browser.
+
+## D8 (major) — the readers defaulted the basis and the disclosure mode
+
+`readPricingBasis` fell back to `"cost_plus_gmp"`/`"closed_book"` and `readSubDisclosure` to
+`"closed_book"`. The seeded template writes both as NULL, so a fresh turnkey agreement drew two
+pressed buttons and a pro-rated schedule of values over payloads that said nothing; readiness went
+green (`validatePricingBasis` read the defaulted object), `upsert_agreement_parts` skipped its branch,
+and `send_commercial_document` then refused twice. Closed-book is a term the homeowner reads (R13,
+R21) — no reader may choose it for her.
+
+**Fix**: both readers answer `null` when the payload is silent (`basis: PricingBasisKind | null`,
+`subDisclosure`/`mode: SubDisclosureMode | null`). `validatePricingBasis` returns *"Choose how this
+agreement is priced."* and *"Choose whether the trades are shown open-book or closed-book."*; neither
+basis button nor either mode button is pressed; no contract-sum field and no fee field is offered
+before a basis exists; the schedule of values shows its "appears once … are written" line rather than
+a table (`scheduleOfValues` returns `[]` for a null mode, since pro-rating IS the closed-book
+presentation); the clause prints *"Say how the trades are shown before this agreement goes out."*
+instead of a note about what the client reads; and the identities table claims neither "Shown to" nor
+"Held from" until a mode exists. `blankPayload` opens `basis: null, subDisclosure: null`.
+
+## D9 (major) — deleting the deposit left a schedule with no repair
+
+`mintDrawKey` answers `"deposit"` only at `position === 0` and a key, once minted, was frozen. Remove
+the deposit from `[deposit, rough_in, cabinets_set, …]` and the first row was `rough_in` — refused by
+`validateDrawSet` and by the database (*"The first draw is the deposit, and it is keyed `deposit`"*)
+with no rename control and no sentence saying how to repair it. The first row's retainage checkbox is
+disabled, so a promoted row carrying `retainageApplies: true` was a second dead end.
+
+**Fix**: `withDepositFirst` runs inside `writeDraws`, so **every** write re-seats row 0 — its key
+becomes `deposit`, it holds no retainage, and any later row that carried `deposit` is re-minted off
+it. Re-keying can never orphan an invoice: `agreement_draw_invoices` is materialized inside
+`send_commercial_document`, and the composer is `readOnly` the moment the document leaves `draft`.
+
+## Round-2 tests
+
+| Test | What it pins |
+|---|---|
+| `packages/supabase/.../use-trade-agreements.test.ts` (12) | the RPC key list, every mapped field, the receipt under `signature`, the caller's project id |
+| `agreement-composer-turnkey.test.tsx` — 3 new | the payload handed to `useSaveAgreementParts` carries `costBasisCents` = Σ lines, from each of the three writers |
+| `turnkey-editors.test.tsx` — 6 new | no basis pressed, no SOV over an unwritten basis or an unchosen mode, the derived cost basis on a line edit, neither mode pressed, the deposit re-seated on removal, a duplicate `deposit` re-minted |
+| `design-build-arithmetic.test.ts` — 3 new | `costBasisCents` on the read payload and out of `withCostBasisCents`; null basis/mode read as null |
+| `readiness-turnkey.test.ts` — 2 new | the panel holds until a basis is chosen and until the trades are said open- or closed-book |
+| `part-kinds.test.ts` — 1 new, 1 amended | a blank pricing basis opens unchosen, with `costBasisCents: null` |
+
+## Round-2 gates
+
+| Command | Result |
+|---|---|
+| `pnpm --filter @patina/designer-portal type-check` | **clean** (`tsc --noEmit`, no output) |
+| `pnpm --filter @patina/designer-portal test -- <touched files>` | turnkey-editors **29/29**, agreement-composer-turnkey **8/8**, readiness-turnkey + part-kinds **48/48**, design-build-arithmetic **28/28**, trade-agreements **8/8** |
+| `pnpm --filter @patina/designer-portal test` (full) | **544 suites / 6658 tests / 12 snapshots — all passed**, 33.2s |
+| `pnpm --filter @patina/supabase test` | **93 files / 1143 passed, 12 skipped** |
+| `pnpm --filter @patina/supabase type-check` | **clean** (one pre-existing round-1 error at `use-design-build.test.ts:228` fixed in passing) |
+| `pnpm --filter @patina/types type-check` | **clean**; dist rebuilt (`pnpm turbo build --filter=@patina/types`, 1 successful) |
+| `pnpm --filter @patina/designer-portal lint` | 2 errors, 203 warnings — **both errors inherited from base `112e6f838`**, in `piece-room-save-gate.test.tsx` and `hooks/__tests__/use-commercial-documents.test.ts`, neither touched by this lane (`git diff --name-only 112e6f838..HEAD` lists neither) |
+
+The flag-off snapshot is **unchanged** — 12 snapshots passed with no `-u`.
+
+## Round-2 diff
+
+18 files changed, 709 insertions(+), 144 deletions(-).
