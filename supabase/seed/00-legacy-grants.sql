@@ -15479,3 +15479,15 @@ DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public._agreement_design_build_subs(uuid, text) FROM PUBLIC, anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00580_room_concept_render.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_client_project_threshold(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00580_room_concept_render.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_client_project_threshold(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
