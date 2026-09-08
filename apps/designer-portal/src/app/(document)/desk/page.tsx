@@ -452,29 +452,32 @@ export default function DeskPage() {
               as before). `isWideDesk` mirrors the matchMedia pattern already
               used by margin-rail.tsx / use-lens-state.ts and defaults to
               false so SSR and the first paint never disagree. */}
-          {isWideDesk ? (
-            <div className="grid grid-cols-[minmax(0,1fr)_260px] gap-12">
-              <div className="min-w-0">{rosterBlock}</div>
-              {/* Not its own landmark — RecentBoardsStrip's own <section> is
-                  the labelled region; a wrapping <aside> here would double
-                  it up as a second, identically-named landmark. */}
+          {/* One wrapper in both states, and the roster block always the first
+              child of the same div: crossing 1280 must re-lay-out the page, not
+              remount the roster — a remount discards the facet she just chose. */}
+          <div
+            className={
+              isWideDesk ? 'grid grid-cols-[minmax(0,1fr)_260px] gap-12' : undefined
+            }
+          >
+            <div className={isWideDesk ? 'min-w-0' : undefined}>{rosterBlock}</div>
+            {/* Not its own landmark — RecentBoardsStrip's own <section> is
+                the labelled region; a wrapping <aside> here would double
+                it up as a second, identically-named landmark. */}
+            {isWideDesk && (
               <div>
                 <RecentBoardsStrip compact />
               </div>
-            </div>
-          ) : (
-            <>
-              {rosterBlock}
-              {/* D5 — the recents strip returns (B2-L2 deleted it along with
-                  the folio grid it used to sit beside). It keeps its own
-                  quiet doorway shape rather than a roster line: a board has
-                  no stage and no need line, so it never fit the roster's
-                  one-line-per-job grammar. It renders nothing of its own once
-                  its query resolves empty, so a boardless studio sees no seam
-                  here at all. */}
-              <RecentBoardsStrip />
-            </>
-          )}
+            )}
+          </div>
+          {/* D5 — the recents strip returns (B2-L2 deleted it along with
+              the folio grid it used to sit beside). It keeps its own
+              quiet doorway shape rather than a roster line: a board has
+              no stage and no need line, so it never fit the roster's
+              one-line-per-job grammar. It renders nothing of its own once
+              its query resolves empty, so a boardless studio sees no seam
+              here at all. */}
+          {!isWideDesk && <RecentBoardsStrip />}
           <DeskBoardsReactionRollup />
 
           {/* R95 — on a quiet Desk the Studio index rises here, at full weight, to
