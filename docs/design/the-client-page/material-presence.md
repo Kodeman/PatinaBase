@@ -105,10 +105,20 @@ handlers, signature/hold semantics, payment handoffs, or fragment IDs in the
 scoped implementation. This is source-review evidence, not an exhaustive
 production or accessibility certification.
 
+All six corrections were implemented in `9bbba87f3` and confirmed by the
+independent reviewers in a second source review. The design reviewer approves
+the corrected direction **for review**, not for deployment.
+
+One nonblocking medium-severity review risk remains: room-scoped signature and
+trade-acceptance gates retain their existing place within each room, below the
+gallery and plan key. The ordering is confirmed; the practical mobile impact
+is not measured. Human review should specifically test finding and reaching
+these actions on a phone. No financial gate was relocated or weakened.
+
 ## Review access
 
 The integration worktree serves a local-only preview at
-`http://127.0.0.1:3002`. Use the existing local fixture account
+`http://127.0.0.1:3202`. Use the existing local fixture account
 `client@patina.dev` / `password123` for the multi-house scenario or
 `client-solo@patina.dev` / `password123` for Cedar Lane. These are public local
 seed credentials, not production accounts. No database reset or reseed is
@@ -119,3 +129,30 @@ interface; the user was asked to dismiss it. Rendered desktop/mobile sign-off
 and human Patina feedback remain pending. The local preview is not a public
 deployment, and this branch must not be promoted on the strength of unit
 checks alone.
+
+## Verification evidence
+
+- Final integrated `pnpm --filter @patina/client-portal type-check`: passed.
+- Final integrated `pnpm --filter @patina/client-portal test -- --runInBand
+  src/components/threshold src/lib/threshold`: **53 suites, 1,184 tests passed**.
+  This includes trade labels, fifth-selection return, visible/accessibility
+  action names and gallery placement after project-level asks.
+- The initial non-writing Threshold browser run passed 11 of 13 tests. The
+  date assertion expects September 14 (`today + 7`); a read-only local DB
+  query confirmed the invoice actually stores September 15. No fixture or
+  financial value was changed to make the test green.
+- The multi-house sign-in test passed alone, but timed out in both batch runs.
+  The final failure snapshot shows the sign-in service temporarily unavailable.
+  Authentication code is outside this change; this remains an unresolved
+  local test-environment issue, not a demonstrated visual-regression cause.
+- The auto-started test server explicitly reports its role check skipped
+  because Playwright's process environment has no service key. These browser
+  results therefore do **not** verify role-gate enforcement. The manual preview
+  uses a separately generated, local-only environment profile.
+- Whitespace diff checks pass. Existing local Prettier warnings are advisory;
+  no repository-wide reformat or production build/deploy was performed.
+
+The implementation agent's clean worktree and merged local branch were
+removed after integration. The integration worktree is deliberately retained
+to serve the requested local review; remove it after that review, not while
+the preview is in use. The shared main checkout was not modified.
