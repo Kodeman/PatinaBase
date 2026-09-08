@@ -253,7 +253,7 @@ export default function DeskPage() {
         ))}
       </div>
     ) : (
-      <DeskRoster roster={roster} />
+      <DeskRoster roster={roster} studioMembers={studioMembers} />
     );
 
   return (

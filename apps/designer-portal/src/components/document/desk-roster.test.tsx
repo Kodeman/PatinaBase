@@ -1,7 +1,9 @@
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type {
   AnsweredClientNote,
   DeskRoster as DeskRosterModel,
+  RosterMember,
 } from '@/lib/document/desk-roster-derivation';
 import { DeskRoster } from './desk-roster';
 
@@ -20,6 +22,28 @@ jest.mock('@/hooks/use-answered-notes', () => ({
   useAnsweredNotes: () => ({ data: mockAnsweredNotes() }),
 }));
 
+const LEAH = 'user-leah';
+const ANNEKE = 'user-anneke';
+
+function member(over: Partial<RosterMember> = {}): RosterMember {
+  return {
+    user_id: LEAH,
+    role: 'owner',
+    status: 'active',
+    profiles: { full_name: 'Leah Hartwell', display_name: null },
+    ...over,
+  };
+}
+
+const STUDIO: RosterMember[] = [
+  member(),
+  member({
+    user_id: ANNEKE,
+    role: 'member',
+    profiles: { full_name: 'Anneke Sund', display_name: null },
+  }),
+];
+
 function roster(over: Partial<DeskRosterModel> = {}): DeskRosterModel {
   return {
     heading: 'Every job · 2 live · 1 overdue',
@@ -35,6 +59,8 @@ function roster(over: Partial<DeskRosterModel> = {}): DeskRosterModel {
           {
             engagementId: 'byrne',
             name: 'Byrne remodel',
+            stage: 'proposal',
+            designerId: ANNEKE,
             state: 'Erin Byrne · design agreement sent August 19',
             overdueText: null,
             mark: 'quiet',
@@ -53,6 +79,8 @@ function roster(over: Partial<DeskRosterModel> = {}): DeskRosterModel {
           {
             engagementId: 'vandersteen',
             name: 'Vandersteen residence',
+            stage: 'project',
+            designerId: null,
             state: 'Anne Vandersteen · Procurement And Orders',
             overdueText:
               'Overdue 6 days — Invoice 1042 · $17,500 overdue — oldest due Aug 2 — send a reminder',
@@ -255,7 +283,9 @@ describe('DeskRoster — the stage tabs (R126)', () => {
       key,
       label: key,
       count: 1,
-      lines: [{ ...roster().groups[0].lines[0], engagementId: `job-${i}` }],
+      lines: [
+        { ...roster().groups[0].lines[0], engagementId: `job-${i}`, stage: key },
+      ],
     }));
     const { container } = render(<DeskRoster roster={model} />);
 
@@ -493,6 +523,220 @@ describe('DeskRoster — the day’s line (IA-05)', () => {
       // The caret is drawn, never spoken: an explicit name is what keeps the
       // pseudo-content out of the accessible name.
       expect(act.getAttribute('aria-label')).toBeTruthy();
+    }
+  });
+});
+
+describe('DeskRoster — the facets (IA-11 / IA-12)', () => {
+  // DocumentAction's click handler is async (it awaits the caller's onClick
+  // after logging), so the facet's state update lands outside user-event's own
+  // act() wrapper unless the click is wrapped here.
+  async function toggle(label: string) {
+    await act(async () => {
+      await userEvent.setup().click(screen.getByRole('button', { name: label }));
+    });
+  }
+
+  it('prints both acts on the head row, unpressed, with stable labels', () => {
+    render(<DeskRoster roster={roster()} studioMembers={STUDIO} />);
+
+    const needsMe = screen.getByRole('button', { name: 'Only what needs me' });
+    const byPerson = screen.getByRole('button', { name: 'By person' });
+    expect(needsMe).toHaveAttribute('aria-pressed', 'false');
+    expect(byPerson).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('keeps each label the same word once its facet is on', async () => {
+    render(<DeskRoster roster={roster()} studioMembers={STUDIO} />);
+
+    await toggle('Only what needs me');
+    await toggle('By person');
+
+    expect(
+      screen.getByRole('button', { name: 'Only what needs me' }),
+    ).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'By person' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+  });
+
+  it('names the active facet in the head sentence, and drops it again', async () => {
+    render(<DeskRoster roster={roster()} studioMembers={STUDIO} />);
+
+    expect(
+      screen.getByText('Every job · 2 live · 1 overdue'),
+    ).toBeInTheDocument();
+
+    await toggle('Only what needs me');
+    expect(
+      screen.getByText(
+        'Every job · 2 live · 1 overdue · showing what needs you',
+      ),
+    ).toBeInTheDocument();
+
+    await toggle('By person');
+    expect(
+      screen.getByText(
+        'Every job · 2 live · 1 overdue · showing what needs you · by person',
+      ),
+    ).toBeInTheDocument();
+
+    await toggle('Only what needs me');
+    expect(
+      screen.getByText('Every job · 2 live · 1 overdue · by person'),
+    ).toBeInTheDocument();
+  });
+
+  it('leaves the stage plates exactly as they were with no facet on', () => {
+    const { container } = render(
+      <DeskRoster roster={roster()} studioMembers={STUDIO} />,
+    );
+
+    expect(container.querySelectorAll('[data-stage-tab]')).toHaveLength(2);
+    expect(container.querySelector('[data-person-plate]')).toBeNull();
+    expect(container.querySelectorAll('[data-roster-line]')).toHaveLength(2);
+    expect(screen.getByText('Proposal · 1')).toBeInTheDocument();
+    expect(screen.getByText('Project · 1')).toBeInTheDocument();
+  });
+
+  it('keeps only marked rows under “Only what needs me”', async () => {
+    const model = roster();
+    model.groups[0].lines[0].mark = null;
+    model.groups[0].lines[0].needKind = null;
+    const { container } = render(
+      <DeskRoster roster={model} studioMembers={STUDIO} />,
+    );
+
+    await toggle('Only what needs me');
+
+    const rows = Array.from(container.querySelectorAll('[data-roster-line]'));
+    expect(rows.map((row) => row.getAttribute('data-roster-line'))).toEqual([
+      'vandersteen',
+    ]);
+    // A stage with nothing left in it prints no plate at all.
+    expect(container.querySelector('[data-stage-tab="proposal"]')).toBeNull();
+    expect(screen.getByText('Project · 1')).toBeInTheDocument();
+  });
+
+  it('prints the sentence, never an empty list, when nothing needs a hand', async () => {
+    const model = roster();
+    for (const group of model.groups) {
+      for (const line of group.lines) {
+        line.mark = null;
+        line.needKind = null;
+      }
+    }
+    const { container } = render(
+      <DeskRoster roster={model} studioMembers={STUDIO} />,
+    );
+
+    await toggle('Only what needs me');
+
+    expect(
+      screen.getByText('Nothing needs your hand today.'),
+    ).toBeInTheDocument();
+    expect(container.querySelectorAll('[data-roster-line]')).toHaveLength(0);
+    expect(container.querySelector('[data-stage-tab]')).toBeNull();
+    // The walkthrough's anchor stays on the page in this state too.
+    expect(
+      container.querySelector('[data-tour-anchor="desk-folio"]'),
+    ).not.toBeNull();
+  });
+
+  it('groups by designer_id under “By person”, unassigned under the principal', async () => {
+    const { container } = render(
+      <DeskRoster roster={roster()} studioMembers={STUDIO} />,
+    );
+
+    await toggle('By person');
+
+    expect(container.querySelector('[data-stage-tab]')).toBeNull();
+    const plates = Array.from(
+      container.querySelectorAll<HTMLElement>('[data-person-plate]'),
+    );
+    // The principal leads; Vandersteen carries no designer_id, so it is hers.
+    expect(plates.map((plate) => plate.textContent)).toEqual([
+      'Leah Hartwell · 1',
+      'Anneke Sund · 1',
+    ]);
+    const leah = plates[0].parentElement!;
+    expect(
+      leah.querySelector('[data-roster-line="vandersteen"]'),
+    ).not.toBeNull();
+    const anneke = plates[1].parentElement!;
+    expect(anneke.querySelector('[data-roster-line="byrne"]')).not.toBeNull();
+  });
+
+  it('gives a person plate the rail and ink, never a stage pigment', async () => {
+    const { container } = render(
+      <DeskRoster roster={roster()} studioMembers={STUDIO} />,
+    );
+
+    await toggle('By person');
+
+    for (const plate of container.querySelectorAll<HTMLElement>(
+      '[data-person-plate]',
+    )) {
+      expect(plate.className).toContain('bg-[var(--doc-rail-stock)]');
+      expect(plate.className).toContain('text-[var(--text-primary)]');
+      expect(plate.className).not.toMatch(/bg-\[var\(--tab-/);
+      expect(plate.className).not.toContain('text-white');
+    }
+  });
+
+  it('keeps each row’s own stage wash when the roster is grouped by person', async () => {
+    const { container } = render(
+      <DeskRoster roster={roster()} studioMembers={STUDIO} />,
+    );
+
+    await toggle('By person');
+
+    const washOf = (id: string) =>
+      container
+        .querySelector<HTMLElement>(`[data-roster-line="${id}"] span.row-wash`)!
+        .style.getPropertyValue('--wash');
+    expect(washOf('byrne')).toBe('var(--wash-proposal)');
+    expect(washOf('vandersteen')).toBe('var(--wash-project)');
+  });
+
+  it('composes the two facets', async () => {
+    const model = roster();
+    model.groups[0].lines[0].mark = null;
+    model.groups[0].lines[0].needKind = null;
+    const { container } = render(
+      <DeskRoster roster={model} studioMembers={STUDIO} />,
+    );
+
+    await toggle('Only what needs me');
+    await toggle('By person');
+
+    const plates = Array.from(
+      container.querySelectorAll<HTMLElement>('[data-person-plate]'),
+    );
+    expect(plates.map((plate) => plate.textContent)).toEqual([
+      'Leah Hartwell · 1',
+    ]);
+  });
+
+  it('offers no “By person” act when no member of the studio can be named', () => {
+    render(<DeskRoster roster={roster()} />);
+
+    expect(
+      screen.getByRole('button', { name: 'Only what needs me' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'By person' })).toBeNull();
+  });
+
+  it('writes no shadow and no padding switch on the head row', () => {
+    const { container } = render(
+      <DeskRoster roster={roster()} studioMembers={STUDIO} />,
+    );
+
+    for (const el of container.querySelectorAll('*')) {
+      expect(el.className.toString()).not.toMatch(
+        /(^|[\s:])(drop-)?shadow-/,
+      );
     }
   });
 });
