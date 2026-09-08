@@ -23,6 +23,9 @@ describe('AppChrome', () => {
     '/field/abc123',
     '/share/abc123',
     '/rfq/abc123',
+    // Wave 3 · P14/R16: the subcontractor's Trade Agreement link, opened from
+    // an email with no session and no account.
+    `/trade/${'a'.repeat(64)}`,
     `/plans/${'a'.repeat(64)}`,
     // SP-03 / review M-D3: the shared piece page is opened from a text message
     // by someone with no session.
