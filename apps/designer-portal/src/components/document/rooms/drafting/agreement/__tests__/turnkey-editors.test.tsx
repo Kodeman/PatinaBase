@@ -857,6 +857,137 @@ describe("the allowances editor", () => {
     );
   });
 
+  it("W3R1-03: naming an allowance ADOPTS its orphan line rather than doubling it", () => {
+    // The walk: the seven fixture cost lines stand at COST BASIS $71,300, three
+    // of them `category: 'allowance'` with nothing behind them, and readiness
+    // says "Add them here". Naming one appended an EIGHTH line and the chip
+    // moved to $75,300; naming all three took it to $81,600 and the room
+    // refused the save with "The cost basis plus the fee must equal the
+    // guaranteed maximum price, to the cent."
+    const writePart = jest.fn();
+    const onChange = jest.fn();
+    const noAllowancesYet = {
+      ...allowances,
+      payload: { allowances: [] as unknown[] },
+    };
+    render(
+      <PartEditor
+        part={noAllowancesYet}
+        onChange={onChange}
+        readOnly={false}
+        libraryOn
+        turnkey={contextOf([PRICING_BASIS, noAllowancesYet], writePart)}
+      />,
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "+ Add an allowance" }),
+    );
+    // A blank allowance claims nothing: the eight lines would be the defect.
+    const [, blankBasis] = writePart.mock.calls[0];
+    expect(
+      (blankBasis as { costLines: unknown[] }).costLines,
+    ).toHaveLength(7);
+
+    // Now the designer names it — with the blank row on the payload, exactly
+    // as the composer would hand it back.
+    const named = {
+      ...allowances,
+      payload: {
+        allowances: [
+          {
+            id: "allowance-1",
+            label: "",
+            amountCents: 0,
+            overageRule: "change_order",
+            underageRule: "credit",
+          },
+        ],
+      },
+    };
+    writePart.mockClear();
+    const onChangeNamed = jest.fn();
+    render(
+      <PartEditor
+        part={named}
+        onChange={onChangeNamed}
+        readOnly={false}
+        libraryOn
+        turnkey={contextOf([PRICING_BASIS, named], writePart)}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText("Allowance 1"), {
+      target: { value: "Tile allowance" },
+    });
+
+    // The allowance took the line's id AND its money.
+    const [written] = onChangeNamed.mock.calls[0];
+    expect((written as { allowances: { id: string; amountCents: number }[] }).allowances).toEqual([
+      {
+        id: "tile",
+        label: "Tile allowance",
+        amountCents: 400_000,
+        overageRule: "change_order",
+        underageRule: "credit",
+      },
+    ]);
+    // And the pricing basis still carries seven lines at $71,300.
+    const [, basisPayload] = writePart.mock.calls[0];
+    const lines = (
+      basisPayload as {
+        costLines: { id: string; basisCents: number }[];
+        costBasisCents: number;
+      }
+    ).costLines;
+    expect(lines).toHaveLength(7);
+    expect(lines.map((line) => line.id)).toEqual([
+      "cabinetry",
+      "electrical",
+      "plumbing",
+      "generalConditions",
+      "tile",
+      "plumbingFixtures",
+      "lighting",
+    ]);
+    expect(
+      (basisPayload as { costBasisCents: number }).costBasisCents,
+    ).toBe(7_130_000);
+  });
+
+  it("W3R1-03: an allowance whose name matches nothing still gets its own line", () => {
+    const writePart = jest.fn();
+    const onChange = jest.fn();
+    const named = {
+      ...allowances,
+      payload: {
+        allowances: [
+          {
+            id: "allowance-1",
+            label: "",
+            amountCents: 0,
+            overageRule: "change_order",
+            underageRule: "credit",
+          },
+        ],
+      },
+    };
+    render(
+      <PartEditor
+        part={named}
+        onChange={onChange}
+        readOnly={false}
+        libraryOn
+        turnkey={contextOf([PRICING_BASIS, named], writePart)}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText("Allowance 1"), {
+      target: { value: "Countertop allowance" },
+    });
+    const [, basisPayload] = writePart.mock.calls[0];
+    const lines = (basisPayload as { costLines: { id: string }[] }).costLines;
+    expect(lines).toHaveLength(8);
+    expect(lines[7].id).toBe("allowance-1");
+  });
+
   it("takes a removed allowance's own line out of the contract sum", () => {
     const writePart = jest.fn();
     render(

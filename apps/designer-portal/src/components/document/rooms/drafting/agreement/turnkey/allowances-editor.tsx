@@ -63,11 +63,55 @@ export function AllowancesEditor({
    * cost line authored on the pricing basis, with no allowance behind it,
    * stays exactly where it was and is NAMED instead — `unbackedAllowanceLine`
    * says so in readiness and below.
+   *
+   * W3R1-03 — AND AN ORPHAN LINE IS ADOPTED, NEVER DOUBLED. The template's
+   * pricing basis arrives carrying `Tile allowance` as a `category:
+   * 'allowance'` cost line, and readiness invites the designer to "Add them
+   * here". Typing that name minted a NEW allowance with a NEW id, so nothing
+   * claimed the orphan and an eighth line was appended beside it: the cost
+   * basis went from $71,300 to $75,300 on a keystroke, and naming all three
+   * took it to $81,600 and broke the GMP-to-the-cent invariant. So an
+   * allowance with no line of its own takes the id of the unclaimed
+   * allowance-category line that carries its name — one number, said once,
+   * exactly as the paragraph above this promises.
    */
-  const write = (next: DesignBuildAllowance[]) => {
-    onChange({ ...payload, allowances: next });
-    if (!turnkey) return;
+  const write = (input: DesignBuildAllowance[]) => {
+    if (!turnkey) {
+      onChange({ ...payload, allowances: input });
+      return;
+    }
     const wasAnAllowance = new Set(allowances.map((entry) => entry.id));
+    const spokenFor = new Set([
+      ...wasAnAllowance,
+      ...input.map((entry) => entry.id),
+    ]);
+    // First orphan per name wins; a name that names two orphans is the
+    // designer's own ambiguity and the second stays orphaned and named.
+    const orphanByLabel = new Map<string, DesignBuildCostLine>();
+    for (const line of basis.costLines) {
+      if (line.category !== "allowance" || spokenFor.has(line.id)) continue;
+      const key = line.label.trim().toLowerCase();
+      if (!key || orphanByLabel.has(key)) continue;
+      orphanByLabel.set(key, line);
+    }
+    const adoptedIds = new Set<string>();
+    const next = input.map((entry) => {
+      if (basis.costLines.some((line) => line.id === entry.id)) return entry;
+      const orphan = orphanByLabel.get(entry.label.trim().toLowerCase());
+      if (!orphan || adoptedIds.has(orphan.id)) return entry;
+      adoptedIds.add(orphan.id);
+      // The line's money comes with the line. An allowance the designer has
+      // already priced keeps her figure — the two are one number, and hers
+      // is the later word.
+      return {
+        ...entry,
+        id: orphan.id,
+        amountCents:
+          entry.amountCents > 0 ? entry.amountCents : orphan.basisCents,
+      };
+    });
+
+    onChange({ ...payload, allowances: next });
     const nextById = new Map(next.map((entry) => [entry.id, entry]));
     const lineFor = (allowance: DesignBuildAllowance): DesignBuildCostLine => ({
       id: allowance.id,
@@ -93,6 +137,11 @@ export function AllowancesEditor({
     }
     for (const allowance of next) {
       if (placed.has(allowance.id)) continue;
+      // An allowance with no name is not yet a cost line. Appending one for
+      // the blank row "+ Add an allowance" mints would claim an id before the
+      // designer has typed the name that adopts an orphan line (W3R1-03), and
+      // the eighth line would be back.
+      if (!allowance.label.trim()) continue;
       costLines.push(lineFor(allowance));
     }
     turnkey.writePart(
