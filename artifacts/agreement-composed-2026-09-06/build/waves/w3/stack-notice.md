@@ -71,3 +71,43 @@ unapplied on Strata, so editing in place is the correct remediation.
   left running.
 
 Next owner: unchanged — whoever runs the Wave 3 walk.
+
+---
+
+## Reset — re-gate 2 (2026-09-07, independent re-gate reviewer)
+
+The re-gate reviewer took the stack and ran
+`supabase db reset --workdir /Users/kody/Code/patina-merged/.codex/worktrees/agent-agr-w3-integration`
+**twice**. No migration and no seed file was edited in this pass — both resets
+replay the same tree the close-out left; the second exists only to hand the walk
+a clean stack.
+
+1. **First reset**, before any probe. Finished clean. Ledger head probed after:
+   `00579, 00578, 00577` (533 rows). Everything in
+   `integration-regate-2.md` §0–§3 was measured on this replay.
+2. **Second reset**, after the gates. Finished clean, same head. It exists
+   because the two client Playwright runs leave real fixture rows behind — after
+   them the stack carried 4 `studio_trade_agreements` and 2 `design_build`
+   proposals, which a walk should not meet. Probed after: both counts are `0`.
+
+Other notes for the next owner:
+
+- `python3 scripts/generate-legacy-grants.py` was re-run: "baseline + 2568
+  replayed statements", `git diff` on `supabase/seed/00-legacy-grants.sql`
+  **empty**. No grant moved in this pass either.
+- Every probe transaction was `BEGIN … ROLLBACK`, so nothing this reviewer
+  probed survives on the stack.
+- A scratch clone `patina_regate2` was made with `pg_dump --no-owner -Fc` +
+  `pg_restore --no-owner` (813 of the source's 818 public FKs restored; the five
+  that did not are `engagement_events_user_id_fkey`, both `invoice_links_*`,
+  `organization_members_user_id_fkey`, `user_roles_user_id_fkey` — all
+  cross-schema references `pg_restore` skipped along with 57 default-privilege
+  statements it lacked rights for). It was used only to confirm that
+  `pg_stat_get_function_calls` is invisible inside an open transaction, and was
+  **dropped** before the gates. Worth knowing: the corrected recipe in `env.md`
+  is not a perfect clone either.
+- A `pnpm dev` client-portal server ran on :3002 with the three-flag override
+  for the e2e gate and was stopped; :3002 confirmed clear afterwards.
+
+Next owner: unchanged — whoever runs the Wave 3 walk. The stack is at `00579`,
+freshly reset, with no e2e or probe residue.
