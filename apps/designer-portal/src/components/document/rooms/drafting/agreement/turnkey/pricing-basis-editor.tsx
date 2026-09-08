@@ -12,14 +12,18 @@
  * into billing authority. The only authority a design-build agreement writes
  * is its `per_draw` cadence.
  *
- * The schedule of values is DERIVED here and never separately authored, which
- * is why there is no schedule-of-values part in the rail.
+ * Under an OPEN book the schedule of values is derived here — the trades at
+ * cost, the fee as its own line. Under a CLOSED book it is written here
+ * instead (R43): the studio's own division of the work, summing to the
+ * contract sum. It lives on this payload rather than in a part of its own, so
+ * there is still one authored total per contract.
  */
 
 import { Button, Input, Select } from "@/components/ui/controls";
 import {
   PRICING_BASIS_KINDS,
   type DesignBuildCostLine,
+  type DesignBuildScheduleOfValuesLine,
   type PricingBasisKind,
 } from "@patina/types";
 import {
@@ -31,6 +35,7 @@ import {
   readPricingBasis,
   readSubDisclosure,
   readSubMarkupBps,
+  seedScheduleOfValues,
   validatePricingBasis,
   withCostBasisCents,
 } from "@/lib/document/design-build";
@@ -41,6 +46,9 @@ import { ScheduleOfValues } from "./schedule-of-values";
 
 const LABEL =
   "font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]";
+
+export const SOV_AUTHORING_NOTE =
+  "Your own division of the work — a room, a phase, or one line for the whole of it. It comes to the contract sum, and it is not the cost lines above.";
 
 const CATEGORY_LABELS: Record<DesignBuildCostLine["category"], string> = {
   sub: "Trade",
@@ -93,6 +101,9 @@ export function PricingBasisEditor({
 
   const writeLines = (lines: DesignBuildCostLine[]) =>
     write({ costLines: lines });
+
+  const writeScheduleOfValues = (lines: DesignBuildScheduleOfValuesLine[]) =>
+    write({ scheduleOfValues: lines });
 
   const sumField: SumField = basis.basis ? SUM_FIELD[basis.basis] : null;
   const sumLabel = contractSumLabel(basis.basis);
@@ -299,6 +310,118 @@ export function PricingBasisEditor({
           {sumLabel} {sum === null ? "—" : turnkeyMoney(sum)}
         </span>
       </div>
+
+      {/* R43 — under a closed book the client reads the studio's own lines,
+          never a pro-rating of the cost lines above. Authored here so the one
+          total on the paper stays the contract sum. */}
+      {mode === "closed_book" && (
+        <div>
+          <p className={LABEL}>Schedule of values · what your client reads</p>
+          <p className="mt-1 text-[11px] leading-relaxed text-[var(--text-muted)]">
+            {SOV_AUTHORING_NOTE}
+          </p>
+          <div className="mt-2 space-y-2">
+            {basis.scheduleOfValues.map((line, index) => (
+              <div
+                key={line.id}
+                className="grid grid-cols-[minmax(0,1fr)_130px_auto] items-center gap-2"
+              >
+                <Input
+                  aria-label={`Schedule of values line ${index + 1}`}
+                  disabled={readOnly}
+                  value={line.label}
+                  onChange={(event) =>
+                    writeScheduleOfValues(
+                      basis.scheduleOfValues.map((row, rowIndex) =>
+                        rowIndex === index
+                          ? { ...row, label: event.target.value }
+                          : row,
+                      ),
+                    )
+                  }
+                  placeholder="Kitchen"
+                />
+                <Input
+                  aria-label={`Schedule of values line ${index + 1} amount`}
+                  inputMode="decimal"
+                  disabled={readOnly}
+                  value={dollars(line.cents === 0 ? null : line.cents)}
+                  onChange={(event) =>
+                    writeScheduleOfValues(
+                      basis.scheduleOfValues.map((row, rowIndex) =>
+                        rowIndex === index
+                          ? {
+                              ...row,
+                              cents: toCentsOrNull(event.target.value) ?? 0,
+                            }
+                          : row,
+                      ),
+                    )
+                  }
+                  placeholder="$ to your client"
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={readOnly}
+                  onClick={() =>
+                    writeScheduleOfValues(
+                      basis.scheduleOfValues.filter(
+                        (_, rowIndex) => rowIndex !== index,
+                      ),
+                    )
+                  }
+                >
+                  Remove
+                </Button>
+              </div>
+            ))}
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={readOnly}
+                onClick={() =>
+                  writeScheduleOfValues([
+                    ...basis.scheduleOfValues,
+                    {
+                      id: `sov-${Date.now()}-${basis.scheduleOfValues.length}`,
+                      label: "",
+                      cents: 0,
+                    },
+                  ])
+                }
+              >
+                + Add a line
+              </Button>
+              {basis.scheduleOfValues.length === 0 && sum !== null && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={readOnly}
+                  onClick={() => writeScheduleOfValues(seedScheduleOfValues(basis))}
+                >
+                  Start with one line
+                </Button>
+              )}
+            </div>
+          </div>
+          <div className="mt-2 flex items-baseline justify-between gap-4 border-t border-[var(--doc-ink-border)] pt-2">
+            <span className={LABEL}>Your client&rsquo;s total</span>
+            <strong
+              data-chip="sov-total"
+              className="font-mono text-[11px] font-medium text-[var(--color-charcoal)]"
+            >
+              {turnkeyMoney(
+                basis.scheduleOfValues.reduce(
+                  (running, line) => running + line.cents,
+                  0,
+                ),
+              )}
+            </strong>
+          </div>
+        </div>
+      )}
 
       {refusal && (
         <p

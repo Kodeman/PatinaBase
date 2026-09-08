@@ -135,6 +135,22 @@
 --    settled receipt, while an administratively revoked one still resolves to
 --    nothing.)
 --
+-- Wave 3 close-out rulings, applied in place (this migration is unapplied on
+-- Strata):
+--   R40  compose_agreement_consent composes from the CLIENT-VISIBLE
+--        PROJECTION — the redacted payload the door renders — so the sentence
+--        the homeowner ticks is the sentence frozen on her signature row
+--        (PART 12b).
+--   R43  the closed-book schedule of values is AUTHORED by the studio, not
+--        pro-rated from the cost lines. _agreement_schedule_of_values returns
+--        the payload's own `scheduleOfValues` under any disclosure that is not
+--        open_book; _validate_pricing_basis_payload holds those lines to the
+--        contract sum; and send_commercial_document refuses a closed book that
+--        carries none. This is RC-4's answer: a uniform multiple is invertible
+--        from one (cost, line) pair, and the allowance parts publish such a
+--        pair by design.
+--   R45  every function this file adds pins its search_path.
+--
 -- Every value widened below lives in a TEXT CHECK constraint, not a Postgres
 -- ENUM type (verified: proposals.document_kind 00423:93-101,
 -- project_commercial_documents.document_kind 00423:110-133,
@@ -751,6 +767,7 @@ DECLARE
   v_id text;
   v_fee_bps numeric;
   v_contract bigint;
+  v_sov bigint := 0;
 BEGIN
   IF jsonb_typeof(COALESCE(p_payload, 'null'::jsonb)) <> 'object' THEN
     RETURN 'The pricing basis could not be read.';
@@ -860,11 +877,49 @@ BEGIN
     RETURN 'Sub pricing is disclosed either open-book or closed-book.';
   END IF;
 
+  -- R43 — THE CLIENT-FACING SCHEDULE OF VALUES, WHEN THE STUDIO HAS WRITTEN
+  -- ONE. Judged whenever the key carries lines, in either disclosure, so a
+  -- draft that has not been divided up yet is not refused before it is asked
+  -- for (the send door asks for it under closed book). The rule is the one the
+  -- draw schedule already lives by: the column comes to the contract sum, to
+  -- the cent.
+  IF jsonb_typeof(p_payload->'scheduleOfValues') = 'array'
+     AND jsonb_array_length(p_payload->'scheduleOfValues') > 0 THEN
+    v_ids := ARRAY[]::text[];
+    v_sov := 0;
+    FOR v_line IN
+      SELECT value FROM jsonb_array_elements(p_payload->'scheduleOfValues')
+    LOOP
+      IF jsonb_typeof(v_line) <> 'object' THEN
+        RETURN 'A schedule-of-values line could not be read.';
+      END IF;
+      v_id := NULLIF(btrim(COALESCE(v_line->>'id', '')), '');
+      IF v_id IS NULL THEN
+        RETURN 'Every schedule-of-values line needs an identifier.';
+      END IF;
+      IF v_id = ANY (v_ids) THEN
+        RETURN 'The schedule of values lists "' || v_id || '" twice.';
+      END IF;
+      v_ids := v_ids || v_id;
+      IF btrim(COALESCE(v_line->>'label', '')) = '' THEN
+        RETURN 'Every schedule-of-values line needs a name.';
+      END IF;
+      IF NOT public._agreement_is_int(v_line->'cents')
+         OR (v_line->>'cents')::numeric <= 0 THEN
+        RETURN 'Every schedule-of-values line needs an amount above zero.';
+      END IF;
+      v_sov := v_sov + (v_line->>'cents')::bigint;
+    END LOOP;
+    IF v_sov <> v_contract THEN
+      RETURN 'The schedule of values must come to the contract sum, to the cent.';
+    END IF;
+  END IF;
+
   RETURN NULL;
 END;
 $$;
 COMMENT ON FUNCTION public._validate_pricing_basis_payload(jsonb) IS
-  'NULL when the pricing basis is sound, else the sentence the designer reads. Four bases only: fixed, cost_plus, cost_plus_gmp, tm_nte (research 02 §2). The schedule of values is DERIVED from the cost lines and never separately authored, so this asserts the derivation instead of a second stored total.';
+  'NULL when the pricing basis is sound, else the sentence the designer reads. Four bases only: fixed, cost_plus, cost_plus_gmp, tm_nte (research 02 §2). The cost basis must equal the cost lines beneath it, and — under closed book, where the client-facing schedule of values is authored rather than derived (R43) — that schedule must come to the contract sum.';
 REVOKE ALL ON FUNCTION public._validate_pricing_basis_payload(jsonb)
   FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public._validate_pricing_basis_payload(jsonb)
@@ -1281,21 +1336,33 @@ GRANT EXECUTE ON FUNCTION public._agreement_money_to_the_cent(numeric)
   TO authenticated, service_role;
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- THE SCHEDULE OF VALUES IS DERIVED, NEVER SEPARATELY AUTHORED — and under
--- closed book it is the ONLY form of the cost lines that crosses the edge to
--- the homeowner (B3, RC-4).
+-- THE SCHEDULE OF VALUES, IN THE DISCLOSURE THE CLAUSE ELECTED (B3, RC-4,
+-- R43).
 --
 --   open_book  — the trades at cost, and the studio's fee as its own line.
 --                The two sum to the contract price. This is the disclosure the
 --                clause elected, and the only mode in which a per-trade number
---                appears at all.
---   closed_book (and anything that is not open_book, fail-closed) — the fee is
---                spread across every line, so no line is what any one trade was
---                paid. `cost x sum / basis` as ONE integer expression, and the
---                LAST line takes what the rounding left over so the column sums
---                to the contract price exactly. Identical arithmetic to
---                scheduleOfValues() in design-build-body.tsx, so the two
---                surfaces cannot print two tables.
+--                appears at all. DERIVED from the cost lines.
+--   closed_book (and anything that is not open_book, fail-closed) — the lines
+--                the STUDIO AUTHORED, and nothing derived from the cost lines
+--                at all.
+--
+-- R43 is why. Pro-rating spreads the fee across every line, which reads like a
+-- closed book and is not one: `cost x sum / basis` is a UNIFORM multiple, the
+-- allowance parts state their amounts at cost on the same client-visible page,
+-- and one such (cost, line) pair hands the reader the multiplier — and with it
+-- every trade's price. RC-4 asks that a sub's bid not be backed out of a line,
+-- and a derived schedule cannot answer that however it is arranged.
+--
+-- So under closed book the studio writes the client's lines itself: its own
+-- division of the work — a room, a phase, or a single "Construction" line —
+-- summing to the contract sum to the cent, which
+-- `_validate_pricing_basis_payload` asserts at both doors. Nothing on that
+-- table is a cost line times anything.
+--
+-- Identical arithmetic and identical source to scheduleOfValues() in
+-- design-build-body.tsx, so the door, the keepsake and the composer cannot
+-- print three tables.
 -- ═══════════════════════════════════════════════════════════════════════════
 CREATE OR REPLACE FUNCTION public._agreement_schedule_of_values(
   p_payload jsonb,
@@ -1309,13 +1376,33 @@ DECLARE
   v_basis bigint := 0;
   v_lines jsonb := '[]'::jsonb;
   v_line jsonb;
-  v_n integer;
   v_i integer := 0;
-  v_allocated bigint := 0;
   v_cents bigint;
 BEGIN
-  IF jsonb_typeof(COALESCE(p_payload, 'null'::jsonb)) <> 'object'
-     OR jsonb_typeof(p_payload->'costLines') <> 'array' THEN
+  IF jsonb_typeof(COALESCE(p_payload, 'null'::jsonb)) <> 'object' THEN
+    RETURN '[]'::jsonb;
+  END IF;
+
+  -- R43 — CLOSED BOOK IS THE STUDIO'S OWN LINES. Nothing here reads the cost
+  -- lines, so nothing on this table divides back into one.
+  IF p_disclosure IS DISTINCT FROM 'open_book' THEN
+    IF jsonb_typeof(p_payload->'scheduleOfValues') <> 'array' THEN
+      RETURN '[]'::jsonb;
+    END IF;
+    SELECT COALESCE(jsonb_agg(jsonb_build_object(
+             'id', COALESCE(NULLIF(btrim(COALESCE(line->>'id', '')), ''),
+                            'line-' || ord::text),
+             'label', line->>'label',
+             'cents', (line->>'cents')::bigint) ORDER BY ord), '[]'::jsonb)
+    INTO v_lines
+    FROM jsonb_array_elements(p_payload->'scheduleOfValues')
+      WITH ORDINALITY AS e(line, ord)
+    WHERE public._agreement_is_int(line->'cents')
+      AND NULLIF(btrim(COALESCE(line->>'label', '')), '') IS NOT NULL;
+    RETURN v_lines;
+  END IF;
+
+  IF jsonb_typeof(p_payload->'costLines') <> 'array' THEN
     RETURN '[]'::jsonb;
   END IF;
 
@@ -1335,11 +1422,6 @@ BEGIN
     RETURN '[]'::jsonb;
   END IF;
 
-  SELECT count(*) INTO v_n
-  FROM jsonb_array_elements(p_payload->'costLines') AS e(line)
-  WHERE public._agreement_is_int(line->'basisCents')
-    AND NULLIF(btrim(COALESCE(line->>'label', '')), '') IS NOT NULL;
-
   FOR v_line IN
     SELECT line FROM jsonb_array_elements(p_payload->'costLines')
       WITH ORDINALITY AS e(line, ord)
@@ -1348,15 +1430,7 @@ BEGIN
     ORDER BY e.ord
   LOOP
     v_i := v_i + 1;
-    IF p_disclosure = 'open_book' THEN
-      v_cents := (v_line->>'basisCents')::bigint;
-    ELSIF v_i < v_n THEN
-      v_cents := round((v_line->>'basisCents')::numeric * v_sum / v_basis)::bigint;
-      v_allocated := v_allocated + v_cents;
-    ELSE
-      v_cents := v_sum - v_allocated;
-    END IF;
-
+    v_cents := (v_line->>'basisCents')::bigint;
     v_lines := v_lines || jsonb_build_array(jsonb_build_object(
       'id', COALESCE(NULLIF(btrim(COALESCE(v_line->>'id', '')), ''),
                      'line-' || v_i::text),
@@ -1364,7 +1438,7 @@ BEGIN
       'cents', v_cents));
   END LOOP;
 
-  IF p_disclosure = 'open_book' AND v_sum - v_basis <> 0 THEN
+  IF v_sum - v_basis <> 0 THEN
     v_lines := v_lines || jsonb_build_array(jsonb_build_object(
       'id', '__fee',
       'label', 'Design and construction fee',
@@ -1375,7 +1449,7 @@ BEGIN
 END;
 $$;
 COMMENT ON FUNCTION public._agreement_schedule_of_values(jsonb, text) IS
-  'The schedule of values a pricing basis describes, in the disclosure mode the sub-disclosure clause elected. Pro-rated with the last line taking the remainder under closed book; at cost with the fee as its own line under open book. The same arithmetic as scheduleOfValues() in design-build-body.tsx.';
+  'The schedule of values a pricing basis describes, in the disclosure mode the sub-disclosure clause elected. The studio''s own authored lines under closed book (R43); the trades at cost with the fee as its own line under open book. The same source and the same arithmetic as scheduleOfValues() in design-build-body.tsx.';
 REVOKE ALL ON FUNCTION public._agreement_schedule_of_values(jsonb, text)
   FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public._agreement_schedule_of_values(jsonb, text)
@@ -1393,10 +1467,11 @@ GRANT EXECUTE ON FUNCTION public._agreement_schedule_of_values(jsonb, text)
 -- RC-4 asks precisely that a trade's bid not be derivable from her copy.
 --
 -- So the payload the CLIENT is handed is redacted here, once, at the one edge
--- she reads through: the derived schedule of values goes over, and the cost
--- lines, the fee, the markup and the cost basis stay behind. The contract sum
--- is carried explicitly because it is HER number and, once the cost basis is
--- gone, no longer derivable on a plain cost-plus basis.
+-- she reads through: the schedule of values goes over — the studio's own
+-- authored lines under closed book (R43), the trades at cost plus the fee
+-- under open — and the cost lines, the fee, the markup and the cost basis stay
+-- behind. The contract sum is carried explicitly because it is HER number and,
+-- once the cost basis is gone, no longer derivable on a plain cost-plus basis.
 --
 -- Under open book nothing is withheld — that is what the clause elected — and
 -- the schedule is projected in the same key so both modes read alike.
@@ -7070,6 +7145,18 @@ BEGIN
         USING ERRCODE = 'check_violation';
     END IF;
 
+    -- R43: under closed book the schedule of values is the studio's own, not
+    -- derived from the cost lines — so there has to be one. Its arithmetic was
+    -- already checked by _validate_pricing_basis_payload above; this is the
+    -- door that asks for it at all.
+    IF v_disclosure <> 'open_book'
+       AND jsonb_array_length(
+             public._agreement_schedule_of_values(
+               v_pricing_basis, v_disclosure)) = 0 THEN
+      RAISE EXCEPTION 'a closed-book agreement needs a schedule of values written for your client'
+        USING ERRCODE = 'check_violation';
+    END IF;
+
     -- R10: the gate holds at send too, not only at template selection. An
     -- attestation can lapse between composing and sending.
     IF NOT public.studio_has_live_license_attestation(
@@ -8352,7 +8439,8 @@ INSERT INTO public.agreement_templates (
       'variant', 'pricing_basis',
       'title', 'Pricing basis', 'required', true, 'clientVisible', true,
       'payload', jsonb_build_object(
-        'basis', NULL, 'costLines', '[]'::jsonb, 'costBasisCents', NULL)),
+        'basis', NULL, 'costLines', '[]'::jsonb, 'costBasisCents', NULL,
+        'scheduleOfValues', '[]'::jsonb)),
     jsonb_build_object(
       'partKey', 'patina.draws', 'kind', 'schedule', 'variant', 'draws',
       'title', 'Draw schedule', 'required', true, 'clientVisible', true,

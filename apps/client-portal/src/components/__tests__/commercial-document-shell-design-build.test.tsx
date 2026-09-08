@@ -38,6 +38,18 @@ const COST_LINES = [
 const EXPECTED_SOV_CENTS = [4_484_000, 1_121_000, 849_600, 743_400, 472_000, 413_000, 330_400];
 const GMP_CENTS = 8_413_400;
 
+/**
+ * R43 — the client-facing schedule of values under a closed book: the studio's
+ * own division of the Halvorsen house, summing to the guaranteed maximum. The
+ * pro-rated table above is what this wave stopped publishing — a uniform
+ * multiple of the costs, invertible from one known pair — and it survives here
+ * only as the figure the closed-book page must NOT show.
+ */
+const CLIENT_SOV = [
+  { id: 'kitchen', label: 'Kitchen', cents: 6_400_000 },
+  { id: 'mudroom', label: 'Mudroom', cents: 2_013_400 },
+];
+
 function part(
   overrides: Partial<CommercialAgreementPart> &
     Pick<CommercialAgreementPart, 'kind' | 'title' | 'id' | 'position' | 'partKey'>,
@@ -70,6 +82,7 @@ function authoredPricingBasis(
       fixedCents: null,
       subDisclosure,
       costLines: COST_LINES,
+      scheduleOfValues: CLIENT_SOV,
     },
   });
 }
@@ -99,11 +112,7 @@ function pricingBasis(
           })),
           { id: '__fee', label: 'Design and construction fee', cents: 1_283_400 },
         ]
-      : COST_LINES.map((line, index) => ({
-          id: line.id,
-          label: line.label,
-          cents: EXPECTED_SOV_CENTS[index],
-        }));
+      : CLIENT_SOV;
 
   const projected = {
     ...authored.payload,
@@ -283,22 +292,37 @@ function bundle(
   };
 }
 
-describe('the schedule of values is derived, to the cent', () => {
-  it('pro-rates the fee across every line under closed book, and sums to the price', () => {
-    const lines = scheduleOfValues(readPricingBasis(authoredPricingBasis('closed_book')));
+describe('the schedule of values, to the cent', () => {
+  it('is the studio’s own lines under closed book, and sums to the price', () => {
+    const lines = scheduleOfValues(readPricingBasis(pricingBasis('closed_book')));
 
-    expect(lines.map((line) => line.cents)).toEqual(EXPECTED_SOV_CENTS);
+    expect(lines).toEqual(CLIENT_SOV);
     expect(lines.reduce((sum, line) => sum + line.cents, 0)).toBe(GMP_CENTS);
   });
 
   it('shows the trades at cost and the fee as its own line under open book', () => {
-    const lines = scheduleOfValues(readPricingBasis(authoredPricingBasis('open_book')));
+    const lines = scheduleOfValues(readPricingBasis(pricingBasis('open_book')));
 
     expect(lines.map((line) => line.cents)).toEqual([
       ...COST_LINES.map((line) => line.basisCents),
       1_283_400,
     ]);
     expect(lines.reduce((sum, line) => sum + line.cents, 0)).toBe(GMP_CENTS);
+  });
+
+  /* The fallback: a payload with no projection at all — a studio-side read of
+     the authored row. It derives the open-book table, integer throughout. */
+  it('derives the open-book table for a payload that carries no projection', () => {
+    const authored = authoredPricingBasis('open_book');
+    const { scheduleOfValues: _projection, ...unprojected } = authored.payload;
+    const lines = scheduleOfValues(
+      readPricingBasis({ ...authored, payload: unprojected }),
+    );
+
+    expect(lines.map((line) => line.cents)).toEqual([
+      ...COST_LINES.map((line) => line.basisCents),
+      1_283_400,
+    ]);
   });
 
   /**
@@ -436,38 +460,40 @@ describe('the turnkey paper, as the homeowner reads it', () => {
     expect(screen.getByTestId('design-build-sov-total')).toHaveTextContent('$84,134');
   });
 
-  it('draws the schedule of values, pro-rated, summing to the price', () => {
+  it('draws the studio’s own schedule of values, summing to the price', () => {
     render(<CommercialDocumentShell bundle={bundle()} />);
 
     const sov = screen.getByTestId('design-build-sov');
     expect(sov).toHaveAttribute('data-disclosure', 'closed_book');
-    expect(within(sov).getAllByTestId('design-build-sov-line')).toHaveLength(7);
-    expect(within(sov).getByText('$44,840')).toBeInTheDocument();
+    expect(within(sov).getAllByTestId('design-build-sov-line')).toHaveLength(2);
+    expect(within(sov).getByText('Kitchen')).toBeInTheDocument();
+    expect(within(sov).getByText('$64,000')).toBeInTheDocument();
     expect(screen.getByTestId('design-build-sov-total')).toHaveTextContent('$84,134');
+    // R43 — and never the pro-rating, which divides back into a trade's bid.
+    expect(within(sov).queryByText('$44,840')).not.toBeInTheDocument();
   });
 
-  /* R13, STATED EXACTLY (RC-4, ruled round 1 — see client-notes.md §11).
-     Under closed book no trade's price is PRINTED: not as a schedule-of-values
-     line at cost, not beside a name. The line the homeowner reads is $44,840,
-     the cabinetry line with the fee spread into it.
-
-     What this test does NOT claim — and an earlier comment here wrongly did —
-     is that $38,000 is unrecoverable. It is recoverable by arithmetic, and
-     necessarily so: this is a cost-plus-GMP prime, the fee is one of its
-     terms, and the allowance parts state their amounts AT COST because a
-     homeowner cannot be asked to respect a change-order threshold she is not
-     shown ($4,000 tile, printed, against its $4,720 schedule line — the
-     multiplier, from two numbers she must have). Closed book on this page is
-     therefore a presentation rule, not an information barrier: it withholds
-     the per-trade price ROW and every bid, in both modes, at every state. A
-     genuinely non-invertible schedule would have to be authored rather than
-     derived from the cost lines, which is a backend change and not Wave 3's. */
+  /* R13 AND RC-4, AS R43 SETTLED THEM. Under closed book no trade's price is
+     printed and none is recoverable: the schedule of values is the studio's
+     own division of the work, not a uniform multiple of the costs, so there is
+     no multiplier to find. The allowance parts still state their amounts AT
+     COST — a change-order threshold she is not shown is not a threshold — but
+     a known allowance no longer inverts anything, because no line on this page
+     was derived from a cost line at all. */
   it('prints no trade’s own price under closed book, and no bid in either mode', () => {
     render(<CommercialDocumentShell bundle={bundle('closed_book')} />);
 
     expect(screen.queryAllByTestId('design-build-sub-price')).toHaveLength(0);
     expect(screen.queryByText('$38,000')).not.toBeInTheDocument();
     expect(screen.queryByText('$9,500')).not.toBeInTheDocument();
+    // No line is a cost line, or a cost line pro-rated by the fee.
+    const sovCents = scheduleOfValues(readPricingBasis(pricingBasis('closed_book'))).map(
+      (line) => line.cents,
+    );
+    for (const cost of COST_LINES) {
+      expect(sovCents).not.toContain(cost.basisCents);
+      expect(sovCents).not.toContain(Math.round((cost.basisCents * GMP_CENTS) / 7_130_000));
+    }
     // The trades themselves are named — she meets them, she just does not
     // meet their bids.
     expect(screen.getByTestId('design-build-subs')).toHaveTextContent('Ridgeline Cabinetry');

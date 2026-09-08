@@ -24,18 +24,17 @@ import type {
      DTO carried anyway — belt and braces, because the number that must never
      appear is a LOSING bid: the one a competitor's quote is read off.
 
-     SAY WHAT CLOSED BOOK IS, AND WHAT IT IS NOT (RC-4, ruled round 1). It
-     withholds the per-trade price row and spreads the fee across the schedule
-     so no line is labelled as anyone's price. It is not an information
-     barrier, and this file does not pretend to be one: on a `cost_plus_gmp`
-     prime the fee is a term of the agreement, and the allowance parts state
-     their amounts AT COST because a change-order threshold she is not shown
-     is not a threshold — so the multiplier, and with it a trade's cost, is
-     recoverable by arithmetic from figures the homeowner is entitled to. A
-     schedule that could not be inverted would have to be authored rather than
-     derived from the cost lines, which is a backend change and not this
-     wave's. The absolute rule that survives in both modes is the bid ledger's
-     absence.
+     WHAT CLOSED BOOK IS (RC-4, ruled R43). It is not a presentation of the
+     cost lines at all. A pro-rated schedule is a UNIFORM multiple of the
+     costs, and the allowance parts state their amounts AT COST on this same
+     page — because a change-order threshold she is not shown is not a
+     threshold — so one (cost, line) pair would hand any reader the multiplier
+     and the multiplier every trade's price. So under a closed book the studio
+     AUTHORS the client's lines: its own division of the work, summing to the
+     contract sum, printed here exactly as the bundle projected them. Under an
+     open book the trades stand at cost and the fee is its own line, which is
+     what that clause elects. The absolute rule in both modes is the bid
+     ledger's absence.
 
    · R5 / R21 — PROSE NEVER CARRIES MONEY, AND A FIGURE NOBODY WROTE IS SAID
      TO BE UNWRITTEN. Only the typed money leaves print figures, and an unset
@@ -43,10 +42,10 @@ import type {
 
    · RC-12 — NO FLOATS. Every figure on this page is an integer number of
      cents, divided only at the moment it is FORMATTED. The one derivation
-     this file performs (the schedule of values, which is derived from the
-     pricing basis' cost lines and never separately authored) is exact integer
-     arithmetic, and its last row takes the remainder so the column always
-     sums to the contract price to the cent.
+     this file still performs — the open-book schedule of values, for a payload
+     that carries no projection — is exact integer arithmetic, and its last row
+     takes the remainder so the column always sums to the contract price to the
+     cent.
    ────────────────────────────────────────────────────────────────────────── */
 
 type UnknownRecord = Record<string, unknown>;
@@ -116,7 +115,7 @@ const BASIS_CEILING_LABEL: Record<string, string> = {
   fixed: 'Contract price',
 };
 
-/** One line of the derived schedule of values. */
+/** One line of the schedule of values the homeowner reads. */
 export interface ScheduleOfValuesLine {
   id: string;
   label: string;
@@ -217,20 +216,21 @@ export function readPricingBasis(part: CommercialAgreementPart): PricingBasisRea
 }
 
 /**
- * THE SCHEDULE OF VALUES IS DERIVED, NEVER SEPARATELY AUTHORED.
+ * THE SCHEDULE OF VALUES, AS THE BUNDLE PROJECTED IT.
  *
- * `closed_book` — the studio's fee is spread across every line, so no line is
- * printed as what any one trade was paid. (Not: so that no line CAN be read
- * that way — see the R13 note at the head of this file.) Each line is
- * `cost × sum / basis`,
- * computed as one integer expression (never `cost × (1 + fee)` in floating
- * point), and the LAST line takes whatever the rounding left over so the
- * column sums to the contract price exactly.
+ * `closed_book` — the studio's OWN authored lines (R43). Nothing here is
+ * derived from the cost lines, which is the point: a derived table is
+ * invertible and an authored one is not.
  *
- * `open_book` — the trades are shown at cost and the fee is its own line, so
- * the two together still sum to the contract price. That is the disclosure the
- * clause elected, and it is the only mode in which a per-trade number appears
- * anywhere on this page.
+ * `open_book` — the trades at cost and the fee as its own line, so the two
+ * together sum to the contract price. That is the disclosure the clause
+ * elected, and the only mode in which a per-trade number appears anywhere on
+ * this page.
+ *
+ * Both arrive already resolved in `payload.scheduleOfValues`. The derivation
+ * below runs only for a payload that carries no projection — a fixture, or a
+ * studio-side read of the authored row — and it is the open-book arithmetic,
+ * integer throughout, with the last line taking the remainder.
  */
 export function scheduleOfValues(reading: PricingBasisReading): ScheduleOfValuesLine[] {
   // R41 — the projected array wins in BOTH disclosures: it is what the bundle

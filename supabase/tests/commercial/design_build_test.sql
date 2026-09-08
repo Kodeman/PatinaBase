@@ -128,6 +128,10 @@ INSERT INTO _db_money VALUES
   ('sov_cabinetry', 4484000), ('sov_electrical', 1121000),
   ('sov_plumbing', 849600), ('sov_general', 743400),
   ('sov_tile', 472000), ('sov_fixtures', 413000), ('sov_lighting', 330400),
+  -- R43: the CLIENT-FACING schedule of values, which the studio writes. The
+  -- seven `sov_*` rows above are the pro-rating this wave stopped publishing;
+  -- they survive as the table T16 proves is NOT what crosses the edge.
+  ('client_kitchen', 6400000), ('client_mudroom', 2013400),
   ('draw1_gross', 841340), ('draw2_gross', 2524020),
   ('draw3_gross', 3365360), ('draw4_gross', 1682680),
   ('draw1_ret', 0), ('draw2_ret', 126201),
@@ -150,6 +154,14 @@ RETURNS jsonb LANGUAGE sql STABLE AS $$
     'subMarkupBps', 0,
     'costBasisCents', pg_temp.m('cost_basis'),
     'gmpCents', pg_temp.m('gmp'),
+    -- R43 — what the HOMEOWNER reads under a closed book: the studio's own
+    -- division of the work, summing to the GMP, and no multiple of any cost
+    -- line below.
+    'scheduleOfValues', jsonb_build_array(
+      jsonb_build_object('id', 'kitchen', 'label', 'Kitchen',
+                         'cents', pg_temp.m('client_kitchen')),
+      jsonb_build_object('id', 'mudroom', 'label', 'Mudroom',
+                         'cents', pg_temp.m('client_mudroom'))),
     'costLines', jsonb_build_array(
       jsonb_build_object('id', 'cabinetry', 'label', 'Cabinetry & millwork',
                          'category', 'sub', 'basisCents', 3800000),
@@ -410,6 +422,8 @@ DECLARE
   v_total bigint := 0;
   v_ret_total bigint := 0;
   v_closing bigint := 0;
+  v_sov jsonb;
+  v_sov_total bigint;
 BEGIN
   -- the pricing basis validates, and names the GMP
   ASSERT public._validate_pricing_basis_payload(v_basis) IS NULL,
@@ -428,19 +442,39 @@ BEGIN
     'T6: the 18% fee must be 1283400 cents';
   ASSERT v_sum + pg_temp.m('fee') = pg_temp.m('gmp'), 'T6: cost basis + fee = GMP';
 
-  -- the schedule of values, pro-rated, line for line and in total
-  ASSERT round(3800000::numeric * 11800 / 10000.0)::bigint = pg_temp.m('sov_cabinetry'), 'T6: SOV cabinetry';
-  ASSERT round(950000::numeric  * 11800 / 10000.0)::bigint = pg_temp.m('sov_electrical'), 'T6: SOV electrical';
-  ASSERT round(720000::numeric  * 11800 / 10000.0)::bigint = pg_temp.m('sov_plumbing'),  'T6: SOV plumbing';
-  ASSERT round(630000::numeric  * 11800 / 10000.0)::bigint = pg_temp.m('sov_general'),   'T6: SOV general conditions';
-  ASSERT round(400000::numeric  * 11800 / 10000.0)::bigint = pg_temp.m('sov_tile'),      'T6: SOV tile';
-  ASSERT round(350000::numeric  * 11800 / 10000.0)::bigint = pg_temp.m('sov_fixtures'),  'T6: SOV fixtures';
-  ASSERT round(280000::numeric  * 11800 / 10000.0)::bigint = pg_temp.m('sov_lighting'),  'T6: SOV lighting';
-  ASSERT pg_temp.m('sov_cabinetry') + pg_temp.m('sov_electrical')
-       + pg_temp.m('sov_plumbing')  + pg_temp.m('sov_general')
-       + pg_temp.m('sov_tile')      + pg_temp.m('sov_fixtures')
-       + pg_temp.m('sov_lighting') = pg_temp.m('gmp'),
-    'T6: the schedule of values sums to the GMP';
+  -- R43 — THE CLOSED-BOOK SCHEDULE OF VALUES IS AUTHORED, NOT DERIVED.
+  v_sov := public._agreement_schedule_of_values(v_basis, 'closed_book');
+  ASSERT jsonb_array_length(v_sov) = 2,
+    format('T6: the studio''s own two lines, got %s', jsonb_array_length(v_sov));
+  ASSERT (v_sov->0->>'label') = 'Kitchen' AND (v_sov->1->>'label') = 'Mudroom',
+    'T6: in the order the studio wrote them';
+  SELECT sum((line->>'cents')::bigint) INTO v_sov_total
+  FROM jsonb_array_elements(v_sov) AS e(line);
+  ASSERT v_sov_total = pg_temp.m('gmp'),
+    format('T6: the client''s schedule sums to the GMP, got %s', v_sov_total);
+
+  -- NO LINE IS A COST LINE TIMES A CONSTANT (RC-4). The pro-rating this wave
+  -- stopped publishing is `cost * gmp / cost_basis`; assert every authored
+  -- line differs from every cost line's image under it, and from every cost
+  -- line itself. One (cost, line) pair would otherwise give the multiplier,
+  -- and the multiplier every trade's price — and the allowance parts publish
+  -- such a pair by design.
+  ASSERT NOT EXISTS (
+    SELECT 1
+    FROM jsonb_array_elements(v_sov) AS s(line)
+    JOIN jsonb_array_elements(v_basis->'costLines') AS c(cost) ON true
+    WHERE (s.line->>'cents')::bigint IN (
+      (c.cost->>'basisCents')::bigint,
+      round((c.cost->>'basisCents')::numeric * pg_temp.m('gmp')
+            / pg_temp.m('cost_basis'))::bigint)
+  ), 'T6: no client line is a cost line, or a cost line pro-rated';
+
+  -- OPEN BOOK still shows the trades at cost with the fee as its own line.
+  v_sov := public._agreement_schedule_of_values(v_basis, 'open_book');
+  ASSERT jsonb_array_length(v_sov) = 8, 'T6: seven trades and the fee';
+  ASSERT (SELECT (line->>'cents')::bigint FROM jsonb_array_elements(v_sov)
+            AS e(line) WHERE line->>'id' = '__fee') = pg_temp.m('fee'),
+    'T6: and the fee line IS the fee';
 
   -- the draw ledger the DB derives
   ASSERT public._validate_draws_payload(pg_temp.draws()) IS NULL,
@@ -611,6 +645,30 @@ BEGIN
   v_err := pg_temp.send_err('a8300000-0000-4000-8000-000000000001');
   ASSERT v_err = 'say whether the trades are priced open-book or closed-book',
     format('T5(c): %L', v_err);
+
+  -- T5(e) · R43 — a closed book with no client-facing schedule of values is
+  -- refused at the send door, and one that does not come to the contract sum
+  -- is refused at both doors with the sentence the composer prints.
+  v_off := pg_temp.pricing_basis() - 'scheduleOfValues';
+  PERFORM public.upsert_agreement_parts(
+    'a8300000-0000-4000-8000-000000000001', pg_temp.turnkey_parts(v_off), NULL);
+  v_err := pg_temp.send_err('a8300000-0000-4000-8000-000000000001');
+  ASSERT v_err = 'a closed-book agreement needs a schedule of values written for your client',
+    format('T5(e send): %L', v_err);
+
+  v_off := jsonb_set(pg_temp.pricing_basis(), '{scheduleOfValues}',
+    jsonb_build_array(jsonb_build_object(
+      'id', 'kitchen', 'label', 'Kitchen', 'cents', pg_temp.m('gmp') - 1)));
+  v_err := pg_temp.save_err(
+    'a8300000-0000-4000-8000-000000000001', pg_temp.turnkey_parts(v_off));
+  ASSERT v_err = 'The schedule of values must come to the contract sum, to the cent.',
+    format('T5(e save): %L', v_err);
+
+  -- An OPEN book needs none: its schedule is the trades at cost, derived.
+  -- (T20(c) sends one end to end.)
+  ASSERT jsonb_array_length(public._agreement_schedule_of_values(
+           pg_temp.pricing_basis() - 'scheduleOfValues', 'open_book')) = 8,
+    'T5(e open): an open book derives its schedule from the cost lines';
 
   -- the sound set sends
   PERFORM public.upsert_agreement_parts(
@@ -1189,14 +1247,35 @@ BEGIN
   ASSERT (v_basis->'payload'->>'contractSumCents')::bigint = pg_temp.m('gmp'),
     'T16: the contract sum is HERS and travels explicitly';
   v_sov := v_basis->'payload'->'scheduleOfValues';
-  ASSERT jsonb_array_length(v_sov) = 7,
-    format('T16: seven pro-rated lines, got %s', jsonb_array_length(v_sov));
-  ASSERT (v_sov->0->>'cents')::bigint = pg_temp.m('sov_cabinetry'),
-    format('T16: pro-rated to the walk''s own table, got %s', v_sov->0->>'cents');
+  ASSERT jsonb_array_length(v_sov) = 2,
+    format('T16: the studio''s own lines, got %s', jsonb_array_length(v_sov));
+  ASSERT (v_sov->0->>'label') = 'Kitchen'
+     AND (v_sov->0->>'cents')::bigint = pg_temp.m('client_kitchen'),
+    format('T16: as she reads them, got %s', v_sov->0);
   SELECT sum((line->>'cents')::bigint) INTO v_total
   FROM jsonb_array_elements(v_sov) AS e(line);
   ASSERT v_total = pg_temp.m('gmp'),
     format('T16: the column sums to the contract price, got %s', v_total);
+
+  -- R43 — AND IT IS NOT THE COST LINES REARRANGED. The pro-rated table
+  -- (`cost * gmp / cost_basis`) is a uniform multiple, so one known pair
+  -- inverts it; nothing that crosses this edge is such a multiple.
+  ASSERT NOT EXISTS (
+    SELECT 1
+    FROM jsonb_array_elements(v_sov) AS s(line)
+    JOIN jsonb_array_elements(pg_temp.pricing_basis()->'costLines') AS c(cost)
+      ON true
+    WHERE (s.line->>'cents')::bigint IN (
+      (c.cost->>'basisCents')::bigint,
+      round((c.cost->>'basisCents')::numeric * pg_temp.m('gmp')
+            / pg_temp.m('cost_basis'))::bigint)
+  ), 'T16: no line the homeowner reads is a cost line times a constant';
+
+  -- The send door asks for those lines: a closed book with none is refused.
+  ASSERT public._agreement_schedule_of_values(
+           pg_temp.pricing_basis() - 'scheduleOfValues', 'closed_book')
+         = '[]'::jsonb,
+    'T16: a closed book with no authored lines has no schedule to show';
 
   -- The studio's own row is untouched: this is a projection, not a deletion.
   ASSERT (SELECT payload ? 'costLines' FROM public.proposal_agreement_parts
@@ -1385,8 +1464,10 @@ BEGIN
   ASSERT position('$84,134' IN v_html) > 0, 'T17: and prints it';
   ASSERT position('<h2>Schedule of values</h2>' IN v_html) > 0,
     'T17: the schedule of values is on the page she signed';
-  ASSERT position('$44,840' IN v_html) > 0,
-    'T17: pro-rated, to the same cent the door printed';
+  ASSERT position('Kitchen' IN v_html) > 0 AND position('$64,000' IN v_html) > 0,
+    'T17: the studio''s own lines, to the same cent the door printed (R43)';
+  ASSERT position('$44,840' IN v_html) = 0,
+    'T17: and never the pro-rated table, which divides back into a bid';
   ASSERT position('$8,413.40' IN v_html) > 0,
     'T17: the deposit draw, TO THE CENT — _agreement_money would have said $8,413';
   ASSERT position('$23,978.19' IN v_html) > 0, 'T17: the rough-in net';

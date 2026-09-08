@@ -1,20 +1,22 @@
 "use client";
 
 /**
- * The schedule of values — DERIVED from the cost lines, never authored.
+ * The schedule of values, exactly as the homeowner will read it.
  *
- * There is no separate schedule-of-values part, on purpose: an authored total
- * and a derived total drift, and the homeowner reads whichever one the page
- * happened to print. The cost lines are the one authored thing; this table is
- * what they come to.
+ * There is no separate schedule-of-values PART, on purpose: whichever mode is
+ * elected, one total lives on the pricing basis and the homeowner cannot read
+ * a second one that drifted from it.
  *
- * Two display modes, elected by the sub-disclosure clause (R13, RC-4):
+ * Two modes, elected by the sub-disclosure clause (R13, RC-4, R43):
  *
- *   · closed-book — every line carries its share of the fee, so no line
- *     divided by (1 + fee) hands the homeowner a trade's bid;
+ *   · closed-book — the studio's OWN lines, written on the pricing basis
+ *     above. Nothing here is derived from the cost lines, because a derived
+ *     table is a uniform multiple of them and divides straight back into a
+ *     trade's bid;
  *   · open-book — the trades stand at cost and the fee is its own line.
  *
- * Read-only by construction. Nothing on this table is typed.
+ * Read-only by construction: this is the display, and the editor above is
+ * where a closed-book line is typed.
  */
 
 import type {
@@ -32,12 +34,12 @@ const LABEL =
   "font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]";
 
 export const CLOSED_BOOK_NOTE =
-  "Closed-book — each line carries its share of the fee.";
+  "Closed-book — your client reads the lines you wrote, not the trades' costs.";
 export const OPEN_BOOK_NOTE =
   "Open-book — the trades stand at cost and the fee is its own line.";
 
 export const UNWRITTEN_NOTE =
-  "The schedule of values appears once the cost lines, the contract sum, and the open-book or closed-book choice are written.";
+  "The schedule of values appears once the contract sum, the open-book or closed-book choice, and the lines beneath them are written.";
 
 export function ScheduleOfValues({
   basis,

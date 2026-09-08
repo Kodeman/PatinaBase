@@ -103,6 +103,13 @@ const PRICING_BASIS = part({
         basisCents: 280_000,
       },
     ],
+    // R43 — the client-facing schedule of values, written by the studio and
+    // summing to the guaranteed maximum. Under a closed book this is what the
+    // homeowner reads; the cost lines above are the studio's own.
+    scheduleOfValues: [
+      { id: "kitchen", label: "Kitchen", cents: 6_400_000 },
+      { id: "mudroom", label: "Mudroom", cents: 2_013_400 },
+    ],
   },
 });
 
@@ -346,7 +353,7 @@ describe("the pricing-basis editor", () => {
     );
   });
 
-  it("pro-rates the schedule of values under closed-book", () => {
+  it("shows the studio's own lines under closed-book, and no cost line", () => {
     const { container } = render(
       <PartEditor
         part={PRICING_BASIS}
@@ -357,10 +364,54 @@ describe("the pricing-basis editor", () => {
       />,
     );
     expect(
-      container.querySelector('[data-sov-line="cabinetry"]')?.textContent,
-    ).toContain("$44,840.00");
+      container.querySelector('[data-sov-line="kitchen"]')?.textContent,
+    ).toContain("$64,000.00");
+    expect(
+      container.querySelector('[data-sov-line="cabinetry"]'),
+    ).not.toBeInTheDocument();
     expect(
       container.querySelector('[data-sov-line="fee"]'),
+    ).not.toBeInTheDocument();
+    // The pro-rated figure this wave stopped publishing is nowhere on the page.
+    expect(container.textContent).not.toContain("$44,840.00");
+  });
+
+  /* R43 — the closed-book lines are TYPED, in this editor, so the studio can
+     divide the work the way it sells it. */
+  it("writes a client-facing schedule-of-values line the studio types", () => {
+    const onChange = jest.fn();
+    render(
+      <PartEditor
+        part={PRICING_BASIS}
+        onChange={onChange}
+        readOnly={false}
+        libraryOn
+        turnkey={contextOf([PRICING_BASIS, SUB_DISCLOSURE])}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText("Schedule of values line 1"), {
+      target: { value: "Kitchen and pantry" },
+    });
+    const written = onChange.mock.calls.at(-1)![0] as Record<string, unknown>;
+    expect(
+      (written.scheduleOfValues as { label: string }[])[0].label,
+    ).toBe("Kitchen and pantry");
+    expect(written.costLines).toEqual(PRICING_BASIS.payload.costLines);
+  });
+
+  it("offers no client schedule of values under open-book", () => {
+    const openBook = { ...SUB_DISCLOSURE, payload: { mode: "open_book" } };
+    render(
+      <PartEditor
+        part={PRICING_BASIS}
+        onChange={jest.fn()}
+        readOnly={false}
+        libraryOn
+        turnkey={contextOf([PRICING_BASIS, openBook])}
+      />,
+    );
+    expect(
+      screen.queryByLabelText("Schedule of values line 1"),
     ).not.toBeInTheDocument();
   });
 

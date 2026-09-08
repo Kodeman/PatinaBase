@@ -62,6 +62,10 @@ function pricingBasis(subMarkupBps: number | null): AgreementPart {
           basisCents: 7_130_000,
         },
       ],
+      // R43 — a closed book carries the client-facing lines the studio wrote.
+      scheduleOfValues: [
+        { id: "kitchen", label: "Kitchen", cents: 8_413_400 },
+      ],
     },
   });
 }

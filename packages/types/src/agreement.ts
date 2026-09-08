@@ -301,13 +301,36 @@ export type PricingBasisKind = (typeof PRICING_BASIS_KINDS)[number];
 export const SUB_DISCLOSURE_MODES = ['open_book', 'closed_book'] as const;
 export type SubDisclosureMode = (typeof SUB_DISCLOSURE_MODES)[number];
 
-/** One line of the cost breakdown behind a design-build pricing basis. The
- *  schedule of values is *derived* from these, never separately authored. */
+/** One line of the cost breakdown behind a design-build pricing basis. Under
+ *  `open_book` the schedule of values is derived from these — the trades at
+ *  cost, the fee as its own line. Under `closed_book` it is not: see
+ *  {@link DesignBuildScheduleOfValuesLine}. */
 export interface DesignBuildCostLine {
   id: string;
   label: string;
   category: 'sub' | 'general_conditions' | 'allowance';
   basisCents: number;
+}
+
+/**
+ * One line of the CLIENT-FACING schedule of values (R43).
+ *
+ * A pro-rated schedule is invertible: one known (cost, line) pair gives the
+ * multiplier, and the multiplier gives every trade's price — which is exactly
+ * what RC-4 asks a closed book not to publish, and the allowance parts state
+ * their amounts at cost, so one such pair is always on the page. So under
+ * `closed_book` the studio AUTHORS these lines instead: they are the studio's
+ * own division of the work (a room, a phase, or a single "Construction"
+ * line), they sum to the contract sum to the cent, and no arithmetic over
+ * them recovers a bid.
+ *
+ * Under `open_book` they are ignored: the trades stand at cost and the fee is
+ * its own line, which is what that clause elects.
+ */
+export interface DesignBuildScheduleOfValuesLine {
+  id: string;
+  label: string;
+  cents: number;
 }
 
 /** `pricing_basis` schedule payload, design-build shape (record-only, R9).
@@ -333,6 +356,13 @@ export interface DesignBuildPricingBasisPayload {
   nteCents: number | null;
   /** Present only for `fixed`. */
   fixedCents: number | null;
+  /**
+   * R43 — the client-facing schedule of values, authored by the studio and
+   * required (summing to the contract sum) whenever the disclosure is not
+   * `open_book`. Empty on a draft nobody has divided up yet, and unread
+   * under `open_book`.
+   */
+  scheduleOfValues: DesignBuildScheduleOfValuesLine[];
   subDisclosure: SubDisclosureMode | null;
 }
 

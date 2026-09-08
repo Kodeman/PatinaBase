@@ -6,7 +6,11 @@
  * contracts at the data-access boundary.
  */
 
-import type { DesignBuildPricingBasisPayload, LienWaiverType } from './agreement';
+import type {
+  DesignBuildPricingBasisPayload,
+  DesignBuildScheduleOfValuesLine,
+  LienWaiverType,
+} from './agreement';
 
 export const COMMERCIAL_DOCUMENT_KINDS = [
   'legacy',
@@ -290,14 +294,11 @@ export interface TradeScopeExecutionResult {
  * build/waves/w3/build-sheet.md §2.6 I-1.
  */
 
-/** One line of the (derived, never separately authored) schedule of values —
- *  pro-rated when the sub-disclosure clause reads `closed_book`, at-cost plus
- *  its own fee line when `open_book` (build-sheet §4.1). */
-export interface DesignBuildScheduleOfValuesLine {
-  id: string;
-  label: string;
-  cents: number;
-}
+/** One line of the schedule of values the homeowner reads — the studio's own
+ *  authored lines when the sub-disclosure clause reads `closed_book` (R43),
+ *  the trades at cost plus their own fee line when `open_book`. Declared once,
+ *  beside the payload it lives on. */
+export type { DesignBuildScheduleOfValuesLine } from './agreement';
 
 /** One row of the client's draw ledger — mirrors {@link TradeScopeDraw}'s
  *  rendered-ledger shape, not the authored `draws` payload

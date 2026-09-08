@@ -140,6 +140,13 @@ const PARTS = [
       gmpCents: GMP_CENTS,
       subDisclosure: 'closed_book',
       costLines: COST_LINES,
+      // R43 — the client-facing schedule of values a closed book carries:
+      // the studio's own division of the house, summing to the guaranteed
+      // maximum. `send_commercial_document` refuses a closed book without one.
+      scheduleOfValues: [
+        { id: 'kitchen', label: 'Kitchen', cents: 6_400_000 },
+        { id: 'mudroom', label: 'Mudroom', cents: 2_013_400 },
+      ],
     },
   },
   {
@@ -358,8 +365,12 @@ test.describe('P13 — the deposit is offered after the signature, never before'
     await expect(sov).toHaveAttribute('data-disclosure', 'closed_book');
     await expect(page.getByTestId('design-build-sov-total')).toContainText('$84,134');
     await expect(page.getByTestId('design-build-contract-sum')).toContainText('$84,134');
-    await expect(sov.getByTestId('design-build-sov-line').first()).toBeVisible();
+    await expect(sov.getByTestId('design-build-sov-line')).toHaveCount(2);
+    await expect(sov).toContainText('Kitchen');
+    await expect(sov).toContainText('$64,000');
+    // R43 — no trade's cost, and no cost pro-rated by the fee.
     await expect(page.locator('body')).not.toContainText('$38,000');
+    await expect(page.locator('body')).not.toContainText('$44,840');
     // The words BOTH halves say. The door renders `composeConsentLine` and the
     // signature row keeps `compose_agreement_consent`'s; this is the exported
     // pin (`HALVORSEN_DESIGN_BUILD_CONSENT`) the SQL test asserts against too,

@@ -73,6 +73,18 @@ const halvorsen: HalvorsenFixture = JSON.parse(
   readFileSync(FIXTURES_PATH, "utf8"),
 ).halvorsen;
 
+/**
+ * R43 — the client-facing schedule of values the studio writes under a closed
+ * book: the Halvorsen house's own two rooms, summing to the guaranteed
+ * maximum. The `expected.scheduleOfValuesCents` block in the fixture file is
+ * the PRO-RATED table this wave stopped publishing; it survives below as the
+ * thing no client line may equal.
+ */
+const CLIENT_SOV = [
+  { id: "kitchen", label: "Kitchen", cents: 6_400_000 },
+  { id: "mudroom", label: "Mudroom", cents: 2_013_400 },
+];
+
 /** The pricing basis exactly as the composer would hold it after step 5 of
  *  the walk. `subMarkupBps` is deliberately absent — step 8 is where a markup
  *  enters, and the no-double-count suite is where it is tested. */
@@ -82,6 +94,7 @@ function pricingBasisPayload(): Record<string, unknown> {
     costLines: halvorsen.costBasisLines,
     feeBps: halvorsen.feePct * 100,
     gmpCents: halvorsen.expected.gmpCents,
+    scheduleOfValues: CLIENT_SOV,
     subDisclosure: "closed_book",
   };
 }
@@ -177,16 +190,36 @@ describe("the Halvorsen pricing basis", () => {
 describe("the Halvorsen schedule of values", () => {
   const basis = readPricingBasis(pricingBasisPayload());
 
-  it("pro-rates every line under closed-book, to the cent", () => {
+  it("prints the studio's own lines under closed-book, never the costs", () => {
     const lines = scheduleOfValues(basis, "closed_book");
-    const byId = Object.fromEntries(lines.map((line) => [line.id, line.cents]));
-    expect(byId).toEqual(halvorsen.expected.scheduleOfValuesCents);
+    expect(lines).toEqual(CLIENT_SOV);
   });
 
   it("sums to the contract sum", () => {
     const lines = scheduleOfValues(basis, "closed_book");
     expect(lines.reduce((sum, line) => sum + line.cents, 0)).toBe(
       halvorsen.expected.scheduleOfValuesTotalCents,
+    );
+  });
+
+  it("shows nothing at all when the studio has written no lines", () => {
+    const undivided = readPricingBasis({
+      ...pricingBasisPayload(),
+      scheduleOfValues: [],
+    });
+    expect(scheduleOfValues(undivided, "closed_book")).toEqual([]);
+    expect(validatePricingBasis(undivided)).toBe(
+      "Write the schedule of values your client will read.",
+    );
+  });
+
+  it("refuses a client schedule that does not come to the contract sum", () => {
+    const short = readPricingBasis({
+      ...pricingBasisPayload(),
+      scheduleOfValues: [{ id: "kitchen", label: "Kitchen", cents: 1 }],
+    });
+    expect(validatePricingBasis(short)).toBe(
+      "The schedule of values must come to the contract sum, to the cent.",
     );
   });
 
@@ -205,13 +238,23 @@ describe("the Halvorsen schedule of values", () => {
   });
 
   it("never lets a closed-book line be divided back into a sub’s bid", () => {
-    // RC-4: under closed-book every line carries the fee, so `line ÷ (1 + fee)`
-    // is the cost — which is exactly why no line may equal a cost line.
+    /* RC-4, ruled R43: a pro-rated table is a UNIFORM multiple of the costs,
+       so one known (cost, line) pair inverts it — and the allowance parts
+       state their amounts at cost on the same page. So the closed-book table
+       is authored, and no line on it is a cost line, or a cost line under the
+       pro-rating this wave stopped publishing. */
     const lines = scheduleOfValues(basis, "closed_book");
+    const multiplier =
+      halvorsen.expected.gmpCents / halvorsen.expected.costBasisCents;
     for (const line of lines) {
-      const cost = halvorsen.costBasisLines.find((l) => l.id === line.id);
-      expect(line.cents).not.toBe(cost?.basisCents);
+      for (const cost of halvorsen.costBasisLines) {
+        expect(line.cents).not.toBe(cost.basisCents);
+        expect(line.cents).not.toBe(Math.round(cost.basisCents * multiplier));
+      }
     }
+    expect(Object.values(halvorsen.expected.scheduleOfValuesCents)).not.toContain(
+      lines[0].cents,
+    );
   });
 });
 

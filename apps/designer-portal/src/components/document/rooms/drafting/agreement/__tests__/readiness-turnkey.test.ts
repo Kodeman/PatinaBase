@@ -74,6 +74,10 @@ const pricingBasis = part({
         basisCents: 7_130_000,
       },
     ],
+    // R43 — a closed book carries the client-facing lines the studio wrote.
+    scheduleOfValues: [
+      { id: "kitchen", label: "Kitchen", cents: 8_413_400 },
+    ],
   },
 });
 
@@ -399,6 +403,9 @@ describe("an allowance line with no allowance behind it", () => {
             category: "allowance",
             basisCents: 900_000,
           },
+        ],
+        scheduleOfValues: [
+          { id: "whole", label: "Construction", cents: 1_000_000 },
         ],
       },
     });

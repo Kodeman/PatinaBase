@@ -1,12 +1,15 @@
 /**
  * The turnkey class's arithmetic — P9.
  *
- * Every figure a design-build agreement shows is DERIVED from two authored
- * payloads: the pricing basis (its cost lines and its fee) and the draw
- * schedule (its percentages and its retainage). Nothing here is separately
- * typed by a designer, which is the whole reason the schedule of values is
- * not its own part: an authored total and a derived total drift, and a
- * homeowner reads whichever one the page happened to print.
+ * Almost every figure a design-build agreement shows is DERIVED from two
+ * authored payloads: the pricing basis (its cost lines and its fee) and the
+ * draw schedule (its percentages and its retainage).
+ *
+ * The one exception is R43's client-facing schedule of values under a closed
+ * book, which the studio writes itself and which lives on the pricing basis
+ * rather than in a part of its own — so there is still exactly one authored
+ * total per contract and no second one to drift from it. It is held to the
+ * contract sum to the cent, at this door and at the database's.
  *
  * The rounding rule is the one the trade instrument already uses and the one
  * `send_commercial_document`'s arm checks: **the last row takes the
@@ -36,6 +39,7 @@ import {
   type DesignBuildDraw,
   type DesignBuildDrawsPayload,
   type DesignBuildPricingBasisPayload,
+  type DesignBuildScheduleOfValuesLine,
   type DesignBuildSubDisclosurePayload,
   type DesignBuildSupervisionPayload,
   type PricingBasisKind,
@@ -124,8 +128,32 @@ export function readPricingBasis(
     gmpCents: readInt(payload.gmpCents),
     nteCents: readInt(payload.nteCents),
     fixedCents: readInt(payload.fixedCents),
+    scheduleOfValues: readScheduleOfValuesLines(payload),
     subDisclosure,
   };
+}
+
+/**
+ * The client-facing schedule of values the studio authored (R43). Read as
+ * written, like everything else here: an unwritten one is an empty list, never
+ * a list this reader made up out of the cost lines.
+ */
+export function readScheduleOfValuesLines(
+  payload: Record<string, unknown>,
+): DesignBuildScheduleOfValuesLine[] {
+  const raw = payload.scheduleOfValues;
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((entry, index) => {
+    if (!entry || typeof entry !== "object") return [];
+    const line = entry as Record<string, unknown>;
+    return [
+      {
+        id: typeof line.id === "string" && line.id ? line.id : `sov-${index}`,
+        label: typeof line.label === "string" ? line.label : "",
+        cents: readInt(line.cents) ?? 0,
+      },
+    ];
+  });
 }
 
 /**
@@ -270,59 +298,68 @@ export interface ScheduleOfValuesLine {
 }
 
 /**
- * The schedule of values, derived — never separately authored.
+ * The schedule of values, in the mode the sub-disclosure clause elected
+ * (R13, RC-4, R43).
  *
- * Two modes, elected by the sub-disclosure clause (R13, RC-4):
- *
- *   · `closed_book` — every line is PRO-RATED, so the fee is spread across
- *     all of them and no single line divided by (1 + fee) hands the homeowner
- *     a sub's bid.
+ *   · `closed_book` — THE STUDIO'S OWN LINES, authored on the pricing basis
+ *     and nothing to do with the cost lines. A pro-rated table is a uniform
+ *     multiple of the costs, and the allowance parts state their amounts at
+ *     cost on the same client-visible page, so one (cost, line) pair hands
+ *     the reader the multiplier and the multiplier hands them every trade's
+ *     price. R43 answers RC-4 by not deriving it at all.
  *   · `open_book` — the lines stand at cost and the fee is its own line. The
  *     studio has chosen to show its margin.
  *
- * The last line takes the remainder in both modes, so the schedule sums to
- * the contract sum to the cent.
+ * `_agreement_schedule_of_values` reads the same two sources in the same
+ * order, so the composer, the homeowner's door and the keepsake print one
+ * table.
  */
 export function scheduleOfValues(
   basis: DesignBuildPricingBasisPayload,
   mode: SubDisclosureMode | null = basis.subDisclosure,
 ): ScheduleOfValuesLine[] {
-  const lines = basis.costLines;
-  // Pro-rating IS the closed-book presentation, so an unchosen mode has no
+  // The disclosure is a term the homeowner reads, so an unchosen mode has no
   // honest table to draw — it has a question outstanding.
   if (mode === null) return [];
+
+  if (mode !== "open_book") {
+    return basis.scheduleOfValues
+      .filter((line) => line.label.trim().length > 0)
+      .map((line) => ({ id: line.id, label: line.label, cents: line.cents }));
+  }
+
+  const lines = basis.costLines;
   if (lines.length === 0) return [];
   const cost = costBasisCents(basis);
   const sum = contractSumCents(basis);
   if (sum === null || cost <= 0) return [];
 
-  if (mode === "open_book") {
-    const atCost = lines.map((line) => ({
-      id: line.id,
-      label: line.label,
-      cents: line.basisCents,
-    }));
-    const margin = sum - cost;
-    if (margin === 0) return atCost;
-    return [
-      ...atCost,
-      { id: "fee", label: feeLineLabel(basis), cents: margin },
-    ];
-  }
-
-  const prorated = lines.map((line) => ({
+  const atCost = lines.map((line) => ({
     id: line.id,
     label: line.label,
-    cents: Math.round((line.basisCents * sum) / cost),
+    cents: line.basisCents,
   }));
-  const head = prorated
-    .slice(0, -1)
-    .reduce((total, line) => total + line.cents, 0);
-  prorated[prorated.length - 1] = {
-    ...prorated[prorated.length - 1],
-    cents: sum - head,
-  };
-  return prorated;
+  const margin = sum - cost;
+  if (margin === 0) return atCost;
+  return [...atCost, { id: "fee", label: feeLineLabel(basis), cents: margin }];
+}
+
+/**
+ * The default division a studio starts from when it elects a closed book
+ * (R43): one line, named for the work, carrying the whole contract sum. The
+ * studio then splits it by room or by phase if it wants to; a single
+ * "Construction" line is a complete answer.
+ */
+export const DEFAULT_SCHEDULE_OF_VALUES_LABEL = "Construction";
+
+export function seedScheduleOfValues(
+  basis: DesignBuildPricingBasisPayload,
+): DesignBuildScheduleOfValuesLine[] {
+  const sum = contractSumCents(basis);
+  if (sum === null || sum <= 0) return [];
+  return [
+    { id: "construction", label: DEFAULT_SCHEDULE_OF_VALUES_LABEL, cents: sum },
+  ];
 }
 
 /** What the open-book fee line is called. A percentage the studio wrote is
@@ -523,6 +560,25 @@ export function validatePricingBasis(
     !(SUB_DISCLOSURE_MODES as readonly string[]).includes(basis.subDisclosure)
   ) {
     return "Choose whether the trades are shown open-book or closed-book.";
+  }
+  // R43 — the client-facing schedule of values, held to the same rule the
+  // draw schedule lives by. Judged whenever lines exist, in either mode; the
+  // closed book is additionally required to have some.
+  const authored = basis.scheduleOfValues;
+  if (authored.length > 0) {
+    if (authored.some((line) => !line.label.trim())) {
+      return "Every schedule-of-values line needs a name.";
+    }
+    if (authored.some((line) => line.cents <= 0)) {
+      return "Every schedule-of-values line needs an amount.";
+    }
+    const sum = contractSumCents(basis);
+    const total = authored.reduce((running, line) => running + line.cents, 0);
+    if (sum !== null && total !== sum) {
+      return "The schedule of values must come to the contract sum, to the cent.";
+    }
+  } else if (basis.subDisclosure === "closed_book") {
+    return "Write the schedule of values your client will read.";
   }
   return null;
 }
