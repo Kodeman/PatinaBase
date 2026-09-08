@@ -1,10 +1,23 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import type { FFEStageKey } from '@patina/types';
 
+import { PLAN_PHONE_CONTENT_PX } from '../plan-key';
 import type { ClientSelection } from '@/lib/commercial-documents';
 import type { RoomBandModel, ThresholdMark } from '@/lib/threshold/derive';
 
 import { RoomBand } from '../room-band';
+
+/** The phone the eleven-pixel floor exists for. `jest.setup.js` installs
+ *  `matchMedia` as a writable-but-not-configurable property, so it is assigned
+ *  rather than redefined. */
+function readingOnAPhone(phone: boolean) {
+  window.matchMedia = jest.fn().mockImplementation((query: string) => ({
+    matches: phone,
+    media: query,
+    addEventListener: jest.fn(),
+    removeEventListener: jest.fn(),
+  })) as unknown as typeof window.matchMedia;
+}
 
 // ── Fixtures — the library & lounge, 5 August 2026 ──────────────────────────
 
@@ -72,6 +85,7 @@ function band(over: Partial<RoomBandModel> = {}): RoomBandModel {
     targetCents: 2380000,
     agreedCents,
     varianceLine: 'about eleven hundred past its target',
+    conceptRender: null,
     pieces,
     marks: [DOOR_MARK],
     ...over,
@@ -166,8 +180,11 @@ describe('RoomBand', () => {
     expect(head).toHaveAttribute('y1', '52');
     expect(screen.getByTestId('room-band-threshold')).toHaveAttribute('stroke-dasharray', '2 4');
     // Line work and no closed outline: the old rectangle read as an empty box.
-    expect(container.querySelectorAll('svg line')).toHaveLength(5);
-    expect(container.querySelectorAll('svg rect')).toHaveLength(2);
+    // Scoped to the room's own drawing — every plate now carries a silhouette
+    // with strokes of its own.
+    expect(drawing.querySelectorAll('line')).toHaveLength(5);
+    expect(drawing.querySelectorAll('rect')).toHaveLength(2);
+    expect(container).toBeTruthy();
   });
 
   it('spaces the footprints evenly and sizes them by quantity', () => {
@@ -199,15 +216,36 @@ describe('RoomBand', () => {
     }
   });
 
-  it('draws an 80-unit outline with the room’s name inside when nothing stands here', () => {
+  /* PP-4 — A ROOM WITH NOTHING IN IT IS A SENTENCE, NOT A RECTANGLE.
+     The outlined <rect> that used to stand here read as furniture-sized empty
+     space. House sheet A10: a floor line at the band's full width and one
+     sentence, and never a zero. */
+  it('rules a floor line and says one sentence when nothing stands here', () => {
     const { container } = render(
       <RoomBand band={band({ pieces: [], agreedCents: 0, marks: [] })} projectId="proj-1" />,
     );
 
-    const drawing = screen.getByTestId('room-band-drawing');
-    expect(drawing).toHaveAttribute('viewBox', '0 0 1000 80');
-    expect(screen.getByTestId('room-band-drawing-name')).toHaveTextContent('Library & lounge');
+    expect(screen.queryByTestId('room-band-drawing')).not.toBeInTheDocument();
+    expect(screen.getByTestId('room-band-empty-floor')).toBeInTheDocument();
+    expect(screen.getByTestId('room-band-empty')).toHaveTextContent(
+      'Nothing stands here yet.',
+    );
+    expect(container.querySelectorAll('rect')).toHaveLength(0);
     expect(container.querySelectorAll('[data-footprint]')).toHaveLength(0);
+  });
+
+  it('names the room the work starts in when the house knows one', () => {
+    render(
+      <RoomBand
+        band={band({ pieces: [], agreedCents: 0, marks: [] })}
+        projectId="proj-1"
+        leadRoomName="Study"
+      />,
+    );
+
+    expect(screen.getByTestId('room-band-empty')).toHaveTextContent(
+      'Nothing stands here yet. The Study comes first.',
+    );
   });
 
   it('rules the floor line of settled type when the band has receipts', () => {
@@ -282,6 +320,54 @@ describe('RoomBand', () => {
     expect(screen.getByRole('heading', { level: 2 })).toBeInTheDocument();
     expect(screen.queryByTestId('room-band-pieces')).not.toBeInTheDocument();
     expect(screen.queryByTestId('room-band-floorline')).not.toBeInTheDocument();
+  });
+
+  /* PP-4 — THE ELEVEN-PIXEL FLOOR, PORTED FROM THE PLAN KEY.
+     SVG type is in user units, so a footprint label's rendered size is
+     `fontSize x contentPx / viewBoxWidth`. At 11 units over a 1000-unit
+     viewBox that is 3.9px on a 390 phone. The crop and the type bump come
+     from `plan-key.tsx`, so both drawings hold one floor. */
+  it('holds the footprint labels at eleven rendered pixels on a phone', () => {
+    readingOnAPhone(true);
+    const { container } = render(<RoomBand band={band()} projectId="proj-1" />);
+
+    const drawing = screen.getByTestId('room-band-drawing');
+    const width = Number(drawing.getAttribute('viewBox')?.split(' ')[2]);
+    const labels = Array.from(container.querySelectorAll('[data-footprint-label]'));
+    expect(labels).toHaveLength(2);
+    for (const label of labels) {
+      const units = Number(label.getAttribute('font-size'));
+      expect((units * PLAN_PHONE_CONTENT_PX) / width).toBeGreaterThanOrEqual(11);
+    }
+  });
+
+  it('keeps the desk drawing at its full measure and its 11-unit lettering', () => {
+    readingOnAPhone(false);
+    const { container } = render(<RoomBand band={band()} projectId="proj-1" />);
+
+    expect(screen.getByTestId('room-band-drawing')).toHaveAttribute(
+      'viewBox',
+      '0 0 1000 140',
+    );
+    for (const label of Array.from(container.querySelectorAll('[data-footprint-label]'))) {
+      expect(label).toHaveAttribute('font-size', '11');
+    }
+  });
+
+  it('carries every footprint into the phone crop rather than cutting one off', () => {
+    readingOnAPhone(true);
+    const { container } = render(<RoomBand band={band()} projectId="proj-1" />);
+
+    const width = Number(
+      screen.getByTestId('room-band-drawing').getAttribute('viewBox')?.split(' ')[2],
+    );
+    const feet = Array.from(container.querySelectorAll('[data-footprint]'));
+    expect(feet).toHaveLength(2);
+    for (const foot of feet) {
+      const right = Number(foot.getAttribute('x')) + Number(foot.getAttribute('width'));
+      expect(right).toBeLessThanOrEqual(width);
+    }
+    expect(screen.getByTestId('room-band-floor')).toHaveAttribute('x2', String(width - 56));
   });
 
   it('hosts room-scoped gates in its children slot', () => {

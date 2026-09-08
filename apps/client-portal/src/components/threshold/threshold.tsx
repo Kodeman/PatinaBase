@@ -878,6 +878,12 @@ export function Threshold({
   const onDoorstep = (mark: ThresholdMark) =>
     mark.roomId === null || !banded.has(mark.roomId);
 
+  // The room the work has actually started in, for the bands that have nothing
+  // on their floor yet. Null while nothing has been agreed anywhere — an empty
+  // room then says only that it is empty, which is all the house knows.
+  const leadRoomName =
+    model.bands.find((band) => band.pieces.length > 0)?.name ?? null;
+
   const doorstepGates: ReactNode[] = [
     ...doorMarks.filter(onDoorstep).map(renderDoor),
     ...wallMarks.filter(onDoorstep).map(renderWall),
@@ -1295,7 +1301,13 @@ export function Threshold({
           )}
 
           {model.bands.map((band) => (
-            <RoomBand key={band.roomId} band={band} projectId={projectId}>
+            <RoomBand
+              key={band.roomId}
+              band={band}
+              projectId={projectId}
+              studioName={studioName}
+              leadRoomName={leadRoomName}
+            >
               {/* ONE array, keyed by mark: a door that has just been signed
                   leaves `band.marks` (the band's own sentence may not go on
                   saying a door waits on her name) and arrives from

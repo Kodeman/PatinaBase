@@ -7,6 +7,10 @@ import {
   GOODS_JOURNEY_STAGES,
   journeyStageIndexForStatus,
 } from '@/components/commercial/journey-stepper';
+import {
+  PieceSilhouette,
+  silhouetteCategory,
+} from '@/components/threshold/instruments/piece-silhouette';
 
 /* ── TRACKING ROW — parcel-grade, for a piece of furniture ───────────────────
    The piece, what it cost, a six-stop micro-spine filled to where it actually
@@ -63,7 +67,7 @@ export interface TrackingRowProps {
   /** The piece, as the client knows it. */
   name: string;
   /**
-   * The selection's image. Null draws a quiet placeholder block, not a gap —
+   * The selection's image. Null draws a silhouette of the piece, not a gap —
    * and so does a URL that fails to load, because a browser's broken-image
    * glyph is the one mark on this page nobody chose to put there.
    */
@@ -72,6 +76,50 @@ export interface TrackingRowProps {
   priceCents: number | null;
   /** Where the piece stands — the FF&E procurement stage, unmapped. */
   status: FFEStageKey;
+  /** The selection's loose kind word, read only to choose the silhouette. */
+  itemType?: string | null;
+  /** Whose drawing it is. Absent studio → the caption simply says "drawing". */
+  studioName?: string | null;
+  /**
+   * Who is making the piece. `ClientSelection` carries no maker column today,
+   * so this is normally absent and the caption says nothing about one — the
+   * "photograph … to follow" clause is printed only where a maker is named.
+   */
+  maker?: string | null;
+}
+
+/** R140: a plate goes to 96px above a value threshold, and 64px below it. */
+const LARGE_PLATE_MIN_CENTS = 200_000;
+
+/**
+ * The plate's caption — what · whose. A drawing says it is a drawing, so a
+ * client never reads an outline as a photograph of her own piece; a
+ * photograph says whose it is where that is known. Nothing is guessed: a
+ * clause with no column behind it is not printed.
+ */
+export function plateCaption({
+  name,
+  drawn,
+  studioName,
+  maker,
+}: {
+  name: string;
+  drawn: boolean;
+  studioName?: string | null;
+  maker?: string | null;
+}): string {
+  const studio = studioName?.trim() || null;
+  const made = maker?.trim() || null;
+  if (!drawn) {
+    return [name, made ? `photograph from ${made}` : 'photograph'].join(' · ');
+  }
+  return [
+    name,
+    studio ? `drawing by ${studio}` : 'drawing',
+    made ? `photograph from ${made} to follow` : null,
+  ]
+    .filter((part): part is string => !!part)
+    .join(' · ');
 }
 
 // Whole-dollar, no cents — the idiom the rest of the commercial rail uses for
@@ -85,7 +133,15 @@ function money(cents: number, currency = 'USD'): string {
   }).format(cents / 100);
 }
 
-export function TrackingRow({ name, imageUrl, priceCents, status }: TrackingRowProps) {
+export function TrackingRow({
+  name,
+  imageUrl,
+  priceCents,
+  status,
+  itemType,
+  studioName,
+  maker,
+}: TrackingRowProps) {
   const stopIndex = journeyStageIndexForStatus(status);
   const stage = GOODS_JOURNEY_STAGES[stopIndex];
   const ink = STAGE_INK[stopIndex];
@@ -93,31 +149,44 @@ export function TrackingRow({ name, imageUrl, priceCents, status }: TrackingRowP
   // instead of staying quiet because an earlier one 404'd.
   const [brokenUrl, setBrokenUrl] = useState<string | null>(null);
   const drawImage = !!imageUrl && brokenUrl !== imageUrl;
+  const large = typeof priceCents === 'number' && priceCents >= LARGE_PLATE_MIN_CENTS;
+  // 64px everywhere the page is dense or narrow; 96px only where the room is
+  // wide enough for it AND the piece is worth the floor it would take.
+  const plate = large
+    ? 'h-16 w-16 min-[960px]:h-24 min-[960px]:w-24'
+    : 'h-16 w-16';
 
   return (
     <div
       data-testid="tracking-row"
       data-journey-stop={stage}
-      className="flex items-start gap-4 border-b border-[var(--border-subtle)] py-3.5"
+      className="grid grid-cols-[auto_minmax(0,1fr)_auto] gap-x-4 gap-y-3 border-b border-[var(--border-subtle)] py-3.5"
     >
-      {drawImage ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={imageUrl as string}
-          alt=""
-          onError={() => setBrokenUrl(imageUrl)}
-          className="h-16 w-16 shrink-0 rounded-[3px] object-cover"
-          data-testid="tracking-row-thumb"
-        />
-      ) : (
-        <span
-          aria-hidden="true"
-          data-testid="tracking-row-thumb-placeholder"
-          className="h-16 w-16 shrink-0 rounded-[3px] border border-[var(--border-subtle)] bg-[var(--bg-warm)]"
-        />
-      )}
+      <div
+        data-testid="tracking-row-plate"
+        data-plate={large ? '96' : '64'}
+        className={`${plate} col-start-1 row-start-1 row-span-2 shrink-0 overflow-hidden rounded-[3px] border border-[var(--border-default)] bg-[var(--paper-doc)]`}
+      >
+        {drawImage ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={imageUrl as string}
+            alt=""
+            onError={() => setBrokenUrl(imageUrl)}
+            className="h-full w-full object-cover"
+            data-testid="tracking-row-thumb"
+          />
+        ) : (
+          <span
+            data-testid="tracking-row-thumb-placeholder"
+            className="block h-full w-full"
+          >
+            <PieceSilhouette category={silhouetteCategory(name, itemType)} name={name} />
+          </span>
+        )}
+      </div>
 
-      <div className="min-w-0 flex-1">
+      <div className="col-start-2 row-start-1 min-w-0">
         <p className="type-body-small font-medium text-[var(--text-primary)]">{name}</p>
 
         {typeof priceCents === 'number' && (
@@ -129,12 +198,23 @@ export function TrackingRow({ name, imageUrl, priceCents, status }: TrackingRowP
         <MicroSpine stopIndex={stopIndex} stage={stage} ink={ink} />
       </div>
 
-      <StatusStamp stage={stage} ink={ink} />
+      <div className="col-start-3 row-start-1">
+        <StatusStamp stage={stage} ink={ink} />
+      </div>
+
+      <p
+        data-testid="tracking-row-caption"
+        className="t-meta col-start-2 col-span-2 row-start-2 text-[var(--ink-subtle)]"
+      >
+        {plateCaption({ name, drawn: !drawImage, studioName, maker })}
+      </p>
     </div>
   );
 }
 
-/** Six stops on a rule, filled to where the piece stands, the stop named. */
+/* Six stops on a rule, filled to where the piece stands. The stage word prints
+   ONCE on the row — in the stamp — and is announced once here, to a screen
+   reader; the 9px duplicate that used to sit at the end of the rule is gone. */
 function MicroSpine({
   stopIndex,
   stage,
@@ -181,13 +261,6 @@ function MicroSpine({
           </Fragment>
         );
       })}
-      <span
-        aria-hidden="true"
-        data-testid="tracking-row-stop-label"
-        className="ml-4 font-mono text-[9px] font-semibold uppercase tracking-[0.16em] text-[var(--text-primary)]"
-      >
-        {stage}
-      </span>
     </div>
   );
 }
@@ -207,7 +280,7 @@ function StatusStamp({ stage, ink }: { stage: string; ink: string }) {
       style={{ color: ink }}
     >
       <span className="pointer-events-none absolute inset-[2.5px] rounded-[1px] border border-current opacity-[0.42]" />
-      <span className="relative block whitespace-nowrap font-mono text-[9px] font-bold uppercase tracking-[0.2em]">
+      <span className="relative block whitespace-nowrap font-mono text-[11px] font-bold uppercase tracking-[0.2em]">
         {stage}
       </span>
     </span>
