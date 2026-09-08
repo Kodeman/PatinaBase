@@ -740,3 +740,237 @@ pnpm --filter @patina/supabase type-check   → clean
 4. **Every lane — F-W3-7.** No `patina.licensing_attestation` part is
    materialized; the rail is ten parts. The attestation is a studio-level record
    read through `studio_has_live_license_attestation`, not a part of the paper.
+
+---
+
+# Round 2 — the three findings, verified, and where each one lands
+
+Round 2 changed **no file on this branch**. All three findings were re-derived
+from first principles on a fresh clone; two of them are true and correct
+*about this branch's output* while their fix lies in another lane's source, and
+the third is a ruling nobody in a lane has the authority to make. What this
+round produced is evidence, and the exact instruction each other lane needs.
+
+Branch is unmoved at `782fb31f9`; `git diff --stat main...HEAD` = 17 files,
+14 749 insertions, 21 deletions.
+
+## R2-1 (blocker) — CONFIRMED, and it is the client lane's source
+
+The reviewer is right about the shape and right about the direction.
+
+- `_agreement_redact_client_payload` (00578:1408) adds `contractSumCents` and
+  `scheduleOfValues` to every `schedule/pricing_basis` payload, then under
+  anything but `open_book` returns `v_payload - 'costLines' - 'feeBps' -
+  'costBasisCents' - 'subMarkupBps'`. That is B3, and it is correct: those four
+  keys are the disclosure the clause declined to make.
+- The **keepsake agrees with the backend.** `_render_agreement_snapshot_html`
+  (00578:8079) redacts through the same function and then draws its schedule
+  from `v_payload->'scheduleOfValues'` (00578:8139-8157), with the Cost basis
+  and Fee rows written as explicitly open-book-only rows. Read on the branch,
+  the keepsake is not "rendering the full table" — it is rendering the
+  *projected* table, correctly, in both modes.
+- The **live door does not.** `apps/client-portal/.../design-build-body.tsx` on
+  `agreement/w3-client` (read here with `git show`, since that file does not
+  exist in this worktree) has `readPricingBasis` build `costLines` from
+  `payload.costLines`, set `costBasisCents` as their sum, and derive
+  `contractSumCents` from `gmpCents ?? nteCents ?? fixedCents` or from
+  `costBasis × (1+fee)`. `scheduleOfValues(reading)` then re-derives the
+  pro-ration client-side and short-circuits on
+  `costLines.length === 0 || costBasisCents <= 0`. Against a redacted payload
+  that is `[]`, so the SOV section, the Cost basis row and the Fee row vanish
+  from a closed-book door while the keepsake of the same agreement shows the
+  schedule.
+
+So the asymmetry is real and it is one-sided: **the backend and the keepsake
+speak the new contract; the client TSX still speaks the pre-B3 one.**
+
+**Not fixable here, and it should not be faked here.** The only backend-shaped
+"fix" would be to re-emit the pro-rated schedule under the key `costLines` with
+`feeBps: 0` so the stale reader renders something. That would put a table that
+is not cost under a name that says cost, would print a Cost basis row carrying
+the contract sum, and would defeat T16, which exists to prove those four keys
+are gone. Declined.
+
+**Client lane, exactly:** `readPricingBasis` reads `payload.contractSumCents`
+when present (it always is, on a design-build bundle) and returns
+`payload.scheduleOfValues` — `[{id,label,cents}]`, already in the elected mode,
+last line carrying the remainder — in place of re-deriving; `costLines`,
+`feeBps`, `costBasisCents` become optional and their rows render only when
+present, which is exactly "open book only". `ScheduleOfValuesLeaf` draws the
+projected lines. And the closed-book jest fixture in
+`commercial-document-shell-design-build.test.tsx` must be rebuilt from what the
+bundle actually emits — the present fixture carries `costLines` on a
+`closed_book` payload, a shape production cannot produce, which is why J-3 is
+green over a door that renders nothing.
+
+## R2-2 (blocker) — CONFIRMED, and it is the designer lane's source
+
+Verified on this branch, line for line:
+
+- 00578:581 `DROP POLICY IF EXISTS agreement_draw_lien_waivers_studio_write`,
+  with no policy created in its place; 00578:592-594 `REVOKE ALL … FROM PUBLIC,
+  anon, authenticated` then `GRANT SELECT` only. There is no INSERT door on the
+  table.
+- `agreement/w3-designer`'s `use-design-build.ts` still does
+  `.from('agreement_draw_lien_waivers').insert({ draw_id, contact_id,
+  contact_display_name, waiver_type, through_date, amount_cents, storage_path,
+  received_at, recorded_by }).select().single()`. In production that is a 42501.
+
+**M3 must not be undone.** Restoring the grant would restore three defects at
+once, and the shipped call demonstrates all three: `waiver_type` is free text by
+the 00417 doctrine and the table has no CHECK, so the client chooses the
+vocabulary; `contact_display_name` is sent by the caller rather than snapshotted
+off the studio's roster, so the "snapshot" can say anything; and `recorded_by`
+is a caller-supplied column, so the record's author is whoever the caller names.
+`record_agreement_draw_lien_waiver` (00578 PART 5b) exists precisely to close
+those three, and it also resolves the contact against
+`studio_contacts.organization_id` and defaults `received_at` to `now()`.
+
+**Designer lane, exactly:** call
+`.rpc('record_agreement_draw_lien_waiver', { p_draw_id, p_waiver_type,
+p_contact_id, p_through_date, p_amount_cents, p_storage_path, p_received_at })`.
+Note the return is **camelCase jsonb**, not a table row —
+`{ id, drawId, drawKey, waiverType, contactDisplayName, throughDate,
+amountCents, receivedAt }` — so `mapAgreementDrawLienWaiver`, which maps an
+`AgreementDrawLienWaiverRow`, does not fit it and the call site should build the
+domain object from the RPC's object directly. `contactDisplayName` comes back
+from the roster, not from the input, and `recordedBy` is no longer an input at
+all. The test must assert the RPC name; as written it asserts
+`from('agreement_draw_lien_waivers')` and will stay green over a broken call.
+
+## R2-3 (major) — CONFIRMED as arithmetic, and it is a ruling
+
+Reproduced here on `patina_w3f2`, calling
+`_agreement_schedule_of_values(basis,'closed_book')` with the walk's figures
+(cost basis 7 130 000, fee 1800 bps, GMP 8 413 400):
+
+```
+ Cabinetry & millwork        4484000   ÷ 1.18 = 3800000
+ Electrical                  1121000   ÷ 1.18 =  950000
+ Plumbing                     849600   ÷ 1.18 =  720000
+ General conditions / site    743400   ÷ 1.18 =  630000
+ Tile allowance               472000   ÷ 1.18 =  400000
+ Plumbing fixtures allowance  413000   ÷ 1.18 =  350000
+ Lighting allowance           330400   ÷ 1.18 =  280000
+```
+
+Every line inverts to its exact cost, and the homeowner does not need to guess
+the divisor: the client-visible allowances part states tile at 400 000 against
+the schedule's 472 000, so 1.18 is on the same page as the number it unlocks,
+and 4 484 000 ÷ 1.18 is the cabinetry sub's own $38 000. RC-4 asked whether a
+sub's bid can be backed out of `line ÷ (1 + fee)`. On this branch it can.
+
+Three of the four ways out, and what each costs:
+
+1. **Author the schedule instead of deriving it.** Closes it completely; moves
+   every pinned walk number; is the backend change `design-build-body.tsx`'s own
+   R13 note says is "not this wave's".
+2. **State the allowances at the marked-up multiple too.** Removes the anchor
+   but restates a contractual allowance amount as something other than what the
+   studio wrote, on the page the homeowner signs. Declined without a ruling.
+3. **Rule that closed book means only "no line is labelled as a trade's
+   price".** No code moves; this is what ships today, and the client body's own
+   comment already says it in those words — "so no line is printed as what any
+   one trade was paid. (Not: so that no line CAN be read that way)". It needs
+   to be said in the ship report, not left implied.
+4. **(Not in the finding, offered here.) Pass allowance-category cost lines
+   through the schedule at their stated amount and spread the fee across the
+   non-allowance lines only.** One function changes; the contract sum does not;
+   the allowances part and the schedule finally agree instead of disagreeing by
+   18%; and the multiple becomes uncomputable, because the homeowner would need
+   the non-allowance cost subtotal and she has never been given it. Computed
+   here on the same figures:
+
+```
+ cabinetry   cost 3800000 → 4599495   ÷ 1.18 = 3897877  (not 3800000)
+ electrical  cost  950000 → 1149874   ÷ 1.18 =  974469
+ plumbing    cost  720000 →  871483   ÷ 1.18 =  738545
+ general     cost  630000 →  762548   ÷ 1.18 =  646227   (remainder line)
+ tile        cost  400000 →  400000            = the allowances part, exactly
+ fixtures    cost  350000 →  350000            = the allowances part, exactly
+ lighting    cost  280000 →  280000            = the allowances part, exactly
+                            ────────
+                            8413400  = the GMP, to the cent
+```
+
+   Its cost: it elects a contract term — that the studio's fee is not earned on
+   allowance dollars — and it moves the walk's pinned schedule numbers and
+   T16/T17's expectations. That election is not a lane's to make, which is why
+   it is written down here rather than committed.
+
+**This lane implements none of the four and encodes none of them.** Baking
+option 3 into a COMMENT and a test would pin a ruling that options 1, 2 and 4
+would then have to unpin.
+
+## Gates, re-run this round (no source changed; this is a regression proof)
+
+Two fresh clones of the shared stack (`patina_w3base2` pristine at 00577,
+`patina_w3f2` with both migrations applied), built with
+`pg_dump --no-owner --no-acl --exclude-schema=cron`, then repaired the way
+`--no-acl` requires: `supabase/seed/00-legacy-grants.sql` replayed, plus the
+schema-level `USAGE` on `auth`/`extensions`/`graphql_public`/`storage`/`vault`
+and the 274 `auth`/`storage` table grants and 7 function grants copied from the
+shared stack. Without that repair the clone reports ~19 phantom failures that
+are nothing but missing ACLs — worth recording, because the first clone this
+round did exactly that and it looks like a regression until you read the error.
+
+```
+psql -d patina_w3f2 -v ON_ERROR_STOP=1 -f supabase/migrations/00578_design_build_kind.sql  → exit 0, NOTICEs only
+psql -d patina_w3f2 -v ON_ERROR_STOP=1 -f supabase/migrations/00579_trade_agreements.sql   → exit 0, NOTICEs only
+psql -d patina_w3f2 -f supabase/seed/00-legacy-grants.sql                                  → 0 errors
+
+commercial/design_build_test.sql                → exit 0, 18 PASS
+commercial/trade_agreement_test.sql             → exit 0,  8 PASS
+commercial/agreement_fee_schedules_test.sql     → exit 0, 11 PASS
+commercial/agreement_parts_test.sql             → exit 0, 30 PASS
+commercial/agreement_library_test.sql           → exit 0, 14 PASS
+commercial/agreement_parts_projection_test.sql  → exit 0,  5 PASS
+commercial/multi_studio_signature_test.sql      → exit 0,  7 PASS
+commercial/trade_scope_test.sql                 → fails identically on BOTH clones (KNOWN_FAILURES §S2)
+commercial/design_services_authority_test.sql   → fails identically on BOTH clones (KNOWN_FAILURES)
+
+bash scripts/run-sql-tests.sh   (PGURL → each clone)
+                       patina_w3base2 (pristine)   patina_w3f2 (this wave)
+   total                       166                       166
+   green                       126                       132
+   expected-fail                21                        21
+   unexpected-fail              19                        13
+   effective-green         147 / 166                 153 / 166
+```
+
+The thirteen are a **strict subset** of the nineteen — every one a clone
+artifact (`pg_cron` absent, or a database-level ACL a `createdb` cannot
+reproduce). The six the wave makes true are the difference:
+`commercial/design_build_test`, `commercial/trade_agreement_test`,
+`commercial/agreement_parts_test`, `commercial/agreement_library_test`,
+`edge_api/public_rpc_authorization_contract_test`,
+`edge_api/public_sd_hardening_contract_test`. **Zero net-new failures**, and the
+numbers reproduce round 1's exactly.
+
+The pins hold, and this run shows it from the other side: on the pristine clone
+`public_sd_hardening_contract_test` dies at line 2397 on `an exact 00511
+dependency profile drifted` — the re-pinned hashes — while on the migrated clone
+it runs 2 779 lines further before hitting `permission denied for schema auth` at
+5176, a database-level ACL the clone cannot carry. **The steward must still run
+that file, and `edge_api/platform_acl_compatibility_test`, whole on the reset
+shared stack.**
+
+```
+pnpm --filter @patina/types type-check      → clean (tsc --noEmit, no output)
+pnpm --filter @patina/supabase type-check   → clean (tsc --noEmit, no output)
+git status --short -- supabase packages     → no modifications
+generated types unchanged: no schema moved this round; the checked-in
+  database.types.ts already carries all 22 Wave 3 symbols
+  (record_agreement_draw_lien_waiver, studio_trade_agreements,
+   agreement_jurisdiction_notices, studio_license_attestations,
+   issue_agreement_draw_invoice, sign_trade_agreement_by_token)
+```
+
+Both clones dropped at the end.
+
+## What this round leaves open
+
+- **R2-1** — client lane, required, before the walk's step 11 can pass.
+- **R2-2** — designer lane, required, before the walk's step 16 can pass.
+- **R2-3** — orchestrator ruling, one of the four above, said out loud in the
+  ship report whichever way it goes.
