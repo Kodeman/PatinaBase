@@ -365,20 +365,7 @@ export function MobileBar() {
               }}
             />
           )
-        ) : (
-          <span className="min-w-0 text-center">
-            <span className="block font-mono text-[12px] uppercase tracking-[0.08em] text-[rgba(250,247,242,0.58)]">
-              {running && !paused ? 'In hand' : 'Today'}
-            </span>
-            <span className="block truncate font-heading text-[14px] italic text-[var(--color-clay)]">
-              {running || paused
-                ? fmtElapsedQuiet(elapsedSeconds)
-                : inHandToday > 0
-                  ? fmtMinutes(inHandToday)
-                  : 'Hands free'}
-            </span>
-          </span>
-        )}
+        ) : null}
       </div>
 
       <button
