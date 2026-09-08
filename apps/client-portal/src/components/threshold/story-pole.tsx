@@ -188,7 +188,7 @@ export function StoryPole({ phases, sections, firstBandAnchor = null }: StoryPol
       {/* ≤600: one line that says where she is and opens the same list. The
           rail used to be hidden outright here, which left a 5,700px page with
           no way to move through it (IA-23 / C03). */}
-      <div className="hidden items-center gap-3 max-[600px]:flex">
+      <div className="hidden flex-wrap items-center gap-x-3 gap-y-2 max-[600px]:flex">
         <ScoredAction
           actionKey="story_pole_open"
           regionKey="story_pole"

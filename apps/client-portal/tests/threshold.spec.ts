@@ -55,7 +55,10 @@ const INVOICE_BALANCE = '$4,060';
 const INVOICE_DUE_DAY = (() => {
   const due = new Date();
   due.setDate(due.getDate() + 7);
-  return new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric' }).format(due);
+  // en-GB, day first: PP-2 gave the house one date idiom and `lib/threshold/
+  // dates.ts` is the only place that composes it. A US format here would go
+  // red against a page that no longer prints one.
+  return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long' }).format(due);
 })();
 
 const STANDING_NOTE_BODY =
@@ -387,7 +390,10 @@ test.describe('The Threshold — the client page', () => {
     // Wave 2 (R1): accepting is signed, so the act stays unlit until the legal
     // name is on the line — no one spends a hold to be told what she was never
     // armed to do (wall-gate.tsx:271).
-    await expect(accept).toBeDisabled();
+    // R139: unavailable is `aria-disabled`, never the native attribute — the
+    // act keeps its place in the tab order so it can answer why.
+    await expect(accept).toHaveAttribute('aria-disabled', 'true');
+    await expect(accept).not.toHaveAttribute('disabled', /.*/);
     await expect(page.getByTestId('wall-hint')).toContainText('Type your full name to accept');
 
     await name.fill('Nora Ellison');
@@ -766,5 +772,147 @@ test.describe('The Threshold — the client page', () => {
     await settle(page);
     await expect(page.getByTestId('letterbox')).toBeVisible();
     await expectNoHeader(page);
+  });
+  /* ── Wave 2: the house sheet ────────────────────────────────────────────── */
+
+  test('names the way out "Sign out", once, on the mat', async ({ page }) => {
+    await signInAsClient(page);
+    await openTheHouse(page);
+
+    const mat = page.getByTestId('mat');
+    const signOut = mat.getByRole('button', { name: /^sign out$/i });
+    await expect(signOut).toHaveCount(1);
+    await expect(signOut).toBeVisible();
+    // The phrase it replaced does not survive anywhere on the page.
+    await expect(page.locator('body')).not.toContainText('Leave the house');
+  });
+
+  test('stands five landmarks under the doorplate, every one pointing at something that renders', async ({
+    page,
+  }) => {
+    await signInAsClient(page);
+    await openTheHouse(page);
+
+    const ledger = page.getByTestId('landmark-ledger');
+    await expect(ledger).toBeVisible();
+
+    const links = ledger.locator('a');
+    await expect(links).toHaveCount(5);
+    await expect(links).toHaveText([
+      'Where we are',
+      'What changed',
+      'What you owe',
+      'What needs you',
+      'The papers',
+    ]);
+
+    // IA-21's failure was a ledger pointing at ids that never render. Every
+    // href resolves to an element on this page.
+    for (const href of await links.evaluateAll((nodes) =>
+      nodes.map((node) => node.getAttribute('href') ?? ''),
+    )) {
+      expect(href.startsWith('#')).toBe(true);
+      await expect(page.locator(href)).toHaveCount(1);
+    }
+
+    // The money is the one landmark exempt from any dimming pass.
+    await expect(ledger.locator('a[href="#letterbox"]')).toHaveAttribute('data-never-dim', '');
+  });
+
+  test('omits a landmark whose target is not on the page', async ({ page }) => {
+    // The three-house client's Aspen Loft has no gate standing: no wall, no
+    // door, no approval. "What needs you" has nothing to point at, so it is
+    // not printed — never printed disabled.
+    await signIn(page, 'client@patina.dev');
+    await expect.poll(() => new URL(page.url()).pathname, { timeout: 60_000 }).toBe('/');
+    await settle(page);
+
+    await expect(page.locator('#wall')).toHaveCount(0);
+    await expect(page.locator('#door')).toHaveCount(0);
+    await expect(page.locator('[id^="approval-"]')).toHaveCount(0);
+
+    const ledger = page.getByTestId('landmark-ledger');
+    await expect(ledger).toBeVisible();
+    await expect(ledger.locator('a')).toHaveCount(4);
+    await expect(ledger).not.toContainText('What needs you');
+    // And the four that remain still point at something.
+    for (const href of await ledger.locator('a').evaluateAll((nodes) =>
+      nodes.map((node) => node.getAttribute('href') ?? ''),
+    )) {
+      await expect(page.locator(href)).toHaveCount(1);
+    }
+  });
+
+  test('says what accepting does, above the act, before the act is armed', async ({ page }) => {
+    await signInAsClient(page);
+    await openTheHouse(page);
+
+    const consequence = page.getByTestId('wall-consequence');
+    // Unavailable is the state the sentence has to survive: it stands before
+    // the name is typed, not only once the act lights.
+    await expect(page.getByTestId('accept-trade-scope-name')).toBeEmpty();
+    await expect(consequence).toBeVisible();
+    await expect(consequence).toContainText('It does not close the project or change your invoice.');
+    await expect(consequence).toContainText(/^Accepting /);
+
+    // It stands over the act, not under it.
+    const [consequenceBottom, actTop] = await Promise.all([
+      consequence.evaluate((node) => node.getBoundingClientRect().bottom),
+      page
+        .getByRole('button', { name: /accept the finished work/i })
+        .evaluate((node) => node.getBoundingClientRect().top),
+    ]);
+    expect(consequenceBottom).toBeLessThanOrEqual(actTop);
+  });
+
+  test('announces the owed figure, and reconciles the rest in one sentence', async ({
+    page,
+  }) => {
+    await signInAsClient(page);
+    await openTheHouse(page);
+
+    // PP-2: the figure with an obligation and a date is the largest true type
+    // in the block — the agreed figure no longer outranks it.
+    const owed = page.getByTestId('house-ledger-owed');
+    await expect(owed).toHaveText(INVOICE_BALANCE);
+    await expect(owed).toHaveClass(/\bt-d2\b/);
+
+    const owedSize = await owed.evaluate((node) =>
+      parseFloat(getComputedStyle(node).fontSize),
+    );
+    const standsSize = await page
+      .getByTestId('house-ledger-top')
+      .evaluate((node) => parseFloat(getComputedStyle(node).fontSize));
+    expect(owedSize).toBeGreaterThan(standsSize);
+
+    // One sentence that reconciles, every figure in it set as money.
+    const reconcile = page.getByTestId('house-ledger-reconcile');
+    await expect(reconcile).toContainText(INVOICE_BALANCE);
+    await expect(reconcile.locator('.t-money').first()).toBeVisible();
+    // Never a $0 placeholder for a row that has nothing to say.
+    await expect(page.getByTestId('house-ledger')).not.toContainText('$0.00');
+  });
+
+  test('makes the story pole’s labels links to the sections they name', async ({ page }) => {
+    await signInAsClient(page);
+    await openTheHouse(page);
+
+    const pole = page.getByTestId('story-pole');
+    await expect(pole).toBeVisible();
+
+    const links = pole.locator('a[href^="#"]');
+    await expect(links.first()).toBeVisible();
+    const count = await links.count();
+    expect(count).toBeGreaterThan(0);
+    for (let index = 0; index < count; index += 1) {
+      const href = await links.nth(index).getAttribute('href');
+      expect(href).toBeTruthy();
+      await expect(page.locator(href as string)).toHaveCount(1);
+    }
+
+    // The caret stays a reading mark: it is not a control.
+    const caret = pole.getByTestId('story-pole-caret');
+    await expect(caret).toHaveCount(1);
+    await expect(caret.locator('a, button')).toHaveCount(0);
   });
 });
