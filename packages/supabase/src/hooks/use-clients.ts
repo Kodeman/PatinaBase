@@ -538,6 +538,9 @@ export function useAddClient() {
       source = 'direct',
       notes,
       invite = true,
+      letter,
+      note,
+      projectId,
     }: {
       clientEmail: string;
       clientName?: string;
@@ -545,12 +548,32 @@ export function useAddClient() {
       notes?: string;
       /** When true (default), send a Supabase Auth magic-link invite if no profile exists. */
       invite?: boolean;
+      /**
+       * The First Letter (flag `client-invite-letter`). When true the route
+       * takes the letter path; when absent it runs today's exact code, so the
+       * off state is byte-identical to today. The flag is read in the
+       * component, never here — this hook only carries what it is handed.
+       */
+      letter?: boolean;
+      /** The designer's own line. ≤280 after trimming; the route re-checks. */
+      note?: string;
+      /** The house the letter is about, and where the note is seeded (R8). */
+      projectId?: string;
     }) => {
       const response = await fetch('/api/clients/invite', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientEmail, clientName, source, notes, invite }),
+        body: JSON.stringify({
+          clientEmail,
+          clientName,
+          source,
+          notes,
+          invite,
+          // Omitted entirely when off, so the request body is byte-identical
+          // to today's — the assertion the e2e spec rests on.
+          ...(letter ? { letter: true, note, projectId } : {}),
+        }),
       });
 
       if (!response.ok) {
@@ -563,6 +586,7 @@ export function useAddClient() {
         profileId: string | null;
         invited: boolean;
         alreadyExists: boolean;
+        kind?: 'invite' | 'notice';
       }>;
     },
     onSuccess: () => {
@@ -599,18 +623,40 @@ export function useInviteAndLinkClient() {
       designerClientId,
       clientEmail,
       clientName,
+      letter,
+      note,
+      projectId,
     }: {
       /** The existing designer_clients.id to link. */
       designerClientId: string;
       /** Email to invite — defaults server-side to the row's client_email. */
       clientEmail?: string;
       clientName?: string;
+      /**
+       * The First Letter (flag `client-invite-letter`). When true the route
+       * takes the letter path; when absent it runs today's exact code, so the
+       * off state is byte-identical to today. The flag is read in the
+       * component, never here — this hook only carries what it is handed.
+       */
+      letter?: boolean;
+      /** The designer's own line. ≤280 after trimming; the route re-checks. */
+      note?: string;
+      /** The house the letter is about, and where the note is seeded (R8). */
+      projectId?: string;
     }) => {
       const response = await fetch('/api/clients/invite', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ designerClientId, clientEmail, clientName, invite: true }),
+        body: JSON.stringify({
+          designerClientId,
+          clientEmail,
+          clientName,
+          invite: true,
+          // Omitted entirely when off, so the request body is byte-identical
+          // to today's — the assertion the e2e spec rests on.
+          ...(letter ? { letter: true, note, projectId } : {}),
+        }),
       });
 
       if (!response.ok) {
@@ -623,6 +669,7 @@ export function useInviteAndLinkClient() {
         profileId: string | null;
         invited: boolean;
         alreadyExists: boolean;
+        kind?: 'invite' | 'notice';
       }>;
     },
     onSuccess: (_data, { designerClientId }) => {

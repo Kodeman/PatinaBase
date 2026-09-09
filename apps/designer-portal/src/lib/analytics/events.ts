@@ -37,7 +37,12 @@ export const projectEvents = {
 };
 
 export const clientEvents = {
-  create: (properties?: Record<string, unknown>) => track('client_create', properties),
+  /**
+   * `has_note` mirrors `has_personal_message` on proposal_sent (L114): whether
+   * a line was written, never the line itself.
+   */
+  create: (properties?: Record<string, unknown> & { has_note?: boolean }) =>
+    track('client_create', properties),
   view: (clientId: string) => track('client_view', { client_id: clientId }),
   interaction: (properties?: Record<string, unknown>) => track('client_interaction', properties),
 };
