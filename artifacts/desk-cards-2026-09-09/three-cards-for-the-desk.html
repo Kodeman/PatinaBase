@@ -1,0 +1,1462 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Three Cards for the Desk</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;1,400&family=Inter:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ───────────────────────────────────────────────────────────────
+   tokens — carried over from artifacts/portal-polish-review-2026-09-08/
+   specimens/designer-desk.html. The seven stage plates keep their light
+   values in dark mode; lifting them drops the white label under 4.5:1.
+   ─────────────────────────────────────────────────────────────── */
+:root {
+  color-scheme: light dark;
+
+  --paper:            #FAF7F2;
+  --paper-doc:        #FCFAF6;
+  --rail:             #E8E3DB;
+
+  --ink:              #2C2926;
+  --ink-muted:        #4E4339;
+  --ink-subtle:       #5A4E43;
+  --ink-faint:        #65594E;
+  --ink-paper:        #FAF7F2;
+
+  --hairline:         #E8E3DB;
+  --hairline-strong:  rgba(44, 41, 38, .14);
+
+  --oak:              #8B7355;
+
+  --clay:             #C4A57B;   --clay-ink:      #7C5E30;
+  --terracotta-ink:   #9C5340;
+
+  --tab-brief:     #497093;
+  --tab-discovery: #307063;
+  --tab-direction: #366A3A;
+  --tab-proposal:  #575D1D;
+  --tab-project:   #6D4E24;
+  --tab-install:   #823832;
+  --tab-care:      #823832;
+
+  --module: 24px;
+  --radius-hair: 2px;
+  --radius-box:  3px;
+
+  --press-in:  70ms;
+  --press-out: 240ms;
+  --ease: cubic-bezier(.22, 1, .36, 1);
+
+  --font-display: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  --font-body:    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  --font-meta:    'DM Mono', 'SF Mono', 'Fira Code', ui-monospace, Menlo, Consolas, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper:           #2A2622;
+    --paper-doc:       #26221E;
+    --rail:            #3A3530;
+    --ink:             #F2EDE6;
+    --ink-muted:       #D6CEC4;
+    --ink-subtle:      #C7BEB3;
+    --ink-faint:       #B8AEA2;
+    --ink-paper:       #2A2622;
+    --hairline:        rgba(242, 237, 230, .14);
+    --hairline-strong: rgba(242, 237, 230, .22);
+    --oak:             #B39572;
+    --clay:            #A8895E;
+    --clay-ink:        #D8B98A;
+    --terracotta-ink:  #E2A895;
+  }
+}
+
+:root[data-theme="dark"] {
+  --paper:           #2A2622;
+  --paper-doc:       #26221E;
+  --rail:            #3A3530;
+  --ink:             #F2EDE6;
+  --ink-muted:       #D6CEC4;
+  --ink-subtle:      #C7BEB3;
+  --ink-faint:       #B8AEA2;
+  --ink-paper:       #2A2622;
+  --hairline:        rgba(242, 237, 230, .14);
+  --hairline-strong: rgba(242, 237, 230, .22);
+  --oak:             #B39572;
+  --clay:            #A8895E;
+  --clay-ink:        #D8B98A;
+  --terracotta-ink:  #E2A895;
+  /* the seven plates keep their light values in dark mode (T01). */
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+}
+h1, h2, h3, h4, p, ul, ol, figure, table { margin: 0; padding: 0; }
+ul { list-style: none; }
+
+/* ─── the type scale ─── */
+.t-d1      { font-family: var(--font-display); font-size: 34px; line-height: 1.15; font-weight: 500; letter-spacing: 0; }
+.t-d2      { font-family: var(--font-display); font-size: 26px; line-height: 1.20; font-weight: 500; letter-spacing: 0; }
+.t-d3      { font-family: var(--font-display); font-size: 20px; line-height: 1.30; font-weight: 500; letter-spacing: 0; }
+.t-body    { font-family: var(--font-body); font-size: 16px; line-height: 1.55; font-weight: 400; }
+.t-body-sm { font-family: var(--font-body); font-size: 14px; line-height: 1.50; font-weight: 400; }
+.t-body-15 { font-family: var(--font-body); font-size: 15px; line-height: 1.50; font-weight: 400; }
+.t-meta    { font-family: var(--font-meta); font-size: 12px; line-height: 1.50; font-weight: 400; letter-spacing: .08em; }
+.t-head    { font-family: var(--font-meta); font-size: 11px; line-height: 1.50; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; }
+.t-money   { font-family: var(--font-meta); font-size: 15px; line-height: 1.5; font-weight: 400; letter-spacing: .02em; font-variant-numeric: tabular-nums; }
+.t-authorship { font-family: var(--font-display); font-size: 20px; line-height: 1.30; font-style: italic; font-weight: 400; }
+
+/* ─── the action tiers ─── */
+.act {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 4px 6px 10px;
+  border: 0;
+  background: none;
+  font-family: var(--font-meta);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.act .label { position: relative; display: inline-block; line-height: 13px; }
+.act .label::before, .act .label::after {
+  content: ''; position: absolute; left: 0; right: 0;
+  transform-origin: left center;
+  transition: background-color 150ms linear, height 150ms var(--ease);
+}
+.act .label::before { bottom: -5px; height: 1px; }
+.act .label::after  { bottom: -8.5px; height: 1px; }
+
+.act--tertiary { color: var(--ink-subtle); }
+.act--tertiary .label::before { background: var(--oak); }
+.act--tertiary .label::after  { content: none; }
+.act--tertiary:hover .label::before { background: var(--ink-faint); height: 1.5px; }
+.act--tertiary:active { color: var(--ink); transition-duration: var(--press-in); }
+
+.act--secondary { color: var(--ink); }
+.act--secondary .label::before { height: 1.5px; background: var(--ink); }
+.act--secondary .label::after  { background: var(--clay); }
+.act--secondary:hover .label::after { height: 2px; }
+.act--secondary:active { transition-duration: var(--press-in); }
+.act:active .label::before { height: 2px; }
+
+.act--inline{display:inline;min-height:0;min-width:0;padding:0 0 3px;font:inherit;letter-spacing:inherit;text-transform:inherit;color:inherit;white-space:normal;background:none;border:0;border-bottom:1px solid var(--oak);cursor:pointer;text-decoration:none;-webkit-box-decoration-break:clone;box-decoration-break:clone}
+.act--inline .label{display:inline;line-height:inherit}
+.act--inline .label::before,.act--inline .label::after,.act--inline::after{content:none}
+.act--inline:hover{border-bottom-color:var(--ink-faint);border-bottom-width:1.5px;padding-bottom:2.5px}
+.act--inline:focus-visible{outline:2px solid var(--clay-ink);outline-offset:2px}
+
+.chip{min-height:44px;padding:10px 14px;border-radius:var(--radius-box);font-family:var(--font-body);font-size:14px;color:var(--ink);background:var(--paper);border:1px solid var(--hairline-strong);cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--rail);border-color:var(--ink-faint)}
+.chip:focus-visible{outline:2px solid var(--clay-ink);outline-offset:2px}
+
+.act:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+
+a:focus-visible, button:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+
+/* ─── the specimen frame ─── */
+.specimen-meta {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px;
+  padding: 10px 24px;
+  background: var(--rail);
+  color: var(--ink-muted);
+  font-family: var(--font-meta);
+  font-size: 11px;
+  letter-spacing: .04em;
+  border-bottom: 1px solid var(--hairline-strong);
+}
+.specimen-meta .switcher { display: flex; align-items: center; gap: 12px; }
+
+.specimen {
+  margin-top: 24px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius-box);
+  background: var(--paper);
+  overflow: hidden;
+}
+.specimen-body { padding: 24px; }
+.specimen-body > .desk-line { color: var(--ink-muted); margin-bottom: 24px; }
+.specimen-body > .desk-line .overdue { color: var(--terracotta-ink); }
+
+/* ─── page frame ─── */
+.page { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+.masthead { max-width: 1100px; margin: 0 auto; padding: 48px 24px 24px; border-bottom: 1px solid var(--hairline-strong); }
+.masthead .kicker { color: var(--ink-subtle); }
+.masthead h1 { margin-top: 12px; }
+.masthead .standfirst { color: var(--ink-muted); max-width: 62ch; margin-top: 24px; }
+.masthead .standfirst + .standfirst { margin-top: 12px; }
+
+section.band { margin-top: 72px; }
+section.band > h2 { color: var(--ink); }
+section.band > .lede { color: var(--ink-muted); max-width: 62ch; margin-top: 12px; }
+.sec-no { color: var(--ink-faint); display: block; margin-bottom: 12px; }
+h3.sub { margin-top: 48px; color: var(--ink); }
+p.note { color: var(--ink-muted); max-width: 62ch; margin-top: 12px; }
+p.note + p.note { margin-top: 12px; }
+
+/* ─── §2 cut / keep pairs ─── */
+.cuts { display: grid; gap: 24px; margin-top: 24px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 900px) { .cuts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.cut {
+  border-top: 1px solid var(--hairline-strong);
+  padding-top: 12px;
+}
+.cut .from, .cut .to { display: flex; gap: 12px; align-items: baseline; }
+.cut .tag { flex: 0 0 44px; color: var(--ink-faint); }
+.cut .from .said { color: var(--ink-subtle); text-decoration: line-through; text-decoration-thickness: 1px; text-decoration-color: var(--oak); }
+.cut .to { margin-top: 12px; }
+.cut .to .said { color: var(--ink); }
+.cut .why { color: var(--ink-muted); margin-top: 12px; }
+
+/* ─── §3 anatomy: one exploded card, six markers on the face ─── */
+.anatomy { margin-top: 24px; display: grid; gap: 24px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 700px) {
+  .anatomy { grid-template-columns: 360px minmax(0, 1fr); gap: 48px; align-items: start; }
+}
+.anatomy-card { max-width: 360px; }
+.anatomy-card .sheet { padding-left: 44px; }
+.reg-marker {
+  position: absolute;
+  width: 20px; height: 20px; border-radius: 50%;
+  border: 1px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-family: var(--font-meta); font-size: 11px; font-weight: 500; line-height: 1;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+  z-index: 3;
+}
+.anatomy-card .stage-plate,
+.anatomy-card .custody,
+.anatomy-card .sheet-name,
+.anatomy-card .sheet-person,
+.anatomy-card .sheet-sentence,
+.anatomy-card .sheet-band { position: relative; }
+.anatomy-card .sheet-top .stage-plate > .reg-marker { left: -32px; top: -1px; }
+.anatomy-card .sheet-top .custody > .reg-marker { left: -28px; top: -3px; }
+.anatomy-card .sheet-name > .reg-marker { left: -32px; top: 2px; }
+.anatomy-card .sheet-person > .reg-marker { left: -32px; top: -2px; }
+.anatomy-card .sheet-sentence > .reg-marker { left: -32px; top: -1px; }
+.anatomy-card .sheet-band > .reg-marker { left: -32px; top: 12px; }
+.anatomy-card .sheet-band { padding-left: 0; }
+.reg-list { display: grid; gap: 24px; list-style: none; }
+.reg-item { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 0 12px; align-items: start; }
+.reg-key {
+  width: 20px; height: 20px; border-radius: 50%;
+  border: 1px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-family: var(--font-meta); font-size: 11px; font-weight: 500; line-height: 1;
+  font-variant-numeric: tabular-nums;
+  margin-top: 2px;
+}
+.reg-item h3 { color: var(--ink); font-family: var(--font-body); font-size: 14px; font-weight: 600; line-height: 1.5; }
+.reg-item p { color: var(--ink-muted); margin-top: 4px; }
+
+/* ─── shared card atoms ─── */
+.mark { flex: 0 0 7px; width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+.mark--urgent { background: var(--terracotta-ink); }
+.mark--quiet  { background: var(--clay-ink); }
+.mark--none   { background: transparent; border: 1px solid var(--ink-faint); }
+.custody { color: var(--ink-subtle); display: inline-flex; align-items: center; gap: 8px; }
+.stage-plate {
+  display: inline-flex; align-items: center;
+  padding: 3px 10px;
+  border-radius: var(--radius-box);
+  color: #FFFFFF;
+}
+.stage-plate--brief     { background: var(--tab-brief); }
+.stage-plate--discovery { background: var(--tab-discovery); }
+.stage-plate--direction { background: var(--tab-direction); }
+.stage-plate--proposal  { background: var(--tab-proposal); }
+.stage-plate--project   { background: var(--tab-project); }
+.stage-plate--install   { background: var(--tab-install); }
+.stage-plate--care      { background: var(--tab-care); }
+
+.wash {
+  position: absolute; inset: 0; pointer-events: none;
+  background: var(--wash, var(--oak));
+  opacity: 0;
+  clip-path: circle(0px at var(--wx, 50%) var(--wy, 50%));
+  transition: clip-path 260ms var(--ease), opacity 160ms linear;
+}
+.w-brief     { --wash: var(--tab-brief); }
+.w-discovery { --wash: var(--tab-discovery); }
+.w-direction { --wash: var(--tab-direction); }
+.w-proposal  { --wash: var(--tab-proposal); }
+.w-project   { --wash: var(--tab-project); }
+.w-install   { --wash: var(--tab-install); }
+.w-care      { --wash: var(--tab-care); }
+
+.job-name { color: var(--ink); text-decoration: none; border-bottom: 1px solid var(--oak); overflow-wrap: anywhere; }
+.job-name:hover, .job-name:focus-visible { border-bottom-color: var(--clay-ink); border-bottom-width: 1.5px; }
+.person { color: var(--ink-muted); }
+.sentence { color: var(--ink-muted); }
+.sentence .overdue { color: var(--terracotta-ink); }
+.sentence .money { color: var(--ink); }
+
+/* ─── Card 1 · the sheet ─── */
+.sheet-grid { display: grid; gap: 24px; align-items: start; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 640px)  { .sheet-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1024px) { .sheet-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.sheet {
+  position: relative;
+  background: var(--paper-doc);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-hair);
+  padding: 24px;
+  overflow: hidden;
+}
+.sheet:hover .wash, .sheet:focus-within .wash { opacity: .07; clip-path: circle(150% at var(--wx, 50%) var(--wy, 50%)); }
+.sheet:hover .job-name, .sheet:focus-within .job-name { border-bottom-color: var(--clay-ink); border-bottom-width: 1.5px; }
+.sheet > *:not(.wash) { position: relative; }
+.sheet-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.sheet-name { display: block; margin-top: 12px; min-height: 52px; }
+.sheet-person { margin-top: 12px; }
+.sheet-sentence { margin-top: 12px; }
+.sheet-band {
+  margin-top: 24px; padding-top: 4px;
+  border-top: 1px solid var(--hairline);
+  min-height: 44px;
+  display: flex; align-items: center; justify-content: flex-end;
+}
+.sheet--quiet .sheet-sentence { color: var(--ink-faint); }
+
+/* ─── Card 2 · the ledger entry ─── */
+.ledger-cols {
+  display: grid;
+  grid-template-columns: 24px 320px minmax(0, 1fr) 132px 96px;
+  column-gap: 24px;
+  padding-bottom: 12px;
+  color: var(--ink-faint);
+}
+.ledger-cols .col-value { text-align: right; }
+.ledger-cols .col-act { text-align: right; }
+.ledger-stage { padding: 24px 0 0; }
+.ledger-stage:first-child { padding-top: 0; }
+.ledger-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 24px 320px minmax(0, 1fr) 132px 96px;
+  align-items: baseline;
+  column-gap: 24px;
+  padding: 24px 0;
+  border-top: 1px solid var(--hairline-strong);
+  background: transparent;
+  overflow: hidden;
+}
+.ledger-row > *:not(.wash) { position: relative; }
+.ledger-row:hover .wash, .ledger-row:focus-within .wash { opacity: .07; clip-path: circle(150% at var(--wx, 50%) var(--wy, 50%)); }
+.ledger-row--urgent { background: var(--paper-doc); }
+.ledger-mark { align-self: start; margin-top: 9px; }
+.ledger-custody { display: block; margin-bottom: 4px; color: var(--ink-subtle); }
+.ledger-name { display: block; }
+.ledger-person { display: block; margin-top: 4px; }
+.ledger-sentence { max-width: 44ch; }
+.ledger-value { text-align: right; color: var(--ink); }
+.ledger-act { text-align: right; }
+.ledger-act .act { white-space: normal; text-align: right; margin-block: -9px; }
+.ledger-act .act .label { text-align: right; }
+@media (max-width: 899px) {
+  .ledger-row { grid-template-columns: 16px minmax(0, 1fr); row-gap: 12px; column-gap: 12px; }
+  .ledger-cols { display: none; }
+  .ledger-row > *:not(.wash) { grid-column: 2; }
+  .ledger-mark { grid-column: 1; align-self: start; margin-top: 9px; }
+  .ledger-sentence { max-width: none; }
+  .ledger-value { text-align: left; }
+  .ledger-act { text-align: right; }
+}
+
+/* ─── Card 3 · the claim ─── */
+.claim-grid { display: grid; gap: 24px; align-items: start; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 640px)  { .claim-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1024px) { .claim-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.claim-card {
+  position: relative;
+  background: var(--paper-doc);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-hair);
+  padding: 20px 20px 0;
+  overflow: hidden;
+}
+.claim-card:hover .wash, .claim-card:focus-within .wash { opacity: .07; clip-path: circle(150% at var(--wx, 50%) var(--wy, 50%)); }
+.claim-upper { position: relative; min-height: 88px; z-index: 1; }
+.claim-upper > *:not(.claim-name) { position: relative; z-index: 1; }
+.claim-custody { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.claim-name { display: block; margin-top: 8px; }
+.claim-name a::before { content: ''; position: absolute; inset: -4px; border-radius: var(--radius-hair); }
+.claim-person { display: block; margin-top: 4px; }
+.claim-sentence { position: relative; z-index: 2; margin-top: 12px; }
+.claim-band {
+  position: relative; z-index: 2;
+  margin-top: 16px;
+  border-top: 1px solid var(--hairline);
+  min-height: 44px;
+  display: flex; align-items: center;
+}
+.claim-band .act { width: 100%; justify-content: flex-start; }
+@supports selector(:has(*)) {
+  .claim-upper:has(.job-name:focus-visible) { outline: 2px solid var(--clay-ink); outline-offset: 2px; border-radius: var(--radius-hair); }
+  .claim-upper:has(.job-name:focus-visible) .job-name:focus-visible { outline: none; }
+}
+.rest-head {
+  margin-top: 48px; padding-top: 12px;
+  border-top: 1px solid var(--hairline-strong);
+  color: var(--ink-subtle);
+}
+.rest-row {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px;
+  min-height: 44px; padding: 12px 0;
+  border-bottom: 1px solid var(--hairline);
+}
+.rest-row .mark { position: relative; top: -2px; }
+.rest-row .rest-who { color: var(--ink-subtle); }
+.rest-row .rest-state { color: var(--ink-faint); }
+.rest-row .leader { flex: 1 1 24px; min-width: 24px; height: 1px; align-self: baseline; border-bottom: 1px dotted var(--hairline-strong); }
+.rest-row .rest-act { flex: 0 0 96px; align-self: baseline; text-align: right; }
+.rest-row .rest-act .act { margin-block: -9px; }
+@media (max-width: 699px) {
+  .rest-row .rest-act { flex: 0 0 100%; }
+  .phone-rail { display: none; }
+}
+
+/* ─── the 390px frames ─── */
+.phone-rail { overflow-x: auto; margin-top: 24px; padding-bottom: 12px; }
+.phone-set { display: flex; gap: 24px; width: max-content; align-items: flex-start; }
+.phone {
+  width: 390px; flex: 0 0 390px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-box);
+  background: var(--paper);
+  padding: 16px;
+}
+.phone .phone-cap { color: var(--ink-faint); display: block; margin-bottom: 12px; }
+.phone .sheet-grid, .phone .claim-grid { grid-template-columns: minmax(0, 1fr); }
+.phone .ledger-row { grid-template-columns: 16px minmax(0, 1fr); row-gap: 12px; column-gap: 12px; }
+.phone .ledger-row > *:not(.wash) { grid-column: 2; }
+.phone .ledger-mark { grid-column: 1; align-self: start; margin-top: 9px; }
+.phone .ledger-value { text-align: left; }
+.phone .ledger-act { text-align: right; }
+.phone .ledger-sentence { max-width: none; }
+.phone .sheet-band, .phone .claim-band { min-height: 48px; }
+.phone .rest-row .rest-act { flex: 0 0 100%; }
+
+/* ─── spec blocks ─── */
+.spec { margin-top: 24px; display: grid; gap: 0; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 760px) { .spec { grid-template-columns: 132px minmax(0, 1fr); column-gap: 24px; } }
+.spec dt { color: var(--ink-faint); font-family: var(--font-meta); font-size: 11px; line-height: 1.5; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; padding-top: 12px; border-top: 1px solid var(--hairline); }
+.spec dd { color: var(--ink-muted); font-family: var(--font-body); font-size: 14px; line-height: 1.5; margin: 0; padding-top: 12px; }
+@media (min-width: 760px) { .spec dd { border-top: 1px solid var(--hairline); } }
+.verdict { display: grid; gap: 24px; margin-top: 24px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 760px) { .verdict { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.verdict h3 { color: var(--ink-faint); font-family: var(--font-meta); font-size: 11px; line-height: 1.5; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; }
+.verdict p { color: var(--ink-muted); margin-top: 12px; }
+
+/* ─── §5 table ─── */
+.table-wrap { overflow-x: auto; margin-top: 24px; padding-bottom: 12px; }
+table { border-collapse: collapse; min-width: 900px; }
+th, td {
+  text-align: left; vertical-align: top;
+  padding: 12px 24px 12px 0;
+  border-bottom: 1px solid var(--hairline);
+  font-family: var(--font-body); font-size: 14px; line-height: 1.5;
+  color: var(--ink-muted);
+}
+thead th {
+  border-bottom: 1px solid var(--hairline-strong);
+  color: var(--ink-faint);
+  font-family: var(--font-meta); font-size: 11px; font-weight: 500;
+  letter-spacing: .08em; text-transform: uppercase;
+  white-space: nowrap;
+}
+tbody th { color: var(--ink); font-family: var(--font-display); font-size: 20px; line-height: 1.3; font-weight: 500; white-space: nowrap; }
+
+/* ─── §6 rulings ─── */
+.rulings { margin-top: 24px; }
+.ruling { border-top: 1px solid var(--hairline-strong); padding: 24px 0; display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 760px) { .ruling { grid-template-columns: 56px minmax(0, 1fr); column-gap: 24px; } }
+.ruling .rno { color: var(--ink-faint); font-family: var(--font-meta); font-size: 12px; letter-spacing: .08em; font-variant-numeric: tabular-nums; }
+.ruling h3 { color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.55; font-weight: 600; }
+.ruling p { color: var(--ink-muted); margin-top: 12px; max-width: 66ch; }
+.ruling p .lean { color: var(--ink); }
+
+.colophon { max-width: 1100px; margin: 72px auto 0; padding: 24px 24px 96px; border-top: 1px solid var(--hairline-strong); color: var(--ink-subtle); }
+@media (max-width: 699px) {
+  .page { padding: 0 16px; }
+  .masthead { padding: 24px 16px; }
+  .colophon { padding: 24px 16px 72px; }
+}
+.colophon p { max-width: 66ch; }
+.colophon p + p { margin-top: 12px; }
+
+/* ─── motion & forced colors ─── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@media (forced-colors: active) {
+  .mark { forced-color-adjust: none; background: transparent; border: 3.5px solid currentColor; }
+  .wash { display: none; }
+  .act .label::before, .act .label::after { forced-color-adjust: none; background: ButtonText; }
+  .act:focus-visible, a:focus-visible, button:focus-visible { outline: 2px solid Highlight; }
+  .sheet, .claim-card, .ledger-row, .rest-row, .reg-marker, .reg-key, .cut, .specimen, .phone, th, td, .ruling, .spec dt, .spec dd { border-color: CanvasText; }
+  .leader { border-bottom-color: CanvasText; }
+  .stage-plate { forced-color-adjust: none; background: ButtonFace; color: ButtonText; border: 1px solid ButtonText; }
+}
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <p class="kicker t-head">Patina &middot; The Document &middot; 9 September 2026</p>
+  <h1 class="t-d1">Three cards for the Desk</h1>
+  <p class="standfirst t-body">Kody asked for project cards on the Desk. The screenshot he sent showed fifteen equal tiles: a name, a sub-line reading &ldquo;1 &middot; Client: Kody&rdquo;, a day counter, and on some a four-step strip from <em>Presented</em> to <em>Installed</em>. That grid is not what runs on prod. The live Desk is a one-line-per-job roster, and on 26 August we wrote the rule down: <span class="t-authorship">one line per job; never a card.</span></p>
+  <p class="standfirst t-body">He is asking for cards again, so the rule is revisited in the open rather than quietly contradicted. Five lenses read the screenshot against the data model and the design contract. Three cards came out of it, live below in HTML on one fictional studio.</p>
+</header>
+
+<main class="page">
+
+  <!-- ─────────── 2 · cuts ─────────── -->
+  <section class="band" aria-labelledby="h-cuts">
+    <span class="sec-no t-head">Section two</span>
+    <h2 class="t-d2" id="h-cuts">What we would cut, and why</h2>
+    <p class="lede t-body">Five lines on the screenshot&rsquo;s card do not survive. Each is replaced by something the data can already say honestly.</p>
+
+    <div class="cuts">
+      <div class="cut">
+        <p class="from"><span class="tag t-head">Was</span> <span class="said t-body-sm">1 &middot; Client: Kody</span></p>
+        <p class="to"><span class="tag t-head">Is</span> <span class="said t-body-sm">Kody Kochaver</span></p>
+        <p class="why t-body-sm">The leading ordinal counts nothing a designer asked about, and nobody says &ldquo;client colon&rdquo; out loud. Position carries the label. Print the person bare.</p>
+      </div>
+
+      <div class="cut">
+        <p class="from"><span class="tag t-head">Was</span> <span class="said t-body-sm">Waiting on Kody for 30 days</span></p>
+        <p class="to"><span class="tag t-head">Is</span> <span class="said t-body-sm">With Kody since 2 Sep</span></p>
+        <p class="why t-body-sm">A number that only grows is an accusation, and it does not know they asked for two weeks on Tuesday. A date can be held against this week; a counter can only be felt bad about.</p>
+      </div>
+
+      <div class="cut">
+        <p class="from"><span class="tag t-head">Was</span> <span class="said t-body-sm">Presented / Approved / In Production / Installed</span></p>
+        <p class="to"><span class="tag t-head">Is</span> <span class="said t-head" style="letter-spacing:.08em;">Direction</span></p>
+        <p class="why t-body-sm">That is a <em>piece&rsquo;s</em> life, not a house&rsquo;s. On Sonnenberg six pieces are in production, three installed, one stuck at the upholsterer &mdash; a four-step rail must pick one, and whichever it picks is a lie. A house stands in one room of the arc, brief through care.</p>
+      </div>
+
+      <div class="cut">
+        <p class="from"><span class="tag t-head">Was</span> <span class="said t-body-sm">15 projects</span></p>
+        <p class="to"><span class="tag t-head">Is</span> <span class="said t-body-sm">Two things are overdue &mdash; Vandersteen, install, since 4 Sep; Sonnenberg residence, $17,500, since 12 Aug</span></p>
+        <p class="why t-body-sm">A tally of the studio&rsquo;s own volume is a scoreboard, and the studio surface is never optimized for engagement. The day&rsquo;s line is a call, not a count.</p>
+      </div>
+
+      <div class="cut">
+        <p class="from"><span class="tag t-head">Was</span> <span class="said t-body-sm">Fifteen cards of equal weight</span></p>
+        <p class="to"><span class="tag t-head">Is</span> <span class="said t-body-sm">Five cards over eleven rows</span></p>
+        <p class="why t-body-sm">On a normal Tuesday one job is on fire and fourteen are fine. The screen should look like that. A quiet house should read calm, not broken.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────── 3 · anatomy ─────────── -->
+  <section class="band" aria-labelledby="h-anatomy">
+    <span class="sec-no t-head">Section three</span>
+    <h2 class="t-d2" id="h-anatomy">What every card carries</h2>
+    <p class="lede t-body">Six registers, fixed order, one type role each. The numbering is not decoration &mdash; the registers <em>are</em> an order, and it is the order the eye takes them in. One exploded card, pulled apart:</p>
+
+    <div class="anatomy">
+
+      <div class="anatomy-card">
+        <div class="sheet w-project">
+          <span class="wash" aria-hidden="true"></span>
+          <div class="sheet-top">
+            <span class="stage-plate t-head stage-plate--project"><span class="reg-marker" aria-hidden="true">1</span>Project</span>
+            <span class="custody t-head"><span class="reg-marker" aria-hidden="true">2</span><span class="mark mark--urgent" aria-hidden="true"></span>With Paul</span>
+          </div>
+          <span class="sheet-name"><span class="reg-marker" aria-hidden="true">3</span><a class="job-name t-d3" href="#h-anatomy">Sonnenberg residence</a></span>
+          <p class="sheet-person person t-body-sm"><span class="reg-marker" aria-hidden="true">4</span>Paul Sonnenberg &middot; Procurement</p>
+          <p class="sheet-sentence sentence t-body-sm"><span class="reg-marker" aria-hidden="true">5</span><span class="money t-money">$17,500</span> <span class="overdue">overdue since 12 Aug</span> &mdash; one piece blocked at the workroom.</p>
+          <div class="sheet-band"><span class="reg-marker" aria-hidden="true">6</span><a class="act act--secondary" href="#h-anatomy" aria-label="Send reminder — Sonnenberg residence, anatomy sample"><span class="label">Send reminder</span></a></div>
+        </div>
+      </div>
+
+      <ol class="reg-list">
+        <li class="reg-item">
+          <span class="reg-key" aria-hidden="true">1</span>
+          <div>
+            <h3>Stage</h3>
+            <p class="t-body-sm">One word on the existing stage plate. DM&nbsp;Mono&nbsp;11 uppercase, white label on the section pigment. Never a count beside it.</p>
+          </div>
+        </li>
+        <li class="reg-item">
+          <span class="reg-key" aria-hidden="true">2</span>
+          <div>
+            <h3>Custody</h3>
+            <p class="t-body-sm">The word names the hand: <span class="t-head">Your pen</span> &middot; <span class="t-head">With Nora</span> &middot; <span class="t-head">With the maker</span> &middot; <span class="t-head">At rest</span>. The 7px mark beside it grades the need &mdash; terracotta ink for urgent or overdue, clay ink for a quiet need, a faint ring for nothing needed. Color never carries custody; the word does.</p>
+          </div>
+        </li>
+        <li class="reg-item">
+          <span class="reg-key" aria-hidden="true">3</span>
+          <div>
+            <h3>Name</h3>
+            <p class="t-body-sm">The name she says out loud. Playfair&nbsp;500 at 20/1.3, oak-scored as the link, two lines reserved so neighbours share a baseline. It wraps; it never truncates.</p>
+          </div>
+        </li>
+        <li class="reg-item">
+          <span class="reg-key" aria-hidden="true">4</span>
+          <div>
+            <h3>Person &middot; phase</h3>
+            <p class="t-body-sm">Inter&nbsp;14, muted, no label. Where the family name is the house name, this line is the phase alone. It disambiguates; it never drives the decision.</p>
+          </div>
+        </li>
+        <li class="reg-item">
+          <span class="reg-key" aria-hidden="true">5</span>
+          <div>
+            <h3>The one true sentence</h3>
+            <p class="t-body-sm">Grammar: subject or figure &mdash; dated fact or required act. One em dash at most. Money takes the mono money step, the broken clause takes terracotta ink. Quiet reads <em>Nothing needs your hand.</em> and the card stops.</p>
+          </div>
+        </li>
+        <li class="reg-item">
+          <span class="reg-key" aria-hidden="true">6</span>
+          <div>
+            <h3>The one act</h3>
+            <p class="t-body-sm">DM&nbsp;Mono&nbsp;13 uppercase, oak-scored tertiary; two-score secondary where a reminder moves or money opens. 44px target, labelled with the house name so eleven cards do not all announce &ldquo;Open&rdquo;. Never two acts. A quiet card has none &mdash; the name is the act.</p>
+          </div>
+        </li>
+      </ol>
+
+    </div>
+
+    <p class="note t-body-sm">Depth is the value step between <span class="t-meta">--paper-doc</span> and <span class="t-meta">--paper</span>, plus a hairline &mdash; no shadow, no borrowed elevation token. Hover washes the stage pigment open from the pointer at 7%; focus is a 2px clay-ink ring at 2px offset; press thickens the act&rsquo;s score to 2px. Nothing lifts.</p>
+  </section>
+
+  <!-- ─────────── 4a · Card 1 ─────────── -->
+  <section class="band" aria-labelledby="h-card1">
+    <span class="sec-no t-head">Card one</span>
+    <h2 class="t-d2" id="h-card1">The Sheet</h2>
+    <p class="lede t-body">The classic card, built under the contract: a sheet of paper laid on the desk, ordered by what it wants from her rather than by where it sits in the arc.</p>
+
+    <div class="specimen" role="region" aria-label="Card one specimen">
+      <div class="specimen-meta">
+        <span>Card 1 &middot; The Sheet &middot; six of sixteen jobs</span>
+        <span>Fixture: Leah Hartwell &middot; Local Dev Studio, Des Moines &middot; fictional</span>
+      </div>
+      <div class="specimen-body">
+        <p class="desk-line t-body">Two things are overdue &mdash; Vandersteen, install, <span class="overdue">since 4 Sep</span>; Sonnenberg residence, <span class="t-money">$17,500</span>, <span class="overdue">since 12 Aug</span>.</p>
+        <ul class="sheet-grid">
+
+          <li class="sheet w-install">
+            <span class="wash" aria-hidden="true"></span>
+            <div class="sheet-top">
+              <span class="stage-plate t-head stage-plate--install">Install</span>
+              <span class="custody t-head"><span class="mark mark--urgent" aria-hidden="true"></span>Your pen</span>
+            </div>
+            <span class="sheet-name"><a class="job-name t-d3" href="#h-card1">Vandersteen</a></span>
+            <p class="sheet-person person t-body-sm">Dana Vandersteen &middot; Install week</p>
+            <p class="sheet-sentence sentence t-body-sm">Install <span class="overdue">overdue since 4 Sep</span> &mdash; nothing rescheduled.</p>
+            <div class="sheet-band"><a class="act act--tertiary" href="#h-card1" aria-label="Open the schedule — Vandersteen"><span class="label">Open the schedule</span></a></div>
+          </li>
+
+          <li class="sheet w-direction">
+            <span class="wash" aria-hidden="true"></span>
+            <div class="sheet-top">
+              <span class="stage-plate t-head stage-plate--direction">Direction</span>
+              <span class="custody t-head"><span class="mark mark--quiet" aria-hidden="true"></span>Your pen</span>
+            </div>
+            <span class="sheet-name"><a class="job-name t-d3" href="#h-card1">Cedar Lane Study</a></span>
+            <p class="sheet-person person t-body-sm">Nora Ellison &middot; Concept Development</p>
+            <p class="sheet-sentence sentence t-body-sm">Nora replied last night &mdash; two rooms await your mark-up.</p>
+            <div class="sheet-band"><a class="act act--tertiary" href="#h-card1" aria-label="Review decisions — Cedar Lane Study"><span class="label">Review decisions</span></a></div>
+          </li>
+
+          <li class="sheet w-brief">
+            <span class="wash" aria-hidden="true"></span>
+            <div class="sheet-top">
+              <span class="stage-plate t-head stage-plate--brief">Brief</span>
+              <span class="custody t-head"><span class="mark mark--quiet" aria-hidden="true"></span>Your pen</span>
+            </div>
+            <span class="sheet-name"><a class="job-name t-d3" href="#h-card1">Marcus Wright</a></span>
+            <p class="sheet-person person t-body-sm">Des Moines &middot; First contact</p>
+            <p class="sheet-sentence sentence t-body-sm">New lead &mdash; respond by 10 Sep.</p>
+            <div class="sheet-band"><a class="act act--tertiary" href="#h-card1" aria-label="Reply — Marcus Wright"><span class="label">Reply</span></a></div>
+          </li>
+
+          <li class="sheet w-project">
+            <span class="wash" aria-hidden="true"></span>
+            <div class="sheet-top">
+              <span class="stage-plate t-head stage-plate--project">Project</span>
+              <span class="custody t-head"><span class="mark mark--urgent" aria-hidden="true"></span>With Paul</span>
+            </div>
+            <span class="sheet-name"><a class="job-name t-d3" href="#h-card1">Sonnenberg residence</a></span>
+            <p class="sheet-person person t-body-sm">Paul Sonnenberg &middot; Procurement</p>
+            <p class="sheet-sentence sentence t-body-sm"><span class="money t-money">$17,500</span> <span class="overdue">overdue since 12 Aug</span> &mdash; one piece blocked at the workroom.</p>
+            <div class="sheet-band"><a class="act act--secondary" href="#h-card1" aria-label="Send reminder — Sonnenberg residence"><span class="label">Send reminder</span></a></div>
+          </li>
+
+          <li class="sheet w-proposal">
+            <span class="wash" aria-hidden="true"></span>
+            <div class="sheet-top">
+              <span class="stage-plate t-head stage-plate--proposal">Proposal</span>
+              <span class="custody t-head"><span class="mark mark--quiet" aria-hidden="true"></span>With Ingrid</span>
+            </div>
+            <span class="sheet-name"><a class="job-name t-d3" href="#h-card1">Halvorsen townhouse</a></span>
+            <p class="sheet-person person t-body-sm">Ingrid Halvorsen &middot; Proposal out</p>
+            <p class="sheet-sentence sentence t-body-sm">Opened 3&times; &mdash; last 7 Sep, no signature yet.</p>
+            <div class="sheet-band"><a class="act act--secondary" href="#h-card1" aria-label="Send reminder — Halvorsen townhouse"><span class="label">Send reminder</span></a></div>
+          </li>
+
+          <li class="sheet sheet--quiet w-care">
+            <span class="wash" aria-hidden="true"></span>
+            <div class="sheet-top">
+              <span class="stage-plate t-head stage-plate--care">Care</span>
+              <span class="custody t-head"><span class="mark mark--none" aria-hidden="true"></span>At rest</span>
+            </div>
+            <span class="sheet-name"><a class="job-name t-d3" href="#h-card1">Osterberg residence</a></span>
+            <p class="sheet-person person t-body-sm">Britt Osterberg &middot; Care</p>
+            <p class="sheet-sentence sentence t-body-sm">Nothing needs your hand.</p>
+          </li>
+
+        </ul>
+      </div>
+    </div>
+
+    <div class="phone-rail">
+      <div class="phone-set">
+        <div class="phone">
+          <span class="phone-cap t-head">390px &middot; one column</span>
+          <ul class="sheet-grid">
+            <li class="sheet w-install">
+              <span class="wash" aria-hidden="true"></span>
+              <div class="sheet-top">
+                <span class="stage-plate t-head stage-plate--install">Install</span>
+                <span class="custody t-head"><span class="mark mark--urgent" aria-hidden="true"></span>Your pen</span>
+              </div>
+              <span class="sheet-name"><a class="job-name t-d3" href="#h-card1">Vandersteen</a></span>
+              <p class="sheet-person person t-body-sm">Dana Vandersteen &middot; Install week</p>
+              <p class="sheet-sentence sentence t-body-sm">Install <span class="overdue">overdue since 4 Sep</span> &mdash; nothing rescheduled.</p>
+              <div class="sheet-band"><a class="act act--tertiary" href="#h-card1" aria-label="Open the schedule — Vandersteen, phone frame"><span class="label">Open the schedule</span></a></div>
+            </li>
+            <li class="sheet w-project">
+              <span class="wash" aria-hidden="true"></span>
+              <div class="sheet-top">
+                <span class="stage-plate t-head stage-plate--project">Project</span>
+                <span class="custody t-head"><span class="mark mark--urgent" aria-hidden="true"></span>With Paul</span>
+              </div>
+              <span class="sheet-name"><a class="job-name t-d3" href="#h-card1">Sonnenberg residence</a></span>
+              <p class="sheet-person person t-body-sm">Paul Sonnenberg &middot; Procurement</p>
+              <p class="sheet-sentence sentence t-body-sm"><span class="money t-money">$17,500</span> <span class="overdue">overdue since 12 Aug</span> &mdash; one piece blocked at the workroom.</p>
+              <div class="sheet-band"><a class="act act--secondary" href="#h-card1" aria-label="Send reminder — Sonnenberg residence, phone frame"><span class="label">Send reminder</span></a></div>
+            </li>
+            <li class="sheet sheet--quiet w-care">
+              <span class="wash" aria-hidden="true"></span>
+              <div class="sheet-top">
+                <span class="stage-plate t-head stage-plate--care">Care</span>
+                <span class="custody t-head"><span class="mark mark--none" aria-hidden="true"></span>At rest</span>
+              </div>
+              <span class="sheet-name"><a class="job-name t-d3" href="#h-card1">Osterberg residence</a></span>
+              <p class="sheet-person person t-body-sm">Britt Osterberg &middot; Care</p>
+              <p class="sheet-sentence sentence t-body-sm">Nothing needs your hand.</p>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <dl class="spec">
+      <dt>Type</dt>
+      <dd>Plate DM Mono 11 uc &middot; custody DM Mono 11 uc &middot; name Playfair 500 20/1.3 &middot; person Inter 14 &middot; sentence Inter 14 &middot; act DM Mono 13 uc.</dd>
+      <dt>Tokens</dt>
+      <dd>Face <span class="t-meta">--paper-doc</span> on <span class="t-meta">--paper</span>, 1px <span class="t-meta">--hairline</span>. Marks <span class="t-meta">--terracotta-ink</span> / <span class="t-meta">--clay-ink</span> / faint ring &mdash; the ink members, never the material pigments.</dd>
+      <dt>Geometry</dt>
+      <dd>3 columns at 1024 and up, 2 at 640&ndash;1023, 1 below. 24px gutters, 24px padding, 2px radius, <span class="t-meta">align-items: start</span> so a quiet card is genuinely shorter.</dd>
+      <dt>Hover / focus</dt>
+      <dd>Stage pigment washes open from the pointer at 7% over 260ms; the name&rsquo;s score turns clay. Focus 2px clay-ink, 2px offset. The link is the name, not the box &mdash; the card only reads live.</dd>
+      <dt>Order</dt>
+      <dd>By need: your pen and overdue, then your pen, then with the client, then with the maker, then at rest. Oldest first, ties broken on name.</dd>
+    </dl>
+
+    <div class="verdict">
+      <div>
+        <h3>Honors</h3>
+        <p class="t-body-sm">Zero shadow, two radii, one act, one sentence, no counts and no progress rail. The quiet card is visibly shorter and lighter &mdash; the proof the Desk is telling the truth.</p>
+      </div>
+      <div>
+        <h3>Departs</h3>
+        <p class="t-body-sm">It is a card, and it re-ranks the studio every morning. Position becomes a claim: the top-left tile is Patina saying what to care about first, printed with its reason so a wrong rank is legible.</p>
+      </div>
+    </div>
+    <p class="note t-body-sm"><span class="t-head">What it costs</span> &mdash; at forty-five jobs, fifteen rows of three-column scanning and some four thousand pixels of desk, most of it spent on houses where nothing is wrong.</p>
+  </section>
+
+  <!-- ─────────── 4b · Card 2 ─────────── -->
+  <section class="band" aria-labelledby="h-card2">
+    <span class="sec-no t-head">Card two</span>
+    <h2 class="t-d2" id="h-card2">The Ledger Entry</h2>
+    <p class="lede t-body">The wide card: a roster row given air and an internal grid, so dates and money finally line up down the page. An entry that is on fire takes a second sheet full-bleed across its own band.</p>
+
+    <div class="specimen" role="region" aria-label="Card two specimen">
+      <div class="specimen-meta">
+        <span>Card 2 &middot; The Ledger Entry &middot; nine of sixteen jobs</span>
+        <span>Grouped by stage, needs first within a stage</span>
+      </div>
+      <div class="specimen-body">
+
+        <div class="ledger-cols t-head">
+          <span></span>
+          <span>Job</span>
+          <span>Today</span>
+          <span class="col-value">Date or figure</span>
+          <span class="col-act">Act</span>
+        </div>
+
+        <section class="ledger-stage" aria-labelledby="lg-brief">
+          <h3 class="stage-plate t-head stage-plate--brief" id="lg-brief">Brief</h3>
+          <ul>
+            <li class="ledger-row w-brief">
+              <span class="wash" aria-hidden="true"></span>
+              <span class="mark mark--quiet ledger-mark" aria-hidden="true"></span>
+              <span>
+                <span class="ledger-custody t-head">Your pen</span>
+                <span class="ledger-name"><a class="job-name t-d3" href="#h-card2">Marcus Wright</a></span>
+                <span class="ledger-person person t-body-sm">Des Moines &middot; First contact</span>
+              </span>
+              <span class="ledger-sentence sentence t-body-sm">New lead &mdash; respond by 10 Sep.</span>
+              <span class="ledger-value t-money">10 Sep</span>
+              <span class="ledger-act"><a class="act act--tertiary" href="#h-card2" aria-label="Reply — Marcus Wright"><span class="label">Reply</span></a></span>
+            </li>
+          </ul>
+        </section>
+
+        <section class="ledger-stage" aria-labelledby="lg-discovery">
+          <h3 class="stage-plate t-head stage-plate--discovery" id="lg-discovery">Discovery</h3>
+          <ul>
+            <li class="ledger-row w-discovery">
+              <span class="wash" aria-hidden="true"></span>
+              <span class="mark mark--none ledger-mark" aria-hidden="true"></span>
+              <span>
+                <span class="ledger-custody t-head">At rest</span>
+                <span class="ledger-name"><a class="job-name t-d3" href="#h-card2">Reinhardt lake house</a></span>
+                <span class="ledger-person person t-body-sm">Green Lake WI &middot; Site visit</span>
+              </span>
+              <span class="ledger-sentence sentence t-body-sm">Nothing needs your hand.</span>
+              <span class="ledger-value t-money"></span>
+              <span class="ledger-act"><a class="act act--tertiary" href="#h-card2" aria-label="Open — Reinhardt lake house"><span class="label">Open</span></a></span>
+            </li>
+          </ul>
+        </section>
+
+        <section class="ledger-stage" aria-labelledby="lg-direction">
+          <h3 class="stage-plate t-head stage-plate--direction" id="lg-direction">Direction</h3>
+          <ul>
+            <li class="ledger-row w-direction">
+              <span class="wash" aria-hidden="true"></span>
+              <span class="mark mark--quiet ledger-mark" aria-hidden="true"></span>
+              <span>
+                <span class="ledger-custody t-head">Your pen</span>
+                <span class="ledger-name"><a class="job-name t-d3" href="#h-card2">Cedar Lane Study</a></span>
+                <span class="ledger-person person t-body-sm">Nora Ellison &middot; Concept Development</span>
+              </span>
+              <span class="ledger-sentence sentence t-body-sm">Nora replied last night &mdash; two rooms await your mark-up.</span>
+              <span class="ledger-value t-money">8 Sep</span>
+              <span class="ledger-act"><a class="act act--tertiary" href="#h-card2" aria-label="Review decisions — Cedar Lane Study"><span class="label">Review</span></a></span>
+            </li>
+          </ul>
+        </section>
+
+        <section class="ledger-stage" aria-labelledby="lg-proposal">
+          <h3 class="stage-plate t-head stage-plate--proposal" id="lg-proposal">Proposal</h3>
+          <ul>
+            <li class="ledger-row w-proposal">
+              <span class="wash" aria-hidden="true"></span>
+              <span class="mark mark--quiet ledger-mark" aria-hidden="true"></span>
+              <span>
+                <span class="ledger-custody t-head">With Ingrid</span>
+                <span class="ledger-name"><a class="job-name t-d3" href="#h-card2">Halvorsen townhouse</a></span>
+                <span class="ledger-person person t-body-sm">Ingrid Halvorsen &middot; Proposal out</span>
+              </span>
+              <span class="ledger-sentence sentence t-body-sm">Opened 3&times; &mdash; last 7 Sep, no signature yet.</span>
+              <span class="ledger-value t-money">7 Sep</span>
+              <span class="ledger-act"><a class="act act--secondary" href="#h-card2" aria-label="Send reminder — Halvorsen townhouse"><span class="label">Send reminder</span></a></span>
+            </li>
+            <li class="ledger-row w-proposal">
+              <span class="wash" aria-hidden="true"></span>
+              <span class="mark mark--none ledger-mark" aria-hidden="true"></span>
+              <span>
+                <span class="ledger-custody t-head">At rest</span>
+                <span class="ledger-name"><a class="job-name t-d3" href="#h-card2">Brekke farmhouse</a></span>
+                <span class="ledger-person person t-body-sm">Tom Brekke &middot; Proposal in draft</span>
+              </span>
+              <span class="ledger-sentence sentence t-body-sm">Nothing needs your hand.</span>
+              <span class="ledger-value t-money"></span>
+              <span class="ledger-act"><a class="act act--tertiary" href="#h-card2" aria-label="Open — Brekke farmhouse"><span class="label">Open</span></a></span>
+            </li>
+          </ul>
+        </section>
+
+        <section class="ledger-stage" aria-labelledby="lg-project">
+          <h3 class="stage-plate t-head stage-plate--project" id="lg-project">Project</h3>
+          <ul>
+            <li class="ledger-row ledger-row--urgent w-project">
+              <span class="wash" aria-hidden="true"></span>
+              <span class="mark mark--urgent ledger-mark" aria-hidden="true"></span>
+              <span>
+                <span class="ledger-custody t-head">With Paul</span>
+                <span class="ledger-name"><a class="job-name t-d3" href="#h-card2">Sonnenberg residence</a></span>
+                <span class="ledger-person person t-body-sm">Paul Sonnenberg &middot; Procurement</span>
+              </span>
+              <span class="ledger-sentence sentence t-body-sm"><span class="money t-money">$17,500</span> <span class="overdue">overdue since 12 Aug</span> &mdash; one piece blocked at the workroom.</span>
+              <span class="ledger-value t-money">$17,500</span>
+              <span class="ledger-act"><a class="act act--secondary" href="#h-card2" aria-label="Send reminder — Sonnenberg residence"><span class="label">Send reminder</span></a></span>
+            </li>
+          </ul>
+        </section>
+
+        <section class="ledger-stage" aria-labelledby="lg-install">
+          <h3 class="stage-plate t-head stage-plate--install" id="lg-install">Install</h3>
+          <ul>
+            <li class="ledger-row ledger-row--urgent w-install">
+              <span class="wash" aria-hidden="true"></span>
+              <span class="mark mark--urgent ledger-mark" aria-hidden="true"></span>
+              <span>
+                <span class="ledger-custody t-head">Your pen</span>
+                <span class="ledger-name"><a class="job-name t-d3" href="#h-card2">Vandersteen</a></span>
+                <span class="ledger-person person t-body-sm">Dana Vandersteen &middot; Install week</span>
+              </span>
+              <span class="ledger-sentence sentence t-body-sm">Install <span class="overdue">overdue since 4 Sep</span> &mdash; nothing rescheduled.</span>
+              <span class="ledger-value t-money">4 Sep</span>
+              <span class="ledger-act"><a class="act act--tertiary" href="#h-card2" aria-label="Open the schedule — Vandersteen"><span class="label">Schedule</span></a></span>
+            </li>
+            <li class="ledger-row w-install">
+              <span class="wash" aria-hidden="true"></span>
+              <span class="mark mark--none ledger-mark" aria-hidden="true"></span>
+              <span>
+                <span class="ledger-custody t-head">At rest</span>
+                <span class="ledger-name"><a class="job-name t-d3" href="#h-card2">Lindgren lake cabin</a></span>
+                <span class="ledger-person person t-body-sm">Per Lindgren &middot; Install week</span>
+              </span>
+              <span class="ledger-sentence sentence t-body-sm">Nothing needs your hand.</span>
+              <span class="ledger-value t-money"></span>
+              <span class="ledger-act"><a class="act act--tertiary" href="#h-card2" aria-label="Open — Lindgren lake cabin"><span class="label">Open</span></a></span>
+            </li>
+          </ul>
+        </section>
+
+        <section class="ledger-stage" aria-labelledby="lg-care">
+          <h3 class="stage-plate t-head stage-plate--care" id="lg-care">Care</h3>
+          <ul>
+            <li class="ledger-row w-care">
+              <span class="wash" aria-hidden="true"></span>
+              <span class="mark mark--none ledger-mark" aria-hidden="true"></span>
+              <span>
+                <span class="ledger-custody t-head">At rest</span>
+                <span class="ledger-name"><a class="job-name t-d3" href="#h-card2">Osterberg residence</a></span>
+                <span class="ledger-person person t-body-sm">Britt Osterberg &middot; Care</span>
+              </span>
+              <span class="ledger-sentence sentence t-body-sm">Nothing needs your hand.</span>
+              <span class="ledger-value t-money"></span>
+              <span class="ledger-act"><a class="act act--tertiary" href="#h-card2" aria-label="Open — Osterberg residence"><span class="label">Open</span></a></span>
+            </li>
+          </ul>
+        </section>
+
+      </div>
+    </div>
+
+    <div class="phone-rail">
+      <div class="phone-set">
+        <div class="phone">
+          <span class="phone-cap t-head">390px &middot; back into a roster row</span>
+          <ul>
+            <li class="ledger-row ledger-row--urgent w-install">
+              <span class="wash" aria-hidden="true"></span>
+              <span class="mark mark--urgent ledger-mark" aria-hidden="true"></span>
+              <span>
+                <span class="ledger-custody t-head">Your pen</span>
+                <span class="ledger-name"><a class="job-name t-d3" href="#h-card2">Vandersteen</a></span>
+                <span class="ledger-person person t-body-sm">Dana Vandersteen &middot; Install week</span>
+              </span>
+              <span class="ledger-sentence sentence t-body-sm">Install <span class="overdue">overdue since 4 Sep</span> &mdash; nothing rescheduled.</span>
+              <span class="ledger-value t-money">4 Sep</span>
+              <span class="ledger-act"><a class="act act--tertiary" href="#h-card2" aria-label="Open the schedule — Vandersteen, phone frame"><span class="label">Schedule</span></a></span>
+            </li>
+            <li class="ledger-row w-proposal">
+              <span class="wash" aria-hidden="true"></span>
+              <span class="mark mark--quiet ledger-mark" aria-hidden="true"></span>
+              <span>
+                <span class="ledger-custody t-head">With Ingrid</span>
+                <span class="ledger-name"><a class="job-name t-d3" href="#h-card2">Halvorsen townhouse</a></span>
+                <span class="ledger-person person t-body-sm">Ingrid Halvorsen &middot; Proposal out</span>
+              </span>
+              <span class="ledger-sentence sentence t-body-sm">Opened 3&times; &mdash; last 7 Sep, no signature yet.</span>
+              <span class="ledger-value t-money">7 Sep</span>
+              <span class="ledger-act"><a class="act act--secondary" href="#h-card2" aria-label="Send reminder — Halvorsen townhouse, phone frame"><span class="label">Send reminder</span></a></span>
+            </li>
+            <li class="ledger-row w-care">
+              <span class="wash" aria-hidden="true"></span>
+              <span class="mark mark--none ledger-mark" aria-hidden="true"></span>
+              <span>
+                <span class="ledger-custody t-head">At rest</span>
+                <span class="ledger-name"><a class="job-name t-d3" href="#h-card2">Osterberg residence</a></span>
+                <span class="ledger-person person t-body-sm">Britt Osterberg &middot; Care</span>
+              </span>
+              <span class="ledger-sentence sentence t-body-sm">Nothing needs your hand.</span>
+              <span class="ledger-value t-money"></span>
+              <span class="ledger-act"><a class="act act--tertiary" href="#h-card2" aria-label="Open — Osterberg residence, phone frame"><span class="label">Open</span></a></span>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <dl class="spec">
+      <dt>Type</dt>
+      <dd>Custody DM Mono 11 uc &middot; name Playfair 500 20/1.3 &middot; person Inter 14 &middot; sentence Inter 14 at a 44ch measure &middot; value DM Mono 15 tabular &middot; act DM Mono 13 uc.</dd>
+      <dt>Tokens</dt>
+      <dd>Transparent on <span class="t-meta">--paper</span>; the urgent entry takes <span class="t-meta">--paper-doc</span> full-bleed. Top rule <span class="t-meta">--hairline-strong</span>. Stage plates as the roster already draws them.</dd>
+      <dt>Geometry</dt>
+      <dd>24px mark &middot; 320px name block &middot; 1fr sentence &middot; 132px value &middot; 96px act, baseline-aligned, 24px column gap, 24px vertical padding.</dd>
+      <dt>Hover / focus</dt>
+      <dd>The same wash across the band. Focus 2px clay-ink at 2px offset on the name and again on the act. The act wraps rather than truncates; its full label rides in the aria-label.</dd>
+      <dt>Order</dt>
+      <dd>Stage first, under the seven plates, needs before at-rest within each stage &mdash; the shipped roster order, unchanged.</dd>
+    </dl>
+
+    <div class="verdict">
+      <div>
+        <h3>Honors</h3>
+        <p class="t-body-sm">The smallest departure on the page: one line per job, with air and a grid. Plates kept, mark kept, nothing folded on first paint. It wins the one thing the roster could not do &mdash; two dates or two figures compared down the page.</p>
+      </div>
+      <div>
+        <h3>Departs</h3>
+        <p class="t-body-sm">A card only as a ledger entry is a card: an edge and a measure, not a tile. The value column is new architecture, and it forces one value per job where the truth is sometimes two. The value is the sentence&rsquo;s own date or figure, so its meaning is read from the sentence beside it &mdash; a quiet job carries none.</p>
+      </div>
+    </div>
+    <p class="note t-body-sm"><span class="t-head">What it costs</span> &mdash; about 1.4&times; the roster&rsquo;s scroll at forty-five jobs, and the value must be chosen by rule rather than judgement.</p>
+  </section>
+
+  <!-- ─────────── 4c · Card 3 ─────────── -->
+  <section class="band" aria-labelledby="h-card3">
+    <span class="sec-no t-head">Card three</span>
+    <h2 class="t-d2" id="h-card3">The Claim</h2>
+    <p class="lede t-body">A card is a treatment for a <em>need</em>, not a container for a <em>job</em>. Houses with a claim on the studio&rsquo;s hand take a card; everything at rest stays a roster row underneath. Switch the density and watch the shape hold.</p>
+
+    <div class="specimen" role="region" aria-label="Card three specimen">
+      <div class="specimen-meta">
+        <span>Card 3 &middot; The Claim</span>
+        <span class="switcher">
+          <span id="claim-sw-label">Studio size</span>
+          <span role="group" aria-labelledby="claim-sw-label" class="switcher">
+            <button type="button" class="chip" id="claim-16" aria-pressed="true">16 jobs</button>
+            <button type="button" class="chip" id="claim-45" aria-pressed="false">45 jobs</button>
+          </span>
+        </span>
+        <span id="claim-status" role="status">5 cards over 11 rows.</span>
+      </div>
+      <div class="specimen-body">
+        <ul class="claim-grid" id="claim-cards"></ul>
+        <h3 class="rest-head t-head" id="claim-rest-head">At rest &middot; 11 jobs</h3>
+        <ul id="claim-rest"></ul>
+      </div>
+    </div>
+
+    <div class="phone-rail">
+      <div class="phone-set">
+        <div class="phone">
+          <span class="phone-cap t-head">390px &middot; cards single-column; at-rest rows stack to name, state, act</span>
+          <ul class="claim-grid">
+            <li class="claim-card w-install">
+              <span class="wash" aria-hidden="true"></span>
+              <div class="claim-upper">
+                <span class="claim-custody">
+                  <span class="stage-plate t-head stage-plate--install">Install</span>
+                  <span class="custody t-head"><span class="mark mark--urgent" aria-hidden="true"></span>Your pen</span>
+                </span>
+                <span class="claim-name"><a class="job-name t-d3" href="#h-card3">Vandersteen</a></span>
+                <span class="claim-person person t-body-sm">Dana Vandersteen &middot; Install week</span>
+              </div>
+              <p class="claim-sentence sentence t-body-15">Install <span class="overdue">overdue since 4 Sep</span> &mdash; nothing rescheduled.</p>
+              <div class="claim-band"><a class="act act--tertiary" href="#h-card3" aria-label="Open the schedule — Vandersteen, phone frame"><span class="label">Open the schedule</span></a></div>
+            </li>
+            <li class="claim-card w-proposal">
+              <span class="wash" aria-hidden="true"></span>
+              <div class="claim-upper">
+                <span class="claim-custody">
+                  <span class="stage-plate t-head stage-plate--proposal">Proposal</span>
+                  <span class="custody t-head"><span class="mark mark--quiet" aria-hidden="true"></span>With Ingrid</span>
+                </span>
+                <span class="claim-name"><a class="job-name t-d3" href="#h-card3">Halvorsen townhouse</a></span>
+                <span class="claim-person person t-body-sm">Ingrid Halvorsen &middot; Proposal out</span>
+              </div>
+              <p class="claim-sentence sentence t-body-15">Opened 3&times; &mdash; last 7 Sep, no signature yet.</p>
+              <div class="claim-band"><a class="act act--secondary" href="#h-card3" aria-label="Send reminder — Halvorsen townhouse, phone frame"><span class="label">Send reminder</span></a></div>
+            </li>
+          </ul>
+          <h3 class="rest-head t-head" id="claim-phone-rest-head">At rest &middot; 11 jobs</h3>
+          <ul>
+            <li class="rest-row">
+              <span class="mark mark--none" aria-hidden="true"></span>
+              <a class="job-name t-body-sm" href="#h-card3">Osterberg residence</a>
+              <span class="rest-who t-body-sm">Britt Osterberg</span>
+              <span class="rest-state t-body-sm">Nothing needs your hand.</span>
+              <span class="leader" aria-hidden="true"></span>
+              <span class="rest-act"><a class="act act--tertiary" href="#h-card3" aria-label="Open — Osterberg residence, phone frame"><span class="label">Open</span></a></span>
+            </li>
+            <li class="rest-row">
+              <span class="mark mark--none" aria-hidden="true"></span>
+              <a class="job-name t-body-sm" href="#h-card3">Reinhardt lake house</a>
+              <span class="rest-who t-body-sm">Green Lake WI</span>
+              <span class="rest-state t-body-sm">Nothing needs your hand.</span>
+              <span class="leader" aria-hidden="true"></span>
+              <span class="rest-act"><a class="act act--tertiary" href="#h-card3" aria-label="Open — Reinhardt lake house, phone frame"><span class="label">Open</span></a></span>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <dl class="spec">
+      <dt>Type</dt>
+      <dd>Custody DM Mono 11 uc above the name &middot; name Playfair 500 20/1.3 &middot; person Inter 14 &middot; sentence Inter 15, two lines allowed &middot; act DM Mono 13 uc.</dd>
+      <dt>Tokens</dt>
+      <dd>Card face <span class="t-meta">--paper-doc</span> on <span class="t-meta">--paper</span> with a hairline; at-rest rows transparent under a <span class="t-meta">--hairline-strong</span> rule.</dd>
+      <dt>Geometry</dt>
+      <dd>Upper block reserved at 88px so the name link is an honest target &mdash; the roster&rsquo;s one sub-44px hit. Act band full width, 44px, its own target, clear of the link.</dd>
+      <dt>Hover / focus</dt>
+      <dd>Wash on the face; the focus ring draws around the whole upper block so focus shows the click zone, and the act keeps its own ring below it.</dd>
+      <dt>Order</dt>
+      <dd>Cards by need &mdash; your pen and overdue, your pen, with the client, with the maker. Rows follow, one line each, never folded.</dd>
+    </dl>
+
+    <div class="verdict">
+      <div>
+        <h3>Honors</h3>
+        <p class="t-body-sm">The 26 August rule survives for the body of the list: most jobs are still one line. The card is the emphasis granted to a house with a claim on the studio &mdash; the only shape here that gets denser rather than louder as the studio grows.</p>
+      </div>
+      <div>
+        <h3>Departs</h3>
+        <p class="t-body-sm">The Desk becomes two renderings rather than one grid, and a job crossing from rest into need changes shape under her &mdash; a movement she must learn before it stops being a surprise.</p>
+      </div>
+    </div>
+    <p class="note t-body-sm"><span class="t-head">What it costs</span> &mdash; two components to keep in step forever, and the day&rsquo;s line must quote the same jobs the cards show or she trusts neither.</p>
+  </section>
+
+  <!-- ─────────── 5 · side by side ─────────── -->
+  <section class="band" aria-labelledby="h-compare">
+    <span class="sec-no t-head">Section five</span>
+    <h2 class="t-d2" id="h-compare">Side by side</h2>
+    <div class="table-wrap">
+      <table>
+        <caption class="t-body-sm" style="text-align:left;color:var(--ink-faint);padding-bottom:12px;">The three cards against the questions that decide between them.</caption>
+        <thead>
+          <tr>
+            <th scope="col">Card</th>
+            <th scope="col">Two-second question</th>
+            <th scope="col">At 15 jobs</th>
+            <th scope="col">At 45 jobs</th>
+            <th scope="col">At 390px</th>
+            <th scope="col">Distance from &ldquo;never a card&rdquo;</th>
+            <th scope="col">Values comparable</th>
+            <th scope="col">A quiet job costs</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th scope="row">The Sheet</th>
+            <td>Answered, once the eye reaches the sentence.</td>
+            <td>Two rows of three. One screen.</td>
+            <td>Fifteen rows, ~4,000px, Z-scanned.</td>
+            <td>One column, unchanged. Its best trait.</td>
+            <td>Furthest &mdash; a tile grid, plainly.</td>
+            <td>No. Every figure sits inside prose.</td>
+            <td>A whole tile, ~150px.</td>
+          </tr>
+          <tr>
+            <th scope="row">The Ledger Entry</th>
+            <td>Answered on one saccade per entry.</td>
+            <td>Nine bands, one screen and a little.</td>
+            <td>~5,600px on a single axis; every column holds.</td>
+            <td>Collapses to the roster row it came from.</td>
+            <td>Nearest &mdash; a row with air and a grid.</td>
+            <td>Yes. The only shape that delivers it.</td>
+            <td>A band, ~110px.</td>
+          </tr>
+          <tr>
+            <th scope="row">The Claim</th>
+            <td>Answered before the sentence &mdash; custody leads.</td>
+            <td>Five cards over eleven rows.</td>
+            <td>Six cards over thirty-nine rows. Unchanged at the top.</td>
+            <td>Cards stack, rows stay rows.</td>
+            <td>Narrow and explicit &mdash; cards only where there is a claim.</td>
+            <td>Only within a card; rows carry no column.</td>
+            <td>A row, ~44px.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ─────────── 6 · rulings ─────────── -->
+  <section class="band" aria-labelledby="h-rulings">
+    <span class="sec-no t-head">Section six</span>
+    <h2 class="t-d2" id="h-rulings">Rulings for Kody</h2>
+    <p class="lede t-body">Five decisions, not a sequence. Nothing below should be settled in code.</p>
+
+    <div class="rulings">
+      <div class="ruling">
+        <span class="rno">R1</span>
+        <div>
+          <h3>Do quiet jobs get cards at all?</h3>
+          <p class="t-body-sm">At sixteen jobs with one overdue, a full grid spends most of its area on houses where nothing is wrong &mdash; the engagement failure arrived at by geometry rather than intent. <span class="lean">The information architect, the practicing designer and the interaction designer all say no.</span> Card 3 encodes that; Card 1 softens it with a shorter, lighter tile; Card 2 gives a quiet job a band the height of a row.</p>
+        </div>
+      </div>
+
+      <div class="ruling">
+        <span class="rno">R2</span>
+        <div>
+          <h3>Does the card replace the roster, or become a third facet?</h3>
+          <p class="t-body-sm">A facet means two renderings of one model kept in step forever, and a view switcher, which is one step from the dashboard the vision refuses. <span class="lean">The typographer says replace &mdash; one rendering, honestly amended.</span> Replacing costs roughly 1.4&times; the scroll at forty-five jobs and formally rescinds the 26 August density rule.</p>
+        </div>
+      </div>
+
+      <div class="ruling">
+        <span class="rno">R3</span>
+        <div>
+          <h3>Does the Desk rank, or merely mark?</h3>
+          <p class="t-body-sm">Need-first order puts Patina&rsquo;s judgement top-left every morning; stage-first is never wrong and never helpful. It costs more in a grid because position <em>is</em> the message &mdash; one stale due date puts a fine house top-left and the instrument loses credibility in a glance. <span class="lean">The panel leans rank, with the reason printed on the card</span> so a wrong rank is correctable rather than mysterious.</p>
+        </div>
+      </div>
+
+      <div class="ruling">
+        <span class="rno">R4</span>
+        <div>
+          <h3>The card edge.</h3>
+          <p class="t-body-sm">No token reaches 3:1 against paper &mdash; hairline is 1.20:1, strong is 1.30:1, and the second stock on the ground is 1.03:1 &mdash; and D4 forbids the shadow that would rescue it. Either amend &ldquo;no new token&rdquo; for one boundary grey near #8F8C88, used only as a card edge, or accept a decorative edge where the box groups and the text carries everything. <span class="lean">The panel accepts the decorative edge;</span> all three cards above are built on that.</p>
+        </div>
+      </div>
+
+      <div class="ruling">
+        <span class="rno">R5</span>
+        <div>
+          <h3>Amend the 26 August rule in writing.</h3>
+          <p class="t-body-sm">Whichever card ships, the recorded rule is contradicted. <span class="lean">Amend it plainly</span> &mdash; &ldquo;one line per job in the roster; a job with a claim on the studio&rsquo;s hand may take a card&rdquo; &mdash; rather than leaving the record silently wrong. That sentence is also the whole design argument in one line.</p>
+        </div>
+      </div>
+    </div>
+
+    <h3 class="sub t-d3">Found along the way</h3>
+    <p class="note t-body-sm">Two live defects in the designer portal, independent of any card. The roster&rsquo;s 7px mark is drawn in the <em>material</em> members of the pigment pairs &mdash; terracotta at 2.13:1, dusty blue at 2.64:1 &mdash; where the paper-ink members were intended. And every focus ring in the portal uses clay at 2.18:1 instead of the clay-ink the spec computes at 5.61:1: the right value was worked out and the wrong token wired. Both are one-token swaps.</p>
+  </section>
+
+  <!-- ─────────── colophon ─────────── -->
+</main>
+
+<footer class="colophon">
+  <p class="t-body-sm">Five lenses, 9 September 2026: an information architect, a typographer and editorial designer, an interaction designer, a practicing designer in Leah&rsquo;s seat, and an accessibility and design-system critic. Synthesis by Fable.</p>
+  <p class="t-body-sm">Fixture: Leah Hartwell, Local Dev Studio, Des Moines &mdash; fictional studio, houses and figures. Every card, row, plate, mark and wash here is live HTML and CSS in Patina&rsquo;s own tokens. Nothing is a screenshot.</p>
+</footer>
+
+<script>
+(function () {
+  'use strict';
+
+  /* placeholder links: this is a specimen sheet, not the portal */
+  document.addEventListener('click', function (e) {
+    var a = e.target.closest ? e.target.closest('a[href="#"]') : null;
+    if (a) { e.preventDefault(); }
+  });
+
+  /* ── the hover wash: stage pigment opening from the pointer ── */
+  function washTarget(el) {
+    return el.closest ? el.closest('.sheet, .ledger-row, .claim-card') : null;
+  }
+  document.addEventListener('pointermove', function (e) {
+    var host = washTarget(e.target);
+    if (!host) { return; }
+    var r = host.getBoundingClientRect();
+    if (!r.width || !r.height) { return; }
+    host.style.setProperty('--wx', ((e.clientX - r.left) / r.width * 100).toFixed(2) + '%');
+    host.style.setProperty('--wy', ((e.clientY - r.top) / r.height * 100).toFixed(2) + '%');
+  }, { passive: true });
+  document.addEventListener('focusin', function (e) {
+    var host = washTarget(e.target);
+    if (!host) { return; }
+    host.style.setProperty('--wx', '50%');
+    host.style.setProperty('--wy', '50%');
+  });
+
+  /* ── Card 3 fixture: 45 jobs, of which 16 are the studio's live sixteen ── */
+  /* n name · s stage · w who or where · c one of the core sixteen ·
+     need: cu custody · mk mark · ph phase · ln sentence · ac act · ti tier · or order band */
+  var JOBS = [
+    { n: 'Marcus Wright', s: 'brief', w: 'Des Moines', c: true, need: {
+        cu: 'Your pen', mk: 'quiet', ph: 'Des Moines &middot; First contact',
+        ln: 'New lead &mdash; respond by 10 Sep.', ac: 'Reply', ti: 'tertiary', or: 3 } },
+    { n: 'Lily Tanaka', s: 'brief', w: 'Ankeny', c: true, need: null },
+    { n: 'Elena Ruiz', s: 'brief', w: 'Urbandale', c: true, need: null },
+    { n: 'Dana Kjelstrom', s: 'brief', w: 'Clive', c: false, need: null },
+    { n: 'Peter Norgaard', s: 'brief', w: 'Waukee', c: false, need: null },
+    { n: 'Greta Lindahl', s: 'brief', w: 'Johnston', c: false, need: null },
+    { n: 'Amara Delacroix-Ryan', s: 'brief', w: 'Grimes', c: false, need: null },
+    { n: 'Theo Maartens', s: 'brief', w: 'Altoona', c: false, need: null },
+
+    { n: 'Reinhardt lake house', s: 'discovery', w: 'Green Lake WI', c: true, need: null },
+    { n: 'Bergquist farmstead', s: 'discovery', w: 'Ames IA', c: false, need: null },
+    { n: 'Trestrail bungalow', s: 'discovery', w: 'Dubuque IA', c: false, need: null },
+    { n: 'Vireo Street rowhouse', s: 'discovery', w: 'St Paul MN', c: false, need: null },
+    { n: 'Ninth Ward loft', s: 'discovery', w: 'Omaha NE', c: false, need: null },
+    { n: 'Halden creek house', s: 'discovery', w: 'Decorah IA', c: false, need: null },
+
+    { n: 'Sarah Chen', s: 'direction', w: 'West Des Moines', c: true, need: null },
+    { n: 'David Nielsen', s: 'direction', w: 'Norwalk', c: true, need: null },
+    { n: 'Cedar Lane Study', s: 'direction', w: 'Nora Ellison', c: true, need: {
+        cu: 'Your pen', mk: 'quiet', ph: 'Nora Ellison &middot; Concept Development',
+        ln: 'Nora replied last night &mdash; two rooms await your mark-up.', ac: 'Review decisions', ti: 'tertiary', or: 2 } },
+    { n: 'Halloway orchard house', s: 'direction', w: 'Ruth Halloway', c: false, need: null },
+    { n: 'Petersen ridge cabin', s: 'direction', w: 'Karin Petersen', c: false, need: null },
+    { n: 'Sandvik townhome', s: 'direction', w: 'Erik Sandvik', c: false, need: null },
+    { n: 'Oakhurst parsonage', s: 'direction', w: 'June Oakhurst', c: false, need: null },
+
+    { n: 'Halvorsen townhouse', s: 'proposal', w: 'Ingrid Halvorsen', c: true, need: {
+        cu: 'With Ingrid', mk: 'quiet', ph: 'Ingrid Halvorsen &middot; Proposal out',
+        ln: 'Opened 3&times; &mdash; last 7 Sep, no signature yet.', ac: 'Send reminder', ti: 'secondary', or: 5 } },
+    { n: 'Brekke farmhouse', s: 'proposal', w: 'Tom Brekke', c: true, need: null },
+    { n: 'Lindqvist bungalow', s: 'proposal', w: 'Ann Lindqvist', c: false, need: null },
+    { n: 'Aster Hill house', s: 'proposal', w: 'Mira Aster', c: false, need: null },
+    { n: 'Muirfield cottage', s: 'proposal', w: 'Glen Muirfield', c: false, need: null },
+    { n: 'Bellweather barn', s: 'proposal', w: 'Sam Bellweather', c: false, need: null },
+
+    { n: 'Sonnenberg residence', s: 'project', w: 'Paul Sonnenberg', c: true, need: {
+        cu: 'With Paul', mk: 'urgent', ph: 'Paul Sonnenberg &middot; Procurement',
+        ln: '<span class="money t-money">$17,500</span> <span class="overdue">overdue since 12 Aug</span> &mdash; one piece blocked at the workroom.',
+        ac: 'Send reminder', ti: 'secondary', or: 4 } },
+    { n: 'Aalborg loft', s: 'project', w: 'Nils Aalborg', c: true, need: null },
+    { n: 'Whitcomb carriage house', s: 'project', w: 'Ellen Whitcomb', c: true, need: null },
+    { n: 'Hollenbeck residence', s: 'project', w: 'Ray Hollenbeck', c: true, need: null },
+    { n: 'Thorsen mill house', s: 'project', w: 'Britt Thorsen', c: false, need: {
+        cu: 'With the maker', mk: 'quiet', ph: 'Britt Thorsen &middot; Procurement',
+        ln: 'PO-118 sent 28 Aug &mdash; no acknowledgment.', ac: 'Follow up with the maker', ti: 'tertiary', or: 6 } },
+    { n: 'Larkspur farm', s: 'project', w: 'Gail Larkspur', c: false, need: null },
+    { n: 'Vanterpool residence', s: 'project', w: 'Dee Vanterpool', c: false, need: null },
+    { n: 'Ridgeline studio', s: 'project', w: 'Ana Ridge', c: false, need: null },
+    { n: 'Blackhawk terrace', s: 'project', w: 'Otto Kranz', c: false, need: null },
+
+    { n: 'Vandersteen', s: 'install', w: 'Dana Vandersteen', c: true, need: {
+        cu: 'Your pen', mk: 'urgent', ph: 'Dana Vandersteen &middot; Install week',
+        ln: 'Install <span class="overdue">overdue since 4 Sep</span> &mdash; nothing rescheduled.',
+        ac: 'Open the schedule', ti: 'tertiary', or: 1 } },
+    { n: 'Lindgren lake cabin', s: 'install', w: 'Per Lindgren', c: true, need: null },
+    { n: 'Kesselring residence', s: 'install', w: 'Mae Kesselring', c: false, need: null },
+    { n: 'Ottendorf house', s: 'install', w: 'Jan Ottendorf', c: false, need: null },
+    { n: 'Ostrander boathouse', s: 'install', w: 'Rue Ostrander', c: false, need: null },
+
+    { n: 'Osterberg residence', s: 'care', w: 'Britt Osterberg', c: true, need: null },
+    { n: 'Pemberton hall', s: 'care', w: 'Hugh Pemberton', c: false, need: null },
+    { n: 'Silvercrest residence', s: 'care', w: 'Iris Silvercrest', c: false, need: null },
+    { n: 'Ravensworth cottage', s: 'care', w: 'Cal Ravensworth', c: false, need: null }
+  ];
+
+  var STAGE_LABEL = {
+    brief: 'Brief', discovery: 'Discovery', direction: 'Direction', proposal: 'Proposal',
+    project: 'Project', install: 'Install', care: 'Care'
+  };
+
+  var cardsEl  = document.getElementById('claim-cards');
+  var restEl   = document.getElementById('claim-rest');
+  var restHead = document.getElementById('claim-rest-head');
+  var phoneHead = document.getElementById('claim-phone-rest-head');
+  var statusEl = document.getElementById('claim-status');
+  var sw16     = document.getElementById('claim-16');
+  var sw45     = document.getElementById('claim-45');
+  var size     = 16;
+
+  function esc(s) {
+    return s.replace(/&(?![a-z]+;|#)/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+  }
+
+  function cardHTML(j) {
+    var d = j.need;
+    return '<li class="claim-card w-' + j.s + '">' +
+      '<span class="wash" aria-hidden="true"></span>' +
+      '<div class="claim-upper">' +
+        '<span class="claim-custody">' +
+          '<span class="stage-plate t-head stage-plate--' + j.s + '">' + STAGE_LABEL[j.s] + '</span>' +
+          '<span class="custody t-head"><span class="mark mark--' + d.mk + '" aria-hidden="true"></span>' + d.cu + '</span>' +
+        '</span>' +
+        '<span class="claim-name"><a class="job-name t-d3" href="#">' + esc(j.n) + '</a></span>' +
+        '<span class="claim-person person t-body-sm">' + d.ph + '</span>' +
+      '</div>' +
+      '<p class="claim-sentence sentence t-body-15">' + d.ln + '</p>' +
+      '<div class="claim-band"><a class="act act--' + d.ti + '" href="#" aria-label="' + d.ac + ' &mdash; ' + esc(j.n) + '"><span class="label">' + d.ac + '</span></a></div>' +
+    '</li>';
+  }
+
+  function restHTML(j) {
+    return '<li class="rest-row">' +
+      '<span class="mark mark--none" aria-hidden="true"></span>' +
+      '<a class="job-name t-body-sm" href="#">' + esc(j.n) + '</a>' +
+      '<span class="rest-who t-body-sm">' + esc(j.w) + '</span>' +
+      '<span class="rest-state t-body-sm">Nothing needs your hand.</span>' +
+      '<span class="leader" aria-hidden="true"></span>' +
+      '<span class="rest-act"><a class="act act--tertiary" href="#" aria-label="Open &mdash; ' + esc(j.n) + '"><span class="label">Open</span></a></span>' +
+    '</li>';
+  }
+
+  function render(announce) {
+    var live = JOBS.filter(function (j) { return size === 45 || j.c; });
+    var claims = live.filter(function (j) { return j.need; })
+                     .sort(function (a, b) { return a.need.or - b.need.or; });
+    var rest = live.filter(function (j) { return !j.need; });
+
+    cardsEl.innerHTML = claims.map(cardHTML).join('');
+    restEl.innerHTML = rest.map(restHTML).join('');
+    var restLabel = 'At rest · ' + rest.length + ' jobs';
+    restHead.textContent = restLabel;
+    if (phoneHead) { phoneHead.textContent = restLabel; }
+    if (announce) {
+      statusEl.textContent = claims.length + ' cards over ' + rest.length + ' rows.';
+    }
+  }
+
+  function setSize(n) {
+    size = n;
+    sw16.setAttribute('aria-pressed', String(n === 16));
+    sw45.setAttribute('aria-pressed', String(n === 45));
+    render(true);
+  }
+
+  sw16.addEventListener('click', function () { setSize(16); });
+  sw45.addEventListener('click', function () { setSize(45); });
+
+  render();
+})();
+</script>
+
+</body>
+</html>
