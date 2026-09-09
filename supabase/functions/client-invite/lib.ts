@@ -17,19 +17,102 @@ export function validateNote(
   return { ok: true, value: trimmed };
 }
 
+/** Timing-safe string compare. Length is allowed to leak; the bytes are not. */
+function secretEquals(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+/**
+ * `SUPABASE_SECRET_KEYS` is injected by the platform as a JSON dictionary of
+ * name -> secret key (verified on Strata: {"default":"sb_secret_…"}). Parsed
+ * defensively so a future array, or a comma-separated list, still works.
+ */
+export function parseSecretKeys(raw: string | null | undefined): string[] {
+  const text = (raw ?? "").trim();
+  if (!text) return [];
+  const out: string[] = [];
+  const push = (v: unknown) => {
+    if (typeof v === "string" && v.trim()) out.push(v.trim());
+    else if (v && typeof v === "object") {
+      const k = (v as { api_key?: unknown }).api_key;
+      if (typeof k === "string" && k.trim()) out.push(k.trim());
+    }
+  };
+  try {
+    const parsed = JSON.parse(text);
+    if (Array.isArray(parsed)) parsed.forEach(push);
+    else if (parsed && typeof parsed === "object") Object.values(parsed).forEach(push);
+    else push(parsed);
+  } catch {
+    text.split(",").forEach((part) => push(part));
+  }
+  return out;
+}
+
+/**
+ * The legacy service-role credential is a project-signed HS256 JWT. It is NOT
+ * present anywhere in the function's environment once the project has been
+ * moved to the new key format, so it cannot be string-compared — but the
+ * gateway (verify_jwt = true, config.toml) has already verified its signature
+ * against the project before the handler runs; a forged one is turned away
+ * upstream with UNAUTHORIZED_LEGACY_JWT and never reaches this code. So the
+ * claims can be read at face value, and only the service_role of THIS project,
+ * unexpired, is admitted.
+ *
+ * If verify_jwt is ever set false for this function, this arm must go with it.
+ *
+ * Requires a known project ref, so a function with no environment at all still
+ * fails closed rather than trusting the gateway alone.
+ */
+function isVerifiedLegacyServiceRoleJwt(token: string, projectRef?: string | null): boolean {
+  if (!projectRef) return false;
+  const parts = token.split(".");
+  if (parts.length !== 3 || !parts[0] || !parts[1] || !parts[2]) return false;
+  let claims: Record<string, unknown>;
+  try {
+    const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    claims = JSON.parse(atob(b64.padEnd(Math.ceil(b64.length / 4) * 4, "=")));
+  } catch {
+    return false;
+  }
+  if (claims.role !== "service_role") return false;
+  if (claims.iss !== "supabase") return false;
+  if (claims.ref !== projectRef) return false;
+  const exp = claims.exp;
+  if (typeof exp !== "number" || exp * 1000 <= Date.now()) return false;
+  return true;
+}
+
 /**
  * Every leg of this function is called server-to-server by a Next.js route
  * holding the service-role key. The gateway's verify_jwt only proves the bearer
  * is SOME valid token; this proves it is the one principal allowed to name an
  * arbitrary writer and signer.
+ *
+ * A project carries TWO shapes of that one principal at once during Supabase's
+ * key-format migration: the new `sb_secret_…` key (what the platform now
+ * injects as SUPABASE_SERVICE_ROLE_KEY, and what SUPABASE_SECRET_KEYS lists)
+ * and the legacy service-role JWT (what long-lived callers still hold). Both
+ * are the service role; only one of them can be string-equal to the env value,
+ * which is why an exact compare alone started returning 401 the moment Strata's
+ * injected key changed shape.
  */
 export function isServiceRoleCaller(
   authorizationHeader: string | null,
   serviceRoleKey: string,
+  secretKeys?: string | null,
+  projectRef?: string | null,
 ): boolean {
-  if (!serviceRoleKey) return false;
   const token = (authorizationHeader ?? "").replace(/^Bearer\s+/i, "").trim();
-  return token.length > 0 && token === serviceRoleKey;
+  if (!token) return false;
+  if (serviceRoleKey && secretEquals(token, serviceRoleKey)) return true;
+  for (const key of parseSecretKeys(secretKeys)) {
+    if (secretEquals(token, key)) return true;
+  }
+  return isVerifiedLegacyServiceRoleJwt(token, projectRef);
 }
 
 export interface TokenRow {

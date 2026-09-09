@@ -55,6 +55,15 @@ import {
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const SUPABASE_SECRET_KEYS = Deno.env.get("SUPABASE_SECRET_KEYS") ?? "";
+// Host label of https://<ref>.supabase.co — pins the legacy-JWT arm to this project.
+const PROJECT_REF = (() => {
+  try {
+    return new URL(SUPABASE_URL).hostname.split(".")[0] || null;
+  } catch {
+    return null;
+  }
+})();
 const CLIENT_PORTAL_URL =
   Deno.env.get("CLIENT_PORTAL_URL") ?? "https://client.patina.cloud";
 // R1: the envelope stays a patina.cloud address; only the display name changes.
@@ -651,7 +660,14 @@ Deno.serve(async (req: Request) => {
   if (req.method !== "POST") {
     return new Response("Method not allowed", { status: 405 });
   }
-  if (!isServiceRoleCaller(req.headers.get("Authorization"), SUPABASE_SERVICE_ROLE_KEY)) {
+  if (
+    !isServiceRoleCaller(
+      req.headers.get("Authorization"),
+      SUPABASE_SERVICE_ROLE_KEY,
+      SUPABASE_SECRET_KEYS,
+      PROJECT_REF,
+    )
+  ) {
     return json({ error: "unauthorized" }, 401);
   }
   const path = new URL(req.url).pathname;
