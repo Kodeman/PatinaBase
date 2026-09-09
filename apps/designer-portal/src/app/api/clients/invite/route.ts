@@ -4,6 +4,11 @@ import {
   badRequest,
   serverError,
 } from '@/lib/supabase-admin';
+import { validateLetterRequest } from './letter-branch';
+
+const FUNCTIONS_BASE =
+  process.env.NEXT_PUBLIC_SUPABASE_FUNCTIONS_URL ??
+  `${process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''}/functions/v1`;
 
 // The client (homeowner) accepting this invite must land on the CLIENT
 // portal, not here. Without an explicit `redirectTo`, GoTrue falls back to
@@ -27,6 +32,16 @@ interface InviteRequestBody {
    * client_email.
    */
   designerClientId?: string;
+  /**
+   * The First Letter (flag `client-invite-letter`). When absent the route runs
+   * today's exact code — do NOT refactor that branch, so the off state stays
+   * provably byte-identical to today.
+   */
+  letter?: boolean;
+  /** The designer's own line, ≤280 after trimming. */
+  note?: string;
+  /** The house the letter is about; also where the note is seeded (R8). */
+  projectId?: string;
 }
 
 /**
@@ -110,6 +125,25 @@ export async function POST(request: NextRequest) {
 
   if (!clientEmail) {
     return badRequest('clientEmail is required');
+  }
+
+  // ── The First Letter (R5/R12/R13) ────────────────────────────────────────
+  const letterVerdict = validateLetterRequest(body);
+  if ('error' in letterVerdict && letterVerdict.error) {
+    return badRequest(letterVerdict.error);
+  }
+  if (letterVerdict.take) {
+    return sendTheLetter({
+      adminClient,
+      callerUser,
+      clientEmail,
+      clientName,
+      source,
+      notes,
+      existingRow,
+      note: letterVerdict.note,
+      projectId: letterVerdict.projectId,
+    });
   }
 
   try {
@@ -295,4 +329,132 @@ export async function POST(request: NextRequest) {
     console.error('[clients/invite] Unexpected error:', err);
     return serverError(err?.message ?? 'Internal server error');
   }
+}
+
+/**
+ * The letter path. Everything today's Branch B does for the auth account, the
+ * profile and the role grant now happens INSIDE the client-invite edge
+ * function — that function is the one place that knows whether GoTrue minted a
+ * new user, and notification_log.user_id is NOT NULL, so the account must exist
+ * before the send. This route keeps what it has always owned: the
+ * designer_clients row and the activity log.
+ */
+async function sendTheLetter(args: {
+  adminClient: any;
+  callerUser: { id: string; email?: string | null };
+  clientEmail: string;
+  clientName?: string;
+  source: 'direct' | 'referral';
+  notes?: string;
+  existingRow: { id: string } | null;
+  note: string | null;
+  projectId: string | null;
+}) {
+  const {
+    adminClient, callerUser, clientEmail, clientName, source, notes,
+    existingRow, note, projectId,
+  } = args;
+
+  const { data: existingProfile } = await adminClient
+    .from('profiles')
+    .select('id')
+    .eq('email', clientEmail)
+    .maybeSingle();
+
+  // R13: an account that already exists gets the short notice letter, never a
+  // silent link. Today this branch tells the designer an invite went and sends
+  // the homeowner nothing.
+  const kind: 'invite' | 'notice' = existingProfile ? 'notice' : 'invite';
+
+  // Write (or link) the roster row FIRST, so the letter can carry the
+  // designer_client_id the People Room row reads its status through.
+  let designerClientId: string;
+  if (existingRow) {
+    designerClientId = existingRow.id;
+  } else {
+    const { data: inserted, error: dcError } = await adminClient
+      .from('designer_clients')
+      .insert({
+        designer_id: callerUser.id,
+        client_email: clientEmail,
+        client_name: clientName ?? null,
+        source,
+        notes: notes ?? null,
+        status: 'active',
+      })
+      .select('id')
+      .single();
+    if (dcError) {
+      return serverError(`Failed to create client relationship: ${dcError.message}`);
+    }
+    designerClientId = inserted.id;
+  }
+
+  const upstream = `${FUNCTIONS_BASE.replace(/\/$/, '')}/client-invite`;
+  const res = await fetch(upstream, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      designerClientId,
+      email: clientEmail,
+      clientName: clientName ?? null,
+      projectId,
+      note,
+      kind,
+      writerId: callerUser.id,
+    }),
+  });
+  const payload = (await res.json().catch(() => ({}))) as {
+    profileId?: string | null;
+    kind?: 'invite' | 'notice';
+    error?: string;
+  };
+  if (!res.ok) {
+    return badRequest(payload.error ?? 'Could not send the letter just now.');
+  }
+
+  const profileId = payload.profileId ?? null;
+  if (profileId) {
+    await adminClient
+      .from('designer_clients')
+      .update({ client_id: profileId })
+      .eq('id', designerClientId);
+  }
+
+  const { data: callerProfile } = await adminClient
+    .from('profiles')
+    .select('display_name, full_name')
+    .eq('id', callerUser.id)
+    .maybeSingle();
+  const writerName =
+    callerProfile?.full_name ?? callerProfile?.display_name ?? callerUser.email ?? 'Someone';
+  const label = clientName?.trim() || clientEmail;
+
+  // lens-4 §B.9: the actor is the designer, not the system. The transport
+  // belongs in telemetry, not in a line a studio owner reads.
+  await adminClient.from('client_activity_log').insert({
+    designer_client_id: designerClientId,
+    activity_type: 'note',
+    title: `${writerName} wrote to ${label}`,
+    description: `Letter sent to ${clientEmail} · ${note ? 'with a note' : 'no note'}`,
+    actor_name: writerName,
+    metadata: {
+      actor_id: callerUser.id,
+      client_email: clientEmail,
+      letter: true,
+      kind: payload.kind ?? kind,
+      has_note: !!note,
+    },
+  });
+
+  return NextResponse.json({
+    designerClientId,
+    profileId,
+    invited: true,
+    alreadyExists: kind === 'notice',
+    kind: payload.kind ?? kind,
+  });
 }
