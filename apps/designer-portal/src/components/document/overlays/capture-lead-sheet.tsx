@@ -7,10 +7,12 @@
  * be the one who starts it.
  *
  * "Just enough to begin. The Brief fills in as you go." (prototype §captureScrim)
- * Name · Email · Phone · The project (one line) · Where from. Email and phone
- * each have a column of their own (00583); before that a single "Contact"
- * field guessed at the value and dropped a phone into the Brief one-liner as
- * "Contact: <value>" prose.
+ * Name · Email · Phone · The project (one line) · Where from — the approved
+ * field order. Email and phone each have a column of their own (00584); before
+ * that a single "Contact" field guessed at the value and dropped a phone into
+ * the Brief one-liner as "Contact: <value>" prose. The form is `noValidate`:
+ * every check, including the optional email's shape, reports in the sheet's own
+ * error channel rather than a native bubble.
  *
  * Built on the DocSheet frame (R3 / I5): charcoal D8 overlay, hairline top
  * border, ZERO shadows (D4). An overlay while open — the Desk beneath does not
@@ -58,6 +60,7 @@ export function CaptureLeadSheet({
   const [project, setProject] = useState('');
   const [source, setSource] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
   const [touched, setTouched] = useState({ name: false, project: false });
 
   // Fresh form every open; clear any prior error.
@@ -69,6 +72,7 @@ export function CaptureLeadSheet({
       setProject('');
       setSource('');
       setError(null);
+      setEmailError(null);
       setTouched({ name: false, project: false });
     }
   }, [open]);
@@ -80,6 +84,7 @@ export function CaptureLeadSheet({
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setEmailError(null);
 
     if (!canSubmit) {
       setTouched({ name: true, project: true });
@@ -89,6 +94,14 @@ export function CaptureLeadSheet({
 
     const trimmedEmail = email.trim();
     const trimmedPhone = phone.trim();
+
+    // The form is `noValidate`, so the optional email field is checked here and
+    // reported in the sheet's own error channel — a native browser bubble would
+    // block the submit with a tooltip the Document does not style (D4).
+    if (trimmedEmail !== '' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      setEmailError('Check the email address — it needs an @ and a domain.');
+      return;
+    }
 
     createLead.mutate(
       {
@@ -127,6 +140,7 @@ export function CaptureLeadSheet({
     <DocSheet open={open} onClose={onClose} title="Capture a lead">
       <form
         onSubmit={submit}
+        noValidate
         data-overlay-capture-lead
         className="mx-auto w-full max-w-[34rem]"
       >
@@ -165,14 +179,19 @@ export function CaptureLeadSheet({
             data-testid="lead-contact-project-fields"
             className="grid grid-cols-1 gap-5"
           >
-            <Field id="capture-lead-email" label="Email">
+            <Field id="capture-lead-email" label="Email" error={emailError ?? undefined}>
               <Input
                 id="capture-lead-email"
                 type="email"
                 autoComplete="email"
                 value={email}
-                onChange={setEmail}
+                onChange={(v) => {
+                  setEmail(v);
+                  setEmailError(null);
+                }}
                 placeholder="okafors@email.com"
+                invalid={emailError !== null}
+                describedBy={emailError ? 'capture-lead-email-error' : undefined}
               />
             </Field>
             <Field id="capture-lead-phone" label="Phone">

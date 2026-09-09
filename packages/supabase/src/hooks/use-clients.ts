@@ -26,7 +26,7 @@ export interface DesignerClient {
   client_email: string | null;
   client_name: string | null;
   client_phone: string | null;
-  /** Normalized derivation of client_phone, set by a trigger (00583). */
+  /** Normalized derivation of client_phone, set by a trigger (00584). */
   client_phone_e164: string | null;
   // Extended fields (v2)
   referral_source: string | null;

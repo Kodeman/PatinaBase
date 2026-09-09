@@ -86,7 +86,7 @@ describe("BriefSection — one head, not two (W5-R2 item 4)", () => {
   });
 });
 
-describe("BriefSection — the captured contact line (00583)", () => {
+describe("BriefSection — the captured contact line (00584)", () => {
   it("prints name, email, and phone separated by a middle dot", () => {
     mockLead = {
       ...BASE_LEAD,
@@ -107,14 +107,24 @@ describe("BriefSection — the captured contact line (00583)", () => {
     expect(line?.textContent).toBe("(555) 014-2200");
   });
 
-  it("prefers the joined homeowner profile's phone when the lead has one", () => {
+  it("prefers the captured phone over the joined homeowner profile's", () => {
     mockLead = {
       ...BASE_LEAD,
       contact_phone: "(555) 014-2200",
       homeowner: { full_name: "Ada Okafor", email: "ada@email.com", phone: "(555) 990-0001" },
     };
     render(<BriefSection leadId="lead-1" />);
+    expect(screen.getByText("(555) 014-2200")).toBeInTheDocument();
+    expect(screen.queryByText("(555) 990-0001")).toBeNull();
+  });
+
+  it("falls back to the joined homeowner profile's phone on an inbound lead", () => {
+    mockLead = {
+      ...BASE_LEAD,
+      homeowner_id: "profile-1",
+      homeowner: { full_name: "Ada Okafor", email: "ada@email.com", phone: "(555) 990-0001" },
+    };
+    render(<BriefSection leadId="lead-1" />);
     expect(screen.getByText("(555) 990-0001")).toBeInTheDocument();
-    expect(screen.queryByText("(555) 014-2200")).toBeNull();
   });
 });

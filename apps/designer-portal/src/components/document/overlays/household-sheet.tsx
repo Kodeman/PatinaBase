@@ -12,7 +12,10 @@
  *   · CHANGE — re-point the document to a different client. Gated to draft for
  *              proposals so a sent/signed proposal can't be mis-attributed.
  *   · EDIT   — correct the relationship's working name/email/phone (for
- *              captured clients without a Patina account) and notes.
+ *              captured clients without a Patina account) and notes. The email
+ *              and phone inputs carry autocomplete="off": they hold the
+ *              household's details, and an autofill token would offer the
+ *              signed-in designer's own address and number instead.
  *
  * Named "The household" on purpose — "Account" already means the login sheet
  * (account/account-sheet.tsx) and the project money band (account-band.tsx).
@@ -224,8 +227,8 @@ export function HouseholdSheet({
           </div>
         )}
 
-        {/* EDIT — the relationship's working details (always notes; name/email
-            for captured clients without a Patina account). */}
+        {/* EDIT — the relationship's working details (always notes;
+            name/email/phone for captured clients without a Patina account). */}
         {client && (
           <div className="mt-6 border-t border-[var(--color-pearl)] pt-4">
             {!editing ? (
@@ -268,7 +271,7 @@ export function HouseholdSheet({
                       <input
                         id="household-email"
                         type="email"
-                        autoComplete="email"
+                        autoComplete="off"
                         value={form.email}
                         onChange={(e) =>
                           setForm((f) => ({ ...f, email: e.target.value }))
@@ -284,7 +287,7 @@ export function HouseholdSheet({
                       <input
                         id="household-phone"
                         type="tel"
-                        autoComplete="tel"
+                        autoComplete="off"
                         value={form.phone}
                         onChange={(e) =>
                           setForm((f) => ({ ...f, phone: e.target.value }))

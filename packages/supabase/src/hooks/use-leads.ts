@@ -32,7 +32,7 @@ export interface Lead {
   contact_name: string | null;
   contact_email: string | null;
   contact_phone: string | null;
-  /** Normalized derivation of contact_phone, set by a trigger (00583). */
+  /** Normalized derivation of contact_phone, set by a trigger (00584). */
   contact_phone_e164: string | null;
   // Track 6 R65 — where the lead came from (canonical chip label or free text).
   source: string | null;
@@ -42,6 +42,7 @@ export interface Lead {
     email: string;
     full_name: string | null;
     avatar_url: string | null;
+    phone: string | null;
   };
 }
 
@@ -139,7 +140,8 @@ export function useLeads(filters?: LeadFilters) {
             id,
             email,
             full_name,
-            avatar_url
+            avatar_url,
+            phone
           )
         `)
         .order('created_at', { ascending: false });
@@ -191,7 +193,8 @@ export function useLead(leadId: string) {
             id,
             email,
             full_name,
-            avatar_url
+            avatar_url,
+            phone
           )
         `)
         .eq('id', leadId)
@@ -509,7 +512,10 @@ export function useAcceptLead() {
             .update({
               client_name: lead.contact_name ?? null,
               client_email: lead.contact_email ?? null,
-              client_phone: lead.contact_phone ?? null,
+              // Mirrors begin_discovery's COALESCE(client_phone, ...): a phone
+              // typed onto the household after capture is not the lead's to
+              // clear, so a phone-less lead leaves the column alone.
+              ...(lead.contact_phone ? { client_phone: lead.contact_phone } : {}),
               source: 'lead',
               lead_id: leadId,
               status: 'active',

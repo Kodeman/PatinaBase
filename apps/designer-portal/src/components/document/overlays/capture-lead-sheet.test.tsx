@@ -118,6 +118,32 @@ describe('CaptureLeadSheet layout', () => {
     );
   });
 
+  it("gates a malformed email in the sheet's own error channel, not a native bubble", () => {
+    render(<CaptureLeadSheet open onClose={jest.fn()} />);
+
+    const email = screen.getByLabelText('Email');
+    // noValidate: the browser never blocks the submit with an unstyled tooltip.
+    expect(email.closest('form')).toHaveAttribute('novalidate');
+
+    fireEvent.change(screen.getByLabelText(/Name/), { target: { value: 'The Okafors' } });
+    fireEvent.change(screen.getByLabelText(/The project \(one line\)/), {
+      target: { value: 'Downtown loft refresh' },
+    });
+    fireEvent.change(email, { target: { value: '(555) 014-2200' } });
+    fireEvent.click(screen.getByRole('button', { name: /begin the brief/i }));
+
+    expect(mutate).not.toHaveBeenCalled();
+    expect(screen.getByText(/it needs an @ and a domain/i)).toBeInTheDocument();
+    expect(email).toHaveAttribute('aria-invalid', 'true');
+    expect(email).toHaveAttribute('aria-describedby', 'capture-lead-email-error');
+
+    // Editing the address takes the notice away, and the capture goes through.
+    fireEvent.change(email, { target: { value: 'okafors@email.com' } });
+    expect(screen.queryByText(/it needs an @ and a domain/i)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /begin the brief/i }));
+    expect(mutate).toHaveBeenCalledTimes(1);
+  });
+
   it('announces field-specific validation when a required value is left blank', () => {
     render(<CaptureLeadSheet open onClose={jest.fn()} />);
 

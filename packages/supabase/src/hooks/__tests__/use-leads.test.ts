@@ -195,6 +195,37 @@ describe('useAcceptLead — manual lead, idempotent on idx_designer_clients_uniq
     expect(dc.__chain.some((c) => c.method === 'is' && c.args[0] === 'client_id' && c.args[1] === null)).toBe(true);
   });
 
+  it('omits client_phone from the update when the lead carries no phone (never clears one typed on the household)', async () => {
+    setTableQueue('leads', [
+      { data: { ...MANUAL_LEAD, contact_phone: null }, error: null },
+      { data: null, error: null },
+    ]);
+
+    const dc = setTableQueue('designer_clients', [
+      { data: null, error: null },
+      { data: { id: 'client-existing' }, error: null },
+      { data: null, error: null },
+    ]);
+
+    const mutationFn = getAcceptFn();
+    await expect(mutationFn('lead-1')).resolves.toBeTruthy();
+
+    const updateCall = dc.__chain.find((c) => c.method === 'update');
+    expect(updateCall?.args[0]).toEqual({
+      client_name: 'James Chen',
+      client_email: 'james@example.com',
+      source: 'lead',
+      lead_id: 'lead-1',
+      status: 'active',
+    });
+    expect(
+      Object.prototype.hasOwnProperty.call(
+        updateCall?.args[0] as Record<string, unknown>,
+        'client_phone',
+      ),
+    ).toBe(false);
+  });
+
   it('INSERTS a new profile-less client when no existing row matches', async () => {
     setTableQueue('leads', [
       { data: MANUAL_LEAD, error: null },
@@ -331,7 +362,7 @@ describe('useAcceptLead — homeowner pair, ordered-limit(1) selection (I65 bug 
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// useCreateLead — the capture insert shape (00583: contact_phone)
+// useCreateLead — the capture insert shape (00584: contact_phone)
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('useCreateLead — capture insert shape', () => {
