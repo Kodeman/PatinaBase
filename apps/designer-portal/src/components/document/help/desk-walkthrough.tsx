@@ -140,7 +140,7 @@ const STEPS: CoachmarkStep[] = [
     beforeShow: scrollAnchorIntoView('[data-tour-anchor="desk-greeting"]'),
     fallbackHeading: 'The Desk',
     fallbackBody:
-      'Every live job lands here, one line each, grouped by stage. A mark at the margin is a job that needs your hand.',
+      'Every live job lands here — a card for each one with a claim on your hand, and a line in the ledger below for the rest.',
   },
   {
     surfaceKey: TOUR.Step2TheFolder,

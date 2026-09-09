@@ -101,7 +101,9 @@ test.describe('Desk — whole-desk error state', () => {
       await expect(everyJob).toBeVisible({ timeout: 20_000 });
 
       const emptyLine = page.getByText('Nothing needs your hand. The work is in motion.');
-      const jobLines = page.locator('[data-roster-line]');
+      // R143 — the Desk's jobs are cards and ledger rows now; this assertion
+      // is about "did any job render at all", so it counts both halves.
+      const jobLines = page.locator('[data-claim-card], [data-ledger-row]');
 
       // Poll past the transient loading-skeleton window rather than snapshot
       // immediately after domcontentloaded — the read is async.

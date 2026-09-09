@@ -174,15 +174,23 @@ test.describe('Inked Instruments action visibility', () => {
       ),
     ).toHaveCount(0);
 
-    // One line per job, under a stage heading, and every line carries its own
-    // act at a real 44px target.
-    await expect(roster.locator('h3').first()).toBeVisible({ timeout: COLD });
-    const firstLine = roster.locator('[data-roster-line]').first();
-    await expect(firstLine).toBeVisible({ timeout: COLD });
-    const rosterAction = firstLine.locator('[data-action-key^="roster-"]');
+    // R143 — a card for a claim, a line for the rest. Both halves carry the
+    // same one act per job at a real 44px target, and the region still elects
+    // no leader.
+    const firstCard = roster.locator('[data-claim-card]').first();
+    await expect(firstCard).toBeVisible({ timeout: COLD });
+    const rosterAction = firstCard.locator('[data-action-key^="roster-"]');
     await expect(rosterAction).toHaveCount(1, { timeout: COLD });
     await expect(rosterAction).toContainText(ROSTER_ACTION, { timeout: COLD });
     await expectMinTarget(rosterAction);
+
+    // The at-rest half's act is the same instrument at the same floor.
+    const firstRow = roster.locator('[data-ledger-row]').first();
+    await expect(firstRow).toBeVisible({ timeout: COLD });
+    const ledgerAction = firstRow.locator('[data-action-key^="roster-"]');
+    await expect(ledgerAction).toHaveCount(1, { timeout: COLD });
+    await expect(ledgerAction).toContainText(ROSTER_ACTION, { timeout: COLD });
+    await expectMinTarget(ledgerAction);
 
     await page.goto(`/doc/${SENT_PROPOSAL_ID}`, {
       waitUntil: 'domcontentloaded',
@@ -243,10 +251,13 @@ test.describe('Inked Instruments action visibility', () => {
 
       // The head act is the FIRST thing on this route, so under `next dev` a
       // press can land on server markup whose handler has not attached yet and
-      // be silently lost. The roster's lines only exist once React has run and
+      // be silently lost. The roster's jobs only exist once React has run and
       // its query resolved, so waiting on one is the hydration barrier.
       await expect(
-        page.getByTestId('desk-roster').locator('[data-roster-line]').first(),
+        page
+          .getByTestId('desk-roster')
+          .locator('[data-claim-card], [data-ledger-row]')
+          .first(),
       ).toBeVisible({ timeout: COLD });
 
       // Regression: the first client-journey form must remain usable without
@@ -304,7 +315,10 @@ test.describe('Inked Instruments action visibility', () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/desk', { waitUntil: 'domcontentloaded' });
     await expect(
-      page.getByTestId('desk-roster').locator('[data-roster-line]').first(),
+      page
+        .getByTestId('desk-roster')
+        .locator('[data-claim-card], [data-ledger-row]')
+        .first(),
     ).toBeVisible({ timeout: COLD });
     await expect
       .poll(() =>

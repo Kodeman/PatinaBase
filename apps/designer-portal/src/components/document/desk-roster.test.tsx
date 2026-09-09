@@ -355,9 +355,10 @@ describe('DeskRoster — an empty desk', () => {
 
     expect(container.querySelectorAll('[data-claim-card]')).toHaveLength(0);
     expect(container.querySelectorAll('[data-ledger-row]')).toHaveLength(3);
-    expect(
-      container.querySelector('[data-tour-anchor="desk-folio"]'),
-    ).not.toBeNull();
+    const anchor = container.querySelector('[data-tour-anchor="desk-folio"]');
+    expect(anchor).not.toBeNull();
+    // Not just "something" — the at-rest head itself.
+    expect(anchor).toHaveAttribute('data-desk-rest-head');
   });
 });
 
