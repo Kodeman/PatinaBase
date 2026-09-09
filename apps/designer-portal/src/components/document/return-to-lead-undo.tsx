@@ -31,6 +31,13 @@
  * The live region is mounted unconditionally and stays empty until there is
  * something to say: a polite region that appears with its content already in
  * place is not reliably announced.
+ *
+ * Its bottom edge rides `--doc-shell-floating-bottom`, the contract the
+ * (document) shell publishes for exactly this (globals.css, "Floating actions
+ * inherit this contract so they clear the active chrome") — the same anchor
+ * the four other floating bands in this tree use. Hard-coded offsets painted
+ * over the 60px Studio Drawer above 1180px and could not track the mobile
+ * bar's real height below it.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -101,6 +108,9 @@ export function ReturnToLeadUndo() {
   useEffect(() => {
     const listen: Listener = (next) => {
       if (next === null && acting.current) return;
+      // A fresh offer ends the previous act's hold, so the flag cannot outlive
+      // the band it was protecting and silence the next dwell expiry.
+      acting.current = false;
       setFailure(null);
       setOffer(next);
     };
@@ -115,6 +125,7 @@ export function ReturnToLeadUndo() {
   useEffect(() => {
     if (!failure) return;
     const timer = window.setTimeout(() => {
+      acting.current = false;
       setFailure(null);
       setOffer(null);
       dismissReturnToLeadUndo();
@@ -133,7 +144,11 @@ export function ReturnToLeadUndo() {
         router.replace(`/doc/${lead_id}`);
       },
       onError: (error) => {
-        acting.current = false;
+        // `acting` deliberately STAYS true: the module dwell timer armed when
+        // the offer was published is still running, and a click made at the
+        // end of the window would otherwise have its refusal wiped a moment
+        // later. The failure window below owns the band from here and clears
+        // the flag when it elapses.
         // The RPC rejects with a PostgrestError — message-shaped, not always an
         // `instanceof Error` — so read `.message` off whatever arrived. The
         // server owns both the verdict and the sentence.
@@ -152,7 +167,7 @@ export function ReturnToLeadUndo() {
       data-testid="return-to-lead-undo-region"
       className={
         standing
-          ? 'fixed bottom-24 left-1/2 z-[45] -translate-x-1/2 min-[1180px]:bottom-6 min-[1180px]:left-6 min-[1180px]:translate-x-0'
+          ? 'fixed bottom-[var(--doc-shell-floating-bottom)] left-1/2 z-[65] -translate-x-1/2'
           : 'sr-only'
       }
     >

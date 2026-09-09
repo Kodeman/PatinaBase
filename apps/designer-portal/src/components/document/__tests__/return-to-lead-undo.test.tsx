@@ -203,6 +203,59 @@ describe('the Undo offer after Accept · begin', () => {
     }
   });
 
+  // The dwell timer belongs to the OFFER, and it kept firing after a refusal
+  // had replaced the offer with the server's sentence — leaving a designer who
+  // clicked at 7.5s about half a second to read why the door was shut.
+  it('gives a late refusal a full window of its own', () => {
+    jest.useFakeTimers();
+    try {
+      returnToLeadMutate.mockImplementationOnce(
+        (
+          _designerClientId: string,
+          options: { onError?: (error: unknown) => void },
+        ) => {
+          options.onError?.({
+            message: 'A proposal has already been started for this client.',
+          });
+        },
+      );
+      renderBoth();
+      fireEvent.click(screen.getByRole('button', { name: 'Accept · begin' }));
+
+      act(() => {
+        jest.advanceTimersByTime(7500);
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+
+      // The offer's own eight seconds elapse here; the sentence must survive it.
+      act(() => {
+        jest.advanceTimersByTime(1000);
+      });
+      expect(screen.getByTestId('return-to-lead-undo')).toHaveTextContent(
+        'A proposal has already been started for this client.',
+      );
+
+      act(() => {
+        jest.advanceTimersByTime(8000);
+      });
+      expect(screen.queryByTestId('return-to-lead-undo')).not.toBeInTheDocument();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  // The (document) shell publishes --doc-shell-floating-bottom so a floating
+  // band clears the Studio Drawer (60px, >=1180px) and the mobile bar's real
+  // measured height below it. Hard-coded offsets painted over both.
+  it('rides the shell’s floating-bottom contract rather than a fixed offset', () => {
+    renderBoth();
+    fireEvent.click(screen.getByRole('button', { name: 'Accept · begin' }));
+
+    const region = screen.getByTestId('return-to-lead-undo-region');
+    expect(region).toHaveClass('bottom-[var(--doc-shell-floating-bottom)]');
+    expect(region.className).not.toMatch(/bottom-24|min-\[1180px\]:bottom-6/);
+  });
+
   it('keeps an empty live region mounted so the offer is announced when it lands', () => {
     renderBoth();
 

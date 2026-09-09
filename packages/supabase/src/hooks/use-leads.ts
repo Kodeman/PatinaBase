@@ -663,8 +663,11 @@ export function useReturnToLeadCheck(designerClientId: string | null | undefined
  *
  * Invalidates everything `useBeginDiscovery` does (it reverses that act), plus
  * the client-list keys from use-clients.ts and the document-state / desk keys —
- * the folder changes shape, so every surface that reads it must re-derive. The
- * check's own key is REMOVED, not invalidated: its subject is gone.
+ * the folder changes shape, so every surface that reads it must re-derive. Two
+ * exceptions: the check's own key is REMOVED rather than invalidated (its
+ * subject is gone), and the departing engagement's own document_state key is
+ * left alone (its page is mid-navigation and the row it would refetch has just
+ * been deleted).
  */
 export function useReturnToLead() {
   const queryClient = useQueryClient();
@@ -704,7 +707,21 @@ export function useReturnToLead() {
       });
       queryClient.invalidateQueries({ queryKey: ['client-stats'] });
       queryClient.invalidateQueries({ queryKey: ['discovery', designerClientId] });
-      queryClient.invalidateQueries({ queryKey: ['document-state'] });
+      // Every document_state reader re-derives EXCEPT the departing engagement's
+      // own: its page is still mounted while the router replaces the URL, and a
+      // refetch there would resolve the deleted relationship to `missing` and
+      // flash a not-found document on a success path.
+      queryClient.invalidateQueries({
+        queryKey: ['document-state'],
+        predicate: (query) =>
+          !(
+            query.queryKey[1] === 'engagement' &&
+            query.queryKey[2] === designerClientId
+          ),
+      });
+      // Vestigial, and kept only because use-clients.ts and use-proposals.ts
+      // both carry it: no query in the tree keys on it. The Desk is the
+      // ['document-state', 'desk'] query the invalidation above covers.
       queryClient.invalidateQueries({ queryKey: ['desk-engagements'] });
     },
   });

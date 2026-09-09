@@ -51,6 +51,9 @@ import { CallPlan } from './call-plan';
 import { DiscoveryScheduleLine } from './discovery-schedule-line';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
 
+/** The refused action points at its sentence with aria-describedby. */
+const RETURN_REASON_ID = 'return-to-lead-reason';
+
 const EMPTY_DRAFT: DiscoveryDraft = {
   project_type: null,
   project_type_custom: null,
@@ -131,6 +134,7 @@ function statusFor(block: BlockKey, d: DiscoveryDraft): string {
 
 export function DiscoverySection({
   engagementId,
+  engagementKind = null,
   designerId,
   clientProfileId,
   clientName,
@@ -138,6 +142,12 @@ export function DiscoverySection({
   onEyebrow,
 }: {
   engagementId: string; // the designer_clients.id (Shape D)
+  /** The engagement's document_state kind. The Discovery spread is reachable
+   *  on a project or proposal engagement too, where `engagementId` is a
+   *  project / proposal-chain id — NOT a designer_clients id — so the
+   *  return-to-lead check must not be asked about it (it answers
+   *  insufficient_privilege). Absent reads as "not a relationship". */
+  engagementKind?: string | null;
   designerId: string;
   clientProfileId: string | null;
   clientName: string;
@@ -158,7 +168,9 @@ export function DiscoverySection({
   const beginDirection = useBeginDirection();
   // F2 — whether this Discovery is still an accidental one click away from
   // being a Brief again. The server owns both the verdict and the sentence.
-  const { data: returnCheck } = useReturnToLeadCheck(engagementId);
+  const { data: returnCheck } = useReturnToLeadCheck(
+    engagementKind === 'relationship' ? engagementId : null,
+  );
   const returnToLead = useReturnToLead();
   const [returnError, setReturnError] = useState<string | null>(null);
   const { data: styles } = useStyles() as {
@@ -395,6 +407,13 @@ export function DiscoverySection({
     },
   ];
 
+  // The reason to print: a refusal from the act itself first, then the
+  // standing verdict. `returnRefused` is rendered as aria-disabled rather than
+  // `disabled` so the action keeps its place in the tab order and the sentence
+  // it points at is announced with it.
+  const returnRefused = returnCheck ? !returnCheck.allowed : false;
+  const returnReason = returnError ?? (returnRefused ? returnCheck?.reason : null);
+
   return (
     // Blur-save law (F4): focusout bubbles here from every block editor, so
     // leaving ANY field flushes the debounce with the field's final value —
@@ -532,10 +551,13 @@ export function DiscoverySection({
           <DocumentAction
             actionKey="return-to-lead"
             variant="tertiary"
-            disabled={!returnCheck.allowed || returnToLead.isPending}
+            aria-disabled={returnRefused || undefined}
+            aria-describedby={returnReason ? RETURN_REASON_ID : undefined}
+            disabled={returnToLead.isPending}
             loading={returnToLead.isPending}
             loadingLabel="Moving…"
             onClick={() => {
+              if (returnRefused) return;
               setReturnError(null);
               returnToLead.mutate(engagementId, {
                 onSuccess: ({ lead_id }) => router.replace(`/doc/${lead_id}`),
@@ -551,9 +573,12 @@ export function DiscoverySection({
           >
             Move back to New Lead
           </DocumentAction>
-          {(returnError ?? (!returnCheck.allowed ? returnCheck.reason : null)) && (
-            <span className="text-[12px] leading-snug text-[var(--text-muted)]">
-              {returnError ?? returnCheck.reason}
+          {returnReason && (
+            <span
+              id={RETURN_REASON_ID}
+              className="text-[12px] leading-snug text-[var(--text-muted)]"
+            >
+              {returnReason}
             </span>
           )}
         </DocumentActionGroup>

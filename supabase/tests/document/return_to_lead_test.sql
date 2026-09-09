@@ -116,7 +116,10 @@ VALUES
    'Empty Rows', 'rtl-empty-rows@test.invalid'),
   ('d7200000-0000-4000-8000-000000000013', NULL,
    'd7000000-0000-4000-8000-000000000001', 'consultation', 'new',
-   'Planted Victim', 'rtl-victim@test.invalid');
+   'Planted Victim', 'rtl-victim@test.invalid'),
+  ('d7200000-0000-4000-8000-000000000014', NULL,
+   'd7000000-0000-4000-8000-000000000001', 'consultation', 'new',
+   'Two Relationships', 'rtl-sibling@test.invalid');
 
 UPDATE public.leads
 SET status = 'contacted',
@@ -516,6 +519,56 @@ BEGIN
 END;
 $$;
 
+-- ── Refusal: two relationships point at one lead ───────────────────────────
+-- The reversal un-accepts the lead and deletes ONE relationship. A sibling row
+-- on the same lead would be left standing behind a lead that is back at 'new',
+-- and Shape D excludes a relationship whose lead is not accepted — so the
+-- survivor would emit no Desk folder at all (review F2-R2-01). RLS permits the
+-- duplicate: a studio co-member may insert a row carrying any lead id of the
+-- studio's, and neither partial unique index on designer_clients forbids it.
+DO $$
+DECLARE
+  v_dc      uuid;
+  v_sibling uuid;
+BEGIN
+  v_dc := pg_temp.rtl_accept('d7200000-0000-4000-8000-000000000014');
+
+  ASSERT (public.return_to_lead_check(v_dc)->>'allowed')::boolean,
+    'one relationship on the lead must leave the door open';
+
+  -- A distinct client_email: the hydrate trigger COALESCEs, so this survives,
+  -- and the (designer_id, client_email) partial unique index is not tripped.
+  INSERT INTO public.designer_clients (
+    designer_id, client_email, source, lead_id, status
+  ) VALUES (
+    'd7000000-0000-4000-8000-000000000001', 'rtl-sibling-second@test.invalid',
+    'direct', 'd7200000-0000-4000-8000-000000000014', 'lead'
+  )
+  RETURNING id INTO v_sibling;
+
+  ASSERT pg_temp.rtl_refusal(v_dc) =
+    'This lead is tied to more than one client, so there is no single move to take back.',
+    'a second relationship on the same lead must close the door';
+  -- Either row refuses, not only the one the accept created: the check is
+  -- ahead of the content and adoption branches for exactly this reason.
+  ASSERT pg_temp.rtl_refusal(v_sibling) =
+    'This lead is tied to more than one client, so there is no single move to take back.',
+    'the second relationship must refuse for the same reason';
+
+  ASSERT (SELECT status = 'accepted' AND accepted_at IS NOT NULL
+          FROM public.leads
+          WHERE id = 'd7200000-0000-4000-8000-000000000014'),
+    'a refused reversal must leave the lead accepted';
+  ASSERT (SELECT count(*) = 2 FROM public.designer_clients
+          WHERE lead_id = 'd7200000-0000-4000-8000-000000000014'),
+    'a refused reversal must leave both relationships standing';
+
+  DELETE FROM public.designer_clients WHERE id = v_sibling;
+  ASSERT (public.return_to_lead_check(v_dc)->>'allowed')::boolean,
+    'with the sibling gone the door opens again';
+END;
+$$;
+
 -- ── A nurtured lead comes back to its dated return, not to "new" ───────────
 DO $$
 DECLARE
@@ -788,7 +841,10 @@ END;
 $$;
 RESET ROLE;
 
--- ── Every probe the check makes can use an index ───────────────────────────
+-- ── The four indexes 00585 adds for its own probes are here ────────────────
+-- Existence only, and only for the four this migration adds — the other
+-- probes ride indexes their own migrations created, and an EXPLAIN on an empty
+-- local table proves nothing either way (review F2-R2-02).
 DO $$
 BEGIN
   ASSERT EXISTS (
@@ -801,6 +857,20 @@ BEGIN
     WHERE schemaname = 'public'
       AND indexname = 'idx_match_ceremonies_designer_client'
   ), 'match_ceremonies.designer_client_id must be indexed for the check';
+  -- Deliberately not partial on archived_at: an archived thread is still an
+  -- open thread, which is why idx_comms_participants_profile_inbox is no use
+  -- to the direct-thread probe.
+  ASSERT EXISTS (
+    SELECT 1 FROM pg_indexes
+    WHERE schemaname = 'public'
+      AND indexname = 'idx_comms_participants_profile_open'
+      AND indexdef NOT LIKE '%archived_at%'
+  ), 'the direct-thread probe needs comms_thread_participants(profile_id)';
+  ASSERT EXISTS (
+    SELECT 1 FROM pg_indexes
+    WHERE schemaname = 'public'
+      AND indexname = 'idx_designer_clients_lead'
+  ), 'the sibling probe needs designer_clients(lead_id) indexed';
 END;
 $$;
 

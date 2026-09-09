@@ -2821,6 +2821,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                 {row.engagement_id && row.designer_id ? (
                   <DiscoverySection
                     engagementId={row.engagement_id}
+                    engagementKind={row.engagement_kind}
                     designerId={row.designer_id}
                     clientProfileId={row.client_profile_id}
                     clientName={row.client_name}

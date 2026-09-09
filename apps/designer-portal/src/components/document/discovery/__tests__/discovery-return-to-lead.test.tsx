@@ -25,6 +25,10 @@ let mockReturnCheck: {
   reason: string | null;
   lead_id: string | null;
 } | null = null;
+// What the section asked the check about, in call order — the RPC raises for an
+// id that is not a designer_clients id, so a non-relationship engagement must
+// pass null and never ask.
+const returnCheckIds: (string | null | undefined)[] = [];
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush, replace: mockReplace }),
@@ -37,7 +41,10 @@ jest.mock('@patina/supabase', () => ({
   useBeginDirection: () => ({ mutate: jest.fn(), isPending: false }),
   useStyles: () => ({ data: [] }),
   useClientRoomScans: () => ({ data: [] }),
-  useReturnToLeadCheck: () => ({ data: mockReturnCheck }),
+  useReturnToLeadCheck: (id: string | null | undefined) => {
+    returnCheckIds.push(id);
+    return { data: mockReturnCheck };
+  },
   useReturnToLead: () => ({ mutate: returnToLeadMutate, isPending: false }),
 }));
 
@@ -49,10 +56,11 @@ jest.mock('../call-plan', () => ({
   CallPlan: () => null,
 }));
 
-function renderSection() {
+function renderSection(engagementKind: string | null = 'relationship') {
   return render(
     <DiscoverySection
       engagementId="engagement-1"
+      engagementKind={engagementKind}
       designerId="designer-1"
       clientProfileId="client-1"
       clientName="The Ellsworths"
@@ -65,6 +73,7 @@ describe('DiscoverySection — Move back to New Lead', () => {
     mockPush.mockClear();
     mockReplace.mockClear();
     returnToLeadMutate.mockClear();
+    returnCheckIds.length = 0;
     mockReturnCheck = null;
   });
 
@@ -97,7 +106,7 @@ describe('DiscoverySection — Move back to New Lead', () => {
     expect(mockReplace).toHaveBeenCalledWith('/doc/lead-77');
   });
 
-  it('is disabled with the server’s reason beside it once the door is shut', () => {
+  it('is refused with the server’s reason beside it once the door is shut', () => {
     mockReturnCheck = {
       allowed: false,
       reason: 'This client was matched through the app and has already been written to.',
@@ -106,16 +115,40 @@ describe('DiscoverySection — Move back to New Lead', () => {
     renderSection();
 
     const action = screen.getByRole('button', { name: 'Move back to New Lead' });
-    expect(action).toBeDisabled();
-    expect(
-      screen.getByText(
-        'This client was matched through the app and has already been written to.',
-      ),
-    ).toBeInTheDocument();
+    // aria-disabled, not `disabled`: the shut door keeps its place in the tab
+    // order, so a screen-reader user can reach it and be read the sentence it
+    // points at. `disabled` would take both away.
+    expect(action).toHaveAttribute('aria-disabled', 'true');
+    expect(action).not.toBeDisabled();
+
+    const reason = screen.getByText(
+      'This client was matched through the app and has already been written to.',
+    );
+    expect(reason).toBeInTheDocument();
+    expect(action).toHaveAttribute('aria-describedby', reason.id);
 
     fireEvent.click(action);
     expect(returnToLeadMutate).not.toHaveBeenCalled();
     expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  // spreadSection lets a designer reach the Discovery spread on a project or
+  // proposal engagement, where the engagement id is a project / proposal id.
+  // return_to_lead_check raises insufficient_privilege for one of those, so the
+  // question is never asked.
+  it('never asks the check about an engagement that is not a relationship', () => {
+    mockReturnCheck = { allowed: true, reason: null, lead_id: 'lead-77' };
+    renderSection('project');
+
+    expect(returnCheckIds.length).toBeGreaterThan(0);
+    expect(returnCheckIds.every((id) => id === null)).toBe(true);
+  });
+
+  it('asks the check for a relationship engagement, by its own id', () => {
+    mockReturnCheck = { allowed: true, reason: null, lead_id: 'lead-77' };
+    renderSection();
+
+    expect(returnCheckIds).toContain('engagement-1');
   });
 
   it('prints no reason while the door is open', () => {

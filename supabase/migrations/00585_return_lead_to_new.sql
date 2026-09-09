@@ -16,7 +16,7 @@
 -- and this branch's base carries 00583_lead_contact_phone.sql. Two files with
 -- the same numeric prefix are one migration version to the Supabase CLI, so
 -- 00584 was not free. 00585 is. Ordering is safe either way — the sweep writes
--- policies, this file writes two new functions, two indexes, and touches no
+-- policies, this file writes two new functions and four indexes, and touches no
 -- existing function or view.
 --
 -- LINEAGE
@@ -68,6 +68,12 @@
 --      them FROM the lead, but the homeowner branch deliberately leaves
 --      client_phone NULL on a profile-holding row, and a NULL there is absence,
 --      not an edit.
+--      Deliberately NOT checked: `source` and `client_id`, the only other
+--      non-key columns on the table (review F2-R2-08). No portal writer sets
+--      `source` on an existing row, and `client_id` is written by the accept
+--      itself, never by a designer editing the household — so neither is a
+--      place studio detail can land. Read the list above as the columns that
+--      CAN carry an edit, not as the whole table.
 --   7. Any row anchored to this relationship in: proposals, project_documents
 --      (the folio), margin_notes, client_activity_log, match_ceremonies (by
 --      designer_client_id, or by the lead), client_decisions,
@@ -92,6 +98,15 @@
 --      rows must not read as content here when they do not read as "3 rooms"
 --      there. A bare row with every column at its default is not content, so a
 --      Discovery folder opened and never typed in still reverses.
+--  10. A second relationship points at the same lead. The reversal un-accepts
+--      the lead AND deletes ONE relationship, so a sibling row would be left
+--      standing behind a lead that is back at 'new' — and document_state
+--      Shape D excludes a relationship whose lead is new/viewed/contacted, so
+--      that survivor (and anything on it) would emit no Desk folder at all
+--      until someone re-accepted. Review F2-R2-01 reproduced it end to end:
+--      RLS lets a studio co-member insert a row carrying a peer's lead id, and
+--      neither partial unique index on designer_clients forbids the duplicate.
+--      One lead, one relationship, or the door is shut.
 --
 -- WHAT THE REVERSAL RESTORES
 -- A nurtured lead earns a dated return, and useNurtureLead stores that date in
@@ -138,14 +153,24 @@
 --
 -- CHEAP ENOUGH FOR EVERY FOLDER LOAD
 -- The check runs on every Discovery folder open, so each probe must be able to
--- use an index. Ten of the twelve tables already index designer_client_id;
--- fulfillment_orders and match_ceremonies did not, and the match_ceremonies
--- probe ORed two columns in one EXISTS so its unique lead_id index could not be
--- used either. Both indexes are added below and the ceremony probe is split in
--- two, one leg per index.
+-- use an index. Ten of the twelve designer_client_id tables already index that
+-- column; fulfillment_orders and match_ceremonies did not, and the
+-- match_ceremonies probe ORed two columns in one EXISTS so its unique lead_id
+-- index could not be used either. Both indexes are added below and the ceremony
+-- probe is split in two, one leg per index.
+--
+-- Two more are added for the same reason (review F2-R2-02). The direct-thread
+-- probe looks up comms_thread_participants by profile_id with left_at IS NULL,
+-- and all three of that table's existing indexes miss it: the pkey and
+-- idx_comms_participants_thread both lead with thread_id, and
+-- idx_comms_participants_profile_inbox is partial on archived_at IS NULL —
+-- which this probe must not assert, because an archived thread is still an open
+-- thread. And the sibling probe (item 10) reads designer_clients.lead_id, which
+-- carried no index of its own. Without the two below, both probes scale with
+-- the whole table rather than with this designer.
 -- ═══════════════════════════════════════════════════════════════════════════
 
--- ── 0. The two probes that could not use an index ───────────────────────────
+-- ── 0. The probes that could not use an index ───────────────────────────────
 
 CREATE INDEX IF NOT EXISTS idx_fulfillment_orders_designer_client
   ON public.fulfillment_orders(designer_client_id)
@@ -154,6 +179,18 @@ CREATE INDEX IF NOT EXISTS idx_fulfillment_orders_designer_client
 CREATE INDEX IF NOT EXISTS idx_match_ceremonies_designer_client
   ON public.match_ceremonies(designer_client_id)
   WHERE designer_client_id IS NOT NULL;
+
+-- The direct-thread probe: by profile, threads not left. Deliberately NOT
+-- partial on archived_at — an archived thread is still an open thread, which
+-- is why idx_comms_participants_profile_inbox cannot serve this.
+CREATE INDEX IF NOT EXISTS idx_comms_participants_profile_open
+  ON public.comms_thread_participants(profile_id)
+  WHERE left_at IS NULL;
+
+-- The sibling-relationship probe.
+CREATE INDEX IF NOT EXISTS idx_designer_clients_lead
+  ON public.designer_clients(lead_id)
+  WHERE lead_id IS NOT NULL;
 
 -- ── 1. return_to_lead_check — the door, and the reason it is shut ───────────
 
@@ -234,6 +271,23 @@ BEGIN
     RETURN jsonb_build_object(
       'allowed', false,
       'reason', 'This client was matched through the app and has already been written to.',
+      'lead_id', v_relationship.lead_id
+    );
+  END IF;
+
+  -- One lead, one relationship. The reversal deletes exactly one row, so a
+  -- sibling on the same lead would outlive the accept with no Desk folder to
+  -- its name (Shape D wants an accepted lead). Ahead of the content and
+  -- adoption branches on purpose: whichever of the two rows is asked, this is
+  -- the true answer.
+  IF EXISTS (
+    SELECT 1 FROM public.designer_clients d2
+    WHERE d2.lead_id = v_relationship.lead_id
+      AND d2.id <> p_designer_client_id
+  ) THEN
+    RETURN jsonb_build_object(
+      'allowed', false,
+      'reason', 'This lead is tied to more than one client, so there is no single move to take back.',
       'lead_id', v_relationship.lead_id
     );
   END IF;
@@ -510,6 +564,19 @@ BEGIN
       RAISE EXCEPTION 'client relationship % not found or access denied',
         p_designer_client_id
         USING ERRCODE = 'insufficient_privilege';
+    END IF;
+
+    -- Restated under the locks for the same reason the authority test above
+    -- is: what this function DELETES must not rest on the reader. The sentence
+    -- is the check's, word for word — the SQL test compares the two, so the
+    -- pair cannot drift apart unnoticed.
+    IF EXISTS (
+      SELECT 1 FROM public.designer_clients d2
+      WHERE d2.lead_id = v_relationship.lead_id
+        AND d2.id <> p_designer_client_id
+    ) THEN
+      RAISE EXCEPTION 'This lead is tied to more than one client, so there is no single move to take back.'
+        USING ERRCODE = 'check_violation';
     END IF;
   END IF;
 

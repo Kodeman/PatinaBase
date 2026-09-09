@@ -607,8 +607,47 @@ describe('useReturnToLead — one RPC, no browser fallback', () => {
     expect(keys).toContainEqual(['designer-client', 'dc-discovery']);
     expect(keys).toContainEqual(['client-stats']);
     expect(keys).toContainEqual(['discovery', 'dc-discovery']);
+    // ['document-state'] is the key that re-derives the DESK: useDeskEngagements
+    // keys on ['document-state', 'desk']. Nothing in the tree reads
+    // ['desk-engagements'], so asserting that one would prove nothing — it is
+    // invalidated only to match use-clients.ts and use-proposals.ts.
     expect(keys).toContainEqual(['document-state']);
-    expect(keys).toContainEqual(['desk-engagements']);
+  });
+
+  // React Query runs the mutation-level onSuccess before the call-site one, and
+  // it is the call site that navigates — so a broad document_state invalidation
+  // reaches the departing page while it is still mounted, and it refetches a
+  // relationship this act has just deleted.
+  it('spares the departing engagement its own document_state refetch', () => {
+    getReturnOnSuccess()({ lead_id: 'lead-1' }, 'dc-discovery');
+
+    const documentState = invalidateQueries.mock.calls
+      .map(
+        (c) =>
+          c[0] as {
+            queryKey: unknown[];
+            predicate?: (query: { queryKey: unknown[] }) => boolean;
+          },
+      )
+      .find(
+        (filters) =>
+          filters.queryKey.length === 1 && filters.queryKey[0] === 'document-state',
+      );
+
+    expect(documentState?.predicate).toBeTypeOf('function');
+    expect(documentState?.predicate?.({ queryKey: ['document-state', 'desk'] })).toBe(
+      true,
+    );
+    expect(
+      documentState?.predicate?.({
+        queryKey: ['document-state', 'engagement', 'dc-discovery'],
+      }),
+    ).toBe(false);
+    expect(
+      documentState?.predicate?.({
+        queryKey: ['document-state', 'engagement', 'another-engagement'],
+      }),
+    ).toBe(true);
   });
 
   it('removes the check rather than refetching it — its subject is gone', () => {
