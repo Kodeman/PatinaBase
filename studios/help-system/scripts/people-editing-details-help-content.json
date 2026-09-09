@@ -18,7 +18,7 @@
             {
               "_type": "span",
               "_key": "peb1s1",
-              "text": "Open their card, choose Edit."
+              "text": "It's the same door everywhere in People: a rolodex card, a field crew member, a client's household — find their card, choose Edit, change what changed, save."
             }
           ]
         },
@@ -31,7 +31,7 @@
             {
               "_type": "span",
               "_key": "peb2s1",
-              "text": "People with a Patina account manage their own name, email, and phone."
+              "text": "The one exception: someone with a Patina account keeps their own name, email, and phone — their card still opens, but those three fields live in their account, not yours to change."
             }
           ]
         }

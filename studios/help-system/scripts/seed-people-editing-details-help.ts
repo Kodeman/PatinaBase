@@ -14,6 +14,12 @@
  * (this file + the .mjs runner) the Decisions dashboard precedent uses, so
  * someone with Sanity write access can actually push it.
  *
+ * F3-R2-04 — the docs come from the typed `people-editing-details-help-
+ * content.ts` module (as `seed-decisions-help.ts` imports
+ * `DECISIONS_HELP_DOCS` from `decisions-help-content.ts`), not the raw JSON
+ * with a locally re-declared type — one typed module, matching the
+ * Decisions precedent exactly.
+ *
  * Idempotent: a deterministic `_id`, so re-running with --commit
  * `createOrReplace`s rather than duplicating. Mirrors
  * seed-decisions-help.ts's shape and usage.
@@ -33,22 +39,9 @@
  */
 
 import { getCliClient } from 'sanity/cli'
-import rawDocs from './people-editing-details-help-content.json'
+import { PEOPLE_EDITING_DETAILS_HELP_DOCS } from './people-editing-details-help-content'
 
-interface HelpArticleSeedDoc {
-  _id: string
-  _type: 'helpContent'
-  surfaceKey: string
-  persona: 'all'
-  contentType: 'helpArticle'
-  helpArticleContent: {
-    title: string
-    oneSentenceAnswer: string
-    body: unknown[]
-  }
-}
-
-const DOCS = rawDocs as HelpArticleSeedDoc[]
+const DOCS = PEOPLE_EDITING_DETAILS_HELP_DOCS
 const commit = process.argv.includes('--commit')
 
 async function main() {
