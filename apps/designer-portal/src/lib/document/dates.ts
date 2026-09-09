@@ -70,6 +70,12 @@ export const MONTH_NAME_FORMAT = new Intl.DateTimeFormat('en-GB', { month: 'long
  */
 export const WEEKDAY_FORMAT = new Intl.DateTimeFormat('en-GB', { weekday: 'long' });
 
+/** The weekday abbreviated — "Tue" — for the registers that print one beside a
+ *  day ("Tue 14 July"). Same reason as WEEKDAY_FORMAT. */
+export const WEEKDAY_SHORT_FORMAT = new Intl.DateTimeFormat('en-GB', {
+  weekday: 'short',
+});
+
 function toDate(value: DateLike): Date | null {
   if (value === null || value === undefined) return null;
   if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;

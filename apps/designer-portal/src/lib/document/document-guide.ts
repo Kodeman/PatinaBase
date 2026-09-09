@@ -10,6 +10,7 @@ import type { SectionScheduleFacts } from './section-derivation';
 import type { SendWallLine } from './proposal-watch-derivation';
 import type { TicketRow } from './ticket-derivation';
 import { deriveTicketLeader, leadTicketException } from './ticket-leader';
+import { DAY_MONTH_FORMAT, WEEKDAY_FORMAT } from './dates';
 import {
   gateActionLabel,
   gateSentence,
@@ -298,9 +299,12 @@ function calendarDaysUntil(iso: string, now: Date): number | null {
   return Math.round((thenMidnight - nowMidnight) / DAY_MS);
 }
 
-const fmtWeekdayDate = (iso: string) =>
-  new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
-    .format(asLocalDate(iso));
+/** "Tuesday, 11 September" — the weekday and the one day idiom, composed
+ *  rather than asking Intl for a third shape (PP-2 / R140, dates.ts). */
+const fmtWeekdayDate = (iso: string) => {
+  const day = asLocalDate(iso);
+  return `${WEEKDAY_FORMAT.format(day)}, ${DAY_MONTH_FORMAT.format(day)}`;
+};
 
 /**
  * ⌥ `Install is three weeks out — {Weekday}, {Month d}` (C-AP-10).
@@ -328,9 +332,7 @@ function installGuideHeadline(
   return `Install is ${spell(Math.round(days / 7))} weeks out — ${when}`;
 }
 
-const fmtShortDay = (iso: string) =>
-  new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' })
-    .format(new Date(iso));
+const fmtShortDay = (iso: string) => DAY_MONTH_FORMAT.format(new Date(iso));
 
 /**
  * ⌥ `Sent {Mon d} · not opened yet` (C-AP-10). The date is the row's own

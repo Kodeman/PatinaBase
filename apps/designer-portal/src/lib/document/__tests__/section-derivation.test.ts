@@ -60,7 +60,7 @@ describe('deriveSections (§4)', () => {
       'future',
       'future',
     ]);
-    expect(s[3].sub).toBe('Signed · Apr 1');
+    expect(s[3].sub).toBe('Signed · 1 April');
     // R108: with no resolver answer the section says 'Active' and nothing more.
     // The old WEEK_MS arithmetic printed a week off projectStartDate here.
     expect(s[4].sub).toBe('Active');
@@ -140,7 +140,7 @@ describe('deriveSections (§4)', () => {
       },
     );
     expect(s[3]).toMatchObject({ state: 'active', sub: 'Awaiting signature' });
-    expect(s[2].sub).toBe('Settled · Mar 21');
+    expect(s[2].sub).toBe('Settled · 21 March');
     expect(s[4].state).toBe('future');
   });
 
@@ -175,7 +175,7 @@ describe('deriveSections (§4)', () => {
         schedule: null,
       },
     );
-    expect(s[3].sub).toBe('Signed · Apr 1');
+    expect(s[3].sub).toBe('Signed · 1 April');
     expect(s[3].state).toBe('active');
   });
 
@@ -194,7 +194,7 @@ describe('deriveSections (§4)', () => {
       },
     );
     expect(s[2]).toMatchObject({ state: 'active', sub: 'Drafting' });
-    expect(s[1].sub).toBe('Settled · Mar 9');
+    expect(s[1].sub).toBe('Settled · 9 March');
   });
 
   it('lead: Brief active with respond-by sub; everything else future', () => {
@@ -211,7 +211,7 @@ describe('deriveSections (§4)', () => {
         schedule: null,
       },
     );
-    expect(s[0]).toMatchObject({ state: 'active', sub: 'Respond by Jun 12' });
+    expect(s[0]).toMatchObject({ state: 'active', sub: 'Respond by 12 June' });
     expect(s.slice(1).every((x) => x.state === 'future')).toBe(true);
   });
 
@@ -299,18 +299,18 @@ describe('deriveSections — schedule registers (R108)', () => {
   it('install: a committed anchor prints its day', () => {
     expect(
       installSub(scheduleFacts({ install: { date: '2026-09-02', fidelity: 'committed' } })),
-    ).toBe('Sep 2');
+    ).toBe('2 September');
   });
 
   it('install: a frame is approximate, never a bare day', () => {
     expect(
       installSub(scheduleFacts({ install: { date: '2026-09-02', fidelity: 'frame' } })),
-    ).toBe('~Sep 2');
+    ).toBe('~2 September');
   });
 
   it('install: a band states a month, never a day', () => {
     const sub = installSub(scheduleFacts({ install: { date: '2026-09-02', fidelity: 'band' } }));
-    expect(sub).toBe('Band · ~Sep');
+    expect(sub).toBe('Band · ~September');
     // The desk refuses to put a day on an unanchored schedule; so does this.
     expect(sub).not.toMatch(/\d/);
   });

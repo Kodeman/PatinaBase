@@ -1,18 +1,26 @@
-/** Tiny shared formatters for Document surfaces. */
+/** Tiny shared formatters for Document surfaces.
+ *
+ * PP-2 / R140 — every date word here goes through `dates.ts`, so the folio
+ * cards, the margin and the document guide print the same idiom the Desk's
+ * day's line and roster rows print. Nothing in this file composes its own
+ * `Intl.DateTimeFormat` for a date. */
+
+import { DAY_MONTH_FORMAT, MONTH_NAME_FORMAT, legalDate } from './dates';
 
 /** DATE columns arrive as bare `YYYY-MM-DD`; parse them as LOCAL midnight so
  *  the rendered day never slips backwards in negative-offset timezones. */
 const asLocalDate = (iso: string) => new Date(/^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso}T00:00:00` : iso);
 
-export const fmtDay = (iso: string) =>
-  new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(asLocalDate(iso));
+/** "11 September" — the house's day-and-month idiom. */
+export const fmtDay = (iso: string) => DAY_MONTH_FORMAT.format(asLocalDate(iso));
 
 /** Month alone (R107) — the precision a band-register date may be stated at. */
-export const fmtMonth = (iso: string) =>
-  new Intl.DateTimeFormat('en-US', { month: 'short' }).format(asLocalDate(iso));
+export const fmtMonth = (iso: string) => MONTH_NAME_FORMAT.format(asLocalDate(iso));
 
-export const fmtMonthYear = (iso: string) =>
-  new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(asLocalDate(iso));
+export const fmtMonthYear = (iso: string) => {
+  const day = asLocalDate(iso);
+  return `${MONTH_NAME_FORMAT.format(day)} ${day.getFullYear()}`;
+};
 
 /**
  * Format a CALENDAR DATE — a day somebody wrote on a page — without letting a
@@ -42,23 +50,25 @@ export const formatCalendarDate = (value?: string | null) => {
   const bare = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
   if (bare) {
     const [, year, month, day] = bare;
-    return new Intl.DateTimeFormat('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    }).format(new Date(Number(year), Number(month) - 1, Number(day), 12));
+    return legalDate(new Date(Number(year), Number(month) - 1, Number(day), 12));
   }
 
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return null;
-  return new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    timeZone: 'UTC',
-  }).format(parsed);
+  // The day is read off the timestamp in UTC — the zone it was written in —
+  // then printed through the one idiom.
+  return legalDate(
+    new Date(
+      parsed.getUTCFullYear(),
+      parsed.getUTCMonth(),
+      parsed.getUTCDate(),
+      12,
+    ),
+  );
 };
 
+/** Money, not a date: `en-US` is what prints a bare "$" — `en-GB` with
+ *  `currency: 'USD'` prints "US$". PP-2 rules date idioms, not currency. */
 export const fmtUsd = (cents: number) =>
   (cents / 100).toLocaleString('en-US', {
     style: 'currency',

@@ -319,7 +319,7 @@ describe('TradeScopeDetail', () => {
     };
     renderDetail(scope());
     expect(
-      screen.getByText('Signed Jan 15, 2026 on paper · recorded by the studio.'),
+      screen.getByText('Signed 15 January 2026 on paper · recorded by the studio.'),
     ).toBeVisible();
   });
 
@@ -353,8 +353,8 @@ describe('TradeScopeDetail', () => {
         },
       };
       renderDetail(scope({ progressState: 'accepted' }));
-      expect(screen.getByText(/accepted Feb 10, 2026/)).toBeVisible();
-      expect(screen.queryByText(/accepted Feb 9, 2026/)).not.toBeInTheDocument();
+      expect(screen.getByText(/accepted 10 February 2026/)).toBeVisible();
+      expect(screen.queryByText(/accepted 9 February 2026/)).not.toBeInTheDocument();
     });
 
     it('leaves an online acceptance in the studio\'s own timezone — it is a moment, not a day', () => {
@@ -371,7 +371,7 @@ describe('TradeScopeDetail', () => {
         },
       };
       renderDetail(scope({ progressState: 'accepted' }));
-      expect(screen.getByText(/accepted Feb 9, 2026/)).toBeVisible();
+      expect(screen.getByText(/accepted 9 February 2026/)).toBeVisible();
     });
   });
 

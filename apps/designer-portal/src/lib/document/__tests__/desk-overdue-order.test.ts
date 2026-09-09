@@ -149,6 +149,6 @@ describe('an overdue folio already sorts first, with no added tier', () => {
 describe('the folio need line is NOT gate-keyed (recorded shortfall)', () => {
   it('prints the need’s own truthful line', () => {
     const { folders } = partitionDesk([overdueDecision], NOW);
-    expect(folders[0].need.text).toBe('1 decision overdue — oldest due May 6');
+    expect(folders[0].need.text).toBe('1 decision overdue — oldest due 6 May');
   });
 });
