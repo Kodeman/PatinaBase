@@ -423,22 +423,40 @@ export async function sendTheLetter(args: {
   if (existingRow) {
     designerClientId = existingRow.id;
   } else {
-    const { data: inserted, error: dcError } = await adminClient
+    // Add Person carries no designerClientId, so an email already on this
+    // designer's roster used to fall straight into the insert and hit
+    // idx_designer_clients_unique_email (designer_id, client_email) — a 500,
+    // and no letter. Reuse the row instead, exactly as the R73 branch does.
+    const { data: onRoster, error: rosterError } = await adminClient
       .from('designer_clients')
-      .insert({
-        designer_id: callerUser.id,
-        client_email: clientEmail,
-        client_name: clientName ?? null,
-        source,
-        notes: notes ?? null,
-        status: 'active',
-      })
       .select('id')
-      .single();
-    if (dcError) {
-      return serverError(`Failed to create client relationship: ${dcError.message}`);
+      .eq('designer_id', callerUser.id)
+      .eq('client_email', clientEmail)
+      .limit(1)
+      .maybeSingle();
+    if (rosterError) {
+      return serverError(`Failed to check your roster: ${rosterError.message}`);
     }
-    designerClientId = inserted.id;
+    if (onRoster) {
+      designerClientId = onRoster.id;
+    } else {
+      const { data: inserted, error: dcError } = await adminClient
+        .from('designer_clients')
+        .insert({
+          designer_id: callerUser.id,
+          client_email: clientEmail,
+          client_name: clientName ?? null,
+          source,
+          notes: notes ?? null,
+          status: 'active',
+        })
+        .select('id')
+        .single();
+      if (dcError) {
+        return serverError(`Failed to create client relationship: ${dcError.message}`);
+      }
+      designerClientId = inserted.id;
+    }
   }
 
   const upstream = `${FUNCTIONS_BASE.replace(/\/$/, '')}/client-invite`;

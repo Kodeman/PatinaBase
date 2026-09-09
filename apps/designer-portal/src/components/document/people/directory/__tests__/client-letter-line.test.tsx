@@ -5,14 +5,21 @@ import { ClientLetterLine, rowCopy } from '../client-letter-line';
 let status: unknown = null;
 let flagValue = { value: true, isLoading: false };
 let queryIsError = false;
+const mutateAsync = jest.fn();
+let mutationPending = false;
 
 jest.mock('@/hooks/use-feature-flag', () => ({ useFeatureFlag: () => flagValue }));
 jest.mock('@patina/supabase', () => ({
   ...jest.requireActual('@patina/supabase'),
   useClientInvitationStatus: () => ({ data: status, isLoading: false, isError: queryIsError }),
+  useInviteAndLinkClient: () => ({ mutateAsync, isPending: mutationPending }),
 }));
 
-function renderLine(props: { designerClientId: string; clientName: string | null }) {
+function renderLine(props: {
+  designerClientId: string;
+  clientName: string | null;
+  clientEmail?: string | null;
+}) {
   const qc = new QueryClient();
   return {
     qc,
@@ -64,6 +71,9 @@ describe('ClientLetterLine', () => {
     global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
     flagValue = { value: true, isLoading: false };
     queryIsError = false;
+    mutateAsync.mockReset();
+    mutateAsync.mockResolvedValue({ designerClientId: 'dc1', kind: 'invite' });
+    mutationPending = false;
   });
 
   it('renders nothing while the flag is still answering', () => {
@@ -166,5 +176,108 @@ describe('ClientLetterLine', () => {
     queryIsError = true;
     const { container } = renderLine({ designerClientId: 'dc1', clientName: 'Dave Okonkwo' });
     expect(container).toBeEmptyDOMElement();
+  });
+});
+
+/**
+ * The trailing act on a roster row with no letter. It used to be a <span>: the
+ * one state that needs a way in was the one state that had none.
+ */
+describe('Write to {given} is an act', () => {
+  beforeEach(() => {
+    status = null;
+    flagValue = { value: true, isLoading: false };
+    queryIsError = false;
+    mutateAsync.mockReset();
+    mutateAsync.mockResolvedValue({ designerClientId: 'dc1', kind: 'invite' });
+    mutationPending = false;
+  });
+
+  it('renders as a button, and only in the no-letter state', () => {
+    renderLine({ designerClientId: 'dc1', clientName: 'Dave Okonkwo' });
+    expect(screen.getByRole('button', { name: 'Write to Dave' })).toBeInTheDocument();
+    expect(screen.queryByTestId('client-letter-compose')).not.toBeInTheDocument();
+  });
+
+  it('offers no act once the letter has gone', () => {
+    status = { state: 'sent', at: '2026-09-09T14:00:00.000Z', invitationId: 'i1' };
+    renderLine({ designerClientId: 'dc1', clientName: 'Dave Okonkwo' });
+    expect(screen.getByTestId('client-letter-line')).toHaveTextContent('Letter sent 9 Sept');
+    expect(screen.queryByRole('button', { name: /^Write to/ })).not.toBeInTheDocument();
+  });
+
+  it('opens the same field the add-person sheet uses', () => {
+    renderLine({
+      designerClientId: 'dc1',
+      clientName: 'Dave Okonkwo',
+      clientEmail: 'dave@okonkwo.net',
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Write to Dave' }));
+    expect(screen.getByTestId('client-letter-compose')).toBeInTheDocument();
+    expect(screen.getByTestId('letter-line-facts')).toHaveTextContent(
+      'DAVE OKONKWO · dave@okonkwo.net',
+    );
+    expect(screen.getByLabelText('A line for Dave')).toBeInTheDocument();
+  });
+
+  it('sends through the invite-and-link mutation, reusing the roster row', async () => {
+    const { qc } = renderLine({
+      designerClientId: 'dc1',
+      clientName: 'Dave Okonkwo',
+      clientEmail: 'dave@okonkwo.net',
+    });
+    const invalidateSpy = jest.spyOn(qc, 'invalidateQueries');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Write to Dave' }));
+    fireEvent.change(screen.getByLabelText('A line for Dave'), {
+      target: { value: '  Second probe of the first letter.  ' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'ADD AND SEND THE LETTER' }));
+
+    await waitFor(() =>
+      expect(mutateAsync).toHaveBeenCalledWith({
+        designerClientId: 'dc1',
+        letter: true,
+        note: 'Second probe of the first letter.',
+      }),
+    );
+    expect(await screen.findByText('Your letter is on its way.')).toBeInTheDocument();
+    expect(invalidateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: ['client-invitation-status', 'dc1'] }),
+    );
+    // The field folds away once the letter is gone.
+    expect(screen.queryByTestId('client-letter-compose')).not.toBeInTheDocument();
+  });
+
+  it('sends with no line at all rather than an empty one', async () => {
+    renderLine({ designerClientId: 'dc1', clientName: 'Dave Okonkwo' });
+    fireEvent.click(screen.getByRole('button', { name: 'Write to Dave' }));
+    fireEvent.click(screen.getByRole('button', { name: 'ADD AND SEND THE LETTER' }));
+    await waitFor(() =>
+      expect(mutateAsync).toHaveBeenCalledWith({
+        designerClientId: 'dc1',
+        letter: true,
+        note: undefined,
+      }),
+    );
+  });
+
+  it('says it could not send, and leaves the field standing', async () => {
+    mutateAsync.mockRejectedValue(new Error('boom'));
+    const { qc } = renderLine({ designerClientId: 'dc1', clientName: 'Dave Okonkwo' });
+    const invalidateSpy = jest.spyOn(qc, 'invalidateQueries');
+    fireEvent.click(screen.getByRole('button', { name: 'Write to Dave' }));
+    fireEvent.click(screen.getByRole('button', { name: 'ADD AND SEND THE LETTER' }));
+    expect(await screen.findByText('Could not send it just now.')).toBeInTheDocument();
+    expect(screen.getByTestId('client-letter-compose')).toBeInTheDocument();
+    expect(invalidateSpy).not.toHaveBeenCalled();
+  });
+
+  it('Not now closes the field without sending', () => {
+    renderLine({ designerClientId: 'dc1', clientName: 'Dave Okonkwo' });
+    fireEvent.click(screen.getByRole('button', { name: 'Write to Dave' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
+    expect(screen.queryByTestId('client-letter-compose')).not.toBeInTheDocument();
+    expect(mutateAsync).not.toHaveBeenCalled();
   });
 });

@@ -569,6 +569,7 @@ export function DirectoryView({
                   <ClientLetterLine
                     designerClientId={p.person_id}
                     clientName={p.display_name ?? null}
+                    clientEmail={p.email}
                   />
                 ) : null}
               </li>

@@ -21,10 +21,13 @@ import { useCallback, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   useClientInvitationStatus,
+  useInviteAndLinkClient,
   clientInvitationStatusKeys,
+  peopleKeys,
   type ClientInvitationStatus,
 } from '@patina/supabase';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
+import { LetterLineField, sendButtonLabel } from './letter-line-field';
 
 const SHORT_MONTHS = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'June',
@@ -66,15 +69,24 @@ export function rowCopy(status: ClientInvitationStatus | null): {
 export function ClientLetterLine({
   designerClientId,
   clientName,
+  clientEmail = null,
 }: {
   designerClientId: string;
   clientName: string | null;
+  /** Shown in the field's facts line; the send resolves it server-side from
+   *  the roster row, so a missing one costs the facts line, not the letter. */
+  clientEmail?: string | null;
 }) {
   const { value: letterOn, isLoading: flagLoading } = useFeatureFlag('client-invite-letter');
   const { data: status, isLoading, isError } = useClientInvitationStatus(
     letterOn ? designerClientId : undefined,
   );
   const [feedback, setFeedback] = useState<string | null>(null);
+  // R73 — the same invite-and-link mutation the ClientPicker's armed row uses,
+  // carrying designerClientId so the EXISTING roster row is reused.
+  const inviteAndLink = useInviteAndLinkClient();
+  const [composing, setComposing] = useState(false);
+  const [note, setNote] = useState('');
   // One in flight, mirroring the studio-member resend guard
   // (account-studio-page.tsx:490-520).
   const inFlight = useRef(false);
@@ -111,6 +123,30 @@ export function ClientLetterLine({
     [designerClientId, queryClient],
   );
 
+  const writeTo = useCallback(async () => {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setFeedback(null);
+    try {
+      await inviteAndLink.mutateAsync({
+        designerClientId,
+        letter: true,
+        note: note.trim() || undefined,
+      });
+      setComposing(false);
+      setNote('');
+      setFeedback('Your letter is on its way.');
+      void queryClient.invalidateQueries({
+        queryKey: clientInvitationStatusKeys.one(designerClientId),
+      });
+      void queryClient.invalidateQueries({ queryKey: peopleKeys.all });
+    } catch {
+      setFeedback('Could not send it just now.');
+    } finally {
+      inFlight.current = false;
+    }
+  }, [designerClientId, inviteAndLink, note, queryClient]);
+
   // Fail-closed: nothing renders until the flag resolves, so a non-pilot studio
   // never sees a letter line flash past. A read that errored is not the same
   // state as "no letter was ever written" — surfacing "Write to X" over a
@@ -121,32 +157,76 @@ export function ClientLetterLine({
   const given = (clientName ?? '').trim().split(/\s+/)[0] || null;
 
   return (
-    <p
-      data-testid="client-letter-line"
-      className="mt-1 pl-[3.25rem] text-[0.7rem] leading-snug text-[var(--color-aged-oak)]"
-    >
-      {text}
-      {action === 'write-again' && status ? (
-        <>
-          {' · '}
-          <button
-            type="button"
-            onClick={() => void writeAgain(status.invitationId)}
-            className="min-h-11 underline underline-offset-4"
-          >
-            Write again
-          </button>
-        </>
+    <>
+      <p
+        data-testid="client-letter-line"
+        className="mt-1 pl-[3.25rem] text-[0.7rem] leading-snug text-[var(--color-aged-oak)]"
+      >
+        {text}
+        {action === 'write-again' && status ? (
+          <>
+            {' · '}
+            <button
+              type="button"
+              onClick={() => void writeAgain(status.invitationId)}
+              className="min-h-11 underline underline-offset-4"
+            >
+              Write again
+            </button>
+          </>
+        ) : null}
+        {action === 'write-to' ? (
+          <>
+            {' · '}
+            {/* An act, not a label: it unfolds the same LetterLineField the
+                add-person sheet uses, and sends through the same route. */}
+            <button
+              type="button"
+              onClick={() => setComposing(true)}
+              className="min-h-11 text-[var(--color-mocha)] underline underline-offset-4"
+            >
+              {given ? `Write to ${given}` : 'Write the letter'}
+            </button>
+          </>
+        ) : null}
+        {feedback ? <span className="ml-2 text-[var(--color-mocha)]">{feedback}</span> : null}
+      </p>
+      {/* Sibling of the <p>, never inside it: the field is block content and a
+          <p> may not carry a <div>. */}
+      {action === 'write-to' && composing ? (
+        <div data-testid="client-letter-compose" className="pl-[3.25rem]">
+          <LetterLineField
+            facts={{
+              clientName,
+              clientEmail: (clientEmail ?? '').trim(),
+              projectName: null,
+            }}
+            value={note}
+            onChange={setNote}
+            disabled={inviteAndLink.isPending}
+          />
+          <div className="mt-3 flex items-center gap-4">
+            <button
+              type="button"
+              onClick={() => void writeTo()}
+              disabled={inviteAndLink.isPending}
+              className="min-h-11 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-clay)] underline underline-offset-4 disabled:opacity-60"
+            >
+              {sendButtonLabel(true)}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setComposing(false);
+                setNote('');
+              }}
+              className="min-h-11 text-[0.74rem] text-[var(--color-aged-oak)] underline underline-offset-4"
+            >
+              Not now
+            </button>
+          </div>
+        </div>
       ) : null}
-      {action === 'write-to' ? (
-        <>
-          {' · '}
-          <span className="text-[var(--color-mocha)]">
-            {given ? `Write to ${given}` : 'Write the letter'}
-          </span>
-        </>
-      ) : null}
-      {feedback ? <span className="ml-2 text-[var(--color-mocha)]">{feedback}</span> : null}
-    </p>
+    </>
   );
 }

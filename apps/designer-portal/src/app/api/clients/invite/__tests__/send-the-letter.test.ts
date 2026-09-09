@@ -11,12 +11,17 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { sendTheLetter } from '../route';
 
-function chainable(terminalResult: { data?: unknown; error?: unknown }) {
+function chainable(
+  terminalResult: { data?: unknown; error?: unknown },
+  /** When given, reads (maybeSingle) answer this and writes (single) answer
+   *  terminalResult — the roster-lookup-then-insert path needs the two apart. */
+  readResult?: { data?: unknown; error?: unknown },
+) {
   const builder: any = {};
-  for (const method of ['select', 'eq', 'neq', 'in', 'insert', 'update', 'upsert']) {
+  for (const method of ['select', 'eq', 'neq', 'in', 'limit', 'order', 'insert', 'update', 'upsert']) {
     builder[method] = jest.fn(() => builder);
   }
-  builder.maybeSingle = jest.fn(() => Promise.resolve(terminalResult));
+  builder.maybeSingle = jest.fn(() => Promise.resolve(readResult ?? terminalResult));
   builder.single = jest.fn(() => Promise.resolve(terminalResult));
   builder.then = (resolve: (v: unknown) => unknown) => resolve(terminalResult);
   return builder;
@@ -148,5 +153,89 @@ describe('sendTheLetter — project-access guard', () => {
     const res = await sendTheLetter({ ...baseArgs, adminClient, projectId: null });
 
     expect(res.status).toBe(200);
+  });
+});
+
+/**
+ * Add Person sends an email-only body (no designerClientId), so an email
+ * already on the roster used to fall into the insert and hit
+ * idx_designer_clients_unique_email — a 500, and no letter.
+ */
+describe('sendTheLetter — a known roster email is reused, never re-inserted', () => {
+  it('reuses the existing designer_clients row and sends with its id', async () => {
+    const designerClients = chainable({ data: { id: 'dc-existing' }, error: null });
+    const adminClient = makeAdminClient({
+      profiles: chainable({ data: null, error: null }),
+      designer_clients: designerClients,
+      client_activity_log: chainable({ data: null, error: null }),
+    });
+
+    const res = await sendTheLetter({ ...baseArgs, adminClient, projectId: null });
+
+    expect(res.status).toBe(200);
+    expect(designerClients.insert).not.toHaveBeenCalled();
+    expect(await res.json()).toEqual(
+      expect.objectContaining({ designerClientId: 'dc-existing' }),
+    );
+    const [, init] = (global.fetch as jest.Mock).mock.calls[0];
+    expect(JSON.parse(init.body).designerClientId).toBe('dc-existing');
+  });
+
+  it('still inserts when the email is new to this designer', async () => {
+    const designerClients = chainable(
+      { data: { id: 'dc-new' }, error: null },
+      { data: null, error: null },
+    );
+    const adminClient = makeAdminClient({
+      profiles: chainable({ data: null, error: null }),
+      designer_clients: designerClients,
+      client_activity_log: chainable({ data: null, error: null }),
+    });
+
+    const res = await sendTheLetter({ ...baseArgs, adminClient, projectId: null });
+
+    expect(res.status).toBe(200);
+    expect(designerClients.insert).toHaveBeenCalledTimes(1);
+    expect(await res.json()).toEqual(
+      expect.objectContaining({ designerClientId: 'dc-new' }),
+    );
+  });
+
+  it('surfaces a failed roster read rather than inserting over it', async () => {
+    const designerClients = chainable(
+      { data: null, error: null },
+      { data: null, error: { message: 'read blew up' } },
+    );
+    const adminClient = makeAdminClient({
+      profiles: chainable({ data: null, error: null }),
+      designer_clients: designerClients,
+      client_activity_log: chainable({ data: null, error: null }),
+    });
+
+    const res = await sendTheLetter({ ...baseArgs, adminClient, projectId: null });
+
+    expect(res.status).toBe(500);
+    expect(designerClients.insert).not.toHaveBeenCalled();
+  });
+
+  it('an explicit designerClientId still wins — no roster lookup at all', async () => {
+    const designerClients = chainable({ data: { id: 'dc-other' }, error: null });
+    const adminClient = makeAdminClient({
+      profiles: chainable({ data: null, error: null }),
+      designer_clients: designerClients,
+      client_activity_log: chainable({ data: null, error: null }),
+    });
+
+    const res = await sendTheLetter({
+      ...baseArgs,
+      adminClient,
+      projectId: null,
+      existingRow: { id: 'dc-r73' },
+    });
+
+    expect(res.status).toBe(200);
+    expect(designerClients.insert).not.toHaveBeenCalled();
+    const [, init] = (global.fetch as jest.Mock).mock.calls[0];
+    expect(JSON.parse(init.body).designerClientId).toBe('dc-r73');
   });
 });
