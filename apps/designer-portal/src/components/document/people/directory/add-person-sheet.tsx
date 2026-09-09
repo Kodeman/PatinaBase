@@ -250,11 +250,15 @@ export function AddPersonSheet({
       void queryClient.invalidateQueries({ queryKey: peopleKeys.all });
 
       const label = name.trim() || trimmedEmail;
+      // The server decides whether R13's notice actually fired
+      // (`kind === 'notice'`), not the designer's own checkbox — the checkbox
+      // only requests a letter; branch A can still link silently underneath.
+      const letterActuallySent = result.alreadyExists ? result.kind === 'notice' : invite;
       const message = letterOn
         ? successLine({
             label,
             email: trimmedEmail,
-            sent: invite,
+            sent: letterActuallySent,
             alreadyExisted: result.alreadyExists,
           })
         : result.alreadyExists

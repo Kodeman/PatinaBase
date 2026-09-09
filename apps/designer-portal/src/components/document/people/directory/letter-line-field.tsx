@@ -105,7 +105,9 @@ export function successLine(opts: {
   alreadyExisted: boolean;
 }): string {
   if (opts.alreadyExisted) {
-    return `${opts.label} was already on Patina. He's linked to you now; a short letter tells him so.`;
+    return opts.sent
+      ? `${opts.label} was already on Patina — linked to your roster now; a short letter tells them so.`
+      : `${opts.label} was already on Patina — linked to your roster now; no letter was sent.`;
   }
   return opts.sent
     ? `${opts.label} is on your roster. Your letter is on its way to ${opts.email}.`

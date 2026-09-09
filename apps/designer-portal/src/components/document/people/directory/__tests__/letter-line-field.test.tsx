@@ -101,7 +101,31 @@ describe('lens-4 §B.7 — the success line names the address it went to', () =>
   it('stops the already-on-Patina branch lying by omission (R13)', () => {
     expect(
       successLine({ label: 'Dave', email: 'dave@okonkwo.net', sent: true, alreadyExisted: true }),
-    ).toBe("Dave was already on Patina. He's linked to you now; a short letter tells him so.");
+    ).toBe('Dave was already on Patina — linked to your roster now; a short letter tells them so.');
+  });
+
+  it('does not claim a letter went when none did, on the already-on-Patina branch', () => {
+    expect(
+      successLine({ label: 'Dave', email: 'dave@okonkwo.net', sent: false, alreadyExisted: true }),
+    ).toBe('Dave was already on Patina — linked to your roster now; no letter was sent.');
+  });
+
+  it('never guesses a gender for the already-on-Patina branch', () => {
+    const sent = successLine({
+      label: 'Priya Raman',
+      email: 'priya@ramanhouse.com',
+      sent: true,
+      alreadyExisted: true,
+    });
+    const notSent = successLine({
+      label: 'Priya Raman',
+      email: 'priya@ramanhouse.com',
+      sent: false,
+      alreadyExisted: true,
+    });
+    for (const line of [sent, notSent]) {
+      expect(line).not.toMatch(/\b(he|him|his|she|her|hers)\b/i);
+    }
   });
 });
 

@@ -180,4 +180,56 @@ describe('flag ON — R12’s rename and the letter', () => {
       'Dave Okonkwo is on your roster. Your letter is on its way to dave@okonkwo.net.',
     );
   });
+
+  it('does not claim a letter was sent when the checkbox is off and the account already exists (R12/R13)', async () => {
+    // The old Branch A: an existing profile, letter off, links silently —
+    // the route returns alreadyExists:true with no `kind` at all.
+    mutateAsync.mockResolvedValue({
+      designerClientId: 'dc1',
+      profileId: 'p1',
+      invited: false,
+      alreadyExists: true,
+    });
+    const onAdded = jest.fn();
+    renderWithClient(
+      <AddPersonSheet open initialKind="client" onClose={() => {}} onAdded={onAdded} />,
+    );
+    fireEvent.change(screen.getByLabelText('Full name (optional)'), {
+      target: { value: 'Priya Raman' },
+    });
+    fireEvent.change(screen.getByLabelText('Email'), {
+      target: { value: 'priya@ramanhouse.com' },
+    });
+    fireEvent.click(screen.getByLabelText('Send Priya the letter'));
+    fireEvent.click(screen.getByRole('button', { name: 'ADD TO YOUR PEOPLE' }));
+    await waitFor(() => expect(onAdded).toHaveBeenCalled());
+    expect(onAdded.mock.calls[0][0]).toBe(
+      'Priya Raman was already on Patina — linked to your roster now; no letter was sent.',
+    );
+  });
+
+  it('claims a letter was sent when the account already exists and the server confirms a notice fired', async () => {
+    mutateAsync.mockResolvedValue({
+      designerClientId: 'dc1',
+      profileId: 'p1',
+      invited: true,
+      alreadyExists: true,
+      kind: 'notice',
+    });
+    const onAdded = jest.fn();
+    renderWithClient(
+      <AddPersonSheet open initialKind="client" onClose={() => {}} onAdded={onAdded} />,
+    );
+    fireEvent.change(screen.getByLabelText('Full name (optional)'), {
+      target: { value: 'Priya Raman' },
+    });
+    fireEvent.change(screen.getByLabelText('Email'), {
+      target: { value: 'priya@ramanhouse.com' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'ADD AND SEND THE LETTER' }));
+    await waitFor(() => expect(onAdded).toHaveBeenCalled());
+    expect(onAdded.mock.calls[0][0]).toBe(
+      'Priya Raman was already on Patina — linked to your roster now; a short letter tells them so.',
+    );
+  });
 });
