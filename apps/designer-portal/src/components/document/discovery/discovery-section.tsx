@@ -518,13 +518,19 @@ export function DiscoverySection({
       {/* F2 — the way back from an accidental "Accept · begin". Shown only for
           a Discovery that came from a lead; once the door is shut the action
           stays visible but disabled, with the server's reason printed beside
-          it in plain sight rather than hidden in a tooltip. */}
+          it in plain sight rather than hidden in a tooltip. Its own region, not
+          the toolrow's: the reversal is a different kind of act from the three
+          above it, and sharing their region key would fold its telemetry into
+          theirs. */}
       {returnCheck?.lead_id && (
-        <div className="mb-5 -mt-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <DocumentActionGroup
+          surfaceKey="discovery"
+          regionKey="return-to-lead"
+          aria-label="Move this client back to New Lead"
+          className="mb-5 -mt-3"
+        >
           <DocumentAction
             actionKey="return-to-lead"
-            surfaceKey="discovery"
-            regionKey="tools"
             variant="tertiary"
             disabled={!returnCheck.allowed || returnToLead.isPending}
             loading={returnToLead.isPending}
@@ -533,12 +539,13 @@ export function DiscoverySection({
               setReturnError(null);
               returnToLead.mutate(engagementId, {
                 onSuccess: ({ lead_id }) => router.replace(`/doc/${lead_id}`),
-                onError: (error) =>
-                  setReturnError(
-                    error instanceof Error
-                      ? error.message
-                      : 'That move could not be taken back.',
-                  ),
+                onError: (error) => {
+                  // The RPC rejects with a PostgrestError — message-shaped, not
+                  // always an `instanceof Error`. Read `.message` off whatever
+                  // arrived so the server's own sentence reaches the designer.
+                  const message = (error as { message?: string } | null)?.message;
+                  setReturnError(message || 'That move could not be taken back.');
+                },
               });
             }}
           >
@@ -549,7 +556,7 @@ export function DiscoverySection({
               {returnError ?? returnCheck.reason}
             </span>
           )}
-        </div>
+        </DocumentActionGroup>
       )}
 
       <p className="mb-2 flex items-center gap-2.5 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">

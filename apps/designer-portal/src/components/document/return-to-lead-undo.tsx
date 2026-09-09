@@ -21,9 +21,19 @@
  * The mutation lives HERE rather than in the publisher, because the component
  * that published is gone; a mutation fired from its unmounted hook has no
  * observer left to run its callbacks.
+ *
+ * The DEADLINE lives in the store, not in this component. An offer whose band
+ * unmounted mid-window (the designer walked to /preferences inside the eight
+ * seconds) must expire on schedule anyway — a component-owned timer died with
+ * the band and left the offer to reappear, live, hours later on the next
+ * document route.
+ *
+ * The live region is mounted unconditionally and stays empty until there is
+ * something to say: a polite region that appears with its content already in
+ * place is not reliably announced.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useReturnToLead } from '@patina/supabase';
 import { DocumentAction } from './document-action';
@@ -38,31 +48,59 @@ export interface UndoOffer {
   designerClientId: string;
 }
 
-type Listener = (offer: UndoOffer | null) => void;
+interface StandingOffer extends UndoOffer {
+  /** Wall-clock deadline, so a remount cannot resurrect a dead offer. */
+  expiresAt: number;
+}
+
+type Listener = (offer: StandingOffer | null) => void;
 
 const listeners = new Set<Listener>();
-let pending: UndoOffer | null = null;
+let pending: StandingOffer | null = null;
+let dwell: ReturnType<typeof setTimeout> | null = null;
+
+function clearDwell(): void {
+  if (dwell === null) return;
+  clearTimeout(dwell);
+  dwell = null;
+}
 
 /** Publish the offer. Safe to call from a component about to unmount. */
 export function offerReturnToLeadUndo(offer: UndoOffer): void {
-  pending = offer;
-  listeners.forEach((listen) => listen(offer));
+  clearDwell();
+  pending = { ...offer, expiresAt: Date.now() + OFFER_MS };
+  dwell = setTimeout(() => dismissReturnToLeadUndo(), OFFER_MS);
+  listeners.forEach((listen) => listen(pending));
 }
 
 /** Withdraw the offer (taken, expired, or refused). */
 export function dismissReturnToLeadUndo(): void {
+  clearDwell();
   pending = null;
   listeners.forEach((listen) => listen(null));
+}
+
+/** The offer only if its window is still open; a lapsed one is discarded. */
+function standingOffer(): StandingOffer | null {
+  if (pending && pending.expiresAt <= Date.now()) {
+    clearDwell();
+    pending = null;
+  }
+  return pending;
 }
 
 export function ReturnToLeadUndo() {
   const router = useRouter();
   const returnToLead = useReturnToLead();
-  const [offer, setOffer] = useState<UndoOffer | null>(pending);
+  const [offer, setOffer] = useState<StandingOffer | null>(standingOffer);
   const [failure, setFailure] = useState<string | null>(null);
+  // A reversal in flight owns the band: the dwell timer must not blank the
+  // sentence out from under a click made at the very end of the window.
+  const acting = useRef(false);
 
   useEffect(() => {
     const listen: Listener = (next) => {
+      if (next === null && acting.current) return;
       setFailure(null);
       setOffer(next);
     };
@@ -72,54 +110,84 @@ export function ReturnToLeadUndo() {
     };
   }, []);
 
+  // A refusal gets a window of its own, starting when it arrives — otherwise a
+  // late failure is printed onto a band the dwell timer has already retired.
   useEffect(() => {
-    if (!offer) return;
-    const timer = window.setTimeout(() => dismissReturnToLeadUndo(), OFFER_MS);
+    if (!failure) return;
+    const timer = window.setTimeout(() => {
+      setFailure(null);
+      setOffer(null);
+      dismissReturnToLeadUndo();
+    }, OFFER_MS);
     return () => window.clearTimeout(timer);
-  }, [offer]);
+  }, [failure]);
 
   const undo = useCallback(() => {
     if (!offer) return;
+    acting.current = true;
     returnToLead.mutate(offer.designerClientId, {
       onSuccess: ({ lead_id }) => {
+        acting.current = false;
         dismissReturnToLeadUndo();
+        setOffer(null);
         router.replace(`/doc/${lead_id}`);
       },
       onError: (error) => {
-        setFailure(
-          error instanceof Error
-            ? error.message
-            : 'That move could not be taken back.',
-        );
+        acting.current = false;
+        // The RPC rejects with a PostgrestError — message-shaped, not always an
+        // `instanceof Error` — so read `.message` off whatever arrived. The
+        // server owns both the verdict and the sentence.
+        const message = (error as { message?: string } | null)?.message;
+        setFailure(message || 'That move could not be taken back.');
       },
     });
   }, [offer, returnToLead, router]);
 
-  if (!offer) return null;
+  const standing = offer !== null || failure !== null;
 
   return (
     <div
       role="status"
       aria-live="polite"
-      data-testid="return-to-lead-undo"
-      className="fixed bottom-24 left-1/2 z-40 flex max-w-[min(92vw,420px)] -translate-x-1/2 flex-wrap items-center gap-x-4 gap-y-1 border border-[var(--color-pearl)] border-l-2 border-l-[var(--color-clay)] bg-[var(--bg-surface)] px-4 py-2.5 md:bottom-6 md:left-6 md:translate-x-0"
+      data-testid="return-to-lead-undo-region"
+      className={
+        standing
+          ? 'fixed bottom-24 left-1/2 z-[45] -translate-x-1/2 min-[1180px]:bottom-6 min-[1180px]:left-6 min-[1180px]:translate-x-0'
+          : 'sr-only'
+      }
     >
-      <span className="text-[13px] text-[var(--color-charcoal)]">
-        {failure ?? offer.message}
-      </span>
-      {!failure && (
-        <DocumentAction
-          actionKey="undo-begin-discovery"
-          surfaceKey="open-document"
-          regionKey="undo-offer"
-          variant="tertiary"
-          disabled={returnToLead.isPending}
-          loading={returnToLead.isPending}
-          loadingLabel="Moving…"
-          onClick={undo}
+      {standing && (
+        <div
+          data-testid="return-to-lead-undo"
+          className="flex max-w-[min(92vw,420px)] flex-wrap items-center gap-x-4 gap-y-1 border border-[var(--color-pearl)] border-l-2 border-l-[var(--color-clay)] bg-[var(--bg-surface)] px-4 py-2.5"
         >
-          Undo
-        </DocumentAction>
+          {failure ? (
+            <span
+              role="alert"
+              className="text-[13px] text-[var(--color-charcoal)]"
+            >
+              {failure}
+            </span>
+          ) : (
+            <>
+              <span className="text-[13px] text-[var(--color-charcoal)]">
+                {offer?.message}
+              </span>
+              <DocumentAction
+                actionKey="undo-begin-discovery"
+                surfaceKey="open-document"
+                regionKey="undo-offer"
+                variant="tertiary"
+                disabled={returnToLead.isPending}
+                loading={returnToLead.isPending}
+                loadingLabel="Moving…"
+                onClick={undo}
+              >
+                Undo
+              </DocumentAction>
+            </>
+          )}
+        </div>
       )}
     </div>
   );

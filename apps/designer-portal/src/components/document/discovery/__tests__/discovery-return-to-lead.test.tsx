@@ -124,4 +124,45 @@ describe('DiscoverySection — Move back to New Lead', () => {
 
     expect(screen.queryByText(/already been written to/)).not.toBeInTheDocument();
   });
+
+  // supabase-js constructs a PostgrestError as a plain JSON-parsed object, not
+  // an `instanceof Error`, so the failure must be read off `.message` — reading
+  // it with `instanceof` printed the generic fallback for every real refusal.
+  it('prints the server\u2019s sentence when the act refuses under a stale open door', () => {
+    mockReturnCheck = { allowed: true, reason: null, lead_id: 'lead-77' };
+    returnToLeadMutate.mockImplementationOnce(
+      (
+        _designerClientId: string,
+        options: { onError?: (error: unknown) => void },
+      ) => {
+        options.onError?.({
+          message: 'A proposal has already been started for this client.',
+          code: '23514',
+          details: null,
+          hint: null,
+        });
+      },
+    );
+    renderSection();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Move back to New Lead' }));
+
+    expect(
+      screen.getByText('A proposal has already been started for this client.'),
+    ).toBeInTheDocument();
+    expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  it('gives the reversal an action region of its own, apart from the toolrow', () => {
+    mockReturnCheck = { allowed: true, reason: null, lead_id: 'lead-77' };
+    const { container } = renderSection();
+
+    const region = container.querySelector(
+      '[role="group"][data-action-region="return-to-lead"]',
+    );
+    expect(region).not.toBeNull();
+    expect(
+      region?.querySelector('[data-action-key="return-to-lead"]'),
+    ).not.toBeNull();
+  });
 });

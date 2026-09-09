@@ -113,10 +113,11 @@ vi.mock('@supabase/ssr', () => ({
 }));
 
 const invalidateQueries = vi.fn();
+const removeQueries = vi.fn();
 vi.mock('@tanstack/react-query', () => ({
   useQuery: (config: unknown) => config,
   useMutation: (config: unknown) => config,
-  useQueryClient: () => ({ invalidateQueries }),
+  useQueryClient: () => ({ invalidateQueries, removeQueries }),
 }));
 
 // Import AFTER the mocks are wired up.
@@ -131,6 +132,7 @@ import {
 beforeEach(() => {
   Object.keys(builders).forEach((k) => delete builders[k]);
   invalidateQueries.mockReset();
+  removeQueries.mockReset();
   supabaseClient.rpc.mockReset();
   supabaseClient.from.mockClear();
 });
@@ -590,7 +592,7 @@ describe('useReturnToLead — one RPC, no browser fallback', () => {
     expect(supabaseClient.from).not.toHaveBeenCalled();
   });
 
-  it('invalidates every key useBeginDiscovery does, plus the check, list and desk keys', () => {
+  it('invalidates every key useBeginDiscovery does, plus the list and desk keys', () => {
     getReturnOnSuccess()({ lead_id: 'lead-1' }, 'dc-discovery');
 
     const keys = invalidateQueries.mock.calls.map(
@@ -602,11 +604,35 @@ describe('useReturnToLead — one RPC, no browser fallback', () => {
     expect(keys).toContainEqual(['lead-stats']);
     expect(keys).toContainEqual(['designer-clients']);
     // Then the rest.
-    expect(keys).toContainEqual(['return-to-lead-check', 'dc-discovery']);
     expect(keys).toContainEqual(['designer-client', 'dc-discovery']);
     expect(keys).toContainEqual(['client-stats']);
     expect(keys).toContainEqual(['discovery', 'dc-discovery']);
     expect(keys).toContainEqual(['document-state']);
     expect(keys).toContainEqual(['desk-engagements']);
+  });
+
+  it('removes the check rather than refetching it — its subject is gone', () => {
+    getReturnOnSuccess()({ lead_id: 'lead-1' }, 'dc-discovery');
+
+    expect(removeQueries).toHaveBeenCalledWith({
+      queryKey: ['return-to-lead-check', 'dc-discovery'],
+    });
+    expect(
+      invalidateQueries.mock.calls.map(
+        (c) => (c[0] as { queryKey: unknown[] }).queryKey,
+      ),
+    ).not.toContainEqual(['return-to-lead-check', 'dc-discovery']);
+  });
+
+  it('declares its error surface so R83 does not double-report a refusal', () => {
+    const mutation = useReturnToLead() as unknown as {
+      meta?: { errorSurface?: string };
+    };
+    expect(mutation.meta?.errorSurface).toBe('inline');
+
+    const query = useReturnToLeadCheck('dc-discovery') as unknown as {
+      meta?: { errorSurface?: string };
+    };
+    expect(query.meta?.errorSurface).toBe('silent');
   });
 });

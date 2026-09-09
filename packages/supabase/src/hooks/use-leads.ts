@@ -625,6 +625,12 @@ export function useReturnToLeadCheck(designerClientId: string | null | undefined
   return useQuery({
     queryKey: ['return-to-lead-check', designerClientId],
     enabled: Boolean(designerClientId),
+    // R83: supporting context for a disabled action. A failed check must not
+    // raise the global red toast over a (document) surface — and after a
+    // successful undo the relationship is gone, so a late refetch answers
+    // `insufficient_privilege`, which is not an auth expiry and would otherwise
+    // land as a raw internal sentence on a success path.
+    meta: { errorSurface: 'silent' as const },
     queryFn: async (): Promise<ReturnToLeadCheck> => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
@@ -656,14 +662,17 @@ export function useReturnToLeadCheck(designerClientId: string | null | undefined
  * raises with its reason, so a stale open door still refuses at the act.
  *
  * Invalidates everything `useBeginDiscovery` does (it reverses that act), plus
- * the check itself, the client-list keys from use-clients.ts, and the
- * document-state / desk keys — the folder changes shape, so every surface that
- * reads it must re-derive.
+ * the client-list keys from use-clients.ts and the document-state / desk keys —
+ * the folder changes shape, so every surface that reads it must re-derive. The
+ * check's own key is REMOVED, not invalidated: its subject is gone.
  */
 export function useReturnToLead() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    // R83: both call sites print the refusal inline at the act site, so the
+    // global MutationCache toast must stay out of it.
+    meta: { errorSurface: 'inline' as const },
     mutationFn: async (designerClientId: string) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
@@ -684,8 +693,10 @@ export function useReturnToLead() {
       queryClient.invalidateQueries({ queryKey: ['lead', result.lead_id] });
       queryClient.invalidateQueries({ queryKey: ['lead-stats'] });
       queryClient.invalidateQueries({ queryKey: ['designer-clients'] });
-      // Then the rest.
-      queryClient.invalidateQueries({
+      // Then the rest. The check is REMOVED rather than invalidated: the
+      // relationship it asks about no longer exists, so a refetch would only
+      // earn an access-denied answer.
+      queryClient.removeQueries({
         queryKey: ['return-to-lead-check', designerClientId],
       });
       queryClient.invalidateQueries({

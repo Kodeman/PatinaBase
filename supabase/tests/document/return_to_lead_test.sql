@@ -92,7 +92,37 @@ VALUES
    'Has Activity', 'rtl-activity@test.invalid'),
   ('d7200000-0000-4000-8000-00000000000b', NULL,
    'd7000000-0000-4000-8000-000000000001', 'consultation', 'new',
-   'Has Ceremony', 'rtl-ceremony@test.invalid');
+   'Has Ceremony', 'rtl-ceremony@test.invalid'),
+  ('d7200000-0000-4000-8000-00000000000c', NULL,
+   'd7000000-0000-4000-8000-000000000001', 'consultation', 'new',
+   'Nurtured', 'rtl-nurtured@test.invalid'),
+  ('d7200000-0000-4000-8000-00000000000d', NULL,
+   'd7000000-0000-4000-8000-000000000001', 'consultation', 'new',
+   'Own Details', 'rtl-details@test.invalid'),
+  ('d7200000-0000-4000-8000-00000000000e', NULL,
+   'd7000000-0000-4000-8000-000000000001', 'consultation', 'new',
+   'Adopted Row', 'rtl-adopted@test.invalid'),
+  ('d7200000-0000-4000-8000-00000000000f', NULL,
+   'd7000000-0000-4000-8000-000000000001', 'consultation', 'new',
+   'Lead Moved On', 'rtl-lead-moved@test.invalid'),
+  ('d7200000-0000-4000-8000-000000000010', NULL,
+   'd7000000-0000-4000-8000-000000000001', 'consultation', 'new',
+   'Client Moved On', 'rtl-client-moved@test.invalid'),
+  ('d7200000-0000-4000-8000-000000000011', 'd7000000-0000-4000-8000-000000000010',
+   'd7000000-0000-4000-8000-000000000001', 'consultation', 'new',
+   'Written To', 'rtl-written@test.invalid'),
+  ('d7200000-0000-4000-8000-000000000012', NULL,
+   'd7000000-0000-4000-8000-000000000001', 'consultation', 'new',
+   'Empty Rows', 'rtl-empty-rows@test.invalid'),
+  ('d7200000-0000-4000-8000-000000000013', NULL,
+   'd7000000-0000-4000-8000-000000000001', 'consultation', 'new',
+   'Planted Victim', 'rtl-victim@test.invalid');
+
+UPDATE public.leads
+SET status = 'contacted',
+    contacted_at = NOW(),
+    response_deadline = TIMESTAMPTZ '2026-12-01 12:00:00+00'
+WHERE id = 'd7200000-0000-4000-8000-00000000000c';
 
 CREATE OR REPLACE FUNCTION pg_temp.assume_rtl_actor(p_actor uuid)
 RETURNS void
@@ -431,6 +461,346 @@ BEGIN
   ASSERT (SELECT status = 'accepted' FROM public.leads
           WHERE id = 'd7200000-0000-4000-8000-000000000008'),
     'a cross-studio refusal must leave the lead accepted';
+END;
+$$;
+
+-- ── A planted lead_id buys a stranger nothing ──────────────────────────────
+-- designer_clients.lead_id is caller-writable and RLS lets a designer insert
+-- their OWN relationship row. Without authority on the LEAD end too, a
+-- designer in another studio could point a row of their own at a victim's
+-- accepted lead and un-accept it, leaving the victim with both a Discovery
+-- folder and a New-Lead Brief for one lead.
+DO $$
+DECLARE
+  v_victim_dc  uuid;
+  v_planted_dc uuid;
+  v_error      text;
+BEGIN
+  v_victim_dc := pg_temp.rtl_accept('d7200000-0000-4000-8000-000000000013');
+
+  PERFORM pg_temp.assume_rtl_actor('d7000000-0000-4000-8000-000000000003');
+  INSERT INTO public.designer_clients (
+    designer_id, client_email, source, lead_id, status
+  ) VALUES (
+    'd7000000-0000-4000-8000-000000000003', 'rtl-planted@test.invalid',
+    'direct', 'd7200000-0000-4000-8000-000000000013', 'lead'
+  )
+  RETURNING id INTO v_planted_dc;
+
+  BEGIN
+    PERFORM public.return_to_lead_check(v_planted_dc);
+    RAISE EXCEPTION 'a planted lead_id must not open the door';
+  EXCEPTION WHEN insufficient_privilege THEN
+    v_error := SQLERRM;
+  END;
+  ASSERT v_error LIKE 'client relationship % not found or access denied',
+    format('unexpected planted-lead check error %L', v_error);
+
+  v_error := NULL;
+  BEGIN
+    PERFORM public.return_to_lead(v_planted_dc);
+    RAISE EXCEPTION 'a planted lead_id must not run the reversal';
+  EXCEPTION WHEN insufficient_privilege THEN
+    v_error := SQLERRM;
+  END;
+  ASSERT v_error LIKE 'client relationship % not found or access denied',
+    format('unexpected planted-lead act error %L', v_error);
+
+  PERFORM pg_temp.assume_rtl_actor('d7000000-0000-4000-8000-000000000001');
+  ASSERT (SELECT status = 'accepted' AND accepted_at IS NOT NULL
+          FROM public.leads
+          WHERE id = 'd7200000-0000-4000-8000-000000000013'),
+    'the victim''s lead must stay exactly where they left it';
+  ASSERT EXISTS (SELECT 1 FROM public.designer_clients WHERE id = v_victim_dc),
+    'the victim''s own Discovery relationship must survive';
+END;
+$$;
+
+-- ── A nurtured lead comes back to its dated return, not to "new" ───────────
+DO $$
+DECLARE
+  v_dc uuid;
+BEGIN
+  v_dc := pg_temp.rtl_accept('d7200000-0000-4000-8000-00000000000c');
+  PERFORM public.return_to_lead(v_dc);
+
+  ASSERT (SELECT status = 'contacted'
+            AND accepted_at IS NULL
+            AND response_deadline = TIMESTAMPTZ '2026-12-01 12:00:00+00'
+          FROM public.leads
+          WHERE id = 'd7200000-0000-4000-8000-00000000000c'),
+    'a nurtured lead must return to contacted with its reconnect date intact';
+END;
+$$;
+
+-- ── Refusal: the relationship carries details of its own ───────────────────
+DO $$
+DECLARE
+  v_dc uuid;
+BEGIN
+  v_dc := pg_temp.rtl_accept('d7200000-0000-4000-8000-00000000000d');
+
+  UPDATE public.designer_clients
+  SET notes = 'Wants oak throughout. Hates chrome.'
+  WHERE id = v_dc;
+  ASSERT pg_temp.rtl_refusal(v_dc) =
+    'This client''s own details have been filled in.',
+    'a note written on the relationship must close the door';
+
+  -- The household sheet's corrected name is content too, and the DELETE would
+  -- discard it: the restored Brief only carries the lead's original contact.
+  UPDATE public.designer_clients
+  SET notes = NULL, client_name = 'Corrected Name'
+  WHERE id = v_dc;
+  ASSERT pg_temp.rtl_refusal(v_dc) =
+    'This client''s own details have been filled in.',
+    'a corrected client name must close the door';
+END;
+$$;
+
+-- ── Refusal: begin_discovery ADOPTED a relationship that predates the accept ─
+DO $$
+DECLARE
+  v_pre uuid;
+  v_dc  uuid;
+BEGIN
+  INSERT INTO public.designer_clients (
+    designer_id, client_email, source, status, created_at
+  ) VALUES (
+    'd7000000-0000-4000-8000-000000000001', 'rtl-adopted@test.invalid',
+    'direct', 'lead', NOW() - INTERVAL '1 day'
+  )
+  RETURNING id INTO v_pre;
+
+  v_dc := pg_temp.rtl_accept('d7200000-0000-4000-8000-00000000000e');
+  ASSERT v_dc = v_pre,
+    'begin_discovery must have adopted the pre-existing contact for this test to mean anything';
+
+  ASSERT pg_temp.rtl_refusal(v_dc) =
+    'This client was already on your list before the lead came in.',
+    'an adopted relationship must not be deleted by the undo';
+  ASSERT EXISTS (SELECT 1 FROM public.designer_clients WHERE id = v_pre),
+    'the adopted relationship must still stand';
+END;
+$$;
+
+-- ── Refusal: the relationship carries no lead ──────────────────────────────
+DO $$
+DECLARE
+  v_dc uuid;
+BEGIN
+  INSERT INTO public.designer_clients (
+    designer_id, client_email, source, status
+  ) VALUES (
+    'd7000000-0000-4000-8000-000000000001', 'rtl-nolead@test.invalid',
+    'direct', 'lead'
+  )
+  RETURNING id INTO v_dc;
+
+  ASSERT pg_temp.rtl_refusal(v_dc) =
+    'This client did not arrive as a lead, so there is no lead to go back to.',
+    'a relationship with no lead behind it has nowhere to go back to';
+END;
+$$;
+
+-- ── Refusal: the relationship has moved past Discovery ─────────────────────
+DO $$
+DECLARE
+  v_dc uuid;
+BEGIN
+  v_dc := pg_temp.rtl_accept('d7200000-0000-4000-8000-000000000010');
+  UPDATE public.designer_clients SET status = 'active' WHERE id = v_dc;
+
+  ASSERT pg_temp.rtl_refusal(v_dc) =
+    'This client has already moved past Discovery.',
+    'a relationship past Discovery must close the door';
+END;
+$$;
+
+-- ── Refusal: the lead is no longer waiting to be accepted ──────────────────
+DO $$
+DECLARE
+  v_dc uuid;
+BEGIN
+  v_dc := pg_temp.rtl_accept('d7200000-0000-4000-8000-00000000000f');
+  UPDATE public.leads
+  SET status = 'declined', declined_at = NOW()
+  WHERE id = 'd7200000-0000-4000-8000-00000000000f';
+
+  ASSERT pg_temp.rtl_refusal(v_dc) =
+    'The lead behind this client is no longer waiting to be accepted.',
+    'a lead that moved on under the relationship must close the door';
+END;
+$$;
+
+-- ── An empty row is not content, a named one is ────────────────────────────
+-- F5: "+ Add a room" tapped once and never typed into must not read as content
+-- here when it does not read as "1 room" on the surface.
+DO $$
+DECLARE
+  v_dc uuid;
+BEGIN
+  v_dc := pg_temp.rtl_accept('d7200000-0000-4000-8000-000000000012');
+  INSERT INTO public.client_discovery (
+    designer_client_id, designer_id, rooms, lifestyle
+  ) VALUES (
+    v_dc, 'd7000000-0000-4000-8000-000000000001',
+    '[{}]'::jsonb, '[{"room": "Living"}]'::jsonb
+  );
+
+  ASSERT (public.return_to_lead_check(v_dc)->>'allowed')::boolean,
+    'a nameless room row and a wordless lifestyle row are not content';
+
+  UPDATE public.client_discovery
+  SET rooms = '[{"name": "Living room"}]'::jsonb
+  WHERE designer_client_id = v_dc;
+  ASSERT pg_temp.rtl_refusal(v_dc) =
+    'Discovery has already been filled in for this client.',
+    'a named room must close the door';
+
+  UPDATE public.client_discovery
+  SET rooms = '[{}]'::jsonb,
+      lifestyle = '[{"who": "two children"}]'::jsonb
+  WHERE designer_client_id = v_dc;
+  ASSERT pg_temp.rtl_refusal(v_dc) =
+    'Discovery has already been filled in for this client.',
+    'a lifestyle row that says who must close the door';
+END;
+$$;
+
+-- ── Refusal: the client has already been written to (all six tables) ───────
+-- One relationship, six rows in turn. Each seed is written as the session
+-- owner: these tables' INSERT policies are not the designer's to satisfy from
+-- the portal, and what is under test is the check, not the writer.
+RESET ROLE;
+
+SELECT set_config(
+  'app.rtl_written_dc',
+  pg_temp.rtl_accept('d7200000-0000-4000-8000-000000000011')::text,
+  true
+);
+
+INSERT INTO public.client_invitations (
+  token, email, designer_id, designer_client_id
+) VALUES (
+  'rtl-invite-token', 'rtl-written@test.invalid',
+  'd7000000-0000-4000-8000-000000000001',
+  current_setting('app.rtl_written_dc')::uuid
+);
+SET LOCAL ROLE authenticated;
+DO $$
+BEGIN
+  ASSERT pg_temp.rtl_refusal(current_setting('app.rtl_written_dc')::uuid) =
+    'This client has already been written to.',
+    'a client invitation must close the door';
+END;
+$$;
+RESET ROLE;
+DELETE FROM public.client_invitations
+WHERE designer_client_id = current_setting('app.rtl_written_dc')::uuid;
+
+INSERT INTO public.client_messages (
+  sender_id, recipient_id, body, designer_client_id
+) VALUES (
+  'd7000000-0000-4000-8000-000000000001',
+  'd7000000-0000-4000-8000-000000000010',
+  'Looking forward to it.',
+  current_setting('app.rtl_written_dc')::uuid
+);
+SET LOCAL ROLE authenticated;
+DO $$
+BEGIN
+  ASSERT pg_temp.rtl_refusal(current_setting('app.rtl_written_dc')::uuid) =
+    'This client has already been written to.',
+    'a client message must close the door';
+END;
+$$;
+RESET ROLE;
+DELETE FROM public.client_messages
+WHERE designer_client_id = current_setting('app.rtl_written_dc')::uuid;
+
+INSERT INTO public.client_nurture_touchpoints (
+  designer_client_id, touchpoint_type
+) VALUES (current_setting('app.rtl_written_dc')::uuid, 'check_in');
+SET LOCAL ROLE authenticated;
+DO $$
+BEGIN
+  ASSERT pg_temp.rtl_refusal(current_setting('app.rtl_written_dc')::uuid) =
+    'This client has already been written to.',
+    'a nurture touchpoint must close the door';
+END;
+$$;
+RESET ROLE;
+DELETE FROM public.client_nurture_touchpoints
+WHERE designer_client_id = current_setting('app.rtl_written_dc')::uuid;
+
+INSERT INTO public.client_reviews (designer_client_id, rating)
+VALUES (current_setting('app.rtl_written_dc')::uuid, 5);
+SET LOCAL ROLE authenticated;
+DO $$
+BEGIN
+  ASSERT pg_temp.rtl_refusal(current_setting('app.rtl_written_dc')::uuid) =
+    'This client has already been written to.',
+    'a client review must close the door';
+END;
+$$;
+RESET ROLE;
+DELETE FROM public.client_reviews
+WHERE designer_client_id = current_setting('app.rtl_written_dc')::uuid;
+
+-- fulfillment_writer_guard refuses any write not stamped as an RPC or a
+-- migration; the stamp is transaction-local and cleared straight after.
+SELECT set_config('app.fulfillment_writer', 'migration', true);
+INSERT INTO public.fulfillment_orders (
+  client_name, designer_client_id, captured_total_cents,
+  product_subtotal_cents, freight_charged_cents, tax_cents
+) VALUES (
+  'Written To', current_setting('app.rtl_written_dc')::uuid, 0, 0, 0, 0
+);
+SELECT set_config('app.fulfillment_writer', '', true);
+SET LOCAL ROLE authenticated;
+DO $$
+BEGIN
+  ASSERT pg_temp.rtl_refusal(current_setting('app.rtl_written_dc')::uuid) =
+    'This client has already been written to.',
+    'a fulfillment order must close the door';
+END;
+$$;
+RESET ROLE;
+SELECT set_config('app.fulfillment_writer', 'migration', true);
+DELETE FROM public.fulfillment_orders
+WHERE designer_client_id = current_setting('app.rtl_written_dc')::uuid;
+SELECT set_config('app.fulfillment_writer', '', true);
+
+-- Last of the six, and left standing: a client decision may only be removed
+-- through delete_client_decision_draft (guard_client_decision_authority), so
+-- there is no tidy-up to do after it and nothing after it needs the door open.
+INSERT INTO public.client_decisions (designer_client_id, designer_id, title)
+VALUES (current_setting('app.rtl_written_dc')::uuid,
+        'd7000000-0000-4000-8000-000000000001', 'Sconce finish');
+SET LOCAL ROLE authenticated;
+DO $$
+BEGIN
+  ASSERT pg_temp.rtl_refusal(current_setting('app.rtl_written_dc')::uuid) =
+    'This client has already been written to.',
+    'a client decision must close the door';
+END;
+$$;
+RESET ROLE;
+
+-- ── Every probe the check makes can use an index ───────────────────────────
+DO $$
+BEGIN
+  ASSERT EXISTS (
+    SELECT 1 FROM pg_indexes
+    WHERE schemaname = 'public'
+      AND indexname = 'idx_fulfillment_orders_designer_client'
+  ), 'fulfillment_orders.designer_client_id must be indexed for the check';
+  ASSERT EXISTS (
+    SELECT 1 FROM pg_indexes
+    WHERE schemaname = 'public'
+      AND indexname = 'idx_match_ceremonies_designer_client'
+  ), 'match_ceremonies.designer_client_id must be indexed for the check';
 END;
 $$;
 

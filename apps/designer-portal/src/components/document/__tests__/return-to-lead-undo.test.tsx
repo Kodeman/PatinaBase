@@ -130,15 +130,22 @@ describe('the Undo offer after Accept · begin', () => {
     }
   });
 
-  it('prints a failed reversal in place of the offer, and retires the Undo', () => {
+  // The RPC rejects with a PostgrestError, which supabase-js constructs as a
+  // plain JSON-parsed object — NOT an `instanceof Error`. Rejecting with that
+  // exact shape is the point of this test: reading the sentence with
+  // `instanceof` printed the generic fallback for every real refusal.
+  it('prints the server\u2019s own sentence from a message-shaped rejection', () => {
     returnToLeadMutate.mockImplementationOnce(
       (
         _designerClientId: string,
-        options: { onError?: (error: Error) => void },
+        options: { onError?: (error: unknown) => void },
       ) => {
-        options.onError?.(
-          new Error('A proposal has already been started for this client.'),
-        );
+        options.onError?.({
+          message: 'A proposal has already been started for this client.',
+          code: '23514',
+          details: null,
+          hint: null,
+        });
       },
     );
     renderBoth();
@@ -149,7 +156,58 @@ describe('the Undo offer after Accept · begin', () => {
     expect(screen.getByTestId('return-to-lead-undo')).toHaveTextContent(
       'A proposal has already been started for this client.',
     );
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'A proposal has already been started for this client.',
+    );
     expect(screen.queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument();
     expect(replace).not.toHaveBeenCalled();
+  });
+
+  it('falls back only when the rejection carries no sentence at all', () => {
+    returnToLeadMutate.mockImplementationOnce(
+      (
+        _designerClientId: string,
+        options: { onError?: (error: unknown) => void },
+      ) => {
+        options.onError?.({});
+      },
+    );
+    renderBoth();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Accept · begin' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+
+    expect(screen.getByTestId('return-to-lead-undo')).toHaveTextContent(
+      'That move could not be taken back.',
+    );
+  });
+
+  it('lets a lapsed offer die even when the band was unmounted for its window', () => {
+    jest.useFakeTimers();
+    try {
+      const first = renderBoth();
+      fireEvent.click(screen.getByRole('button', { name: 'Accept · begin' }));
+      expect(screen.getByTestId('return-to-lead-undo')).toBeInTheDocument();
+
+      // The designer walks off the (document) routes inside the eight seconds.
+      first.unmount();
+      act(() => {
+        jest.advanceTimersByTime(9000);
+      });
+
+      // ...and comes back later, in the same tab session.
+      render(<ReturnToLeadUndo />);
+      expect(screen.queryByTestId('return-to-lead-undo')).not.toBeInTheDocument();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('keeps an empty live region mounted so the offer is announced when it lands', () => {
+    renderBoth();
+
+    const region = screen.getByTestId('return-to-lead-undo-region');
+    expect(region).toHaveAttribute('aria-live', 'polite');
+    expect(region).toBeEmptyDOMElement();
   });
 });
