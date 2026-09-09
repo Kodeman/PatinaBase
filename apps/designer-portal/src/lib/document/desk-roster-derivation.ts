@@ -111,6 +111,14 @@ export interface RosterLine {
   /** Inter — the client and the state, in one run (M1 draws a place; the row
    *  carries no location column, so the name stands in its position). */
   state: string;
+  /** The line under the name: the client and the phase, and nothing else.
+   *  `state` carries the body text too, which the ledger's sentence cell and
+   *  the card's register 5 already print — printing it twice is what put
+   *  "nothing needs your hand" directly above "Nothing needs your hand.".
+   *  The client is dropped where it IS the job's name (a lead titled after the
+   *  person). Empty where the job has neither a nameable client nor a phase,
+   *  and the line is then not written at all. */
+  personLine: string;
   /** Inter, red — the dated overdue phrase and what is overdue. */
   overdueText: string | null;
   mark: RosterMark;
@@ -357,6 +365,17 @@ export function deriveDeskRoster(
       .filter((part): part is string => Boolean(part))
       .join(' · ');
 
+    const client = clientOf(row);
+    const sameAsName =
+      !!client &&
+      client.trim().toLowerCase() === (row.title ?? '').trim().toLowerCase();
+    const personLine = [
+      sameAsName ? null : client,
+      prettyPhase(row.current_phase),
+    ]
+      .filter((part): part is string => Boolean(part))
+      .join(' · ');
+
     const jobHref = `/doc/${row.engagement_id}`;
     const act: RosterAct =
       need?.actionLabel != null
@@ -374,6 +393,7 @@ export function deriveDeskRoster(
         stage: row.active_section,
         designerId: row.designer_id,
         state,
+        personLine,
         overdueText:
           overdue.isOverdue && need
             ? `Overdue ${overdueElapsedPhrase(overdue)} — ${need.text}`

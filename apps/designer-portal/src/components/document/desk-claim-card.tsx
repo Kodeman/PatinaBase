@@ -154,14 +154,16 @@ export function DeskClaimCard({
         </Link>
         {/* 4 · person · phase — no label, no ordinal, no "Client:". Its own
             inert wrapper so it needs no flex `order` to land after the name. */}
-        <span data-claim-inert className="block">
-          <span
-            data-register="person"
-            className="mt-1 block text-[14px] leading-[1.5] text-[var(--text-muted)] [overflow-wrap:anywhere]"
-          >
-            {line.state}
+        {line.personLine && (
+          <span data-claim-inert className="block">
+            <span
+              data-register="person"
+              className="mt-1 block text-[14px] leading-[1.5] text-[var(--text-muted)] [overflow-wrap:anywhere]"
+            >
+              {line.personLine}
+            </span>
           </span>
-        </span>
+        )}
       </div>
       {/* 5 · the one true sentence — the overdue clause in the red letter's own
           ink, and never a growing day count beside a date. Selectable. */}

@@ -569,8 +569,8 @@
 /* ── R143 · The Claim card and the at-rest ledger ────────────────────────────
    A card is a treatment for NEED, not a container for a job. Structure lives
    here rather than in arbitrary Tailwind because four of these rules cannot be
-   written as utilities: the :has() focus wrap, the 899px collapse (not a
-   Tailwind breakpoint), the forced-colors block, and pointer-events on the
+   written as utilities: the :has() focus wrap, the 899px collapse (a container
+   query, which Tailwind 3 cannot write), the forced-colors block, and pointer-events on the
    link zone. Colour and spacing stay on the components as classes. ────────── */
 
 .desk-claims-grid {
@@ -665,10 +665,25 @@
   }
 }
 
+/* The ledger measures ITSELF, not the window. The roster is not always the
+   width of the page — it has sat in a page-level column before — and a
+   viewport media query let a 662px roster keep asking for the five-track grid,
+   which resolved the sentence track to 0px and broke the sentence one
+   character to a line. The list is the query container, so the collapse below
+   fires on the width the row actually has. */
+.desk-ledger-list {
+  container-type: inline-size;
+}
 .desk-ledger-row {
   position: relative;
   display: grid;
-  grid-template-columns: 24px 320px minmax(0, 1fr) 132px 96px;
+  /* The sentence track has a floor rather than minmax(0,1fr): below it the row
+     collapses (the @container rule) instead of degrading into a column of
+     single characters. The act track is max-content over a 96px floor —
+     "Open the job" is 113px, and a fixed 96px clipped it to "OPEN THE J"
+     under this row's own overflow:hidden. */
+  grid-template-columns:
+    24px 320px minmax(200px, 1fr) 132px minmax(96px, max-content);
   align-items: baseline;
   column-gap: 24px;
   padding: 24px 0;
@@ -685,8 +700,9 @@
 .desk-ledger-row [data-ledger-cell='act'] { text-align: right; }
 .desk-ledger-row [data-ledger-cell='mark'] { align-self: start; margin-top: 9px; }
 
-/* The ledger degrades back into the roster row it came from. */
-@media (max-width: 899px) {
+/* The ledger degrades back into the roster row it came from — measured on the
+   list's own inline size (see .desk-ledger-list), never on the viewport. */
+@container (max-width: 899px) {
   .desk-ledger-row {
     grid-template-columns: 16px minmax(0, 1fr);
     row-gap: 12px;

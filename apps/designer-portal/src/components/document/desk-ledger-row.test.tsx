@@ -17,6 +17,7 @@ function line(over: Partial<RosterLine> = {}): RosterLine {
     stage: 'discovery',
     designerId: null,
     state: 'Reinhardt · Site Visit · quiet · nothing needs your hand',
+    personLine: 'Reinhardt · Site Visit',
     overdueText: null,
     mark: null,
     needKind: null,
@@ -61,6 +62,38 @@ describe('DeskLedgerRow — the at-rest row', () => {
     expect(nameCell).toHaveTextContent('At rest');
     expect(nameCell).toHaveTextContent('Reinhardt lake house');
     expect(nameCell).toHaveTextContent('Site Visit');
+  });
+
+  it('the line under the name is person · phase, never the body text', () => {
+    const { container } = render(<DeskLedgerRow line={line()} tone="discovery" />);
+    const person = container.querySelector('[data-register="person"]')!;
+
+    expect(person).toHaveTextContent('Reinhardt · Site Visit');
+    expect(person.textContent).not.toContain('nothing needs your hand');
+  });
+
+  it('writes no person line at all where there is neither client nor phase', () => {
+    const { container } = render(
+      <DeskLedgerRow line={line({ personLine: '' })} tone="discovery" />,
+    );
+
+    expect(container.querySelector('[data-register="person"]')).toBeNull();
+  });
+
+  it('says the sentence once — the name block never repeats it', () => {
+    const { container } = render(
+      <DeskLedgerRow
+        line={line({ personLine: 'Reinhardt · Site Visit' })}
+        tone="discovery"
+      />,
+    );
+    const nameCell = container.querySelector('[data-ledger-cell="name"]')!;
+    const sentence = container.querySelector('[data-ledger-cell="sentence"]')!;
+
+    expect(sentence).toHaveTextContent('Nothing needs your hand.');
+    expect(nameCell.textContent?.toLowerCase()).not.toContain(
+      'nothing needs your hand',
+    );
   });
 
   it('prints the in-motion sentence where the job has one', () => {

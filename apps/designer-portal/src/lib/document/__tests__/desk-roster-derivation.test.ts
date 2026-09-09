@@ -1413,3 +1413,47 @@ describe('IA-12 · By person regroups the card half too', () => {
     expect(groupClaimsByPerson(cardsOf({ live: [mine], folders: [folder(mine)] }), [])).toEqual([]);
   });
 });
+
+describe('deriveDeskRoster — personLine (the line under the name)', () => {
+  it('joins the client and the phase, and never the body text', () => {
+    const r = row('a', 'project', {
+      client_name: 'The Vandersteens',
+      current_phase: 'procurement_and_orders',
+    });
+    const roster = deriveDeskRoster(
+      input({ live: [r], folders: [folder(r, need({ text: 'A task is due' }))] }),
+      NOW,
+    );
+
+    expect(roster.groups[0].lines[0].personLine).toBe(
+      'The Vandersteens · Procurement And Orders',
+    );
+  });
+
+  it('omits a client that is the job’s own name (case and space insensitive)', () => {
+    const r = row('a', 'project', {
+      title: 'Priya Raman',
+      client_name: '  priya raman ',
+      current_phase: 'discovery',
+    });
+    const roster = deriveDeskRoster(input({ live: [r] }), NOW);
+
+    expect(roster.groups[0].lines[0].personLine).toBe('Discovery');
+  });
+
+  it('is empty where the job has neither a nameable client nor a phase', () => {
+    const r = row('a', 'project', { client_name: '', current_phase: null });
+    const roster = deriveDeskRoster(input({ live: [r] }), NOW);
+
+    expect(roster.groups[0].lines[0].personLine).toBe('');
+  });
+
+  it('never carries the at-rest sentence the ledger’s own cell owns', () => {
+    const r = row('a', 'project', { client_name: 'Erin Byrne' });
+    const roster = deriveDeskRoster(input({ live: [r] }), NOW);
+    const line = roster.groups[0].lines[0];
+
+    expect(line.personLine).toBe('Erin Byrne');
+    expect(line.personLine).not.toContain('nothing needs your hand');
+  });
+});

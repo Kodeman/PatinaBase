@@ -183,7 +183,8 @@ function LedgerHalf({
           >
             {group.label} · {group.count}
           </h3>
-          <ul>
+          {/* The query container the rows' 899px collapse measures. */}
+          <ul className="desk-ledger-list">
             {group.lines.map((line) => (
               <DeskLedgerRow
                 key={line.engagementId}

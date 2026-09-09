@@ -57,9 +57,17 @@ export function DeskLedgerRow({
         >
           {line.name}
         </Link>
-        <span className="mt-1 block text-[14px] leading-[1.5] text-[var(--text-muted)] [overflow-wrap:anywhere]">
-          {line.state}
-        </span>
+        {/* Person · phase, and never the body text: the sentence cell to the
+            right owns that, and printing it here too put "nothing needs your
+            hand" directly above "Nothing needs your hand." */}
+        {line.personLine && (
+          <span
+            data-register="person"
+            className="mt-1 block text-[14px] leading-[1.5] text-[var(--text-muted)] [overflow-wrap:anywhere]"
+          >
+            {line.personLine}
+          </span>
+        )}
       </span>
       <span
         data-ledger-cell="sentence"

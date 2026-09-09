@@ -24,6 +24,7 @@ function card(over: Partial<ClaimCard> = {}): ClaimCard {
       stage: 'project',
       designerId: null,
       state: 'Anne Vandersteen · Procurement And Orders',
+      personLine: 'Anne Vandersteen · Procurement And Orders',
       overdueText: 'Overdue 6 days — Invoice 1042 · $17,500 overdue',
       mark: 'urgent',
       needKind: 'overdue_invoice',
@@ -61,6 +62,41 @@ describe('DeskClaimCard — the six registers, in DOM order', () => {
       'sentence',
       'act',
     ]);
+  });
+
+  it('register 4 is person · phase and never repeats register 5', () => {
+    const { container } = render(
+      <DeskClaimCard
+        card={card({
+          line: {
+            ...card().line,
+            personLine: 'Marcus Wright',
+            needText: 'New lead — respond by 12 September',
+            overdueText: null,
+          },
+        })}
+        tone="project"
+        settle={false}
+      />,
+    );
+    const person = container.querySelector('[data-register="person"]')!;
+    const sentence = container.querySelector('[data-register="sentence"]')!;
+
+    expect(person).toHaveTextContent('Marcus Wright');
+    expect(sentence).toHaveTextContent('New lead — respond by 12 September');
+    expect(person.textContent).not.toContain(sentence.textContent!);
+  });
+
+  it('writes no person line where there is neither client nor phase', () => {
+    const { container } = render(
+      <DeskClaimCard
+        card={card({ line: { ...card().line, personLine: '' } })}
+        tone="project"
+        settle={false}
+      />,
+    );
+
+    expect(container.querySelector('[data-register="person"]')).toBeNull();
   });
 
   it('carries the custody word beside the mark, and hides the mark', () => {
