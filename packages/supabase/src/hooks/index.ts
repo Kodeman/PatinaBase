@@ -280,6 +280,14 @@ export type {
   ClientFilters,
 } from "./use-clients";
 export {
+  useClientInvitationStatus,
+  clientInvitationStatusKeys,
+} from "./use-client-invitation-status";
+export type {
+  ClientInvitationState,
+  ClientInvitationStatus,
+} from "./use-client-invitation-status";
+export {
   // Client Decisions
   useClientDecisions,
   useDecision,

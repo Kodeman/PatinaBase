@@ -58,6 +58,7 @@ import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { MarginNote } from '../../margin-note';
 import { ViewHeader, EmptyTeach } from '../view-shell';
 import { PersonRow } from '../directory/person-row';
+import { ClientLetterLine } from '../directory/client-letter-line';
 import { CompanyRow } from '../directory/company-row';
 import { ScopeLens } from '../directory/scope-lens';
 import { TradeChipRow } from '../directory/trade-chip-row';
@@ -561,6 +562,15 @@ export function DirectoryView({
                     hasRolodexMatch(p, rolodexContactIds, rolodexKeys)
                   }
                 />
+                {/* R9 — the letter's own line, outside the row's <button> so
+                    "Write again" is not a button inside a button. person_id IS
+                    designer_clients.id on a client row (00420:86). */}
+                {p.role === 'client' ? (
+                  <ClientLetterLine
+                    designerClientId={p.person_id}
+                    clientName={p.display_name ?? null}
+                  />
+                ) : null}
               </li>
             ))}
           </ul>
