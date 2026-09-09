@@ -8,18 +8,21 @@ import type {
   SectionKey,
 } from '@/lib/document/desk-derivation';
 import {
+  CLAIMS_ANCHOR_ID,
   custodyWord,
-  deriveDeskDayLine,
+  deriveDeskClaims,
   deriveDeskRoster,
   deriveRosterPeople,
   facetHeading,
   filterRosterToNeeds,
+  groupClaimsByPerson,
   groupRosterByPerson,
   motionAnchorDate,
   NOTHING_NEEDS_YOU,
   OPEN_THE_JOB,
   ROSTER_STAGE_ORDER,
   rosterLineNeedsAHand,
+  type AnsweredClientNote,
   type DeskRosterInput,
   type RosterMember,
 } from '@/lib/document/desk-roster-derivation';
@@ -469,293 +472,210 @@ describe('deriveDeskRoster — eleven jobs', () => {
   });
 });
 
-describe('deriveDeskDayLine — the day’s line (IA-05)', () => {
-  const HOUR = 3_600_000;
-
-  const overdueRow = () =>
-    row('vandersteen', 'project', {
-      title: 'Vandersteen residence',
-      client_name: 'Anne Vandersteen',
-      project_id: 'p-vandersteen',
+describe('deriveDeskDayLine — the day’s line quotes the grid (D7)', () => {
+  function claimsOf(over: Partial<DeskRosterInput> = {}, notes: AnsweredClientNote[] = []) {
+    return deriveDeskClaims({
+      roster: deriveDeskRoster(input(over), NOW),
+      answeredNotes: notes,
+      now: NOW,
     });
-  const leadRow = () =>
-    row('wright', 'brief', {
-      title: 'Wright apartment',
-      client_name: 'Marcus Wright',
-      project_id: null,
-    });
-  const answeredRow = () =>
-    row('cedar', 'install', {
-      title: 'Cedar Lane Study',
-      client_name: 'Nora Ellison',
-      project_id: 'p-cedar',
-    });
-
-  const overdueNeed = () => need({ kind: 'overdue_invoice', dueOn: '2026-08-19' });
-  const leadNeed = () =>
-    need({
-      kind: 'new_lead',
-      text: 'New lead — respond by Aug 27',
-      dueOn: '2026-08-27',
-    });
-
-  function threeLineRoster() {
-    const v = overdueRow();
-    const l = leadRow();
-    const c = answeredRow();
-    return deriveDeskRoster(
-      input({
-        live: [v, l, c],
-        folders: [folder(v, overdueNeed()), folder(l, leadNeed()), folder(c)],
-      }),
-      NOW,
-    );
   }
 
-  const answeredNote = (projectId: string, at: string) => ({
-    projectId,
-    answeredAt: at,
-  });
+  it('names the first three cards, in the grid’s own rank order', () => {
+    const late = row('late', 'project', { title: 'Vandersteen residence' });
+    const mine = row('mine', 'project', { title: 'Cedar Lane study' });
+    const theirs = row('theirs', 'proposal', { title: 'Halvorsen loft' });
+    const fourth = row('fourth', 'care', { title: 'Osterberg cottage' });
+    const result = claimsOf({
+      live: [late, mine, theirs, fourth],
+      folders: [
+        folder(late, need({ owner: 'designer', dueOn: '2026-08-01' })),
+        folder(mine, need({ owner: 'designer', text: 'Two rooms await your mark-up' })),
+        folder(theirs, need({ owner: 'client', text: 'Opened, not signed' })),
+        folder(fourth, need({ owner: 'maker', text: 'The maker has not acknowledged' })),
+      ],
+    });
 
-  it('says three things, and each one is a view of a row on the page', () => {
-    const roster = threeLineRoster();
-    const dayLine = deriveDeskDayLine(
-      roster,
-      [answeredNote('p-cedar', new Date(NOW.getTime() - 8 * HOUR).toISOString())],
-      NOW,
-    )!;
-
-    expect(dayLine.lines.map((line) => line.key)).toEqual([
-      'overdue',
-      'lead',
-      'answered',
+    expect(result.dayLine!.lines.map((l) => l.key)).toEqual([
+      'card-late',
+      'card-mine',
+      'card-theirs',
     ]);
-
-    const onThePage = new Set(
-      roster.groups.flatMap((group) =>
-        group.lines.map((line) => line.engagementId),
-      ),
-    );
-    for (const line of dayLine.lines) {
-      expect(onThePage.has(line.engagementId)).toBe(true);
-      for (const part of line.parts) {
-        if (part.kind === 'job') expect(onThePage.has(part.engagementId)).toBe(true);
-      }
-    }
-  });
-
-  it('links the overdue job and puts the clause after the dash in its own part', () => {
-    const dayLine = deriveDeskDayLine(threeLineRoster(), [], NOW)!;
-    const [overdue] = dayLine.lines;
-
-    expect(overdue.parts[0]).toEqual({
+    expect(result.dayLine!.lines[0].parts[0]).toEqual({
       kind: 'job',
       text: 'Vandersteen residence',
-      engagementId: 'vandersteen',
+      engagementId: 'late',
     });
-    expect(overdue.parts[1].kind).toBe('overdue');
-    expect(overdue.parts[1].text).toMatch(/^ — project, overdue \d+ days?$/);
   });
 
-  it('names the person she is keeping waiting, and never the job twice', () => {
-    const dayLine = deriveDeskDayLine(threeLineRoster(), [], NOW)!;
-    const lead = dayLine.lines.find((line) => line.key === 'lead')!;
+  it('prints the overdue clause in the red letter’s own part kind', () => {
+    const late = row('late', 'project');
+    const result = claimsOf({
+      live: [late],
+      folders: [folder(late, need({ owner: 'designer', dueOn: '2026-08-01' }))],
+    });
+    const clause = result.dayLine!.lines[0].parts.find((p) => p.kind === 'overdue');
 
-    // The specimen's own line (designer-desk.html:776): the CLIENT is the act,
-    // the sentence is sentence-cased, the date is the house's one idiom, and
-    // the job title ('Wright apartment') appears nowhere on it.
-    expect(lead.parts).toEqual([
-      { kind: 'job', text: 'Marcus Wright', engagementId: 'wright' },
-      { kind: 'text', text: ' · new lead — respond by 27 August' },
+    expect(clause).toBeDefined();
+    expect(clause!.text).toContain('overdue');
+  });
+
+  it('says the card’s own reason when nothing is overdue', () => {
+    const mine = row('mine', 'project');
+    const result = claimsOf({
+      live: [mine],
+      folders: [folder(mine, need({ owner: 'designer', text: 'Two rooms await your mark-up' }))],
+    });
+
+    expect(result.dayLine!.lines[0].parts[1]).toEqual({
+      kind: 'text',
+      text: ' — Two rooms await your mark-up',
+    });
+  });
+
+  it('counts the cards it could not name, and points at the grid', () => {
+    const live = ['a', 'b', 'c', 'd', 'e'].map((id) => row(id, 'project'));
+    const result = claimsOf({
+      live,
+      folders: live.map((r) => folder(r, need({ owner: 'designer' }))),
+    });
+
+    expect(result.dayLine!.lines).toHaveLength(3);
+    expect(result.dayLine!.more).toEqual({ count: 2, anchorId: CLAIMS_ANCHOR_ID });
+  });
+
+  it('has no more-link when every card is named', () => {
+    const live = ['a', 'b'].map((id) => row(id, 'project'));
+    const result = claimsOf({
+      live,
+      folders: live.map((r) => folder(r, need({ owner: 'designer' }))),
+    });
+
+    expect(result.dayLine!.more).toBeNull();
+  });
+
+  it('says nothing at all when nothing claims her hand', () => {
+    // A "nothing needs you" banner over sixteen live jobs is a second queue.
+    expect(claimsOf({ live: [row('a', 'project')] }).dayLine).toBeNull();
+  });
+});
+
+describe('deriveDeskDayLine — the answered client note (D7’s fourth line)', () => {
+  function claimsOf(over: Partial<DeskRosterInput> = {}, notes: AnsweredClientNote[] = []) {
+    return deriveDeskClaims({
+      roster: deriveDeskRoster(input(over), NOW),
+      answeredNotes: notes,
+      now: NOW,
+    });
+  }
+
+  it('speaks for a job that has a CARD, below the three the line names', () => {
+    const a = row('a', 'project', { title: 'Alder house' });
+    const b = row('b', 'project', { title: 'Birch house' });
+    const c = row('c', 'project', { title: 'Cedar house' });
+    const claimed = row('claimed', 'project', {
+      title: 'Byrne remodel',
+      client_name: 'Erin Byrne',
+      project_id: 'p-byrne',
+    });
+    const result = claimsOf(
+      {
+        live: [a, b, c, claimed],
+        folders: [
+          folder(a, need({ owner: 'designer' })),
+          folder(b, need({ owner: 'designer' })),
+          folder(c, need({ owner: 'designer' })),
+          folder(claimed, need({ owner: 'maker' })),
+        ],
+      },
+      [{ projectId: 'p-byrne', answeredAt: '2026-08-25T06:00:00Z' }],
+    );
+
+    expect(result.dayLine!.lines.map((l) => l.key)).toEqual([
+      'card-a',
+      'card-b',
+      'card-c',
+      'answered',
     ]);
-    expect(lead.parts.map((part) => part.text).join('')).not.toContain(
-      'Wright apartment',
-    );
+    expect(result.dayLine!.lines[3].parts).toEqual([
+      { kind: 'text', text: 'Erin Byrne replied last night — ' },
+      { kind: 'job', text: 'Byrne remodel', engagementId: 'claimed' },
+    ]);
   });
 
-  it('says the deadline in the house idiom, whatever the need said', () => {
-    // The need's own sentence is dated 'Aug 27'; the day's line does not
-    // borrow it, so a second date style cannot reach this band (PP-2).
-    const dayLine = deriveDeskDayLine(threeLineRoster(), [], NOW)!;
-    const lead = dayLine.lines.find((line) => line.key === 'lead')!;
-    const said = lead.parts.map((part) => part.text).join('');
-    expect(said).toContain('27 August');
-    expect(said).not.toMatch(/Aug\s+27/);
-  });
-
-  it('omits the lead line when the deadline cannot be read', () => {
-    const unreadable = row('wright', 'brief', {
-      title: 'Wright apartment',
-      client_name: 'Marcus Wright',
-      project_id: null,
+  it('speaks for a QUIET job that is only a ledger row', () => {
+    // The client answering is news whether or not the job claims her hand;
+    // searching only the cards would have silently dropped this line.
+    const quiet = row('quiet', 'care', {
+      title: 'Osterberg cottage',
+      client_name: 'Nora Ellison',
+      project_id: 'p-nora',
     });
-    const roster = deriveDeskRoster(
-      input({
-        live: [unreadable],
-        folders: [
-          folder(
-            unreadable,
-            need({ kind: 'new_lead', text: 'New lead — respond', dueOn: null }),
-          ),
-        ],
-      }),
-      NOW,
-    );
-    const dayLine = deriveDeskDayLine(roster, [], NOW);
-    expect(
-      dayLine?.lines.some((line) => line.key === 'lead') ?? false,
-    ).toBe(false);
-  });
+    const result = claimsOf({ live: [quiet] }, [
+      { projectId: 'p-nora', answeredAt: '2026-08-25T06:00:00Z' },
+    ]);
 
-  it('falls back to the job when the lead row carries no named client', () => {
-    const unnamed = row('unnamed', 'brief', {
-      title: 'Harbour flat',
-      client_name: '',
-      project_id: null,
-    });
-    const roster = deriveDeskRoster(
-      input({ live: [unnamed], folders: [folder(unnamed, leadNeed())] }),
-      NOW,
-    );
-
-    const lead = deriveDeskDayLine(roster, [], NOW)!.lines.find(
-      (line) => line.key === 'lead',
-    )!;
-    expect(lead.parts[0]).toEqual({
-      kind: 'job',
-      text: 'Harbour flat',
-      engagementId: 'unnamed',
-    });
-  });
-
-  it('leaves a reconnect touchpoint to the roster row — the lead slot is new leads only', () => {
-    const nurtured = row('nurtured', 'brief', {
-      title: 'Kessler loft',
-      client_name: 'Ivy Kessler',
-      project_id: null,
-    });
-    const roster = deriveDeskRoster(
-      input({
-        live: [nurtured],
-        folders: [
-          folder(
-            nurtured,
-            need({
-              kind: 'reconnect_due',
-              text: 'Reconnect — touchpoint due Aug 20',
-              dueOn: '2026-08-20',
-            }),
-          ),
-        ],
-      }),
-      NOW,
-    );
-
-    const dayLine = deriveDeskDayLine(roster, [], NOW);
-    expect(dayLine?.lines.some((line) => line.key === 'lead') ?? false).toBe(
-      false,
-    );
-  });
-
-  it('takes the earliest lead deadline when two leads are open', () => {
-    const soon = row('soon', 'brief', { title: 'Soon', client_name: 'A Soon' });
-    const later = row('later', 'brief', { title: 'Later', client_name: 'B Later' });
-    const roster = deriveDeskRoster(
-      input({
-        live: [later, soon],
-        folders: [
-          folder(later, need({ kind: 'new_lead', text: 'New lead — respond by Sep 4', dueOn: '2026-09-04' })),
-          folder(soon, need({ kind: 'new_lead', text: 'New lead — respond by Aug 27', dueOn: '2026-08-27' })),
-        ],
-      }),
-      NOW,
-    );
-
-    const dayLine = deriveDeskDayLine(roster, [], NOW)!;
-    expect(dayLine.lines[0].engagementId).toBe('soon');
-  });
-
-  it('names the client who replied, and reads the note within the day only', () => {
-    const roster = threeLineRoster();
-    const inside = deriveDeskDayLine(
-      roster,
-      [answeredNote('p-cedar', new Date(NOW.getTime() - 8 * HOUR).toISOString())],
-      NOW,
-    )!;
-    const answered = inside.lines.find((line) => line.key === 'answered')!;
-    expect(answered.parts).toEqual([
+    expect(result.cards).toEqual([]);
+    expect(result.dayLine!.lines.map((l) => l.key)).toEqual(['answered']);
+    expect(result.dayLine!.lines[0].parts).toEqual([
       { kind: 'text', text: 'Nora Ellison replied last night — ' },
-      { kind: 'job', text: 'Cedar Lane Study', engagementId: 'cedar' },
+      { kind: 'job', text: 'Osterberg cottage', engagementId: 'quiet' },
+    ]);
+  });
+
+  it('never quotes one job twice — a named card takes the note’s slot', () => {
+    const claimed = row('claimed', 'project', {
+      title: 'Byrne remodel',
+      client_name: 'Erin Byrne',
+      project_id: 'p-byrne',
+    });
+    const other = row('other', 'care', {
+      title: 'Osterberg cottage',
+      client_name: 'Nora Ellison',
+      project_id: 'p-nora',
+    });
+    const result = claimsOf(
+      {
+        live: [claimed, other],
+        folders: [folder(claimed, need({ owner: 'designer' }))],
+      },
+      [
+        { projectId: 'p-byrne', answeredAt: '2026-08-25T07:00:00Z' },
+        { projectId: 'p-nora', answeredAt: '2026-08-25T06:00:00Z' },
+      ],
+    );
+
+    // p-byrne is newest, but its job is already quoted as card-claimed, so the
+    // note falls to the next unquoted job rather than naming Byrne twice.
+    expect(result.dayLine!.lines.map((l) => l.engagementId)).toEqual([
+      'claimed',
+      'other',
+    ]);
+  });
+
+  it('drops a note older than the window', () => {
+    const quiet = row('quiet', 'care', {
+      client_name: 'Nora Ellison',
+      project_id: 'p-nora',
+    });
+    const result = claimsOf({ live: [quiet] }, [
+      { projectId: 'p-nora', answeredAt: '2026-08-20T06:00:00Z' },
     ]);
 
-    const outside = deriveDeskDayLine(
-      roster,
-      [answeredNote('p-cedar', new Date(NOW.getTime() - 25 * HOUR).toISOString())],
-      NOW,
-    )!;
-    expect(outside.lines.some((line) => line.key === 'answered')).toBe(false);
+    expect(result.dayLine).toBeNull();
   });
 
-  it('stays silent about a reply it cannot attribute to a named client', () => {
-    const anonymous = row('anon', 'install', {
-      title: 'Anonymous project',
+  it('cannot say the line without a client name', () => {
+    // The roster refuses a role noun standing in for a name, and so does this.
+    const quiet = row('quiet', 'care', {
       client_name: 'Client User',
-      project_id: 'p-anon',
+      project_id: 'p-nora',
     });
-    const v = overdueRow();
-    const roster = deriveDeskRoster(
-      input({ live: [v, anonymous], folders: [folder(v, overdueNeed()), folder(anonymous)] }),
-      NOW,
-    );
+    const result = claimsOf({ live: [quiet] }, [
+      { projectId: 'p-nora', answeredAt: '2026-08-25T06:00:00Z' },
+    ]);
 
-    const dayLine = deriveDeskDayLine(
-      roster,
-      [answeredNote('p-anon', new Date(NOW.getTime() - HOUR).toISOString())],
-      NOW,
-    )!;
-    expect(dayLine.lines.some((line) => line.key === 'answered')).toBe(false);
-  });
-
-  it('never grows past three lines, and counts the rest below', () => {
-    const v = overdueRow();
-    const l = leadRow();
-    const c = answeredRow();
-    const rest = Array.from({ length: 12 }, (_, i) =>
-      row(`rest-${i}`, 'project', {
-        title: `Rest ${i}`,
-        client_name: `Family ${i}`,
-      }),
-    );
-    const roster = deriveDeskRoster(
-      input({
-        live: [v, l, c, ...rest],
-        folders: [
-          folder(v, overdueNeed()),
-          folder(l, leadNeed()),
-          folder(c),
-          ...rest.map((r) => folder(r)),
-        ],
-      }),
-      NOW,
-    );
-
-    const dayLine = deriveDeskDayLine(
-      roster,
-      [answeredNote('p-cedar', new Date(NOW.getTime() - HOUR).toISOString())],
-      NOW,
-    )!;
-
-    expect(dayLine.lines).toHaveLength(3);
-    expect(dayLine.more).toEqual({ count: 12, stageKey: 'brief' });
-  });
-
-  it('renders nothing at all when nothing needs her', () => {
-    const quiet = Array.from({ length: 6 }, (_, i) => row(`quiet-${i}`, 'project'));
-
-    expect(
-      deriveDeskDayLine(deriveDeskRoster(input({ live: quiet }), NOW), [], NOW),
-    ).toBeNull();
-    expect(deriveDeskDayLine(deriveDeskRoster(input({}), NOW), [], NOW)).toBeNull();
+    expect(result.dayLine).toBeNull();
   });
 });
 
@@ -1172,5 +1092,248 @@ describe('D8 · deriveDeskRoster writes the value and the motion sentence', () =
 
     expect(roster.groups[0].lines[0].valueText).toBeNull();
     expect(roster.groups[0].lines[0].motionText).toBeNull();
+  });
+});
+
+describe('D5 · a claim takes a card, a quiet job takes a line', () => {
+  function claimsOf(over: Partial<DeskRosterInput> = {}) {
+    return deriveDeskClaims({
+      roster: deriveDeskRoster(input(over), NOW),
+      answeredNotes: [],
+      now: NOW,
+    });
+  }
+
+  it('cards every marked line and leaves every unmarked one in the ledger', () => {
+    const claimed = row('claimed', 'project');
+    const quietA = row('quiet-a', 'project');
+    const quietB = row('quiet-b', 'care');
+    const result = claimsOf({
+      live: [claimed, quietA, quietB],
+      folders: [folder(claimed)],
+    });
+
+    expect(result.cards.map((c) => c.line.engagementId)).toEqual(['claimed']);
+    expect(result.ledger.map((g) => g.key)).toEqual(['project', 'care']);
+    expect(result.ledger[0].lines.map((l) => l.engagementId)).toEqual(['quiet-a']);
+    expect(result.ledger[0].count).toBe(1);
+  });
+
+  it('drops a stage group the split emptied', () => {
+    const claimed = row('claimed', 'project');
+    expect(claimsOf({ live: [claimed], folders: [folder(claimed)] }).ledger).toEqual([]);
+  });
+
+  it('agrees with filterRosterToNeeds, which is the same predicate', () => {
+    const claimed = row('claimed', 'project');
+    const quiet = row('quiet', 'project');
+    const roster = deriveDeskRoster(
+      input({ live: [claimed, quiet], folders: [folder(claimed)] }),
+      NOW,
+    );
+    const result = deriveDeskClaims({ roster, answeredNotes: [], now: NOW });
+
+    expect(result.cards.map((c) => c.line.engagementId)).toEqual(
+      filterRosterToNeeds(roster.groups).flatMap((g) =>
+        g.lines.map((l) => l.engagementId),
+      ),
+    );
+  });
+
+  it('keeps the roster’s own heading, and counts the ledger head', () => {
+    const claimed = row('claimed', 'project');
+    const quiet = row('quiet', 'project');
+    const result = claimsOf({ live: [claimed, quiet], folders: [folder(claimed)] });
+
+    expect(result.heading).toBe('Every job · 2 live · 0 overdue');
+    expect(result.restHeading).toBe('At rest · 1 job');
+  });
+
+  it('pluralises the ledger head, and says nothing over an empty ledger', () => {
+    const a = row('a', 'project');
+    const b = row('b', 'project');
+    expect(claimsOf({ live: [a, b] }).restHeading).toBe('At rest · 2 jobs');
+    expect(claimsOf({ live: [] }).restHeading).toBe('');
+  });
+
+  it('keeps the ledger under the paper’s own stage order (D8)', () => {
+    const live = [...ROSTER_STAGE_ORDER].reverse().map((s) => row(s, s));
+    const result = claimsOf({ live });
+
+    expect(result.ledger.map((g) => g.key)).toEqual([...ROSTER_STAGE_ORDER]);
+    expect(result.cards).toEqual([]);
+  });
+});
+
+describe('D3 · the cards rank by band, then oldest, then name', () => {
+  function claimsOf(over: Partial<DeskRosterInput> = {}) {
+    return deriveDeskClaims({
+      roster: deriveDeskRoster(input(over), NOW),
+      answeredNotes: [],
+      now: NOW,
+    });
+  }
+
+  it('bands designer+overdue, designer, client, maker — in that order', () => {
+    const late = row('z-late', 'project', { title: 'Z overdue' });
+    const mine = row('m-mine', 'project', { title: 'M owned' });
+    const theirs = row('client-held', 'project', { title: 'Client held' });
+    const maker = row('maker-held', 'project', { title: 'Maker held' });
+    const result = claimsOf({
+      live: [maker, theirs, mine, late],
+      folders: [
+        folder(maker, need({ owner: 'maker' })),
+        folder(theirs, need({ owner: 'client' })),
+        folder(mine, need({ owner: 'designer' })),
+        folder(late, need({ owner: 'designer', dueOn: '2026-08-01' })),
+      ],
+    });
+
+    expect(result.cards.map((c) => c.band)).toEqual([0, 1, 2, 3]);
+    expect(result.cards.map((c) => c.line.engagementId)).toEqual([
+      'z-late',
+      'm-mine',
+      'client-held',
+      'maker-held',
+    ]);
+  });
+
+  it('puts the oldest need date first inside a band', () => {
+    const soon = row('m-soon', 'project', { title: 'M soon' });
+    const older = row('a-older', 'project', { title: 'A older' });
+    const result = claimsOf({
+      live: [soon, older],
+      folders: [
+        folder(soon, need({ owner: 'designer', dueOn: '2026-09-20' })),
+        folder(older, need({ owner: 'designer', dueOn: '2026-09-01' })),
+      ],
+    });
+
+    expect(result.cards.map((c) => c.line.engagementId)).toEqual([
+      'a-older',
+      'm-soon',
+    ]);
+  });
+
+  it('breaks a tie on the name, never on the id', () => {
+    // A UUID tiebreak is stable but arbitrary; a name is legible.
+    const zed = row('aaa', 'project', { title: 'Zeta house' });
+    const ash = row('zzz', 'project', { title: 'Ash house' });
+    const result = claimsOf({
+      live: [zed, ash],
+      folders: [
+        folder(zed, need({ owner: 'designer' })),
+        folder(ash, need({ owner: 'designer' })),
+      ],
+    });
+
+    expect(result.cards.map((c) => c.line.name)).toEqual([
+      'Ash house',
+      'Zeta house',
+    ]);
+  });
+
+  it('orders two UNDATED same-band cards by name', () => {
+    // Both dueOn are absent, so both anchor times are +Infinity and the date
+    // comparison yields NaN, not 0. NaN is falsy, so `||` falls through to the
+    // name comparison — the behaviour this test pins, because a subtraction
+    // that returns NaN silently is exactly the kind of thing a refactor
+    // "simplifies" into a broken sort.
+    const zed = row('aaa', 'project', { title: 'Zeta house' });
+    const ash = row('zzz', 'project', { title: 'Ash house' });
+    const result = claimsOf({
+      live: [zed, ash],
+      folders: [
+        folder(zed, need({ owner: 'designer', dueOn: null })),
+        folder(ash, need({ owner: 'designer', dueOn: null })),
+      ],
+    });
+
+    expect(result.cards.map((c) => c.line.name)).toEqual([
+      'Ash house',
+      'Zeta house',
+    ]);
+  });
+
+  it('sorts a dated card ahead of an undated one in the same band', () => {
+    const dated = row('dated', 'project', { title: 'Zeta house' });
+    const undated = row('undated', 'project', { title: 'Ash house' });
+    const result = claimsOf({
+      live: [dated, undated],
+      folders: [
+        folder(dated, need({ owner: 'designer', dueOn: '2026-09-01' })),
+        folder(undated, need({ owner: 'designer', dueOn: null })),
+      ],
+    });
+
+    expect(result.cards.map((c) => c.line.engagementId)).toEqual([
+      'dated',
+      'undated',
+    ]);
+  });
+
+  it('carries the stage and its sentence-case label on the card', () => {
+    const mine = row('mine', 'project');
+    const result = claimsOf({ live: [mine], folders: [folder(mine)] });
+
+    expect(result.cards[0].stage).toBe('project');
+    expect(result.cards[0].stageLabel).toBe('Project');
+    expect(result.cards[0].custody).toBe('Your pen');
+  });
+});
+
+describe('IA-12 · By person regroups the card half too', () => {
+  const PEOPLE = deriveRosterPeople([
+    {
+      user_id: 'user-leah',
+      role: 'owner',
+      status: 'active',
+      profiles: { full_name: 'Leah Hartwell', display_name: null },
+    },
+    {
+      user_id: 'user-anneke',
+      role: 'member',
+      status: 'active',
+      profiles: { full_name: 'Anneke Sund', display_name: null },
+    },
+  ]);
+
+  function cardsOf(over: Partial<DeskRosterInput> = {}) {
+    return deriveDeskClaims({
+      roster: deriveDeskRoster(input(over), NOW),
+      answeredNotes: [],
+      now: NOW,
+    }).cards;
+  }
+
+  it('groups the cards by designerId, principal first', () => {
+    const mine = row('mine', 'project', { designer_id: 'user-leah' });
+    const hers = row('hers', 'project', { designer_id: 'user-anneke' });
+    const grouped = groupClaimsByPerson(
+      cardsOf({ live: [mine, hers], folders: [folder(mine), folder(hers)] }),
+      PEOPLE,
+    );
+
+    expect(grouped.map((g) => [g.label, g.count])).toEqual([
+      ['Leah Hartwell', 1],
+      ['Anneke Sund', 1],
+    ]);
+    expect(grouped[0].cards[0].line.engagementId).toBe('mine');
+  });
+
+  it('groups an unassigned card under the principal, never dropping it', () => {
+    const orphan = row('orphan', 'project', { designer_id: null });
+    const grouped = groupClaimsByPerson(
+      cardsOf({ live: [orphan], folders: [folder(orphan)] }),
+      PEOPLE,
+    );
+
+    expect(grouped).toHaveLength(1);
+    expect(grouped[0].count).toBe(1);
+  });
+
+  it('returns nothing to group when the studio has no named people', () => {
+    const mine = row('mine', 'project');
+    expect(groupClaimsByPerson(cardsOf({ live: [mine], folders: [folder(mine)] }), [])).toEqual([]);
   });
 });

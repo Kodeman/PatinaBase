@@ -458,9 +458,14 @@ export type DayLinePart =
   | { kind: 'job'; text: string; engagementId: string }
   | { kind: 'overdue'; text: string };
 
+/** The id the `more` link lands on — the claims grid's own element. The grid
+ *  has no stage, so the old `#roster-stage-{key}` target is gone with the
+ *  stage-first grid it pointed into. */
+export const CLAIMS_ANCHOR_ID = 'desk-claims';
+
 export interface DayLine {
-  /** Stable across renders, and states which of the three lines this is. */
-  key: 'overdue' | 'lead' | 'answered';
+  /** `card-${engagementId}` for a quoted card, `answered` for the note. */
+  key: string;
   /** The row this line is a view of. */
   engagementId: string;
   parts: DayLinePart[];
@@ -468,15 +473,13 @@ export interface DayLine {
 
 export interface DeskDayLine {
   lines: DayLine[];
-  /** `and N more below`, pointing at the first stage plate. */
-  more: { count: number; stageKey: SectionKey } | null;
+  /** `and N more below`, pointing at the claims grid. */
+  more: { count: number; anchorId: string } | null;
 }
 
+/** D7 — the line quotes the top THREE cards. The answered note is a fourth
+ *  line on top of that, not one of the three. */
 export const MAX_DAY_LINES = 3;
-
-/** The lead line's fixed half — sentence-cased inside its own sentence, the
- *  way the specimen sets it (`designer-desk.html:776`). */
-const LEAD_SENTENCE = 'new lead — respond by';
 
 /** "Replied last night" is only true inside a day. */
 export const ANSWERED_NOTE_WINDOW_MS = 86_400_000;
@@ -496,95 +499,50 @@ function flatten(roster: DeskRoster): FlatLine[] {
   return flat;
 }
 
-function byDueThenId(a: FlatLine, b: FlatLine): number {
-  return (
-    anchorTime(a.line.dueOn) - anchorTime(b.line.dueOn) ||
-    a.line.engagementId.localeCompare(b.line.engagementId)
-  );
-}
-
+/**
+ * D7 — the day's line, now a view of the grid it sits above.
+ *
+ * Before this it selected by its own rule (oldest overdue → newest lead →
+ * client-answered) while the roster ordered by another. That was tolerable
+ * under stage plates, where the line was a shortcut into a list; in a grid,
+ * where POSITION is the message, a line contradicting the first card means
+ * neither is trusted.
+ *
+ * The card lines quote the grid. The answered note does NOT: it searches the
+ * whole roster, because a client answering is news whether or not the job
+ * claims her hand, and a quiet job is exactly the one she would otherwise not
+ * look at today. The `taken` set spans both, so no job is ever named twice.
+ */
 export function deriveDeskDayLine(
+  cards: readonly ClaimCard[],
   roster: DeskRoster,
   answeredNotes: readonly AnsweredClientNote[],
   now: Date,
 ): DeskDayLine | null {
-  const flat = flatten(roster);
   const lines: DayLine[] = [];
   const taken = new Set<string>();
 
-  // (a) The overdue sentence, re-rendered: the job as an inline act, and the
-  // clause after the dash in the red letter's own ink. The one-line sentence
-  // above the band still names WHAT is overdue; this line says where it sits
-  // and how long it has stood — the same fact at a second grain, never a
-  // second copy of the sentence.
-  const overdue = flat
-    .filter((entry) => entry.line.overdue.isOverdue)
-    .sort(byDueThenId)[0];
-  const elapsed = overdue ? overdueElapsedPhrase(overdue.line.overdue) : null;
-  if (overdue && elapsed) {
-    taken.add(overdue.line.engagementId);
+  for (const card of cards.slice(0, MAX_DAY_LINES)) {
+    const { line } = card;
+    taken.add(line.engagementId);
+    const elapsed = overdueElapsedPhrase(line.overdue);
     lines.push({
-      key: 'overdue',
-      engagementId: overdue.line.engagementId,
+      key: `card-${line.engagementId}`,
+      engagementId: line.engagementId,
       parts: [
-        {
-          kind: 'job',
-          text: overdue.line.name,
-          engagementId: overdue.line.engagementId,
-        },
-        {
-          kind: 'overdue',
-          text: ` — ${overdue.stageLabel.toLowerCase()}, overdue ${elapsed}`,
-        },
+        { kind: 'job', text: line.name, engagementId: line.engagementId },
+        elapsed
+          ? { kind: 'overdue', text: ` — overdue ${elapsed}` }
+          : {
+              // The card's own reason, not a second sentence about it: a line
+              // that paraphrases the card is a second queue in miniature.
+              kind: 'text',
+              text: ` — ${line.needText ?? line.act.label.toLowerCase()}`,
+            },
       ],
     });
   }
 
-  // (b) The earliest lead deadline, said the way the specimen says it:
-  // "Marcus Wright · new lead — respond by 10 September". The line writes its
-  // own sentence off `dueOn` rather than borrowing the need's, because the
-  // need's is dated in the Desk's older idiom (`Sep 10`) and PP-2 gives this
-  // surface one date style. The date is the only variable in it, so there is
-  // nothing here that can drift from the need except the day itself.
-  //
-  // 'reconnect_due' is deliberately NOT here. It shares `lead_response_deadline`
-  // with 'new_lead' in `needSortKey`, but the specimen and §F item 5 both say
-  // "new lead", and a nurtured lead's touchpoint is not the deadline this slot
-  // answers. Widening it is a product call, not a lane's — pinned by test.
-  const lead = flat
-    .filter(
-      (entry) =>
-        entry.line.needKind === 'new_lead' &&
-        !!dayMonth(entry.line.dueOn) &&
-        !taken.has(entry.line.engagementId),
-    )
-    .sort(byDueThenId)[0];
-  if (lead) {
-    taken.add(lead.line.engagementId);
-    lines.push({
-      key: 'lead',
-      engagementId: lead.line.engagementId,
-      parts: [
-        // The person, not the job: this line answers "who am I keeping
-        // waiting". The job name stands in only where the row has no named
-        // client, since `clientOf` refuses a placeholder for a real name — and
-        // the job title is never printed a second time beside it.
-        {
-          kind: 'job',
-          text: lead.line.client ?? lead.line.name,
-          engagementId: lead.line.engagementId,
-        },
-        {
-          kind: 'text',
-          text: ` · ${LEAD_SENTENCE} ${dayMonth(lead.line.dueOn)}`,
-        },
-      ],
-    });
-  }
-
-  // (c) The client's own answer, inside the last day. Without a client name
-  // the line cannot be said — the roster refuses a role noun standing in for
-  // a name it does not have, and so does this.
   const floor = now.getTime() - ANSWERED_NOTE_WINDOW_MS;
   const answered = answeredNotes
     .map((note) => ({ note, at: Date.parse(note.answeredAt) }))
@@ -595,6 +553,7 @@ export function deriveDeskDayLine(
         entry.at <= now.getTime(),
     )
     .sort((a, b) => b.at - a.at);
+  const flat = flatten(roster);
   for (const { note } of answered) {
     const match = flat.find(
       (entry) =>
@@ -619,25 +578,161 @@ export function deriveDeskDayLine(
     break;
   }
 
-  // Nothing needs her: the band does not render. A "nothing needs you" banner
-  // over sixteen live jobs is itself a second queue.
+  // Nothing claims her hand: the band does not render. A "nothing needs you"
+  // banner over sixteen live jobs is itself a second queue.
   if (lines.length === 0) return null;
 
-  const shown = lines.slice(0, MAX_DAY_LINES);
-  const marked = flat.filter((entry) => entry.line.mark !== null);
-  const spoken = shown.filter((line) =>
-    marked.some((entry) => entry.line.engagementId === line.engagementId),
-  ).length;
-  const remaining = marked.length - spoken;
-  const firstStage = roster.groups[0]?.key ?? null;
+  const quoted = lines.filter((line) => line.key !== 'answered').length;
+  const remaining = cards.length - quoted;
+  return {
+    lines,
+    more: remaining > 0 ? { count: remaining, anchorId: CLAIMS_ANCHOR_ID } : null,
+  };
+}
+
+/* ── The claims split (D5, D3, D8) ──────────────────────────────────────────
+ *
+ * R143: one line per job in the at-rest ledger; a job with a claim on the
+ * studio's hand takes a Claim card. The predicate is the mark the roster
+ * already draws — `mark !== null`, every job carrying a need — so the split
+ * reads the same fact the margin does rather than deriving a second one.
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+export type ClaimBand = 0 | 1 | 2 | 3;
+
+export interface ClaimCard {
+  line: RosterLine;
+  stage: SectionKey;
+  stageLabel: string;
+  custody: string;
+  band: ClaimBand;
+}
+
+export interface ClaimPersonGroup {
+  key: string;
+  label: string;
+  count: number;
+  cards: ClaimCard[];
+}
+
+export interface DeskClaimsInput {
+  roster: DeskRoster;
+  answeredNotes: readonly AnsweredClientNote[];
+  now: Date;
+}
+
+export interface DeskClaims {
+  cards: ClaimCard[];
+  ledger: RosterGroup[];
+  heading: string;
+  restHeading: string;
+  dayLine: DeskDayLine | null;
+}
+
+function claimBand(line: RosterLine): ClaimBand {
+  if (line.needOwner === 'maker') return 3;
+  if (line.needOwner === 'client') return 2;
+  // 'designer', and the D6 default for a need whose rule stated no owner.
+  return line.overdue.isOverdue ? 0 : 1;
+}
+
+function restHeadingFor(count: number): string {
+  if (count === 0) return '';
+  return `At rest · ${count} ${count === 1 ? 'job' : 'jobs'}`;
+}
+
+/**
+ * D5 · D3 · D8 — the Desk in two halves.
+ *
+ * Takes the roster `deriveDeskRoster` already built rather than rebuilding it,
+ * so the head's counts, the stage grouping and every line's own derivation are
+ * one computation with one source of truth. The card half is RE-ORDERED (D3:
+ * rank, with the reason printed on the card); the ledger half keeps the
+ * stage-first order it shipped with, because a ledger has headings to skip and
+ * a grid does not.
+ */
+export function deriveDeskClaims(input: DeskClaimsInput): DeskClaims {
+  const { roster, answeredNotes, now } = input;
+
+  const cards: ClaimCard[] = [];
+  const ledger: RosterGroup[] = [];
+
+  for (const group of roster.groups) {
+    const rest: RosterLine[] = [];
+    for (const line of group.lines) {
+      if (rosterLineNeedsAHand(line)) {
+        cards.push({
+          line,
+          stage: line.stage,
+          stageLabel: STAGE_LABEL[line.stage],
+          custody: line.custody,
+          band: claimBand(line),
+        });
+      } else {
+        rest.push(line);
+      }
+    }
+    if (rest.length > 0) {
+      ledger.push({ ...group, count: rest.length, lines: rest });
+    }
+  }
+
+  // Band, then oldest need date, then name. Two undated cards give
+  // +Infinity − +Infinity = NaN, which is falsy, so `||` falls through to the
+  // name — deliberate, and pinned by test. An undated card sorts BEHIND a
+  // dated one, because +Infinity − finite is +Infinity.
+  cards.sort(
+    (a, b) =>
+      a.band - b.band ||
+      anchorTime(a.line.dueOn) - anchorTime(b.line.dueOn) ||
+      a.line.name.localeCompare(b.line.name),
+  );
+
+  const restCount = ledger.reduce((total, group) => total + group.count, 0);
 
   return {
-    lines: shown,
-    more:
-      remaining > 0 && firstStage
-        ? { count: remaining, stageKey: firstStage }
-        : null,
+    cards,
+    ledger,
+    heading: roster.heading,
+    restHeading: restHeadingFor(restCount),
+    dayLine: deriveDeskDayLine(cards, roster, answeredNotes, now),
   };
+}
+
+/**
+ * Regroups the CARD half by the person who carries the job, on exactly the
+ * rule `groupRosterByPerson` uses for the ledger half: a card with no
+ * `designerId`, or one naming nobody on the list, groups under the principal
+ * rather than vanishing.
+ */
+export function groupClaimsByPerson(
+  cards: readonly ClaimCard[],
+  people: readonly RosterPerson[],
+): ClaimPersonGroup[] {
+  if (people.length === 0) return [];
+
+  const principal = people.find((person) => person.isPrincipal) ?? people[0];
+  const known = new Set(people.map((person) => person.id));
+  const cardsByPerson = new Map<string, ClaimCard[]>(
+    people.map((person) => [person.id, []]),
+  );
+
+  for (const card of cards) {
+    const id =
+      card.line.designerId && known.has(card.line.designerId)
+        ? card.line.designerId
+        : principal.id;
+    cardsByPerson.get(id)!.push(card);
+  }
+
+  return people
+    .map((person) => ({
+      key: `person-${person.id}`,
+      label: person.name,
+      count: cardsByPerson.get(person.id)!.length,
+      cards: cardsByPerson.get(person.id)!,
+    }))
+    .filter((group) => group.count > 0);
 }
 
 /* ── The two facets (IA-11 / IA-12) ─────────────────────────────────────────
