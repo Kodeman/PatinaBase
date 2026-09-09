@@ -679,11 +679,16 @@
   display: grid;
   /* The sentence track has a floor rather than minmax(0,1fr): below it the row
      collapses (the @container rule) instead of degrading into a column of
-     single characters. The act track is max-content over a 96px floor —
-     "Open the job" is 113px, and a fixed 96px clipped it to "OPEN THE J"
-     under this row's own overflow:hidden. */
-  grid-template-columns:
-    24px 320px minmax(200px, 1fr) 132px minmax(96px, max-content);
+     single characters. The act track is a flat 120px — "Open the job" is
+     113px, and the old fixed 96px clipped it to "OPEN THE J" under this row's
+     own overflow:hidden. Flat, not max-content: a max-content act track is
+     as wide as the longest label in ITS OWN row, so the value column would
+     stop lining up the moment two rows carried different acts, and a value
+     column that does not line up is not a ledger.
+     Minimum width = 24+320+200+132+120 + 4×24 gaps = 892px, which is under
+     the 899px container threshold below — so the row always has room for the
+     five tracks before the collapse takes over, and never clips. */
+  grid-template-columns: 24px 320px minmax(200px, 1fr) 132px 120px;
   align-items: baseline;
   column-gap: 24px;
   padding: 24px 0;

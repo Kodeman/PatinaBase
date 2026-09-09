@@ -11,6 +11,14 @@ import { psqlRun } from '../helpers/psql';
 
 const COLD = 30_000;
 
+/** The seeded designer every fixture in this file writes as. */
+const SEEDED_DESIGNER = 'a0000000-0000-0000-0000-000000000004';
+/** The two fixture boards, seeded in beforeAll and deleted in afterAll. */
+const BOARD_IDS = [
+  'cb000000-0000-4000-8000-0000000000a1',
+  'cb000000-0000-4000-8000-0000000000a2',
+] as const;
+
 test.describe.configure({ mode: 'serial' });
 // Single actor on a shared studio row: the three browser projects would run as
 // the same seeded designer and race each other.
@@ -29,22 +37,37 @@ test.beforeAll(() => {
   psqlRun(
     `UPDATE public.profiles
         SET help_state = '{"tours": {"desk-walkthrough": {"completed": true}}}'::jsonb
-      WHERE id = 'a0000000-0000-0000-0000-000000000004'::uuid`,
+      WHERE id = '${SEEDED_DESIGNER}'::uuid`,
   );
   // The seeds carry no `proposal_boards` rows, and RecentBoardsStrip renders
   // nothing at all against an empty query — so the placement assertion below
-  // would pass vacuously without these. Draft proposals only: the child-draft
-  // guard refuses a board on a sent or accepted one.
+  // would pass vacuously without these. Both hang off the seeded studio's own
+  // DRAFT proposals: `guard_proposal_child_draft_only` refuses a board on a
+  // sent or accepted one. Their titles are ordinary studio words because
+  // wp3-screenshots photographs this Desk. Removed again in afterAll — left
+  // behind, they turn up in every later spec's boards strip.
   psqlRun(
     `INSERT INTO public.proposal_boards (id, proposal_id, name, status, updated_at)
-     VALUES
-       ('cb000000-0000-4000-8000-0000000000a1'::uuid,
-        'b3900000-0000-4000-8000-000000000001'::uuid,
-        'Palette + materials study', 'active', now()),
-       ('cb000000-0000-4000-8000-0000000000a2'::uuid,
-        'b3900000-0000-4000-8000-000000000002'::uuid,
-        'ZZ QA Scratch Template', 'active', now() - interval '1 day')
+     SELECT v.id, v.proposal_id, v.name, 'active', v.updated_at
+       FROM (VALUES
+         ('${BOARD_IDS[0]}'::uuid,
+          'b3900000-0000-4000-8000-000000000001'::uuid,
+          'Palette study', now()),
+         ('${BOARD_IDS[1]}'::uuid,
+          'b3900000-0000-4000-8000-000000000002'::uuid,
+          'Living room board', now() - interval '1 day')
+       ) AS v(id, proposal_id, name, updated_at)
+       JOIN public.proposals p
+         ON p.id = v.proposal_id
+        AND p.designer_id = '${SEEDED_DESIGNER}'::uuid
      ON CONFLICT (id) DO NOTHING`,
+  );
+});
+
+test.afterAll(() => {
+  psqlRun(
+    `DELETE FROM public.proposal_boards
+      WHERE id IN ('${BOARD_IDS[0]}'::uuid, '${BOARD_IDS[1]}'::uuid)`,
   );
 });
 
