@@ -128,12 +128,12 @@ export async function POST(request: NextRequest) {
   }
 
   // ── The First Letter (R5/R12/R13) ────────────────────────────────────────
-  const letterVerdict = validateLetterRequest(body);
-  if ('error' in letterVerdict && letterVerdict.error) {
-    return badRequest(letterVerdict.error);
-  }
-  if (letterVerdict.take) {
-    try {
+  try {
+    const letterVerdict = validateLetterRequest(body);
+    if ('error' in letterVerdict && letterVerdict.error) {
+      return badRequest(letterVerdict.error);
+    }
+    if (letterVerdict.take) {
       return await sendTheLetter({
         adminClient,
         callerUser,
@@ -145,10 +145,10 @@ export async function POST(request: NextRequest) {
         note: letterVerdict.note,
         projectId: letterVerdict.projectId,
       });
-    } catch (err: any) {
-      console.error('[clients/invite] Unexpected error:', err);
-      return serverError(err?.message ?? 'Internal server error');
     }
+  } catch (err: any) {
+    console.error('[clients/invite] Unexpected error:', err);
+    return serverError(err?.message ?? 'Internal server error');
   }
 
   try {
@@ -360,11 +360,44 @@ async function sendTheLetter(args: {
     existingRow, note, projectId,
   } = args;
 
-  const { data: existingProfile } = await adminClient
+  // R8/R11: projectId is body-supplied and drives both the edge function's
+  // studio-identity resolution and the note it seeds into that project — so a
+  // caller-owned project is confirmed here, before either happens. "Owns"
+  // mirrors R11's authorship rule: the project's lead designer, or any active
+  // member of the project's studio.
+  if (projectId) {
+    const { data: project, error: projectError } = await adminClient
+      .from('projects')
+      .select('id, designer_id, studio_id')
+      .eq('id', projectId)
+      .maybeSingle();
+    if (projectError) {
+      return serverError(`Failed to verify project access: ${projectError.message}`);
+    }
+    let hasAccess = !!project && project.designer_id === callerUser.id;
+    if (!hasAccess && project?.studio_id) {
+      const { data: membership } = await adminClient
+        .from('organization_members')
+        .select('user_id')
+        .eq('organization_id', project.studio_id)
+        .eq('user_id', callerUser.id)
+        .eq('status', 'active')
+        .maybeSingle();
+      hasAccess = !!membership;
+    }
+    if (!hasAccess) {
+      return badRequest('Project not found');
+    }
+  }
+
+  const { data: existingProfile, error: existingProfileError } = await adminClient
     .from('profiles')
     .select('id')
     .eq('email', clientEmail)
     .maybeSingle();
+  if (existingProfileError) {
+    return serverError(`Failed to check for an existing account: ${existingProfileError.message}`);
+  }
 
   // R13: an account that already exists gets the short notice letter, never a
   // silent link. Today this branch tells the designer an invite went and sends
