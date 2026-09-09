@@ -41,6 +41,7 @@ function roster(): DeskRosterModel {
           {
             engagementId: 'chen',
             name: 'Full Room',
+            stage: 'brief',
             state: 'Sarah Chen · new lead',
             overdueText: null,
             mark: 'quiet',
@@ -54,6 +55,7 @@ function roster(): DeskRosterModel {
           {
             engagementId: 'tanaka',
             name: 'Full Room',
+            stage: 'brief',
             state: 'Lily Tanaka · new lead',
             overdueText: null,
             mark: 'quiet',
@@ -74,6 +76,7 @@ function roster(): DeskRosterModel {
           {
             engagementId: 'vandersteen',
             name: 'Vandersteen residence',
+            stage: 'project',
             state: 'Anne Vandersteen · procurement',
             overdueText: null,
             mark: null,
@@ -92,26 +95,38 @@ function roster(): DeskRosterModel {
 
 function rows(container: HTMLElement): HTMLElement[] {
   return Array.from(
-    container.querySelectorAll<HTMLElement>('[data-roster-line]'),
+    container.querySelectorAll<HTMLElement>(
+      '[data-claim-card], [data-ledger-row]',
+    ),
   );
 }
 
 describe('DeskRoster — the roster settles once per page load', () => {
-  it('settles on the first mount, staggering by the row’s own index', () => {
+  it('settles on the first mount, staggering by the card’s own index', () => {
     const { container, unmount } = render(<DeskRoster roster={roster()} />);
 
+    // Two marked jobs take cards; the unmarked one takes an at-rest row. The
+    // orchestrated moment belongs to the claims: DeskLedgerRow takes no
+    // settle, so the ledger arrives already at rest.
     const settled = rows(container);
     expect(settled).toHaveLength(3);
-    for (const row of settled) {
-      expect(row.className).toContain('desk-settle');
+    const cards = settled.filter((row) => row.hasAttribute('data-claim-card'));
+    const ledger = settled.filter((row) => row.hasAttribute('data-ledger-row'));
+    expect(cards).toHaveLength(2);
+    expect(ledger).toHaveLength(1);
+    for (const card of cards) {
+      expect(card.className).toContain('desk-settle');
     }
-    // The index runs across the whole roster, not per stage group — the CSS
-    // caps the stagger at the seventh line.
-    expect(settled.map((row) => row.style.getPropertyValue('--i'))).toEqual([
+    // The index runs across the whole grid, not per person group — the CSS
+    // caps the stagger at the seventh card.
+    expect(cards.map((card) => card.style.getPropertyValue('--i'))).toEqual([
       '0',
       '1',
-      '2',
     ]);
+    for (const row of ledger) {
+      expect(row.className).not.toContain('desk-settle');
+      expect(row.style.getPropertyValue('--i')).toBe('');
+    }
 
     unmount();
   });

@@ -582,8 +582,12 @@ export function deriveDeskDayLine(
   // banner over sixteen live jobs is itself a second queue.
   if (lines.length === 0) return null;
 
-  const quoted = lines.filter((line) => line.key !== 'answered').length;
-  const remaining = cards.length - quoted;
+  // Every card the line already spoke, by either route: the answered note can
+  // name a card below the top three, and "and 1 more below" must not then
+  // point at the job just named.
+  const remaining = cards.filter(
+    (card) => !taken.has(card.line.engagementId),
+  ).length;
   return {
     lines,
     more: remaining > 0 ? { count: remaining, anchorId: CLAIMS_ANCHOR_ID } : null,

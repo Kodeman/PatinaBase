@@ -603,6 +603,58 @@ describe('deriveDeskDayLine — the answered client note (D7’s fourth line)', 
     ]);
   });
 
+  it('never counts a card the note already named among “N more below”', () => {
+    // Four cards, three quoted by rank and the fourth spoken by the note —
+    // so nothing is left unnamed, and the more-link must not offer to show
+    // the reader the job it has just finished telling them about.
+    const a = row('a', 'project');
+    const b = row('b', 'project');
+    const c = row('c', 'project');
+    const claimed = row('claimed', 'project', {
+      client_name: 'Erin Byrne',
+      project_id: 'p-byrne',
+    });
+    const result = claimsOf(
+      {
+        live: [a, b, c, claimed],
+        folders: [
+          folder(a, need({ owner: 'designer' })),
+          folder(b, need({ owner: 'designer' })),
+          folder(c, need({ owner: 'designer' })),
+          folder(claimed, need({ owner: 'maker' })),
+        ],
+      },
+      [{ projectId: 'p-byrne', answeredAt: '2026-08-25T06:00:00Z' }],
+    );
+
+    expect(result.cards).toHaveLength(4);
+    expect(result.dayLine!.lines.map((l) => l.key)).toEqual([
+      'card-a',
+      'card-b',
+      'card-c',
+      'answered',
+    ]);
+    expect(result.dayLine!.more).toBeNull();
+  });
+
+  it('still counts the cards no line named at all', () => {
+    const live = ['a', 'b', 'c', 'd'].map((id) => row(id, 'project'));
+    const quiet = row('quiet', 'care', {
+      client_name: 'Nora Ellison',
+      project_id: 'p-nora',
+    });
+    const result = claimsOf(
+      {
+        live: [...live, quiet],
+        folders: live.map((r) => folder(r, need({ owner: 'designer' }))),
+      },
+      [{ projectId: 'p-nora', answeredAt: '2026-08-25T06:00:00Z' }],
+    );
+
+    // The note spoke for a LEDGER row, so it took nothing off the card count.
+    expect(result.dayLine!.more).toEqual({ count: 1, anchorId: CLAIMS_ANCHOR_ID });
+  });
+
   it('speaks for a QUIET job that is only a ledger row', () => {
     // The client answering is news whether or not the job claims her hand;
     // searching only the cards would have silently dropped this line.

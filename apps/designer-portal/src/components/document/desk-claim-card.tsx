@@ -56,9 +56,9 @@ const HEAD_TYPE =
   'font-mono text-[11px] font-medium uppercase tracking-[0.08em]';
 
 /** `data-roster-line` was the row's identity; an `id` is what a link lands
- *  on, and the day's line is nothing but links into the Desk. MOVED here from
- *  desk-roster.tsx, which keeps its own copy for its existing importers
- *  until Task 7 retires it there. */
+ *  on, and the day's line is nothing but links into the Desk. The one
+ *  definition, reached by both halves; desk-roster.tsx re-exports it for its
+ *  own existing importers. */
 export function rosterLineAnchorId(engagementId: string): string {
   return `roster-line-${engagementId}`;
 }
