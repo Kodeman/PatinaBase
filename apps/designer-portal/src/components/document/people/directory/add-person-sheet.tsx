@@ -27,14 +27,25 @@ import {
   useAddProjectParty,
   useFindOrCreateVendor,
   useSaveVendor,
+  useStudioIdentity,
   peopleKeys,
   type PartyKind,
 } from '@patina/supabase';
 import { ALL_FIELD_TRADES, FIELD_TRADE_LABELS } from '@patina/types';
 import { useProjects } from '@/hooks/use-projects';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
+import { clientEvents } from '@/lib/analytics/events';
 import { DocumentAction, DocumentActionGroup } from '../../document-action';
 import { RoomSheet } from '../../rooms/room-sheet';
 import type { DirectoryRole } from '../views/directory-view';
+import {
+  LetterLineField,
+  checkboxHelper,
+  checkboxLabel,
+  givenNameOf,
+  sendButtonLabel,
+  successLine,
+} from './letter-line-field';
 
 export type AddedPersonKind =
   | 'client'
@@ -163,6 +174,11 @@ export function AddPersonSheet({
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [invite, setInvite] = useState(true);
+  const [note, setNote] = useState('');
+  const { value: letterOn, isLoading: letterLoading } = useFeatureFlag('client-invite-letter');
+  const { data: studioIdentity } = useStudioIdentity({ designerId: undefined });
+  const studioName = studioIdentity?.name ?? null;
+  const clientGiven = givenNameOf(name);
   // Maker fields (R78: name · specialty · orders email · website).
   const [makerName, setMakerName] = useState('');
   const [category, setCategory] = useState('');
@@ -188,6 +204,7 @@ export function AddPersonSheet({
     setName('');
     setEmail('');
     setInvite(true);
+    setNote('');
     setMakerName('');
     setCategory('');
     setOrdersEmail('');
@@ -224,16 +241,27 @@ export function AddPersonSheet({
         clientName: name.trim() || undefined,
         source: 'direct',
         invite,
+        ...(letterOn && invite
+          ? { letter: true as const, note: note.trim() || undefined }
+          : {}),
       });
       void queryClient.invalidateQueries({ queryKey: peopleKeys.all });
 
       const label = name.trim() || trimmedEmail;
-      const message = result.alreadyExists
-        ? `${label} is already on Patina — linked to their account, now on your roster.`
-        : result.invited
-          ? `${label} added — a magic-link invite is on its way.`
-          : `${label} added to your roster.`;
+      const message = letterOn
+        ? successLine({
+            label,
+            email: trimmedEmail,
+            sent: invite,
+            alreadyExisted: result.alreadyExists,
+          })
+        : result.alreadyExists
+          ? `${label} is already on Patina — linked to their account, now on your roster.`
+          : result.invited
+            ? `${label} added — a magic-link invite is on its way.`
+            : `${label} added to your roster.`;
       onAdded?.(message, 'client');
+      clientEvents.create({ has_note: letterOn && invite && !!note.trim() });
       reset();
       onClose();
     } catch (e) {
@@ -375,10 +403,11 @@ export function AddPersonSheet({
 
       {kind === 'client' ? (
         <>
-          <label className={FIELD_LABEL}>
+          <label className={FIELD_LABEL} htmlFor="client-full-name">
             Full name <span className="opacity-60">(optional)</span>
           </label>
           <input
+            id="client-full-name"
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -386,8 +415,9 @@ export function AddPersonSheet({
             className={`${FIELD_INPUT} mb-4`}
           />
 
-          <label className={FIELD_LABEL}>Email</label>
+          <label className={FIELD_LABEL} htmlFor="client-email">Email</label>
           <input
+            id="client-email"
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -398,15 +428,57 @@ export function AddPersonSheet({
             className={FIELD_INPUT}
           />
 
-          <label className="mt-4 flex cursor-pointer items-center gap-2.5 text-[0.74rem] text-[var(--color-mocha)]">
-            <input
-              type="checkbox"
-              checked={invite}
-              onChange={(e) => setInvite(e.target.checked)}
-              className="h-4 w-4 cursor-pointer rounded border-[var(--color-pearl)] accent-[var(--color-clay)]"
-            />
-            Send a magic-link invite to Patina
-          </label>
+          {/* Fail-closed: neither the old string nor the new one renders while
+              PostHog is still answering, so a non-pilot studio never sees the
+              letter flash past. */}
+          {letterLoading ? (
+            <div className="mt-4 h-[18px]" aria-hidden />
+          ) : letterOn ? (
+            <>
+              <label className="mt-4 flex cursor-pointer items-start gap-2.5 text-[0.74rem] text-[var(--color-mocha)]">
+                <input
+                  type="checkbox"
+                  checked={invite}
+                  onChange={(e) => setInvite(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 cursor-pointer rounded border-[var(--color-pearl)] accent-[var(--color-clay)]"
+                  aria-label={checkboxLabel(clientGiven)}
+                />
+                <span>
+                  {checkboxLabel(clientGiven)}
+                  <span className="mt-0.5 block text-[0.64rem] leading-relaxed text-[var(--color-aged-oak)]">
+                    {checkboxHelper({ givenName: clientGiven, studioName, pronoun: null })}
+                  </span>
+                </span>
+              </label>
+
+              <LetterLineField
+                facts={{
+                  clientName: name.trim() || null,
+                  clientEmail: email.trim() || 'no email yet',
+                  projectName: null,
+                }}
+                value={note}
+                onChange={setNote}
+                // Checkbox off folds the field to "+ A line for {given}";
+                // opening it turns the letter back on. The key forces a
+                // remount on every invite flip so the field's own `open`
+                // state can't drift from `folded` after the first render.
+                folded={!invite}
+                key={invite ? 'letter-on' : 'letter-off'}
+                onOpen={() => setInvite(true)}
+              />
+            </>
+          ) : (
+            <label className="mt-4 flex cursor-pointer items-center gap-2.5 text-[0.74rem] text-[var(--color-mocha)]">
+              <input
+                type="checkbox"
+                checked={invite}
+                onChange={(e) => setInvite(e.target.checked)}
+                className="h-4 w-4 cursor-pointer rounded border-[var(--color-pearl)] accent-[var(--color-clay)]"
+              />
+              Send a magic-link invite to Patina
+            </label>
+          )}
 
           {onGoToLeads && (
             <p className="mt-3 text-[0.66rem] text-[var(--color-aged-oak)]">
@@ -640,7 +712,9 @@ export function AddPersonSheet({
           loadingLabel="Adding…"
           onClick={() => void submit()}
         >
-          Add to roster
+          {kind === 'client' && letterOn && !letterLoading
+            ? sendButtonLabel(invite)
+            : 'Add to roster'}
         </DocumentAction>
         <DocumentAction
           actionKey="cancel-add-person"

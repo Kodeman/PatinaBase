@@ -118,6 +118,7 @@ export function LetterLineField({
   onChange,
   folded = false,
   disabled = false,
+  onOpen,
 }: {
   facts: LetterLineFacts;
   value: string;
@@ -125,6 +126,10 @@ export function LetterLineField({
   /** Folded starts as the single-line "+ A line for {given}" disclosure. */
   folded?: boolean;
   disabled?: boolean;
+  /** Fired when the folded disclosure is opened — lets a caller whose own
+   *  "send the letter" toggle drove the fold (add-person-sheet) turn that
+   *  toggle back on, rather than leaving the field open with the letter off. */
+  onOpen?: () => void;
 }) {
   const given = givenNameOf(facts.clientName);
   const label = fieldLabel(given);
@@ -135,7 +140,10 @@ export function LetterLineField({
       <button
         type="button"
         data-testid="letter-line-disclosure"
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          setOpen(true);
+          onOpen?.();
+        }}
         className="mt-3 inline-flex min-h-11 items-center text-[0.74rem] text-[var(--color-mocha)] underline underline-offset-4"
       >
         {`+ ${label}`}
