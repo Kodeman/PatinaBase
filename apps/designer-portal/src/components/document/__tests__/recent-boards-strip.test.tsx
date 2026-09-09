@@ -192,8 +192,8 @@ describe('RecentBoardsStrip — the compact rail (IA-17, ≥1280px)', () => {
   });
 });
 
-/** Swaps window.matchMedia's `matches` for the '(min-width: 1280px)' query
- *  desk/page.tsx reads to decide the grid/rail split. */
+/** Swaps window.matchMedia's `matches` so a wide desk cannot bring a rail
+ *  back by accident — the Desk must read the same at every viewport. */
 function mockWideDesk(matches: boolean) {
   window.matchMedia = jest.fn().mockImplementation((query: string) => ({
     matches,
@@ -207,35 +207,49 @@ function mockWideDesk(matches: boolean) {
   }));
 }
 
-describe('desk/page.tsx — the boards rail beside the roster head (IA-17)', () => {
-  it('renders the rail only at ≥1280px; below it, the full strip stays where it was', () => {
+describe('desk/page.tsx — the boards strip sits below the roster', () => {
+  it('prints the full strip, and no rail, at every viewport', () => {
     mockRecentBoards.mockReturnValue({
       data: [board({ name: 'Cedar Lane Study' })],
       isLoading: false,
       isError: false,
     });
 
-    mockWideDesk(false);
-    const { unmount } = render(<DeskPage />);
-    expect(screen.getByText('Recent boards')).toBeInTheDocument();
-    expect(screen.queryByText('Boards')).not.toBeInTheDocument();
-    expect(screen.getByTestId('desk-roster')).toBeInTheDocument();
-    unmount();
-
-    mockWideDesk(true);
-    render(<DeskPage />);
-    expect(screen.getByText('Boards')).toBeInTheDocument();
-    expect(screen.queryByText('Recent boards')).not.toBeInTheDocument();
-    expect(screen.getByTestId('desk-roster')).toBeInTheDocument();
+    for (const wide of [false, true]) {
+      mockWideDesk(wide);
+      const { unmount } = render(<DeskPage />);
+      expect(screen.getByText('Recent boards')).toBeInTheDocument();
+      // "Boards" is the rail variant's heading — IA-17's 260px column took a
+      // quarter of the desk and left the ledger row narrower than its own
+      // fixed tracks, so the rail is gone at every width.
+      expect(screen.queryByText('Boards')).not.toBeInTheDocument();
+      expect(screen.getByTestId('desk-roster')).toBeInTheDocument();
+      unmount();
+    }
   });
 
-  it('keeps the roster column minmax(0,1fr) in the ≥1280 grid — no min-width overflow', () => {
+  it('gives the roster the full content width — no two-column page grid', () => {
     mockRecentBoards.mockReturnValue({ data: [], isLoading: false, isError: false });
     mockWideDesk(true);
     const { container } = render(<DeskPage />);
 
-    const grid = container.querySelector('[class*="grid-cols-"]');
-    expect(grid).not.toBeNull();
-    expect(grid?.className).toContain('minmax(0,1fr)_260px');
+    expect(container.querySelector('[class*="_260px"]')).toBeNull();
+  });
+
+  it('renders the strip AFTER the roster in DOM order', () => {
+    mockRecentBoards.mockReturnValue({
+      data: [board({ name: 'Cedar Lane Study' })],
+      isLoading: false,
+      isError: false,
+    });
+    mockWideDesk(true);
+    render(<DeskPage />);
+
+    const roster = screen.getByTestId('desk-roster');
+    const strip = screen.getByText('Recent boards');
+
+    expect(
+      roster.compareDocumentPosition(strip) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 });

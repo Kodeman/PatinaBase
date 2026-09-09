@@ -31,6 +31,21 @@ test.beforeAll(() => {
         SET help_state = '{"tours": {"desk-walkthrough": {"completed": true}}}'::jsonb
       WHERE id = 'a0000000-0000-0000-0000-000000000004'::uuid`,
   );
+  // The seeds carry no `proposal_boards` rows, and RecentBoardsStrip renders
+  // nothing at all against an empty query — so the placement assertion below
+  // would pass vacuously without these. Draft proposals only: the child-draft
+  // guard refuses a board on a sent or accepted one.
+  psqlRun(
+    `INSERT INTO public.proposal_boards (id, proposal_id, name, status, updated_at)
+     VALUES
+       ('cb000000-0000-4000-8000-0000000000a1'::uuid,
+        'b3900000-0000-4000-8000-000000000001'::uuid,
+        'Palette + materials study', 'active', now()),
+       ('cb000000-0000-4000-8000-0000000000a2'::uuid,
+        'b3900000-0000-4000-8000-000000000002'::uuid,
+        'ZZ QA Scratch Template', 'active', now() - interval '1 day')
+     ON CONFLICT (id) DO NOTHING`,
+  );
 });
 
 test('a job with a claim takes a card; a quiet job takes a ledger row', async ({
@@ -177,4 +192,94 @@ test('the Desk does not scroll sideways at 390', async ({
       ),
     )
     .toBe(true);
+});
+
+test('the ledger keeps its sentence column, and its act is never clipped', async ({
+  authenticatedPage: page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/desk', { waitUntil: 'domcontentloaded' });
+
+  const roster = page.getByTestId('desk-roster');
+  await expect(roster.locator('[data-ledger-row]').first()).toBeVisible({
+    timeout: COLD,
+  });
+
+  // The sentence track has a floor: it degrades by collapsing the row, never
+  // by breaking "Nothing needs your hand." one character to a line.
+  const sentences = await roster
+    .locator('[data-ledger-cell="sentence"]')
+    .evaluateAll((els) =>
+      els.map((el) => {
+        const lineHeight = parseFloat(getComputedStyle(el).lineHeight);
+        return {
+          width: el.getBoundingClientRect().width,
+          lines: Math.round(el.getBoundingClientRect().height / lineHeight),
+        };
+      }),
+    );
+  expect(sentences.length).toBeGreaterThan(0);
+  for (const { width, lines } of sentences) {
+    expect(width).toBeGreaterThanOrEqual(200);
+    expect(lines).toBeLessThanOrEqual(3);
+  }
+
+  // "Open the job" is 113px wide; a 96px fixed track clipped it to "OPEN THE J"
+  // under the row's own overflow:hidden.
+  const acts = await roster
+    .locator('[data-ledger-cell="act"]')
+    .evaluateAll((els) =>
+      els.map((el) => ({ scrollW: el.scrollWidth, clientW: el.clientWidth })),
+    );
+  expect(acts.length).toBeGreaterThan(0);
+  for (const { scrollW, clientW } of acts) {
+    expect(scrollW).toBeLessThanOrEqual(clientW);
+  }
+});
+
+test('the boards strip sits below the roster, and the Desk keeps its full width', async ({
+  authenticatedPage: page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/desk', { waitUntil: 'domcontentloaded' });
+
+  const roster = page.getByTestId('desk-roster');
+  const lastRow = roster.locator('[data-ledger-row]').last();
+  await expect(lastRow).toBeVisible({ timeout: COLD });
+
+  const strip = page.locator('section[aria-labelledby="recent-mood-boards"]');
+  await expect(strip).toHaveCount(1);
+  // The rail variant is gone: there is no second, compact copy anywhere.
+  await expect(
+    page.locator('section[aria-labelledby="recent-mood-boards-compact"]'),
+  ).toHaveCount(0);
+
+  const placement = await page.evaluate(() => {
+    const roster = document.querySelector(
+      '[data-testid="desk-roster"]',
+    ) as HTMLElement;
+    const rows = Array.from(
+      document.querySelectorAll('[data-ledger-row]'),
+    ) as HTMLElement[];
+    const strip = document.querySelector(
+      'section[aria-labelledby="recent-mood-boards"]',
+    ) as HTMLElement;
+    const main = document.querySelector('main') as HTMLElement;
+    const mainStyle = getComputedStyle(main);
+    const contentWidth =
+      main.getBoundingClientRect().width -
+      parseFloat(mainStyle.paddingLeft) -
+      parseFloat(mainStyle.paddingRight);
+    return {
+      stripTop: strip.getBoundingClientRect().top + window.scrollY,
+      lastRowBottom:
+        rows[rows.length - 1].getBoundingClientRect().bottom + window.scrollY,
+      rosterWidth: roster.getBoundingClientRect().width,
+      contentWidth,
+    };
+  });
+
+  expect(placement.stripTop).toBeGreaterThan(placement.lastRowBottom);
+  // Full width of the desk — not the ~55% a 260px rail plus its gap left behind.
+  expect(placement.rosterWidth).toBeCloseTo(placement.contentWidth, 0);
 });
