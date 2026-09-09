@@ -11,11 +11,14 @@
  */
 
 import {
+  firstName,
   folderTab,
   type DeskFolder,
   type DocumentStateRow,
   type MotionChip,
+  type MotionKind,
   type NeedKind,
+  type NeedLine,
   type SectionKey,
 } from './desk-derivation';
 import { dayMonth } from './dates';
@@ -127,6 +130,16 @@ export interface RosterLine {
   dueOn?: string | null;
   /** The need's own sentence, unconcatenated (NeedLine.text). */
   needText?: string | null;
+  /** D6 — the custody word. Always written. */
+  custody: string;
+  /** The need's own owner, for D3's ranking. Null where there is no need. */
+  needOwner: 'designer' | 'client' | 'maker' | null;
+  /** D8 — the ledger's value column, as `12 Aug`: the need's own date where
+   *  the line has a need, else the in-motion state's anchor date. Null where
+   *  neither states one, and the cell renders empty. */
+  valueText?: string | null;
+  /** The in-motion chip's own sentence, unconcatenated (MotionChip.text). */
+  motionText?: string | null;
 }
 
 export interface RosterGroup {
@@ -168,6 +181,68 @@ function clientOf(row: DocumentStateRow): string | null {
   if (!name) return null;
   const last = name.split(/\s+/).filter(Boolean).pop() ?? '';
   return PLACEHOLDER_CLIENT_NAMES.has(last.toLowerCase()) ? null : name;
+}
+
+/** D6's four words. 'At rest' is the fifth, and belongs to a job with no need
+ *  at all rather than to an owner. */
+const CUSTODY_YOUR_PEN = 'Your pen';
+const CUSTODY_THE_CLIENT = 'With the client';
+const CUSTODY_THE_MAKER = 'With the maker';
+const CUSTODY_AT_REST = 'At rest';
+
+/**
+ * D6 — whose hand the job is in, said in one of four ways.
+ *
+ * The owner is READ off the need, never inferred at render: the rule that
+ * derived the need already knew the answer, and a card that guesses is the
+ * thing the ruling forbids. A need whose rule states no owner defaults to the
+ * studio's own pen — the recommendation Kody took — rather than falling silent
+ * or claiming a client we cannot name.
+ *
+ * The client's first name is printed only where `clientOf` will vouch for it:
+ * the seed's placeholder `Client User` is refused here exactly as it is
+ * refused on the line, because a role noun never stands in for a real name.
+ */
+export function custodyWord(
+  need: NeedLine | null,
+  row: DocumentStateRow,
+): string {
+  if (!need) return CUSTODY_AT_REST;
+  if (need.owner === 'maker') return CUSTODY_THE_MAKER;
+  if (need.owner === 'client') {
+    const client = clientOf(row);
+    return client ? `With ${firstName(client)}` : CUSTODY_THE_CLIENT;
+  }
+  return CUSTODY_YOUR_PEN;
+}
+
+/**
+ * D8 — the date an in-motion state is anchored to, for the ledger's value
+ * column.
+ *
+ * Only three of the kinds `deriveMotion` returns have a date on
+ * `document_state`; the other nine state a position, not a moment, and their
+ * cell stays empty rather than borrowing `updated_at`, which is a feed stamp
+ * and not a fact about the job.
+ *
+ * `with_client` reads `proposal_sent_at` ONLY (never
+ * `proposal_last_opened_at`) — the chip's own prose already reads "With
+ * client since <sent date>", and this column must print the same date the
+ * sentence names.
+ */
+export function motionAnchorDate(chip: MotionChip | null): string | null {
+  if (!chip) return null;
+  const row = chip.row;
+  switch (chip.kind) {
+    case 'with_client':
+      return row.proposal_sent_at ?? null;
+    case 'sent_unopened':
+      return row.proposal_sent_at ?? null;
+    case 'drafting':
+      return row.proposal_updated_at ?? row.updated_at ?? null;
+    default:
+      return null;
+  }
 }
 
 const NUMBER_WORDS = [
@@ -297,6 +372,11 @@ export function deriveDeskRoster(
         client: clientOf(row),
         dueOn: need?.dueOn ?? null,
         needText: need?.text ?? null,
+        custody: custodyWord(need, row),
+        needOwner: need?.owner ?? null,
+        // The need's own date first — a deadline outranks a provenance stamp.
+        valueText: dayMonth(need?.dueOn ?? null) ?? dayMonth(motionAnchorDate(chip)),
+        motionText: chip?.text ?? null,
       },
       stage: row.active_section,
       tab: folderTab(row),

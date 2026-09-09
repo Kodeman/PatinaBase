@@ -2,17 +2,20 @@ import type {
   DeskFolder,
   DocumentStateRow,
   MotionChip,
+  MotionKind,
   NeedKind,
   NeedLine,
   SectionKey,
 } from '@/lib/document/desk-derivation';
 import {
+  custodyWord,
   deriveDeskDayLine,
   deriveDeskRoster,
   deriveRosterPeople,
   facetHeading,
   filterRosterToNeeds,
   groupRosterByPerson,
+  motionAnchorDate,
   NOTHING_NEEDS_YOU,
   OPEN_THE_JOB,
   ROSTER_STAGE_ORDER,
@@ -987,5 +990,187 @@ describe('facetHeading (IA-11 / IA-12)', () => {
 describe('the empty facet sentence', () => {
   it('is a sentence, not an empty list', () => {
     expect(NOTHING_NEEDS_YOU).toBe('Nothing needs your hand today.');
+  });
+});
+
+describe('D6 · custodyWord — whose hand, in words', () => {
+  it('says Your pen for the studio’s own need', () => {
+    expect(custodyWord(need({ owner: 'designer' }), row('a', 'project'))).toBe(
+      'Your pen',
+    );
+  });
+
+  it('defaults to Your pen when the rule stated no owner at all', () => {
+    expect(custodyWord(need({ owner: undefined }), row('a', 'project'))).toBe(
+      'Your pen',
+    );
+    expect(custodyWord(need({ owner: null }), row('a', 'project'))).toBe(
+      'Your pen',
+    );
+  });
+
+  it('names the client by first name where the row carries one', () => {
+    const r = row('a', 'project', { client_name: 'Nora Ellison' });
+    expect(custodyWord(need({ owner: 'client' }), r)).toBe('With Nora');
+  });
+
+  it('falls back to With the client where the name is a placeholder', () => {
+    // `clientOf` refuses the seed's `Client User` as a family name, and so
+    // does this — a role noun never stands in for a name we do not have.
+    const r = row('a', 'project', { client_name: 'Client User' });
+    expect(custodyWord(need({ owner: 'client' }), r)).toBe('With the client');
+  });
+
+  it('falls back to With the client where the row carries no name', () => {
+    const r = row('a', 'project', { client_name: null });
+    expect(custodyWord(need({ owner: 'client' }), r)).toBe('With the client');
+  });
+
+  it('says With the maker for a vendor-owned need', () => {
+    expect(custodyWord(need({ owner: 'maker' }), row('a', 'project'))).toBe(
+      'With the maker',
+    );
+  });
+
+  it('says At rest where there is no need at all', () => {
+    expect(custodyWord(null, row('a', 'project'))).toBe('At rest');
+  });
+});
+
+describe('D6 · deriveDeskRoster writes custody onto every line', () => {
+  it('carries the word and the owner on the line itself', () => {
+    const claimed = row('claimed', 'project', { client_name: 'Nora Ellison' });
+    const quiet = row('quiet', 'project');
+    const roster = deriveDeskRoster(
+      input({
+        live: [claimed, quiet],
+        folders: [folder(claimed, need({ owner: 'client' }))],
+      }),
+      NOW,
+    );
+    const lines = roster.groups[0].lines;
+
+    expect(lines.find((l) => l.engagementId === 'claimed')!.custody).toBe(
+      'With Nora',
+    );
+    expect(lines.find((l) => l.engagementId === 'claimed')!.needOwner).toBe(
+      'client',
+    );
+    expect(lines.find((l) => l.engagementId === 'quiet')!.custody).toBe('At rest');
+    expect(lines.find((l) => l.engagementId === 'quiet')!.needOwner).toBeNull();
+  });
+});
+
+describe('D8 · the ledger’s date column reads the in-motion state’s own date', () => {
+  const dated = (kind: MotionKind, over: Partial<DocumentStateRow>) =>
+    ({ row: row('m', 'project', over), kind, text: 'x' }) as unknown as MotionChip;
+
+  // Controller ruling (Task 3): with_client reads proposal_sent_at ONLY, never
+  // proposal_last_opened_at — the chip's own prose already reads "With client
+  // since <sent date>", and the value column must print the same date the
+  // sentence names.
+  it('reads the send date for a proposal with the client, even once opened', () => {
+    expect(
+      motionAnchorDate(
+        dated('with_client', {
+          proposal_sent_at: '2026-08-04T00:00:00Z',
+          proposal_last_opened_at: '2026-08-12T00:00:00Z',
+        }),
+      ),
+    ).toBe('2026-08-04T00:00:00Z');
+    expect(
+      motionAnchorDate(
+        dated('with_client', { proposal_sent_at: '2026-08-04T00:00:00Z' }),
+      ),
+    ).toBe('2026-08-04T00:00:00Z');
+  });
+
+  it('reads the send date for a sent, unopened proposal', () => {
+    expect(
+      motionAnchorDate(
+        dated('sent_unopened', { proposal_sent_at: '2026-08-04T00:00:00Z' }),
+      ),
+    ).toBe('2026-08-04T00:00:00Z');
+  });
+
+  it('reads the last touch for a cold draft, falling back to updated_at', () => {
+    expect(
+      motionAnchorDate(
+        dated('drafting', { proposal_updated_at: '2026-08-06T00:00:00Z' }),
+      ),
+    ).toBe('2026-08-06T00:00:00Z');
+    expect(
+      motionAnchorDate(
+        dated('drafting', {
+          proposal_updated_at: null,
+          updated_at: '2026-08-02T00:00:00Z',
+        }),
+      ),
+    ).toBe('2026-08-02T00:00:00Z');
+  });
+
+  it.each([
+    'paused',
+    'in_discovery',
+    'in_flight',
+    'drift',
+    'schedule_position',
+    'discovery_scheduled',
+    'slots_stale',
+    'intro_nudge',
+    'intro_sent',
+  ] as const)('states no date for %s', (kind) => {
+    expect(motionAnchorDate(dated(kind, {}))).toBeNull();
+  });
+
+  it('states no date with no chip at all', () => {
+    expect(motionAnchorDate(null)).toBeNull();
+  });
+});
+
+describe('D8 · deriveDeskRoster writes the value and the motion sentence', () => {
+  it('prefers the need’s own date, in the surface’s one date style', () => {
+    const dated = row('dated', 'project');
+    const roster = deriveDeskRoster(
+      input({ live: [dated], folders: [folder(dated, need({ dueOn: '2026-08-12' }))] }),
+      NOW,
+    );
+
+    // dayMonth's own idiom is the long month name ("11 September" —
+    // dates.ts / dates.test.ts), not the three-letter abbreviation.
+    expect(roster.groups[0].lines[0].valueText).toBe('12 August');
+  });
+
+  it('falls to the in-motion date, and carries the chip’s own sentence', () => {
+    // Noon UTC, matching this file's own NOW convention — a midnight-UTC
+    // timestamp reads back a day early once `dayMonth` formats it in a
+    // negative-offset local timezone (the exact trap desk-derivation.ts's
+    // `fmtDay` comment names).
+    const moving = row('moving', 'project', {
+      proposal_sent_at: '2026-08-04T12:00:00Z',
+    });
+    const roster = deriveDeskRoster(
+      input({
+        live: [moving],
+        chips: [
+          {
+            row: moving,
+            kind: 'with_client',
+            text: 'With client since 4 Aug',
+          } as unknown as MotionChip,
+        ],
+      }),
+      NOW,
+    );
+
+    expect(roster.groups[0].lines[0].valueText).toBe('4 August');
+    expect(roster.groups[0].lines[0].motionText).toBe('With client since 4 Aug');
+  });
+
+  it('leaves the cell empty for a job that is neither needed nor moving', () => {
+    const roster = deriveDeskRoster(input({ live: [row('still', 'project')] }), NOW);
+
+    expect(roster.groups[0].lines[0].valueText).toBeNull();
+    expect(roster.groups[0].lines[0].motionText).toBeNull();
   });
 });

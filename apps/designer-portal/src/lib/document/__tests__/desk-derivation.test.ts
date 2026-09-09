@@ -10,13 +10,50 @@ import {
   deriveMotion,
   partitionDesk,
   deriveReconnectNeeds,
+  NEED_ACTION_LABELS,
   type DocumentStateRow,
   type NurtureLike,
   type DeskCeremonySignal,
+  type NeedKind,
 } from '../desk-derivation';
 import type { DeskScheduleInput } from '../desk-schedule';
 
 const NOW = new Date('2026-06-11T12:00:00Z');
+
+/** D6 — every need kind states whose hand it is in. Ten carried nothing, and
+ *  a card would have had to guess at render, which the ruling forbids. */
+const OWNER_BY_KIND: Record<NeedKind, 'designer' | 'client' | 'maker'> = {
+  overdue_decision: 'client',
+  overdue_invoice: 'client',
+  proposal_signed: 'designer',
+  damage_claim: 'designer',
+  proposal_declined: 'designer',
+  proposal_expired: 'designer',
+  lines_flagged: 'designer',
+  new_lead: 'designer',
+  ceremony_pending: 'designer',
+  reconnect_due: 'designer',
+  hesitating_proposal: 'client',
+  awaiting_inspection: 'designer',
+  schedule_conflict: 'designer',
+  schedule_proposal: 'designer',
+  task_due: 'designer',
+  schedule_unconfigured: 'designer',
+  po_unsent: 'designer',
+  po_unacknowledged: 'maker',
+  pulse_due: 'designer',
+};
+
+describe('D6 · the owner table covers every kind that exists', () => {
+  it('names exactly the kinds the action-label table knows', () => {
+    // A NeedKind added later without an owner fails here rather than shipping
+    // a card that guesses. This is a coverage guard, NOT the owner assertion —
+    // the assertions that matter drive the real rules, below.
+    expect(Object.keys(OWNER_BY_KIND).sort()).toEqual(
+      Object.keys(NEED_ACTION_LABELS).sort(),
+    );
+  });
+});
 
 const daysAgo = (n: number) => new Date(NOW.getTime() - n * 86_400_000).toISOString();
 const daysAhead = (n: number) => new Date(NOW.getTime() + n * 86_400_000).toISOString();
@@ -103,6 +140,7 @@ describe('deriveNeed', () => {
     expect(need!.text).toBe('AP-012 has an open damage claim');
     expect(need!.stamp.label).toBe('CLAIM OPEN');
     expect(need!.urgent).toBe(false);
+    expect(need!.owner).toBe('designer');
   });
 
   it('open damage claims without a PO identifier still surface, pluralized', () => {
@@ -152,6 +190,7 @@ describe('deriveNeed', () => {
     expect(need!.stamp.label).toBe('DELIVERED');
     expect(need!.text).toMatch(/2 .*awaiting inspection/i);
     expect(need!.urgent).toBe(false);
+    expect(need!.owner).toBe('designer');
   });
 
   it('new lead with a comfortable deadline → need, not urgent', () => {
@@ -381,6 +420,24 @@ describe('deriveNeed', () => {
     );
     expect(need!.kind).toBe('proposal_declined');
     expect(need!.stamp.label).toBe('DECLINED');
+    expect(need!.owner).toBe('designer');
+  });
+
+  // D6 — no existing test in this file exercised the expired branch; written
+  // in the style of the declined test directly above it.
+  it('expired proposal → need with EXPIRED stamp', () => {
+    const need = deriveNeed(
+      mkRow({
+        engagement_kind: 'proposal',
+        active_section: 'proposal',
+        project_id: null,
+        proposal_status: 'expired',
+      }),
+      NOW,
+    );
+    expect(need!.kind).toBe('proposal_expired');
+    expect(need!.stamp.label).toBe('EXPIRED');
+    expect(need!.owner).toBe('designer');
   });
 
   it('paused project never needs a hand, even with overdue decisions', () => {
@@ -788,6 +845,7 @@ describe('deriveNeed — lines_flagged (C4)', () => {
     expect(need!.stamp.label).toBe('FLAGGED');
     expect(need!.stamp.color).toBe('var(--color-clay)');
     expect(need!.urgent).toBe(false);
+    expect(need!.owner).toBe('designer');
   });
 
   it('singularizes a single flagged line', () => {

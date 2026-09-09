@@ -499,7 +499,13 @@ const daysBetween = (earlierIso: string, now: Date) =>
 // R106 — the Arrival Arc's small text helpers. Kept local (not folder-tab's
 // last-name convention): the parked card's copy is first-name, conversational
 // ("Introduce yourself to Elena").
-function firstName(name: string | null | undefined, fallback = 'them'): string {
+// D6: also the custody word's first name — "With Nora". The roster's own
+// module reads it from here rather than growing a second copy that could
+// drift from the parked card's copy.
+export function firstName(
+  name: string | null | undefined,
+  fallback = 'them',
+): string {
   const first = (name ?? '').trim().split(/\s+/)[0];
   return first || fallback;
 }
@@ -655,6 +661,7 @@ const needProposal: NeedRule = ({ row, now, flagged }) => {
         actionLabel: NEED_ACTION_LABELS.proposal_declined,
         stamp: { label: 'DECLINED', ...STAMP.terracotta },
         urgent: false,
+        owner: 'designer',
       });
     }
     if (row.proposal_status === 'expired') {
@@ -664,6 +671,7 @@ const needProposal: NeedRule = ({ row, now, flagged }) => {
         actionLabel: NEED_ACTION_LABELS.proposal_expired,
         stamp: { label: 'EXPIRED', ...STAMP.terracotta },
         urgent: false,
+        owner: 'designer',
       });
     }
     // C4: the client has flagged lines on a still-live proposal — a concrete
@@ -682,6 +690,7 @@ const needProposal: NeedRule = ({ row, now, flagged }) => {
         actionLabel: NEED_ACTION_LABELS.lines_flagged,
         stamp: { label: 'FLAGGED', ...STAMP.clay },
         urgent: false,
+        owner: 'designer',
         deepLink: `/drafting/${flagged.proposalId}?flagged=1`,
       });
     }
@@ -824,6 +833,7 @@ const needDamageClaim: NeedRule = ({ row }) => {
       actionLabel: NEED_ACTION_LABELS.damage_claim,
       stamp: { label: 'CLAIM OPEN', ...STAMP.terracotta, tone: 'damaged' },
       urgent: false,
+      owner: 'designer',
     };
   }
   return null;
@@ -841,6 +851,7 @@ const needAwaitingInspection: NeedRule = ({ row }) => {
       actionLabel: NEED_ACTION_LABELS.awaiting_inspection,
       stamp: { label: 'DELIVERED', ...STAMP.sage },
       urgent: false,
+      owner: 'designer',
     };
   }
   return null;
@@ -857,6 +868,7 @@ const needScheduleCollision: NeedRule = ({ conflict }) => {
       actionLabel: NEED_ACTION_LABELS.schedule_conflict,
       stamp: { label: conflict.collision.label, ...STAMP.terracotta },
       urgent: false,
+      owner: 'designer',
     };
   }
   return null;
@@ -876,6 +888,7 @@ const needScheduleContradiction: NeedRule = ({ schedule }) => {
       actionLabel: NEED_ACTION_LABELS.schedule_conflict,
       stamp: { label: 'SCHEDULE', ...STAMP.terracotta },
       urgent: false,
+      owner: 'designer',
     };
   }
   return null;
@@ -891,6 +904,7 @@ const needScheduleProposalConflict: NeedRule = ({ schedule }) => {
       actionLabel: NEED_ACTION_LABELS.schedule_conflict,
       stamp: { label: 'SCHEDULE', ...STAMP.terracotta },
       urgent: false,
+      owner: 'designer',
     };
   }
   return null;
@@ -909,6 +923,7 @@ const needScheduleProposal: NeedRule = ({ schedule }) => {
       actionLabel: NEED_ACTION_LABELS.schedule_proposal,
       stamp: { label: 'PROPOSED', ...STAMP.clay },
       urgent: false,
+      owner: 'designer',
     };
   }
   return null;
@@ -953,6 +968,7 @@ const needScheduleUnconfigured: NeedRule = ({ row, schedule }) => {
       actionLabel: NEED_ACTION_LABELS.schedule_unconfigured,
       stamp: { label: 'BAND', ...STAMP.clay },
       urgent: false,
+      owner: 'designer',
     };
   }
   return null;
