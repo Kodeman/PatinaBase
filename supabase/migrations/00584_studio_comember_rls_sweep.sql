@@ -108,8 +108,9 @@
 --     field-media and proposal-assets is touched.
 --
 -- No GRANT/REVOKE (policies only) → no seed/00-legacy-grants.sql regeneration.
--- No schema change (no table, column, type, enum or function) → no
--- `pnpm db:generate`; packages/supabase/src/database.types.ts is unaffected.
+-- Policies plus ONE index (idx_field_captures_primary_photo_path, item 6's
+-- predicate). No table, column, type, enum or function → no `pnpm db:generate`;
+-- packages/supabase/src/database.types.ts is unaffected.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 
