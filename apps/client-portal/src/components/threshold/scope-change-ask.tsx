@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 
+import { formatCurrency } from "@patina/shared";
 import {
   useApproveScopeChange,
   useCancelClientScopeChangeRequest,
@@ -22,7 +23,6 @@ import {
 import {
   countInWords,
   joinClauses,
-  moneyInWords,
 } from "@/components/threshold/instruments/standing-sentence";
 import { useAuth } from "@/hooks/use-auth";
 import { DAY_MONTH_FORMAT as DAY_MONTH } from "@/lib/threshold/dates";
@@ -106,7 +106,7 @@ function parseNewRooms(value: ScopeChangeRow["new_rooms"]): Array<{ name: string
 }
 
 function signedClause(cents: number, label: string): string {
-  const amount = moneyInWords(Math.abs(cents));
+  const amount = formatCurrency(Math.abs(cents));
   return cents > 0 ? `${amount} additional ${label}` : `${amount} less ${label}`;
 }
 
@@ -136,7 +136,7 @@ function impactLine(row: ScopeChangeRow): string | null {
   if (weeks !== 0) clauses.push(weeksClause(weeks));
 
   const total = row.new_total_budget_cents ?? 0;
-  const totalSentence = total !== 0 ? ` New project value: ${moneyInWords(total)}.` : "";
+  const totalSentence = total !== 0 ? ` New project value: ${formatCurrency(total)}.` : "";
   const clauseSentence = clauses.length > 0 ? `${joinClauses(clauses)}.` : "";
 
   if (!clauseSentence && !totalSentence) return null;
@@ -422,7 +422,7 @@ function NewRooms({ rooms }: { rooms: Array<{ name: string; budgetCents: number 
             data-testid="scope-change-new-room"
             className="text-[15px] leading-relaxed text-[var(--text-body)]"
           >
-            {`${room.name} · ${moneyInWords(room.budgetCents)}`}
+            {`${room.name} · ${formatCurrency(room.budgetCents)}`}
           </li>
         ))}
       </ul>

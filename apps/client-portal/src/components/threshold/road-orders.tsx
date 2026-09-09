@@ -2,11 +2,11 @@
 
 import { useEffect, useRef, useState } from 'react';
 
+import { formatCurrency } from '@patina/shared';
 import { useStartDirectOrderCheckout } from '@patina/supabase';
 
 import { GOODS_JOURNEY_STAGES } from '@/components/commercial/journey-stepper';
 import { ScoredAction } from '@/components/threshold/instruments/scored-action';
-import { moneyInWords } from '@/components/threshold/instruments/standing-sentence';
 import {
   revealReturnAnchor,
   useCheckoutConfirmation,
@@ -123,7 +123,7 @@ export function RoadOrders({ orders, closed = [], onRefetch, today }: RoadOrders
                   order.houseless ? 'bought direct, not tied to this house' : 'bought direct'
                 }${order.inFlight ? ' · bank transfer pending' : ''}${
                   order.quantity > 1 ? ` · ${order.quantity} of them` : ''
-                } · ${moneyInWords(order.amountCents, order.currency)}`}
+                } · ${formatCurrency(order.amountCents, order.currency)}`}
               </span>
             </div>
 
@@ -161,7 +161,7 @@ export function RoadOrders({ orders, closed = [], onRefetch, today }: RoadOrders
                 >
                   {`${order.name} · ${order.word}${
                     order.houseless ? ' · bought direct, not tied to this house' : ''
-                  }${raised ? ` · bought ${raised}` : ''} · ${moneyInWords(
+                  }${raised ? ` · bought ${raised}` : ''} · ${formatCurrency(
                     order.amountCents,
                     order.currency,
                   )}`}
