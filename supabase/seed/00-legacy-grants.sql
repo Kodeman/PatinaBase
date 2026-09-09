@@ -15491,3 +15491,15 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.get_client_project_threshold(uuid) TO authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00581_client_invite_letter.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.client_invitation_status(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00581_client_invite_letter.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.client_invitation_status(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;

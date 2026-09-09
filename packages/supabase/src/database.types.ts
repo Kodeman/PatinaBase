@@ -2496,40 +2496,100 @@ export type Database = {
           accepted_at: string | null
           accepted_by: string | null
           created_at: string
+          designer_client_id: string | null
+          designer_full_name: string | null
+          designer_given_name: string | null
           designer_id: string
           email: string
+          email_log_id: string | null
           expires_at: string
           id: string
+          kind: string
+          last_sent_at: string | null
           personal_message: string | null
           project_id: string | null
+          project_name: string | null
+          provider_idempotency_key: string | null
+          recipient_name: string | null
+          rendered_standing_sentence: string | null
+          rendered_subject: string | null
+          resend_count: number
+          revoked_at: string | null
+          sender_display_name: string | null
           sent_at: string
+          signature_city: string | null
+          signer_id: string | null
+          studio_logo_url: string | null
+          studio_name: string | null
+          superseded_by: string | null
           token: string
+          writer_id: string | null
         }
         Insert: {
           accepted_at?: string | null
           accepted_by?: string | null
           created_at?: string
+          designer_client_id?: string | null
+          designer_full_name?: string | null
+          designer_given_name?: string | null
           designer_id: string
           email: string
+          email_log_id?: string | null
           expires_at?: string
           id?: string
+          kind?: string
+          last_sent_at?: string | null
           personal_message?: string | null
           project_id?: string | null
+          project_name?: string | null
+          provider_idempotency_key?: string | null
+          recipient_name?: string | null
+          rendered_standing_sentence?: string | null
+          rendered_subject?: string | null
+          resend_count?: number
+          revoked_at?: string | null
+          sender_display_name?: string | null
           sent_at?: string
+          signature_city?: string | null
+          signer_id?: string | null
+          studio_logo_url?: string | null
+          studio_name?: string | null
+          superseded_by?: string | null
           token: string
+          writer_id?: string | null
         }
         Update: {
           accepted_at?: string | null
           accepted_by?: string | null
           created_at?: string
+          designer_client_id?: string | null
+          designer_full_name?: string | null
+          designer_given_name?: string | null
           designer_id?: string
           email?: string
+          email_log_id?: string | null
           expires_at?: string
           id?: string
+          kind?: string
+          last_sent_at?: string | null
           personal_message?: string | null
           project_id?: string | null
+          project_name?: string | null
+          provider_idempotency_key?: string | null
+          recipient_name?: string | null
+          rendered_standing_sentence?: string | null
+          rendered_subject?: string | null
+          resend_count?: number
+          revoked_at?: string | null
+          sender_display_name?: string | null
           sent_at?: string
+          signature_city?: string | null
+          signer_id?: string | null
+          studio_logo_url?: string | null
+          studio_name?: string | null
+          superseded_by?: string | null
           token?: string
+          writer_id?: string | null
         }
         Relationships: [
           {
@@ -2544,6 +2604,13 @@ export type Database = {
             columns: ["accepted_by"]
             isOneToOne: false
             referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_invitations_designer_client_id_fkey"
+            columns: ["designer_client_id"]
+            isOneToOne: false
+            referencedRelation: "designer_clients"
             referencedColumns: ["id"]
           },
           {
@@ -2572,6 +2639,41 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_invitations_signer_id_fkey"
+            columns: ["signer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_invitations_signer_id_fkey"
+            columns: ["signer_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_invitations_superseded_by_fkey"
+            columns: ["superseded_by"]
+            isOneToOne: false
+            referencedRelation: "client_invitations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_invitations_writer_id_fkey"
+            columns: ["writer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_invitations_writer_id_fkey"
+            columns: ["writer_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
             referencedColumns: ["id"]
           },
         ]
@@ -15828,6 +15930,7 @@ export type Database = {
       project_notes: {
         Row: {
           answered_at: string | null
+          author_byline: string | null
           author_id: string
           body: string
           created_at: string
@@ -15841,6 +15944,7 @@ export type Database = {
         }
         Insert: {
           answered_at?: string | null
+          author_byline?: string | null
           author_id: string
           body: string
           created_at?: string
@@ -15854,6 +15958,7 @@ export type Database = {
         }
         Update: {
           answered_at?: string | null
+          author_byline?: string | null
           author_id?: string
           body?: string
           created_at?: string
@@ -31614,6 +31719,14 @@ export type Database = {
         Returns: Json
       }
       claim_quiz_session: { Args: { p_session_key: string }; Returns: Json }
+      client_invitation_status: {
+        Args: { p_designer_client_id: string }
+        Returns: {
+          at: string
+          invitation_id: string
+          state: string
+        }[]
+      }
       client_pick: {
         Args: { p_ceremony_id: string; p_slot_id: string }
         Returns: Json
