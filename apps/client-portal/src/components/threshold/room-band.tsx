@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 
+import { formatCurrency } from '@patina/shared';
 import { ROOM_RENDERS_BUCKET, createBrowserClient } from '@patina/supabase';
 
 import {
@@ -12,7 +13,6 @@ import {
 import {
   countInWords,
   joinClauses,
-  moneyInWords,
 } from '@/components/threshold/instruments/standing-sentence';
 import { TrackingRow } from '@/components/threshold/instruments/tracking-row';
 import {
@@ -399,12 +399,12 @@ function lintelLedger(band: RoomBandModel): string | null {
   const parts: string[] = [];
   if (band.agreedCents > 0 && band.targetCents !== null) {
     parts.push(
-      `${moneyInWords(band.agreedCents)} agreed against ${moneyInWords(
+      `${formatCurrency(band.agreedCents)} agreed against ${formatCurrency(
         band.targetCents,
       )} planned${band.varianceLine ? ` — ${band.varianceLine}` : ''}`,
     );
   } else if (band.agreedCents > 0) {
-    parts.push(`${moneyInWords(band.agreedCents)} agreed`);
+    parts.push(`${formatCurrency(band.agreedCents)} agreed`);
   }
   if (band.pieces.length > 0) {
     parts.push(
@@ -495,7 +495,7 @@ function PieceRecord({ piece }: { piece: ClientSelection }) {
       <p>
         {piece.name}
         {piece.clientLineTotalCents > 0
-          ? ` · ${moneyInWords(piece.clientLineTotalCents)}`
+          ? ` · ${formatCurrency(piece.clientLineTotalCents)}`
           : ''}
         {piece.quantity > 1 ? ` · ${countInWords(piece.quantity)} of them` : ''}
       </p>

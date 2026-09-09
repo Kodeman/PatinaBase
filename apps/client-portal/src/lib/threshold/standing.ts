@@ -3,10 +3,18 @@
    Threshold asks a narrower question — what is closed, and until when — so it
    speaks in doors and walls rather than in papers and scopes.
 
-   The cardinality rules, the money format and the clause joins are NOT
-   restated here: they come from making/standing-sentence.ts, which is shared
-   and string-pinned by its own tests. This module is the house's vocabulary
-   laid over that grammar, and nothing else. ────────────────────────────── */
+   The cardinality rules and the clause joins are NOT restated here: they come
+   from making/standing-sentence.ts, which is shared and string-pinned by its
+   own tests. This module is the house's vocabulary laid over that grammar, and
+   nothing else.
+
+   Money is the one exception. The doorstep sentence prints on the house page,
+   where §F-B gives every figure its cents, so the balance clause spells
+   through `formatCurrency`. `moneyInWords` stays for the variance line alone,
+   which is deliberately approximate at hundreds granularity and would read as
+   a false precision with cents on it. ─────────────────────────────────────── */
+
+import { formatCurrency } from '@patina/shared';
 
 import { countInWords, joinClauses, moneyInWords } from '@/components/threshold/instruments/standing-sentence';
 
@@ -86,7 +94,7 @@ export function thresholdStanding(m: ThresholdStandingInput): string {
 
   const sentences = ['Nothing waits for your name.'];
   if (Number.isFinite(m.balanceCents) && m.balanceCents > 0) {
-    sentences.push(`A balance of ${moneyInWords(m.balanceCents)} stands open.`);
+    sentences.push(`A balance of ${formatCurrency(m.balanceCents)} stands open.`);
   }
   const credenza = m.credenzaLine?.trim();
   if (credenza) sentences.push(credenza);

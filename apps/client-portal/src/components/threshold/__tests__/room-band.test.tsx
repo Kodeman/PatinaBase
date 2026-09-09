@@ -140,7 +140,7 @@ describe('RoomBand', () => {
 
     const lintel = screen.getByTestId('room-band-lintel');
     expect(lintel).toHaveTextContent(
-      '$24,900 agreed against $23,800 planned — about eleven hundred past its target',
+      '$24,900.00 agreed against $23,800.00 planned — about eleven hundred past its target',
     );
     expect(lintel).toHaveTextContent('two pieces');
     expect(lintel).toHaveTextContent('one door waits on your name');
@@ -155,7 +155,7 @@ describe('RoomBand', () => {
     );
 
     const ledger = screen.getByTestId('room-band-ledger');
-    expect(ledger).toHaveTextContent('$24,900 agreed');
+    expect(ledger).toHaveTextContent('$24,900.00 agreed');
     expect(ledger).not.toHaveTextContent('planned');
   });
 
@@ -309,7 +309,7 @@ describe('RoomBand', () => {
 
     expect(lift).toHaveAttribute('aria-expanded', 'true');
     const record = screen.getByTestId('room-band-record');
-    expect(record).toHaveTextContent('$2,340');
+    expect(record).toHaveTextContent('$2,340.00');
 
     const journey = within(record).getByTestId('threshold-journey');
     const stops = within(journey).getAllByRole('listitem');
