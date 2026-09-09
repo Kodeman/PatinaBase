@@ -1,0 +1,17 @@
+{
+  "img": {
+    "src": "http://127.0.0.1:54321/storage/v1/object/sign/room-renders/b0000000-0000-0000-0000-0000000000d1/b0000000-0000-0000-0000-0000000d2c0b/plate-probe.png?token=eyJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJyb29tLXJlbmRlcnMvYjAwMDAwMDAtMDAwMC0wMDAwLTAwMDAtMDAwMDAwMDAwMGQxL2IwMDAwMDAwLTAwMDAtMDAwMC0wMDAwLTAwMDAwMDBkMmMwYi9wbGF0ZS1wcm9iZS5wbmciLCJzY29wZSI6ImRvd25sb2FkIiwiaWF0IjoxNzg4OTI0NTg5LCJleHAiOjE3ODg5MjgxODl9.cTj5OG21tQebhz4ZhTOIdpPBJqbaC2Itpsvy8WbB4Xg",
+    "complete": true,
+    "naturalWidth": 0,
+    "naturalHeight": 0
+  },
+  "fetchStatus": {
+    "status": 200,
+    "type": "image/png",
+    "bytes": 510
+  },
+  "requestFailures": [
+    "http://127.0.0.1:54321/storage/v1/object/public/product-images/a0000000-0000-0000-0000-000000000001/1a666c28-9477-52b9-86ed-a09a6fd7eebb/e5e50860-93ba-55c9-a23f :: csp",
+    "http://127.0.0.1:54321/storage/v1/object/sign/room-renders/b0000000-0000-0000-0000-0000000000d1/b0000000-0000-0000-0000-0000000d2c0b/plate-probe.png?token=eyJhb :: csp"
+  ]
+}
