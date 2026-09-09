@@ -24,8 +24,10 @@ the three Google Fonts families named below.
 
 ## A1. Tokens
 
-Paste this block verbatim. Do not add tokens. Do not use a hex literal
-anywhere else in the file.
+Paste this block verbatim. Do not add tokens — with the single exception
+recorded as R144 (`--color-card-edge`, below), which was ruled into the
+sheet rather than added to a surface. Do not use a hex literal anywhere
+else in the file.
 
 ```css
 :root {
@@ -49,6 +51,10 @@ anywhere else in the file.
 
   /* — the rest rule pigment (4.20:1 on paper) — */
   --oak:              #8B7355;
+
+  /* — the one boundary grey (R144). A component boundary answers to 1.4.11's
+       3:1, which no hairline reaches. Claim cards ONLY. — */
+  --card-edge:        #8F8C88;  /* 3.21:1 on paper-doc · 3.13:1 on paper */
 
   /* — state pigments: material value / paper ink — */
   --clay:             #C4A57B;   --clay-ink:      #7C5E30;
@@ -93,6 +99,7 @@ anywhere else in the file.
     --hairline:        rgba(242, 237, 230, .14);
     --hairline-strong: rgba(242, 237, 230, .22);
     --oak:             #B39572;
+    --card-edge:       #77736E;  /* 3.19:1 on the dark ground */
     --clay-ink:        #D8B98A;
     --golden-ink:      #E0C963;
     --terracotta-ink:  #E2A895;

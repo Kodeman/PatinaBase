@@ -10846,3 +10846,95 @@ The sheet also carries the exact CSS for R139's four action tiers (§A5), the co
 Never re-edited by a build lane: a lane that needs the sheet changed reports it and it is amended here, in the open, the way R126 and I107 were.
 
 *Entries add: I153 · last id = I153*
+
+### R143 · The Desk is a hybrid — a claim takes a card, a quiet job takes a line — 2026-09-09
+
+**Ruled by Kody, 2026-09-09** (**D1**, **D2**, **D5**, **R5**; against the panel proposal
+*Three Cards for the Desk*, `artifacts/desk-cards-2026-09-09/three-cards-for-the-desk.html`). This
+**amends I150** (`Wave B2 — the ticket everywhere, and the Desk roster`, 2026-08-26), which ruled the
+four-up folio grid into one stage-grouped roster, *one line per live job … never a card*.
+
+The amended rule, in full: **one line per job in the at-rest ledger; a job with a claim on the studio's
+hand takes a Claim card.** The predicate is the one the roster already computes — `mark !== null` in
+`desk-roster-derivation.ts`, which is every job carrying a need, urgent or quiet. In-motion chips and
+quiet jobs stay lines. Nothing folds on first paint; the headings still never fold; the ledger half is
+still grouped under the seven stage plates in the paper's own order.
+
+What did **not** change, and why the amendment is narrow rather than a reversal: the density rule that
+made I150 right is still the rule for the body of the list. At 16 jobs the Desk is about five cards over
+eleven rows; at 45, about six over thirty-nine. The card is the *emphasis* granted to a job with a claim,
+not a container granted to every job — fifteen equal cards was the shape I150 correctly refused, and this
+ruling does not bring it back. Two things the row could not give are what buy the card: a need sentence
+that wants two lines, and a name that wants an honest 44px target (the roster's name link was the Desk's
+one sub-44px hit area).
+
+**One rendering, not a third facet** (**D2**). No view switcher — a switcher is one step from the dashboard
+the vision refuses. The two facets stand and now compose over both halves: *Only what needs me* hides the
+ledger entirely (the cards already are what needs her); *By person* regroups **both** halves by assigned
+designer. Labels never change with state; `aria-pressed` carries it (IX18).
+
+**The Desk ranks, and prints its reason** (**D3**). Cards are ordered by custody band — the studio's own pen
+and overdue, then the studio's own pen, then with the client, then with the maker — oldest need date first
+within a band, ties broken on **name**, never on a UUID. This inverts the shipped stage-first sort for the
+card half only; the ledger half keeps stage-first. Ranking is a real claim on a surface that promises the
+studio won't notice Patina, so the reason is printed plainly on the card ("overdue since 4 Sep") — a wrong
+rank has to be legible and correctable, never mysterious.
+
+**Custody is stated, never inferred at render** (**D6**). Ten need kinds carried no `owner` — `damage_claim`,
+`proposal_declined`, `proposal_expired`, `lines_flagged`, `awaiting_inspection`, `schedule_conflict` (all
+three branches), `schedule_proposal`, `schedule_unconfigured`. All ten are filled as `'designer'` in the
+need table itself, which is where the rule that derived the need already knows the answer. The word on the
+card is one of four: `Your pen` · `With {first name}` (or `With the client` where the row carries no name
+we will print) · `With the maker` · `At rest`.
+
+**The day's line quotes the grid** (**D7**). Up to three lines, each naming one of the top three cards in
+rank order, plus the answered-client note as a fourth when one landed inside 24 hours. Before this the line
+selected by its own rule while the roster ordered by another — tolerable under stage plates, incoherent in
+a grid where position *is* the message.
+
+**The hit model** (**D10**). The link is scoped to the card's upper block — custody, name, person·phase, at
+least 88px — as an absolutely-positioned overlay belonging to the name link, so the whole block is one
+target. The act is a separate full-width 44px band below. Two clean targets per card, name then act, DOM
+order, no nesting, no roving tabindex.
+
+**The trade-off inside that ruling, taken deliberately.** The upper block **is** the link zone: the custody
+row and the person·phase line take `pointer-events: none` so a click anywhere in the block — including on
+those two lines — activates the name link. They are consequently **not selectable**. That is the cost, and
+it is paid knowingly: an 88px target that is only really 24px of it is the sub-44px defect the card exists
+to fix, and a block that looks clickable but swallows the click in its top-left corner is worse than a
+small honest link. What is preserved is the thing designers actually copy — **the need sentence below the
+block stays fully selectable**, as does every word in the at-rest ledger row, where the name link is an
+ordinary inline link and nothing overlays anything. The client's name also still stands, selectable, in
+the ledger half. Raising the two lines with `z-index` instead was rejected: it makes the middle of a
+supposedly-single target dead, which is the failure mode a user cannot see or explain.
+
+*Entries add: R143 · last id = R143*
+
+### R144 · One new token, and one only — the card edge — 2026-09-09
+
+**Ruled by Kody, 2026-09-09** (**D4**, **D4a**, **R5**; the accessibility critic's finding F1). This **amends
+the "no new token" rule** recorded in **I153** (`The house sheet has a home`, 2026-09-08), whose §A1 reads
+*"Do not add tokens."*
+
+A card is a component boundary where a row is not, so WCAG 1.4.11's 3:1 attaches to its edge. Measured on
+the shipped palette, nothing reaches it: `--hairline` on paper **1.20:1**, `--hairline-strong` composited
+**1.30:1**, `--doc-paper` on `--paper` **1.025:1**. D4's zero-shadow rule forbids the elevation that would
+otherwise carry the boundary, and `--elevation-sheet` is R126's, scoped to margin chips, the ledger sheet
+and the drawer — not spendable here. The exception is therefore granted, once and narrowly:
+
+**One boundary grey. `#8F8C88` — 3.21:1 on `--doc-paper`, 3.13:1 on `--color-off-white`.** Named
+`--card-edge` in `docs/design/house-sheet/SPEC.md` (following that file's convention) and
+`--color-card-edge` in `apps/designer-portal/src/app/globals.css` (following that file's `--color-*`
+convention). The two names are deliberate, not drift.
+
+**Claim cards only** (**D4a**). The at-rest ledger rows keep the existing hairline — they are rows, and a row
+is not a component boundary. Nothing else in either portal spends this token. It is an edge and never a
+word: it is not an `-ink` companion, it clears no text floor, and no letter is ever set in it.
+
+The dark companion is **`#77736E`** (3.19:1 on the sheet's `--paper #2A2622`), recorded in the house sheet's
+`@media (prefers-color-scheme: dark)` block. It is deliberately **not** written into the designer portal's
+`globals.css`: that file declares no `prefers-color-scheme` block and its `.dark` class redefines none of
+the paper, ink or hairline tokens, so a dark value there would be dead code claiming a dark surface the
+portal does not paint.
+
+*Entries add: R144 · last id = R144*

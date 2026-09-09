@@ -711,3 +711,41 @@ describe('F56 · the base pigments are not spent as text', () => {
     expect(inkless).toEqual([]);
   });
 });
+
+/**
+ * D4 — the one boundary grey.
+ *
+ * A card is a component boundary where a row is not, so WCAG 1.4.11's 3:1
+ * attaches to it. Nothing in the palette reached it — hairline 1.20:1,
+ * hairline-strong 1.30:1, paper-doc on paper 1.025:1 — and D4 forbids the
+ * shadow that would rescue it. R144 amends "no new token" exactly once, for
+ * this one value, on Claim cards only.
+ */
+describe('D4 · --color-card-edge is the one boundary grey', () => {
+  it('is declared, and at the ruled value', () => {
+    // A retune has to be a ruling, not an edit.
+    expect(tokens.get('--color-card-edge')).toBe('#8F8C88');
+  });
+
+  it('clears 3:1 on both light grounds a card is ever laid on', () => {
+    // resolveToken, not restated hexes: the whole point of this suite is that
+    // a retuned ground is measured on its REAL value. Hard-coding #FCFAF6 here
+    // would keep passing after someone changed --doc-paper.
+    const edge = resolveToken('--color-card-edge');
+    const grounds = ['--doc-paper', '--color-off-white'] as const;
+    const measured = Object.fromEntries(
+      grounds.map((ground) => [
+        `--color-card-edge on ${ground} (${resolveToken(ground)})`,
+        Number(contrastRatio(edge, resolveToken(ground)).toFixed(2)),
+      ]),
+    );
+    const failing = Object.entries(measured).filter(([, ratio]) => ratio < 3);
+    expect(failing).toEqual([]);
+  });
+
+  it('is not an ink token, so the AA text guard never claims it', () => {
+    // It is a boundary, never a word. Naming that here keeps a later rename
+    // to `--color-card-edge-ink` from silently entering the 4.5:1 suite.
+    expect('--color-card-edge'.endsWith('-ink')).toBe(false);
+  });
+});

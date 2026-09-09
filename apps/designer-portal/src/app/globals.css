@@ -46,6 +46,19 @@
   --color-terracotta: #D4A090;
   --color-golden-hour: #E8C547;
 
+  /* D4 / R144 — the one boundary grey, and the only exception to "no new
+     token". A Claim card is a component boundary where a roster row is not,
+     so WCAG 1.4.11's 3:1 attaches to it; nothing in the palette reached it
+     (hairline 1.20:1, hairline-strong 1.30:1, paper-doc on paper 1.025:1)
+     and D4 forbids the shadow that would rescue it. 3.21:1 on --doc-paper,
+     3.13:1 on --color-off-white. Claim cards ONLY (D4a) — the at-rest
+     ledger rows keep the existing hairline. Never a word, only an edge.
+     This portal paints no dark paper set (no prefers-color-scheme block
+     anywhere in this file; the .dark class carries shadcn tokens only), so
+     the dark companion #77736E is recorded in docs/design/house-sheet/SPEC.md
+     rather than written here as dead code. */
+  --color-card-edge: #8F8C88;
+
   /* — The Document (spec v1.1 §10) — paper-object surfaces. D4: depth comes
      from these values + flat stacked edges, never from shadows. */
   --doc-paper: #FCFAF6;
