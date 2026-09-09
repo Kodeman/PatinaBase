@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { render, within } from '@testing-library/react';
 import type { ClaimCard } from '@/lib/document/desk-roster-derivation';
 import { DeskClaimCard } from './desk-claim-card';
@@ -176,5 +178,85 @@ describe('DeskClaimCard — the six registers, in DOM order', () => {
       expect(el.className.toString()).not.toMatch(/\bshadow-/);
       expect(el.className.toString()).not.toMatch(/\bdrop-shadow\b/);
     }
+  });
+});
+
+/**
+ * D10 fix-round-1 — the 88px link zone was not real: `.row-wash-score` (which
+ * sets `position: relative`) rode the SAME element as `data-roster-name`, so
+ * that element — not `.desk-claim-upper` — became the containing block for
+ * the overlay's `::before`. The overlay shrank to the word's own box (~34px)
+ * while stage/custody/person stayed `pointer-events: none`, leaving most of
+ * the advertised 88px zone dead. The fix: the link itself now stays
+ * `position: static`, and `.row-wash-score` rides a NESTED span instead.
+ *
+ * jsdom does not load globals.css (desk-focus-ring.test.ts's own note), so
+ * the real coverage here is the source guards, not computed style.
+ */
+describe('D10 fix — the link zone is the upper block, not the word', () => {
+  const CSS_PATH = join(__dirname, '../../app/globals.css');
+  const TSX_PATH = join(__dirname, './desk-claim-card.tsx');
+  const css = readFileSync(CSS_PATH, 'utf8');
+  const tsx = readFileSync(TSX_PATH, 'utf8');
+
+  it('keeps the name link outside the inert wrapper', () => {
+    const { container } = render(
+      <DeskClaimCard card={card()} tone="project" settle={false} />,
+    );
+
+    expect(
+      container.querySelector('[data-roster-name]')!.closest('[data-claim-inert]'),
+    ).toBeNull();
+  });
+
+  it('(weak, jsdom-only) the rendered link carries no inline position: relative', () => {
+    // jsdom applies no stylesheet, so this only catches an inline-style
+    // regression — the source guards below are the real assertion.
+    const { container } = render(
+      <DeskClaimCard card={card()} tone="project" settle={false} />,
+    );
+    const anchor = container.querySelector('[data-roster-name]') as HTMLElement;
+
+    expect(getComputedStyle(anchor).position).not.toBe('relative');
+  });
+
+  it('globals.css: .desk-claim-upper is itself the positioned ancestor', () => {
+    const upperRule = css.match(/\.desk-claim-upper\s*\{[^}]*\}/)?.[0] ?? '';
+
+    expect(upperRule).toMatch(/position:\s*relative/);
+  });
+
+  it('globals.css: no rule ever sets [data-roster-name] to position: relative', () => {
+    // Every rule block whose selector mentions [data-roster-name] — except the
+    // ::before overlay itself, which is legitimately position: absolute.
+    const rules = css.match(/\.desk-claim-upper[^{]*\[data-roster-name\][^{]*\{[^}]*\}/g) ?? [];
+    const nonOverlayRules = rules.filter((rule) => !rule.includes('::before'));
+
+    expect(nonOverlayRules.length).toBeGreaterThan(0);
+    for (const rule of nonOverlayRules) {
+      expect(rule).not.toMatch(/position:\s*relative/);
+    }
+    // And at least one of them says so explicitly, rather than relying on the
+    // browser default.
+    expect(nonOverlayRules.some((rule) => /position:\s*static/.test(rule))).toBe(
+      true,
+    );
+  });
+
+  it('globals.css: the overlay pseudo-element is scoped under .desk-claim-upper', () => {
+    expect(css).toMatch(/\.desk-claim-upper \[data-roster-name\]::before\s*\{/);
+  });
+
+  it('desk-claim-card.tsx: .row-wash-score never lands on the element carrying data-roster-name', () => {
+    const idx = tsx.indexOf('data-roster-name');
+    expect(idx).toBeGreaterThan(-1);
+
+    const tagStart = tsx.lastIndexOf('<Link', idx);
+    const tagEnd = tsx.indexOf('>', idx);
+    expect(tagStart).toBeGreaterThan(-1);
+    expect(tagEnd).toBeGreaterThan(tagStart);
+
+    const tag = tsx.slice(tagStart, tagEnd);
+    expect(tag).not.toMatch(/row-wash-score/);
   });
 });

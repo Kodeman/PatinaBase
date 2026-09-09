@@ -131,16 +131,24 @@ export function DeskClaimCard({
             </span>
           </span>
         </span>
-        {/* 3 · name — wraps, never truncates. */}
-        <span data-register="name" className="mt-2 block">
-          <Link
-            href={line.jobHref}
-            data-roster-name
-            className="row-wash-score min-w-0 font-heading text-[20px] font-medium leading-[1.3] text-[var(--text-primary)] no-underline transition-colors [overflow-wrap:anywhere] motion-reduce:transition-none"
-          >
+        {/* 3 · name — wraps, never truncates. A DIRECT child of
+            .desk-claim-upper, never wrapped or itself positioned: the D10
+            overlay is this element's own ::before, and an absolutely
+            positioned pseudo-element's containing block is its nearest
+            POSITIONED ancestor. `.row-wash-score` sets position:relative for
+            its own underline, so it rides a NESTED span instead of this
+            anchor — putting it here would make the WORD's own box the
+            overlay's containing block instead of the 88px upper block. */}
+        <Link
+          href={line.jobHref}
+          data-roster-name
+          data-register="name"
+          className="mt-2 block min-w-0 font-heading text-[20px] font-medium leading-[1.3] text-[var(--text-primary)] no-underline transition-colors motion-reduce:transition-none"
+        >
+          <span className="row-wash-score [overflow-wrap:anywhere]">
             {line.name}
-          </Link>
-        </span>
+          </span>
+        </Link>
         {/* 4 · person · phase — no label, no ordinal, no "Client:". Its own
             inert wrapper so it needs no flex `order` to land after the name. */}
         <span data-claim-inert className="block">
