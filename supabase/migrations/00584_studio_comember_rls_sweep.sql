@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- 00583 — Studio co-members reach the rest of the designer domain
+-- 00584 — Studio co-members reach the rest of the designer domain
 --
 -- Lineage: 00315 (is_studio_comember) → 00316 (the shared-workspace widening,
 -- table by table: designer_clients, leads, client_decisions, projects,
@@ -34,10 +34,14 @@
 --     policy is FOR ALL and an additive twin would duplicate the whole body,
 --     or where the head carries a bug worth fixing in the same breath.
 -- Every CREATE POLICY is preceded by DROP POLICY IF EXISTS on the same name.
+-- Every DROP of a REGRAFTED head is preceded by a DO block that raises if the
+-- policy is absent (00510 S1's shape, absence check only): a head that drifted
+-- must stop the replay, not be silently reinvented from this file's copy.
 --
 -- REGRAFTED HEADS (body copied from these files, one leaf changed):
 --   storage.objects "Designers manage discovery folio objects" ....... 00224
 --   public.room_scan_images, all nine policies .............. 00032 + 00082
+--     (replaced by four; the read is written out, not delegated — item 7)
 --   storage.objects room-scans owner ×4 ............................. 00077
 --   storage.objects "Designers can read shared scan artifacts" ....... 00287
 --   public.project_documents "Designers manage their project documents" 00169
@@ -55,11 +59,22 @@
 -- BEFORE any bucket_id or layer guard can short-circuit. So a policy that
 -- named these helpers while applying TO PUBLIC would raise
 -- `permission denied for function is_studio_comember` on every anon SELECT of
--- that table — the exact defect 00510 repaired on storage.objects. Several
--- heads regrafted here carried no TO clause (00077's four room-scans policies,
--- 00430's three project-documents write policies); they are recreated TO
--- authenticated. Every one of their predicates already required auth.uid(),
--- so anon could only ever have evaluated to false. Nothing is withdrawn.
+-- that table — the exact defect 00510 repaired on storage.objects.
+--
+-- SEVENTEEN regrafted policies carried no TO clause at their head and are
+-- recreated TO authenticated:
+--   00077 room-scans owner ×4 (storage.objects)
+--   00430 project-documents upload/update/delete ×3 (storage.objects)
+--   00169 "Designers manage their project documents" ×1 (project_documents)
+--   00032 + 00082 room_scan_images ×9 (public.room_scan_images)
+-- Every one of the seventeen dropped predicates already required auth.uid() —
+-- `auth.uid()::text = seg[2]`, `rs.user_id = auth.uid()`, `p.designer_id =
+-- auth.uid()`, `rsa.designer_id = auth.uid()` — so anon could only ever have
+-- evaluated them to false. Nothing is withdrawn. No anon or service path
+-- depends on them either: the edge functions that touch these tables and
+-- buckets run under the service role, which is BYPASSRLS, and the one that
+-- forwards the caller's JWT (confirm-scan-bundle) forwards an authenticated
+-- one.
 --
 -- QUALIFY ON SIGHT (00430's rule). Inside an EXISTS whose FROM has a `name`
 -- column, an unqualified `name` binds to THAT table, not storage.objects, and
@@ -75,13 +90,12 @@
 -- designer branch of that policy has never matched a single row. The 00430
 -- defect, in a bucket 00430 did not cover. Qualified here.
 --
--- KNOWN PARTIAL (item 9). The four room-scans owner policies are regrafted with
--- a co-member leg keyed on `rs.id::text = seg[3]` — the lane 00287's header
--- documents ("the iOS uploader writes the SCAN id as segment [3]"). The Capture
--- app's RoomScanStoragePath.swift builds {folder}/{userId}/{roomId}/{filename},
--- i.e. the ROOM id at segment 3, and 00287 tolerates both via an OR. This file's
--- added leg does not carry that OR, so Capture-laid objects are not reached by
--- the widening. Flagged rather than silently papered over.
+-- ROOM-SCANS PATH SHAPE (item 9). Both iOS uploaders lay objects at
+-- {folder}/{userId}/{roomId}/{filename}, so segment 2 is the scan OWNER's uid
+-- and segment 3 may be either the scan id or the room id. 00287 already
+-- tolerates both through an OR; the co-member leg added to 00077's four owner
+-- policies reproduces that OR verbatim, anchored on segment 2 = rs.user_id, so
+-- Capture-laid and legacy objects are reached alike.
 --
 -- NOT DONE, deliberately:
 --   • saved_vendors, vendor_reviews, project_team_members, designer earnings
@@ -107,6 +121,28 @@
 -- ("Designers manage discovery folio") already carries is_design_studio_comember
 -- as of 00582; this is the same rule applied to the objects those rows describe,
 -- so one folio does not admit two different sets of people.
+-- Pre-drop assertion (item 1, 00224). 00510 S1's shape, absence only: if the head this
+-- regraft copies is gone, the replay stops rather than reinventing it here.
+DO $$
+DECLARE v_missing text;
+BEGIN
+  SELECT string_agg(expected.polname, ', ')
+    INTO v_missing
+  FROM (VALUES
+    ('Designers manage discovery folio objects')
+  ) AS expected(polname)
+  WHERE NOT EXISTS (
+    SELECT 1 FROM pg_policy AS policy
+    WHERE policy.polrelid = 'storage.objects'::regclass
+      AND policy.polname = expected.polname
+  );
+  IF v_missing IS NOT NULL THEN
+    RAISE EXCEPTION
+      '00584: expected policy % on % missing — head drifted, refusing to regraft',
+      v_missing, 'storage.objects';
+  END IF;
+END $$;
+
 DROP POLICY IF EXISTS "Designers manage discovery folio objects" ON storage.objects;
 CREATE POLICY "Designers manage discovery folio objects"
   ON storage.objects FOR ALL TO authenticated
@@ -222,6 +258,13 @@ CREATE POLICY po_payments_studio_rw ON public.po_payments
     )
   );
 
+-- The capture-media predicate below joins field_captures on primary_photo_path
+-- for every object read in that bucket; without this index each read is a seq
+-- scan of field_captures.
+CREATE INDEX IF NOT EXISTS idx_field_captures_primary_photo_path
+  ON public.field_captures (primary_photo_path)
+  WHERE primary_photo_path IS NOT NULL;
+
 -- 6 · REGRAFT of 00234's four capture-media owner policies. field_captures
 -- .primary_photo_path holds the BUCKET-RELATIVE object key — the same string the
 -- portal hands to storage.from('capture-media').createSignedUrls
@@ -229,6 +272,31 @@ CREATE POLICY po_payments_studio_rw ON public.po_payments
 -- storage.objects.name directly. The owner test is preserved verbatim as the
 -- first OR branch: an object still uploads under the uploader's own uid prefix
 -- before any field_captures row exists to describe it.
+-- Pre-drop assertion (item 6, 00234). 00510 S1's shape, absence only: if the head this
+-- regraft copies is gone, the replay stops rather than reinventing it here.
+DO $$
+DECLARE v_missing text;
+BEGIN
+  SELECT string_agg(expected.polname, ', ')
+    INTO v_missing
+  FROM (VALUES
+    ('Capture media owner read'),
+    ('Capture media owner upload'),
+    ('Capture media owner update'),
+    ('Capture media owner delete')
+  ) AS expected(polname)
+  WHERE NOT EXISTS (
+    SELECT 1 FROM pg_policy AS policy
+    WHERE policy.polrelid = 'storage.objects'::regclass
+      AND policy.polname = expected.polname
+  );
+  IF v_missing IS NOT NULL THEN
+    RAISE EXCEPTION
+      '00584: expected policy % on % missing — head drifted, refusing to regraft',
+      v_missing, 'storage.objects';
+  END IF;
+END $$;
+
 DROP POLICY IF EXISTS "Capture media owner read" ON storage.objects;
 CREATE POLICY "Capture media owner read"
   ON storage.objects FOR SELECT TO authenticated
@@ -295,12 +363,48 @@ CREATE POLICY "Capture media owner delete"
 -- ═══════════════════════════════════════════════════════════════════════════
 
 -- 7 · room_scan_images. 00032 left five policies and 00082 added four more, all
--- nine restating "is the parent scan mine?" inline. They are replaced by the
--- DELEGATED-READ pattern their siblings already use: room_files_select and
--- room_file_measurements_select (00341:348 and :354) are literally
--- `EXISTS (SELECT 1 FROM public.room_scans rs WHERE rs.id = scan_id)` and let
--- room_scans' own RLS decide. That is the whole point — the read rule lives in
--- one place, so widening room_scans widens its children automatically.
+-- nine restating "is the parent scan mine?" inline. They collapse into four.
+--
+-- The read is written OUT IN FULL — three explicit branches — rather than
+-- delegated to room_scans' own RLS the way room_files_select and
+-- room_file_measurements_select (00341:348 and :354) do. Delegation would be
+-- shorter but WIDER than intended: room_scans carries "Designers can view
+-- authorized room scans" (00020:138), whose second branch admits any designer
+-- holding a designer_clients row against the scan owner. Riding on that would
+-- let a designer read a homeowner's scan IMAGES without the homeowner ever
+-- sharing the scan through a room_scan_association. The three branches below
+-- are the owner, the owner's studio, and an active association's studio —
+-- exactly the reach 00032/00082 granted, widened only by the studio.
+-- Pre-drop assertion (item 7, 00032 + 00082). 00510 S1's shape, absence only: if the head this
+-- regraft copies is gone, the replay stops rather than reinventing it here.
+DO $$
+DECLARE v_missing text;
+BEGIN
+  SELECT string_agg(expected.polname, ', ')
+    INTO v_missing
+  FROM (VALUES
+    ('Users can view their room scan images'),
+    ('Users can insert room scan images'),
+    ('Users can update their room scan images'),
+    ('Users can delete their room scan images'),
+    ('Designers can view associated room scan images'),
+    ('room_scan_images owner insert'),
+    ('room_scan_images owner or designer select'),
+    ('room_scan_images owner update'),
+    ('room_scan_images owner delete')
+  ) AS expected(polname)
+  WHERE NOT EXISTS (
+    SELECT 1 FROM pg_policy AS policy
+    WHERE policy.polrelid = 'public.room_scan_images'::regclass
+      AND policy.polname = expected.polname
+  );
+  IF v_missing IS NOT NULL THEN
+    RAISE EXCEPTION
+      '00584: expected policy % on % missing — head drifted, refusing to regraft',
+      v_missing, 'public.room_scan_images';
+  END IF;
+END $$;
+
 DROP POLICY IF EXISTS "Users can view their room scan images"        ON public.room_scan_images;
 DROP POLICY IF EXISTS "Users can insert room scan images"            ON public.room_scan_images;
 DROP POLICY IF EXISTS "Users can update their room scan images"      ON public.room_scan_images;
@@ -315,13 +419,18 @@ DROP POLICY IF EXISTS room_scan_images_select ON public.room_scan_images;
 CREATE POLICY room_scan_images_select ON public.room_scan_images
   FOR SELECT TO authenticated
   USING (
-    EXISTS (SELECT 1 FROM public.room_scans rs WHERE rs.id = scan_id)
-    OR EXISTS (
-      SELECT 1 FROM public.room_scan_associations rsa
-      WHERE rsa.scan_id = room_scan_images.scan_id
-        AND rsa.status = 'active'
-        AND public.is_studio_comember(rsa.designer_id)
-    )
+    EXISTS (SELECT 1 FROM public.room_scans rs
+            WHERE rs.id = room_scan_images.scan_id AND rs.user_id = auth.uid())
+    OR EXISTS (SELECT 1 FROM public.room_scans rs
+            WHERE rs.id = room_scan_images.scan_id
+              AND public.is_studio_comember(rs.user_id))
+    -- status + expiry guards reproduced from 00082's association branch; that
+    -- branch carries no access_level test, so none is invented here.
+    OR EXISTS (SELECT 1 FROM public.room_scan_associations rsa
+            WHERE rsa.scan_id = room_scan_images.scan_id
+              AND rsa.status = 'active'
+              AND (rsa.expires_at IS NULL OR rsa.expires_at > now())
+              AND public.is_studio_comember(rsa.designer_id))
   );
 
 DROP POLICY IF EXISTS room_scan_images_studio_write_insert ON public.room_scan_images;
@@ -330,7 +439,8 @@ CREATE POLICY room_scan_images_studio_write_insert ON public.room_scan_images
   WITH CHECK (
     EXISTS (
       SELECT 1 FROM public.room_scans rs
-      WHERE rs.id = scan_id AND public.is_studio_comember(rs.user_id)
+      WHERE rs.id = room_scan_images.scan_id
+        AND public.is_studio_comember(rs.user_id)
     )
   );
 
@@ -340,13 +450,15 @@ CREATE POLICY room_scan_images_studio_write_update ON public.room_scan_images
   USING (
     EXISTS (
       SELECT 1 FROM public.room_scans rs
-      WHERE rs.id = scan_id AND public.is_studio_comember(rs.user_id)
+      WHERE rs.id = room_scan_images.scan_id
+        AND public.is_studio_comember(rs.user_id)
     )
   )
   WITH CHECK (
     EXISTS (
       SELECT 1 FROM public.room_scans rs
-      WHERE rs.id = scan_id AND public.is_studio_comember(rs.user_id)
+      WHERE rs.id = room_scan_images.scan_id
+        AND public.is_studio_comember(rs.user_id)
     )
   );
 
@@ -356,14 +468,25 @@ CREATE POLICY room_scan_images_studio_write_delete ON public.room_scan_images
   USING (
     EXISTS (
       SELECT 1 FROM public.room_scans rs
-      WHERE rs.id = scan_id AND public.is_studio_comember(rs.user_id)
+      WHERE rs.id = room_scan_images.scan_id
+        AND public.is_studio_comember(rs.user_id)
     )
   );
 
--- 8 · room_scans write legs. 00014's "Users can manage their room scans" (FOR
--- ALL, auth.uid() = user_id) stays untouched — it is also the SELECT leg the
--- delegated read in item 7 rides on. Helper copied from
--- room_scans_studio_designer_read (00316), this table's own studio SELECT leg.
+-- 8 · room_scans. 00014's "Users can manage their room scans" (FOR ALL,
+-- auth.uid() = user_id) stays untouched. Helper copied from
+-- room_scans_studio_designer_read (00316), this table's own studio SELECT leg,
+-- which reaches a scan only through a designer_clients engagement.
+
+-- Required, not decorative: Postgres filters the target rows of an UPDATE or a
+-- DELETE through the table's SELECT policies first, so the three write legs
+-- below reach nothing on a scan no SELECT policy admits — a colleague's own
+-- designer-owned scan among them.
+DROP POLICY IF EXISTS room_scans_studio_select ON public.room_scans;
+CREATE POLICY room_scans_studio_select ON public.room_scans
+  FOR SELECT TO authenticated
+  USING (public.is_studio_comember(user_id));
+
 DROP POLICY IF EXISTS room_scans_studio_insert ON public.room_scans;
 CREATE POLICY room_scans_studio_insert ON public.room_scans
   FOR INSERT TO authenticated
@@ -385,6 +508,31 @@ CREATE POLICY room_scans_studio_delete ON public.room_scans
 -- room_id may sit at segment 3 for legacy objects. `name` is qualified because
 -- public.room_scans HAS a `name` column: unqualified, the added EXISTS would
 -- read the scan's title as a path and match nothing.
+-- Pre-drop assertion (item 9, 00077). 00510 S1's shape, absence only: if the head this
+-- regraft copies is gone, the replay stops rather than reinventing it here.
+DO $$
+DECLARE v_missing text;
+BEGIN
+  SELECT string_agg(expected.polname, ', ')
+    INTO v_missing
+  FROM (VALUES
+    ('Users can read their own scan artifacts'),
+    ('Users can upload their own scan artifacts'),
+    ('Users can update their own scan artifacts'),
+    ('Users can delete their own scan artifacts')
+  ) AS expected(polname)
+  WHERE NOT EXISTS (
+    SELECT 1 FROM pg_policy AS policy
+    WHERE policy.polrelid = 'storage.objects'::regclass
+      AND policy.polname = expected.polname
+  );
+  IF v_missing IS NOT NULL THEN
+    RAISE EXCEPTION
+      '00584: expected policy % on % missing — head drifted, refusing to regraft',
+      v_missing, 'storage.objects';
+  END IF;
+END $$;
+
 DROP POLICY IF EXISTS "Users can read their own scan artifacts" ON storage.objects;
 CREATE POLICY "Users can read their own scan artifacts"
   ON storage.objects FOR SELECT TO authenticated
@@ -394,7 +542,12 @@ CREATE POLICY "Users can read their own scan artifacts"
       auth.uid()::text = (storage.foldername(storage.objects.name))[2]
       OR EXISTS (
         SELECT 1 FROM public.room_scans rs
-        WHERE rs.id::text = (storage.foldername(storage.objects.name))[3]
+        WHERE rs.user_id::text = (storage.foldername(storage.objects.name))[2]
+          AND (
+            rs.id::text = (storage.foldername(storage.objects.name))[3]
+            OR (rs.room_id IS NOT NULL
+                AND rs.room_id::text = (storage.foldername(storage.objects.name))[3])
+          )
           AND public.is_studio_comember(rs.user_id)
       )
     )
@@ -409,7 +562,12 @@ CREATE POLICY "Users can upload their own scan artifacts"
       auth.uid()::text = (storage.foldername(storage.objects.name))[2]
       OR EXISTS (
         SELECT 1 FROM public.room_scans rs
-        WHERE rs.id::text = (storage.foldername(storage.objects.name))[3]
+        WHERE rs.user_id::text = (storage.foldername(storage.objects.name))[2]
+          AND (
+            rs.id::text = (storage.foldername(storage.objects.name))[3]
+            OR (rs.room_id IS NOT NULL
+                AND rs.room_id::text = (storage.foldername(storage.objects.name))[3])
+          )
           AND public.is_studio_comember(rs.user_id)
       )
     )
@@ -424,7 +582,12 @@ CREATE POLICY "Users can update their own scan artifacts"
       auth.uid()::text = (storage.foldername(storage.objects.name))[2]
       OR EXISTS (
         SELECT 1 FROM public.room_scans rs
-        WHERE rs.id::text = (storage.foldername(storage.objects.name))[3]
+        WHERE rs.user_id::text = (storage.foldername(storage.objects.name))[2]
+          AND (
+            rs.id::text = (storage.foldername(storage.objects.name))[3]
+            OR (rs.room_id IS NOT NULL
+                AND rs.room_id::text = (storage.foldername(storage.objects.name))[3])
+          )
           AND public.is_studio_comember(rs.user_id)
       )
     )
@@ -439,7 +602,12 @@ CREATE POLICY "Users can delete their own scan artifacts"
       auth.uid()::text = (storage.foldername(storage.objects.name))[2]
       OR EXISTS (
         SELECT 1 FROM public.room_scans rs
-        WHERE rs.id::text = (storage.foldername(storage.objects.name))[3]
+        WHERE rs.user_id::text = (storage.foldername(storage.objects.name))[2]
+          AND (
+            rs.id::text = (storage.foldername(storage.objects.name))[3]
+            OR (rs.room_id IS NOT NULL
+                AND rs.room_id::text = (storage.foldername(storage.objects.name))[3])
+          )
           AND public.is_studio_comember(rs.user_id)
       )
     )
@@ -448,6 +616,28 @@ CREATE POLICY "Users can delete their own scan artifacts"
 -- 10 · REGRAFT of 00287. Body verbatim; the single leaf
 -- `rsa.designer_id = auth.uid()` becomes public.is_studio_comember(...). The
 -- status, expiry and access_level guards are unchanged.
+-- Pre-drop assertion (item 10, 00287). 00510 S1's shape, absence only: if the head this
+-- regraft copies is gone, the replay stops rather than reinventing it here.
+DO $$
+DECLARE v_missing text;
+BEGIN
+  SELECT string_agg(expected.polname, ', ')
+    INTO v_missing
+  FROM (VALUES
+    ('Designers can read shared scan artifacts')
+  ) AS expected(polname)
+  WHERE NOT EXISTS (
+    SELECT 1 FROM pg_policy AS policy
+    WHERE policy.polrelid = 'storage.objects'::regclass
+      AND policy.polname = expected.polname
+  );
+  IF v_missing IS NOT NULL THEN
+    RAISE EXCEPTION
+      '00584: expected policy % on % missing — head drifted, refusing to regraft',
+      v_missing, 'storage.objects';
+  END IF;
+END $$;
+
 DROP POLICY IF EXISTS "Designers can read shared scan artifacts" ON storage.objects;
 CREATE POLICY "Designers can read shared scan artifacts"
   ON storage.objects FOR SELECT TO authenticated
@@ -521,12 +711,35 @@ CREATE POLICY project_tasks_studio_rw ON public.project_tasks
   );
 
 -- 14 · REGRAFT of 00169's "Designers manage their project documents". The
--- `project_id IS NOT NULL` guard is added to match this table's discovery and
--- proposal siblings ("Designers manage discovery folio", 00582; "Designers
--- manage proposal folio", 00425), which each guard their own FK the same way —
--- without it a NULL project_id makes the EXISTS NULL rather than false.
+-- `project_id IS NOT NULL` guard is added to match the SHAPE of this table's
+-- discovery and proposal siblings ("Designers manage discovery folio", 00582;
+-- "Designers manage proposal folio", 00425), which each guard their own FK the
+-- same way. It changes no row: EXISTS never yields NULL, so a NULL project_id
+-- already makes the EXISTS false on its own.
 -- The head had USING only; WITH CHECK is supplied so writes are gated by the
 -- same rule rather than falling back to USING.
+-- Pre-drop assertion (item 14, 00169). 00510 S1's shape, absence only: if the head this
+-- regraft copies is gone, the replay stops rather than reinventing it here.
+DO $$
+DECLARE v_missing text;
+BEGIN
+  SELECT string_agg(expected.polname, ', ')
+    INTO v_missing
+  FROM (VALUES
+    ('Designers manage their project documents')
+  ) AS expected(polname)
+  WHERE NOT EXISTS (
+    SELECT 1 FROM pg_policy AS policy
+    WHERE policy.polrelid = 'public.project_documents'::regclass
+      AND policy.polname = expected.polname
+  );
+  IF v_missing IS NOT NULL THEN
+    RAISE EXCEPTION
+      '00584: expected policy % on % missing — head drifted, refusing to regraft',
+      v_missing, 'public.project_documents';
+  END IF;
+END $$;
+
 DROP POLICY IF EXISTS "Designers manage their project documents" ON public.project_documents;
 CREATE POLICY "Designers manage their project documents"
   ON public.project_documents FOR ALL TO authenticated
@@ -551,6 +764,30 @@ CREATE POLICY "Designers manage their project documents"
 -- verbatim (name already qualified there); `p.designer_id = auth.uid()` becomes
 -- public.is_studio_comember(p.designer_id), matching the table-side policy in
 -- item 14. TO authenticated added — see the banner.
+-- Pre-drop assertion (item 15, 00430). 00510 S1's shape, absence only: if the head this
+-- regraft copies is gone, the replay stops rather than reinventing it here.
+DO $$
+DECLARE v_missing text;
+BEGIN
+  SELECT string_agg(expected.polname, ', ')
+    INTO v_missing
+  FROM (VALUES
+    ('Designers upload project documents'),
+    ('Designers update project documents'),
+    ('Designers delete project documents')
+  ) AS expected(polname)
+  WHERE NOT EXISTS (
+    SELECT 1 FROM pg_policy AS policy
+    WHERE policy.polrelid = 'storage.objects'::regclass
+      AND policy.polname = expected.polname
+  );
+  IF v_missing IS NOT NULL THEN
+    RAISE EXCEPTION
+      '00584: expected policy % on % missing — head drifted, refusing to regraft',
+      v_missing, 'storage.objects';
+  END IF;
+END $$;
+
 DROP POLICY IF EXISTS "Designers upload project documents" ON storage.objects;
 CREATE POLICY "Designers upload project documents"
   ON storage.objects FOR INSERT TO authenticated
@@ -591,6 +828,28 @@ CREATE POLICY "Designers delete project documents"
 -- the designer branch gains an OR public.is_studio_comember(p.designer_id)
 -- alongside its own `= auth.uid()` test. The team-member branch and the
 -- client_visible branch are untouched.
+-- Pre-drop assertion (item 16, 00510). 00510 S1's shape, absence only: if the head this
+-- regraft copies is gone, the replay stops rather than reinventing it here.
+DO $$
+DECLARE v_missing text;
+BEGIN
+  SELECT string_agg(expected.polname, ', ')
+    INTO v_missing
+  FROM (VALUES
+    ('Project members can read documents')
+  ) AS expected(polname)
+  WHERE NOT EXISTS (
+    SELECT 1 FROM pg_policy AS policy
+    WHERE policy.polrelid = 'storage.objects'::regclass
+      AND policy.polname = expected.polname
+  );
+  IF v_missing IS NOT NULL THEN
+    RAISE EXCEPTION
+      '00584: expected policy % on % missing — head drifted, refusing to regraft',
+      v_missing, 'storage.objects';
+  END IF;
+END $$;
+
 DROP POLICY IF EXISTS "Project members can read documents" ON storage.objects;
 CREATE POLICY "Project members can read documents"
   ON storage.objects FOR SELECT TO authenticated
@@ -661,18 +920,28 @@ CREATE POLICY project_parties_studio_delete ON public.project_parties
     )
   );
 
--- 18 · projects create/delete. 00316 gave this table projects_studio_select and
--- projects_studio_update; helper copied from those. 00168's two owner policies
--- stay.
+-- 18 · projects delete. 00316 gave this table projects_studio_select and
+-- projects_studio_update; 00168's two owner policies stay.
+--
+-- NO INSERT LEG, deliberately. set_project_studio_id() (SECURITY INVOKER
+-- authority trigger, head 00563, still live at 00578) refuses every direct
+-- authenticated INSERT whose NEW.designer_id is not auth.uid(), raising
+-- studio_id_not_designer_studio. RLS cannot lift a trigger, so a
+-- projects_studio_insert policy would admit exactly the rows 00168 already
+-- admits and nothing else — dead text. The test asserts the refusal (C5) so a
+-- later reader does not file it as a policy gap.
+--
+-- The DELETE leg takes the NARROWER is_design_studio_comember and stops at
+-- non-completed projects: co-member deletes are limited to non-completed
+-- projects and the design-studio helper because there is no BEFORE DELETE
+-- guard trigger on public.projects — this predicate is the only gate, and a
+-- completed project is the studio's record of delivered work.
 DROP POLICY IF EXISTS projects_studio_insert ON public.projects;
-CREATE POLICY projects_studio_insert ON public.projects
-  FOR INSERT TO authenticated
-  WITH CHECK (public.is_studio_comember(designer_id));
 
 DROP POLICY IF EXISTS projects_studio_delete ON public.projects;
 CREATE POLICY projects_studio_delete ON public.projects
   FOR DELETE TO authenticated
-  USING (public.is_studio_comember(designer_id));
+  USING (public.is_design_studio_comember(designer_id) AND status <> 'completed');
 
 -- 19 · leads create. Helper copied from leads_studio_select (00316). The
 -- `homeowner_id IS NULL` guard is 00166's, preserved: a designer-created lead
@@ -731,6 +1000,28 @@ CREATE POLICY field_link_tokens_studio_rw ON public.field_link_tokens
 -- storage.objects.name (the designer branch has never matched a row — see the
 -- banner), and the leaf gains the studio helper. is_project_team_member is
 -- untouched.
+-- Pre-drop assertion (item 23, 00282). 00510 S1's shape, absence only: if the head this
+-- regraft copies is gone, the replay stops rather than reinventing it here.
+DO $$
+DECLARE v_missing text;
+BEGIN
+  SELECT string_agg(expected.polname, ', ')
+    INTO v_missing
+  FROM (VALUES
+    ('Field team can read field media')
+  ) AS expected(polname)
+  WHERE NOT EXISTS (
+    SELECT 1 FROM pg_policy AS policy
+    WHERE policy.polrelid = 'storage.objects'::regclass
+      AND policy.polname = expected.polname
+  );
+  IF v_missing IS NOT NULL THEN
+    RAISE EXCEPTION
+      '00584: expected policy % on % missing — head drifted, refusing to regraft',
+      v_missing, 'storage.objects';
+  END IF;
+END $$;
+
 DROP POLICY IF EXISTS "Field team can read field media" ON storage.objects;
 CREATE POLICY "Field team can read field media"
   ON storage.objects FOR SELECT TO authenticated
@@ -912,6 +1203,30 @@ CREATE POLICY phase_templates_studio_delete ON public.phase_templates
 -- 29 · REGRAFT of 00099's three proposal-assets write policies. Bodies verbatim;
 -- `p.designer_id = auth.uid()` becomes the helper — the same one
 -- proposal_mood_boards_proposal_* already use on the neighbouring bucket.
+-- Pre-drop assertion (item 29, 00099). 00510 S1's shape, absence only: if the head this
+-- regraft copies is gone, the replay stops rather than reinventing it here.
+DO $$
+DECLARE v_missing text;
+BEGIN
+  SELECT string_agg(expected.polname, ', ')
+    INTO v_missing
+  FROM (VALUES
+    ('Designers can upload proposal assets'),
+    ('Designers can replace their proposal assets'),
+    ('Designers can delete their proposal assets')
+  ) AS expected(polname)
+  WHERE NOT EXISTS (
+    SELECT 1 FROM pg_policy AS policy
+    WHERE policy.polrelid = 'storage.objects'::regclass
+      AND policy.polname = expected.polname
+  );
+  IF v_missing IS NOT NULL THEN
+    RAISE EXCEPTION
+      '00584: expected policy % on % missing — head drifted, refusing to regraft',
+      v_missing, 'storage.objects';
+  END IF;
+END $$;
+
 DROP POLICY IF EXISTS "Designers can upload proposal assets" ON storage.objects;
 CREATE POLICY "Designers can upload proposal assets"
   ON storage.objects FOR INSERT TO authenticated
@@ -966,11 +1281,13 @@ CREATE POLICY products_studio_delete ON public.products
   );
 
 -- 31 · invoices delete. 00316 gave this table select/insert/update studio legs;
--- helper copied from invoices_studio_select.
+-- helper copied from invoices_studio_select. The `status = 'draft'` guard is
+-- invoices_studio_update_draft's (00316:274), reproduced: a co-member may not
+-- edit an issued invoice, so she may not erase one either.
 DROP POLICY IF EXISTS invoices_studio_delete ON public.invoices;
 CREATE POLICY invoices_studio_delete ON public.invoices
   FOR DELETE TO authenticated
-  USING (public.is_studio_comember(designer_id));
+  USING (public.is_studio_comember(designer_id) AND status = 'draft');
 
 -- 32 · lead_room_scans. 00285's policy carries a homeowner branch and a designer
 -- branch; only the designer branch is widened here. Helper copied from
@@ -1109,7 +1426,10 @@ CREATE POLICY profile_presence_studio_select ON public.profile_presence
   );
 
 -- 36 · vendor_quote_requests. Helper copied from invoices_studio_select (00316):
--- a quote request is procurement, which the studio already shares.
+-- a quote request is procurement, which the studio already shares. RLS is not
+-- the only gate here: guard_vendor_quote_configuration_snapshot() (00403:1011)
+-- still refuses any CONFIGURATION-LINKED request whose designer_id <> auth.uid()
+-- with insufficient_privilege, so this policy widens unlinked requests only.
 DROP POLICY IF EXISTS vendor_quote_requests_studio_rw ON public.vendor_quote_requests;
 CREATE POLICY vendor_quote_requests_studio_rw ON public.vendor_quote_requests
   FOR ALL TO authenticated
@@ -1118,4 +1438,4 @@ CREATE POLICY vendor_quote_requests_studio_rw ON public.vendor_quote_requests
 
 
 COMMENT ON POLICY room_scan_images_select ON public.room_scan_images IS
-  '00583: delegated read — room_scans'' own RLS decides, matching room_files_select and room_file_measurements_select (00341). Replaces the nine inline owner/designer policies 00032 and 00082 left behind.';
+  '00584: owner, owner''s studio, or an active association''s studio. Written out rather than delegated to room_scans'' RLS, which would inherit the designer_clients branch of "Designers can view authorized room scans" (00020) and admit a designer the homeowner never shared the scan with. Replaces the nine inline owner/designer policies 00032 and 00082 left behind.';

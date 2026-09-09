@@ -767,7 +767,7 @@ BEGIN
   ASSERT v_count = 1,
     'FAIL j3c: a co-member must SELECT the studio''s saved_vendors row, got ' || v_count;
 
-  -- j4: writes. 00421 made every policy here SELECT-only; 00583 widened
+  -- j4: writes. 00421 made every policy here SELECT-only; 00584 widened
   -- project_parties' INSERT/UPDATE/DELETE to studio co-members (a colleague
   -- edits the project's directory), and left project_team_members and
   -- saved_vendors exactly as they were. j4a/j4d/j4e therefore now expect the
@@ -776,7 +776,7 @@ BEGIN
    WHERE id = 'bd000000-0000-4000-8000-0000000000b1';
   GET DIAGNOSTICS v_count = ROW_COUNT;
   ASSERT v_count = 1,
-    'FAIL j4a: a co-member must UPDATE a party (00583), rows affected: ' || v_count;
+    'FAIL j4a: a co-member must UPDATE a party (00584), rows affected: ' || v_count;
 
   UPDATE project_team_members SET role = 'lead_designer'
    WHERE id = 'bd000000-0000-4000-8000-0000000000f2';
@@ -791,13 +791,13 @@ BEGIN
   DELETE FROM project_parties WHERE id = 'bd000000-0000-4000-8000-0000000000b1';
   GET DIAGNOSTICS v_count = ROW_COUNT;
   ASSERT v_count = 1,
-    'FAIL j4d: a co-member must DELETE a party (00583), rows affected: ' || v_count;
+    'FAIL j4d: a co-member must DELETE a party (00584), rows affected: ' || v_count;
 
   INSERT INTO project_parties (id, project_id, party_kind, display_name)
   VALUES ('bd000000-0000-4000-8000-0000000000be', 'bd000000-0000-4000-8000-0000000000e1', 'gc', 'Comember Add');
   GET DIAGNOSTICS v_count = ROW_COUNT;
   ASSERT v_count = 1,
-    'FAIL j4e: a co-member must INSERT a party (00583), rows affected: ' || v_count;
+    'FAIL j4e: a co-member must INSERT a party (00584), rows affected: ' || v_count;
 
   v_raised := false;
   BEGIN
