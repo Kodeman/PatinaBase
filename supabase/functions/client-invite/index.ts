@@ -44,6 +44,7 @@ import {
 } from "../_shared/studio-identity.ts";
 import {
   buildSnapshot,
+  chooseSigner,
   generateToken,
   isServiceRoleCaller,
   RESEND_COOLDOWN_MS,
@@ -51,6 +52,7 @@ import {
   resendEligibility,
   validateNote,
   validateToken,
+  type SignerProfile,
 } from "./lib.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -83,7 +85,7 @@ async function resolveSigner(
   opts: { writerId: string; projectId: string | null },
 ): Promise<{
   signerId: string;
-  signerFullName: string;
+  signerFullName: string | null;
   signerEmail: string | null;
   studioName: string | null;
   studioLogoUrl: string | null;
@@ -97,7 +99,7 @@ async function resolveSigner(
 
   // The owner of the resolved studio, when there is one. Otherwise the writer
   // signs her own letter — a solo designer IS the studio.
-  let signerId = opts.writerId;
+  let ownerId: string | null = null;
   if (identity?.studioId) {
     const { data: owner } = await admin
       .from("organization_members")
@@ -108,21 +110,32 @@ async function resolveSigner(
       .order("created_at", { ascending: true })
       .limit(1)
       .maybeSingle();
-    const ownerId = (owner as { user_id?: string } | null)?.user_id;
-    if (ownerId) signerId = ownerId;
+    ownerId = (owner as { user_id?: string } | null)?.user_id ?? null;
   }
 
-  const { data: signerProfile } = await admin
+  // Both profiles in one read — the owner names the letter, the writer is the
+  // fallback when the owner has no name on file (the production defect: a
+  // studio owner whose profiles row carries neither full_name nor display_name).
+  const ids = ownerId && ownerId !== opts.writerId
+    ? [ownerId, opts.writerId]
+    : [opts.writerId];
+  const { data: profileRows } = await admin
     .from("profiles")
-    .select("full_name, business_name, email, city")
-    .eq("id", signerId)
-    .maybeSingle();
-  const p = signerProfile as
-    | { full_name: string | null; business_name: string | null; email: string | null; city: string | null }
-    | null;
+    .select("id, full_name, display_name, email, city")
+    .in("id", ids);
+  const rows = (profileRows ?? []) as SignerProfile[];
+  const ownerProfile = ownerId
+    ? rows.find((r) => r.id === ownerId) ?? null
+    : null;
+  const writerProfile = rows.find((r) => r.id === opts.writerId) ?? null;
 
-  const signerFullName =
-    p?.full_name?.trim() || p?.business_name?.trim() || "Your designer";
+  const { signerId, signerFullName, profile: p } = chooseSigner({
+    writerId: opts.writerId,
+    ownerId,
+    ownerProfile,
+    writerProfile,
+  });
+
   // studioCobrand is deliberately NOT used: it withholds the name for a
   // source='full_name' identity because renderBrandedShell would then show a
   // co-brand under a Patina wordmark. This letter has no wordmark — the
@@ -143,7 +156,7 @@ async function resolveSigner(
     studioName,
     studioLogoUrl,
     signatureCity,
-    senderDisplay: studioDisplayName(identity, signerFullName),
+    senderDisplay: studioDisplayName(identity, signerFullName ?? ""),
   };
 }
 

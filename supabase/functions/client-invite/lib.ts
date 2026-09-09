@@ -161,12 +161,65 @@ export function resendCooldownRemainingMs(
   return elapsed >= RESEND_COOLDOWN_MS ? 0 : RESEND_COOLDOWN_MS - elapsed;
 }
 
+export interface SignerProfile {
+  id: string;
+  full_name: string | null;
+  display_name: string | null;
+  email: string | null;
+  city: string | null;
+}
+
+/**
+ * The name a profile can actually prove: full_name, then display_name, then
+ * NOTHING. Voice rule 5 — a slot with no fact prints nothing, so there is no
+ * "Your designer" and no pronoun standing in for someone we cannot name.
+ * business_name is deliberately absent: it resolves through
+ * resolveStudioIdentity as the STUDIO, and naming it as the person too would
+ * sign the letter "Acme Ltd of Acme Ltd".
+ */
+export function profileName(
+  p: { full_name: string | null; display_name: string | null } | null,
+): string | null {
+  return p?.full_name?.trim() || p?.display_name?.trim() || null;
+}
+
+/**
+ * R11 + voice rule 5. The studio owner's name, then the writer's, then NO NAME
+ * — at which point the studio authors the letter (see client-letter.ts).
+ *
+ * A missing owner row and an owner with nothing on file are the same case: the
+ * writer signs. `signerId` names whoever the letter is actually signed by, so
+ * the stored row and the printed name agree; with no name at all it stays the
+ * owner (else the writer), which still points at the studio's principal.
+ */
+export function chooseSigner(opts: {
+  writerId: string;
+  ownerId: string | null;
+  ownerProfile: SignerProfile | null;
+  writerProfile: SignerProfile | null;
+}): { signerId: string; signerFullName: string | null; profile: SignerProfile | null } {
+  const ownerName = profileName(opts.ownerProfile);
+  const writerName = profileName(opts.writerProfile);
+  const named = ownerName
+    ? opts.ownerProfile
+    : (writerName ? opts.writerProfile : null);
+  return {
+    signerId: named?.id ?? opts.ownerId ?? opts.writerId,
+    signerFullName: ownerName ?? writerName,
+    profile: named ?? opts.ownerProfile ?? opts.writerProfile,
+  };
+}
+
 export interface SnapshotInput {
   kind: "invite" | "notice";
   email: string;
   clientName: string | null;
-  /** R11: the STUDIO OWNER's full name. The writer's words, the owner's name. */
-  signerFullName: string;
+  /**
+   * R11: the STUDIO OWNER's full name. The writer's words, the owner's name.
+   * NULL when neither the owner nor the writer has one on file — the studio
+   * then authors the letter and no placeholder identity is invented.
+   */
+  signerFullName: string | null;
   studioName: string | null;
   studioLogoUrl: string | null;
   signatureCity: string | null;
@@ -180,12 +233,13 @@ export interface SnapshotInput {
 /** The one place the letter's facts are assembled. Everything downstream reads
  *  this object and never a live table. */
 export function buildSnapshot(input: SnapshotInput): ClientLetterSnapshot {
+  const signer = input.signerFullName?.trim() || null;
   return {
     kind: input.kind,
     recipientEmail: input.email,
     recipientName: input.clientName?.trim() || null,
-    designerFullName: input.signerFullName,
-    designerGivenName: givenName(input.signerFullName),
+    designerFullName: signer,
+    designerGivenName: signer ? givenName(signer) || null : null,
     studioName: input.studioName?.trim() || null,
     studioLogoUrl: input.studioLogoUrl?.trim() || null,
     signatureCity: input.signatureCity?.trim() || null,
