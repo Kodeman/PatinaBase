@@ -203,7 +203,7 @@ const STEPS_TEAMMATE: CoachmarkStep[] = [
     ...STEPS[0],
     fallbackHeading: 'The Desk',
     fallbackBody:
-      "Every live job in the studio lands here, one line each. A mark at the margin means someone's hand is needed — not always yours.",
+      "Every live job in the studio lands here — a card for each one with a claim on someone's hand, not always yours, and a line in the ledger below for the rest.",
   },
   {
     ...STEPS[1],

@@ -225,11 +225,12 @@ describe('DeskWalkthrough — teammate persona (L7)', () => {
 
     expect(mockTourCaptured.persona).toBe('teammate');
     // Step 1's teammate body is the only one that changes for step 1 (proposal
-    // table row 1) — pins the fallback content swap, verbatim from
-    // proposals/customer-success-lead.md §3.
+    // table row 1) — pins the fallback content swap. Its shape is
+    // proposals/customer-success-lead.md §3's; R143 amended the description of
+    // the Desk itself, which is two halves now.
     expect(mockTourCaptured.steps?.[0]?.fallbackHeading).toBe('The Desk');
     expect(mockTourCaptured.steps?.[0]?.fallbackBody).toBe(
-      "Every live job in the studio lands here, one line each. A mark at the margin means someone's hand is needed — not always yours.",
+      "Every live job in the studio lands here — a card for each one with a claim on someone's hand, not always yours, and a line in the ledger below for the rest.",
     );
     expect(mockTourCaptured.steps).toHaveLength(6);
 

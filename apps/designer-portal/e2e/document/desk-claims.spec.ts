@@ -140,6 +140,8 @@ test('Only what needs me hides the ledger and leaves the cards', async ({
   await roster.getByRole('button', { name: 'Only what needs me' }).click();
 
   await expect(roster.locator('[data-ledger-row]')).toHaveCount(0);
+  // The head goes with its half — a count of nothing is still a count.
+  await expect(roster.locator('[data-desk-rest-head]')).toHaveCount(0);
   await expect(roster.locator('[data-claim-card]')).toHaveCount(cardsBefore);
   // IX18 — the label never changes with state; aria-pressed carries it.
   await expect(
