@@ -413,3 +413,201 @@ is yielding to, and a CSS fix aimed by reasoning needs a rendered measurement be
 | `.codex/worktrees/agent-pp-int3b` | `portal-polish/integration-w3b` | W3b integration; **kept**, holds the prod `.next` build |
 
 `agent-pp-main3b` (the merge-to-main worktree) was removed, as every `agent-pp-main*` before it.
+
+---
+
+## 8 · Program complete — the client portal is closed; Wave 3c is still in flight
+
+**Read this first.** Wave 2c (added 2026-09-09) is the **last** wave on the client portal: the house
+page now matches `specimens/client-house.html` on money everywhere it renders, and nothing on the
+client track is waiting on a lane. It is **not** the last wave of the program. A **Wave 3c** is
+running in parallel on the Desk — lane **D8**, branch `portal-polish/d8` (head `23239266f`),
+reviewed in `waves/w3c/d8-review.md`, carrying the designer-side date sweep (`fmtDay`) and the
+`.da-score-on`-versus-hover fix that Wave 3b listed as owed. It is **pushed and not merged**, and
+`patina-designer-portal` has not been redeployed since Wave 3b. This section closes the record for
+everything that *has* shipped; W3c will add its own.
+
+### Wave 2c at a glance
+
+| | |
+|---|---|
+| Deployed | `patina-client-portal` |
+| Version | **`6f8adbb5-c024-4f25-bebd-070ee18924e1`** (2026-09-09T03:04:49Z) |
+| Rollback | **`a787400e-e4e7-4d72-a0ca-4d6a188336b3`** (W2b's deployment) |
+| `main` | **`f7865c728`** — `merge(portal-polish): wave 2c — cents residuals` |
+| Branches | `portal-polish/h8` · `portal-polish/integration-w2c` · `portal-polish/to-main-w2c`, all pushed, all ancestors of `main` |
+| Lane | **H8** — the six `moneyInWords` call sites Wave 2b named, moved to `formatCurrency` |
+| What it closed | **The plan key prints `$11,000.00`**, not `$11,000`. Every money token on the rendered house page carries cents, at 1440 and at 390. Wave 2b divergence 1 — the most visible fault left on the page — is gone, and with it the "does a figure in a sentence carry cents?" question at those six sites. |
+| What it did not | `approval-ask.tsx`'s `approvalWeighing` still prints whole dollars; it was outside the lane's brief and outside W2b's divergent list. Last money-in-prose surface on the Threshold. |
+
+Full detail: **`ship/w2c-ship.md`**.
+
+### Every deployment, per portal, in order
+
+**`patina-client-portal`**
+
+| Wave | Version | Deployed | Rolls back to |
+|---|---|---|---|
+| W2 | `99bc3971-d33d-47da-ac72-97112d71b1c9` | 2026-09-08T23:06:54Z | `f46e2e19-a806-45d1-853e-28a007533724` (pre-program) |
+| W2b | `a787400e-e4e7-4d72-a0ca-4d6a188336b3` | 2026-09-09T00:52:05Z | `99bc3971-…` |
+| **W2c** | **`6f8adbb5-c024-4f25-bebd-070ee18924e1`** | **2026-09-09T03:04:49Z** | **`a787400e-…`** ← **live** |
+
+`npx wrangler rollback a787400e-e4e7-4d72-a0ca-4d6a188336b3 --name patina-client-portal`
+
+**`patina-designer-portal`**
+
+| Wave | Version | Deployed | Rolls back to |
+|---|---|---|---|
+| W3 | `bf6a3679-40b5-4c24-8db2-7cc2348f145a` | 2026-09-08T23:56:34Z | `6987d9ff-9154-453f-ae89-c7ab4c714d48` (pre-program) |
+| **W3b** | **`cf67abe9-65e1-4818-b7d1-8eaa9943d93d`** | **2026-09-09T01:44:22Z** | **`bf6a3679-…`** ← **live** |
+
+`npx wrangler rollback bf6a3679-40b5-4c24-8db2-7cc2348f145a --name patina-designer-portal`
+
+**Strata** — one migration in the whole program: **`00580_room_concept_render.sql`** (W1 · Lane A2).
+Four nullable columns on `project_rooms`, the private `room-renders` bucket, four keys added to
+`get_client_project_threshold`'s `selections` payload, and the `useRoomConceptRender` hook. No wave
+since has pushed a migration or an edge function; W2/W2b/W2c/W3/W3b deployed portals only. There is
+nothing to roll back — correct forward with `00581`; the columns are nullable.
+
+### Final gate numbers, per portal
+
+**Client portal** (W2c, and identical to W2b — the lane edited assertions in place)
+
+| Gate | Result |
+|---|---|
+| `type-check` | exit 0 |
+| `test -- --coverage` | **143 suites / 2427 tests**; coverage **75.78 / 71.56 / 75.90 / 78.09** against the 70/60/70/70 floor |
+| `lint` | **63 problems (11 errors, 52 warnings)** — byte-identical to the W2 baseline; none in a touched file |
+| `threshold.spec.ts` | **22 / 22** |
+| Renders | 1440 → **1440/1440**, 390 → **390/390**; zero app-origin console errors |
+
+**Designer portal** (W3b — unchanged until W3c lands)
+
+| Gate | Result |
+|---|---|
+| `type-check` | exit 0 |
+| `test -- --ci` | **549 suites / 6807 tests / 0 todo** (W1 baseline was 548 / 6786) |
+| `lint` | **205 problems (2 errors, 203 warnings)** — the two known pre-existing errors, not grown |
+| `shadow-gate.test.ts` | green and byte-unchanged from `origin/main`, as is `eslint.config.mjs` |
+| Renders | 1440, doc and orders-ledger all **1440/1440**; **390 → 390/390**, closed by W3b |
+
+**Across the program: no suite was lost, no lint count grew, no `box-shadow` was added, and
+`--elevation-sheet` / `desk-settle` were never touched.**
+
+### Everything still owed to Kody
+
+The lists in §4, §6 and §7 stand; this is the consolidated one, deduplicated, as of Wave 2c.
+
+**Nobody but Kody can close these**
+
+1. **Signed-in prod walk of the house page** (`client.patina.cloud`).
+2. **Signed-in prod walk of the Desk** (`app.patina.cloud`). Both were searched for honestly across
+   five waves: the only accounts in the repo are the local seeds, and both `playwright.config.ts`
+   files pin `localhost`. Nothing in the repo can sign into production.
+
+**Work that wants a lane**
+
+3. **`approval-ask.tsx`'s `approvalWeighing`** — the last whole-dollar money-in-prose surface on the
+   Threshold. Mechanical now that the other six are ruled in practice.
+4. **Wave 3c / lane D8 is unmerged** — the designer-side `fmtDay` date sweep and the
+   `.da-score-on`-versus-hover fix. Branch `portal-polish/d8`, reviewed, pushed, **not in `main`**,
+   **not deployed**.
+5. **Wire A3's hooks into `concept-render-upload.tsx`.** `useRoomConceptRenderRecord` and
+   `useRemoveRoomConceptRender` shipped with **zero consumers**; D6's component still uses its own
+   local helpers, so **the orphaned storage object on Remove is still live in production**. The cure
+   is written and unconnected.
+6. **The specimen's 390 reflow on the Desk** — day's line first under the greeting, sticky stage
+   plates, action column under the state sentence. The overflow half is closed (W3b); the reflow
+   half was never given to a lane.
+7. **Seed a `lead_designer`** on Cedar Lane Study, so the note's three-part signature can be seen
+   and pinned. The code is right; the fixture is short.
+8. **No dotted leader, no fixed 96px action column** on a Desk roster row (§D item 8).
+9. **The desk walkthrough dialog `aria-hidden`s the entire Desk while open** — pre-existing chrome,
+   and the first thing a new designer's screen reader meets.
+10. **No index on `project_notes.answered_at`** — D1's 60s poll filters on it. Inert at studio scale.
+
+**Rulings the build could not make**
+
+11. **A ruling on `.da-score-on` vs `:hover`.** `.da-score-hover:hover::after` outranks
+    `.da-score-on::after`, so a *selected* control reads clay-hovered rather than
+    charcoal-selected while the pointer is on it. Observed live on the Orders ledger's `LEDGER` tab.
+    (D8 carries a fix; it is unmerged.)
+12. **The Desk's overdue-line wording** — the specimen's `One thing is overdue — Vandersteen,
+    install, since 4 September` versus the two pinned assertions D1 had to keep green.
+13. **`reconnect_due` in the day's line's lead slot** — a client due for a reconnect: does it
+    belong? Deliberately excluded and now tested as such.
+14. **The standalone invoice's Playfair total under PP-2** — flagged in `rulings.md:21` as a
+    consequence to confirm during the build. **No wave touched it.**
+
+**Tokens and contracts the sheet and the portals disagree on**
+
+15. **`--hairline`** (client portal) — settled in practice as the sheet's own `#E8E3DB` literal at
+    `globals.css:87`; plates still use `--border-default` (`#E5E2DD`). Add the alias or bless the
+    fallback.
+16. **`--hairline-strong`** (designer portal) — not defined at all; D1's rule uses
+    `--doc-ink-border`. Same decision, other portal.
+17. **The `.t-*` type steps exist in neither portal as classes.** Both waves matched the sheet's
+    values through local utilities. A real adoption is a program-level decision.
+18. **`.act--inline` / `InlineAct`** — H3 and D1 each wrote one, in different portals. Name it
+    before a third lane writes a third.
+
+**Environment and tooling, for whoever runs the next program on this machine**
+
+19. **`next dev` cannot reliably serve *either* portal here.** W3 hit it on the designer portal;
+    W2c hit it on the client portal — 28 `Watchpack EMFILE` errors and a **404 for every route**,
+    with `ulimit -n` already 1048576. It is the system-wide kqueue pool, and it fails when other
+    agent programs are running (W2c measured **93 node processes**, including two other portals
+    building and testing). **`next start` is not the workaround** while `output: 'standalone'` is
+    set — Next says so and the suite goes red; use `node .next/standalone/server.js`.
+20. **Both portals' `.env.local` in the main checkout point at `127.0.0.1`**, so a prod deploy must
+    export the `NEXT_PUBLIC_*` set from `wrangler.jsonc` `vars`. W2b and W2c did exactly that from a
+    worktree with no `.env` at all, and the preflight resolves an exported value first by design
+    (`infra/deploy-portal.sh:68-90`). **That is the recipe; document it and stop shuffling files.**
+21. **`packages/api-client` and `packages/aesthete-quiz` have no dist in a fresh worktree** and are
+    not built by the portal turbo filters. Two packages, not one. (`@patina/shared` and
+    `@patina/supabase` need no dist — they resolve through `"main": "./src/index.ts"`.)
+22. **The `commit-msg` hook rejects `merge(...)` on a normal commit only**
+    (`scripts/hooks/patina-hooks.mjs:155-158`); a git merge commit never reaches it. Confirmed five
+    times. Either add `merge` to the allowed types or stop naming `merge(...)` lane-merge subjects
+    in plans.
+23. **Export `SUPABASE_SERVICE_ROLE_KEY` before `threshold.spec.ts`** — without it the signing test
+    fails with a 500 (`server.ts:57`) that reads like a regression and is not one.
+24. **`pnpm --filter … test:e2e -- <args>`** interposes a literal `--` that Playwright reads as a
+    positional argument, so `-g` is silently ignored and the whole file runs. Use `npx playwright
+    test` from the app directory for filtered runs.
+25. **When one wave waits on another, poll `git ls-remote origin main` for the merge subject**, not
+    a ship-report path. Reports are written inside throwaway merge-to-main worktrees and reach
+    `origin/main` before — or instead of — the shared checkout.
+26. **A parallel Prettier drift exists across the client Threshold files and A3's
+    `use-room-concept-render.ts`.** All pre-existing, all advisory. There is no root Prettier config
+    outside `services/media` and `services/projects`; that is the actual fix.
+
+### Worktrees to sweep
+
+`scripts/repo-gc.sh` (dry-run first). Every branch below **except `portal-polish/d8`** is pushed to
+origin and an ancestor of `main`, so nothing here holds unmerged work.
+
+| Worktree | Branch | Note |
+|---|---|---|
+| `.codex/worktrees/agent-pp-a1` · `agent-pp-a2` | `portal-polish/a1` · `a2` | W1 lanes |
+| `.codex/worktrees/agent-pp-h1` … `agent-pp-h6` | `portal-polish/h1` … `h6` | W2 lanes |
+| `.codex/worktrees/agent-pp-int` | `portal-polish/integration` | W2 integration |
+| `.codex/worktrees/agent-pp-h7` | `portal-polish/h7` | W2b lane |
+| `.codex/worktrees/agent-pp-int2b` | `portal-polish/integration-w2b` | W2b integration |
+| `.codex/worktrees/agent-pp-h8` | `portal-polish/h8` | W2c lane |
+| `.codex/worktrees/agent-pp-int2c` | `portal-polish/integration-w2c` | W2c integration; holds the prod `.open-next` build |
+| `.codex/worktrees/agent-pp-d1` … `agent-pp-d6` | `portal-polish/d1` … `d6` | W3 lanes |
+| `.codex/worktrees/agent-pp-int3` | `portal-polish/integration-w3` | W3 integration; holds the prod `.next` build |
+| `.codex/worktrees/agent-pp-a3` · `agent-pp-d7` | `portal-polish/a3` · `d7` | W3b lanes |
+| `.codex/worktrees/agent-pp-int3b` | `portal-polish/integration-w3b` | W3b integration; holds the prod `.next` build |
+| **`.codex/worktrees/agent-pp-d8`** | **`portal-polish/d8`** | **DO NOT SWEEP — Wave 3c, reviewed, pushed, NOT in `main`** |
+
+Already removed, each after its push: `agent-pp-main` (W2) · `agent-pp-main2b` (W2b) ·
+`agent-pp-main2c` (W2c) · `agent-pp-main3` (W3) · `agent-pp-main3b` (W3b).
+
+### The header of this report is four waves stale
+
+§1–§5 were written when the program was three waves and `main` was `99906f992`. It is now six
+shipped waves (W1 · W2 · W3 · W2b · W3b · W2c) with a seventh in flight, and `main` is **`f7865c728`**.
+The original text is left in place rather than rewritten, so the record of what each wave reported
+at the time stays readable; §6, §7 and this section carry the corrections.

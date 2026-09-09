@@ -1,0 +1,217 @@
+[
+  {
+    "viewport": "house-w2c-1440x900",
+    "file": "/Users/kody/Code/patina-merged/artifacts/portal-polish-build-2026-09-08/waves/w2c/renders/house-w2c-1440x900.png",
+    "consoleErrors": [
+      {
+        "text": "Failed to load resource: net::ERR_CONNECTION_REFUSED",
+        "url": "http://localhost:3000/api/auth/qr/generate",
+        "line": 0
+      },
+      {
+        "text": "Loading the image 'http://127.0.0.1:54321/storage/v1/object/public/product-images/a0000000-0000-0000-0000-000000000001/1a666c28-9477-52b9-86ed-a09a6fd7eebb/e5e50860-93ba-55c9-a23f-42dcbd35cb29.jpg' violates the following Content Security Policy directive: \"img-src 'self' data: https: blob:\". The action has been blocked.",
+        "url": "http://localhost:3002/projects/b0000000-0000-0000-0000-00000000c0d1",
+        "line": 0
+      }
+    ],
+    "requestFailures": [
+      {
+        "url": "http://localhost:3000/api/auth/qr/generate",
+        "failure": "net::ERR_CONNECTION_REFUSED"
+      },
+      {
+        "url": "http://localhost:3002/_next/static/chunks/main-app.js?v=1788922918925",
+        "failure": "net::ERR_ABORTED"
+      },
+      {
+        "url": "http://localhost:3002/_next/static/chunks/app/page.js",
+        "failure": "net::ERR_ABORTED"
+      },
+      {
+        "url": "http://127.0.0.1:54321/storage/v1/object/public/product-images/a0000000-0000-0000-0000-000000000001/1a666c28-9477-52b9-86ed-a09a6fd7eebb/e5e50860-93ba-55c9-a23f-42dcbd35cb29.jpg",
+        "failure": "csp"
+      }
+    ],
+    "scrollWidth": 1440,
+    "clientWidth": 1440,
+    "landmarks": [
+      {
+        "label": "Where we are",
+        "href": "#doorstep"
+      },
+      {
+        "label": "What changed",
+        "href": "#changed"
+      },
+      {
+        "label": "What you owe",
+        "href": "#letterbox"
+      },
+      {
+        "label": "What needs you",
+        "href": "#wall"
+      },
+      {
+        "label": "The papers",
+        "href": "#mat-papers"
+      }
+    ],
+    "landmarkTargets": [
+      {
+        "href": "#doorstep",
+        "present": true
+      },
+      {
+        "href": "#changed",
+        "present": true
+      },
+      {
+        "href": "#letterbox",
+        "present": true
+      },
+      {
+        "href": "#wall",
+        "present": true
+      },
+      {
+        "href": "#mat-papers",
+        "present": true
+      }
+    ],
+    "anchors": [
+      "doorstep",
+      "key",
+      "letterbox",
+      "wall",
+      "door",
+      "road",
+      "note",
+      "previously",
+      "mat",
+      "mat-papers",
+      "ledger",
+      "changed"
+    ],
+    "owed": "$4,060.00",
+    "wallConsequence": "Accepting releases $2,980.00 to Marta Voss for the finished work. It does not close the project or change your invoice.",
+    "signOut": 1,
+    "storyPoleLinks": 2,
+    "planKeySentence": "One mark stands open on this drawing.",
+    "planKeyList": [
+      "ShutCedar Lane — Phase Work — $11,000.00, your name.",
+      "HatchedBuilt-in shelving, north wall — $2,980.00, held back until you accept it.",
+      "OpenEverything else in the house stands open."
+    ],
+    "moneyTokens": [
+      "$4,060.00",
+      "$11,100.00",
+      "$0.00",
+      "$2,980.00",
+      "$11,000.00",
+      "$8,120.00"
+    ]
+  },
+  {
+    "viewport": "house-w2c-390x844@2x",
+    "file": "/Users/kody/Code/patina-merged/artifacts/portal-polish-build-2026-09-08/waves/w2c/renders/house-w2c-390x844@2x.png",
+    "consoleErrors": [
+      {
+        "text": "Loading the image 'http://127.0.0.1:54321/storage/v1/object/public/product-images/a0000000-0000-0000-0000-000000000001/1a666c28-9477-52b9-86ed-a09a6fd7eebb/e5e50860-93ba-55c9-a23f-42dcbd35cb29.jpg' violates the following Content Security Policy directive: \"img-src 'self' data: https: blob:\". The action has been blocked.",
+        "url": "http://localhost:3002/projects/b0000000-0000-0000-0000-00000000c0d1",
+        "line": 0
+      }
+    ],
+    "requestFailures": [
+      {
+        "url": "http://localhost:3002/_next/static/chunks/app/page.js",
+        "failure": "net::ERR_ABORTED"
+      },
+      {
+        "url": "http://localhost:3002/_next/static/chunks/main-app.js?v=1788922928980",
+        "failure": "net::ERR_ABORTED"
+      },
+      {
+        "url": "http://127.0.0.1:54321/storage/v1/object/public/product-images/a0000000-0000-0000-0000-000000000001/1a666c28-9477-52b9-86ed-a09a6fd7eebb/e5e50860-93ba-55c9-a23f-42dcbd35cb29.jpg",
+        "failure": "csp"
+      }
+    ],
+    "scrollWidth": 390,
+    "clientWidth": 390,
+    "landmarks": [
+      {
+        "label": "Where we are",
+        "href": "#doorstep"
+      },
+      {
+        "label": "What changed",
+        "href": "#changed"
+      },
+      {
+        "label": "What you owe",
+        "href": "#letterbox"
+      },
+      {
+        "label": "What needs you",
+        "href": "#wall"
+      },
+      {
+        "label": "The papers",
+        "href": "#mat-papers"
+      }
+    ],
+    "landmarkTargets": [
+      {
+        "href": "#doorstep",
+        "present": true
+      },
+      {
+        "href": "#changed",
+        "present": true
+      },
+      {
+        "href": "#letterbox",
+        "present": true
+      },
+      {
+        "href": "#wall",
+        "present": true
+      },
+      {
+        "href": "#mat-papers",
+        "present": true
+      }
+    ],
+    "anchors": [
+      "doorstep",
+      "key",
+      "letterbox",
+      "wall",
+      "door",
+      "road",
+      "note",
+      "previously",
+      "mat",
+      "mat-papers",
+      "ledger",
+      "changed"
+    ],
+    "owed": "$4,060.00",
+    "wallConsequence": "Accepting releases $2,980.00 to Marta Voss for the finished work. It does not close the project or change your invoice.",
+    "signOut": 1,
+    "storyPoleLinks": 2,
+    "planKeySentence": "One mark stands open on this drawing.",
+    "planKeyList": [
+      "ShutCedar Lane — Phase Work — $11,000.00, your name.",
+      "HatchedBuilt-in shelving, north wall — $2,980.00, held back until you accept it.",
+      "OpenEverything else in the house stands open."
+    ],
+    "moneyTokens": [
+      "$4,060.00",
+      "$11,100.00",
+      "$0.00",
+      "$2,980.00",
+      "$11,000.00",
+      "$8,120.00"
+    ]
+  }
+]
