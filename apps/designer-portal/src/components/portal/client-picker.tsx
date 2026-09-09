@@ -10,6 +10,8 @@ import {
   useInviteAndLinkClient,
   type DesignerClient,
 } from '@/hooks/use-clients';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
+import { LetterLineField } from '../document/people/directory/letter-line-field';
 import { cn } from '@/lib/utils';
 
 export interface ClientPickerProps {
@@ -106,6 +108,9 @@ export function ClientPicker({
   const clients = clientOptions ?? queriedClients;
   const addClient = useAddClient();
   const inviteAndLink = useInviteAndLinkClient();
+  const { value: letterOn } = useFeatureFlag('client-invite-letter');
+  // Keyed by row: an armed row's line belongs to that row and to no other.
+  const [notes, setNotes] = React.useState<Record<string, string>>({});
 
   // Only contacts that are linkable carry a non-null client_id (a profiles.id).
   const labelFor = React.useCallback((dc: DesignerClient) => {
@@ -202,10 +207,12 @@ export function ClientPicker({
     setInvitingId(dc.id);
     setInviteError(null);
     try {
+      const note = (notes[dc.id] ?? '').trim();
       const result = await inviteAndLink.mutateAsync({
         designerClientId: dc.id,
         clientEmail: dc.client_email,
         clientName: dc.client_name ?? undefined,
+        ...(letterOn ? { letter: true as const, note: note || undefined } : {}),
       });
       if (result.profileId) {
         onChange(result.profileId);
@@ -438,6 +445,20 @@ export function ClientPicker({
                             an invite emails them a signup link and links this
                             record once they accept.
                           </p>
+                          {letterOn && (
+                            <LetterLineField
+                              facts={{
+                                clientName: dc.client_name ?? null,
+                                clientEmail: dc.client_email ?? '',
+                                projectName: null,
+                              }}
+                              value={notes[dc.id] ?? ''}
+                              onChange={(next) =>
+                                setNotes((prev) => ({ ...prev, [dc.id]: next }))
+                              }
+                              folded
+                            />
+                          )}
                           <div className="flex items-center gap-2">
                             <button
                               type="button"
@@ -450,7 +471,7 @@ export function ClientPicker({
                               }}
                               className="rounded-sm bg-[var(--accent-primary)] px-2 py-1 text-[0.7rem] font-medium text-white"
                             >
-                              Send invite
+                              {letterOn ? 'Send the letter' : 'Send invite'}
                             </button>
                             <button
                               type="button"

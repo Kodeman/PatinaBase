@@ -29,6 +29,7 @@ import {
 import { ClientPicker } from '@/components/portal/client-picker';
 import { useClient, useInviteAndLinkClient } from '@/hooks/use-clients';
 import { useAttachDocumentClient } from '@/hooks/use-attach-client';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { useToast } from '@/components/portal/toast-provider';
 import { proposalEvents } from '@/lib/analytics';
 import { DocSheet } from './doc-sheet';
@@ -167,6 +168,7 @@ export function SendSheet({
   const retryProposalSend = useRetryProposalSend({ errorSurface: 'inline' });
   const attachClient = useAttachDocumentClient();
   const inviteAndLinkClient = useInviteAndLinkClient();
+  const { value: letterOn } = useFeatureFlag('client-invite-letter');
   const { toast } = useToast();
 
   // A sibling version already accepted? Sending this one won't affect it.
@@ -586,6 +588,9 @@ export function SendSheet({
         designerClientId: proposal.designer_client_id,
         clientEmail: capturedHousehold.client_email,
         clientName: capturedHousehold.client_name ?? undefined,
+        letter: letterOn,
+        note: personalMessage,
+        projectId: proposal.project_id ?? undefined,
         invite: inviteAndLinkClient.mutateAsync,
         attach: attachClient.mutateAsync,
       });
@@ -650,6 +655,7 @@ export function SendSheet({
                       inviteAndLinkClient.isPending || attachClient.isPending
                     }
                     onInvite={handleInviteCapturedHousehold}
+                    letterOn={letterOn}
                   />
                 ) : (
                   <>
