@@ -1,0 +1,13 @@
+[
+  {
+    "_id": "helpContent.designer-portal--document--people--editing-details",
+    "_type": "helpContent",
+    "surfaceKey": "designer-portal/document/people",
+    "persona": "all",
+    "contentType": "tooltip",
+    "tooltipContent": {
+      "eyebrow": "Editing someone's details",
+      "body": "Open their card, choose Edit. People with a Patina account manage their own name, email, and phone."
+    }
+  }
+]
