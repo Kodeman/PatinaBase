@@ -29,9 +29,11 @@ export function validateLetterRequest(body: {
     return { take: false, error: 'That line is longer than 280 characters.' };
   }
 
+  const trimmedProjectId = (body.projectId ?? '').trim();
+
   return {
     take: true,
     note: trimmed || null,
-    projectId: body.projectId ?? null,
+    projectId: trimmedProjectId || null,
   };
 }

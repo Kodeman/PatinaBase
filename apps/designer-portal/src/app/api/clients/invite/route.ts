@@ -133,17 +133,22 @@ export async function POST(request: NextRequest) {
     return badRequest(letterVerdict.error);
   }
   if (letterVerdict.take) {
-    return sendTheLetter({
-      adminClient,
-      callerUser,
-      clientEmail,
-      clientName,
-      source,
-      notes,
-      existingRow,
-      note: letterVerdict.note,
-      projectId: letterVerdict.projectId,
-    });
+    try {
+      return await sendTheLetter({
+        adminClient,
+        callerUser,
+        clientEmail,
+        clientName,
+        source,
+        notes,
+        existingRow,
+        note: letterVerdict.note,
+        projectId: letterVerdict.projectId,
+      });
+    } catch (err: any) {
+      console.error('[clients/invite] Unexpected error:', err);
+      return serverError(err?.message ?? 'Internal server error');
+    }
   }
 
   try {
