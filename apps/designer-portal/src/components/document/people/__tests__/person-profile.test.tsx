@@ -5,8 +5,10 @@
  * status_raw a third time. See
  * apps/designer-portal/src/lib/document/people-derivation.ts.
  *
- * F3 also lives here: the studio-contact/gc/trade branches' "Edit" door
- * (opens AddPersonSheet's edit mode), including the archived-card hide.
+ * F3 also lives here: the client branch's "Edit details" door (opens the
+ * existing HouseholdSheet standalone) and the studio-contact/gc/trade
+ * branches' "Edit" door (opens AddPersonSheet's edit mode), including the
+ * archived-card hide.
  */
 import { render, screen, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -33,8 +35,10 @@ jest.mock('@patina/supabase', () => ({
   useClientReviews: () => ({ data: [] }),
   useStartDirectThread: () => ({ mutate: jest.fn() }),
   useStyles: () => ({ data: [] }),
-  // F3 — AddPersonSheet's edit mode ("Edit"), now reachable from this
-  // component's tree via RolodexEditAction.
+  // F3 — HouseholdSheet ("Edit details") and AddPersonSheet's edit mode
+  // ("Edit"), both now reachable from this component's tree.
+  useDesignerClientForClientUser: () => ({ data: undefined }),
+  useUpdateClientContact: () => ({ mutate: jest.fn(), isPending: false }),
   useStudioContact: () => ({ data: mockStudioContact }),
   useUpdateStudioContact: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useAddClient: () => ({ mutateAsync: jest.fn(), isPending: false }),
@@ -46,6 +50,19 @@ jest.mock('@patina/supabase', () => ({
 
 jest.mock('@/hooks/use-person-documents', () => ({
   usePersonDocuments: () => ({ data: [] }),
+}));
+
+jest.mock('@/hooks/use-attach-client', () => ({
+  useAttachDocumentClient: () => ({
+    mutate: jest.fn(),
+    isPending: false,
+    isError: false,
+    error: null,
+  }),
+}));
+
+jest.mock('@/components/portal/client-picker', () => ({
+  ClientPicker: () => null,
 }));
 
 jest.mock('@/hooks/use-projects', () => ({
@@ -204,6 +221,43 @@ describe('PersonProfile — Nurture card (J7)', () => {
     expect(
       screen.queryByText('Still drafting — nothing has gone to them yet.'),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe('PersonProfile — client "Edit details" opens the household sheet standalone (F3)', () => {
+  it('opens HouseholdSheet for a captured client', () => {
+    mockPersonData = basePerson({ role: 'client', meta: {} });
+    renderWithClient(
+      <PersonProfile
+        personId="client-1"
+        role="client"
+        onBack={jest.fn()}
+        openThread={jest.fn()}
+        openPerson={jest.fn()}
+        goView={jest.fn()}
+        notify={jest.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit details' }));
+    expect(screen.getAllByText('The household').length).toBeGreaterThan(0);
+  });
+
+  it('never offers Edit details for a bare lead — its personId is a leads.id, not a designer_clients.id', () => {
+    mockPersonData = basePerson({ role: 'lead', meta: {} });
+    renderWithClient(
+      <PersonProfile
+        personId="lead-1"
+        role="lead"
+        onBack={jest.fn()}
+        openThread={jest.fn()}
+        openPerson={jest.fn()}
+        goView={jest.fn()}
+        notify={jest.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: 'Edit details' })).not.toBeInTheDocument();
   });
 });
 

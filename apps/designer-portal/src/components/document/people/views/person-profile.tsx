@@ -22,12 +22,14 @@
  * never a stored activity log (R51). Reuses Avatar/RoleBadge from person-bits.
  * Zero shadows (D4), strict focus (D1), typography-first.
  *
- * F3 — a profile actually backed by a live `studio_contacts` card — the pure
- * rolodex branch (role 'contact', where person_id IS the studio_contacts id)
- * or a network/team party folded into the rolodex (`meta.studio_contact_id`)
- * — gets "Edit" via `RolodexEditAction`, which opens AddPersonSheet in its
- * edit mode. Hidden for an archived card; makers stay read-only
- * (vendor-owned, R78).
+ * F3 — edit affordances. A captured client (role 'client', never a bare
+ * 'lead') gets "Edit details", opening the existing HouseholdSheet standalone
+ * for its designer_client id. A profile actually backed by a live
+ * `studio_contacts` card — the pure rolodex branch (role 'contact', where
+ * person_id IS the studio_contacts id) or a network/team party folded into
+ * the rolodex (`meta.studio_contact_id`) — gets "Edit" via
+ * `RolodexEditAction`, which opens AddPersonSheet in its edit mode. Hidden
+ * for an archived card; makers stay read-only (vendor-owned, R78).
  */
 
 import { useMemo, useState } from 'react';
@@ -69,6 +71,7 @@ import {
   type ProfileProjectRow,
 } from '../profile/profile-cards';
 import { AddPersonSheet } from '../directory/add-person-sheet';
+import { HouseholdSheet } from '../../overlays/household-sheet';
 
 /** F3 — the id of the `studio_contacts` row backing this profile, when there
  *  is one: the pure rolodex branch's own id (role 'contact'), or the
@@ -157,6 +160,10 @@ function ClientProfile({
   // `personId` for a lead is a lead id, so we gate on the role and skip the
   // filter for leads (the hook then returns nothing, which is correct).
   const designerClientId = role === 'client' ? personId : undefined;
+  // F3 — "Edit details" opens the household sheet standalone. A captured
+  // client only: a lead's personId is a leads.id, not a designer_clients.id,
+  // so the sheet would have nothing real to read or write.
+  const [editingHousehold, setEditingHousehold] = useState(false);
 
   const { data: client } = useClient(personId);
   const { data: projects } = useClientProjects(personId);
@@ -410,9 +417,29 @@ function ClientProfile({
                 )
               }
             />
+            {role === 'client' && (
+              <ActionButton
+                actionKey="edit-client-details"
+                label="Edit details"
+                onClick={() => setEditingHousehold(true)}
+              />
+            )}
           </>
         }
       />
+
+      {role === 'client' && (
+        <HouseholdSheet
+          open={editingHousehold}
+          onClose={() => setEditingHousehold(false)}
+          engagementKind="relationship"
+          projectId={null}
+          proposalId={null}
+          clientProfileId={profileId}
+          designerClientId={personId}
+          clientName={name}
+        />
+      )}
 
       <div className="mt-[1.3rem] grid grid-cols-1 gap-7 lg:grid-cols-[1.4fr_1fr]">
         <div>
