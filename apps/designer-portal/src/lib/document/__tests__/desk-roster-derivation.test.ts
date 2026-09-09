@@ -1145,6 +1145,30 @@ describe('D8 · deriveDeskRoster writes the value and the motion sentence', () =
     expect(roster.groups[0].lines[0].valueText).toBeNull();
     expect(roster.groups[0].lines[0].motionText).toBeNull();
   });
+
+  // dates.ts's house rule: the year is spelled out only once it is not this
+  // year — `today.getFullYear() !== date.getFullYear() ? legalDate(date) :
+  // dayMonth(date)`. NOW is 2026-08-25, so a prior-year due date must carry
+  // its year and a current-year one must not.
+  it('spells the year out for a due date from a prior year (the house rule)', () => {
+    const dated = row('dated-prior-year', 'project');
+    const roster = deriveDeskRoster(
+      input({ live: [dated], folders: [folder(dated, need({ dueOn: '2025-08-12' }))] }),
+      NOW,
+    );
+
+    expect(roster.groups[0].lines[0].valueText).toBe('12 August 2025');
+  });
+
+  it('omits the year for a due date within this year', () => {
+    const dated = row('dated-this-year', 'project');
+    const roster = deriveDeskRoster(
+      input({ live: [dated], folders: [folder(dated, need({ dueOn: '2026-08-12' }))] }),
+      NOW,
+    );
+
+    expect(roster.groups[0].lines[0].valueText).toBe('12 August');
+  });
 });
 
 describe('D5 · a claim takes a card, a quiet job takes a line', () => {

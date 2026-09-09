@@ -76,6 +76,19 @@ describe('DeskClaimCard — the six registers, in DOM order', () => {
     );
   });
 
+  it('guards the stage plate and the custody word against a long single token — the card is overflow:hidden', () => {
+    const { container } = render(
+      <DeskClaimCard card={card()} tone="project" settle={false} />,
+    );
+    const stage = container.querySelector('[data-register="stage"]')!;
+    const custody = container.querySelector('[data-register="custody"]')!;
+
+    for (const el of [stage, custody]) {
+      expect(el.className).toMatch(/\bmin-w-0\b/);
+      expect(el.className).toContain('[overflow-wrap:anywhere]');
+    }
+  });
+
   it('marks urgent in terracotta-ink and quiet in mocha (D9)', () => {
     const { container: hot } = render(
       <DeskClaimCard card={card()} tone="project" settle={false} />,

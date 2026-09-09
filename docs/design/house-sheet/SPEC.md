@@ -25,9 +25,9 @@ the three Google Fonts families named below.
 ## A1. Tokens
 
 Paste this block verbatim. Do not add tokens — with the single exception
-recorded as R144 (`--color-card-edge`, below), which was ruled into the
-sheet rather than added to a surface. Do not use a hex literal anywhere
-else in the file.
+recorded as R144 (`--card-edge`, below, named `--color-card-edge` in the
+portal), which was ruled into the sheet rather than added to a surface. Do
+not use a hex literal anywhere else in the file.
 
 ```css
 :root {

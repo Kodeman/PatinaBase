@@ -21,7 +21,7 @@ import {
   type NeedLine,
   type SectionKey,
 } from './desk-derivation';
-import { dayMonth } from './dates';
+import { dayMonth, legalDate, parseSourceDate } from './dates';
 import {
   deriveOverdue,
   overdueElapsedPhrase,
@@ -134,10 +134,11 @@ export interface RosterLine {
   custody: string;
   /** The need's own owner, for D3's ranking. Null where there is no need. */
   needOwner: 'designer' | 'client' | 'maker' | null;
-  /** D8 — the ledger's value column, as `dayMonth` prints it (`12 August`):
-   *  the need's own date where the line has a need, else the in-motion
-   *  state's anchor date. Null where neither states one, and the cell
-   *  renders empty. */
+  /** D8 — the ledger's value column, in the house's year-aware idiom
+   *  (`12 August`, or `12 August 2025` once the year is not this one —
+   *  dates.ts's rule): the need's own date where the line has a need, else
+   *  the in-motion state's anchor date. Null where neither states one, and
+   *  the cell renders empty. */
   valueText?: string | null;
   /** The in-motion chip's own sentence, unconcatenated (MotionChip.text). */
   motionText?: string | null;
@@ -244,6 +245,19 @@ export function motionAnchorDate(chip: MotionChip | null): string | null {
     default:
       return null;
   }
+}
+
+/**
+ * D8 / dates.ts's house rule — the ledger's value column spells the year out
+ * only when it is not this year: `today.getFullYear() !== date.getFullYear()
+ * ? legalDate(date) : dayMonth(date)`. Composed here rather than in
+ * `motionAnchorDate`, which stays a plain date-string lookup with an honest
+ * signature; this is the one place that also holds `now`.
+ */
+function ledgerValueDate(value: string | null, now: Date): string | null {
+  const date = parseSourceDate(value);
+  if (!date) return null;
+  return now.getFullYear() !== date.getFullYear() ? legalDate(date) : dayMonth(date);
 }
 
 const NUMBER_WORDS = [
@@ -376,7 +390,9 @@ export function deriveDeskRoster(
         custody: custodyWord(need, row),
         needOwner: need?.owner ?? null,
         // The need's own date first — a deadline outranks a provenance stamp.
-        valueText: dayMonth(need?.dueOn ?? null) ?? dayMonth(motionAnchorDate(chip)),
+        valueText:
+          ledgerValueDate(need?.dueOn ?? null, now) ??
+          ledgerValueDate(motionAnchorDate(chip), now),
         motionText: chip?.text ?? null,
       },
       stage: row.active_section,

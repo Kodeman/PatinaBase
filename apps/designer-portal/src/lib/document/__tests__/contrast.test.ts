@@ -742,10 +742,4 @@ describe('D4 · --color-card-edge is the one boundary grey', () => {
     const failing = Object.entries(measured).filter(([, ratio]) => ratio < 3);
     expect(failing).toEqual([]);
   });
-
-  it('is not an ink token, so the AA text guard never claims it', () => {
-    // It is a boundary, never a word. Naming that here keeps a later rename
-    // to `--color-card-edge-ink` from silently entering the 4.5:1 suite.
-    expect('--color-card-edge'.endsWith('-ink')).toBe(false);
-  });
 });

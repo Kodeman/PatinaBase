@@ -10877,7 +10877,8 @@ designer. Labels never change with state; `aria-pressed` carries it (IX18).
 and overdue, then the studio's own pen, then with the client, then with the maker — oldest need date first
 within a band, ties broken on **name**, never on a UUID. This inverts the shipped stage-first sort for the
 card half only; the ledger half keeps stage-first. Ranking is a real claim on a surface that promises the
-studio won't notice Patina, so the reason is printed plainly on the card ("overdue since 4 Sep") — a wrong
+studio won't notice Patina, so the reason is printed plainly on the card ("Overdue 6 days — …", the
+`overdueElapsedPhrase` form) — a wrong
 rank has to be legible and correctable, never mysterious.
 
 **Custody is stated, never inferred at render** (**D6**). Ten need kinds carried no `owner` — `damage_claim`,

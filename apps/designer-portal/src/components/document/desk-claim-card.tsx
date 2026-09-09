@@ -105,17 +105,20 @@ export function DeskClaimCard({
             flex `order`) so DOM order and visual order stay identical. */}
         <span data-claim-inert className="block">
           <span className="flex flex-wrap items-center justify-between gap-2">
-            {/* 1 · stage — one word on the plate, never "· 3" on a card. */}
+            {/* 1 · stage — one word on the plate, never "· 3" on a card. The
+                card has overflow:hidden, so a long single token needs its own
+                wrap guard like every other name-bearing element. */}
             <span
               data-register="stage"
-              className={`inline-flex items-center rounded-[3px] px-2.5 py-[3px] text-white ${HEAD_TYPE} ${STAGE_TAB[card.stage]}`}
+              className={`inline-flex min-w-0 items-center rounded-[3px] px-2.5 py-[3px] text-white [overflow-wrap:anywhere] ${HEAD_TYPE} ${STAGE_TAB[card.stage]}`}
             >
               {card.stageLabel}
             </span>
-            {/* 2 · custody — whose hand, beside the 7px mark. */}
+            {/* 2 · custody — whose hand, beside the 7px mark. Same wrap guard:
+                "With <name>" can carry a long single token. */}
             <span
               data-register="custody"
-              className={`inline-flex items-center gap-2 text-[var(--text-subtle)] ${HEAD_TYPE}`}
+              className={`inline-flex min-w-0 items-center gap-2 text-[var(--text-subtle)] [overflow-wrap:anywhere] ${HEAD_TYPE}`}
             >
               <span
                 aria-hidden="true"

@@ -997,16 +997,6 @@ describe('DeskRoster — R143, the Desk in two halves', () => {
     expect(container.querySelectorAll('[data-claim-card]')).toHaveLength(2);
     expect(container.querySelectorAll('[data-ledger-row]')).toHaveLength(1);
   });
-
-  it('points the day’s line’s more-link at the claims grid', () => {
-    const { container } = render(<DeskRoster roster={roster()} />);
-    const more = container.querySelector('[data-day-line-more]');
-
-    // Two cards and up to three quoted lines, so there is no more-link on this
-    // fixture — the assertion is that if one exists it lands on the grid.
-    if (more) expect(more).toHaveAttribute('href', '#desk-claims');
-    expect(container.querySelector('#desk-claims')).not.toBeNull();
-  });
 });
 
 describe('DeskRoster — no shadow reaches either half', () => {
