@@ -206,6 +206,9 @@ $ pnpm --filter @patina/designer-portal lint
 ```
 
 The two known pre-existing errors, same rules and same lines as the Wave-3 baseline. Not grown.
+The pre-push hook printed `Affected verification has advisory failures` on the push; re-running
+`node scripts/hooks/patina-hooks.mjs pre-push` shows it is that same `eslint .` exit — the identical
+`205 problems (2 errors, 203 warnings)`, nothing new.
 
 Diffstat against `origin/main`:
 
