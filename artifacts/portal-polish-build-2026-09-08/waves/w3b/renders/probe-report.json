@@ -1,0 +1,56 @@
+{
+  "overflow390": {
+    "asShipped": {
+      "scrollWidth": 390,
+      "clientWidth": 390
+    },
+    "offenders": [],
+    "withoutBottomNav": {
+      "hidden": 2,
+      "scrollWidth": 390,
+      "clientWidth": 390
+    },
+    "withoutRoster": {
+      "scrollWidth": 390,
+      "clientWidth": 390
+    },
+    "withoutBoth": {
+      "scrollWidth": 390,
+      "clientWidth": 390
+    },
+    "bottomNavChildren": null,
+    "rosterMaxRight": {
+      "maxRight": 363,
+      "who": "DIV.flex flex-wrap items-baseline justify-between gap-x-6 gap-y-"
+    }
+  },
+  "cleanConsole": {
+    "desk": {
+      "url": "http://localhost:3000/desk",
+      "consoleErrors": [],
+      "pageErrors": []
+    },
+    "doc": {
+      "url": "http://localhost:3000/doc/006a08f4-aa39-4fcb-8e02-ee3506efb1cb",
+      "consoleErrors": [],
+      "pageErrors": []
+    },
+    "orders": {
+      "url": "http://localhost:3000/desk",
+      "consoleErrors": [],
+      "pageErrors": []
+    }
+  },
+  "docFacts": {
+    "url": "http://localhost:3000/doc/006a08f4-aa39-4fcb-8e02-ee3506efb1cb",
+    "headings": [
+      "Full Room",
+      "The brief",
+      "The record"
+    ],
+    "bodyStart": "Skip to the paper\n←\nPUT DOWN\n\nMarcus Wright\n\nBRIEF\n\nThe brief\nNOTHING YET\nThe record\nNOTHING YET\nFull Room\n\nMarcus Wright · New inquiry\n\nMESSAGE\n\nNew lead — respond by Sep 11\nRESPOND TO THE INQUIRY\nNow at The brief · Nothing yet\n\nWorkflow stage\n\nINQUIRY & QUALIFICATION · CORE · STAGE 01\n\nCORE · 01\n\nRESPOND BY SEP 11\n\nThe brief\n\nNothing yet\n\nMarcus Wright · marcus.wright@example.com\n\nINBOUND VIA PATINA\n\nMATCH\n\n0.85\n\nBUDGET\n\n$5k – $15k\n\nTIMELINE\n\n1–3 Months\n\n“Complete bedroom refresh. Transitioning from college furniture to something grown-up. Want a calm, restful space with Japanese influences.”\nstyle alignment: japandi\ntimeline fit\nroom type experience\n\nFull Room · Austin, TX\n\nROOM SCAN\n\nNo "
+  },
+  "ordersFacts": {
+    "dialogText": "Orders\nORDERS · LEDGER\n?\nPUT BACK · ESC\n\nEvery project's purchase orders, gathered in one studio register.\n\nLEDGER\nTHE WEEK\nRECEIVING\nVENDORS\nTHROUGHPUT\n6\nOPEN\n1\nUNSENT\nPROJECT ·\nALL\nCHEN RESIDENCE\nOLSEN LAKE HOUSE\nPAYMENT ·\nALL\nDUE\nPENDING\nPAID\nSELECT MULTIPLE\n\nAPPARATUS\n\nAP-012\n\nRECEIVED / INSPECT\nReceived and dispositioned\n~May 6\n\nOLSEN LAKE HOUSE · $4,200 · NOT SENT\n\nPDF\nopen document →\n\nCERAMICA STUDIO\n\nCER-0044\n\nIN TRANSIT\nReceived and dispositioned\n~May 25\n\nOLSEN LAKE HOUSE · $1,890 · NOT SENT\n\nPDF\nopen document →\n\nNORDIC ATELIER\n\nNA-2026-041\n\nIN PRODUCTION\nReceived and dispositioned\n~Jul 18\n\nCHEN RESIDENCE · $7,620 · NOT SENT\n\nPDF\nopen document →\n\nPO drafted\n\nDRAFT\nComplete to produce\n—\n\nOLSEN LAKE HOUSE · $3,400 · NOT SENT\n\nSEND →\nopen document →\n\nSAWKILLE CO\n\nSK-087\n\nCONFIRMED\nComplete to produce\n~Aug 2\n\nCHEN RESIDENCE · $2,400 · NOT SENT\n\nPDF\nopen document →\n\nSK-102\n\nIN PRODUCTION\nReceived and dispositioned\n—\n\nCHEN RESIDENCE · $9,600 · NOT SENT\n\nPDF\nopen document →\n\nWOODWARD & SONS\n\nWS-201\n\nRECEIVED / INSPECT\nReceived and dispositioned\n—\n\nOLSEN LAKE HOUSE · $5,100 · NOT SENT\n\nPDF\nopen document →\n\nWS-188\n\nRECEIVED / INSPECT\nReceived and dispositioned\n~May 20\n\nCHEN RESIDENCE · $6,800 · NOT SENT\n\nPDF\nopen document →"
+  }
+}

@@ -318,3 +318,98 @@ the sheet's own `#E8E3DB` literal and wired `<TheNote>`'s author name.
 
 `agent-pp-main2b` (the merge-to-main worktree) was removed, as `agent-pp-main` and `agent-pp-main3`
 were before it.
+
+---
+
+## 7 · Wave 3b — Desk follow-ups (added 2026-09-09)
+
+A fifth wave, two lanes (**A3** `@patina/supabase` concept-render record/remove hooks, **D7** the
+Desk follow-ups Wave 3 left owed), run after Wave 2b released the local database and port 3000.
+Full detail: **`ship/w3b-ship.md`**.
+
+| | |
+|---|---|
+| Deployed | `patina-designer-portal` |
+| Version | **`cf67abe9-65e1-4818-b7d1-8eaa9943d93d`** (2026-09-09T01:44:22Z) |
+| Rollback | **`bf6a3679-40b5-4c24-8db2-7cc2348f145a`** (W3's deployment) |
+| `main` | **`3ca24f6b2`** — `merge(portal-polish): wave 3b — Desk follow-ups` |
+| Branches | `portal-polish/a3` · `portal-polish/d7` · `portal-polish/integration-w3b` · `portal-polish/to-main-w3b`, all pushed, all ancestors of `main` |
+| Gates | designer type-check exit 0 · designer jest **549 suites / 6807 tests** (W3 baseline 548/6786 — **+1 suite, +21 tests, none lost**) · lint **205 problems / 2 errors**, byte-identical to the W3 baseline · shadow gate + `action-rest-rules` 4 suites / 74 tests, `shadow-gate.test.ts` byte-unchanged · `@patina/supabase` type-check 0 and **94 files / 1163 tests** · admin build exit 0 · client type-check exit 0 |
+| Renders | `waves/w3b/renders/` — `/desk`, a project document, and the Orders ledger at 1440 (all 1440/1440) and `/desk` at 390×844@2× (**390 / 390 — the overflow is closed**); **zero console and zero page errors** on all three signed-in surfaces; exactly one `box-shadow` on the page, `--elevation-sheet` |
+| Strata | untouched; no migration, no edge function, no other Worker |
+| Merges | both lanes merged **without a single conflict** |
+
+### What it closed
+
+**PP-2 on the day's line and the greeting** — `Marcus Wright · new lead — respond by 11 September`
+above `TUESDAY · 8 SEPTEMBER`, the client name leading and one en-GB date idiom, closing §4's
+divergences 3 and 4 for those two surfaces. **PP-3/R139's last unfinished rest rule** —
+`.da-score-hover::after` drops `scaleX(0)` and rests at 1px aged oak across ~31 consumers; measured
+live on the Orders ledger (20 on one sheet: `THE WEEK` rests `rgb(139,115,85)`, raises to
+`rgb(196,165,123)` clay) and the document page (`PUT DOWN`, same). **B03** — the ⌘K input is a real
+combobox (`combobox` / `aria-expanded` / `aria-autocomplete` in the served chunk), closing the gap
+D4 named and reverted. **The 390 horizontal overflow** — 437/390 for two waves, now **390/390**.
+And **A3** added `useRoomConceptRenderRecord` / `useRemoveRoomConceptRender` with delete-before-null
+ordering, the cure for D6's orphaned-storage-object finding.
+
+### Corrections to this report
+
+* **The header is now two waves stale.** It reads "Three waves" and `main` = `99906f992`; with 2b and
+  3b it is five waves and `main` = `3ca24f6b2`. Left in place, as W2b left it, so each wave's own
+  record stays readable.
+* **§4 item 21 has a second instance.** `packages/aesthete-quiz` also has no dist in a fresh worktree
+  and is not built by `@patina/designer-portal^...`, so `pnpm --filter @patina/client-portal
+  type-check` fails first-run with `Cannot find module '@patina/aesthete-quiz'` plus six downstream
+  errors. The fresh-worktree preamble is now **two** builds: `@patina/api-client` and
+  `@patina/aesthete-quiz`.
+* **§4 item 22 stands as W2b corrected it**, confirmed again here: `merge(...)` was refused on the
+  lane merges and accepted on the wave merge onto `main`, which kept its
+  `merge(portal-polish): wave 3b — …` subject.
+* **§4 item 20's recipe is now proven on the designer portal.** Exporting the sixteen committed
+  literals from `apps/designer-portal/wrangler.jsonc` `vars` for the one deploy invocation satisfies
+  the preflight and inlines exactly the values the Worker serves — verified by downloading all 36
+  served chunks before and after and finding identical counts for all seven env strings. No `.env`
+  shuffling, from a worktree with no `.env.local` at all.
+
+### The finding this wave paid for
+
+D7's brief was the 390 overflow and it targeted the roster **job name** (`min-w-0` +
+`[overflow-wrap:anywhere]`), following Wave 3's own DOM surgery. On the first integration render the
+number had not moved: still **437/390**. Bisecting the DOM found the real constraint one element to
+the right — the state sentence `<p class="doc-type-body min-w-0 flex-1">`, which yields its width to
+the name, is squeezed to 10px, and then overflows with its own 84px min-content. Stripping D7's two
+utilities back to their pre-D7 shape on the same build gave **437 either way**: on this seed the
+name fix is **inert** (the longest name has spaces and already wrapped). Giving the sentence the same
+`[overflow-wrap:anywhere]` gave **390/390**. Shipped as `0b0d49778` with its own test. The lesson for
+the next lane: a `min-w-0 flex-1` sibling is as much a source of min-content overflow as the child it
+is yielding to, and a CSS fix aimed by reasoning needs a rendered measurement before it is believed.
+
+### Still owed after 3b
+
+* **Finish PP-2 on the Desk.** `desk-derivation.ts`'s module-private `fmtDay` still prints `Sep 11`
+  on every roster row and on the document page, one line under the day's line's `11 September`.
+  Two date idioms remain on one screen. A shared file no lane owned; wants a real lane.
+* **Wire A3's hooks into `concept-render-upload.tsx`.** A3 has **zero consumers** — D6's component
+  still uses its own local helpers, so the orphaned storage object on Remove is **still live in
+  production**. The cure is written and unconnected.
+* **A ruling on `.da-score-on` vs `:hover`** — the hover compound outranks the selected rule, so a
+  selected control reads hovered rather than selected-and-hovered. Seen live on the ledger's
+  `LEDGER` tab.
+* **The specimen's 390 reflow** — the overflow half of W3's "The 390 Desk" is closed; the reflow half
+  (day's line first, sticky plates, action column under the sentence) is not.
+* **A3's whole-file Prettier reformat** flipped `use-room-concept-render.ts` to double quotes against
+  119 of 133 single-quoted neighbours, and `index.ts` carries two unrelated reformat hunks. An
+  argument for a root Prettier config; there is none outside `services/media` and `services/projects`.
+* **A3's read hook queries `project_rooms` directly**, not through `get_client_project_threshold` —
+  fine for a designer consumer, possibly empty for a client one. Check before wiring.
+* **The signed-in prod walk** — still owed, still for the same reason: no prod credential in the repo.
+
+### Worktrees added by this wave
+
+| Worktree | Branch | Note |
+|---|---|---|
+| `.codex/worktrees/agent-pp-a3` | `portal-polish/a3` | W3b lane |
+| `.codex/worktrees/agent-pp-d7` | `portal-polish/d7` | W3b lane |
+| `.codex/worktrees/agent-pp-int3b` | `portal-polish/integration-w3b` | W3b integration; **kept**, holds the prod `.next` build |
+
+`agent-pp-main3b` (the merge-to-main worktree) was removed, as every `agent-pp-main*` before it.

@@ -1,0 +1,283 @@
+{
+  "overflowingRows": 3,
+  "anat": [
+    {
+      "text": "The Ashfords (no-login household)The Ashfords (no-login household) · S",
+      "scrollW": 369,
+      "clientW": 336,
+      "kids": [
+        {
+          "tag": "SPAN",
+          "text": "",
+          "l": 27,
+          "rt": 363,
+          "w": 336,
+          "scrollW": 336,
+          "minWidth": "0px",
+          "flex": "0 1 auto",
+          "whiteSpace": "normal",
+          "overflowWrap": "normal",
+          "cls": "row-wash"
+        },
+        {
+          "tag": "SPAN",
+          "text": "",
+          "l": 27,
+          "rt": 34,
+          "w": 7,
+          "scrollW": 7,
+          "minWidth": "auto",
+          "flex": "0 0 auto",
+          "whiteSpace": "normal",
+          "overflowWrap": "normal",
+          "cls": "inline-block h-[7px] w-[7px] shrink-0 rounded-full"
+        },
+        {
+          "tag": "A",
+          "text": "The Ashfords (no-login household)",
+          "l": 48,
+          "rt": 299,
+          "w": 251,
+          "scrollW": 251,
+          "minWidth": "0px",
+          "flex": "0 1 auto",
+          "whiteSpace": "normal",
+          "overflowWrap": "anywhere",
+          "cls": "row-wash-score min-w-0 font-heading text-[16px] font-medium text-[var(--text-primary)] no-underline transition"
+        },
+        {
+          "tag": "P",
+          "text": "The Ashfords (no-login household) · Schedule",
+          "l": 312,
+          "rt": 363,
+          "w": 51,
+          "scrollW": 84,
+          "minWidth": "0px",
+          "flex": "1 1 0%",
+          "whiteSpace": "normal",
+          "overflowWrap": "normal",
+          "cls": "doc-type-body min-w-0 flex-1 text-[var(--text-muted)]"
+        },
+        {
+          "tag": "A",
+          "text": "Open the job",
+          "l": 27,
+          "rt": 140,
+          "w": 113,
+          "scrollW": 113,
+          "minWidth": "44px",
+          "flex": "0 0 auto",
+          "whiteSpace": "nowrap",
+          "overflowWrap": "normal",
+          "cls": "da-act relative inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center gap-2 whitespace-no"
+        }
+      ]
+    },
+    {
+      "text": "Elena Marlowe — Living Room DirectionElena Marlowe (no-login household",
+      "scrollW": 410,
+      "clientW": 336,
+      "kids": [
+        {
+          "tag": "SPAN",
+          "text": "",
+          "l": 27,
+          "rt": 363,
+          "w": 336,
+          "scrollW": 336,
+          "minWidth": "0px",
+          "flex": "0 1 auto",
+          "whiteSpace": "normal",
+          "overflowWrap": "normal",
+          "cls": "row-wash"
+        },
+        {
+          "tag": "SPAN",
+          "text": "",
+          "l": 27,
+          "rt": 34,
+          "w": 7,
+          "scrollW": 7,
+          "minWidth": "auto",
+          "flex": "0 0 auto",
+          "whiteSpace": "normal",
+          "overflowWrap": "normal",
+          "cls": "inline-block h-[7px] w-[7px] shrink-0 rounded-full"
+        },
+        {
+          "tag": "A",
+          "text": "Elena Marlowe — Living Room Direction",
+          "l": 48,
+          "rt": 340,
+          "w": 292,
+          "scrollW": 292,
+          "minWidth": "0px",
+          "flex": "0 1 auto",
+          "whiteSpace": "normal",
+          "overflowWrap": "anywhere",
+          "cls": "row-wash-score min-w-0 font-heading text-[16px] font-medium text-[var(--text-primary)] no-underline transition"
+        },
+        {
+          "tag": "P",
+          "text": "Elena Marlowe (no-login household) · draftin",
+          "l": 353,
+          "rt": 363,
+          "w": 10,
+          "scrollW": 84,
+          "minWidth": "0px",
+          "flex": "1 1 0%",
+          "whiteSpace": "normal",
+          "overflowWrap": "normal",
+          "cls": "doc-type-body min-w-0 flex-1 text-[var(--text-muted)]"
+        },
+        {
+          "tag": "A",
+          "text": "Open the job",
+          "l": 27,
+          "rt": 140,
+          "w": 113,
+          "scrollW": 113,
+          "minWidth": "44px",
+          "flex": "0 0 auto",
+          "whiteSpace": "nowrap",
+          "overflowWrap": "normal",
+          "cls": "da-act relative inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center gap-2 whitespace-no"
+        }
+      ]
+    },
+    {
+      "text": "Aspen Loft — Living Room Refreshsent, unopened 1dOpen the job",
+      "scrollW": 360,
+      "clientW": 336,
+      "kids": [
+        {
+          "tag": "SPAN",
+          "text": "",
+          "l": 27,
+          "rt": 363,
+          "w": 336,
+          "scrollW": 336,
+          "minWidth": "0px",
+          "flex": "0 1 auto",
+          "whiteSpace": "normal",
+          "overflowWrap": "normal",
+          "cls": "row-wash"
+        },
+        {
+          "tag": "SPAN",
+          "text": "",
+          "l": 27,
+          "rt": 34,
+          "w": 7,
+          "scrollW": 7,
+          "minWidth": "auto",
+          "flex": "0 0 auto",
+          "whiteSpace": "normal",
+          "overflowWrap": "normal",
+          "cls": "inline-block h-[7px] w-[7px] shrink-0 rounded-full"
+        },
+        {
+          "tag": "A",
+          "text": "Aspen Loft — Living Room Refresh",
+          "l": 48,
+          "rt": 298,
+          "w": 251,
+          "scrollW": 251,
+          "minWidth": "0px",
+          "flex": "0 1 auto",
+          "whiteSpace": "normal",
+          "overflowWrap": "anywhere",
+          "cls": "row-wash-score min-w-0 font-heading text-[16px] font-medium text-[var(--text-primary)] no-underline transition"
+        },
+        {
+          "tag": "P",
+          "text": "sent, unopened 1d",
+          "l": 312,
+          "rt": 363,
+          "w": 51,
+          "scrollW": 75,
+          "minWidth": "0px",
+          "flex": "1 1 0%",
+          "whiteSpace": "normal",
+          "overflowWrap": "normal",
+          "cls": "doc-type-body min-w-0 flex-1 text-[var(--text-muted)]"
+        },
+        {
+          "tag": "A",
+          "text": "Open the job",
+          "l": 27,
+          "rt": 140,
+          "w": 113,
+          "scrollW": 113,
+          "minWidth": "44px",
+          "flex": "0 0 auto",
+          "whiteSpace": "nowrap",
+          "overflowWrap": "normal",
+          "cls": "da-act relative inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center gap-2 whitespace-no"
+        }
+      ]
+    }
+  ],
+  "cures": [
+    {
+      "row": "The Ashfords (no-login household)The Ash",
+      "hid": "SPAN",
+      "liScrollW": 369,
+      "docScrollW": 437
+    },
+    {
+      "row": "The Ashfords (no-login household)The Ash",
+      "hid": "SPAN",
+      "liScrollW": 348,
+      "docScrollW": 437
+    },
+    {
+      "row": "The Ashfords (no-login household)The Ash",
+      "hid": "The Ashfords (no-login household)",
+      "liScrollW": 336,
+      "docScrollW": 437
+    },
+    {
+      "row": "The Ashfords (no-login household)The Ash",
+      "hid": "The Ashfords (no-login household) ",
+      "liScrollW": 336,
+      "docScrollW": 437
+    },
+    {
+      "row": "The Ashfords (no-login household)The Ash",
+      "hid": "Open the job",
+      "liScrollW": 369,
+      "docScrollW": 437
+    },
+    {
+      "row": "Elena Marlowe — Living Room DirectionEle",
+      "hid": "SPAN",
+      "liScrollW": 410,
+      "docScrollW": 437
+    },
+    {
+      "row": "Elena Marlowe — Living Room DirectionEle",
+      "hid": "SPAN",
+      "liScrollW": 389,
+      "docScrollW": 417
+    },
+    {
+      "row": "Elena Marlowe — Living Room DirectionEle",
+      "hid": "Elena Marlowe — Living Room Direct",
+      "liScrollW": 336,
+      "docScrollW": 396
+    },
+    {
+      "row": "Elena Marlowe — Living Room DirectionEle",
+      "hid": "Elena Marlowe (no-login household)",
+      "liScrollW": 336,
+      "docScrollW": 396
+    },
+    {
+      "row": "Elena Marlowe — Living Room DirectionEle",
+      "hid": "Open the job",
+      "liScrollW": 410,
+      "docScrollW": 437
+    }
+  ]
+}

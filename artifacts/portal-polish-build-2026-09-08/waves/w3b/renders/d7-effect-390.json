@@ -1,0 +1,18 @@
+{
+  "shipped": {
+    "doc": 437,
+    "longest": 292
+  },
+  "preD7": {
+    "doc": 437,
+    "longest": 292
+  },
+  "withSentenceWrap": {
+    "doc": 390,
+    "sentences": 17
+  },
+  "restored": {
+    "doc": 437
+  },
+  "nameCount": 17
+}
