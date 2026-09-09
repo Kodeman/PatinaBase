@@ -246,7 +246,7 @@ const optionId = (index: number) => `command-bar-option-${index}`;
 
 /* The list is a DOM sibling of the input, so the active option is not a
    descendant of the element that holds focus. ARIA's containment rule for
-   aria-activedescendant is satisfied the two ways it allows from a textbox:
+   aria-activedescendant is satisfied the two ways it allows from a combobox:
    the input OWNS this listbox, and it CONTROLS it. One listbox with a group
    per section — not a listbox per section — so there is one thing to own. */
 const RESULTS_ID = 'command-bar-results';
@@ -1103,9 +1103,18 @@ export function CommandBar() {
         onClick={() => setOpen(false)}
       />
       <div className="relative w-[min(560px,92vw)] overflow-hidden rounded-[6px] border border-[var(--doc-ink-border)] bg-[var(--doc-paper)]">
+        {/* B03 — the pattern completed. A textbox that names an active option
+            in a list it controls IS a combobox; without the role, expanded
+            state and autocomplete behaviour, a screen reader announces a plain
+            field and never says the list is there. Keyboard behaviour is
+            unchanged — ArrowUp/Down/Enter below own it, and focus never leaves
+            the input. */}
         <input
           ref={inputRef}
           type="text"
+          role="combobox"
+          aria-expanded={!asking}
+          aria-autocomplete="list"
           aria-activedescendant={
             !asking && flatRows[active] ? optionId(active) : undefined
           }

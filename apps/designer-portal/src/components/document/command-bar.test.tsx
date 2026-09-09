@@ -165,7 +165,7 @@ describe('SP-07 — the palette drops the Engine framing', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: /find anything/i }));
 
-    const input = screen.getByRole('textbox', { name: 'Find anything' });
+    const input = screen.getByRole('combobox', { name: 'Find anything' });
     expect(input).toHaveAttribute('placeholder', 'Find a document or a ledger…');
   });
 
@@ -178,7 +178,7 @@ describe('SP-07 — the palette drops the Engine framing', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: /find anything/i }));
 
-    const input = screen.getByRole('textbox', { name: 'Find anything' });
+    const input = screen.getByRole('combobox', { name: 'Find anything' });
     fireEvent.change(input, { target: { value: 'zzz-no-such-thing-zzz' } });
 
     expect(screen.getByText('No match')).toBeInTheDocument();
@@ -195,7 +195,7 @@ describe('SP-07 — the palette drops the Engine framing', () => {
     fireEvent.click(screen.getByRole('button', { name: /find anything/i }));
 
     const dialog = screen.getByRole('dialog', { name: 'Command bar' });
-    fireEvent.change(screen.getByRole('textbox', { name: 'Find anything' }), {
+    fireEvent.change(screen.getByRole('combobox', { name: 'Find anything' }), {
       target: { value: 'anything' },
     });
 
@@ -218,7 +218,7 @@ describe('SP-16 — ⌘K typed search finds the plan room', () => {
       </>,
     );
     fireEvent.click(screen.getByRole('button', { name: /find anything/i }));
-    const input = screen.getByRole('textbox', { name: 'Find anything' });
+    const input = screen.getByRole('combobox', { name: 'Find anything' });
     fireEvent.change(input, { target: { value: query } });
   }
 
@@ -244,7 +244,7 @@ describe('SP-16 — ⌘K typed search finds the plan room', () => {
         </>,
       );
       fireEvent.click(screen.getByRole('button', { name: /find anything/i }));
-      fireEvent.change(screen.getByRole('textbox', { name: 'Find anything' }), {
+      fireEvent.change(screen.getByRole('combobox', { name: 'Find anything' }), {
         target: { value: query },
       });
       expect(screen.getByText('Plan room')).toBeInTheDocument();
@@ -288,7 +288,7 @@ describe('F21 — ⌘K restores focus to the opener on close', () => {
     opener.focus();
     fireEvent.click(opener);
 
-    const input = await screen.findByRole('textbox', { name: 'Find anything' });
+    const input = await screen.findByRole('combobox', { name: 'Find anything' });
     await waitFor(() => expect(input).toHaveFocus());
 
     fireEvent.keyDown(window, { key: 'Escape' });
@@ -310,7 +310,7 @@ describe('F21 — ⌘K restores focus to the opener on close', () => {
     opener.focus();
     fireEvent.click(opener);
     await waitFor(() =>
-      expect(screen.getByRole('textbox', { name: 'Find anything' })).toHaveFocus(),
+      expect(screen.getByRole('combobox', { name: 'Find anything' })).toHaveFocus(),
     );
 
     // A chosen ledger row closes the palette and opens a sheet in the same
@@ -429,7 +429,7 @@ describe('F04 — the empty query leads with Where the work stands', () => {
     mockDeskData.mockReturnValue(studio as never);
 
     openPalette();
-    fireEvent.change(screen.getByRole('textbox', { name: 'Find anything' }), {
+    fireEvent.change(screen.getByRole('combobox', { name: 'Find anything' }), {
       target: { value: 'install' },
     });
 
@@ -443,7 +443,7 @@ describe('F04 — the empty query leads with Where the work stands', () => {
     mockDeskData.mockReturnValue(studio as never);
 
     openPalette();
-    fireEvent.change(screen.getByRole('textbox', { name: 'Find anything' }), {
+    fireEvent.change(screen.getByRole('combobox', { name: 'Find anything' }), {
       target: { value: 'proposal' },
     });
 
@@ -490,7 +490,7 @@ describe('F39/F65 — a stage phrase opens the palette already typed', () => {
       new CustomEvent('document:open-command-bar', { detail: { query: 'install' } }),
     );
 
-    expect(screen.getByRole('textbox', { name: 'Find anything' })).toHaveValue('install');
+    expect(screen.getByRole('combobox', { name: 'Find anything' })).toHaveValue('install');
     expect(screen.getByText('Where the work stands')).toBeInTheDocument();
     expect(screen.getByText('In install · 1')).toBeInTheDocument();
     expect(screen.queryByText('In procurement · 1')).not.toBeInTheDocument();
@@ -501,7 +501,7 @@ describe('F39/F65 — a stage phrase opens the palette already typed', () => {
 
     fireEvent(window, new CustomEvent('document:open-command-bar'));
 
-    expect(screen.getByRole('textbox', { name: 'Find anything' })).toHaveValue('');
+    expect(screen.getByRole('combobox', { name: 'Find anything' })).toHaveValue('');
   });
 });
 
@@ -570,7 +570,7 @@ describe('F29/F48/F50/F82 — This surface carries all four document surfaces', 
     mockDeskData.mockReturnValue({ folders: [{ row: deskRow() }], chips: [] } as never);
 
     openPalette();
-    fireEvent.change(screen.getByRole('textbox', { name: 'Find anything' }), {
+    fireEvent.change(screen.getByRole('combobox', { name: 'Find anything' }), {
       target: { value: 'board' },
     });
 
@@ -597,7 +597,7 @@ describe('F29/F48/F50/F82 — This surface carries all four document surfaces', 
     } as never);
 
     openPalette();
-    fireEvent.change(screen.getByRole('textbox', { name: 'Find anything' }), {
+    fireEvent.change(screen.getByRole('combobox', { name: 'Find anything' }), {
       target: { value: 'spec book' },
     });
 
@@ -631,7 +631,7 @@ describe('F29/F48/F50/F82 — This surface carries all four document surfaces', 
     window.addEventListener('document:open-call-sheet', listener);
 
     openPalette();
-    fireEvent.change(screen.getByRole('textbox', { name: 'Find anything' }), {
+    fireEvent.change(screen.getByRole('combobox', { name: 'Find anything' }), {
       target: { value: 'roster' },
     });
     fireEvent.click(screen.getByText('Call sheet · Vandersteen').closest('button')!);
@@ -689,7 +689,7 @@ describe('D4\' — ⌘K offers a Start a board… command', () => {
     mockDeskData.mockReturnValue({ folders: [{ row: deskRow() }], chips: [] } as never);
 
     openPalette();
-    fireEvent.change(screen.getByRole('textbox', { name: 'Find anything' }), {
+    fireEvent.change(screen.getByRole('combobox', { name: 'Find anything' }), {
       target: { value: 'new board' },
     });
 
@@ -713,7 +713,7 @@ describe('D4\' — ⌘K offers a Start a board… command', () => {
     } as never);
 
     openPalette();
-    fireEvent.change(screen.getByRole('textbox', { name: 'Find anything' }), {
+    fireEvent.change(screen.getByRole('combobox', { name: 'Find anything' }), {
       target: { value: 'start a board' },
     });
 
@@ -786,7 +786,7 @@ describe('the "Leave a note" doorway follows the tester-notes flag', () => {
       </>,
     );
     fireEvent.click(screen.getByRole('button', { name: /find anything/i }));
-    fireEvent.change(screen.getByRole('textbox', { name: 'Find anything' }), {
+    fireEvent.change(screen.getByRole('combobox', { name: 'Find anything' }), {
       target: { value: 'leave a note' },
     });
   }
@@ -816,7 +816,7 @@ describe('L5 — the two reference doorways in ⌘K', () => {
       </>,
     );
     fireEvent.click(screen.getByRole('button', { name: /find anything/i }));
-    fireEvent.change(screen.getByRole('textbox', { name: 'Find anything' }), {
+    fireEvent.change(screen.getByRole('combobox', { name: 'Find anything' }), {
       target: { value: query },
     });
   }
@@ -871,7 +871,7 @@ describe('B03 — the palette a screen reader can drive', () => {
 
   const options = () => screen.getAllByRole('option');
   const paletteInput = () =>
-    screen.getByRole('textbox', { name: 'Find anything' });
+    screen.getByRole('combobox', { name: 'Find anything' });
 
   it('opens a modal dialog, not a floating panel over a live page', () => {
     expect(openPalette()).toHaveAttribute('aria-modal', 'true');
@@ -899,7 +899,7 @@ describe('B03 — the palette a screen reader can drive', () => {
   it('owns and controls that listbox from the input the focus sits in', () => {
     openPalette();
     // ARIA lets aria-activedescendant leave the focused element only for a
-    // logical descendant (aria-owns) or, from a textbox, the controlled
+    // logical descendant (aria-owns) or, from a combobox, the controlled
     // element's subtree (aria-controls). The list is a DOM sibling, so
     // without one of these the pointer names nothing an AT has to resolve.
     const listbox = screen.getByRole('listbox');
@@ -912,6 +912,19 @@ describe('B03 — the palette a screen reader can drive', () => {
         paletteInput().getAttribute('aria-activedescendant')!,
       ),
     );
+  });
+
+  it('is a combobox, expanded, autocompleting from the list (B03)', () => {
+    openPalette();
+    // The role is what makes the rest legible: an input that merely NAMES an
+    // active option is still announced as a plain field, so the list it drives
+    // is never mentioned.
+    const input = paletteInput();
+    expect(input.tagName).toBe('INPUT');
+    expect(input).toHaveAttribute('role', 'combobox');
+    expect(input).toHaveAttribute('aria-expanded', 'true');
+    expect(input).toHaveAttribute('aria-autocomplete', 'list');
+    expect(input).toHaveAttribute('aria-activedescendant');
   });
 
   it('marks exactly one option selected, and names it on the input', () => {
