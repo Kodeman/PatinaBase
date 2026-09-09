@@ -16,6 +16,7 @@ Artifact: https://claude.ai/code/artifact/b80a403f-56a7-421f-baa7-b74f973490ad (
 | `specimens/email-letter.html` | The invite email as rendered (light/dark, images-off text block) |
 | `specimens/composer-sheet.html` | The add-person sheet with the note field |
 | `specimens/arrival.html` | Landing / first-visit Threshold carrying the note |
+| `rulings.md` | **Kody's rulings, 8 September 2026** — R1–R13 with owner and status, the three deviations from the panel, and what the rulings do not decide (Q5, the owed PP-6 V9 amendment, the unplanned build) |
 | `proposal.html` | **The deliverable** — scrolling proposal document (house Idiom A). Twelve numbered sections plus an appendix; the three specimens are embedded unchanged inside `figure.mock` wrappers |
 | `source/proposal.md` | Prose spine — section headings and paragraphs, no markup |
 | `source/check-prose.mjs` | Word-budget gate (`data-prose-cap` per top-level `<section>`, `data-prose-total` on `<body>`). Run `node source/check-prose.mjs` from this folder |

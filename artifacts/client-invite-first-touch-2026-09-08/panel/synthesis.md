@@ -28,13 +28,14 @@ A homeowner's first-ever contact with Patina is a Supabase Auth email: subject *
 - **As she types**, her words appear beneath the field in the letter's callout style with the facts line above — a glance check, not a rendered-email preview (lens 2, medium confidence; cheap).
 - **Success line:** `Dave is on your roster. Your letter is on its way to dave@okonkwo.net.` / `…Nothing was sent.` / `Dave was already on Patina. He's linked to you now; a short letter tells him so.`
 - **Activity log:** `Leah wrote to Dave Okonkwo` — `Letter sent to dave@okonkwo.net · with a note`.
+- **Who may write, whose name signs:** any studio member may write; **the studio owner signs** (R11 — the panel proposed the writer signs). What the callout then does with a junior's words is open (Q5).
 
 ### 2.2 The letter (homeowner side)
 
 Copy is lens 4's, adopted in full. Body 96 words with the note, 55 without.
 
 - **From:** `Middle West Studio via Patina <hello@patina.cloud>` — see R1; three lenses disagreed. **Reply-to: the designer's address** (unanimous; precedent in four senders).
-- **Subject:** `Leah Hartwell added you to the Van Hise kitchen and back hall`. "Added", not "invited" (lens 4: the literal truth of the act; "invite" makes Patina the host). No "Patina" in the subject (unanimous). Solo fixture: `Nora Feld set up a page for your work together`.
+- **Subject:** `Leah Hartwell invited you to the Van Hise kitchen and back hall`. The panel wrote "added, not invited" (lens 4: the literal truth of the act; "invite" makes Patina the host); Kody amended it on the subject line alone (R3), and the body's standing sentence still says "added you to". No "Patina" in the subject (unanimous). Solo fixture, unchanged: `Nora Feld set up a page for your work together`.
 - **Preheader:** `Where Middle West Studio keeps the record of your job.`
 - **Letterhead** (PP-1, two-sided): `MIDDLE WEST STUDIO` / `Madison · 8 September 2026` left; `Prepared for Dave Okonkwo` right. Studio logo ≤24px beside the name when one exists. **No Patina wordmark.** Solo designer: her own name is the letterhead (lens 4; lens 3 would keep the Patina wordmark here — R2 records the dissent).
 - **Standing sentence** (system, truth-framed, always present): *"Leah Hartwell of Middle West Studio added you to the Van Hise kitchen and back hall on 8 September. The page below holds the studio's record of the job — the plans, the papers, and the numbers."* Two sentences, deliberately (lens 4 §E.7): the second tells a stranger what he has been handed.
@@ -55,7 +56,7 @@ Copy is lens 4's, adopted in full. Body 96 words with the note, 55 without.
 
 ### 2.4 After send (designer side)
 
-- **Row states, three:** `Letter sent 8 Sept` · `Signed in 9 Sept` · `Link lapsed 15 Sept · Write again`. `Opened` withheld — R9.
+- **Row states, four:** `Letter sent 8 Sept` · `Opened 9 Sept` · `Signed in 9 Sept` · `Link lapsed 15 Sept · Write again`. The panel withheld `Opened`; Kody kept it (R9), with the constraints intact — never phrased as an absence, never as a duration, never on a client surface.
 - **Resend in v1** (lenses 2, 5, 6 against today's silent no-op): new token, same frozen letter, one in flight at a time, one-per-hour cooldown. Never phrased as an absence.
 
 ### 2.5 What it takes (lens 6, adopted)
@@ -75,21 +76,21 @@ Copy is lens 4's, adopted in full. Body 96 words with the note, 55 without.
 
 Each is a recommendation, not a decision. The owner rules; disagreement is the useful response.
 
-| # | Question | Recommendation | Owner | Blocks |
-|---|---|---|---|---|
-| R1 | The envelope: From display name for homeowner letters. | `Middle West Studio via Patina <hello@patina.cloud>` — business name leads, "via" discloses the relay (the Gmail-Groups pattern), which reads as a legitimate relay rather than display-name spoofing; a personal name in front of a domain that is not hers is the shape filters catch (lens 3). Fallback with no studio: `Leah Hartwell via Patina`. Alternative for the ear: bare `Middle West Studio` (lens 4). Reply-to the designer either way. | Kody | L1 |
-| R2 | Is the email a client surface under PP-1? | Yes. Studio letterhead on top, Patina once in the colophon. Implemented as an additive `audience:'client-letter'` shell branch so only this sender changes; the wholesale shell change is its own program. Solo designer: her name is the letterhead (lens 3 dissents: keep the Patina wordmark when there is no studio). Record with the owed PP-6 V9 amendment. | Kody | L1, L3 |
-| R3 | The letter's copy. | Lens 4's letter as written: subject "added you to", the two-sentence standing sentence, `Open the project`, the dated expiry line, the three-line footer. | Leah (ear) | L1 |
-| R4 | The note: optional or required; cap. | Optional, 280 characters. The letter reads whole without it. | Leah (practice) | L1, L2 |
-| R5 | Delivery path. | (c): GoTrue mints, we write; the letter's link is our seven-day token; the GoTrue link is minted at click, on a button POST. | Kody | L1 |
-| R6 | The landing. | Page two of the letter, no password, one button. Retire the password form. | Kody | L3 |
-| R7′ | Full name or given name in the sign-off. | Full name on the first letter and the first-visit note; R7's given name on every letter after. | Leah (ear) | L1 |
-| R8 | The note's afterlife. | Seeded as the house's first standing note from the frozen snapshot; recedes as standing notes do; with no project it lives on the letter page and the client record only. | Leah (practice) | L3 |
-| R9 | Row states. | Three: Letter sent · Signed in · Link lapsed. `Opened` withheld — a read receipt in a studio's hands has one use, pressure. If kept, never as an absence, never on a client surface. | Leah (practice) | L4 |
-| R10 | Resend in v1. | Yes: same frozen letter, new date, one in flight, one per hour. The lapsed-link page offers one tap. | Kody | L4 |
-| R11 | Who may write, whose name signs. | Any studio member; the writer signs. (Owner-only signing for juniors is a business call, not a default.) | Leah (practice) | L2 |
-| R12 | Retire "invite", "magic-link", "to Patina" on the designer's side. | Ship the checkbox rename and helper regardless of the rest. The house word is *the letter*. | Kody | L2 |
-| R13 | The already-has-account case. | The notice letter goes; the silent link ends. | Kody | L1 |
+| # | Question | Recommendation | Owner | Blocks | Ruled |
+|---|---|---|---|---|---|
+| R1 | The envelope: From display name for homeowner letters. | `Middle West Studio via Patina <hello@patina.cloud>` — business name leads, "via" discloses the relay (the Gmail-Groups pattern), which reads as a legitimate relay rather than display-name spoofing; a personal name in front of a domain that is not hers is the shape filters catch (lens 3). Fallback with no studio: `Leah Hartwell via Patina`. Alternative for the ear: bare `Middle West Studio` (lens 4). Reply-to the designer either way. | Kody | L1 | As recommended. |
+| R2 | Is the email a client surface under PP-1? | Yes. Studio letterhead on top, Patina once in the colophon. Implemented as an additive `audience:'client-letter'` shell branch so only this sender changes; the wholesale shell change is its own program. Solo designer: her name is the letterhead (lens 3 dissents: keep the Patina wordmark when there is no studio). Record with the owed PP-6 V9 amendment. | Kody | L1, L3 | As recommended. |
+| R3 | The letter's copy. | Lens 4's letter as written: subject "added you to", the two-sentence standing sentence, `Open the project`, the dated expiry line, the three-line footer. | Leah (ear) | L1 | Adopted **except the subject reads "invited you to"** — `Leah Hartwell invited you to the Van Hise kitchen and back hall`; solo subject unchanged; the body still says "added you to". *Provisional.* |
+| R4 | The note: optional or required; cap. | Optional, 280 characters. The letter reads whole without it. | Leah (practice) | L1, L2 | As recommended. *Provisional.* |
+| R5 | Delivery path. | (c): GoTrue mints, we write; the letter's link is our seven-day token; the GoTrue link is minted at click, on a button POST. | Kody | L1 | Hybrid path (c), as recommended. |
+| R6 | The landing. | Page two of the letter, no password, one button. Retire the password form. | Kody | L3 | As recommended. |
+| R7′ | Full name or given name in the sign-off. | Full name on the first letter and the first-visit note; R7's given name on every letter after. | Leah (ear) | L1 | As recommended. *Provisional.* |
+| R8 | The note's afterlife. | Seeded as the house's first standing note from the frozen snapshot; recedes as standing notes do; with no project it lives on the letter page and the client record only. | Leah (practice) | L3 | As recommended. *Provisional.* |
+| R9 | Row states. | Three: Letter sent · Signed in · Link lapsed. `Opened` withheld — a read receipt in a studio's hands has one use, pressure. If kept, never as an absence, never on a client surface. | Leah (practice) | L4 | **Four states, `Opened` kept** — Letter sent · Opened · Signed in · Link lapsed. Constraints stand. *Provisional.* |
+| R10 | Resend in v1. | Yes: same frozen letter, new date, one in flight, one per hour. The lapsed-link page offers one tap. | Kody | L4 | As recommended. |
+| R11 | Who may write, whose name signs. | Any studio member; the writer signs. (Owner-only signing for juniors is a business call, not a default.) | Leah (practice) | L2 | **Any studio member may write; the studio owner signs.** Q5 left open. *Provisional.* |
+| R12 | Retire "invite", "magic-link", "to Patina" on the designer's side. | Ship the checkbox rename and helper regardless of the rest. The house word is *the letter*. | Kody | L2 | As recommended. |
+| R13 | The already-has-account case. | The notice letter goes; the silent link ends. | Kody | L1 | As recommended. |
 
 ## 4 · Vision test
 

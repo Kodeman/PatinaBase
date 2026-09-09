@@ -931,7 +931,7 @@ tbody tr:last-child td,tbody tr:last-child th{border-bottom:none;}
   <div class="masthead-meta">
     <div><b>Prepared for</b><span>Kody &middot; build, infrastructure, operations</span><span>Leah and the Middle West Studio team &middot; design and practice. The mockups draw their studio by name.</span></div>
     <div><b>Lanes</b><span>L1 The send leg</span><span>L2 The composer</span><span>L3 The arrival</span><span>L4 The designer&rsquo;s account</span><span>&asymp;10.5 engineer-days</span></div>
-    <div><b>Standing</b><span>Nothing here is built</span><span>One recommendation, thirteen rulings</span></div>
+    <div><b>Standing</b><span>Nothing here is built</span><span>One recommendation</span><span>Thirteen rulings, ruled 8 September (Leah&rsquo;s provisional)</span></div>
   </div>
 </header>
 
@@ -1233,6 +1233,10 @@ tbody tr:last-child td,tbody tr:last-child th{border-bottom:none;}
           <p class="state t-body-sm">Letter sent 8 Sept</p>
         </li>
         <li>
+          <p class="who t-d3">Tom Reyes</p>
+          <p class="state t-body-sm">Opened 9 Sept</p>
+        </li>
+        <li>
           <p class="who t-d3">Priya Raman</p>
           <p class="state t-body-sm">Link lapsed 15 Sept · <button type="button" class="act act--inline"><span class="label">Write again</span></button></p>
         </li>
@@ -1265,7 +1269,7 @@ tbody tr:last-child td,tbody tr:last-child th{border-bottom:none;}
     <li><strong>As she types</strong>, her words appear beneath the field in the letter&rsquo;s callout style with the facts line above &mdash; a glance check, not a rendered-email preview.</li>
     <li><strong>The success line</strong> tells the truth about both acts: <span class="quote">Dave is on your roster. Your letter is on its way to dave@okonkwo.net.</span> &middot; <span class="quote">&hellip;Nothing was sent.</span> &middot; <span class="quote">Dave was already on Patina. He&rsquo;s linked to you now; a short letter tells him so.</span></li>
     <li><strong>The activity log</strong> records an author, not a system: <span class="quote">Leah wrote to Dave Okonkwo</span> &mdash; <span class="quote">Letter sent to dave@okonkwo.net &middot; with a note</span>.</li>
-    <li><strong>Any studio member may write, and the writer signs</strong> &mdash; owner-only signing for juniors is a business call, not a default. <a href="#r11">R11</a>.</li>
+    <li><strong>Any studio member may write; the studio owner signs</strong> &mdash; ruled against the panel, which had the writer sign. What the callout does with a junior&rsquo;s words is the open question, Q5. <a href="#r11">R11</a>.</li>
     <li><strong>The rename ships regardless of the rest</strong> &mdash; &ldquo;invite&rdquo;, &ldquo;magic-link&rdquo; and &ldquo;to Patina&rdquo; leave the designer&rsquo;s side; the house word is <em>the letter</em>. <a href="#r12">R12</a>.</li>
   </ul>
 </section>
@@ -1285,7 +1289,7 @@ tbody tr:last-child td,tbody tr:last-child th{border-bottom:none;}
     <dl class="envelope">
       <dt>From</dt><dd>Middle West Studio via Patina &lt;hello@patina.cloud&gt;</dd>
       <dt>Reply-to</dt><dd>leah@middleweststudio.com</dd>
-      <dt>Subject</dt><dd>Leah Hartwell added you to the Van Hise kitchen and back hall</dd>
+      <dt>Subject</dt><dd>Leah Hartwell invited you to the Van Hise kitchen and back hall</dd>
       <dt>Preheader</dt><dd>Where Middle West Studio keeps the record of your job.</dd>
     </dl>
 
@@ -1428,7 +1432,7 @@ its own.</pre>
       <tbody>
         <tr><th scope="row">From</th><td><span class="mono">Middle West Studio via Patina &lt;hello@patina.cloud&gt;</span> &mdash; business name leads, &ldquo;via&rdquo; discloses the relay. Fallback with no studio: <span class="mono">Leah Hartwell via Patina</span>. <a href="#r1">R1</a></td></tr>
         <tr><th scope="row">Reply-to</th><td>The designer&rsquo;s own address. Unanimous; the precedent already runs in four senders.</td></tr>
-        <tr><th scope="row">Subject</th><td><span class="mono">Leah Hartwell added you to the Van Hise kitchen and back hall</span>. Solo fixture: <span class="mono">Nora Feld set up a page for your work together</span>.</td></tr>
+        <tr><th scope="row">Subject</th><td><span class="mono">Leah Hartwell invited you to the Van Hise kitchen and back hall</span> &mdash; Kody&rsquo;s amendment to the panel&rsquo;s &ldquo;added you to&rdquo;, on the subject line alone. <a href="#r3">R3</a>. Solo fixture, unchanged: <span class="mono">Nora Feld set up a page for your work together</span>.</td></tr>
         <tr><th scope="row">Preheader</th><td><span class="mono">Where Middle West Studio keeps the record of your job.</span> It answers what happens if she opens it, rather than repeating the subject.</td></tr>
         <tr><th scope="row">Category</th><td>Transactional, through <span class="ref">sendCompliantEmail</span> with an idempotency key. No unsubscribe footer.</td></tr>
         <tr><th scope="row">Plain-text part</th><td>Mandatory, not optional &mdash; the same letter, laid out for a reader with images off.</td></tr>
@@ -1438,7 +1442,7 @@ its own.</pre>
 
   <p>It opens with the studio&rsquo;s letterhead and closes with one colophon. Between them: a standing sentence the system writes and never disguises as hers, her note in a brass-ruled callout, one button, and a date the link works until. There is no <span class="quote">Accept invitation</span> and no countdown.</p>
 
-  <p>The subject says added, not invited: added is what happened, and invited would make Patina the host. Three lenses disagreed on the From name; <a href="#r1">R1</a> records the disagreement and the recommendation both, and <a href="#r2">R2</a> the letterhead. <a href="#r3">R3</a> owns the copy, <a href="#r7b">R7&prime;</a> the sign-off.</p>
+  <p>Kody amended the panel: the subject reads invited you to; the body still says added you to. Three lenses disagreed on the From name; <a href="#r1">R1</a> records the disagreement and the recommendation both, and <a href="#r2">R2</a> the letterhead. <a href="#r3">R3</a> owns the copy, <a href="#r7b">R7&prime;</a> the sign-off.</p>
 
   <h3 class="mono-head">The body, line by line</h3>
   <ul>
@@ -1584,25 +1588,25 @@ its own.</pre>
 <section id="after" data-prose-cap="110">
   <div class="opener"><p class="eyebrow">Seven</p><h2>After send</h2></div>
 
-  <p class="lede">Three row states, all of them things that happened: Letter sent 8 Sept, Signed in 9 Sept, Link lapsed 15 Sept, with the remedy beside the last.</p>
+  <p class="lede">Four row states, all of them things that happened: Letter sent 8 Sept, Opened 9 Sept, Signed in 9 Sept, Link lapsed 15 Sept, the remedy beside the last.</p>
 
   <div class="tablewrap">
     <table class="tight">
       <thead><tr><th class="w-name" scope="col">Row reads</th><th scope="col">Read from</th><th class="w-what" scope="col">Why this wording</th></tr></thead>
       <tbody>
         <tr><th scope="row">Letter sent 8 Sept</th><td><span class="ref">client_invitations.sent_at</span> + <span class="ref">notification_log</span></td><td>An act with a date. Never &ldquo;pending&rdquo;, never a state she is waiting in.</td></tr>
+        <tr><th scope="row">Opened 9 Sept</th><td>Open event on the <span class="ref">notification_log</span> row</td><td><strong>Kept, against the panel.</strong> A dated act like the others, and it prints only when it happened. <a href="#r9">R9</a>.</td></tr>
         <tr><th scope="row">Signed in 9 Sept</th><td><span class="ref">accepted_at</span></td><td>The only thing worth knowing: he arrived.</td></tr>
         <tr><th scope="row">Link lapsed 15 Sept &middot; Write again</th><td><span class="ref">expires_at</span></td><td>The remedy sits beside the fact, so the row is never a reproach.</td></tr>
-        <tr><th scope="row"><em>Opened</em></th><td>&mdash;</td><td><strong>Withheld.</strong> Never as an absence, never on a client surface. <a href="#r9">R9</a>.</td></tr>
       </tbody>
     </table>
   </div>
 
-  <p>Opened is withheld. A read receipt in a studio&rsquo;s hands has one use, and that use is pressure.</p>
+  <p>Kody kept Opened against the panel. It is never an absence, never a duration, never on a client surface.</p>
 
   <p>Resend ships in v1 against today&rsquo;s silent no-op: a new token, the same frozen letter with a new date, one in flight, one per hour. The lapsed-link page offers it as one tap. <a href="#r10">R10</a>.</p>
 
-  <p>Where the person already has an account, the designer is told a letter went and the homeowner gets nothing; a short notice letter goes instead. <a href="#r13">R13</a>.</p>
+  <p>Where the person already has an account, the designer is told a letter went and the homeowner gets nothing; a notice letter goes instead. <a href="#r13">R13</a>.</p>
 
   <h3 class="mono-head">The notice letter</h3>
   <ul>
@@ -1670,25 +1674,26 @@ its own.</pre>
 <section id="rulings" data-prose-cap="30">
   <div class="opener"><p class="eyebrow">Nine</p><h2>Rulings</h2></div>
 
-  <p class="lede">Each of these is a recommendation, not a decision. The owner column names who rules; disagreement is the useful response.</p>
+  <p class="lede">Each of these was a recommendation. The owner column names who rules; the Ruled column records what was decided.</p>
+  <p>Ruled by Kody, 8 September; Leah&rsquo;s items provisional.</p>
 
   <div class="tablewrap">
     <table class="tight min900">
-      <thead><tr><th scope="col">#</th><th class="w-name" scope="col">Ruling</th><th class="w-what" scope="col">Recommendation</th><th scope="col">Owner</th><th scope="col">Blocks</th></tr></thead>
+      <thead><tr><th scope="col">#</th><th class="w-name" scope="col">Ruling</th><th class="w-what" scope="col">Recommendation</th><th scope="col">Owner</th><th scope="col">Blocks</th><th class="w-what" scope="col">Ruled</th></tr></thead>
       <tbody>
-        <tr><th class="num" scope="row" id="r1">R1</th><td><strong>The envelope: From display name for homeowner letters.</strong></td><td><span class="mono">Middle West Studio via Patina &lt;hello@patina.cloud&gt;</span> &mdash; business name leads, &ldquo;via&rdquo; discloses the relay (the Gmail-Groups pattern), which reads as a legitimate relay rather than display-name spoofing; a personal name in front of a domain that is not hers is the shape filters catch. Fallback with no studio: <span class="mono">Leah Hartwell via Patina</span>. Alternative for the ear: bare <span class="mono">Middle West Studio</span>. Reply-to the designer either way.</td><td>Kody</td><td class="num">L1</td></tr>
-        <tr><th class="num" scope="row" id="r2">R2</th><td><strong>Is the email a client surface under PP-1?</strong></td><td>Yes. Studio letterhead on top, Patina once in the colophon. Implemented as an additive <span class="ref">audience:'client-letter'</span> shell branch so only this sender changes; the wholesale shell change is its own program. Solo designer: her name is the letterhead (lens 3 dissents: keep the Patina wordmark when there is no studio). Record with the owed PP-6 V9 amendment.</td><td>Kody</td><td class="num">L1, L3</td></tr>
-        <tr><th class="num" scope="row" id="r3">R3</th><td><strong>The letter&rsquo;s copy.</strong></td><td>Lens 4&rsquo;s letter as written: subject &ldquo;added you to&rdquo;, the two-sentence standing sentence, <span class="quote">Open the project</span>, the dated expiry line, the three-line footer.</td><td>Leah (ear)</td><td class="num">L1</td></tr>
-        <tr><th class="num" scope="row" id="r4">R4</th><td><strong>The note: optional or required; cap.</strong></td><td>Optional, 280 characters. The letter reads whole without it.</td><td>Leah (practice)</td><td class="num">L1, L2</td></tr>
-        <tr><th class="num" scope="row" id="r5">R5</th><td><strong>Delivery path.</strong></td><td>(c): GoTrue mints, we write; the letter&rsquo;s link is our seven-day token; the GoTrue link is minted at click, on a button POST.</td><td>Kody</td><td class="num">L1</td></tr>
-        <tr><th class="num" scope="row" id="r6">R6</th><td><strong>The landing.</strong></td><td>Page two of the letter, no password, one button. Retire the password form.</td><td>Kody</td><td class="num">L3</td></tr>
-        <tr><th class="num" scope="row" id="r7b">R7&prime;</th><td><strong>Full name or given name in the sign-off.</strong></td><td>Full name on the first letter and the first-visit note; R7&rsquo;s given name on every letter after.</td><td>Leah (ear)</td><td class="num">L1</td></tr>
-        <tr><th class="num" scope="row" id="r8">R8</th><td><strong>The note&rsquo;s afterlife.</strong></td><td>Seeded as the house&rsquo;s first standing note from the frozen snapshot; recedes as standing notes do; with no project it lives on the letter page and the client record only.</td><td>Leah (practice)</td><td class="num">L3</td></tr>
-        <tr><th class="num" scope="row" id="r9">R9</th><td><strong>Row states.</strong></td><td>Three: Letter sent &middot; Signed in &middot; Link lapsed. <span class="quote">Opened</span> withheld &mdash; a read receipt in a studio&rsquo;s hands has one use, pressure. If kept, never as an absence, never on a client surface.</td><td>Leah (practice)</td><td class="num">L4</td></tr>
-        <tr><th class="num" scope="row" id="r10">R10</th><td><strong>Resend in v1.</strong></td><td>Yes: same frozen letter, new date, one in flight, one per hour. The lapsed-link page offers one tap.</td><td>Kody</td><td class="num">L4</td></tr>
-        <tr><th class="num" scope="row" id="r11">R11</th><td><strong>Who may write, whose name signs.</strong></td><td>Any studio member; the writer signs. (Owner-only signing for juniors is a business call, not a default.)</td><td>Leah (practice)</td><td class="num">L2</td></tr>
-        <tr><th class="num" scope="row" id="r12">R12</th><td><strong>Retire &ldquo;invite&rdquo;, &ldquo;magic-link&rdquo;, &ldquo;to Patina&rdquo; on the designer&rsquo;s side.</strong></td><td>Ship the checkbox rename and helper regardless of the rest. The house word is <em>the letter</em>.</td><td>Kody</td><td class="num">L2</td></tr>
-        <tr><th class="num" scope="row" id="r13">R13</th><td><strong>The already-has-account case.</strong></td><td>The notice letter goes; the silent link ends.</td><td>Kody</td><td class="num">L1</td></tr>
+        <tr><th class="num" scope="row" id="r1">R1</th><td><strong>The envelope: From display name for homeowner letters.</strong></td><td><span class="mono">Middle West Studio via Patina &lt;hello@patina.cloud&gt;</span> &mdash; business name leads, &ldquo;via&rdquo; discloses the relay (the Gmail-Groups pattern), which reads as a legitimate relay rather than display-name spoofing; a personal name in front of a domain that is not hers is the shape filters catch. Fallback with no studio: <span class="mono">Leah Hartwell via Patina</span>. Alternative for the ear: bare <span class="mono">Middle West Studio</span>. Reply-to the designer either way.</td><td>Kody</td><td class="num">L1</td><td>As recommended.</td></tr>
+        <tr><th class="num" scope="row" id="r2">R2</th><td><strong>Is the email a client surface under PP-1?</strong></td><td>Yes. Studio letterhead on top, Patina once in the colophon. Implemented as an additive <span class="ref">audience:'client-letter'</span> shell branch so only this sender changes; the wholesale shell change is its own program. Solo designer: her name is the letterhead (lens 3 dissents: keep the Patina wordmark when there is no studio). Record with the owed PP-6 V9 amendment.</td><td>Kody</td><td class="num">L1, L3</td><td>As recommended.</td></tr>
+        <tr><th class="num" scope="row" id="r3">R3</th><td><strong>The letter&rsquo;s copy.</strong></td><td>Lens 4&rsquo;s letter as written: subject &ldquo;added you to&rdquo;, the two-sentence standing sentence, <span class="quote">Open the project</span>, the dated expiry line, the three-line footer.</td><td>Leah (ear)</td><td class="num">L1</td><td><strong>Except the subject reads &ldquo;invited you to&rdquo;</strong> &mdash; <span class="mono">Leah Hartwell invited you to the Van Hise kitchen and back hall</span>. Solo subject unchanged; the body still says &ldquo;added you to&rdquo;. <em>Provisional.</em></td></tr>
+        <tr><th class="num" scope="row" id="r4">R4</th><td><strong>The note: optional or required; cap.</strong></td><td>Optional, 280 characters. The letter reads whole without it.</td><td>Leah (practice)</td><td class="num">L1, L2</td><td>As recommended. <em>Provisional.</em></td></tr>
+        <tr><th class="num" scope="row" id="r5">R5</th><td><strong>Delivery path.</strong></td><td>(c): GoTrue mints, we write; the letter&rsquo;s link is our seven-day token; the GoTrue link is minted at click, on a button POST.</td><td>Kody</td><td class="num">L1</td><td>Hybrid path (c), as recommended.</td></tr>
+        <tr><th class="num" scope="row" id="r6">R6</th><td><strong>The landing.</strong></td><td>Page two of the letter, no password, one button. Retire the password form.</td><td>Kody</td><td class="num">L3</td><td>As recommended.</td></tr>
+        <tr><th class="num" scope="row" id="r7b">R7&prime;</th><td><strong>Full name or given name in the sign-off.</strong></td><td>Full name on the first letter and the first-visit note; R7&rsquo;s given name on every letter after.</td><td>Leah (ear)</td><td class="num">L1</td><td>As recommended. <em>Provisional.</em></td></tr>
+        <tr><th class="num" scope="row" id="r8">R8</th><td><strong>The note&rsquo;s afterlife.</strong></td><td>Seeded as the house&rsquo;s first standing note from the frozen snapshot; recedes as standing notes do; with no project it lives on the letter page and the client record only.</td><td>Leah (practice)</td><td class="num">L3</td><td>As recommended. <em>Provisional.</em></td></tr>
+        <tr><th class="num" scope="row" id="r9">R9</th><td><strong>Row states.</strong></td><td>Three: Letter sent &middot; Signed in &middot; Link lapsed. <span class="quote">Opened</span> withheld &mdash; a read receipt in a studio&rsquo;s hands has one use, pressure. If kept, never as an absence, never on a client surface.</td><td>Leah (practice)</td><td class="num">L4</td><td><strong>Four states, <span class="quote">Opened</span> kept</strong> &mdash; Letter sent &middot; Opened &middot; Signed in &middot; Link lapsed. The constraints stand. <em>Provisional.</em></td></tr>
+        <tr><th class="num" scope="row" id="r10">R10</th><td><strong>Resend in v1.</strong></td><td>Yes: same frozen letter, new date, one in flight, one per hour. The lapsed-link page offers one tap.</td><td>Kody</td><td class="num">L4</td><td>As recommended.</td></tr>
+        <tr><th class="num" scope="row" id="r11">R11</th><td><strong>Who may write, whose name signs.</strong></td><td>Any studio member; the writer signs. (Owner-only signing for juniors is a business call, not a default.)</td><td>Leah (practice)</td><td class="num">L2</td><td><strong>Any studio member may write; the studio owner signs.</strong> Q5 left open. <em>Provisional.</em></td></tr>
+        <tr><th class="num" scope="row" id="r12">R12</th><td><strong>Retire &ldquo;invite&rdquo;, &ldquo;magic-link&rdquo;, &ldquo;to Patina&rdquo; on the designer&rsquo;s side.</strong></td><td>Ship the checkbox rename and helper regardless of the rest. The house word is <em>the letter</em>.</td><td>Kody</td><td class="num">L2</td><td>Ship the designer-side rename first, as recommended.</td></tr>
+        <tr><th class="num" scope="row" id="r13">R13</th><td><strong>The already-has-account case.</strong></td><td>The notice letter goes; the silent link ends.</td><td>Kody</td><td class="num">L1</td><td>As recommended.</td></tr>
       </tbody>
     </table>
   </div>
@@ -1719,17 +1724,18 @@ its own.</pre>
 
   <ul>
     <li><strong>Comment on the Artifact</strong> on the line it concerns.</li>
-    <li><strong>Rule <a href="#rulings">R1&ndash;R13</a></strong> &mdash; Kody owns <a href="#r1">R1</a>, <a href="#r2">R2</a>, <a href="#r5">R5</a>, <a href="#r6">R6</a>, <a href="#r10">R10</a>, <a href="#r12">R12</a> and <a href="#r13">R13</a>; Leah owns <a href="#r3">R3</a>, <a href="#r4">R4</a>, <a href="#r7b">R7&prime;</a>, <a href="#r8">R8</a>, <a href="#r9">R9</a> and <a href="#r11">R11</a>.</li>
+    <li><strong>Leah confirms <a href="#r3">R3</a>, <a href="#r4">R4</a>, <a href="#r7b">R7&prime;</a>, <a href="#r8">R8</a>, <a href="#r9">R9</a> and <a href="#r11">R11</a></strong> &mdash; ruled provisionally by Kody on 8 September so nothing is blocked; each stands until she confirms or overturns it. The full record is <a href="rulings.md">rulings.md</a>.</li>
     <li><strong>Walk the People Room add-client sheet today</strong> and read the letter your own client would get &mdash; Mailpit locally. Ten minutes gets further than reading.</li>
   </ul>
 
   <div class="qgroup">
-    <h3 class="mono-head">Four questions for Middle West Studio</h3>
+    <h3 class="mono-head">Five questions for Middle West Studio</h3>
     <ol>
       <li>Does &ldquo;Middle West Studio via Patina&rdquo; read right in your clients&rsquo; inboxes, or would you rather the bare studio name?</li>
       <li>Should a junior&rsquo;s letter sign with the junior&rsquo;s name?</li>
       <li>Would you ever want to see &ldquo;Opened&rdquo; &mdash; and if so, what would you do with it?</li>
       <li>Full name or given name on the first letter?</li>
+      <li><strong>Q5, raised by <a href="#r11">R11</a>:</strong> when a junior writes the note, does the callout attribute the words to the junior, or does the letter carry them under the owner&rsquo;s signature?</li>
     </ol>
   </div>
 
