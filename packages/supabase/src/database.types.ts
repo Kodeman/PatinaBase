@@ -4781,6 +4781,8 @@ export type Database = {
           client_email: string | null
           client_id: string | null
           client_name: string | null
+          client_phone: string | null
+          client_phone_e164: string | null
           created_at: string
           designer_id: string
           first_project_at: string | null
@@ -4808,6 +4810,8 @@ export type Database = {
           client_email?: string | null
           client_id?: string | null
           client_name?: string | null
+          client_phone?: string | null
+          client_phone_e164?: string | null
           created_at?: string
           designer_id: string
           first_project_at?: string | null
@@ -4835,6 +4839,8 @@ export type Database = {
           client_email?: string | null
           client_id?: string | null
           client_name?: string | null
+          client_phone?: string | null
+          client_phone_e164?: string | null
           created_at?: string
           designer_id?: string
           first_project_at?: string | null
@@ -8806,6 +8812,8 @@ export type Database = {
           client_request_id: string | null
           contact_email: string | null
           contact_name: string | null
+          contact_phone: string | null
+          contact_phone_e164: string | null
           contacted_at: string | null
           created_at: string
           declined_at: string | null
@@ -8832,6 +8840,8 @@ export type Database = {
           client_request_id?: string | null
           contact_email?: string | null
           contact_name?: string | null
+          contact_phone?: string | null
+          contact_phone_e164?: string | null
           contacted_at?: string | null
           created_at?: string
           declined_at?: string | null
@@ -8858,6 +8868,8 @@ export type Database = {
           client_request_id?: string | null
           contact_email?: string | null
           contact_name?: string | null
+          contact_phone?: string | null
+          contact_phone_e164?: string | null
           contacted_at?: string | null
           created_at?: string
           declined_at?: string | null

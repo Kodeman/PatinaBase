@@ -15503,3 +15503,45 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.client_invitation_status(uuid) TO authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00583_lead_contact_phone.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.normalize_lead_contact_phone_e164() FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00583_lead_contact_phone.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.normalize_designer_client_phone_e164() FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00583_lead_contact_phone.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.begin_discovery(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00583_lead_contact_phone.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.begin_discovery(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00583_lead_contact_phone.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.hydrate_lead_relationship_contact() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00583_lead_contact_phone.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.ceremony_complete(uuid, text, jsonb, text, text, text) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00583_lead_contact_phone.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.ceremony_complete(uuid, text, jsonb, text, text, text) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
