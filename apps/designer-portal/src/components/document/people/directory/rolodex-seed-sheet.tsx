@@ -140,6 +140,10 @@ export function RolodexSeedSheet({
   const [pendingId, setPendingId] = useState<string | null>(null);
   // F3-R1-07 — the card this review list is editing, if any.
   const [editingContact, setEditingContact] = useState<StudioContact | null>(null);
+  // F3-R2-11 — the confirmation message from a save via that editor, so
+  // closing the sheet acknowledges the save (R51/R83 grammar) instead of
+  // just silently landing back on the review list.
+  const [notice, setNotice] = useState<string | null>(null);
 
   const rows = useMemo(() => {
     const list = [...(contacts ?? [])];
@@ -198,6 +202,16 @@ export function RolodexSeedSheet({
         restore a card at any time.
       </p>
 
+      {/* The quiet confirmation band — R51's settled grammar, inline, no toast (R83). */}
+      {notice && (
+        <p
+          role="status"
+          className="mb-4 border-l-2 border-[var(--color-sage)] bg-[rgba(133,148,124,0.07)] py-2 pl-3 pr-2 font-mono text-[11px] uppercase tracking-[0.07em] text-[#6f8268]"
+        >
+          {notice}
+        </p>
+      )}
+
       {isLoading ? (
         <p className="py-6 text-center text-[0.74rem] text-[var(--color-aged-oak)]">
           Reading the rolodex…
@@ -217,7 +231,10 @@ export function RolodexSeedSheet({
               pending={pendingId === c.id}
               onArchive={handleArchive}
               onRestore={handleRestore}
-              onEdit={setEditingContact}
+              onEdit={(c) => {
+                setNotice(null);
+                setEditingContact(c);
+              }}
             />
           ))}
         </ul>
@@ -238,7 +255,10 @@ export function RolodexSeedSheet({
           open
           onClose={() => setEditingContact(null)}
           contact={editingContact}
-          onSaved={() => setEditingContact(null)}
+          onSaved={(message) => {
+            setEditingContact(null);
+            setNotice(message);
+          }}
         />
       )}
     </RoomSheet>

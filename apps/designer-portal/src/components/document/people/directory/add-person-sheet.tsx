@@ -27,6 +27,13 @@
  * with only the fields that actually changed. `onSaved` fires in place of
  * `onAdded` on success — there is no directory tab to land on, since the
  * caller is already sitting on the card's own profile.
+ *
+ * F3-R2-14 — a card with `vendor_id` set (every 00418 pass-A/B row) is the
+ * studio's OWN COPY of a maker: this editor only ever writes the
+ * `studio_contacts` row it was opened on, never the `vendors` row `vendor_id`
+ * points at. "Makers stay read-only (vendor-owned)" governs that shared
+ * `vendors` record, not the studio's private label for it — so this sheet
+ * intentionally still edits a vendor-backed card's copy.
  */
 
 import { useEffect, useMemo, useState } from 'react';
@@ -234,6 +241,21 @@ export function AddPersonSheet({
   const isCompanyContact = contact?.entity_kind === 'company';
   const hasProfile = !!contact?.profile_id;
   const contactDisplayName = contact?.full_name ?? contact?.company_name ?? 'this contact';
+  // F3-R2-10 — a company card's name is a studio-book fact even when the
+  // card also carries a profile_id (not a state we expect, but the primary
+  // field must not vanish entirely if it occurs): render/validate/diff it
+  // whenever it's the company-name field, and otherwise only when there's no
+  // profile to self-manage the person's name.
+  const primaryFieldRendered = isCompanyContact || !hasProfile;
+  // F3-R2-09 — a seeded vendor card's specialties[0] can sit outside the
+  // field-trade vocab (VendorSpecialty, not FieldTrade); shown as its own
+  // option so the editor renders what the record holds instead of a blank
+  // control that discards the value on any unrelated save.
+  const originalSpecialty = contact?.specialties?.[0] ?? null;
+  const outOfVocabSpecialty =
+    originalSpecialty && !(ALL_FIELD_TRADES as readonly string[]).includes(originalSpecialty)
+      ? originalSpecialty
+      : null;
   useEffect(() => {
     if (!open || !contact) return;
     setPartyName(contact.full_name ?? '');
@@ -420,19 +442,26 @@ export function AddPersonSheet({
    *  F3-R1-01/16 — a company card's name lives in `company_name`; only a
    *  person card's uses `full_name` — sending the wrong column would
    *  overwrite one with the other on a save that touched neither.
-   *  F3-R1-06 — a profile-holder's name/email/phone are never diffed (the
+   *  F3-R1-06 — a profile-holder's name/phone/email are never diffed (the
    *  fields are hidden in that render branch, but this guards the write
-   *  itself, not just the UI).
+   *  itself, not just the UI). Company stays studio-owned either way (the
+   *  Company field renders regardless of `hasProfile`), so it is never
+   *  gated on it (F3-R2-08).
    *  F3-R1-09 — trade patches element 0 of `specialties` in place rather
    *  than replacing the whole array, so a card with more than one specialty
-   *  keeps the rest. */
+   *  keeps the rest.
+   *  F3-R2-07 — the primary Name/Company-name field only renders when
+   *  `primaryFieldRendered` (mirrors the render branch below); validating
+   *  and diffing it when it's off-screen blocks saving an unrelated field
+   *  (e.g. Notes) on a profile-holding person whose `full_name` is NULL.
+   *  F3-R2-06 — Notes is diffed for every card, not only profile-holders. */
   const submitEditContact = async () => {
     if (!contact) return;
     setError(null);
     const trimmedCompany = company.trim();
     const trimmedName = partyName.trim();
     const primaryValue = isCompanyContact ? trimmedCompany : trimmedName;
-    if (!primaryValue) {
+    if (primaryFieldRendered && !primaryValue) {
       setError(
         isCompanyContact ? 'This company needs a name.' : 'This contact needs a name.',
       );
@@ -454,7 +483,8 @@ export function AddPersonSheet({
       if (trimmedCompany !== (contact.company_name ?? ''))
         patch.companyName = trimmedCompany || null;
     } else {
-      if (trimmedName !== (contact.full_name ?? '')) patch.fullName = trimmedName;
+      if (!hasProfile && trimmedName !== (contact.full_name ?? ''))
+        patch.fullName = trimmedName;
       if (trimmedCompany !== (contact.company_name ?? ''))
         patch.companyName = trimmedCompany || null;
     }
@@ -462,9 +492,8 @@ export function AddPersonSheet({
       const restSpecialties = (contact.specialties ?? []).slice(1);
       patch.specialties = trimmedTrade ? [trimmedTrade, ...restSpecialties] : restSpecialties;
     }
-    if (hasProfile) {
-      if (trimmedNotes !== (contact.notes ?? '')) patch.notes = trimmedNotes || null;
-    } else {
+    if (trimmedNotes !== (contact.notes ?? '')) patch.notes = trimmedNotes || null;
+    if (!hasProfile) {
       const trimmedPhone = phone.trim();
       const trimmedEmail = partyEmail.trim();
       if (trimmedPhone !== (contact.phone ?? '')) patch.phone = trimmedPhone || null;
@@ -476,13 +505,14 @@ export function AddPersonSheet({
       return;
     }
 
+    const confirmationName = primaryValue || contactDisplayName;
     try {
       await updateContact.mutateAsync({
         id: contact.id,
         organizationId: contact.organization_id,
         ...patch,
       });
-      onSaved?.(`${primaryValue}’s details are saved.`);
+      onSaved?.(`${confirmationName}’s details are saved.`);
       reset();
       onClose();
     } catch (e) {
@@ -550,7 +580,7 @@ export function AddPersonSheet({
             </p>
           )}
 
-          {!hasProfile && (
+          {primaryFieldRendered && (
             <>
               <label className={FIELD_LABEL} htmlFor="edit-contact-name">
                 {isCompanyContact ? 'Company name' : 'Name'}
@@ -598,6 +628,9 @@ export function AddPersonSheet({
             className={`${FIELD_INPUT} mb-4`}
           >
             <option value="">Which trade…</option>
+            {outOfVocabSpecialty && (
+              <option value={outOfVocabSpecialty}>{outOfVocabSpecialty}</option>
+            )}
             {ALL_FIELD_TRADES.map((t) => (
               <option key={t} value={t}>
                 {FIELD_TRADE_LABELS[t]}
@@ -605,21 +638,19 @@ export function AddPersonSheet({
             ))}
           </select>
 
-          {hasProfile ? (
-            <>
-              <label className={FIELD_LABEL} htmlFor="edit-contact-notes">
-                Notes <span className="opacity-60">(optional)</span>
-              </label>
-              <textarea
-                id="edit-contact-notes"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Anything worth remembering…"
-                rows={3}
-                className={`${FIELD_INPUT} resize-none`}
-              />
-            </>
-          ) : (
+          <label className={FIELD_LABEL} htmlFor="edit-contact-notes">
+            Notes <span className="opacity-60">(optional)</span>
+          </label>
+          <textarea
+            id="edit-contact-notes"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Anything worth remembering…"
+            rows={3}
+            className={`${FIELD_INPUT} ${hasProfile ? '' : 'mb-4'} resize-none`}
+          />
+
+          {!hasProfile && (
             <>
               <label className={FIELD_LABEL} htmlFor="edit-contact-phone">
                 Phone <span className="opacity-60">(optional)</span>

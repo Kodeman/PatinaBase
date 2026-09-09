@@ -169,6 +169,24 @@ describe('RolodexSeedSheet — Edit opens the card editor (F3-R1-07)', () => {
       expect(screen.queryByText('Edit Rosa Martínez')).not.toBeInTheDocument(),
     );
   });
+
+  // F3-R2-11 — a save via this door acknowledges itself instead of silently
+  // landing back on the review list.
+  it('shows the save confirmation inline after closing the editor', async () => {
+    renderWithClient(
+      <RolodexSeedSheet open onClose={jest.fn()} organizationId="org-1" />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.change(screen.getByLabelText('Phone (optional)'), {
+      target: { value: '5559876543' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/Rosa Martínez.*saved/)).toBeInTheDocument(),
+    );
+  });
 });
 
 describe('RolodexSeedSheet — DONE closes', () => {

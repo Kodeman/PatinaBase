@@ -299,3 +299,122 @@ describe('AddPersonSheet — edit mode, trade patches one specialty in place (F3
     });
   });
 });
+
+describe('AddPersonSheet — edit mode, Notes are editable on every card (F3-R2-06)', () => {
+  it('renders and diffs Notes for a plain (non-profile) card alongside Phone/Email', async () => {
+    renderWithClient(
+      <AddPersonSheet
+        open
+        onClose={jest.fn()}
+        contact={contact({ notes: null })}
+      />,
+    );
+
+    expect(screen.getByLabelText('Notes (optional)')).toHaveValue('');
+    expect(screen.getByLabelText('Phone (optional)')).toBeInTheDocument();
+    expect(screen.getByLabelText('Email (optional)')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Notes (optional)'), {
+      target: { value: 'Calls back fast' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(updateMutateAsync).toHaveBeenCalled());
+    expect(updateMutateAsync.mock.calls[0][0]).toEqual({
+      id: 'contact-1',
+      organizationId: 'org-1',
+      notes: 'Calls back fast',
+    });
+  });
+});
+
+describe('AddPersonSheet — edit mode, a profile-holder with no full_name on file (F3-R2-07)', () => {
+  it('saves an unrelated field without the hidden Name field blocking it, and confirms with a fallback name', async () => {
+    const onSaved = jest.fn();
+    renderWithClient(
+      <AddPersonSheet
+        open
+        onClose={jest.fn()}
+        onSaved={onSaved}
+        contact={contact({ profile_id: 'user-1', full_name: null, notes: null })}
+      />,
+    );
+
+    expect(screen.queryByLabelText('Name')).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Notes (optional)'), {
+      target: { value: 'Prefers texts' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(updateMutateAsync).toHaveBeenCalled());
+    expect(updateMutateAsync.mock.calls[0][0]).toEqual({
+      id: 'contact-1',
+      organizationId: 'org-1',
+      notes: 'Prefers texts',
+    });
+    // Falls back to company_name (contactDisplayName) since there's no name to quote.
+    expect(onSaved).toHaveBeenCalledWith(expect.stringContaining('Moretti Plumbing'));
+  });
+});
+
+describe('AddPersonSheet — edit mode, a specialty outside the field-trade vocab (F3-R2-09)', () => {
+  it('shows the original value as its own option instead of a blank control', () => {
+    renderWithClient(
+      <AddPersonSheet
+        open
+        onClose={jest.fn()}
+        contact={contact({ specialties: ['upholstery'] })}
+      />,
+    );
+
+    expect(screen.getByLabelText('Trade (optional)')).toHaveValue('upholstery');
+    expect(screen.getByRole('option', { name: 'upholstery' })).toBeInTheDocument();
+  });
+
+  it('keeps the out-of-vocab specialty on an unrelated save', async () => {
+    renderWithClient(
+      <AddPersonSheet
+        open
+        onClose={jest.fn()}
+        contact={contact({ specialties: ['upholstery'] })}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText('Company (optional)'), {
+      target: { value: 'Moretti Home' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(updateMutateAsync).toHaveBeenCalled());
+    expect(updateMutateAsync.mock.calls[0][0]).not.toHaveProperty('specialties');
+  });
+});
+
+describe('AddPersonSheet — edit mode, a company card that also carries profile_id (F3-R2-10)', () => {
+  it('still shows and edits Company name — a studio-book fact, not the profile-holder’s identity', async () => {
+    const companyWithProfile = contact({
+      entity_kind: 'company',
+      contact_kind: 'vendor',
+      full_name: null,
+      company_name: 'Moretti Plumbing',
+      profile_id: 'user-1',
+      specialties: [],
+    });
+    renderWithClient(
+      <AddPersonSheet open onClose={jest.fn()} contact={companyWithProfile} />,
+    );
+
+    expect(screen.getByLabelText('Company name')).toHaveValue('Moretti Plumbing');
+
+    fireEvent.change(screen.getByLabelText('Company name'), {
+      target: { value: 'Moretti Plumbing & Heating' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(updateMutateAsync).toHaveBeenCalled());
+    expect(updateMutateAsync.mock.calls[0][0]).toEqual({
+      id: 'contact-1',
+      organizationId: 'org-1',
+      companyName: 'Moretti Plumbing & Heating',
+    });
+  });
+});
