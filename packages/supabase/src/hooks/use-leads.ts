@@ -602,6 +602,103 @@ export function useBeginDiscovery() {
   });
 }
 
+/** What {@link useReturnToLeadCheck} answers: the door, and why it is shut. */
+export interface ReturnToLeadCheck {
+  allowed: boolean;
+  /** One plain sentence, written by the RPC, shown as helper text. */
+  reason: string | null;
+  lead_id: string | null;
+}
+
+/**
+ * Whether an accidental "Accept · begin" can still be undone (00585).
+ *
+ * An undo only exists while it is still an undo. The server refuses once the
+ * relationship holds real content or the client has been written to, and hands
+ * back the sentence to print under the disabled action — so the reason is
+ * never guessed at in the portal.
+ *
+ * Disabled without a relationship id. Kept fresh rather than cached long: the
+ * answer changes the moment anything is written to the engagement.
+ */
+export function useReturnToLeadCheck(designerClientId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['return-to-lead-check', designerClientId],
+    enabled: Boolean(designerClientId),
+    queryFn: async (): Promise<ReturnToLeadCheck> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase.rpc('return_to_lead_check', {
+        p_designer_client_id: designerClientId,
+      });
+
+      if (error) throw error;
+      // Fail closed: a shape the RPC did not promise is not permission.
+      if (!data || typeof data.allowed !== 'boolean') {
+        throw new Error('Return-to-lead check did not return a verdict');
+      }
+
+      return {
+        allowed: data.allowed,
+        reason: data.reason ?? null,
+        lead_id: data.lead_id ?? null,
+      };
+    },
+  });
+}
+
+/**
+ * Undo an accidental "Accept · begin" (00585) — the lead goes back to `new`
+ * with its accepted stamp cleared, and the empty Discovery relationship is
+ * deleted, so the Desk folder reads as the Brief again.
+ *
+ * The RPC re-runs {@link useReturnToLeadCheck}'s check under a row lock and
+ * raises with its reason, so a stale open door still refuses at the act.
+ *
+ * Invalidates everything `useBeginDiscovery` does (it reverses that act), plus
+ * the check itself, the client-list keys from use-clients.ts, and the
+ * document-state / desk keys — the folder changes shape, so every surface that
+ * reads it must re-derive.
+ */
+export function useReturnToLead() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (designerClientId: string) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase.rpc('return_to_lead', {
+        p_designer_client_id: designerClientId,
+      });
+
+      if (error) throw error;
+      if (!data?.lead_id) {
+        throw new Error('Return to lead did not return the restored lead');
+      }
+
+      return data as { lead_id: string };
+    },
+    onSuccess: (result, designerClientId) => {
+      // useBeginDiscovery's set, keyed by the lead this act restores.
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
+      queryClient.invalidateQueries({ queryKey: ['lead', result.lead_id] });
+      queryClient.invalidateQueries({ queryKey: ['lead-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['designer-clients'] });
+      // Then the rest.
+      queryClient.invalidateQueries({
+        queryKey: ['return-to-lead-check', designerClientId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['designer-client', designerClientId],
+      });
+      queryClient.invalidateQueries({ queryKey: ['client-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['discovery', designerClientId] });
+      queryClient.invalidateQueries({ queryKey: ['document-state'] });
+      queryClient.invalidateQueries({ queryKey: ['desk-engagements'] });
+    },
+  });
+}
+
 /**
  * Nurture a lead with a reconnect date (Track 6, ruling R65).
  *

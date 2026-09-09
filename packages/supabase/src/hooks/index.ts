@@ -231,10 +231,12 @@ export {
   useMarkLeadViewed,
   useAcceptLead,
   useBeginDiscovery,
+  useReturnToLeadCheck,
+  useReturnToLead,
   useNurtureLead,
   useDeclineLead,
 } from "./use-leads";
-export type { Lead, LeadFilters } from "./use-leads";
+export type { Lead, LeadFilters, ReturnToLeadCheck } from "./use-leads";
 export {
   useDiscovery,
   useUpsertDiscovery,

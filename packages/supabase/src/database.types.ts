@@ -34973,6 +34973,11 @@ export type Database = {
         Args: { p_designer_id: string }
         Returns: undefined
       }
+      return_to_lead: { Args: { p_designer_client_id: string }; Returns: Json }
+      return_to_lead_check: {
+        Args: { p_designer_client_id: string }
+        Returns: Json
+      }
       reverse_direct_order_earnings: {
         Args: { p_order_id: string }
         Returns: Json
