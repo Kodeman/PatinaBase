@@ -1,7 +1,9 @@
--- Lead contact phone regression (00583)
+-- Lead contact phone regression (00584)
 -- A phone taken at the front door must normalize on the lead, carry onto the
 -- designer_clients row Discovery ensures, and read in the People directory
 -- both before Discovery (as the lead's) and after (as the client's).
+-- Clearing a raw phone must clear its E.164 derivation with it, on both tables,
+-- and an emptied "Phone on file" must not be re-hydrated from the lead.
 -- Run:
 --   psql 'postgresql://postgres:postgres@127.0.0.1:54322/postgres' \
 --     -v ON_ERROR_STOP=1 -f supabase/tests/document/lead_contact_phone_test.sql
@@ -60,6 +62,31 @@ BEGIN
           FROM public.leads
           WHERE id = 'd9200000-0000-4000-8000-000000000002'),
     'a lead with no phone must carry a NULL contact_phone_e164';
+END;
+$$;
+
+-- Clearing the raw phone clears the derivation with it: a stale e164 is a
+-- number a later SMS path would still read after the designer removed it.
+DO $$
+BEGIN
+  UPDATE public.leads
+  SET contact_phone = NULL
+  WHERE id = 'd9200000-0000-4000-8000-000000000001';
+  ASSERT (SELECT contact_phone_e164 IS NULL
+          FROM public.leads
+          WHERE id = 'd9200000-0000-4000-8000-000000000001'),
+    format('clearing contact_phone must clear contact_phone_e164, got %L',
+           (SELECT contact_phone_e164 FROM public.leads
+            WHERE id = 'd9200000-0000-4000-8000-000000000001'));
+
+  -- Put it back for the Discovery legs below.
+  UPDATE public.leads
+  SET contact_phone = '(555) 014-2200'
+  WHERE id = 'd9200000-0000-4000-8000-000000000001';
+  ASSERT (SELECT contact_phone_e164 = '+15550142200'
+          FROM public.leads
+          WHERE id = 'd9200000-0000-4000-8000-000000000001'),
+    're-typing the phone must re-derive its E.164 form';
 END;
 $$;
 
@@ -175,6 +202,26 @@ BEGIN
             WHERE id = v_relationship_id),
            (SELECT client_phone_e164 FROM public.designer_clients
             WHERE id = v_relationship_id));
+
+  -- The household sheet's own clear: it saves name, email, and phone together,
+  -- so this is the shape hydration sees. The phone must stay empty (hydration
+  -- fills it on INSERT only) and its derivation must go with it. The email
+  -- re-hydrating is 00399's deliberate behaviour, asserted here so the
+  -- difference between the two columns is on the record.
+  UPDATE public.designer_clients
+  SET client_email = NULL, client_phone = NULL
+  WHERE id = v_relationship_id;
+
+  ASSERT (SELECT client_phone IS NULL AND client_phone_e164 IS NULL
+          FROM public.designer_clients WHERE id = v_relationship_id),
+    format('an emptied Phone on file must stay empty, got %L / %L',
+           (SELECT client_phone FROM public.designer_clients
+            WHERE id = v_relationship_id),
+           (SELECT client_phone_e164 FROM public.designer_clients
+            WHERE id = v_relationship_id));
+  ASSERT (SELECT client_email = 'okafors@test.invalid'
+          FROM public.designer_clients WHERE id = v_relationship_id),
+    'the email leg still re-hydrates from the lead (00399)';
 END;
 $$;
 

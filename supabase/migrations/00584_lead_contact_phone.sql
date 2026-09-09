@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- 00583 — lead contact phone: a spot for both phone and email on a new lead
+-- 00584 — lead contact phone: a spot for both phone and email on a new lead
 --
 -- INTENT
 -- A captured lead had one "Contact" field. An email landed in
@@ -17,7 +17,12 @@
 --   public.hydrate_lead_relationship_contact()      00399:744-768
 --   public.people_directory (view)                  00221 → 00420 → 00478:139-371
 --   No later migration redefines any of the four (verified by grep across
---   supabase/migrations at 00582).
+--   supabase/migrations at 00583; 00583_studio_comember_rls_sweep, unmerged on
+--   fix/studio-comember-rls-sweep, changes policies only and none of the four).
+--
+-- NUMBER
+-- Minted as 00583, moved to 00584: fix/studio-comember-rls-sweep claimed 00583
+-- first on origin, and the ledger version is the numeric prefix.
 --
 -- E.164 DERIVATION
 -- public.normalize_party_phone_e164() (00281) cannot be reused here: its body
@@ -26,6 +31,19 @@
 -- calling the same pure helper public.normalize_phone_e164(text) (00281).
 -- Trigger names sort after hydrate_lead_relationship_contact_trg so the
 -- normalizer sees the hydrated phone (BEFORE row triggers fire in name order).
+--
+-- ANON WRITES
+-- The leads normalizer is unconditional and SECURITY INVOKER, and anon holds no
+-- EXECUTE on public.normalize_phone_e164, so an anon INSERT into leads raises
+-- "permission denied for function normalize_phone_e164" before RLS reaches its
+-- own WITH CHECK denial. Every lead write today is authenticated or SECURITY
+-- DEFINER, and 00281's project_parties trigger has the identical shape, so this
+-- is left as-is; a future public capture form would need EXECUTE granted.
+--
+-- NO INDEX YET
+-- Neither *_e164 column is indexed. 00281 indexed project_parties.phone_e164
+-- for the inbound conversation-key lookup; nothing reads these two columns yet,
+-- so the index waits for the reader that needs it.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 -- ── 1. Columns ──────────────────────────────────────────────────────────────
@@ -36,10 +54,11 @@ ALTER TABLE public.leads
 
 COMMENT ON COLUMN public.leads.contact_phone IS
   'Phone as the designer typed it at capture. Optional. Carries through to '
-  'designer_clients.client_phone when the lead begins Discovery (00583).';
+  'designer_clients.client_phone when the lead begins Discovery (00584).';
 COMMENT ON COLUMN public.leads.contact_phone_e164 IS
   'Normalized derivation of contact_phone, set by the normalize_phone_leads '
-  'trigger. NULL when the raw phone is absent or unparseable (00583).';
+  'trigger. NULL when the raw phone is absent, cleared, or unparseable '
+  '(00584).';
 
 ALTER TABLE public.designer_clients
   ADD COLUMN IF NOT EXISTS client_phone text,
@@ -47,23 +66,28 @@ ALTER TABLE public.designer_clients
 
 COMMENT ON COLUMN public.designer_clients.client_phone IS
   'Working phone for a captured household with no Patina account. A client '
-  'with a profile manages their own phone on profiles.phone (00583).';
+  'with a profile manages their own phone on profiles.phone (00584).';
 COMMENT ON COLUMN public.designer_clients.client_phone_e164 IS
   'Normalized derivation of client_phone, set by the '
-  'normalize_phone_designer_clients trigger (00583).';
+  'normalize_phone_designer_clients trigger (00584).';
 
 -- ── 2. E.164 derivation triggers ────────────────────────────────────────────
 
 CREATE OR REPLACE FUNCTION public.normalize_lead_contact_phone_e164()
 RETURNS TRIGGER
 LANGUAGE plpgsql
-SET search_path TO 'public'
+SET search_path = public, pg_temp
 AS $$
 BEGIN
-  -- Derive from the raw phone; a directly-supplied e164 is still normalized so
-  -- a hand write cannot smuggle an unnormalized value in.
+  -- The raw column is the only source on UPDATE, so clearing the phone clears
+  -- the derivation with it. On INSERT a directly-supplied e164 is still put
+  -- through the normalizer, so a hand write cannot smuggle a raw value in.
   NEW.contact_phone_e164 := public.normalize_phone_e164(
-    COALESCE(NEW.contact_phone, NEW.contact_phone_e164)
+    CASE
+      WHEN TG_OP = 'INSERT' AND NEW.contact_phone IS NULL
+        THEN NEW.contact_phone_e164
+      ELSE NEW.contact_phone
+    END
   );
   RETURN NEW;
 END;
@@ -74,7 +98,7 @@ REVOKE ALL ON FUNCTION public.normalize_lead_contact_phone_e164()
 
 COMMENT ON FUNCTION public.normalize_lead_contact_phone_e164() IS
   'BEFORE INSERT/UPDATE trigger on leads: keeps contact_phone_e164 a '
-  'normalized derivation of contact_phone (00583).';
+  'normalized derivation of contact_phone (00584).';
 
 DROP TRIGGER IF EXISTS normalize_phone_leads ON public.leads;
 CREATE TRIGGER normalize_phone_leads
@@ -84,11 +108,15 @@ CREATE TRIGGER normalize_phone_leads
 CREATE OR REPLACE FUNCTION public.normalize_designer_client_phone_e164()
 RETURNS TRIGGER
 LANGUAGE plpgsql
-SET search_path TO 'public'
+SET search_path = public, pg_temp
 AS $$
 BEGIN
   NEW.client_phone_e164 := public.normalize_phone_e164(
-    COALESCE(NEW.client_phone, NEW.client_phone_e164)
+    CASE
+      WHEN TG_OP = 'INSERT' AND NEW.client_phone IS NULL
+        THEN NEW.client_phone_e164
+      ELSE NEW.client_phone
+    END
   );
   RETURN NEW;
 END;
@@ -100,7 +128,7 @@ REVOKE ALL ON FUNCTION public.normalize_designer_client_phone_e164()
 COMMENT ON FUNCTION public.normalize_designer_client_phone_e164() IS
   'BEFORE INSERT/UPDATE trigger on designer_clients: keeps client_phone_e164 a '
   'normalized derivation of client_phone. Sorts after '
-  'hydrate_lead_relationship_contact_trg so it sees the hydrated phone (00583).';
+  'hydrate_lead_relationship_contact_trg so it sees the hydrated phone (00584).';
 
 DROP TRIGGER IF EXISTS normalize_phone_designer_clients ON public.designer_clients;
 CREATE TRIGGER normalize_phone_designer_clients
@@ -283,11 +311,13 @@ COMMENT ON FUNCTION public.begin_discovery(uuid) IS
   'Atomic Brief→Discovery transition. The exact designer or an active '
   'non-guest peer in the same active design_studio may act; contractor, '
   'manufacturer, inactive, and guest co-memberships confer no authority. '
-  '00583: every branch that writes client_email also carries the lead''s '
+  '00584: every branch that writes client_email also carries the lead''s '
   'contact_phone onto designer_clients.client_phone; an existing row''s phone '
   'is preserved (COALESCE), never overwritten.';
 
--- ── 4. hydrate_lead_relationship_contact — 00399:744-768 verbatim + phone.
+-- ── 4. hydrate_lead_relationship_contact — 00399:744-768 verbatim + phone on
+--       INSERT only, so an emptied "Phone on file" stays empty. The trigger's
+--       UPDATE OF column list is 00399's unchanged.
 --       Deliberately NO phone backfill of existing rows: an old lead's phone
 --       lives in project_description prose and must not be guessed at. ──────
 
@@ -305,7 +335,7 @@ BEGIN
   IF NEW.lead_id IS NOT NULL
      AND (NEW.client_name IS NULL
           OR NEW.client_email IS NULL
-          OR NEW.client_phone IS NULL)
+          OR (TG_OP = 'INSERT' AND NEW.client_phone IS NULL))
   THEN
     SELECT contact_name, contact_email, contact_phone
     INTO v_contact_name, v_contact_email, v_contact_phone
@@ -315,7 +345,11 @@ BEGIN
 
     NEW.client_name := COALESCE(NEW.client_name, v_contact_name);
     NEW.client_email := COALESCE(NEW.client_email, v_contact_email);
-    NEW.client_phone := COALESCE(NEW.client_phone, v_contact_phone);
+    -- INSERT only: the household sheet's "Phone on file" must be clearable, so
+    -- an UPDATE that empties client_phone is never refilled from the lead.
+    IF TG_OP = 'INSERT' THEN
+      NEW.client_phone := COALESCE(NEW.client_phone, v_contact_phone);
+    END IF;
   END IF;
   RETURN NEW;
 END;
@@ -327,8 +361,7 @@ REVOKE ALL ON FUNCTION public.hydrate_lead_relationship_contact()
 DROP TRIGGER IF EXISTS hydrate_lead_relationship_contact_trg
   ON public.designer_clients;
 CREATE TRIGGER hydrate_lead_relationship_contact_trg
-BEFORE INSERT OR UPDATE OF lead_id, designer_id, client_name, client_email,
-                           client_phone
+BEFORE INSERT OR UPDATE OF lead_id, designer_id, client_name, client_email
 ON public.designer_clients
 FOR EACH ROW EXECUTE FUNCTION public.hydrate_lead_relationship_contact();
 
@@ -649,7 +682,7 @@ COMMENT ON FUNCTION public.ceremony_complete(uuid, text, jsonb, text, text, text
   'seed client_discovery from the request (defensive budget parse, I62), start '
   'the direct thread with the intro as head message, letter the client '
   '(in_app + email + APNs, best-effort), stamp the ceremony. Idempotent: '
-  're-call after send returns the existing stamps. 00583: the engagement row '
+  're-call after send returns the existing stamps. 00584: the engagement row '
   'carries the lead''s contact_phone onto client_phone.';
 
 -- ── 6. people_directory — 00478:139-371 verbatim, two columns changed:
@@ -895,7 +928,7 @@ WHERE public.is_active_studio_member(sc.organization_id);
 COMMENT ON VIEW public.people_directory IS
   'R57 / People Room roster (client|lead|maker|gc|sub|installer|receiver|'
   'architect|photographer|stager|team|contact) for the querying user. v5 '
-  '(00583): the client branch''s phone reads '
+  '(00584): the client branch''s phone reads '
   'COALESCE(designer_clients.client_phone, profiles.phone) and the lead '
   'branch''s reads COALESCE(leads.contact_phone, profiles.phone), so a phone '
   'taken at capture shows for a household with no Patina account instead of '
