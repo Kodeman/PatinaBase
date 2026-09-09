@@ -341,14 +341,18 @@ describe('useRecordPartySmsConsent — the only writer of consent columns on an 
     return { select, eq, maybeSingle };
   }
 
-  /** `.select('id').eq('phone_e164', …).eq('sms_consent_status', 'opted_out').limit(1)`
-   *  — the F3 phone-global opt-out check. */
+  /** `.select('id').eq('phone_e164', …).eq('sms_consent_status', 'opted_out').neq('id', …).limit(1)`
+   *  — the F3 phone-global opt-out check. F3-R2-01 added the `.neq('id', …)`
+   *  self-exclusion so a row's own stale `opted_out` (left in place by
+   *  `useUpdateProjectParty`'s phone-change revert, which never lifts it)
+   *  can never read as "someone else already opted out on this number". */
   function siblingBuilder(result: { data: unknown; error: unknown }) {
     const limit = vi.fn().mockResolvedValue(result);
-    const eq2 = vi.fn(() => ({ limit }));
+    const neq = vi.fn(() => ({ limit }));
+    const eq2 = vi.fn(() => ({ neq }));
     const eq1 = vi.fn(() => ({ eq: eq2 }));
     const select = vi.fn(() => ({ eq: eq1 }));
-    return { select, eq1, eq2, limit };
+    return { select, eq1, eq2, neq, limit };
   }
 
   /** `.update(payload).eq('id', …).eq('phone', …).eq('sms_consent_status', 'not_asked').select().single()`
@@ -396,10 +400,12 @@ describe('useRecordPartySmsConsent — the only writer of consent columns on an 
       smsConsentEvidence: 'Told me at the site kickoff on Aug 8',
     });
 
-    // F3 — self row's phone_e164 looked up, then checked for an opted-out sibling.
+    // F3 — self row's phone_e164 looked up, then checked for an opted-out sibling
+    // (F3-R2-01: excluding this row's own id).
     expect(self.eq).toHaveBeenCalledWith('id', PARTY_ID);
     expect(sibling.eq1).toHaveBeenCalledWith('phone_e164', E164);
     expect(sibling.eq2).toHaveBeenCalledWith('sms_consent_status', 'opted_out');
+    expect(sibling.neq).toHaveBeenCalledWith('id', PARTY_ID);
     expect(sibling.limit).toHaveBeenCalledWith(1);
 
     // F1 — the attester comes from the authenticated user, not the caller.
@@ -431,7 +437,7 @@ describe('useRecordPartySmsConsent — the only writer of consent columns on an 
     expect(main.eq3).toHaveBeenCalledWith('sms_consent_status', 'not_asked');
   });
 
-  it('F2 — reverts to not_asked (all six columns) and throws a clear error when the updated row has no phone_e164', async () => {
+  it('F2 — reverts to not_asked (all eight columns, F3-R2-02) and throws a clear error when the updated row has no phone_e164', async () => {
     const self = selfRowBuilder({ data: { phone_e164: null }, error: null });
     const main = mainUpdateBuilder({
       data: { id: PARTY_ID, project_id: 'proj-1', phone_e164: null },
@@ -461,6 +467,8 @@ describe('useRecordPartySmsConsent — the only writer of consent columns on an 
       sms_consent_recorded_at: null,
       sms_consent_recorded_by: null,
       sms_consent_disclosure_version: null,
+      sms_consented_at: null,
+      sms_opt_out_at: null,
     });
     expect(revert.eq).toHaveBeenCalledWith('id', PARTY_ID);
   });

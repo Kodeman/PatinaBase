@@ -474,10 +474,12 @@ export interface UpdateProjectPartyInput {
 }
 
 /** The five evidence columns `fc_dispatch_optin_invite` (00432) reads, plus
- *  `sms_consent_status` — the exact six-column bundle every write (and every
- *  not_asked revert) sets together. Shared by `useUpdateProjectParty`'s
- *  phone-change revert below and `useRecordPartySmsConsent`'s own reverts
- *  further down this file. */
+ *  `sms_consent_status`, plus the two attestation timestamps
+ *  (`sms_consented_at` / `sms_opt_out_at`, F3-R2-02) — the full eight-column
+ *  bundle every write (and every not_asked revert) sets together, so a
+ *  reverted row's timestamps always agree with its status. Shared by
+ *  `useUpdateProjectParty`'s phone-change revert below and
+ *  `useRecordPartySmsConsent`'s own revert further down this file. */
 const NOT_ASKED_CONSENT_COLUMNS = {
   sms_consent_status: 'not_asked' as const,
   sms_consent_source: null,
@@ -485,7 +487,23 @@ const NOT_ASKED_CONSENT_COLUMNS = {
   sms_consent_recorded_at: null,
   sms_consent_recorded_by: null,
   sms_consent_disclosure_version: null,
+  sms_consented_at: null,
+  sms_opt_out_at: null,
 };
+
+/** Mirrors the DB's `normalize_phone_e164` (00281) so a client-side "did the
+ *  phone actually change" comparison agrees with what the trigger will
+ *  derive — a cosmetic reformat of the same digits (different spacing,
+ *  parens, a leading +1) must never read as a change. Never raises: an
+ *  unparseable phone simply compares as `null`. */
+export function normalizePartyPhoneForCompare(phone: string | null | undefined): string | null {
+  const digits = (phone ?? '').replace(/\D/g, '');
+  if (!digits) return null;
+  if (digits.length === 10) return `+1${digits}`;
+  if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`;
+  if (digits.length >= 8 && digits.length <= 15) return `+${digits}`;
+  return null;
+}
 
 /**
  * Edit a project_parties row in place (Call Sheet Wave 3 — roster-row unfold:
@@ -495,14 +513,27 @@ const NOT_ASKED_CONSENT_COLUMNS = {
  * studio_contact_id change or a display-name edit can move where this row
  * surfaces there.
  *
- * F3-R1-02 / F3-R1-12 — a phone edit reverts SMS consent to `not_asked`
- * (the same six-column bundle `useRecordPartySmsConsent` writes), whatever the
- * prior state: a `granted` party must not keep a texting-enabled state for a
- * number that never consented, and an `opted_out` party's new number — which
- * never opted out — must not be stranded un-inviteable behind the old one's
- * STOP. The caller only ever sends `patch.phone` when it actually changed
- * (both edit forms diff against the record first), so this never fires on an
- * unrelated save.
+ * F3-R1-02 / F3-R1-12 / F3-R2-01 — a GENUINE phone change (normalized E.164,
+ * not the raw string — F3-R2-03 already covers the raw-string false
+ * positive one level up, but this hook re-checks so it never trusts the
+ * caller) reverts SMS consent, but never lifts `opted_out`: that status is
+ * the only stored record of a recipient's STOP, and flipping it to
+ * `not_asked` would both erase that record and re-open the invite path for
+ * a number that opted out. So:
+ *  · `pending` / `granted` revert to `not_asked` — unless the number being
+ *    moved TO already carries its own `opted_out` sibling row, in which
+ *    case this row is set to `opted_out` too rather than wrongly reopening
+ *    an already-opted-out number.
+ *  · `opted_out` is left untouched entirely (status, evidence, timestamps).
+ *  · `not_asked` has nothing to revert.
+ * The `useRecordPartySmsConsent` sibling check below excludes this row's
+ * own id (F3-R2-01) so a stale `opted_out` this row is still carrying from
+ * before its OWN phone changed can never read as "someone else already
+ * opted out on this number" and block that row's own fresh invite. Note
+ * `opted_out` left in place here means that row stays permanently
+ * un-inviteable through this hook even once its number changes — a
+ * deliberate compliance-first tradeoff; un-stranding it needs its own
+ * (per-number) opt-out ledger, out of scope for this fix.
  */
 export function useUpdateProjectParty() {
   const queryClient = useQueryClient();
@@ -515,8 +546,44 @@ export function useUpdateProjectParty() {
       if (patch.companyName !== undefined) dbPatch.company_name = patch.companyName?.trim() || null;
       if (patch.trade !== undefined) dbPatch.trade = patch.trade?.trim() || null;
       if (patch.phone !== undefined) {
-        dbPatch.phone = patch.phone?.trim() || null;
-        Object.assign(dbPatch, NOT_ASKED_CONSENT_COLUMNS);
+        const nextPhone = patch.phone?.trim() || null;
+        dbPatch.phone = nextPhone;
+
+        const { data: currentRow, error: currentRowError } = await supabase
+          .from('project_parties')
+          .select('sms_consent_status, phone_e164')
+          .eq('id', id)
+          .maybeSingle();
+        if (currentRowError) throw currentRowError;
+        const currentStatus = currentRow?.sms_consent_status as
+          | ProjectParty['sms_consent_status']
+          | undefined;
+        const currentE164 = (currentRow?.phone_e164 as string | null) ?? null;
+        const nextE164 = normalizePartyPhoneForCompare(nextPhone);
+        const phoneGenuinelyChanged = nextE164 !== currentE164;
+
+        if (phoneGenuinelyChanged && (currentStatus === 'pending' || currentStatus === 'granted')) {
+          let revertsToOptedOut = false;
+          if (nextE164) {
+            const { data: optedOutOnNewNumber, error: siblingError } = await supabase
+              .from('project_parties')
+              .select('id')
+              .eq('phone_e164', nextE164)
+              .eq('sms_consent_status', 'opted_out')
+              .neq('id', id)
+              .limit(1);
+            if (siblingError) throw siblingError;
+            revertsToOptedOut = !!(optedOutOnNewNumber && optedOutOnNewNumber.length > 0);
+          }
+          Object.assign(
+            dbPatch,
+            revertsToOptedOut
+              ? { ...NOT_ASKED_CONSENT_COLUMNS, sms_consent_status: 'opted_out' as const }
+              : NOT_ASKED_CONSENT_COLUMNS,
+          );
+        }
+        // currentStatus 'opted_out' or 'not_asked' (or the row vanished from
+        // under us): consent columns are never rewritten by a phone edit.
       }
       if (patch.email !== undefined) dbPatch.email = patch.email?.trim() || null;
       if (patch.showToClient !== undefined) dbPatch.show_to_client = patch.showToClient;
@@ -602,6 +669,17 @@ export function useRecordPartySmsConsent() {
       // F3 — a STOP reply opts out every row on that phone_e164; a sibling
       // row still at not_asked must not silently re-invite a number that
       // already opted out on another party/project row.
+      //
+      // F3-R2-01 — excludes THIS row's own id: `useUpdateProjectParty` never
+      // lifts an `opted_out` status on a phone edit (it preserves the
+      // compliance record instead), so a row whose phone changed since it
+      // opted out can still carry that stale `opted_out` on its own current
+      // phone_e164. Without the exclusion this row would read as its own
+      // "sibling", permanently blocking its own fresh invite with the wrong
+      // message (blaming another party for an opt-out that's really its
+      // own history). This UPDATE's `.eq('sms_consent_status', 'not_asked')`
+      // guard still requires that row to be genuinely at `not_asked` before
+      // this exclusion even matters.
       const { data: selfRow, error: selfError } = await supabase
         .from('project_parties')
         .select('phone_e164')
@@ -615,6 +693,7 @@ export function useRecordPartySmsConsent() {
           .select('id')
           .eq('phone_e164', phoneE164)
           .eq('sms_consent_status', 'opted_out')
+          .neq('id', input.partyId)
           .limit(1);
         if (siblingError) throw siblingError;
         if (optedOutSiblings && optedOutSiblings.length > 0) {

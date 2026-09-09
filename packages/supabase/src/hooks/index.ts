@@ -424,6 +424,7 @@ export {
   useProjectRoster,
   isProjectArtifactApproval,
   excludeProjectArtifactApprovals,
+  normalizePartyPhoneForCompare,
 } from "./use-coordination";
 export type {
   Court,

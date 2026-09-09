@@ -31,6 +31,14 @@ jest.mock('@patina/supabase', () => ({
     mutateAsync: updateMutateAsync,
     isPending: false,
   }),
+  normalizePartyPhoneForCompare: (phone: string | null | undefined) => {
+    const digits = (phone ?? '').replace(/\D/g, '');
+    if (!digits) return null;
+    if (digits.length === 10) return `+1${digits}`;
+    if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`;
+    if (digits.length >= 8 && digits.length <= 15) return `+${digits}`;
+    return null;
+  },
   fieldLinkUrl: (token: string) => `https://patina.cloud/field/${token}`,
 }));
 
@@ -120,5 +128,47 @@ describe('PartyProfileSheet — edit', () => {
     expect(updateMutateAsync).not.toHaveBeenCalled();
     expect(screen.getByText('Moretti Plumbing')).toBeInTheDocument();
     expect(screen.queryByLabelText('Name')).not.toBeInTheDocument();
+  });
+
+  // F3-R2-03 — a cosmetic reformat of the same number must not read as a
+  // change (which would otherwise silently revoke a granted/pending
+  // consent server-side).
+  it('does not send a phone patch for a cosmetic reformat of the same number', async () => {
+    render(<PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+
+    // Same digits as the prefilled '5551234567', just reformatted.
+    fireEvent.change(screen.getByLabelText('Phone'), { target: { value: '(555) 123-4567' } });
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Sal R. Moretti' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(updateMutateAsync).toHaveBeenCalled());
+    expect(updateMutateAsync.mock.calls[0][0]).toEqual({
+      id: 'party-1',
+      projectId: 'project-1',
+      patch: { displayName: 'Sal R. Moretti' },
+    });
+  });
+
+  // F3-R2-03 — the inline caution only appears once the phone is actually
+  // edited on a granted/pending party, never for an untouched field or a
+  // not_asked/opted_out one.
+  it('warns inline only when editing the phone would clear a granted consent', () => {
+    personData.current = person({ status_raw: 'granted' });
+    render(<PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+
+    expect(screen.queryByText(/clears their texting opt-in/i)).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Phone'), { target: { value: '5559876543' } });
+    expect(screen.getByText(/clears their texting opt-in/i)).toBeInTheDocument();
+  });
+
+  it('never warns for a not_asked party even after editing the phone', () => {
+    render(<PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.change(screen.getByLabelText('Phone'), { target: { value: '5559876543' } });
+
+    expect(screen.queryByText(/clears their texting opt-in/i)).not.toBeInTheDocument();
   });
 });

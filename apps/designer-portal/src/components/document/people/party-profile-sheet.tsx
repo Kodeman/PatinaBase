@@ -34,6 +34,7 @@ import {
   useProjectParties,
   useRecordPartySmsConsent,
   useUpdateProjectParty,
+  normalizePartyPhoneForCompare,
   fieldLinkUrl,
   type PartyRole,
   type PartySmsMessage,
@@ -270,6 +271,14 @@ export function PartyProfileSheet({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editing]);
 
+  // F3-R2-03 — warn before a save that will clear a granted/pending consent:
+  // normalized so a cosmetic reformat (spacing, parens, a leading +1) never
+  // trips the warning for a number that hasn't actually changed.
+  const phoneEditWillRevokeConsent =
+    editing &&
+    (consent === 'granted' || consent === 'pending') &&
+    normalizePartyPhoneForCompare(editForm.phone) !== normalizePartyPhoneForCompare(phone);
+
   const saveParty = async () => {
     if (!partyId) return;
     setEditError(null);
@@ -295,7 +304,12 @@ export function PartyProfileSheet({
     if (trimmedName !== (person?.display_name ?? '')) patch.displayName = trimmedName;
     if (trimmedCompany !== originalCompany) patch.companyName = trimmedCompany || null;
     if (trimmedTrade !== originalTrade) patch.trade = trimmedTrade || null;
-    if (trimmedPhone !== (phone ?? '')) patch.phone = trimmedPhone || null;
+    // F3-R2-03 — compare normalized numbers, not raw strings: a cosmetic
+    // reformat of the same phone must not read as a change and silently
+    // revoke a granted/pending consent (useUpdateProjectParty reverts
+    // consent on any `patch.phone`, whatever the actual digits are).
+    if (normalizePartyPhoneForCompare(trimmedPhone) !== normalizePartyPhoneForCompare(phone))
+      patch.phone = trimmedPhone || null;
     if (trimmedEmail !== (person?.email ?? '')) patch.email = trimmedEmail || null;
 
     if (Object.keys(patch).length === 0) {
@@ -472,6 +486,12 @@ export function PartyProfileSheet({
               onChange={(e) => setEditForm((f) => ({ ...f, phone: e.target.value }))}
               className={EDIT_INPUT}
             />
+            {phoneEditWillRevokeConsent && (
+              <p className="mt-1.5 text-[0.7rem] leading-relaxed text-[var(--color-terracotta-ink)]">
+                Changing the number clears their texting opt-in — you&rsquo;ll
+                need to record consent again.
+              </p>
+            )}
           </div>
           <div>
             <label className={EDIT_LABEL} htmlFor="party-edit-email">
