@@ -1,4 +1,5 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ClientLetterLine, rowCopy } from '../client-letter-line';
 
 let status: unknown = null;
@@ -10,6 +11,18 @@ jest.mock('@patina/supabase', () => ({
   ...jest.requireActual('@patina/supabase'),
   useClientInvitationStatus: () => ({ data: status, isLoading: false, isError: queryIsError }),
 }));
+
+function renderLine(props: { designerClientId: string; clientName: string | null }) {
+  const qc = new QueryClient();
+  return {
+    qc,
+    ...render(
+      <QueryClientProvider client={qc}>
+        <ClientLetterLine {...props} />
+      </QueryClientProvider>,
+    ),
+  };
+}
 
 describe('R9 / lens-4 §B.8 — dated prose, never a badge and never an absence', () => {
   it('names the four states', () => {
@@ -56,20 +69,20 @@ describe('ClientLetterLine', () => {
   it('renders nothing while the flag is still answering', () => {
     flagValue = { value: false, isLoading: true };
     status = { state: 'sent', at: '2026-09-08T14:00:00.000Z', invitationId: 'i1' };
-    const { container } = render(<ClientLetterLine designerClientId="dc1" clientName="Dave Okonkwo" />);
+    const { container } = renderLine({ designerClientId: 'dc1', clientName: 'Dave Okonkwo' });
     expect(container).toBeEmptyDOMElement();
   });
 
   it('renders nothing at all when the flag is off', () => {
     flagValue = { value: false, isLoading: false };
     status = { state: 'sent', at: '2026-09-08T14:00:00.000Z', invitationId: 'i1' };
-    const { container } = render(<ClientLetterLine designerClientId="dc1" clientName="Dave Okonkwo" />);
+    const { container } = renderLine({ designerClientId: 'dc1', clientName: 'Dave Okonkwo' });
     expect(container).toBeEmptyDOMElement();
   });
 
   it('prints the dated line with no pill, dot or colour', () => {
     status = { state: 'sent', at: '2026-09-08T14:00:00.000Z', invitationId: 'i1' };
-    render(<ClientLetterLine designerClientId="dc1" clientName="Dave Okonkwo" />);
+    renderLine({ designerClientId: 'dc1', clientName: 'Dave Okonkwo' });
     const line = screen.getByTestId('client-letter-line');
     expect(line).toHaveTextContent('Letter sent 8 Sept');
     expect(line.querySelector('svg')).toBeNull();
@@ -78,7 +91,7 @@ describe('ClientLetterLine', () => {
 
   it('offers Write again beside a lapsed link, and resends once', async () => {
     status = { state: 'lapsed', at: '2026-09-15T14:00:00.000Z', invitationId: 'i1' };
-    render(<ClientLetterLine designerClientId="dc1" clientName="Dave Okonkwo" />);
+    renderLine({ designerClientId: 'dc1', clientName: 'Dave Okonkwo' });
     const button = screen.getByRole('button', { name: 'Write again' });
     fireEvent.click(button);
     fireEvent.click(button);
@@ -95,7 +108,7 @@ describe('ClientLetterLine', () => {
       status: 429,
       json: async () => ({ error: 'too_soon' }),
     });
-    render(<ClientLetterLine designerClientId="dc1" clientName="Dave Okonkwo" />);
+    renderLine({ designerClientId: 'dc1', clientName: 'Dave Okonkwo' });
     fireEvent.click(screen.getByRole('button', { name: 'Write again' }));
     expect(
       await screen.findByText('A letter went out within the hour. You can write again after that.'),
@@ -104,21 +117,46 @@ describe('ClientLetterLine', () => {
 
   it('says the letter went, without a badge', async () => {
     status = { state: 'lapsed', at: '2026-09-15T14:00:00.000Z', invitationId: 'i1' };
-    render(<ClientLetterLine designerClientId="dc1" clientName="Dave Okonkwo" />);
+    renderLine({ designerClientId: 'dc1', clientName: 'Dave Okonkwo' });
     fireEvent.click(screen.getByRole('button', { name: 'Write again' }));
     expect(await screen.findByText('A fresh letter is on its way.')).toBeInTheDocument();
   });
 
+  it('invalidates the status cache on a successful resend, so the row does not go stale', async () => {
+    status = { state: 'lapsed', at: '2026-09-15T14:00:00.000Z', invitationId: 'i1' };
+    const { qc } = renderLine({ designerClientId: 'dc1', clientName: 'Dave Okonkwo' });
+    const invalidateSpy = jest.spyOn(qc, 'invalidateQueries');
+    fireEvent.click(screen.getByRole('button', { name: 'Write again' }));
+    await screen.findByText('A fresh letter is on its way.');
+    expect(invalidateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: ['client-invitation-status', 'dc1'] }),
+    );
+  });
+
+  it('does not invalidate the status cache when the resend fails', async () => {
+    status = { state: 'lapsed', at: '2026-09-15T14:00:00.000Z', invitationId: 'i1' };
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: async () => ({ error: 'boom' }),
+    });
+    const { qc } = renderLine({ designerClientId: 'dc1', clientName: 'Dave Okonkwo' });
+    const invalidateSpy = jest.spyOn(qc, 'invalidateQueries');
+    fireEvent.click(screen.getByRole('button', { name: 'Write again' }));
+    await screen.findByText('Could not send it just now.');
+    expect(invalidateSpy).not.toHaveBeenCalled();
+  });
+
   it('offers Write to {given} beside the no-letter row', () => {
     status = null;
-    render(<ClientLetterLine designerClientId="dc1" clientName="Dave Okonkwo" />);
+    renderLine({ designerClientId: 'dc1', clientName: 'Dave Okonkwo' });
     const line = screen.getByTestId('client-letter-line');
     expect(line).toHaveTextContent('On your roster · no letter sent · Write to Dave');
   });
 
   it('still offers a way in when the client has no name on file', () => {
     status = null;
-    render(<ClientLetterLine designerClientId="dc1" clientName={null} />);
+    renderLine({ designerClientId: 'dc1', clientName: null });
     const line = screen.getByTestId('client-letter-line');
     expect(line).toHaveTextContent('On your roster · no letter sent · Write the letter');
   });
@@ -126,7 +164,7 @@ describe('ClientLetterLine', () => {
   it('says nothing rather than misreading a failed read as no letter sent', () => {
     status = null;
     queryIsError = true;
-    const { container } = render(<ClientLetterLine designerClientId="dc1" clientName="Dave Okonkwo" />);
+    const { container } = renderLine({ designerClientId: 'dc1', clientName: 'Dave Okonkwo' });
     expect(container).toBeEmptyDOMElement();
   });
 });

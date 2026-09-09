@@ -18,8 +18,10 @@
  */
 
 import { useCallback, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   useClientInvitationStatus,
+  clientInvitationStatusKeys,
   type ClientInvitationStatus,
 } from '@patina/supabase';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
@@ -76,6 +78,7 @@ export function ClientLetterLine({
   // One in flight, mirroring the studio-member resend guard
   // (account-studio-page.tsx:490-520).
   const inFlight = useRef(false);
+  const queryClient = useQueryClient();
 
   const writeAgain = useCallback(
     async (invitationId: string) => {
@@ -95,6 +98,9 @@ export function ClientLetterLine({
           setFeedback('Could not send it just now.');
         } else {
           setFeedback('A fresh letter is on its way.');
+          void queryClient.invalidateQueries({
+            queryKey: clientInvitationStatusKeys.one(designerClientId),
+          });
         }
       } catch {
         setFeedback('Could not send it just now.');
@@ -102,7 +108,7 @@ export function ClientLetterLine({
         inFlight.current = false;
       }
     },
-    [],
+    [designerClientId, queryClient],
   );
 
   // Fail-closed: nothing renders until the flag resolves, so a non-pilot studio
