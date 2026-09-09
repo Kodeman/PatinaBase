@@ -3,11 +3,12 @@ import { ClientLetterLine, rowCopy } from '../client-letter-line';
 
 let status: unknown = null;
 let flagValue = { value: true, isLoading: false };
+let queryIsError = false;
 
 jest.mock('@/hooks/use-feature-flag', () => ({ useFeatureFlag: () => flagValue }));
 jest.mock('@patina/supabase', () => ({
   ...jest.requireActual('@patina/supabase'),
-  useClientInvitationStatus: () => ({ data: status, isLoading: false }),
+  useClientInvitationStatus: () => ({ data: status, isLoading: false, isError: queryIsError }),
 }));
 
 describe('R9 / lens-4 §B.8 — dated prose, never a badge and never an absence', () => {
@@ -49,6 +50,7 @@ describe('ClientLetterLine', () => {
   beforeEach(() => {
     global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
     flagValue = { value: true, isLoading: false };
+    queryIsError = false;
   });
 
   it('renders nothing while the flag is still answering', () => {
@@ -105,5 +107,26 @@ describe('ClientLetterLine', () => {
     render(<ClientLetterLine designerClientId="dc1" clientName="Dave Okonkwo" />);
     fireEvent.click(screen.getByRole('button', { name: 'Write again' }));
     expect(await screen.findByText('A fresh letter is on its way.')).toBeInTheDocument();
+  });
+
+  it('offers Write to {given} beside the no-letter row', () => {
+    status = null;
+    render(<ClientLetterLine designerClientId="dc1" clientName="Dave Okonkwo" />);
+    const line = screen.getByTestId('client-letter-line');
+    expect(line).toHaveTextContent('On your roster · no letter sent · Write to Dave');
+  });
+
+  it('still offers a way in when the client has no name on file', () => {
+    status = null;
+    render(<ClientLetterLine designerClientId="dc1" clientName={null} />);
+    const line = screen.getByTestId('client-letter-line');
+    expect(line).toHaveTextContent('On your roster · no letter sent · Write the letter');
+  });
+
+  it('says nothing rather than misreading a failed read as no letter sent', () => {
+    status = null;
+    queryIsError = true;
+    const { container } = render(<ClientLetterLine designerClientId="dc1" clientName="Dave Okonkwo" />);
+    expect(container).toBeEmptyDOMElement();
   });
 });

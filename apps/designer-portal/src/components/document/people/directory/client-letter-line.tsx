@@ -69,7 +69,7 @@ export function ClientLetterLine({
   clientName: string | null;
 }) {
   const { value: letterOn, isLoading: flagLoading } = useFeatureFlag('client-invite-letter');
-  const { data: status, isLoading } = useClientInvitationStatus(
+  const { data: status, isLoading, isError } = useClientInvitationStatus(
     letterOn ? designerClientId : undefined,
   );
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -106,8 +106,10 @@ export function ClientLetterLine({
   );
 
   // Fail-closed: nothing renders until the flag resolves, so a non-pilot studio
-  // never sees a letter line flash past.
-  if (flagLoading || !letterOn || isLoading) return null;
+  // never sees a letter line flash past. A read that errored is not the same
+  // state as "no letter was ever written" — surfacing "Write to X" over a
+  // transient RPC failure could prompt a duplicate letter, so we say nothing.
+  if (flagLoading || !letterOn || isLoading || isError) return null;
 
   const { text, action } = rowCopy(status ?? null);
   const given = (clientName ?? '').trim().split(/\s+/)[0] || null;
@@ -130,10 +132,12 @@ export function ClientLetterLine({
           </button>
         </>
       ) : null}
-      {action === 'write-to' && given ? (
+      {action === 'write-to' ? (
         <>
           {' · '}
-          <span className="text-[var(--color-mocha)]">{`Write to ${given}`}</span>
+          <span className="text-[var(--color-mocha)]">
+            {given ? `Write to ${given}` : 'Write the letter'}
+          </span>
         </>
       ) : null}
       {feedback ? <span className="ml-2 text-[var(--color-mocha)]">{feedback}</span> : null}
