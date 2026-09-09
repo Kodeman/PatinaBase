@@ -42,7 +42,7 @@ describe('fieldEffectType', () => {
 describe('fmtFieldDate', () => {
   it('formats a bare YYYY-MM-DD at LOCAL midnight (no day slip)', () => {
     // Parsed as local midnight, so the weekday/day never drift by a day.
-    expect(fmtFieldDate('2026-07-14')).toBe('Tue, Jul 14');
+    expect(fmtFieldDate('2026-07-14')).toBe('Tue 14 July');
   });
   it('returns null for empty / unparseable input', () => {
     expect(fmtFieldDate(null)).toBeNull();
@@ -65,7 +65,7 @@ describe('describeFieldEffect', () => {
     [
       { type: 'report_delay', new_date: '2026-07-14' },
       'Rough-in plumbing',
-      'Move “Rough-in plumbing” to Tue, Jul 14',
+      'Move “Rough-in plumbing” to Tue 14 July',
     ],
     [{ type: 'report_delay' }, null, 'Move it'],
     [{ type: 'flag_blocker', note: 'valve stuck' }, null, 'Raise a blocker: valve stuck'],

@@ -460,7 +460,7 @@ describe("ClientNoteComposer — standing note", () => {
       screen.getByText("Three last pieces are ready for your signature."),
     ).toBeInTheDocument();
     expect(
-      screen.getByText("Sent Sep 4. It stands on her page until she answers."),
+      screen.getByText("Sent 4 September. It stands on her page until she answers."),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Take it down" }),
@@ -485,7 +485,7 @@ describe("ClientNoteComposer — standing note", () => {
     });
 
     expect(
-      screen.getByText("Taken down Sep 4. It moves to Previously."),
+      screen.getByText("Taken down 4 September. It moves to Previously."),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Write to your client" }),

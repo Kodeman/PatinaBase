@@ -20,6 +20,7 @@
 
 import type { PartyRole, PeopleDirectoryRow } from '@patina/supabase';
 import { getFieldTradeLabel, getPartyKindLabel, getVendorSpecialtyLabel } from '@patina/types';
+import { MONTH_NAME_FORMAT } from './dates';
 
 export type { PartyRole };
 
@@ -495,14 +496,14 @@ export interface JourneyInputs {
   }>;
 }
 
-/** A US-month label for the journey date stamp (e.g. "Apr 2026"). A DATE-only
+/** A month label for the journey date stamp (e.g. "April 2026"). A DATE-only
  *  value (kickoff_date, suggested_date) parses as UTC midnight and shifts back a
  *  month in negative-offset timezones — coerce it to local midnight first (the
- *  same guard desk-derivation's fmtDay uses). */
+ *  same guard `dates.ts` applies). */
 function fmtMonth(iso: string): string {
   const coerced = /^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso}T00:00:00` : iso;
   const d = new Date(coerced);
-  return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  return `${MONTH_NAME_FORMAT.format(d)} ${d.getFullYear()}`;
 }
 
 /** Dollars from a cents amount, no decimals when round (e.g. "$25,100"). */

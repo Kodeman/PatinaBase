@@ -1,0 +1,51 @@
+{
+  "cleanConsole": {
+    "desk": {
+      "url": "http://localhost:3000/desk",
+      "consoleErrors": [],
+      "pageErrors": []
+    },
+    "doc": {
+      "url": "http://localhost:3000/doc/0384388c-4004-4046-b252-abca59bb7e87",
+      "consoleErrors": [],
+      "pageErrors": []
+    },
+    "orders": {
+      "url": "http://localhost:3000/desk",
+      "consoleErrors": [],
+      "pageErrors": []
+    }
+  },
+  "hoverControl": {
+    "unselectedCount": 17,
+    "selectedCount": 3,
+    "sample": [
+      {
+        "text": "THE WEEK",
+        "rest": "rgb(139, 115, 85)",
+        "hover": "rgb(196, 165, 123)",
+        "restsAgedOak": true,
+        "raisesToClay": true
+      },
+      {
+        "text": "RECEIVING",
+        "rest": "rgb(139, 115, 85)",
+        "hover": "rgb(196, 165, 123)",
+        "restsAgedOak": true,
+        "raisesToClay": true
+      },
+      {
+        "text": "VENDORS",
+        "rest": "rgb(139, 115, 85)",
+        "hover": "rgb(196, 165, 123)",
+        "restsAgedOak": true,
+        "raisesToClay": true
+      }
+    ],
+    "legend": {
+      "CHARCOAL": "rgb(44, 41, 38)",
+      "CLAY": "rgb(196, 165, 123)",
+      "AGED_OAK": "rgb(139, 115, 85)"
+    }
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "mode": "remove",
+  "steps": [
+    {
+      "name": "ffe-unfold-candidates",
+      "detail": 1
+    },
+    {
+      "name": "room-container-found",
+      "detail": 1
+    },
+    {
+      "name": "room-container-text",
+      "detail": "Concept render · Wave 3c round-trip proof · uploaded 8 September\n\nREPLACE\nREMOVE"
+    },
+    {
+      "name": "after-remove-text",
+      "detail": "ADD A CONCEPT RENDER"
+    },
+    {
+      "name": "plate-img-count",
+      "detail": 0
+    }
+  ],
+  "consoleErrors": [
+    "TypeError: Failed to fetch\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:15165\n    at tO (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21424)\n  ",
+    "Error logged: AppError: Not authenticated\n    at w (http://localhost:3000/_next/static/chunks/4734-3ecf2bb61ffdb155.js:1:13317)\n    at Object.onError (http://localhost:3000/_next/static/chunks/4734-3e",
+    "Loading the image 'http://127.0.0.1:54321/storage/v1/object/public/product-images/a0000000-0000-0000-0000-000000000001/1a666c28-9477-52b9-86ed-a09a6fd7eebb/e5e50860-93ba-55c9-a23f-42dcbd35cb29.jpg' vi",
+    "Loading the image 'http://127.0.0.1:54321/storage/v1/object/sign/room-renders/b0000000-0000-0000-0000-0000000000d1/b0000000-0000-0000-0000-0000000d2c0b/w3c-roundtrip.png?token=eyJhbGciOiJIUzI1NiJ9.eyJ"
+  ]
+}

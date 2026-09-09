@@ -22,6 +22,7 @@
  */
 
 import { LENS_COUNT_MAX_CHARS } from './lens-constants';
+import { DAY_MONTH_FORMAT } from './dates';
 
 export const QUIET_NOTHING_YET = 'Nothing yet';
 export const QUIET_NOT_KNOWN_YET = 'Not known yet';
@@ -101,11 +102,8 @@ export function scheduleQuietStatus({
   const day = asLocalDate(installStart);
   if (Number.isNaN(day.getTime())) return QUIET_NOT_KNOWN_YET;
   // W4-R1 drops the weekday the rail's count line keeps: the paper prints one
-  // date form, `Install Sep 19`.
-  const printed = new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-  }).format(day);
+  // date form, `Install 19 September`.
+  const printed = DAY_MONTH_FORMAT.format(day);
   const days = calendarDaysUntil(day, now);
   if (days < 0) return `Installed ${printed}`;
   const tail =

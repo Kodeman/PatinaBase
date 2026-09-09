@@ -146,42 +146,42 @@ describe('milestoneStamp', () => {
 
   it('signed', () => {
     expect(milestoneStamp({ date: '2026-07-09', derivedStatus: 'signed' }, today)).toEqual({
-      text: 'Signed · Jul 9',
+      text: 'Signed · 9 July',
       late: false,
     });
   });
 
   it('due, not yet late', () => {
     expect(milestoneStamp({ date: '2026-07-20', derivedStatus: 'due' }, today)).toEqual({
-      text: 'Due Jul 20',
+      text: 'Due 20 July',
       late: false,
     });
   });
 
   it('due, today exactly — not late', () => {
     expect(milestoneStamp({ date: '2026-07-15', derivedStatus: 'due' }, today)).toEqual({
-      text: 'Due Jul 15',
+      text: 'Due 15 July',
       late: false,
     });
   });
 
   it('due, in the past — late with days-over arithmetic', () => {
     expect(milestoneStamp({ date: '2026-07-10', derivedStatus: 'due' }, today)).toEqual({
-      text: 'Due Jul 10 · 5 days over',
+      text: 'Due 10 July · 5 days over',
       late: true,
     });
   });
 
   it('upcoming', () => {
     expect(milestoneStamp({ date: '2026-08-01', derivedStatus: 'upcoming' }, today)).toEqual({
-      text: 'Upcoming · Aug 1',
+      text: 'Upcoming · 1 August',
       late: false,
     });
   });
 
   it('slipped', () => {
     expect(milestoneStamp({ date: '2026-07-01', derivedStatus: 'slipped' }, today)).toEqual({
-      text: 'Slipped · Jul 1',
+      text: 'Slipped · 1 July',
       late: true,
     });
   });
@@ -221,17 +221,17 @@ describe('phaseMeta', () => {
           itemCount: 3,
           lastSigned: { name: 'Leah', date: '2026-05-30' },
         }).text,
-      ).toBe('Closed Jun 1 · 3 items · Leah signed May 30');
+      ).toBe('Closed 1 June · 3 items · Leah signed 30 May');
     });
 
     it('omits item count when zero', () => {
-      expect(phaseMeta({ ...base, state: 'closed', end: '2026-06-01', itemCount: 0 }).text).toBe('Closed Jun 1');
+      expect(phaseMeta({ ...base, state: 'closed', end: '2026-06-01', itemCount: 0 }).text).toBe('Closed 1 June');
     });
 
     it('omits last-signed when absent', () => {
       expect(
         phaseMeta({ ...base, state: 'closed', end: '2026-06-01', itemCount: 2, lastSigned: null }).text,
-      ).toBe('Closed Jun 1 · 2 items');
+      ).toBe('Closed 1 June · 2 items');
     });
 
     it('omits the closed-date segment when end is null', () => {
@@ -240,10 +240,10 @@ describe('phaseMeta', () => {
 
     it('singularizes item count at exactly 1, pluralizes otherwise', () => {
       expect(phaseMeta({ ...base, state: 'closed', end: '2026-06-01', itemCount: 1 }).text).toBe(
-        'Closed Jun 1 · 1 item',
+        'Closed 1 June · 1 item',
       );
       expect(phaseMeta({ ...base, state: 'closed', end: '2026-06-01', itemCount: 2 }).text).toBe(
-        'Closed Jun 1 · 2 items',
+        'Closed 1 June · 2 items',
       );
     });
 
@@ -259,7 +259,7 @@ describe('phaseMeta', () => {
           end: '2026-06-01',
           overrun: { anchorDate: '2026-09-21', overrunDays: 6 },
         }).overrunText,
-      ).toBe('Chain overruns Sep 21 by 6 days');
+      ).toBe('Chain overruns 21 September by 6 days');
     });
   });
 
@@ -274,14 +274,14 @@ describe('phaseMeta', () => {
           openCount: 4,
           blockingCount: 2,
         }).text,
-      ).toBe('Jul 9 – Jul 23 · 4 open · 2 blocking');
+      ).toBe('9 July – 23 July · 4 open · 2 blocking');
     });
 
     it('omits open/blocking counts when zero', () => {
       expect(
         phaseMeta({ ...base, state: 'active', start: '2026-07-09', end: '2026-07-23', openCount: 0, blockingCount: 0 })
           .text,
-      ).toBe('Jul 9 – Jul 23');
+      ).toBe('9 July – 23 July');
     });
 
     it('omits the date-range segment when either date is null', () => {
@@ -298,7 +298,7 @@ describe('phaseMeta', () => {
     it('full: date range + the two constant segments', () => {
       expect(
         phaseMeta({ ...base, state: 'future', anchored: true, start: '2026-08-01', end: '2026-08-15' }).text,
-      ).toBe('Aug 1 – Aug 15 · Anchored · Holds when upstream moves');
+      ).toBe('1 August – 15 August · Anchored · Holds when upstream moves');
     });
 
     it('omits the date-range segment when dates are null but keeps the constants', () => {
@@ -317,7 +317,7 @@ describe('phaseMeta', () => {
           end: '2026-08-15',
           slackDays: 4,
         }).text,
-      ).toBe('Aug 1 – Aug 15 · Anchored · Holds when upstream moves · 4 days slack');
+      ).toBe('1 August – 15 August · Anchored · Holds when upstream moves · 4 days slack');
     });
 
     it('slackDays of exactly 0 still renders (a tight fit is honest information)', () => {
@@ -344,8 +344,8 @@ describe('phaseMeta', () => {
         end: '2026-09-28',
         overrun: { anchorDate: '2026-09-21', overrunDays: 6 },
       });
-      expect(result.text).toBe('Sep 21 – Sep 28 · Anchored · Holds when upstream moves');
-      expect(result.overrunText).toBe('Chain overruns Sep 21 by 6 days');
+      expect(result.text).toBe('21 September – 28 September · Anchored · Holds when upstream moves');
+      expect(result.overrunText).toBe('Chain overruns 21 September by 6 days');
     });
 
     it('overrun singularizes at exactly 1 day', () => {
@@ -356,7 +356,7 @@ describe('phaseMeta', () => {
           anchored: true,
           overrun: { anchorDate: '2026-09-21', overrunDays: 1 },
         }).overrunText,
-      ).toBe('Chain overruns Sep 21 by 1 day');
+      ).toBe('Chain overruns 21 September by 1 day');
     });
 
     it('overrunText is null when overrun is absent/null', () => {
@@ -541,7 +541,7 @@ describe('phaseGhostLine', () => {
         { start: '2026-06-01', end: '2026-06-30' },
         { start: '2026-06-26', end: '2026-07-29' },
       ),
-    ).toBe('→ Jun 26 – Jul 29');
+    ).toBe('→ 26 June – 29 July');
   });
 
   it('null when the phase is unmoved (from equals to)', () => {
@@ -562,7 +562,7 @@ describe('phaseGhostLine', () => {
   it('a single null endpoint renders as an em-dash', () => {
     expect(
       phaseGhostLine({ start: null, end: '2026-06-30' }, { start: '2026-06-26', end: null }),
-    ).toBe('→ Jun 26 – —');
+    ).toBe('→ 26 June – —');
   });
 
   it('detects a move even when only the end shifts', () => {
@@ -571,6 +571,6 @@ describe('phaseGhostLine', () => {
         { start: '2026-06-01', end: '2026-06-30' },
         { start: '2026-06-01', end: '2026-07-10' },
       ),
-    ).toBe('→ Jun 1 – Jul 10');
+    ).toBe('→ 1 June – 10 July');
   });
 });

@@ -1,0 +1,85 @@
+Wave 3c — concept-render storage round-trip
+Run: 2026-09-09T03:28:07Z
+Local stack only — API_URL http://127.0.0.1:54321, linked_project null.
+Signed in through the real UI as designer@patina.dev, who IS this
+project's designer_id — so the four storage policies' gate,
+app_private.is_project_studio_member, is satisfied by the user session.
+No service_role key is used anywhere in this round-trip.
+Project b0000000-0000-0000-0000-0000000000d1 · Room b0000000-0000-0000-0000-0000000d2c0b (Aspen Loft Refresh · Living Room)
+
+───────────────────────────────────────────────────────────────
+## BEFORE — nothing uploaded
+
+project_rooms — the four columns 00580 added:
+-[ RECORD 1 ]--------------+-
+concept_render_url         | 
+concept_render_caption     | 
+concept_render_uploaded_at | 
+concept_render_uploaded_by | 
+
+storage.objects in the PRIVATE room-renders bucket:
+(0 rows)
+
+ objects_in_bucket 
+-------------------
+                 0
+(1 row)
+
+───────────────────────────────────────────────────────────────
+## UPLOAD leg (Playwright, real UI: open the act → choose PNG → caption → Upload)
+
+· ffe-unfold-candidates: 1
+· room-container-found: 1
+· room-container-text: "ADD A CONCEPT RENDER"
+· png-generated-bytes: 74
+· standing-caption: "Concept render · Wave 3c round-trip proof · uploaded 8 September\n\nREPLACE\nREMOVE"
+· plate-img-count: 1
+───────────────────────────────────────────────────────────────
+## AFTER UPLOAD — the object stands and the row points at it
+
+project_rooms — the four columns 00580 added:
+-[ RECORD 1 ]--------------+--------------------------------------------------------------------------------------------
+concept_render_url         | b0000000-0000-0000-0000-0000000000d1/b0000000-0000-0000-0000-0000000d2c0b/w3c-roundtrip.png
+concept_render_caption     | Wave 3c round-trip proof
+concept_render_uploaded_at | 2026-09-09 03:28:18.014+00
+concept_render_uploaded_by | a0000000-0000-0000-0000-000000000004
+
+storage.objects in the PRIVATE room-renders bucket:
+-[ RECORD 1 ]-------------------------------------------------------------------------------------------
+bucket_id  | room-renders
+name       | b0000000-0000-0000-0000-0000000000d1/b0000000-0000-0000-0000-0000000d2c0b/w3c-roundtrip.png
+owner      | a0000000-0000-0000-0000-000000000004
+size_bytes | 74
+mimetype   | image/png
+
+ objects_in_bucket 
+-------------------
+                 1
+(1 row)
+
+───────────────────────────────────────────────────────────────
+## REMOVE leg (Playwright, real UI: press Remove)
+
+· ffe-unfold-candidates: 1
+· room-container-found: 1
+· room-container-text: "Concept render · Wave 3c round-trip proof · uploaded 8 September\n\nREPLACE\nREMOVE"
+· after-remove-text: "ADD A CONCEPT RENDER"
+· plate-img-count: 0
+───────────────────────────────────────────────────────────────
+## AFTER REMOVE — the object is gone AND the four columns are null
+
+project_rooms — the four columns 00580 added:
+-[ RECORD 1 ]--------------+-
+concept_render_url         | 
+concept_render_caption     | 
+concept_render_uploaded_at | 
+concept_render_uploaded_by | 
+
+storage.objects in the PRIVATE room-renders bucket:
+(0 rows)
+
+ objects_in_bucket 
+-------------------
+                 0
+(1 row)
+

@@ -28,6 +28,9 @@ import {
   isCeremonySourceEvent,
   type DeskScheduleInput,
 } from './desk-schedule';
+// dates.ts imports nothing either, so the one date idiom costs this module no
+// dependency (PP-2 / R140).
+import { dayMonth } from './dates';
 // Type-only, so it is erased at compile time and buys no runtime dependency:
 // the filled-stamp tones are the Stamp component's contract, not a second
 // vocabulary declared here.
@@ -472,13 +475,13 @@ const STAMP = {
   mocha: { color: 'var(--color-mocha)', ink: 'var(--color-mocha)' },
 } as const;
 
-// Bare DATE columns (e.g. an invoice due_date 'YYYY-MM-DD') must parse as LOCAL
-// midnight, or `new Date()` reads them as UTC and the rendered day slips back a
-// day in negative-offset timezones. Timestamps (with a time part) are unaffected.
-const fmtDay = (iso: string) =>
-  new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(
-    new Date(/^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso}T00:00:00` : iso),
-  );
+// PP-2 / R140 — the Desk prints one day idiom, "11 September", and the roster
+// row prints the same one as the day's line directly above it. `dayMonth` also
+// carries the guard this helper used to spell out: a bare DATE column (an
+// invoice due_date 'YYYY-MM-DD') parses as LOCAL midnight, or `new Date()`
+// reads it as UTC and the rendered day slips back a day in negative-offset
+// timezones. An unreadable date is silence rather than "Invalid Date".
+const fmtDay = (iso: string) => dayMonth(iso) ?? '';
 
 /** Whole dollars, the register the Desk states money in. Local rather than
  *  `project-commerce.ts`'s `money`, for the same reason every other helper

@@ -265,19 +265,19 @@ describe('RulePhaseBar — keyboard model', () => {
     const { slider } = renderBar(makeBar());
     expect(slider).toHaveAttribute(
       'aria-valuetext',
-      'Design Development: starts Feb 1, 28 days — MOVE mode',
+      'Design Development: starts 1 February, 28 days — MOVE mode',
     );
 
     fireEvent.keyDown(slider, { key: 'Enter' });
     expect(slider).toHaveAttribute(
       'aria-valuetext',
-      'Design Development: starts Feb 1, 28 days — RESIZE mode',
+      'Design Development: starts 1 February, 28 days — RESIZE mode',
     );
 
     fireEvent.keyDown(slider, { key: 'Enter' });
     expect(slider).toHaveAttribute(
       'aria-valuetext',
-      'Design Development: starts Feb 1, 28 days — MOVE mode',
+      'Design Development: starts 1 February, 28 days — MOVE mode',
     );
   });
 
@@ -305,12 +305,12 @@ describe('RulePhaseBar — keyboard model', () => {
   it('a staged nudge shows the same inline date readout a pointer drag gets', () => {
     const bar = makeBar();
     const { slider, rerenderWith } = renderBar(bar);
-    expect(screen.queryByText(/Feb 2 — Mar 2/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/2 February — 2 March/)).not.toBeInTheDocument();
 
     fireEvent.keyDown(slider, { key: 'ArrowRight' });
     rerenderWith(ruleAnchorSession('p1', START + 1));
 
-    expect(screen.getByText(/Feb 2 — Mar 2 · 28d/)).toBeInTheDocument();
+    expect(screen.getByText(/2 February — 2 March · 28d/)).toBeInTheDocument();
   });
 });
 

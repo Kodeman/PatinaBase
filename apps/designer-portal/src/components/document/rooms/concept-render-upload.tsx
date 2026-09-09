@@ -10,38 +10,45 @@
  * module, never retyped — so the studio hears the reason before the server
  * would have given one it could not read.
  *
- * The read and the removal are done here rather than through a hook because
- * `useRoomConceptRender` (Wave 1, Lane A2) exposes the upload only, and this
- * lane may not edit `packages/supabase`. Both are plain awaited calls rather
- * than React Query reads: this component mounts under every room heading in
- * `ffe-section.tsx`, and several existing suites mount that section with no
- * QueryClientProvider at all.
+ * WHY THIS IS THREE COMPONENTS AND NOT ONE. This mounts under EVERY room
+ * heading in `ffe-section.tsx`, and fifteen suites mount that section with no
+ * QueryClientProvider and a `jest.mock('@patina/supabase')` factory that
+ * defines only the hooks the section itself uses (D6's finding). A React Query
+ * hook called from the always-mounted body would throw in all of them. So the
+ * body that is always mounted calls no hook at all:
+ *
+ *   ConceptRenderUpload   always mounted · hook-free · runs one probe (a single
+ *                         column, no signing) that answers only "does this room
+ *                         have a render?"
+ *   StandingConceptRender mounts only once the answer is yes · reads the record
+ *                         through `useRoomConceptRenderRecord` (which re-signs
+ *                         the private-bucket URL on its own schedule, where a
+ *                         one-shot effect would keep handing out an hour-old
+ *                         link) and takes it down through
+ *                         `useRemoveRoomConceptRender` — the hook that deletes
+ *                         the storage object BEFORE nulling the row, so a
+ *                         removal can never leave an orphan behind the client's
+ *                         page.
+ *   ConceptRenderForm     mounts only after the studio opens the act · carries
+ *                         the upload hook.
  */
 
 import { useCallback, useEffect, useId, useState } from 'react';
 import {
   createBrowserClient,
   useRoomConceptRender,
-  ROOM_RENDERS_BUCKET,
+  useRoomConceptRenderRecord,
+  useRemoveRoomConceptRender,
   ROOM_RENDER_MAX_BYTES,
   ROOM_RENDER_MIME_TYPES,
 } from '@patina/supabase';
 import { DocumentAction } from '@/components/document/document-action';
 import { fmtDay } from '@/lib/document/format';
 
-const SIGNED_URL_TTL_SECONDS = 60 * 60;
-
 /** The client page's on-image label. Stated here as the studio's consent line,
  *  before the upload — the studio is told what the page will say. */
 export const CONCEPT_RENDER_CONSENT =
   "Labeled 'Concept · not installed' on the client's page";
-
-export interface ConceptRenderRecord {
-  path: string;
-  caption: string | null;
-  uploadedAt: string | null;
-  signedUrl: string | null;
-}
 
 const asMegabytes = (bytes: number) => {
   const mb = bytes / (1024 * 1024);
@@ -64,7 +71,10 @@ export function conceptRenderRejection(file: {
   return null;
 }
 
-export function conceptRenderCaptionLine(record: ConceptRenderRecord): string {
+export function conceptRenderCaptionLine(record: {
+  caption: string | null;
+  uploadedAt: string | null;
+}): string {
   return [
     'Concept render',
     record.caption,
@@ -74,53 +84,24 @@ export function conceptRenderCaptionLine(record: ConceptRenderRecord): string {
     .join(' · ');
 }
 
-async function readConceptRender(
+/**
+ * Does this room have a render? One column, no signing, no hook — the question
+ * the always-mounted body is allowed to ask. Everything else about the render
+ * is read by the hook inside `StandingConceptRender`.
+ */
+async function roomHasConceptRender(
   projectId: string,
   roomId: string,
-): Promise<ConceptRenderRecord | null> {
+): Promise<boolean> {
   const supabase = createBrowserClient() as any;
   const { data, error } = await supabase
     .from('project_rooms')
-    .select(
-      'concept_render_url, concept_render_caption, concept_render_uploaded_at',
-    )
+    .select('concept_render_url')
     .eq('id', roomId)
     .eq('project_id', projectId)
     .maybeSingle();
-  if (error || !data?.concept_render_url) return null;
-
-  const path = data.concept_render_url as string;
-  let signedUrl: string | null = null;
-  try {
-    const signed = await supabase.storage
-      .from(ROOM_RENDERS_BUCKET)
-      .createSignedUrl(path, SIGNED_URL_TTL_SECONDS);
-    signedUrl = signed?.data?.signedUrl ?? null;
-  } catch {
-    signedUrl = null;
-  }
-
-  return {
-    path,
-    caption: (data.concept_render_caption as string | null) ?? null,
-    uploadedAt: (data.concept_render_uploaded_at as string | null) ?? null,
-    signedUrl,
-  };
-}
-
-async function clearConceptRender(projectId: string, roomId: string) {
-  const supabase = createBrowserClient() as any;
-  const { error } = await supabase
-    .from('project_rooms')
-    .update({
-      concept_render_url: null,
-      concept_render_caption: null,
-      concept_render_uploaded_at: null,
-      concept_render_uploaded_by: null,
-    })
-    .eq('id', roomId)
-    .eq('project_id', projectId);
-  if (error) throw error;
+  if (error) return false;
+  return Boolean(data?.concept_render_url);
 }
 
 function ConceptRenderForm({
@@ -237,64 +218,51 @@ function ConceptRenderForm({
   );
 }
 
-export function ConceptRenderUpload({
+function StandingConceptRender({
   projectId,
   roomId,
   roomName,
+  formOpen,
+  onToggleForm,
+  onRemoved,
 }: {
   projectId: string;
   roomId: string;
   roomName: string;
+  formOpen: boolean;
+  onToggleForm: () => void;
+  onRemoved: () => void;
 }) {
-  const [record, setRecord] = useState<ConceptRenderRecord | null>(null);
-  const [open, setOpen] = useState(false);
-  const [reload, setReload] = useState(0);
+  const record = useRoomConceptRenderRecord({ projectId, roomId });
+  const removal = useRemoveRoomConceptRender();
   const [reason, setReason] = useState<string | null>(null);
-  const [removing, setRemoving] = useState(false);
 
-  useEffect(() => {
-    let alive = true;
-    void (async () => {
-      try {
-        const next = await readConceptRender(projectId, roomId);
-        if (alive) setRecord(next);
-      } catch {
-        // A room whose render cannot be read shows no render — never a
-        // broken plate under a label that claims one.
-      }
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [projectId, roomId, reload]);
+  const standing = record.data ?? null;
 
   const remove = useCallback(async () => {
-    setRemoving(true);
+    if (!standing) return;
     setReason(null);
     try {
-      await clearConceptRender(projectId, roomId);
-      setRecord(null);
-      setOpen(false);
+      await removal.mutateAsync({ projectId, roomId, path: standing.path });
+      onRemoved();
     } catch {
       setReason("The render did not come down. It is still on the client's page.");
-    } finally {
-      setRemoving(false);
     }
-  }, [projectId, roomId]);
+  }, [projectId, roomId, removal, standing, onRemoved]);
 
   return (
-    <div className="mb-1" data-concept-render-room={roomId}>
-      {record && (
+    <>
+      {standing && (
         <div className="flex items-start gap-2.5 pt-0.5">
-          {record.signedUrl && (
+          {standing.url && (
             <img
-              src={record.signedUrl}
-              alt={record.caption ?? `Concept render for ${roomName}`}
+              src={standing.url}
+              alt={standing.caption ?? `Concept render for ${roomName}`}
               className="h-[92px] w-[92px] shrink-0 rounded-[3px] border border-[var(--color-pearl)] object-cover"
             />
           )}
           <p className="max-w-[56ch] pt-0.5 text-[12px] leading-[1.5] text-[var(--text-subtle)]">
-            {conceptRenderCaptionLine(record)}
+            {conceptRenderCaptionLine(standing)}
           </p>
         </div>
       )}
@@ -310,27 +278,25 @@ export function ConceptRenderUpload({
 
       <div className="flex items-center gap-1">
         <DocumentAction
-          actionKey={
-            record ? 'replace-room-concept-render' : 'open-room-concept-render'
-          }
+          actionKey="replace-room-concept-render"
           surfaceKey="project"
           regionKey="room-concept-render"
           variant="tertiary"
-          aria-expanded={open}
+          aria-expanded={formOpen}
           onClick={() => {
             setReason(null);
-            setOpen((was) => !was);
+            onToggleForm();
           }}
         >
-          {record ? 'Replace' : 'Add a concept render'}
+          Replace
         </DocumentAction>
-        {record && (
+        {standing && (
           <DocumentAction
             actionKey="remove-room-concept-render"
             surfaceKey="project"
             regionKey="room-concept-render"
             variant="tertiary"
-            loading={removing}
+            loading={removal.isPending}
             loadingLabel="Removing"
             onClick={remove}
           >
@@ -338,6 +304,71 @@ export function ConceptRenderUpload({
           </DocumentAction>
         )}
       </div>
+    </>
+  );
+}
+
+export function ConceptRenderUpload({
+  projectId,
+  roomId,
+  roomName,
+}: {
+  projectId: string;
+  roomId: string;
+  roomName: string;
+}) {
+  /** null while the probe has not answered — a room says nothing rather than
+   *  offering an act whose label would then reverse itself. */
+  const [standing, setStanding] = useState<boolean | null>(null);
+  const [open, setOpen] = useState(false);
+  const [reload, setReload] = useState(0);
+
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      try {
+        const has = await roomHasConceptRender(projectId, roomId);
+        if (alive) setStanding(has);
+      } catch {
+        // A room whose render cannot be read shows no render — never a
+        // broken plate under a label that claims one.
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [projectId, roomId, reload]);
+
+  return (
+    <div className="mb-1" data-concept-render-room={roomId}>
+      {standing === true && (
+        <StandingConceptRender
+          projectId={projectId}
+          roomId={roomId}
+          roomName={roomName}
+          formOpen={open}
+          onToggleForm={() => setOpen((was) => !was)}
+          onRemoved={() => {
+            setStanding(false);
+            setOpen(false);
+          }}
+        />
+      )}
+
+      {standing === false && (
+        <div className="flex items-center gap-1">
+          <DocumentAction
+            actionKey="open-room-concept-render"
+            surfaceKey="project"
+            regionKey="room-concept-render"
+            variant="tertiary"
+            aria-expanded={open}
+            onClick={() => setOpen((was) => !was)}
+          >
+            Add a concept render
+          </DocumentAction>
+        </div>
+      )}
 
       {open && (
         <ConceptRenderForm

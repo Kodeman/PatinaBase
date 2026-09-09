@@ -15,6 +15,8 @@
  * whatever hooks they already hold.
  */
 
+import { MONTH_NAME_FORMAT } from './dates';
+
 export type StudioSetupStepKey =
   | 'named-and-branded'
   | 'own-title-set'
@@ -100,10 +102,7 @@ export function deriveSetupSteps(
 
   const openCount = steps.filter((s) => !s.done).length;
   const allDone = openCount === 0;
-  const settledLabel = `Set up · ${new Intl.DateTimeFormat('en-US', {
-    month: 'long',
-    year: 'numeric',
-  }).format(now)}`;
+  const settledLabel = `Set up · ${MONTH_NAME_FORMAT.format(now)} ${now.getFullYear()}`;
 
   return { steps, openCount, allDone, settledLabel };
 }
