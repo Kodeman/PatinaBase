@@ -4,6 +4,7 @@ import {
   buildSnapshot,
   isServiceRoleCaller,
   resendCooldownRemainingMs,
+  resendEligibility,
   validateNote,
   validateToken,
   RESEND_COOLDOWN_MS,
@@ -57,6 +58,15 @@ Deno.test("token validation is total and orders its failures", () => {
     }),
     { ok: false, error: "already_accepted", status: 409 },
   );
+});
+
+Deno.test("R13 — a notice has nothing to resend", () => {
+  assertEquals(resendEligibility("notice"), {
+    ok: false,
+    error: "nothing_to_resend",
+    status: 409,
+  });
+  assertEquals(resendEligibility("invite"), { ok: true });
 });
 
 Deno.test("R10 — one letter per hour", () => {

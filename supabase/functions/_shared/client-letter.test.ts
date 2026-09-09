@@ -119,6 +119,21 @@ Deno.test("the note is a callout, and a designer typing HTML cannot break it", (
   assertStringIncludes(letter.html, "&amp; a plan for &lt;the&gt; hall");
 });
 
+Deno.test("the CTA url is escaped in both hrefs — the button and the fallback link", () => {
+  const letter = renderClientLetter({
+    ...F1,
+    ctaUrl: 'https://client.patina.cloud/auth/invite/"><script>alert(1)</script>',
+  });
+  assert(!letter.html.includes("<script>"));
+  // Two href attributes carry the CTA url: the button (ctaButton) and the
+  // "paste this link" fallback. Both must be escaped, or a token that
+  // happens to collide with a quote/bracket breaks out of the attribute.
+  assertEquals(
+    (letter.html.match(/href="[^"]*&quot;&gt;&lt;script&gt;/g) ?? []).length,
+    2,
+  );
+});
+
 Deno.test("the letter reads whole with no note", () => {
   const letter = renderClientLetter({ ...F1, personalMessage: null });
   assertStringIncludes(letter.html, "added you to the Van Hise kitchen");

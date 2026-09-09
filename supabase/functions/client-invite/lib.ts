@@ -57,6 +57,18 @@ export function validateToken(row: TokenRow | null, now = Date.now()): TokenVerd
   return { ok: true };
 }
 
+/**
+ * R13 — a notice has no expiry line and nothing to accept; there is nothing
+ * for "Write again" to refresh. Checked before the cooldown so a stale
+ * notice reads as "nothing to resend", not as a wait timer that never ends.
+ */
+export function resendEligibility(
+  kind: "invite" | "notice",
+): { ok: true } | { ok: false; error: "nothing_to_resend"; status: number } {
+  if (kind === "notice") return { ok: false, error: "nothing_to_resend", status: 409 };
+  return { ok: true };
+}
+
 export function resendCooldownRemainingMs(
   lastSentAt: string | null,
   now = Date.now(),

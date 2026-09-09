@@ -344,7 +344,7 @@ export async function POST(request: NextRequest) {
  * before the send. This route keeps what it has always owned: the
  * designer_clients row and the activity log.
  */
-async function sendTheLetter(args: {
+export async function sendTheLetter(args: {
   adminClient: any;
   callerUser: { id: string; email?: string | null };
   clientEmail: string;
@@ -374,6 +374,11 @@ async function sendTheLetter(args: {
     if (projectError) {
       return serverError(`Failed to verify project access: ${projectError.message}`);
     }
+    // Mirrors is_active_org_member (00556: role <> 'guest' AND
+    // organizations.status = 'active' — "a suspended/deactivated organization
+    // confers no co-membership") rather than calling that RPC directly: it
+    // reads auth.uid() and this route only holds a service-role adminClient,
+    // which has no caller JWT, so the RPC would always resolve false here.
     let hasAccess = !!project && project.designer_id === callerUser.id;
     if (!hasAccess && project?.studio_id) {
       const { data: membership } = await adminClient
@@ -382,8 +387,16 @@ async function sendTheLetter(args: {
         .eq('organization_id', project.studio_id)
         .eq('user_id', callerUser.id)
         .eq('status', 'active')
+        .neq('role', 'guest')
         .maybeSingle();
-      hasAccess = !!membership;
+      if (membership) {
+        const { data: org } = await adminClient
+          .from('organizations')
+          .select('status')
+          .eq('id', project.studio_id)
+          .maybeSingle();
+        hasAccess = org?.status === 'active';
+      }
     }
     if (!hasAccess) {
       return badRequest('Project not found');

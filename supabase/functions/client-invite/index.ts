@@ -48,6 +48,7 @@ import {
   isServiceRoleCaller,
   RESEND_COOLDOWN_MS,
   resendCooldownRemainingMs,
+  resendEligibility,
   validateNote,
   validateToken,
 } from "./lib.ts";
@@ -501,6 +502,8 @@ async function resendFrom(
   if (!old) return json({ error: "not_found" }, 404);
   const row = old as any;
 
+  const eligibility = resendEligibility(row.kind);
+  if (!eligibility.ok) return json({ error: eligibility.error }, eligibility.status);
   if (row.superseded_by) return json({ error: "already_superseded" }, 409);
   const remaining = resendCooldownRemainingMs(row.last_sent_at ?? row.sent_at);
   if (remaining > 0) {

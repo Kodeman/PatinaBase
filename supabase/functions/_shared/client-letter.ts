@@ -232,7 +232,7 @@ function colophon(s: ClientLetterSnapshot): string {
     `Prepared by ${escapeHtml(by)} &middot; Sent through Patina`,
     `Sent to ${escapeHtml(s.recipientEmail)} at the request of ${escapeHtml(by)}.`,
     ignore,
-    `Button not working? Paste this link into your browser:<br><a href="${s.ctaUrl}" style="color:${C.verd}; text-decoration:underline; word-break:break-all;">${escapeHtml(s.ctaUrl)}</a>`,
+    `Button not working? Paste this link into your browser:<br><a href="${escapeHtml(s.ctaUrl)}" style="color:${C.verd}; text-decoration:underline; word-break:break-all;">${escapeHtml(s.ctaUrl)}</a>`,
   ];
   return lines
     .map(
@@ -264,7 +264,10 @@ export function renderClientLetter(s: ClientLetterSnapshot): RenderedClientLette
     paragraph(escapeHtml(standing)),
     note,
     spacer(6),
-    ctaButton(s.ctaUrl, ctaLabel(s), "brass"),
+    // ctaButton (branded-email.ts) interpolates its url arg into an href
+    // attribute unescaped — it only escapes the label — so the URL is
+    // escaped here, at the one call site this module owns.
+    ctaButton(escapeHtml(s.ctaUrl), ctaLabel(s), "brass"),
     spacer(10),
     expiry,
     signOffHtml,
