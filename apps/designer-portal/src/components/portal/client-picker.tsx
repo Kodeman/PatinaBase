@@ -116,6 +116,19 @@ export function ClientPicker({
   const letterReady = letterOn && !letterLoading;
   // Keyed by row: an armed row's line belongs to that row and to no other.
   const [notes, setNotes] = React.useState<Record<string, string>>({});
+  // A row's drafted line is only good for its current arm-cycle: discarding
+  // it via Cancel, or sending it successfully, must not leave it to be
+  // silently resent the next time the same row is armed (LetterLineField's
+  // own `open` state resets to folded on remount, so a stale note would send
+  // with no visible sign it was ever there).
+  const clearNote = React.useCallback((id: string) => {
+    setNotes((prev) => {
+      if (!(id in prev)) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  }, []);
 
   // Only contacts that are linkable carry a non-null client_id (a profiles.id).
   const labelFor = React.useCallback((dc: DesignerClient) => {
@@ -223,6 +236,7 @@ export function ClientPicker({
         onChange(result.profileId);
         setSearch('');
         setOpen(false);
+        clearNote(dc.id);
       } else {
         setInviteError({
           id: dc.id,
@@ -426,7 +440,11 @@ export function ClientPicker({
                         <div
                           role="group"
                           id={confirmId}
-                          aria-label={`Invite ${dc.client_email}`}
+                          aria-label={
+                            letterReady
+                              ? `Send the letter to ${dc.client_email}`
+                              : `Invite ${dc.client_email}`
+                          }
                           data-testid={`client-picker-invite-confirm-${dc.id}`}
                           onKeyDown={(event) => {
                             // cmdk's Command root preventDefault()s EVERY Enter
@@ -446,9 +464,19 @@ export function ClientPicker({
                           className="px-2 pb-1.5 pt-0.5 text-[0.7rem] leading-snug text-[var(--text-muted)]"
                         >
                           <p className="mb-1.5">
-                            {dc.client_email} has no Patina account yet. Sending
-                            an invite emails them a signup link and links this
-                            record once they accept.
+                            {letterReady ? (
+                              <>
+                                {dc.client_email} has no Patina account yet.
+                                Sending the letter emails them a signup link
+                                and links this record once they accept.
+                              </>
+                            ) : (
+                              <>
+                                {dc.client_email} has no Patina account yet.
+                                Sending an invite emails them a signup link
+                                and links this record once they accept.
+                              </>
+                            )}
                           </p>
                           {letterReady && (
                             <LetterLineField
@@ -484,6 +512,7 @@ export function ClientPicker({
                               onClick={(event) => {
                                 event.stopPropagation();
                                 setArmedInviteId(null);
+                                clearNote(dc.id);
                               }}
                               className="rounded-sm px-2 py-1 text-[0.7rem] text-[var(--text-muted)] hover:bg-[var(--bg-hover)]"
                             >

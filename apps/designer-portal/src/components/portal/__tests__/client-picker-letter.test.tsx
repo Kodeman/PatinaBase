@@ -93,3 +93,53 @@ it('flag off — today’s armed row, no field, no letter key', async () => {
   expect(mutateAsync.mock.calls[0][0]).not.toHaveProperty('letter');
   flagValue = { value: true, isLoading: false };
 });
+
+it('flag still resolving — no field renders and no letter key is sent', async () => {
+  flagValue = { value: true, isLoading: true };
+  openAndArm();
+  expect(screen.queryByTestId('letter-line-disclosure')).toBeNull();
+  fireEvent.click(screen.getByTestId('client-picker-invite-send-dc1'));
+  await waitFor(() => expect(mutateAsync).toHaveBeenCalled());
+  expect(mutateAsync.mock.calls[0][0]).not.toHaveProperty('letter');
+  flagValue = { value: true, isLoading: false };
+});
+
+it('Cancel discards the drafted note — re-arming the same row later sends nothing stale', async () => {
+  openAndArm();
+  fireEvent.click(screen.getByTestId('letter-line-disclosure'));
+  fireEvent.change(screen.getByLabelText('A line for Dave'), {
+    target: { value: 'Dave — a draft I will cancel.' },
+  });
+  fireEvent.click(screen.getByTestId('client-picker-invite-cancel-dc1'));
+
+  // Re-arm the SAME row later in the same session, without reopening the
+  // disclosure (which starts folded again on remount) — the exact scenario
+  // a designer trusting "Cancel" would produce.
+  fireEvent.click(screen.getByRole('option', { name: /Dave Okonkwo/ }));
+  expect(screen.getByTestId('letter-line-disclosure')).toBeInTheDocument();
+  fireEvent.click(screen.getByTestId('client-picker-invite-send-dc1'));
+
+  await waitFor(() => expect(mutateAsync).toHaveBeenCalled());
+  expect(mutateAsync.mock.calls[0][0].note).toBeUndefined();
+});
+
+it('a successful send clears the note — re-arming the same row later starts empty', async () => {
+  openAndArm();
+  fireEvent.click(screen.getByTestId('letter-line-disclosure'));
+  fireEvent.change(screen.getByLabelText('A line for Dave'), {
+    target: { value: 'Dave — the drawings are in.' },
+  });
+  fireEvent.click(screen.getByTestId('client-picker-invite-send-dc1'));
+  await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(1));
+  expect(mutateAsync.mock.calls[0][0].note).toBe('Dave — the drawings are in.');
+
+  // The popover closed on success; reopen and re-arm the same row without
+  // reopening the (re-folded) disclosure.
+  fireEvent.click(screen.getByTestId('client-picker-trigger'));
+  fireEvent.click(screen.getByRole('option', { name: /Dave Okonkwo/ }));
+  expect(screen.getByTestId('letter-line-disclosure')).toBeInTheDocument();
+  fireEvent.click(screen.getByTestId('client-picker-invite-send-dc1'));
+
+  await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(2));
+  expect(mutateAsync.mock.calls[1][0].note).toBeUndefined();
+});

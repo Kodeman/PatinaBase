@@ -622,6 +622,18 @@ export function SendSheet({
   const noteFeedsLetter =
     letterReady && !proposal?.client_id && !!capturedHousehold?.client_email;
 
+  // `maxLength` only stops a keystroke — it can't retroactively shorten text
+  // already typed before `noteFeedsLetter` turned true (the brief window
+  // while the flag or the captured household is still loading). Once it
+  // does turn true, the composer layer of R4's cap has to apply to whatever
+  // is already there, not just what's typed next.
+  useEffect(() => {
+    if (!noteFeedsLetter) return;
+    setPersonalMessage((prev) =>
+      prev.length > LETTER_NOTE_MAX ? prev.slice(0, LETTER_NOTE_MAX) : prev,
+    );
+  }, [noteFeedsLetter]);
+
   return (
     <DocSheet open={open} onClose={onClose} title="Send proposal">
       <div className="mx-auto max-w-xl">
