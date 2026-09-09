@@ -66,6 +66,18 @@ export default function DeskPage() {
   const { user } = useAuth();
   const { data: profile } = useProfile();
   const hydrated = useHydrated();
+  // IA-17 — the boards rail sits beside the roster head at ≥1280px only.
+  // Defaults to false (single column) so SSR and the first client paint
+  // match; a live listener keeps it correct across a resize.
+  const [isWideDesk, setIsWideDesk] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const media = window.matchMedia('(min-width: 1280px)');
+    const update = () => setIsWideDesk(media.matches);
+    update();
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
   const suppressFirstTouch = useSuppressDeskFirstTouch(); // R97 — hold the note during modal/tour
   const showWalkthroughOffer = useDeskWalkthroughOffer(); // R97 — existing-designer tour offer
   const [captureOpen, setCaptureOpen] = useState(false);
@@ -225,6 +237,24 @@ export default function DeskPage() {
   // space — larger, and earlier in the composition — rather than sitting as
   // bottom front matter. Only known once the read resolves.
   const deskEmpty = !!data && roster.liveCount === 0;
+
+  const rosterBlock =
+    isLoading && !data ? (
+      <div
+        className="space-y-3"
+        aria-hidden
+        data-tour-anchor="desk-needs-your-hand"
+      >
+        {[0, 1, 2].map((i) => (
+          <div
+            key={i}
+            className="h-6 rounded-[3px] border border-[var(--border-subtle)] bg-[var(--bg-surface)]"
+          />
+        ))}
+      </div>
+    ) : (
+      <DeskRoster roster={roster} studioMembers={studioMembers} />
+    );
 
   return (
     <main className="mx-auto w-full max-w-[1120px] px-[clamp(1.5rem,5vw,4rem)] pb-28 pt-14">
@@ -416,30 +446,38 @@ export default function DeskPage() {
             />
           )}
 
-          {isLoading && !data ? (
-            <div
-              className="space-y-3"
-              aria-hidden
-              data-tour-anchor="desk-needs-your-hand"
-            >
-              {[0, 1, 2].map((i) => (
-                <div
-                  key={i}
-                  className="h-6 rounded-[3px] border border-[var(--border-subtle)] bg-[var(--bg-surface)]"
-                />
-              ))}
-            </div>
-          ) : (
-            <DeskRoster roster={roster} />
-          )}
-
-          {/* D5 — the recents strip returns (B2-L2 deleted it along with the
-              folio grid it used to sit beside). It keeps its own quiet
-              doorway shape rather than a roster line: a board has no stage
-              and no need line, so it never fit the roster's one-line-per-job
-              grammar. It renders nothing of its own once its query resolves
-              empty, so a boardless studio sees no seam here at all. */}
-          <RecentBoardsStrip />
+          {/* IA-17 — at ≥1280px the roster and the boards rail sit side by
+              side instead of ~2,000px apart; below 1280 the single column is
+              unchanged (the roster block above the full-width strip, exactly
+              as before). `isWideDesk` mirrors the matchMedia pattern already
+              used by margin-rail.tsx / use-lens-state.ts and defaults to
+              false so SSR and the first paint never disagree. */}
+          {/* One wrapper in both states, and the roster block always the first
+              child of the same div: crossing 1280 must re-lay-out the page, not
+              remount the roster — a remount discards the facet she just chose. */}
+          <div
+            className={
+              isWideDesk ? 'grid grid-cols-[minmax(0,1fr)_260px] gap-12' : undefined
+            }
+          >
+            <div className={isWideDesk ? 'min-w-0' : undefined}>{rosterBlock}</div>
+            {/* Not its own landmark — RecentBoardsStrip's own <section> is
+                the labelled region; a wrapping <aside> here would double
+                it up as a second, identically-named landmark. */}
+            {isWideDesk && (
+              <div>
+                <RecentBoardsStrip compact />
+              </div>
+            )}
+          </div>
+          {/* D5 — the recents strip returns (B2-L2 deleted it along with
+              the folio grid it used to sit beside). It keeps its own
+              quiet doorway shape rather than a roster line: a board has
+              no stage and no need line, so it never fit the roster's
+              one-line-per-job grammar. It renders nothing of its own once
+              its query resolves empty, so a boardless studio sees no seam
+              here at all. */}
+          {!isWideDesk && <RecentBoardsStrip />}
           <DeskBoardsReactionRollup />
 
           {/* R95 — on a quiet Desk the Studio index rises here, at full weight, to

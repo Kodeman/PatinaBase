@@ -20,6 +20,12 @@ jest.mock('@/components/document/command-bar', () => ({
   openLedger: jest.fn(),
 }));
 
+// The day's line's own read — mocked so the roster renders without a
+// QueryClient. This suite is about the settle flag, not the band.
+jest.mock('@/hooks/use-answered-notes', () => ({
+  useAnsweredNotes: () => ({ data: [] }),
+}));
+
 function roster(): DeskRosterModel {
   return {
     heading: 'Every job · 3 live · 0 overdue',

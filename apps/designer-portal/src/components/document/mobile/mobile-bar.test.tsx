@@ -360,6 +360,56 @@ describe('the elected act at 390', () => {
   });
 });
 
+// D5 (VISION.md:50) — the centre slot's dwell-timer fallback ("Today" /
+// "In hand" + elapsed, or "Hands free") is gone. A timer that watches her is
+// not a tool; the "Time in hand … review or adjust" row in More stays,
+// because that one she opens.
+describe('the centre slot with no primary action (D5, VISION.md:50)', () => {
+  beforeEach(() => {
+    mockPathname = '/doc/proj-1';
+    mockCallSheetOn = true;
+  });
+
+  it('renders nothing — no dwell timer, no "Today", no "Hands free", no elapsed string', () => {
+    mountBar();
+
+    const bar = screen.getByTestId('mobile-bar');
+    expect(within(bar).queryByText('Today')).toBeNull();
+    expect(within(bar).queryByText('In hand')).toBeNull();
+    expect(within(bar).queryByText('Hands free')).toBeNull();
+    expect(within(bar).queryByText(/^\d+:\d{2}$/)).toBeNull();
+    expect(within(bar).queryByText(/^\d+\s*min$/)).toBeNull();
+  });
+
+  it('leaves the rest of the bar unchanged when a primary action IS registered', () => {
+    mountBar({
+      action: {
+        actionKey: 'mark-proposal-signed',
+        surfaceKey: 'open-document',
+        regionKey: 'proposal-watch-actions',
+        label: 'Mark the Okonkwo agreement signed',
+        target: { kind: 'press', onPress: jest.fn() },
+      },
+    });
+
+    const bar = screen.getByTestId('mobile-bar');
+    expect(
+      within(bar).getByRole('button', { name: 'Mark the Okonkwo agreement signed' }),
+    ).toBeInTheDocument();
+    expect(within(bar).queryByText('Today')).toBeNull();
+    expect(within(bar).queryByText('Hands free')).toBeNull();
+  });
+
+  it('the More row still renders "Time in hand … review or adjust" — that timer stays, she opens it', () => {
+    mountBar();
+    const menu = openMore();
+    expect(
+      menu.getByText(/review or adjust/),
+    ).toBeInTheDocument();
+    expect(menu.getByText('Time in hand')).toBeInTheDocument();
+  });
+});
+
 describe('the left zone · household and the current stop (OD-11, A-08)', () => {
   beforeEach(() => {
     mockPathname = '/doc/proj-1';

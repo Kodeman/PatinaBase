@@ -74,7 +74,7 @@ const VARIANTS = [
     // R139 (2026-09-08) rules a fourth tier. The charcoal fill that is retired
     // chrome for every row above is this row's correct grammar, so `terminal`
     // retires nothing — this table is the one place that records the
-    // distinction. Lane D4 builds the variant and un-skips the todo below.
+    // distinction.
     variant: 'terminal',
     retiredChrome: null,
     tracking: 'tracking-[0]',
@@ -83,18 +83,8 @@ const VARIANTS = [
   },
 ] as const;
 
-type BuiltVariant = Exclude<(typeof VARIANTS)[number], { variant: 'terminal' }>;
-
-const BUILT_VARIANTS = VARIANTS.filter(
-  (row): row is BuiltVariant => row.variant !== 'terminal',
-);
-
 describe('DocumentAction', () => {
-  test.todo(
-    'renders the terminal variant in the scored-ink grammar — skipped because DocumentAction has no terminal variant yet; Wave 3 lane D4 adds it under R139 and folds this row back into the it.each',
-  );
-
-  it.each(BUILT_VARIANTS)(
+  it.each(VARIANTS)(
     'renders the $variant variant in the scored-ink grammar',
     ({ variant, retiredChrome, tracking, weight }) => {
       render(
@@ -123,7 +113,7 @@ describe('DocumentAction', () => {
       expect(action).not.toHaveClass('min-h-11');
       expect(action).not.toHaveClass('min-w-11');
       expect(action).not.toHaveClass('rounded-[4px]');
-      expect(action).not.toHaveClass(retiredChrome);
+      if (retiredChrome) expect(action).not.toHaveClass(retiredChrome);
       expect(action.className).not.toContain('focus-visible:outline');
 
       expect(action).toHaveAttribute('data-action-key', `${variant}-action`);
@@ -133,7 +123,7 @@ describe('DocumentAction', () => {
     },
   );
 
-  it.each(BUILT_VARIANTS)(
+  it.each(VARIANTS)(
     'gives the $variant variant one hit halo, a scored label, and its pool',
     ({ variant, hasPool }) => {
       render(
@@ -279,6 +269,44 @@ describe('DocumentAction', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
     expect(events.actionSelected).not.toHaveBeenCalled();
+  });
+
+  it('never dims an unavailable act with opacity (B07)', () => {
+    // Quiet ink at opacity-50 measures 2.21:1. The unavailable treatment is
+    // faint ink at FULL opacity with hairline scores — globals.css carries it,
+    // so what has to be true here is that no opacity class survives.
+    const { rerender } = render(
+      <DocumentAction
+        actionKey="save"
+        surfaceKey="compose"
+        regionKey="room-head"
+        disabled
+      >
+        Save draft
+      </DocumentAction>,
+    );
+
+    const action = screen.getByRole('button', { name: 'Save draft' });
+    expect(action.className).not.toContain('opacity-50');
+    expect(action).toHaveClass(
+      'disabled:cursor-not-allowed',
+      'aria-disabled:cursor-not-allowed',
+    );
+
+    rerender(
+      <DocumentAction
+        actionKey="save"
+        surfaceKey="compose"
+        regionKey="room-head"
+        href="/library"
+        disabled
+      >
+        Save draft
+      </DocumentAction>,
+    );
+    const link = screen.getByRole('link', { name: 'Save draft' });
+    expect(link).toHaveAttribute('aria-disabled', 'true');
+    expect(link.className).not.toContain('opacity-50');
   });
 
   it('deduplicates impressions for a mounted action and presentation', () => {

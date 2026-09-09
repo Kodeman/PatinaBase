@@ -1,5 +1,10 @@
-import { render, screen } from '@testing-library/react';
-import type { DeskRoster as DeskRosterModel } from '@/lib/document/desk-roster-derivation';
+import { act, render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import type {
+  AnsweredClientNote,
+  DeskRoster as DeskRosterModel,
+  RosterMember,
+} from '@/lib/document/desk-roster-derivation';
 import { DeskRoster } from './desk-roster';
 
 jest.mock('@/lib/analytics/document-events', () => ({
@@ -9,6 +14,35 @@ jest.mock('@/lib/analytics/document-events', () => ({
 jest.mock('@/components/document/command-bar', () => ({
   openLedger: jest.fn(),
 }));
+
+// The day's line's own read. Mocked here so the roster stays renderable
+// without a QueryClient; the notes themselves are set per-test.
+const mockAnsweredNotes = jest.fn(() => [] as AnsweredClientNote[]);
+jest.mock('@/hooks/use-answered-notes', () => ({
+  useAnsweredNotes: () => ({ data: mockAnsweredNotes() }),
+}));
+
+const LEAH = 'user-leah';
+const ANNEKE = 'user-anneke';
+
+function member(over: Partial<RosterMember> = {}): RosterMember {
+  return {
+    user_id: LEAH,
+    role: 'owner',
+    status: 'active',
+    profiles: { full_name: 'Leah Hartwell', display_name: null },
+    ...over,
+  };
+}
+
+const STUDIO: RosterMember[] = [
+  member(),
+  member({
+    user_id: ANNEKE,
+    role: 'member',
+    profiles: { full_name: 'Anneke Sund', display_name: null },
+  }),
+];
 
 function roster(over: Partial<DeskRosterModel> = {}): DeskRosterModel {
   return {
@@ -25,6 +59,8 @@ function roster(over: Partial<DeskRosterModel> = {}): DeskRosterModel {
           {
             engagementId: 'byrne',
             name: 'Byrne remodel',
+            stage: 'proposal',
+            designerId: ANNEKE,
             state: 'Erin Byrne · design agreement sent August 19',
             overdueText: null,
             mark: 'quiet',
@@ -43,6 +79,8 @@ function roster(over: Partial<DeskRosterModel> = {}): DeskRosterModel {
           {
             engagementId: 'vandersteen',
             name: 'Vandersteen residence',
+            stage: 'project',
+            designerId: null,
             state: 'Anne Vandersteen · Procurement And Orders',
             overdueText:
               'Overdue 6 days — Invoice 1042 · $17,500 overdue — oldest due Aug 2 — send a reminder',
@@ -245,7 +283,9 @@ describe('DeskRoster — the stage tabs (R126)', () => {
       key,
       label: key,
       count: 1,
-      lines: [{ ...roster().groups[0].lines[0], engagementId: `job-${i}` }],
+      lines: [
+        { ...roster().groups[0].lines[0], engagementId: `job-${i}`, stage: key },
+      ],
     }));
     const { container } = render(<DeskRoster roster={model} />);
 
@@ -317,6 +357,386 @@ describe('DeskRoster — no shadow reaches the roster', () => {
 
     for (const el of container.querySelectorAll('*')) {
       expect(el.className.toString()).not.toMatch(/(^|[\s:])(drop-)?shadow-/);
+    }
+  });
+});
+
+describe('DeskRoster — the day’s line (IA-05)', () => {
+  beforeEach(() => {
+    mockAnsweredNotes.mockReturnValue([]);
+  });
+
+  function richRoster(): DeskRosterModel {
+    const model = roster();
+    model.groups[0].lines[0] = {
+      ...model.groups[0].lines[0],
+      engagementId: 'wright',
+      name: 'Wright apartment',
+      needKind: 'new_lead',
+      dueOn: '2026-08-27',
+      needText: 'New lead — respond by Aug 27',
+      client: 'Marcus Wright',
+      projectId: null,
+    };
+    model.groups[1].lines.push({
+      ...model.groups[1].lines[0],
+      engagementId: 'cedar',
+      name: 'Cedar Lane Study',
+      overdueText: null,
+      overdue: { isOverdue: false, days: 0 },
+      needKind: 'task_due',
+      mark: 'quiet',
+      client: 'Nora Ellison',
+      projectId: 'p-cedar',
+      act: { label: 'Open the job', href: '/doc/cedar' },
+    });
+    model.groups[1].count = 2;
+    model.liveCount = 3;
+    return model;
+  }
+
+  it('renders nothing at all when nothing needs her', () => {
+    const model = roster();
+    for (const group of model.groups) {
+      for (const line of group.lines) {
+        line.mark = null;
+        line.needKind = null;
+        line.overdueText = null;
+        line.overdue = { isOverdue: false, days: 0 };
+      }
+    }
+    model.overdueCount = 0;
+    model.overdueLine = 'Nothing is overdue.';
+
+    const { container } = render(<DeskRoster roster={model} />);
+
+    expect(container.querySelector('[data-desk-day-line]')).toBeNull();
+    expect(screen.queryByText(/more below/)).toBeNull();
+  });
+
+  it('names the overdue job as an act into its own row, the clause in the red letter’s ink', () => {
+    const { container } = render(<DeskRoster roster={roster()} />);
+
+    const band = container.querySelector('[data-desk-day-line]')!;
+    const link = within(band as HTMLElement).getByRole('link', {
+      name: 'Vandersteen residence — the row below',
+    });
+    expect(link).toHaveAttribute('href', '#roster-line-vandersteen');
+    expect(container.querySelector('#roster-line-vandersteen')).toHaveAttribute(
+      'data-roster-line',
+      'vandersteen',
+    );
+
+    const clause = band.querySelector('[data-day-line-overdue]')!;
+    expect(clause.className).toContain('var(--color-terracotta-ink)');
+    expect(clause.textContent).toMatch(/^ — project, overdue \d+ days?$/);
+    // The sentence above the band is untouched — the head count, the sentence
+    // and the row mark stay three legible levels of one fact.
+    expect(
+      screen.getByText('One thing is overdue — Vandersteen.'),
+    ).toBeInTheDocument();
+  });
+
+  it('carries every line into a row that is already on the page', () => {
+    mockAnsweredNotes.mockReturnValue([
+      { projectId: 'p-cedar', answeredAt: new Date().toISOString() },
+    ]);
+    const { container } = render(<DeskRoster roster={richRoster()} />);
+
+    const band = container.querySelector('[data-desk-day-line]')!;
+    const links = Array.from(band.querySelectorAll('a[href^="#roster-line-"]'));
+    expect(links.length).toBeGreaterThan(0);
+    for (const link of links) {
+      const id = link.getAttribute('href')!.slice(1);
+      expect(container.querySelector(`[id="${id}"]`)).toHaveAttribute(
+        'data-roster-line',
+      );
+    }
+  });
+
+  it('says at most three things, and names the client who replied', () => {
+    mockAnsweredNotes.mockReturnValue([
+      { projectId: 'p-cedar', answeredAt: new Date().toISOString() },
+    ]);
+    const { container } = render(<DeskRoster roster={richRoster()} />);
+
+    const lines = container.querySelectorAll('[data-day-line]');
+    expect(lines.length).toBeLessThanOrEqual(3);
+    expect(Array.from(lines).map((l) => l.getAttribute('data-day-line'))).toEqual([
+      'overdue',
+      'lead',
+      'answered',
+    ]);
+    expect(
+      container.querySelector('[data-day-line="answered"]')!.textContent,
+    ).toBe('Nora Ellison replied last night — Cedar Lane Study');
+  });
+
+  it('sends “and N more below” to the first stage plate', () => {
+    const { container } = render(<DeskRoster roster={roster()} />);
+
+    const more = container.querySelector('[data-day-line-more]')!;
+    expect(more.textContent).toBe('and 1 more below');
+    expect(more).toHaveAttribute('href', '#roster-stage-proposal');
+    expect(
+      container.querySelector('[data-stage-tab="proposal"]'),
+    ).toHaveAttribute('id', 'roster-stage-proposal');
+  });
+
+  it('names the person she is keeping waiting on the lead line', () => {
+    const { container } = render(<DeskRoster roster={richRoster()} />);
+
+    const lead = container.querySelector('[data-day-line="lead"]')!;
+    expect(lead.textContent).toBe(
+      'Marcus Wright · New lead — respond by Aug 27',
+    );
+    expect(
+      within(lead as HTMLElement).getByRole('link', {
+        name: 'Marcus Wright — the row below',
+      }),
+    ).toHaveAttribute('href', '#roster-line-wright');
+  });
+
+  it('writes the sheet’s inline act, not a control box', () => {
+    const { container } = render(<DeskRoster roster={roster()} />);
+
+    const link = container.querySelector<HTMLElement>(
+      '[data-desk-day-line] a[href^="#roster-line-"]',
+    )!;
+    expect(link.className).toContain('border-[color:var(--color-aged-oak)]');
+    expect(link.className).toContain('text-inherit');
+    expect(link.className).toContain('focus-visible:outline-2');
+    expect(link.className).not.toMatch(/min-h-|rounded-|bg-\[/);
+  });
+
+  it('gives every inline act the sheet’s focus pair — the ring and the caret', () => {
+    const { container } = render(<DeskRoster roster={roster()} />);
+
+    const acts = Array.from(
+      container.querySelectorAll<HTMLElement>('[data-desk-day-line] a'),
+    );
+    expect(acts.length).toBeGreaterThan(0);
+    for (const act of acts) {
+      expect(act.className).toContain('focus-visible:outline-2');
+      expect(act.className).toContain("before:content-['‸']");
+      expect(act.className).toContain('focus-visible:before:opacity-100');
+      // The caret is drawn, never spoken: an explicit name is what keeps the
+      // pseudo-content out of the accessible name.
+      expect(act.getAttribute('aria-label')).toBeTruthy();
+    }
+  });
+});
+
+describe('DeskRoster — the facets (IA-11 / IA-12)', () => {
+  // DocumentAction's click handler is async (it awaits the caller's onClick
+  // after logging), so the facet's state update lands outside user-event's own
+  // act() wrapper unless the click is wrapped here.
+  async function toggle(label: string) {
+    await act(async () => {
+      await userEvent.setup().click(screen.getByRole('button', { name: label }));
+    });
+  }
+
+  it('prints both acts on the head row, unpressed, with stable labels', () => {
+    render(<DeskRoster roster={roster()} studioMembers={STUDIO} />);
+
+    const needsMe = screen.getByRole('button', { name: 'Only what needs me' });
+    const byPerson = screen.getByRole('button', { name: 'By person' });
+    expect(needsMe).toHaveAttribute('aria-pressed', 'false');
+    expect(byPerson).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('keeps each label the same word once its facet is on', async () => {
+    render(<DeskRoster roster={roster()} studioMembers={STUDIO} />);
+
+    await toggle('Only what needs me');
+    await toggle('By person');
+
+    expect(
+      screen.getByRole('button', { name: 'Only what needs me' }),
+    ).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'By person' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+  });
+
+  it('names the active facet in the head sentence, and drops it again', async () => {
+    render(<DeskRoster roster={roster()} studioMembers={STUDIO} />);
+
+    expect(
+      screen.getByText('Every job · 2 live · 1 overdue'),
+    ).toBeInTheDocument();
+
+    await toggle('Only what needs me');
+    expect(
+      screen.getByText(
+        'Every job · 2 live · 1 overdue · showing what needs you',
+      ),
+    ).toBeInTheDocument();
+
+    await toggle('By person');
+    expect(
+      screen.getByText(
+        'Every job · 2 live · 1 overdue · showing what needs you · by person',
+      ),
+    ).toBeInTheDocument();
+
+    await toggle('Only what needs me');
+    expect(
+      screen.getByText('Every job · 2 live · 1 overdue · by person'),
+    ).toBeInTheDocument();
+  });
+
+  it('leaves the stage plates exactly as they were with no facet on', () => {
+    const { container } = render(
+      <DeskRoster roster={roster()} studioMembers={STUDIO} />,
+    );
+
+    expect(container.querySelectorAll('[data-stage-tab]')).toHaveLength(2);
+    expect(container.querySelector('[data-person-plate]')).toBeNull();
+    expect(container.querySelectorAll('[data-roster-line]')).toHaveLength(2);
+    expect(screen.getByText('Proposal · 1')).toBeInTheDocument();
+    expect(screen.getByText('Project · 1')).toBeInTheDocument();
+  });
+
+  it('keeps only marked rows under “Only what needs me”', async () => {
+    const model = roster();
+    model.groups[0].lines[0].mark = null;
+    model.groups[0].lines[0].needKind = null;
+    const { container } = render(
+      <DeskRoster roster={model} studioMembers={STUDIO} />,
+    );
+
+    await toggle('Only what needs me');
+
+    const rows = Array.from(container.querySelectorAll('[data-roster-line]'));
+    expect(rows.map((row) => row.getAttribute('data-roster-line'))).toEqual([
+      'vandersteen',
+    ]);
+    // A stage with nothing left in it prints no plate at all.
+    expect(container.querySelector('[data-stage-tab="proposal"]')).toBeNull();
+    expect(screen.getByText('Project · 1')).toBeInTheDocument();
+  });
+
+  it('prints the sentence, never an empty list, when nothing needs a hand', async () => {
+    const model = roster();
+    for (const group of model.groups) {
+      for (const line of group.lines) {
+        line.mark = null;
+        line.needKind = null;
+      }
+    }
+    const { container } = render(
+      <DeskRoster roster={model} studioMembers={STUDIO} />,
+    );
+
+    await toggle('Only what needs me');
+
+    expect(
+      screen.getByText('Nothing needs your hand today.'),
+    ).toBeInTheDocument();
+    expect(container.querySelectorAll('[data-roster-line]')).toHaveLength(0);
+    expect(container.querySelector('[data-stage-tab]')).toBeNull();
+    // The walkthrough's anchor stays on the page in this state too.
+    expect(
+      container.querySelector('[data-tour-anchor="desk-folio"]'),
+    ).not.toBeNull();
+  });
+
+  it('groups by designer_id under “By person”, unassigned under the principal', async () => {
+    const { container } = render(
+      <DeskRoster roster={roster()} studioMembers={STUDIO} />,
+    );
+
+    await toggle('By person');
+
+    expect(container.querySelector('[data-stage-tab]')).toBeNull();
+    const plates = Array.from(
+      container.querySelectorAll<HTMLElement>('[data-person-plate]'),
+    );
+    // The principal leads; Vandersteen carries no designer_id, so it is hers.
+    expect(plates.map((plate) => plate.textContent)).toEqual([
+      'Leah Hartwell · 1',
+      'Anneke Sund · 1',
+    ]);
+    const leah = plates[0].parentElement!;
+    expect(
+      leah.querySelector('[data-roster-line="vandersteen"]'),
+    ).not.toBeNull();
+    const anneke = plates[1].parentElement!;
+    expect(anneke.querySelector('[data-roster-line="byrne"]')).not.toBeNull();
+  });
+
+  it('gives a person plate the rail and ink, never a stage pigment', async () => {
+    const { container } = render(
+      <DeskRoster roster={roster()} studioMembers={STUDIO} />,
+    );
+
+    await toggle('By person');
+
+    for (const plate of container.querySelectorAll<HTMLElement>(
+      '[data-person-plate]',
+    )) {
+      expect(plate.className).toContain('bg-[var(--doc-rail-stock)]');
+      expect(plate.className).toContain('text-[var(--text-primary)]');
+      expect(plate.className).not.toMatch(/bg-\[var\(--tab-/);
+      expect(plate.className).not.toContain('text-white');
+    }
+  });
+
+  it('keeps each row’s own stage wash when the roster is grouped by person', async () => {
+    const { container } = render(
+      <DeskRoster roster={roster()} studioMembers={STUDIO} />,
+    );
+
+    await toggle('By person');
+
+    const washOf = (id: string) =>
+      container
+        .querySelector<HTMLElement>(`[data-roster-line="${id}"] span.row-wash`)!
+        .style.getPropertyValue('--wash');
+    expect(washOf('byrne')).toBe('var(--wash-proposal)');
+    expect(washOf('vandersteen')).toBe('var(--wash-project)');
+  });
+
+  it('composes the two facets', async () => {
+    const model = roster();
+    model.groups[0].lines[0].mark = null;
+    model.groups[0].lines[0].needKind = null;
+    const { container } = render(
+      <DeskRoster roster={model} studioMembers={STUDIO} />,
+    );
+
+    await toggle('Only what needs me');
+    await toggle('By person');
+
+    const plates = Array.from(
+      container.querySelectorAll<HTMLElement>('[data-person-plate]'),
+    );
+    expect(plates.map((plate) => plate.textContent)).toEqual([
+      'Leah Hartwell · 1',
+    ]);
+  });
+
+  it('offers no “By person” act when no member of the studio can be named', () => {
+    render(<DeskRoster roster={roster()} />);
+
+    expect(
+      screen.getByRole('button', { name: 'Only what needs me' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'By person' })).toBeNull();
+  });
+
+  it('writes no shadow and no padding switch on the head row', () => {
+    const { container } = render(
+      <DeskRoster roster={roster()} studioMembers={STUDIO} />,
+    );
+
+    for (const el of container.querySelectorAll('*')) {
+      expect(el.className.toString()).not.toMatch(
+        /(^|[\s:])(drop-)?shadow-/,
+      );
     }
   });
 });

@@ -97,6 +97,13 @@ export interface RosterLine {
   engagementId: string;
   /** Playfair. */
   name: string;
+  /** The job's own stage. Carried on the line, not only on its group, because
+   *  the By person facet regroups the same lines away from their stage and the
+   *  row's wash still belongs to the stage the job is in. */
+  stage: SectionKey;
+  /** `document_state.designer_id` — a `profiles.id`, which is the same id
+   *  `organization_members.user_id` holds. Null = nobody is assigned. */
+  designerId: string | null;
   /** Inter — the client and the state, in one run (M1 draws a place; the row
    *  carries no location column, so the name stands in its position). */
   state: string;
@@ -108,6 +115,17 @@ export interface RosterLine {
   /** Opening the job is act one — the line's own name carries this. */
   jobHref: string;
   act: RosterAct;
+  /** The project this job stands on, where it has one. The day's line joins
+   *  `project_notes` on it; a lead has none. */
+  projectId?: string | null;
+  /** The client's own name, unconcatenated — `state` joins it with the phase
+   *  and the need, and the day's line needs it standing alone. Null wherever
+   *  `clientOf` refuses a placeholder. */
+  client?: string | null;
+  /** The need's own date, where the rule stated one (NeedLine.dueOn). */
+  dueOn?: string | null;
+  /** The need's own sentence, unconcatenated (NeedLine.text). */
+  needText?: string | null;
 }
 
 export interface RosterGroup {
@@ -262,6 +280,8 @@ export function deriveDeskRoster(
       line: {
         engagementId: row.engagement_id,
         name: row.title,
+        stage: row.active_section,
+        designerId: row.designer_id,
         state,
         overdueText:
           overdue.isOverdue && need
@@ -272,6 +292,10 @@ export function deriveDeskRoster(
         overdue,
         jobHref,
         act,
+        projectId: row.project_id ?? null,
+        client: clientOf(row),
+        dueOn: need?.dueOn ?? null,
+        needText: need?.text ?? null,
       },
       stage: row.active_section,
       tab: folderTab(row),
@@ -327,4 +351,352 @@ export function deriveDeskRoster(
     heading: `Every job · ${liveCount} live · ${overdueNames.length} overdue`,
     overdueLine: overdueSentence(overdueNames),
   };
+}
+
+/* ── The day's line (IA-05) ─────────────────────────────────────────────────
+ *
+ * At most three lines under the roster head, and nothing at all when nothing
+ * needs her. Every line is a VIEW of a roster row already on the page — it
+ * links into the roster and never introduces a job the roster does not list.
+ * That is what keeps it from becoming a second queue.
+ */
+
+/** A note this studio's client answered — `project_notes.answered_at` (00565),
+ *  keyed by project. RLS scopes the read; this module only shapes what it is
+ *  handed. */
+export interface AnsweredClientNote {
+  projectId: string;
+  answeredAt: string;
+}
+
+/** `overdue` is the clause after the dash, which the roster prints in
+ *  terracotta ink; `job` is the inline act into the row. */
+export type DayLinePart =
+  | { kind: 'text'; text: string }
+  | { kind: 'job'; text: string; engagementId: string }
+  | { kind: 'overdue'; text: string };
+
+export interface DayLine {
+  /** Stable across renders, and states which of the three lines this is. */
+  key: 'overdue' | 'lead' | 'answered';
+  /** The row this line is a view of. */
+  engagementId: string;
+  parts: DayLinePart[];
+}
+
+export interface DeskDayLine {
+  lines: DayLine[];
+  /** `and N more below`, pointing at the first stage plate. */
+  more: { count: number; stageKey: SectionKey } | null;
+}
+
+export const MAX_DAY_LINES = 3;
+
+/** "Replied last night" is only true inside a day. */
+export const ANSWERED_NOTE_WINDOW_MS = 86_400_000;
+
+interface FlatLine {
+  line: RosterLine;
+  stageLabel: string;
+}
+
+function flatten(roster: DeskRoster): FlatLine[] {
+  const flat: FlatLine[] = [];
+  for (const group of roster.groups) {
+    for (const line of group.lines) {
+      flat.push({ line, stageLabel: group.label });
+    }
+  }
+  return flat;
+}
+
+function byDueThenId(a: FlatLine, b: FlatLine): number {
+  return (
+    anchorTime(a.line.dueOn) - anchorTime(b.line.dueOn) ||
+    a.line.engagementId.localeCompare(b.line.engagementId)
+  );
+}
+
+export function deriveDeskDayLine(
+  roster: DeskRoster,
+  answeredNotes: readonly AnsweredClientNote[],
+  now: Date,
+): DeskDayLine | null {
+  const flat = flatten(roster);
+  const lines: DayLine[] = [];
+  const taken = new Set<string>();
+
+  // (a) The overdue sentence, re-rendered: the job as an inline act, and the
+  // clause after the dash in the red letter's own ink. The one-line sentence
+  // above the band still names WHAT is overdue; this line says where it sits
+  // and how long it has stood — the same fact at a second grain, never a
+  // second copy of the sentence.
+  const overdue = flat
+    .filter((entry) => entry.line.overdue.isOverdue)
+    .sort(byDueThenId)[0];
+  const elapsed = overdue ? overdueElapsedPhrase(overdue.line.overdue) : null;
+  if (overdue && elapsed) {
+    taken.add(overdue.line.engagementId);
+    lines.push({
+      key: 'overdue',
+      engagementId: overdue.line.engagementId,
+      parts: [
+        {
+          kind: 'job',
+          text: overdue.line.name,
+          engagementId: overdue.line.engagementId,
+        },
+        {
+          kind: 'overdue',
+          text: ` — ${overdue.stageLabel.toLowerCase()}, overdue ${elapsed}`,
+        },
+      ],
+    });
+  }
+
+  // (b) The earliest lead deadline. The need already wrote the sentence
+  // ("New lead — respond by Sep 10"); the day's line borrows it rather than
+  // writing a second one that could drift from it.
+  //
+  // 'reconnect_due' is deliberately NOT here. It shares `lead_response_deadline`
+  // with 'new_lead' in `needSortKey`, but the specimen and §F item 5 both say
+  // "new lead", and a nurtured lead's touchpoint is not the deadline this slot
+  // answers. Widening it is a product call, not a lane's — pinned by test.
+  const lead = flat
+    .filter(
+      (entry) =>
+        entry.line.needKind === 'new_lead' &&
+        !!entry.line.dueOn &&
+        !!entry.line.needText &&
+        !taken.has(entry.line.engagementId),
+    )
+    .sort(byDueThenId)[0];
+  if (lead) {
+    taken.add(lead.line.engagementId);
+    lines.push({
+      key: 'lead',
+      engagementId: lead.line.engagementId,
+      parts: [
+        // The person, not the job: this line answers "who am I keeping
+        // waiting". The job name stands in only where the row has no named
+        // client, since `clientOf` refuses a placeholder for a real name.
+        {
+          kind: 'job',
+          text: lead.line.client ?? lead.line.name,
+          engagementId: lead.line.engagementId,
+        },
+        { kind: 'text', text: ` · ${lead.line.needText}` },
+      ],
+    });
+  }
+
+  // (c) The client's own answer, inside the last day. Without a client name
+  // the line cannot be said — the roster refuses a role noun standing in for
+  // a name it does not have, and so does this.
+  const floor = now.getTime() - ANSWERED_NOTE_WINDOW_MS;
+  const answered = answeredNotes
+    .map((note) => ({ note, at: Date.parse(note.answeredAt) }))
+    .filter(
+      (entry) =>
+        Number.isFinite(entry.at) &&
+        entry.at >= floor &&
+        entry.at <= now.getTime(),
+    )
+    .sort((a, b) => b.at - a.at);
+  for (const { note } of answered) {
+    const match = flat.find(
+      (entry) =>
+        entry.line.projectId === note.projectId &&
+        !!entry.line.client &&
+        !taken.has(entry.line.engagementId),
+    );
+    if (!match) continue;
+    taken.add(match.line.engagementId);
+    lines.push({
+      key: 'answered',
+      engagementId: match.line.engagementId,
+      parts: [
+        { kind: 'text', text: `${match.line.client} replied last night — ` },
+        {
+          kind: 'job',
+          text: match.line.name,
+          engagementId: match.line.engagementId,
+        },
+      ],
+    });
+    break;
+  }
+
+  // Nothing needs her: the band does not render. A "nothing needs you" banner
+  // over sixteen live jobs is itself a second queue.
+  if (lines.length === 0) return null;
+
+  const shown = lines.slice(0, MAX_DAY_LINES);
+  const marked = flat.filter((entry) => entry.line.mark !== null);
+  const spoken = shown.filter((line) =>
+    marked.some((entry) => entry.line.engagementId === line.engagementId),
+  ).length;
+  const remaining = marked.length - spoken;
+  const firstStage = roster.groups[0]?.key ?? null;
+
+  return {
+    lines: shown,
+    more:
+      remaining > 0 && firstStage
+        ? { count: remaining, stageKey: firstStage }
+        : null,
+  };
+}
+
+/* ── The two facets (IA-11 / IA-12) ─────────────────────────────────────────
+   Facets, not a density toggle: neither one changes what a row looks like or
+   how much padding it carries. "Only what needs me" narrows the population;
+   "By person" regroups it. They compose, and with both off the roster is
+   exactly the stage-grouped roster `deriveDeskRoster` returned. ───────────── */
+
+/** The empty result of "Only what needs me" — never an empty list. */
+export const NOTHING_NEEDS_YOU = 'Nothing needs your hand today.';
+
+/** A row needs a hand when it carries a mark. `deriveDeskRoster` already
+ *  writes that mark from the need model (URGENT_NEED_KINDS above is its
+ *  red-letter half; a quiet need is still a need), so the facet reads the
+ *  same fact the margin does rather than deriving a second one. */
+export function rosterLineNeedsAHand(line: RosterLine): boolean {
+  return line.mark !== null;
+}
+
+/** Narrows every group to its marked rows and drops the groups left empty. */
+export function filterRosterToNeeds(
+  groups: readonly RosterGroup[],
+): RosterGroup[] {
+  return groups
+    .map((group) => {
+      const lines = group.lines.filter(rosterLineNeedsAHand);
+      return { ...group, count: lines.length, lines };
+    })
+    .filter((group) => group.count > 0);
+}
+
+/** A member of the studio, as the roster needs them: an id to match
+ *  `designer_id` against and a name to print. */
+export interface RosterPerson {
+  id: string;
+  name: string;
+  isPrincipal: boolean;
+}
+
+/** The structural shape of an `organization_members` row with its profile —
+ *  the roster reads these four fields off the list `desk/page.tsx` already
+ *  fetched, and the derivation stays free of the data layer. */
+export interface RosterMember {
+  user_id: string;
+  role: string;
+  status: string;
+  profiles: {
+    full_name: string | null;
+    display_name: string | null;
+  } | null;
+}
+
+/** A person group. Keyed by person, never by stage: people are not stages and
+ *  take no stage pigment. */
+export interface RosterPersonGroup {
+  key: string;
+  label: string;
+  count: number;
+  lines: RosterLine[];
+}
+
+function memberName(member: RosterMember): string | null {
+  const name = (
+    member.profiles?.full_name ||
+    member.profiles?.display_name ||
+    ''
+  ).trim();
+  return name || null;
+}
+
+/**
+ * The people the roster can group by: every member of the studio we can name,
+ * the principal first and the rest alphabetically. A member with no name on
+ * their profile is left out — an unnamed plate says nothing.
+ */
+export function deriveRosterPeople(
+  members: readonly RosterMember[],
+): RosterPerson[] {
+  const people: RosterPerson[] = [];
+  const seen = new Set<string>();
+
+  for (const member of members) {
+    if (member.status !== 'active' && member.status !== 'invited') continue;
+    if (seen.has(member.user_id)) continue;
+    const name = memberName(member);
+    if (!name) continue;
+    seen.add(member.user_id);
+    people.push({
+      id: member.user_id,
+      name,
+      isPrincipal: member.role === 'owner',
+    });
+  }
+
+  const principalIndex = people.findIndex((person) => person.isPrincipal);
+  const rest = people
+    .filter((_, index) => index !== principalIndex)
+    .sort((a, b) => a.name.localeCompare(b.name));
+  return principalIndex === -1
+    ? rest
+    : [people[principalIndex], ...rest];
+}
+
+/**
+ * Regroups the roster's lines by the person who carries the job.
+ *
+ * A row with no `designerId` — and a row whose `designerId` names nobody on
+ * this list — groups under the principal rather than vanishing: the head's
+ * live count is the roster's own contract, and a row the facet cannot place is
+ * still a row the studio owns.
+ */
+export function groupRosterByPerson(
+  groups: readonly RosterGroup[],
+  people: readonly RosterPerson[],
+): RosterPersonGroup[] {
+  if (people.length === 0) return [];
+
+  const principal = people.find((person) => person.isPrincipal) ?? people[0];
+  const known = new Set(people.map((person) => person.id));
+  const linesByPerson = new Map<string, RosterLine[]>(
+    people.map((person) => [person.id, []]),
+  );
+
+  for (const group of groups) {
+    for (const line of group.lines) {
+      const id =
+        line.designerId && known.has(line.designerId)
+          ? line.designerId
+          : principal.id;
+      linesByPerson.get(id)!.push(line);
+    }
+  }
+
+  return people
+    .map((person) => ({
+      key: `person-${person.id}`,
+      label: person.name,
+      count: linesByPerson.get(person.id)!.length,
+      lines: linesByPerson.get(person.id)!,
+    }))
+    .filter((group) => group.count > 0);
+}
+
+/** The head sentence says which facets are on, in words. The count clauses in
+ *  front of it are the whole roster's, not the filtered view's. */
+export function facetHeading(
+  heading: string,
+  facets: { needsMe: boolean; byPerson: boolean },
+): string {
+  let sentence = heading;
+  if (facets.needsMe) sentence += ' · showing what needs you';
+  if (facets.byPerson) sentence += ' · by person';
+  return sentence;
 }

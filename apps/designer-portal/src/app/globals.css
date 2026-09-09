@@ -400,8 +400,11 @@
   transition: none;
 }
 
-/* The score under the row's name turns clay as the wash opens. Lanes put
-   .row-wash-score on the name; the wash and the score are one gesture. */
+/* The score under the row's name is DRAWN AT REST (§F-O) and turns clay as the
+   wash opens. A rule that only exists on hover is not an affordance — the name
+   has to read as a link before the pointer arrives, and a touch screen has no
+   hover at all. Lanes put .row-wash-score on the name; the wash and the score
+   are one gesture. */
 .row-wash-score {
   position: relative;
 }
@@ -413,18 +416,13 @@
   bottom: -2px;
   left: 0;
   height: 1px;
-  background: var(--color-pearl);
-  transform: scaleX(0);
-  transform-origin: left center;
-  transition:
-    transform var(--duration-fast) var(--ease-editorial),
-    background-color var(--duration-fast) var(--ease-editorial);
+  background: var(--color-aged-oak);
+  transition: background-color var(--duration-fast) var(--ease-editorial);
 }
 
 .has-wash:hover .row-wash-score::after,
 .has-wash:focus-within .row-wash-score::after {
   background: var(--color-clay);
-  transform: scaleX(1);
 }
 
 /* The one orchestrated moment: the roster settles in, once per page load.
@@ -676,23 +674,24 @@
 }
 .da-secondary .da-label::before {
   height: 1px;
-  background-color: rgba(44, 41, 38, 0.28);
+  background-color: var(--color-aged-oak);
 }
 .da-secondary .da-label::after {
   content: none;
 }
 
-/* ── TERTIARY · unscored until asked, and never inked at all ──────────────
-   it carries no .da-pool in the markup; a whisper does not flood. */
+/* ── TERTIARY · scored at rest, and never inked at all ────────────────────
+   it carries no .da-pool in the markup; a whisper does not flood. The rule is
+   unconditional (§F-D): scaleX(0) made the whole tier invisible to a touch
+   screen, which has no hover to reveal it. */
 .da-tertiary {
   color: var(--color-quiet-ink);
 }
 .da-tertiary .da-label::before {
   height: 1px;
-  background-color: var(--color-quiet-ink);
-  transform: scaleX(0);
+  background-color: var(--color-aged-oak);
   transition:
-    transform 300ms var(--ease-editorial),
+    height 150ms var(--ease-editorial),
     background-color 150ms linear;
 }
 .da-tertiary .da-label::after {
@@ -736,6 +735,46 @@
   color: var(--color-off-white);
 }
 
+/* ── TERMINAL · the one filled tier (R139, house sheet §A5 as amended by §F-C).
+   Money moves or a paper is signed, and nothing else in either portal takes a
+   fill — so the fill itself is the meaning, and the two portals share one
+   grammar for it. The label leaves the mono caption behind for Inter 500 16px
+   sentence case with tabular figures, because the amount lives INSIDE the label
+   ("Pay $4,060.00"), never beside a bare verb. ─────────────────────────────── */
+.da-terminal {
+  min-height: 48px;
+  padding: 13px 22px;
+  border-radius: 3px;
+  background-color: var(--color-charcoal);
+  color: var(--color-off-white);
+}
+.da-terminal .da-pool {
+  inset: 0;
+  border-radius: 3px;
+  /* the sheet's terminal hover value; charcoal has no deeper token */
+  background-color: #1f1d1a;
+}
+.da-terminal .da-label {
+  font-family: var(--font-body);
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 16px;
+  letter-spacing: 0;
+  text-transform: none;
+  font-variant-numeric: tabular-nums;
+}
+.da-terminal .da-label::before,
+.da-terminal .da-label::after {
+  content: none;
+}
+.da-terminal .da-leading,
+.da-terminal .da-trailing {
+  color: var(--color-off-white);
+}
+.da-terminal:hover {
+  background-color: #1f1d1a;
+}
+
 /* ── hover · the scoring answers, and a 3.5px bead gathers under the finger ─ */
 .da-act:hover .da-pool {
   clip-path: circle(3.5px at var(--ink-x, 50%) var(--ink-y, 50%));
@@ -752,13 +791,14 @@
   color: var(--color-charcoal);
 }
 .da-secondary:hover .da-label::before {
-  background-color: var(--color-aged-oak);
+  background-color: var(--color-charcoal);
 }
 .da-tertiary:hover {
   color: var(--color-charcoal);
 }
 .da-tertiary:hover .da-label::before {
-  transform: scaleX(1);
+  height: 1.5px;
+  background-color: var(--color-quiet-ink);
 }
 .da-danger:hover {
   color: var(--color-error);
@@ -830,15 +870,50 @@
   transition-timing-function: linear;
 }
 .da-tertiary:active .da-label::before {
-  transform: scaleX(1);
+  height: 1.5px;
+  background-color: var(--color-charcoal);
   transition-duration: var(--press-in);
   transition-timing-function: linear;
 }
 
-/* ── focus · the proofreader's caret in the margin, and the scores turn clay.
-   No ring: the mark that says "here" is the mark a proofreader would make. ── */
+/* ── unavailable · never opacity. Quiet ink at opacity-50 measures 2.21:1
+   (B07), so an unavailable act keeps FULL opacity: it drops to faint ink and
+   its scores fall to hairline stock, still legible as the act it is beside the
+   reason it names. The filled tier keeps a fill — rail stock, not charcoal —
+   because a terminal act that stops looking terminal has lost its role. ───── */
+.da-act:disabled,
+.da-act[aria-disabled='true'] {
+  color: var(--text-faint);
+}
+.da-act:disabled .da-pool,
+.da-act[aria-disabled='true'] .da-pool {
+  background-color: transparent;
+}
+.da-act:disabled .da-label::before,
+.da-act:disabled .da-label::after,
+.da-act[aria-disabled='true'] .da-label::before,
+.da-act[aria-disabled='true'] .da-label::after {
+  background-color: var(--color-pearl);
+}
+.da-terminal:disabled,
+.da-terminal[aria-disabled='true'] {
+  background-color: var(--doc-rail-stock);
+  /* §A5: the fill retreats to rail stock, so the silhouette has to be drawn
+     back in — an unavailable terminal act still reads as the terminal act.
+     --doc-ink-border is this portal's stock for the sheet's --hairline-strong;
+     --color-pearl is lighter than rail stock and would draw nothing. */
+  border: 1px solid var(--doc-ink-border);
+}
+
+/* ── focus · a 2px clay outline AND the proofreader's caret in the margin, and
+   the scores turn clay. The caret alone was the mark a proofreader would make,
+   but a 14px glyph at 1px from the edge is not a focus indicator anyone can
+   follow across a keyboard pass (§A5 Focus) — so the ring carries the position
+   and the caret keeps the voice. `outline` and not `border`: it takes no
+   layout, so a focused act never resizes its neighbours (VC-22). ─────────── */
 .da-act:focus-visible {
-  outline: none;
+  outline: 2px solid var(--color-clay-ink);
+  outline-offset: 2px;
 }
 .da-act::before {
   /* A caret is a mark, not a word. The `/ ''` alt text keeps the glyph out of
@@ -873,7 +948,8 @@
    off-white on the pool (≈13.6:1); the clay score already rides the ink at
    ≈6.2:1 and keeps its colour, so the mark stays the proofreader's, not a
    ring. Value only — no shadow (D4). ────────────────────────────────────── */
-.da-inked:focus-visible::before {
+.da-inked:focus-visible::before,
+.da-terminal:focus-visible::before {
   color: var(--color-off-white);
 }
 .da-inked:focus-visible .da-label::before {
@@ -931,15 +1007,6 @@
   }
   .da-primary:hover .da-trailing {
     transform: none;
-  }
-  .da-tertiary .da-label::before {
-    transform: none;
-    opacity: 0;
-  }
-  .da-tertiary:hover .da-label::before,
-  .da-tertiary:active .da-label::before {
-    transform: none;
-    opacity: 1;
   }
 }
 
