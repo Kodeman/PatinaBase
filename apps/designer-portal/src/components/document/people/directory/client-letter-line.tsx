@@ -210,7 +210,7 @@ export function ClientLetterLine({
               type="button"
               onClick={() => void writeTo()}
               disabled={inviteAndLink.isPending}
-              className="min-h-11 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-clay)] underline underline-offset-4 disabled:opacity-60"
+              className="min-h-11 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)] underline underline-offset-4 disabled:opacity-60"
             >
               {sendButtonLabel(true)}
             </button>
