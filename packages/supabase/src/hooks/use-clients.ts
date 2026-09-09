@@ -25,6 +25,9 @@ export interface DesignerClient {
   // Direct contact info (for clients without profiles)
   client_email: string | null;
   client_name: string | null;
+  client_phone: string | null;
+  /** Normalized derivation of client_phone, set by a trigger (00583). */
+  client_phone_e164: string | null;
   // Extended fields (v2)
   referral_source: string | null;
   location: string | null;
@@ -347,8 +350,8 @@ export function useUpdateClientNotes() {
 
 /**
  * Update a client's editable contact fields on the designer's relationship row
- * (designer_clients): the working name + email (the contact for captured
- * clients without a Patina account) and notes. The client's OWN Patina profile
+ * (designer_clients): the working name, email, and phone (the contact for
+ * captured clients without a Patina account) and notes. The client's OWN Patina profile
  * (full_name/email/phone) is theirs — not edited here. Invalidates the client
  * lists AND the document/desk read models so a renamed household shows through
  * immediately (§5).
@@ -365,6 +368,7 @@ export function useUpdateClientContact() {
       updates: {
         client_name?: string | null;
         client_email?: string | null;
+        client_phone?: string | null;
         notes?: string | null;
       };
     }) => {

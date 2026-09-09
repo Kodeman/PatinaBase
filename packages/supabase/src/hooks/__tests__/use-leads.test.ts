@@ -120,7 +120,7 @@ vi.mock('@tanstack/react-query', () => ({
 }));
 
 // Import AFTER the mocks are wired up.
-import { useAcceptLead, useBeginDiscovery } from '../use-leads';
+import { useAcceptLead, useBeginDiscovery, useCreateLead } from '../use-leads';
 
 beforeEach(() => {
   Object.keys(builders).forEach((k) => delete builders[k]);
@@ -139,6 +139,7 @@ const MANUAL_LEAD = {
   designer_id: 'designer-1',
   contact_name: 'James Chen',
   contact_email: 'james@example.com',
+  contact_phone: '(555) 014-2200',
 };
 
 function getAcceptFn() {
@@ -178,6 +179,7 @@ describe('useAcceptLead — manual lead, idempotent on idx_designer_clients_uniq
     expect(updateCall?.args[0]).toEqual({
       client_name: 'James Chen',
       client_email: 'james@example.com',
+      client_phone: '(555) 014-2200',
       source: 'lead',
       lead_id: 'lead-1',
       status: 'active',
@@ -222,6 +224,7 @@ describe('useAcceptLead — manual lead, idempotent on idx_designer_clients_uniq
       client_id: null,
       client_name: 'James Chen',
       client_email: 'james@example.com',
+      client_phone: '(555) 014-2200',
       source: 'lead',
       lead_id: 'lead-1',
       status: 'active',
@@ -324,6 +327,52 @@ describe('useAcceptLead — homeowner pair, ordered-limit(1) selection (I65 bug 
       lead_id: 'lead-1',
       status: 'active',
     });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// useCreateLead — the capture insert shape (00583: contact_phone)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('useCreateLead — capture insert shape', () => {
+  function getCreateFn() {
+    return (useCreateLead() as unknown as {
+      mutationFn: (input: Record<string, unknown>) => Promise<unknown>;
+    }).mutationFn;
+  }
+
+  it('writes both contact_email and contact_phone to their own columns', async () => {
+    supabaseClient.auth.getUser.mockResolvedValue({
+      data: { user: { id: 'designer-1' } },
+    });
+    const leads = setTableQueue('leads', [{ data: { id: 'lead-new' }, error: null }]);
+
+    await getCreateFn()({
+      project_type: 'consultation',
+      project_description: 'Downtown loft refresh',
+      contact_name: 'The Okafors',
+      contact_email: 'okafors@example.com',
+      contact_phone: '(555) 014-2200',
+    });
+
+    const insertCall = leads.__chain.find((c) => c.method === 'insert');
+    expect(insertCall?.args[0]).toMatchObject({
+      contact_name: 'The Okafors',
+      contact_email: 'okafors@example.com',
+      contact_phone: '(555) 014-2200',
+    });
+  });
+
+  it('nulls an omitted phone rather than dropping the column', async () => {
+    supabaseClient.auth.getUser.mockResolvedValue({
+      data: { user: { id: 'designer-1' } },
+    });
+    const leads = setTableQueue('leads', [{ data: { id: 'lead-new' }, error: null }]);
+
+    await getCreateFn()({ project_type: 'consultation', contact_name: 'No Phone' });
+
+    const insertCall = leads.__chain.find((c) => c.method === 'insert');
+    expect((insertCall?.args[0] as Record<string, unknown>).contact_phone).toBeNull();
   });
 });
 

@@ -31,6 +31,9 @@ export interface Lead {
   // Contact details for designer-captured prospects with no homeowner profile
   contact_name: string | null;
   contact_email: string | null;
+  contact_phone: string | null;
+  /** Normalized derivation of contact_phone, set by a trigger (00583). */
+  contact_phone_e164: string | null;
   // Track 6 R65 — where the lead came from (canonical chip label or free text).
   source: string | null;
   // Joined data
@@ -257,6 +260,7 @@ export function useCreateLead() {
       location_state?: string;
       contact_name?: string;
       contact_email?: string;
+      contact_phone?: string;
       // Optional ISO timestamp. Additive + backward-compatible: the old
       // legacy AddLeadDialog never passed it (stayed null there).
       // The Document's CaptureLeadSheet sets it +1 day (Track 6, R62) so the
@@ -286,6 +290,7 @@ export function useCreateLead() {
           location_state: input.location_state || null,
           contact_name: input.contact_name || null,
           contact_email: input.contact_email || null,
+          contact_phone: input.contact_phone || null,
           response_deadline: input.response_deadline || null,
           source: input.source || null,
           // match_score left null — the UI coalesces `match_score || 0`.
@@ -504,6 +509,7 @@ export function useAcceptLead() {
             .update({
               client_name: lead.contact_name ?? null,
               client_email: lead.contact_email ?? null,
+              client_phone: lead.contact_phone ?? null,
               source: 'lead',
               lead_id: leadId,
               status: 'active',
@@ -519,6 +525,7 @@ export function useAcceptLead() {
               client_id: null,
               client_name: lead.contact_name ?? null,
               client_email: lead.contact_email ?? null,
+              client_phone: lead.contact_phone ?? null,
               source: 'lead',
               lead_id: leadId,
               status: 'active',
