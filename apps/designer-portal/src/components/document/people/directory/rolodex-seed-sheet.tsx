@@ -26,6 +26,7 @@ import { Avatar } from '../person-bits';
 import { RoomSheet } from '../../rooms/room-sheet';
 import { DocumentAction, DocumentActionGroup } from '../../document-action';
 import { companyKindLabel } from './company-row';
+import { AddPersonSheet } from './add-person-sheet';
 
 function friendlyRolodexError(err: unknown, verb: 'archive' | 'restore'): string {
   const msg = err instanceof Error ? err.message : String(err ?? '');
@@ -45,12 +46,16 @@ function ContactRow({
   pending,
   onArchive,
   onRestore,
+  onEdit,
 }: {
   contact: StudioContact;
   error: string | null;
   pending: boolean;
   onArchive: (id: string) => void;
   onRestore: (id: string) => void;
+  /** F3-R1-07 — this sheet is the rolodex's own review list; without an Edit
+   *  door here, the card editor was reachable only through a ⌘K deep link. */
+  onEdit: (contact: StudioContact) => void;
 }) {
   const archived = !!contact.archived_at;
   const name =
@@ -88,6 +93,18 @@ function ContactRow({
           </span>
         )}
       </span>
+      {!archived && (
+        <DocumentAction
+          actionKey="edit-rolodex-card"
+          surfaceKey="people"
+          regionKey="rolodex-seed-sheet"
+          variant="tertiary"
+          onClick={() => onEdit(contact)}
+          disabled={pending}
+        >
+          Edit
+        </DocumentAction>
+      )}
       <DocumentAction
         actionKey={archived ? 'restore-studio-contact' : 'archive-studio-contact'}
         surfaceKey="people"
@@ -121,6 +138,8 @@ export function RolodexSeedSheet({
   const restoreContact = useRestoreStudioContact();
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [pendingId, setPendingId] = useState<string | null>(null);
+  // F3-R1-07 — the card this review list is editing, if any.
+  const [editingContact, setEditingContact] = useState<StudioContact | null>(null);
 
   const rows = useMemo(() => {
     const list = [...(contacts ?? [])];
@@ -198,6 +217,7 @@ export function RolodexSeedSheet({
               pending={pendingId === c.id}
               onArchive={handleArchive}
               onRestore={handleRestore}
+              onEdit={setEditingContact}
             />
           ))}
         </ul>
@@ -212,6 +232,15 @@ export function RolodexSeedSheet({
           Done
         </DocumentAction>
       </DocumentActionGroup>
+
+      {editingContact && (
+        <AddPersonSheet
+          open
+          onClose={() => setEditingContact(null)}
+          contact={editingContact}
+          onSaved={() => setEditingContact(null)}
+        />
+      )}
     </RoomSheet>
   );
 }

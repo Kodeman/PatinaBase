@@ -312,7 +312,7 @@ describe('PersonProfile — rolodex "Edit" on a studio-contact-backed profile (F
     expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
   });
 
-  it('offers Edit for a network/team party folded into the rolodex via meta.studio_contact_id', () => {
+  it('offers "Edit rolodex card" (not the bare "Edit") for a network/team party folded into the rolodex via meta.studio_contact_id — the head still shows the party row, not this card (F3-R1-05)', () => {
     mockPersonData = basePerson({
       person_id: 'party-1',
       role: 'architect',
@@ -332,7 +332,8 @@ describe('PersonProfile — rolodex "Edit" on a studio-contact-backed profile (F
       />,
     );
 
-    expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Edit rolodex card' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
   });
 
   it('hides Edit for a party never folded into the rolodex', () => {

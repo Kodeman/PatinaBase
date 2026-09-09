@@ -40,6 +40,8 @@ import {
   type UpdateProjectPartyPatch,
 } from '@patina/supabase';
 import {
+  ALL_FIELD_TRADES,
+  FIELD_TRADE_LABELS,
   SMS_CONSENT_DISPLAY,
   getFieldTradeLabel,
   getPartyKindLabel,
@@ -269,8 +271,14 @@ export function PartyProfileSheet({
   }, [editing]);
 
   const saveParty = async () => {
-    if (!partyId || !person?.project_id) return;
+    if (!partyId) return;
     setEditError(null);
+    if (!person?.project_id) {
+      setEditError(
+        "This party isn't attached to a project — reopen it from the roster.",
+      );
+      return;
+    }
     const trimmedName = editForm.name.trim();
     if (!trimmedName) {
       setEditError('This party needs a name.');
@@ -439,12 +447,19 @@ export function PartyProfileSheet({
             <label className={EDIT_LABEL} htmlFor="party-edit-trade">
               Trade
             </label>
-            <input
+            <select
               id="party-edit-trade"
               value={editForm.trade}
               onChange={(e) => setEditForm((f) => ({ ...f, trade: e.target.value }))}
               className={EDIT_INPUT}
-            />
+            >
+              <option value="">Which trade…</option>
+              {ALL_FIELD_TRADES.map((t) => (
+                <option key={t} value={t}>
+                  {FIELD_TRADE_LABELS[t]}
+                </option>
+              ))}
+            </select>
           </div>
           <div>
             <label className={EDIT_LABEL} htmlFor="party-edit-phone">

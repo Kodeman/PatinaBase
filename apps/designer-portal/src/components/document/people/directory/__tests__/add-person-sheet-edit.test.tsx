@@ -154,4 +154,148 @@ describe('AddPersonSheet — edit mode', () => {
     await waitFor(() => expect(onSaved).toHaveBeenCalled());
     expect(onAdded).not.toHaveBeenCalled();
   });
+
+  it('uses the telemetry key "save-person" (not "add-person") for a rolodex save (F3-R1-11)', () => {
+    renderWithClient(
+      <AddPersonSheet open onClose={jest.fn()} contact={contact()} />,
+    );
+    expect(screen.getByRole('button', { name: 'Save' })).toHaveAttribute(
+      'data-action-key',
+      'save-person',
+    );
+  });
+});
+
+describe('AddPersonSheet — edit mode, a company card (F3-R1-01 / F3-R1-16)', () => {
+  it('labels the field "Company name" and diffs against company_name, not full_name — a no-op save writes nothing', async () => {
+    const onClose = jest.fn();
+    const companyContact = contact({
+      entity_kind: 'company',
+      contact_kind: 'vendor',
+      full_name: null,
+      company_name: 'Moretti Plumbing',
+      specialties: [],
+    });
+    renderWithClient(
+      <AddPersonSheet open onClose={onClose} contact={companyContact} />,
+    );
+
+    expect(screen.getByLabelText('Company name')).toHaveValue('Moretti Plumbing');
+    expect(screen.queryByLabelText('Name')).not.toBeInTheDocument();
+    // The separate "Company (optional)" field folds into the one field above
+    // for a company card — it would otherwise duplicate the same value.
+    expect(screen.queryByLabelText('Company (optional)')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(updateMutateAsync).not.toHaveBeenCalled();
+  });
+
+  it('sends companyName, never fullName, when the company name changes', async () => {
+    const companyContact = contact({
+      entity_kind: 'company',
+      contact_kind: 'vendor',
+      full_name: null,
+      company_name: 'Moretti Plumbing',
+      specialties: [],
+    });
+    renderWithClient(
+      <AddPersonSheet open onClose={jest.fn()} contact={companyContact} />,
+    );
+
+    fireEvent.change(screen.getByLabelText('Company name'), {
+      target: { value: 'Moretti Plumbing & Heating' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(updateMutateAsync).toHaveBeenCalled());
+    expect(updateMutateAsync.mock.calls[0][0]).toEqual({
+      id: 'contact-1',
+      organizationId: 'org-1',
+      companyName: 'Moretti Plumbing & Heating',
+    });
+    expect(updateMutateAsync.mock.calls[0][0]).not.toHaveProperty('fullName');
+  });
+});
+
+describe('AddPersonSheet — edit mode, a profile-holding card (F3-R1-06)', () => {
+  it('hides Name/Phone/Email — self-managed on their Patina account — but keeps Trade/Company/Notes studio-editable', () => {
+    renderWithClient(
+      <AddPersonSheet
+        open
+        onClose={jest.fn()}
+        contact={contact({ profile_id: 'user-1', notes: 'Prefers morning calls' })}
+      />,
+    );
+
+    expect(screen.queryByLabelText('Name')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Phone (optional)')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Email (optional)')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Company (optional)')).toHaveValue('Moretti Plumbing');
+    expect(screen.getByLabelText('Trade (optional)')).toHaveValue('plumbing');
+    expect(screen.getByLabelText('Notes (optional)')).toHaveValue('Prefers morning calls');
+  });
+
+  it('never sends phone or email even if a stray edit slipped through — only trade/company/notes are diffable', async () => {
+    renderWithClient(
+      <AddPersonSheet
+        open
+        onClose={jest.fn()}
+        contact={contact({ profile_id: 'user-1' })}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText('Notes (optional)'), {
+      target: { value: 'Prefers morning calls' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(updateMutateAsync).toHaveBeenCalled());
+    expect(updateMutateAsync.mock.calls[0][0]).toEqual({
+      id: 'contact-1',
+      organizationId: 'org-1',
+      notes: 'Prefers morning calls',
+    });
+  });
+});
+
+describe('AddPersonSheet — edit mode, trade patches one specialty in place (F3-R1-09)', () => {
+  it('keeps the rest of a multi-specialty card when only the first trade changes', async () => {
+    const multiTrade = contact({ specialties: ['plumbing', 'gas', 'backflow'] });
+    renderWithClient(
+      <AddPersonSheet open onClose={jest.fn()} contact={multiTrade} />,
+    );
+
+    fireEvent.change(screen.getByLabelText('Trade (optional)'), {
+      target: { value: 'hvac' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(updateMutateAsync).toHaveBeenCalled());
+    expect(updateMutateAsync.mock.calls[0][0]).toEqual({
+      id: 'contact-1',
+      organizationId: 'org-1',
+      specialties: ['hvac', 'gas', 'backflow'],
+    });
+  });
+
+  it('drops only the first specialty when the trade is cleared, keeping the rest', async () => {
+    const multiTrade = contact({ specialties: ['plumbing', 'gas', 'backflow'] });
+    renderWithClient(
+      <AddPersonSheet open onClose={jest.fn()} contact={multiTrade} />,
+    );
+
+    fireEvent.change(screen.getByLabelText('Trade (optional)'), {
+      target: { value: '' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(updateMutateAsync).toHaveBeenCalled());
+    expect(updateMutateAsync.mock.calls[0][0]).toEqual({
+      id: 'contact-1',
+      organizationId: 'org-1',
+      specialties: ['gas', 'backflow'],
+    });
+  });
 });

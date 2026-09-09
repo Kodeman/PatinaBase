@@ -74,10 +74,15 @@ import { AddPersonSheet } from '../directory/add-person-sheet';
 import { HouseholdSheet } from '../../overlays/household-sheet';
 
 /** F3 — the id of the `studio_contacts` row backing this profile, when there
- *  is one: the pure rolodex branch's own id (role 'contact'), or the
- *  lineage FK a network/team party carries once folded into the rolodex
+ *  is one: the pure rolodex branch's own id (role 'contact' — TeamProfile's
+ *  catch-all branch below is what actually renders these; there is no
+ *  separate 'contact' case in the role switch), or the lineage FK a
+ *  network/team party carries once folded into the rolodex
  *  (`meta.studio_contact_id`, 00418/00419). Null for a party never promoted
- *  in, and for roles the rolodex never touches (client/lead/maker/team). */
+ *  in. A 'team' row never carries `studio_contact_id` — the view's TEAM leg
+ *  (00478 L298-320) only ever puts role/project_name/job_title/staff_role in
+ *  its `meta`, so this still resolves to null for it, just not by a
+ *  role==='team' special case. */
 function backingStudioContactId(
   role: PartyRole,
   personId: string,
@@ -89,12 +94,23 @@ function backingStudioContactId(
 }
 
 /** F3 — the rolodex "Edit" action: shown only once the backing card is known
- *  to be live (loaded, not archived). Opens AddPersonSheet in edit mode. */
+ *  to be live (loaded, not archived). Opens AddPersonSheet in edit mode.
+ *
+ *  F3-R1-05 — `linked` distinguishes the pure rolodex branch (role
+ *  'contact', where the profile head already shows this exact
+ *  studio_contacts row) from a network/team PARTY row folded into the
+ *  rolodex (gc/architect/photographer/stager/team): the head there keeps
+ *  showing the `project_parties` row's own fields, so editing the linked
+ *  card changes the shared card without changing what's on screen. The
+ *  label and confirmation say so rather than implying the visible profile
+ *  will update. */
 function RolodexEditAction({
   studioContactId,
+  linked,
   notify,
 }: {
   studioContactId: string | null;
+  linked: boolean;
   notify: (m: string) => void;
 }) {
   const { data: contact } = useStudioContact(studioContactId);
@@ -102,16 +118,26 @@ function RolodexEditAction({
   if (!studioContactId || !contact || contact.archived_at) return null;
   return (
     <>
-      <ActionButton actionKey="edit-rolodex-card" label="Edit" onClick={() => setOpen(true)} />
-      <AddPersonSheet
-        open={open}
-        onClose={() => setOpen(false)}
-        contact={contact}
-        onSaved={(message) => {
-          notify(message);
-          setOpen(false);
-        }}
+      <ActionButton
+        actionKey="edit-rolodex-card"
+        label={linked ? 'Edit rolodex card' : 'Edit'}
+        onClick={() => setOpen(true)}
       />
+      {open && (
+        <AddPersonSheet
+          open={open}
+          onClose={() => setOpen(false)}
+          contact={contact}
+          onSaved={(message) => {
+            notify(
+              linked
+                ? 'Their rolodex card is updated — this project’s roster keeps its own record.'
+                : message,
+            );
+            setOpen(false);
+          }}
+        />
+      )}
     </>
   );
 }
@@ -428,7 +454,12 @@ function ClientProfile({
         }
       />
 
-      {role === 'client' && (
+      {/* F3-R1-14 — mounted only while actually editing: HouseholdSheet's own
+          `useDesignerClientForClientUser` + `useClient` ran on every profile
+          visit even closed, and its DocSheet already returns null the instant
+          `open` is false (no close animation to preserve), so nothing is lost
+          by not mounting it until there's something to edit. */}
+      {role === 'client' && editingHousehold && (
         <HouseholdSheet
           open={editingHousehold}
           onClose={() => setEditingHousehold(false)}
@@ -650,7 +681,11 @@ function NetworkProfile({
                 onClick={() => router.push(`/doc/${projectId}`)}
               />
             )}
-            <RolodexEditAction studioContactId={studioContactId} notify={notify} />
+            <RolodexEditAction
+              studioContactId={studioContactId}
+              linked={role !== 'contact'}
+              notify={notify}
+            />
           </>
         }
       />
@@ -770,7 +805,11 @@ function TeamProfile({
                 )
               }
             />
-            <RolodexEditAction studioContactId={studioContactId} notify={notify} />
+            <RolodexEditAction
+              studioContactId={studioContactId}
+              linked={role !== 'contact'}
+              notify={notify}
+            />
           </>
         }
       />

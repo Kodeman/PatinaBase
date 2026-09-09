@@ -1,9 +1,11 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { StudioContact } from '@patina/supabase';
 import { RolodexSeedSheet } from '../directory/rolodex-seed-sheet';
 
 const archiveMutateAsync = jest.fn();
 const restoreMutateAsync = jest.fn();
+const updateContactMutateAsync = jest.fn();
 
 const CONTACTS: StudioContact[] = [
   {
@@ -49,16 +51,46 @@ const CONTACTS: StudioContact[] = [
 ];
 
 jest.mock('@patina/supabase', () => ({
+  ...jest.requireActual('@patina/supabase'),
   useStudioContacts: jest.fn(() => ({ data: CONTACTS, isLoading: false })),
   useArchiveStudioContact: () => ({ mutateAsync: archiveMutateAsync, isPending: false }),
   useRestoreStudioContact: () => ({ mutateAsync: restoreMutateAsync, isPending: false }),
+  // F3-R1-07 — the sheet now nests AddPersonSheet's edit mode; stub just
+  // enough of its own hook surface for it to mount.
+  useUpdateStudioContact: () => ({ mutateAsync: updateContactMutateAsync, isPending: false }),
+  useStudioIdentity: () => ({ data: null, isLoading: false }),
+  useAddClient: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useAddProjectParty: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useFindOrCreateVendor: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useSaveVendor: () => ({ mutateAsync: jest.fn(), isPending: false }),
 }));
+
+jest.mock('@/hooks/use-feature-flag', () => ({
+  useFeatureFlag: () => ({ value: false, isLoading: false }),
+}));
+
+jest.mock('@/hooks/use-auth', () => ({
+  useAuth: () => ({ user: { id: 'designer-1' } }),
+}));
+
+jest.mock('@/hooks/use-projects', () => ({
+  useProjects: () => ({ data: [] }),
+}));
+
+function renderWithClient(ui: React.ReactElement) {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+}
 
 beforeEach(() => {
   archiveMutateAsync.mockReset();
   restoreMutateAsync.mockReset();
+  updateContactMutateAsync.mockReset();
   archiveMutateAsync.mockResolvedValue(CONTACTS[0]);
   restoreMutateAsync.mockResolvedValue(CONTACTS[1]);
+  updateContactMutateAsync.mockResolvedValue(CONTACTS[0]);
 });
 
 describe('RolodexSeedSheet — archive/restore', () => {
@@ -97,6 +129,44 @@ describe('RolodexSeedSheet — archive/restore', () => {
 
     await waitFor(() =>
       expect(screen.getByText('Ask an owner or admin to archive this.')).toBeInTheDocument(),
+    );
+  });
+});
+
+describe('RolodexSeedSheet — Edit opens the card editor (F3-R1-07)', () => {
+  it('shows Edit only on a live row, and opens AddPersonSheet prefilled from that card', () => {
+    renderWithClient(
+      <RolodexSeedSheet open onClose={jest.fn()} organizationId="org-1" />,
+    );
+
+    // The archived company card gets no Edit door — makers/archived cards
+    // stay read-only.
+    expect(screen.getAllByRole('button', { name: 'Edit' })).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+
+    expect(screen.getByText('Edit Rosa Martínez')).toBeInTheDocument();
+    expect(screen.getByLabelText('Name')).toHaveValue('Rosa Martínez');
+  });
+
+  it('saves through useUpdateStudioContact and closes the editor', async () => {
+    renderWithClient(
+      <RolodexSeedSheet open onClose={jest.fn()} organizationId="org-1" />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.change(screen.getByLabelText('Phone (optional)'), {
+      target: { value: '5559876543' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(updateContactMutateAsync).toHaveBeenCalledWith({
+      id: 'person-1',
+      organizationId: 'org-1',
+      phone: '5559876543',
+    }));
+    await waitFor(() =>
+      expect(screen.queryByText('Edit Rosa Martínez')).not.toBeInTheDocument(),
     );
   });
 });
