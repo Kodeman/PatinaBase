@@ -98,6 +98,31 @@ describe("PP-3 · the rest rule is unconditional", () => {
     expect(raised!.body).toMatch(/background-color:\s*var\(--color-clay\)/);
   });
 
+  it("keeps a selected score charcoal under the pointer — selected beats hovered", () => {
+    // `.da-score-on::after` alone is (0,1,1) and loses to
+    // `.da-score-hover:hover::after` (0,2,1), so a selected tab went clay while
+    // hovered. The held rule names both classes, which outranks the hover pair
+    // and — declared later at equal weight — the resting hover rule too.
+    const held = ALL_RULES.find(
+      (rule) =>
+        /\.da-score-hover\.da-score-on::after/.test(rule.selector) &&
+        /\.da-score-hover\.da-score-on:hover::after/.test(rule.selector) &&
+        /\.da-score-hover\.da-score-on:focus-visible::after/.test(rule.selector),
+    );
+    expect(held).toBeDefined();
+    expect(held!.body).toMatch(/background-color:\s*var\(--color-charcoal\)/);
+    expect(held!.body).not.toMatch(/box-shadow/);
+
+    // …and it is declared AFTER the clay hover rule it has to beat.
+    const clayHover = ALL_RULES.findIndex(
+      (rule) =>
+        /\.da-score-hover:hover::after/.test(rule.selector) &&
+        !/\.da-score-on/.test(rule.selector),
+    );
+    expect(clayHover).toBeGreaterThan(-1);
+    expect(ALL_RULES.indexOf(held!)).toBeGreaterThan(clayHover);
+  });
+
   it("rests the tertiary and secondary scores on aged oak", () => {
     const scored = restRulesTouching(
       /^\.da-(tertiary|secondary) \.da-label::before$/,

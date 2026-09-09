@@ -1045,11 +1045,23 @@
 }
 
 /* ── da-score-on · the same rule held down, in charcoal — for a picker or toggle
-   that's already selected. Same specificity as the hover state above, declared
-   after it, so a selected control reads scored even with the pointer elsewhere;
-   combine as className="da-score-hover da-score-on". ───────────────────────── */
+   that's already selected. Combine as className="da-score-hover da-score-on".
+   ────────────────────────────────────────────────────────────────────────── */
 .da-score-on::after {
   transform: scaleX(1);
+  background-color: var(--color-charcoal);
+}
+
+/* Selected beats hovered. On its own `.da-score-on::after` (0,1,1) loses to
+   `.da-score-hover:hover::after` (0,2,1), so the SELECTED tab went clay while
+   the pointer sat on it — the page told the studio the tab it was already
+   standing in was merely available. Naming both classes raises the rest rule
+   to the hover rule's weight (declared after it, so it wins) and the hovered
+   and focused pair above it. A specificity bump only: same token, no new
+   colour, no depth. ───────────────────────────────────────────────────────── */
+.da-score-hover.da-score-on::after,
+.da-score-hover.da-score-on:hover::after,
+.da-score-hover.da-score-on:focus-visible::after {
   background-color: var(--color-charcoal);
 }
 
