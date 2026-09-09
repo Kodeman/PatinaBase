@@ -40,6 +40,15 @@ describe('the plate', () => {
     row({ priceCents: null });
     expect(screen.getByTestId('tracking-row-plate')).toHaveAttribute('data-plate', '64');
   });
+
+  // §A1's own stroke token (#E8E3DB), not the portal's --border-default
+  // (#E5E2DD), and never --rail — §A10 keeps that for fills.
+  it('strokes the plate in the sheet’s hairline', () => {
+    row({ priceCents: 200_000 });
+    const plate = screen.getByTestId('tracking-row-plate');
+    expect(plate.className).toContain('border-[var(--hairline)]');
+    expect(plate.className).not.toContain('border-[var(--border-default)]');
+  });
 });
 
 describe('the silhouette in place of a photograph', () => {

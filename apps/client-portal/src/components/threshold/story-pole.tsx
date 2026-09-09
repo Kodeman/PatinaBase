@@ -110,8 +110,15 @@ function chapterSection(
 
 export interface StoryPoleProps {
   phases: ReturnType<typeof splitSpinePhases>;
-  /** The page's sections, in reading order, by anchor id. */
-  sections: Array<{ id: string; label: string }>;
+  /**
+   * The page's sections, in reading order, by anchor id.
+   *
+   * `label` is the sentence the desktop rail prints on its own line ("You
+   * stand at the doorstep"). `short` is the noun the ≤600px bar puts after
+   * "You are in: ", because the bar supplies the verb — "You are in: You
+   * stand at the doorstep" says it twice.
+   */
+  sections: Array<{ id: string; label: string; short: string }>;
   /** The first room band's anchor — installation's place. Null when the page draws no band. */
   firstBandAnchor?: string | null;
 }
@@ -172,6 +179,7 @@ export function StoryPole({ phases, sections, firstBandAnchor = null }: StoryPol
   const caretTop =
     sections.length > 1 ? `${Math.round((here / (sections.length - 1)) * 100)}%` : '0%';
   const hereLabel = sections[here]?.label ?? sections[0]?.label ?? '';
+  const hereShort = sections[here]?.short ?? sections[0]?.short ?? '';
 
   return (
     <aside
@@ -199,7 +207,7 @@ export function StoryPole({ phases, sections, firstBandAnchor = null }: StoryPol
           aria-controls="story-pole-rail"
           onClick={() => setOpen((was) => !was)}
         >
-          {`You are in: ${hereLabel}`}
+          {`You are in: ${hereShort}`}
         </ScoredAction>
 
         <div
@@ -256,9 +264,14 @@ export function StoryPole({ phases, sections, firstBandAnchor = null }: StoryPol
                     ? { backgroundColor: 'var(--text-primary)' }
                     : { backgroundColor: 'var(--border-default)' }
               }
+              // Every mark strikes into the same 9px column, held or not, so
+              // every label starts at the same 7px gap off the rail — the
+              // sheet's own pole (`.pole-mark` is a fixed column with one
+              // gap). The held mark is told apart by its weight and its
+              // brass, not by running into the word beside it.
               className={
                 graduation.held
-                  ? 'absolute -left-4 top-1.5 h-0.5 w-5'
+                  ? 'absolute -left-4 top-1.5 h-0.5 w-[9px]'
                   : 'absolute -left-4 top-[7px] h-px w-[9px]'
               }
             />

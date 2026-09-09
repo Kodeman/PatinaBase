@@ -753,7 +753,7 @@ describe('DoorGate — per commercial kind', () => {
     bundleMock.mockReturnValue(bundleFor('trade_scope'));
     renderGate({ proposal: { ...PROPOSAL, kind: 'trade_scope' } });
 
-    expect(screen.getByTestId('spine-gate-deposit')).toHaveTextContent('$1,440 on signing');
+    expect(screen.getByTestId('spine-gate-deposit')).toHaveTextContent('$1,440.00 on signing');
   });
 
   it('falls back to the bundle’s own kind when the proposal does not carry one', () => {

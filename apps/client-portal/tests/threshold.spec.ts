@@ -34,18 +34,19 @@ const MULTI_OTHER_HOUSE_COUNT = 2;
 /* ── The five facts, read off the seed ──────────────────────────────────────
    1 · Authorization No. 1, signed — the FROZEN client figure on
        furnishing_authorization_items (812000c), never the studio's live
-       project_ffe_items row (780000c)                          → $8,120
+       project_ffe_items row (780000c)                          → $8,120.00
    2 · the maker whose finished work waits: trade_scope_terms
        .party_display_name                                      → Marta Voss
    3 · the joinery held back until she accepts it: the trade scope's
-       client_price_cents (298000c)                             → $2,980
+       client_price_cents (298000c), billed as the one draw that gates on
+       her acceptance                                           → $2,980.00
    4 · invoice INV-2026-0301, sent and unpaid: 406000c due CURRENT_DATE + 7
    ────────────────────────────────────────────────────────────────────────── */
-const AUTHORIZATION_TOTAL = '$8,120';
+const AUTHORIZATION_TOTAL = '$8,120.00';
 const LIVE_WORKING_FIGURE = '$7,800';
 const MAKER = 'Marta Voss';
-const HELD_DRAW = '$2,980';
-const INVOICE_BALANCE = '$4,060';
+const HELD_DRAW = '$2,980.00';
+const INVOICE_BALANCE = '$4,060.00';
 /**
  * The seed dates this invoice `CURRENT_DATE + 7` (the-client-page.sql:621), so
  * the day it falls due moves with the clock. A literal 'September 11' was true
@@ -53,12 +54,22 @@ const INVOICE_BALANCE = '$4,060';
  * read the day off the same rule the seed uses.
  */
 const INVOICE_DUE_DAY = (() => {
-  const due = new Date();
-  due.setDate(due.getDate() + 7);
-  // en-GB, day first: PP-2 gave the house one date idiom and `lib/threshold/
-  // dates.ts` is the only place that composes it. A US format here would go
-  // red against a page that no longer prints one.
-  return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long' }).format(due);
+  // Count the seven days on the calendar the SEED counts them on. Postgres runs
+  // in UTC, so `CURRENT_DATE + 7` rolls over at UTC midnight; counting from the
+  // runner's local clock instead names a different day for every evening west
+  // of Greenwich (19:38 CDT on 8 September asked for 15 September while the
+  // seeded invoice said 16 September, and the suite went red on the clock).
+  const now = new Date();
+  const due = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 7));
+  // en-GB, day first, and the year spelled out: PP-2 gave the house one date
+  // idiom and `lib/threshold/dates.ts` is the only place that composes it. A
+  // due date is a term of the invoice, so it is `legalDate`, never `dayMonth`.
+  return new Intl.DateTimeFormat('en-GB', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(due);
 })();
 
 const STANDING_NOTE_BODY =
@@ -854,6 +865,13 @@ test.describe('The Threshold — the client page', () => {
     await expect(consequence).toBeVisible();
     await expect(consequence).toContainText('It does not close the project or change your invoice.');
     await expect(consequence).toContainText(/^Accepting /);
+    // The seed carries the draw this acceptance releases, so the sentence
+    // names the money and the maker rather than falling back to the honest
+    // but figureless form.
+    await expect(consequence).toContainText(`Accepting releases ${HELD_DRAW} to ${MAKER}`);
+    await expect(
+      page.getByRole('button', { name: new RegExp(`accept the finished work · \\${HELD_DRAW}`, 'i') }),
+    ).toHaveCount(1);
 
     // It stands over the act, not under it.
     const [consequenceBottom, actTop] = await Promise.all([
@@ -889,8 +907,13 @@ test.describe('The Threshold — the client page', () => {
     const reconcile = page.getByTestId('house-ledger-reconcile');
     await expect(reconcile).toContainText(INVOICE_BALANCE);
     await expect(reconcile.locator('.t-money').first()).toBeVisible();
-    // Never a $0 placeholder for a row that has nothing to say.
-    await expect(page.getByTestId('house-ledger')).not.toContainText('$0.00');
+    // Never a $0 placeholder on a ROW that has nothing to say. The
+    // reconciling sentence names "$0.00 paid" on purpose: nothing paid is a
+    // fact about this house, and §F-B sets every ledger figure with its cents.
+    const rowFigures = await page
+      .locator('#ledger [data-ledger-figure]')
+      .allTextContents();
+    expect(rowFigures).not.toContain('$0.00');
   });
 
   test('makes the story pole’s labels links to the sections they name', async ({ page }) => {

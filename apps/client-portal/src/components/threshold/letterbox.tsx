@@ -3,11 +3,11 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { useInvoiceLink, type Invoice } from '@patina/supabase';
-import { invoiceBalanceCents } from '@patina/shared';
+import { formatCurrency, invoiceBalanceCents } from '@patina/shared';
 import { invoiceLinkPath } from '@patina/utils';
 
 import { ScoredAction } from '@/components/threshold/instruments/scored-action';
-import { moneyInWords } from '@/components/threshold/instruments/standing-sentence';
+
 import { clientEvents } from '@/lib/analytics/events';
 import {
   revealReturnAnchor,
@@ -15,7 +15,7 @@ import {
   useCheckoutReturn,
   useNamedInvoice,
 } from '@/lib/threshold/checkout-return';
-import { dayMonth, legalDate } from '@/lib/threshold/dates';
+import { legalDate } from '@/lib/threshold/dates';
 import {
   parseSourceDate,
   toInvoiceModel,
@@ -34,9 +34,10 @@ import { Settlement } from './settlement';
    accountant's order and the same act to settle them — rather than a second
    invoice grammar invented here. The letterbox is the envelope; the toll is
    the letter, and there is only ever one of it on this surface. The toll does
-   its own date formatting; `today` is threaded through so it can spell the
-   year out on an invoice that falls in another one, and the summary line above
-   it keeps exactly the same rule so the two cannot disagree.
+   its own date formatting; `today` is threaded through for the sentences that
+   still reckon against it. Both the toll and the summary line above it print
+   a due date in full — day, month and year — so the two cannot disagree and
+   neither leaves a client to guess the year off her own invoice.
 
    An empty letterbox is drawn as an empty letterbox. It is not hidden, and it
    carries no "no invoices" card: the slot with nothing in it IS the state.
@@ -58,19 +59,17 @@ export interface LetterboxProps {
    * standing fact rather than a session.
    */
   onRefetch?: () => void | Promise<unknown>;
-  /**
-   * Today, for deciding whether the due date needs its year spelled out — the
-   * rule `SpineToll` applies. Omitted during SSR and the first client paint,
-   * which simply drops the year.
-   */
+  /** Today, for the toll's own reckoning. Omitted during SSR and the first
+   * client paint. The due date does not depend on it: it spells its year
+   * every time. */
   today?: Date;
 }
 
-/** "15 August", and the year too, once it is not this year. */
-function formatDue(dueDate: string | null, today?: Date): string | null {
-  const due = parseSourceDate(dueDate);
-  if (!due) return null;
-  return today && today.getFullYear() !== due.getFullYear() ? legalDate(due) : dayMonth(due);
+/** "15 September 2026". A due date is a term of the letter, so it spells its
+ * year every time — a client reading "due 15 September" on an invoice she is
+ * looking at in January has to guess which September. */
+function formatDue(dueDate: string | null): string | null {
+  return legalDate(parseSourceDate(dueDate));
 }
 
 function Drawing({ full }: { full: boolean }) {
@@ -122,7 +121,7 @@ export function Letterbox({
   const namedId = useNamedInvoice();
   const namedRow = namedId ? (invoices.find((row) => row.id === namedId) ?? null) : null;
   const invoice = namedRow ? toInvoiceModel(namedRow) : soonestDue;
-  const due = invoice ? formatDue(invoice.dueDate, today) : null;
+  const due = invoice ? formatDue(invoice.dueDate) : null;
 
   // The letter's own address (00574 · K1) — the whole invoice on one page, and
   // the till on it. Additive here: the settle-in-place below stays until W3b.
@@ -280,11 +279,11 @@ export function Letterbox({
             className="max-w-[46ch] text-[15px] leading-[1.62] text-[var(--text-body)]"
           >
             {`${invoice.number ?? 'Invoice'} · `}
-            <span className="t-money">{moneyInWords(invoice.totalCents)}</span>
+            <span className="t-money">{formatCurrency(invoice.totalCents)}</span>
             {' total · '}
-            <span className="t-money">{moneyInWords(invoice.paidCents)}</span>
+            <span className="t-money">{formatCurrency(invoice.paidCents)}</span>
             {' paid. Balance '}
-            <span className="t-money">{moneyInWords(invoice.balanceCents)}</span>
+            <span className="t-money">{formatCurrency(invoice.balanceCents)}</span>
             {due ? `, due ${due}` : ''}.
           </p>
 
@@ -309,7 +308,7 @@ export function Letterbox({
                 // budget on a letter nobody opened.
                 prefetch={false}
               >
-                {`Pay ${moneyInWords(invoice.balanceCents)}`}
+                {`Pay ${formatCurrency(invoice.balanceCents)}`}
               </ScoredAction>
             )}
             <ScoredAction

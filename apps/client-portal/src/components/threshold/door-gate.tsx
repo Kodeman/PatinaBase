@@ -11,13 +11,13 @@ import {
   signatureIsComplete,
 } from '@/components/threshold/instruments/signature-line';
 import { SpineGate } from '@/components/threshold/instruments/spine-gate';
-import { countInWords, moneyInWords } from '@/components/threshold/instruments/standing-sentence';
+import { countInWords } from '@/components/threshold/instruments/standing-sentence';
 import {
   invalidateSignedCommercialDocument,
   useClientCommercialDocument,
 } from '@/hooks/use-commercial-client';
 import { makingEvents, proposalClientEvents } from '@/lib/analytics/events';
-import { DAY_MONTH_FORMAT as DAY_MONTH } from '@/lib/threshold/dates';
+import { DAY_MONTH_FORMAT as DAY_MONTH, legalDate } from '@/lib/threshold/dates';
 import {
   parseSourceDate,
   type NoteModel,
@@ -483,7 +483,7 @@ export function DoorGate({
   // hers — the same sentence the phone's seal says.
   const holder = studioName?.trim() || 'Your studio';
   const receipt = standingSignedAt
-    ? `${proposal.title} · signed ${DAY_MONTH.format(standingSignedAt)} · ${holder} has your signature. You’ll have a copy.`
+    ? `${proposal.title} · signed ${legalDate(standingSignedAt)} · ${holder} has your signature. You’ll have a copy.`
     : null;
 
   // The document's own total is authoritative: Σ clientLineTotalCents
@@ -532,7 +532,7 @@ export function DoorGate({
             : declined
               ? 'Shut. You declined it.'
               : sent
-                ? `Shut since ${DAY_MONTH.format(sent)} · it opens on your name`
+                ? `Shut since ${legalDate(sent)} · it opens on your name`
                 : 'Shut · it opens on your name'}
         </p>
       </div>
@@ -722,7 +722,10 @@ export function DoorGate({
                   >
                     <dt>{item.description}</dt>
                     <dd className="font-mono text-[13px]">
-                      {moneyInWords(item.clientLineTotalCents || 0)}
+                      {formatCurrency(
+                        item.clientLineTotalCents || 0,
+                        bundle.data?.serviceTerms?.currency ?? 'USD',
+                      )}
                     </dd>
                   </div>
                 ))}
@@ -731,7 +734,12 @@ export function DoorGate({
                   className="flex justify-between gap-4 border-b border-current py-1.5 text-[15px]"
                 >
                   <dt>{caption ?? 'The whole of it'}</dt>
-                  <dd className="font-mono text-[13px]">{moneyInWords(totalCents)}</dd>
+                  <dd className="font-mono text-[13px]">
+                    {formatCurrency(
+                      totalCents,
+                      bundle.data?.serviceTerms?.currency ?? 'USD',
+                    )}
+                  </dd>
                 </div>
               </dl>
             )}

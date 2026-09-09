@@ -68,25 +68,10 @@ function checkoutRefusalSentence(
    prints the charged figure on the payment row, because that is a fact.
    ───────────────────────────────────────────────────────────────────────── */
 
+/* The Pay act's own inks are gone: R139's terminal tier (globals.css, the
+   Scored Ink block) is what paints it now, and --pay-act-bg / --pay-act-fg /
+   --pay-act-bg-hover had no reader left. What remains here is print. */
 const SHEET_RULES = `
-/* D-1 — the act's inks, as tokens rather than a literal. The mockup's
-   --btn-bg-hover is #1F1D1A in light and #FFFAF0 in dark; the hardcoded
-   literal was the light value, which would have gone dark-on-dark the moment
-   dark mode was exercised on the page's only payment control. Keyed on the
-   portal's own darkMode strategy (tailwind.config.ts: darkMode: ['class']),
-   NOT on prefers-color-scheme — nothing in this portal defines dark values for
-   --text-primary and friends yet, so flipping the button alone on a system
-   preference would be the regression, not the fix. */
-[data-pay-sheet] {
-  --pay-act-bg: var(--color-charcoal);
-  --pay-act-fg: var(--color-off-white);
-  --pay-act-bg-hover: #1F1D1A;
-}
-.dark [data-pay-sheet] {
-  --pay-act-bg: #F0E9DD;
-  --pay-act-fg: #1D1914;
-  --pay-act-bg-hover: #FFFAF0;
-}
 [data-pay-print="only"] { display: none; }
 @media print {
   @page { size: letter; margin: 0.5in; }

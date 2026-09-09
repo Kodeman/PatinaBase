@@ -1,6 +1,7 @@
 'use client';
 
 import { Fragment, useState } from 'react';
+import { formatCurrency } from '@patina/shared';
 import type { FFEStageKey } from '@patina/types';
 
 import {
@@ -122,17 +123,6 @@ export function plateCaption({
     .join(' · ');
 }
 
-// Whole-dollar, no cents — the idiom the rest of the commercial rail uses for
-// a client reading their own selections (see client-selections.tsx), and the
-// one every figure on this surface now speaks (`moneyInWords`).
-function money(cents: number, currency = 'USD'): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency,
-    maximumFractionDigits: 0,
-  }).format(cents / 100);
-}
-
 export function TrackingRow({
   name,
   imageUrl,
@@ -165,7 +155,7 @@ export function TrackingRow({
       <div
         data-testid="tracking-row-plate"
         data-plate={large ? '96' : '64'}
-        className={`${plate} col-start-1 row-start-1 row-span-2 shrink-0 overflow-hidden rounded-[3px] border border-[var(--border-default)] bg-[var(--paper-doc)]`}
+        className={`${plate} col-start-1 row-start-1 row-span-2 shrink-0 overflow-hidden rounded-[3px] border border-[var(--hairline)] bg-[var(--paper-doc)]`}
       >
         {drawImage ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -191,7 +181,7 @@ export function TrackingRow({
 
         {typeof priceCents === 'number' && (
           <p className="type-meta-small mt-0.5 text-[var(--text-muted)]" data-testid="tracking-row-price">
-            {money(priceCents)}
+            {formatCurrency(priceCents)}
           </p>
         )}
 
