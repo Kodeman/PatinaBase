@@ -22,6 +22,7 @@ import { MobileActionDock } from '@/components/document/mobile/mobile-action-doc
 import { MobileSheets } from '@/components/document/mobile/mobile-sheets';
 import { DocumentTimeProvider } from '@/hooks/document-time-provider';
 import { DocumentRouteBoundary } from '@/components/document/document-route-boundary';
+import { ReturnToLeadUndo } from '@/components/document/return-to-lead-undo';
 import { SkipToPaper } from '@/components/document/skip-to-paper';
 
 export const metadata: Metadata = {
@@ -41,6 +42,9 @@ export const metadata: Metadata = {
  * site, where the designer is already looking, not as a floating card in the
  * corner that outlives the moment. Any `toast()` call reached from this tree
  * no-ops against the context default, which is the intended posture, not a bug.
+ * ReturnToLeadUndo below is not a reversal of that: it is one band for one act,
+ * mounted because "Accept · begin" navigates away from the surface that fired
+ * it, so its Undo has nowhere else to stand. It reaches no `toast()` call.
  */
 export default function DocumentLayout({
   children,
@@ -94,6 +98,10 @@ export default function DocumentLayout({
                   <InvoiceOverlays />
                   {/* R85 — the ⌘K "draft a proposal" household-picker cold start. */}
                   <DraftProposalOverlay />
+                  {/* F2 — the Undo offer for "Accept · begin", published by
+                      the triage bar just before it navigates. Renders nothing
+                      until an offer stands. */}
+                  <ReturnToLeadUndo />
                   <MobileActionDock />
                   <MobileBar />
                   <MobileSheets />

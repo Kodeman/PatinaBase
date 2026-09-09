@@ -22,6 +22,8 @@ import {
   useBeginDirection,
   useStyles,
   useClientRoomScans,
+  useReturnToLeadCheck,
+  useReturnToLead,
 } from '@patina/supabase';
 import { StrataMark } from '../strata-mark';
 import { FacetSection } from '../rooms/drafting/facet-section';
@@ -154,6 +156,11 @@ export function DiscoverySection({
   const { data: read } = useDiscovery(engagementId);
   const upsert = useUpsertDiscovery();
   const beginDirection = useBeginDirection();
+  // F2 — whether this Discovery is still an accidental one click away from
+  // being a Brief again. The server owns both the verdict and the sentence.
+  const { data: returnCheck } = useReturnToLeadCheck(engagementId);
+  const returnToLead = useReturnToLead();
+  const [returnError, setReturnError] = useState<string | null>(null);
   const { data: styles } = useStyles() as {
     data: { id: string; name: string }[] | undefined;
   };
@@ -507,6 +514,43 @@ export function DiscoverySection({
           Add inspiration
         </DocumentAction>
       </DocumentActionGroup>
+
+      {/* F2 — the way back from an accidental "Accept · begin". Shown only for
+          a Discovery that came from a lead; once the door is shut the action
+          stays visible but disabled, with the server's reason printed beside
+          it in plain sight rather than hidden in a tooltip. */}
+      {returnCheck?.lead_id && (
+        <div className="mb-5 -mt-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <DocumentAction
+            actionKey="return-to-lead"
+            surfaceKey="discovery"
+            regionKey="tools"
+            variant="tertiary"
+            disabled={!returnCheck.allowed || returnToLead.isPending}
+            loading={returnToLead.isPending}
+            loadingLabel="Moving…"
+            onClick={() => {
+              setReturnError(null);
+              returnToLead.mutate(engagementId, {
+                onSuccess: ({ lead_id }) => router.replace(`/doc/${lead_id}`),
+                onError: (error) =>
+                  setReturnError(
+                    error instanceof Error
+                      ? error.message
+                      : 'That move could not be taken back.',
+                  ),
+              });
+            }}
+          >
+            Move back to New Lead
+          </DocumentAction>
+          {(returnError ?? (!returnCheck.allowed ? returnCheck.reason : null)) && (
+            <span className="text-[12px] leading-snug text-[var(--text-muted)]">
+              {returnError ?? returnCheck.reason}
+            </span>
+          )}
+        </div>
+      )}
 
       <p className="mb-2 flex items-center gap-2.5 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
         The essentials — structured · they open &amp; seed the agreement

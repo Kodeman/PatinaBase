@@ -36,6 +36,10 @@ jest.mock('@patina/supabase', () => ({
   useUpsertDiscovery: () => ({ mutateAsync: jest.fn().mockResolvedValue(undefined) }),
   useBeginDirection: () => ({ mutate: jest.fn(), isPending: false }),
   useStyles: () => ({ data: [] }),
+  // F2 — DiscoverySection now reads the return-to-lead door. A non-lead
+  // relationship has no lead_id, which is how the action stays unrendered here.
+  useReturnToLeadCheck: () => ({ data: null }),
+  useReturnToLead: () => ({ mutate: jest.fn(), isPending: false }),
   useClientRoomScans: (...args: unknown[]) => {
     hookArgs = args;
     return { data: mockScans };
