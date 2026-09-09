@@ -244,3 +244,77 @@ ancestors of `main`, so nothing here holds unmerged work.
 | `.codex/worktrees/agent-pp-int3` | `portal-polish/integration-w3` | W3 integration; kept, holds the prod `.next` build |
 
 Already removed: `agent-pp-main` (W2) and `agent-pp-main3` (W3), the two merge-to-main worktrees.
+
+---
+
+## 6 · Wave 2b — house-page follow-ups (added 2026-09-09)
+
+A fourth wave, one lane (**H7**), run after W3 released the local database. It exists to close the
+divergences Wave 2's own ship report listed rather than leave them for a ruling nobody would make.
+Full detail: **`ship/w2b-ship.md`**.
+
+| | |
+|---|---|
+| Deployed | `patina-client-portal` |
+| Version | **`a787400e-e4e7-4d72-a0ca-4d6a188336b3`** (2026-09-09T00:52:05Z) |
+| Rollback | **`99bc3971-d33d-47da-ac72-97112d71b1c9`** (W2's deployment) |
+| `main` | **`cdb81ebf3`** — `merge(portal-polish): wave 2b — house page follow-ups` |
+| Branches | `portal-polish/h7` · `portal-polish/integration-w2b` · `portal-polish/to-main-w2b`, all pushed, all ancestors of `main` |
+| Gates | type-check exit 0 · jest **143 suites / 2427 tests**, coverage **75.78 / 71.56 / 75.90 / 78.09** (floor 70/60/70/70) · lint **63 problems (11 errors)**, byte-identical to the W2 baseline · e2e **22/22** |
+| Renders | `waves/w2b/renders/` at 1440 and 390 — **no horizontal overflow at either width**, no app-origin console error |
+| Strata | untouched; no migration, no edge function, no other Worker |
+
+### What it closed
+
+Six of the nine divergences `w2-ship.md` §4 listed against `specimens/client-house.html`: **cents
+on every figure in the money block and on the piece plates**; the **due date's year**; the wall
+gate's **"Accept the finished work · $2,980.00"** (from a seeded `gates_on_acceptance` draw, pinned
+in e2e); the story pole's **held tick clearing its label**; the ≤600px bar reading **"You are in:
+the doorstep"** instead of the doubled sentence; and **"Leave the house"** gone from the portal
+entirely (`Sign out` ×4 in the served chunk, `Leave the house` ×0). It also settled `--hairline` as
+the sheet's own `#E8E3DB` literal and wired `<TheNote>`'s author name.
+
+### Corrections to this report
+
+* **The header above is one wave stale.** It reads "Three waves" and `main` = `99906f992`; with 2b
+  it is four waves and `main` = `cdb81ebf3`. Left in place rather than rewritten, so the record of
+  what each wave reported at the time stays readable.
+* **§4 item 18 is closed** — the `gatesOnAcceptance` draw is seeded and the wall act carries its
+  amount.
+* **§4 item 17 is closed in code** — `threshold.tsx` passes the author and studio names; it is now
+  blocked only by a fixture with an empty `project_team_members`, so the three-part signature
+  renders as two parts locally.
+* **§4 item 22 overstates the hook.** `merge(...)` is refused on a *normal* commit
+  (`scripts/hooks/patina-hooks.mjs:155-158`) but accepted on a git merge commit — which is why every
+  merge onto `main` in this program could keep its `merge(portal-polish): …` subject while the lane
+  merges could not.
+* **§4 item 20's inverse applies to the client portal too.** W2 shuffled `.env` files to get a prod
+  build out of a worktree. W2b did not: exporting the twenty-one committed literals from
+  `apps/client-portal/wrangler.jsonc` `vars` satisfies the preflight (an exported `process.env`
+  value wins, `infra/deploy-portal.sh:68-90`) and inlines exactly the values the Worker serves.
+  **That is the recipe to document for both portals.**
+
+### Still owed after 2b
+
+* **One ruling: does a figure inside a sentence carry cents?** Six call sites still use
+  `moneyInWords` — `plan-key.tsx:106`, `road-orders.tsx:126,164`, `scope-change-ask.tsx:109,139,425`,
+  `review-ask.tsx:514`. The plan key is the visible one: it prints `$11,000` a screen below
+  `$11,000.00`. This is the re-review's open **P2**, deliberately not written by the integration
+  lane, and one ruling closes all six.
+* **Seed a `lead_designer`** on Cedar Lane Study so the note's three-part signature can be seen.
+* **Export `SUPABASE_SERVICE_ROLE_KEY` before `threshold.spec.ts`** — without it the signing test
+  fails with a 500 (`server.ts:57`) that reads like a regression and is not one. Belongs in the
+  plan's e2e step.
+* **The plan key's SVG callout truncates** ("Built-in shelving, no…") against §A's no-truncation rule.
+* **The signed-in prod walk** — still owed, still for the same reason: no prod credential exists in
+  the repo.
+
+### Worktrees added by this wave
+
+| Worktree | Branch | Note |
+|---|---|---|
+| `.codex/worktrees/agent-pp-h7` | `portal-polish/h7` | already listed in §5; it is Wave 2b's lane |
+| `.codex/worktrees/agent-pp-int2b` | `portal-polish/integration-w2b` | W2b integration; kept |
+
+`agent-pp-main2b` (the merge-to-main worktree) was removed, as `agent-pp-main` and `agent-pp-main3`
+were before it.
