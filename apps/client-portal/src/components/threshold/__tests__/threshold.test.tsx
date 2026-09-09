@@ -742,6 +742,22 @@ describe('Threshold — which house', () => {
     expect(screen.queryByTestId('plan-key')).not.toBeInTheDocument();
   });
 
+  // The key is the one section that is skipped outright when a read fails, so
+  // it is the one anchor a landmark or a pole link could be left pointing at
+  // after the page has decided not to draw it (IA-21).
+  it('points nothing at the key on a page that could not draw one', () => {
+    roomsMock.mockReturnValue({
+      data: undefined,
+      isPending: false,
+      isLoading: false,
+      isError: true,
+    });
+    const { container } = renderThreshold();
+
+    expect(container.querySelector('#key')).toBeNull();
+    expect(container.querySelector('a[href="#key"]')).toBeNull();
+  });
+
   it('says what she bought direct could not be read rather than “Nothing on the road.”', () => {
     ordersMock.mockReturnValue({
       data: undefined,
@@ -770,16 +786,16 @@ describe('Threshold — the five facts', () => {
     const { container } = renderThreshold();
 
     // 1 · the authorization, and what it is worth
-    expect(screen.getByTestId('door-total')).toHaveTextContent('$6,890');
+    expect(screen.getByTestId('door-total')).toHaveTextContent('$6,890.00');
     // 2 · the maker whose finished work is waiting
     expect(container.textContent).toContain('Prairie Coat Painting');
     // 3 · the draw her acceptance releases
     expect(container.textContent).toContain(
-      'The draw of $1,440 releases on your acceptance.',
+      'The draw of $1,440.00 releases on your acceptance.',
     );
     // 4 · the balance and the day it falls due
     expect(screen.getByTestId('letterbox-body')).toHaveTextContent(
-      'Balance $9,125, due 15 August',
+      'Balance $9,125.00, due 15 August 2026',
     );
     // 5 · the chapter the house stands in
     expect(screen.getByTestId('doorplate-sub')).toHaveTextContent('Procurement');
@@ -808,6 +824,18 @@ describe('Threshold — the five facts', () => {
     expect(screen.getAllByTestId('note-body')).toHaveLength(1);
     expect(screen.getAllByTestId('door-note-pin')).toHaveLength(1);
     expect(screen.getByTestId('door-note-read')).toHaveAttribute('href', '#note');
+  });
+
+  // The three-part signature (H1) only reaches a reader once the page hands
+  // `TheNote` a studio as well as an author. It had the author twice over and
+  // no studio at all, so the letter signed with one segment where the sheet
+  // asks for three.
+  it('signs the letter in full — the hand, the studio, and the day', () => {
+    renderThreshold();
+
+    expect(screen.getByTestId('note-signature')).toHaveTextContent(
+      'Nora Quist · Quist Interiors · 4 August 2026',
+    );
   });
 
   it('pins nothing on the ground floor, where the letter is already set above', () => {
@@ -1463,9 +1491,9 @@ describe('Threshold — a room’s target', () => {
 
     // $24,900 agreed against the plan's $23,800 → about eleven hundred past.
     expect(screen.getByTestId('house-ledger-top')).toHaveTextContent(
-      'The house stands at $61,400 agreed of',
+      'The house stands at $61,400.00 agreed of',
     );
-    expect(screen.getByTestId('house-ledger-top')).toHaveTextContent('$23,800 planned');
+    expect(screen.getByTestId('house-ledger-top')).toHaveTextContent('$23,800.00 planned');
   });
 
   it('falls back to the room’s own budget where the plan says nothing', () => {
@@ -1481,7 +1509,7 @@ describe('Threshold — a room’s target', () => {
 
     renderThreshold();
 
-    expect(screen.getByTestId('house-ledger-top')).toHaveTextContent('$31,000 planned');
+    expect(screen.getByTestId('house-ledger-top')).toHaveTextContent('$31,000.00 planned');
   });
 
   it('stands on the agreed figure alone when nothing is planned', () => {
@@ -1493,7 +1521,7 @@ describe('Threshold — a room’s target', () => {
     renderThreshold();
 
     expect(screen.getByTestId('house-ledger-top')).toHaveTextContent(
-      'The house stands at $61,400 agreed.',
+      'The house stands at $61,400.00 agreed.',
     );
     expect(screen.getByTestId('house-ledger-top')).not.toHaveTextContent('planned');
   });

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import type { ReactNode } from 'react';
 
 import { ScoredAction } from '@/components/threshold/instruments/scored-action';
-import { DAY_MONTH_FORMAT as DAY_MONTH } from '@/lib/threshold/dates';
+import { DAY_MONTH_FORMAT as DAY_MONTH, legalDate } from '@/lib/threshold/dates';
 import {
   parseSourceDate,
   type NoteModel,
@@ -38,10 +38,12 @@ function dateline(sentAt: string | null, today: Date): string | null {
   return DAY_MONTH.format(sent);
 }
 
-/** "Nora Quist · Local Dev Studio · 4 August" — the note signs in full: who
- * wrote it, the studio she keeps it for, and the day she sent it. A studio
- * name that is not yet known, or a note with no sent date, simply drops that
- * segment rather than leaving a bare " · " in its place. */
+/** "Nora Quist · Local Dev Studio · 4 August 2026" — the note signs in full:
+ * who wrote it, the studio she keeps it for, and the day she sent it. The date
+ * is a term of the letter, so it spells its year (`legalDate`). A studio name
+ * that is not yet known, that is the author's own name, or a note with no sent
+ * date, simply drops that segment rather than leaving a bare " · " in its
+ * place. */
 function signatureOf(
   authorName: string | null | undefined,
   studioName: string | null | undefined,
@@ -50,9 +52,9 @@ function signatureOf(
   const name = authorName?.trim();
   if (!name) return null;
   const studio = studioName?.trim() || null;
-  const sent = parseSourceDate(sentAt);
-  const sentDate = sent ? DAY_MONTH.format(sent) : null;
-  return [name, studio, sentDate].filter((part): part is string => !!part).join(' · ');
+  return [name, studio === name ? null : studio, legalDate(sentAt)]
+    .filter((part): part is string => !!part)
+    .join(' · ');
 }
 
 export interface NoteEnclosure extends ThresholdNoteEnclosure {

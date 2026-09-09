@@ -390,8 +390,8 @@ describe('Letterbox — one letter, half out of the slot', () => {
 
     const body = screen.getByTestId('letterbox-body');
     expect(body).toHaveTextContent('Invoice No. 4');
-    expect(body).toHaveTextContent('$18,250');
-    expect(body).toHaveTextContent('$9,125');
+    expect(body).toHaveTextContent('$18,250.00');
+    expect(body).toHaveTextContent('$9,125.00');
     expect(body).toHaveTextContent('due 15 August');
   });
 
@@ -410,7 +410,7 @@ describe('Letterbox — one letter, half out of the slot', () => {
     render(<Letterbox invoice={invoice({ number: null, dueDate: null })} today={TODAY} />);
 
     const body = screen.getByTestId('letterbox-body');
-    expect(body).toHaveTextContent('Invoice · $18,250 total');
+    expect(body).toHaveTextContent('Invoice · $18,250.00 total');
     expect(body).not.toHaveTextContent('due');
   });
 
@@ -600,7 +600,7 @@ describe('Letterbox — one letter, half out of the slot', () => {
   it('offers the invoice its own address, above the settle-in-place', () => {
     render(<Letterbox invoice={invoice()} today={TODAY} />);
 
-    const open = screen.getByRole('link', { name: 'Pay $9,125' });
+    const open = screen.getByRole('link', { name: 'Pay $9,125.00' });
     expect(open).toHaveAttribute('href', `/pay/${LINK_TOKEN}`);
   });
 
@@ -609,7 +609,7 @@ describe('Letterbox — one letter, half out of the slot', () => {
   it('carries the amount in the label, under a sentence that says what it does', () => {
     render(<Letterbox invoice={invoice()} today={TODAY} />);
 
-    const pay = screen.getByRole('link', { name: 'Pay $9,125' });
+    const pay = screen.getByRole('link', { name: 'Pay $9,125.00' });
     const consequence = screen.getByTestId('letterbox-consequence');
     expect(consequence).toHaveTextContent(
       'This opens payment. Nothing is charged until you choose how to pay.',
@@ -641,7 +641,7 @@ describe('Letterbox — one letter, half out of the slot', () => {
       [...screen.getByTestId('letterbox-body').querySelectorAll('.t-money')].map(
         (node) => node.textContent,
       ),
-    ).toEqual(['$18,250', '$9,125', '$9,125']);
+    ).toEqual(['$18,250.00', '$9,125.00', '$9,125.00']);
   });
 
   it('keeps the balance structurally exempt from any dimming pass', () => {
@@ -657,7 +657,7 @@ describe('Letterbox — one letter, half out of the slot', () => {
   it('never warms the pay page by scrolling past it', () => {
     render(<Letterbox invoice={invoice()} today={TODAY} />);
 
-    expect(screen.getByRole('link', { name: 'Pay $9,125' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Pay $9,125.00' })).toHaveAttribute(
       'data-prefetch',
       'false',
     );
@@ -667,7 +667,7 @@ describe('Letterbox — one letter, half out of the slot', () => {
     const user = userEvent.setup();
     render(<Letterbox invoice={invoice()} today={TODAY} />);
 
-    expect(screen.getByRole('link', { name: 'Pay $9,125' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Pay $9,125.00' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Print' })).toBeInTheDocument();
 
     const toggle = screen.getByRole('button', { name: 'Open the letterbox' });
