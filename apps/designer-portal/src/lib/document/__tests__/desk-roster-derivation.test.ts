@@ -554,14 +554,54 @@ describe('deriveDeskDayLine — the day’s line (IA-05)', () => {
     expect(overdue.parts[1].text).toMatch(/^ — project, overdue \d+ days?$/);
   });
 
-  it('names the person she is keeping waiting, then borrows the lead’s own sentence', () => {
+  it('names the person she is keeping waiting, and never the job twice', () => {
     const dayLine = deriveDeskDayLine(threeLineRoster(), [], NOW)!;
     const lead = dayLine.lines.find((line) => line.key === 'lead')!;
 
+    // The specimen's own line (designer-desk.html:776): the CLIENT is the act,
+    // the sentence is sentence-cased, the date is the house's one idiom, and
+    // the job title ('Wright apartment') appears nowhere on it.
     expect(lead.parts).toEqual([
       { kind: 'job', text: 'Marcus Wright', engagementId: 'wright' },
-      { kind: 'text', text: ' · New lead — respond by Aug 27' },
+      { kind: 'text', text: ' · new lead — respond by 27 August' },
     ]);
+    expect(lead.parts.map((part) => part.text).join('')).not.toContain(
+      'Wright apartment',
+    );
+  });
+
+  it('says the deadline in the house idiom, whatever the need said', () => {
+    // The need's own sentence is dated 'Aug 27'; the day's line does not
+    // borrow it, so a second date style cannot reach this band (PP-2).
+    const dayLine = deriveDeskDayLine(threeLineRoster(), [], NOW)!;
+    const lead = dayLine.lines.find((line) => line.key === 'lead')!;
+    const said = lead.parts.map((part) => part.text).join('');
+    expect(said).toContain('27 August');
+    expect(said).not.toMatch(/Aug\s+27/);
+  });
+
+  it('omits the lead line when the deadline cannot be read', () => {
+    const unreadable = row('wright', 'brief', {
+      title: 'Wright apartment',
+      client_name: 'Marcus Wright',
+      project_id: null,
+    });
+    const roster = deriveDeskRoster(
+      input({
+        live: [unreadable],
+        folders: [
+          folder(
+            unreadable,
+            need({ kind: 'new_lead', text: 'New lead — respond', dueOn: null }),
+          ),
+        ],
+      }),
+      NOW,
+    );
+    const dayLine = deriveDeskDayLine(roster, [], NOW);
+    expect(
+      dayLine?.lines.some((line) => line.key === 'lead') ?? false,
+    ).toBe(false);
   });
 
   it('falls back to the job when the lead row carries no named client', () => {

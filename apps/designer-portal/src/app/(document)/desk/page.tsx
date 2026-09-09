@@ -27,6 +27,7 @@ import {
 import { documentEvents } from '@/lib/analytics/document-events';
 import { DeskRoster } from '@/components/document/desk-roster';
 import { deriveDeskRoster } from '@/lib/document/desk-roster-derivation';
+import { WEEKDAY_FORMAT, dayMonth } from '@/lib/document/dates';
 import { DeskContents } from '@/components/document/desk-contents';
 import { RecentBoardsStrip } from '@/components/document/recent-boards-strip';
 import { DeskBoardsReactionRollup } from '@/components/document/desk-boards-reaction-rollup';
@@ -206,11 +207,10 @@ export default function DeskPage() {
       : now.getHours() < 18
         ? 'Good afternoon'
         : 'Good evening';
+  // PP-2 — the Desk's one date style. The greeting says the same idiom the
+  // day's line says beneath it, and neither composes its own formatter.
   const dateLabel = hydrated
-    ? `${new Intl.DateTimeFormat('en-US', { weekday: 'long' }).format(now)} · ${new Intl.DateTimeFormat(
-        'en-US',
-        { month: 'long', day: 'numeric' },
-      ).format(now)}`.toUpperCase()
+    ? `${WEEKDAY_FORMAT.format(now)} · ${dayMonth(now)}`.toUpperCase()
     : '';
   const name =
     profile?.display_name || profile?.full_name || user?.name || null;

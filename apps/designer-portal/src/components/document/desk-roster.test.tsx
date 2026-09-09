@@ -488,7 +488,7 @@ describe('DeskRoster — the day’s line (IA-05)', () => {
 
     const lead = container.querySelector('[data-day-line="lead"]')!;
     expect(lead.textContent).toBe(
-      'Marcus Wright · New lead — respond by Aug 27',
+      'Marcus Wright · new lead — respond by 27 August',
     );
     expect(
       within(lead as HTMLElement).getByRole('link', {
