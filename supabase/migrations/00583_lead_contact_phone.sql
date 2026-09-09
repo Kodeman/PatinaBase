@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- 00584 — lead contact phone: a spot for both phone and email on a new lead
+-- 00583 — lead contact phone: a spot for both phone and email on a new lead
 --
 -- INTENT
 -- A captured lead had one "Contact" field. An email landed in
@@ -13,16 +13,26 @@
 --
 -- LINEAGE (bodies copied verbatim from the files named, then grafted)
 --   public.begin_discovery(uuid)                    00386 → 00399:515-675
---   public.ceremony_complete(...)                   00331:75-374
 --   public.hydrate_lead_relationship_contact()      00399:744-768
 --   public.people_directory (view)                  00221 → 00420 → 00478:139-371
---   No later migration redefines any of the four (verified by grep across
---   supabase/migrations at 00583; 00583_studio_comember_rls_sweep, unmerged on
---   fix/studio-comember-rls-sweep, changes policies only and none of the four).
+--   No later migration redefines any of the three (verified by grep across
+--   supabase/migrations, origin/main included; 00584_studio_comember_rls_sweep
+--   changes policies only and touches none of the three).
 --
 -- NUMBER
--- Minted as 00583, moved to 00584: fix/studio-comember-rls-sweep claimed 00583
--- first on origin, and the ledger version is the numeric prefix.
+-- 00583. Minted as 00583, briefly moved to 00584 on a wrong reading of the
+-- sibling branch, moved back: origin/main carries 00584 as
+-- 00584_studio_comember_rls_sweep and 00583 is vacant. Ordering is safe either
+-- way — the sweep writes policies, this file writes columns and bodies.
+--
+-- A PROFILE HOLDER'S PHONE IS THEIR OWN
+-- A captured phone reaches designer_clients.client_phone only on a row with NO
+-- Patina profile (client_id IS NULL). A client who holds a profile manages
+-- their phone on profiles.phone, and the household sheet offers them no phone
+-- field, so a number seeded onto such a row could never be cleared. That is why
+-- 00331's ceremony_complete is NOT redefined here: the only row it ensures
+-- carries client_id = the lead's homeowner, and a profile-less arc lead is
+-- served by the hydrate trigger below instead.
 --
 -- E.164 DERIVATION
 -- public.normalize_party_phone_e164() (00281) cannot be reused here: its body
@@ -54,11 +64,11 @@ ALTER TABLE public.leads
 
 COMMENT ON COLUMN public.leads.contact_phone IS
   'Phone as the designer typed it at capture. Optional. Carries through to '
-  'designer_clients.client_phone when the lead begins Discovery (00584).';
+  'designer_clients.client_phone when the lead begins Discovery (00583).';
 COMMENT ON COLUMN public.leads.contact_phone_e164 IS
   'Normalized derivation of contact_phone, set by the normalize_phone_leads '
   'trigger. NULL when the raw phone is absent, cleared, or unparseable '
-  '(00584).';
+  '(00583).';
 
 ALTER TABLE public.designer_clients
   ADD COLUMN IF NOT EXISTS client_phone text,
@@ -66,10 +76,10 @@ ALTER TABLE public.designer_clients
 
 COMMENT ON COLUMN public.designer_clients.client_phone IS
   'Working phone for a captured household with no Patina account. A client '
-  'with a profile manages their own phone on profiles.phone (00584).';
+  'with a profile manages their own phone on profiles.phone (00583).';
 COMMENT ON COLUMN public.designer_clients.client_phone_e164 IS
   'Normalized derivation of client_phone, set by the '
-  'normalize_phone_designer_clients trigger (00584).';
+  'normalize_phone_designer_clients trigger (00583).';
 
 -- ── 2. E.164 derivation triggers ────────────────────────────────────────────
 
@@ -98,7 +108,7 @@ REVOKE ALL ON FUNCTION public.normalize_lead_contact_phone_e164()
 
 COMMENT ON FUNCTION public.normalize_lead_contact_phone_e164() IS
   'BEFORE INSERT/UPDATE trigger on leads: keeps contact_phone_e164 a '
-  'normalized derivation of contact_phone (00584).';
+  'normalized derivation of contact_phone (00583).';
 
 DROP TRIGGER IF EXISTS normalize_phone_leads ON public.leads;
 CREATE TRIGGER normalize_phone_leads
@@ -128,7 +138,7 @@ REVOKE ALL ON FUNCTION public.normalize_designer_client_phone_e164()
 COMMENT ON FUNCTION public.normalize_designer_client_phone_e164() IS
   'BEFORE INSERT/UPDATE trigger on designer_clients: keeps client_phone_e164 a '
   'normalized derivation of client_phone. Sorts after '
-  'hydrate_lead_relationship_contact_trg so it sees the hydrated phone (00584).';
+  'hydrate_lead_relationship_contact_trg so it sees the hydrated phone (00583).';
 
 DROP TRIGGER IF EXISTS normalize_phone_designer_clients ON public.designer_clients;
 CREATE TRIGGER normalize_phone_designer_clients
@@ -311,13 +321,14 @@ COMMENT ON FUNCTION public.begin_discovery(uuid) IS
   'Atomic Brief→Discovery transition. The exact designer or an active '
   'non-guest peer in the same active design_studio may act; contractor, '
   'manufacturer, inactive, and guest co-memberships confer no authority. '
-  '00584: every branch that writes client_email also carries the lead''s '
+  '00583: every branch that writes client_email also carries the lead''s '
   'contact_phone onto designer_clients.client_phone; an existing row''s phone '
   'is preserved (COALESCE), never overwritten.';
 
 -- ── 4. hydrate_lead_relationship_contact — 00399:744-768 verbatim + phone on
---       INSERT only, so an emptied "Phone on file" stays empty. The trigger's
---       UPDATE OF column list is 00399's unchanged.
+--       INSERT of a profile-less row only, so an emptied "Phone on file" stays
+--       empty and a client with a profile keeps their own number. The
+--       trigger's UPDATE OF column list is 00399's unchanged.
 --       Deliberately NO phone backfill of existing rows: an old lead's phone
 --       lives in project_description prose and must not be guessed at. ──────
 
@@ -335,7 +346,9 @@ BEGIN
   IF NEW.lead_id IS NOT NULL
      AND (NEW.client_name IS NULL
           OR NEW.client_email IS NULL
-          OR (TG_OP = 'INSERT' AND NEW.client_phone IS NULL))
+          OR (TG_OP = 'INSERT'
+              AND NEW.client_id IS NULL
+              AND NEW.client_phone IS NULL))
   THEN
     SELECT contact_name, contact_email, contact_phone
     INTO v_contact_name, v_contact_email, v_contact_phone
@@ -345,9 +358,12 @@ BEGIN
 
     NEW.client_name := COALESCE(NEW.client_name, v_contact_name);
     NEW.client_email := COALESCE(NEW.client_email, v_contact_email);
-    -- INSERT only: the household sheet's "Phone on file" must be clearable, so
-    -- an UPDATE that empties client_phone is never refilled from the lead.
-    IF TG_OP = 'INSERT' THEN
+    -- INSERT only, and only onto a profile-less row: the household sheet's
+    -- "Phone on file" must be clearable, so an UPDATE that empties
+    -- client_phone is never refilled from the lead; and a client who holds a
+    -- profile has no phone field on that sheet, so a number seeded here could
+    -- never be cleared.
+    IF TG_OP = 'INSERT' AND NEW.client_id IS NULL THEN
       NEW.client_phone := COALESCE(NEW.client_phone, v_contact_phone);
     END IF;
   END IF;
@@ -365,327 +381,7 @@ BEFORE INSERT OR UPDATE OF lead_id, designer_id, client_name, client_email
 ON public.designer_clients
 FOR EACH ROW EXECUTE FUNCTION public.hydrate_lead_relationship_contact();
 
--- ── 5. ceremony_complete — 00331:75-374 verbatim + client_phone on the
---       engagement row it ensures ────────────────────────────────────────────
-
-CREATE OR REPLACE FUNCTION public.ceremony_complete(
-  p_lead_id         uuid,
-  p_intro           text,
-  p_slots           jsonb,
-  p_timezone        text,
-  p_credential_line text DEFAULT NULL,
-  p_portfolio_url   text DEFAULT NULL
-)
-RETURNS jsonb
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public, pg_temp
-AS $$
-DECLARE
-  v_uid          uuid := auth.uid();
-  v_lead         leads%ROWTYPE;
-  v_ceremony     match_ceremonies%ROWTYPE;
-  v_slot         jsonb;
-  v_slots        jsonb := '[]'::jsonb;
-  v_slot_count   int;
-  v_starts       timestamptz;
-  v_dc           designer_clients%ROWTYPE;
-  v_client_name  text;
-  v_scan         room_scans%ROWTYPE;
-  v_scan_found   boolean := false;
-  v_rooms        jsonb := '[]'::jsonb;
-  v_styles       text[] := '{}';
-  v_scan_id      uuid;
-  v_budget_min   integer;
-  v_budget_max   integer;
-  v_band         text[];
-  v_thread_id    uuid;
-  v_msg_id       uuid;
-  v_studio_name  text;
-  v_log_id       uuid;
-  v_title        text;
-  v_message      text;
-BEGIN
-  IF v_uid IS NULL THEN
-    RAISE EXCEPTION 'not_authenticated' USING DETAIL = 'auth.uid() is null';
-  END IF;
-
-  -- ── Validate: caller owns the lead, and the ceremony stub exists ──
-  SELECT * INTO v_lead FROM leads WHERE id = p_lead_id;
-  IF NOT FOUND OR v_lead.designer_id IS DISTINCT FROM v_uid THEN
-    RAISE EXCEPTION 'not_authorized' USING DETAIL = p_lead_id::text;
-  END IF;
-
-  -- Lock the ceremony row: serializes a double-send race on one transaction.
-  SELECT * INTO v_ceremony FROM match_ceremonies
-   WHERE lead_id = p_lead_id FOR UPDATE;
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'ceremony_not_found'
-      USING DETAIL = 'accept_design_request has not run for lead ' || p_lead_id::text;
-  END IF;
-
-  -- ── IDEMPOTENT: already sent/picked → return the existing stamps ──
-  IF v_ceremony.state IN ('sent', 'picked') THEN
-    RETURN jsonb_build_object(
-      'ceremony_id',        v_ceremony.id,
-      'lead_id',            p_lead_id,
-      'designer_client_id', v_ceremony.designer_client_id,
-      'thread_id',          v_ceremony.thread_id,
-      'intro_message_id',   v_ceremony.intro_message_id,
-      'already_sent',       true
-    );
-  END IF;
-
-  -- ── Gate re-check (2.2: non-empty words AND 2–3 future slots) ──
-  IF p_intro IS NULL OR btrim(p_intro) = '' THEN
-    RAISE EXCEPTION 'intro_required' USING DETAIL = 'the introduction must be written';
-  END IF;
-
-  IF p_slots IS NULL OR jsonb_typeof(p_slots) <> 'array' THEN
-    RAISE EXCEPTION 'slots_invalid' USING DETAIL = 'offered slots must be a json array';
-  END IF;
-  v_slot_count := jsonb_array_length(p_slots);
-  IF v_slot_count < 2 OR v_slot_count > 3 THEN
-    RAISE EXCEPTION 'slots_count' USING DETAIL = '2-3 offered slots required, got ' || v_slot_count;
-  END IF;
-
-  -- Normalize: every slot gets a server-side uuid id if absent, a 45-minute
-  -- default duration, and must start in the future.
-  FOR v_slot IN SELECT * FROM jsonb_array_elements(p_slots) LOOP
-    v_starts := (v_slot->>'starts_at')::timestamptz;
-    IF v_starts IS NULL THEN
-      RAISE EXCEPTION 'slot_starts_at_required' USING DETAIL = v_slot::text;
-    END IF;
-    IF v_starts <= now() THEN
-      RAISE EXCEPTION 'slot_in_past' USING DETAIL = v_starts::text;
-    END IF;
-    v_slots := v_slots || jsonb_build_array(jsonb_build_object(
-      'id',               COALESCE(NULLIF(v_slot->>'id', '')::uuid, gen_random_uuid()),
-      'starts_at',        to_jsonb(v_starts),
-      'duration_minutes', COALESCE(NULLIF(v_slot->>'duration_minutes', '')::int, 45)
-    ));
-  END LOOP;
-
-  -- ── Freeze the ceremony FIRST: the 00332 trigger guard reads state='sent'
-  --    when the leads UPDATE below fires it, suppressing the generic 00289
-  --    homeowner notification in favor of the named introduction moment. ──
-  UPDATE match_ceremonies
-     SET state           = 'sent',
-         intro_text      = p_intro,
-         credential_line = NULLIF(btrim(COALESCE(p_credential_line, '')), ''),
-         portfolio_url   = NULLIF(btrim(COALESCE(p_portfolio_url, '')), ''),
-         offered_slots   = v_slots,
-         offered_at      = now(),
-         timezone        = NULLIF(btrim(COALESCE(p_timezone, '')), ''),
-         updated_at      = now()
-   WHERE id = v_ceremony.id;
-
-  UPDATE leads
-     SET status      = 'accepted',
-         accepted_at = COALESCE(accepted_at, now()),
-         updated_at  = now()
-   WHERE id = p_lead_id;
-
-  -- ── designer_clients: the engagement row (I65 bug 2 — NEVER downgrade an
-  --    active/proposal relationship; the index re-scope above makes a second,
-  --    engagement-scoped 'lead' row legal). Resolution order:
-  --      1. a lead-status row already linked to THIS lead (idempotency/root)
-  --      2. a virgin lead-status row for the pair (no lead linked) → adopt it
-  --      3. otherwise INSERT a fresh engagement row — existing active/proposal
-  --         rows are never read, touched, or downgraded. ──
-  SELECT COALESCE(NULLIF(btrim(p.display_name), ''), p.full_name)
-    INTO v_client_name
-  FROM profiles p WHERE p.id = v_lead.homeowner_id;
-
-  SELECT * INTO v_dc FROM designer_clients
-   WHERE designer_id = v_uid AND lead_id = p_lead_id AND status = 'lead'
-   ORDER BY created_at LIMIT 1;
-
-  IF NOT FOUND THEN
-    SELECT * INTO v_dc FROM designer_clients
-     WHERE designer_id = v_uid AND client_id = v_lead.homeowner_id
-       AND status = 'lead' AND lead_id IS NULL
-     ORDER BY created_at LIMIT 1;
-
-    IF FOUND THEN
-      UPDATE designer_clients
-         SET lead_id      = p_lead_id,
-             client_name  = COALESCE(client_name, v_client_name),
-             client_phone = COALESCE(client_phone, v_lead.contact_phone),
-             source       = COALESCE(source, 'design_request'),
-             updated_at   = now()
-       WHERE id = v_dc.id
-       RETURNING * INTO v_dc;
-    ELSE
-      INSERT INTO designer_clients (designer_id, client_id, client_name, client_phone, source, lead_id, status)
-      VALUES (v_uid, v_lead.homeowner_id, v_client_name, v_lead.contact_phone,
-              'design_request', p_lead_id, 'lead')
-      RETURNING * INTO v_dc;
-    END IF;
-  END IF;
-
-  -- ── client_discovery, seeded atomically from the request (I65 find 1: this
-  --    replaces the lazy first-render seed for arc-born engagements). ──
-  SELECT rs.* INTO v_scan
-  FROM lead_room_scans lrs
-  JOIN room_scans rs ON rs.id = lrs.scan_id
-  WHERE lrs.lead_id = p_lead_id
-  ORDER BY lrs.is_primary DESC, lrs.position ASC
-  LIMIT 1;
-  v_scan_found := FOUND;
-
-  IF v_scan_found THEN
-    v_rooms := jsonb_build_array(jsonb_build_object(
-      'name',            initcap(replace(COALESCE(NULLIF(v_scan.room_type, ''), 'room'), '_', ' ')),
-      'floor_area_sqft', v_scan.floor_area
-    ));
-    v_styles  := COALESCE(v_scan.suggested_styles, '{}');
-    v_scan_id := v_scan.id;
-  END IF;
-
-  -- Budget mapping, DEFENSIVE (I62: prod budget_range has drifted to free
-  -- text). The 5 documented slugs, then a $Nk–$Mk / $Nk-$Mk parse (en/em dash
-  -- or hyphen, optional $ and decimals), else both stay null.
-  CASE v_lead.budget_range
-    WHEN 'under_5k'  THEN v_budget_min := 0;          v_budget_max := 500000;
-    WHEN '5k_15k'    THEN v_budget_min := 500000;     v_budget_max := 1500000;
-    WHEN '15k_50k'   THEN v_budget_min := 1500000;    v_budget_max := 5000000;
-    WHEN '50k_100k'  THEN v_budget_min := 5000000;    v_budget_max := 10000000;
-    WHEN 'over_100k' THEN v_budget_min := 10000000;   v_budget_max := NULL;
-    ELSE
-      v_band := regexp_match(
-        COALESCE(v_lead.budget_range, ''),
-        '^\$?\s*(\d+(?:\.\d+)?)\s*[kK]\s*[–—-]\s*\$?\s*(\d+(?:\.\d+)?)\s*[kK]$'
-      );
-      IF v_band IS NOT NULL THEN
-        v_budget_min := round(v_band[1]::numeric * 100000);
-        v_budget_max := round(v_band[2]::numeric * 100000);
-      END IF;
-  END CASE;
-
-  INSERT INTO client_discovery (
-    designer_client_id, designer_id, project_type, rooms, style_keywords,
-    budget_min_cents, budget_max_cents, room_scan_id
-  )
-  VALUES (
-    v_dc.id, v_uid, v_lead.project_type, v_rooms, v_styles,
-    v_budget_min, v_budget_max, v_scan_id
-  )
-  ON CONFLICT (designer_client_id) DO NOTHING;
-  -- ready_at stays null: the seed pre-fills, it does not declare readiness.
-
-  -- ── The thread + the introduction as its head message (R106 §6: "this
-  --    message becomes the head of the client–designer thread"). ──
-  -- rpc_start_direct_thread (00103) reads auth.uid() from the JWT claim, which
-  -- survives the definer context (I65-verified); idempotent by design (finds
-  -- an existing direct thread for the pair first).
-  v_thread_id := public.rpc_start_direct_thread(v_lead.homeowner_id);
-
-  INSERT INTO comms_messages (thread_id, sender_id, body)
-  VALUES (v_thread_id, v_uid, p_intro)
-  RETURNING id INTO v_msg_id;
-
-  -- ── Client notification: the named introduction moment. Best-effort — a
-  --    notification failure must never unwind the send. ──
-  BEGIN
-    SELECT rsi.name INTO v_studio_name
-    FROM public.resolve_studio_identity(NULL, v_uid) rsi;
-    v_studio_name := COALESCE(NULLIF(btrim(v_studio_name), ''), 'Your designer');
-
-    v_title   := v_studio_name || ' introduced themselves';
-    v_message := v_studio_name || ' introduced themselves — pick a time.';
-
-    INSERT INTO notification_log (user_id, type, channel, status, template_id, metadata)
-    VALUES (
-      v_lead.homeowner_id,
-      'match_introduction',
-      'in_app',
-      'delivered',
-      'design-request-intro-delivered',
-      jsonb_build_object(
-        'lead_id',            p_lead_id,
-        'designer_id',        v_uid,
-        'ceremony_id',        v_ceremony.id,
-        'designer_client_id', v_dc.id,
-        'thread_id',          v_thread_id,
-        'entity_type',        'design_request',
-        'entity_id',          p_lead_id::text,
-        'title',              v_title,
-        'message',            v_message,
-        'deep_link',          '/doc/' || p_lead_id::text,
-        'url',                '/doc/' || p_lead_id::text
-      )
-    )
-    RETURNING id INTO v_log_id;
-
-    PERFORM public.invoke_edge_function(
-      'notification-dispatch',
-      jsonb_build_object(
-        'user_id',     v_lead.homeowner_id,
-        'type',        'match_introduction',
-        'channel',     'email',
-        'template_id', 'design-request-intro-delivered',
-        'data', jsonb_build_object(
-          'studio_name', v_studio_name,
-          'projectType', v_lead.project_type,
-          'slot_count',  v_slot_count,
-          'leadId',      p_lead_id,
-          'thread_id',   v_thread_id
-        ),
-        'priority', 'high'
-      )
-    );
-
-    PERFORM public.invoke_edge_function(
-      'apns-send',
-      jsonb_build_object(
-        'user_id',             v_lead.homeowner_id,
-        'title',               v_title,
-        'body',                v_message,
-        'entity_type',         'design_request',
-        'entity_id',           p_lead_id::text,
-        'notification_log_id', v_log_id
-      )
-    );
-  EXCEPTION WHEN OTHERS THEN
-    RAISE WARNING 'ceremony_complete: notification step failed for lead %: %',
-      p_lead_id, sqlerrm;
-  END;
-
-  -- ── Stamp the ceremony with what the send created. ──
-  UPDATE match_ceremonies
-     SET designer_client_id = v_dc.id,
-         thread_id          = v_thread_id,
-         intro_message_id   = v_msg_id,
-         updated_at         = now()
-   WHERE id = v_ceremony.id;
-
-  RETURN jsonb_build_object(
-    'ceremony_id',        v_ceremony.id,
-    'lead_id',            p_lead_id,
-    'designer_client_id', v_dc.id,
-    'thread_id',          v_thread_id,
-    'intro_message_id',   v_msg_id,
-    'already_sent',       false
-  );
-END;
-$$;
-
-REVOKE EXECUTE ON FUNCTION public.ceremony_complete(uuid, text, jsonb, text, text, text) FROM PUBLIC, anon;
-GRANT  EXECUTE ON FUNCTION public.ceremony_complete(uuid, text, jsonb, text, text, text) TO authenticated, service_role;
-
-COMMENT ON FUNCTION public.ceremony_complete(uuid, text, jsonb, text, text, text) IS
-  'Arrival Arc threshold act (R106 §2): one transaction — freeze the ceremony '
-  '(state=sent, offered_slots normalized server-side), accept the lead (00332 '
-  'guard suppresses the generic 00289 letter), ensure the engagement''s '
-  'status=lead designer_clients row (NEVER downgrading active/proposal — I65), '
-  'seed client_discovery from the request (defensive budget parse, I62), start '
-  'the direct thread with the intro as head message, letter the client '
-  '(in_app + email + APNs, best-effort), stamp the ceremony. Idempotent: '
-  're-call after send returns the existing stamps. 00584: the engagement row '
-  'carries the lead''s contact_phone onto client_phone.';
-
--- ── 6. people_directory — 00478:139-371 verbatim, two columns changed:
+-- ── 5. people_directory — 00478:139-371 verbatim, two columns changed:
 --       the client branch's phone prefers designer_clients.client_phone and
 --       the lead branch's prefers leads.contact_phone, each still falling back
 --       to the joined profile's phone. Every other column and branch is
@@ -928,7 +624,7 @@ WHERE public.is_active_studio_member(sc.organization_id);
 COMMENT ON VIEW public.people_directory IS
   'R57 / People Room roster (client|lead|maker|gc|sub|installer|receiver|'
   'architect|photographer|stager|team|contact) for the querying user. v5 '
-  '(00584): the client branch''s phone reads '
+  '(00583): the client branch''s phone reads '
   'COALESCE(designer_clients.client_phone, profiles.phone) and the lead '
   'branch''s reads COALESCE(leads.contact_phone, profiles.phone), so a phone '
   'taken at capture shows for a household with no Patina account instead of '

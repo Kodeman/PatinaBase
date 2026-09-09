@@ -1,9 +1,14 @@
--- Lead contact phone regression (00584)
+-- Lead contact phone regression (00583)
 -- A phone taken at the front door must normalize on the lead, carry onto the
 -- designer_clients row Discovery ensures, and read in the People directory
 -- both before Discovery (as the lead's) and after (as the client's).
 -- Clearing a raw phone must clear its E.164 derivation with it, on both tables,
 -- and an emptied "Phone on file" must not be re-hydrated from the lead.
+-- A household that holds a Patina profile keeps its own number: no captured
+-- phone reaches a designer_clients row with a client_id.
+-- 00331's ceremony_complete is deliberately not redefined by 00583 and so is
+-- not exercised here; the arc path reaches client_phone, when it reaches it at
+-- all, through the same hydrate trigger the legs below cover.
 -- Run:
 --   psql 'postgresql://postgres:postgres@127.0.0.1:54322/postgres' \
 --     -v ON_ERROR_STOP=1 -f supabase/tests/document/lead_contact_phone_test.sql
@@ -16,6 +21,8 @@ INSERT INTO auth.users (
 )
 VALUES
   ('d9000000-0000-4000-8000-000000000001', 'phone-owner@test.invalid', '', NOW(), NOW(), NOW(),
+   '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('d9000000-0000-4000-8000-000000000002', 'phone-homeowner@test.invalid', '', NOW(), NOW(), NOW(),
    '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
 
 INSERT INTO public.profiles (id, email, full_name, is_designer, created_at, updated_at)
@@ -23,6 +30,13 @@ VALUES
   ('d9000000-0000-4000-8000-000000000001', 'phone-owner@test.invalid',
    'Phone Owner', true, NOW(), NOW())
 ON CONFLICT (id) DO UPDATE SET is_designer = true;
+
+-- The homeowner with a Patina account keeps their own number on the profile.
+INSERT INTO public.profiles (id, email, full_name, phone, is_designer, created_at, updated_at)
+VALUES
+  ('d9000000-0000-4000-8000-000000000002', 'phone-homeowner@test.invalid',
+   'Ada Okafor', '(555) 990-0001', false, NOW(), NOW())
+ON CONFLICT (id) DO UPDATE SET phone = EXCLUDED.phone;
 
 INSERT INTO public.organizations (id, type, name, slug)
 VALUES
@@ -48,7 +62,10 @@ VALUES
    'The Okafors', 'okafors@test.invalid', '(555) 014-2200'),
   ('d9200000-0000-4000-8000-000000000002', NULL,
    'd9000000-0000-4000-8000-000000000001', 'consultation', 'new',
-   'No Phone Household', 'nophone@test.invalid', NULL);
+   'No Phone Household', 'nophone@test.invalid', NULL),
+  ('d9200000-0000-4000-8000-000000000003', 'd9000000-0000-4000-8000-000000000002',
+   'd9000000-0000-4000-8000-000000000001', 'consultation', 'new',
+   'Ada Okafor', NULL, '(555) 014-2299');
 
 DO $$
 BEGIN
@@ -238,6 +255,36 @@ BEGIN
   ASSERT (SELECT client_phone IS NULL AND client_phone_e164 IS NULL
           FROM public.designer_clients WHERE id = v_relationship_id),
     'a phone-less lead must leave client_phone NULL';
+END;
+$$;
+
+-- A household that holds a Patina profile manages its own phone. The captured
+-- number must NOT be seeded onto that relationship: the household sheet gives a
+-- profile-holding client no phone field, so a number written here could never
+-- be cleared, and it would shadow profiles.phone in the directory forever.
+DO $$
+DECLARE
+  v_relationship_id uuid;
+BEGIN
+  v_relationship_id := (
+    public.begin_discovery('d9200000-0000-4000-8000-000000000003')
+    ->>'designerClientId'
+  )::uuid;
+
+  ASSERT (SELECT client_id = 'd9000000-0000-4000-8000-000000000002'
+          FROM public.designer_clients WHERE id = v_relationship_id),
+    'the profile-holding lead must link its homeowner';
+  ASSERT (SELECT client_phone IS NULL AND client_phone_e164 IS NULL
+          FROM public.designer_clients WHERE id = v_relationship_id),
+    format('a profile-holding client must not be seeded a captured phone, got %L',
+           (SELECT client_phone FROM public.designer_clients
+            WHERE id = v_relationship_id));
+  ASSERT (SELECT phone = '(555) 990-0001'
+          FROM public.people_directory
+          WHERE person_id = v_relationship_id AND role = 'client'),
+    format('the directory must fall through to the profile phone, got %L',
+           (SELECT phone FROM public.people_directory
+            WHERE person_id = v_relationship_id AND role = 'client'));
 END;
 $$;
 
