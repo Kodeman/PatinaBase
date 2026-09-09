@@ -54,8 +54,13 @@ const INVOICE_BALANCE = '$4,060.00';
  * read the day off the same rule the seed uses.
  */
 const INVOICE_DUE_DAY = (() => {
-  const due = new Date();
-  due.setDate(due.getDate() + 7);
+  // Count the seven days on the calendar the SEED counts them on. Postgres runs
+  // in UTC, so `CURRENT_DATE + 7` rolls over at UTC midnight; counting from the
+  // runner's local clock instead names a different day for every evening west
+  // of Greenwich (19:38 CDT on 8 September asked for 15 September while the
+  // seeded invoice said 16 September, and the suite went red on the clock).
+  const now = new Date();
+  const due = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 7));
   // en-GB, day first, and the year spelled out: PP-2 gave the house one date
   // idiom and `lib/threshold/dates.ts` is the only place that composes it. A
   // due date is a term of the invoice, so it is `legalDate`, never `dayMonth`.
@@ -63,6 +68,7 @@ const INVOICE_DUE_DAY = (() => {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
+    timeZone: 'UTC',
   }).format(due);
 })();
 

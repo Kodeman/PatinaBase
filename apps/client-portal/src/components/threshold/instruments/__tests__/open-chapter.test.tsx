@@ -253,10 +253,10 @@ describe('SpineToll', () => {
 // ── The tracking row — parcel-grade, with C's stamp ─────────────────────────
 
 describe('TrackingRow', () => {
-  it('shows the piece, its agreed price in whole dollars, and its thumbnail', () => {
+  it('shows the piece, its agreed price with its cents, and its thumbnail', () => {
     render(<TrackingRow {...CREDENZA} />);
     expect(screen.getByText('Walnut credenza')).toBeInTheDocument();
-    expect(screen.getByTestId('tracking-row-price')).toHaveTextContent('$8,400');
+    expect(screen.getByTestId('tracking-row-price')).toHaveTextContent('$8,400.00');
     expect(screen.getByTestId('tracking-row-thumb')).toHaveAttribute(
       'src',
       'https://cdn.patina.test/credenza.jpg',
