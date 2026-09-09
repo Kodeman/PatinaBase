@@ -255,15 +255,17 @@ export interface NeedLine {
    *  stamp is provenance, not a deadline, and `need-tie-break.ts` ranks a
    *  past `dueOn` as overdue. */
   dueOn?: string | null;
-  /** A3-L7 — whose hand the need's next move is in, when the rule already
-   *  knows: `'client'` where the studio is waiting on the client (an overdue
-   *  decision, an overdue invoice, a sent-but-unopened or viewed-but-unsigned
-   *  proposal), `'designer'` where the next act is the studio's own pen (a
-   *  signed proposal awaiting activation, a due task, a drafted-but-unsent
-   *  PO, a reconnect, a ceremony draft, a Pulse to send), `'maker'` where the
-   *  studio is waiting on a vendor (a PO sent but not yet acknowledged).
-   *  Absent where the rule has no clear single owner. */
-  owner?: 'designer' | 'client' | 'maker' | null;
+  /** A3-L7 / D6 — whose hand the need's next move is in. REQUIRED: every rule
+   *  states one, so a card never has to guess at render. `'client'` where the
+   *  studio is waiting on the client (an overdue decision, an overdue
+   *  invoice, a sent-but-unopened or viewed-but-unsigned proposal),
+   *  `'designer'` where the next act is the studio's own pen — the default
+   *  for a rule with no other clear single owner (a signed proposal awaiting
+   *  activation, a due task, a drafted-but-unsent PO, a reconnect, a
+   *  ceremony draft, a Pulse to send, and every other studio-side need),
+   *  `'maker'` where the studio is waiting on a vendor (a PO sent but not yet
+   *  acknowledged). */
+  owner: 'designer' | 'client' | 'maker';
 }
 
 export interface DeskFolder {

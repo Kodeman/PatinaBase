@@ -134,9 +134,10 @@ export interface RosterLine {
   custody: string;
   /** The need's own owner, for D3's ranking. Null where there is no need. */
   needOwner: 'designer' | 'client' | 'maker' | null;
-  /** D8 — the ledger's value column, as `12 Aug`: the need's own date where
-   *  the line has a need, else the in-motion state's anchor date. Null where
-   *  neither states one, and the cell renders empty. */
+  /** D8 — the ledger's value column, as `dayMonth` prints it (`12 August`):
+   *  the need's own date where the line has a need, else the in-motion
+   *  state's anchor date. Null where neither states one, and the cell
+   *  renders empty. */
   valueText?: string | null;
   /** The in-motion chip's own sentence, unconcatenated (MotionChip.text). */
   motionText?: string | null;
