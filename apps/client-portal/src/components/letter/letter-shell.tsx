@@ -34,8 +34,11 @@ export interface LetterSnapshotView {
   studioName: string | null;
   studioLogoUrl: string | null;
   signatureCity: string | null;
-  designerFullName: string;
-  designerGivenName: string;
+  /** NULL when the send resolved no real name — the studio authors the letter
+   *  and no placeholder identity is printed. Mirrors the frozen snapshot's own
+   *  degradation in supabase/functions/_shared/client-letter.ts. */
+  designerFullName: string | null;
+  designerGivenName: string | null;
   projectName: string | null;
   standingSentence: string;
   personalMessage: string | null;
@@ -43,8 +46,13 @@ export interface LetterSnapshotView {
   expiresAt: string;
 }
 
-function letterheadName(s: LetterSnapshotView): string {
-  return (s.studioName ?? '').trim() || s.designerFullName;
+const stated = (v: string | null | undefined): string | null =>
+  (v ?? '').trim() || null;
+
+/** The studio, the person where there is no studio, and NOTHING where there is
+ *  neither — an empty letterhead, never an invented one. */
+function letterheadName(s: LetterSnapshotView): string | null {
+  return stated(s.studioName) ?? stated(s.designerFullName);
 }
 
 export function LetterShell({
@@ -63,6 +71,9 @@ export function LetterShell({
     .filter(Boolean)
     .join(' · ');
   const note = snapshot.personalMessage?.trim();
+  // Who can send another: her given name, then the studio, then nobody. Never a
+  // guessed pronoun — the page has no idea of anyone's gender.
+  const sender = stated(snapshot.designerGivenName) ?? stated(snapshot.studioName);
 
   return (
     <main className="mx-auto min-h-screen max-w-[46rem] bg-[#F5F0E6] px-6 py-12 text-[#1F1B16]">
@@ -73,13 +84,15 @@ export function LetterShell({
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={snapshot.studioLogoUrl}
-                alt={name}
+                alt={name ?? ''}
                 className="h-5 max-h-6 w-auto"
               />
             ) : null}
-            <span className="font-heading text-[1.15rem] font-semibold uppercase tracking-[0.06em]">
-              {name.toUpperCase()}
-            </span>
+            {name ? (
+              <span className="font-heading text-[1.15rem] font-semibold uppercase tracking-[0.06em]">
+                {name.toUpperCase()}
+              </span>
+            ) : null}
           </div>
           <p className="mt-1.5 font-mono text-[11px] tracking-[0.08em] text-[#8C8578]">{place}</p>
         </div>
@@ -118,7 +131,9 @@ export function LetterShell({
 
       {snapshot.kind === 'invite' ? (
         <p data-testid="letter-expiry" className="mt-5 text-[13px] text-[#8C8578]">
-          {`The link works until ${longDate(snapshot.expiresAt)}; ${snapshot.designerGivenName} can send another.`}
+          {sender
+            ? `The link works until ${longDate(snapshot.expiresAt)}; ${sender} can send another.`
+            : `The link works until ${longDate(snapshot.expiresAt)}.`}
         </p>
       ) : null}
 
@@ -134,7 +149,7 @@ export function LetterShell({
         data-testid="letter-colophon"
         className="mt-4 space-y-1 text-[12px] leading-relaxed text-[#8C8578]"
       >
-        <p>{`Prepared by ${name} · Sent through Patina`}</p>
+        <p>{name ? `Prepared by ${name} · Sent through Patina` : 'Sent through Patina'}</p>
       </footer>
     </main>
   );

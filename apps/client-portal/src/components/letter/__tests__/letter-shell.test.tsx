@@ -121,3 +121,68 @@ it('puts the designer on the letterhead when there is no studio', () => {
     'Prepared by Leah Hartwell · Sent through Patina',
   );
 });
+
+/**
+ * The production defect, on page two. A studio owner with no full_name and no
+ * display_name froze a snapshot with no person on it; this page used to fill
+ * the gap with 'Your designer' and — worse — a guessed pronoun, 'she'.
+ */
+describe('a snapshot with no person on it', () => {
+  const NAMELESS: LetterSnapshotView = {
+    ...SNAP,
+    studioName: 'Middle Studio',
+    signatureCity: 'Prairie du Sac',
+    designerFullName: null,
+    designerGivenName: null,
+    projectName: null,
+    standingSentence:
+      "Middle Studio set up a page for your work together on 9 September. It's where the studio keeps the record — the plans, the papers, and the numbers, as they come.",
+  };
+
+  it('lets the studio author the letter, and names no person anywhere', () => {
+    const { container } = render(<LetterShell snapshot={NAMELESS}>{null}</LetterShell>);
+    const text = container.textContent ?? '';
+    expect(text).not.toContain('Your designer');
+    expect(text).not.toContain('Your keep');
+    expect(text).not.toMatch(/\bshe\b/);
+    expect(text).not.toContain('null');
+    expect(text).not.toContain('undefined');
+    expect(screen.getByTestId('letter-letterhead')).toHaveTextContent('MIDDLE STUDIO');
+    expect(screen.getByTestId('letter-colophon')).toHaveTextContent(
+      'Prepared by Middle Studio · Sent through Patina',
+    );
+  });
+
+  it('offers the remedy in the studio\'s name, never a pronoun', () => {
+    render(<LetterShell snapshot={NAMELESS}>{null}</LetterShell>);
+    expect(screen.getByTestId('letter-expiry')).toHaveTextContent(
+      'The link works until 15 September; Middle Studio can send another.',
+    );
+  });
+
+  it('signs with the studio alone', () => {
+    render(<LetterShell snapshot={NAMELESS}>{null}</LetterShell>);
+    expect(screen.getByTestId('letter-signoff')).toHaveTextContent(
+      '— Middle Studio · Prairie du Sac',
+    );
+  });
+
+  it('with no studio either: no letterhead name, no sign-off, no remedy name', () => {
+    const bare: LetterSnapshotView = {
+      ...NAMELESS,
+      studioName: null,
+      studioLogoUrl: null,
+      signatureCity: null,
+      standingSentence:
+        "A page for your work together was set up on 9 September. It's where the record is kept — the plans, the papers, and the numbers, as they come.",
+    };
+    const { container } = render(<LetterShell snapshot={bare}>{null}</LetterShell>);
+    expect(screen.queryByTestId('letter-signoff')).toBeNull();
+    expect(screen.getByTestId('letter-expiry')).toHaveTextContent(
+      'The link works until 15 September.',
+    );
+    expect(screen.getByTestId('letter-colophon')).toHaveTextContent('Sent through Patina');
+    expect(screen.getByTestId('letter-colophon')).not.toHaveTextContent('Prepared by');
+    expect(container.textContent ?? '').not.toContain('Your designer');
+  });
+});

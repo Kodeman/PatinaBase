@@ -49,8 +49,10 @@ function toView(row: Record<string, unknown>): LetterSnapshotView {
     studioName: (row.studio_name as string | null) ?? null,
     studioLogoUrl: (row.studio_logo_url as string | null) ?? null,
     signatureCity: (row.signature_city as string | null) ?? null,
-    designerFullName: (row.designer_full_name as string | null) ?? 'Your designer',
-    designerGivenName: (row.designer_given_name as string | null) ?? 'she',
+    // NO PLACEHOLDER, and above all no guessed pronoun: a snapshot with no name
+    // on it is a letter the studio authored, and LetterShell degrades to that.
+    designerFullName: (row.designer_full_name as string | null) ?? null,
+    designerGivenName: (row.designer_given_name as string | null) ?? null,
     projectName: (row.project_name as string | null) ?? null,
     standingSentence: (row.rendered_standing_sentence as string | null) ?? '',
     personalMessage: (row.personal_message as string | null) ?? null,
