@@ -25,6 +25,14 @@ export interface ProjectNote {
   sentAt: string;
   answeredAt: string | null;
   retiredAt: string | null;
+  /**
+   * 00581. The signature frozen when the note was written — "Leah Hartwell ·
+   * Middle West Studio · 8 September". Null on every note written before The
+   * First Letter, and on every note a studio member writes by hand; those still
+   * sign with the live studio name. When it is set it WINS, because a studio
+   * that renames itself must not silently relabel a letter it sent last month.
+   */
+  authorByline: string | null;
 }
 
 function toProjectNote(row: ProjectNoteRow): ProjectNote {
@@ -38,6 +46,7 @@ function toProjectNote(row: ProjectNoteRow): ProjectNote {
     sentAt: row.sent_at,
     answeredAt: row.answered_at,
     retiredAt: row.retired_at,
+    authorByline: row.author_byline ?? null,
   };
 }
 

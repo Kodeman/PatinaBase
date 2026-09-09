@@ -102,6 +102,8 @@ export interface ThresholdNote {
   answeredAt?: string | null;
   retiredAt: string | null;
   enclosures: ThresholdNoteEnclosure[];
+  /** 00581 — the signature frozen at write time. Wins over live resolution. */
+  byline?: string | null;
 }
 
 /** A phase approval. It carries no room, so it always stands on the Doorstep. */
@@ -241,6 +243,8 @@ export interface NoteModel {
   body: string;
   sentAt: string | null;
   enclosures: ThresholdNoteEnclosure[];
+  /** 00581 — the signature frozen at write time. Wins over live resolution. */
+  byline?: string | null;
 }
 
 /** What became of the thing, in the word the line beneath it prints. */
@@ -594,6 +598,7 @@ export function deriveThreshold(input: ThresholdInput): ThresholdModel {
         id: standing.id,
         body: standing.body,
         sentAt: standing.sentAt,
+        byline: standing.byline ?? null,
         enclosures: standing.enclosures ?? [],
       }
     : null;

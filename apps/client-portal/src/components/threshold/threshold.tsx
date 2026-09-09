@@ -239,6 +239,7 @@ function toThresholdNote(note: ProjectNote): ThresholdNote {
     answeredAt: note.answeredAt,
     retiredAt: note.retiredAt,
     enclosures: note.enclosures ?? [],
+    byline: note.authorByline,
   };
 }
 

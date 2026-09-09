@@ -97,7 +97,11 @@ export function TheNote({
   if (!note) return null;
 
   const line = dateline(note.sentAt, today);
-  const signature = signatureOf(authorName, studioName, note.sentAt);
+  // R8 — a frozen byline is the whole signature, already dated and already
+  // naming the studio as it stood the day the note was written. Live
+  // resolution is the fallback for every note that carries none.
+  const frozen = note.byline?.trim();
+  const signature = frozen || signatureOf(authorName, studioName, note.sentAt);
 
   return (
     <section
