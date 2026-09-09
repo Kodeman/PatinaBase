@@ -4,8 +4,13 @@
  * isNurtureDue read, rather than reimplementing "proposal sent" off bare
  * status_raw a third time. See
  * apps/designer-portal/src/lib/document/people-derivation.ts.
+ *
+ * F3 also lives here: the studio-contact/gc/trade branches' "Edit" door
+ * (opens AddPersonSheet's edit mode), including the archived-card hide.
  */
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { StudioContact } from '@patina/supabase';
 import { PersonProfile } from '../views/person-profile';
 
 const mockPush = jest.fn();
@@ -15,6 +20,7 @@ jest.mock('next/navigation', () => ({
 }));
 
 let mockPersonData: Record<string, unknown> | null = null;
+let mockStudioContact: StudioContact | null = null;
 
 jest.mock('@patina/supabase', () => ({
   usePerson: () => ({ data: mockPersonData, isLoading: false }),
@@ -27,11 +33,65 @@ jest.mock('@patina/supabase', () => ({
   useClientReviews: () => ({ data: [] }),
   useStartDirectThread: () => ({ mutate: jest.fn() }),
   useStyles: () => ({ data: [] }),
+  // F3 — AddPersonSheet's edit mode ("Edit"), now reachable from this
+  // component's tree via RolodexEditAction.
+  useStudioContact: () => ({ data: mockStudioContact }),
+  useUpdateStudioContact: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useAddClient: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useAddProjectParty: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useFindOrCreateVendor: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useSaveVendor: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useStudioIdentity: () => ({ data: null, isLoading: false }),
 }));
 
 jest.mock('@/hooks/use-person-documents', () => ({
   usePersonDocuments: () => ({ data: [] }),
 }));
+
+jest.mock('@/hooks/use-projects', () => ({
+  useProjects: () => ({ data: [] }),
+}));
+
+jest.mock('@/hooks/use-auth', () => ({
+  useAuth: () => ({ user: { id: 'designer-1' } }),
+}));
+
+jest.mock('@/hooks/use-feature-flag', () => ({
+  useFeatureFlag: () => ({ value: false, isLoading: false }),
+}));
+
+function renderWithClient(ui: React.ReactElement) {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  return render(
+    <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>,
+  );
+}
+
+function studioContact(over: Partial<StudioContact> = {}): StudioContact {
+  return {
+    id: 'contact-1',
+    organization_id: 'org-1',
+    entity_kind: 'person',
+    company_id: null,
+    contact_kind: 'other',
+    full_name: 'Priya Raman',
+    company_name: null,
+    email: 'priya@example.com',
+    phone: '5551234567',
+    phone_e164: '+15551234567',
+    specialties: [],
+    vendor_id: null,
+    profile_id: null,
+    created_by: 'designer-1',
+    notes: null,
+    archived_at: null,
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+    ...over,
+  };
+}
 
 // The client-role path under test never renders MakerProfile, but
 // person-profile.tsx imports it eagerly at module scope — its own import
@@ -144,5 +204,103 @@ describe('PersonProfile — Nurture card (J7)', () => {
     expect(
       screen.queryByText('Still drafting — nothing has gone to them yet.'),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe('PersonProfile — rolodex "Edit" on a studio-contact-backed profile (F3)', () => {
+  it('shows Edit for a pure rolodex card (role contact) and opens AddPersonSheet’s edit mode', () => {
+    mockPersonData = basePerson({
+      person_id: 'contact-1',
+      role: 'contact',
+      display_name: 'Priya Raman',
+      meta: {},
+    });
+    mockStudioContact = studioContact({ id: 'contact-1', full_name: 'Priya Raman' });
+    renderWithClient(
+      <PersonProfile
+        personId="contact-1"
+        role="contact"
+        onBack={jest.fn()}
+        openThread={jest.fn()}
+        openPerson={jest.fn()}
+        goView={jest.fn()}
+        notify={jest.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    expect(screen.getByText('Edit Priya Raman')).toBeInTheDocument();
+  });
+
+  it('hides Edit when the backing card is archived', () => {
+    mockPersonData = basePerson({
+      person_id: 'contact-1',
+      role: 'contact',
+      display_name: 'Priya Raman',
+      meta: {},
+    });
+    mockStudioContact = studioContact({
+      id: 'contact-1',
+      archived_at: '2026-01-02T00:00:00Z',
+    });
+    renderWithClient(
+      <PersonProfile
+        personId="contact-1"
+        role="contact"
+        onBack={jest.fn()}
+        openThread={jest.fn()}
+        openPerson={jest.fn()}
+        goView={jest.fn()}
+        notify={jest.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
+  });
+
+  it('offers Edit for a network/team party folded into the rolodex via meta.studio_contact_id', () => {
+    mockPersonData = basePerson({
+      person_id: 'party-1',
+      role: 'architect',
+      display_name: 'Dana Wu',
+      meta: { studio_contact_id: 'contact-2' },
+    });
+    mockStudioContact = studioContact({ id: 'contact-2', full_name: 'Dana Wu' });
+    renderWithClient(
+      <PersonProfile
+        personId="party-1"
+        role="architect"
+        onBack={jest.fn()}
+        openThread={jest.fn()}
+        openPerson={jest.fn()}
+        goView={jest.fn()}
+        notify={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument();
+  });
+
+  it('hides Edit for a party never folded into the rolodex', () => {
+    mockPersonData = basePerson({
+      person_id: 'party-1',
+      role: 'architect',
+      display_name: 'Dana Wu',
+      meta: {},
+    });
+    mockStudioContact = null;
+    renderWithClient(
+      <PersonProfile
+        personId="party-1"
+        role="architect"
+        onBack={jest.fn()}
+        openThread={jest.fn()}
+        openPerson={jest.fn()}
+        goView={jest.fn()}
+        notify={jest.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
   });
 });

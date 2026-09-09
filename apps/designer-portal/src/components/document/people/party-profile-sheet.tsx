@@ -12,6 +12,11 @@
  *     template provenance on outbound),
  *   · a "Send text" composer, disabled with explanatory copy until the party
  *     has opted in (consent 'granted').
+ *   · F3 — an "Edit" action turns the contact card into a form (Name /
+ *     Company / Trade / Phone / Email); Kind and Project stay read-only, and
+ *     Save patches only the changed fields via `useUpdateProjectParty`. This
+ *     never rewrites a project's historical roster rows — it edits the one
+ *     live `project_parties` row this sheet is already open on.
  *
  * Zero shadows (D4); typography-first; the Room beneath never unmounts (D1).
  */
@@ -28,9 +33,11 @@ import {
   useOrganizations,
   useProjectParties,
   useRecordPartySmsConsent,
+  useUpdateProjectParty,
   fieldLinkUrl,
   type PartyRole,
   type PartySmsMessage,
+  type UpdateProjectPartyPatch,
 } from '@patina/supabase';
 import {
   SMS_CONSENT_DISPLAY,
@@ -46,6 +53,10 @@ import { PromoteBand } from './promote-band';
 
 const META =
   'font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]';
+const EDIT_LABEL =
+  'mb-1 block font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]';
+const EDIT_INPUT =
+  'w-full rounded-[7px] border border-[var(--color-pearl)] bg-white px-3 py-2 text-[0.82rem] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none';
 
 function ConsentChip({ status }: { status: string | null | undefined }) {
   const cfg =
@@ -225,6 +236,78 @@ export function PartyProfileSheet({
     [role, trade, company, phone, person?.email, projectName],
   );
 
+  // F3 — the edit form. Kind and Project are never in this state (read-only
+  // in edit mode too); raw meta values feed it, not the humanized `trade`
+  // label above, so an untouched field round-trips exactly. Self-clears
+  // whenever a different party opens, same as the invite-to-texts state.
+  const [editing, setEditing] = useState(false);
+  const [editForm, setEditForm] = useState({
+    name: '',
+    company: '',
+    trade: '',
+    phone: '',
+    email: '',
+  });
+  const [editError, setEditError] = useState<string | null>(null);
+  const updateParty = useUpdateProjectParty();
+  useEffect(() => {
+    setEditing(false);
+    setEditError(null);
+  }, [partyId]);
+  // Snapshot the current record only at the moment editing opens — not on
+  // every `person` refetch — so an in-progress edit is never clobbered.
+  useEffect(() => {
+    if (!editing) return;
+    setEditForm({
+      name: person?.display_name ?? '',
+      company: (meta.company_name as string | undefined) ?? '',
+      trade: (meta.trade as string | undefined) ?? '',
+      phone: phone ?? '',
+      email: person?.email ?? '',
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editing]);
+
+  const saveParty = async () => {
+    if (!partyId || !person?.project_id) return;
+    setEditError(null);
+    const trimmedName = editForm.name.trim();
+    if (!trimmedName) {
+      setEditError('This party needs a name.');
+      return;
+    }
+    const originalCompany = (meta.company_name as string | undefined) ?? '';
+    const originalTrade = (meta.trade as string | undefined) ?? '';
+    const trimmedCompany = editForm.company.trim();
+    const trimmedTrade = editForm.trade.trim();
+    const trimmedPhone = editForm.phone.trim();
+    const trimmedEmail = editForm.email.trim();
+
+    const patch: UpdateProjectPartyPatch = {};
+    if (trimmedName !== (person?.display_name ?? '')) patch.displayName = trimmedName;
+    if (trimmedCompany !== originalCompany) patch.companyName = trimmedCompany || null;
+    if (trimmedTrade !== originalTrade) patch.trade = trimmedTrade || null;
+    if (trimmedPhone !== (phone ?? '')) patch.phone = trimmedPhone || null;
+    if (trimmedEmail !== (person?.email ?? '')) patch.email = trimmedEmail || null;
+
+    if (Object.keys(patch).length === 0) {
+      setEditing(false);
+      return;
+    }
+    try {
+      await updateParty.mutateAsync({
+        id: partyId,
+        projectId: person.project_id,
+        patch,
+      });
+      setEditing(false);
+    } catch (e) {
+      setEditError(
+        e instanceof Error ? e.message : 'Could not save just now. Try again.',
+      );
+    }
+  };
+
   const mint = async () => {
     if (!partyId) return;
     setLinkError(null);
@@ -322,19 +405,124 @@ export function PartyProfileSheet({
         />
       )}
 
-      {/* Contact card */}
-      <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-2 border-y border-[var(--color-pearl)] py-3">
-        {contact
-          .filter(([, v]) => !!v)
-          .map(([label, value]) => (
-            <div key={label}>
-              <dt className={META}>{label}</dt>
-              <dd className="text-[0.82rem] text-[var(--color-charcoal)]">
-                {value}
-              </dd>
-            </div>
-          ))}
-      </dl>
+      {/* Contact card — F3 turns into an edit form behind "Edit". Kind and
+          Project are read-only in both states. */}
+      {editing ? (
+        <div className="mt-4 space-y-3 border-y border-[var(--color-pearl)] py-3">
+          <p className={META}>
+            {getPartyKindLabel(role)}
+            {projectName ? ` · ${projectName}` : ''}
+          </p>
+          <div>
+            <label className={EDIT_LABEL} htmlFor="party-edit-name">
+              Name
+            </label>
+            <input
+              id="party-edit-name"
+              value={editForm.name}
+              onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
+              className={EDIT_INPUT}
+            />
+          </div>
+          <div>
+            <label className={EDIT_LABEL} htmlFor="party-edit-company">
+              Company
+            </label>
+            <input
+              id="party-edit-company"
+              value={editForm.company}
+              onChange={(e) => setEditForm((f) => ({ ...f, company: e.target.value }))}
+              className={EDIT_INPUT}
+            />
+          </div>
+          <div>
+            <label className={EDIT_LABEL} htmlFor="party-edit-trade">
+              Trade
+            </label>
+            <input
+              id="party-edit-trade"
+              value={editForm.trade}
+              onChange={(e) => setEditForm((f) => ({ ...f, trade: e.target.value }))}
+              className={EDIT_INPUT}
+            />
+          </div>
+          <div>
+            <label className={EDIT_LABEL} htmlFor="party-edit-phone">
+              Phone
+            </label>
+            <input
+              id="party-edit-phone"
+              type="tel"
+              value={editForm.phone}
+              onChange={(e) => setEditForm((f) => ({ ...f, phone: e.target.value }))}
+              className={EDIT_INPUT}
+            />
+          </div>
+          <div>
+            <label className={EDIT_LABEL} htmlFor="party-edit-email">
+              Email
+            </label>
+            <input
+              id="party-edit-email"
+              type="email"
+              value={editForm.email}
+              onChange={(e) => setEditForm((f) => ({ ...f, email: e.target.value }))}
+              className={EDIT_INPUT}
+            />
+          </div>
+          {editError && (
+            <p className="text-[0.7rem] text-[var(--color-terracotta-ink)]">{editError}</p>
+          )}
+          <DocumentActionRow
+            surfaceKey="people"
+            regionKey="party-details-editor"
+            aria-label="Field party edit actions"
+          >
+            <DocumentAction
+              actionKey="save-party-details"
+              variant="primary"
+              onClick={() => void saveParty()}
+              disabled={updateParty.isPending}
+              loading={updateParty.isPending}
+              loadingLabel="Saving…"
+            >
+              Save
+            </DocumentAction>
+            <DocumentAction
+              actionKey="cancel-party-details"
+              variant="tertiary"
+              onClick={() => setEditing(false)}
+            >
+              Cancel
+            </DocumentAction>
+          </DocumentActionRow>
+        </div>
+      ) : (
+        <>
+          <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-2 border-y border-[var(--color-pearl)] py-3">
+            {contact
+              .filter(([, v]) => !!v)
+              .map(([label, value]) => (
+                <div key={label}>
+                  <dt className={META}>{label}</dt>
+                  <dd className="text-[0.82rem] text-[var(--color-charcoal)]">
+                    {value}
+                  </dd>
+                </div>
+              ))}
+          </dl>
+          <DocumentAction
+            actionKey="edit-party-details"
+            surfaceKey="people"
+            regionKey="party-contact-card"
+            variant="secondary"
+            onClick={() => setEditing(true)}
+            className="mt-2"
+          >
+            Edit
+          </DocumentAction>
+        </>
+      )}
 
       {/* Field link — the no-auth "what's on me" link for the field party. */}
       <section className="mt-4">

@@ -41,6 +41,9 @@ jest.mock('@patina/supabase', () => ({
     mutate: recordConsentMutate,
     isPending: recordConsentState.isPending,
   }),
+  // F3 — the sheet's edit mode calls this unconditionally at render time now
+  // (not just on save); every mount of PartyProfileSheet needs it mocked.
+  useUpdateProjectParty: () => ({ mutateAsync: jest.fn(), isPending: false }),
   fieldLinkUrl: (token: string) => `https://patina.cloud/field/${token}`,
 }));
 

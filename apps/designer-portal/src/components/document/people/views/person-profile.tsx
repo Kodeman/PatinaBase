@@ -21,9 +21,16 @@
  * existing proposals, projects, decisions, threads, touchpoints, and reviews —
  * never a stored activity log (R51). Reuses Avatar/RoleBadge from person-bits.
  * Zero shadows (D4), strict focus (D1), typography-first.
+ *
+ * F3 — a profile actually backed by a live `studio_contacts` card — the pure
+ * rolodex branch (role 'contact', where person_id IS the studio_contacts id)
+ * or a network/team party folded into the rolodex (`meta.studio_contact_id`)
+ * — gets "Edit" via `RolodexEditAction`, which opens AddPersonSheet in its
+ * edit mode. Hidden for an archived card; makers stay read-only
+ * (vendor-owned, R78).
  */
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   useClient,
@@ -34,6 +41,7 @@ import {
   usePerson,
   useProposals,
   useStartDirectThread,
+  useStudioContact,
   useThreads,
   type ClientDecision,
   type PartyRole,
@@ -60,6 +68,50 @@ import {
   TrustCard,
   type ProfileProjectRow,
 } from '../profile/profile-cards';
+import { AddPersonSheet } from '../directory/add-person-sheet';
+
+/** F3 — the id of the `studio_contacts` row backing this profile, when there
+ *  is one: the pure rolodex branch's own id (role 'contact'), or the
+ *  lineage FK a network/team party carries once folded into the rolodex
+ *  (`meta.studio_contact_id`, 00418/00419). Null for a party never promoted
+ *  in, and for roles the rolodex never touches (client/lead/maker/team). */
+function backingStudioContactId(
+  role: PartyRole,
+  personId: string,
+  meta: Record<string, unknown>,
+): string | null {
+  if (role === 'contact') return personId;
+  const id = meta['studio_contact_id'];
+  return typeof id === 'string' && id ? id : null;
+}
+
+/** F3 — the rolodex "Edit" action: shown only once the backing card is known
+ *  to be live (loaded, not archived). Opens AddPersonSheet in edit mode. */
+function RolodexEditAction({
+  studioContactId,
+  notify,
+}: {
+  studioContactId: string | null;
+  notify: (m: string) => void;
+}) {
+  const { data: contact } = useStudioContact(studioContactId);
+  const [open, setOpen] = useState(false);
+  if (!studioContactId || !contact || contact.archived_at) return null;
+  return (
+    <>
+      <ActionButton actionKey="edit-rolodex-card" label="Edit" onClick={() => setOpen(true)} />
+      <AddPersonSheet
+        open={open}
+        onClose={() => setOpen(false)}
+        contact={contact}
+        onSaved={(message) => {
+          notify(message);
+          setOpen(false);
+        }}
+      />
+    </>
+  );
+}
 
 /** The winning option's label on a resolved selection decision, if any. */
 function chosenLabel(d: ClientDecision): string | null {
@@ -542,6 +594,7 @@ function NetworkProfile({
     : [];
 
   const isGc = role === 'gc';
+  const studioContactId = backingStudioContactId(role, personId, meta);
 
   return (
     <>
@@ -570,6 +623,7 @@ function NetworkProfile({
                 onClick={() => router.push(`/doc/${projectId}`)}
               />
             )}
+            <RolodexEditAction studioContactId={studioContactId} notify={notify} />
           </>
         }
       />
@@ -641,6 +695,7 @@ function buildNetworkTrack(
 // ─── TEAM profile (the colophon) ────────────────────────────────────────────
 
 function TeamProfile({
+  personId,
   role,
   name,
   email,
@@ -651,6 +706,7 @@ function TeamProfile({
   onBack,
   notify,
 }: {
+  personId: string;
   role: PartyRole;
   name: string;
   email: string | null;
@@ -666,6 +722,7 @@ function TeamProfile({
     statusRaw ?? (meta['role'] as string) ?? null,
   );
   const projectName = (meta['project_name'] as string) ?? null;
+  const studioContactId = backingStudioContactId(role, personId, meta);
 
   return (
     <>
@@ -676,15 +733,18 @@ function TeamProfile({
         email={email}
         phone={phone}
         actions={
-          <ActionButton
-            actionKey="adjust-person-visibility"
-            label="Adjust visibility"
-            onClick={() =>
-              notify(
-                `Opens this teammate's document access — margin visibility is set per document in studio settings.`,
-              )
-            }
-          />
+          <>
+            <ActionButton
+              actionKey="adjust-person-visibility"
+              label="Adjust visibility"
+              onClick={() =>
+                notify(
+                  `Opens this teammate's document access — margin visibility is set per document in studio settings.`,
+                )
+              }
+            />
+            <RolodexEditAction studioContactId={studioContactId} notify={notify} />
+          </>
         }
       />
 
