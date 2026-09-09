@@ -137,13 +137,24 @@ function JobLine({
           line.mark ? { backgroundColor: MARK_COLOR[line.mark] } : undefined
         }
       />
+      {/* The name WRAPS, never truncates (the sheet's own rule). A flex child's
+          min-width is auto, so without `min-w-0` a long job name sets the row's
+          minimum width and the whole Desk scrolls sideways at 390;
+          `[overflow-wrap:anywhere]` is what lets a name with no space in it
+          break rather than push. */}
       <Link
         href={line.jobHref}
-        className="row-wash-score font-heading text-[16px] font-medium text-[var(--text-primary)] no-underline transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none"
+        data-roster-name
+        className="row-wash-score min-w-0 font-heading text-[16px] font-medium text-[var(--text-primary)] no-underline transition-colors [overflow-wrap:anywhere] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none"
       >
         {line.name}
       </Link>
-      <p className="doc-type-body min-w-0 flex-1 text-[var(--text-muted)]">
+      {/* `min-w-0` lets this sentence be squeezed to nothing so the name gets
+          its room — which means its OWN longest word then overflows the box it
+          was squeezed into, and the page scrolls sideways at 390 whatever the
+          name does. Measured on the seed: names alone left the Desk at
+          scrollWidth 437/390; wrapping this sentence too lands it at 390/390. */}
+      <p className="doc-type-body min-w-0 flex-1 text-[var(--text-muted)] [overflow-wrap:anywhere]">
         {line.state}
         {line.overdueText && (
           <>

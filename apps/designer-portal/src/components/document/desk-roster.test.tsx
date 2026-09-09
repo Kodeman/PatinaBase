@@ -128,6 +128,41 @@ describe('DeskRoster — the density rule', () => {
     expect(container.querySelector('[hidden]')).toBeNull();
   });
 
+  it('lets a long job name wrap instead of widening the page (390)', () => {
+    // A flex child's min-width is auto, so an unbreakable name sets the row's
+    // minimum width and the whole Desk scrolls sideways at 390. `min-w-0` plus
+    // an overflow-wrap lets it WRAP — never truncate, which the sheet forbids.
+    const { container } = render(<DeskRoster roster={roster()} />);
+    const names = container.querySelectorAll('[data-roster-name]');
+    expect(names).toHaveLength(2);
+    for (const name of names) {
+      expect(name.className).toContain('min-w-0');
+      expect(name.className).toContain('[overflow-wrap:anywhere]');
+      expect(name.className).not.toContain('truncate');
+      expect(name.className).not.toContain('whitespace-nowrap');
+    }
+    // and the sentence beside it can still give the name its room.
+    for (const line of container.querySelectorAll('[data-roster-line]')) {
+      expect(line.querySelector('p')!.className).toContain('min-w-0');
+    }
+  });
+
+  it('lets the state sentence wrap too, or the row still widens the page (390)', () => {
+    // The sentence is `min-w-0 flex-1`: it yields its width to the name and is
+    // then narrower than its own longest word. Without a wrap of its own that
+    // word overflows and the Desk scrolls sideways at 390 — measured 437/390
+    // with the name already wrapping, 390/390 once the sentence wraps as well.
+    const { container } = render(<DeskRoster roster={roster()} />);
+    const lines = container.querySelectorAll('[data-roster-line]');
+    expect(lines).toHaveLength(2);
+    for (const line of lines) {
+      const sentence = line.querySelector('p')!;
+      expect(sentence.className).toContain('[overflow-wrap:anywhere]');
+      expect(sentence.className).not.toContain('truncate');
+      expect(sentence.className).not.toContain('whitespace-nowrap');
+    }
+  });
+
   it('never prints a badge or a count beside a job', () => {
     const { container } = render(<DeskRoster roster={roster()} />);
 
@@ -488,7 +523,7 @@ describe('DeskRoster — the day’s line (IA-05)', () => {
 
     const lead = container.querySelector('[data-day-line="lead"]')!;
     expect(lead.textContent).toBe(
-      'Marcus Wright · New lead — respond by Aug 27',
+      'Marcus Wright · new lead — respond by 27 August',
     );
     expect(
       within(lead as HTMLElement).getByRole('link', {

@@ -9,8 +9,9 @@
  *
  * eslint reads `.ts`/`.tsx` only and no stylelint config exists in this repo,
  * so nothing but this suite can see a rule that hides itself at rest. It reads
- * globals.css the way `shadow-gate.test.ts` does, and it names its one
- * remaining exception rather than filtering it away.
+ * globals.css the way `shadow-gate.test.ts` does. It once named one remaining
+ * exception (`.da-score-hover`); that rule now rests visible too, so the
+ * contract is simply that there is none.
  */
 
 import { readFileSync } from "node:fs";
@@ -69,14 +70,32 @@ describe("PP-3 · the rest rule is unconditional", () => {
     expect(hidden).toEqual([]);
   });
 
-  it("names the one .da-* rest rule still drawn at scaleX(0)", () => {
-    // The ad-hoc score kit worn by ~30 non-DocumentAction controls. It carries
-    // the same defect and is not this lane's to change; frozen here by name so
-    // it cannot be joined by a second, and so the debt stays visible.
+  it("leaves NO .da-* rest rule drawn at scaleX(0) — the exception is gone", () => {
+    // `.da-score-hover` — the ad-hoc score kit worn by ~30 non-DocumentAction
+    // controls — was the one rule this suite used to name as a frozen
+    // exception. It now rests visible like every other tier, so the list is
+    // empty and a re-introduced scaleX(0) rest fails here by name.
     const hidden = restRulesTouching(/\.da-/)
       .filter((rule) => /transform\s*:[^;]*scaleX\(\s*0\s*\)/.test(rule.body))
       .map((rule) => rule.selector);
-    expect(hidden).toEqual([".da-score-hover::after"]);
+    expect(hidden).toEqual([]);
+  });
+
+  it("rests the ad-hoc score on aged oak and raises it to clay", () => {
+    const [rest] = restRulesTouching(/^\.da-score-hover::after$/);
+    expect(rest).toBeDefined();
+    expect(rest!.body).toMatch(
+      /background-color:\s*var\(--color-aged-oak\)/,
+    );
+    expect(rest!.body).not.toMatch(/scaleX/);
+
+    const raised = ALL_RULES.find(
+      (rule) =>
+        /\.da-score-hover:hover::after/.test(rule.selector) &&
+        /\.da-score-hover:focus-visible::after/.test(rule.selector),
+    );
+    expect(raised).toBeDefined();
+    expect(raised!.body).toMatch(/background-color:\s*var\(--color-clay\)/);
   });
 
   it("rests the tertiary and secondary scores on aged oak", () => {

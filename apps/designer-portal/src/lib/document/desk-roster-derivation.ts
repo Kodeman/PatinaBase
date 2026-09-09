@@ -18,6 +18,7 @@ import {
   type NeedKind,
   type SectionKey,
 } from './desk-derivation';
+import { dayMonth } from './dates';
 import {
   deriveOverdue,
   overdueElapsedPhrase,
@@ -392,6 +393,10 @@ export interface DeskDayLine {
 
 export const MAX_DAY_LINES = 3;
 
+/** The lead line's fixed half — sentence-cased inside its own sentence, the
+ *  way the specimen sets it (`designer-desk.html:776`). */
+const LEAD_SENTENCE = 'new lead — respond by';
+
 /** "Replied last night" is only true inside a day. */
 export const ANSWERED_NOTE_WINDOW_MS = 86_400_000;
 
@@ -454,9 +459,12 @@ export function deriveDeskDayLine(
     });
   }
 
-  // (b) The earliest lead deadline. The need already wrote the sentence
-  // ("New lead — respond by Sep 10"); the day's line borrows it rather than
-  // writing a second one that could drift from it.
+  // (b) The earliest lead deadline, said the way the specimen says it:
+  // "Marcus Wright · new lead — respond by 10 September". The line writes its
+  // own sentence off `dueOn` rather than borrowing the need's, because the
+  // need's is dated in the Desk's older idiom (`Sep 10`) and PP-2 gives this
+  // surface one date style. The date is the only variable in it, so there is
+  // nothing here that can drift from the need except the day itself.
   //
   // 'reconnect_due' is deliberately NOT here. It shares `lead_response_deadline`
   // with 'new_lead' in `needSortKey`, but the specimen and §F item 5 both say
@@ -466,8 +474,7 @@ export function deriveDeskDayLine(
     .filter(
       (entry) =>
         entry.line.needKind === 'new_lead' &&
-        !!entry.line.dueOn &&
-        !!entry.line.needText &&
+        !!dayMonth(entry.line.dueOn) &&
         !taken.has(entry.line.engagementId),
     )
     .sort(byDueThenId)[0];
@@ -479,13 +486,17 @@ export function deriveDeskDayLine(
       parts: [
         // The person, not the job: this line answers "who am I keeping
         // waiting". The job name stands in only where the row has no named
-        // client, since `clientOf` refuses a placeholder for a real name.
+        // client, since `clientOf` refuses a placeholder for a real name — and
+        // the job title is never printed a second time beside it.
         {
           kind: 'job',
           text: lead.line.client ?? lead.line.name,
           engagementId: lead.line.engagementId,
         },
-        { kind: 'text', text: ` · ${lead.line.needText}` },
+        {
+          kind: 'text',
+          text: ` · ${LEAD_SENTENCE} ${dayMonth(lead.line.dueOn)}`,
+        },
       ],
     });
   }

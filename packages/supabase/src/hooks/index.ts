@@ -718,7 +718,10 @@ export type {
   RoomScanStyleSignals,
   RoomScanFilters,
 } from "./use-room-scans";
-export type { RoomScanOwnerKind, RoomScanWithProvenance } from "./use-room-scans";
+export type {
+  RoomScanOwnerKind,
+  RoomScanWithProvenance,
+} from "./use-room-scans";
 export {
   useRoomScanPhotos,
   useRoomScanCovers,
@@ -1606,9 +1609,7 @@ export type {
   BoardItemFeedbackRow,
 } from "./board-verdicts";
 export { useBoardReactionStatuses } from "./use-board-reaction-status";
-export {
-  useBoardsReactionRollup,
-} from "./use-board-reaction-rollup";
+export { useBoardsReactionRollup } from "./use-board-reaction-rollup";
 export type {
   BoardReactionRollupEntry,
   BoardsReactionRollup,
@@ -2077,14 +2078,20 @@ export {
 export type { MarkProjectReadInput } from "./use-reading-marks";
 export {
   useRoomConceptRender,
+  useRoomConceptRenderRecord,
+  useRemoveRoomConceptRender,
   roomConceptRenderPath,
   roomConceptRenderRoomsKey,
   roomConceptRenderThresholdKey,
+  roomConceptRenderRecordKey,
   ROOM_RENDERS_BUCKET,
   ROOM_RENDER_MAX_BYTES,
   ROOM_RENDER_MIME_TYPES,
+  ROOM_CONCEPT_RENDER_SIGNED_URL_SECONDS,
 } from "./use-room-concept-render";
 export type {
   UploadRoomConceptRenderInput,
   UploadRoomConceptRenderResult,
+  RoomConceptRenderRecord,
+  RemoveRoomConceptRenderInput,
 } from "./use-room-concept-render";
