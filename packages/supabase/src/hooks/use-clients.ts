@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
+import { peopleKeys } from './use-people';
 
 // Lazy client getter to avoid module-level initialization during SSR
 const getSupabase = () => createBrowserClient();
@@ -390,6 +391,10 @@ export function useUpdateClientContact() {
       queryClient.invalidateQueries({ queryKey: ['designer-client', clientId] });
       queryClient.invalidateQueries({ queryKey: ['document-state'] });
       queryClient.invalidateQueries({ queryKey: ['desk-engagements'] });
+      // F3-R1-03: the People Room reads this same edit through people_directory
+      // (the client branch) — without this, the profile head and Directory row
+      // keep showing the pre-edit name/email/phone after a successful save.
+      queryClient.invalidateQueries({ queryKey: peopleKeys.all });
     },
   });
 }

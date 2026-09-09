@@ -473,6 +473,20 @@ export interface UpdateProjectPartyInput {
   patch: Partial<UpdateProjectPartyPatch>;
 }
 
+/** The five evidence columns `fc_dispatch_optin_invite` (00432) reads, plus
+ *  `sms_consent_status` — the exact six-column bundle every write (and every
+ *  not_asked revert) sets together. Shared by `useUpdateProjectParty`'s
+ *  phone-change revert below and `useRecordPartySmsConsent`'s own reverts
+ *  further down this file. */
+const NOT_ASKED_CONSENT_COLUMNS = {
+  sms_consent_status: 'not_asked' as const,
+  sms_consent_source: null,
+  sms_consent_evidence: null,
+  sms_consent_recorded_at: null,
+  sms_consent_recorded_by: null,
+  sms_consent_disclosure_version: null,
+};
+
 /**
  * Edit a project_parties row in place (Call Sheet Wave 3 — roster-row unfold:
  * rename, re-trade, re-phone/email, toggle SHOW TO CLIENT, or re-point the
@@ -480,6 +494,15 @@ export interface UpdateProjectPartyInput {
  * read models (project-parties, project-roster) plus the People Room, since a
  * studio_contact_id change or a display-name edit can move where this row
  * surfaces there.
+ *
+ * F3-R1-02 / F3-R1-12 — a phone edit reverts SMS consent to `not_asked`
+ * (the same six-column bundle `useRecordPartySmsConsent` writes), whatever the
+ * prior state: a `granted` party must not keep a texting-enabled state for a
+ * number that never consented, and an `opted_out` party's new number — which
+ * never opted out — must not be stranded un-inviteable behind the old one's
+ * STOP. The caller only ever sends `patch.phone` when it actually changed
+ * (both edit forms diff against the record first), so this never fires on an
+ * unrelated save.
  */
 export function useUpdateProjectParty() {
   const queryClient = useQueryClient();
@@ -491,7 +514,10 @@ export function useUpdateProjectParty() {
       if (patch.displayName !== undefined) dbPatch.display_name = patch.displayName;
       if (patch.companyName !== undefined) dbPatch.company_name = patch.companyName?.trim() || null;
       if (patch.trade !== undefined) dbPatch.trade = patch.trade?.trim() || null;
-      if (patch.phone !== undefined) dbPatch.phone = patch.phone?.trim() || null;
+      if (patch.phone !== undefined) {
+        dbPatch.phone = patch.phone?.trim() || null;
+        Object.assign(dbPatch, NOT_ASKED_CONSENT_COLUMNS);
+      }
       if (patch.email !== undefined) dbPatch.email = patch.email?.trim() || null;
       if (patch.showToClient !== undefined) dbPatch.show_to_client = patch.showToClient;
       if (patch.studioContactId !== undefined) dbPatch.studio_contact_id = patch.studioContactId;
@@ -525,18 +551,6 @@ export interface RecordPartySmsConsentInput {
   smsConsentSource: 'verbal' | 'written' | 'web_form' | 'other';
   smsConsentEvidence: string;
 }
-
-/** The five evidence columns `fc_dispatch_optin_invite` (00432) reads, plus
- *  `sms_consent_status` — the exact six-column bundle every write (and every
- *  not_asked revert) in this hook sets together. */
-const NOT_ASKED_CONSENT_COLUMNS = {
-  sms_consent_status: 'not_asked' as const,
-  sms_consent_source: null,
-  sms_consent_evidence: null,
-  sms_consent_recorded_at: null,
-  sms_consent_recorded_by: null,
-  sms_consent_disclosure_version: null,
-};
 
 /**
  * Invite an EXISTING party to texts — the only writer of consent columns
