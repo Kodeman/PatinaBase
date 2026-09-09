@@ -141,8 +141,8 @@ export function LetterLineField({
         type="button"
         data-testid="letter-line-disclosure"
         onClick={() => {
-          setOpen(true);
           onOpen?.();
+          setOpen(true);
         }}
         className="mt-3 inline-flex min-h-11 items-center text-[0.74rem] text-[var(--color-mocha)] underline underline-offset-4"
       >

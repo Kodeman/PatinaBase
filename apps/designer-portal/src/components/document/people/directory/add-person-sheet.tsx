@@ -33,6 +33,7 @@ import {
 } from '@patina/supabase';
 import { ALL_FIELD_TRADES, FIELD_TRADE_LABELS } from '@patina/types';
 import { useProjects } from '@/hooks/use-projects';
+import { useAuth } from '@/hooks/use-auth';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { clientEvents } from '@/lib/analytics/events';
 import { DocumentAction, DocumentActionGroup } from '../../document-action';
@@ -148,6 +149,7 @@ export function AddPersonSheet({
   onGoToLeads?: () => void;
 }) {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const addClient = useAddClient();
   // R83: this sheet renders failures inline — keep the global toast silent.
   const findOrCreateVendor = useFindOrCreateVendor({ errorSurface: 'inline' });
@@ -176,7 +178,7 @@ export function AddPersonSheet({
   const [invite, setInvite] = useState(true);
   const [note, setNote] = useState('');
   const { value: letterOn, isLoading: letterLoading } = useFeatureFlag('client-invite-letter');
-  const { data: studioIdentity } = useStudioIdentity({ designerId: undefined });
+  const { data: studioIdentity } = useStudioIdentity({ designerId: user?.id ?? null });
   const studioName = studioIdentity?.name ?? null;
   const clientGiven = givenNameOf(name);
   // Maker fields (R78: name · specialty · orders email · website).

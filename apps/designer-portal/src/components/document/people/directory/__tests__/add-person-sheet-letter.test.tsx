@@ -9,6 +9,10 @@ jest.mock('@/hooks/use-feature-flag', () => ({
   useFeatureFlag: () => flagValue,
 }));
 
+jest.mock('@/hooks/use-auth', () => ({
+  useAuth: () => ({ user: { id: 'designer-1' } }),
+}));
+
 jest.mock('@patina/supabase', () => ({
   ...jest.requireActual('@patina/supabase'),
   useAddClient: () => ({ mutateAsync, isPending: false }),
