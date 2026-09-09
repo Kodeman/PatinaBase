@@ -1,7 +1,7 @@
 /**
  * @jest-environment node
  *
- * sendTheLetter's project-access guard (route.ts:368-391): a projectId in the
+ * sendTheLetter's project-access guard (send-the-letter.ts): a projectId in the
  * body must not let a caller unrelated to that project's studio drive a
  * cross-studio send. Mirrors is_active_org_member (00556) — role <> 'guest'
  * AND organizations.status = 'active' — since this route only holds a
@@ -9,7 +9,7 @@
  * auth.uid(), which is null under the service role).
  */
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { sendTheLetter } from '../route';
+import { sendTheLetter } from '../send-the-letter';
 
 function chainable(
   terminalResult: { data?: unknown; error?: unknown },
