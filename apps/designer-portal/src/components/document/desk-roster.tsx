@@ -149,7 +149,12 @@ function JobLine({
       >
         {line.name}
       </Link>
-      <p className="doc-type-body min-w-0 flex-1 text-[var(--text-muted)]">
+      {/* `min-w-0` lets this sentence be squeezed to nothing so the name gets
+          its room — which means its OWN longest word then overflows the box it
+          was squeezed into, and the page scrolls sideways at 390 whatever the
+          name does. Measured on the seed: names alone left the Desk at
+          scrollWidth 437/390; wrapping this sentence too lands it at 390/390. */}
+      <p className="doc-type-body min-w-0 flex-1 text-[var(--text-muted)] [overflow-wrap:anywhere]">
         {line.state}
         {line.overdueText && (
           <>

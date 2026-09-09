@@ -147,6 +147,22 @@ describe('DeskRoster — the density rule', () => {
     }
   });
 
+  it('lets the state sentence wrap too, or the row still widens the page (390)', () => {
+    // The sentence is `min-w-0 flex-1`: it yields its width to the name and is
+    // then narrower than its own longest word. Without a wrap of its own that
+    // word overflows and the Desk scrolls sideways at 390 — measured 437/390
+    // with the name already wrapping, 390/390 once the sentence wraps as well.
+    const { container } = render(<DeskRoster roster={roster()} />);
+    const lines = container.querySelectorAll('[data-roster-line]');
+    expect(lines).toHaveLength(2);
+    for (const line of lines) {
+      const sentence = line.querySelector('p')!;
+      expect(sentence.className).toContain('[overflow-wrap:anywhere]');
+      expect(sentence.className).not.toContain('truncate');
+      expect(sentence.className).not.toContain('whitespace-nowrap');
+    }
+  });
+
   it('never prints a badge or a count beside a job', () => {
     const { container } = render(<DeskRoster roster={roster()} />);
 
