@@ -3,6 +3,7 @@
  * Deliberately imports nothing from components or @patina/help-system
  * (the stages.ts → help-system → @portabletext ESM trap).
  */
+import { dayMonth } from '../dates';
 import {
   deriveNeed,
   folderTab,
@@ -409,9 +410,8 @@ describe('deriveNeed — overdue_invoice carries the receivable figure (B2-03)',
     expect(need!.text).toContain('$17,500');
     expect(need!.text).toBe(
       'Invoice 0418 · $17,500 overdue — oldest due ' +
-        new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(
-          new Date(daysAgo(22)),
-        ) +
+        // PP-2 / R140 — the Desk states a day in one idiom, "11 September".
+        dayMonth(daysAgo(22)) +
         ' — send a reminder',
     );
   });

@@ -56,25 +56,25 @@ describe('W4-R1 quiet status lines', () => {
 
     it('prints the install day and how far out it stands', () => {
       expect(scheduleQuietStatus({ installStart: '2026-09-19', now })).toBe(
-        'Install Sep 19 · 3 weeks out',
+        'Install 19 September · 3 weeks out',
       );
     });
 
     it('counts in days inside a fortnight, and names today and tomorrow', () => {
       expect(scheduleQuietStatus({ installStart: '2026-09-05', now })).toBe(
-        'Install Sep 5 · 7 days out',
+        'Install 5 September · 7 days out',
       );
       expect(scheduleQuietStatus({ installStart: '2026-08-29', now })).toBe(
-        'Install Aug 29 · today',
+        'Install 29 August · today',
       );
       expect(scheduleQuietStatus({ installStart: '2026-08-30', now })).toBe(
-        'Install Aug 30 · tomorrow',
+        'Install 30 August · tomorrow',
       );
     });
 
     it('turns to Installed once the day has passed, with no tail', () => {
       expect(scheduleQuietStatus({ installStart: '2026-08-01', now })).toBe(
-        'Installed Aug 1',
+        'Installed 1 August',
       );
     });
 
@@ -89,7 +89,7 @@ describe('W4-R1 quiet status lines', () => {
 
     it('reads a bare DATE column as LOCAL midnight, so the day never slips', () => {
       expect(scheduleQuietStatus({ installStart: '2026-09-19', now })).toContain(
-        'Sep 19',
+        '19 September',
       );
     });
   });

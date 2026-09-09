@@ -171,7 +171,7 @@ describe('deriveDocumentGuide', () => {
       },
     });
 
-    expect(dated.headline).toBe('Install is three weeks out — Tuesday, September 15');
+    expect(dated.headline).toBe('Install is three weeks out — Tuesday, 15 September');
     // A3-L7 — a known install day with no need firing IS the install rest
     // state ("Install day is {date}." / "Hold the window"), so the act
     // changes even though the dated headline template itself does not.
@@ -208,7 +208,7 @@ describe('deriveDocumentGuide', () => {
     });
 
     // The DAY the row carries, never the wall's relative prose.
-    expect(guide.headline).toBe('Sent Aug 9 · not opened yet');
+    expect(guide.headline).toBe('Sent 9 August · not opened yet');
     expect(guide.action).toEqual({
       key: 'nudge-client',
       label: 'Nudge Avery Stone',
@@ -227,7 +227,7 @@ describe('deriveDocumentGuide', () => {
       },
     });
 
-    expect(guide.headline).toBe('Sent Aug 9 · not opened yet');
+    expect(guide.headline).toBe('Sent 9 August · not opened yet');
     expect(guide.action?.label).toBe('Review signing controls');
   });
 
@@ -268,7 +268,7 @@ describe('deriveDocumentGuide', () => {
       } as never,
     });
 
-    expect(guide.headline).toBe('Install is ten days out — Friday, September 4');
+    expect(guide.headline).toBe('Install is ten days out — Friday, 4 September');
   });
 
   it('never reports a paper handover as unopened', () => {

@@ -251,7 +251,7 @@ describe("commercial status treatment", () => {
         clientSignedOnPaper: true,
         clientPaperSignedOn: "2026-01-15",
       }).description,
-    ).toContain("Signed Jan 15, 2026 on paper · recorded by the studio.");
+    ).toContain("Signed 15 January 2026 on paper · recorded by the studio.");
   });
 
   it("keeps the undated phrase when it does not", () => {
@@ -282,7 +282,7 @@ describe("signedOnPaperNote", () => {
 
   it("prints the calendar day it was given, undisturbed by the reader's timezone", () => {
     expect(signedOnPaperNote("2026-02-10")).toBe(
-      "Signed Feb 10, 2026 on paper · recorded by the studio.",
+      "Signed 10 February 2026 on paper · recorded by the studio.",
     );
   });
 

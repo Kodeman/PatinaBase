@@ -77,7 +77,7 @@ describe('the client mirror marks an answered approval in mocha', () => {
     renderMirror();
 
     const mark = screen.getByText(/^answered/);
-    expect(mark.textContent).toBe('answered · Sep 2');
+    expect(mark.textContent).toBe('answered · 2 September');
     expect(mark.textContent).not.toMatch(/[✓✔]/u);
   });
 

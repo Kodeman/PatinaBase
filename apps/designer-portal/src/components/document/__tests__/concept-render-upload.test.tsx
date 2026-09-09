@@ -193,7 +193,7 @@ describe('the concept-render act at the room heading', () => {
     mount();
 
     expect(
-      await screen.findByText('Concept render · Late-afternoon view · uploaded Sep 8'),
+      await screen.findByText('Concept render · Late-afternoon view · uploaded 8 September'),
     ).toBeInTheDocument();
     expect(screen.getByAltText('Late-afternoon view')).toHaveAttribute(
       'src',
@@ -251,7 +251,7 @@ describe('the concept-render act at the room heading', () => {
       'The render did not upload. Nothing on the page has changed.',
     );
     expect(
-      screen.getByText('Concept render · Late-afternoon view · uploaded Sep 8'),
+      screen.getByText('Concept render · Late-afternoon view · uploaded 8 September'),
     ).toBeInTheDocument();
     expect(screen.getByAltText('Late-afternoon view')).toBeInTheDocument();
   });
