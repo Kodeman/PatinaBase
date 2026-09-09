@@ -566,6 +566,141 @@
   }
 }
 
+/* ── R143 · The Claim card and the at-rest ledger ────────────────────────────
+   A card is a treatment for NEED, not a container for a job. Structure lives
+   here rather than in arbitrary Tailwind because four of these rules cannot be
+   written as utilities: the :has() focus wrap, the 899px collapse (not a
+   Tailwind breakpoint), the forced-colors block, and pointer-events on the
+   link zone. Colour and spacing stay on the components as classes. ────────── */
+
+.desk-claims-grid {
+  display: grid;
+  gap: 24px;
+  align-items: start;             /* a quiet card IS shorter, and says so */
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (min-width: 640px) {
+  .desk-claims-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (min-width: 1024px) {
+  .desk-claims-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+.desk-claim-card {
+  position: relative;
+  background: var(--doc-paper);
+  /* D4/R144 — the one boundary grey, 3.21:1 on this face. D4a: cards only. */
+  border: 1px solid var(--color-card-edge);
+  border-radius: 2px;
+  padding: 20px 20px 0;
+  overflow: hidden;               /* clips the wash's circle to the card */
+}
+.desk-claim-card > *:not(.row-wash) { position: relative; }
+
+/* D10 — the WHOLE upper block is the link, not the name inside it: the
+   roster's name link was the Desk's one sub-44px target. The overlay is the
+   name link's own ::before, sized against .desk-claim-upper, so there is one
+   accessible name and no nested interactive content.
+
+   The stage plate, the custody row and the person line take pointer-events:
+   none, so a click anywhere in the block reaches that overlay. They are
+   therefore NOT selectable — the deliberate cost recorded in R143. Raising
+   them with z-index instead would make the middle of a single target dead,
+   which is a failure a user can neither see nor explain. The need sentence
+   below the block keeps pointer events and stays selectable, as does every
+   word of the at-rest ledger row. */
+.desk-claim-upper { position: relative; min-height: 88px; display: flex; flex-direction: column; }
+.desk-claim-upper [data-claim-inert] { pointer-events: none; }
+.desk-claim-upper [data-roster-name]::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 2px;
+}
+
+.desk-claim-sentence,
+.desk-claim-band { position: relative; z-index: 2; }
+.desk-claim-band {
+  margin-top: 16px;
+  /* The LIGHTER rule (the specimen's --hairline). --rule-hair is a full
+     shorthand value, so it is spent whole, never `1px solid var(--rule-hair)`. */
+  border-top: var(--rule-hair);
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
+.desk-claim-band .da-act { width: 100%; justify-content: flex-start; }
+/* Phone: no hover, so the act's own box carries the whole affordance. */
+@media (max-width: 639px) {
+  .desk-claim-band { min-height: 48px; }
+}
+
+/* The ring is drawn around the whole zone, so focus REVEALS the click area
+   rather than outlining a word inside it. */
+@supports selector(:has(*)) {
+  .desk-claim-upper:has([data-roster-name]:focus-visible) {
+    outline: 2px solid var(--color-clay-ink);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+  .desk-claim-upper:has([data-roster-name]:focus-visible)
+    [data-roster-name]:focus-visible { outline: none; }
+  /* .row-wash-score fires on CARD hover, so hovering the act would also light
+     the name. Two lit targets is a lie about where the click will land. */
+  .desk-claim-card:has(.da-act:hover) .row-wash-score::after {
+    background: var(--color-aged-oak);
+  }
+}
+
+.desk-ledger-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 24px 320px minmax(0, 1fr) 132px 96px;
+  align-items: baseline;
+  column-gap: 24px;
+  padding: 24px 0;
+  border-top: 1px solid var(--doc-ink-border);
+  background: transparent;   /* D4a — a row is not a component boundary */
+  overflow: hidden;          /* clips the wash's circle to the row */
+}
+/* The wash sits at z-index:-1 inside the row's own stacking context; giving
+   the cells a position keeps them painting above it at every browser, and is
+   what the specimen does. */
+.desk-ledger-row > *:not(.row-wash) { position: relative; }
+.desk-ledger-row [data-ledger-cell='sentence'] { max-width: 44ch; }
+.desk-ledger-row [data-ledger-cell='value'],
+.desk-ledger-row [data-ledger-cell='act'] { text-align: right; }
+.desk-ledger-row [data-ledger-cell='mark'] { align-self: start; margin-top: 9px; }
+
+/* The ledger degrades back into the roster row it came from. */
+@media (max-width: 899px) {
+  .desk-ledger-row {
+    grid-template-columns: 16px minmax(0, 1fr);
+    row-gap: 12px;
+    column-gap: 12px;
+  }
+  .desk-ledger-row > *:not(.row-wash) { grid-column: 2; }
+  .desk-ledger-row [data-ledger-cell='mark'] { grid-column: 1; }
+  .desk-ledger-row [data-ledger-cell='sentence'] { max-width: none; }
+  .desk-ledger-row [data-ledger-cell='value'] { text-align: left; }
+}
+
+/* F9 — the portal's first forced-colors block. In High Contrast a mark drawn
+   as a background on an empty span vanishes entirely, and the wash repaints as
+   a solid fill over the words. */
+@media (forced-colors: active) {
+  [data-roster-mark] {
+    forced-color-adjust: none;
+    background: transparent !important;
+    border: 3.5px solid currentColor;
+  }
+  .row-wash { display: none; }
+  .desk-claim-card, .desk-ledger-row { border-color: CanvasText; }
+  .desk-claim-upper:has([data-roster-name]:focus-visible) {
+    outline-color: Highlight;
+  }
+}
+
 /* The Scored Ink (I107) — DocumentAction grammar. Proof Sheet No 001 Proof VI.
    Interaction-triggered only (R15); no shadows (D4); .da-act owns the honest
    44px target while .da-hit remains its invisible contract witness.
