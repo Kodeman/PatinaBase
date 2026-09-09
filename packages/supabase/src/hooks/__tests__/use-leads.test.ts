@@ -226,6 +226,30 @@ describe('useAcceptLead — manual lead, idempotent on idx_designer_clients_uniq
     ).toBe(false);
   });
 
+  it('leaves a phone already on the household alone (the row\'s number outranks the lead\'s)', async () => {
+    setTableQueue('leads', [
+      { data: MANUAL_LEAD, error: null },
+      { data: null, error: null },
+    ]);
+
+    const dc = setTableQueue('designer_clients', [
+      { data: null, error: null },
+      { data: { id: 'client-existing', client_phone: '(555) 990-0001' }, error: null },
+      { data: null, error: null },
+    ]);
+
+    const mutationFn = getAcceptFn();
+    await expect(mutationFn('lead-1')).resolves.toBeTruthy();
+
+    const updateCall = dc.__chain.find((c) => c.method === 'update');
+    expect(
+      Object.prototype.hasOwnProperty.call(
+        updateCall?.args[0] as Record<string, unknown>,
+        'client_phone',
+      ),
+    ).toBe(false);
+  });
+
   it('INSERTS a new profile-less client when no existing row matches', async () => {
     setTableQueue('leads', [
       { data: MANUAL_LEAD, error: null },
@@ -362,7 +386,7 @@ describe('useAcceptLead — homeowner pair, ordered-limit(1) selection (I65 bug 
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// useCreateLead — the capture insert shape (00584: contact_phone)
+// useCreateLead — the capture insert shape (00583: contact_phone)
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('useCreateLead — capture insert shape', () => {

@@ -17,6 +17,16 @@
  *              household's details, and an autofill token would offer the
  *              signed-in designer's own address and number instead.
  *
+ * Two details that read as inconsistencies and are not:
+ *   · The three read lines resolve profile-first — a client who holds a Patina
+ *     account owns their name, email, and phone. people_directory resolves the
+ *     same three captured-first, which is the studio's own roster; that split
+ *     predates the phone column (00583) and the phone simply follows it.
+ *   · An emptied "Email on file" re-fills from the lead on the next save
+ *     (00399's hydrate trigger, unchanged); an emptied "Phone on file" stays
+ *     empty (00583 hydrates phone on INSERT only). Clearing an email needs
+ *     00399 revisited, not a change here.
+ *
  * Named "The household" on purpose — "Account" already means the login sheet
  * (account/account-sheet.tsx) and the project money band (account-band.tsx).
  */

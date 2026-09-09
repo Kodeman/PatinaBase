@@ -8,7 +8,7 @@
  *
  * "Just enough to begin. The Brief fills in as you go." (prototype §captureScrim)
  * Name · Email · Phone · The project (one line) · Where from — the approved
- * field order. Email and phone each have a column of their own (00584); before
+ * field order. Email and phone each have a column of their own (00583); before
  * that a single "Contact" field guessed at the value and dropped a phone into
  * the Brief one-liner as "Contact: <value>" prose. The form is `noValidate`:
  * every check, including the optional email's shape, reports in the sheet's own
@@ -189,7 +189,7 @@ export function CaptureLeadSheet({
                   setEmail(v);
                   setEmailError(null);
                 }}
-                placeholder="okafors@email.com"
+                placeholder="okafors@example.com"
                 invalid={emailError !== null}
                 describedBy={emailError ? 'capture-lead-email-error' : undefined}
               />

@@ -268,7 +268,8 @@ test.describe('Inked Instruments action visibility', () => {
       });
       await expect(captureLeadSheet).toBeVisible({ timeout: COLD });
       for (const field of [
-        captureLeadSheet.getByLabel('Contact'),
+        captureLeadSheet.getByLabel('Email'),
+        captureLeadSheet.getByLabel('Phone'),
         captureLeadSheet.getByLabel('The project (one line)'),
       ]) {
         await expect

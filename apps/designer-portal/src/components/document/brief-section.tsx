@@ -3,7 +3,7 @@
 /**
  * Brief section (active for lead-shaped engagements, R1). The lead's stats,
  * ask, and match reasons, plus — Track 6 / R61 / R65 — the captured contact
- * (name · email · phone, 00584), the source, and the inline Accept / Nurture /
+ * (name · email · phone, 00583), the source, and the inline Accept / Nurture /
  * Pass triage. The triage shows while
  * a lead is actionable: new / viewed AND nurtured ('contacted'), so a
  * reconnect-due lead can convert / re-date / pass instead of dead-ending. Only
@@ -72,11 +72,12 @@ export function BriefSection({
     lead.homeowner?.full_name ?? lead.contact_name ?? null;
   const contactEmail: string | null =
     lead.homeowner?.email ?? lead.contact_email ?? null;
-  // Phone reads captured-first, the order people_directory's lead branch uses
-  // (00584): a number typed onto this lead is more specific than the standing
-  // one on a Patina profile. `homeowner.phone` is selected by useLead.
+  // Phone resolves profile-first, the order the name and email above already
+  // use, so one printed line never pairs a profile name with a captured number
+  // (00583). `homeowner.phone` is selected by useLead. people_directory's lead
+  // branch reads captured-first, as it already does for name and email.
   const contactPhone: string | null =
-    lead.contact_phone ?? lead.homeowner?.phone ?? null;
+    lead.homeowner?.phone ?? lead.contact_phone ?? null;
 
   // The source — the captured "Where from" (R65, `leads.source`) when present;
   // otherwise derived honestly from what the row carries (a joined homeowner
