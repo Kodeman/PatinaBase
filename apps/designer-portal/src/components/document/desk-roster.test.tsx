@@ -371,17 +371,18 @@ describe('DeskRoster — the hover wash (R126)', () => {
 });
 
 describe('DeskRoster — the marks are unchanged by the wash', () => {
-  it('keeps terracotta for urgent and dusty blue for quiet', () => {
+  // D9 — the material pigments read 2.13:1 (terracotta) and 2.64:1 (dusty
+  // blue) on paper and failed 1.4.11 as graphical objects. The ink members
+  // read 5.28:1 and 7.86:1 and are the same two registers.
+  it('keeps terracotta-ink for urgent and mocha for quiet', () => {
     const { container } = render(<DeskRoster roster={roster()} />);
 
     const [quiet, urgent] = Array.from(
       container.querySelectorAll<HTMLElement>('[data-roster-mark]'),
     );
-    expect(quiet.getAttribute('data-mark-color')).toBe(
-      'var(--color-dusty-blue)',
-    );
+    expect(quiet.getAttribute('data-mark-color')).toBe('var(--color-mocha)');
     expect(urgent.getAttribute('data-mark-color')).toBe(
-      'var(--color-terracotta)',
+      'var(--color-terracotta-ink)',
     );
   });
 });

@@ -32,10 +32,14 @@ import { openLedger } from './command-bar';
 import { RowWash, useRowWash, type RowWashTone } from './row-wash';
 
 /** SP-20's device — a quiet need (a setup chore, an unopened proposal, a PO
- *  nobody answered) never wears the red letter's own ink. */
+ *  nobody answered) never wears the red letter's own ink.
+ *
+ *  D9: both are the INK members of their pairs. The material pigments
+ *  (#D4A090 at 2.13:1, #8B9CAD at 2.64:1) failed 1.4.11 as graphical
+ *  objects; terracotta-ink reads 5.28:1 and mocha 7.86:1 on paper. */
 const MARK_COLOR = {
-  urgent: 'var(--color-terracotta)',
-  quiet: 'var(--color-dusty-blue)',
+  urgent: 'var(--color-terracotta-ink)',
+  quiet: 'var(--color-mocha)',
 } as const;
 
 type StageKey = RosterGroup['key'];
@@ -80,9 +84,11 @@ export function rosterLineAnchorId(engagementId: string): string {
  *  padding, so at 1px the mark would land on the word's first letter. It is
  *  set just outside the word instead — a proofreader marks the margin. Every
  *  inline act below carries an `aria-label`, which is what keeps the caret's
- *  pseudo-content out of the accessible name (opacity:0 does not exempt it). */
+ *  pseudo-content out of the accessible name (opacity:0 does not exempt it).
+ *  D9: the ring is clay-INK (5.61:1). The base clay it carried before read
+ *  2.18:1 and was the same defect the roster's mark carried. */
 const INLINE_ACT =
-  "relative border-b border-[color:var(--color-aged-oak)] pb-[3px] text-inherit no-underline transition-colors before:pointer-events-none before:absolute before:left-[-0.7em] before:top-1/2 before:-translate-y-1/2 before:text-[14px] before:leading-none before:text-[color:var(--color-quiet-ink)] before:opacity-0 before:transition-opacity before:duration-150 before:content-['‸'] hover:border-b-[1.5px] hover:border-[color:var(--text-faint)] hover:pb-[2.5px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] focus-visible:before:opacity-100 motion-reduce:transition-none motion-reduce:before:transition-none";
+  "relative border-b border-[color:var(--color-aged-oak)] pb-[3px] text-inherit no-underline transition-colors before:pointer-events-none before:absolute before:left-[-0.7em] before:top-1/2 before:-translate-y-1/2 before:text-[14px] before:leading-none before:text-[color:var(--color-quiet-ink)] before:opacity-0 before:transition-opacity before:duration-150 before:content-['‸'] hover:border-b-[1.5px] hover:border-[color:var(--text-faint)] hover:pb-[2.5px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay-ink)] focus-visible:before:opacity-100 motion-reduce:transition-none motion-reduce:before:transition-none";
 
 /** The roster settles in ONCE per document session. A remount on return to
  *  /desk must not replay it, so the flag lives on the module, not the tree. */
@@ -145,7 +151,7 @@ function JobLine({
       <Link
         href={line.jobHref}
         data-roster-name
-        className="row-wash-score min-w-0 font-heading text-[16px] font-medium text-[var(--text-primary)] no-underline transition-colors [overflow-wrap:anywhere] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none"
+        className="row-wash-score min-w-0 font-heading text-[16px] font-medium text-[var(--text-primary)] no-underline transition-colors [overflow-wrap:anywhere] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay-ink)] motion-reduce:transition-none"
       >
         {line.name}
       </Link>
