@@ -358,4 +358,57 @@ describe('PersonProfile — rolodex "Edit" on a studio-contact-backed profile (F
 
     expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
   });
+
+  // F3-R2-13 — a background refetch (or someone archiving the card) must
+  // never unmount an open edit sheet out from under the designer without
+  // explanation.
+  it('closes an open edit sheet with an explanation instead of silently vanishing when the card is archived mid-edit', () => {
+    mockPersonData = basePerson({
+      person_id: 'contact-1',
+      role: 'contact',
+      display_name: 'Priya Raman',
+      meta: {},
+    });
+    mockStudioContact = studioContact({ id: 'contact-1', full_name: 'Priya Raman' });
+    const notify = jest.fn();
+    const { rerender } = renderWithClient(
+      <PersonProfile
+        personId="contact-1"
+        role="contact"
+        onBack={jest.fn()}
+        openThread={jest.fn()}
+        openPerson={jest.fn()}
+        goView={jest.fn()}
+        notify={notify}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    expect(screen.getByText('Edit Priya Raman')).toBeInTheDocument();
+
+    // The card gets archived mid-edit (another tab, or someone else).
+    mockStudioContact = studioContact({
+      id: 'contact-1',
+      full_name: 'Priya Raman',
+      archived_at: '2026-01-02T00:00:00Z',
+    });
+    rerender(
+      <QueryClientProvider client={new QueryClient()}>
+        <PersonProfile
+          personId="contact-1"
+          role="contact"
+          onBack={jest.fn()}
+          openThread={jest.fn()}
+          openPerson={jest.fn()}
+          goView={jest.fn()}
+          notify={notify}
+        />
+      </QueryClientProvider>,
+    );
+
+    expect(screen.queryByText('Edit Priya Raman')).not.toBeInTheDocument();
+    expect(notify).toHaveBeenCalledWith(
+      expect.stringContaining('reopen it to try again'),
+    );
+  });
 });

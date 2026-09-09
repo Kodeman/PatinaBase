@@ -32,7 +32,7 @@
  * for an archived card; makers stay read-only (vendor-owned, R78).
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   useClient,
@@ -103,7 +103,14 @@ function backingStudioContactId(
  *  showing the `project_parties` row's own fields, so editing the linked
  *  card changes the shared card without changing what's on screen. The
  *  label and confirmation say so rather than implying the visible profile
- *  will update. */
+ *  will update.
+ *
+ *  F3-R2-13 — a background refetch (or someone else archiving the card)
+ *  must never unmount an open edit sheet out from under the designer: only
+ *  the button is gated on the card being live; once `open` is true the
+ *  sheet stays mounted through a render where the card just went stale, and
+ *  the effect below closes it with an explanation on the next tick instead
+ *  of the whole action vanishing silently. */
 function RolodexEditAction({
   studioContactId,
   linked,
@@ -115,15 +122,26 @@ function RolodexEditAction({
 }) {
   const { data: contact } = useStudioContact(studioContactId);
   const [open, setOpen] = useState(false);
-  if (!studioContactId || !contact || contact.archived_at) return null;
+  const canEdit = !!studioContactId && !!contact && !contact.archived_at;
+
+  useEffect(() => {
+    if (open && !canEdit) {
+      setOpen(false);
+      notify('That card changed while you were editing it — reopen it to try again.');
+    }
+  }, [open, canEdit, notify]);
+
+  if (!canEdit && !open) return null;
   return (
     <>
-      <ActionButton
-        actionKey="edit-rolodex-card"
-        label={linked ? 'Edit rolodex card' : 'Edit'}
-        onClick={() => setOpen(true)}
-      />
-      {open && (
+      {canEdit && (
+        <ActionButton
+          actionKey="edit-rolodex-card"
+          label={linked ? 'Edit rolodex card' : 'Edit'}
+          onClick={() => setOpen(true)}
+        />
+      )}
+      {open && contact && (
         <AddPersonSheet
           open={open}
           onClose={() => setOpen(false)}
@@ -469,6 +487,7 @@ function ClientProfile({
           clientProfileId={profileId}
           designerClientId={personId}
           clientName={name}
+          startEditing
         />
       )}
 

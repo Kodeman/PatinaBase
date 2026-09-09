@@ -29,9 +29,13 @@
  *
  * Named "The household" on purpose — "Account" already means the login sheet
  * (account/account-sheet.tsx) and the project money band (account-band.tsx).
+ *
+ * F3-R2-16 — `startEditing` opens straight into EDIT (default false, every
+ * on-document caller unaffected) for a caller whose own door already
+ * promised the form, e.g. the People room's "Edit details".
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   useClient,
   useDesignerClientForClientUser,
@@ -65,6 +69,12 @@ export interface HouseholdSheetProps {
   clientName: string;
   /** Proposal status — gates CHANGE to draft so a sent proposal keeps its client. */
   proposalStatus?: string | null;
+  /** F3-R2-16 — open straight into the EDIT form rather than the VIEW state.
+   *  Default false keeps every on-document caller's behavior (view first,
+   *  "Edit details" to reach the form) unchanged; the People room's own
+   *  "Edit details" action — which already promised the form — passes true
+   *  so it doesn't ask the designer to click "Edit details" twice. */
+  startEditing?: boolean;
 }
 
 export function HouseholdSheet({
@@ -77,6 +87,7 @@ export function HouseholdSheet({
   designerClientId = null,
   clientName,
   proposalStatus,
+  startEditing = false,
 }: HouseholdSheetProps) {
   const { data: rel } = useDesignerClientForClientUser(
     clientProfileId ?? undefined,
@@ -111,14 +122,21 @@ export function HouseholdSheet({
     proposalStatus !== 'draft';
   const canChange = !!attachTarget && !proposalLocked;
 
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(startEditing);
   const [form, setForm] = useState({
     name: '',
     email: '',
     phone: '',
     notes: '',
   });
+  // F3-R2-12 — hydrate once per relationship, not on every field-level
+  // refetch: on-demand mounting (F3-R1-14) means this effect's first run can
+  // now land after the designer has already started typing, and re-hydrating
+  // on every `client` change would clobber those keystrokes.
+  const hydratedFor = useRef<string | null>(null);
   useEffect(() => {
+    if (!client?.id || hydratedFor.current === client.id) return;
+    hydratedFor.current = client.id;
     setForm({
       name: client?.client_name ?? '',
       email: client?.client_email ?? '',
