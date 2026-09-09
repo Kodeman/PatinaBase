@@ -339,3 +339,126 @@ colliding untracked files. Nothing in this ship touched that checkout — the
 gate, the merge and the deploy all ran from the worktree — but a plain
 `git pull` there will not go cleanly; the two local commits need dropping or
 rebasing against their origin twins first.
+
+---
+
+# Hotfix 2026-09-09 (ledger columns, boards to the bottom)
+
+Kody, on prod at ~1500px signed in: *"Having the boards over here doesn't work.
+We need full width of the desk. Move the boards back to the bottom."* and
+*"Fix the at rest formatting."* Two defects, both shipped by this program the
+same afternoon.
+
+## Root causes
+
+**H1 — the ledger row could not hold its own grid.** `.desk-ledger-row`'s fixed
+tracks plus gaps come to 668px, but IA-17's 260px boards rail left the roster
+region at **662px** (1500px viewport) / **678px** (1280px) — so the
+`minmax(0,1fr)` sentence track resolved to **0px** and `[overflow-wrap:anywhere]`
+broke "Nothing needs your hand." to **one character per line: 21 line boxes,
+441px tall, a 497px row** — while the 899px collapse never fired, because it was
+a media query on the WINDOW and the row's problem was its own width.
+
+**H2 — the line under the name printed the sentence a second time.**
+`state` composes `client · phase · body` with `body` falling back to
+`QUIET_STATE = 'quiet · nothing needs your hand'`, and the sentence cell already
+prints "Nothing needs your hand." — so the row read the sentence twice, and for
+a lead titled after its own client (Kody's "Priya Raman") the name twice as well.
+`DeskClaimCard`'s register 4 carried the same duplication, measured verbatim.
+
+Separately, and **not** rail-dependent: the 96px act track could not hold
+"Open the job" (113px) at ANY viewport, so `overflow:hidden` clipped it to
+"OPEN THE J" — present since `f141d51ac`.
+
+## Commits (branch `desk-cards/hotfix-ledger`, merged to main)
+
+| SHA | |
+|---|---|
+| `9178ee7231e0569a9e65e09e32287269ab0adba6` | fix(desk): the ledger keeps its columns, and says the sentence once |
+| `17ceb0db2b0b7bd807aef0e1f4cca0b12bc72030` | fix(desk): the boards return to the bottom, and the Desk takes its full width |
+| `f49c260fc78ee53a00f491aac4972135d54984e6` | fix(desk): a flat act track, and the fixture boards clean up after themselves |
+
+`origin/main` = `f49c260fc78ee53a00f491aac4972135d54984e6` (was `4701ea9b6`).
+
+What changed: the boards rail's `matchMedia` gate and its
+`grid-cols-[minmax(0,1fr)_260px]` page grid are gone — the roster spans the
+content width at every breakpoint and `RecentBoardsStrip` renders below it in
+its full form. The ledger `<ul>` became a query container
+(`container-type: inline-size`), its 899px collapse became `@container`, the
+sentence track gained a `minmax(200px,1fr)` floor and the act track a flat
+`120px` (flat, not `max-content`: a max-content act is as wide as ITS OWN row's
+label, so the value column would stop lining up the moment two rows carried
+different acts). Minimum five-track width = 24+320+200+132+120 + 4×24 = **892px**,
+under the 899px threshold, so the row always has room before the collapse takes
+over. A new `RosterLine.personLine` carries `client · phase` only — dropping a
+client that IS the job's name — and both the ledger row and the card's register 4
+read it.
+
+## Gate
+
+| gate | result |
+|---|---|
+| `type-check` | clean |
+| Desk unit suites (desk-ledger-row, desk-claim-card, desk-roster, desk-roster-settle, desk-claims, recent-boards-strip, `(document)/desk/page.test.tsx`) | **7 suites, 108 tests passed** |
+| full `test -- --ci` (pre-review-fix state) | 561 suites / 7015 tests passed |
+| `lint` | 2 errors — the pre-existing I150 pair only |
+| chromium e2e `desk-claims.spec.ts` | **6/6 passed**, incl. the two new assertions; fixture teardown verified (0 rows left) |
+
+Measured after, at 1500 / 1280 / 1100: roster region **976 / 992 / 990px**,
+sentence track **291 / 307 / 305px**, **1 line box**, act `scrollWidth ==
+clientWidth`, row height **497 → 132.5px**, full page **6257 → 3596px**.
+
+## Deployment
+
+`./infra/deploy-portal.sh designer` from the worktree, with all 11 `NEXT_PUBLIC_*`
+vars read programmatically out of `apps/designer-portal/wrangler.jsonc` `vars`
+and exported (no `.env` written).
+
+- deployment **`c91640ac-74a7-4612-9299-784fcb0047bf`** @ **2026-09-09T16:35:53.871Z**
+  (bottom row of `wrangler deployments list --name patina-designer-portal`),
+  newer than the prior `b615b951-e82c-461a-877a-3fb0d25f176e` @ 15:12:15.848Z.
+
+Probe evidence — `https://app.patina.cloud/auth/signin`, stylesheet hrefs extracted
+and fetched:
+
+| | before | after |
+|---|---|---|
+| main css hash | `15d98f1e5ae9d567` | **`c7674573c1d012f8`** (changed) |
+| `desk-ledger-row` | 1 hit | 1 hit |
+| `container-type` | **0 hits** | **1 hit** |
+| `@container (max-width: 899px)` | absent | **present, 1** |
+| `@media (max-width:899px)` | present | **0** |
+
+Served rules, verbatim from the deployed stylesheet:
+```css
+.desk-ledger-row{display:grid;grid-template-columns:24px 320px minmax(200px,1fr) 132px 120px;…;overflow:hidden}
+.desk-ledger-list{container-type:inline-size}
+@container (max-width: 899px){.desk-ledger-row{grid-template-columns:16px minmax(0,1fr);…}}
+```
+The page HTML and JS chunks are auth-gated, so the rail's removal was confirmed
+against the local build output instead: `.open-next/` contains **0 files**
+matching `isWideDesk` and **0** matching `_260px`, against a positive control of
+4 files each for `desk-ledger-list` and `recent-mood-boards`.
+
+## Owed
+
+- **Kody's re-walk**, signed in on prod, at desktop, **~960px**, and **390** — the
+  hotfix was verified by measurement and by a local 1440 screenshot pair, never by
+  Kody's own eye at those three widths.
+- **The ~999px container crossover is accepted, not fixed.** The collapse used to
+  fire at a 899px *viewport*; it now fires at a 899px *roster region*, which on a
+  full-width Desk is roughly a 999px viewport. Between ~899 and ~999 — a
+  half-screen window on a laptop — rows now take the stacked form. Controller
+  ruled the stacked form is the designed reflow; recorded here so nobody
+  rediscovers it as a bug.
+- **`RosterLine.state` is dead.** Nothing renders it any more; only its derivation
+  tests hold it up. Follow-up: delete it and update the three fixtures.
+- **`RecentBoardsStrip`'s `compact` variant is now unused** by any caller, kept
+  with its five tests green. Same follow-up question.
+- **IA-17's reversal needs recording in the portal-polish docs.** The rail shipped
+  as IA-17 this afternoon and is gone by evening; the decision log still reads as
+  though it stands.
+- **The same defect class is still live on `/doc/[id]`.** `wp3-screenshots.spec.ts:153`
+  "margin handoff" fails at 390 with the margin rail's own one-character wrap —
+  a pre-existing red, not a gate for this ship, but it is the same fixed-track
+  problem in a narrow column and deserves the same container-query treatment.
