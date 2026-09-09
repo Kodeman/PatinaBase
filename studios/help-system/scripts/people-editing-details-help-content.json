@@ -4,10 +4,38 @@
     "_type": "helpContent",
     "surfaceKey": "designer-portal/document/people",
     "persona": "all",
-    "contentType": "tooltip",
-    "tooltipContent": {
-      "eyebrow": "Editing someone's details",
-      "body": "Open their card, choose Edit. People with a Patina account manage their own name, email, and phone."
+    "contentType": "helpArticle",
+    "helpArticleContent": {
+      "title": "Editing someone’s details",
+      "oneSentenceAnswer": "Open their card and choose Edit — people with a Patina account manage their own name, email, and phone.",
+      "body": [
+        {
+          "_type": "block",
+          "_key": "peb1",
+          "style": "normal",
+          "markDefs": [],
+          "children": [
+            {
+              "_type": "span",
+              "_key": "peb1s1",
+              "text": "Open their card, choose Edit."
+            }
+          ]
+        },
+        {
+          "_type": "block",
+          "_key": "peb2",
+          "style": "normal",
+          "markDefs": [],
+          "children": [
+            {
+              "_type": "span",
+              "_key": "peb2s1",
+              "text": "People with a Patina account manage their own name, email, and phone."
+            }
+          ]
+        }
+      ]
     }
   }
 ]
