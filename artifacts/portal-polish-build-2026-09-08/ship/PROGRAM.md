@@ -416,16 +416,13 @@ is yielding to, and a CSS fix aimed by reasoning needs a rendered measurement be
 
 ---
 
-## 8 · Program complete — the client portal is closed; Wave 3c is still in flight
+## 8 · Program complete — both portals are closed
 
-**Read this first.** Wave 2c (added 2026-09-09) is the **last** wave on the client portal: the house
-page now matches `specimens/client-house.html` on money everywhere it renders, and nothing on the
-client track is waiting on a lane. It is **not** the last wave of the program. A **Wave 3c** is
-running in parallel on the Desk — lane **D8**, branch `portal-polish/d8` (head `23239266f`),
-reviewed in `waves/w3c/d8-review.md`, carrying the designer-side date sweep (`fmtDay`) and the
-`.da-score-on`-versus-hover fix that Wave 3b listed as owed. It is **pushed and not merged**, and
-`patina-designer-portal` has not been redeployed since Wave 3b. This section closes the record for
-everything that *has* shipped; W3c will add its own.
+**Read this first.** The program is **finished**. Wave 2c closed the client portal; **Wave 3c**
+(added 2026-09-09, below) closed the Desk. Seven waves — W1 · W2 · W3 · W2b · W3b · W2c · W3c — no
+lane is outstanding, no branch is unmerged, and both portals are deployed from `main` at
+**`66a54ba00`**. Everything remaining is in *Everything still owed to Kody*, and every item there is
+either a walk only Kody can do, a ruling only Kody can make, or a lane nobody was ever given.
 
 ### Wave 2c at a glance
 
@@ -441,6 +438,21 @@ everything that *has* shipped; W3c will add its own.
 | What it did not | `approval-ask.tsx`'s `approvalWeighing` still prints whole dollars; it was outside the lane's brief and outside W2b's divergent list. Last money-in-prose surface on the Threshold. |
 
 Full detail: **`ship/w2c-ship.md`**.
+
+### Wave 3c at a glance
+
+| | |
+|---|---|
+| Deployed | `patina-designer-portal` |
+| Version | **`cfa89e71-3d30-4723-9b08-6a7c99c9c21c`** (2026-09-09T03:34:01Z) |
+| Rollback | **`cf67abe9-65e1-4818-b7d1-8eaa9943d93d`** (W3b's deployment) |
+| `main` | **`66a54ba00`** — `merge(portal-polish): wave 3c — Desk residuals` |
+| Branches | `portal-polish/d8` · `portal-polish/integration-w3c` · `portal-polish/to-main-w3c`, all pushed, all ancestors of `main` |
+| Lane | **D8** — the three items Wave 3b listed as owed, in one lane |
+| What it closed | **PP-2 on the Desk**: the roster row and the document page print `11 September`, and a text-node sweep of `/desk`, the document page and the Orders ledger returns **zero** short-month literals. **`.da-score-on` vs `:hover`**: a selected control measures charcoal `rgb(44,41,38)` *while hovered*, and the 17 unselected controls beside it still raise to clay. **A3's hooks wired into `concept-render-upload.tsx`** — and, for the first time in the program, **a real storage round-trip**: an object uploaded into the private `room-renders` bucket through the signed-in UI and removed again, with postgres read before, during and after. Remove deletes the object *and* nulls the four columns. **The orphaned storage object is gone.** |
+| What it did not | The standing plate was never seen painting against an `https:` origin — CSP blocks local-http images under a production build (`next.config.js:95-97`), proved by a `BYPASS_CSP` control. Prod is matched by the `https:` token, but that is argued, not observed. `Replace` is still unit-test-only. |
+
+Full detail: **`ship/w3c-ship.md`**.
 
 ### Every deployment, per portal, in order
 
@@ -459,9 +471,10 @@ Full detail: **`ship/w2c-ship.md`**.
 | Wave | Version | Deployed | Rolls back to |
 |---|---|---|---|
 | W3 | `bf6a3679-40b5-4c24-8db2-7cc2348f145a` | 2026-09-08T23:56:34Z | `6987d9ff-9154-453f-ae89-c7ab4c714d48` (pre-program) |
-| **W3b** | **`cf67abe9-65e1-4818-b7d1-8eaa9943d93d`** | **2026-09-09T01:44:22Z** | **`bf6a3679-…`** ← **live** |
+| W3b | `cf67abe9-65e1-4818-b7d1-8eaa9943d93d` | 2026-09-09T01:44:22Z | `bf6a3679-…` |
+| **W3c** | **`cfa89e71-3d30-4723-9b08-6a7c99c9c21c`** | **2026-09-09T03:34:01Z** | **`cf67abe9-…`** ← **live** |
 
-`npx wrangler rollback bf6a3679-40b5-4c24-8db2-7cc2348f145a --name patina-designer-portal`
+`npx wrangler rollback cf67abe9-65e1-4818-b7d1-8eaa9943d93d --name patina-designer-portal`
 
 **Strata** — one migration in the whole program: **`00580_room_concept_render.sql`** (W1 · Lane A2).
 Four nullable columns on `project_rooms`, the private `room-renders` bucket, four keys added to
@@ -481,15 +494,18 @@ nothing to roll back — correct forward with `00581`; the columns are nullable.
 | `threshold.spec.ts` | **22 / 22** |
 | Renders | 1440 → **1440/1440**, 390 → **390/390**; zero app-origin console errors |
 
-**Designer portal** (W3b — unchanged until W3c lands)
+**Designer portal** (W3c — final)
 
 | Gate | Result |
 |---|---|
 | `type-check` | exit 0 |
-| `test -- --ci` | **549 suites / 6807 tests / 0 todo** (W1 baseline was 548 / 6786) |
-| `lint` | **205 problems (2 errors, 203 warnings)** — the two known pre-existing errors, not grown |
-| `shadow-gate.test.ts` | green and byte-unchanged from `origin/main`, as is `eslint.config.mjs` |
-| Renders | 1440, doc and orders-ledger all **1440/1440**; **390 → 390/390**, closed by W3b |
+| `test -- --ci` | **549 suites / 6810 tests / 0 todo** (W3b was 549 / 6807; W1 baseline 548 / 6786) |
+| `lint` | **205 problems (2 errors, 203 warnings)** — the two known pre-existing errors, count unchanged across all four designer waves |
+| `shadow-gate.test.ts` · `contrast.test.ts` · `rail-stock.test.ts` · `eslint.config.mjs` | green and **byte-unchanged** from `origin/main` |
+| `@patina/supabase` | type-check exit 0 · **94 files / 1163 tests** |
+| `admin-portal build` · `client-portal type-check` | exit 0 · exit 0 |
+| Renders | `/desk`, document page and orders-ledger all **1440/1440**; **390 → 390/390**; zero console errors post-session; one shadow, `--elevation-sheet` |
+| Storage | **first real round-trip** — object written to and deleted from `room-renders` through the signed-in UI, four columns set then nulled, bucket empty afterwards |
 
 **Across the program: no suite was lost, no lint count grew, no `box-shadow` was added, and
 `--elevation-sheet` / `desk-settle` were never touched.**
@@ -509,13 +525,13 @@ The lists in §4, §6 and §7 stand; this is the consolidated one, deduplicated,
 
 3. **`approval-ask.tsx`'s `approvalWeighing`** — the last whole-dollar money-in-prose surface on the
    Threshold. Mechanical now that the other six are ruled in practice.
-4. **Wave 3c / lane D8 is unmerged** — the designer-side `fmtDay` date sweep and the
-   `.da-score-on`-versus-hover fix. Branch `portal-polish/d8`, reviewed, pushed, **not in `main`**,
-   **not deployed**.
-5. **Wire A3's hooks into `concept-render-upload.tsx`.** `useRoomConceptRenderRecord` and
-   `useRemoveRoomConceptRender` shipped with **zero consumers**; D6's component still uses its own
-   local helpers, so **the orphaned storage object on Remove is still live in production**. The cure
-   is written and unconnected.
+4. ~~**Wave 3c / lane D8 is unmerged**~~ — **CLOSED by W3c.** Merged, deployed
+   (`cfa89e71-…`), and both halves observed live: zero short-month literals on the Desk, the
+   document page or the Orders ledger, and a selected control measured charcoal under the pointer.
+5. ~~**Wire A3's hooks into `concept-render-upload.tsx`**~~ — **CLOSED by W3c**, and the orphan is
+   proved dead rather than argued: an object was uploaded into `room-renders` through the signed-in
+   UI and removed, with the bucket read before, during and after. Remove deletes the object *and*
+   nulls the four columns. See `w3c-ship.md` §5.
 6. **The specimen's 390 reflow on the Desk** — day's line first under the greeting, sticky stage
    plates, action column under the state sentence. The overflow half is closed (W3b); the reflow
    half was never given to a lane.
@@ -528,10 +544,10 @@ The lists in §4, §6 and §7 stand; this is the consolidated one, deduplicated,
 
 **Rulings the build could not make**
 
-11. **A ruling on `.da-score-on` vs `:hover`.** `.da-score-hover:hover::after` outranks
-    `.da-score-on::after`, so a *selected* control reads clay-hovered rather than
-    charcoal-selected while the pointer is on it. Observed live on the Orders ledger's `LEDGER` tab.
-    (D8 carries a fix; it is unmerged.)
+11. ~~**A ruling on `.da-score-on` vs `:hover`**~~ — **CLOSED by W3c.** D8's one-line specificity
+    bump (`.da-score-hover.da-score-on::after`, `:hover`, `:focus-visible`, all charcoal) shipped;
+    the `LEDGER` tab now measures `rgb(44,41,38)` while hovered, and the 17 unselected controls
+    beside it still raise to clay. Same token, no new hex, no shadow.
 12. **The Desk's overdue-line wording** — the specimen's `One thing is overdue — Vandersteen,
     install, since 4 September` versus the two pinned assertions D1 had to keep green.
 13. **`reconnect_due` in the day's line's lead slot** — a client due for a reconnect: does it
@@ -550,6 +566,29 @@ The lists in §4, §6 and §7 stand; this is the consolidated one, deduplicated,
     values through local utilities. A real adoption is a program-level decision.
 18. **`.act--inline` / `InlineAct`** — H3 and D1 each wrote one, in different portals. Name it
     before a third lane writes a third.
+
+**New from Wave 3c**
+
+27. **The local-render CSP trap.** `next.config.js:95-97` allows `http://127.0.0.1:*` in `img-src`
+    only when `NODE_ENV=development`, but every render pass on this machine must use `next build` +
+    `next start` (item 19), which is production. So a private-bucket signed URL served from local
+    Supabase **will not paint** — `naturalWidth 0`, `requestfailed :: csp` — while `fetch()` on the
+    same URL returns 200. Proved with a `BYPASS_CSP` control: the plate paints at 240×160 with CSP
+    lifted and nothing else changed. Prod is matched by the `https:` token in both branches.
+    Either add the local origins to the non-dev branch or document it; the next person to render a
+    concept render will otherwise report a broken plate that is not broken.
+28. **`Replace` on a concept render is unproven end to end.** The hook upserts at the same path, so
+    a replace should not orphan; only Add and Remove were round-tripped. The harness exists
+    (`waves/w3c/renders/roundtrip.sh`).
+29. **D8's two PP-2 residuals want rulings, not code.** The lens ladder's fixed-width registers
+    (`SEP 15` inside `cap(…, 40)` — `15 SEPTEMBER` risks the truncation the sheet forbids, so it
+    needs a render or a ruling), and `2:00 PM` vs `2:00 pm`
+    (`desk-derivation.fmtDayTime`, `ceremony-schedule.fmtCeremonySlot`).
+30. **`field-sms.fmtFieldDate` now reads `Tue 14 July`, and that string leaves the building** in an
+    SMS to a US trade. If outbound SMS should keep a US idiom, one line and one test.
+31. **Money stays `en-US` in seven places** by design — en-GB with `currency: 'USD'` prints
+    `US$17,500`. If the house wants that as a rule rather than a comment in `format.ts:70-71`, it
+    belongs in `DECISIONS.md`, which no build lane may write.
 
 **Environment and tooling, for whoever runs the next program on this machine**
 
@@ -600,14 +639,33 @@ origin and an ancestor of `main`, so nothing here holds unmerged work.
 | `.codex/worktrees/agent-pp-int3` | `portal-polish/integration-w3` | W3 integration; holds the prod `.next` build |
 | `.codex/worktrees/agent-pp-a3` · `agent-pp-d7` | `portal-polish/a3` · `d7` | W3b lanes |
 | `.codex/worktrees/agent-pp-int3b` | `portal-polish/integration-w3b` | W3b integration; holds the prod `.next` build |
-| **`.codex/worktrees/agent-pp-d8`** | **`portal-polish/d8`** | **DO NOT SWEEP — Wave 3c, reviewed, pushed, NOT in `main`** |
+| `.codex/worktrees/agent-pp-d8` | `portal-polish/d8` | W3c lane — **now merged and safe to sweep** (W2c's DO-NOT-SWEEP note is retired) |
+| `.codex/worktrees/agent-pp-int3c` | `portal-polish/integration-w3c` | W3c integration; holds the prod `.open-next` build |
+
+**All 25 `agent-pp-*` worktrees on disk, for the sweep** (`scripts/repo-gc.sh`, dry-run first):
+`agent-pp-a1` `a2` `a3` · `agent-pp-h1` `h2` `h3` `h4` `h5` `h6` `h7` `h8` ·
+`agent-pp-d1` `d2` `d3` `d4` `d5` `d6` `d7` `d8` ·
+`agent-pp-int` `int2b` `int2c` `int3` `int3b` `int3c`.
+**Every one of their branches is pushed and an ancestor of `main` — nothing on disk holds unmerged
+work.** `int2c`, `int3` and `int3c` hold prod builds; sweep them last if a rollback rebuild is
+wanted.
 
 Already removed, each after its push: `agent-pp-main` (W2) · `agent-pp-main2b` (W2b) ·
-`agent-pp-main2c` (W2c) · `agent-pp-main3` (W3) · `agent-pp-main3b` (W3b).
+`agent-pp-main2c` (W2c) · `agent-pp-main3` (W3) · `agent-pp-main3b` (W3b) · `agent-pp-main3c` (W3c).
 
-### The header of this report is four waves stale
+### The header of this report is five waves stale
 
-§1–§5 were written when the program was three waves and `main` was `99906f992`. It is now six
-shipped waves (W1 · W2 · W3 · W2b · W3b · W2c) with a seventh in flight, and `main` is **`f7865c728`**.
-The original text is left in place rather than rewritten, so the record of what each wave reported
-at the time stays readable; §6, §7 and this section carry the corrections.
+§1–§5 were written when the program was three waves and `main` was `99906f992`. It is now **seven
+shipped waves** — W1 · W2 · W3 · W2b · W3b · W2c · W3c — and `main` is **`66a54ba00`**. The original
+text is left in place rather than rewritten, so the record of what each wave reported at the time
+stays readable; §6, §7 and this section carry the corrections.
+
+### Where the program ended
+
+Both portals are live from `main` at `66a54ba00`: `patina-client-portal`
+`6f8adbb5-c024-4f25-bebd-070ee18924e1` and `patina-designer-portal`
+`cfa89e71-3d30-4723-9b08-6a7c99c9c21c`. One migration, `00580`, pushed in W1 and never revised.
+No suite was lost across seven waves, no lint count grew, no `box-shadow` was added, and the shadow
+gate is byte-identical to where it started. The last wave's contribution to that record is the one
+kind of evidence the other six could not produce: a real object, written into a real bucket through
+a real session, and taken back out.
