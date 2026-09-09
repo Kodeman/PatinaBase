@@ -37,6 +37,10 @@ import {
   CapturedHouseholdInvite,
   inviteAndAttachCapturedHousehold,
 } from './captured-household-invite';
+import {
+  LETTER_NOTE_MAX,
+  counterCopy,
+} from '../people/directory/letter-line-field';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
 import { useProposalMirrorData } from '../drafting/proposal-mirror';
 import { useDraftingState } from '@/hooks/use-drafting-state';
@@ -168,7 +172,12 @@ export function SendSheet({
   const retryProposalSend = useRetryProposalSend({ errorSurface: 'inline' });
   const attachClient = useAttachDocumentClient();
   const inviteAndLinkClient = useInviteAndLinkClient();
-  const { value: letterOn } = useFeatureFlag('client-invite-letter');
+  const { value: letterOn, isLoading: letterLoading } = useFeatureFlag(
+    'client-invite-letter',
+  );
+  // Fail-closed, matching add-person-sheet.tsx and client-picker.tsx: nothing
+  // letter-shaped renders until the flag has actually resolved.
+  const letterReady = letterOn && !letterLoading;
   const { toast } = useToast();
 
   // A sibling version already accepted? Sending this one won't affect it.
@@ -588,7 +597,7 @@ export function SendSheet({
         designerClientId: proposal.designer_client_id,
         clientEmail: capturedHousehold.client_email,
         clientName: capturedHousehold.client_name ?? undefined,
-        letter: letterOn,
+        letter: letterReady,
         note: personalMessage,
         projectId: proposal.project_id ?? undefined,
         invite: inviteAndLinkClient.mutateAsync,
@@ -604,6 +613,14 @@ export function SendSheet({
   };
 
   const total = ((proposal?.total_amount || 0) / 100).toLocaleString();
+
+  // R4's three-layer enforcement (composer, route, DB CHECK) applies to this
+  // textarea's content only on the path where it becomes the letter's `note`
+  // — the captured-household invite-and-attach above, gated on the same
+  // condition CapturedHouseholdInvite itself renders under. The ordinary
+  // sendProposal personal message has no such limit.
+  const noteFeedsLetter =
+    letterReady && !proposal?.client_id && !!capturedHousehold?.client_email;
 
   return (
     <DocSheet open={open} onClose={onClose} title="Send proposal">
@@ -655,7 +672,7 @@ export function SendSheet({
                       inviteAndLinkClient.isPending || attachClient.isPending
                     }
                     onInvite={handleInviteCapturedHousehold}
-                    letterOn={letterOn}
+                    letterOn={letterReady}
                   />
                 ) : (
                   <>
@@ -815,7 +832,16 @@ export function SendSheet({
                 placeholder="Write a personal note to your client…"
                 className={`${fieldCls} resize-y`}
                 style={{ minHeight: 110 }}
+                maxLength={noteFeedsLetter ? LETTER_NOTE_MAX : undefined}
               />
+              {noteFeedsLetter && (
+                <p
+                  data-testid="send-sheet-message-counter"
+                  className="font-mono text-[11px] text-[var(--color-aged-oak)]"
+                >
+                  {counterCopy(personalMessage.length)}
+                </p>
+              )}
             </div>
 
             {/* Canonical client-copy validation */}

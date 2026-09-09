@@ -79,7 +79,7 @@ export function CapturedHouseholdInvite({
       <p className="mb-3 text-[12.5px] leading-relaxed text-[var(--color-mocha)]">
         <b>{householdName}</b> is still this proposal&rsquo;s household.{' '}
         {letterOn
-          ? 'Write to them so they can receive and sign it — your message above goes with the letter.'
+          ? 'Write to them so they can receive and sign it — your message below goes with the letter.'
           : `Invite ${name?.trim() ? 'them' : email} to Patina so they can receive and sign it.`}
       </p>
       <DocumentAction

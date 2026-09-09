@@ -108,7 +108,12 @@ export function ClientPicker({
   const clients = clientOptions ?? queriedClients;
   const addClient = useAddClient();
   const inviteAndLink = useInviteAndLinkClient();
-  const { value: letterOn } = useFeatureFlag('client-invite-letter');
+  const { value: letterOn, isLoading: letterLoading } = useFeatureFlag(
+    'client-invite-letter',
+  );
+  // Fail-closed, matching add-person-sheet.tsx: nothing letter-shaped renders
+  // until the flag has actually resolved.
+  const letterReady = letterOn && !letterLoading;
   // Keyed by row: an armed row's line belongs to that row and to no other.
   const [notes, setNotes] = React.useState<Record<string, string>>({});
 
@@ -212,7 +217,7 @@ export function ClientPicker({
         designerClientId: dc.id,
         clientEmail: dc.client_email,
         clientName: dc.client_name ?? undefined,
-        ...(letterOn ? { letter: true as const, note: note || undefined } : {}),
+        ...(letterReady ? { letter: true as const, note: note || undefined } : {}),
       });
       if (result.profileId) {
         onChange(result.profileId);
@@ -445,7 +450,7 @@ export function ClientPicker({
                             an invite emails them a signup link and links this
                             record once they accept.
                           </p>
-                          {letterOn && (
+                          {letterReady && (
                             <LetterLineField
                               facts={{
                                 clientName: dc.client_name ?? null,
@@ -471,7 +476,7 @@ export function ClientPicker({
                               }}
                               className="rounded-sm bg-[var(--accent-primary)] px-2 py-1 text-[0.7rem] font-medium text-white"
                             >
-                              {letterOn ? 'Send the letter' : 'Send invite'}
+                              {letterReady ? 'Send the letter' : 'Send invite'}
                             </button>
                             <button
                               type="button"
