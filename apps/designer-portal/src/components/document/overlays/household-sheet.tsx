@@ -11,8 +11,8 @@
  *              its own "+ Add new client").
  *   · CHANGE — re-point the document to a different client. Gated to draft for
  *              proposals so a sent/signed proposal can't be mis-attributed.
- *   · EDIT   — correct the relationship's working name/email (for captured
- *              clients without a Patina account) and notes.
+ *   · EDIT   — correct the relationship's working name/email/phone (for
+ *              captured clients without a Patina account) and notes.
  *
  * Named "The household" on purpose — "Account" already means the login sheet
  * (account/account-sheet.tsx) and the project money band (account-band.tsx).
@@ -76,7 +76,7 @@ export function HouseholdSheet({
   const hasProfile = !!client?.client_id || !!client?.client;
   const name = client?.client?.full_name ?? client?.client_name ?? clientName;
   const email = client?.client?.email ?? client?.client_email ?? null;
-  const phone = client?.client?.phone ?? null;
+  const phone = client?.client?.phone ?? client?.client_phone ?? null;
   const status = client?.status ?? null;
   const hasHousehold = Boolean(clientProfileId || designerClientId);
 
@@ -99,14 +99,26 @@ export function HouseholdSheet({
   const canChange = !!attachTarget && !proposalLocked;
 
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ name: '', email: '', notes: '' });
+  const [form, setForm] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    notes: '',
+  });
   useEffect(() => {
     setForm({
       name: client?.client_name ?? '',
       email: client?.client_email ?? '',
+      phone: client?.client_phone ?? '',
       notes: client?.notes ?? '',
     });
-  }, [client?.id, client?.client_name, client?.client_email, client?.notes]);
+  }, [
+    client?.id,
+    client?.client_name,
+    client?.client_email,
+    client?.client_phone,
+    client?.notes,
+  ]);
 
   const onPick = (clientId: string | null) => {
     if (!attachTarget) return;
@@ -120,6 +132,7 @@ export function HouseholdSheet({
       : {
           client_name: form.name.trim() || null,
           client_email: form.email.trim() || null,
+          client_phone: form.phone.trim() || null,
           notes: form.notes || null,
         };
     updateContact.mutate(
@@ -255,11 +268,28 @@ export function HouseholdSheet({
                       <input
                         id="household-email"
                         type="email"
+                        autoComplete="email"
                         value={form.email}
                         onChange={(e) =>
                           setForm((f) => ({ ...f, email: e.target.value }))
                         }
                         placeholder="client@email.com"
+                        className={fieldCls}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className={labelCls} htmlFor="household-phone">
+                        Phone on file
+                      </label>
+                      <input
+                        id="household-phone"
+                        type="tel"
+                        autoComplete="tel"
+                        value={form.phone}
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, phone: e.target.value }))
+                        }
+                        placeholder="(555) 014-2200"
                         className={fieldCls}
                       />
                     </div>

@@ -20,13 +20,28 @@ describe('CaptureLeadSheet layout', () => {
     mutate.mockReset();
   });
 
-  it('gives long contact and project values the full sheet width', () => {
+  it('stacks email, phone, and project one per row at the sheet\'s width', () => {
     render(<CaptureLeadSheet open onClose={jest.fn()} />);
 
+    // The sheet is a narrow overlay — a second column would squeeze a long
+    // email or project line, so the stack stays single-column at every width.
     const fields = screen.getByTestId('lead-contact-project-fields');
     expect(fields.className).not.toContain('grid-cols-2');
-    expect(screen.getByLabelText('Contact')).toHaveClass('min-w-0');
+    expect(screen.getByLabelText('Email')).toHaveClass('min-w-0');
+    expect(screen.getByLabelText('Phone')).toHaveClass('min-w-0');
     expect(screen.getByLabelText(/The project \(one line\)/)).toHaveClass('min-w-0');
+  });
+
+  it('types the email and phone inputs so a phone keypad and autofill work', () => {
+    render(<CaptureLeadSheet open onClose={jest.fn()} />);
+
+    const email = screen.getByLabelText('Email');
+    expect(email).toHaveAttribute('type', 'email');
+    expect(email).toHaveAttribute('autocomplete', 'email');
+
+    const phone = screen.getByLabelText('Phone');
+    expect(phone).toHaveAttribute('type', 'tel');
+    expect(phone).toHaveAttribute('autocomplete', 'tel');
   });
 
   it('keeps Begin disabled until a nonblank name and project note exist', () => {
@@ -49,7 +64,7 @@ describe('CaptureLeadSheet layout', () => {
     expect(submit).toBeEnabled();
   });
 
-  it('submits trimmed required values while leaving contact and source optional', () => {
+  it('submits trimmed required values while leaving email, phone, and source optional', () => {
     render(<CaptureLeadSheet open onClose={jest.fn()} />);
 
     fireEvent.change(screen.getByLabelText(/Name/), {
@@ -65,12 +80,41 @@ describe('CaptureLeadSheet layout', () => {
         contact_name: 'The Okafors',
         project_description: 'Downtown loft refresh',
         contact_email: undefined,
+        contact_phone: undefined,
         source: undefined,
       }),
       expect.objectContaining({
         onSuccess: expect.any(Function),
         onError: expect.any(Function),
       }),
+    );
+  });
+
+  it('submits a trimmed email and phone to their own columns', () => {
+    render(<CaptureLeadSheet open onClose={jest.fn()} />);
+
+    fireEvent.change(screen.getByLabelText(/Name/), {
+      target: { value: 'The Okafors' },
+    });
+    fireEvent.change(screen.getByLabelText(/The project \(one line\)/), {
+      target: { value: 'Downtown loft refresh' },
+    });
+    fireEvent.change(screen.getByLabelText('Email'), {
+      target: { value: '  okafors@email.com  ' },
+    });
+    fireEvent.change(screen.getByLabelText('Phone'), {
+      target: { value: '  (555) 014-2200  ' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /begin the brief/i }));
+
+    expect(mutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        contact_email: 'okafors@email.com',
+        contact_phone: '(555) 014-2200',
+        // A phone no longer rides along in the Brief one-liner as prose.
+        project_description: 'Downtown loft refresh',
+      }),
+      expect.anything(),
     );
   });
 
