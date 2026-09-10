@@ -664,8 +664,10 @@ export function useReturnToLeadCheck(designerClientId: string | null | undefined
  * Invalidates everything `useBeginDiscovery` does (it reverses that act), plus
  * the client-list keys from use-clients.ts and the document-state / desk keys —
  * the folder changes shape, so every surface that reads it must re-derive. Two
- * exceptions: the check's own key is REMOVED rather than invalidated (its
- * subject is gone), and the departing engagement's own document_state key is
+ * exceptions: the check's own key is WRITTEN with the closed-door answer rather
+ * than invalidated or removed (its subject is gone, and a removed key its live
+ * observer re-creates would fetch), and the departing engagement's own
+ * document_state key is
  * left alone (its page is mid-navigation and the row it would refetch has just
  * been deleted).
  */
@@ -696,12 +698,20 @@ export function useReturnToLead() {
       queryClient.invalidateQueries({ queryKey: ['lead', result.lead_id] });
       queryClient.invalidateQueries({ queryKey: ['lead-stats'] });
       queryClient.invalidateQueries({ queryKey: ['designer-clients'] });
-      // Then the rest. The check is REMOVED rather than invalidated: the
-      // relationship it asks about no longer exists, so a refetch would only
-      // earn an access-denied answer.
-      queryClient.removeQueries({
-        queryKey: ['return-to-lead-check', designerClientId],
-      });
+      // Then the rest. The check is ANSWERED rather than invalidated or
+      // removed: the relationship it asks about no longer exists, so a refetch
+      // would only earn an access-denied answer. Removing it is not the same as
+      // silencing it — the section is still mounted while the router replaces
+      // the URL, and React Query re-creates a removed query the moment its live
+      // observer renders again, which fetches it. That second
+      // `return_to_lead_check` 403s and logs `client relationship <id> not
+      // found or access denied` on a success path. Writing the closed-door
+      // answer instead leaves a fresh entry no observer needs to fetch, and the
+      // action it gates (`returnCheck?.lead_id`) reads it as gone.
+      queryClient.setQueryData<ReturnToLeadCheck>(
+        ['return-to-lead-check', designerClientId],
+        { allowed: false, reason: null, lead_id: null },
+      );
       queryClient.invalidateQueries({
         queryKey: ['designer-client', designerClientId],
       });

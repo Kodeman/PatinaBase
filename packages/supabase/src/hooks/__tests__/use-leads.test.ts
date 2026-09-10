@@ -114,10 +114,11 @@ vi.mock('@supabase/ssr', () => ({
 
 const invalidateQueries = vi.fn();
 const removeQueries = vi.fn();
+const setQueryData = vi.fn();
 vi.mock('@tanstack/react-query', () => ({
   useQuery: (config: unknown) => config,
   useMutation: (config: unknown) => config,
-  useQueryClient: () => ({ invalidateQueries, removeQueries }),
+  useQueryClient: () => ({ invalidateQueries, removeQueries, setQueryData }),
 }));
 
 // Import AFTER the mocks are wired up.
@@ -133,6 +134,7 @@ beforeEach(() => {
   Object.keys(builders).forEach((k) => delete builders[k]);
   invalidateQueries.mockReset();
   removeQueries.mockReset();
+  setQueryData.mockReset();
   supabaseClient.rpc.mockReset();
   supabaseClient.from.mockClear();
 });
@@ -650,12 +652,25 @@ describe('useReturnToLead — one RPC, no browser fallback', () => {
     ).toBe(true);
   });
 
-  it('removes the check rather than refetching it — its subject is gone', () => {
+  it('answers the check rather than refetching OR removing it — its subject is gone', () => {
+    // Removing is not silencing: `DiscoverySection` is still mounted while the
+    // router replaces the URL, and React Query re-creates a removed query the
+    // moment its live observer renders again — which fetches it. That second
+    // `return_to_lead_check` 403s on the relationship this act just deleted and
+    // logs `client relationship <id> not found or access denied` seconds after
+    // a success. Writing the closed-door answer leaves a fresh entry nothing
+    // needs to fetch, and the action it gates reads `lead_id: null` as gone.
     getReturnOnSuccess()({ lead_id: 'lead-1' }, 'dc-discovery');
 
-    expect(removeQueries).toHaveBeenCalledWith({
-      queryKey: ['return-to-lead-check', 'dc-discovery'],
-    });
+    expect(setQueryData).toHaveBeenCalledWith(
+      ['return-to-lead-check', 'dc-discovery'],
+      { allowed: false, reason: null, lead_id: null },
+    );
+    expect(
+      removeQueries.mock.calls.map(
+        (c) => (c[0] as { queryKey: unknown[] }).queryKey,
+      ),
+    ).not.toContainEqual(['return-to-lead-check', 'dc-discovery']);
     expect(
       invalidateQueries.mock.calls.map(
         (c) => (c[0] as { queryKey: unknown[] }).queryKey,
