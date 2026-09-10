@@ -22,7 +22,7 @@ import { Button } from "@/components/ui/controls";
 import { DocSheet } from "../../../overlays/doc-sheet";
 
 const LABEL =
-  "font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]";
+  "font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--ink-subtle)]";
 
 export const REPLACE_WARNING =
   "This replaces the parts on this agreement. Nothing else on the draft changes.";
@@ -198,7 +198,7 @@ export function TemplatePickerSheet({
                       {DESIGN_BUILD_COPY.templateNeedsAttestation}{" "}
                       <a
                         href="/desk?account=studio"
-                        className="underline decoration-[var(--color-aged-oak)] underline-offset-2"
+                        className="underline decoration-[var(--oak)] underline-offset-2"
                       >
                         Account → Studio
                       </a>

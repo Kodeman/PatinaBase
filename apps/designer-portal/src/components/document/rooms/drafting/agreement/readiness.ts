@@ -45,11 +45,20 @@ import {
 } from "./part-kinds";
 
 export interface AgreementBlocker {
-  /** The part this blocker belongs to, so the rail can mark the row. Null for
-   *  a blocker about the document as a whole (its kind, its state, its
+  /** The part this blocker belongs to, so the outline can mark the row. Null
+   *  for a blocker about the document as a whole (its kind, its state, its
    *  client, the class floor). */
   partId: string | null;
   message: string;
+  /**
+   * The imperative phrase the readiness voice counts with — "name a fee",
+   * "name a ceiling", "link a client". Absent, the voice falls back to
+   * `message`, so the region is never empty and never wrong (§A10).
+   */
+  ask?: string;
+  /** What the voice says when THIS blocker is the one that just went —
+   *  "Role rates name the fee". Absent, no transition sentence is composed. */
+  cleared?: string;
 }
 
 export interface AgreementReadiness {
@@ -162,8 +171,11 @@ export function assessAgreementReadiness({
 }): AgreementReadiness {
   const blockers: AgreementBlocker[] = [];
   const notes: string[] = [];
-  const add = (partId: string | null, message: string) =>
-    blockers.push({ partId, message });
+  const add = (
+    partId: string | null,
+    message: string,
+    voice?: { ask: string; cleared?: string },
+  ) => blockers.push({ partId, message, ...voice });
 
   // R-1 / R-2 — the document itself, unchanged from the flag-off wording.
   if (
@@ -434,9 +446,10 @@ export function assessAgreementReadiness({
       );
     });
     const doubleCount = validateNoDoubleCount({
-      supervision: supervisionParts.length > 0
-        ? readSupervision(supervisionParts[0].payload ?? {})
-        : null,
+      supervision:
+        supervisionParts.length > 0
+          ? readSupervision(supervisionParts[0].payload ?? {})
+          : null,
       subMarkupBps: readSubMarkupBps(pricingBasisPart?.payload ?? {}),
     });
     if (doubleCount) {
@@ -488,6 +501,7 @@ export function assessAgreementReadiness({
     add(
       null,
       "This agreement names no fee. Add a rate card, a flat fee, or a per-phase fee.",
+      { ask: "name a fee", cleared: "Role rates name the fee" },
     );
   }
 
@@ -527,12 +541,13 @@ export function assessAgreementReadiness({
     add(
       ceilingPart?.id ?? null,
       "An agreement that bills hourly needs a ceiling. Add a Ceiling part, or remove the role rates.",
+      { ask: "name a ceiling" },
     );
   }
 
   // R-3 — last, as it is today.
   if (!recipientEmail?.trim()) {
-    add(null, CLIENT_LINK_BLOCKER);
+    add(null, CLIENT_LINK_BLOCKER, { ask: "link a client" });
   }
 
   return { ready: blockers.length === 0, blockers, notes };

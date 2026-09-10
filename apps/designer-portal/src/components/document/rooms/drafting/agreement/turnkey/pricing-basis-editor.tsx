@@ -45,7 +45,7 @@ import { bpsToPercent, percentToBps, turnkeyMoney } from "./money";
 import { ScheduleOfValues } from "./schedule-of-values";
 
 const LABEL =
-  "font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]";
+  "font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--ink-subtle)]";
 
 export const SOV_AUTHORING_NOTE =
   "Your own division of the work — a room, a phase, or one line for the whole of it. It comes to the contract sum, and it is not the cost lines above.";
@@ -399,7 +399,9 @@ export function PricingBasisEditor({
                   variant="ghost"
                   size="sm"
                   disabled={readOnly}
-                  onClick={() => writeScheduleOfValues(seedScheduleOfValues(basis))}
+                  onClick={() =>
+                    writeScheduleOfValues(seedScheduleOfValues(basis))
+                  }
                 >
                   Start with one line
                 </Button>

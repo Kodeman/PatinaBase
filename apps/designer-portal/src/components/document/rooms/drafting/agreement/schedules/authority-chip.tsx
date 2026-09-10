@@ -22,7 +22,7 @@ import {
 const INK: Record<AuthorityStanding, string> = {
   authority: "text-[var(--color-charcoal)]",
   "deposit-only": "text-[var(--color-charcoal)]",
-  "record-only": "text-[var(--color-aged-oak)]",
+  "record-only": "text-[var(--ink-subtle)]",
 };
 
 export function AuthorityChip({

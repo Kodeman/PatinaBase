@@ -21,7 +21,7 @@ import { Button, Input } from "@/components/ui/controls";
 import { documentEvents } from "@/lib/analytics/document-events";
 
 const LABEL =
-  "font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]";
+  "font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--ink-subtle)]";
 
 export const SAVED_NOTE = "Saved to your Library.";
 export const NOT_PERMITTED_NOTE =

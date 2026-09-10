@@ -20,7 +20,7 @@
  * the flag.
  */
 
-import { render } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import type { AgreementPart } from "@patina/types";
 import { AgreementComposer } from "../agreement-composer";
 import type { CommercialDocumentBundle } from "@/hooks/use-commercial-documents";
@@ -58,18 +58,37 @@ jest.mock("../../../../overlays/doc-sheet", () => ({
 }));
 
 jest.mock("../../../../document-action", () => ({
+  // The held contract, mirrored from the primitive T1 landed: a held act keeps
+  // its place in the tab order, carries `aria-disabled`, swallows the act and
+  // says why instead.
   DocumentAction: ({
     children,
     actionKey: _actionKey,
-    surfaceKey: _surfaceKey,
-    regionKey: _regionKey,
     trailing: _trailing,
     variant: _variant,
     loading: _loading,
     loadingLabel: _loadingLabel,
+    held,
+    onHeldActivate,
+    disabled,
+    onClick,
     ...props
-  }: React.ButtonHTMLAttributes<HTMLButtonElement> &
-    Record<string, unknown>) => <button {...props}>{children}</button>,
+  }: React.ButtonHTMLAttributes<HTMLButtonElement> & Record<string, any>) => (
+    <button
+      {...props}
+      aria-disabled={disabled && held ? "true" : undefined}
+      disabled={disabled && !held ? true : undefined}
+      onClick={(event) => {
+        if (disabled) {
+          if (held) onHeldActivate?.();
+          return;
+        }
+        onClick?.(event);
+      }}
+    >
+      {children}
+    </button>
+  ),
 }));
 
 jest.mock("@/components/portal/client-picker", () => ({
@@ -236,8 +255,32 @@ function renderRoom(parts: AgreementPart[]) {
   );
 }
 
+/* Below 1248 the outline is a disclosure, and jsdom's matchMedia answers
+   `false` to every query, so the suite opens it the way a laptop does. */
+const outline = () =>
+  screen.getByRole("navigation", { name: "Agreement parts" });
+const outlineTitles = () => {
+  const toggle = within(outline()).getByRole("button", { name: "The parts" });
+  if (toggle.getAttribute("aria-expanded") !== "true") fireEvent.click(toggle);
+  return within(outline())
+    .getAllByRole("listitem")
+    .map((row) => row.textContent ?? "");
+};
+const write = (title: string) =>
+  fireEvent.click(screen.getByRole("button", { name: `${title} Write` }));
+
+/** N-9 — the whole-tree snapshots this file carried (1,543 recorded lines
+ *  across five calls) pinned markup the galley deletes. What they were for is
+ *  asserted directly instead: with `design-build` off, NO turnkey surface is
+ *  drawn and every turnkey money part stays in the read-only card. */
+const noTurnkeySurface = (container: HTMLElement) => {
+  expect(screen.queryByText(/Draw ledger/i)).toBeNull();
+  expect(screen.queryByText(/Notice of cancellation/i)).toBeNull();
+  expect(container.querySelector("[data-draw-row]")).toBeNull();
+};
+
 describe("the composed room with design-build off", () => {
-  it("renders the rail and the standard parts exactly as Wave 2 shipped", () => {
+  it("lists every part and draws no turnkey surface", () => {
     const { container } = renderRoom([
       part({
         partKey: "patina.services",
@@ -280,11 +323,28 @@ describe("the composed room with design-build off", () => {
         payload: { body: "Ownership and cancellation." },
       }),
     ]);
-    expect(container.firstChild).toMatchSnapshot();
+
+    expect(outlineTitles()).toEqual([
+      "Services",
+      "Deliverables",
+      "Role rates",
+      "Ceiling",
+      "Terms",
+    ]);
+    // Wave 2's Library IS on in this suite, so its acts are the control that
+    // proves the absences below are the design-build gate and not an empty
+    // room.
+    expect(
+      screen.getByRole("button", { name: "Start from a template…" }),
+    ).toBeInTheDocument();
+    noTurnkeySurface(container);
   });
 
-  it("renders a part hidden from the client exactly as Wave 2 shipped", () => {
-    const { container } = renderRoom([
+  // AR-e — hide-a-part is an act on every agreement now, not the turnkey lane
+  // alone, so it exists here with `design-build` off. R48 still withholds it
+  // from the two parts that state the money.
+  it("offers the hide act on a plain agreement, and says the part is hidden", () => {
+    renderRoom([
       part({
         partKey: "studio.internal-note",
         title: "Studio note",
@@ -292,7 +352,8 @@ describe("the composed room with design-build off", () => {
         payload: { body: "Our own note." },
       }),
     ]);
-    expect(container.firstChild).toMatchSnapshot();
+    const act = screen.getByRole("button", { name: "Show to the client" });
+    expect(act).toHaveAttribute("data-client-visible", "false");
   });
 
   it("leaves the pricing basis in the read-only card, as Wave 2 shipped", () => {
@@ -305,7 +366,11 @@ describe("the composed room with design-build off", () => {
         payload: { basis: "cost_plus_gmp" },
       }),
     ]);
-    expect(container.firstChild).toMatchSnapshot();
+    write("Pricing basis");
+    expect(
+      screen.getByText(/This part opens in a later release/),
+    ).toBeInTheDocument();
+    noTurnkeySurface(container);
   });
 
   it("leaves the draws in the read-only card, as Wave 2 shipped", () => {
@@ -318,7 +383,15 @@ describe("the composed room with design-build off", () => {
         payload: { draws: [], retainageBps: 500 },
       }),
     ]);
-    expect(container.firstChild).toMatchSnapshot();
+    write("Draws");
+    expect(
+      screen.getByText(/This part opens in a later release/),
+    ).toBeInTheDocument();
+    // R48 — the two parts that state the money are never hideable.
+    expect(
+      screen.queryByRole("button", { name: /Hide from the client/ }),
+    ).toBeNull();
+    noTurnkeySurface(container);
   });
 
   it("leaves the allowances in the read-only card, as Wave 2 shipped", () => {
@@ -331,6 +404,10 @@ describe("the composed room with design-build off", () => {
         payload: { allowances: [] },
       }),
     ]);
-    expect(container.firstChild).toMatchSnapshot();
+    write("Allowances");
+    expect(
+      screen.getByText(/This part opens in a later release/),
+    ).toBeInTheDocument();
+    noTurnkeySurface(container);
   });
 });

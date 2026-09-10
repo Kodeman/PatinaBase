@@ -7,9 +7,12 @@
  * sits behind `agreementParts && agreementLibrary`; with the Library flag off
  * the Contract Room must render exactly the paper Wave 1 shipped.
  *
- * A failure here is a bug, never a snapshot to update. If a later wave has a
- * ruling that deliberately moves the flag-off room, it re-pins this file with
- * that ruling named in the commit — it does not run `-u` and move on.
+ * N-9 — the three whole-tree snapshots this file used to carry (1,568
+ * recorded lines across five calls) pinned the very header row and grid
+ * classes the galley deletes, so they proved the markup rather than the rule.
+ * They are replaced by assertions on the thing actually being proved: with
+ * `agreement-library` off, NO Wave 2 surface is drawn, and every Wave 1
+ * editor still opens.
  *
  * RE-PINNED ONCE, deliberately: walk round 2, finding W2R2-06. The header's
  * three acts (Preview client copy / Return to the seven facets / Save
@@ -26,7 +29,7 @@
  * variant, which Wave 1 opens read-only in `UnsupportedPartCard`).
  */
 
-import { render } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import type { AgreementPart } from "@patina/types";
 import { AgreementComposer } from "../agreement-composer";
 import type { CommercialDocumentBundle } from "@/hooks/use-commercial-documents";
@@ -64,18 +67,37 @@ jest.mock("../../../../overlays/doc-sheet", () => ({
 }));
 
 jest.mock("../../../../document-action", () => ({
+  // The held contract, mirrored from the primitive T1 landed: a held act keeps
+  // its place in the tab order, carries `aria-disabled`, swallows the act and
+  // says why instead.
   DocumentAction: ({
     children,
     actionKey: _actionKey,
-    surfaceKey: _surfaceKey,
-    regionKey: _regionKey,
     trailing: _trailing,
     variant: _variant,
     loading: _loading,
     loadingLabel: _loadingLabel,
+    held,
+    onHeldActivate,
+    disabled,
+    onClick,
     ...props
-  }: React.ButtonHTMLAttributes<HTMLButtonElement> &
-    Record<string, unknown>) => <button {...props}>{children}</button>,
+  }: React.ButtonHTMLAttributes<HTMLButtonElement> & Record<string, any>) => (
+    <button
+      {...props}
+      aria-disabled={disabled && held ? "true" : undefined}
+      disabled={disabled && !held ? true : undefined}
+      onClick={(event) => {
+        if (disabled) {
+          if (held) onHeldActivate?.();
+          return;
+        }
+        onClick?.(event);
+      }}
+    >
+      {children}
+    </button>
+  ),
 }));
 
 jest.mock("@/components/portal/client-picker", () => ({
@@ -217,8 +239,25 @@ function renderRoom(parts: AgreementPart[]) {
   );
 }
 
+/* Below 1248 the outline is a disclosure, and jsdom's matchMedia answers
+   `false` to every query, so the suite opens it the way a laptop does. */
+const outline = () =>
+  screen.getByRole("navigation", { name: "Agreement parts" });
+const openOutline = () => {
+  const toggle = within(outline()).getByRole("button", { name: "The parts" });
+  if (toggle.getAttribute("aria-expanded") !== "true") fireEvent.click(toggle);
+};
+const outlineTitles = () => {
+  openOutline();
+  return within(outline())
+    .getAllByRole("listitem")
+    .map((row) => row.textContent ?? "");
+};
+const write = (title: string) =>
+  fireEvent.click(screen.getByRole("button", { name: `${title} Write` }));
+
 describe("the composed room with agreement-library off", () => {
-  it("renders the rail and the standard parts exactly as Wave 1 shipped", () => {
+  it("lists every part and offers none of the Library", () => {
     const { container } = renderRoom([
       part({
         partKey: "patina.services",
@@ -279,10 +318,33 @@ describe("the composed room with agreement-library off", () => {
         payload: { body: "Ownership and cancellation." },
       }),
     ]);
-    expect(container.firstChild).toMatchSnapshot();
+
+    // FS-16 — the outline keeps the shipped rail's contract.
+    expect(outlineTitles()).toEqual([
+      "Services",
+      "Deliverables",
+      "Role rates",
+      "Ceiling",
+      "Retainer",
+      "Billing cadence",
+      "Terms",
+    ]);
+    // Wave 2's three acts are absent, not disabled.
+    expect(
+      screen.queryByRole("button", { name: "Start from a template…" }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: /Save as template/ }),
+    ).toBeNull();
+    // …and Wave 1's own blank-kind menu is what the seam offers.
+    expect(
+      screen.getAllByRole("button", { name: "+ Add a part" }).length,
+    ).toBeGreaterThan(0);
+    // No R9 standing anywhere: the chip is Wave 2's.
+    expect(container.querySelector("[data-authority-standing]")).toBeNull();
   });
 
-  it("renders the flat-fee editor exactly as Wave 1 shipped", () => {
+  it("opens the flat-fee editor Wave 1 shipped", () => {
     const { container } = renderRoom([
       part({
         partKey: "custom.flat",
@@ -292,10 +354,12 @@ describe("the composed room with agreement-library off", () => {
         payload: { cents: 800000 },
       }),
     ]);
-    expect(container.firstChild).toMatchSnapshot();
+    write("Flat fee");
+    expect(screen.getByLabelText(/Flat fee · dollars/i)).toHaveValue("8000");
+    expect(container.querySelector("[data-authority-standing]")).toBeNull();
   });
 
-  it("renders the per-phase editor exactly as Wave 1 shipped", () => {
+  it("opens the per-phase editor Wave 1 shipped", () => {
     const { container } = renderRoom([
       part({
         partKey: "custom.per-phase",
@@ -310,10 +374,13 @@ describe("the composed room with agreement-library off", () => {
         },
       }),
     ]);
-    expect(container.firstChild).toMatchSnapshot();
+    write("Fee by phase");
+    expect(screen.getByDisplayValue("Concept")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Documentation")).toBeInTheDocument();
+    expect(container.querySelector("[data-authority-standing]")).toBeNull();
   });
 
-  it("renders the furnishings-deposit editor exactly as Wave 1 shipped", () => {
+  it("opens the furnishings-deposit editor Wave 1 shipped", () => {
     const { container } = renderRoom([
       part({
         partKey: "patina.deposit",
@@ -323,7 +390,11 @@ describe("the composed room with agreement-library off", () => {
         payload: { depositPercent: 50 },
       }),
     ]);
-    expect(container.firstChild).toMatchSnapshot();
+    write("Furnishings deposit");
+    expect(
+      screen.getByRole("region", { name: "Furnishings deposit editor" }),
+    ).toBeInTheDocument();
+    expect(container.querySelector("[data-authority-standing]")).toBeNull();
   });
 
   it("leaves a record-only variant in Wave 1's read-only card", () => {
@@ -336,6 +407,12 @@ describe("the composed room with agreement-library off", () => {
         payload: { markupPercent: 18 },
       }),
     ]);
-    expect(container.firstChild).toMatchSnapshot();
+    write("Cost plus");
+    expect(
+      screen.getByText(/This part opens in a later release/),
+    ).toBeInTheDocument();
+    // Wave 2's record-only help line and its chip are both absent.
+    expect(container.querySelector("[data-authority-standing]")).toBeNull();
+    expect(screen.queryByText(/It is written down/)).toBeNull();
   });
 });
