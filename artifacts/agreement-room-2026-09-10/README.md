@@ -48,4 +48,4 @@ node "$R" specimens/direction-1.html --out shots/specimens/direction-1 \
   --console
 ```
 
-**What this program does not decide.** Which direction ships, and six other open questions — see `rulings.md`.
+**Ruled 10 September 2026** — see `rulings.md`: D · the galley ships; the return act and the seven-facet room are retired (R24 reversed); §A14 and the 1200px studio band are adopted; the hidden send trigger is folded into the build wave.
