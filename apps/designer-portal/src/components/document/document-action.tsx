@@ -225,11 +225,14 @@ export const DocumentAction = forwardRef<
     'data-held': isHeld || undefined,
     onPointerDown: markInkPoint,
     onPointerMove: markInkPoint,
-    // Held is faint ink on the rail (N-6), never opacity — appended, so an act
-    // that is not held keeps the exact class string it carried before.
-    className:
-      [BASE_CLASS, VARIANT_CLASS[variant], className ?? ''].join(' ') +
-      (isHeld ? ' opacity-100 bg-[var(--rail)] text-[var(--ink-faint)]' : ''),
+    // Held is faint ink on the rail (N-6), never opacity — and it is already
+    // painted by `.da-act[aria-disabled='true']` (`--text-faint`, byte-
+    // identical to `--ink-faint`) and `.da-terminal[aria-disabled='true']`
+    // (`--doc-rail-stock`, i.e. `--rail`) in `globals.css:1066-1086`. Utility
+    // classes appended here lost that cascade (0,1,0 against 0,2,0) and were
+    // inert (T1R-06); a held-specific treatment belongs in a
+    // `.da-act[data-held='true']` rule after :1086, not here.
+    className: [BASE_CLASS, VARIANT_CLASS[variant], className ?? ''].join(' '),
   };
 
   if (href) {
@@ -270,6 +273,13 @@ export const DocumentAction = forwardRef<
     );
   }
 
+  // Spread, never written as `aria-disabled={isHeld || undefined}`: that form
+  // sits after `{...rest}` and erases a caller's OWN `aria-disabled` on every
+  // act that is not held. `discovery-section.tsx:554` is one such caller, and
+  // its refusal stopped being announced. Held adds the mark; nothing else
+  // touches it.
+  const heldMark = isHeld ? ({ 'aria-disabled': true } as const) : null;
+
   const buttonOnClick = onClick as DocumentActionButtonProps['onClick'];
   const handleClick = async (event: MouseEvent<HTMLButtonElement>) => {
     if (unavailable) {
@@ -297,7 +307,7 @@ export const DocumentAction = forwardRef<
       ref={ref as React.Ref<HTMLButtonElement>}
       type={(rest as ButtonHTMLAttributes<HTMLButtonElement>).type ?? 'button'}
       disabled={unavailable && !held}
-      aria-disabled={isHeld || undefined}
+      {...heldMark}
       onClick={handleClick}
     >
       {content}
