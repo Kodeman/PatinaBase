@@ -20,11 +20,11 @@ export interface DocumentGuideReadinessFacts {
 }
 
 const DISCOVERY_INPUTS: Record<EssentialKey, DocumentGuideInputFact> = {
-  scope: { label: 'Project type and named rooms', owner: 'Designer', blocks: 'Direction', focusId: 'discovery-facet-scope' },
-  budget: { label: 'Working budget', owner: 'Client', blocks: 'Direction', focusId: 'discovery-facet-budget' },
-  timeline: { label: 'Target or hard date', owner: 'Client', blocks: 'Direction', focusId: 'discovery-facet-timeline' },
-  style: { label: 'Style direction', owner: 'Client', blocks: 'Direction', focusId: 'discovery-facet-style' },
-  lifestyle: { label: 'Lifestyle needs', owner: 'Client', blocks: 'Direction', focusId: 'discovery-facet-lifestyle' },
+  scope: { label: 'Project type and named rooms', shortLabel: 'Scope', owner: 'Designer', blocks: 'Direction', focusId: 'discovery-facet-scope' },
+  budget: { label: 'Working budget', shortLabel: 'Budget', owner: 'Client', blocks: 'Direction', focusId: 'discovery-facet-budget' },
+  timeline: { label: 'Target or hard date', shortLabel: 'Dates', owner: 'Client', blocks: 'Direction', focusId: 'discovery-facet-timeline' },
+  style: { label: 'Style direction', shortLabel: 'Style', owner: 'Client', blocks: 'Direction', focusId: 'discovery-facet-style' },
+  lifestyle: { label: 'Lifestyle needs', shortLabel: 'Lifestyle', owner: 'Client', blocks: 'Direction', focusId: 'discovery-facet-lifestyle' },
 };
 
 const EMPTY_DISCOVERY: DiscoveryFacts = {

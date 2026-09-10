@@ -4801,6 +4801,7 @@ export type Database = {
           status: string
           style_preferences: Json | null
           style_tags: string[] | null
+          subject: string | null
           tags: string[] | null
           total_projects: number | null
           total_revenue: number | null
@@ -4830,6 +4831,7 @@ export type Database = {
           status?: string
           style_preferences?: Json | null
           style_tags?: string[] | null
+          subject?: string | null
           tags?: string[] | null
           total_projects?: number | null
           total_revenue?: number | null
@@ -4859,6 +4861,7 @@ export type Database = {
           status?: string
           style_preferences?: Json | null
           style_tags?: string[] | null
+          subject?: string | null
           tags?: string[] | null
           total_projects?: number | null
           total_revenue?: number | null
@@ -8831,6 +8834,7 @@ export type Database = {
           room_scan_id: string | null
           source: string | null
           status: string
+          subject: string | null
           timeline: string | null
           updated_at: string
         }
@@ -8859,6 +8863,7 @@ export type Database = {
           room_scan_id?: string | null
           source?: string | null
           status?: string
+          subject?: string | null
           timeline?: string | null
           updated_at?: string
         }
@@ -8887,6 +8892,7 @@ export type Database = {
           room_scan_id?: string | null
           source?: string | null
           status?: string
+          subject?: string | null
           timeline?: string | null
           updated_at?: string
         }
@@ -17696,6 +17702,7 @@ export type Database = {
           start_date: string | null
           status: Database["public"]["Enums"]["project_status"] | null
           studio_id: string | null
+          subject: string | null
           target_end_date: string | null
           timeline_end: string | null
           timeline_start: string | null
@@ -17735,6 +17742,7 @@ export type Database = {
           start_date?: string | null
           status?: Database["public"]["Enums"]["project_status"] | null
           studio_id?: string | null
+          subject?: string | null
           target_end_date?: string | null
           timeline_end?: string | null
           timeline_start?: string | null
@@ -17774,6 +17782,7 @@ export type Database = {
           start_date?: string | null
           status?: Database["public"]["Enums"]["project_status"] | null
           studio_id?: string | null
+          subject?: string | null
           target_end_date?: string | null
           timeline_end?: string | null
           timeline_start?: string | null
@@ -19647,6 +19656,7 @@ export type Database = {
           signed_by_name: string | null
           signed_ip: string | null
           status: string
+          subject: string | null
           subtotal: number | null
           superseded_at: string | null
           superseded_reason: string | null
@@ -19698,6 +19708,7 @@ export type Database = {
           signed_by_name?: string | null
           signed_ip?: string | null
           status?: string
+          subject?: string | null
           subtotal?: number | null
           superseded_at?: string | null
           superseded_reason?: string | null
@@ -19749,6 +19760,7 @@ export type Database = {
           signed_by_name?: string | null
           signed_ip?: string | null
           status?: string
+          subject?: string | null
           subtotal?: number | null
           superseded_at?: string | null
           superseded_reason?: string | null
@@ -27799,6 +27811,7 @@ export type Database = {
           proposal_updated_at: string | null
           proposal_viewed_at: string | null
           pulse_week_of: string | null
+          subject: string | null
           title: string | null
           unacked_po_count: number | null
           unacked_po_label: string | null
@@ -29549,6 +29562,7 @@ export type Database = {
           signed_by_name: string | null
           signed_ip: string | null
           status: string
+          subject: string | null
           subtotal: number | null
           superseded_at: string | null
           superseded_reason: string | null
@@ -29828,6 +29842,7 @@ export type Database = {
           signed_by_name: string | null
           signed_ip: string | null
           status: string
+          subject: string | null
           subtotal: number | null
           superseded_at: string | null
           superseded_reason: string | null
@@ -29933,6 +29948,7 @@ export type Database = {
           start_date: string | null
           status: Database["public"]["Enums"]["project_status"] | null
           studio_id: string | null
+          subject: string | null
           target_end_date: string | null
           timeline_end: string | null
           timeline_start: string | null
@@ -30177,6 +30193,7 @@ export type Database = {
           signed_by_name: string | null
           signed_ip: string | null
           status: string
+          subject: string | null
           subtotal: number | null
           superseded_at: string | null
           superseded_reason: string | null
@@ -30567,6 +30584,7 @@ export type Database = {
           signed_by_name: string | null
           signed_ip: string | null
           status: string
+          subject: string | null
           subtotal: number | null
           superseded_at: string | null
           superseded_reason: string | null
@@ -31312,6 +31330,7 @@ export type Database = {
           start_date: string | null
           status: Database["public"]["Enums"]["project_status"] | null
           studio_id: string | null
+          subject: string | null
           target_end_date: string | null
           timeline_end: string | null
           timeline_start: string | null
@@ -31441,6 +31460,7 @@ export type Database = {
           signed_by_name: string | null
           signed_ip: string | null
           status: string
+          subject: string | null
           subtotal: number | null
           superseded_at: string | null
           superseded_reason: string | null
@@ -31786,6 +31806,7 @@ export type Database = {
           start_date: string | null
           status: Database["public"]["Enums"]["project_status"] | null
           studio_id: string | null
+          subject: string | null
           target_end_date: string | null
           timeline_end: string | null
           timeline_start: string | null
@@ -34338,6 +34359,7 @@ export type Database = {
           start_date: string | null
           status: Database["public"]["Enums"]["project_status"] | null
           studio_id: string | null
+          subject: string | null
           target_end_date: string | null
           timeline_end: string | null
           timeline_start: string | null
@@ -35341,6 +35363,7 @@ export type Database = {
               signed_by_name: string | null
               signed_ip: string | null
               status: string
+              subject: string | null
               subtotal: number | null
               superseded_at: string | null
               superseded_reason: string | null
@@ -35406,6 +35429,7 @@ export type Database = {
               signed_by_name: string | null
               signed_ip: string | null
               status: string
+              subject: string | null
               subtotal: number | null
               superseded_at: string | null
               superseded_reason: string | null
@@ -35572,6 +35596,7 @@ export type Database = {
           start_date: string | null
           status: Database["public"]["Enums"]["project_status"] | null
           studio_id: string | null
+          subject: string | null
           target_end_date: string | null
           timeline_end: string | null
           timeline_start: string | null

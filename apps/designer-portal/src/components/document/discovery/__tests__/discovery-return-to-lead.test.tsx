@@ -96,6 +96,12 @@ describe('DiscoverySection — Move back to New Lead', () => {
 
     const action = screen.getByRole('button', { name: 'Move back to New Lead' });
     expect(action).not.toBeDisabled();
+    // D7 — the undo says what it does even where nothing refuses it, and the
+    // action points at that sentence unconditionally.
+    const consequence = screen.getByText(
+      'Returns this to the lead queue; nothing here is lost.',
+    );
+    expect(action).toHaveAttribute('aria-describedby', consequence.id);
 
     fireEvent.click(action);
 
@@ -151,11 +157,29 @@ describe('DiscoverySection — Move back to New Lead', () => {
     expect(returnCheckIds).toContain('engagement-1');
   });
 
-  it('prints no reason while the door is open', () => {
+  it('prints the consequence, never a refusal, while the door is open', () => {
     mockReturnCheck = { allowed: true, reason: null, lead_id: 'lead-77' };
     renderSection();
 
     expect(screen.queryByText(/already been written to/)).not.toBeInTheDocument();
+    expect(
+      screen.getByText('Returns this to the lead queue; nothing here is lost.'),
+    ).toBeInTheDocument();
+  });
+
+  // D7 — a shut door states the server's reason INSTEAD of the consequence;
+  // the two never print together.
+  it('replaces the consequence with the refusal once the door is shut', () => {
+    mockReturnCheck = {
+      allowed: false,
+      reason: 'This client was matched through the app and has already been written to.',
+      lead_id: 'lead-77',
+    };
+    renderSection();
+
+    expect(
+      screen.queryByText('Returns this to the lead queue; nothing here is lost.'),
+    ).not.toBeInTheDocument();
   });
 
   // supabase-js constructs a PostgrestError as a plain JSON-parsed object, not

@@ -15557,3 +15557,63 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.return_to_lead(uuid) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00586_discovery_prefill_is_not_content.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.return_to_lead_check(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00586_discovery_prefill_is_not_content.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.return_to_lead_check(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00589_return_to_lead_hardening.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.return_to_lead_check(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00589_return_to_lead_hardening.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.return_to_lead_check(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00589_return_to_lead_hardening.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.return_to_lead(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00589_return_to_lead_hardening.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.return_to_lead(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00590_engagement_subject.sql
+DO $g$ BEGIN
+  grant select on document_state to authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00590_engagement_subject.sql
+DO $g$ BEGIN
+  grant select on document_state to service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 20260910152111_create_contact_messages.sql
+DO $g$ BEGIN
+  REVOKE ALL PRIVILEGES ON TABLE public.contact_messages FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 20260910152111_create_contact_messages.sql
+DO $g$ BEGIN
+  GRANT INSERT, SELECT ON TABLE public.contact_messages TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;

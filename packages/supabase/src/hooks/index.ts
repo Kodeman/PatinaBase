@@ -111,6 +111,11 @@ export {
   useRemoveProductFromProject,
   useUpdateProjectProductNotes,
 } from "./use-projects";
+export { useUpdateEngagementSubject } from "./use-engagement-subject";
+export type {
+  EngagementSubjectKind,
+  UpdateEngagementSubjectInput,
+} from "./use-engagement-subject";
 export {
   useSession,
   useUser,

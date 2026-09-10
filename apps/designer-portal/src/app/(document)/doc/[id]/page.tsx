@@ -26,6 +26,7 @@ import {
   useProposalFeedback,
   useProjectRoster,
   useDiscovery,
+  useBeginDirection,
   useProjectContextualHandoffs,
   useProposalScopeRooms,
   useProposalScheduleItems,
@@ -36,6 +37,7 @@ import {
   useOrganizationMembers,
   useMarkFirstDocumentOpened,
 } from '@patina/supabase';
+import type { DiscoveryRead } from '@patina/supabase';
 import {
   rollupVerdicts,
   formatVerdictRollup,
@@ -105,6 +107,8 @@ import {
 } from '@/components/document/care-band';
 import { CareSection } from '@/components/document/quiet-sections';
 import { DiscoverySection } from '@/components/document/discovery/discovery-section';
+import { PROJECT_TYPES } from '@/components/document/discovery/editors';
+import { LetterheadSubject } from '@/components/document/letterhead-subject';
 import { DiscoveryRecap } from '@/components/document/discovery/discovery-recap';
 import { DiscoveryMargin } from '@/components/document/discovery/discovery-margin';
 import {
@@ -149,6 +153,7 @@ import {
   composeDocumentGuideInputs,
   type DocumentGuideReadinessFacts,
 } from '@/lib/document/document-guide-inputs';
+import { ESSENTIAL_KEYS } from '@/lib/document/discovery-readiness';
 import { deriveGates, nearestOpenGate } from '@/lib/document/workflow-gate';
 import {
   asCommercialDocumentKind,
@@ -345,10 +350,47 @@ function vitalsFor(
       .filter(Boolean)
       .join(' · ');
   }
-  if (row.engagement_kind === 'lead') {
-    return [row.client_name, 'New inquiry'].filter(Boolean).join(' · ');
+  // A5 — the lead and relationship branches printed the client name under a
+  // title that IS the client name, beside a position the band already states.
+  // The vitals say nothing rather than say it twice.
+  if (row.engagement_kind === 'lead') return '';
+  return '';
+}
+
+/** The discovery vocabulary the section's own editor prints. */
+const PROJECT_TYPE_LABEL = new Map(
+  PROJECT_TYPES.map((option) => [option.value, option.label]),
+);
+
+/**
+ * R4 — the line the head prints when the studio has written no subject of its
+ * own: what the job IS, from the discovery row. Assembled at print time and
+ * never stored — the description would otherwise freeze while the discovery
+ * row kept moving.
+ *
+ * Project and lead papers assemble nothing: a project's vitals already carry
+ * phase · target · money, and a brief has no discovery row behind it (P5).
+ */
+function subjectFor(
+  row: DocumentStateRow,
+  discovery: DiscoveryRead | undefined,
+): string | null {
+  if (row.engagement_kind !== 'relationship' && row.engagement_kind !== 'proposal') {
+    return null;
   }
-  return [row.client_name, 'In discovery'].filter(Boolean).join(' · ');
+  const read = discovery?.row ?? null;
+  if (!read) return null;
+  const type = read.project_type?.trim() ?? '';
+  const label =
+    type === 'custom'
+      ? (read.project_type_custom?.trim() || null)
+      : type
+        ? (PROJECT_TYPE_LABEL.get(type) ?? null)
+        : null;
+  const named = (read.rooms ?? []).filter((room) => Boolean(room?.name?.trim()))
+    .length;
+  const rooms = named > 0 ? `${named} ${named === 1 ? 'room' : 'rooms'}` : null;
+  return [label, rooms].filter(Boolean).join(' · ') || null;
 }
 
 /**
@@ -365,6 +407,10 @@ function vitalsFor(
 /** One array identity for "this spread raises nothing", so the band's memo is
  *  not busted by a fresh `[]` on every render. */
 const NO_BAND_NEEDS: readonly RedLetterRow[] = [];
+
+/** D1 — one spelling of an open input's key, so the row the guide's act names
+ *  and the row the sheet lists are the same row to the derivation. */
+const bandInputKey = (index: number, label: string) => `${index}:${label}`;
 
 /**
  * D-B24 — which measure line 2 has to fit. The three tiers are the shell's own
@@ -931,6 +977,14 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   };
   const discoveryQuery = useDiscovery(
     row?.active_section === 'discovery' ? row.engagement_id : null,
+  );
+  // R4 — a proposal paper's assembled line comes from the SAME discovery row,
+  // reached through the chain's `designer_client_id`: `engagement_id` there is
+  // the proposal chain root, which `client_discovery` knows nothing about.
+  const proposalDiscoveryQuery = useDiscovery(
+    row?.engagement_kind === 'proposal'
+      ? (liveProposal?.designer_client_id ?? null)
+      : null,
   );
   const draftingState = useDraftingState(
     proposalId,
@@ -1630,14 +1684,57 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         gate: nearestGate,
         closureReady,
         ticketRows,
+        alreadySeeded: Boolean(discoveryQuery.data?.row?.seeded_proposal_id),
       })
     : null;
+  // R5 — one leader. The band's rest act on a ready discovery RUNS the seed
+  // (`begin_direction_from_discovery`, 00224) and lands on the successor
+  // document, which is what `discovery-section.tsx`'s readiness band used to
+  // do before it lost its act.
+  const beginDirectionAsync = useBeginDirection().mutateAsync;
+  // The act is not over when the RPC resolves — it is over when the successor
+  // document has been navigated to. Held until this page unmounts under the
+  // new URL, so the leader never looks idle mid-flight.
+  const [beginDirectionLanding, setBeginDirectionLanding] = useState(false);
+  const [beginDirectionError, setBeginDirectionError] = useState<string | null>(null);
+  const engagementId = row?.engagement_id ?? null;
+  // F2 — the RPC COPIES the discovery row into the seeded agreement, so the
+  // section's pending write has to land first: a 600ms debounce or a
+  // fire-and-forget focusout flush can otherwise arrive after the copy.
+  const discoveryFlush = useRef<(() => Promise<void>) | null>(null);
+  const registerDiscoveryFlush = useCallback((flush: () => Promise<void>) => {
+    discoveryFlush.current = flush;
+  }, []);
+  const runBeginDirection = useCallback(async () => {
+    if (!engagementId) return;
+    setBeginDirectionError(null);
+    setBeginDirectionLanding(true);
+    try {
+      await discoveryFlush.current?.();
+      const proposalId = await beginDirectionAsync({ designerClientId: engagementId });
+      // J1: the document's IDENTITY moves here — /doc/<designerClientId> stops
+      // resolving the instant the draft proposal exists (00327), so the old
+      // name is a dead end and the successor id is replaced onto, not pushed.
+      router.replace(`/doc/${proposalId}`);
+    } catch (err) {
+      setBeginDirectionLanding(false);
+      // The RPC rejects with a PostgrestError — message-shaped, not always an
+      // `instanceof Error`.
+      const message = (err as { message?: string } | null)?.message;
+      setBeginDirectionError(message || 'Something went wrong beginning the Direction.');
+    }
+  }, [beginDirectionAsync, engagementId, router]);
+
   // Split from activateGuide so the red-letter zone's per-need actions (below)
   // can reach the same switch without going through the guide's own model.
   const activateDestination = useCallback(
     (destination: DocumentGuideAction['destination']) => {
       if (destination.kind === 'retry') {
         void enrichedOperationalQuery.refetch();
+        return;
+      }
+      if (destination.kind === 'begin-direction') {
+        void runBeginDirection();
         return;
       }
       if (destination.kind === 'anchor') {
@@ -1649,13 +1746,18 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       // the fourth destination or a deep-linked guide act would open nothing.
       if (destination.kind === 'href') router.push(destination.href);
     },
-    [enrichedOperationalQuery, jumpToSection, router],
+    [enrichedOperationalQuery, jumpToSection, router, runBeginDirection],
   );
   const activateGuide = useCallback(() => {
+    // R5 — while the seed's failure is on line 2, the act is its Retry.
+    if (beginDirectionError) {
+      void runBeginDirection();
+      return;
+    }
     const destination = guideModel?.action?.destination;
     if (!destination) return;
     activateDestination(destination);
-  }, [activateDestination, guideModel]);
+  }, [activateDestination, beginDirectionError, guideModel, runBeginDirection]);
 
   const redLetterRows: RedLetterRow[] = useMemo(() => {
     if (!row || row.engagement_kind !== 'project') return [];
@@ -1851,20 +1953,10 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         : null,
     [row?.active_section],
   );
-  // W5F-03 — ONE section source for both of the stage strip's gates: the
-  // suppression above the spread and the re-host inside `scope`. They read the
-  // same value, so they cannot disagree about which spread this is.
-  //
-  // Residual, closed at W6: that value has to be the SPREAD's section, not the
-  // row's. The `scope` region that hosts one of the two mounts is gated on
-  // `spreadSection` (`= table ? table.section : row.active_section`), and a
-  // pinned worktable deliberately holds a stale composition — so an
-  // `active_section: 'proposal'` under a pinned `section: 'project'` suppressed
-  // the free-standing strip and never mounted `scope`, printing ZERO strips.
-  // `stageStripInScope` is therefore computed below, beside `spreadSection`,
-  // and both use sites sit under it.
-  // W5F-02 — `scope` mounts on the PROPOSAL spread only, so only the proposal
-  // spread re-hosts the strip. brief/discovery/direction keep it where it was.
+  // R1 — the stage line prints on the glass at project · install · care only;
+  // the pre-work and proposal spreads carry none. The rail keeps its own
+  // `CORE · STAGE 03` register (`preworkStageLine` above feeds it): the rail is
+  // the door, and it says the stage whether or not the glass does.
   const ladderSegments = ticketInput
     ? deriveLadderSegments({
         ticket: ticketInput,
@@ -1918,6 +2010,13 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           // reported up by `SectionStageLineMount` (N2).
           stageLine: preworkStageLine,
           investmentCents: liveProposal?.total_amount ?? null,
+          // D6 — the discovery stop's own figure, the same one the band's
+          // sentence counts down. Null until the read answers, so the rail
+          // never states a number nobody has stated.
+          essentialsDone:
+            row?.active_section === 'discovery' && discoveryReadiness.state === 'ready'
+              ? ESSENTIAL_KEYS.length - guideInputs.length
+              : null,
         },
       })
     : [];
@@ -2114,15 +2213,54 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     !deskGuidanceFailed
       ? redLetterRows
       : NO_BAND_NEEDS;
-  const guideHeadline = guideModel?.headline ?? null;
-  const guideActLabel = guideModel?.action?.label ?? null;
+  // R5/F11 — the refusal is a fact about ONE press of ONE leader. Left
+  // standing it overrode line 2 for the life of the page, so jumping a section
+  // or editing a facet kept a stale `Retry` where the leader belongs.
+  // `bandSpread` is `spreadSection` read above the early returns.
+  const guideActionKey = guideModel?.action?.key ?? null;
+  useEffect(() => {
+    setBeginDirectionError(null);
+  }, [guideActionKey, bandSpread]);
+  // R5 — a failed seed is stated on line 2 itself, where the leader stands,
+  // and its act re-runs the seed. There is no second band to print it in.
+  const guideHeadline = beginDirectionError
+    ? `Couldn’t begin the Direction — ${beginDirectionError}`
+    : (guideModel?.headline ?? null);
+  const guideActLabel = beginDirectionError
+    ? 'Retry'
+    : (guideModel?.action?.label ?? null);
   // N-05 — telemetry keys on the act's own key, never on its printed label.
-  const guideActKey = guideModel?.action?.key ?? null;
+  const guideActKey = beginDirectionError
+    ? 'retry-begin-direction'
+    : (guideModel?.action?.key ?? null);
+  // D-B24 — the same guide fact at the 327 measure. A refusal is already one
+  // clause and states its own reason, so it has no second form to fall to.
+  const guideMediumHeadline = beginDirectionError
+    ? null
+    : (guideModel?.mediumHeadline ?? null);
+  const guideShortHeadline = beginDirectionError
+    ? null
+    : (guideModel?.shortHeadline ?? null);
+  const guideActShortLabel = beginDirectionError
+    ? null
+    : (guideModel?.action?.shortLabel ?? null);
+  // D1 — the band's act NAMES the first open input, so that input must not be
+  // listed again behind the door. It names it exactly when `withInputs` built
+  // the act from it: a needs-input state whose first fact carries a focus id.
+  // Whether line 2 actually prints that act is the DERIVATION's answer, not
+  // this one — a standing exception outranks the guide — so the key travels
+  // down and the exclusion is made there.
+  const namedInputKey =
+    guideModel?.state === 'needs_input' && guideModel.topInput?.focusId
+      ? bandInputKey(0, guideModel.topInput.label)
+      : null;
+  const doorFacts = guideInputs;
+  const bandSection = row?.active_section ?? null;
   // W3-R2 — the guide's open inputs, the sheet's own second section. Their
   // facts are rebuilt every render from the same reads; this string is what
   // actually changes.
-  const inputSignature = guideInputs
-    .map((fact) => `${fact.label}|${fact.owner}|${fact.blocks}`)
+  const inputSignature = doorFacts
+    .map((fact) => `${fact.label}|${fact.owner}|${fact.blocks}|${fact.focusId ?? ''}`)
     .join(';');
   const bandHousehold = row?.client_name ?? '';
   const bandStageIndex = ticketPhase
@@ -2140,21 +2278,52 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   const bandModel = useMemo<LensBandModel | null>(() => {
     if (!bandSpread) return null;
     const guideAct = guideActLabel
-      ? { key: guideActKey ?? 'guide', label: guideActLabel, onAct: activateGuide }
+      ? {
+          key: guideActKey ?? 'guide',
+          label: guideActLabel,
+          shortLabel: guideActShortLabel ?? undefined,
+          onAct: activateGuide,
+          // R5 — the seed is in flight; the leader is held, not idle.
+          disabled: beginDirectionLanding,
+        }
       : null;
-    const inputs: LensInputItem[] = guideInputs.map((fact, index) => ({
-      key: `${index}:${fact.label}`,
+    // D1 — each row carries its OWN act, landing on its own facet. A fact with
+    // no facet to land on (a direction gap, a signature) prints the sentence
+    // and asks for nothing rather than borrowing the band's act.
+    const inputs: LensInputItem[] = doorFacts.map((fact, index) => ({
+      key: bandInputKey(index, fact.label),
       // The input's own kind word — `Client signature` stands under SIGNATURE.
       eyebrow: (fact.label.split(/\s+/).pop() ?? fact.label).toUpperCase(),
       sentence: `${fact.label} · ${fact.owner} · blocks ${fact.blocks}`,
-      act: guideAct,
+      act:
+        fact.focusId && bandSection
+          ? {
+              key: `input:${fact.label}`,
+              label: `Add ${fact.label}`,
+              onAct: () =>
+                activateDestination({
+                  kind: 'anchor',
+                  section: bandSection,
+                  focusId: fact.focusId,
+                  activate: true,
+                }),
+            }
+          : null,
     }));
     return deriveLensBand({
       spreadKind: bandSpread,
       ticket: ticketRows ?? [],
       needs: bandNeeds,
       inputs,
-      guide: guideHeadline ? { text: guideHeadline, act: guideAct } : null,
+      namedInputKey,
+      guide: guideHeadline
+        ? {
+            text: guideHeadline,
+            act: guideAct,
+            medium: guideMediumHeadline,
+            short: guideShortHeadline,
+          }
+        : null,
       tier: lensTier,
       household: bandHousehold,
       stageWord: bandStageWord,
@@ -2170,7 +2339,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       sentDate: bandSent,
       readingStop: bandStop,
     });
-    // `guideInputs` and `ticketPhase` are re-created every render; the values
+    // `doorFacts` and `ticketPhase` are re-created every render; the values
     // that decide the model are `inputSignature` and `bandStageIndex`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -2178,10 +2347,17 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     ticketRows,
     bandNeeds,
     inputSignature,
+    namedInputKey,
     guideHeadline,
+    guideMediumHeadline,
+    guideShortHeadline,
     guideActLabel,
+    guideActShortLabel,
     guideActKey,
     activateGuide,
+    activateDestination,
+    beginDirectionLanding,
+    bandSection,
     lensTier,
     bandHousehold,
     bandStageWord,
@@ -2328,9 +2504,14 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // read on this page stays on the live row.
   const table = worktableOn ? tablePin.composition : null;
   const spreadSection = table ? table.section : row.active_section;
-  // W5F-03 (residual) — the gate both stage-strip mounts read, off the spread
-  // the page is actually printing.
-  const stageStripInScope = spreadSection === 'proposal';
+  // R1 — the eleven-stage vocabulary prints only where a schedule resolver
+  // anchors it. At brief · discovery · direction · proposal it was a per-stop
+  // constant with no position and no fidelity; the rail's own register is the
+  // door to it there.
+  const stageOnGlass =
+    spreadSection === 'project' ||
+    spreadSection === 'install' ||
+    spreadSection === 'care';
   // W4a — the Finalize table: the LEGACY proposal in the client's hands. Its
   // head, its leader, its Offer facets and its one shelf stand only here.
   //
@@ -2619,6 +2800,21 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           // AnyRecord, but the letterhead may only reach the three columns it
           // actually reads.
           vitals={vitalsFor(row, project as ProjectVitalsRecord, liveProposal, scheduleVitals)}
+          // R4 — the stored line, or the one assembled from discovery. The
+          // assembled words are printed, never written.
+          subject={
+            <LetterheadSubject
+              kind={row.engagement_kind}
+              id={row.engagement_id}
+              subject={row.subject}
+              assembled={subjectFor(
+                row,
+                row.engagement_kind === 'proposal'
+                  ? proposalDiscoveryQuery.data
+                  : discoveryQuery.data,
+              )}
+            />
+          }
           // R80: project vitals self-save at the letterhead (blur-save law).
           projectId={row.engagement_kind === 'project' ? row.project_id : null}
           fill={deriveFillState(sections)}
@@ -2758,20 +2954,12 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                 letterhead. They ride inside <div data-active-section> so they
                 read as the section's own sub-label, exactly as the deck draws
                 the open Project row. */}
-            {/* W5-R5 §2 (N2) — on the PROPOSAL spread this strip is the
-                `scope` stop's body and prints inside it, so the first element
-                after the band is the spread's first region head, not a
-                free-standing band. Everywhere else it stays where R1/I114 put
-                it: the open section's own sub-label.
-                W5F-02: the suppression was `isPreWorkSection`, all four
-                stages — but `scope` mounts on the PROPOSAL spread only, so
-                brief, discovery and direction lost the strip entirely rather
-                than re-hosting it. `section-stage-line-mount.tsx`'s
-                section-mode branch exists precisely for those three.
-                W5F-03: both gates read `spreadSection`, so they cannot
-                disagree about which spread this is — including under a pinned
-                worktable, where the row's own section is deliberately stale. */}
-            {!stageStripInScope && (
+            {/* R1 — project · install · care only, and free-standing: those
+                three spreads are the ones a schedule resolver anchors, so the
+                strip carries a real position and a real fidelity. The gate
+                reads `spreadSection`, not the row's own section, so a pinned
+                worktable cannot disagree with the paper it is printing. */}
+            {stageOnGlass && (
               <SectionStageLineMount
                 projectId={
                   row.engagement_kind === 'project' ? row.project_id : null
@@ -2806,6 +2994,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                 region="brief"
                 status={preworkStatus('brief')}
                 eyebrow={briefEyebrow ?? undefined}
+                silent
               >
                 {row.lead_id ? (
                   <BriefSection leadId={row.lead_id} onEyebrow={setBriefEyebrow} />
@@ -2816,7 +3005,10 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
               <PreworkRegion
                 region="discovery"
                 status={preworkStatus('discovery')}
+                // R3 — reported up and still read by the band; the head no
+                // longer prints it.
                 eyebrow={discoveryEyebrow ?? undefined}
+                silent
               >
                 {row.engagement_id && row.designer_id ? (
                   <DiscoverySection
@@ -2827,6 +3019,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                     clientName={row.client_name}
                     projectId={row.project_id ?? null}
                     onEyebrow={setDiscoveryEyebrow}
+                    onRegisterFlush={registerDiscoveryFlush}
                   />
                 ) : null}
               </PreworkRegion>
@@ -2838,6 +3031,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                 region="direction"
                 status={preworkStatus('direction')}
                 eyebrow={preworkEyebrow}
+                silent
               >
                 {proposalVerdictHead}
                 {proposalLifecycle}
@@ -2864,26 +3058,10 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                   {proposalLifecycle}
                 </PreworkRegion>
                 <PreworkRegion region="scope" status={preworkStatus('scope')}>
-                  {/* W5-R5 §2 (N2) — the stage line IS this stop's body, and
-                      `stageStripInScope` above is the same fact read once. */}
-                  {stageStripInScope && (
-                    <SectionStageLineMount
-                      // W5F2-01 — NULL, always. N2 rules `scope`'s fact to be
-                      // the SECTION's, and the head and the rail segment both
-                      // derive it that way (`preworkStageLine` is a pure
-                      // `deriveSectionWorkflowStageDocument(active_section)`).
-                      // A non-null id sends the mount down the project branch
-                      // instead, so on a project engagement still sitting at
-                      // `active_section: 'proposal'` the head printed
-                      // `Core · stage 03` while the body beneath it printed the
-                      // project's real workflow stage — the one-fact-two-
-                      // derivations shape N2 exists to close, reintroduced
-                      // through the branch rather than through the mount.
-                      projectId={null}
-                      activeSection={row.active_section}
-                      hosted
-                    />
-                  )}
+                  {/* R1 — the strip that stood here as this stop's body is
+                      gone; the head's own status line still states the phrase
+                      (`preworkStageLine`, derived from the source), and the
+                      rail is the door to the vocabulary itself. */}
                   {row.proposal_id ? (
                     <ProposalBlocksReadOnly
                       proposalId={row.proposal_id}

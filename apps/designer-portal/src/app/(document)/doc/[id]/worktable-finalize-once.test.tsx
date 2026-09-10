@@ -67,6 +67,8 @@ jest.mock('@patina/supabase', () => ({
   useProposalFeedback: () => ({ data: mockFeedback }),
   useProjectRoster: () => ({ data: [] }),
   useDiscovery: () => ({ data: undefined, isLoading: false, isError: false }),
+  // R5 — page.tsx runs the discovery seed for the band's rest act.
+  useBeginDirection: () => ({ mutateAsync: jest.fn() }),
   useProjectContextualHandoffs: () => ({ data: [], isError: false }),
   useCoordinationItems: () => ({ data: [] }),
   useProjectFFEItems: () => ({ data: [] }),
@@ -123,6 +125,8 @@ jest.mock('@patina/supabase', () => ({
   useOrganizations: () => ({ data: [] }),
   useOrganizationMembers: () => ({ data: [] }),
   useMarkFirstDocumentOpened: () => ({ mutate: jest.fn() }),
+  // R4 — the letterhead's subject editor writes through this.
+  useUpdateEngagementSubject: () => ({ mutateAsync: jest.fn() }),
 }));
 
 jest.mock('@/hooks/use-auth', () => ({
