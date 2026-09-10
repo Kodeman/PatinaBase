@@ -19,6 +19,9 @@ jest.mock("next/navigation", () => ({
   useRouter: () => ({ push: jest.fn() }),
 }));
 
+// FS-12 — the galley takes neither `count` nor `action` from the shell: one
+// act and one count, both on the page. The mock passes anything it is given
+// so a regression that re-adds them is visible rather than swallowed.
 jest.mock("../../../room-shell", () => ({
   RoomShell: ({
     count,
@@ -30,7 +33,7 @@ jest.mock("../../../room-shell", () => ({
     children: React.ReactNode;
   }) => (
     <div>
-      <p data-testid="room-count">{count}</p>
+      {count !== undefined && <p data-testid="room-count">{count}</p>}
       {action}
       {children}
     </div>
@@ -47,6 +50,9 @@ jest.mock("../../../../overlays/doc-sheet", () => ({
   }) => (open ? <div>{children}</div> : null),
 }));
 
+// The held contract, mirrored from the primitive T1 landed: a held act keeps
+// its place in the tab order, carries `aria-disabled`, swallows the act and
+// says why instead.
 jest.mock("../../../../document-action", () => ({
   DocumentAction: ({
     children,
@@ -55,9 +61,27 @@ jest.mock("../../../../document-action", () => ({
     variant: _variant,
     loading: _loading,
     loadingLabel: _loadingLabel,
+    held,
+    onHeldActivate,
+    disabled,
+    onClick,
     ...props
-  }: React.ButtonHTMLAttributes<HTMLButtonElement> &
-    Record<string, unknown>) => <button {...props}>{children}</button>,
+  }: React.ButtonHTMLAttributes<HTMLButtonElement> & Record<string, any>) => (
+    <button
+      {...props}
+      aria-disabled={disabled && held ? "true" : undefined}
+      disabled={disabled && !held ? true : undefined}
+      onClick={(event) => {
+        if (disabled) {
+          if (held) onHeldActivate?.();
+          return;
+        }
+        onClick?.(event);
+      }}
+    >
+      {children}
+    </button>
+  ),
 }));
 
 jest.mock("@/components/portal/client-picker", () => ({
@@ -214,31 +238,50 @@ const threeParts = () => [
   }),
 ];
 
-const railRows = () =>
-  within(screen.getByRole("navigation", { name: "Agreement parts" }))
-    .getAllByRole("listitem")
-    .map((row) => row.textContent ?? "");
+/* The outline keeps the shipped rail's contract (FS-16) — a nav named
+   `Agreement parts` wrapping a ul of li — but below 1248 it is a disclosure,
+   and jsdom's matchMedia answers `false` to every query, so the suite opens it
+   the way a designer on a laptop does. */
+const outline = () =>
+  screen.getByRole("navigation", { name: "Agreement parts" });
 
-// The rail row's select button is the one control in the row with no
-// aria-label of its own (Reorder/Rename/Part options all carry one).
-const selectPart = (title: string) => {
-  const row = within(
-    screen.getByRole("navigation", { name: "Agreement parts" }),
-  )
-    .getAllByRole("listitem")
-    .find((item) => item.textContent?.includes(title));
-  if (!row) throw new Error(`No rail row for ${title}`);
-  const button = within(row)
-    .getAllByRole("button")
-    .find((candidate) => !candidate.getAttribute("aria-label"));
-  if (!button) throw new Error(`No select control for ${title}`);
-  fireEvent.click(button);
+const openOutline = () => {
+  const toggle = within(outline()).getByRole("button", { name: "The parts" });
+  if (toggle.getAttribute("aria-expanded") !== "true") fireEvent.click(toggle);
 };
 
-const openRowMenu = (title: string) =>
+const railRows = () => {
+  openOutline();
+  return within(outline())
+    .getAllByRole("listitem")
+    .map((row) => row.textContent ?? "");
+};
+
+/** Unfold a part from its own head on the paper — the fold act is labelled by
+ *  the head and then by itself, so its name is "Services Write". */
+const write = (title: string) =>
+  fireEvent.click(screen.getByRole("button", { name: `${title} Write` }));
+
+/** Order is a part act on the paper now, not a row menu in a rail. */
+const move = (title: string, direction: "up" | "down") =>
   fireEvent.click(
-    screen.getByRole("button", { name: `Part options for ${title}` }),
+    screen.getByRole("button", {
+      name: `${title} Move ${direction}`,
+    }),
   );
+
+/** One `+ Add a part` act at every seam (AX-20); they are the same act. */
+const addAPart = () =>
+  fireEvent.click(screen.getAllByRole("button", { name: "+ Add a part" })[0]);
+
+/** The record that replaced Save (§A5 "taken"). */
+const record = () => screen.getAllByText(/Not saved yet|^Saved /)[0];
+
+/** How many parts the outline says need attention. */
+const attentionRows = () => {
+  openOutline();
+  return within(outline()).queryAllByText("needs attention").length;
+};
 
 beforeEach(() => {
   seq = 0;
@@ -288,9 +331,7 @@ describe("AgreementComposer · materialize", () => {
         screen.queryByText("This agreement has no parts yet."),
       ).not.toBeInTheDocument(),
     );
-    expect(screen.getByTestId("room-count")).toHaveTextContent(
-      "of 3 parts need attention",
-    );
+    expect(railRows()).toHaveLength(3);
   });
 
   it("does not seed an agreement that already has parts", () => {
@@ -319,21 +360,19 @@ describe("AgreementComposer · composing", () => {
   const renderComposer = (bundle = bundleWith(threeParts())) =>
     render(<AgreementComposer proposal={proposal} bundle={bundle} />);
 
-  it("opens clean and enables Save only once something changes", () => {
+  // §A5 "taken" — no Save control survives. The dated record line is what a
+  // save leaves behind, and it says out loud when there is nothing behind it.
+  it("opens with the record, not a Save control", () => {
     renderComposer();
-    expect(screen.getByRole("button", { name: "Saved" })).toBeDisabled();
-    openRowMenu("Exclusions");
-    fireEvent.click(screen.getByRole("button", { name: "Move up" }));
-    expect(
-      screen.getByRole("button", { name: "Save agreement" }),
-    ).toBeEnabled();
+    expect(record()).toHaveTextContent("Not saved yet");
+    expect(screen.queryByRole("button", { name: "Save agreement" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Saved" })).toBeNull();
   });
 
   it("moves a part up", () => {
     renderComposer();
     expect(railRows()[0]).toContain("Services");
-    openRowMenu("Terms");
-    fireEvent.click(screen.getByRole("button", { name: "Move up" }));
+    move("Terms", "up");
     expect(railRows().map((row) => row)).toEqual([
       expect.stringContaining("Services"),
       expect.stringContaining("Terms"),
@@ -343,33 +382,46 @@ describe("AgreementComposer · composing", () => {
 
   it("moves a part down", () => {
     renderComposer();
-    openRowMenu("Services");
-    fireEvent.click(screen.getByRole("button", { name: "Move down" }));
+    move("Services", "down");
     expect(railRows()[0]).toContain("Exclusions");
     expect(railRows()[1]).toContain("Services");
   });
 
+  // Checks 14/15 — the move announces itself in the one status region and
+  // hands focus back to the part's own control, with no pointer involved.
+  it("names the part and its new place in the status region", () => {
+    renderComposer();
+    move("Terms", "up");
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Terms is now part 2 of 3.",
+    );
+  });
+
+  // Removing and renaming are acts on the open part, in its own fold — not a
+  // row menu in a rail that no longer exists.
   it("removes a part, Exclusions included", () => {
     renderComposer();
-    openRowMenu("Exclusions");
-    fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+    write("Exclusions");
+    fireEvent.click(
+      screen.getByRole("button", { name: "Remove from this agreement" }),
+    );
     expect(railRows()).toHaveLength(2);
     expect(railRows().join(" ")).not.toContain("Exclusions");
   });
 
   it("renames a part", () => {
     renderComposer();
-    openRowMenu("Exclusions");
-    fireEvent.click(screen.getByRole("button", { name: "Rename" }));
-    const field = screen.getByRole("textbox", { name: "Rename Exclusions" });
-    fireEvent.change(field, { target: { value: "Not included" } });
-    fireEvent.keyDown(field, { key: "Enter" });
+    write("Exclusions");
+    fireEvent.change(
+      screen.getByRole("textbox", { name: "The name of this part" }),
+      { target: { value: "Not included" } },
+    );
     expect(railRows().join(" ")).toContain("Not included");
   });
 
-  it("adds a blank part and selects it", () => {
+  it("adds a blank part and unfolds it", () => {
     renderComposer();
-    fireEvent.click(screen.getByRole("button", { name: "+ Add a part" }));
+    addAPart();
     fireEvent.click(screen.getByRole("button", { name: "Ceiling" }));
     expect(railRows()).toHaveLength(4);
     expect(
@@ -379,47 +431,41 @@ describe("AgreementComposer · composing", () => {
 
   // R21 — a blank money part opens with no amount at all, so the client copy
   // cannot print a figure nobody wrote and readiness holds the send.
-  const attentionCount = () =>
-    Number(
-      /^(\d+) of \d+ parts need attention$/.exec(
-        screen.getAllByText(/parts need attention/)[0].textContent ?? "",
-      )?.[1] ?? -1,
-    );
-
   it("opens a new Retainer with no amount, and marks it for attention", () => {
     renderComposer();
-    const before = attentionCount();
-    fireEvent.click(screen.getByRole("button", { name: "+ Add a part" }));
+    const before = attentionRows();
+    addAPart();
     fireEvent.click(screen.getByRole("button", { name: "Retainer" }));
     expect(screen.getByLabelText(/Retainer · dollars/i)).toHaveValue("");
-    expect(attentionCount()).toBe(before + 1);
+    expect(attentionRows()).toBe(before + 1);
   });
 
   it("opens a new Flat fee with no amount, and marks it for attention", () => {
     renderComposer();
-    const before = attentionCount();
-    fireEvent.click(screen.getByRole("button", { name: "+ Add a part" }));
+    const before = attentionRows();
+    addAPart();
     fireEvent.click(screen.getByRole("button", { name: "Flat fee" }));
     expect(screen.getByLabelText(/Flat fee · dollars/i)).toHaveValue("");
-    expect(attentionCount()).toBe(before + 1);
+    expect(attentionRows()).toBe(before + 1);
   });
 
   // R18 — and the menu will not offer it twice.
   it("stops offering a money part once the agreement carries it", () => {
     renderComposer();
-    fireEvent.click(screen.getByRole("button", { name: "+ Add a part" }));
+    addAPart();
     fireEvent.click(screen.getByRole("button", { name: "Retainer" }));
-    fireEvent.click(screen.getByRole("button", { name: "+ Add a part" }));
+    addAPart();
     expect(
       screen.queryByRole("button", { name: "Retainer" }),
     ).not.toBeInTheDocument();
   });
 
-  it("writes the whole ordered array in one call on Save", async () => {
+  // No Save control survives, so closing a fold is what takes the act: one
+  // whole-array `upsert_agreement_parts`, exactly as the button called it.
+  it("writes the whole ordered array in one call when a fold closes", async () => {
     renderComposer();
-    openRowMenu("Terms");
-    fireEvent.click(screen.getByRole("button", { name: "Move up" }));
-    fireEvent.click(screen.getByRole("button", { name: "Save agreement" }));
+    move("Terms", "up");
+    write("Services");
 
     await waitFor(() => expect(mockSaveParts).toHaveBeenCalledTimes(1));
     const written = mockSaveParts.mock.calls[0][0] as AgreementPart[];
@@ -429,10 +475,7 @@ describe("AgreementComposer · composing", () => {
       "patina.exclusions",
     ]);
     expect(written.map((p) => p.position)).toEqual([1, 2, 3]);
-    expect(
-      await screen.findByText("All agreement changes saved."),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Saved" })).toBeDisabled();
+    await waitFor(() => expect(record()).toHaveTextContent(/^Saved /));
   });
 
   // B-9 — `classify_project_time_entry_authority` filters authority rates on
@@ -471,11 +514,11 @@ describe("AgreementComposer · composing", () => {
       ]),
     );
 
-    selectPart("Role rates");
+    write("Role rates");
     fireEvent.change(screen.getByLabelText("Lead Designer hourly rate"), {
       target: { value: "170" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Save agreement" }));
+    write("Role rates");
 
     await waitFor(() => expect(mockSaveParts).toHaveBeenCalledTimes(1));
     const written = mockSaveParts.mock.calls[0][0] as AgreementPart[];
@@ -500,7 +543,7 @@ describe("AgreementComposer · composing", () => {
     );
     renderComposer();
 
-    selectPart("Exclusions");
+    write("Exclusions");
     expect(
       screen.getByRole("region", { name: "Exclusions editor" }),
     ).toBeInTheDocument();
@@ -508,31 +551,78 @@ describe("AgreementComposer · composing", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "Item 1" }), {
       target: { value: "Construction labour" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Save agreement" }));
+    // The move is a save behind the open fold: the part comes back with a
+    // fresh uuid and the fold has to stay on the part she was writing.
+    move("Exclusions", "up");
+    write("Services");
 
+    await waitFor(() => expect(mockSaveParts).toHaveBeenCalled());
     expect(
-      await screen.findByText("All agreement changes saved."),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("region", { name: "Exclusions editor" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("region", { name: "Services editor" }),
+      screen.queryByRole("region", { name: "Exclusions editor" }),
     ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("region", { name: "Services editor" }),
+    ).toBeInTheDocument();
+  });
+
+  /* FS-6 / R21 — a part that puts nothing on the paper prints nothing here
+     either, and is still reachable: its head, its rest row and its `Write`
+     act live in the studio's strip beside the gap, and the seam above it
+     still offers `+ Add a part`. */
+  it("prints nothing for an unwritten part, and keeps it reachable", () => {
+    renderComposer(
+      bundleWith([
+        part({
+          partKey: "patina.services",
+          position: 1,
+          title: "Services",
+          payload: { body: "Interior design services." },
+        }),
+        part({
+          partKey: "custom.house-rules",
+          position: 2,
+          title: "House rules",
+          payload: { body: "" },
+        }),
+      ]),
+    );
+
+    const strip = screen.getByRole("complementary", {
+      name: "The studio · House rules",
+    });
+    expect(
+      within(strip).getByText(
+        "Not written yet. Your client\u2019s copy does not print this part.",
+      ),
+    ).toBeInTheDocument();
+    // The paper prints no head and no body for it…
+    expect(
+      screen.queryByRole("heading", { name: "House rules" }),
+    ).not.toBeInTheDocument();
+    // …and the fold still opens, in place, from the strip's own act.
+    fireEvent.click(
+      within(strip).getByRole("button", { name: "House rules Write" }),
+    );
+    expect(
+      screen.getByRole("region", { name: "House rules editor" }),
+    ).toBeInTheDocument();
+    // The seam beside it is still an act (AX-20).
+    expect(
+      screen.getAllByRole("button", { name: "+ Add a part" }).length,
+    ).toBeGreaterThan(0);
   });
 
   it("edits a clause body through the editor", () => {
     renderComposer();
+    write("Services");
     const body = screen.getByRole("textbox", { name: "Body" });
     fireEvent.change(body, { target: { value: "New scope." } });
-    expect(
-      screen.getByRole("button", { name: "Save agreement" }),
-    ).toBeEnabled();
+    expect(record()).toHaveTextContent("Not saved yet");
   });
 });
 
-describe("AgreementComposer · readiness panel", () => {
-  it("counts the parts that need attention, not the parts", () => {
+describe("AgreementComposer · the readiness voice", () => {
+  it("marks the rows that need attention", () => {
     const parts = [
       part({
         partKey: "patina.services",
@@ -553,14 +643,30 @@ describe("AgreementComposer · readiness panel", () => {
     render(
       <AgreementComposer proposal={proposal} bundle={bundleWith(parts)} />,
     );
-    expect(screen.getByTestId("room-count")).toHaveTextContent(
-      "1 of 2 parts need attention",
-    );
+    // FS-12 — one act and one count, both on the page: the shell carries
+    // neither, and the readiness aside is gone with the rail.
+    expect(screen.queryByTestId("room-count")).toBeNull();
     expect(
-      within(
-        screen.getByRole("region", { name: "Agreement readiness" }),
-      ).getByText("1 of 2 parts need attention"),
-    ).toBeInTheDocument();
+      screen.queryByRole("region", { name: "Agreement readiness" }),
+    ).toBeNull();
+    expect(attentionRows()).toBe(1);
+  });
+
+  // §A10, checks 5/6 — ONE permanent region, present at load, never empty,
+  // counting things to finish rather than parts.
+  it("speaks one sentence in one permanent status region", () => {
+    render(
+      <AgreementComposer
+        proposal={proposal}
+        bundle={bundleWith(threeParts())}
+      />,
+    );
+    const region = screen.getByRole("status");
+    expect(region).toHaveAttribute("aria-live", "polite");
+    expect(region).toHaveAttribute("id", "room-status");
+    expect(region).toHaveTextContent(
+      "One thing before this can go: name a fee.",
+    );
   });
 
   it("names the class floor when the agreement carries no fee", () => {
@@ -613,7 +719,7 @@ describe("AgreementComposer · one part per money variant (R18/R29)", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "+ Add a part" }));
+    addAPart();
 
     expect(screen.queryByRole("button", { name: "Ceiling" })).toBeNull();
     // The menu is open and offering the parts that are still addable, so the
@@ -639,14 +745,17 @@ describe("AgreementComposer · one part per money variant (R18/R29)", () => {
 
     // Make the composition dirty, so nothing but the duplicate can be what
     // holds the act.
+    write("Services");
     fireEvent.change(screen.getByRole("textbox", { name: "Body" }), {
       target: { value: "Interior design services, revised." },
     });
 
-    expect(
-      screen.getByRole("button", { name: "Save agreement" }),
-    ).toBeDisabled();
-    expect(screen.getByRole("button", { name: /Review/ })).toBeDisabled();
+    // §A5 — the terminal act is HELD, never natively disabled: it keeps its
+    // place in the tab order and carries the reason it cannot be taken.
+    const send = screen.getByRole("button", { name: /Send the agreement/ });
+    expect(send).toHaveAttribute("aria-disabled", "true");
+    expect(send).not.toBeDisabled();
+    fireEvent.click(send);
     expect(mockSaveParts).not.toHaveBeenCalled();
   });
 });
@@ -695,14 +804,14 @@ describe("AgreementComposer · the refusals the room says first", () => {
     ).toBeInTheDocument();
 
     // Dirty, so nothing but the blank role can be what holds the act.
+    write("Services");
     fireEvent.change(screen.getByRole("textbox", { name: "Body" }), {
       target: { value: "Interior design services, revised." },
     });
 
-    expect(
-      screen.getByRole("button", { name: "Save agreement" }),
-    ).toBeDisabled();
-    expect(screen.getByRole("button", { name: /Review/ })).toBeDisabled();
+    const send = screen.getByRole("button", { name: /Send the agreement/ });
+    expect(send).toHaveAttribute("aria-disabled", "true");
+    fireEvent.click(send);
     expect(mockSaveParts).not.toHaveBeenCalled();
   });
 
@@ -716,14 +825,19 @@ describe("AgreementComposer · the refusals the room says first", () => {
     });
     renderComposer();
 
+    write("Services");
     fireEvent.change(screen.getByRole("textbox", { name: "Body" }), {
       target: { value: "Interior design services, revised." },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Save agreement" }));
+    write("Services");
 
+    // Twice on the page by design: the studio's one live region announces it,
+    // and the line beside the record prints it where the save was taken.
     expect(
-      await screen.findByText("an agreement that bills time needs a ceiling"),
-    ).toBeInTheDocument();
+      await screen.findAllByText(
+        "an agreement that bills time needs a ceiling",
+      ),
+    ).toHaveLength(2);
     expect(
       screen.queryByText("The agreement could not be saved."),
     ).not.toBeInTheDocument();
@@ -733,14 +847,15 @@ describe("AgreementComposer · the refusals the room says first", () => {
     mockSaveParts.mockRejectedValue({ code: "PGRST301" });
     renderComposer();
 
+    write("Services");
     fireEvent.change(screen.getByRole("textbox", { name: "Body" }), {
       target: { value: "Interior design services, revised." },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Save agreement" }));
+    write("Services");
 
     expect(
-      await screen.findByText("The agreement could not be saved."),
-    ).toBeInTheDocument();
+      await screen.findAllByText("The agreement could not be saved."),
+    ).toHaveLength(2);
   });
 });
 
@@ -762,6 +877,7 @@ describe("AgreementComposer · resilience", () => {
     // above it says what kind of part this is, in words.
     expect(screen.getAllByText("Wormhole").length).toBeGreaterThan(0);
     expect(screen.queryByText(/quantum/)).not.toBeInTheDocument();
+    write("Wormhole");
     expect(
       screen.getByText(/This part opens in a later release/),
     ).toBeInTheDocument();
@@ -780,7 +896,10 @@ describe("AgreementComposer · resilience", () => {
       screen.queryByRole("button", { name: "+ Add a part" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Part options for Services" }),
+      screen.queryByRole("button", { name: "Services Move down" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Hide from the client/ }),
     ).not.toBeInTheDocument();
     expect(screen.getByText(/Its parts are fixed as sent/)).toBeInTheDocument();
   });

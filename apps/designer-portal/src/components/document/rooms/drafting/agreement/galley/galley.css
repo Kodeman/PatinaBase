@@ -1,0 +1,517 @@
+/* Direction I · D · the galley — transcribed from
+   artifacts/agreement-room-2026-09-10/specimens/direction-1.html.
+
+   Every token here is one the house sheet already landed at `:root` in
+   globals.css (T1): no hex literal, no shadow, no `--oak` on `color`. The
+   class names carry a `g-` prefix because this file is loaded globally by the
+   room's own chunk and `.part`, `.head` and `.record` are names the portal
+   must be free to spend elsewhere. `.studio-note`, `.field*`, `.money-row*`
+   and the `.t-*` scale are the house sheet's own and are used unprefixed. */
+
+/* ——— the bands ———
+   1440   120 | 192 outline | 48 | 720 galley | 48 | 192 studio | 120
+   1024   the galley at its drawn 664, centred; the studio's strips interrupt
+    390   16 | one column, 358 | 16 — the strips interrupt there too
+
+   NO-4: every studio strip sits OUTSIDE the paper in the DOM at every width.
+   At 1440 it takes the margin beside the part it names; below 1248 the sheet
+   ends, the strip prints on --rail, and the sheet resumes. */
+.g-room {
+  width: 1200px;
+  max-width: calc(100% - 48px);
+  margin: 0 auto;
+}
+@media (min-width: 1248px) {
+  .g-room {
+    position: relative;
+    display: grid;
+    grid-template-columns: 192px 720px 192px;
+    column-gap: 48px;
+    row-gap: 0;
+    grid-auto-rows: min-content;
+  }
+  .g-head {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .g-outline {
+    grid-column: 1;
+    grid-row: 2;
+    align-self: start;
+  }
+  .g-paper,
+  .g-galley-foot,
+  .g-studio-run {
+    grid-column: 2;
+  }
+}
+@media (min-width: 768px) and (max-width: 1247px) {
+  .g-room {
+    width: 664px;
+    max-width: calc(100% - 96px);
+  }
+}
+@media (max-width: 767px) {
+  .g-room {
+    padding: 0 16px;
+    width: 100%;
+    max-width: none;
+  }
+}
+
+.g-page {
+  padding: var(--module) 0 48px;
+}
+
+/* ——— the shared page furniture ——— */
+.g-head {
+  margin: 0 0 var(--module);
+}
+.g-eyebrow {
+  color: var(--ink-subtle);
+}
+.g-head h1 {
+  margin: 6px 0 6px;
+  color: var(--ink);
+}
+.g-prepared {
+  margin: 12px 0 0;
+  max-width: 65ch;
+  color: var(--ink);
+}
+.g-reason {
+  margin: 6px 0 0;
+  color: var(--ink-subtle);
+  max-width: 56ch;
+}
+.g-record {
+  margin: 12px 0 var(--module);
+  color: var(--ink-subtle);
+}
+#room-status {
+  display: block;
+  max-width: 56ch;
+}
+
+/* ——— the acts, §A5's four tiers ——— */
+.g-act {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 4px 6px 10px;
+  border: 0;
+  background: none;
+  font-family: var(--font-meta);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.g-act .g-label {
+  position: relative;
+  display: inline-block;
+  line-height: 13px;
+}
+.g-act .g-label::before,
+.g-act .g-label::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  transform-origin: left center;
+  transition:
+    background-color 150ms linear,
+    height 150ms var(--ease-editorial);
+}
+.g-act .g-label::before {
+  bottom: -5px;
+  height: 1px;
+}
+.g-act .g-label::after {
+  bottom: -8.5px;
+  height: 1px;
+}
+.g-act--tertiary {
+  color: var(--ink-subtle);
+}
+.g-act--tertiary .g-label::before {
+  background: var(--oak);
+}
+.g-act--tertiary .g-label::after {
+  content: none;
+}
+.g-act--tertiary:hover .g-label::before {
+  background: var(--ink-faint);
+  height: 1.5px;
+}
+.g-act--tertiary:active {
+  color: var(--ink);
+}
+.g-act:focus-visible {
+  outline: 2px solid var(--clay-ink);
+  outline-offset: 2px;
+}
+/* Held — never the native attribute. The ink stays at full strength. */
+.g-act[aria-disabled="true"] {
+  cursor: not-allowed;
+  color: var(--ink-faint);
+}
+.g-act--tertiary[aria-disabled="true"] .g-label::before {
+  background: var(--hairline-strong);
+}
+
+/* The inline tier — an act inside a sentence, ruled under, never a box. */
+.g-act--inline {
+  display: inline;
+  min-height: 0;
+  min-width: 0;
+  padding: 0 0 3px;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+  white-space: normal;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--oak);
+  cursor: pointer;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+.g-act--inline .g-label {
+  display: inline;
+  line-height: inherit;
+}
+.g-act--inline .g-label::before,
+.g-act--inline .g-label::after {
+  content: none;
+}
+.g-act--inline:hover {
+  border-bottom-color: var(--ink-faint);
+  border-bottom-width: 1.5px;
+  padding-bottom: 2.5px;
+}
+.g-act--inline[aria-disabled="true"] {
+  color: var(--ink-faint);
+  border-bottom-color: var(--hairline-strong);
+}
+
+/* ——— the outline ——— */
+.g-outline__head {
+  margin: 0 0 6px;
+}
+.g-outline__toggle {
+  justify-content: flex-start;
+  padding-left: 0;
+}
+.g-caret {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-right: 1px solid var(--ink-faint);
+  border-bottom: 1px solid var(--ink-faint);
+  transform: rotate(-45deg);
+}
+[aria-expanded="true"] > .g-caret {
+  transform: rotate(45deg);
+}
+@media (min-width: 1248px) {
+  .g-outline__toggle .g-caret {
+    display: none;
+  }
+}
+.g-outline ul {
+  border-top: 1px solid var(--hairline-strong);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.g-outline li {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  border-bottom: 1px solid var(--hairline-strong);
+}
+/* .t-body-sm metrics — a real step of the scale, with no local family. */
+.g-outline__row {
+  width: 100%;
+  justify-content: flex-start;
+  white-space: normal;
+  text-align: left;
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.5;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink);
+  padding-left: 0;
+}
+.g-outline__row .g-label {
+  line-height: 21px;
+}
+.g-outline__row[aria-current="true"] .g-label::before {
+  height: 1.5px;
+  background: var(--ink);
+}
+.g-attn {
+  color: var(--ink-subtle);
+  margin: 0 0 10px;
+}
+.g-outline__foot {
+  margin: var(--module) 0 0;
+}
+.g-outline__foot .g-act,
+.g-outline__foot button {
+  justify-content: flex-start;
+  padding-left: 0;
+}
+
+/* ——— the paper ——— */
+.g-paper {
+  background: var(--paper-doc);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius-hair);
+  padding: var(--module);
+  margin: 0;
+}
+.g-paper + .g-paper,
+.g-strip + .g-paper {
+  margin-top: var(--module);
+}
+.g-paper__head {
+  color: var(--ink);
+  margin: 0 0 var(--module);
+}
+
+/* ——— a part, and the seam beneath it ——— */
+.g-part {
+  padding: 0 0 var(--module);
+  /* the room's bar is sticky at 60px; 24 is the module of air above the head */
+  scroll-margin-top: 84px;
+}
+.g-seam {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  border-top: 1px solid var(--hairline-strong);
+}
+.g-seam .g-act {
+  color: var(--ink-faint);
+  justify-content: flex-start;
+  padding-left: 0;
+}
+.g-part__head-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0 12px;
+  margin: 0 0 12px;
+}
+.g-part__head {
+  margin: 0;
+  color: var(--ink);
+}
+.g-part[data-selected="true"] {
+  border-left: 2px solid var(--ink);
+  margin-left: -24px;
+  padding-left: 22px;
+}
+/* AX-11 — a rule AND a word, never a hue alone. */
+.g-part[data-selected="true"] .g-part__head::after {
+  content: " — being written";
+  font-family: var(--font-meta);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-subtle);
+}
+/* The fold takes the printed part's own text width: no indent inside the
+   part, so the money editor and the printed lines share one measure. */
+.g-fold {
+  border-top: 1px solid var(--hairline-strong);
+  padding: 12px 0 0;
+  margin: 12px 0 0;
+}
+.g-fold[hidden] {
+  display: none;
+}
+.g-fold .field-control {
+  scroll-margin-top: 84px;
+}
+.g-part__printed {
+  color: var(--ink-muted);
+  max-width: 65ch;
+}
+.g-part__printed > :last-child {
+  margin-bottom: 0;
+}
+
+/* Move up / Move down / Hide sit on the head's own row beside the fold act,
+   and their box is RESERVED whether or not they are showing — revealing them
+   is a change of visibility and never of layout, so the paper does not move
+   under a keyboard walk (FS-19, check 18). The ghost is inert: two spans,
+   aria-hidden, focusable by nothing. */
+.g-part__acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 12px;
+}
+.g-part__acts-ghost,
+.g-part__acts-live {
+  display: flex;
+  align-items: center;
+  gap: 0 12px;
+}
+.g-part__acts-ghost {
+  visibility: hidden;
+}
+.g-part__acts-live {
+  display: none;
+}
+.g-part[data-selected="true"] .g-part__acts-ghost,
+.g-part:focus-within .g-part__acts-ghost {
+  display: none;
+}
+.g-part[data-selected="true"] .g-part__acts-live,
+.g-part:focus-within .g-part__acts-live {
+  display: flex;
+}
+
+/* An unwritten part prints nothing at all on the paper; its fold is still
+   here, so opening it from the studio's rest row unfolds in place. */
+.g-part--unwritten {
+  padding-bottom: 0;
+}
+.g-part--unwritten:has(> .g-fold[hidden]) {
+  padding: 0;
+}
+
+/* The prose field's box: §A14's `.field-grow` paints the control's border
+   transparent so the mirror and the control share one cell, so the visible
+   box is drawn by the wrapper that holds them both. */
+.field-grow {
+  background: var(--paper-doc);
+  border: 1px solid var(--hairline-strong);
+  border-bottom: 1px solid var(--ink-faint);
+  border-radius: var(--radius-hair);
+}
+
+/* ——— the studio's strip: outside the paper at every width (NO-4) ——— */
+.g-strip {
+  margin: var(--module) 0;
+}
+.g-strip .studio-note {
+  margin: 0;
+}
+.g-strip__part {
+  color: var(--ink);
+  margin: 0 0 6px;
+}
+.g-strip__standing {
+  color: var(--ink-subtle);
+  margin: 0 0 12px;
+}
+.g-strip p {
+  max-width: 56ch;
+  margin: 0 0 12px;
+}
+.g-strip p:last-child {
+  margin-bottom: 0;
+}
+.g-strip .g-act {
+  justify-content: flex-start;
+  padding-left: 0;
+}
+
+/* At 1440 the strips are marginalia: set beside the part they name, pushed
+   down only where the one above them runs long, and out of the sheet's own
+   flow — so the segments close into one continuous sheet and the studio still
+   speaks from the margin. Below 1248 they return to the flow and interrupt. */
+.g-studio-run {
+  display: none;
+}
+@media (min-width: 1248px) {
+  .g-strip {
+    position: absolute;
+    left: 1008px;
+    width: 192px;
+    margin: 0;
+  }
+  .g-paper {
+    padding: 0 var(--module);
+    border-radius: 0;
+  }
+  .g-paper:not(:last-of-type) {
+    border-bottom: 0;
+  }
+  .g-paper:first-of-type {
+    padding-top: var(--module);
+    border-radius: var(--radius-hair) var(--radius-hair) 0 0;
+  }
+  .g-paper:last-of-type {
+    padding-bottom: var(--module);
+    border-radius: 0 0 var(--radius-hair) var(--radius-hair);
+  }
+  .g-paper + .g-paper,
+  .g-strip + .g-paper {
+    margin-top: 0;
+    border-top: 0;
+  }
+}
+
+/* Below 1248 a strip whose whole payload is a part's name and its standing
+   says nothing the paper has not already said, so it does not print and the
+   sheet does not part for it: the standings gather into one studio run below
+   the paper instead. */
+@media (max-width: 1247px) {
+  .g-studio-run {
+    display: block;
+  }
+  .g-strip--quiet {
+    display: none;
+  }
+  .g-strip .g-strip__standing {
+    display: none;
+  }
+}
+
+/* ——— the galley's foot: Review & send, then the whole read ——— */
+.g-galley-foot {
+  border-top: 1px solid var(--hairline-strong);
+  padding-top: var(--module);
+  margin-top: var(--module);
+}
+.g-consequence {
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--ink);
+  max-width: 56ch;
+  margin: 0 0 12px;
+}
+.g-send-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 24px;
+}
+.g-blockers {
+  margin: 0 0 var(--module);
+}
+.g-blockers p {
+  margin: 0 0 6px;
+}
+.g-blockers p:last-child {
+  margin-bottom: 0;
+}

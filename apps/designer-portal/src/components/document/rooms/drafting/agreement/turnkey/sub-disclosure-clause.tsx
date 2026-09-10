@@ -32,7 +32,7 @@ import { payloadOf, TURNKEY_PART_KEYS, type TurnkeyContext } from "./context";
 import type { TurnkeyEditorProps } from "./pricing-basis-editor";
 
 const LABEL =
-  "font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]";
+  "font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--ink-subtle)]";
 
 export const MODE_LABELS: Record<SubDisclosureMode, string> = {
   open_book: "Open-book",
@@ -141,7 +141,7 @@ export function SubDisclosureClause({
                     price per trade at all; under open-book she reads the
                     AWARDED price. Neither ever reads a bid. */}
                 {clause.mode !== null && (
-                  <span className="font-mono text-[11px] text-[var(--color-aged-oak)]">
+                  <span className="font-mono text-[11px] text-[var(--ink-subtle)]">
                     {clause.mode === "open_book"
                       ? "Shown to your client"
                       : "Held from your client"}

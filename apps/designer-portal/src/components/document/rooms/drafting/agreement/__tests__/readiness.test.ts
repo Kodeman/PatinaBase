@@ -503,7 +503,12 @@ describe("assessAgreementReadiness — keys, titles, and the document", () => {
   it("R-3: blocks a missing client email, and keeps it out of the attention count", () => {
     const readiness = assess(nine(), { recipientEmail: null });
     expect(readiness.blockers).toEqual([
-      { partId: null, message: "Link a client with an email address." },
+      {
+        partId: null,
+        message: "Link a client with an email address.",
+        // §A10 — the imperative phrase the readiness voice counts with.
+        ask: "link a client",
+      },
     ]);
     expect(readiness.ready).toBe(false);
     expect(partsNeedingAttention(readiness)).toBe(0);

@@ -43,7 +43,7 @@ import {
 import { turnkeyEditorFor, type TurnkeyContext } from "./turnkey";
 
 const labelClass =
-  "font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]";
+  "font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--ink-subtle)]";
 
 export interface PartEditorProps {
   part: AgreementPart;
@@ -75,6 +75,12 @@ export interface PartEditorProps {
    * visibility is rendered and the flag-off room is unchanged.
    */
   onToggleClientVisible?: (next: boolean) => void;
+  /**
+   * FS-7 — the caller's own head already carries the title, the kind, the
+   * standing, the visibility act and the part's blockers, so the editor
+   * prints no header at all. The body below is unchanged either way.
+   */
+  headless?: boolean;
 }
 
 export function PartEditor({
@@ -85,64 +91,69 @@ export function PartEditor({
   blockers = [],
   turnkey,
   onToggleClientVisible,
+  headless = false,
 }: PartEditorProps) {
   const chipped = libraryOn && part.kind === "schedule";
   const hidden = part.clientVisible === false;
   return (
     <section aria-label={`${part.title} editor`} className="space-y-4">
-      <header>
-        <p className={labelClass}>
-          {partKindLabel(part.kind, part.variant)}
-          {chipped && (
-            <>
-              {" · "}
-              <AuthorityChip variant={part.variant} />
-            </>
-          )}
-          {/* R39 — the chip states the fact; the toggle below is the act.
+      {!headless && (
+        <header>
+          <p className={labelClass}>
+            {partKindLabel(part.kind, part.variant)}
+            {chipped && (
+              <>
+                {" · "}
+                <AuthorityChip variant={part.variant} />
+              </>
+            )}
+            {/* R39 — the chip states the fact; the toggle below is the act.
               Both only exist where the visibility act does. */}
-          {onToggleClientVisible && hidden && (
-            <>
-              {" · "}
-              <span data-client-visible="false" className={labelClass}>
-                {DESIGN_BUILD_COPY.hiddenFromClient}
-              </span>
-            </>
-          )}
-        </p>
-        <h2 className="mt-1 font-heading text-[1.25rem] italic text-[var(--color-charcoal)]">
-          {part.title}
-        </h2>
-        {onToggleClientVisible && (
-          <label className="mt-2 flex items-center gap-2 text-[12px] text-[var(--color-charcoal)]">
-            <input
-              type="checkbox"
-              disabled={readOnly}
-              checked={hidden}
-              onChange={(event) => onToggleClientVisible(event.target.checked)}
-            />
-            {DESIGN_BUILD_COPY.hiddenFromClient}
-          </label>
-        )}
-        {onToggleClientVisible && hidden && (
-          <p className="mt-1 text-[11px] leading-relaxed text-[var(--text-muted)]">
-            {DESIGN_BUILD_COPY.hiddenFromClientHelp}
+            {onToggleClientVisible && hidden && (
+              <>
+                {" · "}
+                <span data-client-visible="false" className={labelClass}>
+                  {DESIGN_BUILD_COPY.hiddenFromClient}
+                </span>
+              </>
+            )}
           </p>
-        )}
-        {blockers.length > 0 && (
-          <div className="mt-2 border-l-2 border-[var(--color-clay-ink)] pl-3">
-            {blockers.map((message) => (
-              <p
-                key={message}
-                role="status"
-                className="text-[11.5px] leading-relaxed text-[var(--color-mocha)]"
-              >
-                {message}
-              </p>
-            ))}
-          </div>
-        )}
-      </header>
+          <h2 className="mt-1 font-heading text-[1.25rem] italic text-[var(--color-charcoal)]">
+            {part.title}
+          </h2>
+          {onToggleClientVisible && (
+            <label className="mt-2 flex items-center gap-2 text-[12px] text-[var(--color-charcoal)]">
+              <input
+                type="checkbox"
+                disabled={readOnly}
+                checked={hidden}
+                onChange={(event) =>
+                  onToggleClientVisible(event.target.checked)
+                }
+              />
+              {DESIGN_BUILD_COPY.hiddenFromClient}
+            </label>
+          )}
+          {onToggleClientVisible && hidden && (
+            <p className="mt-1 text-[11px] leading-relaxed text-[var(--text-muted)]">
+              {DESIGN_BUILD_COPY.hiddenFromClientHelp}
+            </p>
+          )}
+          {blockers.length > 0 && (
+            <div className="mt-2 border-l-2 border-[var(--color-clay-ink)] pl-3">
+              {blockers.map((message) => (
+                <p
+                  key={message}
+                  role="status"
+                  className="text-[11.5px] leading-relaxed text-[var(--color-mocha)]"
+                >
+                  {message}
+                </p>
+              ))}
+            </div>
+          )}
+        </header>
+      )}
       <PartEditorBody
         part={part}
         onChange={onChange}
@@ -645,7 +656,7 @@ function AttachmentEditor({ payload, onChange, readOnly }: EditorProps) {
 export function UnsupportedPartCard({ part }: { part: AgreementPart }) {
   return (
     <div className="border border-[var(--doc-ink-border)] px-4 py-3">
-      <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+      <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--ink-subtle)]">
         {part.title}
       </p>
       <p className="mt-2 text-[12.5px] leading-relaxed text-[var(--color-mocha)]">

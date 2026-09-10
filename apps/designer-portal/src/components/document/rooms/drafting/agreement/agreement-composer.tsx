@@ -1,30 +1,32 @@
 "use client";
 
 /**
- * The Contract Room, composed — the `agreement-parts` face of the drafting
- * room.
+ * The Agreement Room — the galley.
  *
- * An agreement stops being seven fixed facets and becomes an ordered list of
- * parts. The rail decides what is in it and in what order; the centre column
- * writes one part at a time; the right rail says what still needs attention
- * and shows the client's copy exactly as it will read.
+ * The paper IS the page. Every part is printed through the very renderer the
+ * client's copy is made of, in order, on one sheet; selecting a part unfolds
+ * its editor BENEATH the printed form, which does not move. There is no rail,
+ * no editor column, no preview aside and no preview sheet: one act at the
+ * paper's foot, one count in one status region, and a full read that lays the
+ * same body over the room rather than instead of it.
  *
  * Persistence is deliberately coarse: every act mutates local state and marks
- * the composition dirty, and Save writes the WHOLE ordered array through
+ * the composition dirty, and a save writes the WHOLE ordered array through
  * `upsert_agreement_parts`. The RPC replaces wholesale, so a removed part is
- * absent rather than blank, and there is no half-saved agreement.
+ * absent rather than blank, and there is no half-saved agreement. There is no
+ * Save control — §A5's "taken": the dated record line is what a save leaves
+ * behind, and Review & send saves before it opens.
  *
  * The money row is not written here. `proposal_service_terms` is the server's
  * projection of the schedule parts (R5); this component never touches it.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   useAgreementDraws,
   useAgreementJurisdictionNotices,
   useAgreementParts,
-  useDiscardAgreementParts,
   useMaterializeAgreementTemplate,
   useMaterializeStandardParts,
   useAgreementStudioContext,
@@ -34,16 +36,15 @@ import {
   licenseAttestationIsLive,
 } from "@patina/supabase";
 import {
-  AGREEMENT_PART_COPY,
   DESIGN_BUILD_COPY,
+  agreementConsequenceSentence,
   type AgreementPart,
   type AgreementTemplate,
 } from "@patina/types";
 import { RoomShell } from "../../room-shell";
-import { DocSheet } from "../../../overlays/doc-sheet";
 import { DocumentAction } from "../../../document-action";
-import { Button } from "@/components/ui/controls";
 import { ClientPicker } from "@/components/portal/client-picker";
+import { RecordOnPaperSheet } from "../../../commercial/record-on-paper-sheet";
 import { useAttachDocumentClient } from "@/hooks/use-attach-client";
 import { useAuth } from "@/hooks/use-auth";
 import { useClients } from "@/hooks/use-clients";
@@ -51,7 +52,7 @@ import { useFeatureFlag } from "@/hooks/use-feature-flag";
 import { documentEvents } from "@/lib/analytics/document-events";
 import type { CommercialDocumentBundle } from "@/hooks/use-commercial-documents";
 import type { CommercialDocument } from "@/lib/document/commercial-documents";
-import { ServiceAgreementPreview } from "../../../commercial/service-agreement-preview";
+import { partDrawsNothing } from "../../../commercial/agreement-parts-body";
 import { ServiceAgreementSendSheet } from "../../../commercial/service-agreement-send-sheet";
 import { clearRoomOrigin, readRoomOrigin } from "@/lib/document/room-origin";
 import {
@@ -59,20 +60,17 @@ import {
   duplicateMoneyVariants,
   localPartId,
   unnamedRateCardRoles,
+  addPartOptions,
 } from "./part-kinds";
-import { PartEditor } from "./part-editor";
-import { PartsRail } from "./parts-rail";
+import { AddPartMenu } from "./add-part-menu";
 import { AddPartSheet, type AddPartChoice } from "./add-part-sheet";
 import { TemplatePickerSheet } from "./template-picker-sheet";
 import { SaveAsTemplateAction } from "./save-as-template-action";
-import { PartHistoryStrip } from "./part-history-strip";
+import { AUTHORITY_STANDING_LABEL, authorityStanding } from "./schedules";
 import {
   assessAgreementReadiness,
-  BLANK_ROLE_BLOCKER,
   blockersForPart,
   documentBlockers,
-  duplicateMoneyBlocker,
-  partsNeedingAttention,
 } from "./readiness";
 import {
   DrawLedger,
@@ -82,21 +80,31 @@ import {
   type TurnkeyContext,
 } from "./turnkey";
 import { TradeAgreementsStrip } from "../../../commercial/trade-agreements";
+import { GalleyPart, FoldAct, type GalleyPartIds } from "./galley/galley-part";
+import { GalleyFold } from "./galley/galley-fold";
+import { PartOutline } from "./galley/part-outline";
+import { StudioStrip, StudioRun } from "./galley/studio-strip";
+import { composeReadinessSentence } from "./galley/readiness-voice";
+import { WholePaperSheet } from "./galley/whole-paper-sheet";
+import "./galley/galley.css";
 
-const labelClass =
-  "font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--ink-subtle)]";
+/** R21/FS-6 — what the studio reads where the client's copy prints nothing. */
+const REST_ROW =
+  "Not written yet. Your client’s copy does not print this part.";
+
+const OWNER_ONLY_REASON =
+  "Only the agreement owner can change the client account.";
 
 function renumber(parts: AgreementPart[]): AgreementPart[] {
   return parts.map((part, index) => ({ ...part, position: index + 1 }));
 }
 
 /**
- * The first part the rail actually shows — build sheet PART 13's eleventh
+ * The first part the galley actually shows — build sheet PART 13's eleventh
  * entry, `patina.licensing_attestation`, is a `kind: 'attestation'` record
  * materialized at compose and never editable here (§8 marks it "gate"). It
  * rides in the composition and is saved with it; it is not a page of the
- * paper, so it is neither listed nor selectable. `parts-rail.tsx` hides the
- * same kind, and this keeps the room from opening on a row that is not there.
+ * paper, so it is neither listed nor openable.
  */
 export function firstRailPartId(parts: AgreementPart[]): string | null {
   return parts.find((part) => part.kind !== "attestation")?.id ?? null;
@@ -108,8 +116,7 @@ export function firstRailPartId(parts: AgreementPart[]): string | null {
  * PostgREST hands react-query a plain `{ message, code, details, hint }`, not
  * an `Error`, so gating on `instanceof Error` threw away every sentence 00575
  * was written to say ("An agreement carries only one ceiling", "every role on
- * the rate card needs a name") and printed the generic line in its place. The
- * refusal and the room say the same words because they are the same words.
+ * the rate card needs a name") and printed the generic line in its place.
  */
 function refusalMessage(error: unknown, fallback: string): string {
   const message =
@@ -121,15 +128,56 @@ function refusalMessage(error: unknown, fallback: string): string {
     : fallback;
 }
 
+/** `patina.role_rates` → `patina-role-rates`, so a part's four ids are stable
+ *  across a save that re-mints every uuid (N-8/FS-26). */
+function idsFor(partKey: string): GalleyPartIds {
+  const slug = partKey.replace(/[^a-zA-Z0-9]+/g, "-").toLowerCase();
+  return {
+    section: `part-${slug}`,
+    head: `head-${slug}`,
+    foldAct: `write-${slug}`,
+    foldPanel: `fold-${slug}`,
+  };
+}
+
+function newestUpdate(parts: AgreementPart[]): string | null {
+  let newest: string | null = null;
+  for (const part of parts) {
+    if (part.updatedAt && (newest === null || part.updatedAt > newest)) {
+      newest = part.updatedAt;
+    }
+  }
+  return newest;
+}
+
+/** `Saved 10 September 2026, 5:36 am` — the record that replaced Save. */
+function savedLine(at: string | null): string {
+  if (!at) return "Not saved yet";
+  const when = new Date(at);
+  if (Number.isNaN(when.getTime())) return "Not saved yet";
+  const day = new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(when);
+  const time = new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+  })
+    .format(when)
+    .toLowerCase();
+  return `Saved ${day}, ${time}`;
+}
+
 export function AgreementComposer({
   proposal,
   bundle,
-  onReturnToFacets,
 }: {
   proposal: any;
   bundle: CommercialDocumentBundle;
-  /** R24 — composing is a door, and this is the handle on the inside. The
-   *  room above swaps back to the seven facets once the parts are gone. */
+  /** R24's handle on the inside, still handed down by the room above until
+   *  the seven-facet room itself is retired. The galley offers no return act:
+   *  it is the only room this agreement has. */
   onReturnToFacets?: () => void;
 }) {
   const router = useRouter();
@@ -137,81 +185,54 @@ export function AgreementComposer({
   const proposalId = document.id;
 
   // R23 — one data layer. The parts hooks live in `@patina/supabase` with the
-  // rest of the Supabase reads and writes; the portal kept a second copy of
-  // them while the package and this room were built in parallel worktrees.
-  // They hand back the saved rows, which is what this room reads, and they
-  // invalidate `commercialKeys.all` — the prefix of this app's own document
-  // bundle key (`commercialDocumentKeys.bundle` is ['commercial-documents',
-  // id]) — so the bundle behind the preview refetches on every save without
-  // this room asking it to.
+  // rest of the Supabase reads and writes, and they invalidate
+  // `commercialKeys.all` — the prefix of this app's own document bundle key —
+  // so the paper behind the room refetches on every save.
   const save = useSaveAgreementParts(proposalId);
   const savePart = useSaveAgreementPart();
   const materialize = useMaterializeStandardParts(proposalId);
-  const discard = useDiscardAgreementParts(proposalId);
   const attachClient = useAttachDocumentClient();
   const { user, status: authStatus } = useAuth();
   const clients = useClients();
 
-  // Wave 2 — the Library. `agreement-parts` is already on (this component is
-  // what that flag renders), so this second read IS `agreementParts &&
-  // agreementLibrary`. Fail-closed: `useFeatureFlag` answers
+  // Wave 2 — the Library. Fail-closed: `useFeatureFlag` answers
   // { value: false, isLoading: true } until PostHog responds, and the extra
   // `!libraryLoading` says out loud that nothing Wave 2 renders may flash to
-  // a studio the flag has not reached. Every hook here sits above every early
-  // return in this file — there are none — and above every conditional.
+  // a studio the flag has not reached.
   const { value: libraryFlag, isLoading: libraryLoading } =
     useFeatureFlag("agreement-library");
   const libraryOn = libraryFlag && !libraryLoading;
 
-  // Wave 3 — the turnkey class. A THIRD nested gate, so `design-build` is
-  // independent of the two before it and reaches nobody the earlier two have
-  // not already reached: this component only renders under `agreement-parts`,
-  // `libraryOn` is `agreement-library`, and both must hold before the turnkey
-  // surfaces exist at all. Fail-closed the same way — `useFeatureFlag` reads
-  // { value: false, isLoading: true } until PostHog answers, so nothing Wave 3
-  // draws can flash to a studio the flag has not reached.
+  // Wave 3 — the turnkey class, nested under the Library so `design-build`
+  // reaches nobody the earlier gate has not already reached.
   const { value: designBuildFlag, isLoading: designBuildLoading } =
     useFeatureFlag("design-build");
   const designBuildOn = libraryOn && designBuildFlag && !designBuildLoading;
 
-  // R32 — WHICH LIBRARY THIS AGREEMENT OPENS. Not the actor's own
-  // organizations: `useOrganizations` returns them in no order at all, so for
-  // a designer who belongs to two design studios it hands back an arbitrary
-  // one, and an arbitrary studio's private parts are not this agreement's
-  // Library. The database resolves the studio the AGREEMENT sits in — the
-  // project's once it is bound, else the lead designer's in 00566's order —
-  // and answers with the reader's own standing in it, which is R3's half:
-  // owners and admins edit the Library, every active member composes from it.
+  // R32 — WHICH LIBRARY THIS AGREEMENT OPENS. The database resolves the studio
+  // the AGREEMENT sits in and answers with the reader's own standing in it,
+  // which is R3's half: owners and admins edit the Library, every active
+  // member composes from it.
   const studioContext = useAgreementStudioContext(proposalId);
   const studioId = studioContext.data?.studioId ?? null;
   const canManage = studioContext.data?.canManage === true;
 
-  // R10 — the studio's self-attested credential, read once and used twice:
-  // the template picker derives its disabled state from it, and readiness
-  // holds the send on it. One read, so the picker and the panel cannot say
-  // different things about the same studio.
+  // R10 — the studio's self-attested credential, read once and used twice.
   const attestation = useStudioLicenseAttestation(
     designBuildOn ? studioId : null,
   );
   const attestationLive = licenseAttestationIsLive(attestation.data ?? null);
-  // R11 — what counsel has actually cleared. Empty on a seeded database, and
-  // that is the intended answer.
+  // R11 — what counsel has actually cleared.
   const notices = useAgreementJurisdictionNotices();
   const enabledJurisdictions = useMemo(
     () => (notices.data ?? []).map((notice) => notice.state),
     [notices.data],
   );
-  // P12 — the draw ledger. Empty until the agreement is sent, because
-  // `send_commercial_document` is what materializes it.
+  // P12 — the draw ledger. Empty until the agreement is sent.
   const drawLedger = useAgreementDraws(
     designBuildOn && document.kind === "design_build" ? proposalId : null,
   );
 
-  // The re-read after a Template is laid in. `materialize_agreement_template`
-  // replaces the part set on the server and answers with a count; the room
-  // holds the composition in local state, so it asks the table what it now
-  // says rather than trusting a shape the mutation was never promised to
-  // return.
   const partsRead = useAgreementParts(proposalId);
   const materializeTemplate = useMaterializeAgreementTemplate(proposalId);
   const ownsProposal = user?.id === proposal.designer_id;
@@ -226,48 +247,53 @@ export function AgreementComposer({
   const [parts, setParts] = useState<AgreementPart[]>(() =>
     renumber([...bundle.parts].sort((a, b) => a.position - b.position)),
   );
-  const [selectedId, setSelectedId] = useState<string | null>(() =>
-    firstRailPartId(bundle.parts),
-  );
+  /**
+   * FS-31 — "selected" and "unfolded" are one state, and it keys on the PART
+   * KEY, never a uuid: `upsert_agreement_parts` is DELETE-then-INSERT, so an
+   * open editor keyed on `id` would remount mid-typing after every save
+   * (N-8/ED-5). One open at a time; the paper resting is the default.
+   */
+  const [openKey, setOpenKey] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
+  const [savedAt, setSavedAt] = useState<string | null>(() =>
+    newestUpdate(bundle.parts),
+  );
   const [saveNote, setSaveNote] = useState<string | null>(null);
+  const [clientOpen, setClientOpen] = useState(false);
   const [clientNote, setClientNote] = useState<string | null>(null);
   const [clientError, setClientError] = useState(false);
-  const [previewOpen, setPreviewOpen] = useState(false);
   const [sendOpen, setSendOpen] = useState(false);
+  const [recordOnPaperOpen, setRecordOnPaperOpen] = useState(false);
+  const [wholePaperOpen, setWholePaperOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [templateError, setTemplateError] = useState<string | null>(null);
   const [keptPartIds, setKeptPartIds] = useState<Set<string>>(
     () => new Set<string>(),
   );
+  /** What the one status region is saying instead of the readiness sentence —
+   *  a reorder, a refusal, the reason a held act cannot be taken. Cleared the
+   *  moment readiness itself has something new to say. */
+  const [announcement, setAnnouncement] = useState<string | null>(null);
 
   // §4.1 — with `design-build` off, a `design_build` agreement renders
-  // read-only prose. It cannot be created with the flag off, so the only way
-  // to stand here is a rollback or a co-member the flag has not reached: the
-  // parts are shown, the editors are frozen, and nothing this room cannot
-  // validate can be typed into a class whose validators are not mounted.
+  // read-only prose: the parts are shown, the editors are frozen, and nothing
+  // this room cannot validate can be typed into a class whose validators are
+  // not mounted.
   const turnkeyFrozen = document.kind === "design_build" && !designBuildOn;
   const readOnly = document.state !== "draft" || turnkeyFrozen;
 
   // Seed the nine standard parts from the terms row this agreement already
-  // has. The ref is React 18 StrictMode's double-effect, not correctness —
-  // `materialize_standard_parts` is idempotent server-side and a second call
-  // writes nothing — but a duplicate round-trip on every mount is still a
-  // round-trip nobody asked for.
+  // has. The ref is React 18 StrictMode's double-effect, not correctness.
   const materializeFired = useRef(false);
   useEffect(() => {
     if (materializeFired.current) return;
     if (readOnly) return;
     if (bundle.parts.length > 0) return;
     materializeFired.current = true;
-    // `mutateAsync`, not `mutate` with callbacks. React Query drops the
+    // `mutateAsync`, not `mutate` with callbacks: React Query drops the
     // callbacks passed to `mutate` when the observer unmounts before the RPC
-    // answers, and `reactStrictMode` unmounts every component once on mount:
-    // the nine rows were written and the parts key was invalidated, but the
-    // room never heard, so it went on saying "This agreement has no parts
-    // yet." until the designer reloaded. Awaiting the promise puts the
-    // continuation in this file, where nothing can throw it away.
+    // answers, and `reactStrictMode` unmounts every component once on mount.
     void (async () => {
       try {
         const next = await materialize.mutateAsync();
@@ -275,7 +301,7 @@ export function AgreementComposer({
           [...next.parts].sort((a, b) => a.position - b.position),
         );
         setParts(seeded);
-        setSelectedId((current) => current ?? firstRailPartId(seeded));
+        setSavedAt(newestUpdate(seeded));
       } catch (error) {
         setSaveNote(
           refusalMessage(error, "The standard parts could not be opened."),
@@ -294,9 +320,9 @@ export function AgreementComposer({
 
   const turnkeyOn = designBuildOn && document.kind === "design_build";
   // W3R2-06 — the room's chrome reads the KIND, never the flag: a frozen
-  // turnkey draft is still a turnkey draft, and must not wear a services
-  // promise it does not keep.
+  // turnkey draft is still a turnkey draft.
   const isTurnkeyKind = document.kind === "design_build";
+  const currency = bundle.terms?.currency ?? "USD";
 
   const readiness = useMemo(
     () =>
@@ -317,37 +343,128 @@ export function AgreementComposer({
       enabledJurisdictions,
     ],
   );
-  const blockedIds = useMemo(() => {
-    const ids = new Set<string>();
-    for (const blocker of readiness.blockers) {
-      if (blocker.partId) ids.add(blocker.partId);
-    }
-    return ids;
+  /**
+   * §A10 — ONE permanent status region, and this is the sentence in it. It
+   * counts things to finish, not parts, and it never empties. The transition
+   * form needs the readiness that was standing before this one, so the voice
+   * is state rather than a memo: a memo would recompose from `null` on every
+   * unrelated render and the sentence that just cleared would be lost.
+   */
+  const [readinessVoice, setReadinessVoice] = useState(() =>
+    composeReadinessSentence(readiness, null),
+  );
+  const lastReadiness = useRef(readiness);
+  useEffect(() => {
+    if (readiness === lastReadiness.current) return;
+    const next = composeReadinessSentence(readiness, lastReadiness.current);
+    lastReadiness.current = readiness;
+    setReadinessVoice((current) => {
+      if (current !== next) setAnnouncement(null);
+      return next;
+    });
   }, [readiness]);
-  const needAttention = partsNeedingAttention(readiness);
 
-  // R18 / R29 — a save the server cannot accept is not offered. The database
-  // refuses a second part of any money shape ("an agreement carries only one
-  // ceiling", 23514) and a rate card carrying a role with no name ("every role
-  // on the rate card needs a name"), and readiness says both sentences first;
-  // holding the act as well is what keeps the room from ever earning those
-  // refusals. Every other blocker still saves — a draft is allowed to be
-  // unfinished, and the R4 floor is asked at the doors out of draft.
+  // R18 / R29 — a save the server cannot accept is not offered.
   const duplicates = useMemo(() => duplicateMoneyVariants(parts), [parts]);
   const unnamedRoles = useMemo(() => unnamedRateCardRoles(parts), [parts]);
   const refusedAtSave = duplicates.length > 0 || unnamedRoles.length > 0;
 
-  const selected = parts.find((part) => part.id === selectedId) ?? null;
+  const rows = useMemo(
+    () => parts.filter((part) => part.kind !== "attestation"),
+    [parts],
+  );
+  const openPart = rows.find((part) => part.partKey === openKey) ?? null;
+
+  /**
+   * FS-19 — measure and restore. Opening or closing a fold changes the height
+   * of the page below the part's own head, and the browser keeps the SCROLL
+   * OFFSET rather than the reading position, so the paper slides under the
+   * eye. No `overflow-anchor` exists anywhere in this portal; the house
+   * pattern is imperative. The anchor is the toggled part's own section: the
+   * fold opens beneath it, so its top must not move by a pixel (check 18).
+   */
+  const room = useRef<HTMLDivElement>(null);
+  /**
+   * N-15 — at 1440 the studio's notes are marginalia: out of the sheet's own
+   * flow, set beside the part each one names, and pushed down only where the
+   * one above runs long. CSS cannot lay a note against a sibling it is not a
+   * child of, so the top is measured. Below 1248 the note returns to the flow
+   * and interrupts the sheet, and this does nothing.
+   */
+  useEffect(() => {
+    const node = room.current;
+    if (!node || typeof window.matchMedia !== "function") return;
+    const wide = window.matchMedia("(min-width: 1248px)");
+    const place = () => {
+      const strips = [...node.querySelectorAll<HTMLElement>("[data-beside]")];
+      if (!wide.matches) {
+        for (const strip of strips) strip.style.top = "";
+        return;
+      }
+      const top = node.getBoundingClientRect().top;
+      const ordered = strips
+        .map((strip) => {
+          const part = window.document.getElementById(
+            strip.dataset.beside ?? "",
+          );
+          return {
+            strip,
+            y: part ? part.getBoundingClientRect().top - top : 0,
+          };
+        })
+        .sort((a, b) => a.y - b.y);
+      let floor = 0;
+      for (const { strip, y } of ordered) {
+        const at = Math.max(y, floor);
+        strip.style.top = `${Math.round(at)}px`;
+        floor = at + strip.offsetHeight + 24;
+      }
+    };
+    const schedule = () => window.requestAnimationFrame?.(place);
+    schedule();
+    window.addEventListener("resize", schedule);
+    wide.addEventListener("change", schedule);
+    return () => {
+      window.removeEventListener("resize", schedule);
+      wide.removeEventListener("change", schedule);
+    };
+  });
+
+  const anchor = useRef<{ id: string; top: number } | null>(null);
+  const rememberAnchor = (sectionId: string) => {
+    const node = window.document.getElementById(sectionId);
+    if (!node) return;
+    anchor.current = { id: sectionId, top: node.getBoundingClientRect().top };
+  };
+  useLayoutEffect(() => {
+    const held = anchor.current;
+    anchor.current = null;
+    if (!held) return;
+    const node = window.document.getElementById(held.id);
+    if (!node) return;
+    const drift = node.getBoundingClientRect().top - held.top;
+    if (drift !== 0) window.scrollBy?.(0, drift);
+  }, [openKey]);
+
+  /**
+   * §A5 "taken" — there is no Save control, so closing a fold is what takes
+   * the act, and the dated record is what it leaves behind. This is the same
+   * whole-array `upsert_agreement_parts` the Save button called, not a
+   * per-part write: N-7's projection round-trip (`scope` →
+   * `materialize_standard_parts`) is untouched, and nothing is written a part
+   * at a time.
+   */
+  const toggleFold = (part: AgreementPart) => {
+    rememberAnchor(idsFor(part.partKey).section);
+    if (dirty && !readOnly) void persist();
+    setOpenKey((current) => (current === part.partKey ? null : part.partKey));
+  };
 
   /**
    * Every act in this room goes through here, and every act may be one of a
    * PAIR. A turnkey editor writes its own payload and a sibling's in the same
-   * handler — the allowances editor lays down its cost line, the
-   * sub-disclosure clause stores its mode where the validator reads it — and
-   * two setters derived from the same render's `parts` would have the second
-   * discard the first. So the updater form is the contract: each write is
-   * applied to what the one before it produced, not to the array this render
-   * closed over.
+   * handler, and two setters derived from the same render's `parts` would have
+   * the second discard the first. So the updater form is the contract.
    */
   const mutate = (
     next: AgreementPart[] | ((current: AgreementPart[]) => AgreementPart[]),
@@ -364,14 +481,9 @@ export function AgreementComposer({
       current.map((part) => (part.id === id ? { ...part, payload } : part)),
     );
 
-  /**
-   * One turnkey editor writing a sibling part's payload — an allowance laying
-   * down its cost line, the sub-disclosure clause storing its mode where the
-   * validator reads it. Local, like every other act in this room: nothing
-   * reaches the table until Save. A part key the composition does not carry is
-   * a no-op, because a designer is allowed to remove a part and a sibling
-   * editor must not resurrect it.
-   */
+  /** One turnkey editor writing a sibling part's payload. A part key the
+   *  composition does not carry is a no-op, because a designer is allowed to
+   *  remove a part and a sibling editor must not resurrect it. */
   const writePart = (partKey: string, payload: Record<string, unknown>) =>
     mutate((current) =>
       current.map((part) =>
@@ -379,9 +491,9 @@ export function AgreementComposer({
       ),
     );
 
-  /** R39 — hiding a part from the client. `client_visible` is the column;
-   *  R33 already refuses to project a hidden fee and readiness already says
-   *  so where the designer typed it. This is the act that sets it. */
+  /** R39/AR-e — hiding a part from the client, on every agreement now and not
+   *  the turnkey lane alone. R33 already refuses to project a hidden fee and
+   *  readiness says so where the designer typed it; this is the act. */
   const setClientVisible = (id: string, clientVisible: boolean) => {
     const target = parts.find((part) => part.id === id) ?? null;
     mutate((current) =>
@@ -410,9 +522,8 @@ export function AgreementComposer({
 
   const removePart = (id: string) => {
     const removed = parts.find((part) => part.id === id) ?? null;
-    const next = parts.filter((part) => part.id !== id);
-    mutate(next);
-    if (selectedId === id) setSelectedId(firstRailPartId(next));
+    mutate(parts.filter((part) => part.id !== id));
+    if (removed && removed.partKey === openKey) setOpenKey(null);
     if (libraryOn && removed) {
       documentEvents.agreementPartRemoved({
         proposal_id: proposalId,
@@ -422,13 +533,45 @@ export function AgreementComposer({
     }
   };
 
-  const reorderPart = (from: number, to: number) => {
-    if (to < 0 || to >= parts.length) return;
+  /**
+   * Order, as a part act on the paper.
+   *
+   * Check 14/15 — the act announces the move in words and hands focus back to
+   * the part's own control, and it needs no pointer: React moves the keyed
+   * DOM node, which drops focus, and the move acts only show while the part
+   * holds it, so the fold act takes focus first and its twin takes it back.
+   */
+  const pendingFocus = useRef<string | null>(null);
+  const reorderPart = (part: AgreementPart, direction: "up" | "down") => {
+    const from = parts.findIndex((entry) => entry.id === part.id);
+    const to = from + (direction === "up" ? -1 : 1);
+    if (from < 0 || to < 0 || to >= parts.length) return;
     const next = [...parts];
     const [moved] = next.splice(from, 1);
-    next.splice(to, 0, moved);
+    next.splice(to, 0, moved!);
     mutate(next);
+    const place = next.filter((entry) => entry.kind !== "attestation");
+    const position = place.findIndex((entry) => entry.id === part.id) + 1;
+    setAnnouncement(
+      `${part.title} is now part ${position} of ${place.length}.`,
+    );
+    pendingFocus.current = `${part.partKey}:${direction}`;
   };
+  useLayoutEffect(() => {
+    const wanted = pendingFocus.current;
+    if (!wanted) return;
+    pendingFocus.current = null;
+    const key = wanted.split(":")[0]!;
+    const head = window.document.getElementById(idsFor(key).foldAct);
+    // The move acts are display:none until the part holds focus, and a hidden
+    // element cannot take it — so the fold act takes it first, and reading a
+    // layout property flushes the style change before the twin is asked.
+    head?.focus();
+    const twin = window.document.querySelector<HTMLElement>(
+      `[data-move-act="${wanted}"]`,
+    );
+    if (twin && twin.offsetParent !== null) twin.focus();
+  });
 
   const addPart = (input: {
     kind: AgreementPart["kind"];
@@ -441,15 +584,11 @@ export function AgreementComposer({
       position: parts.length + 1,
     });
     mutate([...parts, blank]);
-    setSelectedId(blank.id);
+    setOpenKey(blank.partKey);
   };
 
-  /**
-   * A jurisdiction notice counsel HAS cleared, laid in as an attachment leaf
-   * (R11). A held notice is never handed to this function — the strip renders
-   * it greyed and non-attachable — and readiness refuses a send carrying one
-   * even if it arrived some other way.
-   */
+  /** A jurisdiction notice counsel HAS cleared, laid in as an attachment leaf
+   *  (R11). A held notice is never handed to this function. */
   const attachNotice = (notice: {
     state: string;
     title: string;
@@ -480,16 +619,13 @@ export function AgreementComposer({
       updatedAt: null,
     };
     mutate([...parts, added]);
-    setSelectedId(added.id);
+    setOpenKey(added.partKey);
   };
 
   /**
-   * A part chosen in the Library picker (M2), laid at the end of the rail.
-   *
+   * A part chosen in the Library picker (M2), laid at the end of the paper.
    * Local, like every other act in this room: the picker writes nothing, and
-   * the part reaches the table with the rest of the composition when the
-   * designer saves. `sourcePartId` rides along so the saved row can be traced
-   * back to the Library entry it came from.
+   * the part reaches the table with the rest of the composition on the save.
    */
   const addFromLibrary = (choice: AddPartChoice) => {
     const added: AgreementPart = {
@@ -508,7 +644,7 @@ export function AgreementComposer({
       updatedAt: null,
     };
     mutate([...parts, added]);
-    setSelectedId(added.id);
+    setOpenKey(added.partKey);
     documentEvents.agreementPartSaved({
       proposal_id: proposalId,
       kind: choice.kind,
@@ -523,10 +659,9 @@ export function AgreementComposer({
 
   /**
    * A Template, laid into this draft. The RPC replaces the part set wholesale
-   * — which is exactly what the sheet warns about before this runs — so the
-   * room throws away the composition it was holding and re-reads the one the
-   * database now has. Unsaved edits go with it, which is why the sheet is
-   * handed `dirty` and says so in the warning.
+   * — which is what the sheet warns about before this runs — so the room
+   * throws away the composition it was holding and re-reads the one the
+   * database now has.
    */
   const applyTemplate = async (template: AgreementTemplate) => {
     setTemplateError(null);
@@ -537,8 +672,9 @@ export function AgreementComposer({
         [...(fresh.data ?? [])].sort((a, b) => a.position - b.position),
       );
       setParts(landed);
-      setSelectedId(firstRailPartId(landed));
+      setOpenKey(null);
       setDirty(false);
+      setSavedAt(newestUpdate(landed) ?? new Date().toISOString());
       setTemplatesOpen(false);
       setSaveNote(`The parts of ${template.title} are on this agreement.`);
       documentEvents.agreementTemplateMaterialized({
@@ -560,18 +696,9 @@ export function AgreementComposer({
   };
 
   /**
-   * One part, kept for the next agreement.
-   *
-   * The Library's PARTS shelf has always said "Compose an agreement, and what
-   * you write there can be kept here" and no act anywhere performed the
-   * keeping: `save_agreement_part` had exactly one caller in the portal, the
-   * Library card's own RENAME. This is the act the sentence promised.
-   *
-   * The Library takes a DETACHED copy — `save_agreement_part` mints its own
-   * `studio.<uuid>` key, so the composed part is untouched and the agreement
-   * is not re-saved. Its client visibility and its required flag travel with
-   * it as the defaults the picker lays down (R8), which is also the only road
-   * by which a part can ever arrive on an agreement hidden from the client.
+   * One part, kept for the next agreement. The Library takes a DETACHED copy
+   * — `save_agreement_part` mints its own `studio.<uuid>` key, so the composed
+   * part is untouched and the agreement is not re-saved.
    */
   const keepInLibrary = async (part: AgreementPart) => {
     if (!studioId) {
@@ -600,52 +727,23 @@ export function AgreementComposer({
 
   const persist = async () => {
     if (refusedAtSave) return false;
-    // `upsert_agreement_parts` is DELETE-then-INSERT and does not carry `id`
-    // through, so every part comes back with a new uuid. `part_key` is the
-    // identity that survives a save — matching on `id` re-selected nothing
-    // and dropped the designer onto part one after every Save.
-    const selectedKey = selected?.partKey ?? null;
     try {
       const next = await save.mutateAsync(parts);
       const saved = renumber(
         [...next.parts].sort((a, b) => a.position - b.position),
       );
       setParts(saved);
-      setSelectedId(
-        (selectedKey === null
-          ? null
-          : (saved.find((part) => part.partKey === selectedKey)?.id ?? null)) ??
-          firstRailPartId(saved),
-      );
       setDirty(false);
-      setSaveNote("All agreement changes saved.");
+      setSavedAt(newestUpdate(saved) ?? new Date().toISOString());
       return true;
     } catch (error) {
-      setSaveNote(refusalMessage(error, "The agreement could not be saved."));
-      return false;
-    }
-  };
-
-  // R24 — the way back out. Merely OPENING this room composes the draft, and
-  // `agreement-parts` is a per-person rollout: without a handle on the inside,
-  // a co-member the flag has not reached could never save this agreement
-  // again, in any room. `discard_agreement_parts` removes the parts and moves
-  // no money — the terms row stays exactly as the last projection left it,
-  // which is the state the seven-facet room reads and edits — so the document
-  // returns to the paper it would have been on had this room never opened.
-  // Draft only: a sent agreement's parts are what bind (R6).
-  const returnToFacets = async () => {
-    setSaveNote(null);
-    try {
-      await discard.mutateAsync();
-      onReturnToFacets?.();
-    } catch (error) {
-      setSaveNote(
-        refusalMessage(
-          error,
-          "The agreement could not be returned to the seven facets.",
-        ),
+      const message = refusalMessage(
+        error,
+        "The agreement could not be saved.",
       );
+      setSaveNote(message);
+      setAnnouncement(message);
+      return false;
     }
   };
 
@@ -660,7 +758,7 @@ export function AgreementComposer({
     setClientError(false);
     if (!ownsProposal) {
       setClientError(true);
-      setClientNote("Only the agreement owner can change the client account.");
+      setClientNote(OWNER_ONLY_REASON);
       return;
     }
     attachClient.mutate(
@@ -693,6 +791,281 @@ export function AgreementComposer({
     parts,
   };
 
+  /* ── the paper, laid out ────────────────────────────────────────────────
+     Every leaf carries its own printed form and, where the studio has
+     something to say about it, a strip that sits OUTSIDE the paper (NO-4).
+     A part that puts nothing on the paper prints nothing (R21/FS-6); its
+     head and its `Write` act are in the strip instead. */
+  const attachmentLetters = useMemo(() => {
+    const letters = new Map<string, string>();
+    let index = 0;
+    for (const part of rows) {
+      if (part.kind !== "attachment" || part.clientVisible === false) continue;
+      letters.set(part.id, String.fromCharCode(65 + index));
+      index += 1;
+    }
+    return letters;
+  }, [rows]);
+
+  const leaves = rows.map((part) => {
+    const drawsNothing = partDrawsNothing(part, currency, turnkeyOn);
+    const partBlockers = blockersForPart(readiness, part.id);
+    const standing =
+      libraryOn && part.kind === "schedule"
+        ? AUTHORITY_STANDING_LABEL[authorityStanding(part.variant)]
+        : null;
+    const quiet = !drawsNothing && partBlockers.length === 0;
+    return {
+      part,
+      ids: idsFor(part.partKey),
+      drawsNothing,
+      partBlockers,
+      standing,
+      quiet,
+      hasStrip: !quiet || standing !== null,
+    };
+  });
+
+  const attentionKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const blocker of readiness.blockers) {
+      if (!blocker.partId) continue;
+      const part = parts.find((entry) => entry.id === blocker.partId);
+      if (part) keys.add(part.partKey);
+    }
+    return keys;
+  }, [readiness, parts]);
+
+  const standingsRun = (() => {
+    const gathered = new Map<string, string[]>();
+    for (const leaf of leaves) {
+      if (!leaf.standing) continue;
+      const names = gathered.get(leaf.standing) ?? [];
+      names.push(leaf.part.title);
+      gathered.set(leaf.standing, names);
+    }
+    return [...gathered.entries()].map(([standing, names]) => ({
+      standing,
+      names,
+    }));
+  })();
+
+  const canHide = (part: AgreementPart) =>
+    // R48 (W3R2-01) — the act does not exist on the two parts that state the
+    // money. The database refuses both (`upsert_agreement_parts`,
+    // `send_commercial_document`, 00578) and readiness says so; withholding
+    // the act is what keeps the room from offering the refusal at all.
+    !readOnly &&
+    !(
+      part.kind === "schedule" &&
+      (part.variant === "pricing_basis" || part.variant === "draws")
+    );
+
+  const seamAct = (place: string) =>
+    readOnly ? null : (
+      <div className="g-seam" key={`seam-${place}`}>
+        {libraryOn ? (
+          <button
+            type="button"
+            className="g-act g-act--tertiary"
+            onClick={() => setAddOpen(true)}
+          >
+            <span className="g-label">+ Add a part</span>
+          </button>
+        ) : (
+          <AddPartMenu options={addPartOptions(parts)} onAdd={addPart} />
+        )}
+      </div>
+    );
+
+  const foldFor = (part: AgreementPart, partBlockers: string[]) => (
+    <GalleyFold
+      // ED-5/N-8 — the part key survives a DELETE-then-INSERT save; the uuid
+      // does not, and an editor keyed on it remounts mid-typing.
+      key={`fold-${part.partKey}`}
+      part={part}
+      proposalId={proposalId}
+      record={
+        !savedAt
+          ? "Not saved yet"
+          : dirty
+            ? `${savedLine(savedAt)} · ${part.title} not yet saved`
+            : savedLine(savedAt)
+      }
+      readOnly={readOnly}
+      libraryOn={libraryOn}
+      blockers={partBlockers}
+      turnkey={turnkeyContext}
+      onChange={(payload) => changePayload(part.id, payload)}
+      onRename={(title) => renamePart(part.id, title)}
+      onRemove={() => removePart(part.id)}
+      onKeepInLibrary={
+        // R3 draws the same line here as on the Template act: owners and
+        // admins edit the Library, every active member composes from it.
+        libraryOn && canManage && !readOnly
+          ? () => void keepInLibrary(part)
+          : undefined
+      }
+      kept={keptPartIds.has(part.id)}
+    />
+  );
+
+  const sheet: React.ReactNode[] = [];
+  /* A strip carrying nothing but a name and a standing is marginalia and
+     nothing more: below 1248 it does not print at all (the standings gather
+     into one run instead), so it must not part the sheet either. It is still
+     outside the paper in the DOM (NO-4) — it is set out of flow at 1440 and
+     placed against its part by measure, so its position in the markup does
+     not decide where it sits. */
+  const marginalia: React.ReactNode[] = [];
+  let segment: React.ReactNode[] = [seamAct("top")];
+  let segmentIndex = 0;
+  const flush = () => {
+    if (segment.filter(Boolean).length === 0) return;
+    sheet.push(
+      <article
+        key={`segment-${segmentIndex}`}
+        className="g-paper"
+        aria-labelledby="agreement-paper-head"
+      >
+        {segmentIndex === 0 && (
+          <h2 className="t-d2 g-paper__head" id="agreement-paper-head">
+            {document.title}
+          </h2>
+        )}
+        {segment}
+      </article>,
+    );
+    segment = [];
+    segmentIndex += 1;
+  };
+
+  for (const leaf of leaves) {
+    const { part, ids, drawsNothing, partBlockers, standing, quiet } = leaf;
+    const isOpen = part.partKey === openKey;
+    if (leaf.hasStrip) {
+      const strip = (
+        <StudioStrip
+          key={`strip-${part.partKey}`}
+          label={`The studio · ${part.title}`}
+          name={part.title}
+          // The head's id belongs to whichever of the two carries the fold
+          // act: the paper's own head, or — when the paper prints nothing —
+          // the strip's rest row.
+          nameId={drawsNothing ? ids.head : undefined}
+          standing={standing}
+          beside={ids.section}
+          quiet={quiet}
+        >
+          {drawsNothing && (
+            <>
+              <p className="t-body-sm">{REST_ROW}</p>
+              <p>
+                <FoldAct
+                  ids={ids}
+                  open={isOpen}
+                  onToggle={() => toggleFold(part)}
+                  labelledBy={ids.head}
+                />
+              </p>
+            </>
+          )}
+          {partBlockers.map((message, index) => (
+            <p
+              className="t-body-sm"
+              key={message}
+              id={`${ids.section}-blocker-${index}`}
+            >
+              {message}
+            </p>
+          ))}
+        </StudioStrip>
+      );
+      if (quiet) {
+        marginalia.push(strip);
+      } else {
+        flush();
+        sheet.push(strip);
+      }
+    }
+    segment.push(
+      <GalleyPart
+        key={part.id}
+        part={part}
+        ids={ids}
+        currency={currency}
+        turnkey={turnkeyOn}
+        attachmentLetter={attachmentLetters.get(part.id)}
+        drawsNothing={drawsNothing}
+        open={isOpen}
+        readOnly={readOnly}
+        canMoveUp={rows[0]?.id !== part.id}
+        canMoveDown={rows[rows.length - 1]?.id !== part.id}
+        onToggle={() => toggleFold(part)}
+        onMove={(direction) => reorderPart(part, direction)}
+        onHide={
+          canHide(part) ? (next) => setClientVisible(part.id, !next) : undefined
+        }
+      >
+        {foldFor(part, partBlockers)}
+      </GalleyPart>,
+    );
+    if (!drawsNothing) segment.push(seamAct(part.partKey));
+  }
+  flush();
+
+  /* The blockers that belong to no part, printed once, in the studio's own
+     ground at the paper's foot — they are what the held Send points at, so
+     they have to be visible and they have to resolve (check 7). */
+  const roomBlockers = [
+    ...new Set(documentBlockers(readiness).map((blocker) => blocker.message)),
+  ];
+  /* The reason a held Send points at has to be words on the page, and it has
+     to resolve (check 7). A blocker about the whole agreement is printed at
+     the foot; one about a part is printed in that part's own strip, and its
+     id is the strip's. */
+  const heldOn = readiness.blockers.find((blocker) => blocker.partId !== null);
+  const heldOnPart = heldOn
+    ? parts.find((entry) => entry.id === heldOn.partId)
+    : undefined;
+  const liveBlockerId =
+    roomBlockers.length > 0
+      ? "agreement-blocker-0"
+      : heldOnPart
+        ? `${idsFor(heldOnPart.partKey).section}-blocker-0`
+        : undefined;
+
+  const retainer = parts.find(
+    (part) => part.kind === "schedule" && part.variant === "retainer",
+  );
+  const retainerCents = Number((retainer?.payload ?? {}).cents);
+  const sendLabel =
+    Number.isFinite(retainerCents) && retainerCents > 0
+      ? `Send the agreement · ${new Intl.NumberFormat("en-US", {
+          style: "currency",
+          currency,
+        }).format(retainerCents / 100)} retainer`
+      : "Send the agreement";
+
+  const sendHeld = !readiness.ready || refusedAtSave || readOnly;
+  /* Check 8 — activating a held act never fails silently: it writes the
+     reason into the one status region and moves focus to the part that is
+     unmet, or to the seam where the missing part would be added. */
+  const sayWhyHeld = () => {
+    const reason = roomBlockers[0] ?? readiness.blockers[0]?.message;
+    if (reason) setAnnouncement(reason);
+    const target = heldOnPart
+      ? window.document.getElementById(idsFor(heldOnPart.partKey).foldAct)
+      : window.document.querySelector<HTMLElement>(".g-seam .g-act");
+    target?.focus();
+  };
+
+  const preparedFor = recipientName
+    ? recipientEmail
+      ? `${recipientName} · ${recipientEmail}`
+      : recipientName
+    : (recipientEmail ?? null);
+
   return (
     <RoomShell
       title={
@@ -700,136 +1073,127 @@ export function AgreementComposer({
           ? DESIGN_BUILD_COPY.roomTitle
           : "The Contract Room · Design Agreement"
       }
-      count={`${needAttention} of ${parts.length} parts need attention`}
-      action={
-        <DocumentAction
-          actionKey="review-design-agreement"
-          variant="primary"
-          trailing="→"
-          // W3R1-08 — a room that can be neither edited nor completed does not
-          // offer to send. Flag-off the editors are not mounted; past draft
-          // the parts are frozen and the paper is already gone.
-          disabled={refusedAtSave || readOnly}
-          onClick={() => void reviewAndSend()}
-        >
-          Review &amp; send
-        </DocumentAction>
-      }
     >
-      <div className="mx-auto max-w-[1240px] px-6 py-7 sm:px-8">
-        <header className="border-b border-[var(--doc-ink-border)] pb-5">
-          <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--color-clay-ink)]">
-            {/* W3R2-06 — keyed off the document's KIND, not the flag: a
-                design-build engagement never carries the services promise,
-                whether or not `design-build` has reached this member. */}
-            {isTurnkeyKind
-              ? DESIGN_BUILD_COPY.roomEyebrow
-              : "Yes to the designer · professional services only"}
-          </p>
-          <div className="mt-1 flex flex-wrap items-end justify-between gap-4">
-            <div>
-              <h1 className="font-heading text-[1.65rem] text-[var(--color-charcoal)]">
-                {document.title}
-              </h1>
-              <p className="mt-1 max-w-2xl text-[12.5px] leading-relaxed text-[var(--color-mocha)]">
-                {isTurnkeyKind
-                  ? DESIGN_BUILD_COPY.roomSubtitle
-                  : "Compose the parts this agreement is made of. Furnishings and purchasing stay outside it."}
-              </p>
-            </div>
-            {/* The three acts wrap on a narrow phone: unwrapped they measured
-                617px against a 390px viewport and carried Save agreement off
-                the right edge of the room. */}
-            <div className="flex flex-wrap items-center gap-3">
-              <Button variant="secondary" onClick={() => setPreviewOpen(true)}>
-                Preview client copy
-              </Button>
-              {!readOnly && (
-                <Button
-                  variant="secondary"
-                  onClick={() => void returnToFacets()}
-                  loading={discard.isPending}
-                >
-                  {AGREEMENT_PART_COPY.returnToFacets}
-                </Button>
-              )}
-              <Button
-                onClick={() => void persist()}
-                loading={save.isPending}
-                disabled={!dirty || readOnly || refusedAtSave}
+      <div className="g-page">
+        <div className="g-room" ref={room}>
+          <header className="g-head">
+            <p className="t-head g-eyebrow">
+              {/* W3R2-06 — keyed off the document's KIND, not the flag. */}
+              {isTurnkeyKind
+                ? DESIGN_BUILD_COPY.roomEyebrow
+                : "Design services agreement"}
+              {` · V${document.version}`}
+            </p>
+            <h1 className="t-d2">
+              {recipientName ?? recipientEmail ?? "A draft with no client yet"}
+            </h1>
+            <p className="t-head g-eyebrow">
+              {document.state === "draft" ? "Draft" : document.state}
+            </p>
+            <p className="t-body g-prepared">
+              {preparedFor
+                ? `Prepared for ${preparedFor} — `
+                : "Prepared for no one yet — "}
+              <button
+                type="button"
+                className="g-act g-act--inline"
+                aria-disabled={!ownsProposal || readOnly ? "true" : undefined}
+                aria-describedby={
+                  !ownsProposal ? "agreement-client-reason" : undefined
+                }
+                onClick={() => {
+                  if (!ownsProposal || readOnly) {
+                    setAnnouncement(OWNER_ONLY_REASON);
+                    return;
+                  }
+                  setClientOpen(true);
+                }}
               >
-                {dirty ? "Save agreement" : "Saved"}
-              </Button>
-            </div>
-          </div>
-          <div className="mt-4 max-w-sm">
-            <p className={labelClass}>Client account</p>
-            <ClientPicker
-              className="mt-2"
-              value={
-                typeof proposal.client_id === "string"
-                  ? proposal.client_id
-                  : null
-              }
-              onChange={changeClient}
-              disabled={
-                attachClient.isPending ||
-                authStatus === "loading" ||
-                !ownsProposal
-              }
-              clientOptions={ownerClients}
-              ariaLabel="Client account"
-              requireClientLogin
-              placeholder="Select or invite a client…"
-            />
-            {!ownsProposal && authStatus !== "loading" && !clientNote && (
-              <p className="mt-2 text-[11px] text-[var(--color-mocha)]">
-                Only the agreement owner can change the client account.
+                <span className="g-label">
+                  {preparedFor ? "Change the client account" : "Link a client"}
+                </span>
+              </button>
+            </p>
+            {!ownsProposal && authStatus !== "loading" && (
+              <p className="t-body-sm g-reason" id="agreement-client-reason">
+                {OWNER_ONLY_REASON}
               </p>
+            )}
+            {clientOpen && (
+              <div className="mt-3 max-w-sm">
+                <ClientPicker
+                  value={
+                    typeof proposal.client_id === "string"
+                      ? proposal.client_id
+                      : null
+                  }
+                  onChange={changeClient}
+                  disabled={attachClient.isPending || authStatus === "loading"}
+                  clientOptions={ownerClients}
+                  ariaLabel="Client account"
+                  requireClientLogin
+                  placeholder="Select or invite a client…"
+                />
+              </div>
             )}
             {clientNote && (
               <p
-                role={clientError ? "alert" : "status"}
-                className="mt-2 text-[11px] text-[var(--color-mocha)]"
+                className="t-body-sm g-reason"
+                role={clientError ? "alert" : undefined}
               >
                 {clientNote}
               </p>
             )}
-          </div>
-          {saveNote && (
-            <p
-              role="status"
-              className="mt-2 text-[11px] text-[var(--color-mocha)]"
-            >
-              {saveNote}
+            <p className="t-meta g-record">
+              {!savedAt
+                ? "Not saved yet"
+                : dirty
+                  ? `${savedLine(savedAt)} · ${openPart?.title ?? "This agreement"} not yet saved`
+                  : savedLine(savedAt)}
             </p>
-          )}
-          {readOnly && (
-            <p className="mt-2 text-[11px] italic text-[var(--text-muted)]">
-              {turnkeyFrozen
-                ? // W3R1-08 — a turnkey DRAFT with `design-build` off has not
-                  // left the studio, and the frozen-document sentence said it
-                  // had. What is true is that the class's editors are not
-                  // mounted for this reader, so nothing here can be typed.
-                  "This is a design-build agreement, and it does not open for you yet. Its parts are shown as they stand."
-                : "This agreement has left the studio. Its parts are fixed as sent."}
+            {saveNote && <p className="t-body-sm g-reason">{saveNote}</p>}
+            {readOnly && (
+              <p className="t-body-sm g-reason">
+                {turnkeyFrozen
+                  ? // W3R1-08 — a turnkey DRAFT with `design-build` off has not
+                    // left the studio; what is true is that the class's editors
+                    // are not mounted for this reader.
+                    "This is a design-build agreement, and it does not open for you yet. Its parts are shown as they stand."
+                  : "This agreement has left the studio. Its parts are fixed as sent."}
+              </p>
+            )}
+            {/* §A10, checks 5/6 — ONE region, authored here, present at load,
+                never conditionally mounted and never empty. */}
+            <p className="studio-note" id="room-status-wrap">
+              <span className="t-head head">The studio</span>
+              <span
+                className="t-body"
+                id="room-status"
+                role="status"
+                aria-live="polite"
+              >
+                {announcement ?? readinessVoice}
+              </span>
             </p>
-          )}
-        </header>
+          </header>
 
-        <div className="grid gap-9 pt-7 min-[1180px]:grid-cols-[260px_minmax(0,1fr)_320px]">
-          <PartsRail
-            parts={parts}
-            selectedId={selectedId}
-            blockedIds={blockedIds}
-            onSelect={setSelectedId}
-            onReorder={reorderPart}
-            onRename={renamePart}
-            onRemove={removePart}
-            onAdd={addPart}
-            readOnly={readOnly}
+          <PartOutline
+            parts={rows}
+            openKey={openKey}
+            attentionKeys={attentionKeys}
+            onSelect={(partKey) => {
+              const part = rows.find((entry) => entry.partKey === partKey);
+              if (!part) return;
+              const section = window.document.getElementById(
+                idsFor(partKey).section,
+              );
+              section?.scrollIntoView?.({ block: "start" });
+              rememberAnchor(idsFor(partKey).section);
+              if (dirty && !readOnly) void persist();
+              setOpenKey(partKey);
+            }}
             libraryOn={libraryOn}
-            onOpenLibrary={() => setAddOpen(true)}
+            readOnly={readOnly}
             onOpenTemplatePicker={() => {
               setTemplateError(null);
               setTemplatesOpen(true);
@@ -841,144 +1205,104 @@ export function AgreementComposer({
                 disabled={parts.length === 0}
               />
             }
-            // R3 draws the same line here as on the Template act: owners and
-            // admins edit the Library, every active member composes from it.
-            // `save_agreement_part` enforces it; hiding it is the courtesy.
-            onKeepInLibrary={
-              libraryOn && canManage && !readOnly
-                ? (part) => void keepInLibrary(part)
-                : undefined
-            }
-            keptPartIds={keptPartIds}
-            visibilityOn={designBuildOn}
           />
 
-          {/* The history strip needs a rhythm under the editor; flag off there
-              is no strip, and the column stays the bare div Wave 1 shipped. */}
-          <div className={libraryOn ? "space-y-6" : undefined}>
-            {selected ? (
-              <>
-                <PartEditor
-                  // ED-5/N-8 — `upsert_agreement_parts` is DELETE-then-INSERT,
-                  // so every save re-mints the row's uuid. Keyed on `id` the
-                  // editor remounts mid-typing; the part key survives the save.
-                  key={selected.partKey}
-                  part={selected}
-                  onChange={(payload) => changePayload(selected.id, payload)}
-                  readOnly={readOnly}
-                  libraryOn={libraryOn}
-                  blockers={blockersForPart(readiness, selected.id)}
-                  turnkey={turnkeyContext}
-                  onToggleClientVisible={
-                    // R48 (W3R2-01) — the act does not exist on the two parts
-                    // that state the money. The database refuses both
-                    // (`upsert_agreement_parts`, `send_commercial_document`,
-                    // 00578) and readiness says so; withholding the toggle is
-                    // what keeps the room from offering the refusal at all.
-                    designBuildOn &&
-                    !readOnly &&
-                    !(
-                      selected.kind === "schedule" &&
-                      (selected.variant === "pricing_basis" ||
-                        selected.variant === "draws")
-                    )
-                      ? (hidden) => setClientVisible(selected.id, !hidden)
-                      : undefined
-                  }
-                />
-                {/* P8 — under the open part, and only under a part that has a
-                    history. A part nobody has touched draws nothing. */}
-                {libraryOn && (
-                  <PartHistoryStrip
-                    key={`history-${selected.partKey}`}
-                    proposalId={proposalId}
-                    partKey={selected.partKey}
-                  />
-                )}
-              </>
-            ) : (
-              <p className="text-[12.5px] italic text-[var(--text-muted)]">
-                Pick a part on the left, or add one.
-              </p>
+          {sheet}
+          {marginalia}
+          <StudioRun standings={standingsRun} />
+
+          <div className="g-galley-foot">
+            {roomBlockers.length > 0 && (
+              <div className="studio-note g-blockers">
+                <span className="t-head head">The studio</span>
+                {roomBlockers.map((message, index) => (
+                  <p
+                    className="t-body-sm"
+                    key={message}
+                    id={`agreement-blocker-${index}`}
+                  >
+                    {message}
+                  </p>
+                ))}
+              </div>
             )}
+            {readiness.notes.length > 0 && (
+              <div className="studio-note g-blockers">
+                <span className="t-head head">The studio</span>
+                {readiness.notes.map((note) => (
+                  <p className="t-body-sm" key={note}>
+                    {note}
+                  </p>
+                ))}
+              </div>
+            )}
+            {/* §A6 — the consequence, then the act it describes, then the
+                quietest way to read what is being sent. */}
+            <p className="g-consequence">
+              {agreementConsequenceSentence({
+                recipientName,
+                parts,
+                currency,
+              })}
+            </p>
+            <div className="g-send-row">
+              <DocumentAction
+                actionKey="review-design-agreement"
+                variant="terminal"
+                disabled={sendHeld}
+                held
+                aria-describedby={sendHeld ? liveBlockerId : undefined}
+                onHeldActivate={sayWhyHeld}
+                onClick={() => void reviewAndSend()}
+              >
+                {sendLabel}
+              </DocumentAction>
+              <DocumentAction
+                actionKey="read-whole-agreement"
+                variant="tertiary"
+                onClick={() => setWholePaperOpen(true)}
+              >
+                Read the whole paper
+              </DocumentAction>
+            </div>
           </div>
 
-          <aside className="space-y-6">
-            <ReadinessPanel
-              needAttention={needAttention}
-              total={parts.length}
-              documentBlockers={[
-                // Both of these are blockers ON a part, so the rail marks the
-                // row; they are also the only blockers that hold Save, so the
-                // panel says why in the same sentence.
-                ...new Set([
-                  ...duplicates.map((duplicate) =>
-                    duplicateMoneyBlocker(duplicate.label),
-                  ),
-                  ...(unnamedRoles.length > 0 ? [BLANK_ROLE_BLOCKER] : []),
-                  ...documentBlockers(readiness).map(
-                    (blocker) => blocker.message,
-                  ),
-                ]),
-              ]}
-              notes={readiness.notes}
-            />
-            {turnkeyOn && (
-              <>
-                {/* R11 — what counsel has cleared, and what is held. There is
-                    no enable control here or anywhere else in the studio's
-                    face; a held notice is counsel's draft, not a studio's
-                    paper. */}
-                <JurisdictionAttachments
-                  onAttach={readOnly ? undefined : attachNotice}
-                  readOnly={readOnly}
-                />
-                {/* P9 · P13 — the ledger, and the studio's act on it. The
-                    deposit is not billed from here: it is offered on the
-                    homeowner's door the moment she signs. */}
-                <DrawLedger
-                  proposalId={proposalId}
-                  draws={drawLedger.data ?? []}
-                  executed={document.state === "executed"}
-                />
-                {/* P12 — the exchange, not the form. Empty until the
-                    agreement is sent, because the ledger is materialized at
-                    send from the frozen draws payload. */}
-                <LienWaiverAttachments
-                  proposalId={proposalId}
-                  studioId={studioId}
-                  draws={drawLedger.data ?? []}
-                  recordedBy={user?.id ?? null}
-                />
-                {/* P14 — the subcontract, studio-side. It lives in the room's
-                    right rail rather than in the Money room's ledger, which
-                    is another lane's file. */}
-                <TradeAgreementsStrip
-                  projectId={document.projectId}
-                  studioId={studioId}
-                  sourceProposalId={proposalId}
-                />
-              </>
-            )}
-            <div className="hidden min-[1180px]:block">
-              <div className="sticky top-[82px] rounded-[8px] border border-[var(--doc-ink-border)] bg-white px-5 py-5">
-                <p className="mb-4 font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--ink-subtle)]">
-                  The client&apos;s copy · live
-                </p>
-                <ServiceAgreementPreview {...previewProps} compact />
-              </div>
+          {turnkeyOn && (
+            <div className="g-turnkey-run">
+              {/* R11 — what counsel has cleared, and what is held. */}
+              <JurisdictionAttachments
+                onAttach={readOnly ? undefined : attachNotice}
+                readOnly={readOnly}
+              />
+              {/* P9 · P13 — the ledger, and the studio's act on it. */}
+              <DrawLedger
+                proposalId={proposalId}
+                draws={drawLedger.data ?? []}
+                executed={document.state === "executed"}
+              />
+              {/* P12 — the exchange, not the form. */}
+              <LienWaiverAttachments
+                proposalId={proposalId}
+                studioId={studioId}
+                draws={drawLedger.data ?? []}
+                recordedBy={user?.id ?? null}
+              />
+              {/* P14 — the subcontract, studio-side. */}
+              <TradeAgreementsStrip
+                projectId={document.projectId}
+                studioId={studioId}
+                sourceProposalId={proposalId}
+              />
             </div>
-          </aside>
+          )}
         </div>
       </div>
 
-      <DocSheet
-        open={previewOpen}
-        onClose={() => setPreviewOpen(false)}
-        title="Client copy preview"
-      >
-        <ServiceAgreementPreview {...previewProps} />
-      </DocSheet>
+      <WholePaperSheet
+        open={wholePaperOpen}
+        onClose={() => setWholePaperOpen(false)}
+        previewProps={previewProps}
+      />
 
       {libraryOn && !readOnly && (
         <>
@@ -1017,9 +1341,10 @@ export function AgreementComposer({
         rates={bundle.rates}
         recipientEmail={recipientEmail}
         recipientName={recipientName}
+        parts={parts}
         readinessOverride={{
           ready: readiness.ready,
-          // R49 — a blocker about a PAIR is filed against the rail and both
+          // R49 — a blocker about a PAIR is filed against the room and both
           // parts, so the sheet would otherwise print one sentence three
           // times. The sheet lists reasons, not rows.
           blockers: [
@@ -1027,45 +1352,38 @@ export function AgreementComposer({
           ],
           notes: readiness.notes,
         }}
+        // 00477 — a signature taken at a kitchen table is findable from the
+        // place it is needed. The seven-facet room was this act's other
+        // caller; the galley is what replaced it.
+        onRecordOffline={
+          document.state === "draft" &&
+          Boolean(bundle.terms) &&
+          bundle.rates.length > 0
+            ? () => {
+                setSendOpen(false);
+                setRecordOnPaperOpen(true);
+              }
+            : undefined
+        }
       />
-    </RoomShell>
-  );
-}
 
-function ReadinessPanel({
-  needAttention,
-  total,
-  documentBlockers: docBlockers,
-  notes,
-}: {
-  needAttention: number;
-  total: number;
-  documentBlockers: string[];
-  notes: string[];
-}) {
-  return (
-    <section
-      aria-label="Agreement readiness"
-      className="border-t border-[var(--doc-ink-border)] pt-4"
-    >
-      <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--ink-subtle)]">
-        {needAttention} of {total} parts need attention
-      </p>
-      {docBlockers.length > 0 && (
-        <ul className="mt-3 space-y-1.5 text-[12px] leading-relaxed text-[var(--color-mocha)]">
-          {docBlockers.map((message) => (
-            <li key={message}>{message}</li>
-          ))}
-        </ul>
+      {recordOnPaperOpen && (
+        <RecordOnPaperSheet
+          kind="design-services"
+          proposalId={proposalId}
+          clientName={recipientName ?? ""}
+          neverSent={document.state === "draft"}
+          open
+          onClose={() => setRecordOnPaperOpen(false)}
+          onRecorded={() => {
+            setRecordOnPaperOpen(false);
+            setAnnouncement(
+              "Paper signature recorded. Countersign it once you’re ready.",
+            );
+          }}
+        />
       )}
-      {notes.length > 0 && (
-        <ul className="mt-3 space-y-1.5 text-[11.5px] italic leading-relaxed text-[var(--text-muted)]">
-          {notes.map((note) => (
-            <li key={note}>{note}</li>
-          ))}
-        </ul>
-      )}
-    </section>
+    </RoomShell>
   );
 }
 

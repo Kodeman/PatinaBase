@@ -66,14 +66,37 @@ jest.mock("../../../../overlays/doc-sheet", () => ({
 }));
 
 jest.mock("../../../../document-action", () => ({
+  // The held contract, mirrored from the primitive T1 landed: a held act keeps
+  // its place in the tab order, carries `aria-disabled`, swallows the act and
+  // says why instead.
   DocumentAction: ({
     children,
     actionKey: _actionKey,
     trailing: _trailing,
     variant: _variant,
+    loading: _loading,
+    loadingLabel: _loadingLabel,
+    held,
+    onHeldActivate,
+    disabled,
+    onClick,
     ...props
-  }: React.ButtonHTMLAttributes<HTMLButtonElement> &
-    Record<string, unknown>) => <button {...props}>{children}</button>,
+  }: React.ButtonHTMLAttributes<HTMLButtonElement> & Record<string, any>) => (
+    <button
+      {...props}
+      aria-disabled={disabled && held ? "true" : undefined}
+      disabled={disabled && !held ? true : undefined}
+      onClick={(event) => {
+        if (disabled) {
+          if (held) onHeldActivate?.();
+          return;
+        }
+        onClick?.(event);
+      }}
+    >
+      {children}
+    </button>
+  ),
 }));
 
 jest.mock("@/components/portal/client-picker", () => ({
@@ -237,10 +260,30 @@ const twoParts = () => [
   part({ partKey: "patina.terms", position: 2, title: "Terms" }),
 ];
 
-const railRows = () =>
-  within(
-    screen.getByRole("navigation", { name: "Agreement parts" }),
-  ).getAllByRole("listitem");
+/* Below 1248 the outline is a disclosure, and jsdom's matchMedia answers
+   `false` to every query, so the suite opens it the way a laptop does. The
+   nav/ul/li contract is the shipped rail's, unchanged (FS-16). */
+const outline = () =>
+  screen.getByRole("navigation", { name: "Agreement parts" });
+const openOutline = () => {
+  const toggle = within(outline()).getByRole("button", { name: "The parts" });
+  if (toggle.getAttribute("aria-expanded") !== "true") fireEvent.click(toggle);
+};
+const railRows = () => {
+  openOutline();
+  return within(outline()).getAllByRole("listitem");
+};
+/** One `+ Add a part` at every seam (AX-20); they are the same act. */
+const addAPart = () =>
+  fireEvent.click(screen.getAllByRole("button", { name: "+ Add a part" })[0]);
+const write = (title: string) =>
+  fireEvent.click(screen.getByRole("button", { name: `${title} Write` }));
+const startFromTemplate = () => {
+  openOutline();
+  fireEvent.click(
+    screen.getByRole("button", { name: "Start from a template…" }),
+  );
+};
 
 function renderRoom(parts = twoParts()) {
   return render(
@@ -262,11 +305,14 @@ beforeEach(() => {
 });
 
 describe("the Contract Room with the Library on", () => {
-  it("puts the Library's three acts in the rail footer", () => {
+  // R7 — the Library's three acts survive the galley: the two template acts
+  // at the outline's foot, and `+ Add a part` at every seam of the paper.
+  it("puts the Library's acts on the outline's foot and the paper's seams", () => {
     renderRoom();
+    openOutline();
     expect(
-      screen.getByRole("button", { name: "+ Add a part" }),
-    ).toBeInTheDocument();
+      screen.getAllByRole("button", { name: "+ Add a part" }).length,
+    ).toBeGreaterThan(0);
     expect(
       screen.getByRole("button", { name: "Start from a template…" }),
     ).toBeInTheDocument();
@@ -280,18 +326,19 @@ describe("the Contract Room with the Library on", () => {
       data: { studioId: "studio-1", canManage: false },
     });
     renderRoom();
+    openOutline();
     expect(
       screen.queryByRole("button", { name: "Save as template…" }),
     ).not.toBeInTheDocument();
     // Composing is not editing — the rest of the footer stands.
     expect(
-      screen.getByRole("button", { name: "+ Add a part" }),
-    ).toBeInTheDocument();
+      screen.getAllByRole("button", { name: "+ Add a part" }).length,
+    ).toBeGreaterThan(0);
   });
 
-  it("lays a Library part at the end of the rail", async () => {
+  it("lays a Library part at the end of the paper", async () => {
     renderRoom();
-    fireEvent.click(screen.getByRole("button", { name: "+ Add a part" }));
+    addAPart();
 
     const row = screen
       .getAllByRole("listitem")
@@ -303,10 +350,9 @@ describe("the Contract Room with the Library on", () => {
 
     await waitFor(() => expect(railRows()).toHaveLength(3));
     expect(within(railRows()[2]).getByText("House rules")).toBeInTheDocument();
-    // The room is now dirty and offers the save.
-    expect(
-      screen.getByRole("button", { name: "Save agreement" }),
-    ).toBeEnabled();
+    // §A5 "taken" — no Save control survives; the record says what stands.
+    expect(screen.queryByRole("button", { name: "Save agreement" })).toBeNull();
+    expect(screen.getAllByText("Not saved yet").length).toBeGreaterThan(0);
   });
 
   it("replaces the composition with what the table says after a Template", async () => {
@@ -318,9 +364,7 @@ describe("the Contract Room with the Library on", () => {
     });
     renderRoom();
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Start from a template…" }),
-    );
+    startFromTemplate();
     const row = screen
       .getAllByRole("listitem")
       .find((item) =>
@@ -351,7 +395,7 @@ describe("the Contract Room with the Library on", () => {
 
     // Lay a Library part in without saving — the room is now holding a
     // composition the table has never seen.
-    fireEvent.click(screen.getByRole("button", { name: "+ Add a part" }));
+    addAPart();
     const libraryRow = screen
       .getAllByRole("listitem")
       .find((item) => within(item).queryByText("House rules")) as HTMLElement;
@@ -359,15 +403,9 @@ describe("the Contract Room with the Library on", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Add to this agreement" }),
     );
-    await waitFor(() =>
-      expect(
-        screen.getByRole("button", { name: "Save agreement" }),
-      ).toBeEnabled(),
-    );
+    await waitFor(() => expect(railRows()).toHaveLength(3));
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Start from a template…" }),
-    );
+    startFromTemplate();
     const templateRow = screen
       .getAllByRole("listitem")
       .find((item) =>
@@ -387,9 +425,7 @@ describe("the Contract Room with the Library on", () => {
     });
     renderRoom();
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Start from a template…" }),
-    );
+    startFromTemplate();
     const row = screen
       .getAllByRole("listitem")
       .find((item) =>
@@ -417,8 +453,15 @@ describe("the Contract Room with the Library on", () => {
         payload: { markupPercent: 18 },
       }),
     ]);
-    expect(within(railRows()[0]).getByText("record only")).toBeInTheDocument();
+    // R9's standing is the studio's word about the part, so it prints in the
+    // studio's strip beside it, never on the paper.
+    expect(
+      within(
+        screen.getByRole("complementary", { name: "The studio · Cost plus" }),
+      ).getByText("record only"),
+    ).toBeInTheDocument();
     // And the editor beneath says the same thing in a sentence.
+    write("Cost plus");
     expect(
       screen.getByText(
         "This is recorded on the agreement. It does not create billing authority yet.",
@@ -439,6 +482,7 @@ describe("the Contract Room with the Library on", () => {
     expect(
       screen.queryByRole("button", { name: "+ Add a part" }),
     ).not.toBeInTheDocument();
+    openOutline();
     expect(
       screen.queryByRole("button", { name: "Start from a template…" }),
     ).not.toBeInTheDocument();
@@ -449,10 +493,8 @@ describe("the Contract Room with the Library on", () => {
   // anything: `save_agreement_part`'s only caller in the portal was the
   // Library card's own rename.
   describe("keeping one part in the Library", () => {
-    const openRowMenu = (title: string) =>
-      fireEvent.click(
-        screen.getByRole("button", { name: `Part options for ${title}` }),
-      );
+    // The act moved with the rail's row menu: it is an act inside the open
+    // part's own fold now.
 
     it("keeps the part the designer chose, with its own defaults", async () => {
       renderRoom([
@@ -466,9 +508,9 @@ describe("the Contract Room with the Library on", () => {
         }),
       ]);
 
-      openRowMenu("House rules");
+      write("House rules");
       fireEvent.click(
-        screen.getByRole("button", { name: "Keep in the Library" }),
+        screen.getByRole("button", { name: "Keep in my Library" }),
       );
 
       await waitFor(() => expect(mockSavePart).toHaveBeenCalledTimes(1));
@@ -484,11 +526,11 @@ describe("the Contract Room with the Library on", () => {
       await screen.findByText("House rules is in your Library.");
 
       // Offered once: a second keep would mint a second Library entry for the
-      // same part, since `save_agreement_part` mints its own studio key.
-      openRowMenu("House rules");
+      // same part, since `save_agreement_part` mints its own studio key. Held,
+      // never natively disabled (§A5).
       expect(
-        screen.getByRole("button", { name: "Kept in the Library" }),
-      ).toBeDisabled();
+        screen.getByRole("button", { name: "In your Library" }),
+      ).toHaveAttribute("aria-disabled", "true");
     });
 
     it("offers the act to nobody but an owner or admin (R3)", () => {
@@ -496,9 +538,9 @@ describe("the Contract Room with the Library on", () => {
         data: { studioId: "studio-1", canManage: false },
       });
       renderRoom();
-      openRowMenu("Services");
+      write("Services");
       expect(
-        screen.queryByRole("button", { name: "Keep in the Library" }),
+        screen.queryByRole("button", { name: "Keep in my Library" }),
       ).not.toBeInTheDocument();
     });
   });
