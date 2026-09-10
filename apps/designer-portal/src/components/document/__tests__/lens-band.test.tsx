@@ -588,6 +588,36 @@ describe('LensBand · line 2, the sentence that changes (L-1, L-11)', () => {
     expect(document.body).not.toHaveFocus();
   });
 
+  // ── W3-F7 — the door is painted in the register of what it withholds ────
+  it('paints the door clay when every withheld row is an open input', () => {
+    render(
+      <LensBand
+        model={model({
+          needs: [],
+          inputs: [
+            {
+              key: '0:Working budget',
+              eyebrow: 'BUDGET',
+              sentence: 'Working budget \u00b7 Client \u00b7 blocks Direction',
+              act: null,
+            },
+          ],
+          guide: { text: 'Waiting on Avery: working budget.', act: null },
+        })}
+        docId="doc-1"
+      />,
+    );
+    const door = screen.getByRole('button', { name: '+1 MORE' });
+    expect(door).toHaveClass('text-[var(--color-clay-ink)]');
+    expect(door.className).not.toMatch(/terracotta/);
+  });
+
+  it('paints it terracotta the moment an exception is behind it', () => {
+    render(<LensBand model={model({ needs: NEEDS })} docId="doc-1" />);
+    const door = screen.getByRole('button', { name: '+3 MORE' });
+    expect(door).toHaveClass('text-[var(--color-terracotta-ink)]');
+  });
+
   it('falls back to the band itself when neither door nor act is left', async () => {
     const actless: RedLetterRow[] = [
       { ...NEEDS[0], actionLabel: null },

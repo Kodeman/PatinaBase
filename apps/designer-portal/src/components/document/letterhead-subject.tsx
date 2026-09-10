@@ -23,8 +23,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useUpdateEngagementSubject } from '@patina/supabase';
 import type { EngagementKind } from '@/lib/document/desk-derivation';
 import { DocumentAction } from './document-action';
-
-type SaveState = 'idle' | 'saving' | 'saved' | 'error';
+import { SaveDot, type SaveState } from './letterhead-vitals';
 
 const ADD_LABEL = 'Add a subject line';
 
@@ -32,22 +31,9 @@ const ADD_LABEL = 'Add a subject line';
  *  the rect does not move on the swap. */
 const TYPE = 'text-[15px] leading-[1.35] text-[var(--text-muted)]';
 
-function SaveDot({ state, errorMsg }: { state: SaveState; errorMsg: string | null }) {
-  if (state === 'idle') return null;
-  return (
-    <span
-      role="status"
-      aria-live="polite"
-      className={`font-mono text-[11px] uppercase tracking-[0.05em] ${
-        state === 'error' ? 'text-[var(--color-terracotta-ink)]' : 'text-[var(--color-sage)]'
-      }`}
-    >
-      {state === 'saving' && '· saving…'}
-      {state === 'saved' && '✓'}
-      {state === 'error' && `· ${errorMsg ?? "couldn't save"}`}
-    </span>
-  );
-}
+/** D2 — the letterhead's own ring, on every control it carries. */
+const RING =
+  'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]';
 
 export function LetterheadSubject({
   kind,
@@ -151,29 +137,29 @@ export function LetterheadSubject({
             }
           }}
           disabled={state === 'saving'}
-          className={`w-full min-w-0 flex-1 border-b border-transparent bg-transparent hover:border-[var(--color-pearl)] focus:border-[var(--color-clay)] focus:outline-none disabled:opacity-60 ${TYPE}`}
+          // The 44px target is taken back out of the flow so the letterhead's
+          // own height does not change when the print swaps for the field.
+          className={`-my-3 w-full min-w-0 flex-1 border-b border-transparent bg-transparent hover:border-[var(--color-pearl)] focus:border-[var(--color-clay)] disabled:opacity-60 min-h-[44px] ${RING} ${TYPE}`}
         />
       ) : printed ? (
-        /* The visible line IS the control — no pencil, no second glyph. */
-        <p
+        /* The visible line IS the control — no pencil, no second glyph. The
+           line names the control: an `aria-label` here REPLACES the subject in
+           the accessible name, so the one line R4 exists to print would never
+           be spoken. */
+        <button
+          type="button"
           ref={(el) => {
             trigger.current = el;
           }}
           data-letterhead-subject
-          role="button"
-          tabIndex={0}
-          aria-label="Edit the subject line"
           onClick={beginEdit}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              beginEdit();
-            }
-          }}
-          className={`min-w-0 cursor-text break-words text-left ${TYPE}`}
+          // The 44px target is taken back out of the flow, so the printed line
+          // keeps its baseline under the name.
+          className={`-my-3 min-w-0 cursor-text break-words py-3 text-left ${RING} ${TYPE}`}
         >
           {printed}
-        </p>
+          <span className="sr-only"> — edit the subject line</span>
+        </button>
       ) : (
         <DocumentAction
           ref={(el) => {

@@ -72,11 +72,13 @@ describe('LetterheadSubject', () => {
     expect(screen.getByText('Kitchen and bath')).toHaveAttribute('data-letterhead-subject');
   });
 
-  it('opens the editor from the printed line, by press and by key', () => {
+  // A real `<button>`, so Enter and Space are the platform's to translate into
+  // a press — there is no hand-written key handler to assert.
+  it('opens the editor from the printed line', () => {
     renderSubject({ subject: 'Whole-house refresh' });
 
-    const line = screen.getByRole('button', { name: 'Edit the subject line' });
-    fireEvent.keyDown(line, { key: 'Enter' });
+    const line = screen.getByRole('button', { name: /edit the subject line$/ });
+    fireEvent.click(line);
     expect(screen.getByRole('textbox', { name: 'Subject line' })).toHaveValue(
       'Whole-house refresh',
     );
@@ -86,7 +88,7 @@ describe('LetterheadSubject', () => {
   it('opens EMPTY over an assembled line, and offers it as the placeholder', () => {
     renderSubject({ assembled: 'Full house · 3 rooms' });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Edit the subject line' }));
+    fireEvent.click(screen.getByRole('button', { name: /edit the subject line$/ }));
     const input = screen.getByRole('textbox', { name: 'Subject line' });
     expect(input).toHaveValue('');
     expect(input).toHaveAttribute('placeholder', 'Full house · 3 rooms');
@@ -105,7 +107,7 @@ describe('LetterheadSubject', () => {
   it('saves the trimmed line on blur, against the engagement it was given', async () => {
     renderSubject({ kind: 'proposal', id: 'proposal-1', subject: 'Old line' });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Edit the subject line' }));
+    fireEvent.click(screen.getByRole('button', { name: /edit the subject line$/ }));
     const input = screen.getByRole('textbox', { name: 'Subject line' });
     fireEvent.change(input, { target: { value: '  Cedar Lane study  ' } });
     await act(async () => {
@@ -122,7 +124,7 @@ describe('LetterheadSubject', () => {
   it('saves null when the line is emptied', async () => {
     renderSubject({ subject: 'Whole-house refresh' });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Edit the subject line' }));
+    fireEvent.click(screen.getByRole('button', { name: /edit the subject line$/ }));
     const input = screen.getByRole('textbox', { name: 'Subject line' });
     fireEvent.change(input, { target: { value: '   ' } });
     await act(async () => {
@@ -139,7 +141,7 @@ describe('LetterheadSubject', () => {
   it('does not save an unchanged line', () => {
     renderSubject({ subject: 'Whole-house refresh' });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Edit the subject line' }));
+    fireEvent.click(screen.getByRole('button', { name: /edit the subject line$/ }));
     fireEvent.blur(screen.getByRole('textbox', { name: 'Subject line' }));
 
     expect(mutateAsync).not.toHaveBeenCalled();
@@ -149,7 +151,7 @@ describe('LetterheadSubject', () => {
   it('does not save the assembled line on a bare Enter', () => {
     renderSubject({ assembled: 'Full house · 3 rooms' });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Edit the subject line' }));
+    fireEvent.click(screen.getByRole('button', { name: /edit the subject line$/ }));
     fireEvent.keyDown(screen.getByRole('textbox', { name: 'Subject line' }), {
       key: 'Enter',
     });
@@ -158,10 +160,53 @@ describe('LetterheadSubject', () => {
     expect(screen.getByText('Full house · 3 rooms')).toBeInTheDocument();
   });
 
+  // ── W3-F6 — the printed line is a real control, and names itself ────────
+  it('is a real button whose accessible name carries the printed line', () => {
+    renderSubject({ subject: 'Whole-house refresh · 4 rooms' });
+
+    const line = screen.getByRole('button', {
+      name: 'Whole-house refresh · 4 rooms — edit the subject line',
+    });
+    expect(line.tagName).toBe('BUTTON');
+    expect(line).toHaveAttribute('type', 'button');
+    expect(line).toHaveAttribute('data-letterhead-subject');
+    // The label must never REPLACE the line: an `aria-label` here would make
+    // the one line R4 exists to print unspeakable.
+    expect(line).not.toHaveAttribute('aria-label');
+  });
+
+  it('wears the letterhead\u2019s own focus ring and a 44px hit box', () => {
+    renderSubject({ subject: 'Whole-house refresh' });
+
+    const line = screen.getByRole('button', { name: /edit the subject line$/ });
+    expect(line).toHaveClass(
+      'focus-visible:outline',
+      'focus-visible:outline-2',
+      'focus-visible:outline-offset-2',
+      'focus-visible:outline-[var(--color-clay)]',
+      'py-3',
+      '-my-3',
+    );
+  });
+
+  it('gives the editor the same ring and target, and no suppressed outline', () => {
+    renderSubject({ subject: 'Whole-house refresh' });
+
+    fireEvent.click(screen.getByRole('button', { name: /edit the subject line$/ }));
+    const input = screen.getByRole('textbox', { name: 'Subject line' });
+    expect(input).toHaveClass(
+      'focus-visible:outline',
+      'focus-visible:outline-[var(--color-clay)]',
+      'min-h-[44px]',
+      '-my-3',
+    );
+    expect(input.className).not.toMatch(/focus:outline-none/);
+  });
+
   it('Escape restores and saves nothing', () => {
     renderSubject({ subject: 'Whole-house refresh' });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Edit the subject line' }));
+    fireEvent.click(screen.getByRole('button', { name: /edit the subject line$/ }));
     const input = screen.getByRole('textbox', { name: 'Subject line' });
     fireEvent.change(input, { target: { value: 'something else' } });
     fireEvent.keyDown(input, { key: 'Escape' });

@@ -39,6 +39,9 @@ let mockDiscoveryFacetExpanded = false;
 let mockMarginItems: Array<Record<string, unknown>> = [];
 let mockDocumentQuery: Record<string, unknown>;
 let mockDiscoveryQuery: Record<string, unknown> = { data: undefined, isLoading: false, isError: false };
+const MOCK_DISCOVERY_UNASKED = { data: undefined, isLoading: false, isError: false };
+/** F2 — the section's serialized save chain, as the page registers it. */
+const mockDiscoveryFlush = jest.fn(async () => undefined);
 // R5 — the seed the band's rest act runs. `begin_direction_from_discovery`
 // returns the successor proposal id (J1).
 const mockBeginDirectionMutateAsync = jest.fn();
@@ -162,7 +165,11 @@ jest.mock('@patina/supabase', () => ({
   useProjectApprovals: () => mockProjectApprovalsQuery,
   useProposalFeedback: () => ({ data: [] }),
   useProjectRoster: () => ({ data: [] }),
-  useDiscovery: () => mockDiscoveryQuery,
+  // R4/F3 — the page holds TWO discovery reads now: the section's, keyed on a
+  // relationship id, and the proposal leg's, keyed on the chain's
+  // `designer_client_id`. Only the one that was given an id answers.
+  useDiscovery: (id: string | null) =>
+    id ? mockDiscoveryQuery : MOCK_DISCOVERY_UNASKED,
   useBeginDirection: () => ({ mutateAsync: mockBeginDirectionMutateAsync }),
   // Read by the real MarginRail.
   useProjectFFEItems: () => ({ data: [] }),
@@ -348,17 +355,21 @@ jest.mock('@/components/document/doc-letterhead', () => ({
   DocLetterhead: ({
     title,
     vitals,
+    subject,
     needsSetup,
     instruments,
   }: {
     title: string;
     vitals?: string;
+    subject?: ReactNode;
     needsSetup?: Array<{ text: string; remedyLabel: string; onActivate: () => void }> | null;
     instruments?: ReactNode;
   }) => (
     <header id="document-project-status">
       {title}
       <span data-testid="doc-vitals">{vitals}</span>
+      {/* R4 — the head's one-line description. */}
+      <span data-testid="doc-subject">{subject}</span>
       {/* W3 — the instruments' ledger stands INSIDE the letterhead now. */}
       <span data-testid="letterhead-instruments">{instruments}</span>
       <span data-testid="doc-needs-setup-count">{needsSetup?.length ?? 0}</span>
@@ -375,8 +386,13 @@ jest.mock('@/components/document/brief-section', () => ({
 }));
 jest.mock('@/components/document/brief-recap', () => ({ BriefRecap: () => <div>Brief recap</div> }));
 jest.mock('@/components/document/discovery/discovery-section', () => ({
-  DiscoverySection: () => (
+  DiscoverySection: ({
+    onRegisterFlush,
+  }: {
+    onRegisterFlush?: (flush: () => Promise<void>) => void;
+  }) => (
     <>
+      {onRegisterFlush?.(mockDiscoveryFlush)}
       <button id="discovery-facet-budget" type="button" aria-expanded={mockDiscoveryFacetExpanded} onClick={mockDiscoveryFacetOpen}>
         Budget comfort
       </button>
@@ -635,6 +651,7 @@ describe('DocumentPage guide activation', () => {
     mockMarginItems = [];
     mockDiscoveryQuery = { data: undefined, isLoading: false, isError: false };
     mockBeginDirectionMutateAsync.mockReset();
+    mockDiscoveryFlush.mockClear();
     mockDraftingState = { gaps: [], isLoading: false, error: null };
     mockProposalData = undefined;
     mockProposalError = false;
@@ -963,7 +980,7 @@ describe('DocumentPage guide activation', () => {
     // that the canonical Discovery read reaches the facet the guide names.
     // R2 — and that the sentence over it names who each open input is with.
     expect(bandSentence()).toBe(
-      'Waiting on Avery: working budget, target or hard date, style direction, lifestyle needs.',
+      'Waiting on Avery: working budget, target or hard date and 2 more.',
     );
     fireEvent.click(screen.getByRole('button', { name: 'Add Working budget' }));
     expect(mockDiscoveryFacetOpen).toHaveBeenCalledTimes(1);
@@ -2418,6 +2435,48 @@ describe('DocumentPage guide activation', () => {
         expect(mockBeginDirectionMutateAsync).toHaveBeenCalledTimes(2);
       });
 
+      // F2 — the RPC copies the discovery row into the seeded agreement, so a
+      // still-in-flight edit has to land BEFORE it runs.
+      it('awaits the section\u2019s pending write before the RPC', async () => {
+        openReadyDiscovery();
+        mockBeginDirectionMutateAsync.mockResolvedValue('proposal-9');
+
+        render(<DocumentPage params={fulfilledParams} />);
+        fireEvent.click(screen.getByRole('button', { name: 'Begin the direction' }));
+
+        await waitFor(() =>
+          expect(mockBeginDirectionMutateAsync).toHaveBeenCalledTimes(1),
+        );
+        expect(mockDiscoveryFlush).toHaveBeenCalledTimes(1);
+        expect(mockDiscoveryFlush.mock.invocationCallOrder[0]).toBeLessThan(
+          mockBeginDirectionMutateAsync.mock.invocationCallOrder[0],
+        );
+      });
+
+      // F11 — the refusal is a fact about one press, not about the page.
+      it('clears the refusal when the guide moves on', async () => {
+        openReadyDiscovery();
+        mockBeginDirectionMutateAsync.mockRejectedValue({
+          message: 'discovery not ready: the five essentials must be captured',
+        });
+
+        const { rerender } = render(<DocumentPage params={fulfilledParams} />);
+        fireEvent.click(screen.getByRole('button', { name: 'Begin the direction' }));
+        await waitFor(() =>
+          expect(bandSentence()).toMatch(/Couldn\u2019t begin the Direction/),
+        );
+
+        // The discovery read changes under it — a facet emptied.
+        const read = mockDiscoveryQuery.data as { row: Record<string, unknown> };
+        read.row.budget_max_cents = null;
+        rerender(<DocumentPage params={fulfilledParams} />);
+
+        await waitFor(() =>
+          expect(bandSentence()).not.toMatch(/Couldn\u2019t begin the Direction/),
+        );
+        expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+      });
+
       it('opens an already-seeded direction instead of seeding twice', () => {
         openReadyDiscovery();
         const read = mockDiscoveryQuery.data as { row: Record<string, unknown> };
@@ -2461,16 +2520,19 @@ describe('DocumentPage guide activation', () => {
         };
       };
 
-      it('names who is waiting on whom, the studio\u2019s share first', () => {
+      // F2 — three open inputs behind the stage's longest act: the long form
+      // overruns the 900 measure, so the band prints the short one rather
+      // than handing 41% of the sentence to CSS ellipsis. The long form's own
+      // grammar is asserted in `document-guide.test.ts`.
+      it('names who is waiting on whom, at the form that fits', () => {
         openPartialDiscovery();
 
         render(<DocumentPage params={fulfilledParams} />);
 
-        expect(bandSentence()).toBe(
-          'Yours to add: project type and named rooms. Waiting on Avery: working budget, lifestyle needs.',
-        );
+        expect(bandSentence()).toBe('1 yours \u00b7 2 theirs');
+        expect(bandSentence()).not.toBe('');
         expect(
-          screen.getByRole('button', { name: 'Add Project type and named rooms' }),
+          screen.getByRole('button', { name: 'Add Scope' }),
         ).toBeInTheDocument();
       });
 
@@ -2499,6 +2561,63 @@ describe('DocumentPage guide activation', () => {
           within(panel).getByRole('button', { name: 'Add Lifestyle needs' }),
         );
         expect(screen.getByRole('button', { name: 'Lifestyle needs' })).toHaveFocus();
+      });
+    });
+
+    // R4/F3 — half of R4 was unbuilt: the discovery read was asked for only on
+    // a discovery paper, so a PROPOSAL paper printed no subject line at all.
+    describe('R4 — the assembled subject reaches a proposal paper', () => {
+      const openProposalPaper = (designerClientId: string | null) => {
+        const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+        mockDocumentQuery = {
+          ...mockDocumentQuery,
+          data: { kind: 'engagement', row: {
+            ...current, engagement_kind: 'proposal', active_section: 'proposal',
+            engagement_id: 'chain-1', proposal_id: 'proposal-1', lead_id: null,
+            subject: null,
+          } },
+        };
+        mockProposalData = {
+          id: 'proposal-1',
+          status: 'sent',
+          version: 1,
+          sent_at: null,
+          viewed_at: null,
+          total_amount: null,
+          items: [],
+          designer_client_id: designerClientId,
+        };
+        mockDiscoveryQuery = {
+          data: { row: {
+            project_type: 'full_house',
+            rooms: [{ name: 'Kitchen' }, { name: 'Dining' }],
+          } },
+          isLoading: false,
+          isError: false,
+        };
+      };
+
+      it('prints the line assembled from the chain\u2019s discovery row', () => {
+        openProposalPaper('relationship-1');
+
+        render(<DocumentPage params={fulfilledParams} />);
+
+        const head = within(screen.getByTestId('doc-subject'));
+        expect(head.getByText('Full house \u00b7 2 rooms')).toHaveAttribute(
+          'data-letterhead-subject',
+        );
+      });
+
+      it('offers the door alone where the chain names no household', () => {
+        openProposalPaper(null);
+
+        render(<DocumentPage params={fulfilledParams} />);
+
+        const head = within(screen.getByTestId('doc-subject'));
+        expect(head.queryByText('Full house \u00b7 2 rooms')).toBeNull();
+        expect(
+          head.getByRole('button', { name: 'Add a subject line' }),
+        ).toBeInTheDocument();
       });
     });
   });
@@ -2748,6 +2867,7 @@ describe('DocumentPage landedRef — A8 first-open gate', () => {
     mockHydrated = true;
     mockDiscoveryQuery = { data: undefined, isLoading: false, isError: false };
     mockBeginDirectionMutateAsync.mockReset();
+    mockDiscoveryFlush.mockClear();
     mockDraftingState = { gaps: [], isLoading: false, error: null };
     mockProposalData = undefined;
     mockProposalError = false;
@@ -2835,6 +2955,7 @@ describe('DocumentPage — first-hire-opened mount effect (L3, 00559)', () => {
     mockHydrated = true;
     mockDiscoveryQuery = { data: undefined, isLoading: false, isError: false };
     mockBeginDirectionMutateAsync.mockReset();
+    mockDiscoveryFlush.mockClear();
     mockDraftingState = { gaps: [], isLoading: false, error: null };
     mockProposalData = undefined;
     mockProposalError = false;
@@ -2937,6 +3058,7 @@ describe('Escape puts the paper down — unless a field is using the key', () =>
     mockHydrated = true;
     mockDiscoveryQuery = { data: undefined, isLoading: false, isError: false };
     mockBeginDirectionMutateAsync.mockReset();
+    mockDiscoveryFlush.mockClear();
     mockDraftingState = { gaps: [], isLoading: false, error: null };
     mockProposalData = undefined;
     mockProposalError = false;

@@ -41,6 +41,8 @@ export function asLegacyProposalLifecycle(value: unknown): LegacyProposalLifecyc
 
 export interface DocumentGuideInputFact {
   label: string;
+  /** D-B24 — the one-word form the band's act wears at the 327 measure. */
+  shortLabel?: string;
   owner: 'Designer' | 'Client' | 'Studio' | 'Project team';
   blocks: string;
   focusId?: string;
@@ -70,6 +72,8 @@ export type DocumentGuideDestination =
 export interface DocumentGuideAction {
   key: string;
   label: string;
+  /** D-B24 — what this act prints when line 2 is in its short form. */
+  shortLabel?: string;
   destination: DocumentGuideDestination;
 }
 
@@ -80,6 +84,9 @@ export interface DocumentGuideModel {
   headline: string;
   reason: string;
   action: DocumentGuideAction | null;
+  /** D-B24 — the same fact at the 327 measure, for the band's short form.
+   *  Null on every branch that does not speak the owner sentence. */
+  shortHeadline?: string | null;
   topInput: DocumentGuideInputFact | null;
   remainingInputCount: number;
 }
@@ -390,13 +397,71 @@ export function inputsSentence(
   // household.
   const mine = facts.filter((fact) => fact.owner !== 'Client').map((fact) => lower(fact.label));
   const theirs = facts.filter((fact) => fact.owner === 'Client').map((fact) => lower(fact.label));
-  const first = (clientName ?? '').trim().split(/\s+/)[0] || 'the client';
+  const first = clientShortName(clientName);
   return [
-    mine.length > 0 ? `Yours to add: ${mine.join(', ')}.` : null,
-    theirs.length > 0 ? `Waiting on ${first}: ${theirs.join(', ')}.` : null,
+    mine.length > 0 ? `Yours to add: ${listPhrase(mine)}.` : null,
+    theirs.length > 0 ? `Waiting on ${first}: ${listPhrase(theirs)}.` : null,
   ]
     .filter(Boolean)
     .join(' ');
+}
+
+/**
+ * W3-F2 — the list reads as English, not as machine output: two items take a
+ * bare `and`, three take a serial one, and past three the sentence names the
+ * first two and counts the rest rather than reciting a column.
+ */
+function listPhrase(items: readonly string[]): string {
+  if (items.length <= 1) return items[0] ?? '';
+  if (items.length === 2) return `${items[0]} and ${items[1]}`;
+  if (items.length === 3) return `${items[0]}, ${items[1]} and ${items[2]}`;
+  return `${items[0]}, ${items[1]} and ${items.length - 2} more`;
+}
+
+/**
+ * W3-F1 — the name the sentence puts after "Waiting on". `client_name` is a
+ * HOUSEHOLD label, not a person: `The Ashfords (no-login household)` and
+ * `Edna & Rob Courtney` are both normal, and the old first-token rule printed
+ * `The` for the first and dropped Rob from the second.
+ *
+ * A parenthetical is bookkeeping and never spoken; an article-led household
+ * keeps its whole name with a lower-case article inside the sentence; a pair
+ * keeps both first names joined the way the studio wrote them; anything else
+ * is one person and takes their first name.
+ */
+export function clientShortName(name: string | null | undefined): string {
+  const cleaned = (name ?? '')
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!cleaned) return 'the client';
+  if (/^the\s+/i.test(cleaned)) return `the ${cleaned.replace(/^the\s+/i, '')}`;
+  const pair = /^(.*?)\s+(&|and)\s+(.*)$/i.exec(cleaned);
+  if (pair) {
+    const left = pair[1].split(/\s+/)[0];
+    const right = pair[3].split(/\s+/)[0];
+    if (left && right) return `${left} ${pair[2]} ${right}`;
+  }
+  return cleaned.split(/\s+/)[0] || 'the client';
+}
+
+/**
+ * D-B24 — the same owner fact at the 327 measure: who is owed, and how many
+ * things are open. It states a count where the long form recites labels, and
+ * it is never empty while the long one has words.
+ */
+export function inputsShortSentence(
+  facts: readonly DocumentGuideInputFact[],
+  clientName: string | null | undefined,
+): string | null {
+  if (facts.length === 0) return null;
+  const mine = facts.filter((fact) => fact.owner !== 'Client').length;
+  const theirs = facts.length - mine;
+  if (theirs === 0) return `Yours to add · ${mine} open`;
+  if (mine === 0) {
+    return `Waiting on ${clientShortName(clientName)} · ${theirs} open`;
+  }
+  return `${mine} yours · ${theirs} theirs`;
 }
 
 function withInputs(
@@ -413,6 +478,9 @@ function withInputs(
       ? {
           key: 'open-missing-input',
           label: `Add ${firstInput.label}`,
+          shortLabel: firstInput.shortLabel
+            ? `Add ${firstInput.shortLabel}`
+            : undefined,
           destination: {
             kind: 'anchor' as const,
             section: model.stage,
@@ -428,9 +496,14 @@ function withInputs(
     model.state === 'needs_input'
       ? inputsSentence(inputFacts ?? [], clientName)
       : null;
+  const shortOwners =
+    model.state === 'needs_input'
+      ? inputsShortSentence(inputFacts ?? [], clientName)
+      : null;
   return {
     ...model,
     headline: owners ?? model.headline,
+    shortHeadline: owners ? shortOwners : null,
     action: inputAction,
     topInput: firstInput,
     remainingInputCount: Math.max(0, (inputFacts?.length ?? 0) - 1),

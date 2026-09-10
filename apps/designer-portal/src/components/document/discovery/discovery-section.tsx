@@ -143,6 +143,7 @@ export function DiscoverySection({
   clientName,
   projectId = null,
   onEyebrow,
+  onRegisterFlush,
 }: {
   engagementId: string; // the designer_clients.id (Shape D)
   /** The engagement's document_state kind. The Discovery spread is reachable
@@ -164,6 +165,11 @@ export function DiscoverySection({
    *  stamp, not a restatement of the region's name, so it moves up into the
    *  head's eyebrow slot via this report-up. */
   onEyebrow?: (text: string | null) => void;
+  /** R5/F2 — the leader that seeds the Direction moved to the band, and the
+   *  seed COPIES this row into the agreement. The 600ms debounce and the
+   *  focusout flush can both still be in flight when it runs, so the section
+   *  hands its serialized save chain up and the page awaits it first. */
+  onRegisterFlush?: (flush: () => Promise<void>) => void;
 }) {
   const router = useRouter();
   const { data: read } = useDiscovery(engagementId);
@@ -279,6 +285,14 @@ export function DiscoverySection({
     },
     [],
   );
+
+  // Through the ref, so the registered callback survives every `flush`
+  // identity change without re-registering.
+  useEffect(() => {
+    onRegisterFlush?.(async () => {
+      await flushRef.current();
+    });
+  }, [onRegisterFlush]);
 
   const { done, ready } = deriveDiscoveryReadiness(toFacts(draft));
   const eyebrow = ready ? 'Ready' : 'In progress';

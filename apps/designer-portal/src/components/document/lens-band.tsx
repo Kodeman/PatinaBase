@@ -264,7 +264,7 @@ export function LensBand({
           data-lens-line2-form={printed.form}
           aria-live="polite"
           aria-atomic="true"
-          className={`flex items-center gap-2 whitespace-nowrap text-[15px] leading-[1.3] ${
+          className={`flex items-center gap-2 whitespace-nowrap text-[16px] leading-[1.3] ${
             standing
               ? 'text-[var(--color-terracotta-ink)]'
               : 'text-[var(--text-primary)]'
@@ -309,7 +309,14 @@ export function LensBand({
                 onStandingOpened?.();
                 setSheetOpen(true);
               }}
-              className="shrink-0 whitespace-nowrap font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)] underline underline-offset-[3px]"
+              // D1 — the door is painted in the register of what it holds: an
+              // open input is not an exception, so a door over inputs alone is
+              // clay, and terracotta returns the moment one of them is.
+              className={`shrink-0 whitespace-nowrap font-mono text-[11px] uppercase tracking-[0.08em] underline underline-offset-[3px] ${
+                printed.withheldHasException
+                  ? 'text-[var(--color-terracotta-ink)]'
+                  : 'text-[var(--color-clay-ink)]'
+              }`}
             >
               +{withheld} MORE
             </button>

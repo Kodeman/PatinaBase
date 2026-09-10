@@ -259,6 +259,7 @@ describe('deriveLensBand · line 2 (L-1)', () => {
         short: null,
         standingCount: 0,
         withheld: 0,
+        withheldHasException: false,
       });
       expect(model.standing).toEqual([]);
       expect(model.line1.rightFlush).toBeNull();
@@ -804,6 +805,220 @@ describe('deriveLensBand · the open inputs (W3-R2)', () => {
     expect(model.line2.kind).toBe('guide');
     expect(model.line2.standingCount).toBe(1);
     expect(model.inputs).toHaveLength(1);
+  });
+});
+
+// ── W3-F2 — a GUIDE line has a second form, and never prints an empty one ──
+describe('deriveLensBand \u00b7 the guide line fits its measure (D-B24)', () => {
+  const OPEN_INPUT = (index: number, label: string) => ({
+    key: `${index}:${label}`,
+    eyebrow: label.split(/\s+/).pop()!.toUpperCase(),
+    sentence: `${label} \u00b7 Client \u00b7 blocks Direction`,
+    act: {
+      key: `input:${label}`,
+      label: `Add ${label}`,
+      onAct: jest.fn(),
+    },
+  });
+
+  /** The seeded discovery paper: five open inputs, one of them the studio's. */
+  const FIVE_INPUTS = [
+    OPEN_INPUT(0, 'Project type and named rooms'),
+    OPEN_INPUT(1, 'Working budget'),
+    OPEN_INPUT(2, 'Target or hard date'),
+    OPEN_INPUT(3, 'Style direction'),
+    OPEN_INPUT(4, 'Lifestyle needs'),
+  ];
+
+  const LONG_SENTENCE =
+    'Yours to add: project type and named rooms. Waiting on the Ashfords: working budget, target or hard date and 2 more.';
+  const SHORT_SENTENCE = '1 yours \u00b7 4 theirs';
+
+  const guideBand = (tier: LensBandInput['tier']) =>
+    deriveLensBand(
+      input({
+        spreadKind: 'discovery',
+        installDate: null,
+        moneyFigure: null,
+        tier,
+        inputs: FIVE_INPUTS,
+        namedInputKey: '0:Project type and named rooms',
+        guide: {
+          text: LONG_SENTENCE,
+          short: SHORT_SENTENCE,
+          act: {
+            key: 'open-missing-input',
+            label: 'Add Project type and named rooms',
+            shortLabel: 'Add Scope',
+            onAct: jest.fn(),
+          },
+        },
+      }),
+    );
+
+  it('prints the long form at the full measure when it fits', () => {
+    // Four open inputs, one of them named on line 2 — the shape the long form
+    // was calibrated for.
+    const fourOpen = [
+      OPEN_INPUT(0, 'Working budget'),
+      OPEN_INPUT(1, 'Target or hard date'),
+      OPEN_INPUT(2, 'Style direction'),
+      OPEN_INPUT(3, 'Lifestyle needs'),
+    ];
+    const model = deriveLensBand(
+      input({
+        spreadKind: 'discovery',
+        installDate: null,
+        moneyFigure: null,
+        tier: 'full',
+        inputs: fourOpen,
+        namedInputKey: '0:Working budget',
+        guide: {
+          text: 'Waiting on Avery: working budget, target or hard date and 2 more.',
+          short: 'Waiting on Avery \u00b7 4 open',
+          act: {
+            key: 'open-missing-input',
+            label: 'Add Working budget',
+            shortLabel: 'Add Budget',
+            onAct: jest.fn(),
+          },
+        },
+      }),
+    );
+    expect(model.line2.kind).toBe('guide');
+    expect(model.line2.form).toBe('long');
+    expect(model.line2.sentence).toBe(
+      'Waiting on Avery: working budget, target or hard date and 2 more.',
+    );
+    expect(model.line2.act?.label).toBe('Add Working budget');
+  });
+
+  // The seeded paper: five open inputs and the longest act on the stage. Its
+  // long form does not fit even the 900 measure — which is exactly the case
+  // that used to reach CSS ellipsis with no second form to fall to.
+  it('falls to the short form at the full measure when the long one overruns', () => {
+    const model = guideBand('full');
+    expect(model.line2.kind).toBe('guide');
+    expect(model.line2.form).toBe('short');
+    expect(model.line2.sentence).toBe(SHORT_SENTENCE);
+    expect(model.line2.act?.label).toBe('Add Scope');
+  });
+
+  it('falls to the short form, and the short act, at the mobile measure', () => {
+    const model = guideBand('mobile');
+    expect(model.line2.form).toBe('short');
+    expect(model.line2.sentence).toBe(SHORT_SENTENCE);
+    expect(model.line2.act?.label).toBe('Add Scope');
+  });
+
+  it('never prints an empty sentence at either measure', () => {
+    expect(guideBand('full').line2.sentence).not.toBe('');
+    expect(guideBand('mobile').line2.sentence).not.toBe('');
+  });
+
+  it('keeps the long form at 390 when two open inputs fit it', () => {
+    const twoOpen = [OPEN_INPUT(0, 'Working budget'), OPEN_INPUT(1, 'Style direction')];
+    const model = deriveLensBand(
+      input({
+        spreadKind: 'discovery',
+        installDate: null,
+        moneyFigure: null,
+        tier: 'mobile',
+        inputs: twoOpen,
+        namedInputKey: '0:Working budget',
+        guide: {
+          text: 'Waiting on Avery: budget.',
+          short: 'Waiting on Avery \u00b7 2 open',
+          act: null,
+        },
+      }),
+    );
+    expect(model.line2.form).toBe('long');
+    expect(model.line2.sentence).toBe('Waiting on Avery: budget.');
+  });
+});
+
+// ── W3-F5 — the D1 exclusion follows what line 2 actually printed ──────────
+describe('deriveLensBand \u00b7 the named input is dropped only on a guide line', () => {
+  const INPUTS = [
+    {
+      key: '0:Working budget',
+      eyebrow: 'BUDGET',
+      sentence: 'Working budget \u00b7 Client \u00b7 blocks Direction',
+      act: null,
+    },
+    {
+      key: '1:Style direction',
+      eyebrow: 'DIRECTION',
+      sentence: 'Style direction \u00b7 Client \u00b7 blocks Direction',
+      act: null,
+    },
+  ];
+  const GUIDE = {
+    text: 'Waiting on Avery: working budget and style direction.',
+    act: { key: 'open-missing-input', label: 'Add Working budget', onAct: jest.fn() },
+  };
+
+  it('drops it when line 2 is the guide', () => {
+    const model = deriveLensBand(
+      input({ inputs: INPUTS, namedInputKey: '0:Working budget', guide: GUIDE }),
+    );
+    expect(model.line2.kind).toBe('guide');
+    expect(model.inputs.map((item) => item.key)).toEqual(['1:Style direction']);
+    expect(model.line2.withheld).toBe(1);
+  });
+
+  it('keeps every input when a standing exception outranks the guide', () => {
+    const model = deriveLensBand(
+      input({
+        needs: VANDERSTEEN_NEEDS,
+        inputs: INPUTS,
+        namedInputKey: '0:Working budget',
+        guide: GUIDE,
+        now: NOW,
+      }),
+    );
+    expect(model.line2.kind).toBe('standing');
+    expect(model.inputs.map((item) => item.key)).toEqual([
+      '0:Working budget',
+      '1:Style direction',
+    ]);
+    // Four exceptions plus both inputs, less the one line 2 is naming.
+    expect(model.line2.standingCount).toBe(6);
+    expect(model.line2.withheld).toBe(5);
+  });
+
+  it('keeps every input where the guide names none', () => {
+    const model = deriveLensBand(input({ inputs: INPUTS, guide: GUIDE }));
+    expect(model.inputs).toHaveLength(2);
+    expect(model.line2.withheld).toBe(2);
+  });
+});
+
+// ── W3-F7 — the door is painted in the register of what it holds ───────────
+describe('deriveLensBand \u00b7 withheldHasException', () => {
+  const INPUT_ONLY = {
+    key: '0:Working budget',
+    eyebrow: 'BUDGET',
+    sentence: 'Working budget \u00b7 Client \u00b7 blocks Direction',
+    act: null,
+  };
+
+  it('is false when every withheld row is an open input', () => {
+    const model = deriveLensBand(
+      input({
+        inputs: [INPUT_ONLY],
+        guide: { text: 'Waiting on Avery: working budget.', act: null },
+      }),
+    );
+    expect(model.line2.withheldHasException).toBe(false);
+  });
+
+  it('is true when a standing exception is behind the door', () => {
+    const model = deriveLensBand(
+      input({ needs: VANDERSTEEN_NEEDS, inputs: [INPUT_ONLY], now: NOW }),
+    );
+    expect(model.line2.withheldHasException).toBe(true);
   });
 });
 

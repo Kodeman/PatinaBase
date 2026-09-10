@@ -63,6 +63,10 @@ export function StandingSheet({
         regionKey="standing-sheet"
         aria-label="Standing actions"
       >
+        {/* W3-F8 — with nothing standing there is no list, so there is no list
+            to rule off: an empty `<ul>` under a hairline read as a section
+            whose contents had been withheld. */}
+        {items.length > 0 && (
         <ul className="w-full">
           {items.map((item) => (
             <li
@@ -87,6 +91,7 @@ export function StandingSheet({
             </li>
           ))}
         </ul>
+        )}
         {inputs.length > 0 && (
           <>
             {/* W3-R2 — the inputs are facts about the next stage, not standing
@@ -99,7 +104,11 @@ export function StandingSheet({
               // `border-color` only, so the declaration was invalid and the
               // rule fell back to `currentColor` — a terracotta hairline
               // inherited from the eyebrow class on the same element.
-              className={`mt-4 border-t border-[var(--doc-ink-border)] pt-3 ${INPUT_EYEBROW}`}
+              className={`${
+                items.length > 0
+                  ? 'mt-4 border-t border-[var(--doc-ink-border)] pt-3'
+                  : ''
+              } ${INPUT_EYEBROW}`}
             >
               INPUT NEEDED · {inputs.length}
             </p>

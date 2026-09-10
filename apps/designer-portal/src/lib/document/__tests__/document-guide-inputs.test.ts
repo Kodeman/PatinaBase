@@ -42,8 +42,8 @@ describe('composeDocumentGuideInputs', () => {
       'Working budget', 'Target or hard date', 'Style direction', 'Lifestyle needs',
     ]);
     expect(inputs[0]).toEqual({
-      label: 'Working budget', owner: 'Client', blocks: 'Direction',
-      focusId: 'discovery-facet-budget',
+      label: 'Working budget', shortLabel: 'Budget', owner: 'Client',
+      blocks: 'Direction', focusId: 'discovery-facet-budget',
     });
   });
 

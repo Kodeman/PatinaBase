@@ -408,6 +408,10 @@ function subjectFor(
  *  not busted by a fresh `[]` on every render. */
 const NO_BAND_NEEDS: readonly RedLetterRow[] = [];
 
+/** D1 — one spelling of an open input's key, so the row the guide's act names
+ *  and the row the sheet lists are the same row to the derivation. */
+const bandInputKey = (index: number, label: string) => `${index}:${label}`;
+
 /**
  * D-B24 — which measure line 2 has to fit. The three tiers are the shell's own
  * (`full` from 1440, `narrow` from 1180, `mobile` below it). The server has no
@@ -973,6 +977,14 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   };
   const discoveryQuery = useDiscovery(
     row?.active_section === 'discovery' ? row.engagement_id : null,
+  );
+  // R4 — a proposal paper's assembled line comes from the SAME discovery row,
+  // reached through the chain's `designer_client_id`: `engagement_id` there is
+  // the proposal chain root, which `client_discovery` knows nothing about.
+  const proposalDiscoveryQuery = useDiscovery(
+    row?.engagement_kind === 'proposal'
+      ? (liveProposal?.designer_client_id ?? null)
+      : null,
   );
   const draftingState = useDraftingState(
     proposalId,
@@ -1686,11 +1698,19 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   const [beginDirectionLanding, setBeginDirectionLanding] = useState(false);
   const [beginDirectionError, setBeginDirectionError] = useState<string | null>(null);
   const engagementId = row?.engagement_id ?? null;
+  // F2 — the RPC COPIES the discovery row into the seeded agreement, so the
+  // section's pending write has to land first: a 600ms debounce or a
+  // fire-and-forget focusout flush can otherwise arrive after the copy.
+  const discoveryFlush = useRef<(() => Promise<void>) | null>(null);
+  const registerDiscoveryFlush = useCallback((flush: () => Promise<void>) => {
+    discoveryFlush.current = flush;
+  }, []);
   const runBeginDirection = useCallback(async () => {
     if (!engagementId) return;
     setBeginDirectionError(null);
     setBeginDirectionLanding(true);
     try {
+      await discoveryFlush.current?.();
       const proposalId = await beginDirectionAsync({ designerClientId: engagementId });
       // J1: the document's IDENTITY moves here — /doc/<designerClientId> stops
       // resolving the instant the draft proposal exists (00327), so the old
@@ -2193,6 +2213,14 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     !deskGuidanceFailed
       ? redLetterRows
       : NO_BAND_NEEDS;
+  // R5/F11 — the refusal is a fact about ONE press of ONE leader. Left
+  // standing it overrode line 2 for the life of the page, so jumping a section
+  // or editing a facet kept a stale `Retry` where the leader belongs.
+  // `bandSpread` is `spreadSection` read above the early returns.
+  const guideActionKey = guideModel?.action?.key ?? null;
+  useEffect(() => {
+    setBeginDirectionError(null);
+  }, [guideActionKey, bandSpread]);
   // R5 — a failed seed is stated on line 2 itself, where the leader stands,
   // and its act re-runs the seed. There is no second band to print it in.
   const guideHeadline = beginDirectionError
@@ -2205,12 +2233,25 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   const guideActKey = beginDirectionError
     ? 'retry-begin-direction'
     : (guideModel?.action?.key ?? null);
+  // D-B24 — the same guide fact at the 327 measure. A refusal is already one
+  // clause and states its own reason, so it has no second form to fall to.
+  const guideShortHeadline = beginDirectionError
+    ? null
+    : (guideModel?.shortHeadline ?? null);
+  const guideActShortLabel = beginDirectionError
+    ? null
+    : (guideModel?.action?.shortLabel ?? null);
   // D1 — the band's act NAMES the first open input, so that input must not be
   // listed again behind the door. It names it exactly when `withInputs` built
   // the act from it: a needs-input state whose first fact carries a focus id.
-  const bandNamesTopInput =
-    guideModel?.state === 'needs_input' && Boolean(guideModel.topInput?.focusId);
-  const doorFacts = bandNamesTopInput ? guideInputs.slice(1) : guideInputs;
+  // Whether line 2 actually prints that act is the DERIVATION's answer, not
+  // this one — a standing exception outranks the guide — so the key travels
+  // down and the exclusion is made there.
+  const namedInputKey =
+    guideModel?.state === 'needs_input' && guideModel.topInput?.focusId
+      ? bandInputKey(0, guideModel.topInput.label)
+      : null;
+  const doorFacts = guideInputs;
   const bandSection = row?.active_section ?? null;
   // W3-R2 — the guide's open inputs, the sheet's own second section. Their
   // facts are rebuilt every render from the same reads; this string is what
@@ -2237,6 +2278,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       ? {
           key: guideActKey ?? 'guide',
           label: guideActLabel,
+          shortLabel: guideActShortLabel ?? undefined,
           onAct: activateGuide,
           // R5 — the seed is in flight; the leader is held, not idle.
           disabled: beginDirectionLanding,
@@ -2246,7 +2288,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     // no facet to land on (a direction gap, a signature) prints the sentence
     // and asks for nothing rather than borrowing the band's act.
     const inputs: LensInputItem[] = doorFacts.map((fact, index) => ({
-      key: `${index}:${fact.label}`,
+      key: bandInputKey(index, fact.label),
       // The input's own kind word — `Client signature` stands under SIGNATURE.
       eyebrow: (fact.label.split(/\s+/).pop() ?? fact.label).toUpperCase(),
       sentence: `${fact.label} · ${fact.owner} · blocks ${fact.blocks}`,
@@ -2270,7 +2312,10 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       ticket: ticketRows ?? [],
       needs: bandNeeds,
       inputs,
-      guide: guideHeadline ? { text: guideHeadline, act: guideAct } : null,
+      namedInputKey,
+      guide: guideHeadline
+        ? { text: guideHeadline, act: guideAct, short: guideShortHeadline }
+        : null,
       tier: lensTier,
       household: bandHousehold,
       stageWord: bandStageWord,
@@ -2294,8 +2339,11 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     ticketRows,
     bandNeeds,
     inputSignature,
+    namedInputKey,
     guideHeadline,
+    guideShortHeadline,
     guideActLabel,
+    guideActShortLabel,
     guideActKey,
     activateGuide,
     activateDestination,
@@ -2750,7 +2798,12 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
               kind={row.engagement_kind}
               id={row.engagement_id}
               subject={row.subject}
-              assembled={subjectFor(row, discoveryQuery.data)}
+              assembled={subjectFor(
+                row,
+                row.engagement_kind === 'proposal'
+                  ? proposalDiscoveryQuery.data
+                  : discoveryQuery.data,
+              )}
             />
           }
           // R80: project vitals self-save at the letterhead (blur-save law).
@@ -2957,6 +3010,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                     clientName={row.client_name}
                     projectId={row.project_id ?? null}
                     onEyebrow={setDiscoveryEyebrow}
+                    onRegisterFlush={registerDiscoveryFlush}
                   />
                 ) : null}
               </PreworkRegion>

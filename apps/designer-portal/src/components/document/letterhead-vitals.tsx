@@ -41,7 +41,7 @@ import { fmtDay, todayYmd } from '@/lib/document/format';
 
 type AnyRecord = any;
 
-type SaveState = 'idle' | 'saving' | 'saved' | 'error';
+export type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 
 const prettyPhase = (phase: string | null) =>
   phase
@@ -83,7 +83,7 @@ function useVitalSave(projectId: string) {
   return { save, state, errorMsg };
 }
 
-function SaveDot({ state, errorMsg }: { state: SaveState; errorMsg: string | null }) {
+export function SaveDot({ state, errorMsg }: { state: SaveState; errorMsg: string | null }) {
   if (state === 'idle') return null;
   return (
     <span
