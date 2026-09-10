@@ -523,7 +523,9 @@ export function normalizePartyPhoneForCompare(phone: string | null | undefined):
  *  · `pending` / `granted` revert to `not_asked` — unless the number being
  *    moved TO already carries its own `opted_out` sibling row, in which
  *    case this row is set to `opted_out` too rather than wrongly reopening
- *    an already-opted-out number.
+ *    an already-opted-out number, and INHERITS that sibling's
+ *    `sms_opt_out_at` rather than stamping the edit's own clock over an
+ *    opt-out that happened elsewhere, earlier, to someone else's row.
  *  · `opted_out` is left untouched entirely (status, evidence, timestamps).
  *  · `not_asked` has nothing to revert.
  * `opted_out` left in place means that row stays permanently un-inviteable
@@ -566,16 +568,25 @@ export function useUpdateProjectParty() {
 
         if (phoneGenuinelyChanged && (currentStatus === 'pending' || currentStatus === 'granted')) {
           let revertsToOptedOut = false;
+          // The sibling's own opt-out moment, inherited below. Most recent
+          // first, so a number with several opted_out rows carries the latest
+          // word on it.
+          let siblingOptOutAt: string | null = null;
           if (nextE164) {
             const { data: optedOutOnNewNumber, error: siblingError } = await supabase
               .from('project_parties')
-              .select('id')
+              .select('id, sms_opt_out_at')
               .eq('phone_e164', nextE164)
               .eq('sms_consent_status', 'opted_out')
               .neq('id', id)
+              .order('sms_opt_out_at', { ascending: false, nullsFirst: false })
               .limit(1);
             if (siblingError) throw siblingError;
-            revertsToOptedOut = !!(optedOutOnNewNumber && optedOutOnNewNumber.length > 0);
+            const sibling = optedOutOnNewNumber?.[0] as
+              | { sms_opt_out_at?: string | null }
+              | undefined;
+            revertsToOptedOut = !!sibling;
+            siblingOptOutAt = sibling?.sms_opt_out_at ?? null;
           }
           Object.assign(
             dbPatch,
@@ -583,11 +594,18 @@ export function useUpdateProjectParty() {
               ? {
                   ...NOT_ASKED_CONSENT_COLUMNS,
                   sms_consent_status: 'opted_out' as const,
-                  // An opted_out row carries the moment it opted out —
-                  // sms-inbound/pipeline.ts stamps it on every STOP, and the
-                  // bundle above nulls it. Without this the row would read
-                  // opted_out with no date behind it.
-                  sms_opt_out_at: new Date().toISOString(),
+                  // The STOP happened on the SIBLING row, at the sibling's
+                  // moment — nobody replied STOP on this row, and nothing
+                  // happened to it at all except a designer correcting a
+                  // number. So the date is inherited, never stamped now():
+                  // a fabricated opt-out time is what a TCPA audit would read
+                  // back as this recipient's own reply. A sibling with no
+                  // date leaves this row with none — "opted out, date
+                  // unknown" is the truth, and the sibling holds whatever
+                  // record there is. The evidence columns null with the
+                  // bundle above because they describe consent collected for
+                  // the OLD number and cannot travel with a phone change.
+                  sms_opt_out_at: siblingOptOutAt,
                 }
               : NOT_ASKED_CONSENT_COLUMNS,
           );

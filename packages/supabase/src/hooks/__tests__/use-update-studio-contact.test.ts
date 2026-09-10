@@ -57,11 +57,15 @@ describe('useUpdateStudioContact — phone_e164 follows the raw phone', () => {
     expect(builder.update).toHaveBeenCalledWith({ phone: null, phone_e164: null });
   });
 
-  it('sends phone_e164: null when the phone is cleared to whitespace', async () => {
+  // A space-only phone is an emptied field, not a number: stored as '   ' the
+  // row reads as "has a phone" to anything testing `phone != null` while
+  // carrying nothing dialable. useUpdateProjectParty writes the same
+  // normalizer's other table this way already.
+  it('stores a whitespace-only phone as null, with its e164', async () => {
     const mutationFn = mutationFnOf(useUpdateStudioContact());
     await mutationFn({ id: 'contact-1', organizationId: 'org-1', phone: '   ' });
 
-    expect(builder.update).toHaveBeenCalledWith({ phone: '   ', phone_e164: null });
+    expect(builder.update).toHaveBeenCalledWith({ phone: null, phone_e164: null });
   });
 
   it('leaves phone_e164 to the trigger when a real number is set', async () => {
@@ -70,6 +74,17 @@ describe('useUpdateStudioContact — phone_e164 follows the raw phone', () => {
       id: 'contact-1',
       organizationId: 'org-1',
       phone: '(555) 123-4567',
+    });
+
+    expect(builder.update).toHaveBeenCalledWith({ phone: '(555) 123-4567' });
+  });
+
+  it('trims a number the studio typed with stray spaces', async () => {
+    const mutationFn = mutationFnOf(useUpdateStudioContact());
+    await mutationFn({
+      id: 'contact-1',
+      organizationId: 'org-1',
+      phone: '  (555) 123-4567 ',
     });
 
     expect(builder.update).toHaveBeenCalledWith({ phone: '(555) 123-4567' });

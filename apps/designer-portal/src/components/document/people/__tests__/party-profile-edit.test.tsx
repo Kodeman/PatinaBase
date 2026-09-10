@@ -181,7 +181,7 @@ describe('PartyProfileSheet — edit', () => {
     expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
   });
 
-  it('re-hydrates an untouched form when the record arrives after Edit opened', () => {
+  it('offers Edit once the record arrives, prefilled from it', () => {
     personData.current = null;
     const { rerender } = render(
       <PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />,
@@ -198,17 +198,70 @@ describe('PartyProfileSheet — edit', () => {
     expect(screen.getByLabelText('Email')).toHaveValue('sal@morettiplumbing.com');
   });
 
-  it('does not clobber a typed field when the record refetches under the form', () => {
-    render(<PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />);
+  // The form is OPEN and untouched when a newer record lands (a co-member's
+  // edit, or the first refetch after the sheet opened): every field the
+  // designer has not typed into takes the new values.
+  it('re-hydrates an untouched open form when a newer record arrives under it', () => {
+    const { rerender } = render(
+      <PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    expect(screen.getByLabelText('Name')).toHaveValue('Sal Moretti');
+
+    personData.current = person({
+      display_name: 'Sal Moretti Jr',
+      email: 'sal.jr@morettiplumbing.com',
+      phone: '5550001111',
+      meta: {
+        company_name: 'Moretti & Sons',
+        trade: 'electrical',
+        phone_e164: '+15550001111',
+        project_name: 'The Ellsworth Kitchen',
+      },
+    });
+    rerender(<PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />);
+
+    expect(screen.getByLabelText('Name')).toHaveValue('Sal Moretti Jr');
+    expect(screen.getByLabelText('Company')).toHaveValue('Moretti & Sons');
+    expect(screen.getByLabelText('Trade')).toHaveValue('electrical');
+    expect(screen.getByLabelText('Phone')).toHaveValue('5550001111');
+    expect(screen.getByLabelText('Email')).toHaveValue('sal.jr@morettiplumbing.com');
+  });
+
+  // The same arrival, with one field typed into: the freeze is the whole
+  // form's, so nothing moves once the designer has started.
+  it('freezes the whole form once the designer has typed, newer record or not', () => {
+    const { rerender } = render(
+      <PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />,
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
     fireEvent.change(screen.getByLabelText('Company'), {
       target: { value: 'Moretti & Sons' },
     });
 
     personData.current = person({ display_name: 'Sal Moretti Jr' });
-    fireEvent.change(screen.getByLabelText('Phone'), { target: { value: '5551234567' } });
+    rerender(<PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />);
 
     expect(screen.getByLabelText('Company')).toHaveValue('Moretti & Sons');
+    expect(screen.getByLabelText('Name')).toHaveValue('Sal Moretti');
+  });
+
+  // The record goes away under an open, untouched form (a query error that
+  // drops the cached row). The last good snapshot must stand — blanking it
+  // would read as the sheet losing the person's details.
+  it('leaves an open form standing when the record disappears under it', () => {
+    const { rerender } = render(
+      <PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+
+    personData.current = null;
+    rerender(<PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />);
+
+    expect(screen.getByLabelText('Name')).toHaveValue('Sal Moretti');
+    expect(screen.getByLabelText('Company')).toHaveValue('Moretti Plumbing');
+    expect(screen.getByLabelText('Phone')).toHaveValue('5551234567');
+    expect(screen.getByLabelText('Email')).toHaveValue('sal@morettiplumbing.com');
   });
 
   // F3-R2-09's shape, for the field trade: a stored value outside
@@ -240,9 +293,31 @@ describe('PartyProfileSheet — edit', () => {
     });
   });
 
-  // project_parties' UPDATE policy admits only the project's own designer; a
-  // co-member who can read this sheet must not be shown raw PostgREST text.
-  it('translates an RLS refusal on Save into plain words', async () => {
+  // 00584 widened project_parties' UPDATE to the whole studio, so a permission
+  // refusal now belongs to a reader admitted by one of the SELECT-only
+  // policies — and it arrives as 42501, not as zero rows.
+  it('translates a permission refusal on Save into plain words', async () => {
+    updateMutateAsync.mockRejectedValue({
+      code: '42501',
+      message: 'new row violates row-level security policy for table "project_parties"',
+    });
+    render(<PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Sal R. Moretti' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(
+      await screen.findByText("Only this project's studio can edit its crew."),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/row-level security policy/i),
+    ).not.toBeInTheDocument();
+  });
+
+  // Zero rows matched is a race, not a refusal: the crew row was removed or
+  // re-pointed under the open form. Calling it a permission problem sent
+  // designers looking for authority they already had.
+  it('reads a vanished row on Save as a race, not a permission problem', async () => {
     updateMutateAsync.mockRejectedValue({
       code: 'PGRST116',
       message: 'JSON object requested, multiple (or no) rows returned',
@@ -253,7 +328,7 @@ describe('PartyProfileSheet — edit', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     expect(
-      await screen.findByText("Only this project's designer can edit its crew."),
+      await screen.findByText("This person's record just changed — refresh to see it."),
     ).toBeInTheDocument();
     expect(
       screen.queryByText(/JSON object requested/i),

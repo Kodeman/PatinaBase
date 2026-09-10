@@ -133,7 +133,12 @@ VALUES
   -- 00587: the cross-studio sibling leg.
   ('d7200000-0000-4000-8000-000000000017', NULL,
    'd7000000-0000-4000-8000-000000000001', 'consultation', 'new',
-   'Foreign Sibling', 'rtl-foreign-sibling@test.invalid');
+   'Foreign Sibling', 'rtl-foreign-sibling@test.invalid'),
+  -- 00587 (review R2 F1): the co-member sibling leg — the row the scope must
+  -- keep counting.
+  ('d7200000-0000-4000-8000-000000000018', NULL,
+   'd7000000-0000-4000-8000-000000000001', 'consultation', 'new',
+   'Comember Sibling', 'rtl-comember-sibling@test.invalid');
 
 UPDATE public.leads
 SET budget_range = '5k_15k', timeline = 'asap'
@@ -596,7 +601,8 @@ $$;
 -- row of their own naming any lead id. An unscoped sibling probe therefore let
 -- a designer in another studio plant a row pointing at this lead and refuse
 -- this undo forever — denial rather than escalation, and permanent. The probe
--- now counts only relationships belonging to the same designer.
+-- now counts only relationships belonging to the same STUDIO (the co-member
+-- leg below is the other half of that scope).
 DO $$
 DECLARE
   v_dc      uuid;
@@ -629,7 +635,8 @@ BEGIN
            public.return_to_lead_check(v_dc)->>'reason');
 
   -- The designer's OWN second relationship still closes the door: the scope
-  -- narrows who counts as a sibling, it does not remove the guard.
+  -- narrows who counts as a sibling to the studio, it does not remove the
+  -- guard.
   INSERT INTO public.designer_clients (
     designer_id, client_email, source, lead_id, status
   ) VALUES (
@@ -657,6 +664,53 @@ BEGIN
   ASSERT EXISTS (SELECT 1 FROM public.designer_clients WHERE id = v_planted),
     'the reversal must not reach outside the studio to delete anything';
   PERFORM pg_temp.assume_rtl_actor('d7000000-0000-4000-8000-000000000001');
+END;
+$$;
+
+-- ── 00587 (review R2 F1): a CO-MEMBER's row on the same lead still refuses ──
+-- The scope narrows the probe to the studio, not to the one designer. A
+-- co-member's relationship on this lead does emit a Desk folder for the
+-- studio, and the reversal deletes only one row — so deleting under it would
+-- leave the co-member holding a Shape-D orphan pointing at a lead back at
+-- 'new', un-undoable from their side (their own check raises on the
+-- lead-ownership guard). Strict designer equality would have opened exactly
+-- that hole while closing the foreign one.
+DO $$
+DECLARE
+  v_dc       uuid;
+  v_comember uuid;
+BEGIN
+  v_dc := pg_temp.rtl_accept('d7200000-0000-4000-8000-000000000018');
+
+  ASSERT (public.return_to_lead_check(v_dc)->>'allowed')::boolean,
+    'one relationship on the lead must leave the door open';
+
+  -- Inserted BY the co-member, as their own row: designer_clients' studio
+  -- policy admits it, and lead_id carries no constraint at all.
+  PERFORM pg_temp.assume_rtl_actor('d7000000-0000-4000-8000-000000000002');
+  INSERT INTO public.designer_clients (
+    designer_id, client_email, source, lead_id, status
+  ) VALUES (
+    'd7000000-0000-4000-8000-000000000002', 'rtl-comember-sibling-2@test.invalid',
+    'direct', 'd7200000-0000-4000-8000-000000000018', 'lead'
+  )
+  RETURNING id INTO v_comember;
+
+  PERFORM pg_temp.assume_rtl_actor('d7000000-0000-4000-8000-000000000001');
+  ASSERT pg_temp.rtl_refusal(v_dc) =
+    'This lead is tied to more than one client, so there is no single move to take back.',
+    'a studio co-member''s row on the same lead must still close the door';
+
+  ASSERT (SELECT status = 'accepted' AND accepted_at IS NOT NULL
+          FROM public.leads
+          WHERE id = 'd7200000-0000-4000-8000-000000000018'),
+    'a refused reversal must leave the lead accepted';
+  ASSERT EXISTS (SELECT 1 FROM public.designer_clients WHERE id = v_comember),
+    'a refused reversal must leave the co-member''s row standing';
+
+  DELETE FROM public.designer_clients WHERE id = v_comember;
+  ASSERT (public.return_to_lead_check(v_dc)->>'allowed')::boolean,
+    'with the co-member''s row gone the door opens again';
 END;
 $$;
 
@@ -869,6 +923,21 @@ BEGIN
   ASSERT (public.return_to_lead_check(v_dc)->>'allowed')::boolean,
     'keep-as-is left off is not content';
 
+  -- The mark counts however it was encoded: a writer that JSON-encodes the
+  -- checkbox as a string must not lose the room it marked.
+  UPDATE public.client_discovery
+  SET rooms = '[{"keep_as_is": "true"}]'::jsonb
+  WHERE designer_client_id = v_dc;
+  ASSERT pg_temp.rtl_refusal(v_dc) =
+    'Discovery has already been filled in for this client.',
+    'a keep-as-is written as a string must still close the door';
+
+  UPDATE public.client_discovery
+  SET rooms = '[{"keep_as_is": "false"}]'::jsonb
+  WHERE designer_client_id = v_dc;
+  ASSERT (public.return_to_lead_check(v_dc)->>'allowed')::boolean,
+    'a keep-as-is written as the string "false" is still not a mark';
+
   UPDATE public.client_discovery
   SET rooms = '[{}]'::jsonb,
       lifestyle = '[{"room": "Living"}]'::jsonb
@@ -876,6 +945,57 @@ BEGIN
   ASSERT pg_temp.rtl_refusal(v_dc) =
     'Discovery has already been filled in for this client.',
     'a lifestyle row naming only its room must close the door';
+
+  -- 00587 (review R2 F7) — the other three row lists answer the same way.
+  -- "+ Add a piece to keep" tapped once writes a literal {}, exactly as
+  -- "+ Add a room" does, and must read the same here.
+  UPDATE public.client_discovery
+  SET rooms = '[{}]'::jsonb,
+      lifestyle = '[{}]'::jsonb,
+      keep_items = '[{}]'::jsonb,
+      avoid_items = '[{}]'::jsonb,
+      decision_makers = '[{}]'::jsonb
+  WHERE designer_client_id = v_dc;
+  ASSERT (public.return_to_lead_check(v_dc)->>'allowed')::boolean,
+    'an empty row in keep / avoid / decision-makers is not content either';
+
+  UPDATE public.client_discovery
+  SET keep_items = '[{"label": "  ", "reason": ""}]'::jsonb,
+      avoid_items = '[{"label": ""}]'::jsonb,
+      decision_makers = '[{"name": "", "role": "  ", "approves": "", "comms": ""}]'::jsonb
+  WHERE designer_client_id = v_dc;
+  ASSERT (public.return_to_lead_check(v_dc)->>'allowed')::boolean,
+    'blank strings in the other three lists are not content';
+
+  UPDATE public.client_discovery
+  SET keep_items = '[{"label": "walnut credenza"}]'::jsonb
+  WHERE designer_client_id = v_dc;
+  ASSERT pg_temp.rtl_refusal(v_dc) =
+    'Discovery has already been filled in for this client.',
+    'a named piece to keep must close the door';
+
+  UPDATE public.client_discovery
+  SET keep_items = '[{"reason": "heirloom"}]'::jsonb
+  WHERE designer_client_id = v_dc;
+  ASSERT pg_temp.rtl_refusal(v_dc) =
+    'Discovery has already been filled in for this client.',
+    'a keep row carrying only its why must close the door';
+
+  UPDATE public.client_discovery
+  SET keep_items = '[{}]'::jsonb,
+      avoid_items = '[{"label": "glass tables"}]'::jsonb
+  WHERE designer_client_id = v_dc;
+  ASSERT pg_temp.rtl_refusal(v_dc) =
+    'Discovery has already been filled in for this client.',
+    'a hard no must close the door';
+
+  UPDATE public.client_discovery
+  SET avoid_items = '[{}]'::jsonb,
+      decision_makers = '[{"comms": "email, Fri recap"}]'::jsonb
+  WHERE designer_client_id = v_dc;
+  ASSERT pg_temp.rtl_refusal(v_dc) =
+    'Discovery has already been filled in for this client.',
+    'a decision-maker row carrying only its comms note must close the door';
 END;
 $$;
 

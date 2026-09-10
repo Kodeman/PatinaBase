@@ -17,11 +17,15 @@
 --    closed the mirror hole (a planted row cannot be USED to un-accept
 --    someone else's lead) but not this one, which is denial rather than
 --    escalation. Both probes — the check's and the act's restatement — now
---    require the sibling to belong to the same designer as the relationship
---    under review. A row outside the studio is not a second folder on the
---    designer's desk and must not speak for it.
+--    require the sibling to belong to the STUDIO: _can_author_proposal, the
+--    same authority predicate each function opens with. A row outside the
+--    studio is not a second folder on the desk and must not speak for it; a
+--    co-member's row IS one, and still closes the door, because the delete
+--    would otherwise strand it behind a lead back at 'new' with no Desk
+--    folder to its name (Shape D). Strict designer equality would have shut
+--    the foreign hole by opening that one — review R2 F1.
 --
--- 2. THE ROOMS / LIFESTYLE CONTENT PROBES READ ONE FIELD EACH.
+-- 2. THE ROW-LIST CONTENT PROBES READ ONE FIELD EACH (OR THE WHOLE ARRAY).
 --    00585 mirrored capturedRooms / capturedLifestyle (discovery-readiness.ts),
 --    which count a room only when it has a name and a lifestyle row only when
 --    it says who or how. Those helpers gate READINESS — whether a block is
@@ -33,6 +37,10 @@
 --    room_type, floor_area_sqft, keep_as_is, notes; LifestyleRow = room, who,
 --    how) now counts. A blank string is still blank — an empty row added and
 --    never typed into is still not content, which is what F5 asked for.
+--    The other three lists — keep_items, avoid_items, decision_makers — were
+--    still compared whole against '[]', so the same "+ Add" tapped once and
+--    abandoned DID refuse the undo there. One gesture, one answer: all five
+--    lists are now read row by row, field by field (review R2 F7).
 --
 -- 3. THE DIRECTORY'S PHONE PRECEDENCE DISAGREED WITH EVERY OTHER SURFACE.
 --    An account holder's own number wins: the household sheet and the Brief
@@ -41,8 +49,16 @@
 --    is theirs to manage. 00583 put the captured column first on both the
 --    lead and client branches, so a stale number taken at the front door
 --    shadowed the one the household maintains. Both branches now read
---    profile-first. The captured column still answers for a household with no
---    Patina account, which is the case 00583 was written for.
+--    profile-first — the PHONE only. display_name and email stay
+--    captured-first, so a row can pair the studio's captured name with the
+--    household's own number; that split is deliberate and display-only, and
+--    the two portal docblocks that described the old order (brief-section.tsx,
+--    household-sheet.tsx) are corrected in the same change (review R2 F3).
+--    The captured column still answers for a household with no Patina
+--    account, which is the case 00583 was written for — and on the lead
+--    branch that is nearly every open lead, because profiles RLS hides a
+--    homeowner from a studio holding no relationship with them, so the
+--    profile leg is silent until one exists (review R2 F10).
 --
 -- LINEAGE (bodies copied from the files named, then grafted; verified with
 -- grep over supabase/migrations that no later file redefines any of the three)
@@ -159,16 +175,19 @@ BEGIN
   -- adoption branches on purpose: whichever of the two rows is asked, this is
   -- the true answer.
   --
-  -- 00587 — scoped to the relationship's own designer. lead_id is
+  -- 00587 — scoped to the STUDIO, not to the one designer. lead_id is
   -- caller-writable, so an unscoped probe let a designer in another studio
-  -- plant a row carrying this lead's id and refuse this undo forever. A row
-  -- outside the studio emits no Desk folder here and is not a second move to
-  -- take back.
+  -- plant a row carrying this lead's id and refuse this undo forever. The
+  -- scope is the same authority predicate this function opened with, so a
+  -- co-member's row on the same lead — which does emit a Desk folder for the
+  -- studio, and which the delete would strand behind a lead back at 'new' —
+  -- still closes the door. Strict designer equality would have closed the
+  -- foreign hole by opening that one (review R2 F1).
   IF EXISTS (
     SELECT 1 FROM public.designer_clients d2
     WHERE d2.lead_id = v_relationship.lead_id
       AND d2.id <> p_designer_client_id
-      AND d2.designer_id = v_relationship.designer_id
+      AND public._can_author_proposal(d2.designer_id)
   ) THEN
     RETURN jsonb_build_object(
       'allowed', false,
@@ -347,19 +366,27 @@ BEGIN
         OR cd.ready_at IS NOT NULL
         OR cd.seeded_proposal_id IS NOT NULL
         OR cd.seeded_at IS NOT NULL
-        OR cd.keep_items IS DISTINCT FROM '[]'::jsonb
-        OR cd.avoid_items IS DISTINCT FROM '[]'::jsonb
-        OR cd.decision_makers IS DISTINCT FROM '[]'::jsonb
         OR cd.style_tag_ids IS DISTINCT FROM '{}'::uuid[]
         OR cd.style_keywords IS DISTINCT FROM '{}'::text[]
-        -- rooms / lifestyle (00587): EVERY field the shape carries, not the
+        -- The five row lists (00587): EVERY field each shape carries, not the
         -- one field readiness counts. capturedRooms / capturedLifestyle answer
         -- "is this block done"; this answers "has the designer typed
         -- anything", and a room with only a type, a note, a floor area or a
         -- keep-as-is mark is work that the delete would lose. Blank stays
-        -- blank, so an added-and-abandoned row is still not content (F5).
+        -- blank, so an added-and-abandoned row is still not content (F5) —
+        -- RowListEditor's "+ Add" writes a literal {} (field-kit.tsx), and
+        -- that gesture must read the same way in all five lists, which is why
+        -- keep_items / avoid_items / decision_makers left the flat
+        -- `IS DISTINCT FROM '[]'` behind with rooms and lifestyle (review R2
+        -- F7). Fields per use-discovery.ts: DiscoveryRoom (name, room_type,
+        -- floor_area_sqft, keep_as_is, notes), LifestyleRow (room, who, how),
+        -- KeepItem (label, reason), AvoidItem (label), DecisionMaker (name,
+        -- role, approves, comms).
         -- ->> renders a jsonb number or boolean as text, so one btrim test
-        -- covers floor_area_sqft whether the portal wrote 240 or '240'.
+        -- covers floor_area_sqft whether the portal wrote 240 or '240', and
+        -- the keep-as-is mark counts however it was encoded — ::boolean would
+        -- raise on a non-boolean and = 'true'::jsonb would miss the string
+        -- "true" (review R2 F8).
         -- The CASE guards the set-returning call — OR is not promised to
         -- short-circuit, so a non-array value must not reach it.
         OR jsonb_typeof(cd.rooms) IS DISTINCT FROM 'array'
@@ -373,7 +400,8 @@ BEGIN
              OR btrim(COALESCE(room->>'room_type', '')) <> ''
              OR btrim(COALESCE(room->>'notes', '')) <> ''
              OR btrim(COALESCE(room->>'floor_area_sqft', '')) <> ''
-             OR room->'keep_as_is' = 'true'::jsonb
+             OR lower(btrim(COALESCE(room->>'keep_as_is', '')))
+                  IN ('true', 't', '1', 'yes')
         )
         OR jsonb_typeof(cd.lifestyle) IS DISTINCT FROM 'array'
         OR EXISTS (
@@ -385,6 +413,37 @@ BEGIN
           WHERE btrim(COALESCE(row_->>'who', '')) <> ''
              OR btrim(COALESCE(row_->>'how', '')) <> ''
              OR btrim(COALESCE(row_->>'room', '')) <> ''
+        )
+        OR jsonb_typeof(cd.keep_items) IS DISTINCT FROM 'array'
+        OR EXISTS (
+          SELECT 1
+          FROM jsonb_array_elements(
+            CASE WHEN jsonb_typeof(cd.keep_items) = 'array'
+              THEN cd.keep_items ELSE '[]'::jsonb END
+          ) AS keep_item
+          WHERE btrim(COALESCE(keep_item->>'label', '')) <> ''
+             OR btrim(COALESCE(keep_item->>'reason', '')) <> ''
+        )
+        OR jsonb_typeof(cd.avoid_items) IS DISTINCT FROM 'array'
+        OR EXISTS (
+          SELECT 1
+          FROM jsonb_array_elements(
+            CASE WHEN jsonb_typeof(cd.avoid_items) = 'array'
+              THEN cd.avoid_items ELSE '[]'::jsonb END
+          ) AS avoid_item
+          WHERE btrim(COALESCE(avoid_item->>'label', '')) <> ''
+        )
+        OR jsonb_typeof(cd.decision_makers) IS DISTINCT FROM 'array'
+        OR EXISTS (
+          SELECT 1
+          FROM jsonb_array_elements(
+            CASE WHEN jsonb_typeof(cd.decision_makers) = 'array'
+              THEN cd.decision_makers ELSE '[]'::jsonb END
+          ) AS decider
+          WHERE btrim(COALESCE(decider->>'name', '')) <> ''
+             OR btrim(COALESCE(decider->>'role', '')) <> ''
+             OR btrim(COALESCE(decider->>'approves', '')) <> ''
+             OR btrim(COALESCE(decider->>'comms', '')) <> ''
         )
       )
   ) THEN
@@ -412,9 +471,10 @@ COMMENT ON FUNCTION public.return_to_lead_check(uuid) IS
   'relationship, and if not, one plain sentence saying why. Returns '
   '{allowed, reason, lead_id}. The Discovery columns the folder prefills from '
   'the lead count as content only once they differ from that prefill (00586). '
-  'A room or lifestyle row counts as content on any field it carries, not on '
-  'its name alone, and the one-lead-one-relationship probe only sees siblings '
-  'belonging to the same designer (00587). Raises insufficient_privilege for a '
+  'A row in any of the five Discovery lists counts as content on any field it '
+  'carries, not on its first field alone, and the one-lead-one-relationship '
+  'probe only sees siblings belonging to the same studio (00587). Raises '
+  'insufficient_privilege for a '
   'caller who is neither the designer nor an active non-guest peer in the same '
   'active design_studio, and for a relationship whose lead_id points at '
   'another designer''s lead (00585).';
@@ -477,14 +537,14 @@ BEGIN
     -- Restated under the locks for the same reason the authority test above
     -- is: what this function DELETES must not rest on the reader. The sentence
     -- is the check's, word for word — the SQL test compares the two, so the
-    -- pair cannot drift apart unnoticed. Scoped to the relationship's own
-    -- designer (00587) for the same reason the check's probe is: a planted
-    -- row from another studio is not a second move to take back.
+    -- pair cannot drift apart unnoticed. Studio-scoped (00587) for the same
+    -- reason the check's probe is: a planted row from another studio is not a
+    -- second move to take back, while a co-member's row on the same lead is.
     IF EXISTS (
       SELECT 1 FROM public.designer_clients d2
       WHERE d2.lead_id = v_relationship.lead_id
         AND d2.id <> p_designer_client_id
-        AND d2.designer_id = v_relationship.designer_id
+        AND public._can_author_proposal(d2.designer_id)
     ) THEN
       RAISE EXCEPTION 'This lead is tied to more than one client, so there is no single move to take back.'
         USING ERRCODE = 'check_violation';
@@ -529,7 +589,7 @@ COMMENT ON FUNCTION public.return_to_lead(uuid) IS
   'it (new, or contacted when it was nurtured to a dated return) with its '
   'accepted_at cleared, and the empty Discovery relationship is deleted, so the '
   'Desk folder returns to the Brief. Its restated sibling guard only counts '
-  'relationships belonging to the same designer (00587). Raises with '
+  'relationships belonging to the same studio (00587). Raises with '
   'return_to_lead_check''s reason when the undo is no longer an undo (00585).';
 
 -- ── 3. people_directory — 00583:390-622 verbatim, one line per branch
@@ -548,7 +608,11 @@ SELECT
   'client'::text                                                 AS role,
   COALESCE(dc.client_name, pr.full_name, pr.display_name, dc.client_email, 'Unnamed client') AS display_name,
   COALESCE(dc.client_email, pr.email)                            AS email,
-  COALESCE(pr.phone, dc.client_phone)                            AS phone,
+  -- NULLIF(btrim(...)) — COALESCE only falls through on NULL, and an
+  -- empty-string profiles.phone would otherwise win over a real captured
+  -- number and read the row blank (review R2 F11). Nothing forbids '' on that
+  -- column; only the studio's own capture answers for it here.
+  COALESCE(NULLIF(btrim(pr.phone), ''), dc.client_phone)         AS phone,
   dc.client_id                                                   AS profile_id,
   NULL::uuid                                                     AS project_id,
   dc.designer_id                                                 AS designer_id,
@@ -582,7 +646,7 @@ SELECT
   'lead',
   COALESCE(l.contact_name, hp.full_name, hp.display_name, l.contact_email, 'New lead'),
   COALESCE(l.contact_email, hp.email),
-  COALESCE(hp.phone, l.contact_phone),
+  COALESCE(NULLIF(btrim(hp.phone), ''), l.contact_phone),
   l.homeowner_id,
   NULL::uuid,
   l.designer_id,
@@ -774,13 +838,21 @@ WHERE public.is_active_studio_member(sc.organization_id);
 COMMENT ON VIEW public.people_directory IS
   'R57 / People Room roster (client|lead|maker|gc|sub|installer|receiver|'
   'architect|photographer|stager|team|contact) for the querying user. v6 '
-  '(00587): phone is profile-first on the client and lead branches — '
-  'COALESCE(profiles.phone, designer_clients.client_phone) and '
-  'COALESCE(profiles.phone, leads.contact_phone). An account holder''s own '
-  'number is theirs to manage and the studio is given no field to edit it, so '
-  'it wins over a number taken at the front door, which is the order the '
-  'household sheet and the Brief already read. The captured column still '
-  'answers for a household with no Patina account. v5 (00583): those two '
+  '(00587): PHONE ONLY is profile-first on the client and lead branches — '
+  'COALESCE(NULLIF(btrim(profiles.phone), ''''), '
+  'designer_clients.client_phone) and the same over leads.contact_phone. An '
+  'account holder''s own number is theirs to manage and the studio is given no '
+  'field to edit it, so it wins over a number taken at the front door, which '
+  'is the order the household sheet and the Brief already read. display_name '
+  'and email in those branches stay CAPTURED-first, so one directory row can '
+  'pair the studio''s captured name with the household''s own number — '
+  'deliberate, and display-only: no SMS or email dispatch reads this view''s '
+  'phone (dispatch reads project_parties.phone_e164). The captured column '
+  'still answers for a household with no Patina account, and on the lead '
+  'branch it answers for nearly every open lead: profiles RLS hides a '
+  'homeowner from a studio that has no designer_clients row with them yet, so '
+  'the profile leg only speaks once some other relationship exists. v5 '
+  '(00583): those two '
   'branches gained the captured columns at all, so a phone taken at capture '
   'shows instead of reading blank. v4 (00478): the client branch''s meta gains '
   'has_sent_proposal and issued_on_paper from '

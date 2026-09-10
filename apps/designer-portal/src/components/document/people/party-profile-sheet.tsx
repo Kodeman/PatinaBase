@@ -61,23 +61,31 @@ const EDIT_LABEL =
 const EDIT_INPUT =
   'w-full rounded-[7px] border border-[var(--color-pearl)] bg-white px-3 py-2 text-[0.82rem] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none';
 
-/** project_parties' UPDATE policy admits only the project's own designer, so a
- *  studio co-member who can READ this sheet is refused on Save with a Postgres
- *  RLS 0-rows-affected (PGRST116 on .single(), or a raw 42501 if the grant
- *  itself were missing). Neither names the project's designer in its own
- *  words — same translation friendlyRolodexError does for the rolodex. */
+/** Two different refusals, two different sentences — the way
+ *  useRecordPartySmsConsent already separates them.
+ *
+ *  00584's `project_parties_studio_update` (USING / WITH CHECK
+ *  is_studio_comember) widened this table's UPDATE to the whole studio, so a
+ *  co-member who can read this sheet CAN save it. A permission refusal is
+ *  therefore left only for a reader admitted by one of the SELECT-only
+ *  policies, and it arrives as 42501 / "permission denied" / an RLS message.
+ *  PGRST116 is the other case entirely: `.single()` matched no row, i.e. this
+ *  crew row was removed or re-pointed under the open form — a race, not a
+ *  permission, and calling it one sent designers looking for authority they
+ *  already had. Same translation idiom friendlyRolodexError does for the
+ *  rolodex. */
 function friendlyPartyWriteError(err: unknown): string {
   const code = (err as { code?: unknown } | null)?.code;
   const msg =
     err instanceof Error
       ? err.message
       : (((err as { message?: unknown } | null)?.message as string | undefined) ?? '');
-  if (
-    /row-level security|permission denied|PGRST116|42501/i.test(
-      `${typeof code === 'string' ? code : ''} ${msg}`,
-    )
-  ) {
-    return "Only this project's designer can edit its crew.";
+  const haystack = `${typeof code === 'string' ? code : ''} ${msg}`;
+  if (/row-level security|permission denied|42501/i.test(haystack)) {
+    return "Only this project's studio can edit its crew.";
+  }
+  if (/PGRST116/i.test(haystack)) {
+    return "This person's record just changed — refresh to see it.";
   }
   return msg || 'Could not save just now. Try again.';
 }
@@ -294,9 +302,11 @@ export function PartyProfileSheet({
   // open-once snapshot took an empty record during the initial fetch and Save
   // then cleared company / trade / phone / email off the row. Once the
   // designer types, `editTouched` freezes it and no refetch can clobber the
-  // edit in progress.
+  // edit in progress. A record that goes AWAY (a query error that drops the
+  // cached row) leaves the last good snapshot standing rather than blanking
+  // the open form under the designer.
   useEffect(() => {
-    if (!editing || editTouched) return;
+    if (!editing || editTouched || !person) return;
     setEditForm({
       name: person?.display_name ?? '',
       company: (meta.company_name as string | undefined) ?? '',

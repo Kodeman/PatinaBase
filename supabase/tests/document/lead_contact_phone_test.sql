@@ -23,6 +23,8 @@ VALUES
   ('d9000000-0000-4000-8000-000000000001', 'phone-owner@test.invalid', '', NOW(), NOW(), NOW(),
    '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
   ('d9000000-0000-4000-8000-000000000002', 'phone-homeowner@test.invalid', '', NOW(), NOW(), NOW(),
+   '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('d9000000-0000-4000-8000-000000000003', 'phone-stranger@test.invalid', '', NOW(), NOW(), NOW(),
    '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
 
 INSERT INTO public.profiles (id, email, full_name, is_designer, created_at, updated_at)
@@ -35,7 +37,11 @@ ON CONFLICT (id) DO UPDATE SET is_designer = true;
 INSERT INTO public.profiles (id, email, full_name, phone, is_designer, created_at, updated_at)
 VALUES
   ('d9000000-0000-4000-8000-000000000002', 'phone-homeowner@test.invalid',
-   'Ada Okafor', '(555) 990-0001', false, NOW(), NOW())
+   'Ada Okafor', '(555) 990-0001', false, NOW(), NOW()),
+  -- 00587 (review R2 F10): a household the studio has no relationship with.
+  -- Their profile phone is real; profiles RLS still hides the row.
+  ('d9000000-0000-4000-8000-000000000003', 'phone-stranger@test.invalid',
+   'Nia Bell', '(555) 990-0003', false, NOW(), NOW())
 ON CONFLICT (id) DO UPDATE SET phone = EXCLUDED.phone;
 
 INSERT INTO public.organizations (id, type, name, slug)
@@ -70,7 +76,13 @@ VALUES
   -- enquiry, and a different number was taken at the door this time.
   ('d9200000-0000-4000-8000-000000000004', 'd9000000-0000-4000-8000-000000000002',
    'd9000000-0000-4000-8000-000000000001', 'consultation', 'new',
-   'Ada Okafor', NULL, '(555) 014-2288');
+   'Ada Okafor', NULL, '(555) 014-2288'),
+  -- 00587 (review R2 F10): the ordinary first enquiry — an account holder the
+  -- studio has never worked with. Nothing links them yet, so the lead branch's
+  -- profile leg stays silent and the captured number answers.
+  ('d9200000-0000-4000-8000-000000000005', 'd9000000-0000-4000-8000-000000000003',
+   'd9000000-0000-4000-8000-000000000001', 'consultation', 'new',
+   'Nia Bell', 'nia@test.invalid', '(555) 014-2277');
 
 DO $$
 BEGIN
@@ -334,6 +346,60 @@ BEGIN
            (SELECT phone FROM public.people_directory
             WHERE person_id = 'd9200000-0000-4000-8000-000000000004'
               AND role = 'lead'));
+END;
+$$;
+
+-- 00587 (review R2 F10) — and how NARROW that is, pinned rather than implied.
+-- Lead 5 is the overwhelmingly common case: a first enquiry from a household
+-- that holds a Patina account the studio has never worked with. profiles'
+-- counterparty SELECT leg needs a designer_clients row to exist, so the join
+-- yields NULL and the captured number answers whatever the precedence says.
+-- The flip only takes effect once some other link makes the profile readable.
+DO $$
+BEGIN
+  ASSERT (SELECT phone IS NULL FROM public.profiles
+          WHERE id = 'd9000000-0000-4000-8000-000000000003')
+      OR NOT EXISTS (SELECT 1 FROM public.profiles
+                     WHERE id = 'd9000000-0000-4000-8000-000000000003'),
+    'the stranger household''s profile must be unreadable for this leg to test anything';
+  ASSERT (SELECT phone = '(555) 014-2277'
+          FROM public.people_directory
+          WHERE person_id = 'd9200000-0000-4000-8000-000000000005'
+            AND role = 'lead'),
+    format('a lead with no relationship behind it must show the captured phone, got %L',
+           (SELECT phone FROM public.people_directory
+            WHERE person_id = 'd9200000-0000-4000-8000-000000000005'
+              AND role = 'lead'));
+END;
+$$;
+
+-- 00587 (review R2 F11) — an empty-string profile phone is not a number.
+-- COALESCE alone falls through only on NULL, so '' would have won over the
+-- captured number and read the row blank, with no field on the studio's side
+-- to put it right. Lead 4's household is readable by now (its sibling began
+-- Discovery above), which is what makes this leg reachable at all.
+RESET ROLE;
+UPDATE public.profiles
+SET phone = '   '
+WHERE id = 'd9000000-0000-4000-8000-000000000002';
+SET LOCAL ROLE authenticated;
+
+DO $$
+BEGIN
+  ASSERT (SELECT phone = '(555) 014-2288'
+          FROM public.people_directory
+          WHERE person_id = 'd9200000-0000-4000-8000-000000000004'
+            AND role = 'lead'),
+    format('a blank profile phone must fall through to the captured one, got %L',
+           (SELECT phone FROM public.people_directory
+            WHERE person_id = 'd9200000-0000-4000-8000-000000000004'
+              AND role = 'lead'));
+  ASSERT (SELECT phone = '(555) 014-2299'
+          FROM public.people_directory
+          WHERE role = 'client'
+            AND person_id = (SELECT id FROM public.designer_clients
+                             WHERE lead_id = 'd9200000-0000-4000-8000-000000000003')),
+    'the client branch must fall through to the captured phone too';
 END;
 $$;
 

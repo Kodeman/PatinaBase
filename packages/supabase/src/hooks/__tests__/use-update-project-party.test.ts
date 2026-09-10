@@ -41,16 +41,19 @@ function currentRowBuilder(result: { data: unknown; error: unknown }) {
   return { select, eq, maybeSingle };
 }
 
-/** `.select('id').eq('phone_e164', …).eq('sms_consent_status', 'opted_out').neq('id', …).limit(1)`
- *  — checked only when a pending/granted row's phone genuinely changes to a
- *  normalizable number. */
+/** `.select('id, sms_opt_out_at').eq('phone_e164', …).eq('sms_consent_status',
+ *  'opted_out').neq('id', …).order('sms_opt_out_at', …).limit(1)` — checked
+ *  only when a pending/granted row's phone genuinely changes to a normalizable
+ *  number. The order is what makes the inherited opt-out date the latest word
+ *  on that number. */
 function siblingBuilder(result: { data: unknown; error: unknown }) {
   const limit = vi.fn().mockResolvedValue(result);
-  const neq = vi.fn(() => ({ limit }));
+  const order = vi.fn(() => ({ limit }));
+  const neq = vi.fn(() => ({ order }));
   const eq2 = vi.fn(() => ({ neq }));
   const eq1 = vi.fn(() => ({ eq: eq2 }));
   const select = vi.fn(() => ({ eq: eq1 }));
-  return { select, eq1, eq2, neq, limit };
+  return { select, eq1, eq2, neq, order, limit };
 }
 
 let builder: MockBuilder;
@@ -118,7 +121,10 @@ describe('useUpdateProjectParty — phone change resets SMS consent', () => {
       data: { sms_consent_status: 'pending', phone_e164: '+15551112222' },
       error: null,
     });
-    const sibling = siblingBuilder({ data: [{ id: 'party-9' }], error: null });
+    const sibling = siblingBuilder({
+      data: [{ id: 'party-9', sms_opt_out_at: '2026-09-01T14:32:00.000Z' }],
+      error: null,
+    });
     from
       .mockReturnValueOnce({ select: currentRow.select })
       .mockReturnValueOnce({ select: sibling.select })
@@ -139,11 +145,44 @@ describe('useUpdateProjectParty — phone change resets SMS consent', () => {
         sms_consented_at: null,
       }),
     );
-    // An opted_out row carries the moment it opted out — sms-inbound stamps it
-    // on every STOP, and the not_asked bundle would have left it null.
+    // The opt-out moment is the SIBLING's, inherited: nobody replied STOP on
+    // this row, so stamping the edit's own clock would date an opt-out that
+    // never happened here.
     const optedOutPatch = builder.update.mock.calls[0][0] as Record<string, unknown>;
-    expect(typeof optedOutPatch.sms_opt_out_at).toBe('string');
-    expect(Number.isNaN(Date.parse(optedOutPatch.sms_opt_out_at as string))).toBe(false);
+    expect(optedOutPatch.sms_opt_out_at).toBe('2026-09-01T14:32:00.000Z');
+    expect(sibling.order).toHaveBeenCalledWith('sms_opt_out_at', {
+      ascending: false,
+      nullsFirst: false,
+    });
+  });
+
+  it('inherits no opt-out date when the sibling carries none', async () => {
+    const currentRow = currentRowBuilder({
+      data: { sms_consent_status: 'granted', phone_e164: '+15551112222' },
+      error: null,
+    });
+    const sibling = siblingBuilder({
+      data: [{ id: 'party-9', sms_opt_out_at: null }],
+      error: null,
+    });
+    from
+      .mockReturnValueOnce({ select: currentRow.select })
+      .mockReturnValueOnce({ select: sibling.select })
+      .mockReturnValueOnce(builder);
+
+    const mutationFn = mutationFnOf(useUpdateProjectParty());
+    await mutationFn({
+      id: 'party-1',
+      projectId: 'project-1',
+      patch: { phone: '5559876543' },
+    });
+
+    expect(builder.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sms_consent_status: 'opted_out',
+        sms_opt_out_at: null,
+      }),
+    );
   });
 
   it('never lifts an opted-out party’s consent — the phone changes, the compliance record does not (F3-R2-01)', async () => {
