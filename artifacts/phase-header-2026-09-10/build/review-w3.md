@@ -1,7 +1,7 @@
 # W3 — adversarial review of the Standing Head build
 
 Branch `build/standing-head-2026-09-10`, HEAD `4525da0c5`, reviewed against `origin/main` (41 files)
-plus the uncommitted `docs/design/the-document/DECISIONS.md` R149 entry. Reviewer did not write the
+plus the uncommitted `docs/design/the-document/DECISIONS.md` R150 entry. Reviewer did not write the
 build. No source file was modified.
 
 **What was actually run** (evidence, not inference)
@@ -78,7 +78,7 @@ live: `font-size: 34px`, one line at 1440 / two at 390) but line 2 is still `tex
 live). `PROGRAM.md`'s R6 row names only the `<h1>`, so the second half was dropped without a recorded
 deviation.
 **Fix:** raise it and re-derive `LENS_LINE2_MEASURE_PX`/`sentencePx` against the 56px contract
-(interacts with finding 2), or record the deviation in the R149 entry.
+(interacts with finding 2), or record the deviation in the R150 entry.
 
 **5 · MED · med** — `apps/designer-portal/src/lib/document/document-guide.ts:814-841` (the
 `alreadySeeded` branch). Shape D of the view (`00590:360` and its `not exists` clause) suppresses a
