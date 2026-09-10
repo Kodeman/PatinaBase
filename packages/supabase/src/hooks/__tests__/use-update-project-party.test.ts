@@ -137,9 +137,13 @@ describe('useUpdateProjectParty — phone change resets SMS consent', () => {
         sms_consent_status: 'opted_out',
         sms_consent_source: null,
         sms_consented_at: null,
-        sms_opt_out_at: null,
       }),
     );
+    // An opted_out row carries the moment it opted out — sms-inbound stamps it
+    // on every STOP, and the not_asked bundle would have left it null.
+    const optedOutPatch = builder.update.mock.calls[0][0] as Record<string, unknown>;
+    expect(typeof optedOutPatch.sms_opt_out_at).toBe('string');
+    expect(Number.isNaN(Date.parse(optedOutPatch.sms_opt_out_at as string))).toBe(false);
   });
 
   it('never lifts an opted-out party’s consent — the phone changes, the compliance record does not (F3-R2-01)', async () => {
@@ -237,5 +241,42 @@ describe('useUpdateProjectParty — phone change resets SMS consent', () => {
     expect(builder.update).toHaveBeenCalledWith(
       expect.objectContaining({ phone: null, sms_consent_status: 'not_asked' }),
     );
+  });
+
+  // 00281's normalizer derives phone_e164 from COALESCE(NEW.phone,
+  // NEW.phone_e164), so a cleared phone alone leaves the old E.164 standing —
+  // and that column is the inbound SMS conversation key.
+  it('sends phone_e164: null alongside a cleared phone', async () => {
+    const currentRow = currentRowBuilder({
+      data: { sms_consent_status: 'not_asked', phone_e164: '+15551234567' },
+      error: null,
+    });
+    from.mockReturnValueOnce({ select: currentRow.select }).mockReturnValueOnce(builder);
+
+    const mutationFn = mutationFnOf(useUpdateProjectParty());
+    await mutationFn({
+      id: 'party-6',
+      projectId: 'project-1',
+      patch: { phone: '   ' },
+    });
+
+    expect(builder.update).toHaveBeenCalledWith({ phone: null, phone_e164: null });
+  });
+
+  it('does not send phone_e164 when the phone is set rather than cleared', async () => {
+    const currentRow = currentRowBuilder({
+      data: { sms_consent_status: 'not_asked', phone_e164: null },
+      error: null,
+    });
+    from.mockReturnValueOnce({ select: currentRow.select }).mockReturnValueOnce(builder);
+
+    const mutationFn = mutationFnOf(useUpdateProjectParty());
+    await mutationFn({
+      id: 'party-7',
+      projectId: 'project-1',
+      patch: { phone: '5551234567' },
+    });
+
+    expect(builder.update).toHaveBeenCalledWith({ phone: '5551234567' });
   });
 });

@@ -526,14 +526,12 @@ export function normalizePartyPhoneForCompare(phone: string | null | undefined):
  *    an already-opted-out number.
  *  · `opted_out` is left untouched entirely (status, evidence, timestamps).
  *  · `not_asked` has nothing to revert.
- * The `useRecordPartySmsConsent` sibling check below excludes this row's
- * own id (F3-R2-01) so a stale `opted_out` this row is still carrying from
- * before its OWN phone changed can never read as "someone else already
- * opted out on this number" and block that row's own fresh invite. Note
- * `opted_out` left in place here means that row stays permanently
- * un-inviteable through this hook even once its number changes — a
- * deliberate compliance-first tradeoff; un-stranding it needs its own
- * (per-number) opt-out ledger, out of scope for this fix.
+ * `opted_out` left in place means that row stays permanently un-inviteable
+ * through this hook even once its number changes — a deliberate
+ * compliance-first tradeoff; un-stranding it needs its own (per-number)
+ * opt-out ledger, out of scope for this fix. `useRecordPartySmsConsent`'s
+ * sibling check cannot help there: its UPDATE is guarded on not_asked, so a
+ * stranded opted_out row never reaches it.
  */
 export function useUpdateProjectParty() {
   const queryClient = useQueryClient();
@@ -548,6 +546,10 @@ export function useUpdateProjectParty() {
       if (patch.phone !== undefined) {
         const nextPhone = patch.phone?.trim() || null;
         dbPatch.phone = nextPhone;
+        // 00281's normalizer reads COALESCE(NEW.phone, NEW.phone_e164), so
+        // clearing the raw phone alone leaves the old E.164 standing — and
+        // that column is the inbound SMS conversation key. Send both.
+        if (nextPhone === null) dbPatch.phone_e164 = null;
 
         const { data: currentRow, error: currentRowError } = await supabase
           .from('project_parties')
@@ -578,7 +580,15 @@ export function useUpdateProjectParty() {
           Object.assign(
             dbPatch,
             revertsToOptedOut
-              ? { ...NOT_ASKED_CONSENT_COLUMNS, sms_consent_status: 'opted_out' as const }
+              ? {
+                  ...NOT_ASKED_CONSENT_COLUMNS,
+                  sms_consent_status: 'opted_out' as const,
+                  // An opted_out row carries the moment it opted out —
+                  // sms-inbound/pipeline.ts stamps it on every STOP, and the
+                  // bundle above nulls it. Without this the row would read
+                  // opted_out with no date behind it.
+                  sms_opt_out_at: new Date().toISOString(),
+                }
               : NOT_ASKED_CONSENT_COLUMNS,
           );
         }
@@ -670,16 +680,11 @@ export function useRecordPartySmsConsent() {
       // row still at not_asked must not silently re-invite a number that
       // already opted out on another party/project row.
       //
-      // F3-R2-01 — excludes THIS row's own id: `useUpdateProjectParty` never
-      // lifts an `opted_out` status on a phone edit (it preserves the
-      // compliance record instead), so a row whose phone changed since it
-      // opted out can still carry that stale `opted_out` on its own current
-      // phone_e164. Without the exclusion this row would read as its own
-      // "sibling", permanently blocking its own fresh invite with the wrong
-      // message (blaming another party for an opt-out that's really its
-      // own history). This UPDATE's `.eq('sms_consent_status', 'not_asked')`
-      // guard still requires that row to be genuinely at `not_asked` before
-      // this exclusion even matters.
+      // No self-exclusion here. This row cannot be its own sibling: the
+      // UPDATE below is guarded on `sms_consent_status = 'not_asked'`, and a
+      // row at not_asked is by definition not one of the opted_out rows this
+      // probe looks for. An exclusion would only change which message a
+      // genuinely stranded row gets, never un-strand it.
       const { data: selfRow, error: selfError } = await supabase
         .from('project_parties')
         .select('phone_e164')
@@ -693,7 +698,6 @@ export function useRecordPartySmsConsent() {
           .select('id')
           .eq('phone_e164', phoneE164)
           .eq('sms_consent_status', 'opted_out')
-          .neq('id', input.partyId)
           .limit(1);
         if (siblingError) throw siblingError;
         if (optedOutSiblings && optedOutSiblings.length > 0) {

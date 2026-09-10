@@ -341,18 +341,17 @@ describe('useRecordPartySmsConsent — the only writer of consent columns on an 
     return { select, eq, maybeSingle };
   }
 
-  /** `.select('id').eq('phone_e164', …).eq('sms_consent_status', 'opted_out').neq('id', …).limit(1)`
-   *  — the F3 phone-global opt-out check. F3-R2-01 added the `.neq('id', …)`
-   *  self-exclusion so a row's own stale `opted_out` (left in place by
-   *  `useUpdateProjectParty`'s phone-change revert, which never lifts it)
-   *  can never read as "someone else already opted out on this number". */
+  /** `.select('id').eq('phone_e164', …).eq('sms_consent_status', 'opted_out').limit(1)`
+   *  — the F3 phone-global opt-out check. NO self-exclusion: the UPDATE below
+   *  is guarded on `sms_consent_status = 'not_asked'`, so this row cannot be
+   *  one of the opted_out rows the probe looks for. An exclusion would only
+   *  change which message a genuinely stranded row gets, never un-strand it. */
   function siblingBuilder(result: { data: unknown; error: unknown }) {
     const limit = vi.fn().mockResolvedValue(result);
-    const neq = vi.fn(() => ({ limit }));
-    const eq2 = vi.fn(() => ({ neq }));
+    const eq2 = vi.fn(() => ({ limit }));
     const eq1 = vi.fn(() => ({ eq: eq2 }));
     const select = vi.fn(() => ({ eq: eq1 }));
-    return { select, eq1, eq2, neq, limit };
+    return { select, eq1, eq2, limit };
   }
 
   /** `.update(payload).eq('id', …).eq('phone', …).eq('sms_consent_status', 'not_asked').select().single()`
@@ -400,12 +399,12 @@ describe('useRecordPartySmsConsent — the only writer of consent columns on an 
       smsConsentEvidence: 'Told me at the site kickoff on Aug 8',
     });
 
-    // F3 — self row's phone_e164 looked up, then checked for an opted-out sibling
-    // (F3-R2-01: excluding this row's own id).
+    // F3 — self row's phone_e164 looked up, then checked for an opted-out
+    // sibling. The probe is not narrowed to other rows: a not_asked row is
+    // never its own opted_out sibling, so there is nothing to exclude.
     expect(self.eq).toHaveBeenCalledWith('id', PARTY_ID);
     expect(sibling.eq1).toHaveBeenCalledWith('phone_e164', E164);
     expect(sibling.eq2).toHaveBeenCalledWith('sms_consent_status', 'opted_out');
-    expect(sibling.neq).toHaveBeenCalledWith('id', PARTY_ID);
     expect(sibling.limit).toHaveBeenCalledWith(1);
 
     // F1 — the attester comes from the authenticated user, not the caller.

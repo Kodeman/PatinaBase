@@ -235,7 +235,14 @@ export function useUpdateStudioContact() {
       if (input.fullName !== undefined) updates.full_name = input.fullName;
       if (input.companyName !== undefined) updates.company_name = input.companyName;
       if (input.email !== undefined) updates.email = input.email;
-      if (input.phone !== undefined) updates.phone = input.phone;
+      if (input.phone !== undefined) {
+        updates.phone = input.phone;
+        // 00417's normalizer is 00281's: phone_e164 :=
+        // normalize_phone_e164(COALESCE(NEW.phone, NEW.phone_e164)). Clearing
+        // the raw phone alone therefore leaves the old derivation standing —
+        // and that column is the rolodex's dedupe key. Send both.
+        if (!input.phone?.trim()) updates.phone_e164 = null;
+      }
       if (input.specialties !== undefined) updates.specialties = input.specialties;
       if (input.vendorId !== undefined) updates.vendor_id = input.vendorId;
       if (input.profileId !== undefined) updates.profile_id = input.profileId;
