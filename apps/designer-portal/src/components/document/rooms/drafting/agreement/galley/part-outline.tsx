@@ -70,21 +70,33 @@ export function PartOutline({
       </h2>
       <div id={bodyId} hidden={!expanded}>
         <ul>
-          {parts.map((part) => (
-            <li key={part.id}>
-              <button
-                type="button"
-                className="g-act g-act--tertiary g-outline__row"
-                aria-current={part.partKey === openKey ? "true" : undefined}
-                onClick={() => onSelect(part.partKey)}
-              >
-                <span className="g-label">{part.title}</span>
-              </button>
-              {attentionKeys.has(part.partKey) && (
-                <span className="t-head g-attn">needs attention</span>
-              )}
-            </li>
-          ))}
+          {parts.map((part) => {
+            // N-8/FS-26 — the part KEY, never the uuid: a save re-mints every
+            // id and a row keyed on one remounts with it.
+            const attention = attentionKeys.has(part.partKey);
+            const attnId = `outline-attn-${part.partKey}`;
+            return (
+              <li key={part.partKey}>
+                <button
+                  type="button"
+                  className="g-act g-act--tertiary g-outline__row"
+                  aria-current={part.partKey === openKey ? "true" : undefined}
+                  // SPEC §5 #22 — the attention word is the outline's, so a
+                  // screen-reader walk of the rows hears it. As a sibling
+                  // span it was in nobody's accessible name.
+                  aria-describedby={attention ? attnId : undefined}
+                  onClick={() => onSelect(part.partKey)}
+                >
+                  <span className="g-label">{part.title}</span>
+                </button>
+                {attention && (
+                  <span className="t-head g-attn" id={attnId}>
+                    needs attention
+                  </span>
+                )}
+              </li>
+            );
+          })}
         </ul>
         {parts.length === 0 && (
           <p className="t-body-sm">This agreement has no parts yet.</p>

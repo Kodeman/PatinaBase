@@ -273,6 +273,9 @@
 .g-outline__foot button {
   justify-content: flex-start;
   padding-left: 0;
+  /* AX-17 — `Save as template…` is a design-system Button and came in at
+     147×30; at the outline's foot it takes its neighbour's act metrics. */
+  min-height: 44px;
 }
 
 /* ——— the paper ——— */
@@ -366,12 +369,21 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 0 12px;
+  min-width: 0;
 }
+/* The reserved box wraps at the measure. Its labels are `white-space: nowrap`,
+   so an unwrapped row of three is 369px wide and the phone's 310px paper
+   cannot hold it — the DOCUMENT scrolled sideways (check 13's own pass
+   condition, `scrollWidth <= clientWidth`). Ghost and live carry identical
+   children and wrap identically, so the reserved height still matches what a
+   reveal costs and Δ stays 0px (FS-19, check 18). */
 .g-part__acts-ghost,
 .g-part__acts-live {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0 12px;
+  min-width: 0;
 }
 .g-part__acts-ghost {
   visibility: hidden;
@@ -481,7 +493,9 @@
   .g-strip--quiet {
     display: none;
   }
-  .g-strip .g-strip__standing {
+  /* …but the gathered run below the paper exists to CARRY those standings,
+     and it is itself a `.g-strip`, so the rule is scoped away from it. */
+  .g-strip:not(.g-studio-run) .g-strip__standing {
     display: none;
   }
 }

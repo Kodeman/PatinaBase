@@ -508,6 +508,10 @@ describe("assessAgreementReadiness — keys, titles, and the document", () => {
         message: "Link a client with an email address.",
         // §A10 — the imperative phrase the readiness voice counts with.
         ask: "link a client",
+        // SPEC §5 marks #20 "comment, not rendered": the voice already says
+        // `link a client`, so the galley's foot does not print the sentence a
+        // second time. `documentBlockers` is what reads this.
+        quiet: true,
       },
     ]);
     expect(readiness.ready).toBe(false);

@@ -54,6 +54,10 @@ export function GalleyFold({
           <input
             id={`rename-${part.partKey}`}
             className="field-control"
+            // SPEC §4's fold markup has no rename field, and its keyboard
+            // model lands the caret in the part's own first field. The mark
+            // is what tells the open effect to walk past this one.
+            data-fold-rename="true"
             type="text"
             value={part.title}
             onChange={(event) => onRename(event.target.value)}

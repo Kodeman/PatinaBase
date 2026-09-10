@@ -68,9 +68,14 @@ export function GalleyPart({
   // reading position (FS-19) and a focus scroll would fight it.
   useEffect(() => {
     if (!open) return;
-    const first = fold.current?.querySelector<HTMLElement>(
-      "textarea, input, select",
-    );
+    // The caret lands in the part's own first field — the clause body, the
+    // first money row — and not in the rename input the fold happens to open
+    // with (SPEC §4's keyboard model).
+    const node = fold.current;
+    const first =
+      node?.querySelector<HTMLElement>(
+        "textarea:not([data-fold-rename]), input:not([data-fold-rename]), select",
+      ) ?? node?.querySelector<HTMLElement>("textarea, input, select");
     first?.focus({ preventScroll: true });
   }, [open]);
 

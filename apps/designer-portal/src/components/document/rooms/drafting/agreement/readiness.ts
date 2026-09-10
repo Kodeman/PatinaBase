@@ -59,6 +59,13 @@ export interface AgreementBlocker {
   /** What the voice says when THIS blocker is the one that just went —
    *  "Role rates name the fee". Absent, no transition sentence is composed. */
   cleared?: string;
+  /**
+   * The blocker's message adds nothing the readiness voice is not already
+   * saying, so the galley's foot does not print it a second time. SPEC §5
+   * marks #20 — the client-link sentence — "comment, not rendered"; the voice
+   * counts it as `link a client` and that is the whole of it.
+   */
+  quiet?: boolean;
 }
 
 export interface AgreementReadiness {
@@ -174,7 +181,7 @@ export function assessAgreementReadiness({
   const add = (
     partId: string | null,
     message: string,
-    voice?: { ask: string; cleared?: string },
+    voice?: { ask: string; cleared?: string; quiet?: boolean },
   ) => blockers.push({ partId, message, ...voice });
 
   // R-1 / R-2 — the document itself, unchanged from the flag-off wording.
@@ -498,8 +505,19 @@ export function assessAgreementReadiness({
   // alone would leave a `design_build` document with the turnkey block
   // skipped — the flag off — carrying no money question at all.
   if (!turnkeyFloor && !namesAFee && hiddenFees.length === 0) {
+    // SPEC §4 Direction I puts this sentence BESIDE the Role rates seam, not
+    // at the paper's foot — it is the note D's crux (iv) names. So it is
+    // filed against the rate-card part whenever the composition carries one:
+    // the strip beside that part prints it, the outline's row says "needs
+    // attention", and the held Send's focus lands on the part the sentence is
+    // about. With no rate card to point at it stays a document blocker and
+    // the foot carries it, remedy and all.
+    const rateCardPart =
+      parts.find(
+        (part) => part.kind === "schedule" && part.variant === "rate_card",
+      ) ?? null;
     add(
-      null,
+      rateCardPart?.id ?? null,
       "This agreement names no fee. Add a rate card, a flat fee, or a per-phase fee.",
       { ask: "name a fee", cleared: "Role rates name the fee" },
     );
@@ -547,7 +565,7 @@ export function assessAgreementReadiness({
 
   // R-3 — last, as it is today.
   if (!recipientEmail?.trim()) {
-    add(null, CLIENT_LINK_BLOCKER, { ask: "link a client" });
+    add(null, CLIENT_LINK_BLOCKER, { ask: "link a client", quiet: true });
   }
 
   return { ready: blockers.length === 0, blockers, notes };
@@ -595,5 +613,7 @@ export function blockersForPart(
 export function documentBlockers(
   readiness: AgreementReadiness,
 ): AgreementBlocker[] {
-  return readiness.blockers.filter((blocker) => blocker.partId === null);
+  return readiness.blockers.filter(
+    (blocker) => blocker.partId === null && blocker.quiet !== true,
+  );
 }
