@@ -25,7 +25,9 @@
 -- unchanged and no grant is re-issued here.
 -- ═══════════════════════════════════════════════════════════════════════════
 
--- The only guest read path. One jsonb, no uuids, no PII beyond names. VOLATILE
+-- The only guest read path. One jsonb, no uuids; the only PII it may carry is
+-- client_display_name, which is a name, or — when the studio entered nothing
+-- but an address for the household — that address (00588). VOLATILE
 -- (it writes view_count). Dead-link semantics (S2): malformed, unknown,
 -- revoked, draft → the same NULL. A closed link, or a void invoice, renders
 -- the withdrawn sheet (K5) — or the settling sheet when a Stripe payment is
@@ -165,13 +167,23 @@ BEGIN
     FROM profiles pr WHERE pr.id = v_payer;
 
     -- 2. The payer's OWN roster row — keyed on the payer, not the designer.
+    -- A payer can hold more than one row: 00331 re-scoped
+    -- idx_designer_clients_unique_profile to WHERE client_id IS NOT NULL AND
+    -- status <> 'lead', so the lead row a household was promoted from survives
+    -- alongside the active one and is usually the OLDER of the two (00585:49).
+    -- The active row wins; dc.id breaks the created_at tie a single
+    -- transaction timestamp would otherwise leave undecided, so this function
+    -- and resolve_invoice_link_for_checkout cannot diverge (F14). The value
+    -- test sits in the WHERE, before the LIMIT: a blank-named row must not be
+    -- picked and then discarded, hiding a sibling row that does carry a name.
     IF v_client_name IS NULL THEN
       SELECT nullif(btrim(dc.client_name), '')
       INTO v_client_name
       FROM designer_clients dc
       WHERE dc.designer_id = v_invoice.designer_id
         AND dc.client_id = v_payer
-      ORDER BY dc.created_at
+        AND nullif(btrim(dc.client_name), '') IS NOT NULL
+      ORDER BY (dc.status <> 'lead') DESC, dc.created_at, dc.id
       LIMIT 1;
     END IF;
 
@@ -184,7 +196,8 @@ BEGIN
       FROM designer_clients dc
       WHERE dc.designer_id = v_invoice.designer_id
         AND dc.client_id = v_payer
-      ORDER BY dc.created_at
+        AND nullif(btrim(dc.client_email), '') IS NOT NULL
+      ORDER BY (dc.status <> 'lead') DESC, dc.created_at, dc.id
       LIMIT 1;
     END IF;
     IF v_client_name IS NULL THEN
@@ -313,6 +326,9 @@ BEGIN
 END;
 $$;
 
+COMMENT ON FUNCTION public.resolve_invoice_link(text, boolean) IS
+  'The only guest read path for /pay/<token>. Called through the client portal''s service client (authenticated + service_role hold EXECUTE, anon never). Validates the 64-hex token, bumps view_count when p_record_view, and returns one narrow jsonb discriminated by kind (sheet is an alias for now): invoice (the payable sheet — no uuids, no internal notes, no Stripe ids, no token; the one address it may print is client_display_name, which since 00588 falls through to the payer household''s own email when the studio entered no name for them; studio.location is the studio address''s City, State; line_items[].attribution is the FF&E maker name), withdrawn (closed link / void invoice, K5), settling (closed with a PaymentIntent-stamped pending or a requires_refund payment, M10), or NULL for malformed/unknown/revoked/draft. pay.processing and payments[] count only PaymentIntent-stamped pending rows (F3); payments[] also carries requires_refund/refunded rows, which the sheet labels honestly, and pay.payable is false while a requires_refund row stands (J2).';
+
 -- Ids only, for invoice-link-checkout. Rows only when the link is active, the
 -- invoice is sent/partially_paid and the balance is positive.
 CREATE OR REPLACE FUNCTION public.resolve_invoice_link_for_checkout(p_token text)
@@ -347,17 +363,23 @@ AS $$
            coalesce(
              nullif(btrim(pr.full_name), ''),
              nullif(btrim(pr.display_name), ''),
+             -- Same row choice as resolve_invoice_link, term for term (F14):
+             -- the active row beats the lead row 00331 lets coexist with it,
+             -- dc.id breaks the created_at tie, and the value test sits in the
+             -- WHERE so a blank row cannot hide a sibling that carries a name.
              (SELECT nullif(btrim(dc.client_name), '')
               FROM public.designer_clients dc
               WHERE dc.designer_id = i.designer_id
                 AND dc.client_id = coalesce(i.client_id, p.client_id)
-              ORDER BY dc.created_at
+                AND nullif(btrim(dc.client_name), '') IS NOT NULL
+              ORDER BY (dc.status <> 'lead') DESC, dc.created_at, dc.id
               LIMIT 1),
              (SELECT nullif(btrim(dc.client_email), '')
               FROM public.designer_clients dc
               WHERE dc.designer_id = i.designer_id
                 AND dc.client_id = coalesce(i.client_id, p.client_id)
-              ORDER BY dc.created_at
+                AND nullif(btrim(dc.client_email), '') IS NOT NULL
+              ORDER BY (dc.status <> 'lead') DESC, dc.created_at, dc.id
               LIMIT 1),
              nullif(btrim(pr.email), '')
            )

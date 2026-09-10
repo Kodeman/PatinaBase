@@ -743,6 +743,24 @@ BEGIN
             (SELECT value FROM links_state WHERE label = 'token33')) r),
     'F14/00588: the checkout resolver carries the same address';
 
+  -- (c) no roster row under this invoice's designer at all: the payer's own
+  -- profile email is the last thing left to print, and the designer-wide
+  -- email-only fallback still must not fire. Move the row to another designer
+  -- rather than deleting it, so the fixture survives intact.
+  UPDATE public.designer_clients
+  SET designer_id = 'a5740000-0000-4000-8000-000000000002'
+  WHERE id = 'a5743000-0000-4000-8000-000000000001';
+  v := public.resolve_invoice_link((SELECT value FROM links_state WHERE label = 'token33'), false);
+  ASSERT v->>'client_display_name' = 'links-client@test.invalid',
+    format('00588: a payer with no roster row is named by profiles.email: %s', v->>'client_display_name');
+  ASSERT (SELECT r.client_display_name = 'links-client@test.invalid'
+          FROM public.resolve_invoice_link_for_checkout(
+            (SELECT value FROM links_state WHERE label = 'token33')) r),
+    'F14/00588: the checkout resolver falls through to profiles.email too';
+  UPDATE public.designer_clients
+  SET designer_id = 'a5740000-0000-4000-8000-000000000001'
+  WHERE id = 'a5743000-0000-4000-8000-000000000001';
+
   -- Restore the fixture for the assertions that follow.
   UPDATE public.designer_clients SET client_name = NULL, client_email = NULL
   WHERE id = 'a5743000-0000-4000-8000-000000000001';
