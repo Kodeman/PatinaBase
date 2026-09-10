@@ -761,8 +761,57 @@ BEGIN
   SET designer_id = 'a5740000-0000-4000-8000-000000000001'
   WHERE id = 'a5743000-0000-4000-8000-000000000001';
 
+  -- (d) Row choice when the payer holds MORE than one roster row. 00331
+  -- re-scoped idx_designer_clients_unique_profile to
+  -- WHERE client_id IS NOT NULL AND status <> 'lead', so exactly one non-lead
+  -- row may exist per pair but the lead row it was promoted from survives
+  -- beside it — and that lead row is usually the OLDER of the two
+  -- (00585:45-55). created_at is the transaction timestamp, so both rows get
+  -- an explicit one here and the ordering is never left to a tie.
+  UPDATE public.designer_clients
+  SET status = 'active', client_name = 'Active Roster Name', client_email = NULL,
+      created_at = now()
+  WHERE id = 'a5743000-0000-4000-8000-000000000001';
+  INSERT INTO public.designer_clients
+    (id, designer_id, client_id, client_email, client_name, status, created_at)
+  VALUES
+    ('a5743000-0000-4000-8000-000000000003', 'a5740000-0000-4000-8000-000000000001',
+     'a5740000-0000-4000-8000-000000000004', 'lead-house@test.invalid',
+     'Lead Roster Name', 'lead', now() - interval '30 days');
+
+  -- Both named: the active row wins, never the older lead row.
+  v := public.resolve_invoice_link((SELECT value FROM links_state WHERE label = 'token33'), false);
+  ASSERT v->>'client_display_name' = 'Active Roster Name',
+    format('00588: the active roster row beats the older lead row: %s', v->>'client_display_name');
+  ASSERT (SELECT r.client_display_name = 'Active Roster Name'
+          FROM public.resolve_invoice_link_for_checkout(
+            (SELECT value FROM links_state WHERE label = 'token33')) r),
+    'F14/00588: both resolvers choose the same roster row';
+
+  -- The winning row is blank-named: it must not be picked and then discarded,
+  -- which would hide the sibling that does carry a name and drop the sheet to
+  -- an address it never needed to print.
+  UPDATE public.designer_clients SET client_name = '   '
+  WHERE id = 'a5743000-0000-4000-8000-000000000001';
+  v := public.resolve_invoice_link((SELECT value FROM links_state WHERE label = 'token33'), false);
+  ASSERT v->>'client_display_name' = 'Lead Roster Name',
+    format('00588: a blank-named winner must not hide a sibling row''s name: %s',
+           coalesce(v->>'client_display_name', '<NULL>'));
+  ASSERT v->'client_display_name' <> 'null'::jsonb
+     AND v->>'client_display_name' <> 'lead-house@test.invalid',
+    format('00588: a name still on the roster outranks NULL and the address: %s',
+           v->>'client_display_name');
+  ASSERT (SELECT r.client_display_name = 'Lead Roster Name'
+          FROM public.resolve_invoice_link_for_checkout(
+            (SELECT value FROM links_state WHERE label = 'token33')) r),
+    'F14/00588: both resolvers skip the blank row the same way';
+
+  DELETE FROM public.designer_clients
+  WHERE id = 'a5743000-0000-4000-8000-000000000003';
+
   -- Restore the fixture for the assertions that follow.
-  UPDATE public.designer_clients SET client_name = NULL, client_email = NULL
+  UPDATE public.designer_clients
+  SET client_name = NULL, client_email = NULL, status = 'active', created_at = now()
   WHERE id = 'a5743000-0000-4000-8000-000000000001';
   UPDATE public.profiles SET full_name = 'Links Client'
   WHERE id = 'a5740000-0000-4000-8000-000000000004';
