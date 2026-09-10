@@ -1,6 +1,14 @@
 /**
  * "The Agreement, Composed" W1 — the composer, driven end to end.
  *
+ * Retargeted onto the galley (Direction D, 2026-09-10). What it proves is
+ * unchanged — nine parts materialize on first open, one RPC replaces the whole
+ * ordered array, a removed part is absent from the money row's projection, and
+ * the client's copy renders the parts in order. What it clicks has moved: the
+ * rail is an outline, the editor is a fold beneath the printed part, there is
+ * no `Save agreement` act (the dated record line is what a save leaves behind)
+ * and `Preview client copy` is `Read the whole paper`.
+ *
  * Chromium-pinned. The three browser projects run in parallel as the SAME
  * seeded designer, and this spec both seeds and mutates one proposal row —
  * firefox and webkit would race chromium for it
@@ -89,47 +97,55 @@ test.describe("Contract Room · composed", () => {
   }) => {
     await page.goto(`/drafting/${proposalId}`, { waitUntil: "networkidle" });
 
-    const rail = page.getByRole("navigation", { name: "Agreement parts" });
+    // FS-16 — the outline keeps the rail's own contract: a `nav` labelled
+    // `Agreement parts` wrapping a `ul` of `li`, one row per part.
+    const outline = page.getByRole("navigation", { name: "Agreement parts" });
     // The nine standard parts materialize on first open. This is the assertion
     // that also proves the flag reached the server Playwright started.
-    await expect(rail.getByRole("listitem")).toHaveCount(9);
+    await expect(outline.getByRole("listitem")).toHaveCount(9);
     await expect
       .poll(() => countByProposal("proposal_agreement_parts", proposalId), {
         message: "materialize_standard_parts seeds nine rows on first open",
       })
       .toBe(9);
 
-    // Remove Exclusions — R4 names it removable.
+    // Remove Exclusions — R4 names it removable. The act is in the part's own
+    // fold now, not a row menu.
+    await page.locator("#write-patina-exclusions").click();
     await page
-      .getByRole("button", { name: "Part options for Exclusions" })
+      .locator("#fold-patina-exclusions")
+      .getByRole("button", { name: "Remove from this agreement" })
       .click();
-    await page.getByRole("button", { name: "Remove" }).click();
-    await expect(rail.getByRole("listitem")).toHaveCount(8);
+    await expect(outline.getByRole("listitem")).toHaveCount(8);
 
-    // Add a Clause, rename it, and move it up one.
-    await page.getByRole("button", { name: "+ Add a part" }).click();
+    // Add a Clause at the seam, rename it, give it a body, and move it up one.
+    await page.getByRole("button", { name: "+ Add a part" }).first().click();
     await page.getByRole("button", { name: "Clause", exact: true }).click();
-    await expect(rail.getByRole("listitem")).toHaveCount(9);
+    await expect(outline.getByRole("listitem")).toHaveCount(9);
 
-    await page.getByRole("button", { name: "Part options for Clause" }).click();
-    await page.getByRole("button", { name: "Rename" }).click();
-    const rename = page.getByRole("textbox", { name: "Rename Clause" });
-    await rename.fill("Site access");
-    await rename.press("Enter");
-    await expect(rail.getByText("Site access")).toBeVisible();
-
-    await page
-      .getByRole("button", { name: "Part options for Site access" })
-      .click();
-    await page.getByRole("button", { name: "Move up" }).click();
-
-    // Give the new clause a body so the client copy has something to print.
-    await page
+    // The new part is the open one, and a blank clause draws nothing on the
+    // paper (R21/FS-6) — so its name and its body are written in the fold.
+    const added = page.locator('.g-part[data-selected="true"]');
+    await added.getByLabel("The name of this part").fill("Site access");
+    await expect(
+      outline.getByRole("button", { name: "Site access" }),
+    ).toBeVisible();
+    await added
       .getByRole("textbox", { name: "Body" })
       .fill("Access on weekdays.");
+    // Written, it prints — and its head carries the order acts.
+    await expect(added.locator(".g-part__printed")).toContainText(
+      "Access on weekdays.",
+    );
+    await page.getByRole("button", { name: "Site access Move up" }).click();
 
-    await page.getByRole("button", { name: "Save agreement" }).click();
-    await expect(page.getByText("All agreement changes saved.")).toBeVisible();
+    // §A5 "taken" — no `Save agreement` act survives. Closing the fold is what
+    // saves, and the dated record line is what it leaves behind.
+    const record = page.locator(".g-head .g-record");
+    await expect(record).toHaveText(/not yet saved$/);
+    await page.getByRole("button", { name: "Site access Write" }).click();
+    await expect(record).toHaveText(/^Saved /);
+    await expect(record).not.toHaveText(/not yet saved/);
 
     // One RPC call replaced the whole set: nine rows, Exclusions gone, the new
     // clause second from last.
@@ -162,11 +178,13 @@ test.describe("Contract Room · composed", () => {
       .single();
     expect(terms?.exclusions).toEqual([]);
 
-    // The client copy renders the parts in rail order, and never "Not yet set".
-    await page.getByRole("button", { name: "Preview client copy" }).click();
+    // The client copy renders the parts in order, and never "Not yet set". The
+    // overlay prints the SAME `ServiceAgreementPreview` the room prints from
+    // (FS-5/FS-13), laid over the room rather than instead of it.
+    await page.getByRole("button", { name: "Read the whole paper" }).click();
     const preview = page
-      .getByRole("article", { name: "Design services agreement client copy" })
-      .last();
+      .getByRole("dialog", { name: "The whole paper" })
+      .getByRole("article", { name: "Design services agreement client copy" });
     await expect(
       preview.getByRole("heading", { name: "Site access" }),
     ).toBeVisible();

@@ -26,6 +26,9 @@ const DESIGNER_EMAIL = process.env.DESIGNER_E2E_EMAIL ?? "designer@patina.dev";
 
 /** The Halvorsen figures, from `source/fixtures.json`. Cost basis $71,300,
  *  fee 18%, GMP $84,134. */
+/** `getByLabel` is a substring match, and every one of these rows carries a
+ *  sibling label that starts with the same words ("Cost line 1 category",
+ *  "Cost line 1 amount"), so the base lookups below are all `exact`. */
 const COST_LINES: [string, string][] = [
   ["Cabinetry & millwork", "38000"],
   ["Electrical", "9500"],
@@ -146,42 +149,89 @@ test.describe("Contract Room · turnkey", () => {
       )
       .toBe("design_build");
 
+    // FS-16 — the rail is the galley's outline now, and it keeps the same
+    // `nav` / `ul` / `li` contract, so every selector below still finds it.
     const rail = page.getByRole("navigation", { name: "Agreement parts" });
+
+    /**
+     * Open a part from the outline, and WAIT FOR THE SAVE IT STARTS.
+     *
+     * The galley has no Save act: selecting a part saves the whole ordered
+     * array behind it (§A5 "taken"), and when that RPC lands it replaces the
+     * composition wholesale. Typing into the fold while it is in flight is
+     * therefore typing into state that is about to be overwritten — so every
+     * open below settles the network first.
+     */
+    const record = page.locator(".g-head .g-record");
+    const room = page.locator(".g-room");
+
+    /**
+     * Open a part from the outline, and WAIT FOR THE SAVE IT STARTS.
+     *
+     * The galley has no Save act: selecting a part saves the whole ordered
+     * array behind it (§A5 "taken"), and when that RPC lands it replaces the
+     * composition wholesale — every part re-minted, because
+     * `upsert_agreement_parts` is DELETE-then-INSERT. Writing into a fold
+     * while that is in flight writes against ids that are about to be
+     * replaced, and the write is silently dropped. `networkidle` alone is not
+     * enough: `persist()` is fired without being awaited, so the click can
+     * return before the request has even started. So the save is awaited by
+     * its own response, and only when the record line says there is one.
+     */
+    const openPart = async (name: RegExp) => {
+      const dirty = /not yet saved/.test(await record.innerText());
+      const saved = dirty
+        ? page
+            .waitForResponse((response) =>
+              response.url().includes("upsert_agreement_parts"),
+            )
+            .catch(() => null)
+        : null;
+      await rail.getByRole("button", { name }).first().click();
+      if (saved) await saved;
+      await page.waitForLoadState("networkidle");
+    };
+    /**
+     * Write one field of the open fold, and PROVE the write landed.
+     *
+     * The galley re-renders the whole sheet on every keystroke (readiness, the
+     * printed form and the studio's strips all recompute), and a `fill` issued
+     * while the previous render is still settling is silently dropped —
+     * observed here as a draw row that vanished the moment its label was
+     * typed. Asserting the value back is what makes each write a barrier.
+     */
+    const writeField = async (label: string, value: string) => {
+      const field = page.getByLabel(label, { exact: true });
+      await expect(field).toBeVisible();
+      await field.fill(value);
+      await expect(field).toHaveValue(value);
+    };
     await expect(rail.getByRole("listitem")).toHaveCount(10);
 
     // ── Step 5. The pricing basis, and the three derived chips.
-    await rail
-      .getByRole("button", { name: /Pricing basis/ })
-      .first()
-      .click();
+    await openPart(/Pricing basis/);
     await page.getByRole("button", { name: "Cost-plus with GMP" }).click();
-    await page.getByLabel("Fee percent").fill("18");
+    await writeField("Fee percent", "18");
 
     for (const [index, [label, dollars]] of COST_LINES.entries()) {
       await page.getByRole("button", { name: "+ Add a cost line" }).click();
-      await page.getByLabel(`Cost line ${index + 1}`).fill(label);
-      await page.getByLabel(`Cost line ${index + 1} amount`).fill(dollars);
+      await writeField(`Cost line ${index + 1}`, label);
+      await writeField(`Cost line ${index + 1} amount`, dollars);
     }
     // ── Step 7. The three allowances, each writing its own cost line.
-    await rail
-      .getByRole("button", { name: /Allowances/ })
-      .first()
-      .click();
+    await openPart(/Allowances/);
     for (const [index, [label, dollars]] of [
       ["Tile allowance", "4000"],
       ["Plumbing fixtures allowance", "3500"],
       ["Lighting allowance", "2800"],
     ].entries()) {
       await page.getByRole("button", { name: "+ Add an allowance" }).click();
-      await page.getByLabel(`Allowance ${index + 1}`).fill(label);
-      await page.getByLabel(`Allowance ${index + 1} amount`).fill(dollars);
+      await writeField(`Allowance ${index + 1}`, label);
+      await writeField(`Allowance ${index + 1} amount`, dollars);
     }
 
-    await rail
-      .getByRole("button", { name: /Pricing basis/ })
-      .first()
-      .click();
-    await page.getByLabel("GMP dollars").fill("84134");
+    await openPart(/Pricing basis/);
+    await writeField("GMP dollars", "84134");
     await expect(page.locator('[data-chip="cost-basis"]')).toHaveText(
       "Cost basis $71,300.00",
     );
@@ -193,8 +243,10 @@ test.describe("Contract Room · turnkey", () => {
     );
 
     // ── Step 6. The draws, to the cent, with the pinned release row.
-    await rail.getByRole("button", { name: /Draws/ }).first().click();
-    await page.getByLabel("Retainage percent").fill("5");
+    // The outline row carries the part's TITLE and nothing else — the old
+    // rail printed the kind label ("Draws") above it, and the galley does not.
+    await openPart(/Draw schedule/);
+    await writeField("Retainage percent", "5");
     for (const [index, [label, pct]] of [
       ["Deposit at signing", "10"],
       ["Rough-in", "30"],
@@ -202,13 +254,17 @@ test.describe("Contract Room · turnkey", () => {
       ["Substantial completion", "20"],
     ].entries()) {
       await page.getByRole("button", { name: "+ Add a draw" }).click();
-      await page.getByLabel(`Draw ${index + 1}`).fill(label);
-      await page.getByLabel(`Draw ${index + 1} percent`).fill(pct);
+      await writeField(`Draw ${index + 1}`, label);
+      await writeField(`Draw ${index + 1} percent`, pct);
       if (index > 0) {
         await page.getByLabel(`Retainage applies to draw ${index + 1}`).check();
       }
     }
-    const roughIn = page.locator('[data-draw-key="rough_in"]');
+    // The draw key is minted when the ROW is created, from the position — the
+    // label is typed afterwards and never re-keys a row that already has one
+    // (`mintDrawKey`, draws-editor.tsx:189-192). So the rough-in draw is
+    // `draw_2`, not `rough_in`.
+    const roughIn = page.locator('[data-draw-key="draw_2"]');
     await expect(roughIn.locator('[data-cell="net"]')).toHaveText("$23,978.19");
     await expect(
       page.locator('[data-draw-key="retainage_release"] [data-cell="net"]'),
@@ -216,28 +272,22 @@ test.describe("Contract Room · turnkey", () => {
 
     // ── Step 8. Supervision beside a trade markup — the one refusal that is
     // enforced by the template rather than left to drafting.
-    await rail
-      .getByRole("button", { name: /Pricing basis/ })
-      .first()
-      .click();
-    await page.getByLabel("Markup on the trades percent").fill("15");
-    await rail
-      .getByRole("button", { name: /Supervision/ })
-      .first()
-      .click();
-    await page.getByLabel("Supervision fee dollars").fill("2500");
-    await expect(page.getByText(/Supervision is paid once/)).toBeVisible();
+    await openPart(/Pricing basis/);
+    await writeField("Markup on the trades percent", "15");
+    await openPart(/Supervision/);
+    await writeField("Supervision fee dollars", "2500");
+    // R49 — the refusal is about a PAIR, so the galley prints it on the room,
+    // on both parts' strips and inside the open editor. Any one of them is the
+    // proof that it is being said. Scoped to the room, because the save the
+    // next act starts is refused with the same sentence and its toast is not
+    // what is being tested here.
+    const doubleCount = room.getByText(/Supervision is paid once/);
+    await expect(doubleCount.first()).toBeVisible();
 
-    await rail
-      .getByRole("button", { name: /Pricing basis/ })
-      .first()
-      .click();
-    await page.getByLabel("Markup on the trades percent").fill("");
-    await rail
-      .getByRole("button", { name: /Supervision/ })
-      .first()
-      .click();
-    await expect(page.getByText(/Supervision is paid once/)).toHaveCount(0);
+    await openPart(/Pricing basis/);
+    await writeField("Markup on the trades percent", "");
+    await openPart(/Supervision/);
+    await expect(doubleCount).toHaveCount(0);
 
     // ── Step 9. The Wisconsin notice is held for counsel and cannot be
     // attached; the lien-waiver form can.
@@ -251,8 +301,12 @@ test.describe("Contract Room · turnkey", () => {
       0,
     );
 
-    await page.getByRole("button", { name: "Save agreement" }).click();
-    await expect(page.getByText("All agreement changes saved.")).toBeVisible();
+    // §A5 "taken" — the galley has no `Save agreement` act. Selecting a part
+    // saves the whole ordered array behind it, so by the time the last part
+    // has been opened the composition is already on the table; the dated
+    // record line is what those saves left behind.
+    await expect(record).toHaveText(/^Saved /);
+    await expect(record).not.toHaveText(/not yet saved/);
 
     // The composition landed as ten parts on a design-build document, and the
     // allowances wrote their own cost lines rather than leaving the pricing
