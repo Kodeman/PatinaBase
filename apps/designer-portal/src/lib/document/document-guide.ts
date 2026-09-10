@@ -84,6 +84,10 @@ export interface DocumentGuideModel {
   headline: string;
   reason: string;
   action: DocumentGuideAction | null;
+  /** D-B24 — the rung between the two: R2's grammar, one label a side and a
+   *  count for the rest. Null on every branch that does not speak the owner
+   *  sentence. */
+  mediumHeadline?: string | null;
   /** D-B24 — the same fact at the 327 measure, for the band's short form.
    *  Null on every branch that does not speak the owner sentence. */
   shortHeadline?: string | null;
@@ -446,6 +450,47 @@ export function clientShortName(name: string | null | undefined): string {
 }
 
 /**
+ * D-B24 — the rung between the long form and the count. It keeps R2's grammar
+ * and the household's NAME — the whole point of the sentence — and gives up
+ * only the recital: one label a side, and a number for the rest. Below three
+ * items a side there is nothing to give up, so it reads exactly as the long
+ * form does and the ladder simply never has cause to pick it.
+ */
+function mediumPhrase(items: readonly string[]): string {
+  if (items.length <= 2) return listPhrase(items);
+  return `${items[0]} and ${items.length - 1} more`;
+}
+
+/**
+ * The medium form of the owner sentence (W3-F2 follow-up). Without it a
+ * seeded discovery paper — five essentials open, the stage's longest act —
+ * fell straight from the long form to `1 yours · 4 theirs`, which is the
+ * cryptic line R2's grammar exists to avoid, and it fell there at 1440.
+ */
+export function inputsMediumSentence(
+  facts: readonly DocumentGuideInputFact[],
+  clientName: string | null | undefined,
+): string | null {
+  if (facts.length === 0) return null;
+  // The rung gives up the RECITAL and the long labels; it keeps the grammar
+  // and the household. A fact stating no short label keeps the one it has.
+  const named = (fact: DocumentGuideInputFact) => {
+    const label = fact.shortLabel ?? fact.label;
+    return label.charAt(0).toLowerCase() + label.slice(1);
+  };
+  const mine = facts.filter((fact) => fact.owner !== 'Client').map(named);
+  const theirs = facts.filter((fact) => fact.owner === 'Client').map(named);
+  return [
+    mine.length > 0 ? `Yours to add: ${mediumPhrase(mine)}.` : null,
+    theirs.length > 0
+      ? `Waiting on ${clientShortName(clientName)}: ${mediumPhrase(theirs)}.`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
+/**
  * D-B24 — the same owner fact at the 327 measure: who is owed, and how many
  * things are open. It states a count where the long form recites labels, and
  * it is never empty while the long one has words.
@@ -496,6 +541,10 @@ function withInputs(
     model.state === 'needs_input'
       ? inputsSentence(inputFacts ?? [], clientName)
       : null;
+  const mediumOwners =
+    model.state === 'needs_input'
+      ? inputsMediumSentence(inputFacts ?? [], clientName)
+      : null;
   const shortOwners =
     model.state === 'needs_input'
       ? inputsShortSentence(inputFacts ?? [], clientName)
@@ -503,6 +552,7 @@ function withInputs(
   return {
     ...model,
     headline: owners ?? model.headline,
+    mediumHeadline: owners ? mediumOwners : null,
     shortHeadline: owners ? shortOwners : null,
     action: inputAction,
     topInput: firstInput,

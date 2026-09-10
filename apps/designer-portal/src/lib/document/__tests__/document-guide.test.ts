@@ -783,6 +783,99 @@ describe('deriveDocumentGuide', () => {
       });
     });
 
+    // ── D-B24 — the rung between the recital and the count ────────────────
+    describe('the medium headline', () => {
+      const FIVE = [
+        fact('Project type and named rooms', 'Designer'),
+        fact('Working budget', 'Client'),
+        fact('Target or hard date', 'Client'),
+        fact('Style direction', 'Client'),
+        fact('Lifestyle needs', 'Client'),
+      ];
+
+      it('names one label a side and counts the rest, on a mixed list', () => {
+        const guide = deriveDocumentGuide({
+          row: row('discovery', { client_name: 'The Ashfords (no-login household)' }),
+          inputFacts: FIVE,
+        });
+
+        expect(guide.mediumHeadline).toBe(
+          'Yours to add: project type and named rooms. Waiting on the Ashfords: working budget and 3 more.',
+        );
+      });
+
+      it('names the first and counts the rest when every input is the client\u2019s', () => {
+        const guide = deriveDocumentGuide({
+          row: row('discovery'),
+          inputFacts: FIVE.slice(1),
+        });
+
+        expect(guide.mediumHeadline).toBe(
+          'Waiting on Avery: working budget and 3 more.',
+        );
+      });
+
+      it('does the same for the studio\u2019s own share', () => {
+        const guide = deriveDocumentGuide({
+          row: row('discovery'),
+          inputFacts: [
+            fact('Project type and named rooms', 'Designer'),
+            fact('Site measurements', 'Designer'),
+            fact('Trade discounts', 'Studio'),
+            fact('Crew booking', 'Project team'),
+            fact('Insurance certificate', 'Studio'),
+          ],
+        });
+
+        expect(guide.mediumHeadline).toBe(
+          'Yours to add: project type and named rooms and 4 more.',
+        );
+      });
+
+      // The rung gives up the long LABELS too, where the fact states a short
+      // one — which is the whole of the room it buys at 1440.
+      it('names each fact by its short label where it has one', () => {
+        const guide = deriveDocumentGuide({
+          row: row('discovery', { client_name: 'The Ashfords (no-login household)' }),
+          inputFacts: [
+            { ...fact('Project type and named rooms', 'Designer'), shortLabel: 'Scope' },
+            { ...fact('Working budget', 'Client'), shortLabel: 'Budget' },
+            { ...fact('Target or hard date', 'Client'), shortLabel: 'Dates' },
+            { ...fact('Style direction', 'Client'), shortLabel: 'Style' },
+            { ...fact('Lifestyle needs', 'Client'), shortLabel: 'Lifestyle' },
+          ],
+        });
+
+        expect(guide.mediumHeadline).toBe(
+          'Yours to add: scope. Waiting on the Ashfords: budget and 3 more.',
+        );
+      });
+
+      // Below three a side there is nothing to give up: the medium rung reads
+      // exactly as the long one, so the ladder never has cause to pick it.
+      it('reads as the long form at two items a side', () => {
+        const guide = deriveDocumentGuide({
+          row: row('discovery'),
+          inputFacts: [
+            fact('Working budget', 'Client'),
+            fact('Lifestyle needs', 'Client'),
+          ],
+        });
+
+        expect(guide.mediumHeadline).toBe(guide.headline);
+      });
+
+      it('states none where the branch does not speak the owner sentence', () => {
+        const guide = deriveDocumentGuide({
+          row: row('discovery'),
+          inputFacts: [],
+          inputsPending: true,
+        });
+
+        expect(guide.mediumHeadline).toBeNull();
+      });
+    });
+
     // ── D-B24 — the same fact at the 327 measure ──────────────────────────
     describe('the short headline', () => {
       it('counts what the client owes', () => {

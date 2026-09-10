@@ -256,6 +256,7 @@ describe('deriveLensBand · line 2 (L-1)', () => {
         act: null,
         form: 'long',
         long: { sentence: '', act: null },
+        medium: null,
         short: null,
         standingCount: 0,
         withheld: 0,
@@ -832,6 +833,8 @@ describe('deriveLensBand \u00b7 the guide line fits its measure (D-B24)', () => 
 
   const LONG_SENTENCE =
     'Yours to add: project type and named rooms. Waiting on the Ashfords: working budget, target or hard date and 2 more.';
+  const MEDIUM_SENTENCE =
+    'Yours to add: scope. Waiting on the Ashfords: budget and 3 more.';
   const SHORT_SENTENCE = '1 yours \u00b7 4 theirs';
 
   const guideBand = (tier: LensBandInput['tier']) =>
@@ -845,6 +848,7 @@ describe('deriveLensBand \u00b7 the guide line fits its measure (D-B24)', () => 
         namedInputKey: '0:Project type and named rooms',
         guide: {
           text: LONG_SENTENCE,
+          medium: MEDIUM_SENTENCE,
           short: SHORT_SENTENCE,
           act: {
             key: 'open-missing-input',
@@ -894,26 +898,85 @@ describe('deriveLensBand \u00b7 the guide line fits its measure (D-B24)', () => 
   });
 
   // The seeded paper: five open inputs and the longest act on the stage. Its
-  // long form does not fit even the 900 measure — which is exactly the case
-  // that used to reach CSS ellipsis with no second form to fall to.
-  it('falls to the short form at the full measure when the long one overruns', () => {
+  // long form does not fit even the 900 measure — and before the medium rung
+  // existed it fell straight to the count, at 1440, on the one paper a
+  // designer meets first.
+  it('takes the medium rung at the full measure, and names the household', () => {
     const model = guideBand('full');
     expect(model.line2.kind).toBe('guide');
-    expect(model.line2.form).toBe('short');
-    expect(model.line2.sentence).toBe(SHORT_SENTENCE);
-    expect(model.line2.act?.label).toBe('Add Scope');
+    expect(model.line2.form).toBe('medium');
+    expect(model.line2.sentence).toBe(MEDIUM_SENTENCE);
+    expect(model.line2.sentence).toContain('the Ashfords');
+    // The medium sentence fits beside the act's WHOLE label, so the act keeps
+    // its words: only the recital was given up.
+    expect(model.line2.act?.label).toBe('Add Project type and named rooms');
   });
 
-  it('falls to the short form, and the short act, at the mobile measure', () => {
+  it('falls past the medium rung to the count at the mobile measure', () => {
     const model = guideBand('mobile');
     expect(model.line2.form).toBe('short');
     expect(model.line2.sentence).toBe(SHORT_SENTENCE);
     expect(model.line2.act?.label).toBe('Add Scope');
   });
 
+  // …and gives the act's words up next, before it gives up the household.
+  it('drops to the act\u2019s short label when the medium form needs the room', () => {
+    const model = deriveLensBand(
+      input({
+        spreadKind: 'discovery',
+        installDate: null,
+        moneyFigure: null,
+        tier: 'full',
+        inputs: FIVE_INPUTS,
+        namedInputKey: '0:Project type and named rooms',
+        guide: {
+          text: LONG_SENTENCE,
+          // 84 characters — past the measure beside the whole act, inside it
+          // beside the short one.
+          medium:
+            'Yours to add: scope and floor plans. Waiting on the Ashfords: budget and 3 more.',
+          short: SHORT_SENTENCE,
+          act: {
+            key: 'open-missing-input',
+            label: 'Add Project type and named rooms',
+            shortLabel: 'Add Scope',
+            onAct: jest.fn(),
+          },
+        },
+      }),
+    );
+    expect(model.line2.form).toBe('medium');
+    expect(model.line2.act?.label).toBe('Add Scope');
+  });
+
   it('never prints an empty sentence at either measure', () => {
     expect(guideBand('full').line2.sentence).not.toBe('');
     expect(guideBand('mobile').line2.sentence).not.toBe('');
+  });
+
+  it('falls to the count where the guide states no medium form', () => {
+    const model = deriveLensBand(
+      input({
+        spreadKind: 'discovery',
+        installDate: null,
+        moneyFigure: null,
+        tier: 'full',
+        inputs: FIVE_INPUTS,
+        namedInputKey: '0:Project type and named rooms',
+        guide: {
+          text: LONG_SENTENCE,
+          short: SHORT_SENTENCE,
+          act: {
+            key: 'open-missing-input',
+            label: 'Add Project type and named rooms',
+            shortLabel: 'Add Scope',
+            onAct: jest.fn(),
+          },
+        },
+      }),
+    );
+    expect(model.line2.form).toBe('short');
+    expect(model.line2.sentence).toBe(SHORT_SENTENCE);
   });
 
   it('keeps the long form at 390 when two open inputs fit it', () => {

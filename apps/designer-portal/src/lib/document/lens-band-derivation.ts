@@ -158,6 +158,10 @@ export interface LensInputItem {
 export interface LensGuideLine {
   text: string;
   act: LensAct | null;
+  /** D-B24 — the rung between: R2's grammar and the household's name, with
+   *  the recital given up. Tried before the count, so a desktop reader is
+   *  told WHO is waiting rather than only how many. */
+  medium?: string | null;
   /** D-B24 — the guide's own 327 form. Without it a guide line had no second
    *  form at all: `fits()` was never consulted and the sentence was left to
    *  CSS ellipsis, which at 390 amputated the whole of it. */
@@ -190,13 +194,16 @@ export interface LensLine2Form {
 
 export interface LensBandLine2 {
   kind: 'standing' | 'guide' | 'none';
-  /** The form that fit the tier's measure — `long.sentence` or `short.sentence`. */
+  /** The form that fit the tier's measure. */
   sentence: string;
   act: LensAct | null;
-  /** Which of the two forms is printed (D-B24). */
-  form: 'long' | 'short';
+  /** Which of the three forms is printed (D-B24). */
+  form: 'long' | 'medium' | 'short';
   /** The whole sentence with the whole act. */
   long: LensLine2Form;
+  /** The middle rung, with the act's FULL label — the pairing tried first.
+   *  Null on a line whose source states no medium form. */
+  medium: LensLine2Form | null;
   /** D-B24's 390 form. Null only when neither the standing item nor the guide
    *  supplied one. */
   short: LensLine2Form | null;
@@ -764,6 +771,15 @@ export function deriveLensBand(input: LensBandInput): LensBandModel {
     : input.guide?.short
       ? { sentence: input.guide.short, act: shortAct(input.guide.act) }
       : null;
+  // Only a guide line has a medium rung: a standing item's short form is a
+  // state and an object, with nothing between it and its whole sentence.
+  const medium: LensLine2Form | null =
+    !worst && input.guide?.medium
+      ? { sentence: input.guide.medium, act: input.guide.act }
+      : null;
+  const mediumShort: LensLine2Form | null = medium
+    ? { sentence: medium.sentence, act: shortAct(medium.act) }
+    : null;
 
   // The door's own words print whole in both forms, so its width is spent
   // before the sentence gets its measure.
@@ -782,11 +798,28 @@ export function deriveLensBand(input: LensBandInput): LensBandModel {
   const fits = (form: LensLine2Form) =>
     sentencePx(form.sentence) <= budgetPx(form.act);
 
-  // D-B24 — one trigger, two forms. There is no qualifier ladder and no
-  // character cap: a cap calibrated for the 900px measure never fires before
-  // CSS ellipsis at 327, which is how a sentence came to lie about itself.
-  const form: 'long' | 'short' = !short || fits(long) ? 'long' : 'short';
-  const printed: LensLine2Form = form === 'short' && short ? short : long;
+  // D-B24 — one trigger, three rungs: the whole sentence, then R2's grammar
+  // with the recital given up, then the count. The medium rung is tried with
+  // the act's own label first and with its short one second, because giving up
+  // the act's words costs less than giving up the household's name. There is
+  // no character cap: a cap calibrated for the 900px measure never fires
+  // before CSS ellipsis at 327, which is how a sentence came to lie about
+  // itself.
+  const { form, printed } = ((): {
+    form: 'long' | 'medium' | 'short';
+    printed: LensLine2Form;
+  } => {
+    if (fits(long)) return { form: 'long', printed: long };
+    if (medium && fits(medium)) return { form: 'medium', printed: medium };
+    if (mediumShort && fits(mediumShort)) {
+      return { form: 'medium', printed: mediumShort };
+    }
+    if (short) return { form: 'short', printed: short };
+    // Nothing fits and there is no rung below: the sentence is printed anyway
+    // and LINE_CLIP takes the overhang. An empty line 2 is never an answer.
+    if (mediumShort) return { form: 'medium', printed: mediumShort };
+    return { form: 'long', printed: long };
+  })();
 
   const line2: LensBandLine2 = {
     kind,
@@ -794,6 +827,7 @@ export function deriveLensBand(input: LensBandInput): LensBandModel {
     act: printed.act,
     form,
     long,
+    medium,
     short,
     standingCount,
     withheld,

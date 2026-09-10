@@ -2235,6 +2235,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     : (guideModel?.action?.key ?? null);
   // D-B24 — the same guide fact at the 327 measure. A refusal is already one
   // clause and states its own reason, so it has no second form to fall to.
+  const guideMediumHeadline = beginDirectionError
+    ? null
+    : (guideModel?.mediumHeadline ?? null);
   const guideShortHeadline = beginDirectionError
     ? null
     : (guideModel?.shortHeadline ?? null);
@@ -2314,7 +2317,12 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       inputs,
       namedInputKey,
       guide: guideHeadline
-        ? { text: guideHeadline, act: guideAct, short: guideShortHeadline }
+        ? {
+            text: guideHeadline,
+            act: guideAct,
+            medium: guideMediumHeadline,
+            short: guideShortHeadline,
+          }
         : null,
       tier: lensTier,
       household: bandHousehold,
@@ -2341,6 +2349,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     inputSignature,
     namedInputKey,
     guideHeadline,
+    guideMediumHeadline,
     guideShortHeadline,
     guideActLabel,
     guideActShortLabel,

@@ -2520,19 +2520,22 @@ describe('DocumentPage guide activation', () => {
         };
       };
 
-      // F2 — three open inputs behind the stage's longest act: the long form
-      // overruns the 900 measure, so the band prints the short one rather
-      // than handing 41% of the sentence to CSS ellipsis. The long form's own
-      // grammar is asserted in `document-guide.test.ts`.
+      // F2 — three open inputs behind the stage's longest act. The long form
+      // overruns the 900 measure, so the band takes the medium rung: R2's
+      // grammar and the household's name kept, the long labels given up.
       it('names who is waiting on whom, at the form that fits', () => {
         openPartialDiscovery();
 
         render(<DocumentPage params={fulfilledParams} />);
 
-        expect(bandSentence()).toBe('1 yours \u00b7 2 theirs');
-        expect(bandSentence()).not.toBe('');
+        expect(bandSentence()).toBe(
+          'Yours to add: scope. Waiting on Avery: budget and lifestyle.',
+        );
+        // The whole point of the medium rung: the client's short name survives
+        // the fall from the long form at the desktop measure.
+        expect(bandSentence()).toContain('Avery');
         expect(
-          screen.getByRole('button', { name: 'Add Scope' }),
+          screen.getByRole('button', { name: 'Add Project type and named rooms' }),
         ).toBeInTheDocument();
       });
 
