@@ -1,4 +1,4 @@
-import { deriveDocumentGuide, needGuideAction } from '../document-guide';
+import { clientShortName, deriveDocumentGuide, needGuideAction } from '../document-guide';
 import type { DocumentStateRow, NeedKind, SectionKey } from '../desk-derivation';
 import type { TicketException, TicketRow, TicketRowKey } from '../ticket-derivation';
 import { deriveGate } from '../workflow-gate';
@@ -69,9 +69,10 @@ describe('deriveDocumentGuide', () => {
   // act, because "Nothing to decide yet" asks for nothing).
   it.each([
     ['brief', 'Nothing to decide yet.', undefined, null],
-    // The rest act names the DIRECTION, so it lands there — not back on the
+    // R5 — the rest act names the DIRECTION and RUNS it: one leader, and the
+    // seed the readiness band used to carry. It never lands back on the
     // discovery checklist it has just called complete (C20).
-    ['discovery', 'Discovery is complete. Shape the direction.', 'Begin the direction', 'direction'],
+    ['discovery', 'Discovery is complete. Shape the direction.', 'Begin the direction', 'begin-direction'],
     ['direction', 'The direction is written. Send it.', 'Send the agreement', '/drafting/proposal-1'],
     ['proposal', 'Wait for the client’s signature', 'Review signing controls', 'proposal'],
     ['project', 'Everything ordered is moving.', 'Release the next room', 'project'],
@@ -87,7 +88,7 @@ describe('deriveDocumentGuide', () => {
         ? guide.action.destination.href
         : guide.action?.destination.kind === 'anchor'
           ? guide.action.destination.section
-          : null,
+          : (guide.action?.destination.kind ?? null),
     ).toBe(destination);
   });
 
@@ -621,6 +622,320 @@ describe('deriveDocumentGuide', () => {
       destination: {
         kind: 'anchor', section: 'discovery', focusId: 'discovery-facet-budget', activate: true,
       },
+    });
+  });
+
+  // ── R2 — the needs-input sentence names owners ───────────────────────────
+  describe('R2 — line 2 names who is waiting on whom', () => {
+    const fact = (
+      label: string,
+      owner: 'Designer' | 'Client' | 'Studio' | 'Project team',
+    ) => ({ label, owner, blocks: 'Direction' });
+
+    it('waits on the client, by first name, when every open input is theirs', () => {
+      const guide = deriveDocumentGuide({
+        row: row('discovery'),
+        inputFacts: [fact('Working budget', 'Client'), fact('Lifestyle needs', 'Client')],
+      });
+
+      expect(guide.headline).toBe('Waiting on Avery: working budget and lifestyle needs.');
+    });
+
+    it('names the studio\u2019s own share as theirs to add', () => {
+      const guide = deriveDocumentGuide({
+        row: row('discovery'),
+        inputFacts: [
+          fact('Project type and named rooms', 'Designer'),
+          fact('Studio countersignature', 'Studio'),
+        ],
+      });
+
+      expect(guide.headline).toBe(
+        'Yours to add: project type and named rooms and studio countersignature.',
+      );
+    });
+
+    it('splits a mixed list, the studio\u2019s first', () => {
+      const guide = deriveDocumentGuide({
+        row: row('discovery'),
+        inputFacts: [
+          fact('Project type and named rooms', 'Designer'),
+          fact('Working budget', 'Client'),
+          fact('Lifestyle needs', 'Client'),
+        ],
+      });
+
+      expect(guide.headline).toBe(
+        'Yours to add: project type and named rooms. Waiting on Avery: working budget and lifestyle needs.',
+      );
+    });
+
+    it('reads the project team as designer-side', () => {
+      const guide = deriveDocumentGuide({
+        row: row('discovery'),
+        inputFacts: [fact('2 open damage claims', 'Project team')],
+      });
+
+      expect(guide.headline).toBe('Yours to add: 2 open damage claims.');
+    });
+
+    it('falls back to "the client" when the row carries no name', () => {
+      const guide = deriveDocumentGuide({
+        row: row('discovery', { client_name: '' }),
+        inputFacts: [fact('Working budget', 'Client')],
+      });
+
+      expect(guide.headline).toBe('Waiting on the client: working budget.');
+    });
+
+    it('keeps the stage headline while the read has answered nothing', () => {
+      const guide = deriveDocumentGuide({
+        row: row('discovery'),
+        inputFacts: [],
+        inputsPending: true,
+      });
+
+      expect(guide.state).toBe('needs_input');
+      expect(guide.headline).toBe('Finish what you need to know');
+    });
+
+    // ── W3-F1 — `client_name` is a HOUSEHOLD label, not a person ──────────
+    describe('the name after "Waiting on" (clientShortName)', () => {
+      it('keeps an article-led household whole, with a lower-case article', () => {
+        expect(clientShortName('The Ashfords (no-login household)')).toBe(
+          'the Ashfords',
+        );
+      });
+
+      it('keeps both first names of a couple, joined as the studio wrote them', () => {
+        expect(clientShortName('Edna & Rob Courtney')).toBe('Edna & Rob');
+        expect(clientShortName('Edna and Rob Courtney')).toBe('Edna and Rob');
+      });
+
+      it('takes the first name of one person', () => {
+        expect(clientShortName('Avery Stone')).toBe('Avery');
+      });
+
+      it('falls back to "the client" with no name at all', () => {
+        expect(clientShortName('')).toBe('the client');
+        expect(clientShortName(null)).toBe('the client');
+      });
+
+      it('prints the household inside the sentence', () => {
+        const guide = deriveDocumentGuide({
+          row: row('discovery', { client_name: 'The Ashfords (no-login household)' }),
+          inputFacts: [fact('Working budget', 'Client')],
+        });
+
+        expect(guide.headline).toBe('Waiting on the Ashfords: working budget.');
+      });
+    });
+
+    // ── W3-F2 — the list reads as English, not as machine output ──────────
+    describe('the conjunction', () => {
+      const waitingOn = (...labels: string[]) =>
+        deriveDocumentGuide({
+          row: row('discovery'),
+          inputFacts: labels.map((label) => fact(label, 'Client')),
+        }).headline;
+
+      it('joins two with a bare "and"', () => {
+        expect(waitingOn('Working budget', 'Lifestyle needs')).toBe(
+          'Waiting on Avery: working budget and lifestyle needs.',
+        );
+      });
+
+      it('joins three with a serial "and"', () => {
+        expect(
+          waitingOn('Working budget', 'Target date', 'Style direction'),
+        ).toBe(
+          'Waiting on Avery: working budget, target date and style direction.',
+        );
+      });
+
+      it('names the first two and counts the rest at four', () => {
+        expect(
+          waitingOn(
+            'Working budget',
+            'Target or hard date',
+            'Style direction',
+            'Lifestyle needs',
+          ),
+        ).toBe(
+          'Waiting on Avery: working budget, target or hard date and 2 more.',
+        );
+      });
+
+      it('applies the same grammar to both halves of a mixed sentence', () => {
+        const guide = deriveDocumentGuide({
+          row: row('discovery'),
+          inputFacts: [
+            fact('Project type', 'Designer'),
+            fact('Named rooms', 'Designer'),
+            fact('Working budget', 'Client'),
+            fact('Style direction', 'Client'),
+          ],
+        });
+
+        expect(guide.headline).toBe(
+          'Yours to add: project type and named rooms. Waiting on Avery: working budget and style direction.',
+        );
+      });
+    });
+
+    // ── D-B24 — the rung between the recital and the count ────────────────
+    describe('the medium headline', () => {
+      const FIVE = [
+        fact('Project type and named rooms', 'Designer'),
+        fact('Working budget', 'Client'),
+        fact('Target or hard date', 'Client'),
+        fact('Style direction', 'Client'),
+        fact('Lifestyle needs', 'Client'),
+      ];
+
+      it('names one label a side and counts the rest, on a mixed list', () => {
+        const guide = deriveDocumentGuide({
+          row: row('discovery', { client_name: 'The Ashfords (no-login household)' }),
+          inputFacts: FIVE,
+        });
+
+        expect(guide.mediumHeadline).toBe(
+          'Yours to add: project type and named rooms. Waiting on the Ashfords: working budget and 3 more.',
+        );
+      });
+
+      it('names the first and counts the rest when every input is the client\u2019s', () => {
+        const guide = deriveDocumentGuide({
+          row: row('discovery'),
+          inputFacts: FIVE.slice(1),
+        });
+
+        expect(guide.mediumHeadline).toBe(
+          'Waiting on Avery: working budget and 3 more.',
+        );
+      });
+
+      it('does the same for the studio\u2019s own share', () => {
+        const guide = deriveDocumentGuide({
+          row: row('discovery'),
+          inputFacts: [
+            fact('Project type and named rooms', 'Designer'),
+            fact('Site measurements', 'Designer'),
+            fact('Trade discounts', 'Studio'),
+            fact('Crew booking', 'Project team'),
+            fact('Insurance certificate', 'Studio'),
+          ],
+        });
+
+        expect(guide.mediumHeadline).toBe(
+          'Yours to add: project type and named rooms and 4 more.',
+        );
+      });
+
+      // The rung gives up the long LABELS too, where the fact states a short
+      // one — which is the whole of the room it buys at 1440.
+      it('names each fact by its short label where it has one', () => {
+        const guide = deriveDocumentGuide({
+          row: row('discovery', { client_name: 'The Ashfords (no-login household)' }),
+          inputFacts: [
+            { ...fact('Project type and named rooms', 'Designer'), shortLabel: 'Scope' },
+            { ...fact('Working budget', 'Client'), shortLabel: 'Budget' },
+            { ...fact('Target or hard date', 'Client'), shortLabel: 'Dates' },
+            { ...fact('Style direction', 'Client'), shortLabel: 'Style' },
+            { ...fact('Lifestyle needs', 'Client'), shortLabel: 'Lifestyle' },
+          ],
+        });
+
+        expect(guide.mediumHeadline).toBe(
+          'Yours to add: scope. Waiting on the Ashfords: budget and 3 more.',
+        );
+      });
+
+      // Below three a side there is nothing to give up: the medium rung reads
+      // exactly as the long one, so the ladder never has cause to pick it.
+      it('reads as the long form at two items a side', () => {
+        const guide = deriveDocumentGuide({
+          row: row('discovery'),
+          inputFacts: [
+            fact('Working budget', 'Client'),
+            fact('Lifestyle needs', 'Client'),
+          ],
+        });
+
+        expect(guide.mediumHeadline).toBe(guide.headline);
+      });
+
+      it('states none where the branch does not speak the owner sentence', () => {
+        const guide = deriveDocumentGuide({
+          row: row('discovery'),
+          inputFacts: [],
+          inputsPending: true,
+        });
+
+        expect(guide.mediumHeadline).toBeNull();
+      });
+    });
+
+    // ── D-B24 — the same fact at the 327 measure ──────────────────────────
+    describe('the short headline', () => {
+      it('counts what the client owes', () => {
+        const guide = deriveDocumentGuide({
+          row: row('discovery'),
+          inputFacts: [
+            fact('Working budget', 'Client'),
+            fact('Style direction', 'Client'),
+          ],
+        });
+
+        expect(guide.shortHeadline).toBe('Waiting on Avery \u00b7 2 open');
+      });
+
+      it('counts what the studio owes', () => {
+        const guide = deriveDocumentGuide({
+          row: row('discovery'),
+          inputFacts: [fact('Project type and named rooms', 'Designer')],
+        });
+
+        expect(guide.shortHeadline).toBe('Yours to add \u00b7 1 open');
+      });
+
+      it('splits a mixed list by side', () => {
+        const guide = deriveDocumentGuide({
+          row: row('discovery'),
+          inputFacts: [
+            fact('Project type and named rooms', 'Designer'),
+            fact('Working budget', 'Client'),
+            fact('Lifestyle needs', 'Client'),
+          ],
+        });
+
+        expect(guide.shortHeadline).toBe('1 yours \u00b7 2 theirs');
+      });
+
+      it('states none where the branch does not speak the owner sentence', () => {
+        const guide = deriveDocumentGuide({
+          row: row('discovery'),
+          inputFacts: [],
+          inputsPending: true,
+        });
+
+        expect(guide.shortHeadline).toBeNull();
+      });
+    });
+  });
+
+  // ── R5 — one leader, and the seeded case ─────────────────────────────────
+  it('opens an already-seeded direction instead of running the seed again', () => {
+    const guide = deriveDocumentGuide({
+      row: row('discovery'),
+      now: new Date('2026-08-10T12:00:00Z'),
+      alreadySeeded: true,
+    });
+
+    expect(guide.action).toEqual({
+      key: 'rest-discovery',
+      label: 'Open the direction',
+      destination: { kind: 'anchor', section: 'direction' },
     });
   });
 });

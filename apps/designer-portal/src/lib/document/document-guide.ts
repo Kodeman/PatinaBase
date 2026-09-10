@@ -41,6 +41,8 @@ export function asLegacyProposalLifecycle(value: unknown): LegacyProposalLifecyc
 
 export interface DocumentGuideInputFact {
   label: string;
+  /** D-B24 — the one-word form the band's act wears at the 327 measure. */
+  shortLabel?: string;
   owner: 'Designer' | 'Client' | 'Studio' | 'Project team';
   blocks: string;
   focusId?: string;
@@ -59,12 +61,19 @@ export type DocumentGuideDestination =
   /** Re-read whatever source left guidance unavailable. It moves nowhere, so it
    *  must not borrow a section anchor's shape to say so. */
   | { kind: 'retry' }
+  /** R5 — one leader: the band's rest act on a ready discovery RUNS
+   *  `begin_direction_from_discovery` and lands on the successor document. It
+   *  moves to a document that does not exist yet, so it can borrow neither an
+   *  anchor's nor an href's shape. */
+  | { kind: 'begin-direction' }
   | { kind: 'anchor'; section: SectionKey; focusId?: string; activate?: boolean }
   | { kind: 'ledger'; name: string; context?: { page?: string; invoiceId?: string; projectId?: string } };
 
 export interface DocumentGuideAction {
   key: string;
   label: string;
+  /** D-B24 — what this act prints when line 2 is in its short form. */
+  shortLabel?: string;
   destination: DocumentGuideDestination;
 }
 
@@ -75,6 +84,13 @@ export interface DocumentGuideModel {
   headline: string;
   reason: string;
   action: DocumentGuideAction | null;
+  /** D-B24 — the rung between the two: R2's grammar, one label a side and a
+   *  count for the rest. Null on every branch that does not speak the owner
+   *  sentence. */
+  mediumHeadline?: string | null;
+  /** D-B24 — the same fact at the 327 measure, for the band's short form.
+   *  Null on every branch that does not speak the owner sentence. */
+  shortHeadline?: string | null;
   topInput: DocumentGuideInputFact | null;
   remainingInputCount: number;
 }
@@ -124,6 +140,10 @@ interface DeriveDocumentGuideInput {
    *  `stageCopy`/`restCopy` path below, so a spread without a map is guided
    *  exactly as it was. */
   ticketRows?: readonly TicketRow[] | null;
+  /** R5 — this discovery has ALREADY seeded its draft direction
+   *  (`client_discovery.seeded_proposal_id`). The rest act then opens what
+   *  exists rather than running the seed a second time. */
+  alreadySeeded?: boolean;
 }
 
 export const stageCopy: Record<SectionKey, Omit<DocumentGuideModel, 'stage' | 'topInput' | 'remainingInputCount'>> = {
@@ -361,9 +381,138 @@ function proposalGuideHeadline(
   return `Sent ${fmtShortDay(row.proposal_sent_at)} · not opened yet`;
 }
 
+/**
+ * R2 — the needs-input sentence names who is waiting on whom, in neutral
+ * phrasing ("Waiting on Edna:", never "Edna owes you"). The facts keep the
+ * order the checklist gives them; each label prints as the checklist spells it,
+ * lower-cased into the sentence.
+ *
+ * `null` = there is nothing to name, and the stage's own static headline
+ * stands (a read still in flight yields no facts and must not be reported as
+ * "nothing outstanding").
+ */
+export function inputsSentence(
+  facts: readonly DocumentGuideInputFact[],
+  clientName: string | null | undefined,
+): string | null {
+  if (facts.length === 0) return null;
+  const lower = (label: string) => label.charAt(0).toLowerCase() + label.slice(1);
+  // `Project team` reads as designer-side: it is the studio's own crew, not the
+  // household.
+  const mine = facts.filter((fact) => fact.owner !== 'Client').map((fact) => lower(fact.label));
+  const theirs = facts.filter((fact) => fact.owner === 'Client').map((fact) => lower(fact.label));
+  const first = clientShortName(clientName);
+  return [
+    mine.length > 0 ? `Yours to add: ${listPhrase(mine)}.` : null,
+    theirs.length > 0 ? `Waiting on ${first}: ${listPhrase(theirs)}.` : null,
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
+/**
+ * W3-F2 — the list reads as English, not as machine output: two items take a
+ * bare `and`, three take a serial one, and past three the sentence names the
+ * first two and counts the rest rather than reciting a column.
+ */
+function listPhrase(items: readonly string[]): string {
+  if (items.length <= 1) return items[0] ?? '';
+  if (items.length === 2) return `${items[0]} and ${items[1]}`;
+  if (items.length === 3) return `${items[0]}, ${items[1]} and ${items[2]}`;
+  return `${items[0]}, ${items[1]} and ${items.length - 2} more`;
+}
+
+/**
+ * W3-F1 — the name the sentence puts after "Waiting on". `client_name` is a
+ * HOUSEHOLD label, not a person: `The Ashfords (no-login household)` and
+ * `Edna & Rob Courtney` are both normal, and the old first-token rule printed
+ * `The` for the first and dropped Rob from the second.
+ *
+ * A parenthetical is bookkeeping and never spoken; an article-led household
+ * keeps its whole name with a lower-case article inside the sentence; a pair
+ * keeps both first names joined the way the studio wrote them; anything else
+ * is one person and takes their first name.
+ */
+export function clientShortName(name: string | null | undefined): string {
+  const cleaned = (name ?? '')
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!cleaned) return 'the client';
+  if (/^the\s+/i.test(cleaned)) return `the ${cleaned.replace(/^the\s+/i, '')}`;
+  const pair = /^(.*?)\s+(&|and)\s+(.*)$/i.exec(cleaned);
+  if (pair) {
+    const left = pair[1].split(/\s+/)[0];
+    const right = pair[3].split(/\s+/)[0];
+    if (left && right) return `${left} ${pair[2]} ${right}`;
+  }
+  return cleaned.split(/\s+/)[0] || 'the client';
+}
+
+/**
+ * D-B24 — the rung between the long form and the count. It keeps R2's grammar
+ * and the household's NAME — the whole point of the sentence — and gives up
+ * only the recital: one label a side, and a number for the rest. Below three
+ * items a side there is nothing to give up, so it reads exactly as the long
+ * form does and the ladder simply never has cause to pick it.
+ */
+function mediumPhrase(items: readonly string[]): string {
+  if (items.length <= 2) return listPhrase(items);
+  return `${items[0]} and ${items.length - 1} more`;
+}
+
+/**
+ * The medium form of the owner sentence (W3-F2 follow-up). Without it a
+ * seeded discovery paper — five essentials open, the stage's longest act —
+ * fell straight from the long form to `1 yours · 4 theirs`, which is the
+ * cryptic line R2's grammar exists to avoid, and it fell there at 1440.
+ */
+export function inputsMediumSentence(
+  facts: readonly DocumentGuideInputFact[],
+  clientName: string | null | undefined,
+): string | null {
+  if (facts.length === 0) return null;
+  // The rung gives up the RECITAL and the long labels; it keeps the grammar
+  // and the household. A fact stating no short label keeps the one it has.
+  const named = (fact: DocumentGuideInputFact) => {
+    const label = fact.shortLabel ?? fact.label;
+    return label.charAt(0).toLowerCase() + label.slice(1);
+  };
+  const mine = facts.filter((fact) => fact.owner !== 'Client').map(named);
+  const theirs = facts.filter((fact) => fact.owner === 'Client').map(named);
+  return [
+    mine.length > 0 ? `Yours to add: ${mediumPhrase(mine)}.` : null,
+    theirs.length > 0
+      ? `Waiting on ${clientShortName(clientName)}: ${mediumPhrase(theirs)}.`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
+/**
+ * D-B24 — the same owner fact at the 327 measure: who is owed, and how many
+ * things are open. It states a count where the long form recites labels, and
+ * it is never empty while the long one has words.
+ */
+export function inputsShortSentence(
+  facts: readonly DocumentGuideInputFact[],
+  clientName: string | null | undefined,
+): string | null {
+  if (facts.length === 0) return null;
+  const mine = facts.filter((fact) => fact.owner !== 'Client').length;
+  const theirs = facts.length - mine;
+  if (theirs === 0) return `Yours to add · ${mine} open`;
+  if (mine === 0) {
+    return `Waiting on ${clientShortName(clientName)} · ${theirs} open`;
+  }
+  return `${mine} yours · ${theirs} theirs`;
+}
+
 function withInputs(
   model: Omit<DocumentGuideModel, 'topInput' | 'remainingInputCount'>,
   inputFacts: readonly DocumentGuideInputFact[] | undefined,
+  clientName?: string | null,
 ): DocumentGuideModel {
   const firstInput = inputFacts?.[0] ?? null;
   // Only the needs-input branch derives its act from the missing input. Paused,
@@ -374,6 +523,9 @@ function withInputs(
       ? {
           key: 'open-missing-input',
           label: `Add ${firstInput.label}`,
+          shortLabel: firstInput.shortLabel
+            ? `Add ${firstInput.shortLabel}`
+            : undefined,
           destination: {
             kind: 'anchor' as const,
             section: model.stage,
@@ -382,8 +534,26 @@ function withInputs(
           },
         }
       : model.action;
+  // R2 — only the needs-input branch speaks the owner sentence. Every other
+  // branch (paused, needs-attention, gate, proposal lifecycle) is already
+  // stating a different fact, and an input list must not displace it.
+  const owners =
+    model.state === 'needs_input'
+      ? inputsSentence(inputFacts ?? [], clientName)
+      : null;
+  const mediumOwners =
+    model.state === 'needs_input'
+      ? inputsMediumSentence(inputFacts ?? [], clientName)
+      : null;
+  const shortOwners =
+    model.state === 'needs_input'
+      ? inputsShortSentence(inputFacts ?? [], clientName)
+      : null;
   return {
     ...model,
+    headline: owners ?? model.headline,
+    mediumHeadline: owners ? mediumOwners : null,
+    shortHeadline: owners ? shortOwners : null,
     action: inputAction,
     topInput: firstInput,
     remainingInputCount: Math.max(0, (inputFacts?.length ?? 0) - 1),
@@ -619,6 +789,7 @@ export function deriveDocumentGuide({
   closureReady,
   inputsPending = false,
   ticketRows,
+  alreadySeeded = false,
 }: DeriveDocumentGuideInput): DocumentGuideModel {
   const stage = row.active_section;
   if (availability === 'unavailable') {
@@ -645,7 +816,7 @@ export function deriveDocumentGuide({
         label: 'Review project status',
         destination: { kind: 'anchor', section: stage, focusId: 'document-project-status' },
       },
-    }, inputFacts);
+    }, inputFacts, row.client_name);
   }
 
   // The gate outranks the operational signals: an open gate IS the project's
@@ -659,7 +830,7 @@ export function deriveDocumentGuide({
   // alike here, and the input keeps both spellings only to stay legible
   // alongside `operationalNeed`.
   if (gate) {
-    return withInputs(gateGuide(gate, row), inputFacts);
+    return withInputs(gateGuide(gate, row), inputFacts, row.client_name);
   }
 
   const need = operationalNeed === undefined ? deriveNeed(row, now) : operationalNeed;
@@ -677,12 +848,12 @@ export function deriveDocumentGuide({
       headline: need.text,
       reason: 'Something on this job needs a decision.',
       action: needGuideAction(need, row.active_section, row.project_id),
-    }, inputFacts);
+    }, inputFacts, row.client_name);
   }
 
   if (stage === 'proposal') {
     const guide = proposalGuide(row, proposal);
-    return withInputs(guide, inputFacts);
+    return withInputs(guide, inputFacts, row.client_name);
   }
 
   const base = stageCopy[stage];
@@ -737,7 +908,7 @@ export function deriveDocumentGuide({
       action: leader.action
         ? { ...leader.action, destination: destination ?? leader.action.destination }
         : null,
-    }, inputFacts);
+    }, inputFacts, row.client_name);
   }
 
   // A3-L7 (direction-b §3.3) — the quiet case gets its own named sentence
@@ -764,11 +935,20 @@ export function deriveDocumentGuide({
     // and landing `Begin the direction` back on the discovery checklist it has
     // just called complete would point a verb at the wrong object (C20). It
     // takes the landing the `direction` stage's own act uses.
+    //
+    // R5 — and that act is the one leader: on a discovery whose direction has
+    // not been seeded yet it RUNS the seed and lands on the successor document
+    // (`begin-direction`), which is what the readiness band used to do. Once a
+    // draft exists the act opens it instead.
     const restDestination: DocumentGuideDestination =
       stage === 'discovery'
-        ? stageCopy.direction.action!.destination
+        ? alreadySeeded
+          ? stageCopy.direction.action!.destination
+          : { kind: 'begin-direction' }
         : (action?.destination ?? stageCopy[stage].action!.destination);
-    const restAction: DocumentGuideAction | null = leader
+    const restLabel =
+      stage === 'discovery' && alreadySeeded ? 'Open the direction' : null;
+    const restLeaderAction: DocumentGuideAction | null = leader
       ? leader.action
         ? { ...leader.action, destination: restDestination }
         : null
@@ -779,6 +959,10 @@ export function deriveDocumentGuide({
             label: rest.actionLabel,
             destination: restDestination,
           };
+    const restAction: DocumentGuideAction | null =
+      restLeaderAction && restLabel
+        ? { ...restLeaderAction, label: restLabel }
+        : restLeaderAction;
     return withInputs({
       ...base,
       stage,
@@ -787,7 +971,7 @@ export function deriveDocumentGuide({
           ? installHeadline!
           : (leader?.headline ?? rest.headline),
       action: restAction,
-    }, inputFacts);
+    }, inputFacts, row.client_name);
   }
 
   return withInputs({
@@ -795,5 +979,5 @@ export function deriveDocumentGuide({
     stage,
     headline: stage === 'install' ? installHeadline ?? base.headline : base.headline,
     action,
-  }, inputFacts);
+  }, inputFacts, row.client_name);
 }

@@ -57,6 +57,10 @@ export interface DocumentStateRow {
   client_profile_id: string | null;
   client_name: string;
   title: string;
+  /** R4 (00590): the studio's own one-line description of this engagement,
+   *  read from whichever leg the row came from. Null until someone writes it —
+   *  the letterhead falls back to the assembled line, which is never stored. */
+  subject: string | null;
   project_status: string | null;
   current_phase: string | null;
   active_section: SectionKey;

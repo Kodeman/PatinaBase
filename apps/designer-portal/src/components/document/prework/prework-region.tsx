@@ -46,6 +46,7 @@ export function PreworkRegion({
   region,
   status,
   eyebrow,
+  silent = false,
   children,
 }: {
   region: DocumentIndexKey;
@@ -59,6 +60,10 @@ export function PreworkRegion({
   /** The mono line above the name — the proposal's version and the stage's own
    *  sub-label, which used to ride the plain 16px head this region replaces. */
   eyebrow?: string;
+  /** R3 — brief, discovery and direction: the rule and the `<h2>` landmark
+   *  stay, and the head prints nothing. The band already states the standing
+   *  fact at these three stops. */
+  silent?: boolean;
   /** The spread's own body for this stop. Absent where the stop has a name and
    *  a position on the paper but nothing mounted under it yet. */
   children?: ReactNode;
@@ -83,6 +88,7 @@ export function PreworkRegion({
         name={name}
         status={status}
         eyebrow={eyebrow}
+        silent={silent}
         // W5-C5 — every pre-work eyebrow arrives after a fetch (the
         // proposal's version, the brief's `Respond by`, discovery's `Ready`),
         // and on `direction`/`proposal` this head is the FIRST region on the

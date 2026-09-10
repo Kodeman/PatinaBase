@@ -376,15 +376,16 @@ test.describe('the lens band’s declared height', () => {
  * the phones are; the gate is ONE number, read against the measurement
  * named beside it, not against the slack.
  *
- * The 390 figure is for the seed's ONE-line 32px title. A two-line title adds
- * 35.5px (≤ 300); stated here, deliberately not asserted, because `…d5`'s
- * title prints on one line at 390 and a gate that allowed 300 would stop
- * catching a two-row ledger.
+ * The 390 figure is for the seed's ONE-line title (R6: 34px at every width).
+ * A two-line title adds 36.7px (≤ 300); stated here, deliberately not
+ * asserted, because `…d5`'s title prints on one line at 390 and a gate that
+ * allowed 300 would stop catching a two-row ledger.
  */
 const LETTERHEAD_MAX_1440 = 205;
 /**
  * D-B48 — the 390 gates are chosen by the MEASURED line count of the paper's
- * name, not per seed. A second 32px line at `leading-[1.08]` adds 34.56px:
+ * name, not per seed. A second 34px line at `leading-[1.08]` adds 36.72px
+ * (R6; it was 32px/34.56px before the name came down off 40):
  * W3-R7's measured 255.17 (chromium) / 262.25 (webkit) → 289.7 / 296.8 for a
  * two-line name, gate 300; first head 423.17 / 430.25 → 457.7 / 464.8, gate
  * 470. Same +5 engine allowance as W3-R7's one-line numbers.
@@ -393,7 +394,7 @@ const LETTERHEAD_MAX_1440 = 205;
  * double every 390 row and still assert the wrong gate the day a seed's name
  * changes. Three lines is a seed defect, not a budget, and fails.
  */
-const TITLE_LINE_PX = 32 * 1.08;
+const TITLE_LINE_PX = 34 * 1.08;
 const LETTERHEAD_MAX_390_BY_LINES: Record<number, number> = { 1: 265, 2: 300 };
 const FIRST_HEAD_MAX_390_BY_LINES: Record<number, number> = { 1: 435, 2: 470 };
 
@@ -480,7 +481,8 @@ test.describe('the letterhead grid', () => {
       scroll: el.scrollWidth,
       client: el.clientWidth,
       value: el.textContent?.trim() ?? '',
-      lines: Math.round(el.getBoundingClientRect().height / (40 * 1.08)),
+      // R6 — 34 at every width; the 1180 step to 40 is gone.
+      lines: Math.round(el.getBoundingClientRect().height / (34 * 1.08)),
     }));
     console.log(
       `W3-R5 · title "${measure.value}": scrollWidth ${measure.scroll}, clientWidth ${measure.client}, lines ${measure.lines}`,

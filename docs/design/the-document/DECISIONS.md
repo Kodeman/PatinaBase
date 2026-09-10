@@ -11016,3 +11016,116 @@ under R147.
 **One defect folded in, not hotfixed.** The paper and the room's only `Review & send` trigger are both `hidden min-[1180px]:block` (`room-shell.tsx:155`), so there is no way to open the send sheet at 1024 or 390 in production today. The send trigger moves onto the page at every width **in the build wave** — it is not carved out as a hotfix ahead of it.
 
 *Entries add: R149 · last id = R149*
+
+### R150 · The Standing Head — six rulings and a direction — 2026-09-10
+
+**Ruled by Kody, 2026-09-10** (**R1**–**R6**; panel `artifacts/phase-header-2026-09-10/`, deck
+`the-standing-head.html`). Five memos — information, typography, interaction, designer, critic — read
+the standing head of every Document spread and found it answering *where* six times and *what* zero
+times: the name, the stage sub-label, the track band, the region head and the readiness band each place
+Edna somewhere, and nothing on the page states the job itself — house, rooms, money, date (A1). Two of
+the six statements are worse than silent. Block 5's `Nothing yet` is a hardcoded constant —
+`registerFor` returns `empty('Nothing yet')` unconditionally for brief, discovery and direction
+(`lens-ladder-derivation.ts:556-561`) — printed forty pixels above block 6's true `3 of 5`. And the
+`SECTION_STAGE` map that synthesizes blocks 3/4 on every pre-work spread is a four-entry per-stop
+constant with no position and no fidelity, identical on every discovery spread forever, and it runs
+backwards: brief→01, discovery→02, direction→05, proposal→03 (A2, A3).
+
+| # | Ruling | Lean / deviation |
+|---|---|---|
+| R1 | **Machinery.** The eleven-stage vocabulary prints only where a schedule resolver anchors it — project, install, care; behind a door at brief, discovery, direction, proposal. The `SECTION_STAGE` inversion is not ruled — it never reaches the glass. | Matches the panel's lean. |
+| R2 | **Studio-private voice, neutral phrasing.** The Document names who is waiting on whom and the owed money at the top — "Waiting on Edna:", never "Edna owes you." The client page keeps its own gentler sentence. | Matches the panel's lean. |
+| R3 | **Region head kept, silent.** The `<h2>` and its 2px rule stay for landmarks and rail jumps; it prints nothing while the band states the standing fact. | Panel leaned a section rule (Playfair 26, Direction 3's shape); Kody ruled "keep it, silent" instead — the deviation this entry is named for. |
+| R4 | **Subject line per engagement, seeded at read time, never persisted.** An optional one-line description, seeded from project type plus named rooms, editable by the studio; the head degrades to the assembled line without it. | Matches the panel's lean; "seeded at read time, never persisted" narrows the panel's plain "add a field." |
+| R5 | **One leader act.** Exactly one primary act, in the head; the readiness act becomes the head's act the moment `ready` flips — until then the readiness band carries no act. | Matches the panel's lean. |
+| R6 | **Name at 34.** Amends R126; the standing sentence rises to 16. | Matches the panel's lean. |
+
+**The direction: The Band.** The 56px sticky band is the page's only leader region, and everything
+that restated it is deleted: the letterhead keeps the name and nothing else, band line 1 carries
+identity and — only where a resolver anchors it — stage, and band line 2 carries the standing sentence,
+one act, and a fixed `+N MORE` door whose rows split by kind. The pre-work region head keeps its `<h2>`
+and its rule but prints nothing, the readiness band demotes to a caption that becomes the band's own
+sentence the instant `ready` flips, and the undo prints its consequence always. R140 is crossed
+knowingly: the agreed figure takes band line 1's right slot on project spreads and the owed sentence
+stands beneath it.
+
+**Amendments.** R126 is amended: the letterhead name prints at 34px (the top of the seven-step sheet),
+not 40px, at every width. R111 stands as the shape of the stage phrase; R1 above rules where it prints.
+R66's readiness band loses its act and its glyph (R5, A5).
+
+**Build.** Implementation record follows as I154: branch `build/standing-head-2026-09-10`, migration
+00590.
+
+**Defects D1–D7**, found along the way and folded into the build rather than patched standalone:
+
+| # | Defect | File |
+|---|---|---|
+| D1 | The `+N MORE` door lists every open input with the same shared act object. | `page.tsx` ~2145 |
+| D2 | Region-jump targets lose their focus ring — `outline-none` with no `focus-visible:` pair. | `RegionHead`'s `<h2>` |
+| D3 | A raw pigment prints as text below the 4.5:1 floor `globals.css` itself documents. | stage sub-label, `--color-aged-oak` |
+| D4 | Heading order runs h1 → h3 → h2 via a sr-only stage heading. | sr-only `<h3>Workflow stage</h3>` |
+| D5 | Typographic contract breaches in the head — negative tracking at 32px, truncation on two lines, an eighth type step. | `doc-letterhead.tsx:78` and both band lines |
+| D6 | `Nothing yet` is a literal fallback, not a derivation. | `page.tsx`, `lens-ladder-derivation.ts` |
+| D7 | The undo prints no forward consequence sentence, only its refusal reason when blocked. | undo control |
+
+*Entries add: R150 · last id = R150*
+
+### I154 · The Band built — the head of every spread, per R150 — 2026-09-10
+
+Branch `build/standing-head-2026-09-10` from `origin/main` `6f00099b3`; **not merged, not
+deployed** — Kody merges and ships. Commits in order: `6801d987` 00590 engagement subject (W1a) ·
+`103080c08` the band (W1b) · `d70dc3cd2` the head (W1c) · `5b6601e94` merge · `4525da0c5` P5 on
+project papers · `59ea45420` W3 review fixes · `a615289e9` the medium form.
+
+**What changed**, per `artifacts/phase-header-2026-09-10/build/PROGRAM.md`:
+
+- **R1 machinery.** `SectionStageLineMount` unmounts at brief · discovery · direction · proposal;
+  stays at project · install · care. The rail keeps its `CORE · STAGE 03` register.
+- **R2 voice.** Line 2 of the band prints the standing sentence with owners — `Waiting on Edna:
+  working budget, how they live.` / `Yours to add: project type and named rooms.` — client named by
+  first name.
+- **R3 silent region head.** `PreworkRegion`'s `<h2>` and 2px rule stay at brief · discovery ·
+  direction, printing nothing; proposal-spread regions keep their real status lines.
+- **R4 subject.** Migration 00590 adds `subject text` to `projects`, `proposals`,
+  `designer_clients`, `leads`, and `document_state.subject` (45th column, all four legs). Letterhead
+  prints `row.subject ?? assembled`, click-to-edit, never persists the assembled line.
+- **R5 one leader.** The readiness band loses its act; on `ready` the band's rest act runs
+  `begin_direction_from_discovery` and lands on the new document.
+- **R6 name 34.** `<h1>` to 34px, tracking 0. **This build also carries R6's second half**: line 2 of
+  the band rises to 16px.
+- **D1 door.** Each sheet input row carries its own act; the fact the band's act already names is
+  excluded from the rows and from `withheld`.
+- **D2–D7, A5**: focus ring restored on the region-jump `<h2>`; raw pigment below 4.5:1 replaced;
+  heading order fixed (sr-only stage heading to `<h2>`); letterhead type contract fixed (no negative
+  tracking, no truncation); `Nothing yet` now derives `N of 5 essentials` from readiness; the undo
+  always prints a consequence sentence, allowed or refused; the readiness band's glyph goes with it.
+- **Beyond the ruled table**: the band's standing sentence has three forms — long · medium · short —
+  chosen by the measure, never empty. The medium form names facts by short label (`scope`,
+  `budget`). The client short name keeps a whole name like `the Ashfords` intact and keeps a pair
+  like `Edna & Rob` together rather than truncating mid-pair. The `+N MORE` door is clay-ink over
+  open inputs, terracotta where an exception is withheld. The subject editor is a real button whose
+  accessible name carries the printed line, not a bare pencil icon.
+
+**Gates**, verbatim: designer-portal `tsc --noEmit` clean; jest 568 suites / 7174 tests green;
+`@patina/supabase` `tsc --noEmit` clean, vitest 98 files / 1213 passed / 12 skipped; admin-portal
+`next build` exit 0; `supabase/tests/document/document_state_subject_test.sql` — four legs — under
+`ON_ERROR_STOP=1`. E2E, chromium: `prework-regions` 10, `lens-band-height` 23 (+1 skipped),
+`lens-a11y` 7, `workflow-stage-responsive` 7, `lens-cls` 2, `lens-density` 13 — all passed;
+`lens-contrast` 6 passed, 1 failed — `:183`, D-B28's request allowlist, against product-image and
+`project_rooms` reads from modules this branch never touched; recorded as standing debt at
+`DECISIONS.md:10315`. Measured: the band holds 56px at 1440 and at 390; the `<h1>` measures 34px;
+the discovery seed's line 2 prints `Yours to add: scope. Waiting on the Ashfords: budget and 3
+more.` at 1440 (medium form, 498px, unclipped) and `1 yours · 4 theirs` at 390.
+
+**Scoped out / owed.** Subject editing on project papers has no affordance — P5 kept the
+letterhead's height contract; reachable later through the instruments ledger. `fits()` under-charges
+every act by roughly 24px of `.da-act` box on every measure it evaluates — a ruling is owed on
+whether to charge that honestly rather than patch around it. W3 review findings 5, 8, 9, 10, 12, 20,
+21, 24 are left exactly as noted in `artifacts/phase-header-2026-09-10/build/review-w3.md` — not
+fixed, not dismissed. Webkit e2e was not run. No signed-in human walk of the shipped surfaces has
+happened yet.
+
+**Before this ships**: the migration (00590) must reach Strata — `supabase db push` — before the
+portal deploys, since the letterhead reads `document_state.subject` directly.
+
+*Entries add: I154 · last id = I154*

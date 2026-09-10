@@ -43,7 +43,13 @@ export interface LensAct {
    *  copy: it changes with the short form, with a rewording, with the tier. */
   key: string;
   label: string;
+  /** D-B24 — what this act prints in the short form. Where the source states
+   *  one it beats `shortenAct`, which can only cut the label it was given. */
+  shortLabel?: string;
   onAct: () => void;
+  /** R5 — the act's own work is in flight (the seed the leader runs). The band
+   *  holds the control rather than letting it be pressed twice. */
+  disabled?: boolean;
 }
 
 /**
@@ -152,6 +158,14 @@ export interface LensInputItem {
 export interface LensGuideLine {
   text: string;
   act: LensAct | null;
+  /** D-B24 — the rung between: R2's grammar and the household's name, with
+   *  the recital given up. Tried before the count, so a desktop reader is
+   *  told WHO is waiting rather than only how many. */
+  medium?: string | null;
+  /** D-B24 — the guide's own 327 form. Without it a guide line had no second
+   *  form at all: `fits()` was never consulted and the sentence was left to
+   *  CSS ellipsis, which at 390 amputated the whole of it. */
+  short?: string | null;
 }
 
 /** Where she is standing, and what that stop's own count line says (OD-7). */
@@ -180,15 +194,18 @@ export interface LensLine2Form {
 
 export interface LensBandLine2 {
   kind: 'standing' | 'guide' | 'none';
-  /** The form that fit the tier's measure — `long.sentence` or `short.sentence`. */
+  /** The form that fit the tier's measure. */
   sentence: string;
   act: LensAct | null;
-  /** Which of the two forms is printed (D-B24). */
-  form: 'long' | 'short';
+  /** Which of the three forms is printed (D-B24). */
+  form: 'long' | 'medium' | 'short';
   /** The whole sentence with the whole act. */
   long: LensLine2Form;
-  /** D-B24's 390 form. Null when the line has no standing item behind it (the
-   *  guide's sentence has no state, no day count and no object to shorten to). */
+  /** The middle rung, with the act's FULL label — the pairing tried first.
+   *  Null on a line whose source states no medium form. */
+  medium: LensLine2Form | null;
+  /** D-B24's 390 form. Null only when neither the standing item nor the guide
+   *  supplied one. */
   short: LensLine2Form | null;
   /** Every standing exception AND every open input — the sheet's row count. */
   standingCount: number;
@@ -197,8 +214,20 @@ export interface LensBandLine2 {
    * takes a row off the door when it is NAMING one. On a guide line nothing on
    * the paper is a sheet row, so a guide with one open input prints `+1 MORE`
    * (W3-R2's own example) where the old arithmetic printed no door at all.
+   *
+   * D1 — an input the guide's act NAMES (`Add Working budget`) is not one of
+   * these rows either. The exclusion is made HERE, against the kind line 2
+   * actually resolved to: a standing exception outranking the guide leaves the
+   * named input unnamed on the paper, and dropping it upstream then hid it
+   * everywhere at once.
    */
   withheld: number;
+  /**
+   * W3-F7 — whether anything behind the door is a standing exception. The door
+   * is painted in the register of what it withholds: terracotta for an
+   * exception, clay where every withheld row is an open input (D1).
+   */
+  withheldHasException: boolean;
 }
 
 export interface LensBandModel {
@@ -218,8 +247,11 @@ export interface LensBandInput {
   ticket: readonly TicketRow[];
   /** The red letter's rows, as `page.tsx` composes them. */
   needs: readonly RedLetterRow[];
-  /** The stage's open inputs, from the guide model (C-6, W3-R2). */
+  /** The stage's open inputs, from the guide model (C-6, W3-R2). ALL of them:
+   *  the D1 exclusion is made below, against the kind line 2 resolves to. */
   inputs?: readonly LensInputItem[];
+  /** D1 — the key of the input the guide's act names, where it names one. */
+  namedInputKey?: string | null;
   guide: LensGuideLine | null;
   /** D-B24 — which measure line 2 has to fit. The page's own media tier. */
   tier: LensTier;
@@ -678,8 +710,19 @@ const monoPx = (label: string) => label.length * LENS_MONO_PX_PER_CHAR;
 
 export function deriveLensBand(input: LensBandInput): LensBandModel {
   const standing = rankStanding(input.ticket, input.needs, input.now);
-  const inputs = input.inputs ?? [];
   const worst = standing[0] ?? null;
+  const kind: LensBandLine2['kind'] = worst
+    ? 'standing'
+    : input.guide
+      ? 'guide'
+      : 'none';
+  const allInputs = input.inputs ?? [];
+  // D1 — only a GUIDE line names an open input. On a standing line the guide's
+  // act is not printed at all, so every input stays behind the door.
+  const inputs =
+    kind === 'guide' && input.namedInputKey
+      ? allInputs.filter((item) => item.key !== input.namedInputKey)
+      : allInputs;
   const readingStop = input.readingStop ?? null;
   const { rightFlush, moneyOnly } = rightSlot(
     input,
@@ -699,53 +742,96 @@ export function deriveLensBand(input: LensBandInput): LensBandModel {
   const standingCount = standing.length + inputs.length;
   // N-02 — line 2 discounts a row only when it is naming one.
   const withheld = standingCount - (worst ? 1 : 0);
+  // W3-F7 — every standing exception except the one line 2 is naming.
+  const withheldHasException = (worst ? standing.length - 1 : standing.length) > 0;
 
   const long: LensLine2Form = {
     sentence: worst ? worst.sentence : (input.guide?.text ?? ''),
     act: worst ? worst.act : (input.guide?.act ?? null),
   };
+  /** D-B24 — the act at the short measure: the source's own short label where
+   *  it states one, else the label cut to its verb. */
+  const shortAct = (act: LensAct | null): LensAct | null =>
+    act
+      ? {
+          key: act.key,
+          label: act.shortLabel ?? shortenAct(act.label),
+          onAct: act.onAct,
+          disabled: act.disabled,
+        }
+      : null;
   const short: LensLine2Form | null = worst
     ? {
         sentence:
           worst.short.days == null
             ? `${worst.short.state} · ${worst.short.subject}`
             : `${worst.short.state} ${worst.short.days}D · ${worst.short.subject}`,
-        act: worst.act
-          ? {
-              key: worst.act.key,
-              label: shortenAct(worst.act.label),
-              onAct: worst.act.onAct,
-            }
-          : null,
+        act: shortAct(worst.act),
       }
+    : input.guide?.short
+      ? { sentence: input.guide.short, act: shortAct(input.guide.act) }
+      : null;
+  // Only a guide line has a medium rung: a standing item's short form is a
+  // state and an object, with nothing between it and its whole sentence.
+  const medium: LensLine2Form | null =
+    !worst && input.guide?.medium
+      ? { sentence: input.guide.medium, act: input.guide.act }
+      : null;
+  const mediumShort: LensLine2Form | null = medium
+    ? { sentence: medium.sentence, act: shortAct(medium.act) }
     : null;
 
   // The door's own words print whole in both forms, so its width is spent
   // before the sentence gets its measure.
   const doorPx =
     withheld > 0 ? monoPx(`+${withheld} MORE`) + LENS_LINE2_GAP_PX : 0;
+  // Never negative: past the point where the act and the door have eaten the
+  // whole measure there is no form left to fall back to, and a negative budget
+  // said "nothing fits" about a sentence that still has to be printed.
   const budgetPx = (act: LensAct | null) =>
-    LENS_LINE2_MEASURE_PX[input.tier] -
-    doorPx -
-    (act ? monoPx(act.label) + LENS_LINE2_GAP_PX : 0);
+    Math.max(
+      0,
+      LENS_LINE2_MEASURE_PX[input.tier] -
+        doorPx -
+        (act ? monoPx(act.label) + LENS_LINE2_GAP_PX : 0),
+    );
   const fits = (form: LensLine2Form) =>
     sentencePx(form.sentence) <= budgetPx(form.act);
 
-  // D-B24 — one trigger, two forms. There is no qualifier ladder and no
-  // character cap: a cap calibrated for the 900px measure never fires before
-  // CSS ellipsis at 327, which is how a sentence came to lie about itself.
-  const form: 'long' | 'short' = !short || fits(long) ? 'long' : 'short';
-  const printed: LensLine2Form = form === 'short' && short ? short : long;
+  // D-B24 — one trigger, three rungs: the whole sentence, then R2's grammar
+  // with the recital given up, then the count. The medium rung is tried with
+  // the act's own label first and with its short one second, because giving up
+  // the act's words costs less than giving up the household's name. There is
+  // no character cap: a cap calibrated for the 900px measure never fires
+  // before CSS ellipsis at 327, which is how a sentence came to lie about
+  // itself.
+  const { form, printed } = ((): {
+    form: 'long' | 'medium' | 'short';
+    printed: LensLine2Form;
+  } => {
+    if (fits(long)) return { form: 'long', printed: long };
+    if (medium && fits(medium)) return { form: 'medium', printed: medium };
+    if (mediumShort && fits(mediumShort)) {
+      return { form: 'medium', printed: mediumShort };
+    }
+    if (short) return { form: 'short', printed: short };
+    // Nothing fits and there is no rung below: the sentence is printed anyway
+    // and LINE_CLIP takes the overhang. An empty line 2 is never an answer.
+    if (mediumShort) return { form: 'medium', printed: mediumShort };
+    return { form: 'long', printed: long };
+  })();
 
   const line2: LensBandLine2 = {
-    kind: worst ? 'standing' : input.guide ? 'guide' : 'none',
+    kind,
     sentence: printed.sentence,
     act: printed.act,
     form,
     long,
+    medium,
     short,
     standingCount,
     withheld,
+    withheldHasException,
   };
 
   return {

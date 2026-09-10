@@ -503,8 +503,52 @@ describe('deriveLadderSegments · the pre-work stops', () => {
     expect(segments.proposal.countLine).toBe('Sent Aug 19 · opened');
   });
 
-  it('gives the three stage stops their names over NOTHING YET (DL-02)', () => {
-    for (const section of ['brief', 'discovery', 'direction'] as const) {
+  // D6 — the discovery stop counts the essentials rather than printing a
+  // constant beside the readiness band's own true figure.
+  it('counts the essentials on the discovery stop once readiness has answered', () => {
+    const segments = byKey(
+      input({
+        ticket: ticket({ section: 'discovery', project: false }),
+        prework: {
+          settled: true,
+          sentOn: null,
+          openedOn: null,
+          scopeRooms: 0,
+          stageLine: null,
+          investmentCents: null,
+          essentialsDone: 3,
+        },
+      }),
+    );
+
+    expect(segments.discovery.countLine).toBe('3 of 5 essentials');
+    expect(segments.discovery.value).toBe('3 OF 5');
+    expect(segments.discovery.fallback).toBeNull();
+  });
+
+  it('says Nothing yet on the discovery stop while readiness has not answered', () => {
+    const segments = byKey(
+      input({
+        ticket: ticket({ section: 'discovery', project: false }),
+        prework: {
+          settled: true,
+          sentOn: null,
+          openedOn: null,
+          scopeRooms: 0,
+          stageLine: null,
+          investmentCents: null,
+          essentialsDone: null,
+        },
+      }),
+    );
+
+    expect(segments.discovery.countLine).toBe('Nothing yet');
+    expect(segments.discovery.value).toBeNull();
+    expect(segments.discovery.fallback).toBe('NOTHING YET');
+  });
+
+  it('gives the two prose stage stops their names over NOTHING YET (DL-02)', () => {
+    for (const section of ['brief', 'direction'] as const) {
       const segments = byKey(
         input({ ticket: ticket({ section, project: false }) }),
       );
