@@ -746,6 +746,15 @@ export function AgreementComposer({
   const applyTemplate = async (template: AgreementTemplate) => {
     setTemplateError(null);
     try {
+      // WR-201 — `revision` reconciles a landing on the PAGE; it cannot recall
+      // a request already on the wire. A slow `upsert_agreement_parts` that
+      // reaches Postgres after `materialize_agreement_template` replaces the
+      // template's parts with the pre-template ones, and the landing correctly
+      // takes the stale branch — so the page keeps the template, the table
+      // does not, the record still reads `Saved`, and the loss surfaces only
+      // on the next load. Waiting on the chain (which drains its own queued
+      // re-run) means no save is ever in the air across a materialize.
+      await inFlight.current;
       await materializeTemplate.mutateAsync(template.templateKey);
       const fresh = await partsRead.refetch();
       const landed = renumber(

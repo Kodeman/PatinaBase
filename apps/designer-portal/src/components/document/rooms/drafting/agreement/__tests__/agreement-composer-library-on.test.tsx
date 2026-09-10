@@ -283,6 +283,8 @@ const addAPart = () =>
   fireEvent.click(screen.getAllByRole("button", { name: "+ Add a part" })[0]);
 const write = (title: string) =>
   fireEvent.click(screen.getByRole("button", { name: `${title} Write` }));
+/** The record that replaced Save (§A5 "taken"). */
+const record = () => screen.getAllByText(/Not saved yet|^Saved /)[0];
 const startFromTemplate = () => {
   openOutline();
   fireEvent.click(
@@ -479,14 +481,16 @@ describe("the Contract Room with the Library on", () => {
     fireEvent.click(within(row).getByRole("button"));
     fireEvent.click(screen.getByRole("button", { name: "Use this template" }));
     fireEvent.click(screen.getByRole("button", { name: "Replace the parts" }));
-    await waitFor(() =>
-      expect(railRows().map((r) => r.textContent ?? "")).toHaveLength(1),
-    );
 
-    // The save that was carrying the OLD composition lands now.
+    // WR-201 — the act now WAITS on the save rather than racing it, so the
+    // save that was carrying the OLD composition lands first and the
+    // materialize follows it.
     await act(async () => {
       gate.shift()!();
     });
+    await waitFor(() =>
+      expect(railRows().map((r) => r.textContent ?? "")).toHaveLength(1),
+    );
 
     // The template is still what the agreement is made of.
     expect(
@@ -500,6 +504,109 @@ describe("the Contract Room with the Library on", () => {
         "The parts of Full-service residential are on this agreement.",
       ),
     ).toBeInTheDocument();
+  });
+
+  /* WR-201 — the revision guard reconciles a landing on the PAGE; it cannot
+     recall a request already on the wire. `upsert_agreement_parts` is
+     DELETE-then-INSERT, so a save that reaches Postgres AFTER
+     `materialize_agreement_template` replaces the template's parts with the
+     pre-template ones — and the landing correctly takes the stale branch, so
+     the page keeps the template, the table does not, and the record reads a
+     clean `Saved`. The loss surfaced only on the next load. `applyTemplate`
+     now waits for the flight (and its queued re-run) before materializing. */
+  it("holds a Template until the save already in the air has landed", async () => {
+    const gate: Array<() => void> = [];
+    mockSaveParts.mockImplementation(
+      (sent: AgreementPart[]) =>
+        new Promise((resolve) => {
+          gate.push(() =>
+            resolve(
+              bundleWith(
+                sent.map((p, index) => ({
+                  ...p,
+                  id: `reminted-${index}`,
+                  position: index + 1,
+                })),
+              ),
+            ),
+          );
+        }),
+    );
+    mockMaterializeTemplate.mockResolvedValue(1);
+    mockRefetch.mockResolvedValue({
+      data: [
+        part({
+          partKey: "studio.house-rules",
+          position: 1,
+          title: "House rules",
+        }),
+      ],
+    });
+    renderRoom();
+
+    write("Services");
+    fireEvent.change(screen.getByRole("textbox", { name: "Body" }), {
+      target: { value: "Interior design services." },
+    });
+    openOutline();
+    fireEvent.click(
+      within(outline()).getByRole("button", { name: "Services" }),
+    );
+    await waitFor(() => expect(mockSaveParts).toHaveBeenCalledTimes(1));
+    // The save is in the air, so the record does not yet read `Saved`.
+    expect(record()).not.toHaveTextContent(/^Saved /);
+
+    startFromTemplate();
+    const row = screen
+      .getAllByRole("listitem")
+      .find((item) =>
+        within(item).queryByText("Full-service residential"),
+      ) as HTMLElement;
+    fireEvent.click(within(row).getByRole("button"));
+    fireEvent.click(screen.getByRole("button", { name: "Use this template" }));
+    fireEvent.click(screen.getByRole("button", { name: "Replace the parts" }));
+
+    // The crux: nothing may reach `materialize_agreement_template` while a
+    // save is still on the wire, because the RPC that lands last wins.
+    await act(async () => {});
+    expect(mockMaterializeTemplate).not.toHaveBeenCalled();
+
+    // The save lands; only now may the template be laid in.
+    await act(async () => {
+      gate.shift()!();
+    });
+    await waitFor(() =>
+      expect(mockMaterializeTemplate).toHaveBeenCalledWith(
+        "studio.full-service",
+      ),
+    );
+    await waitFor(() => expect(railRows()).toHaveLength(1));
+
+    // State carries the template's parts, and the record reads `Saved` only
+    // once both have landed.
+    expect(
+      railRows()
+        .map((r) => r.textContent ?? "")
+        .join(" "),
+    ).toContain("House rules");
+    expect(record()).toHaveTextContent(/^Saved /);
+
+    // And the NEXT save sends the template's composition, not the nine parts
+    // the in-flight call was carrying.
+    write("House rules");
+    fireEvent.change(screen.getByRole("textbox", { name: "Body" }), {
+      target: { value: "The house rules." },
+    });
+    openOutline();
+    fireEvent.click(
+      within(outline()).getByRole("button", { name: "House rules" }),
+    );
+    await waitFor(() => expect(mockSaveParts).toHaveBeenCalledTimes(2));
+    const nextPayload = mockSaveParts.mock.calls[1][0] as AgreementPart[];
+    expect(nextPayload.map((p) => p.partKey)).toEqual(["studio.house-rules"]);
+    await act(async () => {
+      gate.shift()!();
+    });
   });
 
   it("tells the designer a Template takes her unsaved edits with it", async () => {
