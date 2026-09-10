@@ -24,6 +24,23 @@
 --    would otherwise strand it behind a lead back at 'new' with no Desk
 --    folder to its name (Shape D). Strict designer equality would have shut
 --    the foreign hole by opening that one — review R2 F1.
+--    The scope is read from the RELATIONSHIP, not from the caller (review
+--    R3-02): _can_author_proposal answers for auth.uid(), so the same row
+--    would have refused one co-member and released another, and a sibling
+--    whose designer had gone quiet would have stopped counting for everyone
+--    but that designer. The predicate below is that helper's shape with
+--    v_relationship.designer_id in the actor's place. Two residuals are
+--    accepted and named here rather than hidden: a sibling whose designer has
+--    LEFT the studio outright no longer counts (the membership row is gone or
+--    'removed', and nothing on designer_clients records the studio the row
+--    was made in) — a stale folder on a departed desk, against a permanent,
+--    reachable refusal; and a planter who shares ANY active org with the
+--    victim can still insert a row under the VICTIM'S OWN designer_id
+--    (designer_clients_studio_rw, 00316/00556, admits every org type) and
+--    refuse the undo (review R3-03). That door is the write policy's, not
+--    this probe's — the same policy already lets such a planter update and
+--    delete the victim's rows outright, so narrowing it belongs to an RLS
+--    change of its own, not to a sibling probe.
 --
 -- 2. THE ROW-LIST CONTENT PROBES READ ONE FIELD EACH (OR THE WHOLE ARRAY).
 --    00585 mirrored capturedRooms / capturedLifestyle (discovery-readiness.ts),
@@ -37,6 +54,11 @@
 --    room_type, floor_area_sqft, keep_as_is, notes; LifestyleRow = room, who,
 --    how) now counts. A blank string is still blank — an empty row added and
 --    never typed into is still not content, which is what F5 asked for.
+--    Two fields are read for their VALUE, not merely for being present:
+--    keep_as_is (the checkbox's own false is not a mark) and, from review
+--    R3-07, floor_area_sqft (a zero is nobody's measurement) and approves
+--    encoded as boolean false. A designer's typed word — including "no" —
+--    still counts everywhere.
 --    The other three lists — keep_items, avoid_items, decision_makers — were
 --    still compared whole against '[]', so the same "+ Add" tapped once and
 --    abandoned DID refuse the undo there. One gesture, one answer: all five
@@ -58,7 +80,20 @@
 --    account, which is the case 00583 was written for — and on the lead
 --    branch that is nearly every open lead, because profiles RLS hides a
 --    homeowner from a studio holding no relationship with them, so the
---    profile leg is silent until one exists (review R2 F10).
+--    profile leg is silent until one exists (review R2 F10). Both legs are
+--    NULLIF(btrim(...))-guarded, not just the profile one, so a
+--    whitespace-only captured number reads as no number rather than as a
+--    blank cell (review R3-05).
+--
+--    NOT CHANGED, and deliberately: nothing writes contact_phone_e164 /
+--    client_phone_e164 alongside a cleared phone. 00583's two normalizers
+--    (normalize_lead_contact_phone_e164, normalize_designer_client_phone_e164)
+--    derive from the RAW column on UPDATE — the INSERT-only branch is the
+--    only one that reads the e164 column — so clearing the phone clears the
+--    derivation with it. That is why useUpdateClientContact carries no
+--    companion write, where useUpdateStudioContact and useUpdateProjectParty
+--    must (00281/00417 normalize COALESCE(NEW.phone, NEW.phone_e164), which
+--    keeps the stale derivation standing). Review R3-04.
 --
 -- LINEAGE (bodies copied from the files named, then grafted; verified with
 -- grep over supabase/migrations that no later file redefines any of the three)
@@ -178,16 +213,40 @@ BEGIN
   -- 00587 — scoped to the STUDIO, not to the one designer. lead_id is
   -- caller-writable, so an unscoped probe let a designer in another studio
   -- plant a row carrying this lead's id and refuse this undo forever. The
-  -- scope is the same authority predicate this function opened with, so a
-  -- co-member's row on the same lead — which does emit a Desk folder for the
-  -- studio, and which the delete would strand behind a lead back at 'new' —
-  -- still closes the door. Strict designer equality would have closed the
-  -- foreign hole by opening that one (review R2 F1).
+  -- scope is the relationship's own studio, so a co-member's row on the same
+  -- lead — which does emit a Desk folder for the studio, and which the delete
+  -- would strand behind a lead back at 'new' — still closes the door. Strict
+  -- designer equality would have closed the foreign hole by opening that one
+  -- (review R2 F1).
   IF EXISTS (
     SELECT 1 FROM public.designer_clients d2
     WHERE d2.lead_id = v_relationship.lead_id
       AND d2.id <> p_designer_client_id
-      AND public._can_author_proposal(d2.designer_id)
+      AND (
+        -- Relationship-relative, never caller-relative (R3-02): the
+        -- studio asked about is the RELATIONSHIP's. Two co-members
+        -- then get one answer for one row, and a designer seated in
+        -- two studios is not refused an undo the row's own designer
+        -- is allowed. _can_author_proposal's shape, with
+        -- v_relationship.designer_id where auth.uid() stands there.
+        d2.designer_id = v_relationship.designer_id
+        OR EXISTS (
+          SELECT 1
+          FROM public.organization_members AS owner_membership
+          JOIN public.organization_members AS sibling_membership
+            ON sibling_membership.organization_id = owner_membership.organization_id
+          JOIN public.organizations AS studio
+            ON studio.id = owner_membership.organization_id
+          WHERE owner_membership.user_id = v_relationship.designer_id
+            AND owner_membership.status = 'active'
+            AND owner_membership.role <> 'guest'
+            AND sibling_membership.user_id = d2.designer_id
+            AND sibling_membership.status = 'active'
+            AND sibling_membership.role <> 'guest'
+            AND studio.type = 'design_studio'
+            AND studio.status = 'active'
+        )
+      )
   ) THEN
     RETURN jsonb_build_object(
       'allowed', false,
@@ -399,7 +458,12 @@ BEGIN
           WHERE btrim(COALESCE(room->>'name', '')) <> ''
              OR btrim(COALESCE(room->>'room_type', '')) <> ''
              OR btrim(COALESCE(room->>'notes', '')) <> ''
-             OR btrim(COALESCE(room->>'floor_area_sqft', '')) <> ''
+             -- A zero is not a measurement anybody took: a writer that
+             -- initializes the field to 0 (as one could initialize the
+             -- checkbox to false) must not make an untouched room read as
+             -- content (review R3-07).
+             OR (btrim(COALESCE(room->>'floor_area_sqft', '')) <> ''
+                 AND btrim(room->>'floor_area_sqft') !~ '^0+(\.0*)?$')
              OR lower(btrim(COALESCE(room->>'keep_as_is', '')))
                   IN ('true', 't', '1', 'yes')
         )
@@ -442,7 +506,12 @@ BEGIN
           ) AS decider
           WHERE btrim(COALESCE(decider->>'name', '')) <> ''
              OR btrim(COALESCE(decider->>'role', '')) <> ''
-             OR btrim(COALESCE(decider->>'approves', '')) <> ''
+             -- Same value-awareness keep_as_is gets: today's control writes
+             -- free text (a designer's "no" is their own word and counts),
+             -- but a writer that encodes the field as boolean false is
+             -- describing an untouched row, not an answer (review R3-07).
+             OR (btrim(COALESCE(decider->>'approves', '')) <> ''
+                 AND lower(btrim(decider->>'approves')) NOT IN ('false', 'f'))
              OR btrim(COALESCE(decider->>'comms', '')) <> ''
         )
       )
@@ -473,7 +542,8 @@ COMMENT ON FUNCTION public.return_to_lead_check(uuid) IS
   'the lead count as content only once they differ from that prefill (00586). '
   'A row in any of the five Discovery lists counts as content on any field it '
   'carries, not on its first field alone, and the one-lead-one-relationship '
-  'probe only sees siblings belonging to the same studio (00587). Raises '
+  'probe only sees siblings belonging to the RELATIONSHIP''s studio, never '
+  'the caller''s (00587). Raises '
   'insufficient_privilege for a '
   'caller who is neither the designer nor an active non-guest peer in the same '
   'active design_studio, and for a relationship whose lead_id points at '
@@ -537,14 +607,39 @@ BEGIN
     -- Restated under the locks for the same reason the authority test above
     -- is: what this function DELETES must not rest on the reader. The sentence
     -- is the check's, word for word — the SQL test compares the two, so the
-    -- pair cannot drift apart unnoticed. Studio-scoped (00587) for the same
-    -- reason the check's probe is: a planted row from another studio is not a
-    -- second move to take back, while a co-member's row on the same lead is.
+    -- pair cannot drift apart unnoticed. Scoped to the relationship's studio
+    -- (00587) for the same reason the check's probe is: a planted row from
+    -- another studio is not a second move to take back, while a co-member's
+    -- row on the same lead is.
     IF EXISTS (
       SELECT 1 FROM public.designer_clients d2
       WHERE d2.lead_id = v_relationship.lead_id
         AND d2.id <> p_designer_client_id
-        AND public._can_author_proposal(d2.designer_id)
+        AND (
+          -- Relationship-relative, never caller-relative (R3-02): the
+          -- studio asked about is the RELATIONSHIP's. Two co-members
+          -- then get one answer for one row, and a designer seated in
+          -- two studios is not refused an undo the row's own designer
+          -- is allowed. _can_author_proposal's shape, with
+          -- v_relationship.designer_id where auth.uid() stands there.
+          d2.designer_id = v_relationship.designer_id
+          OR EXISTS (
+            SELECT 1
+            FROM public.organization_members AS owner_membership
+            JOIN public.organization_members AS sibling_membership
+              ON sibling_membership.organization_id = owner_membership.organization_id
+            JOIN public.organizations AS studio
+              ON studio.id = owner_membership.organization_id
+            WHERE owner_membership.user_id = v_relationship.designer_id
+              AND owner_membership.status = 'active'
+              AND owner_membership.role <> 'guest'
+              AND sibling_membership.user_id = d2.designer_id
+              AND sibling_membership.status = 'active'
+              AND sibling_membership.role <> 'guest'
+              AND studio.type = 'design_studio'
+              AND studio.status = 'active'
+          )
+        )
     ) THEN
       RAISE EXCEPTION 'This lead is tied to more than one client, so there is no single move to take back.'
         USING ERRCODE = 'check_violation';
@@ -589,7 +684,8 @@ COMMENT ON FUNCTION public.return_to_lead(uuid) IS
   'it (new, or contacted when it was nurtured to a dated return) with its '
   'accepted_at cleared, and the empty Discovery relationship is deleted, so the '
   'Desk folder returns to the Brief. Its restated sibling guard only counts '
-  'relationships belonging to the same studio (00587). Raises with '
+  'relationships belonging to the RELATIONSHIP''s studio, not the caller''s '
+  '(00587). Raises with '
   'return_to_lead_check''s reason when the undo is no longer an undo (00585).';
 
 -- ── 3. people_directory — 00583:390-622 verbatim, one line per branch
@@ -611,8 +707,11 @@ SELECT
   -- NULLIF(btrim(...)) — COALESCE only falls through on NULL, and an
   -- empty-string profiles.phone would otherwise win over a real captured
   -- number and read the row blank (review R2 F11). Nothing forbids '' on that
-  -- column; only the studio's own capture answers for it here.
-  COALESCE(NULLIF(btrim(pr.phone), ''), dc.client_phone)         AS phone,
+  -- column; only the studio's own capture answers for it here. Both legs are
+  -- guarded, not just the profile one: a whitespace-only captured number
+  -- would otherwise fall straight through and render the same blank cell
+  -- (review R3-05).
+  COALESCE(NULLIF(btrim(pr.phone), ''), NULLIF(btrim(dc.client_phone), '')) AS phone,
   dc.client_id                                                   AS profile_id,
   NULL::uuid                                                     AS project_id,
   dc.designer_id                                                 AS designer_id,
@@ -646,7 +745,7 @@ SELECT
   'lead',
   COALESCE(l.contact_name, hp.full_name, hp.display_name, l.contact_email, 'New lead'),
   COALESCE(l.contact_email, hp.email),
-  COALESCE(NULLIF(btrim(hp.phone), ''), l.contact_phone),
+  COALESCE(NULLIF(btrim(hp.phone), ''), NULLIF(btrim(l.contact_phone), '')),
   l.homeowner_id,
   NULL::uuid,
   l.designer_id,
@@ -840,7 +939,9 @@ COMMENT ON VIEW public.people_directory IS
   'architect|photographer|stager|team|contact) for the querying user. v6 '
   '(00587): PHONE ONLY is profile-first on the client and lead branches — '
   'COALESCE(NULLIF(btrim(profiles.phone), ''''), '
-  'designer_clients.client_phone) and the same over leads.contact_phone. An '
+  'NULLIF(btrim(designer_clients.client_phone), '''')) and the same over '
+  'leads.contact_phone, so a whitespace-only number on either side reads as '
+  'no number rather than as a blank cell. An '
   'account holder''s own number is theirs to manage and the studio is given no '
   'field to edit it, so it wins over a number taken at the front door, which '
   'is the order the household sheet and the Brief already read. display_name '

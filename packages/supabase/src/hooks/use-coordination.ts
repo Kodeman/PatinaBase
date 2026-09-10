@@ -573,12 +573,20 @@ export function useUpdateProjectParty() {
           // word on it.
           let siblingOptOutAt: string | null = null;
           if (nextE164) {
+            // No self-exclusion, for the reason useRecordPartySmsConsent's
+            // probe carries none: this row cannot be its own sibling. The
+            // probe is keyed on nextE164 while the row still holds
+            // currentE164, and the two differ by the phoneGenuinelyChanged
+            // guard above. If a concurrent write DID move this row onto the
+            // new number and a STOP landed on it, matching itself is the
+            // right answer anyway — the opt-out is kept and its own date
+            // inherited, where an exclusion would have reset a live STOP to
+            // not_asked (review R3-06).
             const { data: optedOutOnNewNumber, error: siblingError } = await supabase
               .from('project_parties')
               .select('id, sms_opt_out_at')
               .eq('phone_e164', nextE164)
               .eq('sms_consent_status', 'opted_out')
-              .neq('id', id)
               .order('sms_opt_out_at', { ascending: false, nullsFirst: false })
               .limit(1);
             if (siblingError) throw siblingError;

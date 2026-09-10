@@ -356,6 +356,13 @@ export function useUpdateClientNotes() {
  * (full_name/email/phone) is theirs — not edited here. Invalidates the client
  * lists AND the document/desk read models so a renamed household shows through
  * immediately (§5).
+ *
+ * No companion `client_phone_e164: null` write, unlike useUpdateStudioContact
+ * and useUpdateProjectParty: 00583's normalize_designer_client_phone_e164
+ * derives the e164 from the RAW column on UPDATE (it reads the e164 column
+ * only on INSERT), so clearing client_phone clears the derivation with it.
+ * 00281/00417 normalize COALESCE(NEW.phone, NEW.phone_e164) instead, which is
+ * why those two hooks must send both (review R3-04).
  */
 export function useUpdateClientContact() {
   const queryClient = useQueryClient();
@@ -376,9 +383,18 @@ export function useUpdateClientContact() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
 
+      // A whitespace-only number is not a number: stored as '   ' it reads as
+      // "has a phone" to everything testing `phone != null` while showing an
+      // empty directory cell, and normalize_phone_e164 makes nothing of it
+      // either (review R3-05 — the same trim useUpdateStudioContact does).
+      const patch =
+        updates.client_phone === undefined
+          ? updates
+          : { ...updates, client_phone: updates.client_phone?.trim() || null };
+
       const { data, error } = await supabase
         .from('designer_clients')
-        .update(updates)
+        .update(patch)
         .eq('id', clientId)
         .select()
         .single();

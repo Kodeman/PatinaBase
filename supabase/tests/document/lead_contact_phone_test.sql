@@ -403,4 +403,37 @@ BEGIN
 END;
 $$;
 
+-- 00587 (review R3-05) — and the guard is symmetric. A whitespace-only number
+-- in the CAPTURED column is not a number either: unguarded it fell straight
+-- through the COALESCE and rendered a blank-looking directory cell, the same
+-- symptom the profile leg above closed. Both households' profile phones are
+-- blank at this point, so the captured column is the only leg left speaking.
+RESET ROLE;
+UPDATE public.leads
+SET contact_phone = '  '
+WHERE id = 'd9200000-0000-4000-8000-000000000004';
+UPDATE public.designer_clients
+SET client_phone = '   '
+WHERE lead_id = 'd9200000-0000-4000-8000-000000000003';
+SET LOCAL ROLE authenticated;
+
+DO $$
+BEGIN
+  ASSERT (SELECT phone IS NULL
+          FROM public.people_directory
+          WHERE person_id = 'd9200000-0000-4000-8000-000000000004'
+            AND role = 'lead'),
+    format('a whitespace-only captured lead phone must read as no phone, got %L',
+           (SELECT phone FROM public.people_directory
+            WHERE person_id = 'd9200000-0000-4000-8000-000000000004'
+              AND role = 'lead'));
+  ASSERT (SELECT phone IS NULL
+          FROM public.people_directory
+          WHERE role = 'client'
+            AND person_id = (SELECT id FROM public.designer_clients
+                             WHERE lead_id = 'd9200000-0000-4000-8000-000000000003')),
+    'a whitespace-only captured client phone must read as no phone too';
+END;
+$$;
+
 ROLLBACK;

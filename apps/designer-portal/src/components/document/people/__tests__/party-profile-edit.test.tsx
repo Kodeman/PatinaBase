@@ -10,9 +10,12 @@ import { PartyProfileSheet } from '../party-profile-sheet';
 
 const updateMutateAsync = jest.fn();
 const personData: { current: Record<string, unknown> | null } = { current: null };
+/** What a refetch of the person query returns — the read side the sheet asks
+ *  when a write matches zero rows. Defaults to "still there". */
+const personRefetch = jest.fn();
 
 jest.mock('@patina/supabase', () => ({
-  usePerson: () => ({ data: personData.current }),
+  usePerson: () => ({ data: personData.current, refetch: personRefetch }),
   usePartySmsThread: () => ({ data: [] }),
   useSendPartySms: () => ({
     mutate: jest.fn(),
@@ -72,6 +75,8 @@ beforeEach(() => {
   updateMutateAsync.mockReset();
   updateMutateAsync.mockResolvedValue({});
   personData.current = person();
+  personRefetch.mockReset();
+  personRefetch.mockImplementation(async () => ({ data: personData.current }));
 });
 
 const ROLE: PartyRole = 'sub';
@@ -293,9 +298,8 @@ describe('PartyProfileSheet — edit', () => {
     });
   });
 
-  // 00584 widened project_parties' UPDATE to the whole studio, so a permission
-  // refusal now belongs to a reader admitted by one of the SELECT-only
-  // policies — and it arrives as 42501, not as zero rows.
+  // A raw RLS message or a missing GRANT is a permission refusal however it
+  // arrives.
   it('translates a permission refusal on Save into plain words', async () => {
     updateMutateAsync.mockRejectedValue({
       code: '42501',
@@ -307,17 +311,20 @@ describe('PartyProfileSheet — edit', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     expect(
-      await screen.findByText("Only this project's studio can edit its crew."),
+      await screen.findByText("Only this project's designer can edit its crew."),
     ).toBeInTheDocument();
     expect(
       screen.queryByText(/row-level security policy/i),
     ).not.toBeInTheDocument();
   });
 
-  // Zero rows matched is a race, not a refusal: the crew row was removed or
-  // re-pointed under the open form. Calling it a permission problem sent
-  // designers looking for authority they already had.
-  it('reads a vanished row on Save as a race, not a permission problem', async () => {
+  // R3-01 — an RLS-blocked UPDATE matches zero rows and comes back as
+  // PGRST116, never 42501: `project_parties_studio_update` (00584) uses one
+  // predicate for USING and WITH CHECK, so the row is simply invisible to the
+  // write. The reader admitted by 00421's SELECT-only policy on a project
+  // whose designer has left the org is exactly that case, and their record is
+  // still readable — so the sentence must name authority.
+  it('reads a zero-row Save whose record is still readable as a permission refusal', async () => {
     updateMutateAsync.mockRejectedValue({
       code: 'PGRST116',
       message: 'JSON object requested, multiple (or no) rows returned',
@@ -328,11 +335,48 @@ describe('PartyProfileSheet — edit', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     expect(
-      await screen.findByText("This person's record just changed — refresh to see it."),
+      await screen.findByText("Only this project's designer can edit its crew."),
     ).toBeInTheDocument();
+    expect(personRefetch).toHaveBeenCalled();
     expect(
       screen.queryByText(/JSON object requested/i),
     ).not.toBeInTheDocument();
+  });
+
+  // The other half of the same code: the row really is gone. Calling that a
+  // permission problem sent designers looking for authority they already had.
+  it('reads a zero-row Save whose record has vanished as a race', async () => {
+    updateMutateAsync.mockRejectedValue({
+      code: 'PGRST116',
+      message: 'JSON object requested, multiple (or no) rows returned',
+    });
+    personRefetch.mockResolvedValue({ data: null });
+    render(<PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Sal R. Moretti' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(
+      await screen.findByText("This person's record just changed — refresh to see it."),
+    ).toBeInTheDocument();
+  });
+
+  // A re-read that fails too cannot tell the two apart; say the reachable
+  // thing rather than guess.
+  it('falls back to the permission sentence when the re-read itself fails', async () => {
+    updateMutateAsync.mockRejectedValue({
+      code: 'PGRST116',
+      message: 'JSON object requested, multiple (or no) rows returned',
+    });
+    personRefetch.mockRejectedValue(new Error('offline'));
+    render(<PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Sal R. Moretti' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(
+      await screen.findByText("Only this project's designer can edit its crew."),
+    ).toBeInTheDocument();
   });
 
   it('shows a write failure that is not a refusal in its own words', async () => {

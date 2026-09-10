@@ -16,6 +16,8 @@ VALUES
    '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
   ('d7000000-0000-4000-8000-000000000003', 'rtl-foreign@test.invalid', '', NOW(), NOW(), NOW(),
    '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('d7000000-0000-4000-8000-000000000004', 'rtl-dual@test.invalid', '', NOW(), NOW(), NOW(),
+   '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
   ('d7000000-0000-4000-8000-000000000010', 'rtl-client@test.invalid', '', NOW(), NOW(), NOW(),
    '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
 
@@ -24,6 +26,7 @@ VALUES
   ('d7000000-0000-4000-8000-000000000001', 'rtl-owner@test.invalid', 'Return Owner', NOW(), NOW()),
   ('d7000000-0000-4000-8000-000000000002', 'rtl-coworker@test.invalid', 'Return Coworker', NOW(), NOW()),
   ('d7000000-0000-4000-8000-000000000003', 'rtl-foreign@test.invalid', 'Return Foreign', NOW(), NOW()),
+  ('d7000000-0000-4000-8000-000000000004', 'rtl-dual@test.invalid', 'Return Dual Member', NOW(), NOW()),
   ('d7000000-0000-4000-8000-000000000010', 'rtl-client@test.invalid', 'Threaded Client', NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 
@@ -32,7 +35,8 @@ SET is_designer = true
 WHERE id IN (
   'd7000000-0000-4000-8000-000000000001',
   'd7000000-0000-4000-8000-000000000002',
-  'd7000000-0000-4000-8000-000000000003'
+  'd7000000-0000-4000-8000-000000000003',
+  'd7000000-0000-4000-8000-000000000004'
 );
 
 INSERT INTO public.organizations (id, type, name, slug)
@@ -51,7 +55,15 @@ VALUES
   ('d7110000-0000-4000-8000-000000000002', 'd7000000-0000-4000-8000-000000000002',
    'd7100000-0000-4000-8000-000000000001', 'member', 'active', NOW()),
   ('d7110000-0000-4000-8000-000000000003', 'd7000000-0000-4000-8000-000000000003',
-   'd7100000-0000-4000-8000-000000000002', 'owner', 'active', NOW());
+   'd7100000-0000-4000-8000-000000000002', 'owner', 'active', NOW()),
+  -- 00587 (review R3-02): one designer, a seat in BOTH studios. The sibling
+  -- probe must answer for the RELATIONSHIP's studio, so this caller gets the
+  -- same answer the relationship's own designer does — under a
+  -- caller-relative scope they would differ.
+  ('d7110000-0000-4000-8000-000000000004', 'd7000000-0000-4000-8000-000000000004',
+   'd7100000-0000-4000-8000-000000000001', 'member', 'active', NOW()),
+  ('d7110000-0000-4000-8000-000000000005', 'd7000000-0000-4000-8000-000000000004',
+   'd7100000-0000-4000-8000-000000000002', 'member', 'active', NOW());
 
 -- One lead per scenario. Each carries a distinct contact_email: the
 -- (designer_id, client_email) partial unique index makes a shared address a
@@ -138,7 +150,11 @@ VALUES
   -- keep counting.
   ('d7200000-0000-4000-8000-000000000018', NULL,
    'd7000000-0000-4000-8000-000000000001', 'consultation', 'new',
-   'Comember Sibling', 'rtl-comember-sibling@test.invalid');
+   'Comember Sibling', 'rtl-comember-sibling@test.invalid'),
+  -- 00587 (review R3-02): the caller-independence leg.
+  ('d7200000-0000-4000-8000-000000000019', NULL,
+   'd7000000-0000-4000-8000-000000000001', 'consultation', 'new',
+   'Two Studios One Caller', 'rtl-dual-caller@test.invalid');
 
 UPDATE public.leads
 SET budget_range = '5k_15k', timeline = 'asap'
@@ -714,6 +730,53 @@ BEGIN
 END;
 $$;
 
+-- ── 00587 (review R3-02): one relationship, one answer, whoever asks ───────
+-- The scope is the RELATIONSHIP's studio, never the caller's. A designer with
+-- a seat in both studios shares one with the planter and one with the
+-- relationship's designer; under a caller-relative probe the planted row would
+-- have counted for them and not for the owner, so the same row would have
+-- refused one co-member's undo and released another's.
+DO $$
+DECLARE
+  v_dc      uuid;
+  v_planted uuid;
+BEGIN
+  v_dc := pg_temp.rtl_accept('d7200000-0000-4000-8000-000000000019');
+
+  PERFORM pg_temp.assume_rtl_actor('d7000000-0000-4000-8000-000000000003');
+  INSERT INTO public.designer_clients (
+    designer_id, client_email, source, lead_id, status
+  ) VALUES (
+    'd7000000-0000-4000-8000-000000000003', 'rtl-dual-planted@test.invalid',
+    'direct', 'd7200000-0000-4000-8000-000000000019', 'lead'
+  )
+  RETURNING id INTO v_planted;
+
+  PERFORM pg_temp.assume_rtl_actor('d7000000-0000-4000-8000-000000000001');
+  ASSERT (public.return_to_lead_check(v_dc)->>'allowed')::boolean,
+    'the relationship''s own designer must be allowed past a foreign row';
+
+  -- The dual member: authority on the relationship through studio one, a
+  -- studio shared with the planter through studio two.
+  PERFORM pg_temp.assume_rtl_actor('d7000000-0000-4000-8000-000000000004');
+  ASSERT (public.return_to_lead_check(v_dc)->>'allowed')::boolean,
+    format('a co-member of both studios must get the same answer, got %L',
+           public.return_to_lead_check(v_dc)->>'reason');
+
+  -- And the act agrees with the door, from that same caller.
+  PERFORM public.return_to_lead(v_dc);
+  ASSERT (SELECT status = 'new' AND accepted_at IS NULL
+          FROM public.leads
+          WHERE id = 'd7200000-0000-4000-8000-000000000019'),
+    'the reversal must complete for the dual-studio caller too';
+
+  PERFORM pg_temp.assume_rtl_actor('d7000000-0000-4000-8000-000000000003');
+  ASSERT EXISTS (SELECT 1 FROM public.designer_clients WHERE id = v_planted),
+    'the reversal must not reach outside the studio to delete anything';
+  PERFORM pg_temp.assume_rtl_actor('d7000000-0000-4000-8000-000000000001');
+END;
+$$;
+
 -- ── A nurtured lead comes back to its dated return, not to "new" ───────────
 DO $$
 DECLARE
@@ -996,6 +1059,51 @@ BEGIN
   ASSERT pg_temp.rtl_refusal(v_dc) =
     'Discovery has already been filled in for this client.',
     'a decision-maker row carrying only its comms note must close the door';
+
+  -- 00587 (review R3-07) — two fields are read for their VALUE, the way
+  -- keep_as_is already is: a zero floor area and an approves encoded as
+  -- boolean false describe an untouched row, not the designer's work.
+  UPDATE public.client_discovery
+  SET decision_makers = '[{}]'::jsonb,
+      rooms = '[{"floor_area_sqft": 0}]'::jsonb
+  WHERE designer_client_id = v_dc;
+  ASSERT (public.return_to_lead_check(v_dc)->>'allowed')::boolean,
+    'a zero floor area is not a measurement anybody took';
+
+  UPDATE public.client_discovery
+  SET rooms = '[{"floor_area_sqft": "0.0"}]'::jsonb
+  WHERE designer_client_id = v_dc;
+  ASSERT (public.return_to_lead_check(v_dc)->>'allowed')::boolean,
+    'a zero written as text is still not a measurement';
+
+  UPDATE public.client_discovery
+  SET rooms = '[{"floor_area_sqft": 0.5}]'::jsonb
+  WHERE designer_client_id = v_dc;
+  ASSERT pg_temp.rtl_refusal(v_dc) =
+    'Discovery has already been filled in for this client.',
+    'a floor area under one square foot is still a figure someone typed';
+
+  UPDATE public.client_discovery
+  SET rooms = '[{}]'::jsonb,
+      decision_makers = '[{"approves": false}]'::jsonb
+  WHERE designer_client_id = v_dc;
+  ASSERT (public.return_to_lead_check(v_dc)->>'allowed')::boolean,
+    'an approves encoded as boolean false is the default, not an answer';
+
+  -- A designer's own word still counts, whatever it says.
+  UPDATE public.client_discovery
+  SET decision_makers = '[{"approves": "no"}]'::jsonb
+  WHERE designer_client_id = v_dc;
+  ASSERT pg_temp.rtl_refusal(v_dc) =
+    'Discovery has already been filled in for this client.',
+    'a typed "no" on approves is the designer''s work and must close the door';
+
+  UPDATE public.client_discovery
+  SET decision_makers = '[{"approves": true}]'::jsonb
+  WHERE designer_client_id = v_dc;
+  ASSERT pg_temp.rtl_refusal(v_dc) =
+    'Discovery has already been filled in for this client.',
+    'an approves marked true must close the door';
 END;
 $$;
 

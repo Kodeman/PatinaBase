@@ -42,18 +42,18 @@ function currentRowBuilder(result: { data: unknown; error: unknown }) {
 }
 
 /** `.select('id, sms_opt_out_at').eq('phone_e164', …).eq('sms_consent_status',
- *  'opted_out').neq('id', …).order('sms_opt_out_at', …).limit(1)` — checked
- *  only when a pending/granted row's phone genuinely changes to a normalizable
- *  number. The order is what makes the inherited opt-out date the latest word
- *  on that number. */
+ *  'opted_out').order('sms_opt_out_at', …).limit(1)` — checked only when a
+ *  pending/granted row's phone genuinely changes to a normalizable number. The
+ *  order is what makes the inherited opt-out date the latest word on that
+ *  number. No `.neq('id', …)`: the probe is keyed on the NEW number while this
+ *  row still holds the old one, so it can never be its own sibling (R3-06). */
 function siblingBuilder(result: { data: unknown; error: unknown }) {
   const limit = vi.fn().mockResolvedValue(result);
   const order = vi.fn(() => ({ limit }));
-  const neq = vi.fn(() => ({ order }));
-  const eq2 = vi.fn(() => ({ neq }));
+  const eq2 = vi.fn(() => ({ order }));
   const eq1 = vi.fn(() => ({ eq: eq2 }));
   const select = vi.fn(() => ({ eq: eq1 }));
-  return { select, eq1, eq2, neq, order, limit };
+  return { select, eq1, eq2, order, limit };
 }
 
 let builder: MockBuilder;
@@ -100,7 +100,6 @@ describe('useUpdateProjectParty — phone change resets SMS consent', () => {
 
     expect(sibling.eq1).toHaveBeenCalledWith('phone_e164', '+15559876543');
     expect(sibling.eq2).toHaveBeenCalledWith('sms_consent_status', 'opted_out');
-    expect(sibling.neq).toHaveBeenCalledWith('id', 'party-1');
     expect(builder.update).toHaveBeenCalledWith(
       expect.objectContaining({
         phone: '5559876543',

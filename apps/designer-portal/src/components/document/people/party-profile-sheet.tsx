@@ -61,19 +61,32 @@ const EDIT_LABEL =
 const EDIT_INPUT =
   'w-full rounded-[7px] border border-[var(--color-pearl)] bg-white px-3 py-2 text-[0.82rem] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none';
 
-/** Two different refusals, two different sentences — the way
- *  useRecordPartySmsConsent already separates them.
- *
- *  00584's `project_parties_studio_update` (USING / WITH CHECK
- *  is_studio_comember) widened this table's UPDATE to the whole studio, so a
- *  co-member who can read this sheet CAN save it. A permission refusal is
- *  therefore left only for a reader admitted by one of the SELECT-only
- *  policies, and it arrives as 42501 / "permission denied" / an RLS message.
- *  PGRST116 is the other case entirely: `.single()` matched no row, i.e. this
- *  crew row was removed or re-pointed under the open form — a race, not a
- *  permission, and calling it one sent designers looking for authority they
- *  already had. Same translation idiom friendlyRolodexError does for the
- *  rolodex. */
+const PARTY_WRITE_DENIED = "Only this project's designer can edit its crew.";
+const PARTY_WRITE_RACED = "This person's record just changed — refresh to see it.";
+
+/** A zero-row write. `useUpdateProjectParty` ends `.update().select().single()`,
+ *  so when RLS's USING clause hides the row from the WRITE, PostgREST updates
+ *  nothing and `.single()` returns PGRST116 — not 42501, which needs a WITH
+ *  CHECK violation or a missing GRANT, and `project_parties_studio_update`
+ *  (00584) uses one predicate for both clauses. The refusal is reachable:
+ *  `project_parties_studio_comember_select` (00421) admits an active member of
+ *  the project's studio, while the UPDATE policy admits only a co-member of
+ *  the project's DESIGNER — so a teammate on a project whose designer has
+ *  since left the org reads this sheet and cannot save it. A vanished row
+ *  reads the same way, which is why the sentence is chosen by asking the read
+ *  side (`saveParty`) rather than by the code alone. */
+function isZeroRowWrite(err: unknown): boolean {
+  const code = (err as { code?: unknown } | null)?.code;
+  const msg =
+    err instanceof Error
+      ? err.message
+      : (((err as { message?: unknown } | null)?.message as string | undefined) ?? '');
+  return /PGRST116/i.test(`${typeof code === 'string' ? code : ''} ${msg}`);
+}
+
+/** Everything else, in plain words — the same translation idiom
+ *  friendlyRolodexError does for the rolodex. 42501 keeps its own leg: an RLS
+ *  message or a missing GRANT is a permission refusal however it arrives. */
 function friendlyPartyWriteError(err: unknown): string {
   const code = (err as { code?: unknown } | null)?.code;
   const msg =
@@ -82,10 +95,7 @@ function friendlyPartyWriteError(err: unknown): string {
       : (((err as { message?: unknown } | null)?.message as string | undefined) ?? '');
   const haystack = `${typeof code === 'string' ? code : ''} ${msg}`;
   if (/row-level security|permission denied|42501/i.test(haystack)) {
-    return "Only this project's studio can edit its crew.";
-  }
-  if (/PGRST116/i.test(haystack)) {
-    return "This person's record just changed — refresh to see it.";
+    return PARTY_WRITE_DENIED;
   }
   return msg || 'Could not save just now. Try again.';
 }
@@ -181,7 +191,7 @@ export function PartyProfileSheet({
   role: PartyRole;
   onClose: () => void;
 }) {
-  const { data: person } = usePerson(partyId, role);
+  const { data: person, refetch: refetchPerson } = usePerson(partyId, role);
   const { data: thread } = usePartySmsThread(open ? partyId : null);
   const { data: activeLink } = useActiveFieldLink(open ? partyId : null);
   const createLink = useCreateFieldLink();
@@ -389,6 +399,20 @@ export function PartyProfileSheet({
       setEditing(false);
       setEditTouched(false);
     } catch (e) {
+      if (isZeroRowWrite(e)) {
+        // Zero rows matched: the row is either hidden from the write or gone.
+        // The read side is the only thing that can tell them apart — if it
+        // still returns the record, the refusal was authority, not a race.
+        let stillReadable = true;
+        try {
+          const { data: fresh } = await refetchPerson();
+          stillReadable = !!fresh;
+        } catch {
+          // The read failed too. Say the reachable thing rather than guess.
+        }
+        setEditError(stillReadable ? PARTY_WRITE_DENIED : PARTY_WRITE_RACED);
+        return;
+      }
       setEditError(friendlyPartyWriteError(e));
     }
   };
