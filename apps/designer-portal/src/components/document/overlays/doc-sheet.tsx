@@ -77,7 +77,8 @@ function getFocusableElements(panel: HTMLElement) {
     return (
       !element.hidden &&
       !element.matches(':disabled') &&
-      element.getAttribute('aria-disabled') !== 'true' &&
+      // N-4 — an `aria-disabled` act is HELD, not gone: it stays in the tab
+      // order so a keyboard reader meets it and the reason standing beside it.
       !element.closest('[hidden], [aria-hidden="true"], [inert]') &&
       style.display !== 'none' &&
       style.visibility !== 'hidden'

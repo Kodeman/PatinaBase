@@ -1,7 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { DESIGN_BUILD_PAPER_COPY, type AgreementPart } from "@patina/types";
+import { useId, useState } from "react";
+import {
+  agreementConsequenceSentence,
+  type AgreementPart,
+} from "@patina/types";
 import { DocSheet } from "../overlays/doc-sheet";
 import { Button, Textarea } from "@/components/ui/controls";
 import { useSendServiceAgreement } from "@/hooks/use-commercial-documents";
@@ -11,6 +14,23 @@ import {
   type ServiceAgreementTerms,
   type ServiceRate,
 } from "@/lib/document/commercial-documents";
+
+/** The retainer named on the terminal act. `null` when the composition has no
+ *  written retainer, in which case the act carries no figure. */
+function retainerLabel(
+  parts: AgreementPart[] | undefined,
+  currency: string,
+): string | null {
+  const retainer = parts?.find(
+    (part) => part.kind === "schedule" && part.variant === "retainer",
+  );
+  const raw = retainer?.payload?.cents;
+  const cents = typeof raw === "number" ? Math.round(raw) : Number(raw);
+  if (!Number.isFinite(cents) || cents <= 0) return null;
+  return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(
+    cents / 100,
+  );
+}
 
 export function ServiceAgreementSendSheet({
   open,
@@ -22,6 +42,7 @@ export function ServiceAgreementSendSheet({
   rates,
   recipientEmail,
   recipientName,
+  parts,
   readinessOverride,
 }: {
   open: boolean;
@@ -38,8 +59,9 @@ export function ServiceAgreementSendSheet({
   recipientEmail: string | null;
   recipientName?: string;
   /** The composition itself, for the consequence sentence the sheet prints
-   *  above its terminal act (FS-22). Declared here so the composer and the
-   *  instruments strip can both pass it; read in a later task of this wave. */
+   *  above its terminal act (FS-22). Absent when the caller has none — the
+   *  sentence then says the agreement has written nothing yet, and the act
+   *  carries no figure. */
   parts?: AgreementPart[];
   /** The composed agreement's verdict, when the room is running under
    *  `agreement-parts`. The seven-facet function below asks for a role rate
@@ -53,15 +75,15 @@ export function ServiceAgreementSendSheet({
   };
 }) {
   const send = useSendServiceAgreement(document.id);
-  /* W3R2-05 — THE SHEET DESCRIBES THE PAPER IT IS SENDING.
-     A design-build prime carries a pricing basis, draws, allowances, a sub
-     disclosure, supervision, change orders, termination, terms and two
-     attachments — not "services, rates, retainer policy, billing cadence,
-     ceiling", and no furnishings deposit at all. Keyed off the document's
-     KIND, so a frozen turnkey draft reads correctly too. */
+  /* W3R2-05 — THE SHEET DESCRIBES THE PAPER IT IS SENDING. The class is named
+     once, in the sheet's title; the consequence sentence below is composed
+     from the parts this agreement actually carries, whichever class it is. */
   const turnkey = document.kind === "design_build";
   const [message, setMessage] = useState("");
   const [result, setResult] = useState<string | null>(null);
+  const [held, setHeld] = useState<string | null>(null);
+  const blockerListId = useId();
+  const noteHintId = useId();
   const readiness =
     readinessOverride ??
     assessServiceAgreementReadiness({
@@ -70,6 +92,19 @@ export function ServiceAgreementSendSheet({
       rates,
       recipientEmail,
     });
+  const currency = terms?.currency ?? "USD";
+  const consequence = agreementConsequenceSentence({
+    recipientName,
+    parts: parts ?? [],
+    currency,
+  });
+  const retainer = retainerLabel(parts, currency);
+  const sendLabel = retainer
+    ? `Send the agreement · ${retainer} retainer`
+    : "Send the agreement";
+  // IA-23 — set, the deposit is one clause inside the consequence sentence
+  // (its procurement part carries it). Unset, it is the sheet's one caution.
+  const depositUnset = !turnkey && terms?.furnishingsDepositPercent === null;
 
   const submit = async () => {
     setResult(null);
@@ -100,48 +135,15 @@ export function ServiceAgreementSendSheet({
       title={turnkey ? "Send design-build agreement" : "Send design agreement"}
     >
       <div className="mx-auto max-w-xl">
-        <p className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-clay-ink)]">
-          {turnkey ? DESIGN_BUILD_PAPER_COPY.documentLabel : "Yes to the designer"}
-        </p>
-        <h2 className="mt-1 font-heading text-xl text-[var(--color-charcoal)]">
-          Send for the client signature
-        </h2>
-        <p className="mt-2 text-[12.5px] leading-relaxed text-[var(--color-mocha)]">
-          {recipientName ? `${recipientName} receives` : "The client receives"}{" "}
-          {turnkey
-            ? "the price, the schedule of values, the draw schedule, the allowances, who is doing the work, and the terms."
-            : "the services, rates, retainer policy, billing cadence, ceiling, and terms."}{" "}
-          Their signature preserves consent; the agreement still awaits the
-          studio countersignature before work is authorized.
-        </p>
-
-        <div className="mt-5 rounded-[4px] border border-[var(--doc-ink-border)] px-4 py-3">
-          <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
-            Recipient
-          </p>
-          <p className="mt-1 text-[12.5px] text-[var(--color-charcoal)]">
-            {recipientEmail || "No client email linked"}
-          </p>
-        </div>
-
-        {/* No furnishings pass through a design-build agreement, so a
-            furnishings deposit is not a term it has. */}
-        {terms && !turnkey && (
-          <div className="mt-3 rounded-[4px] border border-[var(--doc-ink-border)] px-4 py-3">
-            <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
-              Furnishings deposit
-            </p>
-            <p className="mt-1 text-[12.5px] text-[var(--color-charcoal)]">
-              {terms.furnishingsDepositPercent === null
-                ? "No furnishings deposit set — authorizations will default to 50%."
-                : `Furnishings deposit · ${terms.furnishingsDepositPercent}% on each authorization`}
-            </p>
-          </div>
-        )}
-
-        {readiness.notes.length > 0 && (
-          <div className="mt-3 border-l-2 border-[var(--color-golden-hour)] pl-3">
+        {(depositUnset || readiness.notes.length > 0) && (
+          <div className="border-l-2 border-[var(--color-golden-hour)] pl-3">
             <ul className="space-y-1 text-[11.5px] text-[var(--color-mocha)]">
+              {depositUnset && (
+                <li>
+                  The furnishings deposit is not set. Authorizations will
+                  default to 50%.
+                </li>
+              )}
               {readiness.notes.map((note) => (
                 <li key={note}>{note}</li>
               ))}
@@ -149,15 +151,11 @@ export function ServiceAgreementSendSheet({
           </div>
         )}
 
-        {/* W3R2-17 — "every contractual facet is present" is not something to
-            say over a warning about missing allowance lines. A sheet that
-            carries a caution carries only the caution. */}
-        {readiness.ready && readiness.notes.length === 0 ? (
-          <p className="mt-4 border-l-2 border-[var(--color-sage)] pl-3 text-[12px] text-[var(--color-mocha)]">
-            Ready to send · every contractual facet is present.
-          </p>
-        ) : !readiness.ready ? (
-          <div className="mt-4 border-l-2 border-[var(--color-terracotta)] pl-3">
+        {!readiness.ready && (
+          <div
+            id={blockerListId}
+            className="mt-4 border-l-2 border-[var(--color-terracotta)] pl-3"
+          >
             <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)]">
               Finish before sending
             </p>
@@ -167,29 +165,62 @@ export function ServiceAgreementSendSheet({
               ))}
             </ul>
           </div>
-        ) : null}
+        )}
 
         <label className="mt-5 block font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
           A note to the client · optional
+          <span
+            id={noteHintId}
+            className="t-meta mt-1 block normal-case tracking-normal text-[var(--text-muted)]"
+          >
+            A short personal note to accompany the agreement.
+          </span>
           <Textarea
             className="mt-2 min-h-24 normal-case tracking-normal"
             value={message}
             onChange={(event) => setMessage(event.target.value)}
-            placeholder="A short personal note to accompany the agreement."
+            aria-describedby={noteHintId}
           />
         </label>
 
-        {result && (
-          <p
-            role="status"
-            className="mt-4 text-[12px] text-[var(--color-mocha)]"
-          >
-            {result}
-          </p>
-        )}
+        {/* One region, two voices: the send's own result, and the reason a
+            held act refused. Present so an activation is never silent. */}
+        <p
+          role="status"
+          aria-live="polite"
+          className="mt-4 text-[12px] text-[var(--color-mocha)]"
+        >
+          {result ?? held}
+        </p>
 
-        <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
-          {onRecordOffline ? (
+        <p className="mt-2 text-[12.5px] leading-relaxed text-[var(--color-mocha)]">
+          {consequence}
+        </p>
+
+        <div className="mt-4 flex flex-wrap items-center justify-end gap-3">
+          <Button variant="ghost" onClick={onClose}>
+            Not yet
+          </Button>
+          <Button
+            onClick={() => void submit()}
+            disabled={!readiness.ready}
+            held
+            onHeldActivate={() => {
+              setResult(null);
+              setHeld(
+                readiness.blockers[0] ??
+                  "This agreement is not ready to send yet.",
+              );
+            }}
+            aria-describedby={readiness.ready ? undefined : blockerListId}
+            loading={send.isPending}
+          >
+            {sendLabel}
+          </Button>
+        </div>
+
+        {onRecordOffline && (
+          <div className="mt-6 border-t border-[var(--doc-ink-border)] pt-4">
             <button
               type="button"
               onClick={onRecordOffline}
@@ -197,22 +228,8 @@ export function ServiceAgreementSendSheet({
             >
               Record a signature received outside Patina
             </button>
-          ) : (
-            <span />
-          )}
-          <div className="flex gap-3">
-            <Button variant="ghost" onClick={onClose}>
-              Send later
-            </Button>
-            <Button
-              onClick={() => void submit()}
-              disabled={!readiness.ready}
-              loading={send.isPending}
-            >
-              Send agreement →
-            </Button>
           </div>
-        </div>
+        )}
       </div>
     </DocSheet>
   );
