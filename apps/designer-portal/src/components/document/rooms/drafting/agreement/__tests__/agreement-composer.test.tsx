@@ -1,5 +1,6 @@
 import { StrictMode } from "react";
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -806,6 +807,107 @@ describe("AgreementComposer · the open fold survives a save (N-8/FS-26)", () =>
     openOutline();
     expect(within(outline()).getByRole("button", { name: "Services" })).toBe(
       row,
+    );
+  });
+});
+
+/* ── N-8 · a write while the save is in flight ───────────────────────────────
+   `persist()` is fired WITHOUT being awaited: selecting another part starts
+   the save and hands the room straight back, so the designer goes on writing
+   into a composition the RPC is already carrying. `upsert_agreement_parts` is
+   DELETE-then-INSERT, so the rows it answers with hold the payloads it was
+   SENT under NEW uuids — and the room used to take that answer wholesale,
+   which threw the writing away while the field went on showing it. The write
+   has to survive, and the next save has to carry it.
+   ────────────────────────────────────────────────────────────────────────── */
+describe("AgreementComposer · a write during an in-flight save (N-8)", () => {
+  /** The saves this suite holds open, answered one at a time. */
+  const gate: Array<() => void> = [];
+
+  const heldSaves = () => {
+    let round = 0;
+    mockSaveParts.mockImplementation((sent: AgreementPart[]) => {
+      const answer = round;
+      round += 1;
+      return new Promise((resolve) => {
+        gate.push(() =>
+          resolve(
+            bundleWith(
+              sent.map((p, index) => ({
+                ...p,
+                // Every uuid is new, exactly as the RPC hands them back.
+                id: `reminted-${answer}-${index}`,
+                position: index + 1,
+              })),
+            ),
+          ),
+        );
+      });
+    });
+  };
+
+  const sentBody = (call: number) =>
+    (mockSaveParts.mock.calls[call]![0] as AgreementPart[]).find(
+      (p) => p.partKey === "patina.services",
+    )?.payload as { body?: string } | undefined;
+
+  const reselectServices = () => {
+    openOutline();
+    fireEvent.click(
+      within(outline()).getByRole("button", { name: "Services" }),
+    );
+  };
+
+  afterEach(() => {
+    gate.splice(0);
+  });
+
+  it("keeps a clause typed while a save is in flight, and sends it on the next save", async () => {
+    heldSaves();
+    render(
+      <AgreementComposer
+        proposal={proposal}
+        bundle={bundleWith(threeParts())}
+      />,
+    );
+
+    write("Services");
+    const body = screen.getByRole("textbox", { name: "Body" });
+    fireEvent.change(body, { target: { value: "The ground floor." } });
+
+    // Selecting the part again saves behind the open fold — and does not wait.
+    reselectServices();
+    await waitFor(() => expect(mockSaveParts).toHaveBeenCalledTimes(1));
+    expect(sentBody(0)?.body).toBe("The ground floor.");
+
+    // The designer keeps writing while that save is in the air.
+    fireEvent.change(body, {
+      target: { value: "The ground floor and the stair hall." },
+    });
+
+    // The RPC lands, re-minting every id under the payloads it was sent.
+    await act(async () => {
+      gate.shift()!();
+    });
+
+    // The writing is still on the paper, and the paper still knows it is
+    // ahead of the table.
+    expect(body).toHaveValue("The ground floor and the stair hall.");
+    expect(record()).toHaveTextContent("not yet saved");
+
+    // And the next save carries it — under the ids the first save minted.
+    reselectServices();
+    await waitFor(() => expect(mockSaveParts).toHaveBeenCalledTimes(2));
+    expect(sentBody(1)?.body).toBe("The ground floor and the stair hall.");
+    expect(
+      (mockSaveParts.mock.calls[1]![0] as AgreementPart[]).map((p) => p.id),
+    ).toEqual(["reminted-0-0", "reminted-0-1", "reminted-0-2"]);
+
+    await act(async () => {
+      gate.shift()!();
+    });
+    await waitFor(() =>
+      expect(record()).not.toHaveTextContent("not yet saved"),
     );
   });
 });

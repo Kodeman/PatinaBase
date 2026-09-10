@@ -468,9 +468,18 @@ export function AgreementComposer({
    * handler, and two setters derived from the same render's `parts` would have
    * the second discard the first. So the updater form is the contract.
    */
+  /**
+   * How many acts the paper has taken. `persist()` is fired WITHOUT being
+   * awaited — closing a fold or selecting another part starts a save and the
+   * designer goes on writing — so the room has to know, when the RPC answers,
+   * whether the composition it sent is still the composition on the paper.
+   */
+  const revision = useRef(0);
+
   const mutate = (
     next: AgreementPart[] | ((current: AgreementPart[]) => AgreementPart[]),
   ) => {
+    revision.current += 1;
     setParts((current) =>
       renumber(typeof next === "function" ? next(current) : next),
     );
@@ -478,29 +487,34 @@ export function AgreementComposer({
     setSaveNote(null);
   };
 
-  const changePayload = (id: string, payload: Record<string, unknown>) =>
-    mutate((current) =>
-      current.map((part) => (part.id === id ? { ...part, payload } : part)),
-    );
-
-  /** One turnkey editor writing a sibling part's payload. A part key the
-   *  composition does not carry is a no-op, because a designer is allowed to
-   *  remove a part and a sibling editor must not resurrect it. */
-  const writePart = (partKey: string, payload: Record<string, unknown>) =>
+  /**
+   * N-8 — every act addresses a part by its KEY, never by `part.id`.
+   * `upsert_agreement_parts` is DELETE-then-INSERT, so a save re-mints every
+   * uuid: a handler that closed over the id it was rendered with matched
+   * nothing once the save landed, and the write vanished without a word while
+   * the field went on showing what was typed into it.
+   */
+  const changePayload = (partKey: string, payload: Record<string, unknown>) =>
     mutate((current) =>
       current.map((part) =>
         part.partKey === partKey ? { ...part, payload } : part,
       ),
     );
 
+  /** One turnkey editor writing a sibling part's payload — the same road a
+   *  part writes its own by. A part key the composition does not carry is a
+   *  no-op, because a designer is allowed to remove a part and a sibling
+   *  editor must not resurrect it. */
+  const writePart = changePayload;
+
   /** R39/AR-e — hiding a part from the client, on every agreement now and not
    *  the turnkey lane alone. R33 already refuses to project a hidden fee and
    *  readiness says so where the designer typed it; this is the act. */
-  const setClientVisible = (id: string, clientVisible: boolean) => {
-    const target = parts.find((part) => part.id === id) ?? null;
+  const setClientVisible = (partKey: string, clientVisible: boolean) => {
+    const target = parts.find((part) => part.partKey === partKey) ?? null;
     mutate((current) =>
       current.map((part) =>
-        part.id === id ? { ...part, clientVisible } : part,
+        part.partKey === partKey ? { ...part, clientVisible } : part,
       ),
     );
     if (target) {
@@ -517,14 +531,16 @@ export function AgreementComposer({
     ? { parts, writePart, projectId: document.projectId }
     : undefined;
 
-  const renamePart = (id: string, title: string) =>
+  const renamePart = (partKey: string, title: string) =>
     mutate((current) =>
-      current.map((part) => (part.id === id ? { ...part, title } : part)),
+      current.map((part) =>
+        part.partKey === partKey ? { ...part, title } : part,
+      ),
     );
 
-  const removePart = (id: string) => {
-    const removed = parts.find((part) => part.id === id) ?? null;
-    mutate(parts.filter((part) => part.id !== id));
+  const removePart = (partKey: string) => {
+    const removed = parts.find((part) => part.partKey === partKey) ?? null;
+    mutate((current) => current.filter((part) => part.partKey !== partKey));
     if (removed && removed.partKey === openKey) setOpenKey(null);
     if (libraryOn && removed) {
       documentEvents.agreementPartRemoved({
@@ -545,7 +561,7 @@ export function AgreementComposer({
    */
   const pendingFocus = useRef<string | null>(null);
   const reorderPart = (part: AgreementPart, direction: "up" | "down") => {
-    const from = parts.findIndex((entry) => entry.id === part.id);
+    const from = parts.findIndex((entry) => entry.partKey === part.partKey);
     const to = from + (direction === "up" ? -1 : 1);
     if (from < 0 || to < 0 || to >= parts.length) return;
     const next = [...parts];
@@ -553,7 +569,8 @@ export function AgreementComposer({
     next.splice(to, 0, moved!);
     mutate(next);
     const place = next.filter((entry) => entry.kind !== "attestation");
-    const position = place.findIndex((entry) => entry.id === part.id) + 1;
+    const position =
+      place.findIndex((entry) => entry.partKey === part.partKey) + 1;
     setAnnouncement(
       `${part.title} is now part ${position} of ${place.length}.`,
     );
@@ -748,13 +765,33 @@ export function AgreementComposer({
       }
       return false;
     }
+    const sentAt = revision.current;
     try {
       const next = await save.mutateAsync(parts);
       const saved = renumber(
         [...next.parts].sort((a, b) => a.position - b.position),
       );
-      setParts(saved);
-      setDirty(false);
+      if (revision.current === sentAt) {
+        // Nothing was written while the save was in flight: the server's
+        // answer IS the paper.
+        setParts(saved);
+        setDirty(false);
+      } else {
+        // Something was. The rows the RPC handed back carry the payloads it
+        // was SENT, one revision stale, so taking them wholesale would throw
+        // away what the designer typed while it flew. Adopt the re-minted ids
+        // by part KEY and keep the writing; the paper stays dirty, because
+        // what is on the table is behind what is on the page.
+        setParts((current) => {
+          const landed = new Map(saved.map((part) => [part.partKey, part]));
+          return current.map((part) => {
+            const row = landed.get(part.partKey);
+            return row
+              ? { ...part, id: row.id, updatedAt: row.updatedAt }
+              : part;
+          });
+        });
+      }
       setSavedAt(newestUpdate(saved) ?? new Date().toISOString());
       return true;
     } catch (error) {
@@ -925,9 +962,9 @@ export function AgreementComposer({
       libraryOn={libraryOn}
       blockers={partBlockers}
       turnkey={turnkeyContext}
-      onChange={(payload) => changePayload(part.id, payload)}
-      onRename={(title) => renamePart(part.id, title)}
-      onRemove={() => removePart(part.id)}
+      onChange={(payload) => changePayload(part.partKey, payload)}
+      onRename={(title) => renamePart(part.partKey, title)}
+      onRemove={() => removePart(part.partKey)}
       onKeepInLibrary={
         // R3 draws the same line here as on the Template act: owners and
         // admins edit the Library, every active member composes from it.
@@ -1020,7 +1057,7 @@ export function AgreementComposer({
                     type="button"
                     className="g-act g-act--tertiary"
                     data-client-visible="false"
-                    onClick={() => setClientVisible(part.id, true)}
+                    onClick={() => setClientVisible(part.partKey, true)}
                   >
                     <span className="g-label">Show to the client</span>
                   </button>
@@ -1061,12 +1098,14 @@ export function AgreementComposer({
         drawsNothing={silent}
         open={isOpen}
         readOnly={readOnly}
-        canMoveUp={rows[0]?.id !== part.id}
-        canMoveDown={rows[rows.length - 1]?.id !== part.id}
+        canMoveUp={rows[0]?.partKey !== part.partKey}
+        canMoveDown={rows[rows.length - 1]?.partKey !== part.partKey}
         onToggle={() => toggleFold(part)}
         onMove={(direction) => reorderPart(part, direction)}
         onHide={
-          canHide(part) ? (next) => setClientVisible(part.id, !next) : undefined
+          canHide(part)
+            ? (next) => setClientVisible(part.partKey, !next)
+            : undefined
         }
       >
         {foldFor(part, partBlockers)}

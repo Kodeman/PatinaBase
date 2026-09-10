@@ -153,43 +153,27 @@ test.describe("Contract Room · turnkey", () => {
     // `nav` / `ul` / `li` contract, so every selector below still finds it.
     const rail = page.getByRole("navigation", { name: "Agreement parts" });
 
-    /**
-     * Open a part from the outline, and WAIT FOR THE SAVE IT STARTS.
-     *
-     * The galley has no Save act: selecting a part saves the whole ordered
-     * array behind it (§A5 "taken"), and when that RPC lands it replaces the
-     * composition wholesale. Typing into the fold while it is in flight is
-     * therefore typing into state that is about to be overwritten — so every
-     * open below settles the network first.
-     */
     const record = page.locator(".g-head .g-record");
     const room = page.locator(".g-room");
 
     /**
-     * Open a part from the outline, and WAIT FOR THE SAVE IT STARTS.
+     * Open a part from the outline.
      *
      * The galley has no Save act: selecting a part saves the whole ordered
-     * array behind it (§A5 "taken"), and when that RPC lands it replaces the
-     * composition wholesale — every part re-minted, because
-     * `upsert_agreement_parts` is DELETE-then-INSERT. Writing into a fold
-     * while that is in flight writes against ids that are about to be
-     * replaced, and the write is silently dropped. `networkidle` alone is not
-     * enough: `persist()` is fired without being awaited, so the click can
-     * return before the request has even started. So the save is awaited by
-     * its own response, and only when the record line says there is one.
+     * array behind it (§A5 "taken"), and `persist()` is fired without being
+     * awaited, so the click returns while the RPC is still in the air. That
+     * used to have to be fenced — every open waited on the
+     * `upsert_agreement_parts` response — because the room took the answer
+     * wholesale and the writing that followed the click was dropped. N-8's
+     * fix removed the reason: every act addresses its part by KEY, and a save
+     * that lands behind newer writing adopts the re-minted ids without
+     * touching the payloads. So the barrier here is the fold itself.
      */
     const openPart = async (name: RegExp) => {
-      const dirty = /not yet saved/.test(await record.innerText());
-      const saved = dirty
-        ? page
-            .waitForResponse((response) =>
-              response.url().includes("upsert_agreement_parts"),
-            )
-            .catch(() => null)
-        : null;
       await rail.getByRole("button", { name }).first().click();
-      if (saved) await saved;
-      await page.waitForLoadState("networkidle");
+      await expect(
+        page.locator(".g-part[data-selected='true'] .g-fold"),
+      ).toBeVisible();
     };
     /**
      * Write one field of the open fold, and PROVE the write landed.

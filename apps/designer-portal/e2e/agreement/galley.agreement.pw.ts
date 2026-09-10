@@ -234,36 +234,52 @@ test.describe("Contract Room · the galley", () => {
     );
 
     // §A5 "taken" — there is no Save control. Closing the fold is the act, and
-    // the dated record is what it leaves behind.
+    // the dated record is what it leaves behind. WR-19/WR-20 — the two record
+    // lines are complementary, not the same string twice: the head speaks for
+    // the AGREEMENT, the fold for its own part.
     const record = page.locator(".g-head .g-record");
+    const foldRecord = fold.locator(".g-record");
     await expect(record).toHaveText(/^Saved /);
     await expect(record).not.toHaveText(/not yet saved/);
 
-    // ED-5/N-8 — `upsert_agreement_parts` is DELETE-then-INSERT, so a save
-    // re-mints every uuid. Re-selecting the open part from the outline saves
-    // behind the open fold: the fold must not close and the writing must not
-    // be lost.
+    // ED-5/N-8/WR-02 — `upsert_agreement_parts` is DELETE-then-INSERT, so a
+    // save re-mints every uuid. Re-selecting the open part from the outline
+    // saves behind the open fold: the fold must not close, must not REMOUNT,
+    // and the writing must not be lost.
     await write.click();
     await expect(fold).toBeVisible();
     await body.fill("The studio designs the ground floor and the stair hall.");
-    await expect(record).toHaveText(/· Services not yet saved$/);
+    await expect(record).toHaveText(/· This agreement not yet saved$/);
+    await expect(foldRecord).toHaveText(/· Services not yet saved$/);
+    // A witness the DOM carries and React does not: it survives a re-render
+    // and dies with a remount. `GalleyPart` is keyed on the part KEY now, so
+    // the re-minted ids reach the same nodes.
+    await fold.evaluate((node) => node.setAttribute("data-node-witness", "1"));
+    await body.evaluate((node) => node.setAttribute("data-node-witness", "1"));
     await page
       .getByRole("navigation", { name: "Agreement parts" })
       .getByRole("button", { name: "Services", exact: true })
       .click();
 
     await expect(record).not.toHaveText(/not yet saved/);
+    await expect(foldRecord).not.toHaveText(/not yet saved/);
     await expect(write).toHaveAttribute("aria-expanded", "true");
     await expect(fold).toBeVisible();
-    await expect(fold.getByRole("textbox", { name: "Body" })).toHaveValue(
+    await expect(fold).toHaveAttribute("data-node-witness", "1");
+    await expect(body).toHaveAttribute("data-node-witness", "1");
+    await expect(body).toHaveValue(
       "The studio designs the ground floor and the stair hall.",
     );
-    // Focus stays inside the fold rather than being thrown back to the page.
-    // It lands on the fold's FIRST field, not the one the caret was in: the
-    // save re-mints every uuid, `GalleyPart` is keyed on `part.id`, so the
-    // part remounts and `GalleyPart`'s open-effect re-seeds focus. The writing
-    // survives because it lives in the composer's state, not in the DOM.
-    await expect(fold.getByLabel("The name of this part")).toBeFocused();
+    // The caret is not re-seeded. Nothing remounted, so `GalleyPart`'s
+    // open-effect never fires again and focus rests where the designer's own
+    // act left it — on the outline row she clicked — rather than being thrown
+    // to the fold's first field.
+    await expect(fold.getByLabel("The name of this part")).not.toBeFocused();
+    await expect(
+      page
+        .getByRole("navigation", { name: "Agreement parts" })
+        .getByRole("button", { name: "Services", exact: true }),
+    ).toBeFocused();
 
     const { data: rows } = await adminDb
       .from("proposal_agreement_parts")
