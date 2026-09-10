@@ -156,7 +156,6 @@ jest.mock("@/components/products/nomination/nominate-to-catalog-modal", () => ({
   NominateToCatalogModal: () => <div />,
 }));
 
-// eslint-disable-next-line import/first
 import { PieceRoom } from "./piece-room";
 
 const DRAFT = {

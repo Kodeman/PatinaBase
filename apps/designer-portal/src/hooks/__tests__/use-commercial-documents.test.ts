@@ -927,6 +927,8 @@ describe('designer commercial document hooks', () => {
     const resendInput = { partyId: 'party-1', existingRfqId: 'rfq-1' };
 
     const mutationFnOf = (scopeId = 'scope-1') =>
+      // The hook is read for its mutationFn only; there is no React render here.
+      // eslint-disable-next-line react-hooks/rules-of-hooks
       (useSendTradeRfq(scopeId) as unknown as {
         mutationFn: (input: typeof resendInput) => Promise<unknown>;
       }).mutationFn;
