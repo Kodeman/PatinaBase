@@ -10939,3 +10939,49 @@ the paper, ink or hairline tokens, so a dark value there would be dead code clai
 portal does not paint.
 
 *Entries add: R144 · last id = R144*
+
+### R145 · Lead contact — phone stands beside email, not inside the prose — 2026-09-09
+
+**Ruled by Kody, 2026-09-09.** A lead now carries `contact_phone` alongside `contact_email`, both optional,
+both plain fields on the row rather than words buried in the capture note. Where a phone number is present
+it follows the lead all the way into the client record when the lead is accepted — `designer_clients` gets
+its own `client_phone`, sourced from the lead, not re-typed by hand.
+
+Old leads whose phone number lives only in the brief's free-text prose are left exactly as they are. This
+is not an oversight: nothing distinguishes a phone digit-string in old prose from a suite number or a project
+code without a designer's eye on it, and a wrong auto-extraction would be worse than an empty field a
+designer can fill once, on sight.
+
+*Entries add: R145 · last id = R145*
+
+### R146 · Return to lead — an undo, not an editor's redo — 2026-09-09
+
+**Ruled by Kody, 2026-09-09.** A Discovery move can be walked back by any co-member of the studio, but only
+while it is still, honestly, an undo: the moment a proposal, folio content, a note, a thread, or a
+client match to the app exists on that relationship, "Move back to New Lead" refuses rather than silently
+discarding work someone else may be depending on. The reversal itself deletes the now-empty relationship row
+outright and says nothing to the client — there was never anything for the client to see.
+
+The action is offered in two places: on the Discovery folder itself, and as an Undo toast riding the
+"Accept · begin" moment, for the designer who wants the shortest possible path back out of a lead accepted
+by mistake.
+
+One thing is deliberately left undone. There is no stage-history ledger for leads — no record of who
+accepted, who reverted, or when — so a return-to-lead leaves no trace beyond the row's own current shape.
+That gap is real and is deferred, not resolved, by this ruling.
+
+*Entries add: R146 · last id = R146*
+
+### R147 · Editing people — the card knows who is allowed to touch it — 2026-09-09
+
+**Ruled by Kody, 2026-09-09.** Any studio member can edit the live rolodex cards and the field parties on a
+project, working from that person's own card. A captured client — someone with no Patina account yet — is
+edited by the studio too, but through "Edit details" on the People room, not through the household sheet's
+document surface. An account holder is different in kind: once someone has signed in, only they manage
+their own name, email, and phone, and the studio's card for them goes read-only on those fields. Makers stay
+read-only across the board — the studio does not edit a maker's own particulars from inside Patina.
+
+None of this rewrites history. A project's roster — who was on it, and as whom — is never altered by a
+later edit to a person's card; the card and the roster row it once populated are different things now.
+
+*Entries add: R147 · last id = R147*
