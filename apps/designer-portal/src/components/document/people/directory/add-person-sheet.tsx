@@ -18,6 +18,22 @@
  * On success every path invalidates the directory read model and hands the Room
  * a quiet inline confirmation (R51 grammar — no toast, R83). Errors render
  * inline at the act site.
+ *
+ * F3 — EDIT mode. Pass `contact` (an existing `studio_contacts` row) and this
+ * same sheet opens on that card instead of creating a new one: the kind choice
+ * is hidden (entity_kind/contact_kind are locked — this never re-kinds a
+ * card), the Name/Company/Trade/Phone/Email fields prefill from the record,
+ * the submit button reads "Save", and submit calls `useUpdateStudioContact`
+ * with only the fields that actually changed. `onSaved` fires in place of
+ * `onAdded` on success — there is no directory tab to land on, since the
+ * caller is already sitting on the card's own profile.
+ *
+ * F3-R2-14 — a card with `vendor_id` set (every 00418 pass-A/B row) is the
+ * studio's OWN COPY of a maker: this editor only ever writes the
+ * `studio_contacts` row it was opened on, never the `vendors` row `vendor_id`
+ * points at. "Makers stay read-only (vendor-owned)" governs that shared
+ * `vendors` record, not the studio's private label for it — so this sheet
+ * intentionally still edits a vendor-backed card's copy.
  */
 
 import { useEffect, useMemo, useState } from 'react';
@@ -28,8 +44,10 @@ import {
   useFindOrCreateVendor,
   useSaveVendor,
   useStudioIdentity,
+  useUpdateStudioContact,
   peopleKeys,
   type PartyKind,
+  type StudioContact,
 } from '@patina/supabase';
 import { ALL_FIELD_TRADES, FIELD_TRADE_LABELS } from '@patina/types';
 import { useProjects } from '@/hooks/use-projects';
@@ -137,6 +155,8 @@ export function AddPersonSheet({
   onAdded,
   onGoToLeads,
   initialKind = 'client',
+  contact = null,
+  onSaved,
 }: {
   open: boolean;
   onClose: () => void;
@@ -147,6 +167,11 @@ export function AddPersonSheet({
   onAdded?: (message: string, landOn: DirectoryRole) => void;
   /** Walk out to lead intake (the pipeline) for a prospect rather than a client. */
   onGoToLeads?: () => void;
+  /** F3 — when present, the sheet opens in EDIT mode for this existing
+   *  rolodex card instead of creating a new one. See the module doc. */
+  contact?: StudioContact | null;
+  /** F3 — fired on a successful edit-mode save, in place of `onAdded`. */
+  onSaved?: (message: string) => void;
 }) {
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -155,6 +180,8 @@ export function AddPersonSheet({
   const findOrCreateVendor = useFindOrCreateVendor({ errorSurface: 'inline' });
   const saveVendor = useSaveVendor({ errorSurface: 'inline' });
   const addParty = useAddProjectParty();
+  const updateContact = useUpdateStudioContact();
+  const isEditMode = !!contact;
 
   const { data: projectsRaw } = useProjects();
   // Real (persisted) projects only — the mock fallback returns slug ids a party
@@ -199,7 +226,46 @@ export function AddPersonSheet({
   >('');
   const [consentEvidence, setConsentEvidence] = useState('');
 
+  const [notes, setNotes] = useState('');
   const [error, setError] = useState<string | null>(null);
+
+  // F3 — edit mode prefill. Keyed on the card's own id (not the object
+  // reference): a background refetch of the same card while the sheet is
+  // open must never clobber an in-progress edit.
+  const contactId = contact?.id ?? null;
+  // F3-R1-01/16 — a company card's "name" IS company_name; a person card's is
+  // full_name. F3-R1-06 — a card whose profile_id is set belongs to someone
+  // with a Patina account, who self-manages name/email/phone there (mirrors
+  // HouseholdSheet's hasProfile branch); only trade, company, and notes stay
+  // studio-editable for it here.
+  const isCompanyContact = contact?.entity_kind === 'company';
+  const hasProfile = !!contact?.profile_id;
+  const contactDisplayName = contact?.full_name ?? contact?.company_name ?? 'this contact';
+  // F3-R2-10 — a company card's name is a studio-book fact even when the
+  // card also carries a profile_id (not a state we expect, but the primary
+  // field must not vanish entirely if it occurs): render/validate/diff it
+  // whenever it's the company-name field, and otherwise only when there's no
+  // profile to self-manage the person's name.
+  const primaryFieldRendered = isCompanyContact || !hasProfile;
+  // F3-R2-09 — a seeded vendor card's specialties[0] can sit outside the
+  // field-trade vocab (VendorSpecialty, not FieldTrade); shown as its own
+  // option so the editor renders what the record holds instead of a blank
+  // control that discards the value on any unrelated save.
+  const originalSpecialty = contact?.specialties?.[0] ?? null;
+  const outOfVocabSpecialty =
+    originalSpecialty && !(ALL_FIELD_TRADES as readonly string[]).includes(originalSpecialty)
+      ? originalSpecialty
+      : null;
+  useEffect(() => {
+    if (!open || !contact) return;
+    setPartyName(contact.full_name ?? '');
+    setCompany(contact.company_name ?? '');
+    setTrade(contact.specialties?.[0] ?? '');
+    setPhone(contact.phone ?? '');
+    setPartyEmail(contact.email ?? '');
+    setNotes(contact.notes ?? '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, contactId]);
 
   const reset = () => {
     setKind('client');
@@ -220,6 +286,7 @@ export function AddPersonSheet({
     setTextUpdates(false);
     setConsentSource('');
     setConsentEvidence('');
+    setNotes('');
     setError(null);
   };
 
@@ -368,46 +435,253 @@ export function AddPersonSheet({
     }
   };
 
+  /** F3 — edit an existing rolodex card. Diffs the form against the record
+   *  and patches only what changed; entity_kind/contact_kind are never sent
+   *  (locked in edit mode). A no-op edit just closes the sheet.
+   *
+   *  F3-R1-01/16 — a company card's name lives in `company_name`; only a
+   *  person card's uses `full_name` — sending the wrong column would
+   *  overwrite one with the other on a save that touched neither.
+   *  F3-R1-06 — a profile-holder's name/phone/email are never diffed (the
+   *  fields are hidden in that render branch, but this guards the write
+   *  itself, not just the UI). Company stays studio-owned either way (the
+   *  Company field renders regardless of `hasProfile`), so it is never
+   *  gated on it (F3-R2-08).
+   *  F3-R1-09 — trade patches element 0 of `specialties` in place rather
+   *  than replacing the whole array, so a card with more than one specialty
+   *  keeps the rest.
+   *  F3-R2-07 — the primary Name/Company-name field only renders when
+   *  `primaryFieldRendered` (mirrors the render branch below); validating
+   *  and diffing it when it's off-screen blocks saving an unrelated field
+   *  (e.g. Notes) on a profile-holding person whose `full_name` is NULL.
+   *  F3-R2-06 — Notes is diffed for every card, not only profile-holders. */
+  const submitEditContact = async () => {
+    if (!contact) return;
+    setError(null);
+    const trimmedCompany = company.trim();
+    const trimmedName = partyName.trim();
+    const primaryValue = isCompanyContact ? trimmedCompany : trimmedName;
+    if (primaryFieldRendered && !primaryValue) {
+      setError(
+        isCompanyContact ? 'This company needs a name.' : 'This contact needs a name.',
+      );
+      return;
+    }
+    const trimmedTrade = trade.trim();
+    const originalTrade = contact.specialties?.[0] ?? '';
+    const trimmedNotes = notes.trim();
+
+    const patch: Partial<{
+      fullName: string;
+      companyName: string | null;
+      specialties: string[];
+      phone: string | null;
+      email: string | null;
+      notes: string | null;
+    }> = {};
+    if (isCompanyContact) {
+      if (trimmedCompany !== (contact.company_name ?? ''))
+        patch.companyName = trimmedCompany || null;
+    } else {
+      if (!hasProfile && trimmedName !== (contact.full_name ?? ''))
+        patch.fullName = trimmedName;
+      if (trimmedCompany !== (contact.company_name ?? ''))
+        patch.companyName = trimmedCompany || null;
+    }
+    if (trimmedTrade !== originalTrade) {
+      const restSpecialties = (contact.specialties ?? []).slice(1);
+      patch.specialties = trimmedTrade ? [trimmedTrade, ...restSpecialties] : restSpecialties;
+    }
+    if (trimmedNotes !== (contact.notes ?? '')) patch.notes = trimmedNotes || null;
+    if (!hasProfile) {
+      const trimmedPhone = phone.trim();
+      const trimmedEmail = partyEmail.trim();
+      if (trimmedPhone !== (contact.phone ?? '')) patch.phone = trimmedPhone || null;
+      if (trimmedEmail !== (contact.email ?? '')) patch.email = trimmedEmail || null;
+    }
+
+    if (Object.keys(patch).length === 0) {
+      close();
+      return;
+    }
+
+    const confirmationName = primaryValue || contactDisplayName;
+    try {
+      await updateContact.mutateAsync({
+        id: contact.id,
+        organizationId: contact.organization_id,
+        ...patch,
+      });
+      onSaved?.(`${confirmationName}’s details are saved.`);
+      reset();
+      onClose();
+    } catch (e) {
+      setError(
+        e instanceof Error ? e.message : 'Could not save just now. Try again.',
+      );
+    }
+  };
+
   const pending =
     addClient.isPending ||
     findOrCreateVendor.isPending ||
     saveVendor.isPending ||
-    addParty.isPending;
+    addParty.isPending ||
+    updateContact.isPending;
 
-  const submit = isFieldKind(kind)
-    ? submitParty
+  const submit = isEditMode
+    ? submitEditContact
+    : isFieldKind(kind)
+      ? submitParty
+      : kind === 'client'
+        ? submitClient
+        : submitMaker;
+
+  const intro = isEditMode
+    ? `Update ${contactDisplayName}’s card — the whole studio sees the change.`
     : kind === 'client'
-      ? submitClient
-      : submitMaker;
-
-  const intro =
-    kind === 'client'
       ? 'Add a client to your directory. They appear on your roster at once; an optional invite gives them a Patina login.'
       : kind === 'maker'
         ? 'Add a maker — a shop you order through. They join your roster and the Orders book can route POs to them.'
         : `Add a ${KIND_NOUN[kind as PartyKind]} to a project. With a phone and a text opt-in, you can coordinate them over SMS — and they land on your People roster.`;
 
   return (
-    <RoomSheet open={open} onClose={close} title="Add someone to your people">
+    <RoomSheet
+      open={open}
+      onClose={close}
+      title={isEditMode ? `Edit ${contactDisplayName}` : 'Add someone to your people'}
+    >
       <div className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--color-clay-ink)]">
-        Add · to your roster
+        {isEditMode ? 'Edit · your rolodex' : 'Add · to your roster'}
       </div>
       <h2 className="mt-1 font-heading text-[1.6rem] font-medium text-[var(--color-charcoal)]">
-        Bring someone in
+        {isEditMode ? `Edit ${contactDisplayName}` : 'Bring someone in'}
       </h2>
       <p className="mb-4 mt-1 text-[0.74rem] text-[var(--color-aged-oak)]">
         {intro}
       </p>
 
-      <KindChoice
-        kind={kind}
-        onKind={(k) => {
-          setKind(k);
-          setError(null);
-        }}
-      />
+      {!isEditMode && (
+        <KindChoice
+          kind={kind}
+          onKind={(k) => {
+            setKind(k);
+            setError(null);
+          }}
+        />
+      )}
 
-      {kind === 'client' ? (
+      {isEditMode ? (
+        <>
+          {hasProfile && (
+            <p className="mb-4 text-[0.72rem] italic leading-relaxed text-[var(--color-aged-oak)]">
+              {contactDisplayName}’s name, email, and phone are managed in their
+              Patina account. Trade, company, and notes still update here.
+            </p>
+          )}
+
+          {primaryFieldRendered && (
+            <>
+              <label className={FIELD_LABEL} htmlFor="edit-contact-name">
+                {isCompanyContact ? 'Company name' : 'Name'}
+              </label>
+              <input
+                id="edit-contact-name"
+                type="text"
+                value={isCompanyContact ? company : partyName}
+                onChange={(e) =>
+                  isCompanyContact
+                    ? setCompany(e.target.value)
+                    : setPartyName(e.target.value)
+                }
+                placeholder={
+                  isCompanyContact ? 'e.g. Moretti Plumbing' : 'e.g. Sal Moretti'
+                }
+                className={`${FIELD_INPUT} mb-4`}
+              />
+            </>
+          )}
+
+          {!isCompanyContact && (
+            <>
+              <label className={FIELD_LABEL} htmlFor="edit-contact-company">
+                Company <span className="opacity-60">(optional)</span>
+              </label>
+              <input
+                id="edit-contact-company"
+                type="text"
+                value={company}
+                onChange={(e) => setCompany(e.target.value)}
+                placeholder="e.g. Moretti Plumbing"
+                className={`${FIELD_INPUT} mb-4`}
+              />
+            </>
+          )}
+
+          <label className={FIELD_LABEL} htmlFor="edit-contact-trade">
+            Trade <span className="opacity-60">(optional)</span>
+          </label>
+          <select
+            id="edit-contact-trade"
+            value={trade}
+            onChange={(e) => setTrade(e.target.value)}
+            className={`${FIELD_INPUT} mb-4`}
+          >
+            <option value="">Which trade…</option>
+            {outOfVocabSpecialty && (
+              <option value={outOfVocabSpecialty}>{outOfVocabSpecialty}</option>
+            )}
+            {ALL_FIELD_TRADES.map((t) => (
+              <option key={t} value={t}>
+                {FIELD_TRADE_LABELS[t]}
+              </option>
+            ))}
+          </select>
+
+          <label className={FIELD_LABEL} htmlFor="edit-contact-notes">
+            Notes <span className="opacity-60">(optional)</span>
+          </label>
+          <textarea
+            id="edit-contact-notes"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Anything worth remembering…"
+            rows={3}
+            className={`${FIELD_INPUT} ${hasProfile ? '' : 'mb-4'} resize-none`}
+          />
+
+          {!hasProfile && (
+            <>
+              <label className={FIELD_LABEL} htmlFor="edit-contact-phone">
+                Phone <span className="opacity-60">(optional)</span>
+              </label>
+              <input
+                id="edit-contact-phone"
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="(555) 123-4567"
+                className={`${FIELD_INPUT} mb-4`}
+              />
+
+              <label className={FIELD_LABEL} htmlFor="edit-contact-email">
+                Email <span className="opacity-60">(optional)</span>
+              </label>
+              <input
+                id="edit-contact-email"
+                type="email"
+                value={partyEmail}
+                onChange={(e) => setPartyEmail(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') void submit();
+                }}
+                placeholder="sal@morettiplumbing.com"
+                className={FIELD_INPUT}
+              />
+            </>
+          )}
+        </>
+      ) : kind === 'client' ? (
         <>
           <label className={FIELD_LABEL} htmlFor="client-full-name">
             Full name <span className="opacity-60">(optional)</span>
@@ -708,22 +982,24 @@ export function AddPersonSheet({
 
       <DocumentActionGroup
         surfaceKey="people"
-        regionKey="add-person-sheet"
+        regionKey={isEditMode ? 'edit-person-sheet' : 'add-person-sheet'}
         className="mt-5 border-t border-[var(--color-pearl)] pt-4"
       >
         <DocumentAction
-          actionKey="add-person"
+          actionKey={isEditMode ? 'save-person' : 'add-person'}
           variant="primary"
           loading={pending}
-          loadingLabel="Adding…"
+          loadingLabel={isEditMode ? 'Saving…' : 'Adding…'}
           onClick={() => void submit()}
         >
-          {kind === 'client' && letterOn && !letterLoading
-            ? sendButtonLabel(invite)
-            : 'Add to roster'}
+          {isEditMode
+            ? 'Save'
+            : kind === 'client' && letterOn && !letterLoading
+              ? sendButtonLabel(invite)
+              : 'Add to roster'}
         </DocumentAction>
         <DocumentAction
-          actionKey="cancel-add-person"
+          actionKey={isEditMode ? 'cancel-edit-person' : 'cancel-add-person'}
           variant="tertiary"
           onClick={close}
         >

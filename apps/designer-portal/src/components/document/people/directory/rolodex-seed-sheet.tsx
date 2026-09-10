@@ -26,6 +26,7 @@ import { Avatar } from '../person-bits';
 import { RoomSheet } from '../../rooms/room-sheet';
 import { DocumentAction, DocumentActionGroup } from '../../document-action';
 import { companyKindLabel } from './company-row';
+import { AddPersonSheet } from './add-person-sheet';
 
 function friendlyRolodexError(err: unknown, verb: 'archive' | 'restore'): string {
   const msg = err instanceof Error ? err.message : String(err ?? '');
@@ -45,12 +46,16 @@ function ContactRow({
   pending,
   onArchive,
   onRestore,
+  onEdit,
 }: {
   contact: StudioContact;
   error: string | null;
   pending: boolean;
   onArchive: (id: string) => void;
   onRestore: (id: string) => void;
+  /** F3-R1-07 — this sheet is the rolodex's own review list; without an Edit
+   *  door here, the card editor was reachable only through a ⌘K deep link. */
+  onEdit: (contact: StudioContact) => void;
 }) {
   const archived = !!contact.archived_at;
   const name =
@@ -88,6 +93,18 @@ function ContactRow({
           </span>
         )}
       </span>
+      {!archived && (
+        <DocumentAction
+          actionKey="edit-rolodex-card"
+          surfaceKey="people"
+          regionKey="rolodex-seed-sheet"
+          variant="tertiary"
+          onClick={() => onEdit(contact)}
+          disabled={pending}
+        >
+          Edit
+        </DocumentAction>
+      )}
       <DocumentAction
         actionKey={archived ? 'restore-studio-contact' : 'archive-studio-contact'}
         surfaceKey="people"
@@ -121,6 +138,12 @@ export function RolodexSeedSheet({
   const restoreContact = useRestoreStudioContact();
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [pendingId, setPendingId] = useState<string | null>(null);
+  // F3-R1-07 — the card this review list is editing, if any.
+  const [editingContact, setEditingContact] = useState<StudioContact | null>(null);
+  // F3-R2-11 — the confirmation message from a save via that editor, so
+  // closing the sheet acknowledges the save (R51/R83 grammar) instead of
+  // just silently landing back on the review list.
+  const [notice, setNotice] = useState<string | null>(null);
 
   const rows = useMemo(() => {
     const list = [...(contacts ?? [])];
@@ -179,6 +202,16 @@ export function RolodexSeedSheet({
         restore a card at any time.
       </p>
 
+      {/* The quiet confirmation band — R51's settled grammar, inline, no toast (R83). */}
+      {notice && (
+        <p
+          role="status"
+          className="mb-4 border-l-2 border-[var(--color-sage)] bg-[rgba(133,148,124,0.07)] py-2 pl-3 pr-2 font-mono text-[11px] uppercase tracking-[0.07em] text-[#6f8268]"
+        >
+          {notice}
+        </p>
+      )}
+
       {isLoading ? (
         <p className="py-6 text-center text-[0.74rem] text-[var(--color-aged-oak)]">
           Reading the rolodex…
@@ -198,6 +231,10 @@ export function RolodexSeedSheet({
               pending={pendingId === c.id}
               onArchive={handleArchive}
               onRestore={handleRestore}
+              onEdit={(c) => {
+                setNotice(null);
+                setEditingContact(c);
+              }}
             />
           ))}
         </ul>
@@ -212,6 +249,18 @@ export function RolodexSeedSheet({
           Done
         </DocumentAction>
       </DocumentActionGroup>
+
+      {editingContact && (
+        <AddPersonSheet
+          open
+          onClose={() => setEditingContact(null)}
+          contact={editingContact}
+          onSaved={(message) => {
+            setEditingContact(null);
+            setNotice(message);
+          }}
+        />
+      )}
     </RoomSheet>
   );
 }
