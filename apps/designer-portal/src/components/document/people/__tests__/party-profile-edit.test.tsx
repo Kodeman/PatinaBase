@@ -171,4 +171,102 @@ describe('PartyProfileSheet — edit', () => {
 
     expect(screen.queryByText(/clears their texting opt-in/i)).not.toBeInTheDocument();
   });
+
+  // The record has not resolved yet. Offering Edit here snapshotted an empty
+  // form, and Save then wrote company / trade / phone / email back as null.
+  it('offers no Edit action while the record is still loading', () => {
+    personData.current = null;
+    render(<PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />);
+
+    expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
+  });
+
+  it('re-hydrates an untouched form when the record arrives after Edit opened', () => {
+    personData.current = null;
+    const { rerender } = render(
+      <PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />,
+    );
+    expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
+
+    personData.current = person();
+    rerender(<PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+
+    expect(screen.getByLabelText('Company')).toHaveValue('Moretti Plumbing');
+    expect(screen.getByLabelText('Trade')).toHaveValue('plumbing');
+    expect(screen.getByLabelText('Phone')).toHaveValue('5551234567');
+    expect(screen.getByLabelText('Email')).toHaveValue('sal@morettiplumbing.com');
+  });
+
+  it('does not clobber a typed field when the record refetches under the form', () => {
+    render(<PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.change(screen.getByLabelText('Company'), {
+      target: { value: 'Moretti & Sons' },
+    });
+
+    personData.current = person({ display_name: 'Sal Moretti Jr' });
+    fireEvent.change(screen.getByLabelText('Phone'), { target: { value: '5551234567' } });
+
+    expect(screen.getByLabelText('Company')).toHaveValue('Moretti & Sons');
+  });
+
+  // F3-R2-09's shape, for the field trade: a stored value outside
+  // ALL_FIELD_TRADES must round-trip rather than be discarded by an
+  // unrelated save.
+  it('keeps an out-of-vocabulary trade as its own option', async () => {
+    personData.current = person({
+      meta: {
+        company_name: 'Moretti Plumbing',
+        trade: 'stonemasonry',
+        phone_e164: '+15551234567',
+        project_name: 'The Ellsworth Kitchen',
+      },
+    });
+    render(<PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+
+    expect(screen.getByLabelText('Trade')).toHaveValue('stonemasonry');
+    expect(
+      screen.getByRole('option', { name: 'stonemasonry' }),
+    ).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Sal R. Moretti' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(updateMutateAsync).toHaveBeenCalled());
+    expect(updateMutateAsync.mock.calls[0][0].patch).toEqual({
+      displayName: 'Sal R. Moretti',
+    });
+  });
+
+  // project_parties' UPDATE policy admits only the project's own designer; a
+  // co-member who can read this sheet must not be shown raw PostgREST text.
+  it('translates an RLS refusal on Save into plain words', async () => {
+    updateMutateAsync.mockRejectedValue({
+      code: 'PGRST116',
+      message: 'JSON object requested, multiple (or no) rows returned',
+    });
+    render(<PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Sal R. Moretti' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(
+      await screen.findByText("Only this project's designer can edit its crew."),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/JSON object requested/i),
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows a write failure that is not a refusal in its own words', async () => {
+    updateMutateAsync.mockRejectedValue(new Error('Network request failed'));
+    render(<PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Sal R. Moretti' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(await screen.findByText('Network request failed')).toBeInTheDocument();
+  });
 });

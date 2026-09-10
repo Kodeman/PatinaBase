@@ -61,6 +61,27 @@ const EDIT_LABEL =
 const EDIT_INPUT =
   'w-full rounded-[7px] border border-[var(--color-pearl)] bg-white px-3 py-2 text-[0.82rem] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none';
 
+/** project_parties' UPDATE policy admits only the project's own designer, so a
+ *  studio co-member who can READ this sheet is refused on Save with a Postgres
+ *  RLS 0-rows-affected (PGRST116 on .single(), or a raw 42501 if the grant
+ *  itself were missing). Neither names the project's designer in its own
+ *  words — same translation friendlyRolodexError does for the rolodex. */
+function friendlyPartyWriteError(err: unknown): string {
+  const code = (err as { code?: unknown } | null)?.code;
+  const msg =
+    err instanceof Error
+      ? err.message
+      : (((err as { message?: unknown } | null)?.message as string | undefined) ?? '');
+  if (
+    /row-level security|permission denied|PGRST116|42501/i.test(
+      `${typeof code === 'string' ? code : ''} ${msg}`,
+    )
+  ) {
+    return "Only this project's designer can edit its crew.";
+  }
+  return msg || 'Could not save just now. Try again.';
+}
+
 function ConsentChip({ status }: { status: string | null | undefined }) {
   const cfg =
     SMS_CONSENT_DISPLAY[(status ?? 'not_asked') as SmsConsentStatus] ??
@@ -251,25 +272,57 @@ export function PartyProfileSheet({
     phone: '',
     email: '',
   });
+  // Has the designer typed into this form yet? Until they have, a late-arriving
+  // record is allowed to re-hydrate it (below); once they have, nothing may
+  // overwrite what they typed.
+  const [editTouched, setEditTouched] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
   const updateParty = useUpdateProjectParty();
+  const editField = (patch: Partial<typeof editForm>) => {
+    setEditTouched(true);
+    setEditForm((f) => ({ ...f, ...patch }));
+  };
+  const rawTrade = (meta.trade as string | undefined) ?? '';
+  const recordLoaded = !!person;
   useEffect(() => {
     setEditing(false);
+    setEditTouched(false);
     setEditError(null);
   }, [partyId]);
-  // Snapshot the current record only at the moment editing opens — not on
-  // every `person` refetch — so an in-progress edit is never clobbered.
+  // The snapshot. It re-runs while the form is UNTOUCHED, so a record that
+  // resolves after the sheet opened still fills the form — the earlier
+  // open-once snapshot took an empty record during the initial fetch and Save
+  // then cleared company / trade / phone / email off the row. Once the
+  // designer types, `editTouched` freezes it and no refetch can clobber the
+  // edit in progress.
   useEffect(() => {
-    if (!editing) return;
+    if (!editing || editTouched) return;
     setEditForm({
       name: person?.display_name ?? '',
       company: (meta.company_name as string | undefined) ?? '',
-      trade: (meta.trade as string | undefined) ?? '',
+      trade: rawTrade,
       phone: phone ?? '',
       email: person?.email ?? '',
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editing]);
+  }, [
+    editing,
+    editTouched,
+    person?.display_name,
+    person?.email,
+    company,
+    rawTrade,
+    phone,
+  ]);
+
+  // F3-R2-09's shape, for the field trade: a stored trade can sit outside
+  // ALL_FIELD_TRADES (a hand-written value, or one retired from the vocab).
+  // Shown as its own option so the select renders what the row holds instead
+  // of a blank control that discards it on any unrelated save.
+  const outOfVocabTrade =
+    rawTrade && !(ALL_FIELD_TRADES as readonly string[]).includes(rawTrade)
+      ? rawTrade
+      : null;
 
   // F3-R2-03 — warn before a save that will clear a granted/pending consent:
   // normalized so a cosmetic reformat (spacing, parens, a leading +1) never
@@ -314,6 +367,7 @@ export function PartyProfileSheet({
 
     if (Object.keys(patch).length === 0) {
       setEditing(false);
+      setEditTouched(false);
       return;
     }
     try {
@@ -323,10 +377,9 @@ export function PartyProfileSheet({
         patch,
       });
       setEditing(false);
+      setEditTouched(false);
     } catch (e) {
-      setEditError(
-        e instanceof Error ? e.message : 'Could not save just now. Try again.',
-      );
+      setEditError(friendlyPartyWriteError(e));
     }
   };
 
@@ -442,7 +495,7 @@ export function PartyProfileSheet({
             <input
               id="party-edit-name"
               value={editForm.name}
-              onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
+              onChange={(e) => editField({ name: e.target.value })}
               className={EDIT_INPUT}
             />
           </div>
@@ -453,7 +506,7 @@ export function PartyProfileSheet({
             <input
               id="party-edit-company"
               value={editForm.company}
-              onChange={(e) => setEditForm((f) => ({ ...f, company: e.target.value }))}
+              onChange={(e) => editField({ company: e.target.value })}
               className={EDIT_INPUT}
             />
           </div>
@@ -464,10 +517,13 @@ export function PartyProfileSheet({
             <select
               id="party-edit-trade"
               value={editForm.trade}
-              onChange={(e) => setEditForm((f) => ({ ...f, trade: e.target.value }))}
+              onChange={(e) => editField({ trade: e.target.value })}
               className={EDIT_INPUT}
             >
               <option value="">Which trade…</option>
+              {outOfVocabTrade && (
+                <option value={outOfVocabTrade}>{outOfVocabTrade}</option>
+              )}
               {ALL_FIELD_TRADES.map((t) => (
                 <option key={t} value={t}>
                   {FIELD_TRADE_LABELS[t]}
@@ -483,7 +539,7 @@ export function PartyProfileSheet({
               id="party-edit-phone"
               type="tel"
               value={editForm.phone}
-              onChange={(e) => setEditForm((f) => ({ ...f, phone: e.target.value }))}
+              onChange={(e) => editField({ phone: e.target.value })}
               className={EDIT_INPUT}
             />
             {phoneEditWillRevokeConsent && (
@@ -501,7 +557,7 @@ export function PartyProfileSheet({
               id="party-edit-email"
               type="email"
               value={editForm.email}
-              onChange={(e) => setEditForm((f) => ({ ...f, email: e.target.value }))}
+              onChange={(e) => editField({ email: e.target.value })}
               className={EDIT_INPUT}
             />
           </div>
@@ -526,7 +582,10 @@ export function PartyProfileSheet({
             <DocumentAction
               actionKey="cancel-party-details"
               variant="tertiary"
-              onClick={() => setEditing(false)}
+              onClick={() => {
+                setEditing(false);
+                setEditTouched(false);
+              }}
             >
               Cancel
             </DocumentAction>
@@ -546,16 +605,21 @@ export function PartyProfileSheet({
                 </div>
               ))}
           </dl>
-          <DocumentAction
-            actionKey="edit-party-details"
-            surfaceKey="people"
-            regionKey="party-contact-card"
-            variant="secondary"
-            onClick={() => setEditing(true)}
-            className="mt-2"
-          >
-            Edit
-          </DocumentAction>
+          {/* Only once the record has resolved: opening Edit mid-fetch used
+              to snapshot an empty form, and Save then cleared company, trade,
+              phone and email off the row. */}
+          {recordLoaded && (
+            <DocumentAction
+              actionKey="edit-party-details"
+              surfaceKey="people"
+              regionKey="party-contact-card"
+              variant="secondary"
+              onClick={() => setEditing(true)}
+              className="mt-2"
+            >
+              Edit
+            </DocumentAction>
+          )}
         </>
       )}
 
