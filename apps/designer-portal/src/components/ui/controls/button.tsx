@@ -143,12 +143,23 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
             : (outerOnClick ?? childOnClick);
         return React.cloneElement(child, {
           ...props,
-          onClick: mergedOnClick,
+          // A held act is held whatever element renders it. Without this the
+          // clone came back live, unmarked and unstyled while the caller had
+          // asked for the opposite (T1R-08).
+          onClick: isHeld
+            ? (event: React.MouseEvent<HTMLElement>) => {
+                event.preventDefault();
+                onHeldActivate?.();
+              }
+            : mergedOnClick,
+          ...(isHeld ? { 'aria-disabled': true, 'data-held': true } : undefined),
           // className precedence (deliberate): caller className > child
           // className > variant classes (cn merges left→right, later wins).
           className: cn(
             buttonVariants({ variant, size }),
             child.props.className,
+            isHeld &&
+              'cursor-not-allowed opacity-100 bg-[var(--rail)] text-[var(--ink-faint)]',
             className
           ),
           ref,

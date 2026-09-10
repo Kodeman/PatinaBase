@@ -175,10 +175,6 @@ export function AgreementComposer({
 }: {
   proposal: any;
   bundle: CommercialDocumentBundle;
-  /** R24's handle on the inside, still handed down by the room above until
-   *  the seven-facet room itself is retired. The galley offers no return act:
-   *  it is the only room this agreement has. */
-  onReturnToFacets?: () => void;
 }) {
   const router = useRouter();
   const document: CommercialDocument = bundle.document;
@@ -809,16 +805,24 @@ export function AgreementComposer({
 
   const leaves = rows.map((part) => {
     const drawsNothing = partDrawsNothing(part, currency, turnkeyOn);
+    // R39 — `AgreementPartsBody` filters a hidden part out before it renders
+    // anything, so the galley's paper must not print one either: the sheet
+    // here IS the client's copy. It keeps its rest row in the studio's margin,
+    // which is also where the act that shows it again lives.
+    const hiddenFromClient = part.clientVisible === false;
+    const silent = drawsNothing || hiddenFromClient;
     const partBlockers = blockersForPart(readiness, part.id);
     const standing =
       libraryOn && part.kind === "schedule"
         ? AUTHORITY_STANDING_LABEL[authorityStanding(part.variant)]
         : null;
-    const quiet = !drawsNothing && partBlockers.length === 0;
+    const quiet = !silent && partBlockers.length === 0;
     return {
       part,
       ids: idsFor(part.partKey),
       drawsNothing,
+      hiddenFromClient,
+      silent,
       partBlockers,
       standing,
       quiet,
@@ -941,7 +945,16 @@ export function AgreementComposer({
   };
 
   for (const leaf of leaves) {
-    const { part, ids, drawsNothing, partBlockers, standing, quiet } = leaf;
+    const {
+      part,
+      ids,
+      drawsNothing,
+      hiddenFromClient,
+      silent,
+      partBlockers,
+      standing,
+      quiet,
+    } = leaf;
     const isOpen = part.partKey === openKey;
     if (leaf.hasStrip) {
       const strip = (
@@ -952,14 +965,24 @@ export function AgreementComposer({
           // The head's id belongs to whichever of the two carries the fold
           // act: the paper's own head, or — when the paper prints nothing —
           // the strip's rest row.
-          nameId={drawsNothing ? ids.head : undefined}
+          nameId={silent ? ids.head : undefined}
           standing={standing}
           beside={ids.section}
           quiet={quiet}
         >
-          {drawsNothing && (
+          {silent && (
             <>
-              <p className="t-body-sm">{REST_ROW}</p>
+              {drawsNothing && <p className="t-body-sm">{REST_ROW}</p>}
+              {hiddenFromClient && (
+                <>
+                  <p className="t-head g-strip__standing">
+                    {DESIGN_BUILD_COPY.hiddenFromClient}
+                  </p>
+                  <p className="t-body-sm">
+                    {DESIGN_BUILD_COPY.hiddenFromClientHelp}
+                  </p>
+                </>
+              )}
               <p>
                 <FoldAct
                   ids={ids}
@@ -967,6 +990,16 @@ export function AgreementComposer({
                   onToggle={() => toggleFold(part)}
                   labelledBy={ids.head}
                 />
+                {hiddenFromClient && canHide(part) && (
+                  <button
+                    type="button"
+                    className="g-act g-act--tertiary"
+                    data-client-visible="false"
+                    onClick={() => setClientVisible(part.id, true)}
+                  >
+                    <span className="g-label">Show to the client</span>
+                  </button>
+                )}
               </p>
             </>
           )}
@@ -996,7 +1029,7 @@ export function AgreementComposer({
         currency={currency}
         turnkey={turnkeyOn}
         attachmentLetter={attachmentLetters.get(part.id)}
-        drawsNothing={drawsNothing}
+        drawsNothing={silent}
         open={isOpen}
         readOnly={readOnly}
         canMoveUp={rows[0]?.id !== part.id}
@@ -1010,7 +1043,7 @@ export function AgreementComposer({
         {foldFor(part, partBlockers)}
       </GalleyPart>,
     );
-    if (!drawsNothing) segment.push(seamAct(part.partKey));
+    if (!silent) segment.push(seamAct(part.partKey));
   }
   flush();
 

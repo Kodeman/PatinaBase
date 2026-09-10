@@ -40,18 +40,6 @@ export const AGREEMENT_PART_COPY = {
   notYetSet: "Not yet set",
   /** Attachment acknowledgment — display only in Wave 1. */
   attachmentAcknowledgment: "I received this",
-  /**
-   * R24 — the act that takes a composed draft back to the seven facets.
-   *
-   * RETIRED with the seven-facet room: there is nothing to return to, and no
-   * surface in this repository should print this string again. It is kept
-   * declared only because `agreement-composer.tsx` still renders it on the
-   * branch this lane is forbidden to edit; the galley lane deletes that call
-   * site, and the constant goes with it at integration.
-   *
-   * @deprecated
-   */
-  returnToFacets: "Return to the seven facets",
 } as const;
 
 /** The retainer's activation sentence, by policy. */

@@ -491,11 +491,6 @@ describe("AGREEMENT_PART_COPY — the shared sentences", () => {
       // surfaces print exactly this for a money part whose amount is zero.
       notYetSet: "Not yet set",
       attachmentAcknowledgment: "I received this",
-      // R24 — the studio's own word for un-composing. Retired with the
-      // seven-facet room and printed nowhere; declared only until the
-      // composer's own call site goes. `composedElsewhere` is gone with the
-      // room that said it.
-      returnToFacets: "Return to the seven facets",
     });
   });
 
