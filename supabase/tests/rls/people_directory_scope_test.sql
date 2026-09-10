@@ -767,11 +767,16 @@ BEGIN
   ASSERT v_count = 1,
     'FAIL j3c: a co-member must SELECT the studio''s saved_vendors row, got ' || v_count;
 
-  -- j4: WRITES still fail — every 00421 policy is SELECT-only.
-  UPDATE project_parties SET display_name = 'Comember Overreach'
+  -- j4: writes. 00421 made every policy here SELECT-only; 00584 widened
+  -- project_parties' INSERT/UPDATE/DELETE to studio co-members (a colleague
+  -- edits the project's directory), and left project_team_members and
+  -- saved_vendors exactly as they were. j4a/j4d/j4e therefore now expect the
+  -- write to LAND; j4b, j4c, j4f and j4g still expect refusal.
+  UPDATE project_parties SET display_name = 'Comember Edit'
    WHERE id = 'bd000000-0000-4000-8000-0000000000b1';
   GET DIAGNOSTICS v_count = ROW_COUNT;
-  ASSERT v_count = 0, 'FAIL j4a: a co-member must not UPDATE a party, rows affected: ' || v_count;
+  ASSERT v_count = 1,
+    'FAIL j4a: a co-member must UPDATE a party (00584), rows affected: ' || v_count;
 
   UPDATE project_team_members SET role = 'lead_designer'
    WHERE id = 'bd000000-0000-4000-8000-0000000000f2';
@@ -785,15 +790,14 @@ BEGIN
 
   DELETE FROM project_parties WHERE id = 'bd000000-0000-4000-8000-0000000000b1';
   GET DIAGNOSTICS v_count = ROW_COUNT;
-  ASSERT v_count = 0, 'FAIL j4d: a co-member must not DELETE a party, rows affected: ' || v_count;
+  ASSERT v_count = 1,
+    'FAIL j4d: a co-member must DELETE a party (00584), rows affected: ' || v_count;
 
-  v_raised := false;
-  BEGIN
-    INSERT INTO project_parties (id, project_id, party_kind, display_name)
-    VALUES ('bd000000-0000-4000-8000-0000000000be', 'bd000000-0000-4000-8000-0000000000e1', 'gc', 'Comember Sneak');
-  EXCEPTION WHEN insufficient_privilege THEN v_raised := true;
-  END;
-  ASSERT v_raised, 'FAIL j4e: a co-member must not INSERT a party';
+  INSERT INTO project_parties (id, project_id, party_kind, display_name)
+  VALUES ('bd000000-0000-4000-8000-0000000000be', 'bd000000-0000-4000-8000-0000000000e1', 'gc', 'Comember Add');
+  GET DIAGNOSTICS v_count = ROW_COUNT;
+  ASSERT v_count = 1,
+    'FAIL j4e: a co-member must INSERT a party (00584), rows affected: ' || v_count;
 
   v_raised := false;
   BEGIN
