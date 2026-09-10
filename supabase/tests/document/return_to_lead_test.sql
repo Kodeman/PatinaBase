@@ -129,7 +129,11 @@ VALUES
    'Prefill Echo', 'rtl-prefill@test.invalid'),
   ('d7200000-0000-4000-8000-000000000016', NULL,
    'd7000000-0000-4000-8000-000000000001', 'consultation', 'new',
-   'Drifted Budget', 'rtl-drifted@test.invalid');
+   'Drifted Budget', 'rtl-drifted@test.invalid'),
+  -- 00587: the cross-studio sibling leg.
+  ('d7200000-0000-4000-8000-000000000017', NULL,
+   'd7000000-0000-4000-8000-000000000001', 'consultation', 'new',
+   'Foreign Sibling', 'rtl-foreign-sibling@test.invalid');
 
 UPDATE public.leads
 SET budget_range = '5k_15k', timeline = 'asap'
@@ -587,6 +591,75 @@ BEGIN
 END;
 $$;
 
+-- ── 00587: a sibling is only a sibling inside the studio ───────────────────
+-- designer_clients.lead_id is caller-writable and RLS lets a designer insert a
+-- row of their own naming any lead id. An unscoped sibling probe therefore let
+-- a designer in another studio plant a row pointing at this lead and refuse
+-- this undo forever — denial rather than escalation, and permanent. The probe
+-- now counts only relationships belonging to the same designer.
+DO $$
+DECLARE
+  v_dc      uuid;
+  v_planted uuid;
+  v_own     uuid;
+BEGIN
+  v_dc := pg_temp.rtl_accept('d7200000-0000-4000-8000-000000000017');
+
+  PERFORM pg_temp.assume_rtl_actor('d7000000-0000-4000-8000-000000000003');
+  INSERT INTO public.designer_clients (
+    designer_id, client_email, source, lead_id, status
+  ) VALUES (
+    'd7000000-0000-4000-8000-000000000003', 'rtl-foreign-sibling-2@test.invalid',
+    'direct', 'd7200000-0000-4000-8000-000000000017', 'lead'
+  )
+  RETURNING id INTO v_planted;
+
+  -- Asserted as the planter: designer_clients RLS hides this row from the
+  -- victim's session entirely, which is exactly why the SECURITY DEFINER
+  -- probe inside the check could see it and the victim could not.
+  ASSERT EXISTS (
+    SELECT 1 FROM public.designer_clients
+    WHERE id = v_planted
+      AND lead_id = 'd7200000-0000-4000-8000-000000000017'
+  ), 'the planted row must really be on the lead for this to test anything';
+
+  PERFORM pg_temp.assume_rtl_actor('d7000000-0000-4000-8000-000000000001');
+  ASSERT (public.return_to_lead_check(v_dc)->>'allowed')::boolean,
+    format('a row from another studio must not refuse the undo, got %L',
+           public.return_to_lead_check(v_dc)->>'reason');
+
+  -- The designer's OWN second relationship still closes the door: the scope
+  -- narrows who counts as a sibling, it does not remove the guard.
+  INSERT INTO public.designer_clients (
+    designer_id, client_email, source, lead_id, status
+  ) VALUES (
+    'd7000000-0000-4000-8000-000000000001', 'rtl-own-sibling@test.invalid',
+    'direct', 'd7200000-0000-4000-8000-000000000017', 'lead'
+  )
+  RETURNING id INTO v_own;
+
+  ASSERT pg_temp.rtl_refusal(v_dc) =
+    'This lead is tied to more than one client, so there is no single move to take back.',
+    'a second relationship of the designer''s own must still close the door';
+
+  DELETE FROM public.designer_clients WHERE id = v_own;
+
+  -- And the act itself goes through with the planted row still standing: its
+  -- restated guard is scoped the same way the check's is.
+  PERFORM public.return_to_lead(v_dc);
+  ASSERT (SELECT status = 'new' AND accepted_at IS NULL
+          FROM public.leads
+          WHERE id = 'd7200000-0000-4000-8000-000000000017'),
+    'the reversal must complete past a foreign row on the same lead';
+  -- Checked as the planter again: the row is invisible to this studio's
+  -- session either way, so only its own designer can prove it survived.
+  PERFORM pg_temp.assume_rtl_actor('d7000000-0000-4000-8000-000000000003');
+  ASSERT EXISTS (SELECT 1 FROM public.designer_clients WHERE id = v_planted),
+    'the reversal must not reach outside the studio to delete anything';
+  PERFORM pg_temp.assume_rtl_actor('d7000000-0000-4000-8000-000000000001');
+END;
+$$;
+
 -- ── A nurtured lead comes back to its dated return, not to "new" ───────────
 DO $$
 DECLARE
@@ -716,14 +789,24 @@ BEGIN
     designer_client_id, designer_id, rooms, lifestyle
   ) VALUES (
     v_dc, 'd7000000-0000-4000-8000-000000000001',
-    '[{}]'::jsonb, '[{"room": "Living"}]'::jsonb
+    '[{}]'::jsonb, '[{}]'::jsonb
   );
 
   ASSERT (public.return_to_lead_check(v_dc)->>'allowed')::boolean,
-    'a nameless room row and a wordless lifestyle row are not content';
+    'an empty room row and an empty lifestyle row are not content';
+
+  -- Blank strings are still blank: a row whose fields were typed into and
+  -- then cleared reads exactly like one that was never touched.
+  UPDATE public.client_discovery
+  SET rooms = '[{"name": "", "room_type": "  ", "notes": ""}]'::jsonb,
+      lifestyle = '[{"room": "", "who": "", "how": "   "}]'::jsonb
+  WHERE designer_client_id = v_dc;
+  ASSERT (public.return_to_lead_check(v_dc)->>'allowed')::boolean,
+    'blank strings on either shape are not content';
 
   UPDATE public.client_discovery
-  SET rooms = '[{"name": "Living room"}]'::jsonb
+  SET rooms = '[{"name": "Living room"}]'::jsonb,
+      lifestyle = '[{}]'::jsonb
   WHERE designer_client_id = v_dc;
   ASSERT pg_temp.rtl_refusal(v_dc) =
     'Discovery has already been filled in for this client.',
@@ -736,6 +819,63 @@ BEGIN
   ASSERT pg_temp.rtl_refusal(v_dc) =
     'Discovery has already been filled in for this client.',
     'a lifestyle row that says who must close the door';
+
+  -- 00587 — every field the two shapes carry is the designer's work, not
+  -- only the one field readiness counts (capturedRooms reads name;
+  -- capturedLifestyle reads who/how). Deleting the relationship under any of
+  -- these would lose what was typed.
+  UPDATE public.client_discovery
+  SET rooms = '[{"room_type": "kitchen"}]'::jsonb,
+      lifestyle = '[{}]'::jsonb
+  WHERE designer_client_id = v_dc;
+  ASSERT pg_temp.rtl_refusal(v_dc) =
+    'Discovery has already been filled in for this client.',
+    'a room with only a type must close the door';
+
+  UPDATE public.client_discovery
+  SET rooms = '[{"notes": "north light, low ceiling"}]'::jsonb
+  WHERE designer_client_id = v_dc;
+  ASSERT pg_temp.rtl_refusal(v_dc) =
+    'Discovery has already been filled in for this client.',
+    'a room with only a note must close the door';
+
+  -- The portal writes floor_area_sqft as a number or as the raw input text;
+  -- ->> renders either as text, so one predicate covers both.
+  UPDATE public.client_discovery
+  SET rooms = '[{"floor_area_sqft": 240}]'::jsonb
+  WHERE designer_client_id = v_dc;
+  ASSERT pg_temp.rtl_refusal(v_dc) =
+    'Discovery has already been filled in for this client.',
+    'a room with only a numeric floor area must close the door';
+
+  UPDATE public.client_discovery
+  SET rooms = '[{"floor_area_sqft": "240"}]'::jsonb
+  WHERE designer_client_id = v_dc;
+  ASSERT pg_temp.rtl_refusal(v_dc) =
+    'Discovery has already been filled in for this client.',
+    'a room with only a typed floor area must close the door';
+
+  UPDATE public.client_discovery
+  SET rooms = '[{"keep_as_is": true}]'::jsonb
+  WHERE designer_client_id = v_dc;
+  ASSERT pg_temp.rtl_refusal(v_dc) =
+    'Discovery has already been filled in for this client.',
+    'a room marked keep-as-is must close the door';
+
+  -- keep_as_is false is the control's own default, not a mark.
+  UPDATE public.client_discovery
+  SET rooms = '[{"keep_as_is": false}]'::jsonb
+  WHERE designer_client_id = v_dc;
+  ASSERT (public.return_to_lead_check(v_dc)->>'allowed')::boolean,
+    'keep-as-is left off is not content';
+
+  UPDATE public.client_discovery
+  SET rooms = '[{}]'::jsonb,
+      lifestyle = '[{"room": "Living"}]'::jsonb
+  WHERE designer_client_id = v_dc;
+  ASSERT pg_temp.rtl_refusal(v_dc) =
+    'Discovery has already been filled in for this client.',
+    'a lifestyle row naming only its room must close the door';
 END;
 $$;
 

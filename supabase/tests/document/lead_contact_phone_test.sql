@@ -65,7 +65,12 @@ VALUES
    'No Phone Household', 'nophone@test.invalid', NULL),
   ('d9200000-0000-4000-8000-000000000003', 'd9000000-0000-4000-8000-000000000002',
    'd9000000-0000-4000-8000-000000000001', 'consultation', 'new',
-   'Ada Okafor', NULL, '(555) 014-2299');
+   'Ada Okafor', NULL, '(555) 014-2299'),
+  -- 00587's lead-branch leg: the SAME household comes back with a second
+  -- enquiry, and a different number was taken at the door this time.
+  ('d9200000-0000-4000-8000-000000000004', 'd9000000-0000-4000-8000-000000000002',
+   'd9000000-0000-4000-8000-000000000001', 'consultation', 'new',
+   'Ada Okafor', NULL, '(555) 014-2288');
 
 DO $$
 BEGIN
@@ -285,6 +290,50 @@ BEGIN
     format('the directory must fall through to the profile phone, got %L',
            (SELECT phone FROM public.people_directory
             WHERE person_id = v_relationship_id AND role = 'client'));
+
+  -- 00587 — and if a number ever DOES reach client_phone on a profile-holding
+  -- row (a legacy row, or a hand write), the profile still wins. That is the
+  -- unclearable-shadow case the paragraph above describes, closed from the
+  -- read side too.
+  UPDATE public.designer_clients
+  SET client_phone = '(555) 014-2299'
+  WHERE id = v_relationship_id;
+  ASSERT (SELECT phone = '(555) 990-0001'
+          FROM public.people_directory
+          WHERE person_id = v_relationship_id AND role = 'client'),
+    format('the client branch must read the profile phone first, got %L',
+           (SELECT phone FROM public.people_directory
+            WHERE person_id = v_relationship_id AND role = 'client'));
+END;
+$$;
+
+-- 00587 — profile-first on the LEAD branch too. Lead 4 is the same household's
+-- second enquiry, still open, carrying its own captured number. The account
+-- holder's own number wins there as well: the studio is given no field to edit
+-- profiles.phone, so a number taken at the door must not shadow the one the
+-- household maintains.
+--
+-- Asserted only now, after the first lead began Discovery: profiles RLS hides a
+-- homeowner's row from a designer who has no relationship with them yet, so on
+-- a lead with no accepted sibling the join yields NULL and the branch reads the
+-- captured number whatever the precedence says.
+DO $$
+BEGIN
+  ASSERT (SELECT contact_phone = '(555) 014-2288'
+          FROM public.leads
+          WHERE id = 'd9200000-0000-4000-8000-000000000004'),
+    'the fixture must really carry a captured phone as well as a profile one';
+  ASSERT (SELECT count(*) = 1 FROM public.profiles
+          WHERE id = 'd9000000-0000-4000-8000-000000000002'),
+    'the homeowner profile must be readable for this leg to test anything';
+  ASSERT (SELECT phone = '(555) 990-0001'
+          FROM public.people_directory
+          WHERE person_id = 'd9200000-0000-4000-8000-000000000004'
+            AND role = 'lead'),
+    format('the lead branch must read the profile phone first, got %L',
+           (SELECT phone FROM public.people_directory
+            WHERE person_id = 'd9200000-0000-4000-8000-000000000004'
+              AND role = 'lead'));
 END;
 $$;
 
