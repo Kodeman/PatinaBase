@@ -14,4 +14,4 @@ and the synthesis the deck is built from.
 
 **source/** — `check-prose.mjs` (word-budget gate) and `render.mjs` (Playwright shots; run outside the sandbox).
 
-No product code changes. Rulings R1–R6 owed; defects D1–D7 found along the way.
+No product code changes. Rulings R1–R6 taken 10 September 2026 — see rulings.md. Direction: The Band. Defects D1–D7 fold into the build.
