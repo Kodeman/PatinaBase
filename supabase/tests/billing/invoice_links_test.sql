@@ -708,6 +708,50 @@ BEGIN
             p_studio_id => 'a5741000-0000-4000-8000-000000000002') s),
     'the payload agrees with resolve_studio_identity';
 
+  -- 00588: a studio invoice is named by its OWN payer. The prod symptom was
+  -- every Middle West studio invoice reading "for Jodi Kurhn and Terri
+  -- Kalscheur" — the designer-wide email-only roster row — because the payer's
+  -- household carries no profile name. Blank the household profile so the
+  -- roster is all that is left to read.
+  UPDATE public.profiles SET full_name = NULL, display_name = NULL
+  WHERE id = 'a5740000-0000-4000-8000-000000000004';
+
+  -- (a) the payer's own roster row names her — never the designer-wide row.
+  UPDATE public.designer_clients
+  SET client_name = 'The Enzenroth House', client_email = NULL
+  WHERE id = 'a5743000-0000-4000-8000-000000000001';
+  v := public.resolve_invoice_link((SELECT value FROM links_state WHERE label = 'token33'), false);
+  ASSERT v->>'client_display_name' = 'The Enzenroth House',
+    format('00588: the studio invoice takes its payer''s own roster name: %s', v->>'client_display_name');
+  ASSERT v->>'client_display_name' <> 'Harper Guest',
+    '00588: the designer-wide email-only roster row must be unreachable with a payer';
+  ASSERT (SELECT r.client_display_name = 'The Enzenroth House'
+          FROM public.resolve_invoice_link_for_checkout(
+            (SELECT value FROM links_state WHERE label = 'token33')) r),
+    'F14/00588: the checkout resolver carries the payer''s own roster name';
+
+  -- (b) name blank, address entered: the sheet reads the address the studio
+  -- typed — the studio's ask, and never a stranger's name.
+  UPDATE public.designer_clients
+  SET client_name = NULL, client_email = 'house-links@test.invalid'
+  WHERE id = 'a5743000-0000-4000-8000-000000000001';
+  v := public.resolve_invoice_link((SELECT value FROM links_state WHERE label = 'token33'), false);
+  ASSERT v->>'client_display_name' = 'house-links@test.invalid',
+    format('00588: an email-only household is named by its address: %s', v->>'client_display_name');
+  ASSERT (SELECT r.client_display_name = 'house-links@test.invalid'
+          FROM public.resolve_invoice_link_for_checkout(
+            (SELECT value FROM links_state WHERE label = 'token33')) r),
+    'F14/00588: the checkout resolver carries the same address';
+
+  -- Restore the fixture for the assertions that follow.
+  UPDATE public.designer_clients SET client_name = NULL, client_email = NULL
+  WHERE id = 'a5743000-0000-4000-8000-000000000001';
+  UPDATE public.profiles SET full_name = 'Links Client'
+  WHERE id = 'a5740000-0000-4000-8000-000000000004';
+  ASSERT (SELECT r.client_display_name = 'Links Client'
+          FROM public.resolve_invoice_link_for_checkout(v_token) r),
+    'the household profile name is back';
+
   -- Draft: no link exists, but even a hand-planted one is NULL.
   INSERT INTO public.invoice_links (invoice_id, token)
   VALUES ('a5745000-0000-4000-8000-000000000034', repeat('d', 64));
