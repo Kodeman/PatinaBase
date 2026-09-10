@@ -708,6 +708,117 @@ BEGIN
             p_studio_id => 'a5741000-0000-4000-8000-000000000002') s),
     'the payload agrees with resolve_studio_identity';
 
+  -- 00588: a studio invoice is named by its OWN payer. The prod symptom was
+  -- every Middle West studio invoice reading "for Jodi Kurhn and Terri
+  -- Kalscheur" — the designer-wide email-only roster row — because the payer's
+  -- household carries no profile name. Blank the household profile so the
+  -- roster is all that is left to read.
+  UPDATE public.profiles SET full_name = NULL, display_name = NULL
+  WHERE id = 'a5740000-0000-4000-8000-000000000004';
+
+  -- (a) the payer's own roster row names her — never the designer-wide row.
+  UPDATE public.designer_clients
+  SET client_name = 'The Enzenroth House', client_email = NULL
+  WHERE id = 'a5743000-0000-4000-8000-000000000001';
+  v := public.resolve_invoice_link((SELECT value FROM links_state WHERE label = 'token33'), false);
+  ASSERT v->>'client_display_name' = 'The Enzenroth House',
+    format('00588: the studio invoice takes its payer''s own roster name: %s', v->>'client_display_name');
+  ASSERT v->>'client_display_name' <> 'Harper Guest',
+    '00588: the designer-wide email-only roster row must be unreachable with a payer';
+  ASSERT (SELECT r.client_display_name = 'The Enzenroth House'
+          FROM public.resolve_invoice_link_for_checkout(
+            (SELECT value FROM links_state WHERE label = 'token33')) r),
+    'F14/00588: the checkout resolver carries the payer''s own roster name';
+
+  -- (b) name blank, address entered: the sheet reads the address the studio
+  -- typed — the studio's ask, and never a stranger's name.
+  UPDATE public.designer_clients
+  SET client_name = NULL, client_email = 'house-links@test.invalid'
+  WHERE id = 'a5743000-0000-4000-8000-000000000001';
+  v := public.resolve_invoice_link((SELECT value FROM links_state WHERE label = 'token33'), false);
+  ASSERT v->>'client_display_name' = 'house-links@test.invalid',
+    format('00588: an email-only household is named by its address: %s', v->>'client_display_name');
+  ASSERT (SELECT r.client_display_name = 'house-links@test.invalid'
+          FROM public.resolve_invoice_link_for_checkout(
+            (SELECT value FROM links_state WHERE label = 'token33')) r),
+    'F14/00588: the checkout resolver carries the same address';
+
+  -- (c) no roster row under this invoice's designer at all: the payer's own
+  -- profile email is the last thing left to print, and the designer-wide
+  -- email-only fallback still must not fire. Move the row to another designer
+  -- rather than deleting it, so the fixture survives intact.
+  UPDATE public.designer_clients
+  SET designer_id = 'a5740000-0000-4000-8000-000000000002'
+  WHERE id = 'a5743000-0000-4000-8000-000000000001';
+  v := public.resolve_invoice_link((SELECT value FROM links_state WHERE label = 'token33'), false);
+  ASSERT v->>'client_display_name' = 'links-client@test.invalid',
+    format('00588: a payer with no roster row is named by profiles.email: %s', v->>'client_display_name');
+  ASSERT (SELECT r.client_display_name = 'links-client@test.invalid'
+          FROM public.resolve_invoice_link_for_checkout(
+            (SELECT value FROM links_state WHERE label = 'token33')) r),
+    'F14/00588: the checkout resolver falls through to profiles.email too';
+  UPDATE public.designer_clients
+  SET designer_id = 'a5740000-0000-4000-8000-000000000001'
+  WHERE id = 'a5743000-0000-4000-8000-000000000001';
+
+  -- (d) Row choice when the payer holds MORE than one roster row. 00331
+  -- re-scoped idx_designer_clients_unique_profile to
+  -- WHERE client_id IS NOT NULL AND status <> 'lead', so exactly one non-lead
+  -- row may exist per pair but the lead row it was promoted from survives
+  -- beside it — and that lead row is usually the OLDER of the two
+  -- (00585:45-55). created_at is the transaction timestamp, so both rows get
+  -- an explicit one here and the ordering is never left to a tie.
+  UPDATE public.designer_clients
+  SET status = 'active', client_name = 'Active Roster Name', client_email = NULL,
+      created_at = now()
+  WHERE id = 'a5743000-0000-4000-8000-000000000001';
+  INSERT INTO public.designer_clients
+    (id, designer_id, client_id, client_email, client_name, status, created_at)
+  VALUES
+    ('a5743000-0000-4000-8000-000000000003', 'a5740000-0000-4000-8000-000000000001',
+     'a5740000-0000-4000-8000-000000000004', 'lead-house@test.invalid',
+     'Lead Roster Name', 'lead', now() - interval '30 days');
+
+  -- Both named: the active row wins, never the older lead row.
+  v := public.resolve_invoice_link((SELECT value FROM links_state WHERE label = 'token33'), false);
+  ASSERT v->>'client_display_name' = 'Active Roster Name',
+    format('00588: the active roster row beats the older lead row: %s', v->>'client_display_name');
+  ASSERT (SELECT r.client_display_name = 'Active Roster Name'
+          FROM public.resolve_invoice_link_for_checkout(
+            (SELECT value FROM links_state WHERE label = 'token33')) r),
+    'F14/00588: both resolvers choose the same roster row';
+
+  -- The winning row is blank-named: it must not be picked and then discarded,
+  -- which would hide the sibling that does carry a name and drop the sheet to
+  -- an address it never needed to print.
+  UPDATE public.designer_clients SET client_name = '   '
+  WHERE id = 'a5743000-0000-4000-8000-000000000001';
+  v := public.resolve_invoice_link((SELECT value FROM links_state WHERE label = 'token33'), false);
+  ASSERT v->>'client_display_name' = 'Lead Roster Name',
+    format('00588: a blank-named winner must not hide a sibling row''s name: %s',
+           coalesce(v->>'client_display_name', '<NULL>'));
+  ASSERT v->'client_display_name' <> 'null'::jsonb
+     AND v->>'client_display_name' <> 'lead-house@test.invalid',
+    format('00588: a name still on the roster outranks NULL and the address: %s',
+           v->>'client_display_name');
+  ASSERT (SELECT r.client_display_name = 'Lead Roster Name'
+          FROM public.resolve_invoice_link_for_checkout(
+            (SELECT value FROM links_state WHERE label = 'token33')) r),
+    'F14/00588: both resolvers skip the blank row the same way';
+
+  DELETE FROM public.designer_clients
+  WHERE id = 'a5743000-0000-4000-8000-000000000003';
+
+  -- Restore the fixture for the assertions that follow.
+  UPDATE public.designer_clients
+  SET client_name = NULL, client_email = NULL, status = 'active', created_at = now()
+  WHERE id = 'a5743000-0000-4000-8000-000000000001';
+  UPDATE public.profiles SET full_name = 'Links Client'
+  WHERE id = 'a5740000-0000-4000-8000-000000000004';
+  ASSERT (SELECT r.client_display_name = 'Links Client'
+          FROM public.resolve_invoice_link_for_checkout(v_token) r),
+    'the household profile name is back';
+
   -- Draft: no link exists, but even a hand-planted one is NULL.
   INSERT INTO public.invoice_links (invoice_id, token)
   VALUES ('a5745000-0000-4000-8000-000000000034', repeat('d', 64));
