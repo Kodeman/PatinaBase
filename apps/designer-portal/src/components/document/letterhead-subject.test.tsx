@@ -57,6 +57,21 @@ describe('LetterheadSubject', () => {
     expect(act).toHaveAttribute('data-action-variant', 'tertiary');
   });
 
+  // P5 — a project paper's vitals already carry phase · target · money, so the
+  // empty case prints nothing there, not even the act.
+  it('prints nothing at all on an empty project paper — not even the act', () => {
+    const { container } = renderSubject({ kind: 'project', id: 'project-1' });
+
+    expect(container.querySelector('[data-letterhead-subject]')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Add a subject line' })).toBeNull();
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it('still prints a stored line on a project paper', () => {
+    renderSubject({ kind: 'project', id: 'project-1', subject: 'Kitchen and bath' });
+    expect(screen.getByText('Kitchen and bath')).toHaveAttribute('data-letterhead-subject');
+  });
+
   it('opens the editor from the printed line, by press and by key', () => {
     renderSubject({ subject: 'Whole-house refresh' });
 

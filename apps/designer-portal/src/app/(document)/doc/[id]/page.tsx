@@ -1933,20 +1933,10 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         : null,
     [row?.active_section],
   );
-  // W5F-03 — ONE section source for both of the stage strip's gates: the
-  // suppression above the spread and the re-host inside `scope`. They read the
-  // same value, so they cannot disagree about which spread this is.
-  //
-  // Residual, closed at W6: that value has to be the SPREAD's section, not the
-  // row's. The `scope` region that hosts one of the two mounts is gated on
-  // `spreadSection` (`= table ? table.section : row.active_section`), and a
-  // pinned worktable deliberately holds a stale composition — so an
-  // `active_section: 'proposal'` under a pinned `section: 'project'` suppressed
-  // the free-standing strip and never mounted `scope`, printing ZERO strips.
-  // `stageStripInScope` is therefore computed below, beside `spreadSection`,
-  // and both use sites sit under it.
-  // W5F-02 — `scope` mounts on the PROPOSAL spread only, so only the proposal
-  // spread re-hosts the strip. brief/discovery/direction keep it where it was.
+  // R1 — the stage line prints on the glass at project · install · care only;
+  // the pre-work and proposal spreads carry none. The rail keeps its own
+  // `CORE · STAGE 03` register (`preworkStageLine` above feeds it): the rail is
+  // the door, and it says the stage whether or not the glass does.
   const ladderSegments = ticketInput
     ? deriveLadderSegments({
         ticket: ticketInput,

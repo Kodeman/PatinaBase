@@ -12,7 +12,8 @@
  * is still moving.
  *
  * P5 — with neither a subject nor an assembled line the paper prints no empty
- * line at all; the door stays open as one tertiary act.
+ * line at all; the door stays open as one tertiary act, except on a project
+ * paper, which prints nothing.
  *
  * Blur-save, Enter, Esc: the R40/R70 law, in the shape `LetterheadTitle` wears
  * one line above.
@@ -110,6 +111,10 @@ export function LetterheadSubject({
   };
 
   const printed = subject ?? assembled;
+
+  // P5 — a project paper's vitals already carry phase · target · money, so an
+  // empty project head prints nothing at all, not even the act.
+  if (printed === null && kind === 'project') return null;
 
   return (
     <div className="mt-1 flex min-w-0 items-baseline gap-2">
