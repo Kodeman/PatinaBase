@@ -912,6 +912,212 @@ describe("AgreementComposer · a write during an in-flight save (N-8)", () => {
   });
 });
 
+/* ── WR-101 · two saves may not fly at once ──────────────────────────────────
+   `persist()` is fired unawaited from a fold close and from the outline, so
+   the room could put two `upsert_agreement_parts` calls in the air at once.
+   The RPC is DELETE-then-INSERT, and when the server applied the OLDER of the
+   two last, the table kept the older payload while the page kept the newer
+   prose — and because the newer landing had already cleared `dirty` and the
+   older landing took the stale branch, which never re-asserts it, the record
+   read a clean `Saved`. A contract clause was gone with a green record.
+
+   The room serializes now: one call in the air, at most one queued behind it,
+   and a landing that is not the latest flight's is discarded. Which is why the
+   inversion can no longer be composed from the page at all — the second call
+   is not issued until the first is down — and that is what the first case
+   pins, because the absence of the pair is the fix.
+   ────────────────────────────────────────────────────────────────────────── */
+describe("AgreementComposer · two saves may not fly at once (WR-101)", () => {
+  /** The saves this suite holds open, landed one at a time, by hand. */
+  const gate: Array<(outcome?: "reject") => void> = [];
+
+  const heldSaves = () => {
+    let round = 0;
+    mockSaveParts.mockImplementation((sent: AgreementPart[]) => {
+      const answer = round;
+      round += 1;
+      return new Promise((resolve, reject) => {
+        gate.push((outcome) => {
+          if (outcome === "reject") {
+            // Exactly the shape PostgREST returns, carrying no sentence of its
+            // own, so the room falls back to its own.
+            reject({ code: "PGRST301" });
+            return;
+          }
+          resolve(
+            bundleWith(
+              sent.map((p, index) => ({
+                ...p,
+                // Every uuid is new, exactly as the RPC hands them back.
+                id: `reminted-${answer}-${index}`,
+                position: index + 1,
+              })),
+            ),
+          );
+        });
+      });
+    });
+  };
+
+  /** Land the oldest save still in the air. */
+  const land = async (outcome?: "reject") => {
+    await act(async () => {
+      gate.shift()!(outcome);
+    });
+  };
+
+  const sentBody = (call: number) =>
+    (mockSaveParts.mock.calls[call]![0] as AgreementPart[]).find(
+      (p) => p.partKey === "patina.services",
+    )?.payload as { body?: string } | undefined;
+
+  /** Selecting the open part again takes the act without closing the fold. */
+  const reselectServices = () => {
+    openOutline();
+    fireEvent.click(
+      within(outline()).getByRole("button", { name: "Services" }),
+    );
+  };
+
+  const refusals = () =>
+    screen.queryAllByText("The agreement could not be saved.");
+
+  const openServices = () => {
+    heldSaves();
+    render(
+      <AgreementComposer
+        proposal={proposal}
+        bundle={bundleWith(threeParts())}
+      />,
+    );
+    write("Services");
+    return screen.getByRole("textbox", { name: "Body" });
+  };
+
+  afterEach(() => {
+    gate.splice(0);
+  });
+
+  it("holds the second save back, so an older landing cannot bury a newer clause", async () => {
+    const body = openServices();
+
+    fireEvent.change(body, { target: { value: "The ground floor." } });
+    reselectServices();
+    await waitFor(() => expect(mockSaveParts).toHaveBeenCalledTimes(1));
+    expect(sentBody(0)?.body).toBe("The ground floor.");
+
+    // The designer writes on, and takes the act again while the first save is
+    // still in the air.
+    fireEvent.change(body, {
+      target: { value: "The ground floor and the stair hall." },
+    });
+    reselectServices();
+
+    // Asked for, not sent. Nothing overtakes the first call, so there is no
+    // pair of calls the server could apply out of order.
+    expect(mockSaveParts).toHaveBeenCalledTimes(1);
+
+    // The first save lands, carrying only the OLDER clause.
+    await land();
+
+    // So the record may not read `Saved` on the strength of it.
+    expect(record()).toHaveTextContent("not yet saved");
+
+    // The queued save goes now, and it is the one that carries the clause the
+    // paper is showing.
+    expect(mockSaveParts).toHaveBeenCalledTimes(2);
+    expect(sentBody(1)?.body).toBe("The ground floor and the stair hall.");
+
+    await land();
+    await waitFor(() =>
+      expect(record()).not.toHaveTextContent("not yet saved"),
+    );
+    expect(body).toHaveValue("The ground floor and the stair hall.");
+    // The last call the RPC took is the newer clause — the table and the page
+    // say the same thing, which is the whole of WR-101.
+    expect(sentBody(mockSaveParts.mock.calls.length - 1)?.body).toBe(
+      "The ground floor and the stair hall.",
+    );
+  });
+
+  it("runs a save requested mid-flight exactly once, with the latest parts", async () => {
+    const body = openServices();
+
+    fireEvent.change(body, { target: { value: "First." } });
+    reselectServices();
+    await waitFor(() => expect(mockSaveParts).toHaveBeenCalledTimes(1));
+
+    // Three more acts while that save is in the air. Between them they queue
+    // ONE save, not three.
+    fireEvent.change(body, { target: { value: "Second." } });
+    reselectServices();
+    fireEvent.change(body, { target: { value: "Third." } });
+    reselectServices();
+    fireEvent.change(body, { target: { value: "Fourth." } });
+    reselectServices();
+    expect(mockSaveParts).toHaveBeenCalledTimes(1);
+
+    await land();
+    expect(mockSaveParts).toHaveBeenCalledTimes(2);
+    expect(sentBody(1)?.body).toBe("Fourth.");
+
+    await land();
+    expect(mockSaveParts).toHaveBeenCalledTimes(2);
+    await waitFor(() =>
+      expect(record()).not.toHaveTextContent("not yet saved"),
+    );
+  });
+
+  it("lets the queued save speak for a failed one that it succeeds behind", async () => {
+    const body = openServices();
+
+    fireEvent.change(body, { target: { value: "First." } });
+    reselectServices();
+    await waitFor(() => expect(mockSaveParts).toHaveBeenCalledTimes(1));
+
+    fireEvent.change(body, { target: { value: "Second." } });
+    reselectServices();
+
+    // The first save fails with another already queued behind it.
+    await land("reject");
+    expect(mockSaveParts).toHaveBeenCalledTimes(2);
+
+    // Nothing is announced. The queued save carries the same composition, and
+    // it is the one that gets to say whether the agreement could be saved.
+    expect(refusals()).toHaveLength(0);
+
+    await land();
+    expect(refusals()).toHaveLength(0);
+    await waitFor(() =>
+      expect(record()).not.toHaveTextContent("not yet saved"),
+    );
+  });
+
+  it("reports the refusal in the status region when the queued save fails too", async () => {
+    const body = openServices();
+
+    fireEvent.change(body, { target: { value: "First." } });
+    reselectServices();
+    await waitFor(() => expect(mockSaveParts).toHaveBeenCalledTimes(1));
+
+    fireEvent.change(body, { target: { value: "Second." } });
+    reselectServices();
+
+    await land("reject");
+    await land("reject");
+
+    // Twice on the page by design: the studio's one live region announces it,
+    // and the line beside the record prints it where the save was taken.
+    await waitFor(() => expect(refusals()).toHaveLength(2));
+    expect(window.document.getElementById("room-status")).toHaveTextContent(
+      "The agreement could not be saved.",
+    );
+    // Neither flight reached the table, so the agreement still has no date on
+    // it at all — the record says so rather than dating a save that failed.
+    expect(record()).toHaveTextContent("Not saved yet");
+  });
+});
+
 /* ── R29 · the two-click duplicate-variant path ──────────────────────────────
    The designer lane's N1: from a materialized agreement, two clicks reached a
    save the server cannot accept — "an agreement carries only one ceiling"

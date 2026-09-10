@@ -9,6 +9,7 @@
  */
 
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -24,6 +25,7 @@ import {
 import type { CommercialDocumentBundle } from "@/hooks/use-commercial-documents";
 
 const mockMaterializeTemplate = jest.fn();
+const mockSaveParts = jest.fn();
 const mockRefetch = jest.fn();
 const mockStudioContext = jest.fn();
 const mockSavePart = jest.fn();
@@ -127,7 +129,10 @@ jest.mock("@patina/supabase", () => ({
   licenseAttestationIsLive: () => false,
   useAgreementJurisdictionNotices: () => ({ data: [], isLoading: false }),
   useAgreementDraws: () => ({ data: [], isLoading: false }),
-  useSaveAgreementParts: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useSaveAgreementParts: () => ({
+    mutateAsync: mockSaveParts,
+    isPending: false,
+  }),
   useMaterializeStandardParts: () => ({
     mutateAsync: jest.fn().mockResolvedValue({ parts: [] }),
     isPending: false,
@@ -293,6 +298,10 @@ function renderRoom(parts = twoParts()) {
 
 beforeEach(() => {
   seq = 0;
+  mockSaveParts.mockReset();
+  mockSaveParts.mockImplementation(async (parts: AgreementPart[]) =>
+    bundleWith(parts.map((p, index) => ({ ...p, position: index + 1 }))),
+  );
   mockMaterializeTemplate.mockReset();
   mockRefetch.mockReset();
   mockSavePart.mockReset();
@@ -385,6 +394,88 @@ describe("the Contract Room with the Library on", () => {
     expect(mockRefetch).toHaveBeenCalledTimes(1);
     expect(
       await screen.findByText(
+        "The parts of Full-service residential are on this agreement.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  /* WR-102 — `applyTemplate` replaces the composition wholesale from the
+     server, so it is an act like any other and has to bump the revision. It
+     did not, and a save already in the air resolved with `revision.current ===
+     sentAt`, took the "the server's answer IS the paper" branch, and laid the
+     PRE-template composition back over the template that had just replaced it
+     — with `dirty` cleared, so the room said nothing about it. */
+  it("keeps a Template laid in during a save when that save lands", async () => {
+    const gate: Array<() => void> = [];
+    mockSaveParts.mockImplementation(
+      (sent: AgreementPart[]) =>
+        new Promise((resolve) => {
+          gate.push(() =>
+            resolve(
+              bundleWith(
+                sent.map((p, index) => ({
+                  ...p,
+                  id: `reminted-${index}`,
+                  position: index + 1,
+                })),
+              ),
+            ),
+          );
+        }),
+    );
+    mockMaterializeTemplate.mockResolvedValue(1);
+    // A part the pre-template composition does not carry, so which composition
+    // is on the paper afterwards cannot be read two ways.
+    mockRefetch.mockResolvedValue({
+      data: [
+        part({
+          partKey: "studio.house-rules",
+          position: 1,
+          title: "House rules",
+        }),
+      ],
+    });
+    renderRoom();
+
+    // Write, then take the act — the save leaves and the room hands straight
+    // back, so the template goes in while it is still in the air.
+    write("Services");
+    fireEvent.change(screen.getByRole("textbox", { name: "Body" }), {
+      target: { value: "Interior design services." },
+    });
+    openOutline();
+    fireEvent.click(
+      within(outline()).getByRole("button", { name: "Services" }),
+    );
+    await waitFor(() => expect(mockSaveParts).toHaveBeenCalledTimes(1));
+
+    startFromTemplate();
+    const row = screen
+      .getAllByRole("listitem")
+      .find((item) =>
+        within(item).queryByText("Full-service residential"),
+      ) as HTMLElement;
+    fireEvent.click(within(row).getByRole("button"));
+    fireEvent.click(screen.getByRole("button", { name: "Use this template" }));
+    fireEvent.click(screen.getByRole("button", { name: "Replace the parts" }));
+    await waitFor(() =>
+      expect(railRows().map((r) => r.textContent ?? "")).toHaveLength(1),
+    );
+
+    // The save that was carrying the OLD composition lands now.
+    await act(async () => {
+      gate.shift()!();
+    });
+
+    // The template is still what the agreement is made of.
+    expect(
+      railRows()
+        .map((r) => r.textContent ?? "")
+        .join(" "),
+    ).toContain("House rules");
+    expect(railRows()).toHaveLength(1);
+    expect(
+      screen.getByText(
         "The parts of Full-service residential are on this agreement.",
       ),
     ).toBeInTheDocument();
