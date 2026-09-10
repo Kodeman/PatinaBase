@@ -15,6 +15,7 @@ The deck's sheet 17 asked these questions and carried the panel's lean; the Ruli
 | AM-1 | Rename `Return to the seven facets` (ED-50, IA-17, LH-28). R24 fixes that the act exists, not what it is called, and it is the last of that vocabulary on the studio's face. | The compliant version built: label unchanged, verbatim, in the quietest tier at the outline's/page's foot, with a consequence sentence and a press-and-hold confirm. | **REVERSED — removed.** Kody: *"I go back on this. Lets remove this concept all together. We have the parts, the templates and saved states that cover all this."* The return act is deleted, not renamed, and the seven-facet room is retired with it. |
 | AM-2 | Permit `.t-authorship` (the authorship italic) as a part heading (TY-8); the shipped editor and the shipped paper both print one today. | The compliant version built: every part head roman at `.t-d3`, one head per part, never two. | **Declined. (rec)** Part heads stay roman at `.t-d3`, one per part; `.t-authorship` is never a heading. |
 | AM-3 | Step the page title down below 480px (TY-25); the house sheet has no responsive steps. | The compliant version built: the h1 holds `.t-d2` at every width — the ask was filed against an email title, which the header reduction retires. | **Declined. (rec)** The h1 holds `.t-d2` at every width; the sheet gains no responsive step. |
+| AR-i | The "Estimate to quote" widget (ROM estimate · Quote ready · Issued) floating over the drafting route. | Not asked by the panel; found overlapping the paper. | **Removed entirely (Kody, 10 September 2026).** Its hours value was write-only — nothing read it — and its middle step was unreachable on a composed agreement. |
 
 ## Consequences for the build wave
 
@@ -23,6 +24,7 @@ The deck's sheet 17 asked these questions and carried the panel's lean; the Ruli
 - **Delete `AGREEMENT_PART_COPY.returnToFacets` and `.composedElsewhere`** (`packages/types/src/agreement-copy.ts`), the **`facet` count in the RoomShell header**, and the **send sheet's facet sentence** (N4 — already in the shared treatment).
 - **The hide act extends to all agreements**, not the turnkey lane alone.
 - **The send trigger moves onto the page at every width**, closing the 1180px gap at `room-shell.tsx:155`. Folded into this wave, not hotfixed.
+- The estimate widget and its hooks are deleted (AR-i).
 
 ## Carried, not decided here
 

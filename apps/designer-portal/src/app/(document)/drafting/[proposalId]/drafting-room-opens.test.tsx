@@ -28,9 +28,6 @@ jest.mock('@/components/document/rooms/drafting/drafting-room', () => ({
     <div data-room={proposalId}>The Contract Room</div>
   ),
 }));
-jest.mock('@/components/document/drafting/drafting-estimate-flow', () => ({
-  DraftingEstimateFlow: () => null,
-}));
 
 const flag = { on: true };
 jest.mock('@/hooks/use-feature-flag', () => ({
