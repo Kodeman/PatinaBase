@@ -75,7 +75,7 @@ export function BriefSection({
   // Phone resolves profile-first, the order the name and email above already
   // use, so one printed line never pairs a profile name with a captured number
   // (00583). `homeowner.phone` is selected by useLead. people_directory's lead
-  // branch now reads the PHONE profile-first too (00587), while its name and
+  // branch now reads the PHONE profile-first too (00589), while its name and
   // email stay captured-first — so the directory row can pair a captured name
   // with this same number, and this line is the one both surfaces agree on.
   const contactPhone: string | null =

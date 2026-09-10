@@ -38,7 +38,7 @@ INSERT INTO public.profiles (id, email, full_name, phone, is_designer, created_a
 VALUES
   ('d9000000-0000-4000-8000-000000000002', 'phone-homeowner@test.invalid',
    'Ada Okafor', '(555) 990-0001', false, NOW(), NOW()),
-  -- 00587 (review R2 F10): a household the studio has no relationship with.
+  -- 00589 (review R2 F10): a household the studio has no relationship with.
   -- Their profile phone is real; profiles RLS still hides the row.
   ('d9000000-0000-4000-8000-000000000003', 'phone-stranger@test.invalid',
    'Nia Bell', '(555) 990-0003', false, NOW(), NOW())
@@ -72,12 +72,12 @@ VALUES
   ('d9200000-0000-4000-8000-000000000003', 'd9000000-0000-4000-8000-000000000002',
    'd9000000-0000-4000-8000-000000000001', 'consultation', 'new',
    'Ada Okafor', NULL, '(555) 014-2299'),
-  -- 00587's lead-branch leg: the SAME household comes back with a second
+  -- 00589's lead-branch leg: the SAME household comes back with a second
   -- enquiry, and a different number was taken at the door this time.
   ('d9200000-0000-4000-8000-000000000004', 'd9000000-0000-4000-8000-000000000002',
    'd9000000-0000-4000-8000-000000000001', 'consultation', 'new',
    'Ada Okafor', NULL, '(555) 014-2288'),
-  -- 00587 (review R2 F10): the ordinary first enquiry — an account holder the
+  -- 00589 (review R2 F10): the ordinary first enquiry — an account holder the
   -- studio has never worked with. Nothing links them yet, so the lead branch's
   -- profile leg stays silent and the captured number answers.
   ('d9200000-0000-4000-8000-000000000005', 'd9000000-0000-4000-8000-000000000003',
@@ -303,7 +303,7 @@ BEGIN
            (SELECT phone FROM public.people_directory
             WHERE person_id = v_relationship_id AND role = 'client'));
 
-  -- 00587 — and if a number ever DOES reach client_phone on a profile-holding
+  -- 00589 — and if a number ever DOES reach client_phone on a profile-holding
   -- row (a legacy row, or a hand write), the profile still wins. That is the
   -- unclearable-shadow case the paragraph above describes, closed from the
   -- read side too.
@@ -319,7 +319,7 @@ BEGIN
 END;
 $$;
 
--- 00587 — profile-first on the LEAD branch too. Lead 4 is the same household's
+-- 00589 — profile-first on the LEAD branch too. Lead 4 is the same household's
 -- second enquiry, still open, carrying its own captured number. The account
 -- holder's own number wins there as well: the studio is given no field to edit
 -- profiles.phone, so a number taken at the door must not shadow the one the
@@ -349,7 +349,7 @@ BEGIN
 END;
 $$;
 
--- 00587 (review R2 F10) — and how NARROW that is, pinned rather than implied.
+-- 00589 (review R2 F10) — and how NARROW that is, pinned rather than implied.
 -- Lead 5 is the overwhelmingly common case: a first enquiry from a household
 -- that holds a Patina account the studio has never worked with. profiles'
 -- counterparty SELECT leg needs a designer_clients row to exist, so the join
@@ -373,7 +373,7 @@ BEGIN
 END;
 $$;
 
--- 00587 (review R2 F11) — an empty-string profile phone is not a number.
+-- 00589 (review R2 F11) — an empty-string profile phone is not a number.
 -- COALESCE alone falls through only on NULL, so '' would have won over the
 -- captured number and read the row blank, with no field on the studio's side
 -- to put it right. Lead 4's household is readable by now (its sibling began
@@ -403,7 +403,7 @@ BEGIN
 END;
 $$;
 
--- 00587 (review R3-05) — and the guard is symmetric. A whitespace-only number
+-- 00589 (review R3-05) — and the guard is symmetric. A whitespace-only number
 -- in the CAPTURED column is not a number either: unguarded it fell straight
 -- through the COALESCE and rendered a blank-looking directory cell, the same
 -- symptom the profile leg above closed. Both households' profile phones are

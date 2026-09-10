@@ -56,7 +56,7 @@ VALUES
    'd7100000-0000-4000-8000-000000000001', 'member', 'active', NOW()),
   ('d7110000-0000-4000-8000-000000000003', 'd7000000-0000-4000-8000-000000000003',
    'd7100000-0000-4000-8000-000000000002', 'owner', 'active', NOW()),
-  -- 00587 (review R3-02): one designer, a seat in BOTH studios. The sibling
+  -- 00589 (review R3-02): one designer, a seat in BOTH studios. The sibling
   -- probe must answer for the RELATIONSHIP's studio, so this caller gets the
   -- same answer the relationship's own designer does — under a
   -- caller-relative scope they would differ.
@@ -142,16 +142,16 @@ VALUES
   ('d7200000-0000-4000-8000-000000000016', NULL,
    'd7000000-0000-4000-8000-000000000001', 'consultation', 'new',
    'Drifted Budget', 'rtl-drifted@test.invalid'),
-  -- 00587: the cross-studio sibling leg.
+  -- 00589: the cross-studio sibling leg.
   ('d7200000-0000-4000-8000-000000000017', NULL,
    'd7000000-0000-4000-8000-000000000001', 'consultation', 'new',
    'Foreign Sibling', 'rtl-foreign-sibling@test.invalid'),
-  -- 00587 (review R2 F1): the co-member sibling leg — the row the scope must
+  -- 00589 (review R2 F1): the co-member sibling leg — the row the scope must
   -- keep counting.
   ('d7200000-0000-4000-8000-000000000018', NULL,
    'd7000000-0000-4000-8000-000000000001', 'consultation', 'new',
    'Comember Sibling', 'rtl-comember-sibling@test.invalid'),
-  -- 00587 (review R3-02): the caller-independence leg.
+  -- 00589 (review R3-02): the caller-independence leg.
   ('d7200000-0000-4000-8000-000000000019', NULL,
    'd7000000-0000-4000-8000-000000000001', 'consultation', 'new',
    'Two Studios One Caller', 'rtl-dual-caller@test.invalid');
@@ -612,7 +612,7 @@ BEGIN
 END;
 $$;
 
--- ── 00587: a sibling is only a sibling inside the studio ───────────────────
+-- ── 00589: a sibling is only a sibling inside the studio ───────────────────
 -- designer_clients.lead_id is caller-writable and RLS lets a designer insert a
 -- row of their own naming any lead id. An unscoped sibling probe therefore let
 -- a designer in another studio plant a row pointing at this lead and refuse
@@ -683,7 +683,7 @@ BEGIN
 END;
 $$;
 
--- ── 00587 (review R2 F1): a CO-MEMBER's row on the same lead still refuses ──
+-- ── 00589 (review R2 F1): a CO-MEMBER's row on the same lead still refuses ──
 -- The scope narrows the probe to the studio, not to the one designer. A
 -- co-member's relationship on this lead does emit a Desk folder for the
 -- studio, and the reversal deletes only one row — so deleting under it would
@@ -730,7 +730,7 @@ BEGIN
 END;
 $$;
 
--- ── 00587 (review R3-02): one relationship, one answer, whoever asks ───────
+-- ── 00589 (review R3-02): one relationship, one answer, whoever asks ───────
 -- The scope is the RELATIONSHIP's studio, never the caller's. A designer with
 -- a seat in both studios shares one with the planter and one with the
 -- relationship's designer; under a caller-relative probe the planted row would
@@ -937,7 +937,7 @@ BEGIN
     'Discovery has already been filled in for this client.',
     'a lifestyle row that says who must close the door';
 
-  -- 00587 — every field the two shapes carry is the designer's work, not
+  -- 00589 — every field the two shapes carry is the designer's work, not
   -- only the one field readiness counts (capturedRooms reads name;
   -- capturedLifestyle reads who/how). Deleting the relationship under any of
   -- these would lose what was typed.
@@ -1009,7 +1009,7 @@ BEGIN
     'Discovery has already been filled in for this client.',
     'a lifestyle row naming only its room must close the door';
 
-  -- 00587 (review R2 F7) — the other three row lists answer the same way.
+  -- 00589 (review R2 F7) — the other three row lists answer the same way.
   -- "+ Add a piece to keep" tapped once writes a literal {}, exactly as
   -- "+ Add a room" does, and must read the same here.
   UPDATE public.client_discovery
@@ -1060,7 +1060,7 @@ BEGIN
     'Discovery has already been filled in for this client.',
     'a decision-maker row carrying only its comms note must close the door';
 
-  -- 00587 (review R3-07) — two fields are read for their VALUE, the way
+  -- 00589 (review R3-07) — two fields are read for their VALUE, the way
   -- keep_as_is already is: a zero floor area and an approves encoded as
   -- boolean false describe an untouched row, not the designer's work.
   UPDATE public.client_discovery

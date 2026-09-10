@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- 00587 — return_to_lead hardening: a sibling is only a sibling inside the
+-- 00589 — return_to_lead hardening: a sibling is only a sibling inside the
 --         studio, a room row says more than its name, and a profile holder's
 --         own phone wins in the directory
 --
@@ -97,9 +97,9 @@
 --
 -- LINEAGE (bodies copied from the files named, then grafted; verified with
 -- grep over supabase/migrations that no later file redefines any of the three)
---   public.return_to_lead_check(uuid)  00585 → 00586:45-371 → 00587
---   public.return_to_lead(uuid)        00585:516-608 → 00587
---   public.people_directory (view)     00478 → 00583:390-622 → 00587
+--   public.return_to_lead_check(uuid)  00585 → 00586:45-371 → 00589
+--   public.return_to_lead(uuid)        00585:516-608 → 00589
+--   public.people_directory (view)     00478 → 00583:390-622 → 00589
 --
 -- No grants change: each CREATE OR REPLACE keeps the existing ACL, and 00585's
 -- REVOKE/GRANT pairs are restated below only because a restatement is free.
@@ -210,7 +210,7 @@ BEGIN
   -- adoption branches on purpose: whichever of the two rows is asked, this is
   -- the true answer.
   --
-  -- 00587 — scoped to the STUDIO, not to the one designer. lead_id is
+  -- 00589 — scoped to the STUDIO, not to the one designer. lead_id is
   -- caller-writable, so an unscoped probe let a designer in another studio
   -- plant a row carrying this lead's id and refuse this undo forever. The
   -- scope is the relationship's own studio, so a co-member's row on the same
@@ -427,7 +427,7 @@ BEGIN
         OR cd.seeded_at IS NOT NULL
         OR cd.style_tag_ids IS DISTINCT FROM '{}'::uuid[]
         OR cd.style_keywords IS DISTINCT FROM '{}'::text[]
-        -- The five row lists (00587): EVERY field each shape carries, not the
+        -- The five row lists (00589): EVERY field each shape carries, not the
         -- one field readiness counts. capturedRooms / capturedLifestyle answer
         -- "is this block done"; this answers "has the designer typed
         -- anything", and a room with only a type, a note, a floor area or a
@@ -543,7 +543,7 @@ COMMENT ON FUNCTION public.return_to_lead_check(uuid) IS
   'A row in any of the five Discovery lists counts as content on any field it '
   'carries, not on its first field alone, and the one-lead-one-relationship '
   'probe only sees siblings belonging to the RELATIONSHIP''s studio, never '
-  'the caller''s (00587). Raises '
+  'the caller''s (00589). Raises '
   'insufficient_privilege for a '
   'caller who is neither the designer nor an active non-guest peer in the same '
   'active design_studio, and for a relationship whose lead_id points at '
@@ -608,7 +608,7 @@ BEGIN
     -- is: what this function DELETES must not rest on the reader. The sentence
     -- is the check's, word for word — the SQL test compares the two, so the
     -- pair cannot drift apart unnoticed. Scoped to the relationship's studio
-    -- (00587) for the same reason the check's probe is: a planted row from
+    -- (00589) for the same reason the check's probe is: a planted row from
     -- another studio is not a second move to take back, while a co-member's
     -- row on the same lead is.
     IF EXISTS (
@@ -685,7 +685,7 @@ COMMENT ON FUNCTION public.return_to_lead(uuid) IS
   'accepted_at cleared, and the empty Discovery relationship is deleted, so the '
   'Desk folder returns to the Brief. Its restated sibling guard only counts '
   'relationships belonging to the RELATIONSHIP''s studio, not the caller''s '
-  '(00587). Raises with '
+  '(00589). Raises with '
   'return_to_lead_check''s reason when the undo is no longer an undo (00585).';
 
 -- ── 3. people_directory — 00583:390-622 verbatim, one line per branch
@@ -937,7 +937,7 @@ WHERE public.is_active_studio_member(sc.organization_id);
 COMMENT ON VIEW public.people_directory IS
   'R57 / People Room roster (client|lead|maker|gc|sub|installer|receiver|'
   'architect|photographer|stager|team|contact) for the querying user. v6 '
-  '(00587): PHONE ONLY is profile-first on the client and lead branches — '
+  '(00589): PHONE ONLY is profile-first on the client and lead branches — '
   'COALESCE(NULLIF(btrim(profiles.phone), ''''), '
   'NULLIF(btrim(designer_clients.client_phone), '''')) and the same over '
   'leads.contact_phone, so a whitespace-only number on either side reads as '

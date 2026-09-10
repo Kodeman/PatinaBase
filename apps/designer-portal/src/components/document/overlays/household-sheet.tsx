@@ -20,7 +20,7 @@
  * Two details that read as inconsistencies and are not:
  *   · The three read lines resolve profile-first — a client who holds a Patina
  *     account owns their name, email, and phone. people_directory agrees on
- *     the PHONE (00587) and still resolves name and email captured-first,
+ *     the PHONE (00589) and still resolves name and email captured-first,
  *     which is the studio's own roster; the phone is the one column the
  *     household alone can edit, so it is the one the directory defers on.
  *   · An emptied "Email on file" re-fills from the lead on the next save
