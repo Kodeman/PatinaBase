@@ -246,6 +246,43 @@ export function AgreementComposer({
     renumber([...bundle.parts].sort((a, b) => a.position - b.position)),
   );
   /**
+   * WR-101 — the composition a QUEUED save will send. A `persist()` that runs
+   * after an earlier one lands cannot read `parts` from the render closure
+   * that asked for it, and a `setParts` updater does not run until React
+   * flushes. So every write to the composition goes through `commitParts`,
+   * which lands it in this ref in the same tick — and the ref, not the
+   * closure, is what a save sends.
+   */
+  const partsRef = useRef(parts);
+  const commitParts = (
+    next: AgreementPart[] | ((current: AgreementPart[]) => AgreementPart[]),
+  ) => {
+    const value = typeof next === "function" ? next(partsRef.current) : next;
+    partsRef.current = value;
+    setParts(value);
+  };
+
+  /**
+   * How many acts the paper has taken. `persist()` is fired WITHOUT being
+   * awaited — closing a fold or selecting another part starts a save and the
+   * designer goes on writing — so the room has to know, when the RPC answers,
+   * whether the composition it sent is still the composition on the paper.
+   */
+  const revision = useRef(0);
+
+  /**
+   * WR-102 — a composition replaced wholesale from the server (a Template laid
+   * in, the standard parts seeded) is an act like any other, so it bumps the
+   * revision. Without the bump a save already in the air resolves with
+   * `revision.current === sentAt`, takes the "the server's answer IS the
+   * paper" branch, and lays the pre-template composition back over the
+   * template it just replaced.
+   */
+  const replaceParts = (next: AgreementPart[]) => {
+    revision.current += 1;
+    commitParts(next);
+  };
+  /**
    * FS-31 — "selected" and "unfolded" are one state, and it keys on the PART
    * KEY, never a uuid: `upsert_agreement_parts` is DELETE-then-INSERT, so an
    * open editor keyed on `id` would remount mid-typing after every save
@@ -301,7 +338,7 @@ export function AgreementComposer({
         const seeded = renumber(
           [...next.parts].sort((a, b) => a.position - b.position),
         );
-        setParts(seeded);
+        replaceParts(seeded);
         setSavedAt(newestUpdate(seeded));
       } catch (error) {
         setSaveNote(
@@ -468,19 +505,11 @@ export function AgreementComposer({
    * handler, and two setters derived from the same render's `parts` would have
    * the second discard the first. So the updater form is the contract.
    */
-  /**
-   * How many acts the paper has taken. `persist()` is fired WITHOUT being
-   * awaited — closing a fold or selecting another part starts a save and the
-   * designer goes on writing — so the room has to know, when the RPC answers,
-   * whether the composition it sent is still the composition on the paper.
-   */
-  const revision = useRef(0);
-
   const mutate = (
     next: AgreementPart[] | ((current: AgreementPart[]) => AgreementPart[]),
   ) => {
     revision.current += 1;
-    setParts((current) =>
+    commitParts((current) =>
       renumber(typeof next === "function" ? next(current) : next),
     );
     setDirty(true);
@@ -690,7 +719,7 @@ export function AgreementComposer({
       const landed = renumber(
         [...(fresh.data ?? [])].sort((a, b) => a.position - b.position),
       );
-      setParts(landed);
+      replaceParts(landed);
       setOpenKey(null);
       setDirty(false);
       setSavedAt(newestUpdate(landed) ?? new Date().toISOString());
@@ -754,27 +783,42 @@ export function AgreementComposer({
     return null;
   };
 
-  const persist = async () => {
-    if (refusedAtSave) {
-      // Check 8/§A10 — a refusal is never silent. Without this, closing a
-      // fold on a duplicate money variant did nothing and said nothing.
-      const message = localRefusal();
-      if (message) {
-        setSaveNote(message);
-        setAnnouncement(message);
-      }
-      return false;
-    }
+  /**
+   * WR-101 — the save currently in the air, the request to run one more when
+   * it lands, and the tag that says which flight a landing belongs to.
+   *
+   * `persist()` is fired unawaited from two places, so two saves used to be
+   * able to fly at once. `upsert_agreement_parts` is DELETE-then-INSERT: when
+   * the server applied the OLDER of two overlapping calls last, the table kept
+   * the older payload, the page kept the newer prose, and — because the newer
+   * landing had already cleared `dirty` and the older landing took the stale
+   * branch, which never re-asserts it — the record read a clean `Saved`. A
+   * clause was gone with a green record. Only one call flies now.
+   */
+  const inFlight = useRef<Promise<boolean> | null>(null);
+  const pendingSave = useRef(false);
+  const saveSeq = useRef(0);
+
+  /** One call to `upsert_agreement_parts`, and what its landing is allowed to
+   *  do to the room. Never called concurrently with itself. */
+  const flight = async (): Promise<boolean> => {
+    const seq = (saveSeq.current += 1);
     const sentAt = revision.current;
     try {
-      const next = await save.mutateAsync(parts);
+      const next = await save.mutateAsync(partsRef.current);
       const saved = renumber(
         [...next.parts].sort((a, b) => a.position - b.position),
       );
-      if (revision.current === sentAt) {
+      // A landing that is not the latest flight's is discarded outright: it
+      // may not write the paper, and it may not clear the record.
+      if (seq !== saveSeq.current) return true;
+      // `dirty` clears only when nothing has moved since this call left — no
+      // act on the paper, and no save already queued behind it.
+      const behindThePage = revision.current !== sentAt || pendingSave.current;
+      if (!behindThePage) {
         // Nothing was written while the save was in flight: the server's
         // answer IS the paper.
-        setParts(saved);
+        commitParts(saved);
         setDirty(false);
       } else {
         // Something was. The rows the RPC handed back carry the payloads it
@@ -782,7 +826,7 @@ export function AgreementComposer({
         // away what the designer typed while it flew. Adopt the re-minted ids
         // by part KEY and keep the writing; the paper stays dirty, because
         // what is on the table is behind what is on the page.
-        setParts((current) => {
+        commitParts((current) => {
           const landed = new Map(saved.map((part) => [part.partKey, part]));
           return current.map((part) => {
             const row = landed.get(part.partKey);
@@ -795,6 +839,10 @@ export function AgreementComposer({
       setSavedAt(newestUpdate(saved) ?? new Date().toISOString());
       return true;
     } catch (error) {
+      if (seq !== saveSeq.current) return false;
+      // A queued save is about to carry the same composition again. It is the
+      // one that gets to say whether the agreement could be saved.
+      if (pendingSave.current) return false;
       const message = refusalMessage(
         error,
         "The agreement could not be saved.",
@@ -803,6 +851,39 @@ export function AgreementComposer({
       setAnnouncement(message);
       return false;
     }
+  };
+
+  const persist = async (): Promise<boolean> => {
+    if (refusedAtSave) {
+      // Check 8/§A10 — a refusal is never silent. Without this, closing a
+      // fold on a duplicate money variant did nothing and said nothing.
+      const message = localRefusal();
+      if (message) {
+        setSaveNote(message);
+        setAnnouncement(message);
+      }
+      return false;
+    }
+    const running = inFlight.current;
+    if (running) {
+      // One more save, once this one is down, carrying whatever the paper says
+      // then. The caller waits on the SAME promise, so `reviewAndSend` opens
+      // the send sheet on the final landing, not the first.
+      pendingSave.current = true;
+      return running;
+    }
+    const chain = (async () => {
+      let outcome = await flight();
+      while (pendingSave.current) {
+        pendingSave.current = false;
+        outcome = await flight();
+      }
+      return outcome;
+    })().finally(() => {
+      inFlight.current = null;
+    });
+    inFlight.current = chain;
+    return chain;
   };
 
   const reviewAndSend = async () => {
@@ -1126,6 +1207,11 @@ export function AgreementComposer({
      the foot; one about a part is printed in that part's own strip, and its
      id is the strip's. */
   const heldOn = readiness.blockers.find((blocker) => blocker.partId !== null);
+  /* WR-104 — the one lookup in this room still made on `part.id` rather than
+     `partKey`, and the only one that may be: `readiness` is memoized from THIS
+     render's `parts`, so the uuid a blocker was filed under is the uuid the
+     part is rendered with. A blocker never outlives the render that made it,
+     which is what N-8 forbids and what every handler had to be moved off. */
   const heldOnPart = heldOn
     ? parts.find((entry) => entry.id === heldOn.partId)
     : undefined;
