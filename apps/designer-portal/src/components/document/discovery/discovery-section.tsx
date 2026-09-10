@@ -22,6 +22,8 @@ import {
   useBeginDirection,
   useStyles,
   useClientRoomScans,
+  useReturnToLeadCheck,
+  useReturnToLead,
 } from '@patina/supabase';
 import { StrataMark } from '../strata-mark';
 import { FacetSection } from '../rooms/drafting/facet-section';
@@ -48,6 +50,9 @@ import {
 import { CallPlan } from './call-plan';
 import { DiscoveryScheduleLine } from './discovery-schedule-line';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
+
+/** The refused action points at its sentence with aria-describedby. */
+const RETURN_REASON_ID = 'return-to-lead-reason';
 
 const EMPTY_DRAFT: DiscoveryDraft = {
   project_type: null,
@@ -129,6 +134,7 @@ function statusFor(block: BlockKey, d: DiscoveryDraft): string {
 
 export function DiscoverySection({
   engagementId,
+  engagementKind = null,
   designerId,
   clientProfileId,
   clientName,
@@ -136,6 +142,12 @@ export function DiscoverySection({
   onEyebrow,
 }: {
   engagementId: string; // the designer_clients.id (Shape D)
+  /** The engagement's document_state kind. The Discovery spread is reachable
+   *  on a project or proposal engagement too, where `engagementId` is a
+   *  project / proposal-chain id — NOT a designer_clients id — so the
+   *  return-to-lead check must not be asked about it (it answers
+   *  insufficient_privilege). Absent reads as "not a relationship". */
+  engagementKind?: string | null;
   designerId: string;
   clientProfileId: string | null;
   clientName: string;
@@ -154,6 +166,13 @@ export function DiscoverySection({
   const { data: read } = useDiscovery(engagementId);
   const upsert = useUpsertDiscovery();
   const beginDirection = useBeginDirection();
+  // F2 — whether this Discovery is still an accidental one click away from
+  // being a Brief again. The server owns both the verdict and the sentence.
+  const { data: returnCheck } = useReturnToLeadCheck(
+    engagementKind === 'relationship' ? engagementId : null,
+  );
+  const returnToLead = useReturnToLead();
+  const [returnError, setReturnError] = useState<string | null>(null);
   const { data: styles } = useStyles() as {
     data: { id: string; name: string }[] | undefined;
   };
@@ -388,6 +407,13 @@ export function DiscoverySection({
     },
   ];
 
+  // The reason to print: a refusal from the act itself first, then the
+  // standing verdict. `returnRefused` is rendered as aria-disabled rather than
+  // `disabled` so the action keeps its place in the tab order and the sentence
+  // it points at is announced with it.
+  const returnRefused = returnCheck ? !returnCheck.allowed : false;
+  const returnReason = returnError ?? (returnRefused ? returnCheck?.reason : null);
+
   return (
     // Blur-save law (F4): focusout bubbles here from every block editor, so
     // leaving ANY field flushes the debounce with the field's final value —
@@ -507,6 +533,56 @@ export function DiscoverySection({
           Add inspiration
         </DocumentAction>
       </DocumentActionGroup>
+
+      {/* F2 — the way back from an accidental "Accept · begin". Shown only for
+          a Discovery that came from a lead; once the door is shut the action
+          stays visible but disabled, with the server's reason printed beside
+          it in plain sight rather than hidden in a tooltip. Its own region, not
+          the toolrow's: the reversal is a different kind of act from the three
+          above it, and sharing their region key would fold its telemetry into
+          theirs. */}
+      {returnCheck?.lead_id && (
+        <DocumentActionGroup
+          surfaceKey="discovery"
+          regionKey="return-to-lead"
+          aria-label="Move this client back to New Lead"
+          className="mb-5 -mt-3"
+        >
+          <DocumentAction
+            actionKey="return-to-lead"
+            variant="tertiary"
+            aria-disabled={returnRefused || undefined}
+            aria-describedby={returnReason ? RETURN_REASON_ID : undefined}
+            disabled={returnToLead.isPending}
+            loading={returnToLead.isPending}
+            loadingLabel="Moving…"
+            onClick={() => {
+              if (returnRefused) return;
+              setReturnError(null);
+              returnToLead.mutate(engagementId, {
+                onSuccess: ({ lead_id }) => router.replace(`/doc/${lead_id}`),
+                onError: (error) => {
+                  // The RPC rejects with a PostgrestError — message-shaped, not
+                  // always an `instanceof Error`. Read `.message` off whatever
+                  // arrived so the server's own sentence reaches the designer.
+                  const message = (error as { message?: string } | null)?.message;
+                  setReturnError(message || 'That move could not be taken back.');
+                },
+              });
+            }}
+          >
+            Move back to New Lead
+          </DocumentAction>
+          {returnReason && (
+            <span
+              id={RETURN_REASON_ID}
+              className="text-[12px] leading-snug text-[var(--text-muted)]"
+            >
+              {returnReason}
+            </span>
+          )}
+        </DocumentActionGroup>
+      )}
 
       <p className="mb-2 flex items-center gap-2.5 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
         The essentials — structured · they open &amp; seed the agreement

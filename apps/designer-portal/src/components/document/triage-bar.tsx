@@ -14,6 +14,8 @@
  *     'lead' → the folder flips Brief (Shape C) → Discovery (Shape D),
  *     "Schedule the discovery call". (NOT `useAcceptLead`, which jumps to
  *     'active' and is invisible in `document_state` — verified, R61.)
+ *     It navigates immediately, so it also publishes the shell-level Undo
+ *     offer (F2, `return-to-lead-undo.tsx`) on its way out.
  *   · Nurture     → `useNurtureLead` (R65) — picks a RECONNECT DATE: the lead
  *     leaves the needs-hand band now (status='contacted' + the desk-derivation
  *     gate) and rises again as a Desk need ('reconnect_due') when the date is
@@ -41,6 +43,7 @@ import {
 } from '@patina/supabase';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { DocumentAction, DocumentActionGroup } from './document-action';
+import { offerReturnToLeadUndo } from './return-to-lead-undo';
 
 type Variant = 'desk' | 'brief';
 
@@ -139,6 +142,14 @@ export function TriageBar({
         // replace it. From the Desk this is a new picked-up document.
         if (variant === 'brief') router.replace(destination);
         else router.push(destination);
+        // F2 — the offer to take it back, published to the shell-level band
+        // (this bar unmounts on the navigation above). Only on this path: the
+        // ceremony path writes to the client, and return_to_lead_check refuses
+        // it, so an Undo there would be an offer that cannot be honoured.
+        offerReturnToLeadUndo({
+          message: 'Moved to Discovery',
+          designerClientId,
+        });
       },
     });
   };

@@ -22,6 +22,7 @@ import { MobileActionDock } from '@/components/document/mobile/mobile-action-doc
 import { MobileSheets } from '@/components/document/mobile/mobile-sheets';
 import { DocumentTimeProvider } from '@/hooks/document-time-provider';
 import { DocumentRouteBoundary } from '@/components/document/document-route-boundary';
+import { ReturnToLeadUndo } from '@/components/document/return-to-lead-undo';
 import { SkipToPaper } from '@/components/document/skip-to-paper';
 
 export const metadata: Metadata = {
@@ -39,8 +40,22 @@ export const metadata: Metadata = {
  * NO ToastProvider — and never one. R83 removed the toast layer from (document)
  * surfaces entirely: a failure is reported as a quiet inline band at the act
  * site, where the designer is already looking, not as a floating card in the
- * corner that outlives the moment. Any `toast()` call reached from this tree
- * no-ops against the context default, which is the intended posture, not a bug.
+ * corner that outlives the moment. A `toast()` call from the PORTAL-LOCAL
+ * provider (components/portal/toast-provider.tsx) no-ops against its context
+ * default here, which is the intended posture, not a bug.
+ *
+ * That is not the whole story, and reading it as one has cost a bug already:
+ * the DESIGN-SYSTEM toast is a different layer, and its <Toaster/> is mounted
+ * globally in providers/providers.tsx, OUTSIDE this route group — so it does
+ * render over document surfaces. The react-query caches in lib/react-query.ts
+ * fire it for any query or mutation error that has not declared its surface.
+ * A hook used on a (document) surface must therefore carry
+ * `meta: { errorSurface: 'inline' }` (mutations) or `'silent'` (supporting
+ * queries), or its failure is reported twice — once inline, once in red.
+ *
+ * ReturnToLeadUndo below is not a reversal of R83: it is one band for one act,
+ * mounted because "Accept · begin" navigates away from the surface that fired
+ * it, so its Undo has nowhere else to stand. It reaches no `toast()` call.
  */
 export default function DocumentLayout({
   children,
@@ -94,6 +109,10 @@ export default function DocumentLayout({
                   <InvoiceOverlays />
                   {/* R85 — the ⌘K "draft a proposal" household-picker cold start. */}
                   <DraftProposalOverlay />
+                  {/* F2 — the Undo offer for "Accept · begin", published by
+                      the triage bar just before it navigates. Renders nothing
+                      until an offer stands. */}
+                  <ReturnToLeadUndo />
                   <MobileActionDock />
                   <MobileBar />
                   <MobileSheets />

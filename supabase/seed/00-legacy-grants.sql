@@ -15533,3 +15533,27 @@ DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.hydrate_lead_relationship_contact() FROM PUBLIC, anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00585_return_lead_to_new.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.return_to_lead_check(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00585_return_lead_to_new.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.return_to_lead_check(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00585_return_lead_to_new.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.return_to_lead(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00585_return_lead_to_new.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.return_to_lead(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
