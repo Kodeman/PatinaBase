@@ -10985,3 +10985,14 @@ None of this rewrites history. A project's roster — who was on it, and as whom
 later edit to a person's card; the card and the roster row it once populated are different things now.
 
 *Entries add: R147 · last id = R147*
+
+### R148 · Phone precedence — the account holder's own number wins — 2026-09-10
+
+**Ruled by Kody, 2026-09-10.** Wherever a person's phone number can come from two places — a
+studio-captured number on the lead or client record, and the number on that person's own Patina
+account — the account holder's own number wins, on every surface: the People directory, the Brief,
+and the household sheet. A studio-captured number stands only until an account exists to outrank
+it, the same way an account holder's name and email already stand above a studio's card for them
+under R147.
+
+*Entries add: R148 · last id = R148*

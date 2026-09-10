@@ -166,3 +166,113 @@ three portals were not touched or redeployed.
 - The SQL test suites were not re-run by this recorder; pass/fail counts above are drawn from the
   deploy chain's own record, not independently reproduced here.
 - `pnpm --dir <wt> supabase:reset` and `database.types.ts` drift were not re-run by this recorder.
+
+## Hotfix 2026-09-10
+
+The three final review rounds above (f1 round 3, f2 round 3, f3 round 3) left several findings open.
+This wave — migration `00587_studio_asks_hotfix.sql` plus targeted app/hook fixes — closes them.
+
+### What the final reviews left open
+
+- f1 round 3: a profile-holder phone-precedence guard's banner overstated what it closed — a
+  client-invite path could still leave a stale studio-captured phone outranking a profile's own
+  number.
+- f2 round 1 / round 3: a foreign-studio `lead_id` could still be planted on a relationship row to
+  deny — not escalate, just permanently jam — the row's own owner's Undo door (the cross-studio
+  *escalation* was closed in round 2; this narrower denial-of-service was not).
+- f3 round 1 / round 3: the "Edit details" party-edit form had no loaded-data guard (a save inside
+  the fetch window could clear company/trade/phone/email); read-only enforcement for account
+  holders and makers needed the studio-side edit surfaces to speak in trade vocabulary rather than
+  raw field names, and to fail with a readable sentence rather than a raw Postgres error; and the
+  round-2 SMS-consent fix was only half-applied — an `opted_out` party's phone edit still wrote
+  `opted_out` back with a cleared timestamp, contradicting its own docstring.
+
+### What this wave fixed (00587)
+
+- **Sibling scope.** The return-to-lead authority check now also scopes to sibling relationship
+  rows on the same `lead_id`, closing the planted-foreign-`lead_id` denial-of-service left open
+  from f2.
+- **Discovery content predicates.** The "no content exists" guard is widened again alongside the
+  sibling-scope fix, keeping `00586`'s field-value-based content ladder intact rather than
+  reverting to row-existence.
+- **Profile-first phone.** `hydrate_lead_relationship_contact` and the People/Brief read paths now
+  prefer an account holder's own profile phone over a studio-captured one wherever both exist,
+  closing the f1 round-3 gap. This is also recorded as a standing ruling — see R148 in
+  `docs/design/the-document/DECISIONS.md`.
+- **Party edit gating, trade vocabulary, friendly error.** The field-party edit sheet now guards on
+  loaded data before allowing Save (closing the fetch-window clear), speaks in the studio's trade
+  vocabulary for read-only fields, and surfaces a plain sentence instead of a raw Postgres error on
+  a blocked write.
+- **Consent opt-out timestamp; removed self-exclusion.** An `opted_out` party's consent state and
+  its opt-out timestamp are now left untouched by an unrelated phone edit (the self-exclusion
+  clause that let a party edit its own consent row alongside a phone change is removed — consent
+  changes only through the consent flow itself).
+- **e164 cleared with phone.** Clearing a phone field now clears its paired `*_e164` column in the
+  same statement, closing the stale-`*_e164` residue from f1.
+
+### Hotfix review rounds
+
+> Verified this round end to end; the work is sound and I found no critical or high-severity
+> defect. One medium finding (R3-01) is a genuine inversion that partly undoes what brief item 5
+> asked for.
+>
+> WHAT I RE-RAN MYSELF (all green):
+> - `supabase/tests/document/return_to_lead_test.sql` — exit 0
+> - `supabase/tests/document/lead_contact_phone_test.sql` — exit 0
+> - `supabase/tests/document/begin_discovery_atomicity_test.sql` — exit 0
+>   (local DB head is `00587`; I confirmed the LIVE bodies match the file — `pg_proc` has
+>   `_can_author_proposal(d2.designer_id)` in `return_to_lead_check`, and `pg_get_viewdef` shows
+>   both...)
+
+**R3-01 (medium) — FIXED.** The reviewer's reading is confirmed: `useUpdateProjectParty` ends
+`.update().eq('id').select().single()`, and `project_parties_studio_update` (00584:896-911) uses
+the *same* predicate for `USING` and `WITH CHECK`, so an RLS-blocked write matches zero rows and
+returns `PGRST116` — `42501` needs a `WITH CHECK` violation or a missing `GRANT`, and the sheet had
+been written to only ever expect `42501`. The read/write gap is real:
+`project_parties_studio_comember_select` (00421:88-96) admits `is_studio_comember(p.designer_id)
+OR is_active_studio_member(p.studio_id)`; the UPDATE policy only admits the first. Rather than pick
+one sentence for an ambiguous code, the sheet now asks the read side on `PGRST116`: it refetches
+the person query, and if that still reads — "Only this project's studio can edit this person" —
+distinguishing a genuinely-vanished row from an RLS-shadowed write.
+
+### QA outcomes
+
+| Flow | Result |
+|---|---|
+| A — Regression: lead capture with email+phone, Brief shows name/email/phone | pass |
+| B — Undo toast reverts accept cleanly | pass |
+| C — Move back to New Lead: enabled first visit, disabled with reason after content | pass |
+| D — Phone carries from lead to `designer_clients` | pass |
+| E — Field party edit: save-without-changes no-op, then clear phone | pass |
+| F — Console error check | pass |
+
+**Not verified (QA):**
+- The root cause of the Defect 1 rendering bug was not traced into source (React component / query
+  hook) — confirmed reproducible and shown to resolve itself (without new network activity) once
+  any unrelated interaction (scroll, expand) occurs, but the exact mechanism (stale loading flag,
+  missed re-render, CSS visibility toggle) was not identified from the browser side alone.
+- Whether Defect 1 (hidden-until-interaction content) also affects other document types beyond
+  Brief/Discovery (e.g. Direction, Proposal, Project, Install) was out of scope for this run and
+  not checked.
+- Whether the two stale-refetch `AppError` console logs (Defect 2) recur on every "Move back to New
+  Lead" at scale, or only under the rapid-repeat-accept pattern used in this QA session, was not
+  stress-tested.
+
+### Deploy evidence
+
+- Main: `f8707b42f4c5cf53290c1627a69e8bc974fe61b4`.
+- Strata migration: `00589_return_to_lead_hardening.sql`.
+- Worker: `patina-designer-portal` version `a39d977f-19c3-4fb4-9506-886152ecd6d0`, deployed
+  2026-09-10T04:07:37.480Z (100%) — newest row in `wrangler deployments list`.
+
+### Owed to Kody (updated)
+
+- A signed-in production walk of all three flows (lead phone, return-to-lead, editing people) —
+  still nothing in this program has been exercised by a human against the live Worker.
+- Push the People "Editing details" help article to Sanity — needs `SANITY_AUTH_TOKEN`:
+  `node studios/help-system/scripts/run-people-editing-details-help-seed.mjs --commit`.
+- A ruling on the Undo band vs. the design-system Toaster — still open from f2.
+- A ruling on whether field crew added from People should also get a `studio_contacts` card
+  (today they land in `project_parties` only, with no directory-side counterpart).
+- The deferred lead stage-history ledger (no record of accept/revert events) — flagged in R146,
+  still open.
