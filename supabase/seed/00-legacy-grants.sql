@@ -15605,3 +15605,15 @@ DO $g$ BEGIN
   grant select on document_state to service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 20260910152111_create_contact_messages.sql
+DO $g$ BEGIN
+  REVOKE ALL PRIVILEGES ON TABLE public.contact_messages FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 20260910152111_create_contact_messages.sql
+DO $g$ BEGIN
+  GRANT INSERT, SELECT ON TABLE public.contact_messages TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
