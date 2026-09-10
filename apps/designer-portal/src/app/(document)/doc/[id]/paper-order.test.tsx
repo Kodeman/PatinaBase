@@ -61,6 +61,8 @@ jest.mock('@patina/supabase', () => ({
   useProposalFeedback: () => ({ data: [] }),
   useProjectRoster: () => ({ data: [] }),
   useDiscovery: () => ({ data: undefined, isLoading: false, isError: false }),
+  // R5 — page.tsx runs the discovery seed for the band's rest act.
+  useBeginDirection: () => ({ mutateAsync: jest.fn() }),
   useProjectFFEItems: () => ({ data: [] }),
   useProjectContextualHandoffs: () => ({ data: [], isError: false }),
   useProjectParties: () => ({ data: [] }),

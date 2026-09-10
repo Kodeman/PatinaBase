@@ -290,6 +290,7 @@ export function LensBand({
               // The 44px target the Scored Ink owns must not grow the declared
               // 56px box, so the control is inset into the 19.5px line.
               className="my-[-12px] shrink-0"
+              disabled={printed.act.disabled}
               onClick={() => {
                 onActed?.();
                 printed.act?.onAct();

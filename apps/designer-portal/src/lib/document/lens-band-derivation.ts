@@ -44,6 +44,9 @@ export interface LensAct {
   key: string;
   label: string;
   onAct: () => void;
+  /** R5 — the act's own work is in flight (the seed the leader runs). The band
+   *  holds the control rather than letting it be pressed twice. */
+  disabled?: boolean;
 }
 
 /**
@@ -197,6 +200,12 @@ export interface LensBandLine2 {
    * takes a row off the door when it is NAMING one. On a guide line nothing on
    * the paper is a sheet row, so a guide with one open input prints `+1 MORE`
    * (W3-R2's own example) where the old arithmetic printed no door at all.
+   *
+   * D1 — an input the guide's act NAMES (`Add Working budget`) is not one of
+   * these rows either, and it is excluded upstream, where the guide model says
+   * which fact its act was built from: `page.tsx` drops it before composing
+   * `inputs`, so the arithmetic here stays "everything the sheet holds, less
+   * the one line 2 is naming".
    */
   withheld: number;
 }

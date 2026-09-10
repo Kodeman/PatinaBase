@@ -3,11 +3,13 @@
 /**
  * The Discovery section (R66) — a self-composing structured-capture body that
  * replaces the inert spine bar. Eight blocks fill in any order (R40 grammar);
- * the Strata Mark is the only progress device; the five essentials → "ready
- * for Direction" (a soft gate). On readiness the designer begins the Direction
- * — a seeded draft design agreement (begin_direction_from_discovery, 00224) —
- * and the act lands on the successor document, whose Direction section is now
- * the engagement's identity (J1).
+ * the five essentials → "ready for Direction" (a soft gate).
+ *
+ * R5/A5 — the readiness band is gone from this body. Its one true sentence and
+ * its act are the standing band's now (page.tsx runs
+ * begin_direction_from_discovery and lands on the successor document, J1), so
+ * this surface carries no second glyph, no second count and no second leader.
+ * The readiness stamp still reports up through `onEyebrow`.
  *
  * The margin holds only the unstructured call Note (R66's load-bearing split);
  * structured facts live in the blocks and seed the proposal field→field.
@@ -19,13 +21,11 @@ import { useRouter } from 'next/navigation';
 import {
   useDiscovery,
   useUpsertDiscovery,
-  useBeginDirection,
   useStyles,
   useClientRoomScans,
   useReturnToLeadCheck,
   useReturnToLead,
 } from '@patina/supabase';
-import { StrataMark } from '../strata-mark';
 import { FacetSection } from '../rooms/drafting/facet-section';
 import {
   deriveDiscoveryReadiness,
@@ -51,8 +51,11 @@ import { CallPlan } from './call-plan';
 import { DiscoveryScheduleLine } from './discovery-schedule-line';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
 
-/** The refused action points at its sentence with aria-describedby. */
+/** D7 — the undo always points at a sentence saying what it does; when the
+ *  door is shut that sentence is the server's refusal instead. */
 const RETURN_REASON_ID = 'return-to-lead-reason';
+const RETURN_CONSEQUENCE =
+  'Returns this to the lead queue; nothing here is lost.';
 
 const EMPTY_DRAFT: DiscoveryDraft = {
   project_type: null,
@@ -165,7 +168,6 @@ export function DiscoverySection({
   const router = useRouter();
   const { data: read } = useDiscovery(engagementId);
   const upsert = useUpsertDiscovery();
-  const beginDirection = useBeginDirection();
   // F2 — whether this Discovery is still an accidental one click away from
   // being a Brief again. The server owns both the verdict and the sentence.
   const { data: returnCheck } = useReturnToLeadCheck(
@@ -194,13 +196,6 @@ export function DiscoverySection({
   const [draft, setDraft] = useState<DiscoveryDraft>(EMPTY_DRAFT);
   const [open, setOpen] = useState<Set<BlockKey>>(new Set());
   const [callOpen, setCallOpen] = useState(false);
-  // R83 (F2, walk 2026-07): a failed Begin-the-Direction explains itself in a
-  // quiet inline band AT the act — never a toast.
-  const [beginError, setBeginError] = useState<string | null>(null);
-  // The act is not over when the RPC resolves — it is over when the successor
-  // document has been navigated to. Held until this component unmounts under
-  // the new URL, so the primary act never looks idle mid-flight.
-  const [landing, setLanding] = useState(false);
   const hydrated = useRef(false);
 
   // Debounced, SERIALIZED self-persist (no Save button) — F3/F4 (walk 2026-07).
@@ -285,10 +280,7 @@ export function DiscoverySection({
     [],
   );
 
-  const { done, essentialsDone, ready, fill } = deriveDiscoveryReadiness(
-    toFacts(draft),
-  );
-  const alreadySeeded = Boolean(read?.row?.seeded_proposal_id);
+  const { done, ready } = deriveDiscoveryReadiness(toFacts(draft));
   const eyebrow = ready ? 'Ready' : 'In progress';
   useEffect(() => {
     onEyebrow?.(eyebrow);
@@ -320,34 +312,6 @@ export function DiscoverySection({
       return next;
     });
   const openBlock = (b: BlockKey) => setOpen((prev) => new Set(prev).add(b));
-
-  const begin = async () => {
-    setBeginError(null);
-    // AWAIT the serialized save chain — the server gate must read the FINAL
-    // facts, not race a still-in-flight edit (F2).
-    await flush();
-    setLanding(true);
-    try {
-      const proposalId = await beginDirection.mutateAsync({
-        designerClientId: engagementId,
-      });
-      // J1: the document's IDENTITY moves here. document_state keys the
-      // pre-Direction row on designer_clients.id (shape D) and suppresses it
-      // the moment a draft proposal exists (00327), while the successor row
-      // (shape B) is keyed on the proposal. So /doc/<designerClientId> stops
-      // resolving to anything at this instant — staying put renders "No
-      // document answers to this name". Navigate to the successor id the RPC
-      // just returned; replace, because the old name is now a dead end.
-      router.replace(`/doc/${proposalId}`);
-    } catch (err) {
-      setLanding(false);
-      // R83: the failure is explained in place, with a retry act. The RPC
-      // rejects with a PostgrestError (message-shaped, not always an
-      // instanceof Error) — read .message off whatever arrived.
-      const message = (err as { message?: string } | null)?.message;
-      setBeginError(message || 'Something went wrong beginning the Direction.');
-    }
-  };
 
   const essentials: { key: BlockKey; name: string; node: React.ReactNode }[] = [
     {
@@ -412,7 +376,12 @@ export function DiscoverySection({
   // `disabled` so the action keeps its place in the tab order and the sentence
   // it points at is announced with it.
   const returnRefused = returnCheck ? !returnCheck.allowed : false;
-  const returnReason = returnError ?? (returnRefused ? returnCheck?.reason : null);
+  // D7 — an undo with no sentence is a door with no sign. The consequence is
+  // stated whenever the door is open; a refusal or a failed act replaces it
+  // with the server's own reason.
+  const returnReason =
+    returnError ??
+    (returnRefused ? (returnCheck?.reason ?? RETURN_CONSEQUENCE) : RETURN_CONSEQUENCE);
 
   return (
     // Blur-save law (F4): focusout bubbles here from every block editor, so
@@ -430,66 +399,6 @@ export function DiscoverySection({
         designerClientId={engagementId}
         clientName={clientName}
       />
-
-      {/* Readiness header — the Strata Mark fills toward Ready (R66). */}
-      <div
-        className={`mb-2.5 flex items-center gap-4 rounded-[3px] px-4 py-3.5 transition-colors ${
-          ready ? 'bg-[rgba(168,181,160,0.16)]' : 'bg-[rgba(229,221,208,0.5)]'
-        }`}
-      >
-        <StrataMark size="lg" fill={fill} />
-        <div className="flex-1">
-          <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
-            Working with {clientName}
-          </p>
-          <p className="mt-0.5 text-[14px] text-[var(--color-charcoal)]">
-            {ready ? (
-              <>
-                <b>Ready for Direction</b> — essentials captured
-              </>
-            ) : (
-              <>
-                <b>{essentialsDone}</b> of 5 essentials captured — keep going
-              </>
-            )}
-          </p>
-        </div>
-        <DocumentAction
-          actionKey={alreadySeeded ? 'open-direction' : 'begin-direction'}
-          surfaceKey="discovery"
-          regionKey="readiness"
-          variant="primary"
-          onClick={() => void begin()}
-          disabled={!ready || landing}
-          loading={landing}
-          loadingLabel="Opening…"
-          className="shrink-0"
-        >
-          {alreadySeeded ? 'Open the Direction' : 'Begin the Direction'}
-        </DocumentAction>
-      </div>
-
-      {/* R83 (F2): the act's failure, inline AT the act — a quiet terracotta
-          band with the server's reason and a retry. Never a toast. */}
-      {beginError && (
-        <div className="mb-2.5 flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-[3px] border-l-2 border-[var(--color-terracotta)] bg-[rgba(212,160,144,0.10)] px-4 py-2.5">
-          <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)]">
-            Couldn&rsquo;t begin the Direction
-          </span>
-          <span className="text-[12px] leading-snug text-[var(--color-charcoal)]">
-            {beginError}
-          </span>
-          <DocumentAction
-            actionKey="retry-begin-direction"
-            surfaceKey="discovery"
-            regionKey="readiness-error"
-            variant="primary"
-            onClick={() => void begin()}
-          >
-            Try again
-          </DocumentAction>
-        </div>
-      )}
 
       {/* Toolrow — the call checklist + the two clip-ins. */}
       <DocumentActionGroup
@@ -552,7 +461,7 @@ export function DiscoverySection({
             actionKey="return-to-lead"
             variant="tertiary"
             aria-disabled={returnRefused || undefined}
-            aria-describedby={returnReason ? RETURN_REASON_ID : undefined}
+            aria-describedby={RETURN_REASON_ID}
             disabled={returnToLead.isPending}
             loading={returnToLead.isPending}
             loadingLabel="Moving…"
@@ -573,14 +482,12 @@ export function DiscoverySection({
           >
             Move back to New Lead
           </DocumentAction>
-          {returnReason && (
-            <span
-              id={RETURN_REASON_ID}
-              className="text-[12px] leading-snug text-[var(--text-muted)]"
-            >
-              {returnReason}
-            </span>
-          )}
+          <span
+            id={RETURN_REASON_ID}
+            className="text-[12px] leading-snug text-[var(--text-muted)]"
+          >
+            {returnReason}
+          </span>
         </DocumentActionGroup>
       )}
 

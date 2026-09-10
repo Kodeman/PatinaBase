@@ -24,8 +24,12 @@ import { DocSheet } from './overlays/doc-sheet';
 
 const ROW =
   'grid grid-cols-[1fr_auto] items-center gap-x-3 border-b border-dashed border-[rgba(139,115,85,0.14)] py-2.5 last:border-b-0';
-const EYEBROW =
-  'font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)]';
+const EYEBROW_BASE = 'font-mono text-[11px] uppercase tracking-[0.08em]';
+/** Standing exceptions — something is wrong. */
+const EYEBROW = `${EYEBROW_BASE} text-[var(--color-terracotta-ink)]`;
+/** D1 — an open input is not an exception. Clay-ink is the register for work
+ *  still to be done; terracotta is reserved for what has gone wrong. */
+const INPUT_EYEBROW = `${EYEBROW_BASE} text-[var(--color-clay-ink)]`;
 const SENTENCE = 'mt-0.5 font-heading text-[14px] text-[var(--color-charcoal)]';
 
 export function StandingSheet({
@@ -95,7 +99,7 @@ export function StandingSheet({
               // `border-color` only, so the declaration was invalid and the
               // rule fell back to `currentColor` — a terracotta hairline
               // inherited from the eyebrow class on the same element.
-              className={`mt-4 border-t border-[var(--doc-ink-border)] pt-3 ${EYEBROW}`}
+              className={`mt-4 border-t border-[var(--doc-ink-border)] pt-3 ${INPUT_EYEBROW}`}
             >
               INPUT NEEDED · {inputs.length}
             </p>
@@ -103,7 +107,7 @@ export function StandingSheet({
               {inputs.map((item) => (
                 <li key={item.key} data-standing-input-row className={ROW}>
                   <div className="min-w-0">
-                    <p className={EYEBROW}>{item.eyebrow}</p>
+                    <p className={INPUT_EYEBROW}>{item.eyebrow}</p>
                     <p className={SENTENCE}>{item.sentence}</p>
                   </div>
                   {item.act && (

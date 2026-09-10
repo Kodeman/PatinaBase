@@ -1,4 +1,5 @@
 import { composeDocumentGuideInputs } from '../document-guide-inputs';
+import { inputsSentence } from '../document-guide';
 import type { DocumentStateRow } from '../desk-derivation';
 
 const row = (overrides: Partial<DocumentStateRow> = {}): DocumentStateRow => ({
@@ -76,6 +77,30 @@ describe('composeDocumentGuideInputs', () => {
       proposal: null,
       readiness: idleReadiness,
     })[0]).toEqual({ label: '2 blocked project items', owner: 'Project team', blocks: 'Active project work' });
+  });
+
+  // R2 — the checklist's own labels are what the band's sentence prints, so
+  // the two are pinned against one composition rather than a hand-typed list.
+  it('feeds the owner sentence the labels the checklist actually yields', () => {
+    const inputs = composeDocumentGuideInputs({
+      row: row(),
+      proposal: null,
+      readiness: {
+        ...idleReadiness,
+        discovery: {
+          state: 'ready',
+          data: {
+            budget_max_cents: 18_450_000,
+            target_date: '2026-11-02',
+            style_tag_ids: ['warm-modern'],
+          },
+        },
+      },
+    });
+
+    expect(inputsSentence(inputs, row().client_name)).toBe(
+      'Yours to add: project type and named rooms. Waiting on Avery: lifestyle needs.',
+    );
   });
 
   it('does not turn loading or error reads into missing-input claims', () => {

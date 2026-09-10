@@ -26,6 +26,7 @@ import {
   useProposalFeedback,
   useProjectRoster,
   useDiscovery,
+  useBeginDirection,
   useProjectContextualHandoffs,
   useProposalScopeRooms,
   useProposalScheduleItems,
@@ -149,6 +150,7 @@ import {
   composeDocumentGuideInputs,
   type DocumentGuideReadinessFacts,
 } from '@/lib/document/document-guide-inputs';
+import { ESSENTIAL_KEYS } from '@/lib/document/discovery-readiness';
 import { deriveGates, nearestOpenGate } from '@/lib/document/workflow-gate';
 import {
   asCommercialDocumentKind,
@@ -1630,14 +1632,49 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         gate: nearestGate,
         closureReady,
         ticketRows,
+        alreadySeeded: Boolean(discoveryQuery.data?.row?.seeded_proposal_id),
       })
     : null;
+  // R5 — one leader. The band's rest act on a ready discovery RUNS the seed
+  // (`begin_direction_from_discovery`, 00224) and lands on the successor
+  // document, which is what `discovery-section.tsx`'s readiness band used to
+  // do before it lost its act.
+  const beginDirectionAsync = useBeginDirection().mutateAsync;
+  // The act is not over when the RPC resolves — it is over when the successor
+  // document has been navigated to. Held until this page unmounts under the
+  // new URL, so the leader never looks idle mid-flight.
+  const [beginDirectionLanding, setBeginDirectionLanding] = useState(false);
+  const [beginDirectionError, setBeginDirectionError] = useState<string | null>(null);
+  const engagementId = row?.engagement_id ?? null;
+  const runBeginDirection = useCallback(async () => {
+    if (!engagementId) return;
+    setBeginDirectionError(null);
+    setBeginDirectionLanding(true);
+    try {
+      const proposalId = await beginDirectionAsync({ designerClientId: engagementId });
+      // J1: the document's IDENTITY moves here — /doc/<designerClientId> stops
+      // resolving the instant the draft proposal exists (00327), so the old
+      // name is a dead end and the successor id is replaced onto, not pushed.
+      router.replace(`/doc/${proposalId}`);
+    } catch (err) {
+      setBeginDirectionLanding(false);
+      // The RPC rejects with a PostgrestError — message-shaped, not always an
+      // `instanceof Error`.
+      const message = (err as { message?: string } | null)?.message;
+      setBeginDirectionError(message || 'Something went wrong beginning the Direction.');
+    }
+  }, [beginDirectionAsync, engagementId, router]);
+
   // Split from activateGuide so the red-letter zone's per-need actions (below)
   // can reach the same switch without going through the guide's own model.
   const activateDestination = useCallback(
     (destination: DocumentGuideAction['destination']) => {
       if (destination.kind === 'retry') {
         void enrichedOperationalQuery.refetch();
+        return;
+      }
+      if (destination.kind === 'begin-direction') {
+        void runBeginDirection();
         return;
       }
       if (destination.kind === 'anchor') {
@@ -1649,13 +1686,18 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       // the fourth destination or a deep-linked guide act would open nothing.
       if (destination.kind === 'href') router.push(destination.href);
     },
-    [enrichedOperationalQuery, jumpToSection, router],
+    [enrichedOperationalQuery, jumpToSection, router, runBeginDirection],
   );
   const activateGuide = useCallback(() => {
+    // R5 — while the seed's failure is on line 2, the act is its Retry.
+    if (beginDirectionError) {
+      void runBeginDirection();
+      return;
+    }
     const destination = guideModel?.action?.destination;
     if (!destination) return;
     activateDestination(destination);
-  }, [activateDestination, guideModel]);
+  }, [activateDestination, beginDirectionError, guideModel, runBeginDirection]);
 
   const redLetterRows: RedLetterRow[] = useMemo(() => {
     if (!row || row.engagement_kind !== 'project') return [];
@@ -1918,6 +1960,13 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           // reported up by `SectionStageLineMount` (N2).
           stageLine: preworkStageLine,
           investmentCents: liveProposal?.total_amount ?? null,
+          // D6 — the discovery stop's own figure, the same one the band's
+          // sentence counts down. Null until the read answers, so the rail
+          // never states a number nobody has stated.
+          essentialsDone:
+            row?.active_section === 'discovery' && discoveryReadiness.state === 'ready'
+              ? ESSENTIAL_KEYS.length - guideInputs.length
+              : null,
         },
       })
     : [];
@@ -2114,15 +2163,30 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     !deskGuidanceFailed
       ? redLetterRows
       : NO_BAND_NEEDS;
-  const guideHeadline = guideModel?.headline ?? null;
-  const guideActLabel = guideModel?.action?.label ?? null;
+  // R5 — a failed seed is stated on line 2 itself, where the leader stands,
+  // and its act re-runs the seed. There is no second band to print it in.
+  const guideHeadline = beginDirectionError
+    ? `Couldn’t begin the Direction — ${beginDirectionError}`
+    : (guideModel?.headline ?? null);
+  const guideActLabel = beginDirectionError
+    ? 'Retry'
+    : (guideModel?.action?.label ?? null);
   // N-05 — telemetry keys on the act's own key, never on its printed label.
-  const guideActKey = guideModel?.action?.key ?? null;
+  const guideActKey = beginDirectionError
+    ? 'retry-begin-direction'
+    : (guideModel?.action?.key ?? null);
+  // D1 — the band's act NAMES the first open input, so that input must not be
+  // listed again behind the door. It names it exactly when `withInputs` built
+  // the act from it: a needs-input state whose first fact carries a focus id.
+  const bandNamesTopInput =
+    guideModel?.state === 'needs_input' && Boolean(guideModel.topInput?.focusId);
+  const doorFacts = bandNamesTopInput ? guideInputs.slice(1) : guideInputs;
+  const bandSection = row?.active_section ?? null;
   // W3-R2 — the guide's open inputs, the sheet's own second section. Their
   // facts are rebuilt every render from the same reads; this string is what
   // actually changes.
-  const inputSignature = guideInputs
-    .map((fact) => `${fact.label}|${fact.owner}|${fact.blocks}`)
+  const inputSignature = doorFacts
+    .map((fact) => `${fact.label}|${fact.owner}|${fact.blocks}|${fact.focusId ?? ''}`)
     .join(';');
   const bandHousehold = row?.client_name ?? '';
   const bandStageIndex = ticketPhase
@@ -2140,14 +2204,36 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   const bandModel = useMemo<LensBandModel | null>(() => {
     if (!bandSpread) return null;
     const guideAct = guideActLabel
-      ? { key: guideActKey ?? 'guide', label: guideActLabel, onAct: activateGuide }
+      ? {
+          key: guideActKey ?? 'guide',
+          label: guideActLabel,
+          onAct: activateGuide,
+          // R5 — the seed is in flight; the leader is held, not idle.
+          disabled: beginDirectionLanding,
+        }
       : null;
-    const inputs: LensInputItem[] = guideInputs.map((fact, index) => ({
+    // D1 — each row carries its OWN act, landing on its own facet. A fact with
+    // no facet to land on (a direction gap, a signature) prints the sentence
+    // and asks for nothing rather than borrowing the band's act.
+    const inputs: LensInputItem[] = doorFacts.map((fact, index) => ({
       key: `${index}:${fact.label}`,
       // The input's own kind word — `Client signature` stands under SIGNATURE.
       eyebrow: (fact.label.split(/\s+/).pop() ?? fact.label).toUpperCase(),
       sentence: `${fact.label} · ${fact.owner} · blocks ${fact.blocks}`,
-      act: guideAct,
+      act:
+        fact.focusId && bandSection
+          ? {
+              key: `input:${fact.label}`,
+              label: `Add ${fact.label}`,
+              onAct: () =>
+                activateDestination({
+                  kind: 'anchor',
+                  section: bandSection,
+                  focusId: fact.focusId,
+                  activate: true,
+                }),
+            }
+          : null,
     }));
     return deriveLensBand({
       spreadKind: bandSpread,
@@ -2170,7 +2256,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       sentDate: bandSent,
       readingStop: bandStop,
     });
-    // `guideInputs` and `ticketPhase` are re-created every render; the values
+    // `doorFacts` and `ticketPhase` are re-created every render; the values
     // that decide the model are `inputSignature` and `bandStageIndex`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -2182,6 +2268,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     guideActLabel,
     guideActKey,
     activateGuide,
+    activateDestination,
+    beginDirectionLanding,
+    bandSection,
     lensTier,
     bandHousehold,
     bandStageWord,

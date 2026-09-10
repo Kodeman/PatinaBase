@@ -69,9 +69,10 @@ describe('deriveDocumentGuide', () => {
   // act, because "Nothing to decide yet" asks for nothing).
   it.each([
     ['brief', 'Nothing to decide yet.', undefined, null],
-    // The rest act names the DIRECTION, so it lands there — not back on the
+    // R5 — the rest act names the DIRECTION and RUNS it: one leader, and the
+    // seed the readiness band used to carry. It never lands back on the
     // discovery checklist it has just called complete (C20).
-    ['discovery', 'Discovery is complete. Shape the direction.', 'Begin the direction', 'direction'],
+    ['discovery', 'Discovery is complete. Shape the direction.', 'Begin the direction', 'begin-direction'],
     ['direction', 'The direction is written. Send it.', 'Send the agreement', '/drafting/proposal-1'],
     ['proposal', 'Wait for the client’s signature', 'Review signing controls', 'proposal'],
     ['project', 'Everything ordered is moving.', 'Release the next room', 'project'],
@@ -87,7 +88,7 @@ describe('deriveDocumentGuide', () => {
         ? guide.action.destination.href
         : guide.action?.destination.kind === 'anchor'
           ? guide.action.destination.section
-          : null,
+          : (guide.action?.destination.kind ?? null),
     ).toBe(destination);
   });
 
@@ -621,6 +622,96 @@ describe('deriveDocumentGuide', () => {
       destination: {
         kind: 'anchor', section: 'discovery', focusId: 'discovery-facet-budget', activate: true,
       },
+    });
+  });
+
+  // ── R2 — the needs-input sentence names owners ───────────────────────────
+  describe('R2 — line 2 names who is waiting on whom', () => {
+    const fact = (
+      label: string,
+      owner: 'Designer' | 'Client' | 'Studio' | 'Project team',
+    ) => ({ label, owner, blocks: 'Direction' });
+
+    it('waits on the client, by first name, when every open input is theirs', () => {
+      const guide = deriveDocumentGuide({
+        row: row('discovery'),
+        inputFacts: [fact('Working budget', 'Client'), fact('Lifestyle needs', 'Client')],
+      });
+
+      expect(guide.headline).toBe('Waiting on Avery: working budget, lifestyle needs.');
+    });
+
+    it('names the studio\u2019s own share as theirs to add', () => {
+      const guide = deriveDocumentGuide({
+        row: row('discovery'),
+        inputFacts: [
+          fact('Project type and named rooms', 'Designer'),
+          fact('Studio countersignature', 'Studio'),
+        ],
+      });
+
+      expect(guide.headline).toBe(
+        'Yours to add: project type and named rooms, studio countersignature.',
+      );
+    });
+
+    it('splits a mixed list, the studio\u2019s first', () => {
+      const guide = deriveDocumentGuide({
+        row: row('discovery'),
+        inputFacts: [
+          fact('Project type and named rooms', 'Designer'),
+          fact('Working budget', 'Client'),
+          fact('Lifestyle needs', 'Client'),
+        ],
+      });
+
+      expect(guide.headline).toBe(
+        'Yours to add: project type and named rooms. Waiting on Avery: working budget, lifestyle needs.',
+      );
+    });
+
+    it('reads the project team as designer-side', () => {
+      const guide = deriveDocumentGuide({
+        row: row('discovery'),
+        inputFacts: [fact('2 open damage claims', 'Project team')],
+      });
+
+      expect(guide.headline).toBe('Yours to add: 2 open damage claims.');
+    });
+
+    it('falls back to "the client" when the row carries no name', () => {
+      const guide = deriveDocumentGuide({
+        row: row('discovery', { client_name: '' }),
+        inputFacts: [fact('Working budget', 'Client')],
+      });
+
+      expect(guide.headline).toBe('Waiting on the client: working budget.');
+    });
+
+    it('keeps the stage headline while the read has answered nothing', () => {
+      const guide = deriveDocumentGuide({
+        row: row('discovery'),
+        inputFacts: [],
+        inputsPending: true,
+      });
+
+      expect(guide.state).toBe('needs_input');
+      expect(guide.headline).toBe('Finish what you need to know');
+    });
+  });
+
+  // ── R5 — one leader, and the seeded case ─────────────────────────────────
+  it('opens an already-seeded direction instead of running the seed again', () => {
+    const guide = deriveDocumentGuide({
+      row: row('discovery'),
+      now: new Date('2026-08-10T12:00:00Z'),
+      alreadySeeded: true,
+    });
+
+    expect(guide.action).toEqual({
+      key: 'rest-discovery',
+      label: 'Open the direction',
+      destination: { kind: 'anchor', section: 'direction' },
     });
   });
 });

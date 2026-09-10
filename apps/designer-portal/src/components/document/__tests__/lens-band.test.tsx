@@ -435,6 +435,64 @@ describe('LensBand · line 2, the sentence that changes (L-1, L-11)', () => {
     ).toBeTruthy();
   });
 
+  // D1 — a row with no facet to land on asks for nothing rather than
+  // borrowing the band's act; a row with one carries its OWN.
+  it('gives each input row its own act, and prints only the sentence without one', () => {
+    const onBudget = jest.fn();
+    render(
+      <LensBand
+        model={model({
+          guide: { text: 'Yours to add: phases & fees.', act: null },
+          inputs: [
+            {
+              key: '0:Working budget',
+              eyebrow: 'BUDGET',
+              sentence: 'Working budget · Client · blocks Direction',
+              act: { key: 'input:Working budget', label: 'Add Working budget', onAct: onBudget },
+            },
+            {
+              key: '1:phases & fees',
+              eyebrow: 'FEES',
+              sentence: 'phases & fees · Designer · blocks Client proposal',
+              act: null,
+            },
+          ],
+        })}
+        docId="doc-1"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '+2 MORE' }));
+    const panel = screen.getByRole('dialog');
+    const rows = panel.querySelectorAll('[data-standing-input-row]');
+    expect(rows).toHaveLength(2);
+    expect(rows[1].querySelectorAll('button')).toHaveLength(0);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add Working budget' }));
+    expect(onBudget).toHaveBeenCalledTimes(1);
+  });
+
+  // R5 — the seed is in flight: the leader is held rather than pressable twice.
+  it('holds the act while its own work is in flight', () => {
+    const onAct = jest.fn();
+    render(
+      <LensBand
+        model={model({
+          guide: {
+            text: 'Discovery is complete. Shape the direction.',
+            act: { key: 'rest-discovery', label: 'Begin the direction', onAct, disabled: true },
+          },
+        })}
+        docId="doc-1"
+      />,
+    );
+
+    const leader = screen.getByRole('button', { name: 'Begin the direction' });
+    expect(leader).toBeDisabled();
+    fireEvent.click(leader);
+    expect(onAct).not.toHaveBeenCalled();
+  });
+
   it('tells the page when the sheet opens and when the act is taken (D-B22)', () => {
     const onStandingOpened = jest.fn();
     const onActed = jest.fn();
