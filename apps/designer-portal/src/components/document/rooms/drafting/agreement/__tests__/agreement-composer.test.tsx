@@ -275,6 +275,13 @@ const move = (title: string, direction: "up" | "down") =>
 const addAPart = () =>
   fireEvent.click(screen.getAllByRole("button", { name: "+ Add a part" })[0]);
 
+/** The same act at a NAMED seam, in paper order: 0 is the seam above the
+ *  first part, 1 the seam beneath it, and so on (walk D2). */
+const addAPartAt = (seam: number) =>
+  fireEvent.click(
+    screen.getAllByRole("button", { name: "+ Add a part" })[seam]!,
+  );
+
 /** The record that replaced Save (§A5 "taken"). */
 const record = () => screen.getAllByText(/Not saved yet|^Saved /)[0];
 
@@ -428,6 +435,46 @@ describe("AgreementComposer · composing", () => {
     expect(
       screen.getByRole("region", { name: "Ceiling editor" }),
     ).toBeInTheDocument();
+  });
+
+  /* Walk D2 — the seam is a PLACE. A part added at the seam after part N is
+     part N+1, and the parts below it move down rather than staying put; the
+     whole renumbered array is what the save carries. */
+  it("lands a part added at a seam directly after that seam's part", () => {
+    renderComposer();
+    addAPartAt(1);
+    fireEvent.click(screen.getByRole("button", { name: "Ceiling" }));
+    expect(railRows()).toEqual([
+      expect.stringContaining("Services"),
+      expect.stringContaining("Ceiling"),
+      expect.stringContaining("Exclusions"),
+      expect.stringContaining("Terms"),
+    ]);
+  });
+
+  it("lands a part added at the seam above the paper first", () => {
+    renderComposer();
+    addAPartAt(0);
+    fireEvent.click(screen.getByRole("button", { name: "Ceiling" }));
+    expect(railRows()[0]).toContain("Ceiling");
+    expect(railRows()[1]).toContain("Services");
+  });
+
+  /* The whole ordered array reaches `upsert_agreement_parts` renumbered from
+     1, with the seam's part still ahead of the one laid in beneath it. */
+  it("saves the seam landing as the part's position", async () => {
+    renderComposer();
+    addAPartAt(2);
+    fireEvent.click(screen.getByRole("button", { name: "Ceiling" }));
+    write("Ceiling");
+    await waitFor(() => expect(mockSaveParts).toHaveBeenCalled());
+    const sent = mockSaveParts.mock.calls.at(-1)![0] as AgreementPart[];
+    expect(sent.map((entry) => [entry.position, entry.title])).toEqual([
+      [1, "Services"],
+      [2, "Exclusions"],
+      [3, "Ceiling"],
+      [4, "Terms"],
+    ]);
   });
 
   // R21 — a blank money part opens with no amount at all, so the client copy

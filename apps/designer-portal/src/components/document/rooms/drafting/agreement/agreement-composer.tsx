@@ -301,6 +301,10 @@ export function AgreementComposer({
   const [recordOnPaperOpen, setRecordOnPaperOpen] = useState(false);
   const [wholePaperOpen, setWholePaperOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  /** Walk D2 — which seam the Library picker was opened from. Held in state
+   *  rather than passed, because the picker is mounted once at the page's
+   *  foot and not inside the seam that called it. */
+  const [addAnchor, setAddAnchor] = useState<string | null>(null);
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [templateError, setTemplateError] = useState<string | null>(null);
   /** N-8/FS-26 — keyed on the part KEY, like everything else the room
@@ -621,18 +625,46 @@ export function AgreementComposer({
     if (twin && twin.offsetParent !== null) twin.focus();
   });
 
-  const addPart = (input: {
-    kind: AgreementPart["kind"];
-    variant: AgreementPart["variant"];
-  }) => {
+  /**
+   * Walk D2 — the seam is a PLACE, not a decoration. `anchor` is the part key
+   * the seam sits beneath, `"top"` the seam above the first part, and `null`
+   * the page-level acts that name no seam and therefore append. An anchor the
+   * composition no longer carries appends too, because a part removed while
+   * its picker was open must not take the new part off the end of the paper.
+   */
+  const insertIndex = (current: AgreementPart[], anchor: string | null) => {
+    if (anchor === null) return current.length;
+    if (anchor === "top") return 0;
+    const at = current.findIndex((part) => part.partKey === anchor);
+    return at < 0 ? current.length : at + 1;
+  };
+
+  /** Lay a part in at its seam. `mutate` renumbers the whole array and the
+   *  save sends the whole array, so the landing needs no position of its
+   *  own — the splice IS the position. */
+  const layIn = (added: AgreementPart, anchor: string | null) => {
+    mutate((current) => {
+      const next = [...current];
+      next.splice(insertIndex(current, anchor), 0, added);
+      return next;
+    });
+    setOpenKey(added.partKey);
+  };
+
+  const addPart = (
+    input: {
+      kind: AgreementPart["kind"];
+      variant: AgreementPart["variant"];
+    },
+    anchor: string | null,
+  ) => {
     const blank = createBlankPart({
       proposalId,
       kind: input.kind,
       variant: input.variant,
-      position: parts.length + 1,
+      position: insertIndex(parts, anchor) + 1,
     });
-    mutate([...parts, blank]);
-    setOpenKey(blank.partKey);
+    layIn(blank, anchor);
   };
 
   /** A jurisdiction notice counsel HAS cleared, laid in as an attachment leaf
@@ -666,20 +698,21 @@ export function AgreementComposer({
       sourcePartId: null,
       updatedAt: null,
     };
-    mutate([...parts, added]);
-    setOpenKey(added.partKey);
+    // A page-level act, not a seam: the notice is laid at the end.
+    layIn(added, null);
   };
 
   /**
-   * A part chosen in the Library picker (M2), laid at the end of the paper.
-   * Local, like every other act in this room: the picker writes nothing, and
-   * the part reaches the table with the rest of the composition on the save.
+   * A part chosen in the Library picker (M2), laid at the seam the picker was
+   * opened from (walk D2). Local, like every other act in this room: the
+   * picker writes nothing, and the part reaches the table with the rest of
+   * the composition on the save.
    */
   const addFromLibrary = (choice: AddPartChoice) => {
     const added: AgreementPart = {
       id: localPartId(),
       proposalId,
-      position: parts.length + 1,
+      position: insertIndex(parts, addAnchor) + 1,
       kind: choice.kind,
       variant: choice.variant,
       partKey: choice.partKey,
@@ -691,8 +724,7 @@ export function AgreementComposer({
       sourcePartId: choice.sourcePartId,
       updatedAt: null,
     };
-    mutate([...parts, added]);
-    setOpenKey(added.partKey);
+    layIn(added, addAnchor);
     documentEvents.agreementPartSaved({
       proposal_id: proposalId,
       kind: choice.kind,
@@ -843,6 +875,13 @@ export function AgreementComposer({
       // A queued save is about to carry the same composition again. It is the
       // one that gets to say whether the agreement could be saved.
       if (pendingSave.current) return false;
+      // WR-101, the same rule on the refusing side: a refusal is only about
+      // the composition this call CARRIED. The paper moved on while it flew,
+      // so the sentence describes an agreement that no longer exists — and
+      // printing it puts a refusal the designer has already answered back on
+      // the room. `dirty` is untouched, so the record still says the table is
+      // behind and the next act saves what is on the page now.
+      if (revision.current !== sentAt) return false;
       const message = refusalMessage(
         error,
         "The agreement could not be saved.",
@@ -1015,12 +1054,18 @@ export function AgreementComposer({
           <button
             type="button"
             className="g-act g-act--tertiary"
-            onClick={() => setAddOpen(true)}
+            onClick={() => {
+              setAddAnchor(place);
+              setAddOpen(true);
+            }}
           >
             <span className="g-label">+ Add a part</span>
           </button>
         ) : (
-          <AddPartMenu options={addPartOptions(parts)} onAdd={addPart} />
+          <AddPartMenu
+            options={addPartOptions(parts)}
+            onAdd={(input) => addPart(input, place)}
+          />
         )}
       </div>
     );

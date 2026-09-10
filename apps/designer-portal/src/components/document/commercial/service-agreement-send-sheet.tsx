@@ -199,11 +199,23 @@ export function ServiceAgreementSendSheet({
           {consequence}
         </p>
 
-        <div className="mt-4 flex flex-wrap items-center justify-end gap-3">
-          <Button variant="ghost" onClick={onClose}>
+        {/* Walk D1 — the acts row is `justify-end`, and an act wider than the
+            sheet overflows to the LEFT: at 390 the sheet goes full-bleed and
+            "Send the agreement · $5,000.00 retainer" had its leading "Se" cut
+            off past the sheet's own bound. Below 480 the two acts stack
+            full-width, and the terminal act's label wraps inside it — the
+            house sheet wraps, never truncates, and the amount stays in the
+            label. */}
+        <div className="mt-4 flex flex-wrap items-center justify-end gap-3 max-[480px]:flex-col max-[480px]:items-stretch">
+          <Button
+            variant="ghost"
+            onClick={onClose}
+            className="max-[480px]:w-full"
+          >
             Not yet
           </Button>
           <Button
+            className="whitespace-normal text-center max-[480px]:w-full"
             onClick={() => void submit()}
             disabled={!readiness.ready}
             /* Check 7 — `held` is what the READINESS says, not what the

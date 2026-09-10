@@ -345,9 +345,28 @@ describe("the Contract Room with the Library on", () => {
     ).toBeGreaterThan(0);
   });
 
-  it("lays a Library part at the end of the paper", async () => {
-    renderRoom();
-    addAPart();
+  /* Walk D2 — the picker is mounted once at the page's foot, so the seam it
+     was opened FROM is what decides where the part lands. Written parts here
+     because an unwritten one prints nothing and carries no seam of its own. */
+  it("lays a Library part at the seam the picker was opened from", async () => {
+    renderRoom([
+      part({
+        partKey: "patina.services",
+        position: 1,
+        title: "Services",
+        payload: { body: "Interior design services." },
+      }),
+      part({
+        partKey: "patina.terms",
+        position: 2,
+        title: "Terms",
+        payload: { body: "Ownership and cancellation." },
+      }),
+    ]);
+    // [0] is the seam above the paper; [1] is the seam beneath Services.
+    fireEvent.click(
+      screen.getAllByRole("button", { name: "+ Add a part" })[1]!,
+    );
 
     const row = screen
       .getAllByRole("listitem")
@@ -358,7 +377,9 @@ describe("the Contract Room with the Library on", () => {
     );
 
     await waitFor(() => expect(railRows()).toHaveLength(3));
-    expect(within(railRows()[2]).getByText("House rules")).toBeInTheDocument();
+    expect(within(railRows()[0]).getByText("Services")).toBeInTheDocument();
+    expect(within(railRows()[1]).getByText("House rules")).toBeInTheDocument();
+    expect(within(railRows()[2]).getByText("Terms")).toBeInTheDocument();
     // §A5 "taken" — no Save control survives; the record says what stands.
     expect(screen.queryByRole("button", { name: "Save agreement" })).toBeNull();
     expect(screen.getAllByText("Not saved yet").length).toBeGreaterThan(0);
