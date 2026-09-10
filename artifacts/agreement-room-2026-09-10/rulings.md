@@ -1,20 +1,28 @@
-# Rulings — the Agreement Room (Kody, September 2026)
+# Rulings — the Agreement Room (Kody, 10 September 2026)
 
-The deck's sheet 17 asks these questions and carries the panel's lean; the Ruling column stays blank until Kody rules.
+The deck's sheet 17 asked these questions and carried the panel's lean; the Ruling column below is Kody's, taken by interview on 10 September 2026. `(rec)` marks a ruling that took the panel's lean.
 
 | No. | Question | Panel's lean | Ruling |
 |---|---|---|---|
-| AR-a | Which direction ships. | Ship D, keeping A as the live alternative. | |
-| AR-b | The rename of the return act, and whether the "composed elsewhere" sentence moves with it. | Rename it, and move both strings in one change. | |
-| AR-c | "Fields on paper" into the house sheet as a new §A14. | Adopt it as pasted in the build contract. | |
-| AR-d | Does the Preview act survive? | Retire it in D and A for a full read of the paper. | |
-| AR-e | Hide-a-part outside the turnkey lane. | No recommendation — IA-32 and LH-15 ask only that the act live with the other part acts; neither proposes extending it. | |
-| AR-f | D's 1200 band exceeds the house sheet's 1100 page measure, which governs a client page. | Name a studio working band at 1200, prose still capped at 65ch. | |
-| AR-g | The paper never adds to one total: a design-services homeowner sees a ceiling, a retainer and a flat fee, each alone. | Of the two options the synthesis offers, say plainly none exists yet. | |
-| AR-h | D's fold act needs a word. The specimen shows "Write" on the part heads; the build contract pins no string, and "Write this part" is A's. | The panel leans to "Write" as the shortest word that is not A's — but no source pins it, so this is an ask, not a recommendation. | |
-| AM-1 | Rename `Return to the seven facets` (ED-50, IA-17, LH-28). R24 fixes that the act exists, not what it is called, and it is the last of that vocabulary on the studio's face. | The compliant version built: label unchanged, verbatim, in the quietest tier at the outline's/page's foot, with a consequence sentence and a press-and-hold confirm. | |
-| AM-2 | Permit `.t-authorship` (the authorship italic) as a part heading (TY-8); the shipped editor and the shipped paper both print one today. | The compliant version built: every part head roman at `.t-d3`, one head per part, never two. | |
-| AM-3 | Step the page title down below 480px (TY-25); the house sheet has no responsive steps. | The compliant version built: the h1 holds `.t-d2` at every width — the ask was filed against an email title, which the header reduction retires. | |
+| AR-a | Which direction ships. | Ship D, keeping A as the live alternative. | **Ship D · the galley. (rec)** A is the live alternative on record — the alternative, not a fallback rule. |
+| AR-b | The rename of the return act, and whether the "composed elsewhere" sentence moves with it. | Rename it, and move both strings in one change. | **REVERSED — removed.** Kody: *"I go back on this. Lets remove this concept all together. We have the parts, the templates and saved states that cover all this."* The return act is removed and the seven-facet room retired, so there is nothing left to rename; `composedElsewhere` goes with it. This reverses **R24** (`artifacts/agreement-composed-2026-09-06/build/rulings-2026-09-06.md`) and retires the **R17** flag-off notice. |
+| AR-c | "Fields on paper" into the house sheet as a new §A14. | Adopt it as pasted in the build contract. | **Adopt as house sheet §A14. (rec)** Verbatim as pasted in `specimens/SPEC.md` §2. |
+| AR-d | Does the Preview act survive? | Retire it in D and A for a full read of the paper. | **Retire "Preview client copy" in D and in A. (rec)** A full read at the paper's own measure replaces it — an overlay, never a route. |
+| AR-e | Hide-a-part outside the turnkey lane. | No recommendation — IA-32 and LH-15 ask only that the act live with the other part acts; neither proposes extending it. | **The hide act is on every agreement (rec)**, beside the other part acts. **R33 stands** — a hidden fee never bills, and readiness names it. **R48 stands** — pricing basis and draws are never hidden. |
+| AR-f | D's 1200 band exceeds the house sheet's 1100 page measure, which governs a client page. | Name a studio working band at 1200, prose still capped at 65ch. | **Name a studio working band at 1200px in the house sheet. (rec)** Prose stays capped at 65ch; 1100 remains the client-page measure. |
+| AR-g | The paper never adds to one total: a design-services homeowner sees a ceiling, a retainer and a flat fee, each alone. | Of the two options the synthesis offers, say plainly none exists yet. | **The paper says plainly that no total exists. (rec)** One sentence: professional time is billed as worked up to the ceiling, and no total is promised. No arithmetic. |
+| AR-h | D's fold act needs a word. The specimen shows "Write" on the part heads; the build contract pins no string, and "Write this part" is A's. | The panel leans to "Write" as the shortest word that is not A's — but no source pins it, so this is an ask, not a recommendation. | **The word is "Write". (rec)** |
+| AM-1 | Rename `Return to the seven facets` (ED-50, IA-17, LH-28). R24 fixes that the act exists, not what it is called, and it is the last of that vocabulary on the studio's face. | The compliant version built: label unchanged, verbatim, in the quietest tier at the outline's/page's foot, with a consequence sentence and a press-and-hold confirm. | **REVERSED — removed.** Kody: *"I go back on this. Lets remove this concept all together. We have the parts, the templates and saved states that cover all this."* The return act is deleted, not renamed, and the seven-facet room is retired with it. |
+| AM-2 | Permit `.t-authorship` (the authorship italic) as a part heading (TY-8); the shipped editor and the shipped paper both print one today. | The compliant version built: every part head roman at `.t-d3`, one head per part, never two. | **Declined. (rec)** Part heads stay roman at `.t-d3`, one per part; `.t-authorship` is never a heading. |
+| AM-3 | Step the page title down below 480px (TY-25); the house sheet has no responsive steps. | The compliant version built: the h1 holds `.t-d2` at every width — the ask was filed against an email title, which the header reduction retires. | **Declined. (rec)** The h1 holds `.t-d2` at every width; the sheet gains no responsive step. |
+
+## Consequences for the build wave
+
+- **Retire `ServiceAgreementEditor`** — the seven-facet room in `apps/designer-portal/src/components/document/rooms/drafting/service-agreement-drafting-room.tsx`. Every agreement is parts on first open, which is already what the live flags do; the flag-off path goes with the room.
+- **Retire `returnedToFacets`** and the UI path to **`discard_agreement_parts`**. The RPC itself may stay for admin use — **ruling owed at build time** on the RPC.
+- **Delete `AGREEMENT_PART_COPY.returnToFacets` and `.composedElsewhere`** (`packages/types/src/agreement-copy.ts`), the **`facet` count in the RoomShell header**, and the **send sheet's facet sentence** (N4 — already in the shared treatment).
+- **The hide act extends to all agreements**, not the turnkey lane alone.
+- **The send trigger moves onto the page at every width**, closing the 1180px gap at `room-shell.tsx:155`. Folded into this wave, not hotfixed.
 
 ## Carried, not decided here
 
@@ -38,5 +46,4 @@ The deck's sheet 17 asks these questions and carries the panel's lean; the Rulin
 ## What these rulings do not decide
 
 - Which wave builds the shipped direction, or in what order against the rest of the roadmap.
-- How AM-1–AM-3, once ruled, amend `docs/design/house-sheet/SPEC.md`/`DECISIONS.md` in writing — this program only builds the compliant version pending that amendment.
 - N-1's fork: whether the designer and client body renderers ever become one component, or stay two kept in sync by the shared-sentence rule.

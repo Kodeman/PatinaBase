@@ -594,6 +594,175 @@ badges · no olive · no green success fill · no ✓ glyph · no spinner · no
 `disabled` · no PATINA wordmark on client pages · no truncation · no
 placeholder text · no `opacity: .5` on a state.
 
+## A14. Fields on paper
+
+*(adopted 2026-09-10, **AR-c**; source the Agreement Room build contract,
+`artifacts/agreement-room-2026-09-10/specimens/SPEC.md` §2.)*
+
+**The rule, in one paragraph.** A field is not a control laid on the page: it is
+the place on the paper where a line has not been written yet, so a sentence must
+not change its size, leading, ink or ground when the studio starts typing in it.
+The label is a `.t-head` and it is always there — no `placeholder`, because a
+hint that vanishes when it is needed was never a label. A prose field inherits
+the paper's body metrics and grows with its content: no scrollbar, no grip. A
+money field is `.t-money`, right-aligned to the block's own rule (§F-I), its
+currency mark furniture the field prints and never stores. A select is the same
+box; its longest option must fit, because a clipped option is truncation. Ground
+`--paper-doc`, box 1px `--hairline-strong` at 2px radius, and the one edge a
+reader can actually see is a 1px `--ink-faint` baseline rule. Focus is §A5's,
+drawn with `outline` so nothing moves. Held is a `--rail` ground, a 2px
+`--terracotta-ink` leading rule and a reason in words — never `opacity`, and
+`aria-disabled="true"` with `aria-describedby`, never `disabled`. The dark twin
+needs no redeclaration: every colour is a token.
+
+```css
+/* §A14 · Fields on paper ─────────────────────────────────────────────── */
+
+/* The group. One module between groups, a half-module inside one. */
+.field           { display: block; margin: 0 0 var(--module); }
+.field:last-child{ margin-bottom: 0; }
+
+/* The label — .t-head, exactly. 11px is the floor and there is nothing below
+   it. The label is always present and always above the field. A placeholder
+   is not a label: no field carries a `placeholder` attribute (A13). */
+.field > .label {
+  display: block;
+  margin: 0 0 12px;
+  font-family: var(--font-meta);
+  font-size: 11px;
+  line-height: 1.5;
+  font-weight: 500;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-subtle);
+}
+
+/* The box. A sheet laid on the page: --paper-doc ground, a 1px
+   --hairline-strong box, 2px radius, and a 1px --ink-faint BASELINE rule —
+   the ruled line of a form on paper, and the one edge a reader can actually
+   see. No shadow, ever (A4). */
+.field-control {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 12px;
+  background: var(--paper-doc);
+  border: 1px solid var(--hairline-strong);
+  border-bottom: 1px solid var(--ink-faint);
+  border-radius: var(--radius-hair);
+  color: var(--ink-muted);
+  font-family: var(--font-body);
+  font-size: 16px;          /* .t-body */
+  line-height: 1.55;
+  letter-spacing: 0;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* Prose — the clause body. Inherits the paper's body metrics exactly, caps at
+   the paper's own measure, and grows with its content: a paper has no
+   scrollbar and no resize grip. */
+.field-control--prose {
+  max-width: 65ch;
+  min-height: calc(var(--module) * 3);
+  resize: none;
+  overflow: hidden;
+  field-sizing: content;
+}
+/* Auto-grow where field-sizing is unsupported: the control and a hidden
+   mirror of its value share one grid cell, so the cell is always as tall as
+   the text. In a static specimen `data-value` is authored, not scripted. */
+.field-grow { display: grid; max-width: 65ch;
+              font-family: var(--font-body); font-size: 16px; line-height: 1.55; }
+.field-grow::after {
+  content: attr(data-value) ' ';
+  visibility: hidden;
+  white-space: pre-wrap;
+}
+.field-grow > .field-control--prose,
+.field-grow::after {
+  grid-area: 1 / 1 / 2 / 2;
+  font: inherit;
+  padding: 12px;
+  border: 1px solid transparent;
+}
+
+/* Select. Same box, same metrics. The mark is drawn from two 1px --ink-faint
+   edges — never a glyph font, never an image (an image cannot read a token).
+   The longest option must still fit: a clipped option is truncation (A4). */
+.field-select { position: relative; }
+.field-select .field-control { padding-right: 36px; }
+.field-select::after {
+  content: '';
+  position: absolute; right: 14px; top: 50%;
+  width: 7px; height: 7px; margin-top: -6px;
+  border-right: 1px solid var(--ink-faint);
+  border-bottom: 1px solid var(--ink-faint);
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+
+/* Money — .t-money in the field exactly as on the paper, so a figure never
+   changes family between being typed and being printed (A3: one family per
+   figure). Right-aligned to the block's own rule, never to the page edge
+   (F-I). The currency mark is furniture printed by the field: never typed,
+   never stored, never part of the value. */
+.field-money { position: relative; display: inline-block; }
+.field-money .field-control {
+  max-width: 13ch;
+  padding-left: 30px;
+  text-align: right;
+  font-family: var(--font-meta);
+  font-size: 15px;          /* .t-money */
+  line-height: 1.5;
+  letter-spacing: .02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.field-money::before {
+  content: '$';
+  position: absolute; left: 12px; top: 50%;
+  transform: translateY(-50%);
+  font-family: var(--font-meta);
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--ink-faint);
+  pointer-events: none;
+}
+
+/* Focus — §A5's focus, unchanged, for every field. `outline` and not `border`,
+   so a focused field never resizes its neighbours (A5, VC-22). */
+.field-control:focus-visible {
+  outline: 2px solid var(--clay-ink);
+  outline-offset: 2px;
+}
+
+/* Held — a field that may not be written, or is written wrong. The ink stays
+   at full strength: never opacity, ever (A5). The ground moves to --rail, a
+   2px --terracotta-ink rule takes the leading edge, and the reason prints
+   directly beneath in words. The rule is the second channel, so the state
+   survives forced colors (A11); the ground change alone is 1.23:1 and carries
+   nothing. */
+.field-control[aria-invalid="true"],
+.field-control[aria-disabled="true"] {
+  background: var(--rail);
+  color: var(--ink);
+  border-left: 2px solid var(--terracotta-ink);
+  padding-left: 11px;       /* 12 − 1, so the text does not move */
+  cursor: not-allowed;
+}
+.field .reason {
+  display: block;
+  margin: 12px 0 0;
+  max-width: 56ch;
+  font-family: var(--font-body);
+  font-size: 14px;          /* .t-body-sm */
+  line-height: 1.50;
+  color: var(--ink);
+}
+```
+
 ---
 
 # §B Fixture data — identical in all three specimens
@@ -1010,3 +1179,9 @@ thumbnails are richer drawings (a plate, two swatches, a caption) not three
 rectangles; the legend rail's tier specimens are inert (`<span>`,
 `aria-hidden="true"`), never a live terminal act beside a record.
 Answers: PR-10, PR-12, SF-27.
+
+**Q. The studio working band.** A **studio** surface — a designer's working
+tool, not a letter the studio sends — may run to a **1200px** band. Prose
+inside it still caps at **65ch**. §A4's **1100px** page measure is unchanged
+and continues to govern every **client** page.
+Answers: AR-f (the Agreement Room, ruled by Kody 2026-09-10; R149).

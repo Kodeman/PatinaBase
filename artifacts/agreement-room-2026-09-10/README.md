@@ -19,7 +19,7 @@
 - `deck/` — `src/index.html`, `build.mjs`, built `index.html` — "The Paper, Under the Pencil"
 - `shots/` — capture ledger (`README.md`, `capture-log.json`, `tools/`) committed; the 18 plates under `shots/current/` uncommitted
 - `review/` — `01a-specimens-technical.md`, `01b-specimens-design.md`, `01c-deck-content.md`, `01d-deck-technical.md`, `02-fix-log-deck.md`, `02-fix-log-direction-1.md`, `02-fix-log-direction-2.md`, `02-fix-log-direction-3.md`, `03-rereview-deck-content.md`, `03-rereview-deck-technical.md`, `03-rereview-specimens-design.md`, `03-rereview-specimens-technical.md`
-- `rulings.md` — this program's ruling sheet, blank until Kody rules
+- `rulings.md` — this program's ruling sheet; Kody's rulings AR-a…AR-h and AM-1–AM-3 are recorded there (10 September 2026)
 
 **The verdict, in three.** The panel's pick is D, "the galley" — four of seven seats rank it first, surer (2 moments of doubt) over A's faster run (3). Leah's re-walk of all five:
 
