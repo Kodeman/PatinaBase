@@ -491,6 +491,11 @@ describe("AGREEMENT_PART_COPY — the shared sentences", () => {
       // surfaces print exactly this for a money part whose amount is zero.
       notYetSet: "Not yet set",
       attachmentAcknowledgment: "I received this",
+      // AR-g / NO-8 — a services agreement adds to no single total, and the
+      // paper says so rather than leaving the homeowner to add a cap to a
+      // retainer. The client fork does not carry it yet (owed).
+      noTotal:
+        "This agreement has no single total: hourly work is billed as it is worked, and each figure above stands on its own.",
       // R24 — the studio's own words for un-composing, and what the
       // seven-facet room says to a co-member standing over a composed
       // agreement. Neither reaches the homeowner's page.

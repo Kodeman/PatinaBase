@@ -69,6 +69,17 @@ interface DocumentActionBaseProps {
   variant?: DocumentActionVariant;
   presentation?: DocumentActionPresentation;
   loading?: boolean;
+  /**
+   * §A5 "held" — the act is offered and cannot be taken. Native `disabled`
+   * removes the control from the tab order, so the reason standing beside it
+   * (`aria-describedby`, forwarded like any other aria prop) is never reached
+   * by keyboard. `held` keeps it focusable, marks it `aria-disabled="true"`
+   * and swallows the activation.
+   *
+   * Opt-in, and read only in company with `disabled`/`loading`: every other
+   * caller renders exactly as before.
+   */
+  held?: boolean;
   loadingLabel?: ReactNode;
   leading?: ReactNode;
   trailing?: ReactNode;
@@ -127,6 +138,7 @@ export const DocumentAction = forwardRef<
     variant = 'secondary',
     presentation = 'inline',
     loading = false,
+    held = false,
     loadingLabel,
     leading,
     trailing,
@@ -144,6 +156,7 @@ export const DocumentAction = forwardRef<
   const surfaceKey = explicitSurfaceKey ?? region?.surfaceKey ?? 'document';
   const regionKey = explicitRegionKey ?? region?.regionKey ?? 'unscoped';
   const unavailable = disabled || loading;
+  const isHeld = held && unavailable;
   const shown = useRef(new Set<string>());
   const shownKey = `${actionKey}:${presentation}`;
 
@@ -201,9 +214,14 @@ export const DocumentAction = forwardRef<
     'data-action-variant': variant,
     'data-action-region': regionKey,
     'aria-busy': loading || undefined,
+    'data-held': isHeld || undefined,
     onPointerDown: markInkPoint,
     onPointerMove: markInkPoint,
-    className: [BASE_CLASS, VARIANT_CLASS[variant], className ?? ''].join(' '),
+    // Held is faint ink on the rail (N-6), never opacity — appended, so an act
+    // that is not held keeps the exact class string it carried before.
+    className:
+      [BASE_CLASS, VARIANT_CLASS[variant], className ?? ''].join(' ') +
+      (isHeld ? ' opacity-100 bg-[var(--rail)] text-[var(--ink-faint)]' : ''),
   };
 
   if (href) {
@@ -235,7 +253,7 @@ export const DocumentAction = forwardRef<
         href={href}
         ref={ref as React.Ref<HTMLAnchorElement>}
         aria-disabled={unavailable || undefined}
-        tabIndex={unavailable ? -1 : rest.tabIndex}
+        tabIndex={unavailable && !held ? -1 : rest.tabIndex}
         onClick={handleClick}
       >
         {content}
@@ -266,7 +284,8 @@ export const DocumentAction = forwardRef<
       {...shared}
       ref={ref as React.Ref<HTMLButtonElement>}
       type={(rest as ButtonHTMLAttributes<HTMLButtonElement>).type ?? 'button'}
-      disabled={unavailable}
+      disabled={unavailable && !held}
+      aria-disabled={isHeld || undefined}
       onClick={handleClick}
     >
       {content}

@@ -84,7 +84,7 @@ import {
 import { TradeAgreementsStrip } from "../../../commercial/trade-agreements";
 
 const labelClass =
-  "font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]";
+  "font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--ink-subtle)]";
 
 function renumber(parts: AgreementPart[]): AgreementPart[] {
   return parts.map((part, index) => ({ ...part, position: index + 1 }));
@@ -859,7 +859,10 @@ export function AgreementComposer({
             {selected ? (
               <>
                 <PartEditor
-                  key={selected.id}
+                  // ED-5/N-8 — `upsert_agreement_parts` is DELETE-then-INSERT,
+                  // so every save re-mints the row's uuid. Keyed on `id` the
+                  // editor remounts mid-typing; the part key survives the save.
+                  key={selected.partKey}
                   part={selected}
                   onChange={(payload) => changePayload(selected.id, payload)}
                   readOnly={readOnly}
@@ -959,7 +962,7 @@ export function AgreementComposer({
             )}
             <div className="hidden min-[1180px]:block">
               <div className="sticky top-[82px] rounded-[8px] border border-[var(--doc-ink-border)] bg-white px-5 py-5">
-                <p className="mb-4 font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+                <p className="mb-4 font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--ink-subtle)]">
                   The client&apos;s copy · live
                 </p>
                 <ServiceAgreementPreview {...previewProps} compact />
@@ -1045,7 +1048,7 @@ function ReadinessPanel({
       aria-label="Agreement readiness"
       className="border-t border-[var(--doc-ink-border)] pt-4"
     >
-      <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+      <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--ink-subtle)]">
         {needAttention} of {total} parts need attention
       </p>
       {docBlockers.length > 0 && (

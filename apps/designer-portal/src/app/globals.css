@@ -1951,3 +1951,236 @@ html:has([data-document-shell]) {
     margin: 0.5in;
   }
 }
+
+/* ═══ THE HOUSE SHEET, LANDED (docs/design/house-sheet/SPEC.md §A, as amended
+   by §F) ══════════════════════════════════════════════════════════════════
+
+   Additive only: every name below is new to this file (nothing is renamed,
+   nothing is removed, and no existing declaration changes), so no surface
+   that does not spell one of these class names renders differently.
+
+   It sits at :root and not inside a room because the "Read the whole paper"
+   overlay renders through a portal, outside the room's own root.
+
+   The tokens are ALIASES onto the portal's palette — the house sheet's names
+   for pigments this file already declares — so a retune stays a one-place
+   edit. Two exceptions are written as literals and say why below.
+
+   No dark twin is written here. This portal paints no dark paper set (the
+   `.dark` class carries shadcn tokens only), and `src/lib/document/__tests__/
+   contrast.test.ts` parses this file for `--*-ink` hexes with no notion of
+   which block they sit in — a dark `--ink`/`--clay-ink`/`--terracotta-ink`
+   would be measured against the LIGHT grounds and fail. The dark companions
+   are recorded in the house sheet, the same way `--color-card-edge`'s is. */
+:root {
+  /* — paper, three stocks — */
+  --paper: var(--color-off-white);
+  --paper-doc: var(--doc-paper);
+  --rail: var(--doc-rail-stock);
+
+  /* — ink — */
+  --ink: var(--color-charcoal);
+  --ink-muted: var(--text-body);
+  --ink-subtle: var(--text-muted);
+  --ink-faint: var(--color-quiet-ink); /* 5.32:1 on the rail — N-6's held pair */
+  --ink-paper: var(--color-off-white);
+
+  /* — the rest-rule pigment. NON-TEXT ONLY (N-14): background and
+       border-color, never `color` — 4.20:1 on paper, 3.51:1 on rail. — */
+  --oak: var(--color-aged-oak);
+
+  /* The house sheet's hairline over paper, flattened to its composite so a
+     rule drawn on the rail does not double. */
+  --hairline-strong: #D8CCB8;
+
+  /* The two paper inks the sheet spends by their short names. Written as
+     literals, not as `var(--color-clay-ink)`: contrast.test.ts refuses an
+     alias-form `--*-ink` token outright (an alias parses to no hex and would
+     ship unmeasured), so the value is repeated here and measured. Same hue,
+     same value as the `--color-` twins above. */
+  --clay-ink: #7C5E30;
+  --terracotta-ink: #9C5340;
+
+  /* — rhythm — */
+  --module: 24px;
+  --radius-hair: 2px;
+}
+
+/* ——— §A3 · the type scale ——— */
+.t-d1      { font-family: var(--font-display); font-size: 34px; line-height: 1.15; font-weight: 500; letter-spacing: 0; }
+.t-d2      { font-family: var(--font-display); font-size: 26px; line-height: 1.20; font-weight: 500; letter-spacing: 0; }
+.t-d3      { font-family: var(--font-display); font-size: 20px; line-height: 1.30; font-weight: 500; letter-spacing: 0; }
+.t-body    { font-family: var(--font-body); font-size: 16px; line-height: 1.55; font-weight: 400; }
+.t-body-sm { font-family: var(--font-body); font-size: 14px; line-height: 1.50; font-weight: 400; }
+.t-meta    { font-family: var(--font-meta); font-size: 12px; line-height: 1.50; font-weight: 400; letter-spacing: .08em; }
+.t-head    { font-family: var(--font-meta); font-size: 11px; line-height: 1.50; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; }
+.t-money   { font-family: var(--font-meta); font-size: 15px; line-height: 1.50; font-weight: 400; letter-spacing: .02em; font-variant-numeric: tabular-nums; }
+.t-authorship { font-family: var(--font-display); font-size: 20px; line-height: 1.30; font-style: italic; font-weight: 400; }
+.t-d1 .t-authorship { font-size: inherit; line-height: inherit; }
+
+/* §A14 · Fields on paper ─────────────────────────────────────────────── */
+
+/* The group. One module between groups, a half-module inside one. */
+.field           { display: block; margin: 0 0 var(--module); }
+.field:last-child{ margin-bottom: 0; }
+
+/* The label — .t-head, exactly. 11px is the floor and there is nothing below
+   it. The label is always present and always above the field. A placeholder
+   is not a label: no field carries a `placeholder` attribute (A13). */
+.field > .label {
+  display: block;
+  margin: 0 0 12px;
+  font-family: var(--font-meta);
+  font-size: 11px;
+  line-height: 1.5;
+  font-weight: 500;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-subtle);
+}
+
+/* The box. A sheet laid on the page: --paper-doc ground, a 1px
+   --hairline-strong box, 2px radius, and a 1px --ink-faint BASELINE rule —
+   the ruled line of a form on paper, and the one edge a reader can actually
+   see. No shadow, ever (A4/D4). */
+.field-control {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 12px;
+  background: var(--paper-doc);
+  border: 1px solid var(--hairline-strong);
+  border-bottom: 1px solid var(--ink-faint);
+  border-radius: var(--radius-hair);
+  color: var(--ink-muted);
+  font-family: var(--font-body);
+  font-size: 16px;          /* .t-body */
+  line-height: 1.55;
+  letter-spacing: 0;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* Prose — the clause body. Inherits the paper's body metrics exactly, caps at
+   the paper's own measure, and grows with its content: a paper has no
+   scrollbar and no resize grip. */
+.field-control--prose {
+  max-width: 65ch;
+  min-height: calc(var(--module) * 3);
+  resize: none;
+  overflow: hidden;
+  field-sizing: content;
+}
+/* Auto-grow where field-sizing is unsupported: the control and a hidden
+   mirror of its value share one grid cell, so the cell is always as tall as
+   the text. */
+.field-grow { display: grid; max-width: 65ch;
+              font-family: var(--font-body); font-size: 16px; line-height: 1.55; }
+.field-grow::after {
+  content: attr(data-value) ' ';
+  visibility: hidden;
+  white-space: pre-wrap;
+}
+.field-grow > .field-control--prose,
+.field-grow::after {
+  grid-area: 1 / 1 / 2 / 2;
+  font: inherit;
+  padding: 12px;
+  border: 1px solid transparent;
+}
+
+/* Select. Same box, same metrics. The mark is drawn from two 1px --ink-faint
+   edges — never a glyph font, never an image (an image cannot read a token).
+   The longest option must still fit: a clipped option is truncation (A4). */
+.field-select { position: relative; }
+.field-select .field-control { padding-right: 36px; }
+.field-select::after {
+  content: '';
+  position: absolute; right: 14px; top: 50%;
+  width: 7px; height: 7px; margin-top: -6px;
+  border-right: 1px solid var(--ink-faint);
+  border-bottom: 1px solid var(--ink-faint);
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+
+/* Money — .t-money in the field exactly as on the paper, so a figure never
+   changes family between being typed and being printed (A3: one family per
+   figure). Right-aligned to the block's own rule, never to the page edge
+   (F-I). The currency mark is furniture printed by the field: never typed,
+   never stored, never part of the value. */
+.field-money { position: relative; display: inline-block; }
+.field-money .field-control {
+  max-width: 13ch;
+  padding-left: 30px;
+  text-align: right;
+  font-family: var(--font-meta);
+  font-size: 15px;          /* .t-money */
+  line-height: 1.5;
+  letter-spacing: .02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.field-money::before {
+  content: '$';
+  position: absolute; left: 12px; top: 50%;
+  transform: translateY(-50%);
+  font-family: var(--font-meta);
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--ink-faint);
+  pointer-events: none;
+}
+
+/* Focus — §A5's focus, unchanged, for every field. `outline` and not `border`,
+   so a focused field never resizes its neighbours (A5, VC-22). */
+.field-control:focus-visible {
+  outline: 2px solid var(--clay-ink);
+  outline-offset: 2px;
+}
+
+/* Held — a field that may not be written, or is written wrong. The ink stays
+   at full strength: never opacity, ever (A5). The ground moves to --rail, a
+   2px --terracotta-ink rule takes the leading edge, and the reason prints
+   directly beneath in words. The rule is the second channel, so the state
+   survives forced colors (A11); the ground change alone is 1.23:1 and carries
+   nothing. */
+.field-control[aria-invalid="true"],
+.field-control[aria-disabled="true"] {
+  background: var(--rail);
+  color: var(--ink);
+  border-left: 2px solid var(--terracotta-ink);
+  padding-left: 11px;       /* 12 − 1, so the text does not move */
+  cursor: not-allowed;
+}
+.field .reason {
+  display: block;
+  margin: 12px 0 0;
+  max-width: 56ch;
+  font-family: var(--font-body);
+  font-size: 14px;          /* .t-body-sm */
+  line-height: 1.50;
+  color: var(--ink);
+}
+
+/* A money row: label on the line, figure right-aligned to the block's own rule
+   (F-I). Stacks below 520px — no container queries exist in the portal (FS-1),
+   so this is a viewport rule. */
+.money-row { display: flex; align-items: baseline; justify-content: space-between;
+             gap: 12px; margin: 0 0 12px; }
+.money-row > .label { margin: 0; }
+.money-rows { border-top: 1px solid var(--hairline-strong); padding-top: 12px; }
+@media (max-width: 519px) {
+  .money-row { display: block; }
+  .money-row > .label { margin: 0 0 12px; }
+}
+
+/* Studio chrome. Readiness sentences and marginal notes are the studio's, not
+   the paper's: --rail ground, a 2px --clay-ink leading rule (5.61:1 on paper,
+   4.70:1 on rail), a .t-head running head. NO-4's binding treatment, at 1440,
+   1024 and 390 alike. */
+.studio-note { background: var(--rail); border-left: 2px solid var(--clay-ink);
+               padding: 12px; margin: 0 0 var(--module); color: var(--ink); }
+.studio-note > .head { display: block; margin: 0 0 12px; color: var(--ink-subtle); }
+.studio-note > p { max-width: 56ch; }

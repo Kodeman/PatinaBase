@@ -67,6 +67,18 @@ export interface ButtonProps
    * when not `asChild`.
    */
   loading?: boolean;
+  /**
+   * §A5 "held" — an act that cannot be taken, offered as one anyway. The
+   * native `disabled` attribute takes the control out of the tab order, so a
+   * reader who arrives at the paper by keyboard never meets the act nor the
+   * `aria-describedby` reason standing beside it. `held` keeps the control
+   * focusable, marks it `aria-disabled`, and swallows the activation instead.
+   *
+   * Opt-in, and only in company with `disabled`/`loading`: every existing
+   * caller renders byte-identically without it. The held look is faint ink on
+   * the rail (N-6), never `opacity`.
+   */
+  held?: boolean;
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
@@ -77,6 +89,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       size,
       asChild = false,
       loading = false,
+      held = false,
       children,
       disabled,
       type,
@@ -84,7 +97,16 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     },
     ref
   ) => {
-    const classes = cn(buttonVariants({ variant, size }), className);
+    const unavailable = disabled || loading;
+    const isHeld = held && unavailable;
+    const classes = cn(
+      buttonVariants({ variant, size }),
+      // Appended here rather than in the variant base string so an act that
+      // is not held carries exactly the class attribute it carried before.
+      isHeld &&
+        'cursor-not-allowed opacity-100 bg-[var(--rail)] text-[var(--ink-faint)]',
+      className
+    );
 
     if (asChild) {
       if (React.isValidElement(children)) {
@@ -143,9 +165,12 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         // implicitly submits it; a caller's explicit `type` always wins.
         type={type ?? 'button'}
         className={classes}
-        disabled={disabled || loading}
+        disabled={unavailable && !held}
+        aria-disabled={isHeld || undefined}
+        data-held={isHeld || undefined}
         aria-busy={loading || undefined}
         {...props}
+        onClick={isHeld ? undefined : props.onClick}
       >
         {loading && <StrataSweep size="xs" label="Working" />}
         {children}

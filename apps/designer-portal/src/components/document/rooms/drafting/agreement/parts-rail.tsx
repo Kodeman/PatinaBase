@@ -305,7 +305,7 @@ function PartRow({
                 : "text-[var(--color-mocha)]"
             }`}
           >
-            <span className="block font-mono text-[10.5px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+            <span className="block font-mono text-[10.5px] uppercase tracking-[0.1em] text-[var(--ink-subtle)]">
               {partKindLabel(part.kind, part.variant)}
               {/* Wave 1 chipped only what created authority in Wave 1 (DR5:
                   `flat` and `per_phase` did not, and their editors said so).
@@ -341,13 +341,13 @@ function PartRow({
             {visibilityOn && part.clientVisible === false && (
               <span
                 data-client-visible="false"
-                className="block font-mono text-[10.5px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
+                className="block font-mono text-[10.5px] uppercase tracking-[0.08em] text-[var(--ink-subtle)]"
               >
                 {DESIGN_BUILD_COPY.hiddenFromClient}
               </span>
             )}
             {blocked && (
-              <span className="block font-mono text-[10.5px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+              <span className="block font-mono text-[10.5px] uppercase tracking-[0.08em] text-[var(--ink-subtle)]">
                 needs attention
               </span>
             )}
@@ -361,7 +361,7 @@ function PartRow({
               aria-label={`Part options for ${part.title}`}
               aria-expanded={menuOpen}
               onClick={() => setMenuOpen((open) => !open)}
-              className="px-2 font-mono text-[13px] text-[var(--color-aged-oak)]"
+              className="px-2 font-mono text-[13px] text-[var(--ink-subtle)]"
             >
               ⋯
             </button>

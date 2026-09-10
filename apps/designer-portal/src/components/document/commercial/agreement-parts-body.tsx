@@ -61,12 +61,11 @@ const money = (cents: number, currency: string) =>
     maximumFractionDigits: 0,
   }).format(cents / 100);
 
+/** AM-2 — the part's own head, on the house sheet's third display step and
+ *  set ROMAN: italic is the paper's voice for an aside, and a part title is
+ *  not an aside. */
 function PartHeading({ children }: { children: React.ReactNode }) {
-  return (
-    <h3 className="mb-2 font-heading text-[1.05rem] italic text-[var(--color-charcoal)]">
-      {children}
-    </h3>
-  );
+  return <h3 className="t-d3 mb-2 text-[var(--ink)]">{children}</h3>;
 }
 
 function MutedLine({ children }: { children: React.ReactNode }) {
@@ -538,6 +537,75 @@ function AttachmentLeaf({
   );
 }
 
+/** W3R1-04 — the pricing basis drags the derived schedule of values along, so
+ *  it keeps its place even when the basis itself draws nothing. */
+function ridesWithScheduleOfValues(part: AgreementPart, turnkey: boolean) {
+  return (
+    turnkey && part.kind === "schedule" && part.variant === "pricing_basis"
+  );
+}
+
+/**
+ * True when this part puts NOTHING on the paper — R27's rule, asked as a
+ * question so a caller can lay out around the gap rather than discover it in
+ * the returned tree. An attachment always draws; a pricing basis always draws,
+ * because the schedule of values hangs off it.
+ */
+export function partDrawsNothing(
+  part: AgreementPart,
+  currency: string,
+  turnkey: boolean,
+): boolean {
+  if (part.kind === "attachment") return false;
+  if (ridesWithScheduleOfValues(part, turnkey)) return false;
+  return renderPartBody(part, currency, turnkey) === null;
+}
+
+/**
+ * ONE part, printed exactly as it prints inside the whole body (FS-5).
+ *
+ * The galley lays the parts out itself and prints each one through this; the
+ * whole-paper overlay prints `AgreementPartsBody`, which is a map over this.
+ * One code path, two framings — a third renderer would be the drift R27 and
+ * N-1 exist to forbid.
+ *
+ * `attachmentLetter` is the caller's, derived from the part's position among
+ * the VISIBLE attachments, so lettering never restarts at "A" when a part is
+ * printed on its own. `headless` is for a caller whose own head already
+ * carries the title (FS-7) — the section then prints no heading of its own.
+ */
+export function AgreementPartSection({
+  part,
+  currency,
+  turnkey = false,
+  attachmentLetter,
+  headless = false,
+}: {
+  part: AgreementPart;
+  currency: string;
+  turnkey?: boolean;
+  attachmentLetter?: string;
+  headless?: boolean;
+}): React.ReactNode | null {
+  if (part.kind === "attachment") {
+    return <AttachmentLeaf part={part} letter={attachmentLetter ?? "A"} />;
+  }
+  const body = renderPartBody(part, currency, turnkey);
+  const isBasis = ridesWithScheduleOfValues(part, turnkey);
+  if (body === null && !isBasis) return null;
+  return (
+    <>
+      {body !== null && (
+        <section data-part-key={part.partKey}>
+          {!headless && <PartHeading>{part.title}</PartHeading>}
+          {body}
+        </section>
+      )}
+      {isBasis && <ScheduleOfValuesSection part={part} currency={currency} />}
+    </>
+  );
+}
+
 export function AgreementPartsBody({
   parts,
   currency,
@@ -561,32 +629,43 @@ export function AgreementPartsBody({
   const sections = visible.filter((part) => part.kind !== "attachment");
   const attachments = visible.filter((part) => part.kind === "attachment");
 
+  /* AR-g / NO-8 — an agreement that bills hourly adds to no single total, and
+     the homeowner's first question is what these figures mean together. The
+     paper says plainly that no total exists rather than leaving her to add a
+     cap to a retainer. Only a design-build agreement computes a sum, so the
+     turnkey paper never carries this. */
+  const billsHourly =
+    !turnkey &&
+    visible.some(
+      (part) => part.kind === "schedule" && part.variant === "rate_card",
+    );
+
   return (
     <>
-      {sections.map((part) => {
-        const body = renderPartBody(part, currency, turnkey);
-        const isBasis =
-          turnkey && part.kind === "schedule" && part.variant === "pricing_basis";
-        if (body === null && !isBasis) return null;
-        return (
-          <Fragment key={part.id}>
-            {body !== null && (
-              <section data-part-key={part.partKey}>
-                <PartHeading>{part.title}</PartHeading>
-                {body}
-              </section>
-            )}
-            {isBasis && (
-              <ScheduleOfValuesSection part={part} currency={currency} />
-            )}
-          </Fragment>
-        );
-      })}
+      {sections.map((part) => (
+        <Fragment key={part.id}>
+          <AgreementPartSection
+            part={part}
+            currency={currency}
+            turnkey={turnkey}
+          />
+        </Fragment>
+      ))}
+      {billsHourly && (
+        <p
+          data-no-total
+          className="text-[12.5px] leading-relaxed text-[var(--text-body)]"
+        >
+          {AGREEMENT_PART_COPY.noTotal}
+        </p>
+      )}
       {attachments.map((part, index) => (
-        <AttachmentLeaf
+        <AgreementPartSection
           key={part.id}
           part={part}
-          letter={String.fromCharCode(65 + index)}
+          currency={currency}
+          turnkey={turnkey}
+          attachmentLetter={String.fromCharCode(65 + index)}
         />
       ))}
     </>

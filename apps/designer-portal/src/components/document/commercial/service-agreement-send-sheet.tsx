@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { DESIGN_BUILD_PAPER_COPY } from "@patina/types";
+import { DESIGN_BUILD_PAPER_COPY, type AgreementPart } from "@patina/types";
 import { DocSheet } from "../overlays/doc-sheet";
 import { Button, Textarea } from "@/components/ui/controls";
 import { useSendServiceAgreement } from "@/hooks/use-commercial-documents";
@@ -37,6 +37,10 @@ export function ServiceAgreementSendSheet({
   rates: ServiceRate[];
   recipientEmail: string | null;
   recipientName?: string;
+  /** The composition itself, for the consequence sentence the sheet prints
+   *  above its terminal act (FS-22). Declared here so the composer and the
+   *  instruments strip can both pass it; read in a later task of this wave. */
+  parts?: AgreementPart[];
   /** The composed agreement's verdict, when the room is running under
    *  `agreement-parts`. The seven-facet function below asks for a role rate
    *  and a ceiling unconditionally — true of the fixed facets, false of a
