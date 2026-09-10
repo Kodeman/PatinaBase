@@ -119,7 +119,25 @@ VALUES
    'Planted Victim', 'rtl-victim@test.invalid'),
   ('d7200000-0000-4000-8000-000000000014', NULL,
    'd7000000-0000-4000-8000-000000000001', 'consultation', 'new',
-   'Two Relationships', 'rtl-sibling@test.invalid');
+   'Two Relationships', 'rtl-sibling@test.invalid'),
+  -- 00586: the two prefill leads. The first carries all three facts the
+  -- Discovery folder prefills from (project_type, budget_range, timeline); the
+  -- second's budget_range is the free text prod has drifted to, which the
+  -- portal's mapping does not read, so it prefills no figure at all.
+  ('d7200000-0000-4000-8000-000000000015', NULL,
+   'd7000000-0000-4000-8000-000000000001', 'full_room', 'new',
+   'Prefill Echo', 'rtl-prefill@test.invalid'),
+  ('d7200000-0000-4000-8000-000000000016', NULL,
+   'd7000000-0000-4000-8000-000000000001', 'consultation', 'new',
+   'Drifted Budget', 'rtl-drifted@test.invalid');
+
+UPDATE public.leads
+SET budget_range = '5k_15k', timeline = 'asap'
+WHERE id = 'd7200000-0000-4000-8000-000000000015';
+
+UPDATE public.leads
+SET budget_range = '$8k-$12k'
+WHERE id = 'd7200000-0000-4000-8000-000000000016';
 
 UPDATE public.leads
 SET status = 'contacted',
@@ -718,6 +736,82 @@ BEGIN
   ASSERT pg_temp.rtl_refusal(v_dc) =
     'Discovery has already been filled in for this client.',
     'a lifestyle row that says who must close the door';
+END;
+$$;
+
+-- ── 00586: the folder's own prefill is not "filled in" ─────────────────────
+-- Opening Discovery persists the lead-derived prefill on first render
+-- (discovery-section.tsx). QA 2026-09-09 flow C: that echo refused the undo
+-- before the designer had typed anything. The echo is not content; a value
+-- that differs from it is.
+DO $$
+DECLARE
+  v_dc uuid;
+BEGIN
+  v_dc := pg_temp.rtl_accept('d7200000-0000-4000-8000-000000000015');
+
+  -- Exactly what useDiscovery's prefill writes for this lead: its
+  -- project_type, budgetRangeToCents('5k_15k'), and its timeline.
+  INSERT INTO public.client_discovery (
+    designer_client_id, designer_id, project_type,
+    budget_min_cents, budget_max_cents, start_urgency
+  ) VALUES (
+    v_dc, 'd7000000-0000-4000-8000-000000000001', 'full_room',
+    500000, 1500000, 'asap'
+  );
+
+  ASSERT (public.return_to_lead_check(v_dc)->>'allowed')::boolean,
+    format(
+      'the folder''s own prefill must not close the door, got %L',
+      public.return_to_lead_check(v_dc)->>'reason'
+    );
+
+  -- Each of the four, moved off the prefill in turn, is the designer's answer.
+  UPDATE public.client_discovery SET project_type = 'whole_home'
+  WHERE designer_client_id = v_dc;
+  ASSERT pg_temp.rtl_refusal(v_dc) =
+    'Discovery has already been filled in for this client.',
+    'a project type the designer changed must close the door';
+
+  UPDATE public.client_discovery SET project_type = 'full_room',
+                                     budget_max_cents = 1600000
+  WHERE designer_client_id = v_dc;
+  ASSERT pg_temp.rtl_refusal(v_dc) =
+    'Discovery has already been filled in for this client.',
+    'a budget ceiling the designer set must close the door';
+
+  UPDATE public.client_discovery SET budget_max_cents = 1500000,
+                                     budget_min_cents = 400000
+  WHERE designer_client_id = v_dc;
+  ASSERT pg_temp.rtl_refusal(v_dc) =
+    'Discovery has already been filled in for this client.',
+    'a budget floor the designer set must close the door';
+
+  UPDATE public.client_discovery SET budget_min_cents = 500000,
+                                     start_urgency = 'next_spring'
+  WHERE designer_client_id = v_dc;
+  ASSERT pg_temp.rtl_refusal(v_dc) =
+    'Discovery has already been filled in for this client.',
+    'an urgency the designer set must close the door';
+END;
+$$;
+
+-- A budget_range the portal's mapping does not read prefills nothing, so any
+-- figure in the row came from the designer.
+DO $$
+DECLARE
+  v_dc uuid;
+BEGIN
+  v_dc := pg_temp.rtl_accept('d7200000-0000-4000-8000-000000000016');
+  INSERT INTO public.client_discovery (
+    designer_client_id, designer_id, project_type, budget_max_cents
+  ) VALUES (
+    v_dc, 'd7000000-0000-4000-8000-000000000001', 'consultation', 1200000
+  );
+
+  ASSERT pg_temp.rtl_refusal(v_dc) =
+    'Discovery has already been filled in for this client.',
+    'a figure no prefill could have written must close the door';
 END;
 $$;
 
