@@ -79,6 +79,13 @@ export interface ButtonProps
    * the rail (N-6), never `opacity`.
    */
   held?: boolean;
+  /**
+   * Called when a held act is activated — after the act itself is swallowed,
+   * so the caller says WHY rather than doing the thing. Keyboard activation
+   * of a native button dispatches a click, so this one path covers Enter,
+   * Space and the pointer. Read only while `held`.
+   */
+  onHeldActivate?: () => void;
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
@@ -90,6 +97,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       asChild = false,
       loading = false,
       held = false,
+      onHeldActivate,
       children,
       disabled,
       type,
@@ -170,7 +178,14 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         data-held={isHeld || undefined}
         aria-busy={loading || undefined}
         {...props}
-        onClick={isHeld ? undefined : props.onClick}
+        onClick={
+          isHeld
+            ? (event) => {
+                event.preventDefault();
+                onHeldActivate?.();
+              }
+            : props.onClick
+        }
       >
         {loading && <StrataSweep size="xs" label="Working" />}
         {children}

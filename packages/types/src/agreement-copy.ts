@@ -41,15 +41,6 @@ export const AGREEMENT_PART_COPY = {
   /** Attachment acknowledgment — display only in Wave 1. */
   attachmentAcknowledgment: "I received this",
   /**
-   * AR-g / NO-8 — the paper never adds to one total. Only a design-build
-   * agreement computes a sum; a design-services homeowner reads a ceiling (a
-   * cap), a retainer and a fee, each alone. Of the two answers the panel
-   * offered — show a total, or say plainly none exists yet — the ruling took
-   * the second. Printed under the parts whenever the agreement bills hourly.
-   */
-  noTotal:
-    "This agreement has no single total: hourly work is billed as it is worked, and each figure above stands on its own.",
-  /**
    * R24 — the act that takes a composed draft back to the seven facets. It is
    * the studio's own word for un-composing, and it is offered only inside the
    * Contract Room, only on a draft.

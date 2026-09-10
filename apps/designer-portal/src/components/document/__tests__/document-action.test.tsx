@@ -481,3 +481,56 @@ describe('DocumentActionGroup', () => {
     spy.mockRestore();
   });
 });
+
+/**
+ * §A5 "held" — an act that cannot be taken is still offered, still reachable
+ * and still says why. Native `disabled` would take it out of the tab order
+ * with its reason, so held keeps the control and swallows the act instead.
+ */
+describe('held', () => {
+  it('keeps a disabled act focusable, marks it aria-disabled, and takes no act', () => {
+    const act = jest.fn();
+    const reason = jest.fn();
+    render(
+      <>
+        <p id="why">Role rates name no fee yet.</p>
+        <DocumentAction
+          actionKey="send"
+          variant="terminal"
+          disabled
+          held
+          aria-describedby="why"
+          onClick={act}
+          onHeldActivate={reason}
+        >
+          Send the agreement
+        </DocumentAction>
+      </>,
+    );
+
+    const action = screen.getByRole('button', { name: 'Send the agreement' });
+    expect(action).toHaveAttribute('aria-disabled', 'true');
+    expect(action).not.toBeDisabled();
+    expect(action).toHaveAttribute('aria-describedby', 'why');
+    action.focus();
+    expect(action).toHaveFocus();
+
+    fireEvent.click(action);
+    expect(act).not.toHaveBeenCalled();
+    expect(reason).toHaveBeenCalledTimes(1);
+    expect(events.actionSelected).not.toHaveBeenCalled();
+  });
+
+  it('changes nothing for a disabled act that is not held', () => {
+    const act = jest.fn();
+    render(
+      <DocumentAction actionKey="send" disabled onClick={act}>
+        Send
+      </DocumentAction>,
+    );
+    const action = screen.getByRole('button', { name: 'Send' });
+    expect(action).toBeDisabled();
+    expect(action).not.toHaveAttribute('aria-disabled');
+    expect(action).not.toHaveAttribute('data-held');
+  });
+});

@@ -80,6 +80,13 @@ interface DocumentActionBaseProps {
    * caller renders exactly as before.
    */
   held?: boolean;
+  /**
+   * Called when a held act is activated — after the act itself is swallowed,
+   * so the caller says WHY rather than doing the thing. Keyboard activation
+   * of a button or a link dispatches a click, so this one path covers Enter,
+   * Space and the pointer. Read only while `held`.
+   */
+  onHeldActivate?: () => void;
   loadingLabel?: ReactNode;
   leading?: ReactNode;
   trailing?: ReactNode;
@@ -139,6 +146,7 @@ export const DocumentAction = forwardRef<
     presentation = 'inline',
     loading = false,
     held = false,
+    onHeldActivate,
     loadingLabel,
     leading,
     trailing,
@@ -229,6 +237,7 @@ export const DocumentAction = forwardRef<
     const handleClick = async (event: MouseEvent<HTMLAnchorElement>) => {
       if (unavailable) {
         event.preventDefault();
+        if (isHeld) onHeldActivate?.();
         return;
       }
       // A capture failure must never block the act itself — the same
@@ -263,7 +272,10 @@ export const DocumentAction = forwardRef<
 
   const buttonOnClick = onClick as DocumentActionButtonProps['onClick'];
   const handleClick = async (event: MouseEvent<HTMLButtonElement>) => {
-    if (unavailable) return;
+    if (unavailable) {
+      if (isHeld) onHeldActivate?.();
+      return;
+    }
     // Same isolate-and-log guard as the Link branch above — a capture
     // failure can never swallow the click's own state update.
     try {

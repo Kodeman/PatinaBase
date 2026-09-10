@@ -61,11 +61,12 @@ const money = (cents: number, currency: string) =>
     maximumFractionDigits: 0,
   }).format(cents / 100);
 
-/** AM-2 — the part's own head, on the house sheet's third display step and
- *  set ROMAN: italic is the paper's voice for an aside, and a part title is
- *  not an aside. */
 function PartHeading({ children }: { children: React.ReactNode }) {
-  return <h3 className="t-d3 mb-2 text-[var(--ink)]">{children}</h3>;
+  return (
+    <h3 className="mb-2 font-heading text-[1.05rem] italic text-[var(--color-charcoal)]">
+      {children}
+    </h3>
+  );
 }
 
 function MutedLine({ children }: { children: React.ReactNode }) {
@@ -629,17 +630,6 @@ export function AgreementPartsBody({
   const sections = visible.filter((part) => part.kind !== "attachment");
   const attachments = visible.filter((part) => part.kind === "attachment");
 
-  /* AR-g / NO-8 — an agreement that bills hourly adds to no single total, and
-     the homeowner's first question is what these figures mean together. The
-     paper says plainly that no total exists rather than leaving her to add a
-     cap to a retainer. Only a design-build agreement computes a sum, so the
-     turnkey paper never carries this. */
-  const billsHourly =
-    !turnkey &&
-    visible.some(
-      (part) => part.kind === "schedule" && part.variant === "rate_card",
-    );
-
   return (
     <>
       {sections.map((part) => (
@@ -651,14 +641,6 @@ export function AgreementPartsBody({
           />
         </Fragment>
       ))}
-      {billsHourly && (
-        <p
-          data-no-total
-          className="text-[12.5px] leading-relaxed text-[var(--text-body)]"
-        >
-          {AGREEMENT_PART_COPY.noTotal}
-        </p>
-      )}
       {attachments.map((part, index) => (
         <AgreementPartSection
           key={part.id}
