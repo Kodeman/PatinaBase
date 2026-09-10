@@ -37,6 +37,7 @@ import {
   useOrganizationMembers,
   useMarkFirstDocumentOpened,
 } from '@patina/supabase';
+import type { DiscoveryRead } from '@patina/supabase';
 import {
   rollupVerdicts,
   formatVerdictRollup,
@@ -106,6 +107,8 @@ import {
 } from '@/components/document/care-band';
 import { CareSection } from '@/components/document/quiet-sections';
 import { DiscoverySection } from '@/components/document/discovery/discovery-section';
+import { PROJECT_TYPES } from '@/components/document/discovery/editors';
+import { LetterheadSubject } from '@/components/document/letterhead-subject';
 import { DiscoveryRecap } from '@/components/document/discovery/discovery-recap';
 import { DiscoveryMargin } from '@/components/document/discovery/discovery-margin';
 import {
@@ -347,10 +350,47 @@ function vitalsFor(
       .filter(Boolean)
       .join(' · ');
   }
-  if (row.engagement_kind === 'lead') {
-    return [row.client_name, 'New inquiry'].filter(Boolean).join(' · ');
+  // A5 — the lead and relationship branches printed the client name under a
+  // title that IS the client name, beside a position the band already states.
+  // The vitals say nothing rather than say it twice.
+  if (row.engagement_kind === 'lead') return '';
+  return '';
+}
+
+/** The discovery vocabulary the section's own editor prints. */
+const PROJECT_TYPE_LABEL = new Map(
+  PROJECT_TYPES.map((option) => [option.value, option.label]),
+);
+
+/**
+ * R4 — the line the head prints when the studio has written no subject of its
+ * own: what the job IS, from the discovery row. Assembled at print time and
+ * never stored — the description would otherwise freeze while the discovery
+ * row kept moving.
+ *
+ * Project and lead papers assemble nothing: a project's vitals already carry
+ * phase · target · money, and a brief has no discovery row behind it (P5).
+ */
+function subjectFor(
+  row: DocumentStateRow,
+  discovery: DiscoveryRead | undefined,
+): string | null {
+  if (row.engagement_kind !== 'relationship' && row.engagement_kind !== 'proposal') {
+    return null;
   }
-  return [row.client_name, 'In discovery'].filter(Boolean).join(' · ');
+  const read = discovery?.row ?? null;
+  if (!read) return null;
+  const type = read.project_type?.trim() ?? '';
+  const label =
+    type === 'custom'
+      ? (read.project_type_custom?.trim() || null)
+      : type
+        ? (PROJECT_TYPE_LABEL.get(type) ?? null)
+        : null;
+  const named = (read.rooms ?? []).filter((room) => Boolean(room?.name?.trim()))
+    .length;
+  const rooms = named > 0 ? `${named} ${named === 1 ? 'room' : 'rooms'}` : null;
+  return [label, rooms].filter(Boolean).join(' · ') || null;
 }
 
 /**
@@ -2417,9 +2457,14 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // read on this page stays on the live row.
   const table = worktableOn ? tablePin.composition : null;
   const spreadSection = table ? table.section : row.active_section;
-  // W5F-03 (residual) — the gate both stage-strip mounts read, off the spread
-  // the page is actually printing.
-  const stageStripInScope = spreadSection === 'proposal';
+  // R1 — the eleven-stage vocabulary prints only where a schedule resolver
+  // anchors it. At brief · discovery · direction · proposal it was a per-stop
+  // constant with no position and no fidelity; the rail's own register is the
+  // door to it there.
+  const stageOnGlass =
+    spreadSection === 'project' ||
+    spreadSection === 'install' ||
+    spreadSection === 'care';
   // W4a — the Finalize table: the LEGACY proposal in the client's hands. Its
   // head, its leader, its Offer facets and its one shelf stand only here.
   //
@@ -2708,6 +2753,16 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           // AnyRecord, but the letterhead may only reach the three columns it
           // actually reads.
           vitals={vitalsFor(row, project as ProjectVitalsRecord, liveProposal, scheduleVitals)}
+          // R4 — the stored line, or the one assembled from discovery. The
+          // assembled words are printed, never written.
+          subject={
+            <LetterheadSubject
+              kind={row.engagement_kind}
+              id={row.engagement_id}
+              subject={row.subject}
+              assembled={subjectFor(row, discoveryQuery.data)}
+            />
+          }
           // R80: project vitals self-save at the letterhead (blur-save law).
           projectId={row.engagement_kind === 'project' ? row.project_id : null}
           fill={deriveFillState(sections)}
@@ -2847,20 +2902,12 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                 letterhead. They ride inside <div data-active-section> so they
                 read as the section's own sub-label, exactly as the deck draws
                 the open Project row. */}
-            {/* W5-R5 §2 (N2) — on the PROPOSAL spread this strip is the
-                `scope` stop's body and prints inside it, so the first element
-                after the band is the spread's first region head, not a
-                free-standing band. Everywhere else it stays where R1/I114 put
-                it: the open section's own sub-label.
-                W5F-02: the suppression was `isPreWorkSection`, all four
-                stages — but `scope` mounts on the PROPOSAL spread only, so
-                brief, discovery and direction lost the strip entirely rather
-                than re-hosting it. `section-stage-line-mount.tsx`'s
-                section-mode branch exists precisely for those three.
-                W5F-03: both gates read `spreadSection`, so they cannot
-                disagree about which spread this is — including under a pinned
-                worktable, where the row's own section is deliberately stale. */}
-            {!stageStripInScope && (
+            {/* R1 — project · install · care only, and free-standing: those
+                three spreads are the ones a schedule resolver anchors, so the
+                strip carries a real position and a real fidelity. The gate
+                reads `spreadSection`, not the row's own section, so a pinned
+                worktable cannot disagree with the paper it is printing. */}
+            {stageOnGlass && (
               <SectionStageLineMount
                 projectId={
                   row.engagement_kind === 'project' ? row.project_id : null
@@ -2895,6 +2942,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                 region="brief"
                 status={preworkStatus('brief')}
                 eyebrow={briefEyebrow ?? undefined}
+                silent
               >
                 {row.lead_id ? (
                   <BriefSection leadId={row.lead_id} onEyebrow={setBriefEyebrow} />
@@ -2905,7 +2953,10 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
               <PreworkRegion
                 region="discovery"
                 status={preworkStatus('discovery')}
+                // R3 — reported up and still read by the band; the head no
+                // longer prints it.
                 eyebrow={discoveryEyebrow ?? undefined}
+                silent
               >
                 {row.engagement_id && row.designer_id ? (
                   <DiscoverySection
@@ -2927,6 +2978,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                 region="direction"
                 status={preworkStatus('direction')}
                 eyebrow={preworkEyebrow}
+                silent
               >
                 {proposalVerdictHead}
                 {proposalLifecycle}
@@ -2953,26 +3005,10 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                   {proposalLifecycle}
                 </PreworkRegion>
                 <PreworkRegion region="scope" status={preworkStatus('scope')}>
-                  {/* W5-R5 §2 (N2) — the stage line IS this stop's body, and
-                      `stageStripInScope` above is the same fact read once. */}
-                  {stageStripInScope && (
-                    <SectionStageLineMount
-                      // W5F2-01 — NULL, always. N2 rules `scope`'s fact to be
-                      // the SECTION's, and the head and the rail segment both
-                      // derive it that way (`preworkStageLine` is a pure
-                      // `deriveSectionWorkflowStageDocument(active_section)`).
-                      // A non-null id sends the mount down the project branch
-                      // instead, so on a project engagement still sitting at
-                      // `active_section: 'proposal'` the head printed
-                      // `Core · stage 03` while the body beneath it printed the
-                      // project's real workflow stage — the one-fact-two-
-                      // derivations shape N2 exists to close, reintroduced
-                      // through the branch rather than through the mount.
-                      projectId={null}
-                      activeSection={row.active_section}
-                      hosted
-                    />
-                  )}
+                  {/* R1 — the strip that stood here as this stop's body is
+                      gone; the head's own status line still states the phrase
+                      (`preworkStageLine`, derived from the source), and the
+                      rail is the door to the vocabulary itself. */}
                   {row.proposal_id ? (
                     <ProposalBlocksReadOnly
                       proposalId={row.proposal_id}

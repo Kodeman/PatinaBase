@@ -51,6 +51,8 @@ let mockProjectQuery: Record<string, unknown> = { data: undefined, isLoading: fa
 let mockMyOrgs: Array<Record<string, unknown>> = [];
 let mockMyStudioMembers: Array<Record<string, unknown>> = [];
 const mockMarkFirstDocumentOpenedMutate = jest.fn();
+/** R4 — the letterhead subject's one write. */
+const mockUpdateEngagementSubject = jest.fn().mockResolvedValue(undefined);
 let mockAuthUser: { id: string } | null = { id: 'owner-user' };
 // W4: the recap line counts drafted-and-unsent client approvals off this read.
 let mockProjectApprovalsQuery: Record<string, unknown> = { data: [] };
@@ -181,6 +183,8 @@ jest.mock('@patina/supabase', () => ({
   useOrganizations: () => ({ data: mockMyOrgs }),
   useOrganizationMembers: () => ({ data: mockMyStudioMembers }),
   useMarkFirstDocumentOpened: () => ({ mutate: mockMarkFirstDocumentOpenedMutate }),
+  // R4 — the letterhead's subject editor writes through this.
+  useUpdateEngagementSubject: () => ({ mutateAsync: mockUpdateEngagementSubject }),
 }));
 
 /* L3 (00559) — mirrors account-studio-page.test.tsx's own-module mock,
@@ -1513,7 +1517,11 @@ describe('DocumentPage guide activation', () => {
   // line must actually land INSIDE <div data-active-section> (containment,
   // not merely "somewhere after it in source text"), and after it in DOM
   // order. jsdom has no :has(), so containment is proven by index comparison
-  // over a flattened element list rather than by selector. ──
+  // over a flattened element list rather than by selector.
+  //
+  // R1 — this is now a PROJECT-spread fact. The strip prints only where a
+  // schedule resolver anchors it (project · install · care); the pre-work
+  // spreads' own zero is asserted below. ──
   describe('the stage line mount is contained by the active section (OD-9)', () => {
     it('nests [data-section-stage-line] inside [data-active-section], after it in document order', () => {
       asProjectDocument();
@@ -2545,32 +2553,45 @@ describe('DocumentPage guide activation', () => {
       ],
     ] as const;
 
-    // W5F-02 — after N2 the strip is re-hosted inside `scope`, and `scope`
-    // mounts on the PROPOSAL spread only. Suppressing it for all four pre-work
-    // stages therefore took it off brief, discovery and direction entirely —
-    // `section-stage-line-mount.tsx`'s section-mode branch exists for exactly
-    // those three.
+    // R1 — the eleven-stage vocabulary leaves the pre-work glass entirely.
+    // At brief · discovery · direction · proposal the phrase was a per-stop
+    // constant with no position and no fidelity; the rail's own register is
+    // the door to it there, and the paper prints nothing.
     it.each(SPREADS)(
-      'the %s spread prints its stage strip exactly once, in the right place',
-      (label, row) => {
+      'the %s spread prints no stage strip at all',
+      (_label, row) => {
         openSpread(row as Record<string, unknown>);
 
-        const strips = document.querySelectorAll('[data-section-stage-line]');
-        // One strip, on every pre-work spread — never zero (W5F-02), never two.
-        expect(strips).toHaveLength(1);
-
-        const insideScope = document.querySelector(
-          '[data-index-region="scope"] [data-section-stage-line]',
-        );
-        if (label === 'proposal') {
-          // Its body — so the first thing after the band is a region head.
-          expect(insideScope).not.toBeNull();
-        } else {
-          // Where R1/I114 put it: the open section's own sub-label.
-          expect(insideScope).toBeNull();
-        }
+        expect(
+          document.querySelectorAll('[data-section-stage-line]'),
+        ).toHaveLength(0);
+        // Not merely unhosted — gone from the whole paper, `scope` included.
+        expect(
+          document.querySelector(
+            '[data-index-region="scope"] [data-section-stage-line]',
+          ),
+        ).toBeNull();
       },
     );
+
+    // …and the spread that keeps it: a project document, whose strip a
+    // schedule resolver actually anchors, still prints exactly one, inside the
+    // open section (OD-9).
+    it('the project spread prints exactly one strip, inside the active section', () => {
+      openSpread({
+        engagement_kind: 'project',
+        active_section: 'project',
+        engagement_id: 'project-1',
+        project_id: 'project-1',
+        lead_id: null,
+        client_profile_id: 'client-1',
+      });
+
+      const strips = document.querySelectorAll('[data-section-stage-line]');
+      expect(strips).toHaveLength(1);
+      const activeSection = document.querySelector('[data-active-section]');
+      expect(activeSection!.contains(strips[0])).toBe(true);
+    });
 
     it.each(SPREADS)(
       'the %s spread mounts exactly the stops the index declares, in order',

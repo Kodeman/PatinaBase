@@ -37,6 +37,7 @@ export function DocLetterhead({
   vitals,
   fill,
   client,
+  subject,
   projectId = null,
   needsSetup = null,
   instruments = null,
@@ -48,6 +49,9 @@ export function DocLetterhead({
   /** The client this document is for — the clickable HouseholdChip, rendered as
    *  a prominent subtitle in the title block (not a tiny line below it). */
   client?: ReactNode;
+  /** R4 — the engagement's one-line description, printed under the name and
+   *  edited in place. Row 2 left, above the vitals. */
+  subject?: ReactNode;
   /** R80: set on project documents — the title + vitals become self-save
    *  fields writing the projects row (blur-save, quiet per-field status). */
   projectId?: string | null;
@@ -72,10 +76,11 @@ export function DocLetterhead({
           {projectId ? (
             <LetterheadTitle projectId={projectId} serverTitle={title} />
           ) : (
-            /* 32px below 1180, 40px from 1180 up (NF-02: the SHELL's own tier,
-               never Tailwind's `sm`): 40px of Playfair spends ~46 characters of a
-               1440 measure but only ~11 of a 390 one. */
-            <h1 className="min-w-0 break-words font-heading text-[32px] font-medium leading-[1.08] tracking-[-0.015em] text-[var(--text-primary)] min-[1180px]:text-[40px]">
+            /* R6 — 34px at every width. The 40px step and the negative
+               tracking both went with it: 40px of Playfair spent ~11
+               characters of a 390 measure, and the standing sentence, not the
+               name, is the head's largest true fact. */
+            <h1 className="min-w-0 break-words font-heading text-[34px] font-medium leading-[1.08] text-[var(--text-primary)]">
               {title}
             </h1>
           )}
@@ -83,13 +88,17 @@ export function DocLetterhead({
         {/* Row 2, left — who it is for, and the vitals. */}
         <div className="min-w-0">
           {client}
+          {subject}
           {projectId ? (
             <LetterheadVitals projectId={projectId} />
           ) : (
             vitals && (
+              /* D5 — 15px, and it WRAPS. The clip trio said the line was one
+                 row long whatever it carried; a vital the paper cannot finish
+                 is not a vital. */
               <p
                 data-letterhead-vitals
-                className="mt-1 overflow-hidden text-ellipsis whitespace-nowrap text-[11px] text-[var(--text-muted)]"
+                className="mt-1 text-[15px] text-[var(--text-muted)]"
               >
                 {vitals}
               </p>

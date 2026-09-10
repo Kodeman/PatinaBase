@@ -90,6 +90,8 @@ jest.mock('@patina/supabase', () => ({
   useOrganizations: () => ({ data: [] }),
   useOrganizationMembers: () => ({ data: [] }),
   useMarkFirstDocumentOpened: () => ({ mutate: jest.fn() }),
+  // R4 — the letterhead's subject editor writes through this.
+  useUpdateEngagementSubject: () => ({ mutateAsync: jest.fn() }),
 }));
 
 jest.mock('@/hooks/use-auth', () => ({
