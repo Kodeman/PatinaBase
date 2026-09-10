@@ -41,20 +41,17 @@ export const AGREEMENT_PART_COPY = {
   /** Attachment acknowledgment — display only in Wave 1. */
   attachmentAcknowledgment: "I received this",
   /**
-   * R24 — the act that takes a composed draft back to the seven facets. It is
-   * the studio's own word for un-composing, and it is offered only inside the
-   * Contract Room, only on a draft.
+   * R24 — the act that takes a composed draft back to the seven facets.
+   *
+   * RETIRED with the seven-facet room: there is nothing to return to, and no
+   * surface in this repository should print this string again. It is kept
+   * declared only because `agreement-composer.tsx` still renders it on the
+   * branch this lane is forbidden to edit; the galley lane deletes that call
+   * site, and the constant goes with it at integration.
+   *
+   * @deprecated
    */
   returnToFacets: "Return to the seven facets",
-  /**
-   * R17(b) / R24 — what the seven-facet room says to a co-member the
-   * `agreement-parts` flag has not reached, standing over an agreement someone
-   * else composed. Her Save cannot land (00575 refuses it, and the write grant
-   * on the money row is gone), so the room says so BEFORE she retypes seven
-   * facets, and names the way back.
-   */
-  composedElsewhere:
-    "This agreement is composed from parts. It is edited in the Contract Room with parts on, where it can also be returned to the seven facets.",
 } as const;
 
 /** The retainer's activation sentence, by policy. */
