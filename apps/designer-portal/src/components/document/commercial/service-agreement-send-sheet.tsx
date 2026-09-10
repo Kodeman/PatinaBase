@@ -104,7 +104,9 @@ export function ServiceAgreementSendSheet({
     : "Send the agreement";
   // IA-23 — set, the deposit is one clause inside the consequence sentence
   // (its procurement part carries it). Unset, it is the sheet's one caution.
-  const depositUnset = !turnkey && terms?.furnishingsDepositPercent === null;
+  // `== null` — with no terms row at all the value is `undefined`, and the
+  // strict test called a document with no deposit "set".
+  const depositUnset = !turnkey && terms?.furnishingsDepositPercent == null;
 
   const submit = async () => {
     setResult(null);
@@ -171,7 +173,7 @@ export function ServiceAgreementSendSheet({
           A note to the client · optional
           <span
             id={noteHintId}
-            className="t-meta mt-1 block normal-case tracking-normal text-[var(--text-muted)]"
+            className="t-meta mt-1 block text-[var(--text-muted)]"
           >
             A short personal note to accompany the agreement.
           </span>
@@ -204,7 +206,11 @@ export function ServiceAgreementSendSheet({
           <Button
             onClick={() => void submit()}
             disabled={!readiness.ready}
-            held
+            /* Check 7 — `held` is what the READINESS says, not what the
+               network is doing: a bare `held` also fired while the send was
+               in flight, marking the act `aria-disabled` with no reason
+               attached and announcing that a ready agreement was not ready. */
+            held={!readiness.ready}
             onHeldActivate={() => {
               setResult(null);
               setHeld(

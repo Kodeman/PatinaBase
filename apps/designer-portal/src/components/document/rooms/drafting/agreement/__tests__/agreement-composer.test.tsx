@@ -690,6 +690,126 @@ describe("AgreementComposer · the readiness voice", () => {
   });
 });
 
+/* ── WR-02 · a save must not remount the part it is saving ───────────────────
+   `upsert_agreement_parts` is DELETE-then-INSERT, so every id it hands back is
+   a NEW uuid. A leaf keyed on `part.id` therefore remounts on every persist,
+   taking the open fold, the caret and the designer's place in the sentence
+   with it (N-8 / FS-26 / §3 R2). The part KEY survives the round trip, and
+   these two cases are the proof: the very DOM nodes are compared, because a
+   remount that happened to restore the same value would pass a value check.
+   ────────────────────────────────────────────────────────────────────────── */
+describe("AgreementComposer · the open fold survives a save (N-8/FS-26)", () => {
+  const remintsEveryId = () =>
+    mockSaveParts.mockImplementation(async (saved: AgreementPart[]) =>
+      bundleWith(
+        saved.map((p, index) => ({
+          ...p,
+          id: `reminted-${index}-${Math.random().toString(16).slice(2)}`,
+          position: index + 1,
+        })),
+      ),
+    );
+
+  const openServicesAndType = () => {
+    write("Services");
+    const body = screen.getByRole("textbox", { name: "Body" });
+    body.focus();
+    fireEvent.change(body, {
+      target: { value: "Interior design services. ZZ" },
+    });
+    return {
+      body,
+      section: document.getElementById("part-patina-services")!,
+    };
+  };
+
+  /** The outline's own row, which persists and leaves the same part open. */
+  const reselectServices = () => {
+    openOutline();
+    fireEvent.click(
+      within(outline()).getByRole("button", { name: "Services" }),
+    );
+  };
+
+  it("keeps the same section and textarea nodes across a persist", async () => {
+    remintsEveryId();
+    render(
+      <AgreementComposer
+        proposal={proposal}
+        bundle={bundleWith(threeParts())}
+      />,
+    );
+
+    const { body, section } = openServicesAndType();
+    expect(section).toBeTruthy();
+
+    reselectServices();
+    await waitFor(() => expect(mockSaveParts).toHaveBeenCalledTimes(1));
+    // The RPC really did hand back a different set of uuids.
+    const returned = await mockSaveParts.mock.results[0]!.value;
+    expect(returned.parts.map((p: AgreementPart) => p.id)).not.toEqual(
+      threeParts().map((p) => p.id),
+    );
+
+    await waitFor(() =>
+      expect(record()).not.toHaveTextContent("not yet saved"),
+    );
+
+    expect(document.getElementById("part-patina-services")).toBe(section);
+    expect(
+      section.isSameNode(document.getElementById("part-patina-services")),
+    ).toBe(true);
+    expect(screen.getByRole("textbox", { name: "Body" })).toBe(body);
+  });
+
+  it("keeps the typed clause and the caret where the designer left them", async () => {
+    remintsEveryId();
+    render(
+      <AgreementComposer
+        proposal={proposal}
+        bundle={bundleWith(threeParts())}
+      />,
+    );
+
+    const { body } = openServicesAndType();
+    expect(document.activeElement).toBe(body);
+
+    reselectServices();
+    await waitFor(() => expect(mockSaveParts).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(record()).not.toHaveTextContent("not yet saved"),
+    );
+
+    expect(body).toHaveValue("Interior design services. ZZ");
+    expect(document.activeElement).toBe(body);
+  });
+
+  it("keeps the outline's rows across a persist too", async () => {
+    remintsEveryId();
+    render(
+      <AgreementComposer
+        proposal={proposal}
+        bundle={bundleWith(threeParts())}
+      />,
+    );
+
+    openServicesAndType();
+    openOutline();
+    const row = within(outline()).getByRole("button", { name: "Services" });
+
+    reselectServices();
+    await waitFor(() => expect(mockSaveParts).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(record()).not.toHaveTextContent("not yet saved"),
+    );
+
+    openOutline();
+    expect(within(outline()).getByRole("button", { name: "Services" })).toBe(
+      row,
+    );
+  });
+});
+
 /* ── R29 · the two-click duplicate-variant path ──────────────────────────────
    The designer lane's N1: from a materialized agreement, two clicks reached a
    save the server cannot accept — "an agreement carries only one ceiling"

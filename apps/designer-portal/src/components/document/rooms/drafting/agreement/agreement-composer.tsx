@@ -71,6 +71,8 @@ import {
   assessAgreementReadiness,
   blockersForPart,
   documentBlockers,
+  duplicateMoneyBlocker,
+  BLANK_ROLE_BLOCKER,
 } from "./readiness";
 import {
   DrawLedger,
@@ -264,7 +266,10 @@ export function AgreementComposer({
   const [addOpen, setAddOpen] = useState(false);
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [templateError, setTemplateError] = useState<string | null>(null);
-  const [keptPartIds, setKeptPartIds] = useState<Set<string>>(
+  /** N-8/FS-26 — keyed on the part KEY, like everything else the room
+   *  remembers about a part: `upsert_agreement_parts` is DELETE-then-INSERT,
+   *  so a set of uuids forgets what it was told the moment a save lands. */
+  const [keptPartKeys, setKeptPartKeys] = useState<Set<string>>(
     () => new Set<string>(),
   );
   /** What the one status region is saying instead of the readiness sentence —
@@ -354,6 +359,8 @@ export function AgreementComposer({
     if (readiness === lastReadiness.current) return;
     const next = composeReadinessSentence(readiness, lastReadiness.current);
     lastReadiness.current = readiness;
+    // The comparison happens OUTSIDE the updater: an updater must be pure,
+    // and StrictMode double-invokes it.
     setReadinessVoice((current) => {
       if (current !== next) setAnnouncement(null);
       return next;
@@ -369,7 +376,6 @@ export function AgreementComposer({
     () => parts.filter((part) => part.kind !== "attestation"),
     [parts],
   );
-  const openPart = rows.find((part) => part.partKey === openKey) ?? null;
 
   /**
    * FS-19 — measure and restore. Opening or closing a fold changes the height
@@ -712,7 +718,7 @@ export function AgreementComposer({
         requiredDefault: part.required,
         clientVisibleDefault: part.clientVisible,
       });
-      setKeptPartIds((current) => new Set(current).add(part.id));
+      setKeptPartKeys((current) => new Set(current).add(part.partKey));
       setSaveNote(`${part.title.trim()} is in your Library.`);
     } catch (error) {
       setSaveNote(
@@ -721,8 +727,27 @@ export function AgreementComposer({
     }
   };
 
+  /** R18/R29 — the sentence the room refuses a save with, before the server
+   *  is ever asked. Named here because the record line, the status region and
+   *  the held Send all have to say the same thing. */
+  const localRefusal = (): string | null => {
+    const duplicate = duplicates[0];
+    if (duplicate) return duplicateMoneyBlocker(duplicate.label);
+    if (unnamedRoles.length > 0) return BLANK_ROLE_BLOCKER;
+    return null;
+  };
+
   const persist = async () => {
-    if (refusedAtSave) return false;
+    if (refusedAtSave) {
+      // Check 8/§A10 — a refusal is never silent. Without this, closing a
+      // fold on a duplicate money variant did nothing and said nothing.
+      const message = localRefusal();
+      if (message) {
+        setSaveNote(message);
+        setAnnouncement(message);
+      }
+      return false;
+    }
     try {
       const next = await save.mutateAsync(parts);
       const saved = renumber(
@@ -910,7 +935,7 @@ export function AgreementComposer({
           ? () => void keepInLibrary(part)
           : undefined
       }
-      kept={keptPartIds.has(part.id)}
+      kept={keptPartKeys.has(part.partKey)}
     />
   );
 
@@ -1023,7 +1048,11 @@ export function AgreementComposer({
     }
     segment.push(
       <GalleyPart
-        key={part.id}
+        // N-8/FS-26/§3 R2 — `upsert_agreement_parts` is DELETE-then-INSERT, so
+        // `part.id` is a NEW uuid after every save and a leaf keyed on it
+        // remounts the open fold mid-writing, losing the caret. The part key
+        // survives the round trip; `GalleyFold` and `openKey` already use it.
+        key={part.partKey}
         part={part}
         ids={ids}
         currency={currency}
@@ -1061,12 +1090,17 @@ export function AgreementComposer({
   const heldOnPart = heldOn
     ? parts.find((entry) => entry.id === heldOn.partId)
     : undefined;
-  const liveBlockerId =
-    roomBlockers.length > 0
-      ? "agreement-blocker-0"
-      : heldOnPart
-        ? `${idsFor(heldOnPart.partKey).section}-blocker-0`
-        : undefined;
+  /* The reason a held act points at must be visible and must resolve. A
+     part-filed blocker is printed in that part's own strip; a document one at
+     the foot; and where the foot prints nothing the sentence the designer can
+     read is the readiness region itself, which never empties. */
+  const liveBlockerId = readOnly
+    ? "agreement-frozen-reason"
+    : heldOnPart
+      ? `${idsFor(heldOnPart.partKey).section}-blocker-0`
+      : roomBlockers.length > 0
+        ? "agreement-blocker-0"
+        : "room-status";
 
   const retainer = parts.find(
     (part) => part.kind === "schedule" && part.variant === "retainer",
@@ -1085,7 +1119,15 @@ export function AgreementComposer({
      reason into the one status region and moves focus to the part that is
      unmet, or to the seam where the missing part would be added. */
   const sayWhyHeld = () => {
-    const reason = roomBlockers[0] ?? readiness.blockers[0]?.message;
+    // The blocker announced is the blocker whose part takes the focus: the
+    // two were different sentences, so the room named the fee floor and sent
+    // the caret to a part the fee floor had nothing to do with.
+    const reason =
+      heldOn?.message ??
+      roomBlockers[0] ??
+      readiness.blockers[0]?.message ??
+      localRefusal() ??
+      undefined;
     if (reason) setAnnouncement(reason);
     const target = heldOnPart
       ? window.document.getElementById(idsFor(heldOnPart.partKey).foldAct)
@@ -1131,8 +1173,16 @@ export function AgreementComposer({
                 type="button"
                 className="g-act g-act--inline"
                 aria-disabled={!ownsProposal || readOnly ? "true" : undefined}
+                /* Check 7 — held on EITHER path, so the reason resolves on
+                   either path: the owner sentence when the reader does not own
+                   the agreement, the frozen sentence when it has left the
+                   studio. */
                 aria-describedby={
-                  !ownsProposal ? "agreement-client-reason" : undefined
+                  !ownsProposal
+                    ? "agreement-client-reason"
+                    : readOnly
+                      ? "agreement-frozen-reason"
+                      : undefined
                 }
                 onClick={() => {
                   if (!ownsProposal || readOnly) {
@@ -1147,7 +1197,10 @@ export function AgreementComposer({
                 </span>
               </button>
             </p>
-            {!ownsProposal && authStatus !== "loading" && (
+            {/* Not gated on auth status: the act above points here from the
+                first paint, and a describedby at a node that does not exist
+                is a held act with no reason at all. */}
+            {!ownsProposal && (
               <p className="t-body-sm g-reason" id="agreement-client-reason">
                 {OWNER_ONLY_REASON}
               </p>
@@ -1178,15 +1231,18 @@ export function AgreementComposer({
               </p>
             )}
             <p className="t-meta g-record">
+              {/* The header record is the AGREEMENT's and the fold's is the
+                  part's, so the two lines are complementary rather than the
+                  same string printed twice on one page. */}
               {!savedAt
                 ? "Not saved yet"
                 : dirty
-                  ? `${savedLine(savedAt)} · ${openPart?.title ?? "This agreement"} not yet saved`
+                  ? `${savedLine(savedAt)} · This agreement not yet saved`
                   : savedLine(savedAt)}
             </p>
             {saveNote && <p className="t-body-sm g-reason">{saveNote}</p>}
             {readOnly && (
-              <p className="t-body-sm g-reason">
+              <p className="t-body-sm g-reason" id="agreement-frozen-reason">
                 {turnkeyFrozen
                   ? // W3R1-08 — a turnkey DRAFT with `design-build` off has not
                     // left the studio; what is true is that the class's editors

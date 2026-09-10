@@ -15,8 +15,8 @@
  * editor still opens.
  *
  * RE-PINNED ONCE, deliberately: walk round 2, finding W2R2-06. The header's
- * three acts (Preview client copy / Return to the seven facets / Save
- * agreement) sat in an unwrapped row that measured 617px against a 390px
+ * three acts — all three now retired with the seven-facet room — sat in an
+ * unwrapped row that measured 617px against a 390px
  * viewport and carried Save agreement off the right edge of the room, in both
  * flag states. The only markup that moved is `flex items-center gap-3` →
  * `flex flex-wrap items-center gap-3` on that row, in all five snapshots; the
