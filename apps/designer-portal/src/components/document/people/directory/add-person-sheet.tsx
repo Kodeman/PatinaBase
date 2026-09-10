@@ -974,8 +974,14 @@ export function AddPersonSheet({
         </>
       )}
 
+      {/* QA 2026-09-09: a refused save (a field kind with no project picked)
+          printed here and nowhere else, so it read as a no-op. `role="alert"`
+          announces it the way the capture sheet's own error channel does. */}
       {error && (
-        <p className="mt-3 text-[0.72rem] text-[var(--color-terracotta-ink)]">
+        <p
+          role="alert"
+          className="mt-3 text-[0.72rem] text-[var(--color-terracotta-ink)]"
+        >
           {error}
         </p>
       )}
