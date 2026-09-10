@@ -1,0 +1,94 @@
+[
+  {
+    "file": "/Users/kody/Code/patina-merged/artifacts/agreement-room-2026-09-10/shots/current/resting-1440.png",
+    "width": 1440,
+    "ok": true
+  },
+  {
+    "file": "/Users/kody/Code/patina-merged/artifacts/agreement-room-2026-09-10/shots/current/clause-editing-1440.png",
+    "width": 1440,
+    "ok": true
+  },
+  {
+    "file": "/Users/kody/Code/patina-merged/artifacts/agreement-room-2026-09-10/shots/current/money-part-fee-floor-1440.png",
+    "width": 1440,
+    "ok": true
+  },
+  {
+    "file": "/Users/kody/Code/patina-merged/artifacts/agreement-room-2026-09-10/shots/current/preview-sheet-1440.png",
+    "width": 1440,
+    "ok": true
+  },
+  {
+    "file": "/Users/kody/Code/patina-merged/artifacts/agreement-room-2026-09-10/shots/current/review-and-send-sheet-1440.png",
+    "width": 1440,
+    "ok": true
+  },
+  {
+    "file": "/Users/kody/Code/patina-merged/artifacts/agreement-room-2026-09-10/shots/current/seven-facets-after-return-1440.png",
+    "width": 1440,
+    "ok": true
+  },
+  {
+    "file": "/Users/kody/Code/patina-merged/artifacts/agreement-room-2026-09-10/shots/current/resting-1024.png",
+    "width": 1024,
+    "ok": true
+  },
+  {
+    "file": "/Users/kody/Code/patina-merged/artifacts/agreement-room-2026-09-10/shots/current/clause-editing-1024.png",
+    "width": 1024,
+    "ok": true
+  },
+  {
+    "file": "/Users/kody/Code/patina-merged/artifacts/agreement-room-2026-09-10/shots/current/money-part-fee-floor-1024.png",
+    "width": 1024,
+    "ok": true
+  },
+  {
+    "file": "/Users/kody/Code/patina-merged/artifacts/agreement-room-2026-09-10/shots/current/preview-sheet-1024.png",
+    "width": 1024,
+    "ok": true
+  },
+  {
+    "width": 1024,
+    "step": "review-and-send-sheet",
+    "ok": false,
+    "error": "TimeoutError: locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: /review.*send/i }).first()\u001b[22m\n"
+  },
+  {
+    "file": "/Users/kody/Code/patina-merged/artifacts/agreement-room-2026-09-10/shots/current/seven-facets-after-return-1024.png",
+    "width": 1024,
+    "ok": true
+  },
+  {
+    "file": "/Users/kody/Code/patina-merged/artifacts/agreement-room-2026-09-10/shots/current/resting-390.png",
+    "width": 390,
+    "ok": true
+  },
+  {
+    "file": "/Users/kody/Code/patina-merged/artifacts/agreement-room-2026-09-10/shots/current/clause-editing-390.png",
+    "width": 390,
+    "ok": true
+  },
+  {
+    "file": "/Users/kody/Code/patina-merged/artifacts/agreement-room-2026-09-10/shots/current/money-part-fee-floor-390.png",
+    "width": 390,
+    "ok": true
+  },
+  {
+    "file": "/Users/kody/Code/patina-merged/artifacts/agreement-room-2026-09-10/shots/current/preview-sheet-390.png",
+    "width": 390,
+    "ok": true
+  },
+  {
+    "width": 390,
+    "step": "review-and-send-sheet",
+    "ok": false,
+    "error": "TimeoutError: locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: /review.*send/i }).first()\u001b[22m\n"
+  },
+  {
+    "file": "/Users/kody/Code/patina-merged/artifacts/agreement-room-2026-09-10/shots/current/seven-facets-after-return-390.png",
+    "width": 390,
+    "ok": true
+  }
+]
