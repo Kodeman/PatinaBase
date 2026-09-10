@@ -284,3 +284,58 @@ new version is the one serving live traffic.
   deleted. `agreement-room/galley` is kept on origin.
 - Untouched, belonging to other programs: `agent-client-material`,
   `agent-inv-int`, `agent-inv-w1`, `-w2`, `-w3`, `-w3b`.
+
+---
+
+## 9 · Estimate widget removal — ship note (2026-09-10, AR-i)
+
+Kody's ruling AR-i (option 1: nothing consumes its value) — the "Estimate to
+quote" widget (ROM estimate · Quote ready · Issued) floating over the drafting
+route was removed entirely, separate from and after this program's ship.
+
+| | |
+|---|---|
+| Branch | `agreement-room/remove-estimate-widget`, worktree `agent-estimate-removal` |
+| `origin/main` before | `dd3dedfcb4fd7d2bfc9678e4119d73962837c05c` |
+| Commit | `1d1b128c2` — `refactor(drafting): remove the write-only Estimate to quote widget (AR-i)` |
+| `origin/main` after | `1d1b128c24c2653d9a013e65f958a2893aeac900` (fast-forward; `git ls-remote origin main` confirms) |
+| Ancestry | `git merge-base --is-ancestor agreement-room/remove-estimate-widget origin/main` → **MERGED** |
+
+Deleted `drafting-estimate-flow.{tsx,test.tsx}`; the `<DraftingEstimateFlow>`
+mount and import in `drafting/[proposalId]/page.tsx`; the jest.mock in
+`drafting-room-opens.test.tsx`; and `useDraftingEstimate`,
+`useSaveDraftingEstimate`, `readDraftingEstimatedHours` plus their private
+helpers (`DraftingEstimate`/`DraftingEstimateRow` types, `mapDraftingEstimate`,
+`draftingEstimateKey`) from `use-drafting-state.ts` — each had zero importers
+outside the deleted component, confirmed by a repo-wide grep before deletion.
+Repo-wide grep for "ROM estimate", "Estimate to quote", "quote_ready",
+"rom_estimate", "USES THE EXISTING PROPOSAL LIFECYCLE", "ESTIMATED DESIGN
+HOURS": **0 hits**.
+
+Gates: `type-check` clean; full `test` suite 7192 passed (1 unrelated jest
+worker SIGSEGV on `licensing-attestation-card.test.tsx`, confirmed a flake —
+9/9 passed in isolation, 569/569 suites green overall); `lint` 0 errors (205
+pre-existing warnings, unrelated). Local production build (`agreement-library:
+true, design-build:true` + the standing flag set) + signed-in walk of
+`/drafting/9375507e-8aff-4156-ab9d-fd0f1dea84ee` at 1440 and 390
+(`shots/estimate-removal/drafting-{1440,390}.png`): zero `Estimate` text hits,
+no console errors traceable to the removal (the two auth-hydration console
+errors observed reproduce identically on `/desk`, confirmed pre-existing).
+
+Deployed via `./infra/deploy-portal.sh designer` (11 `NEXT_PUBLIC_*` vars from
+`wrangler.jsonc` exported inline). Start **2026-09-10T21:19:18Z**. New Worker
+version **`8e799f35-b3ee-4abf-8c77-f8cb20d7726b`**, created
+2026-09-10T21:20:54.065Z (prior live version
+`05900cfa-11a5-4648-975a-5b04f8f4890c`). Served-bytes probe of the live drafting
+chunk (`page-34b667bc057db3b8.js`) and the shared `3495` chunk: `"Estimate to
+quote"` and `"ROM estimate"` **ABSENT**; `"Read the whole paper"` **PRESENT**
+(the galley is still there). `wrangler tail patina-designer-portal --format
+json`, 60 s, two `/auth/signin` hits: both `outcome: ok`, 0 exceptions, 0
+error-level logs, both on `scriptVersion.id 8e799f35-…`.
+
+Not verified: a signed-in production walk of the drafting route against
+Strata (same gap as §6 above, not newly introduced); `app.patina.cloud`
+custom-domain routing (probed via the `*.workers.dev` host, as in §5).
+
+Worktree `agent-estimate-removal` retired after this note; local branch
+`agreement-room/remove-estimate-widget` deleted (kept on origin).
