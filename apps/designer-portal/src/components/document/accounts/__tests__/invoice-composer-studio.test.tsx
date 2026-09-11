@@ -35,9 +35,6 @@ jest.mock('@patina/supabase', () => ({
   useProjects: () => ({
     data: [{ id: 'project-1', name: 'Hollis House', status: 'active', client_id: 'client-9' }],
   }),
-}));
-
-jest.mock('@/hooks/use-time-tracking', () => ({
   useClaimTimeEntries: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useUnbilledTime: () => ({ data: { entries: [] }, isLoading: false }),
 }));

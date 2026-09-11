@@ -1,9 +1,14 @@
 import type { ProjectBillingAuthority } from "./commercial-documents";
 
-export type TimeBillingState =
-  | "authorized"
-  | "pending_authorization"
-  | "nonbillable";
+// The billing-state primitives live beside the write hooks in @patina/supabase
+// (one definition); this module re-exports them so its document-side callers
+// keep their import.
+export {
+  isInvoiceEligibleTimeEntry,
+  type TimeBillingState,
+  type InvoiceEligibleTimeEntry,
+} from "@patina/supabase";
+import type { TimeBillingState } from "@patina/supabase";
 
 /**
  * Automatic document time is billable only after the server says an executed
@@ -35,24 +40,13 @@ export function automaticTimeBillingIntent(
   return { billable: true, reason: "active" };
 }
 
-export interface InvoiceEligibleTimeEntry {
+interface BillingStateEntry {
   billable?: boolean | null;
   invoice_id?: string | null;
   billing_state?: TimeBillingState | null;
 }
 
-/**
- * The server-authored billing state is decisive. A null state remains eligible
- * for pre-authority legacy entries so existing projects keep invoicing.
- */
-export function isInvoiceEligibleTimeEntry(
-  entry: InvoiceEligibleTimeEntry,
-): boolean {
-  if (entry.billable !== true || entry.invoice_id) return false;
-  return entry.billing_state == null || entry.billing_state === "authorized";
-}
-
-export function timeBillingStateLabel(entry: InvoiceEligibleTimeEntry): string {
+export function timeBillingStateLabel(entry: BillingStateEntry): string {
   if (entry.invoice_id) return "Billed";
   if (entry.billable !== true || entry.billing_state === "nonbillable") {
     return "Non-bill";

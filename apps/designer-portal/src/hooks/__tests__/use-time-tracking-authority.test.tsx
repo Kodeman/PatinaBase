@@ -5,11 +5,14 @@ import {
   filterProjectUnbilledEntries,
   useStopTimer,
   type UnbilledTimeRow,
-} from "../use-time-tracking";
+} from "@patina/supabase";
 
 const mockCreateBrowserClient = jest.fn();
 
-jest.mock("@patina/supabase", () => ({
+// The hooks live in @patina/supabase now and reach for the client through the
+// package's own ./client module, so that is what has to be mocked — mocking
+// the package barrel would replace the hooks under test.
+jest.mock("@patina/supabase/client", () => ({
   createBrowserClient: () => mockCreateBrowserClient(),
 }));
 

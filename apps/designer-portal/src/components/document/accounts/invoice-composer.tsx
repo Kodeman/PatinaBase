@@ -41,12 +41,10 @@ import {
   useProjectInvoices,
   useProjectPaymentMilestones,
   useProjects,
-} from '@patina/supabase';
-import { computeInvoiceTotals, formatCurrency } from '@patina/shared';
-import {
   useClaimTimeEntries,
   useUnbilledTime,
-} from '@/hooks/use-time-tracking';
+} from '@patina/supabase';
+import { computeInvoiceTotals, formatCurrency } from '@patina/shared';
 import { formatHoursLabel } from '@/lib/time-billing';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { ClientPicker } from '@/components/portal/client-picker';

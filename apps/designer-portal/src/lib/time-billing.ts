@@ -117,7 +117,9 @@ export function groupEntriesByWeek<T extends WeekGroupable>(entries: T[]): WeekG
 
 // ── Studio report period windows ──
 
-export type StudioPeriod = 'week' | 'month' | 'quarter' | 'year';
+/** One implementation, in @patina/supabase beside the hook that reads it. */
+export { studioPeriodStartISO, type StudioPeriod } from '@patina/supabase';
+import type { StudioPeriod } from '@patina/supabase';
 
 export const STUDIO_PERIODS: Array<{ key: StudioPeriod; label: string }> = [
   { key: 'week', label: 'This Week' },
@@ -125,16 +127,3 @@ export const STUDIO_PERIODS: Array<{ key: StudioPeriod; label: string }> = [
   { key: 'quarter', label: 'Quarter' },
   { key: 'year', label: 'Year' },
 ];
-
-/**
- * Inclusive lower bound (ISO timestamp) for a rolling report window ending
- * now. Mirrors the earnings page's rolling periods ("week" = last 7 days).
- */
-export function studioPeriodStartISO(period: StudioPeriod, now: Date = new Date()): string {
-  const start = new Date(now);
-  if (period === 'week') start.setDate(now.getDate() - 7);
-  else if (period === 'month') start.setMonth(now.getMonth() - 1);
-  else if (period === 'quarter') start.setMonth(now.getMonth() - 3);
-  else start.setFullYear(now.getFullYear() - 1);
-  return start.toISOString();
-}
