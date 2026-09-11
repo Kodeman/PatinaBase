@@ -116,8 +116,14 @@ ALTER TABLE public.studio_contacts
 ALTER TABLE public.studio_contacts
   ADD CONSTRAINT studio_contacts_company_kind_check CHECK (
     company_kind IS NULL OR company_kind IN (
-      'gc', 'sub', 'vendor', 'maker', 'architect', 'engineer',
-      'inspector', 'lender', 'stager', 'photographer', 'other'
+      -- crm-model §2 Company.company_kind, verbatim …
+      'gc', 'sub', 'architect', 'engineer', 'lender', 'authority',
+      'showroom', 'vendor', 'workroom', 'supplier', 'stager',
+      'photography', 'maker',
+      -- … plus the two the room already uses that the model does not list.
+      -- 'authority' is the AHJ (F-27's city department); it is NOT 'inspector',
+      -- which stays for the private/lender inspector of §3.8's paper-exempt pair.
+      'inspector', 'other'
     )
   );
 
@@ -130,7 +136,12 @@ COMMENT ON COLUMN public.studio_contacts.studio_verdict IS
 COMMENT ON COLUMN public.studio_contacts.company_kind IS
   'What the firm is to the studio. CHECKed, not an enum: an enum ADD VALUE '
   'cannot be used in the transaction that adds it, and the widening vocabulary '
-  'stays code-resident per PD-4/PR-f.';
+  'stays code-resident per PD-4/PR-f. The list is crm-model §2 verbatim plus '
+  '''inspector'' and ''other''; it must stay a superset of the shipped UI''s '
+  'COMPANY_KIND_LABELS (gc/workroom/showroom/vendor/supplier) so folding the '
+  'free-text contact_kind (00417) into this column cannot raise 23514. '
+  'Reconciled spelling: the trade noun ''photography'' (crm-model §2) wins over '
+  '''photographer''; nothing writes either today.';
 COMMENT ON COLUMN public.studio_contacts.trades IS
   'Trades the FIRM covers (crm-model §2: a firm carries trades, a person does '
   'not). Distinct from specialties, which 00417 seeded from vendor categories.';

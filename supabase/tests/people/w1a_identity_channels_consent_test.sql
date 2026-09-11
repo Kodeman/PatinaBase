@@ -13,6 +13,14 @@
 --      in that studio on that number — and onto no other studio's.
 --   5. record_channel_consent() refuses a non-member, and authenticated holds
 --      no direct INSERT on the consent table (the RPC is the only door).
+--   6. r1 B1/M1: one recorded `pending` mirrors onto every row in the studio
+--      WITHOUT firing 00432's opt-in SMS once per row — while a designer's own
+--      write to a party row still dispatches; and a maintenance re-run of the
+--      backfill sends nothing either.
+--   7. r1 M2/M3/M4: the widened vocabularies — ap_email and portal_311 channel
+--      kinds (each normalised by its own rule), a dated `bounced` channel
+--      status, and the company kinds the shipped UI already renders plus the
+--      AHJ `authority`.
 --
 -- How to run:
 --   psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
@@ -357,6 +365,188 @@ BEGIN
   PERFORM pg_temp.reset_role();
 
   RAISE NOTICE '4. mirror + 5. record_channel_consent: passed';
+END
+$$;
+
+-- ─── 6. B1 regression: one recorded `pending` is ONE consent act, not N texts ─
+--
+-- mirror_channel_consent_to_parties() writes the studio's verdict, with the
+-- whole evidence set, onto every party row in that studio on that number. Each
+-- newly-evidenced-`pending` row independently satisfies fc_dispatch_optin_invite
+-- (00432), so before the r1 fix one record_channel_consent(...,'pending',...)
+-- call sent one real opt-in SMS PER PARTY ROW. 00594 now suppresses the
+-- dispatch for the mirror's own UPDATE and only for that.
+--
+-- Dispatches are observed by standing in for public.invoke_edge_function for the
+-- length of this (rolled-back) transaction — the real one calls out over pg_net.
+
+CREATE TABLE public._w1a_dispatch_log (
+  id      bigserial PRIMARY KEY,
+  fn_name text,
+  body    jsonb
+);
+
+CREATE OR REPLACE FUNCTION public.invoke_edge_function(fn_name text, body jsonb DEFAULT '{}'::jsonb)
+RETURNS bigint
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public', 'extensions'
+AS $fn$
+BEGIN
+  INSERT INTO public._w1a_dispatch_log (fn_name, body) VALUES (fn_name, body);
+  RETURN 0;
+END;
+$fn$;
+
+-- Three Alpha seats, one number, nobody asked yet.
+INSERT INTO project_parties (id, project_id, party_kind, display_name, phone, sms_consent_status)
+VALUES
+  ('e0000000-0000-4000-8000-000000000011', 'd0000000-0000-4000-8000-00000000000a', 'sub', 'Ray Thao', '(612) 555-0143', 'not_asked'),
+  ('e0000000-0000-4000-8000-000000000012', 'd0000000-0000-4000-8000-00000000000a', 'sub', 'Ray Thao', '612-555-0143',   'not_asked'),
+  ('e0000000-0000-4000-8000-000000000013', 'd0000000-0000-4000-8000-00000000000a', 'sub', 'Ray Thao', '+1 612 555 0143', 'not_asked');
+
+-- A fourth number for the maintenance re-run of the backfill (M1): one evidenced
+-- pending row, one sibling that the fold's mirror will flip.
+INSERT INTO project_parties (id, project_id, party_kind, display_name, phone,
+                             sms_consent_status, sms_consent_source, sms_consent_evidence,
+                             sms_consent_recorded_at, sms_consent_disclosure_version)
+VALUES
+  ('e0000000-0000-4000-8000-000000000014', 'd0000000-0000-4000-8000-00000000000a', 'sub', 'Ray Thao', '612-555-0144',
+   'pending', 'written', 'Kickoff form', '2026-03-03T00:00:00Z', 'field-sms-v1'),
+  ('e0000000-0000-4000-8000-000000000015', 'd0000000-0000-4000-8000-00000000000a', 'sub', 'Ray Thao', '+16125550144',
+   'not_asked', NULL, NULL, NULL, NULL);
+
+DO $$
+DECLARE
+  n INTEGER;
+  d INTEGER;
+  folded INTEGER;
+BEGIN
+  -- 6z. Control: the fixture row above that was INSERTed already-evidenced and
+  --     already-pending is a real consent act and DID dispatch — proof the
+  --     00432 rail is live in this transaction, so a zero below means
+  --     suppressed, not absent.
+  SELECT COUNT(*) INTO d FROM public._w1a_dispatch_log
+   WHERE body->>'templateKey' = 'sms_optin_invite';
+  ASSERT d = 1, 'FAIL 6z: the fixture''s evidenced-pending insert should dispatch once, got ' || d;
+
+  -- 6a. One act: a studio member records a pending consent for the number.
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+  PERFORM public.record_channel_consent(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '(612) 555-0143', 'pending',
+    'written', 'Kickoff form', 'field-sms-v1', 'd0000000-0000-4000-8000-00000000000a');
+  PERFORM pg_temp.reset_role();
+
+  -- The mirror still does its job: all three rows are fully evidenced pending.
+  SELECT COUNT(*) INTO n FROM project_parties
+   WHERE phone_e164 = '+16125550143'
+     AND sms_consent_status = 'pending'
+     AND sms_consent_source IS NOT NULL
+     AND sms_consent_recorded_at IS NOT NULL
+     AND sms_consent_disclosure_version IS NOT NULL
+     AND btrim(COALESCE(sms_consent_evidence, '')) <> '';
+  ASSERT n = 3, 'FAIL 6a: the mirror should evidence all three rows, got ' || n;
+
+  -- 6b. …and not one opt-in SMS left the building.
+  SELECT COUNT(*) INTO d FROM public._w1a_dispatch_log
+   WHERE body->>'templateKey' = 'sms_optin_invite';
+  ASSERT d = 1, 'FAIL 6b: a mirrored pending must dispatch nothing, got ' || (d - 1);
+
+  -- 6c. The suppression is scoped to the mirror's own write: a designer writing
+  --     an evidenced pending onto a party row directly still dispatches, once.
+  UPDATE project_parties
+     SET sms_consent_status = 'not_asked', sms_consent_source = NULL,
+         sms_consent_evidence = NULL, sms_consent_recorded_at = NULL,
+         sms_consent_disclosure_version = NULL
+   WHERE id = 'e0000000-0000-4000-8000-000000000011';
+  UPDATE project_parties
+     SET sms_consent_status = 'pending', sms_consent_source = 'written',
+         sms_consent_evidence = 'Kickoff form', sms_consent_recorded_at = now(),
+         sms_consent_disclosure_version = 'field-sms-v1'
+   WHERE id = 'e0000000-0000-4000-8000-000000000011';
+  SELECT COUNT(*) INTO d FROM public._w1a_dispatch_log
+   WHERE body->>'templateKey' = 'sms_optin_invite';
+  ASSERT d = 2, 'FAIL 6c: a direct party-row write must still dispatch once, got ' || (d - 1);
+
+  -- 6d. The flag does not leak past the mirror's own statement.
+  ASSERT COALESCE(current_setting('patina.suppress_optin_dispatch', true), '') <> '1',
+    'FAIL 6d: the suppression flag must not survive the mirror';
+
+  -- 6e. M1: re-running the backfill as maintenance folds a new row, whose mirror
+  --     flips a sibling to evidenced pending — and still sends nothing.
+  SELECT public.backfill_channel_consent_from_parties() INTO folded;
+  ASSERT folded = 1, 'FAIL 6e: the re-run should fold the one unrecorded number, got ' || folded;
+
+  SELECT COUNT(*) INTO n FROM project_parties
+   WHERE phone_e164 = '+16125550144' AND sms_consent_status = 'pending';
+  ASSERT n = 2, 'FAIL 6e: the fold should mirror onto both rows, got ' || n;
+
+  SELECT COUNT(*) INTO d FROM public._w1a_dispatch_log
+   WHERE body->>'templateKey' = 'sms_optin_invite';
+  ASSERT d = 2, 'FAIL 6f: a backfill re-run must send nothing, got ' || (d - 2);
+
+  RAISE NOTICE '6. mirror fan-out (B1) + backfill re-run (M1): passed';
+END
+$$;
+
+-- ─── 7. r1 vocabulary widenings (M2 / M3 / M4) ─────────────────────────────
+
+DO $$
+DECLARE
+  raised TEXT;
+  n INTEGER;
+BEGIN
+  -- 7a. The AP address and the 311 portal both have a kind now, and each is
+  --     normalised by its own rule (email lowercased, portal handle kept raw).
+  INSERT INTO studio_contact_channels (id, owner_type, owner_id, channel_kind, value)
+  VALUES
+    ('f0000000-0000-4000-8000-000000000011', 'company', 'c0000000-0000-4000-8000-000000000002', 'ap_email', '  AP@Northgate.COM '),
+    ('f0000000-0000-4000-8000-000000000012', 'company', 'c0000000-0000-4000-8000-000000000002', 'portal_311', '  MPLS-311 / acct 88213  ');
+
+  SELECT COUNT(*) INTO n FROM studio_contact_channels
+   WHERE id = 'f0000000-0000-4000-8000-000000000011' AND value = 'ap@northgate.com';
+  ASSERT n = 1, 'FAIL 7a: ap_email must be lowercased like email';
+
+  SELECT COUNT(*) INTO n FROM studio_contact_channels
+   WHERE id = 'f0000000-0000-4000-8000-000000000012' AND value = 'MPLS-311 / acct 88213';
+  ASSERT n = 1, 'FAIL 7a: a portal_311 handle must survive verbatim (trimmed)';
+
+  -- 7b. A bounce has somewhere to land, dated.
+  UPDATE studio_contact_channels
+     SET status = 'bounced', status_at = now()
+   WHERE id = 'f0000000-0000-4000-8000-000000000011';
+  SELECT COUNT(*) INTO n FROM studio_contact_channels
+   WHERE id = 'f0000000-0000-4000-8000-000000000011' AND status = 'bounced' AND status_at IS NOT NULL;
+  ASSERT n = 1, 'FAIL 7b: the email rail must be able to write a dated bounce';
+
+  -- 7c. The vocabulary is still a CHECK, not a free-text column.
+  raised := NULL;
+  BEGIN
+    INSERT INTO studio_contact_channels (owner_type, owner_id, channel_kind, value)
+    VALUES ('company', 'c0000000-0000-4000-8000-000000000002', 'carrier_pigeon', 'x');
+  EXCEPTION WHEN check_violation THEN
+    raised := SQLSTATE;
+  END;
+  ASSERT raised = '23514', 'FAIL 7c: an unknown channel_kind must still be refused';
+
+  -- 7d. M3: every company kind the shipped UI renders, plus the AHJ, now fits.
+  UPDATE studio_contacts SET company_kind = 'workroom'  WHERE id = 'c0000000-0000-4000-8000-000000000002';
+  UPDATE studio_contacts SET company_kind = 'showroom'  WHERE id = 'c0000000-0000-4000-8000-000000000002';
+  UPDATE studio_contacts SET company_kind = 'supplier'  WHERE id = 'c0000000-0000-4000-8000-000000000002';
+  UPDATE studio_contacts SET company_kind = 'authority' WHERE id = 'c0000000-0000-4000-8000-000000000002';
+  SELECT COUNT(*) INTO n FROM studio_contacts
+   WHERE id = 'c0000000-0000-4000-8000-000000000002' AND company_kind = 'authority';
+  ASSERT n = 1, 'FAIL 7d: authority (the AHJ) must be a company kind';
+
+  raised := NULL;
+  BEGIN
+    UPDATE studio_contacts SET company_kind = 'not_a_kind' WHERE id = 'c0000000-0000-4000-8000-000000000002';
+  EXCEPTION WHEN check_violation THEN
+    raised := SQLSTATE;
+  END;
+  ASSERT raised = '23514', 'FAIL 7d: an unknown company_kind must still be refused';
+
+  RAISE NOTICE '7. widened vocabularies (M2/M3/M4): passed';
   RAISE NOTICE 'All W1a assertions passed.';
 END
 $$;

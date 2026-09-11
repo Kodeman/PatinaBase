@@ -21,6 +21,10 @@
 -- which is evaluated AFTER the normalising trigger — so the same number typed
 -- three different ways lands once.
 --
+-- The kind vocabulary is crm-model §2's Reach channel list: four voice lines,
+-- two email doors (general + AP), and portal_311. status is crm-model's
+-- ok/bounced/unsubscribed/dead, with ok spelled `active`.
+--
 -- RLS gates on the OWNING CARD's organization_id via studio_contact_org(uuid)
 -- (00592).
 --
@@ -35,7 +39,11 @@ CREATE TABLE IF NOT EXISTS public.studio_contact_channels (
   owner_id   uuid NOT NULL REFERENCES public.studio_contacts(id) ON DELETE CASCADE,
 
   channel_kind text NOT NULL CHECK (
-    channel_kind IN ('mobile', 'office', 'dispatch', 'email', 'after_hours')
+    channel_kind IN (
+      'mobile', 'office', 'dispatch', 'after_hours',
+      'email', 'ap_email',
+      'portal_311'
+    )
   ),
   value      text NOT NULL,
   label      text,
@@ -47,13 +55,47 @@ CREATE TABLE IF NOT EXISTS public.studio_contact_channels (
   verified_at timestamptz,
   preferred   boolean NOT NULL DEFAULT false,
 
-  status    text NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'dead', 'unsubscribed')),
+  status    text NOT NULL DEFAULT 'active'
+    CHECK (status IN ('active', 'bounced', 'unsubscribed', 'dead')),
   status_at timestamptz,
 
   created_by uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
+
+-- Vocabulary, re-stated as named constraints so a rerun of this file over an
+-- existing table really does widen them (CREATE TABLE IF NOT EXISTS would skip
+-- the inline versions above) — the 00592 idiom. Both lists are crm-model §2.
+--
+-- channel_kind carries the four voice lines, BOTH email doors (the general
+-- address and the AP address the bookkeeper pays from — direction §2.2 E6, and
+-- the partner of 00592's remit_to), and portal_311, the only way F-27 is
+-- reachable at all. DELIBERATELY NOT HERE: crm-model's app / account /
+-- field_link / paper. Those are not addresses a studio member types onto a
+-- card — they are reach tiers derived from an access grant (E9) and belong
+-- with that object, not in this table's vocabulary.
+ALTER TABLE public.studio_contact_channels
+  DROP CONSTRAINT IF EXISTS studio_contact_channels_channel_kind_check;
+ALTER TABLE public.studio_contact_channels
+  ADD CONSTRAINT studio_contact_channels_channel_kind_check CHECK (
+    channel_kind IN (
+      'mobile', 'office', 'dispatch', 'after_hours',
+      'email', 'ap_email',
+      'portal_311'
+    )
+  );
+
+-- status: crm-model §2 names ok/bounced/unsubscribed/dead. 'ok' is spelled
+-- 'active' here (a rename, harmless); 'bounced' is not optional — it is the
+-- commonest verdict the email rail writes back (direction §7 P3, CS6-10, which
+-- also requires the date status_at carries).
+ALTER TABLE public.studio_contact_channels
+  DROP CONSTRAINT IF EXISTS studio_contact_channels_status_check;
+ALTER TABLE public.studio_contact_channels
+  ADD CONSTRAINT studio_contact_channels_status_check CHECK (
+    status IN ('active', 'bounced', 'unsubscribed', 'dead')
+  );
 
 COMMENT ON TABLE public.studio_contact_channels IS
   'E6: every way a person or firm is actually reachable, typed. Owned by the '
@@ -65,10 +107,18 @@ COMMENT ON TABLE public.studio_contact_channels IS
 COMMENT ON COLUMN public.studio_contact_channels.value IS
   'Normalised by normalize_studio_contact_channel(): E.164 for phone kinds '
   '(falling back to the trimmed raw text when unparseable, since the column is '
-  'NOT NULL), lower(btrim(...)) for email.';
+  'NOT NULL), lower(btrim(...)) for the two email kinds, trimmed raw text for '
+  'portal_311 (a portal handle is neither).';
+COMMENT ON COLUMN public.studio_contact_channels.channel_kind IS
+  'crm-model §2 Reach channel. mobile/office/dispatch/after_hours are voice '
+  'lines; email is the general address and ap_email the one the bookkeeper pays '
+  'from (pairs with 00592''s remit_to); portal_311 is a municipal scheduling '
+  'portal — F-27 is reachable no other way. app/account/field_link/paper are '
+  'NOT kinds here: they are reach tiers derived from an access grant (E9).';
 COMMENT ON COLUMN public.studio_contact_channels.status IS
-  'active | dead | unsubscribed — the send rails'' verdict on the channel, '
-  'dated by status_at. Distinct from consent, which is per studio per value.';
+  'active | bounced | unsubscribed | dead — the send rails'' verdict on the '
+  'channel, dated by status_at (crm-model §2 spells active as ok). Distinct '
+  'from consent, which is per studio per value.';
 
 -- ── Normalisation ───────────────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION public.normalize_studio_contact_channel()
@@ -77,8 +127,11 @@ LANGUAGE plpgsql
 SET search_path = public, pg_temp
 AS $$
 BEGIN
-  IF NEW.channel_kind = 'email' THEN
+  IF NEW.channel_kind IN ('email', 'ap_email') THEN
     NEW.value := lower(btrim(COALESCE(NEW.value, '')));
+  ELSIF NEW.channel_kind = 'portal_311' THEN
+    -- A portal handle/URL is neither phone nor address: keep what was typed.
+    NEW.value := btrim(COALESCE(NEW.value, ''));
   ELSE
     NEW.value := COALESCE(
       public.normalize_phone_e164(NEW.value),
@@ -93,7 +146,8 @@ REVOKE ALL ON FUNCTION public.normalize_studio_contact_channel() FROM PUBLIC, an
 
 COMMENT ON FUNCTION public.normalize_studio_contact_channel() IS
   'BEFORE INSERT/UPDATE on studio_contact_channels: E.164 for phone kinds, '
-  'lowercased for email. Same shape as 00281''s normalize_party_phone_e164 and '
+  'lowercased for email and ap_email, trimmed raw for portal_311. Same shape '
+  'as 00281''s normalize_party_phone_e164 and '
   '00583''s two lead/client normalisers — a per-table trigger fn over the one '
   'shared pure helper (00593).';
 

@@ -36,6 +36,18 @@
 -- onto sibling party rows, and a row moving to evidenced-`pending` fires
 -- 00432's fc_dispatch_optin_invite — a real opt-in SMS, from a migration.
 --
+-- That ordering only protects THIS file's own fold. At runtime the same hazard
+-- is live and worse: one recorded `pending` fans out to every party row in the
+-- studio on that number, and each newly-evidenced-pending row fires its own
+-- opt-in text — N identical messages to one human from one studio act, on a
+-- 10DLC campaign where duplicate opt-in traffic is exactly what gets a campaign
+-- filtered. So this file also REDEFINES fc_dispatch_optin_invite (lineage
+-- 00432:27-68, retriggered 00284:254-257) to stand down while the mirror is the
+-- one writing: a mirror write is cache maintenance, never a studio act, and
+-- must have no external side effect. A designer writing an evidenced `pending`
+-- onto a party row directly still dispatches, unchanged. Sending the invite for
+-- a consent RECORD is W2's hook, once, deliberately — not a trigger's fan-out.
+--
 -- Adds GRANT/REVOKE → regenerate seed/00-legacy-grants.sql after this migration
 -- (python3 scripts/generate-legacy-grants.py).
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -188,13 +200,83 @@ COMMENT ON FUNCTION public.backfill_channel_consent_from_parties() IS
   'Folds project_parties.sms_consent_* into studio_channel_consent, one row per '
   '(studio, sms, phone_e164). Precedence: opted_out over everything, then the '
   'most recent granted, then pending, then not_asked. Idempotent — ON CONFLICT '
-  'DO NOTHING never overwrites a later decision (00594).';
+  'DO NOTHING never overwrites a later decision — and side-effect-free to '
+  're-run once the trigger exists: a folded `pending` reaches the party rows '
+  'through the mirror, which suppresses 00432''s opt-in dispatch (00594).';
 
 SELECT public.backfill_channel_consent_from_parties();
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- 3. The mirror — created AFTER the backfill, see the header
 -- ═══════════════════════════════════════════════════════════════════════════
+
+-- ── 3a. Teach the opt-in dispatch to stand down for a mirror write ──────────
+-- Lineage: 00432:27-68 (current head — the body below is that body verbatim),
+-- trigger fc_optin_invite_dispatch created at 00284:254-257. Delta: one guard,
+-- first statement. Everything else is untouched.
+--
+-- patina.suppress_optin_dispatch is set (SET LOCAL, via set_config(...,true))
+-- only by mirror_channel_consent_to_parties() below, around its own UPDATE, and
+-- cleared immediately after it. AFTER-row triggers queued by that UPDATE fire
+-- at the end of that statement, before the mirror's next statement, so the
+-- window is exactly the mirror's own write and nothing else in the transaction.
+CREATE OR REPLACE FUNCTION public.fc_dispatch_optin_invite()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  -- 00594: the mirror is maintaining the cached copy of a consent record that
+  -- was already decided elsewhere. Mirroring a verdict is not asking for one.
+  IF COALESCE(current_setting('patina.suppress_optin_dispatch', true), '') = '1' THEN
+    RETURN NEW;
+  END IF;
+
+  IF NEW.sms_consent_status <> 'pending' OR NEW.phone_e164 IS NULL THEN
+    RETURN NEW;
+  END IF;
+  IF NEW.sms_consent_source IS NULL
+     OR NEW.sms_consent_recorded_at IS NULL
+     OR NEW.sms_consent_disclosure_version IS NULL
+     OR btrim(COALESCE(NEW.sms_consent_evidence, '')) = '' THEN
+    RETURN NEW;
+  END IF;
+  IF TG_OP = 'UPDATE'
+     AND OLD.sms_consent_status IS NOT DISTINCT FROM 'pending'
+     AND OLD.sms_consent_source IS NOT NULL
+     AND OLD.sms_consent_recorded_at IS NOT NULL
+     AND OLD.sms_consent_disclosure_version IS NOT NULL
+     AND btrim(COALESCE(OLD.sms_consent_evidence, '')) <> '' THEN
+    RETURN NEW;
+  END IF;
+
+  BEGIN
+    PERFORM public.invoke_edge_function(
+      'sms-dispatch',
+      jsonb_build_object(
+        'partyId',     NEW.id,
+        'projectId',   NEW.project_id,
+        'templateKey', 'sms_optin_invite',
+        'type',        'field_optin_confirmation'
+      )
+    );
+  EXCEPTION WHEN OTHERS THEN
+    RAISE WARNING 'fc_dispatch_optin_invite: dispatch failed for party %: %', NEW.id, SQLERRM;
+  END;
+
+  RETURN NEW;
+END;
+$$;
+
+COMMENT ON FUNCTION public.fc_dispatch_optin_invite() IS
+  'Dispatches the SMS double-confirmation only after auditable prior express '
+  'consent is recorded (00432), and never for a write made by '
+  'mirror_channel_consent_to_parties(), which sets patina.suppress_optin_dispatch '
+  'for the duration of its own UPDATE — one recorded consent must not fan out '
+  'into one text per party row on the number (00594).';
+
+-- ── 3b. The mirror ──────────────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION public.mirror_channel_consent_to_parties()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -205,6 +287,11 @@ BEGIN
   IF NEW.channel_kind <> 'sms' THEN
     RETURN NEW;
   END IF;
+
+  -- Transaction-local, cleared below: fc_dispatch_optin_invite (redefined in
+  -- 3a) reads this and returns without dispatching. Without it, one recorded
+  -- `pending` becomes one real opt-in SMS per party row on the number.
+  PERFORM set_config('patina.suppress_optin_dispatch', '1', true);
 
   UPDATE public.project_parties pp
      SET sms_consent_status             = NEW.status,
@@ -222,6 +309,8 @@ BEGIN
          = NEW.organization_id
      AND pp.sms_consent_status IS DISTINCT FROM NEW.status;
 
+  PERFORM set_config('patina.suppress_optin_dispatch', '', true);
+
   RETURN NEW;
 END;
 $$;
@@ -232,7 +321,9 @@ COMMENT ON FUNCTION public.mirror_channel_consent_to_parties() IS
   'AFTER INSERT/UPDATE on studio_channel_consent: pushes the studio''s verdict '
   'onto every party row in that studio carrying the same phone_e164, making '
   'project_parties.sms_consent_* a read-only cached mirror. Guarded on a real '
-  'status change so a re-record does not re-fire 00432''s opt-in dispatch '
+  'status change so a re-record does not rewrite unchanged rows, and it sets '
+  'patina.suppress_optin_dispatch for the duration of its own UPDATE so a '
+  'mirrored `pending` cannot fire 00432''s opt-in dispatch once per row '
   '(00594).';
 
 DROP TRIGGER IF EXISTS mirror_channel_consent_to_parties_trg ON public.studio_channel_consent;

@@ -180,30 +180,75 @@ async function loadPhoneParties(
   return (data ?? []) as PhoneParty[];
 }
 
-/** One entry per studio holding the number, with a project to cite as origin. */
+interface StudioTarget {
+  org: string;
+  /** A project in that studio, cited as the consent record's origin. */
+  projectId: string;
+  /** Every party row on this number belonging to that studio. */
+  partyIds: string[];
+}
+
+/**
+ * One entry per studio holding the number, with a project to cite as origin and
+ * the studio's own party rows.
+ *
+ * The org is resolved the same way the SQL side resolves it (00594:141, :221):
+ * studio_id, falling back to the designer's primary studio. Without the
+ * fallback a project with a NULL studio_id gets a consent record written by the
+ * migration that an inbound STOP could never reach — the record would keep
+ * saying granted while the party rows went opted_out.
+ */
 async function studiosHoldingPhone(
   supabase: SupabaseClient,
   parties: PhoneParty[],
-): Promise<Array<{ org: string; projectId: string }>> {
+): Promise<StudioTarget[]> {
   const projectIds = [...new Set(parties.map((p) => p.project_id))];
   if (projectIds.length === 0) return [];
   const { data } = await supabase
     .from("projects")
-    .select("id, studio_id")
+    .select("id, studio_id, designer_id")
     .in("id", projectIds);
-  const out: Array<{ org: string; projectId: string }> = [];
-  const seen = new Set<string>();
-  for (const row of (data ?? []) as Array<{ id: string; studio_id: string | null }>) {
-    if (!row.studio_id || seen.has(row.studio_id)) continue;
-    seen.add(row.studio_id);
-    out.push({ org: row.studio_id, projectId: row.id });
+  const rows = (data ?? []) as Array<
+    { id: string; studio_id: string | null; designer_id: string | null }
+  >;
+
+  const orgOfProject = new Map<string, string>();
+  const primaryStudio = new Map<string, string | null>();
+  for (const row of rows) {
+    if (row.studio_id) {
+      orgOfProject.set(row.id, row.studio_id);
+      continue;
+    }
+    if (!row.designer_id) continue;
+    if (!primaryStudio.has(row.designer_id)) {
+      const { data: org } = await supabase.rpc("_primary_studio_for", {
+        p_user: row.designer_id,
+      });
+      primaryStudio.set(row.designer_id, (org as string | null) ?? null);
+    }
+    const fallback = primaryStudio.get(row.designer_id) ?? null;
+    if (fallback) orgOfProject.set(row.id, fallback);
+  }
+
+  const out: StudioTarget[] = [];
+  const byOrg = new Map<string, StudioTarget>();
+  for (const p of parties) {
+    const org = orgOfProject.get(p.project_id);
+    if (!org) continue;
+    let target = byOrg.get(org);
+    if (!target) {
+      target = { org, projectId: p.project_id, partyIds: [] };
+      byOrg.set(org, target);
+      out.push(target);
+    }
+    target.partyIds.push(p.id);
   }
   return out;
 }
 
 async function writeChannelConsent(
   supabase: SupabaseClient,
-  targets: Array<{ org: string; projectId: string }>,
+  targets: StudioTarget[],
   phone: string,
   status: "granted" | "opted_out",
   now: string,
@@ -241,6 +286,13 @@ async function writeChannelConsent(
   }
 }
 
+// The party-row writes below mirror the consent records written above. The two
+// directions are deliberately NOT symmetric.
+//
+// A STOP stays phone-global. It is a carrier-level act against the sending
+// number, it can only ever REFUSE a send, and the only rows it reaches that the
+// scoped write would not are rows whose org cannot be resolved at all — rows
+// that have no consent record either, so nothing is left disagreeing.
 async function optOutAllForPhone(supabase: SupabaseClient, phone: string, now: string) {
   await supabase
     .from("project_parties")
@@ -248,16 +300,24 @@ async function optOutAllForPhone(supabase: SupabaseClient, phone: string, now: s
     .eq("phone_e164", phone);
 }
 
-async function grantAllForPhone(
+// A grant is scoped to the same studios the consent records were written for —
+// never phone-globally. Flipping every row on the number to `granted` is the
+// "two writers" hazard direction.md C10 names: it hands a studio that never
+// invited this number a granted party row, which the send gate still reads,
+// while that studio's own consent record stays `not_asked`. Scoped, the record
+// and the mirror agree by construction.
+async function grantPartiesForStudios(
   supabase: SupabaseClient,
-  phone: string,
+  targets: StudioTarget[],
   now: string,
   onlyPending: boolean,
 ) {
+  const ids = targets.flatMap((t) => t.partyIds);
+  if (ids.length === 0) return;
   let q = supabase
     .from("project_parties")
     .update({ sms_consent_status: "granted", sms_consented_at: now, sms_opt_out_at: null })
-    .eq("phone_e164", phone);
+    .in("id", ids);
   if (onlyPending) q = q.eq("sms_consent_status", "pending");
   await q;
 }
@@ -399,6 +459,7 @@ export async function processInbound(
       await studiosHoldingPhone(supabase, await loadPhoneParties(supabase, from)),
       from, "opted_out", nowIso, `Inbound ${upper}`,
     );
+    // Phone-global on purpose — see optOutAllForPhone.
     await optOutAllForPhone(supabase, from, nowIso);
     await supabase.from("sms_messages")
       .update({ parsed_intent: { path: "keyword", keyword: "stop" } }).eq("id", messageId);
@@ -410,12 +471,18 @@ export async function processInbound(
     return { status: 200, twiml: twimlBody(), disposition: "opted_out" };
   }
   if (START_WORDS.includes(upper)) {
+    // One target set for both writers: the studios that actually hold the
+    // number, and only their party rows.
+    const startTargets = await studiosHoldingPhone(
+      supabase,
+      await loadPhoneParties(supabase, from),
+    );
     await writeChannelConsent(
       supabase,
-      await studiosHoldingPhone(supabase, await loadPhoneParties(supabase, from)),
+      startTargets,
       from, "granted", nowIso, `Inbound ${upper}`,
     );
-    await grantAllForPhone(supabase, from, nowIso, false);
+    await grantPartiesForStudios(supabase, startTargets, nowIso, false);
     await captureServerEvent("sms-inbound", "sms_parse_outcome",
       { path: "keyword", intent: "start", confidence_bucket: "n/a", disposition: "resubscribed" },
       { getEnv: deps.getEnv, fetchImpl: deps.fetchImpl });
@@ -435,16 +502,18 @@ export async function processInbound(
     const hasPending = parties.some((p) => p.sms_consent_status === "pending");
     if (hasPending) {
       // Only the studios that actually asked: a YES confirms the invite that
-      // was sent, never a studio that never invited this number.
+      // was sent, never a studio that never invited this number. The party-row
+      // write uses the same target set, so it cannot grant beyond it.
+      const yesTargets = await studiosHoldingPhone(
+        supabase,
+        parties.filter((p) => p.sms_consent_status === "pending"),
+      );
       await writeChannelConsent(
         supabase,
-        await studiosHoldingPhone(
-          supabase,
-          parties.filter((p) => p.sms_consent_status === "pending"),
-        ),
+        yesTargets,
         from, "granted", nowIso, `Inbound ${upper}`,
       );
-      await grantAllForPhone(supabase, from, nowIso, true);
+      await grantPartiesForStudios(supabase, yesTargets, nowIso, true);
       await captureServerEvent("sms-inbound", "sms_opt_in", { phone: from }, { getEnv: deps.getEnv, fetchImpl: deps.fetchImpl });
       const pending = parties.find((p) => p.sms_consent_status === "pending")!;
       const projectNames = await loadProjectNames(supabase, [pending.project_id]);

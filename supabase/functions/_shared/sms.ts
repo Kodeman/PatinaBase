@@ -190,32 +190,69 @@ function reduceConsent(
 }
 
 /**
+ * The organization a project belongs to, resolved exactly the way the SQL side
+ * resolves it (00594:141 and :221):
+ * `COALESCE(projects.studio_id, _primary_studio_for(projects.designer_id))`.
+ *
+ * The fallback matters: a project with a NULL studio_id still gets a consent
+ * record written under its designer's primary studio by the backfill and the
+ * mirror, so any reader that keys on studio_id alone silently disagrees with
+ * the table — the room would print "Texting" for a number that has STOPped.
+ */
+export async function resolveProjectOrg(
+  supabase: SupabaseClient,
+  projectId: string | null,
+): Promise<string | null> {
+  if (!projectId) return null;
+  const { data: proj } = await supabase
+    .from("projects")
+    .select("studio_id, designer_id")
+    .eq("id", projectId)
+    .maybeSingle();
+  const row = proj as
+    | { studio_id?: string | null; designer_id?: string | null }
+    | null;
+  if (!row) return null;
+  if (row.studio_id) return row.studio_id;
+  if (!row.designer_id) return null;
+  const { data: org } = await supabase.rpc("_primary_studio_for", {
+    p_user: row.designer_id,
+  });
+  return (org as string | null) ?? null;
+}
+
+/** What the studio's own consent record says about this number. */
+export type ChannelConsentVerdict = "refuse" | "allow" | "unknown";
+
+/**
  * PRIMARY consent gate (migration 00594). Consent is a fact about a (studio,
  * channel value) pair, held in studio_channel_consent — not a per-party-row
  * ledger. This is read BEFORE reduceConsent() below: the studio that owns the
  * job is the only studio whose verdict may silence this send, and the only one
  * whose grant may authorise it.
  *
- * Returns true when the send must be refused:
- *   · the studio's own record says opted_out, or
- *   · there is NO record for that studio (or no studio could be resolved) AND
- *     some party row on this number has opted out — fail closed until the
- *     backfill is proven everywhere (PR-x).
+ *   · "refuse" — the studio's own record says opted_out; or there is NO record
+ *     for that studio (or no studio could be resolved) AND some party row on
+ *     this number has opted out, which fails closed until the backfill is
+ *     proven everywhere (PR-x). That fallback is deliberately phone-global.
+ *   · "allow" — the studio's own record says granted. This is the half of G-3
+ *     the per-party ledger cannot do: a seat created today for a number the
+ *     studio recorded a grant for in 2025 starts `not_asked` on its own row
+ *     (the mirror fires on a consent write, never on a party-row insert), and
+ *     without this branch the send is refused as not_consented and the studio
+ *     has to re-record a consent it already holds (fixture F-11).
+ *   · "unknown" — record says not_asked/pending, or there is none: the legacy
+ *     party-row gates below decide.
+ *
+ * "allow" lifts only the POSITIVE gates. Every opted_out path still refuses,
+ * whichever ledger carries it.
  */
-async function channelConsentRefuses(
+async function channelConsentVerdict(
   supabase: SupabaseClient,
   phone: string,
   projectId: string | null,
-): Promise<boolean> {
-  let org: string | null = null;
-  if (projectId) {
-    const { data: proj } = await supabase
-      .from("projects")
-      .select("studio_id")
-      .eq("id", projectId)
-      .maybeSingle();
-    org = (proj as { studio_id?: string | null } | null)?.studio_id ?? null;
-  }
+): Promise<ChannelConsentVerdict> {
+  const org = await resolveProjectOrg(supabase, projectId);
 
   if (org) {
     const { data: record } = await supabase
@@ -225,16 +262,22 @@ async function channelConsentRefuses(
       .eq("channel_kind", "sms")
       .eq("channel_value", phone)
       .maybeSingle();
-    if (record) return (record as { status: string }).status === "opted_out";
+    if (record) {
+      const status = (record as { status: string }).status;
+      if (status === "opted_out") return "refuse";
+      if (status === "granted") return "allow";
+      return "unknown";
+    }
   }
 
   const { data: rows } = await supabase
     .from("project_parties")
     .select("sms_consent_status")
     .eq("phone_e164", phone);
-  return (rows ?? []).some(
+  const anyOptedOut = (rows ?? []).some(
     (r) => (r as { sms_consent_status: string }).sms_consent_status === "opted_out",
   );
+  return anyOptedOut ? "refuse" : "unknown";
 }
 
 async function resolveRecipient(
@@ -485,22 +528,28 @@ export async function sendPartySms(
     return { sent: false, reason: "no_phone_number" };
   }
   // FIRST: the studio's own consent record for this number (00594).
-  if (
-    await channelConsentRefuses(supabase, recipient.phone, recipient.projectId)
-  ) {
+  const verdict = await channelConsentVerdict(
+    supabase,
+    recipient.phone,
+    recipient.projectId,
+  );
+  if (verdict === "refuse") {
     return { sent: false, reason: "opted_out" };
   }
+  // The studio's own record says granted: that authorises the send even when
+  // this party row has not caught up. It never overrides an opt-out.
+  const studioGranted = verdict === "allow";
   // SECOND, fail-closed until the backfill is proven everywhere (PR-x): the
   // legacy phone-global reduction across party rows, unchanged.
   if (recipient.consent === "opted_out") {
     return { sent: false, reason: "opted_out" };
   }
-  if (!isInvite && recipient.consent !== "granted") {
+  if (!isInvite && !studioGranted && recipient.consent !== "granted") {
     // Only the double-opt-in invite may reach a non-granted party.
     return { sent: false, reason: "not_consented" };
   }
   if (
-    isInvite && recipient.consent !== "pending" &&
+    isInvite && !studioGranted && recipient.consent !== "pending" &&
     recipient.consent !== "granted"
   ) {
     // The invite is meaningful only for a pending (or already-granted) party.
