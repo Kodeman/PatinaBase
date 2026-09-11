@@ -91,6 +91,7 @@ import {
   parseTaxShippingConfig,
   type TaxShippingConfig,
 } from './direct-order.ts';
+import { authorizeInvoiceReconcile } from './reconcile-authz.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -132,6 +133,16 @@ async function getCallerUser(req: Request) {
 
 interface CallerUser {
   id: string;
+}
+
+// A client that acts AS the caller. PostgREST reads role and claims from the
+// Authorization JWT, not from the apikey, so auth.uid() inside a SECURITY
+// DEFINER predicate resolves to the caller here — which a plain service-role
+// client cannot do.
+function createCallerScopedClient(req: Request): SupabaseClient {
+  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } },
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -765,6 +776,7 @@ async function loadDirectOrderPayable(
 
 async function reconcileStoredInvoiceCheckout(
   admin: SupabaseClient,
+  callerClient: SupabaseClient,
   stripe: Stripe,
   caller: CallerUser,
   invoiceId: string,
@@ -804,11 +816,20 @@ async function reconcileStoredInvoiceCheckout(
     stripe_event_id: string | null;
     stripe_checkout_session_id: string | null;
   } | null;
-  if (
-    !invoice ||
-    (caller.id !== attemptData.payer_id && caller.id !== invoice.designer_id)
-  ) {
+  if (!invoice) {
     return json({ error: 'invoice_not_found' }, 404);
+  }
+  const authz = await authorizeInvoiceReconcile(
+    callerClient,
+    caller.id,
+    attemptData.payer_id ?? null,
+    invoice.designer_id,
+  );
+  if (!authz.ok) {
+    if (authz.status === 500) {
+      console.error('create-checkout-session: co-membership check failed', authz.body.detail);
+    }
+    return json(authz.body, authz.status);
   }
   if (!payment || payment.stripe_checkout_session_id !== sessionId) {
     return json(
@@ -1141,6 +1162,7 @@ Deno.serve(async (req: Request) => {
   if (reconcileSessionId) {
     return reconcileStoredInvoiceCheckout(
       admin,
+      createCallerScopedClient(req),
       stripe,
       caller,
       invoiceId as string,
