@@ -46,6 +46,12 @@
 --      read-then-write window.
 --  15. r2r2 M-2: 00593's card backfill does not mark a person card's number
 --      SMS-capable without a party row behind it (CS4-7).
+--  16. r3r2 M-1: the two consent doors COMPOSE — reconsent() then a recorded
+--      grant cannot walk a STOP back to `granted`; only the recipient's own
+--      inbound YES/START opens that door again.
+--  17. r3r2 M-2: an affiliation's two ids must be a person card and a company
+--      card (and never the same card), and a channel's owner_type must equal
+--      its card's entity_kind.
 --
 -- How to run:
 --   psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
@@ -1190,8 +1196,8 @@ BEGIN
   SELECT regexp_replace(pg_get_functiondef(p.oid), '\s+', ' ', 'g') INTO norm
     FROM pg_proc p JOIN pg_namespace ns ON ns.oid = p.pronamespace
    WHERE ns.nspname = 'public' AND p.proname = 'record_channel_consent';
-  ASSERT norm LIKE '%WHERE scc.status IS DISTINCT FROM ''opted_out'' OR EXCLUDED.status = ''opted_out'' RETURNING%',
-    'FAIL 14a: record_channel_consent must gate opted_out in the upsert''s DO UPDATE … WHERE';
+  ASSERT norm LIKE '%WHERE (scc.status IS DISTINCT FROM ''opted_out'' OR EXCLUDED.status = ''opted_out'') AND (EXCLUDED.status <> ''granted''%RETURNING%',
+    'FAIL 14a: record_channel_consent must gate opted_out AND the unanswered refusal in the upsert''s DO UPDATE … WHERE';
 
   SELECT regexp_replace(pg_get_functiondef(p.oid), '\s+', ' ', 'g') INTO norm
     FROM pg_proc p JOIN pg_namespace ns ON ns.oid = p.pronamespace
@@ -1317,6 +1323,211 @@ BEGIN
     'FAIL 15d: the card backfill marked a number SMS-capable with no party row behind it';
 
   RAISE NOTICE '15. the card backfill does not invent SMS capability (M-2): passed';
+END
+$$;
+
+-- ─── 16. r3r2 M-1: the two doors, composed ────────────────────────────────
+--
+-- Each door held its own line: record_channel_consent refused every transition
+-- out of `opted_out`, and record_channel_reconsent landed on `pending`, never
+-- `granted`. Composed they did not: reconsent moved the row off `opted_out`,
+-- and the next recorded grant found a row the first gate no longer refused. Two
+-- calls, any studio member, and a recorded STOP was back at `granted` — with
+-- the mirror clearing the party-row backstop sendPartySms falls back on.
+
+DO $$
+DECLARE
+  r      RECORD;
+  raised TEXT;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+
+  -- The refusal, recorded.
+  PERFORM public.record_channel_consent(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '6125550233', 'opted_out',
+    'inbound_sms', 'Replied STOP', NULL, NULL);
+
+  -- 16a. The direct grant is refused, as before.
+  raised := NULL;
+  BEGIN
+    PERFORM public.record_channel_consent(
+      'b0000000-0000-4000-8000-00000000000a', 'sms', '6125550233', 'granted',
+      'written', 'Kickoff form', 'field-sms-v1', NULL);
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'channel_opted_out',
+    'FAIL 16a: a direct grant over a refusal must be refused, got ' || COALESCE(raised, '<no error>');
+
+  -- 16b. The named way back lands on pending and keeps the opt-out date.
+  PERFORM public.record_channel_reconsent(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '6125550233',
+    'written', 'Signed a fresh consent at the walkthrough', 'field-sms-v1', NULL);
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550233';
+  ASSERT r.status = 'pending', 'FAIL 16b: reconsent must land on pending, got ' || r.status;
+  ASSERT r.opt_out_at IS NOT NULL, 'FAIL 16b2: the refusal date must survive';
+
+  -- 16c. THE COMPOSITION. The grant is still refused, because the refusal has
+  --      not been answered by the person who made it.
+  raised := NULL;
+  BEGIN
+    PERFORM public.record_channel_consent(
+      'b0000000-0000-4000-8000-00000000000a', 'sms', '6125550233', 'granted',
+      'written', 'Kickoff form', 'field-sms-v1', NULL);
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'consent_awaiting_recipient',
+    'FAIL 16c: reconsent + grant must not compose into granted, got ' || COALESCE(raised, '<no error>');
+
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550233';
+  ASSERT r.status = 'pending' AND r.consented_at IS NULL,
+    'FAIL 16c2: the refused grant must leave the record at pending with no consent date';
+
+  -- 16d. A further `pending` re-record is still allowed — the studio may keep
+  --      restating the consent it holds; it just may not call it granted.
+  PERFORM public.record_channel_consent(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '6125550233', 'pending',
+    'written', 'Re-sent the confirmation text', 'field-sms-v1', NULL);
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550233';
+  ASSERT r.status = 'pending' AND r.evidence = 'Re-sent the confirmation text',
+    'FAIL 16d: a pending re-record must still be accepted';
+
+  PERFORM pg_temp.reset_role();
+
+  -- 16e. The recipient answers. The inbound rail writes this table directly as
+  --      service_role (sms-inbound/pipeline.ts writeChannelConsent), stamping a
+  --      FRESH consented_at — which is what reopens the studio's door.
+  UPDATE studio_channel_consent
+     SET status = 'granted', consented_at = now(), source = 'inbound_sms',
+         evidence = 'Replied START', recorded_at = now()
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550233';
+
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+  PERFORM public.record_channel_consent(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '6125550233', 'granted',
+    'written', 'Kickoff form', 'field-sms-v1', NULL);
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550233';
+  ASSERT r.status = 'granted' AND r.evidence = 'Kickoff form',
+    'FAIL 16e: after the recipient''s own grant the studio may record again';
+  ASSERT r.opt_out_at IS NOT NULL,
+    'FAIL 16e2: the refusal date still has to print (R-Q)';
+  PERFORM pg_temp.reset_role();
+
+  RAISE NOTICE '16. the two consent doors do not compose past a STOP (M-1): passed';
+END
+$$;
+
+-- ─── 17. r3r2 M-2: both sides of an affiliation are the card they claim ────
+--
+-- person_id and company_id are both FKs into studio_contacts, which holds both
+-- kinds of card, and company_id is copied onto studio_contacts.company_id by
+-- the pointer trigger — so an unguarded row produced a person card that is its
+-- own firm, rendered as its own crew (R-W). owner_type on a channel has the
+-- same shape of hole.
+
+INSERT INTO studio_contacts (id, organization_id, entity_kind, contact_kind, full_name, company_name, created_by)
+VALUES
+  ('c0000000-0000-4000-8000-000000000031', 'b0000000-0000-4000-8000-00000000000a',
+   'person', 'sub', 'Rosa Villareal', NULL, 'a0000000-0000-4000-8000-000000000001'),
+  ('c0000000-0000-4000-8000-000000000032', 'b0000000-0000-4000-8000-00000000000a',
+   'company', 'sub', NULL, 'Villareal Millwork', 'a0000000-0000-4000-8000-000000000001');
+
+DO $$
+DECLARE
+  raised TEXT;
+  v_ptr  uuid;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+
+  -- 17a. A person card as the FIRM.
+  raised := NULL;
+  BEGIN
+    INSERT INTO studio_person_affiliations (person_id, company_id)
+    VALUES ('c0000000-0000-4000-8000-000000000031', 'c0000000-0000-4000-8000-000000000001');
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'affiliation_company_not_a_company',
+    'FAIL 17a: a person card may not be an affiliation''s firm, got ' || COALESCE(raised, '<no error>');
+
+  -- 17b. A company card as the PERSON.
+  raised := NULL;
+  BEGIN
+    INSERT INTO studio_person_affiliations (person_id, company_id)
+    VALUES ('c0000000-0000-4000-8000-000000000002', 'c0000000-0000-4000-8000-000000000032');
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'affiliation_person_not_a_person',
+    'FAIL 17b: a company card may not be an affiliation''s person, got ' || COALESCE(raised, '<no error>');
+
+  -- 17c. The card as its own firm — the shape that reached
+  --      studio_contacts.company_id = id through the pointer trigger. The kind
+  --      guard catches it before the distinct-cards CHECK ever runs (one card
+  --      cannot be both kinds), and either refusal is the right answer.
+  raised := NULL;
+  BEGIN
+    INSERT INTO studio_person_affiliations (person_id, company_id)
+    VALUES ('c0000000-0000-4000-8000-000000000031', 'c0000000-0000-4000-8000-000000000031');
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised IN ('affiliation_company_not_a_company',
+                    'new row for relation "studio_person_affiliations" violates check constraint "studio_person_affiliations_distinct_cards_check"'),
+    'FAIL 17c: a card may not be its own firm, got ' || COALESCE(raised, '<no error>');
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM studio_contacts sc
+     WHERE sc.id = 'c0000000-0000-4000-8000-000000000031' AND sc.company_id = sc.id),
+    'FAIL 17c2: no card may point at itself as its firm';
+
+  -- 17d. A well-formed affiliation still writes, and still moves the pointer.
+  INSERT INTO studio_person_affiliations (person_id, company_id, role_at_firm)
+  VALUES ('c0000000-0000-4000-8000-000000000031', 'c0000000-0000-4000-8000-000000000032', 'owner');
+  SELECT company_id INTO v_ptr FROM studio_contacts
+   WHERE id = 'c0000000-0000-4000-8000-000000000031';
+  ASSERT v_ptr = 'c0000000-0000-4000-8000-000000000032',
+    'FAIL 17d: the guard must not break the pointer binding';
+
+  -- 17e. An UPDATE that moves either side is guarded too.
+  raised := NULL;
+  BEGIN
+    UPDATE studio_person_affiliations
+       SET company_id = 'c0000000-0000-4000-8000-000000000001'
+     WHERE person_id = 'c0000000-0000-4000-8000-000000000031';
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'affiliation_company_not_a_company',
+    'FAIL 17e: the UPDATE path must be guarded too, got ' || COALESCE(raised, '<no error>');
+
+  -- 17f. A channel's owner_type must be the card's own kind.
+  raised := NULL;
+  BEGIN
+    INSERT INTO studio_contact_channels (owner_type, owner_id, channel_kind, value)
+    VALUES ('company', 'c0000000-0000-4000-8000-000000000031', 'mobile', '612-555-0234');
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'channel_owner_kind_mismatch',
+    'FAIL 17f: a person card''s channel may not claim owner_type=company, got ' || COALESCE(raised, '<no error>');
+
+  INSERT INTO studio_contact_channels (owner_type, owner_id, channel_kind, value)
+  VALUES ('person', 'c0000000-0000-4000-8000-000000000031', 'mobile', '612-555-0234');
+  ASSERT EXISTS (
+    SELECT 1 FROM studio_contact_channels
+     WHERE owner_id = 'c0000000-0000-4000-8000-000000000031' AND value = '+16125550234'),
+    'FAIL 17f2: a matching owner_type must still write';
+
+  PERFORM pg_temp.reset_role();
+
+  -- 17g. The legacy pointer can still name a person card (00417's own CHECK
+  --      permits it). The reverse binding must stand down rather than raise
+  --      out of the guard and take the studio_contacts write with it.
+  UPDATE studio_contacts SET company_id = 'c0000000-0000-4000-8000-000000000001'
+   WHERE id = 'c0000000-0000-4000-8000-000000000031';
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM studio_person_affiliations spa
+     WHERE spa.person_id = 'c0000000-0000-4000-8000-000000000031'
+       AND spa.company_id = 'c0000000-0000-4000-8000-000000000001'),
+    'FAIL 17g: a malformed legacy pointer must not be mirrored into an affiliation';
+
+  RAISE NOTICE '17. affiliation and channel kinds are enforced (M-2): passed';
   RAISE NOTICE 'All W1a assertions passed.';
 END
 $$;

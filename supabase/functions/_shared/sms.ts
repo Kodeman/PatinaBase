@@ -886,15 +886,22 @@ export async function flushDeferredMessages(
     // FIRST: the studio's own record for this number, resolved through the
     // deferred row's party, exactly as sendPartySms does.
     let deferredProjectId: string | null = null;
+    let deferredPartyConsent: ConsentStatus | null = null;
     if (row.party_id) {
       const { data: deferredParty } = await supabase
         .from("project_parties")
-        .select("project_id")
+        .select("project_id, sms_consent_status")
         .eq("id", row.party_id)
         .maybeSingle();
-      deferredProjectId =
-        (deferredParty as { project_id?: string | null } | null)?.project_id ??
-          null;
+      const party = deferredParty as
+        | { project_id?: string | null; sms_consent_status?: string | null }
+        | null;
+      deferredProjectId = party?.project_id ?? null;
+      // resolveRecipient's partyId branch reads exactly this one row and
+      // defaults a missing row to not_asked; the flush must answer the same
+      // question the same way.
+      deferredPartyConsent =
+        (party?.sms_consent_status as ConsentStatus | undefined) ?? "not_asked";
     }
     const verdict = await channelConsentVerdict(
       supabase,
@@ -914,14 +921,28 @@ export async function flushDeferredMessages(
     const studioGranted = verdict === "allow";
 
     // SECOND, fail-closed until the backfill is proven everywhere (PR-x): the
-    // legacy party-row reduction, unchanged.
-    const { data: partyRows } = await supabase
-      .from("project_parties")
-      .select("sms_consent_status")
-      .eq("phone_e164", phone);
-    const consent = reduceConsent(
-      (partyRows ?? []) as { sms_consent_status: ConsentStatus }[],
-    );
+    // legacy party-row check — NARROWED to the deferred row's own party, the
+    // same narrowing resolveRecipient() applies when a partyId is given
+    // (sms.ts resolveRecipient, partyId branch). Reducing across every row on
+    // the phone number re-opened G-3 in this path in both directions: an
+    // unrelated studio's opted_out row suppressed the owning studio's own
+    // granted send, and an unrelated studio's granted row carried a send for a
+    // studio that had never obtained consent at all. A studio's fail-closed
+    // second check may only read that studio's own books (R-AK). The
+    // phone-global reduction survives only where there is no party to narrow
+    // to — the same case channelConsentVerdict keeps it for.
+    let consent: ConsentStatus;
+    if (deferredPartyConsent !== null) {
+      consent = deferredPartyConsent;
+    } else {
+      const { data: partyRows } = await supabase
+        .from("project_parties")
+        .select("sms_consent_status")
+        .eq("phone_e164", phone);
+      consent = reduceConsent(
+        (partyRows ?? []) as { sms_consent_status: ConsentStatus }[],
+      );
+    }
     const isInvite = row.template_key === "sms_optin_invite";
     if (consent === "opted_out") {
       await supabase

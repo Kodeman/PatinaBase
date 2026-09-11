@@ -109,7 +109,8 @@ ALTER TABLE public.studio_contact_channels
 
 COMMENT ON TABLE public.studio_contact_channels IS
   'E6: every way a person or firm is actually reachable, typed. Owned by the '
-  'rolodex card (studio_contacts); `value` is normalised on write — phones to '
+  'rolodex card (studio_contacts) — owner_type must equal that card''s own '
+  'entity_kind, enforced by assert_channel_owner_kind(); `value` is normalised on write — phones to '
   'E.164 via normalize_phone_e164 (00281), emails lowercased. Consent is NOT '
   'here: it is a fact about the channel VALUE per studio, in '
   'studio_channel_consent (00594).';
@@ -207,6 +208,51 @@ DROP TRIGGER IF EXISTS set_updated_at_studio_contact_channels ON public.studio_c
 CREATE TRIGGER set_updated_at_studio_contact_channels
   BEFORE UPDATE ON public.studio_contact_channels
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+-- ── owner_type has to be the kind the card actually is ──────────────────────
+-- owner_type's CHECK says person|company; owner_id's FK says "some card".
+-- Neither says they agree, so a company card could carry owner_type='person'
+-- and be offered an SMS invite as a person, or a person card could sit in a
+-- firm's Reach list as the firm's own line. A CHECK cannot reach studio_contacts,
+-- so this is a BEFORE trigger — the same shape as 00592's
+-- assert_affiliation_card_kinds().
+CREATE OR REPLACE FUNCTION public.assert_channel_owner_kind()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+DECLARE
+  v_kind text;
+BEGIN
+  SELECT sc.entity_kind INTO v_kind
+    FROM public.studio_contacts sc WHERE sc.id = NEW.owner_id;
+
+  IF v_kind IS DISTINCT FROM NEW.owner_type THEN
+    RAISE EXCEPTION 'channel_owner_kind_mismatch'
+      USING HINT = 'studio_contact_channels.owner_type must equal the card''s '
+                   'own entity_kind: a company card''s channels are '
+                   'owner_type = company, a person card''s are person.';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.assert_channel_owner_kind()
+  FROM PUBLIC, anon, authenticated;
+
+COMMENT ON FUNCTION public.assert_channel_owner_kind() IS
+  'BEFORE INSERT/UPDATE on studio_contact_channels: owner_type must equal '
+  'studio_contacts.entity_kind for owner_id (channel_owner_kind_mismatch). The '
+  'column CHECK and the FK each say half of this and neither says they agree '
+  '(00593).';
+
+DROP TRIGGER IF EXISTS assert_channel_owner_kind_trg ON public.studio_contact_channels;
+CREATE TRIGGER assert_channel_owner_kind_trg
+  BEFORE INSERT OR UPDATE OF owner_type, owner_id
+  ON public.studio_contact_channels
+  FOR EACH ROW EXECUTE FUNCTION public.assert_channel_owner_kind();
 
 -- ── Indexes ─────────────────────────────────────────────────────────────────
 -- The ON CONFLICT arbiter for the backfill (and for every later re-fold). The

@@ -15995,6 +15995,12 @@ END $g$;
 
 -- 00592_people_cards_affiliations_rules.sql
 DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.assert_affiliation_card_kinds() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00592_people_cards_affiliations_rules.sql
+DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public._sync_person_company_pointer(uuid) FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
@@ -16044,6 +16050,12 @@ END $g$;
 -- 00593_studio_contact_channels.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.normalize_studio_contact_channel() FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00593_studio_contact_channels.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.assert_channel_owner_kind() FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
