@@ -34,3 +34,7 @@
 **Published.** Deck: https://claude.ai/code/artifact/9a461b37-a73b-4778-8357-809f52db0d98
 
 **Review status.** Six rounds, two lenses (content, technical + design). Final: `review/03-rereview-final.md` — clean; render sweep `ALL ASSERTIONS PASS (14 viewports x 4)` at 390 / 700 / 861 / 1001 / 1024 / 1280 / 1440. Two rate holes confirmed against the head classifier body (00578:2599-2820). One program-level item open for Kody: the deck shape (cover + 14 + colophon) has no written contract — R5-15.
+
+**Ruled 2026-09-11.**
+
+Fourteen rulings + eight program rulings recorded in `rulings.md`; lanes and merge order in `program-charter.md`.
