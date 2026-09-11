@@ -888,3 +888,139 @@ Deno.test("flush: the studio's opted-out record suppresses a deferred send the p
   assertEquals(row.twilio_status, "suppressed");
   assertEquals(row.error_message, "opted_out");
 });
+
+// ── r3r2 BLOCKING: the flush's SECOND gate is the deferred party's own row ──
+//
+// The fail-closed legacy check reduced across every party row sharing the
+// phone number, unscoped to the deferred row's own party. Two studios on one
+// number (a shared vendor, a GC working for both, a recycled number) then
+// answered for each other, in both directions.
+
+Deno.test("flush: an unrelated studio's opted-out row does not suppress the owning studio's own granted send", async () => {
+  const now = new Date("2026-07-08T18:00:00Z"); // ~1pm Chicago — not quiet
+  const fake = createFakeSupabase({
+    sms_conversations: [
+      { id: "conv1", twilio_number: "+15550000000", phone_e164: "+15551230001" },
+    ],
+    sms_messages: [
+      {
+        id: "m1",
+        direction: "outbound",
+        twilio_status: "deferred",
+        body: "hello",
+        conversation_id: "conv1",
+        party_id: "p1",
+        template_key: "sms_daily_digest",
+        created_at: new Date(now.getTime() - 60 * 60 * 1000).toISOString(),
+      },
+    ],
+    project_parties: [
+      // The studio that owns the deferred send: granted, on its own books.
+      { id: "p1", phone_e164: "+15551230001", project_id: "proj1", sms_consent_status: "granted" },
+      // An unrelated studio's STOP on the same number.
+      { id: "p2", phone_e164: "+15551230001", project_id: "proj2", sms_consent_status: "opted_out" },
+    ],
+    projects: [
+      { id: "proj1", studio_id: "org-alpha" },
+      { id: "proj2", studio_id: "org-beta" },
+    ],
+    studio_channel_consent: [{
+      organization_id: "org-alpha",
+      channel_kind: "sms",
+      channel_value: "+15551230001",
+      status: "granted",
+    }],
+  });
+  const result = await flushDeferredMessages(fake as never, {
+    getEnv: envOf({ SMS_DEV_MODE: "dry_run", TWILIO_FROM_NUMBER: "+15550000000" }),
+    now,
+  });
+  assertEquals(result.flushed, 1, "another studio's STOP is not this studio's fact");
+  assertEquals(result.suppressed, 0);
+});
+
+Deno.test("flush: an unrelated studio's granted row does not carry a send for a studio that never asked", async () => {
+  const now = new Date("2026-07-08T18:00:00Z");
+  const fake = createFakeSupabase({
+    sms_conversations: [
+      { id: "conv1", twilio_number: "+15550000000", phone_e164: "+15551230001" },
+    ],
+    sms_messages: [
+      {
+        id: "m1",
+        direction: "outbound",
+        twilio_status: "deferred",
+        body: "hello",
+        conversation_id: "conv1",
+        party_id: "p1",
+        template_key: "sms_daily_digest",
+        created_at: new Date(now.getTime() - 60 * 60 * 1000).toISOString(),
+      },
+    ],
+    project_parties: [
+      // org-alpha never asked, and holds no consent record either.
+      { id: "p1", phone_e164: "+15551230001", project_id: "proj1", sms_consent_status: "not_asked" },
+      // org-beta's own, legitimate grant, for its own job.
+      { id: "p2", phone_e164: "+15551230001", project_id: "proj2", sms_consent_status: "granted" },
+    ],
+    projects: [
+      { id: "proj1", studio_id: "org-alpha" },
+      { id: "proj2", studio_id: "org-beta" },
+    ],
+  });
+  let fetchCalls = 0;
+  const result = await flushDeferredMessages(fake as never, {
+    getEnv: flushEnv(),
+    fetchImpl: (() => {
+      fetchCalls++;
+      return Promise.reject("must not call Twilio");
+    }) as unknown as typeof fetch,
+    now,
+  });
+  assertEquals(result.flushed, 0, "another studio's grant may not authorise this send");
+  assertEquals(result.suppressed, 1);
+  assertEquals(fetchCalls, 0);
+  const row = (fake._data.sms_messages ?? [])[0] as {
+    twilio_status: string;
+    error_message: string;
+  };
+  assertEquals(row.twilio_status, "suppressed");
+  assertEquals(row.error_message, "not_consented");
+});
+
+Deno.test("flush: with no party on the deferred row the phone-global reduction still refuses a STOP", async () => {
+  const now = new Date("2026-07-08T18:00:00Z");
+  const fake = createFakeSupabase({
+    sms_conversations: [
+      { id: "conv1", twilio_number: "+15550000000", phone_e164: "+15551230001" },
+    ],
+    sms_messages: [
+      {
+        id: "m1",
+        direction: "outbound",
+        twilio_status: "deferred",
+        body: "hello",
+        conversation_id: "conv1",
+        party_id: null,
+        template_key: "sms_daily_digest",
+        created_at: new Date(now.getTime() - 60 * 60 * 1000).toISOString(),
+      },
+    ],
+    project_parties: [
+      { id: "p2", phone_e164: "+15551230001", project_id: "proj2", sms_consent_status: "opted_out" },
+    ],
+    projects: [{ id: "proj2", studio_id: "org-beta" }],
+  });
+  let fetchCalls = 0;
+  const result = await flushDeferredMessages(fake as never, {
+    getEnv: flushEnv(),
+    fetchImpl: (() => {
+      fetchCalls++;
+      return Promise.reject("must not call Twilio");
+    }) as unknown as typeof fetch,
+    now,
+  });
+  assertEquals(result.flushed, 0, "an unattributable send must not outrun a STOP");
+  assertEquals(result.suppressed, 1);
+  assertEquals(fetchCalls, 0);
+});

@@ -408,3 +408,271 @@ The migration numbers stay provisional: `refs/heads/hour-tracking/server` holds
 its own 00595–00597, and the local `supabase_migrations` ledger has carried that
 wave's 00592–00594 before. At integration, renumber against whichever tip wins
 (report §5).
+
+---
+
+# Round 2 of the r3 review — BLOCKING 1 · M-1 · M-2 · M-3
+
+On top of `77fac9f90`, against
+`build/w1a-review-r3-migrations.md` (M-1, M-2, M-3) and
+`build/w1a-review-r3-tests.md` (Finding 1, BLOCKING). Those four findings only;
+nothing else from either review was taken. Local Supabase only — no
+`supabase db push`, no `supabase functions deploy`, no Strata contact, no
+`.env.local` repoint (`apps/*/.env.local` still does not exist in this
+worktree: `ls apps/*/.env.local` → `no matches found`).
+
+Files touched:
+
+```
+supabase/functions/_shared/sms.ts
+supabase/functions/_shared/sms.test.ts
+supabase/migrations/00592_people_cards_affiliations_rules.sql
+supabase/migrations/00593_studio_contact_channels.sql
+supabase/migrations/00594_studio_channel_consent.sql
+supabase/tests/people/w1a_identity_channels_consent_test.sql
+supabase/seed/00-legacy-grants.sql        (regenerated, never hand-edited)
+artifacts/people-room-crm-2026-09-11/build/w1a-report.md
+```
+
+`packages/supabase/src/database.types.ts` was regenerated and did **not**
+change: both new objects are trigger functions.
+
+---
+
+## BLOCKING 1 — `flushDeferredMessages()`'s second gate was phone-global
+
+**What changed** (`supabase/functions/_shared/sms.ts`). The deferred row's
+party lookup now reads `project_id, sms_consent_status` in the one query it
+already made, and the fail-closed second check uses THAT party's own status
+when the row names a party — the same narrowing `resolveRecipient()`'s
+`partyId` branch has always applied, including its "a missing row reads as
+`not_asked`" default. The phone-global `reduceConsent()` survives only for a
+deferred row with no `party_id`, mirroring `resolveRecipient()`'s two branches
+and `channelConsentVerdict()`'s one surviving phone-global read. The comment at
+the gate now says why (R-AK: a studio's fail-closed check may only read that
+studio's own books).
+
+**Evidence — the two directions, against the PRE-fix gate.** The three new
+tests were run with the second gate reverted to the phone-global reduction:
+
+```
+flush: an unrelated studio's opted-out row does not suppress the owning studio's own granted send ... FAILED (2ms)
+flush: an unrelated studio's granted row does not carry a send for a studio that never asked ... FAILED (0ms)
+error: AssertionError: another studio's STOP is not this studio's fact
+FAILED | 27 passed | 2 failed (32ms)
+```
+
+and with the fix in place:
+
+```
+$ deno test --no-check --allow-all --config supabase/functions/deno.json \
+    supabase/functions/_shared/sms.test.ts supabase/functions/_tests/sms-inbound.test.ts
+ok | 61 passed | 0 failed (90ms)
+
+$ deno test --no-check --allow-all --config supabase/functions/deno.json \
+    supabase/functions/_tests/ supabase/functions/_shared/
+FAILED | 684 passed | 1 failed (3s)
+  ./supabase/functions/_tests/stripe-rail.test.ts (uncaught error)   ← pre-existing, env-only
+
+$ deno check --config supabase/functions/deno.json \
+    supabase/functions/_shared/sms.ts supabase/functions/sms-inbound/pipeline.ts
+Check supabase/functions/_shared/sms.ts
+Check supabase/functions/sms-inbound/pipeline.ts
+```
+
+Three cases were added, both directions plus the branch that must NOT narrow:
+an unrelated studio's `opted_out` row no longer suppresses the owning studio's
+granted send; an unrelated studio's `granted` row no longer carries a send for a
+studio that never asked (the outbound-SMS direction); and a deferred row with
+`party_id: null` is still refused by the phone-global reduction when any row on
+the number says STOP.
+
+**Not taken**: the r3 tests review's Finding 2 (the same shape in
+`sendPartySms`'s phone-only path, confirmed unreachable from both production
+callers) — out of scope for this round's four findings.
+
+---
+
+## M-1 — the two consent doors composed past a STOP
+
+Taken as the **tighten** half of the finding's either/or, because the softer
+half leaves W2's hook and the portal copy to be written against a guarantee the
+code does not make, and because the invariant as stated is the TCPA-facing one.
+
+**What changed** (`supabase/migrations/00594_studio_channel_consent.sql`,
+edited in place — unapplied everywhere but local). The upsert's
+`DO UPDATE … WHERE` gains a second leg:
+
+```sql
+  WHERE (scc.status IS DISTINCT FROM 'opted_out'
+         OR EXCLUDED.status = 'opted_out')
+    AND (EXCLUDED.status <> 'granted'
+         OR scc.status = 'granted'
+         OR scc.opt_out_at IS NULL
+         OR (scc.consented_at IS NOT NULL AND scc.consented_at > scc.opt_out_at))
+```
+
+so a studio-side `granted` is refused while an **unanswered** refusal stands:
+`opt_out_at` set with no `consented_at` after it. What answers a refusal is the
+recipient's own YES/START, which the inbound rail writes directly as
+`service_role` with a fresh `consented_at`
+(`sms-inbound/pipeline.ts writeChannelConsent`, `consented_at: now`) — the RPC
+is not on that path, so the rail is untouched. A record already AT `granted`
+may still restate its evidence (the number is sendable either way, and refusing
+there would strand a folded row whose dates disagree with its status, since
+`record_channel_reconsent()` requires `status = 'opted_out'` and would have no
+door left to offer).
+
+`IF NOT FOUND` now re-reads the conflicting row purely to name the leg that
+refused: `channel_opted_out` when the row is still `opted_out` (unchanged, and
+the existing block-14c assertion still sees it), `consent_awaiting_recipient`
+otherwise.
+
+The two comment blocks the finding cited (`:531-535`, `:717-721`) and both
+function COMMENTs now state the composed rule rather than the per-door one, and
+report decision 12 says to read the two sentences together.
+
+**Evidence — the reviewer's own three steps, re-run as an authenticated member
+with RLS on** (`$TMPDIR/probe_m1_m2.sql`, one rolled-back transaction):
+
+```
+NOTICE:  STEP1 direct grant: refused -> channel_opted_out
+NOTICE:  STEP2a reconsent -> status=pending
+NOTICE:  STEP2b grant-after-reconsent -> consent_awaiting_recipient (status now pending)
+
+ status  | source  |       evidence        | consented_at_set | opt_out_kept
+---------+---------+-----------------------+------------------+--------------
+ pending | written | Fresh written consent | f                | t
+```
+
+SQL block 16 asserts the whole arc, including that a `pending` re-record is
+still accepted (the studio may keep restating the consent it holds) and that
+after the recipient's own inbound grant the studio may record `granted` again
+with `opt_out_at` still printable (R-Q).
+
+---
+
+## M-2 — no entity-kind guard on affiliations (r2 m-5 / m-6)
+
+**What changed.**
+
+`00592`:
+
+- `assert_affiliation_card_kinds()` — SECURITY DEFINER, `search_path` pinned,
+  revoked from `PUBLIC, anon, authenticated`, fired
+  `BEFORE INSERT OR UPDATE OF person_id, company_id`. `person_id` must be a
+  person card (`affiliation_person_not_a_person`), `company_id` a company card
+  (`affiliation_company_not_a_company`).
+- `CHECK (person_id <> company_id)`
+  (`studio_person_affiliations_distinct_cards_check`), added with the
+  DROP-IF-EXISTS/ADD idiom so a re-run over an existing table really adds it.
+  It sits behind the trigger: one card cannot be both kinds, so a self-row is
+  refused by the kind guard first — the CHECK is the declarative backstop.
+- The fold that opens affiliations from the legacy pointer now also requires
+  `c.entity_kind = 'company'` and `c.id <> p.id`, so it cannot mint a row its
+  own guard would refuse; a pre-existing malformed pointer is left for a human,
+  exactly as a cross-studio one is.
+- `sync_person_affiliation_from_pointer()` stands down for a pointer that names
+  a non-company card (or the card itself) instead of raising out of the guard
+  and taking the whole `studio_contacts` write with it — the same posture it
+  already had for a cross-studio pointer.
+- The table COMMENT says both kinds are enforced.
+
+`00593` (r2 m-6, the equivalent guard the finding asks for):
+
+- `assert_channel_owner_kind()`, same shape, fired
+  `BEFORE INSERT OR UPDATE OF owner_type, owner_id`:
+  `studio_contact_channels.owner_type` must equal the card's own `entity_kind`
+  (`channel_owner_kind_mismatch`). The backfill already writes
+  `owner_type = sc.entity_kind` in all four legs, so it passes unchanged.
+
+**Evidence — the reviewer's own insert, re-run as an authenticated member with
+RLS on:**
+
+```
+NOTICE:  self-affiliation -> affiliation_company_not_a_company
+
+                  id                  | company_id | self_pointer
+--------------------------------------+------------+--------------
+ c1000000-0000-4000-8000-000000000101 |            |
+```
+
+SQL block 17 covers all six cases: a person card as the firm, a company card as
+the person, the card as its own firm, a well-formed affiliation still moving
+the pointer, the UPDATE path, and the channel `owner_type` mismatch plus the
+matching write — and 17g asserts a malformed legacy pointer is not mirrored
+into an affiliation and does not raise.
+
+**Object probe** (after a full reset):
+
+```
+ assert_affiliation_card_kinds          | t | {search_path=public} | anon f | auth f
+ assert_channel_owner_kind              | t | {search_path=public} | anon f | auth f
+
+ studio_contact_channels    | assert_channel_owner_kind_trg
+ studio_person_affiliations | assert_affiliation_card_kinds_trg
+```
+
+---
+
+## M-3 — the report had outlived the code again
+
+`artifacts/people-room-crm-2026-09-11/build/w1a-report.md`:
+
+- **(a)** §1's `sms-inbound` bullet no longer says "Each write happens before
+  the existing `project_parties` write". It now states the party-write-first
+  ordering on START and YES, cites `pipeline.ts:546-551` / `:578-583` and the
+  load-bearing comment at `:339-350`, says why (the record write consumed the
+  `pending → granted` transition 00374's trigger needs), and notes STOP keeps
+  the opposite order because a refusal has no transition to consume.
+- **(b)** The `sms_capable` evidence rule is now in the report twice: 00593's
+  §1 row names it, and new **decision 17** states it in full (evidence = a
+  folded party row on the same normalised number; everything else keeps the
+  `false` default and the `line type unconfirmed` label).
+- **(c)** Transcripts re-pasted from this round's runs: the SQL suite now shows
+  all seventeen blocks; the legacy-grants line is 186 lines / "baseline + 2628
+  replayed statements"; the deno line is `61 passed` for the two suites and
+  `684 passed | 1 failed` for the whole tree; the types diffstat says 465 in
+  both the paste and the prose, with a note that a fresh `db:generate` leaves
+  the committed file unchanged; the definer/ACL table gains
+  `sync_person_affiliation_from_pointer` (the "two pointer functions"
+  parenthetical now says three) and both new guards; the trigger table gains
+  both new triggers and a note that the reverse binding's trigger lives on
+  `studio_contacts`.
+- **§5's collision paragraph** is replaced with the current cross-branch state:
+  scanned across all 140 local and remote refs, only this wave's branch and its
+  origin mirror hold 00592–00594; `origin/main`'s tip is still `00591`;
+  `hour-tracking/integration` holds 00595–00597 and `hour-tracking/server`
+  00595–00599. Numbers stay provisional — re-check the integration tip at merge.
+- Decisions **18** (the composed doors) and **19** (the kind guards) added;
+  decisions 12, 13 and 14 amended to say what the code now guarantees.
+
+---
+
+## Verification, this round
+
+```
+$ pnpm --dir …/agent-people-build supabase:reset
+Applying migration 00592_people_cards_affiliations_rules.sql...
+Applying migration 00593_studio_contact_channels.sql...
+Applying migration 00594_studio_channel_consent.sql...
+Finished supabase db reset on branch main.
+
+$ psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 \
+    -f supabase/tests/people/w1a_identity_channels_consent_test.sql
+NOTICE:  1. … 15. … passed
+NOTICE:  16. the two consent doors do not compose past a STOP (M-1): passed
+NOTICE:  17. affiliation and channel kinds are enforced (M-2): passed
+NOTICE:  All W1a assertions passed.
+ROLLBACK
+
+$ for f in 00592 00593 00594; do { echo BEGIN; cat $f; cat $f; echo ROLLBACK; } | psql -v ON_ERROR_STOP=1; done
+(no ERROR on any of the six replays — only "already exists, skipping" notices)
+
+$ python3 scripts/generate-legacy-grants.py
+wrote …/supabase/seed/00-legacy-grants.sql — baseline + 2628 replayed statements
+
+$ SUPABASE_DB_URL=…54322/postgres pnpm --dir …/agent-people-build db:generate
+$ git diff --stat packages/supabase/src/database.types.ts
+(empty — no drift; 465 insertions against the wave's base commit, unchanged)
+```

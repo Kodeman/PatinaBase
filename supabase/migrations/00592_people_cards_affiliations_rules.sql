@@ -211,7 +211,9 @@ COMMENT ON TABLE public.studio_person_affiliations IS
   'survive (crm-model §4). Both ids point at studio_contacts — person_id at a '
   'person card, company_id at a company card. THIS TABLE IS THE HOME of the '
   'person-at-firm fact and the one the room reads (the company card''s crew '
-  'list, R-W). studio_contacts.company_id (00417) is now a DERIVED POINTER at '
+  'list, R-W). Both kinds are ENFORCED by assert_affiliation_card_kinds(), and '
+  'a card may not be its own firm '
+  '(studio_person_affiliations_distinct_cards_check). studio_contacts.company_id (00417) is now a DERIVED POINTER at '
   'the person''s open affiliation, kept for the legacy readers and maintained '
   'by sync_studio_contact_company_pointer(); a direct write to that legacy '
   'column opens the matching affiliation here, through '
@@ -274,6 +276,75 @@ REVOKE ALL ON TABLE public.studio_person_affiliations FROM PUBLIC, anon, authent
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.studio_person_affiliations TO authenticated;
 GRANT ALL ON public.studio_person_affiliations TO service_role;
 
+-- ── Both sides have to be the card they claim to be ─────────────────────────
+-- person_id and company_id are both FKs into studio_contacts, which holds
+-- BOTH kinds of card, so the FK alone permits a firm as the person and a
+-- person as the firm. That is not a cosmetic malformation: company_id here is
+-- copied into studio_contacts.company_id by _sync_person_company_pointer()
+-- below, the column every pre-affiliation reader still follows, and
+-- studio_contacts_company_link_check (00417:119) only asks that the HOLDER is
+-- a person. A row with person_id = company_id therefore produced a person card
+-- that is its own firm — rendered as the firm line on the card (direction §2.2
+-- E2) and as its own crew (R-W).
+--
+-- A CHECK cannot see another table, so the kinds are asserted by a BEFORE
+-- trigger; person_id <> company_id is a plain CHECK. Stated with the
+-- DROP/ADD idiom so a re-run over an existing table really does add it.
+ALTER TABLE public.studio_person_affiliations
+  DROP CONSTRAINT IF EXISTS studio_person_affiliations_distinct_cards_check;
+ALTER TABLE public.studio_person_affiliations
+  ADD CONSTRAINT studio_person_affiliations_distinct_cards_check
+  CHECK (person_id <> company_id);
+
+CREATE OR REPLACE FUNCTION public.assert_affiliation_card_kinds()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+DECLARE
+  v_person_kind  text;
+  v_company_kind text;
+BEGIN
+  SELECT sc.entity_kind INTO v_person_kind
+    FROM public.studio_contacts sc WHERE sc.id = NEW.person_id;
+  SELECT sc.entity_kind INTO v_company_kind
+    FROM public.studio_contacts sc WHERE sc.id = NEW.company_id;
+
+  IF v_person_kind IS DISTINCT FROM 'person' THEN
+    RAISE EXCEPTION 'affiliation_person_not_a_person'
+      USING HINT = 'studio_person_affiliations.person_id must name a person '
+                   'card. A firm does not work at a firm.';
+  END IF;
+  IF v_company_kind IS DISTINCT FROM 'company' THEN
+    RAISE EXCEPTION 'affiliation_company_not_a_company'
+      USING HINT = 'studio_person_affiliations.company_id must name a company '
+                   'card — it is also what studio_contacts.company_id is kept '
+                   'equal to.';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.assert_affiliation_card_kinds()
+  FROM PUBLIC, anon, authenticated;
+
+COMMENT ON FUNCTION public.assert_affiliation_card_kinds() IS
+  'BEFORE INSERT/UPDATE on studio_person_affiliations: person_id must be a '
+  'person card and company_id a company card '
+  '(affiliation_person_not_a_person / affiliation_company_not_a_company). The '
+  'FKs cannot say this — studio_contacts holds both kinds — and the pointer '
+  'trigger copies company_id onto the person card, so an unguarded row made a '
+  'card its own firm (00592).';
+
+DROP TRIGGER IF EXISTS assert_affiliation_card_kinds_trg
+  ON public.studio_person_affiliations;
+CREATE TRIGGER assert_affiliation_card_kinds_trg
+  BEFORE INSERT OR UPDATE OF person_id, company_id
+  ON public.studio_person_affiliations
+  FOR EACH ROW EXECUTE FUNCTION public.assert_affiliation_card_kinds();
+
 -- ── E4's home, and the legacy pointer ───────────────────────────────────────
 -- studio_contacts.company_id (00417:80) held "which firm is this person at"
 -- before this table existed, and the shipped hooks still write it
@@ -290,6 +361,12 @@ SELECT p.id, p.company_id, NULL, NULL
   JOIN public.studio_contacts c ON c.id = p.company_id
  WHERE p.company_id IS NOT NULL
    AND p.entity_kind = 'person'
+   -- The pointer could already name a PERSON card (00417's CHECK only asks
+   -- that the holder is a person). Such a link is left exactly as the
+   -- cross-studio one is — for a human — rather than folded into a row
+   -- assert_affiliation_card_kinds() would refuse.
+   AND c.entity_kind = 'company'
+   AND c.id <> p.id
    -- The RLS WITH CHECK pins both cards to one studio; the backfill holds the
    -- same line, so a pre-existing cross-studio link is left for a human.
    AND c.organization_id = p.organization_id
@@ -445,6 +522,16 @@ BEGIN
     -- A cross-studio pointer is left exactly as the backfill and the RLS
     -- WITH CHECK leave it: for a human. Opening the affiliation here would
     -- write a row the policy itself refuses.
+    NULL;
+  ELSIF NEW.company_id = NEW.id
+     OR (SELECT sc.entity_kind FROM public.studio_contacts sc
+          WHERE sc.id = NEW.company_id) IS DISTINCT FROM 'company' THEN
+    -- 00417's studio_contacts_company_link_check permits the legacy pointer to
+    -- name a person card, or the card itself. Opening the affiliation would
+    -- raise out of assert_affiliation_card_kinds() and take the whole
+    -- studio_contacts write down with it, so this half stands down for the
+    -- same reason it stands down for a cross-studio pointer: the malformation
+    -- is older than this file and is left visible, not mirrored.
     NULL;
   ELSE
     -- Open the new one FIRST, dated today so it outranks any NULL-dated row

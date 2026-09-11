@@ -12,8 +12,8 @@ Local Supabase only. Nothing was pushed to Strata; no `supabase db push`, no
 
 | File | Carries |
 |---|---|
-| `supabase/migrations/00592_people_cards_affiliations_rules.sql` | `studio_contact_org()` + `project_party_designer()` helpers · `studio_contacts` person columns (`is_sole_proprietor`, `studio_verdict`, `studio_verdict_at`) and company columns (`legal_name`, `dba_name`, `company_kind` + CHECK, `trades`, `w9_on_file_at`, `tax_id_last4`, `remit_to`, `retainage_bps`, `warranty_until`, `paperwork_contact_person_id`, `signer_person_id`, `site_contact_person_id`) · new table `studio_person_affiliations` · new table `studio_contact_rules` |
-| `supabase/migrations/00593_studio_contact_channels.sql` | New table `studio_contact_channels` · **`normalize_channel_value(kind, value)`** — the one channel-key rule, shared with 00594's consent RPCs · `normalize_studio_contact_channel()` trigger (defers to it) · four-part backfill from `studio_contacts.phone/email` and from `project_parties.phone/email` where `studio_contact_id` is set |
+| `supabase/migrations/00592_people_cards_affiliations_rules.sql` | `studio_contact_org()` + `project_party_designer()` helpers · `studio_contacts` person columns (`is_sole_proprietor`, `studio_verdict`, `studio_verdict_at`) and company columns (`legal_name`, `dba_name`, `company_kind` + CHECK, `trades`, `w9_on_file_at`, `tax_id_last4`, `remit_to`, `retainage_bps`, `warranty_until`, `paperwork_contact_person_id`, `signer_person_id`, `site_contact_person_id`) · new table `studio_person_affiliations` (+ `assert_affiliation_card_kinds()` and `studio_person_affiliations_distinct_cards_check`) · new table `studio_contact_rules` |
+| `supabase/migrations/00593_studio_contact_channels.sql` | New table `studio_contact_channels` · **`normalize_channel_value(kind, value)`** — the one channel-key rule, shared with 00594's consent RPCs · `normalize_studio_contact_channel()` trigger (defers to it) · `assert_channel_owner_kind()` trigger — `owner_type` must equal the card's own `entity_kind` · four-part backfill from `studio_contacts.phone/email` and from `project_parties.phone/email` where `studio_contact_id` is set, carrying the `sms_capable` evidence rule below |
 | `supabase/migrations/00594_studio_channel_consent.sql` | New table `studio_channel_consent` (PK `(organization_id, channel_kind, channel_value)`) · `backfill_channel_consent_from_parties()` + its one call · `mirror_channel_consent_to_parties()` trigger · RPC `record_channel_consent(...)` · RPC `record_channel_reconsent(...)` (PR-m's named way back) · **REDEFINES two existing trigger functions**: `fc_dispatch_optin_invite` (lineage `00432:27-68`) and `_site_request_consent_granted_dispatch` (lineage `00374:3399-3444`) · `COMMENT ON TABLE public.project_parties` restating the mirror invariant (lineage `00212:46`) |
 
 **Two functions are redefined, both grafted from their grep-winner bodies
@@ -37,8 +37,9 @@ before I wrote them (`normalize_channel_value`, `record_channel_reconsent`,
 `mirror_channel_consent_to_parties`, `record_channel_consent`).
 
 `python3 scripts/generate-legacy-grants.py` was re-run after the grants:
-`supabase/seed/00-legacy-grants.sql` gained 156 lines ("baseline + 2623 replayed
-statements"). It regenerates with an empty diff.
+`supabase/seed/00-legacy-grants.sql` gained 186 lines over this wave's base
+commit `700261663` ("baseline + 2628 replayed statements"). It regenerates with
+an empty diff.
 
 ### Edge functions
 
@@ -64,7 +65,9 @@ statements"). It regenerates with an empty diff.
   that one party row, and on the phone-only path it reduces across the rows the
   caller could not attribute. `flushDeferredMessages()` runs the SAME two gates
   in the same order, keyed off the deferred row's own `party_id` (R-AH) — a
-  second send path with a second consent gate is two answers to one question.
+  second send path with a second consent gate is two answers to one question —
+  and its second gate is narrowed to that party's own row, not reduced across
+  every row on the number (r3r2 BLOCKING; decision 14).
 - `supabase/functions/sms-inbound/pipeline.ts` — `loadPhoneParties()`,
   `studiosHoldingPhone()` (now over the shared `orgsOfProjects()`),
   `studiosHoldingRecord()`, `withRecordOnlyStudios()`, `writeChannelConsent()`,
@@ -83,8 +86,18 @@ statements"). It regenerates with an empty diff.
   pending invite upserts `granted` **only** for the studios that actually hold a
   pending row — no record-only union there. `origin_project_id` follows the
   CURRENT verdict in both writers (`t.projectId ?? prior`), matching
-  `record_channel_consent`'s `COALESCE(EXCLUDED..., scc....)`. Each write
-  happens before the existing `project_parties` write, which is kept.
+  `record_channel_consent`'s `COALESCE(EXCLUDED..., scc....)`. The existing
+  `project_parties` writes are kept, and on the two GRANT branches they now run
+  **before** the consent-record write, not after: `grantPartiesForStudios()`
+  precedes `writeChannelConsent()` on START (`pipeline.ts:546-551`) and on YES
+  (`pipeline.ts:578-583`). Writing the record first consumed the seat's
+  `pending → granted` transition through 00594's mirror, so 00374's
+  `site_request_consent_granted_dispatch` never fired and every site request
+  parked in `awaiting_consent` on that seat stayed parked for ever (r2r2 B-1).
+  The order is load-bearing and must not be swapped back; `pipeline.ts:339-350`
+  says so at the call site, and SQL block 13 asserts the released request. STOP
+  keeps the opposite order (the record first, then the phone-global party
+  write), since a refusal has no transition to consume.
 - `supabase/functions/_tests/fake-supabase.ts` — `upsert({onConflict})` now
   accepts a composite key (`"a,b,c"`). It previously treated the whole string as
   one column name, so a composite upsert matched the first row in the table.
@@ -171,7 +184,12 @@ statements"). It regenerates with an empty diff.
     time it reaches the write. PR-m's way back
     ("always a fresh recorded consent or an inbound START") is a separate named
     door, `record_channel_reconsent()`, landing on `pending` — `granted` stays
-    the recipient's to give by replying YES or START. The optional half of the
+    the recipient's to give by replying YES or START, and that is now enforced
+    ACROSS the pair, not only at each door: this door refuses `granted` while
+    the refusal reconsent superseded is still unanswered
+    (`consent_awaiting_recipient`; decision 18 below). Read those two
+    sentences together — a studio member holds both doors, so a guarantee that
+    holds only per-door is not a guarantee at all. The optional half of the
     review's suggestion — capping the sms RPC at `pending` outright — was NOT
     taken: it would retire the `allow` branch M5 exists for and fixture F-11
     needs (a studio holding auditable prior express written consent).
@@ -179,18 +197,33 @@ statements"). It regenerates with an empty diff.
 13. **The no-record fallback reduces across the studio's own projects, never
     across tenants** (R-AK). `channelConsentVerdict()`'s fail-closed second
     check — the one PR-x keeps until the backfill is proven everywhere — now
-    scans the resolving studio's own party rows. Phone-globally it blocked a
+    scans the resolving studio's own party rows, and `flushDeferredMessages()`'s
+    own second check reads the deferred row's own party (decision 14). Phone-globally it blocked a
     studio's first-ever outreach to a number it had never contacted, because
     some unrelated studio once received a STOP from it, with no
     operator-visible reason and no expiry. The one surviving phone-global read
     is the case where no studio resolves at all.
 
-14. **One consent gate, both send paths** (R-AH). `flushDeferredMessages()`
-    reads `channelConsentVerdict()` keyed off the deferred row's `party_id`
-    before the legacy reduction, exactly as `sendPartySms()` does. Before this
-    a studio's `granted` record died at quiet hours (the flush refused the send
-    as `not_consented`) and a studio's `opted_out` record could be overruled on
-    the flush by another studio's granted party row.
+14. **One consent gate, both send paths — BOTH halves of it** (R-AH).
+    `flushDeferredMessages()` reads `channelConsentVerdict()` keyed off the
+    deferred row's `party_id` before the legacy check, exactly as
+    `sendPartySms()` does. Before this a studio's `granted` record died at quiet
+    hours (the flush refused the send as `not_consented`) and a studio's
+    `opted_out` record could be overruled on the flush by another studio's
+    granted party row. The **second**, fail-closed check is now narrowed the
+    same way `sendPartySms()` narrows it: when the deferred row names a party,
+    the flush reads THAT party's own `sms_consent_status` rather than reducing
+    across every row sharing the phone number, which is what
+    `resolveRecipient()`'s `partyId` branch has always done. Unnarrowed it
+    re-opened G-3 inside the quiet-hours path in both directions (r3r2
+    BLOCKING): an unrelated studio's `opted_out` row suppressed the owning
+    studio's own granted send, and — worse — an unrelated studio's `granted`
+    row carried a real outbound SMS for a studio that had never obtained
+    consent at all. `flushDeferredMessages` is called on the field-daily cron
+    (`field-daily/core.ts:143`), so that was a live scheduled send path. The
+    phone-global reduction survives only where the deferred row names no party
+    — the same case `channelConsentVerdict()` keeps it for. Three tests in
+    `_shared/sms.test.ts` cover both directions and the no-party case.
 
 15. **`studio_person_affiliations` is the home of person-at-firm;
     `studio_contacts.company_id` is a derived pointer** (R-AI). 00592 backfills
@@ -214,6 +247,59 @@ statements"). It regenerates with an empty diff.
 16. **A START is a re-subscription, not a first grant** (R-AJ). The inbound
     grant is scoped to studios whose record is `opted_out` or `pending`; a seat
     on the number is not an invitation.
+
+17. **The card backfill does not invent SMS capability** (r2r2 M-2). A rolodex
+    card holds ONE untyped number and nothing on it says which kind of line it
+    is, so 00593's leg (a) leaves `sms_capable` at its `false` default unless
+    there is EVIDENCE: a party row folded onto the same card (00418) carrying
+    the same normalised number — that number really was on an SMS rail. Where
+    there is none the row is still written (the studio must see the number) but
+    it is labelled `From the card (00593 backfill) — line type unconfirmed`, so
+    W1b's Reach editor can show which lines it is asking the studio to type. A
+    blanket `true` would have asserted exactly what `sms_capable` exists to
+    deny — "an office line must never be offered an SMS invite" (crm-model §2
+    CS4-7, direction §5.1) — and person cards carrying an office, showroom,
+    dispatch or 311-only number are ordinary in the fixture (F-13, F-14, F-17,
+    F-20, F-27). The backfill runs once; a wrong `true` is a card the studio
+    then has to correct by hand. Leg (c) folds the same evidenced party rows
+    and marks them `true`, so the two legs agree by construction rather than
+    racing the `ON CONFLICT`. SQL block 15.
+
+18. **The two consent doors compose, and neither walks a STOP back on its own**
+    (r3r2 M-1). `record_channel_consent()` refuses every transition out of
+    `opted_out`, and `record_channel_reconsent()` lands on `pending`. Stated
+    that way each door held, but the PAIR did not: reconsent moved the row off
+    `opted_out`, and the next recorded grant found a row the first gate no
+    longer refused — two calls, any studio member, and a recorded STOP was back
+    at `granted`, with the mirror clearing the party-row backstop `sendPartySms`
+    falls back on. So the write door now ALSO refuses `granted` while an
+    **unanswered** refusal stands: `opt_out_at` set with no `consented_at`
+    after it (`consent_awaiting_recipient`). What answers a refusal is the
+    recipient's own YES/START, which the inbound rail writes directly with a
+    fresh `consented_at`; after that this door opens again. A record already at
+    `granted` may still restate its evidence — the number is sendable either
+    way, and refusing there would strand a folded row whose dates disagree with
+    its status, since `reconsent()` requires `status = 'opted_out'`. SQL
+    block 16.
+
+19. **Both sides of an affiliation must be the card they claim to be**
+    (r3r2 M-2). `person_id` and `company_id` are both FKs into
+    `studio_contacts`, which holds BOTH kinds of card, so the FKs permitted a
+    firm as the person and a person as the firm — and since
+    `_sync_person_company_pointer()` copies `company_id` onto
+    `studio_contacts.company_id`, an affiliation with the same card on both
+    sides produced a person card that is its own firm, which 00417's
+    `studio_contacts_company_link_check` does not catch. A CHECK cannot reach
+    another table, so `assert_affiliation_card_kinds()` is a BEFORE trigger
+    (`affiliation_person_not_a_person` / `affiliation_company_not_a_company`),
+    with `CHECK (person_id <> company_id)` behind it. `studio_contact_channels`
+    had the same hole and gets the same shape of guard,
+    `assert_channel_owner_kind()`. Two consequences: 00592's fold now also
+    requires `c.entity_kind = 'company'`, leaving a pre-existing malformed
+    legacy pointer for a human exactly as it leaves a cross-studio one; and
+    `sync_person_affiliation_from_pointer()` stands down for such a pointer
+    rather than raising out of the guard and taking the `studio_contacts` write
+    with it. SQL block 17.
 
 ---
 
@@ -284,11 +370,18 @@ Finished supabase db reset on branch main.
  project_party_designer                 | t         | {search_path=public}            | f         | t
  _sync_person_company_pointer           | t         | {search_path=public}            | f         | f
  sync_studio_contact_company_pointer    | t         | {search_path=public}            | f         | f
+ sync_person_affiliation_from_pointer   | t         | {search_path=public}            | f         | f
+ assert_affiliation_card_kinds          | t         | {search_path=public}            | f         | f
+ assert_channel_owner_kind              | t         | {search_path=public}            | f         | f
 ```
 
-(The two pointer functions added by R-AI hold EXECUTE for nobody: the trigger
-runs as the definer owner, and `_sync_person_company_pointer(uuid)` takes a
-caller-supplied person id, so its REVOKE names `authenticated` too.)
+(The THREE pointer functions added by R-AI — `_sync_person_company_pointer`,
+`sync_studio_contact_company_pointer` and the reverse binding
+`sync_person_affiliation_from_pointer` — hold EXECUTE for nobody: the triggers
+run as the definer owner, and `_sync_person_company_pointer(uuid)` takes a
+caller-supplied person id, so its REVOKE names `authenticated` too. The two
+r3r2 kind guards, `assert_affiliation_card_kinds()` and
+`assert_channel_owner_kind()`, hold nothing either, for the same reason.)
 
 The two REDEFINED trigger functions keep the ACL `CREATE OR REPLACE` preserved:
 `_site_request_consent_granted_dispatch` still holds nothing for `authenticated`
@@ -324,12 +417,18 @@ explicit `REVOKE ... FROM authenticated` held.)
 ```
  studio_channel_consent     | mirror_channel_consent_to_parties_trg
  studio_channel_consent     | set_updated_at_studio_channel_consent
+ studio_contact_channels    | assert_channel_owner_kind_trg
  studio_contact_channels    | normalize_studio_contact_channel_trg
  studio_contact_channels    | set_updated_at_studio_contact_channels
  studio_contact_rules       | set_updated_at_studio_contact_rules
+ studio_person_affiliations | assert_affiliation_card_kinds_trg
  studio_person_affiliations | set_updated_at_studio_person_affiliations
  studio_person_affiliations | sync_studio_contact_company_pointer_trg
 ```
+
+(`studio_contacts` also carries `sync_person_affiliation_from_pointer_trg`, the
+reverse half of the R-AI binding — it lives on that table, not on the four new
+ones listed here.)
 
 ### SQL test
 
@@ -347,6 +446,11 @@ NOTICE:  9. record_channel_consent transition gate (B-2): passed
 NOTICE:  10. mirror evidence refresh (M-1): passed
 NOTICE:  11. one normalisation + origin rule (M-3): passed
 NOTICE:  12. affiliations are the home, company_id the pointer (R-AI): passed
+NOTICE:  13. an inbound grant releases its parked site requests (B-1): passed
+NOTICE:  14. the opted_out gate is part of the write (M-1): passed
+NOTICE:  15. the card backfill does not invent SMS capability (M-2): passed
+NOTICE:  16. the two consent doors do not compose past a STOP (M-1): passed
+NOTICE:  17. affiliation and channel kinds are enforced (M-2): passed
 NOTICE:  All W1a assertions passed.
 ROLLBACK
 ```
@@ -384,18 +488,31 @@ refused (`consent_not_recordable`) with the grant and its whole evidence set
 left standing, and an opt-out that restates its own words keeps the disclosure
 version rather than nulling it.
 
+Blocks 13–15 are the r2 re-review round: an inbound YES/START releases the site
+requests parked in `awaiting_consent`, one dispatch per request, and the record
+write that follows adds no second one (13); the "nothing leaves `opted_out`"
+gate is part of the WRITE in both doors rather than a read before it, and a
+refused grant leaves the refusal byte-for-byte intact (14); and 00593's card
+backfill marks no person-card number SMS-capable without a folded party row
+behind it, labelling the rest `line type unconfirmed` (15). Blocks 16–17 are
+the r3 re-review round: `record_channel_reconsent()` followed by a recorded
+grant is refused (`consent_awaiting_recipient`) and only the recipient's own
+inbound grant reopens that door (16); and an affiliation's `person_id` must be
+a person card, its `company_id` a company card, never the same card, on INSERT
+and UPDATE alike, with a channel's `owner_type` held to its card's
+`entity_kind` and the legacy-pointer binding standing down rather than raising
+through it (17).
+
 ### Deno tests
 
 ```
-$ deno test --allow-all --config supabase/functions/deno.json supabase/functions/_shared/sms.test.ts
-ok | 26 passed | 0 failed (42ms)
-
-$ deno test --allow-all --config supabase/functions/deno.json supabase/functions/_tests/sms-inbound.test.ts
-ok | 32 passed | 0 failed (26ms)
+$ deno test --no-check --allow-all --config supabase/functions/deno.json \
+    supabase/functions/_shared/sms.test.ts supabase/functions/_tests/sms-inbound.test.ts
+ok | 61 passed | 0 failed (90ms)     # 29 in sms.test.ts, 32 in sms-inbound.test.ts
 
 $ deno test --no-check --allow-all --config supabase/functions/deno.json \
     supabase/functions/_tests/ supabase/functions/_shared/
-FAILED | 681 passed | 1 failed (3s)
+FAILED | 684 passed | 1 failed (3s)
   ./supabase/functions/_tests/stripe-rail.test.ts (uncaught error)
     error: (in promise) Error: supabaseKey is required.
 ```
@@ -430,6 +547,14 @@ a consent record but no party row; START lifts a seatless `opted_out` record but
 leaves a seatless `not_asked` one alone; a STOP re-homes `origin_project_id`
 onto the job it came from.
 
+**r3r2**: `_shared/sms.test.ts` — the flush's SECOND gate is the deferred
+row's own party: an unrelated studio's opted-out row no longer suppresses the
+owning studio's granted send, an unrelated studio's granted row no longer
+carries a send for a studio that never asked (a real outbound SMS before this),
+and with no party on the deferred row the phone-global reduction still refuses
+a STOP. Both failing directions were confirmed against the pre-fix code
+(2 failed) before the narrowing landed.
+
 **r3**: `_shared/sms.test.ts` — with no record, an opted-out sibling party row
 **in the same studio** still blocks, another studio's does not, and with no
 resolvable studio at all any opted-out row on the number still blocks (R-AK);
@@ -458,9 +583,13 @@ both reproduce on HEAD with my edits stashed. Pre-existing — the suites run
 ```
 $ SUPABASE_DB_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres pnpm db:generate
 $ git diff --stat 700261663 -- packages/supabase/src/database.types.ts
- packages/supabase/src/database.types.ts | 461 ++++++++++++++++++++++++++++++++
- 1 file changed, 461 insertions(+)
+ packages/supabase/src/database.types.ts | 465 ++++++++++++++++++++++++++++++++
+ 1 file changed, 465 insertions(+)
 ```
+
+Re-running `db:generate` after the r3r2 round leaves the committed file
+unchanged (`git diff --stat packages/supabase/src/database.types.ts` → empty):
+both new guards are trigger functions, adding no column and no signature.
 
 465 insertions, **zero deletions**. New table types `studio_channel_consent`,
 `studio_contact_channels`, `studio_contact_rules`,
@@ -501,16 +630,24 @@ deploys.)
 
 - **Not applied to Strata.** No `supabase db push`, no `supabase functions
   deploy`, no `.env.local` repoint. Local only.
-- **Migration numbers are provisional, and there is a live collision.** The
-  local Postgres arrived carrying `00592_time_entry_claim_and_source`,
-  `00593_project_unbilled_time_repair` and `00594_time_entry_auto_roster` in
-  `supabase_migrations.schema_migrations` — another wave's branch has already
-  minted 00592–00594 somewhere. Those files do not exist in this worktree, so
-  this worktree's head really is 00591 and the reset replaced them wholesale.
-  **At integration, expect to renumber this wave's three files** (filename plus
-  the internal banner number and cross-references) against the target tip, per
-  patina-parallel-work. Nothing here is applied to prod, so this side is the one
-  that moves.
+- **Migration numbers are provisional, but nothing collides today.** Scanned
+  across all 140 local and remote refs
+  (`git ls-tree --name-only <ref> supabase/migrations/ | grep 0059[2-4]`), the
+  only refs holding 00592–00594 are this wave's own branch and its origin
+  mirror; `origin/main`'s migration tip is still `00591_notification_log_delivery`.
+  The hour-tracking wave, which earlier held these numbers, has moved up:
+  `hour-tracking/integration` now carries `00595/00596/00597_time_entry_*` and
+  `hour-tracking/server` carries those plus `00598_studio_member_rates` and
+  `00599_resolve_time_rate_cents`. (The stale
+  `00592_time_entry_claim_and_source` / `00593_project_unbilled_time_repair` /
+  `00594_time_entry_auto_roster` rows this report earlier read out of the local
+  `supabase_migrations.schema_migrations` were that wave's older numbering left
+  behind in the shared local stack; the reset replaced them, and the ledger now
+  reads `00592_people_cards_affiliations_rules`,
+  `00593_studio_contact_channels`, `00594_studio_channel_consent`.) **Re-check
+  the integration tip at merge and renumber if it has moved** — numbers stay
+  provisional until then, per patina-parallel-work. Nothing here is applied to
+  prod, so this side is the one that moves.
 - **The backfills found nothing locally (0 channels, 0 consent rows).**
   Migrations run before seeds, so `studio_contacts` and `project_parties` were
   empty when 00593/00594 executed. The fold logic is proven by the SQL test
