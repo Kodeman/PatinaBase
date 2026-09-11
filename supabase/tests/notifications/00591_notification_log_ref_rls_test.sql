@@ -30,8 +30,10 @@
 --      held table-wide INSERT/UPDATE/DELETE — so an unfiltered anon UPDATE
 --      could have repointed every row's ref at one readable invoice.
 --   7. The proposal leg stamps itself: _sync_proposal_send_email_log and
---      sync_proposal_send_in_app_log both write ref_type/ref_id, the studio
---      co-member sees the email row, and an unrelated designer does not.
+--      sync_proposal_send_in_app_log both write ref_type/ref_id, the email
+--      row reports 'sent' (accept) rather than 'delivered' for a dispatch in
+--      state 'delivered', the studio co-member sees the email row, and an
+--      unrelated designer does not.
 --   8. An unrelated authenticated user (the outsider studio's owner) sees
 --      none of it.
 --   9. 00591 also drops NOT NULL on user_id, so a letter to a recipient with
@@ -39,6 +41,11 @@
 --      row: the studio sees it through the ref policy, the addressee-by-email
 --      does not (the owner policy's auth.uid() = user_id is NULL, never
 --      TRUE), and anon does not.
+--  10. The backfill never stamps a STUDIO-addressed row. Designer and
+--      co-member notices carrying the same metadata.invoice_id stay
+--      unstamped; the client's letter and the account-less recipient's letter
+--      are stamped. Otherwise a delivered internal notice would become the
+--      document's delivery record and mask a bounced client letter.
 --
 -- NOTE ON STYLE: supabase/tests/** is not pgTAP. Plain psql script — BEGIN,
 -- fixtures (written as postgres, RLS-exempt), pg_temp role-assumption
@@ -391,6 +398,7 @@ DO $$
 DECLARE
   v_type text;
   v_id uuid;
+  v_status public.notification_status;
   v_seen boolean;
 BEGIN
   -- 7a. the email row carries the stamp
@@ -403,6 +411,17 @@ BEGIN
   ASSERT v_id = 'b0000000-0000-0000-0000-000000000001',
     'FAIL 7a: _sync_proposal_send_email_log must stamp ref_id = the proposal id, got: '
     || COALESCE(v_id::text, 'NULL');
+
+  -- 7a2. …and reports ACCEPT, not delivery. The fixture dispatch is in state
+  --      'delivered', which proposal-send sets on Resend's 2xx; the email row
+  --      must therefore read 'sent'. Only resend-webhook's email.delivered
+  --      event may write 'delivered' (its upgrade-from set includes 'sent').
+  SELECT status INTO v_status
+    FROM public.notification_log
+   WHERE id = 'e9080000-0000-4000-8000-00000000000e';
+  ASSERT v_status = 'sent',
+    'FAIL 7a2: a dispatch in state ''delivered'' must yield notification_log status ''sent'', got: '
+    || COALESCE(v_status::text, 'NULL');
 
   -- 7b. so does the in-app row (F5)
   SELECT ref_type, ref_id INTO v_type, v_id
@@ -467,6 +486,103 @@ BEGIN
 END $$;
 
 ROLLBACK TO SAVEPOINT s_outsider;
+
+-- ─── the backfill never stamps a studio-addressed row ───────────────────────
+-- The portal reads the latest ref-stamped row per document as that document's
+-- delivery record, so a delivered designer notice carrying the same
+-- invoice_id in metadata must not be allowed to mask a bounced client letter.
+
+SAVEPOINT s_backfill;
+
+INSERT INTO public.notification_log (id, user_id, type, channel, status, ref_type, ref_id, metadata)
+VALUES
+  -- the client's letter: must be stamped
+  ('e9090000-0000-4000-8000-000000000010', 'a0000000-0000-0000-0000-000000000005',
+   'invoice_sent', 'email', 'sent', NULL, NULL,
+   jsonb_build_object('invoice_id', 'e9030000-0000-4000-8000-00000000000a')),
+  -- the designer's own back-office notice: must be left alone
+  ('e9090000-0000-4000-8000-000000000011', 'a0000000-0000-0000-0000-000000000004',
+   'invoice_ar_flagged', 'email', 'sent', NULL, NULL,
+   jsonb_build_object('invoice_id', 'e9030000-0000-4000-8000-00000000000a')),
+  -- a notice to a CO-MEMBER of the same studio: must also be left alone
+  ('e9090000-0000-4000-8000-000000000012', 'a0000000-0000-0000-0000-000000000003',
+   'invoice_check_intent', 'email', 'sent', NULL, NULL,
+   jsonb_build_object('invoice_id', 'e9030000-0000-4000-8000-00000000000a')),
+  -- the account-less recipient: must be stamped (that is the whole point of
+  -- the nullable user_id)
+  ('e9090000-0000-4000-8000-000000000013', NULL,
+   'invoice_sent', 'email', 'sent', NULL, NULL,
+   jsonb_build_object('invoice_id', 'e9030000-0000-4000-8000-00000000000a'))
+ON CONFLICT (id) DO NOTHING;
+
+-- The invoice metadata leg of 00591's backfill, verbatim. KEEP IN SYNC with
+-- the migration: this test is only meaningful if it runs the same statement.
+UPDATE public.notification_log n
+SET ref_type = 'invoice',
+    ref_id = i.id
+FROM public.invoices i
+WHERE n.ref_type IS NULL
+  AND n.channel = 'email'
+  AND i.id = CASE
+      WHEN n.metadata->>'invoice_id' ~*
+        '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+      THEN (n.metadata->>'invoice_id')::uuid
+    END
+  AND n.user_id IS DISTINCT FROM i.designer_id
+  AND NOT EXISTS (
+    SELECT 1
+    FROM public.organization_members me
+    JOIN public.organization_members ownr
+      ON ownr.organization_id = me.organization_id
+    JOIN public.organizations org
+      ON org.id = me.organization_id AND org.status = 'active'
+    WHERE me.user_id = n.user_id
+      AND me.status = 'active' AND me.role <> 'guest'
+      AND ownr.user_id = i.designer_id
+      AND ownr.status = 'active' AND ownr.role <> 'guest'
+  );
+
+DO $$
+DECLARE
+  v_type text;
+  v_id uuid;
+BEGIN
+  -- 10a. the client-addressed letter IS stamped
+  SELECT ref_type, ref_id INTO v_type, v_id
+    FROM public.notification_log
+   WHERE id = 'e9090000-0000-4000-8000-000000000010';
+  ASSERT v_type = 'invoice' AND v_id = 'e9030000-0000-4000-8000-00000000000a',
+    'FAIL 10a: the client-addressed invoice_sent row must be stamped, got ref_type='
+    || COALESCE(v_type, 'NULL') || ' ref_id=' || COALESCE(v_id::text, 'NULL');
+
+  -- 10b. the designer's own invoice_ar_flagged row is NOT
+  SELECT ref_type, ref_id INTO v_type, v_id
+    FROM public.notification_log
+   WHERE id = 'e9090000-0000-4000-8000-000000000011';
+  ASSERT v_type IS NULL AND v_id IS NULL,
+    'FAIL 10b: the designer-addressed invoice_ar_flagged row must be left unstamped, got ref_type='
+    || COALESCE(v_type, 'NULL') || ' ref_id=' || COALESCE(v_id::text, 'NULL');
+
+  -- 10c. nor is the co-member's
+  SELECT ref_type, ref_id INTO v_type, v_id
+    FROM public.notification_log
+   WHERE id = 'e9090000-0000-4000-8000-000000000012';
+  ASSERT v_type IS NULL AND v_id IS NULL,
+    'FAIL 10c: the co-member-addressed invoice_check_intent row must be left unstamped, got ref_type='
+    || COALESCE(v_type, 'NULL') || ' ref_id=' || COALESCE(v_id::text, 'NULL');
+
+  -- 10d. the account-less recipient's letter IS stamped
+  SELECT ref_type, ref_id INTO v_type, v_id
+    FROM public.notification_log
+   WHERE id = 'e9090000-0000-4000-8000-000000000013';
+  ASSERT v_type = 'invoice' AND v_id = 'e9030000-0000-4000-8000-00000000000a',
+    'FAIL 10d: the account-less invoice_sent row must be stamped, got ref_type='
+    || COALESCE(v_type, 'NULL') || ' ref_id=' || COALESCE(v_id::text, 'NULL');
+
+  RAISE NOTICE '00591 backfill studio-row exclusion: PASSED';
+END $$;
+
+ROLLBACK TO SAVEPOINT s_backfill;
 
 DO $$ BEGIN RAISE NOTICE '00591 notification_log ref RLS + anon lockdown: ALL PASSED'; END $$;
 

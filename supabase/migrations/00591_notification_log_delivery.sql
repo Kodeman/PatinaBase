@@ -54,8 +54,10 @@
 --   F2  the four symmetric ref policies collapse into one studio policy (2).
 --   F3  the backfill now joins on the deterministic email_log_id links
 --       (client_invitations 00581, proposal_send_dispatches 00388) before
---       falling back to metadata, and every leg is scoped `channel = 'email'`
---       to match the partial index.
+--       falling back to metadata, every leg is scoped `channel = 'email'` to
+--       match the partial index, and no leg stamps a STUDIO-addressed row
+--       (see the backfill's own note — a delivered internal notice must not
+--       be able to mask a bounced client letter about the same document).
 --
 -- ref_type vocabulary: 'invoice' (public.invoices), 'client_invitation'
 -- (public.client_invitations), 'client_review' (public.client_reviews),
@@ -66,8 +68,9 @@
 --
 -- Lineage of _sync_proposal_send_email_log: created 00388 → this file (adds
 -- ref_type/ref_id to the INSERT column list, VALUES, and ON CONFLICT UPDATE
--- SET only — everything else is the 00388 body verbatim, confirmed as the
--- sole prior definition via
+-- SET, and remaps the dispatch state 'delivered' to notification_status
+-- 'sent' — see the CASE's own note; everything else is the 00388 body
+-- verbatim, confirmed as the sole prior definition via
 --   grep -rln "CREATE OR REPLACE FUNCTION[^(]*_sync_proposal_send_email_log" \
 --     supabase/migrations/*.sql).
 -- Lineage of sync_proposal_send_in_app_log: 00388 → 00534 → this file (same
@@ -172,6 +175,28 @@ CREATE INDEX IF NOT EXISTS notification_log_provider_id_idx
 -- Every leg is scoped `channel = 'email'`: notification_log_ref_idx and the
 -- ref SELECT policy are both email-only, so stamping an in_app/push/sms row
 -- buys nothing and would only widen what the CHECKs below have to hold.
+--
+-- STUDIO-SIDE ROWS ARE NEVER STAMPED. The portal reads the latest ref-stamped
+-- row per document as THAT DOCUMENT'S delivery record, and several
+-- designer-addressed notices already carry the document's id in metadata —
+-- invoice_ar_flagged, invoice_check_intent, invoice_payment_refunded on the
+-- invoice side; commercial_client_signed, commercial_furnishings_executed on
+-- the proposal side. Stamping one of those would let a delivered internal
+-- notice mask a bounced client letter about the same invoice. So every leg
+-- excludes a recipient who is the document's own designer OR any active
+-- non-guest member of an active organization that designer belongs to.
+--
+-- That NOT EXISTS is public.is_studio_comember's body (00315 → 00556) with
+-- auth.uid() replaced by n.user_id; it cannot be called directly because it
+-- is SECURITY DEFINER over the CURRENT session's uid, not an arbitrary one.
+-- Over-exclusion fails safe: an unstamped row simply has no delivery record,
+-- where a wrongly-stamped one reports the wrong outcome.
+--
+-- The guard rides the two join-based legs too. Their targets are the external
+-- recipient by construction (client_invitations.email_log_id IS the letter to
+-- the invitee; proposal_send_dispatches.email_log_id IS the letter to the
+-- client), so it should never fire there — it is there so no future leg
+-- inherits an unguarded shape.
 
 UPDATE public.notification_log n
 SET ref_type = 'client_invitation',
@@ -179,7 +204,20 @@ SET ref_type = 'client_invitation',
 FROM public.client_invitations ci
 WHERE ci.email_log_id = n.id
   AND n.ref_type IS NULL
-  AND n.channel = 'email';
+  AND n.channel = 'email'
+  AND n.user_id IS DISTINCT FROM ci.designer_id
+  AND NOT EXISTS (
+    SELECT 1
+    FROM public.organization_members me
+    JOIN public.organization_members ownr
+      ON ownr.organization_id = me.organization_id
+    JOIN public.organizations org
+      ON org.id = me.organization_id AND org.status = 'active'
+    WHERE me.user_id = n.user_id
+      AND me.status = 'active' AND me.role <> 'guest'
+      AND ownr.user_id = ci.designer_id
+      AND ownr.status = 'active' AND ownr.role <> 'guest'
+  );
 
 UPDATE public.notification_log n
 SET ref_type = 'proposal',
@@ -187,28 +225,78 @@ SET ref_type = 'proposal',
 FROM public.proposal_send_dispatches d
 WHERE d.email_log_id = n.id
   AND n.ref_type IS NULL
-  AND n.channel = 'email';
+  AND n.channel = 'email'
+  AND n.user_id IS DISTINCT FROM d.designer_id
+  AND NOT EXISTS (
+    SELECT 1
+    FROM public.organization_members me
+    JOIN public.organization_members ownr
+      ON ownr.organization_id = me.organization_id
+    JOIN public.organizations org
+      ON org.id = me.organization_id AND org.status = 'active'
+    WHERE me.user_id = n.user_id
+      AND me.status = 'active' AND me.role <> 'guest'
+      AND ownr.user_id = d.designer_id
+      AND ownr.status = 'active' AND ownr.role <> 'guest'
+  );
 
--- Fallback legs. Only cast metadata text to uuid where it is actually a valid
--- uuid literal — a malformed or absent key must not abort the backfill.
+-- Fallback legs. These now JOIN the referenced document rather than trusting
+-- the metadata literal: the join is what supplies designer_id for the guard,
+-- and it drops a dangling id (a document since deleted) instead of stamping a
+-- ref that points at nothing. The uuid cast sits inside a CASE so it is only
+-- attempted on a well-formed literal — CASE is one of the few constructs
+-- whose evaluation order Postgres guarantees, so a malformed or absent key
+-- yields NULL instead of aborting the backfill.
 
-UPDATE public.notification_log
+UPDATE public.notification_log n
 SET ref_type = 'invoice',
-    ref_id = (metadata->>'invoice_id')::uuid
-WHERE ref_type IS NULL
-  AND channel = 'email'
-  AND metadata->>'invoice_id' IS NOT NULL
-  AND metadata->>'invoice_id' ~*
-    '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
+    ref_id = i.id
+FROM public.invoices i
+WHERE n.ref_type IS NULL
+  AND n.channel = 'email'
+  AND i.id = CASE
+      WHEN n.metadata->>'invoice_id' ~*
+        '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+      THEN (n.metadata->>'invoice_id')::uuid
+    END
+  AND n.user_id IS DISTINCT FROM i.designer_id
+  AND NOT EXISTS (
+    SELECT 1
+    FROM public.organization_members me
+    JOIN public.organization_members ownr
+      ON ownr.organization_id = me.organization_id
+    JOIN public.organizations org
+      ON org.id = me.organization_id AND org.status = 'active'
+    WHERE me.user_id = n.user_id
+      AND me.status = 'active' AND me.role <> 'guest'
+      AND ownr.user_id = i.designer_id
+      AND ownr.status = 'active' AND ownr.role <> 'guest'
+  );
 
-UPDATE public.notification_log
+UPDATE public.notification_log n
 SET ref_type = 'proposal',
-    ref_id = (metadata->>'proposal_id')::uuid
-WHERE ref_type IS NULL
-  AND channel = 'email'
-  AND metadata->>'proposal_id' IS NOT NULL
-  AND metadata->>'proposal_id' ~*
-    '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
+    ref_id = p.id
+FROM public.proposals p
+WHERE n.ref_type IS NULL
+  AND n.channel = 'email'
+  AND p.id = CASE
+      WHEN n.metadata->>'proposal_id' ~*
+        '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+      THEN (n.metadata->>'proposal_id')::uuid
+    END
+  AND n.user_id IS DISTINCT FROM p.designer_id
+  AND NOT EXISTS (
+    SELECT 1
+    FROM public.organization_members me
+    JOIN public.organization_members ownr
+      ON ownr.organization_id = me.organization_id
+    JOIN public.organizations org
+      ON org.id = me.organization_id AND org.status = 'active'
+    WHERE me.user_id = n.user_id
+      AND me.status = 'active' AND me.role <> 'guest'
+      AND ownr.user_id = p.designer_id
+      AND ownr.status = 'active' AND ownr.role <> 'guest'
+  );
 
 -- ─── ref_type / ref_id integrity ────────────────────────────────────────────
 -- After the backfill, so VALIDATE reads a settled table. NOT VALID + a
@@ -271,8 +359,17 @@ BEGIN
       USING ERRCODE = 'no_data_found';
   END IF;
 
+  -- 00591 delta: proposal-send sets dispatch state 'delivered' on Resend's
+  -- ACCEPT (a 2xx), which is not delivery. notification_log's convention
+  -- (00552) is that 'sent' means accepted and 'delivered' is written ONLY by
+  -- resend-webhook's email.delivered event — whose upgrade-from set includes
+  -- 'sent', so the row still reaches 'delivered' the moment Resend confirms.
+  -- Writing 'delivered' here reported every accepted proposal letter as
+  -- delivered and made a later bounce invisible. Historical rows already at
+  -- 'delivered' are deliberately left alone: there is no way to tell, after
+  -- the fact, which of them a webhook actually confirmed.
   v_log_status := CASE v_dispatch.state
-    WHEN 'delivered' THEN 'delivered'::public.notification_status
+    WHEN 'delivered' THEN 'sent'::public.notification_status
     WHEN 'suppressed' THEN 'suppressed'::public.notification_status
     WHEN 'failed' THEN 'failed'::public.notification_status
     WHEN 'unconfirmed' THEN v_dispatch.state::public.notification_status
