@@ -26,12 +26,27 @@
 --       · the no-authority-covering-started_at branch (00578:2694-2700) — the
 --         caller's rate used to survive here too.
 --       · the no-rate branch (00578:2765-2772) — which NULLED rate and amount
---         and stranded the row for ever, because the addendum promotion filter
---         (00577:2493-2496) requires both non-NULL. It now carries the studio
---         rate and stays pending_authorization, so a later signed addendum can
---         promote it.
+--         and stranded the row for ever. It now carries the studio rate and stays
+--         pending_authorization, so the row PRINTS HONESTLY instead of reading
+--         NULL. **It is NOT promotable** — see the W1-R1-04 correction below.
 --     On the authority branch the classifier's own bound/selected rate still
 --     wins and rate_source is stamped 'authority'.
+--
+--  W1-R1-04 CORRECTION (review round 1). An earlier revision of this banner, and
+--  plan-v2 §2's Done-when #4, claimed the repaired row "stays
+--  pending_authorization, so a later signed addendum can promote it". IT CANNOT.
+--  Every promotion loop in the lineage (00412:1138 → 00414:913 → 00475:892 →
+--  00511:4596 → 00566:843 → 00575:1845 → 00578:6610) JOINs
+--  project_billing_authorities ON prior_authority.id = entry.billing_authority_id
+--  and requires entry.authority_rate_id IS NOT NULL; this branch sets BOTH to
+--  NULL. Measured: the repaired row reads rate=15000 amount=30000
+--  state=pending_authorization src=studio_member billing_authority_id=NULL, and
+--  the real promotion predicate selects 0 rows. What the repair delivers is the
+--  money printing honestly on the ledger and in the composer, NOT promotability.
+--  Making such a row promotable means a new promotion arm inside the signed
+--  countersign ceremony — governance, not a fix-round code change. Recorded as
+--  OWED RULING HT-6-b beside HT-6-a, and pinned as a deliberate assert in
+--  supabase/tests/billing/time_rate_resolution_test.sql case (c).
 --  3. rated_amount_cents is owned on every branch — it was nullable-and-
 --     caller-supplied on the non-services branch whenever duration or rate was
 --     NULL, which is why 00600's INSERT branch rejects a supplied value.
@@ -52,6 +67,12 @@
 -- ('pending_authorization') plus rate_source ('none'), which is what the row
 -- prints. Downgrading billable to false would make the row NON-promotable by a
 -- later addendum, defeating delta 2's own repair.
+--
+-- REVIEW ROUND 1, the other two repairs in this file:
+--  · W1-R1-02 — the NOT NEW.billable branch must never overwrite a BOUND row's
+--    signed rate. See the comment on that branch.
+--  · W1-R1-03 — delta 1 validates only a NEW role pick, not every fire. See the
+--    comment on delta 1.
 --
 -- Reconciles: nothing reverted — the body is 00578's, verbatim, this session.
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -99,7 +120,16 @@ BEGIN
   END IF;
 
   -- ── 00601 delta 1: HT-41's role pick is validated, never trusted ─────────
-  IF NEW.rate_role IS NOT NULL THEN
+  -- W1-R1-03: only a NEW pick. The first revision validated on EVERY fire, so the
+  -- moment the owner removed the roster seat a recorded role came from, every
+  -- guarded edit to that entry raised — and rate_role itself cannot be changed
+  -- (aab_ refuses it for any non-postgres caller), so the row was frozen with no
+  -- escape but DELETE. HT-25-a's cross-role re-seat makes exactly that churn the
+  -- expected case. Measured before the fix: a member's own duration correction
+  -- raised 'rate_role vendor is not a role this member holds on the project' and
+  -- the stored duration stayed 60.
+  IF NEW.rate_role IS NOT NULL
+     AND (TG_OP = 'INSERT' OR NEW.rate_role IS DISTINCT FROM OLD.rate_role) THEN
     IF NOT (
       (
         NEW.rate_role = 'lead_designer'
@@ -154,8 +184,21 @@ BEGIN
 
   IF NOT NEW.billable THEN
     NEW.billing_state := 'nonbillable';
-    NEW.hourly_rate_cents := v_rate_cents;   -- 00601: discarded, not kept
-    NEW.rate_source := v_rate_source;
+    -- W1-R1-02: a BOUND row's signed rate is never overwritten here. The first
+    -- revision stamped the resolver's answer on this branch before the bound-row
+    -- handling below could keep OLD.hourly_rate_cents, and `billable` is not in
+    -- aab_'s watched list so nothing could catch it. Measured: a $300/h hour bound
+    -- to a one-card authority came back from a plain billable off/on round trip
+    -- priced at the $150/h studio rate with rate_source still claiming
+    -- 'authority' — and claim_time_entries would then invoice-lock that number.
+    -- 00578 never touched hourly_rate_cents on this branch at all.
+    IF TG_OP = 'INSERT' OR OLD.billing_authority_id IS NULL THEN
+      NEW.hourly_rate_cents := v_rate_cents;   -- 00601: discarded, not kept
+      NEW.rate_source := v_rate_source;
+    ELSE
+      NEW.hourly_rate_cents := OLD.hourly_rate_cents;
+      NEW.rate_source := OLD.rate_source;
+    END IF;
     NEW.rated_amount_cents := CASE WHEN NEW.duration_minutes IS NULL THEN NULL ELSE 0 END;
     RETURN NEW;
   END IF;
@@ -384,6 +427,16 @@ BEGIN
   END IF;
   IF v_src !~ 'COALESCE\(v_project_ceiling_cents, v_authority.billing_ceiling_cents\) IS NULL' THEN
     RAISE EXCEPTION '00601: 00575''s nullable-ceiling (F-2) delta was lost';
+  END IF;
+
+  -- ── review round 1 ───────────────────────────────────────────────────────
+  -- W1-R1-02: the non-billable branch must not re-price a bound row.
+  IF v_src !~ 'NEW\.hourly_rate_cents := OLD\.hourly_rate_cents' THEN
+    RAISE EXCEPTION '00601: the non-billable branch must preserve a bound row''s signed rate (W1-R1-02)';
+  END IF;
+  -- W1-R1-03: the role pick is validated only when it is NEW.
+  IF v_src !~ 'NEW\.rate_role IS DISTINCT FROM OLD\.rate_role' THEN
+    RAISE EXCEPTION '00601: rate_role must be validated only on a NEW pick, or a removed roster seat freezes the entry (W1-R1-03)';
   END IF;
 END
 $postcondition$;

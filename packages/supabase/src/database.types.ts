@@ -24605,6 +24605,7 @@ export type Database = {
           hourly_rate_cents: number
           id: string
           studio_id: string
+          updated_at: string
           user_id: string
         }
         Insert: {
@@ -24615,6 +24616,7 @@ export type Database = {
           hourly_rate_cents: number
           id?: string
           studio_id: string
+          updated_at?: string
           user_id: string
         }
         Update: {
@@ -24625,6 +24627,7 @@ export type Database = {
           hourly_rate_cents?: number
           id?: string
           studio_id?: string
+          updated_at?: string
           user_id?: string
         }
         Relationships: [

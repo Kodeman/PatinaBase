@@ -85,12 +85,17 @@ BEGIN;
 INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, instance_id, aud, role)
 VALUES
   ('a7200000-0000-4000-8000-000000000001', 'unbilled-designer@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
-  ('a7200000-0000-4000-8000-000000000002', 'unbilled-vendor@test.invalid',   '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+  ('a7200000-0000-4000-8000-000000000002', 'unbilled-vendor@test.invalid',   '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  -- Review round 1 (W1-R1-16): an active studio member who logs through the LIVE
+  -- write path, so case (b)'s reconciliation is proved against a SERVER-RATED row
+  -- and not only against pre-W1 snapshots written with the classifier disabled.
+  ('a7200000-0000-4000-8000-000000000003', 'unbilled-member@test.invalid',   '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
 
 INSERT INTO profiles (id, email, full_name, created_at, updated_at)
 VALUES
   ('a7200000-0000-4000-8000-000000000001', 'unbilled-designer@test.invalid', 'Unbilled Designer', NOW(), NOW()),
-  ('a7200000-0000-4000-8000-000000000002', 'unbilled-vendor@test.invalid',   'Unbilled Vendor',   NOW(), NOW())
+  ('a7200000-0000-4000-8000-000000000002', 'unbilled-vendor@test.invalid',   'Unbilled Vendor',   NOW(), NOW()),
+  ('a7200000-0000-4000-8000-000000000003', 'unbilled-member@test.invalid',   'Unbilled Member',   NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 UPDATE profiles SET is_designer = true WHERE id = 'a7200000-0000-4000-8000-000000000001';
 
@@ -100,7 +105,17 @@ VALUES ('a7200000-0000-4000-8000-0000000000a1', 'design_studio', 'Unbilled Studi
 -- The designer owns the studio. The vendor is DELIBERATELY not a member of it.
 INSERT INTO organization_members (id, user_id, organization_id, role, status, joined_at)
 VALUES ('a7200000-0000-4000-8000-0000000000c1', 'a7200000-0000-4000-8000-000000000001',
-        'a7200000-0000-4000-8000-0000000000a1', 'owner', 'active', NOW());
+        'a7200000-0000-4000-8000-0000000000a1', 'owner', 'active', NOW()),
+       ('a7200000-0000-4000-8000-0000000000c3', 'a7200000-0000-4000-8000-000000000003',
+        'a7200000-0000-4000-8000-0000000000a1', 'member', 'active', NOW());
+
+-- Her studio rate, so the classifier has an answer for her. Written as postgres:
+-- studio_member_rates' own authorization is asserted per role in
+-- supabase/tests/rls/studio_member_rates_test.sql, not here.
+INSERT INTO studio_member_rates (id, studio_id, user_id, hourly_rate_cents, effective_from, created_by)
+VALUES ('a7200000-0000-4000-8000-0000000000d3', 'a7200000-0000-4000-8000-0000000000a1',
+        'a7200000-0000-4000-8000-000000000003', 12000, CURRENT_DATE - 60,
+        'a7200000-0000-4000-8000-000000000001');
 
 INSERT INTO projects (id, name, designer_id, created_by)
 VALUES ('a7200000-0000-4000-8000-0000000000e1', 'Unbilled House',
@@ -282,6 +297,35 @@ END;
 $$ LANGUAGE plpgsql;
 GRANT EXECUTE ON FUNCTION pg_temp.reset_role() TO PUBLIC;
 
+-- ─── the LIVE-PATH sibling row (W1-R1-16) ──────────────────────────────────
+-- Case (b)'s two rows are written with aac_classify_project_time_entry_authority_trg
+-- DISABLED, which is the honest way to write a PRE-W1 snapshot — but it means case
+-- (b) no longer exercises a live write path and can no longer fail on a classifier
+-- regression. This row is the other half: the studio member logs it HERSELF,
+-- through every trigger, and the classifier rates it from her studio_member_rates
+-- row. 45 min at $120/h = 9000 cents, so (b1)'s reconciliation sweep now covers a
+-- server-rated row as well as two snapshots.
+DO $$
+BEGIN
+  PERFORM pg_temp.assume_user('a7200000-0000-4000-8000-000000000003');
+  INSERT INTO project_time_entries (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('a7200000-0000-4000-8000-0000000000b3', 'a7200000-0000-4000-8000-0000000000e1',
+          'a7200000-0000-4000-8000-000000000003', NOW() - INTERVAL '3 days', 45, true, 'manual_entry');
+  PERFORM pg_temp.reset_role();
+
+  ASSERT (SELECT hourly_rate_cents FROM project_time_entries
+           WHERE id = 'a7200000-0000-4000-8000-0000000000b3') = 12000,
+    'FAIL live0 (W1-R1-16): the live path must rate this row from studio_member_rates, got '
+    || COALESCE((SELECT hourly_rate_cents::text FROM project_time_entries
+                  WHERE id = 'a7200000-0000-4000-8000-0000000000b3'), 'NULL');
+  ASSERT (SELECT rate_source FROM project_time_entries
+           WHERE id = 'a7200000-0000-4000-8000-0000000000b3') = 'studio_member',
+    'FAIL live1 (W1-R1-16): the server-rated row must carry its provenance';
+
+  RAISE NOTICE 'time_unbilled_view_repair: live-path sibling row written.';
+END
+$$;
+
 -- ─── (a) the dropped-profiles-join payoff ──────────────────────────────────
 DO $$
 DECLARE
@@ -300,8 +344,9 @@ BEGIN
 
   PERFORM pg_temp.reset_role();
 
-  ASSERT v_rows = 2,
-    'FAIL a2: both vendor entries must appear in project_unbilled_time (the INNER JOIN on profiles dropped them), got ' || v_rows;
+  ASSERT v_rows = 3,
+    'FAIL a2: both vendor entries must appear in project_unbilled_time (the INNER JOIN on '
+    'profiles dropped them), alongside the live-path member row, got ' || v_rows;
 
   RAISE NOTICE 'time_unbilled_view_repair: case (a) passed.';
 END
@@ -333,6 +378,14 @@ BEGIN
   ASSERT v_rate = 0 AND v_amount = 0,
     'FAIL b4: a rate-less entry must read 0/0, not a legacy chain value, got '
     || COALESCE(v_rate::text, 'NULL') || '/' || COALESCE(v_amount::text, 'NULL');
+
+  -- W1-R1-16: the same reconciliation, on the row the LIVE path rated.
+  SELECT resolved_rate_cents, amount_cents INTO v_rate, v_amount
+  FROM project_unbilled_time WHERE id = 'a7200000-0000-4000-8000-0000000000b3';
+  ASSERT v_rate = 12000 AND v_amount = 9000,
+    'FAIL b5 (W1-R1-16): the server-rated row must print the rate that priced it — 45 min at '
+    '12000/h is 9000 cents; got ' || COALESCE(v_rate::text, 'NULL') || '/'
+    || COALESCE(v_amount::text, 'NULL');
 
   PERFORM pg_temp.reset_role();
 

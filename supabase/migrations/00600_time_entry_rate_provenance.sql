@@ -98,7 +98,11 @@ COMMENT ON COLUMN public.project_time_entries.rate_source IS
 COMMENT ON COLUMN public.project_time_entries.rate_role IS
   'HT-41: the roster role that priced this hour, when the member holds more '
   'than one. Caller-suppliable on INSERT and validated by the classifier '
-  'against the member''s live project_team_members rows; immutable afterwards.';
+  'against the member''s live project_team_members rows. IMMUTABLE afterwards: '
+  'aab_guard_commercial_time_entry_derived_fields_trg raises for every '
+  'non-postgres caller, so a member cannot change her pick — she deletes the '
+  'entry and logs it again. It is in the aac_ watched list only so a postgres-'
+  'side rail can re-price the hour (W1-R1-10).';
 
 -- ── The guard, grafted from 00412:2344-2384 with the three deltas ──────────
 CREATE OR REPLACE FUNCTION public.guard_commercial_time_entry_derived_fields()
@@ -174,8 +178,13 @@ ON public.project_time_entries
 FOR EACH ROW EXECUTE FUNCTION public.guard_commercial_time_entry_derived_fields();
 
 -- 00578 redefined the classifier FUNCTION but not its trigger, so this list is
--- still 00412:2623-2624's. rate_role joins it: a member changing their role pick
--- must re-price the hour (00601 validates the new role and re-resolves).
+-- still 00412:2623-2624's. rate_role joins it so that a POSTGRES-SIDE rail which
+-- re-points the role also re-prices the hour. A caller cannot change rate_role at
+-- all: aab_ above raises for every non-postgres actor on any rate_role edit, so
+-- the column is caller-suppliable on INSERT and immutable afterwards.
+-- (Corrected in review round 1, W1-R1-10: this comment previously read "a member
+-- changing their role pick must re-price the hour", which is not a thing a member
+-- can do — and that false premise is what W1-R1-03's bug was built on.)
 DROP TRIGGER IF EXISTS aac_classify_project_time_entry_authority_trg
   ON public.project_time_entries;
 CREATE TRIGGER aac_classify_project_time_entry_authority_trg

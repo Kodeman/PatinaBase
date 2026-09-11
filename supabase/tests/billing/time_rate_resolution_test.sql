@@ -25,6 +25,30 @@
 --   (i) P-4 — an UPDATE of a legacy row whose rate the chain cannot explain
 --       KEEPS its amount (the write-down 00596 taught us to look for).
 --
+-- REVIEW ROUND 1 added five cases. This file is the ONLY real gate for the
+-- classifier rewrite (W1-R1-15: all six red supabase/tests/commercial files are
+-- pre-existing failures that abort inside
+-- _countersign_design_services_agreement_impl BEFORE any authority-rate assert,
+-- so "commercial green unchanged" is never coverage of this path):
+--   (j) W1-R1-02 — a BOUND row's signed rate survives a `billable` off/on round
+--       trip. The classifier used to stamp the resolver's answer on the
+--       non-billable branch before the bound-row handling could keep
+--       OLD.hourly_rate_cents, and `billable` is not in aab_'s watched list, so a
+--       signed hour could be silently re-priced and then invoice-locked.
+--       Also carries (j0), W1-R1-07's comparison: on a ONE-CARD authority the
+--       resolver's own answer equals the rate the classifier stored.
+--   (k) W1-R1-03 — after the owner removes the roster seat a recorded rate_role
+--       came from, the member can still correct her own un-invoiced entry, and
+--       the recorded rate_role survives. Validating on every fire froze the row.
+--   (l) W1-R1-01 — the RPC boundary: a caller with NO relationship to the project
+--       cannot pull its signed rate cards out of the GRANTed DEFINER resolver, and
+--       a role the member does not hold raises there too.
+--   (m) W1-R1-05 — the project's own designer, a plain org member, can still
+--       correct a TEAMMATE's entry (the shipped `Designers manage their project
+--       time entries` ALL policy has no user_id leg); a plain studio member who
+--       is neither the designer nor an admin still cannot resolve someone else's
+--       rate. The first half was silently revoked by the first revision's assert.
+--
 -- Every write runs as the member under `SET LOCAL ROLE authenticated` + a JWT
 -- claim: the guard returns early for current_user = 'postgres' (00412:2354), so
 -- a test written as postgres would assert nothing.
@@ -64,13 +88,20 @@ INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, creat
 VALUES
   ('b1100000-0000-4000-8000-000000000001', 'rate-owner@test.invalid',  '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
   ('b1100000-0000-4000-8000-000000000002', 'rate-hire@test.invalid',   '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
-  ('b1100000-0000-4000-8000-000000000003', 'rate-twohat@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+  ('b1100000-0000-4000-8000-000000000003', 'rate-twohat@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  -- review round 1: a brand-new authenticated user with NO relationship to any of
+  -- these projects (W1-R1-01), and a project designer who is a PLAIN org member
+  -- rather than the studio's owner (W1-R1-05).
+  ('b1100000-0000-4000-8000-000000000004', 'rate-stranger@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('b1100000-0000-4000-8000-000000000005', 'rate-plaindes@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
 
 INSERT INTO public.profiles (id, email, full_name, is_designer, created_at, updated_at)
 VALUES
   ('b1100000-0000-4000-8000-000000000001', 'rate-owner@test.invalid',  'Rate Owner',  true,  NOW(), NOW()),
   ('b1100000-0000-4000-8000-000000000002', 'rate-hire@test.invalid',   'Rate Hire',   true,  NOW(), NOW()),
-  ('b1100000-0000-4000-8000-000000000003', 'rate-twohat@test.invalid', 'Rate Twohat', false, NOW(), NOW())
+  ('b1100000-0000-4000-8000-000000000003', 'rate-twohat@test.invalid', 'Rate Twohat', false, NOW(), NOW()),
+  ('b1100000-0000-4000-8000-000000000004', 'rate-stranger@test.invalid', 'Rate Stranger', false, NOW(), NOW()),
+  ('b1100000-0000-4000-8000-000000000005', 'rate-plaindes@test.invalid', 'Rate PlainDes', true,  NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO public.organizations (id, type, name, slug, status)
@@ -80,7 +111,12 @@ INSERT INTO public.organization_members (id, user_id, organization_id, role, sta
 VALUES
   ('b1100000-0000-4000-8000-0000000000c1', 'b1100000-0000-4000-8000-000000000001', 'b1100000-0000-4000-8000-0000000000a1', 'owner',  'active', NOW()),
   ('b1100000-0000-4000-8000-0000000000c2', 'b1100000-0000-4000-8000-000000000002', 'b1100000-0000-4000-8000-0000000000a1', 'member', 'active', NOW()),
-  ('b1100000-0000-4000-8000-0000000000c3', 'b1100000-0000-4000-8000-000000000003', 'b1100000-0000-4000-8000-0000000000a1', 'member', 'active', NOW());
+  ('b1100000-0000-4000-8000-0000000000c3', 'b1100000-0000-4000-8000-000000000003', 'b1100000-0000-4000-8000-0000000000a1', 'member', 'active', NOW()),
+  -- A plain 'member' on purpose (W1-R1-05): if she were owner or admin,
+  -- is_org_admin_or_owner would satisfy the resolver's second assert and the
+  -- designer leg under test would never be exercised. The stranger (…004) is in
+  -- NO organization at all.
+  ('b1100000-0000-4000-8000-0000000000c5', 'b1100000-0000-4000-8000-000000000005', 'b1100000-0000-4000-8000-0000000000a1', 'member', 'active', NOW());
 
 -- P1 plain (non-services) · P2 services, no card for the hire's role ·
 -- P3 services, cards named for both of the two-hat member's roles.
@@ -88,12 +124,17 @@ INSERT INTO public.projects (id, name, designer_id, created_by)
 VALUES
   ('b1100000-0000-4000-8000-0000000000e1', 'Plain House',    'b1100000-0000-4000-8000-000000000001', 'b1100000-0000-4000-8000-000000000001'),
   ('b1100000-0000-4000-8000-0000000000e2', 'Services House', 'b1100000-0000-4000-8000-000000000001', 'b1100000-0000-4000-8000-000000000001'),
-  ('b1100000-0000-4000-8000-0000000000e3', 'Two-hat House',  'b1100000-0000-4000-8000-000000000001', 'b1100000-0000-4000-8000-000000000001');
+  ('b1100000-0000-4000-8000-0000000000e3', 'Two-hat House',  'b1100000-0000-4000-8000-000000000001', 'b1100000-0000-4000-8000-000000000001'),
+  -- P4 services with exactly ONE rate card (the single-card fallback, W1-R1-07 /
+  -- W1-R1-02). P5 plain, owned by the plain-member designer (W1-R1-05).
+  ('b1100000-0000-4000-8000-0000000000e4', 'One-card House', 'b1100000-0000-4000-8000-000000000001', 'b1100000-0000-4000-8000-000000000001'),
+  ('b1100000-0000-4000-8000-0000000000e5', 'Plain-des House','b1100000-0000-4000-8000-000000000005', 'b1100000-0000-4000-8000-000000000005');
 
 INSERT INTO public.proposals (id, designer_id, title, status, document_kind)
 VALUES
   ('b1100000-0000-4000-8000-0000000000d2', 'b1100000-0000-4000-8000-000000000001', 'Services agreement', 'draft', 'design_services'),
-  ('b1100000-0000-4000-8000-0000000000d3', 'b1100000-0000-4000-8000-000000000001', 'Two-hat agreement',  'draft', 'design_services');
+  ('b1100000-0000-4000-8000-0000000000d3', 'b1100000-0000-4000-8000-000000000001', 'Two-hat agreement',  'draft', 'design_services'),
+  ('b1100000-0000-4000-8000-0000000000d4', 'b1100000-0000-4000-8000-000000000001', 'One-card agreement', 'draft', 'design_services');
 
 -- The proposals stay in 'draft': guard_commercial_authored_child (00412:633-654)
 -- forbids writing proposal_service_rates once a proposal leaves draft, and the
@@ -105,7 +146,10 @@ VALUES
   ('b1100000-0000-4000-8000-00000000f201', 'b1100000-0000-4000-8000-0000000000d2', 1, 'Principal',     30000, 0, NOW() - INTERVAL '20 days'),
   ('b1100000-0000-4000-8000-00000000f202', 'b1100000-0000-4000-8000-0000000000d2', 1, 'Junior',        10000, 1, NOW() - INTERVAL '20 days'),
   ('b1100000-0000-4000-8000-00000000f301', 'b1100000-0000-4000-8000-0000000000d3', 1, 'Lead designer', 25000, 0, NOW() - INTERVAL '20 days'),
-  ('b1100000-0000-4000-8000-00000000f302', 'b1100000-0000-4000-8000-0000000000d3', 1, 'Vendor',         9000, 1, NOW() - INTERVAL '20 days');
+  ('b1100000-0000-4000-8000-00000000f302', 'b1100000-0000-4000-8000-0000000000d3', 1, 'Vendor',         9000, 1, NOW() - INTERVAL '20 days'),
+  -- ONE card, and no role on the roster is named 'Principal': the classifier's
+  -- single-card fallback (00601:278-293) is the only thing that can bind this hour.
+  ('b1100000-0000-4000-8000-00000000f401', 'b1100000-0000-4000-8000-0000000000d4', 1, 'Principal',     30000, 0, NOW() - INTERVAL '20 days');
 
 INSERT INTO public.project_commercial_documents
   (id, project_id, proposal_id, document_kind, is_origin, created_by, executed_at)
@@ -113,6 +157,8 @@ VALUES
   ('b1100000-0000-4000-8000-00000000cd02', 'b1100000-0000-4000-8000-0000000000e2', 'b1100000-0000-4000-8000-0000000000d2',
    'design_services', true, 'b1100000-0000-4000-8000-000000000001', NOW() - INTERVAL '5 days'),
   ('b1100000-0000-4000-8000-00000000cd03', 'b1100000-0000-4000-8000-0000000000e3', 'b1100000-0000-4000-8000-0000000000d3',
+   'design_services', true, 'b1100000-0000-4000-8000-000000000001', NOW() - INTERVAL '5 days'),
+  ('b1100000-0000-4000-8000-00000000cd04', 'b1100000-0000-4000-8000-0000000000e4', 'b1100000-0000-4000-8000-0000000000d4',
    'design_services', true, 'b1100000-0000-4000-8000-000000000001', NOW() - INTERVAL '5 days');
 
 -- retainer_activation_policy 'immediate' so retainer gating is not what the
@@ -124,7 +170,9 @@ VALUES
   ('b1100000-0000-4000-8000-00000000ba02', 'b1100000-0000-4000-8000-0000000000e2', 'b1100000-0000-4000-8000-00000000cd02',
    'b1100000-0000-4000-8000-0000000000d2', 100000000, 0, 'immediate', 'monthly', NOW() - INTERVAL '5 days', 'active'),
   ('b1100000-0000-4000-8000-00000000ba03', 'b1100000-0000-4000-8000-0000000000e3', 'b1100000-0000-4000-8000-00000000cd03',
-   'b1100000-0000-4000-8000-0000000000d3', 100000000, 0, 'immediate', 'monthly', NOW() - INTERVAL '5 days', 'active');
+   'b1100000-0000-4000-8000-0000000000d3', 100000000, 0, 'immediate', 'monthly', NOW() - INTERVAL '5 days', 'active'),
+  ('b1100000-0000-4000-8000-00000000ba04', 'b1100000-0000-4000-8000-0000000000e4', 'b1100000-0000-4000-8000-00000000cd04',
+   'b1100000-0000-4000-8000-0000000000d4', 100000000, 0, 'immediate', 'monthly', NOW() - INTERVAL '5 days', 'active');
 
 INSERT INTO public.project_billing_authority_rates
   (id, billing_authority_id, source_rate_id, version, role_name, hourly_rate_cents)
@@ -132,7 +180,8 @@ VALUES
   ('b1100000-0000-4000-8000-00000000aa21', 'b1100000-0000-4000-8000-00000000ba02', 'b1100000-0000-4000-8000-00000000f201', 1, 'Principal',     30000),
   ('b1100000-0000-4000-8000-00000000aa22', 'b1100000-0000-4000-8000-00000000ba02', 'b1100000-0000-4000-8000-00000000f202', 1, 'Junior',        10000),
   ('b1100000-0000-4000-8000-00000000aa31', 'b1100000-0000-4000-8000-00000000ba03', 'b1100000-0000-4000-8000-00000000f301', 1, 'Lead designer', 25000),
-  ('b1100000-0000-4000-8000-00000000aa32', 'b1100000-0000-4000-8000-00000000ba03', 'b1100000-0000-4000-8000-00000000f302', 1, 'Vendor',         9000);
+  ('b1100000-0000-4000-8000-00000000aa32', 'b1100000-0000-4000-8000-00000000ba03', 'b1100000-0000-4000-8000-00000000f302', 1, 'Vendor',         9000),
+  ('b1100000-0000-4000-8000-00000000aa41', 'b1100000-0000-4000-8000-00000000ba04', 'b1100000-0000-4000-8000-00000000f401', 1, 'Principal',     30000);
 
 -- The two-hat member holds both roles on P3 (so 00597 seats nobody there).
 INSERT INTO public.project_team_members (id, project_id, user_id, role, assigned_by)
@@ -230,6 +279,7 @@ DECLARE
   v_amount INTEGER;
   v_state  TEXT;
   v_auth   UUID;
+  v_promotable INTEGER;
 BEGIN
   PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000000002');
   INSERT INTO public.project_time_entries
@@ -252,6 +302,32 @@ BEGIN
     '00577:2493-2496 promotion filter; expected 15000, got ' || COALESCE(v_amount::text, 'NULL');
   ASSERT v_state = 'pending_authorization',
     'FAIL c3: the hour is not authorized by a signed card, got ' || COALESCE(v_state, 'NULL');
+
+  -- W1-R1-04: what the repair delivers is HONEST MONEY, not promotability. The
+  -- real promotion predicate — every loop in the lineage, head 00578:6584-6602 —
+  -- JOINs project_billing_authorities ON prior_authority.id =
+  -- entry.billing_authority_id and requires entry.authority_rate_id IS NOT NULL,
+  -- and this branch sets both to NULL. The earlier revision of 00601's banner and
+  -- plan-v2 §2's Done-when #4 both claimed "a later signed addendum can promote
+  -- it"; it cannot. Pinned here as the shipped behaviour, and recorded as OWED
+  -- RULING HT-6-b. A ruling the other way is a new promotion arm inside the
+  -- countersign ceremony — not a code choice.
+  SELECT count(*) INTO v_promotable
+  FROM public.project_time_entries entry
+  JOIN public.project_billing_authorities prior_authority
+    ON prior_authority.id = entry.billing_authority_id
+  WHERE entry.id = 'b1100000-0000-4000-8000-0000000000b4'
+    AND entry.billing_state = 'pending_authorization'
+    AND entry.billable AND entry.duration_minutes IS NOT NULL
+    AND entry.rated_amount_cents IS NOT NULL
+    AND entry.authority_rate_id IS NOT NULL;
+  ASSERT v_promotable = 0,
+    'FAIL c4 (W1-R1-04, owed ruling HT-6-b): the repaired row is NOT promotable — if this '
+    'assert ever reads 1, the promotion predicate changed and HT-6-b was ruled; update the '
+    'banner in 00601 and Done-when #4 with it. Got ' || v_promotable;
+  ASSERT (SELECT authority_rate_id FROM public.project_time_entries
+           WHERE id = 'b1100000-0000-4000-8000-0000000000b4') IS NULL,
+    'FAIL c5: the unbound row carries no authority_rate_id — that is WHY it is not promotable';
 
   RAISE NOTICE 'time_rate_resolution: case (c) passed.';
 END
@@ -465,6 +541,251 @@ BEGIN
     || COALESCE(v_amount::text, 'NULL');
 
   RAISE NOTICE 'time_rate_resolution: case (i) passed.';
+END
+$$;
+
+-- ─── (j) W1-R1-02 + W1-R1-07: a BOUND signed rate survives billable off/on ──
+DO $$
+DECLARE
+  v_rate    INTEGER;
+  v_source  TEXT;
+  v_amount  INTEGER;
+  v_state   TEXT;
+  v_auth    UUID;
+  v_r_cents INTEGER;
+  v_r_src   TEXT;
+BEGIN
+  -- The hire logs on the ONE-CARD services project. Her roster role is
+  -- support_designer (00597 seats her), and the only card is named 'Principal', so
+  -- nothing matches by role: the classifier's single-card fallback (00601:278-293)
+  -- is what binds the hour at $300/h.
+  PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000000002');
+  INSERT INTO public.project_time_entries
+    (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('b1100000-0000-4000-8000-0000000000c1', 'b1100000-0000-4000-8000-0000000000e4',
+          'b1100000-0000-4000-8000-000000000002', NOW() - INTERVAL '1 day', 60, true, 'manual_entry');
+
+  SELECT hourly_rate_cents, rate_source, rated_amount_cents, billing_authority_id
+    INTO v_rate, v_source, v_amount, v_auth
+  FROM public.project_time_entries WHERE id = 'b1100000-0000-4000-8000-0000000000c1';
+  ASSERT v_auth IS NOT NULL AND v_rate = 30000 AND v_source = 'authority' AND v_amount = 30000,
+    'FAIL j0a (precondition): the single-card fallback must bind this hour at 30000/authority; got '
+    || COALESCE(v_rate::text,'NULL') || ' / ' || COALESCE(v_source,'NULL')
+    || ' / ' || COALESCE(v_amount::text,'NULL');
+
+  -- W1-R1-07: the resolver must give the SAME answer the classifier stored. Before
+  -- the tier-1 single-card fallback was added, this read 15000 / studio_member —
+  -- a wrong preview for the row that is sitting right there, and the mechanism
+  -- behind the overwrite (j) is about.
+  SELECT resolved.cents, resolved.source INTO v_r_cents, v_r_src
+  FROM public.resolve_time_rate_cents(
+    'b1100000-0000-4000-8000-0000000000e4', 'b1100000-0000-4000-8000-000000000002',
+    (SELECT started_at FROM public.project_time_entries
+      WHERE id = 'b1100000-0000-4000-8000-0000000000c1'), NULL) AS resolved;
+  ASSERT v_r_cents = 30000 AND v_r_src = 'authority',
+    'FAIL j0b (W1-R1-07): the resolver and the classifier must not disagree about which card '
+    'a role matches; resolver said ' || COALESCE(v_r_cents::text,'NULL') || ' / '
+    || COALESCE(v_r_src,'NULL') || ' for a row the classifier stored at 30000 / authority';
+  PERFORM pg_temp.reset_role();
+
+  -- A SECOND version of the card, cheaper. A new hour would now be priced from it,
+  -- so the resolver's answer and this bound row's signed rate genuinely diverge —
+  -- which is what makes the round trip below a real test rather than a tautology.
+  INSERT INTO public.proposal_service_rates
+    (id, proposal_id, version, role_name, hourly_rate_cents, sort_order, effective_at)
+  VALUES ('b1100000-0000-4000-8000-00000000f402', 'b1100000-0000-4000-8000-0000000000d4',
+          2, 'Principal', 20000, 0, NOW() - INTERVAL '20 days');
+  INSERT INTO public.project_billing_authority_rates
+    (id, billing_authority_id, source_rate_id, version, role_name, hourly_rate_cents)
+  VALUES ('b1100000-0000-4000-8000-00000000aa42', 'b1100000-0000-4000-8000-00000000ba04',
+          'b1100000-0000-4000-8000-00000000f402', 2, 'Principal', 20000);
+
+  PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000000002');
+  UPDATE public.project_time_entries SET billable = false
+   WHERE id = 'b1100000-0000-4000-8000-0000000000c1';
+
+  SELECT hourly_rate_cents, rate_source, rated_amount_cents, billing_state
+    INTO v_rate, v_source, v_amount, v_state
+  FROM public.project_time_entries WHERE id = 'b1100000-0000-4000-8000-0000000000c1';
+  ASSERT v_rate = 30000 AND v_source = 'authority',
+    'FAIL j1 (W1-R1-02): a non-billable toggle must not re-price a BOUND hour — the signed '
+    '30000 / authority must stand; got ' || COALESCE(v_rate::text,'NULL') || ' / '
+    || COALESCE(v_source,'NULL');
+  ASSERT v_state = 'nonbillable' AND v_amount = 0,
+    'FAIL j2: a non-billable hour is worth 0 and says so; got '
+    || COALESCE(v_state,'NULL') || ' / ' || COALESCE(v_amount::text,'NULL');
+
+  UPDATE public.project_time_entries SET billable = true
+   WHERE id = 'b1100000-0000-4000-8000-0000000000c1';
+  PERFORM pg_temp.reset_role();
+
+  SELECT hourly_rate_cents, rate_source, rated_amount_cents, billing_state
+    INTO v_rate, v_source, v_amount, v_state
+  FROM public.project_time_entries WHERE id = 'b1100000-0000-4000-8000-0000000000c1';
+  ASSERT v_rate = 30000,
+    'FAIL j3 (W1-R1-02): the way back reads OLD.hourly_rate_cents, so an overwrite on the way '
+    'out is PERMANENT — a signed $300/h hour must not come back at any other rate; got '
+    || COALESCE(v_rate::text,'NULL');
+  ASSERT v_source = 'authority',
+    'FAIL j4: provenance must still say authority, got ' || COALESCE(v_source,'NULL');
+  ASSERT v_amount = 30000,
+    'FAIL j5: 60 min at 30000/h is 30000 cents — this is the number claim_time_entries would '
+    'invoice-lock; got ' || COALESCE(v_amount::text,'NULL');
+  ASSERT v_state = 'authorized',
+    'FAIL j6: the signed card authorizes the hour again, got ' || COALESCE(v_state,'NULL');
+
+  RAISE NOTICE 'time_rate_resolution: case (j) passed.';
+END
+$$;
+
+-- ─── (k) W1-R1-03: a removed roster seat must not freeze the entry ─────────
+DO $$
+DECLARE
+  v_duration INTEGER;
+  v_role     TEXT;
+  v_rate     INTEGER;
+BEGIN
+  -- Entry b6 (case e) is bound to the Vendor card and records rate_role='vendor'.
+  -- The owner now removes the vendor seat — HT-25-a's cross-role re-seat makes
+  -- exactly this churn the expected case, and a designer handover does the same to
+  -- 'lead_designer' rows. Done as postgres: project_team_members' write
+  -- authorization is not what this case is about.
+  UPDATE public.project_team_members SET removed_at = NOW()
+   WHERE id = 'b1100000-0000-4000-8000-00000000dd32';
+
+  PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000000003');
+  UPDATE public.project_time_entries SET duration_minutes = 120
+   WHERE id = 'b1100000-0000-4000-8000-0000000000b6';
+  PERFORM pg_temp.reset_role();
+
+  SELECT duration_minutes, rate_role, hourly_rate_cents
+    INTO v_duration, v_role, v_rate
+  FROM public.project_time_entries WHERE id = 'b1100000-0000-4000-8000-0000000000b6';
+
+  ASSERT v_duration = 120,
+    'FAIL k1 (W1-R1-03): validating rate_role on EVERY fire froze the entry the moment the seat '
+    'the role came from was removed — and rate_role cannot be changed either, so DELETE was the '
+    'only escape. The correction must land; duration is ' || COALESCE(v_duration::text,'NULL');
+  ASSERT v_role = 'vendor',
+    'FAIL k2: the recorded role survives the seat it came from, got ' || COALESCE(v_role,'NULL');
+  ASSERT v_rate = 9000,
+    'FAIL k3: the bound signed rate is untouched by the correction, got '
+    || COALESCE(v_rate::text,'NULL');
+
+  -- Put the seat back: later cases read this roster.
+  UPDATE public.project_team_members SET removed_at = NULL
+   WHERE id = 'b1100000-0000-4000-8000-00000000dd32';
+
+  RAISE NOTICE 'time_rate_resolution: case (k) passed.';
+END
+$$;
+
+-- ─── (l) W1-R1-01: the RPC boundary is not a door to the signed cards ──────
+DO $$
+DECLARE
+  v_stranger_raised BOOLEAN := false;
+  v_role_raised     BOOLEAN := false;
+  v_cents           INTEGER;
+BEGIN
+  -- A brand-new authenticated user in no organization, rostered nowhere. Before the
+  -- relationship assert, this call returned the Two-hat project's signed
+  -- 'Lead designer' card (25000) out of a table otherwise gated to studio
+  -- co-members and the client. p_user_id is the caller's own id, so the refusal
+  -- provably comes from the RELATIONSHIP assert and not from the "someone else's
+  -- rate" one.
+  PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000000004');
+  BEGIN
+    SELECT resolved.cents INTO v_cents
+    FROM public.resolve_time_rate_cents(
+      'b1100000-0000-4000-8000-0000000000e3', 'b1100000-0000-4000-8000-000000000004',
+      NOW() - INTERVAL '1 day', 'lead_designer') AS resolved;
+  EXCEPTION WHEN insufficient_privilege THEN v_stranger_raised := true;
+  END;
+  PERFORM pg_temp.reset_role();
+  ASSERT v_stranger_raised,
+    'FAIL l1 (W1-R1-01): a caller with no relationship to the project must not be able to '
+    'resolve against it; the call returned ' || COALESCE(v_cents::text, 'NULL');
+
+  -- And a role the member does not hold raises AT THE RPC BOUNDARY too — inside the
+  -- classifier 00601 delta 1 owns that, and validates only a NEW pick (W1-R1-03).
+  PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000000003');
+  BEGIN
+    SELECT resolved.cents INTO v_cents
+    FROM public.resolve_time_rate_cents(
+      'b1100000-0000-4000-8000-0000000000e3', 'b1100000-0000-4000-8000-000000000003',
+      NOW() - INTERVAL '1 day', 'bookkeeper') AS resolved;
+  EXCEPTION WHEN check_violation THEN v_role_raised := true;
+  END;
+
+  -- A role she DOES hold still answers, so l2 is not passing by breaking the RPC.
+  SELECT resolved.cents INTO v_cents
+  FROM public.resolve_time_rate_cents(
+    'b1100000-0000-4000-8000-0000000000e3', 'b1100000-0000-4000-8000-000000000003',
+    NOW() - INTERVAL '1 day', 'vendor') AS resolved;
+  PERFORM pg_temp.reset_role();
+
+  ASSERT v_role_raised,
+    'FAIL l2 (W1-R1-01): p_rate_role was taken verbatim, so a direct caller could aim the '
+    'resolver at whichever signed card paid best';
+  ASSERT v_cents = 9000,
+    'FAIL l3: a role she holds must still resolve to its card (9000), got '
+    || COALESCE(v_cents::text, 'NULL');
+
+  RAISE NOTICE 'time_rate_resolution: case (l) passed.';
+END
+$$;
+
+-- ─── (m) W1-R1-05: the project designer's shipped capability is not revoked ─
+DO $$
+DECLARE
+  v_duration INTEGER;
+  v_rate     INTEGER;
+  v_raised   BOOLEAN := false;
+  v_cents    INTEGER;
+BEGIN
+  -- The hire logs on the plain-member designer's own project.
+  PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000000002');
+  INSERT INTO public.project_time_entries
+    (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('b1100000-0000-4000-8000-0000000000c2', 'b1100000-0000-4000-8000-0000000000e5',
+          'b1100000-0000-4000-8000-000000000002', NOW() - INTERVAL '3 hours', 60, true, 'manual_entry');
+  PERFORM pg_temp.reset_role();
+
+  -- The project's DESIGNER corrects it. `Designers manage their project time
+  -- entries` (00177:136-137) is an ALL policy qualified only on
+  -- projects.designer_id = auth.uid() — no user_id leg — so this was allowed before
+  -- W1, and the first revision of the resolver's assert refused it because she is a
+  -- plain org member rather than an owner/admin. An undeclared narrowing is the
+  -- defect, so the designer leg is admitted.
+  PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000000005');
+  UPDATE public.project_time_entries SET duration_minutes = 90
+   WHERE id = 'b1100000-0000-4000-8000-0000000000c2';
+  PERFORM pg_temp.reset_role();
+
+  SELECT duration_minutes, hourly_rate_cents INTO v_duration, v_rate
+  FROM public.project_time_entries WHERE id = 'b1100000-0000-4000-8000-0000000000c2';
+  ASSERT v_duration = 90,
+    'FAIL m1 (W1-R1-05): the project designer must still be able to correct a teammate''s '
+    'entry; duration is ' || COALESCE(v_duration::text, 'NULL');
+  ASSERT v_rate = 15000,
+    'FAIL m2: the hire''s studio rate still prices the hour, got ' || COALESCE(v_rate::text,'NULL');
+
+  -- The narrowing that DOES stand, asserted so it is a decision: a plain studio
+  -- member who is neither the author, the project's designer, nor an owner/admin
+  -- cannot resolve someone else's rate.
+  PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000000003');
+  BEGIN
+    SELECT resolved.cents INTO v_cents
+    FROM public.resolve_time_rate_cents(
+      'b1100000-0000-4000-8000-0000000000e5', 'b1100000-0000-4000-8000-000000000002',
+      NOW() - INTERVAL '3 hours', NULL) AS resolved;
+  EXCEPTION WHEN insufficient_privilege THEN v_raised := true;
+  END;
+  PERFORM pg_temp.reset_role();
+  ASSERT v_raised,
+    'FAIL m3: resolving ANOTHER member''s rate stays an owner/admin or project-designer act';
+
+  RAISE NOTICE 'time_rate_resolution: case (m) passed.';
   RAISE NOTICE 'All time_rate_resolution assertions passed.';
 END
 $$;

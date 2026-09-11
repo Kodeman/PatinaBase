@@ -15656,6 +15656,12 @@ END $g$;
 
 -- 00598_studio_member_rates.sql
 DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_studio_member_rate_history() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00598_studio_member_rates.sql
+DO $g$ BEGIN
   REVOKE ALL ON TABLE public.studio_member_rates FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;

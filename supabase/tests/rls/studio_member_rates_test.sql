@@ -8,17 +8,29 @@
 --       UPDATE, and no read of a colleague's rate. The self leg is deliberate
 --       (a studio member may see what they are worth); it is asserted, not
 --       implied, so a later narrowing is a decision and not an accident.
---   (d) guest  — may not write and may not read a colleague's row. NOTE: the
---       policy's self leg is `user_id = auth.uid()` with no status test, so a
---       guest who has a rate row of their own CAN read it. That is asserted
---       below as the shape that ships, rather than quietly left out of the
---       "guest may nothing" claim.
+--   (d) guest  — may not write, and may not read anything. AMENDED IN REVIEW
+--       ROUND 1 (W1-R1-09): a guest can no longer HAVE a rate row, because the
+--       INSERT policy now requires the SUBJECT to be an active non-guest member
+--       of the studio. The arm that used to assert "a guest reads their own row"
+--       is replaced by its cause — the owner's attempt to create that row is
+--       refused.
 --   (e) a cross-studio owner — may nothing at all, on any verb.
 --   (f) NOBODY may DELETE: there is no DELETE policy AND no DELETE grant, so
 --       the attempt fails on privilege, not on a zero-row no-op.
 --   (g) the open-row ladder: a later rate closes the prior one at
 --       effective_from - 1, and exactly ONE open row per (studio, member)
---       survives — including when the second rate is BACKDATED.
+--       survives — including when the second rate is BACKDATED. Extended in
+--       review round 1 (W1-R1-06) with the THREE-ROW INTERLEAVE: a rate
+--       backdated INTO an already-closed row's span used to leave two rows
+--       covering the same dates, which the earlier arm could not see because it
+--       only read the backdated row's own effective_to. The arm now asserts that
+--       exactly ONE row covers every date in the whole span.
+--   (h) the closed-row freeze (W1-R1-08): "history is a fact" was enforced
+--       against DELETE only, so an owner or admin could rewrite a CLOSED row's
+--       rate or dates in place. Asserted per role, with the open row still
+--       correctable so the settings page's blur-save idiom is not broken.
+--   (i) W1-R1-09: a rate row cannot be created for a profile that is not an
+--       active non-guest member of the studio — neither a guest nor an outsider.
 --
 -- How to run:
 --   psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 \
@@ -56,7 +68,11 @@ VALUES
   ('c2200000-0000-4000-8000-000000000002', 'smr-admin@test.invalid',   '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
   ('c2200000-0000-4000-8000-000000000003', 'smr-member@test.invalid',  '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
   ('c2200000-0000-4000-8000-000000000004', 'smr-guest@test.invalid',   '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
-  ('c2200000-0000-4000-8000-000000000005', 'smr-outside@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+  ('c2200000-0000-4000-8000-000000000005', 'smr-outside@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  -- A SECOND active plain member, added in review round 1: the admin's rate row
+  -- used to be written against the guest, which W1-R1-09's membership leg now
+  -- refuses. The subject of a rate has to be someone who could log studio time.
+  ('c2200000-0000-4000-8000-000000000006', 'smr-second@test.invalid',  '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
 
 INSERT INTO public.profiles (id, email, full_name, created_at, updated_at)
 VALUES
@@ -64,7 +80,8 @@ VALUES
   ('c2200000-0000-4000-8000-000000000002', 'smr-admin@test.invalid',   'SMR Admin',   NOW(), NOW()),
   ('c2200000-0000-4000-8000-000000000003', 'smr-member@test.invalid',  'SMR Member',  NOW(), NOW()),
   ('c2200000-0000-4000-8000-000000000004', 'smr-guest@test.invalid',   'SMR Guest',   NOW(), NOW()),
-  ('c2200000-0000-4000-8000-000000000005', 'smr-outside@test.invalid', 'SMR Outside', NOW(), NOW())
+  ('c2200000-0000-4000-8000-000000000005', 'smr-outside@test.invalid', 'SMR Outside', NOW(), NOW()),
+  ('c2200000-0000-4000-8000-000000000006', 'smr-second@test.invalid',  'SMR Second',  NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO public.organizations (id, type, name, slug, status)
@@ -78,7 +95,8 @@ VALUES
   ('c2200000-0000-4000-8000-0000000000c2', 'c2200000-0000-4000-8000-000000000002', 'c2200000-0000-4000-8000-0000000000a1', 'admin',  'active', NOW()),
   ('c2200000-0000-4000-8000-0000000000c3', 'c2200000-0000-4000-8000-000000000003', 'c2200000-0000-4000-8000-0000000000a1', 'member', 'active', NOW()),
   ('c2200000-0000-4000-8000-0000000000c4', 'c2200000-0000-4000-8000-000000000004', 'c2200000-0000-4000-8000-0000000000a1', 'guest',  'active', NOW()),
-  ('c2200000-0000-4000-8000-0000000000c5', 'c2200000-0000-4000-8000-000000000005', 'c2200000-0000-4000-8000-0000000000a2', 'owner',  'active', NOW());
+  ('c2200000-0000-4000-8000-0000000000c5', 'c2200000-0000-4000-8000-000000000005', 'c2200000-0000-4000-8000-0000000000a2', 'owner',  'active', NOW()),
+  ('c2200000-0000-4000-8000-0000000000c6', 'c2200000-0000-4000-8000-000000000006', 'c2200000-0000-4000-8000-0000000000a1', 'member', 'active', NOW());
 
 -- ─── (a) the owner may write and read ──────────────────────────────────────
 DO $$
@@ -112,7 +130,7 @@ BEGIN
   PERFORM pg_temp.assume_user('c2200000-0000-4000-8000-000000000002');
   INSERT INTO public.studio_member_rates (id, studio_id, user_id, hourly_rate_cents, effective_from, created_by)
   VALUES ('c2200000-0000-4000-8000-0000000000f2', 'c2200000-0000-4000-8000-0000000000a1',
-          'c2200000-0000-4000-8000-000000000004', 9000, CURRENT_DATE - 30,
+          'c2200000-0000-4000-8000-000000000006', 9000, CURRENT_DATE - 30,
           'c2200000-0000-4000-8000-000000000002');
   SELECT count(*) INTO v_seen FROM public.studio_member_rates
    WHERE studio_id = 'c2200000-0000-4000-8000-0000000000a1';
@@ -185,7 +203,7 @@ BEGIN
 END
 $$;
 
--- ─── (d) a guest: no writes, no colleague's row (own row IS readable) ──────
+-- ─── (d) a guest: no writes, nothing to read ───────────────────────────────
 DO $$
 DECLARE
   v_others INTEGER;
@@ -200,9 +218,10 @@ BEGIN
 
   SELECT count(*) INTO v_own FROM public.studio_member_rates
    WHERE user_id = 'c2200000-0000-4000-8000-000000000004';
-  ASSERT v_own = 1,
-    'FAIL d2: the self leg has no status test, so a guest reads their OWN rate row — '
-    'asserted as shipped, not assumed away; saw ' || v_own;
+  ASSERT v_own = 0,
+    'FAIL d2 (W1-R1-09): a guest cannot HAVE a rate row — the INSERT policy requires '
+    'an active non-guest membership for the subject, and is_studio_comember (00556:68) '
+    'refuses a guest, so a guest rate is one the resolver could never reach; saw ' || v_own;
 
   BEGIN
     INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
@@ -280,9 +299,10 @@ $$;
 -- ─── (g) the open-row ladder, forwards and backdated ─────────────────────
 DO $$
 DECLARE
-  v_open   INTEGER;
-  v_closed DATE;
-  v_new_to DATE;
+  v_open    INTEGER;
+  v_closed  DATE;
+  v_new_to  DATE;
+  v_covered INTEGER;
 BEGIN
   PERFORM pg_temp.assume_user('c2200000-0000-4000-8000-000000000001');
   -- A raise, effective today: the 30-days-ago row closes yesterday.
@@ -302,13 +322,15 @@ BEGIN
   ASSERT v_closed = CURRENT_DATE - 1,
     'FAIL g2: the prior row must close at the new row''s effective_from - 1, got ' || v_closed;
 
-  -- A BACKDATED correction: it cannot close the row that starts later, so it
-  -- closes ITSELF and the invariant still holds.
+  -- A BACKDATED correction, landing INSIDE the already-closed first row's span.
+  -- This is the W1-R1-06 shape: before the repair the close matched only rows that
+  -- were still OPEN, so the first row kept covering [-30, today-1] while this one
+  -- covered [-10, today-1] and two rows priced every day in between. The close now
+  -- matches every row whose span CONTAINS the new start, closed rows included.
   INSERT INTO public.studio_member_rates (id, studio_id, user_id, hourly_rate_cents, effective_from, created_by)
   VALUES ('c2200000-0000-4000-8000-0000000000f4', 'c2200000-0000-4000-8000-0000000000a1',
           'c2200000-0000-4000-8000-000000000003', 16000, CURRENT_DATE - 10,
           'c2200000-0000-4000-8000-000000000001');
-  PERFORM pg_temp.reset_role();
 
   SELECT count(*) INTO v_open FROM public.studio_member_rates
    WHERE studio_id = 'c2200000-0000-4000-8000-0000000000a1'
@@ -322,7 +344,120 @@ BEGIN
   ASSERT v_new_to = CURRENT_DATE - 1,
     'FAIL g4: the backdated row must close the day before the next row begins, got ' || v_new_to;
 
+  -- W1-R1-06: the row the backdated one landed inside must have been RE-CLOSED.
+  SELECT effective_to INTO v_closed FROM public.studio_member_rates
+   WHERE id = 'c2200000-0000-4000-8000-0000000000f1';
+  ASSERT v_closed = CURRENT_DATE - 11,
+    'FAIL g5 (W1-R1-06): the row whose span contained the backdated start must be '
+    're-closed at the new start - 1 (CURRENT_DATE - 11), got ' || v_closed;
+
+  -- The invariant the ladder exists for, asserted over the WHOLE span rather than
+  -- on one row's effective_to: exactly one rate prices any given day.
+  SELECT count(*) INTO v_covered
+  FROM generate_series(CURRENT_DATE - 30, CURRENT_DATE, INTERVAL '1 day') AS d(day)
+  WHERE (
+    SELECT count(*) FROM public.studio_member_rates r
+    WHERE r.studio_id = 'c2200000-0000-4000-8000-0000000000a1'
+      AND r.user_id   = 'c2200000-0000-4000-8000-000000000003'
+      AND r.effective_from <= d.day::date
+      AND (r.effective_to IS NULL OR r.effective_to >= d.day::date)
+  ) <> 1;
+  PERFORM pg_temp.reset_role();
+  ASSERT v_covered = 0,
+    'FAIL g6 (W1-R1-06, HT-3): exactly one rate row must cover every date in the span; '
+    || v_covered || ' day(s) are covered by none or by more than one';
+
   RAISE NOTICE 'studio_member_rates: case (g) passed.';
+END
+$$;
+
+-- ─── (h) a closed row is history: frozen, per role (W1-R1-08) ─────────────
+DO $$
+DECLARE
+  v_owner_rate   BOOLEAN := false;
+  v_owner_dates  BOOLEAN := false;
+  v_admin_rate   BOOLEAN := false;
+  v_identity     BOOLEAN := false;
+BEGIN
+  -- f1 is CLOSED by now (case g re-closed it at CURRENT_DATE - 11).
+  PERFORM pg_temp.assume_user('c2200000-0000-4000-8000-000000000001');
+  BEGIN
+    UPDATE public.studio_member_rates SET hourly_rate_cents = 1
+     WHERE id = 'c2200000-0000-4000-8000-0000000000f1';
+  EXCEPTION WHEN check_violation THEN v_owner_rate := true;
+  END;
+  BEGIN
+    UPDATE public.studio_member_rates SET effective_from = CURRENT_DATE - 29
+     WHERE id = 'c2200000-0000-4000-8000-0000000000f1';
+  EXCEPTION WHEN check_violation THEN v_owner_dates := true;
+  END;
+
+  -- The OPEN row stays correctable — the settings page saves on blur.
+  UPDATE public.studio_member_rates SET hourly_rate_cents = 19000
+   WHERE id = 'c2200000-0000-4000-8000-0000000000f3';
+
+  BEGIN
+    UPDATE public.studio_member_rates SET user_id = 'c2200000-0000-4000-8000-000000000006'
+     WHERE id = 'c2200000-0000-4000-8000-0000000000f3';
+  EXCEPTION WHEN check_violation THEN v_identity := true;
+  END;
+  PERFORM pg_temp.reset_role();
+
+  PERFORM pg_temp.assume_user('c2200000-0000-4000-8000-000000000002');
+  BEGIN
+    UPDATE public.studio_member_rates SET hourly_rate_cents = 1
+     WHERE id = 'c2200000-0000-4000-8000-0000000000f1';
+  EXCEPTION WHEN check_violation THEN v_admin_rate := true;
+  END;
+  PERFORM pg_temp.reset_role();
+
+  ASSERT v_owner_rate,
+    'FAIL h1 (W1-R1-08): even the owner must not rewrite a CLOSED row''s rate — history is a fact';
+  ASSERT v_owner_dates,
+    'FAIL h2 (W1-R1-08): a closed row''s dates must be frozen too';
+  ASSERT v_admin_rate,
+    'FAIL h3 (W1-R1-08): an admin must not rewrite a closed row''s rate either';
+  ASSERT v_identity,
+    'FAIL h4 (W1-R1-08): a rate row may not be re-pointed at another member';
+  ASSERT (SELECT hourly_rate_cents FROM public.studio_member_rates
+           WHERE id = 'c2200000-0000-4000-8000-0000000000f1') = 15500,
+    'FAIL h5: the refused edits must not have changed the closed row';
+  ASSERT (SELECT hourly_rate_cents FROM public.studio_member_rates
+           WHERE id = 'c2200000-0000-4000-8000-0000000000f3') = 19000,
+    'FAIL h6: the OPEN row must still be correctable in place';
+
+  RAISE NOTICE 'studio_member_rates: case (h) passed.';
+END
+$$;
+
+-- ─── (i) the rate's subject must be a studio member (W1-R1-09) ────────────
+DO $$
+DECLARE
+  v_guest   BOOLEAN := false;
+  v_outside BOOLEAN := false;
+BEGIN
+  PERFORM pg_temp.assume_user('c2200000-0000-4000-8000-000000000001');
+  BEGIN
+    INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
+    VALUES ('c2200000-0000-4000-8000-0000000000a1', 'c2200000-0000-4000-8000-000000000004',
+            9000, CURRENT_DATE, 'c2200000-0000-4000-8000-000000000001');
+  EXCEPTION WHEN insufficient_privilege THEN v_guest := true;
+  END;
+  BEGIN
+    INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
+    VALUES ('c2200000-0000-4000-8000-0000000000a1', 'c2200000-0000-4000-8000-000000000005',
+            9000, CURRENT_DATE, 'c2200000-0000-4000-8000-000000000001');
+  EXCEPTION WHEN insufficient_privilege THEN v_outside := true;
+  END;
+  PERFORM pg_temp.reset_role();
+
+  ASSERT v_guest,
+    'FAIL i1 (W1-R1-09): a guest is not a subject a studio rate may be set for';
+  ASSERT v_outside,
+    'FAIL i2 (W1-R1-09): a rate row must not be creatable against a profile that is not '
+    'a member of the studio at all';
+
+  RAISE NOTICE 'studio_member_rates: case (i) passed.';
   RAISE NOTICE 'All studio_member_rates assertions passed.';
 END
 $$;
