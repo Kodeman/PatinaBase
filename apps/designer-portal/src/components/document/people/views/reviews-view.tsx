@@ -19,7 +19,7 @@ import {
   type ClientReview,
   type CompletedProject,
 } from '@patina/supabase';
-import { deliveryWord, isAttentionState } from '@/lib/delivery-ui';
+import { DeliveryWord } from '../../delivery-word';
 import { ViewHeader, EmptyTeach } from '../view-shell';
 import { Avatar } from '../person-bits';
 import { ReviewRequestSheet } from '../ops/review-request-sheet';
@@ -70,10 +70,11 @@ export function ReviewsView({ notify }: PeopleViewProps) {
   const { data: toRequest, isLoading: loadingToRequest } =
     useCompletedProjectsWithoutReview();
   const togglePublish = useTogglePortfolioPublish();
-  // One read for the pending tab's sent asks — a per-row hook would open N.
+  // One read for the pending tab's sent asks — a per-row hook would open N,
+  // and no read at all on the tabs that never print the word.
   const requestDelivery = useEmailDelivery(
     'client_review',
-    (sent ?? []).map((r) => r.id),
+    tab === 'pending' ? (sent ?? []).map((r) => r.id) : [],
   );
 
   const pendingCount = (toRequest?.length ?? 0) + (sent?.length ?? 0);
@@ -134,24 +135,23 @@ export function ReviewsView({ notify }: PeopleViewProps) {
               />
             );
           })}
-          {(sent ?? []).map((r) => {
-            const d = requestDelivery.byRef[r.id] ?? null;
-            const attention =
-              d && isAttentionState(d.state)
-                ? deliveryWord(d, r.designer_client?.client_email ?? null)?.text
-                : null;
-            return (
-              <QueueRow
-                key={r.id}
-                name={reviewClientName(r)}
-                why={
-                  attention
-                    ? `Request sent — awaiting their words · ${attention}`
-                    : 'Request sent — awaiting their words'
-                }
-              />
-            );
-          })}
+          {(sent ?? []).map((r) => (
+            <QueueRow
+              key={r.id}
+              name={reviewClientName(r)}
+              why={
+                <>
+                  Request sent — awaiting their words
+                  <DeliveryWord
+                    delivery={requestDelivery.byRef[r.id] ?? null}
+                    recipient={r.designer_client?.client_email ?? null}
+                    mode="attention"
+                    className="mt-0.5 block"
+                  />
+                </>
+              }
+            />
+          ))}
         </ul>
       );
     }

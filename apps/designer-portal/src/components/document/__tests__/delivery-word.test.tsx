@@ -60,32 +60,73 @@ describe('deliveryWord — the nine states, as dated prose', () => {
     ).toEqual({ text: 'Opened 9 Sept', register: 'quiet' });
   });
 
-  it('names the five states that need the designer', () => {
-    expect(deliveryWord(delivery({ state: 'delayed' }))).toEqual({
-      text: 'Delayed — still trying dave@okonkwo.net',
+  it('names the four states that need the designer, each with its date', () => {
+    expect(
+      deliveryWord(delivery({ state: 'delayed', delayedAt: '2026-09-09T09:00:00.000Z' })),
+    ).toEqual({
+      text: 'Delayed 9 Sept — still trying dave@okonkwo.net',
       register: 'attention',
     });
     expect(
       deliveryWord(
-        delivery({ state: 'bounced', bounceType: 'permanent', bounceReason: 'no such mailbox' }),
+        delivery({
+          state: 'bounced',
+          bouncedAt: '2026-09-09T09:00:00.000Z',
+          bounceType: 'permanent',
+          bounceReason: 'no such mailbox',
+        }),
       ),
     ).toEqual({
-      text: "Bounced — didn't reach dave@okonkwo.net",
+      text: "Bounced 9 Sept — didn't reach dave@okonkwo.net",
       register: 'attention',
       detail: 'no such mailbox',
     });
-    expect(deliveryWord(delivery({ state: 'complained' }))).toEqual({
-      text: 'Marked as spam by dave@okonkwo.net',
+    expect(
+      deliveryWord(
+        delivery({ state: 'complained', lastEventAt: '2026-09-09T09:00:00.000Z' }),
+      ),
+    ).toEqual({
+      text: 'Marked as spam 9 Sept by dave@okonkwo.net',
       register: 'attention',
     });
-    expect(deliveryWord(delivery({ state: 'failed' }))).toEqual({
-      text: "Didn't send",
+    expect(
+      deliveryWord(
+        delivery({ state: 'suppressed', lastEventAt: '2026-09-09T09:00:00.000Z' }),
+      ),
+    ).toEqual({
+      text: 'Not sent 9 Sept — dave@okonkwo.net opted out',
       register: 'attention',
     });
-    expect(deliveryWord(delivery({ state: 'suppressed' }))).toEqual({
-      text: 'Not sent — dave@okonkwo.net opted out',
-      register: 'attention',
-    });
+  });
+
+  it('dates an attention line from the event that caused it, not from a delivery', () => {
+    // bouncedAt wins over every other stamp on the row.
+    expect(
+      deliveryWord(
+        delivery({
+          state: 'bounced',
+          bouncedAt: '2026-09-10T09:00:00.000Z',
+          delayedAt: '2026-09-09T09:00:00.000Z',
+          lastEventAt: '2026-09-08T09:00:00.000Z',
+        }),
+      )?.text,
+    ).toBe("Bounced 10 Sept — didn't reach dave@okonkwo.net");
+    // delayedAt is next, ahead of the quiet line's deliveredAt.
+    expect(
+      deliveryWord(
+        delivery({
+          state: 'delayed',
+          deliveredAt: '2026-09-11T09:00:00.000Z',
+          delayedAt: '2026-09-09T09:00:00.000Z',
+        }),
+      )?.text,
+    ).toBe('Delayed 9 Sept — still trying dave@okonkwo.net');
+  });
+
+  it('says nothing about a send that never left Patina', () => {
+    // `failed` is ambiguous — it may yet have gone out — so the surface is
+    // silent rather than reporting "Didn't send".
+    expect(deliveryWord(delivery({ state: 'failed' }))).toBeNull();
   });
 
   it('falls back to the bounce type when the provider gave no reason', () => {
@@ -98,21 +139,30 @@ describe('deliveryWord — the nine states, as dated prose', () => {
     ).toBeUndefined();
   });
 
-  it('falls back to the caller’s address, then to a person we cannot name', () => {
-    expect(deliveryWord(delivery({ state: 'failed', recipient: null }), 'ros@studio.test')).toEqual({
-      text: "Didn't send",
-      register: 'attention',
-    });
+  it('falls back to the caller’s address when the log carries none', () => {
     expect(
       deliveryWord(delivery({ state: 'complained', recipient: null }), 'ros@studio.test')?.text,
-    ).toBe('Marked as spam by ros@studio.test');
-    expect(deliveryWord(delivery({ state: 'complained', recipient: null }))?.text).toBe(
-      'Marked as spam by them',
-    );
+    ).toBe('Marked as spam 8 Sept by ros@studio.test');
     // The row's own address never wins over the log's.
     expect(
       deliveryWord(delivery({ state: 'complained' }), 'someone-else@studio.test')?.text,
-    ).toBe('Marked as spam by dave@okonkwo.net');
+    ).toBe('Marked as spam 8 Sept by dave@okonkwo.net');
+  });
+
+  it('names nobody at all rather than "them" where a name would read as one', () => {
+    expect(deliveryWord(delivery({ state: 'complained', recipient: null }))?.text).toBe(
+      'Marked as spam 8 Sept',
+    );
+    expect(deliveryWord(delivery({ state: 'suppressed', recipient: null }))?.text).toBe(
+      'Not sent 8 Sept — opted out',
+    );
+    // `them` survives only where the sentence needs an object.
+    expect(deliveryWord(delivery({ state: 'bounced', recipient: null }))?.text).toBe(
+      "Bounced 8 Sept — didn't reach them",
+    );
+    expect(deliveryWord(delivery({ state: 'delayed', recipient: null }))?.text).toBe(
+      'Delayed 8 Sept — still trying them',
+    );
   });
 
   it('reads the date it has, in order of preference', () => {
@@ -129,31 +179,44 @@ describe('deliveryWord — the nine states, as dated prose', () => {
   });
 
   it('never phrases a state as an absence or a duration', () => {
+    // The ONE permitted present-tense phrase, allowed by name rather than
+    // scrubbed out of the string before the check.
+    const PERMITTED_PRESENT_TENSE = ['still trying'];
     for (const state of ALL_STATES) {
-      const { text } = deliveryWord(delivery({ state }))!;
-      // "still trying" is the one permitted present-tense phrase: the provider
-      // IS still retrying, which is an event, not a wait we invented.
-      const scrubbed = text.replace('still trying', '');
-      expect(scrubbed).not.toMatch(/hasn't|has not|not yet|still|days ago|ago/i);
+      const word = deliveryWord(delivery({ state }));
+      if (!word) continue;
+      const present = word.text.match(/hasn't|has not|not yet|still|days ago|ago/gi) ?? [];
+      for (const hit of present) {
+        expect(
+          PERMITTED_PRESENT_TENSE.some((phrase) => word.text.includes(phrase)),
+        ).toBe(true);
+        // and the hit is part of that phrase, not a second offence
+        expect('still trying').toContain(hit.toLowerCase());
+      }
     }
+    // The permitted phrase really is present where it is claimed.
+    expect(deliveryWord(delivery({ state: 'delayed' }))?.text).toContain('still trying');
   });
 
   it('carries no pill, dot, colour fill or ✓ glyph in its copy', () => {
     for (const state of ALL_STATES) {
-      expect(deliveryWord(delivery({ state }))!.text).not.toMatch(/[✓✔●•]/);
+      expect(deliveryWord(delivery({ state }))?.text ?? '').not.toMatch(/[✓✔●•]/);
     }
   });
 });
 
 describe('isAttentionState', () => {
-  it('names exactly the five that need acting on', () => {
+  it('names exactly the four that need acting on', () => {
     expect(ALL_STATES.filter(isAttentionState)).toEqual([
       'delayed',
       'bounced',
       'complained',
-      'failed',
       'suppressed',
     ]);
+  });
+
+  it('leaves `failed` out — an ambiguous send is not a thing to act on', () => {
+    expect(isAttentionState('failed')).toBe(false);
   });
 });
 
@@ -165,7 +228,7 @@ describe('DeliveryWord', () => {
       />,
     );
     const word = screen.getByTestId('delivery-word');
-    expect(word).toHaveTextContent("Bounced — didn't reach dave@okonkwo.net");
+    expect(word).toHaveTextContent("Bounced 8 Sept — didn't reach dave@okonkwo.net");
     expect(word).toHaveAttribute('role', 'status');
     expect(word).toHaveAttribute('title', 'no such mailbox');
     expect(word.querySelector('svg')).toBeNull();
@@ -187,19 +250,43 @@ describe('DeliveryWord', () => {
   it('speaks in attention mode when the mail needs the designer', () => {
     render(<DeliveryWord delivery={delivery({ state: 'suppressed' })} mode="attention" />);
     expect(screen.getByTestId('delivery-word')).toHaveTextContent(
-      'Not sent — dave@okonkwo.net opted out',
+      'Not sent 8 Sept — dave@okonkwo.net opted out',
     );
   });
 
-  it('prints the remedy after the word', () => {
-    render(
+  it('says nothing at all about a send that never left Patina', () => {
+    const { container } = render(<DeliveryWord delivery={delivery({ state: 'failed' })} />);
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it('is a live region only in the attention register', () => {
+    const { rerender } = render(
+      <DeliveryWord delivery={delivery({ state: 'delivered' })} />,
+    );
+    const quiet = screen.getByTestId('delivery-word');
+    expect(quiet).not.toHaveAttribute('role');
+    // The readable muted step (R126), not --color-aged-oak, which fails AA at 11px.
+    expect(quiet.className).toContain('text-[var(--text-muted)]');
+
+    rerender(<DeliveryWord delivery={delivery({ state: 'bounced' })} />);
+    const loud = screen.getByTestId('delivery-word');
+    expect(loud).toHaveAttribute('role', 'status');
+    expect(loud.className).toContain('text-[var(--color-terracotta-ink)]');
+  });
+
+  it('prints the remedy after the word, outside the live region, on an en-space', () => {
+    const { container } = render(
       <DeliveryWord
         delivery={delivery({ state: 'bounced' })}
         action={<a href="/people">Fix the address in People</a>}
       />,
     );
-    expect(
-      screen.getByRole('link', { name: 'Fix the address in People' }),
-    ).toBeInTheDocument();
+    const link = screen.getByRole('link', { name: 'Fix the address in People' });
+    expect(link).toBeInTheDocument();
+    // The remedy is standing advice, not news — it must not be announced.
+    const word = screen.getByTestId('delivery-word');
+    expect(word).not.toContainElement(link);
+    expect(word.textContent).not.toMatch(/Fix the address/);
+    expect(container.textContent).toContain('\u2002Fix the address in People');
   });
 });

@@ -39,8 +39,20 @@ let mockLetterFlag: { value: boolean; isLoading: boolean } = {
 const mockInviteAndLinkClient = jest.fn();
 const mockAttachDocumentClient = jest.fn();
 
+// 00591 — what the provider did with the proposal email. Mocked like the other
+// four delivery-word suites, so the real hook never reaches React Query.
+let mockEmailDeliveryByRef: Record<string, unknown> = {};
+
+jest.mock('@patina/supabase', () => ({
+  ...jest.requireActual('@patina/supabase'),
+  useEmailDelivery: () => ({
+    byRef: mockEmailDeliveryByRef,
+    isLoading: false,
+    isError: false,
+  }),
+}));
+
 jest.mock('@tanstack/react-query', () => ({
-  useQuery: () => ({ data: undefined, isLoading: false, isError: false }),
   useQueryClient: () => ({ invalidateQueries: mockInvalidate }),
   useIsMutating: ({ predicate }: { predicate: (mutation: unknown) => boolean }) =>
     (mockPendingProposalMutation && predicate(mockPendingProposalMutation)
@@ -246,6 +258,7 @@ beforeEach(() => {
     gaps: [],
   });
   mockPendingProposalMutation = null;
+  mockEmailDeliveryByRef = {};
   mockUseDraftingState.mockReturnValue({
     gaps: [],
     isLoading: false,
@@ -1098,5 +1111,68 @@ describe('SendSheet — the letter for an unlinked captured household', () => {
 
     await waitFor(() => expect(mockInviteAndLinkClient).toHaveBeenCalled());
     expect(mockInviteAndLinkClient.mock.calls[0][0]).not.toHaveProperty('letter');
+  });
+});
+
+/**
+ * 00591 — the provider's own verdict, printed beside the dispatch status the
+ * sheet already shows. `mode="all"`, so a healthy send speaks too.
+ */
+describe('the send sheet prints what became of the mail', () => {
+  beforeEach(() => {
+    mockUseProposalMirrorData.mockReturnValue(readyMirror());
+  });
+
+  const log = (over: Record<string, unknown> = {}) => ({
+    logId: 'log-1',
+    refId: 'proposal-1',
+    recipient: 'harper@example.com',
+    state: 'bounced',
+    status: 'bounced',
+    sentAt: '2026-09-08T14:00:00.000Z',
+    deliveredAt: null,
+    bouncedAt: '2026-09-09T09:00:00.000Z',
+    bounceType: 'permanent',
+    bounceReason: 'no such mailbox',
+    delayedAt: null,
+    lastEvent: 'email.bounced',
+    lastEventAt: '2026-09-09T09:00:00.000Z',
+    createdAt: '2026-09-08T14:00:00.000Z',
+    ...over,
+  });
+
+  it('says nothing while the log has no row for this proposal', () => {
+    mockProposal = { ...mockProposal, status: 'sent' };
+    render(<SendSheet proposalId="proposal-1" open onClose={jest.fn()} />);
+    expect(screen.queryByTestId('delivery-word')).toBeNull();
+  });
+
+  it('names the bounce, dated, against the address it was sent to', () => {
+    mockProposal = { ...mockProposal, status: 'sent' };
+    mockEmailDeliveryByRef = { 'proposal-1': log() };
+    render(<SendSheet proposalId="proposal-1" open onClose={jest.fn()} />);
+    expect(screen.getByTestId('delivery-word')).toHaveTextContent(
+      "Bounced 9 Sept — didn't reach harper@example.com",
+    );
+  });
+
+  it('speaks in the quiet register when the mail landed', () => {
+    mockProposal = { ...mockProposal, status: 'sent' };
+    mockEmailDeliveryByRef = {
+      'proposal-1': log({
+        state: 'delivered',
+        status: 'delivered',
+        bouncedAt: null,
+        bounceType: null,
+        bounceReason: null,
+        deliveredAt: '2026-09-08T15:00:00.000Z',
+        lastEvent: 'email.delivered',
+        lastEventAt: '2026-09-08T15:00:00.000Z',
+      }),
+    };
+    render(<SendSheet proposalId="proposal-1" open onClose={jest.fn()} />);
+    const word = screen.getByTestId('delivery-word');
+    expect(word).toHaveTextContent('Delivered 8 Sept');
+    expect(word).not.toHaveAttribute('role');
   });
 });

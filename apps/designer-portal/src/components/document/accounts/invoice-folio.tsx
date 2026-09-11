@@ -406,21 +406,23 @@ export function InvoiceFolio({
             {overdue && <span style={{ color: TERRACOTTA_INK }}> · overdue</span>}
           </p>
         </div>
-        <div className="flex shrink-0 flex-col items-end gap-1">
+        {/* The word can be a full sentence with an address in it, so this
+            column shrinks and caps rather than pushing the letterhead wide. */}
+        <div className="flex min-w-0 max-w-[60%] flex-col items-end gap-1 text-right">
           <div className="flex items-center gap-2.5">
-          <Stamp label={stamp.label} color={stamp.color} ink={stamp.ink} />
-          {documentProjectId && invoice.project && onOpenDocument && (
-            <DocumentAction
-              actionKey="open-invoice-document"
-              surfaceKey="accounts"
-              regionKey="invoice-letterhead"
-              variant="tertiary"
-              onClick={() => onOpenDocument(documentProjectId)}
-              className="folio-no-print"
-            >
-              document ↗
-            </DocumentAction>
-          )}
+            <Stamp label={stamp.label} color={stamp.color} ink={stamp.ink} />
+            {documentProjectId && invoice.project && onOpenDocument && (
+              <DocumentAction
+                actionKey="open-invoice-document"
+                surfaceKey="accounts"
+                regionKey="invoice-letterhead"
+                variant="tertiary"
+                onClick={() => onOpenDocument(documentProjectId)}
+                className="folio-no-print"
+              >
+                document ↗
+              </DocumentAction>
+            )}
           </div>
           <DeliveryWord
             delivery={delivery}

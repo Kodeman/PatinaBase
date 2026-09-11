@@ -27,11 +27,14 @@ function shortDate(iso: string | null | undefined): string {
   return `${d.getUTCDate()} ${SHORT_MONTHS[d.getUTCMonth()]}`;
 }
 
+/**
+ * `failed` is deliberately absent: the send never left Patina, so the word
+ * would describe an ambiguity as a fact. deliveryWord returns null for it.
+ */
 const ATTENTION: ReadonlySet<EmailDeliveryState> = new Set<EmailDeliveryState>([
   'delayed',
   'bounced',
   'complained',
-  'failed',
   'suppressed',
 ]);
 
@@ -52,10 +55,21 @@ export function deliveryWord(
   recipient?: string | null,
 ): DeliveryWordCopy | null {
   if (!delivery) return null;
-  const who = delivery.recipient ?? recipient ?? 'them';
+  const known = delivery.recipient ?? recipient ?? null;
+  const who = known ?? 'them';
   const when = shortDate(
     delivery.deliveredAt ?? delivery.lastEventAt ?? delivery.sentAt ?? delivery.createdAt,
   );
+  // An attention line is dated from the event that caused it, not from the
+  // delivery that never happened.
+  const trouble = shortDate(
+    delivery.bouncedAt ??
+      delivery.delayedAt ??
+      delivery.lastEventAt ??
+      delivery.sentAt ??
+      delivery.createdAt,
+  );
+  const dated = (head: string) => (trouble ? `${head} ${trouble}` : head);
 
   switch (delivery.state) {
     case 'sending':
@@ -67,20 +81,48 @@ export function deliveryWord(
     case 'opened':
       return { text: `Opened ${when}`.trim(), register: 'quiet' };
     case 'delayed':
-      return { text: `Delayed — still trying ${who}`, register: 'attention' };
+      return {
+        text: `${dated('Delayed')} — still trying ${who}`,
+        register: 'attention',
+      };
     case 'bounced':
       return {
-        text: `Bounced — didn't reach ${who}`,
+        text: `${dated('Bounced')} — didn't reach ${who}`,
         register: 'attention',
         detail: delivery.bounceReason ?? delivery.bounceType ?? undefined,
       };
     case 'complained':
-      return { text: `Marked as spam by ${who}`, register: 'attention' };
+      return {
+        text: known
+          ? `${dated('Marked as spam')} by ${known}`
+          : dated('Marked as spam'),
+        register: 'attention',
+      };
+    // A send that never left Patina is ambiguous — it may yet have gone out —
+    // so the surface says nothing rather than reporting "Didn't send".
     case 'failed':
-      return { text: "Didn't send", register: 'attention' };
+      return null;
     case 'suppressed':
-      return { text: `Not sent — ${who} opted out`, register: 'attention' };
+      return {
+        text: known
+          ? `${dated('Not sent')} — ${known} opted out`
+          : `${dated('Not sent')} — opted out`,
+        register: 'attention',
+      };
     default:
       return null;
   }
+}
+
+/**
+ * The nudge's own failure line. A suppressed address is a settled fact about
+ * the recipient, so it is named rather than offered as something to retry.
+ */
+export function nudgeFailureNote(
+  emailSuppressed: boolean,
+  clientEmail: string | null,
+): string {
+  return emailSuppressed
+    ? `Not sent — ${clientEmail ?? 'this client'}’s address is suppressed after a bounce or complaint.`
+    : 'Nudge recorded, but the email couldn’t be sent — follow up directly.';
 }

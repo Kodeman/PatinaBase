@@ -1251,6 +1251,10 @@ export function useRetryProposalSend(options?: { errorSurface?: 'inline' }) {
  * proposal-nudge edge function emails a reminder. The RPC enforces ownership,
  * a sent/viewed state, and a 3-day cooldown server-side. Email is best-effort
  * (the stamp already landed) and surfaced via `_emailDispatched`.
+ *
+ * A suppressed address is its own outcome, not a transport failure: the edge
+ * function answers 409 `email_suppressed`, and `emailSuppressed` carries that
+ * through so a surface can say WHY rather than offer a retry that can't work.
  */
 export function useNudgeProposal() {
   const queryClient = useQueryClient();
@@ -1266,18 +1270,33 @@ export function useNudgeProposal() {
       if (error) throw error;
 
       let emailDispatched = true;
+      let emailSuppressed = false;
       try {
         const { error: fnError } = await supabase.functions.invoke('proposal-nudge', {
           body: { proposalId },
         });
-        if (fnError) emailDispatched = false;
+        if (fnError) {
+          emailDispatched = false;
+          // FunctionsHttpError carries the 409 response; its body names the
+          // settled fact about the recipient.
+          try {
+            const body = await (fnError as { context?: Response }).context?.json();
+            emailSuppressed = body?.error === 'email_suppressed';
+          } catch {
+            /* a body we cannot read is just a failed dispatch */
+          }
+        }
       } catch (e) {
         emailDispatched = false;
         // eslint-disable-next-line no-console
         console.warn('proposal-nudge invocation failed', e);
       }
 
-      return { last_nudged_at: lastNudgedAt as string | null, _emailDispatched: emailDispatched };
+      return {
+        last_nudged_at: lastNudgedAt as string | null,
+        _emailDispatched: emailDispatched,
+        emailSuppressed,
+      };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['proposal'] });

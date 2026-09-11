@@ -31,6 +31,7 @@
 
 import { useState } from 'react';
 import { useNudgeProposal, useProposal } from '@/hooks/use-proposals';
+import { nudgeFailureNote } from '@/lib/delivery-ui';
 import { useFinalizeLeader } from '@/hooks/use-finalize-leader';
 import { commercialDocumentExperience } from '@/lib/document/commercial-documents';
 import { familyLabel } from '@/lib/document/family-label';
@@ -69,7 +70,10 @@ export function FinalizeHead({
         res._emailDispatched
           ? { text: `Reminder sent to ${familyLabel(clientName)}.`, tone: 'ok' }
           : {
-              text: 'Nudge recorded, but the email couldn’t be sent — follow up directly.',
+              text: nudgeFailureNote(
+                res.emailSuppressed,
+                proposal?.client?.email ?? null,
+              ),
               tone: 'warn',
             },
       );

@@ -24,9 +24,9 @@ import {
   type EmailDelivery,
   type Invoice,
 } from '@patina/supabase';
-import { deliveryWord, isAttentionState } from '@/lib/delivery-ui';
 import { fmtDay, fmtUsd } from '@/lib/document/format';
 import { invoiceBalanceCents } from '@/lib/document/account-summary';
+import { DeliveryWord } from '../delivery-word';
 import { DocumentAction } from '../document-action';
 import { Stamp } from '../stamp';
 import { openInvoiceFolio } from './invoice-overlays';
@@ -124,11 +124,6 @@ function ReceivableRow({
   const chasedAt = invoice.ar_last_chased_at;
   // R136 — a studio invoice ages like any other, but has no house to open.
   const studioInvoice = invoice.project_id === null;
-  // The row's facts line stays quiet unless the mail needs the designer.
-  const deliveryFact =
-    delivery && isAttentionState(delivery.state)
-      ? (deliveryWord(delivery, invoice.client?.email)?.text ?? null)
-      : null;
 
   const doChase = async () => {
     setNote(null);
@@ -184,6 +179,14 @@ function ReceivableRow({
             folio →
           </span>
         </button>
+        {/* Sentence case, terracotta — so it sits OUTSIDE the facts line,
+            which is uppercase and truncating. */}
+        <DeliveryWord
+          delivery={delivery}
+          recipient={invoice.client?.email}
+          mode="attention"
+          className="block truncate"
+        />
         <p className="truncate font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
           {invoice.project?.name ?? invoice.title ?? 'Studio'}
           {studioInvoice && (
@@ -198,7 +201,6 @@ function ReceivableRow({
             invoice.reminder_count > 0
               ? `${invoice.reminder_count} reminded`
               : null,
-            deliveryFact,
           ]
             .filter(Boolean)
             .join(' · ')}`}

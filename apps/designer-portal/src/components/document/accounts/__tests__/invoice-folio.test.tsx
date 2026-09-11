@@ -60,8 +60,14 @@ const invoice: Invoice = {
 };
 let mockInvoice: Invoice = invoice;
 
+let mockEmailDeliveryByRef: Record<string, unknown> = {};
+
 jest.mock('@patina/supabase', () => ({
-  useEmailDelivery: () => ({ byRef: {}, isLoading: false, isError: false }),
+  useEmailDelivery: () => ({
+    byRef: mockEmailDeliveryByRef,
+    isLoading: false,
+    isError: false,
+  }),
   useInvoice: () => ({
     data: mockInvoice,
     isLoading: false,
@@ -108,6 +114,7 @@ jest.mock('@tanstack/react-query', () => ({
 describe('InvoiceFolio delivery recovery', () => {
   beforeEach(() => {
     mockInvoice = invoice;
+    mockEmailDeliveryByRef = {};
     mockInvoiceLink = { token: LINK_TOKEN, status: 'active' };
     jest.clearAllMocks();
     mockRefetch.mockResolvedValue({ data: invoice });
@@ -551,5 +558,104 @@ describe('InvoiceFolio delivery recovery', () => {
     expect(screen.queryByRole('button', { name: 'Regenerate link' })).not.toBeInTheDocument();
     // Print still stands — it does not depend on the link.
     expect(screen.getByRole('button', { name: 'Print' })).toBeInTheDocument();
+  });
+});
+
+/**
+ * 00591 — the folio is where the reader CAME to ask, so the word speaks in
+ * every state (`mode="all"`), and carries the remedy only where there is one.
+ */
+describe('InvoiceFolio · what became of the mail', () => {
+  const sentInvoice = { ...invoice, status: 'sent' as const, invoice_number: 'INV-1070' };
+
+  const log = (over: Record<string, unknown> = {}) => ({
+    logId: 'log-1',
+    refId: 'invoice-1',
+    recipient: 'client@example.com',
+    state: 'bounced',
+    status: 'bounced',
+    sentAt: '2026-09-08T14:00:00.000Z',
+    deliveredAt: null,
+    bouncedAt: '2026-09-09T09:00:00.000Z',
+    bounceType: 'permanent',
+    bounceReason: 'no such mailbox',
+    delayedAt: null,
+    lastEvent: 'email.bounced',
+    lastEventAt: '2026-09-09T09:00:00.000Z',
+    createdAt: '2026-09-08T14:00:00.000Z',
+    ...over,
+  });
+
+  beforeEach(() => {
+    mockInvoice = sentInvoice;
+    mockInvoiceLink = { token: LINK_TOKEN, status: 'active' };
+    mockEmailDeliveryByRef = {};
+    jest.clearAllMocks();
+    mockRefetch.mockResolvedValue({ data: sentInvoice });
+  });
+
+  it('names the bounce and offers the one remedy that can fix it', () => {
+    mockEmailDeliveryByRef = { 'invoice-1': log() };
+
+    render(<InvoiceFolio invoiceId="invoice-1" />);
+
+    expect(screen.getByTestId('delivery-word')).toHaveTextContent(
+      "Bounced 9 Sept — didn't reach client@example.com",
+    );
+    expect(
+      screen.getByRole('link', { name: 'Fix the address in People' }),
+    ).toHaveAttribute('href', '/people');
+  });
+
+  it('offers the same remedy for an opted-out address', () => {
+    mockEmailDeliveryByRef = {
+      'invoice-1': log({
+        state: 'suppressed',
+        status: 'suppressed',
+        bouncedAt: null,
+        bounceType: null,
+        bounceReason: null,
+      }),
+    };
+
+    render(<InvoiceFolio invoiceId="invoice-1" />);
+
+    expect(screen.getByTestId('delivery-word')).toHaveTextContent(
+      'Not sent 9 Sept — client@example.com opted out',
+    );
+    expect(
+      screen.getByRole('link', { name: 'Fix the address in People' }),
+    ).toBeInTheDocument();
+  });
+
+  it('speaks quietly and offers nothing when the mail landed', () => {
+    mockEmailDeliveryByRef = {
+      'invoice-1': log({
+        state: 'delivered',
+        status: 'delivered',
+        bouncedAt: null,
+        bounceType: null,
+        bounceReason: null,
+        deliveredAt: '2026-09-08T15:00:00.000Z',
+        lastEvent: 'email.delivered',
+        lastEventAt: '2026-09-08T15:00:00.000Z',
+      }),
+    };
+
+    render(<InvoiceFolio invoiceId="invoice-1" />);
+
+    expect(screen.getByTestId('delivery-word')).toHaveTextContent('Delivered 8 Sept');
+    expect(
+      screen.queryByRole('link', { name: 'Fix the address in People' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('says nothing about a draft, which has never been mailed', () => {
+    mockInvoice = invoice;
+    mockEmailDeliveryByRef = {};
+
+    render(<InvoiceFolio invoiceId="invoice-1" />);
+
+    expect(screen.queryByTestId('delivery-word')).toBeNull();
   });
 });

@@ -163,6 +163,18 @@ describe('ClientLetterLine', () => {
     );
   });
 
+  it('clears the delivery log too, so a bounced word does not outlive the resend', async () => {
+    status = { state: 'lapsed', at: '2026-09-15T14:00:00.000Z', invitationId: 'i1' };
+    deliveryByRef = { i1: bounced() };
+    const { qc } = renderLine({ designerClientId: 'dc1', clientName: 'Dave Okonkwo' });
+    const invalidateSpy = jest.spyOn(qc, 'invalidateQueries');
+    fireEvent.click(screen.getByRole('button', { name: 'Write again' }));
+    await screen.findByText('A fresh letter is on its way.');
+    expect(invalidateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: ['email-delivery'] }),
+    );
+  });
+
   it('does not invalidate the status cache when the resend fails', async () => {
     status = { state: 'lapsed', at: '2026-09-15T14:00:00.000Z', invitationId: 'i1' };
     (global.fetch as jest.Mock).mockResolvedValue({
@@ -334,7 +346,7 @@ describe('the letter that did not arrive', () => {
       clientEmail: 'dave@okonkwo.net',
     });
     const line = screen.getByTestId('client-letter-line');
-    expect(line).toHaveTextContent("Bounced — didn't reach dave@okonkwo.net");
+    expect(line).toHaveTextContent("Bounced 8 Sept — didn't reach dave@okonkwo.net");
     expect(line).not.toHaveTextContent('Letter sent 8 Sept');
   });
 
@@ -347,7 +359,7 @@ describe('the letter that did not arrive', () => {
       clientEmail: 'dave@okonkwo.net',
     });
     expect(screen.getByTestId('client-letter-line')).toHaveTextContent(
-      "Bounced — didn't reach dave@okonkwo.net",
+      "Bounced 8 Sept — didn't reach dave@okonkwo.net",
     );
   });
 

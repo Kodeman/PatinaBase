@@ -24,6 +24,7 @@ import {
   useEmailDelivery,
   useInviteAndLinkClient,
   clientInvitationStatusKeys,
+  emailDeliveryKeys,
   peopleKeys,
   type ClientInvitationStatus,
 } from '@patina/supabase';
@@ -122,6 +123,9 @@ export function ClientLetterLine({
           void queryClient.invalidateQueries({
             queryKey: clientInvitationStatusKeys.one(designerClientId),
           });
+          // The new letter has its own notification_log row, so the bounced
+          // word from the old one must not survive the resend.
+          void queryClient.invalidateQueries({ queryKey: emailDeliveryKeys.all });
         }
       } catch {
         setFeedback('Could not send it just now.');

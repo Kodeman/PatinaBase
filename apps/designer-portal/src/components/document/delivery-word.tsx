@@ -37,26 +37,35 @@ export function DeliveryWord({
   const word = deliveryWord(delivery, recipient);
   if (!word) return null;
 
-  return (
+  const attention = word.register === 'attention';
+
+  // The live region is the word itself. `action` is a standing remedy, not
+  // news, so it sits outside — an announced link would re-read on every poll.
+  const span = (
     <span
-      role="status"
+      {...(attention ? { role: 'status' } : {})}
       data-testid="delivery-word"
       title={word.detail}
-      className={`text-[11px] ${className}`}
-      style={{
-        color:
-          word.register === 'attention'
-            ? 'var(--color-terracotta-ink)'
-            : 'var(--color-aged-oak)',
-      }}
+      className={`text-[11px] ${
+        attention
+          ? 'text-[var(--color-terracotta-ink)]'
+          : 'text-[var(--text-muted)]'
+      }`}
     >
       {word.text}
-      {action ? (
-        <>
-          {' '}
-          {action}
-        </>
-      ) : null}
+    </span>
+  );
+
+  if (!action) {
+    return className ? <span className={className}>{span}</span> : span;
+  }
+
+  return (
+    <span className={className}>
+      {span}
+      {/* A real en-space, as the docblock says — not a word space. */}
+      {'\u2002'}
+      {action}
     </span>
   );
 }
