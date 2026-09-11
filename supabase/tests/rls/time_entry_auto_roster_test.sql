@@ -12,6 +12,15 @@
 --       (project_id, user_id, role) triple means the only way to express a
 --       re-seat is to clear removed_at, and a member who logs again is working
 --       on the project again.
+--   (i) the OTHER half of (d), added in review round 2 (finding m2): when the
+--       removed seat was NOT support_designer, the re-seat is a DIFFERENT role.
+--       The INSERT always proposes support_designer and ON CONFLICT
+--       (project_id, user_id, role) can only match a row of that role, so a
+--       removed `vendor` seat is left as a tombstone and a live support_designer
+--       row is added beside it — two rows, and the live role is one the member
+--       never held. The classifier's role read excludes the tombstone
+--       (removed_at IS NULL, 00578:2709-2717), so support_designer becomes the
+--       RATE role. Pinned here, and folded into owed ruling HT-25-a.
 --   (e) a cross-studio non-member is still refused by the INSERT policies and
 --       seats nobody — the seat must never be the thing that authorizes the
 --       insert (RLS WITH CHECK is evaluated AFTER before-row triggers).
@@ -48,14 +57,16 @@ VALUES
   ('a7300000-0000-4000-8000-000000000001', 'roster-owner@test.invalid',    '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
   ('a7300000-0000-4000-8000-000000000002', 'roster-member@test.invalid',   '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
   ('a7300000-0000-4000-8000-000000000003', 'roster-lead@test.invalid',     '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
-  ('a7300000-0000-4000-8000-000000000004', 'roster-outsider@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+  ('a7300000-0000-4000-8000-000000000004', 'roster-outsider@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('a7300000-0000-4000-8000-000000000005', 'roster-vendor@test.invalid',   '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
 
 INSERT INTO profiles (id, email, full_name, created_at, updated_at)
 VALUES
   ('a7300000-0000-4000-8000-000000000001', 'roster-owner@test.invalid',    'Roster Owner',    NOW(), NOW()),
   ('a7300000-0000-4000-8000-000000000002', 'roster-member@test.invalid',   'Roster Member',   NOW(), NOW()),
   ('a7300000-0000-4000-8000-000000000003', 'roster-lead@test.invalid',     'Roster Lead',     NOW(), NOW()),
-  ('a7300000-0000-4000-8000-000000000004', 'roster-outsider@test.invalid', 'Roster Outsider', NOW(), NOW())
+  ('a7300000-0000-4000-8000-000000000004', 'roster-outsider@test.invalid', 'Roster Outsider', NOW(), NOW()),
+  ('a7300000-0000-4000-8000-000000000005', 'roster-vendor@test.invalid',   'Roster Vendor',   NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO organizations (id, type, name, slug)
@@ -68,7 +79,8 @@ VALUES
   ('a7300000-0000-4000-8000-0000000000c1', 'a7300000-0000-4000-8000-000000000001', 'a7300000-0000-4000-8000-0000000000a1', 'owner',  'active', NOW()),
   ('a7300000-0000-4000-8000-0000000000c2', 'a7300000-0000-4000-8000-000000000002', 'a7300000-0000-4000-8000-0000000000a1', 'member', 'active', NOW()),
   ('a7300000-0000-4000-8000-0000000000c3', 'a7300000-0000-4000-8000-000000000003', 'a7300000-0000-4000-8000-0000000000a1', 'member', 'active', NOW()),
-  ('a7300000-0000-4000-8000-0000000000c4', 'a7300000-0000-4000-8000-000000000004', 'a7300000-0000-4000-8000-0000000000a2', 'owner',  'active', NOW());
+  ('a7300000-0000-4000-8000-0000000000c4', 'a7300000-0000-4000-8000-000000000004', 'a7300000-0000-4000-8000-0000000000a2', 'owner',  'active', NOW()),
+  ('a7300000-0000-4000-8000-0000000000c5', 'a7300000-0000-4000-8000-000000000005', 'a7300000-0000-4000-8000-0000000000a1', 'member', 'active', NOW());
 
 -- Two projects of the owner's: one nobody is rostered to, one with a lead.
 INSERT INTO projects (id, name, designer_id, created_by)
@@ -79,6 +91,14 @@ VALUES
 INSERT INTO project_team_members (id, project_id, user_id, role, assigned_by)
 VALUES ('a7300000-0000-4000-8000-0000000000f1', 'a7300000-0000-4000-8000-0000000000e2',
         'a7300000-0000-4000-8000-000000000003', 'lead_designer', 'a7300000-0000-4000-8000-000000000001');
+
+-- Case (i): a VENDOR seat the owner has already removed. The role is what makes
+-- the case: ON CONFLICT keys on (project_id, user_id, role), so the re-seat
+-- cannot reuse this row.
+INSERT INTO project_team_members (id, project_id, user_id, role, assigned_by, removed_at)
+VALUES ('a7300000-0000-4000-8000-0000000000f2', 'a7300000-0000-4000-8000-0000000000e2',
+        'a7300000-0000-4000-8000-000000000005', 'vendor',
+        'a7300000-0000-4000-8000-000000000001', NOW() - INTERVAL '1 day');
 
 -- ─── helpers ───────────────────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION pg_temp.assume_user(p_user_id UUID)
@@ -205,6 +225,59 @@ BEGIN
   ASSERT v_removed IS NULL, 'FAIL d2: the next log must re-seat a removed member';
 
   RAISE NOTICE 'time_entry_auto_roster: case (d) passed.';
+END
+$$;
+
+-- ─── (i) a removed NON-support seat re-seats under a DIFFERENT role ──────────
+DO $$
+DECLARE
+  v_count     INTEGER;
+  v_live_role TEXT;
+  v_vendor    TIMESTAMPTZ;
+BEGIN
+  PERFORM pg_temp.assume_user('a7300000-0000-4000-8000-000000000005');
+  INSERT INTO project_time_entries (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('a7300000-0000-4000-8000-0000000000b9', 'a7300000-0000-4000-8000-0000000000e2',
+          'a7300000-0000-4000-8000-000000000005', NOW() - INTERVAL '2 hours', 60, true, 'manual_entry');
+  PERFORM pg_temp.reset_role();
+
+  -- (i1) TWO rows, not one: the tombstone the owner made, plus a new seat.
+  SELECT count(*) INTO v_count FROM project_team_members
+   WHERE project_id = 'a7300000-0000-4000-8000-0000000000e2'
+     AND user_id    = 'a7300000-0000-4000-8000-000000000005';
+  ASSERT v_count = 2,
+    'FAIL i1: a removed vendor seat cannot be reused by ON CONFLICT (project_id, user_id, role), '
+    'so the next log adds a SECOND row beside the tombstone; expected 2, got ' || v_count;
+
+  -- (i2) the tombstone stands — the owner's removal of the VENDOR seat is intact.
+  SELECT removed_at INTO v_vendor FROM project_team_members
+   WHERE project_id = 'a7300000-0000-4000-8000-0000000000e2'
+     AND user_id    = 'a7300000-0000-4000-8000-000000000005'
+     AND role       = 'vendor';
+  ASSERT v_vendor IS NOT NULL,
+    'FAIL i2: the removed vendor seat must remain removed';
+
+  -- (i3) the LIVE role is support_designer — a role this member never held, and
+  -- the one the classifier will use as the rate role. This is the half of HT-25-a
+  -- that "a seat the owner removed is re-seated" does not say.
+  SELECT role INTO v_live_role FROM project_team_members
+   WHERE project_id = 'a7300000-0000-4000-8000-0000000000e2'
+     AND user_id    = 'a7300000-0000-4000-8000-000000000005'
+     AND removed_at IS NULL;
+  ASSERT v_live_role = 'support_designer',
+    'FAIL i3 (HT-25-a, unruled): the live seat after a removed vendor seat is support_designer, got '
+    || COALESCE(v_live_role, 'NULL');
+
+  -- (i4) exactly ONE live role, so the classifier's count(DISTINCT role) = 1 read
+  -- resolves — at the Support-designer rate card, not the Vendor one.
+  SELECT count(DISTINCT role) INTO v_count FROM project_team_members
+   WHERE project_id = 'a7300000-0000-4000-8000-0000000000e2'
+     AND user_id    = 'a7300000-0000-4000-8000-000000000005'
+     AND removed_at IS NULL;
+  ASSERT v_count = 1,
+    'FAIL i4: the classifier reads count(DISTINCT role) = 1 over LIVE seats only; got ' || v_count;
+
+  RAISE NOTICE 'time_entry_auto_roster: case (i) passed.';
 END
 $$;
 

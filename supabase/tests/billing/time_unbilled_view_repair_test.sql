@@ -33,6 +33,44 @@
 --   (c2) it appears in project_unbilled_time.
 --   (c3) on it, round(duration_minutes/60.0 * resolved_rate_cents) = amount_cents.
 --   (c4) an over-ceiling sibling is pending_authorization and does NOT appear.
+--   (c5) the SAME "every row reconciles" sweep as (b1), run a second time as the
+--        SERVICES studio's designer. Added in review round 2 (finding m3):
+--        project_unbilled_time is security_invoker and the two studios are
+--        deliberately separate, so (b1)'s sweep sees TWO rows, not four — it is
+--        not the "every row" guard its message implies. This is the other half.
+--
+-- Case (d) is the LEGACY RATE-LESS arm, added in review round 2 (finding B1).
+-- 00596's "one rate source" is a repair for authority-rated rows and a WRITE-DOWN
+-- for legacy ones. An un-invoiced, authorized, billable, rate-less entry on a
+-- project carrying change_order_terms.hourly_rate_cents used to report
+-- resolved_rate = that rate and amount = duration x that rate through 00412's
+-- chain; after 00596 it reports 0/0, because the classifier's non-services branch
+-- (00578:2648-2654) leaves both hourly_rate_cents and rated_amount_cents NULL
+-- when no rate was supplied, and useCreateTimeEntry cannot supply one. The Hours
+-- ledger, useStudioTimeReport's studio balance and the invoice composer's time
+-- line all read this view, so such a row now bills $0 — and claim_time_entries
+-- then invoice-locks it.
+--
+-- Measured on Strata read-only, 2026-09-11: 88 entries total, 14 unbilled +
+-- authorized + billable + completed, 4 of them rate-less, 8 projects carrying a
+-- change-order rate, 0 profiles carrying default_hourly_rate_cents. Exactly ONE
+-- row intersects — 60 min on "Kodys Test Project" at $175/h, i.e. $175.00 — so
+-- today's live exposure is one row on a test project, not a studio's money.
+--
+-- WHICH answer is correct is governance, not code, and is recorded as OWED ruling
+-- HT-6-a in artifacts/hour-tracking-2026-09-11/rulings.md: either stamp
+-- hourly_rate_cents once on exactly those rows from the change-order rate
+-- (PRESERVING the amount, arguably what P-4's "unbilled history keep their
+-- amounts" requires), or accept $0 explicitly with Leah told before the deploy.
+-- Case (d) pins TODAY'S SHIPPED BEHAVIOUR (0/0) and names the pre-00596 figures
+-- in its own assert messages, so a ruling the other way flips one assert rather
+-- than discovering an untested path:
+--   (d1) precondition — the project carries change_order_terms.hourly_rate_cents
+--        and the entry carries no rate of its own, yet is authorized.
+--   (d2) the view reports resolved_rate_cents = 0 and amount_cents = 0.
+--   (d3) the size of the write-down, computed from the project's own
+--        change_order_terms, is stated (not asserted away) so the number is in
+--        the run output.
 --
 -- How to run:
 --   psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 \
@@ -169,6 +207,45 @@ VALUES
   ('a7210000-0000-4000-8000-0000000000b2', 'a7210000-0000-4000-8000-0000000000e1',
    'a7210000-0000-4000-8000-000000000002', NOW() - INTERVAL '2 days', 120, true, 'manual_entry');
 
+-- ─── legacy rate-less fixtures (case d) ───────────────────────────────────
+-- A THIRD studio, so neither (a)'s profile-visibility precondition nor (b1)'s
+-- sweep changes meaning. A NON-services project (no project_commercial_documents
+-- row) carrying the scope builder's DEFAULT change-order rate — 17500, the
+-- literal in change-order-terms-editor.tsx's DEFAULT_TERMS, which
+-- activate_proposal_as_project carries into projects.change_order_terms on every
+-- activation. The entry sends NO hourly_rate_cents, which is what
+-- useCreateTimeEntry does today (CreateTimeEntryInput has no rate field at all).
+INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, instance_id, aud, role)
+VALUES
+  ('a7220000-0000-4000-8000-000000000001', 'unbilled-legacy-designer@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+
+INSERT INTO profiles (id, email, full_name, created_at, updated_at)
+VALUES
+  ('a7220000-0000-4000-8000-000000000001', 'unbilled-legacy-designer@test.invalid', 'Legacy Designer', NOW(), NOW())
+ON CONFLICT (id) DO NOTHING;
+UPDATE profiles SET is_designer = true WHERE id = 'a7220000-0000-4000-8000-000000000001';
+
+INSERT INTO organizations (id, type, name, slug)
+VALUES ('a7220000-0000-4000-8000-0000000000a1', 'design_studio', 'Legacy Studio', 'unbilled-legacy-studio-test');
+
+INSERT INTO organization_members (id, user_id, organization_id, role, status, joined_at)
+VALUES ('a7220000-0000-4000-8000-0000000000c1', 'a7220000-0000-4000-8000-000000000001',
+        'a7220000-0000-4000-8000-0000000000a1', 'owner', 'active', NOW());
+
+INSERT INTO projects (id, name, designer_id, created_by, change_order_terms)
+VALUES ('a7220000-0000-4000-8000-0000000000e1', 'Legacy House',
+        'a7220000-0000-4000-8000-000000000001', 'a7220000-0000-4000-8000-000000000001',
+        jsonb_build_object(
+          'hourly_rate_cents', 17500,
+          'minimum_fee_cents', 25000,
+          'approval_required', true
+        ));
+
+-- 120 billable minutes, no rate of any kind supplied.
+INSERT INTO project_time_entries (id, project_id, user_id, started_at, duration_minutes, billable, source)
+VALUES ('a7220000-0000-4000-8000-0000000000b1', 'a7220000-0000-4000-8000-0000000000e1',
+        'a7220000-0000-4000-8000-000000000001', NOW() - INTERVAL '4 days', 120, true, 'timer_auto');
+
 -- ─── helpers ───────────────────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION pg_temp.assume_user(p_user_id UUID)
 RETURNS VOID AS $$
@@ -304,9 +381,82 @@ BEGIN
   ASSERT v_rows = 0,
     'FAIL c4b: an over-ceiling entry must not appear in project_unbilled_time, got ' || v_rows;
 
+  -- (c5) the (b1) sweep again, from inside THIS studio. (b1) runs as the
+  -- non-services designer and security_invoker narrows it to that studio's rows,
+  -- so without this the authority-rated rows were never in an "every row" sweep.
+  SELECT count(*) INTO v_rows FROM project_unbilled_time
+   WHERE round(duration_minutes / 60.0 * resolved_rate_cents)::int IS DISTINCT FROM amount_cents;
+  ASSERT v_rows = 0,
+    'FAIL c5a: every row visible to the SERVICES designer must reconcile, offending rows: ' || v_rows;
+
+  -- …and prove the sweep actually saw something, so c5a cannot pass on an empty
+  -- result set (which is exactly how (b1) silently missed this studio).
+  SELECT count(*) INTO v_rows FROM project_unbilled_time;
+  ASSERT v_rows >= 1,
+    'FAIL c5b: the services designer must see at least her own authorized row, got ' || v_rows;
+
   PERFORM pg_temp.reset_role();
 
   RAISE NOTICE 'time_unbilled_view_repair: case (c) passed.';
+END
+$$;
+
+-- ─── (d) the legacy rate-less arm — a WRITE-DOWN, pinned to owed HT-6-a ─────
+DO $$
+DECLARE
+  v_co_rate  INTEGER;
+  v_rate     INTEGER;
+  v_amount   INTEGER;
+  v_stored   INTEGER;
+  v_state    TEXT;
+  v_pre_rate INTEGER;
+  v_pre_amt  INTEGER;
+BEGIN
+  -- (d1) preconditions: a change-order rate on the project, none on the row.
+  SELECT NULLIF((p.change_order_terms->>'hourly_rate_cents')::int, 0) INTO v_co_rate
+  FROM projects p WHERE p.id = 'a7220000-0000-4000-8000-0000000000e1';
+  ASSERT v_co_rate = 17500,
+    'FAIL d1a: the project must carry the DEFAULT_TERMS change-order rate, got '
+    || COALESCE(v_co_rate::text, 'NULL');
+
+  SELECT hourly_rate_cents, rated_amount_cents, billing_state
+    INTO v_rate, v_stored, v_state
+  FROM project_time_entries WHERE id = 'a7220000-0000-4000-8000-0000000000b1';
+  ASSERT v_rate IS NULL,
+    'FAIL d1b: the entry must carry NO rate of its own (useCreateTimeEntry cannot send one), got '
+    || v_rate::text;
+  ASSERT v_stored IS NULL,
+    'FAIL d1c: the non-services classifier branch leaves rated_amount_cents NULL when no rate was supplied, got '
+    || v_stored::text;
+  ASSERT v_state = 'authorized',
+    'FAIL d1d: a non-services entry is authorized (00578:2648-2650), got ' || COALESCE(v_state, 'NULL');
+
+  PERFORM pg_temp.assume_user('a7220000-0000-4000-8000-000000000001');
+
+  -- (d2) TODAY'S SHIPPED ANSWER. 00596 cut the change-order leg, so the view
+  -- reports nothing for this row. If HT-6-a is ruled the other way — stamp
+  -- hourly_rate_cents on exactly these rows from the change-order rate — these
+  -- two asserts become 17500 / 35000 and nothing else in this file moves.
+  SELECT resolved_rate_cents, amount_cents INTO v_rate, v_amount
+  FROM project_unbilled_time WHERE id = 'a7220000-0000-4000-8000-0000000000b1';
+  ASSERT v_rate = 0,
+    'FAIL d2a (HT-6-a, unruled): 00596 reports no rate for a legacy rate-less entry; expected 0, got '
+    || COALESCE(v_rate::text, 'NULL');
+  ASSERT v_amount = 0,
+    'FAIL d2b (HT-6-a, unruled): 00596 reports no money for a legacy rate-less entry; expected 0, got '
+    || COALESCE(v_amount::text, 'NULL');
+
+  PERFORM pg_temp.reset_role();
+
+  -- (d3) state the write-down rather than asserting it away: this is what 00412's
+  -- chain reported for the same row, and what the Hours ledger, the studio
+  -- unbilled balance and the composer's time line printed before 00596.
+  v_pre_rate := v_co_rate;
+  v_pre_amt  := round(120 / 60.0 * v_co_rate)::int;
+  RAISE NOTICE 'time_unbilled_view_repair (d3): pre-00596 this row read rate=% amount=%; post-00596 it reads 0/0 — owed ruling HT-6-a.',
+    v_pre_rate, v_pre_amt;
+
+  RAISE NOTICE 'time_unbilled_view_repair: case (d) passed.';
   RAISE NOTICE 'All time_unbilled_view_repair assertions passed.';
 END
 $$;

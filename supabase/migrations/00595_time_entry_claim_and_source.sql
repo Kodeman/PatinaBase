@@ -6,8 +6,19 @@
 -- `update({invoice_id:null}).eq('invoice_id', invoiceId)` — detaching EVERY
 -- entry the invoice already carried, not only the ones just stamped. One
 -- statement stamps only still-unbilled, billable, authorized, COMPLETED rows;
--- the caller detects a partial claim by counting the returned ids and rolls the
--- transaction back. No compensating UPDATE exists any more.
+-- the caller detects a partial claim by counting the returned ids.
+--
+-- What "the caller compensates" means, precisely (corrected in review round 2,
+-- finding m5): there is NO transaction for the caller to roll back. PostgREST
+-- gives the RPC its own transaction, so a short return means the matching rows
+-- ARE stamped by the time the hook throws. The composer therefore deletes the
+-- draft invoice it had just created, and fk_time_entries_invoice
+-- (00178:211-212) is ON DELETE SET NULL, so deleting the draft releases the
+-- partial stamp. Both BEFORE-UPDATE guards permit that detach:
+-- guard_invoiced_time_entry (00177:51-84) allows an invoice_id-only change and
+-- guard_time_entry_invoice_authority (00412) returns early on
+-- NEW.invoice_id IS NULL. No compensating UPDATE exists any more — the one that
+-- shipped detached every entry the invoice already carried.
 --
 -- `duration_minutes IS NOT NULL` is load-bearing, not tidiness: a running timer
 -- on a non-services project is billable + billing_state 'authorized'
@@ -62,23 +73,45 @@ COMMENT ON COLUMN public.project_time_entries.source IS
 
 -- Postcondition: the constraint is keyed on `source` (conkey, not a text
 -- match — Postgres canonicalizes `source IN (...)` to `source = ANY (ARRAY…)`,
--- so "(source)" never appears in the definition text) and admits all nine
--- values. Same shape as 00545's check, extended to the new vocabulary.
+-- so "(source)" never appears in the definition text), admits all nine
+-- values, and is the ONLY CHECK keyed on that column. Same shape as 00545's
+-- check, extended to the new vocabulary.
 DO $constraint_definition_check$
 DECLARE
-  v_def text;
-  v_val text;
+  v_attnum smallint;
+  v_count  integer;
+  v_def    text;
+  v_val    text;
 BEGIN
+  SELECT attnum INTO v_attnum FROM pg_attribute
+   WHERE attrelid = 'public.project_time_entries'::regclass
+     AND attname = 'source';
+
+  -- Widening by name is only provably EFFECTIVE if no OTHER CHECK also keys on
+  -- `source` and still carries the narrow list — 00545's own F4 comment warns
+  -- about exactly that shape. 00545 paid the archaeology (it dropped every
+  -- source CHECK mentioning timer_manual + manual_entry before adding the named
+  -- one) and nothing between 00545 and 00591 touches `source`, so this asserts
+  -- the fact rather than assuming it. Strata was NOT probed for this: the assert
+  -- is what will probe it, at push time (review round 2, finding n6).
+  SELECT count(*) INTO v_count
+  FROM pg_constraint
+  WHERE conrelid = 'public.project_time_entries'::regclass
+    AND contype = 'c'
+    AND conkey = ARRAY[v_attnum];
+
+  IF v_count <> 1 THEN
+    RAISE EXCEPTION
+      'time-entry migration: expected exactly ONE CHECK keyed on project_time_entries.source, found % — a second narrow CHECK would veto the widened vocabulary',
+      v_count;
+  END IF;
+
   SELECT pg_get_constraintdef(oid) INTO v_def
   FROM pg_constraint
   WHERE conrelid = 'public.project_time_entries'::regclass
     AND contype = 'c'
     AND conname = 'project_time_entries_source_ck'
-    AND conkey = ARRAY[(
-      SELECT attnum FROM pg_attribute
-       WHERE attrelid = 'public.project_time_entries'::regclass
-         AND attname = 'source'
-    )];
+    AND conkey = ARRAY[v_attnum];
 
   IF v_def IS NULL THEN
     RAISE EXCEPTION
@@ -122,9 +155,12 @@ GRANT  EXECUTE ON FUNCTION public.claim_time_entries(uuid, uuid[]) TO authentica
 COMMENT ON FUNCTION public.claim_time_entries(uuid, uuid[]) IS
   'Stamps invoice_id on the subset of p_entry_ids still unbilled, billable, '
   'COMPLETED (duration_minutes IS NOT NULL) and authorized, returning the ids '
-  'actually claimed. A caller that receives fewer ids than it asked for must roll '
-  'the transaction back — there is deliberately no compensating UPDATE (the one '
-  'that shipped in the portal detached the whole invoice). A RUNNING timer is '
+  'actually claimed. A caller that receives fewer ids than it asked for must '
+  'delete the draft invoice it just created, which releases the partial stamp '
+  'through fk_time_entries_invoice''s ON DELETE SET NULL (00178:211-212) — there '
+  'is NO transaction to roll back (PostgREST gives this RPC its own) and '
+  'deliberately no compensating UPDATE (the one that shipped in the portal '
+  'detached the whole invoice). A RUNNING timer is '
   'never claimable: invoicing one would freeze duration_minutes under '
   'guard_invoiced_time_entry (00177:51-84) while the per-user running-timer index '
   '(00177:37-41) ignores invoice_id, wedging the member''s one timer slot for '

@@ -57,6 +57,19 @@
 -- If it is ruled the other way, the fix is to delete the ON CONFLICT re-seat arm
 -- and let the insert fail `Team can log their own time entries`.
 --
+-- The re-seat is NOT always same-role, and that half is part of HT-25-a
+-- (measured in review round 2, finding m2): the INSERT always proposes
+-- `support_designer`, and ON CONFLICT (project_id, user_id, role) can only match
+-- a row of THAT role. So when the owner removes a `vendor` / `bookkeeper` /
+-- `lead_designer` seat, the member's next log inserts a SECOND row —
+-- support_designer, live — beside the removed tombstone. The classifier's role
+-- read excludes the tombstone (`removed_at IS NULL`, 00578:2709-2717), so the
+-- entry then rates at the Support-designer rate-card row rather than at the role
+-- the member actually held, and v_project_roster / the Call Sheet list them as a
+-- support designer. Asserted as case (i) in
+-- supabase/tests/rls/time_entry_auto_roster_test.sql so it is a pinned decision
+-- and not a surprise.
+--
 -- Lineage: new function. REVOKE shape follows 00412:2385-2386 (trigger-only
 -- functions are reachable from no caller).
 --
@@ -145,8 +158,11 @@ COMMENT ON FUNCTION public.time_entry_auto_roster() IS
   'INSERT policies require, so the seat can never be the thing that authorizes '
   'the insert. The project''s own designer is never seated — she is already '
   'lead_designer to the classifier (00578:2708-2710) and her RLS does not come '
-  'from the roster. A seat the owner removed IS re-seated on the next log '
-  '(owed ruling HT-25-a). A NULL auth.uid() (service_role, cron, migration) '
+  'from the roster. A seat the owner removed IS re-seated on the next log, and '
+  'only a REMOVED support_designer seat is reused: removing a vendor / '
+  'bookkeeper / lead_designer seat leaves the tombstone and adds a live '
+  'support_designer row beside it, which the classifier then uses as the rate '
+  'role (owed ruling HT-25-a, both halves). A NULL auth.uid() (service_role, cron, migration) '
   'seats NOBODY: the co-membership gate cannot be evaluated without an actor, '
   'and a seat confers SELECT on every row of the project through '
   '"Team can view their project time entries".';
