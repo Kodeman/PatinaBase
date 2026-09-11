@@ -558,7 +558,7 @@ describe('InvoiceFolio delivery recovery', () => {
     expect(screen.queryByRole('button', { name: 'Regenerate link' })).not.toBeInTheDocument();
     // Print still stands — it does not depend on the link. It is a link now,
     // not a button: it opens the print route in a new tab.
-    expect(screen.getByRole('link', { name: 'Print / Save PDF' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /^Print \/ Save PDF/ })).toBeInTheDocument();
   });
 
   it('opens the print route in a new tab rather than printing the folio in place', () => {
@@ -566,10 +566,12 @@ describe('InvoiceFolio delivery recovery', () => {
 
     render(<InvoiceFolio invoiceId="invoice-1" />);
 
-    const print = screen.getByRole('link', { name: 'Print / Save PDF' });
+    const print = screen.getByRole('link', { name: /^Print \/ Save PDF/ });
     expect(print).toHaveAttribute('href', '/invoices/invoice-1/print');
     expect(print).toHaveAttribute('target', '_blank');
     expect(print).toHaveAttribute('rel', expect.stringContaining('noopener'));
+    // The new tab is announced, not just implied by target.
+    expect(print).toHaveAccessibleName('Print / Save PDF (opens in a new tab)');
   });
 });
 

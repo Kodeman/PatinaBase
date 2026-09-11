@@ -702,6 +702,7 @@ export function InvoiceFolio({
               className="ml-auto"
             >
               Print / Save PDF
+              <span className="sr-only"> (opens in a new tab)</span>
             </DocumentAction>
           )}
         </DocumentActionGroup>
