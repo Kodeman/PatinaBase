@@ -7,7 +7,7 @@
  * regenerated yet, so the Supabase client is cast `as any` like the other
  * portal hooks (see use-projects.ts).
  *
- * This module moved here from apps/designer-portal/src/hooks (00592 wave) so
+ * This module moved here from apps/designer-portal/src/hooks (00595 wave) so
  * every surface that captures an hour — desk, ⌘K, mobile, Field drain — reads
  * one implementation. The document-coupled pieces (document-time-provider,
  * time-derivation, authority-hours) stay app-local.
@@ -622,7 +622,7 @@ export interface ClaimTimeEntriesInput {
 }
 
 /**
- * Atomic claim (00592). `claim_time_entries` stamps, in ONE statement, only the
+ * Atomic claim (00595). `claim_time_entries` stamps, in ONE statement, only the
  * rows still unbilled, billable and authorized, and returns the ids it actually
  * claimed. Fewer ids back than asked for means another invoice won the race:
  * the mutation throws and the caller compensates by deleting its draft. There

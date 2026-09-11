@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- Auto-roster on first log (migration 00594, HT-25)
+-- Auto-roster on first log (migration 00597, HT-25)
 --
 -- Covers, per role:
 --   (a) an active non-guest studio co-member logging on an UN-ROSTERED project
@@ -15,6 +15,15 @@
 --   (e) a cross-studio non-member is still refused by the INSERT policies and
 --       seats nobody — the seat must never be the thing that authorizes the
 --       insert (RLS WITH CHECK is evaluated AFTER before-row triggers).
+--   (f) the project's OWN designer logging on her own project seats NOBODY, and
+--       v_project_roster returns no `team` row for her. is_studio_comember's
+--       first branch is `p_owner = auth.uid()`, so a solo designer passes the
+--       co-membership gate and would otherwise be listed as a support designer
+--       on every project she logs an hour on.
+--   (g) STRUCTURAL: the trigger body still carries the is_studio_comember gate.
+--       Case (e) passes with or without it — a failed INSERT rolls the trigger's
+--       seat back either way — so the gate needs its own assert or a future edit
+--       deleting it goes green. Same shape as 00596's viewdef postcondition.
 --
 -- How to run:
 --   psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 \
@@ -214,6 +223,53 @@ BEGIN
   ASSERT v_count = 0, 'FAIL e2: a refused insert must seat nobody, got ' || v_count;
 
   RAISE NOTICE 'time_entry_auto_roster: case (e) passed.';
+END
+$$;
+
+-- ─── (f) the project's own designer seats nobody ────────────────────────────
+DO $$
+DECLARE
+  v_count   INTEGER;
+  v_roster  INTEGER;
+BEGIN
+  PERFORM pg_temp.assume_user('a7300000-0000-4000-8000-000000000001');
+  INSERT INTO project_time_entries (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('a7300000-0000-4000-8000-0000000000b6', 'a7300000-0000-4000-8000-0000000000e1',
+          'a7300000-0000-4000-8000-000000000001', NOW() - INTERVAL '4 hours', 90, true, 'timer_auto');
+  PERFORM pg_temp.reset_role();
+
+  SELECT count(*) INTO v_count FROM project_team_members
+   WHERE project_id = 'a7300000-0000-4000-8000-0000000000e1'
+     AND user_id    = 'a7300000-0000-4000-8000-000000000001';
+  ASSERT v_count = 0,
+    'FAIL f1: the project''s own designer must not be seated on her own project, got ' || v_count;
+
+  SELECT count(*) INTO v_roster FROM v_project_roster
+   WHERE project_id = 'a7300000-0000-4000-8000-0000000000e1'
+     AND source     = 'team'
+     AND profile_id = 'a7300000-0000-4000-8000-000000000001';
+  ASSERT v_roster = 0,
+    'FAIL f2: the principal must not appear on the roster as a team member, got ' || v_roster;
+
+  RAISE NOTICE 'time_entry_auto_roster: case (f) passed.';
+END
+$$;
+
+-- ─── (g) the co-membership gate is still in the body (structural) ───────────
+DO $$
+DECLARE
+  v_src text;
+BEGIN
+  SELECT prosrc INTO v_src FROM pg_proc
+   WHERE oid = 'public.time_entry_auto_roster()'::regprocedure;
+
+  ASSERT v_src LIKE '%is_studio_comember%',
+    'FAIL g1: time_entry_auto_roster must keep its is_studio_comember gate — without it a '
+    'DEFINER trigger can manufacture the seat that authorizes the insert';
+  ASSERT v_src LIKE '%designer_id%',
+    'FAIL g2: time_entry_auto_roster must keep its own-designer early exit';
+
+  RAISE NOTICE 'time_entry_auto_roster: case (g) passed.';
   RAISE NOTICE 'All time_entry_auto_roster assertions passed.';
 END
 $$;

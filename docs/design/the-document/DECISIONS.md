@@ -11130,7 +11130,7 @@ portal deploys, since the letterhead reads `document_state.subject` directly.
 
 *Entries add: I154 · last id = I154*
 
-### R151 · The studio's own clock — the hour-tracking rulings — 2026-09-11
+### R152 · The studio's own clock — the hour-tracking rulings — 2026-09-11
 
 **Ruled by Kody, 2026-09-11** (**HT-1**…**HT-41** and the program rulings **P-1**…**P-8**, by
 interview on the panel's sheet; evidence register `artifacts/hour-tracking-2026-09-11/` — brief, nine
@@ -11144,7 +11144,7 @@ lens** in the same sheet: *mine · a member · this project · the studio*. One 
 no admin-portal route, no tab bar, no member leaderboard, no staff picker inside a money ledger (the
 member scope is entered from the person in the People Room). The project scope **stops ANDing
 `user_id`**: it answers *this house's hours*, not *my hours on this house*, which is what it has
-silently answered since R75. Totals sit **above** the rows that produced them (V10). A plain member
+silently answered since R75. Totals sit **above** the rows that produced them (V11). A plain member
 sees no lens. The member scope is **aggregate by default**; free-text notes only behind an explicit
 detail act, and the studio rollup's return shape never carries `notes` at all — asserted per role in
 SQL, not filtered in the client (HT-8, HT-9, HT-10, HT-36, HT-37, HT-38).
@@ -11189,9 +11189,14 @@ real (`time-derivation.ts` sums cumulative idle and uses it only for the annotat
 bound reads the single longest gap) and is **instrumented before it is relitigated** — R64 is
 explicitly "watch with data", and no data has been watched (HT-16, HT-17).
 
-**Companion VISION entry.** V10 (`docs/vision/VISION-DECISIONS.md`) strengthens VISION §6 with the
+**Companion VISION entry.** V11 (`docs/vision/VISION-DECISIONS.md`) strengthens VISION §6 with the
 ledger test that permits this sheet: *a total is permitted as the front matter of the rows that
 produced it; a total with no rows beneath it is a dashboard.* D9 is amended there too — capture
 belongs wherever the work happened; review belongs only in the drawer ledger, never a page.
 
-*Entries add: R151 · last id = R151*
+**Renumbered R151 → R152 before merge.** A different R151 — *People room as a construction CRM*,
+ruled the same day — was committed first on `build/people-room-crm-2026-09-11` (`1970075c2`), at the
+same line of this append-only file. Two programs cut from the same head on 2026-09-11; this one
+ships last, so this one moved. Its companion VISION entry moved with it, V10 → V11.
+
+*Entries add: R152 · last id = R152*

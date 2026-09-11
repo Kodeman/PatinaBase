@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- claim_time_entries atomicity (migration 00592, HT-5)
+-- claim_time_entries atomicity (migration 00595, HT-5)
 --
 -- The bug this pins: the portal's claim read-modify-wrote, and on a partial
 -- conflict it ran `update({invoice_id:null}).eq('invoice_id', invoiceId)` —
@@ -14,6 +14,8 @@
 --   (b) re-claiming an already-claimed id to the SAME invoice returns nothing
 --       and stamps nothing (idempotent).
 --   (c) an invoiced row cannot be re-claimed to a SECOND invoice.
+--   (d) a RUNNING timer (duration_minutes IS NULL) is never claimed — claiming
+--       one would wedge the member's single running-timer slot for good.
 --
 -- How to run:
 --   psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 \
@@ -109,7 +111,7 @@ BEGIN
 
   ASSERT (SELECT invoice_id FROM project_time_entries WHERE id = 'a7100000-0000-4000-8000-0000000000b1')
          = 'a7100000-0000-4000-8000-0000000000a1',
-    'FAIL a2: the invoice''s pre-existing entry was detached — the 00592 bug is back';
+    'FAIL a2: the invoice''s pre-existing entry was detached — the 00595 bug is back';
 
   ASSERT (SELECT invoice_id FROM project_time_entries WHERE id = 'a7100000-0000-4000-8000-0000000000b3')
          = 'a7100000-0000-4000-8000-0000000000a2',
@@ -170,6 +172,49 @@ BEGIN
     'FAIL c2: the entry must still belong to the first invoice';
 
   RAISE NOTICE 'time_claim_atomicity: case (c) passed.';
+END
+$$;
+
+-- ─── (d) a RUNNING timer is never claimed ──────────────────────────────────
+-- A running row on a non-services project is billable and billing_state
+-- 'authorized' (00578:2648-2650), so only `duration_minutes IS NOT NULL` keeps it
+-- out. Claim one and the invoiced lock (00177:51-84) freezes duration_minutes:
+-- the timer can then neither be stopped nor discarded, and the per-user running
+-- index (00177:37-41) ignores invoice_id, so the member can never start another.
+DO $$
+DECLARE
+  v_count   INTEGER;
+  v_state   TEXT;
+  v_billable BOOLEAN;
+BEGIN
+  PERFORM pg_temp.assume_user('a7100000-0000-4000-8000-000000000001');
+  INSERT INTO project_time_entries (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('a7100000-0000-4000-8000-0000000000b4', 'a7100000-0000-4000-8000-0000000000e1',
+          'a7100000-0000-4000-8000-000000000001', NOW() - INTERVAL '10 minutes', NULL, true, 'timer_auto');
+  PERFORM pg_temp.reset_role();
+
+  -- Precondition: the ONLY thing that can exclude this row is its NULL duration.
+  SELECT billing_state, billable INTO v_state, v_billable
+  FROM project_time_entries WHERE id = 'a7100000-0000-4000-8000-0000000000b4';
+  ASSERT v_billable, 'FAIL d0a: the running fixture must be billable for this case to mean anything';
+  ASSERT v_state IS NULL OR v_state = 'authorized',
+    'FAIL d0b: the running fixture must pass the billing_state clause, got ' || COALESCE(v_state, 'NULL');
+
+  PERFORM pg_temp.assume_user('a7100000-0000-4000-8000-000000000001');
+  SELECT count(*) INTO v_count
+  FROM public.claim_time_entries(
+    'a7100000-0000-4000-8000-0000000000a3',
+    ARRAY['a7100000-0000-4000-8000-0000000000b4']::uuid[]
+  );
+  PERFORM pg_temp.reset_role();
+
+  ASSERT v_count = 0,
+    'FAIL d1: a running timer must never be claimed, got ' || v_count;
+  ASSERT (SELECT invoice_id IS NULL FROM project_time_entries
+           WHERE id = 'a7100000-0000-4000-8000-0000000000b4'),
+    'FAIL d2: a running timer must be left unstamped — invoicing it wedges the member''s timer slot';
+
+  RAISE NOTICE 'time_claim_atomicity: case (d) passed.';
   RAISE NOTICE 'All time_claim_atomicity assertions passed.';
 END
 $$;

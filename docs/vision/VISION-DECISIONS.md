@@ -223,7 +223,7 @@ the deck `artifacts/portal-polish-review-2026-09-08/deck/index.html` (sheets 10�
 
 ## Ruled — 2026-09-11 (hour tracking)
 
-### V10 · A ledger is not a dashboard — §6 strengthened, not weakened — 2026-09-11
+### V11 · A ledger is not a dashboard — §6 strengthened, not weakened — 2026-09-11
 
 **Ruled.** VISION §6's refusal of dashboards gains one explicit exception, written as a test rather
 than as a carve-out: **a total is permitted as the front matter of the rows that produced it; a total
@@ -258,7 +258,7 @@ typography-first.`), at the same indent:
 >   **front matter of the rows that produced it**, and a total with no rows beneath it is a
 >   dashboard. The Hours sheet is a permitted reporting surface on exactly that condition. Nothing
 >   here licenses a utilisation score, leaderboard, ranking, streak, target, burn-down, progress bar,
->   sparkline or red/green state — those stay refused (V10, 2026-09-11).
+>   sparkline or red/green state — those stay refused (V11, 2026-09-11).
 
 **`VISION.md` is untracked in git** (`git ls-files docs/vision/` returns only this file; the document
 lives in Kody's working tree alone), so the bullet above could not be committed with this entry. It is
@@ -269,4 +269,9 @@ recorded here verbatim and owed as a one-line paste. Nothing else in §6 changes
 **HT-33**), the panel synthesis `artifacts/hour-tracking-2026-09-11/synthesis.md`, and the build plan
 `artifacts/hour-tracking-2026-09-11/build/plan-v2.md`.
 
-*Entries add: C1 · S1–S6 · V1–V7 · V8 · V9 · V10 · last id = V10*
+**Renumbered V10 → V11 before merge.** A different V10 — *Trade-side compliance upload door* — was
+committed first on `build/people-room-crm-2026-09-11` (`1970075c2`), ruled the same day from a
+program cut from the same head. This one ships last, so this one moved; the §6 bullet recorded above
+cites V11 accordingly, and the companion DECISIONS entry moved R151 → R152.
+
+*Entries add: C1 · S1–S6 · V1–V7 · V8 · V9 · V10 · V11 · last id = V11*

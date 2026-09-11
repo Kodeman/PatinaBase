@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- project_unbilled_time repair (migration 00593, HT-6)
+-- project_unbilled_time repair (migration 00596, HT-6)
 --
 -- Two live money defects, asserted:
 --   (a) the INNER JOIN on profiles under security_invoker dropped any entry
@@ -8,6 +8,9 @@
 --       is NOT an organization member and shares no other relationship, so
 --       can_view_profile() is false for the project's own designer: case (a1)
 --       pins that precondition, (a2) pins that the entry is in the view anyway.
+--       00596 removes the profiles join outright rather than outer-joining it —
+--       it selected nothing and could filter nothing — so (a2) holds for a
+--       stronger reason than the plan first described.
 --   (b) resolved_rate_cents came from the legacy change-order chain while
 --       amount_cents preferred the rated snapshot — the rate printed did not
 --       price the line. Case (b) reconciles the two on EVERY row of the view.
@@ -83,7 +86,7 @@ END;
 $$ LANGUAGE plpgsql;
 GRANT EXECUTE ON FUNCTION pg_temp.reset_role() TO PUBLIC;
 
--- ─── (a) the LEFT JOIN payoff ──────────────────────────────────────────────
+-- ─── (a) the dropped-profiles-join payoff ──────────────────────────────────
 DO $$
 DECLARE
   v_profiles INTEGER;
@@ -102,7 +105,7 @@ BEGIN
   PERFORM pg_temp.reset_role();
 
   ASSERT v_rows = 2,
-    'FAIL a2: both vendor entries must appear in project_unbilled_time (INNER JOIN profiles dropped them), got ' || v_rows;
+    'FAIL a2: both vendor entries must appear in project_unbilled_time (the INNER JOIN on profiles dropped them), got ' || v_rows;
 
   RAISE NOTICE 'time_unbilled_view_repair: case (a) passed.';
 END
