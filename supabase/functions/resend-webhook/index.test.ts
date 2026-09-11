@@ -11,7 +11,11 @@ import {
   assertEquals,
   assertFalse,
 } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { handleResendEvent } from "./index.ts";
+import {
+  handleResendEvent,
+  isTimestampWithinWindow,
+  timingSafeEqual,
+} from "./index.ts";
 
 // No PostHog key ⇒ both emit helpers are no-ops, so nothing leaves the process.
 Deno.env.delete("POSTHOG_API_KEY");
@@ -23,7 +27,10 @@ interface Recorded {
   guard?: string[];
 }
 
-function stubClient(logRow: Record<string, unknown> | null) {
+function stubClient(
+  logRow: Record<string, unknown> | null,
+  bounceCount = 0,
+) {
   const updates: Recorded[] = [];
 
   function chain(table: string, patch?: Record<string, unknown>) {
@@ -36,6 +43,7 @@ function stubClient(logRow: Record<string, unknown> | null) {
         }
         return node;
       },
+      gte: () => Promise.resolve({ count: bounceCount, error: null }),
       single: () => Promise.resolve({ data: logRow, error: null }),
       maybeSingle: () => Promise.resolve({ data: logRow, error: null }),
       update: (next: Record<string, unknown>) => {
@@ -166,6 +174,41 @@ Deno.test("a legacy flat bounce_type still resolves, and subType stands in for a
   assertEquals(first.patch.bounce_reason, "MessageRejected");
 });
 
+Deno.test("a hard bounce suppresses the profile on the first event", async () => {
+  const { client, updates } = stubClient(LOG_ROW);
+  await handleResendEvent(client as never, {
+    type: "email.bounced",
+    data: { email_id: "re_1", bounce: { type: "Permanent" } },
+  });
+  const profileUpdate = updates.find((u) => u.table === "profiles");
+  assertEquals(profileUpdate?.patch.email_suppressed, true);
+  assert(typeof profileUpdate?.patch.email_suppressed_at === "string");
+});
+
+Deno.test("a lone soft bounce records the bounce and suppresses nobody", async () => {
+  const { client, updates } = stubClient(LOG_ROW, 1);
+  await handleResendEvent(client as never, {
+    type: "email.bounced",
+    data: { email_id: "re_1", bounce: { type: "Transient" } },
+  });
+  const [first] = logUpdates(updates);
+  assertEquals(first.patch.status, "bounced");
+  assertEquals(first.patch.bounce_type, "Transient");
+  assertEquals(updates.find((u) => u.table === "profiles"), undefined);
+});
+
+Deno.test("a bounce on a row with no user_id never touches profiles", async () => {
+  const { client, updates } = stubClient({ ...LOG_ROW, user_id: null });
+  const outcome = await handleResendEvent(client as never, {
+    type: "email.bounced",
+    data: { email_id: "re_1", bounce: { type: "Permanent" } },
+  });
+  assertEquals(outcome, { matched: true });
+  const [first] = logUpdates(updates);
+  assertEquals(first.patch.status, "bounced");
+  assertEquals(updates.find((u) => u.table === "profiles"), undefined);
+});
+
 Deno.test("engagement events keep writing their own timestamps and the trail", async () => {
   for (
     const [type, column, status] of [
@@ -205,4 +248,29 @@ Deno.test("an unhandled event type writes nothing to notification_log", async ()
   });
   assertEquals(outcome, { matched: true });
   assertEquals(logUpdates(updates).length, 0);
+});
+
+
+Deno.test("a signature older than the replay window is refused", () => {
+  const now = 1_800_000_000_000;
+  const seconds = now / 1000;
+  assertEquals(isTimestampWithinWindow(String(seconds), now), true);
+  assertEquals(isTimestampWithinWindow(String(seconds - 299), now), true);
+  assertEquals(isTimestampWithinWindow(String(seconds + 299), now), true);
+  // Older than five minutes, and further into the future than five minutes.
+  assertEquals(isTimestampWithinWindow(String(seconds - 301), now), false);
+  assertEquals(isTimestampWithinWindow(String(seconds + 301), now), false);
+  // Absent or unparseable is not a timestamp at all.
+  assertEquals(isTimestampWithinWindow(null, now), false);
+  assertEquals(isTimestampWithinWindow("", now), false);
+  assertEquals(isTimestampWithinWindow("not-a-number", now), false);
+});
+
+Deno.test("signature comparison is byte-wise over equal-length inputs", () => {
+  assertEquals(timingSafeEqual("abc123", "abc123"), true);
+  assertEquals(timingSafeEqual("abc123", "abc124"), false);
+  // A prefix must not pass, and a length difference short-circuits to false.
+  assertEquals(timingSafeEqual("abc", "abc123"), false);
+  assertEquals(timingSafeEqual("", ""), true);
+  assertEquals(timingSafeEqual("", "a"), false);
 });
