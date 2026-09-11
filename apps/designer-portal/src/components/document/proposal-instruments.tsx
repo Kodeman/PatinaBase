@@ -37,6 +37,7 @@ import {
 } from '@/lib/document/proposal-watch-derivation';
 import { useFinalizeLeader } from '@/hooks/use-finalize-leader';
 import { rememberRoomOrigin } from '@/lib/document/room-origin';
+import { nudgeFailureNote } from '@/lib/delivery-ui';
 import { useDraftingState } from '@/hooks/use-drafting-state';
 import { displayDraftingState } from '@/lib/document/drafting-progress';
 import {
@@ -84,6 +85,7 @@ export function ProposalInstruments({
       <SendWallLine
         proposalId={proposalId}
         clientName={clientName}
+        clientEmail={proposal?.client?.email ?? null}
         commercialState={
           typeof proposal?.commercial_state === 'string'
             ? proposal.commercial_state
@@ -116,12 +118,15 @@ export function ProposalInstruments({
 function SendWallLine({
   proposalId,
   clientName,
+  clientEmail,
   commercialState,
   issuedOnPaper,
   nudgeHoisted = false,
 }: {
   proposalId: string;
   clientName: string;
+  /** Named in the suppression note, where the address IS the fact. */
+  clientEmail: string | null;
   commercialState: string | null;
   issuedOnPaper: boolean;
   /** The table's leader is already offering this nudge — the SAME decision,
@@ -145,7 +150,7 @@ function SendWallLine({
         res._emailDispatched
           ? { text: `Reminder sent to ${family}.`, tone: 'ok' }
           : {
-              text: 'Nudge recorded, but the email couldn’t be sent — follow up directly.',
+              text: nudgeFailureNote(res.emailSuppressed, clientEmail),
               tone: 'warn',
             },
       );

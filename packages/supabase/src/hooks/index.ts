@@ -2111,3 +2111,17 @@ export type {
   RoomConceptRenderRecord,
   RemoveRoomConceptRenderInput,
 } from "./use-room-concept-render";
+export {
+  useEmailDelivery,
+  deriveEmailDeliveryState,
+  shouldPollEmailDelivery,
+  emailDeliveryKeys,
+  EMAIL_DELIVERY_SELECT,
+} from "./use-email-delivery";
+export type {
+  EmailDelivery,
+  EmailDeliveryRefType,
+  EmailDeliveryState,
+  EmailDeliveryStatus,
+  EmailDeliveryRow,
+} from "./use-email-delivery";

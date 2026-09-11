@@ -17,7 +17,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useIsMutating, useQueryClient } from '@tanstack/react-query';
-import { PROPOSAL_CLIENT_MUTATION_KEY } from '@patina/supabase';
+import { PROPOSAL_CLIENT_MUTATION_KEY, useEmailDelivery } from '@patina/supabase';
 import {
   useProposal,
   useRetryProposalSend,
@@ -42,6 +42,7 @@ import {
   counterCopy,
 } from '../people/directory/letter-line-field';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
+import { DeliveryWord } from '../delivery-word';
 import { useProposalMirrorData } from '../drafting/proposal-mirror';
 import { useDraftingState } from '@/hooks/use-drafting-state';
 import { assessProposalSendReadiness } from '@/lib/document/proposal-send-validation';
@@ -222,6 +223,12 @@ export function SendSheet({
     sentAt: committedSentAt,
     enabled: shouldReadDeliveryStatus,
   });
+  // 00591 — what the provider did with the mail, alongside (not instead of)
+  // the dispatch-instance status above.
+  const emailDelivery = useEmailDelivery(
+    'proposal',
+    open && proposal && proposal.status !== 'draft' ? [proposalId] : [],
+  );
 
   useEffect(() => {
     setDeliveryRecovery(null);
@@ -971,6 +978,16 @@ export function SendSheet({
                   </p>
                 )}
               </div>
+            )}
+
+            {emailDelivery.byRef[proposalId] && (
+              <p className="text-[12.5px]">
+                <DeliveryWord
+                  delivery={emailDelivery.byRef[proposalId]}
+                  recipient={clientEmail ?? null}
+                  mode="all"
+                />
+              </p>
             )}
 
             {sendError && (

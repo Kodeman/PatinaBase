@@ -6,7 +6,14 @@ const executeFurnishingsOnPaper = jest.fn();
 let mockDrift: Record<string, unknown> = { data: new Map(), isLoading: false };
 let mockCommercialDocument: Record<string, unknown> = { data: undefined, isLoading: false };
 
+let mockEmailDeliveryByRef: Record<string, unknown> = {};
+
 jest.mock("@patina/supabase", () => ({
+  useEmailDelivery: () => ({
+    byRef: mockEmailDeliveryByRef,
+    isLoading: false,
+    isError: false,
+  }),
   useProposalSendDispatchStatus: () => ({
     isLoading: false,
     isError: false,
@@ -114,6 +121,7 @@ describe("AuthorizationDetail", () => {
     executeFurnishingsOnPaper.mockReset();
     mockDrift = { data: new Map(), isLoading: false };
     mockCommercialDocument = { data: undefined, isLoading: false };
+    mockEmailDeliveryByRef = {};
   });
 
   it("renders nothing when there is no instrument to show", () => {
@@ -443,5 +451,95 @@ describe("AuthorizationDetail", () => {
       );
       expect(screen.queryByTestId("void-act")).not.toBeInTheDocument();
     }
+  });
+});
+
+/**
+ * 00591 — the provider's verdict in the dispatch band, beside (not instead of)
+ * the dispatch-instance status the band already reads.
+ */
+describe("AuthorizationDetail \u00b7 the dispatch band's delivery word", () => {
+  const log = (over: Record<string, unknown> = {}) => ({
+    logId: "log-1",
+    refId: "proposal-1",
+    recipient: "harper@example.com",
+    state: "bounced",
+    status: "bounced",
+    sentAt: "2026-09-08T14:00:00.000Z",
+    deliveredAt: null,
+    bouncedAt: "2026-09-09T09:00:00.000Z",
+    bounceType: "permanent",
+    bounceReason: "no such mailbox",
+    delayedAt: null,
+    lastEvent: "email.bounced",
+    lastEventAt: "2026-09-09T09:00:00.000Z",
+    createdAt: "2026-09-08T14:00:00.000Z",
+    ...over,
+  });
+
+  beforeEach(() => {
+    mockDrift = { data: new Map(), isLoading: false };
+    mockCommercialDocument = { data: undefined, isLoading: false };
+    mockEmailDeliveryByRef = {};
+  });
+
+  it("names the bounce against the address the authorization went to", () => {
+    mockEmailDeliveryByRef = { "proposal-1": log() };
+
+    render(
+      <AuthorizationDetail
+        projectId="project-1"
+        instrument={{ ...baseInstrument, state: "sent" }}
+        open
+        onClose={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId("delivery-word")).toHaveTextContent(
+      "Bounced 9 Sept \u2014 didn't reach harper@example.com",
+    );
+  });
+
+  it("speaks in the quiet register when the authorization landed", () => {
+    mockEmailDeliveryByRef = {
+      "proposal-1": log({
+        state: "delivered",
+        status: "delivered",
+        bouncedAt: null,
+        bounceType: null,
+        bounceReason: null,
+        deliveredAt: "2026-09-08T15:00:00.000Z",
+        lastEvent: "email.delivered",
+        lastEventAt: "2026-09-08T15:00:00.000Z",
+      }),
+    };
+
+    render(
+      <AuthorizationDetail
+        projectId="project-1"
+        instrument={{ ...baseInstrument, state: "sent" }}
+        open
+        onClose={jest.fn()}
+      />,
+    );
+
+    const word = screen.getByTestId("delivery-word");
+    expect(word).toHaveTextContent("Delivered 8 Sept");
+    expect(word).not.toHaveAttribute("role");
+  });
+
+  it("says nothing about a draft, which has not been dispatched", () => {
+    mockEmailDeliveryByRef = { "proposal-1": log() };
+
+    render(
+      <AuthorizationDetail
+        projectId="project-1"
+        instrument={{ ...baseInstrument, state: "draft" }}
+        open
+        onClose={jest.fn()}
+      />,
+    );
+
+    expect(screen.queryByTestId("delivery-word")).toBeNull();
   });
 });

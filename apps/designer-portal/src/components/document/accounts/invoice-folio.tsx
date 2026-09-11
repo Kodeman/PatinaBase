@@ -16,7 +16,9 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import {
+  useEmailDelivery,
   useInvoice,
   useInvoiceLink,
   useIssueInvoice,
@@ -42,6 +44,7 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import { DateTextInput } from '../date-text-input';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
+import { DeliveryWord } from '../delivery-word';
 import { Stamp } from '../stamp';
 import { todayYmd } from '@/lib/document/format';
 import { dollarsToCents } from '@/lib/document/invoice-composer';
@@ -103,6 +106,11 @@ export function InvoiceFolio({
   const { data: invoiceLink } = useInvoiceLink(invoiceId);
   const regenerateLink = useRegenerateInvoiceLink({ errorSurface: 'inline' });
   const reconciledSessionIds = useRef(new Set<string>());
+  // A draft has never been mailed, so there is nothing to ask about.
+  const emailDelivery = useEmailDelivery(
+    'invoice',
+    invoice && invoice.status !== 'draft' ? [invoice.id] : [],
+  );
 
   const [act, setAct] = useState<ActPanel>(null);
   /** R51's quiet confirmation grammar — sage when it landed, terracotta when not. */
@@ -176,6 +184,7 @@ export function InvoiceFolio({
     );
   }
 
+  const delivery = emailDelivery.byRef[invoice.id] ?? null;
   const stamp = FOLIO_STAMP[invoice.status] ?? FOLIO_STAMP.draft;
   const overdue = isInvoiceOverdue(invoice);
   const balance = invoiceBalanceCents(invoice);
@@ -397,20 +406,37 @@ export function InvoiceFolio({
             {overdue && <span style={{ color: TERRACOTTA_INK }}> · overdue</span>}
           </p>
         </div>
-        <div className="flex shrink-0 items-center gap-2.5">
-          <Stamp label={stamp.label} color={stamp.color} ink={stamp.ink} />
-          {documentProjectId && invoice.project && onOpenDocument && (
-            <DocumentAction
-              actionKey="open-invoice-document"
-              surfaceKey="accounts"
-              regionKey="invoice-letterhead"
-              variant="tertiary"
-              onClick={() => onOpenDocument(documentProjectId)}
-              className="folio-no-print"
-            >
-              document ↗
-            </DocumentAction>
-          )}
+        {/* The word can be a full sentence with an address in it, so this
+            column shrinks and caps rather than pushing the letterhead wide. */}
+        <div className="flex min-w-0 max-w-[60%] flex-col items-end gap-1 text-right">
+          <div className="flex items-center gap-2.5">
+            <Stamp label={stamp.label} color={stamp.color} ink={stamp.ink} />
+            {documentProjectId && invoice.project && onOpenDocument && (
+              <DocumentAction
+                actionKey="open-invoice-document"
+                surfaceKey="accounts"
+                regionKey="invoice-letterhead"
+                variant="tertiary"
+                onClick={() => onOpenDocument(documentProjectId)}
+                className="folio-no-print"
+              >
+                document ↗
+              </DocumentAction>
+            )}
+          </div>
+          <DeliveryWord
+            delivery={delivery}
+            recipient={invoice.client?.email}
+            mode="all"
+            className="folio-no-print"
+            action={
+              delivery && (delivery.state === 'bounced' || delivery.state === 'suppressed') ? (
+                <Link href="/people" className="underline underline-offset-4">
+                  Fix the address in People
+                </Link>
+              ) : undefined
+            }
+          />
         </div>
       </div>
 

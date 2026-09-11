@@ -7,13 +7,32 @@ let flagValue = { value: true, isLoading: false };
 let queryIsError = false;
 const mutateAsync = jest.fn();
 let mutationPending = false;
+let deliveryByRef: Record<string, unknown> = {};
 
 jest.mock('@/hooks/use-feature-flag', () => ({ useFeatureFlag: () => flagValue }));
 jest.mock('@patina/supabase', () => ({
   ...jest.requireActual('@patina/supabase'),
   useClientInvitationStatus: () => ({ data: status, isLoading: false, isError: queryIsError }),
   useInviteAndLinkClient: () => ({ mutateAsync, isPending: mutationPending }),
+  useEmailDelivery: () => ({ byRef: deliveryByRef, isLoading: false, isError: false }),
 }));
+
+const bounced = (recipient: string | null = 'dave@okonkwo.net') => ({
+  logId: 'log-1',
+  refId: 'i1',
+  recipient,
+  state: 'bounced' as const,
+  status: 'bounced' as const,
+  sentAt: '2026-09-08T14:00:00.000Z',
+  deliveredAt: null,
+  bouncedAt: '2026-09-08T14:05:00.000Z',
+  bounceType: 'permanent',
+  bounceReason: 'no such mailbox',
+  delayedAt: null,
+  lastEvent: 'email.bounced',
+  lastEventAt: '2026-09-08T14:05:00.000Z',
+  createdAt: '2026-09-08T14:00:00.000Z',
+});
 
 function renderLine(props: {
   designerClientId: string;
@@ -74,6 +93,7 @@ describe('ClientLetterLine', () => {
     mutateAsync.mockReset();
     mutateAsync.mockResolvedValue({ designerClientId: 'dc1', kind: 'invite' });
     mutationPending = false;
+    deliveryByRef = {};
   });
 
   it('renders nothing while the flag is still answering', () => {
@@ -143,6 +163,18 @@ describe('ClientLetterLine', () => {
     );
   });
 
+  it('clears the delivery log too, so a bounced word does not outlive the resend', async () => {
+    status = { state: 'lapsed', at: '2026-09-15T14:00:00.000Z', invitationId: 'i1' };
+    deliveryByRef = { i1: bounced() };
+    const { qc } = renderLine({ designerClientId: 'dc1', clientName: 'Dave Okonkwo' });
+    const invalidateSpy = jest.spyOn(qc, 'invalidateQueries');
+    fireEvent.click(screen.getByRole('button', { name: 'Write again' }));
+    await screen.findByText('A fresh letter is on its way.');
+    expect(invalidateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: ['email-delivery'] }),
+    );
+  });
+
   it('does not invalidate the status cache when the resend fails', async () => {
     status = { state: 'lapsed', at: '2026-09-15T14:00:00.000Z', invitationId: 'i1' };
     (global.fetch as jest.Mock).mockResolvedValue({
@@ -191,6 +223,7 @@ describe('Write to {given} is an act', () => {
     mutateAsync.mockReset();
     mutateAsync.mockResolvedValue({ designerClientId: 'dc1', kind: 'invite' });
     mutationPending = false;
+    deliveryByRef = {};
   });
 
   it('renders as a button, and only in the no-letter state', () => {
@@ -279,5 +312,61 @@ describe('Write to {given} is an act', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
     expect(screen.queryByTestId('client-letter-compose')).not.toBeInTheDocument();
     expect(mutateAsync).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * 00591 — the letter's own delivery. The RPC states stay authoritative; the
+ * delivery word replaces the line's text only when the mail needs the studio.
+ */
+describe('the letter that did not arrive', () => {
+  beforeEach(() => {
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
+    flagValue = { value: true, isLoading: false };
+    queryIsError = false;
+    mutateAsync.mockReset();
+    mutationPending = false;
+    deliveryByRef = {};
+  });
+
+  it('keeps the RPC prose while the mail is behaving', () => {
+    status = { state: 'sent', at: '2026-09-08T14:00:00.000Z', invitationId: 'i1' };
+    deliveryByRef = {};
+    renderLine({ designerClientId: 'dc1', clientName: 'Dave Okonkwo' });
+    expect(screen.getByTestId('client-letter-line')).toHaveTextContent('Letter sent 8 Sept');
+    expect(screen.queryByTestId('delivery-word')).not.toBeInTheDocument();
+  });
+
+  it('replaces the prose when the letter bounced', () => {
+    status = { state: 'sent', at: '2026-09-08T14:00:00.000Z', invitationId: 'i1' };
+    deliveryByRef = { i1: bounced() };
+    renderLine({
+      designerClientId: 'dc1',
+      clientName: 'Dave Okonkwo',
+      clientEmail: 'dave@okonkwo.net',
+    });
+    const line = screen.getByTestId('client-letter-line');
+    expect(line).toHaveTextContent("Bounced 8 Sept — didn't reach dave@okonkwo.net");
+    expect(line).not.toHaveTextContent('Letter sent 8 Sept');
+  });
+
+  it('falls back to the row’s own address when the log carries none', () => {
+    status = { state: 'sent', at: '2026-09-08T14:00:00.000Z', invitationId: 'i1' };
+    deliveryByRef = { i1: bounced(null) };
+    renderLine({
+      designerClientId: 'dc1',
+      clientName: 'Dave Okonkwo',
+      clientEmail: 'dave@okonkwo.net',
+    });
+    expect(screen.getByTestId('client-letter-line')).toHaveTextContent(
+      "Bounced 8 Sept — didn't reach dave@okonkwo.net",
+    );
+  });
+
+  it('keeps Write again beside a lapsed link that also bounced', () => {
+    status = { state: 'lapsed', at: '2026-09-15T14:00:00.000Z', invitationId: 'i1' };
+    deliveryByRef = { i1: bounced() };
+    renderLine({ designerClientId: 'dc1', clientName: 'Dave Okonkwo' });
+    expect(screen.getByRole('button', { name: 'Write again' })).toBeInTheDocument();
   });
 });

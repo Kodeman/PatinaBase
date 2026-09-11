@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
 import { peopleKeys } from './use-people';
+import { emailDeliveryKeys } from './use-email-delivery';
 
 // Lazy client getter to avoid module-level initialization during SSR
 const getSupabase = () => createBrowserClient();
@@ -703,6 +704,7 @@ export function useInviteAndLinkClient() {
       queryClient.invalidateQueries({ queryKey: ['designer-client-for-user'] });
       queryClient.invalidateQueries({ queryKey: ['client-stats'] });
       queryClient.invalidateQueries({ queryKey: ['client-activity'] });
+      queryClient.invalidateQueries({ queryKey: emailDeliveryKeys.all });
     },
   });
 }
