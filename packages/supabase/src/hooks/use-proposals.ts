@@ -13,6 +13,7 @@ import {
   type ProposalSendSnapshot,
 } from '../lib/proposal-payment-schedule';
 import { signBoardMediaValue } from '../lib/board-storage';
+import { emailDeliveryKeys } from './use-email-delivery';
 import type {
   ProposalExclusion,
   ProposalPaymentMilestone,
@@ -1207,6 +1208,7 @@ export function useSendProposal(options?: { errorSurface?: 'inline' }) {
         queryClient.invalidateQueries({
           queryKey: ['drafting-facets', proposalId],
         }),
+        queryClient.invalidateQueries({ queryKey: emailDeliveryKeys.all }),
       ]);
     },
   });
@@ -1236,6 +1238,7 @@ export function useRetryProposalSend(options?: { errorSurface?: 'inline' }) {
         queryClient.invalidateQueries({
           queryKey: ['proposal-send-dispatch-status', proposalId],
         }),
+        queryClient.invalidateQueries({ queryKey: emailDeliveryKeys.all }),
       ]);
     },
   });

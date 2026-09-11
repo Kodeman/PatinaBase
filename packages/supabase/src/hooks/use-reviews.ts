@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
+import { emailDeliveryKeys } from './use-email-delivery';
 
 const getSupabase = () => createBrowserClient();
 
@@ -197,6 +198,7 @@ export function useCreateReviewRequest() {
       queryClient.invalidateQueries({
         queryKey: ['completed-projects-without-review'],
       });
+      queryClient.invalidateQueries({ queryKey: emailDeliveryKeys.all });
     },
   });
 }

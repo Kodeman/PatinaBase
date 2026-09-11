@@ -11,6 +11,7 @@ import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tansta
 import { createBrowserClient } from '../client';
 import type { OnlinePaymentMethod } from '@patina/shared/invoice';
 import { isLikelyInvoiceLinkToken } from '@patina/utils';
+import { emailDeliveryKeys } from './use-email-delivery';
 
 export type { OnlinePaymentMethod };
 
@@ -1008,6 +1009,7 @@ export function useIssueInvoice(options?: { errorSurface?: 'inline' }) {
     },
     onSuccess: (invoice, { projectId, invoiceId }) => {
       invalidateInvoiceEffects(queryClient, projectId ?? invoice?.project_id, invoiceId);
+      queryClient.invalidateQueries({ queryKey: emailDeliveryKeys.all });
     },
   });
 }
@@ -1113,6 +1115,7 @@ export function useSendInvoice(options?: { errorSurface?: 'inline' }) {
     },
     onSuccess: (_data, { projectId, invoiceId }) => {
       invalidateInvoiceEffects(queryClient, projectId, invoiceId);
+      queryClient.invalidateQueries({ queryKey: emailDeliveryKeys.all });
     },
   });
 }
@@ -1151,6 +1154,7 @@ export function useChaseInvoice(options?: { errorSurface?: 'inline' }) {
       // need to clear immediately must ALSO invalidate ['document-state'] — the
       // Receivables page's doChase does exactly that.
       invalidateInvoiceEffects(queryClient, projectId);
+      queryClient.invalidateQueries({ queryKey: emailDeliveryKeys.all });
     },
   });
 }
