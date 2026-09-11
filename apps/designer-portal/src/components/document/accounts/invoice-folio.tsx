@@ -10,9 +10,11 @@
  * rebuilt in the charcoal/paper grammar: quiet inline confirmations, R83
  * terracotta inline errors, NO toasts, zero shadows).
  *
- * Print (BIL-01): the folio prints ITSELF — the @media print stylesheet below
- * hides every body sibling of the portal root (PaperFolioSheet portals onto
- * <body>) and lets the paper flow as pages.
+ * Print (BIL-01): the folio does NOT print itself. It opens /invoices/<id>/print
+ * in a new tab, which renders the shared InvoicePaper under the
+ * `#invoice-print-root` visibility pattern. Printing in place printed a blank
+ * page — globals.css's `@media print { body * { visibility: hidden } }` restores
+ * visibility only for `.proposal-print-area`, which the folio never carried.
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -377,16 +379,6 @@ export function InvoiceFolio({
 
   return (
     <div>
-      {/* Print = the folio itself (R74). The sheet portals onto <body>, so the
-          folio's page is exactly the overlay subtree; everything else hides. */}
-      <style>{`@media print {
-        body > *:not([data-doc-overlay='paper-folio']) { display: none !important; }
-        [data-doc-overlay='paper-folio'] { position: static !important; overflow: visible !important; padding: 0 !important; }
-        [data-doc-overlay='paper-folio'] .paper-folio-backdrop { display: none !important; }
-        [data-doc-overlay='paper-folio'] .paper-folio-panel { position: static !important; max-width: none !important; border: 0 !important; border-radius: 0 !important; }
-        .folio-no-print { display: none !important; }
-      }`}</style>
-
       {/* ── Head: number · stamp · household · the doorway ─────────────── */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
@@ -418,7 +410,6 @@ export function InvoiceFolio({
                 regionKey="invoice-letterhead"
                 variant="tertiary"
                 onClick={() => onOpenDocument(documentProjectId)}
-                className="folio-no-print"
               >
                 document ↗
               </DocumentAction>
@@ -428,7 +419,6 @@ export function InvoiceFolio({
             delivery={delivery}
             recipient={invoice.client?.email}
             mode="all"
-            className="folio-no-print"
             action={
               delivery && (delivery.state === 'bounced' || delivery.state === 'suppressed') ? (
                 <Link href="/people" className="underline underline-offset-4">
@@ -627,7 +617,7 @@ export function InvoiceFolio({
       </div>
 
       {/* ── The acts row ────────────────────────────────────────────────── */}
-      <div className="folio-no-print mt-5 border-t border-[var(--color-pearl)] pt-3">
+      <div className="mt-5 border-t border-[var(--color-pearl)] pt-3">
         <DocumentActionGroup surfaceKey="accounts" regionKey="invoice-actions">
           {isDraft && (
             <DocumentAction
@@ -699,13 +689,19 @@ export function InvoiceFolio({
             </DocumentAction>
           )}
           {canPrint && (
+            // Opens the print route in a new tab rather than printing in
+            // place: the folio is an overlay, and globals.css's
+            // `@media print { body * { visibility: hidden } }` reveals only
+            // `.proposal-print-area`, so printing here produced a blank page.
             <DocumentAction
               actionKey="print-invoice"
               variant="tertiary"
-              onClick={() => window.print()}
+              href={`/invoices/${invoiceId}/print`}
+              target="_blank"
+              rel="noopener"
               className="ml-auto"
             >
-              Print
+              Print / Save PDF
             </DocumentAction>
           )}
         </DocumentActionGroup>
