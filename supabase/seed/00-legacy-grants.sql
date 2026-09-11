@@ -15656,6 +15656,12 @@ END $g$;
 
 -- 00592_people_cards_affiliations_rules.sql
 DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.assert_studio_contact_designations() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00592_people_cards_affiliations_rules.sql
+DO $g$ BEGIN
   REVOKE ALL ON TABLE public.studio_person_affiliations FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;

@@ -210,7 +210,21 @@ async function studiosHoldingPhone(
   if (projectIds.length === 0) return [];
   // One resolver, shared with the send gate (_shared/sms.ts), so the two sides
   // of the rail cannot disagree about which studio a project belongs to.
-  const orgOfProject = await orgsOfProjects(supabase, projectIds);
+  const { orgs: orgOfProject, failed } = await orgsOfProjects(
+    supabase,
+    projectIds,
+  );
+  // A seat whose studio could not be read is a studio this keyword will not
+  // reach. Say so in the log rather than letting the map come back quietly
+  // short (R-AM); the phone-global party-row write below still carries the
+  // STOP, and studiosHoldingRecord() still carries every studio that holds a
+  // record.
+  if (failed) {
+    console.error(
+      "studiosHoldingPhone: some seats could not be attributed to a studio",
+      { projectIds },
+    );
+  }
 
   const out: StudioTarget[] = [];
   const byOrg = new Map<string, StudioTarget>();
@@ -271,6 +285,40 @@ function withRecordOnlyStudios(
   return out;
 }
 
+/**
+ * The disclosure version and the recorder standing on THIS studio's own seats
+ * for this number — the evidence half of the consent record the inbound rail
+ * cannot know by itself (R-AN). Scoped to the target's own party rows, so one
+ * studio's disclosure never becomes another studio's evidence.
+ */
+async function seatConsentEvidence(
+  supabase: SupabaseClient,
+  partyIds: string[],
+): Promise<{ disclosureVersion: string | null; recordedBy: string | null }> {
+  if (partyIds.length === 0) {
+    return { disclosureVersion: null, recordedBy: null };
+  }
+  const { data, error } = await supabase
+    .from("project_parties")
+    .select("sms_consent_disclosure_version, sms_consent_recorded_by")
+    .in("id", partyIds);
+  if (error) {
+    console.error("seatConsentEvidence: project_parties read failed", error);
+    return { disclosureVersion: null, recordedBy: null };
+  }
+  const rows = (data ?? []) as Array<{
+    sms_consent_disclosure_version?: string | null;
+    sms_consent_recorded_by?: string | null;
+  }>;
+  return {
+    disclosureVersion:
+      rows.find((r) => r.sms_consent_disclosure_version)
+        ?.sms_consent_disclosure_version ?? null,
+    recordedBy: rows.find((r) => r.sms_consent_recorded_by)
+      ?.sms_consent_recorded_by ?? null,
+  };
+}
+
 async function writeChannelConsent(
   supabase: SupabaseClient,
   targets: StudioTarget[],
@@ -284,7 +332,9 @@ async function writeChannelConsent(
     // "granted 2 May 2025, opted out 3 Dec 2025" must both stay printable.
     const { data: existing } = await supabase
       .from("studio_channel_consent")
-      .select("consented_at, opt_out_at, disclosure_version, origin_project_id")
+      .select(
+        "consented_at, opt_out_at, disclosure_version, recorded_by, origin_project_id",
+      )
       .eq("organization_id", t.org)
       .eq("channel_kind", "sms")
       .eq("channel_value", phone)
@@ -293,8 +343,18 @@ async function writeChannelConsent(
       consented_at?: string | null;
       opt_out_at?: string | null;
       disclosure_version?: string | null;
+      recorded_by?: string | null;
       origin_project_id?: string | null;
     };
+    // WHICH DISCLOSURE THE PERSON WAS SHOWN, AND WHO RECORDED IT, ARE FACTS THE
+    // RAIL DOES NOT HOLD — the studio does, on its own seats, from the portal's
+    // own write. With no record yet (the ordinary case: W1a ships no hook that
+    // writes one), carrying only `prior` minted a `granted` record with a NULL
+    // disclosure version, which the mirror then wrote down over the seat that
+    // had it. record_channel_consent refuses a granted without a disclosure
+    // version (00594); the rail's door falls back to the studio's own seats
+    // instead of inventing one (R-AN).
+    const seat = await seatConsentEvidence(supabase, t.partyIds);
     await supabase.from("studio_channel_consent").upsert({
       organization_id: t.org,
       channel_kind: "sms",
@@ -313,7 +373,8 @@ async function writeChannelConsent(
       source: "inbound_sms",
       evidence,
       recorded_at: now,
-      disclosure_version: prior.disclosure_version ?? null,
+      disclosure_version: prior.disclosure_version ?? seat.disclosureVersion,
+      recorded_by: prior.recorded_by ?? seat.recordedBy,
       // The origin follows the CURRENT verdict, the same rule 00594's
       // record_channel_consent applies (COALESCE(new, prior)). R-Q's sentence
       // names the job the verdict on the books came from; taking the prior made

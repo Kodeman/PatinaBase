@@ -5,7 +5,12 @@ import {
   assert,
   assertEquals,
 } from "https://deno.land/std@0.168.0/testing/asserts.ts";
-import { flushDeferredMessages, isQuietHours, sendPartySms } from "./sms.ts";
+import {
+  flushDeferredMessages,
+  isQuietHours,
+  resolveProjectOrg,
+  sendPartySms,
+} from "./sms.ts";
 import { createFakeSupabase } from "../_tests/fake-supabase.ts";
 
 function envOf(map: Record<string, string>) {
@@ -678,11 +683,38 @@ Deno.test("a granted record does not override an opted-out party row", async () 
 // M7: sms.ts resolves the org the same way 00594 does — studio_id, then the
 // designer's primary studio — so the gate and the table cannot disagree about
 // which studio a NULL-studio_id project belongs to.
-Deno.test("a NULL-studio_id project resolves its org through _primary_studio_for", async () => {
+//
+// r5 M5-1 / R-AM: over the TABLES, never through the _primary_studio_for RPC,
+// which is revoked from every PostgREST role (00483) and answers the rail with
+// 42501. The rows below are the real query shape — organization_members joined
+// to organizations — so a stubbed RPC can no longer hide that.
+Deno.test("a NULL-studio_id project resolves its org from organization_members", async () => {
   const fake = createFakeSupabase(
     {
       project_parties: [party("p1", "granted")],
       projects: [{ id: "proj1", studio_id: null, designer_id: "dz1" }],
+      organization_members: [
+        // A non-studio org the designer also belongs to, first in the array —
+        // the org type filter, not the row order, is what picks the studio.
+        {
+          user_id: "dz1",
+          organization_id: "org-vendor",
+          role: "owner",
+          status: "active",
+          joined_at: "2024-01-01T00:00:00Z",
+        },
+        {
+          user_id: "dz1",
+          organization_id: "org-alpha",
+          role: "member",
+          status: "active",
+          joined_at: "2025-01-01T00:00:00Z",
+        },
+      ],
+      organizations: [
+        { id: "org-vendor", type: "vendor" },
+        { id: "org-alpha", type: "design_studio" },
+      ],
       studio_channel_consent: [{
         organization_id: "org-alpha",
         channel_kind: "sms",
@@ -690,13 +722,91 @@ Deno.test("a NULL-studio_id project resolves its org through _primary_studio_for
         status: "opted_out",
       }],
     },
-    { _primary_studio_for: (args) => ({ data: args.p_user === "dz1" ? "org-alpha" : null, error: null }) },
   );
   const res = await sendPartySms(fake as never, { partyId: "p1", body: "hello" }, {
     getEnv: envOf(CONSENT_ENV),
     now: OPEN_HOURS,
   });
   assert(!res.sent, "the studio's STOP must reach a project with no studio_id");
+  assertEquals(res.reason, "opted_out");
+});
+
+// r5 M5-1 / R-AM: the ranking is 00315's own — owner first, then the earliest
+// joined_at — read off organization_members, and a non-studio org is not a
+// candidate however early it was joined.
+Deno.test("the primary studio is the owner-role design_studio, read off the tables", async () => {
+  const fake = createFakeSupabase({
+    projects: [{ id: "proj1", studio_id: null, designer_id: "dz1" }],
+    organization_members: [
+      {
+        user_id: "dz1",
+        organization_id: "org-early",
+        role: "member",
+        status: "active",
+        joined_at: "2023-01-01T00:00:00Z",
+      },
+      {
+        user_id: "dz1",
+        organization_id: "org-owned",
+        role: "owner",
+        status: "active",
+        joined_at: "2026-01-01T00:00:00Z",
+      },
+      {
+        user_id: "dz1",
+        organization_id: "org-left",
+        role: "owner",
+        status: "removed",
+        joined_at: "2022-01-01T00:00:00Z",
+      },
+    ],
+    organizations: [
+      { id: "org-early", type: "design_studio" },
+      { id: "org-owned", type: "design_studio" },
+      { id: "org-left", type: "design_studio" },
+    ],
+  });
+  assertEquals(await resolveProjectOrg(fake as never, "proj1"), {
+    org: "org-owned",
+    failed: false,
+  });
+});
+
+// …and a resolve that FAILED is not a project with no studio. The RPC this
+// used to call (_primary_studio_for) is revoked from every PostgREST role
+// (00483), so the 42501 came back as a silent null org and the gate then read
+// another tenant's rows. Now it is a logged refusal.
+Deno.test("a failed org resolve refuses the send instead of reading as no studio", async () => {
+  const denied = { message: "permission denied for table projects" };
+  const failing = {
+    select: () => failing,
+    eq: () => failing,
+    in: () => failing,
+    maybeSingle: () => Promise.resolve({ data: null, error: denied }),
+    then: (cb: (v: unknown) => unknown) =>
+      Promise.resolve({ data: null, error: denied }).then(cb),
+  };
+
+  assertEquals(
+    await resolveProjectOrg({ from: () => failing } as never, "proj1"),
+    { org: null, failed: true },
+  );
+
+  const fake = createFakeSupabase({
+    project_parties: [party("p1", "granted")],
+    projects: [{ id: "proj1", studio_id: "org-alpha" }],
+  });
+  const blindToProjects = {
+    ...fake,
+    from: (table: string) =>
+      table === "projects" ? failing : fake.from(table),
+  };
+  const res = await sendPartySms(
+    blindToProjects as never,
+    { partyId: "p1", body: "hello" },
+    { getEnv: envOf(CONSENT_ENV), now: OPEN_HOURS },
+  );
+  assert(!res.sent, "an unresolvable studio must not send on a granted seat");
   assertEquals(res.reason, "opted_out");
 });
 
@@ -761,7 +871,7 @@ Deno.test("another studio's opted-out party row does not block this studio's gra
 
 // The org-scoped scan follows the same NULL-studio_id fallback the table uses,
 // so a refusal on a project with no studio_id still reaches the record's org.
-Deno.test("the stale-record scan resolves a NULL-studio_id project through _primary_studio_for", async () => {
+Deno.test("the stale-record scan resolves a NULL-studio_id project from organization_members", async () => {
   const fake = createFakeSupabase(
     {
       project_parties: [
@@ -772,6 +882,14 @@ Deno.test("the stale-record scan resolves a NULL-studio_id project through _prim
         { id: "proj1", studio_id: "org-alpha" },
         { id: "proj2", studio_id: null, designer_id: "dz1" },
       ],
+      organization_members: [{
+        user_id: "dz1",
+        organization_id: "org-alpha",
+        role: "owner",
+        status: "active",
+        joined_at: "2025-01-01T00:00:00Z",
+      }],
+      organizations: [{ id: "org-alpha", type: "design_studio" }],
       studio_channel_consent: [{
         organization_id: "org-alpha",
         channel_kind: "sms",
@@ -779,7 +897,6 @@ Deno.test("the stale-record scan resolves a NULL-studio_id project through _prim
         status: "granted",
       }],
     },
-    { _primary_studio_for: (args) => ({ data: args.p_user === "dz1" ? "org-alpha" : null, error: null }) },
   );
   const res = await sendPartySms(fake as never, { partyId: "p1", body: "hello" }, {
     getEnv: envOf(CONSENT_ENV),

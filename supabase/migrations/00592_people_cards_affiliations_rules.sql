@@ -8,7 +8,10 @@
 --   1. studio_contacts gains the person facts (is_sole_proprietor,
 --      studio_verdict, studio_verdict_at) and the company facts (legal_name,
 --      dba_name, company_kind, trades, w9_on_file_at, tax_id_last4, remit_to,
---      retainage_bps, warranty_until, and the three designated-person FKs).
+--      retainage_bps, warranty_until, and the three designated-person FKs —
+--      each guarded by assert_studio_contact_designations() to a PERSON card
+--      in the SAME studio, never the row itself, since a self-FK into a table
+--      holding both kinds of card and every tenant's cards says none of that).
 --   2. studio_person_affiliations — E4: which person does what at which firm.
 --      Backfilled from studio_contacts.company_id (00417), which becomes a
 --      derived pointer at the open affiliation, kept equal by trigger. One
@@ -166,6 +169,85 @@ COMMENT ON COLUMN public.studio_contacts.signer_person_id IS
 COMMENT ON COLUMN public.studio_contacts.site_contact_person_id IS
   'The one name per firm the superintendent calls about the site.';
 
+-- ── The three designated people must be people, in this studio ──────────────
+-- (r5 M5-4, ruling R-AP.) All three columns are plain self-FKs into
+-- studio_contacts, which holds BOTH kinds of card AND every studio's cards, so
+-- the FK alone permits another tenant's card, a COMPANY card, or the row
+-- itself as its own site contact. This is the same hole
+-- assert_affiliation_card_kinds() closes for studio_person_affiliations, and it
+-- is closed the same way: a CHECK cannot see another table, so a BEFORE
+-- trigger asserts it. paperwork_contact_person_id is what P3's trade-upload
+-- chase (PR-a) will mint a token against — a cross-tenant value there is a
+-- cross-tenant paperwork link waiting for a SECURITY DEFINER reader that does
+-- not re-check.
+CREATE OR REPLACE FUNCTION public.assert_studio_contact_designations()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+DECLARE
+  v_col  text;
+  v_id   uuid;
+  v_kind text;
+  v_org  uuid;
+BEGIN
+  FOR v_col, v_id IN
+    SELECT t.col, t.ref
+      FROM (VALUES
+              ('paperwork_contact_person_id', NEW.paperwork_contact_person_id),
+              ('signer_person_id',            NEW.signer_person_id),
+              ('site_contact_person_id',      NEW.site_contact_person_id)
+           ) AS t(col, ref)
+     WHERE t.ref IS NOT NULL
+  LOOP
+    IF v_id = NEW.id THEN
+      RAISE EXCEPTION 'designated_person_is_self'
+        USING HINT = v_col || ' may not name the card it sits on: a firm is not '
+                     'its own site contact, and a person is not their own signer.';
+    END IF;
+
+    SELECT sc.entity_kind, sc.organization_id INTO v_kind, v_org
+      FROM public.studio_contacts sc WHERE sc.id = v_id;
+
+    IF v_kind IS DISTINCT FROM 'person' THEN
+      RAISE EXCEPTION 'designated_person_not_a_person'
+        USING HINT = v_col || ' must name a PERSON card. The studio chases '
+                     'paper at a human, not at a firm.';
+    END IF;
+    IF v_org IS DISTINCT FROM NEW.organization_id THEN
+      RAISE EXCEPTION 'designated_person_other_studio'
+        USING HINT = v_col || ' must name a card in the SAME studio. A '
+                     'designated person is a fact inside one rolodex.';
+    END IF;
+  END LOOP;
+
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.assert_studio_contact_designations()
+  FROM PUBLIC, anon, authenticated;
+
+COMMENT ON FUNCTION public.assert_studio_contact_designations() IS
+  'BEFORE INSERT/UPDATE on studio_contacts: paperwork_contact_person_id, '
+  'signer_person_id and site_contact_person_id must each name a PERSON card in '
+  'the SAME organization_id, and never the row itself '
+  '(designated_person_not_a_person / designated_person_other_studio / '
+  'designated_person_is_self). The self-FKs cannot say this — studio_contacts '
+  'holds both kinds of card and every studio''s cards — and '
+  'paperwork_contact_person_id is the pointer the trade-upload chase mints a '
+  'token against (00592, r5 M5-4/R-AP).';
+
+DROP TRIGGER IF EXISTS assert_studio_contact_designations_trg
+  ON public.studio_contacts;
+CREATE TRIGGER assert_studio_contact_designations_trg
+  BEFORE INSERT OR UPDATE OF
+    paperwork_contact_person_id, signer_person_id, site_contact_person_id,
+    organization_id
+  ON public.studio_contacts
+  FOR EACH ROW EXECUTE FUNCTION public.assert_studio_contact_designations();
+
 -- Company cards are looked up by kind inside a studio (the Firms chip).
 CREATE INDEX IF NOT EXISTS idx_studio_contacts_org_company_kind
   ON public.studio_contacts(organization_id, company_kind)
@@ -213,7 +295,11 @@ COMMENT ON TABLE public.studio_person_affiliations IS
   'person-at-firm fact and the one the room reads (the company card''s crew '
   'list, R-W). Both kinds are ENFORCED by assert_affiliation_card_kinds(), and '
   'a card may not be its own firm '
-  '(studio_person_affiliations_distinct_cards_check). studio_contacts.company_id (00417) is now a DERIVED POINTER at '
+  '(studio_person_affiliations_distinct_cards_check). '
+  'N PERSONS x N FIRMS (R-AO): a person may hold MORE THAN ONE open row — the '
+  'sole proprietor who also crews for a GC (crm-model §4) — and neither '
+  'trigger below ever closes a row it was not pointed at. '
+  'studio_contacts.company_id (00417) is now a DERIVED POINTER at '
   'the person''s open affiliation, kept for the legacy readers and maintained '
   'by sync_studio_contact_company_pointer(); a direct write to that legacy '
   'column opens the matching affiliation here, through '
@@ -491,7 +577,8 @@ SECURITY DEFINER
 SET search_path TO 'public'
 AS $$
 DECLARE
-  v_open uuid;
+  v_open     uuid;
+  v_rederive boolean := false;
 BEGIN
   IF NEW.entity_kind IS DISTINCT FROM 'person' THEN
     RETURN NULL;
@@ -513,11 +600,24 @@ BEGIN
   PERFORM set_config('patina.suppress_affiliation_sync', '1', true);
 
   IF NEW.company_id IS NULL THEN
-    -- The designer cleared the firm: the person left, dated today.
-    UPDATE public.studio_person_affiliations spa
-       SET to_date = GREATEST(CURRENT_DATE, COALESCE(spa.from_date, CURRENT_DATE))
-     WHERE spa.person_id = NEW.id
-       AND spa.to_date IS NULL;
+    -- The designer cleared the firm: the affiliation THE POINTER NAMED ends
+    -- today. Only that one (r5 M5-3, ruling R-AO) — a sibling the pointer was
+    -- not naming is a standing fact about a different firm and is not the
+    -- designer's to end from this card's firm field.
+    --
+    -- OLD.company_id NULL with an open affiliation standing is a pointer that
+    -- had already drifted from the fact; nothing was named, so nothing closes
+    -- and the re-derive below simply lets the pointer catch up.
+    IF TG_OP = 'UPDATE' AND OLD.company_id IS NOT NULL THEN
+      UPDATE public.studio_person_affiliations spa
+         SET to_date = GREATEST(CURRENT_DATE, COALESCE(spa.from_date, CURRENT_DATE))
+       WHERE spa.person_id = NEW.id
+         AND spa.to_date IS NULL
+         AND spa.company_id = OLD.company_id;
+    END IF;
+    -- A surviving sibling IS the person's open affiliation now, so the pointer
+    -- is re-derived onto it rather than left NULL beside a standing fact.
+    v_rederive := true;
   ELSIF public.studio_contact_org(NEW.company_id) IS DISTINCT FROM NEW.organization_id THEN
     -- A cross-studio pointer is left exactly as the backfill and the RLS
     -- WITH CHECK leave it: for a human. Opening the affiliation here would
@@ -534,21 +634,30 @@ BEGIN
     -- is older than this file and is left visible, not mirrored.
     NULL;
   ELSE
-    -- Open the new one FIRST, dated today so it outranks any NULL-dated row
-    -- the fold left, then close the others. The reverse order would leave a
-    -- moment with no open affiliation at all.
+    -- Open the affiliation the pointer names, dated today so it outranks any
+    -- NULL-dated row the fold left — and OPEN IT ONLY. Siblings stand (r5
+    -- M5-3, ruling R-AO): the model is N persons x N firms (crm-model §1 E4),
+    -- the sole proprietor who also crews for a GC holds two open affiliations,
+    -- and this trigger fires on the column the SHIPPED card editor writes on
+    -- every save (use-studio-contacts.ts:202, :234). Closing the others here
+    -- meant a designer picking the other firm in today's editor silently ended
+    -- a standing affiliation and struck the person off that firm's crew list
+    -- (R-W). The pointer holds one — the most recently begun — and the room
+    -- reads the affiliations for the rest.
     INSERT INTO public.studio_person_affiliations (person_id, company_id, from_date, to_date)
     VALUES (NEW.id, NEW.company_id, CURRENT_DATE, NULL)
     ON CONFLICT (person_id, company_id) WHERE to_date IS NULL DO NOTHING;
-
-    UPDATE public.studio_person_affiliations spa
-       SET to_date = GREATEST(CURRENT_DATE, COALESCE(spa.from_date, CURRENT_DATE))
-     WHERE spa.person_id = NEW.id
-       AND spa.to_date IS NULL
-       AND spa.company_id <> NEW.company_id;
   END IF;
 
   PERFORM set_config('patina.suppress_affiliation_sync', '', true);
+
+  -- Outside the suppression window on purpose: this is the ordinary pointer
+  -- derivation, and its studio_contacts write re-enters this function only to
+  -- find pointer and open affiliation already agreeing (the early return
+  -- above), so it terminates in one hop.
+  IF v_rederive THEN
+    PERFORM public._sync_person_company_pointer(NEW.id);
+  END IF;
 
   RETURN NULL;
 END;
@@ -559,8 +668,12 @@ REVOKE ALL ON FUNCTION public.sync_person_affiliation_from_pointer()
 
 COMMENT ON FUNCTION public.sync_person_affiliation_from_pointer() IS
   'AFTER INSERT/UPDATE OF company_id on studio_contacts: opens the person''s '
-  'affiliation at the firm the pointer names, closing any other open one, and '
-  'closes them all when the pointer is cleared. The reverse half of '
+  'affiliation at the firm the pointer names, and closes THAT ONE — the one the '
+  'pointer named — when the pointer is cleared. It never touches a sibling '
+  'affiliation: the model is N persons x N firms (R-AO), a person may stand '
+  'open at two firms, and the pointer simply holds the most recently begun. '
+  'Clearing the pointer re-derives it onto any surviving open affiliation. The '
+  'reverse half of '
   'sync_studio_contact_company_pointer(), so the legacy column the shipped '
   'hooks still write (use-studio-contacts.ts:202, :234) cannot produce a card '
   'the company''s crew list cannot see. Stands down for a cross-studio pointer, '
@@ -584,7 +697,10 @@ COMMENT ON COLUMN public.studio_contacts.company_id IS
   'sync_person_affiliation_from_pointer() opens (or closes) that affiliation '
   'when this column is written directly — which is what the shipped hooks still '
   'do. So a firm set through the legacy column is a firm the company card''s '
-  'crew list can see, and neither writer silently discards the other (00592).';
+  'crew list can see, and neither writer silently discards the other. ONE '
+  'POINTER, MANY AFFILIATIONS (R-AO): writing this column opens the '
+  'affiliation it names and leaves every sibling standing, so moving the '
+  'pointer is not a way to end a person''s other firm (00592).';
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- 4. studio_contact_rules — E7, the contact rule

@@ -534,15 +534,25 @@ BEGIN
   -- `pending` becomes one real opt-in SMS per party row on the number.
   PERFORM set_config('patina.suppress_consent_dispatch', '1', true);
 
+  -- THE VERDICT AND ITS DATES ARE COPIED; THE EVIDENCE IS COALESCED, PER
+  -- COLUMN (r5 M5-2, ruling R-AN). A record can carry a verdict without
+  -- carrying every evidence column — the inbound rail mints one from a YES on
+  -- a number whose evidence so far lives only on the seat — and before this,
+  -- the mirror wrote those NULLs down over a disclosure version and a recorder
+  -- the portal had recorded. That is the same hollow-evidence state r2 M-1
+  -- closed, arriving from the other side: the 10DLC evidence for the send
+  -- cannot be erased by a write that simply did not restate it. So the mirror
+  -- never overwrites a non-null evidence column with NULL; the record's own
+  -- door (record_channel_consent) already refuses to empty the set.
   UPDATE public.project_parties pp
      SET sms_consent_status             = NEW.status,
          sms_consented_at               = NEW.consented_at,
          sms_opt_out_at                 = NEW.opt_out_at,
-         sms_consent_source             = NEW.source,
-         sms_consent_evidence           = NEW.evidence,
-         sms_consent_recorded_at        = NEW.recorded_at,
-         sms_consent_disclosure_version = NEW.disclosure_version,
-         sms_consent_recorded_by        = NEW.recorded_by
+         sms_consent_source             = COALESCE(NEW.source, pp.sms_consent_source),
+         sms_consent_evidence           = COALESCE(NEW.evidence, pp.sms_consent_evidence),
+         sms_consent_recorded_at        = COALESCE(NEW.recorded_at, pp.sms_consent_recorded_at),
+         sms_consent_disclosure_version = COALESCE(NEW.disclosure_version, pp.sms_consent_disclosure_version),
+         sms_consent_recorded_by        = COALESCE(NEW.recorded_by, pp.sms_consent_recorded_by)
     FROM public.projects p
    WHERE p.id = pp.project_id
      AND pp.phone_e164 = NEW.channel_value
@@ -554,16 +564,20 @@ BEGIN
      -- write path cannot produce and project_parties has no CHECK against,
      -- and it is the 10DLC evidence for the send. Re-firing is already held
      -- off by patina.suppress_consent_dispatch above, so the narrow status
-     -- test is no longer load-bearing.
+     -- test is no longer load-bearing. Compared against the values this write
+     -- would actually leave, so a NULL the COALESCE is not going to write no
+     -- longer counts as a difference.
      AND (pp.sms_consent_status, pp.sms_consented_at, pp.sms_opt_out_at,
           pp.sms_consent_source, pp.sms_consent_evidence,
           pp.sms_consent_recorded_at, pp.sms_consent_disclosure_version,
           pp.sms_consent_recorded_by)
          IS DISTINCT FROM
          (NEW.status, NEW.consented_at, NEW.opt_out_at,
-          NEW.source, NEW.evidence,
-          NEW.recorded_at, NEW.disclosure_version,
-          NEW.recorded_by);
+          COALESCE(NEW.source, pp.sms_consent_source),
+          COALESCE(NEW.evidence, pp.sms_consent_evidence),
+          COALESCE(NEW.recorded_at, pp.sms_consent_recorded_at),
+          COALESCE(NEW.disclosure_version, pp.sms_consent_disclosure_version),
+          COALESCE(NEW.recorded_by, pp.sms_consent_recorded_by));
 
   PERFORM set_config('patina.suppress_consent_dispatch', '', true);
 
@@ -617,7 +631,11 @@ COMMENT ON FUNCTION public.mirror_channel_consent_to_parties() IS
   'onto every party row in that studio carrying the same phone_e164, making '
   'project_parties.sms_consent_* a read-only cached mirror. Guarded on the '
   'whole cached tuple (status AND the evidence set) so a re-record does not '
-  'rewrite already-identical rows but DOES refresh evidence, and it sets '
+  'rewrite already-identical rows but DOES refresh evidence — refresh, never '
+  'erase: each evidence column is COALESCEd over what the seat holds, so a '
+  'record that carries a verdict without a disclosure version or a recorder '
+  '(the shape the inbound rail mints) cannot null the ones the portal recorded '
+  '(R-AN). It also sets '
   'patina.suppress_consent_dispatch for the duration of its own UPDATE so a '
   'mirrored verdict cannot fire 00432''s opt-in dispatch or 00374''s '
   'site-request dispatch once per row. A mirrored `granted` DOES release the '
@@ -652,7 +670,12 @@ CREATE TRIGGER mirror_channel_consent_to_parties_trg
 --      evidence at all, and it erased a recorded grant, its source, its words
 --      and its disclosure version — from the record AND, through the mirror,
 --      from every seat in the studio on that number.
---   2. TRANSITION. Nothing leaves `opted_out` through this door. Not to
+--   2. TRANSITION — AND IT READS BOTH LEDGERS. The send gate refuses on the
+--      record OR on a refusal standing on one of this studio's own party rows;
+--      this door does the same (R-AL), because until PR-x retires those writes
+--      a refusal can stand on a seat with no record behind it, and granting
+--      over it also cleared — through the mirror — the very seat the send gate
+--      would have tested. Nothing leaves `opted_out` through this door. Not to
 --      granted (that is the recipient's to give), not to pending, and not to
 --      not_asked — a STOP is the only stored record of a refusal and the RPC
 --      may not erase it. PR-m's way back is a fresh recorded consent, which
@@ -702,9 +725,11 @@ SECURITY DEFINER
 SET search_path TO 'public'
 AS $$
 DECLARE
-  v_value  text;
-  v_now    timestamptz := now();
-  v_row    public.studio_channel_consent;
+  v_value         text;
+  v_now           timestamptz := now();
+  v_row           public.studio_channel_consent;
+  v_seat_refusal  boolean := false;
+  v_record_status text;
 BEGIN
   IF NOT public.is_active_studio_member(p_organization_id) THEN
     RAISE EXCEPTION 'not_a_studio_member'
@@ -749,6 +774,53 @@ BEGIN
        OR COALESCE(btrim(p_evidence), '') = '' THEN
       RAISE EXCEPTION 'consent_evidence_required'
         USING HINT = 'Marking a refusal needs a source and the evidence in words (PR-m).';
+    END IF;
+  END IF;
+
+  -- ── 2a. The refusal that lives only on a seat (r5 B5-1, ruling R-AL) ─────
+  -- The gate below reads the RECORD. The send gate reads BOTH — the record and
+  -- this studio's own party rows (_shared/sms.ts orgHasOptedOutParty), because
+  -- project_parties.sms_consent_* is still writable by the portal (PR-x has not
+  -- retired those writes) and a refusal can therefore stand on a seat with no
+  -- record behind it at all: PR-m's manually marked verbal STOP, the phone-edit
+  -- path's revertsToOptedOut (use-coordination.ts:596-620), any seat that goes
+  -- opted_out after the fold. Reading only the record, this door wrote `granted`
+  -- straight over such a refusal — and the mirror then cleared the very party
+  -- row the send gate was going to test, so one RPC call by any studio member
+  -- turned a refusal into a sendable number with no trace left.
+  --
+  -- So the write door reads the same two ledgers the read door does. Scoped to
+  -- THIS org, resolved the way the mirror resolves it, so R-AK is not reopened:
+  -- another studio's STOP is not this studio's fact.
+  --
+  -- The way past is not a second call to this door: the studio records the
+  -- refusal it is holding (status opted_out, with its own evidence), which puts
+  -- the fact on the books where reconsent() and the recipient's own YES/START
+  -- can act on it.
+  IF p_status = 'granted' THEN
+    SELECT EXISTS (
+      SELECT 1
+        FROM public.project_parties pp
+        JOIN public.projects p ON p.id = pp.project_id
+       WHERE pp.phone_e164 = v_value
+         AND pp.sms_consent_status = 'opted_out'
+         AND pp.sms_opt_out_at IS NOT NULL
+         AND COALESCE(p.studio_id, public._primary_studio_for(p.designer_id))
+             = p_organization_id
+    ) INTO v_seat_refusal;
+
+    SELECT scc.status INTO v_record_status
+      FROM public.studio_channel_consent scc
+     WHERE scc.organization_id = p_organization_id
+       AND scc.channel_kind    = p_channel_kind
+       AND scc.channel_value   = v_value;
+
+    IF v_seat_refusal AND v_record_status IS DISTINCT FROM 'opted_out' THEN
+      RAISE EXCEPTION 'channel_opted_out'
+        USING HINT = 'A seat in this studio on this number is marked opted out. '
+                     'Record that refusal here first (status opted_out, with the '
+                     'evidence), then record_channel_reconsent() is the way back '
+                     'and the grant is the recipient''s to give.';
     END IF;
   END IF;
 
@@ -849,6 +921,20 @@ BEGIN
              AND (scc.opt_out_at IS NULL
                   OR (scc.consented_at IS NOT NULL
                       AND scc.consented_at > scc.opt_out_at))))
+    -- 2a's seat test again, inside the write. The check above is what refuses
+    -- the INSERT case (no record yet, refusal on a seat only); this leg is the
+    -- same rule where the row already exists, so a seat marked opted_out
+    -- between that read and this write cannot be written over either.
+    AND (EXCLUDED.status <> 'granted'
+         OR NOT EXISTS (
+              SELECT 1
+                FROM public.project_parties pp
+                JOIN public.projects p ON p.id = pp.project_id
+               WHERE pp.phone_e164 = scc.channel_value
+                 AND pp.sms_consent_status = 'opted_out'
+                 AND pp.sms_opt_out_at IS NOT NULL
+                 AND COALESCE(p.studio_id, public._primary_studio_for(p.designer_id))
+                     = scc.organization_id))
   RETURNING * INTO v_row;
 
   IF NOT FOUND THEN
@@ -865,6 +951,24 @@ BEGIN
         USING HINT = 'This number or address already opted out. Only they can '
                      'rejoin by replying START, or the studio can record a fresh '
                      'consent through record_channel_reconsent().';
+    END IF;
+
+    -- The seat leg (2a) raced in between: name it for what it is rather than
+    -- letting it print as an unanswered refusal on the record.
+    IF p_status = 'granted' AND EXISTS (
+         SELECT 1
+           FROM public.project_parties pp
+           JOIN public.projects p ON p.id = pp.project_id
+          WHERE pp.phone_e164 = v_value
+            AND pp.sms_consent_status = 'opted_out'
+            AND pp.sms_opt_out_at IS NOT NULL
+            AND COALESCE(p.studio_id, public._primary_studio_for(p.designer_id))
+                = p_organization_id) THEN
+      RAISE EXCEPTION 'channel_opted_out'
+        USING HINT = 'A seat in this studio on this number is marked opted out. '
+                     'Record that refusal here first (status opted_out, with the '
+                     'evidence), then record_channel_reconsent() is the way back '
+                     'and the grant is the recipient''s to give.';
     END IF;
 
     RAISE EXCEPTION 'consent_awaiting_recipient'
@@ -897,7 +1001,11 @@ COMMENT ON FUNCTION public.record_channel_consent(uuid, text, text, text, text, 
   'reconsent() plus a grant cannot compose their way back to granted without '
   'the recipient''s own YES or START, and a DATELESS refusal (the shipped '
   'portal writes them on purpose and the fold mints them) fails closed like a '
-  'dated one; never empties the evidence set — source, '
+  'dated one; refuses `granted` (channel_opted_out) while a DATED opted_out '
+  'seat stands in THIS studio on that number even when the record knows '
+  'nothing of it, since the portal still writes party rows directly and the '
+  'send gate reads both ledgers — the write door now reads both too (R-AL); '
+  'never empties the evidence set — source, '
   'evidence, disclosure_version and recorded_by are kept when the new verdict '
   'does not restate them, and laundering is closed by the evidence gate, since '
   'every accepted status must supply its own source and evidence; normalises '
