@@ -430,15 +430,84 @@ Deno.test("a caller's own tag wins over the derived one of the same name", async
   ]);
 });
 
+/** Runs `fn` with a stubbed fetch and a known EMAIL_DEV_MODE, then restores
+ * both. sendCompliantEmail's live path posts to Resend, so a test that reaches
+ * it must never depend on the ambient env to stay off the network. */
+async function withStubbedSend(
+  devMode: string | null,
+  fn: (calls: Array<{ url: string; body: unknown }>) => Promise<void>,
+): Promise<void> {
+  const previousMode = Deno.env.get("EMAIL_DEV_MODE");
+  const previousKey = Deno.env.get("RESEND_API_KEY");
+  const realFetch = globalThis.fetch;
+  const calls: Array<{ url: string; body: unknown }> = [];
+
+  if (devMode === null) Deno.env.delete("EMAIL_DEV_MODE");
+  else Deno.env.set("EMAIL_DEV_MODE", devMode);
+  Deno.env.set("RESEND_API_KEY", "test-key");
+  globalThis.fetch = ((input: string | URL | Request, init?: RequestInit) => {
+    calls.push({
+      url: typeof input === "string" ? input : input.toString(),
+      body: init?.body ? JSON.parse(String(init.body)) : undefined,
+    });
+    return Promise.resolve(
+      new Response(JSON.stringify({ id: "re_stub_1" }), { status: 200 }),
+    );
+  }) as typeof fetch;
+
+  try {
+    await fn(calls);
+  } finally {
+    globalThis.fetch = realFetch;
+    if (previousMode === undefined) Deno.env.delete("EMAIL_DEV_MODE");
+    else Deno.env.set("EMAIL_DEV_MODE", previousMode);
+    if (previousKey === undefined) Deno.env.delete("RESEND_API_KEY");
+    else Deno.env.set("RESEND_API_KEY", previousKey);
+  }
+}
+
 Deno.test("the notification_log insert stamps ref_type, ref_id and recipient", async () => {
   const captured: { insert?: Record<string, unknown> } = {};
-  await sendCompliantEmail(loggingClient(captured) as never, {
-    ...emailOptions,
-    category: "transactional" as const,
-    failClosedPolicyReads: false,
-    ref: { type: "invoice", id: "20000000-0000-4000-8000-000000000002" },
+  await withStubbedSend(null, async (calls) => {
+    await sendCompliantEmail(loggingClient(captured) as never, {
+      ...emailOptions,
+      category: "transactional" as const,
+      failClosedPolicyReads: false,
+      ref: { type: "invoice", id: "20000000-0000-4000-8000-000000000002" },
+    });
+    assertEquals(calls.length, 1);
+    assertEquals(calls[0].url, "https://api.resend.com/emails");
+    const body = calls[0].body as { text?: string };
+    assertEquals(typeof body.text, "string");
   });
   assertEquals(captured.insert?.ref_type, "invoice");
   assertEquals(captured.insert?.ref_id, "20000000-0000-4000-8000-000000000002");
   assertEquals(captured.insert?.recipient, "client@test.invalid");
+});
+
+Deno.test("a ref-stamped send with no userId still logs, with a null user_id", async () => {
+  const captured: { insert?: Record<string, unknown> } = {};
+  await withStubbedSend(null, async () => {
+    await sendCompliantEmail(loggingClient(captured) as never, {
+      ...emailOptions,
+      userId: undefined,
+      category: "transactional" as const,
+      ref: { type: "client_review", id: "30000000-0000-4000-8000-000000000003" },
+    });
+  });
+  assertEquals(captured.insert?.user_id, null);
+  assertEquals(captured.insert?.ref_type, "client_review");
+  assertEquals(captured.insert?.recipient, "client@test.invalid");
+});
+
+Deno.test("a send with neither a userId nor a ref writes no log row", async () => {
+  const captured: { insert?: Record<string, unknown> } = {};
+  await withStubbedSend(null, async () => {
+    await sendCompliantEmail(loggingClient(captured) as never, {
+      ...emailOptions,
+      userId: undefined,
+      category: "transactional" as const,
+    });
+  });
+  assertEquals(captured.insert, undefined);
 });
