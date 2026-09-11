@@ -653,3 +653,92 @@ Deno.test("a NULL-studio_id project resolves its org through _primary_studio_for
   assert(!res.sent, "the studio's STOP must reach a project with no studio_id");
   assertEquals(res.reason, "opted_out");
 });
+
+// ── r2 review B-3: a `granted` record is never self-certifying ──────────────
+//
+// The record and the party rows drift: the portal still writes
+// project_parties.sms_consent_* directly (PR-x), an inbound STOP writes party
+// rows phone-globally, and the mirror fires on a consent write but never on a
+// party-row insert. So `allow` may not rest on the record alone — this studio's
+// own party rows are scanned for a refusal first.
+Deno.test("a stale granted record does not carry a send past this studio's own STOP", async () => {
+  const fake = createFakeSupabase({
+    project_parties: [
+      party("p1", "not_asked"), // the new seat, proj1 / org-alpha
+      { ...party("p2", "opted_out"), project_id: "proj2" }, // also org-alpha
+    ],
+    projects: [
+      { id: "proj1", studio_id: "org-alpha" },
+      { id: "proj2", studio_id: "org-alpha" },
+    ],
+    studio_channel_consent: [{
+      organization_id: "org-alpha",
+      channel_kind: "sms",
+      channel_value: "+15551230001",
+      status: "granted", // stale: written before the STOP reached the rows
+    }],
+  });
+  const res = await sendPartySms(fake as never, { partyId: "p1", body: "hello" }, {
+    getEnv: envOf(CONSENT_ENV),
+    now: OPEN_HOURS,
+  });
+  assert(!res.sent, "a refusal on this studio's own rows outranks its stale record");
+  assertEquals(res.reason, "opted_out");
+  assertEquals((fake._data.sms_messages ?? []).length, 0, "no row on a blocked send");
+});
+
+// …and the scan stays studio-scoped: phone-globally it would re-open G-3,
+// because an inbound STOP opts out every party row on the number everywhere.
+Deno.test("another studio's opted-out party row does not block this studio's granted record", async () => {
+  const fake = createFakeSupabase({
+    project_parties: [
+      party("p1", "not_asked"), // proj1 / org-alpha
+      { ...party("p2", "opted_out"), project_id: "proj2" }, // proj2 / org-beta
+    ],
+    projects: [
+      { id: "proj1", studio_id: "org-alpha" },
+      { id: "proj2", studio_id: "org-beta" },
+    ],
+    studio_channel_consent: [{
+      organization_id: "org-alpha",
+      channel_kind: "sms",
+      channel_value: "+15551230001",
+      status: "granted",
+    }],
+  });
+  const res = await sendPartySms(fake as never, { partyId: "p1", body: "hello" }, {
+    getEnv: envOf(CONSENT_ENV),
+    now: OPEN_HOURS,
+  });
+  assert(res.sent, "Beta's STOP must not silence Alpha (G-3)");
+});
+
+// The org-scoped scan follows the same NULL-studio_id fallback the table uses,
+// so a refusal on a project with no studio_id still reaches the record's org.
+Deno.test("the stale-record scan resolves a NULL-studio_id project through _primary_studio_for", async () => {
+  const fake = createFakeSupabase(
+    {
+      project_parties: [
+        party("p1", "not_asked"),
+        { ...party("p2", "opted_out"), project_id: "proj2" },
+      ],
+      projects: [
+        { id: "proj1", studio_id: "org-alpha" },
+        { id: "proj2", studio_id: null, designer_id: "dz1" },
+      ],
+      studio_channel_consent: [{
+        organization_id: "org-alpha",
+        channel_kind: "sms",
+        channel_value: "+15551230001",
+        status: "granted",
+      }],
+    },
+    { _primary_studio_for: (args) => ({ data: args.p_user === "dz1" ? "org-alpha" : null, error: null }) },
+  );
+  const res = await sendPartySms(fake as never, { partyId: "p1", body: "hello" }, {
+    getEnv: envOf(CONSENT_ENV),
+    now: OPEN_HOURS,
+  });
+  assert(!res.sent, "a studio-less project's STOP still belongs to the same studio");
+  assertEquals(res.reason, "opted_out");
+});
