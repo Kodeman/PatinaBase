@@ -511,3 +511,76 @@ Deno.test("isQuietHours brackets the 8am–8pm window", () => {
   // 18:00 UTC is 13:00 Chicago — open.
   assert(!isQuietHours(new Date("2026-07-08T18:00:00Z"), "America/Chicago"));
 });
+
+// ── the studio-scoped consent gate (migration 00594) ────────────────────────
+
+const CONSENT_ENV = {
+  SMS_DEV_MODE: "dry_run",
+  TWILIO_FROM_NUMBER: "+15550000000",
+};
+const OPEN_HOURS = new Date("2026-07-08T18:00:00Z"); // ~1pm Chicago
+
+Deno.test("the studio's consent record blocks a send the party row would allow", async () => {
+  const fake = createFakeSupabase({
+    project_parties: [party("p1", "granted")],
+    projects: [{ id: "proj1", studio_id: "org-alpha" }],
+    studio_channel_consent: [{
+      organization_id: "org-alpha",
+      channel_kind: "sms",
+      channel_value: "+15551230001",
+      status: "opted_out",
+    }],
+  });
+  const res = await sendPartySms(fake as never, { partyId: "p1", body: "hello" }, {
+    getEnv: envOf(CONSENT_ENV),
+    now: OPEN_HOURS,
+  });
+  assert(!res.sent, "an opted-out studio record must block the send");
+  assertEquals(res.reason, "opted_out");
+  assertEquals((fake._data.sms_messages ?? []).length, 0, "no row on a blocked send");
+});
+
+Deno.test("another studio's opt-out does not block this studio's send", async () => {
+  const fake = createFakeSupabase({
+    project_parties: [party("p1", "granted")],
+    projects: [{ id: "proj1", studio_id: "org-alpha" }],
+    studio_channel_consent: [
+      // Alpha owns this job and said yes; Beta holds the same number and got a
+      // STOP. Before 00594 the phone-global reduction silenced Alpha too.
+      {
+        organization_id: "org-alpha",
+        channel_kind: "sms",
+        channel_value: "+15551230001",
+        status: "granted",
+      },
+      {
+        organization_id: "org-beta",
+        channel_kind: "sms",
+        channel_value: "+15551230001",
+        status: "opted_out",
+      },
+    ],
+  });
+  const res = await sendPartySms(fake as never, { partyId: "p1", body: "hello" }, {
+    getEnv: envOf(CONSENT_ENV),
+    now: OPEN_HOURS,
+  });
+  assert(res.sent, "the owning studio's grant should carry the send");
+});
+
+Deno.test("with no studio record, an opted-out sibling party row still blocks (fail closed)", async () => {
+  const fake = createFakeSupabase({
+    project_parties: [
+      party("p1", "granted"),
+      { ...party("p2", "opted_out"), project_id: "proj2" },
+    ],
+    projects: [{ id: "proj1", studio_id: "org-alpha" }],
+    // studio_channel_consent deliberately empty — the backfill has not run.
+  });
+  const res = await sendPartySms(fake as never, { partyId: "p1", body: "hello" }, {
+    getEnv: envOf(CONSENT_ENV),
+    now: OPEN_HOURS,
+  });
+  assert(!res.sent, "an unbacked-filled number with a STOP anywhere must fail closed");
+  assertEquals(res.reason, "opted_out");
+});

@@ -3,6 +3,11 @@
 // sendPartySms() is used by sms-dispatch (assignment/invite jobs), sms-inbound
 // (out-of-band replies), and field-daily (digest + delivery confirms). It:
 //   · resolves the recipient phone + SMS consent from project_parties,
+//   · reads the STUDIO'S consent record for the number first
+//     (studio_channel_consent, 00594) — consent is per studio per channel
+//     value, so one studio's STOP no longer silences another's job; the old
+//     phone-global party-row reduction stays behind it as a fail-closed
+//     second check (PR-x),
 //   · enforces the consent gate (granted only — EXCEPT sms_optin_invite, the
 //     double-opt-in invite, which is the sole send allowed to a 'pending' party;
 //     an 'opted_out' phone is NEVER texted),
@@ -182,6 +187,54 @@ function reduceConsent(
   if (rows.some((r) => r.sms_consent_status === "granted")) return "granted";
   if (rows.some((r) => r.sms_consent_status === "pending")) return "pending";
   return "not_asked";
+}
+
+/**
+ * PRIMARY consent gate (migration 00594). Consent is a fact about a (studio,
+ * channel value) pair, held in studio_channel_consent — not a per-party-row
+ * ledger. This is read BEFORE reduceConsent() below: the studio that owns the
+ * job is the only studio whose verdict may silence this send, and the only one
+ * whose grant may authorise it.
+ *
+ * Returns true when the send must be refused:
+ *   · the studio's own record says opted_out, or
+ *   · there is NO record for that studio (or no studio could be resolved) AND
+ *     some party row on this number has opted out — fail closed until the
+ *     backfill is proven everywhere (PR-x).
+ */
+async function channelConsentRefuses(
+  supabase: SupabaseClient,
+  phone: string,
+  projectId: string | null,
+): Promise<boolean> {
+  let org: string | null = null;
+  if (projectId) {
+    const { data: proj } = await supabase
+      .from("projects")
+      .select("studio_id")
+      .eq("id", projectId)
+      .maybeSingle();
+    org = (proj as { studio_id?: string | null } | null)?.studio_id ?? null;
+  }
+
+  if (org) {
+    const { data: record } = await supabase
+      .from("studio_channel_consent")
+      .select("status")
+      .eq("organization_id", org)
+      .eq("channel_kind", "sms")
+      .eq("channel_value", phone)
+      .maybeSingle();
+    if (record) return (record as { status: string }).status === "opted_out";
+  }
+
+  const { data: rows } = await supabase
+    .from("project_parties")
+    .select("sms_consent_status")
+    .eq("phone_e164", phone);
+  return (rows ?? []).some(
+    (r) => (r as { sms_consent_status: string }).sms_consent_status === "opted_out",
+  );
 }
 
 async function resolveRecipient(
@@ -431,6 +484,14 @@ export async function sendPartySms(
   if (!recipient.phone) {
     return { sent: false, reason: "no_phone_number" };
   }
+  // FIRST: the studio's own consent record for this number (00594).
+  if (
+    await channelConsentRefuses(supabase, recipient.phone, recipient.projectId)
+  ) {
+    return { sent: false, reason: "opted_out" };
+  }
+  // SECOND, fail-closed until the backfill is proven everywhere (PR-x): the
+  // legacy phone-global reduction across party rows, unchanged.
   if (recipient.consent === "opted_out") {
     return { sent: false, reason: "opted_out" };
   }

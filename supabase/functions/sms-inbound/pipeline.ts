@@ -6,7 +6,9 @@
 // Pipeline order is LOAD-BEARING (compliance first, LLM last):
 //   (c) idempotency: INSERT sms_messages ON CONFLICT (twilio_sid) DO NOTHING —
 //       a duplicate MessageSid returns 200 empty TwiML and does nothing
-//   (d) COMPLIANCE KEYWORDS before anything else (STOP/START/YES/HELP)
+//   (d) COMPLIANCE KEYWORDS before anything else (STOP/START/YES/HELP) —
+//       each writes studio_channel_consent (00594) FIRST, once per studio
+//       holding the number, then mirrors onto the party rows
 //   (e) resolve conversation + candidate parties by phone (unknown → brush-off)
 //   (f) MMS: fetch each MediaUrl with Twilio auth → field-media
 //   (g) deterministic parse: project-choice / confirmation / numbered menu
@@ -156,6 +158,89 @@ async function renderSms(
 }
 
 // ── keyword compliance ───────────────────────────────────────────────────────
+// Consent is a fact about a (studio, channel value) pair (studio_channel_consent,
+// migration 00594), not a per-party-row ledger. Every compliance keyword writes
+// that record FIRST, once per studio that holds the number; the party-row writes
+// below remain as the mirror the DB trigger also maintains, so every reader that
+// still joins on project_parties.sms_consent_* keeps working.
+interface PhoneParty {
+  id: string;
+  project_id: string;
+  sms_consent_status: string;
+}
+
+async function loadPhoneParties(
+  supabase: SupabaseClient,
+  phone: string,
+): Promise<PhoneParty[]> {
+  const { data } = await supabase
+    .from("project_parties")
+    .select("id, project_id, sms_consent_status")
+    .eq("phone_e164", phone);
+  return (data ?? []) as PhoneParty[];
+}
+
+/** One entry per studio holding the number, with a project to cite as origin. */
+async function studiosHoldingPhone(
+  supabase: SupabaseClient,
+  parties: PhoneParty[],
+): Promise<Array<{ org: string; projectId: string }>> {
+  const projectIds = [...new Set(parties.map((p) => p.project_id))];
+  if (projectIds.length === 0) return [];
+  const { data } = await supabase
+    .from("projects")
+    .select("id, studio_id")
+    .in("id", projectIds);
+  const out: Array<{ org: string; projectId: string }> = [];
+  const seen = new Set<string>();
+  for (const row of (data ?? []) as Array<{ id: string; studio_id: string | null }>) {
+    if (!row.studio_id || seen.has(row.studio_id)) continue;
+    seen.add(row.studio_id);
+    out.push({ org: row.studio_id, projectId: row.id });
+  }
+  return out;
+}
+
+async function writeChannelConsent(
+  supabase: SupabaseClient,
+  targets: Array<{ org: string; projectId: string }>,
+  phone: string,
+  status: "granted" | "opted_out",
+  now: string,
+  evidence: string,
+) {
+  for (const t of targets) {
+    // Read-then-upsert so a date already earned survives the new verdict:
+    // "granted 2 May 2025, opted out 3 Dec 2025" must both stay printable.
+    const { data: existing } = await supabase
+      .from("studio_channel_consent")
+      .select("consented_at, opt_out_at, disclosure_version, origin_project_id")
+      .eq("organization_id", t.org)
+      .eq("channel_kind", "sms")
+      .eq("channel_value", phone)
+      .maybeSingle();
+    const prior = (existing ?? {}) as {
+      consented_at?: string | null;
+      opt_out_at?: string | null;
+      disclosure_version?: string | null;
+      origin_project_id?: string | null;
+    };
+    await supabase.from("studio_channel_consent").upsert({
+      organization_id: t.org,
+      channel_kind: "sms",
+      channel_value: phone,
+      status,
+      consented_at: status === "granted" ? now : (prior.consented_at ?? null),
+      opt_out_at: status === "opted_out" ? now : (prior.opt_out_at ?? null),
+      source: "inbound_sms",
+      evidence,
+      recorded_at: now,
+      disclosure_version: prior.disclosure_version ?? null,
+      origin_project_id: prior.origin_project_id ?? t.projectId,
+    }, { onConflict: "organization_id,channel_kind,channel_value" });
+  }
+}
+
 async function optOutAllForPhone(supabase: SupabaseClient, phone: string, now: string) {
   await supabase
     .from("project_parties")
@@ -309,6 +394,11 @@ export async function processInbound(
 
   // (d) COMPLIANCE KEYWORDS — before resolve/MMS/LLM. Phone-global.
   if (STOP_WORDS.includes(upper)) {
+    await writeChannelConsent(
+      supabase,
+      await studiosHoldingPhone(supabase, await loadPhoneParties(supabase, from)),
+      from, "opted_out", nowIso, `Inbound ${upper}`,
+    );
     await optOutAllForPhone(supabase, from, nowIso);
     await supabase.from("sms_messages")
       .update({ parsed_intent: { path: "keyword", keyword: "stop" } }).eq("id", messageId);
@@ -320,6 +410,11 @@ export async function processInbound(
     return { status: 200, twiml: twimlBody(), disposition: "opted_out" };
   }
   if (START_WORDS.includes(upper)) {
+    await writeChannelConsent(
+      supabase,
+      await studiosHoldingPhone(supabase, await loadPhoneParties(supabase, from)),
+      from, "granted", nowIso, `Inbound ${upper}`,
+    );
     await grantAllForPhone(supabase, from, nowIso, false);
     await captureServerEvent("sms-inbound", "sms_parse_outcome",
       { path: "keyword", intent: "start", confidence_bucket: "n/a", disposition: "resubscribed" },
@@ -339,6 +434,16 @@ export async function processInbound(
   if (upper === "YES" || upper === "Y") {
     const hasPending = parties.some((p) => p.sms_consent_status === "pending");
     if (hasPending) {
+      // Only the studios that actually asked: a YES confirms the invite that
+      // was sent, never a studio that never invited this number.
+      await writeChannelConsent(
+        supabase,
+        await studiosHoldingPhone(
+          supabase,
+          parties.filter((p) => p.sms_consent_status === "pending"),
+        ),
+        from, "granted", nowIso, `Inbound ${upper}`,
+      );
       await grantAllForPhone(supabase, from, nowIso, true);
       await captureServerEvent("sms-inbound", "sms_opt_in", { phone: from }, { getEnv: deps.getEnv, fetchImpl: deps.fetchImpl });
       const pending = parties.find((p) => p.sms_consent_status === "pending")!;

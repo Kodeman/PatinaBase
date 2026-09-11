@@ -694,3 +694,92 @@ Deno.test("attribution on replay: parsed_intent/confidence stamp the ORIGINAL st
     "the replayed original text is excluded from the LLM's recent-history feed",
   );
 });
+
+// ── studio-scoped consent records (migration 00594) ─────────────────────────
+
+Deno.test("STOP writes an opted_out consent record for every studio holding the phone", async () => {
+  const fake = createFakeSupabase(baseSeed({
+    projects: [
+      { id: "proj1", name: "Maple St", designer_id: "dz1", studio_id: "org-alpha" },
+      { id: "proj2", name: "Beta job", designer_id: "dz2", studio_id: "org-beta" },
+      { id: "proj3", name: "Alpha job 2", designer_id: "dz1", studio_id: "org-alpha" },
+    ],
+    project_parties: [
+      { id: "p1", phone_e164: "+15551110010", project_id: "proj1", party_kind: "sub", sms_consent_status: "granted" },
+      { id: "p2", phone_e164: "+15551110010", project_id: "proj2", party_kind: "sub", sms_consent_status: "granted" },
+      { id: "p3", phone_e164: "+15551110010", project_id: "proj3", party_kind: "sub", sms_consent_status: "granted" },
+    ],
+  }));
+  const res = await processInbound(
+    params({ From: "+15551110010", Body: "STOP", MessageSid: "SMstoporg" }),
+    { supabase: fake as never, getEnv: NO_POSTHOG },
+  );
+  assertEquals(res.disposition, "opted_out");
+  const consent = (fake._data.studio_channel_consent ?? []) as Array<{
+    organization_id: string; channel_kind: string; channel_value: string; status: string; source: string;
+  }>;
+  assertEquals(consent.length, 2, "one record per studio, not one per party row");
+  assert(consent.every((c) => c.status === "opted_out" && c.channel_kind === "sms"));
+  assert(consent.every((c) => c.source === "inbound_sms"));
+  assertEquals(
+    consent.map((c) => c.organization_id).sort().join(","),
+    "org-alpha,org-beta",
+  );
+});
+
+Deno.test("YES grants consent only for the studios that actually invited", async () => {
+  const fake = createFakeSupabase(baseSeed({
+    projects: [
+      { id: "proj1", name: "Maple St", designer_id: "dz1", studio_id: "org-alpha" },
+      { id: "proj2", name: "Beta job", designer_id: "dz2", studio_id: "org-beta" },
+    ],
+    project_parties: [
+      { id: "p1", phone_e164: "+15551110011", project_id: "proj1", party_kind: "sub", sms_consent_status: "pending", display_name: "Sal Sub" },
+      { id: "p2", phone_e164: "+15551110011", project_id: "proj2", party_kind: "sub", sms_consent_status: "not_asked", display_name: "Sal Sub" },
+    ],
+  }));
+  const res = await processInbound(
+    params({ From: "+15551110011", Body: "YES", MessageSid: "SMyesorg" }),
+    { supabase: fake as never, getEnv: NO_POSTHOG },
+  );
+  assertEquals(res.disposition, "granted");
+  const consent = (fake._data.studio_channel_consent ?? []) as Array<{
+    organization_id: string; status: string; consented_at: string | null;
+  }>;
+  assertEquals(consent.length, 1, "only the inviting studio gets a record");
+  assertEquals(consent[0].organization_id, "org-alpha");
+  assertEquals(consent[0].status, "granted");
+  assert(consent[0].consented_at, "a grant is dated");
+});
+
+Deno.test("START re-grants per studio and keeps the earlier opt-out date", async () => {
+  const fake = createFakeSupabase(baseSeed({
+    projects: [{ id: "proj1", name: "Maple St", designer_id: "dz1", studio_id: "org-alpha" }],
+    project_parties: [
+      { id: "p1", phone_e164: "+15551110012", project_id: "proj1", party_kind: "sub", sms_consent_status: "opted_out" },
+    ],
+    studio_channel_consent: [{
+      organization_id: "org-alpha",
+      channel_kind: "sms",
+      channel_value: "+15551110012",
+      status: "opted_out",
+      opt_out_at: "2025-12-03T00:00:00Z",
+      consented_at: null,
+      disclosure_version: "field-sms-v1",
+      origin_project_id: "proj1",
+    }],
+  }));
+  const res = await processInbound(
+    params({ From: "+15551110012", Body: "START", MessageSid: "SMstartorg" }),
+    { supabase: fake as never, getEnv: NO_POSTHOG },
+  );
+  assertEquals(res.disposition, "resubscribed");
+  const consent = (fake._data.studio_channel_consent ?? []) as Array<{
+    status: string; opt_out_at: string | null; consented_at: string | null; disclosure_version: string | null;
+  }>;
+  assertEquals(consent.length, 1, "the record is upserted, not duplicated");
+  assertEquals(consent[0].status, "granted");
+  assertEquals(consent[0].opt_out_at, "2025-12-03T00:00:00Z", "the STOP date survives");
+  assert(consent[0].consented_at, "the new grant is dated");
+  assertEquals(consent[0].disclosure_version, "field-sms-v1", "the disclosure version carries");
+});

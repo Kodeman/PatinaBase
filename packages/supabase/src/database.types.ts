@@ -24354,66 +24354,358 @@ export type Database = {
           },
         ]
       }
+      studio_channel_consent: {
+        Row: {
+          channel_kind: string
+          channel_value: string
+          consented_at: string | null
+          created_at: string
+          disclosure_version: string | null
+          evidence: string | null
+          opt_out_at: string | null
+          organization_id: string
+          origin_project_id: string | null
+          recorded_at: string | null
+          recorded_by: string | null
+          source: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          channel_kind: string
+          channel_value: string
+          consented_at?: string | null
+          created_at?: string
+          disclosure_version?: string | null
+          evidence?: string | null
+          opt_out_at?: string | null
+          organization_id: string
+          origin_project_id?: string | null
+          recorded_at?: string | null
+          recorded_by?: string | null
+          source?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          channel_kind?: string
+          channel_value?: string
+          consented_at?: string | null
+          created_at?: string
+          disclosure_version?: string | null
+          evidence?: string | null
+          opt_out_at?: string | null
+          organization_id?: string
+          origin_project_id?: string | null
+          recorded_at?: string | null
+          recorded_by?: string | null
+          source?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "studio_channel_consent_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "admin_studio_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_channel_consent_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_channel_consent_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "v_studios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_channel_consent_origin_project_id_fkey"
+            columns: ["origin_project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "studio_channel_consent_origin_project_id_fkey"
+            columns: ["origin_project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_channel_consent_recorded_by_fkey"
+            columns: ["recorded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_channel_consent_recorded_by_fkey"
+            columns: ["recorded_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      studio_contact_channels: {
+        Row: {
+          channel_kind: string
+          created_at: string
+          created_by: string | null
+          id: string
+          label: string | null
+          owner_id: string
+          owner_type: string
+          preferred: boolean
+          sms_capable: boolean
+          status: string
+          status_at: string | null
+          updated_at: string
+          value: string
+          verified: boolean
+          verified_at: string | null
+        }
+        Insert: {
+          channel_kind: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          label?: string | null
+          owner_id: string
+          owner_type: string
+          preferred?: boolean
+          sms_capable?: boolean
+          status?: string
+          status_at?: string | null
+          updated_at?: string
+          value: string
+          verified?: boolean
+          verified_at?: string | null
+        }
+        Update: {
+          channel_kind?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          label?: string | null
+          owner_id?: string
+          owner_type?: string
+          preferred?: boolean
+          sms_capable?: boolean
+          status?: string
+          status_at?: string | null
+          updated_at?: string
+          value?: string
+          verified?: boolean
+          verified_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "studio_contact_channels_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_contact_channels_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_contact_channels_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "studio_contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      studio_contact_rules: {
+        Row: {
+          channels_allowed: string[]
+          channels_forbidden: string[]
+          contact_hours: string | null
+          created_at: string
+          escalation_by_class: Json
+          id: string
+          reason: string | null
+          route_to_person_id: string | null
+          set_at: string
+          set_by: string | null
+          subject_id: string
+          subject_type: string
+          updated_at: string
+        }
+        Insert: {
+          channels_allowed?: string[]
+          channels_forbidden?: string[]
+          contact_hours?: string | null
+          created_at?: string
+          escalation_by_class?: Json
+          id?: string
+          reason?: string | null
+          route_to_person_id?: string | null
+          set_at?: string
+          set_by?: string | null
+          subject_id: string
+          subject_type: string
+          updated_at?: string
+        }
+        Update: {
+          channels_allowed?: string[]
+          channels_forbidden?: string[]
+          contact_hours?: string | null
+          created_at?: string
+          escalation_by_class?: Json
+          id?: string
+          reason?: string | null
+          route_to_person_id?: string | null
+          set_at?: string
+          set_by?: string | null
+          subject_id?: string
+          subject_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "studio_contact_rules_route_to_person_id_fkey"
+            columns: ["route_to_person_id"]
+            isOneToOne: false
+            referencedRelation: "studio_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_contact_rules_set_by_fkey"
+            columns: ["set_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_contact_rules_set_by_fkey"
+            columns: ["set_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       studio_contacts: {
         Row: {
           archived_at: string | null
           company_id: string | null
+          company_kind: string | null
           company_name: string | null
           contact_kind: string
           created_at: string
           created_by: string | null
+          dba_name: string | null
           email: string | null
           entity_kind: string
           full_name: string | null
           id: string
+          is_sole_proprietor: boolean
+          legal_name: string | null
           notes: string | null
           organization_id: string
+          paperwork_contact_person_id: string | null
           phone: string | null
           phone_e164: string | null
           profile_id: string | null
+          remit_to: string | null
+          retainage_bps: number | null
+          signer_person_id: string | null
+          site_contact_person_id: string | null
           specialties: string[]
+          studio_verdict: string | null
+          studio_verdict_at: string | null
+          tax_id_last4: string | null
+          trades: string[]
           updated_at: string
           vendor_id: string | null
+          w9_on_file_at: string | null
+          warranty_until: string | null
         }
         Insert: {
           archived_at?: string | null
           company_id?: string | null
+          company_kind?: string | null
           company_name?: string | null
           contact_kind: string
           created_at?: string
           created_by?: string | null
+          dba_name?: string | null
           email?: string | null
           entity_kind: string
           full_name?: string | null
           id?: string
+          is_sole_proprietor?: boolean
+          legal_name?: string | null
           notes?: string | null
           organization_id: string
+          paperwork_contact_person_id?: string | null
           phone?: string | null
           phone_e164?: string | null
           profile_id?: string | null
+          remit_to?: string | null
+          retainage_bps?: number | null
+          signer_person_id?: string | null
+          site_contact_person_id?: string | null
           specialties?: string[]
+          studio_verdict?: string | null
+          studio_verdict_at?: string | null
+          tax_id_last4?: string | null
+          trades?: string[]
           updated_at?: string
           vendor_id?: string | null
+          w9_on_file_at?: string | null
+          warranty_until?: string | null
         }
         Update: {
           archived_at?: string | null
           company_id?: string | null
+          company_kind?: string | null
           company_name?: string | null
           contact_kind?: string
           created_at?: string
           created_by?: string | null
+          dba_name?: string | null
           email?: string | null
           entity_kind?: string
           full_name?: string | null
           id?: string
+          is_sole_proprietor?: boolean
+          legal_name?: string | null
           notes?: string | null
           organization_id?: string
+          paperwork_contact_person_id?: string | null
           phone?: string | null
           phone_e164?: string | null
           profile_id?: string | null
+          remit_to?: string | null
+          retainage_bps?: number | null
+          signer_person_id?: string | null
+          site_contact_person_id?: string | null
           specialties?: string[]
+          studio_verdict?: string | null
+          studio_verdict_at?: string | null
+          tax_id_last4?: string | null
+          trades?: string[]
           updated_at?: string
           vendor_id?: string | null
+          w9_on_file_at?: string | null
+          warranty_until?: string | null
         }
         Relationships: [
           {
@@ -24459,6 +24751,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "studio_contacts_paperwork_contact_person_id_fkey"
+            columns: ["paperwork_contact_person_id"]
+            isOneToOne: false
+            referencedRelation: "studio_contacts"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "studio_contacts_profile_id_fkey"
             columns: ["profile_id"]
             isOneToOne: false
@@ -24470,6 +24769,20 @@ export type Database = {
             columns: ["profile_id"]
             isOneToOne: false
             referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_contacts_signer_person_id_fkey"
+            columns: ["signer_person_id"]
+            isOneToOne: false
+            referencedRelation: "studio_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_contacts_site_contact_person_id_fkey"
+            columns: ["site_contact_person_id"]
+            isOneToOne: false
+            referencedRelation: "studio_contacts"
             referencedColumns: ["id"]
           },
           {
@@ -24586,6 +24899,80 @@ export type Database = {
             columns: ["studio_id"]
             isOneToOne: true
             referencedRelation: "v_studios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      studio_person_affiliations: {
+        Row: {
+          company_id: string
+          created_at: string
+          created_by: string | null
+          from_date: string | null
+          holds_trade_license: boolean
+          id: string
+          is_paperwork_contact: boolean
+          is_signer: boolean
+          person_id: string
+          role_at_firm: string | null
+          to_date: string | null
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          created_by?: string | null
+          from_date?: string | null
+          holds_trade_license?: boolean
+          id?: string
+          is_paperwork_contact?: boolean
+          is_signer?: boolean
+          person_id: string
+          role_at_firm?: string | null
+          to_date?: string | null
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          created_by?: string | null
+          from_date?: string | null
+          holds_trade_license?: boolean
+          id?: string
+          is_paperwork_contact?: boolean
+          is_signer?: boolean
+          person_id?: string
+          role_at_firm?: string | null
+          to_date?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "studio_person_affiliations_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "studio_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_person_affiliations_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_person_affiliations_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_person_affiliations_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
+            referencedRelation: "studio_contacts"
             referencedColumns: ["id"]
           },
         ]
@@ -31473,6 +31860,7 @@ export type Database = {
         }
         Returns: Json
       }
+      backfill_channel_consent_from_parties: { Args: never; Returns: number }
       backfill_why_author_display_names: { Args: never; Returns: number }
       batch_place_library_products_in_project: {
         Args: { p_request: Json }
@@ -34277,6 +34665,7 @@ export type Database = {
         Args: { p_enclosures: Json }
         Returns: boolean
       }
+      project_party_designer: { Args: { p_party_id: string }; Returns: string }
       promote_batch_to_studio: { Args: { p_items: Json }; Returns: string[] }
       promote_board_reference_to_selection: {
         Args: { p_board_item_id: string; p_request: Json }
@@ -34464,6 +34853,40 @@ export type Database = {
           p_suggestions: Json
         }
         Returns: undefined
+      }
+      record_channel_consent: {
+        Args: {
+          p_channel_kind: string
+          p_channel_value: string
+          p_disclosure_version?: string
+          p_evidence?: string
+          p_organization_id: string
+          p_origin_project_id?: string
+          p_source?: string
+          p_status: string
+        }
+        Returns: {
+          channel_kind: string
+          channel_value: string
+          consented_at: string | null
+          created_at: string
+          disclosure_version: string | null
+          evidence: string | null
+          opt_out_at: string | null
+          organization_id: string
+          origin_project_id: string | null
+          recorded_at: string | null
+          recorded_by: string | null
+          source: string | null
+          status: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "studio_channel_consent"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       record_custom_commission_milestone: {
         Args: {
@@ -36071,6 +36494,7 @@ export type Database = {
           verdict_guest_rejected: number
         }[]
       }
+      studio_contact_org: { Args: { p_contact_id: string }; Returns: string }
       studio_has_live_license_attestation: {
         Args: { p_studio_id: string }
         Returns: boolean

@@ -15630,6 +15630,138 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00592_people_cards_affiliations_rules.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.studio_contact_org(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00592_people_cards_affiliations_rules.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.studio_contact_org(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00592_people_cards_affiliations_rules.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.project_party_designer(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00592_people_cards_affiliations_rules.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.project_party_designer(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00592_people_cards_affiliations_rules.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.studio_person_affiliations FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00592_people_cards_affiliations_rules.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON public.studio_person_affiliations TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00592_people_cards_affiliations_rules.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.studio_person_affiliations TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00592_people_cards_affiliations_rules.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.studio_contact_rules FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00592_people_cards_affiliations_rules.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON public.studio_contact_rules TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00592_people_cards_affiliations_rules.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.studio_contact_rules TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00593_studio_contact_channels.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.normalize_studio_contact_channel() FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00593_studio_contact_channels.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.studio_contact_channels FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00593_studio_contact_channels.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON public.studio_contact_channels TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00593_studio_contact_channels.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.studio_contact_channels TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00594_studio_channel_consent.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.studio_channel_consent FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00594_studio_channel_consent.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.studio_channel_consent TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00594_studio_channel_consent.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.studio_channel_consent TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00594_studio_channel_consent.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.backfill_channel_consent_from_parties() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00594_studio_channel_consent.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.backfill_channel_consent_from_parties() TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00594_studio_channel_consent.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.mirror_channel_consent_to_parties() FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00594_studio_channel_consent.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.record_channel_consent(uuid, text, text, text, text, text, text, uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00594_studio_channel_consent.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.record_channel_consent(uuid, text, text, text, text, text, text, uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 20260910152111_create_contact_messages.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON TABLE public.contact_messages FROM PUBLIC, anon, authenticated, service_role;
