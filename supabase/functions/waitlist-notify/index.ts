@@ -12,6 +12,8 @@ import { renderBrandedShell, heading } from '../_shared/branded-email.ts';
 import { sendCompliantEmail } from '../_shared/send-email.ts';
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') ?? '';
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const FROM_ADDRESS =
   Deno.env.get('RESEND_FROM_TRANSACTIONAL') ||
   Deno.env.get('RESEND_FROM') ||
@@ -40,6 +42,16 @@ Deno.serve(async (req: Request) => {
     if (!RESEND_API_KEY) {
       console.warn('[waitlist-notify] RESEND_API_KEY not set — skipping send for', email);
       return new Response(JSON.stringify({ skipped: 'no RESEND_API_KEY' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    // createClient throws on an empty key, which would turn a missing secret
+    // into a 500 on a path that has no user to check anything against anyway.
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+      console.warn('[waitlist-notify] service-role client unavailable — skipping send for', email);
+      return new Response(JSON.stringify({ skipped: 'no service-role client' }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });
@@ -75,10 +87,7 @@ Deno.serve(async (req: Request) => {
         `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse; margin:4px 0 8px;">${tableRows}</table>`,
     });
 
-    const admin = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
-    );
+    const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const result = await sendCompliantEmail(admin, {
       to: NOTIFY_TO,
       subject: `New waitlist signup: ${email}`,

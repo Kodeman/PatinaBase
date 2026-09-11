@@ -252,6 +252,21 @@ Deno.serve(async (req: Request) => {
     },
   });
 
+  // A suppressed address is a settled fact about the recipient, not a transport
+  // failure: 409 so the caller can say so instead of offering a retry.
+  if (result.suppressed) {
+    console.warn('proposal-nudge: recipient suppressed', proposal.id);
+    return json(
+      {
+        error: 'email_suppressed',
+        suppressed: true,
+        detail:
+          "This client's address is suppressed after a bounce or complaint.",
+      },
+      409,
+    );
+  }
+
   if (!result.success) {
     console.error('proposal-nudge: send failed', proposal.id, result.error);
     return json({ error: 'send_failed', detail: result.error }, 502);

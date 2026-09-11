@@ -2,16 +2,23 @@
 //
 // Runs daily at 09:30 UTC (scheduled by pg_cron in migration 00096).
 // Finds projects that moved to status='completed' 3+ days ago and have no
-// existing sent/queued/collected client_reviews row for that project.
-// For each candidate, sends a review-request email via Resend and inserts
-// a client_reviews row with request_status='sent'.
+// existing sent/queued/collected client_reviews row for that project, and no
+// earlier attempt parked at not_sent because the address is suppressed.
+// For each candidate the client_reviews row is written FIRST as 'queued' with
+// the id the letter names, then promoted to 'sent' when the send lands, parked
+// at 'not_sent' + the skip tag when the address is suppressed, or deleted when
+// the send simply failed — so tomorrow's run retries a failure and only a
+// failure.
 //
 // PRD #13: review request auto-trigger. SMS (#33) intentionally deferred.
 
 // deno-lint-ignore-file no-explicit-any
 
 import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { sendCompliantEmail } from '../_shared/send-email.ts';
+import {
+  type ComplianceSendResult,
+  sendCompliantEmail,
+} from '../_shared/send-email.ts';
 import {
   renderBrandedShell,
   paragraph,
@@ -30,6 +37,12 @@ import {
   studioSignatureCity,
 } from '../_shared/studio-identity.ts';
 import { clientProjectLink } from '../_shared/client-portal-links.ts';
+import {
+  BLOCKING_REQUEST_STATUSES,
+  projectsToSkip,
+  type ReviewRequestRow,
+  SUPPRESSED_SKIP_TAG,
+} from './logic.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -78,7 +91,7 @@ async function sendReviewEmail(supabase: SupabaseClient, opts: {
   studioLogoUrl?: string;
   /** Who signs the letter (R7) — the studio, never Patina. */
   signature: StudioSignOff;
-}): Promise<boolean> {
+}): Promise<ComplianceSendResult> {
   const senderDisplay = opts.senderName;
   const greeting = opts.clientName ? `Hi ${escapeHtml(opts.clientName)},` : 'Hi there,';
   // Was `/review/<projectId>` — singular, and no such route ever existed, so
@@ -129,9 +142,8 @@ async function sendReviewEmail(supabase: SupabaseClient, opts: {
     console.error(
       'review-requests: send failed for project', opts.projectId, result.error,
     );
-    return false;
   }
-  return true;
+  return result;
 }
 
 Deno.serve(async (_req: Request) => {
@@ -160,21 +172,20 @@ Deno.serve(async (_req: Request) => {
 
   const projectIds = candidates.map((p) => p.id);
 
-  // 2. Find projects that already have a sent/queued/collected review
+  // 2. Find projects that already have a review out, answered, or parked
+  //    because the client's address is suppressed
   const { data: existingReviews, error: revError } = await supabase
     .from('client_reviews')
-    .select('project_id')
+    .select('project_id, request_status, tags')
     .in('project_id', projectIds)
-    .in('request_status', ['sent', 'queued', 'collected']);
+    .in('request_status', [...BLOCKING_REQUEST_STATUSES]);
 
   if (revError) {
     console.error('review-requests: existing reviews query failed', revError);
     return new Response(JSON.stringify({ error: revError.message }), { status: 500 });
   }
 
-  const reviewedIds = new Set(
-    ((existingReviews ?? []) as { project_id: string }[]).map((r) => r.project_id)
-  );
+  const reviewedIds = projectsToSkip((existingReviews ?? []) as ReviewRequestRow[]);
   const unreviewed = candidates.filter((p) => !reviewedIds.has(p.id));
 
   if (unreviewed.length === 0) {
@@ -229,6 +240,8 @@ Deno.serve(async (_req: Request) => {
 
   // 5. Process each candidate
   let sent = 0;
+  let suppressed = 0;
+  let failed = 0;
   for (const project of unreviewed) {
     const clientProfile = project.client_id ? profileMap.get(project.client_id) : undefined;
     const designerProfile = project.designer_id ? profileMap.get(project.designer_id) : undefined;
@@ -261,11 +274,25 @@ Deno.serve(async (_req: Request) => {
     const senderName = studioDisplayName(identity, designerName ?? 'Patina');
     const cobrand = studioCobrand(identity);
 
-    // Minted here so the notification_log row can carry the client_reviews id
-    // it is about; the row itself is still written only on a successful send.
+    // The row is written before the send, at the id the letter names, so a
+    // send that lands can never leave notification_log pointing at a
+    // client_reviews row that was never created.
     const reviewId = crypto.randomUUID();
+    const { error: queueErr } = await supabase
+      .from('client_reviews')
+      .insert({
+        id: reviewId,
+        designer_client_id: dc.id,
+        project_id: project.id,
+        request_status: 'queued',
+      });
 
-    const ok = await sendReviewEmail(supabase, {
+    if (queueErr) {
+      console.error('review-requests: failed to queue review row for project', project.id, queueErr);
+      continue;
+    }
+
+    const result = await sendReviewEmail(supabase, {
       projectId: project.id,
       projectName: project.name,
       designerClientId: dc.id,
@@ -291,27 +318,50 @@ Deno.serve(async (_req: Request) => {
       },
     });
 
-    if (ok) {
-      const { error: insertErr } = await supabase
+    if (result.success) {
+      const { error: updateErr } = await supabase
         .from('client_reviews')
-        .insert({
-          id: reviewId,
-          designer_client_id: dc.id,
-          project_id: project.id,
+        .update({
           request_status: 'sent',
           request_sent_at: new Date().toISOString(),
-        });
+        })
+        .eq('id', reviewId);
 
-      if (insertErr) {
-        console.error('review-requests: failed to insert review row for project', project.id, insertErr);
+      if (updateErr) {
+        console.error('review-requests: failed to mark review sent for project', project.id, updateErr);
       } else {
         sent++;
       }
+    } else if (result.suppressed) {
+      // The address bounced or complained. The row stays as this function's own
+      // record of the attempt: client_reviews has no jsonb column, so `tags`
+      // carries the reason and the candidate filter reads it back tomorrow.
+      const { error: skipErr } = await supabase
+        .from('client_reviews')
+        .update({ request_status: 'not_sent', tags: [SUPPRESSED_SKIP_TAG] })
+        .eq('id', reviewId);
+
+      if (skipErr) {
+        console.error('review-requests: failed to park suppressed review for project', project.id, skipErr);
+      }
+      suppressed++;
+    } else {
+      // Nothing was sent and nothing is owed — drop the queued row so tomorrow
+      // retries this project instead of seeing it as already asked.
+      const { error: deleteErr } = await supabase
+        .from('client_reviews')
+        .delete()
+        .eq('id', reviewId);
+
+      if (deleteErr) {
+        console.error('review-requests: failed to drop queued review for project', project.id, deleteErr);
+      }
+      failed++;
     }
   }
 
   return new Response(
-    JSON.stringify({ scanned: unreviewed.length, sent }),
+    JSON.stringify({ scanned: unreviewed.length, sent, suppressed, failed }),
     { headers: { 'Content-Type': 'application/json' } },
   );
 });
