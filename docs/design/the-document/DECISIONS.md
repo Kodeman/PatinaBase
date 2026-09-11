@@ -11129,3 +11129,69 @@ happened yet.
 portal deploys, since the letterhead reads `document_state.subject` directly.
 
 *Entries add: I154 · last id = I154*
+
+### R151 · The studio's own clock — the hour-tracking rulings — 2026-09-11
+
+**Ruled by Kody, 2026-09-11** (**HT-1**…**HT-41** and the program rulings **P-1**…**P-8**, by
+interview on the panel's sheet; evidence register `artifacts/hour-tracking-2026-09-11/` — brief, nine
+seat memos, `synthesis.md`, the ruling sheet `rulings.md`, and the executable plan
+`build/plan-v2.md`). Nine seats read one table, `public.project_time_entries`, and found capture
+inside a document already best-in-class and almost everything around it failing — two of the failures
+live money defects. This entry records what was ruled; the waves carry it out.
+
+**One. The scope lens — R77 amended, not replaced.** The Hours ledger grows one **admin-gated scope
+lens** in the same sheet: *mine · a member · this project · the studio*. One sheet — no `/hours` page,
+no admin-portal route, no tab bar, no member leaderboard, no staff picker inside a money ledger (the
+member scope is entered from the person in the People Room). The project scope **stops ANDing
+`user_id`**: it answers *this house's hours*, not *my hours on this house*, which is what it has
+silently answered since R75. Totals sit **above** the rows that produced them (V10). A plain member
+sees no lens. The member scope is **aggregate by default**; free-text notes only behind an explicit
+detail act, and the studio rollup's return shape never carries `notes` at all — asserted per role in
+SQL, not filtered in the client (HT-8, HT-9, HT-10, HT-36, HT-37, HT-38).
+
+**Two. `billable` becomes an explicit control at every capture surface — D10 and R20 amended.** Today
+the three capture paths disagree: the desk auto-timer sends the fail-closed intent (false), a
+hand-typed entry sends nothing (true by default), Patina Field sends nothing (true). One server-owned
+rule resolves `billable` for every `source`, a pill at every surface is seeded from the resolved
+answer, and **the implicit `?? true` default goes**. The row prints its reason in words
+(*"non-billable · no agreement"*) instead of a bare `Non-bill`. **`activity` is recorded, never
+required** — the strip's `'design'` default goes and an unset activity prints *"activity not set"*.
+R20's write-first close-out is untouched: **the zero-tap in-document path stays zero taps**, and no
+wave may add a required field to it (HT-11, HT-12, HT-24).
+
+**Three. Yesterday's hour, and the backdated mark.** Backdating is allowed — **any date, until the
+entry is invoiced** (the invoiced-entry lock already freezes `started_at`). The ledger add row and the
+⌘K verb carry a date field defaulting to the **paged week**, closing a live mis-dating bug: paging the
+ledger back a week and using the add row files the entry into today. An entry logged more than **30
+days** after the fact carries a quiet **"backdated"** mark — a derived, unstyled DM-mono word on the
+row, no badge and no colour (HT-13, HT-40).
+
+**Four. Auto-start is disclosed, and a member may opt out — R19 amended.** A member's first document
+open shows a **one-time dismissible sentence** saying the document starts a timer; the per-member
+opt-out lives on their **own profile**, defaults on, and off falls back to **one-tap manual start** —
+never to no timer. R19's consent evidence was one person, who is also the owner; this is what changes
+that (HT-35).
+
+**Five. The role chip.** Where a member holds more than one live roster role on a project, they
+**pick the role per entry** and the row records it. The chip appears only for a multi-role member;
+a single-role member sees nothing new. A role a member does not hold is refused server-side — a
+client cannot claim a rate it has no seat for (HT-4, HT-41).
+
+**Six. One quiet Record row, and no nudges — under R82.** A running timer over **8 hours** writes one
+quiet Record row on the Post's Record page. No push, no email, no badge, and **no daily anything,
+ever**. The opt-in weekly unlogged-day reminder is built but dark: weekly at most, per member,
+default off, and its cron entry is never scheduled (HT-34, P-5 — the program ships unflagged, so the
+absent cron entry is the off switch).
+
+**R64 keeps its 30-minute number.** Only its **scope** wording extends: the abandonment bound binds
+**any clock-derived duration**, Patina Field included, not the desk alone. The cumulative-idle hole is
+real (`time-derivation.ts` sums cumulative idle and uses it only for the annotation string while the
+bound reads the single longest gap) and is **instrumented before it is relitigated** — R64 is
+explicitly "watch with data", and no data has been watched (HT-16, HT-17).
+
+**Companion VISION entry.** V10 (`docs/vision/VISION-DECISIONS.md`) strengthens VISION §6 with the
+ledger test that permits this sheet: *a total is permitted as the front matter of the rows that
+produced it; a total with no rows beneath it is a dashboard.* D9 is amended there too — capture
+belongs wherever the work happened; review belongs only in the drawer ledger, never a page.
+
+*Entries add: R151 · last id = R151*

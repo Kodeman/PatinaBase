@@ -220,3 +220,53 @@ the deck `artifacts/portal-polish-review-2026-09-08/deck/index.html` (sheets 10�
 `docs/superpowers/plans/2026-09-08-portal-polish-build.md`.
 
 *Entries add: C1 · S1–S6 · V1–V7 · V8 · V9 · last id = V9*
+
+## Ruled — 2026-09-11 (hour tracking)
+
+### V10 · A ledger is not a dashboard — §6 strengthened, not weakened — 2026-09-11
+
+**Ruled.** VISION §6's refusal of dashboards gains one explicit exception, written as a test rather
+than as a carve-out: **a total is permitted as the front matter of the rows that produced it; a total
+with no rows beneath it is a dashboard.** The Hours sheet is a permitted reporting surface on exactly
+that condition — its scope lens (mine · a member · this project · the studio) shows day-grouped rows
+in every scope, and every total it prints sits above the rows it came from.
+
+**This strengthens §6; it does not relax it.** The refusal now has a falsifiable test, so the next
+proposal for a tile, a card, or a "studio week at a glance" number is refused by rule rather than by
+taste. Specifically still refused, and named so they cannot be re-argued as polish: a per-member
+utilisation score, a leaderboard, a ranking, a streak, a target, a burn-down, a progress bar, a
+sparkline, a red/green state, a bare studio total on the Desk `hours` card (HT-29 — the card is
+act-bearing or absent), a `/hours` page, an admin-portal hours route, a tab bar, and a staff dropdown
+ranked by hours (HT-8, HT-32). The billing-state chip stays as built — a 1px-bordered text pill with
+no fill, which is a table's state column and not a status badge (HT-40).
+
+**Two companion entries ruled the same day, recorded here because both are VISION-level and neither
+costs a line of code:**
+
+- **Patina Field is The Document off-desk, not a fourth surface** (HT-33). §5's ranking is unchanged:
+  The Document → the iOS app → the marketplace. Field's capture surfaces are doors into The
+  Document's own Hours ledger, so a literal §8 test does not park them as a side journey.
+- **D9 is amended** (HT-32) to read: *capture belongs wherever the work happened; review belongs only
+  in the drawer ledger, never a page.* The old wording was at once too narrow to authorise ⌘K / Field
+  capture and too weak to forbid the `/hours` page someone will propose.
+
+**The sentence §6 itself gains**, to be inserted as a new bullet immediately after `VISION.md:73`
+(`**Tab / zone / dashboard UI, shadows, red/green status, badges.** One living Document,
+typography-first.`), at the same indent:
+
+> - **The one exception, and its test.** A ledger is not a dashboard: a total is permitted as the
+>   **front matter of the rows that produced it**, and a total with no rows beneath it is a
+>   dashboard. The Hours sheet is a permitted reporting surface on exactly that condition. Nothing
+>   here licenses a utilisation score, leaderboard, ranking, streak, target, burn-down, progress bar,
+>   sparkline or red/green state — those stay refused (V10, 2026-09-11).
+
+**`VISION.md` is untracked in git** (`git ls-files docs/vision/` returns only this file; the document
+lives in Kody's working tree alone), so the bullet above could not be committed with this entry. It is
+recorded here verbatim and owed as a one-line paste. Nothing else in §6 changes; the bullets at
+`:70-72` and `:74-76` are untouched.
+
+**Source:** Kody, 2026-09-11 — `artifacts/hour-tracking-2026-09-11/rulings.md` (**HT-30**, **HT-32**,
+**HT-33**), the panel synthesis `artifacts/hour-tracking-2026-09-11/synthesis.md`, and the build plan
+`artifacts/hour-tracking-2026-09-11/build/plan-v2.md`.
+
+*Entries add: C1 · S1–S6 · V1–V7 · V8 · V9 · V10 · last id = V10*
