@@ -109,8 +109,12 @@ class Builder {
       const items = (Array.isArray(this._payload) ? this._payload : [this._payload]) as Row[];
       const affected: Row[] = [];
       for (const x of items) {
-        const cc = this._onConflict;
-        const dup = cc ? rows.find((r) => x[cc] != null && r[cc] === x[cc]) : undefined;
+        // onConflict may name a composite key ("a,b,c") — a row matches only
+        // when EVERY named column matches and none of them is null.
+        const cols = (this._onConflict ?? "").split(",").map((c) => c.trim()).filter(Boolean);
+        const dup = cols.length
+          ? rows.find((r) => cols.every((c) => x[c] != null && r[c] === x[c]))
+          : undefined;
         if (dup) {
           if (this._ignoreDup) continue; // conflict ignored → not returned
           Object.assign(dup, x);
