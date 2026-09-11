@@ -115,12 +115,27 @@ VALUES ('a7200000-0000-4000-8000-0000000000f1', 'a7200000-0000-4000-8000-0000000
         'a7200000-0000-4000-8000-000000000002', 'vendor', 'a7200000-0000-4000-8000-000000000001');
 
 -- One rated entry and one rate-less entry, both authored by the vendor.
-INSERT INTO project_time_entries (id, project_id, user_id, started_at, duration_minutes, billable, hourly_rate_cents, source)
+--
+-- AMENDED BY W1 (00601): the classifier now owns hourly_rate_cents on every
+-- branch (HT-1 — "a client-supplied rate is discarded"), so a supplied 15000 on
+-- a non-services project is replaced by the resolver's answer, and the vendor has
+-- no studio rate card. These two rows are therefore written with the classifier
+-- switched off for the insert, which is what a PRE-W1 row actually is: a snapshot
+-- rate of its own, already on the row. That is exactly the state case (b) is
+-- about — whether the VIEW prints the rate that priced the line — and it keeps
+-- (b4)'s rate-less row rate-less. Giving the vendor a studio_member_rates row
+-- instead would have rated BOTH entries and destroyed (b4). ALTER TABLE …
+-- DISABLE TRIGGER is transactional, so the file's ROLLBACK restores it.
+ALTER TABLE project_time_entries
+  DISABLE TRIGGER aac_classify_project_time_entry_authority_trg;
+INSERT INTO project_time_entries (id, project_id, user_id, started_at, duration_minutes, billable, hourly_rate_cents, rated_amount_cents, billing_state, source)
 VALUES
   ('a7200000-0000-4000-8000-0000000000b1', 'a7200000-0000-4000-8000-0000000000e1',
-   'a7200000-0000-4000-8000-000000000002', NOW() - INTERVAL '2 days', 90, true, 15000, 'field_manual'),
+   'a7200000-0000-4000-8000-000000000002', NOW() - INTERVAL '2 days', 90, true, 15000, 22500, 'authorized', 'field_manual'),
   ('a7200000-0000-4000-8000-0000000000b2', 'a7200000-0000-4000-8000-0000000000e1',
-   'a7200000-0000-4000-8000-000000000002', NOW() - INTERVAL '1 day', 30, true, NULL, 'manual_entry');
+   'a7200000-0000-4000-8000-000000000002', NOW() - INTERVAL '1 day', 30, true, NULL, NULL, 'authorized', 'manual_entry');
+ALTER TABLE project_time_entries
+  ENABLE TRIGGER aac_classify_project_time_entry_authority_trg;
 
 -- ─── design-services fixtures (case c) ────────────────────────────────────
 -- A second studio, so case (a)'s profile-visibility precondition is untouched.
