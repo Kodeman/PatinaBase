@@ -4,12 +4,15 @@
 // and update campaign inline counters.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { capturePosthogEvent } from "../_shared/posthog.ts";
 import {
   DELIVERY_UPGRADE_FROM_STATUSES,
   isHardBounce,
+  lastEventName,
   RESEND_EVENT_STATUS,
+  resolveBounceReason,
+  resolveBounceType,
 } from "./status-map.ts";
 
 
@@ -19,316 +22,399 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, svix-id, svix-timestamp, svix-signature",
 };
 
+/**
+ * Best-effort RPC. The postgrest builder is a thenable with `then` and no
+ * `catch`, so `supabase.rpc(...).catch(fn)` threw TypeError before it ever
+ * reached the network — which is why the bounce-suppression path below never
+ * ran. Swallowing here keeps a counter outage from failing the webhook.
+ */
+async function bestEffortRpc(
+  supabase: SupabaseClient,
+  fn: string,
+  args: Record<string, unknown>,
+): Promise<void> {
+  try {
+    const { error } = await supabase.rpc(fn, args);
+    if (error) console.warn(`resend-webhook: ${fn} failed`, error.message);
+  } catch (err) {
+    console.warn(`resend-webhook: ${fn} threw`, err);
+  }
+}
+
 // Soft-bounce suppression threshold. Hard bounces suppress on the first event.
 const SOFT_BOUNCE_THRESHOLD = 3;
 const BOUNCE_WINDOW_DAYS = 30;
 
-interface ResendWebhookEvent {
+export interface ResendWebhookEvent {
   type: string;
   data: {
     email_id: string;
     to?: string[];
     from?: string;
     created_at?: string;
+    bounce?: { type?: string; subType?: string; message?: string };
     bounce_type?: string;
     [key: string]: unknown;
   };
 }
+
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
+// One line per cold start, not one per rejected delivery.
+let missingSecretLogged = false;
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  // Fail closed. An unsigned body is an anonymous write to notification_log and
+  // to profiles' suppression flags, so an unconfigured secret rejects traffic
+  // rather than trusting it.
   const webhookSecret = Deno.env.get("RESEND_WEBHOOK_SECRET");
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
+  if (!webhookSecret) {
+    if (!missingSecretLogged) {
+      missingSecretLogged = true;
+      console.error(
+        "resend-webhook: RESEND_WEBHOOK_SECRET is not set — rejecting every delivery until it is",
+      );
+    }
+    return json({ error: "webhook_secret_not_configured" }, 401);
+  }
 
   try {
     const body = await req.text();
 
-    // Verify webhook signature if secret is configured
-    if (webhookSecret) {
-      const svixId = req.headers.get("svix-id");
-      const svixTimestamp = req.headers.get("svix-timestamp");
-      const svixSignature = req.headers.get("svix-signature");
+    const svixId = req.headers.get("svix-id");
+    const svixTimestamp = req.headers.get("svix-timestamp");
+    const svixSignature = req.headers.get("svix-signature");
 
-      if (!svixId || !svixTimestamp || !svixSignature) {
-        return new Response(
-          JSON.stringify({ error: "Missing webhook signature headers" }),
-          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
+    if (!svixId || !svixTimestamp || !svixSignature) {
+      return json({ error: "Missing webhook signature headers" }, 401);
+    }
 
-      const signaturePayload = `${svixId}.${svixTimestamp}.${body}`;
-      const secretBytes = Uint8Array.from(
-        atob(webhookSecret.replace("whsec_", "")),
-        (c) => c.charCodeAt(0)
-      );
+    const signaturePayload = `${svixId}.${svixTimestamp}.${body}`;
+    const secretBytes = Uint8Array.from(
+      atob(webhookSecret.replace("whsec_", "")),
+      (c) => c.charCodeAt(0),
+    );
 
-      const encoder = new TextEncoder();
-      const key = await crypto.subtle.importKey(
-        "raw",
-        secretBytes,
-        { name: "HMAC", hash: "SHA-256" },
-        false,
-        ["sign"]
-      );
-      const signature = await crypto.subtle.sign(
-        "HMAC",
-        key,
-        encoder.encode(signaturePayload)
-      );
-      const expectedSignature = btoa(
-        String.fromCharCode(...new Uint8Array(signature))
-      );
+    const encoder = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+      "raw",
+      secretBytes,
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign"],
+    );
+    const signature = await crypto.subtle.sign(
+      "HMAC",
+      key,
+      encoder.encode(signaturePayload),
+    );
+    const expectedSignature = btoa(
+      String.fromCharCode(...new Uint8Array(signature)),
+    );
 
-      const signatures = svixSignature.split(" ");
-      const isValid = signatures.some((sig) => {
-        const [, sigValue] = sig.split(",");
-        return sigValue === expectedSignature;
-      });
+    const signatures = svixSignature.split(" ");
+    const isValid = signatures.some((sig) => {
+      const [, sigValue] = sig.split(",");
+      return sigValue === expectedSignature;
+    });
 
-      if (!isValid) {
-        console.error("Webhook signature verification failed");
-        return new Response(
-          JSON.stringify({ error: "Invalid webhook signature" }),
-          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
+    if (!isValid) {
+      console.error("Webhook signature verification failed");
+      return json({ error: "Invalid webhook signature" }, 401);
     }
 
     const event: ResendWebhookEvent = JSON.parse(body);
-    const emailId = event.data.email_id;
-
-    if (!emailId) {
-      return new Response(
-        JSON.stringify({ error: "Missing email_id in webhook data" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    if (!event.data?.email_id) {
+      return json({ error: "Missing email_id in webhook data" }, 400);
     }
 
-    // Find the notification log entry by provider_id
-    const { data: logEntry } = await supabase
-      .from("notification_log")
-      .select("id, user_id, status")
-      .eq("provider_id", emailId)
-      .single();
-
-    if (!logEntry) {
-      // Not found — might be a non-tracked email (e.g. auth emails)
-      console.warn(`No notification_log entry for email_id: ${emailId}`);
-      return new Response(
-        JSON.stringify({ received: true, matched: false }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Fetch campaign_id from log metadata if present
-    const { data: fullLog } = await supabase
-      .from("notification_log")
-      .select("id, user_id, status, type, template_id, metadata")
-      .eq("id", logEntry.id)
-      .single();
-
-    const campaignId = fullLog?.metadata?.campaign_id as string | undefined;
-    const notificationType = fullLog?.type as string;
-    const templateId = fullLog?.template_id as string | undefined;
-    // Present on notification_log rows written by a sequence send
-    // (automation-processor) — surfaced on every PostHog emit below so
-    // sequence performance is queryable without re-joining notification_log.
-    const sequenceId = fullLog?.metadata?.sequence_id as string | undefined;
-    const stepIndex = fullLog?.metadata?.step_index as number | undefined;
-
-    const mappedStatus = RESEND_EVENT_STATUS[event.type];
-
-    // Process based on event type
-    switch (event.type) {
-      case "email.delivered": {
-        // sendCompliantEmail writes 'sent' on Resend's 2xx accept (00552);
-        // this event is the only writer of delivery truth. Guarded so an
-        // out-of-order delivered event cannot walk 'opened'/'clicked' back.
-        await supabase
-          .from("notification_log")
-          .update({
-            status: mappedStatus,
-            sent_at: event.data.created_at || new Date().toISOString(),
-          })
-          .eq("id", logEntry.id)
-          .in("status", [...DELIVERY_UPGRADE_FROM_STATUSES]);
-
-        // Update campaign inline counter
-        if (campaignId) {
-          await supabase.rpc("increment_campaign_counter", {
-            p_campaign_id: campaignId,
-            p_column: "sent_count",
-          }).catch(() => {
-            // Fallback: direct update
-            supabase
-              .from("campaigns")
-              .update({ sent_count: supabase.rpc ? undefined : 1 })
-              .eq("id", campaignId);
-          });
-        }
-
-        // Emit PostHog event
-        await emitPostHogEvent(logEntry.user_id, "email_sent", {
-          campaign_id: campaignId,
-          template_id: templateId,
-          notification_type: notificationType,
-          sequence_id: sequenceId,
-          step_index: stepIndex,
-        });
-        break;
-      }
-
-      case "email.opened": {
-        await supabase
-          .from("notification_log")
-          .update({
-            status: mappedStatus,
-            opened_at: new Date().toISOString(),
-          })
-          .eq("id", logEntry.id);
-
-        if (campaignId) {
-          await supabase.rpc("increment_campaign_counter", {
-            p_campaign_id: campaignId,
-            p_column: "open_count",
-          }).catch(() => {});
-        }
-
-        await emitPostHogEvent(logEntry.user_id, "email_opened", {
-          campaign_id: campaignId,
-          template_id: templateId,
-          notification_type: notificationType,
-          sequence_id: sequenceId,
-          step_index: stepIndex,
-        });
-
-        // Update PostHog user property
-        await updatePostHogUserProperties(logEntry.user_id, {
-          last_email_opened_at: new Date().toISOString(),
-        });
-        break;
-      }
-
-      case "email.clicked": {
-        await supabase
-          .from("notification_log")
-          .update({
-            status: mappedStatus,
-            clicked_at: new Date().toISOString(),
-          })
-          .eq("id", logEntry.id);
-
-        if (campaignId) {
-          await supabase.rpc("increment_campaign_counter", {
-            p_campaign_id: campaignId,
-            p_column: "click_count",
-          }).catch(() => {});
-        }
-
-        await emitPostHogEvent(logEntry.user_id, "email_clicked", {
-          campaign_id: campaignId,
-          template_id: templateId,
-          notification_type: notificationType,
-          sequence_id: sequenceId,
-          step_index: stepIndex,
-        });
-        break;
-      }
-
-      case "email.bounced": {
-        await supabase
-          .from("notification_log")
-          .update({
-            status: mappedStatus,
-            error: `Bounce: ${event.data.bounce_type || "unknown"}`,
-          })
-          .eq("id", logEntry.id);
-
-        if (campaignId) {
-          await supabase.rpc("increment_campaign_counter", {
-            p_campaign_id: campaignId,
-            p_column: "bounce_count",
-          }).catch(() => {});
-        }
-
-        await emitPostHogEvent(logEntry.user_id, "email_bounced", {
-          campaign_id: campaignId,
-          template_id: templateId,
-          bounce_type: event.data.bounce_type,
-          sequence_id: sequenceId,
-          step_index: stepIndex,
-        });
-
-        // Increment bounce count and check suppression threshold
-        await handleBounce(supabase, logEntry.user_id, event.data.bounce_type);
-        break;
-      }
-
-      case "email.complained": {
-        await supabase
-          .from("notification_log")
-          .update({
-            status: mappedStatus,
-            error: "Spam complaint",
-          })
-          .eq("id", logEntry.id);
-
-        if (campaignId) {
-          await supabase.rpc("increment_campaign_counter", {
-            p_campaign_id: campaignId,
-            p_column: "unsubscribe_count",
-          }).catch(() => {});
-        }
-
-        // Permanently suppress on complaint
-        await supabase
-          .from("profiles")
-          .update({
-            email_suppressed: true,
-            email_suppressed_at: new Date().toISOString(),
-            email_complaint: true,
-          })
-          .eq("id", logEntry.user_id);
-
-        await emitPostHogEvent(logEntry.user_id, "email_unsubscribed", {
-          campaign_id: campaignId,
-          template_id: templateId,
-          reason: "spam_complaint",
-          sequence_id: sequenceId,
-          step_index: stepIndex,
-        });
-
-        console.warn(`Email suppressed for user ${logEntry.user_id} due to spam complaint`);
-        break;
-      }
-
-      default: {
-        console.log(`Unhandled Resend webhook event type: ${event.type}`);
-      }
-    }
-
-    // Update total_emails_received PostHog user property
-    await updatePostHogUserProperties(logEntry.user_id, {
-      $set_once: { first_email_received_at: new Date().toISOString() },
-    });
-
-    return new Response(
-      JSON.stringify({ received: true, event_type: event.type }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    // Service-role client only after the signature has cleared.
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
+
+    const outcome = await handleResendEvent(supabase, event);
+    return json({
+      received: true,
+      matched: outcome.matched,
+      event_type: event.type,
+    });
   } catch (error) {
     console.error("Error in resend-webhook:", error);
-    return new Response(
-      JSON.stringify({ error: "Internal server error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return json({ error: "Internal server error" }, 500);
   }
 });
+
+/**
+ * Apply one verified Resend event to notification_log (and, for bounces and
+ * complaints, to the recipient's suppression state).
+ *
+ * Exported so it can be exercised against a stubbed client: importing this
+ * module for its `serve()` alone would boot a listener.
+ */
+export async function handleResendEvent(
+  supabase: SupabaseClient,
+  event: ResendWebhookEvent,
+): Promise<{ matched: boolean }> {
+  const emailId = event.data.email_id;
+
+  // Find the notification log entry by provider_id
+  const { data: logEntry } = await supabase
+    .from("notification_log")
+    .select("id, user_id, status")
+    .eq("provider_id", emailId)
+    .single();
+
+  if (!logEntry) {
+    // Not found — might be a non-tracked email (e.g. auth emails)
+    console.warn(`No notification_log entry for email_id: ${emailId}`);
+    return { matched: false };
+  }
+
+  // Fetch campaign_id from log metadata if present
+  const { data: fullLog } = await supabase
+    .from("notification_log")
+    .select("id, user_id, status, type, template_id, metadata")
+    .eq("id", logEntry.id)
+    .single();
+
+  const campaignId = fullLog?.metadata?.campaign_id as string | undefined;
+  const notificationType = fullLog?.type as string;
+  const templateId = fullLog?.template_id as string | undefined;
+  // Present on notification_log rows written by a sequence send
+  // (automation-processor) — surfaced on every PostHog emit below so
+  // sequence performance is queryable without re-joining notification_log.
+  const sequenceId = fullLog?.metadata?.sequence_id as string | undefined;
+  const stepIndex = fullLog?.metadata?.step_index as number | undefined;
+
+  const mappedStatus = RESEND_EVENT_STATUS[event.type];
+  const now = new Date().toISOString();
+  const lastEvent = lastEventName(event.type);
+  // Every handled event leaves this trail, whatever it does to `status`.
+  const trail = lastEvent
+    ? { last_event: lastEvent, last_event_at: now }
+    : {};
+
+  // Process based on event type
+  switch (event.type) {
+    case "email.sent": {
+      // Resend's accept, not a delivery: `status` is left exactly where it is
+      // so a re-delivered 'sent' cannot walk 'delivered'/'opened' backwards.
+      await supabase
+        .from("notification_log")
+        .update({ ...trail })
+        .eq("id", logEntry.id);
+      break;
+    }
+
+    case "email.delivered": {
+      // Two writes on purpose. The status promotion is guarded so an
+      // out-of-order delivered event cannot walk 'opened'/'clicked' back
+      // (sendCompliantEmail writes 'sent' on Resend's 2xx accept, 00552);
+      // the delivery timestamp and the event trail are facts either way.
+      await supabase
+        .from("notification_log")
+        .update({
+          status: mappedStatus,
+          sent_at: event.data.created_at || now,
+        })
+        .eq("id", logEntry.id)
+        .in("status", [...DELIVERY_UPGRADE_FROM_STATUSES]);
+
+      await supabase
+        .from("notification_log")
+        .update({
+          delivered_at: event.data.created_at || now,
+          ...trail,
+        })
+        .eq("id", logEntry.id);
+
+      // Update campaign inline counter
+      if (campaignId) {
+        await bestEffortRpc(supabase, "increment_campaign_counter", {
+          p_campaign_id: campaignId,
+          p_column: "sent_count",
+        });
+      }
+
+      // Emit PostHog event
+      await emitPostHogEvent(logEntry.user_id, "email_sent", {
+        campaign_id: campaignId,
+        template_id: templateId,
+        notification_type: notificationType,
+        sequence_id: sequenceId,
+        step_index: stepIndex,
+      });
+      break;
+    }
+
+    case "email.delivery_delayed": {
+      // Transient: the message may still land, so `status` is untouched and
+      // only the retry is recorded.
+      await supabase
+        .from("notification_log")
+        .update({ delayed_at: now, ...trail })
+        .eq("id", logEntry.id);
+      break;
+    }
+
+    case "email.opened": {
+      await supabase
+        .from("notification_log")
+        .update({
+          status: mappedStatus,
+          opened_at: now,
+          ...trail,
+        })
+        .eq("id", logEntry.id);
+
+      if (campaignId) {
+        await bestEffortRpc(supabase, "increment_campaign_counter", {
+          p_campaign_id: campaignId,
+          p_column: "open_count",
+        });
+      }
+
+      await emitPostHogEvent(logEntry.user_id, "email_opened", {
+        campaign_id: campaignId,
+        template_id: templateId,
+        notification_type: notificationType,
+        sequence_id: sequenceId,
+        step_index: stepIndex,
+      });
+
+      // Update PostHog user property
+      await updatePostHogUserProperties(logEntry.user_id, {
+        last_email_opened_at: now,
+      });
+      break;
+    }
+
+    case "email.clicked": {
+      await supabase
+        .from("notification_log")
+        .update({
+          status: mappedStatus,
+          clicked_at: now,
+          ...trail,
+        })
+        .eq("id", logEntry.id);
+
+      if (campaignId) {
+        await bestEffortRpc(supabase, "increment_campaign_counter", {
+          p_campaign_id: campaignId,
+          p_column: "click_count",
+        });
+      }
+
+      await emitPostHogEvent(logEntry.user_id, "email_clicked", {
+        campaign_id: campaignId,
+        template_id: templateId,
+        notification_type: notificationType,
+        sequence_id: sequenceId,
+        step_index: stepIndex,
+      });
+      break;
+    }
+
+    case "email.bounced": {
+      const bounceType = resolveBounceType(event.data);
+      const bounceReason = resolveBounceReason(event.data);
+
+      await supabase
+        .from("notification_log")
+        .update({
+          status: mappedStatus,
+          error: `Bounce: ${bounceType || "unknown"}`,
+          bounced_at: now,
+          bounce_type: bounceType,
+          bounce_reason: bounceReason,
+          ...trail,
+        })
+        .eq("id", logEntry.id);
+
+      if (campaignId) {
+        await bestEffortRpc(supabase, "increment_campaign_counter", {
+          p_campaign_id: campaignId,
+          p_column: "bounce_count",
+        });
+      }
+
+      await emitPostHogEvent(logEntry.user_id, "email_bounced", {
+        campaign_id: campaignId,
+        template_id: templateId,
+        bounce_type: bounceType,
+        bounce_reason: bounceReason,
+        sequence_id: sequenceId,
+        step_index: stepIndex,
+      });
+
+      // Increment bounce count and check suppression threshold
+      await handleBounce(supabase, logEntry.user_id, bounceType ?? undefined);
+      break;
+    }
+
+    case "email.complained": {
+      await supabase
+        .from("notification_log")
+        .update({
+          status: mappedStatus,
+          error: "Spam complaint",
+          ...trail,
+        })
+        .eq("id", logEntry.id);
+
+      if (campaignId) {
+        await bestEffortRpc(supabase, "increment_campaign_counter", {
+          p_campaign_id: campaignId,
+          p_column: "unsubscribe_count",
+        });
+      }
+
+      // Permanently suppress on complaint
+      await supabase
+        .from("profiles")
+        .update({
+          email_suppressed: true,
+          email_suppressed_at: now,
+          email_complaint: true,
+        })
+        .eq("id", logEntry.user_id);
+
+      await emitPostHogEvent(logEntry.user_id, "email_unsubscribed", {
+        campaign_id: campaignId,
+        template_id: templateId,
+        reason: "spam_complaint",
+        sequence_id: sequenceId,
+        step_index: stepIndex,
+      });
+
+      console.warn(`Email suppressed for user ${logEntry.user_id} due to spam complaint`);
+      break;
+    }
+
+    default: {
+      console.log(`Unhandled Resend webhook event type: ${event.type}`);
+    }
+  }
+
+  // Update total_emails_received PostHog user property
+  await updatePostHogUserProperties(logEntry.user_id, {
+    $set_once: { first_email_received_at: now },
+  });
+
+  return { matched: true };
+}
 
 /**
  * Handle bounce events: increment counter, then suppress — immediately for a
@@ -381,18 +467,12 @@ async function updatePostHogUserProperties(
 }
 
 async function handleBounce(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseClient,
   userId: string,
   bounceType?: string
 ): Promise<void> {
   // Increment bounce count
-  await supabase.rpc("increment_bounce_count", { p_user_id: userId }).catch(() => {
-    // If RPC doesn't exist, do it manually
-    return supabase
-      .from("profiles")
-      .update({ email_bounce_count: supabase.rpc ? undefined : 1 })
-      .eq("id", userId);
-  });
+  await bestEffortRpc(supabase, "increment_bounce_count", { p_user_id: userId });
 
   // Manual increment fallback
   const { data: profile } = await supabase
