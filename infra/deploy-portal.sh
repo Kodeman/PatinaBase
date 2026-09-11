@@ -269,6 +269,207 @@ echo "==> [0/3] Preflight OK: runtime-origin path resolves (SUPABASE_ORIGIN_RUNT
 echo
 
 # ---------------------------------------------------------------------------
+# Phase 0b — export EVERY NEXT_PUBLIC_* the target's wrangler.jsonc declares.
+#
+# WHY THIS EXISTS
+# ---------------
+# wrangler.jsonc `vars` are RUNTIME Worker bindings. NEXT_PUBLIC_* is inlined
+# into the client bundle at BUILD time from process.env / the app's .env files —
+# `next build` never reads wrangler.jsonc. Phase 0 above resolved only the
+# Supabase trio, so every other NEXT_PUBLIC_* (PostHog key/host, edge API URL,
+# client-portal URL, NEXT_PUBLIC_ENV, ...) was inlined as `undefined` whenever
+# the deploy ran from a checkout without .env.local. A worktree deploy on
+# 2026-09-11 shipped exactly that: the live bundle kept
+# `a.env.NEXT_PUBLIC_POSTHOG_KEY` as a runtime property access, PostHog never
+# initialized, and all 13 fail-closed flags went dark while the Supabase URL
+# (trio-guarded) was a correct literal — so nothing looked broken.
+#
+# Values resolve through the SAME machinery/precedence as the trio
+# (exported process.env > .env.production.local > .env.local > .env.production
+# > .env), with the committed wrangler.jsonc literal as a final fallback so a
+# checkout without .env.local builds the same bundle a main-checkout deploy
+# would. The Supabase trio is deliberately EXCLUDED from that fallback: its
+# fail-closed empty check above is what stops a worktree from shipping a
+# white-screen build, and a wrangler fallback would silently defeat it.
+# ---------------------------------------------------------------------------
+echo "==> [0b/3] Preflight: exporting NEXT_PUBLIC_* declared in wrangler.jsonc"
+
+WRANGLER_CONFIG="$APP_DIR/wrangler.jsonc"
+if [ ! -f "$WRANGLER_CONFIG" ]; then
+  echo "ERROR: wrangler config not found: $WRANGLER_CONFIG" >&2
+  exit 1
+fi
+
+# The three NEXT_PUBLIC_* keys whose emptiness is silent in prod: PostHog going
+# dark takes every fail-closed feature flag with it, and an empty edge API URL
+# dead-ends the scan read path. Required ONLY when the portal's own vars block
+# declares them — manufacturer declares none of them, admin declares no
+# NEXT_PUBLIC_EDGE_API_URL.
+REQUIRED_WRANGLER_NEXT_PUBLIC_KEYS=" NEXT_PUBLIC_POSTHOG_KEY NEXT_PUBLIC_POSTHOG_HOST NEXT_PUBLIC_EDGE_API_URL "
+
+read_wrangler_next_public_vars() {
+  # $1 = wrangler.jsonc path, $2 = production|staging.
+  # Emits KEY<NUL>VALUE<NUL> for every NEXT_PUBLIC_* var in the ACTIVE vars
+  # block. Wrangler does not inherit `vars` into a named environment — an env
+  # block that declares vars replaces the top-level block wholesale — so
+  # staging reads env.staging.vars and nothing else.
+  node - "$1" "$2" <<'NODE'
+const fs = require('fs');
+const [file, targetEnv] = process.argv.slice(2);
+const src = fs.readFileSync(file, 'utf8');
+
+// String-aware JSONC comment stripper. A naive /\/\/.*/ replace eats the `//`
+// inside every "https://..." value and silently yields empty vars.
+let out = '';
+let i = 0;
+while (i < src.length) {
+  const c = src[i];
+  if (c === '"') {
+    out += c;
+    i++;
+    while (i < src.length) {
+      if (src[i] === '\\') { out += src.slice(i, i + 2); i += 2; continue; }
+      out += src[i];
+      i++;
+      if (src[i - 1] === '"') break;
+    }
+    continue;
+  }
+  if (c === '/' && src[i + 1] === '/') { while (i < src.length && src[i] !== '\n') i++; continue; }
+  if (c === '/' && src[i + 1] === '*') {
+    i += 2;
+    while (i < src.length && !(src[i] === '*' && src[i + 1] === '/')) i++;
+    i += 2;
+    continue;
+  }
+  out += c;
+  i++;
+}
+out = out.replace(/,(\s*[}\]])/g, '$1');
+
+const cfg = JSON.parse(out);
+const vars = targetEnv === 'staging'
+  ? ((cfg.env && cfg.env.staging && cfg.env.staging.vars) || {})
+  : (cfg.vars || {});
+
+let buf = '';
+for (const key of Object.keys(vars)) {
+  if (key.indexOf('NEXT_PUBLIC_') !== 0) continue;
+  buf += key + '\0' + String(vars[key]) + '\0';
+}
+process.stdout.write(buf);
+NODE
+}
+
+mask_value() {
+  # $1 = value. Prints a non-recoverable preview: the prefix up to and
+  # including the first `_` (when that prefix is short enough to be a real
+  # tag like `phc_`) plus 4 more characters.
+  mv_value="$1"
+  if [ -z "$mv_value" ]; then
+    printf '<empty>'
+    return 0
+  fi
+  mv_head=""
+  case "$mv_value" in
+    *_*)
+      mv_candidate="${mv_value%%_*}_"
+      if [ ${#mv_candidate} -le 8 ] && [ ${#mv_candidate} -lt ${#mv_value} ]; then
+        mv_head="$mv_candidate"
+      fi
+      ;;
+  esac
+  mv_rest="${mv_value#"$mv_head"}"
+  printf '%s%s…(%d chars)' "$mv_head" "$(printf '%s' "$mv_rest" | cut -c1-4)" "${#mv_value}"
+}
+
+WRANGLER_VAR_NAMES=()
+WRANGLER_VAR_VALUES=()
+# Read straight from the process substitution — no temp file to leak or to be
+# denied. `set -e` cannot see a failure inside a process substitution, so the
+# empty-result guard below is what makes a parse failure fail CLOSED.
+while IFS= read -r -d '' wv_name && IFS= read -r -d '' wv_value; do
+  WRANGLER_VAR_NAMES+=("$wv_name")
+  WRANGLER_VAR_VALUES+=("$wv_value")
+done < <(read_wrangler_next_public_vars "$WRANGLER_CONFIG" "$TARGET_ENV")
+
+if [ "${#WRANGLER_VAR_NAMES[@]}" -eq 0 ]; then
+  echo "ERROR: no NEXT_PUBLIC_* vars found in ${WRANGLER_CONFIG} for env '${TARGET_ENV}'." >&2
+  echo "       Every portal declares at least NEXT_PUBLIC_SUPABASE_URL — this almost" >&2
+  echo "       certainly means the JSONC parse produced an empty vars block." >&2
+  exit 1
+fi
+
+# Captured for the post-build chunk gate (Phase 2.6).
+PREFLIGHT_POSTHOG_KEY=""
+MISSING_REQUIRED_KEYS=""
+
+wv_index=0
+while [ "$wv_index" -lt "${#WRANGLER_VAR_NAMES[@]}" ]; do
+  wv_name="${WRANGLER_VAR_NAMES[$wv_index]}"
+  wv_literal="${WRANGLER_VAR_VALUES[$wv_index]}"
+  wv_index=$((wv_index + 1))
+
+  case "$wv_name" in
+    NEXT_PUBLIC_SUPABASE_URL|NEXT_PUBLIC_SUPABASE_ANON_KEY|NEXT_PUBLIC_SUPABASE_STORAGE_KEY)
+      wv_allow_fallback=false
+      ;;
+    *)
+      wv_allow_fallback=true
+      ;;
+  esac
+
+  wv_resolved="$(resolve_next_public_var "$wv_name")"
+  wv_source="env"
+  if [ -z "$wv_resolved" ] && [ "$wv_allow_fallback" = "true" ]; then
+    wv_resolved="$wv_literal"
+    wv_source="wrangler.jsonc"
+  fi
+
+  export "$wv_name=$wv_resolved"
+
+  if [ "$wv_name" = "NEXT_PUBLIC_POSTHOG_KEY" ]; then
+    PREFLIGHT_POSTHOG_KEY="$wv_resolved"
+  fi
+
+  case "$REQUIRED_WRANGLER_NEXT_PUBLIC_KEYS" in
+    *" $wv_name "*)
+      if [ -z "$wv_resolved" ]; then
+        MISSING_REQUIRED_KEYS="$MISSING_REQUIRED_KEYS $wv_name"
+      fi
+      ;;
+  esac
+
+  case "$wv_name" in
+    *KEY|*TOKEN|*SECRET) wv_display="$(mask_value "$wv_resolved")" ;;
+    *) wv_display="${wv_resolved:-<empty>}" ;;
+  esac
+  printf '    %-46s = %-24s [%s]\n' "$wv_name" "$wv_display" "$wv_source"
+done
+
+if [ -n "$MISSING_REQUIRED_KEYS" ]; then
+  if [ "$TARGET_ENV" = "staging" ]; then
+    # Staging deliberately ships an empty NEXT_PUBLIC_POSTHOG_KEY (PostHog is
+    # off there; NEXT_PUBLIC_FLAG_OVERRIDES compensates) — see the comment on
+    # that var in wrangler.jsonc. Requiring it would block every staging deploy.
+    echo "==> [0b/3] NOTE: staging leaves these intentionally empty:${MISSING_REQUIRED_KEYS}"
+  else
+    echo "ERROR: refusing to build ${PORTAL} portal — these NEXT_PUBLIC_* vars are" >&2
+    echo "       declared in ${WRANGLER_CONFIG} (env '${TARGET_ENV}') but resolved EMPTY:" >&2
+    echo "      ${MISSING_REQUIRED_KEYS}" >&2
+    echo "       next build would inline them as undefined. An empty PostHog key" >&2
+    echo "       means PostHog never initializes and every fail-closed feature flag" >&2
+    echo "       goes dark; an empty NEXT_PUBLIC_EDGE_API_URL dead-ends the scan" >&2
+    echo "       read path. Give them real values in wrangler.jsonc's vars block" >&2
+    echo "       (or export them) before deploying." >&2
+    exit 1
+  fi
+fi
+
+echo "==> [0b/3] Preflight OK: ${#WRANGLER_VAR_NAMES[@]} NEXT_PUBLIC_* vars exported into the build env"
+echo
+
+# ---------------------------------------------------------------------------
 # Phase 1 — rebuild this app's workspace dependencies (the stale-dist guard).
 # ---------------------------------------------------------------------------
 echo "==> [1/3] Building workspace dependencies via Turborepo"
@@ -303,6 +504,52 @@ if [ "$HANDLER_BYTES" -gt $((55 * 1024 * 1024)) ]; then
   echo "       (see scripts/dedupe-client-reference-manifests.mjs)" >&2
   exit 1
 fi
+
+# ---------------------------------------------------------------------------
+# Phase 2.6 — client-chunk gate: prove NEXT_PUBLIC_* actually got inlined.
+#
+# The served-chunk grep was previously a manual post-deploy step (the
+# 2026-08-26 placeholder incident: a literal "<wrangler.jsonc value>" reached
+# three prod chunks and broke sign-in for ~14 minutes). Doing it BEFORE the
+# deploy is the whole point — a bundle that still carries the env var's NAME
+# instead of its value never reaches Cloudflare.
+# ---------------------------------------------------------------------------
+CHUNKS_DIR="$APP_DIR/.open-next/assets/_next/static/chunks"
+if [ ! -d "$CHUNKS_DIR" ]; then
+  echo "ERROR: built client chunks not found: $CHUNKS_DIR" >&2
+  exit 1
+fi
+
+CHUNK_TOTAL="$(find "$CHUNKS_DIR" -name '*.js' -type f | wc -l | tr -d ' ')"
+# `grep -rl` exits 1 on no match; under `set -e`/pipefail that would abort the
+# script before we can report the (good) zero count.
+POSTHOG_NAME_HITS="$(grep -rl 'NEXT_PUBLIC_POSTHOG_KEY' "$CHUNKS_DIR" 2>/dev/null | wc -l | tr -d ' ' || true)"
+echo "==> [2.6/3] Chunk gate: ${CHUNK_TOTAL} client chunks; NEXT_PUBLIC_POSTHOG_KEY name survives in ${POSTHOG_NAME_HITS}"
+
+if [ "$POSTHOG_NAME_HITS" -ne 0 ]; then
+  echo "ERROR: refusing to deploy ${PORTAL} portal — ${POSTHOG_NAME_HITS} client chunk(s)" >&2
+  echo "       still contain the literal text NEXT_PUBLIC_POSTHOG_KEY, i.e. the build" >&2
+  echo "       left it as a runtime property access (a.env.NEXT_PUBLIC_POSTHOG_KEY)" >&2
+  echo "       instead of inlining a value. PostHog would never initialize and every" >&2
+  echo "       fail-closed feature flag would be dark. Offending chunks:" >&2
+  grep -rl 'NEXT_PUBLIC_POSTHOG_KEY' "$CHUNKS_DIR" 2>/dev/null | sed 's/^/         /' >&2 || true
+  exit 1
+fi
+
+if [ -n "$PREFLIGHT_POSTHOG_KEY" ]; then
+  POSTHOG_VALUE_HITS="$(grep -rlF "$PREFLIGHT_POSTHOG_KEY" "$CHUNKS_DIR" 2>/dev/null | wc -l | tr -d ' ' || true)"
+  echo "==> [2.6/3] Chunk gate: resolved PostHog key literal present in ${POSTHOG_VALUE_HITS} chunk(s)"
+  if [ "$POSTHOG_VALUE_HITS" -eq 0 ]; then
+    echo "ERROR: refusing to deploy ${PORTAL} portal — the resolved PostHog key" >&2
+    echo "       ($(mask_value "$PREFLIGHT_POSTHOG_KEY")) appears in ZERO client chunks." >&2
+    echo "       The value never made it into the bundle, so PostHog is dark in this" >&2
+    echo "       build. Check that Phase 0b exported it before the OpenNext build." >&2
+    exit 1
+  fi
+else
+  echo "==> [2.6/3] Chunk gate: PostHog key intentionally empty for '${TARGET_ENV}' — value check skipped"
+fi
+echo
 
 # ---------------------------------------------------------------------------
 # Phase 3 — deploy the worker.
