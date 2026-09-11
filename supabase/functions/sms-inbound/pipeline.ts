@@ -507,13 +507,23 @@ export async function processInbound(
     return { status: 200, twiml: twimlBody(), disposition: "opted_out" };
   }
   if (START_WORDS.includes(upper)) {
-    // One target set for both writers: the studios that actually hold the
-    // number, and only their party rows.
+    // A START is a RE-subscription: it answers a sender that asked. So the
+    // target set is the studios whose own record for this number is currently
+    // `opted_out` (the refusal it lifts) or `pending` (the invite it answers).
+    // A studio at `not_asked`, or with no record at all, is untouched even when
+    // it holds a seat on the number — holding a seat is not having asked, and
+    // granting on a seat manufactured consent for a studio that never invited
+    // this person (R-AJ). The seat-derived arm survives only to carry each
+    // qualifying studio's party rows, so the record and the mirror still agree.
+    const startOrgs = await studiosHoldingRecord(supabase, from, [
+      "opted_out",
+      "pending",
+    ]);
+    const startOrgSet = new Set(startOrgs);
     const startTargets = withRecordOnlyStudios(
-      await studiosHoldingPhone(supabase, await loadPhoneParties(supabase, from)),
-      // Only records currently refusing. A START lifts the STOP it mirrors; it
-      // does not hand a grant to a studio whose record never left not_asked.
-      await studiosHoldingRecord(supabase, from, ["opted_out"]),
+      (await studiosHoldingPhone(supabase, await loadPhoneParties(supabase, from)))
+        .filter((t) => startOrgSet.has(t.org)),
+      startOrgs,
     );
     await writeChannelConsent(
       supabase,

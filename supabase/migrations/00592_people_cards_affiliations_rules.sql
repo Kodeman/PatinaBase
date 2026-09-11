@@ -10,6 +10,9 @@
 --      dba_name, company_kind, trades, w9_on_file_at, tax_id_last4, remit_to,
 --      retainage_bps, warranty_until, and the three designated-person FKs).
 --   2. studio_person_affiliations — E4: which person does what at which firm.
+--      Backfilled from studio_contacts.company_id (00417), which becomes a
+--      derived pointer at the open affiliation, kept equal by trigger. One
+--      fact, one home, one writer — the pointer is the cache.
 --   3. studio_contact_rules — E7: the contact rule (allowed / forbidden /
 --      routed / hours / escalation), one per subject, person · company ·
 --      engagement.
@@ -201,7 +204,11 @@ COMMENT ON TABLE public.studio_person_affiliations IS
   'E4: which person does what at which firm, dated. A person moving firms '
   'closes one row (to_date) and opens another; the person card and its channels '
   'survive (crm-model §4). Both ids point at studio_contacts — person_id at a '
-  'person card, company_id at a company card.';
+  'person card, company_id at a company card. THIS TABLE IS THE HOME of the '
+  'person-at-firm fact and the one the room reads (the company card''s crew '
+  'list, R-W). studio_contacts.company_id (00417) is now a DERIVED POINTER at '
+  'the person''s open affiliation, kept for the legacy readers and maintained '
+  'by sync_studio_contact_company_pointer() — never the other way round.';
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_studio_person_affiliations_open
   ON public.studio_person_affiliations(person_id, company_id)
@@ -258,6 +265,113 @@ CREATE POLICY studio_person_affiliations_member_delete
 REVOKE ALL ON TABLE public.studio_person_affiliations FROM PUBLIC, anon, authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.studio_person_affiliations TO authenticated;
 GRANT ALL ON public.studio_person_affiliations TO service_role;
+
+-- ── E4's home, and the legacy pointer ───────────────────────────────────────
+-- studio_contacts.company_id (00417:80) held "which firm is this person at"
+-- before this table existed, and the shipped hooks still write it
+-- (packages/supabase/src/hooks/use-studio-contacts.ts:202, :234). Two homes for
+-- one fact is the failure this file's own header refuses for the contact rule,
+-- so the two are BOUND rather than left to drift: the affiliation is the fact,
+-- company_id is a derived pointer at the person's open affiliation. Without the
+-- backfill every person already linked to a firm would have no affiliation row
+-- and the company card's crew list would render empty for exactly the firms the
+-- studio has been using longest.
+INSERT INTO public.studio_person_affiliations (person_id, company_id, from_date, to_date)
+SELECT p.id, p.company_id, NULL, NULL
+  FROM public.studio_contacts p
+  JOIN public.studio_contacts c ON c.id = p.company_id
+ WHERE p.company_id IS NOT NULL
+   AND p.entity_kind = 'person'
+   -- The RLS WITH CHECK pins both cards to one studio; the backfill holds the
+   -- same line, so a pre-existing cross-studio link is left for a human.
+   AND c.organization_id = p.organization_id
+ON CONFLICT (person_id, company_id) WHERE to_date IS NULL DO NOTHING;
+
+-- The pointer, kept equal to the open affiliation. One direction only: writing
+-- an affiliation moves company_id, never the reverse, so there is one writer
+-- for the fact and one for its cache.
+CREATE OR REPLACE FUNCTION public._sync_person_company_pointer(p_person_id uuid)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+DECLARE
+  v_company uuid;
+BEGIN
+  IF p_person_id IS NULL THEN
+    RETURN;
+  END IF;
+  -- A person may hold two open affiliations (crm-model §4 — the sole
+  -- proprietor who also crews for a GC). The pointer holds one; it holds the
+  -- most recently begun, and the room reads the affiliations for the rest.
+  SELECT spa.company_id INTO v_company
+    FROM public.studio_person_affiliations spa
+   WHERE spa.person_id = p_person_id
+     AND spa.to_date IS NULL
+   ORDER BY spa.from_date DESC NULLS LAST, spa.created_at DESC
+   LIMIT 1;
+
+  UPDATE public.studio_contacts sc
+     SET company_id = v_company
+   WHERE sc.id = p_person_id
+     AND sc.entity_kind = 'person'
+     AND sc.company_id IS DISTINCT FROM v_company;
+END;
+$$;
+
+-- Nothing outside the trigger calls this: it takes a caller-supplied person
+-- id and writes a card, so authenticated is revoked too (the trigger runs as
+-- the definer owner and needs no grant).
+REVOKE ALL ON FUNCTION public._sync_person_company_pointer(uuid)
+  FROM PUBLIC, anon, authenticated;
+
+COMMENT ON FUNCTION public._sync_person_company_pointer(uuid) IS
+  'Recomputes studio_contacts.company_id for one person from that person''s '
+  'OPEN affiliation (most recently begun, NULL when none). The pointer is '
+  'derived; studio_person_affiliations is the fact (00592).';
+
+CREATE OR REPLACE FUNCTION public.sync_studio_contact_company_pointer()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+BEGIN
+  -- Both sides on an UPDATE that moves the row to another person.
+  IF TG_OP <> 'INSERT' THEN
+    PERFORM public._sync_person_company_pointer(OLD.person_id);
+  END IF;
+  IF TG_OP <> 'DELETE' THEN
+    PERFORM public._sync_person_company_pointer(NEW.person_id);
+  END IF;
+  RETURN NULL;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.sync_studio_contact_company_pointer()
+  FROM PUBLIC, anon, authenticated;
+
+COMMENT ON FUNCTION public.sync_studio_contact_company_pointer() IS
+  'AFTER INSERT/UPDATE/DELETE on studio_person_affiliations: keeps '
+  'studio_contacts.company_id equal to the person''s open affiliation''s '
+  'company_id. One direction only — the affiliation is the fact the room '
+  'reads, company_id the derived pointer the legacy readers still follow '
+  '(00592).';
+
+DROP TRIGGER IF EXISTS sync_studio_contact_company_pointer_trg
+  ON public.studio_person_affiliations;
+CREATE TRIGGER sync_studio_contact_company_pointer_trg
+  AFTER INSERT OR UPDATE OR DELETE ON public.studio_person_affiliations
+  FOR EACH ROW EXECUTE FUNCTION public.sync_studio_contact_company_pointer();
+
+COMMENT ON COLUMN public.studio_contacts.company_id IS
+  'DERIVED POINTER at the person''s open affiliation '
+  '(studio_person_affiliations.company_id), kept for the legacy readers that '
+  'predate that table — the room itself reads the affiliations, which carry the '
+  'role, the dates and the paperwork/signer flags a single id cannot. '
+  'Maintained by sync_studio_contact_company_pointer(); a direct write to this '
+  'column is overwritten by the next affiliation write (00592).';
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- 4. studio_contact_rules — E7, the contact rule

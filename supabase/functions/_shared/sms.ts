@@ -300,9 +300,15 @@ export type ChannelConsentVerdict = "refuse" | "allow" | "unknown";
  * whose grant may authorise it.
  *
  *   · "refuse" — the studio's own record says opted_out; or there is NO record
- *     for that studio (or no studio could be resolved) AND some party row on
- *     this number has opted out, which fails closed until the backfill is
- *     proven everywhere (PR-x). That fallback is deliberately phone-global.
+ *     for that studio AND some party row on this number IN THAT SAME STUDIO
+ *     has opted out, which fails closed until the backfill is proven
+ *     everywhere (PR-x). That fallback reduces across the studio's own
+ *     projects, never across tenants (R-AK): a STOP given to a studio this
+ *     send has nothing to do with is not this studio's fact, and treating it
+ *     as one silently blocked a studio's very first outreach to a number it
+ *     had never contacted. Phone-global survives in exactly one place — when
+ *     NO studio can be resolved for the send at all, where there is nothing to
+ *     scope to and an unattributable send must not outrun a STOP.
  *   · "allow" — the studio's own record says granted AND no party row in that
  *     same studio on that number says opted_out. This is the half of G-3 the
  *     per-party ledger cannot do: a seat created today for a number the studio
@@ -345,6 +351,14 @@ async function channelConsentVerdict(
     }
   }
 
+  // No record for this studio yet (the backfill has not reached this pair):
+  // fail closed on a refusal already on this studio's own books.
+  if (org) {
+    return (await orgHasOptedOutParty(supabase, phone, org)) ? "refuse" : "unknown";
+  }
+
+  // No studio resolves at all — nothing to scope to, so the reduction stays
+  // phone-global here and only here.
   const { data: rows } = await supabase
     .from("project_parties")
     .select("sms_consent_status")
@@ -794,6 +808,13 @@ const DEFERRED_TTL_MS = 24 * 3600 * 1000;
  * during which the recipient may have opted out or the send window may have
  * closed for good (>24h stale): a defer is a promise to try later, not a
  * guarantee to send at all.
+ *
+ * The re-check is the SAME gate sendPartySms uses, in the same order (R-AH):
+ * the studio's own consent record (channelConsentVerdict, keyed off the
+ * deferred row's own party) first, then the legacy party-row reduction. A
+ * second send path with a second consent gate is two answers to one question —
+ * it let a studio's `granted` record die at quiet hours, and let a studio's
+ * `opted_out` record be overruled by another studio's granted party row.
  */
 export async function flushDeferredMessages(
   supabase: SupabaseClient,
@@ -862,6 +883,38 @@ export async function flushDeferredMessages(
     }
 
     // Re-check consent — it may have changed since the row was deferred.
+    // FIRST: the studio's own record for this number, resolved through the
+    // deferred row's party, exactly as sendPartySms does.
+    let deferredProjectId: string | null = null;
+    if (row.party_id) {
+      const { data: deferredParty } = await supabase
+        .from("project_parties")
+        .select("project_id")
+        .eq("id", row.party_id)
+        .maybeSingle();
+      deferredProjectId =
+        (deferredParty as { project_id?: string | null } | null)?.project_id ??
+          null;
+    }
+    const verdict = await channelConsentVerdict(
+      supabase,
+      phone,
+      deferredProjectId,
+    );
+    if (verdict === "refuse") {
+      await supabase
+        .from("sms_messages")
+        .update({ twilio_status: "suppressed", error_message: "opted_out" })
+        .eq("id", row.id);
+      suppressed++;
+      continue;
+    }
+    // The studio's own record says granted: that carries the deferred send even
+    // when this party row has not caught up (F-11). It never lifts an opt-out.
+    const studioGranted = verdict === "allow";
+
+    // SECOND, fail-closed until the backfill is proven everywhere (PR-x): the
+    // legacy party-row reduction, unchanged.
     const { data: partyRows } = await supabase
       .from("project_parties")
       .select("sms_consent_status")
@@ -881,7 +934,7 @@ export async function flushDeferredMessages(
     if (isInvite) {
       // The invite is meaningful only for a pending (or already-granted)
       // party — including the no-party-rows case (reduces to 'not_asked').
-      if (consent !== "pending" && consent !== "granted") {
+      if (!studioGranted && consent !== "pending" && consent !== "granted") {
         await supabase
           .from("sms_messages")
           .update({
@@ -892,7 +945,7 @@ export async function flushDeferredMessages(
         suppressed++;
         continue;
       }
-    } else if (consent !== "granted") {
+    } else if (!studioGranted && consent !== "granted") {
       await supabase
         .from("sms_messages")
         .update({ twilio_status: "suppressed", error_message: "not_consented" })

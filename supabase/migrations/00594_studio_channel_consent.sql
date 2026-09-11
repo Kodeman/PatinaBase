@@ -82,14 +82,20 @@
 -- (use-coordination.ts:519-522, :699-703, :721-733, :745):
 --   · `pending`/`granted` require source + evidence + disclosure_version;
 --     `opted_out` requires source + evidence (PR-m: a manual mark needs both).
+--     `not_asked` is refused outright (R-AG) — it is the absence of a record,
+--     not a verdict, and taking it was the one evidence-free door into this
+--     table: four arguments erased a recorded grant and its whole 10DLC
+--     evidence set, from the record and from every mirrored seat.
 --   · Nothing leaves `opted_out` through this door — not to granted, not to
 --     pending, not to not_asked. A STOP is the only stored record of a refusal
 --     and the RPC may not erase it. PR-m's way back is a FRESH recorded
 --     consent, which gets its own named door, record_channel_reconsent(),
 --     landing on `pending` so the double opt-in still runs.
---   · source / evidence / disclosure_version are NEVER carried forward across a
---     status change. Carrying them forward made a grant inherit the STOP's own
---     words as its 10DLC evidence.
+--   · No write may EMPTY the evidence set: source / evidence /
+--     disclosure_version / recorded_by keep what stands when the new verdict
+--     does not restate them (R-AG). Laundering is closed by the evidence gate,
+--     not by nulling — every status this door accepts must supply its own
+--     source and evidence, so a status change has always restated them.
 --
 -- Adds GRANT/REVOKE → regenerate seed/00-legacy-grants.sql after this migration
 -- (python3 scripts/generate-legacy-grants.py).
@@ -507,17 +513,33 @@ CREATE TRIGGER mirror_channel_consent_to_parties_trg
 --   1. EVIDENCE. `pending` and `granted` require source + evidence +
 --      disclosure_version; `opted_out` requires source + evidence (PR-m: a
 --      verbal STOP the studio heard is a real record, and needs to say who
---      heard it and when). Nothing else may claim consent.
+--      heard it and when). Nothing else may claim consent. `not_asked` is
+--      REFUSED outright (R-AG): it is the absence of a record, not a verdict,
+--      and there is nothing to record. It stays a legal value in the CHECK
+--      because the backfill mints it, and it stays a legal thing to READ — the
+--      chip still prints "Not asked" — but no studio act may write it here.
+--      Before R-AG the four-argument call record_channel_consent(org, 'sms',
+--      number, 'not_asked') was the one door into this table that needed no
+--      evidence at all, and it erased a recorded grant, its source, its words
+--      and its disclosure version — from the record AND, through the mirror,
+--      from every seat in the studio on that number.
 --   2. TRANSITION. Nothing leaves `opted_out` through this door. Not to
 --      granted (that is the recipient's to give), not to pending, and not to
 --      not_asked — a STOP is the only stored record of a refusal and the RPC
 --      may not erase it. PR-m's way back is a fresh recorded consent, which
 --      has its own named door: record_channel_reconsent() below.
---   3. NO LAUNDERING. source / evidence / disclosure_version are never carried
---      forward across a status change. Carried forward, a grant inherited the
---      STOP's own words ("Replied STOP", source inbound_sms) as the evidence a
---      carrier audit would be shown. Only a re-record of the SAME status may
---      keep an omitted field.
+--   3. NO LAUNDERING, AND NO ERASURE. Every status this door still accepts
+--      requires its own source and evidence, so a status change always
+--      RESTATES them — a grant can never inherit the STOP's own words
+--      ("Replied STOP", source inbound_sms) as the evidence a carrier audit
+--      would be shown, because the caller had to type new words to get here.
+--      And no write may empty the evidence set: source, evidence,
+--      disclosure_version and recorded_by are COALESCEd over what stands, so a
+--      verdict that does not restate a field keeps it rather than nulling it
+--      (R-AG). The only field a change may legitimately omit is
+--      disclosure_version on an `opted_out` — a refusal is not shown a
+--      disclosure — and the version the person WAS shown when they consented
+--      is a fact the audit still needs.
 --
 -- Dates still survive a verdict that does not restate them: "granted 2 May
 -- 2025, opted out 3 Dec 2025" must both stay printable (R-Q).
@@ -540,7 +562,6 @@ DECLARE
   v_value  text;
   v_now    timestamptz := now();
   v_prior  text;
-  v_same   boolean;
   v_row    public.studio_channel_consent;
 BEGIN
   IF NOT public.is_active_studio_member(p_organization_id) THEN
@@ -553,6 +574,15 @@ BEGIN
   END IF;
   IF p_status NOT IN ('not_asked', 'pending', 'granted', 'opted_out') THEN
     RAISE EXCEPTION 'invalid_consent_status';
+  END IF;
+  -- R-AG. `not_asked` is the absence of a record; recording it is not an act
+  -- the studio can perform, and taking it here destroys the evidence set both
+  -- on the record and on every mirrored seat.
+  IF p_status = 'not_asked' THEN
+    RAISE EXCEPTION 'consent_not_recordable'
+      USING HINT = 'There is nothing to record: not_asked is the absence of a '
+                   'consent, not a verdict. Record the verdict that actually '
+                   'happened (pending / granted / opted_out).';
   END IF;
 
   -- The channels table's own rule, shared: public.normalize_channel_value
@@ -597,10 +627,12 @@ BEGIN
   END IF;
 
   -- ── 3. Write ──────────────────────────────────────────────────────────────
-  -- A re-record of the SAME status may leave a field out and keep what stands;
-  -- a status CHANGE always restates the evidence set, or clears it.
-  v_same := (v_prior IS NOT DISTINCT FROM p_status);
-
+  -- No write may empty the evidence set (R-AG): each of source, evidence,
+  -- disclosure_version and recorded_by keeps what stands when the new verdict
+  -- does not restate it. Laundering is closed by the evidence gate above
+  -- rather than by nulling — every status this door accepts must supply its
+  -- own source and evidence, so a status CHANGE has already restated them by
+  -- the time it reaches here.
   INSERT INTO public.studio_channel_consent AS scc (
     organization_id, channel_kind, channel_value, status,
     consented_at, opt_out_at,
@@ -622,15 +654,11 @@ BEGIN
                           THEN EXCLUDED.consented_at ELSE scc.consented_at END,
       opt_out_at   = CASE WHEN EXCLUDED.status = 'opted_out'
                           THEN EXCLUDED.opt_out_at ELSE scc.opt_out_at END,
-      source             = CASE WHEN v_same THEN COALESCE(EXCLUDED.source, scc.source)
-                                ELSE EXCLUDED.source END,
-      evidence           = CASE WHEN v_same THEN COALESCE(EXCLUDED.evidence, scc.evidence)
-                                ELSE EXCLUDED.evidence END,
+      source             = COALESCE(EXCLUDED.source, scc.source),
+      evidence           = COALESCE(EXCLUDED.evidence, scc.evidence),
       recorded_at        = EXCLUDED.recorded_at,
-      disclosure_version = CASE WHEN v_same
-                                THEN COALESCE(EXCLUDED.disclosure_version, scc.disclosure_version)
-                                ELSE EXCLUDED.disclosure_version END,
-      recorded_by        = EXCLUDED.recorded_by,
+      disclosure_version = COALESCE(EXCLUDED.disclosure_version, scc.disclosure_version),
+      recorded_by        = COALESCE(EXCLUDED.recorded_by, scc.recorded_by),
       -- The origin follows the CURRENT verdict, in both writers (the inbound
       -- rail agrees: pipeline.ts writes t.projectId ?? prior). R-Q's sentence
       -- names the job the verdict on the books came from, not an older one.
@@ -650,10 +678,14 @@ COMMENT ON FUNCTION public.record_channel_consent(uuid, text, text, text, text, 
   'The one write path into studio_channel_consent for the portal. Studio-member '
   'gated (not_a_studio_member); requires source + evidence + disclosure_version '
   'for pending/granted and source + evidence for opted_out '
-  '(consent_evidence_required); refuses every transition OUT of opted_out '
-  '(channel_opted_out — record_channel_reconsent() is the named way back, PR-m); '
-  'never carries source/evidence/disclosure_version across a status change; '
-  'normalises the channel value through normalize_channel_value(); stamps '
+  '(consent_evidence_required); REFUSES not_asked outright '
+  '(consent_not_recordable — there is nothing to record, R-AG); refuses every '
+  'transition OUT of opted_out (channel_opted_out — record_channel_reconsent() '
+  'is the named way back, PR-m); never empties the evidence set — source, '
+  'evidence, disclosure_version and recorded_by are kept when the new verdict '
+  'does not restate them, and laundering is closed by the evidence gate, since '
+  'every accepted status must supply its own source and evidence; normalises '
+  'the channel value through normalize_channel_value(); stamps '
   'recorded_by/recorded_at; and keeps an earlier granted/opt-out date when the '
   'new verdict does not restate it (00594).';
 
