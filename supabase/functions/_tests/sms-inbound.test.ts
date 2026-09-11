@@ -1053,3 +1053,91 @@ Deno.test("START mints no consent record for a seat-holding studio that has none
   const parties = fake._data.project_parties as Array<{ id: string; sms_consent_status: string }>;
   assertEquals(parties.find((p) => p.id === "p1")!.sms_consent_status, "not_asked");
 });
+
+// ── r4 review fixes ─────────────────────────────────────────────────────────
+
+// M-2: the YES used to move only the seats already at `pending`, while the
+// consent record written straight after mirrored `granted` onto EVERY seat the
+// studio holds on the number (00594). A seat the mirror moves takes no real
+// pending -> granted transition, so 00374's site_request_consent_granted_dispatch
+// never fires for it: that seat read `granted` for ever while its site request
+// sat in awaiting_consent for ever. Party-first has to cover what the record
+// covers — while still targeting only the studios that actually asked.
+Deno.test("YES grants every seat of the inviting studio, not only the pending one", async () => {
+  const fake = createFakeSupabase(baseSeed({
+    projects: [
+      { id: "projA", name: "Job A", designer_id: "dz1", studio_id: "org-alpha" },
+      { id: "projB", name: "Job B", designer_id: "dz1", studio_id: "org-alpha" },
+      { id: "projC", name: "Beta job", designer_id: "dz2", studio_id: "org-beta" },
+    ],
+    project_parties: [
+      { id: "pA", phone_e164: "+15551110050", project_id: "projA", party_kind: "sub", sms_consent_status: "pending", display_name: "Sal Sub" },
+      { id: "pB", phone_e164: "+15551110050", project_id: "projB", party_kind: "sub", sms_consent_status: "not_asked", display_name: "Sal Sub" },
+      { id: "pC", phone_e164: "+15551110050", project_id: "projC", party_kind: "sub", sms_consent_status: "not_asked", display_name: "Sal Sub" },
+    ],
+  }));
+  const res = await processInbound(
+    params({ From: "+15551110050", Body: "YES", MessageSid: "SMyessibling" }),
+    { supabase: fake as never, getEnv: NO_POSTHOG },
+  );
+  assertEquals(res.disposition, "granted");
+  const parties = fake._data.project_parties as Array<{ id: string; sms_consent_status: string }>;
+  assertEquals(parties.find((p) => p.id === "pA")!.sms_consent_status, "granted");
+  assertEquals(
+    parties.find((p) => p.id === "pB")!.sms_consent_status,
+    "granted",
+    "the inviting studio's other seat must take the real transition, not the mirror's",
+  );
+  assertEquals(
+    parties.find((p) => p.id === "pC")!.sms_consent_status,
+    "not_asked",
+    "a studio that never invited is still untouched (R-AJ)",
+  );
+  const consent = (fake._data.studio_channel_consent ?? []) as Array<
+    { organization_id: string; status: string; origin_project_id: string | null }
+  >;
+  assertEquals(consent.length, 1, "only the inviting studio gets a record");
+  assertEquals(consent[0].organization_id, "org-alpha");
+  assertEquals(
+    consent[0].origin_project_id,
+    "projA",
+    "R-Q: the origin is the job the invite actually went out on",
+  );
+});
+
+// B-1: 00594 refuses `granted` while refusal_unanswered stands, because a
+// refusal is routinely dateless. The rail is the writer that raises it on a STOP
+// and the only writer that lowers it — the recipient's own YES/START.
+Deno.test("STOP records the refusal as unanswered; a START lowers the flag", async () => {
+  const fake = createFakeSupabase(baseSeed({
+    projects: [{ id: "proj1", name: "Maple St", designer_id: "dz1", studio_id: "org-alpha" }],
+    project_parties: [
+      { id: "p1", phone_e164: "+15551110051", project_id: "proj1", party_kind: "sub", sms_consent_status: "granted" },
+    ],
+  }));
+  await processInbound(
+    params({ From: "+15551110051", Body: "STOP", MessageSid: "SMstopflag" }),
+    { supabase: fake as never, getEnv: NO_POSTHOG },
+  );
+  let consent = (fake._data.studio_channel_consent ?? []) as Array<
+    { status: string; refusal_unanswered: boolean }
+  >;
+  assertEquals(consent.length, 1);
+  assertEquals(consent[0].status, "opted_out");
+  assertEquals(consent[0].refusal_unanswered, true, "a STOP stands unanswered");
+
+  await processInbound(
+    params({ From: "+15551110051", Body: "START", MessageSid: "SMstartflag" }),
+    { supabase: fake as never, getEnv: NO_POSTHOG },
+  );
+  consent = (fake._data.studio_channel_consent ?? []) as Array<
+    { status: string; refusal_unanswered: boolean }
+  >;
+  assertEquals(consent.length, 1);
+  assertEquals(consent[0].status, "granted");
+  assertEquals(
+    consent[0].refusal_unanswered,
+    false,
+    "only the recipient's own answer lowers it — this is what reopens the studio's door",
+  );
+});

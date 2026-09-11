@@ -15728,6 +15728,18 @@ END $g$;
 
 -- 00593_studio_contact_channels.sql
 DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.channel_value_was_on_sms_rail(text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00593_studio_contact_channels.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.channel_value_was_on_sms_rail(text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00593_studio_contact_channels.sql
+DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.normalize_studio_contact_channel() FROM PUBLIC, anon;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;

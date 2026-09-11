@@ -21,9 +21,11 @@
 --      kinds (each normalised by its own rule), a dated `bounced` channel
 --      status, and the company kinds the shipped UI already renders plus the
 --      AHJ `authority`.
---   8. r2 B-1: a mirrored `granted` fires NEITHER of project_parties' outward
---      AFTER triggers — not the opt-in invite, and not 00374's site-request
---      consent dispatch — while a direct party-row write still fires both.
+--   8. r2 B-1 / r4 M-2: a mirrored `granted` fires NEITHER of project_parties'
+--      outward AFTER triggers — not the opt-in invite, and not 00374's
+--      site-request consent dispatch — while a direct party-row write still
+--      fires both; and the mirror STILL releases the parked site requests on
+--      the seats it moved, durably and with no edge invocation.
 --   9. r2 B-2: record_channel_consent is a transition gate. Evidence is
 --      required, nothing leaves opted_out through it, the evidence set is
 --      never carried across a status change, and PR-m's way back is the named
@@ -38,17 +40,24 @@
 --      studio_contacts.company_id is a derived pointer the trigger keeps equal
 --      — in BOTH directions, so a firm set through the legacy column opens the
 --      affiliation the crew list reads (block 12).
---  13. r2r2 B-1: an inbound YES/START releases the site requests parked in
---      awaiting_consent — one consent-granted outbox row and one dispatch per
---      request, and the record write that follows adds no second dispatch.
+--  13. r2r2 B-1 / r4 M-2: an inbound YES/START releases the site requests
+--      parked in awaiting_consent — one consent-granted outbox row and one
+--      dispatch per request, and the record write that follows adds no second
+--      dispatch — INCLUDING the seat the studio never asked on, which the
+--      record's mirror grants regardless.
 --  14. r2r2 M-1: the "nothing leaves opted_out" gate is part of the WRITE in
 --      both doors, not a read before it, so a concurrent STOP cannot land in a
 --      read-then-write window.
---  15. r2r2 M-2: 00593's card backfill does not mark a person card's number
---      SMS-capable without a party row behind it (CS4-7).
+--  15. r2r2 M-2 / r4 M-1: 00593's backfill marks a number SMS-capable only on
+--      REAL SMS-rail evidence — an sms_conversations thread, or a FIELD-kind
+--      seat that was actually asked. An architect's or an AHJ inspector's
+--      folded party row is not evidence, in leg (a) or in leg (c) (CS4-7).
 --  16. r3r2 M-1: the two consent doors COMPOSE — reconsent() then a recorded
 --      grant cannot walk a STOP back to `granted`; only the recipient's own
 --      inbound YES/START opens that door again.
+--  16B. r4 B-1: the same holds for a DATELESS refusal — the shape the shipped
+--      portal writes on purpose and the fold mints verbatim. The refusal is a
+--      stored fact (refusal_unanswered), not an inference from opt_out_at.
 --  17. r3r2 M-2: an affiliation's two ids must be a person card and a company
 --      card (and never the same card), and a channel's owner_type must equal
 --      its card's entity_kind.
@@ -606,6 +615,13 @@ $$;
 -- every party row in the studio on the number, so one recorded grant fanned out
 -- into one dispatch per open request per seat.
 --
+-- r4 M-2 sharpened the invariant: it is about SENDING. Suppressing the trigger
+-- wholesale also stranded the DURABLE half — the seat read `granted` while its
+-- site request sat in awaiting_consent for ever. So the mirror now carries its
+-- own narrow release (site_request_dispatch_after_consent() only, never
+-- invoke_edge_function), and this block proves both halves: zero edge
+-- invocations, two released requests.
+--
 -- public.invoke_edge_function is still standing in (installed for block 6).
 
 -- Two Alpha seats for one human on one number, each with a site request parked
@@ -647,11 +663,32 @@ BEGIN
    WHERE fn_name = 'site-request-dispatch';
   ASSERT d = 0, 'FAIL 8b: a mirrored grant must dispatch no site request, got ' || d;
 
-  -- 8c. Nor any durable dispatch work: the requests are still parked.
+  -- 8c. The suppression is about SENDING, not about work. The mirror still
+  --     RELEASES the requests parked on the seats it just moved — durable,
+  --     in-transaction: snapshot stamped, one consent-granted outbox row each,
+  --     and (8b) not one edge invocation. Without this the seats read `granted`
+  --     while their requests sat in awaiting_consent for ever, since 00374's
+  --     trigger is the only caller of site_request_dispatch_after_consent() and
+  --     the lifecycle sweep only promotes requests that already hold an outbox
+  --     row (r4 M-2).
   SELECT COUNT(*) INTO n FROM site_requests
    WHERE id IN ('a1000000-0000-4000-8000-000000000001', 'a1000000-0000-4000-8000-000000000002')
-     AND status = 'awaiting_consent' AND consent_status_snapshot <> 'granted';
-  ASSERT n = 2, 'FAIL 8c: a mirrored grant must mint no dispatch work, got ' || n;
+     AND consent_status_snapshot = 'granted';
+  ASSERT n = 2,
+    'FAIL 8c: a mirrored grant must release the parked requests durably, got ' || n;
+
+  SELECT COUNT(*) INTO n FROM site_request_dispatch_outbox
+   WHERE request_id IN ('a1000000-0000-4000-8000-000000000001',
+                        'a1000000-0000-4000-8000-000000000002')
+     AND action = 'consent-granted';
+  ASSERT n = 2,
+    'FAIL 8c2: one consent-granted outbox row per released request, got ' || n;
+
+  -- 8c3. …and still NOTHING left the building for them.
+  SELECT COUNT(*) INTO d FROM public._w1a_dispatch_log
+   WHERE fn_name = 'site-request-dispatch';
+  ASSERT d = 0,
+    'FAIL 8c3: the durable release must not invoke the edge function, got ' || d;
 
   -- 8d. The suppression is scoped to the mirror's own write: a designer
   --     flipping a party row to granted directly still releases its request.
@@ -1099,10 +1136,16 @@ $$;
 -- patina.suppress_consent_dispatch, the later party write matched nothing, and
 -- the trade's request sat in awaiting_consent for ever.
 
+-- Three seats for one human on one number in ONE studio: two `pending`, and a
+-- third the studio never asked on this job. r4 M-2: the YES used to move only
+-- the pending seats, while the consent record's mirror flipped the third to
+-- `granted` too — silently, under the dispatch guard — so that seat read
+-- granted for ever while its site request stayed parked for ever.
 INSERT INTO project_parties (id, project_id, party_kind, display_name, phone, trade, sms_consent_status)
 VALUES
   ('e0000000-0000-4000-8000-000000000031', 'd0000000-0000-4000-8000-00000000000a', 'sub', 'Nell Bracco', '(612) 555-0177', 'plumbing', 'pending'),
-  ('e0000000-0000-4000-8000-000000000032', 'd0000000-0000-4000-8000-00000000000a', 'sub', 'Nell Bracco', '612-555-0177',   'plumbing', 'pending');
+  ('e0000000-0000-4000-8000-000000000032', 'd0000000-0000-4000-8000-00000000000a', 'sub', 'Nell Bracco', '612-555-0177',   'plumbing', 'pending'),
+  ('e0000000-0000-4000-8000-000000000033', 'd0000000-0000-4000-8000-00000000000a', 'sub', 'Nell Bracco', '+16125550177',   'plumbing', 'not_asked');
 
 INSERT INTO site_requests (id, project_id, created_by, assignee_party_id, status, due_at, note)
 VALUES
@@ -1111,7 +1154,10 @@ VALUES
    'awaiting_consent', now() + interval '3 days', 'Stack photos'),
   ('a1000000-0000-4000-8000-000000000012', 'd0000000-0000-4000-8000-00000000000a',
    'a0000000-0000-4000-8000-000000000001', 'e0000000-0000-4000-8000-000000000032',
-   'awaiting_consent', now() + interval '3 days', 'Valve photos');
+   'awaiting_consent', now() + interval '3 days', 'Valve photos'),
+  ('a1000000-0000-4000-8000-000000000013', 'd0000000-0000-4000-8000-00000000000a',
+   'a0000000-0000-4000-8000-000000000001', 'e0000000-0000-4000-8000-000000000033',
+   'awaiting_consent', now() + interval '3 days', 'Meter photos');
 
 DO $$
 DECLARE
@@ -1119,12 +1165,15 @@ DECLARE
   d INTEGER;
 BEGIN
   -- 13a. The shipped order, step 1: grantPartiesForStudios() — scoped to the
-  --      studio's own seats, onlyPending, exactly as the YES branch writes it.
+  --      studios that ASKED, but covering EVERY seat those studios hold on the
+  --      number, exactly as the YES branch now writes it (r4 M-2). No status
+  --      filter: the record's mirror is about to cover all three anyway, and a
+  --      seat the mirror moves takes no real transition.
   UPDATE project_parties
      SET sms_consent_status = 'granted', sms_consented_at = now(), sms_opt_out_at = NULL
    WHERE id IN ('e0000000-0000-4000-8000-000000000031',
-                'e0000000-0000-4000-8000-000000000032')
-     AND sms_consent_status = 'pending';
+                'e0000000-0000-4000-8000-000000000032',
+                'e0000000-0000-4000-8000-000000000033');
 
   -- 13b. Step 2: writeChannelConsent() — the rail's own upsert, as service_role.
   INSERT INTO studio_channel_consent (
@@ -1140,28 +1189,43 @@ BEGIN
         source = EXCLUDED.source, evidence = EXCLUDED.evidence,
         recorded_at = EXCLUDED.recorded_at;
 
-  -- 13c. Both requests were RELEASED: durable outbox work, and the snapshot.
+  -- 13c. ALL THREE requests were RELEASED — including the one on the seat the
+  --      studio never asked on, which the record was going to grant regardless
+  --      (r4 M-2). Durable outbox work, and the snapshot.
   SELECT COUNT(*) INTO n FROM site_request_dispatch_outbox
    WHERE request_id IN ('a1000000-0000-4000-8000-000000000011',
-                        'a1000000-0000-4000-8000-000000000012')
+                        'a1000000-0000-4000-8000-000000000012',
+                        'a1000000-0000-4000-8000-000000000013')
      AND action = 'consent-granted';
-  ASSERT n = 2,
+  ASSERT n = 3,
     'FAIL 13c: an inbound grant must mint one consent-granted outbox row per '
     'parked request, got ' || n;
 
   SELECT COUNT(*) INTO n FROM site_requests
    WHERE id IN ('a1000000-0000-4000-8000-000000000011',
-                'a1000000-0000-4000-8000-000000000012')
+                'a1000000-0000-4000-8000-000000000012',
+                'a1000000-0000-4000-8000-000000000013')
      AND consent_status_snapshot = 'granted';
-  ASSERT n = 2, 'FAIL 13c2: both snapshots must read granted, got ' || n;
+  ASSERT n = 3, 'FAIL 13c2: all three snapshots must read granted, got ' || n;
+
+  -- 13c3. And none of them is still parked with a stale snapshot — the exact
+  --       state the not_asked sibling used to be stranded in.
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM site_requests sr
+      JOIN project_parties pp ON pp.id = sr.assignee_party_id
+     WHERE pp.phone_e164 = '+16125550177'
+       AND sr.status = 'awaiting_consent'
+       AND sr.consent_status_snapshot IS DISTINCT FROM 'granted'),
+    'FAIL 13c3: a granted seat must not still hold a request parked at not_asked';
 
   -- 13d. …once each. The mirror that follows refreshes evidence under
   --      suppression and must not dispatch a second time.
   SELECT COUNT(*) INTO d FROM public._w1a_dispatch_log
    WHERE fn_name = 'site-request-dispatch'
      AND body->>'request_id' IN ('a1000000-0000-4000-8000-000000000011',
-                                 'a1000000-0000-4000-8000-000000000012');
-  ASSERT d = 2,
+                                 'a1000000-0000-4000-8000-000000000012',
+                                 'a1000000-0000-4000-8000-000000000013');
+  ASSERT d = 3,
     'FAIL 13d: exactly one dispatch per released request, got ' || d;
 
   -- 13e. And the mirror still did its own job: the seats carry the record's
@@ -1171,9 +1235,9 @@ BEGIN
      AND sms_consent_status = 'granted'
      AND sms_consent_source = 'inbound_sms'
      AND sms_consent_evidence = 'Inbound YES';
-  ASSERT n = 2, 'FAIL 13e: the mirror must refresh both seats'' evidence, got ' || n;
+  ASSERT n = 3, 'FAIL 13e: the mirror must refresh all three seats'' evidence, got ' || n;
 
-  RAISE NOTICE '13. an inbound grant releases its parked site requests (B-1): passed';
+  RAISE NOTICE '13. an inbound grant releases its parked site requests (B-1/M-2): passed';
 END
 $$;
 
@@ -1240,14 +1304,23 @@ BEGIN
 END
 $$;
 
--- ─── 15. r2 M-2: the card backfill does not invent SMS capability ─────────
+-- ─── 15. r2 M-2 / r4 M-1: the card backfill does not invent SMS capability ─
 --
 -- crm-model §2 CS4-7 / direction §5.1: an office line must never be offered an
 -- SMS invite, and sms_capable is the column that says so. A person card holds
 -- ONE untyped number and the fixture is full of person cards carrying an
--- office, showroom or dispatch line (F-13, F-14, F-17, F-20, F-27). The
--- statement below is 00593 backfill leg (a), verbatim — if that statement
--- changes, change this with it.
+-- office, showroom or dispatch line (F-13, F-14, F-17, F-20, F-27).
+--
+-- r4 M-1: "a party row exists on this card with this number" is NOT that
+-- evidence. party_kind covers architect, photographer, stager, client,
+-- client_rep, vendor and other, none of which the SMS rail touches — so F-10
+-- Sam Rowe ("never texted") and F-27 Ray Thao ("NEVER texted; scheduled through
+-- 311") both came out of the fold marked SMS-capable. The evidence is now
+-- public.channel_value_was_on_sms_rail(): a real sms_conversations thread on the
+-- number, or a FIELD-kind seat on it that has actually been asked. Both legs
+-- (a) and (c) use it, and everything else keeps the `line type unconfirmed`
+-- label. The two statements below are 00593 backfill legs (a) and (c),
+-- verbatim — if those statements change, change these with them.
 
 INSERT INTO studio_contacts (id, organization_id, entity_kind, contact_kind, full_name, company_name, phone, created_by)
 VALUES
@@ -1256,17 +1329,45 @@ VALUES
   ('c0000000-0000-4000-8000-000000000022', 'b0000000-0000-4000-8000-00000000000a',
    'person', 'sub', 'Nell Bracco', NULL, '612-555-0177', 'a0000000-0000-4000-8000-000000000001'),
   ('c0000000-0000-4000-8000-000000000023', 'b0000000-0000-4000-8000-00000000000a',
-   'company', 'sub', NULL, 'Solheim Tile', '(612) 555-0202', 'a0000000-0000-4000-8000-000000000001');
+   'company', 'sub', NULL, 'Solheim Tile', '(612) 555-0202', 'a0000000-0000-4000-8000-000000000001'),
+  -- F-10's shape: an architect the studio has never texted, with a folded
+  -- party row on the card carrying exactly that number.
+  ('c0000000-0000-4000-8000-000000000024', 'b0000000-0000-4000-8000-00000000000a',
+   'person', 'other', 'Sam Rowe (architect, never texted)', NULL, '(612) 555-0210', 'a0000000-0000-4000-8000-000000000001'),
+  -- F-27's shape: the AHJ inspector, scheduled through 311, reachable on a desk
+  -- line that must NEVER be texted. His card carries no number of its own —
+  -- only leg (c), off the party row, can produce a channel for him.
+  ('c0000000-0000-4000-8000-000000000025', 'b0000000-0000-4000-8000-00000000000a',
+   'person', 'other', 'Ray Thao (AHJ, NEVER text)', NULL, NULL, 'a0000000-0000-4000-8000-000000000001'),
+  -- A number the studio really has texted, on a card with no party row at all:
+  -- the sms_conversations thread is the evidence.
+  ('c0000000-0000-4000-8000-000000000026', 'b0000000-0000-4000-8000-00000000000a',
+   'person', 'sub', 'Tova Lind (real SMS thread)', NULL, '(612) 555-0288', 'a0000000-0000-4000-8000-000000000001');
 
--- Nell's card is the one with evidence: a party row folded onto it (00418)
--- carries the same number, so that number really was on an SMS rail.
+-- Nell's card is the one with evidence: a FIELD-kind party row folded onto it
+-- (00418) carries the same number and has been asked for consent — block 13
+-- granted it — so that number really was on an SMS rail.
 UPDATE project_parties SET studio_contact_id = 'c0000000-0000-4000-8000-000000000022'
  WHERE id = 'e0000000-0000-4000-8000-000000000031';
+
+-- Sam's and Ray's rows: folded onto their cards, on their numbers, and NEITHER
+-- of them a kind the SMS rail covers.
+INSERT INTO project_parties (id, project_id, party_kind, display_name, phone, studio_contact_id, sms_consent_status)
+VALUES
+  ('e0000000-0000-4000-8000-000000000041', 'd0000000-0000-4000-8000-00000000000a', 'architect',
+   'Sam Rowe', '612-555-0210', 'c0000000-0000-4000-8000-000000000024', 'not_asked'),
+  ('e0000000-0000-4000-8000-000000000042', 'd0000000-0000-4000-8000-00000000000a', 'other',
+   'Ray Thao', '(612) 555-0311', 'c0000000-0000-4000-8000-000000000025', 'not_asked');
+
+-- Tova's evidence: a real thread on her number, no party row anywhere.
+INSERT INTO sms_conversations (twilio_number, phone_e164, last_outbound_at)
+VALUES ('+16125550100', '+16125550288', now());
 
 DO $$
 DECLARE
   r RECORD;
 BEGIN
+  -- 00593 backfill leg (a), verbatim.
   INSERT INTO public.studio_contact_channels (owner_type, owner_id, channel_kind, value, sms_capable, label)
   SELECT sc.entity_kind,
          sc.id,
@@ -1278,15 +1379,27 @@ BEGIN
               ELSE 'From the card (00593 backfill)' END
   FROM public.studio_contacts sc
   CROSS JOIN LATERAL (
-    SELECT sc.entity_kind = 'person' AND EXISTS (
-             SELECT 1
-               FROM public.project_parties pp
-              WHERE pp.studio_contact_id = sc.id
-                AND public.normalize_channel_value('mobile', COALESCE(pp.phone_e164, pp.phone))
-                    = public.normalize_channel_value('mobile', COALESCE(sc.phone_e164, sc.phone))
-           ) AS texted
+    SELECT sc.entity_kind = 'person'
+           AND public.channel_value_was_on_sms_rail(
+                 public.normalize_channel_value('mobile', COALESCE(sc.phone_e164, sc.phone))
+               ) AS texted
   ) ev
   WHERE btrim(COALESCE(sc.phone_e164, sc.phone, '')) <> ''
+  ON CONFLICT (owner_id, channel_kind, value) DO NOTHING;
+
+  -- 00593 backfill leg (c), verbatim.
+  INSERT INTO public.studio_contact_channels (owner_type, owner_id, channel_kind, value, sms_capable, label)
+  SELECT 'person', sc.id, 'mobile', COALESCE(pp.phone_e164, pp.phone),
+         public.channel_value_was_on_sms_rail(
+           public.normalize_channel_value('mobile', COALESCE(pp.phone_e164, pp.phone))),
+         CASE WHEN public.channel_value_was_on_sms_rail(
+                     public.normalize_channel_value('mobile', COALESCE(pp.phone_e164, pp.phone)))
+              THEN 'From a project roster (00593 backfill)'
+              ELSE 'From a project roster (00593 backfill) — line type unconfirmed' END
+  FROM public.project_parties pp
+  JOIN public.studio_contacts sc
+    ON sc.id = pp.studio_contact_id AND sc.entity_kind = 'person'
+  WHERE btrim(COALESCE(pp.phone_e164, pp.phone, '')) <> ''
   ON CONFLICT (owner_id, channel_kind, value) DO NOTHING;
 
   -- 15a. A person card with no SMS evidence keeps the SAFE default, and says so.
@@ -1297,11 +1410,12 @@ BEGIN
   ASSERT r.label LIKE '%line type unconfirmed%',
     'FAIL 15a2: the row must say the line type is unconfirmed, got ' || COALESCE(r.label, '<null>');
 
-  -- 15b. A person card whose number is on a folded party row IS SMS-capable.
+  -- 15b. A person card whose number carries a FIELD-kind seat that has actually
+  --      been asked IS SMS-capable.
   SELECT * INTO r FROM studio_contact_channels
    WHERE owner_id = 'c0000000-0000-4000-8000-000000000022' AND value = '+16125550177';
   ASSERT r.sms_capable = true,
-    'FAIL 15b: a number carried by a folded party row must be SMS-capable';
+    'FAIL 15b: a number on an asked field seat must be SMS-capable';
   ASSERT r.label NOT LIKE '%unconfirmed%',
     'FAIL 15b2: an evidenced row must not be labelled unconfirmed';
 
@@ -1311,18 +1425,49 @@ BEGIN
   ASSERT r.channel_kind = 'office' AND r.sms_capable = false,
     'FAIL 15c: a company card number must be an office line, never SMS-capable';
 
-  -- 15d. Nothing anywhere is SMS-capable without a party row behind it.
+  -- 15e. r4 M-1, leg (a): the architect the studio has never texted. A folded
+  --      party row on the same number is NOT evidence — his kind is not one the
+  --      SMS rail covers.
+  SELECT * INTO r FROM studio_contact_channels
+   WHERE owner_id = 'c0000000-0000-4000-8000-000000000024' AND value = '+16125550210';
+  ASSERT FOUND, 'FAIL 15e: the architect card should still get a channel row';
+  ASSERT r.sms_capable = false,
+    'FAIL 15e2: an architect party row must not make a number SMS-capable';
+  ASSERT r.label LIKE '%line type unconfirmed%',
+    'FAIL 15e3: the architect row must say the line type is unconfirmed, got '
+    || COALESCE(r.label, '<null>');
+
+  -- 15f. r4 M-1, leg (c): the AHJ desk line, which arrives ONLY through the
+  --      party-row leg. Leg (c) used to write a literal `true`.
+  SELECT * INTO r FROM studio_contact_channels
+   WHERE owner_id = 'c0000000-0000-4000-8000-000000000025' AND value = '+16125550311';
+  ASSERT FOUND, 'FAIL 15f: leg (c) should still fold the roster number onto the card';
+  ASSERT r.label LIKE 'From a project roster%',
+    'FAIL 15f2: that row must come from leg (c), got ' || COALESCE(r.label, '<null>');
+  ASSERT r.sms_capable = false,
+    'FAIL 15f3: leg (c) must not assert SMS capability for a 311 desk line';
+  ASSERT r.label LIKE '%line type unconfirmed%',
+    'FAIL 15f4: leg (c) must label an unevidenced line unconfirmed, got '
+    || COALESCE(r.label, '<null>');
+
+  -- 15g. And a number with a REAL sms_conversations thread is capable, with no
+  --      party row anywhere.
+  SELECT * INTO r FROM studio_contact_channels
+   WHERE owner_id = 'c0000000-0000-4000-8000-000000000026' AND value = '+16125550288';
+  ASSERT r.sms_capable = true,
+    'FAIL 15g: a number with a real SMS thread must be SMS-capable';
+  ASSERT r.label NOT LIKE '%unconfirmed%',
+    'FAIL 15g2: a threaded number must not be labelled unconfirmed';
+
+  -- 15d. Nothing anywhere is SMS-capable without a real SMS rail behind it.
   ASSERT NOT EXISTS (
     SELECT 1 FROM studio_contact_channels c
-     WHERE c.label LIKE 'From the card (00593 backfill)%'
+     WHERE c.label LIKE '%(00593 backfill)%'
        AND c.sms_capable
-       AND NOT EXISTS (
-         SELECT 1 FROM project_parties pp
-          WHERE pp.studio_contact_id = c.owner_id
-            AND public.normalize_channel_value('mobile', COALESCE(pp.phone_e164, pp.phone)) = c.value)),
-    'FAIL 15d: the card backfill marked a number SMS-capable with no party row behind it';
+       AND NOT public.channel_value_was_on_sms_rail(c.value)),
+    'FAIL 15d: the backfill marked a number SMS-capable with no SMS rail behind it';
 
-  RAISE NOTICE '15. the card backfill does not invent SMS capability (M-2): passed';
+  RAISE NOTICE '15. the card backfill does not invent SMS capability (M-2/M-1): passed';
 END
 $$;
 
@@ -1398,11 +1543,12 @@ BEGIN
   PERFORM pg_temp.reset_role();
 
   -- 16e. The recipient answers. The inbound rail writes this table directly as
-  --      service_role (sms-inbound/pipeline.ts writeChannelConsent), stamping a
-  --      FRESH consented_at — which is what reopens the studio's door.
+  --      service_role (sms-inbound/pipeline.ts writeChannelConsent), lowering
+  --      refusal_unanswered and stamping a FRESH consented_at — which is what
+  --      reopens the studio's door.
   UPDATE studio_channel_consent
-     SET status = 'granted', consented_at = now(), source = 'inbound_sms',
-         evidence = 'Replied START', recorded_at = now()
+     SET status = 'granted', consented_at = now(), refusal_unanswered = false,
+         source = 'inbound_sms', evidence = 'Replied START', recorded_at = now()
    WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
      AND channel_value = '+16125550233';
 
@@ -1420,6 +1566,113 @@ BEGIN
   PERFORM pg_temp.reset_role();
 
   RAISE NOTICE '16. the two consent doors do not compose past a STOP (M-1): passed';
+END
+$$;
+
+-- ─── 16B. r4 B-1: and they do not compose past a DATELESS STOP either ─────
+--
+-- The gate above used to be stated as "opt_out_at set with no later
+-- consented_at". A refusal is routinely DATELESS: the shipped portal writes
+-- opted_out party rows with a NULL sms_opt_out_at on purpose
+-- (use-coordination.ts — "a sibling with no date leaves this row with none"),
+-- every pre-00432 row carries no date either, and
+-- backfill_channel_consent_from_parties() folds that population verbatim. So
+-- the date test failed OPEN for exactly the records the first prod push mints:
+-- reconsent() plus a recorded grant walked a real STOP back to `granted` in two
+-- calls, by any studio member, and the mirror then cleared the party-row
+-- backstop sendPartySms falls back on. The refusal is now a stored FACT.
+
+INSERT INTO project_parties (id, project_id, party_kind, display_name, phone,
+                             sms_consent_status, sms_opt_out_at,
+                             sms_consent_source, sms_consent_evidence)
+VALUES
+  ('e0000000-0000-4000-8000-000000000051', 'd0000000-0000-4000-8000-00000000000a', 'sub',
+   'Bo Ferrand', '(612) 555-0244', 'opted_out', NULL, 'other', 'Opted out, date unknown');
+
+DO $$
+DECLARE
+  r      RECORD;
+  raised TEXT;
+BEGIN
+  -- 16Ba. The fold mints the dateless refusal — and records it AS a refusal.
+  PERFORM public.backfill_channel_consent_from_parties();
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550244';
+  ASSERT FOUND, 'FAIL 16Ba: the fold should mint a record for the opted_out row';
+  ASSERT r.status = 'opted_out' AND r.opt_out_at IS NULL,
+    'FAIL 16Ba2: this is the DATELESS refusal the portal really writes';
+  ASSERT r.refusal_unanswered,
+    'FAIL 16Ba3: a folded refusal must be recorded as unanswered, dated or not';
+
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+
+  -- 16Bb. The direct grant is refused by the first gate, as always.
+  raised := NULL;
+  BEGIN
+    PERFORM public.record_channel_consent(
+      'b0000000-0000-4000-8000-00000000000a', 'sms', '6125550244', 'granted',
+      'written', 'Kickoff form', 'field-sms-v1', NULL);
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'channel_opted_out',
+    'FAIL 16Bb: a direct grant over a dateless refusal must be refused, got '
+    || COALESCE(raised, '<no error>');
+
+  -- 16Bc. THE COMPOSITION, on a refusal with no date. reconsent() moves the row
+  --       off opted_out; the grant that follows must STILL be refused.
+  PERFORM public.record_channel_reconsent(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '6125550244',
+    'written', 'Signed a fresh consent at the walkthrough', 'field-sms-v1', NULL);
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550244';
+  ASSERT r.status = 'pending' AND r.refusal_unanswered,
+    'FAIL 16Bc: reconsent lands on pending and the refusal still stands unanswered';
+
+  raised := NULL;
+  BEGIN
+    PERFORM public.record_channel_consent(
+      'b0000000-0000-4000-8000-00000000000a', 'sms', '6125550244', 'granted',
+      'written', 'Kickoff form', 'field-sms-v1', NULL);
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'consent_awaiting_recipient',
+    'FAIL 16Bc2: a DATELESS refusal must fail closed like a dated one, got '
+    || COALESCE(raised, '<no error>');
+
+  -- 16Bd. And the seats still carry the refusal: the backstop sendPartySms
+  --       falls back on was never cleared.
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550244';
+  ASSERT r.status = 'pending' AND r.consented_at IS NULL,
+    'FAIL 16Bd: the refused grant must leave the record at pending, undated';
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM project_parties pp
+     WHERE pp.phone_e164 = '+16125550244' AND pp.sms_consent_status = 'granted'),
+    'FAIL 16Bd2: no seat on a STOPped number may read granted';
+
+  PERFORM pg_temp.reset_role();
+
+  -- 16Be. Only the recipient's own answer opens the door — the rail lowers the
+  --       flag, exactly as writeChannelConsent does.
+  UPDATE studio_channel_consent
+     SET status = 'granted', consented_at = now(), refusal_unanswered = false,
+         source = 'inbound_sms', evidence = 'Replied START', recorded_at = now()
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550244';
+
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+  PERFORM public.record_channel_consent(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '6125550244', 'granted',
+    'written', 'Kickoff form', 'field-sms-v1', NULL);
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550244';
+  ASSERT r.status = 'granted' AND r.evidence = 'Kickoff form',
+    'FAIL 16Be: after the recipient''s own grant the studio may record again';
+  PERFORM pg_temp.reset_role();
+
+  RAISE NOTICE '16B. a DATELESS refusal fails closed too (r4 B-1): passed';
 END
 $$;
 

@@ -13,8 +13,8 @@ Local Supabase only. Nothing was pushed to Strata; no `supabase db push`, no
 | File | Carries |
 |---|---|
 | `supabase/migrations/00592_people_cards_affiliations_rules.sql` | `studio_contact_org()` + `project_party_designer()` helpers · `studio_contacts` person columns (`is_sole_proprietor`, `studio_verdict`, `studio_verdict_at`) and company columns (`legal_name`, `dba_name`, `company_kind` + CHECK, `trades`, `w9_on_file_at`, `tax_id_last4`, `remit_to`, `retainage_bps`, `warranty_until`, `paperwork_contact_person_id`, `signer_person_id`, `site_contact_person_id`) · new table `studio_person_affiliations` (+ `assert_affiliation_card_kinds()` and `studio_person_affiliations_distinct_cards_check`) · new table `studio_contact_rules` |
-| `supabase/migrations/00593_studio_contact_channels.sql` | New table `studio_contact_channels` · **`normalize_channel_value(kind, value)`** — the one channel-key rule, shared with 00594's consent RPCs · `normalize_studio_contact_channel()` trigger (defers to it) · `assert_channel_owner_kind()` trigger — `owner_type` must equal the card's own `entity_kind` · four-part backfill from `studio_contacts.phone/email` and from `project_parties.phone/email` where `studio_contact_id` is set, carrying the `sms_capable` evidence rule below |
-| `supabase/migrations/00594_studio_channel_consent.sql` | New table `studio_channel_consent` (PK `(organization_id, channel_kind, channel_value)`) · `backfill_channel_consent_from_parties()` + its one call · `mirror_channel_consent_to_parties()` trigger · RPC `record_channel_consent(...)` · RPC `record_channel_reconsent(...)` (PR-m's named way back) · **REDEFINES two existing trigger functions**: `fc_dispatch_optin_invite` (lineage `00432:27-68`) and `_site_request_consent_granted_dispatch` (lineage `00374:3399-3444`) · `COMMENT ON TABLE public.project_parties` restating the mirror invariant (lineage `00212:46`) |
+| `supabase/migrations/00593_studio_contact_channels.sql` | New table `studio_contact_channels` · **`normalize_channel_value(kind, value)`** — the one channel-key rule, shared with 00594's consent RPCs · **`channel_value_was_on_sms_rail(value)`** — the `sms_capable` evidence test (an `sms_conversations` thread, or an asked FIELD-kind seat) · `normalize_studio_contact_channel()` trigger (defers to the normaliser) · `assert_channel_owner_kind()` trigger — `owner_type` must equal the card's own `entity_kind` · four-part backfill from `studio_contacts.phone/email` and from `project_parties.phone/email` where `studio_contact_id` is set, carrying the `sms_capable` evidence rule below |
+| `supabase/migrations/00594_studio_channel_consent.sql` | New table `studio_channel_consent` (PK `(organization_id, channel_kind, channel_value)`, carrying `refusal_unanswered` — the stored "a refusal stands that has not been answered") · `backfill_channel_consent_from_parties()` + its one call · `mirror_channel_consent_to_parties()` trigger · RPC `record_channel_consent(...)` · RPC `record_channel_reconsent(...)` (PR-m's named way back) · **REDEFINES two existing trigger functions**: `fc_dispatch_optin_invite` (lineage `00432:27-68`) and `_site_request_consent_granted_dispatch` (lineage `00374:3399-3444`) · `COMMENT ON TABLE public.project_parties` restating the mirror invariant (lineage `00212:46`) |
 
 **Two functions are redefined, both grafted from their grep-winner bodies
 verbatim** (`grep -rln "CREATE OR REPLACE FUNCTION[^(]*<name>" supabase/migrations/*.sql | sort | tail -1`):
@@ -88,9 +88,10 @@ an empty diff.
   CURRENT verdict in both writers (`t.projectId ?? prior`), matching
   `record_channel_consent`'s `COALESCE(EXCLUDED..., scc....)`. The existing
   `project_parties` writes are kept, and on the two GRANT branches they now run
-  **before** the consent-record write, not after: `grantPartiesForStudios()`
-  precedes `writeChannelConsent()` on START (`pipeline.ts:546-551`) and on YES
-  (`pipeline.ts:578-583`). Writing the record first consumed the seat's
+  **before** the consent-record write, not after, and cover EVERY seat the
+  target studios hold on the number rather than only the `pending` ones (r4
+  M-2): `grantPartiesForStudios()` precedes `writeChannelConsent()` on START and
+  on YES. Writing the record first consumed the seat's
   `pending → granted` transition through 00594's mirror, so 00374's
   `site_request_consent_granted_dispatch` never fired and every site request
   parked in `awaiting_consent` on that seat stayed parked for ever (r2r2 B-1).
@@ -248,22 +249,33 @@ an empty diff.
     grant is scoped to studios whose record is `opted_out` or `pending`; a seat
     on the number is not an invitation.
 
-17. **The card backfill does not invent SMS capability** (r2r2 M-2). A rolodex
-    card holds ONE untyped number and nothing on it says which kind of line it
-    is, so 00593's leg (a) leaves `sms_capable` at its `false` default unless
-    there is EVIDENCE: a party row folded onto the same card (00418) carrying
-    the same normalised number — that number really was on an SMS rail. Where
-    there is none the row is still written (the studio must see the number) but
-    it is labelled `From the card (00593 backfill) — line type unconfirmed`, so
-    W1b's Reach editor can show which lines it is asking the studio to type. A
-    blanket `true` would have asserted exactly what `sms_capable` exists to
-    deny — "an office line must never be offered an SMS invite" (crm-model §2
-    CS4-7, direction §5.1) — and person cards carrying an office, showroom,
-    dispatch or 311-only number are ordinary in the fixture (F-13, F-14, F-17,
-    F-20, F-27). The backfill runs once; a wrong `true` is a card the studio
-    then has to correct by hand. Leg (c) folds the same evidenced party rows
-    and marks them `true`, so the two legs agree by construction rather than
-    racing the `ON CONFLICT`. SQL block 15.
+17. **The card backfill does not invent SMS capability** (r2r2 M-2, sharpened
+    by r4 M-1). A rolodex card holds ONE untyped number and nothing on it says
+    which kind of line it is, so 00593's leg (a) leaves `sms_capable` at its
+    `false` default unless there is EVIDENCE THAT THE NUMBER WAS ON AN SMS
+    RAIL, which is what `public.channel_value_was_on_sms_rail(value)` answers:
+    an `sms_conversations` thread on the normalised number (00282 — a thread
+    exists only because a message moved), or a FIELD-kind `project_parties`
+    seat on it (`gc | sub | installer | receiver`, `pipeline.ts`'s
+    `FIELD_KINDS`) whose `sms_consent_status` has left `not_asked`. The test is
+    phone-global on purpose: being an SMS line is a fact about the line, not
+    about a studio's consent (that is `studio_channel_consent`'s job).
+    "A party row exists on this card with this number" is NOT that evidence —
+    `party_kind` also covers architect, photographer, stager, client,
+    client_rep, vendor and other, so F-10 Sam Rowe ("never texted") and F-27 Ray
+    Thao ("NEVER texted; scheduled through 311") came out of the fold marked
+    SMS-capable, the exact assertion `sms_capable` exists to deny. Where there
+    is no evidence the row is still written (the studio must see the number) but
+    it is labelled `— line type unconfirmed`, so W1b's Reach editor can show
+    which lines it is asking the studio to type. A blanket `true` would have
+    asserted "an office line may be offered an SMS invite" (crm-model §2 CS4-7,
+    direction §5.1) — and person cards carrying an office, showroom, dispatch or
+    311-only number are ordinary in the fixture (F-13, F-14, F-17, F-20, F-27).
+    The backfill runs once; a wrong `true` is a card the studio then has to
+    correct by hand. **Leg (c) applies the same test** rather than the literal
+    `true` it used to write, and labels an unevidenced roster number the same
+    way, so the two legs agree by construction rather than racing the
+    `ON CONFLICT`. SQL block 15 (15a–15g).
 
 18. **The two consent doors compose, and neither walks a STOP back on its own**
     (r3r2 M-1). `record_channel_consent()` refuses every transition out of
@@ -273,14 +285,26 @@ an empty diff.
     longer refused — two calls, any studio member, and a recorded STOP was back
     at `granted`, with the mirror clearing the party-row backstop `sendPartySms`
     falls back on. So the write door now ALSO refuses `granted` while an
-    **unanswered** refusal stands: `opt_out_at` set with no `consented_at`
-    after it (`consent_awaiting_recipient`). What answers a refusal is the
-    recipient's own YES/START, which the inbound rail writes directly with a
-    fresh `consented_at`; after that this door opens again. A record already at
+    **unanswered** refusal stands — and (r4 B-1) that is read off a STORED
+    FACT, `studio_channel_consent.refusal_unanswered`, not inferred from
+    `opt_out_at`. A refusal is routinely DATELESS: the shipped portal writes
+    `opted_out` party rows with a NULL `sms_opt_out_at` on purpose
+    (`use-coordination.ts:604-617` — "opted out, date unknown" is the truth),
+    every pre-00432 row carries no date either, and the fold mints that whole
+    population verbatim, so the date test failed OPEN for exactly the records
+    the first prod push creates. The flag is raised by every writer that records
+    a refusal (the fold, `record_channel_consent`, `record_channel_reconsent`,
+    the inbound STOP rail) and lowered only by a `granted` write. The date test
+    is KEPT alongside it, so a `service_role` writer that dates a refusal
+    without raising the flag still fails closed
+    (`consent_awaiting_recipient`). What answers a refusal is the
+    recipient's own YES/START, which the inbound rail writes directly — lowering
+    the flag and stamping a fresh `consented_at`; after that this door opens
+    again. A record already at
     `granted` may still restate its evidence — the number is sendable either
     way, and refusing there would strand a folded row whose dates disagree with
     its status, since `reconsent()` requires `status = 'opted_out'`. SQL
-    block 16.
+    blocks 16 and 16B (the dateless refusal).
 
 19. **Both sides of an affiliation must be the card they claim to be**
     (r3r2 M-2). `person_id` and `company_id` are both FKs into
@@ -300,6 +324,33 @@ an empty diff.
     `sync_person_affiliation_from_pointer()` stands down for such a pointer
     rather than raising out of the guard and taking the `studio_contacts` write
     with it. SQL block 17.
+
+20. **The mirror's suppression is about SENDING, not about work** (r4 M-2).
+    Standing both outward AFTER triggers down for a mirror write also stranded
+    the DURABLE half: 00374's `_site_request_consent_granted_dispatch` is the
+    only caller of `site_request_dispatch_after_consent()`, and the lifecycle
+    sweep only promotes requests that already hold an outbox row. So a seat the
+    mirror moved to `granted` — every seat of a studio-recorded grant, and every
+    sibling seat an inbound YES covered beyond the ones it transitioned itself —
+    read `granted` for ever while its site request sat in `awaiting_consent` for
+    ever with `consent_status_snapshot` still saying `not_asked`. Two changes:
+    (a) `mirror_channel_consent_to_parties()` captures the seats it is about to
+    move onto `granted` and calls `site_request_dispatch_after_consent()` for
+    their parked requests — **that function only, never
+    `invoke_edge_function`**, so the snapshot and the `consent-granted` outbox
+    row land in the same transaction while the eager wake-up, the one outward
+    act, stays with the party-row trigger and the lifecycle sweep carries the
+    row out; and (b) the inbound YES branch now writes party rows for EVERY seat
+    the target studios hold on the number, not only the seats already at
+    `pending` (`grantPartiesForStudios` lost its `onlyPending` argument; START
+    already passed `false`). Which STUDIOS are targeted is still the narrow
+    question — only the ones that actually asked (R-AJ) — and the record's
+    `origin_project_id` still names the job the invite went out on. The two are
+    idempotent against each other: on the inbound path the party write moves the
+    seats first, so the mirror's capture comes back empty. SQL blocks 8
+    (8b/8c/8c2/8c3) and 13 (13c/13c2/13c3/13d), plus
+    `_tests/sms-inbound.test.ts`'s "YES grants every seat of the inviting
+    studio, not only the pending one".
 
 ---
 
@@ -489,15 +540,20 @@ left standing, and an opt-out that restates its own words keeps the disclosure
 version rather than nulling it.
 
 Blocks 13–15 are the r2 re-review round: an inbound YES/START releases the site
-requests parked in `awaiting_consent`, one dispatch per request, and the record
-write that follows adds no second one (13); the "nothing leaves `opted_out`"
+requests parked in `awaiting_consent` — including the seat the studio never
+asked on, which the record's mirror grants regardless — one dispatch per
+request, and the record write that follows adds no second one (13); the "nothing leaves `opted_out`"
 gate is part of the WRITE in both doors rather than a read before it, and a
 refused grant leaves the refusal byte-for-byte intact (14); and 00593's card
-backfill marks no person-card number SMS-capable without a folded party row
-behind it, labelling the rest `line type unconfirmed` (15). Blocks 16–17 are
+backfill marks no number SMS-capable without a real SMS rail behind it — an
+`sms_conversations` thread or an asked FIELD-kind seat — in leg (a) AND leg (c),
+labelling the rest `line type unconfirmed`, with an architect card and an AHJ
+desk line as the two cases that used to come out `true` (15). Blocks 16–17 are
 the r3 re-review round: `record_channel_reconsent()` followed by a recorded
 grant is refused (`consent_awaiting_recipient`) and only the recipient's own
-inbound grant reopens that door (16); and an affiliation's `person_id` must be
+inbound grant reopens that door (16), and block 16B proves the same for a
+DATELESS refusal, the shape the shipped portal writes and the fold mints (r4
+B-1); and an affiliation's `person_id` must be
 a person card, its `company_id` a company card, never the same card, on INSERT
 and UPDATE alike, with a channel's `owner_type` held to its card's
 `entity_kind` and the legacy-pointer binding standing down rather than raising
@@ -660,8 +716,10 @@ deploys.)
   `service_role` without overwriting anything: the rows it folds reach the party
   rows through the mirror, which stands BOTH of `project_parties`' outward
   AFTER triggers down for its own write — 00432's opt-in invite and 00374's
-  site-request consent dispatch — so a re-run sends no SMS and mints no dispatch
-  work either (r2 B-1).
+  site-request consent dispatch — so a re-run sends no SMS (r2 B-1). It may mint
+  durable `consent-granted` outbox work for site requests parked on seats a
+  folded `granted` moves, which is the release those requests were owed (r4
+  M-2); a folded record whose party rows already read `granted` moves nothing.
 - **Out of W1a scope by instruction** (named so the next wave does not assume
   they landed): `studio_compliance_documents`, `project_party_authority`,
   `project_site_access_cards`, `client_households`, `studio_contact_merges`,
