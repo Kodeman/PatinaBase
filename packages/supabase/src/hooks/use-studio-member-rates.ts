@@ -28,8 +28,11 @@ export interface StudioMemberRate {
   effective_from: string;
   /** date, or null on the one open row per (studio, member) */
   effective_to: string | null;
+  /** The owner/admin who last wrote the row (00598 freezes it once closed). */
   created_by: string | null;
   created_at: string;
+  /** Stamped by 00598's set_updated_at trigger — when the open row was corrected. */
+  updated_at: string;
 }
 
 export interface SetStudioMemberRateInput {

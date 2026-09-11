@@ -55,11 +55,18 @@
 --     00600 CHECK admits ('client' is excluded, so it is never stamped).
 --  5. P-4 PRESERVATION, stated rather than silent: when the resolver answers
 --     'none' on an UPDATE of a row that already carries a rate snapshot, the
---     snapshot is KEPT and rate_source is left NULL (its legacy, unknown-
---     provenance value) instead of nulling money on an unbilled row. P-4 says
+--     snapshot is KEPT — and so is the provenance that describes it. P-4 says
 --     "invoiced and unbilled history keep their amounts"; HT-1 is about who
 --     owns the rate on a NEW entry. A new row with no resolvable rate is
 --     NULL + 'none' — "rate pending" (HT-26), never a blank.
+--     CORRECTED in review round 2 (W1-R2-05): this branch used to force
+--     rate_source to NULL, which erased provenance from a row W1 itself wrote.
+--     HT-13 makes backdating a first-class act, and a W1-era entry backdated
+--     before its rate's effective_from read `20000 / (NULL)` — while both
+--     rate_source's COMMENT (00600) and TimeRateSource's doc comment define NULL
+--     as "a row written before 00600", so lane B would render a current row as
+--     legacy. It now keeps OLD.rate_source with the snapshot it describes; a
+--     genuinely legacy row already has OLD.rate_source NULL.
 --
 -- `billable` stays CLIENT-set (HT-12 + HT-11 as reconciled in plan-v2 §2): the
 -- classifier never upgrades it and does not downgrade it here either — the
@@ -167,13 +174,15 @@ BEGIN
   END IF;
 
   -- delta 5: P-4 preservation. An existing snapshot is not destroyed because the
-  -- chain has no answer; its provenance stays NULL (legacy, unknown), not 'none'.
+  -- chain has no answer — and W1-R2-05: the provenance stays with the snapshot it
+  -- describes. Forcing NULL here relabelled a W1-era row as pre-00600 legacy the
+  -- moment HT-13's backdating moved it outside its rate's span.
   IF TG_OP = 'UPDATE'
      AND v_rate_source = 'none'
      AND OLD.hourly_rate_cents IS NOT NULL
   THEN
     v_rate_cents  := OLD.hourly_rate_cents;
-    v_rate_source := NULL;
+    v_rate_source := OLD.rate_source;
   END IF;
 
   SELECT EXISTS (
@@ -437,6 +446,14 @@ BEGIN
   -- W1-R1-03: the role pick is validated only when it is NEW.
   IF v_src !~ 'NEW\.rate_role IS DISTINCT FROM OLD\.rate_role' THEN
     RAISE EXCEPTION '00601: rate_role must be validated only on a NEW pick, or a removed roster seat freezes the entry (W1-R1-03)';
+  END IF;
+
+  -- ── review round 2 ───────────────────────────────────────────────────────
+  -- W1-R2-05: delta 5 keeps the provenance with the snapshot. Forcing NULL here
+  -- relabels a W1-era row as pre-00600 legacy (00600's own COMMENT defines NULL
+  -- that way), which is a lie about money the studio can read.
+  IF v_src !~ 'v_rate_source := OLD\.rate_source' THEN
+    RAISE EXCEPTION '00601: delta 5 must preserve OLD.rate_source, not NULL it — NULL means "written before 00600" (W1-R2-05)';
   END IF;
 END
 $postcondition$;

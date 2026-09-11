@@ -49,6 +49,19 @@
 --       is neither the designer nor an admin still cannot resolve someone else's
 --       rate. The first half was silently revoked by the first revision's assert.
 --
+-- REVIEW ROUND 2 added two cases and one assert:
+--   (n) W1-R2-02 — the ORDINARY designer holds TWO active studios (00295 provisions
+--       a personal one at the is_designer flip; she later joins the one that pays
+--       her). Every fixture above gives its designer one, so the studio fallback in
+--       00599 was never exercised where it decides anything, and its uuid tiebreak
+--       was a coin flip locally and a deterministic wrong answer on Strata.
+--   (o) W1-R2-05 — a W1-rated row backdated out of its rate's span keeps its
+--       provenance. Case (i) cannot catch this: its row is GENUINELY legacy, so
+--       OLD.rate_source is already NULL.
+--   (m4) W1-R2-03 — the designer-on-behalf leg is the classifier's, not a caller's:
+--       at pg_trigger_depth() = 0 a project designer who is not a studio owner/admin
+--       may not resolve a colleague's pay rate.
+--
 -- Every write runs as the member under `SET LOCAL ROLE authenticated` + a JWT
 -- claim: the guard returns early for current_user = 'postgres' (00412:2354), so
 -- a test written as postgres would assert nothing.
@@ -783,9 +796,192 @@ BEGIN
   END;
   PERFORM pg_temp.reset_role();
   ASSERT v_raised,
-    'FAIL m3: resolving ANOTHER member''s rate stays an owner/admin or project-designer act';
+    'FAIL m3: resolving ANOTHER member''s rate stays an owner/admin act';
+
+  -- W1-R2-03: the designer leg is for the CLASSIFIER, not for callers. m1/m2 above
+  -- exercise it the only way it is meant to be reached — through an UPDATE, at
+  -- pg_trigger_depth() >= 1. At depth 0 the same designer must be refused: ungated,
+  -- any user who is the designer of any project could read any colleague's studio
+  -- rate (measured 47500 for a colleague whose studio_member_rates she can read 0
+  -- rows of), and user ids are on the roster and in the People room.
+  v_raised := false;
+  PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000000005');
+  BEGIN
+    SELECT resolved.cents INTO v_cents
+    FROM public.resolve_time_rate_cents(
+      'b1100000-0000-4000-8000-0000000000e5', 'b1100000-0000-4000-8000-000000000002',
+      NOW() - INTERVAL '3 hours', NULL) AS resolved;
+  EXCEPTION WHEN insufficient_privilege THEN v_raised := true;
+  END;
+  PERFORM pg_temp.reset_role();
+  ASSERT v_raised,
+    'FAIL m4 (W1-R2-03): a project designer who is not a studio owner/admin must not be '
+    'able to resolve a colleague''s pay rate by direct call; it returned '
+    || COALESCE(v_cents::text, 'NULL');
 
   RAISE NOTICE 'time_rate_resolution: case (m) passed.';
+END
+$$;
+
+-- ─── (n) W1-R2-02: the two-studio designer — the studio choice is MEANINGFUL ─
+-- Every fixture above gives its designer exactly ONE studio, so the studio
+-- fallback in 00599 was never exercised where it actually decides anything. The
+-- ordinary designer has TWO: 00295's provision_studio_on_designer mints a personal
+-- design studio the moment is_designer flips with no membership yet, and she later
+-- joins the studio that pays her. She is owner of both, active in both, and both
+-- memberships carry the same now() — so before this fix every ORDER BY key above
+-- `studio.id` tied and the studio that priced her hour was a random uuid (8 runs
+-- over one fixture: 6 picked the auto-provisioned studio, 2 the intended one). On
+-- Strata the tie is deterministic and WRONG: the personal studio joins first.
+--
+-- The order of these three statements is the whole point, and mirrors signup:
+-- flip is_designer BEFORE any membership exists (00295 no-ops if she already
+-- belongs to any organization, any status), then join the real studio.
+INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, instance_id, aud, role)
+VALUES ('b1100000-0000-4000-8000-000000000006', 'rate-twostudio@test.invalid', '', NOW(), NOW(), NOW(),
+        '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+
+INSERT INTO public.profiles (id, email, full_name, is_designer, created_at, updated_at)
+VALUES ('b1100000-0000-4000-8000-000000000006', 'rate-twostudio@test.invalid', 'Rate TwoStudio', false, NOW(), NOW())
+ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name, is_designer = false;
+
+-- The flip that provisions the personal studio (a separate UPDATE on purpose: the
+-- INSERT above lands on the row auth.users already created, so ON CONFLICT DO
+-- NOTHING would leave is_designer false and the trigger would never fire — which is
+-- exactly why no earlier case in this file has a two-studio designer).
+UPDATE public.profiles SET is_designer = true
+ WHERE id = 'b1100000-0000-4000-8000-000000000006';
+
+-- …and then she joins the studio that actually pays her.
+INSERT INTO public.organizations (id, type, name, slug, status)
+VALUES ('b1100000-0000-4000-8000-0000000000a2', 'design_studio', 'Paying Studio', 'rate-paying-studio-test', 'active');
+INSERT INTO public.organization_members (id, user_id, organization_id, role, status, joined_at)
+VALUES ('b1100000-0000-4000-8000-0000000000c6', 'b1100000-0000-4000-8000-000000000006',
+        'b1100000-0000-4000-8000-0000000000a2', 'owner', 'active', NOW());
+
+-- Her own project, studio_id NULL — the shape 5 of 6 seeded projects rows carry.
+INSERT INTO public.projects (id, name, designer_id, created_by)
+VALUES ('b1100000-0000-4000-8000-0000000000e6', 'Two-studio House',
+        'b1100000-0000-4000-8000-000000000006', 'b1100000-0000-4000-8000-000000000006');
+
+DO $$
+DECLARE
+  v_studios     INTEGER;
+  v_personal    uuid;
+  v_rate        INTEGER;
+  v_source      TEXT;
+  v_resolved    INTEGER;
+BEGIN
+  SELECT count(*) INTO v_studios
+  FROM public.organizations studio
+  JOIN public.organization_members m ON m.organization_id = studio.id
+  WHERE m.user_id = 'b1100000-0000-4000-8000-000000000006'
+    AND studio.type = 'design_studio' AND studio.status = 'active'
+    AND m.status = 'active' AND m.role <> 'guest';
+  ASSERT v_studios = 2,
+    'FAIL n0 (precondition): the designer must hold TWO active studios or this case is '
+    'vacuous — 00295''s provision trigger did not fire; got ' || v_studios;
+
+  SELECT studio.id INTO v_personal
+  FROM public.organizations studio
+  JOIN public.organization_members m ON m.organization_id = studio.id
+  WHERE m.user_id = 'b1100000-0000-4000-8000-000000000006'
+    AND studio.id <> 'b1100000-0000-4000-8000-0000000000a2';
+  ASSERT v_personal IS NOT NULL, 'FAIL n0b (precondition): the personal studio is missing';
+
+  ASSERT (SELECT studio_id FROM public.projects
+           WHERE id = 'b1100000-0000-4000-8000-0000000000e6') IS NULL,
+    'FAIL n0c (precondition): the project must carry studio_id NULL — the fallback is what is under test';
+
+  -- Her rate exists in the PAYING studio only. The personal studio has none, and
+  -- never will: nothing seats a rate there.
+  PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000000006');
+  INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
+  VALUES ('b1100000-0000-4000-8000-0000000000a2', 'b1100000-0000-4000-8000-000000000006',
+          22000, CURRENT_DATE - 10, 'b1100000-0000-4000-8000-000000000006');
+  PERFORM pg_temp.reset_role();
+
+  ASSERT NOT EXISTS (SELECT 1 FROM public.studio_member_rates
+                      WHERE studio_id = v_personal),
+    'FAIL n0d (precondition): the personal studio must hold no rate row';
+
+  -- She logs an hour on her own project, through every trigger.
+  PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000000006');
+  INSERT INTO public.project_time_entries
+    (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('b1100000-0000-4000-8000-0000000000ba', 'b1100000-0000-4000-8000-0000000000e6',
+          'b1100000-0000-4000-8000-000000000006', NOW() - INTERVAL '2 hours', 60, true, 'manual_entry');
+
+  SELECT resolved.cents INTO v_resolved
+  FROM public.resolve_time_rate_cents(
+    'b1100000-0000-4000-8000-0000000000e6', 'b1100000-0000-4000-8000-000000000006',
+    NOW() - INTERVAL '2 hours', NULL) AS resolved;
+  PERFORM pg_temp.reset_role();
+
+  SELECT hourly_rate_cents, rate_source INTO v_rate, v_source
+  FROM public.project_time_entries WHERE id = 'b1100000-0000-4000-8000-0000000000ba';
+
+  ASSERT v_rate = 22000,
+    'FAIL n1 (W1-R2-02): the hour must be priced from the studio that holds her rate, not '
+    'from whichever studio uuid sorted first; got ' || COALESCE(v_rate::text, 'NULL');
+  ASSERT v_source = 'studio_member',
+    'FAIL n2 (W1-R2-02): rate_source must be ''studio_member'' — ''none'' here is the silent '
+    '$0 invoice HT-1/HT-26 were ruled to end; got ' || COALESCE(v_source, 'NULL');
+  ASSERT v_resolved = 22000,
+    'FAIL n3: the resolver and the classifier must agree on the studio; resolver said '
+    || COALESCE(v_resolved::text, 'NULL');
+
+  RAISE NOTICE 'time_rate_resolution: case (n) passed.';
+END
+$$;
+
+-- ─── (o) W1-R2-05: backdating must not erase a W1-era row's provenance ──────
+-- HT-13 makes backdating a first-class act. Delta 5 keeps the rate snapshot when
+-- the chain has no answer — but it used to force rate_source to NULL, and NULL is
+-- DEFINED (00600's COLUMN COMMENT, and TimeRateSource's doc comment) as "a row
+-- written before 00600". So a row W1 itself rated at studio_member, backdated
+-- before its rate's effective_from, started reading as legacy and lane B's column
+-- would render it that way. Case (i) covers a GENUINELY legacy row (OLD.rate_source
+-- already NULL) and therefore could not catch this.
+DO $$
+DECLARE
+  v_rate   INTEGER;
+  v_source TEXT;
+  v_amount INTEGER;
+BEGIN
+  PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000000002');
+  INSERT INTO public.project_time_entries
+    (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('b1100000-0000-4000-8000-0000000000bb', 'b1100000-0000-4000-8000-0000000000e1',
+          'b1100000-0000-4000-8000-000000000002', NOW() - INTERVAL '1 day', 60, true, 'manual_entry');
+  PERFORM pg_temp.reset_role();
+
+  SELECT hourly_rate_cents, rate_source INTO v_rate, v_source
+  FROM public.project_time_entries WHERE id = 'b1100000-0000-4000-8000-0000000000bb';
+  ASSERT v_rate = 15000 AND v_source = 'studio_member',
+    'FAIL o0 (precondition): the row must start as a W1-rated studio_member hour; got '
+    || COALESCE(v_rate::text, 'NULL') || ' / ' || COALESCE(v_source, 'NULL');
+
+  -- Backdated 20 days BEFORE the studio rate's effective_from (CURRENT_DATE - 30
+  -- is the rate; this lands at CURRENT_DATE - 50), so the chain answers 'none'.
+  PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000000002');
+  UPDATE public.project_time_entries
+     SET started_at = NOW() - INTERVAL '50 days'
+   WHERE id = 'b1100000-0000-4000-8000-0000000000bb';
+  PERFORM pg_temp.reset_role();
+
+  SELECT hourly_rate_cents, rate_source, rated_amount_cents INTO v_rate, v_source, v_amount
+  FROM public.project_time_entries WHERE id = 'b1100000-0000-4000-8000-0000000000bb';
+
+  ASSERT v_rate = 15000,
+    'FAIL o1 (P-4): backdating must not write the rate down; got ' || COALESCE(v_rate::text, 'NULL');
+  ASSERT v_source = 'studio_member',
+    'FAIL o2 (W1-R2-05): the provenance must stay with the snapshot it describes — NULL here '
+    'relabels a W1-era row as pre-00600 legacy; got ' || COALESCE(v_source, 'NULL');
+  ASSERT v_amount = 15000,
+    'FAIL o3: the preserved rate must still price the hour; got ' || COALESCE(v_amount::text, 'NULL');
+
+  RAISE NOTICE 'time_rate_resolution: case (o) passed.';
   RAISE NOTICE 'All time_rate_resolution assertions passed.';
 END
 $$;

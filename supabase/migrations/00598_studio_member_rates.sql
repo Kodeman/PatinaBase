@@ -31,9 +31,12 @@
 --   · W1-R1-08 — "history is a fact" was enforced against DELETE only: the
 --     UPDATE policy carried no column restriction and no open-row predicate, so
 --     an owner could rewrite a CLOSED row's rate or dates. A BEFORE UPDATE guard
---     now freezes a closed row outright, and freezes identity/authorship on the
---     open one. The UPDATE policy is deliberately NOT narrowed to the open row:
---     a silent zero-row no-op is a worse answer to an owner than a raise.
+--     now freezes a closed row outright, and freezes identity on the open one.
+--     The UPDATE policy is deliberately NOT narrowed to the open row: a silent
+--     zero-row no-op is a worse answer to an owner than a raise.
+--     AMENDED in review round 2 (W1-R2-04): the freeze covered created_by too,
+--     which broke the very blur-save idiom HT-3 rules for the moment a studio has
+--     TWO owner/admins — see the guard's own comment below.
 --   · W1-R1-09 — the INSERT policy never checked that user_id was a member of
 --     studio_id, so a rate row could be created for an arbitrary profile. The
 --     WITH CHECK now requires an active, non-guest organization_members row.
@@ -75,6 +78,10 @@ COMMENT ON TABLE public.studio_member_rates IS
 COMMENT ON COLUMN public.studio_member_rates.effective_to IS
   'NULL = the open row. Closed by close_prior_studio_member_rate() when a later '
   'row supersedes it — never by hand.';
+COMMENT ON COLUMN public.studio_member_rates.created_by IS
+  'The owner/admin who last wrote this row. Frozen once the row closes; on the '
+  'OPEN row a second admin''s same-day correction re-stamps it (W1-R2-04) — the '
+  'blur-save upsert sends created_by on every write.';
 
 CREATE INDEX IF NOT EXISTS idx_studio_member_rates_lookup
   ON public.studio_member_rates(studio_id, user_id, effective_from DESC);
@@ -135,8 +142,8 @@ FOR EACH ROW EXECUTE FUNCTION public.close_prior_studio_member_rate();
 -- The missing half of "append-only": the no-DELETE posture said nothing about an
 -- UPDATE, so an owner could rewrite a closed row's rate or its dates. A closed
 -- row is now frozen outright; the open row stays correctable (that is the
--- settings page's blur-save idiom) but cannot be re-pointed at another studio,
--- another member, or another author.
+-- settings page's blur-save idiom) but cannot be re-pointed at another studio or
+-- another member.
 -- The postgres early return is the 00412:2354 idiom: the canonical rails
 -- (close_prior_studio_member_rate above, now DEFINER) run as postgres.
 CREATE OR REPLACE FUNCTION public.guard_studio_member_rate_history()
@@ -153,12 +160,19 @@ BEGIN
       USING ERRCODE = 'check_violation';
   END IF;
 
+  -- W1-R2-04: created_by is NOT frozen on the open row. The settings page's
+  -- blur-save upserts ON CONFLICT (studio_id, user_id, effective_from) and
+  -- PostgREST assigns EVERY payload column from `excluded`, created_by included —
+  -- so freezing it meant a studio's SECOND owner/admin could not correct a rate the
+  -- first set the same day: the UPDATE raised and her number was silently lost
+  -- (measured through the real policies — admin B's 15500 dropped, the row stayed
+  -- at admin A's 14000). created_by therefore records the LAST author of the open
+  -- row; the closed rows below it keep theirs, frozen outright by the raise above.
   IF NEW.studio_id  IS DISTINCT FROM OLD.studio_id
      OR NEW.user_id    IS DISTINCT FROM OLD.user_id
-     OR NEW.created_by IS DISTINCT FROM OLD.created_by
      OR NEW.created_at IS DISTINCT FROM OLD.created_at
   THEN
-    RAISE EXCEPTION 'studio member rate identity and authorship are immutable'
+    RAISE EXCEPTION 'studio member rate identity is immutable'
       USING ERRCODE = 'check_violation';
   END IF;
 

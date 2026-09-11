@@ -79,6 +79,42 @@
 --    `(p_at AT TIME ZONE 'UTC')::date` — matching studio_member_rates.effective_*
 --    being plain dates with no zone of their own.
 --
+-- REVIEW ROUND 2 — TWO REPAIRS:
+--
+--  · W1-R2-02 (the studio coin-flip). For a project with studio_id NULL — 5 of 6
+--    projects rows on a freshly seeded stack — the studio that PRICES the hour was
+--    chosen arbitrarily. fc_provision_studio_on_designer auto-provisions a personal
+--    design studio and seats the designer as owner in the same transaction she
+--    joins a real one, so every key above `studio.id` ties (owner on both,
+--    joined_at and created_at both that transaction's now()) and the tiebreak was a
+--    random uuid: the ladder run 8× over one fixture picked the auto-provisioned
+--    studio 6 times. When the wrong studio won, tier 2 missed, the hour stored
+--    NULL / 'none', printed "rate pending" and invoiced at $0 — the silent money
+--    HT-1/HT-26 were ruled to end. On Strata it ties the WRONG way deterministically
+--    (the personal studio is provisioned at signup, BEFORE she joins a studio, so
+--    joined_at favours the one studio that never carries studio_member_rates rows).
+--    The first key is now MEANINGFUL: the studio that actually holds a rate row for
+--    p_user_id. Below it, `organizations.created_at` is inserted before `studio.id`
+--    so no tiebreak is ever a uuid. NOTE on the earlier banner text: this ladder
+--    does NOT "mirror _agreement_studio_id" and never could call it —
+--    `public._agreement_studio_id(p_proposal_id uuid, p_actor uuid)`
+--    (00576:504-576) takes a PROPOSAL id, not a project id, and asserts the ACTOR's
+--    standing rather than the subject's. Its shape (a meaningful EXISTS first, a
+--    total order below) is what is borrowed, and that is all the claim now is.
+--
+--  · W1-R2-03 (a pay-rate leak). ASSERT 2's designer leg was unconditional, so any
+--    user who is the designer of ANY project could resolve ANY p_user_id's rate —
+--    including a colleague with no relationship to that project — while RLS
+--    (studio_member_rates_read_self_or_admin) gives her nothing. Measured as a
+--    plain studio `member` who is a project designer: she reads 0 rows of
+--    studio_member_rates for the colleague, yet this function returned
+--    cents=47500 source=studio_member for him. User ids are on the roster and in
+--    the People room, so every colleague's pay was enumerable. The leg's only
+--    purpose (W1-R1-05) is the classifier's designer-on-behalf UPDATE, which
+--    always runs at pg_trigger_depth() >= 1 — so it is gated on depth. At the RPC
+--    boundary a project designer who is not a studio owner/admin may resolve only
+--    her OWN rate.
+--
 -- Lineage: new function — nothing is redefined.
 -- Reconciles: the three 00578 branches that leave the rate client-owned are
 -- fixed in 00601, not here; this file only supplies the answer.
@@ -112,8 +148,18 @@ BEGIN
   WHERE project.id = p_project_id;
 
   -- projects.studio_id is NULL on legacy rows (§0.13 — which is why it is never
-  -- a POLICY key). The fallback is _agreement_studio_id's ladder (00576:536-556):
-  -- the designer's own active, non-guest design studio.
+  -- a POLICY key). The fallback is the designer's own active, non-guest design
+  -- studio, chosen in _agreement_studio_id's SHAPE (00576:504-576): one meaningful
+  -- EXISTS first, then a total order with no uuid tiebreak.
+  --
+  -- W1-R2-02: the first key is the studio that actually holds a rate row for this
+  -- member. Every key below it ties for the ordinary two-studio designer — she is
+  -- owner of both, and 00295's fc_provision_studio_on_designer seats her in the
+  -- personal one in the same transaction, so joined_at and created_at are the same
+  -- now() — which made `studio.id` the real tiebreak: a coin flip locally, and on
+  -- Strata a deterministic win for the personal studio that can never carry a rate.
+  -- organizations.created_at sits above studio.id so the last resort is a fact
+  -- about the studio, not its uuid.
   IF v_studio_id IS NULL AND v_designer_id IS NOT NULL THEN
     SELECT studio.id INTO v_studio_id
     FROM public.organizations AS studio
@@ -124,9 +170,15 @@ BEGIN
       AND studio.status = 'active'
       AND membership.status = 'active'
       AND membership.role <> 'guest'
-    ORDER BY (membership.role = 'owner') DESC,
+    ORDER BY EXISTS (
+               SELECT 1 FROM public.studio_member_rates AS priced
+               WHERE priced.studio_id = studio.id
+                 AND priced.user_id   = p_user_id
+             ) DESC,
+             (membership.role = 'owner') DESC,
              membership.joined_at NULLS LAST,
              membership.created_at,
+             studio.created_at,
              studio.id
     LIMIT 1;
   END IF;
@@ -152,16 +204,24 @@ BEGIN
   END IF;
 
   -- ── ASSERT 2: you may resolve your own rate ──────────────────────────────
-  -- Resolving someone ELSE's is the act of a studio owner/admin, or of the
-  -- project's own designer — whose `Designers manage their project time entries`
-  -- policy already lets her correct a teammate's entry, and which this assert
-  -- would otherwise revoke in silence (W1-R1-05).
+  -- Resolving someone ELSE's is the act of a studio owner/admin, or — INSIDE THE
+  -- CLASSIFIER ONLY — of the project's own designer, whose `Designers manage their
+  -- project time entries` policy lets her correct a teammate's entry and which an
+  -- ungated assert would revoke in silence (W1-R1-05).
+  --
+  -- W1-R2-03: the designer leg is gated on pg_trigger_depth() > 0. Ungated it was a
+  -- confidential-pay leak out of a GRANTed DEFINER function — a plain studio member
+  -- who happens to be a project designer could read any colleague's studio rate by
+  -- calling this with his user id, a number RLS gives her nothing of. Its only
+  -- purpose is the classifier's designer-on-behalf UPDATE, which always runs at
+  -- depth >= 1, so the gate costs that path nothing.
   IF auth.uid() IS NOT NULL
      AND p_user_id IS DISTINCT FROM auth.uid()
-     AND v_designer_id IS DISTINCT FROM auth.uid()
+     AND NOT (v_designer_id IS NOT DISTINCT FROM auth.uid()
+              AND pg_catalog.pg_trigger_depth() > 0)
      AND NOT COALESCE(public.is_org_admin_or_owner(v_studio_id), false)
   THEN
-    RAISE EXCEPTION 'resolve_time_rate_cents: only a studio owner or admin, or the project''s designer, may resolve another member''s rate'
+    RAISE EXCEPTION 'resolve_time_rate_cents: only a studio owner or admin may resolve another member''s rate'
       USING ERRCODE = 'insufficient_privilege';
   END IF;
 
@@ -346,6 +406,27 @@ BEGIN
        !~ 'AT TIME ZONE ''UTC'''
   THEN
     RAISE EXCEPTION '00599: the rate-boundary date anchor must be explicitly UTC (W1-R1-11)';
+  END IF;
+
+  -- ── review round 2: the two repairs a future graft must not drop ───────────
+  -- W1-R2-02: the studio ladder must not terminate on studio.id alone — every key
+  -- above it ties for the ordinary two-studio designer, so without a MEANINGFUL
+  -- first key the studio that prices the hour is a uuid coin flip.
+  IF pg_get_functiondef('public.resolve_time_rate_cents(uuid,uuid,timestamptz,text)'::regprocedure)
+       !~ 'priced\.studio_id = studio\.id'
+  THEN
+    RAISE EXCEPTION '00599: the studio fallback must order first on "this studio holds a rate for this member" — a uuid tiebreak is a coin flip (W1-R2-02)';
+  END IF;
+  IF pg_get_functiondef('public.resolve_time_rate_cents(uuid,uuid,timestamptz,text)'::regprocedure)
+       !~ 'studio\.created_at'
+  THEN
+    RAISE EXCEPTION '00599: organizations.created_at must sit above studio.id so no tiebreak is ever a uuid (W1-R2-02)';
+  END IF;
+  -- W1-R2-03: the designer-on-behalf leg is for the classifier, not for callers.
+  IF pg_get_functiondef('public.resolve_time_rate_cents(uuid,uuid,timestamptz,text)'::regprocedure)
+       !~ 'pg_trigger_depth\(\) > 0'
+  THEN
+    RAISE EXCEPTION '00599: the designer-on-behalf leg must be gated on trigger depth, or any project designer can enumerate colleagues'' pay (W1-R2-03)';
   END IF;
 END
 $postcondition$;

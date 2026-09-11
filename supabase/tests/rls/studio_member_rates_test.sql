@@ -31,6 +31,12 @@
 --       correctable so the settings page's blur-save idiom is not broken.
 --   (i) W1-R1-09: a rate row cannot be created for a profile that is not an
 --       active non-guest member of the studio — neither a guest nor an outsider.
+--   (j) W1-R2-04 (review round 2): in a studio with TWO owner/admins, the second
+--       may correct a rate the first set the SAME DAY — written as the hook writes
+--       it, an upsert on (studio_id, user_id, effective_from) that carries
+--       created_by. The freeze used to cover created_by, so that correction raised
+--       and the second admin's number was silently lost. (a2)/(b2) could not catch
+--       it: they update the rate alone, as the same actor.
 --
 -- How to run:
 --   psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 \
@@ -458,6 +464,64 @@ BEGIN
     'a member of the studio at all';
 
   RAISE NOTICE 'studio_member_rates: case (i) passed.';
+END
+$$;
+
+-- ─── (j) two owner/admins, one day: the second may correct the first (W1-R2-04) ─
+-- The exact blur-save idiom HT-3 rules for, written the way the hook writes it:
+-- useSetStudioMemberRate upserts ON CONFLICT (studio_id, user_id, effective_from)
+-- and PostgREST assigns EVERY payload column from `excluded`, created_by included.
+-- While the freeze covered created_by, a studio's SECOND admin could not correct a
+-- rate the first had set the same day: the UPDATE raised 'identity and authorship
+-- are immutable' and her number was silently lost. Cases (a2)/(b2) could not catch
+-- it — they update hourly_rate_cents alone, as the same actor.
+DO $$
+DECLARE
+  v_rate   INTEGER;
+  v_author uuid;
+  v_open   INTEGER;
+BEGIN
+  -- The OWNER types a rate for the second member today.
+  PERFORM pg_temp.assume_user('c2200000-0000-4000-8000-000000000001');
+  INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
+  VALUES ('c2200000-0000-4000-8000-0000000000a1', 'c2200000-0000-4000-8000-000000000006',
+          14000, CURRENT_DATE, 'c2200000-0000-4000-8000-000000000001')
+  ON CONFLICT (studio_id, user_id, effective_from) DO UPDATE
+    SET hourly_rate_cents = EXCLUDED.hourly_rate_cents,
+        created_by        = EXCLUDED.created_by;
+  PERFORM pg_temp.reset_role();
+
+  -- The ADMIN corrects it the same day, through the same upsert.
+  PERFORM pg_temp.assume_user('c2200000-0000-4000-8000-000000000002');
+  INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
+  VALUES ('c2200000-0000-4000-8000-0000000000a1', 'c2200000-0000-4000-8000-000000000006',
+          15500, CURRENT_DATE, 'c2200000-0000-4000-8000-000000000002')
+  ON CONFLICT (studio_id, user_id, effective_from) DO UPDATE
+    SET hourly_rate_cents = EXCLUDED.hourly_rate_cents,
+        created_by        = EXCLUDED.created_by;
+  PERFORM pg_temp.reset_role();
+
+  SELECT hourly_rate_cents, created_by INTO v_rate, v_author
+  FROM public.studio_member_rates
+  WHERE studio_id = 'c2200000-0000-4000-8000-0000000000a1'
+    AND user_id   = 'c2200000-0000-4000-8000-000000000006'
+    AND effective_from = CURRENT_DATE;
+
+  ASSERT v_rate = 15500,
+    'FAIL j1 (W1-R2-04): a second owner/admin must be able to correct the same day''s rate; '
+    'the stored rate is ' || COALESCE(v_rate::text, 'NULL');
+  ASSERT v_author = 'c2200000-0000-4000-8000-000000000002',
+    'FAIL j2 (W1-R2-04): created_by on the OPEN row records the last author, got '
+    || COALESCE(v_author::text, 'NULL');
+
+  SELECT count(*) INTO v_open FROM public.studio_member_rates
+   WHERE studio_id = 'c2200000-0000-4000-8000-0000000000a1'
+     AND user_id   = 'c2200000-0000-4000-8000-000000000006'
+     AND effective_to IS NULL;
+  ASSERT v_open = 1,
+    'FAIL j3: the correction must not leave a second open row, found ' || v_open;
+
+  RAISE NOTICE 'studio_member_rates: case (j) passed.';
   RAISE NOTICE 'All studio_member_rates assertions passed.';
 END
 $$;
