@@ -10,7 +10,8 @@
 
 // deno-lint-ignore-file no-explicit-any
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { sendCompliantEmail } from '../_shared/send-email.ts';
 import {
   renderBrandedShell,
   paragraph,
@@ -32,7 +33,6 @@ import { clientProjectLink } from '../_shared/client-portal-links.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')!;
 const FROM_ADDRESS = Deno.env.get('RESEND_FROM') ?? 'hello@patina.cloud';
 const CLIENT_PORTAL_URL = Deno.env.get('CLIENT_PORTAL_URL') ?? 'https://client.patina.cloud';
 
@@ -59,11 +59,17 @@ interface DesignerClient {
   client_name: string | null;
 }
 
-async function sendReviewEmail(opts: {
+async function sendReviewEmail(supabase: SupabaseClient, opts: {
   projectId: string;
   projectName: string;
   designerClientId: string;
+  /** Minted before the send so notification_log can name the row it belongs to. */
+  reviewId: string;
   clientEmail: string;
+  /** The client's auth user id, when she has an account. */
+  clientUserId: string | null;
+  /** Replies land on the designer, not on Patina. */
+  designerEmail: string | null;
   clientName: string | null;
   /** Display name for the subject/prose — studio, designer, or 'Patina'. */
   senderName: string;
@@ -101,23 +107,28 @@ async function sendReviewEmail(opts: {
     ].join(''),
   });
 
-  const res = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${RESEND_API_KEY}`,
-      'Content-Type': 'application/json',
+  const result = await sendCompliantEmail(supabase, {
+    to: opts.clientEmail,
+    subject,
+    html,
+    from: FROM_ADDRESS,
+    replyTo: opts.designerEmail ?? undefined,
+    userId: opts.clientUserId ?? undefined,
+    notificationType: 'review_request',
+    category: 'operational',
+    templateId: 'review-request',
+    ref: { type: 'client_review', id: opts.reviewId },
+    metadata: {
+      project_id: opts.projectId,
+      designer_client_id: opts.designerClientId,
+      review_id: opts.reviewId,
     },
-    body: JSON.stringify({
-      from: FROM_ADDRESS,
-      to: opts.clientEmail,
-      subject,
-      html,
-    }),
   });
 
-  if (!res.ok) {
-    const text = await res.text();
-    console.error('review-requests: Resend failed for project', opts.projectId, res.status, text);
+  if (!result.success) {
+    console.error(
+      'review-requests: send failed for project', opts.projectId, result.error,
+    );
     return false;
   }
   return true;
@@ -250,11 +261,18 @@ Deno.serve(async (_req: Request) => {
     const senderName = studioDisplayName(identity, designerName ?? 'Patina');
     const cobrand = studioCobrand(identity);
 
-    const ok = await sendReviewEmail({
+    // Minted here so the notification_log row can carry the client_reviews id
+    // it is about; the row itself is still written only on a successful send.
+    const reviewId = crypto.randomUUID();
+
+    const ok = await sendReviewEmail(supabase, {
       projectId: project.id,
       projectName: project.name,
       designerClientId: dc.id,
+      reviewId,
       clientEmail,
+      clientUserId: clientProfile?.id ?? null,
+      designerEmail: designerProfile?.email ?? null,
       clientName,
       senderName,
       studioName: cobrand.studioName,
@@ -277,6 +295,7 @@ Deno.serve(async (_req: Request) => {
       const { error: insertErr } = await supabase
         .from('client_reviews')
         .insert({
+          id: reviewId,
           designer_client_id: dc.id,
           project_id: project.id,
           request_status: 'sent',
