@@ -17604,6 +17604,8 @@ export type Database = {
           notes: string | null
           phase_key: string | null
           project_id: string
+          rate_role: string | null
+          rate_source: string | null
           rated_amount_cents: number | null
           raw_seconds: number | null
           source: string
@@ -17627,6 +17629,8 @@ export type Database = {
           notes?: string | null
           phase_key?: string | null
           project_id: string
+          rate_role?: string | null
+          rate_source?: string | null
           rated_amount_cents?: number | null
           raw_seconds?: number | null
           source?: string
@@ -17650,6 +17654,8 @@ export type Database = {
           notes?: string | null
           phase_key?: string | null
           project_id?: string
+          rate_role?: string | null
+          rate_source?: string | null
           rated_amount_cents?: number | null
           raw_seconds?: number | null
           source?: string
@@ -24586,6 +24592,89 @@ export type Database = {
             columns: ["studio_id"]
             isOneToOne: true
             referencedRelation: "v_studios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      studio_member_rates: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          effective_from: string
+          effective_to: string | null
+          hourly_rate_cents: number
+          id: string
+          studio_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          effective_from?: string
+          effective_to?: string | null
+          hourly_rate_cents: number
+          id?: string
+          studio_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          effective_from?: string
+          effective_to?: string | null
+          hourly_rate_cents?: number
+          id?: string
+          studio_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "studio_member_rates_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_member_rates_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_member_rates_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "admin_studio_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_member_rates_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_member_rates_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "v_studios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_member_rates_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_member_rates_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
             referencedColumns: ["id"]
           },
         ]
@@ -35045,6 +35134,19 @@ export type Database = {
           source: string
           studio_id: string
           website: string
+        }[]
+      }
+      resolve_time_rate_cents: {
+        Args: {
+          p_at: string
+          p_project_id: string
+          p_rate_role?: string
+          p_user_id: string
+        }
+        Returns: {
+          cents: number
+          role: string
+          source: string
         }[]
       }
       resolve_trade_agreement_link: { Args: { p_token: string }; Returns: Json }
