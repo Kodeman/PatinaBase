@@ -1,0 +1,1576 @@
+<title>The Studio's Own Clock</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;1,400&family=Inter:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   The Studio's Own Clock — hour tracking in Patina.
+   Nine seats, 218 findings, one table: public.project_time_entries.
+   Typeset in the house sheet: docs/design/house-sheet/SPEC.md §A
+   as amended by §F. No shadow. No reveal motion. 11 September 2026.
+   ============================================================ */
+
+:root {
+  color-scheme: light dark;
+
+  /* paper, three stocks */
+  --paper:            #FAF7F2;
+  --paper-doc:        #FCFAF6;
+
+  /* ink */
+  --ink:              #2C2926;
+  --ink-muted:        #4E4339;
+  --ink-subtle:       #5A4E43;
+  --ink-faint:        #65594E;
+
+  /* hairlines */
+  --hairline:         #E8E3DB;
+  --hairline-strong:  rgba(44, 41, 38, .14);
+
+  /* the rest rule pigment */
+  --oak:              #8B7355;
+
+  /* state pigments: paper ink only (the material-value halves have no consumer) */
+  --clay-ink:      #7C5E30;
+  --terracotta-ink:#9C5340;
+  --sage-ink:      #5F6B57;
+
+  /* rhythm */
+  --radius-box:  3px;
+
+  --font-display: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  --font-body:    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-meta:    'DM Mono', 'SF Mono', 'Fira Code', ui-monospace, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper:           #2A2622;
+    --paper-doc:       #26221E;
+    --ink:             #F2EDE6;
+    --ink-muted:       #D6CEC4;
+    --ink-subtle:      #C7BEB3;
+    --ink-faint:       #B8AEA2;
+    --hairline:        rgba(242, 237, 230, .14);
+    --hairline-strong: rgba(242, 237, 230, .22);
+    --oak:             #B39572;
+    --clay-ink:        #D8B98A;
+    --terracotta-ink:  #E2A895;
+    --sage-ink:        #AFC0A6;
+  }
+}
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper:           #2A2622;
+  --paper-doc:       #26221E;
+  --ink:             #F2EDE6;
+  --ink-muted:       #D6CEC4;
+  --ink-subtle:      #C7BEB3;
+  --ink-faint:       #B8AEA2;
+  --hairline:        rgba(242, 237, 230, .14);
+  --hairline-strong: rgba(242, 237, 230, .22);
+  --oak:             #B39572;
+  --clay-ink:        #D8B98A;
+  --terracotta-ink:  #E2A895;
+  --sage-ink:        #AFC0A6;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+body {
+  margin: 0;
+  padding-inline: clamp(16px, 4vw, 64px);
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.55;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------- the seven-step scale (house sheet A3) ---------- */
+.t-d1   { font-family: var(--font-display); font-size: 34px; line-height: 1.15; font-weight: 500; margin: 0; text-wrap: balance; overflow-wrap: break-word; }
+.t-d2   { font-family: var(--font-display); font-size: 26px; line-height: 1.20; font-weight: 500; margin: 0; text-wrap: balance; overflow-wrap: break-word; }
+.t-d3   { font-family: var(--font-display); font-size: 20px; line-height: 1.30; font-weight: 500; margin: 0; overflow-wrap: break-word; }
+.t-body { font-family: var(--font-body); font-size: 16px; line-height: 1.55; font-weight: 400; margin: 0; }
+.t-body-sm { font-family: var(--font-body); font-size: 14px; line-height: 1.50; font-weight: 400; margin: 0; }
+.t-meta { font-family: var(--font-meta); font-size: 12px; line-height: 1.50; font-weight: 400; letter-spacing: .08em; margin: 0; }
+.t-head { font-family: var(--font-meta); font-size: 11px; line-height: 1.50; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; margin: 0; }
+.t-authorship { font-family: var(--font-display); font-size: 20px; line-height: 1.30; font-weight: 400; font-style: italic; margin: 0; }
+
+.ink-muted { color: var(--ink-muted); }
+.ink-faint { color: var(--ink-faint); }
+.defect { color: var(--terracotta-ink); }
+.holds { color: var(--sage-ink); }
+.measure { max-width: 58ch; }
+code { font-family: var(--font-meta); font-size: .92em; overflow-wrap: anywhere; }
+strong { font-weight: 500; }
+.t-body strong, .t-body-sm strong,
+table.sheet td:not(.src):not(.id):not(.num) strong,
+table.sheet th:not(.id):not(.num) strong { font-weight: 600; }
+em { font-style: normal; font-weight: 500; color: var(--ink); }
+.no-caps { text-transform: none; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* ---------- deck shell ---------- */
+.slide {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  padding-block: 56px 140px;
+  border-bottom: 1px solid var(--hairline);
+}
+.slide:last-of-type { border-bottom: 0; }
+.inner {
+  width: 100%;
+  max-width: 1240px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 124px minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+.gutter { display: flex; flex-direction: column; gap: 12px; position: sticky; top: 24px; align-self: start; }
+.gutter .sheet-no { color: var(--ink); font-variant-numeric: tabular-nums; }
+.gutter .chapter { color: var(--ink-faint); }
+.gutter .rule { height: 1px; background: var(--oak); width: 24px; }
+.main { min-width: 0; display: flex; flex-direction: column; gap: 24px; }
+
+@media (max-width: 1000px) {
+  .inner { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .gutter { position: static; flex-direction: row; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .gutter .rule { display: none; }
+  .slide { align-items: flex-start; padding-block: 40px 80px; }
+}
+
+/* ---------- structural furniture: rules, not cards ---------- */
+.rule-strong { height: 1px; background: var(--hairline-strong); border: 0; margin: 0; }
+.stack { display: flex; flex-direction: column; gap: 12px; }
+
+/* the verdict list: a key in the margin, a claim on the line */
+.verdicts { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0; }
+.verdicts > li {
+  display: grid; grid-template-columns: 116px minmax(0, 1fr);
+  gap: 4px 24px; padding: 14px 0; border-top: 1px solid var(--hairline-strong);
+  align-items: baseline;
+}
+.verdicts > li { max-width: calc(116px + 24px + 58ch); }
+.verdicts > li:last-child { border-bottom: 1px solid var(--hairline-strong); }
+.verdicts .k { color: var(--ink-faint); }
+@media (max-width: 700px) { .verdicts > li { grid-template-columns: minmax(0, 1fr); } }
+
+/* the count row: figures that are the point of their slide */
+.counts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px; border-top: 1px solid var(--hairline-strong); border-bottom: 1px solid var(--hairline-strong); padding-block: 16px; }
+.counts > div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.counts .fig { font-family: var(--font-display); font-size: 26px; line-height: 1.2; font-weight: 500; font-variant-numeric: tabular-nums; }
+@media (max-width: 820px) { .counts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 420px) { .counts { grid-template-columns: minmax(0, 1fr); gap: 12px; } }
+
+/* ---------- tables: wide content scrolls in its own container ---------- */
+.scroller { overflow-x: auto; overflow-y: hidden; max-width: 100%; }
+table.sheet { border-collapse: collapse; width: 100%; min-width: 680px; }
+table.sheet th, table.sheet td {
+  text-align: left; vertical-align: top;
+  padding: 9px 18px 9px 0; border-top: 1px solid var(--hairline);
+  font-family: var(--font-body); font-size: 14px; line-height: 1.5;
+}
+table.sheet thead th {
+  border-top: 0; border-bottom: 1px solid var(--hairline-strong); color: var(--ink-faint);
+  font-family: var(--font-meta); font-size: 11px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase;
+  white-space: normal;
+}
+table.sheet tbody tr:last-child td { border-bottom: 1px solid var(--hairline); }
+table.sheet tfoot td { border-top: 1px solid var(--hairline-strong); color: var(--ink-subtle); }
+table.sheet td:last-child, table.sheet th:last-child { padding-right: 0; }
+table.sheet td.id, table.sheet th.id { white-space: nowrap; color: var(--ink-faint); font-family: var(--font-meta); font-size: 12px; letter-spacing: .08em; }
+table.sheet td.src { font-family: var(--font-meta); font-size: 11.5px; letter-spacing: .02em; color: var(--ink-faint); overflow-wrap: break-word; }
+table.sheet td.num, table.sheet th.num { font-family: var(--font-meta); font-size: 13px; font-variant-numeric: tabular-nums; letter-spacing: .02em; white-space: nowrap; }
+table.sheet td.num.wrap { white-space: normal; }
+table.sheet td.mark { text-align: center; white-space: nowrap; }
+table.sheet td.mark:has(.mq) { text-align: left; }
+table.sheet th.mark { text-align: center; }
+table.sheet td.lead { color: var(--ink); }
+table.sheet tr.strong td { border-top: 1px solid var(--hairline-strong); }
+table.sheet td::before { content: none; }
+
+/* The ruling sheet's question column is mostly <code>, whose overflow-wrap:
+   anywhere drops its min-content to near zero; give it an explicit floor so
+   the auto layout cannot ribbon it once the gutter column appears. */
+@media (min-width: 861px) {
+  #sheet-14 table.sheet th:nth-child(3),
+  #sheet-14 table.sheet td:nth-child(3) { min-width: 260px; }
+}
+
+@media (max-width: 860px) {
+  table.sheet, table.sheet.wide, table.sheet.widest { min-width: 0; display: block; }
+  .scroller { overflow-x: auto; overflow-y: hidden; }
+  table.sheet thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  table.sheet tbody, table.sheet tfoot, table.sheet tr, table.sheet td { display: block; width: 100%; }
+  table.sheet tr { border-top: 1px solid var(--hairline-strong); padding: 12px 0; border-top-color: var(--ink-faint); }
+  table.sheet tbody tr:last-child { border-bottom: 1px solid var(--hairline-strong); }
+  table.sheet td { border: 0; padding: 0 0 6px; }
+  table.sheet tr td:last-child { padding-bottom: 0; }
+  table.sheet td.mark { text-align: left; }
+  table.sheet td.id { white-space: normal; }
+  table.sheet td::before {
+    content: attr(data-label); display: block;
+    font-family: var(--font-meta); font-size: 11px; line-height: 1.5; font-weight: 500;
+    letter-spacing: .08em; text-transform: uppercase; color: var(--ink-faint);
+  }
+}
+
+/* ---------- the mark: a dial, full / half / empty ---------- */
+.m {
+  display: inline-block; width: 11px; height: 11px; border-radius: 50%;
+  border: 1px solid var(--ink-faint); vertical-align: -1px;
+}
+.m-full { background: var(--ink); border-color: var(--ink); }
+.m-half { background: linear-gradient(90deg, var(--ink) 0 50%, transparent 50% 100%); border-color: var(--ink); }
+.m-none { background: none; }
+.mq { display: block; text-align: left; white-space: normal; font-family: var(--font-meta); font-size: 11px; letter-spacing: .04em; color: var(--ink-faint); margin: 2px 0 0; }
+.legend { display: flex; flex-wrap: wrap; gap: 20px; }
+.legend span { font-family: var(--font-meta); font-size: 11.5px; letter-spacing: .04em; color: var(--ink-subtle); }
+
+/* ---------- annotations under a table ---------- */
+.ann { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 24px; }
+@media (max-width: 820px) { .ann { grid-template-columns: minmax(0, 1fr); } }
+.ann .k { display: block; font-family: var(--font-meta); font-size: 11px; line-height: 1.5; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 4px; }
+.ann p { margin: 0; }
+
+/* ---------- the register (colophon) ---------- */
+.reg { display: grid; grid-template-columns: 176px minmax(0, 1fr); gap: 6px 24px; margin: 0; }
+.reg dt { font-family: var(--font-meta); font-size: 11px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-faint); margin: 0; padding-top: 3px; }
+.reg dd { margin: 0; font-family: var(--font-meta); font-size: 12px; line-height: 1.6; color: var(--ink-muted); overflow-wrap: anywhere; }
+@media (max-width: 700px) { .reg { grid-template-columns: minmax(0, 1fr); gap: 2px; } .reg dd { padding-bottom: 8px; } }
+
+a { color: var(--ink); text-decoration-color: var(--oak); text-underline-offset: 3px; }
+a:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+.skip { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.skip:focus { position: fixed; width: auto; height: auto; overflow: visible; clip-path: none; left: 12px; top: 12px; z-index: 70; background: var(--paper-doc); color: var(--ink); padding: 12px; border: 1px solid var(--hairline-strong); border-radius: var(--radius-box); font-family: var(--font-meta); font-size: 12px; white-space: normal; }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: .01ms !important; animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
+@media (forced-colors: active) {
+  .m { forced-color-adjust: none; border-color: CanvasText; }
+  .m-full { background: CanvasText; }
+  .m-half { background: linear-gradient(90deg, CanvasText 0 50%, Canvas 50% 100%); }
+  .m-none { background: Canvas; }
+}
+@media print {
+  :root, :root[data-theme="dark"] {
+    color-scheme: light;
+    --paper:#FAF7F2; --paper-doc:#FCFAF6;
+    --ink:#2C2926; --ink-muted:#4E4339; --ink-subtle:#5A4E43; --ink-faint:#65594E;
+    --hairline:#E8E3DB; --hairline-strong:rgba(44,41,38,.14); --oak:#8B7355;
+  }
+  .slide { min-height: 0; display: block; break-after: page; border: 0; padding-block: 24px; }
+  .slide:last-of-type { break-after: auto; }
+  table.sheet, table.sheet.wide, table.sheet.widest { min-width: 0 !important; display: table !important; width: 100% !important; }
+  .scroller { overflow: visible !important; }
+  table.sheet thead { position: static !important; width: auto !important; height: auto !important; overflow: visible !important; clip-path: none !important; white-space: normal !important; }
+  table.sheet tbody, table.sheet tfoot { display: table-row-group !important; }
+  table.sheet tr { display: table-row !important; border-top: 1px solid var(--hairline-strong) !important; padding: 0 !important; }
+  table.sheet td { display: table-cell !important; border: 0 !important; padding: 6px 12px 6px 0 !important; }
+  table.sheet td::before { content: none !important; }
+  table.sheet thead th, table.sheet td.num, table.sheet td.mark, table.sheet td.id { white-space: normal !important; }
+}
+</style>
+
+<a class="skip" href="#sheet-2">Skip the cover</a>
+<p class="visually-hidden">This deck pages with the left and right arrow keys, or j and k. Home jumps to the first sheet, End to the last.</p>
+
+<main>
+
+<!-- ============ 01 — COVER ============ -->
+<section class="slide" id="sheet-1" aria-labelledby="h1">
+  <div class="inner">
+    <div class="gutter">
+      <p class="t-head sheet-no">Sheet 01 / 16</p>
+      <div class="rule"></div>
+      <p class="t-head chapter">Hour tracking</p>
+    </div>
+    <div class="main">
+      <div class="stack">
+        <p class="t-head ink-faint">A nine-seat panel and a build-out plan &middot; prepared for Kody</p>
+        <h1 class="t-d1" id="h1">The Studio's Own Clock</h1>
+        <p class="t-authorship ink-muted measure"><code class="no-caps">time</code> is not a margin item the margin prints: it is the studio&rsquo;s own clock.</p>
+        <p class="t-meta ink-faint">margin-groups.ts:11-13 &middot; 11 September 2026</p>
+      </div>
+      <hr class="rule-strong">
+      <div class="counts">
+        <div><span class="fig">9</span><span class="t-head ink-faint">Seats</span></div>
+        <div><span class="fig">218</span><span class="t-head ink-faint">Findings</span></div>
+        <div><span class="fig">1</span><span class="t-head ink-faint">Table &mdash; <code class="no-caps">project_time_entries</code></span></div>
+        <div><span class="fig">30&ndash;50</span><span class="t-head ink-faint">Eng-days, 8 waves</span></div>
+      </div>
+      <ul class="verdicts">
+        <li><span class="t-head k">Today</span><span class="t-body measure">Capture inside a document is the best thing in the product &mdash; and the hour it writes prices at <span class="defect">$0 or NULL</span> on the commonest project kind, a new hire&rsquo;s hours are stranded money no later agreement can promote, and of the four views one works, one answers the wrong question, and two exist in the database and in no click path.</span></li>
+        <li><span class="t-head k">The shape</span><span class="t-body measure">One server-owned answer for rate and billable on every path; one sheet with one admin-gated lens for all four views; one new door per surface and a date field; and a CSV.</span></li>
+        <li><span class="t-head k">The ask</span><span class="t-body measure">Forty rulings, four of which must be ruled before the plan can be sequenced &mdash; HT-1 gates W1&rsquo;s first line; HT-10 and HT-37 gate W2; HT-4 gates W7 and W1&rsquo;s backfill &mdash; and three consent rulings that decide whether the first hire trusts the clock.</span></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 02 — THE ASK ============ -->
+<section class="slide" id="sheet-2" aria-labelledby="h2" tabindex="-1">
+  <div class="inner">
+    <div class="gutter">
+      <p class="t-head sheet-no">Sheet 02 / 16</p>
+      <div class="rule"></div>
+      <p class="t-head chapter">The ask</p>
+    </div>
+    <div class="main">
+      <h2 class="t-d2" id="h2">Six cells. Two pass outright.</h2>
+      <div class="scroller">
+        <table class="sheet" aria-labelledby="h2">
+          <thead><tr><th scope="col">Kody&rsquo;s requirement</th><th scope="col" class="mark">Today</th><th scope="col">What the row actually holds</th><th scope="col">Evidence</th></tr></thead>
+          <tbody>
+            <tr>
+              <td data-label="Requirement" class="lead">Log an hour anywhere</td>
+              <td data-label="Today" class="mark"><span class="m m-half" role="img" aria-label="partial"></span><span class="mq">8 taps off-document</span></td>
+              <td data-label="Holds">Zero taps inside an open document; eight off one; impossible on the phone with nothing held and in Patina Field for anything but a just-closed visit</td>
+              <td data-label="Evidence" class="src">log-strip.tsx:11-12 &middot; document-time-provider.tsx:410-413 &middot; V4VisitReviewScreen.swift:308-316</td>
+            </tr>
+            <tr>
+              <td data-label="Requirement" class="lead">Who</td>
+              <td data-label="Today" class="mark"><span class="m m-full" role="img" aria-label="present"></span></td>
+              <td data-label="Holds"><code>user_id</code> NOT NULL on every row, on every path</td>
+              <td data-label="Evidence" class="src">00177:13-25</td>
+            </tr>
+            <tr>
+              <td data-label="Requirement" class="lead">What the work was</td>
+              <td data-label="Today" class="mark"><span class="m m-half" role="img" aria-label="partial"></span></td>
+              <td data-label="Holds">NULL on the zero-tap path, <code>'design'</code> whenever the strip is touched &mdash; the column lies either way</td>
+              <td data-label="Evidence" class="src">document-time-provider.tsx:283-290 &middot; log-strip.tsx:36</td>
+            </tr>
+            <tr>
+              <td data-label="Requirement" class="lead">Project</td>
+              <td data-label="Today" class="mark"><span class="m m-full" role="img" aria-label="present"></span></td>
+              <td data-label="Holds">NOT NULL &mdash; and that is also why admin and studio time has no legal home</td>
+              <td data-label="Evidence" class="src">00177:14-15 &middot; hours-ledger.tsx:273</td>
+            </tr>
+            <tr>
+              <td data-label="Requirement" class="lead">Rate</td>
+              <td data-label="Today" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Holds"><span class="defect">Whatever the browser says &mdash; and no browser says anything.</span> Lands NULL, then $0; the precedence chain below it has no writer</td>
+              <td data-label="Evidence" class="src">00578:2648-2653 &middot; use-time-tracking.ts:286-299 &middot; 00412:2676-2682</td>
+            </tr>
+            <tr>
+              <td data-label="Requirement" class="lead">Billable</td>
+              <td data-label="Today" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Holds">No control on any surface; the three capture paths send three different answers on one project</td>
+              <td data-label="Evidence" class="src">log-strip.tsx (whole file) &middot; document-time-provider.tsx:410-424 &middot; FieldVisitCloseRecord.swift:128-176 &middot; default 00177:22</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="legend">
+        <span><span class="m m-full" aria-hidden="true"></span> &nbsp;present</span>
+        <span><span class="m m-half" aria-hidden="true"></span> &nbsp;partial, or answers the wrong question</span>
+        <span><span class="m m-none" aria-hidden="true"></span> &nbsp;absent</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 03 — CAPABILITY MATRIX ============ -->
+<section class="slide" id="sheet-3" aria-labelledby="h3">
+  <div class="inner">
+    <div class="gutter">
+      <p class="t-head sheet-no">Sheet 03 / 16</p>
+      <div class="rule"></div>
+      <p class="t-head chapter">Today</p>
+    </div>
+    <div class="main">
+      <h2 class="t-d2" id="h3">Seventeen capabilities, five surfaces. One empty column: the admin portal.</h2>
+      <div class="scroller">
+        <table class="sheet widest" aria-labelledby="h3">
+          <thead>
+            <tr>
+              <th scope="col">Capability</th>
+              <th scope="col" class="mark">Designer desktop</th>
+              <th scope="col" class="mark">Designer mobile</th>
+              <th scope="col" class="mark">Patina Field</th>
+              <th scope="col" class="mark">Admin portal</th>
+              <th scope="col" class="mark">Client portal</th>
+              <th scope="col">Footnote</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td data-label="Capability" class="lead">Log the hour just spent, in a document</td>
+              <td data-label="Designer desktop" class="mark"><span class="m m-full" role="img" aria-label="present"></span></td>
+              <td data-label="Designer mobile" class="mark"><span class="m m-half" role="img" aria-label="partial"></span><span class="mq">derived, current-state &sect;2</span></td>
+              <td data-label="Patina Field" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Admin portal" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Client portal" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Footnote" class="src">log-strip.tsx:11-12 &middot; studio-drawer.tsx:468</td>
+            </tr>
+            <tr>
+              <td data-label="Capability" class="lead">Log with nothing in hand</td>
+              <td data-label="Designer desktop" class="mark"><span class="m m-half" role="img" aria-label="partial"></span><span class="mq">8</span></td>
+              <td data-label="Designer mobile" class="mark"><span class="m m-none" role="img" aria-label="absent"></span><span class="mq">saves nothing</span></td>
+              <td data-label="Patina Field" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Admin portal" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Client portal" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Footnote" class="src">hours-ledger.tsx:545-595 &middot; document-time-provider.tsx:410-413</td>
+            </tr>
+            <tr>
+              <td data-label="Capability" class="lead">Log a just-closed site visit</td>
+              <td data-label="Designer desktop" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Designer mobile" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Patina Field" class="mark"><span class="m m-full" role="img" aria-label="present"></span><span class="mq">1 tap</span></td>
+              <td data-label="Admin portal" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Client portal" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Footnote" class="src">FieldVisitCloseRecord.swift:128-176</td>
+            </tr>
+            <tr>
+              <td data-label="Capability" class="lead">Log a drive, a call, a sourcing run</td>
+              <td data-label="Designer desktop" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Designer mobile" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Patina Field" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Admin portal" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Client portal" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Footnote" class="src">activity CHECK 00198:27-29 &middot; FieldCompanionPresentation.swift:51-54</td>
+            </tr>
+            <tr>
+              <td data-label="Capability" class="lead">Log yesterday&rsquo;s hour</td>
+              <td data-label="Designer desktop" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Designer mobile" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Patina Field" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Admin portal" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Client portal" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Footnote" class="src">use-time-tracking.ts:316 &middot; mis-dates into today: hours-ledger.tsx:545-595</td>
+            </tr>
+            <tr>
+              <td data-label="Capability" class="lead">Log an hour with no project</td>
+              <td data-label="Designer desktop" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Designer mobile" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Patina Field" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Admin portal" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Client portal" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Footnote" class="src">00177:14-15 &middot; addValid hours-ledger.tsx:273</td>
+            </tr>
+            <tr>
+              <td data-label="Capability" class="lead">Set billable</td>
+              <td data-label="Designer desktop" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Designer mobile" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Patina Field" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Admin portal" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Client portal" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Footnote" class="src">no control anywhere &middot; default 00177:22</td>
+            </tr>
+            <tr>
+              <td data-label="Capability" class="lead">Set what the work was</td>
+              <td data-label="Designer desktop" class="mark"><span class="m m-half" role="img" aria-label="partial"></span></td>
+              <td data-label="Designer mobile" class="mark"><span class="m m-half" role="img" aria-label="partial"></span><span class="mq">derived, current-state &sect;2</span></td>
+              <td data-label="Patina Field" class="mark"><span class="m m-none" role="img" aria-label="absent"></span><span class="mq">hardcoded</span></td>
+              <td data-label="Admin portal" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Client portal" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Footnote" class="src">log-strip.tsx:36 &middot; FieldVisitCloseRecord.swift:137,149</td>
+            </tr>
+            <tr>
+              <td data-label="Capability" class="lead">Adjust the duration before it is money</td>
+              <td data-label="Designer desktop" class="mark"><span class="m m-full" role="img" aria-label="present"></span></td>
+              <td data-label="Designer mobile" class="mark"><span class="m m-half" role="img" aria-label="partial"></span><span class="mq">derived, current-state &sect;2</span></td>
+              <td data-label="Patina Field" class="mark"><span class="m m-none" role="img" aria-label="absent"></span><span class="mq">wall clock</span></td>
+              <td data-label="Admin portal" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Client portal" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Footnote" class="src">VisitReview.swift:52-83 &middot; V4VisitReviewScreen.swift:286-316</td>
+            </tr>
+            <tr>
+              <td data-label="Capability" class="lead">See my hours</td>
+              <td data-label="Designer desktop" class="mark"><span class="m m-full" role="img" aria-label="present"></span></td>
+              <td data-label="Designer mobile" class="mark"><span class="m m-half" role="img" aria-label="partial"></span><span class="mq">derived, current-state &sect;2</span></td>
+              <td data-label="Patina Field" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Admin portal" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Client portal" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Footnote" class="src">hours-ledger.tsx:104-123 &middot; WorkDashboardScreen.swift:349-390</td>
+            </tr>
+            <tr>
+              <td data-label="Capability" class="lead">See a member&rsquo;s hours</td>
+              <td data-label="Designer desktop" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Designer mobile" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Patina Field" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Admin portal" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Client portal" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Footnote" class="src">hard filter <code>.eq('user_id', me)</code> hours-ledger.tsx:104-123</td>
+            </tr>
+            <tr>
+              <td data-label="Capability" class="lead">See a project&rsquo;s hours</td>
+              <td data-label="Designer desktop" class="mark"><span class="m m-half" role="img" aria-label="partial"></span><span class="mq">wrong answer</span></td>
+              <td data-label="Designer mobile" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Patina Field" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Admin portal" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Client portal" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Footnote" class="src">project ANDed with self: hours-ledger.tsx:95-97, 104-123</td>
+            </tr>
+            <tr>
+              <td data-label="Capability" class="lead">See the studio&rsquo;s hours</td>
+              <td data-label="Designer desktop" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Designer mobile" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Patina Field" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Admin portal" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Client portal" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Footnote" class="src">a correct, RLS-clean rollup with zero callers: use-time-tracking.ts:689</td>
+            </tr>
+            <tr>
+              <td data-label="Capability" class="lead">Fix a member&rsquo;s wrong entry</td>
+              <td data-label="Designer desktop" class="mark"><span class="m m-half" role="img" aria-label="partial"></span><span class="mq">the project&rsquo;s own designer only</span></td>
+              <td data-label="Designer mobile" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Patina Field" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Admin portal" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Client portal" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Footnote" class="src">every <em>own-row</em> write policy is <code>user_id = auth.uid()</code> (head: 00484:803,785 &middot; 00316:248,257); the exception is 00177:136 FOR ALL, which already lets the project&rsquo;s own <code>designer_id</code> adjust anyone&rsquo;s row &mdash; the gap is an admin who is not the project&rsquo;s designer, not all admins</td>
+            </tr>
+            <tr>
+              <td data-label="Capability" class="lead">Export a file of hours</td>
+              <td data-label="Designer desktop" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Designer mobile" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Patina Field" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Admin portal" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Client portal" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Footnote" class="src">&ldquo;Export week&rdquo; opens the invoice composer &middot; CSV-header precedent qbo-export/index.ts:131-132</td>
+            </tr>
+            <tr>
+              <td data-label="Capability" class="lead">Bill unbilled hours to an invoice</td>
+              <td data-label="Designer desktop" class="mark"><span class="m m-full" role="img" aria-label="present"></span><span class="mq">not atomic</span></td>
+              <td data-label="Designer mobile" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Patina Field" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Admin portal" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Client portal" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Footnote" class="src">hours-ledger.tsx:380-400 &middot; rollback detaches the whole invoice: use-time-tracking.ts:604-621</td>
+            </tr>
+            <tr>
+              <td data-label="Capability" class="lead">See the hours on an invoice</td>
+              <td data-label="Designer desktop" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Designer mobile" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Patina Field" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Admin portal" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Client portal" class="mark"><span class="m m-half" role="img" aria-label="partial"></span><span class="mq">one line</span></td>
+              <td data-label="Footnote" class="src">qty 1, names no person and no day: invoice-composer.ts:150-161 &middot; time-billing.ts:43-54</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="ann">
+        <div><span class="k">The one thing to protect</span><p class="t-body-sm ink-muted">The in-document path, unanimous across five seats: the entry is written before the strip appears and persists if ignored.</p></div>
+        <div><span class="k">The empty column</span><p class="t-body-sm ink-muted">No hours capability in the admin portal, and none proposed; the client portal keeps one read-only, unbroken-down invoice line.</p></div>
+        <div><span class="k">The read already exists</span><p class="t-body-sm ink-muted"><code>time_entries_studio_read</code> grants every active non-guest co-member SELECT on every studio entry (00316:237-240, active/role test in <code>is_studio_comember</code> at 00556:51) &mdash; only the UI hides it.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 04 — FRICTION ============ -->
+<section class="slide" id="sheet-4" aria-labelledby="h4">
+  <div class="inner">
+    <div class="gutter">
+      <p class="t-head sheet-no">Sheet 04 / 16</p>
+      <div class="rule"></div>
+      <p class="t-head chapter">Friction</p>
+    </div>
+    <div class="main">
+      <h2 class="t-d2" id="h4">Interactions per capture path. A <code>&lt;select&gt;</code> counts as two.</h2>
+      <div class="scroller">
+        <table class="sheet wide" aria-labelledby="h4">
+          <thead><tr><th scope="col">Path</th><th scope="col">Action</th><th scope="col" class="num">Today</th><th scope="col" class="num">v1</th><th scope="col">Where the count comes from</th></tr></thead>
+          <tbody>
+            <tr>
+              <td data-label="Path" class="lead">Web desk &mdash; in a document</td>
+              <td data-label="Action">log the time just spent</td>
+              <td data-label="Today" class="num holds">0</td>
+              <td data-label="v1" class="num holds">0</td>
+              <td data-label="Source">Unanimous, five seats. Protect it; spend the friction budget off-document</td>
+            </tr>
+            <tr>
+              <td data-label="Path" class="lead">Web desk &mdash; adjust before it is money</td>
+              <td data-label="Action">nudge minutes, set activity</td>
+              <td data-label="Today" class="num">4</td>
+              <td data-label="v1" class="num">4</td>
+              <td data-label="Source">4 (CR &sect;3, minutes + activity + Log); FS &sect;3&rsquo;s 3 omits the minutes nudge. v1 adds a static rate and amount readout, no tap</td>
+            </tr>
+            <tr>
+              <td data-label="Path" class="lead">Web desk &mdash; nothing in hand</td>
+              <td data-label="Action">log 45 min of call time</td>
+              <td data-label="Today" class="num">8</td>
+              <td data-label="v1" class="num">5</td>
+              <td data-label="Source">8 convergent across CR &sect;3 / WEB &sect;3 / FS &sect;3. v1 is 5, not 3: the NL parser is a later S</td>
+            </tr>
+            <tr>
+              <td data-label="Path" class="lead">Web desk &mdash; yesterday&rsquo;s hour</td>
+              <td data-label="Action">backdate</td>
+              <td data-label="Today" class="num wrap defect">impossible</td>
+              <td data-label="v1" class="num">+1 field</td>
+              <td data-label="Source">FS-11, WEB-2 only. The cheapest high-value item in the program</td>
+            </tr>
+            <tr>
+              <td data-label="Path" class="lead">Web mobile &mdash; document held</td>
+              <td data-label="Action">manual entry</td>
+              <td data-label="Today" class="num">&ge;6</td>
+              <td data-label="v1" class="num">3</td>
+              <td data-label="Source">Today &ge;6 from CR &sect;3 &mdash; the clock doorway appears only after a minute accrues, and leaving fires a second offer to dismiss; v1 = 3 per synthesis &sect;3&rsquo;s reconciliation (CR proposed 2&ndash;4)</td>
+            </tr>
+            <tr>
+              <td data-label="Path" class="lead">Web mobile &mdash; nothing held</td>
+              <td data-label="Action">manual entry</td>
+              <td data-label="Today" class="num wrap defect">accepts input, saves nothing</td>
+              <td data-label="v1" class="num">3</td>
+              <td data-label="Source">CR-1, FS-24, WEB-3. The requirement failing on the surface she actually holds</td>
+            </tr>
+            <tr>
+              <td data-label="Path" class="lead">Field &mdash; visit just closed</td>
+              <td data-label="Action">log the visit</td>
+              <td data-label="Today" class="num holds">1</td>
+              <td data-label="v1" class="num holds">1</td>
+              <td data-label="Source">The fastest path in the product. Extend with a stepper and a billable toggle, never replace</td>
+            </tr>
+            <tr>
+              <td data-label="Path" class="lead">Field &mdash; anything else</td>
+              <td data-label="Action">a drive, a call, admin</td>
+              <td data-label="Today" class="num wrap defect">impossible</td>
+              <td data-label="v1" class="num">3</td>
+              <td data-label="Source">MOB &sect;3 adopted; VET / LEAH say 2 from the companion &mdash; the same sheet, a different door</td>
+            </tr>
+            <tr>
+              <td data-label="Path" class="lead">Field &mdash; companion strip</td>
+              <td data-label="Action">reach the sheet while idle</td>
+              <td data-label="Today" class="num wrap defect">impossible</td>
+              <td data-label="v1" class="num">3</td>
+              <td data-label="Source">MOB-11 binding: the collapsed presentation carries a single optional action (FieldCompanionPresentation.swift:56-64) and that slot is &ldquo;End visit&rdquo;</td>
+            </tr>
+            <tr>
+              <td data-label="Path" class="lead">Widget / App Intent</td>
+              <td data-label="Action">log from the home screen or by voice</td>
+              <td data-label="Today" class="num wrap defect">impossible</td>
+              <td data-label="v1" class="num">not in v1</td>
+              <td data-label="Source">FS-31 blocks the capability, not the count: the drainer runs once per launch and Capture has no background task</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 05 — THE TWO RATE HOLES ============ -->
+<section class="slide" id="sheet-5" aria-labelledby="h5">
+  <div class="inner">
+    <div class="gutter">
+      <p class="t-head sheet-no">Sheet 05 / 16</p>
+      <div class="rule"></div>
+      <p class="t-head chapter">Money</p>
+    </div>
+    <div class="main">
+      <h2 class="t-d2" id="h5">Four money holes &mdash; two are rate holes, both confirmed against the head classifier body.</h2>
+      <div class="scroller">
+        <table class="sheet wide" aria-labelledby="h5">
+          <thead><tr><th scope="col" class="id">Hole</th><th scope="col">What it is</th><th scope="col">Who is exposed</th><th scope="col">Line</th><th scope="col" class="num">Fix</th><th scope="col">Provenance</th></tr></thead>
+          <tbody>
+            <tr>
+              <td data-label="Hole" class="id">1</td>
+              <td data-label="What it is" class="lead">A non-services project&rsquo;s hour lands <code>authorized</code> with <code>rated_amount_cents</code> NULL and then prices at $0, because no path sends a rate and <code>profiles.default_hourly_rate_cents</code> has no writer anywhere (00578:2648-2653).</td>
+              <td data-label="Who is exposed">Every project that is not <code>design_services</code> / <code>design_build</code> &mdash; the commonest kind. A <code>member</code> may also write their own rate, amount and billing state.</td>
+              <td data-label="Line" class="src">guard early-exit 00412:2356-2366 &middot; head branch 00578:2648-2653 &middot; no rate sent: use-time-tracking.ts:286-299 &middot; dead leg 00412:2676-2682</td>
+              <td data-label="Fix" class="num">W1<br><span class="t-head ink-faint">HT-1, HT-2</span></td>
+              <td data-label="Provenance" class="src">Re-verified 00578:2599-2820; not refuted, worse on inspection</td>
+            </tr>
+            <tr>
+              <td data-label="Hole" class="id">2</td>
+              <td data-label="What it is" class="lead">A new hire&rsquo;s hours are permanently stranded money: no exact-one role match nulls the authority ids, the rate and the amount, the promotion loop requires both NOT NULL, and the shipped default label &ldquo;Principal designer&rdquo; can never normalize-match <code>lead_designer</code> (00578:2765-2771).</td>
+              <td data-label="Who is exposed">The studio&rsquo;s first hire, on every services project carrying a default two-role rate card. Also: anyone holding two roster roles, and any hour before an authority covers <code>started_at</code>.</td>
+              <td data-label="Line" class="src">NULL landing 00578:2765-2771 &middot; promotion filter 00577:2493-2496 &middot; role match 00578:2709-2745 (was 00412:2510-2546) &middot; default label service-agreement-drafting-room.tsx:238 &middot; role CHECK 00084:164-165</td>
+              <td data-label="Fix" class="num">W1 + backfill<br>cause removed W7<br><span class="t-head ink-faint">HT-3, HT-4</span></td>
+              <td data-label="Provenance" class="src">Re-verified 00578:2599-2820; not refuted, worse on inspection</td>
+            </tr>
+            <tr>
+              <td data-label="Hole" class="id">3</td>
+              <td data-label="What it is">The invoice claim is not atomic, and its rollback un-bills the whole invoice: a partial-claim conflict detaches every entry the invoice already carried.</td>
+              <td data-label="Who is exposed">Any studio drawing a second invoice against the same project</td>
+              <td data-label="Line" class="src">use-time-tracking.ts:604-621</td>
+              <td data-label="Fix" class="num">W0<br><span class="t-head ink-faint">HT-5</span></td>
+              <td data-label="Provenance" class="src">Verified in source during synthesis (use-time-tracking.ts:604-621)</td>
+            </tr>
+            <tr>
+              <td data-label="Hole" class="id">4</td>
+              <td data-label="What it is">The studio&rsquo;s unbilled balance silently understates: the view is declared <code>security_invoker = true</code>, so the caller&rsquo;s own <code>profiles</code> RLS applies to its join, dropping any entry logged by a roster vendor or bookkeeper the caller cannot see under that RLS &mdash; and the rate printed beside the amount did not price the line.</td>
+              <td data-label="Who is exposed">Any studio using roster vendors or an outside bookkeeper</td>
+              <td data-label="Line" class="src">security_invoker 00412:2672 &middot; INNER JOIN 00412:2683-2685 &middot; documented hazard 00555:3024-3026 &middot; rate/amount split 00412:2674-2681</td>
+              <td data-label="Fix" class="num">W0<br><span class="t-head ink-faint">HT-6</span></td>
+              <td data-label="Provenance" class="src">view + consumer verified (invoice-composer.tsx:611-616)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 06 — THE FOUR VIEWS + PERMISSION ============ -->
+<section class="slide" id="sheet-6" aria-labelledby="h6">
+  <div class="inner">
+    <div class="gutter">
+      <p class="t-head sheet-no">Sheet 06 / 16</p>
+      <div class="rule"></div>
+      <p class="t-head chapter">The four views</p>
+    </div>
+    <div class="main">
+      <h2 class="t-d2" id="h6">One sheet, one admin-gated scope lens. No page, no tab bar, no second surface.</h2>
+      <div class="scroller">
+        <table class="sheet wide" aria-labelledby="h6">
+          <thead><tr><th scope="col">Scope</th><th scope="col">The door</th><th scope="col">Who opens it</th><th scope="col">What changes</th><th scope="col">Totals</th><th scope="col">Never</th></tr></thead>
+          <tbody>
+            <tr>
+              <td data-label="Scope" class="lead">My hours</td>
+              <td data-label="Door">Default scope; lens absent for non-admins. <code>/desk?book=hours</code>, <code>g h</code>, &#8984;K</td>
+              <td data-label="Who">Every active member, own rows</td>
+              <td data-label="What changes">Adds rate + <code>rate_source</code> and the billing state</td>
+              <td data-label="Totals">Today, week, billable % in minutes</td>
+              <td data-label="Never">Not a timesheet to submit. No streak, target or utilisation score</td>
+            </tr>
+            <tr>
+              <td data-label="Scope" class="lead">A member&rsquo;s hours</td>
+              <td data-label="Door">Entered from the person in the People Room &mdash; not a staff picker inside a money ledger</td>
+              <td data-label="Who"><code>owner</code> / <code>admin</code>, asserted by <code>is_org_admin_or_owner</code></td>
+              <td data-label="What changes">The member&rsquo;s name as the leftmost fact</td>
+              <td data-label="Totals">Their week, billable split, unbilled</td>
+              <td data-label="Never">Aggregate by default; free-text notes only behind an explicit detail act. No leaderboard</td>
+            </tr>
+            <tr>
+              <td data-label="Scope" class="lead">A project&rsquo;s hours</td>
+              <td data-label="Door">The <code>?projectId=</code> lens that already exists &mdash; with the <code>user_id</code> AND removed</td>
+              <td data-label="Who">Rostered project members or studio co-members; admins regardless</td>
+              <td data-label="What changes">Name, plus the shipped role&rarr;rate authority band</td>
+              <td data-label="Totals">Project total, billable %, unbilled with &ldquo;Bill it&rdquo;; the ceiling as a sentence</td>
+              <td data-label="Never">No burn-down, no progress bar, no red/green. No hours-vs-estimate until the two estimate columns reconcile</td>
+            </tr>
+            <tr>
+              <td data-label="Scope" class="lead">The studio&rsquo;s hours</td>
+              <td data-label="Door">Terminal lens position; the CSV sits beside it</td>
+              <td data-label="Who"><code>owner</code> / <code>admin</code> only</td>
+              <td data-label="What changes">Name and project; internal rows in an explicit &ldquo;&mdash; internal &mdash;&rdquo; group</td>
+              <td data-label="Totals">Hours, billable minutes, and billable amount in dollars</td>
+              <td data-label="Never">Not a dashboard: no tiles, sparkline, bar chart, badge or KPI row</td>
+            </tr>
+            <tr>
+              <td data-label="Scope" class="lead">Field &mdash; my hours</td>
+              <td data-label="Door">7th Browse tile, plain week list</td>
+              <td data-label="Who">The signed-in field worker, own scope only</td>
+              <td data-label="What changes">Day, project, minutes, activity, billing state as plain text</td>
+              <td data-label="Totals">Week total</td>
+              <td data-label="Never">No member, project or studio scope on a camera-first one-handed screen</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <hr class="rule-strong">
+      <h3 class="t-d3" id="h6b">Permission, by <code>organization_members.role</code> &mdash; the column is <code>role</code>, of type <code>member_role</code> (00021:136, 00021:22).</h3>
+      <div class="scroller">
+        <table class="sheet wide" aria-labelledby="h6b">
+          <thead><tr><th scope="col">Role</th><th scope="col" class="mark">My hours</th><th scope="col" class="mark">A member&rsquo;s</th><th scope="col" class="mark">A project&rsquo;s</th><th scope="col" class="mark">The studio&rsquo;s</th><th scope="col" class="mark">Adjust another&rsquo;s</th><th scope="col" class="mark">CSV</th><th scope="col">Gate</th></tr></thead>
+          <tbody>
+            <tr>
+              <td data-label="Role" class="lead"><code>owner</code></td>
+              <td data-label="My hours" class="mark"><span class="m m-full" role="img" aria-label="present"></span></td>
+              <td data-label="A member's" class="mark"><span class="m m-full" role="img" aria-label="present"></span></td>
+              <td data-label="A project's" class="mark"><span class="m m-full" role="img" aria-label="present"></span></td>
+              <td data-label="The studio's" class="mark"><span class="m m-full" role="img" aria-label="present"></span></td>
+              <td data-label="Adjust another's" class="mark"><span class="m m-full" role="img" aria-label="present"></span></td>
+              <td data-label="CSV" class="mark"><span class="m m-full" role="img" aria-label="present"></span></td>
+              <td data-label="Gate" class="src"><code>is_org_admin_or_owner</code> (00484:604-623)</td>
+            </tr>
+            <tr>
+              <td data-label="Role" class="lead"><code>admin</code></td>
+              <td data-label="My hours" class="mark"><span class="m m-full" role="img" aria-label="present"></span></td>
+              <td data-label="A member's" class="mark"><span class="m m-full" role="img" aria-label="present"></span></td>
+              <td data-label="A project's" class="mark"><span class="m m-full" role="img" aria-label="present"></span></td>
+              <td data-label="The studio's" class="mark"><span class="m m-full" role="img" aria-label="present"></span></td>
+              <td data-label="Adjust another's" class="mark"><span class="m m-full" role="img" aria-label="present"></span></td>
+              <td data-label="CSV" class="mark"><span class="m m-full" role="img" aria-label="present"></span></td>
+              <td data-label="Gate" class="src">same; never <code>user_is_org_member</code>, the one un-hardened helper (00021:484-517)</td>
+            </tr>
+            <tr>
+              <td data-label="Role" class="lead"><code>member</code></td>
+              <td data-label="My hours" class="mark"><span class="m m-full" role="img" aria-label="present"></span></td>
+              <td data-label="A member's" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="A project's" class="mark"><span class="m m-full" role="img" aria-label="present"></span><span class="mq">co-member</span></td>
+              <td data-label="The studio's" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Adjust another's" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="CSV" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Gate" class="src"><code>time_entries_studio_read</code> (00316:237-240) grants any studio co-member; <code>is_project_team_member</code> (00484:626-644) also covers a rostered non-co-member</td>
+            </tr>
+            <tr>
+              <td data-label="Role" class="lead"><code>guest</code></td>
+              <td data-label="My hours" class="mark"><span class="m m-half" role="img" aria-label="partial"></span><span class="mq">rostered</span></td>
+              <td data-label="A member's" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="A project's" class="mark"><span class="m m-half" role="img" aria-label="partial"></span><span class="mq">rostered</span></td>
+              <td data-label="The studio's" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Adjust another's" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="CSV" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="Gate" class="src">excluded from <code>time_entries_studio_read</code> (00316:237-240, active/role test in <code>is_studio_comember</code> at 00556:51); but <code>is_project_team_member</code> (00484:626-644) has no role filter and grants a rostered guest project-level read</td>
+            </tr>
+            <tr class="strong">
+              <td data-label="Role" class="lead">What the database already permits a <code>member</code></td>
+              <td data-label="My hours" class="mark"><span class="m m-full" role="img" aria-label="present"></span></td>
+              <td data-label="A member's" class="mark"><span class="m m-full" role="img" aria-label="present"></span></td>
+              <td data-label="A project's" class="mark"><span class="m m-full" role="img" aria-label="present"></span></td>
+              <td data-label="The studio's" class="mark"><span class="m m-full" role="img" aria-label="present"></span></td>
+              <td data-label="Adjust another's" class="mark"><span class="m m-none" role="img" aria-label="absent"></span></td>
+              <td data-label="CSV" class="mark">&mdash;</td>
+              <td data-label="Gate" class="src">SELECT on every studio entry, notes included, already granted. Zero new SELECT policy needed either way &mdash; <strong>HT-10 decides whether to narrow it</strong></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="ann">
+        <div><span class="k">Open question</span><p class="t-body-sm ink-muted">No source names how a <code>project_time_entries</code> policy derives the organization id <code>is_org_admin_or_owner</code> takes as its first argument (00484:604-609), and both candidate keys are ruled out (architecture.md:22, :289) &mdash; HT-10.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 07 — RATE TRUTH ============ -->
+<section class="slide" id="sheet-7" aria-labelledby="h7">
+  <div class="inner">
+    <div class="gutter">
+      <p class="t-head sheet-no">Sheet 07 / 16</p>
+      <div class="rule"></div>
+      <p class="t-head chapter">Rate truth</p>
+    </div>
+    <div class="main">
+      <h2 class="t-d2" id="h7">The server owns the rate on every branch. Nobody edits an entry&rsquo;s rate.</h2>
+      <div class="scroller">
+        <table class="sheet wide" aria-labelledby="h7">
+          <thead><tr><th scope="col">Project kind</th><th scope="col">Resolution order today</th><th scope="col">Proposed order</th><th scope="col">Who edits, where</th></tr></thead>
+          <tbody>
+            <tr>
+              <td data-label="Project kind" class="lead"><code>design_services</code>, <code>design_build</code></td>
+              <td data-label="Today">Authority rate via exact-one normalize-match of a free-text role label against the roster enum &rarr; else <span class="defect">NULL + <code>pending_authorization</code>, stranded for ever</span></td>
+              <td data-label="Proposed">Authority rate bound to a <strong>person or roster role</strong> &rarr; <code>studio_member_rates</code> (visible cost, still <code>pending_authorization</code>) &rarr; <code>none</code></td>
+              <td data-label="Who edits">The rate card inside the signed agreement &mdash; contractual, immutable per version, unchanged (part-editor.tsx:423)</td>
+            </tr>
+            <tr>
+              <td data-label="Project kind" class="lead">Every other kind &mdash; the commonest</td>
+              <td data-label="Today">The browser&rsquo;s <code>hourly_rate_cents</code>, which no client sends &rarr; <code>change_order_terms</code>, authored only through the legacy proposal scope builder and copied in by the 00066 conversion (00066:525-535) &rarr; <code>profiles.default_hourly_rate_cents</code>, <span class="defect">no writer anywhere</span> &rarr; <span class="defect">0</span></td>
+              <td data-label="Proposed">Server-resolved on every path: <code>studio_member_rates</code> &rarr; <code>none</code>. Both dead legs cut, not preserved</td>
+              <td data-label="Who edits"><code>studio_member_rates</code>, in the People Room member profile. Blur-save, <code>owner</code> / <code>admin</code> only</td>
+            </tr>
+            <tr>
+              <td data-label="Project kind" class="lead">Internal / no project</td>
+              <td data-label="Today">Does not exist &mdash; <code>project_id</code> is NOT NULL</td>
+              <td data-label="Proposed"><code>nonbillable</code> by short-circuit. No rate, no amount</td>
+              <td data-label="Who edits">&mdash;</td>
+            </tr>
+            <tr>
+              <td data-label="Project kind" class="lead">Every kind</td>
+              <td data-label="Today"><code>hourly_rate_cents</code> is client-writable on non-services rows; <code>rate_source</code> does not exist</td>
+              <td data-label="Proposed">One SECURITY DEFINER resolver called by the classifier on every branch; <code>rate_source</code> CHECK <code>('authority','studio_member','none')</code> printed in the ledger</td>
+              <td data-label="Who edits"><strong>Nobody</strong> edits an entry&rsquo;s rate. The guard&rsquo;s column list gains <code>rate_source</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="ann">
+        <div><span class="k">History</span><p class="t-body-sm ink-muted">Authority rates are already immutable and versioned; <code>studio_member_rates</code> is append-only with <code>effective_from</code> / <code>effective_to</code>, and the resolver takes the row covering the entry&rsquo;s <code>started_at</code>.</p></div>
+        <div><span class="k">Backfill is mandatory</span><p class="t-body-sm ink-muted">Stranded rows are never promoted by a later agreement; W1 ships a one-off re-rate plus a pre-flight count of rows whose rate would change.</p></div>
+        <div><span class="k">Blast radius</span><p class="t-body-sm ink-muted">The classifier is 222 lines (00578:2599-2820), 201 between <code>BEGIN</code> and <code>END</code>, holding ceiling accrual, retainer gating, a project-level <code>FOR UPDATE</code> and three immutability raises, redefined twice since 00412 &mdash; gated by <code>run-sql-tests.sh -d supabase/tests/commercial</code>, not a type-check.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 08 — MONEY HAND-OFF ============ -->
+<section class="slide" id="sheet-8" aria-labelledby="h8">
+  <div class="inner">
+    <div class="gutter">
+      <p class="t-head sheet-no">Sheet 08 / 16</p>
+      <div class="rule"></div>
+      <p class="t-head chapter">The hand-off</p>
+    </div>
+    <div class="main">
+      <h2 class="t-d2" id="h8">Unbilled to invoice. The lock already exists; the file does not.</h2>
+      <div class="scroller">
+        <table class="sheet wide" aria-labelledby="h8">
+          <thead><tr><th scope="col">Question</th><th scope="col">Verdict</th><th scope="col">Evidence</th><th scope="col">Seats</th></tr></thead>
+          <tbody>
+            <tr>
+              <td data-label="Question" class="lead">Unbilled &rarr; invoice</td>
+              <td data-label="Verdict">Keep the pull-through. Replace the client-side claim with <code>claim_time_entries(p_invoice_id, p_entry_ids uuid[])</code> in W0 &mdash; today&rsquo;s compensating detach is a live money bug</td>
+              <td data-label="Evidence" class="src">use-time-tracking.ts:604-621</td>
+              <td data-label="Seats" class="num">FS, unopposed</td>
+            </tr>
+            <tr>
+              <td data-label="Question" class="lead">Approval / submit / lock-week</td>
+              <td data-label="Verdict"><strong>Not in v1 &mdash; unanimous.</strong> <code>guard_invoiced_time_entry</code> already forbids DELETE and freezes every priced column once <code>invoice_id</code> is set: that is the lock. A second state machine gives the bookkeeper two locks</td>
+              <td data-label="Evidence" class="src">00177:51-80</td>
+              <td data-label="Seats" class="num wrap">6 seats + the draft</td>
+            </tr>
+            <tr>
+              <td data-label="Question" class="lead">What ships instead</td>
+              <td data-label="Verdict">One write widening: an <code>owner</code> / <code>admin</code> UPDATE + DELETE policy via <code>is_org_admin_or_owner</code>, plus <code>updated_by</code> and one audit row on any adjust or delete. An RLS policy, not a DEFINER RPC</td>
+              <td data-label="Evidence" class="src">audit_logs 00021:226-241</td>
+              <td data-label="Seats" class="num">FS, VET, OPS, BIL</td>
+            </tr>
+            <tr>
+              <td data-label="Question" class="lead">The compensating control</td>
+              <td data-label="Verdict">The member scope lens <em>is</em> the approval step &mdash; she looks at a hire&rsquo;s week before she bills it. It ships <em>with</em>, never after, any widening of who can bill whom</td>
+              <td data-label="Evidence" class="src">LEAH-13</td>
+              <td data-label="Seats" class="num">LEAH, binding</td>
+            </tr>
+            <tr>
+              <td data-label="Question" class="lead">What the client sees</td>
+              <td data-label="Verdict">One priced line stays, plus a dated sub-table beneath the folio&rsquo;s time line (date &middot; hours &middot; rate). The composer names the person on every row. The homeowner gets no staffing detail</td>
+              <td data-label="Evidence" class="src">buildTimeLineDraft invoice-composer.ts:150-161</td>
+              <td data-label="Seats" class="num">CR vs LEAH + REP &mdash; split by surface</td>
+            </tr>
+            <tr>
+              <td data-label="Question" class="lead">Export set</td>
+              <td data-label="Verdict">(1) per-entry CSV from the fact view: <code>Member, Date, Project, Client, Activity, Billable, Duration (min), Rate, Rate Source, Amount, Billing State, Invoiced, Invoice #</code>. (2) per-client statement. (3) <strong>No QuickBooks integration</strong> &mdash; the bookkeeper wants a file on Friday</td>
+              <td data-label="Evidence" class="src">CSV-header precedent qbo-export/index.ts:131-132 &middot; promise VISION.md:54</td>
+              <td data-label="Seats" class="num">5 for, 0 against</td>
+            </tr>
+            <tr>
+              <td data-label="Question" class="lead">Sequencing</td>
+              <td data-label="Verdict">Pull the CSV forward &mdash; it needs only the fact view. But it must not ship on the drifted view, which is why the view repair moves to W0</td>
+              <td data-label="Evidence" class="src">view repair 00412:2683-2685</td>
+              <td data-label="Seats" class="num">VET forward, REP gate, FS W0</td>
+            </tr>
+            <tr>
+              <td data-label="Question" class="lead">Naming</td>
+              <td data-label="Verdict">&ldquo;Export week &rarr; Accounts&rdquo; opens the invoice composer. Rename the ledger&rsquo;s act so <strong>Export means a file</strong></td>
+              <td data-label="Evidence" class="src">hours-ledger.tsx:380-400</td>
+              <td data-label="Seats" class="num">CR-24</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 09 — CAPTURE, PROPOSED ============ -->
+<section class="slide" id="sheet-9" aria-labelledby="h9">
+  <div class="inner">
+    <div class="gutter">
+      <p class="t-head sheet-no">Sheet 09 / 16</p>
+      <div class="rule"></div>
+      <p class="t-head chapter">Capture, proposed</p>
+    </div>
+    <div class="main">
+      <h2 class="t-d2" id="h9">One new door per surface. No new route, no second hours surface.</h2>
+      <div class="scroller">
+        <table class="sheet wide" aria-labelledby="h9">
+          <thead><tr><th scope="col">Path</th><th scope="col">Surface</th><th scope="col" class="num">Taps</th><th scope="col">Offline</th><th scope="col" class="num">Wave</th><th scope="col">File</th></tr></thead>
+          <tbody>
+            <tr>
+              <td data-label="Path" class="lead">The log strip, untouched &mdash; plus a rate readout and a billable pill</td>
+              <td data-label="Surface">Web, in a document</td>
+              <td data-label="Taps" class="num">0</td>
+              <td data-label="Offline">already written server-side</td>
+              <td data-label="Wave" class="num">W3</td>
+              <td data-label="File" class="src">log-strip.tsx</td>
+            </tr>
+            <tr>
+              <td data-label="Path" class="lead">A &#8984;K &ldquo;Log time&rdquo; verb: project, duration, date, activity, Enter</td>
+              <td data-label="Surface">Web desk, nothing in hand</td>
+              <td data-label="Taps" class="num">5</td>
+              <td data-label="Offline">online only</td>
+              <td data-label="Wave" class="num">W3</td>
+              <td data-label="File" class="src">command-bar.tsx (1175 lines)</td>
+            </tr>
+            <tr>
+              <td data-label="Path" class="lead">A date field on the ledger add row and the &#8984;K form, defaulting to the paged week</td>
+              <td data-label="Surface">Web desk, the ledger</td>
+              <td data-label="Taps" class="num">+1 field</td>
+              <td data-label="Offline">online only</td>
+              <td data-label="Wave" class="num">W3</td>
+              <td data-label="File" class="src">hours-ledger.tsx:545-595</td>
+            </tr>
+            <tr>
+              <td data-label="Path" class="lead">A billable pill at every web capture surface, seeded from the resolved answer</td>
+              <td data-label="Surface">Web, all four</td>
+              <td data-label="Taps" class="num">0 required</td>
+              <td data-label="Offline">online only</td>
+              <td data-label="Wave" class="num">W3</td>
+              <td data-label="File" class="src">log-strip.tsx &middot; hours-ledger.tsx:545-595 &middot; mobile-sheets.tsx</td>
+            </tr>
+            <tr>
+              <td data-label="Path" class="lead">A project picker on the mobile sheet &mdash; or disabled with an inline band. Never a silent success</td>
+              <td data-label="Surface">Web mobile, nothing held</td>
+              <td data-label="Taps" class="num">3</td>
+              <td data-label="Offline">online only</td>
+              <td data-label="Wave" class="num">W3</td>
+              <td data-label="File" class="src">mobile-sheets.tsx:1145-1231</td>
+            </tr>
+            <tr>
+              <td data-label="Path" class="lead">A stepper on the visit-close offer, defaulted to the <em>active</em> duration, plus a billable toggle</td>
+              <td data-label="Surface">Patina Field, visit just closed</td>
+              <td data-label="Taps" class="num">1</td>
+              <td data-label="Offline">outbox</td>
+              <td data-label="Wave" class="num">W6</td>
+              <td data-label="File" class="src">V4VisitReviewScreen.swift:286-371 &middot; VisitReview.swift:52-83</td>
+            </tr>
+            <tr>
+              <td data-label="Path" class="lead">A <code>LogTimeSheet</code> behind a 7th Browse tile: project, duration, activity, billable, date</td>
+              <td data-label="Surface">Patina Field, no visit</td>
+              <td data-label="Taps" class="num">3</td>
+              <td data-label="Offline">outbox &mdash; <code>TimeEntryOutboxRecord</code></td>
+              <td data-label="Wave" class="num">W6</td>
+              <td data-label="File" class="src">WorkDashboardScreen.swift:349-390 &middot; new LogTimeSheet.swift</td>
+            </tr>
+            <tr>
+              <td data-label="Path" class="lead">A third companion action, <code>logTime</code>, in the <strong>expanded</strong> state only</td>
+              <td data-label="Surface">Patina Field, companion strip</td>
+              <td data-label="Taps" class="num">3</td>
+              <td data-label="Offline">outbox</td>
+              <td data-label="Wave" class="num">W6</td>
+              <td data-label="File" class="src">FieldCompanionPresentation.swift:51-64</td>
+            </tr>
+            <tr>
+              <td data-label="Path" class="lead">&ldquo;My hours this week&rdquo; &mdash; read-only plain text, own scope only</td>
+              <td data-label="Surface">Patina Field, same tile</td>
+              <td data-label="Taps" class="num">&mdash;</td>
+              <td data-label="Offline">&mdash;</td>
+              <td data-label="Wave" class="num">W6</td>
+              <td data-label="File" class="src">WorkDashboardScreen.swift:349-390</td>
+            </tr>
+            <tr>
+              <td data-label="Path" class="lead">A running timer owned by Field</td>
+              <td data-label="Surface">Patina Field</td>
+              <td data-label="Taps" class="num">&mdash;</td>
+              <td data-label="Offline">&mdash;</td>
+              <td data-label="Wave" class="num">not in v1</td>
+              <td data-label="File" class="src">the one-timer index is global; <code>durationMinutes</code> is non-Optional &mdash; HT-7</td>
+            </tr>
+            <tr>
+              <td data-label="Path" class="lead">Home-screen widget</td>
+              <td data-label="Surface">iOS</td>
+              <td data-label="Taps" class="num">&mdash;</td>
+              <td data-label="Offline">&mdash;</td>
+              <td data-label="Wave" class="num">not in v1</td>
+              <td data-label="File" class="src">XL: a new signed appex, no Embed App Extensions phase; <code>capture-gate.sh</code> cannot gate it</td>
+            </tr>
+            <tr>
+              <td data-label="Path" class="lead">App Intent / Siri</td>
+              <td data-label="Surface">iOS</td>
+              <td data-label="Taps" class="num">1 utterance</td>
+              <td data-label="Offline">queued until the app is next opened</td>
+              <td data-label="Wave" class="num">not in v1</td>
+              <td data-label="File" class="src">drainer runs once per launch: RootView.swift:432; no <code>BGTaskScheduler</code> &mdash; HT-28</td>
+            </tr>
+            <tr>
+              <td data-label="Path" class="lead">A Live Activity ticking a lock-screen clock</td>
+              <td data-label="Surface">iOS</td>
+              <td data-label="Taps" class="num">&mdash;</td>
+              <td data-label="Offline">&mdash;</td>
+              <td data-label="Wave" class="num">struck</td>
+              <td data-label="File" class="src">breaches R69&rsquo;s principle &mdash; its stated scope is spine timer + mobile bar only (DECISIONS.md:2561). 3 seats against, 0 for. HT-31</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="t-body-sm ink-muted">&ldquo;Online only&rdquo; &mdash; no wave adds a portal offline write path; the label is read from the plan&rsquo;s absence of one, not a cited line</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 10 — THE WAVE PLAN ============ -->
+<section class="slide" id="sheet-10" aria-labelledby="h10">
+  <div class="inner">
+    <div class="gutter">
+      <p class="t-head sheet-no">Sheet 10 / 16</p>
+      <div class="rule"></div>
+      <p class="t-head chapter">The plan</p>
+    </div>
+    <div class="main">
+      <h2 class="t-d2" id="h10">Eight waves. Every one ships unflagged, on the precedent time tracking set.</h2>
+      <div class="scroller">
+        <table class="sheet widest" aria-labelledby="h10">
+          <thead><tr><th scope="col" class="id">Wave</th><th scope="col">Ships</th><th scope="col" class="num">Effort</th><th scope="col" class="num">Depends on</th><th scope="col">Gate</th><th scope="col" class="num">Migrations</th></tr></thead>
+          <tbody>
+            <tr>
+              <td data-label="Wave" class="id">W0</td>
+              <td data-label="Ships" class="lead">The live money bugs: atomic claim, the unbilled view repaired, the <code>source</code> CHECK widened once, the hook module made canonical, three dated governance entries</td>
+              <td data-label="Effort" class="num">M &middot; 3&ndash;5 d</td>
+              <td data-label="Depends on" class="num">&mdash;</td>
+              <td data-label="Gate" class="src">new time_claim_atomicity_test.sql green; commercial suite green unchanged; <code>admin-portal build</code>; live-mode render still claims</td>
+              <td data-label="Migrations" class="num">head+1&hellip;+3</td>
+            </tr>
+            <tr>
+              <td data-label="Wave" class="id">W1</td>
+              <td data-label="Ships" class="lead">Rate truth: one resolver the classifier calls on every branch, <code>rate_source</code> on the row, <code>studio_member_rates</code> in the People Room, &ldquo;rate pending&rdquo; in place of a blank, a doorway on <code>pending_authorization</code>, and a backfill of stranded rows</td>
+              <td data-label="Effort" class="num">L &middot; 6&ndash;10 d</td>
+              <td data-label="Depends on" class="num">W0</td>
+              <td data-label="Gate" class="src">commercial suite green <em>unchanged</em>; new billing suite green; backfill pre-flight count matches post count</td>
+              <td data-label="Migrations" class="num">head+4&hellip;+9</td>
+            </tr>
+            <tr>
+              <td data-label="Wave" class="id">W2</td>
+              <td data-label="Ships" class="lead">The four views: the scope lens, the project lens fixed, the member scope entered from the People Room, the owner/admin write widening with an audit row, the drip link and the help article made true, the auto-start disclosure and opt-out</td>
+              <td data-label="Effort" class="num">M &middot; 3&ndash;5 d</td>
+              <td data-label="Depends on" class="num">W0 &mdash; <strong>not W1</strong></td>
+              <td data-label="Gate" class="src">Okonkwo project lens shows the house, not the opener; a plain member sees no lens; an admin adjust writes an audit row with both value sets; first hours e2e spec</td>
+              <td data-label="Migrations" class="num">head+10&hellip;+13</td>
+            </tr>
+            <tr>
+              <td data-label="Wave" class="id">W3</td>
+              <td data-label="Ships" class="lead">Capture with nothing in hand: the &#8984;K verb at 5, a date field, a billable pill everywhere, the mobile form that can no longer save nothing, and <code>activity</code> that stops lying</td>
+              <td data-label="Effort" class="num">M &middot; 3&ndash;5 d</td>
+              <td data-label="Depends on" class="num">W0, W1</td>
+              <td data-label="Gate" class="src">a 45-minute call logged in 5 interactions from &#8984;K with no document open; the zero-tap path unregressed</td>
+              <td data-label="Migrations" class="num">head+14&hellip;+15</td>
+            </tr>
+            <tr>
+              <td data-label="Wave" class="id">W4</td>
+              <td data-label="Ships" class="lead">Internal and admin time: a nullable <code>project_id</code>, a trigger-validated <code>studio_id</code>, four new RLS policies, and an &ldquo;&mdash; internal &mdash;&rdquo; group that is never folded into a project total</td>
+              <td data-label="Effort" class="num">L &middot; 6&ndash;10 d</td>
+              <td data-label="Depends on" class="num">W1, W3</td>
+              <td data-label="Gate" class="src">RLS suite asserts the positive, cross-studio-negative and anti-aiming cases before the portal is touched</td>
+              <td data-label="Migrations" class="num">head+16&hellip;+20</td>
+            </tr>
+            <tr>
+              <td data-label="Wave" class="id">W5</td>
+              <td data-label="Ships" class="lead">The bookkeeper&rsquo;s Friday: a per-entry CSV, a composer that names the person on every row, a dated sub-table on the client&rsquo;s folio, a per-client statement, and &ldquo;Export&rdquo; meaning a file</td>
+              <td data-label="Effort" class="num">M &middot; 3&ndash;5 d</td>
+              <td data-label="Depends on" class="num">W1, W2</td>
+              <td data-label="Gate" class="src">a studio-scope CSV opens in a spreadsheet, one row per entry, every row naming a person and a day; amounts sum to the ledger&rsquo;s total</td>
+              <td data-label="Migrations" class="num wrap">none &middot; head+21 reserved</td>
+            </tr>
+            <tr>
+              <td data-label="Wave" class="id">W6</td>
+              <td data-label="Ships" class="lead">Patina Field: a <code>LogTimeSheet</code> with no visit, a stepper on the offer defaulted to active duration, a <code>travel</code> activity, &ldquo;my hours this week&rdquo;, and a sibling outbox drainer</td>
+              <td data-label="Effort" class="num">M &middot; 3&ndash;5 d</td>
+              <td data-label="Depends on" class="num">W0 (HT-33), W1, W3</td>
+              <td data-label="Gate" class="src">physical device, airplane mode: log &rarr; kill &rarr; reconnect &rarr; SELECT the row. SwiftData assertion: <code>didResetIncompatibleStore == false</code></td>
+              <td data-label="Migrations" class="num">head+22&hellip;+23</td>
+            </tr>
+            <tr>
+              <td data-label="Wave" class="id">W7</td>
+              <td data-label="Ships" class="lead">Rate cards bind to a person or a roster role instead of a string; a timer still running after 8 hours writes one quiet Record row; <code>project_phases.estimated_hours</code> is ruled on and executed</td>
+              <td data-label="Effort" class="num">M &middot; 3&ndash;5 d</td>
+              <td data-label="Depends on" class="num">W1</td>
+              <td data-label="Gate" class="src">a default two-role card created by the drafting room prices a new hire instead of stranding every entry</td>
+              <td data-label="Migrations" class="num">head+24&hellip;+26</td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr>
+              <td data-label="Wave" class="id">All</td>
+              <td data-label="Ships">Migration numbers are minted as <code>origin/main</code> head + n after <code>git fetch</code>, never written as a literal. Local head is eleven behind Strata. PostHog events land W1 (<code>time_entry_logged</code>, <code>time_rate_unresolved</code>), W2 (<code>time_scope_viewed</code>, <code>time_entry_adjusted</code>, <code>time_entry_deleted</code>), W3 (<code>time_timer_started</code>/<code>_stopped</code>), W5 (<code>time_export_taken</code>), W6 (<code>time_entry_logged</code>, field surfaces) &mdash; HT-27.</td>
+              <td data-label="Effort" class="num">&mdash;</td>
+              <td data-label="Depends on" class="num">&mdash;</td>
+              <td data-label="Gate" class="src">every render check runs with <code>NEXT_PUBLIC_DESIGNER_PORTAL_DATA_MODE=live</code>; every data claim is a SELECT, never a screenshot</td>
+              <td data-label="Migrations" class="num">head+1&hellip;+26</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 11 — CRITICAL PATH ============ -->
+<section class="slide" id="sheet-11" aria-labelledby="h11">
+  <div class="inner">
+    <div class="gutter">
+      <p class="t-head sheet-no">Sheet 11 / 16</p>
+      <div class="rule"></div>
+      <p class="t-head chapter">Critical path</p>
+    </div>
+    <div class="main">
+      <h2 class="t-d2" id="h11">Two co-critical paths of the same length. W4 and W7 are the only slack.</h2>
+      <div class="counts">
+        <div><span class="fig">30&ndash;50</span><span class="t-head ink-faint">Eng-days, all 8 waves</span></div>
+        <div><span class="fig">15&ndash;25</span><span class="t-head ink-faint">Eng-days, critical path</span></div>
+        <div><span class="fig">18&ndash;28</span><span class="t-head ink-faint">Working days, calendar</span></div>
+        <div><span class="fig">2&ndash;3</span><span class="t-head ink-faint">Concurrent worktrees</span></div>
+      </div>
+      <ul class="verdicts">
+        <li><span class="t-head k">Path A</span><span class="t-body">W0 &rarr; W1 &rarr; W2 &rarr; W5 &mdash; stop the bleeding, make the number true, make it visible four ways, put it in a file.</span></li>
+        <li><span class="t-head k">Path B</span><span class="t-body">W0 &rarr; W1 &rarr; W3 &rarr; W6 &mdash; the same 15&ndash;25 days, running beside it.</span></li>
+        <li><span class="t-head k">The long item</span><span class="t-body">W1&rsquo;s classifier rewrite. Nothing shortens it; the commercial SQL suite is the gate and it is not negotiable.</span></li>
+      </ul>
+      <hr class="rule-strong">
+      <div class="scroller">
+        <table class="sheet wide" aria-labelledby="h11">
+          <thead><tr><th scope="col" class="id">Stage</th><th scope="col">Runs concurrently</th><th scope="col" class="num">Worktrees</th><th scope="col">Shared-state owner</th><th scope="col">Conflict surface</th><th scope="col">Why</th></tr></thead>
+          <tbody>
+            <tr>
+              <td data-label="Stage" class="id">1</td>
+              <td data-label="Runs" class="lead">W0 alone</td>
+              <td data-label="Worktrees" class="num">1</td>
+              <td data-label="Owner">W0 owns <code>supabase db reset</code> and port 3000</td>
+              <td data-label="Conflict">None. W0 must land before anything forks, because it moves the hook module every later wave edits</td>
+              <td data-label="Why">&mdash;</td>
+            </tr>
+            <tr>
+              <td data-label="Stage" class="id">2</td>
+              <td data-label="Runs" class="lead">W1 &parallel; W2</td>
+              <td data-label="Worktrees" class="num">2</td>
+              <td data-label="Owner">W1 owns <code>supabase db reset</code>; W2 runs against its output or a port-isolated stack</td>
+              <td data-label="Conflict">Both touch <code>hours-ledger.tsx</code>. <strong>W2 owns that file</strong>; W1&rsquo;s rate column lands as a follow-commit on the integration branch</td>
+              <td data-label="Why">The plan exists to enable this stage: six of nine seats put rate truth ahead of visibility; the customer puts the member lens first and asked not to have it gated behind the rate rewrite</td>
+            </tr>
+            <tr>
+              <td data-label="Stage" class="id">3</td>
+              <td data-label="Runs" class="lead">W3 &parallel; W5</td>
+              <td data-label="Worktrees" class="num">2</td>
+              <td data-label="Owner">W3 owns <code>supabase db reset</code></td>
+              <td data-label="Conflict">W3 owns the command bar, the log strip, the mobile sheets and the add row; W5 owns the composer, the billing lib and the client portal. No overlap</td>
+              <td data-label="Why">&mdash;</td>
+            </tr>
+            <tr>
+              <td data-label="Stage" class="id">4</td>
+              <td data-label="Runs" class="lead">W4 &parallel; W6 &parallel; W7</td>
+              <td data-label="Worktrees" class="num">3</td>
+              <td data-label="Owner">W4 owns <code>supabase db reset</code>; W6 owns the physical device; W7 owns the edge-function local serve</td>
+              <td data-label="Conflict">W4 is policies; W6 is Swift only; W7 is the agreement part editor plus an edge function. No overlap</td>
+              <td data-label="Why">&mdash;</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 12 — WHAT GETS DELETED ============ -->
+<section class="slide" id="sheet-12" aria-labelledby="h12">
+  <div class="inner">
+    <div class="gutter">
+      <p class="t-head sheet-no">Sheet 12 / 16</p>
+      <div class="rule"></div>
+      <p class="t-head chapter">Deleted</p>
+    </div>
+    <div class="main">
+      <h2 class="t-d2" id="h12">Twenty-three dispositions.</h2>
+      <div class="scroller">
+        <table class="sheet wide" aria-labelledby="h12">
+          <thead><tr><th scope="col" class="id">&#8470;</th><th scope="col">Thing</th><th scope="col">path:line</th><th scope="col" class="num">Wave</th><th scope="col">Gate before deleting</th></tr></thead>
+          <tbody>
+            <tr><td data-label="No" class="id">1</td><td data-label="Thing" class="lead defect">The compensating detach in <code>useClaimTimeEntries</code> &mdash; a live money bug</td><td data-label="Line" class="src">use-time-tracking.ts:616-619</td><td data-label="Wave" class="num">W0</td><td data-label="Gate"><code>claim_time_entries</code> lands first</td></tr>
+            <tr><td data-label="No" class="id">2</td><td data-label="Thing" class="lead defect"><code>project_unbilled_time</code>&rsquo;s INNER JOIN on <code>profiles</code></td><td data-label="Line" class="src">00412:2683-2685 &middot; hazard 00555:3024-3026</td><td data-label="Wave" class="num">W0</td><td data-label="Gate">Keep the view <em>name</em> &mdash; three callers and a SQL test read it</td></tr>
+            <tr><td data-label="No" class="id">3</td><td data-label="Thing" class="lead">The view&rsquo;s <code>change_order_terms &rarr; default_hourly_rate_cents &rarr; 0</code> chain, both legs</td><td data-label="Line" class="src">00412:2676-2682 (includes both rate legs, formerly split with &#8470;9)</td><td data-label="Wave" class="num">W0</td><td data-label="Gate">With &#8470;2, one redefinition</td></tr>
+            <tr><td data-label="No" class="id">4</td><td data-label="Thing" class="lead"><code>useTimeEntries</code></td><td data-label="Line" class="src">use-time-tracking.ts:118</td><td data-label="Wave" class="num">W0</td><td data-label="Gate">0 callers</td></tr>
+            <tr><td data-label="No" class="id">5</td><td data-label="Thing" class="lead"><code>useTimeSummary</code> &mdash; the hook wrapper only</td><td data-label="Line" class="src">use-time-tracking.ts:271</td><td data-label="Wave" class="num">W0</td><td data-label="Gate">Keep <code>fetchTimeSummary</code>: one call site (use-projects.ts:481), itself in a hook with no consumers &mdash; re-derive before keeping</td></tr>
+            <tr><td data-label="No" class="id">6</td><td data-label="Thing" class="lead"><code>useReleaseTimeEntries</code></td><td data-label="Line" class="src">use-time-tracking.ts:634</td><td data-label="Wave" class="num">W0</td><td data-label="Gate">0 callers; nothing ever releases an entry</td></tr>
+            <tr><td data-label="No" class="id">7</td><td data-label="Thing" class="lead">The section comment describing a studio Hours book that never shipped</td><td data-label="Line" class="src">use-time-tracking.ts:653</td><td data-label="Wave" class="num">W0</td><td data-label="Gate">&mdash;</td></tr>
+            <tr><td data-label="No" class="id">8</td><td data-label="Thing" class="lead"><code>change_order_terms-&gt;&gt;'hourly_rate_cents'</code> as a rate leg</td><td data-label="Line" class="src">00412:2677,2680 &middot; legacy writer use-scope-builder.ts:945-950 (writes <code>proposal_change_order_terms</code>, copied to <code>projects.change_order_terms</code> by 00066:525-535)</td><td data-label="Wave" class="num">W1</td><td data-label="Gate">The resolver lands first</td></tr>
+            <tr><td data-label="No" class="id">9</td><td data-label="Thing" class="lead">The <code>profiles.default_hourly_rate_cents</code> fallback (its view legs are removed with &#8470;3, in W0)</td><td data-label="Line" class="src">00412:2678,2681 &middot; column declared 00177:89, view legs 00177:111,118</td><td data-label="Wave" class="num">W1</td><td data-label="Gate">The <em>column</em> drops a cycle after the view rewrite is live</td></tr>
+            <tr><td data-label="No" class="id">10</td><td data-label="Thing" class="lead">The <code>pending_authorization</code> dead-end badge and the silently-null provenance label</td><td data-label="Line" class="src">hours-ledger.tsx:683-700 (pill) &middot; hours-ledger.tsx:184 (state) &middot; authority-hours.ts:74-88</td><td data-label="Wave" class="num">W1</td><td data-label="Gate">Replaced by a doorway and &ldquo;rate pending&rdquo;</td></tr>
+            <tr><td data-label="No" class="id">11</td><td data-label="Thing" class="lead">The live drip link <code>?sheet=hours</code>, which lands on a bare Desk</td><td data-label="Line" class="src">copy-deck.md:357,379,627 vs desk-doorway.tsx:19,41</td><td data-label="Wave" class="num">W2</td><td data-label="Gate">One character</td></tr>
+            <tr><td data-label="No" class="id">12</td><td data-label="Thing" class="lead">The help article&rsquo;s two studio-scope sentences</td><td data-label="Line" class="src">&hellip;/wave-1/15-hours.md:9,15</td><td data-label="Wave" class="num">W2</td><td data-label="Gate"><strong>Made true</strong>, not deleted; pushed to Sanity</td></tr>
+            <tr><td data-label="No" class="id">13</td><td data-label="Thing" class="lead">Gap-matrix rows BIL-04 and BIL-08</td><td data-label="Line" class="src">portal-vs-desk-feature-gap-matrix-v2.md:189,193 (both copies: docs/design/the-document/ and docs/product/)</td><td data-label="Wave" class="num">W2</td><td data-label="Gate">Reopen BIL-08 as rate-display drift, not absence; edit both copies</td></tr>
+            <tr><td data-label="No" class="id">14</td><td data-label="Thing" class="lead">The <code>23505</code> toast branch in <code>useStartTimer</code></td><td data-label="Line" class="src">use-time-tracking.ts:480-484</td><td data-label="Wave" class="num">W3</td><td data-label="Gate"><code>start_timer</code> lands first, returning both rows</td></tr>
+            <tr><td data-label="No" class="id">15</td><td data-label="Thing" class="lead">The implicit <code>billable: input.billable ?? true</code></td><td data-label="Line" class="src">use-time-tracking.ts:320 (the default) &middot; :467 (<code>useStartTimer</code> &mdash; sets <code>billable</code> only when provided, no default)</td><td data-label="Wave" class="num">W3</td><td data-label="Gate">Every surface carries the control first; then a missing value is a caught bug</td></tr>
+            <tr><td data-label="No" class="id">16</td><td data-label="Thing" class="lead">The log strip&rsquo;s <code>'design'</code> activity default</td><td data-label="Line" class="src">log-strip.tsx:36</td><td data-label="Wave" class="num">W3</td><td data-label="Gate">Replaced by &ldquo;activity not set&rdquo;, never by a required tap</td></tr>
+            <tr><td data-label="No" class="id">17</td><td data-label="Thing" class="lead"><code>CaptureWidgets/</code> and <code>CaptureShareExtension/</code> &mdash; empty directories shaped like targets</td><td data-label="Line" class="src">absent from Capture.xcodeproj/project.pbxproj:1140-1224</td><td data-label="Wave" class="num">W6</td><td data-label="Gate">No third state: either targets or gone</td></tr>
+            <tr><td data-label="No" class="id">18</td><td data-label="Thing" class="lead"><code>useUpdatePhaseEstimates</code> &mdash; 0 callers, so phase estimates are a budget you can read and never set</td><td data-label="Line" class="src">use-time-tracking.ts:791</td><td data-label="Wave" class="num">W7</td><td data-label="Gate">HT-39 first &mdash; re-home or drop, not both-and-neither</td></tr>
+            <tr><td data-label="No" class="id">19</td><td data-label="Thing" class="lead">The shipped default rate-card label &ldquo;Principal designer&rdquo;</td><td data-label="Line" class="src">service-agreement-drafting-room.tsx:238 &middot; role CHECK 00084:164-165</td><td data-label="Wave" class="num">W7</td><td data-label="Gate">The person/role binding lands first</td></tr>
+            <tr><td data-label="No" class="id">20</td><td data-label="Thing" class="lead">The draft&rsquo;s DEFINER rollup, its <code>studio_id</code>-keyed RLS policy, and every new call site on <code>user_is_org_member</code></td><td data-label="Line" class="src">architecture-draft.md:29,50,51 &middot; 00317:15-18 &middot; 00021:484-517</td><td data-label="Wave" class="num">&mdash;</td><td data-label="Gate">Dropped from the plan outright, not built then removed</td></tr>
+            <tr><td data-label="No" class="id">21</td><td data-label="Thing" class="lead">Stale line citations throughout the architecture draft</td><td data-label="Line" class="src">draft :3,7,8,63,97 point at 00412; head is 00578:2599</td><td data-label="Wave" class="num">W0</td><td data-label="Gate">The draft is an input, not a record</td></tr>
+            <tr><td data-label="No" class="id">22</td><td data-label="Thing" class="lead"><code>useStudioTimeReport</code> &mdash; <strong>not deleted</strong></td><td data-label="Line" class="src">use-time-tracking.ts:689-781</td><td data-label="Wave" class="num">&mdash;</td><td data-label="Gate">HT-37 contested: 8 seats delete, feasibility calls deletion &ldquo;the single biggest avoidable cost in the program&rdquo;. This plan wires it in W2</td></tr>
+            <tr><td data-label="No" class="id">23</td><td data-label="Thing" class="lead">The stale spec pointer in the Document&rsquo;s CLAUDE.md</td><td data-label="Line" class="src">per briefing &sect;2</td><td data-label="Wave" class="num">W0</td><td data-label="Gate">Not re-verified by any seat &mdash; verify the pointer exists before fixing it</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="ann">
+        <div><span class="k">Not on this sheet</span><p class="t-body-sm ink-muted">Synthesis &sect;8&rsquo;s nudge-rule and Live-Activity rows are rulings, not deletions &mdash; they appear as HT-34 and HT-31 on sheet 14, and the Live Activity strike also shows on sheet 09.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 13 — RISKS ============ -->
+<section class="slide" id="sheet-13" aria-labelledby="h13">
+  <div class="inner">
+    <div class="gutter">
+      <p class="t-head sheet-no">Sheet 13 / 16</p>
+      <div class="rule"></div>
+      <p class="t-head chapter">Risks</p>
+    </div>
+    <div class="main">
+      <h2 class="t-d2" id="h13">Eleven risks. Every mitigation is a named gate, not a promise to be careful.</h2>
+      <div class="scroller">
+        <table class="sheet wide" aria-labelledby="h13">
+          <thead><tr><th scope="col" class="id">&#8470;</th><th scope="col">Risk</th><th scope="col" class="num">Severity</th><th scope="col">Mitigation</th></tr></thead>
+          <tbody>
+            <tr><td data-label="No" class="id">1</td><td data-label="Risk" class="lead">The classifier rewrite silently re-rates history &mdash; 222 lines (00578:2599-2820; 201 between <code>BEGIN</code> and <code>END</code>) holding ceiling accrual, retainer gating, a project-level <code>FOR UPDATE</code> and three immutability raises, redefined twice already</td><td data-label="Severity" class="num defect">highest</td><td data-label="Mitigation">Resolver is a separate function; classifier gets one call plus three branch fixes, raises copied verbatim; gate is <code>run-sql-tests.sh -d supabase/tests/commercial</code>; backfill is its own migration, pre-flight count must match post</td></tr>
+            <tr><td data-label="No" class="id">2</td><td data-label="Risk" class="lead">Nullable <code>project_id</code> writes internal time and then hides it &mdash; all nine policies resolve through <code>project_id</code> &mdash; five through <code>projects p</code> (00177:136 &middot; 00316:237,242,248,257), four through <code>is_project_team_member(project_id)</code> (00177:140,144,148,152, re-created at head by 00484:785,794,803,812)</td><td data-label="Severity" class="num">high</td><td data-label="Mitigation">The four new policies land in the <em>same</em> migration set as the <code>DROP NOT NULL</code>; the RLS suite asserts positive, cross-studio-negative and anti-aiming before the portal is touched</td></tr>
+            <tr><td data-label="No" class="id">3</td><td data-label="Risk" class="lead"><code>studio_id</code> becomes a cross-studio write hole &mdash; a member could aim it at any organization</td><td data-label="Severity" class="num">high</td><td data-label="Mitigation">The 00317 anti-aiming guard is replicated as a trigger, not assumed from the CHECK, and asserted per role in the RLS suite</td></tr>
+            <tr><td data-label="No" class="id">4</td><td data-label="Risk" class="lead">Migration-number collision across three concurrent worktrees &mdash; six-plus renumber incidents in this repo</td><td data-label="Severity" class="num">medium</td><td data-label="Mitigation">Reserved ranges per wave, provisional until merge and re-checked against the integration tip before each merge; numbers are written as <code>head+n</code>, never as literals</td></tr>
+            <tr><td data-label="No" class="id">5</td><td data-label="Risk" class="lead">The <code>activity</code> CHECK is inline and unnamed (00198:27-29) &mdash; the precedent is 00545, a 232-line migration whose name-discovery block is 00545:33-43</td><td data-label="Severity" class="num">low</td><td data-label="Mitigation"><code>source</code> was already named <code>project_time_entries_source_ck</code> by 00545:147-148; only the <code>activity</code> widening (W6) needs 00545&rsquo;s name-discovery form</td></tr>
+            <tr><td data-label="No" class="id">6</td><td data-label="Risk" class="lead">A stale <code>packages/supabase</code> <code>dist/</code> ships a working source and a broken bundle &mdash; the <code>proposalTierVisibility</code> incident class, and W0 moves the hook module into that package</td><td data-label="Severity" class="num">medium</td><td data-label="Mitigation"><code>turbo build --filter=@patina/supabase</code> before any consumer type-check; <code>admin-portal build</code> as the wave gate; portal deploys only through <code>./infra/deploy-portal.sh</code></td></tr>
+            <tr><td data-label="No" class="id">7</td><td data-label="Risk" class="lead">The SwiftData schema change destroys queued, unsynced billable hours &mdash; the store&rsquo;s open ladder sets aside an incompatible store and retries</td><td data-label="Severity" class="num">medium</td><td data-label="Mitigation">W6 asserts <code>didResetIncompatibleStore == false</code> against a previous-schema store &mdash; a green <code>capture-gate.sh</code> does not cover this</td></tr>
+            <tr><td data-label="No" class="id">8</td><td data-label="Risk" class="lead">Narrowing <code>time_entries_studio_read</code> is a widening-in-reverse, landing mid-program if HT-10 is ruled &ldquo;narrow&rdquo;</td><td data-label="Severity" class="num">medium</td><td data-label="Mitigation">Isolated to its own reserved migration (head+12) with a per-role SQL test, and the only change in it, so it reverts without touching the lens</td></tr>
+            <tr><td data-label="No" class="id">9</td><td data-label="Risk" class="lead">A green gate that proves nothing &mdash; <code>turbo</code> silently skips workspaces with no such script, and the portal&rsquo;s mock fallback returns mock data on <em>any</em> thrown error, including an RLS denial</td><td data-label="Severity" class="num">medium</td><td data-label="Mitigation">Every render check runs <code>NEXT_PUBLIC_DESIGNER_PORTAL_DATA_MODE=live</code>; every data claim is a SELECT, never a screenshot; per-wave gates are named explicitly</td></tr>
+            <tr><td data-label="No" class="id">10</td><td data-label="Risk" class="lead">The published promise outruns the build again &mdash; a live drip email and a shipped help article already describe a studio-wide ledger that does not exist</td><td data-label="Severity" class="num">low</td><td data-label="Mitigation">Both are W2 <em>ship-gate</em> items, not follow-ups: the article is true or the sentences are gone before the wave is called shipped</td></tr>
+            <tr><td data-label="No" class="id">11</td><td data-label="Risk" class="lead">R19&rsquo;s consent evidence is one person, who is also the owner &mdash; and the ruling is about to govern an employee&rsquo;s documents</td><td data-label="Severity" class="num">low &middot; trust, not code</td><td data-label="Mitigation">W2 ships the disclosure band and the per-member opt-out as ship-gate items, and its member scope defaults to aggregate with notes behind an explicit detail act</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 14 — THE RULING SHEET ============ -->
+<section class="slide" id="sheet-14" aria-labelledby="h14">
+  <div class="inner">
+    <div class="gutter">
+      <p class="t-head sheet-no">Sheet 14 / 16</p>
+      <div class="rule"></div>
+      <p class="t-head chapter">The ruling sheet</p>
+    </div>
+    <div class="main">
+      <h2 class="t-d2" id="h14">Forty questions. Four must be ruled before the plan can be sequenced: HT-1 (W1), HT-10 &amp; HT-37 (W2), HT-4 (W7 + W1&rsquo;s backfill).</h2>
+      <div class="scroller">
+        <table class="sheet widest" aria-labelledby="h14">
+          <thead><tr><th scope="col" class="id">ID</th><th scope="col" class="id">Touches</th><th scope="col">The question</th><th scope="col">Panel recommendation</th><th scope="col">Panel</th></tr></thead>
+          <tbody>
+            <tr><td data-label="ID" class="id">HT-1</td><td data-label="Touches" class="id">new</td><td data-label="Question" class="lead">Does the server own <code>hourly_rate_cents</code> on every project kind, overriding any value a client sends?</td><td data-label="Recommendation">Yes. One resolver, every branch; clients stop sending an opinion</td><td data-label="Panel" class="num">9 &middot; 0</td></tr>
+            <tr><td data-label="ID" class="id">HT-2</td><td data-label="Touches" class="id">new</td><td data-label="Question" class="lead">Are <code>change_order_terms</code> and <code>profiles.default_hourly_rate_cents</code> cut from the chain, or kept as tiers 2 and 3?</td><td data-label="Recommendation">Cut both. One has only a legacy writer; the other has no writer at all</td><td data-label="Panel" class="num">4 &middot; 1 (LEAH keeps tier 3)</td></tr>
+            <tr><td data-label="ID" class="id">HT-3</td><td data-label="Touches" class="id">new</td><td data-label="Question" class="lead">Does a per-member studio rate exist, and is the People Room member profile its home?</td><td data-label="Recommendation">Yes, and yes. Blur-save, <code>owner</code> / <code>admin</code> only</td><td data-label="Panel" class="num">6 &middot; 0</td></tr>
+            <tr><td data-label="ID" class="id">HT-4</td><td data-label="Touches" class="id">new</td><td data-label="Question" class="lead">Does a rate-card row bind to a person or roster role instead of a free-text label?</td><td data-label="Recommendation">Yes. Do not build a resolver on a string match</td><td data-label="Panel" class="num">1 seat (CR) &middot; 0</td></tr>
+            <tr><td data-label="ID" class="id">HT-5</td><td data-label="Touches" class="id">new</td><td data-label="Question" class="lead">Is <code>claim_time_entries</code> a Wave 0 item?</td><td data-label="Recommendation">Yes. Atomic claim; delete the compensating detach</td><td data-label="Panel" class="num">1 &middot; 0, unopposed</td></tr>
+            <tr><td data-label="ID" class="id">HT-6</td><td data-label="Touches" class="id">new</td><td data-label="Question" class="lead">Does the <code>project_unbilled_time</code> repair move to Wave 0?</td><td data-label="Recommendation">Yes. It is a silent money understatement, not a cleanup</td><td data-label="Panel" class="num">6 &middot; 0 (draft said W6)</td></tr>
+            <tr><td data-label="ID" class="id">HT-7</td><td data-label="Touches" class="id">R19</td><td data-label="Question" class="lead">May a Field, widget or intent surface ever own the single global running-timer slot?</td><td data-label="Recommendation">No, not in v1. Elapsed-since-arrival pre-fill feels like a timer without owning the slot</td><td data-label="Panel" class="num">unanimous</td></tr>
+            <tr><td data-label="ID" class="id">HT-8</td><td data-label="Touches" class="id">R77</td><td data-label="Question" class="lead">Does the Hours ledger grow an admin-gated scope lens &mdash; mine, member, project, studio &mdash; in the same sheet?</td><td data-label="Recommendation">Yes. One sheet, no page, no tab bar, no leaderboard</td><td data-label="Panel" class="num">8 &middot; 0</td></tr>
+            <tr><td data-label="ID" class="id">HT-9</td><td data-label="Touches" class="id">new</td><td data-label="Question" class="lead">Does the project lens stop ANDing <code>user_id</code>?</td><td data-label="Recommendation">Yes. It answers the wrong question with a plausible number</td><td data-label="Panel" class="num">3 &middot; 0, unopposed</td></tr>
+            <tr><td data-label="ID" class="id">HT-10</td><td data-label="Touches" class="id">new</td><td data-label="Question" class="lead">Is <code>time_entries_studio_read</code> narrowed to owner/admin, or does a plain member keep the teammate read 00316 already grants?</td><td data-label="Recommendation"><strong>Decide explicitly.</strong> Panel leans narrow to owner/admin and keep the project-team read</td><td data-label="Panel" class="num wrap">CR narrow; FS flags the cost</td></tr>
+            <tr><td data-label="ID" class="id">HT-11</td><td data-label="Touches" class="id">new</td><td data-label="Question" class="lead">Does <code>billable</code> become an explicit control at every capture surface, and does the implicit <code>?? true</code> go?</td><td data-label="Recommendation">Yes to both. <code>billable</code> is not a guarded column &mdash; this ships with no server change</td><td data-label="Panel" class="num">6 &middot; 0</td></tr>
+            <tr><td data-label="ID" class="id">HT-12</td><td data-label="Touches" class="id">R19</td><td data-label="Question" class="lead">Does one server-owned rule resolve <code>billable</code> for every <code>source</code>, and is the reason printed on the row?</td><td data-label="Recommendation">Yes. Keep fail-closed; make it consistent; print &ldquo;non-billable &middot; no agreement&rdquo;</td><td data-label="Panel" class="num">3 &middot; 0</td></tr>
+            <tr><td data-label="ID" class="id">HT-13</td><td data-label="Touches" class="id">new</td><td data-label="Question" class="lead">Is backdating allowed, and how far?</td><td data-label="Recommendation">Yes &mdash; a date field on the add row and the &#8984;K verb, defaulting to the paged week. Kody sets the bound</td><td data-label="Panel" class="num">2 &middot; 0, unopposed</td></tr>
+            <tr><td data-label="ID" class="id">HT-14</td><td data-label="Touches" class="id">new</td><td data-label="Question" class="lead">Does the mobile manual form get a project picker, or is it disabled when nothing is held?</td><td data-label="Recommendation">Either &mdash; but never a silent success</td><td data-label="Panel" class="num">3 &middot; 0</td></tr>
+            <tr><td data-label="ID" class="id">HT-15</td><td data-label="Touches" class="id">new</td><td data-label="Question" class="lead">May <code>project_id</code> be NULL for non-billable internal time, rather than a sentinel &ldquo;Internal&rdquo; project?</td><td data-label="Recommendation">Yes &mdash; and reprice it M &rarr; L. Four new policies plus an anti-aiming trigger</td><td data-label="Panel" class="num">5 &middot; 0</td></tr>
+            <tr><td data-label="ID" class="id">HT-16</td><td data-label="Touches" class="id">D10</td><td data-label="Question" class="lead">Is D10 enforced on Patina Field rather than amended?</td><td data-label="Recommendation">Enforce. D10 binds every surface that proposes a duration. A stepper on the offer, defaulted to active duration</td><td data-label="Panel" class="num">4 &middot; 0</td></tr>
+            <tr><td data-label="ID" class="id">HT-17</td><td data-label="Touches" class="id">R64</td><td data-label="Question" class="lead">Does the abandonment bound bind any clock-derived duration, and does it ever fire on <em>cumulative</em> idle?</td><td data-label="Recommendation">Scope: yes, extend the wording, keep the 30-minute number. Cumulative: not yet &mdash; instrument the ratio first</td><td data-label="Panel" class="num wrap">CR extend &middot; MOB gate &middot; VET instrument</td></tr>
+            <tr><td data-label="ID" class="id">HT-18</td><td data-label="Touches" class="id">new</td><td data-label="Question" class="lead">Does Field get a <code>LogTimeSheet</code> reachable with no visit &mdash; a 7th Browse tile and the expanded companion state?</td><td data-label="Recommendation">Yes. The collapsed strip&rsquo;s one-action contract holds &mdash; a single optional action, and that slot is &ldquo;End visit&rdquo; (<code>FieldCompanionPresentation.swift:56-64</code>)</td><td data-label="Panel" class="num">6 &middot; 0</td></tr>
+            <tr><td data-label="ID" class="id">HT-19</td><td data-label="Touches" class="id">new</td><td data-label="Question" class="lead">Does the <code>activity</code> CHECK gain a travel / drive value?</td><td data-label="Recommendation">Yes &mdash; and it must be reachable before the truck moves, not after</td><td data-label="Panel" class="num">1 &middot; 0, unopposed</td></tr>
+            <tr><td data-label="ID" class="id">HT-20</td><td data-label="Touches" class="id">new</td><td data-label="Question" class="lead">Is per-entry CSV the export, pulled forward rather than last?</td><td data-label="Recommendation">Yes, from the fact view, on the <code>qbo-export</code> blob pattern &mdash; gated on HT-6</td><td data-label="Panel" class="num">5 &middot; 0</td></tr>
+            <tr><td data-label="ID" class="id">HT-21</td><td data-label="Touches" class="id">new</td><td data-label="Question" class="lead">Does the client&rsquo;s invoice gain a dated sub-table, and does the composer name the person?</td><td data-label="Recommendation">Composer: yes, name the person. Client line: one priced line plus a dated sub-table</td><td data-label="Panel" class="num">CR vs LEAH + REP</td></tr>
+            <tr><td data-label="ID" class="id">HT-22</td><td data-label="Touches" class="id">new</td><td data-label="Question" class="lead">Does an owner/admin UPDATE + DELETE policy exist on time entries?</td><td data-label="Recommendation">Yes &mdash; exactly one write widening, via <code>is_org_admin_or_owner</code>, audited</td><td data-label="Panel" class="num">4 &middot; 0</td></tr>
+            <tr><td data-label="ID" class="id">HT-23</td><td data-label="Touches" class="id">new</td><td data-label="Question" class="lead">Do edits leave a trace &mdash; <code>updated_by</code> plus an audit row?</td><td data-label="Recommendation">Yes. Nearly free at the boundary being built anyway, expensive to retrofit</td><td data-label="Panel" class="num">2 &middot; 0</td></tr>
+            <tr><td data-label="ID" class="id">HT-24</td><td data-label="Touches" class="id">new</td><td data-label="Question" class="lead">Is <code>activity</code> recorded rather than defaulted &mdash; and is it ever made required?</td><td data-label="Recommendation">Recorded, never required. Print &ldquo;activity not set&rdquo; honestly; the zero-tap path keeps working</td><td data-label="Panel" class="num">2 seats (FS, CR) &middot; 0</td></tr>
+            <tr><td data-label="ID" class="id">HT-25</td><td data-label="Touches" class="id">new</td><td data-label="Question" class="lead">May a studio member log time on a project they are not rostered to &mdash; auto-roster on first log, or is a roster seat required?</td><td data-label="Recommendation"><strong>Decide explicitly.</strong> The requirement as written currently fails, with a silent RLS refusal</td><td data-label="Panel" class="num">1 &middot; 0, unopposed</td></tr>
+            <tr><td data-label="ID" class="id">HT-26</td><td data-label="Touches" class="id">new</td><td data-label="Question" class="lead">Does <code>pending_authorization</code> become a doorway, and does an unresolved rate print &ldquo;rate pending&rdquo; instead of a blank?</td><td data-label="Recommendation">Yes to both. Wire the badge to the already-shipped authority band</td><td data-label="Panel" class="num">2 &middot; 0</td></tr>
+            <tr><td data-label="ID" class="id">HT-27</td><td data-label="Touches" class="id">new</td><td data-label="Question" class="lead">Do the PostHog events ship before any iOS extension wave?</td><td data-label="Recommendation">Yes. The widget decision must rest on <code>time_entry_logged</code> by surface, not on taste</td><td data-label="Panel" class="num">4 &middot; 0</td></tr>
+            <tr><td data-label="ID" class="id">HT-28</td><td data-label="Touches" class="id">new</td><td data-label="Question" class="lead">Does the Siri / App-Intent path ship before a background drain exists?</td><td data-label="Recommendation">No. Either the intent attempts the network with the outbox as fallback, or a background task ships first</td><td data-label="Panel" class="num">FS blocker</td></tr>
+            <tr><td data-label="ID" class="id">HT-29</td><td data-label="Touches" class="id">&sect;6</td><td data-label="Question" class="lead">Is the Desk <code>hours</code> card a studio week total for admins, or act-bearing only?</td><td data-label="Recommendation">Act-bearing or nothing &mdash; unbilled with &ldquo;Bill it&rdquo;, or a timer still running from yesterday</td><td data-label="Panel" class="num">CR + OPS vs LEAH</td></tr>
+            <tr><td data-label="ID" class="id">HT-30</td><td data-label="Touches" class="id">&sect;6</td><td data-label="Question" class="lead">Is &sect;6 amended for this program, or strengthened?</td><td data-label="Recommendation">Strengthened: a total is permitted as the front matter of the rows that produced it; a total with no rows beneath it is a dashboard</td><td data-label="Panel" class="num">CR; FS compatible</td></tr>
+            <tr><td data-label="ID" class="id">HT-31</td><td data-label="Touches" class="id">R69</td><td data-label="Question" class="lead">Does a Live Activity ever tick a running clock on the lock screen?</td><td data-label="Recommendation">Affirm R69&rsquo;s principle &mdash; its stated scope is spine timer + mobile bar only (DECISIONS.md:2561) &mdash; and strike the Live Activity. If one ever ships: minute resolution, no elapsed animation</td><td data-label="Panel" class="num">0 &middot; 3</td></tr>
+            <tr><td data-label="ID" class="id">HT-32</td><td data-label="Touches" class="id">D9</td><td data-label="Question" class="lead">Is D9 amended to &ldquo;capture belongs wherever the work happened; review belongs only in the drawer ledger, never a page&rdquo;?</td><td data-label="Recommendation">Amend. The current wording is too narrow to authorise &#8984;K and Field capture, and too weak to forbid the <code>/hours</code> page someone will propose</td><td data-label="Panel" class="num wrap">CR amend; FS carve-out</td></tr>
+            <tr><td data-label="ID" class="id">HT-33</td><td data-label="Touches" class="id">&sect;1</td><td data-label="Question" class="lead">Is Patina Field recorded as <em>The Document off-desk</em> rather than a fourth surface?</td><td data-label="Recommendation">Yes &mdash; one dated VISION-DECISIONS entry, zero code. Without it a literal &sect;8 test parks W6</td><td data-label="Panel" class="num">1 &middot; 0, unopposed</td></tr>
+            <tr><td data-label="ID" class="id">HT-34</td><td data-label="Touches" class="id">&sect;4/&sect;6</td><td data-label="Question" class="lead">Does an unlogged-day nudge exist at all?</td><td data-label="Recommendation">Ship rule (a) only &mdash; a timer over 8 h writes one quiet Record row, no push, no email. Rule (b) opt-in, weekly at most, dark by default, never daily</td><td data-label="Panel" class="num">4 &middot; 1 &middot; daily: 0 for</td></tr>
+            <tr><td data-label="ID" class="id">HT-35</td><td data-label="Touches" class="id">R19</td><td data-label="Question" class="lead">Is auto-start disclosed to a new member, and may a member opt out?</td><td data-label="Recommendation">Disclose: yes, a one-time dismissible sentence on the first document open. Opt-out: yes, per member, default on, on their own profile</td><td data-label="Panel" class="num">2 &middot; 0</td></tr>
+            <tr><td data-label="ID" class="id">HT-36</td><td data-label="Touches" class="id">R77</td><td data-label="Question" class="lead">Does the member scope default to aggregate, with free-text notes behind an explicit detail act?</td><td data-label="Recommendation">Yes. The rollup&rsquo;s return shape is frozen at buckets, minutes and money &mdash; never <code>notes</code> &mdash; asserted per role</td><td data-label="Panel" class="num">2 &middot; 0</td></tr>
+            <tr><td data-label="ID" class="id">HT-37</td><td data-label="Touches" class="id">new</td><td data-label="Question" class="lead"><code>useStudioTimeReport</code>: delete or wire?</td><td data-label="Recommendation"><strong>Panel splits &mdash; Kody rules.</strong> This plan wires it; if he rules delete, the INVOKER replacement lands in head+13 and W2 moves to the low end of L</td><td data-label="Panel" class="num">8 delete &middot; 1 wire</td></tr>
+            <tr><td data-label="ID" class="id">HT-38</td><td data-label="Touches" class="id">new</td><td data-label="Question" class="lead">Is the studio rollup SECURITY DEFINER or INVOKER?</td><td data-label="Recommendation">INVOKER. The draft&rsquo;s stated reason for DEFINER is false &mdash; the rows are already co-member-readable &mdash; and its signature has no <code>p_studio_id</code>, so the promised assert cannot be written</td><td data-label="Panel" class="num wrap">FS decisive; draft says DEFINER</td></tr>
+            <tr><td data-label="ID" class="id">HT-39</td><td data-label="Touches" class="id">new</td><td data-label="Question" class="lead"><code>project_phases.estimated_hours</code>: re-home or drop?</td><td data-label="Recommendation">Rule it either way; do not leave it. A second estimate column already feeds the ledger&rsquo;s live readout</td><td data-label="Panel" class="num wrap">FS, CR, LEAH, REP split</td></tr>
+            <tr><td data-label="ID" class="id">HT-40</td><td data-label="Touches" class="id">new</td><td data-label="Question" class="lead">Is the billing-state chip a &sect;6 &ldquo;badge&rdquo;?</td><td data-label="Recommendation">Keep it as built. A 1px-bordered text pill with no fill is a table&rsquo;s state column; add no colour-coding</td><td data-label="Panel" class="num">1 &middot; 0, unopposed</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 15 — THE DECISION ============ -->
+<section class="slide" id="sheet-15" aria-labelledby="h15">
+  <div class="inner">
+    <div class="gutter">
+      <p class="t-head sheet-no">Sheet 15 / 16</p>
+      <div class="rule"></div>
+      <p class="t-head chapter">The decision</p>
+    </div>
+    <div class="main">
+      <h2 class="t-d2" id="h15">Three things are asked of you.</h2>
+      <ul class="verdicts">
+        <li><span class="t-head k">Approve the shape</span><span class="t-body">One server-owned answer for rate and billable; one sheet with one admin-gated lens; one new door per surface and a date field; a CSV. No new route, no dashboard, no approval workflow, no daily nudge.</span></li>
+        <li><span class="t-head k">Rule the sheet</span><span class="t-body">HT-1 &hellip; HT-40 &mdash; four must be ruled before the plan can be sequenced &mdash; HT-1 gates W1&rsquo;s first line; HT-10 and HT-37 gate W2; HT-4 gates W7 and W1&rsquo;s backfill &mdash; and three consent rulings that decide whether the first hire trusts the clock (HT-30, HT-35, HT-36).</span></li>
+        <li><span class="t-head k">Green-light W0</span><span class="t-body">Three to five days: the atomic claim, the unbilled view, the <code>source</code> CHECK, the hook module made canonical (droppable if the band runs long), and three dated governance entries. It depends on nothing and blocks everything.</span></li>
+      </ul>
+      <hr class="rule-strong">
+      <h3 class="visually-hidden" id="h15b">The four gating rulings</h3>
+      <div class="scroller">
+        <table class="sheet" aria-labelledby="h15b">
+          <thead><tr><th scope="col">Ruling</th><th scope="col">Gates</th><th scope="col">Cost of not ruling it</th></tr></thead>
+          <tbody>
+            <tr><td data-label="Ruling" class="id lead">HT-1</td><td data-label="Gates">The first line of SQL in W1</td><td data-label="Cost">A member prices their own hour on the commonest project kind</td></tr>
+            <tr><td data-label="Ruling" class="id lead">HT-4</td><td data-label="Gates">W7, and the cause behind W1&rsquo;s backfill</td><td data-label="Cost">A default two-role rate card strands every entry on a services project</td></tr>
+            <tr><td data-label="Ruling" class="id lead">HT-10</td><td data-label="Gates">W2&rsquo;s head+12</td><td data-label="Cost">The permission model in this deck is cosmetic</td></tr>
+            <tr><td data-label="Ruling" class="id lead">HT-37</td><td data-label="Gates">W2&rsquo;s band: M, or the low end of L</td><td data-label="Cost">Either rebuilding what exists, or a client-side whole-studio aggregation later reviewers must re-audit</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 16 — COLOPHON ============ -->
+<section class="slide" id="sheet-16" aria-labelledby="h16">
+  <div class="inner">
+    <div class="gutter">
+      <p class="t-head sheet-no">Sheet 16 / 16</p>
+      <div class="rule"></div>
+      <p class="t-head chapter">Colophon</p>
+    </div>
+    <div class="main">
+      <h2 class="t-d2" id="h16">Sources, seats, date.</h2>
+      <dl class="reg">
+        <dt>Panel</dt><dd>artifacts/hour-tracking-2026-09-11/panel/ &mdash; memo-pm-studio-ops.md, memo-pm-billing.md, memo-pm-timetrack-veteran.md, memo-ux-mobile.md, memo-ux-web.md, memo-ux-reporting.md, memo-leah.md, memo-feasibility.md, memo-critic.md</dd>
+        <dt>Synthesis</dt><dd>artifacts/hour-tracking-2026-09-11/synthesis.md &mdash; &sect;1 verdict, &sect;3 friction, &sect;4 the four views, &sect;5 rate truth, &sect;6 money hand-off, &sect;7 ruling sheet, &sect;8 deletions, &sect;9 dissents</dd>
+        <dt>Architecture</dt><dd>artifacts/hour-tracking-2026-09-11/architecture.md &mdash; &sect;0 binding rules, &sect;1&ndash;&sect;8 waves, &sect;9 critical path, &sect;10 effort, &sect;11 risks, &sect;12 not in v1, &sect;13 deletions, &sect;14 rulings by wave</dd>
+        <dt>Briefing</dt><dd>briefing/panel-brief-common.md, briefing/current-state.md &sect;0, &sect;2 and &sect;3 (surface capability tables), briefing/rulings-digest.md, briefing/architecture-draft.md (superseded)</dd>
+        <dt>Seats</dt><dd>Nine. Studio-ops PM &middot; billing PM &middot; time-tracking veteran PM &middot; iOS UX &middot; web UX &middot; reporting and information design &middot; the customer &middot; feasibility (senior engineer) &middot; critic (vision and rulings).</dd>
+        <dt>Seat key</dt><dd>FS = feasibility &middot; CR = critic &middot; WEB / MOB / REP = the UX seats &middot; OPS / BIL / VET = the PMs &middot; LEAH = the customer.</dd>
+        <dt>Findings count</dt><dd>218 (synthesis.md:3), carried without independent re-derivation. Numbered seat-memo rows alone sum to 203 (30+45+25+12+16+27+17+15+16); with feasibility&rsquo;s seven per-wave effort rows, 210; with the critic&rsquo;s separate C1&ndash;C29 series counted alongside CRITIC-1&hellip;30, 239.</dd>
+        <dt>Typeset to</dt><dd>docs/design/house-sheet/SPEC.md &sect;A as amended by &sect;F. Playfair Display, Inter, DM Mono. No shadow, no reveal motion, no truncation. Known deviations, not corrected: page measure 1240px (&sect;A4: 1100px &mdash; narrowing would worsen sheet-table clipping); block gaps of 2/4/6/10/20px (&sect;A4: a 12/24 module); <code>.t-head</code> used beyond running heads, for verdict keys, count labels, annotation keys and in-cell labels (&sect;A3); the mark dial <code>.m</code> at 11px with <code>border-radius: 50%</code> (&sect;A4: 50% permitted only for the 7px mark dot); <code>.slide</code> padding-block 56/140px (&sect;A4: off the 12/24 module); three off-scale meta sizes &mdash; <code>td.src</code> and <code>.legend span</code> at 11.5px, <code>td.num</code> at 13px (&sect;A3: 11px and 12px only); this entry and &ldquo;Findings count&rdquo; exceed one line, and sheet 05&rsquo;s hole cells, sheet 06&rsquo;s open question and the verdict bodies on the cover and sheet 15 are reference sentences rather than short clauses &mdash; all kept as reference rather than prose.</dd>
+        <dt>Title from</dt><dd>margin-groups.ts:11-13 &mdash; <code>time</code> is not a margin item the margin prints: it is the studio&rsquo;s own clock</dd>
+        <dt>Paths</dt><dd>Citations are relative to apps/designer-portal/src/ (TS/TSX) and supabase/migrations/ (five-digit numbers), on origin/main. Swift under apps/mobile/Capture/; edge functions under supabase/functions/; workspace packages under packages/ (e.g. packages/supabase/src/); docs and artifacts from the repo root.</dd>
+        <dt>Date</dt><dd>11 September 2026</dd>
+      </dl>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<script>
+(function () {
+  var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  if (!slides.length) { return; }
+
+  // Single source of truth for "which slide is current": the last slide
+  // whose top edge has crossed above the "reading line" (a third of the
+  // viewport down) — equivalently, the slide whose box contains viewport
+  // y = 0 while the reader is mid-slide, not just at a slide boundary.
+  function currentIndex() {
+    var threshold = window.innerHeight * 0.33;
+    var idx = 0;
+    for (var i = 0; i < slides.length; i++) {
+      if (slides[i].getBoundingClientRect().top <= threshold) {
+        idx = i;
+      } else {
+        break;
+      }
+    }
+    return idx;
+  }
+
+  // The target slide of an in-flight (possibly repeated, possibly fast)
+  // paging gesture. Tracked here rather than re-derived from scroll
+  // position on every keypress, so a fast ArrowRight hold doesn't lose
+  // presses to a scroll animation still mid-flight.
+  var pending = null;
+  var pendingTimer = null;
+
+  function clampIndex(i) {
+    return Math.min(slides.length - 1, Math.max(0, i));
+  }
+
+  function scrollToSlide(i) {
+    var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    try {
+      slides[i].scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+    } catch (e) {
+      window.scrollTo(0, slides[i].offsetTop);
+    }
+  }
+
+  function resetPending() {
+    pending = null;
+    if (pendingTimer) { clearTimeout(pendingTimer); pendingTimer = null; }
+  }
+
+  function go(delta) {
+    var base = pending !== null ? pending : currentIndex();
+    var i;
+    // A fresh ArrowLeft, more than ~100px into the slide being read,
+    // returns to that slide's top rather than throwing the slide away —
+    // symmetric with ArrowRight only when the reader is at the top already.
+    if (delta < 0 && pending === null && slides[base].getBoundingClientRect().top < -100) {
+      i = base;
+    } else {
+      i = clampIndex(base + delta);
+    }
+    pending = i;
+    scrollToSlide(i);
+    if (pendingTimer) { clearTimeout(pendingTimer); }
+    pendingTimer = setTimeout(resetPending, 900);
+  }
+
+  document.addEventListener('scrollend', resetPending);
+
+  function scrollerCanScroll(el) {
+    return el.scrollWidth > el.clientWidth + 1;
+  }
+
+  document.addEventListener('keydown', function (ev) {
+    if (ev.metaKey || ev.ctrlKey || ev.altKey || ev.shiftKey) { return; }
+    var t = ev.target;
+    if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName || ''))) { return; }
+    var scroller = t && t.closest && t.closest('.scroller');
+    var k = ev.key;
+    // Only cede arrow keys to the scroller when it can actually move
+    // further in that direction; otherwise fall through to paging so a
+    // focused, non-scrolling scroller is never a dead stop.
+    if (scroller && scrollerCanScroll(scroller)) {
+      if (k === 'ArrowRight' && scroller.scrollLeft + scroller.clientWidth < scroller.scrollWidth - 1) { return; }
+      if (k === 'ArrowLeft' && scroller.scrollLeft > 0) { return; }
+    }
+    if (k === 'ArrowRight' || k === 'j' || k === 'J') {
+      ev.preventDefault(); go(1);
+    } else if (k === 'ArrowLeft' || k === 'k' || k === 'K') {
+      ev.preventDefault(); go(-1);
+    } else if (k === 'Home') {
+      ev.preventDefault(); resetPending(); slides[0].scrollIntoView({ block: 'start' });
+    } else if (k === 'End') {
+      ev.preventDefault(); resetPending(); slides[slides.length - 1].scrollIntoView({ block: 'start' });
+    }
+  });
+
+  // A scroller is only a keyboard stop, and only claims to scroll, when it
+  // truly can — re-evaluated on resize, since the block-card breakpoint
+  // removes all overflow.
+  function updateScrollers() {
+    Array.prototype.slice.call(document.querySelectorAll('.scroller')).forEach(function (el) {
+      if (scrollerCanScroll(el)) {
+        el.setAttribute('tabindex', '0');
+        el.setAttribute('role', 'region');
+        var label = 'Table, scrolls horizontally';
+        var t = el.querySelector('table');
+        var labelledby = t && t.getAttribute('aria-labelledby');
+        var heading = labelledby && document.getElementById(labelledby);
+        var named = t && t.getAttribute('data-table-name');
+        if (named) { label = 'Table: ' + named; }
+        else if (heading && heading.textContent) {
+          var h = heading.textContent.trim().replace(/\s+/g, ' ');
+          var cut = h.search(/[.:;\u2014]/);
+          if (cut > 0) { h = h.slice(0, cut); }
+          label = 'Table: ' + h;
+        }
+        el.setAttribute('aria-label', label);
+      } else {
+        el.removeAttribute('tabindex');
+        el.removeAttribute('role');
+        el.removeAttribute('aria-label');
+      }
+    });
+  }
+  updateScrollers();
+  window.addEventListener('resize', updateScrollers, { passive: true });
+  window.addEventListener('pageshow', updateScrollers);
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(updateScrollers);
+  }
+})();
+</script>

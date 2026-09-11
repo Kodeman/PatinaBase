@@ -1,0 +1,39 @@
+ROUND-6 SWEEP — 2026-09-11T16:46:05.355Z
+widths 390 / 700 / 861 / 1001 / 1024 / 1280 / 1440 x heights 844 / 900
+
+| viewport | A1 docSW<=iw | A2 scrollers | A3 q-col>=160 | A4 outside |
+|---|---|---|---|---|
+| 390x844 | PASS | PASS | n/a | PASS |
+| 390x900 | PASS | PASS | n/a | PASS |
+| 700x844 | PASS | PASS | n/a | PASS |
+| 700x900 | PASS | PASS | n/a | PASS |
+| 861x844 | PASS | PASS | PASS min=271.3 | PASS |
+| 861x900 | PASS | PASS | PASS min=271.3 | PASS |
+| 1001x844 | PASS | PASS | PASS min=264.7 | PASS |
+| 1001x900 | PASS | PASS | PASS min=264.7 | PASS |
+| 1024x844 | PASS | PASS | PASS min=272 | PASS |
+| 1024x900 | PASS | PASS | PASS min=272 | PASS |
+| 1280x844 | PASS | PASS | PASS min=352.8 | PASS |
+| 1280x900 | PASS | PASS | PASS min=352.8 | PASS |
+| 1440x844 | PASS | PASS | PASS min=374.2 | PASS |
+| 1440x900 | PASS | PASS | PASS min=374.2 | PASS |
+
+sheet-14 column widths (row 1), by viewport:
+  390x844 -> [358, 358, 358, 358, 358]
+  390x900 -> [358, 358, 358, 358, 358]
+  700x844 -> [644, 644, 644, 644, 644]
+  700x900 -> [644, 644, 644, 644, 644]
+  861x844 -> [58.8, 75.1, 271.3, 183.6, 203.3]
+  861x900 -> [58.8, 75.1, 271.3, 183.6, 203.3]
+  1001x844 -> [58.8, 75.1, 264.7, 172.1, 202.3]
+  1001x900 -> [58.8, 75.1, 264.7, 172.1, 202.3]
+  1024x844 -> [58.8, 75.1, 272, 184.8, 203.4]
+  1024x900 -> [58.8, 75.1, 272, 184.8, 203.4]
+  1280x844 -> [58.8, 75.1, 352.8, 326.7, 216.2]
+  1280x900 -> [58.8, 75.1, 352.8, 326.7, 216.2]
+  1440x844 -> [58.8, 75.1, 374.2, 364.3, 219.6]
+  1440x900 -> [58.8, 75.1, 374.2, 364.3, 219.6]
+
+announced scroller region names:
+
+ALL ASSERTIONS PASS (14 viewports x 4)
