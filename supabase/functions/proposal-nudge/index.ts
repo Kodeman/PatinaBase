@@ -10,6 +10,7 @@
 // deno-lint-ignore-file no-explicit-any
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { sendCompliantEmail } from '../_shared/send-email.ts';
 import {
   renderBrandedShell,
   heading,
@@ -31,7 +32,6 @@ import {
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')!;
 const FROM_ADDRESS = Deno.env.get('RESEND_FROM') ?? 'hello@patina.cloud';
 const CLIENT_PORTAL_URL = Deno.env.get('CLIENT_PORTAL_URL') ?? 'https://client.patina.cloud';
 
@@ -235,27 +235,41 @@ Deno.serve(async (req: Request) => {
     ].join(''),
   });
 
-  const payload: Record<string, unknown> = {
-    from: FROM_ADDRESS,
+  const result = await sendCompliantEmail(supabase, {
     to: recipient,
+    cc: proposal.cc_email ?? undefined,
     subject,
     html,
-  };
-  if (proposal.cc_email) payload.cc = proposal.cc_email;
-
-  const res = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${RESEND_API_KEY}`,
-      'Content-Type': 'application/json',
+    from: FROM_ADDRESS,
+    userId: proposal.client_id ?? undefined,
+    notificationType: 'proposal_nudge',
+    category: 'operational',
+    templateId: 'proposal-nudge',
+    metadata: {
+      proposal_id: proposal.id,
+      project_id: proposal.project_id,
+      deep_link: `/proposals/${proposal.id}`,
     },
-    body: JSON.stringify(payload),
   });
 
-  if (!res.ok) {
-    const text = await res.text();
-    console.error('proposal-nudge: Resend failed', res.status, text);
-    return json({ error: 'send_failed', detail: text }, 502);
+  // A suppressed address is a settled fact about the recipient, not a transport
+  // failure: 409 so the caller can say so instead of offering a retry.
+  if (result.suppressed) {
+    console.warn('proposal-nudge: recipient suppressed', proposal.id);
+    return json(
+      {
+        error: 'email_suppressed',
+        suppressed: true,
+        detail:
+          "This client's address is suppressed after a bounce or complaint.",
+      },
+      409,
+    );
+  }
+
+  if (!result.success) {
+    console.error('proposal-nudge: send failed', proposal.id, result.error);
+    return json({ error: 'send_failed', detail: result.error }, 502);
   }
 
   return json({ ok: true });

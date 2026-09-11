@@ -109,6 +109,21 @@ Deno.test("PP-1 — the letter never wears the Patina wordmark", () => {
   assertStringIncludes(letter.html, "Prepared for Dave Okonkwo");
 });
 
+Deno.test("an SVG letterhead mark is dropped, leaving the studio name standing", () => {
+  const svg = renderClientLetter({
+    ...F1,
+    studioLogoUrl: "https://cdn.patina.cloud/studio-logos/abc/mark.svg",
+  });
+  assert(!svg.html.includes("<img src="), "an SVG mark must not be rendered as an <img>");
+  assertStringIncludes(svg.html, "MIDDLE WEST STUDIO");
+
+  const png = renderClientLetter({
+    ...F1,
+    studioLogoUrl: "https://cdn.patina.cloud/studio-logos/abc/mark.png",
+  });
+  assertStringIncludes(png.html, '<img src="https://cdn.patina.cloud/studio-logos/abc/mark.png"');
+});
+
 Deno.test("the note is a callout, and a designer typing HTML cannot break it", () => {
   const letter = renderClientLetter({
     ...F1,

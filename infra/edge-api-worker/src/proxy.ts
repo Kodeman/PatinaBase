@@ -33,6 +33,19 @@ const PROXY_METADATA_HEADERS = new Set([
   'x-real-ip',
 ]);
 
+const PUBLIC_STORAGE_PREFIX = '/storage/v1/object/public/';
+const DEFAULT_PUBLIC_OBJECT_CACHE = 'public, max-age=3600';
+
+/**
+ * A public storage object is the same bytes for everyone — and email clients
+ * fetch studio logos through this origin, so forcing `private, no-store` made
+ * every open of every letter a fresh origin round trip.
+ */
+export function isPublicStorageObjectRequest(request: Request): boolean {
+  if (request.method !== 'GET' && request.method !== 'HEAD') return false;
+  return new URL(request.url).pathname.startsWith(PUBLIC_STORAGE_PREFIX);
+}
+
 export function isCompatibilityPath(pathname: string): boolean {
   return COMPATIBILITY_PREFIXES.some(
     (prefix) => pathname === prefix.slice(0, -1) || pathname.startsWith(prefix),
@@ -163,9 +176,20 @@ export async function proxySupabaseRequest(
   }
 
   const responseHeaders = new Headers(upstream.headers);
-  responseHeaders.set('cache-control', 'private, no-store');
-  responseHeaders.set('cdn-cache-control', 'no-store');
-  responseHeaders.set('cloudflare-cdn-cache-control', 'no-store');
+  if (isPublicStorageObjectRequest(request)) {
+    responseHeaders.set(
+      'cache-control',
+      upstream.headers.get('cache-control') ?? DEFAULT_PUBLIC_OBJECT_CACHE,
+    );
+    responseHeaders.delete('cdn-cache-control');
+    responseHeaders.delete('cloudflare-cdn-cache-control');
+    // A cacheable response must never carry one caller's session forward.
+    responseHeaders.delete('set-cookie');
+  } else {
+    responseHeaders.set('cache-control', 'private, no-store');
+    responseHeaders.set('cdn-cache-control', 'no-store');
+    responseHeaders.set('cloudflare-cdn-cache-control', 'no-store');
+  }
   responseHeaders.set('x-patina-trace-id', traceId);
 
   const responseInit = {

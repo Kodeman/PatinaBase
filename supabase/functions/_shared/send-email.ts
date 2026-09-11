@@ -5,6 +5,7 @@
 
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { SignJWT } from "https://deno.land/x/jose@v5.2.0/index.ts";
+import { htmlToText } from "./html-to-text.ts";
 
 export type SendCategory =
   | "transactional"
@@ -34,6 +35,10 @@ export interface ComplianceSendOptions {
   skipLog?: boolean;
   unsubscribeBaseUrl?: string;
   tags?: Array<{ name: string; value: string }>;
+  /** The business record this letter is about, stamped on notification_log.
+   * Only for the outbound copy to the external recipient; never on
+   * studio-facing notices. */
+  ref?: { type: string; id: string };
   idempotencyKey?: string;
   /** Fail closed when suppression/rate policy storage cannot be read. Durable
    * sends should enable this; legacy direct callers retain prior behavior. */
@@ -111,6 +116,14 @@ function getDevMode(): "dry_run" | "redirect" | "off" {
   return mode === "dry_run" || mode === "redirect" ? mode : "off";
 }
 
+/** The address actually handed to the provider — EMAIL_DEV_MODE=redirect
+ * rewrites it, and every notification_log row should say where the mail really
+ * went, the suppressed rows included. */
+function effectiveRecipient(to: string): string {
+  const override = Deno.env.get("EMAIL_DEV_REDIRECT_TO");
+  return getDevMode() === "redirect" && override ? override : to;
+}
+
 function getUnsubscribeSecret(): Uint8Array {
   const secret = Deno.env.get("UNSUBSCRIBE_TOKEN_SECRET") ||
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -124,6 +137,32 @@ function getUnsubscribeSecret(): Uint8Array {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Unknown send error";
+}
+
+/** Resend rejects a tag name/value outside [A-Za-z0-9_-] and caps its length. */
+const MAX_TAG_LENGTH = 256;
+
+function sanitizeTagValue(value: string): string {
+  return value.replace(/[^A-Za-z0-9_-]/g, "-").slice(0, MAX_TAG_LENGTH);
+}
+
+/**
+ * Every send is tagged with its category, and with its template when it has
+ * one, so Resend's own analytics slice the way notification_log does. A caller
+ * that sets either name itself keeps its value.
+ */
+export function buildResendTags(
+  options: Pick<ComplianceSendOptions, "tags" | "category" | "templateId">,
+): Array<{ name: string; value: string }> {
+  const merged = new Map<string, string>();
+  merged.set("category", options.category);
+  if (options.templateId) {
+    merged.set("template", sanitizeTagValue(options.templateId));
+  }
+  for (const tag of options.tags ?? []) {
+    merged.set(sanitizeTagValue(tag.name), sanitizeTagValue(tag.value));
+  }
+  return [...merged].map(([name, value]) => ({ name, value }));
 }
 
 export async function generateUnsubscribeToken(
@@ -203,10 +242,7 @@ export async function prepareCompliantEmail(
   options: ComplianceSendOptions,
 ): Promise<CompliancePreparationResult> {
   const devMode = getDevMode();
-  const recipientOverride = Deno.env.get("EMAIL_DEV_REDIRECT_TO");
-  const effectiveTo = devMode === "redirect" && recipientOverride
-    ? recipientOverride
-    : options.to;
+  const effectiveTo = effectiveRecipient(options.to);
 
   if (options.userId) {
     const suppression = await checkEmailSuppression(
@@ -274,13 +310,16 @@ export async function prepareCompliantEmail(
     html: options.html,
     headers,
   };
-  if (options.text) payload.text = options.text;
+  // A multipart send needs a text part; derive one rather than ship HTML alone.
+  const text = options.text ??
+    (options.html ? htmlToText(options.html) : undefined);
+  if (text) payload.text = text;
   const cc = options.cc
     ? (Array.isArray(options.cc) ? options.cc : [options.cc])
     : undefined;
   if (cc) payload.cc = cc;
   if (options.replyTo) payload.reply_to = options.replyTo;
-  if (options.tags) payload.tags = options.tags;
+  payload.tags = buildResendTags(options);
   if (options.attachments?.length) payload.attachments = options.attachments;
 
   return {
@@ -388,36 +427,54 @@ export async function sendCompliantEmail(
   }
 
   const prepared = await prepareCompliantEmail(supabase, options);
-  const shouldLog = Boolean(options.userId && !options.skipLog);
+  // A letter to someone with no Patina account still has a business record
+  // behind it; a `ref` is enough to earn a log row (notification_log.user_id is
+  // nullable, 00591).
+  const shouldLog = !options.skipLog &&
+    Boolean(options.userId || options.ref);
 
   if (prepared.state === "suppressed") {
     if (shouldLog) {
-      await supabase.from("notification_log").insert({
-        user_id: options.userId,
+      const { error } = await supabase.from("notification_log").insert({
+        user_id: options.userId ?? null,
         type: options.notificationType ?? "unknown",
         channel: "email",
         status: "suppressed",
         template_id: options.templateId,
+        ref_type: options.ref?.type,
+        ref_id: options.ref?.id,
+        recipient: effectiveRecipient(options.to),
         metadata: { reason: prepared.reason, ...options.metadata },
       });
+      if (error) {
+        console.error("[send-email] notification_log insert failed", error);
+      }
     }
     return { success: false, suppressed: true, error: prepared.reason };
   }
 
   let logId: string | undefined;
   if (shouldLog) {
-    const { data: logEntry } = await supabase
+    const { data: logEntry, error } = await supabase
       .from("notification_log")
       .insert({
-        user_id: options.userId,
+        user_id: options.userId ?? null,
         type: options.notificationType ?? "unknown",
         channel: "email",
         status: "sending",
         template_id: options.templateId,
+        ref_type: options.ref?.type,
+        ref_id: options.ref?.id,
+        recipient: prepared.request.to[0],
         metadata: options.metadata ?? {},
       })
       .select("id")
       .single();
+    // Without this the row is silently dropped and the provider_id never lands,
+    // so resend-webhook can never match the send it belongs to.
+    if (error) {
+      console.error("[send-email] notification_log insert failed", error);
+    }
     logId = logEntry?.id;
   }
 

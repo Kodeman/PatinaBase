@@ -8,6 +8,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { SignJWT } from "https://deno.land/x/jose@v5.2.0/index.ts";
 import { renderTemplateFromDb } from "../_shared/render-template.ts";
+import { toEmailAssetUrl } from "../_shared/email-assets.ts";
 import {
   renderBrandedShell,
   ctaButton,
@@ -620,7 +621,7 @@ function buildCampaignEmailHtml(
       const heroImageUrl = data.heroImageUrl as string;
 
       body = `
-        ${heroImageUrl ? `<img src="${heroImageUrl}" alt="Product launch" style="width:100%;border-radius:10px;margin-bottom:24px;" />` : ""}
+        ${heroImageUrl ? `<img src="${toEmailAssetUrl(heroImageUrl) ?? ""}" alt="Product launch" style="width:100%;border-radius:10px;margin-bottom:24px;" />` : ""}
         <h1 style="color:#1F1B16;font-family:${SERIF};font-size:28px;font-weight:600;line-height:1.16;letter-spacing:-0.015em;margin:0 0 16px;">${headline}</h1>
         <p style="color:#4B463E;font-family:${SANS};font-size:16px;line-height:1.62;margin:0 0 28px;">${bodyText}</p>
         ${products
@@ -628,7 +629,7 @@ function buildCampaignEmailHtml(
           .map(
             (p) => `
           <div style="margin-bottom:20px;">
-            ${p.imageUrl ? `<img src="${p.imageUrl}" alt="${p.name}" style="width:100%;border-radius:10px;margin-bottom:12px;" />` : ""}
+            ${p.imageUrl ? `<img src="${toEmailAssetUrl(p.imageUrl) ?? ""}" alt="${p.name}" style="width:100%;border-radius:10px;margin-bottom:12px;" />` : ""}
             <p style="color:#1F1B16;font-family:${SERIF};font-size:17px;font-weight:600;margin:0 0 4px;">${p.name}</p>
             <p style="color:#1F1B16;font-family:${SANS};font-size:15px;margin:0;">${p.priceFormatted}${p.maker ? ` <span style="color:#8C8578;font-style:italic;">by ${p.maker}</span>` : ""}</p>
           </div>
@@ -654,7 +655,7 @@ function buildCampaignEmailHtml(
         <div style="margin:0 0 16px;">
           <span style="display:inline-block;font-family:${MONO};font-size:11px;font-weight:500;letter-spacing:0.16em;text-transform:uppercase;color:#4E7A66;">${season}</span>
         </div>
-        ${moodImageUrl ? `<img src="${moodImageUrl}" alt="${season}" style="width:100%;border-radius:10px;margin-bottom:24px;" />` : ""}
+        ${moodImageUrl ? `<img src="${toEmailAssetUrl(moodImageUrl) ?? ""}" alt="${season}" style="width:100%;border-radius:10px;margin-bottom:24px;" />` : ""}
         <h1 style="color:#1F1B16;font-family:${SERIF};font-size:28px;font-weight:600;line-height:1.16;letter-spacing:-0.015em;margin:0 0 16px;">${headline}</h1>
         <p style="color:#4B463E;font-family:${SANS};font-size:16px;line-height:1.62;margin:0 0 28px;">${bodyText}</p>
         ${products
@@ -662,7 +663,7 @@ function buildCampaignEmailHtml(
           .map(
             (p) => `
           <div style="margin-bottom:16px;">
-            ${p.imageUrl ? `<img src="${p.imageUrl}" alt="${p.name}" style="width:100%;border-radius:8px;margin-bottom:8px;" />` : ""}
+            ${p.imageUrl ? `<img src="${toEmailAssetUrl(p.imageUrl) ?? ""}" alt="${p.name}" style="width:100%;border-radius:8px;margin-bottom:8px;" />` : ""}
             <p style="color:#1F1B16;font-family:${SERIF};font-size:15px;font-weight:600;margin:0 0 2px;">${p.name}</p>
             <p style="color:#1F1B16;font-family:${SANS};font-size:13px;margin:0;">${p.priceFormatted}</p>
           </div>
@@ -688,7 +689,7 @@ function buildCampaignEmailHtml(
       body = `
         <p style="color:#4E7A66;font-family:${MONO};font-size:11px;font-weight:500;letter-spacing:0.16em;text-transform:uppercase;margin:0 0 16px;">Maker Spotlight</p>
         <div style="margin:0 0 24px;">
-          ${makerPortraitUrl ? `<img src="${makerPortraitUrl}" alt="${makerName}" width="100" height="100" style="border-radius:50%;display:block;margin:0 0 12px;" />` : ""}
+          ${makerPortraitUrl ? `<img src="${toEmailAssetUrl(makerPortraitUrl) ?? ""}" alt="${makerName}" width="100" height="100" style="border-radius:50%;display:block;margin:0 0 12px;" />` : ""}
           <h1 style="color:#1F1B16;font-family:${SERIF};font-size:26px;font-weight:600;line-height:1.16;letter-spacing:-0.015em;margin:0 0 4px;">${makerName}</h1>
           ${makerLocation ? `<p style="color:#8C8578;font-family:${SERIF};font-size:14px;font-style:italic;margin:0;">${makerLocation}</p>` : ""}
         </div>
@@ -702,7 +703,7 @@ function buildCampaignEmailHtml(
           .map(
             (p) => `
           <div style="margin-bottom:16px;">
-            ${p.imageUrl ? `<img src="${p.imageUrl}" alt="${p.name}" style="width:100%;border-radius:10px;margin-bottom:12px;" />` : ""}
+            ${p.imageUrl ? `<img src="${toEmailAssetUrl(p.imageUrl) ?? ""}" alt="${p.name}" style="width:100%;border-radius:10px;margin-bottom:12px;" />` : ""}
             <p style="color:#1F1B16;font-family:${SERIF};font-size:17px;font-weight:600;margin:0 0 4px;">${p.name}</p>
             <p style="color:#1F1B16;font-family:${SANS};font-size:15px;margin:0 0 8px;">${p.priceFormatted}</p>
           </div>
@@ -747,7 +748,7 @@ function buildCampaignEmailHtml(
           .map(
             (p) => `
           <div style="margin-bottom:20px;">
-            ${p.imageUrl ? `<img src="${p.imageUrl}" alt="${p.name}" style="width:100%;border-radius:10px;margin-bottom:12px;" />` : ""}
+            ${p.imageUrl ? `<img src="${toEmailAssetUrl(p.imageUrl) ?? ""}" alt="${p.name}" style="width:100%;border-radius:10px;margin-bottom:12px;" />` : ""}
             <p style="color:#1F1B16;font-family:${SERIF};font-size:17px;font-weight:600;margin:0 0 4px;">${p.name}</p>
             <p style="color:#1F1B16;font-family:${SANS};font-size:15px;margin:0;">${p.priceFormatted}</p>
             ${p.matchReason ? `<p style="color:#4E7A66;font-family:${SANS};font-size:12px;font-weight:500;margin:4px 0 0;">${p.matchReason}</p>` : ""}

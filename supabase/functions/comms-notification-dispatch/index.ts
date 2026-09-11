@@ -27,6 +27,7 @@ import {
   signCommsMuteToken,
   buildMuteUrl,
 } from "../_shared/comms-token.ts";
+import { toEmailAssetUrl } from "../_shared/email-assets.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -240,7 +241,7 @@ serve(async (req) => {
       }
       const senderName = sender?.full_name ?? "Someone";
       const senderInitial = (senderName[0] ?? "?").toUpperCase();
-      const senderAvatarUrl = sender?.avatar_url ?? null;
+      const senderAvatarUrl = toEmailAssetUrl(sender?.avatar_url ?? null);
       const deepLink = deepLinkFor(p.role);
 
       // Display strings the DB-backed email template interpolates verbatim.
