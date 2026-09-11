@@ -20,6 +20,14 @@
 --       first branch is `p_owner = auth.uid()`, so a solo designer passes the
 --       co-membership gate and would otherwise be listed as a support designer
 --       on every project she logs an hour on.
+--   (h) a NULL auth.uid() (a server-side writer: service_role, cron, migration)
+--       seats NOBODY, and the same insert under the member's own JWT does seat.
+--       Added in review round 1 (finding m3): a seat satisfies `Team can view
+--       their project time entries`, whose live qual is is_project_team_member
+--       ALONE, so a seat is project-wide read. Under a NULL actor the
+--       co-membership gate cannot be evaluated at all, so the trigger fails
+--       closed instead of following 00317:38-39's bypass precedent — that
+--       precedent is for a guard that REFUSES, and this one GRANTS.
 --   (g) STRUCTURAL: the trigger body still carries the is_studio_comember gate.
 --       Case (e) passes with or without it — a failed INSERT rolls the trigger's
 --       seat back either way — so the gate needs its own assert or a future edit
@@ -252,6 +260,52 @@ BEGIN
     'FAIL f2: the principal must not appear on the roster as a team member, got ' || v_roster;
 
   RAISE NOTICE 'time_entry_auto_roster: case (f) passed.';
+END
+$$;
+
+-- ─── (h) a server-side writer (no JWT) seats nobody ─────────────────────────
+DO $$
+DECLARE
+  v_count INTEGER;
+  v_role  TEXT;
+BEGIN
+  -- No actor: this session is the unrestricted owner with no request.jwt.claims,
+  -- which is what a service_role / cron / migration write looks like to
+  -- auth.uid(). The member IS an active non-guest co-member of the project's
+  -- studio and is NOT rostered on this project — i.e. exactly the case that gets
+  -- a seat when she logs it herself (proved in h2 below).
+  ASSERT (SELECT auth.uid()) IS NULL, 'FAIL h0 (precondition): the actor must be NULL here';
+
+  INSERT INTO project_time_entries (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('a7300000-0000-4000-8000-0000000000b7', 'a7300000-0000-4000-8000-0000000000e2',
+          'a7300000-0000-4000-8000-000000000002', NOW() - INTERVAL '6 hours', 25, true, 'manual_entry');
+
+  SELECT count(*) INTO v_count FROM project_team_members
+   WHERE project_id = 'a7300000-0000-4000-8000-0000000000e2'
+     AND user_id    = 'a7300000-0000-4000-8000-000000000002';
+  ASSERT v_count = 0,
+    'FAIL h1: a write with no actor must seat nobody — a seat is project-wide read and the '
+    'co-membership gate cannot be evaluated without auth.uid(); got ' || v_count;
+
+  -- h2: the same member, same project, under her OWN JWT, is seated. Without this
+  -- half, h1 would also pass if the trigger had simply stopped working.
+  PERFORM pg_temp.assume_user('a7300000-0000-4000-8000-000000000002');
+  INSERT INTO project_time_entries (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('a7300000-0000-4000-8000-0000000000b8', 'a7300000-0000-4000-8000-0000000000e2',
+          'a7300000-0000-4000-8000-000000000002', NOW() - INTERVAL '5 hours', 20, true, 'manual_entry');
+  PERFORM pg_temp.reset_role();
+
+  SELECT count(*) INTO v_count FROM project_team_members
+   WHERE project_id = 'a7300000-0000-4000-8000-0000000000e2'
+     AND user_id    = 'a7300000-0000-4000-8000-000000000002';
+  ASSERT v_count = 1, 'FAIL h2a: her own log must seat exactly one row, got ' || v_count;
+
+  SELECT role INTO v_role FROM project_team_members
+   WHERE project_id = 'a7300000-0000-4000-8000-0000000000e2'
+     AND user_id    = 'a7300000-0000-4000-8000-000000000002';
+  ASSERT v_role = 'support_designer', 'FAIL h2b: the seat must be support_designer, got ' || v_role;
+
+  RAISE NOTICE 'time_entry_auto_roster: case (h) passed.';
 END
 $$;
 

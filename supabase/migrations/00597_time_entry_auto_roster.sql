@@ -22,8 +22,26 @@
 -- virtue of the seat this trigger just gave them. The seat is therefore gated
 -- on the same studio co-membership `time_entries_studio_insert_own`
 -- (00316:242-246) already requires: own row + a studio co-member's project.
--- A NULL auth.uid() (migration / service-role context) bypasses the gate,
--- matching 00317:38-39's precedent.
+--
+-- A NULL auth.uid() SEATS NOBODY — the one place this trigger deliberately does
+-- NOT follow 00317:38-39's bypass precedent, and the reason is the direction of
+-- the effect. 00317's guard REFUSES a write, so bypassing it under a trusted
+-- server context is safe; this trigger GRANTS a privilege. A seat satisfies
+-- `Team can view their project time entries`, whose live qual is
+-- is_project_team_member(project_id) ALONE (measured against pg_policies,
+-- 2026-09-11 — there is no user_id leg on the SELECT policy), so a seat hands its
+-- holder SELECT on EVERY row of that project, notes included. Under a NULL actor
+-- the co-membership gate cannot be evaluated at all (is_studio_comember reads
+-- auth.uid()), so a server-side writer — service_role, a cron job, a migration —
+-- could otherwise seat a person with no studio relationship of any kind and give
+-- them that read. Fail closed: no actor, no seat. Nothing in the tree writes
+-- project_time_entries server-side today (grep over supabase/functions and
+-- services is empty; iOS writes under the member's own JWT), so this costs
+-- nothing now; if a server-side writer is ever added it must seat deliberately,
+-- not as a side effect. Asserted as case (h) in
+-- supabase/tests/rls/time_entry_auto_roster_test.sql. NOTE that `current_user` is
+-- useless as a discriminator here — inside a SECURITY DEFINER function it is
+-- always the owner ('postgres'), whatever role called in.
 --
 -- The project's OWN designer is excluded outright — see the comment on the early
 -- exit in the body. She is not the person HT-25 was written about.
@@ -81,17 +99,21 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  IF v_actor IS NOT NULL THEN
-    IF NEW.user_id IS DISTINCT FROM v_actor THEN
-      RETURN NEW;
-    END IF;
-    IF NOT EXISTS (
-      SELECT 1 FROM public.projects p
-       WHERE p.id = NEW.project_id
-         AND public.is_studio_comember(p.designer_id)
-    ) THEN
-      RETURN NEW;
-    END IF;
+  -- No actor, no seat. See the banner: the gate cannot be evaluated without
+  -- auth.uid(), and a seat confers project-wide read.
+  IF v_actor IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  IF NEW.user_id IS DISTINCT FROM v_actor THEN
+    RETURN NEW;
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM public.projects p
+     WHERE p.id = NEW.project_id
+       AND public.is_studio_comember(p.designer_id)
+  ) THEN
+    RETURN NEW;
   END IF;
 
   IF EXISTS (
@@ -124,7 +146,10 @@ COMMENT ON FUNCTION public.time_entry_auto_roster() IS
   'the insert. The project''s own designer is never seated — she is already '
   'lead_designer to the classifier (00578:2708-2710) and her RLS does not come '
   'from the roster. A seat the owner removed IS re-seated on the next log '
-  '(owed ruling HT-25-a).';
+  '(owed ruling HT-25-a). A NULL auth.uid() (service_role, cron, migration) '
+  'seats NOBODY: the co-membership gate cannot be evaluated without an actor, '
+  'and a seat confers SELECT on every row of the project through '
+  '"Team can view their project time entries".';
 
 DROP TRIGGER IF EXISTS aaa0_time_entry_auto_roster_trg
   ON public.project_time_entries;

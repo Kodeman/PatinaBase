@@ -483,6 +483,16 @@ export type TimeToast = (
 export function useStartTimer(options?: { toast?: TimeToast }) {
   const queryClient = useQueryClient();
   const toast = options?.toast;
+  /** The 23505 branch below is the ONLY feedback a member gets for the
+   *  one-running-timer index (00177:37-41). A call site that forgets to pass a
+   *  toast must not silence it — it degrades to the console, never to nothing. */
+  const notify: TimeToast = (message, variant) => {
+    if (toast) {
+      toast(message, variant);
+      return;
+    }
+    console.warn(`[useStartTimer] ${message}`);
+  };
 
   return useMutation({
     mutationFn: async (input: StartTimerInput) => {
@@ -514,11 +524,11 @@ export function useStartTimer(options?: { toast?: TimeToast }) {
     },
     onError: (error: unknown, input) => {
       if ((error as { code?: string } | null)?.code === '23505') {
-        if (!input.quiet) toast?.('You already have a timer running', 'warning');
+        if (!input.quiet) notify('You already have a timer running', 'warning');
         // Another tab/device may have started it — make the chip catch up.
         queryClient.invalidateQueries({ queryKey: timeKeys.runningTimer() });
       } else if (!input.quiet) {
-        toast?.('Could not start the timer. Please try again.', 'error');
+        notify('Could not start the timer. Please try again.', 'error');
       }
     },
   });
