@@ -335,6 +335,19 @@ async function optOutAllForPhone(supabase: SupabaseClient, phone: string, now: s
 // invited this number a granted party row, which the send gate still reads,
 // while that studio's own consent record stays `not_asked`. Scoped, the record
 // and the mirror agree by construction.
+//
+// IT ALSO RUNS BEFORE writeChannelConsent(), NOT AFTER. The consent record's
+// mirror (00594 mirror_channel_consent_to_parties) flips this studio's party
+// rows to `granted` itself, under patina.suppress_consent_dispatch — which is
+// exactly what 00374's _site_request_consent_granted_dispatch stands down for.
+// Writing the record first therefore consumed the pending -> granted transition
+// silently: this update then matched nothing (YES filters on `pending`) or was a
+// granted -> granted non-transition (START), the trigger never fired, and every
+// site request parked in `awaiting_consent` on that seat stayed parked for ever
+// — that trigger is the only caller of site_request_dispatch_after_consent(),
+// and the lifecycle sweep only promotes requests that already have an outbox
+// row. Party row first, record second: the transition is real, the trigger
+// fires once, and the mirror that follows only refreshes evidence.
 async function grantPartiesForStudios(
   supabase: SupabaseClient,
   targets: StudioTarget[],
@@ -525,12 +538,17 @@ export async function processInbound(
         .filter((t) => startOrgSet.has(t.org)),
       startOrgs,
     );
+    // ORDER IS LOAD-BEARING — see grantPartiesForStudios. The party write goes
+    // FIRST so the real opted_out/pending -> granted transition is the one that
+    // fires 00374's site_request_consent_granted_dispatch and releases the
+    // trade's parked requests. The record write that follows only refreshes the
+    // evidence, under the mirror's suppression.
+    await grantPartiesForStudios(supabase, startTargets, nowIso, false);
     await writeChannelConsent(
       supabase,
       startTargets,
       from, "granted", nowIso, `Inbound ${upper}`,
     );
-    await grantPartiesForStudios(supabase, startTargets, nowIso, false);
     await captureServerEvent("sms-inbound", "sms_parse_outcome",
       { path: "keyword", intent: "start", confidence_bucket: "n/a", disposition: "resubscribed" },
       { getEnv: deps.getEnv, fetchImpl: deps.fetchImpl });
@@ -556,12 +574,13 @@ export async function processInbound(
         supabase,
         parties.filter((p) => p.sms_consent_status === "pending"),
       );
+      // Party write FIRST — see the START branch and grantPartiesForStudios.
+      await grantPartiesForStudios(supabase, yesTargets, nowIso, true);
       await writeChannelConsent(
         supabase,
         yesTargets,
         from, "granted", nowIso, `Inbound ${upper}`,
       );
-      await grantPartiesForStudios(supabase, yesTargets, nowIso, true);
       await captureServerEvent("sms-inbound", "sms_opt_in", { phone: from }, { getEnv: deps.getEnv, fetchImpl: deps.fetchImpl });
       const pending = parties.find((p) => p.sms_consent_status === "pending")!;
       const projectNames = await loadProjectNames(supabase, [pending.project_id]);

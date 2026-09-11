@@ -19,7 +19,11 @@
 -- email on any party row already folded to a card (studio_contact_id set,
 -- 00418). ON CONFLICT DO NOTHING against the (owner, kind, value) unique index,
 -- which is evaluated AFTER the normalising trigger — so the same number typed
--- three different ways lands once.
+-- three different ways lands once. sms_capable is NOT asserted from the card:
+-- it keeps its safe `false` default unless a party row on the same card carries
+-- the same normalised number, which is the only evidence in the database that
+-- the line was ever on an SMS rail (CS4-7 — an office line must never be
+-- offered an SMS invite, and person cards routinely carry office numbers).
 --
 -- The normalising rule itself lives in ONE function, public.normalize_channel_value
 -- (created here), because 00594 keys its consent record on the same value. Two
@@ -249,16 +253,45 @@ GRANT ALL ON public.studio_contact_channels TO service_role;
 -- ═══════════════════════════════════════════════════════════════════════════
 -- Backfill
 -- ═══════════════════════════════════════════════════════════════════════════
--- (a) Rolodex card phones. A person's single number is their mobile; a firm's
---     is the office line. Only a person's number is assumed SMS-capable.
+-- (a) Rolodex card phones. The card holds ONE untyped number; nothing on it
+--     says which kind of line it is, so this statement asserts as little as it
+--     can get away with.
+--
+--     sms_capable STAYS AT ITS `false` DEFAULT UNLESS THERE IS EVIDENCE.
+--     sms_capable exists to deny exactly the thing a blanket `true` would
+--     assert: "an office line must not be offered an SMS invite" (crm-model §2
+--     CS4-7, direction §5.1). Person cards carrying an office, showroom,
+--     dispatch or 311-only number are ordinary in the fixture (F-13 Ingrid,
+--     F-14 Rosa, F-17 Jim, F-20 Claire, F-27 Ray), and this statement runs ONCE
+--     — a wrong `true` is then a card the studio has to correct by hand. The
+--     only evidence available here is a party row folded onto the same card
+--     (00418) carrying the same normalised number: that number really was on an
+--     SMS rail. Leg (c) below folds those same rows and marks them `true`, so
+--     the two legs agree by construction rather than racing the ON CONFLICT.
+--
+--     channel_kind is still `mobile` for a person and `office` for a firm —
+--     the vocabulary has no "unknown" and a row needs some kind — but where
+--     there is no SMS evidence the label says so, so W1b's Reach editor can
+--     show the studio which lines it is being asked to type.
 INSERT INTO public.studio_contact_channels (owner_type, owner_id, channel_kind, value, sms_capable, label)
 SELECT sc.entity_kind,
        sc.id,
        CASE WHEN sc.entity_kind = 'person' THEN 'mobile' ELSE 'office' END,
        COALESCE(sc.phone_e164, sc.phone),
-       sc.entity_kind = 'person',
-       'From the card (00593 backfill)'
+       ev.texted,
+       CASE WHEN sc.entity_kind = 'person' AND NOT ev.texted
+            THEN 'From the card (00593 backfill) — line type unconfirmed'
+            ELSE 'From the card (00593 backfill)' END
 FROM public.studio_contacts sc
+CROSS JOIN LATERAL (
+  SELECT sc.entity_kind = 'person' AND EXISTS (
+           SELECT 1
+             FROM public.project_parties pp
+            WHERE pp.studio_contact_id = sc.id
+              AND public.normalize_channel_value('mobile', COALESCE(pp.phone_e164, pp.phone))
+                  = public.normalize_channel_value('mobile', COALESCE(sc.phone_e164, sc.phone))
+         ) AS texted
+) ev
 WHERE btrim(COALESCE(sc.phone_e164, sc.phone, '')) <> ''
 ON CONFLICT (owner_id, channel_kind, value) DO NOTHING;
 

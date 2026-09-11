@@ -90,7 +90,12 @@
 --     pending, not to not_asked. A STOP is the only stored record of a refusal
 --     and the RPC may not erase it. PR-m's way back is a FRESH recorded
 --     consent, which gets its own named door, record_channel_reconsent(),
---     landing on `pending` so the double opt-in still runs.
+--     landing on `pending` so the double opt-in still runs. Both doors state
+--     that gate INSIDE the write (the upsert's DO UPDATE … WHERE, the UPDATE's
+--     own WHERE) rather than as a read before it: a SELECT … FOR UPDATE locks
+--     nothing when the row does not exist yet, and the inbound STOP rail writes
+--     this table directly as service_role, so a refusal could land in the gap
+--     and be overwritten by the grant that read past it.
 --   · No write may EMPTY the evidence set: source / evidence /
 --     disclosure_version / recorded_by keep what stands when the new verdict
 --     does not restate them (R-AG). Laundering is closed by the evidence gate,
@@ -561,7 +566,6 @@ AS $$
 DECLARE
   v_value  text;
   v_now    timestamptz := now();
-  v_prior  text;
   v_row    public.studio_channel_consent;
 BEGIN
   IF NOT public.is_active_studio_member(p_organization_id) THEN
@@ -610,21 +614,21 @@ BEGIN
     END IF;
   END IF;
 
-  -- ── 2. Transition ─────────────────────────────────────────────────────────
-  -- Lock the row so two members cannot race past this check.
-  SELECT scc.status INTO v_prior
-    FROM public.studio_channel_consent scc
-   WHERE scc.organization_id = p_organization_id
-     AND scc.channel_kind    = p_channel_kind
-     AND scc.channel_value   = v_value
-     FOR UPDATE;
-
-  IF v_prior = 'opted_out' AND p_status <> 'opted_out' THEN
-    RAISE EXCEPTION 'channel_opted_out'
-      USING HINT = 'This number or address already opted out. Only they can '
-                   'rejoin by replying START, or the studio can record a fresh '
-                   'consent through record_channel_reconsent().';
-  END IF;
+  -- ── 2. Transition — stated INSIDE the write, never as a read before it ───
+  -- A `SELECT … FOR UPDATE` ahead of the upsert locks NOTHING when no row
+  -- exists yet, and the first record on a channel is exactly the contested
+  -- case: the inbound STOP rail upserts this table directly as service_role
+  -- (sms-inbound/pipeline.ts writeChannelConsent), so it could land `opted_out`
+  -- in the gap between that read and the upsert — and the upsert would then
+  -- take the DO UPDATE branch and write `granted` straight over a refusal that
+  -- was already on the books, leaving only opt_out_at behind and mirroring the
+  -- grant onto every seat in the studio on that number.
+  --
+  -- ON CONFLICT DO UPDATE re-reads the LATEST row version and re-evaluates its
+  -- own WHERE, so the rule belongs there: the write either happens or returns
+  -- nothing, and nothing returned IS the refusal (the IF NOT FOUND below).
+  -- Re-recording a refusal on a refusal is still allowed — hence the
+  -- EXCLUDED.status leg.
 
   -- ── 3. Write ──────────────────────────────────────────────────────────────
   -- No write may empty the evidence set (R-AG): each of source, evidence,
@@ -663,7 +667,16 @@ BEGIN
       -- rail agrees: pipeline.ts writes t.projectId ?? prior). R-Q's sentence
       -- names the job the verdict on the books came from, not an older one.
       origin_project_id  = COALESCE(EXCLUDED.origin_project_id, scc.origin_project_id)
+  WHERE scc.status IS DISTINCT FROM 'opted_out'
+     OR EXCLUDED.status = 'opted_out'
   RETURNING * INTO v_row;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'channel_opted_out'
+      USING HINT = 'This number or address already opted out. Only they can '
+                   'rejoin by replying START, or the studio can record a fresh '
+                   'consent through record_channel_reconsent().';
+  END IF;
 
   RETURN v_row;
 END;
@@ -681,7 +694,9 @@ COMMENT ON FUNCTION public.record_channel_consent(uuid, text, text, text, text, 
   '(consent_evidence_required); REFUSES not_asked outright '
   '(consent_not_recordable — there is nothing to record, R-AG); refuses every '
   'transition OUT of opted_out (channel_opted_out — record_channel_reconsent() '
-  'is the named way back, PR-m); never empties the evidence set — source, '
+  'is the named way back, PR-m), and states that gate inside the upsert''s '
+  'DO UPDATE … WHERE so a concurrent STOP cannot land in a read-then-write '
+  'window; never empties the evidence set — source, '
   'evidence, disclosure_version and recorded_by are kept when the new verdict '
   'does not restate them, and laundering is closed by the evidence gate, since '
   'every accepted status must supply its own source and evidence; normalises '
@@ -721,7 +736,6 @@ AS $$
 DECLARE
   v_value text;
   v_now   timestamptz := now();
-  v_prior text;
   v_row   public.studio_channel_consent;
 BEGIN
   IF NOT public.is_active_studio_member(p_organization_id) THEN
@@ -746,19 +760,13 @@ BEGIN
     RAISE EXCEPTION 'invalid_channel_value';
   END IF;
 
-  SELECT scc.status INTO v_prior
-    FROM public.studio_channel_consent scc
-   WHERE scc.organization_id = p_organization_id
-     AND scc.channel_kind    = p_channel_kind
-     AND scc.channel_value   = v_value
-     FOR UPDATE;
-
-  IF v_prior IS DISTINCT FROM 'opted_out' THEN
-    RAISE EXCEPTION 'no_opt_out_to_supersede'
-      USING HINT = 'There is no refusal on the books for this channel. Record '
-                   'the consent through record_channel_consent() instead.';
-  END IF;
-
+  -- The mirror image of record_channel_consent's gate, stated the same way:
+  -- inside the write. A read-then-check here had the same window in reverse —
+  -- the read saw `opted_out`, a concurrent writer moved the row, and this
+  -- UPDATE then superseded a refusal that was no longer on the books. In READ
+  -- COMMITTED an UPDATE re-reads the row it blocked on and re-applies its own
+  -- WHERE, so `AND scc.status = 'opted_out'` IS the gate and zero rows returned
+  -- is the refusal.
   UPDATE public.studio_channel_consent scc
      SET status             = 'pending',
          -- opt_out_at is KEPT. The room still has to be able to say "opted out
@@ -772,7 +780,14 @@ BEGIN
    WHERE scc.organization_id = p_organization_id
      AND scc.channel_kind    = p_channel_kind
      AND scc.channel_value   = v_value
+     AND scc.status          = 'opted_out'
   RETURNING * INTO v_row;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'no_opt_out_to_supersede'
+      USING HINT = 'There is no refusal on the books for this channel. Record '
+                   'the consent through record_channel_consent() instead.';
+  END IF;
 
   RETURN v_row;
 END;
@@ -786,7 +801,9 @@ GRANT EXECUTE ON FUNCTION public.record_channel_reconsent(uuid, text, text, text
 COMMENT ON FUNCTION public.record_channel_reconsent(uuid, text, text, text, text, text, uuid) IS
   'PR-m''s named way back from a recorded opt-out: a FRESH recorded consent, '
   'with source + evidence + disclosure_version all required. Refuses unless the '
-  'channel is currently opted_out (no_opt_out_to_supersede). Lands on `pending`, '
+  'channel is currently opted_out (no_opt_out_to_supersede — the condition is in '
+  'the UPDATE''s own WHERE, so a concurrent writer cannot move the row out from '
+  'under it). Lands on `pending`, '
   'never `granted` — granted stays the recipient''s to give by replying YES or '
   'START — and keeps opt_out_at so the refusal it superseded stays printable '
   '(00594).';

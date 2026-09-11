@@ -12,7 +12,12 @@
 --   2. studio_person_affiliations — E4: which person does what at which firm.
 --      Backfilled from studio_contacts.company_id (00417), which becomes a
 --      derived pointer at the open affiliation, kept equal by trigger. One
---      fact, one home, one writer — the pointer is the cache.
+--      fact, one home — the pointer is the cache. BOUND BOTH WAYS: an
+--      affiliation write re-derives the pointer, and a direct write to the
+--      legacy pointer (which is still what the shipped hooks do —
+--      use-studio-contacts.ts:202, :234) opens the affiliation it names. Bound
+--      one way only, the shipped UI produced cards with a firm and no
+--      affiliation row, invisible to the company card's crew list (R-W).
 --   3. studio_contact_rules — E7: the contact rule (allowed / forbidden /
 --      routed / hours / escalation), one per subject, person · company ·
 --      engagement.
@@ -208,7 +213,10 @@ COMMENT ON TABLE public.studio_person_affiliations IS
   'person-at-firm fact and the one the room reads (the company card''s crew '
   'list, R-W). studio_contacts.company_id (00417) is now a DERIVED POINTER at '
   'the person''s open affiliation, kept for the legacy readers and maintained '
-  'by sync_studio_contact_company_pointer() — never the other way round.';
+  'by sync_studio_contact_company_pointer(); a direct write to that legacy '
+  'column opens the matching affiliation here, through '
+  'sync_person_affiliation_from_pointer(), so neither writer can leave a person '
+  'at a firm the crew list cannot see.';
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_studio_person_affiliations_open
   ON public.studio_person_affiliations(person_id, company_id)
@@ -287,9 +295,10 @@ SELECT p.id, p.company_id, NULL, NULL
    AND c.organization_id = p.organization_id
 ON CONFLICT (person_id, company_id) WHERE to_date IS NULL DO NOTHING;
 
--- The pointer, kept equal to the open affiliation. One direction only: writing
--- an affiliation moves company_id, never the reverse, so there is one writer
--- for the fact and one for its cache.
+-- The pointer, kept equal to the open affiliation. Writing an affiliation moves
+-- company_id; the reverse binding (sync_person_affiliation_from_pointer, below)
+-- opens the affiliation when the legacy column is written directly, so the fact
+-- and its cache cannot disagree whichever writer moved first.
 CREATE OR REPLACE FUNCTION public._sync_person_company_pointer(p_person_id uuid)
 RETURNS void
 LANGUAGE plpgsql
@@ -338,6 +347,14 @@ SECURITY DEFINER
 SET search_path TO 'public'
 AS $$
 BEGIN
+  -- The other half of the binding is writing. sync_person_affiliation_from_pointer()
+  -- only ever leaves the affiliations agreeing with the pointer it was handed,
+  -- so recomputing the pointer from them would be a no-op — and the flag is
+  -- what makes "no-op" provable rather than merely likely.
+  IF COALESCE(current_setting('patina.suppress_affiliation_sync', true), '') = '1' THEN
+    RETURN NULL;
+  END IF;
+
   -- Both sides on an UPDATE that moves the row to another person.
   IF TG_OP <> 'INSERT' THEN
     PERFORM public._sync_person_company_pointer(OLD.person_id);
@@ -355,9 +372,11 @@ REVOKE ALL ON FUNCTION public.sync_studio_contact_company_pointer()
 COMMENT ON FUNCTION public.sync_studio_contact_company_pointer() IS
   'AFTER INSERT/UPDATE/DELETE on studio_person_affiliations: keeps '
   'studio_contacts.company_id equal to the person''s open affiliation''s '
-  'company_id. One direction only — the affiliation is the fact the room '
-  'reads, company_id the derived pointer the legacy readers still follow '
-  '(00592).';
+  'company_id. The affiliation is the fact the room reads, company_id the '
+  'derived pointer the legacy readers still follow; '
+  'sync_person_affiliation_from_pointer() binds the other direction, and this '
+  'function stands down (patina.suppress_affiliation_sync) while that one '
+  'writes (00592).';
 
 DROP TRIGGER IF EXISTS sync_studio_contact_company_pointer_trg
   ON public.studio_person_affiliations;
@@ -365,13 +384,120 @@ CREATE TRIGGER sync_studio_contact_company_pointer_trg
   AFTER INSERT OR UPDATE OR DELETE ON public.studio_person_affiliations
   FOR EACH ROW EXECUTE FUNCTION public.sync_studio_contact_company_pointer();
 
+-- ── The reverse binding ─────────────────────────────────────────────────────
+-- The pointer above is only half a binding. company_id is the column the
+-- SHIPPED writers still set — packages/supabase/src/hooks/use-studio-contacts.ts
+-- :202 (add a card) and :234 (edit one) — and nothing opened an affiliation
+-- from that write. So a designer who set a person's firm through the shipped UI
+-- produced a card with company_id set and NO affiliation row: invisible to the
+-- company card's crew list (R-W, which reads affiliations), and silently
+-- discarded the moment any affiliation was written for that person, because the
+-- pointer trigger would then overwrite the firm the designer had chosen.
+--
+-- R-AI says the room reads affiliations and company_id is a derived pointer
+-- kept for legacy readers. That only holds if writing the pointer OPENS the
+-- affiliation it points at. It does now, in both directions:
+--
+--   affiliation written  → pointer re-derived   (sync_studio_contact_company_pointer)
+--   pointer written      → affiliation opened   (this function)
+--
+-- Termination: this function writes affiliations only to make them AGREE with
+-- the pointer it was handed, and holds patina.suppress_affiliation_sync while
+-- it does, so the pointer trigger cannot write back. The pointer trigger's own
+-- UPDATE is guarded IS DISTINCT FROM, so it re-enters this function only when
+-- the value really moved, and this function returns at its first test when the
+-- open affiliation already equals it.
+CREATE OR REPLACE FUNCTION public.sync_person_affiliation_from_pointer()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+DECLARE
+  v_open uuid;
+BEGIN
+  IF NEW.entity_kind IS DISTINCT FROM 'person' THEN
+    RETURN NULL;
+  END IF;
+
+  -- What the affiliations already say — the same pick the pointer trigger
+  -- makes, so "they already agree" means the same thing on both sides.
+  SELECT spa.company_id INTO v_open
+    FROM public.studio_person_affiliations spa
+   WHERE spa.person_id = NEW.id
+     AND spa.to_date IS NULL
+   ORDER BY spa.from_date DESC NULLS LAST, spa.created_at DESC
+   LIMIT 1;
+
+  IF v_open IS NOT DISTINCT FROM NEW.company_id THEN
+    RETURN NULL;   -- nothing to bind; usually this is the pointer trigger's own write
+  END IF;
+
+  PERFORM set_config('patina.suppress_affiliation_sync', '1', true);
+
+  IF NEW.company_id IS NULL THEN
+    -- The designer cleared the firm: the person left, dated today.
+    UPDATE public.studio_person_affiliations spa
+       SET to_date = GREATEST(CURRENT_DATE, COALESCE(spa.from_date, CURRENT_DATE))
+     WHERE spa.person_id = NEW.id
+       AND spa.to_date IS NULL;
+  ELSIF public.studio_contact_org(NEW.company_id) IS DISTINCT FROM NEW.organization_id THEN
+    -- A cross-studio pointer is left exactly as the backfill and the RLS
+    -- WITH CHECK leave it: for a human. Opening the affiliation here would
+    -- write a row the policy itself refuses.
+    NULL;
+  ELSE
+    -- Open the new one FIRST, dated today so it outranks any NULL-dated row
+    -- the fold left, then close the others. The reverse order would leave a
+    -- moment with no open affiliation at all.
+    INSERT INTO public.studio_person_affiliations (person_id, company_id, from_date, to_date)
+    VALUES (NEW.id, NEW.company_id, CURRENT_DATE, NULL)
+    ON CONFLICT (person_id, company_id) WHERE to_date IS NULL DO NOTHING;
+
+    UPDATE public.studio_person_affiliations spa
+       SET to_date = GREATEST(CURRENT_DATE, COALESCE(spa.from_date, CURRENT_DATE))
+     WHERE spa.person_id = NEW.id
+       AND spa.to_date IS NULL
+       AND spa.company_id <> NEW.company_id;
+  END IF;
+
+  PERFORM set_config('patina.suppress_affiliation_sync', '', true);
+
+  RETURN NULL;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.sync_person_affiliation_from_pointer()
+  FROM PUBLIC, anon, authenticated;
+
+COMMENT ON FUNCTION public.sync_person_affiliation_from_pointer() IS
+  'AFTER INSERT/UPDATE OF company_id on studio_contacts: opens the person''s '
+  'affiliation at the firm the pointer names, closing any other open one, and '
+  'closes them all when the pointer is cleared. The reverse half of '
+  'sync_studio_contact_company_pointer(), so the legacy column the shipped '
+  'hooks still write (use-studio-contacts.ts:202, :234) cannot produce a card '
+  'the company''s crew list cannot see. Stands down for a cross-studio pointer, '
+  'which the affiliation RLS refuses anyway, and holds '
+  'patina.suppress_affiliation_sync while it writes so the two halves cannot '
+  'ping-pong (00592).';
+
+DROP TRIGGER IF EXISTS sync_person_affiliation_from_pointer_trg
+  ON public.studio_contacts;
+CREATE TRIGGER sync_person_affiliation_from_pointer_trg
+  AFTER INSERT OR UPDATE OF company_id ON public.studio_contacts
+  FOR EACH ROW EXECUTE FUNCTION public.sync_person_affiliation_from_pointer();
+
 COMMENT ON COLUMN public.studio_contacts.company_id IS
   'DERIVED POINTER at the person''s open affiliation '
   '(studio_person_affiliations.company_id), kept for the legacy readers that '
   'predate that table — the room itself reads the affiliations, which carry the '
   'role, the dates and the paperwork/signer flags a single id cannot. '
-  'Maintained by sync_studio_contact_company_pointer(); a direct write to this '
-  'column is overwritten by the next affiliation write (00592).';
+  'BOUND IN BOTH DIRECTIONS: sync_studio_contact_company_pointer() re-derives '
+  'this column from the open affiliation, and '
+  'sync_person_affiliation_from_pointer() opens (or closes) that affiliation '
+  'when this column is written directly — which is what the shipped hooks still '
+  'do. So a firm set through the legacy column is a firm the company card''s '
+  'crew list can see, and neither writer silently discards the other (00592).';
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- 4. studio_contact_rules — E7, the contact rule
