@@ -220,3 +220,25 @@ the deck `artifacts/portal-polish-review-2026-09-08/deck/index.html` (sheets 10�
 `docs/superpowers/plans/2026-09-08-portal-polish-build.md`.
 
 *Entries add: C1 · S1–S6 · V1–V7 · V8 · V9 · last id = V9*
+
+### V10 · Trade-side compliance upload door — narrows S2 — 2026-09-11
+
+**Decision:** Trades may write compliance documents (COI, W-9, licence, signed waivers) to the
+studio's company card through a tokened field-link page; documents land unverified until a studio
+member confirms them. The trade remains the studio's vendor, not Patina's customer.
+
+**Why this narrows S2.** S2 draws the line that homeowners are the studio's clients and makers are
+the studio's vendors — neither is Patina's customer. This is the first place a vendor (a trade) gets
+a write path into Patina at all, even a narrow, unverified-until-confirmed one scoped to their own
+compliance paperwork. S2 still holds — the trade never becomes a Patina customer, never gets an
+account by default, and every document they write sits unconfirmed until a studio member acts on
+it — but the boundary is no longer "vendors never write," it is "vendors may write compliance
+paperwork to the studio's own record, under the studio's review."
+
+**Source:** Kody, 2026-09-11 (**PR-a**), overruling the panel's lean to park this ask — panel
+`artifacts/people-room-crm-2026-09-11/`, rulings sheet
+`artifacts/people-room-crm-2026-09-11/rulings.md`, deck *Everyone on the Job* published at
+https://claude.ai/code/artifact/9be6c6e0-af40-43be-a46f-4ba6f29ab766. Built in P3 of the People room
+CRM program; see `docs/design/the-document/DECISIONS.md` **R151**.
+
+*Entries add: C1 · S1–S6 · V1–V7 · V8 · V9 · V10 · last id = V10*

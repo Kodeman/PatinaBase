@@ -11129,3 +11129,39 @@ happened yet.
 portal deploys, since the letterhead reads `document_state.subject` directly.
 
 *Entries add: I154 · last id = I154*
+
+### R151 · People room as a construction CRM — panel "Everyone on the Job" — 2026-09-11
+
+**Ruled by Kody, 2026-09-11** (**PR-a, PR-b, PR-c, PR-d, PR-g, PR-q, PR-r** by interview, plus one
+overrule on the eighteen leans; panel and evidence register `artifacts/people-room-crm-2026-09-11/`,
+rulings sheet `artifacts/people-room-crm-2026-09-11/rulings.md`, deck *Everyone on the Job*
+published at https://claude.ai/code/artifact/9be6c6e0-af40-43be-a46f-4ba6f29ab766). Twelve seats —
+six construction, six UX/UI — reworked the People room into a construction CRM: firms and people
+carry typed reach, consent, and paper facts; seats on a job carry authority, stage, and window; the
+Directory becomes a studio-wide ledger with the Call Sheet as its per-project DocSheet.
+
+**Seven rulings, by interview:**
+
+| ID | Ruling |
+|---|---|
+| PR-a | **Overruled the panel's park.** Build the trade-side compliance upload door (COI, W-9, licence, signed waivers) in P3 — a tokened field-link page a trade writes to, landing on the studio's company card unverified until a studio member confirms it. Amends VISION S2 (see the linked VISION-DECISIONS.md entry). |
+| PR-b | Hybrid adopted. A seat snapshots name-at-time and trade-on-the-job; typed channels, contact rule, consent, and document expiries live-read from the card when `studio_contact_id` is set. |
+| PR-c | Household + seat adopted, split by job. A household holds members and the change-order threshold; every member who acts on a job gets a seat carrying the authority grant. |
+| PR-d | Ends with the job adopted. The 90-day link clock is retired; a grant ends with the engagement window, renews on use, and prints its end date in words. |
+| PR-g | Mixed list adopted. Firm rows appear under Everyone, sorted into the band of the crew they carry; the head names both nouns ("29 people, 22 firms"). |
+| PR-q | 1200 ledger adopted. Hairline ledger rows replace bordered card rows at the 1200 studio working band; the Call Sheet stays a 760px DocSheet. |
+| PR-r | Never store the code adopted. Patina stores the lockbox version, the key holder, the hours, and who was told — never the gate code itself. |
+
+**Eighteen leans** (PR-e, f, h, i, j, k, l, m, n, o, p, s, t, u, v, w, x) **stand** as the panel
+recorded them. **PR-y is overruled**: no flag. The rebuilt `people_directory` replaces the
+six-branch view outright at 100% on deploy, rather than shipping behind a flag with the old view
+kept live.
+
+**Program terms** (rulings.md §6): all three phases build in this program; one deploy chain at the
+end; 100% rollout at deploy, no flag; the `call-sheet` flag is retired with Call Sheet live for
+every studio; the pending email-deliverability chain deploys as step one of the final chain; Patina
+Field (Capture) roster and site access screens ship to TestFlight; People help articles are drafted
+and pushed to Sanity. Done is deploy + probes + a walk script — Kody's signed-in prod walk is owed
+separately.
+
+*Entries add: R151 · last id = R151*

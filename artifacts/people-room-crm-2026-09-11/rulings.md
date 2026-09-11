@@ -8,13 +8,13 @@ These seven carry the most weight or the most cost if wrong. Rule these first.
 
 | ID | Ruling | Panel's lean | What changes if overruled | Kody's ruling |
 |---|---|---|---|---|
-| PR-a | The trade-side compliance upload door (AM-1, AM-8, AM-10, AM-13, AM-15), asked by five of six construction seats as one object | Park it. The studio records the document on the company card; Patina drafts the chase to the firm's paperwork contact, landing `awaiting_review` | A tokened upload page, an unverified-until-confirmed document state, and a trade-facing write tier enter the roadmap; the company card gains an inbound queue | |
-| PR-b | D-A: does a seat snapshot or live-read firm and person facts | Hybrid. Name at time and trade on the job stay snapshotted; typed channels, contact rule, consent and document expiries read live from the card when `studio_contact_id` is set. Amends PD-3 | Every seat keeps its own copy of consent and expiry, and the room re-derives truth heuristically at every seam, as G-1 already describes | |
-| PR-c | CRM-19: household object, or `client_rep` party row, for Chidi Okonkwo | Both, split by job. A household holds the members and the change-order threshold; every member who acts on a job gets a seat carrying the authority grant | If household only: authority has no per-job home. If `client_rep` only: the two spouses never resolve to one client | |
-| PR-d | CRM-14: the 90-day link clock | Retire it. A grant ends with the engagement window, renews on use, and prints its end date in words | The mint act cannot say "ends with the job"; the studio re-mints on a clock unrelated to the work | |
-| PR-g | Do firm rows appear under Everyone, or only under Firms | Mixed default list: firms appear under Everyone, sorted into the band of the crew they carry, and the head names both nouns ("29 people, 22 firms") | Everyone lists people only, Firms becomes the sole door to the rolodex's firms, and the head count carries one noun | |
-| PR-q | Density: hairline ledger rows at the 1200 band, replacing today's bordered white card rows at 760px | Adopt. The Directory is a ledger; the Call Sheet stays a 760px DocSheet | Today's row and measure stand, the word columns collapse into the unfold, and the Directory answers fewer questions per screen | |
-| PR-r | Does Patina store a live gate code at all | Store the lockbox version, the key holder, the hours, and who was told. Hold the code itself off Patina and print that the code is held off Patina, ask the key holder. No re-auth gate, no hide-on-glance | Patina stores the code, and the site access table needs a sensitivity treatment the room has no precedent for | |
+| PR-a | The trade-side compliance upload door (AM-1, AM-8, AM-10, AM-13, AM-15), asked by five of six construction seats as one object | Park it. The studio records the document on the company card; Patina drafts the chase to the firm's paperwork contact, landing `awaiting_review` | A tokened upload page, an unverified-until-confirmed document state, and a trade-facing write tier enter the roadmap; the company card gains an inbound queue | BUILD the trade-side upload door in P3. Overrules the panel's park; amends VISION S2 (Kody, 2026-09-11) |
+| PR-b | D-A: does a seat snapshot or live-read firm and person facts | Hybrid. Name at time and trade on the job stay snapshotted; typed channels, contact rule, consent and document expiries read live from the card when `studio_contact_id` is set. Amends PD-3 | Every seat keeps its own copy of consent and expiry, and the room re-derives truth heuristically at every seam, as G-1 already describes | Hybrid adopted |
+| PR-c | CRM-19: household object, or `client_rep` party row, for Chidi Okonkwo | Both, split by job. A household holds the members and the change-order threshold; every member who acts on a job gets a seat carrying the authority grant | If household only: authority has no per-job home. If `client_rep` only: the two spouses never resolve to one client | Household + seat adopted |
+| PR-d | CRM-14: the 90-day link clock | Retire it. A grant ends with the engagement window, renews on use, and prints its end date in words | The mint act cannot say "ends with the job"; the studio re-mints on a clock unrelated to the work | Ends with the job adopted |
+| PR-g | Do firm rows appear under Everyone, or only under Firms | Mixed default list: firms appear under Everyone, sorted into the band of the crew they carry, and the head names both nouns ("29 people, 22 firms") | Everyone lists people only, Firms becomes the sole door to the rolodex's firms, and the head count carries one noun | Mixed list adopted |
+| PR-q | Density: hairline ledger rows at the 1200 band, replacing today's bordered white card rows at 760px | Adopt. The Directory is a ledger; the Call Sheet stays a 760px DocSheet | Today's row and measure stand, the word columns collapse into the unfold, and the Directory answers fewer questions per screen | 1200 ledger adopted |
+| PR-r | Does Patina store a live gate code at all | Store the lockbox version, the key holder, the hours, and who was told. Hold the code itself off Patina and print that the code is held off Patina, ask the key holder. No re-auth gate, no hide-on-glance | Patina stores the code, and the site access table needs a sensitivity treatment the room has no precedent for | Never store the code adopted |
 
 ## 2. Leans on record (stand unless overruled)
 
@@ -22,24 +22,24 @@ Eighteen more rulings. Each carries a working lean; build proceeds on the lean u
 
 | ID | Ruling | Panel's lean | Kody's ruling |
 |---|---|---|---|
-| PR-e | Extending the three reach words (Account, Field link, On paper) | Do not extend. A forbidding or routing rule prints as a sentence beside the word, never as a fourth word | |
-| PR-f | CRM-10: widen kinds and trades | Widen in code now: client_rep, inspector with an ahj / lender / third_party subtype, lender, engineer, vendor, other_named with a required label; trades gain radon mitigation, insulation, waterproofing, roofing, septic. Defer studio-editable extension lists | |
-| PR-h | Does a lapsed COI read as a blocking clause on the roster row, or only on the company card | Both, one source. The document lives on the company card; the roster row prints a held clause in words with a terracotta leading rule, not a badge | |
-| PR-i | Which history line a picker mini row may carry | Repeat count and dates only. Never a verdict at the pick | |
-| PR-j | Do `?role`, `?view`, `?scope`, `?trade` stay in the address | Keep them. The People room gets its own rule | |
-| PR-k | Does Chidi Okonkwo get a second Patina account by default | No. Email-only is his default mode; an account is optional and additive | |
-| PR-l | When the engagement window is shorter than the firm's warranty term, does minting auto-extend | Make the studio choose, with the warranty end offered as the second option in words | |
-| PR-m | Is "mark opted out" ever a manual studio act | Yes, with a source and evidence, for a verbal STOP the studio heard. The way back is always a fresh recorded consent or an inbound START | |
-| PR-n | Who may set an authority grant | The principal by default; the lead designer may set a grant whose scope excludes money and draw certification | |
-| PR-o | On merge, may the studio flip which card survives | Yes, always the studio's call. The older card is pre-picked, both ids stay resolvable | |
-| PR-p | Stage on the cross-project Directory row | Stage prints on a seat line only, never as a person-level column | |
-| PR-s | May Patina Field mint a field link for someone met on site with no rolodex card | Yes, for a studio member's own session, creating the person card at the same moment | |
-| PR-t | Does a mobile screen show an authority threshold figure | Show the yes or no ("may approve this change order"), and the figure only on the desk | |
-| PR-u | AM-2: cross-studio compliance sharing | Park it. Each studio verifies independently; the compliant version copies the last verified document forward at the pick, inside one studio | |
-| PR-v | Who adds `--color-dusty-blue-ink` and re-audits every tint used as text | The People room build owns it, in the same alias block that maps house-sheet token names onto the shipped `--color-*` names | |
-| PR-w | Is the site access card ruled out of every client-facing surface, in writing | Yes. Studio-only table, no client RLS branch, no `show_to_client` toggle | |
-| PR-x | Is the phone-global consent reduction in `sms.ts:174-185` retired once `studio_channel_consent` ships | Keep it as a fail-closed secondary check until backfill is proven, then retire it in a named follow-up | |
-| PR-y | Is the `people_directory` rebuild sequenced before the seats-beneath Directory | Yes, both in P1, view first, behind a flag, with the six-branch view kept live | |
+| PR-e | Extending the three reach words (Account, Field link, On paper) | Do not extend. A forbidding or routing rule prints as a sentence beside the word, never as a fourth word | STAND (Kody, 2026-09-11) |
+| PR-f | CRM-10: widen kinds and trades | Widen in code now: client_rep, inspector with an ahj / lender / third_party subtype, lender, engineer, vendor, other_named with a required label; trades gain radon mitigation, insulation, waterproofing, roofing, septic. Defer studio-editable extension lists | STAND (Kody, 2026-09-11) |
+| PR-h | Does a lapsed COI read as a blocking clause on the roster row, or only on the company card | Both, one source. The document lives on the company card; the roster row prints a held clause in words with a terracotta leading rule, not a badge | STAND (Kody, 2026-09-11) |
+| PR-i | Which history line a picker mini row may carry | Repeat count and dates only. Never a verdict at the pick | STAND (Kody, 2026-09-11) |
+| PR-j | Do `?role`, `?view`, `?scope`, `?trade` stay in the address | Keep them. The People room gets its own rule | STAND (Kody, 2026-09-11) |
+| PR-k | Does Chidi Okonkwo get a second Patina account by default | No. Email-only is his default mode; an account is optional and additive | STAND (Kody, 2026-09-11) |
+| PR-l | When the engagement window is shorter than the firm's warranty term, does minting auto-extend | Make the studio choose, with the warranty end offered as the second option in words | STAND (Kody, 2026-09-11) |
+| PR-m | Is "mark opted out" ever a manual studio act | Yes, with a source and evidence, for a verbal STOP the studio heard. The way back is always a fresh recorded consent or an inbound START | STAND (Kody, 2026-09-11) |
+| PR-n | Who may set an authority grant | The principal by default; the lead designer may set a grant whose scope excludes money and draw certification | STAND (Kody, 2026-09-11) |
+| PR-o | On merge, may the studio flip which card survives | Yes, always the studio's call. The older card is pre-picked, both ids stay resolvable | STAND (Kody, 2026-09-11) |
+| PR-p | Stage on the cross-project Directory row | Stage prints on a seat line only, never as a person-level column | STAND (Kody, 2026-09-11) |
+| PR-s | May Patina Field mint a field link for someone met on site with no rolodex card | Yes, for a studio member's own session, creating the person card at the same moment | STAND (Kody, 2026-09-11) |
+| PR-t | Does a mobile screen show an authority threshold figure | Show the yes or no ("may approve this change order"), and the figure only on the desk | STAND (Kody, 2026-09-11) |
+| PR-u | AM-2: cross-studio compliance sharing | Park it. Each studio verifies independently; the compliant version copies the last verified document forward at the pick, inside one studio | STAND (Kody, 2026-09-11) |
+| PR-v | Who adds `--color-dusty-blue-ink` and re-audits every tint used as text | The People room build owns it, in the same alias block that maps house-sheet token names onto the shipped `--color-*` names | STAND (Kody, 2026-09-11) |
+| PR-w | Is the site access card ruled out of every client-facing surface, in writing | Yes. Studio-only table, no client RLS branch, no `show_to_client` toggle | STAND (Kody, 2026-09-11) |
+| PR-x | Is the phone-global consent reduction in `sms.ts:174-185` retired once `studio_channel_consent` ships | Keep it as a fail-closed secondary check until backfill is proven, then retire it in a named follow-up | STAND (Kody, 2026-09-11) |
+| PR-y | Is the `people_directory` rebuild sequenced before the seats-beneath Directory | Yes, both in P1, view first, behind a flag, with the six-branch view kept live | OVERRULED: no flag — the rebuilt `people_directory` replaces the six-branch view at 100% on deploy (Kody, 2026-09-11) |
 
 ## 3. Ruled by the orchestrator during build (Fable)
 
@@ -98,3 +98,16 @@ Never dropped, never quietly folded into the compliant version. Each has a compl
 - Flag names for the rollout.
 - The client page's "your contact" designation.
 - Patina Field scope beyond what PR-s and PR-t already state.
+
+## 6. Program rulings (Kody, 2026-09-11)
+
+| Axis | Ruling |
+|---|---|
+| Scope | All three phases (P1, P2, P3) build in this program — including the trade-side compliance upload door (PR-a) in P3 |
+| Deploy | One chain at the end, covering the whole program — not a phase-by-phase deploy |
+| Rollout | 100% at deploy, no flag. Overrules PR-y: the rebuilt `people_directory` replaces the six-branch view outright, not behind a flag |
+| Call Sheet flag | Retired. The `call-sheet` flag comes out; Call Sheet is live for all studios |
+| Email deliverability | The pending email-deliverability chain deploys as step one of the final chain, ahead of the People room CRM changes |
+| iOS | Patina Field (Capture) roster + site access screens are built and shipped to TestFlight as part of this program |
+| Help | Help articles for the People room are drafted and pushed to Sanity |
+| Definition of done | Deploy + probes + a walk script. Kody's signed-in prod walk is owed and not part of "done" for this program |
