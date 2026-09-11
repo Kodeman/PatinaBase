@@ -31814,6 +31814,10 @@ export type Database = {
         Returns: Json
       }
       claim_quiz_session: { Args: { p_session_key: string }; Returns: Json }
+      claim_time_entries: {
+        Args: { p_entry_ids: string[]; p_invoice_id: string }
+        Returns: string[]
+      }
       client_invitation_status: {
         Args: { p_designer_client_id: string }
         Returns: {

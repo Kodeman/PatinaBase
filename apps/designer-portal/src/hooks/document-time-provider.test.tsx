@@ -59,6 +59,13 @@ jest.mock('@patina/supabase', () => ({
     auth: { getUser: authGetUser },
     from: jest.fn(() => chainBuilder()),
   }),
+  useRunningTimer: () => ({ data: null }),
+  useStartTimer: () => ({ mutateAsync: startTimerMutateAsync }),
+  useStopTimer: () => ({ mutateAsync: stopTimerMutateAsync }),
+  useDiscardTimer: () => ({ mutateAsync: discardTimerMutateAsync }),
+  useCreateTimeEntry: () => ({ mutateAsync: jest.fn() }),
+  useUpdateTimeEntry: () => ({ mutateAsync: jest.fn() }),
+  useDeleteTimeEntry: () => ({ mutateAsync: jest.fn() }),
 }));
 
 const stopTimerMutateAsync = jest.fn(async (input: { entryId: string }) => {
@@ -83,16 +90,6 @@ const discardTimerMutateAsync = jest.fn(async (input: { entryId: string }) => {
   runningTimerRow = null;
   return { id: input.entryId };
 });
-
-jest.mock('@/hooks/use-time-tracking', () => ({
-  useRunningTimer: () => ({ data: null }),
-  useStartTimer: () => ({ mutateAsync: startTimerMutateAsync }),
-  useStopTimer: () => ({ mutateAsync: stopTimerMutateAsync }),
-  useDiscardTimer: () => ({ mutateAsync: discardTimerMutateAsync }),
-  useCreateTimeEntry: () => ({ mutateAsync: jest.fn() }),
-  useUpdateTimeEntry: () => ({ mutateAsync: jest.fn() }),
-  useDeleteTimeEntry: () => ({ mutateAsync: jest.fn() }),
-}));
 
 jest.mock('@/hooks/use-commercial-documents', () => ({
   commercialDocumentKeys: { authority: (id: string) => ['project-authority', id] },

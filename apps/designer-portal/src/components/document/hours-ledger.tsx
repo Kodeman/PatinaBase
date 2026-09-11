@@ -24,13 +24,13 @@
 
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { createBrowserClient } from '@patina/supabase';
 import {
+  createBrowserClient,
   filterProjectUnbilledEntries,
   useCreateTimeEntry,
   useDeleteTimeEntry,
   useUpdateTimeEntry,
-} from '@/hooks/use-time-tracking';
+} from '@patina/supabase';
 import { ACTIVITIES, fmtMinutes } from '@/lib/document/time-derivation';
 import { fmtDay, fmtUsd } from '@/lib/document/format';
 import { LedgerFrontMatter } from './ledger-front-matter';

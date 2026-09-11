@@ -6,24 +6,84 @@
  * index — a duplicate INSERT raises SQLSTATE 23505). database.types.ts is not
  * regenerated yet, so the Supabase client is cast `as any` like the other
  * portal hooks (see use-projects.ts).
+ *
+ * This module moved here from apps/designer-portal/src/hooks (00595 wave) so
+ * every surface that captures an hour — desk, ⌘K, mobile, Field drain — reads
+ * one implementation. The document-coupled pieces (document-time-provider,
+ * time-derivation, authority-hours) stay app-local.
  */
 
 import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
-import { createBrowserClient } from '@patina/supabase';
+import { createBrowserClient } from '../client';
 import { normalizePhaseSlug, ALL_PHASE_SLUGS, type PhaseSlug } from '@patina/types';
-import { queryKeys } from '@/lib/react-query';
-import { studioPeriodStartISO, type StudioPeriod } from '@/lib/time-billing';
-import { useToast } from '@/components/portal/toast-provider';
-import type { MockTimeTracking, TimeEntry as TimeSummaryEntry } from '@/types/project-ui';
-import {
-  isInvoiceEligibleTimeEntry,
-  type TimeBillingState,
-} from '@/lib/document/authority-hours';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const getSupabase = () => createBrowserClient() as any;
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
+
+// ── Query keys ──
+// Literal arrays that MIRROR designer-portal's queryKeys factory exactly
+// (queryKeys.projects.all = ['projects'], queryKeys.time.all = ['time'], and
+// runningTimer()'s trailing undefined is part of the key). The portal's other
+// hooks read and invalidate the same arrays, so these literals are a contract,
+// not a convenience — same house style as use-invoices.ts.
+const timeKeys = {
+  timeEntries: (projectId: string, filters?: unknown) =>
+    filters
+      ? (['projects', projectId, 'time-entries', filters] as const)
+      : (['projects', projectId, 'time-entries'] as const),
+  timeTracking: (projectId: string) => ['projects', projectId, 'time-tracking'] as const,
+  unbilledTime: (projectId: string) => ['projects', projectId, 'unbilled-time'] as const,
+  keyMetrics: (projectId: string) => ['projects', projectId, 'key-metrics'] as const,
+  timeline: (projectId: string) => ['projects', projectId, 'timeline'] as const,
+  all: ['time'] as const,
+  runningTimer: () => ['time', 'running-timer', undefined] as const,
+  studioReport: (period: string) => ['time', 'studio-report', period] as const,
+};
+
+// ── Billing state (the server's verdict on an hour) ──
+// Canonical here so this module does not reach into the portal; the portal's
+// lib/document/authority-hours re-exports these three for its own callers.
+
+export type TimeBillingState =
+  | 'authorized'
+  | 'pending_authorization'
+  | 'nonbillable';
+
+export interface InvoiceEligibleTimeEntry {
+  billable?: boolean | null;
+  invoice_id?: string | null;
+  billing_state?: TimeBillingState | null;
+}
+
+/**
+ * The server-authored billing state is decisive. A null state remains eligible
+ * for pre-authority legacy entries so existing projects keep invoicing.
+ */
+export function isInvoiceEligibleTimeEntry(
+  entry: InvoiceEligibleTimeEntry,
+): boolean {
+  if (entry.billable !== true || entry.invoice_id) return false;
+  return entry.billing_state == null || entry.billing_state === 'authorized';
+}
+
+// ── Rolling report windows ──
+
+export type StudioPeriod = 'week' | 'month' | 'quarter' | 'year';
+
+/**
+ * Inclusive lower bound (ISO timestamp) for a rolling report window ending
+ * now. Mirrors the earnings page's rolling periods ("week" = last 7 days).
+ */
+export function studioPeriodStartISO(period: StudioPeriod, now: Date = new Date()): string {
+  const start = new Date(now);
+  if (period === 'week') start.setDate(now.getDate() - 7);
+  else if (period === 'month') start.setMonth(now.getMonth() - 1);
+  else if (period === 'quarter') start.setMonth(now.getMonth() - 3);
+  else start.setFullYear(now.getFullYear() - 1);
+  return start.toISOString();
+}
 
 // ── Types ──
 
@@ -105,52 +165,20 @@ export function filterProjectUnbilledEntries<
 // Every time-entry write must refresh the project's entry list, the summary
 // panel, the unbilled rollup, and key metrics (hoursSpent).
 function invalidateProjectTime(queryClient: QueryClient, projectId: string) {
-  queryClient.invalidateQueries({ queryKey: queryKeys.projects.timeEntries(projectId) });
-  queryClient.invalidateQueries({ queryKey: queryKeys.projects.timeTracking(projectId) });
-  queryClient.invalidateQueries({ queryKey: queryKeys.projects.unbilledTime(projectId) });
-  queryClient.invalidateQueries({ queryKey: queryKeys.projects.keyMetrics(projectId) });
-  queryClient.invalidateQueries({ queryKey: queryKeys.time.all });
+  queryClient.invalidateQueries({ queryKey: timeKeys.timeEntries(projectId) });
+  queryClient.invalidateQueries({ queryKey: timeKeys.timeTracking(projectId) });
+  queryClient.invalidateQueries({ queryKey: timeKeys.unbilledTime(projectId) });
+  queryClient.invalidateQueries({ queryKey: timeKeys.keyMetrics(projectId) });
+  queryClient.invalidateQueries({ queryKey: timeKeys.all });
 }
 
 // ── Queries ──
-
-/** Completed entries (running timers excluded), newest first. */
-export function useTimeEntries(projectId: string | null, filters?: TimeEntryFilters) {
-  return useQuery({
-    queryKey: projectId
-      ? queryKeys.projects.timeEntries(projectId, filters)
-      : ['projects', 'time-entries', 'null'],
-    queryFn: async (): Promise<ProjectTimeEntry[]> => {
-      if (!projectId) throw new Error('Project ID required');
-      const supabase = getSupabase();
-      let query = supabase
-        .from('project_time_entries')
-        .select('*, profile:profiles!project_time_entries_user_id_fkey(full_name)')
-        .eq('project_id', projectId)
-        .not('duration_minutes', 'is', null)
-        .order('started_at', { ascending: false });
-
-      if (filters?.userId) query = query.eq('user_id', filters.userId);
-      if (filters?.phaseKey) query = query.eq('phase_key', filters.phaseKey);
-      if (filters?.billable !== undefined) query = query.eq('billable', filters.billable);
-      if (filters?.invoiced === true) query = query.not('invoice_id', 'is', null);
-      if (filters?.invoiced === false) query = query.is('invoice_id', null);
-      if (filters?.from) query = query.gte('started_at', filters.from);
-      if (filters?.to) query = query.lte('started_at', filters.to);
-
-      const { data, error } = await query;
-      if (error) throw error;
-      return (data ?? []) as ProjectTimeEntry[];
-    },
-    enabled: !!projectId,
-  });
-}
 
 /** Unbilled rollup from the project_unbilled_time view (00177). */
 export function useUnbilledTime(projectId: string | null) {
   return useQuery({
     queryKey: projectId
-      ? queryKeys.projects.unbilledTime(projectId)
+      ? timeKeys.unbilledTime(projectId)
       : ['projects', 'unbilled-time', 'null'],
     queryFn: async (): Promise<UnbilledTimeSummary> => {
       if (!projectId) throw new Error('Project ID required');
@@ -187,9 +215,25 @@ export function useUnbilledTime(projectId: string | null) {
   });
 }
 
+/** One phase's spent-vs-estimated hours (designer-portal's TimeEntry UI shape). */
+export interface TimePhaseSummary {
+  phase: PhaseSlug;
+  hoursSpent: number;
+  hoursEstimated: number;
+}
+
+/** Structurally the portal's MockTimeTracking, stated here so the data layer
+ *  does not import a portal UI type. */
+export interface ProjectTimeSummary {
+  entries: TimePhaseSummary[];
+  totalSpent: number;
+  totalEstimated: number;
+  effectiveRate: number;
+}
+
 /**
  * Shared summary fetch — spent vs estimated hours per phase, shaped to the
- * MockTimeTracking contract TimeTrackingPanel renders. Also used by
+ * ProjectTimeSummary contract TimeTrackingPanel renders. Also used by
  * useProjectTimeTracking (use-projects.ts) for real (UUID) projects.
  *
  * effectiveRate is left 0 — the panel derives the effective $/hr from
@@ -199,7 +243,7 @@ export async function fetchTimeSummary(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: any,
   projectId: string
-): Promise<MockTimeTracking> {
+): Promise<ProjectTimeSummary> {
   const [entriesRes, phasesRes] = await Promise.all([
     supabase
       .from('project_time_entries')
@@ -250,7 +294,7 @@ export async function fetchTimeSummary(
     if (minutes !== undefined) ensure(slug).spentMinutes += minutes;
   }
 
-  const summaryEntries: TimeSummaryEntry[] = order.map((slug) => {
+  const summaryEntries: TimePhaseSummary[] = order.map((slug) => {
     const agg = byPhase.get(slug)!;
     return {
       phase: slug,
@@ -265,20 +309,6 @@ export async function fetchTimeSummary(
     totalEstimated: round1(summaryEntries.reduce((sum, e) => sum + e.hoursEstimated, 0)),
     effectiveRate: 0,
   };
-}
-
-/** Per-phase spent vs estimated summary (UUID projects). */
-export function useTimeSummary(projectId: string | null) {
-  return useQuery({
-    queryKey: projectId
-      ? queryKeys.projects.timeTracking(projectId)
-      : ['projects', 'time-tracking', 'null'],
-    queryFn: async () => {
-      if (!projectId) throw new Error('Project ID required');
-      return fetchTimeSummary(getSupabase(), projectId);
-    },
-    enabled: !!projectId,
-  });
 }
 
 // ── Mutations (manual entries) ──
@@ -404,7 +434,7 @@ export interface RunningTimer {
 /** The signed-in user's running timer, or null. */
 export function useRunningTimer() {
   return useQuery({
-    queryKey: queryKeys.time.runningTimer(),
+    queryKey: timeKeys.runningTimer(),
     queryFn: async (): Promise<RunningTimer | null> => {
       const supabase = getSupabase();
       const { data: userData } = await supabase.auth.getUser();
@@ -439,14 +469,30 @@ export interface StartTimerInput {
   quiet?: boolean;
 }
 
+/** The portal's toast surface, injected — the data layer owns no UI. */
+export type TimeToast = (
+  message: string,
+  variant?: 'success' | 'error' | 'warning' | 'info',
+) => void;
+
 /**
  * Start a running timer. The partial unique index enforces one per user —
  * a duplicate start surfaces as SQLSTATE 23505, which we toast (and refresh
  * the runningTimer query so the chip shows the existing timer).
  */
-export function useStartTimer() {
+export function useStartTimer(options?: { toast?: TimeToast }) {
   const queryClient = useQueryClient();
-  const { toast } = useToast();
+  const toast = options?.toast;
+  /** The 23505 branch below is the ONLY feedback a member gets for the
+   *  one-running-timer index (00177:37-41). A call site that forgets to pass a
+   *  toast must not silence it — it degrades to the console, never to nothing. */
+  const notify: TimeToast = (message, variant) => {
+    if (toast) {
+      toast(message, variant);
+      return;
+    }
+    console.warn(`[useStartTimer] ${message}`);
+  };
 
   return useMutation({
     mutationFn: async (input: StartTimerInput) => {
@@ -474,15 +520,15 @@ export function useStartTimer() {
       return data as RunningTimer;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.time.runningTimer() });
+      queryClient.invalidateQueries({ queryKey: timeKeys.runningTimer() });
     },
     onError: (error: unknown, input) => {
       if ((error as { code?: string } | null)?.code === '23505') {
-        if (!input.quiet) toast('You already have a timer running', 'warning');
+        if (!input.quiet) notify('You already have a timer running', 'warning');
         // Another tab/device may have started it — make the chip catch up.
-        queryClient.invalidateQueries({ queryKey: queryKeys.time.runningTimer() });
+        queryClient.invalidateQueries({ queryKey: timeKeys.runningTimer() });
       } else if (!input.quiet) {
-        toast('Could not start the timer. Please try again.', 'error');
+        notify('Could not start the timer. Please try again.', 'error');
       }
     },
   });
@@ -547,7 +593,7 @@ export function useStopTimer() {
       return data as ProjectTimeEntry;
     },
     onSuccess: (entry) => {
-      // invalidateProjectTime covers queryKeys.time.all (→ runningTimer) too.
+      // invalidateProjectTime covers timeKeys.all (→ runningTimer) too.
       invalidateProjectTime(queryClient, entry.project_id);
     },
   });
@@ -568,17 +614,16 @@ export function useDiscardTimer() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.time.runningTimer() });
+      queryClient.invalidateQueries({ queryKey: timeKeys.runningTimer() });
     },
   });
 }
 
-// ── Invoice claim / release (kind='time' pull-through, 00178) ──
+// ── Invoice claim (kind='time' pull-through, 00178) ──
 // "Claiming" stamps invoice_id on unbilled entries when the composer creates
 // a draft carrying a time line; once stamped, the 00177 guard trigger locks
-// the entries' priced columns. "Releasing" nulls invoice_id back out (the
-// void_invoice RPC does this server-side; the client hook exists for
-// compensation paths and future draft-editing UI).
+// the entries' priced columns. Releasing is the void_invoice RPC's job,
+// server-side — no client hook nulls invoice_id any more.
 
 export interface ClaimTimeEntriesInput {
   invoiceId: string;
@@ -587,10 +632,12 @@ export interface ClaimTimeEntriesInput {
 }
 
 /**
- * Atomically-guarded claim: only rows still unbilled (`invoice_id IS NULL`)
- * are stamped. If another invoice claimed any of them since the composer
- * loaded, the partial claim is rolled back and the mutation throws so the
- * caller can compensate (delete the draft) and refresh.
+ * Atomic claim (00595). `claim_time_entries` stamps, in ONE statement, only the
+ * rows still unbilled, billable and authorized, and returns the ids it actually
+ * claimed. Fewer ids back than asked for means another invoice won the race:
+ * the mutation throws and the caller compensates by deleting its draft. There
+ * is deliberately NO compensating UPDATE here — the one that shipped detached
+ * every entry the invoice already carried.
  */
 export function useClaimTimeEntries(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
@@ -600,28 +647,19 @@ export function useClaimTimeEntries(options?: { errorSurface?: 'inline' }) {
     meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
     mutationFn: async ({ invoiceId, entryIds }: ClaimTimeEntriesInput) => {
       const supabase = getSupabase();
-      const { data, error } = await supabase
-        .from('project_time_entries')
-        .update({ invoice_id: invoiceId })
-        .in('id', entryIds)
-        .is('invoice_id', null)
-        .eq('billable', true)
-        .or('billing_state.eq.authorized,billing_state.is.null')
-        .select('id');
+      const { data, error } = await supabase.rpc('claim_time_entries', {
+        p_invoice_id: invoiceId,
+        p_entry_ids: entryIds,
+      });
       if (error) throw error;
 
-      const claimed = (data ?? []) as Array<{ id: string }>;
+      const claimed = ((data ?? []) as string[]);
       if (claimed.length !== entryIds.length) {
-        // Roll back whatever we did stamp, then surface the conflict.
-        await supabase
-          .from('project_time_entries')
-          .update({ invoice_id: null })
-          .eq('invoice_id', invoiceId);
         throw new Error(
           'Some of the selected time entries were just billed on another invoice. Refresh and try again.'
         );
       }
-      return claimed.map((row) => row.id);
+      return claimed;
     },
     onSuccess: (_ids, { projectId }) => {
       invalidateProjectTime(queryClient, projectId);
@@ -630,27 +668,7 @@ export function useClaimTimeEntries(options?: { errorSurface?: 'inline' }) {
   });
 }
 
-/** Release every entry attached to an invoice back to the unbilled pool. */
-export function useReleaseTimeEntries() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async ({ invoiceId }: { invoiceId: string; projectId: string }) => {
-      const supabase = getSupabase();
-      const { error } = await supabase
-        .from('project_time_entries')
-        .update({ invoice_id: null })
-        .eq('invoice_id', invoiceId);
-      if (error) throw error;
-    },
-    onSuccess: (_data, { projectId }) => {
-      invalidateProjectTime(queryClient, projectId);
-      queryClient.invalidateQueries({ queryKey: ['invoices'] });
-    },
-  });
-}
-
-// ── Studio time report (the Hours book — /desk?book=hours) ──
+// ── Studio time report ──
 
 export interface StudioTimeEntry extends ProjectTimeEntry {
   project?: { name: string | null } | null;
@@ -688,7 +706,7 @@ export interface StudioTimeReport {
  */
 export function useStudioTimeReport(period: StudioPeriod) {
   return useQuery({
-    queryKey: queryKeys.time.studioReport(period),
+    queryKey: timeKeys.studioReport(period),
     queryFn: async (): Promise<StudioTimeReport> => {
       const supabase = getSupabase();
       const startISO = studioPeriodStartISO(period);
@@ -808,9 +826,9 @@ export function useUpdatePhaseEstimates() {
       }
     },
     onSuccess: (_, { projectId }) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.timeTracking(projectId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.timeline(projectId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.keyMetrics(projectId) });
+      queryClient.invalidateQueries({ queryKey: timeKeys.timeTracking(projectId) });
+      queryClient.invalidateQueries({ queryKey: timeKeys.timeline(projectId) });
+      queryClient.invalidateQueries({ queryKey: timeKeys.keyMetrics(projectId) });
     },
   });
 }

@@ -80,11 +80,25 @@ version of `guard_project_ffe_selection_integrity()` from
 explicit) — that fix is applied and these files now fail on a *different,
 deeper* assertion, unrelated to the fixture bug:
 
-- `supabase/tests/commercial/authorized_schedule_test.sql` — now fails at `schedule line ... is not ready for authorization: ["designDisposition"]` from `_create_furnishings_authorization_from_schedule_impl`. A readiness-gate/fixture drift in the schedule-authorization domain.
-- `supabase/tests/commercial/design_services_authority_test.sql` — same `designDisposition` readiness-gate failure, same function.
-- `supabase/tests/commercial/executed_on_paper_test.sql` — same `designDisposition` readiness-gate failure, same function.
-- `supabase/tests/commercial/design_services_gap_hardening_test.sql` — `legacy release blocked by the wrong guard: 'schedule line ... is not ready for authorization: ["designDisposition"]'` — same family; the test's own message implies it already suspects a guard-ordering regression.
-- `supabase/tests/commercial/trade_scope_test.sql` — MOVED here from Group 2 by `00510`. Its Group 2 cause (`non-room assignment cannot carry a room`, raised inside `public.engage_trade_scope` itself, which inserted `project_ffe_items` without `assignment_scope`) is fixed: 00510 set `assignment_scope` explicitly in the RPC body, and the file now runs through the whole engagement ceremony — including a new assertion that both room-scoped presence lines are filed `assignment_scope = 'room'`. It now fails ~320 lines later at `schedule line ... is not ready for authorization: ["designDisposition"]`, the same readiness-gate family as the four above.
+**Failure points re-measured 2026-09-11** (hour-tracking W0 review round 1). Four
+of these five now abort EARLIER than the `designDisposition` readiness gate
+recorded below — inside `_countersign_design_services_agreement_impl`, at
+`design services agreement <uuid> not found or access denied`. The
+`designDisposition` diagnosis is kept in each entry because it is where the file
+stopped in 2026-08, and the new, earlier failure has not been diagnosed to a root
+cause; both are recorded so a reader does not re-diagnose the old one. Proven
+pre-existing, not hour-tracking's: the same five fail identically on a replay of
+`origin/hour-tracking/integration` (545 migrations, none of W0's) and none of
+W0's migrations touches the countersign path. **Consequence for any wave gating
+on this directory: `supabase/tests/commercial` exercises 10 of its 16 files and
+the four countersign files stop BEFORE their authority asserts — never report
+"commercial green" as coverage of the authority rate path.**
+
+- `supabase/tests/commercial/authorized_schedule_test.sql` — 2026-09-11: aborts at `:308`, `design services agreement d7300000-... not found or access denied`. Previously (2026-08) failed later at `schedule line ... is not ready for authorization: ["designDisposition"]` from `_create_furnishings_authorization_from_schedule_impl`. A readiness-gate/fixture drift in the schedule-authorization domain.
+- `supabase/tests/commercial/design_services_authority_test.sql` — 2026-09-11: aborts at `:177`, `design services agreement d5300000-... not found or access denied`, i.e. 44 lines before its three `project_unbilled_time` asserts at `:221,349,362` — so those asserts do not run. (The hour-tracking program therefore pins the repaired view's design-services arm in `supabase/tests/billing/time_unbilled_view_repair_test.sql` case (c) instead.) Previously: same `designDisposition` readiness-gate failure as above.
+- `supabase/tests/commercial/executed_on_paper_test.sql` — 2026-09-11: aborts at `:214`, `design services agreement ea300000-... not found or access denied`. Previously: same `designDisposition` readiness-gate failure, same function.
+- `supabase/tests/commercial/design_services_gap_hardening_test.sql` — 2026-09-11: aborts at `:128`, `proposal d6300000-... failed canonical project provenance`. Previously: `legacy release blocked by the wrong guard: 'schedule line ... is not ready for authorization: ["designDisposition"]'` — same family; the test's own message implies it already suspects a guard-ordering regression.
+- `supabase/tests/commercial/trade_scope_test.sql` — MOVED here from Group 2 by `00510`. Its Group 2 cause (`non-room assignment cannot carry a room`, raised inside `public.engage_trade_scope` itself, which inserted `project_ffe_items` without `assignment_scope`) is fixed: 00510 set `assignment_scope` explicitly in the RPC body. 2026-09-11: aborts at `:196`, `design services agreement d8300000-... not found or access denied`. Previously it ran the whole engagement ceremony and failed ~320 lines later at `schedule line ... is not ready for authorization: ["designDisposition"]`.
 
 Un-related residuals, each a genuine assertion failure whose root cause
 (a later migration changing a guard, a policy count, or an ordering) was
@@ -96,6 +110,7 @@ identified only down to the failing message, not chased further:
 - `supabase/tests/proposals/proposal_builder_atomicity_test.sql` — `proposal board room belongs to another proposal`.
 - `supabase/tests/proposals/proposal_policy_locking_integrity_test.sql` — `all thirteen installed-client SELECT-only policies must remain` (a policy-count assertion — the live count no longer matches 13).
 - `supabase/tests/proposals/proposal_signature_authority_test.sql` — `owner_insert_requires_owner`.
+- `supabase/tests/field/field_capture_note_routing_test.sql` — `FAIL 7f: field_captures should carry exactly five policies, got 9` (at `:547`). Added 2026-09-11 (hour-tracking W0 review, finding N1): `00584_studio_comember_rls_sweep.sql` added the four `field_captures_studio_{select,insert,update,delete}` policies beside the five the assertion was written against, so the count is 9. The assertion's own message asks for a deliberate ruling (FC-R8 per-studio) rather than a silent bump — so the expected count is left alone and the file is listed here instead. Unrelated to hour tracking: W0 adds no policy to any table.
 - `supabase/tests/rls/design_requests_test.sql` — `FAIL 3b: expected no_scans, got <none>` (a case that should raise a specific error no longer does).
 - `supabase/tests/rls/studio_titles_test.sql` — `FAIL f: demoting the sole active owner should raise last_owner_protected` (same shape — an expected guard no longer fires). Cross-ref project memory: studio co-member RLS has a documented SECURITY DEFINER requirement that may be implicated.
 - `supabase/tests/spec_books/security_and_lifecycle_test.sql` — `only service_role may finalize rendered issues` (the test's own custom ASSERT message; the finalize-lifecycle guard it exercises no longer behaves as written).
