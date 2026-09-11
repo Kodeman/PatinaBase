@@ -75,6 +75,15 @@ These were decided mid-build to keep the specimens moving. They stand unless Kod
 | R-Z | No element id may equal a hash token. The 390 file's state sections take the 1440 file's `id="face-<state>"` pattern with a hash-to-id lookup; all `getElementById` call sites follow |
 | R-AA | A seat line under a Directory person row is a button at both widths whose accessible name is the seat's text, and activating it opens that person's card — the same open-person path as the row's name — announcing the card in `role="status"`. No inert buttons |
 | R-AB | These specimens are design specimens, not a prototype of writes. The acts that would write to the studio's book — Edit the rule, Revoke, Send a text, Record a document, Chase the renewal, Text, Copy field link, Show to client, Close this seat, Add four to the roster, Add to the roster, Save this note — are deliberately inert. They stay enabled, focusable buttons beside their consequence sentences; no `aria-disabled`, no caveat on the face. SPEC §7 gains rule 13 stating this. Settled: not a finding |
+| R-AC | Owners and admins of the studio receive the compliance_document_inbound notice, plus the member who minted the paperwork link if they are neither. No new role. (Kody) |
+| R-AD | A firm with no active engagement may still be minted a paperwork link; the studio chooses the end date, offered as 30 days or the firm's next engagement window, in words on the mint act (PR-l pattern). No silent fallback clock. (Fable) |
+| R-AE | A confirmed waiver upload stays a compliance document on the company card; it writes nothing to the money book. The money book reads it later if it chooses (CRM-9 lean). (Fable) |
+| R-AF | One paperwork token per firm by convention; a person who is paperwork contact for two firms holds two links. (Fable) |
+| R-AG | record_channel_consent refuses 'not_asked' as a target status; no status change may null or overwrite consent evidence columns; a change restates evidence or is refused (W1a M3-1). (Fable, 2026-09-11) |
+| R-AH | flushDeferredMessages re-checks consent through channelConsentVerdict keyed off the party row before every deferred send (W1a M3-2). (Fable, 2026-09-11) |
+| R-AI | 00592 backfills studio_person_affiliations from studio_contacts.company_id; a trigger keeps company_id equal to the open affiliation; the room reads affiliations, company_id is a derived legacy pointer (W1a M3-3). (Fable, 2026-09-11) |
+| R-AJ | Inbound START/UNSTOP grants consent only for studios whose record for that phone is opted_out or pending; not_asked and no-record studios are untouched (W1a M3-4). (Fable, 2026-09-11) |
+| R-AK | The no-record consent fallback is scoped to the resolving studio's own party rows; PR-x's fail-closed phone-global check means across that studio's projects, never across tenants (W1a F3). (Fable, 2026-09-11) |
 
 ## 4. Parked (side journeys under VISION)
 

@@ -32,6 +32,11 @@
 --      party row can never sit at granted with a NULL evidence set.
 --  11. r2 M-3: one normalisation rule — an unparseable phone gets a channel row
 --      AND a consent record, on the same key.
+--  12. r3 R-AG/R-AI: record_channel_consent refuses `not_asked` outright and no
+--      status change empties the evidence set (block 9d); and
+--      studio_person_affiliations is the home of person-at-firm while
+--      studio_contacts.company_id is a derived pointer the trigger keeps equal
+--      (block 12).
 --
 -- How to run:
 --   psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
@@ -693,24 +698,54 @@ BEGIN
   ASSERT raised = 'consent_evidence_required',
     'FAIL 9c: a manual opt-out needs source + evidence, got ' || COALESCE(raised, '<no error>');
 
-  -- 9d. NO LAUNDERING. A grant, then a status change with nothing supplied:
-  --     the grant's provenance must NOT survive onto the new verdict.
+  -- 9d. r3 R-AG: `not_asked` is not a verdict. The four-argument call that
+  --     needed no evidence at all — and erased a recorded grant, its source,
+  --     its words and its disclosure version, from the record AND from every
+  --     mirrored seat — is refused outright.
   PERFORM public.record_channel_consent(
     'b0000000-0000-4000-8000-00000000000a', 'sms', '6125550166', 'granted',
     'written', 'Signed 2025 form', 'field-sms-v1', NULL);
-  PERFORM public.record_channel_consent(
-    'b0000000-0000-4000-8000-00000000000a', 'sms', '6125550166', 'not_asked');
+  raised := NULL;
+  BEGIN
+    PERFORM public.record_channel_consent(
+      'b0000000-0000-4000-8000-00000000000a', 'sms', '6125550166', 'not_asked');
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'consent_not_recordable',
+    'FAIL 9d: not_asked must be refused, got ' || COALESCE(raised, '<no error>');
+
   SELECT * INTO r FROM studio_channel_consent
    WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
      AND channel_value = '+16125550166';
-  ASSERT r.status = 'not_asked', 'FAIL 9d: expected not_asked, got ' || COALESCE(r.status, '<none>');
-  ASSERT r.source IS NULL AND r.evidence IS NULL AND r.disclosure_version IS NULL,
-    'FAIL 9d: the grant''s provenance must not carry onto a different verdict, got '
-    || COALESCE(r.source, '<null>') || ' / ' || COALESCE(r.evidence, '<null>');
-  ASSERT r.consented_at IS NOT NULL, 'FAIL 9d2: the grant DATE still survives (R-Q)';
+  ASSERT r.status = 'granted', 'FAIL 9d2: the grant must stand, got ' || COALESCE(r.status, '<none>');
+  ASSERT r.source = 'written' AND r.evidence = 'Signed 2025 form'
+     AND r.disclosure_version = 'field-sms-v1' AND r.recorded_by IS NOT NULL,
+    'FAIL 9d2: the refused call must leave the whole evidence set standing, got '
+    || COALESCE(r.source, '<null>') || ' / ' || COALESCE(r.evidence, '<null>') || ' / '
+    || COALESCE(r.disclosure_version, '<null>');
 
-  -- 9e. Nothing leaves opted_out through this door — not even to not_asked,
-  --     which would erase the only stored record of the refusal.
+  -- 9d3. R-AG's other half: a status CHANGE may not EMPTY the evidence set. An
+  --      opt-out carries no disclosure version of its own — the version the
+  --      person was shown when they consented is the audit's, and it stays.
+  --      Laundering is closed by the evidence gate instead: source and evidence
+  --      were restated by this very call.
+  PERFORM public.record_channel_consent(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '6125550166', 'opted_out',
+    'verbal', 'Told me at the walk-through to stop', NULL, NULL);
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550166';
+  ASSERT r.status = 'opted_out', 'FAIL 9d3: expected opted_out, got ' || COALESCE(r.status, '<none>');
+  ASSERT r.source = 'verbal' AND r.evidence = 'Told me at the walk-through to stop',
+    'FAIL 9d3: the refusal must carry its OWN words, got '
+    || COALESCE(r.source, '<null>') || ' / ' || COALESCE(r.evidence, '<null>');
+  ASSERT r.disclosure_version = 'field-sms-v1',
+    'FAIL 9d3: the disclosure version must not be nulled by a change, got '
+    || COALESCE(r.disclosure_version, '<null>');
+  ASSERT r.recorded_by IS NOT NULL, 'FAIL 9d3: recorded_by must not be nulled';
+  ASSERT r.consented_at IS NOT NULL, 'FAIL 9d4: the grant DATE still survives (R-Q)';
+
+  -- 9e. Nothing leaves opted_out through this door. not_asked is now refused
+  --     one gate earlier (R-AG), so it cannot erase the refusal either way.
   PERFORM public.record_channel_consent(
     'b0000000-0000-4000-8000-00000000000a', 'sms', '6125550166', 'opted_out',
     'inbound_sms', 'Replied STOP', NULL, NULL);
@@ -719,7 +754,7 @@ BEGIN
     PERFORM public.record_channel_consent(
       'b0000000-0000-4000-8000-00000000000a', 'sms', '6125550166', 'not_asked');
   EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
-  ASSERT raised = 'channel_opted_out',
+  ASSERT raised = 'consent_not_recordable',
     'FAIL 9e: opted_out -> not_asked must be refused, got ' || COALESCE(raised, '<no error>');
 
   raised := NULL;
@@ -877,6 +912,126 @@ BEGIN
   PERFORM pg_temp.reset_role();
 
   RAISE NOTICE '11. one normalisation + origin rule (M-3): passed';
+END
+$$;
+
+-- ─── 12. r3 R-AI: one home for person-at-firm, one derived pointer ─────────
+--
+-- studio_person_affiliations is the fact the room reads; studio_contacts.
+-- company_id (00417) is a derived pointer kept for the legacy readers. The
+-- trigger is what binds them, so the two can never answer "which firm is this
+-- person at" differently.
+
+-- A second Alpha person card, so this block's affiliation does not collide
+-- with block 1's (person c…0001 is already open at Northgate).
+INSERT INTO studio_contacts (id, organization_id, entity_kind, contact_kind, full_name, created_by)
+VALUES ('c0000000-0000-4000-8000-00000000000f', 'b0000000-0000-4000-8000-00000000000a',
+        'person', 'sub', 'Rosa Vela', 'a0000000-0000-4000-8000-000000000001');
+
+DO $$
+DECLARE
+  v UUID;
+  n INTEGER;
+  aff_id UUID;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+
+  -- 12a. Opening an affiliation moves the pointer.
+  INSERT INTO studio_person_affiliations (person_id, company_id, role_at_firm)
+  VALUES ('c0000000-0000-4000-8000-00000000000f',
+          'c0000000-0000-4000-8000-000000000002', 'foreman')
+  RETURNING id INTO aff_id;
+  PERFORM pg_temp.reset_role();
+
+  SELECT company_id INTO v FROM studio_contacts
+   WHERE id = 'c0000000-0000-4000-8000-00000000000f';
+  ASSERT v = 'c0000000-0000-4000-8000-000000000002',
+    'FAIL 12a: the open affiliation must set the pointer, got ' || COALESCE(v::text, '<null>');
+
+  -- 12a2. Block 1's affiliation moved its own person's pointer too — the
+  --       trigger is not scoped to this block's fixture.
+  SELECT company_id INTO v FROM studio_contacts
+   WHERE id = 'c0000000-0000-4000-8000-000000000001';
+  ASSERT v = 'c0000000-0000-4000-8000-000000000002',
+    'FAIL 12a2: block 1''s affiliation must have set its pointer, got ' || COALESCE(v::text, '<null>');
+
+  -- 12b. A direct legacy write to the pointer does not survive the next
+  --      affiliation write: the affiliation is the fact, the column the cache.
+  UPDATE studio_contacts SET company_id = NULL
+   WHERE id = 'c0000000-0000-4000-8000-00000000000f';
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+  UPDATE studio_person_affiliations SET role_at_firm = 'superintendent'
+   WHERE id = aff_id;
+  PERFORM pg_temp.reset_role();
+  SELECT company_id INTO v FROM studio_contacts
+   WHERE id = 'c0000000-0000-4000-8000-00000000000f';
+  ASSERT v = 'c0000000-0000-4000-8000-000000000002',
+    'FAIL 12b: the pointer must be re-derived from the affiliation, got ' || COALESCE(v::text, '<null>');
+
+  -- 12c. Closing the affiliation (the person leaving the firm) clears it.
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+  UPDATE studio_person_affiliations SET to_date = CURRENT_DATE WHERE id = aff_id;
+  PERFORM pg_temp.reset_role();
+  SELECT company_id INTO v FROM studio_contacts
+   WHERE id = 'c0000000-0000-4000-8000-00000000000f';
+  ASSERT v IS NULL,
+    'FAIL 12c: a closed affiliation must clear the pointer, got ' || COALESCE(v::text, '<null>');
+
+  -- 12d. Deleting the row re-derives it too, and there is nothing left.
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+  UPDATE studio_person_affiliations SET to_date = NULL WHERE id = aff_id;
+  DELETE FROM studio_person_affiliations WHERE id = aff_id;
+  PERFORM pg_temp.reset_role();
+  SELECT company_id INTO v FROM studio_contacts
+   WHERE id = 'c0000000-0000-4000-8000-00000000000f';
+  ASSERT v IS NULL,
+    'FAIL 12d: a deleted affiliation must clear the pointer, got ' || COALESCE(v::text, '<null>');
+
+  -- 12e. The fold 00592 runs at migration time, over live data: a person
+  --      already linked through company_id gets ONE open affiliation, and a
+  --      re-run adds nothing. (The statement is 00592's, verbatim — it has no
+  --      function to call; if that statement changes, change this with it.)
+  UPDATE studio_contacts SET company_id = 'c0000000-0000-4000-8000-000000000002'
+   WHERE id = 'c0000000-0000-4000-8000-00000000000f';
+
+  INSERT INTO public.studio_person_affiliations (person_id, company_id, from_date, to_date)
+  SELECT p.id, p.company_id, NULL, NULL
+    FROM public.studio_contacts p
+    JOIN public.studio_contacts c ON c.id = p.company_id
+   WHERE p.company_id IS NOT NULL
+     AND p.entity_kind = 'person'
+     AND c.organization_id = p.organization_id
+  ON CONFLICT (person_id, company_id) WHERE to_date IS NULL DO NOTHING;
+
+  INSERT INTO public.studio_person_affiliations (person_id, company_id, from_date, to_date)
+  SELECT p.id, p.company_id, NULL, NULL
+    FROM public.studio_contacts p
+    JOIN public.studio_contacts c ON c.id = p.company_id
+   WHERE p.company_id IS NOT NULL
+     AND p.entity_kind = 'person'
+     AND c.organization_id = p.organization_id
+  ON CONFLICT (person_id, company_id) WHERE to_date IS NULL DO NOTHING;
+
+  SELECT COUNT(*) INTO n FROM studio_person_affiliations
+   WHERE person_id = 'c0000000-0000-4000-8000-00000000000f'
+     AND company_id = 'c0000000-0000-4000-8000-000000000002'
+     AND to_date IS NULL;
+  ASSERT n = 1,
+    'FAIL 12e: the fold must leave exactly one open affiliation, got ' || n;
+
+  -- 12f. And no person card anywhere is left pointing at a firm it has no open
+  --      affiliation with — the invariant the backfill exists to establish.
+  SELECT COUNT(*) INTO n
+    FROM studio_contacts p
+   WHERE p.entity_kind = 'person'
+     AND p.company_id IS NOT NULL
+     AND NOT EXISTS (
+       SELECT 1 FROM studio_person_affiliations a
+        WHERE a.person_id = p.id AND a.company_id = p.company_id AND a.to_date IS NULL);
+  ASSERT n = 0,
+    'FAIL 12f: ' || n || ' person card(s) point at a firm with no open affiliation';
+
+  RAISE NOTICE '12. affiliations are the home, company_id the pointer (R-AI): passed';
   RAISE NOTICE 'All W1a assertions passed.';
 END
 $$;

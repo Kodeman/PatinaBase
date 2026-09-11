@@ -31194,6 +31194,10 @@ export type Database = {
         Args: { p_request: Json }
         Returns: Json
       }
+      _sync_person_company_pointer: {
+        Args: { p_person_id: string }
+        Returns: undefined
+      }
       _sync_proposal_send_email_log: {
         Args: { p_dispatch_id: string }
         Returns: undefined

@@ -963,3 +963,93 @@ Deno.test("a STOP re-homes origin_project_id onto the job it came from", async (
     "the verdict on the books names the job it came from",
   );
 });
+
+// ── r3 R-AJ: a START is a RE-subscription, never a first grant ──────────────
+//
+// studiosHoldingPhone() returns every studio with a seat on the number,
+// without looking at what that studio's record says. Unioned into the START
+// targets, a studio that holds a seat, has never invited the number and sits
+// at `not_asked` was written `granted` with source `inbound_sms` — after which
+// the send gate's `allow` branch authorised it to text. The target set is now
+// the studios whose own record is `opted_out` (the refusal the START lifts) or
+// `pending` (the invite it answers).
+
+Deno.test("START does not grant a seat-holding studio whose record never left not_asked", async () => {
+  const fake = createFakeSupabase(baseSeed({
+    projects: [
+      { id: "proj1", name: "Maple St", designer_id: "dz1", studio_id: "org-alpha" },
+      { id: "proj2", name: "Beta job", designer_id: "dz2", studio_id: "org-beta" },
+    ],
+    project_parties: [
+      { id: "p1", phone_e164: "+15551110040", project_id: "proj1", party_kind: "sub", sms_consent_status: "opted_out" },
+      { id: "p2", phone_e164: "+15551110040", project_id: "proj2", party_kind: "sub", sms_consent_status: "not_asked" },
+    ],
+    studio_channel_consent: [
+      { organization_id: "org-alpha", channel_kind: "sms", channel_value: "+15551110040", status: "opted_out" },
+      { organization_id: "org-beta", channel_kind: "sms", channel_value: "+15551110040", status: "not_asked" },
+    ],
+  }));
+  const res = await processInbound(
+    params({ From: "+15551110040", Body: "START", MessageSid: "SMstartnotasked" }),
+    { supabase: fake as never, getEnv: NO_POSTHOG },
+  );
+  assertEquals(res.disposition, "resubscribed");
+  const byOrg = Object.fromEntries(
+    ((fake._data.studio_channel_consent ?? []) as Array<{ organization_id: string; status: string }>)
+      .map((c) => [c.organization_id, c.status]),
+  );
+  assertEquals(byOrg["org-alpha"], "granted", "the studio that was refused is re-subscribed");
+  assertEquals(
+    byOrg["org-beta"],
+    "not_asked",
+    "a seat is not an invitation: a studio that never asked gains no consent",
+  );
+  const parties = fake._data.project_parties as Array<{ id: string; sms_consent_status: string }>;
+  assertEquals(parties.find((p) => p.id === "p1")!.sms_consent_status, "granted");
+  assertEquals(
+    parties.find((p) => p.id === "p2")!.sms_consent_status,
+    "not_asked",
+    "…and gains no granted party row either",
+  );
+});
+
+Deno.test("START grants a studio whose record is pending (the invite it answers)", async () => {
+  const fake = createFakeSupabase(baseSeed({
+    projects: [{ id: "proj1", name: "Maple St", designer_id: "dz1", studio_id: "org-alpha" }],
+    project_parties: [
+      { id: "p1", phone_e164: "+15551110041", project_id: "proj1", party_kind: "sub", sms_consent_status: "pending" },
+    ],
+    studio_channel_consent: [
+      { organization_id: "org-alpha", channel_kind: "sms", channel_value: "+15551110041", status: "pending" },
+    ],
+  }));
+  const res = await processInbound(
+    params({ From: "+15551110041", Body: "START", MessageSid: "SMstartpending" }),
+    { supabase: fake as never, getEnv: NO_POSTHOG },
+  );
+  assertEquals(res.disposition, "resubscribed");
+  const consent = (fake._data.studio_channel_consent ?? []) as Array<{ organization_id: string; status: string }>;
+  assertEquals(consent.length, 1);
+  assertEquals(consent[0].status, "granted");
+});
+
+Deno.test("START mints no consent record for a seat-holding studio that has none", async () => {
+  const fake = createFakeSupabase(baseSeed({
+    projects: [{ id: "proj1", name: "Maple St", designer_id: "dz1", studio_id: "org-alpha" }],
+    project_parties: [
+      { id: "p1", phone_e164: "+15551110042", project_id: "proj1", party_kind: "sub", sms_consent_status: "not_asked" },
+    ],
+  }));
+  const res = await processInbound(
+    params({ From: "+15551110042", Body: "START", MessageSid: "SMstartnorecord" }),
+    { supabase: fake as never, getEnv: NO_POSTHOG },
+  );
+  assertEquals(res.disposition, "resubscribed");
+  assertEquals(
+    ((fake._data.studio_channel_consent ?? []) as unknown[]).length,
+    0,
+    "a START with no record on the books manufactures none",
+  );
+  const parties = fake._data.project_parties as Array<{ id: string; sms_consent_status: string }>;
+  assertEquals(parties.find((p) => p.id === "p1")!.sms_consent_status, "not_asked");
+});

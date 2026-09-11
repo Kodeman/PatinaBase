@@ -51,12 +51,20 @@ statements"). It regenerates with an empty diff.
   **refuses on a stale record** — any party row on this number belonging to the
   SAME studio that says `opted_out` outranks a `granted` record; allows on
   `granted` (the F-11 case: a seat created today for a number the studio
-  recorded a grant for in 2025); and when no record exists for that studio (or
-  no studio resolves) falls back to "any party row on this number is opted out →
-  refuse". The stale-record scan is studio-scoped on purpose: phone-globally it
-  would re-open G-3, since an inbound STOP opts out every party row on the
-  number in every studio. The existing phone-global `reduceConsent()` reduction
-  stays underneath it, untouched, as the fail-closed second check (PR-x).
+  recorded a grant for in 2025); and when no record exists for that studio falls
+  back to "a party row on this number **in that same studio** is opted out →
+  refuse". Both scans are studio-scoped on purpose: phone-globally they would
+  re-open G-3, since an inbound STOP opts out every party row on the number in
+  every studio, and a studio's first-ever outreach to a number it has never
+  contacted would be silently blocked by a STOP it never received (R-AK). The
+  fallback stays phone-global in exactly one place — when NO studio resolves for
+  the send at all, where there is nothing to scope to and an unattributable send
+  must not outrun a STOP. Underneath, the legacy `reduceConsent()` reduction
+  stays as the fail-closed second check (PR-x); on the `partyId` path it reads
+  that one party row, and on the phone-only path it reduces across the rows the
+  caller could not attribute. `flushDeferredMessages()` runs the SAME two gates
+  in the same order, keyed off the deferred row's own `party_id` (R-AH) — a
+  second send path with a second consent gate is two answers to one question.
 - `supabase/functions/sms-inbound/pipeline.ts` — `loadPhoneParties()`,
   `studiosHoldingPhone()` (now over the shared `orgsOfProjects()`),
   `studiosHoldingRecord()`, `withRecordOnlyStudios()`, `writeChannelConsent()`,
@@ -64,10 +72,14 @@ statements"). It regenerates with an empty diff.
   studio holding the number **by seat or by record** — a studio that holds a
   consent record but no party row (a removed seat today, a card-level consent
   once W2 lands) was invisible to the seat-only derivation, so its record sat at
-  `granted` for ever while the number had said STOP. START/UNSTOP upserts
-  `granted` for seat-holding studios plus any studio whose record is currently
-  `opted_out` (it lifts the refusals it mirrors; it never manufactures consent
-  for a studio whose record never left `not_asked`). A `YES` that confirms a
+  `granted` for ever while the number had said STOP. START/UNSTOP is a
+  RE-subscription, so it upserts `granted` only for the studios whose own record
+  for that number is currently `opted_out` (the refusal it lifts) or `pending`
+  (the invite it answers). A studio at `not_asked`, or with no record at all, is
+  left untouched **even when it holds a seat on the number** — holding a seat is
+  not having asked (R-AJ). In practice nothing is lost: a STOP writes an
+  `opted_out` record for every studio holding the number, so the studios a START
+  can be answering always have one. A `YES` that confirms a
   pending invite upserts `granted` **only** for the studios that actually hold a
   pending row — no record-only union there. `origin_project_id` follows the
   CURRENT verdict in both writers (`t.projectId ?? prior`), matching
@@ -145,15 +157,55 @@ statements"). It regenerates with an empty diff.
     `record_channel_consent()` requires source + evidence + disclosure_version
     for `pending`/`granted` and source + evidence for `opted_out` (PR-m), and
     refuses every transition OUT of `opted_out` — including to `not_asked`,
-    which would erase the only stored record of the refusal. It never carries
-    source/evidence/disclosure_version across a status change, which is how a
-    grant came to inherit a STOP's own words as its evidence. PR-m's way back
+    which would erase the only stored record of the refusal. **`not_asked` is
+    refused outright as a target status** (`consent_not_recordable`, R-AG):
+    there is nothing to record — it is the absence of a consent, not a verdict —
+    and taking it was the one evidence-free door into the table, where four
+    arguments erased a recorded grant, its source, its words and its disclosure
+    version, from the record and, through the mirror, from every seat in the
+    studio on that number. **No write may empty the evidence set**: source,
+    evidence, disclosure_version and recorded_by keep what stands when the new
+    verdict does not restate them. Laundering is closed by the evidence gate
+    rather than by nulling — every status the door still accepts must supply its
+    own source and evidence, so a status change has already restated them by the
+    time it reaches the write. PR-m's way back
     ("always a fresh recorded consent or an inbound START") is a separate named
     door, `record_channel_reconsent()`, landing on `pending` — `granted` stays
     the recipient's to give by replying YES or START. The optional half of the
     review's suggestion — capping the sms RPC at `pending` outright — was NOT
     taken: it would retire the `allow` branch M5 exists for and fixture F-11
     needs (a studio holding auditable prior express written consent).
+
+13. **The no-record fallback reduces across the studio's own projects, never
+    across tenants** (R-AK). `channelConsentVerdict()`'s fail-closed second
+    check — the one PR-x keeps until the backfill is proven everywhere — now
+    scans the resolving studio's own party rows. Phone-globally it blocked a
+    studio's first-ever outreach to a number it had never contacted, because
+    some unrelated studio once received a STOP from it, with no
+    operator-visible reason and no expiry. The one surviving phone-global read
+    is the case where no studio resolves at all.
+
+14. **One consent gate, both send paths** (R-AH). `flushDeferredMessages()`
+    reads `channelConsentVerdict()` keyed off the deferred row's `party_id`
+    before the legacy reduction, exactly as `sendPartySms()` does. Before this
+    a studio's `granted` record died at quiet hours (the flush refused the send
+    as `not_consented`) and a studio's `opted_out` record could be overruled on
+    the flush by another studio's granted party row.
+
+15. **`studio_person_affiliations` is the home of person-at-firm;
+    `studio_contacts.company_id` is a derived pointer** (R-AI). 00592 backfills
+    an open affiliation (`to_date` NULL) for every person already linked
+    through `company_id`, and a trigger keeps `company_id` equal to the
+    person's open affiliation's `company_id` — one direction only. Without the
+    backfill the company card's crew list (R-W) would have rendered empty for
+    exactly the firms a studio has been using longest; without the trigger the
+    shipped hooks that still write `company_id`
+    (`use-studio-contacts.ts:202, :234`) would have left two homes for one fact
+    with nothing saying which wins. The COMMENT on both says which is which.
+
+16. **A START is a re-subscription, not a first grant** (R-AJ). The inbound
+    grant is scoped to studios whose record is `opted_out` or `pending`; a seat
+    on the number is not an invitation.
 
 ---
 
@@ -222,7 +274,13 @@ Finished supabase db reset on branch main.
  record_channel_reconsent               | t         | {search_path=public}            | f         | t
  studio_contact_org                     | t         | {search_path=public}            | f         | t
  project_party_designer                 | t         | {search_path=public}            | f         | t
+ _sync_person_company_pointer           | t         | {search_path=public}            | f         | f
+ sync_studio_contact_company_pointer    | t         | {search_path=public}            | f         | f
 ```
+
+(The two pointer functions added by R-AI hold EXECUTE for nobody: the trigger
+runs as the definer owner, and `_sync_person_company_pointer(uuid)` takes a
+caller-supplied person id, so its REVOKE names `authenticated` too.)
 
 The two REDEFINED trigger functions keep the ACL `CREATE OR REPLACE` preserved:
 `_site_request_consent_granted_dispatch` still holds nothing for `authenticated`
@@ -262,6 +320,7 @@ explicit `REVOKE ... FROM authenticated` held.)
  studio_contact_channels    | set_updated_at_studio_contact_channels
  studio_contact_rules       | set_updated_at_studio_contact_rules
  studio_person_affiliations | set_updated_at_studio_person_affiliations
+ studio_person_affiliations | sync_studio_contact_company_pointer_trg
 ```
 
 ### SQL test
@@ -279,6 +338,7 @@ NOTICE:  8. mirror fan-out, site-request leg (B-1): passed
 NOTICE:  9. record_channel_consent transition gate (B-2): passed
 NOTICE:  10. mirror evidence refresh (M-1): passed
 NOTICE:  11. one normalisation + origin rule (M-3): passed
+NOTICE:  12. affiliations are the home, company_id the pointer (R-AI): passed
 NOTICE:  All W1a assertions passed.
 ROLLBACK
 ```
@@ -306,20 +366,28 @@ and `record_channel_reconsent()`'s behaviour including `no_opt_out_to_supersede`
 and a non-member refusal (9); a same-status re-record refreshing the mirrored
 evidence, plus a whole-table assertion that NO party row sits at `granted` with
 a hollow evidence set (10); and one normalisation rule plus one origin rule
-(11).
+(11). Block 12 is the r3 round: opening an affiliation sets
+`studio_contacts.company_id`, a direct legacy write to that column does not
+survive the next affiliation write, closing or deleting the affiliation clears
+it, 00592's fold statement leaves exactly one open row and is a no-op on a
+re-run, and no person card anywhere points at a firm it has no open affiliation
+with. Block 9 also gained the R-AG pair: the four-argument `not_asked` call is
+refused (`consent_not_recordable`) with the grant and its whole evidence set
+left standing, and an opt-out that restates its own words keeps the disclosure
+version rather than nulling it.
 
 ### Deno tests
 
 ```
 $ deno test --allow-all --config supabase/functions/deno.json supabase/functions/_shared/sms.test.ts
-ok | 22 passed | 0 failed (39ms)
+ok | 26 passed | 0 failed (42ms)
 
 $ deno test --allow-all --config supabase/functions/deno.json supabase/functions/_tests/sms-inbound.test.ts
-ok | 29 passed | 0 failed (29ms)
+ok | 32 passed | 0 failed (26ms)
 
 $ deno test --no-check --allow-all --config supabase/functions/deno.json \
     supabase/functions/_tests/ supabase/functions/_shared/
-FAILED | 674 passed | 1 failed (3s)
+FAILED | 681 passed | 1 failed (3s)
   ./supabase/functions/_tests/stripe-rail.test.ts (uncaught error)
     error: (in promise) Error: supabaseKey is required.
 ```
@@ -354,6 +422,16 @@ a consent record but no party row; START lifts a seatless `opted_out` record but
 leaves a seatless `not_asked` one alone; a STOP re-homes `origin_project_id`
 onto the job it came from.
 
+**r3**: `_shared/sms.test.ts` — with no record, an opted-out sibling party row
+**in the same studio** still blocks, another studio's does not, and with no
+resolvable studio at all any opted-out row on the number still blocks (R-AK);
+the flush honours the studio's `granted` record for a party row that has not
+caught up, and suppresses on the studio's `opted_out` record even when the
+party-row reduction would allow it (R-AH). `_tests/sms-inbound.test.ts` — START
+does not grant a seat-holding studio whose record never left `not_asked`, does
+grant one whose record is `pending`, and mints no record at all for a
+seat-holding studio that has none (R-AJ).
+
 Type check of the two files I edited:
 
 ```
@@ -376,7 +454,7 @@ $ git diff --stat 700261663 -- packages/supabase/src/database.types.ts
  1 file changed, 461 insertions(+)
 ```
 
-461 insertions, **zero deletions**. New table types `studio_channel_consent`,
+465 insertions, **zero deletions**. New table types `studio_channel_consent`,
 `studio_contact_channels`, `studio_contact_rules`,
 `studio_person_affiliations`; new function types
 `backfill_channel_consent_from_parties`, `normalize_channel_value`,
@@ -446,6 +524,11 @@ deploys.)
   columns (`stage`, `on_site_from/to`, `site_access_mode`, `contracted_through`,
   `off_job_at/reason`, `company_id`, bid fields), the `create_field_link` expiry
   change (PR-d), and the `client_decisions.court` widening.
+- **A studio with a seat but no consent record cannot be re-subscribed by a
+  START** (R-AJ, by ruling). In practice a STOP writes an `opted_out` record for
+  every studio holding the number, so the studios a START can answer always have
+  one; the case with no record at all is a number that never received a STOP
+  through this rail.
 - **`project_parties.sms_consent_*` is not yet read-only.** It is a mirror by
   trigger, but the columns still carry their old grants and policies, and
   `sms-inbound` still writes them directly (deliberately: "the existing

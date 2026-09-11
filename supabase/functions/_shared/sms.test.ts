@@ -568,20 +568,66 @@ Deno.test("another studio's opt-out does not block this studio's send", async ()
   assert(res.sent, "the owning studio's grant should carry the send");
 });
 
-Deno.test("with no studio record, an opted-out sibling party row still blocks (fail closed)", async () => {
+Deno.test("with no studio record, an opted-out sibling party row in the SAME studio still blocks (fail closed)", async () => {
   const fake = createFakeSupabase({
     project_parties: [
       party("p1", "granted"),
       { ...party("p2", "opted_out"), project_id: "proj2" },
     ],
-    projects: [{ id: "proj1", studio_id: "org-alpha" }],
+    projects: [
+      { id: "proj1", studio_id: "org-alpha" },
+      { id: "proj2", studio_id: "org-alpha" },
+    ],
     // studio_channel_consent deliberately empty — the backfill has not run.
   });
   const res = await sendPartySms(fake as never, { partyId: "p1", body: "hello" }, {
     getEnv: envOf(CONSENT_ENV),
     now: OPEN_HOURS,
   });
-  assert(!res.sent, "an unbacked-filled number with a STOP anywhere must fail closed");
+  assert(!res.sent, "an unbacked-filled number with this studio's own STOP must fail closed");
+  assertEquals(res.reason, "opted_out");
+});
+
+// R-AK: …but that fallback reduces across the studio's OWN projects, never
+// across tenants. Before this, a studio's very first outreach to a number it
+// had never contacted was silently blocked because some unrelated studio once
+// got a STOP from it — with no operator-visible reason, and indefinitely.
+Deno.test("with no studio record, ANOTHER studio's opted-out party row does not block", async () => {
+  const fake = createFakeSupabase({
+    project_parties: [
+      party("p1", "granted"),
+      { ...party("p2", "opted_out"), project_id: "proj2" },
+    ],
+    projects: [
+      { id: "proj1", studio_id: "org-alpha" },
+      { id: "proj2", studio_id: "org-beta" },
+    ],
+    // studio_channel_consent deliberately empty for both.
+  });
+  const res = await sendPartySms(fake as never, { partyId: "p1", body: "hello" }, {
+    getEnv: envOf(CONSENT_ENV),
+    now: OPEN_HOURS,
+  });
+  assert(res.sent, "Beta's STOP is not Alpha's fact");
+});
+
+// The one place the reduction stays phone-global: no studio resolves at all,
+// so there is nothing to scope to and an unattributable send must not outrun
+// a STOP.
+Deno.test("with no record and no resolvable studio, any opted-out row on the number still blocks", async () => {
+  const fake = createFakeSupabase({
+    project_parties: [
+      party("p1", "granted"),
+      { ...party("p2", "opted_out"), project_id: "proj2" },
+    ],
+    // proj1 carries neither studio_id nor designer_id.
+    projects: [{ id: "proj1", studio_id: null, designer_id: null }],
+  });
+  const res = await sendPartySms(fake as never, { partyId: "p1", body: "hello" }, {
+    getEnv: envOf(CONSENT_ENV),
+    now: OPEN_HOURS,
+  });
+  assert(!res.sent, "an unattributable send must fail closed");
   assertEquals(res.reason, "opted_out");
 });
 
@@ -741,4 +787,104 @@ Deno.test("the stale-record scan resolves a NULL-studio_id project through _prim
   });
   assert(!res.sent, "a studio-less project's STOP still belongs to the same studio");
   assertEquals(res.reason, "opted_out");
+});
+
+// ── r3 R-AH: the flush is a send path, and reads the SAME primary gate ──────
+//
+// flushDeferredMessages is called on the field-daily cron and is where
+// sendPartySms parks an off-hours send. Before this it re-checked consent with
+// the party-row reduction alone, so the two send paths answered one question
+// two ways.
+
+Deno.test("flush: the studio's granted record carries a deferred send the party row would refuse", async () => {
+  const now = new Date("2026-07-08T18:00:00Z"); // ~1pm Chicago — not quiet
+  const fake = createFakeSupabase({
+    sms_conversations: [
+      { id: "conv1", twilio_number: "+15550000000", phone_e164: "+15551230001" },
+    ],
+    sms_messages: [
+      {
+        id: "m1",
+        direction: "outbound",
+        twilio_status: "deferred",
+        body: "hello",
+        conversation_id: "conv1",
+        party_id: "p1",
+        template_key: "sms_daily_digest",
+        created_at: new Date(now.getTime() - 60 * 60 * 1000).toISOString(),
+      },
+    ],
+    // F-11: the seat was created today and has not caught up with the record.
+    project_parties: [
+      { id: "p1", phone_e164: "+15551230001", project_id: "proj1", sms_consent_status: "not_asked" },
+    ],
+    projects: [{ id: "proj1", studio_id: "org-alpha" }],
+    studio_channel_consent: [{
+      organization_id: "org-alpha",
+      channel_kind: "sms",
+      channel_value: "+15551230001",
+      status: "granted",
+    }],
+  });
+  const result = await flushDeferredMessages(fake as never, {
+    getEnv: envOf({ SMS_DEV_MODE: "dry_run", TWILIO_FROM_NUMBER: "+15550000000" }),
+    now,
+  });
+  assertEquals(result.flushed, 1, "the studio's own grant must survive quiet hours");
+  assertEquals(result.suppressed, 0);
+});
+
+Deno.test("flush: the studio's opted-out record suppresses a deferred send the party rows would allow", async () => {
+  const now = new Date("2026-07-08T18:00:00Z");
+  const fake = createFakeSupabase({
+    sms_conversations: [
+      { id: "conv1", twilio_number: "+15550000000", phone_e164: "+15551230001" },
+    ],
+    sms_messages: [
+      {
+        id: "m1",
+        direction: "outbound",
+        twilio_status: "deferred",
+        body: "hello",
+        conversation_id: "conv1",
+        party_id: "p1",
+        template_key: "sms_daily_digest",
+        created_at: new Date(now.getTime() - 60 * 60 * 1000).toISOString(),
+      },
+    ],
+    // The owning studio's own seat is gone (G-10 hard-deletes on roster
+    // remove); another studio's granted row is all the reduction can see.
+    project_parties: [
+      { id: "p1", phone_e164: "+15551230001", project_id: "proj1", sms_consent_status: "granted" },
+      { id: "p2", phone_e164: "+15551230001", project_id: "proj2", sms_consent_status: "granted" },
+    ],
+    projects: [
+      { id: "proj1", studio_id: "org-alpha" },
+      { id: "proj2", studio_id: "org-beta" },
+    ],
+    studio_channel_consent: [{
+      organization_id: "org-alpha",
+      channel_kind: "sms",
+      channel_value: "+15551230001",
+      status: "opted_out",
+    }],
+  });
+  let fetchCalls = 0;
+  const result = await flushDeferredMessages(fake as never, {
+    getEnv: flushEnv(),
+    fetchImpl: (() => {
+      fetchCalls++;
+      return Promise.reject("must not call Twilio");
+    }) as unknown as typeof fetch,
+    now,
+  });
+  assertEquals(result.flushed, 0);
+  assertEquals(result.suppressed, 1);
+  assertEquals(fetchCalls, 0);
+  const row = (fake._data.sms_messages ?? [])[0] as {
+    twilio_status: string;
+    error_message: string;
+  };
+  assertEquals(row.twilio_status, "suppressed");
+  assertEquals(row.error_message, "opted_out");
 });
