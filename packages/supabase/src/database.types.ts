@@ -3879,6 +3879,39 @@ export type Database = {
         }
         Relationships: []
       }
+      contact_messages: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          message: string
+          name: string
+          posthog_distinct_id: string | null
+          reason: string
+          user_agent: string | null
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          message: string
+          name: string
+          posthog_distinct_id?: string | null
+          reason?: string
+          user_agent?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          message?: string
+          name?: string
+          posthog_distinct_id?: string | null
+          reason?: string
+          user_agent?: string | null
+        }
+        Relationships: []
+      }
       coordination_item_revisions: {
         Row: {
           attachments: Json
@@ -9878,55 +9911,85 @@ export type Database = {
       }
       notification_log: {
         Row: {
+          bounce_reason: string | null
+          bounce_type: string | null
+          bounced_at: string | null
           channel: Database["public"]["Enums"]["notification_channel"]
           clicked_at: string | null
           created_at: string
+          delayed_at: string | null
           deliver_after: string | null
+          delivered_at: string | null
           error: string | null
           id: string
+          last_event: string | null
+          last_event_at: string | null
           metadata: Json | null
           opened_at: string | null
           provider_id: string | null
+          recipient: string | null
+          ref_id: string | null
+          ref_type: string | null
           retry_count: number
           sent_at: string | null
           status: Database["public"]["Enums"]["notification_status"]
           template_id: string | null
           type: string
-          user_id: string
+          user_id: string | null
         }
         Insert: {
+          bounce_reason?: string | null
+          bounce_type?: string | null
+          bounced_at?: string | null
           channel: Database["public"]["Enums"]["notification_channel"]
           clicked_at?: string | null
           created_at?: string
+          delayed_at?: string | null
           deliver_after?: string | null
+          delivered_at?: string | null
           error?: string | null
           id?: string
+          last_event?: string | null
+          last_event_at?: string | null
           metadata?: Json | null
           opened_at?: string | null
           provider_id?: string | null
+          recipient?: string | null
+          ref_id?: string | null
+          ref_type?: string | null
           retry_count?: number
           sent_at?: string | null
           status?: Database["public"]["Enums"]["notification_status"]
           template_id?: string | null
           type: string
-          user_id: string
+          user_id?: string | null
         }
         Update: {
+          bounce_reason?: string | null
+          bounce_type?: string | null
+          bounced_at?: string | null
           channel?: Database["public"]["Enums"]["notification_channel"]
           clicked_at?: string | null
           created_at?: string
+          delayed_at?: string | null
           deliver_after?: string | null
+          delivered_at?: string | null
           error?: string | null
           id?: string
+          last_event?: string | null
+          last_event_at?: string | null
           metadata?: Json | null
           opened_at?: string | null
           provider_id?: string | null
+          recipient?: string | null
+          ref_id?: string | null
+          ref_type?: string | null
           retry_count?: number
           sent_at?: string | null
           status?: Database["public"]["Enums"]["notification_status"]
           template_id?: string | null
           type?: string
-          user_id?: string
+          user_id?: string | null
         }
         Relationships: [
           {
