@@ -32,6 +32,7 @@ import {
   shouldPollEmailDelivery,
   emailDeliveryKeys,
   EMAIL_DELIVERY_SELECT,
+  EMAIL_DELIVERY_CHUNK,
   type EmailDelivery,
   type EmailDeliveryRow,
 } from '../use-email-delivery';
@@ -41,7 +42,10 @@ interface DeliveryConfig {
   enabled: boolean;
   staleTime: number;
   refetchIntervalInBackground: boolean;
-  refetchInterval: (q: unknown) => number | false;
+  /** Typed against TanStack's `Query` in the hook; only `.state.data` is read. */
+  refetchInterval: (q: {
+    state: { data: Record<string, EmailDelivery> | undefined };
+  }) => number | false;
   queryFn: () => Promise<Record<string, EmailDelivery>>;
 }
 
@@ -293,13 +297,75 @@ describe('refetchInterval', () => {
     expect(shouldPollEmailDelivery({}, now)).toBe(false);
   });
 
-  it('is wired into the query config', () => {
+  it('is wired into the query config, reading the query’s own state', () => {
     const c = config('invoice', ['inv-1']);
     expect(c.refetchInterval({ state: { data: {} } })).toBe(false);
+    expect(c.refetchInterval({ state: { data: undefined } })).toBe(false);
     expect(
       c.refetchInterval({
         state: { data: { a: delivery({ state: 'sending', createdAt: new Date().toISOString() }) } },
       }),
     ).toBe(30_000);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Dedupe, chunking, and the stable empty answer
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('the ids the hook actually asks about', () => {
+  it('dedupes and sorts them for the key AND the request', async () => {
+    const c = config('invoice', ['b', 'a', 'b', 'a', 'c']);
+    expect(c.queryKey).toEqual(['email-delivery', 'invoice', 'a,b,c']);
+    await c.queryFn();
+    expect(chain.in).toHaveBeenCalledTimes(1);
+    expect(chain.in).toHaveBeenCalledWith('ref_id', ['a', 'b', 'c']);
+  });
+
+  it('splits a ledger-sized batch into chunks of 100', async () => {
+    // The Accounts ledger passes every non-draft invoice, which is not a
+    // number PostgREST will take in one `.in()` URL filter.
+    const ids = Array.from({ length: 250 }, (_, i) => `inv-${String(i).padStart(3, '0')}`);
+    await config('invoice', ids).queryFn();
+    expect(EMAIL_DELIVERY_CHUNK).toBe(100);
+    expect(supabaseClient.from).toHaveBeenCalledTimes(3);
+    expect(chain.in).toHaveBeenCalledTimes(3);
+    const batches = chain.in.mock.calls.map((call) => call[1] as string[]);
+    expect(batches.map((b) => b.length)).toEqual([100, 100, 50]);
+    // Every id is asked about exactly once, in sorted order.
+    expect(batches.flat()).toEqual([...ids].sort());
+  });
+
+  it('merges the chunks into one byRef answer', async () => {
+    const ids = Array.from({ length: 150 }, (_, i) => `inv-${String(i).padStart(3, '0')}`);
+    chain.order
+      .mockResolvedValueOnce({ data: [row({ ref_id: 'inv-000', status: 'bounced' })], error: null })
+      .mockResolvedValueOnce({ data: [row({ ref_id: 'inv-149', status: 'delivered' })], error: null });
+    const byRef = await config('invoice', ids).queryFn();
+    expect(Object.keys(byRef).sort()).toEqual(['inv-000', 'inv-149']);
+    expect(byRef['inv-000'].state).toBe('bounced');
+    expect(byRef['inv-149'].state).toBe('delivered');
+  });
+
+  it('throws when any one chunk is refused', async () => {
+    const ids = Array.from({ length: 150 }, (_, i) => `inv-${String(i).padStart(3, '0')}`);
+    chain.order
+      .mockResolvedValueOnce({ data: [], error: null })
+      .mockResolvedValueOnce({ data: null, error: new Error('rls') });
+    await expect(config('invoice', ids).queryFn()).rejects.toThrow('rls');
+  });
+});
+
+describe('byRef before anything has been read', () => {
+  it('is the same frozen object every render, so a memo on it never re-fires', () => {
+    const first = useEmailDelivery('invoice', ['inv-1']) as unknown as {
+      byRef: Record<string, EmailDelivery>;
+    };
+    const second = useEmailDelivery('invoice', ['inv-2']) as unknown as {
+      byRef: Record<string, EmailDelivery>;
+    };
+    expect(first.byRef).toEqual({});
+    expect(first.byRef).toBe(second.byRef);
+    expect(Object.isFrozen(first.byRef)).toBe(true);
   });
 });

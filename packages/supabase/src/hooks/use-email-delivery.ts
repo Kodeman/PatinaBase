@@ -10,7 +10,7 @@
  * invitation read in use-client-invitation-status.ts.
  */
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, type Query } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
 import type { Database, Tables } from '../database.types';
 
@@ -74,6 +74,14 @@ export interface EmailDelivery {
 export const EMAIL_DELIVERY_SELECT =
   'id, ref_id, recipient, status, sent_at, delivered_at, bounced_at, bounce_type, bounce_reason, delayed_at, last_event, last_event_at, created_at';
 
+/** PostgREST `.in()` is a URL filter — a ledger-sized batch has to be split. */
+export const EMAIL_DELIVERY_CHUNK = 100;
+
+/** A 12th notification_status must fail type-check here, not fall through. */
+function assertNever(value: never): never {
+  throw new Error(`Unhandled notification_status: ${String(value)}`);
+}
+
 /**
  * The provider's status column, read as one word a studio would use.
  *
@@ -103,16 +111,31 @@ export function deriveEmailDeliveryState(
     case 'queued':
     case 'sending':
     case 'unconfirmed':
-    default:
       return 'sending';
+    default:
+      return assertNever(row.status);
   }
+}
+
+/** Deduped and sorted: the same batch in any order is one cache entry. */
+function normalizeIds(refIds: string[] | undefined): string[] {
+  return [...new Set(refIds ?? [])].sort();
 }
 
 export const emailDeliveryKeys = {
   all: ['email-delivery'] as const,
   list: (refType: EmailDeliveryRefType, ids: string[]) =>
-    ['email-delivery', refType, [...ids].sort().join(',')] as const,
+    ['email-delivery', refType, normalizeIds(ids).join(',')] as const,
 };
+
+/** One reference per empty answer, so `byRef` is stable across renders. */
+const EMPTY: Record<string, EmailDelivery> = Object.freeze({});
+
+function chunk(ids: string[], size: number): string[][] {
+  const out: string[][] = [];
+  for (let i = 0; i < ids.length; i += size) out.push(ids.slice(i, i + size));
+  return out;
+}
 
 function toEmailDelivery(row: EmailDeliveryRow): EmailDelivery {
   return {
@@ -159,43 +182,54 @@ export function shouldPollEmailDelivery(
   });
 }
 
+type EmailDeliveryQuery = Query<
+  Record<string, EmailDelivery>,
+  Error,
+  Record<string, EmailDelivery>,
+  ReturnType<typeof emailDeliveryKeys.list>
+>;
+
 /**
  * The latest email per referenced record. `byRef` is keyed by `ref_id`, so a
  * row-level surface can read one id out of a page-level batch.
  */
 export function useEmailDelivery(refType: EmailDeliveryRefType, refIds: string[]) {
-  const ids = refIds ?? [];
+  const ids = normalizeIds(refIds);
   const query = useQuery({
     queryKey: emailDeliveryKeys.list(refType, ids),
     enabled: ids.length > 0,
     staleTime: 15_000,
     refetchIntervalInBackground: false,
-    refetchInterval: (q): number | false =>
-      shouldPollEmailDelivery(
-        (q as { state?: { data?: Record<string, EmailDelivery> } })?.state?.data,
-      )
-        ? POLL_MS
-        : false,
+    refetchInterval: (q: EmailDeliveryQuery): number | false =>
+      shouldPollEmailDelivery(q.state.data) ? POLL_MS : false,
     queryFn: async (): Promise<Record<string, EmailDelivery>> => {
       const supabase = getSupabase();
-      const { data, error } = await supabase
-        .from('notification_log')
-        .select(EMAIL_DELIVERY_SELECT)
-        .eq('channel', 'email')
-        .eq('ref_type', refType)
-        .in('ref_id', ids)
-        .order('created_at', { ascending: false });
-      if (error) throw error;
+      const pages = await Promise.all(
+        chunk(ids, EMAIL_DELIVERY_CHUNK).map(async (batch) => {
+          const { data, error } = await supabase
+            .from('notification_log')
+            .select(EMAIL_DELIVERY_SELECT)
+            .eq('channel', 'email')
+            .eq('ref_type', refType)
+            .in('ref_id', batch)
+            .order('created_at', { ascending: false });
+          if (error) throw error;
+          return (data ?? []) as unknown as EmailDeliveryRow[];
+        }),
+      );
       const byRef: Record<string, EmailDelivery> = {};
-      // Rows arrive newest-first, so the first sighting of a ref_id is its
-      // latest email; later ones are its history and are dropped.
-      for (const row of (data ?? []) as unknown as EmailDeliveryRow[]) {
-        if (!row.ref_id || byRef[row.ref_id]) continue;
-        byRef[row.ref_id] = toEmailDelivery(row);
+      // Rows arrive newest-first within a chunk, and a ref_id only ever lands
+      // in one chunk, so the first sighting of a ref_id is its latest email;
+      // later ones are its history and are dropped.
+      for (const rows of pages) {
+        for (const row of rows) {
+          if (!row.ref_id || byRef[row.ref_id]) continue;
+          byRef[row.ref_id] = toEmailDelivery(row);
+        }
       }
       return byRef;
     },
   });
 
-  return { ...query, byRef: (query.data ?? {}) as Record<string, EmailDelivery> };
+  return { ...query, byRef: query.data ?? EMPTY };
 }
