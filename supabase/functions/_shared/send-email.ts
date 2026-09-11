@@ -5,6 +5,7 @@
 
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { SignJWT } from "https://deno.land/x/jose@v5.2.0/index.ts";
+import { htmlToText } from "./html-to-text.ts";
 
 export type SendCategory =
   | "transactional"
@@ -34,6 +35,8 @@ export interface ComplianceSendOptions {
   skipLog?: boolean;
   unsubscribeBaseUrl?: string;
   tags?: Array<{ name: string; value: string }>;
+  /** The business record this letter is about, stamped on notification_log. */
+  ref?: { type: string; id: string };
   idempotencyKey?: string;
   /** Fail closed when suppression/rate policy storage cannot be read. Durable
    * sends should enable this; legacy direct callers retain prior behavior. */
@@ -124,6 +127,28 @@ function getUnsubscribeSecret(): Uint8Array {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Unknown send error";
+}
+
+/** Resend rejects a tag value outside [A-Za-z0-9_-]; a templateId is free-form. */
+function sanitizeTagValue(value: string): string {
+  return value.replace(/[^A-Za-z0-9_-]/g, "-");
+}
+
+/**
+ * Every send is tagged with its category, and with its template when it has
+ * one, so Resend's own analytics slice the way notification_log does. A caller
+ * that sets either name itself keeps its value.
+ */
+export function buildResendTags(
+  options: Pick<ComplianceSendOptions, "tags" | "category" | "templateId">,
+): Array<{ name: string; value: string }> {
+  const merged = new Map<string, string>();
+  merged.set("category", options.category);
+  if (options.templateId) {
+    merged.set("template", sanitizeTagValue(options.templateId));
+  }
+  for (const tag of options.tags ?? []) merged.set(tag.name, tag.value);
+  return [...merged].map(([name, value]) => ({ name, value }));
 }
 
 export async function generateUnsubscribeToken(
@@ -274,13 +299,16 @@ export async function prepareCompliantEmail(
     html: options.html,
     headers,
   };
-  if (options.text) payload.text = options.text;
+  // A multipart send needs a text part; derive one rather than ship HTML alone.
+  const text = options.text ??
+    (options.html ? htmlToText(options.html) : undefined);
+  if (text) payload.text = text;
   const cc = options.cc
     ? (Array.isArray(options.cc) ? options.cc : [options.cc])
     : undefined;
   if (cc) payload.cc = cc;
   if (options.replyTo) payload.reply_to = options.replyTo;
-  if (options.tags) payload.tags = options.tags;
+  payload.tags = buildResendTags(options);
   if (options.attachments?.length) payload.attachments = options.attachments;
 
   return {
@@ -398,6 +426,9 @@ export async function sendCompliantEmail(
         channel: "email",
         status: "suppressed",
         template_id: options.templateId,
+        ref_type: options.ref?.type,
+        ref_id: options.ref?.id,
+        recipient: options.to,
         metadata: { reason: prepared.reason, ...options.metadata },
       });
     }
@@ -414,6 +445,11 @@ export async function sendCompliantEmail(
         channel: "email",
         status: "sending",
         template_id: options.templateId,
+        ref_type: options.ref?.type,
+        ref_id: options.ref?.id,
+        // The address actually handed to the provider — EMAIL_DEV_MODE=redirect
+        // rewrites it, and the log should say where the mail really went.
+        recipient: prepared.request.to[0],
         metadata: options.metadata ?? {},
       })
       .select("id")

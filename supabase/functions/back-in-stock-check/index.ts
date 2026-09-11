@@ -5,6 +5,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { toEmailAssetUrl } from "../_shared/email-assets.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -44,7 +45,7 @@ serve(async (req) => {
       .eq("id", product_id)
       .single();
 
-    const productImageUrl = product?.images?.[0] || null;
+    const productImageUrl = toEmailAssetUrl(product?.images?.[0] || null);
     const productUrl = product?.source_url || "https://admin.patina.cloud";
     // Pre-built <img> tag for the branded email (empty string when there is no
     // image, so the template's centered slot collapses gracefully).

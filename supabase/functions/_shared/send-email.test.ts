@@ -9,6 +9,7 @@ import {
   generateUnsubscribeUrl,
   prepareCompliantEmail,
   type PreparedResendRequest,
+  sendCompliantEmail,
   sendPreparedResendRequest,
 } from "./send-email.ts";
 
@@ -330,4 +331,114 @@ Deno.test("one-click unsubscribe always names /api/unsubscribe, never /preferenc
   } finally {
     Deno.env.delete("UNSUBSCRIBE_TOKEN_SECRET");
   }
+});
+
+/* ── Deliverability: text part, provider tags, notification_log refs ────────
+   The three carried on every send through the chokepoint. */
+
+/** Minimal client: clears policy reads, records the notification_log insert. */
+function loggingClient(captured: { insert?: Record<string, unknown> }) {
+  return {
+    from(table: string) {
+      const query: Record<string, unknown> = {
+        select: () => query,
+        eq: () => query,
+        in: () => query,
+        gte: () => Promise.resolve({ count: 0, error: null }),
+        maybeSingle: () =>
+          Promise.resolve({ data: { email_suppressed: false }, error: null }),
+        single: () =>
+          Promise.resolve({ data: { id: "log-1" }, error: null }),
+        insert: (row: Record<string, unknown>) => {
+          if (table === "notification_log") captured.insert = row;
+          return query;
+        },
+        update: () => query,
+      };
+      return query;
+    },
+  };
+}
+
+Deno.test("the Resend body carries a derived text part when the caller omits one", async () => {
+  const result = await prepareCompliantEmail(
+    loggingClient({}) as never,
+    {
+      ...emailOptions,
+      category: "transactional" as const,
+      html:
+        '<head><style>.a{color:red}</style></head><p>Your proposal is ready.</p>' +
+        '<a href="https://client.patina.cloud/p/1">Review proposal</a>',
+    },
+  );
+  assertEquals(result.state, "ready");
+  if (result.state !== "ready") return;
+  const body = JSON.parse(result.request.body);
+  assertEquals(
+    body.text,
+    "Your proposal is ready.\nReview proposal (https://client.patina.cloud/p/1)",
+  );
+});
+
+Deno.test("a caller-written text part is never overwritten", async () => {
+  const result = await prepareCompliantEmail(
+    loggingClient({}) as never,
+    {
+      ...emailOptions,
+      category: "transactional" as const,
+      text: "Hand-written.",
+    },
+  );
+  if (result.state !== "ready") throw new Error("expected ready");
+  assertEquals(JSON.parse(result.request.body).text, "Hand-written.");
+});
+
+Deno.test("every send is tagged with its category and template", async () => {
+  const result = await prepareCompliantEmail(
+    loggingClient({}) as never,
+    {
+      ...emailOptions,
+      category: "transactional" as const,
+      templateId: "invoice-reminder/stage 2",
+    },
+  );
+  if (result.state !== "ready") throw new Error("expected ready");
+  assertEquals(JSON.parse(result.request.body).tags, [
+    { name: "category", value: "transactional" },
+    { name: "template", value: "invoice-reminder-stage-2" },
+  ]);
+});
+
+Deno.test("a caller's own tag wins over the derived one of the same name", async () => {
+  const result = await prepareCompliantEmail(
+    loggingClient({}) as never,
+    {
+      ...emailOptions,
+      category: "transactional" as const,
+      templateId: "invoice-sent",
+      tags: [
+        { name: "category", value: "billing" },
+        { name: "studio", value: "middlewest" },
+      ],
+    },
+  );
+  if (result.state !== "ready") throw new Error("expected ready");
+  assertEquals(JSON.parse(result.request.body).tags, [
+    { name: "category", value: "billing" },
+    { name: "template", value: "invoice-sent" },
+    { name: "studio", value: "middlewest" },
+  ]);
+});
+
+Deno.test("the notification_log insert stamps ref_type, ref_id and recipient", async () => {
+  const captured: { insert?: Record<string, unknown> } = {};
+  await sendCompliantEmail(loggingClient(captured) as never, {
+    ...emailOptions,
+    category: "transactional" as const,
+    failClosedPolicyReads: false,
+    ref: { type: "invoice", id: "20000000-0000-4000-8000-000000000002" },
+  });
+  assertEquals(captured.insert?.ref_type, "invoice");
+  assertEquals(captured.insert?.ref_id, "20000000-0000-4000-8000-000000000002");
+  assertEquals(captured.insert?.recipient, "client@test.invalid");
 });

@@ -21,6 +21,7 @@ import {
   paragraph,
   spacer,
 } from "./branded-email.ts";
+import { toEmailAssetUrl } from "./email-assets.ts";
 
 // ── copied from ./branded-email.ts (module-private there) ──────────────────
 const C = {
@@ -264,8 +265,9 @@ function letterhead(s: ClientLetterSnapshot): string {
     .filter((part): part is string => Boolean(part))
     .map(escapeHtml)
     .join(" &middot; ");
-  const logo = s.studioLogoUrl
-    ? `<td valign="middle" style="padding-right:10px;"><img src="${escapeHtml(s.studioLogoUrl)}" height="20" alt="${escapeHtml(name ?? "")}" style="display:block; height:20px; max-height:24px; width:auto; border:0; outline:none; text-decoration:none;"></td>`
+  const studioLogoUrl = toEmailAssetUrl(s.studioLogoUrl);
+  const logo = studioLogoUrl
+    ? `<td valign="middle" style="padding-right:10px;"><img src="${escapeHtml(studioLogoUrl)}" height="20" alt="${escapeHtml(name ?? "")}" style="display:block; height:20px; max-height:24px; width:auto; border:0; outline:none; text-decoration:none;"></td>`
     : "";
   const nameCell = name
     ? `<td valign="middle" class="ink" style="font-family:${F.serif}; font-size:19px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; color:${C.ink};">${escapeHtml(name).toUpperCase()}</td>`

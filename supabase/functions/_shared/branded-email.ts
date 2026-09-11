@@ -31,6 +31,8 @@ const F = {
 const FONT_LINK =
   "https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400&family=Hanken+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap";
 
+import { toEmailAssetUrl } from "./email-assets.ts";
+
 const HEAD_CSS = `
 :root { color-scheme: light dark; supported-color-schemes: light dark; }
 html, body { margin:0 !important; padding:0 !important; height:100% !important; width:100% !important; }
@@ -244,7 +246,8 @@ export function renderBrandedShell(opts: BrandedShellOpts): string {
   // byte-identical to the plain Patina output. Leads with "\n" + indentation and
   // carries no trailing newline so the existing markup follows unchanged.
   const studioName = opts.studioName?.trim();
-  const studioLogoUrl = opts.studioLogoUrl?.trim();
+  // A storage-hosted logo is served through Patina's own origin in mail.
+  const studioLogoUrl = toEmailAssetUrl(opts.studioLogoUrl) ?? undefined;
   const cobrand = studioLogoUrl
     ? `\n        <tr><td class="px" style="padding:10px 40px 0;">
           <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
