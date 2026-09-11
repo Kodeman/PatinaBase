@@ -103,7 +103,7 @@ export function InvoiceFolio({
   const send = useSendInvoice({ errorSurface: 'inline' });
   const recordPayment = useRecordPayment({ errorSurface: 'inline' });
   const voidInvoice = useVoidInvoice({ errorSurface: 'inline' });
-  const reconcileCheckout = useReconcileInvoiceCheckout();
+  const reconcileCheckout = useReconcileInvoiceCheckout({ errorSurface: 'inline' });
   // The invoice's own address (00574). Null for a draft — nothing to copy yet.
   const { data: invoiceLink } = useInvoiceLink(invoiceId);
   const regenerateLink = useRegenerateInvoiceLink({ errorSurface: 'inline' });
@@ -153,7 +153,12 @@ export function InvoiceFolio({
           void qc.invalidateQueries({ queryKey: ['document-state'] });
         }
       })
-      .catch(() => undefined);
+      .catch((e: unknown) => {
+        if (!active) return;
+        setNote(
+          `Could not confirm the card payment — ${e instanceof Error ? e.message : 'try again'}`,
+        );
+      });
 
     return () => {
       active = false;

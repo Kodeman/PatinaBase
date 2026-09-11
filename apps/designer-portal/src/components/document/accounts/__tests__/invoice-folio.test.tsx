@@ -168,6 +168,46 @@ describe('InvoiceFolio delivery recovery', () => {
     expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ['document-state'] });
   });
 
+  it('renders a failed reconcile inline with the function message, not a toast', async () => {
+    const pendingPayment = {
+      id: 'payment-1',
+      invoice_id: invoice.id,
+      amount_cents: invoice.total_cents,
+      surcharge_cents: 750,
+      method: 'stripe' as const,
+      status: 'pending' as const,
+      reference: null,
+      note: null,
+      received_at: null,
+      recorded_by: 'client-1',
+      checkout_attempt_id: 'attempt-1',
+      stripe_checkout_session_id: 'cs_paid_card',
+      stripe_payment_intent_id: null,
+      stripe_payment_method_type: null,
+      stripe_event_id: null,
+      created_at: '2026-08-07T02:45:44.000Z',
+      updated_at: '2026-08-07T02:45:44.000Z',
+    };
+    mockInvoice = {
+      ...invoice,
+      status: 'sent',
+      invoice_number: 'INV-1045',
+      payments: [pendingPayment],
+    };
+    // What the hook now throws once it unwraps a FunctionsHttpError body,
+    // instead of the generic "Edge Function returned a non-2xx status code".
+    mockReconcileCheckout.mockRejectedValue(new Error('invoice_not_found'));
+
+    render(<InvoiceFolio invoiceId="invoice-1" />);
+
+    await waitFor(() =>
+      expect(
+        screen.getByText(/Could not confirm the card payment — invoice_not_found/),
+      ).toBeInTheDocument(),
+    );
+    expect(mockInvalidateQueries).not.toHaveBeenCalled();
+  });
+
   it('keeps the issued invoice reachable when email delivery fails', async () => {
     mockIssue.mockResolvedValue({
       ...invoice,
