@@ -84,6 +84,7 @@ interface InvoiceRow {
     id: string;
     full_name: string | null;
     business_name: string | null;
+    email: string | null;
   } | null;
 }
 
@@ -159,7 +160,7 @@ Deno.serve(async (req: Request) => {
       total_cents, amount_paid_cents, currency, due_date, sent_at,
       project:projects!invoices_project_id_fkey(id, name, client_id),
       client:profiles!invoices_client_id_fkey(id, full_name, email),
-      designer:profiles!invoices_designer_id_fkey(id, full_name, business_name)
+      designer:profiles!invoices_designer_id_fkey(id, full_name, business_name, email)
     `
     )
     .eq('id', invoiceId)
@@ -304,6 +305,8 @@ Deno.serve(async (req: Request) => {
       to: recipientEmail,
       subject: rendered.subject,
       html: rendered.html,
+      // A question about an invoice belongs with the designer who sent it.
+      replyTo: invoice.designer?.email ?? undefined,
       userId: clientUserId ?? undefined,
       notificationType: sendType === 'reminder' ? 'invoice_reminder' : 'invoice_sent',
       category: 'operational',

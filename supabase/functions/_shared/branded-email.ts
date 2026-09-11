@@ -31,7 +31,7 @@ const F = {
 const FONT_LINK =
   "https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400&family=Hanken+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap";
 
-import { toEmailAssetUrl } from "./email-assets.ts";
+import { isSvgAssetUrl, toEmailAssetUrl } from "./email-assets.ts";
 
 const HEAD_CSS = `
 :root { color-scheme: light dark; supported-color-schemes: light dark; }
@@ -247,7 +247,12 @@ export function renderBrandedShell(opts: BrandedShellOpts): string {
   // carries no trailing newline so the existing markup follows unchanged.
   const studioName = opts.studioName?.trim();
   // A storage-hosted logo is served through Patina's own origin in mail.
-  const studioLogoUrl = toEmailAssetUrl(opts.studioLogoUrl) ?? undefined;
+  // An SVG mark is dropped rather than rendered: Gmail strips it and the byline
+  // would be a hole where the studio should be, so the name carries it instead.
+  const rewrittenLogoUrl = toEmailAssetUrl(opts.studioLogoUrl) ?? undefined;
+  const studioLogoUrl = isSvgAssetUrl(rewrittenLogoUrl)
+    ? undefined
+    : rewrittenLogoUrl;
   const cobrand = studioLogoUrl
     ? `\n        <tr><td class="px" style="padding:10px 40px 0;">
           <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>

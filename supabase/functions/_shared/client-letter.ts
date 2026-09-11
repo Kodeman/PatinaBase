@@ -21,7 +21,7 @@ import {
   paragraph,
   spacer,
 } from "./branded-email.ts";
-import { toEmailAssetUrl } from "./email-assets.ts";
+import { isSvgAssetUrl, toEmailAssetUrl } from "./email-assets.ts";
 
 // ── copied from ./branded-email.ts (module-private there) ──────────────────
 const C = {
@@ -265,7 +265,9 @@ function letterhead(s: ClientLetterSnapshot): string {
     .filter((part): part is string => Boolean(part))
     .map(escapeHtml)
     .join(" &middot; ");
-  const studioLogoUrl = toEmailAssetUrl(s.studioLogoUrl);
+  // Gmail strips an SVG <img>; the letterhead then stands on its name alone.
+  const rewrittenLogoUrl = toEmailAssetUrl(s.studioLogoUrl);
+  const studioLogoUrl = isSvgAssetUrl(rewrittenLogoUrl) ? null : rewrittenLogoUrl;
   const logo = studioLogoUrl
     ? `<td valign="middle" style="padding-right:10px;"><img src="${escapeHtml(studioLogoUrl)}" height="20" alt="${escapeHtml(name ?? "")}" style="display:block; height:20px; max-height:24px; width:auto; border:0; outline:none; text-decoration:none;"></td>`
     : "";

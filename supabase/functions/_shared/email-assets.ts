@@ -13,6 +13,10 @@
 
 const PUBLIC_OBJECT_PREFIX = "/storage/v1/object/public/";
 const DEFAULT_ASSET_HOST = "https://api.patina.cloud";
+// A mailbox provider's image proxy cannot reach a developer's machine, and the
+// default asset host proxies the CLOUD project — rewriting a local URL onto it
+// would serve some other project's bytes.
+const LOCAL_HOSTNAMES = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
 /** Env access may be denied (`deno test` without --allow-env); never throw. */
 function env(name: string): string | undefined {
@@ -35,11 +39,15 @@ function originOf(url: string | undefined): string | null {
 /**
  * Rewrite a Supabase public-storage URL onto the email asset host.
  *
- * Rewritten only when the URL's origin is the configured Supabase project
- * origin (`supabaseUrl`, default `SUPABASE_URL`) or any `*.supabase.co` host,
- * AND its path is under `/storage/v1/object/public/`. A signed or otherwise
+ * Rewritten only when the URL's origin EQUALS the configured Supabase project
+ * origin (`supabaseUrl`, default `SUPABASE_URL`) AND its path is under
+ * `/storage/v1/object/public/`. Another project's host — `*.supabase.co`
+ * included — is someone else's storage and is left alone. A signed or otherwise
  * non-public storage path, a URL on any other host, and a non-absolute URL all
  * pass through unchanged. Null/empty input yields null.
+ *
+ * A local project origin (localhost/127.0.0.1/[::1]) is rewritten only when an
+ * asset host was named explicitly (`assetHost` or `EMAIL_ASSET_HOST`).
  */
 export function toEmailAssetUrl(
   url: string | null | undefined,
@@ -58,16 +66,29 @@ export function toEmailAssetUrl(
   if (!parsed.pathname.startsWith(PUBLIC_OBJECT_PREFIX)) return raw;
 
   const projectOrigin = originOf(opts.supabaseUrl ?? env("SUPABASE_URL"));
-  const isProjectOrigin = projectOrigin !== null &&
-    parsed.origin === projectOrigin;
-  const isSupabaseCloud = parsed.protocol === "https:" &&
-    parsed.hostname.endsWith(".supabase.co");
-  if (!isProjectOrigin && !isSupabaseCloud) return raw;
+  if (projectOrigin === null || parsed.origin !== projectOrigin) return raw;
 
-  const assetOrigin = originOf(
-    opts.assetHost ?? env("EMAIL_ASSET_HOST") ?? DEFAULT_ASSET_HOST,
-  );
+  const configuredHost = opts.assetHost ?? env("EMAIL_ASSET_HOST");
+  if (!configuredHost && LOCAL_HOSTNAMES.has(parsed.hostname)) return raw;
+
+  const assetOrigin = originOf(configuredHost ?? DEFAULT_ASSET_HOST);
   if (!assetOrigin) return raw;
 
   return `${assetOrigin}${parsed.pathname}${parsed.search}${parsed.hash}`;
+}
+
+/**
+ * Gmail (and several other clients) strip an `<img>` whose source is an SVG, so
+ * a studio whose mark is a vector gets its name in type instead of a hole.
+ */
+export function isSvgAssetUrl(url: string | null | undefined): boolean {
+  const raw = (url ?? "").trim();
+  if (!raw) return false;
+  let pathname: string;
+  try {
+    pathname = new URL(raw).pathname;
+  } catch {
+    pathname = raw.split(/[?#]/)[0];
+  }
+  return pathname.toLowerCase().endsWith(".svg");
 }

@@ -5,7 +5,7 @@
 import {
   assertEquals,
 } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { toEmailAssetUrl } from "./email-assets.ts";
+import { isSvgAssetUrl, toEmailAssetUrl } from "./email-assets.ts";
 
 const CLOUD = "https://bkvcixdmuyejfzcijpdg.supabase.co";
 const LOCAL = "http://127.0.0.1:54321";
@@ -68,19 +68,42 @@ Deno.test("a local stack URL is rewritten only when it IS the project origin", (
   );
 });
 
+Deno.test("a local project origin is left alone unless an asset host was named", () => {
+  const previous = Deno.env.get("EMAIL_ASSET_HOST");
+  Deno.env.delete("EMAIL_ASSET_HOST");
+  try {
+    for (const origin of [LOCAL, "http://localhost:54321", "http://[::1]:54321"]) {
+      const local = `${origin}/storage/v1/object/public/studio-logos/m/mark.png`;
+      // No host configured: the default api.patina.cloud fronts the cloud
+      // project, so a local URL must not be pointed at it.
+      assertEquals(toEmailAssetUrl(local, { supabaseUrl: origin }), local);
+      // Named explicitly: the caller means it.
+      assertEquals(
+        toEmailAssetUrl(local, { supabaseUrl: origin, assetHost: HOST }),
+        `${HOST}/storage/v1/object/public/studio-logos/m/mark.png`,
+      );
+    }
+  } finally {
+    if (previous !== undefined) Deno.env.set("EMAIL_ASSET_HOST", previous);
+  }
+});
+
 Deno.test("null, undefined and empty input yield null", () => {
   assertEquals(toEmailAssetUrl(null, { assetHost: HOST }), null);
   assertEquals(toEmailAssetUrl(undefined, { assetHost: HOST }), null);
   assertEquals(toEmailAssetUrl("   ", { assetHost: HOST }), null);
 });
 
-Deno.test("any *.supabase.co project is accepted, not just the configured one", () => {
+Deno.test("another *.supabase.co project is someone else's storage and is untouched", () => {
+  const other =
+    "https://otherproject.supabase.co/storage/v1/object/public/avatars/a.png";
   assertEquals(
-    toEmailAssetUrl(
-      "https://otherproject.supabase.co/storage/v1/object/public/avatars/a.png",
-      { supabaseUrl: LOCAL, assetHost: HOST },
-    ),
-    `${HOST}/storage/v1/object/public/avatars/a.png`,
+    toEmailAssetUrl(other, { supabaseUrl: LOCAL, assetHost: HOST }),
+    other,
+  );
+  assertEquals(
+    toEmailAssetUrl(other, { supabaseUrl: CLOUD, assetHost: HOST }),
+    other,
   );
 });
 
@@ -92,4 +115,17 @@ Deno.test("a relative or unparseable URL passes through unchanged", () => {
     }),
     "/storage/v1/object/public/studio-logos/m.png",
   );
+});
+
+Deno.test("an SVG logo is recognised whatever its case, query or fragment", () => {
+  assertEquals(isSvgAssetUrl(`${CLOUD}/storage/v1/object/public/l/mark.svg`), true);
+  assertEquals(isSvgAssetUrl(`${CLOUD}/storage/v1/object/public/l/MARK.SVG`), true);
+  assertEquals(
+    isSvgAssetUrl(`${CLOUD}/storage/v1/object/public/l/mark.svg?v=2#a`),
+    true,
+  );
+  assertEquals(isSvgAssetUrl("/logos/mark.svg?v=2"), true);
+  assertEquals(isSvgAssetUrl(`${CLOUD}/storage/v1/object/public/l/mark.png`), false);
+  assertEquals(isSvgAssetUrl(null), false);
+  assertEquals(isSvgAssetUrl("  "), false);
 });
