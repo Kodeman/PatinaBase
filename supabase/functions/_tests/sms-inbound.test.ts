@@ -848,3 +848,118 @@ Deno.test("STOP reaches a NULL-studio_id project through _primary_studio_for", a
   assertEquals(consent[0].organization_id, "org-alpha");
   assertEquals(consent[0].status, "opted_out");
 });
+
+// ── r2 review B-3(b) / M-3: the STOP must reach every record on the number ──
+
+// studiosHoldingPhone() reads project_parties only. A studio that holds a
+// consent record but no seat — the seat was removed (G-10 is still a hard
+// delete), or, once W2 lands, the consent was recorded against a rolodex card
+// that never had one — was invisible to it, so its record sat at `granted` for
+// ever while the number had said STOP. The send gate now acts on that fact.
+Deno.test("STOP reaches a studio that holds a consent record but no party row", async () => {
+  const fake = createFakeSupabase(baseSeed({
+    projects: [{ id: "proj1", name: "Maple St", designer_id: "dz1", studio_id: "org-alpha" }],
+    project_parties: [
+      { id: "p1", phone_e164: "+15551110030", project_id: "proj1", party_kind: "sub", sms_consent_status: "granted" },
+    ],
+    studio_channel_consent: [
+      {
+        organization_id: "org-alpha",
+        channel_kind: "sms",
+        channel_value: "+15551110030",
+        status: "granted",
+        origin_project_id: "proj1",
+      },
+      {
+        // Beta holds a record on this number with no seat left anywhere.
+        organization_id: "org-beta",
+        channel_kind: "sms",
+        channel_value: "+15551110030",
+        status: "granted",
+        origin_project_id: "projB",
+      },
+    ],
+  }));
+  const res = await processInbound(
+    params({ From: "+15551110030", Body: "STOP", MessageSid: "SMstopseatless" }),
+    { supabase: fake as never, getEnv: NO_POSTHOG },
+  );
+  assertEquals(res.disposition, "opted_out");
+  const consent = (fake._data.studio_channel_consent ?? []) as Array<{
+    organization_id: string; status: string; origin_project_id: string | null;
+  }>;
+  assertEquals(consent.length, 2, "no record is duplicated");
+  assert(
+    consent.every((c) => c.status === "opted_out"),
+    "a STOP must reach every record on the number, seat or no seat",
+  );
+  assertEquals(
+    consent.find((c) => c.organization_id === "org-beta")!.origin_project_id,
+    "projB",
+    "a seatless studio keeps the origin it already had",
+  );
+});
+
+// A START lifts the refusals it mirrors — including a seatless record — but it
+// does not manufacture a grant for a studio whose record never left not_asked.
+Deno.test("START lifts a seatless opted_out record but leaves a seatless not_asked one alone", async () => {
+  const fake = createFakeSupabase(baseSeed({
+    projects: [{ id: "proj1", name: "Maple St", designer_id: "dz1", studio_id: "org-alpha" }],
+    project_parties: [
+      { id: "p1", phone_e164: "+15551110031", project_id: "proj1", party_kind: "sub", sms_consent_status: "opted_out" },
+    ],
+    studio_channel_consent: [
+      { organization_id: "org-alpha", channel_kind: "sms", channel_value: "+15551110031", status: "opted_out" },
+      { organization_id: "org-beta", channel_kind: "sms", channel_value: "+15551110031", status: "opted_out" },
+      { organization_id: "org-gamma", channel_kind: "sms", channel_value: "+15551110031", status: "not_asked" },
+    ],
+  }));
+  const res = await processInbound(
+    params({ From: "+15551110031", Body: "START", MessageSid: "SMstartseatless" }),
+    { supabase: fake as never, getEnv: NO_POSTHOG },
+  );
+  assertEquals(res.disposition, "resubscribed");
+  const byOrg = Object.fromEntries(
+    ((fake._data.studio_channel_consent ?? []) as Array<{ organization_id: string; status: string }>)
+      .map((c) => [c.organization_id, c.status]),
+  );
+  assertEquals(byOrg["org-alpha"], "granted");
+  assertEquals(byOrg["org-beta"], "granted", "the seatless refusal is lifted too");
+  assertEquals(
+    byOrg["org-gamma"],
+    "not_asked",
+    "a START must not manufacture consent for a studio that never asked",
+  );
+});
+
+// M-3: the origin follows the CURRENT verdict, in both writers. Taking the
+// prior made R-Q's sentence name the grant's job after a STOP.
+Deno.test("a STOP re-homes origin_project_id onto the job it came from", async () => {
+  const fake = createFakeSupabase(baseSeed({
+    projects: [{ id: "proj9", name: "Lindqvist kitchen", designer_id: "dz1", studio_id: "org-alpha" }],
+    project_parties: [
+      { id: "p1", phone_e164: "+15551110032", project_id: "proj9", party_kind: "sub", sms_consent_status: "granted" },
+    ],
+    studio_channel_consent: [{
+      organization_id: "org-alpha",
+      channel_kind: "sms",
+      channel_value: "+15551110032",
+      status: "granted",
+      origin_project_id: "proj-old",
+    }],
+  }));
+  const res = await processInbound(
+    params({ From: "+15551110032", Body: "STOP", MessageSid: "SMstoporigin" }),
+    { supabase: fake as never, getEnv: NO_POSTHOG },
+  );
+  assertEquals(res.disposition, "opted_out");
+  const consent = (fake._data.studio_channel_consent ?? []) as Array<{
+    status: string; origin_project_id: string | null;
+  }>;
+  assertEquals(consent[0].status, "opted_out");
+  assertEquals(
+    consent[0].origin_project_id,
+    "proj9",
+    "the verdict on the books names the job it came from",
+  );
+});

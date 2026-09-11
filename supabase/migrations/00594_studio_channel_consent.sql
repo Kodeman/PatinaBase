@@ -29,7 +29,15 @@
 --   4. record_channel_consent(...) — SECURITY DEFINER, studio-member gated. The
 --      ONLY write path the portal gets: the table grants authenticated SELECT
 --      and nothing else, so a consent fact cannot be written without passing
---      through the membership check and the evidence stamping.
+--      through the membership check, the evidence requirement and the
+--      transition gate below.
+--   5. record_channel_reconsent(...) — the one named exception to that gate:
+--      PR-m's fresh recorded consent after a refusal, landing on `pending`.
+--
+-- Both RPCs key on public.normalize_channel_value(kind, value) — 00593's own
+-- rule, in one function, so a channel row and its consent record can never land
+-- on different keys (the RPC used to refuse an unparseable phone the channels
+-- table deliberately keeps).
 --
 -- ORDER IS LOAD-BEARING: the mirror trigger is created AFTER the backfill runs.
 -- Creating it first would make the backfill push a consent verdict back down
@@ -41,12 +49,47 @@
 -- studio on that number, and each newly-evidenced-pending row fires its own
 -- opt-in text — N identical messages to one human from one studio act, on a
 -- 10DLC campaign where duplicate opt-in traffic is exactly what gets a campaign
--- filtered. So this file also REDEFINES fc_dispatch_optin_invite (lineage
--- 00432:27-68, retriggered 00284:254-257) to stand down while the mirror is the
--- one writing: a mirror write is cache maintenance, never a studio act, and
--- must have no external side effect. A designer writing an evidenced `pending`
--- onto a party row directly still dispatches, unchanged. Sending the invite for
--- a consent RECORD is W2's hook, once, deliberately — not a trigger's fan-out.
+-- filtered.
+--
+-- THE INVARIANT: project_parties carries AFTER-row triggers that reach the
+-- outside world, and a mirror write must fire none of them. A mirror write is
+-- cache maintenance of a verdict decided elsewhere, never a studio act. So this
+-- file REDEFINES BOTH of project_parties' outward-facing AFTER triggers to
+-- stand down while the mirror is the one writing, reading one shared flag,
+-- patina.suppress_consent_dispatch:
+--
+--   · fc_dispatch_optin_invite  — lineage 00432:27-68 (the grep-winner body,
+--     verbatim below), trigger fc_optin_invite_dispatch created 00284:254-257.
+--     Fires on an evidenced `pending`; sends the opt-in invite SMS.
+--   · _site_request_consent_granted_dispatch — lineage 00374:3399-3444 (the
+--     grep-winner body, verbatim below), trigger
+--     site_request_consent_granted_dispatch created 00374:3446-3455. Fires when
+--     sms_consent_status flips to `granted`; mints site-request dispatch work
+--     and calls site-request-dispatch, which calls sendPartySms — a real text.
+--
+-- Before this file there was no studio-side path to `granted` at all (the
+-- portal caps its own party-row write at `pending`), so the second trigger
+-- could only ever fire from the recipient's own inbound YES/START. The mirror
+-- creates that path, so the mirror has to close it. A designer writing an
+-- evidenced `pending` (or a `granted`) onto a party row DIRECTLY still
+-- dispatches, unchanged. Sending for a consent RECORD is W2's hook, once,
+-- deliberately — not a trigger's fan-out. The invariant is restated as a
+-- COMMENT on project_parties so the third such trigger cannot land unguarded.
+--
+-- THE WRITE DOOR IS A TRANSITION GATE, not just a value check.
+-- record_channel_consent() is granted to every authenticated studio member, so
+-- it has to enforce in SQL what the shipped portal enforces in TypeScript
+-- (use-coordination.ts:519-522, :699-703, :721-733, :745):
+--   · `pending`/`granted` require source + evidence + disclosure_version;
+--     `opted_out` requires source + evidence (PR-m: a manual mark needs both).
+--   · Nothing leaves `opted_out` through this door — not to granted, not to
+--     pending, not to not_asked. A STOP is the only stored record of a refusal
+--     and the RPC may not erase it. PR-m's way back is a FRESH recorded
+--     consent, which gets its own named door, record_channel_reconsent(),
+--     landing on `pending` so the double opt-in still runs.
+--   · source / evidence / disclosure_version are NEVER carried forward across a
+--     status change. Carrying them forward made a grant inherit the STOP's own
+--     words as its 10DLC evidence.
 --
 -- Adds GRANT/REVOKE → regenerate seed/00-legacy-grants.sql after this migration
 -- (python3 scripts/generate-legacy-grants.py).
@@ -210,16 +253,33 @@ SELECT public.backfill_channel_consent_from_parties();
 -- 3. The mirror — created AFTER the backfill, see the header
 -- ═══════════════════════════════════════════════════════════════════════════
 
--- ── 3a. Teach the opt-in dispatch to stand down for a mirror write ──────────
--- Lineage: 00432:27-68 (current head — the body below is that body verbatim),
--- trigger fc_optin_invite_dispatch created at 00284:254-257. Delta: one guard,
--- first statement. Everything else is untouched.
+-- ── 3a. Teach BOTH outward-facing party triggers to stand down for a mirror ──
 --
--- patina.suppress_optin_dispatch is set (SET LOCAL, via set_config(...,true))
+-- project_parties' non-internal trigger set, probed on the local stack:
+--
+--   set_updated_at_project_parties        update_updated_at_column        BEFORE
+--   normalize_phone_project_parties       normalize_party_phone_e164      BEFORE
+--   fc_optin_invite_dispatch              fc_dispatch_optin_invite        AFTER
+--   site_request_consent_granted_dispatch _site_request_consent_granted_… AFTER
+--
+-- The two BEFORE triggers are pure row shaping. BOTH AFTER triggers reach the
+-- outside world, and the mirror's UPDATE satisfies both of them — one on an
+-- evidenced `pending`, one on any flip to `granted`. Guarding only the first
+-- left a recorded `granted` minting site-request dispatch work and texting a
+-- trade out of a cache write. Both are redefined here, from their grep-winner
+-- bodies verbatim, with the same first-statement guard:
+--
+--   3a-1  fc_dispatch_optin_invite               lineage 00432:27-68
+--   3a-2  _site_request_consent_granted_dispatch lineage 00374:3399-3444
+--
+-- patina.suppress_consent_dispatch is set (SET LOCAL, via set_config(...,true))
 -- only by mirror_channel_consent_to_parties() below, around its own UPDATE, and
 -- cleared immediately after it. AFTER-row triggers queued by that UPDATE fire
 -- at the end of that statement, before the mirror's next statement, so the
 -- window is exactly the mirror's own write and nothing else in the transaction.
+
+-- ── 3a-1. The opt-in invite (lineage 00432:27-68, verbatim + one guard) ──────
+-- Trigger fc_optin_invite_dispatch created at 00284:254-257.
 CREATE OR REPLACE FUNCTION public.fc_dispatch_optin_invite()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -229,7 +289,7 @@ AS $$
 BEGIN
   -- 00594: the mirror is maintaining the cached copy of a consent record that
   -- was already decided elsewhere. Mirroring a verdict is not asking for one.
-  IF COALESCE(current_setting('patina.suppress_optin_dispatch', true), '') = '1' THEN
+  IF COALESCE(current_setting('patina.suppress_consent_dispatch', true), '') = '1' THEN
     RETURN NEW;
   END IF;
 
@@ -272,9 +332,99 @@ $$;
 COMMENT ON FUNCTION public.fc_dispatch_optin_invite() IS
   'Dispatches the SMS double-confirmation only after auditable prior express '
   'consent is recorded (00432), and never for a write made by '
-  'mirror_channel_consent_to_parties(), which sets patina.suppress_optin_dispatch '
+  'mirror_channel_consent_to_parties(), which sets patina.suppress_consent_dispatch '
   'for the duration of its own UPDATE — one recorded consent must not fan out '
   'into one text per party row on the number (00594).';
+
+-- ── 3a-2. The site-request consent dispatch ─────────────────────────────────
+-- Lineage: 00374:3399-3444 (current head — the body below is that body
+-- verbatim), trigger site_request_consent_granted_dispatch created at
+-- 00374:3446-3455 and left exactly as it is. Delta: one guard, first statement.
+--
+-- This one is the sharper of the two: it calls site_request_dispatch_after_consent()
+-- (durable work, in-transaction) and then invoke_edge_function('site-request-dispatch',
+-- …), whose handler calls sendPartySms — a real outbound text per awaiting_consent
+-- request on the seat. The mirror's UPDATE flips sms_consent_status to 'granted'
+-- on EVERY party row in the studio on that number, so one recorded grant fanned
+-- out into one dispatch per open request per seat.
+CREATE OR REPLACE FUNCTION public._site_request_consent_granted_dispatch()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+DECLARE
+  v_request record;
+  v_dispatch jsonb;
+BEGIN
+  -- 00594: the mirror is maintaining the cached copy of a consent record that
+  -- was already decided elsewhere. Mirroring a verdict is not asking for one,
+  -- and it is not the moment a trade learns there is work waiting.
+  IF COALESCE(current_setting('patina.suppress_consent_dispatch', true), '') = '1' THEN
+    RETURN NEW;
+  END IF;
+
+  IF NEW.sms_consent_status <> 'granted'
+     OR OLD.sms_consent_status = 'granted' THEN
+    RETURN NEW;
+  END IF;
+
+  FOR v_request IN
+    SELECT id
+    FROM public.site_requests
+    WHERE assignee_party_id = NEW.id
+      AND status = 'awaiting_consent'
+    ORDER BY created_at
+  LOOP
+    -- Durable work is part of the same transaction as the consent update.
+    -- The Edge invocation below is only an eager wake-up: pg_net can miss,
+    -- retry, or arrive after a worker restart without stranding the request in
+    -- awaiting_consent. The lifecycle sweep will claim this identifier-only
+    -- row and mint a raw guest token only when an SMS attempt actually begins.
+    v_dispatch := public.site_request_dispatch_after_consent(v_request.id);
+    BEGIN
+      PERFORM public.invoke_edge_function(
+        'site-request-dispatch',
+        jsonb_build_object(
+          'action', 'consent-granted',
+          'request_id', v_request.id,
+          'party_id', NEW.id,
+          'outbox_id', v_dispatch->>'outbox_id'
+        )
+      );
+    EXCEPTION WHEN OTHERS THEN
+      RAISE WARNING 'site request consent dispatch failed for request %: %',
+        v_request.id, SQLERRM;
+    END;
+  END LOOP;
+  RETURN NEW;
+END;
+$$;
+
+COMMENT ON FUNCTION public._site_request_consent_granted_dispatch() IS
+  'Releases site requests parked in awaiting_consent when the assignee''s '
+  'consent turns granted (00374), and never for a write made by '
+  'mirror_channel_consent_to_parties(), which sets patina.suppress_consent_dispatch '
+  'for the duration of its own UPDATE — a cached verdict must not mint dispatch '
+  'work or text a trade (00594).';
+
+-- The invariant, on the table itself, so the third one cannot land unguarded.
+COMMENT ON TABLE public.project_parties IS
+  'Track 5 coordination courts (R46): GC / vendor / client_rep / other parties '
+  'on a project. profile_id NULLABLE — v1 parties do NOT log in; the designer '
+  'records their move via resolve_coordination_item. Setting profile_id later '
+  'gives that party a real login (a flag flip, not a migration). vendor_id '
+  'soft-links a known vendor; both back-links ON DELETE SET NULL so item/task '
+  'court history survives (00212). '
+  'sms_consent_* is a READ-ONLY CACHED MIRROR '
+  'of studio_channel_consent since 00594, maintained by '
+  'mirror_channel_consent_to_parties(). INVARIANT: any AFTER-row trigger added '
+  'to this table that reaches outside the transaction (an SMS, an email, an '
+  'edge invocation, durable dispatch work) MUST stand down when '
+  'current_setting(''patina.suppress_consent_dispatch'', true) = ''1'' — that '
+  'flag marks a mirror write, which is cache maintenance of a verdict already '
+  'decided, never a studio act. Guarded so far: fc_dispatch_optin_invite, '
+  '_site_request_consent_granted_dispatch.';
 
 -- ── 3b. The mirror ──────────────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION public.mirror_channel_consent_to_parties()
@@ -291,7 +441,7 @@ BEGIN
   -- Transaction-local, cleared below: fc_dispatch_optin_invite (redefined in
   -- 3a) reads this and returns without dispatching. Without it, one recorded
   -- `pending` becomes one real opt-in SMS per party row on the number.
-  PERFORM set_config('patina.suppress_optin_dispatch', '1', true);
+  PERFORM set_config('patina.suppress_consent_dispatch', '1', true);
 
   UPDATE public.project_parties pp
      SET sms_consent_status             = NEW.status,
@@ -307,9 +457,24 @@ BEGIN
      AND pp.phone_e164 = NEW.channel_value
      AND COALESCE(p.studio_id, public._primary_studio_for(p.designer_id))
          = NEW.organization_id
-     AND pp.sms_consent_status IS DISTINCT FROM NEW.status;
+     -- The whole cached tuple, not the status alone. Guarding on status only
+     -- suppressed every EVIDENCE refresh too, so a row could sit at `granted`
+     -- with NULL source / recorded_at / evidence — a state the portal's own
+     -- write path cannot produce and project_parties has no CHECK against,
+     -- and it is the 10DLC evidence for the send. Re-firing is already held
+     -- off by patina.suppress_consent_dispatch above, so the narrow status
+     -- test is no longer load-bearing.
+     AND (pp.sms_consent_status, pp.sms_consented_at, pp.sms_opt_out_at,
+          pp.sms_consent_source, pp.sms_consent_evidence,
+          pp.sms_consent_recorded_at, pp.sms_consent_disclosure_version,
+          pp.sms_consent_recorded_by)
+         IS DISTINCT FROM
+         (NEW.status, NEW.consented_at, NEW.opt_out_at,
+          NEW.source, NEW.evidence,
+          NEW.recorded_at, NEW.disclosure_version,
+          NEW.recorded_by);
 
-  PERFORM set_config('patina.suppress_optin_dispatch', '', true);
+  PERFORM set_config('patina.suppress_consent_dispatch', '', true);
 
   RETURN NEW;
 END;
@@ -320,11 +485,12 @@ REVOKE ALL ON FUNCTION public.mirror_channel_consent_to_parties() FROM PUBLIC, a
 COMMENT ON FUNCTION public.mirror_channel_consent_to_parties() IS
   'AFTER INSERT/UPDATE on studio_channel_consent: pushes the studio''s verdict '
   'onto every party row in that studio carrying the same phone_e164, making '
-  'project_parties.sms_consent_* a read-only cached mirror. Guarded on a real '
-  'status change so a re-record does not rewrite unchanged rows, and it sets '
-  'patina.suppress_optin_dispatch for the duration of its own UPDATE so a '
-  'mirrored `pending` cannot fire 00432''s opt-in dispatch once per row '
-  '(00594).';
+  'project_parties.sms_consent_* a read-only cached mirror. Guarded on the '
+  'whole cached tuple (status AND the evidence set) so a re-record does not '
+  'rewrite already-identical rows but DOES refresh evidence, and it sets '
+  'patina.suppress_consent_dispatch for the duration of its own UPDATE so a '
+  'mirrored verdict cannot fire 00432''s opt-in dispatch or 00374''s '
+  'site-request dispatch once per row (00594).';
 
 DROP TRIGGER IF EXISTS mirror_channel_consent_to_parties_trg ON public.studio_channel_consent;
 CREATE TRIGGER mirror_channel_consent_to_parties_trg
@@ -334,6 +500,27 @@ CREATE TRIGGER mirror_channel_consent_to_parties_trg
 -- ═══════════════════════════════════════════════════════════════════════════
 -- 4. record_channel_consent — the portal's only write path
 -- ═══════════════════════════════════════════════════════════════════════════
+-- Granted to every authenticated studio member, so this function IS the
+-- policy. It enforces, in SQL, what the shipped portal enforces in TypeScript
+-- (use-coordination.ts:519-522, :699-703, :721-733, :745):
+--
+--   1. EVIDENCE. `pending` and `granted` require source + evidence +
+--      disclosure_version; `opted_out` requires source + evidence (PR-m: a
+--      verbal STOP the studio heard is a real record, and needs to say who
+--      heard it and when). Nothing else may claim consent.
+--   2. TRANSITION. Nothing leaves `opted_out` through this door. Not to
+--      granted (that is the recipient's to give), not to pending, and not to
+--      not_asked — a STOP is the only stored record of a refusal and the RPC
+--      may not erase it. PR-m's way back is a fresh recorded consent, which
+--      has its own named door: record_channel_reconsent() below.
+--   3. NO LAUNDERING. source / evidence / disclosure_version are never carried
+--      forward across a status change. Carried forward, a grant inherited the
+--      STOP's own words ("Replied STOP", source inbound_sms) as the evidence a
+--      carrier audit would be shown. Only a re-record of the SAME status may
+--      keep an omitted field.
+--
+-- Dates still survive a verdict that does not restate them: "granted 2 May
+-- 2025, opted out 3 Dec 2025" must both stay printable (R-Q).
 CREATE OR REPLACE FUNCTION public.record_channel_consent(
   p_organization_id    uuid,
   p_channel_kind       text,
@@ -350,9 +537,11 @@ SECURITY DEFINER
 SET search_path TO 'public'
 AS $$
 DECLARE
-  v_value text;
-  v_now   timestamptz := now();
-  v_row   public.studio_channel_consent;
+  v_value  text;
+  v_now    timestamptz := now();
+  v_prior  text;
+  v_same   boolean;
+  v_row    public.studio_channel_consent;
 BEGIN
   IF NOT public.is_active_studio_member(p_organization_id) THEN
     RAISE EXCEPTION 'not_a_studio_member'
@@ -366,16 +555,51 @@ BEGIN
     RAISE EXCEPTION 'invalid_consent_status';
   END IF;
 
-  -- Same normalisation the channels table applies, so the record and the
-  -- channel land on the same key.
-  IF p_channel_kind = 'email' THEN
-    v_value := NULLIF(lower(btrim(COALESCE(p_channel_value, ''))), '');
-  ELSE
-    v_value := public.normalize_phone_e164(p_channel_value);
-  END IF;
+  -- The channels table's own rule, shared: public.normalize_channel_value
+  -- (00593). One function, both callers — so a channel row and its consent
+  -- record cannot land on different keys.
+  v_value := public.normalize_channel_value(p_channel_kind, p_channel_value);
   IF v_value IS NULL THEN
     RAISE EXCEPTION 'invalid_channel_value';
   END IF;
+
+  -- ── 1. Evidence ───────────────────────────────────────────────────────────
+  IF p_status IN ('pending', 'granted') THEN
+    IF COALESCE(btrim(p_source), '') = ''
+       OR COALESCE(btrim(p_evidence), '') = ''
+       OR COALESCE(btrim(p_disclosure_version), '') = '' THEN
+      RAISE EXCEPTION 'consent_evidence_required'
+        USING HINT = 'pending and granted need a source, the evidence in words, '
+                     'and the disclosure version the person was shown.';
+    END IF;
+  ELSIF p_status = 'opted_out' THEN
+    IF COALESCE(btrim(p_source), '') = ''
+       OR COALESCE(btrim(p_evidence), '') = '' THEN
+      RAISE EXCEPTION 'consent_evidence_required'
+        USING HINT = 'Marking a refusal needs a source and the evidence in words (PR-m).';
+    END IF;
+  END IF;
+
+  -- ── 2. Transition ─────────────────────────────────────────────────────────
+  -- Lock the row so two members cannot race past this check.
+  SELECT scc.status INTO v_prior
+    FROM public.studio_channel_consent scc
+   WHERE scc.organization_id = p_organization_id
+     AND scc.channel_kind    = p_channel_kind
+     AND scc.channel_value   = v_value
+     FOR UPDATE;
+
+  IF v_prior = 'opted_out' AND p_status <> 'opted_out' THEN
+    RAISE EXCEPTION 'channel_opted_out'
+      USING HINT = 'This number or address already opted out. Only they can '
+                   'rejoin by replying START, or the studio can record a fresh '
+                   'consent through record_channel_reconsent().';
+  END IF;
+
+  -- ── 3. Write ──────────────────────────────────────────────────────────────
+  -- A re-record of the SAME status may leave a field out and keep what stands;
+  -- a status CHANGE always restates the evidence set, or clears it.
+  v_same := (v_prior IS NOT DISTINCT FROM p_status);
 
   INSERT INTO public.studio_channel_consent AS scc (
     organization_id, channel_kind, channel_value, status,
@@ -398,11 +622,18 @@ BEGIN
                           THEN EXCLUDED.consented_at ELSE scc.consented_at END,
       opt_out_at   = CASE WHEN EXCLUDED.status = 'opted_out'
                           THEN EXCLUDED.opt_out_at ELSE scc.opt_out_at END,
-      source             = COALESCE(EXCLUDED.source, scc.source),
-      evidence           = COALESCE(EXCLUDED.evidence, scc.evidence),
+      source             = CASE WHEN v_same THEN COALESCE(EXCLUDED.source, scc.source)
+                                ELSE EXCLUDED.source END,
+      evidence           = CASE WHEN v_same THEN COALESCE(EXCLUDED.evidence, scc.evidence)
+                                ELSE EXCLUDED.evidence END,
       recorded_at        = EXCLUDED.recorded_at,
-      disclosure_version = COALESCE(EXCLUDED.disclosure_version, scc.disclosure_version),
+      disclosure_version = CASE WHEN v_same
+                                THEN COALESCE(EXCLUDED.disclosure_version, scc.disclosure_version)
+                                ELSE EXCLUDED.disclosure_version END,
       recorded_by        = EXCLUDED.recorded_by,
+      -- The origin follows the CURRENT verdict, in both writers (the inbound
+      -- rail agrees: pipeline.ts writes t.projectId ?? prior). R-Q's sentence
+      -- names the job the verdict on the books came from, not an older one.
       origin_project_id  = COALESCE(EXCLUDED.origin_project_id, scc.origin_project_id)
   RETURNING * INTO v_row;
 
@@ -417,7 +648,113 @@ GRANT EXECUTE ON FUNCTION public.record_channel_consent(uuid, text, text, text, 
 
 COMMENT ON FUNCTION public.record_channel_consent(uuid, text, text, text, text, text, text, uuid) IS
   'The one write path into studio_channel_consent for the portal. Studio-member '
-  'gated (raises not_a_studio_member), normalises the channel value, stamps '
-  'recorded_by/recorded_at, and keeps an earlier granted/opt-out date when the '
-  'new verdict does not restate it. PR-m''s manual "mark opted out" runs through '
-  'here with a source and evidence (00594).';
+  'gated (not_a_studio_member); requires source + evidence + disclosure_version '
+  'for pending/granted and source + evidence for opted_out '
+  '(consent_evidence_required); refuses every transition OUT of opted_out '
+  '(channel_opted_out — record_channel_reconsent() is the named way back, PR-m); '
+  'never carries source/evidence/disclosure_version across a status change; '
+  'normalises the channel value through normalize_channel_value(); stamps '
+  'recorded_by/recorded_at; and keeps an earlier granted/opt-out date when the '
+  'new verdict does not restate it (00594).';
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 5. record_channel_reconsent — PR-m's named way back from a STOP
+-- ═══════════════════════════════════════════════════════════════════════════
+-- PR-m: "The way back is always a fresh recorded consent or an inbound START."
+-- The inbound START is the rail's own path. This is the other one, and it is
+-- deliberately a SEPARATE, named door rather than a fourth argument to
+-- record_channel_consent: superseding a refusal is not the same act as
+-- recording one, it must be visible in the audit, and it must not be reachable
+-- by a caller that merely got the status string wrong.
+--
+-- It lands on `pending`, never `granted`. The person said stop; the studio now
+-- holds fresh prior express consent, which is exactly the state the double
+-- opt-in confirmation exists for. `granted` stays the recipient's to give, by
+-- replying YES or START. (The invite itself is W2's hook on the consent record
+-- — the mirror still suppresses the per-row trigger fan-out.)
+CREATE OR REPLACE FUNCTION public.record_channel_reconsent(
+  p_organization_id    uuid,
+  p_channel_kind       text,
+  p_channel_value      text,
+  p_source             text,
+  p_evidence           text,
+  p_disclosure_version text,
+  p_origin_project_id  uuid DEFAULT NULL
+)
+RETURNS public.studio_channel_consent
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+DECLARE
+  v_value text;
+  v_now   timestamptz := now();
+  v_prior text;
+  v_row   public.studio_channel_consent;
+BEGIN
+  IF NOT public.is_active_studio_member(p_organization_id) THEN
+    RAISE EXCEPTION 'not_a_studio_member'
+      USING HINT = 'Only an active, non-guest member of this studio may record consent.';
+  END IF;
+
+  IF p_channel_kind NOT IN ('sms', 'email') THEN
+    RAISE EXCEPTION 'invalid_channel_kind';
+  END IF;
+
+  IF COALESCE(btrim(p_source), '') = ''
+     OR COALESCE(btrim(p_evidence), '') = ''
+     OR COALESCE(btrim(p_disclosure_version), '') = '' THEN
+    RAISE EXCEPTION 'consent_evidence_required'
+      USING HINT = 'Superseding a refusal needs a source, the evidence in words, '
+                   'and the disclosure version the person was shown.';
+  END IF;
+
+  v_value := public.normalize_channel_value(p_channel_kind, p_channel_value);
+  IF v_value IS NULL THEN
+    RAISE EXCEPTION 'invalid_channel_value';
+  END IF;
+
+  SELECT scc.status INTO v_prior
+    FROM public.studio_channel_consent scc
+   WHERE scc.organization_id = p_organization_id
+     AND scc.channel_kind    = p_channel_kind
+     AND scc.channel_value   = v_value
+     FOR UPDATE;
+
+  IF v_prior IS DISTINCT FROM 'opted_out' THEN
+    RAISE EXCEPTION 'no_opt_out_to_supersede'
+      USING HINT = 'There is no refusal on the books for this channel. Record '
+                   'the consent through record_channel_consent() instead.';
+  END IF;
+
+  UPDATE public.studio_channel_consent scc
+     SET status             = 'pending',
+         -- opt_out_at is KEPT. The room still has to be able to say "opted out
+         -- by text, 3 Dec 2025" alongside the fresh consent that superseded it.
+         source             = p_source,
+         evidence           = p_evidence,
+         recorded_at        = v_now,
+         disclosure_version = p_disclosure_version,
+         recorded_by        = auth.uid(),
+         origin_project_id  = COALESCE(p_origin_project_id, scc.origin_project_id)
+   WHERE scc.organization_id = p_organization_id
+     AND scc.channel_kind    = p_channel_kind
+     AND scc.channel_value   = v_value
+  RETURNING * INTO v_row;
+
+  RETURN v_row;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.record_channel_reconsent(uuid, text, text, text, text, text, uuid)
+  FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.record_channel_reconsent(uuid, text, text, text, text, text, uuid)
+  TO authenticated, service_role;
+
+COMMENT ON FUNCTION public.record_channel_reconsent(uuid, text, text, text, text, text, uuid) IS
+  'PR-m''s named way back from a recorded opt-out: a FRESH recorded consent, '
+  'with source + evidence + disclosure_version all required. Refuses unless the '
+  'channel is currently opted_out (no_opt_out_to_supersede). Lands on `pending`, '
+  'never `granted` — granted stays the recipient''s to give by replying YES or '
+  'START — and keeps opt_out_at so the refusal it superseded stays printable '
+  '(00594).';

@@ -21,6 +21,17 @@
 --      kinds (each normalised by its own rule), a dated `bounced` channel
 --      status, and the company kinds the shipped UI already renders plus the
 --      AHJ `authority`.
+--   8. r2 B-1: a mirrored `granted` fires NEITHER of project_parties' outward
+--      AFTER triggers — not the opt-in invite, and not 00374's site-request
+--      consent dispatch — while a direct party-row write still fires both.
+--   9. r2 B-2: record_channel_consent is a transition gate. Evidence is
+--      required, nothing leaves opted_out through it, the evidence set is
+--      never carried across a status change, and PR-m's way back is the named
+--      record_channel_reconsent().
+--  10. r2 M-1: a same-status re-record REFRESHES the mirrored evidence, so a
+--      party row can never sit at granted with a NULL evidence set.
+--  11. r2 M-3: one normalisation rule — an unparseable phone gets a channel row
+--      AND a consent record, on the same key.
 --
 -- How to run:
 --   psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
@@ -295,11 +306,25 @@ BEGIN
   ASSERT v = 'not_asked',
     'FAIL 4b: the mirror must not cross studios, Beta row reads ' || COALESCE(v, '<null>');
 
-  -- 4c. A studio member records a fresh grant through the RPC, passing the
-  --     number as typed; the RPC normalises it onto the same record.
+  -- 4c. The record now says opted_out, so the ordinary door is shut: a studio
+  --     member cannot type their way back to granted (r2 B-2).
   PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
-  PERFORM public.record_channel_consent(
-    'b0000000-0000-4000-8000-00000000000a', 'sms', '(612) 555-0142', 'granted',
+  raised := NULL;
+  BEGIN
+    PERFORM public.record_channel_consent(
+      'b0000000-0000-4000-8000-00000000000a', 'sms', '(612) 555-0142', 'granted',
+      'written', 'Fresh written consent', 'field-sms-v1',
+      'd0000000-0000-4000-8000-00000000000a');
+  EXCEPTION WHEN OTHERS THEN
+    raised := SQLERRM;
+  END;
+  ASSERT raised = 'channel_opted_out',
+    'FAIL 4c: opted_out -> granted must be refused, got ' || COALESCE(raised, '<no error>');
+
+  -- 4c2. PR-m's named way back: a fresh recorded consent, landing on pending,
+  --      normalised onto the SAME record (no second row).
+  PERFORM public.record_channel_reconsent(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '(612) 555-0142',
     'written', 'Fresh written consent', 'field-sms-v1',
     'd0000000-0000-4000-8000-00000000000a');
   PERFORM pg_temp.reset_role();
@@ -307,12 +332,13 @@ BEGIN
   SELECT COUNT(*) INTO n FROM studio_channel_consent
    WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
      AND channel_kind = 'sms' AND channel_value = '+16125550142';
-  ASSERT n = 1, 'FAIL 4c: the RPC must normalise onto the existing record, got ' || n;
+  ASSERT n = 1, 'FAIL 4c2: the RPC must normalise onto the existing record, got ' || n;
 
   SELECT COUNT(*) INTO n FROM project_parties
    WHERE id IN ('e0000000-0000-4000-8000-000000000001', 'e0000000-0000-4000-8000-000000000002')
-     AND sms_consent_status = 'granted';
-  ASSERT n = 2, 'FAIL 4d: the mirror should re-grant both Alpha rows, got ' || n;
+     AND sms_consent_status = 'pending'
+     AND sms_consent_evidence = 'Fresh written consent';
+  ASSERT n = 2, 'FAIL 4d: the mirror should carry the fresh consent onto both Alpha rows, got ' || n;
 
   -- 4e. The earlier opt-out date survives the new grant.
   SELECT opt_out_at::text INTO v FROM studio_channel_consent
@@ -469,7 +495,7 @@ BEGIN
   ASSERT d = 2, 'FAIL 6c: a direct party-row write must still dispatch once, got ' || (d - 1);
 
   -- 6d. The flag does not leak past the mirror's own statement.
-  ASSERT COALESCE(current_setting('patina.suppress_optin_dispatch', true), '') <> '1',
+  ASSERT COALESCE(current_setting('patina.suppress_consent_dispatch', true), '') <> '1',
     'FAIL 6d: the suppression flag must not survive the mirror';
 
   -- 6e. M1: re-running the backfill as maintenance folds a new row, whose mirror
@@ -547,6 +573,310 @@ BEGIN
   ASSERT raised = '23514', 'FAIL 7d: an unknown company_kind must still be refused';
 
   RAISE NOTICE '7. widened vocabularies (M2/M3/M4): passed';
+END
+$$;
+
+-- ─── 8. r2 B-1: BOTH outward AFTER triggers stand down for a mirror write ──
+--
+-- project_parties carries two AFTER-row triggers that reach the outside world.
+-- Block 6 proved the opt-in invite is suppressed. This is the other one:
+-- site_request_consent_granted_dispatch fires whenever sms_consent_status flips
+-- to 'granted', mints durable dispatch work, and calls site-request-dispatch,
+-- which calls sendPartySms — a real text to a trade. The mirror's UPDATE flips
+-- every party row in the studio on the number, so one recorded grant fanned out
+-- into one dispatch per open request per seat.
+--
+-- public.invoke_edge_function is still standing in (installed for block 6).
+
+-- Two Alpha seats for one human on one number, each with a site request parked
+-- in awaiting_consent.
+INSERT INTO project_parties (id, project_id, party_kind, display_name, phone, trade, sms_consent_status)
+VALUES
+  ('e0000000-0000-4000-8000-000000000021', 'd0000000-0000-4000-8000-00000000000a', 'sub', 'Ivo Marek', '(612) 555-0155', 'electrical', 'not_asked'),
+  ('e0000000-0000-4000-8000-000000000022', 'd0000000-0000-4000-8000-00000000000a', 'sub', 'Ivo Marek', '612-555-0155',   'electrical', 'not_asked');
+
+INSERT INTO site_requests (id, project_id, created_by, assignee_party_id, status, due_at, note)
+VALUES
+  ('a1000000-0000-4000-8000-000000000001', 'd0000000-0000-4000-8000-00000000000a',
+   'a0000000-0000-4000-8000-000000000001', 'e0000000-0000-4000-8000-000000000021',
+   'awaiting_consent', now() + interval '3 days', 'Panel photos'),
+  ('a1000000-0000-4000-8000-000000000002', 'd0000000-0000-4000-8000-00000000000a',
+   'a0000000-0000-4000-8000-000000000001', 'e0000000-0000-4000-8000-000000000022',
+   'awaiting_consent', now() + interval '3 days', 'Rough-in photos');
+
+DO $$
+DECLARE
+  d INTEGER;
+  n INTEGER;
+BEGIN
+  -- 8a. One studio act: a member records the grant the studio holds in writing.
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+  PERFORM public.record_channel_consent(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '(612) 555-0155', 'granted',
+    'written', 'Signed kickoff form', 'field-sms-v1',
+    'd0000000-0000-4000-8000-00000000000a');
+  PERFORM pg_temp.reset_role();
+
+  -- The mirror did its job: both seats read granted.
+  SELECT COUNT(*) INTO n FROM project_parties
+   WHERE phone_e164 = '+16125550155' AND sms_consent_status = 'granted';
+  ASSERT n = 2, 'FAIL 8a: the mirror should grant both seats, got ' || n;
+
+  -- 8b. …and NOT ONE site-request dispatch left the building.
+  SELECT COUNT(*) INTO d FROM public._w1a_dispatch_log
+   WHERE fn_name = 'site-request-dispatch';
+  ASSERT d = 0, 'FAIL 8b: a mirrored grant must dispatch no site request, got ' || d;
+
+  -- 8c. Nor any durable dispatch work: the requests are still parked.
+  SELECT COUNT(*) INTO n FROM site_requests
+   WHERE id IN ('a1000000-0000-4000-8000-000000000001', 'a1000000-0000-4000-8000-000000000002')
+     AND status = 'awaiting_consent' AND consent_status_snapshot <> 'granted';
+  ASSERT n = 2, 'FAIL 8c: a mirrored grant must mint no dispatch work, got ' || n;
+
+  -- 8d. The suppression is scoped to the mirror's own write: a designer
+  --     flipping a party row to granted directly still releases its request.
+  UPDATE project_parties SET sms_consent_status = 'not_asked'
+   WHERE id = 'e0000000-0000-4000-8000-000000000021';
+  UPDATE project_parties SET sms_consent_status = 'granted'
+   WHERE id = 'e0000000-0000-4000-8000-000000000021';
+
+  SELECT COUNT(*) INTO d FROM public._w1a_dispatch_log
+   WHERE fn_name = 'site-request-dispatch';
+  ASSERT d = 1, 'FAIL 8d: a direct party-row grant must still dispatch once, got ' || d;
+
+  SELECT COUNT(*) INTO n FROM site_requests
+   WHERE id = 'a1000000-0000-4000-8000-000000000001' AND consent_status_snapshot = 'granted';
+  ASSERT n = 1, 'FAIL 8d2: the direct grant should have released its request';
+
+  -- 8e. The flag does not leak past the mirror's own statement.
+  ASSERT COALESCE(current_setting('patina.suppress_consent_dispatch', true), '') <> '1',
+    'FAIL 8e: the suppression flag must not survive the mirror';
+
+  RAISE NOTICE '8. mirror fan-out, site-request leg (B-1): passed';
+END
+$$;
+
+-- ─── 9. r2 B-2: the write door is a transition gate ────────────────────────
+
+DO $$
+DECLARE
+  raised TEXT;
+  r RECORD;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+
+  -- 9a. `granted` with no source at all.
+  raised := NULL;
+  BEGIN
+    PERFORM public.record_channel_consent(
+      'b0000000-0000-4000-8000-00000000000a', 'sms', '6125550166', 'granted');
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'consent_evidence_required',
+    'FAIL 9a: a bare four-argument grant must be refused, got ' || COALESCE(raised, '<no error>');
+
+  -- 9b. `pending`/`granted` need the disclosure version too, not just words.
+  raised := NULL;
+  BEGIN
+    PERFORM public.record_channel_consent(
+      'b0000000-0000-4000-8000-00000000000a', 'sms', '6125550166', 'pending',
+      'written', 'Kickoff form', NULL);
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'consent_evidence_required',
+    'FAIL 9b: pending needs a disclosure version, got ' || COALESCE(raised, '<no error>');
+
+  -- 9c. PR-m: marking a refusal by hand needs a source and the words too.
+  raised := NULL;
+  BEGIN
+    PERFORM public.record_channel_consent(
+      'b0000000-0000-4000-8000-00000000000a', 'sms', '6125550166', 'opted_out');
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'consent_evidence_required',
+    'FAIL 9c: a manual opt-out needs source + evidence, got ' || COALESCE(raised, '<no error>');
+
+  -- 9d. NO LAUNDERING. A grant, then a status change with nothing supplied:
+  --     the grant's provenance must NOT survive onto the new verdict.
+  PERFORM public.record_channel_consent(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '6125550166', 'granted',
+    'written', 'Signed 2025 form', 'field-sms-v1', NULL);
+  PERFORM public.record_channel_consent(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '6125550166', 'not_asked');
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550166';
+  ASSERT r.status = 'not_asked', 'FAIL 9d: expected not_asked, got ' || COALESCE(r.status, '<none>');
+  ASSERT r.source IS NULL AND r.evidence IS NULL AND r.disclosure_version IS NULL,
+    'FAIL 9d: the grant''s provenance must not carry onto a different verdict, got '
+    || COALESCE(r.source, '<null>') || ' / ' || COALESCE(r.evidence, '<null>');
+  ASSERT r.consented_at IS NOT NULL, 'FAIL 9d2: the grant DATE still survives (R-Q)';
+
+  -- 9e. Nothing leaves opted_out through this door — not even to not_asked,
+  --     which would erase the only stored record of the refusal.
+  PERFORM public.record_channel_consent(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '6125550166', 'opted_out',
+    'inbound_sms', 'Replied STOP', NULL, NULL);
+  raised := NULL;
+  BEGIN
+    PERFORM public.record_channel_consent(
+      'b0000000-0000-4000-8000-00000000000a', 'sms', '6125550166', 'not_asked');
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'channel_opted_out',
+    'FAIL 9e: opted_out -> not_asked must be refused, got ' || COALESCE(raised, '<no error>');
+
+  raised := NULL;
+  BEGIN
+    PERFORM public.record_channel_consent(
+      'b0000000-0000-4000-8000-00000000000a', 'sms', '6125550166', 'pending',
+      'written', 'Kickoff form', 'field-sms-v1', NULL);
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'channel_opted_out',
+    'FAIL 9e2: opted_out -> pending must be refused, got ' || COALESCE(raised, '<no error>');
+
+  -- 9f. …but a re-record of the SAME refusal is fine, and restates its words.
+  PERFORM public.record_channel_consent(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '6125550166', 'opted_out',
+    'verbal', 'Told me on site to stop texting', NULL, NULL);
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550166';
+  ASSERT r.evidence = 'Told me on site to stop texting',
+    'FAIL 9f: a same-status re-record should restate the evidence, got ' || COALESCE(r.evidence, '<null>');
+
+  -- 9g. The named way back needs the full evidence set.
+  raised := NULL;
+  BEGIN
+    PERFORM public.record_channel_reconsent(
+      'b0000000-0000-4000-8000-00000000000a', 'sms', '6125550166',
+      'written', 'Signed 2026 form', NULL, NULL);
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'consent_evidence_required',
+    'FAIL 9g: reconsent needs a disclosure version, got ' || COALESCE(raised, '<no error>');
+
+  -- 9h. It lands on pending — never granted — and keeps the opt-out date.
+  PERFORM public.record_channel_reconsent(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '6125550166',
+    'written', 'Signed 2026 form', 'field-sms-v1', NULL);
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550166';
+  ASSERT r.status = 'pending',
+    'FAIL 9h: reconsent must land on pending, got ' || COALESCE(r.status, '<none>');
+  ASSERT r.evidence = 'Signed 2026 form' AND r.source = 'written',
+    'FAIL 9h2: reconsent must stamp its own evidence';
+  ASSERT r.opt_out_at IS NOT NULL,
+    'FAIL 9h3: the refusal it superseded must stay printable';
+
+  -- 9i. And it is not a general-purpose door: with no refusal on the books it
+  --     refuses and points back at record_channel_consent.
+  raised := NULL;
+  BEGIN
+    PERFORM public.record_channel_reconsent(
+      'b0000000-0000-4000-8000-00000000000a', 'sms', '6125550166',
+      'written', 'again', 'field-sms-v1', NULL);
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'no_opt_out_to_supersede',
+    'FAIL 9i: reconsent without a refusal must be refused, got ' || COALESCE(raised, '<no error>');
+  PERFORM pg_temp.reset_role();
+
+  -- 9j. A member of another studio cannot use the named door either.
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000002');
+  raised := NULL;
+  BEGIN
+    PERFORM public.record_channel_reconsent(
+      'b0000000-0000-4000-8000-00000000000a', 'sms', '6125550166',
+      'written', 'not mine to give', 'field-sms-v1', NULL);
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'not_a_studio_member',
+    'FAIL 9j: a non-member must be refused, got ' || COALESCE(raised, '<no error>');
+  PERFORM pg_temp.reset_role();
+
+  RAISE NOTICE '9. record_channel_consent transition gate (B-2): passed';
+END
+$$;
+
+-- ─── 10. r2 M-1: the mirror refreshes evidence, not only status ────────────
+
+DO $$
+DECLARE
+  n INTEGER;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+  -- Same status twice, different words. Guarded on status alone, the second
+  -- write never reached the party rows, leaving the cache permanently wrong
+  -- about the audit half of the record — the 10DLC evidence for the send.
+  PERFORM public.record_channel_consent(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '(612) 555-0155', 'granted',
+    'verbal', 'Said yes on site', 'field-sms-v1', NULL);
+  PERFORM pg_temp.reset_role();
+
+  SELECT COUNT(*) INTO n FROM project_parties
+   WHERE phone_e164 = '+16125550155'
+     AND sms_consent_status = 'granted'
+     AND sms_consent_source = 'verbal'
+     AND sms_consent_evidence = 'Said yes on site'
+     AND sms_consent_recorded_at IS NOT NULL;
+  ASSERT n = 2,
+    'FAIL 10: a same-status re-record must refresh the mirrored evidence on both seats, got ' || n;
+
+  -- No party row may sit at granted with a hollow evidence set.
+  SELECT COUNT(*) INTO n FROM project_parties
+   WHERE sms_consent_status = 'granted'
+     AND (sms_consent_source IS NULL
+          OR sms_consent_recorded_at IS NULL
+          OR btrim(COALESCE(sms_consent_evidence, '')) = '');
+  ASSERT n = 0,
+    'FAIL 10b: a granted party row with a hollow evidence set, ' || n || ' of them';
+
+  RAISE NOTICE '10. mirror evidence refresh (M-1): passed';
+END
+$$;
+
+-- ─── 11. r2 M-3: one normalisation rule, one origin rule ───────────────────
+
+DO $$
+DECLARE
+  r RECORD;
+  v TEXT;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+
+  -- 11a. The channels table keeps 'ext 411' verbatim (block 2d). The consent
+  --      RPC used to refuse that same value, so the channel row could never
+  --      carry a consent record. One shared rule now, so it can.
+  SELECT value INTO v FROM studio_contact_channels
+   WHERE id = 'f1000000-0000-4000-8000-000000000004';
+  PERFORM public.record_channel_consent(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '  ext 411 ', 'granted',
+    'written', 'Dispatch desk letter', 'field-sms-v1', NULL);
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_kind = 'sms' AND channel_value = v;
+  ASSERT r.status = 'granted',
+    'FAIL 11a: an unparseable phone must key the same way in both tables (' || COALESCE(v, '<null>') || ')';
+
+  -- 11b. The origin follows the CURRENT verdict: a later verdict naming a
+  --      different job wins, matching the inbound rail (pipeline.ts).
+  PERFORM public.record_channel_consent(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', 'ext 411', 'granted',
+    'written', 'Dispatch desk letter', 'field-sms-v1',
+    'd0000000-0000-4000-8000-00000000000a');
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_kind = 'sms' AND channel_value = v;
+  ASSERT r.origin_project_id = 'd0000000-0000-4000-8000-00000000000a',
+    'FAIL 11b: a supplied origin must win over the stored one';
+
+  -- …and a verdict that names no job keeps the one on the books.
+  PERFORM public.record_channel_consent(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', 'ext 411', 'granted',
+    'written', 'Dispatch desk letter', 'field-sms-v1', NULL);
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_kind = 'sms' AND channel_value = v;
+  ASSERT r.origin_project_id = 'd0000000-0000-4000-8000-00000000000a',
+    'FAIL 11b2: an unnamed origin must keep the stored one';
+  PERFORM pg_temp.reset_role();
+
+  RAISE NOTICE '11. one normalisation + origin rule (M-3): passed';
   RAISE NOTICE 'All W1a assertions passed.';
 END
 $$;

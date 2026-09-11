@@ -221,6 +221,74 @@ export async function resolveProjectOrg(
   return (org as string | null) ?? null;
 }
 
+/**
+ * The same resolution as resolveProjectOrg(), for many projects at once and
+ * returning a project-id → org map. Exported because sms-inbound's pipeline
+ * derives its STOP/START targets the same way: the two sides of the rail must
+ * never disagree about which studio a project belongs to.
+ */
+export async function orgsOfProjects(
+  supabase: SupabaseClient,
+  projectIds: string[],
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (projectIds.length === 0) return out;
+  const { data } = await supabase
+    .from("projects")
+    .select("id, studio_id, designer_id")
+    .in("id", projectIds);
+  const rows = (data ?? []) as Array<
+    { id: string; studio_id?: string | null; designer_id?: string | null }
+  >;
+  const primary = new Map<string, string | null>();
+  for (const row of rows) {
+    if (row.studio_id) {
+      out.set(row.id, row.studio_id);
+      continue;
+    }
+    if (!row.designer_id) continue;
+    if (!primary.has(row.designer_id)) {
+      const { data: org } = await supabase.rpc("_primary_studio_for", {
+        p_user: row.designer_id,
+      });
+      primary.set(row.designer_id, (org as string | null) ?? null);
+    }
+    const fallback = primary.get(row.designer_id) ?? null;
+    if (fallback) out.set(row.id, fallback);
+  }
+  return out;
+}
+
+/**
+ * Is there a party row on this number, IN THIS STUDIO, that says opted_out?
+ *
+ * The studio record and the party rows can drift: the portal still writes
+ * project_parties.sms_consent_* directly (PR-x has not retired those writes),
+ * and an inbound STOP writes party rows phone-globally. So a record that says
+ * `granted` is not proof that nobody in this studio has since refused. Scoped
+ * to the owning studio on purpose — phone-globally it would re-open G-3, the
+ * bug this whole table exists to fix, because an inbound STOP opts out every
+ * party row on the number in every studio.
+ */
+async function orgHasOptedOutParty(
+  supabase: SupabaseClient,
+  phone: string,
+  org: string,
+): Promise<boolean> {
+  const { data } = await supabase
+    .from("project_parties")
+    .select("project_id, sms_consent_status")
+    .eq("phone_e164", phone)
+    .eq("sms_consent_status", "opted_out");
+  const rows = (data ?? []) as Array<{ project_id?: string | null }>;
+  const projectIds = [
+    ...new Set(rows.map((r) => r.project_id).filter(Boolean)),
+  ] as string[];
+  if (projectIds.length === 0) return false;
+  const orgs = await orgsOfProjects(supabase, projectIds);
+  return projectIds.some((id) => orgs.get(id) === org);
+}
+
 /** What the studio's own consent record says about this number. */
 export type ChannelConsentVerdict = "refuse" | "allow" | "unknown";
 
@@ -235,17 +303,21 @@ export type ChannelConsentVerdict = "refuse" | "allow" | "unknown";
  *     for that studio (or no studio could be resolved) AND some party row on
  *     this number has opted out, which fails closed until the backfill is
  *     proven everywhere (PR-x). That fallback is deliberately phone-global.
- *   · "allow" — the studio's own record says granted. This is the half of G-3
- *     the per-party ledger cannot do: a seat created today for a number the
- *     studio recorded a grant for in 2025 starts `not_asked` on its own row
- *     (the mirror fires on a consent write, never on a party-row insert), and
+ *   · "allow" — the studio's own record says granted AND no party row in that
+ *     same studio on that number says opted_out. This is the half of G-3 the
+ *     per-party ledger cannot do: a seat created today for a number the studio
+ *     recorded a grant for in 2025 starts `not_asked` on its own row (the
+ *     mirror fires on a consent write, never on a party-row insert), and
  *     without this branch the send is refused as not_consented and the studio
  *     has to re-record a consent it already holds (fixture F-11).
  *   · "unknown" — record says not_asked/pending, or there is none: the legacy
  *     party-row gates below decide.
  *
- * "allow" lifts only the POSITIVE gates. Every opted_out path still refuses,
- * whichever ledger carries it.
+ * "allow" lifts only the POSITIVE gates, and it is never taken on a record
+ * alone. A record can go stale — the portal still writes party rows directly,
+ * and an inbound STOP reaches party rows phone-globally — so the owning
+ * studio's own party rows are scanned for a refusal BEFORE `granted` is
+ * honoured. Every opted_out path still refuses, whichever ledger carries it.
  */
 async function channelConsentVerdict(
   supabase: SupabaseClient,
@@ -265,6 +337,9 @@ async function channelConsentVerdict(
     if (record) {
       const status = (record as { status: string }).status;
       if (status === "opted_out") return "refuse";
+      // The record is not self-certifying: a refusal recorded on one of this
+      // studio's own party rows since the record was written still refuses.
+      if (await orgHasOptedOutParty(supabase, phone, org)) return "refuse";
       if (status === "granted") return "allow";
       return "unknown";
     }

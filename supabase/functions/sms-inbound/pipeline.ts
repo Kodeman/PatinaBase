@@ -23,7 +23,7 @@
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { parseFieldMessage, type FieldParseInput, type FieldParseResult } from "../_shared/field-parse.ts";
 import { renderTemplateFromDb } from "../_shared/render-template.ts";
-import { resolveStudioName } from "../_shared/sms.ts";
+import { orgsOfProjects, resolveStudioName } from "../_shared/sms.ts";
 import { captureServerEvent } from "../_shared/aesthete-events.ts";
 
 const FIELD_KINDS = ["gc", "sub", "installer", "receiver"];
@@ -182,8 +182,12 @@ async function loadPhoneParties(
 
 interface StudioTarget {
   org: string;
-  /** A project in that studio, cited as the consent record's origin. */
-  projectId: string;
+  /**
+   * A project in that studio, cited as the consent record's origin. NULL for a
+   * studio that holds a consent record but no seat on this number — the record
+   * keeps whatever origin it already had.
+   */
+  projectId: string | null;
   /** Every party row on this number belonging to that studio. */
   partyIds: string[];
 }
@@ -204,31 +208,9 @@ async function studiosHoldingPhone(
 ): Promise<StudioTarget[]> {
   const projectIds = [...new Set(parties.map((p) => p.project_id))];
   if (projectIds.length === 0) return [];
-  const { data } = await supabase
-    .from("projects")
-    .select("id, studio_id, designer_id")
-    .in("id", projectIds);
-  const rows = (data ?? []) as Array<
-    { id: string; studio_id: string | null; designer_id: string | null }
-  >;
-
-  const orgOfProject = new Map<string, string>();
-  const primaryStudio = new Map<string, string | null>();
-  for (const row of rows) {
-    if (row.studio_id) {
-      orgOfProject.set(row.id, row.studio_id);
-      continue;
-    }
-    if (!row.designer_id) continue;
-    if (!primaryStudio.has(row.designer_id)) {
-      const { data: org } = await supabase.rpc("_primary_studio_for", {
-        p_user: row.designer_id,
-      });
-      primaryStudio.set(row.designer_id, (org as string | null) ?? null);
-    }
-    const fallback = primaryStudio.get(row.designer_id) ?? null;
-    if (fallback) orgOfProject.set(row.id, fallback);
-  }
+  // One resolver, shared with the send gate (_shared/sms.ts), so the two sides
+  // of the rail cannot disagree about which studio a project belongs to.
+  const orgOfProject = await orgsOfProjects(supabase, projectIds);
 
   const out: StudioTarget[] = [];
   const byOrg = new Map<string, StudioTarget>();
@@ -242,6 +224,49 @@ async function studiosHoldingPhone(
       out.push(target);
     }
     target.partyIds.push(p.id);
+  }
+  return out;
+}
+
+/**
+ * Studios that hold a consent record for this number WITHOUT holding a seat.
+ *
+ * studiosHoldingPhone() reads project_parties only, so a studio whose seat was
+ * removed — or, once W2 lands, whose consent was recorded against a rolodex
+ * card that never had a seat — is invisible to it. Its record then sits at
+ * `granted` for ever while the number has said STOP, and the send gate acts on
+ * that stale fact. A compliance keyword has to reach every record on the
+ * number, seat or no seat.
+ */
+async function studiosHoldingRecord(
+  supabase: SupabaseClient,
+  phone: string,
+  onlyStatuses?: string[],
+): Promise<string[]> {
+  const { data } = await supabase
+    .from("studio_channel_consent")
+    .select("organization_id, status")
+    .eq("channel_kind", "sms")
+    .eq("channel_value", phone);
+  const rows = (data ?? []) as Array<
+    { organization_id: string; status: string }
+  >;
+  return rows
+    .filter((r) => !onlyStatuses || onlyStatuses.includes(r.status))
+    .map((r) => r.organization_id);
+}
+
+/** Seat-derived targets first, then any record-only studio, once each. */
+function withRecordOnlyStudios(
+  targets: StudioTarget[],
+  orgs: string[],
+): StudioTarget[] {
+  const seen = new Set(targets.map((t) => t.org));
+  const out = [...targets];
+  for (const org of orgs) {
+    if (seen.has(org)) continue;
+    seen.add(org);
+    out.push({ org, projectId: null, partyIds: [] });
   }
   return out;
 }
@@ -281,7 +306,11 @@ async function writeChannelConsent(
       evidence,
       recorded_at: now,
       disclosure_version: prior.disclosure_version ?? null,
-      origin_project_id: prior.origin_project_id ?? t.projectId,
+      // The origin follows the CURRENT verdict, the same rule 00594's
+      // record_channel_consent applies (COALESCE(new, prior)). R-Q's sentence
+      // names the job the verdict on the books came from; taking the prior made
+      // a STOP print the job the earlier grant came from.
+      origin_project_id: t.projectId ?? prior.origin_project_id ?? null,
     }, { onConflict: "organization_id,channel_kind,channel_value" });
   }
 }
@@ -454,9 +483,16 @@ export async function processInbound(
 
   // (d) COMPLIANCE KEYWORDS — before resolve/MMS/LLM. Phone-global.
   if (STOP_WORDS.includes(upper)) {
+    // Every studio holding the number — by seat, and by record even with no
+    // seat left. A refusal that cannot reach a record leaves that record
+    // saying granted, and the send gate honours it.
+    const stopTargets = withRecordOnlyStudios(
+      await studiosHoldingPhone(supabase, await loadPhoneParties(supabase, from)),
+      await studiosHoldingRecord(supabase, from),
+    );
     await writeChannelConsent(
       supabase,
-      await studiosHoldingPhone(supabase, await loadPhoneParties(supabase, from)),
+      stopTargets,
       from, "opted_out", nowIso, `Inbound ${upper}`,
     );
     // Phone-global on purpose — see optOutAllForPhone.
@@ -473,9 +509,11 @@ export async function processInbound(
   if (START_WORDS.includes(upper)) {
     // One target set for both writers: the studios that actually hold the
     // number, and only their party rows.
-    const startTargets = await studiosHoldingPhone(
-      supabase,
-      await loadPhoneParties(supabase, from),
+    const startTargets = withRecordOnlyStudios(
+      await studiosHoldingPhone(supabase, await loadPhoneParties(supabase, from)),
+      // Only records currently refusing. A START lifts the STOP it mirrors; it
+      // does not hand a grant to a studio whose record never left not_asked.
+      await studiosHoldingRecord(supabase, from, ["opted_out"]),
     );
     await writeChannelConsent(
       supabase,

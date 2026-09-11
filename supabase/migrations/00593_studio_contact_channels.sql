@@ -21,6 +21,12 @@
 -- which is evaluated AFTER the normalising trigger — so the same number typed
 -- three different ways lands once.
 --
+-- The normalising rule itself lives in ONE function, public.normalize_channel_value
+-- (created here), because 00594 keys its consent record on the same value. Two
+-- statements of the same rule drift: the consent RPC refused an unparseable
+-- phone while this trigger kept the raw text, leaving channel rows no consent
+-- record could ever be written for.
+--
 -- The kind vocabulary is crm-model §2's Reach channel list: four voice lines,
 -- two email doors (general + AP), and portal_311. status is crm-model's
 -- ok/bounced/unsubscribed/dead, with ok spelled `active`.
@@ -121,23 +127,60 @@ COMMENT ON COLUMN public.studio_contact_channels.status IS
   'from consent, which is per studio per value.';
 
 -- ── Normalisation ───────────────────────────────────────────────────────────
+-- The channel-key rule lives in ONE function, because 00594's consent record is
+-- keyed on the same value and the two must never disagree. A rule stated twice
+-- drifted once already: the consent RPC refused an unparseable phone while this
+-- trigger kept the trimmed raw text, so a channel row could exist that no
+-- consent record could ever be written for.
+--
+-- IMMUTABLE and side-effect-free, so it is safe to call from a trigger, from a
+-- SECURITY DEFINER RPC, and from a backfill's WHERE clause alike.
+CREATE OR REPLACE FUNCTION public.normalize_channel_value(
+  p_channel_kind text,
+  p_value        text
+)
+RETURNS text
+LANGUAGE sql
+IMMUTABLE
+SET search_path TO 'public'
+AS $$
+  SELECT CASE
+    WHEN p_channel_kind IN ('email', 'ap_email')
+      THEN NULLIF(lower(btrim(COALESCE(p_value, ''))), '')
+    -- A portal handle/URL is neither phone nor address: keep what was typed.
+    WHEN p_channel_kind = 'portal_311'
+      THEN NULLIF(btrim(COALESCE(p_value, '')), '')
+    ELSE COALESCE(
+           public.normalize_phone_e164(p_value),
+           NULLIF(btrim(COALESCE(p_value, '')), '')
+         )
+  END;
+$$;
+
+REVOKE ALL ON FUNCTION public.normalize_channel_value(text, text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.normalize_channel_value(text, text)
+  TO authenticated, service_role;
+
+COMMENT ON FUNCTION public.normalize_channel_value(text, text) IS
+  'The ONE channel-key rule: E.164 for phone kinds, falling back to the trimmed '
+  'raw text when unparseable; lower(btrim(...)) for email and ap_email; trimmed '
+  'raw for portal_311. NULL only when nothing was typed. Called by '
+  'normalize_studio_contact_channel() (this file) and by 00594''s '
+  'record_channel_consent() / record_channel_reconsent(), so a channel row and '
+  'its consent record always land on the same key.';
+
 CREATE OR REPLACE FUNCTION public.normalize_studio_contact_channel()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 SET search_path = public, pg_temp
 AS $$
 BEGIN
-  IF NEW.channel_kind IN ('email', 'ap_email') THEN
-    NEW.value := lower(btrim(COALESCE(NEW.value, '')));
-  ELSIF NEW.channel_kind = 'portal_311' THEN
-    -- A portal handle/URL is neither phone nor address: keep what was typed.
-    NEW.value := btrim(COALESCE(NEW.value, ''));
-  ELSE
-    NEW.value := COALESCE(
-      public.normalize_phone_e164(NEW.value),
-      btrim(COALESCE(NEW.value, ''))
-    );
-  END IF;
+  -- COALESCE to '' because value is NOT NULL here: the number the studio typed
+  -- is never lost, it simply gets no E.164.
+  NEW.value := COALESCE(
+    public.normalize_channel_value(NEW.channel_kind, NEW.value),
+    ''
+  );
   RETURN NEW;
 END;
 $$;
@@ -145,11 +188,11 @@ $$;
 REVOKE ALL ON FUNCTION public.normalize_studio_contact_channel() FROM PUBLIC, anon;
 
 COMMENT ON FUNCTION public.normalize_studio_contact_channel() IS
-  'BEFORE INSERT/UPDATE on studio_contact_channels: E.164 for phone kinds, '
-  'lowercased for email and ap_email, trimmed raw for portal_311. Same shape '
-  'as 00281''s normalize_party_phone_e164 and '
-  '00583''s two lead/client normalisers — a per-table trigger fn over the one '
-  'shared pure helper (00593).';
+  'BEFORE INSERT/UPDATE on studio_contact_channels: defers entirely to '
+  'normalize_channel_value(), the one channel-key rule 00594''s consent RPCs '
+  'also use. Same shape as 00281''s normalize_party_phone_e164 and 00583''s two '
+  'lead/client normalisers — a per-table trigger fn over one shared pure '
+  'helper (00593).';
 
 DROP TRIGGER IF EXISTS normalize_studio_contact_channel_trg ON public.studio_contact_channels;
 CREATE TRIGGER normalize_studio_contact_channel_trg

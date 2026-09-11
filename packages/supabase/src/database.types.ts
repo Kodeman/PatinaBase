@@ -34511,6 +34511,10 @@ export type Database = {
         Args: { p_from: string; p_to: string }
         Returns: boolean
       }
+      normalize_channel_value: {
+        Args: { p_channel_kind: string; p_value: string }
+        Returns: string
+      }
       normalize_phone_e164: { Args: { p_phone: string }; Returns: string }
       notification_time_zone: { Args: { p_user_id: string }; Returns: string }
       notify_client_attention: {
@@ -34864,6 +34868,39 @@ export type Database = {
           p_origin_project_id?: string
           p_source?: string
           p_status: string
+        }
+        Returns: {
+          channel_kind: string
+          channel_value: string
+          consented_at: string | null
+          created_at: string
+          disclosure_version: string | null
+          evidence: string | null
+          opt_out_at: string | null
+          organization_id: string
+          origin_project_id: string | null
+          recorded_at: string | null
+          recorded_by: string | null
+          source: string | null
+          status: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "studio_channel_consent"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      record_channel_reconsent: {
+        Args: {
+          p_channel_kind: string
+          p_channel_value: string
+          p_disclosure_version: string
+          p_evidence: string
+          p_organization_id: string
+          p_origin_project_id?: string
+          p_source: string
         }
         Returns: {
           channel_kind: string
