@@ -308,8 +308,14 @@ deploys.)
   Migrations run before seeds, so `studio_contacts` and `project_parties` were
   empty when 00593/00594 executed. The fold logic is proven by the SQL test
   against its own fixture, not by seed data. On Strata the backfills will do
-  real work on first push — and `backfill_channel_consent_from_parties()` can be
-  re-run afterwards as `service_role` without overwriting anything.
+  real work on first push. **Before that push, dry-run the fold** — run the
+  `ranked` CTE from `backfill_channel_consent_from_parties()` as a bare
+  `SELECT org, phone_e164, sms_consent_status FROM ranked WHERE rn = 1` against
+  prod and read it, so the fold is seen before it is taken (r1 review m14).
+  `backfill_channel_consent_from_parties()` can then be re-run afterwards as
+  `service_role` without overwriting anything: since the r1 B1 fix the rows it
+  folds reach the party rows through the mirror, which stands the opt-in
+  dispatch down for its own write, so a re-run sends no SMS either.
 - **Out of W1a scope by instruction** (named so the next wave does not assume
   they landed): `studio_compliance_documents`, `project_party_authority`,
   `project_site_access_cards`, `client_households`, `studio_contact_merges`,

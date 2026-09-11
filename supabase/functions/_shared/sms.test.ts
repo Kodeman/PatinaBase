@@ -584,3 +584,72 @@ Deno.test("with no studio record, an opted-out sibling party row still blocks (f
   assert(!res.sent, "an unbacked-filled number with a STOP anywhere must fail closed");
   assertEquals(res.reason, "opted_out");
 });
+
+// ── r1 review fixes ─────────────────────────────────────────────────────────
+
+// M5: the studio-scoped record must be able to AUTHORISE, not only refuse.
+// F-11: the studio recorded Dana's grant in 2025; the seat created today for
+// the same number starts not_asked, because the mirror fires on a consent
+// write, never on a party-row insert.
+Deno.test("the studio's granted record carries a send the party row would refuse", async () => {
+  const fake = createFakeSupabase({
+    project_parties: [party("p1", "not_asked")],
+    projects: [{ id: "proj1", studio_id: "org-alpha" }],
+    studio_channel_consent: [{
+      organization_id: "org-alpha",
+      channel_kind: "sms",
+      channel_value: "+15551230001",
+      status: "granted",
+    }],
+  });
+  const res = await sendPartySms(fake as never, { partyId: "p1", body: "hello" }, {
+    getEnv: envOf(CONSENT_ENV),
+    now: OPEN_HOURS,
+  });
+  assert(res.sent, "the studio's own grant must authorise the send");
+});
+
+// …but never over an opt-out, from either ledger.
+Deno.test("a granted record does not override an opted-out party row", async () => {
+  const fake = createFakeSupabase({
+    project_parties: [party("p1", "opted_out")],
+    projects: [{ id: "proj1", studio_id: "org-alpha" }],
+    studio_channel_consent: [{
+      organization_id: "org-alpha",
+      channel_kind: "sms",
+      channel_value: "+15551230001",
+      status: "granted",
+    }],
+  });
+  const res = await sendPartySms(fake as never, { partyId: "p1", body: "hello" }, {
+    getEnv: envOf(CONSENT_ENV),
+    now: OPEN_HOURS,
+  });
+  assert(!res.sent);
+  assertEquals(res.reason, "opted_out");
+});
+
+// M7: sms.ts resolves the org the same way 00594 does — studio_id, then the
+// designer's primary studio — so the gate and the table cannot disagree about
+// which studio a NULL-studio_id project belongs to.
+Deno.test("a NULL-studio_id project resolves its org through _primary_studio_for", async () => {
+  const fake = createFakeSupabase(
+    {
+      project_parties: [party("p1", "granted")],
+      projects: [{ id: "proj1", studio_id: null, designer_id: "dz1" }],
+      studio_channel_consent: [{
+        organization_id: "org-alpha",
+        channel_kind: "sms",
+        channel_value: "+15551230001",
+        status: "opted_out",
+      }],
+    },
+    { _primary_studio_for: (args) => ({ data: args.p_user === "dz1" ? "org-alpha" : null, error: null }) },
+  );
+  const res = await sendPartySms(fake as never, { partyId: "p1", body: "hello" }, {
+    getEnv: envOf(CONSENT_ENV),
+    now: OPEN_HOURS,
+  });
+  assert(!res.sent, "the studio's STOP must reach a project with no studio_id");
+  assertEquals(res.reason, "opted_out");
+});

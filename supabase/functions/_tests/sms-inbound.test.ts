@@ -12,7 +12,7 @@ const NO_POSTHOG = () => undefined; // keep captureServerEvent off the network
 
 function baseSeed(extra: Record<string, unknown[]> = {}) {
   return {
-    projects: [{ id: "proj1", name: "Maple St", designer_id: "dz1" }],
+    projects: [{ id: "proj1", name: "Maple St", designer_id: "dz1", studio_id: "org-alpha" }],
     profiles: [{ id: "dz1", full_name: "Dana Designer" }],
     email_templates: [
       { slug: "sms_optin_confirm", is_active: true, html_content: "You're set {{party_first_name}} for {{project_name}}." },
@@ -782,4 +782,69 @@ Deno.test("START re-grants per studio and keeps the earlier opt-out date", async
   assertEquals(consent[0].opt_out_at, "2025-12-03T00:00:00Z", "the STOP date survives");
   assert(consent[0].consented_at, "the new grant is dated");
   assertEquals(consent[0].disclosure_version, "field-sms-v1", "the disclosure version carries");
+});
+
+// ── r1 review fixes ─────────────────────────────────────────────────────────
+
+// M6: the party-row grant must be scoped to the same studios as the consent
+// record. Phone-globally, org-beta's seat would go `granted` — and the send
+// gate still reads that row — while org-beta's own record stayed absent.
+Deno.test("YES does not grant a party row in a studio that never invited", async () => {
+  const fake = createFakeSupabase(baseSeed({
+    projects: [
+      { id: "proj1", name: "Maple St", designer_id: "dz1", studio_id: "org-alpha" },
+      { id: "proj2", name: "Beta job", designer_id: "dz2", studio_id: "org-beta" },
+    ],
+    project_parties: [
+      { id: "p1", phone_e164: "+15551110020", project_id: "proj1", party_kind: "sub", sms_consent_status: "pending", display_name: "Sal Sub" },
+      { id: "p2", phone_e164: "+15551110020", project_id: "proj2", party_kind: "sub", sms_consent_status: "pending", display_name: "Sal Sub" },
+    ],
+  }));
+  // Only org-alpha's row is pending at the moment of the YES.
+  (fake._data.project_parties as Array<{ id: string; sms_consent_status: string }>)
+    .find((p) => p.id === "p2")!.sms_consent_status = "not_asked";
+
+  const res = await processInbound(
+    params({ From: "+15551110020", Body: "YES", MessageSid: "SMyesscope" }),
+    { supabase: fake as never, getEnv: NO_POSTHOG },
+  );
+  assertEquals(res.disposition, "granted");
+  const parties = fake._data.project_parties as Array<{ id: string; sms_consent_status: string }>;
+  assertEquals(parties.find((p) => p.id === "p1")!.sms_consent_status, "granted");
+  assertEquals(
+    parties.find((p) => p.id === "p2")!.sms_consent_status,
+    "not_asked",
+    "a studio that never invited must not gain a granted party row",
+  );
+  const consent = (fake._data.studio_channel_consent ?? []) as Array<{ organization_id: string }>;
+  assertEquals(consent.length, 1);
+  assertEquals(consent[0].organization_id, "org-alpha");
+});
+
+// M7: a project with a NULL studio_id resolves through the designer's primary
+// studio, exactly as 00594's backfill and mirror do. Without the fallback the
+// migration writes a consent record this rail can never reach.
+Deno.test("STOP reaches a NULL-studio_id project through _primary_studio_for", async () => {
+  const fake = createFakeSupabase(
+    baseSeed({
+      projects: [
+        { id: "proj1", name: "Maple St", designer_id: "dz1", studio_id: null },
+      ],
+      project_parties: [
+        { id: "p1", phone_e164: "+15551110021", project_id: "proj1", party_kind: "sub", sms_consent_status: "granted" },
+      ],
+    }),
+    { _primary_studio_for: (args) => ({ data: args.p_user === "dz1" ? "org-alpha" : null, error: null }) },
+  );
+  const res = await processInbound(
+    params({ From: "+15551110021", Body: "STOP", MessageSid: "SMstopnullstudio" }),
+    { supabase: fake as never, getEnv: NO_POSTHOG },
+  );
+  assertEquals(res.disposition, "opted_out");
+  const consent = (fake._data.studio_channel_consent ?? []) as Array<{
+    organization_id: string; status: string;
+  }>;
+  assertEquals(consent.length, 1, "the designer's primary studio gets the record");
+  assertEquals(consent[0].organization_id, "org-alpha");
+  assertEquals(consent[0].status, "opted_out");
 });
