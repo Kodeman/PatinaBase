@@ -7,6 +7,7 @@ const mockSend = jest.fn();
 const mockRecordPayment = jest.fn();
 const mockVoid = jest.fn();
 const mockReconcileCheckout = jest.fn();
+const mockReconcileOptions = jest.fn();
 const mockRefetch = jest.fn();
 const mockInvalidateQueries = jest.fn();
 const mockRegenerateLink = jest.fn();
@@ -99,10 +100,13 @@ jest.mock('@patina/supabase', () => ({
 jest.mock(
   '@/hooks/use-invoice-checkout-reconciliation',
   () => ({
-    useReconcileInvoiceCheckout: () => ({
-      mutateAsync: mockReconcileCheckout,
-      isPending: false,
-    }),
+    useReconcileInvoiceCheckout: (options?: unknown) => {
+      mockReconcileOptions(options);
+      return {
+        mutateAsync: mockReconcileCheckout,
+        isPending: false,
+      };
+    },
   }),
   { virtual: true },
 );
@@ -166,6 +170,12 @@ describe('InvoiceFolio delivery recovery', () => {
     );
     await waitFor(() => expect(mockRefetch).toHaveBeenCalledTimes(1));
     expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ['document-state'] });
+  });
+
+  it('asks for the inline error surface, so a failure never reaches the global toast', () => {
+    render(<InvoiceFolio invoiceId="invoice-1" />);
+
+    expect(mockReconcileOptions).toHaveBeenCalledWith({ errorSurface: 'inline' });
   });
 
   it('renders a failed reconcile inline with the function message, not a toast', async () => {
