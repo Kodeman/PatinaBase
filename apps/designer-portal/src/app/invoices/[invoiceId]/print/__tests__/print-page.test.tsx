@@ -10,7 +10,7 @@ import { Suspense } from 'react';
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { Invoice } from '@patina/supabase';
-import DesignerInvoicePrintPage from './page';
+import DesignerInvoicePrintPage from '../page';
 
 const INVOICE_ID = 'b0000000-0000-0000-0000-00000000e142';
 
