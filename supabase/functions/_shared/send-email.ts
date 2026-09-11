@@ -35,7 +35,9 @@ export interface ComplianceSendOptions {
   skipLog?: boolean;
   unsubscribeBaseUrl?: string;
   tags?: Array<{ name: string; value: string }>;
-  /** The business record this letter is about, stamped on notification_log. */
+  /** The business record this letter is about, stamped on notification_log.
+   * Only for the outbound copy to the external recipient; never on
+   * studio-facing notices. */
   ref?: { type: string; id: string };
   idempotencyKey?: string;
   /** Fail closed when suppression/rate policy storage cannot be read. Durable

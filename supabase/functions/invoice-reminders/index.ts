@@ -236,7 +236,9 @@ async function escalateToDesigner(
         notificationType: 'invoice_ar_flagged',
         category: 'operational',
         templateId: 'invoice-ar-escalation',
-        ref: { type: 'invoice', id: invoice.id },
+        // No `ref`: this is a notice TO the studio about the invoice, not the
+        // invoice's delivery record. The A/R page reads the latest row per
+        // invoice, so a delivered escalation would mask a bounced client copy.
         metadata: {
           invoice_id: invoice.id,
           project_id: invoice.project_id,
