@@ -1,0 +1,1626 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The People Room</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;1,400&family=Inter:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Source: artifacts/agreement-room-2026-09-10/deck/src/index.html (lines 14-91) */
+:root {
+  color-scheme: light dark;
+
+  /* paper, three stocks */
+  --paper:            #FAF7F2;
+  --paper-doc:        #FCFAF6;
+  --rail:             #E8E3DB;
+
+  /* ink */
+  --ink:              #2C2926;
+  --ink-muted:        #4E4339;
+  --ink-subtle:       #5A4E43;
+  --ink-faint:        #65594E;
+  --ink-paper:        #FAF7F2;
+
+  /* hairlines */
+  --hairline:         #E8E3DB;
+  --hairline-strong:  rgba(44, 41, 38, .14);
+
+  /* the rest rule pigment */
+  --oak:              #8B7355;
+
+  /* state pigments: material value / paper ink */
+  --clay:             #C4A57B;   --clay-ink:      #7C5E30;
+  --golden:           #E8C547;   --golden-ink:    #79651E;
+  --terracotta:       #D4A090;   --terracotta-ink:#9C5340;
+  --sage:             #A8B5A0;   --sage-ink:      #5F6B57;
+
+  /* rhythm */
+  --module: 24px;
+  --radius-hair: 2px;
+  --radius-box:  3px;
+
+  /* motion */
+  --press-in:  70ms;
+  --press-out: 240ms;
+  --ease: cubic-bezier(.22, 1, .36, 1);
+
+  --font-display: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  --font-body:    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-meta:    'DM Mono', 'SF Mono', 'Fira Code', ui-monospace, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper:           #2A2622;
+    --paper-doc:       #26221E;
+    --rail:            #3A3530;
+    --ink:             #F2EDE6;
+    --ink-muted:       #D6CEC4;
+    --ink-subtle:      #C7BEB3;
+    --ink-faint:       #B8AEA2;
+    --ink-paper:       #2A2622;
+    --hairline:        rgba(242, 237, 230, .14);
+    --hairline-strong: rgba(242, 237, 230, .22);
+    --oak:             #B39572;
+    --clay-ink:        #D8B98A;
+    --golden-ink:      #E0C963;
+    --terracotta-ink:  #E2A895;
+    --sage-ink:        #AFC0A6;
+  }
+}
+:root[data-theme="dark"] {
+  --paper:           #2A2622;
+  --paper-doc:       #26221E;
+  --rail:            #3A3530;
+  --ink:             #F2EDE6;
+  --ink-muted:       #D6CEC4;
+  --ink-subtle:      #C7BEB3;
+  --ink-faint:       #B8AEA2;
+  --ink-paper:       #2A2622;
+  --hairline:        rgba(242, 237, 230, .14);
+  --hairline-strong: rgba(242, 237, 230, .22);
+  --oak:             #B39572;
+  --clay-ink:        #D8B98A;
+  --golden-ink:      #E0C963;
+  --terracotta-ink:  #E2A895;
+  --sage-ink:        #AFC0A6;
+}
+
+  .crm-band { max-width: 1200px; margin: 0 auto; padding: 24px; background: var(--paper); font-family: var(--font-body); color: var(--ink); }
+  .crm-h    { font-family: var(--font-display); font-size: 20px; font-weight: 500; margin: 48px 0 12px; }
+  .crm-h:first-child { margin-top: 0; }
+
+  /* ── Row (person + company share this grammar) ─────────────────────── */
+  .crm-list { border-top: 1px solid var(--hairline); }
+  .crm-row  { display: flex; align-items: center; gap: 16px; padding: 12px 16px; border-bottom: 1px solid var(--hairline); }
+
+  .avatar { flex: none; display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-meta); font-weight: 500; font-size: 12px; color: var(--ink-paper); background: var(--oak); }
+  .avatar--circle { width: 34px; height: 34px; border-radius: 50%; }
+  .avatar--square { width: 42px; height: 42px; border-radius: 8px; }
+
+  .row-id   { flex: 1 1 320px; min-width: 0; }
+  .row-name { font-size: 14px; font-weight: 600; line-height: 1.4; }
+  .row-sub  { font-family: var(--font-meta); font-size: 12px; letter-spacing: .04em; color: var(--ink-subtle); margin-top: 2px; }
+  .row-rule { font-size: 14px; line-height: 1.5; color: var(--ink); margin-top: 4px; }
+  .row-rule--blocked { border-left: 2px solid var(--terracotta-ink); padding-left: 10px; }
+
+  .row-words { flex: none; display: flex; gap: 12px; }
+  .row-chevron { flex: none; width: 16px; color: var(--ink-faint); text-align: center; }
+
+  /* ── The word: bordered box, word + border always agree, never a fill ── */
+  .word { flex: none; width: 108px; text-align: center; padding: 4px 6px;
+    border: 1px solid var(--hairline-strong); border-radius: var(--radius-box);
+    font-family: var(--font-meta); font-size: 11px; font-weight: 500;
+    letter-spacing: .06em; text-transform: uppercase; background: transparent; }
+  .word--current  { border-color: var(--sage);       color: var(--sage-ink); }
+  .word--pending  { border-color: var(--golden);     color: var(--golden-ink); }
+  .word--blocked  { border-color: var(--terracotta); color: var(--terracotta-ink); }
+  .word--dormant  { border-color: var(--hairline-strong); color: var(--ink-faint); }
+  /* Authority: a fact, not a state — no border pigment, no fill. */
+  .word--plain { border-color: transparent; color: var(--ink-subtle); text-transform: none;
+    letter-spacing: 0; font-weight: 400; text-align: left; width: auto; padding: 4px 0; }
+
+  /* ── Card ────────────────────────────────────────────────────────────── */
+  .crm-card { max-width: 720px; margin: 0 auto 48px; }
+  .card-header { display: flex; align-items: center; gap: 16px; padding-bottom: 24px; }
+  .card-name { font-family: var(--font-display); font-size: 20px; font-weight: 500; }
+  .card-meta { font-family: var(--font-meta); font-size: 12px; color: var(--ink-subtle); margin-top: 4px; }
+  .card-region { padding: 24px 0; border-top: 1px solid var(--hairline-strong); }
+  .card-region h3 { font-family: var(--font-meta); font-size: 11px; font-weight: 500;
+    letter-spacing: .08em; text-transform: uppercase; color: var(--ink-subtle); margin: 0 0 12px; }
+
+  .crm-table { width: 100%; border-collapse: collapse; }
+  .crm-table th { font-family: var(--font-meta); font-size: 11px; font-weight: 500; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--ink-subtle); text-align: left; padding: 0 12px 8px 0; }
+  .crm-table td { font-size: 14px; padding: 12px 12px 12px 0; border-top: 1px solid var(--hairline); }
+
+  /* ── Page ground ─────────────────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { background: var(--paper); color: var(--ink); margin: 0; font-family: var(--font-body); overflow-wrap: break-word; }
+  h1, h2, h3, p { margin: 0; }
+  ul { margin: 0; padding: 0; list-style: none; }
+
+  /* ── Type scale ──────────────────────────────────────────────────────── */
+  .t-d1 { font-family: var(--font-display); font-size: 34px; line-height: 1.15; font-weight: 500; }
+  .t-d2 { font-family: var(--font-display); font-size: 26px; line-height: 1.20; font-weight: 500; }
+  .t-d3 { font-family: var(--font-display); font-size: 20px; line-height: 1.30; font-weight: 500; }
+  .t-body { font-family: var(--font-body); font-size: 16px; line-height: 1.55; }
+  .t-body-sm { font-family: var(--font-body); font-size: 14px; line-height: 1.50; }
+  .t-meta { font-family: var(--font-meta); font-size: 12px; line-height: 1.50; letter-spacing: .08em; color: var(--ink-subtle); }
+  .t-head { font-family: var(--font-meta); font-size: 11px; line-height: 1.50; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-subtle); }
+
+  .prose { max-width: 65ch; }
+  .consequence { max-width: 56ch; color: var(--ink-muted); }
+
+  /* ── Acts ────────────────────────────────────────────────────────────── */
+  .act { display: inline-flex; align-items: center; justify-content: flex-start; gap: 8px;
+    max-width: 100%; min-width: 44px; min-height: 44px; padding: 0; margin: 0;
+    border: 0; background: transparent; color: var(--ink); cursor: pointer;
+    font-family: var(--font-meta); font-size: 13px; font-weight: 500;
+    letter-spacing: .06em; text-transform: uppercase; text-align: left; text-decoration: none; }
+  .act-label { border-bottom: 1px solid var(--oak); padding-bottom: 2px; }
+  .act--secondary .act-label { position: relative; }
+  .act--secondary .act-label::after { content: ""; position: absolute; left: 0; right: 0; bottom: -4px; border-bottom: 1px solid var(--clay); }
+  .act--tertiary { color: var(--ink-muted); }
+  .act--inline { font-family: var(--font-body); font-size: 14px; font-weight: 500;
+    letter-spacing: 0; text-transform: none; color: var(--ink); }
+  .act--terminal { justify-content: center; border-radius: var(--radius-box); background: var(--ink); color: var(--ink-paper);
+    font-family: var(--font-body); font-size: 16px; font-weight: 500; letter-spacing: 0; text-transform: none; padding: 12px 24px; }
+  .act--terminal .act-label { border-bottom: 0; padding-bottom: 0; }
+  .act:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+  [aria-disabled="true"] { cursor: not-allowed; color: var(--ink-faint); }
+  .actrow { display: flex; flex-wrap: wrap; gap: 24px; margin-top: 24px; }
+
+  /* ── Chips and lens words ────────────────────────────────────────────── */
+  .narrows { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; }
+  .narrow { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 12px;
+    border: 1px solid var(--hairline-strong); border-radius: var(--radius-box); background: var(--paper);
+    color: var(--ink-muted); cursor: pointer;
+    font-family: var(--font-meta); font-size: 12px; letter-spacing: .04em; }
+  .narrow[aria-pressed="true"] { background: var(--rail); border-color: var(--ink-faint); color: var(--ink); }
+  .narrow:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+  .lens { display: flex; flex-wrap: wrap; gap: 24px; margin-top: 24px; }
+  .lensword[aria-pressed="false"] { color: var(--ink-faint); }
+  .lensword[aria-pressed="false"] .act-label { border-bottom-color: var(--hairline-strong); }
+
+  /* ── Held ────────────────────────────────────────────────────────────── */
+  .held { background: var(--rail); border-left: 2px solid var(--terracotta-ink); padding: 12px 12px 12px 11px; }
+  .held-why { color: var(--ink); margin-top: 12px; }
+
+  /* ── Phones ──────────────────────────────────────────────────────────── */
+  .tel { display: inline-flex; align-items: center; min-width: 44px; min-height: 44px; padding: 0 4px;
+    color: var(--ink); text-decoration: none; font-family: var(--font-meta); font-size: 13px; }
+  .tel > span { border-bottom: 1px solid var(--oak); padding-bottom: 2px; white-space: nowrap; }
+  .tel:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+  .tel--inline { display: inline; min-width: 0; min-height: 0; padding: 14px 2px; }
+  .tel--route { border-bottom: 1px solid var(--oak); white-space: nowrap; }
+  .tel--line { display: flex; align-items: center; padding: 12px 4px; font-family: var(--font-body); font-size: 16px; line-height: 1.55; }
+
+  /* ── The state bar, outside the page ─────────────────────────────────── */
+  .statebar { background: var(--rail); color: var(--ink-muted); border-bottom: 1px solid var(--hairline-strong);
+    padding: 10px 24px; font-family: var(--font-meta); font-size: 11px; line-height: 1.50; letter-spacing: .04em; }
+  .sb-acts { display: flex; flex-wrap: wrap; gap: 12px; }
+  .statebar .act { font-size: 11px; letter-spacing: .04em; color: var(--ink-muted); }
+  .statebar .act[aria-pressed="true"] { color: var(--ink); }
+  .sb-line { margin-top: 12px; }
+
+  /* ── The live region ─────────────────────────────────────────────────── */
+  .announce { position: absolute; top: 0; left: 0; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+
+  /* ── The band at 390 ─────────────────────────────────────────────────── */
+  .avatar--lg { width: 48px; height: 48px; border-radius: 50%; font-size: 14px; }
+  .linkline { display: inline-block; min-height: 44px; padding: 0; border: 0; background: transparent;
+    text-align: left; cursor: pointer; color: var(--ink); text-decoration: none;
+    font-family: var(--font-body); font-size: 16px; line-height: 1.55; }
+  .linkline > span { border-bottom: 1px solid var(--oak); }
+  .linkline:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+
+  .crm-band { width: 100%; max-width: none; padding: 24px 16px; }
+  .room-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px; padding-bottom: 24px; }
+  .state > h2 { margin-bottom: 12px; }
+
+  /* ── Rows at 390: two lines that never fold ──────────────────────────── */
+  .crm-row { display: block; padding: 12px 0; }
+  .prow-top { display: flex; align-items: flex-start; gap: 16px; }
+  .row-id { flex: 1 1 auto; min-width: 0; }
+  .open-person { display: block; width: 100%; min-height: 44px; padding: 0; border: 0; background: transparent;
+    text-align: left; cursor: pointer; color: var(--ink); font-family: var(--font-body); }
+  .open-person:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+  .open-person .row-name, .open-person .row-sub { display: block; }
+  .prow-line2 { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 12px; padding-left: 50px; }
+  .prow-line2--firm { padding-left: 58px; }
+  .reach-plain { font-family: var(--font-meta); font-size: 12px; letter-spacing: .04em; color: var(--ink-subtle); }
+  .disc { display: inline-flex; align-items: center; gap: 8px; min-width: 44px; min-height: 44px; padding: 0 4px;
+    border: 0; background: transparent; cursor: pointer; color: var(--ink-muted);
+    font-family: var(--font-meta); font-size: 12px; letter-spacing: .04em; text-transform: uppercase; }
+  .disc:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+  .disc-chev { color: var(--ink-faint); transition: transform var(--press-out) var(--ease); }
+  .disc[aria-expanded="true"] .disc-chev { transform: rotate(180deg); }
+  .seats, .unfold { margin-top: 12px; padding-left: 50px; }
+  .seat { display: block; width: 100%; margin: 0; padding: 12px 0; border: 0;
+    border-top: 1px solid var(--hairline); background: transparent; text-align: left; cursor: pointer;
+    color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.55; }
+  .seat:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+  .seat-line { display: block; font-size: 14px; line-height: 1.5; }
+  .words { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; }
+  .dupe { margin-top: 48px; padding: 12px 0; border-top: 1px solid var(--hairline); border-bottom: 1px solid var(--hairline); }
+  .dupe .act { margin-top: 12px; }
+  .sub-head { font-family: var(--font-meta); font-size: 11px; line-height: 1.50; font-weight: 500;
+    letter-spacing: .08em; text-transform: uppercase; color: var(--ink-subtle); margin: 24px 0 12px; }
+  .sub-head:first-child { margin-top: 0; }
+  .clause-route { display: block; margin-top: 4px; }
+  .word--inline { display: inline-block; width: auto; padding: 3px 8px; vertical-align: middle; text-align: center; }
+  .stack { margin-top: 12px; }
+  .stack-row { padding: 12px 0; border-top: 1px solid var(--hairline); }
+  .stack-row .t-head { display: block; }
+  .stack-val { font-size: 14px; line-height: 1.5; margin-top: 2px; }
+  .paper-doc { padding: 12px 0; border-top: 1px solid var(--hairline); }
+  .band { margin-top: 48px; }
+  .band--apart { margin-top: 72px; padding-top: 24px; border-top: 1px solid var(--hairline-strong); }
+  .chan-row { padding: 12px 0; border-top: 1px solid var(--hairline); }
+  .note { color: var(--ink-subtle); margin-top: 4px; }
+  .vitals { margin-top: 12px; }
+
+  /* ── Fields ──────────────────────────────────────────────────────────── */
+  .field { margin-top: 24px; }
+  .field-label { display: block; margin-bottom: 12px; }
+  .control { display: block; width: 100%; background: var(--paper-doc); color: var(--ink);
+    border: 1px solid var(--hairline-strong); border-bottom: 1px solid var(--ink-faint);
+    border-radius: var(--radius-hair); padding: 12px;
+    font-family: var(--font-body); font-size: 16px; line-height: 1.55; }
+  .control:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+  textarea.control { resize: vertical; min-height: 96px; }
+  .select-wrap { position: relative; }
+  select.control { appearance: none; padding-right: 40px; }
+  .select-chev { position: absolute; right: 12px; top: 50%; margin-top: -4px; color: var(--ink-faint); pointer-events: none; }
+  .check { display: flex; align-items: flex-start; gap: 12px; margin-top: 24px; min-height: 44px; }
+  .check input { appearance: none; width: 22px; height: 22px; margin: 11px 0 0; cursor: pointer;
+    background: var(--paper-doc); border: 1px solid var(--ink-faint); border-radius: var(--radius-hair); }
+  .check input:checked { background: var(--ink); border-color: var(--ink); }
+  .check input:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+  .check label { font-size: 16px; line-height: 1.55; padding-top: 11px; }
+  .eyebrow { margin-bottom: 12px; }
+  .pick-box { appearance: none; flex: none; width: 22px; height: 22px; margin: 12px 0 0; cursor: pointer;
+    background: var(--paper-doc); border: 1px solid var(--ink-faint); border-radius: var(--radius-hair); }
+  .pick-box:checked { background: var(--ink); border-color: var(--ink); }
+  .pick-box:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+  .pick-name { display: block; min-height: 44px; padding: 12px 0 0; cursor: pointer; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0s !important; animation-delay: 0s !important;
+      transition-duration: 0s !important; transition-delay: 0s !important; }
+  }
+
+  @media (forced-colors: active) {
+    .word, .act--terminal { border: 1px solid ButtonText; }
+    .check input, .pick-box { appearance: auto; -webkit-appearance: auto; }
+    .act:focus-visible, .narrow:focus-visible, .control:focus-visible, .tel:focus-visible,
+    .seat:focus-visible, .open-person:focus-visible, .disc:focus-visible { outline-color: Highlight; }
+  }
+</style>
+</head>
+<body>
+
+<div class="statebar" id="statebar">
+  <div class="sb-acts" role="group" aria-label="Specimen states">
+    <button type="button" class="act act--tertiary" data-go="state-directory" aria-pressed="true"><span class="act-label">Directory</span></button>
+    <button type="button" class="act act--tertiary" data-go="state-person" aria-pressed="false"><span class="act-label">Person card</span></button>
+    <button type="button" class="act act--tertiary" data-go="state-company" aria-pressed="false"><span class="act-label">Company card</span></button>
+    <button type="button" class="act act--tertiary" data-go="state-roster" aria-pressed="false"><span class="act-label">Project roster</span></button>
+    <button type="button" class="act act--tertiary" data-go="state-pick" aria-pressed="false"><span class="act-label">Bring forward</span></button>
+    <button type="button" class="act act--tertiary" data-go="state-add" aria-pressed="false"><span class="act-label">Add sheet</span></button>
+    <button type="button" class="act act--tertiary" data-go="state-access" aria-pressed="false"><span class="act-label">Site access</span></button>
+  </div>
+  <p class="sb-line">People room specimen · Okonkwo residence · 20 October 2026 · invented data</p>
+</div>
+
+<p class="announce" id="announce" role="status" aria-live="polite"></p>
+
+<main class="crm-band">
+  <header class="room-head">
+    <h1 class="t-d1">The People Room</h1>
+    <p class="t-meta" id="head-count"></p>
+  </header>
+  <section class="state" id="face-directory" hidden></section>
+  <section class="state" id="face-person" hidden></section>
+  <section class="state" id="face-company" hidden></section>
+  <section class="state" id="face-roster" hidden></section>
+  <section class="state" id="face-pick" hidden></section>
+  <section class="state" id="face-add" hidden></section>
+  <section class="state" id="face-access" hidden></section>
+</main>
+
+<script>
+(function () {
+  'use strict';
+
+  const FIXTURE = {
+  "today": "2026-10-20",
+  "thisWeek": { "from": "2026-10-19", "to": "2026-10-25" },
+  "head": { "people": 29, "firms": 22 },
+  "project": {
+    "id": "okonkwo",
+    "name": "Okonkwo residence",
+    "address": "4412 Fremont Ave S, Minneapolis MN 55409",
+    "permitIssued": "2026-10-06",
+    "demoStarted": "2026-10-12",
+    "substantialCompletion": "2027-08-13"
+  },
+  "companies": [
+    { "id": "hartwell",   "name": "Hartwell Studio",                    "kind": "Design studio",          "crew": 3, "jobs": 2, "paper": "Current" },
+    { "id": "marrow",     "name": "Marrow & Sons",                      "kind": "GC",                     "crew": 3, "jobs": 2, "paper": "Current",
+      "documents": [
+        { "type": "COI, general liability", "number": "GL-4417-22", "issuer": "Cedar States Mutual", "issued": "2026-04-01", "expires": "2027-03-31", "state": "Current", "heldBy": "studio", "blocks": ["site access", "payment", "draw"] },
+        { "type": "W-9", "number": "", "issuer": "", "issued": "2025-02-18", "expires": "", "state": "Current", "heldBy": "studio", "blocks": ["payment"] },
+        { "type": "MN BC contractor licence", "number": "BC-708341", "issuer": "MN DLI", "issued": "2026-01-02", "expires": "2027-12-31", "state": "Current", "heldBy": "studio", "blocks": ["contract", "permit"] }
+      ],
+      "payee": { "remitTo": "Marrow & Sons", "taxIdLast4": "2208", "retainage": "10%" },
+      "designations": { "paperworkContact": "F-08", "signer": "F-07", "siteContact": "F-09" } },
+    { "id": "beckrowe",   "name": "Beck + Rowe Architects",             "kind": "Architect",              "crew": 1, "jobs": 1, "paper": "Current" },
+    { "id": "northgate",  "name": "Northgate Electric",                 "kind": "Electrical sub",         "crew": 1, "jobs": 2, "paper": "Lapsed", "warrantyUntil": "2026-11-21",
+      "documents": [
+        { "type": "COI, general liability", "number": "GL-9021-18", "issuer": "Lakes Casualty", "issued": "2025-04-01", "expires": "2026-03-31", "state": "Lapsed", "heldBy": "studio", "blocks": ["site access", "payment", "draw"] },
+        { "type": "W-9", "number": "", "issuer": "", "issued": "2025-04-14", "expires": "", "state": "Current", "heldBy": "studio", "blocks": ["payment"] },
+        { "type": "MN electrical contractor licence", "number": "EA-114522", "issuer": "MN DLI", "issued": "2026-01-02", "expires": "2027-12-31", "state": "Current", "heldBy": "studio", "blocks": ["contract", "permit"] },
+        { "type": "COI, workers compensation", "number": "", "issuer": "", "issued": "", "expires": "", "state": "Not on file", "heldBy": "studio", "blocks": ["site access", "draw"] }
+      ],
+      "payee": { "remitTo": "Northgate Electric", "taxIdLast4": "4417", "retainage": "10%" },
+      "designations": { "paperworkContact": "F-11", "signer": "F-11", "siteContact": "F-11" },
+      "soleProprietor": true,
+      "history": "First job 2025, the Lindqvist kitchen. Two projects. No verdict recorded." },
+    { "id": "rusk",       "name": "Rusk Mechanical",                    "kind": "Plumbing sub",           "crew": 1, "jobs": 2, "paper": "Current" },
+    { "id": "halvorsen",  "name": "Halvorsen Cabinet Works",            "kind": "Cabinetry sub",          "crew": 1, "jobs": 2, "paper": "Current" },
+    { "id": "tcdrywall",  "name": "Twin Cities Drywall & Plaster",      "kind": "Drywall sub",            "crew": 2, "jobs": 1, "paper": "Current",
+      "designations": { "paperworkContact": "F-14", "signer": "F-15", "siteContact": "F-14" } },
+    { "id": "lakeshore",  "name": "Lakeshore Painting Co.",             "kind": "Paint sub",              "crew": 1, "jobs": 1, "paper": "Current" },
+    { "id": "boreal",     "name": "Boreal HVAC",                        "kind": "HVAC sub",               "crew": 1, "jobs": 1, "paper": "Current" },
+    { "id": "cedariron",  "name": "Cedar & Iron Framing",               "kind": "Framing sub",            "crew": 1, "jobs": 1, "paper": "Current" },
+    { "id": "radonnorth", "name": "Radon Solutions North",              "kind": "Radon sub",              "crew": 1, "jobs": 1, "paper": "Current" },
+    { "id": "stonehaven", "name": "Stonehaven Tile Gallery",            "kind": "Showroom",               "crew": 1, "jobs": 2, "paper": "Current" },
+    { "id": "waterline",  "name": "Waterline Supply",                   "kind": "Supplier",               "crew": 1, "jobs": 1, "paper": "Current" },
+    { "id": "lumen",      "name": "Lumen & Co.",                        "kind": "Showroom",               "crew": 1, "jobs": 1, "paper": "Current" },
+    { "id": "ashgrove",   "name": "Ashgrove Millwork",                  "kind": "Maker",                  "crew": 1, "jobs": 1, "paper": "Lapses in 30 days" },
+    { "id": "kestrel",    "name": "Kestrel Staging",                    "kind": "Stager",                 "crew": 1, "jobs": 1, "paper": "Current" },
+    { "id": "jfeld",      "name": "Jonah Feld Photography",             "kind": "Photography",            "crew": 1, "jobs": 1, "paper": "Current" },
+    { "id": "gnbank",     "name": "Great Northern Bank",                "kind": "Lender",                 "crew": 1, "jobs": 1, "paper": "Not on file" },
+    { "id": "cped",       "name": "City of Minneapolis, CPED Inspections", "kind": "Authority",           "crew": 1, "jobs": 1, "paper": "Not on file" },
+    { "id": "ostrom",     "name": "Ostrom Builders",                    "kind": "GC",                     "crew": 1, "jobs": 1, "paper": "Current" },
+    { "id": "rivera",     "name": "Rivera Finishes",                    "kind": "Paint sub",              "crew": 0, "jobs": 1, "paper": "Not on file" },
+    { "id": "granite",    "name": "Granite North",                      "kind": "Countertop fabricator",  "crew": 0, "jobs": 1, "paper": "Not on file" }
+  ],
+  "persons": [
+    { "id": "F-01", "name": "Leah Hartwell",    "company": "hartwell",   "roleAtFirm": "principal",        "side": "studio", "reach": "Account",    "consent": null,          "phone": "(612) 555-0101", "email": "leah@hartwellstudio.com" },
+    { "id": "F-02", "name": "Priya Natarajan",  "company": "hartwell",   "roleAtFirm": "lead designer",    "side": "studio", "reach": "Account",    "consent": null,          "phone": "(612) 555-0102", "email": "priya@hartwellstudio.com" },
+    { "id": "F-03", "name": "Dale Whitcomb",    "company": "hartwell",   "roleAtFirm": "bookkeeper",       "side": "studio", "reach": "Account",    "consent": null,          "phone": "(612) 555-0103", "email": "dale@hartwellstudio.com" },
+    { "id": "F-04", "name": "Adaeze Okonkwo",   "company": null,         "roleAtFirm": "Okonkwo household","side": "client", "reach": "Account",    "consent": "Texting",     "phone": "(612) 555-0104", "email": "adaeze@okonkwohousehold.com" },
+    { "id": "F-05", "name": "Chidi Okonkwo",    "company": null,         "roleAtFirm": "Okonkwo household","side": "client", "reach": "On paper",   "consent": "Not asked",   "phone": "(612) 555-0105", "email": "chidi@okonkwohousehold.com" },
+    { "id": "F-06", "name": "Ngozi Eze",        "company": null,         "roleAtFirm": "key holder",       "side": "crew",   "reach": "Field link", "consent": "Texting",     "phone": "(612) 555-0106", "email": null },
+    { "id": "F-07", "name": "Tom Marrow",       "company": "marrow",     "roleAtFirm": "owner, signer",    "side": "crew",   "reach": "Field link", "consent": "Not asked",   "phone": "(612) 555-0107", "email": "tom@marrowandsons.com" },
+    { "id": "F-08", "name": "Erin Sato",        "company": "marrow",     "roleAtFirm": "project manager",  "side": "crew",   "reach": "Field link", "consent": "Texting",     "phone": "(612) 555-0108", "email": "erin@marrowandsons.com" },
+    { "id": "F-09", "name": "Luis Ochoa",       "company": "marrow",     "roleAtFirm": "superintendent",   "side": "crew",   "reach": "Field link", "consent": "Texting",     "phone": "(612) 555-0109", "email": null },
+    { "id": "F-10", "name": "Sam Rowe",         "company": "beckrowe",   "roleAtFirm": "architect of record", "side": "crew","reach": "On paper",   "consent": "Not asked",   "phone": "(612) 555-0110", "email": "sam@beckandrowe.com" },
+    { "id": "F-11", "name": "Dana Kowalski",    "company": "northgate",  "roleAtFirm": "owner-operator",   "side": "crew",   "reach": "Field link", "consent": "Texting",     "phone": "(612) 555-0111", "email": "dana@northgateelectric.com" },
+    { "id": "F-12", "name": "Pete Rusk",        "company": "rusk",       "roleAtFirm": "owner",            "side": "crew",   "reach": "On paper",   "consent": "Opted out",   "phone": "(612) 555-0112", "email": null },
+    { "id": "F-13", "name": "Ingrid Halvorsen", "company": "halvorsen",  "roleAtFirm": "owner",            "side": "crew",   "reach": "On paper",   "consent": "Not asked",   "phone": "(612) 555-0113", "email": "ingrid@halvorsencabinetworks.com" },
+    { "id": "F-14", "name": "Rosa Delgado",     "company": "tcdrywall",  "roleAtFirm": "office manager",   "side": "crew",   "reach": "On paper",   "consent": "Not asked",   "phone": "(612) 555-0114", "email": "rosa@twincitiesdrywall.com" },
+    { "id": "F-15", "name": "Frank Bauer",      "company": "tcdrywall",  "roleAtFirm": "owner, signer",    "side": "crew",   "reach": "On paper",   "consent": "Not asked",   "phone": null,             "email": null },
+    { "id": "F-16", "name": "Amara Osei",       "company": "lakeshore",  "roleAtFirm": "owner",            "side": "crew",   "reach": "Account",    "consent": "Texting",     "phone": "(612) 555-0116", "email": "amara@lakeshorepainting.com" },
+    { "id": "F-17", "name": "Jim Lindgren",     "company": "boreal",     "roleAtFirm": "project manager",  "side": "crew",   "reach": "On paper",   "consent": "Not asked",   "phone": "(612) 555-0117", "email": "jim@borealhvac.com" },
+    { "id": "F-18", "name": "Joe Wozniak",      "company": "cedariron",  "roleAtFirm": "framing foreman",  "side": "crew",   "reach": "Field link", "consent": "Invited",     "phone": "(612) 555-0118", "email": null },
+    { "id": "F-19", "name": "Kelly Marsh",      "company": "radonnorth", "roleAtFirm": "owner",            "side": "crew",   "reach": "On paper",   "consent": "Not asked",   "phone": "(612) 555-0119", "email": "kelly@radonsolutionsnorth.com" },
+    { "id": "F-20", "name": "Claire Bissett",   "company": "stonehaven", "roleAtFirm": "showroom rep",     "side": "maker",  "reach": "On paper",   "consent": "Not asked",   "phone": "(612) 555-0120", "email": "claire@stonehaventile.com" },
+    { "id": "F-21", "name": "Marcus Hale",      "company": "waterline",  "roleAtFirm": "fixtures rep",     "side": "maker",  "reach": "On paper",   "consent": null,          "phone": "(612) 555-0121", "email": "marcus@waterlinesupply.com" },
+    { "id": "F-22", "name": "Sofia Ferraro",    "company": "lumen",      "roleAtFirm": "lighting rep",     "side": "maker",  "reach": "On paper",   "consent": null,          "phone": "(612) 555-0122", "email": "sofia@lumenandco.com" },
+    { "id": "F-23", "name": "Owen Ashby",       "company": "ashgrove",   "roleAtFirm": "owner",            "side": "maker",  "reach": "Account",    "consent": null,          "phone": "(612) 555-0123", "email": "owen@ashgrovemillwork.com" },
+    { "id": "F-24", "name": "Nadia Brooks",     "company": "kestrel",    "roleAtFirm": "owner",            "side": "crew",   "reach": "On paper",   "consent": "Not asked",   "phone": "(612) 555-0124", "email": "nadia@kestrelstaging.com" },
+    { "id": "F-25", "name": "Jonah Feld",       "company": "jfeld",      "roleAtFirm": "owner",            "side": "crew",   "reach": "On paper",   "consent": "Not asked",   "phone": "(612) 555-0125", "email": "jonah@jonahfeldphotography.com" },
+    { "id": "F-26", "name": "Carol Nystrom",    "company": "gnbank",     "roleAtFirm": "draw inspector",   "side": "crew",   "reach": "On paper",   "consent": "Not asked",   "phone": "(612) 555-0126", "email": "carol@greatnorthernbank.com" },
+    { "id": "F-27", "name": "Ray Thao",         "company": "cped",       "roleAtFirm": "building inspector","side": "crew",  "reach": "On paper",   "consent": "Not asked",   "phone": "(612) 555-0127", "email": "ray.thao@minneapolismn.gov" },
+    { "id": "L-01", "name": "Karin Lindqvist",  "company": null,         "roleAtFirm": "Lindqvist household","side": "client","reach": "Account",   "consent": null,          "phone": "(612) 555-0201", "email": "karin@lindqvisthousehold.com" },
+    { "id": "L-02", "name": "Ben Ostrom",       "company": "ostrom",     "roleAtFirm": "owner",            "side": "crew",   "reach": "On paper",   "consent": "Texting",     "phone": "(612) 555-0202", "email": "ben@ostrombuilders.com" }
+  ],
+  "channels": {
+    "F-11": [
+      { "kind": "Mobile", "value": "(612) 555-0111", "preferred": true,  "smsCapable": true,  "verified": "2026-10-12", "status": "ok",      "consent": "Texting" },
+      { "kind": "Email",  "value": "dana@northgateelectric.com", "preferred": false, "smsCapable": false, "verified": "", "status": "bounced", "consent": null }
+    ],
+    "F-12": [
+      { "kind": "Mobile", "value": "(612) 555-0112", "preferred": true,  "smsCapable": true,  "verified": "2025-05-02", "status": "ok",      "consent": "Opted out" }
+    ],
+    "F-15": [],
+    "F-14": [
+      { "kind": "Email",  "value": "rosa@twincitiesdrywall.com", "preferred": true,  "smsCapable": false, "verified": "2026-10-09", "status": "ok", "consent": null },
+      { "kind": "Office", "value": "(612) 555-0114", "preferred": false, "smsCapable": false, "verified": "2026-10-09", "status": "ok", "consent": null }
+    ],
+    "F-08": [
+      { "kind": "Mobile", "value": "(612) 555-0108", "preferred": true,  "smsCapable": true,  "verified": "2026-10-08", "status": "ok", "consent": "Texting" },
+      { "kind": "Email",  "value": "erin@marrowandsons.com", "preferred": false, "smsCapable": false, "verified": "2026-10-08", "status": "ok", "consent": null }
+    ],
+    "F-18": [
+      { "kind": "Mobile", "value": "(612) 555-0118", "preferred": true,  "smsCapable": true,  "verified": "2026-10-13", "status": "ok", "consent": "Invited" }
+    ],
+    "F-27": [
+      { "kind": "Office",     "value": "(612) 555-0127", "preferred": true,  "smsCapable": false, "verified": "2026-10-06", "status": "ok", "consent": null },
+      { "kind": "Email",      "value": "ray.thao@minneapolismn.gov", "preferred": false, "smsCapable": false, "verified": "", "status": "ok", "consent": null },
+      { "kind": "311 portal", "value": "inspection scheduling", "preferred": false, "smsCapable": false, "verified": "", "status": "ok", "consent": null }
+    ]
+  },
+  "consents": [
+    { "person": "F-11", "channelValue": "(612) 555-0111", "state": "Texting",   "source": "written", "recorded": "2025-05-02", "originJob": "Lindqvist kitchen", "note": "Carried forward to the Okonkwo residence, 12 October 2026." },
+    { "person": "F-12", "channelValue": "(612) 555-0112", "state": "Opted out", "source": "inbound text", "recorded": "2025-12-03", "originJob": "Lindqvist kitchen", "note": "Opted out by text, 3 December 2025, on the Lindqvist kitchen." },
+    { "person": "F-18", "channelValue": "(612) 555-0118", "state": "Invited",   "source": "verbal",  "recorded": "2026-10-13", "originJob": "Okonkwo residence", "note": "Recorded by Priya Natarajan at the site kickoff, 13 October 2026. No YES yet." },
+    { "person": "F-06", "channelValue": "(612) 555-0106", "state": "Texting",   "source": "written", "recorded": "2026-10-10", "originJob": "Okonkwo residence", "note": "Site kickoff form, 10 October 2026." },
+    { "person": "F-08", "channelValue": "(612) 555-0108", "state": "Texting",   "source": "written", "recorded": "2026-10-08", "originJob": "Okonkwo residence", "note": "Written consent, 8 October 2026." },
+    { "person": "F-09", "channelValue": "(612) 555-0109", "state": "Texting",   "source": "verbal",  "recorded": "2026-10-10", "originJob": "Okonkwo residence", "note": "Verbal at kickoff, recorded by Priya Natarajan." },
+    { "person": "F-16", "channelValue": "(612) 555-0116", "state": "Texting",   "source": "web form","recorded": "2026-10-14", "originJob": "Okonkwo residence", "note": "Web form, 14 October 2026." }
+  ],
+  "rules": [
+    { "person": "F-11", "text": "Text only. The email on file bounces.", "block": false, "setBy": "Priya Natarajan", "setAt": "2026-10-12" },
+    { "person": "F-15", "text": "Do not contact directly. Write Rosa Delgado instead.", "block": true, "routeTo": "F-14", "setBy": "Leah Hartwell", "setAt": "2026-10-09" },
+    { "person": "F-27", "text": "Never text. Office phone or the 311 portal only.", "block": true, "setBy": "Priya Natarajan", "setAt": "2026-10-06" },
+    { "person": "F-13", "text": "Email only. No cell for work.", "block": false, "setBy": "Priya Natarajan", "setAt": "2026-10-09" },
+    { "person": "F-10", "text": "Email only. Phone for emergencies.", "block": false, "setBy": "Priya Natarajan", "setAt": "2026-10-06" },
+    { "person": "F-05", "text": "Email first. Call for anything over $2,500.", "block": false, "setBy": "Leah Hartwell", "setAt": "2026-09-30" },
+    { "person": "F-06", "text": "Text only. Never opens email.", "block": false, "setBy": "Priya Natarajan", "setAt": "2026-10-10" },
+    { "person": "F-09", "text": "Text only. Phone calls.", "block": false, "setBy": "Priya Natarajan", "setAt": "2026-10-10" },
+    { "person": "F-26", "text": "Never text. Email and phone only.", "block": true, "setBy": "Dale Whitcomb", "setAt": "2026-10-06" }
+  ],
+  "grants": [
+    { "person": "F-11", "tier": "Field link", "opens": "the Call Sheet and the site access card", "granted": "2026-10-12", "lastUsed": "2026-10-17", "ends": "2027-08-13", "endsWords": "Ends with the job, 13 August 2027. Renews when they use it." },
+    { "person": "F-08", "tier": "Field link", "opens": "the Call Sheet and the site access card", "granted": "2026-10-08", "lastUsed": "2026-10-19", "ends": "2027-08-13", "endsWords": "Ends with the job, 13 August 2027. Renews when they use it." },
+    { "person": "F-04", "tier": "Account",    "opens": "the client page and the Patina app",      "granted": "2026-09-22", "lastUsed": "2026-10-20", "ends": "",           "endsWords": "No end date. Revoked by removing the account." },
+    { "person": "F-18", "tier": "Field link", "opens": "the Call Sheet and the site access card", "granted": "2026-10-13", "lastUsed": "2026-10-14", "ends": "2026-12-19", "endsWords": "Ends with the framing window, 19 December 2026." },
+    { "person": "F-16", "tier": "Account",    "opens": "the maker book at another studio",        "granted": "2026-05-11", "lastUsed": "2026-10-02", "ends": "",           "endsWords": "Held elsewhere. Matched on email, 14 October 2026." }
+  ],
+  "engagements": [
+    { "person": "F-02", "company": "hartwell",   "band": "studio",  "kind": "lead designer",        "trade": "",                   "stage": "On the job", "from": "2026-08-01", "to": "2027-09-30", "authority": "Change orders, design intent. No money.", "access": "controls" },
+    { "person": "F-03", "company": "hartwell",   "band": "studio",  "kind": "bookkeeper",           "trade": "",                   "stage": "On the job", "from": "2026-08-01", "to": "2027-09-30", "authority": "Prepares only.",                        "access": "none" },
+    { "person": "F-01", "company": "hartwell",   "band": "studio",  "kind": "principal",            "trade": "",                   "stage": "On the job", "from": "2026-08-01", "to": "2027-09-30", "authority": "Approves fee changes.",                 "access": "none" },
+    { "person": "F-04", "company": null,         "band": "client",  "kind": "client",               "trade": "",                   "stage": "On the job", "from": "2026-08-01", "to": "2027-09-30", "authority": "Selections.",                           "access": "key" },
+    { "person": "F-05", "company": null,         "band": "client",  "kind": "household member",     "trade": "",                   "stage": "On the job", "from": "2026-08-01", "to": "2027-09-30", "authority": "Signs money to $2,500.",                "access": "key" },
+    { "person": "F-07", "company": "marrow",     "band": "week",    "kind": "gc",                   "trade": "general contracting","stage": "On the job", "from": "2026-10-12", "to": "2027-08-13", "authority": "Signs sub payments. Prices change orders.", "access": "controls" },
+    { "person": "F-08", "company": "marrow",     "band": "week",    "kind": "gc",                   "trade": "project management", "stage": "On the job", "from": "2026-10-12", "to": "2027-08-13", "authority": "Prepares only.",                        "access": "controls" },
+    { "person": "F-09", "company": "marrow",     "band": "week",    "kind": "gc",                   "trade": "field supervision",  "stage": "On the job", "from": "2026-10-12", "to": "2027-08-13", "authority": "Controls the gate.",                    "access": "controls" },
+    { "person": "F-18", "company": "cedariron",  "band": "week",    "kind": "sub",                  "trade": "carpentry / framing","stage": "On the job", "from": "2026-10-12", "to": "2026-12-19", "authority": "",                                      "access": "escorted" },
+    { "person": "F-11", "company": "northgate",  "band": "week",    "kind": "sub",                  "trade": "electrical",         "stage": "On the job", "from": "2026-10-12", "to": "2027-08-13", "authority": "",                                      "access": "escorted",
+      "held": "Site access held. Northgate Electric's insurance lapsed 31 March 2026." },
+    { "person": "F-06", "company": null,         "band": "week",    "kind": "receiver",             "trade": "",                   "stage": "On the job", "from": "2026-10-12", "to": "2027-09-30", "authority": "Holds a key.",                          "access": "key" },
+    { "person": "F-10", "company": "beckrowe",   "band": "week",    "kind": "architect",            "trade": "architecture",       "stage": "On the job", "from": "2026-08-01", "to": "2027-08-13", "authority": "Change orders, design conformance. No money.", "access": "scheduled" },
+    { "person": "F-27", "company": "cped",       "band": "later",   "kind": "inspector",            "trade": "code enforcement",   "stage": "Awarded",    "from": "2026-11-16", "to": "2027-08-13", "authority": "Passes or fails an inspection.",        "access": "scheduled" },
+    { "person": "F-26", "company": "gnbank",     "band": "later",   "kind": "inspector",            "trade": "construction lending","stage": "Awarded",   "from": "2026-11-02", "to": "2027-08-13", "authority": "Releases a draw.",                      "access": "scheduled" },
+    { "person": "F-12", "company": "rusk",       "band": "later",   "kind": "sub",                  "trade": "plumbing",           "stage": "Awarded",    "from": "2026-11-09", "to": "2027-04-24", "authority": "",                                      "access": "escorted" },
+    { "person": "F-17", "company": "boreal",     "band": "later",   "kind": "sub",                  "trade": "hvac",               "stage": "Awarded",    "from": "2027-02-01", "to": "2027-05-14", "authority": "Prices change orders, sub side.",       "access": "escorted" },
+    { "person": "F-19", "company": "radonnorth", "band": "later",   "kind": "sub",                  "trade": "radon mitigation",   "stage": "Awarded",    "from": "2027-02-01", "to": "2027-02-19", "authority": "",                                      "access": "escorted" },
+    { "person": "F-14", "company": "tcdrywall",  "band": "later",   "kind": "sub",                  "trade": "drywall / plaster",  "stage": "Awarded",    "from": "2027-01-11", "to": "2027-02-27", "authority": "",                                      "access": "none" },
+    { "person": "F-15", "company": "tcdrywall",  "band": "later",   "kind": "sub",                  "trade": "drywall / plaster",  "stage": "Awarded",    "from": "2027-01-11", "to": "2027-02-27", "authority": "Signs the subcontract, sub side.",      "access": "none" },
+    { "person": "F-13", "company": "halvorsen",  "band": "later",   "kind": "sub",                  "trade": "cabinetry",          "stage": "Awarded",    "from": "2027-04-05", "to": "2027-05-28", "authority": "",                                      "access": "escorted" },
+    { "person": "F-16", "company": "lakeshore",  "band": "later",   "kind": "sub",                  "trade": "paint",              "stage": "Awarded",    "from": "2027-05-04", "to": "2027-06-18", "authority": "",                                      "access": "escorted",
+      "bid": "Quoted 2 October 2026. Selected 9 October 2026." },
+    { "person": "F-23", "company": "ashgrove",   "band": "later",   "kind": "maker",                "trade": "millwork fabrication","stage": "Awarded",   "from": "2027-06-07", "to": "2027-06-11", "authority": "",                                      "access": "scheduled" },
+    { "person": "F-24", "company": "kestrel",    "band": "later",   "kind": "stager",               "trade": "staging",            "stage": "Awarded",    "from": "2027-08-16", "to": "2027-08-20", "authority": "",                                      "access": "scheduled" },
+    { "person": "F-25", "company": "jfeld",      "band": "later",   "kind": "photographer",         "trade": "photography",        "stage": "Awarded",    "from": "2027-09-13", "to": "2027-09-13", "authority": "",                                      "access": "scheduled" },
+    { "person": null,   "company": "rivera",     "band": "bidding", "kind": "sub",                  "trade": "paint",              "stage": "No response","from": "", "to": "", "authority": "", "access": "none",
+      "bid": "Asked 28 September 2026. Due 5 October 2026. Nobody owed an answer after that." },
+    { "person": null,   "company": "granite",    "band": "done",    "kind": "sub",                  "trade": "countertop fabrication","stage": "Off the job","from": "", "to": "", "authority": "", "access": "none",
+      "closed": "Off the job 2 October 2026. The slab program went to Stonehaven Tile Gallery." }
+  ],
+  "siteAccess": {
+    "project": "Okonkwo residence",
+    "address": "4412 Fremont Ave S, Minneapolis MN 55409",
+    "callFirst": [
+      { "person": "F-09", "role": "superintendent", "phone": "(612) 555-0109" },
+      { "person": "F-05", "role": "owner",          "phone": "(612) 555-0105" },
+      { "person": "F-10", "role": "architect",      "phone": "(612) 555-0110" }
+    ],
+    "wayIn": "Lockbox, version 3. The code is held off Patina; ask Luis Ochoa.",
+    "gateControl": "Luis Ochoa controls the gate.",
+    "keyHolder": { "person": "F-06", "line": "Ngozi Eze holds a key. Text only, (612) 555-0106." },
+    "hours": "Weekdays 07:00 to 17:00. No Saturday work before 09:00.",
+    "receiving": "Ngozi Eze receives deliveries. Stage in the detached garage.",
+    "changeLog": [
+      { "what": "Lockbox changed to version 3.", "when": "2026-10-16", "by": "Priya Natarajan", "told": ["F-09", "F-06", "F-18", "F-11"] },
+      { "what": "Site hours set for the demo phase.", "when": "2026-10-12", "by": "Priya Natarajan", "told": ["F-07", "F-08", "F-09"] }
+    ]
+  },
+  "addSheet": {
+    "dateline": "Add sheet, mid-flow, 13 October 2026",
+    "kind": "a sub",
+    "project": "Okonkwo residence",
+    "name": "Joe Wozniak",
+    "firm": "Cedar & Iron Framing",
+    "trade": "carpentry / framing",
+    "channels": [
+      { "kind": "Mobile", "value": "(612) 555-0118", "smsCapable": true },
+      { "kind": "Email",  "value": "", "smsCapable": false }
+    ],
+    "rule": "Text only. No working email.",
+    "consent": { "checked": true, "method": "verbal", "evidence": "Recorded by Priya at the site kickoff, 13 October 2026." },
+    "consequence": "Adding Joe Wozniak puts him on the Okonkwo residence Call Sheet and opens a field link for the framing window. It never opens billing or the agreement.",
+    "terminal": "Add to the roster"
+  }
+};
+
+  /* Lines the face says in its own words; the fixture carries the facts under them. */
+  const FACE = {
+    dupe: 'These two cards share a phone.',
+    soleProp: 'Sole proprietor',
+    emailHeld: 'This address bounced back, 12 March 2026. Texts and calls still reach them.',
+    pastSeat: 'Lindqvist kitchen · sub · electrical · Closed 21 Nov 2025 · Warranty through 21 Nov 2026',
+    textConsequence: 'This opens a text to Dana Kowalski on the mobile she agreed to. Nothing sends until you send it.',
+    paperHeld: 'Site access, payment and the draw are held until a current certificate is on file.',
+    ledger: 'Draw 1 waiver ledger, in the money book',
+    addConsequence: FIXTURE.addSheet.consequence,
+    invited: 'He is invited, not consenting, until he replies YES.',
+    studioOnly: 'Studio only. This card never reaches a client page.',
+    personBlocks: 'Blocks site access, payment and the draw.',
+    pickConsequence: "Adds four seats to the Okonkwo residence. Pete Rusk arrives opted out of texting. Northgate Electric's insurance lapsed 31 Mar 2026."
+  };
+
+  const STATES = ['state-directory', 'state-person', 'state-company', 'state-roster', 'state-pick', 'state-add', 'state-access'];
+  /* R-Z: no element id may equal a hash token. Hash token in, section id out. */
+  const FACES = {
+    'state-directory': 'face-directory',
+    'state-person': 'face-person',
+    'state-company': 'face-company',
+    'state-roster': 'face-roster',
+    'state-pick': 'face-pick',
+    'state-add': 'face-add',
+    'state-access': 'face-access'
+  };
+  function faceOf(state) { return document.getElementById(FACES[state]); }
+  const STATE_NAMES = {
+    'state-directory': 'Directory',
+    'state-person': 'Person card',
+    'state-company': 'Company card',
+    'state-roster': 'Project roster',
+    'state-pick': 'Bring forward',
+    'state-add': 'Add sheet',
+    'state-access': 'Site access'
+  };
+
+  const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const MONL = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+  function dshort(iso) { if (!iso) { return ''; } const p = iso.split('-'); return Number(p[2]) + ' ' + MON[Number(p[1]) - 1] + ' ' + p[0]; }
+  function dlong(iso) { if (!iso) { return ''; } const p = iso.split('-'); return Number(p[2]) + ' ' + MONL[Number(p[1]) - 1] + ' ' + p[0]; }
+  function esc(s) {
+    return String(s === null || s === undefined ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  function cap(s) { return String(s).charAt(0).toUpperCase() + String(s).slice(1); }
+  function slug(s) { return String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''); }
+  function person(id) { return FIXTURE.persons.filter(function (p) { return p.id === id; })[0]; }
+  function firm(id) { return FIXTURE.companies.filter(function (c) { return c.id === id; })[0]; }
+  function seatOf(id) { return FIXTURE.engagements.filter(function (e) { return e.person === id; })[0]; }
+  function consentOf(id) { return FIXTURE.consents.filter(function (c) { return c.person === id; })[0]; }
+  function ruleOf(id) { return FIXTURE.rules.filter(function (r) { return r.person === id; })[0]; }
+  function grantOf(id) { return FIXTURE.grants.filter(function (g) { return g.person === id; })[0]; }
+  function bandOf(b) { return FIXTURE.engagements.filter(function (e) { return e.band === b; }); }
+  function nameOf(id) { const p = person(id); return p ? p.name : ''; }
+  function telHref(phone) { return 'tel:+1' + String(phone).replace(/[^0-9]/g, ''); }
+  function telLink(phone) {
+    if (!phone) { return ''; }
+    return '<a class="tel" href="' + telHref(phone) + '"><span>' + esc(phone) + '</span></a>';
+  }
+  function linkPhones(html) {
+    return html.replace(/\(\d{3}\) \d{3}-\d{4}/g, function (m) {
+      return '<a class="tel tel--inline" href="' + telHref(m) + '"><span>' + m + '</span></a>';
+    });
+  }
+  function initials(name) {
+    const parts = String(name).replace(/[^A-Za-z ]/g, ' ').split(' ').filter(Boolean);
+    return ((parts[0] || '').charAt(0) + (parts[1] || '').charAt(0)).toUpperCase();
+  }
+
+  /* ── Shared with people-room-1440.html: one source for clauses, routing and consent ── */
+  const P = {}; FIXTURE.persons.forEach(function (p) { P[p.id] = p; });
+  const RULE = {}; FIXTURE.rules.forEach(function (r) { RULE[r.person] = r; });
+  const CONSENT = {}; FIXTURE.consents.forEach(function (c) { CONSENT[c.person] = c; });
+  function fmtShort(iso) { return dshort(iso); }
+  function isPhone(v) { return /^\(\d{3}\) \d{3}-\d{4}$/.test(v); }
+  /* The routed line keeps its phone on the same line, so the link carries its own rule. */
+  function tel(phone) { return '<a class="tel tel--route" href="' + telHref(phone) + '">' + esc(phone) + '</a>'; }
+
+  const SOURCE_WORDS = {
+    'written': 'Written consent', 'verbal': 'Verbal consent',
+    'web form': 'Web form consent', 'inbound text': 'Consent by text'
+  };
+  function consentSentence(id) {
+    const c = CONSENT[id];
+    if (!c) return '';
+    const lead = c.state === 'Opted out' ? 'Opted out by text' : SOURCE_WORDS[c.source];
+    return lead + ', ' + fmtShort(c.recorded) + ', on the ' + c.originJob + '.';
+  }
+
+  /* Routed contact: the email when there is one, then the office phone as a tel: link. Never a bare phone string. */
+  function routeChannels(id) {
+    const list = FIXTURE.channels[id] || [];
+    const out = [];
+    const em = list.filter(function (x) { return x.kind === 'Email' && x.value; })[0];
+    if (em) out.push(esc(em.value));
+    const ph = list.filter(function (x) { return x.kind === 'Office' && isPhone(x.value); })[0] ||
+      list.filter(function (x) { return isPhone(x.value); })[0];
+    if (ph) out.push(tel(ph.value));
+    return out;
+  }
+  function routeWrite(id) {
+    const to = P[id];
+    if (!to) return '';
+    const ch = routeChannels(id);
+    return 'Write ' + esc(to.name) + (ch.length ? ' · ' + ch.join(' · ') : '');
+  }
+  function clausesFor(p) {
+    const out = [];
+    const r = RULE[p.id];
+    if (r) out.push({ text: r.text, block: !!r.block, route: (r.block && r.routeTo && P[r.routeTo]) ? r.routeTo : null });
+    const c = CONSENT[p.id];
+    if (c && c.state === 'Opted out') out.push({ text: c.note, block: false, route: null });
+    return out;
+  }
+  function clauseHtml(list) {
+    return list.map(function (c) {
+      return '<div class="row-rule' + (c.block ? ' row-rule--blocked' : '') + '">' + esc(c.text) +
+        (c.route ? '<span class="clause-route">' + routeWrite(c.route) + '</span>' : '') + '</div>';
+    }).join('');
+  }
+
+  const WORD_PIGMENT = {
+    'Account': 'current', 'Field link': 'pending', 'On paper': 'dormant',
+    'Texting': 'current', 'Invited': 'pending', 'Not asked': 'dormant', 'Opted out': 'blocked',
+    'On the job': 'current', 'Awarded': 'pending', 'Warranty': 'dormant',
+    'No response': 'dormant', 'Off the job': 'dormant',
+    'Current': 'current', 'Lapses in 30 days': 'pending', 'Lapsed': 'blocked', 'Not on file': 'dormant'
+  };
+  function word(w) {
+    if (!w) { return ''; }
+    return '<span class="word word--' + (WORD_PIGMENT[w] || 'dormant') + '">' + esc(w) + '</span>';
+  }
+  function wordInline(w) {
+    if (!w) { return ''; }
+    return '<span class="word word--inline word--' + (WORD_PIGMENT[w] || 'dormant') + '">' + esc(w) + '</span>';
+  }
+  function plainWord(w) {
+    if (!w) { return ''; }
+    return '<span class="word word--plain">' + esc(w) + '</span>';
+  }
+  /* A document that blocks work is alarming whether it lapsed or was never filed. */
+  function docWord(d) {
+    if (d.state !== 'Current' && d.blocks && d.blocks.length) {
+      return '<span class="word word--blocked">' + esc(d.state) + '</span>';
+    }
+    return word(d.state);
+  }
+  /* A firm whose only people inspect or lend holds no compliance paper for the studio. */
+  function holdsNoPaper(cid) {
+    const c = firm(cid);
+    if ((c.documents || []).length) { return false; }
+    const people = FIXTURE.persons.filter(function (p) { return p.company === cid; });
+    if (!people.length) { return false; }
+    return people.every(function (p) { const e = seatOf(p.id); return !!e && e.kind === 'inspector'; });
+  }
+  function paperWord(cid) { return holdsNoPaper(cid) ? '' : word(firm(cid).paper); }
+
+  function docBlocks(d) { return d.state === 'Lapsed' || (d.state === 'Not on file' && d.blocks && d.blocks.length); }
+  const CHEV = '<svg class="disc-chev" width="12" height="8" viewBox="0 0 12 8" fill="none" stroke="currentColor" stroke-width="1" aria-hidden="true"><path d="M1 1.5 L6 6.5 L11 1.5"></path></svg>';
+  const SELECT_CHEV = '<svg class="select-chev" width="12" height="8" viewBox="0 0 12 8" fill="none" stroke="currentColor" stroke-width="1" aria-hidden="true"><path d="M1 1.5 L6 6.5 L11 1.5"></path></svg>';
+
+  function subLine(p) {
+    const e = seatOf(p.id);
+    const f = p.company ? firm(p.company) : null;
+    const left = f ? f.name : p.roleAtFirm;
+    let right = '';
+    if (e && e.trade) { right = e.trade; }
+    else if (e && e.kind) { right = e.kind; }
+    else { right = p.roleAtFirm; }
+    if (right === left) { return left; }
+    return left + ' · ' + right;
+  }
+
+  function seatWindow(e) {
+    return dshort(e.from) + ' to ' + dshort(e.to);
+  }
+
+  function seatLine(e) {
+    return [FIXTURE.project.name, e.kind, e.trade, e.stage, seatWindow(e)]
+      .filter(Boolean).join(' · ');
+  }
+
+  function accessWords(a) {
+    return {
+      none: 'No site access',
+      escorted: 'Escorted on site',
+      key: 'Holds a key',
+      scheduled: 'On site by appointment',
+      controls: 'Controls the gate'
+    }[a] || '';
+  }
+
+  const ROLE_WORDS = {
+    'lead designer': 'Studio', 'bookkeeper': 'Studio', 'principal': 'Studio',
+    'client': 'Client', 'household member': 'Client', 'gc': 'GC', 'sub': 'Subs',
+    'receiver': 'Receiver', 'architect': 'Architect', 'inspector': 'Inspectors',
+    'maker': 'Makers', 'stager': 'Stager', 'photographer': 'Photographer'
+  };
+  function roleWord(k) { return ROLE_WORDS[k] || cap(k); }
+
+  /* ── The directory ─────────────────────────────────────────────────── */
+
+  const DIR_PEOPLE = ['F-04', 'F-05', 'F-07', 'F-08', 'F-09', 'F-11', 'F-18', 'F-12', 'F-14', 'F-15', 'F-27', 'F-20'];
+  const DIR_OPEN = ['F-11', 'F-18', 'F-12', 'F-15', 'F-27'];
+  const DIR_FIRMS = ['marrow', 'northgate', 'tcdrywall', 'stonehaven', 'gnbank', 'cped'];
+
+  function dirPersonRow(pid) {
+    const p = person(pid);
+    const e = seatOf(pid);
+    const f = p.company ? firm(p.company) : null;
+    const open = DIR_OPEN.indexOf(pid) > -1;
+    const panelId = 'seats-' + slug(p.name);
+    const count = e ? 1 : 0;
+    /* §6.2 Row (R-M): reach · consent · paper, plain, on line 2 of every row, folded or not. */
+    const plain = [p.reach, p.consent, f && !holdsNoPaper(p.company) ? f.paper : '']
+      .filter(Boolean).join(' · ');
+    let out = '<li class="crm-row">';
+    out += '<div class="prow-top">';
+    out += '<span class="avatar avatar--circle" aria-hidden="true">' + esc(initials(p.name)) + '</span>';
+    out += '<div class="row-id">';
+    out += '<button type="button" class="open-person" data-open-person="' + pid + '">';
+    out += '<span class="row-name">' + esc(p.name) + '</span>';
+    out += '<span class="row-sub">' + esc(subLine(p)) + '</span>';
+    out += '</button>';
+    out += clauseHtml(clausesFor(p));
+    out += '</div></div>';
+    out += '<div class="prow-line2">';
+    out += '<span class="reach-plain">' + esc(plain) + '</span>';
+    out += telLink(p.phone);
+    out += '<button type="button" class="disc" data-disc="' + panelId + '" aria-expanded="' + (open ? 'true' : 'false') + '" aria-controls="' + panelId + '">' + count + ' seat' + (count === 1 ? '' : 's') + CHEV + '</button>';
+    out += '</div>';
+    out += '<ul class="seats" id="' + panelId + '"' + (open ? '' : ' hidden') + '>';
+    if (e) {
+      out += '<li><button type="button" class="seat" data-open-person="' + pid + '">';
+      out += '<span class="seat-line">' + esc(seatLine(e)) + '</span>';
+      out += '<span class="words">' + word(e.stage) + '</span>';
+      out += '</button></li>';
+    }
+    out += '</ul>';
+    out += '</li>';
+    return out;
+  }
+
+  function dirFirmRow(cid) {
+    const c = firm(cid);
+    const jobs = c.jobs === 1 ? '1 open job' : c.jobs + ' open jobs';
+    const sub = c.kind + ' · ' + c.crew + ' on the crew · ' + jobs;
+    const signer = c.designations && c.designations.signer ? nameOf(c.designations.signer) : '';
+    let out = '<li class="crm-row">';
+    out += '<div class="prow-top">';
+    out += '<span class="avatar avatar--square" aria-hidden="true">' + esc(initials(c.name)) + '</span>';
+    out += '<div class="row-id">';
+    out += '<button type="button" class="open-person" data-open-company="' + cid + '">';
+    out += '<span class="row-name">' + esc(c.name) + '</span>';
+    out += '<span class="row-sub">' + esc(sub) + '</span>';
+    out += '</button></div></div>';
+    const firmWords = paperWord(cid) + (signer ? plainWord('Signs: ' + signer) : '');
+    if (firmWords) { out += '<div class="prow-line2 prow-line2--firm">' + firmWords + '</div>'; }
+    out += '</li>';
+    return out;
+  }
+
+  function renderDirectory() {
+    const narrow = ['Everyone', 'Clients', 'Crew', 'Makers', 'Studio', 'Firms'];
+    const trades = ['electrical', 'plumbing', 'cabinetry', 'drywall', 'paint', 'hvac', 'carpentry / framing', 'radon mitigation'];
+    let out = '<div class="narrows" role="group" aria-label="Narrow the book">';
+    narrow.forEach(function (n, i) {
+      out += '<button type="button" class="narrow" aria-pressed="' + (i === 0 ? 'true' : 'false') + '">' + esc(n) + '</button>';
+    });
+    out += '</div>';
+    out += '<div class="narrows" role="group" aria-label="Narrow the crew by trade">';
+    trades.forEach(function (t) {
+      out += '<button type="button" class="narrow" aria-pressed="false">' + esc(t) + '</button>';
+    });
+    out += '</div>';
+    out += '<div class="lens" role="group" aria-label="Whose book you are reading">';
+    out += '<span class="t-head">Lens</span>';
+    out += '<button type="button" class="act act--tertiary lensword" aria-pressed="false"><span class="act-label">MINE</span></button>';
+    out += '<button type="button" class="act act--tertiary lensword" aria-pressed="true"><span class="act-label">STUDIO</span></button>';
+    out += '</div>';
+    out += '<div class="dupe"><p class="t-body prose">' + esc(FACE.dupe) + '</p>';
+    out += '<p class="t-body prose"><button type="button" class="linkline" data-open-person="F-04"><span>' + esc(nameOf('F-04')) + '</span></button>' + esc(' · ') + '<button type="button" class="linkline" data-open-person="F-05"><span>' + esc(nameOf('F-05')) + '</span></button></p></div>';
+    out += '<h2 class="t-d3" style="margin-top:48px">People</h2>';
+    out += '<ul class="crm-list">' + DIR_PEOPLE.map(dirPersonRow).join('') + '</ul>';
+    out += '<h2 class="t-d3" style="margin-top:48px">Firms</h2>';
+    out += '<ul class="crm-list">' + DIR_FIRMS.map(dirFirmRow).join('') + '</ul>';
+    return out;
+  }
+
+  /* ── The person card ───────────────────────────────────────────────── */
+
+  function renderPerson(pid) {
+    const p = person(pid);
+    const e = seatOf(pid);
+    const r = ruleOf(pid);
+    const g = grantOf(pid);
+    const cons = consentOf(pid);
+    const f = p.company ? firm(p.company) : null;
+    const since = f && f.history ? (f.history.match(/First job (\d{4})/) || [])[1] : '';
+    const meta = f
+      ? f.name + ' · ' + p.roleAtFirm + (since ? ', since ' + since : '')
+      : p.roleAtFirm;
+    const chans = (FIXTURE.channels[pid] && FIXTURE.channels[pid].length) ? FIXTURE.channels[pid] : null;
+
+    let out = '<div class="crm-card">';
+    out += '<div class="card-header">';
+    out += '<span class="avatar avatar--circle avatar--lg" aria-hidden="true">' + esc(initials(p.name)) + '</span>';
+    out += '<div><h2 class="card-name t-d3">' + esc(p.name) + '</h2>';
+    out += '<p class="card-meta">' + esc(meta) + '</p>';
+    if (f && f.soleProprietor) { out += '<p class="card-meta">' + esc(FACE.soleProp) + '</p>'; }
+    out += '</div></div>';
+
+    /* Reach & access */
+    out += '<div class="card-region"><h3>Reach &amp; access</h3>';
+    out += '<p class="sub-head">Channels</p>';
+    if (!chans) {
+      if (p.phone) { out += '<p class="t-body">' + telLink(p.phone) + '</p>'; }
+      if (p.email) { out += '<p class="t-body prose">' + esc(p.email) + '</p>'; }
+      if (!p.phone && !p.email) { out += '<p class="t-body">No channel on file.</p>'; }
+    }
+    if (chans) { out += '<ul>'; }
+    (chans || []).forEach(function (c) {
+      if (c.status === 'bounced') {
+        out += '<li class="chan-row"><div class="held"><p class="t-head">Channel</p>';
+        out += '<p class="t-body">' + esc(c.kind + ' · ' + c.value) + '</p>';
+        out += '<p class="t-body-sm held-why prose">' + esc(FACE.emailHeld) + '</p></div></li>';
+        return;
+      }
+      const label = c.kind + ' · ' + c.value + (c.preferred ? ' · preferred' : '') + (c.verified ? ' · verified ' + dshort(c.verified) : '');
+      out += '<li class="chan-row"><p class="t-head">Channel</p><p class="t-body">' + linkPhones(esc(label)) + '</p>';
+      if (c.consent) { out += '<p class="t-head">Consent</p><p class="words">' + word(c.consent) + '</p>'; }
+      if (cons && cons.channelValue === c.value) {
+        const said = consentSentence(pid);
+        out += '<p class="t-body-sm note prose">' +
+          esc(cons.state === 'Opted out' ? said : said + ' ' + cons.note) + '</p>';
+      }
+      out += '</li>';
+    });
+    if (chans) { out += '</ul>'; }
+
+    /* R-V: the region prints on every card, with its sub-head and its fallback line. */
+    out += '<p class="sub-head">Contact rule</p>';
+    if (r) {
+      out += '<p class="t-body prose' + (r.block ? ' row-rule--blocked' : '') + '">' +
+        esc(r.text + ' Set by ' + r.setBy + ', ' + dlong(r.setAt) + '.') + '</p>';
+      if (r.block && r.routeTo && P[r.routeTo]) {
+        out += '<p class="t-body-sm note prose">' + routeWrite(r.routeTo) + '</p>';
+      }
+      out += '<div class="actrow"><button type="button" class="act act--tertiary"><span class="act-label">Edit the rule</span></button></div>';
+    } else {
+      out += '<p class="t-body prose">No contact rule on file.</p>';
+    }
+
+    out += '<p class="sub-head">Access grants</p>';
+    if (g) {
+      out += '<p class="t-body prose">' + esc(g.tier + ' · ' + g.opens + ' · minted ' + dshort(g.granted) + ' · used ' + dshort(g.lastUsed) + ' · ' + g.endsWords) + '</p>';
+      out += '<div class="actrow"><button type="button" class="act act--tertiary"><span class="act-label">Revoke</span></button></div>';
+    } else {
+      out += '<p class="t-body prose">No grant on file.</p>';
+    }
+    out += '</div>';
+
+    /* Seats */
+    out += '<div class="card-region"><h3>Seats on projects</h3>';
+    if (e) {
+      out += '<p class="t-body">' + esc([FIXTURE.project.name, e.kind, e.trade].filter(Boolean).join(' · ')) + '</p>';
+      out += '<p class="words">' + word(e.stage) + '</p>';
+      out += '<p class="t-body-sm note">' + esc(seatWindow(e)) + '</p>';
+      out += '<p class="words" id="seat-authority">' + plainWord(e.authority ? e.authority : 'No authority on this job') + '</p>';
+      out += '<p class="t-body-sm">' + esc(accessWords(e.access)) + '</p>';
+      if (e.kind === 'sub') { out += '<p class="t-body-sm">Contracted through ' + esc(firm('marrow').name) + '</p>'; }
+      if (e.kind === 'sub' || e.kind === 'maker') { out += '<p class="t-body-sm">Hidden from the client</p>'; }
+      out += '<div class="actrow"><button type="button" class="act act--tertiary" data-disc="authority-band" aria-expanded="false" aria-controls="authority-band"><span class="act-label">Edit the authority</span></button></div>';
+      out += '<div class="stack" id="authority-band" hidden>';
+      out += '<div class="field"><label class="t-head field-label" for="f-authority-edit">AUTHORITY ON THIS JOB</label>';
+      out += '<input class="control" type="text" id="f-authority-edit" value="' + esc(e.authority || 'No authority on this job') + '"></div>';
+      out += '<div class="actrow"><button type="button" class="act js-save-authority"><span class="act-label">Save the authority</span></button></div>';
+      out += '</div>';
+    } else {
+      out += '<p class="t-body">No open seat on this project.</p>';
+    }
+    out += '</div>';
+
+    if (f && f.warrantyUntil) {
+      out += '<div class="card-region"><h3>Past seats</h3>';
+      out += '<p class="t-body">' + esc(FACE.pastSeat) + '</p>';
+      out += '<p class="words">' + word('Warranty') + '</p></div>';
+    }
+
+    if (f && f.soleProprietor && f.documents) {
+      const coi = f.documents[0];
+      out += '<div class="card-region"><h3>Paper</h3>';
+      out += '<p class="t-body prose">' + esc(coi.type + ' · ' + coi.number + ' · ' + coi.issuer + ' · expired ' + dlong(coi.expires)) + '</p>';
+      out += '<p class="words">' + docWord(coi) + '</p>';
+      out += '<p class="t-body-sm">' + esc(FACE.personBlocks) + '</p></div>';
+    }
+
+    if (f && f.history && g) {
+      out += '<div class="card-region"><h3>History</h3>';
+      out += '<p class="t-body prose">' + esc('Worked ' + f.jobs + " of the studio's projects. Last touch " + dlong(g.lastUsed) + ', text, logistics.') + '</p></div>';
+    }
+
+    if (p.consent === 'Texting' && p.phone) {
+      const why = pid === 'F-11' ? FACE.textConsequence
+        : 'This opens a text to ' + p.name + ' on the mobile they agreed to. Nothing sends until you send it.';
+      out += '<div class="card-region"><p class="t-body-sm consequence">' + esc(why) + '</p>';
+      out += '<div class="actrow"><button type="button" class="act"><span class="act-label">Send a text</span></button></div></div>';
+    }
+    out += '</div>';
+    return out;
+  }
+
+  /* ── The company card ──────────────────────────────────────────────── */
+
+  function paperStack(d) {
+    let expires = '—';
+    if (d.expires) { expires = dshort(d.expires); }
+    else if (d.issued) { expires = 'On file ' + dshort(d.issued); }
+    const cells = [
+      ['Type', esc(d.type)],
+      ['Number', esc(d.number || '—')],
+      ['Issuer', esc(d.issuer || '—')],
+      ['Expires', esc(expires)],
+      ['State', docWord(d)],
+      ['Held by', d.heldBy === 'studio' ? 'The studio' : esc(d.heldBy)],
+      ['Blocks', esc(cap(d.blocks.join(', ')))]
+    ];
+    let out = '<li class="paper-doc">';
+    cells.forEach(function (c) {
+      out += '<p class="t-head">' + c[0] + '</p><p class="stack-val">' + c[1] + '</p>';
+    });
+    out += '</li>';
+    return out;
+  }
+
+  function crewOf(cid) {
+    const d = firm(cid).designations || {};
+    const order = [];
+    ['paperworkContact', 'signer', 'siteContact'].forEach(function (k) {
+      if (d[k] && order.indexOf(d[k]) < 0) { order.push(d[k]); }
+    });
+    FIXTURE.persons.forEach(function (p) {
+      if (p.company === cid && order.indexOf(p.id) < 0) { order.push(p.id); }
+    });
+    return order;
+  }
+
+  function crewLine(cid, pid) {
+    const c = firm(cid);
+    const d = c.designations || {};
+    const p = person(pid);
+    const bits = [p.roleAtFirm];
+    if (d.paperworkContact === pid) { bits.push('paperwork contact'); }
+    if (d.signer === pid) { bits.push('signer'); }
+    if (d.siteContact === pid) { bits.push('site contact'); }
+    const lic = (c.documents || []).filter(function (x) { return x.type.indexOf('licence') > -1; })[0];
+    if (c.soleProprietor && lic) { bits.push('holds the trade licence'); }
+    return bits.join(' · ');
+  }
+
+  function renderCompany(cid) {
+    const c = firm(cid);
+    const docs = c.documents || [];
+    const held = docs.filter(docBlocks).length > 0;
+    const seats = FIXTURE.engagements.filter(function (e) { return e.company === cid && e.person; });
+    let meta = c.kind + ' · ' + (c.crew === 1 ? '1 person' : c.crew + ' people') + ' · ' + (c.jobs === 1 ? '1 project' : c.jobs + ' projects');
+    if (c.warrantyUntil) { meta += ' · warranty through ' + dshort(c.warrantyUntil); }
+
+    let out = '<div class="crm-card">';
+    out += '<div class="card-header">';
+    out += '<span class="avatar avatar--square" aria-hidden="true">' + esc(initials(c.name)) + '</span>';
+    out += '<div><h2 class="card-name t-d3">' + esc(c.name) + '</h2>';
+    out += '<p class="card-meta">' + esc(meta) + '</p></div></div>';
+
+    out += '<div class="card-region"><h3>Crew &amp; designations</h3>';
+    crewOf(cid).forEach(function (pid) {
+      const r = ruleOf(pid);
+      /* R-W: only the name is the control; the designations are plain text. */
+      out += '<p class="prose"><button type="button" class="linkline" data-open-person="' + pid + '"><span>' + esc(nameOf(pid)) + '</span></button>' + esc(' · ' + crewLine(cid, pid)) + '</p>';
+      if (r && r.block) {
+        out += '<p class="row-rule row-rule--blocked">' + esc(r.text) + '</p>';
+        if (r.routeTo && P[r.routeTo]) {
+          out += '<p class="t-body-sm note prose">' + routeWrite(r.routeTo) + '</p>';
+        }
+      }
+    });
+    out += '</div>';
+
+    out += '<div class="card-region"><h3>Paper</h3>';
+    if (holdsNoPaper(cid)) {
+      out += '<p class="t-body prose">No paper is held for this firm.</p></div>';
+    } else {
+      /* §5.3 #4 (R-P): the table, then the leading-rule clause, then the consequence, then the acts. */
+      if (docs.length) {
+        out += '<ul class="stack">' + docs.map(paperStack).join('') + '</ul>';
+      } else {
+        out += '<p class="words">' + word('Not on file') + '</p>';
+      }
+      if (held) {
+        out += '<p class="t-body prose row-rule row-rule--blocked" style="margin-top:24px">' + esc(FACE.paperHeld) + '</p>';
+        out += '<p class="t-body-sm consequence" id="chase-why" style="margin-top:12px">' + esc('This drafts a note to ' + c.name + "'s paperwork contact and files it for your review. Nothing is sent until you send it.") + '</p>';
+      }
+      out += '<div class="actrow">';
+      out += '<button type="button" class="act act--secondary"><span class="act-label">Record a document</span></button>';
+      if (held) { out += '<button type="button" class="act act--tertiary" aria-describedby="chase-why"><span class="act-label">Chase the renewal</span></button>'; }
+      out += '</div>';
+      out += '</div>';
+    }
+
+    if (c.payee) {
+      out += '<div class="card-region"><h3>Payee</h3>';
+      out += '<p class="t-body">Remit to ' + esc(c.payee.remitTo) + '</p>';
+      out += '<p class="t-body">Tax id ending ' + esc(c.payee.taxIdLast4) + '</p>';
+      out += '<p class="t-body">Retainage ' + esc(c.payee.retainage) + '</p></div>';
+    }
+
+    if (seats.length) {
+      out += '<div class="card-region"><h3>Jobs</h3>';
+      seats.forEach(function (e) {
+        out += '<p class="t-body">' + esc(FIXTURE.project.name + ' · ' + nameOf(e.person) + ' · ') + wordInline(e.stage) + '</p>';
+      });
+      if (docs.filter(function (d) { return docBlocks(d) && d.blocks.indexOf('draw') > -1; }).length) {
+        out += '<div class="actrow"><button type="button" class="act act--inline"><span class="act-label">' + esc(FACE.ledger) + '</span></button></div>';
+      }
+      out += '</div>';
+    }
+
+    if (c.history) {
+      out += '<div class="card-region"><h3>History</h3>';
+      out += '<p class="t-body prose">' + esc(c.history) + '</p></div>';
+    }
+    out += '</div>';
+    return out;
+  }
+
+  /* ── The call sheet ────────────────────────────────────────────────── */
+
+  function rosterPersonRow(e, showStart) {
+    const p = person(e.person);
+    const f = p.company ? firm(p.company) : null;
+    const unfolded = e.person === 'F-11';
+    const panelId = 'unfold-' + slug(p.name);
+    const said = consentSentence(p.id);
+    const acts = [];
+    if (p.phone && p.consent === 'Texting') { acts.push('Text'); }
+    if (p.reach === 'Field link') { acts.push('Copy field link'); }
+    acts.push('Show to client');
+    acts.push('Close this seat');
+    let out = '<li class="crm-row" data-kind="' + esc(roleWord(e.kind)) + '">';
+    out += '<div class="prow-top">';
+    out += '<span class="avatar avatar--circle" aria-hidden="true">' + esc(initials(p.name)) + '</span>';
+    out += '<div class="row-id">';
+    out += '<button type="button" class="open-person" data-open-person="' + e.person + '">';
+    out += '<span class="row-name">' + esc(p.name) + '</span>';
+    out += '<span class="row-sub">' + esc(subLine(p)) + '</span></button>';
+    if (e.authority) { out += '<p class="words">' + plainWord(e.authority) + '</p>'; }
+    if (e.held) { out += '<p class="row-rule row-rule--blocked">' + esc(e.held) + '</p>'; }
+    out += clauseHtml(clausesFor(p));
+    if (showStart && e.from) { out += '<p class="t-body-sm note">Starts ' + esc(dshort(e.from)) + '</p>'; }
+    if (e.bid) { out += '<p class="t-body-sm note">' + esc(e.bid) + '</p>'; }
+    out += '</div></div>';
+    out += '<div class="prow-line2">';
+    out += '<span class="words">' + word(p.reach) + word(e.stage) + '</span>';
+    out += telLink(p.phone);
+    out += '<button type="button" class="disc" data-disc="' + panelId + '" aria-expanded="' + (unfolded ? 'true' : 'false') + '" aria-controls="' + panelId + '" aria-label="More about ' + esc(p.name) + '">More' + CHEV + '</button>';
+    out += '</div>';
+    out += '<div class="unfold" id="' + panelId + '"' + (unfolded ? '' : ' hidden') + '>';
+    out += p.phone
+      ? '<p class="t-body-sm note">Mobile</p>' + telLink(p.phone)
+      : '<p class="t-body-sm note">No phone on file</p>';
+    if (said) { out += '<p class="t-body-sm prose">' + esc(said) + '</p>'; }
+    out += '<div class="words">' + (p.consent ? word(p.consent) : '') +
+      (f && !holdsNoPaper(p.company) ? word(f.paper) : '') + '</div>';
+    out += '<div class="actrow">';
+    acts.forEach(function (a) {
+      out += '<button type="button" class="act act--tertiary"><span class="act-label">' + esc(a) + '</span></button>';
+    });
+    out += '</div></div></li>';
+    return out;
+  }
+
+  function rosterFirmRow(e) {
+    const c = firm(e.company);
+    const line = c.name + ' · ' + e.trade + ' · ' + (e.bid || e.closed);
+    let out = '<li class="crm-row" data-kind="' + esc(roleWord(e.kind)) + '">';
+    out += '<div class="prow-top">';
+    out += '<span class="avatar avatar--square" aria-hidden="true">' + esc(initials(c.name)) + '</span>';
+    out += '<div class="row-id"><p class="row-name prose">' + esc(line) + '</p></div></div>';
+    out += '<div class="prow-line2 prow-line2--firm"><span class="words">' + word(e.stage) + '</span></div>';
+    out += '</li>';
+    return out;
+  }
+
+  /* The Call Sheet's site-access summary line, shared by the roster and the picker (R-U). */
+  function siteHeadLine() {
+    const sa = FIXTURE.siteAccess;
+    const changed = sa.changeLog.slice().sort(function (a, b) { return a.when < b.when ? 1 : -1; })[0];
+    return 'Key held by ' + nameOf(sa.keyHolder.person) + '. ' + sa.gateControl + ' Changed ' + dshort(changed.when) + '.';
+  }
+
+  function renderRoster() {
+    let out = '<h2 class="t-d3">Call sheet · ' + esc(FIXTURE.project.name) + '</h2>';
+    out += '<p class="t-body prose">' + esc(siteHeadLine()) + '</p>';
+    out += '<div class="actrow"><button type="button" class="act act--inline" data-go="state-access"><span class="act-label">Open the site access card</span></button></div>';
+    const onNow = FIXTURE.engagements.filter(function (e) {
+      return e.person && (e.band === 'studio' || e.band === 'client' || e.band === 'week');
+    }).map(function (e) { return person(e.person); });
+    const tally = function (fn) { return onNow.filter(fn).length; };
+    out += '<p class="t-meta vitals">' + esc(onNow.length + ' on the job this week · ' +
+      tally(function (x) { return x.consent === 'Texting'; }) + ' reachable by text · ' +
+      tally(function (x) { return x.reach === 'Account'; }) + ' with accounts · ' +
+      tally(function (x) { return x.reach === 'On paper'; }) + ' on paper') + '</p>';
+
+    const roles = [];
+    FIXTURE.engagements.forEach(function (e) {
+      const w = e.kind ? roleWord(e.kind) : '';
+      if (w && roles.indexOf(w) < 0) { roles.push(w); }
+    });
+    out += '<div class="narrows" data-narrow="roster" role="group" aria-label="Narrow the call sheet by role">';
+    out += '<button type="button" class="narrow" data-kind-pick="Everyone" aria-pressed="true">Everyone</button>';
+    roles.forEach(function (w) {
+      out += '<button type="button" class="narrow" data-kind-pick="' + esc(w) + '" aria-pressed="false">' + esc(w) + '</button>';
+    });
+    out += '</div>';
+
+    out += '<div class="band"><h3 class="t-head">Studio side</h3><ul class="crm-list">';
+    out += bandOf('studio').map(function (e) { return rosterPersonRow(e, false); }).join('') + '</ul></div>';
+
+    out += '<div class="band"><h3 class="t-head">Client side</h3><ul class="crm-list">';
+    out += bandOf('client').map(function (e) { return rosterPersonRow(e, false); }).join('') + '</ul></div>';
+
+    out += '<div class="band"><h3 class="t-head">On the job · this week</h3><ul class="crm-list">';
+    out += bandOf('week').map(function (e) { return rosterPersonRow(e, false); }).join('') + '</ul></div>';
+
+    const later = bandOf('later').slice().sort(function (a, b) { return a.from < b.from ? -1 : (a.from > b.from ? 1 : 0); });
+    out += '<div class="band"><h3 class="t-head">On the job · later</h3><ul class="crm-list">';
+    out += later.map(function (e) { return rosterPersonRow(e, true); }).join('') + '</ul></div>';
+
+    out += '<div class="band band--apart"><h3 class="t-head">Bidding</h3><ul class="crm-list">';
+    out += bandOf('bidding').map(rosterFirmRow).join('') + '</ul></div>';
+
+    out += '<div class="band band--apart"><h3 class="t-head">Done</h3><ul class="crm-list">';
+    out += bandOf('done').map(rosterFirmRow).join('') + '</ul></div>';
+    return out;
+  }
+
+  /* ── The add sheet ─────────────────────────────────────────────────── */
+
+  function field(id, label, value, kind) {
+    let out = '<div class="field"><label class="t-head field-label" for="' + id + '">' + label + '</label>';
+    if (kind === 'area') {
+      out += '<textarea class="control" id="' + id + '" rows="3">' + esc(value) + '</textarea>';
+    } else {
+      out += '<input class="control" type="text" id="' + id + '" value="' + esc(value) + '">';
+    }
+    out += '</div>';
+    return out;
+  }
+
+  const ADD_KINDS = ['a client', 'a household member', 'a maker', 'a GC', 'a sub', 'an installer', 'a receiver', 'someone else'];
+  /* Each kind stands for a real seat in the fixture, so picking one rewrites the whole sheet. */
+  const ADD_EXAMPLE = {
+    'a client': 'F-04', 'a household member': 'F-05', 'a maker': 'F-20',
+    'a GC': 'F-07', 'a receiver': 'F-06', 'someone else': 'F-27'
+  };
+  const ADD_FIRM = { 'a maker': 1, 'a GC': 1, 'a sub': 1, 'an installer': 1, 'someone else': 1 };
+
+  function addSheetFor(kind) {
+    const a = FIXTURE.addSheet;
+    if (kind === a.kind) {
+      return {
+        kind: a.kind, project: a.project, name: a.name, firm: a.firm, trade: a.trade,
+        channels: a.channels.map(function (c) { return { label: c.kind.toUpperCase(), value: c.value }; }),
+        rule: a.rule, authority: '',
+        consented: a.consent.checked, method: a.consent.method, evidence: a.consent.evidence,
+        invited: FACE.invited, consequence: a.consequence
+      };
+    }
+    const pid = ADD_EXAMPLE[kind];
+    const p = pid ? person(pid) : null;
+    const e = p ? seatOf(p.id) : null;
+    const r = p ? ruleOf(p.id) : null;
+    const c = p ? consentOf(p.id) : null;
+    const f = p && p.company ? firm(p.company) : null;
+    const auth = e && e.authority ? e.authority : '';
+    const nm = p ? p.name : '';
+    return {
+      kind: kind, project: a.project, name: nm,
+      firm: f ? f.name : '', trade: e && e.trade ? e.trade : '',
+      channels: [
+        { label: 'MOBILE', value: p && p.phone ? p.phone : '' },
+        { label: 'EMAIL', value: p && p.email ? p.email : '' }
+      ],
+      rule: r ? r.text : '',
+      authority: auth,
+      consented: !!c, method: c ? c.source : 'verbal', evidence: c ? c.note : '',
+      invited: '',
+      consequence: nm
+        ? 'Adding ' + nm + ' puts them on the ' + a.project + ' Call Sheet' +
+          (auth ? ' and records the authority above' : '') + '. It never opens billing or the agreement.'
+        : 'Nothing is added to the ' + a.project + ' Call Sheet until you name someone.'
+    };
+  }
+
+  function renderAdd() {
+    const a = FIXTURE.addSheet;
+    const sheet = addSheetFor(addKind);
+    let out = '<p class="t-head eyebrow">ADD · TO YOUR ROSTER</p>';
+    out += '<h2 class="t-d2">Bring someone in</h2>';
+    out += '<p class="t-meta" style="margin-top:12px">' + esc(a.dateline) + '</p>';
+    out += '<div class="narrows" data-narrow="add-kind" role="group" aria-label="What kind of person you are adding">';
+    ADD_KINDS.forEach(function (k) {
+      out += '<button type="button" class="narrow" data-kind-pick="' + esc(k) + '" aria-pressed="' +
+        (k === sheet.kind ? 'true' : 'false') + '">' + esc(k) + '</button>';
+    });
+    out += '</div>';
+    out += field('f-project', 'PROJECT', sheet.project);
+    out += field('f-name', 'FULL NAME', sheet.name);
+    if (ADD_FIRM[sheet.kind]) {
+      out += field('f-firm', 'COMPANY', sheet.firm);
+      out += field('f-trade', 'TRADE', sheet.trade);
+    }
+
+    out += '<h3 class="t-head" style="margin-top:48px">Channels</h3>';
+    sheet.channels.forEach(function (c, i) {
+      out += field('f-chan-' + i, esc(c.label), c.value);
+    });
+    out += field('f-rule', 'CONTACT RULE', sheet.rule);
+
+    out += '<h3 class="t-head" style="margin-top:48px">Authority</h3>';
+    out += field('f-authority', 'AUTHORITY ON THIS JOB', sheet.authority);
+    out += '<p class="t-body-sm prose" id="authority-note" style="margin-top:12px">' +
+      (sheet.authority ? 'Defaulted from the agreement. Confirm it, or write a different one.' : 'Nothing defaulted from the agreement.') + '</p>';
+    out += '<div class="actrow"><button type="button" class="act act--tertiary js-authority"><span class="act-label">' +
+      (sheet.authority ? 'Confirm from the agreement' : 'Record the authority') + '</span></button></div>';
+
+    out += '<h3 class="t-head" style="margin-top:48px">Consent</h3>';
+    out += '<div class="check"><input type="checkbox" id="f-consent"' + (sheet.consented ? ' checked' : '') + '>';
+    out += '<label for="f-consent">They gave prior express consent for text updates</label></div>';
+    out += '<div class="field"><label class="t-head field-label" for="f-method">HOW CONSENT WAS GIVEN</label>';
+    out += '<div class="select-wrap"><select class="control" id="f-method">';
+    ['verbal', 'written', 'web form', 'inbound text'].forEach(function (m) {
+      out += '<option' + (m === sheet.method ? ' selected' : '') + '>' + esc(m) + '</option>';
+    });
+    out += '</select>' + SELECT_CHEV + '</div></div>';
+    out += field('f-where', 'WHERE AND WHEN THEY AGREED', sheet.evidence, 'area');
+    if (sheet.invited) { out += '<p class="t-body-sm prose" style="margin-top:12px">' + esc(sheet.invited) + '</p>'; }
+
+    out += '<p class="t-body-sm consequence" style="margin-top:48px">' + esc(sheet.consequence) + '</p>';
+    out += '<div class="actrow"><button type="button" class="act act--terminal"><span class="act-label">' + esc(a.terminal) + '</span></button></div>';
+    return out;
+  }
+
+  /* ── Bring forward, the rolodex picker ─────────────────────────────── */
+
+  const PICK_PRIOR = 'Worked 1 prior project, Lindqvist kitchen, closed 2025';
+  const PICK_ROWS = [
+    { id: 'F-11', firm: 'northgate',  trade: 'electrical',          picked: true,  line: PICK_PRIOR, consent: true, paper: true },
+    { id: 'F-12', firm: 'rusk',       trade: 'plumbing',            picked: true,  line: PICK_PRIOR, consent: true,
+      note: 'Opted out by text 3 Dec 2025, on the Lindqvist kitchen.' },
+    { id: 'F-13', firm: 'halvorsen',  trade: 'cabinetry',           picked: true,  line: PICK_PRIOR, consent: true, rule: true },
+    { id: 'F-20', firm: 'stonehaven', trade: 'tile & stone',        picked: true,  line: 'Saved twice, one firm.' },
+    { id: 'L-02', firm: 'ostrom',     trade: 'general contracting', picked: false, line: PICK_PRIOR }
+  ];
+  const PICK_TRAVELS = ['Identity', 'Typed channels', 'Contact rule', 'Consent by channel value', 'Document expiries', 'One history line'];
+  const PICK_STAYS = ['2025 pricing', '2025 project notes', 'Show to client'];
+
+  function pickRow(row) {
+    const p = person(row.id);
+    const c = firm(row.firm);
+    const boxId = 'pick-' + slug(p.name);
+    let out = '<li class="crm-row">';
+    out += '<div class="prow-top">';
+    out += '<input class="pick-box" type="checkbox" id="' + boxId + '" data-who="' + slug(p.name) + '"' + (row.picked ? ' checked' : '') + '>';
+    out += '<span class="avatar avatar--circle" aria-hidden="true">' + esc(initials(p.name)) + '</span>';
+    out += '<div class="row-id">';
+    out += '<label class="row-name pick-name" for="' + boxId + '">' + esc(p.name) + '</label>';
+    out += '<span class="row-sub">' + esc(c.name + ' · ' + row.trade) + '</span>';
+    if (row.rule) { out += '<p class="row-rule">' + esc(ruleOf(row.id).text) + '</p>'; }
+    out += '<p class="t-body-sm note prose">' + esc(row.line) + '</p>';
+    if (row.note) { out += '<p class="t-body-sm note prose">' + esc(row.note) + '</p>'; }
+    out += '</div></div>';
+    const pw = row.paper && !holdsNoPaper(row.firm) ? word(c.paper) : '';
+    out += '<div class="prow-line2"><span class="words">' + pw + word(p.reach) +
+      (row.consent ? word(p.consent) : '') + '</span></div>';
+    out += '</li>';
+    return out;
+  }
+
+  function renderPick() {
+    let out = '<h2 class="t-d3">Call sheet · ' + esc(FIXTURE.project.name) + '</h2>';
+    out += '<p class="t-body prose">' + esc(siteHeadLine()) + '</p>';
+    out += '<div class="band">';
+    out += '<p class="t-head eyebrow">OKONKWO RESIDENCE</p>';
+    out += '<h3 class="t-d3">From the rolodex</h3>';
+    out += field('f-pick-search', 'SEARCH THE ROLODEX', 'Lindqvist');
+    out += '<p class="t-body-sm note prose vitals" id="pick-count">4 of 5 from the Lindqvist kitchen selected</p>';
+    out += '<ul class="crm-list stack">' + PICK_ROWS.map(pickRow).join('') + '</ul>';
+    out += '<h3 class="t-head" style="margin-top:48px">What travels</h3><ul>';
+    PICK_TRAVELS.forEach(function (t) { out += '<li class="stack-row"><p class="t-body">' + esc(t) + '</p></li>'; });
+    out += '</ul>';
+    out += '<h3 class="t-head" style="margin-top:48px">What stays behind</h3><ul>';
+    PICK_STAYS.forEach(function (t) { out += '<li class="stack-row"><p class="t-body">' + esc(t) + '</p></li>'; });
+    out += '</ul>';
+    out += '<div class="actrow" style="margin-top:48px">';
+    out += '<button type="button" class="act act--terminal" id="pick-terminal" aria-describedby="pick-consequence"><span class="act-label">Add four to the roster</span></button>';
+    out += '<button type="button" class="act act--secondary js-putback"><span class="act-label">Put back</span></button>';
+    out += '</div>';
+    out += '<p class="t-body-sm consequence" id="pick-consequence" style="margin-top:12px">' + esc(FACE.pickConsequence) + '</p>';
+    out += '</div>';
+    return out;
+  }
+
+  const NUMWORD = ['no', 'one', 'two', 'three', 'four', 'five'];
+
+  function pickUpdate() {
+    const boxes = Array.prototype.slice.call(document.querySelectorAll('.pick-box'));
+    const on = boxes.filter(function (b) { return b.checked; });
+    const n = on.length;
+    const who = on.map(function (b) { return b.getAttribute('data-who'); });
+
+    const count = document.getElementById('pick-count');
+    if (count) { count.textContent = n + ' of ' + boxes.length + ' from the Lindqvist kitchen selected'; }
+
+    const term = document.getElementById('pick-terminal');
+    if (term) {
+      const label = term.querySelector('.act-label') || term;
+      label.textContent = n ? 'Add ' + NUMWORD[n] + ' to the roster' : 'Add to the roster';
+      if (n) { term.removeAttribute('aria-disabled'); } else { term.setAttribute('aria-disabled', 'true'); }
+    }
+
+    const line = document.getElementById('pick-consequence');
+    if (line) {
+      const parts = ['Adds ' + NUMWORD[n] + ' seat' + (n === 1 ? '' : 's') + ' to the Okonkwo residence.'];
+      if (who.indexOf('pete-rusk') > -1) { parts.push('Pete Rusk arrives opted out of texting.'); }
+      if (who.indexOf('dana-kowalski') > -1) { parts.push("Northgate Electric's insurance lapsed 31 Mar 2026."); }
+      line.textContent = parts.join(' ');
+    }
+    return n;
+  }
+
+  /* ── The site access card ──────────────────────────────────────────── */
+
+  function renderAccess() {
+    const sa = FIXTURE.siteAccess;
+    let out = '<h2 class="t-d3">Site access · ' + esc(sa.project) + '</h2>';
+    out += '<p class="t-body prose">' + esc(sa.address) + '</p>';
+    out += '<p class="t-body-sm note prose">' + esc(FACE.studioOnly) + '</p>';
+
+    out += '<div class="card-region"><h3>Who to call first</h3><ul>';
+    sa.callFirst.forEach(function (c) {
+      const line = nameOf(c.person) + ', ' + c.role + ', ' + c.phone;
+      out += '<li class="stack-row"><a class="tel tel--line" href="' + telHref(c.phone) + '"><span>' + esc(line) + '</span></a></li>';
+    });
+    out += '</ul></div>';
+
+    out += '<div class="card-region"><h3>The way in</h3>';
+    out += '<p class="t-body prose">' + esc(sa.wayIn) + '</p>';
+    out += '<p class="t-body prose" style="margin-top:12px">' + esc(sa.gateControl) + '</p></div>';
+
+    out += '<div class="card-region"><h3>Key holder</h3>';
+    out += '<p class="t-body prose">' + linkPhones(esc(sa.keyHolder.line)) + '</p>';
+    out += '<p class="words">' + word(person(sa.keyHolder.person).consent) + '</p></div>';
+
+    out += '<div class="card-region"><h3>Hours</h3>';
+    out += '<p class="t-body prose">' + esc(sa.hours) + '</p></div>';
+
+    out += '<div class="card-region"><h3>Receiving</h3>';
+    out += '<p class="t-body prose">' + esc(sa.receiving) + '</p></div>';
+
+    out += '<div class="card-region"><h3>Who was told</h3><ul>';
+    sa.changeLog.slice().sort(function (a, b) { return a.when < b.when ? 1 : -1; }).forEach(function (l) {
+      const told = l.told.map(nameOf).join(', ');
+      out += '<li class="stack-row"><p class="t-body prose">' + esc(l.what + ' ' + dlong(l.when) + ', by ' + l.by + '. Told: ' + told + '.') + '</p></li>';
+    });
+    out += '</ul>';
+    out += '<div class="actrow"><button type="button" class="act act--secondary" data-disc="told-band" aria-expanded="false" aria-controls="told-band"><span class="act-label">Log who was told</span></button></div>';
+    out += '<div id="told-band" class="stack" hidden>';
+    out += '<div class="field"><label class="t-head field-label" for="f-told">WHAT CHANGED AND WHO YOU TOLD</label>';
+    out += '<textarea class="control" id="f-told" rows="3"></textarea></div>';
+    out += '<div class="actrow"><button type="button" class="act"><span class="act-label">Save this note</span></button></div>';
+    out += '</div></div>';
+    return out;
+  }
+
+  /* ── Wiring ────────────────────────────────────────────────────────── */
+
+  let pFocus = 'F-11';
+  let coFocus = 'northgate';
+  let addKind = FIXTURE.addSheet.kind;
+
+  const RENDER = {
+    'state-directory': renderDirectory,
+    'state-person': function () { return renderPerson(pFocus); },
+    'state-company': function () { return renderCompany(coFocus); },
+    'state-roster': renderRoster,
+    'state-pick': renderPick,
+    'state-add': renderAdd,
+    'state-access': renderAccess
+  };
+
+  function paint(s) {
+    faceOf(s).innerHTML = RENDER[s]();
+  }
+
+  /* CR-5: narrow the call sheet to one role. */
+  function narrowRoster(kind) {
+    const sheet = faceOf('state-roster');
+    const rows = sheet.querySelectorAll('[data-kind]');
+    for (let i = 0; i < rows.length; i++) {
+      rows[i].hidden = !(kind === 'Everyone' || rows[i].getAttribute('data-kind') === kind);
+    }
+    const bands = sheet.querySelectorAll('.band');
+    for (let j = 0; j < bands.length; j++) {
+      bands[j].hidden = bands[j].querySelectorAll('[data-kind]:not([hidden])').length === 0;
+    }
+  }
+
+  function say(msg) {
+    const el = document.getElementById('announce');
+    if (el) { el.textContent = msg; }
+  }
+
+  function parseHash() {
+    const raw = (location.hash || '').replace(/^#/, '');
+    const tokens = raw.split(/[&,]/).filter(Boolean);
+    let state = null;
+    let nobar = false;
+    for (let i = 0; i < tokens.length; i++) {
+      if (state === null && tokens[i].indexOf('state-') === 0) { state = tokens[i]; }
+      if (tokens[i] === 'nobar') { nobar = true; }
+    }
+    if (STATES.indexOf(state) < 0) { state = 'state-directory'; }
+    return { state: state, nobar: nobar };
+  }
+
+  function show() {
+    const h = parseHash();
+    STATES.forEach(function (s) {
+      faceOf(s).hidden = (s !== h.state);
+    });
+    document.getElementById('statebar').hidden = h.nobar;
+    document.getElementById('head-count').hidden = (h.state !== 'state-directory');
+    const bar = document.querySelectorAll('.sb-acts .act');
+    for (let i = 0; i < bar.length; i++) {
+      bar[i].setAttribute('aria-pressed', bar[i].getAttribute('data-go') === h.state ? 'true' : 'false');
+    }
+    say(STATE_NAMES[h.state]);
+  }
+
+  function boot() {
+    document.getElementById('head-count').textContent = FIXTURE.head.people + ' people · ' + FIXTURE.head.firms + ' firms';
+    STATES.forEach(paint);
+    show();
+  }
+
+  document.addEventListener('click', function (ev) {
+    const t = ev.target;
+    if (!t || !t.closest) { return; }
+    const op = t.closest('[data-open-person]');
+    if (op) {
+      ev.preventDefault();
+      pFocus = op.getAttribute('data-open-person');
+      paint('state-person');
+      if (location.hash.replace(/^#/, '') === 'state-person') { show(); } else { location.hash = 'state-person'; }
+      return;
+    }
+    const oc = t.closest('[data-open-company]');
+    if (oc) {
+      ev.preventDefault();
+      coFocus = oc.getAttribute('data-open-company');
+      paint('state-company');
+      if (location.hash.replace(/^#/, '') === 'state-company') { show(); } else { location.hash = 'state-company'; }
+      return;
+    }
+    const go = t.closest('[data-go]');
+    if (go) {
+      ev.preventDefault();
+      if (go.closest('.sb-acts')) {
+        pFocus = 'F-11';
+        coFocus = 'northgate';
+        addKind = FIXTURE.addSheet.kind;
+        paint('state-person');
+        paint('state-company');
+        paint('state-add');
+      }
+      location.hash = go.getAttribute('data-go');
+      return;
+    }
+    const disc = t.closest('[data-disc]');
+    if (disc) {
+      const panel = document.getElementById(disc.getAttribute('data-disc'));
+      if (panel) {
+        const open = disc.getAttribute('aria-expanded') === 'true';
+        disc.setAttribute('aria-expanded', open ? 'false' : 'true');
+        panel.hidden = open;
+        say(open ? 'Folded' : 'Unfolded');
+      }
+      return;
+    }
+    const saveAuth = t.closest('.js-save-authority');
+    if (saveAuth) {
+      const box = document.getElementById('f-authority-edit');
+      const line = document.getElementById('seat-authority');
+      if (box && line) { line.innerHTML = plainWord(box.value); }
+      const trigger = document.querySelector('[aria-controls="authority-band"]');
+      if (trigger) { trigger.setAttribute('aria-expanded', 'false'); }
+      const band = document.getElementById('authority-band');
+      if (band) { band.hidden = true; }
+      say('Authority saved.');
+      return;
+    }
+    const confirmAuth = t.closest('.js-authority');
+    if (confirmAuth) {
+      const note = document.getElementById('authority-note');
+      if (note) { note.textContent = 'Authority recorded for this seat.'; }
+      say('Authority recorded.');
+      return;
+    }
+    const putBack = t.closest('.js-putback');
+    if (putBack) {
+      const boxes = document.querySelectorAll('.pick-box');
+      for (let i = 0; i < boxes.length; i++) { boxes[i].checked = false; }
+      pickUpdate();
+      say('Put back.');
+      return;
+    }
+    const pressed = t.closest('[aria-pressed]');
+    if (pressed && !pressed.getAttribute('data-go')) {
+      const group = pressed.closest('[role="group"]');
+      if (group && group.getAttribute('data-narrow') === 'add-kind') {
+        const picked = pressed.getAttribute('data-kind-pick');
+        addKind = picked;
+        paint('state-add');
+        say(picked);
+        return;
+      }
+      if (group) {
+        const all = group.querySelectorAll('[aria-pressed]');
+        for (let i = 0; i < all.length; i++) { all[i].setAttribute('aria-pressed', 'false'); }
+      }
+      pressed.setAttribute('aria-pressed', 'true');
+      if (group && group.getAttribute('data-narrow') === 'roster') { narrowRoster(pressed.getAttribute('data-kind-pick')); }
+      say(pressed.textContent.trim());
+    }
+  });
+
+  document.addEventListener('change', function (ev) {
+    const t = ev.target;
+    if (t && t.classList && t.classList.contains('pick-box')) {
+      say(pickUpdate() + ' of 5 selected.');
+    }
+  });
+
+  window.addEventListener('hashchange', show);
+
+  window.addEventListener('message', function (ev) {
+    const d = ev.data;
+    if (!d || typeof d !== 'object') { return; }
+    let s = d.state;
+    if (typeof s !== 'string') { return; }
+    if (s.indexOf('state-') !== 0) { s = 'state-' + s; }
+    if (STATES.indexOf(s) < 0) { return; }
+    location.hash = s;
+  });
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot);
+  } else {
+    boot();
+  }
+}());
+</script>
+</body>
+</html>
+<!-- specimen-complete -->

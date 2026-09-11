@@ -1,0 +1,188 @@
+<!-- People room CRM face — paste-ready fragment. Tokens: _tokens-reference.css
+     (same directory, linked below). Fixture: Okonkwo residence. No color not
+     backed by this file's own token block; state words never rely on hue alone. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;1,400&family=Inter:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="_tokens-reference.css">
+<style>
+  .crm-band { max-width: 1200px; margin: 0 auto; padding: 24px; background: var(--paper); font-family: var(--font-body); color: var(--ink); }
+  .crm-h    { font-family: var(--font-display); font-size: 20px; font-weight: 500; margin: 48px 0 12px; }
+  .crm-h:first-child { margin-top: 0; }
+
+  /* ── Row (person + company share this grammar) ─────────────────────── */
+  .crm-list { border-top: 1px solid var(--hairline); }
+  .crm-row  { display: flex; align-items: center; gap: 16px; padding: 12px 16px; border-bottom: 1px solid var(--hairline); }
+
+  .avatar { flex: none; display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-meta); font-weight: 500; font-size: 12px; color: var(--ink-paper); background: var(--oak); }
+  .avatar--circle { width: 34px; height: 34px; border-radius: 50%; }
+  .avatar--square { width: 42px; height: 42px; border-radius: 8px; }
+
+  .row-id   { flex: 1 1 320px; min-width: 0; }
+  .row-name { font-size: 14px; font-weight: 600; line-height: 1.4; }
+  .row-sub  { font-family: var(--font-meta); font-size: 12px; letter-spacing: .04em; color: var(--ink-subtle); margin-top: 2px; }
+  .row-rule { font-size: 14px; line-height: 1.5; color: var(--ink); margin-top: 4px; }
+  .row-rule--blocked { border-left: 2px solid var(--terracotta-ink); padding-left: 10px; }
+
+  .row-words { flex: none; display: flex; gap: 12px; }
+  .row-chevron { flex: none; width: 16px; color: var(--ink-faint); text-align: center; }
+
+  /* ── The word: bordered box, word + border always agree, never a fill ── */
+  .word { flex: none; width: 108px; text-align: center; padding: 4px 6px;
+    border: 1px solid var(--hairline-strong); border-radius: var(--radius-box);
+    font-family: var(--font-meta); font-size: 11px; font-weight: 500;
+    letter-spacing: .06em; text-transform: uppercase; background: transparent; }
+  .word--current  { border-color: var(--sage);       color: var(--sage-ink); }
+  .word--pending  { border-color: var(--golden);     color: var(--golden-ink); }
+  .word--blocked  { border-color: var(--terracotta); color: var(--terracotta-ink); }
+  .word--dormant  { border-color: var(--hairline-strong); color: var(--ink-faint); }
+  /* Authority: a fact, not a state — no border pigment, no fill. */
+  .word--plain { border-color: transparent; color: var(--ink-subtle); text-transform: none;
+    letter-spacing: 0; font-weight: 400; text-align: left; width: auto; padding: 4px 0; }
+
+  /* ── Card ────────────────────────────────────────────────────────────── */
+  .crm-card { max-width: 720px; margin: 0 auto 48px; }
+  .card-header { display: flex; align-items: center; gap: 16px; padding-bottom: 24px; }
+  .card-name { font-family: var(--font-display); font-size: 20px; font-weight: 500; }
+  .card-meta { font-family: var(--font-meta); font-size: 12px; color: var(--ink-subtle); margin-top: 4px; }
+  .card-region { padding: 24px 0; border-top: 1px solid var(--hairline-strong); }
+  .card-region h3 { font-family: var(--font-meta); font-size: 11px; font-weight: 500;
+    letter-spacing: .08em; text-transform: uppercase; color: var(--ink-subtle); margin: 0 0 12px; }
+
+  .crm-table { width: 100%; border-collapse: collapse; }
+  .crm-table th { font-family: var(--font-meta); font-size: 11px; font-weight: 500; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--ink-subtle); text-align: left; padding: 0 12px 8px 0; }
+  .crm-table td { font-size: 14px; padding: 12px 12px 12px 0; border-top: 1px solid var(--hairline); }
+</style>
+
+<div class="crm-band">
+  <!-- §1 · Row anatomy — person row, F-11 Dana Kowalski (COI lapsed) -->
+  <p class="crm-h">Field crew</p>
+  <div class="crm-list">
+    <div class="crm-row">
+      <span class="avatar avatar--circle">DK</span>
+      <span class="row-id">
+        <span class="row-name">Dana Kowalski</span>
+        <span class="row-sub">Northgate Electric · electrical</span>
+      </span>
+      <span class="row-words">
+        <span class="word word--pending">Field link</span>
+        <span class="word word--current">Texting</span>
+        <span class="word word--current">On the job</span>
+        <span class="word word--blocked">Lapsed</span>
+      </span>
+      <span class="row-chevron">›</span>
+    </div>
+
+    <!-- F-18 Joe Wozniak — consent pending, golden -->
+    <div class="crm-row">
+      <span class="avatar avatar--circle">JW</span>
+      <span class="row-id">
+        <span class="row-name">Joe Wozniak</span>
+        <span class="row-sub">Cedar &amp; Iron Framing · carpentry / framing</span>
+      </span>
+      <span class="row-words">
+        <span class="word word--pending">Field link</span>
+        <span class="word word--pending">Invited</span>
+        <span class="word word--current">On the job</span>
+        <span class="word word--current">Current</span>
+      </span>
+      <span class="row-chevron">›</span>
+    </div>
+
+    <!-- F-27 Ray Thao — dormant, do-not-contact rule, no chip -->
+    <div class="crm-row">
+      <span class="avatar avatar--circle">RT</span>
+      <span class="row-id">
+        <span class="row-name">Ray Thao</span>
+        <span class="row-sub">City of Minneapolis, CPED Inspections · building inspector</span>
+        <span class="row-rule row-rule--blocked">Never text — office phone or the 311 portal only.</span>
+      </span>
+      <span class="row-words">
+        <span class="word word--dormant">On paper</span>
+        <span class="word word--dormant">Not asked</span>
+        <span class="word word--dormant">Prospect</span>
+        <span class="word word--dormant">Not on file</span>
+      </span>
+      <span class="row-chevron">›</span>
+    </div>
+  </div>
+
+  <!-- Company row, F-07 Marrow & Sons -->
+  <p class="crm-h">Companies</p>
+  <div class="crm-list">
+    <div class="crm-row">
+      <span class="avatar avatar--square">MS</span>
+      <span class="row-id">
+        <span class="row-name">Marrow &amp; Sons</span>
+        <span class="row-sub">GC firm · 3 people · 2 projects</span>
+      </span>
+      <span class="row-words">
+        <span class="word word--pending">Lapses in 30 days</span>
+        <span class="word word--plain">Signs</span>
+      </span>
+      <span class="row-chevron">›</span>
+    </div>
+  </div>
+
+  <!-- §3 · Person card — F-11 Dana Kowalski -->
+  <p class="crm-h">Person card</p>
+  <div class="crm-card">
+    <div class="card-header">
+      <span class="avatar avatar--circle" style="width:48px;height:48px;font-size:14px;">DK</span>
+      <span>
+        <span class="card-name">Dana Kowalski</span>
+        <span class="card-meta">Northgate Electric · owner-operator</span>
+      </span>
+    </div>
+    <div class="card-region">
+      <h3>Contact &amp; rule</h3>
+      <table class="crm-table">
+        <tr><th>Kind</th><th>Value</th><th>Preferred</th></tr>
+        <tr><td>Mobile</td><td>text only</td><td>Yes</td></tr>
+        <tr><td>Email</td><td>unread</td><td>&mdash;</td></tr>
+      </table>
+      <p class="row-rule">Consent recorded on the Lindqvist job in 2025 and carried forward to Okonkwo.</p>
+    </div>
+    <div class="card-region">
+      <h3>Engagements</h3>
+      <table class="crm-table">
+        <tr><th>Project</th><th>Trade</th><th>Stage</th><th>Authority</th></tr>
+        <tr><td>Okonkwo residence</td><td>Electrical</td>
+          <td><span class="word word--current" style="width:auto;">On the job</span></td>
+          <td><span class="word word--plain">None</span></td></tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- §3 · Company card — F-07 Marrow & Sons -->
+  <p class="crm-h">Company card</p>
+  <div class="crm-card">
+    <div class="card-header">
+      <span class="avatar avatar--square" style="width:48px;height:48px;font-size:14px;">MS</span>
+      <span>
+        <span class="card-name">Marrow &amp; Sons</span>
+        <span class="card-meta">GC firm</span>
+      </span>
+    </div>
+    <div class="card-region">
+      <h3>Compliance documents</h3>
+      <table class="crm-table">
+        <tr><th>Type</th><th>Expires</th><th>Status</th></tr>
+        <tr><td>COI &mdash; general liability</td><td>2027-03-31</td>
+          <td><span class="word word--current" style="width:auto;">Current</span></td></tr>
+        <tr><td>W-9</td><td>&mdash;</td>
+          <td><span class="word word--current" style="width:auto;">Current</span></td></tr>
+      </table>
+    </div>
+    <div class="card-region">
+      <h3>Payee &amp; paperwork</h3>
+      <table class="crm-table">
+        <tr><th>Role at firm</th><th>Person</th><th>Reach</th></tr>
+        <tr><td>Signer</td><td>Tom Marrow</td>
+          <td><span class="word word--pending" style="width:auto;">Field link</span></td></tr>
+      </table>
+    </div>
+  </div>
+</div>
