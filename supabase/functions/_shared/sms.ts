@@ -190,6 +190,80 @@ function reduceConsent(
 }
 
 /**
+ * A resolution that can fail. `failed` is never folded into a null org: a
+ * lookup that errored is NOT the same fact as "this project has no studio", and
+ * every caller here treats the first as a logged refusal (R-AM).
+ */
+export interface OrgResolution {
+  org: string | null;
+  failed: boolean;
+}
+
+/**
+ * The designer's primary design_studio, resolved the way
+ * `_primary_studio_for()` (00315:64-79) resolves it — owner role first, then
+ * earliest joined_at, then created_at — but over the TABLES, not the function.
+ *
+ * NEVER THE RPC. `_primary_studio_for` is revoked from every PostgREST role
+ * (00483's allowlist: proacl `{postgres=X/postgres}`), so calling it from the
+ * rail returns 42501 "permission denied for function" — and a caller that
+ * destructures only `data` reads that as a NULL org, silently. It is an
+ * internal helper for other SECURITY DEFINER bodies, and this is the same shape
+ * resolveStudioName() already reads below.
+ */
+async function primaryStudioFor(
+  supabase: SupabaseClient,
+  designerId: string,
+): Promise<OrgResolution> {
+  const { data: memberships, error: mErr } = await supabase
+    .from("organization_members")
+    .select("organization_id, role, joined_at, created_at")
+    .eq("user_id", designerId)
+    .eq("status", "active");
+  if (mErr) {
+    console.error("primaryStudioFor: organization_members read failed", mErr);
+    return { org: null, failed: true };
+  }
+  const rows = (memberships ?? []) as Array<{
+    organization_id: string;
+    role?: string | null;
+    joined_at?: string | null;
+    created_at?: string | null;
+  }>;
+  if (rows.length === 0) return { org: null, failed: false };
+
+  const { data: orgs, error: oErr } = await supabase
+    .from("organizations")
+    .select("id")
+    .in("id", rows.map((r) => r.organization_id))
+    .eq("type", "design_studio");
+  if (oErr) {
+    console.error("primaryStudioFor: organizations read failed", oErr);
+    return { org: null, failed: true };
+  }
+  const studios = new Set(
+    ((orgs ?? []) as Array<{ id: string }>).map((o) => o.id),
+  );
+
+  // 00315's ORDER BY, in the same order: owner first, then joined_at with
+  // NULLs last, then created_at.
+  const ranked = rows
+    .filter((r) => studios.has(r.organization_id))
+    .sort((a, b) => {
+      const owner = Number(b.role === "owner") - Number(a.role === "owner");
+      if (owner !== 0) return owner;
+      const aj = a.joined_at ?? "￿";
+      const bj = b.joined_at ?? "￿";
+      if (aj !== bj) return aj < bj ? -1 : 1;
+      const ac = a.created_at ?? "";
+      const bc = b.created_at ?? "";
+      if (ac !== bc) return ac < bc ? -1 : 1;
+      return 0;
+    });
+  return { org: ranked[0]?.organization_id ?? null, failed: false };
+}
+
+/**
  * The organization a project belongs to, resolved exactly the way the SQL side
  * resolves it (00594:141 and :221):
  * `COALESCE(projects.studio_id, _primary_studio_for(projects.designer_id))`.
@@ -202,23 +276,24 @@ function reduceConsent(
 export async function resolveProjectOrg(
   supabase: SupabaseClient,
   projectId: string | null,
-): Promise<string | null> {
-  if (!projectId) return null;
-  const { data: proj } = await supabase
+): Promise<OrgResolution> {
+  if (!projectId) return { org: null, failed: false };
+  const { data: proj, error } = await supabase
     .from("projects")
     .select("studio_id, designer_id")
     .eq("id", projectId)
     .maybeSingle();
+  if (error) {
+    console.error("resolveProjectOrg: projects read failed", error);
+    return { org: null, failed: true };
+  }
   const row = proj as
     | { studio_id?: string | null; designer_id?: string | null }
     | null;
-  if (!row) return null;
-  if (row.studio_id) return row.studio_id;
-  if (!row.designer_id) return null;
-  const { data: org } = await supabase.rpc("_primary_studio_for", {
-    p_user: row.designer_id,
-  });
-  return (org as string | null) ?? null;
+  if (!row) return { org: null, failed: false };
+  if (row.studio_id) return { org: row.studio_id, failed: false };
+  if (!row.designer_id) return { org: null, failed: false };
+  return await primaryStudioFor(supabase, row.designer_id);
 }
 
 /**
@@ -226,21 +301,29 @@ export async function resolveProjectOrg(
  * returning a project-id → org map. Exported because sms-inbound's pipeline
  * derives its STOP/START targets the same way: the two sides of the rail must
  * never disagree about which studio a project belongs to.
+ *
+ * `failed` says a lookup errored, so a caller can refuse rather than act on a
+ * map that is short some entries (R-AM).
  */
 export async function orgsOfProjects(
   supabase: SupabaseClient,
   projectIds: string[],
-): Promise<Map<string, string>> {
+): Promise<{ orgs: Map<string, string>; failed: boolean }> {
   const out = new Map<string, string>();
-  if (projectIds.length === 0) return out;
-  const { data } = await supabase
+  if (projectIds.length === 0) return { orgs: out, failed: false };
+  const { data, error } = await supabase
     .from("projects")
     .select("id, studio_id, designer_id")
     .in("id", projectIds);
+  if (error) {
+    console.error("orgsOfProjects: projects read failed", error);
+    return { orgs: out, failed: true };
+  }
   const rows = (data ?? []) as Array<
     { id: string; studio_id?: string | null; designer_id?: string | null }
   >;
   const primary = new Map<string, string | null>();
+  let failed = false;
   for (const row of rows) {
     if (row.studio_id) {
       out.set(row.id, row.studio_id);
@@ -248,15 +331,14 @@ export async function orgsOfProjects(
     }
     if (!row.designer_id) continue;
     if (!primary.has(row.designer_id)) {
-      const { data: org } = await supabase.rpc("_primary_studio_for", {
-        p_user: row.designer_id,
-      });
-      primary.set(row.designer_id, (org as string | null) ?? null);
+      const resolved = await primaryStudioFor(supabase, row.designer_id);
+      if (resolved.failed) failed = true;
+      primary.set(row.designer_id, resolved.org);
     }
     const fallback = primary.get(row.designer_id) ?? null;
     if (fallback) out.set(row.id, fallback);
   }
-  return out;
+  return { orgs: out, failed };
 }
 
 /**
@@ -275,17 +357,26 @@ async function orgHasOptedOutParty(
   phone: string,
   org: string,
 ): Promise<boolean> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("project_parties")
     .select("project_id, sms_consent_status")
     .eq("phone_e164", phone)
     .eq("sms_consent_status", "opted_out");
+  if (error) {
+    // A refusal we could not read is not a refusal we may assume away.
+    console.error("orgHasOptedOutParty: project_parties read failed", error);
+    return true;
+  }
   const rows = (data ?? []) as Array<{ project_id?: string | null }>;
   const projectIds = [
     ...new Set(rows.map((r) => r.project_id).filter(Boolean)),
   ] as string[];
   if (projectIds.length === 0) return false;
-  const orgs = await orgsOfProjects(supabase, projectIds);
+  const { orgs, failed } = await orgsOfProjects(supabase, projectIds);
+  // Some of those opted-out seats could not be attributed to a studio. Which
+  // studio they belong to is exactly the question, so an unresolved one counts
+  // against the send (R-AM).
+  if (failed) return true;
   return projectIds.some((id) => orgs.get(id) === org);
 }
 
@@ -318,6 +409,10 @@ export type ChannelConsentVerdict = "refuse" | "allow" | "unknown";
  *     has to re-record a consent it already holds (fixture F-11).
  *   · "unknown" — record says not_asked/pending, or there is none: the legacy
  *     party-row gates below decide.
+ *   · "refuse", logged — the owning studio could not be RESOLVED at all (a
+ *     failed read, not an absent studio). A failure is not a fact about the
+ *     number, and the no-studio branch below would answer this send out of
+ *     every tenant's rows, so it refuses instead (R-AM).
  *
  * "allow" lifts only the POSITIVE gates, and it is never taken on a record
  * alone. A record can go stale — the portal still writes party rows directly,
@@ -330,16 +425,35 @@ async function channelConsentVerdict(
   phone: string,
   projectId: string | null,
 ): Promise<ChannelConsentVerdict> {
-  const org = await resolveProjectOrg(supabase, projectId);
+  const { org, failed } = await resolveProjectOrg(supabase, projectId);
+
+  // A studio that could not be resolved is not a studio that does not exist
+  // (R-AM). Taking the no-studio branch here would read another tenant's
+  // ledger for this send, so the failure refuses instead — logged, never
+  // silent.
+  if (failed) {
+    console.error(
+      "channelConsentVerdict: refusing, the owning studio could not be resolved",
+      { projectId },
+    );
+    return "refuse";
+  }
 
   if (org) {
-    const { data: record } = await supabase
+    const { data: record, error: recordError } = await supabase
       .from("studio_channel_consent")
       .select("status")
       .eq("organization_id", org)
       .eq("channel_kind", "sms")
       .eq("channel_value", phone)
       .maybeSingle();
+    if (recordError) {
+      console.error(
+        "channelConsentVerdict: refusing, the consent record could not be read",
+        recordError,
+      );
+      return "refuse";
+    }
     if (record) {
       const status = (record as { status: string }).status;
       if (status === "opted_out") return "refuse";

@@ -61,6 +61,21 @@
 --  17. r3r2 M-2: an affiliation's two ids must be a person card and a company
 --      card (and never the same card), and a channel's owner_type must equal
 --      its card's entity_kind.
+--  18. r5 M5-2 (R-AN): the mirror refreshes the evidence it carries and NEVER
+--      nulls a column it does not — the disclosure version and the recorder the
+--      seat holds survive a record the inbound rail minted without them.
+--  19. r5 B5-1 (R-AL): record_channel_consent reads the SEATS as well as the
+--      record. A dated opted_out party row in this studio refuses a grant
+--      (channel_opted_out) and survives it byte for byte; the way past is to
+--      record the refusal, then reconsent(). Another studio's refusal is still
+--      not this studio's fact (R-AK).
+--  20. r5 M5-3 (R-AO): N persons x N firms. Writing the legacy company_id
+--      pointer opens the affiliation it names and leaves every sibling
+--      standing; clearing it closes only the one it named and re-derives onto
+--      what is left.
+--  21. r5 M5-4 (R-AP): paperwork_contact_person_id / signer_person_id /
+--      site_contact_person_id must each name a PERSON card in the SAME studio,
+--      never the row itself — on INSERT as well as UPDATE.
 --
 -- How to run:
 --   psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
@@ -904,6 +919,22 @@ BEGIN
   ASSERT n = 2,
     'FAIL 10: a same-status re-record must refresh the mirrored evidence on both seats, got ' || n;
 
+  -- 10b. THE WHOLE EVIDENCE SET — all five columns (r5 M5-2, R-AN). The two
+  --      this check used to omit, disclosure_version and recorded_by, are
+  --      exactly the two a record can arrive without (the inbound rail mints
+  --      one from a YES), and omitting them here is why the mirror could null
+  --      them on the seat without a test noticing.
+  SELECT COUNT(*) INTO n FROM project_parties
+   WHERE phone_e164 = '+16125550155'
+     AND sms_consent_status = 'granted'
+     AND sms_consent_source = 'verbal'
+     AND sms_consent_evidence = 'Said yes on site'
+     AND sms_consent_recorded_at IS NOT NULL
+     AND sms_consent_disclosure_version = 'field-sms-v1'
+     AND sms_consent_recorded_by = 'a0000000-0000-4000-8000-000000000001';
+  ASSERT n = 2,
+    'FAIL 10b: the mirror must carry all five evidence columns onto both seats, got ' || n;
+
   -- No party row may sit at granted with a hollow evidence set.
   SELECT COUNT(*) INTO n FROM project_parties
    WHERE sms_consent_status = 'granted'
@@ -911,7 +942,7 @@ BEGIN
           OR sms_consent_recorded_at IS NULL
           OR btrim(COALESCE(sms_consent_evidence, '')) = '');
   ASSERT n = 0,
-    'FAIL 10b: a granted party row with a hollow evidence set, ' || n || ' of them';
+    'FAIL 10b2: a granted party row with a hollow evidence set, ' || n || ' of them';
 
   RAISE NOTICE '10. mirror evidence refresh (M-1): passed';
 END
@@ -1781,6 +1812,345 @@ BEGIN
     'FAIL 17g: a malformed legacy pointer must not be mirrored into an affiliation';
 
   RAISE NOTICE '17. affiliation and channel kinds are enforced (M-2): passed';
+END
+$$;
+
+-- ─── 18. r5 M5-2 (R-AN): the mirror REFRESHES evidence, it never erases it ──
+--
+-- A record can carry a verdict without carrying every evidence column: the
+-- inbound rail writes one from a YES on a number whose disclosure version and
+-- recorder live only on the seat, where the portal put them. The mirror used to
+-- write those NULLs down, so after a real double opt-in neither the record nor
+-- any seat said which disclosure the person was shown.
+
+INSERT INTO projects (id, name, designer_id, studio_id, created_by, status, created_at, updated_at)
+VALUES ('d0000000-0000-4000-8000-0000000000a1', 'W1A Evidence job',
+        'a0000000-0000-4000-8000-000000000001', 'b0000000-0000-4000-8000-00000000000a',
+        'a0000000-0000-4000-8000-000000000001', 'active', NOW(), NOW());
+
+INSERT INTO project_parties (id, project_id, party_kind, display_name, phone,
+                             sms_consent_status, sms_consent_source, sms_consent_evidence,
+                             sms_consent_recorded_at, sms_consent_disclosure_version,
+                             sms_consent_recorded_by)
+VALUES ('e0000000-0000-4000-8000-0000000000a1', 'd0000000-0000-4000-8000-0000000000a1',
+        'sub', 'Ada Wren', '612-555-0344',
+        'pending', 'written', 'Signed the studio''s field-SMS form',
+        '2026-03-01T00:00:00Z', 'field-sms-v1', 'a0000000-0000-4000-8000-000000000001');
+
+DO $$
+DECLARE
+  r RECORD;
+BEGIN
+  -- The rail's own write, in its own shape: service-side, status + dates +
+  -- source + evidence, and NOTHING in disclosure_version / recorded_by.
+  INSERT INTO studio_channel_consent (
+    organization_id, channel_kind, channel_value, status,
+    consented_at, refusal_unanswered, source, evidence, recorded_at,
+    disclosure_version, recorded_by)
+  VALUES ('b0000000-0000-4000-8000-00000000000a', 'sms', '+16125550344', 'granted',
+          NOW(), false, 'inbound_sms', 'Replied YES', NOW(), NULL, NULL);
+
+  SELECT * INTO r FROM project_parties
+   WHERE id = 'e0000000-0000-4000-8000-0000000000a1';
+
+  ASSERT r.sms_consent_status = 'granted',
+    'FAIL 18a: the verdict must still mirror, got ' || COALESCE(r.sms_consent_status, '<null>');
+  ASSERT r.sms_consent_source = 'inbound_sms' AND r.sms_consent_evidence = 'Replied YES',
+    'FAIL 18b: the evidence the record DOES carry must still refresh';
+  ASSERT r.sms_consent_disclosure_version = 'field-sms-v1',
+    'FAIL 18c: the disclosure version the seat held must survive a record that has none, got '
+      || COALESCE(r.sms_consent_disclosure_version, '<null>');
+  ASSERT r.sms_consent_recorded_by = 'a0000000-0000-4000-8000-000000000001',
+    'FAIL 18d: the recorder the seat held must survive too, got '
+      || COALESCE(r.sms_consent_recorded_by::text, '<null>');
+
+  RAISE NOTICE '18. the mirror never nulls an evidence column (R-AN): passed';
+END
+$$;
+
+-- ─── 19. r5 B5-1 (R-AL): the write door reads the seats too ────────────────
+--
+-- project_parties.sms_consent_* is still writable by the portal (PR-x), so a
+-- refusal can stand on a seat with no record behind it — PR-m's manually marked
+-- verbal STOP. The send gate tests both ledgers; before R-AL the write door
+-- tested only the record, wrote `granted` over the refusal, and the mirror then
+-- cleared the very seat the send gate was going to test.
+
+INSERT INTO projects (id, name, designer_id, studio_id, created_by, status, created_at, updated_at)
+VALUES ('d0000000-0000-4000-8000-0000000000a2', 'W1A Seat-refusal job',
+        'a0000000-0000-4000-8000-000000000001', 'b0000000-0000-4000-8000-00000000000a',
+        'a0000000-0000-4000-8000-000000000001', 'active', NOW(), NOW());
+
+INSERT INTO project_parties (id, project_id, party_kind, display_name, phone,
+                             sms_consent_status, sms_opt_out_at,
+                             sms_consent_source, sms_consent_evidence,
+                             sms_consent_recorded_at)
+VALUES
+  -- Alpha's own seat, refused and DATED, with no consent record anywhere.
+  ('e0000000-0000-4000-8000-0000000000a2', 'd0000000-0000-4000-8000-0000000000a2',
+   'sub', 'Pete Rusk', '612-555-0322',
+   'opted_out', '2026-04-01T00:00:00Z', 'verbal', 'Told the PM to stop texting him',
+   '2026-04-01T00:00:00Z'),
+  -- BETA's seat, on a different number Alpha has never contacted. R-AK: one
+  -- studio's refusal is not another studio's fact, and this door must not
+  -- re-open the phone-global reduction.
+  ('e0000000-0000-4000-8000-0000000000a3', 'd0000000-0000-4000-8000-00000000000b',
+   'sub', 'Pete Rusk', '612-555-0333',
+   'opted_out', '2026-04-01T00:00:00Z', 'inbound_sms', 'Replied STOP to Beta',
+   '2026-04-01T00:00:00Z');
+
+DO $$
+DECLARE
+  raised TEXT;
+  r      RECORD;
+  n      INTEGER;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+
+  -- 19a. The grant is refused, and refused as what it is.
+  raised := NULL;
+  BEGIN
+    PERFORM public.record_channel_consent(
+      'b0000000-0000-4000-8000-00000000000a', 'sms', '(612) 555-0322', 'granted',
+      'written', 'We have a new signed form', 'field-sms-v1', NULL);
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'channel_opted_out',
+    'FAIL 19a: a dated refusal on this studio''s own seat must refuse the grant, got '
+      || COALESCE(raised, '<no error>');
+
+  -- 19b. And the refusal survives byte for byte — no record was minted, and
+  --      the seat still says what it said.
+  SELECT COUNT(*) INTO n FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_kind = 'sms' AND channel_value = '+16125550322';
+  ASSERT n = 0, 'FAIL 19b: a refused write must mint no record, got ' || n;
+
+  SELECT * INTO r FROM project_parties
+   WHERE id = 'e0000000-0000-4000-8000-0000000000a2';
+  ASSERT r.sms_consent_status = 'opted_out'
+     AND r.sms_opt_out_at IS NOT NULL
+     AND r.sms_consent_source = 'verbal'
+     AND r.sms_consent_evidence = 'Told the PM to stop texting him',
+    'FAIL 19b2: the seat''s refusal must survive the refused grant untouched';
+
+  -- 19c. The way past is to put the refusal ON THE BOOKS first…
+  PERFORM public.record_channel_consent(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '(612) 555-0322', 'opted_out',
+    'verbal', 'Told the PM to stop texting him, recorded by the studio', NULL, NULL);
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_kind = 'sms' AND channel_value = '+16125550322';
+  ASSERT r.status = 'opted_out' AND r.refusal_unanswered,
+    'FAIL 19c: recording the refusal must be accepted and stand unanswered';
+
+  --      …after which the record''s own gate governs: still no grant, and
+  --      reconsent() is the named door.
+  raised := NULL;
+  BEGIN
+    PERFORM public.record_channel_consent(
+      'b0000000-0000-4000-8000-00000000000a', 'sms', '(612) 555-0322', 'granted',
+      'written', 'We have a new signed form', 'field-sms-v1', NULL);
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'channel_opted_out',
+    'FAIL 19c2: the recorded refusal must still refuse the grant, got '
+      || COALESCE(raised, '<no error>');
+
+  PERFORM public.record_channel_reconsent(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '(612) 555-0322',
+    'written', 'Fresh signed consent, 12 Sep', 'field-sms-v1', NULL);
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_kind = 'sms' AND channel_value = '+16125550322';
+  ASSERT r.status = 'pending',
+    'FAIL 19c3: reconsent() must still be the way back, got ' || COALESCE(r.status, '<null>');
+
+  -- 19d. R-AK is not re-opened: BETA's dated refusal on +16125550333 is not
+  --      Alpha''s fact, and Alpha''s first outreach to that number stands.
+  PERFORM public.record_channel_consent(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '612-555-0333', 'granted',
+    'written', 'Signed at the Alpha kickoff', 'field-sms-v1', NULL);
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_kind = 'sms' AND channel_value = '+16125550333';
+  ASSERT r.status = 'granted',
+    'FAIL 19d: another studio''s refusal must not refuse this studio''s grant, got '
+      || COALESCE(r.status, '<null>');
+
+  PERFORM pg_temp.reset_role();
+
+  -- …and Beta's own seat is untouched by Alpha's grant. Read outside Alpha's
+  -- role: under RLS a member of Alpha cannot see Beta's rows at all.
+  SELECT * INTO r FROM project_parties
+   WHERE id = 'e0000000-0000-4000-8000-0000000000a3';
+  ASSERT r.sms_consent_status = 'opted_out',
+    'FAIL 19d2: Alpha''s grant must not reach Beta''s seat, got ' || COALESCE(r.sms_consent_status, '<null>');
+
+  RAISE NOTICE '19. the write door reads the seats too (R-AL): passed';
+END
+$$;
+
+-- ─── 20. r5 M5-3 (R-AO): N persons x N firms — siblings stand ──────────────
+--
+-- The pointer trigger fires on the column the SHIPPED card editor writes on
+-- every save (use-studio-contacts.ts:202, :234). Closing every other open
+-- affiliation there meant a designer picking the other firm silently ended a
+-- standing affiliation and struck the person off that firm's crew list (R-W).
+
+INSERT INTO studio_contacts (id, organization_id, entity_kind, contact_kind, full_name, company_name, created_by)
+VALUES
+  ('c0000000-0000-4000-8000-000000000051', 'b0000000-0000-4000-8000-00000000000a',
+   'person', 'sub', 'Ray Thao', NULL, 'a0000000-0000-4000-8000-000000000001'),
+  ('c0000000-0000-4000-8000-000000000052', 'b0000000-0000-4000-8000-00000000000a',
+   'company', 'sub', NULL, 'Thao Electric (sole prop)', 'a0000000-0000-4000-8000-000000000001'),
+  ('c0000000-0000-4000-8000-000000000053', 'b0000000-0000-4000-8000-00000000000a',
+   'company', 'gc', NULL, 'Marrow & Sons', 'a0000000-0000-4000-8000-000000000001');
+
+DO $$
+DECLARE
+  v UUID;
+  n INTEGER;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+
+  -- The sole proprietor who also crews for a GC: TWO open affiliations
+  -- (crm-model §4). The pointer holds the most recently begun.
+  INSERT INTO studio_person_affiliations (person_id, company_id, from_date)
+  VALUES ('c0000000-0000-4000-8000-000000000051', 'c0000000-0000-4000-8000-000000000052', DATE '2025-01-01'),
+         ('c0000000-0000-4000-8000-000000000051', 'c0000000-0000-4000-8000-000000000053', DATE '2026-01-01');
+  PERFORM pg_temp.reset_role();
+
+  SELECT company_id INTO v FROM studio_contacts
+   WHERE id = 'c0000000-0000-4000-8000-000000000051';
+  ASSERT v = 'c0000000-0000-4000-8000-000000000053',
+    'FAIL 20a: the pointer must hold the most recently begun, got ' || COALESCE(v::text, '<null>');
+
+  -- 20b. The designer picks the other firm on the card. The pointer moves; the
+  --      GC affiliation STANDS.
+  UPDATE studio_contacts SET company_id = 'c0000000-0000-4000-8000-000000000052'
+   WHERE id = 'c0000000-0000-4000-8000-000000000051';
+
+  SELECT COUNT(*) INTO n FROM studio_person_affiliations
+   WHERE person_id = 'c0000000-0000-4000-8000-000000000051' AND to_date IS NULL;
+  ASSERT n = 2,
+    'FAIL 20b: moving the pointer must leave the sibling affiliation open, got ' || n;
+  ASSERT EXISTS (
+    SELECT 1 FROM studio_person_affiliations
+     WHERE person_id = 'c0000000-0000-4000-8000-000000000051'
+       AND company_id = 'c0000000-0000-4000-8000-000000000053'
+       AND to_date IS NULL),
+    'FAIL 20b2: the GC affiliation must still be open — the person still crews there';
+
+  SELECT company_id INTO v FROM studio_contacts
+   WHERE id = 'c0000000-0000-4000-8000-000000000051';
+  ASSERT v = 'c0000000-0000-4000-8000-000000000052',
+    'FAIL 20b3: the pointer must read what the designer picked, got ' || COALESCE(v::text, '<null>');
+
+  -- 20c. Clearing the firm ends ONLY the one the pointer named, and the
+  --      pointer re-derives onto the affiliation that is still standing.
+  UPDATE studio_contacts SET company_id = NULL
+   WHERE id = 'c0000000-0000-4000-8000-000000000051';
+
+  ASSERT EXISTS (
+    SELECT 1 FROM studio_person_affiliations
+     WHERE person_id = 'c0000000-0000-4000-8000-000000000051'
+       AND company_id = 'c0000000-0000-4000-8000-000000000052'
+       AND to_date IS NOT NULL),
+    'FAIL 20c: clearing the pointer must close the affiliation it named';
+  ASSERT EXISTS (
+    SELECT 1 FROM studio_person_affiliations
+     WHERE person_id = 'c0000000-0000-4000-8000-000000000051'
+       AND company_id = 'c0000000-0000-4000-8000-000000000053'
+       AND to_date IS NULL),
+    'FAIL 20c2: the sibling must survive the clear';
+
+  SELECT company_id INTO v FROM studio_contacts
+   WHERE id = 'c0000000-0000-4000-8000-000000000051';
+  ASSERT v = 'c0000000-0000-4000-8000-000000000053',
+    'FAIL 20c3: the pointer must re-derive onto the surviving open affiliation, got '
+      || COALESCE(v::text, '<null>');
+
+  RAISE NOTICE '20. the pointer moves one affiliation, not all of them (R-AO): passed';
+END
+$$;
+
+-- ─── 21. r5 M5-4 (R-AP): the three designated people ───────────────────────
+--
+-- paperwork_contact_person_id / signer_person_id / site_contact_person_id are
+-- plain self-FKs into studio_contacts, which holds both kinds of card and every
+-- studio's cards. Same hole assert_affiliation_card_kinds() closes, same shape
+-- of guard.
+
+INSERT INTO studio_contacts (id, organization_id, entity_kind, contact_kind, full_name, company_name, created_by)
+VALUES
+  ('c0000000-0000-4000-8000-000000000061', 'b0000000-0000-4000-8000-00000000000b',
+   'person', 'sub', 'Beta Person', NULL, 'a0000000-0000-4000-8000-000000000002'),
+  ('c0000000-0000-4000-8000-000000000062', 'b0000000-0000-4000-8000-00000000000a',
+   'person', 'sub', 'Alpha Paperwork Person', NULL, 'a0000000-0000-4000-8000-000000000001'),
+  ('c0000000-0000-4000-8000-000000000063', 'b0000000-0000-4000-8000-00000000000a',
+   'company', 'gc', NULL, 'Alpha GC', 'a0000000-0000-4000-8000-000000000001');
+
+DO $$
+DECLARE
+  raised TEXT;
+  r      RECORD;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+
+  -- 21a. Another studio's card.
+  raised := NULL;
+  BEGIN
+    UPDATE studio_contacts
+       SET paperwork_contact_person_id = 'c0000000-0000-4000-8000-000000000061'
+     WHERE id = 'c0000000-0000-4000-8000-000000000063';
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'designated_person_other_studio',
+    'FAIL 21a: a cross-studio paperwork contact must be refused, got ' || COALESCE(raised, '<no error>');
+
+  -- 21b. A COMPANY card as the signer.
+  raised := NULL;
+  BEGIN
+    UPDATE studio_contacts
+       SET signer_person_id = 'c0000000-0000-4000-8000-000000000002'
+     WHERE id = 'c0000000-0000-4000-8000-000000000063';
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'designated_person_not_a_person',
+    'FAIL 21b: a firm may not sign for a firm, got ' || COALESCE(raised, '<no error>');
+
+  -- 21c. The row itself.
+  raised := NULL;
+  BEGIN
+    UPDATE studio_contacts
+       SET site_contact_person_id = 'c0000000-0000-4000-8000-000000000063'
+     WHERE id = 'c0000000-0000-4000-8000-000000000063';
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'designated_person_is_self',
+    'FAIL 21c: a firm may not be its own site contact, got ' || COALESCE(raised, '<no error>');
+
+  -- 21d. The INSERT path is guarded too.
+  raised := NULL;
+  BEGIN
+    INSERT INTO studio_contacts (organization_id, entity_kind, contact_kind, company_name,
+                                 created_by, signer_person_id)
+    VALUES ('b0000000-0000-4000-8000-00000000000a', 'company', 'gc', 'Alpha GC Two',
+            'a0000000-0000-4000-8000-000000000001', 'c0000000-0000-4000-8000-000000000061');
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'designated_person_other_studio',
+    'FAIL 21d: the INSERT path must be guarded too, got ' || COALESCE(raised, '<no error>');
+
+  -- 21e. A person card in the same studio is accepted, on all three.
+  UPDATE studio_contacts
+     SET paperwork_contact_person_id = 'c0000000-0000-4000-8000-000000000062',
+         signer_person_id            = 'c0000000-0000-4000-8000-000000000062',
+         site_contact_person_id      = 'c0000000-0000-4000-8000-000000000062'
+   WHERE id = 'c0000000-0000-4000-8000-000000000063';
+  SELECT * INTO r FROM studio_contacts WHERE id = 'c0000000-0000-4000-8000-000000000063';
+  ASSERT r.paperwork_contact_person_id = 'c0000000-0000-4000-8000-000000000062'
+     AND r.signer_person_id            = 'c0000000-0000-4000-8000-000000000062'
+     AND r.site_contact_person_id      = 'c0000000-0000-4000-8000-000000000062',
+    'FAIL 21e: a well-formed designation must still write';
+
+  PERFORM pg_temp.reset_role();
+  RAISE NOTICE '21. the designated people are people, in this studio (R-AP): passed';
   RAISE NOTICE 'All W1a assertions passed.';
 END
 $$;

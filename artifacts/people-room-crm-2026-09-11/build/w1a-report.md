@@ -46,8 +46,11 @@ an empty diff.
 - `supabase/functions/_shared/sms.ts` — new `channelConsentVerdict()`
   (`"refuse" | "allow" | "unknown"`), called in `sendPartySms()` **before** the
   existing gate, plus `resolveProjectOrg()` / `orgsOfProjects()`, which resolve
-  a project's studio exactly as the SQL side does
-  (`COALESCE(studio_id, _primary_studio_for(designer_id))`). It reads
+  a project's studio to the same answer the SQL side does
+  (`COALESCE(studio_id, <the designer's primary studio>)`) — over
+  `organization_members`/`organizations`, never through the revoked
+  `_primary_studio_for` RPC, and a failed resolve refuses rather than reading as
+  "no studio" (r5 R-AM). It reads
   `studio_channel_consent` for `(org, 'sms', phone)`; refuses on `opted_out`;
   **refuses on a stale record** — any party row on this number belonging to the
   SAME studio that says `opted_out` outranks a `granted` record; allows on
@@ -153,13 +156,19 @@ an empty diff.
 9. **`record_channel_consent` keeps dates it did not restate.** A later grant
    does not erase `opt_out_at`, and vice versa — the room has to be able to
    print "granted 2 May 2025, opted out 3 Dec 2025" (R-Q).
-10. **The org for a project is `projects.studio_id`,** with
-    `_primary_studio_for(designer_id)` as the fallback (00317 both backfilled
-    the column and trigger-maintains it) — **on both sides**. `sms.ts`'
-    `resolveProjectOrg()` / `orgsOfProjects()` and `pipeline.ts`'
-    `studiosHoldingPhone()` apply the same COALESCE the migration does, so the
-    gate and the table cannot disagree about which studio a NULL-`studio_id`
-    project belongs to (r1 M7).
+10. **The org for a project is `projects.studio_id`,** with the designer's
+    primary studio as the fallback (00317 both backfilled the column and
+    trigger-maintains it) — **on both sides**. `sms.ts`' `resolveProjectOrg()` /
+    `orgsOfProjects()` and `pipeline.ts`' `studiosHoldingPhone()` resolve the
+    same fallback the migration does, so the gate and the table cannot disagree
+    about which studio a NULL-`studio_id` project belongs to (r1 M7). **The SQL
+    side calls `_primary_studio_for()`; the edge rail never does** (r5 M5-1,
+    R-AM): that function is revoked from every PostgREST role (00483 —
+    `proacl {postgres=X/postgres}`), so an RPC call answers the rail with 42501
+    and a caller reading only `data` takes the error for "no studio". The rail
+    reads `organization_members` joined to `organizations` instead, ranked the
+    way 00315 ranks them (owner first, then earliest `joined_at`), and a FAILED
+    resolve is a logged refusal, never a silent NULL.
 11. **An unparseable phone keeps its raw text** in `studio_contact_channels.value`
     (the column is NOT NULL, so it cannot take the normaliser's NULL). The
     number the studio typed is never lost; it simply gets no E.164. The consent
@@ -587,18 +596,22 @@ row would allow; another studio's opt-out does **not** block the owning
 studio's send (the G-3 bug, gone); with no record at all an opted-out sibling
 party row still blocks; the studio's `granted` record carries a send the party
 row would refuse (M5/F-11); a `granted` record never overrides an opted-out
-party row; a NULL-`studio_id` project resolves through `_primary_studio_for`
-(M7). **r2 B-3**: a stale `granted` record does not carry a send past this
+party row; a NULL-`studio_id` project resolves its org off `organization_members`
+(M7; r5 R-AM — not through the revoked `_primary_studio_for` RPC). **r2 B-3**: a stale `granted` record does not carry a send past this
 studio's own STOP; another studio's opted-out party row does **not** block this
 studio's `granted` record (the scan stays studio-scoped, or G-3 re-opens); the
-stale-record scan resolves a NULL-`studio_id` project through
-`_primary_studio_for` too.
+stale-record scan resolves a NULL-`studio_id` project the same way. **r5
+R-AM**: the primary studio is the owner-role `design_studio` read off the
+tables, and a failed org resolve refuses the send instead of reading as "no
+studio".
 `_tests/sms-inbound.test.ts` — STOP writes one `opted_out` record per studio
 (two studios, three party rows → two records); YES grants only for the studio
 that actually invited; START upserts in place and keeps the earlier `opt_out_at`
 and `disclosure_version`; YES does not grant a party row in a studio that never
-invited (M6); STOP reaches a NULL-`studio_id` project through
-`_primary_studio_for` (M7). **r2 B-3(b)/M-3**: STOP reaches a studio that holds
+invited (M6); STOP reaches a NULL-`studio_id` project through the designer's
+primary studio, read off `organization_members` (M7, r5 R-AM). **r5 R-AN**: an
+inbound YES carries the seat's `disclosure_version` and recorder onto the
+record it mints. **r2 B-3(b)/M-3**: STOP reaches a studio that holds
 a consent record but no party row; START lifts a seatless `opted_out` record but
 leaves a seatless `not_asked` one alone; a STOP re-homes `origin_project_id`
 onto the job it came from.

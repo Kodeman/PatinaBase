@@ -84,6 +84,11 @@ These were decided mid-build to keep the specimens moving. They stand unless Kod
 | R-AI | 00592 backfills studio_person_affiliations from studio_contacts.company_id; a trigger keeps company_id equal to the open affiliation; the room reads affiliations, company_id is a derived legacy pointer (W1a M3-3). (Fable, 2026-09-11) |
 | R-AJ | Inbound START/UNSTOP grants consent only for studios whose record for that phone is opted_out or pending; not_asked and no-record studios are untouched (W1a M3-4). (Fable, 2026-09-11) |
 | R-AK | The no-record consent fallback is scoped to the resolving studio's own party rows; PR-x's fail-closed phone-global check means across that studio's projects, never across tenants (W1a F3). (Fable, 2026-09-11) |
+| R-AL | record_channel_consent's transition gate also reads the studio's own party rows: a grant is refused (channel_opted_out) while any party row on that phone in the studio is opted_out with a dated opt-out and the record does not already say opted_out (W1a B5-1). (Fable, 2026-09-11) |
+| R-AM | The edge SMS rail never calls _primary_studio_for (revoked from client roles by 00483); orgs resolve through organization_members/organizations with errors checked at every call site (W1a M5-1). (Fable, 2026-09-11) |
+| R-AN | The consent mirror never overwrites a non-null evidence column with NULL; inbound YES/START falls back to the disclosure version and recorder standing on the studio's own seats (W1a M5-2). (Fable, 2026-09-11) |
+| R-AO | Affiliations are N persons × N firms; the company pointer trigger opens or closes only the affiliation it names and leaves siblings standing (W1a M5-3). (Fable, 2026-09-11) |
+| R-AP | paperwork_contact_person_id, signer_person_id and site_contact_person_id must each name a person card in the same studio and never the row itself, enforced by a BEFORE trigger (W1a M5-4). (Fable, 2026-09-11) |
 
 ## 4. Parked (side journeys under VISION)
 

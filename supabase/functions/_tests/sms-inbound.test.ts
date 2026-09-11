@@ -60,6 +60,43 @@ Deno.test("YES grants a pending party and confirms", async () => {
   assert(res.twiml.includes("<Message>"));
 });
 
+// r5 M5-2 / R-AN: the rail does not know which disclosure the person was shown
+// or who recorded it — the studio does, on its own seat, from the portal's
+// write. With no record yet (the ordinary case), the record used to be minted
+// with both NULL, and 00594's mirror then wrote those NULLs over the seat.
+Deno.test("an inbound YES carries the seat's disclosure version and recorder onto the record", async () => {
+  const fake = createFakeSupabase(baseSeed({
+    project_parties: [
+      {
+        id: "p1",
+        phone_e164: "+15551110033",
+        project_id: "proj1",
+        party_kind: "sub",
+        sms_consent_status: "pending",
+        display_name: "Sal Sub",
+        sms_consent_source: "written",
+        sms_consent_evidence: "Signed the studio's field-SMS form",
+        sms_consent_disclosure_version: "field-sms-v1",
+        sms_consent_recorded_by: "dz1",
+      },
+    ],
+  }));
+  const res = await processInbound(
+    params({ From: "+15551110033", Body: "YES", MessageSid: "SMyesevidence" }),
+    { supabase: fake as never, getEnv: NO_POSTHOG },
+  );
+  assertEquals(res.disposition, "granted");
+  const consent = (fake._data.studio_channel_consent ?? []) as Array<{
+    status: string;
+    disclosure_version: string | null;
+    recorded_by: string | null;
+  }>;
+  assertEquals(consent.length, 1);
+  assertEquals(consent[0].status, "granted");
+  assertEquals(consent[0].disclosure_version, "field-sms-v1");
+  assertEquals(consent[0].recorded_by, "dz1");
+});
+
 Deno.test("a duplicate MessageSid is idempotent (one row, no reprocess)", async () => {
   const seed = baseSeed(); // unknown phone → brush-off path, no parser needed
   const fake = createFakeSupabase(seed);
@@ -824,17 +861,22 @@ Deno.test("YES does not grant a party row in a studio that never invited", async
 // M7: a project with a NULL studio_id resolves through the designer's primary
 // studio, exactly as 00594's backfill and mirror do. Without the fallback the
 // migration writes a consent record this rail can never reach.
-Deno.test("STOP reaches a NULL-studio_id project through _primary_studio_for", async () => {
+// r5 M5-1 / R-AM: off organization_members + organizations, never the revoked
+// _primary_studio_for RPC — the stub that used to stand here hid a 42501.
+Deno.test("STOP reaches a NULL-studio_id project through the designer's primary studio", async () => {
   const fake = createFakeSupabase(
     baseSeed({
       projects: [
         { id: "proj1", name: "Maple St", designer_id: "dz1", studio_id: null },
       ],
+      organization_members: [
+        { user_id: "dz1", organization_id: "org-alpha", role: "owner", status: "active", joined_at: "2025-01-01T00:00:00Z" },
+      ],
+      organizations: [{ id: "org-alpha", type: "design_studio" }],
       project_parties: [
         { id: "p1", phone_e164: "+15551110021", project_id: "proj1", party_kind: "sub", sms_consent_status: "granted" },
       ],
     }),
-    { _primary_studio_for: (args) => ({ data: args.p_user === "dz1" ? "org-alpha" : null, error: null }) },
   );
   const res = await processInbound(
     params({ From: "+15551110021", Body: "STOP", MessageSid: "SMstopnullstudio" }),
