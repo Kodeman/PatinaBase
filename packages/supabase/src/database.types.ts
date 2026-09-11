@@ -24367,6 +24367,7 @@ export type Database = {
           origin_project_id: string | null
           recorded_at: string | null
           recorded_by: string | null
+          refusal_unanswered: boolean
           source: string | null
           status: string
           updated_at: string
@@ -24383,6 +24384,7 @@ export type Database = {
           origin_project_id?: string | null
           recorded_at?: string | null
           recorded_by?: string | null
+          refusal_unanswered?: boolean
           source?: string | null
           status?: string
           updated_at?: string
@@ -24399,6 +24401,7 @@ export type Database = {
           origin_project_id?: string | null
           recorded_at?: string | null
           recorded_by?: string | null
+          refusal_unanswered?: boolean
           source?: string | null
           status?: string
           updated_at?: string
@@ -32104,6 +32107,10 @@ export type Database = {
         }
         Returns: Json
       }
+      channel_value_was_on_sms_rail: {
+        Args: { p_value: string }
+        Returns: boolean
+      }
       chase_invoice: { Args: { p_invoice_id: string }; Returns: string }
       check_concierge_payment_discrepancies: { Args: never; Returns: Json }
       claim_aesthete_jobs: {
@@ -34885,6 +34892,7 @@ export type Database = {
           origin_project_id: string | null
           recorded_at: string | null
           recorded_by: string | null
+          refusal_unanswered: boolean
           source: string | null
           status: string
           updated_at: string
@@ -34918,6 +34926,7 @@ export type Database = {
           origin_project_id: string | null
           recorded_at: string | null
           recorded_by: string | null
+          refusal_unanswered: boolean
           source: string | null
           status: string
           updated_at: string

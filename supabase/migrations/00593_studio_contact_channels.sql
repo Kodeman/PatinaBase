@@ -20,10 +20,13 @@
 -- 00418). ON CONFLICT DO NOTHING against the (owner, kind, value) unique index,
 -- which is evaluated AFTER the normalising trigger — so the same number typed
 -- three different ways lands once. sms_capable is NOT asserted from the card:
--- it keeps its safe `false` default unless a party row on the same card carries
--- the same normalised number, which is the only evidence in the database that
--- the line was ever on an SMS rail (CS4-7 — an office line must never be
--- offered an SMS invite, and person cards routinely carry office numbers).
+-- it keeps its safe `false` default unless public.channel_value_was_on_sms_rail()
+-- says the number really was on an SMS rail — an sms_conversations thread on it,
+-- or a FIELD-kind seat on it that has been asked for consent. The mere existence
+-- of a folded party row is not evidence (party_kind also covers architect,
+-- photographer, stager, client, client_rep, vendor, other) (CS4-7 — an office
+-- line must never be offered an SMS invite, and person cards routinely carry
+-- office numbers).
 --
 -- The normalising rule itself lives in ONE function, public.normalize_channel_value
 -- (created here), because 00594 keys its consent record on the same value. Two
@@ -174,6 +177,63 @@ COMMENT ON FUNCTION public.normalize_channel_value(text, text) IS
   'record_channel_consent() / record_channel_reconsent(), so a channel row and '
   'its consent record always land on the same key.';
 
+-- ── The SMS-rail evidence test ──────────────────────────────────────────────
+-- sms_capable says "this line takes a text". The backfill has to answer that
+-- from what the database already knows, and the honest answers are narrow:
+--
+--   · sms_conversations holds one row per (twilio_number, phone_e164) (00282).
+--     A thread exists only because a message actually moved on that number.
+--   · a project_parties seat of a FIELD kind (gc / sub / installer / receiver —
+--     sms-inbound/pipeline.ts's FIELD_KINDS, the only kinds the rail covers)
+--     whose sms_consent_status has left `not_asked`: the number was really put
+--     on the rail, even if nothing has been sent yet.
+--
+-- Deliberately PHONE-GLOBAL: being an SMS-capable line is a fact about the
+-- line, not about one studio's consent (that is studio_channel_consent's job,
+-- 00594). Deliberately NOT "some party row exists with this number": party_kind
+-- also covers architect, photographer, stager, client, client_rep, vendor and
+-- other, and marking those SMS-capable is the assertion crm-model §2 CS4-7
+-- exists to deny — F-10 Sam Rowe, "never texted", and F-27 Ray Thao, "NEVER
+-- texted; scheduled through 311", are both ordinary folded party rows.
+--
+-- Backfill helper only: SECURITY INVOKER and not granted to authenticated, so
+-- it cannot become a half-RLS'd reader of two tables from the portal.
+CREATE OR REPLACE FUNCTION public.channel_value_was_on_sms_rail(p_value text)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SET search_path TO 'public'
+AS $$
+  SELECT p_value IS NOT NULL
+     AND (
+       EXISTS (
+         SELECT 1 FROM public.sms_conversations c
+          WHERE c.phone_e164 = p_value
+       )
+       OR EXISTS (
+         SELECT 1 FROM public.project_parties pp
+          WHERE public.normalize_channel_value('mobile', COALESCE(pp.phone_e164, pp.phone))
+                = p_value
+            AND pp.party_kind IN ('gc', 'sub', 'installer', 'receiver')
+            AND COALESCE(pp.sms_consent_status, 'not_asked') <> 'not_asked'
+       )
+     );
+$$;
+
+REVOKE ALL ON FUNCTION public.channel_value_was_on_sms_rail(text)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.channel_value_was_on_sms_rail(text) TO service_role;
+
+COMMENT ON FUNCTION public.channel_value_was_on_sms_rail(text) IS
+  'TRUE when a normalised phone really was on an SMS rail: an sms_conversations '
+  'thread exists on it (00282), or a FIELD-kind project_parties seat '
+  '(gc/sub/installer/receiver) on it has been asked for consent at all. The '
+  'evidence test 00593''s backfill uses for sms_capable — the mere existence of '
+  'a party row is NOT evidence, since party_kind also covers architect, '
+  'photographer, stager, client, client_rep, vendor and other (crm-model §2 '
+  'CS4-7). Phone-global on purpose: SMS capability is a fact about the line, '
+  'not about a studio''s consent (00593).';
+
 CREATE OR REPLACE FUNCTION public.normalize_studio_contact_channel()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -309,11 +369,28 @@ GRANT ALL ON public.studio_contact_channels TO service_role;
 --     CS4-7, direction §5.1). Person cards carrying an office, showroom,
 --     dispatch or 311-only number are ordinary in the fixture (F-13 Ingrid,
 --     F-14 Rosa, F-17 Jim, F-20 Claire, F-27 Ray), and this statement runs ONCE
---     — a wrong `true` is then a card the studio has to correct by hand. The
---     only evidence available here is a party row folded onto the same card
---     (00418) carrying the same normalised number: that number really was on an
---     SMS rail. Leg (c) below folds those same rows and marks them `true`, so
---     the two legs agree by construction rather than racing the ON CONFLICT.
+--     — a wrong `true` is then a card the studio has to correct by hand.
+--
+--     THE EVIDENCE IS AN SMS RAIL, NOT A ROW. A party row folded onto the card
+--     (00418) proves only that the studio wrote the number down: party_kind
+--     ranges over architect, photographer, stager, client, client_rep, vendor
+--     and other, none of which the SMS rail covers (FIELD_KINDS = gc | sub |
+--     installer | receiver, sms-inbound/pipeline.ts). Sam Rowe the architect
+--     (F-10, "never texted") and Ray Thao at the AHJ (F-27, "NEVER texted;
+--     scheduled through 311") both have folded rows, and existence alone marked
+--     both SMS-capable — the exact assertion CS4-7 exists to deny. So the test
+--     is one of two real signals, both phone-global because being an SMS line is
+--     a fact about the LINE, not about a studio's consent:
+--       · an sms_conversations row on the normalised number — the Field
+--         Coordination thread table, keyed (twilio_number, phone_e164) (00282).
+--         A thread exists only because a message actually moved.
+--       · or a folded party row on a FIELD_KINDS seat whose sms_consent_status
+--         has moved off `not_asked` — the number was really put on the rail,
+--         even if nothing has been sent yet.
+--     Everything else keeps `false` and the `line type unconfirmed` label, so
+--     W1b's Reach editor asks the studio rather than asserting for it. Leg (c)
+--     below applies the SAME test rather than a literal `true`, so the two legs
+--     agree by construction rather than racing the ON CONFLICT.
 --
 --     channel_kind is still `mobile` for a person and `office` for a firm —
 --     the vocabulary has no "unknown" and a row needs some kind — but where
@@ -330,13 +407,10 @@ SELECT sc.entity_kind,
             ELSE 'From the card (00593 backfill)' END
 FROM public.studio_contacts sc
 CROSS JOIN LATERAL (
-  SELECT sc.entity_kind = 'person' AND EXISTS (
-           SELECT 1
-             FROM public.project_parties pp
-            WHERE pp.studio_contact_id = sc.id
-              AND public.normalize_channel_value('mobile', COALESCE(pp.phone_e164, pp.phone))
-                  = public.normalize_channel_value('mobile', COALESCE(sc.phone_e164, sc.phone))
-         ) AS texted
+  SELECT sc.entity_kind = 'person'
+         AND public.channel_value_was_on_sms_rail(
+               public.normalize_channel_value('mobile', COALESCE(sc.phone_e164, sc.phone))
+             ) AS texted
 ) ev
 WHERE btrim(COALESCE(sc.phone_e164, sc.phone, '')) <> ''
 ON CONFLICT (owner_id, channel_kind, value) DO NOTHING;
@@ -350,9 +424,17 @@ ON CONFLICT (owner_id, channel_kind, value) DO NOTHING;
 
 -- (c) Party-row phones, for parties already folded onto a PERSON card (00418).
 --     The snapshot on the row is often the only place a working number lives.
+--     Same evidence test as leg (a) — a roster row is where the number came
+--     from, not proof it is a mobile: F-27's 311 desk line and F-10's
+--     emergency-only number arrive here exactly the same way.
 INSERT INTO public.studio_contact_channels (owner_type, owner_id, channel_kind, value, sms_capable, label)
-SELECT 'person', sc.id, 'mobile', COALESCE(pp.phone_e164, pp.phone), true,
-       'From a project roster (00593 backfill)'
+SELECT 'person', sc.id, 'mobile', COALESCE(pp.phone_e164, pp.phone),
+       public.channel_value_was_on_sms_rail(
+         public.normalize_channel_value('mobile', COALESCE(pp.phone_e164, pp.phone))),
+       CASE WHEN public.channel_value_was_on_sms_rail(
+                   public.normalize_channel_value('mobile', COALESCE(pp.phone_e164, pp.phone)))
+            THEN 'From a project roster (00593 backfill)'
+            ELSE 'From a project roster (00593 backfill) — line type unconfirmed' END
 FROM public.project_parties pp
 JOIN public.studio_contacts sc
   ON sc.id = pp.studio_contact_id AND sc.entity_kind = 'person'

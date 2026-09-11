@@ -302,6 +302,14 @@ async function writeChannelConsent(
       status,
       consented_at: status === "granted" ? now : (prior.consented_at ?? null),
       opt_out_at: status === "opted_out" ? now : (prior.opt_out_at ?? null),
+      // 00594's stored "a refusal stands that the person has not answered".
+      // A STOP raises it; the recipient's own YES/START is the ONLY thing that
+      // lowers it, which is what reopens record_channel_consent's granted door.
+      // It is a column rather than a test on opt_out_at because a refusal is
+      // routinely dateless — the shipped portal writes opted_out party rows
+      // with a NULL sms_opt_out_at on purpose, and the fold mints those
+      // records verbatim, so a date test failed open for that whole population.
+      refusal_unanswered: status === "opted_out",
       source: "inbound_sms",
       evidence,
       recorded_at: now,
@@ -348,20 +356,25 @@ async function optOutAllForPhone(supabase: SupabaseClient, phone: string, now: s
 // and the lifecycle sweep only promotes requests that already have an outbox
 // row. Party row first, record second: the transition is real, the trigger
 // fires once, and the mirror that follows only refreshes evidence.
+//
+// IT ALSO COVERS EVERY SEAT THE TARGET STUDIOS HOLD ON THE NUMBER, not only the
+// seats already at `pending`. The mirror grants all of them anyway, and a seat
+// the mirror moves takes no real transition — so a `not_asked` sibling ended up
+// reading `granted` with its site request parked in awaiting_consent for ever.
+// Which studios are targeted is still the narrow question (R-AJ): only the ones
+// that actually asked, or that were already opted_out/pending on a START.
+// Which of their seats move is not.
 async function grantPartiesForStudios(
   supabase: SupabaseClient,
   targets: StudioTarget[],
   now: string,
-  onlyPending: boolean,
 ) {
   const ids = targets.flatMap((t) => t.partyIds);
   if (ids.length === 0) return;
-  let q = supabase
+  await supabase
     .from("project_parties")
     .update({ sms_consent_status: "granted", sms_consented_at: now, sms_opt_out_at: null })
     .in("id", ids);
-  if (onlyPending) q = q.eq("sms_consent_status", "pending");
-  await q;
 }
 
 // ── candidate items across the phone's parties ───────────────────────────────
@@ -543,7 +556,7 @@ export async function processInbound(
     // fires 00374's site_request_consent_granted_dispatch and releases the
     // trade's parked requests. The record write that follows only refreshes the
     // evidence, under the mirror's suppression.
-    await grantPartiesForStudios(supabase, startTargets, nowIso, false);
+    await grantPartiesForStudios(supabase, startTargets, nowIso);
     await writeChannelConsent(
       supabase,
       startTargets,
@@ -568,14 +581,29 @@ export async function processInbound(
     const hasPending = parties.some((p) => p.sms_consent_status === "pending");
     if (hasPending) {
       // Only the studios that actually asked: a YES confirms the invite that
-      // was sent, never a studio that never invited this number. The party-row
-      // write uses the same target set, so it cannot grant beyond it.
-      const yesTargets = await studiosHoldingPhone(
+      // was sent, never a studio that never invited this number.
+      const askedTargets = await studiosHoldingPhone(
         supabase,
         parties.filter((p) => p.sms_consent_status === "pending"),
       );
+      // …but WITHIN those studios, every seat on the number — not only the
+      // seats that happen to be `pending`. The consent record written below
+      // mirrors `granted` onto all of them (00594), and a seat the mirror moves
+      // takes no real pending -> granted transition, so 00374's
+      // site_request_consent_granted_dispatch never fires for it: that seat read
+      // `granted` for ever while its site request sat in awaiting_consent for
+      // ever. Party-first has to cover exactly what the record covers. (The
+      // mirror carries its own durable release as a backstop; this is the path
+      // that also sends the eager wake-up.) The START branch already covered
+      // every seat, for the same reason.
+      // The origin project stays the one that ASKED, so R-Q's sentence names
+      // the job the invite went out on.
+      const originByOrg = new Map(askedTargets.map((t) => [t.org, t.projectId]));
+      const yesTargets = (await studiosHoldingPhone(supabase, parties))
+        .filter((t) => originByOrg.has(t.org))
+        .map((t) => ({ ...t, projectId: originByOrg.get(t.org) ?? t.projectId }));
       // Party write FIRST — see the START branch and grantPartiesForStudios.
-      await grantPartiesForStudios(supabase, yesTargets, nowIso, true);
+      await grantPartiesForStudios(supabase, yesTargets, nowIso);
       await writeChannelConsent(
         supabase,
         yesTargets,
