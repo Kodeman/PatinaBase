@@ -5,6 +5,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import {
   commercialKeys,
   createBrowserClient,
+  emailDeliveryKeys,
   invalidateProjectWorkflow,
   settleScheduleWrite,
 } from "@patina/supabase";
@@ -723,6 +724,7 @@ export function useSendServiceAgreement(proposalId: string) {
       });
       void queryClient.invalidateQueries({ queryKey: ["document-state"] });
       void queryClient.invalidateQueries({ queryKey: ["desk-engagements"] });
+      void queryClient.invalidateQueries({ queryKey: emailDeliveryKeys.all });
     },
   });
 }
@@ -1365,6 +1367,7 @@ export function useSendFurnishingsAuthorization(projectId: string) {
         queryClient.invalidateQueries({
           queryKey: ["proposal", proposalId],
         }),
+        queryClient.invalidateQueries({ queryKey: emailDeliveryKeys.all }),
       ]);
     },
   });
@@ -1809,6 +1812,7 @@ export function useSendTradeScope(projectId: string) {
           queryKey: commercialDocumentKeys.bundle(proposalId),
         }),
         queryClient.invalidateQueries({ queryKey: ["proposal", proposalId] }),
+        queryClient.invalidateQueries({ queryKey: emailDeliveryKeys.all }),
       ]);
     },
   });

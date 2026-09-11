@@ -17,11 +17,14 @@ import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   useChaseInvoice,
+  useEmailDelivery,
   useSendInvoice,
   invoiceDaysOverdue,
   type ArAging,
+  type EmailDelivery,
   type Invoice,
 } from '@patina/supabase';
+import { deliveryWord, isAttentionState } from '@/lib/delivery-ui';
 import { fmtDay, fmtUsd } from '@/lib/document/format';
 import { invoiceBalanceCents } from '@/lib/document/account-summary';
 import { DocumentAction } from '../document-action';
@@ -38,6 +41,11 @@ export function AccountsReceivablesPage({
   onOpenDocument: (projectId: string | null) => void;
 }) {
   const { openInvoices, buckets, totalBalanceCents } = aging;
+  // One read for the whole page — a per-row hook would open N queries.
+  const emailDelivery = useEmailDelivery(
+    'invoice',
+    openInvoices.map((inv) => inv.id),
+  );
 
   if (openInvoices.length === 0) {
     return (
@@ -73,6 +81,7 @@ export function AccountsReceivablesPage({
           <ReceivableRow
             key={inv.id}
             invoice={inv}
+            delivery={emailDelivery.byRef[inv.id] ?? null}
             highlight={inv.id === highlightInvoiceId}
             onOpenDocument={onOpenDocument}
           />
@@ -84,10 +93,12 @@ export function AccountsReceivablesPage({
 
 function ReceivableRow({
   invoice,
+  delivery,
   highlight,
   onOpenDocument,
 }: {
   invoice: Invoice;
+  delivery: EmailDelivery | null;
   highlight: boolean;
   onOpenDocument: (projectId: string | null) => void;
 }) {
@@ -113,6 +124,11 @@ function ReceivableRow({
   const chasedAt = invoice.ar_last_chased_at;
   // R136 — a studio invoice ages like any other, but has no house to open.
   const studioInvoice = invoice.project_id === null;
+  // The row's facts line stays quiet unless the mail needs the designer.
+  const deliveryFact =
+    delivery && isAttentionState(delivery.state)
+      ? (deliveryWord(delivery, invoice.client?.email)?.text ?? null)
+      : null;
 
   const doChase = async () => {
     setNote(null);
@@ -182,6 +198,7 @@ function ReceivableRow({
             invoice.reminder_count > 0
               ? `${invoice.reminder_count} reminded`
               : null,
+            deliveryFact,
           ]
             .filter(Boolean)
             .join(' · ')}`}

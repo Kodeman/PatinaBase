@@ -40,6 +40,7 @@ const mockInviteAndLinkClient = jest.fn();
 const mockAttachDocumentClient = jest.fn();
 
 jest.mock('@tanstack/react-query', () => ({
+  useQuery: () => ({ data: undefined, isLoading: false, isError: false }),
   useQueryClient: () => ({ invalidateQueries: mockInvalidate }),
   useIsMutating: ({ predicate }: { predicate: (mutation: unknown) => boolean }) =>
     (mockPendingProposalMutation && predicate(mockPendingProposalMutation)

@@ -16,6 +16,7 @@ jest.mock('../invoice-overlays', () => ({
 }));
 
 jest.mock('@patina/supabase', () => ({
+  useEmailDelivery: () => ({ byRef: {}, isLoading: false, isError: false }),
   useSendInvoice: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useChaseInvoice: () => ({ mutateAsync: jest.fn(), isPending: false }),
   invoiceDaysOverdue: (inv: { due_date: string | null }) =>

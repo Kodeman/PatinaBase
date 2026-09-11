@@ -12,12 +12,14 @@
 import { useMemo, useState } from 'react';
 import {
   useClientReviews,
+  useEmailDelivery,
   useReviewStats,
   useCompletedProjectsWithoutReview,
   useTogglePortfolioPublish,
   type ClientReview,
   type CompletedProject,
 } from '@patina/supabase';
+import { deliveryWord, isAttentionState } from '@/lib/delivery-ui';
 import { ViewHeader, EmptyTeach } from '../view-shell';
 import { Avatar } from '../person-bits';
 import { ReviewRequestSheet } from '../ops/review-request-sheet';
@@ -68,6 +70,11 @@ export function ReviewsView({ notify }: PeopleViewProps) {
   const { data: toRequest, isLoading: loadingToRequest } =
     useCompletedProjectsWithoutReview();
   const togglePublish = useTogglePortfolioPublish();
+  // One read for the pending tab's sent asks — a per-row hook would open N.
+  const requestDelivery = useEmailDelivery(
+    'client_review',
+    (sent ?? []).map((r) => r.id),
+  );
 
   const pendingCount = (toRequest?.length ?? 0) + (sent?.length ?? 0);
   const counts: Record<ReviewTab, number> = {
@@ -127,13 +134,24 @@ export function ReviewsView({ notify }: PeopleViewProps) {
               />
             );
           })}
-          {(sent ?? []).map((r) => (
-            <QueueRow
-              key={r.id}
-              name={reviewClientName(r)}
-              why="Request sent — awaiting their words"
-            />
-          ))}
+          {(sent ?? []).map((r) => {
+            const d = requestDelivery.byRef[r.id] ?? null;
+            const attention =
+              d && isAttentionState(d.state)
+                ? deliveryWord(d, r.designer_client?.client_email ?? null)?.text
+                : null;
+            return (
+              <QueueRow
+                key={r.id}
+                name={reviewClientName(r)}
+                why={
+                  attention
+                    ? `Request sent — awaiting their words · ${attention}`
+                    : 'Request sent — awaiting their words'
+                }
+              />
+            );
+          })}
         </ul>
       );
     }
@@ -221,7 +239,7 @@ export function ReviewsView({ notify }: PeopleViewProps) {
         ))}
       </ul>
     );
-  }, [tab, loading, toRequest, sent, collected, queued, togglePublish, notify]);
+  }, [tab, loading, toRequest, sent, collected, queued, togglePublish, notify, requestDelivery.byRef]);
 
   return (
     <>

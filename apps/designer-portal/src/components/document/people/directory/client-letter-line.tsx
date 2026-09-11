@@ -21,12 +21,15 @@ import { useCallback, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   useClientInvitationStatus,
+  useEmailDelivery,
   useInviteAndLinkClient,
   clientInvitationStatusKeys,
   peopleKeys,
   type ClientInvitationStatus,
 } from '@patina/supabase';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
+import { isAttentionState } from '@/lib/delivery-ui';
+import { DeliveryWord } from '../../delivery-word';
 import { LetterLineField, sendButtonLabel } from './letter-line-field';
 
 const SHORT_MONTHS = [
@@ -91,6 +94,12 @@ export function ClientLetterLine({
   // (account-studio-page.tsx:490-520).
   const inFlight = useRef(false);
   const queryClient = useQueryClient();
+  // 00591 — what became of the letter itself. The RPC states above stay
+  // authoritative; this only speaks when the mail needs the designer.
+  const emailDelivery = useEmailDelivery(
+    'client_invitation',
+    status ? [status.invitationId] : [],
+  );
 
   const writeAgain = useCallback(
     async (invitationId: string) => {
@@ -155,6 +164,10 @@ export function ClientLetterLine({
 
   const { text, action } = rowCopy(status ?? null);
   const given = (clientName ?? '').trim().split(/\s+/)[0] || null;
+  const letterDelivery = status ? (emailDelivery.byRef[status.invitationId] ?? null) : null;
+  const letterNeedsAttention = Boolean(
+    letterDelivery && isAttentionState(letterDelivery.state),
+  );
 
   return (
     <>
@@ -162,7 +175,15 @@ export function ClientLetterLine({
         data-testid="client-letter-line"
         className="mt-1 pl-[3.25rem] text-[0.7rem] leading-snug text-[var(--color-aged-oak)]"
       >
-        {text}
+        {letterNeedsAttention ? (
+          <DeliveryWord
+            delivery={letterDelivery}
+            recipient={clientEmail}
+            mode="attention"
+          />
+        ) : (
+          text
+        )}
         {action === 'write-again' && status ? (
           <>
             {' · '}

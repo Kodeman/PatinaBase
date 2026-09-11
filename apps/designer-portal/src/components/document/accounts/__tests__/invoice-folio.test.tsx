@@ -61,6 +61,7 @@ const invoice: Invoice = {
 let mockInvoice: Invoice = invoice;
 
 jest.mock('@patina/supabase', () => ({
+  useEmailDelivery: () => ({ byRef: {}, isLoading: false, isError: false }),
   useInvoice: () => ({
     data: mockInvoice,
     isLoading: false,

@@ -11,8 +11,9 @@
  * (the R74b composer).
  */
 
-import type { Invoice } from '@patina/supabase';
+import { useEmailDelivery, type EmailDelivery, type Invoice } from '@patina/supabase';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
+import { DeliveryWord } from '../delivery-word';
 import { Stamp } from '../stamp';
 import { fmtDay, fmtUsd } from '@/lib/document/format';
 import { invoiceBalanceCents } from '@/lib/document/account-summary';
@@ -43,6 +44,12 @@ export function AccountsLedgerPage({
   invoices: Invoice[];
   onOpenDocument: (projectId: string | null) => void;
 }) {
+  // One read for the whole ledger — a per-row hook would open N queries.
+  const emailDelivery = useEmailDelivery(
+    'invoice',
+    invoices.filter((inv) => inv.status !== 'draft').map((inv) => inv.id),
+  );
+
   return (
     <div>
       {/* R74b — the book learns to write: draw an invoice from the page head. */}
@@ -74,7 +81,11 @@ export function AccountsLedgerPage({
           </p>
         </div>
       ) : (
-        <InvoiceRows invoices={invoices} onOpenDocument={onOpenDocument} />
+        <InvoiceRows
+          invoices={invoices}
+          deliveryByRef={emailDelivery.byRef}
+          onOpenDocument={onOpenDocument}
+        />
       )}
     </div>
   );
@@ -82,9 +93,11 @@ export function AccountsLedgerPage({
 
 function InvoiceRows({
   invoices,
+  deliveryByRef,
   onOpenDocument,
 }: {
   invoices: Invoice[];
+  deliveryByRef: Record<string, EmailDelivery>;
   onOpenDocument: (projectId: string | null) => void;
 }) {
   return (
@@ -146,7 +159,14 @@ function InvoiceRows({
             <span className="whitespace-nowrap font-mono text-[11px] text-[var(--color-mocha)]">
               {tail}
             </span>
-            <Stamp label={stamp.label} color={stamp.color} ink={stamp.ink} />
+            <span className="flex items-center gap-2 whitespace-nowrap">
+              <DeliveryWord
+                delivery={deliveryByRef[inv.id] ?? null}
+                recipient={inv.client?.email}
+                mode="attention"
+              />
+              <Stamp label={stamp.label} color={stamp.color} ink={stamp.ink} />
+            </span>
             {!studioInvoice && (
               <button
                 type="button"

@@ -7,6 +7,7 @@ let mockDrift: Record<string, unknown> = { data: new Map(), isLoading: false };
 let mockCommercialDocument: Record<string, unknown> = { data: undefined, isLoading: false };
 
 jest.mock("@patina/supabase", () => ({
+  useEmailDelivery: () => ({ byRef: {}, isLoading: false, isError: false }),
   useProposalSendDispatchStatus: () => ({
     isLoading: false,
     isError: false,
