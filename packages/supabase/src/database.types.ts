@@ -9935,7 +9935,7 @@ export type Database = {
           status: Database["public"]["Enums"]["notification_status"]
           template_id: string | null
           type: string
-          user_id: string
+          user_id: string | null
         }
         Insert: {
           bounce_reason?: string | null
@@ -9962,7 +9962,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["notification_status"]
           template_id?: string | null
           type: string
-          user_id: string
+          user_id?: string | null
         }
         Update: {
           bounce_reason?: string | null
@@ -9989,7 +9989,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["notification_status"]
           template_id?: string | null
           type?: string
-          user_id?: string
+          user_id?: string | null
         }
         Relationships: [
           {
