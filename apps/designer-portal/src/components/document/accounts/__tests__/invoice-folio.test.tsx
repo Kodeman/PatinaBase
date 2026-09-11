@@ -556,8 +556,20 @@ describe('InvoiceFolio delivery recovery', () => {
 
     expect(screen.queryByRole('button', { name: 'Copy link' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Regenerate link' })).not.toBeInTheDocument();
-    // Print still stands — it does not depend on the link.
-    expect(screen.getByRole('button', { name: 'Print' })).toBeInTheDocument();
+    // Print still stands — it does not depend on the link. It is a link now,
+    // not a button: it opens the print route in a new tab.
+    expect(screen.getByRole('link', { name: 'Print / Save PDF' })).toBeInTheDocument();
+  });
+
+  it('opens the print route in a new tab rather than printing the folio in place', () => {
+    mockInvoice = { ...invoice, status: 'sent', invoice_number: 'INV-1063' };
+
+    render(<InvoiceFolio invoiceId="invoice-1" />);
+
+    const print = screen.getByRole('link', { name: 'Print / Save PDF' });
+    expect(print).toHaveAttribute('href', '/invoices/invoice-1/print');
+    expect(print).toHaveAttribute('target', '_blank');
+    expect(print).toHaveAttribute('rel', expect.stringContaining('noopener'));
   });
 });
 
