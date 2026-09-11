@@ -2126,6 +2126,15 @@ export type {
   EmailDeliveryRow,
 } from "./use-email-delivery";
 export {
+  studioMemberRateKeys,
+  useStudioMemberRates,
+  useSetStudioMemberRate,
+} from "./use-studio-member-rates";
+export type {
+  StudioMemberRate,
+  SetStudioMemberRateInput,
+} from "./use-studio-member-rates";
+export {
   isInvoiceEligibleTimeEntry,
   studioPeriodStartISO,
   filterProjectUnbilledEntries,
@@ -2144,6 +2153,8 @@ export {
 } from "./use-time-tracking";
 export type {
   TimeBillingState,
+  TimeRateSource,
+  TimeRateRole,
   InvoiceEligibleTimeEntry,
   StudioPeriod,
   ProjectTimeEntry,
