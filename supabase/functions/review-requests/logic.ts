@@ -1,48 +1,41 @@
 // Candidate filtering for the daily review-request cron.
-//
-// client_reviews carries no jsonb/notes column (00062 and nothing since), so a
-// skipped send has nowhere to write a reason except `tags`. A row left at
-// 'not_sent' with the skip tag is this function's own record that it already
-// tried this project and the client's address is suppressed — without it the
-// cron would mint a fresh row and attempt a fresh send every single day.
 
-/** Written by this function only; never a designer-authored review tag. */
-export const SUPPRESSED_SKIP_TAG = "email_suppressed";
-
-/** The statuses worth fetching when deciding whether to skip a project. */
+/** The statuses that mean a request is already out, or already answered. */
 export const BLOCKING_REQUEST_STATUSES = [
   "sent",
   "queued",
   "collected",
-  "not_sent",
 ] as const;
 
 export interface ReviewRequestRow {
   project_id: string | null;
   request_status: string | null;
-  tags: string[] | null;
 }
 
-/**
- * Projects that must not get a review request today: one is already out
- * (sent/queued) or answered (collected), or a previous run found the address
- * suppressed and marked the row not_sent with the skip tag.
- */
-export function projectsToSkip(rows: ReviewRequestRow[]): Set<string> {
+export interface ClientSuppressionProfile {
+  email_suppressed?: boolean | null;
+}
+
+/** Projects whose review request is already out (sent/queued) or answered. */
+export function projectsWithRequestOut(rows: ReviewRequestRow[]): Set<string> {
   const skip = new Set<string>();
   for (const row of rows) {
-    if (!row.project_id) continue;
-    if (row.request_status === "not_sent") {
-      if ((row.tags ?? []).includes(SUPPRESSED_SKIP_TAG)) skip.add(row.project_id);
-      continue;
-    }
-    if (
-      row.request_status === "sent" ||
-      row.request_status === "queued" ||
-      row.request_status === "collected"
-    ) {
+    if (!row.project_id || !row.request_status) continue;
+    if ((BLOCKING_REQUEST_STATUSES as readonly string[]).includes(row.request_status)) {
       skip.add(row.project_id);
     }
   }
   return skip;
+}
+
+/**
+ * The exact inverse of the send chokepoint's suppression gate: it suppresses
+ * only a recipient who HAS a profile carrying the flag, so reading the flag
+ * here is what stops this daily cron re-attempting the same dead address —
+ * a client with no profile is never suppressed and is always eligible.
+ */
+export function isSuppressedRecipient(
+  profile: ClientSuppressionProfile | null | undefined,
+): boolean {
+  return profile?.email_suppressed === true;
 }

@@ -1,14 +1,13 @@
 // Supabase Edge Function: review-requests
 //
 // Runs daily at 09:30 UTC (scheduled by pg_cron in migration 00096).
-// Finds projects that moved to status='completed' 3+ days ago and have no
-// existing sent/queued/collected client_reviews row for that project, and no
-// earlier attempt parked at not_sent because the address is suppressed.
+// Finds projects that moved to status='completed' 3+ days ago, have no
+// existing sent/queued/collected client_reviews row for that project, and whose
+// client's profile is not email-suppressed.
 // For each candidate the client_reviews row is written FIRST as 'queued' with
-// the id the letter names, then promoted to 'sent' when the send lands, parked
-// at 'not_sent' + the skip tag when the address is suppressed, or deleted when
-// the send simply failed — so tomorrow's run retries a failure and only a
-// failure.
+// the id the letter names, then promoted to 'sent' when the send lands, or
+// deleted when the send does not — so the row never outlives a letter that was
+// never delivered, and tomorrow's run retries a failure.
 //
 // PRD #13: review request auto-trigger. SMS (#33) intentionally deferred.
 
@@ -39,9 +38,9 @@ import {
 import { clientProjectLink } from '../_shared/client-portal-links.ts';
 import {
   BLOCKING_REQUEST_STATUSES,
-  projectsToSkip,
+  isSuppressedRecipient,
+  projectsWithRequestOut,
   type ReviewRequestRow,
-  SUPPRESSED_SKIP_TAG,
 } from './logic.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -62,6 +61,8 @@ interface Profile {
   full_name: string | null;
   email: string | null;
   city: string | null;
+  /** Read for the client only: a suppressed address is not asked again. */
+  email_suppressed: boolean | null;
 }
 
 interface DesignerClient {
@@ -172,11 +173,10 @@ Deno.serve(async (_req: Request) => {
 
   const projectIds = candidates.map((p) => p.id);
 
-  // 2. Find projects that already have a review out, answered, or parked
-  //    because the client's address is suppressed
+  // 2. Find projects that already have a review out or answered
   const { data: existingReviews, error: revError } = await supabase
     .from('client_reviews')
-    .select('project_id, request_status, tags')
+    .select('project_id, request_status')
     .in('project_id', projectIds)
     .in('request_status', [...BLOCKING_REQUEST_STATUSES]);
 
@@ -185,7 +185,9 @@ Deno.serve(async (_req: Request) => {
     return new Response(JSON.stringify({ error: revError.message }), { status: 500 });
   }
 
-  const reviewedIds = projectsToSkip((existingReviews ?? []) as ReviewRequestRow[]);
+  const reviewedIds = projectsWithRequestOut(
+    (existingReviews ?? []) as ReviewRequestRow[],
+  );
   const unreviewed = candidates.filter((p) => !reviewedIds.has(p.id));
 
   if (unreviewed.length === 0) {
@@ -201,7 +203,7 @@ Deno.serve(async (_req: Request) => {
 
   const { data: profilesData, error: profilesError } = await supabase
     .from('profiles')
-    .select('id, full_name, email, city')
+    .select('id, full_name, email, city, email_suppressed')
     .in('id', allProfileIds.length > 0 ? allProfileIds : ['00000000-0000-0000-0000-000000000000']);
 
   if (profilesError) {
@@ -240,7 +242,7 @@ Deno.serve(async (_req: Request) => {
 
   // 5. Process each candidate
   let sent = 0;
-  let suppressed = 0;
+  let skipped = 0;
   let failed = 0;
   for (const project of unreviewed) {
     const clientProfile = project.client_id ? profileMap.get(project.client_id) : undefined;
@@ -259,6 +261,13 @@ Deno.serve(async (_req: Request) => {
     const clientEmail = clientProfile?.email ?? dc.client_email;
     if (!clientEmail) {
       console.warn('review-requests: no client email for project', project.id);
+      continue;
+    }
+
+    // The send would be refused anyway; skipping here keeps the cron from
+    // minting and deleting a queued row for this project every single day.
+    if (isSuppressedRecipient(clientProfile)) {
+      skipped++;
       continue;
     }
 
@@ -332,22 +341,11 @@ Deno.serve(async (_req: Request) => {
       } else {
         sent++;
       }
-    } else if (result.suppressed) {
-      // The address bounced or complained. The row stays as this function's own
-      // record of the attempt: client_reviews has no jsonb column, so `tags`
-      // carries the reason and the candidate filter reads it back tomorrow.
-      const { error: skipErr } = await supabase
-        .from('client_reviews')
-        .update({ request_status: 'not_sent', tags: [SUPPRESSED_SKIP_TAG] })
-        .eq('id', reviewId);
-
-      if (skipErr) {
-        console.error('review-requests: failed to park suppressed review for project', project.id, skipErr);
-      }
-      suppressed++;
     } else {
       // Nothing was sent and nothing is owed — drop the queued row so tomorrow
-      // retries this project instead of seeing it as already asked.
+      // retries this project instead of seeing it as already asked. A
+      // suppression lands here too: the candidate filter above, not a parked
+      // row, is what stops the daily retry.
       const { error: deleteErr } = await supabase
         .from('client_reviews')
         .delete()
@@ -361,7 +359,7 @@ Deno.serve(async (_req: Request) => {
   }
 
   return new Response(
-    JSON.stringify({ scanned: unreviewed.length, sent, suppressed, failed }),
+    JSON.stringify({ scanned: unreviewed.length, sent, skipped, failed }),
     { headers: { 'Content-Type': 'application/json' } },
   );
 });
