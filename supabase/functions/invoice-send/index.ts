@@ -308,6 +308,7 @@ Deno.serve(async (req: Request) => {
       notificationType: sendType === 'reminder' ? 'invoice_reminder' : 'invoice_sent',
       category: 'operational',
       templateId: sendType === 'reminder' ? 'invoice-reminder-manual' : 'invoice-sent',
+      ref: { type: 'invoice', id: invoice.id },
       // subject/message/deep_link double as the in-app inbox rendering (the
       // client portal surfaces this notification_log row — see header note).
       metadata: {

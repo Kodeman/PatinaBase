@@ -207,6 +207,7 @@ async function sendLetter(
     notificationType: "client_invite_letter",
     category: "transactional",
     templateId: "client-invite-letter",
+    ref: { type: "client_invitation", id: opts.invitationId },
     idempotencyKey,
     metadata: {
       invitation_id: opts.invitationId,

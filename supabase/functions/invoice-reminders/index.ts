@@ -236,6 +236,7 @@ async function escalateToDesigner(
         notificationType: 'invoice_ar_flagged',
         category: 'operational',
         templateId: 'invoice-ar-escalation',
+        ref: { type: 'invoice', id: invoice.id },
         metadata: {
           invoice_id: invoice.id,
           project_id: invoice.project_id,
@@ -376,6 +377,9 @@ Deno.serve(async (_req: Request) => {
         notificationType: 'invoice_reminder',
         category: 'operational',
         templateId: STAGE_TEMPLATE_IDS[stage],
+        ref: { type: 'invoice', id: invoice.id },
+        // R1 — a homeowner replying to a reminder reaches her designer.
+        replyTo: invoice.designer?.email ?? undefined,
         metadata: {
           invoice_id: invoice.id,
           project_id: invoice.project_id,
