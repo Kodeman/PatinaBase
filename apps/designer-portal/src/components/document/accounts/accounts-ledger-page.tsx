@@ -11,6 +11,7 @@
  * (the R74b composer).
  */
 
+import { useEffect, useRef } from 'react';
 import { useEmailDelivery, type EmailDelivery, type Invoice } from '@patina/supabase';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
 import { DeliveryWord } from '../delivery-word';
@@ -39,9 +40,13 @@ const INVOICE_STAMP: Record<
 
 export function AccountsLedgerPage({
   invoices,
+  highlightInvoiceId = null,
   onOpenDocument,
 }: {
   invoices: Invoice[];
+  /** The invoice named by the /desk?book=accounts&page=ledger&invoiceId=…
+   *  doorway (desk-doorway.tsx) — e.g. the print page's "Back to invoice". */
+  highlightInvoiceId?: string | null;
   onOpenDocument: (projectId: string | null) => void;
 }) {
   // One read for the whole ledger — a per-row hook would open N queries.
@@ -49,6 +54,19 @@ export function AccountsLedgerPage({
     'invoice',
     invoices.filter((inv) => inv.status !== 'draft').map((inv) => inv.id),
   );
+
+  // Arriving by that doorway lands on the ledger; the invoice it names is the
+  // one the reader asked for, so open its folio rather than making them find
+  // the row again. Waits until the invoice is actually in the loaded list (the
+  // first render has none), and fires once per id so closing the folio — or
+  // any later re-render — does not reopen it.
+  const openedFolioFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!highlightInvoiceId || openedFolioFor.current === highlightInvoiceId) return;
+    if (!invoices.some((inv) => inv.id === highlightInvoiceId)) return;
+    openedFolioFor.current = highlightInvoiceId;
+    openInvoiceFolio(highlightInvoiceId);
+  }, [highlightInvoiceId, invoices]);
 
   return (
     <div>

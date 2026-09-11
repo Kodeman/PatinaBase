@@ -173,7 +173,11 @@ export function AccountsBook({
           </button>
 
           {page === 'ledger' && (
-            <AccountsLedgerPage invoices={invoices ?? []} onOpenDocument={openDocument} />
+            <AccountsLedgerPage
+              invoices={invoices ?? []}
+              highlightInvoiceId={initialContext?.invoiceId ?? null}
+              onOpenDocument={openDocument}
+            />
           )}
           {page === 'receivables' && (
             <AccountsReceivablesPage
