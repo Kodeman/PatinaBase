@@ -195,13 +195,21 @@ statements"). It regenerates with an empty diff.
 15. **`studio_person_affiliations` is the home of person-at-firm;
     `studio_contacts.company_id` is a derived pointer** (R-AI). 00592 backfills
     an open affiliation (`to_date` NULL) for every person already linked
-    through `company_id`, and a trigger keeps `company_id` equal to the
-    person's open affiliation's `company_id` — one direction only. Without the
+    through `company_id`, and the two are bound **in both directions**:
+    `sync_studio_contact_company_pointer()` re-derives `company_id` from the
+    open affiliation, and `sync_person_affiliation_from_pointer()` opens (or
+    closes) that affiliation when `company_id` is written directly. Without the
     backfill the company card's crew list (R-W) would have rendered empty for
-    exactly the firms a studio has been using longest; without the trigger the
-    shipped hooks that still write `company_id`
-    (`use-studio-contacts.ts:202, :234`) would have left two homes for one fact
-    with nothing saying which wins. The COMMENT on both says which is which.
+    exactly the firms a studio has been using longest. Bound one way only — as
+    this wave first shipped it — the hooks that still write `company_id`
+    (`use-studio-contacts.ts:202, :234`) produced a card with a firm and **no
+    affiliation row**, invisible to that same crew list, and the firm the
+    designer chose was silently discarded by the next affiliation write (r2
+    review M-3). The reverse trigger stands down for a cross-studio pointer
+    (which the affiliation RLS refuses anyway) and holds
+    `patina.suppress_affiliation_sync` while it writes, so the two halves
+    cannot ping-pong. The COMMENT on both says which is the fact and which the
+    pointer.
 
 16. **A START is a re-subscription, not a first grant** (R-AJ). The inbound
     grant is scoped to studios whose record is `opted_out` or `pending`; a seat
