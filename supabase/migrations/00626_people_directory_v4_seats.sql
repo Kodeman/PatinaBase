@@ -75,6 +75,22 @@
 --     v_project_roster.has_active_field_link already carries (00594's own
 --     comment), intended and not a leak.
 --
+-- ⚠ DEPLOY SEQUENCING — A HARD CONSTRAINT, NOT A PREFERENCE (w1b r1 MAJOR-5)
+-- This file MUST NOT reach Strata ahead of W2's Directory. Every carded human
+-- is now emitted by the CONTACTS branch as role='contact', and the shipped
+-- feed drops exactly that role (directory-view.tsx:294,
+-- `filter((p) => p.role !== 'contact')`). Measured on the seeded fixture as
+-- designer@patina.dev: the six-branch view rendered 22 field rows (architect 1,
+-- gc 5, photographer 1, receiver 1, stager 1, sub 13); after this file the feed
+-- renders client 7 / lead 5 / sub 1, so every GC, sub, installer, receiver,
+-- architect, photographer and stager disappears and people-room.tsx:383 says
+-- "62 people" over what it draws. PR-y is overruled (rulings §6): there is no
+-- flag to hide this, and §6 rules ONE deploy chain at the end of the program —
+-- so 00623–00627 and W2's Directory ship in that one chain, together.
+-- W2's chip mapping should read meta.entity_kind plus
+-- people_directory_seats.party_kind rather than `role`, which is the shape
+-- this view now offers.
+--
 -- No GRANT/REVOKE is added beyond the two views' own restated GRANT SELECT and
 -- the new functions' REVOKE/GRANT → regenerate seed/00-legacy-grants.sql after
 -- this migration (python3 scripts/generate-legacy-grants.py).
@@ -126,6 +142,42 @@ CREATE INDEX IF NOT EXISTS idx_project_parties_identity_key
   ON public.project_parties(
     public.party_identity_key(studio_contact_id, profile_id, phone_e164, email, id)
   );
+
+-- ── party_kind_in_directory — the Directory's seven kinds, in ONE place ────
+-- The winner per identity was computed twice over DIFFERENT candidate sets:
+-- people_directory's DISTINCT ON saw only the seven kinds below, while
+-- people_directory_seats' first_value() partitioned over every kind. For an
+-- uncarded human whose most recently updated seat was outside the seven — a
+-- `sub` on one job and a `vendor` on another — the two picked different
+-- winners and `people_directory_seats.person_id = people_directory.person_id`
+-- nested NOTHING, which is the one join the redesign rests on (w1b final
+-- review r1 MAJOR-2). The vocabulary now lives here, and the seats view orders
+-- its window by the same candidate set the Directory selects on, so the two
+-- cannot pick differently again.
+--
+-- IMMUTABLE and a plain scalar SQL body, so the planner inlines it wherever it
+-- appears — party_identity_key()'s posture, and the reason the Directory's
+-- WHERE clause can call it without giving up its index.
+CREATE OR REPLACE FUNCTION public.party_kind_in_directory(p_party_kind text)
+RETURNS boolean
+LANGUAGE sql
+IMMUTABLE
+AS $$
+  SELECT p_party_kind IN ('gc', 'sub', 'installer', 'receiver',
+                          'architect', 'photographer', 'stager');
+$$;
+
+REVOKE ALL ON FUNCTION public.party_kind_in_directory(text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.party_kind_in_directory(text)
+  TO authenticated, service_role;
+
+COMMENT ON FUNCTION public.party_kind_in_directory(text) IS
+  'Whether a project_parties kind is one of the seven the Directory''s party '
+  'branch emits an identity row for (gc, sub, installer, receiver, architect, '
+  'photographer, stager). Stated ONCE: people_directory selects on it and '
+  'people_directory_seats orders its winner window by it, so the identity '
+  'winner is computed over one candidate set and a Directory row that claims '
+  'N seats nests N seats (00626).';
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- 2. reach_state_for / identity_seat_count / contact_rule_summary
@@ -466,8 +518,7 @@ FROM (
     ON scc.organization_id = public.project_consent_org(pp.project_id)
    AND scc.channel_kind    = 'sms'
    AND scc.channel_value   = pp.phone_e164
-  WHERE pp.party_kind IN ('gc', 'sub', 'installer', 'receiver',
-                          'architect', 'photographer', 'stager')
+  WHERE public.party_kind_in_directory(pp.party_kind)
     AND pp.studio_contact_id IS NULL
     AND ( public.is_studio_comember(pj.designer_id)
        OR public.is_studio_comember(pj.lead_designer_id)
@@ -613,16 +664,20 @@ GRANT SELECT ON public.people_directory TO authenticated;
 -- ═══════════════════════════════════════════════════════════════════════════
 -- person_id here is the identity's row in people_directory: the rolodex card
 -- when the seat carries a stamp, otherwise the same winning party id the
--- Directory chose — computed by the same first_value() the branch above
--- reaches with DISTINCT ON, over the same ORDER BY. So a UI joining
--- people_directory_seats.person_id = people_directory.person_id nests every
--- seat under exactly one row, and no seat dangles for a carded human.
+-- Directory chose — the window below orders by the Directory's own candidate
+-- set (unstamped, party_kind_in_directory()) first and then by its ORDER BY
+-- verbatim, so the two computations cannot name different winners. So a UI
+-- joining people_directory_seats.person_id = people_directory.person_id nests
+-- every seat under exactly one row, and no seat dangles for any identity the
+-- Directory emits — carded or not.
 --
 -- EVERY party kind, not the Directory's seven: "where is this human seated" is
 -- a different question from "who belongs in the six chips", and PR-c's
--- client_rep seat must appear under the household member's card. A seat whose
--- kind has no identity row of its own (a `vendor` or `other` party with no
--- stamp and no login) still lists here and simply joins to nothing.
+-- client_rep seat must appear under the household member's card. An identity
+-- with NO seat in the seven has no Directory row of its own (an uncarded,
+-- loginless `vendor` or `other` party), so its seats still list here and
+-- simply join to nothing — the one dangle that is by design, and a different
+-- thing from the winner divergence r1 MAJOR-2 found.
 CREATE OR REPLACE VIEW public.people_directory_seats
 WITH (security_invoker = true) AS
 SELECT
@@ -633,7 +688,14 @@ SELECT
     first_value(pp.id) OVER (
       PARTITION BY public.party_identity_key(pp.studio_contact_id, pp.profile_id,
                                              pp.phone_e164, pp.email, pp.id)
-      ORDER BY pp.updated_at DESC, pp.id
+      -- The Directory's candidate set, expressed as a preference: unstamped
+      -- seats of the seven kinds first, then its own ORDER BY verbatim. Both
+      -- views therefore name the same winner for the same identity even when
+      -- the most recently updated seat is a kind the Directory does not emit
+      -- (w1b final review r1 MAJOR-2).
+      ORDER BY (pp.studio_contact_id IS NULL) DESC,
+               public.party_kind_in_directory(pp.party_kind) DESC,
+               pp.updated_at DESC, pp.id
     )
   )                                                              AS person_id,
   pp.id                                                          AS seat_id,
@@ -681,8 +743,10 @@ COMMENT ON VIEW public.people_directory_seats IS
   'E5 on its own surface: one row per project_parties SEAT, keyed by '
   'party_identity_key() and carrying person_id = the identity''s row in '
   'people_directory (the rolodex card when the seat is stamped, else the same '
-  'most-recently-updated party the Directory chose, by the same first_value '
-  'ordering). Nest seats under a Directory row by joining on person_id. '
+  'party the Directory chose — the window orders by the Directory''s own '
+  'candidate set, unstamped seats of party_kind_in_directory() first, then by '
+  'updated_at DESC, id, so one identity can only have one winner). Nest seats '
+  'under a Directory row by joining on person_id. '
   'Admits EVERY party kind, unlike people_directory''s seven, because "where '
   'is this human seated" is a different question from "who is in the six '
   'chips" and PR-c''s client_rep seat must appear under the household '

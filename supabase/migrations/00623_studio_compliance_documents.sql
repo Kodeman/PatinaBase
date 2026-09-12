@@ -23,7 +23,8 @@
 --
 --   2. compliance_state(holder) → current | lapses_soon | lapsed |
 --      not_on_file. Direction §3.8's paper word family, in one place, with the
---      30-day window stated once. SECURITY INVOKER so the table's member-only
+--      30-day window stated once, over GATING paper only — a lapse that holds
+--      no gate changes nothing (CS2 §4, PR-h; w1b r1 MAJOR-3). SECURITY INVOKER so the table's member-only
 --      RLS is the whole access rule — the posture 00594's
 --      channel_consent_status() established: a caller who is not a member of
 --      the owning studio reads 'not_on_file', never another studio's word.
@@ -195,8 +196,10 @@ SECURITY DEFINER
 SET search_path TO 'public'
 AS $$
 DECLARE
-  v_kind text;
-  v_org  uuid;
+  v_kind         text;
+  v_org          uuid;
+  v_succ_type    text;
+  v_succ_expires date;
 BEGIN
   SELECT sc.entity_kind, sc.organization_id INTO v_kind, v_org
     FROM public.studio_contacts sc WHERE sc.id = NEW.holder_id;
@@ -219,7 +222,8 @@ BEGIN
   END IF;
 
   IF NEW.superseded_by IS NOT NULL THEN
-    PERFORM 1 FROM public.studio_compliance_documents d
+    SELECT d.doc_type, d.expires_on INTO v_succ_type, v_succ_expires
+      FROM public.studio_compliance_documents d
       WHERE d.id = NEW.superseded_by
         AND d.organization_id = NEW.organization_id
         AND d.holder_id = NEW.holder_id;
@@ -228,6 +232,30 @@ BEGIN
         USING HINT = 'superseded_by must name another document held for the '
                      'SAME card in the SAME studio. A renewal supersedes its '
                      'own predecessor, not somebody else''s paper.';
+    END IF;
+
+    -- Card and studio were the whole guard, and they cannot tell a renewal
+    -- from a laundering: one UPDATE through PostgREST by a plain studio
+    -- member pointed a lapsed COI at the firm's undated W-9 and the paper
+    -- word flipped from lapsed to current while the lapsed COI was still on
+    -- file (w1b final review r1 MAJOR-4). compliance_state() excludes every
+    -- superseded row, so the successor must be the SAME paper, covering at
+    -- least as long as the row it retires.
+    IF v_succ_type IS DISTINCT FROM NEW.doc_type THEN
+      RAISE EXCEPTION 'compliance_successor_wrong_type'
+        USING HINT = 'A renewal is the same paper: superseded_by must name a '
+                     'document of the same doc_type. A W-9 does not renew a '
+                     'COI, and pointing one at the other would hide a lapse.';
+    END IF;
+    IF v_succ_expires IS NOT NULL
+       AND NEW.expires_on IS NOT NULL
+       AND v_succ_expires < NEW.expires_on THEN
+      RAISE EXCEPTION 'compliance_successor_not_later'
+        USING HINT = 'A renewal covers at least as long as the paper it '
+                     'retires: superseded_by must name a document whose '
+                     'expires_on is not earlier than this row''s. An undated '
+                     'successor (a signed waiver, a W-9) is open-ended and '
+                     'always qualifies.';
     END IF;
   END IF;
 
@@ -242,15 +270,20 @@ COMMENT ON FUNCTION public.assert_compliance_holder() IS
   'BEFORE INSERT/UPDATE on studio_compliance_documents: holder_id must name a '
   'card whose entity_kind equals holder_type, in the SAME organization_id, and '
   'superseded_by must name another document for the same card in the same '
-  'studio (compliance_holder_not_found / _kind_mismatch / _other_studio / '
-  'compliance_successor_other_holder). The FKs cannot say any of this — '
-  'studio_contacts holds both kinds of card and every studio''s cards (00623, '
-  'the 00592 R-AP shape).';
+  'studio, of the SAME doc_type, expiring no earlier than the row it retires '
+  '(compliance_holder_not_found / _kind_mismatch / _other_studio / '
+  'compliance_successor_other_holder / compliance_successor_wrong_type / '
+  'compliance_successor_not_later). The last two are what keeps a supersede a '
+  'renewal rather than a way to hide a lapse, since compliance_state() reads '
+  'only non-superseded rows and UPDATE is granted to authenticated. The FKs '
+  'cannot say any of this — studio_contacts holds both kinds of card and every '
+  'studio''s cards (00623, the 00592 R-AP shape).';
 
 DROP TRIGGER IF EXISTS assert_compliance_holder_trg
   ON public.studio_compliance_documents;
 CREATE TRIGGER assert_compliance_holder_trg
-  BEFORE INSERT OR UPDATE OF holder_id, holder_type, organization_id, superseded_by
+  BEFORE INSERT OR UPDATE OF holder_id, holder_type, organization_id,
+                             superseded_by, doc_type, expires_on
   ON public.studio_compliance_documents
   FOR EACH ROW EXECUTE FUNCTION public.assert_compliance_holder();
 
@@ -305,6 +338,16 @@ GRANT ALL ON public.studio_compliance_documents TO service_role;
 -- holder with no paper at all reads `not_on_file`, which is a different fact
 -- (C21, R-K).
 --
+-- Only GATING paper can move the word off `current`: cardinality(blocks) > 0
+-- on both date FILTERs. CS2 §4 — "a date with no gate changes nothing" — and
+-- PR-h, which puts the word in the blocked family with a terracotta leading
+-- rule, are the reason the column exists; reading the dates without it made a
+-- lapsed training card that gates nothing print the blocked word over a firm
+-- whose COI was current (w1b final review r1 MAJOR-3). count(*) = 0 is
+-- deliberately NOT filtered, so `not_on_file` still means no paper at all
+-- rather than no gating paper: a gateless certificate on file is held, and a
+-- holder carrying only gateless paper reads `current`.
+--
 -- SECURITY INVOKER, so the table's member-only RLS is the whole access rule —
 -- 00594's channel_consent_status() posture. A caller outside the owning studio
 -- sees no rows and reads 'not_on_file'; it can never print another studio's
@@ -318,10 +361,12 @@ AS $$
   SELECT CASE
            WHEN count(*) = 0 THEN 'not_on_file'
            WHEN count(*) FILTER (
-                  WHERE d.expires_on IS NOT NULL
+                  WHERE cardinality(d.blocks) > 0
+                    AND d.expires_on IS NOT NULL
                     AND d.expires_on < CURRENT_DATE) > 0 THEN 'lapsed'
            WHEN count(*) FILTER (
-                  WHERE d.expires_on IS NOT NULL
+                  WHERE cardinality(d.blocks) > 0
+                    AND d.expires_on IS NOT NULL
                     AND d.expires_on <= CURRENT_DATE + 30) > 0 THEN 'lapses_soon'
            ELSE 'current'
          END
@@ -336,8 +381,11 @@ GRANT EXECUTE ON FUNCTION public.compliance_state(uuid) TO authenticated, servic
 COMMENT ON FUNCTION public.compliance_state(uuid) IS
   'The paper word for one rolodex card: current | lapses_soon | lapsed | '
   'not_on_file (direction §3.8), over its non-superseded documents, with the '
-  '30-day window stated once. Worst-first: one lapsed paper makes the holder '
-  'lapsed. Undated paper (a W-9) is held and cannot lapse; NO paper is '
-  'not_on_file, a different fact. SECURITY INVOKER — the table''s member-only '
-  'RLS is the access rule, so a caller outside the studio reads not_on_file '
-  'rather than another studio''s word (00623).';
+  '30-day window stated once. Worst-first: one lapsed GATING paper makes the '
+  'holder lapsed. Only paper with a non-empty blocks[] can move the word off '
+  'current — CS2 §4, "a date with no gate changes nothing", and PR-h''s '
+  'blocked family. Undated paper (a W-9) is held and cannot lapse; NO paper '
+  'at all is not_on_file, a different fact from no GATING paper, which reads '
+  'current. SECURITY INVOKER — the table''s member-only RLS is the access '
+  'rule, so a caller outside the studio reads not_on_file rather than another '
+  'studio''s word (00623).';
