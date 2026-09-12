@@ -115,6 +115,16 @@
 --      refuse_legacy_consent_write_trg is on project_parties, both shipped
 --      readers go through channel_consent_status(), and that function is
 --      SECURITY INVOKER so one studio cannot read another's verdict.
+--  39. close-review r2 MAJOR-1: the add path never lowers a standing grant.
+--      `pending` over `granted` is refused by name (consent_already_granted)
+--      and leaves the grant's date, words and disclosure version exactly as
+--      they stood; record_channel_invite() — the door useAddProjectParty calls
+--      — returns that grant untouched, mints the `pending` where nothing
+--      stands, and inherits every gate of the sibling it delegates to.
+--  40. close-review r2 MAJOR-2: one reader, one verdict. A record carrying an
+--      unanswered refusal reads `opted_out` through channel_consent_status()
+--      whatever its status column says, so both shipped readers print what the
+--      send rail decides — and the rule lives in the reader alone (R-AS).
 --
 -- How to run:
 --   psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
@@ -4881,6 +4891,387 @@ BEGIN
   RAISE NOTICE '38. one resolver for the seat''s studio: reader and writer '
                'agree, and no view prints another studio''s consent word '
                '(close-review r1 MAJOR-1): passed';
+END
+$$;
+
+-- ─── 39. close-review r2 MAJOR-1: the add path never lowers a standing grant ─
+--
+-- The room's most ordinary act — a repeat sub added to a SECOND job with "text
+-- updates" ticked — used to call record_channel_consent(…, 'pending', …)
+-- unconditionally. The transition gate only refuses a move OUT of opted_out, so
+-- granted -> pending passed every leg: the studio's own recorded grant was
+-- demoted on every add. Three things went with it — the room printed "Invited"
+-- for a number the studio holds an evidenced grant for, channelConsentVerdict
+-- fell from "allow" to "unknown" so every non-invite send was refused as
+-- not_consented against a seat born `pending` (fixture F-11), and the new act's
+-- five evidence columns landed on top of the OLD grant's consented_at, so R-Q
+-- composed "Verbal consent, 2 May 2025" and the disclosure version the person
+-- was actually shown was gone from the only copy there is.
+--
+-- Two halves are asserted here: the RPC now refuses the downgrade by name, and
+-- record_channel_invite() — the door useAddProjectParty calls — returns the
+-- standing grant untouched instead.
+
+INSERT INTO projects (id, name, designer_id, studio_id, created_by, status, created_at, updated_at)
+VALUES ('d0000000-0000-4000-8000-0000000000a5', 'W1A Lindqvist kitchen',
+        'a0000000-0000-4000-8000-000000000001', 'b0000000-0000-4000-8000-00000000000a',
+        'a0000000-0000-4000-8000-000000000001', 'active', NOW(), NOW());
+
+DO $$
+DECLARE
+  r      RECORD;
+  r2     RECORD;
+  raised TEXT;
+  w      TEXT;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+
+  -- 39a. The studio records the written grant it holds, and it is back-dated
+  --      the way a real 2025 grant is. (The back-date is a direct write as the
+  --      test's superuser — now() is frozen for the whole transaction, and the
+  --      point of the case is that an OLD date must not end up under a NEW
+  --      act's words.)
+  PERFORM public.record_channel_consent(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '(612) 555-0601', 'granted',
+    'written', 'Signed the Lindqvist kickoff form', 'field-sms-v3', NULL);
+  PERFORM pg_temp.reset_role();
+
+  UPDATE studio_channel_consent
+     SET consented_at = '2025-05-02T00:00:00Z', recorded_at = '2025-05-02T00:00:00Z'
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550601';
+
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550601';
+  ASSERT r.status = 'granted' AND r.source = 'written'
+     AND r.disclosure_version = 'field-sms-v3',
+    'FAIL 39a fixture: the studio must hold an evidenced written grant';
+
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+
+  -- 39b. THE FINDING. A `pending` over that grant is refused, by name.
+  raised := NULL;
+  BEGIN
+    PERFORM public.record_channel_consent(
+      'b0000000-0000-4000-8000-00000000000a', 'sms', '612-555-0601', 'pending',
+      'verbal', 'Said yes at the Okonkwo walkthrough', 'field-sms-v9',
+      'd0000000-0000-4000-8000-0000000000a5');
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'consent_already_granted',
+    'FAIL 39b: pending over a standing granted must be refused by name, got '
+      || COALESCE(raised, '<no error>');
+
+  -- 39c. …and the record is byte-for-byte what it was. The grant's date is
+  --      still filed under the grant's own words and its own disclosure.
+  SELECT * INTO r2 FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550601';
+  ASSERT r2.status             = 'granted'
+     AND r2.source             = 'written'
+     AND r2.evidence           = 'Signed the Lindqvist kickoff form'
+     AND r2.disclosure_version = 'field-sms-v3'
+     AND r2.consented_at       = '2025-05-02T00:00:00Z'::timestamptz
+     AND r2.recorded_at        = '2025-05-02T00:00:00Z'::timestamptz,
+    'FAIL 39c: the refused write must leave the grant and its evidence exactly '
+    'as they stood, got ' || COALESCE(r2.status, '<null>') || ' / '
+      || COALESCE(r2.source, '<null>') || ' / '
+      || COALESCE(r2.disclosure_version, '<null>');
+
+  -- 39d. The door the add path actually uses returns that grant UNTOUCHED —
+  --      no error to swallow, no write, nothing for the designer to see.
+  SELECT * INTO r2 FROM public.record_channel_invite(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '612-555-0601',
+    'verbal', 'Said yes at the Okonkwo walkthrough', 'field-sms-v9',
+    'd0000000-0000-4000-8000-0000000000a5');
+  ASSERT r2.status             = 'granted'
+     AND r2.source             = 'written'
+     AND r2.evidence           = 'Signed the Lindqvist kickoff form'
+     AND r2.disclosure_version = 'field-sms-v3'
+     AND r2.consented_at       = '2025-05-02T00:00:00Z'::timestamptz,
+    'FAIL 39d: the invite door must return the standing grant untouched, got '
+      || COALESCE(r2.status, '<null>') || ' / ' || COALESCE(r2.source, '<null>');
+
+  SELECT * INTO r2 FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550601';
+  ASSERT r2.recorded_at = '2025-05-02T00:00:00Z'::timestamptz
+     AND r2.origin_project_id IS NOT DISTINCT FROM r.origin_project_id,
+    'FAIL 39d2: the invite door must write NOTHING when a grant stands';
+
+  -- 39e. So the room keeps printing the grant's word — "Texting", not
+  --      "Invited" — for the seat the add creates.
+  SELECT public.channel_consent_status(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '+16125550601') INTO w;
+  ASSERT w = 'granted',
+    'FAIL 39e: the room must still read the grant, got ' || COALESCE(w, '<null>');
+
+  -- 39f. NEGATIVE CONTROL — with nothing on the books the same door mints the
+  --      `pending` the add path needs, with the caller's own evidence. The
+  --      close-review r1 MAJOR-2 fix is not undone.
+  SELECT * INTO r2 FROM public.record_channel_invite(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '(612) 555-0602',
+    'verbal', 'Said yes at the Okonkwo walkthrough', 'field-sms-v9',
+    'd0000000-0000-4000-8000-0000000000a5');
+  ASSERT r2.status = 'pending' AND r2.source = 'verbal'
+     AND r2.evidence = 'Said yes at the Okonkwo walkthrough'
+     AND r2.disclosure_version = 'field-sms-v9'
+     AND r2.channel_value = '+16125550602'
+     AND r2.origin_project_id = 'd0000000-0000-4000-8000-0000000000a5',
+    'FAIL 39f: with no record standing the invite door must mint the pending, got '
+      || COALESCE(r2.status, '<null>');
+
+  -- 39g. …and over a standing `pending` it still goes through, refreshing the
+  --      invite's evidence. A pending is not a grant; nothing is protected.
+  SELECT * INTO r2 FROM public.record_channel_invite(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '+16125550602',
+    'written', 'Re-sent the opt-in from the Lindqvist job', 'field-sms-v9', NULL);
+  ASSERT r2.status = 'pending' AND r2.source = 'written'
+     AND r2.evidence = 'Re-sent the opt-in from the Lindqvist job',
+    'FAIL 39g: the invite door must restate a pending''s evidence, got '
+      || COALESCE(r2.source, '<null>');
+
+  -- 39h. Every gate of the sibling still applies through this door: a refusal
+  --      on the books refuses the invite before any seat is born.
+  PERFORM public.record_channel_consent(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '(612) 555-0603', 'opted_out',
+    'inbound_sms', 'Replied STOP', NULL, NULL);
+  raised := NULL;
+  BEGIN
+    PERFORM public.record_channel_invite(
+      'b0000000-0000-4000-8000-00000000000a', 'sms', '612-555-0603',
+      'verbal', 'Said yes at the walkthrough', 'field-sms-v9', NULL);
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'channel_opted_out',
+    'FAIL 39h: the invite door must inherit the refusal gate, got '
+      || COALESCE(raised, '<no error>');
+
+  -- 39i. …and the evidence requirement, and the normaliser.
+  raised := NULL;
+  BEGIN
+    PERFORM public.record_channel_invite(
+      'b0000000-0000-4000-8000-00000000000a', 'sms', '(612) 555-0604',
+      NULL, NULL, NULL, NULL);
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'consent_evidence_required',
+    'FAIL 39i: the invite door must require evidence, got '
+      || COALESCE(raised, '<no error>');
+
+  -- …and the same normaliser, so the two spellings of 0602 above are ONE key.
+  -- (An unparseable phone is deliberately KEPT by normalize_channel_value as
+  -- trimmed raw text — 00593's rule, block 11 — so there is no refusal to
+  -- assert here; what matters is that this door cannot land on a key the
+  -- sibling would not.)
+  ASSERT (SELECT COUNT(*) FROM studio_channel_consent
+           WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+             AND channel_value IN ('+16125550602', '(612) 555-0602')) = 1,
+    'FAIL 39i2: both spellings must land on one key';
+  raised := NULL;
+  BEGIN
+    PERFORM public.record_channel_invite(
+      'b0000000-0000-4000-8000-00000000000a', 'carrier_pigeon', '612-555-0606',
+      'verbal', 'Said yes', 'field-sms-v9', NULL);
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'invalid_channel_kind',
+    'FAIL 39i3: the invite door must refuse a channel kind it has no rules for, got '
+      || COALESCE(raised, '<no error>');
+  PERFORM pg_temp.reset_role();
+
+  -- 39j. A GRANT CARRYING AN UNANSWERED REFUSAL IS NOT A GRANT TO PROTECT.
+  --      It is unsendable (block 40), so the invite falls through and is
+  --      refused properly rather than silently "succeeding" on a dead number.
+  INSERT INTO studio_channel_consent (
+    organization_id, channel_kind, channel_value, status, consented_at,
+    opt_out_at, refusal_unanswered, source, evidence, recorded_at,
+    disclosure_version)
+  VALUES ('b0000000-0000-4000-8000-00000000000a', 'sms', '+16125550605', 'granted',
+          NULL, '2025-11-16T00:00:00Z', true, 'verbal', 'Said yes on site, years ago',
+          '2024-02-01T00:00:00Z', 'field-sms-v1');
+
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+  raised := NULL;
+  BEGIN
+    PERFORM public.record_channel_invite(
+      'b0000000-0000-4000-8000-00000000000a', 'sms', '612-555-0605',
+      'verbal', 'Said yes at the walkthrough', 'field-sms-v9', NULL);
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'consent_awaiting_recipient',
+    'FAIL 39j: an unsendable granted must not be treated as a standing grant, got '
+      || COALESCE(raised, '<no error>');
+  PERFORM pg_temp.reset_role();
+
+  -- 39k. A stranger studio cannot use the door to learn whether a grant stands
+  --      — the membership gate is BEFORE the read, since the door is a definer.
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000002');
+  raised := NULL;
+  BEGIN
+    PERFORM public.record_channel_invite(
+      'b0000000-0000-4000-8000-00000000000a', 'sms', '612-555-0601',
+      'verbal', 'Said yes', 'field-sms-v9', NULL);
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'not_a_studio_member',
+    'FAIL 39k: a non-member must be refused before the read, got '
+      || COALESCE(raised, '<no error>');
+  PERFORM pg_temp.reset_role();
+
+  -- 39l. The door is a definer with its search_path pinned, closed to PUBLIC
+  --      and anon, open to the two roles that call it.
+  ASSERT (SELECT prosecdef FROM pg_proc pr
+            JOIN pg_namespace ns ON ns.oid = pr.pronamespace
+           WHERE ns.nspname = 'public' AND pr.proname = 'record_channel_invite'),
+    'FAIL 39l: record_channel_invite must be SECURITY DEFINER';
+  ASSERT (SELECT 'search_path=public' = ANY(proconfig) FROM pg_proc pr
+            JOIN pg_namespace ns ON ns.oid = pr.pronamespace
+           WHERE ns.nspname = 'public' AND pr.proname = 'record_channel_invite'),
+    'FAIL 39l2: record_channel_invite must pin its search_path';
+  ASSERT NOT has_function_privilege('anon',
+    'public.record_channel_invite(uuid, text, text, text, text, text, uuid)', 'EXECUTE'),
+    'FAIL 39l3: anon must not execute record_channel_invite';
+  ASSERT has_function_privilege('authenticated',
+    'public.record_channel_invite(uuid, text, text, text, text, text, uuid)', 'EXECUTE'),
+    'FAIL 39l4: authenticated must execute record_channel_invite';
+  ASSERT has_function_privilege('service_role',
+    'public.record_channel_invite(uuid, text, text, text, text, text, uuid)', 'EXECUTE'),
+    'FAIL 39l5: service_role must execute record_channel_invite';
+
+  RAISE NOTICE '39. the add path never lowers a standing grant: pending over '
+               'granted is refused by name and the invite door returns the '
+               'grant untouched (close-review r2 MAJOR-1): passed';
+END
+$$;
+
+-- ─── 40. close-review r2 MAJOR-2: one reader, one verdict ──────────────────
+--
+-- refusal_unanswered is verdict-bearing everywhere but here:
+-- channelConsentVerdict (_shared/sms.ts) refuses EVERY send on it whatever the
+-- status says, and record_channel_consent refuses every studio-side write on
+-- it. The fold deliberately mints records where it is TRUE while status reads
+-- `granted` — the r8 W4-M1 shape, ruled at 00594:655-666 as "the record is
+-- minted UNSENDABLE". channel_consent_status() returned scc.status alone, so
+-- both readers printed `granted`, which renders as "Texting": the Call Sheet
+-- and the Directory told the designer the number was on the rail while every
+-- send came back opted_out, and the studio could not correct it because the
+-- write door refuses every verdict but opted_out. G-3 restored inside the
+-- record built to end it.
+
+INSERT INTO project_parties (id, project_id, party_kind, display_name, phone,
+                             sms_consent_status, sms_consented_at, sms_opt_out_at,
+                             sms_consent_source, sms_consent_evidence,
+                             sms_consent_recorded_at, sms_consent_disclosure_version)
+VALUES
+  ('e0000000-0000-4000-8000-0000000000e1', 'd0000000-0000-4000-8000-0000000000a5',
+   'sub', 'Pete Rusk', '(612) 555-0610',
+   'granted', NULL, '2025-11-16T00:00:00Z',
+   'inbound_sms', 'Replied STOP on the Rusk thread', '2025-11-16T00:00:00Z', 'field-sms-v1'),
+  ('e0000000-0000-4000-8000-0000000000e2', 'd0000000-0000-4000-8000-0000000000a5',
+   'sub', 'Ida Lindqvist', '(612) 555-0611',
+   'granted', '2026-03-01T00:00:00Z', NULL,
+   'written', 'Signed the kickoff form', '2026-03-01T00:00:00Z', 'field-sms-v1');
+
+DO $$
+DECLARE
+  r          RECORD;
+  w          TEXT;
+  dir_word   TEXT;
+  meta_word  TEXT;
+  refuses    BOOLEAN;
+BEGIN
+  -- 40a. The fold mints the contradictory legacy shape, unchanged: the status
+  --      reads `granted` and an unanswered refusal stands under it.
+  PERFORM public.backfill_channel_consent_from_parties();
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550610';
+  ASSERT FOUND AND r.status = 'granted' AND r.refusal_unanswered
+     AND r.opt_out_at = '2025-11-16T00:00:00Z'::timestamptz,
+    'FAIL 40a: the fold must still mint granted + refusal_unanswered, got '
+      || COALESCE(r.status, '<null>');
+
+  -- 40b. THE FINDING. The one reader carries the one verdict: the number is
+  --      opted out, whatever the status column happens to say.
+  SELECT public.channel_consent_status(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '+16125550610') INTO w;
+  ASSERT w = 'opted_out',
+    'FAIL 40b: an unanswered refusal must read opted_out, got '
+      || COALESCE(w, '<null>');
+
+  -- 40c. …so the reader and the SEND GATE now agree by construction. This is
+  --      channelConsentVerdict's rule (_shared/sms.ts: status opted_out OR
+  --      refusal_unanswered -> "refuse") stated in SQL against the same row.
+  refuses := (r.status = 'opted_out' OR r.refusal_unanswered);
+  ASSERT refuses AND w = 'opted_out',
+    'FAIL 40c: the room must print what the send rail decides — '
+      || 'send gate refuses=' || refuses::text || ', room says ' || COALESCE(w, '<null>');
+
+  -- 40d. Both shipped readers print it, for the studio whose ledger it is.
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+  SELECT sms_consent_status INTO w FROM v_project_roster
+   WHERE roster_id = 'e0000000-0000-4000-8000-0000000000e1';
+  ASSERT w = 'opted_out',
+    'FAIL 40d: v_project_roster must not print "Texting" for an unsendable '
+    'number, got ' || COALESCE(w, '<null>');
+
+  SELECT status_raw, meta->>'sms_consent_status' INTO dir_word, meta_word
+    FROM people_directory
+   WHERE person_id = 'e0000000-0000-4000-8000-0000000000e1' AND role = 'sub';
+  ASSERT dir_word = 'opted_out' AND meta_word = 'opted_out',
+    'FAIL 40d2: people_directory must print it in both places, got '
+      || COALESCE(dir_word, '<null>') || ' / ' || COALESCE(meta_word, '<null>');
+
+  -- 40e. NEGATIVE CONTROL — a clean grant with no refusal standing still reads
+  --      `granted` and still prints "Texting". The flag is the whole rule; the
+  --      status column is not overridden for anything else.
+  SELECT public.channel_consent_status(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '+16125550611') INTO w;
+  ASSERT w = 'granted',
+    'FAIL 40e: a clean grant must still read granted, got ' || COALESCE(w, '<null>');
+  SELECT sms_consent_status INTO w FROM v_project_roster
+   WHERE roster_id = 'e0000000-0000-4000-8000-0000000000e2';
+  ASSERT w = 'granted',
+    'FAIL 40e2: the roster must still print a clean grant, got '
+      || COALESCE(w, '<null>');
+  PERFORM pg_temp.reset_role();
+
+  -- 40f. The same holds for a folded `pending` or `not_asked` winner with a
+  --      refusing sibling — the divergence was never about `granted`.
+  UPDATE studio_channel_consent SET status = 'pending'
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550610';
+  SELECT public.channel_consent_status(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '+16125550610') INTO w;
+  ASSERT w = 'opted_out',
+    'FAIL 40f: a pending winner with a standing refusal must read opted_out, got '
+      || COALESCE(w, '<null>');
+
+  UPDATE studio_channel_consent SET status = 'not_asked'
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550610';
+  SELECT public.channel_consent_status(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '+16125550610') INTO w;
+  ASSERT w = 'opted_out',
+    'FAIL 40f2: a not_asked winner with a standing refusal must read opted_out, got '
+      || COALESCE(w, '<null>');
+
+  -- 40g. And no record at all is still the absence the callers COALESCE.
+  SELECT public.channel_consent_status(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '+16125550699') INTO w;
+  ASSERT w IS NULL,
+    'FAIL 40g: no record must stay NULL, got ' || COALESCE(w, '<null>');
+
+  -- 40h. The rule lives in ONE place (R-AS): neither view tests the flag
+  --      itself — they take the word from the reader.
+  ASSERT (SELECT definition FROM pg_views
+           WHERE schemaname = 'public' AND viewname = 'v_project_roster')
+         NOT ILIKE '%refusal_unanswered%',
+    'FAIL 40h: v_project_roster must not restate the refusal rule';
+  ASSERT (SELECT definition FROM pg_views
+           WHERE schemaname = 'public' AND viewname = 'people_directory')
+         NOT ILIKE '%refusal_unanswered%',
+    'FAIL 40h2: people_directory must not restate the refusal rule';
+
+  RAISE NOTICE '40. one reader, one verdict: an unanswered refusal reads '
+               'opted_out everywhere the room prints it (close-review r2 '
+               'MAJOR-2): passed';
   RAISE NOTICE 'All W1a assertions passed.';
 END
 $$;

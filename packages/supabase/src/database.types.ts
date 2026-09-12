@@ -34943,6 +34943,44 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      record_channel_invite: {
+        Args: {
+          p_channel_kind: string
+          p_channel_value: string
+          p_disclosure_version?: string
+          p_evidence?: string
+          p_organization_id: string
+          p_origin_project_id?: string
+          p_source?: string
+        }
+        Returns: {
+          channel_kind: string
+          channel_value: string
+          consented_at: string | null
+          created_at: string
+          disclosure_version: string | null
+          evidence: string | null
+          opt_out_at: string | null
+          opt_out_evidence: string | null
+          opt_out_recorded_at: string | null
+          opt_out_recorded_by: string | null
+          opt_out_source: string | null
+          organization_id: string
+          origin_project_id: string | null
+          recorded_at: string | null
+          recorded_by: string | null
+          refusal_unanswered: boolean
+          source: string | null
+          status: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "studio_channel_consent"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       record_channel_reconsent: {
         Args: {
           p_channel_kind: string

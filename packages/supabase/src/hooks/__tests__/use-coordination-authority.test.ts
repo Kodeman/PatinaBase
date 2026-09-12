@@ -592,7 +592,7 @@ describe('useAddProjectParty — the invite goes on the studio record too (MAJOR
     smsConsentEvidence: 'Told me at the site kickoff',
   };
 
-  it('records a pending consent record BEFORE the seat is born, so the room never prints "Not asked" for a person Patina has just texted', async () => {
+  it('records the invite on the studio record BEFORE the seat is born, so the room never prints "Not asked" for a person Patina has just texted', async () => {
     const ins = insertBuilder({ data: { id: 'party-9', project_id: PROJECT_ID }, error: null });
     from.mockReturnValue({ insert: ins.insert });
     rpc.mockReset();
@@ -607,12 +607,11 @@ describe('useAddProjectParty — the invite goes on the studio record too (MAJOR
       'project_consent_org',
       { p_project_id: PROJECT_ID },
     ]);
-    expect(rpc.mock.calls[1][0]).toBe('record_channel_consent');
+    expect(rpc.mock.calls[1][0]).toBe('record_channel_invite');
     expect(rpc.mock.calls[1][1]).toEqual({
       p_organization_id: ORG_ID,
       p_channel_kind: 'sms',
       p_channel_value: '(612) 555-9001',
-      p_status: 'pending',
       p_source: 'verbal',
       p_evidence: 'Told me at the site kickoff',
       p_disclosure_version: 'field-sms-v1',
@@ -621,6 +620,34 @@ describe('useAddProjectParty — the invite goes on the studio record too (MAJOR
     // The seat is still written — the freeze is BEFORE UPDATE, and the invite
     // dispatch still fires off this INSERT.
     expect(ins.insert).toHaveBeenCalledTimes(1);
+    const seat = ins.insert.mock.calls[0][0] as Record<string, unknown>;
+    expect(seat.sms_consent_status).toBe('pending');
+  });
+
+  // close-review r2 MAJOR-1. `pending` is the FIRST half of the double opt-in,
+  // and the add path used to write it unconditionally through
+  // record_channel_consent — so adding a repeat sub to a second job demoted the
+  // studio's own recorded grant, printed "Invited" for a granted number, turned
+  // the send verdict from "allow" to "unknown", and filed the new act's words
+  // under the old grant's date. The hook's half of the fix is WHICH DOOR it
+  // calls: record_channel_invite leaves a standing grant alone (00594).
+  it('never asks for a `pending` verdict at all — the door it calls is the one that cannot lower a standing grant', async () => {
+    const ins = insertBuilder({ data: { id: 'party-9', project_id: PROJECT_ID }, error: null });
+    from.mockReturnValue({ insert: ins.insert });
+    rpc.mockReset();
+    rpc
+      .mockResolvedValueOnce({ data: ORG_ID, error: null })
+      .mockResolvedValueOnce({ data: null, error: null });
+
+    await config().mutationFn(textableInput);
+
+    const [name, args] = rpc.mock.calls[1] as [string, Record<string, unknown>];
+    expect(name).toBe('record_channel_invite');
+    expect(name).not.toBe('record_channel_consent');
+    expect(args).not.toHaveProperty('p_status');
+    // The seat is still born `pending` — the invite dispatch fires off it, and
+    // the send rail reads the studio's `granted` record for it where one stands
+    // (sms.ts channelConsentVerdict's "allow" branch).
     const seat = ins.insert.mock.calls[0][0] as Record<string, unknown>;
     expect(seat.sms_consent_status).toBe('pending');
   });

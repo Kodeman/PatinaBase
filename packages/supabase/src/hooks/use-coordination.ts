@@ -413,13 +413,13 @@ export interface AddProjectPartyInput {
  * fires the opt-in SMS invite server-side. The UI never sends the invite.
  *
  * When the designer ticks "text updates" the invite is ALSO recorded on the
- * studio's own consent record (`record_channel_consent(…, 'pending', …)`,
- * 00594) before the row is written. Since R-AS that record is the single source
- * both readers take the consent word from, so a seat born `pending` with no
- * record behind it printed "Not asked" for a person Patina had just texted.
- * Recording first also puts 00594's gates ahead of the invite: a number this
- * studio holds a refusal for, or one that cannot be normalized to E.164, is
- * refused before the seat exists and before anything is sent.
+ * studio's own consent record (`record_channel_invite`, 00594) before the row
+ * is written. Since R-AS that record is the single source both readers take the
+ * consent word from, so a seat born `pending` with no record behind it printed
+ * "Not asked" for a person Patina had just texted. Recording first also puts
+ * 00594's gates ahead of the invite: a number this studio holds a refusal for,
+ * or one that cannot be normalized to E.164, is refused before the seat exists
+ * and before anything is sent.
  */
 export function useAddProjectParty() {
   const queryClient = useQueryClient();
@@ -445,10 +445,22 @@ export function useAddProjectParty() {
       // just texted, and §3.8's `Invited` word was unreachable for every newly
       // added party.
       //
-      // Recorded BEFORE the insert on purpose: record_channel_consent() is the
-      // gate. A number this studio already holds a refusal for, or one that
-      // cannot be normalized to E.164, is refused HERE — before a seat is born
-      // at `pending` and before the invite trigger sends anything.
+      // Recorded BEFORE the insert on purpose: the RPC is the gate. A number
+      // this studio already holds a refusal for, or one that cannot be
+      // normalized to E.164, is refused HERE — before a seat is born at
+      // `pending` and before the invite trigger sends anything.
+      //
+      // THE DOOR IS record_channel_invite, NOT record_channel_consent
+      // (close-review r2 MAJOR-1). `pending` is the first half of the double
+      // opt-in, and writing it unconditionally demoted the studio's own
+      // recorded grant every time a repeat sub was added to a second job: the
+      // room then printed "Invited" for a number the studio holds an evidenced
+      // grant for, every non-invite send was refused as not_consented, and the
+      // new act's five evidence columns landed on top of the old grant's date.
+      // record_channel_invite leaves a standing grant exactly as it is and
+      // records the invite only when there is nothing better on the books; the
+      // seat below is still born `pending`, and the send rail reads the
+      // studio's `granted` record for it (sms.ts channelConsentVerdict).
       if (wantsText) {
         const { data: consentOrg, error: orgError } = await supabase
           .rpc('project_consent_org', { p_project_id: input.projectId });
@@ -458,11 +470,10 @@ export function useAddProjectParty() {
             "This project isn't attached to a studio yet, so there's nowhere to record texting consent.",
           );
         }
-        const { error: consentError } = await supabase.rpc('record_channel_consent', {
+        const { error: consentError } = await supabase.rpc('record_channel_invite', {
           p_organization_id: consentOrg,
           p_channel_kind: 'sms',
           p_channel_value: consentPhone as string,
-          p_status: 'pending',
           p_source: consentSource,
           p_evidence: consentEvidence,
           p_disclosure_version: 'field-sms-v1',
