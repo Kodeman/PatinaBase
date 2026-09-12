@@ -1,0 +1,77 @@
+BEGIN
+CREATE FUNCTION
+CREATE FUNCTION
+GRANT
+GRANT
+ assume_user 
+-------------
+ 
+(1 row)
+
+=== the tables ===
+ docs | authority | site_cards | seats | grants 
+------+-----------+------------+-------+--------
+    0 |         0 |          0 |     0 |      1
+(1 row)
+
+=== the views, by branch ===
+ role | count 
+------+-------
+(0 rows)
+
+=== the four definer readers ===
+ rfq | agreement | plan | invoice 
+-----+-----------+------+---------
+   0 |         0 |    0 |       0
+(1 row)
+
+=== naming a FOREIGN studio, a foreign card, a foreign project, a foreign seat ===
+ foreign_firm_paper_word | foreign_identity_paper | foreign_rule | foreign_seat_count |            foreign_tenant            |       foreign_designer_oracle        
+-------------------------+------------------------+--------------+--------------------+--------------------------------------+--------------------------------------
+ not_on_file             | not_on_file            |              |                  0 | b0000000-0000-0000-0000-000000000001 | a0000000-0000-0000-0000-000000000004
+(1 row)
+
+ foreign_numbers 
+-----------------
+               0
+(1 row)
+
+ foreign_numbers_naming_my_own_org 
+-----------------------------------
+                                 1
+(1 row)
+
+ foreign_consent_word 
+----------------------
+ 
+(1 row)
+
+ foreign_consent_dates 
+-----------------------
+                     0
+(1 row)
+
+=== can the foreign owner write? ===
+psql:probe140-r7-cross-tenant-sweep.sql:56: NOTICE:  site access INSERT refused: new row violates row-level security policy for table "project_site_access_cards"
+DO
+psql:probe140-r7-cross-tenant-sweep.sql:62: NOTICE:  document INSERT refused: new row violates row-level security policy for table "studio_compliance_documents"
+DO
+psql:probe140-r7-cross-tenant-sweep.sql:68: NOTICE:  lockbox UPDATE touched 0 row(s)
+DO
+=== anon ===
+ assume_anon 
+-------------
+ 
+(1 row)
+
+psql:probe140-r7-cross-tenant-sweep.sql:73: NOTICE:  anon people_directory: permission denied for table studio_contacts
+DO
+psql:probe140-r7-cross-tenant-sweep.sql:75: NOTICE:  anon seats: permission denied for view people_directory_seats
+DO
+psql:probe140-r7-cross-tenant-sweep.sql:77: NOTICE:  anon grants: permission denied for view v_access_grants
+DO
+psql:probe140-r7-cross-tenant-sweep.sql:79: NOTICE:  anon site cards: permission denied for table project_site_access_cards
+DO
+psql:probe140-r7-cross-tenant-sweep.sql:81: NOTICE:  anon compliance_state: permission denied for function compliance_state
+DO
+ROLLBACK

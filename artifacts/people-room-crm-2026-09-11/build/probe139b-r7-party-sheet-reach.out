@@ -1,0 +1,22 @@
+BEGIN
+CREATE FUNCTION
+GRANT
+ assume_user 
+-------------
+ 
+(1 row)
+
+=== how many of the studio's seats can the shipped party sheet still open? ===
+ seats_of_the_seven_kinds | useperson_finds_a_row | sheet_opens_empty 
+--------------------------+-----------------------+-------------------
+                       22 |                     1 |                21
+(1 row)
+
+=== the seats whose record refuses texts, and what the sheet would print ===
+ display_name |  phone_e164  | seat_line_word | card_row_word |          what_the_sheet_reads          
+--------------+--------------+----------------+---------------+----------------------------------------
+ Pete Rusk    | +16125550112 | opted_out      | opted_out     | no row -> chip falls back to Not asked
+ Pete Rusk    | +16125550112 | opted_out      | opted_out     | no row -> chip falls back to Not asked
+(2 rows)
+
+ROLLBACK

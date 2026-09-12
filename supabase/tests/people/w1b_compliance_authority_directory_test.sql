@@ -2436,6 +2436,15 @@ END $$;
 -- The gate now resolves through project_tenant_org() (00624 §1): the recorded
 -- studio when there is one, else the DESIGN studio the caller and the job's
 -- designer share. This block walks both sides on the same studio-less job.
+--
+-- AND THE TWO CARD POINTERS ARE THE THIRD AND FOURTH WRITE (w1b final review
+-- r7 BLOCKING-1). r6's fix moved every gate in the wave onto
+-- project_tenant_org() except assert_project_party_cards(), which is the ONLY
+-- tenant guard on project_parties.company_id and .warranty_contact_person_id
+-- — so this block asserted "may record both" over a job where two further
+-- writes did not land at all, and where a card of the guessed studio DID. The
+-- legs below record both pointers naming the working studio's own cards and
+-- walk the foreign card's refusal in both column names.
 DO $$
 DECLARE
   n integer;
@@ -2479,6 +2488,23 @@ BEGIN
   INSERT INTO public.project_party_authority (engagement_id, scope)
   VALUES ('f2200000-0000-4000-8000-00000000000c','selections');
 
+  -- and four rolodex cards for the two card POINTERS (w1b final review r7
+  -- BLOCKING-1): a firm and a warranty contact in the studio DOING the work,
+  -- and the same two in the studio the CONSENT resolver guesses, which this
+  -- caller is not a member of and reads 0 rows of.
+  INSERT INTO public.studio_contacts (id, organization_id, entity_kind, contact_kind,
+                                      company_name, full_name, created_by) VALUES
+    ('f2400000-0000-4000-8000-00000000000c','b0000000-0000-0000-0000-000000000001',
+     'company','trade','Block 14 Own Firm',NULL,'a0000000-0000-0000-0000-000000000004'),
+    ('f2500000-0000-4000-8000-00000000000c','b0000000-0000-0000-0000-000000000001',
+     'person','trade',NULL,'Block 14 Own Warranty Contact','a0000000-0000-0000-0000-000000000004'),
+    ('f2600000-0000-4000-8000-00000000000c',
+     public.project_consent_org('b0000000-0000-0000-0000-0000000000d1'),
+     'company','trade','Block 14 Foreign Firm',NULL,'a0000000-0000-0000-0000-000000000004'),
+    ('f2700000-0000-4000-8000-00000000000c',
+     public.project_consent_org('b0000000-0000-0000-0000-0000000000d1'),
+     'person','trade',NULL,'Block 14 Foreign Warranty Contact','a0000000-0000-0000-0000-000000000004');
+
   -- ── the ADMIN of the studio actually doing the work ────────────────────
   PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000003');
   IF NOT public.is_active_studio_member('b0000000-0000-0000-0000-000000000001') THEN
@@ -2517,6 +2543,53 @@ BEGIN
   VALUES ('b0000000-0000-0000-0000-0000000000d3','Block 14 admin write');
   INSERT INTO public.project_party_authority (engagement_id, scope, threshold_cents)
   VALUES ('f2200000-0000-4000-8000-00000000000c','money',250000);
+
+  -- ── and the two ROLODEX POINTERS, the third and fourth write on this job ──
+  -- w1b final review r7 BLOCKING-1. assert_project_party_cards() was the one
+  -- tenant guard r6 MAJOR-1 left on project_consent_org(), and on this
+  -- population that INVERTED it: the working studio's own firm card was
+  -- refused party_company_other_studio, its own warranty contact
+  -- party_warranty_contact_other_studio, while a card of the guessed studio —
+  -- which this caller reads 0 rows of — LANDED on this studio's seat and
+  -- printed paper_state not_on_file on its own seat line. Both directions are
+  -- walked here, because a guard that refuses the compliant write and accepts
+  -- the cross-tenant one fails two ways and the error name it raises is
+  -- exactly the violation it permits.
+  UPDATE public.project_parties SET company_id = 'f2400000-0000-4000-8000-00000000000c'
+   WHERE id = 'f2200000-0000-4000-8000-00000000000c';
+  IF NOT EXISTS (SELECT 1 FROM public.project_parties
+                  WHERE id = 'f2200000-0000-4000-8000-00000000000c'
+                    AND company_id = 'f2400000-0000-4000-8000-00000000000c') THEN
+    RAISE EXCEPTION '14t the working studio''s OWN firm card did not land on its own seat';
+  END IF;
+  UPDATE public.project_parties
+     SET warranty_contact_person_id = 'f2500000-0000-4000-8000-00000000000c'
+   WHERE id = 'f2200000-0000-4000-8000-00000000000c';
+  IF NOT EXISTS (SELECT 1 FROM public.project_parties
+                  WHERE id = 'f2200000-0000-4000-8000-00000000000c'
+                    AND warranty_contact_person_id = 'f2500000-0000-4000-8000-00000000000c') THEN
+    RAISE EXCEPTION '14u the working studio''s OWN warranty contact did not land on its own seat';
+  END IF;
+  -- the card this caller cannot read may not be named
+  IF (SELECT count(*) FROM public.studio_contacts
+       WHERE id = 'f2600000-0000-4000-8000-00000000000c') <> 0 THEN
+    RAISE EXCEPTION '14v the foreign card is readable to this caller, so the refusal below proves nothing';
+  END IF;
+  BEGIN
+    UPDATE public.project_parties SET company_id = 'f2600000-0000-4000-8000-00000000000c'
+     WHERE id = 'f2200000-0000-4000-8000-00000000000c';
+    RAISE EXCEPTION '14w a FIRM card of the studio the consent resolver guesses LANDED on this studio''s own seat';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM <> 'party_company_other_studio' THEN RAISE; END IF;
+  END;
+  BEGIN
+    UPDATE public.project_parties
+       SET warranty_contact_person_id = 'f2700000-0000-4000-8000-00000000000c'
+     WHERE id = 'f2200000-0000-4000-8000-00000000000c';
+    RAISE EXCEPTION '14x a PERSON card of the studio the consent resolver guesses LANDED as this studio''s own warranty contact';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM <> 'party_warranty_contact_other_studio' THEN RAISE; END IF;
+  END;
 
   -- ── and the word on that restored seat may not be the affirmative one ──
   -- The record that decides it lives at the org project_consent_org() guesses,
@@ -2591,7 +2664,7 @@ BEGIN
   END;
 
   PERFORM pg_temp.reset_role();
-  RAISE NOTICE '14. a studio-less job: the admin of the studio doing the work reads its seat, its site access card and its authority grant and may record both, the consent word on that seat reads NULL rather than the affirmative one because the deciding record lives where it cannot be read, and a co-member of the designer through a non-design organization reads none of it and may write nothing (r6 MAJOR-1): passed';
+  RAISE NOTICE '14. a studio-less job: the admin of the studio doing the work reads its seat, its site access card and its authority grant and may record all four — the card, the grant, the seat''s FIRM pointer and its WARRANTY CONTACT, both naming their own rolodex cards — while a firm card and a person card of the studio the consent resolver guesses are refused party_company_other_studio / party_warranty_contact_other_studio (r7 BLOCKING-1), the consent word on that seat reads NULL rather than the affirmative one because the deciding record lives where it cannot be read, and a co-member of the designer through a non-design organization reads none of it and may write nothing (r6 MAJOR-1): passed';
 END $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -2632,6 +2705,106 @@ BEGIN
   END IF;
   PERFORM pg_temp.reset_role();
   RAISE NOTICE '15. the client branch inherits designer_clients'' own posture exactly (% row(s) each) while every tenant-scoped object of this wave stays shut to the same caller — r6 MAJOR-2 is a ruling of record, not a silent inconsistency: passed', n_view;
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 16. A number the studio's own seat carries reaches the identity's word,
+--     whether or not the job records its studio
+-- ═══════════════════════════════════════════════════════════════════════════
+-- w1b final review r7 MAJOR-1. identity_phone_numbers()' seat leg — added by
+-- r5 BLOCKING-1 to close a cross-tenant phone-number oracle — was a single
+-- EQUALITY against project_consent_org(), and an equality against a GUESSING
+-- resolver is the wrong instrument in front of a WORST-FIRST reduction:
+-- dropping a number can only make the printed word MORE permissive (this
+-- function's own r4 MAJOR-3 argument). On a job that records no studio_id the
+-- guess names whatever studio the designer's memberships rank first, so the
+-- studio's own seat dropped out and the identity row printed the affirmative
+-- word over the studio's OWN recorded refusal — with the seat line printing
+-- NULL (the r6 gate), so nothing on the face argued. Fail-OPEN, on the row the
+-- text composer opens from. The leg now names the studio DOING the work beside
+-- the record's studio (R-BD/R-BB).
+--
+-- The control is probe138's, both ways: ONE field — projects.studio_id —
+-- decided whether the refusal reached the face, with nothing else about the
+-- seat, the number or the record changing. So the same seat is read on a
+-- studio-less job and then on a job that records its studio, and the word has
+-- to be the same refusal both times.
+DO $$
+DECLARE
+  v_word    text;
+  v_numbers text[];
+BEGIN
+  -- a card in the studio doing the work, carrying a permitted number
+  INSERT INTO public.studio_contacts (id, organization_id, entity_kind, contact_kind,
+                                      full_name, phone_e164, created_by)
+  VALUES ('f2800000-0000-4000-8000-00000000000c','b0000000-0000-0000-0000-000000000001',
+          'person','trade','Block 16 Carded Trade','+16125559996',
+          'a0000000-0000-0000-0000-000000000004');
+  -- the studio's OWN two records: the card's number is permitted, the second
+  -- work mobile is refused
+  INSERT INTO public.studio_channel_consent (organization_id, channel_kind, channel_value,
+                                             status, source, recorded_at, consented_at)
+  VALUES ('b0000000-0000-0000-0000-000000000001','sms','+16125559996','granted','written',now(),now())
+  ON CONFLICT (organization_id, channel_kind, channel_value)
+    DO UPDATE SET status = 'granted', source = 'written', consented_at = now();
+  INSERT INTO public.studio_channel_consent (organization_id, channel_kind, channel_value,
+                                             status, opt_out_at, opt_out_source)
+  VALUES ('b0000000-0000-0000-0000-000000000001','sms','+16125559997','opted_out',now(),'inbound_sms')
+  ON CONFLICT (organization_id, channel_kind, channel_value)
+    DO UPDATE SET status = 'opted_out', opt_out_at = now(), opt_out_source = 'inbound_sms';
+  -- and the seat that carries the refused number, on the STUDIO-LESS job
+  INSERT INTO public.project_parties (id, project_id, party_kind, display_name, trade,
+                                      phone_e164, studio_contact_id, created_by)
+  VALUES ('f2900000-0000-4000-8000-00000000000c','b0000000-0000-0000-0000-0000000000d1',
+          'sub','Block 16 Carded Trade','electrical','+16125559997',
+          'f2800000-0000-4000-8000-00000000000c','a0000000-0000-0000-0000-000000000004');
+
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000003');  -- admin of the studio doing the work
+  IF NOT public.is_active_studio_member('b0000000-0000-0000-0000-000000000001') THEN
+    RAISE EXCEPTION '16a the actor must be a member of the studio whose card and records these are';
+  END IF;
+  IF public.is_active_studio_member(
+       public.project_consent_org('b0000000-0000-0000-0000-0000000000d1')) THEN
+    RAISE EXCEPTION '16b the actor must NOT be a member of the org the consent resolver guesses, or the fail-open this block is about cannot be observed';
+  END IF;
+
+  SELECT array_agg(n ORDER BY n) INTO v_numbers
+    FROM public.identity_phone_numbers('b0000000-0000-0000-0000-000000000001',
+           'f2800000-0000-4000-8000-00000000000c','+16125559996') AS t(n);
+  IF v_numbers IS DISTINCT FROM ARRAY['+16125559996','+16125559997'] THEN
+    RAISE EXCEPTION '16c the number set for a card whose seat sits on a STUDIO-LESS job of this same studio is % — the seat''s number has to be in it, or the worst-first reduction reads more permissively than the studio''s own record', COALESCE(v_numbers::text,'NULL');
+  END IF;
+  SELECT consent_status INTO v_word FROM public.people_directory
+   WHERE person_id = 'f2800000-0000-4000-8000-00000000000c';
+  IF v_word IS DISTINCT FROM 'opted_out' THEN
+    RAISE EXCEPTION '16d the Directory row printed % over this studio''s own recorded refusal on a number its own seat carries', COALESCE(v_word,'NULL');
+  END IF;
+
+  -- ── the mutation control: the same seat on a job that RECORDS its studio ──
+  PERFORM pg_temp.reset_role();
+  UPDATE public.project_parties
+     SET project_id = 'b0000000-0000-0000-0000-00000000c0d1'
+   WHERE id = 'f2900000-0000-4000-8000-00000000000c';
+  IF (SELECT studio_id FROM public.projects
+       WHERE id = 'b0000000-0000-0000-0000-00000000c0d1')
+     IS DISTINCT FROM 'b0000000-0000-0000-0000-000000000001' THEN
+    RAISE EXCEPTION '16e the control project must RECORD this studio for the control to be a control';
+  END IF;
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000003');
+  SELECT array_agg(n ORDER BY n) INTO v_numbers
+    FROM public.identity_phone_numbers('b0000000-0000-0000-0000-000000000001',
+           'f2800000-0000-4000-8000-00000000000c','+16125559996') AS t(n);
+  IF v_numbers IS DISTINCT FROM ARRAY['+16125559996','+16125559997'] THEN
+    RAISE EXCEPTION '16f the control''s number set is % — the two placements disagree, so projects.studio_id still decides what the reduction sees', COALESCE(v_numbers::text,'NULL');
+  END IF;
+  SELECT consent_status INTO v_word FROM public.people_directory
+   WHERE person_id = 'f2800000-0000-4000-8000-00000000000c';
+  IF v_word IS DISTINCT FROM 'opted_out' THEN
+    RAISE EXCEPTION '16g the control printed % — one field may not decide whether a recorded refusal reaches the face', COALESCE(v_word,'NULL');
+  END IF;
+
+  PERFORM pg_temp.reset_role();
+  RAISE NOTICE '16. the number set and the identity''s consent word: a seat on a STUDIO-LESS job of this studio contributes its number, so the studio''s own recorded refusal decides the Directory word (opted_out, not the affirmative one), and the same seat moved onto a job that RECORDS its studio reads identically — projects.studio_id no longer decides whether a refusal reaches the face (r7 MAJOR-1, probe138''s control both ways): passed';
 END $$;
 
 DO $$ BEGIN RAISE NOTICE 'All W1b assertions passed.'; END $$;

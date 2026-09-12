@@ -500,7 +500,16 @@ export function PartyProfileSheet({
         <h2 className="font-heading text-[1.6rem] font-medium text-[var(--color-charcoal)]">
           {person?.display_name ?? 'Field party'}
         </h2>
-        <ConsentChip status={consent} />
+        {/* No chip when the identity did not resolve. people_directory v4
+            keys a carded human on their rolodex card, so usePerson(<seat id>,
+            <party_kind>) finds no row for a stamped seat and `consent` falls
+            back to 'not_asked' — the sheet printed "Not asked" over a record
+            that says opted_out (w1b final review r7 MAJOR-2). R-BE owes W2 the
+            repoint: read people_directory_seats for the seat, join the
+            identity on person_id, and take the word from consent_status. Until
+            then the sheet says nothing rather than the affirmative-adjacent
+            word. */}
+        {person ? <ConsentChip status={consent} /> : null}
       </div>
 
       {/* Promote band (Call Sheet Wave 2, slide 10) — only when this party

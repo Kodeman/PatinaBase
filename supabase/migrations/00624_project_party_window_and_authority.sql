@@ -83,6 +83,26 @@
 -- OF studio_id IS NULL PROJECTS ON STRATA IS OWED BEFORE THIS CHAIN RUNS:
 -- locally it is 5 of 8, and every gate in this wave turns on it.
 --
+-- AND THAT OWED COUNT GATES A CONSENT QUESTION, NOT ONLY A VISIBILITY ONE
+-- (w1b final review r7 MAJOR-1, for the deploy brief). On a studio-less
+-- project the SEND rail resolves the org the same way SQL does —
+-- _shared/sms.ts resolveProjectOrg() over primaryStudioFor(), i.e.
+-- COALESCE(studio_id, _primary_studio_for(designer)) — so a `granted` record
+-- held at the GUESSED studio permits a text to a number the studio doing the
+-- work has recorded `opted_out`. That is project_consent_org()'s own
+-- pre-existing posture (00594 / R-AK), not something 00623-00627 introduce;
+-- it is written here because the owed Strata number is owed for that reason
+-- too, not only because the gates turn on it.
+--
+-- R-BD, the ruling this banner now sits under: every tenant resolution for a
+-- project uses project_tenant_org(), project_consent_org() is retired from
+-- guards and reducers, and the studio_id IS NULL population is LEGACY — W3
+-- backfills projects.studio_id from the designer's SINGLE active design-studio
+-- membership, leaves the ambiguous ones NULL and lists them, and the W7
+-- preflight counts what remains on Strata before this chain runs. (The five
+-- local ones are all ambiguous: their designer owns two design studios, so
+-- nothing in the record chooses and the backfill may not guess either.)
+--
 -- Adds GRANT/REVOKE → regenerate seed/00-legacy-grants.sql after this
 -- migration (python3 scripts/generate-legacy-grants.py).
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -284,9 +304,34 @@ COMMENT ON COLUMN public.project_parties.warranty_contact_person_id IS
 -- ── The two new card pointers have to be the cards they claim to be ─────────
 -- Both are plain self-FKs into studio_contacts, which holds BOTH kinds of card
 -- AND every tenant's cards — the 00592 R-AP hole, closed the same way. The
--- studio is resolved through project_party_org()'s single resolver; a project
--- that resolves to NO studio cannot verify either pointer, so it refuses
--- rather than accept an unverifiable cross-tenant value.
+-- studio is resolved through project_tenant_org(), this wave's ONE gate
+-- resolver (§1); a project that resolves to NO studio cannot verify either
+-- pointer, so it refuses rather than accept an unverifiable cross-tenant
+-- value.
+--
+-- IT WAS project_consent_org(), AND THAT INVERTED THE GUARD (w1b final review
+-- r7 BLOCKING-1). r6 MAJOR-1 moved every gate in this wave onto
+-- project_tenant_org() — the site-access policies (00625), the authority
+-- policies through project_party_org() (§1b), the Directory's party branch and
+-- the seats view (00626) — and this trigger, the ONLY tenant guard on
+-- company_id and warranty_contact_person_id, was left behind. On a project
+-- that records no studio_id the two resolvers name different studios (5 of 8
+-- local projects), so the guard refused the working studio's OWN cards
+-- (party_company_other_studio on their own firm, party_warranty_contact_other_
+-- studio on their own warranty contact) and ACCEPTED a card belonging to the
+-- studio the consent resolver guesses — a card the writer reads 0 rows of —
+-- which then appeared on the working studio's own seat line with paper_state
+-- degraded to not_on_file. The guard is SECURITY DEFINER and never asked
+-- whether the caller belonged to v_org, so the error name it raised was
+-- exactly the violation it permitted.
+--
+-- project_tenant_org() is CALLER-RELATIVE where the record names no studio, so
+-- a writer with no auth.uid() (service_role, a seed, a backfill) resolves NULL
+-- on that population and takes the existing party_card_project_has_no_studio
+-- refusal — the honest answer, and already the behaviour for a project that
+-- resolves to no studio at all. Every project the seed and both suites write a
+-- pointer on records its studio_id, so nothing in the chain relies on the old
+-- guess.
 CREATE OR REPLACE FUNCTION public.assert_project_party_cards()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -302,7 +347,7 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  v_org := public.project_consent_org(NEW.project_id);
+  v_org := public.project_tenant_org(NEW.project_id);
   IF v_org IS NULL THEN
     RAISE EXCEPTION 'party_card_project_has_no_studio'
       USING HINT = 'This project resolves to no studio, so a rolodex card on '
@@ -353,12 +398,20 @@ REVOKE ALL ON FUNCTION public.assert_project_party_cards()
 COMMENT ON FUNCTION public.assert_project_party_cards() IS
   'BEFORE INSERT/UPDATE on project_parties: company_id must name a COMPANY '
   'card and warranty_contact_person_id a PERSON card, both in the studio '
-  'project_party_org()/project_consent_org() resolves for the project '
+  'project_tenant_org() resolves for the project — this wave''s ONE gate '
+  'resolver, never project_consent_org() '
   '(party_company_not_a_company / party_company_other_studio / '
   'party_warranty_contact_not_a_person / _other_studio / '
   'party_card_project_has_no_studio). The self-FKs cannot say this — '
   'studio_contacts holds both kinds of card and every studio''s cards (00624, '
-  'the 00592 R-AP shape).';
+  'the 00592 R-AP shape). It resolved through project_consent_org() until r7 '
+  'BLOCKING-1: on a studio_id IS NULL project that guess INVERTED the guard — '
+  'the working studio''s own firm and warranty-contact cards were refused '
+  'while a card of the guessed studio, which the writer reads 0 rows of, '
+  'LANDED on their seat and printed paper_state not_on_file on their own seat '
+  'line. project_tenant_org() is caller-relative on that population, so a '
+  'writer with no auth.uid() (service_role, seed, backfill) resolves NULL and '
+  'takes the party_card_project_has_no_studio refusal rather than a guess.';
 
 DROP TRIGGER IF EXISTS assert_project_party_cards_trg ON public.project_parties;
 CREATE TRIGGER assert_project_party_cards_trg

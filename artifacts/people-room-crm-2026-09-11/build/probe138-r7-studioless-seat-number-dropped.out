@@ -1,0 +1,67 @@
+BEGIN
+CREATE FUNCTION
+CREATE FUNCTION
+GRANT
+GRANT
+INSERT 0 1
+INSERT 0 1
+ assume_user 
+-------------
+ 
+(1 row)
+
+=== the record this studio holds for that number ===
+ record_word 
+-------------
+ opted_out
+(1 row)
+
+=== the numbers the reduction actually sees for Dana ===
+ identity_phone_numbers 
+------------------------
+ +16125550111
+(1 row)
+
+=== what Dana's Directory row prints ===
+ display_name  | consent_status | seat_count 
+---------------+----------------+------------
+ Dana Kowalski | granted        |          3
+(1 row)
+
+=== and her seat lines ===
+    project_name    |  phone_e164  | consent_status 
+--------------------+--------------+----------------
+ Aspen Loft Refresh | +16125558888 | 
+ Lindqvist kitchen  | +16125550111 | granted
+ Okonkwo residence  | +16125550111 | granted
+(3 rows)
+
+=== CONTROL: move the same seat onto a job that RECORDS its studio ===
+ reset_role 
+------------
+ 
+(1 row)
+
+UPDATE 1
+ assume_user 
+-------------
+ 
+(1 row)
+
+ identity_phone_numbers 
+------------------------
+ +16125550111
+ +16125558888
+(2 rows)
+
+ display_name  | consent_status 
+---------------+----------------
+ Dana Kowalski | opted_out
+(1 row)
+
+ reset_role 
+------------
+ 
+(1 row)
+
+ROLLBACK
