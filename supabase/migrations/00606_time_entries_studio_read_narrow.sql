@@ -209,6 +209,55 @@ CREATE POLICY time_entries_owner_admin_read ON public.project_time_entries
 --     ruling about, pinned as case (o) below, and flagged to the orchestrator
 --     rather than narrowed here on a guess.
 --
+-- AMENDED IN ROUND 5 — BOUND (e2), AND WHAT THIS ACT CAN STILL DO. The paragraph
+-- above claimed the tier refuses her own workspace "to EVERY caller while she
+-- holds an employer seat". That was FALSE as written, and measured so (W2-R5-01,
+-- MAJOR): HT-3-d's tier is a ROLE test, and a designer can WRITE her own role in
+-- the studio she controls. With two authenticated statements — a consent-free
+-- `admin` seat for an account she holds, then `transfer_studio_ownership`, whose
+-- last statement DEMOTES auth.uid() to 'admin' (00484:524-536) — her 00295
+-- workspace moves from the OWNED tier into the EMPLOYER tier while she stays
+-- is_org_admin_or_owner there. Measured end to end, with HER as the sole actor and
+-- both statements reachable from her own studio settings page: a project an honest
+-- employer was pricing CORRECTLY fell to 'none' (the demotion makes her employer
+-- tier ambiguous, which satisfies bound (c)), she stamped the workspace whose rate
+-- card she writes, her next hour came back 99900 / studio_member / 199800 rated,
+-- and the employer read 0 rows with project_hours_total refused 42501, for ever.
+-- The act did not repair 'none' — it MANUFACTURED 'none' and took the work.
+-- Bound (e2) below refuses it: while the project's designer holds any employer
+-- seat, SHE may not name a studio she herself administers. The OWNED arm is
+-- untouched (HT-3-c's sole proprietor, case (o)), and so is every caller who is not
+-- the designer — MEASURED, not assumed: written as a property of (the designer,
+-- p_studio_id) for every caller, the refusal makes cases (n) and (g)/(h) FAIL,
+-- because an honest employer's own owner and admin can then no longer repair the
+-- legacy project of a designer who happens to be an admin there, and no other
+-- studio is in her tier — the project is 'none' for ever, which is exactly the harm
+-- W2-R2-02 found. At call time her admin seat at an honest employer and her admin
+-- seat in a workspace she just handed to a confederate are the SAME shape; only
+-- WHEN the role was written separates them, and that is candidate (iv), a new rule.
+--
+-- AND THIS FILE NO LONGER CLAIMS THE ACT CANNOT MOVE MONEY. It can, and the two
+-- shapes are pinned as PASSING, loudly-labelled assertions rather than left for a
+-- sixth round to find:
+--   · case (q), q8-q11 — HT-3-d's SECOND consequence ("a confederate she seats as
+--     admin in her workspace is refused … the workspace is not in the tier") is
+--     still FALSE after the demotion: the workspace genuinely IS in the tier then,
+--     and bound (e) cannot tell it from an employer. The account she handed the
+--     title to stamps it, her hours price at her own 99900 / 199800 rated, and the
+--     honest employer reads 0 rows. The owed consent door would NOT close this one —
+--     the seat being exploited is her OWN 00295 seat.
+--   · case (r), W2-R5-02 — a WILLING designer authors the `created_by` sibling
+--     bound (a2) asks of a confederate, so that leg bounds nobody she cooperates
+--     with; his stamp succeeds, and removing the cause (he deletes her seat) does
+--     not undo it. W2-R2-04's consent door is therefore IRREVERSIBLE through this
+--     act, which is what round 4 ruled must not survive.
+-- Both need a ruling the program owes — HT-3-b arm (c)'s consent door (seats land
+-- 'invited'; only the named user activates her own seat), or a bound on WHEN the
+-- tier and the sibling are read (predating the target project), or on who may
+-- author the rate card in the studio being named. None is guessed here. Until one
+-- lands, this act is money-moving in the hands of a designer with one accomplice,
+-- and the projects.studio_id IS NULL population on Strata is the exposure.
+--
 -- ONE LEG OF ROUND 3 IS RETAINED, and it is not a second arm: where the caller
 -- is NOT the designer herself, the studio she names must ALREADY hold a project
 -- this designer both LEADS and CREATED. HT-3-d's tier bound does not reach this
@@ -233,6 +282,13 @@ CREATE POLICY time_entries_owner_admin_read ON public.project_time_entries
 -- holding one legacy project from before it — still works, and a manufactured
 -- sibling does not. Cases (d) and (k) of
 -- supabase/tests/rls/time_entry_studio_stamp_test.sql measure both.
+--   CORRECTED IN ROUND 5 (W2-R5-02 — measured): this leg is safe against an
+--   UNWILLING victim ONLY. It bounds what an attacker can forge about a designer
+--   who is not helping him; it bounds nothing about a designer who IS, because she
+--   authors the sibling herself with one INSERT naming his studio (00563's
+--   authenticated arm admits any studio she belongs to, and his consent-free seat
+--   made her belong). Case (r) measures that end to end. So `created_by` does not
+--   close the consent-door class — it narrows it to attackers acting alone.
 --
 -- Either way the project must still be unstamped AND unpriced: where
 -- project_pricing_studio_id already answers, the owner HAS her read and this
@@ -397,6 +453,74 @@ BEGIN
       USING ERRCODE = 'insufficient_privilege';
   END IF;
 
+  -- (e2) HT-3-d's FIRST OPERATIVE SENTENCE, made true (round 5, W2-R5-01 — MAJOR,
+  --      measured 1/1 through RLS). HT-3-d says "a designer naming her own
+  --      workspace while she has any employer is refused", and bound (e) expresses
+  --      that through `role <> 'owner'` — a ROLE test, and she can WRITE her own
+  --      role in the studio she controls. Two authenticated statements, with HER as
+  --      the SOLE actor and both of them live affordances on her own studio settings
+  --      page (account-studio-page.tsx:1554), put her 00295 workspace inside her own
+  --      EMPLOYER tier: a consent-free `admin` seat for any account she holds (`Org
+  --      owners can insert members` asks only is_org_admin_or_owner AND
+  --      role <> 'owner'), then transfer_studio_ownership(workspace, that account),
+  --      whose last statement DEMOTES auth.uid() to 'admin' (00484:524-536). 'admin'
+  --      still satisfies bound (a) and studio_member_rates_admin_insert, so she keeps
+  --      the standing and the rate card. Measured end to end: a project an honest
+  --      employer was pricing CORRECTLY fell to 'none' (the demotion makes her
+  --      employer tier ambiguous, satisfying bound (c)), she stamped the workspace,
+  --      her next hour came back 99900 / studio_member / 199800 rated, and the
+  --      employer read 0 rows with project_hours_total refused 42501 — for ever,
+  --      bound (b). The act did not repair 'none'; it MANUFACTURED 'none' and took
+  --      the work. So: while the project's designer holds any employer seat, SHE may
+  --      not name a studio she herself administers. Her hours, her money, her own
+  --      rate card and the decision would otherwise be one hand.
+  --
+  --      WHY THIS IS GATED ON THE ACTOR, when round 4 moved bound (e) off the actor
+  --      for good reasons — MEASURED, not reasoned: written as a property of (the
+  --      designer, p_studio_id) and applied to every caller, this refusal DENIES
+  --      HT-3-a's remedy outright to an ordinary studio. A designer who is an `admin`
+  --      of her honest employer is indistinguishable at call time from a designer who
+  --      has just handed her workspace to a confederate — in both she is 'admin' and
+  --      somebody else is 'owner'. The designer-property form was installed on this
+  --      stack and the suite run: cases (n) and (g)/(h) FAIL — the employer's own
+  --      ADMIN and its OWNER can no longer repair the legacy project of a designer
+  --      who happens to be an admin there, and no other studio is in her tier, so
+  --      that project is 'none' for ever with no act available to anybody. That is
+  --      the exact harm W2-R2-02 found and section (4) exists to end, so the broad
+  --      form is a regression, not a narrowing. The only thing that separates the
+  --      two shapes is WHEN her seat took its role — which is candidate (iv),
+  --      a bound on the time the tier is read, and a new rule.
+  --
+  --      WHAT REMAINS OPEN, asserted as PASSING test cases rather than left for a
+  --      sixth round (cases (q) q8-q11 and (r)): HT-3-d's SECOND consequence — "a
+  --      confederate she seats as admin in her workspace is refused for the same
+  --      reason (the workspace is not in the tier)" — is still false after the
+  --      demotion, because the workspace genuinely IS in the tier then and bound (e)
+  --      cannot tell it from an employer. The confederate she handed the title to
+  --      stamps it, and bound (a2)'s `created_by` sibling is something a WILLING
+  --      designer authors herself (W2-R5-02, case (r)). So this act moves money for
+  --      a designer with one accomplice account. Closing that needs a ruling the
+  --      program owes — HT-3-b arm (c)'s consent door, a temporal bound on the tier
+  --      and the sibling (candidate (iv)), or a bound on who may author the rate
+  --      card in the studio being named (candidate (ii), which would also move case
+  --      (o6)). None is guessed here, and the exposure is the
+  --      projects.studio_id IS NULL population on Strata, still uncounted.
+  IF v_actor = v_designer_id AND v_designer_has_employer_seat AND EXISTS (
+    SELECT 1
+    FROM public.organization_members AS designer_standing
+    WHERE designer_standing.organization_id = p_studio_id
+      AND designer_standing.user_id = v_designer_id
+      AND designer_standing.status = 'active'
+      AND designer_standing.role IN ('owner', 'admin')
+  ) THEN
+    RAISE EXCEPTION 'stamp_project_pricing_studio: a designer may not name a '
+                    'studio she herself administers while she holds an employer '
+                    'seat — that would leave her hours, her money and her own rate '
+                    'card in one hand. Another owner or admin of that studio names '
+                    'it (HT-3-d, W2-R5-01)'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
   -- (f) the write. The row count is READ rather than assumed (W2-R4-06): under a
   --     concurrent stamp the bounds above can pass and the column be filled
   --     before this statement, and returning p_studio_id would then report a
@@ -462,7 +586,21 @@ COMMENT ON FUNCTION public.stamp_project_pricing_studio(uuid, uuid) IS
   'must ALREADY hold a project that designer both LEADS and CREATED — '
   'created_by, because an outsider can seat a victim designer in her own org '
   'consent-free, which puts that org inside the tier, but cannot forge that '
-  'column (W2-R3-01). Refuses a stamped project (final, HT-3-c) and one whose '
+  'column (W2-R3-01); that leg bounds an attacker acting ALONE and bounds nothing '
+  'about a designer who cooperates with him, who authors the sibling herself '
+  '(W2-R5-02, measured). AND (round 5, W2-R5-01 — MAJOR): while the project''s '
+  'designer holds any employer seat, SHE may not name a studio she herself '
+  'administers — the tier is a ROLE test and she can WRITE her own role, so a '
+  'consent-free `admin` seat plus transfer_studio_ownership (which demotes '
+  'auth.uid(), 00484:524-536) moved her own 00295 workspace into her own employer '
+  'tier and she stamped a project an honest employer was pricing CORRECTLY, taking '
+  'it at the 99900 she wrote herself. That refusal is gated on the designer being '
+  'the ACTOR because the broad form measurably denies HT-3-a''s remedy to any '
+  'designer who is an admin of her only employer (cases (n) and (g)/(h) fail). '
+  'THIS ACT CAN STILL MOVE MONEY for a designer with one accomplice account: '
+  'cases (q) q8-q11 and (r) of time_entry_studio_stamp_test.sql pin both shapes as '
+  'passing assertions, and closing them is a ruling the program owes. Refuses a '
+  'stamped project (final, HT-3-c) and one whose '
   'hours a studio already prices. Writes one audit_logs row '
   '(project.pricing_studio_stamped, W2-R4-05) and returns the studio the UPDATE '
   'actually wrote (W2-R4-06). SECURITY DEFINER so the write does not meet '
@@ -648,8 +786,38 @@ BEGIN
     SELECT prosrc LIKE '%project_pricing_studio_id(p_project_id) IS NOT NULL%'
     FROM pg_proc
     WHERE oid = to_regprocedure('public.stamp_project_pricing_studio(uuid,uuid)')
-  ), '00606: the stamp must refuse a project a studio already prices — it '
-     'repairs ''none'', it does not move money';
+  ), '00606: the stamp must refuse a project a studio already prices — that bound '
+     'is what keeps the act pointed at ''none'' rather than at a priced project. It '
+     'is NOT a claim that the act cannot move money: round 5 measured a designer '
+     'MANUFACTURING ''none'' on a correctly-priced project (W2-R5-01) and a willing '
+     'designer handing a confederate the sibling bound (a2) asks for (W2-R5-02). '
+     'Bound (e2) closes the sole-actor form; cases (q-residue) and (r) of '
+     'time_entry_studio_stamp_test.sql pin what is still open, and it waits on a '
+     'ruling';
+
+  -- (e2), round 5's bound, pinned by source — it is the only thing standing
+  -- between a designer with one authenticated RPC call and her own rate card.
+  ASSERT (
+    SELECT prosrc LIKE '%designer_standing.role IN (''owner'', ''admin'')%'
+       AND prosrc LIKE '%IF v_actor = v_designer_id AND v_designer_has_employer_seat%'
+    FROM pg_proc
+    WHERE oid = to_regprocedure('public.stamp_project_pricing_studio(uuid,uuid)')
+  ), '00606: bound (e2), HT-3-d''s first operative sentence made true (W2-R5-01, '
+     'MAJOR, measured 1/1): while the project''s designer holds any employer seat, '
+     'SHE may not name a studio she herself administers. Without it the tier is a '
+     'role test she can satisfy by WRITING her own role — one consent-free `admin` '
+     'seat plus transfer_studio_ownership, whose last statement demotes auth.uid() '
+     'to ''admin'' (00484:524-536), both reachable from her own studio settings '
+     'page — and she stamped her own workspace on a project her honest employer '
+     'was pricing correctly, priced the next hour at the 99900 she wrote for '
+     'herself, and left that employer reading 0 rows for ever. Two scopes are '
+     'deliberate and neither may be widened without a ruling: the OWNED arm is '
+     'untouched (there she IS the studio — HT-3-c, case (o)), and the refusal is '
+     'gated on the designer being the ACTOR because the designer-property form '
+     'MEASURABLY breaks cases (n) and (g)/(h) — an honest employer''s owner and '
+     'admin could no longer repair the legacy project of a designer who is an '
+     'admin there, leaving it ''none'' for ever, which is the harm section (4) '
+     'exists to end';
 
   -- set_project_studio_id is NOT redefined by this file (§0.4 / 00603's own rule).
   ASSERT (
