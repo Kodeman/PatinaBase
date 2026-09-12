@@ -4,7 +4,9 @@
 -- 00594, so the fold is seen before it is taken.
 --
 -- It is the function's own CTE chain verbatim (00594, section 2), with the
--- INSERT replaced by a SELECT. The `refusal` CTE is the half that matters and
+-- INSERT replaced by a SELECT. It prints opt_out_at — the date the fold will
+-- actually write — beside opt_out_recorded_at, so the operator cannot read a
+-- dated refusal off a row about to be minted without one (r6 R6-M2). The `refusal` CTE is the half that matters and
 -- the half an earlier version of this dry run omitted (r9 R5-M2): it is asked
 -- of EVERY seat in the group, not of the winning row, and its LEFT JOIN is what
 -- decides `refusal_unanswered` — the one column that decides whether a studio
@@ -50,6 +52,7 @@ ranked AS (
 ),
 refusal AS (
   SELECT org, phone_e164,
+         sms_opt_out_at,
          sms_consent_source      AS opt_out_source,
          sms_consent_evidence    AS opt_out_evidence,
          sms_consent_recorded_at AS opt_out_recorded_at,
@@ -74,6 +77,11 @@ SELECT r.org,
        r.phone_e164,
        r.sms_consent_status,
        (f.org IS NOT NULL) AS refusal_unanswered,
+       -- WHEN THEY REFUSED, exactly as the fold will write it (r6 R6-M2): the
+       -- winning row's date, or the refusing sibling's where the winner has
+       -- none. Printed beside opt_out_recorded_at (when it was written DOWN) so
+       -- the operator is not shown a dated refusal on a row that has no date.
+       COALESCE(r.sms_opt_out_at, f.sms_opt_out_at) AS opt_out_at,
        f.opt_out_source,
        f.opt_out_evidence,
        f.opt_out_recorded_at
