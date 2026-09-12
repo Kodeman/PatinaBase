@@ -3433,14 +3433,22 @@ $$;
 -- REVIEW ROUND 11 (W1-R11-RESIDUE) — PINNED, NOT FIXED: HT-3-b(c) STAYS OWED
 -- ═══════════════════════════════════════════════════════════════════════════
 --
--- ─── (ad) the consent-free seat, pointed at a designer who has NO employer:
+-- ─── (ad-i) the consent-free seat, pointed at a designer who has NO employer:
 --          a stranger's workspace becomes her one employer tier and its rates
 --          price her studio's client ───────────────────────────────────────────
 --
 -- HT-3-b's own text says a member "can only push the outcome toward 'none', never
--- toward a number she set", and for the MEMBER BEING PRICED that is what cases (x)
--- and (aa8) measure. This case measures the other actor, and the sentence does not
--- cover it.
+-- toward a number she set". CORRECTED 2026-09-12 (W1-R11-01, measured 1/1 with a
+-- control): that sentence is FALSE as built, and it is false for the MEMBER BEING
+-- PRICED herself, not only for a third party. What actually holds is narrower —
+-- a member can push the outcome toward 'none' OR, when the project's DESIGNER
+-- holds no employer seat, toward a number the member set in an organization SHE
+-- OWNS. Cases (x) and (aa8) measure only the first half: their extra seat makes
+-- the designer's employer tier AMBIGUOUS (two employers → 'none'). The second
+-- half is the tier going from EMPTY to exactly ONE, which is the single
+-- transition that yields a number instead of 'none' — leg (ad-ii) below measures
+-- it with the subject as the sole actor, and this leg (ad-i) measures the same
+-- door under a third party's hand.
 --
 -- A studio's PRINCIPAL holds an `owner` seat, so her EMPLOYER tier is empty. Any
 -- account that owns an organization — which 00295 hands to every designer at signup —
@@ -3586,7 +3594,429 @@ BEGIN
     'invoice composer''s feed and claim_time_entries'' invoice lock. When arm (c) lands this '
     'becomes 24000';
 
-  RAISE NOTICE 'time_rate_resolution: case (ad) passed — HT-3-b''s consent-door residue pinned as built, arm (c) OWED.';
+  RAISE NOTICE 'time_rate_resolution: case (ad-i) passed — HT-3-b''s consent-door residue pinned as built, arm (c) OWED.';
+END
+$$;
+
+-- ─── (ad-ii) the SAME door, with the SEATER being the MEMBER BEING PRICED ────
+--
+-- W1-R11-01. (ad-i) used a third `stranger` account and said in so many words
+-- that HT-3-b's "never toward a number she set" still "holds for the member being
+-- priced". It does not. Delete the stranger and the subject herself walks through
+-- the same door, because an ordinary designer signup already hands her everything
+-- the manoeuvre needs: 00295's fc_provision_studio_on_designer gives every
+-- is_designer profile whose designer grant precedes any membership row a
+-- one-person workspace W she OWNS.
+--
+-- The studio's PRINCIPAL is seated `owner` first and granted studio_owner second,
+-- so her EMPLOYER tier is EMPTY — the shape HT-3-b's own ruling cell calls "every
+-- studio principal". The subject is a plain `member` of S, priced 20000 there by
+-- the principal on HT-3's own surface. Then TWO statements, both the subject's
+-- own, both through RLS, nothing forged and nothing privileged:
+--
+--   INSERT organization_members(the principal, W, 'member', 'active')
+--        — allowed by `Org owners can insert members`
+--          (is_org_admin_or_owner(W) AND role <> 'owner'; nothing about the
+--          invitee, no consent, no invitation to accept)
+--   INSERT studio_member_rates(W, herself, 99900)
+--        — allowed by studio_member_rates_admin_insert; 00295 made her W's owner
+--
+-- W is now the PRINCIPAL's one employer-tier candidate, so W prices every hour on
+-- the principal's projects — including the subject's own, at the number the
+-- subject set about herself. Measured 1/1 on two surfaces with a control in this
+-- same fixture, which is what cases (x) and (aa8) cannot reach: their second seat
+-- makes the tier AMBIGUOUS (two employers → 'none'), while here the designer's
+-- employer tier goes from EMPTY to exactly ONE — the one transition that produces
+-- a number instead of 'none'.
+--
+-- It is an `authorized` `studio_member` row indistinguishable from a legitimate
+-- one, so it is NOT a 'none' row W2's composer can filter, and claim_time_entries
+-- will invoice-lock it.
+--
+-- NOT FIXED HERE, for the reasons (ad-i) gives and one more: every code-only
+-- narrowing either keys on the member being priced (which HT-3-a forbids) or was
+-- rated blocker-grade in rounds 5-6, and reading the owned tier first restores
+-- W1-R8-01. The closure is HT-3-b arm **(c)** — seats land `status = 'invited'`,
+-- only the named user activates her own seat — which stays OWED in
+-- artifacts/hour-tracking-2026-09-11/rulings.md. When arm (c) lands, every assert
+-- below becomes 20000 / studio_member / 40000 and nothing else in this file moves.
+INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, instance_id, aud, role)
+VALUES
+  ('b1100000-0000-4000-8000-00000000f001', 'r11af-principal@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('b1100000-0000-4000-8000-00000000f002', 'r11af-subject@test.invalid',   '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+
+INSERT INTO public.organizations (id, type, name, slug, status)
+VALUES ('b1100000-0000-4000-8000-00000000fa01', 'design_studio', 'R11af Principal Studio', 'r11af-principal', 'active');
+
+UPDATE public.profiles SET full_name = 'R11af Principal' WHERE id = 'b1100000-0000-4000-8000-00000000f001';
+UPDATE public.profiles SET full_name = 'R11af Subject'   WHERE id = 'b1100000-0000-4000-8000-00000000f002';
+
+-- The principal: seated owner FIRST, studio_owner second → 00295 gives her
+-- nothing extra and she holds no employer seat anywhere.
+INSERT INTO public.organization_members (id, user_id, organization_id, role, status, joined_at)
+VALUES ('b1100000-0000-4000-8000-00000000fc01', 'b1100000-0000-4000-8000-00000000f001',
+        'b1100000-0000-4000-8000-00000000fa01', 'owner', 'active', NOW());
+INSERT INTO public.user_roles (user_id, role_id)
+SELECT 'b1100000-0000-4000-8000-00000000f001', id FROM public.roles WHERE name = 'studio_owner';
+
+-- The subject: an ordinary designer signup (designer grant first → 00295 gives
+-- her workspace W), then a plain `member` seat in the principal's studio.
+INSERT INTO public.user_roles (user_id, role_id)
+SELECT 'b1100000-0000-4000-8000-00000000f002', id FROM public.roles WHERE name = 'studio_designer';
+INSERT INTO public.organization_members (id, user_id, organization_id, role, status, joined_at)
+VALUES ('b1100000-0000-4000-8000-00000000fc02', 'b1100000-0000-4000-8000-00000000f002',
+        'b1100000-0000-4000-8000-00000000fa01', 'member', 'active', NOW());
+
+DO $$
+DECLARE
+  v_w      uuid;
+  v_stamp  uuid;
+  v_rate   INTEGER;
+  v_source TEXT;
+  v_amount INTEGER;
+  v_state  TEXT;
+  v_vrate  INTEGER;
+  v_vamt   INTEGER;
+BEGIN
+  SELECT organization_id INTO v_w FROM public.organization_members
+   WHERE user_id = 'b1100000-0000-4000-8000-00000000f002' AND role = 'owner' AND status = 'active';
+  ASSERT v_w IS NOT NULL AND v_w <> 'b1100000-0000-4000-8000-00000000fa01',
+    'FAIL ad4 (precondition): 00295 must have provisioned the SUBJECT her own workspace — that '
+    'workspace is the whole of the manoeuvre, and she needs no second account for it';
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM public.organization_members
+     WHERE user_id = 'b1100000-0000-4000-8000-00000000f001'
+       AND status = 'active' AND role <> 'owner' AND role <> 'guest'),
+    'FAIL ad4b (precondition): the principal must hold NO employer seat to begin with — an empty '
+    'employer tier is what one seat can seize';
+
+  -- The principal prices the subject honestly, in her own studio.
+  PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-00000000f001');
+  INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
+  VALUES ('b1100000-0000-4000-8000-00000000fa01', 'b1100000-0000-4000-8000-00000000f002',
+          20000, CURRENT_DATE - 20, 'b1100000-0000-4000-8000-00000000f001');
+  PERFORM pg_temp.reset_role();
+
+  -- ── THE CONTROL, before the manoeuvre, in this same fixture ───────────────
+  INSERT INTO public.projects (id, name, designer_id, created_by)
+  VALUES ('b1100000-0000-4000-8000-00000000fe00', 'R11af Control House',
+          'b1100000-0000-4000-8000-00000000f001', 'b1100000-0000-4000-8000-00000000f001');
+  ASSERT (SELECT studio_id FROM public.projects
+           WHERE id = 'b1100000-0000-4000-8000-00000000fe00') = 'b1100000-0000-4000-8000-00000000fa01',
+    'FAIL ad5a (the control): with nothing manoeuvred, the principal''s own studio is stamped on '
+    'her project through the OWNED tier';
+
+  PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-00000000f002');
+  INSERT INTO public.project_time_entries
+    (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('b1100000-0000-4000-8000-00000000fb00', 'b1100000-0000-4000-8000-00000000fe00',
+          'b1100000-0000-4000-8000-00000000f002', NOW() - INTERVAL '3 hours', 120, true, 'manual_entry');
+  PERFORM pg_temp.reset_role();
+
+  SELECT hourly_rate_cents, rate_source, rated_amount_cents
+    INTO v_rate, v_source, v_amount
+  FROM public.project_time_entries WHERE id = 'b1100000-0000-4000-8000-00000000fb00';
+  ASSERT v_rate = 20000 AND v_source = 'studio_member' AND v_amount = 40000,
+    'FAIL ad5 (the control): before the manoeuvre the subject''s hour carries the 20000 the '
+    'principal set for her in the principal''s studio (40000 for 120 min) — without this line the '
+    'legs below measure a difference from nothing; got ' || COALESCE(v_rate::text, 'NULL') || ' / '
+    || COALESCE(v_source, 'NULL') || ' / ' || COALESCE(v_amount::text, 'NULL');
+
+  -- ── THE MANOEUVRE: two statements, both the SUBJECT'S own, both through RLS ─
+  PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-00000000f002');
+  INSERT INTO public.organization_members (id, user_id, organization_id, role, status, joined_at)
+  VALUES ('b1100000-0000-4000-8000-00000000fc03', 'b1100000-0000-4000-8000-00000000f001',
+          v_w, 'member', 'active', NOW());
+  INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
+  VALUES (v_w, 'b1100000-0000-4000-8000-00000000f002', 99900, CURRENT_DATE - 10,
+          'b1100000-0000-4000-8000-00000000f002');
+  PERFORM pg_temp.reset_role();
+
+  ASSERT (SELECT role::text FROM public.organization_members
+           WHERE id = 'b1100000-0000-4000-8000-00000000fc03') = 'member',
+    'FAIL ad6a (precondition): the subject''s consent-free seat for the PRINCIPAL must have landed '
+    'as a plain member through `Org owners can insert members`. If it now raises, HT-3-b arm (c) '
+    'shipped and this leg should be rewritten as a negative one';
+
+  -- ── SURFACE 1: the principal's next project, created in a NULL-studio context ─
+  INSERT INTO public.projects (id, name, designer_id, created_by)
+  VALUES ('b1100000-0000-4000-8000-00000000fe01', 'R11af Client House',
+          'b1100000-0000-4000-8000-00000000f001', 'b1100000-0000-4000-8000-00000000f001');
+  SELECT studio_id INTO v_stamp FROM public.projects
+   WHERE id = 'b1100000-0000-4000-8000-00000000fe01';
+
+  ASSERT v_stamp = v_w,
+    'FAIL ad6 (PINS TODAY — HT-3-b arm (c) OWED): the workspace the SUBJECT owns is now the '
+    'principal''s ONE employer candidate, so 00602/00603 stamp it on the principal''s own project. '
+    'When arm (c) closes the consent door this becomes the principal''s studio '
+    '(b1100000-0000-4000-8000-00000000fa01) and ad7 reverts to the control''s 20000 / 40000; got '
+    || COALESCE(v_stamp::text, 'NULL');
+
+  PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-00000000f002');
+  INSERT INTO public.project_time_entries
+    (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('b1100000-0000-4000-8000-00000000fb01', 'b1100000-0000-4000-8000-00000000fe01',
+          'b1100000-0000-4000-8000-00000000f002', NOW() - INTERVAL '3 hours', 120, true, 'manual_entry');
+  PERFORM pg_temp.reset_role();
+
+  SELECT hourly_rate_cents, rate_source, rated_amount_cents, billing_state
+    INTO v_rate, v_source, v_amount, v_state
+  FROM public.project_time_entries WHERE id = 'b1100000-0000-4000-8000-00000000fb01';
+  ASSERT v_rate = 99900 AND v_source = 'studio_member' AND v_amount = 199800
+         AND v_state = 'authorized',
+    'FAIL ad7 (PINS TODAY — W1-R11-01, HT-3-b arm (c) OWED): the MEMBER BEING PRICED moved her own '
+    'hour on her principal''s project to the 99900 SHE set in the workspace SHE owns — authorized, '
+    '$1,998.00, a studio_member row indistinguishable from a legitimate one. HT-3-b''s text says '
+    'this is impossible. The control above reads 20000 / studio_member / 40000, and that is what '
+    'arm (c) makes this line read; got ' || COALESCE(v_rate::text, 'NULL') || ' / '
+    || COALESCE(v_source, 'NULL') || ' / ' || COALESCE(v_amount::text, 'NULL') || ' / '
+    || COALESCE(v_state, 'NULL');
+
+  SELECT resolved_rate_cents, amount_cents INTO v_vrate, v_vamt
+  FROM public.project_unbilled_time WHERE id = 'b1100000-0000-4000-8000-00000000fb01';
+  ASSERT v_vrate = 99900 AND v_vamt = 199800,
+    'FAIL ad7b (PINS TODAY — HT-3-b arm (c) OWED): and it reaches project_unbilled_time at '
+    '99900 / $1,998.00, which is the invoice composer''s feed and claim_time_entries'' invoice '
+    'lock. Arm (c) makes this 20000 / 40000; got ' || COALESCE(v_vrate::text, 'NULL') || ' / '
+    || COALESCE(v_vamt::text, 'NULL');
+
+  -- ── SURFACE 2: a LEGACY project (studio_id genuinely NULL) — step 2 itself ──
+  -- No project creation is needed for this surface on Strata: every legacy
+  -- studio_id IS NULL project of a principal with no employer seat is live today,
+  -- and 00599 step 2 answers for it without any stamp being involved.
+  INSERT INTO public.projects (id, name, designer_id, created_by)
+  VALUES ('b1100000-0000-4000-8000-00000000fe02', 'R11af Legacy House',
+          'b1100000-0000-4000-8000-00000000f001', 'b1100000-0000-4000-8000-00000000f001');
+  UPDATE public.projects SET studio_id = NULL
+   WHERE id = 'b1100000-0000-4000-8000-00000000fe02';
+  ASSERT (SELECT studio_id FROM public.projects
+           WHERE id = 'b1100000-0000-4000-8000-00000000fe02') IS NULL,
+    'FAIL ad8a (precondition): the legacy project must carry studio_id NULL, or step 1 answers and '
+    'step 2 is never exercised';
+
+  PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-00000000f002');
+  INSERT INTO public.project_time_entries
+    (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('b1100000-0000-4000-8000-00000000fb02', 'b1100000-0000-4000-8000-00000000fe02',
+          'b1100000-0000-4000-8000-00000000f002', NOW() - INTERVAL '3 hours', 120, true, 'manual_entry');
+  PERFORM pg_temp.reset_role();
+
+  SELECT hourly_rate_cents, rate_source, rated_amount_cents, billing_state
+    INTO v_rate, v_source, v_amount, v_state
+  FROM public.project_time_entries WHERE id = 'b1100000-0000-4000-8000-00000000fb02';
+  ASSERT v_rate = 99900 AND v_source = 'studio_member' AND v_amount = 199800
+         AND v_state = 'authorized',
+    'FAIL ad8 (PINS TODAY — W1-R11-01, HT-3-b arm (c) OWED): the same number reaches the same '
+    'member through 00599 step 2 on a LEGACY NULL-studio project, with no stamp involved at all — '
+    'which is why this surface needs no project creation on Strata. Arm (c) makes this '
+    '20000 / studio_member / 40000; got ' || COALESCE(v_rate::text, 'NULL') || ' / '
+    || COALESCE(v_source, 'NULL') || ' / ' || COALESCE(v_amount::text, 'NULL') || ' / '
+    || COALESCE(v_state, 'NULL');
+
+  SELECT resolved_rate_cents, amount_cents INTO v_vrate, v_vamt
+  FROM public.project_unbilled_time WHERE id = 'b1100000-0000-4000-8000-00000000fb02';
+  ASSERT v_vrate = 99900 AND v_vamt = 199800,
+    'FAIL ad9 (PINS TODAY — HT-3-b arm (c) OWED): and the legacy surface reaches the composer at '
+    '99900 / $1,998.00 too. Arm (c) makes this 20000 / 40000; got '
+    || COALESCE(v_vrate::text, 'NULL') || ' / ' || COALESCE(v_vamt::text, 'NULL');
+
+  RAISE NOTICE 'time_rate_resolution: case (ad-ii) passed — W1-R11-01 pinned on both surfaces with its control, HT-3-b arm (c) OWED.';
+END
+$$;
+
+-- ─── (ae) THE LIVE PATH: a project created by the client's signature, not by a
+--          postgres INSERT — W1-R11-02 ──────────────────────────────────────────
+--
+-- Every other case in this file creates its projects AS POSTGRES. That is 00563's
+-- migration bypass (`session_user = 'postgres'` with no active role), the ONE
+-- context where `set_project_studio_id` leaves projects.studio_id NULL and 00602's
+-- `zzz_` trigger therefore decides. On every LIVE creation path 00563 fills the
+-- column first, and inside its activation bridge it sorts the designer's candidate
+-- studios with `(membership.role = 'owner') DESC` — owner FIRST, the exact
+-- preference HT-3-b was ruled to invert. 00602 returns early on a non-NULL
+-- studio_id, so HT-3-b was inert exactly where real projects are born, and
+-- W1-R8-01 arms A and B were both still live there (measured 1/1 end to end).
+--
+-- 00603 closes it: a per-row flag trigger records whether the CALLER named the
+-- column, and a single employer-tier candidate overrides a value 00563 DERIVED —
+-- never one the caller NAMED (HT-3-c arm (a), case (ac), untouched).
+--
+-- The fixture is case (aa)'s, reached through `public.sign_proposal`: Leah owns S;
+-- her hire is an ordinary designer signup (00295 → workspace W) seated `admin` in
+-- S; Leah prices the hire 20000 and the assistant 12000 in S; the hire prices
+-- herself 99900 in W; the CLIENT signs the proposal. Before 00603 this stamped W,
+-- priced her own hour 99900 / 199800 and the assistant's 'none' / $0.
+INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, instance_id, aud, role)
+VALUES
+  ('b1100000-0000-4000-8000-00000000e001', 'r11ae-leah@test.invalid',   '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('b1100000-0000-4000-8000-00000000e002', 'r11ae-hire@test.invalid',   '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('b1100000-0000-4000-8000-00000000e003', 'r11ae-asst@test.invalid',   '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('b1100000-0000-4000-8000-00000000e004', 'r11ae-client@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+
+INSERT INTO public.organizations (id, type, name, slug, status)
+VALUES ('b1100000-0000-4000-8000-00000000ea01', 'design_studio', 'R11ae Hartwell Studio', 'r11ae-hartwell', 'active');
+
+UPDATE public.profiles SET full_name = 'R11ae Leah'      WHERE id = 'b1100000-0000-4000-8000-00000000e001';
+UPDATE public.profiles SET full_name = 'R11ae Hire'      WHERE id = 'b1100000-0000-4000-8000-00000000e002';
+UPDATE public.profiles SET full_name = 'R11ae Assistant' WHERE id = 'b1100000-0000-4000-8000-00000000e003';
+UPDATE public.profiles SET full_name = 'R11ae Client'    WHERE id = 'b1100000-0000-4000-8000-00000000e004';
+
+-- Leah: seated first, designer role second → she owns S and nothing else.
+INSERT INTO public.organization_members (id, user_id, organization_id, role, status, joined_at)
+VALUES ('b1100000-0000-4000-8000-00000000ec01', 'b1100000-0000-4000-8000-00000000e001',
+        'b1100000-0000-4000-8000-00000000ea01', 'owner', 'active', NOW());
+INSERT INTO public.user_roles (user_id, role_id)
+SELECT 'b1100000-0000-4000-8000-00000000e001', id FROM public.roles WHERE name = 'studio_owner';
+
+-- THE HIRE: designer role FIRST (the self-signup order → 00295 gives her W),
+-- then seated `admin` in S.
+INSERT INTO public.user_roles (user_id, role_id)
+SELECT 'b1100000-0000-4000-8000-00000000e002', id FROM public.roles WHERE name = 'studio_designer';
+INSERT INTO public.organization_members (id, user_id, organization_id, role, status, joined_at)
+VALUES ('b1100000-0000-4000-8000-00000000ec02', 'b1100000-0000-4000-8000-00000000e002',
+        'b1100000-0000-4000-8000-00000000ea01', 'admin', 'active', NOW());
+
+-- The assistant: a plain member of S, no designer role.
+INSERT INTO public.organization_members (id, user_id, organization_id, role, status, joined_at)
+VALUES ('b1100000-0000-4000-8000-00000000ec03', 'b1100000-0000-4000-8000-00000000e003',
+        'b1100000-0000-4000-8000-00000000ea01', 'member', 'active', NOW());
+
+DO $$
+DECLARE
+  v_w        uuid;
+  v_dc       uuid := 'b1100000-0000-4000-8000-00000000ed01';
+  v_proposal uuid := 'b1100000-0000-4000-8000-00000000ef01';
+  v_result   jsonb;
+  v_project  uuid;
+  v_studio   uuid;
+  v_rate     INTEGER;
+  v_source   TEXT;
+  v_amount   INTEGER;
+  v_state    TEXT;
+  v_vrate    INTEGER;
+  v_vamt     INTEGER;
+BEGIN
+  SELECT organization_id INTO v_w FROM public.organization_members
+   WHERE user_id = 'b1100000-0000-4000-8000-00000000e002' AND role = 'owner' AND status = 'active';
+  ASSERT v_w IS NOT NULL AND v_w <> 'b1100000-0000-4000-8000-00000000ea01',
+    'FAIL ae0 (precondition): the hire must own the workspace 00295 provisions at her designer '
+    'grant — two candidate studios is what sends 00563 into its ambiguity bridge, which is where '
+    'the defect lived';
+
+  -- Leah prices both of her people IN S, through RLS, on HT-3's own surface.
+  PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-00000000e001');
+  INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
+  VALUES
+    ('b1100000-0000-4000-8000-00000000ea01', 'b1100000-0000-4000-8000-00000000e002', 20000, CURRENT_DATE - 20, 'b1100000-0000-4000-8000-00000000e001'),
+    ('b1100000-0000-4000-8000-00000000ea01', 'b1100000-0000-4000-8000-00000000e003', 12000, CURRENT_DATE - 20, 'b1100000-0000-4000-8000-00000000e001');
+  PERFORM pg_temp.reset_role();
+
+  -- The hire prices HERSELF in the workspace she owns. Still allowed (HT-3 in
+  -- letter); under HT-3-b it must price nothing while she has an employer.
+  PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-00000000e002');
+  INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
+  VALUES (v_w, 'b1100000-0000-4000-8000-00000000e002', 99900, CURRENT_DATE - 10, 'b1100000-0000-4000-8000-00000000e002');
+  PERFORM pg_temp.reset_role();
+
+  -- The proposal the client will sign. Authored as a draft and crossed into
+  -- 'sent' through 00390's own send capability, because an issued proposal is
+  -- immutable even to postgres (the proposals.sql seed does the same).
+  INSERT INTO public.designer_clients (id, designer_id, client_id, status, client_name)
+  VALUES (v_dc, 'b1100000-0000-4000-8000-00000000e002', 'b1100000-0000-4000-8000-00000000e004',
+          'active', 'R11ae Client');
+
+  INSERT INTO public.proposals
+    (id, designer_id, client_id, designer_client_id, title, description, status,
+     subtotal, total_amount, valid_until, created_at, updated_at, version)
+  VALUES (v_proposal, 'b1100000-0000-4000-8000-00000000e002', 'b1100000-0000-4000-8000-00000000e004',
+          v_dc, 'R11ae Client House', 'the live activation path', 'draft',
+          1850000, 1850000, NOW() + INTERVAL '14 days', NOW(), NOW(), 1);
+  PERFORM set_config('app.proposal_send_id', v_proposal::text, true);
+  UPDATE public.proposals SET status = 'sent', sent_at = NOW(), updated_at = NOW()
+   WHERE id = v_proposal;
+  PERFORM set_config('app.proposal_send_id', '', true);
+
+  -- THE SIGNATURE — the ordinary way a project is created, by the client.
+  PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-00000000e004');
+  v_result := public.sign_proposal(v_proposal, 'R11ae Client');
+  PERFORM pg_temp.reset_role();
+
+  ASSERT (v_result ->> 'status') = 'accepted' AND (v_result ->> 'newly_signed')::boolean,
+    'FAIL ae1a (precondition): the client''s signature must land and activate a project, or this '
+    'case is not on the live path at all; got ' || COALESCE(v_result::text, 'NULL');
+
+  v_project := (v_result ->> 'project_id')::uuid;
+  SELECT studio_id INTO v_studio FROM public.projects WHERE id = v_project;
+
+  ASSERT v_studio = 'b1100000-0000-4000-8000-00000000ea01',
+    'FAIL ae1 (W1-R11-02): a project created by the client''s signature must be stamped with S — '
+    'the hire''s ONE employer seat. The workspace id ' || COALESCE(v_w::text, 'NULL') || ' here is '
+    '00563''s activation bridge choosing `(membership.role = ''owner'') DESC` and 00602 returning '
+    'early, which is HT-3-b going inert on the path that creates real projects; got '
+    || COALESCE(v_studio::text, 'NULL');
+
+  PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-00000000e002');
+  INSERT INTO public.project_time_entries
+    (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('b1100000-0000-4000-8000-00000000eb01', v_project,
+          'b1100000-0000-4000-8000-00000000e002', NOW() - INTERVAL '3 hours', 120, true, 'manual_entry');
+  PERFORM pg_temp.reset_role();
+
+  SELECT hourly_rate_cents, rate_source, rated_amount_cents, billing_state
+    INTO v_rate, v_source, v_amount, v_state
+  FROM public.project_time_entries WHERE id = 'b1100000-0000-4000-8000-00000000eb01';
+  ASSERT v_rate = 20000 AND v_source = 'studio_member' AND v_amount = 40000
+         AND v_state = 'authorized',
+    'FAIL ae2 (W1-R8-01 arm A, on the LIVE path): the hire''s own client-billed hour must carry '
+    'Leah''s 20000 (40000 for 120 min, authorized). 99900 / 199800 here is her own self-set number '
+    'reaching money through the signing ceremony; got ' || COALESCE(v_rate::text, 'NULL') || ' / '
+    || COALESCE(v_source, 'NULL') || ' / ' || COALESCE(v_amount::text, 'NULL') || ' / '
+    || COALESCE(v_state, 'NULL');
+
+  PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-00000000e003');
+  INSERT INTO public.project_time_entries
+    (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('b1100000-0000-4000-8000-00000000eb02', v_project,
+          'b1100000-0000-4000-8000-00000000e003', NOW() - INTERVAL '3 hours', 120, true, 'manual_entry');
+  PERFORM pg_temp.reset_role();
+
+  SELECT hourly_rate_cents, rate_source, rated_amount_cents
+    INTO v_rate, v_source, v_amount
+  FROM public.project_time_entries WHERE id = 'b1100000-0000-4000-8000-00000000eb02';
+  ASSERT v_rate = 12000 AND v_source = 'studio_member' AND v_amount = 24000,
+    'FAIL ae3 (W1-R8-01 arm B, on the LIVE path): the assistant''s hour on the same project must '
+    'carry the 12000 his employer set for him (24000 for 120 min). A ''none'' here is arm B — $0 '
+    'into the unbilled view, the balance and the invoice lock, on a project whose studio is the '
+    'one workspace nobody priced him in; got ' || COALESCE(v_rate::text, 'NULL') || ' / '
+    || COALESCE(v_source, 'NULL') || ' / ' || COALESCE(v_amount::text, 'NULL');
+
+  SELECT resolved_rate_cents, amount_cents INTO v_vrate, v_vamt
+  FROM public.project_unbilled_time WHERE id = 'b1100000-0000-4000-8000-00000000eb01';
+  ASSERT v_vrate = 20000 AND v_vamt = 40000,
+    'FAIL ae4a: the composer''s own feed must report 20000 / $400.00 for the hire''s hour on the '
+    'signed project; got ' || COALESCE(v_vrate::text, 'NULL') || ' / ' || COALESCE(v_vamt::text, 'NULL');
+
+  SELECT resolved_rate_cents, amount_cents INTO v_vrate, v_vamt
+  FROM public.project_unbilled_time WHERE id = 'b1100000-0000-4000-8000-00000000eb02';
+  ASSERT v_vrate = 12000 AND v_vamt = 24000,
+    'FAIL ae4b: and 12000 / $240.00 for the assistant''s, not $0.00; got '
+    || COALESCE(v_vrate::text, 'NULL') || ' / ' || COALESCE(v_vamt::text, 'NULL');
+
+  -- HT-3-c arm (a) is untouched by 00603 on this same path: a studio the CALLER
+  -- NAMES is still final. Case (ac) is the RLS-level pin; this leg proves the flag
+  -- trigger does not mistake a named studio for a derived one.
+  INSERT INTO public.projects (id, name, designer_id, created_by, studio_id)
+  VALUES ('b1100000-0000-4000-8000-00000000ee09', 'R11ae Named House',
+          'b1100000-0000-4000-8000-00000000e002', 'b1100000-0000-4000-8000-00000000e002', v_w);
+  ASSERT (SELECT studio_id FROM public.projects
+           WHERE id = 'b1100000-0000-4000-8000-00000000ee09') = v_w,
+    'FAIL ae5 (HT-3-c arm (a), 00603''s named/derived flag): a studio the caller NAMED must survive '
+    'the stamp even when the designer has an employer — overriding it would make every sole '
+    'proprietor''s named studio unreachable and would reverse case (ac); got '
+    || COALESCE((SELECT studio_id FROM public.projects
+                  WHERE id = 'b1100000-0000-4000-8000-00000000ee09')::text, 'NULL');
+
+  RAISE NOTICE 'time_rate_resolution: case (ae) passed — W1-R11-02 closed by 00603 on the live activation path, HT-3-c untouched.';
 END
 $$;
 
