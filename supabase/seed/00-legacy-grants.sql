@@ -15686,13 +15686,7 @@ END $g$;
 
 -- 00599_resolve_time_rate_cents.sql
 DO $g$ BEGIN
-  REVOKE EXECUTE ON FUNCTION public.resolve_time_rate_cents(uuid, uuid, timestamptz, text) FROM PUBLIC, anon;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00599_resolve_time_rate_cents.sql
-DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.resolve_time_rate_cents(uuid, uuid, timestamptz, text) TO authenticated;
+  REVOKE EXECUTE ON FUNCTION public.resolve_time_rate_cents(uuid, uuid, timestamptz, text) FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
@@ -15705,6 +15699,12 @@ END $g$;
 -- 00601_classifier_rate_resolver.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.classify_project_time_entry_authority() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00602_projects_studio_id_on_insert.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.set_project_studio_id_owned() FROM PUBLIC, anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
