@@ -41,6 +41,14 @@
 -- RLS gates on the OWNING CARD's organization_id via studio_contact_org(uuid)
 -- (00592).
 --
+-- IT ALSO CLOSES THE REFERENCED SIDE OF THE THREE CARD GUARDS (r8 R8-M2, R-AR).
+-- assert_channel_owner_kind (here) and 00592's designation and rule-route
+-- guards all fire on the REFERENCING row; nothing fired when the card being
+-- pointed AT changed its entity_kind or its studio, which undid all three at
+-- once. assert_studio_contact_identity_stable() at the foot of this file is
+-- that missing BEFORE UPDATE trigger on studio_contacts — placed here, not in
+-- 00592, because it reads studio_contact_channels.
+--
 -- Adds GRANT/REVOKE → regenerate seed/00-legacy-grants.sql after this migration
 -- (python3 scripts/generate-legacy-grants.py).
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -449,3 +457,127 @@ JOIN public.studio_contacts sc
   ON sc.id = pp.studio_contact_id AND sc.entity_kind = 'person'
 WHERE btrim(COALESCE(pp.email, '')) <> ''
 ON CONFLICT (owner_id, channel_kind, value) DO NOTHING;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- The card cannot change WHAT IT IS or WHOSE IT IS while something holds it
+-- ═══════════════════════════════════════════════════════════════════════════
+-- (r8 R8-M2, ruling R-AR.) The three guards this wave adds —
+-- assert_studio_contact_designations() (00592), assert_studio_contact_rule_route()
+-- (00592) and assert_channel_owner_kind() (above) — all fire on the REFERENCING
+-- row only: the card that holds the designation, the rule that holds the route,
+-- the channel that holds owner_type. NOTHING fires when the card being pointed
+-- AT changes what it is or whose it is. Both columns are ordinary
+-- member-writable columns on studio_contacts (00417's member UPDATE policy) and
+-- entity_kind is one the shipped data layer already writes on update
+-- (packages/supabase/src/hooks/use-studio-contacts.ts). So ONE UPDATE undid all
+-- three at once:
+--
+--   · flip a person card to a company card and it carries channels with
+--     owner_type = 'person' — the exact state assert_channel_owner_kind() was
+--     written to prevent ("a company card could be offered an SMS invite as a
+--     person");
+--   · a firm's paperwork_contact_person_id then names a FIRM, and after an org
+--     move names a card in ANOTHER STUDIO — 00592's own "cross-tenant paperwork
+--     link waiting for a SECURITY DEFINER reader that does not re-check", which
+--     is what P3's trade-upload chase (PR-a) mints a token against;
+--   · a contact rule routes to a firm, in another studio — and R-L / R-S print
+--     that routed person's name as the one line telling a designer how to reach
+--     a do-not-contact person.
+--
+-- The cheapest correct answer, and the one ruled: REFUSE the change while any
+-- channel, designation, rule route or affiliation still points at the card, and
+-- name in the hint what holds it. The studio's way out is the same one the room
+-- already offers — detach the dependents (or merge the card, PR-o) and then
+-- change it — and the refusal is legible rather than a constraint violation
+-- three tables away.
+--
+-- IT REFUSES A CHANGE, NOT A RESTATEMENT: `UPDATE OF` fires whenever the column
+-- is in the SET list, unchanged value included, and the shipped hook writes
+-- entity_kind on every edit that passes one. So the first test is IS DISTINCT
+-- FROM; an UPDATE that merely restates the card's own kind passes through.
+--
+-- This guard lives in 00593 rather than 00592 for one reason: it reads
+-- studio_contact_channels, which 00592 has not created yet. Same shape as the
+-- three guards it completes.
+CREATE OR REPLACE FUNCTION public.assert_studio_contact_identity_stable()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+DECLARE
+  v_holders text[] := ARRAY[]::text[];
+  v_n       integer;
+BEGIN
+  IF NEW.entity_kind    IS NOT DISTINCT FROM OLD.entity_kind
+     AND NEW.organization_id IS NOT DISTINCT FROM OLD.organization_id THEN
+    RETURN NEW;
+  END IF;
+
+  SELECT count(*) INTO v_n
+    FROM public.studio_contact_channels c
+   WHERE c.owner_id = OLD.id;
+  IF v_n > 0 THEN
+    v_holders := v_holders || (v_n || ' reach channel(s) on this card');
+  END IF;
+
+  SELECT count(*) INTO v_n
+    FROM public.studio_contacts sc
+   WHERE sc.paperwork_contact_person_id = OLD.id
+      OR sc.signer_person_id            = OLD.id
+      OR sc.site_contact_person_id      = OLD.id;
+  IF v_n > 0 THEN
+    v_holders := v_holders || (v_n || ' designation(s) naming it on other cards');
+  END IF;
+
+  SELECT count(*) INTO v_n
+    FROM public.studio_contact_rules r
+   WHERE r.route_to_person_id = OLD.id;
+  IF v_n > 0 THEN
+    v_holders := v_holders || (v_n || ' contact rule(s) routing to it');
+  END IF;
+
+  SELECT count(*) INTO v_n
+    FROM public.studio_person_affiliations a
+   WHERE a.person_id = OLD.id OR a.company_id = OLD.id;
+  IF v_n > 0 THEN
+    v_holders := v_holders || (v_n || ' affiliation(s) standing on it');
+  END IF;
+
+  IF array_length(v_holders, 1) IS NOT NULL THEN
+    RAISE EXCEPTION 'studio_contact_identity_held'
+      USING HINT = 'This card cannot change its entity_kind or its studio '
+                   'while something still points at it: '
+                   || array_to_string(v_holders, ', ')
+                   || '. Detach or move those first — a company card carrying '
+                      'a person''s channels, a designation naming a firm, or a '
+                      'route into another studio are states the three guards '
+                      'on those rows exist to refuse.';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.assert_studio_contact_identity_stable()
+  FROM PUBLIC, anon, authenticated;
+
+COMMENT ON FUNCTION public.assert_studio_contact_identity_stable() IS
+  'BEFORE UPDATE OF entity_kind, organization_id on studio_contacts: refuses '
+  'the change (studio_contact_identity_held) while any reach channel, '
+  'designation, contact-rule route or affiliation still points at the card, '
+  'with a HINT naming what holds it. The three guards this wave adds — '
+  'assert_channel_owner_kind, assert_studio_contact_designations, '
+  'assert_studio_contact_rule_route — all fire on the REFERENCING row, so one '
+  'ordinary UPDATE of the REFERENCED card undid all three at once: a company '
+  'card carrying owner_type = person channels, a paperwork designation naming a '
+  'firm in another studio, a rule routing across tenants. A restatement of the '
+  'same values passes through; only an actual change is refused '
+  '(00593, r8 R8-M2, R-AR).';
+
+DROP TRIGGER IF EXISTS assert_studio_contact_identity_stable_trg
+  ON public.studio_contacts;
+CREATE TRIGGER assert_studio_contact_identity_stable_trg
+  BEFORE UPDATE OF entity_kind, organization_id
+  ON public.studio_contacts
+  FOR EACH ROW EXECUTE FUNCTION public.assert_studio_contact_identity_stable();

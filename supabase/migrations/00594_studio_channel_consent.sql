@@ -677,6 +677,10 @@ DECLARE
   v_seat_evidence    text;
   v_seat_recorded_at timestamptz;
   v_seat_recorded_by uuid;
+  -- TRUE when the verdict being mirrored is a refusal that carries NO WORDS OF
+  -- ITS OWN. Then the seat's four evidence columns are WRITTEN NULL rather than
+  -- COALESCEd: see the branch below (r8 R8-M1, ruling R-AQ).
+  v_refusal_wordless boolean := false;
 BEGIN
   IF NEW.channel_kind <> 'sms' THEN
     RETURN NEW;
@@ -719,11 +723,35 @@ BEGIN
   -- the fallback (never NULL over non-null, R-AN). disclosure_version has no
   -- refusal-side twin — it belongs to the disclosure the person was shown, not
   -- to how they refused — so it keeps coming from the record's own column.
+  --
+  -- AND WHERE THE REFUSAL HAS NO WORDS, THE SEAT IS LEFT WITH NONE (r8 R8-M1,
+  -- ruling R-AQ). "The seat's own standing value is the fallback" is true only
+  -- while that standing value is itself about the refusal. It is not, for the
+  -- seat NEXT DOOR. project_parties has ONE evidence set and a sibling seat in
+  -- the same studio on the same number routinely holds the GRANT's evidence —
+  -- the studio's paperwork, dated the day of the grant. So on the sourceless
+  -- refusal the portal and the fold really write, every COALESCE below kept
+  -- what the sibling held and left that seat asserting the studio's own consent
+  -- document AS the refusal: R-Q's sentence, composed off the seat, printed
+  -- "Opted out in writing, 2 Jan 2026" — the studio's consent form named as the
+  -- refusal, dated to the day of the grant. It bites on the first prod fold,
+  -- over real project_parties data, and needs no later act by anyone.
+  --
+  -- R-AN's "never NULL over non-null" was written about a verdict that simply
+  -- did not restate its evidence. A REFUSAL WITH NO SOURCE IS NOT THAT CASE: it
+  -- is a refusal whose evidence is known to be ABSENT, and absent is what the
+  -- seat must say. NULL here is therefore the honest write, and it is exactly
+  -- what the shipped portal writes for the same verdict (use-coordination.ts
+  -- writes `opted_out` together with the not-asked columns). R-AN still governs
+  -- every other transition, including a refusal that DOES carry its own words.
+  -- disclosure_version is not in this set — it belongs to the disclosure the
+  -- person was shown, not to how they refused, and keeps coming from the record.
   IF NEW.status = 'opted_out' THEN
     v_seat_source      := NEW.opt_out_source;
     v_seat_evidence    := NEW.opt_out_evidence;
     v_seat_recorded_at := NEW.opt_out_recorded_at;
     v_seat_recorded_by := NEW.opt_out_recorded_by;
+    v_refusal_wordless := NEW.opt_out_source IS NULL;
   ELSE
     v_seat_source      := NEW.source;
     v_seat_evidence    := NEW.evidence;
@@ -777,11 +805,17 @@ BEGIN
          sms_opt_out_at                 = COALESCE(NEW.opt_out_at, pp.sms_opt_out_at),
          -- v_seat_* is the record's consent set, or THE REFUSAL'S OWN SET
          -- when the verdict being mirrored is a refusal (r9 R5-M1, above).
-         sms_consent_source             = COALESCE(v_seat_source, pp.sms_consent_source),
-         sms_consent_evidence           = COALESCE(v_seat_evidence, pp.sms_consent_evidence),
-         sms_consent_recorded_at        = COALESCE(v_seat_recorded_at, pp.sms_consent_recorded_at),
+         -- CASE, not COALESCE, on the four: a wordless refusal wipes them
+         -- (R-AQ), every other transition refreshes-never-erases (R-AN).
+         sms_consent_source             = CASE WHEN v_refusal_wordless THEN NULL
+                                               ELSE COALESCE(v_seat_source, pp.sms_consent_source) END,
+         sms_consent_evidence           = CASE WHEN v_refusal_wordless THEN NULL
+                                               ELSE COALESCE(v_seat_evidence, pp.sms_consent_evidence) END,
+         sms_consent_recorded_at        = CASE WHEN v_refusal_wordless THEN NULL
+                                               ELSE COALESCE(v_seat_recorded_at, pp.sms_consent_recorded_at) END,
          sms_consent_disclosure_version = COALESCE(NEW.disclosure_version, pp.sms_consent_disclosure_version),
-         sms_consent_recorded_by        = COALESCE(v_seat_recorded_by, pp.sms_consent_recorded_by)
+         sms_consent_recorded_by        = CASE WHEN v_refusal_wordless THEN NULL
+                                               ELSE COALESCE(v_seat_recorded_by, pp.sms_consent_recorded_by) END
     FROM public.projects p
    WHERE p.id = pp.project_id
      AND pp.phone_e164 = NEW.channel_value
@@ -806,11 +840,15 @@ BEGIN
          (NEW.status,
           COALESCE(NEW.consented_at, pp.sms_consented_at),
           COALESCE(NEW.opt_out_at, pp.sms_opt_out_at),
-          COALESCE(v_seat_source, pp.sms_consent_source),
-          COALESCE(v_seat_evidence, pp.sms_consent_evidence),
-          COALESCE(v_seat_recorded_at, pp.sms_consent_recorded_at),
+          CASE WHEN v_refusal_wordless THEN NULL
+               ELSE COALESCE(v_seat_source, pp.sms_consent_source) END,
+          CASE WHEN v_refusal_wordless THEN NULL
+               ELSE COALESCE(v_seat_evidence, pp.sms_consent_evidence) END,
+          CASE WHEN v_refusal_wordless THEN NULL
+               ELSE COALESCE(v_seat_recorded_at, pp.sms_consent_recorded_at) END,
           COALESCE(NEW.disclosure_version, pp.sms_consent_disclosure_version),
-          COALESCE(v_seat_recorded_by, pp.sms_consent_recorded_by));
+          CASE WHEN v_refusal_wordless THEN NULL
+               ELSE COALESCE(v_seat_recorded_by, pp.sms_consent_recorded_by) END);
 
   PERFORM set_config('patina.suppress_consent_dispatch', '', true);
 
@@ -871,8 +909,14 @@ COMMENT ON FUNCTION public.mirror_channel_consent_to_parties() IS
   '(R-AN). WHEN THE VERDICT IS `opted_out` THE SEAT GETS THE REFUSAL''S OWN '
   'EVIDENCE SET (opt_out_source / opt_out_evidence / opt_out_recorded_at / '
   'opt_out_recorded_by), AND NEVER THE STUDIO''S CONSENT SET IN ITS PLACE — '
-  'where the refusal has no words of its own the fallback is what the seat '
-  'already holds, never NEW.source/evidence (r6 R6-M1): project_parties has ONE '
+  'and where the refusal has NO WORDS OF ITS OWN the four are WRITTEN NULL on '
+  'every seat, never left standing (r8 R8-M1, R-AQ): a sibling seat in the same '
+  'studio on the same number routinely holds the GRANT''s evidence, so keeping '
+  'it left that seat naming the studio''s own consent document as the refusal, '
+  'dated to the day of the grant. A refusal with no source is a refusal whose '
+  'evidence is known ABSENT, which is not the case R-AN''s never-NULL-over-'
+  'non-null rule was written about; R-AN still governs every other transition. '
+  'project_parties has ONE '
   'evidence set, and mirroring the studio''s consent evidence under an '
   'opted_out status made the seat say the refusal arrived the way the studio''s '
   'paperwork did (r9 R5-M1) — which, for the sourceless refusals the portal and '
