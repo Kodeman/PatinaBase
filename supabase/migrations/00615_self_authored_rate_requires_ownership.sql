@@ -83,6 +83,58 @@
 -- read named. 00599's assert is not edited (it is merged, and it passed against
 -- the body 00599 installs); it is superseded, by number, here.
 --
+-- ── SECOND SECTION, ADDED FOR W2 REVIEW ROUND 8 (W2-R8-01) ─────────────────
+-- HT-3-e(2) asks WHO AUTHORED THE ROW. Round 8 measured the other half of that
+-- question: 00598 freezes a rate row's identity (studio, subject, dates) and lets
+-- an actor re-stamp `created_by` only with her own id — but it does NOT freeze the
+-- NUMBER, and `studio_member_rates_admin_update` (00598:347) admits any owner or
+-- admin of the studio, including one who is the rate's own SUBJECT. So an
+-- admin-designer of an HONEST employer rewrote the OWNER's open row from 25000 to
+-- 99900 with `created_by` untouched, and the row she now controlled was
+-- "arm's-length" by both of HT-3-e's tests: her 120-minute hour came back
+-- 99900 / studio_member / 199800 where the owner had written 25000, measured 1/1
+-- through RLS with ONE account, no ownership transfer, no confederate and no
+-- consent-free seat. `authenticated` holds UPDATE on the table, so that is a
+-- one-line PostgREST PATCH, not a psql-only fact. It was also a VISIBILITY
+-- regression against HT-3-e(3)'s answer: her 99900 carried the OWNER's id as
+-- author, so his own rate-card lens attributed her number to himself.
+--
+-- THE CLOSURE CHOSEN (HT-3-e(4), the guard, one statement): authorship records who
+-- SET THE NUMBER THAT IS THERE. In `guard_studio_member_rate_history`, when
+-- `NEW.hourly_rate_cents IS DISTINCT FROM OLD.hourly_rate_cents`, `created_by` is
+-- stamped with the acting `auth.uid()`. HT-3-e(2) then reads a true answer and the
+-- rewrite prices exactly as the INSERT form already does: 'none' until the studio
+-- writes a number of its own. Of the three candidates the review put to the
+-- orchestrator this is the one that costs an honest studio NOTHING — the blur-save
+-- (`useSetStudioMemberRate`, use-studio-member-rates.ts:101-113) already sends
+-- `created_by: userId`, i.e. exactly this value, so no shipped path changes; the
+-- POLICY candidate (`AND user_id <> auth.uid()`) would additionally refuse an
+-- admin-designer's in-place correction of her own row, a capability W1 shipped
+-- (00598 cases a2/b2/h6) and HT-3 rules for; and the RULING-ONLY candidate would
+-- leave the taking standing. It is also the candidate that repairs the visibility
+-- regression, because the number and its author now move together.
+--   · The `current_user = 'postgres'` early return is untouched, so the ladder
+--     (close_prior_studio_member_rate, DEFINER → postgres) and every seed and
+--     migration write keep their authorship.
+--   · The stamp is conditional on `auth.uid()` being present: a service_role path
+--     with no JWT leaves the recorded author standing rather than writing NULL
+--     (NULL is the deleted-author value, case (ag5)).
+--   · It is placed AFTER the W1-R5-01 actor check, deliberately: a caller who
+--     forges `created_by` to a third party AND moves the number still RAISES
+--     (case (j4)) rather than being silently corrected.
+--   · An UPDATE that does not move the number does not move authorship — the
+--     clause is `IS DISTINCT FROM`, so an unrelated touch cannot take credit for
+--     somebody else's rate.
+-- Lineage (guard_studio_member_rate_history): 00598 → 00615. The body below is
+-- 00598:233-302's verbatim, with that ONE statement grafted in and nothing else
+-- touched; the trigger (`aaa_guard_studio_member_rate_history_trg`) is NOT
+-- recreated, because CREATE OR REPLACE keeps the binding and the trigger's NAME is
+-- what pins its order before close_prior_studio_member_rate_trg (00598's own
+-- postcondition asserts that ordering and still passes).
+-- Measured by `supabase/tests/rls/studio_member_rates_test.sql` case (l) at the
+-- table and `supabase/tests/billing/time_rate_resolution_test.sql` case (ah) end
+-- to end — the round-8 probe A shape, in both directions.
+--
 -- Reconciles: nothing reverted. The body is 00599's, grafted — `patina-db-migrations`
 -- step 2, with the grep (`CREATE OR REPLACE FUNCTION[^(]*resolve_time_rate_cents`
 -- over supabase/migrations/*.sql | sort | tail -1) naming 00599 as the only
@@ -533,5 +585,164 @@ BEGIN
   RAISE NOTICE '00615 postconditions passed.';
 END
 $postcondition$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- W2-R8-01 / HT-3-e(4) — authorship records who set the number that is there.
+-- Lineage: 00598 → 00615. 00598's body verbatim; ONE statement grafted.
+-- ═══════════════════════════════════════════════════════════════════════════
+CREATE OR REPLACE FUNCTION public.guard_studio_member_rate_history()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  IF current_user IS NOT DISTINCT FROM 'postgres' THEN RETURN NEW; END IF;
+
+  IF OLD.effective_to IS NOT NULL THEN
+    RAISE EXCEPTION 'a closed studio member rate row is history and cannot be edited — write a new row'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  -- W1-R2-04: created_by is NOT frozen on the open row. The settings page's
+  -- blur-save upserts ON CONFLICT (studio_id, user_id, effective_from) and
+  -- PostgREST assigns EVERY payload column from `excluded`, created_by included —
+  -- so freezing it meant a studio's SECOND owner/admin could not correct a rate the
+  -- first set the same day: the UPDATE raised and her number was silently lost
+  -- (measured through the real policies — admin B's 15500 dropped, the row stayed
+  -- at admin A's 14000). created_by therefore records the LAST author of the open
+  -- row; the closed rows below it keep theirs, frozen outright by the raise above.
+  -- W1-R7-03: the open row's DATES are frozen too. They were named nowhere, so a
+  -- studio owner or admin could hand-close a colleague's only open row
+  -- (`UPDATE … SET effective_to = CURRENT_DATE - 1`) and leave ZERO open rows —
+  -- every later hour then resolves 'none' and invoices at $0 — or leave two rows
+  -- covering one day, which this file's own non-overlap invariant (case g6) exists
+  -- to forbid. effective_to is the ladder's column on INSERT
+  -- (guard_studio_member_rate_insert above) and it is the ladder's column on UPDATE
+  -- too: only close_prior_studio_member_rate writes it, and that function is
+  -- SECURITY DEFINER, so its UPDATE arrives here as current_user = 'postgres' and
+  -- takes the early return at the top. The settings page's blur-save is untouched —
+  -- PostgREST's upsert assigns only payload columns, effective_from is the conflict
+  -- key, and effective_to is never sent.
+  IF NEW.studio_id      IS DISTINCT FROM OLD.studio_id
+     OR NEW.user_id        IS DISTINCT FROM OLD.user_id
+     OR NEW.created_at     IS DISTINCT FROM OLD.created_at
+     OR NEW.effective_from IS DISTINCT FROM OLD.effective_from
+     OR NEW.effective_to   IS DISTINCT FROM OLD.effective_to
+  THEN
+    RAISE EXCEPTION 'studio member rate identity is immutable'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  -- W1-R5-01: created_by stays un-frozen (the blur-save above needs it) but it is
+  -- AUTHORSHIP, not a free column — it may only ever be re-stamped with the acting
+  -- admin's own id. 00599's studio ladder ranks on "a rate this studio holds for her
+  -- that she did NOT write", so an un-checked UPDATE made the authorization key
+  -- caller-writable: she is the OWNER of the personal workspace 00295's
+  -- fc_provision_studio_on_designer provisions for every is_designer profile, so
+  -- studio_member_rates_admin_update admits her there, and re-stamping a third
+  -- party's id relabelled her own self-set 99900 as arm's-length — measured at
+  -- $1,998.00 authorized on a 120-minute entry, with the negative controls
+  -- (seat-no-forge, forge-no-seat) both returning 15000/30000. It also let a studio
+  -- admin re-stamp a COLLEAGUE's row as self-authored, disarming the employing
+  -- studio's own rate. The blur-save is untouched: PostgREST's upsert always
+  -- assigns the acting admin's own id, which is exactly what this permits.
+  IF NEW.created_by IS DISTINCT FROM OLD.created_by
+     AND NEW.created_by IS DISTINCT FROM (select auth.uid())
+  THEN
+    RAISE EXCEPTION 'studio member rate authorship records the actor — created_by may only be re-stamped with your own id'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  -- ── W2-R8-01 / HT-3-e(4), THE ONLY DELTA 00615 ADDS TO THIS BODY ──────────
+  -- HT-3-e(2) prices on WHO AUTHORED THE ROW, so authorship has to be the author
+  -- of the NUMBER THAT IS THERE — not of the row's first version. The number is
+  -- the one column this guard deliberately leaves writable (00598 cases a2, b2, h6:
+  -- the settings page saves on blur and an honest studio corrects a rate in place),
+  -- and studio_member_rates_admin_update admits any owner/admin of the studio,
+  -- the rate's own SUBJECT included. Measured before this statement, 1/1 through
+  -- RLS as her, ONE account: an admin-designer rewrote her employer OWNER's open
+  -- row 25000 → 99900 with created_by untouched, the row read as arm's-length to
+  -- both of HT-3-e's tests, and her 120-minute hour came back
+  -- 99900 / studio_member / 199800. After it, the rewrite is her own number by the
+  -- record as well as in fact, HT-3-e(2) ignores it, and the hour prices 'none'
+  -- until the studio writes a row of its own — identical to the INSERT form the
+  -- ruling already covered. It also repairs a visibility regression HT-3-e(3)'s
+  -- answer depends on: the owner's rate-card lens no longer shows HER number under
+  -- HIS name.
+  -- `auth.uid()` IS NOT NULL is required, not assumed: every authenticated caller
+  -- has one, and a service_role path without a JWT must leave the recorded author
+  -- standing rather than write NULL, which is the DELETED-AUTHOR value tier 2
+  -- treats as arm's-length (case (ag5)). postgres already returned at the top.
+  IF NEW.hourly_rate_cents IS DISTINCT FROM OLD.hourly_rate_cents
+     AND (select auth.uid()) IS NOT NULL
+  THEN
+    NEW.created_by := (select auth.uid());
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+COMMENT ON FUNCTION public.guard_studio_member_rate_history() IS
+  'HT-3 append-only history: a CLOSED rate row cannot be edited at all, and on the '
+  'OPEN row studio_id, user_id, created_at, effective_from and effective_to are '
+  'frozen (W1-R1-08, W1-R7-03). created_by stays writable for the blur-save but '
+  'only with the actor''s own id (W1-R5-01), and W2-R8-01 / HT-3-e(4) (RULED '
+  '2026-09-12, migration 00615) stamps it with the actor whenever '
+  'hourly_rate_cents moves: HT-3-e(2) prices on who authored the row, so the '
+  'record has to name whoever set the number that is there. Without it the rate''s '
+  'own subject rewrote her studio owner''s number in place and it still read as '
+  'arm''s-length. Writes arriving as postgres (close_prior_studio_member_rate, '
+  'seeds, migrations) take the early return untouched.';
+
+-- Restated rather than inherited (CREATE OR REPLACE keeps a function's ACL): a
+-- trigger function needs no EXECUTE privilege on any role, and this one is
+-- SECURITY INVOKER, so nobody holds it.
+REVOKE ALL ON FUNCTION public.guard_studio_member_rate_history()
+  FROM PUBLIC, anon, authenticated, service_role;
+
+DO $guardpostcondition$
+DECLARE
+  v_src text := pg_get_functiondef(
+    'public.guard_studio_member_rate_history()'::regprocedure);
+BEGIN
+  -- SPELLING HEURISTIC, not a proof of behaviour (W2-R7-04 / W2-R8-06): these
+  -- asserts read the function's SOURCE TEXT, comments included. Case (l) of
+  -- studio_member_rates_test.sql and case (ah) of time_rate_resolution_test.sql
+  -- are what measure the behaviour.
+  ASSERT v_src ~ 'NEW\.hourly_rate_cents IS DISTINCT FROM OLD\.hourly_rate_cents',
+    '00615: HT-3-e(4) keys on the NUMBER MOVING — an UPDATE that leaves '
+    'hourly_rate_cents alone must not move authorship, or an unrelated touch takes '
+    'credit for somebody else''s rate';
+  ASSERT v_src ~ 'NEW\.created_by := \(select auth\.uid\(\)\)',
+    '00615: and the stamp is the ACTING uid — a rewrite of the number is authored '
+    'by whoever typed it, which is the question HT-3-e(2) asks when it prices';
+  ASSERT v_src ~ 'current_user IS NOT DISTINCT FROM ''postgres'' THEN RETURN NEW',
+    '00615: the postgres early return survives the graft — close_prior_studio_'
+    'member_rate is SECURITY DEFINER and its own UPDATE of effective_to must not '
+    'be re-authored, nor refused';
+  ASSERT v_src ~ 'studio member rate identity is immutable',
+    '00615: W1-R1-08/W1-R7-03''s identity-and-dates freeze survives the graft';
+  ASSERT v_src ~ 'created_by may only be re-stamped with your own id',
+    '00615: W1-R5-01''s actor check survives the graft, and the new stamp sits '
+    'AFTER it so a forge combined with a rate change still RAISES (case j4)';
+  ASSERT v_src ~ 'a closed studio member rate row is history',
+    '00615: a closed row is still history — the raise above every other test';
+  ASSERT (SELECT NOT prosecdef FROM pg_proc
+           WHERE oid = to_regprocedure('public.guard_studio_member_rate_history()')),
+    '00615: the guard stays SECURITY INVOKER — current_user is how it tells the '
+    'ladder''s own writes from a caller''s (00598)';
+  ASSERT EXISTS (
+    SELECT 1 FROM pg_trigger t
+    JOIN pg_class c ON c.oid = t.tgrelid
+    WHERE c.relname = 'studio_member_rates'
+      AND t.tgname = 'aaa_guard_studio_member_rate_history_trg'
+      AND NOT t.tgisinternal),
+    '00615: the 00598 trigger binding survives CREATE OR REPLACE — the NAME is '
+    'what orders this guard before close_prior_studio_member_rate_trg';
+  RAISE NOTICE '00615 guard postconditions passed.';
+END
+$guardpostcondition$;
 
 COMMIT;

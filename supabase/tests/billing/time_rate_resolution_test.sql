@@ -255,6 +255,23 @@
 --        she owns (ag4 — the non-regression HT-3-c depends on), and the
 --        created_by-NULL branch recorded (ag5).
 --
+-- W2 REVIEW ROUND 8 adds one case, and it is the OTHER HALF of (ag)'s question:
+--   (ah) W2-R8-01 / HT-3-e(4) — HT-3-e(2) prices on WHO AUTHORED THE ROW, and round
+--        8 measured that the ROW'S NUMBER was editable in place with authorship left
+--        untouched: an `admin`-designer rewrote her employer OWNER's open row from
+--        25000 to 99900, the row stayed "arm's-length" by both of HT-3-e's tests,
+--        and her 120-minute hour came back 99900 / studio_member / 199800. ONE
+--        account, two statements, no ownership transfer and no confederate — (ag)
+--        could not catch it because every leg of (ag) writes a NEW row. The closure
+--        is in the 00598 guard, redefined at 00615: when hourly_rate_cents moves,
+--        created_by is stamped with the acting uid, so HT-3-e(2) reads a true
+--        answer. Five legs: the rewrite is re-authored to her and prices 'none'
+--        (ah1/ah2, resolver and classifier agreeing), the STUDIO's own in-place
+--        correction prices again (ah3 — the honest blur-save, end to end), the
+--        OWNER's own row still prices after she edits it (ah4 — HT-3-c's sole
+--        proprietor, the non-regression), and a deleted-author row corrected by the
+--        studio is authored by the corrector and prices (ah5).
+--
 -- REVIEW ROUND 12 adds one case, PINNED not fixed:
 --   (af) W1-R12-01 — on that same LIVE path an AMBIGUOUS employer tier is NOT
 --        'none'. 00603 stands aside there (its OPEN SUB-QUESTION), so 00563's
@@ -4625,6 +4642,176 @@ BEGIN
     || COALESCE(v_rate::text, 'NULL') || ' / ' || COALESCE(v_source, 'NULL');
 
   RAISE NOTICE 'time_rate_resolution: case (ag) passed — HT-3-e(2): her own number prices only where she owns the studio, and the owner''s own row still prices.';
+END
+$$;
+
+-- ─── (ah) W2-R8-01 / HT-3-e(4): the NUMBER is authored too ───────────────────
+-- (ag) measured the INSERT form of the taking and closed it. Round 8 measured the
+-- UPDATE form, which (ag) cannot see: `studio_member_rates_admin_update`
+-- (00598:347) admits any owner/admin of the studio — the rate's own SUBJECT
+-- included — and 00598's guard freezes the row's identity and dates but NOT its
+-- number. So an `admin`-designer rewrote her employer OWNER's open row from 25000
+-- to 99900 with `created_by` untouched; the row read as arm's-length to HT-3-e(2)
+-- AND satisfied HT-3-e(1)'s new stamp leg, and her 120-minute hour came back
+-- 99900 / studio_member / 199800. ONE account, two statements, no ownership
+-- transfer, no confederate, no consent-free seat — and `authenticated` holds UPDATE
+-- on the table, so it is a PostgREST PATCH. It was a visibility regression too: her
+-- 99900 carried the OWNER's id as its author, so his own rate-card lens showed her
+-- number under his name, which is exactly the visibility HT-3-e(3)'s accepted
+-- residual leans on.
+-- The closure (00615's second section, grafted into guard_studio_member_rate_history
+-- from 00598): when hourly_rate_cents moves, created_by is stamped with the acting
+-- uid. Authorship then names whoever set the number that is there, which is the
+-- question HT-3-e(2) asks when it prices. This case re-uses (ag)'s E2 Studio — the
+-- admin's open row is the 21000 (ag3) the OWNER wrote today — and measures the rule
+-- in both directions. The table-level contract (authorship unmoved when the number
+-- does not move; a forge + a rate change still raising) is
+-- supabase/tests/rls/studio_member_rates_test.sql case (l).
+DO $$
+DECLARE
+  v_rate     INTEGER;
+  v_source   TEXT;
+  v_amount   INTEGER;
+  v_author   uuid;
+  v_resolved INTEGER;
+  v_rsource  TEXT;
+BEGIN
+  SELECT hourly_rate_cents, created_by INTO v_rate, v_author
+  FROM public.studio_member_rates
+  WHERE studio_id = 'b1300000-0000-4000-8000-0000000000a1'
+    AND user_id   = 'b1300000-0000-4000-8000-000000000002'
+    AND effective_to IS NULL;
+  ASSERT v_rate = 21000 AND v_author = 'b1300000-0000-4000-8000-000000000001',
+    'FAIL ah0 (precondition): the admin-designer''s open row must be the 21000 the '
+    'studio OWNER wrote in (ag3), so what follows measures a rewrite of somebody '
+    'else''s number; got ' || COALESCE(v_rate::text, 'NULL') || ' / '
+    || COALESCE(v_author::text, 'NULL');
+
+  -- ── ah1: SHE rewrites the owner's number in place. The UPDATE is W1's
+  --    capability and still lands; what must not survive is the claim that the
+  --    owner authored it.
+  PERFORM pg_temp.assume_user('b1300000-0000-4000-8000-000000000002');
+  UPDATE public.studio_member_rates SET hourly_rate_cents = 99900
+   WHERE studio_id = 'b1300000-0000-4000-8000-0000000000a1'
+     AND user_id   = 'b1300000-0000-4000-8000-000000000002'
+     AND effective_to IS NULL;
+  PERFORM pg_temp.reset_role();
+
+  SELECT hourly_rate_cents, created_by INTO v_rate, v_author
+  FROM public.studio_member_rates
+  WHERE studio_id = 'b1300000-0000-4000-8000-0000000000a1'
+    AND user_id   = 'b1300000-0000-4000-8000-000000000002'
+    AND effective_to IS NULL;
+  ASSERT v_rate = 99900 AND v_author = 'b1300000-0000-4000-8000-000000000002',
+    'FAIL ah1 (W2-R8-01, HT-3-e(4)): a rewrite of the number must be AUTHORED by '
+    'whoever typed it. Measured before this rule the row read 99900 with the '
+    'OWNER''s id — her own number, in his name, arm''s-length to HT-3-e(2); got '
+    || COALESCE(v_rate::text, 'NULL') || ' / ' || COALESCE(v_author::text, 'NULL');
+
+  -- ── ah2: and therefore her next hour does NOT price at her number. 'none' is
+  --    HT-26's "rate pending", the same answer (ag1) gives the INSERT form.
+  PERFORM pg_temp.assume_user('b1300000-0000-4000-8000-000000000002');
+  INSERT INTO public.project_time_entries
+    (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('b1300000-0000-4000-8000-0000000000b6', 'b1300000-0000-4000-8000-0000000000e1',
+          'b1300000-0000-4000-8000-000000000002', NOW() - INTERVAL '30 minutes', 120, true, 'manual_entry');
+  PERFORM pg_temp.reset_role();
+  SELECT hourly_rate_cents, rate_source, rated_amount_cents INTO v_rate, v_source, v_amount
+  FROM public.project_time_entries WHERE id = 'b1300000-0000-4000-8000-0000000000b6';
+  SELECT resolved.cents, resolved.source INTO v_resolved, v_rsource
+  FROM public.resolve_time_rate_cents(
+    'b1300000-0000-4000-8000-0000000000e1', 'b1300000-0000-4000-8000-000000000002',
+    NOW() - INTERVAL '30 minutes', NULL) AS resolved;
+  ASSERT v_rate IS NULL AND v_source = 'none' AND v_amount IS NULL,
+    'FAIL ah2 (W2-R8-01): THE TAKING. The rate''s own subject rewrote her studio '
+    'owner''s open row and her 120-minute hour came back 99900 / studio_member / '
+    '199800 — one account, two statements. It must answer ''none'' until the studio '
+    'writes a number of its own (ah3); got ' || COALESCE(v_rate::text, 'NULL')
+    || ' / ' || COALESCE(v_source, 'NULL') || ' / ' || COALESCE(v_amount::text, 'NULL');
+  ASSERT v_resolved IS NULL AND v_rsource = 'none',
+    'FAIL ah2b: the resolver must say what the classifier wrote — one rate chain, '
+    'one answer (HT-1); resolver said ' || COALESCE(v_resolved::text, 'NULL') || ' / '
+    || COALESCE(v_rsource, 'NULL');
+
+  -- ── ah3: THE HONEST BLUR-SAVE, end to end. The studio's owner corrects the
+  --    number IN PLACE — no new row, the exact idiom HT-3 rules for and the shape
+  --    the policy candidate for this finding would have broken — and the hour
+  --    prices again at the studio's number.
+  PERFORM pg_temp.assume_user('b1300000-0000-4000-8000-000000000001');
+  UPDATE public.studio_member_rates SET hourly_rate_cents = 22000
+   WHERE studio_id = 'b1300000-0000-4000-8000-0000000000a1'
+     AND user_id   = 'b1300000-0000-4000-8000-000000000002'
+     AND effective_to IS NULL;
+  PERFORM pg_temp.reset_role();
+  PERFORM pg_temp.assume_user('b1300000-0000-4000-8000-000000000002');
+  INSERT INTO public.project_time_entries
+    (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('b1300000-0000-4000-8000-0000000000b7', 'b1300000-0000-4000-8000-0000000000e1',
+          'b1300000-0000-4000-8000-000000000002', NOW() - INTERVAL '20 minutes', 60, true, 'manual_entry');
+  PERFORM pg_temp.reset_role();
+  SELECT hourly_rate_cents, rate_source, rated_amount_cents INTO v_rate, v_source, v_amount
+  FROM public.project_time_entries WHERE id = 'b1300000-0000-4000-8000-0000000000b7';
+  ASSERT v_rate = 22000 AND v_source = 'studio_member' AND v_amount = 22000,
+    'FAIL ah3 (the non-regression HT-3 rules for): an owner correcting the open row '
+    'IN PLACE is the settings page''s blur-save — it must keep working and the hour '
+    'must price at the studio''s number. If this is ''none'', the stamp is firing on '
+    'the wrong actor; if the UPDATE was refused, the fix took the blur-save with it; '
+    'got ' || COALESCE(v_rate::text, 'NULL') || ' / ' || COALESCE(v_source, 'NULL')
+    || ' / ' || COALESCE(v_amount::text, 'NULL');
+
+  -- ── ah4: the SOLE PROPRIETOR edits her own number. She IS the owner, so the
+  --    re-stamp names her and HT-3-e(2)'s owner exemption prices it — (ag4)'s
+  --    non-regression, now through the UPDATE path.
+  PERFORM pg_temp.assume_user('b1300000-0000-4000-8000-000000000001');
+  UPDATE public.studio_member_rates SET hourly_rate_cents = 46000
+   WHERE studio_id = 'b1300000-0000-4000-8000-0000000000a1'
+     AND user_id   = 'b1300000-0000-4000-8000-000000000001'
+     AND effective_to IS NULL;
+  INSERT INTO public.project_time_entries
+    (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('b1300000-0000-4000-8000-0000000000b8', 'b1300000-0000-4000-8000-0000000000e2',
+          'b1300000-0000-4000-8000-000000000001', NOW() - INTERVAL '15 minutes', 120, true, 'manual_entry');
+  PERFORM pg_temp.reset_role();
+  SELECT hourly_rate_cents, rate_source, rated_amount_cents INTO v_rate, v_source, v_amount
+  FROM public.project_time_entries WHERE id = 'b1300000-0000-4000-8000-0000000000b8';
+  ASSERT v_rate = 46000 AND v_source = 'studio_member' AND v_amount = 92000,
+    'FAIL ah4 (HT-3-c''s sole proprietor, UPDATE path): a studio OWNER editing her '
+    'own rate in place must still price her own hours — she is the party the money '
+    'belongs to and there is nobody else to write her number. A ''none'' here means '
+    'every one-person studio stopped billing the moment it corrected a rate; got '
+    || COALESCE(v_rate::text, 'NULL') || ' / ' || COALESCE(v_source, 'NULL') || ' / '
+    || COALESCE(v_amount::text, 'NULL');
+
+  -- ── ah5: a DELETED-AUTHOR row (created_by NULL, (ag5)) corrected by the studio
+  --    is authored by the corrector and prices. The stamp only ever writes a real
+  --    uid, so NULL is not recreated by an edit.
+  PERFORM pg_temp.assume_user('b1300000-0000-4000-8000-000000000001');
+  UPDATE public.studio_member_rates SET hourly_rate_cents = 20500
+   WHERE studio_id = 'b1300000-0000-4000-8000-0000000000a1'
+     AND user_id   = 'b1300000-0000-4000-8000-000000000003'
+     AND effective_to IS NULL;
+  PERFORM pg_temp.reset_role();
+  SELECT created_by INTO v_author FROM public.studio_member_rates
+   WHERE studio_id = 'b1300000-0000-4000-8000-0000000000a1'
+     AND user_id   = 'b1300000-0000-4000-8000-000000000003'
+     AND effective_to IS NULL;
+  PERFORM pg_temp.assume_user('b1300000-0000-4000-8000-000000000003');
+  INSERT INTO public.project_time_entries
+    (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('b1300000-0000-4000-8000-0000000000b9', 'b1300000-0000-4000-8000-0000000000e3',
+          'b1300000-0000-4000-8000-000000000003', NOW() - INTERVAL '10 minutes', 60, true, 'manual_entry');
+  PERFORM pg_temp.reset_role();
+  SELECT hourly_rate_cents, rate_source INTO v_rate, v_source
+  FROM public.project_time_entries WHERE id = 'b1300000-0000-4000-8000-0000000000b9';
+  ASSERT v_author = 'b1300000-0000-4000-8000-000000000001' AND v_rate = 20500
+     AND v_source = 'studio_member',
+    'FAIL ah5: correcting a row whose author was deleted (created_by NULL) records '
+    'the corrector and the hour prices at the corrected number — the stamp writes a '
+    'real uid or nothing, so an edit never recreates the NULL branch; got '
+    || COALESCE(v_author::text, 'NULL') || ' / ' || COALESCE(v_rate::text, 'NULL')
+    || ' / ' || COALESCE(v_source, 'NULL');
+
+  RAISE NOTICE 'time_rate_resolution: case (ah) passed — W2-R8-01: a rewritten number is authored by whoever typed it, and the blur-save still prices.';
 END
 $$;
 
