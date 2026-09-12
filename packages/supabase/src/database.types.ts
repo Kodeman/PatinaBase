@@ -24363,6 +24363,10 @@ export type Database = {
           disclosure_version: string | null
           evidence: string | null
           opt_out_at: string | null
+          opt_out_evidence: string | null
+          opt_out_recorded_at: string | null
+          opt_out_recorded_by: string | null
+          opt_out_source: string | null
           organization_id: string
           origin_project_id: string | null
           recorded_at: string | null
@@ -24380,6 +24384,10 @@ export type Database = {
           disclosure_version?: string | null
           evidence?: string | null
           opt_out_at?: string | null
+          opt_out_evidence?: string | null
+          opt_out_recorded_at?: string | null
+          opt_out_recorded_by?: string | null
+          opt_out_source?: string | null
           organization_id: string
           origin_project_id?: string | null
           recorded_at?: string | null
@@ -24397,6 +24405,10 @@ export type Database = {
           disclosure_version?: string | null
           evidence?: string | null
           opt_out_at?: string | null
+          opt_out_evidence?: string | null
+          opt_out_recorded_at?: string | null
+          opt_out_recorded_by?: string | null
+          opt_out_source?: string | null
           organization_id?: string
           origin_project_id?: string | null
           recorded_at?: string | null
@@ -24407,6 +24419,20 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "studio_channel_consent_opt_out_recorded_by_fkey"
+            columns: ["opt_out_recorded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_channel_consent_opt_out_recorded_by_fkey"
+            columns: ["opt_out_recorded_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "studio_channel_consent_organization_id_fkey"
             columns: ["organization_id"]
@@ -34888,6 +34914,10 @@ export type Database = {
           disclosure_version: string | null
           evidence: string | null
           opt_out_at: string | null
+          opt_out_evidence: string | null
+          opt_out_recorded_at: string | null
+          opt_out_recorded_by: string | null
+          opt_out_source: string | null
           organization_id: string
           origin_project_id: string | null
           recorded_at: string | null
@@ -34922,6 +34952,10 @@ export type Database = {
           disclosure_version: string | null
           evidence: string | null
           opt_out_at: string | null
+          opt_out_evidence: string | null
+          opt_out_recorded_at: string | null
+          opt_out_recorded_by: string | null
+          opt_out_source: string | null
           organization_id: string
           origin_project_id: string | null
           recorded_at: string | null

@@ -754,10 +754,18 @@ Deno.test("STOP writes an opted_out consent record for every studio holding the 
   assertEquals(res.disposition, "opted_out");
   const consent = (fake._data.studio_channel_consent ?? []) as Array<{
     organization_id: string; channel_kind: string; channel_value: string; status: string; source: string;
+    opt_out_source: string | null; opt_out_evidence: string | null; opt_out_recorded_at: string | null;
   }>;
   assertEquals(consent.length, 2, "one record per studio, not one per party row");
   assert(consent.every((c) => c.status === "opted_out" && c.channel_kind === "sms"));
   assert(consent.every((c) => c.source === "inbound_sms"));
+  // 00594 r8 W4-M2: the refusal gets its OWN evidence set, so a studio
+  // recording fresh consent later cannot speak for it.
+  assert(
+    consent.every((c) => c.opt_out_source === "inbound_sms" && !!c.opt_out_evidence),
+    "the STOP stamps the refusal's own source and words",
+  );
+  assert(consent.every((c) => !!c.opt_out_recorded_at), "the refusal is dated on its own set");
   assertEquals(
     consent.map((c) => c.organization_id).sort().join(","),
     "org-alpha,org-beta",
@@ -803,6 +811,9 @@ Deno.test("START re-grants per studio and keeps the earlier opt-out date", async
       opt_out_at: "2025-12-03T00:00:00Z",
       consented_at: null,
       disclosure_version: "field-sms-v1",
+      opt_out_source: "inbound_sms",
+      opt_out_evidence: "Replied STOP",
+      opt_out_recorded_at: "2025-12-03T00:00:00Z",
       origin_project_id: "proj1",
     }],
   }));
@@ -813,12 +824,17 @@ Deno.test("START re-grants per studio and keeps the earlier opt-out date", async
   assertEquals(res.disposition, "resubscribed");
   const consent = (fake._data.studio_channel_consent ?? []) as Array<{
     status: string; opt_out_at: string | null; consented_at: string | null; disclosure_version: string | null;
+    opt_out_source: string | null; opt_out_evidence: string | null;
   }>;
   assertEquals(consent.length, 1, "the record is upserted, not duplicated");
   assertEquals(consent[0].status, "granted");
   assertEquals(consent[0].opt_out_at, "2025-12-03T00:00:00Z", "the STOP date survives");
   assert(consent[0].consented_at, "the new grant is dated");
   assertEquals(consent[0].disclosure_version, "field-sms-v1", "the disclosure version carries");
+  // 00594 r8 W4-M2: the answered refusal keeps its own words — a carrier audit
+  // asks about the STOP whether or not it was answered.
+  assertEquals(consent[0].opt_out_source, "inbound_sms", "the refusal's source survives the grant");
+  assertEquals(consent[0].opt_out_evidence, "Replied STOP", "the refusal's words survive the grant");
 });
 
 // ── r1 review fixes ─────────────────────────────────────────────────────────
