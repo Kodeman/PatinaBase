@@ -11,13 +11,22 @@
 // including the publishable anon key that ships in every portal's
 // wrangler.jsonc as a committed literal — so before this fix, a POST here
 // with an anon bearer routed straight into either rule's handler. index.ts
-// now runs `isServiceRoleCaller` (this module, mirroring client-invite's
-// lib.ts pattern) before either sweep executes: only the platform's
-// service-role credential — what `invoke_edge_function`'s cron bridge
-// presents — gets past the door. So each rule now has TWO independent
-// reasons it does not fire for anyone but the cron: the request-routing gate
-// below, AND (for rule (b) specifically) the opt-in column defaulting to
-// false with no writer.
+// runs `isServiceRoleCaller` (this module, mirroring client-invite's lib.ts
+// pattern) — only the platform's service-role credential — what
+// `invoke_edge_function`'s cron bridge presents — gets past the door.
+//
+// NARROWED (round-2 review, D-R2-01): the gate binds ONLY rule (b). Gating
+// rule (a) too was unproven against the only caller that matters — the
+// Vault-literal bearer invoke_edge_function actually sends has never been
+// confirmed to satisfy any of `isServiceRoleCaller`'s three arms on Strata,
+// and a mismatch would silently 403 the hourly sweep forever with no visible
+// failure (cron.job_run_details still reports 'succeeded'; see index.ts's
+// job_runs bookkeeping, D-R2-06, which is the fix for that half). Rule (b)
+// already has two independent reasons it cannot fire in prod (never
+// scheduled; opt-in column defaults false) and loses nothing by adding a
+// third; rule (a) is now ungated, matching its cron peers (decision-
+// reminders, field-daily, morning-brief), none of which carry an in-code
+// caller check either.
 //
 //   (a) running_timer  — a running timer over 8h writes ONE quiet Record row
 //       (notification_log, channel='in_app'), with `read_at` already stamped
@@ -287,7 +296,7 @@ export function runTimeNudges(
     : runRunningTimerSweep(port, now);
 }
 
-// ─── caller verification (D-R1-01 / D-R1-11) ───────────────────────────────
+// ─── caller verification (D-R1-01 / D-R1-11 / D-R2-01) ─────────────────────
 //
 // verify_jwt=true (config.toml) proves the bearer is SOME token the project
 // signed — the publishable anon key qualifies, since it too is a JWT signed
@@ -305,7 +314,9 @@ export function runTimeNudges(
 // never a data-integrity hole; the exposure D-R1-01/D-R1-11 named was an
 // unauthenticated-in-practice caller being able to run the sweep at an
 // attacker-chosen rate (cost: bounded, per D-R1-11; still not a caller this
-// function should answer to).
+// function should answer to). D-R2-01 narrowed index.ts to call this
+// function ONLY before rule (b) — see the module header above for why rule
+// (a) must not depend on an unverified Vault-literal shape.
 
 /** Timing-safe string compare. Length is allowed to leak; the bytes are not. */
 function secretEquals(a: string, b: string): boolean {

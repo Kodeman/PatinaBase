@@ -18,9 +18,9 @@ import type {
   InboxMessage,
   ProcurementNotification,
   ProcurementNotificationKind,
-} from "@patina/supabase";
-import type { NeedKind, SectionKey } from "./desk-derivation";
-import { sectionAnchorId } from "./section-anchor";
+} from '@patina/supabase';
+import type { NeedKind, SectionKey } from './desk-derivation';
+import { sectionAnchorId } from './section-anchor';
 
 /**
  * Notification `type` → the Desk {@link NeedKind} that already carries its act.
@@ -35,21 +35,21 @@ import { sectionAnchorId } from "./section-anchor";
  */
 export const NOTIFICATION_NEED_KIND: Record<string, NeedKind> = {
   // Decisions the client owes — the Desk's overdue-decision need.
-  decision_overdue: "overdue_decision",
-  decision_required: "overdue_decision",
-  notify_decision_overdue: "overdue_decision",
-  notify_decision_required: "overdue_decision",
+  decision_overdue: 'overdue_decision',
+  decision_required: 'overdue_decision',
+  notify_decision_overdue: 'overdue_decision',
+  notify_decision_required: 'overdue_decision',
   // Money owed — the Desk's overdue-invoice need (opens Accounts → Receivables).
-  invoice_overdue: "overdue_invoice",
-  invoice_ar_flagged: "overdue_invoice",
+  invoice_overdue: 'overdue_invoice',
+  invoice_ar_flagged: 'overdue_invoice',
   // A damaged piece — the Desk's damage-claim need.
-  damage_claim_drafted: "damage_claim",
+  damage_claim_drafted: 'damage_claim',
   // A lead about to go cold — the Desk's lead-urgency need.
-  lead_expiring: "new_lead",
-  new_lead: "new_lead",
+  lead_expiring: 'new_lead',
+  new_lead: 'new_lead',
   // The proposal turned — the Desk holds these at Proposal-active (R1).
-  proposal_declined: "proposal_declined",
-  proposal_expired: "proposal_expired",
+  proposal_declined: 'proposal_declined',
+  proposal_expired: 'proposal_expired',
 };
 
 // ─── R106 (the Arrival Arc) — notification audience census ──────────────────
@@ -80,7 +80,7 @@ export const NOTIFICATION_NEED_KIND: Record<string, NeedKind> = {
 //     code change here. Pinned by the `discovery_call_picked` cases in
 //     post-derivation.test.ts.
 
-export type RecordRowKind = "cross_reference" | "notice";
+export type RecordRowKind = 'cross_reference' | 'notice';
 
 export interface RecordRow {
   kind: RecordRowKind;
@@ -109,16 +109,16 @@ export interface RecordRow {
  *  what D1 forbids; the designer's own notification settings are reachable from
  *  inside, through the Account sheet (`/desk?account=notifications`). */
 const DOCUMENT_ROUTE_PREFIXES = [
-  "/doc",
-  "/desk",
-  "/people",
-  "/library",
-  "/drafting",
-  "/compose",
-  "/rooms",
-  "/room",
-  "/ceremony",
-  "/help",
+  '/doc',
+  '/desk',
+  '/people',
+  '/library',
+  '/drafting',
+  '/compose',
+  '/rooms',
+  '/room',
+  '/ceremony',
+  '/help',
 ];
 
 function isDocumentRoute(href: string | null | undefined): href is string {
@@ -141,7 +141,7 @@ function metaString(
   if (!md) return null;
   for (const k of keys) {
     const v = md[k];
-    if (typeof v === "string" && v) return v;
+    if (typeof v === 'string' && v) return v;
   }
   return null;
 }
@@ -154,21 +154,19 @@ function metaString(
  *  `deriveRecordRow` below). Null when the notice carries no project. */
 export function documentHrefFor(n: InboxNotification): string | null {
   const md = n.metadata ?? {};
-  const projectId = metaString(md, "project_id", "projectId");
+  const projectId = metaString(md, 'project_id', 'projectId');
   if (!projectId) return null;
-  const section = metaString(md, "section", "section_key") as SectionKey | null;
+  const section = metaString(md, 'section', 'section_key') as SectionKey | null;
   if (section) return `/doc/${projectId}#${sectionAnchorId(section)}`;
-  const sheet = metaString(md, "sheet");
-  return sheet
-    ? `/doc/${projectId}?sheet=${encodeURIComponent(sheet)}`
-    : `/doc/${projectId}`;
+  const sheet = metaString(md, 'sheet');
+  return sheet ? `/doc/${projectId}?sheet=${encodeURIComponent(sheet)}` : `/doc/${projectId}`;
 }
 
 /** The raw deep link a notice carries (metadata.deep_link ?? metadata.url) —
  *  ported from the legacy inbox page, kept only to honor Document-route links. */
 export function deepLinkFor(n: InboxNotification): string | null {
   const md = n.metadata ?? {};
-  return metaString(md, "deep_link", "url");
+  return metaString(md, 'deep_link', 'url');
 }
 
 /**
@@ -176,7 +174,7 @@ export function deepLinkFor(n: InboxNotification): string | null {
  * the Desk / the document; everything else is a plain notice.
  */
 export function deriveRecordRow(n: InboxNotification): RecordRow {
-  const type = (n.type ?? "").toLowerCase();
+  const type = (n.type ?? '').toLowerCase();
   // C4 (Schedule & Boards Wave 2): a per-line client verdict lands as ONE
   // notification type ('client_feedback') for approve / flag / note. Only a FLAG
   // is Desk-backed — the 'lines_flagged' need carries the act (resolve / revise)
@@ -185,9 +183,9 @@ export function deriveRecordRow(n: InboxNotification): RecordRow {
   // (not in NOTIFICATION_NEED_KIND) because that map keys on type alone and one
   // type covers all three verdicts.
   const needKind: NeedKind | null =
-    type === "client_feedback"
-      ? metaString(n.metadata, "verdict") === "rejected"
-        ? "lines_flagged"
+    type === 'client_feedback'
+      ? metaString(n.metadata, 'verdict') === 'rejected'
+        ? 'lines_flagged'
         : null
       : (NOTIFICATION_NEED_KIND[type] ?? null);
   const docHref = documentHrefFor(n);
@@ -196,8 +194,8 @@ export function deriveRecordRow(n: InboxNotification): RecordRow {
     // The act is on the Desk. Point at the document when we can address it,
     // otherwise at the Desk itself — never at the notice's own act route.
     return {
-      kind: "cross_reference",
-      href: docHref ?? "/desk",
+      kind: 'cross_reference',
+      href: docHref ?? '/desk',
       onDesk: true,
       needKind,
     };
@@ -206,7 +204,7 @@ export function deriveRecordRow(n: InboxNotification): RecordRow {
   // A plain notice: navigate only if it resolves inside the Document model.
   const deep = deepLinkFor(n);
   const href = docHref ?? (isDocumentRoute(deep) ? deep : null);
-  return { kind: "notice", href, onDesk: false, needKind: null };
+  return { kind: 'notice', href, onDesk: false, needKind: null };
 }
 
 // ─── The unified Record item (Wave 0B) ───────────────────────────────────────
@@ -218,7 +216,7 @@ export function deriveRecordRow(n: InboxNotification): RecordRow {
 // sheet renders a single dated list and mark-read routes back to the right
 // table.
 
-export type RecordSource = "inbox" | "procurement";
+export type RecordSource = 'inbox' | 'procurement';
 
 export interface RecordItem {
   /** Stable list key across both feeds. */
@@ -239,7 +237,7 @@ export interface RecordItem {
 export function inboxRecordItem(n: InboxNotification): RecordItem {
   return {
     key: `inbox:${n.id}`,
-    source: "inbox",
+    source: 'inbox',
     id: n.id,
     createdAt: n.created_at,
     read: isNotificationRead(n),
@@ -259,15 +257,15 @@ export function inboxRecordItem(n: InboxNotification): RecordItem {
 export const PROCUREMENT_NEED_KIND: Partial<
   Record<ProcurementNotificationKind, NeedKind>
 > = {
-  damage_claim_drafted: "damage_claim",
+  damage_claim_drafted: 'damage_claim',
 };
 
 const PROCUREMENT_KIND_TITLE: Record<ProcurementNotificationKind, string> = {
-  deposit_due: "Deposit due",
-  balance_due: "Balance due",
-  milestone_due: "Milestone payment due",
-  delivery_this_week: "Delivery this week",
-  damage_claim_drafted: "Damage claim drafted",
+  deposit_due: 'Deposit due',
+  balance_due: 'Balance due',
+  milestone_due: 'Milestone payment due',
+  delivery_this_week: 'Delivery this week',
+  damage_claim_drafted: 'Damage claim drafted',
 };
 
 /**
@@ -287,21 +285,16 @@ export function procurementRecordItem(n: ProcurementNotification): RecordItem {
 
   return {
     key: `procurement:${n.id}`,
-    source: "procurement",
+    source: 'procurement',
     id: n.id,
     createdAt: n.created_at,
     read: !!n.read_at,
     title: vendorName ? `${kindTitle} — ${vendorName}` : kindTitle,
-    body: n.purchase_order?.project?.name ?? "",
-    typeLabel: "Procurement",
+    body: n.purchase_order?.project?.name ?? '',
+    typeLabel: 'Procurement',
     row: needKind
-      ? {
-          kind: "cross_reference",
-          href: docHref ?? "/desk",
-          onDesk: true,
-          needKind,
-        }
-      : { kind: "notice", href: docHref, onDesk: false, needKind: null },
+      ? { kind: 'cross_reference', href: docHref ?? '/desk', onDesk: true, needKind }
+      : { kind: 'notice', href: docHref, onDesk: false, needKind: null },
   };
 }
 
@@ -310,8 +303,7 @@ export function mergeRecordItems(...feeds: RecordItem[][]): RecordItem[] {
   return feeds
     .flat()
     .sort(
-      (a, b) =>
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     );
 }
 
@@ -319,16 +311,16 @@ export function mergeRecordItems(...feeds: RecordItem[][]): RecordItem[] {
 
 export function notificationTitle(n: InboxNotification): string {
   const md = n.metadata ?? {};
-  return metaString(md, "subject", "headline", "title") ?? formatType(n.type);
+  return metaString(md, 'subject', 'headline', 'title') ?? formatType(n.type);
 }
 
 export function notificationBody(n: InboxNotification): string {
   const md = n.metadata ?? {};
-  return metaString(md, "preview", "message", "body") ?? "";
+  return metaString(md, 'preview', 'message', 'body') ?? '';
 }
 
 export function formatType(type: string): string {
-  return type.replace(/[._-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  return type.replace(/[._-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 export function isNotificationRead(n: InboxNotification): boolean {
@@ -337,7 +329,7 @@ export function isNotificationRead(n: InboxNotification): boolean {
 
 /** A Letter opens the People Room's Threads view on the shared conversation —
  *  never a copy (the People Room reads `?thread=`, mirrors the person param). */
-export function letterHref(message: Pick<InboxMessage, "thread_id">): string {
+export function letterHref(message: Pick<InboxMessage, 'thread_id'>): string {
   return `/people?thread=${message.thread_id}`;
 }
 
@@ -346,21 +338,21 @@ export function letterTitle(message: InboxMessage): string {
   const t = message.thread;
   if (t?.title) return t.title;
   switch (t?.kind) {
-    case "project":
-      return "Project conversation";
-    case "vendor_brief":
-      return "Vendor brief";
-    case "support":
-      return "Support";
+    case 'project':
+      return 'Project conversation';
+    case 'vendor_brief':
+      return 'Vendor brief';
+    case 'support':
+      return 'Support';
     default:
-      return "Direct message";
+      return 'Direct message';
   }
 }
 
 /** Relative time for the dated ledger. Older than a week falls back to a date. */
 export function relTime(value: string, now: Date = new Date()): string {
   const then = new Date(value).getTime();
-  if (!Number.isFinite(then)) return "";
+  if (!Number.isFinite(then)) return '';
   const sec = Math.round((now.getTime() - then) / 1000);
   if (sec < 60) return `${Math.max(sec, 0)}s ago`;
   const min = Math.round(sec / 60);

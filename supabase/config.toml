@@ -670,9 +670,18 @@ verify_jwt = true
 # platform default; explicit here for intent, matching those functions.
 # CORRECTED (round-1 review, D-R1-01): verify_jwt=true is satisfied by any
 # project-signed JWT, including the publishable anon key committed in every
-# portal's wrangler.jsonc — so this function DOES carry an in-code
-# service-role check (isServiceRoleCaller, index.ts/logic.ts), unlike the
-# peers named above which do not.
+# portal's wrangler.jsonc.
+# NARROWED (round-2 review, D-R2-01): the in-code service-role check
+# (isServiceRoleCaller, index.ts/logic.ts) now gates ONLY the dark
+# weekly_unlogged arm, not the live running_timer sweep. invoke_edge_function
+# sends the Vault-literal service-role bearer (00258), and that literal's
+# exact shape has never been confirmed against isServiceRoleCaller's arms on
+# Strata — the fallback in the finding this corrects (D-R1-01's original
+# option (b)) is to gate only the arm that must never fire by accident
+# (weekly_unlogged has no schedule and an opt-in column defaulting false —
+# two more independent reasons besides the gate), leaving running_timer
+# ungated like its cron peers named above, so an unverified door can never
+# silently 403 the one rule that actually ships.
 [functions.time-nudges]
 verify_jwt = true
 

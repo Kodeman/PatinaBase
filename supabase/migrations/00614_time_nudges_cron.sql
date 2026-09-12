@@ -29,10 +29,20 @@
 -- inert, not one: no `cron.job` row is ever created for it (this file); the
 -- opt-in column below defaults to false with no writer; and the edge
 -- function itself now requires the platform's service-role credential
--- before either rule runs (supabase/functions/time-nudges/index.ts,
+-- before rule (b) runs (supabase/functions/time-nudges/index.ts,
 -- isServiceRoleCaller). This migration still buys none of that third layer
 -- — it lives in the function, not the schema — named here so a future
 -- reader does not repeat the overstated claim.
+--
+-- NARROWED (round-2 review, D-R2-01): the service-role check above gates
+-- ONLY rule (b), not the hourly rule (a) this file schedules. The Vault
+-- literal `invoke_edge_function` (00258) actually sends has never been
+-- confirmed against any of isServiceRoleCaller's admitted shapes on Strata
+-- — gating rule (a) on it too would risk silencing this cron invisibly
+-- (this table's own job would still show 'succeeded'; only the edge
+-- function's new `job_runs` bookkeeping, D-R2-06, would catch it). Rule (a)
+-- runs ungated, matching the cron peers named above, none of which carry an
+-- in-code caller check either.
 --
 -- Also new in this migration (D-R1-03): two partial UNIQUE indexes backing
 -- the edge function's idempotency at the database layer, so a race between

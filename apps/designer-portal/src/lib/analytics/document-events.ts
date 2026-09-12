@@ -47,6 +47,7 @@
  *   · time_entry_deleted     — (W2)
  *   · time_autostart_disclosed  — (W2, HT-35)
  *   · time_autostart_opted_out  — (W2, HT-35)
+ *   · time_export_taken       — scope, row_count, period (W5)
  */
 
 import posthog from "posthog-js";
