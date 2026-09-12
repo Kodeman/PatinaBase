@@ -1,0 +1,63 @@
+BEGIN
+SET
+                              set_config                               
+-----------------------------------------------------------------------
+ {"sub":"a0000000-0000-0000-0000-000000000004","role":"authenticated"}
+(1 row)
+
+=== G1: r3 MAJOR-2 re-check — no Directory row claims a seat_count it cannot nest ===
+ rows_where_count_disagrees | total_rows 
+----------------------------+------------
+                          0 |         62
+(1 row)
+
+=== G2: the four branches with a domain-table person_id all claim 0 ===
+  role  | rows | min_count | max_count 
+--------+------+-----------+-----------
+ client |    7 |         0 |         0
+ lead   |    5 |         0 |         0
+(2 rows)
+
+=== G3: r3 tests MAJOR-1 re-check — the three consent faces of a row always agree ===
+ party_rows_with_disagreeing_faces | party_rows 
+-----------------------------------+------------
+                                 0 |          1
+(1 row)
+
+=== G4: no Directory row is MORE permissive than any seat beneath it ===
+ pairs | row_softer_than_a_seat 
+-------+------------------------
+    29 |                      0
+(1 row)
+
+=== G5: PR-p — people_directory still carries no stage column; PR-r — no code column ===
+ directory_stage_cols | site_card_code_cols 
+----------------------+---------------------
+                    0 |                   0
+(1 row)
+
+=== G6: create_field_link — the windows the seed mints ===
+ display_name  |      project      | on_site_to | warranty_until | link_ends  | status 
+---------------+-------------------+------------+----------------+------------+--------
+ Dana Kowalski | Okonkwo residence | 2027-06-30 |                | 2027-07-01 | active
+ Erin Sato     | Lindqvist kitchen | 2025-10-15 | 2026-11-21     | 2026-11-22 | active
+ Erin Sato     | Okonkwo residence | 2027-08-13 |                | 2027-08-14 | active
+ Joe Wozniak   | Okonkwo residence | 2026-11-20 |                | 2026-11-21 | active
+ Luis Ochoa    | Okonkwo residence | 2027-08-13 |                | 2027-08-14 | active
+ Ngozi Eze     | Okonkwo residence | 2027-09-30 |                | 2027-10-01 | active
+(6 rows)
+
+ROLLBACK
+=== G7: create_field_link — every branch, as the owner ===
+BEGIN
+SET
+                              set_config                               
+-----------------------------------------------------------------------
+ {"sub":"a0000000-0000-0000-0000-000000000004","role":"authenticated"}
+(1 row)
+
+psql:probe99-w1b-final-r4-invariants.sql:89: NOTICE:  live window + caller date -> <NULL>  (window end 2027-09-13)
+psql:probe99-w1b-final-r4-invariants.sql:89: NOTICE:  no closed-window seat without warranty in this fixture
+psql:probe99-w1b-final-r4-invariants.sql:89: NOTICE:  no window, no caller date -> <NULL> (90d = 2026-12-11)
+DO
+ROLLBACK

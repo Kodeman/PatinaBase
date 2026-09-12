@@ -1,0 +1,16 @@
+BEGIN
+SET
+                              set_config                               
+-----------------------------------------------------------------------
+ {"sub":"a0000000-0000-0000-0000-000000000004","role":"authenticated"}
+(1 row)
+
+psql:probe100-w1b-final-r4-field-link-branches.sql:52: NOTICE:  A live window (2027-09-13) + a caller date 5d out -> 2027-09-14 (caller date NOT honoured: t)
+psql:probe100-w1b-final-r4-field-link-branches.sql:52: NOTICE:  B warranty alone (2027-10-17) -> 2027-10-18
+psql:probe100-w1b-final-r4-field-link-branches.sql:52: NOTICE:  C closed window (40d ago) -> 2026-12-11 (= 90d: t)
+psql:probe100-w1b-final-r4-field-link-branches.sql:52: NOTICE:  D no window + caller date 7d -> 2026-09-19 (caller honoured: t)
+psql:probe100-w1b-final-r4-field-link-branches.sql:52: NOTICE:  E no window + caller date in the PAST -> 2026-12-11 (never past: t)
+psql:probe100-w1b-final-r4-field-link-branches.sql:52: NOTICE:  F off_job seat -> 2026-12-11 (a fresh 90-day door: t)
+psql:probe100-w1b-final-r4-field-link-branches.sql:52: NOTICE:  G non-designer member refused -> not authorized to mint a field link for party d0e30000-0000-0000-0000-000000000025
+DO
+ROLLBACK

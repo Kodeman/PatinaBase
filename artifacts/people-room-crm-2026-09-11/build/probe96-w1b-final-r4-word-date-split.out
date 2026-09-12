@@ -1,0 +1,28 @@
+BEGIN
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+SET
+                              set_config                               
+-----------------------------------------------------------------------
+ {"sub":"a0000000-0000-0000-0000-000000000004","role":"authenticated"}
+(1 row)
+
+=== K1: the one Directory row — its word, and the two dates it carries ===
+ display_name  | consent_status | status_raw | winning_number |       consented_at        | opt_out_at | seat_count 
+---------------+----------------+------------+----------------+---------------------------+------------+------------
+ Two Num Trade | opted_out      | opted_out  | +16125559102   | 2025-05-02T00:00:00+00:00 |            |          2
+(1 row)
+
+=== K2: the record, per number ===
+RESET
+ channel_value |  status   | consented_at | opt_out_at 
+---------------+-----------+--------------+------------
+ +16125559101  | opted_out |              | 2025-12-03
+ +16125559102  | granted   | 2025-05-02   | 
+(2 rows)
+
+ROLLBACK
