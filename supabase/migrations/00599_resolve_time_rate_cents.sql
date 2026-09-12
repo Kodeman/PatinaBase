@@ -133,9 +133,31 @@
 --     EXACTLY ONE → it prices.
 --   · any tier with more than one candidate → NULL → step 3's 'none'.
 -- There is NO rate-existence, seat-date, org-age, member-count or `created_by` key
--- anywhere and NO `ORDER BY` at all: the choice is independent of the member being
--- priced, so a member can only push the outcome toward 'none' — never toward a
--- number she set. The owner repairs a 'none' by NAMING the studio on the project.
+-- anywhere and NO `ORDER BY` at all: the choice here is independent of the member
+-- being priced. The owner repairs a 'none' by NAMING the studio on the project.
+--
+-- RETRACTED, TWICE, MEASURED BOTH TIMES — this banner used to continue "…so a
+-- member can only push the outcome toward 'none' — never toward a number she set."
+-- That is FALSE as built, and the sentence is withdrawn rather than repaired,
+-- because what makes it false is not in this file:
+--   · W1-R11-01 (measured 1/1 with a control, cases (ad-i)/(ad-ii)): seating
+--     needs no consent from the person seated, so where the project's DESIGNER
+--     holds NO employer seat, one `Org owners can insert members` INSERT makes the
+--     seater's own workspace her ONE employer candidate — an EMPTY tier becoming
+--     exactly one, which step 2 below then prices at the number the seater set.
+--   · W1-R12-01 (measured 1/1 with a control through `public.sign_proposal`, case
+--     (af)): and an AMBIGUOUS tier is 'none' only where THIS function or 00603
+--     decides. On the live activation path 00603 stands aside (its OPEN
+--     SUB-QUESTION) and `set_project_studio_id`'s bridge (00563:266-277) ranks the
+--     candidates on `membership.joined_at` then `membership.created_at` — ordinary
+--     caller-suppliable columns — so a member prices herself there EVEN WHEN the
+--     designer already holds a real employer seat.
+-- The property that does hold: a member can push the outcome toward 'none' only
+-- where the decision is step 2's here or 00603's; where it is 00563's bridge the
+-- answer is decided on dates the seating caller writes. Both closures are RULINGS,
+-- not code in this wave: HT-3-b arm (c) (seats land `status = 'invited'`), which is
+-- OWED and was measured to close both shapes, or a ruling that an ambiguous
+-- employer tier must fail closed on the activation path.
 --
 -- HT-3-c (RULED by the orchestrator 2026-09-12, arm (a) — flagged to Kody): a
 -- project whose designer NAMED its `studio_id` at creation prices from that studio
@@ -285,8 +307,14 @@ BEGIN
   -- more than one is NULL, which step 3 reports as 'none' for the owner to repair by
   -- naming the studio on the project. Nothing about the MEMBER BEING PRICED enters —
   -- not her memberships, not her seat dates, not a rate's authorship, not an org's
-  -- created_at, not whether a studio holds a rate for her — so the worst a member
-  -- can do to the answer is push it to 'none'. Seven review rounds each deleted one
+  -- created_at, not whether a studio holds a rate for her. (RETRACTED W1-R11-01 /
+  -- W1-R12-01, measured both times: this comment used to add "…so the worst a
+  -- member can do to the answer is push it to 'none'". False — see the banner. The
+  -- worst she can do HERE is push it to 'none'; a seat she writes can still make
+  -- the designer's EMPTY tier exactly one, and on the live activation path an
+  -- AMBIGUOUS tier is decided by 00563's bridge on dates she writes. Cases (ad-i),
+  -- (ad-ii) and (af) of supabase/tests/billing/time_rate_resolution_test.sql pin
+  -- all three as built.) Seven review rounds each deleted one
   -- key that was a question about a studio SHE stands in (she can be seated; a
   -- second account can seat her, author her rate, or hold a workspace she is a plain
   -- member of; a seat's dates are written by whoever seats her), and round 11

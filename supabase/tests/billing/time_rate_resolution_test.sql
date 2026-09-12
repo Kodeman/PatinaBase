@@ -222,7 +222,27 @@
 --        seat, one consent-free `Org owners can insert members` INSERT makes a
 --        stranger's workspace her sole employer tier and its rates price her
 --        studio's client. Measured 1/1. HT-3-b arm (c) — consent on seating — is the
---        closure and stays OWED.
+--        closure and stays OWED. Round 11's fix pass split it into (ad-i), the
+--        third-party hand, and (ad-ii), the MEMBER BEING PRICED as the sole actor.
+--   (ae) THE LIVE PATH (W1-R11-02): a project created by the client's signature
+--        rather than by a postgres INSERT. Every other case in this file creates
+--        its projects as postgres — 00563's migration bypass, the one context
+--        where the studio_id column is left NULL for HT-3-b to fill — so the
+--        green suite proved nothing about where real projects are born. 00603
+--        closes it for a designer with ONE employer seat.
+--
+-- REVIEW ROUND 12 adds one case, PINNED not fixed:
+--   (af) W1-R12-01 — on that same LIVE path an AMBIGUOUS employer tier is NOT
+--        'none'. 00603 stands aside there (its OPEN SUB-QUESTION), so 00563's
+--        activation bridge decides on `membership.joined_at`, a column the
+--        SEATING CALLER writes. The MEMBER BEING PRICED therefore prices herself
+--        EVEN WHEN the project's designer already holds a real employer seat —
+--        the one shape HT-3-b's ruling cell and cases (x)/(aa8) call safe.
+--        Measured 1/1 through `public.sign_proposal` with a control in the same
+--        fixture. Both closures are rulings: HT-3-b arm (c) (already OWED, and
+--        measured to close it), or an ambiguous tier failing closed on the
+--        activation path. The banners of (ad-i), (ad-ii), 00599 and 00603 are
+--        corrected to say so.
 --
 -- Where the resolver is probed directly it is probed as postgres (auth.uid() IS
 -- NULL — the 00317:38-39 precedent), because no signed-in role holds EXECUTE.
@@ -3440,15 +3460,25 @@ $$;
 -- HT-3-b's own text says a member "can only push the outcome toward 'none', never
 -- toward a number she set". CORRECTED 2026-09-12 (W1-R11-01, measured 1/1 with a
 -- control): that sentence is FALSE as built, and it is false for the MEMBER BEING
--- PRICED herself, not only for a third party. What actually holds is narrower —
--- a member can push the outcome toward 'none' OR, when the project's DESIGNER
--- holds no employer seat, toward a number the member set in an organization SHE
--- OWNS. Cases (x) and (aa8) measure only the first half: their extra seat makes
--- the designer's employer tier AMBIGUOUS (two employers → 'none'). The second
--- half is the tier going from EMPTY to exactly ONE, which is the single
--- transition that yields a number instead of 'none' — leg (ad-ii) below measures
--- it with the subject as the sole actor, and this leg (ad-i) measures the same
--- door under a third party's hand.
+-- PRICED herself, not only for a third party. CORRECTED AGAIN THE SAME DAY
+-- (W1-R12-01, case (af), measured 1/1 with a control on the live path): the first
+-- correction was still too generous. What actually holds is this —
+--
+--   a member can push the outcome toward 'none' only where the decision is 00599
+--   step 2's or 00603's. Where it is 00563's activation bridge — i.e. on the path
+--   that creates real projects, whenever the designer's employer tier is AMBIGUOUS
+--   — the answer is chosen on `membership.joined_at` / `membership.created_at`,
+--   both of which the SEATING CALLER writes, so an ambiguous tier yields a number
+--   the member set just as an empty one does.
+--
+-- Cases (x) and (aa8) measure only the 'none' half, and only because they create
+-- their projects AS POSTGRES, where 00563 leaves the column NULL and step 2
+-- answers: there, and there alone, their extra seat's AMBIGUOUS tier is 'none'.
+-- The two shapes that yield a number instead are the tier going from EMPTY to
+-- exactly ONE — leg (ad-ii) below measures it with the subject as the sole actor,
+-- and this leg (ad-i) measures the same door under a third party's hand — and an
+-- AMBIGUOUS tier on the live activation path, which case (af) measures with the
+-- designer already holding a real employer seat.
 --
 -- A studio's PRINCIPAL holds an `owner` seat, so her EMPLOYER tier is empty. Any
 -- account that owns an organization — which 00295 hands to every designer at signup —
@@ -3625,9 +3655,14 @@ $$;
 -- the principal's projects — including the subject's own, at the number the
 -- subject set about herself. Measured 1/1 on two surfaces with a control in this
 -- same fixture, which is what cases (x) and (aa8) cannot reach: their second seat
--- makes the tier AMBIGUOUS (two employers → 'none'), while here the designer's
--- employer tier goes from EMPTY to exactly ONE — the one transition that produces
--- a number instead of 'none'.
+-- makes the tier AMBIGUOUS, and they create their projects AS POSTGRES, where an
+-- ambiguous tier IS 'none' (00599 step 2). Here the designer's employer tier goes
+-- from EMPTY to exactly ONE, which yields a number on every path. CORRECTED
+-- 2026-09-12 (W1-R12-01): this banner used to call that "the one transition that
+-- produces a number instead of 'none'". It is not. On the LIVE activation path an
+-- AMBIGUOUS tier also produces a number, because 00603 stands aside there and
+-- 00563's bridge ranks the candidates on `joined_at` — see case (af), which
+-- measures it with the designer already holding a real employer seat.
 --
 -- It is an `authorized` `studio_member` row indistinguishable from a legitimate
 -- one, so it is NOT a 'none' row W2's composer can filter, and claim_time_entries
@@ -4017,6 +4052,344 @@ BEGIN
                   WHERE id = 'b1100000-0000-4000-8000-00000000ee09')::text, 'NULL');
 
   RAISE NOTICE 'time_rate_resolution: case (ae) passed — W1-R11-02 closed by 00603 on the live activation path, HT-3-c untouched.';
+END
+$$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- REVIEW ROUND 12 (W1-R12-01) — PINNED, NOT FIXED: AN AMBIGUOUS EMPLOYER TIER
+-- IS NOT 'none' ON THE LIVE PATH
+-- ═══════════════════════════════════════════════════════════════════════════
+--
+-- ─── (af) THE LIVE PATH with an AMBIGUOUS employer tier: 00563's bridge decides
+--          it on `joined_at`, which the SEATING CALLER writes, so the member
+--          being priced prices herself even though the project's designer
+--          ALREADY HOLDS an employer seat ──────────────────────────────────────
+--
+-- W1-R12-01, measured 1/1 end to end through `public.sign_proposal` with the
+-- control below in the same fixture.
+--
+-- HT-3-b says "any tier with more than one candidate → 'none'". That is true of
+-- 00599 step 2 and of 00603's own two tiers — and FALSE on the path that creates
+-- real projects. 00603 deliberately stands aside when the employer tier is
+-- ambiguous (its banner's OPEN SUB-QUESTION: clearing the column there would
+-- either refuse the client's signature or smuggle a NULL past 00563's fail-closed
+-- check at 00563:326-346), so the question falls back to `set_project_studio_id`'s
+-- activation bridge, which still ranks the candidates:
+--
+--   ORDER BY EXISTS (a sibling project for this designer+client) DESC,
+--            (membership.role = 'owner') DESC,
+--            membership.joined_at NULLS LAST,
+--            membership.created_at,
+--            membership.organization_id
+--
+-- `organization_members.joined_at` is nullable with NO default and `created_at` is
+-- `NOT NULL DEFAULT now()`; `guard_org_membership_changes()` constrains only
+-- `role`, `status`, `organization_id` and `user_id`; and `Org owners can insert
+-- members` is `is_org_admin_or_owner(organization_id) AND role <> 'owner'` —
+-- nothing about the invitee. So the two date keys 00599/00602/00603 each spent a
+-- review round deleting from their own bodies are still in charge of the same
+-- question, one trigger later, and are written by the member who benefits.
+--
+-- THIS IS NOT (ad-ii)'s shape. There the designer's employer tier was EMPTY and
+-- one seat made it exactly ONE. Here the designer holds a REAL employer seat
+-- (`admin` in S) the whole time — the shape HT-3-b's ruling cell and cases (x) and
+-- (aa8) both call safe, on the ground that a second seat "can only push it toward
+-- 'none'". It does not: it pushes it to 99900.
+--
+-- THE FIXTURE — the program's own customer shape plus one ordinary designer
+-- signup. No stranger account, no forged column, no privileged role:
+--   · Leah owns S (owner seat first, studio_owner second → no employer seat).
+--   · THE HIRE is the project's lead designer: seated `admin` in S FIRST, designer
+--     grant SECOND, so 00295 provisions her nothing — exactly ONE employer seat
+--     and she owns no organization at all.
+--   · THE SUBJECT is an ordinary designer signup (grant first → 00295 hands her
+--     workspace W_M, which she OWNS) and a plain `member` of S.
+--   · Leah prices the subject 12000 in S, through RLS, on HT-3's own surface.
+--
+-- THE MANOEUVRE is one statement, the subject's own, allowed through RLS:
+--   INSERT organization_members(THE HIRE, W_M, 'member', 'active',
+--                               joined_at = 2000-01-01)
+-- The hire's employer tier is now AMBIGUOUS (S and W_M), 00603 stands aside, and
+-- the bridge's `joined_at` key hands the signed project to W_M.
+--
+-- MEASURED, both signatures through `public.sign_proposal` as the CLIENT:
+--   CONTROL (client one, before the manoeuvre) → stamp S  · 12000 / 24000
+--   THE SIGNATURE (client two, after it)       → stamp W_M · 99900 / studio_member
+--                                                / 199800 / authorized, and
+--                                                project_unbilled_time $1,998.00
+-- Two clients, not one: the bridge's FIRST key prefers a studio already holding a
+-- project for this exact designer-client pair, so the control's own project would
+-- otherwise decide the second answer and hide the date key.
+--
+-- Review round 12 measured two further controls in this same shape, not repeated
+-- here because each costs a third signature and neither changes what is pinned:
+-- the identical seat with `joined_at` NULL stamps S and reads 12000 / 24000 (NULLS
+-- LAST loses the bridge's order — the MANUFACTURED DATE is the whole lever), and
+-- the identical seat at `status = 'invited'` stamps S and reads 12000 / 24000
+-- (HT-3-b arm (c)'s shape — so arm (c) closes this leg completely).
+--
+-- NOT FIXED HERE. 00603's ambiguous arm must not be patched in a fix round, and
+-- every code-only narrowing either keys on the MEMBER BEING PRICED (HT-3-a forbids
+-- it) or re-introduces a ranking key among employer candidates (rounds 4-7 rated
+-- every such key blocker-grade). Restricting the bridge to the employer tier does
+-- not help: both candidates here ARE employer-tier seats. The two closures are
+-- rulings, and both are on the orchestrator's table:
+--   · HT-3-b arm (c) — seats land `status = 'invited'`, only the named user
+--     activates her own seat — ALREADY OWED, and measured to close this leg; or
+--   · a ruling that an ambiguous employer tier must FAIL CLOSED on the activation
+--     path (refuse the signature, or leave the column NULL and amend 00563's
+--     check), which is the edit to the signing ceremony 00603's banner flags as
+--     its OPEN SUB-QUESTION.
+-- Under EITHER closure every assert below reads the control's values: stamp S,
+-- 12000 / studio_member / 24000 / authorized, and 12000 / 24000 in the view.
+INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, instance_id, aud, role)
+VALUES
+  ('b1200000-0000-4000-8000-00000000a001', 'r12af-leah@test.invalid',    '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('b1200000-0000-4000-8000-00000000a002', 'r12af-hire@test.invalid',    '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('b1200000-0000-4000-8000-00000000a003', 'r12af-subject@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('b1200000-0000-4000-8000-00000000a004', 'r12af-client1@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('b1200000-0000-4000-8000-00000000a005', 'r12af-client2@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+
+INSERT INTO public.organizations (id, type, name, slug, status)
+VALUES ('b1200000-0000-4000-8000-00000000aa01', 'design_studio', 'R12af Hartwell Studio', 'r12af-hartwell', 'active');
+
+UPDATE public.profiles SET full_name = 'R12af Leah'     WHERE id = 'b1200000-0000-4000-8000-00000000a001';
+UPDATE public.profiles SET full_name = 'R12af Hire'     WHERE id = 'b1200000-0000-4000-8000-00000000a002';
+UPDATE public.profiles SET full_name = 'R12af Subject'  WHERE id = 'b1200000-0000-4000-8000-00000000a003';
+UPDATE public.profiles SET full_name = 'R12af Client I' WHERE id = 'b1200000-0000-4000-8000-00000000a004';
+UPDATE public.profiles SET full_name = 'R12af Client II' WHERE id = 'b1200000-0000-4000-8000-00000000a005';
+
+-- Leah: owner seat first, studio_owner second → she owns S and is employed nowhere.
+INSERT INTO public.organization_members (id, user_id, organization_id, role, status, joined_at)
+VALUES ('b1200000-0000-4000-8000-00000000ac01', 'b1200000-0000-4000-8000-00000000a001',
+        'b1200000-0000-4000-8000-00000000aa01', 'owner', 'active', NOW());
+INSERT INTO public.user_roles (user_id, role_id)
+SELECT 'b1200000-0000-4000-8000-00000000a001', id FROM public.roles WHERE name = 'studio_owner';
+
+-- THE HIRE (the project's lead designer): seated `admin` in S FIRST, designer grant
+-- SECOND → 00295's any-status membership guard provisions her nothing. She is the
+-- "exactly one employer seat, owns nothing" shape HT-3-b's cell calls safe.
+INSERT INTO public.organization_members (id, user_id, organization_id, role, status, joined_at)
+VALUES ('b1200000-0000-4000-8000-00000000ac02', 'b1200000-0000-4000-8000-00000000a002',
+        'b1200000-0000-4000-8000-00000000aa01', 'admin', 'active', NOW());
+INSERT INTO public.user_roles (user_id, role_id)
+SELECT 'b1200000-0000-4000-8000-00000000a002', id FROM public.roles WHERE name = 'studio_designer';
+
+-- THE SUBJECT: an ordinary designer signup (grant first → 00295 gives her W_M),
+-- then a plain `member` seat in S.
+INSERT INTO public.user_roles (user_id, role_id)
+SELECT 'b1200000-0000-4000-8000-00000000a003', id FROM public.roles WHERE name = 'studio_designer';
+INSERT INTO public.organization_members (id, user_id, organization_id, role, status, joined_at)
+VALUES ('b1200000-0000-4000-8000-00000000ac03', 'b1200000-0000-4000-8000-00000000a003',
+        'b1200000-0000-4000-8000-00000000aa01', 'member', 'active', NOW());
+
+DO $$
+DECLARE
+  v_wm       uuid;
+  v_result   jsonb;
+  v_control  uuid;
+  v_project  uuid;
+  v_studio   uuid;
+  v_rate     INTEGER;
+  v_source   TEXT;
+  v_amount   INTEGER;
+  v_state    TEXT;
+  v_vrate    INTEGER;
+  v_vamt     INTEGER;
+  v_n        INTEGER;
+BEGIN
+  SELECT organization_id INTO v_wm FROM public.organization_members
+   WHERE user_id = 'b1200000-0000-4000-8000-00000000a003' AND role = 'owner' AND status = 'active';
+  ASSERT v_wm IS NOT NULL AND v_wm <> 'b1200000-0000-4000-8000-00000000aa01',
+    'FAIL af0 (precondition): 00295 must have provisioned the SUBJECT her own workspace — that '
+    'workspace is the whole of the manoeuvre, and she needs no second account for it';
+
+  SELECT count(*) INTO v_n FROM public.organization_members
+   WHERE user_id = 'b1200000-0000-4000-8000-00000000a002'
+     AND status = 'active' AND role <> 'owner' AND role <> 'guest';
+  ASSERT v_n = 1,
+    'FAIL af0b (precondition): the HIRE must begin with EXACTLY ONE employer seat — that is the '
+    'shape HT-3-b''s ruling cell calls safe, and the whole point of this leg is that it is not; '
+    'got ' || v_n;
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM public.organization_members
+     WHERE user_id = 'b1200000-0000-4000-8000-00000000a002' AND role = 'owner'),
+    'FAIL af0c (precondition): the HIRE must own no organization at all, or the owned tier and '
+    '00563''s `(role = ''owner'') DESC` key confound the measurement';
+
+  -- Leah prices the subject honestly, in her own studio, on HT-3's own surface.
+  PERFORM pg_temp.assume_user('b1200000-0000-4000-8000-00000000a001');
+  INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
+  VALUES ('b1200000-0000-4000-8000-00000000aa01', 'b1200000-0000-4000-8000-00000000a003',
+          12000, CURRENT_DATE - 20, 'b1200000-0000-4000-8000-00000000a001');
+  PERFORM pg_temp.reset_role();
+
+  -- The subject prices HERSELF in the workspace she owns. Still allowed in letter
+  -- (HT-3); under HT-3-b it must price nothing while the project's designer has an
+  -- employer, let alone while she has one and the tier is merely ambiguous.
+  PERFORM pg_temp.assume_user('b1200000-0000-4000-8000-00000000a003');
+  INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
+  VALUES (v_wm, 'b1200000-0000-4000-8000-00000000a003', 99900, CURRENT_DATE - 10,
+          'b1200000-0000-4000-8000-00000000a003');
+  PERFORM pg_temp.reset_role();
+
+  -- ── THE CONTROL: client ONE signs, before the manoeuvre, on the LIVE path ───
+  INSERT INTO public.designer_clients (id, designer_id, client_id, status, client_name)
+  VALUES ('b1200000-0000-4000-8000-00000000ad01', 'b1200000-0000-4000-8000-00000000a002',
+          'b1200000-0000-4000-8000-00000000a004', 'active', 'R12af Client I');
+  INSERT INTO public.proposals
+    (id, designer_id, client_id, designer_client_id, title, description, status,
+     subtotal, total_amount, valid_until, created_at, updated_at, version)
+  VALUES ('b1200000-0000-4000-8000-00000000af01', 'b1200000-0000-4000-8000-00000000a002',
+          'b1200000-0000-4000-8000-00000000a004', 'b1200000-0000-4000-8000-00000000ad01',
+          'R12af Control House', 'the control, on the live path', 'draft',
+          1850000, 1850000, NOW() + INTERVAL '14 days', NOW(), NOW(), 1);
+  PERFORM set_config('app.proposal_send_id', 'b1200000-0000-4000-8000-00000000af01', true);
+  UPDATE public.proposals SET status = 'sent', sent_at = NOW(), updated_at = NOW()
+   WHERE id = 'b1200000-0000-4000-8000-00000000af01';
+  PERFORM set_config('app.proposal_send_id', '', true);
+
+  PERFORM pg_temp.assume_user('b1200000-0000-4000-8000-00000000a004');
+  v_result := public.sign_proposal('b1200000-0000-4000-8000-00000000af01', 'R12af Client I');
+  PERFORM pg_temp.reset_role();
+  ASSERT (v_result ->> 'status') = 'accepted' AND (v_result ->> 'newly_signed')::boolean,
+    'FAIL af1a (precondition): the control signature must land and activate a project, or this '
+    'leg is not on the live path at all; got ' || COALESCE(v_result::text, 'NULL');
+  v_control := (v_result ->> 'project_id')::uuid;
+
+  ASSERT (SELECT studio_id FROM public.projects WHERE id = v_control)
+           = 'b1200000-0000-4000-8000-00000000aa01',
+    'FAIL af1 (the control): with nothing manoeuvred the hire has ONE employer candidate, so the '
+    'signed project is stamped S — case (ae)''s property, re-measured in this fixture; got '
+    || COALESCE((SELECT studio_id::text FROM public.projects WHERE id = v_control), 'NULL');
+
+  PERFORM pg_temp.assume_user('b1200000-0000-4000-8000-00000000a003');
+  INSERT INTO public.project_time_entries
+    (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('b1200000-0000-4000-8000-00000000ab01', v_control,
+          'b1200000-0000-4000-8000-00000000a003', NOW() - INTERVAL '3 hours', 120, true, 'manual_entry');
+  PERFORM pg_temp.reset_role();
+
+  SELECT hourly_rate_cents, rate_source, rated_amount_cents, billing_state
+    INTO v_rate, v_source, v_amount, v_state
+  FROM public.project_time_entries WHERE id = 'b1200000-0000-4000-8000-00000000ab01';
+  ASSERT v_rate = 12000 AND v_source = 'studio_member' AND v_amount = 24000
+         AND v_state = 'authorized',
+    'FAIL af2 (the control): before the manoeuvre the subject''s hour on a signed project carries '
+    'the 12000 Leah set for her in S (24000 for 120 min, authorized) — without this line the legs '
+    'below measure a difference from nothing; got ' || COALESCE(v_rate::text, 'NULL') || ' / '
+    || COALESCE(v_source, 'NULL') || ' / ' || COALESCE(v_amount::text, 'NULL') || ' / '
+    || COALESCE(v_state, 'NULL');
+
+  SELECT resolved_rate_cents, amount_cents INTO v_vrate, v_vamt
+  FROM public.project_unbilled_time WHERE id = 'b1200000-0000-4000-8000-00000000ab01';
+  ASSERT v_vrate = 12000 AND v_vamt = 24000,
+    'FAIL af2b (the control): and the composer''s own feed reports 12000 / $240.00 for it; got '
+    || COALESCE(v_vrate::text, 'NULL') || ' / ' || COALESCE(v_vamt::text, 'NULL');
+
+  -- ── THE MANOEUVRE: ONE statement, the SUBJECT'S own, through RLS ────────────
+  PERFORM pg_temp.assume_user('b1200000-0000-4000-8000-00000000a003');
+  INSERT INTO public.organization_members (id, user_id, organization_id, role, status, joined_at)
+  VALUES ('b1200000-0000-4000-8000-00000000ac04', 'b1200000-0000-4000-8000-00000000a002',
+          v_wm, 'member', 'active', TIMESTAMPTZ '2000-01-01 00:00:00+00');
+  PERFORM pg_temp.reset_role();
+
+  ASSERT (SELECT role::text FROM public.organization_members
+           WHERE id = 'b1200000-0000-4000-8000-00000000ac04') = 'member'
+         AND (SELECT status::text FROM public.organization_members
+               WHERE id = 'b1200000-0000-4000-8000-00000000ac04') = 'active',
+    'FAIL af3a (precondition): the subject''s consent-free seat for the HIRE must have landed as '
+    'an ACTIVE plain member through `Org owners can insert members`. If it now lands ''invited'' '
+    'or raises, HT-3-b arm (c) shipped and this leg should be rewritten as a negative one — arm '
+    '(c) was measured to make every assert below read the control''s values (stamp S, '
+    '12000 / studio_member / 24000)';
+
+  ASSERT (SELECT joined_at FROM public.organization_members
+           WHERE id = 'b1200000-0000-4000-8000-00000000ac04')
+         < (SELECT joined_at FROM public.organization_members
+             WHERE id = 'b1200000-0000-4000-8000-00000000ac02'),
+    'FAIL af3b (precondition): the manufactured `joined_at` must be EARLIER than the hire''s real '
+    'employer seat — that date is the whole lever, and `guard_org_membership_changes()` constrains '
+    'only role, status, organization_id and user_id. Measured: the identical seat with joined_at '
+    'NULL stamps S and reads 12000 / 24000, because the bridge''s NULLS LAST loses the order';
+
+  SELECT count(*) INTO v_n FROM public.organization_members
+   WHERE user_id = 'b1200000-0000-4000-8000-00000000a002'
+     AND status = 'active' AND role <> 'owner' AND role <> 'guest';
+  ASSERT v_n = 2,
+    'FAIL af3c (precondition): the hire''s EMPLOYER tier must now hold TWO candidates — which is '
+    'the state HT-3-b rules is ''none'' and 00603''s ambiguous arm deliberately leaves to 00563''s '
+    'bridge (00603''s OPEN SUB-QUESTION); got ' || v_n;
+
+  -- ── THE SIGNATURE: client TWO signs, the ordinary way a project is born ─────
+  -- A SECOND client, because the bridge's first key prefers a studio already
+  -- holding a project for this exact designer-client pair: reusing client one
+  -- would let the control's own project answer and hide the date key.
+  INSERT INTO public.designer_clients (id, designer_id, client_id, status, client_name)
+  VALUES ('b1200000-0000-4000-8000-00000000ad02', 'b1200000-0000-4000-8000-00000000a002',
+          'b1200000-0000-4000-8000-00000000a005', 'active', 'R12af Client II');
+  INSERT INTO public.proposals
+    (id, designer_id, client_id, designer_client_id, title, description, status,
+     subtotal, total_amount, valid_until, created_at, updated_at, version)
+  VALUES ('b1200000-0000-4000-8000-00000000af02', 'b1200000-0000-4000-8000-00000000a002',
+          'b1200000-0000-4000-8000-00000000a005', 'b1200000-0000-4000-8000-00000000ad02',
+          'R12af Client House', 'the live activation path, ambiguous employer tier', 'draft',
+          1850000, 1850000, NOW() + INTERVAL '14 days', NOW(), NOW(), 1);
+  PERFORM set_config('app.proposal_send_id', 'b1200000-0000-4000-8000-00000000af02', true);
+  UPDATE public.proposals SET status = 'sent', sent_at = NOW(), updated_at = NOW()
+   WHERE id = 'b1200000-0000-4000-8000-00000000af02';
+  PERFORM set_config('app.proposal_send_id', '', true);
+
+  PERFORM pg_temp.assume_user('b1200000-0000-4000-8000-00000000a005');
+  v_result := public.sign_proposal('b1200000-0000-4000-8000-00000000af02', 'R12af Client II');
+  PERFORM pg_temp.reset_role();
+  ASSERT (v_result ->> 'status') = 'accepted' AND (v_result ->> 'newly_signed')::boolean,
+    'FAIL af4a (precondition): the client''s signature must land and activate a project. If it '
+    'now RAISES, the ambiguous employer tier has been ruled to FAIL CLOSED on the activation path '
+    '(one of W1-R12-01''s two closures) and this leg should be rewritten as a negative one; got '
+    || COALESCE(v_result::text, 'NULL');
+  v_project := (v_result ->> 'project_id')::uuid;
+  SELECT studio_id INTO v_studio FROM public.projects WHERE id = v_project;
+
+  ASSERT v_studio = v_wm,
+    'FAIL af4 (PINS TODAY — W1-R12-01, HT-3-b arm (c) OWED / 00603''s OPEN SUB-QUESTION): the '
+    'hire''s employer tier is AMBIGUOUS, which HT-3-b rules is ''none'', so 00603 stands aside and '
+    '00563''s activation bridge decides it on `membership.joined_at` — a column the SEATING CALLER '
+    'writes. The workspace the SUBJECT owns is stamped on the hire''s signed project. Under either '
+    'closure (arm (c), or an ambiguous tier failing closed here) this becomes S '
+    '(b1200000-0000-4000-8000-00000000aa01); got ' || COALESCE(v_studio::text, 'NULL');
+
+  PERFORM pg_temp.assume_user('b1200000-0000-4000-8000-00000000a003');
+  INSERT INTO public.project_time_entries
+    (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('b1200000-0000-4000-8000-00000000ab02', v_project,
+          'b1200000-0000-4000-8000-00000000a003', NOW() - INTERVAL '3 hours', 120, true, 'manual_entry');
+  PERFORM pg_temp.reset_role();
+
+  SELECT hourly_rate_cents, rate_source, rated_amount_cents, billing_state
+    INTO v_rate, v_source, v_amount, v_state
+  FROM public.project_time_entries WHERE id = 'b1200000-0000-4000-8000-00000000ab02';
+  ASSERT v_rate = 99900 AND v_source = 'studio_member' AND v_amount = 199800
+         AND v_state = 'authorized',
+    'FAIL af5 (PINS TODAY — W1-R12-01, HT-3-b arm (c) OWED / 00603''s OPEN SUB-QUESTION): the '
+    'MEMBER BEING PRICED moved her own hour on her employer''s client project to the 99900 SHE '
+    'set in the workspace SHE owns — authorized, $1,998.00, a studio_member row indistinguishable '
+    'from a legitimate one, so W2''s composer cannot filter it and claim_time_entries will '
+    'invoice-lock it. The project''s designer held an employer seat the whole time, which HT-3-b''s '
+    'ruling cell and cases (x)/(aa8) both call safe. The control above reads 12000 / '
+    'studio_member / 24000, and that is what either closure makes this line read; got '
+    || COALESCE(v_rate::text, 'NULL') || ' / ' || COALESCE(v_source, 'NULL') || ' / '
+    || COALESCE(v_amount::text, 'NULL') || ' / ' || COALESCE(v_state, 'NULL');
+
+  SELECT resolved_rate_cents, amount_cents INTO v_vrate, v_vamt
+  FROM public.project_unbilled_time WHERE id = 'b1200000-0000-4000-8000-00000000ab02';
+  ASSERT v_vrate = 99900 AND v_vamt = 199800,
+    'FAIL af5b (PINS TODAY — W1-R12-01): and it reaches project_unbilled_time at '
+    '99900 / $1,998.00, which is the invoice composer''s feed and claim_time_entries'' invoice '
+    'lock. Either closure makes this 12000 / 24000; got ' || COALESCE(v_vrate::text, 'NULL')
+    || ' / ' || COALESCE(v_vamt::text, 'NULL');
+
+  RAISE NOTICE 'time_rate_resolution: case (af) passed — W1-R12-01 pinned on the live activation path with its control, HT-3-b arm (c) OWED and 00603''s ambiguous arm an OPEN SUB-QUESTION.';
 END
 $$;
 

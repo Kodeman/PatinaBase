@@ -75,13 +75,47 @@
 -- When the employer tier is EMPTY or AMBIGUOUS and 00563 already derived a value,
 -- 00563's answer stands. HT-3-b says an ambiguous tier is 'none', but on the
 -- activation path 'none' is unreachable without either leaving studio_id NULL —
--- which 00563's fail-closed check (00563:352-362) forbids for an authenticated
+-- which 00563's fail-closed check (00563:326-346) forbids for an authenticated
 -- caller — or refusing the client's signature. Clearing the column here would
 -- therefore either break the signing ceremony or smuggle a row past a check that
 -- exists to stop exactly that. If HT-3-b's "more than one is 'none'" is meant to
 -- bind the activation bridge too, that IS an edit to the signing ceremony and
 -- must be ruled: it is flagged to the orchestrator in
 -- artifacts/hour-tracking-2026-09-11/build/W1-fix-r11.md, not decided here.
+--
+-- THE OPEN SUB-QUESTION IS NOT COSMETIC (W1-R12-01, measured 1/1 end to end
+-- through `public.sign_proposal` with a control in the same fixture; case (af) of
+-- supabase/tests/billing/time_rate_resolution_test.sql pins it). What 00563's
+-- answer rests on, once this file stands aside, is the remainder of its bridge's
+-- ORDER BY (00563:266-277): after the sibling-project preference and
+-- `(role = 'owner') DESC` it ranks on `membership.joined_at NULLS LAST`, then
+-- `membership.created_at`. `joined_at` is nullable with NO default, `created_at` is
+-- NOT NULL DEFAULT now(), `guard_org_membership_changes()` constrains neither, and
+-- `Org owners can insert members` says nothing about the invitee. So the MEMBER
+-- BEING PRICED can seat the project's DESIGNER in a workspace she owns with a
+-- backdated `joined_at`, make the designer's employer tier AMBIGUOUS, and have her
+-- own hour on the designer's client project come back
+-- 99900 / studio_member / 199800 / authorized with project_unbilled_time reporting
+-- $1,998.00 — EVEN WHEN THE DESIGNER ALREADY HOLDS AN EMPLOYER SEAT, which is the
+-- one shape HT-3-b's ruling cell calls safe. Controls in the same fixture: no
+-- manoeuvre, the same seat with `joined_at` NULL, and the same seat at
+-- `status = 'invited'` each stamp the employer studio and read 12000 / 24000.
+--
+-- RETRACTED BY LINE: 00602:98-99 ("ambiguity is 'none' under HT-3-b") and
+-- 00602:104-108 ("a second seat can make a designer's tier ambiguous — a $0
+-- denial-of-service (the pre-existing W1-R8-12), never somebody else's number")
+-- are both FALSE on the activation path, with the measured values above. They hold
+-- on the postgres/seed path and for 00599 step 2, and nowhere else. The two
+-- closures are RULINGS, and neither is code in this wave: HT-3-b arm (c) (seats
+-- land `status = 'invited'`; only the named user activates her own seat), which is
+-- already OWED and was measured to close it completely, or a ruling that an
+-- ambiguous employer tier must FAIL CLOSED on the activation path — refuse the
+-- signature, or leave the column NULL and amend 00563's check. No code-only
+-- closure exists inside this program's files that does not key on the member being
+-- priced (HT-3-a forbids it) or re-introduce a ranking key among the employer
+-- candidates (rounds 4-7 rated every such key blocker-grade); restricting the
+-- bridge to the employer tier does not help, because both candidates in the
+-- measured shape ARE employer-tier seats.
 --
 -- When the caller named nothing and the column is STILL NULL after 00563 (the
 -- migration/seed/service bypass), the two tiers behave exactly as 00602 shipped
@@ -93,9 +127,11 @@
 -- who owns an organization can seat the project's DESIGNER in it, become her one
 -- employer candidate, and price herself there. That is HT-3-b arm (c) (seats land
 -- `status = 'invited'`; only the named user activates her own seat), which stays
--- OWED. Cases (ad) and (af) of the billing suite pin it as built, on both
--- surfaces, and rulings.md records that a member CAN push the outcome toward a
--- number she set when the project's designer holds no employer seat.
+-- OWED. Cases (ad-i) and (ad-ii) of the billing suite pin it as built, on both
+-- surfaces, and case (af) pins the AMBIGUOUS-tier shape above; rulings.md records
+-- that a member CAN push the outcome toward a number she set — toward her own
+-- number when the project's designer holds no employer seat, and, on the
+-- activation path, even when the designer holds one.
 --
 -- Lineage: `set_project_studio_id_owned` 00602 → 00603 (body grafted from 00602
 -- verbatim, one arm added). `record_project_studio_id_named` is new. Nothing else
