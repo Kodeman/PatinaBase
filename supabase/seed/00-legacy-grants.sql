@@ -15780,6 +15780,12 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00593_studio_contact_channels.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.assert_studio_contact_identity_stable() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 00594_studio_channel_consent.sql
 DO $g$ BEGIN
   REVOKE ALL ON TABLE public.studio_channel_consent FROM PUBLIC, anon, authenticated;

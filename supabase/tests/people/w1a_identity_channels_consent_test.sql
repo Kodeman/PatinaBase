@@ -89,6 +89,14 @@
 --      r9 R5-M1: the SEAT keeps the refusal's own source and words too — the
 --      mirror carries opt_out_source/evidence/recorded_at/recorded_by onto
 --      project_parties whenever the verdict it is mirroring is a refusal.
+--      r8 R8-M1 (R-AQ): and where the refusal has NO words of its own, all
+--      four are written NULL on EVERY seat — including the sibling seat that
+--      was carrying the grant's evidence, which the COALESCE used to leave
+--      standing under an `opted_out` status.
+--  29. r8 R8-M2 (R-AR): a card held by a channel, a designation, a rule route
+--      or an affiliation may not change its entity_kind or its studio; a
+--      restatement of the same values still writes; detaching the dependents
+--      opens the door again.
 --
 -- How to run:
 --   psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
@@ -2818,6 +2826,20 @@ VALUES
   ('e0000000-0000-4000-8000-0000000000a9', 'd0000000-0000-4000-8000-0000000000a4',
    'sub', 'Ola Nyquist', '612-555-0433', 'opted_out');
 
+-- r8 R8-M1's population: THE SIBLING SEAT. Same studio, same number, carrying
+-- the GRANT's evidence — the studio's own consent form, dated the day of the
+-- kickoff. project_parties has ONE evidence set, so this is the seat the
+-- mirror's COALESCE quietly left asserting that form AS the refusal.
+INSERT INTO project_parties (id, project_id, party_kind, display_name, phone,
+                             sms_consent_status, sms_consent_source,
+                             sms_consent_evidence, sms_consent_recorded_at,
+                             sms_consent_recorded_by, sms_consented_at)
+VALUES
+  ('e0000000-0000-4000-8000-0000000000aa', 'd0000000-0000-4000-8000-0000000000a4',
+   'sub', 'Nils Ek', '612-555-0433', 'granted', 'written',
+   'Signed consent form at kickoff', '2026-01-02 00:00:00+00',
+   'a0000000-0000-4000-8000-000000000001', '2026-01-02 00:00:00+00');
+
 DO $$
 DECLARE
   r      RECORD;
@@ -3009,11 +3031,40 @@ BEGIN
     'FAIL 27i5: the seat''s refusal still stands, got '
       || COALESCE(r.sms_consent_status, '<null>');
 
+  -- 27i6. r8 R8-M1: AND THE SIBLING SEAT SAYS NOTHING EITHER. Before this,
+  --       27i–27i5 proved only that the seat which CARRIED the sourceless
+  --       refusal was left NULL — which it was, because it had nothing to keep.
+  --       The seat next door had the studio's kickoff consent form on it, the
+  --       COALESCE kept it, and the mirror left that seat reading
+  --       (opted_out, written, 'Signed consent form at kickoff', 2 Jan 2026).
+  --       R-Q's sentence, composed off the seat — which is what every shipped
+  --       surface reads — printed "Opted out in writing, 2 Jan 2026": the
+  --       studio's own consent document named as the refusal, dated to the day
+  --       of the grant. A refusal with no source is a refusal whose evidence is
+  --       known ABSENT, so all four columns are written NULL (R-AQ).
+  SELECT * INTO r FROM project_parties WHERE id = 'e0000000-0000-4000-8000-0000000000aa';
+  ASSERT r.sms_consent_status = 'opted_out',
+    'FAIL 27i6: the refusal reaches the sibling seat too, got '
+      || COALESCE(r.sms_consent_status, '<null>');
+  ASSERT r.sms_consent_source IS NULL AND r.sms_consent_evidence IS NULL
+     AND r.sms_consent_recorded_at IS NULL AND r.sms_consent_recorded_by IS NULL,
+    'FAIL 27i7: a wordless refusal must not leave the GRANT''s evidence '
+    'standing on a sibling seat, got '
+      || COALESCE(r.sms_consent_source, '<null>') || ' / '
+      || COALESCE(r.sms_consent_evidence, '<null>') || ' / '
+      || COALESCE(r.sms_consent_recorded_at::text, '<null>') || ' / '
+      || COALESCE(r.sms_consent_recorded_by::text, '<null>');
+  -- The grant's own date is NOT evidence and is not in the wiped set: the
+  -- record still says the number was once granted, and R-Q prints both halves.
+  ASSERT r.sms_consented_at IS NOT NULL,
+    'FAIL 27i8: the wipe is the four evidence columns, not the consent date';
+
   RAISE NOTICE '27. reconsent is evidence-only and re-callable (r7 M7-2), '
                'leaves the refusal''s own evidence standing (r8 W4-M2), the '
                'seat carries the refusal''s own words too (r9 R5-M1), and a '
                'sourceless refusal is never given the studio''s consent as its '
-               'words (r6 R6-M1): passed';
+               'words (r6 R6-M1) — nor left standing on the sibling seat '
+               '(r8 R8-M1): passed';
 END
 $$;
 
@@ -3175,6 +3226,143 @@ BEGIN
 
   RAISE NOTICE '28. a studio-recorded refusal never speaks for a texted one, '
                'and the refusal keeps the date it arrived (r7 R7-M1): passed';
+END
+$$;
+
+-- ─── 29. r8 R8-M2 (R-AR): the card cannot change what it is, or whose ──────
+--
+-- The three card guards this wave adds all fire on the REFERENCING row. One
+-- ordinary UPDATE of the card being pointed AT undid all three at once: a
+-- company card left carrying owner_type = 'person' channels (the exact state
+-- assert_channel_owner_kind exists to refuse), a paperwork/site designation
+-- naming a firm and then a card in ANOTHER STUDIO, a contact rule routing
+-- across tenants. entity_kind is a column the shipped data layer already
+-- writes on update (use-studio-contacts.ts).
+
+INSERT INTO studio_contacts (id, organization_id, entity_kind, contact_kind,
+                             full_name, company_name, created_by)
+VALUES
+  -- full_name AND company_name, so studio_contacts_entity_name_check cannot be
+  -- what refuses the flip: the guard under test is the only thing in the way.
+  ('c0000000-0000-4000-8000-000000000071', 'b0000000-0000-4000-8000-00000000000a',
+   'person', 'sub', 'Held Person', 'Held Person LLC',
+   'a0000000-0000-4000-8000-000000000001'),
+  ('c0000000-0000-4000-8000-000000000072', 'b0000000-0000-4000-8000-00000000000a',
+   'company', 'gc', NULL, 'Holder GC', 'a0000000-0000-4000-8000-000000000001');
+
+DO $$
+DECLARE
+  raised TEXT;
+  r      RECORD;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+
+  -- 29a. A card nothing points at is free to change. The guard refuses a
+  --      CHANGE, never a card.
+  UPDATE studio_contacts
+     SET entity_kind = 'company'
+   WHERE id = 'c0000000-0000-4000-8000-000000000071';
+  UPDATE studio_contacts
+     SET entity_kind = 'person'
+   WHERE id = 'c0000000-0000-4000-8000-000000000071';
+
+  -- Now hang all four kinds of dependent on it.
+  INSERT INTO studio_contact_channels (owner_type, owner_id, channel_kind, value)
+  VALUES ('person', 'c0000000-0000-4000-8000-000000000071', 'mobile', '612-555-0471');
+
+  UPDATE studio_contacts
+     SET site_contact_person_id = 'c0000000-0000-4000-8000-000000000071'
+   WHERE id = 'c0000000-0000-4000-8000-000000000072';
+
+  INSERT INTO studio_contact_rules (subject_type, subject_id, route_to_person_id,
+                                    channels_forbidden, reason)
+  VALUES ('company', 'c0000000-0000-4000-8000-000000000072',
+          'c0000000-0000-4000-8000-000000000071', ARRAY['mobile'],
+          'Write the PM instead');
+
+  INSERT INTO studio_person_affiliations (person_id, company_id, role_at_firm)
+  VALUES ('c0000000-0000-4000-8000-000000000071',
+          'c0000000-0000-4000-8000-000000000072', 'pm');
+
+  -- 29b. The kind flip is refused, and the hint names what holds it.
+  raised := NULL;
+  BEGIN
+    UPDATE studio_contacts
+       SET entity_kind = 'company'
+     WHERE id = 'c0000000-0000-4000-8000-000000000071';
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'studio_contact_identity_held',
+    'FAIL 29b: a held card may not change its entity_kind, got '
+      || COALESCE(raised, '<no error>');
+
+  -- 29c. So is the studio move — the half that mints the cross-tenant
+  --      paperwork link 00592's own comment warns about.
+  raised := NULL;
+  BEGIN
+    UPDATE studio_contacts
+       SET organization_id = 'b0000000-0000-4000-8000-00000000000b'
+     WHERE id = 'c0000000-0000-4000-8000-000000000071';
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'studio_contact_identity_held',
+    'FAIL 29c: a held card may not be moved to another studio, got '
+      || COALESCE(raised, '<no error>');
+
+  -- 29d. The COMPANY side is held too — by the affiliation standing on it.
+  --      The designation it carries is cleared first only so that the OLDER
+  --      guard is not the one that answers: assert_studio_contact_designations_trg
+  --      also fires on an organization_id change, sorts before this trigger by
+  --      name, and correctly refuses the move as designated_person_other_studio.
+  --      Clearing it leaves the affiliation as the only thing holding the firm.
+  UPDATE studio_contacts SET site_contact_person_id = NULL
+   WHERE id = 'c0000000-0000-4000-8000-000000000072';
+
+  raised := NULL;
+  BEGIN
+    UPDATE studio_contacts
+       SET organization_id = 'b0000000-0000-4000-8000-00000000000b'
+     WHERE id = 'c0000000-0000-4000-8000-000000000072';
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'studio_contact_identity_held',
+    'FAIL 29d: the firm the affiliation names is held too, got '
+      || COALESCE(raised, '<no error>');
+
+  -- 29e. A RESTATEMENT is not a change. `UPDATE OF` fires whenever the column
+  --      is in the SET list, and the shipped hook writes entity_kind on every
+  --      edit that passes one — so an ordinary card edit must still write.
+  UPDATE studio_contacts
+     SET entity_kind = 'person',
+         organization_id = 'b0000000-0000-4000-8000-00000000000a',
+         full_name = 'Held Person, renamed'
+   WHERE id = 'c0000000-0000-4000-8000-000000000071';
+  SELECT * INTO r FROM studio_contacts
+   WHERE id = 'c0000000-0000-4000-8000-000000000071';
+  ASSERT r.full_name = 'Held Person, renamed',
+    'FAIL 29e: restating the same kind and studio must not refuse the edit';
+
+  -- 29f. Detach the four, and the change goes through. The studio's way out is
+  --      the room's own doors, not an ops fix.
+  DELETE FROM studio_person_affiliations
+   WHERE person_id = 'c0000000-0000-4000-8000-000000000071';
+  DELETE FROM studio_contact_rules
+   WHERE route_to_person_id = 'c0000000-0000-4000-8000-000000000071';
+  DELETE FROM studio_contact_channels
+   WHERE owner_id = 'c0000000-0000-4000-8000-000000000071';
+
+  -- The kind flip, not the studio move: studio_contacts' own member RLS
+  -- WITH CHECK refuses a move into a studio this member does not belong to,
+  -- which would prove nothing about this guard.
+  UPDATE studio_contacts
+     SET entity_kind = 'company'
+   WHERE id = 'c0000000-0000-4000-8000-000000000071';
+  PERFORM pg_temp.reset_role();
+  SELECT * INTO r FROM studio_contacts
+   WHERE id = 'c0000000-0000-4000-8000-000000000071';
+  ASSERT r.entity_kind = 'company',
+    'FAIL 29f: an unheld card must still be free to change, got '
+      || COALESCE(r.entity_kind, '<null>');
+
+  RAISE NOTICE '29. a held card cannot change what it is or whose it is '
+               '(r8 R8-M2, R-AR): passed';
   RAISE NOTICE 'All W1a assertions passed.';
 END
 $$;

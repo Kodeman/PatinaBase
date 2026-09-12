@@ -89,6 +89,8 @@ These were decided mid-build to keep the specimens moving. They stand unless Kod
 | R-AN | The consent mirror never overwrites a non-null evidence column with NULL; inbound YES/START falls back to the disclosure version and recorder standing on the studio's own seats (W1a M5-2). (Fable, 2026-09-11) |
 | R-AO | Affiliations are N persons × N firms; the company pointer trigger opens or closes only the affiliation it names and leaves siblings standing (W1a M5-3). (Fable, 2026-09-11) |
 | R-AP | paperwork_contact_person_id, signer_person_id and site_contact_person_id must each name a person card in the same studio and never the row itself, enforced by a BEFORE trigger (W1a M5-4). (Fable, 2026-09-11) |
+| R-AQ | R-AN refined: a refusal with no source has evidence known absent, so a sourceless opt-out mirrors NULL into every sibling seat's evidence columns; COALESCE governs every other transition (W1a R8-M1). (Fable, 2026-09-11) |
+| R-AR | A BEFORE UPDATE OF entity_kind, organization_id trigger on studio_contacts refuses the change while any channel, designation, rule route, or affiliation still points at the card (W1a R8-M2). (Fable, 2026-09-11) |
 
 ## 4. Parked (side journeys under VISION)
 
