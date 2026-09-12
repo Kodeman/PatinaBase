@@ -4758,6 +4758,129 @@ BEGIN
   RAISE NOTICE '37. the record is the single source: no mirror, the legacy '
                'columns frozen, both readers on channel_consent_status(), and '
                'org isolation through RLS (R-AS): passed';
+END
+$$;
+
+
+-- ─── 38. close-review r1 MAJOR-1: one resolver, so a reader and a writer ────
+--        can never name different studios for the same seat
+--
+-- Both views used to INLINE _primary_studio_for's body, and an inlined copy in
+-- a security_invoker view is not a definer: it sees only the memberships the
+-- CALLER's own organization_members RLS shows it. A project with studio_id NULL
+-- whose designer belongs to two studios therefore resolved to one studio for a
+-- writer and to another for a reader — and the reader then asked THAT studio's
+-- ledger and printed its word with confidence.
+--
+-- The fixture is exactly that shape: Carol joined Beta in 2025 and Alpha in
+-- 2026, so the resolver's ordering (owner first, then earliest joined) resolves
+-- her to Beta; her project carries no studio_id; Beta holds the refusal for the
+-- number and Alpha holds a grant for the same number on its own books.
+
+DO $$
+DECLARE
+  v_org   UUID;
+  v_alice TEXT;
+  v_bob   TEXT;
+BEGIN
+  INSERT INTO organization_members (user_id, organization_id, role, status, joined_at, created_at, updated_at)
+  VALUES
+    ('a0000000-0000-4000-8000-000000000003', 'b0000000-0000-4000-8000-00000000000a', 'member', 'active', '2026-01-01T00:00:00Z', NOW(), NOW()),
+    ('a0000000-0000-4000-8000-000000000003', 'b0000000-0000-4000-8000-00000000000b', 'admin',  'active', '2025-01-01T00:00:00Z', NOW(), NOW());
+
+  INSERT INTO projects (id, name, designer_id, studio_id, created_by, status, created_at, updated_at)
+  VALUES ('d0000000-0000-4000-8000-00000000000c', 'W1A Carol job',
+          'a0000000-0000-4000-8000-000000000003', NULL,
+          'a0000000-0000-4000-8000-000000000003', 'active', NOW(), NOW());
+
+  ASSERT (SELECT studio_id FROM projects
+           WHERE id = 'd0000000-0000-4000-8000-00000000000c') IS NULL,
+    'FAIL 38 fixture: the project must carry no studio_id — that is the whole case';
+
+  INSERT INTO project_parties (id, project_id, party_kind, display_name, phone, sms_consent_status)
+  VALUES ('e0000000-0000-4000-8000-00000000000c', 'd0000000-0000-4000-8000-00000000000c',
+          'sub', 'Ray Thao', '(612) 555-9001', 'not_asked');
+
+  INSERT INTO studio_channel_consent (organization_id, channel_kind, channel_value, status, refusal_unanswered)
+  VALUES ('b0000000-0000-4000-8000-00000000000b', 'sms', '+16125559001', 'opted_out', true),
+         ('b0000000-0000-4000-8000-00000000000a', 'sms', '+16125559001', 'granted',   false);
+
+  -- 38a. The resolver answers the way every WRITER answers.
+  SELECT public.project_consent_org('d0000000-0000-4000-8000-00000000000c') INTO v_org;
+  ASSERT v_org = 'b0000000-0000-4000-8000-00000000000b',
+    'FAIL 38a: the seat''s consent belongs to Beta, got ' || COALESCE(v_org::text, '<null>');
+
+  -- 38b. …and it answers the same for a caller who can see only Alpha's half
+  --      of Carol's memberships. Before this fix the inlined copy answered
+  --      Alpha here, and the roster printed Alpha's `granted` for a number
+  --      Beta's books refuse.
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+  SELECT public.project_consent_org('d0000000-0000-4000-8000-00000000000c') INTO v_org;
+  ASSERT v_org = 'b0000000-0000-4000-8000-00000000000b',
+    'FAIL 38b: the resolver must not answer per caller, got ' || COALESCE(v_org::text, '<null>');
+
+  -- 38c. So Alpha's owner no longer reads Alpha's word for Beta's seat. She is
+  --      not a member of Beta, and channel_consent_status() is SECURITY
+  --      INVOKER, so Beta's ledger is closed to her: the roster degrades to
+  --      `not_asked` rather than printing another studio's verdict.
+  SELECT sms_consent_status INTO v_alice FROM v_project_roster
+   WHERE roster_id = 'e0000000-0000-4000-8000-00000000000c';
+  ASSERT v_alice = 'not_asked',
+    'FAIL 38c: an Alpha reader must not be answered off Alpha''s ledger, got '
+      || COALESCE(v_alice, '<null>');
+  PERFORM pg_temp.reset_role();
+
+  -- 38d. Beta's owner — the studio whose ledger this is — reads the refusal.
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000002');
+  SELECT sms_consent_status INTO v_bob FROM v_project_roster
+   WHERE roster_id = 'e0000000-0000-4000-8000-00000000000c';
+  ASSERT v_bob = 'opted_out',
+    'FAIL 38d: the owning studio must read its own refusal, got '
+      || COALESCE(v_bob, '<null>');
+  PERFORM pg_temp.reset_role();
+
+  -- 38e. Neither view carries the inlined body any more — one resolver, three
+  --      call sites, so this cannot drift back.
+  ASSERT (SELECT definition FROM pg_views
+           WHERE schemaname = 'public' AND viewname = 'v_project_roster')
+         ILIKE '%project_consent_org%',
+    'FAIL 38e: v_project_roster must call the resolver';
+  ASSERT (SELECT definition FROM pg_views
+           WHERE schemaname = 'public' AND viewname = 'people_directory')
+         ILIKE '%project_consent_org%',
+    'FAIL 38e2: people_directory must call the resolver';
+  -- The team branch still joins organization_members for its own reasons; what
+  -- must be gone is the primary-studio ORDER BY the consent word used to
+  -- resolve through.
+  ASSERT (SELECT definition FROM pg_views
+           WHERE schemaname = 'public' AND viewname = 'v_project_roster')
+         NOT ILIKE '%design_studio%',
+    'FAIL 38e3: v_project_roster must not inline the primary-studio lookup';
+  ASSERT (SELECT definition FROM pg_views
+           WHERE schemaname = 'public' AND viewname = 'people_directory')
+         NOT ILIKE '%design_studio%',
+    'FAIL 38e4: people_directory must not inline the primary-studio lookup';
+
+  -- 38f. The resolver is a definer with its search_path pinned, closed to
+  --      PUBLIC and anon, open to the two roles the views are read by.
+  ASSERT (SELECT prosecdef FROM pg_proc pr
+            JOIN pg_namespace ns ON ns.oid = pr.pronamespace
+           WHERE ns.nspname = 'public' AND pr.proname = 'project_consent_org'),
+    'FAIL 38f: project_consent_org must be SECURITY DEFINER';
+  ASSERT (SELECT 'search_path=public' = ANY(proconfig) FROM pg_proc pr
+            JOIN pg_namespace ns ON ns.oid = pr.pronamespace
+           WHERE ns.nspname = 'public' AND pr.proname = 'project_consent_org'),
+    'FAIL 38f2: project_consent_org must pin its search_path';
+  ASSERT NOT has_function_privilege('anon',
+    'public.project_consent_org(uuid)', 'EXECUTE'),
+    'FAIL 38f3: anon must not execute project_consent_org';
+  ASSERT has_function_privilege('authenticated',
+    'public.project_consent_org(uuid)', 'EXECUTE'),
+    'FAIL 38f4: authenticated must execute project_consent_org';
+
+  RAISE NOTICE '38. one resolver for the seat''s studio: reader and writer '
+               'agree, and no view prints another studio''s consent word '
+               '(close-review r1 MAJOR-1): passed';
   RAISE NOTICE 'All W1a assertions passed.';
 END
 $$;

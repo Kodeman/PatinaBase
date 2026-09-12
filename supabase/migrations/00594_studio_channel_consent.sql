@@ -30,7 +30,10 @@
 --   3. THE FREEZE (R-AS). project_parties.sms_consent_* becomes legacy:
 --      commented as such, refused by refuse_legacy_consent_write(), and read by
 --      nobody. v_project_roster and people_directory take the consent word off
---      the record through channel_consent_status(). There is no mirror and no
+--      the record through channel_consent_status(), resolving the studio the
+--      seat's ledger belongs to through project_consent_org() — one SECURITY
+--      DEFINER resolver shared with every writer, so a reader and a writer can
+--      never name different studios for the same seat. There is no mirror and no
 --      second copy — that copy is what ten review rounds kept finding defects
 --      in, because one evidence set on the seat can only ever describe the act
 --      that happened last.
@@ -930,6 +933,65 @@ COMMENT ON FUNCTION public.channel_consent_status(uuid, text, text) IS
 
 
 -- ═══════════════════════════════════════════════════════════════════════════
+-- 3c-2. The org whose ledger a project's consent is read from
+-- ═══════════════════════════════════════════════════════════════════════════
+-- ONE RESOLVER, NOT THREE INLINED COPIES (close-review r1 MAJOR-1).
+--
+-- Both views below need the org a project belongs to: studio_id, falling back
+-- to the designer's primary studio. _primary_studio_for() is that fallback, but
+-- 00484:1221/:1278-1289 revoked EXECUTE on it from every PostgREST role, and a
+-- security_invoker view checks function permissions against the CALLER — so the
+-- views inlined its body instead, three times.
+--
+-- The inlined copy is textually identical and behaviourally is NOT: the
+-- function is SECURITY DEFINER and a subquery in an invoker view is not.
+-- organization_members carries "Active members can view co-members"
+-- (is_active_org_member), so the inlined copy sees only memberships in orgs the
+-- CALLER belongs to, while backfill_channel_consent_from_parties() (:381),
+-- record_channel_consent()'s seat gate and the send rail (_shared/sms.ts
+-- primaryStudioFor) see every membership. For a project with studio_id IS NULL
+-- whose designer belongs to more than one design_studio the two diverge, and
+-- the view then asks ANOTHER studio's ledger and prints its word with
+-- confidence: one seat, one number, "Not asked" to a member of studio A and
+-- "Opted out" to a member of studio B. Worse than the degrade-to-NULL the old
+-- comment documented, and on exactly the studio_id IS NULL population §5.2
+-- names as this wave's blind spot.
+--
+-- So the resolution gets a function of its own — the shape studio_contact_org()
+-- already takes (00592:65-76) — and the views call it. It returns an ORG ID,
+-- never a consent word: channel_consent_status() stays SECURITY INVOKER, so
+-- studio_channel_consent's member-only RLS is still the whole of what a caller
+-- may read through it.
+CREATE OR REPLACE FUNCTION public.project_consent_org(p_project_id uuid)
+RETURNS uuid
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+  SELECT COALESCE(p.studio_id, public._primary_studio_for(p.designer_id))
+    FROM public.projects p
+   WHERE p.id = p_project_id;
+$$;
+
+REVOKE ALL ON FUNCTION public.project_consent_org(uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.project_consent_org(uuid)
+  TO authenticated, service_role;
+
+COMMENT ON FUNCTION public.project_consent_org(uuid) IS
+  'The organization whose consent ledger a project''s seats are read against: '
+  'projects.studio_id, falling back to _primary_studio_for(designer_id) — the '
+  'same resolution backfill_channel_consent_from_parties(), '
+  'record_channel_consent()''s seat gate and the SMS send rail use. SECURITY '
+  'DEFINER so v_project_roster and people_directory (both security_invoker) '
+  'resolve it the way every writer does instead of through the caller''s own '
+  'organization_members RLS, which answered for a different studio entirely '
+  'when a designer belongs to more than one (00594, close-review r1 MAJOR-1). '
+  'Returns an org id only; the consent word still comes from '
+  'channel_consent_status(), which is INVOKER.';
+
+
+-- ═══════════════════════════════════════════════════════════════════════════
 -- 3d. The two shipped readers, repointed at the record
 -- ═══════════════════════════════════════════════════════════════════════════
 -- Both views are grafted from their grep-winning bodies and changed in exactly
@@ -971,31 +1033,16 @@ SELECT
   -- column was NOT NULL before, so the absence is COALESCEd to the word.
   COALESCE(
     public.channel_consent_status(
-      COALESCE(
-          prj.studio_id,
-          -- _primary_studio_for() is the SQL side's fallback, but 00483 revoked
-          -- EXECUTE on it from every PostgREST role, and a security_invoker view
-          -- checks function permissions against the CALLER — so it is inlined here,
-          -- ORDER BY for ORDER BY (00315:64-79). Under the caller's own RLS
-          -- organization_members answers for a co-member ("Active members can view
-          -- co-members"), which is exactly the population that reads these views;
-          -- for anyone else it degrades to NULL, and the consent word with it.
-          (SELECT om2.organization_id
-             FROM public.organization_members om2
-             JOIN public.organizations o2 ON o2.id = om2.organization_id
-            WHERE om2.user_id = prj.designer_id
-              AND om2.status  = 'active'
-              AND o2.type     = 'design_studio'
-            ORDER BY (om2.role = 'owner') DESC, om2.joined_at NULLS LAST, om2.created_at
-            LIMIT 1)
-        ),
+      -- One resolver, shared with every writer (3c-2). It is SECURITY DEFINER,
+      -- so a caller who cannot see the project — or who belongs to a different
+      -- studio than the one the seat's consent lives under — still gets the
+      -- studio this seat's ledger actually belongs to, and the join this
+      -- expression used to need is gone with the inlined copy.
+      public.project_consent_org(pp.project_id),
       'sms', pp.phone_e164),
     'not_asked')                                                 AS sms_consent_status,
   pp.updated_at                                                  AS updated_at
 FROM public.project_parties pp
--- LEFT, not INNER: a caller who can see the seat but not the project keeps
--- the roster row and loses only the consent word.
-LEFT JOIN public.projects prj ON prj.id = pp.project_id
 
 UNION ALL
 
@@ -1186,24 +1233,8 @@ SELECT
   -- status_raw and the meta both read the RECORD (R-AS): the seat's own
   -- column is frozen legacy since 00594.
   COALESCE(public.channel_consent_status(
-    COALESCE(
-        pj.studio_id,
-        -- _primary_studio_for() is the SQL side's fallback, but 00483 revoked
-        -- EXECUTE on it from every PostgREST role, and a security_invoker view
-        -- checks function permissions against the CALLER — so it is inlined here,
-        -- ORDER BY for ORDER BY (00315:64-79). Under the caller's own RLS
-        -- organization_members answers for a co-member ("Active members can view
-        -- co-members"), which is exactly the population that reads these views;
-        -- for anyone else it degrades to NULL, and the consent word with it.
-        (SELECT om2.organization_id
-           FROM public.organization_members om2
-           JOIN public.organizations o2 ON o2.id = om2.organization_id
-          WHERE om2.user_id = pj.designer_id
-            AND om2.status  = 'active'
-            AND o2.type     = 'design_studio'
-          ORDER BY (om2.role = 'owner') DESC, om2.joined_at NULLS LAST, om2.created_at
-          LIMIT 1)
-      ),
+    -- One resolver, shared with every writer (3c-2).
+    public.project_consent_org(pp.project_id),
     'sms', pp.phone_e164), 'not_asked'),
   pp.updated_at,
   jsonb_build_object(
@@ -1214,24 +1245,8 @@ SELECT
     'trade',              pp.trade,
     'phone_e164',         pp.phone_e164,
     'sms_consent_status', COALESCE(public.channel_consent_status(
-      COALESCE(
-          pj.studio_id,
-          -- _primary_studio_for() is the SQL side's fallback, but 00483 revoked
-          -- EXECUTE on it from every PostgREST role, and a security_invoker view
-          -- checks function permissions against the CALLER — so it is inlined here,
-          -- ORDER BY for ORDER BY (00315:64-79). Under the caller's own RLS
-          -- organization_members answers for a co-member ("Active members can view
-          -- co-members"), which is exactly the population that reads these views;
-          -- for anyone else it degrades to NULL, and the consent word with it.
-          (SELECT om2.organization_id
-             FROM public.organization_members om2
-             JOIN public.organizations o2 ON o2.id = om2.organization_id
-            WHERE om2.user_id = pj.designer_id
-              AND om2.status  = 'active'
-              AND o2.type     = 'design_studio'
-            ORDER BY (om2.role = 'owner') DESC, om2.joined_at NULLS LAST, om2.created_at
-            LIMIT 1)
-        ),
+      -- One resolver, shared with every writer (3c-2).
+      public.project_consent_org(pp.project_id),
       'sms', pp.phone_e164), 'not_asked'),
     'sms_consented_at',   pp.sms_consented_at,
     'sms_opt_out_at',     pp.sms_opt_out_at,

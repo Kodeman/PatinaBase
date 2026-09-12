@@ -42,6 +42,7 @@ vi.mock('@tanstack/react-query', () => ({
 
 import {
   excludeProjectArtifactApprovals,
+  useAddProjectParty,
   useCreateCoordinationItem,
   useDeleteCoordinationItem,
   useExtendCoordinationItem,
@@ -50,6 +51,7 @@ import {
   useReassignCoordinationItem,
   useRecordPartySmsConsent,
   useResolveCoordinationItem,
+  useUpdateProjectParty,
   useCoordinationRealtime,
   useSubmitCoordinationRevision,
   useUpdateCoordinationItem,
@@ -556,5 +558,173 @@ describe('useRecordPartySmsConsent — the only writer of consent columns on an 
     ).rejects.toThrow(/prior consent/i);
     expect(from).not.toHaveBeenCalled();
     expect(getUser).not.toHaveBeenCalled();
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// close-review r1 MAJOR-2 / MAJOR-3 — the record, and what a frozen column says
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('useAddProjectParty — the invite goes on the studio record too (MAJOR-2)', () => {
+  const PROJECT_ID = 'proj-1';
+  const ORG_ID = 'org-beta';
+
+  function insertBuilder(result: { data: unknown; error: unknown }) {
+    const single = vi.fn().mockResolvedValue(result);
+    const select = vi.fn(() => ({ single }));
+    const insert = vi.fn((_payload: Record<string, unknown>) => ({ select }));
+    return { insert, select, single };
+  }
+
+  function config() {
+    return useAddProjectParty() as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+    };
+  }
+
+  const textableInput = {
+    projectId: PROJECT_ID,
+    partyKind: 'sub' as const,
+    displayName: 'Ray Thao',
+    phone: '(612) 555-9001',
+    textUpdates: true,
+    smsConsentSource: 'verbal' as const,
+    smsConsentEvidence: 'Told me at the site kickoff',
+  };
+
+  it('records a pending consent record BEFORE the seat is born, so the room never prints "Not asked" for a person Patina has just texted', async () => {
+    const ins = insertBuilder({ data: { id: 'party-9', project_id: PROJECT_ID }, error: null });
+    from.mockReturnValue({ insert: ins.insert });
+    rpc.mockReset();
+    rpc
+      .mockResolvedValueOnce({ data: ORG_ID, error: null })
+      .mockResolvedValueOnce({ data: null, error: null });
+
+    await config().mutationFn(textableInput);
+
+    expect(rpc).toHaveBeenCalledTimes(2);
+    expect(rpc.mock.calls[0]).toEqual([
+      'project_consent_org',
+      { p_project_id: PROJECT_ID },
+    ]);
+    expect(rpc.mock.calls[1][0]).toBe('record_channel_consent');
+    expect(rpc.mock.calls[1][1]).toEqual({
+      p_organization_id: ORG_ID,
+      p_channel_kind: 'sms',
+      p_channel_value: '(612) 555-9001',
+      p_status: 'pending',
+      p_source: 'verbal',
+      p_evidence: 'Told me at the site kickoff',
+      p_disclosure_version: 'field-sms-v1',
+      p_origin_project_id: PROJECT_ID,
+    });
+    // The seat is still written — the freeze is BEFORE UPDATE, and the invite
+    // dispatch still fires off this INSERT.
+    expect(ins.insert).toHaveBeenCalledTimes(1);
+    const seat = ins.insert.mock.calls[0][0] as Record<string, unknown>;
+    expect(seat.sms_consent_status).toBe('pending');
+  });
+
+  it('writes no consent record when the designer did not tick text updates', async () => {
+    const ins = insertBuilder({ data: { id: 'party-9', project_id: PROJECT_ID }, error: null });
+    from.mockReturnValue({ insert: ins.insert });
+    rpc.mockReset();
+
+    await config().mutationFn({ ...textableInput, textUpdates: false });
+
+    expect(rpc).not.toHaveBeenCalled();
+    const seat = ins.insert.mock.calls[0][0] as Record<string, unknown>;
+    expect(seat.sms_consent_status).toBe('not_asked');
+  });
+
+  it('refuses before the seat exists when the project has no studio to record against', async () => {
+    const ins = insertBuilder({ data: null, error: null });
+    from.mockReturnValue({ insert: ins.insert });
+    rpc.mockReset();
+    rpc.mockResolvedValueOnce({ data: null, error: null });
+
+    await expect(config().mutationFn(textableInput)).rejects.toThrow(/isn't attached to a studio/i);
+    expect(ins.insert).not.toHaveBeenCalled();
+  });
+
+  it("turns the RPC's channel_opted_out into a sentence, and never writes the seat", async () => {
+    const ins = insertBuilder({ data: null, error: null });
+    from.mockReturnValue({ insert: ins.insert });
+    rpc.mockReset();
+    rpc
+      .mockResolvedValueOnce({ data: ORG_ID, error: null })
+      .mockResolvedValueOnce({ data: null, error: { message: 'channel_opted_out', code: 'P0001' } });
+
+    await expect(config().mutationFn(textableInput)).rejects.toThrow(/already opted out/i);
+    expect(ins.insert).not.toHaveBeenCalled();
+  });
+});
+
+describe("the frozen legacy columns speak English until W2 repoints them (MAJOR-3 / F2 / F3)", () => {
+  const FROZEN = {
+    message: 'consent_legacy_column_frozen',
+    code: 'P0001',
+    hint: 'project_parties.sms_consent_* is legacy since 00594.',
+  };
+
+  it('useRecordPartySmsConsent surfaces a written sentence, not the Postgres string', async () => {
+    const selfMaybeSingle = vi.fn().mockResolvedValue({ data: { phone_e164: '+15551234567' }, error: null });
+    const selfEq = vi.fn(() => ({ maybeSingle: selfMaybeSingle }));
+    const siblingLimit = vi.fn().mockResolvedValue({ data: [], error: null });
+    const siblingEq2 = vi.fn(() => ({ limit: siblingLimit }));
+    const siblingEq1 = vi.fn(() => ({ eq: siblingEq2 }));
+    const single = vi.fn().mockResolvedValue({ data: null, error: FROZEN });
+    const selectAfterUpdate = vi.fn(() => ({ single }));
+    const eq3 = vi.fn(() => ({ select: selectAfterUpdate }));
+    const eq2 = vi.fn(() => ({ eq: eq3 }));
+    const eq1 = vi.fn(() => ({ eq: eq2 }));
+    const update = vi.fn(() => ({ eq: eq1 }));
+    from
+      .mockReturnValueOnce({ select: vi.fn(() => ({ eq: selfEq })) })
+      .mockReturnValueOnce({ select: vi.fn(() => ({ eq: siblingEq1 })) })
+      .mockReturnValueOnce({ update });
+
+    const hook = useRecordPartySmsConsent() as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+    };
+    await expect(
+      hook.mutationFn({
+        partyId: 'party-1',
+        phone: '5551234567',
+        smsConsentSource: 'verbal',
+        smsConsentEvidence: 'Told me at kickoff',
+      }),
+    ).rejects.toThrow(/Texting consent has moved to the studio's own record/);
+  });
+
+  it('useUpdateProjectParty surfaces the same sentence when a phone edit restates a frozen column', async () => {
+    const currentMaybeSingle = vi.fn().mockResolvedValue({
+      data: { sms_consent_status: 'granted', phone_e164: '+15551234567' },
+      error: null,
+    });
+    const currentEq = vi.fn(() => ({ maybeSingle: currentMaybeSingle }));
+    const siblingLimit = vi.fn().mockResolvedValue({ data: [], error: null });
+    const siblingOrder = vi.fn(() => ({ limit: siblingLimit }));
+    const siblingEq2 = vi.fn(() => ({ order: siblingOrder }));
+    const siblingEq1 = vi.fn(() => ({ eq: siblingEq2 }));
+    const single = vi.fn().mockResolvedValue({ data: null, error: FROZEN });
+    const selectAfterUpdate = vi.fn(() => ({ single }));
+    const updateEq = vi.fn(() => ({ select: selectAfterUpdate }));
+    const update = vi.fn(() => ({ eq: updateEq }));
+    from
+      .mockReturnValueOnce({ select: vi.fn(() => ({ eq: currentEq })) })
+      .mockReturnValueOnce({ select: vi.fn(() => ({ eq: siblingEq1 })) })
+      .mockReturnValueOnce({ update });
+
+    const hook = useUpdateProjectParty() as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+    };
+    await expect(
+      hook.mutationFn({
+        id: 'party-1',
+        projectId: 'proj-1',
+        patch: { phone: '612-555-0199' },
+      }),
+    ).rejects.toThrow(/Texting consent has moved to the studio's own record/);
   });
 });

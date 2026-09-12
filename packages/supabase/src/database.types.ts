@@ -34710,6 +34710,7 @@ export type Database = {
         Args: { quiz_answers: Json; timings?: Json }
         Returns: Json
       }
+      project_consent_org: { Args: { p_project_id: string }; Returns: string }
       project_note_enclosures_ok: {
         Args: { p_enclosures: Json }
         Returns: boolean

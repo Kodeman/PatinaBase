@@ -410,7 +410,16 @@ export interface AddProjectPartyInput {
  * Add a field party (gc / sub / installer / receiver) to a project. Inserts a
  * project_parties row; the 00281 trigger normalizes phone_e164, and — per the
  * Track B contract — a row written with a phone + sms_consent_status='pending'
- * fires the opt-in SMS invite server-side. The UI writes the row only.
+ * fires the opt-in SMS invite server-side. The UI never sends the invite.
+ *
+ * When the designer ticks "text updates" the invite is ALSO recorded on the
+ * studio's own consent record (`record_channel_consent(…, 'pending', …)`,
+ * 00594) before the row is written. Since R-AS that record is the single source
+ * both readers take the consent word from, so a seat born `pending` with no
+ * record behind it printed "Not asked" for a person Patina had just texted.
+ * Recording first also puts 00594's gates ahead of the invite: a number this
+ * studio holds a refusal for, or one that cannot be normalized to E.164, is
+ * refused before the seat exists and before anything is sent.
  */
 export function useAddProjectParty() {
   const queryClient = useQueryClient();
@@ -418,7 +427,8 @@ export function useAddProjectParty() {
     mutationFn: async (input: AddProjectPartyInput) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
-      const wantsText = input.textUpdates && !!input.phone?.trim();
+      const consentPhone = input.phone?.trim() || null;
+      const wantsText = !!input.textUpdates && !!consentPhone;
       const consentSource = input.smsConsentSource?.trim() || null;
       const consentEvidence = input.smsConsentEvidence?.trim() || null;
       if (wantsText && (!consentSource || !consentEvidence)) {
@@ -426,6 +436,41 @@ export function useAddProjectParty() {
           'Record how and where this person gave prior consent before sending a text.',
         );
       }
+      // THE RECORD, NOT ONLY THE SEAT (00594 R-AS, close-review r1 MAJOR-2).
+      // The freeze is BEFORE UPDATE, so this INSERT still writes the seat and
+      // fc_optin_invite_dispatch (00284) still sends the opt-in invite off it.
+      // But both readers — v_project_roster and people_directory — take the
+      // consent word off studio_channel_consent now, so a seat born `pending`
+      // with no record behind it printed "Not asked" for someone Patina had
+      // just texted, and §3.8's `Invited` word was unreachable for every newly
+      // added party.
+      //
+      // Recorded BEFORE the insert on purpose: record_channel_consent() is the
+      // gate. A number this studio already holds a refusal for, or one that
+      // cannot be normalized to E.164, is refused HERE — before a seat is born
+      // at `pending` and before the invite trigger sends anything.
+      if (wantsText) {
+        const { data: consentOrg, error: orgError } = await supabase
+          .rpc('project_consent_org', { p_project_id: input.projectId });
+        if (orgError) throw orgError;
+        if (!consentOrg) {
+          throw new Error(
+            "This project isn't attached to a studio yet, so there's nowhere to record texting consent.",
+          );
+        }
+        const { error: consentError } = await supabase.rpc('record_channel_consent', {
+          p_organization_id: consentOrg,
+          p_channel_kind: 'sms',
+          p_channel_value: consentPhone as string,
+          p_status: 'pending',
+          p_source: consentSource,
+          p_evidence: consentEvidence,
+          p_disclosure_version: 'field-sms-v1',
+          p_origin_project_id: input.projectId,
+        });
+        if (consentError) throw asWrittenConsentRpcError(consentError);
+      }
+
       const { data, error } = await supabase
         .from('project_parties')
         .insert({
@@ -490,6 +535,51 @@ const NOT_ASKED_CONSENT_COLUMNS = {
   sms_consented_at: null,
   sms_opt_out_at: null,
 };
+
+/** What 00594's freeze (R-AS) raises when a shipped writer still reaches for
+ *  `project_parties.sms_consent_*`. The two writers below are exactly that —
+ *  W2 replaces them with `record_channel_consent()` / `record_channel_reconsent()`
+ *  — and until it does, the raw Postgres string was rendered verbatim into the
+ *  party sheet's own error slot. It fails CLOSED (nothing is written, nothing
+ *  is sent); what it must not do is say so in Postgres. */
+const CONSENT_LEGACY_FROZEN = 'consent_legacy_column_frozen';
+const CONSENT_FROZEN_SENTENCE =
+  "Texting consent has moved to the studio's own record, and this screen hasn't caught up yet. Nothing was changed.";
+
+/** Re-throws 00594's freeze as a written sentence. Any other error passes
+ *  through untouched. */
+function asWrittenConsentError(error: unknown): unknown {
+  const message = (error as { message?: unknown } | null)?.message;
+  if (typeof message === 'string' && message.includes(CONSENT_LEGACY_FROZEN)) {
+    return new Error(CONSENT_FROZEN_SENTENCE);
+  }
+  return error;
+}
+
+/** `record_channel_consent()` (00594) refuses in four named ways. Each is a
+ *  fact the designer can act on, so each gets its own sentence rather than the
+ *  raw Postgres string. Anything else passes through. */
+function asWrittenConsentRpcError(error: unknown): unknown {
+  const message = (error as { message?: unknown } | null)?.message;
+  if (typeof message !== 'string') return error;
+  if (message.includes('channel_opted_out')) {
+    return new Error(
+      'This number already opted out of Patina texts. Only they can rejoin by replying START.',
+    );
+  }
+  if (message.includes('invalid_channel_value')) {
+    return new Error("That phone can't receive texts — fix the number first.");
+  }
+  if (message.includes('not_a_studio_member')) {
+    return new Error('Only an active member of this studio can record texting consent.');
+  }
+  if (message.includes('consent_evidence_required')) {
+    return new Error(
+      'Record how and where this person gave prior consent before sending a text.',
+    );
+  }
+  return error;
+}
 
 /** Mirrors the DB's `normalize_phone_e164` (00281) so a client-side "did the
  *  phone actually change" comparison agrees with what the trigger will
@@ -631,7 +721,12 @@ export function useUpdateProjectParty() {
         .eq('id', id)
         .select()
         .single();
-      if (error) throw error;
+      // A phone edit on a seat currently `pending` or `granted` restates the
+      // consent columns, and 00594's freeze refuses them. W2 replaces this
+      // branch with record_channel_consent(); until then the refusal is real
+      // and the edit does not land — so it says so in words (close-review r1
+      // MAJOR-3 / F3).
+      if (error) throw asWrittenConsentError(error);
       return data as ProjectParty;
     },
     onSuccess: (_data, input) => {
@@ -763,7 +858,11 @@ export function useRecordPartySmsConsent() {
             "This person's texting status just changed — refresh to see it.",
           );
         }
-        throw error;
+        // 00594's freeze (R-AS) refuses this whole write; the sheet renders
+        // the thrown message verbatim, so it must not be the Postgres string.
+        // W2 replaces this hook with record_channel_consent() (close-review r1
+        // MAJOR-3 / F2).
+        throw asWrittenConsentError(error);
       }
 
       // F2 — the trigger gates dispatch on phone_e164 (NULL for unparseable
@@ -775,7 +874,7 @@ export function useRecordPartySmsConsent() {
           .from('project_parties')
           .update(NOT_ASKED_CONSENT_COLUMNS)
           .eq('id', input.partyId);
-        if (revertError) throw revertError;
+        if (revertError) throw asWrittenConsentError(revertError);
         throw new Error(
           "That phone can't receive texts — fix the number first.",
         );
