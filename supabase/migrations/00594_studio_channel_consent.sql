@@ -641,11 +641,45 @@ SECURITY DEFINER
 SET search_path TO 'public'
 AS $$
 DECLARE
-  v_newly_granted uuid[];
-  v_request       uuid;
+  v_newly_granted    uuid[];
+  v_request          uuid;
+  v_seat_source      text;
+  v_seat_evidence    text;
+  v_seat_recorded_at timestamptz;
+  v_seat_recorded_by uuid;
 BEGIN
   IF NEW.channel_kind <> 'sms' THEN
     RETURN NEW;
+  END IF;
+
+  -- WHEN THE VERDICT IS A REFUSAL, THE SEAT CARRIES THE REFUSAL'S OWN EVIDENCE
+  -- (r9 R5-M1). W4-M2 kept opt_out_source / opt_out_evidence /
+  -- opt_out_recorded_at / opt_out_recorded_by off the studio's side of the
+  -- record — but project_parties has no second set of columns, and the mirror
+  -- was still copying the CONSENT side onto the seat. So a seat that read
+  -- (opted_out, inbound_sms, 'Replied STOP') read (opted_out, written, 'Signed
+  -- a fresh consent…') the moment record_channel_reconsent() put the studio's
+  -- own paperwork on the record: R-Q's sentence, read off the seat — which is
+  -- what every shipped surface reads — became "Opted out in writing", naming
+  -- the studio's consent as the refusal, and the 10DLC artifact of how the STOP
+  -- arrived was gone from the only copy those surfaces see. The refusal's
+  -- evidence is the evidence OF the verdict being mirrored, so when the verdict
+  -- is `opted_out` the refusal's set is what the seat gets; the studio's set is
+  -- the fallback for the legacy rows minted before opt_out_* existed, and the
+  -- seat's own standing value is the fallback after that (never NULL over
+  -- non-null, R-AN). disclosure_version has no refusal-side twin — it belongs
+  -- to the disclosure the person was shown, not to how they refused — so it
+  -- keeps coming from the record's own column.
+  IF NEW.status = 'opted_out' THEN
+    v_seat_source      := COALESCE(NEW.opt_out_source,      NEW.source);
+    v_seat_evidence    := COALESCE(NEW.opt_out_evidence,    NEW.evidence);
+    v_seat_recorded_at := COALESCE(NEW.opt_out_recorded_at, NEW.recorded_at);
+    v_seat_recorded_by := COALESCE(NEW.opt_out_recorded_by, NEW.recorded_by);
+  ELSE
+    v_seat_source      := NEW.source;
+    v_seat_evidence    := NEW.evidence;
+    v_seat_recorded_at := NEW.recorded_at;
+    v_seat_recorded_by := NEW.recorded_by;
   END IF;
 
   -- The seats this write is about to move ONTO `granted`, captured before the
@@ -692,11 +726,13 @@ BEGIN
      SET sms_consent_status             = NEW.status,
          sms_consented_at               = COALESCE(NEW.consented_at, pp.sms_consented_at),
          sms_opt_out_at                 = COALESCE(NEW.opt_out_at, pp.sms_opt_out_at),
-         sms_consent_source             = COALESCE(NEW.source, pp.sms_consent_source),
-         sms_consent_evidence           = COALESCE(NEW.evidence, pp.sms_consent_evidence),
-         sms_consent_recorded_at        = COALESCE(NEW.recorded_at, pp.sms_consent_recorded_at),
+         -- v_seat_* is the record's consent set, or THE REFUSAL'S OWN SET
+         -- when the verdict being mirrored is a refusal (r9 R5-M1, above).
+         sms_consent_source             = COALESCE(v_seat_source, pp.sms_consent_source),
+         sms_consent_evidence           = COALESCE(v_seat_evidence, pp.sms_consent_evidence),
+         sms_consent_recorded_at        = COALESCE(v_seat_recorded_at, pp.sms_consent_recorded_at),
          sms_consent_disclosure_version = COALESCE(NEW.disclosure_version, pp.sms_consent_disclosure_version),
-         sms_consent_recorded_by        = COALESCE(NEW.recorded_by, pp.sms_consent_recorded_by)
+         sms_consent_recorded_by        = COALESCE(v_seat_recorded_by, pp.sms_consent_recorded_by)
     FROM public.projects p
    WHERE p.id = pp.project_id
      AND pp.phone_e164 = NEW.channel_value
@@ -709,8 +745,10 @@ BEGIN
      -- and it is the 10DLC evidence for the send. Re-firing is already held
      -- off by patina.suppress_consent_dispatch above, so the narrow status
      -- test is no longer load-bearing. Compared against the values this write
-     -- would actually leave, so a NULL the COALESCE is not going to write no
-     -- longer counts as a difference.
+     -- would actually leave — v_seat_* included, so a refusal arriving with its
+     -- own source and words is not suppressed as identical to the studio's
+     -- consent set already on the seat (r9 R5-M1) — so a NULL the COALESCE is
+     -- not going to write no longer counts as a difference.
      AND (pp.sms_consent_status, pp.sms_consented_at, pp.sms_opt_out_at,
           pp.sms_consent_source, pp.sms_consent_evidence,
           pp.sms_consent_recorded_at, pp.sms_consent_disclosure_version,
@@ -719,11 +757,11 @@ BEGIN
          (NEW.status,
           COALESCE(NEW.consented_at, pp.sms_consented_at),
           COALESCE(NEW.opt_out_at, pp.sms_opt_out_at),
-          COALESCE(NEW.source, pp.sms_consent_source),
-          COALESCE(NEW.evidence, pp.sms_consent_evidence),
-          COALESCE(NEW.recorded_at, pp.sms_consent_recorded_at),
+          COALESCE(v_seat_source, pp.sms_consent_source),
+          COALESCE(v_seat_evidence, pp.sms_consent_evidence),
+          COALESCE(v_seat_recorded_at, pp.sms_consent_recorded_at),
           COALESCE(NEW.disclosure_version, pp.sms_consent_disclosure_version),
-          COALESCE(NEW.recorded_by, pp.sms_consent_recorded_by));
+          COALESCE(v_seat_recorded_by, pp.sms_consent_recorded_by));
 
   PERFORM set_config('patina.suppress_consent_dispatch', '', true);
 
@@ -781,7 +819,14 @@ COMMENT ON FUNCTION public.mirror_channel_consent_to_parties() IS
   'erase: each evidence column is COALESCEd over what the seat holds, so a '
   'record that carries a verdict without a disclosure version or a recorder '
   '(the shape the inbound rail mints) cannot null the ones the portal recorded '
-  '(R-AN). It also sets '
+  '(R-AN). WHEN THE VERDICT IS `opted_out` THE SEAT GETS THE REFUSAL''S OWN '
+  'EVIDENCE SET (opt_out_source / opt_out_evidence / opt_out_recorded_at / '
+  'opt_out_recorded_by), falling back to the studio''s set and then to what the '
+  'seat already holds: project_parties has ONE evidence set, and mirroring the '
+  'studio''s consent evidence under an opted_out status made the seat say the '
+  'refusal arrived the way the studio''s paperwork did (r9 R5-M1). '
+  'disclosure_version has no refusal-side twin and always comes from the '
+  'record. It also sets '
   'patina.suppress_consent_dispatch for the duration of its own UPDATE so a '
   'mirrored verdict cannot fire 00432''s opt-in dispatch or 00374''s '
   'site-request dispatch once per row. A mirrored `granted` DOES release the '
