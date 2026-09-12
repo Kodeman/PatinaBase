@@ -44,6 +44,73 @@ Deno.test("STOP opts out every party row on the phone (no reply)", async () => {
   assert(!res.twiml.includes("<Message>"));
 });
 
+// r10 M1: project_parties holds ONE evidence set, and under `opted_out` it
+// belongs to the refusal. The rail used to flip the status and the date and
+// leave the GRANT's four columns standing, so a seat with a recorded grant that
+// then texted STOP read "opted out IN WRITING, per the studio's own form,
+// recorded months before the STOP, by the studio member who recorded the
+// GRANT" — the attribution R7-M1 and R5-M2 ruled must be NULL on a rail write.
+// The seat is what R-Q reads and what the first prod fold mints the record
+// from, so the lie travelled.
+Deno.test("STOP writes the refusal's own evidence over the grant's on every seat", async () => {
+  const fake = createFakeSupabase(baseSeed({
+    project_parties: [
+      {
+        id: "p1",
+        phone_e164: "+15551110044",
+        project_id: "proj1",
+        party_kind: "sub",
+        sms_consent_status: "granted",
+        sms_consented_at: "2025-05-02T00:00:00Z",
+        sms_consent_source: "written",
+        sms_consent_evidence: "Signed the Lindqvist kickoff form",
+        sms_consent_recorded_at: "2025-05-02T00:00:00Z",
+        sms_consent_disclosure_version: "field-sms-v1",
+        sms_consent_recorded_by: "dz1",
+      },
+    ],
+  }));
+  const res = await processInbound(
+    params({ From: "+15551110044", Body: "STOP", MessageSid: "SMstopevidence" }),
+    { supabase: fake as never, getEnv: NO_POSTHOG },
+  );
+  assertEquals(res.disposition, "opted_out");
+  const p1 = (fake._data.project_parties as Array<Record<string, unknown>>)
+    .find((p) => p.id === "p1")!;
+  assertEquals(p1.sms_consent_status, "opted_out");
+  assertEquals(p1.sms_consent_source, "inbound_sms");
+  assertEquals(p1.sms_consent_evidence, "Inbound STOP");
+  assertEquals(p1.sms_consent_recorded_at, p1.sms_opt_out_at);
+  assertEquals(p1.sms_consent_recorded_by, null);
+  // Which disclosure the person was shown is a fact about the GRANT, and the
+  // mirror keeps it too — the rail does not erase it.
+  assertEquals(p1.sms_consent_disclosure_version, "field-sms-v1");
+  // And the record says the same thing about the same STOP.
+  const consent = (fake._data.studio_channel_consent ?? []) as Array<Record<string, unknown>>;
+  assertEquals(consent.length, 1);
+  assertEquals(consent[0].opt_out_source, "inbound_sms");
+  assertEquals(consent[0].opt_out_evidence, "Inbound STOP");
+  assertEquals(consent[0].opt_out_recorded_by, null);
+});
+
+// The keyword the person actually sent is the words on both sides.
+Deno.test("an UNSUBSCRIBE stamps its own keyword on the seats, not a generic STOP", async () => {
+  const fake = createFakeSupabase(baseSeed({
+    project_parties: [
+      { id: "p1", phone_e164: "+15551110045", project_id: "proj1", party_kind: "sub", sms_consent_status: "granted" },
+    ],
+  }));
+  await processInbound(
+    params({ From: "+15551110045", Body: "unsubscribe", MessageSid: "SMunsub" }),
+    { supabase: fake as never, getEnv: NO_POSTHOG },
+  );
+  const p1 = (fake._data.project_parties as Array<Record<string, unknown>>)
+    .find((p) => p.id === "p1")!;
+  assertEquals(p1.sms_consent_evidence, "Inbound UNSUBSCRIBE");
+  const consent = (fake._data.studio_channel_consent ?? []) as Array<Record<string, unknown>>;
+  assertEquals(consent[0].opt_out_evidence, "Inbound UNSUBSCRIBE");
+});
+
 Deno.test("YES grants a pending party and confirms", async () => {
   const fake = createFakeSupabase(baseSeed({
     project_parties: [

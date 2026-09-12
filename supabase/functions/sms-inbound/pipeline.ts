@@ -492,10 +492,39 @@ async function writeChannelConsent(
 // number, it can only ever REFUSE a send, and the only rows it reaches that the
 // scoped write would not are rows whose org cannot be resolved at all — rows
 // that have no consent record either, so nothing is left disagreeing.
-async function optOutAllForPhone(supabase: SupabaseClient, phone: string, now: string) {
+//
+// IT WRITES THE REFUSAL'S OWN EVIDENCE SET ALONGSIDE THE STATUS (r10 M1).
+// project_parties holds ONE evidence set, and under a given status it belongs
+// to whatever wrote that status. Flipping the status and the date while leaving
+// the four evidence columns alone left the commonest real refusal on the books
+// — a seat with a recorded grant that later texted STOP — saying it was refused
+// IN WRITING, per the studio's own kickoff form, written down months BEFORE the
+// refusal happened, by the studio member who recorded the GRANT (the
+// attribution R7-M1 and R5-M2 ruled must be NULL on a rail-written STOP). The
+// seat is what R-Q's sentence is read off and what the first prod fold
+// (backfill_channel_consent_from_parties) mints the record from, so the lie
+// travelled. This is the same set the record gets above and the same set 00594's
+// mirror writes onto these seats for this verdict, so all three now agree:
+// `inbound_sms`, the keyword as it arrived, the moment it arrived — and
+// recorded_by NULL, because nobody in the studio recorded this; the recipient
+// did. The disclosure version is not touched: which disclosure the person was
+// shown is a fact about the grant, and the mirror keeps it too.
+async function optOutAllForPhone(
+  supabase: SupabaseClient,
+  phone: string,
+  now: string,
+  evidence: string,
+) {
   await supabase
     .from("project_parties")
-    .update({ sms_consent_status: "opted_out", sms_opt_out_at: now })
+    .update({
+      sms_consent_status: "opted_out",
+      sms_opt_out_at: now,
+      sms_consent_source: "inbound_sms",
+      sms_consent_evidence: evidence,
+      sms_consent_recorded_at: now,
+      sms_consent_recorded_by: null,
+    })
     .eq("phone_e164", phone);
 }
 
@@ -680,13 +709,16 @@ export async function processInbound(
       await studiosHoldingPhone(supabase, stopPhoneParties.parties),
       stopRecordStudios.orgs,
     );
+    // One string for both writers: the record and the seats must say the same
+    // thing about the same STOP (r10 M1).
+    const stopEvidence = `Inbound ${upper}`;
     const stopWrite = await writeChannelConsent(
       supabase,
       stopTargets,
-      from, "opted_out", nowIso, `Inbound ${upper}`,
+      from, "opted_out", nowIso, stopEvidence,
     );
     // Phone-global on purpose — see optOutAllForPhone.
-    await optOutAllForPhone(supabase, from, nowIso);
+    await optOutAllForPhone(supabase, from, nowIso, stopEvidence);
     await supabase.from("sms_messages")
       .update({ parsed_intent: { path: "keyword", keyword: "stop" } }).eq("id", messageId);
     await captureServerEvent("sms-inbound", "sms_opt_out", { phone: from }, { getEnv: deps.getEnv, fetchImpl: deps.fetchImpl });
