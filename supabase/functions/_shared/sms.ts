@@ -344,13 +344,13 @@ export async function orgsOfProjects(
 /**
  * Is there a party row on this number, IN THIS STUDIO, that says opted_out?
  *
- * The studio record and the party rows can drift: the portal still writes
- * project_parties.sms_consent_* directly (PR-x has not retired those writes),
- * and an inbound STOP writes party rows phone-globally. So a record that says
- * `granted` is not proof that nobody in this studio has since refused. Scoped
- * to the owning studio on purpose — phone-globally it would re-open G-3, the
- * bug this whole table exists to fix, because an inbound STOP opts out every
- * party row on the number in every studio.
+ * PR-x's fail-closed SECOND check, and after R-AS the only thing the seats are
+ * still asked. project_parties.sms_consent_* is frozen legacy — nothing writes
+ * it any more — but the rows already on the books carry real refusals that
+ * predate the fold, and a record minted after one of them would otherwise
+ * outrank it. Only `opted_out` is read: a seat may refuse a send, never
+ * authorise one. Scoped to the owning studio on purpose — phone-globally it
+ * would re-open G-3, the bug the consent record exists to fix.
  */
 async function orgHasOptedOutParty(
   supabase: SupabaseClient,
@@ -392,8 +392,8 @@ export type ChannelConsentVerdict = "refuse" | "allow" | "unknown";
  *
  *   · "refuse" — the studio's own record says opted_out; or there is NO record
  *     for that studio AND some party row on this number IN THAT SAME STUDIO
- *     has opted out, which fails closed until the backfill is proven
- *     everywhere (PR-x). That fallback reduces across the studio's own
+ *     has opted out, which fails closed for the refusals written before the
+ *     fold (PR-x). That fallback reduces across the studio's own
  *     projects, never across tenants (R-AK): a STOP given to a studio this
  *     send has nothing to do with is not this studio's fact, and treating it
  *     as one silently blocked a studio's very first outreach to a number it
@@ -415,10 +415,10 @@ export type ChannelConsentVerdict = "refuse" | "allow" | "unknown";
  *     every tenant's rows, so it refuses instead (R-AM).
  *
  * "allow" lifts only the POSITIVE gates, and it is never taken on a record
- * alone. A record can go stale — the portal still writes party rows directly,
- * and an inbound STOP reaches party rows phone-globally — so the owning
- * studio's own party rows are scanned for a refusal BEFORE `granted` is
- * honoured. Every opted_out path still refuses, whichever ledger carries it.
+ * alone. The frozen party rows (R-AS) still carry refusals written before the
+ * fold, so the owning studio's own rows are scanned for one BEFORE `granted`
+ * is honoured. Every opted_out path still refuses, whichever ledger carries it
+ * — but only the record can ever authorise a send.
  *
  * AND `status` IS NOT THE WHOLE VERDICT (r6 M6-3). refusal_unanswered is the
  * stored fact the WRITE door treats as load-bearing — a refusal the person who
@@ -505,6 +505,33 @@ async function channelConsentVerdict(
   // read that ERRORED comes back as an empty row set, and an empty row set read
   // as "nobody has refused" would lift the primary gate on exactly the send
   // that has no other check (r7 R7-M2).
+  //
+  // THE RECORDS ARE READ FIRST, EVEN HERE (R-AS). The inbound STOP used to
+  // write project_parties phone-globally as well as writing the records, and
+  // that write was this branch's backstop for a seat whose studio cannot be
+  // resolved. project_parties.sms_consent_* is frozen legacy now and the rail
+  // writes the record only, so the phone-global reduction has to be asked of
+  // the records: any studio's recorded refusal on this number refuses a send
+  // that belongs to no studio at all. Scoped sends are untouched — the branch
+  // above answered them off the owning studio's own record (R-AK).
+  const { data: recordRows, error: recordScanError } = await supabase
+    .from("studio_channel_consent")
+    .select("status, refusal_unanswered")
+    .eq("channel_kind", "sms")
+    .eq("channel_value", phone);
+  if (recordScanError) {
+    console.error(
+      "channelConsentVerdict: refusing, the phone-global record scan failed",
+      recordScanError,
+    );
+    return "refuse";
+  }
+  const anyRecordRefuses = (recordRows ?? []).some((r) => {
+    const row = r as { status: string; refusal_unanswered?: boolean | null };
+    return row.status === "opted_out" || row.refusal_unanswered === true;
+  });
+  if (anyRecordRefuses) return "refuse";
+
   const { data: rows, error: scanError } = await supabase
     .from("project_parties")
     .select("sms_consent_status")

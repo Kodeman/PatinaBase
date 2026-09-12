@@ -1347,6 +1347,58 @@ Deno.test("a failed phone-global scan refuses the send instead of reading as no 
   assertEquals(res.reason, "opted_out");
 });
 
+// ── R-AS: the unattributable branch reads the RECORDS first ────────────────
+//
+// The inbound STOP used to write project_parties phone-globally, and that write
+// was this branch's backstop. Since R-AS the rail writes the record only and
+// the legacy columns are frozen, so the phone-global question has to be asked
+// of the records: any studio's recorded refusal on this number refuses a send
+// that belongs to no studio at all.
+Deno.test("an unattributable send is refused by another studio's RECORDED stop", async () => {
+  const fake = createFakeSupabase({
+    ...unattributableSeed(),
+    studio_channel_consent: [{
+      organization_id: "org-alpha",
+      channel_kind: "sms",
+      channel_value: "+15551230001",
+      status: "opted_out",
+      refusal_unanswered: true,
+    }],
+  });
+  const res = await sendPartySms(
+    fake as never,
+    { partyId: "p1", body: "hello" },
+    { getEnv: envOf(CONSENT_ENV), now: OPEN_HOURS },
+  );
+  assert(!res.sent, "a send with no studio must not outrun a recorded STOP");
+  assertEquals(res.reason, "opted_out");
+});
+
+// …and a failed read of THAT scan refuses too, like its four siblings (R-AM).
+Deno.test("an unattributable send whose record scan fails is refused, not allowed", async () => {
+  const fake = createFakeSupabase(unattributableSeed());
+  const denied = {
+    ...fake,
+    from: (table: string) =>
+      table === "studio_channel_consent"
+        ? {
+          select: () => ({
+            eq: () => ({
+              eq: () => Promise.resolve({ data: null, error: { message: "denied" } }),
+            }),
+          }),
+        }
+        : fake.from(table),
+  };
+  const res = await sendPartySms(
+    denied as never,
+    { partyId: "p1", body: "hello" },
+    { getEnv: envOf(CONSENT_ENV), now: OPEN_HOURS },
+  );
+  assert(!res.sent, "a record scan we could not read is not a scan that found nothing");
+  assertEquals(res.reason, "opted_out");
+});
+
 // The control: the same send, same shape, with the read working — otherwise the
 // assertion above would pass for the wrong reason.
 Deno.test("the unattributable send still goes when the phone-global scan reads clean", async () => {

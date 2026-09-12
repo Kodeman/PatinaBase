@@ -26,8 +26,14 @@ function params(p: Partial<InboundParams> & { From: string; Body: string; Messag
   return { To: TO, NumMedia: "0", ...p } as InboundParams;
 }
 
-Deno.test("STOP opts out every party row on the phone (no reply)", async () => {
+// R-AS: the refusal lands on the RECORD of every studio that holds the number,
+// and on nothing else. project_parties.sms_consent_* is frozen legacy.
+Deno.test("STOP opts out every studio's record for the phone, and writes no seat", async () => {
   const fake = createFakeSupabase(baseSeed({
+    projects: [
+      { id: "proj1", name: "Maple St", designer_id: "dz1", studio_id: "org-alpha" },
+      { id: "proj2", name: "Beta job", designer_id: "dz2", studio_id: "org-beta" },
+    ],
     project_parties: [
       { id: "p1", phone_e164: "+15551110000", project_id: "proj1", party_kind: "sub", sms_consent_status: "granted" },
       { id: "p2", phone_e164: "+15551110000", project_id: "proj2", party_kind: "installer", sms_consent_status: "granted" },
@@ -38,21 +44,27 @@ Deno.test("STOP opts out every party row on the phone (no reply)", async () => {
     { supabase: fake as never, getEnv: NO_POSTHOG },
   );
   assertEquals(res.disposition, "opted_out");
+  const byOrg = Object.fromEntries(
+    ((fake._data.studio_channel_consent ?? []) as Array<{ organization_id: string; status: string }>)
+      .map((c) => [c.organization_id, c.status]),
+  );
+  assertEquals(byOrg["org-alpha"], "opted_out");
+  assertEquals(byOrg["org-beta"], "opted_out", "both studios holding the number are refused");
   const parties = fake._data.project_parties as Array<{ sms_consent_status: string }>;
-  assert(parties.every((p) => p.sms_consent_status === "opted_out"), "all rows opted out");
+  assert(
+    parties.every((p) => p.sms_consent_status === "granted"),
+    "the frozen legacy columns are left exactly as they stood",
+  );
   // STOP does not reply (Twilio Advanced Opt-Out already did).
   assert(!res.twiml.includes("<Message>"));
 });
 
-// r10 M1: project_parties holds ONE evidence set, and under `opted_out` it
-// belongs to the refusal. The rail used to flip the status and the date and
-// leave the GRANT's four columns standing, so a seat with a recorded grant that
-// then texted STOP read "opted out IN WRITING, per the studio's own form,
-// recorded months before the STOP, by the studio member who recorded the
-// GRANT" — the attribution R7-M1 and R5-M2 ruled must be NULL on a rail write.
-// The seat is what R-Q reads and what the first prod fold mints the record
-// from, so the lie travelled.
-Deno.test("STOP writes the refusal's own evidence over the grant's on every seat", async () => {
+// r10 M1, restated for the single source (R-AS). project_parties holds ONE
+// evidence set, which is why a seat could never say both "signed the kickoff
+// form" and "replied STOP" — the defect that fix chased. The record holds the
+// grant's five and the refusal's four side by side, so the STOP writes its own
+// evidence where it belongs and the grant's paperwork is left standing.
+Deno.test("STOP writes the refusal's own evidence onto the record, beside the grant's", async () => {
   const fake = createFakeSupabase(baseSeed({
     project_parties: [
       {
@@ -75,26 +87,31 @@ Deno.test("STOP writes the refusal's own evidence over the grant's on every seat
     { supabase: fake as never, getEnv: NO_POSTHOG },
   );
   assertEquals(res.disposition, "opted_out");
-  const p1 = (fake._data.project_parties as Array<Record<string, unknown>>)
-    .find((p) => p.id === "p1")!;
-  assertEquals(p1.sms_consent_status, "opted_out");
-  assertEquals(p1.sms_consent_source, "inbound_sms");
-  assertEquals(p1.sms_consent_evidence, "Inbound STOP");
-  assertEquals(p1.sms_consent_recorded_at, p1.sms_opt_out_at);
-  assertEquals(p1.sms_consent_recorded_by, null);
-  // Which disclosure the person was shown is a fact about the GRANT, and the
-  // mirror keeps it too — the rail does not erase it.
-  assertEquals(p1.sms_consent_disclosure_version, "field-sms-v1");
-  // And the record says the same thing about the same STOP.
   const consent = (fake._data.studio_channel_consent ?? []) as Array<Record<string, unknown>>;
   assertEquals(consent.length, 1);
+  assertEquals(consent[0].status, "opted_out");
+  // The refusal's own four: how it arrived, in its own words, and nobody in the
+  // studio as its recorder — the recipient made it.
   assertEquals(consent[0].opt_out_source, "inbound_sms");
   assertEquals(consent[0].opt_out_evidence, "Inbound STOP");
+  assertEquals(consent[0].opt_out_recorded_at, consent[0].opt_out_at);
   assertEquals(consent[0].opt_out_recorded_by, null);
+  // This STOP MINTS the record, so there is no standing grant to protect and
+  // the act's own source and words go on the consent side too (the same leg
+  // record_channel_consent's INSERT takes). The disclosure version is not
+  // invented: R-AN scopes the seat fallback to a GRANT.
+  assertEquals(consent[0].source, "inbound_sms");
+  assertEquals(consent[0].disclosure_version, null);
+  // The seat is frozen legacy and says exactly what it said before.
+  const p1 = (fake._data.project_parties as Array<Record<string, unknown>>)
+    .find((p) => p.id === "p1")!;
+  assertEquals(p1.sms_consent_status, "granted");
+  assertEquals(p1.sms_consent_source, "written");
+  assertEquals(p1.sms_consent_evidence, "Signed the Lindqvist kickoff form");
 });
 
-// The keyword the person actually sent is the words on both sides.
-Deno.test("an UNSUBSCRIBE stamps its own keyword on the seats, not a generic STOP", async () => {
+// The keyword the person actually sent is the words on the record.
+Deno.test("an UNSUBSCRIBE stamps its own keyword on the record, not a generic STOP", async () => {
   const fake = createFakeSupabase(baseSeed({
     project_parties: [
       { id: "p1", phone_e164: "+15551110045", project_id: "proj1", party_kind: "sub", sms_consent_status: "granted" },
@@ -104,9 +121,6 @@ Deno.test("an UNSUBSCRIBE stamps its own keyword on the seats, not a generic STO
     params({ From: "+15551110045", Body: "unsubscribe", MessageSid: "SMunsub" }),
     { supabase: fake as never, getEnv: NO_POSTHOG },
   );
-  const p1 = (fake._data.project_parties as Array<Record<string, unknown>>)
-    .find((p) => p.id === "p1")!;
-  assertEquals(p1.sms_consent_evidence, "Inbound UNSUBSCRIBE");
   const consent = (fake._data.studio_channel_consent ?? []) as Array<Record<string, unknown>>;
   assertEquals(consent[0].opt_out_evidence, "Inbound UNSUBSCRIBE");
 });
@@ -122,8 +136,15 @@ Deno.test("YES grants a pending party and confirms", async () => {
     { supabase: fake as never, getEnv: NO_POSTHOG },
   );
   assertEquals(res.disposition, "granted");
+  const consent = (fake._data.studio_channel_consent ?? []) as Array<
+    { organization_id: string; status: string }
+  >;
+  assertEquals(consent.length, 1);
+  assertEquals(consent[0].organization_id, "org-alpha");
+  assertEquals(consent[0].status, "granted");
+  // The seat is frozen legacy: the grant lives on the record alone (R-AS).
   const p1 = (fake._data.project_parties as Array<{ id: string; sms_consent_status: string }>).find((p) => p.id === "p1")!;
-  assertEquals(p1.sms_consent_status, "granted");
+  assertEquals(p1.sms_consent_status, "pending");
   assert(res.twiml.includes("<Message>"));
 });
 
@@ -266,8 +287,8 @@ Deno.test("LLM <0.5 routes to designer review", async () => {
 function multiProjectSeed(conversation: Record<string, unknown>, extra: Record<string, unknown[]> = {}) {
   return baseSeed({
     projects: [
-      { id: "proj1", name: "Maple St", designer_id: "dz1" },
-      { id: "proj2", name: "Feldman", designer_id: "dz1" },
+      { id: "proj1", name: "Maple St", designer_id: "dz1", studio_id: "org-alpha" },
+      { id: "proj2", name: "Feldman", designer_id: "dz1", studio_id: "org-alpha" },
     ],
     project_parties: [
       { id: "p1", phone_e164: "+15551110004", project_id: "proj1", party_kind: "sub", sms_consent_status: "granted" },
@@ -429,8 +450,9 @@ Deno.test("STOP while awaiting a project choice still opts out", async () => {
     { supabase: fake as never, getEnv: NO_POSTHOG, now: PIN_NOW },
   );
   assertEquals(res.disposition, "opted_out");
-  const parties = fake._data.project_parties as Array<{ sms_consent_status: string }>;
-  assert(parties.every((p) => p.sms_consent_status === "opted_out"), "compliance runs before conversation state");
+  const consent = (fake._data.studio_channel_consent ?? []) as Array<{ status: string }>;
+  assert(consent.length > 0, "compliance runs before conversation state");
+  assert(consent.every((c) => c.status === "opted_out"));
 });
 
 Deno.test("two simultaneous chooser picks apply the stashed update exactly once", async () => {
@@ -906,10 +928,10 @@ Deno.test("START re-grants per studio and keeps the earlier opt-out date", async
 
 // ── r1 review fixes ─────────────────────────────────────────────────────────
 
-// M6: the party-row grant must be scoped to the same studios as the consent
-// record. Phone-globally, org-beta's seat would go `granted` — and the send
-// gate still reads that row — while org-beta's own record stayed absent.
-Deno.test("YES does not grant a party row in a studio that never invited", async () => {
+// M6, restated for the single source (R-AS): the grant is scoped to the studios
+// that actually invited. Phone-globally, org-beta would gain a `granted` record
+// for a number it never asked.
+Deno.test("YES does not grant a studio that never invited", async () => {
   const fake = createFakeSupabase(baseSeed({
     projects: [
       { id: "proj1", name: "Maple St", designer_id: "dz1", studio_id: "org-alpha" },
@@ -929,16 +951,16 @@ Deno.test("YES does not grant a party row in a studio that never invited", async
     { supabase: fake as never, getEnv: NO_POSTHOG },
   );
   assertEquals(res.disposition, "granted");
-  const parties = fake._data.project_parties as Array<{ id: string; sms_consent_status: string }>;
-  assertEquals(parties.find((p) => p.id === "p1")!.sms_consent_status, "granted");
-  assertEquals(
-    parties.find((p) => p.id === "p2")!.sms_consent_status,
-    "not_asked",
-    "a studio that never invited must not gain a granted party row",
-  );
-  const consent = (fake._data.studio_channel_consent ?? []) as Array<{ organization_id: string }>;
-  assertEquals(consent.length, 1);
+  const consent = (fake._data.studio_channel_consent ?? []) as Array<
+    { organization_id: string; status: string }
+  >;
+  assertEquals(consent.length, 1, "a studio that never invited gains no record");
   assertEquals(consent[0].organization_id, "org-alpha");
+  assertEquals(consent[0].status, "granted");
+  // Neither seat moves: they are frozen legacy.
+  const parties = fake._data.project_parties as Array<{ id: string; sms_consent_status: string }>;
+  assertEquals(parties.find((p) => p.id === "p1")!.sms_consent_status, "pending");
+  assertEquals(parties.find((p) => p.id === "p2")!.sms_consent_status, "not_asked");
 });
 
 // M7: a project with a NULL studio_id resolves through the designer's primary
@@ -1129,13 +1151,10 @@ Deno.test("START does not grant a seat-holding studio whose record never left no
     "not_asked",
     "a seat is not an invitation: a studio that never asked gains no consent",
   );
+  // The seats are frozen legacy and neither of them moves (R-AS).
   const parties = fake._data.project_parties as Array<{ id: string; sms_consent_status: string }>;
-  assertEquals(parties.find((p) => p.id === "p1")!.sms_consent_status, "granted");
-  assertEquals(
-    parties.find((p) => p.id === "p2")!.sms_consent_status,
-    "not_asked",
-    "…and gains no granted party row either",
-  );
+  assertEquals(parties.find((p) => p.id === "p1")!.sms_consent_status, "opted_out");
+  assertEquals(parties.find((p) => p.id === "p2")!.sms_consent_status, "not_asked");
 });
 
 Deno.test("START grants a studio whose record is pending (the invite it answers)", async () => {
@@ -1181,14 +1200,12 @@ Deno.test("START mints no consent record for a seat-holding studio that has none
 
 // ── r4 review fixes ─────────────────────────────────────────────────────────
 
-// M-2: the YES used to move only the seats already at `pending`, while the
-// consent record written straight after mirrored `granted` onto EVERY seat the
-// studio holds on the number (00594). A seat the mirror moves takes no real
-// pending -> granted transition, so 00374's site_request_consent_granted_dispatch
-// never fires for it: that seat read `granted` for ever while its site request
-// sat in awaiting_consent for ever. Party-first has to cover what the record
-// covers — while still targeting only the studios that actually asked.
-Deno.test("YES grants every seat of the inviting studio, not only the pending one", async () => {
+// M-2, restated for the single source (R-AS). The consent record is per studio,
+// not per seat, so a YES on one of a studio's two seats grants that studio ONCE,
+// for the number — and a studio that never invited is still untouched. The
+// sibling-seat problem this test was written for cannot exist any more: there
+// are no seats to move.
+Deno.test("YES grants the inviting studio once, whatever its other seats say", async () => {
   const fake = createFakeSupabase(baseSeed({
     projects: [
       { id: "projA", name: "Job A", designer_id: "dz1", studio_id: "org-alpha" },
@@ -1207,17 +1224,9 @@ Deno.test("YES grants every seat of the inviting studio, not only the pending on
   );
   assertEquals(res.disposition, "granted");
   const parties = fake._data.project_parties as Array<{ id: string; sms_consent_status: string }>;
-  assertEquals(parties.find((p) => p.id === "pA")!.sms_consent_status, "granted");
-  assertEquals(
-    parties.find((p) => p.id === "pB")!.sms_consent_status,
-    "granted",
-    "the inviting studio's other seat must take the real transition, not the mirror's",
-  );
-  assertEquals(
-    parties.find((p) => p.id === "pC")!.sms_consent_status,
-    "not_asked",
-    "a studio that never invited is still untouched (R-AJ)",
-  );
+  assertEquals(parties.find((p) => p.id === "pA")!.sms_consent_status, "pending");
+  assertEquals(parties.find((p) => p.id === "pB")!.sms_consent_status, "not_asked");
+  assertEquals(parties.find((p) => p.id === "pC")!.sms_consent_status, "not_asked");
   const consent = (fake._data.studio_channel_consent ?? []) as Array<
     { organization_id: string; status: string; origin_project_id: string | null }
   >;
@@ -1405,11 +1414,12 @@ Deno.test("a STOP whose consent-record read fails is not acknowledged, and the r
   );
   assertEquals(res.status, 500, "Twilio must not be told a STOP landed when it did not");
   assertEquals(res.disposition, "opt_out_incomplete");
-  // The party rows still carry the refusal — every write that could land, did.
+  // Nothing landed anywhere: the record is the only thing a keyword writes, and
+  // the seats are frozen legacy (R-AS). That is why the STOP is not acknowledged.
   assert(
     ((fake._data.project_parties ?? []) as Array<{ sms_consent_status: string }>)
-      .every((p) => p.sms_consent_status === "opted_out"),
-    "the carrier-level refusal still reaches every seat",
+      .every((p) => p.sms_consent_status === "granted"),
+    "the frozen seats are untouched",
   );
   // The idempotency claim is released, or the retry would answer `duplicate`
   // and the seatless record would keep saying granted for ever.

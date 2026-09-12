@@ -9,29 +9,30 @@
 --   3. studio_channel_consent backfill precedence, PER STUDIO: opted_out beats
 --      everything inside one studio, and one studio's STOP never reaches
 --      another studio holding the same number.
---   4. The mirror trigger writes the studio's verdict back onto every party row
---      in that studio on that number — and onto no other studio's.
+--   4. R-AS: a consent act writes the RECORD and nothing else — the party rows
+--      are frozen legacy — and one studio's verdict never reaches another's.
+--      v_project_roster prints the record.
 --   5. record_channel_consent() refuses a non-member, and authenticated holds
 --      no direct INSERT on the consent table (the RPC is the only door).
---   6. r1 B1/M1: one recorded `pending` mirrors onto every row in the studio
---      WITHOUT firing 00432's opt-in SMS once per row — while a designer's own
---      write to a party row still dispatches; and a maintenance re-run of the
---      backfill sends nothing either.
+--   6. r1 B1/M1, under R-AS: a recorded `pending` reaches no party row at all,
+--      so 00432's opt-in SMS cannot fan out — while a direct party-row write
+--      (through the legacy escape hatch) still dispatches, proving the shipped
+--      trigger keeps its shipped body; and a backfill re-run sends nothing.
 --   7. r1 M2/M3/M4: the widened vocabularies — ap_email and portal_311 channel
 --      kinds (each normalised by its own rule), a dated `bounced` channel
 --      status, and the company kinds the shipped UI already renders plus the
 --      AHJ `authority`.
---   8. r2 B-1 / r4 M-2: a mirrored `granted` fires NEITHER of project_parties'
---      outward AFTER triggers — not the opt-in invite, and not 00374's
---      site-request consent dispatch — while a direct party-row write still
---      fires both; and the mirror STILL releases the parked site requests on
---      the seats it moved, durably and with no edge invocation.
+--   8. r2 B-1 under R-AS: a recorded `granted` fires neither of
+--      project_parties' outward AFTER triggers, because it writes no party row;
+--      the shipped triggers still fire on a real party-row transition. It also
+--      asserts THE GAP owed to W2: parked site requests are no longer released
+--      by consent arriving, because that release lived on the seat transition.
 --   9. r2 B-2: record_channel_consent is a transition gate. Evidence is
 --      required, nothing leaves opted_out through it, the evidence set is
 --      never carried across a status change, and PR-m's way back is the named
 --      record_channel_reconsent().
---  10. r2 M-1: a same-status re-record REFRESHES the mirrored evidence, so a
---      party row can never sit at granted with a NULL evidence set.
+--  10. r2 M-1 / R-AN: a same-status re-record REFRESHES the record's evidence,
+--      so no record can sit at granted with a hollow evidence set.
 --  11. r2 M-3: one normalisation rule — an unparseable phone gets a channel row
 --      AND a consent record, on the same key.
 --  12. r3 R-AG/R-AI: record_channel_consent refuses `not_asked` outright and no
@@ -40,11 +41,10 @@
 --      studio_contacts.company_id is a derived pointer the trigger keeps equal
 --      — in BOTH directions, so a firm set through the legacy column opens the
 --      affiliation the crew list reads (block 12).
---  13. r2r2 B-1 / r4 M-2: an inbound YES/START releases the site requests
---      parked in awaiting_consent — one consent-granted outbox row and one
---      dispatch per request, and the record write that follows adds no second
---      dispatch — INCLUDING the seat the studio never asked on, which the
---      record's mirror grants regardless.
+--  13. R-AS: the eight legacy sms_consent_* columns are FROZEN. Any real change
+--      raises consent_legacy_column_frozen; restating the same values still
+--      writes; `app.consent_legacy_write = 'on'` is the one deliberate door and
+--      it closes with its own statement; INSERT is untouched.
 --  14. r2r2 M-1: the "nothing leaves opted_out" gate is part of the WRITE in
 --      both doors, not a read before it, so a concurrent STOP cannot land in a
 --      read-then-write window.
@@ -61,9 +61,9 @@
 --  17. r3r2 M-2: an affiliation's two ids must be a person card and a company
 --      card (and never the same card), and a channel's owner_type must equal
 --      its card's entity_kind.
---  18. r5 M5-2 (R-AN): the mirror refreshes the evidence it carries and NEVER
---      nulls a column it does not — the disclosure version and the recorder the
---      seat holds survive a record the inbound rail minted without them.
+--  18. r5 M5-2 (R-AN): the record's evidence is refreshed, never nulled by a
+--      write that does not restate it; the frozen seat is left alone; and both
+--      v_project_roster and people_directory print the record's verdict.
 --  19. r5 B5-1 (R-AL): record_channel_consent reads the SEATS as well as the
 --      record. A dated opted_out party row in this studio refuses a grant
 --      (channel_opted_out) and survives it byte for byte; the way past is to
@@ -86,13 +86,10 @@
 --      studio's fresh consent, leaves the record at `opted_out` with the
 --      refusal standing, leaves the mirrored refusal on the seats, and stays
 --      re-callable. Sending resumes on the recipient's YES/START alone.
---      r9 R5-M1: the SEAT keeps the refusal's own source and words too — the
---      mirror carries opt_out_source/evidence/recorded_at/recorded_by onto
---      project_parties whenever the verdict it is mirroring is a refusal.
---      r8 R8-M1 (R-AQ): and where the refusal has NO words of its own, all
---      four are written NULL on EVERY seat — including the sibling seat that
---      was carrying the grant's evidence, which the COALESCE used to leave
---      standing under an `opted_out` status.
+--      R-AS: no consent act reaches a seat at all, so the whole class r9 R5-M1
+--      and r8 R8-M1 (R-AQ) chased — one evidence set on the seat having to
+--      speak for two acts — cannot recur. The record holds the grant's five and
+--      the refusal's four side by side.
 --  29. r8 R8-M2 (R-AR): a card held by a channel, a designation, a rule route
 --      or an affiliation may not change its entity_kind or its studio; a
 --      restatement of the same values still writes; detaching the dependents
@@ -100,9 +97,9 @@
 --  30. r2 R2-M1: the fold picks the refusing sibling by the refusal's OWN
 --      facts, not by row age. Two refusals on one number in one studio — the
 --      dated, worded inbound STOP and the dateless sourceless one the shipped
---      portal writes — and the record AND both seats keep the STOP's date and
---      its words; where the words and the date sit on different refusing
---      seats, the record still ends up with both.
+--      portal writes — and the RECORD keeps the STOP's date and its words;
+--      where the words and the date sit on different refusing seats, the record
+--      still ends up with both. The seats are read, never written.
 --  35. r9 M1: record_channel_reconsent dates the consent it records. The five
 --      evidence columns and consented_at are one act, so a fresh verbal
 --      consent is never filed under an older written grant's date, and the
@@ -112,8 +109,12 @@
 --      winning row alone — the shipped portal's sourceless `opted_out` seat
 --      wins the bucket, and the studio's signed grant on the seat next door
 --      lands on the record's consent side instead of being minted away and
---      then wiped off every seat by R-AQ's mirror branch. It does not invent a
+--      lost outright, since the record is the only copy. It does not invent a
 --      grant for a group that holds none.
+--  37. R-AS as objects and access: the mirror function and trigger are gone,
+--      refuse_legacy_consent_write_trg is on project_parties, both shipped
+--      readers go through channel_consent_status(), and that function is
+--      SECURITY INVOKER so one studio cannot read another's verdict.
 --
 -- How to run:
 --   psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
@@ -417,7 +418,7 @@ BEGIN
 END
 $$;
 
--- ─── 4. The mirror + 5. the RPC ────────────────────────────────────────────
+-- ─── 4. The record is the single source + 5. the RPC ───────────────────────
 
 DO $$
 DECLARE
@@ -426,7 +427,7 @@ DECLARE
   v TEXT;
   r RECORD;
 BEGIN
-  -- Put Alpha back to opted_out so the mirror's effect is unambiguous. Even
+  -- Put Alpha back to opted_out so the record's effect is unambiguous. Even
   -- this setup step has to run as a member: the RPC gates on auth.uid(), so a
   -- JWT-less session (here, plain postgres) is refused like anyone else.
   PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
@@ -435,17 +436,42 @@ BEGIN
     'inbound_sms', 'STOP', 'field-sms-v1', 'd0000000-0000-4000-8000-00000000000a');
   PERFORM pg_temp.reset_role();
 
-  -- 4a. Every Alpha party row on that number now reads opted_out.
-  SELECT COUNT(*) INTO n FROM project_parties
-   WHERE id IN ('e0000000-0000-4000-8000-000000000001', 'e0000000-0000-4000-8000-000000000002')
-     AND sms_consent_status = 'opted_out';
-  ASSERT n = 2, 'FAIL 4a: the mirror should opt out both Alpha rows, got ' || n;
-
-  -- 4b. Beta's row on the same number is untouched.
+  -- 4a. THE SEATS ARE NOT WRITTEN (R-AS). The seat that carried the STOP still
+  --     says opted_out because that is what the fixture wrote; the seat that
+  --     carried the grant still says granted. A consent act touches neither.
   SELECT sms_consent_status INTO v FROM project_parties
-   WHERE id = 'e0000000-0000-4000-8000-000000000003';
+   WHERE id = 'e0000000-0000-4000-8000-000000000001';
+  ASSERT v = 'granted',
+    'FAIL 4a: the grant seat must be left exactly as it stood, got '
+      || COALESCE(v, '<null>');
+  SELECT sms_consent_status INTO v FROM project_parties
+   WHERE id = 'e0000000-0000-4000-8000-000000000002';
+  ASSERT v = 'opted_out',
+    'FAIL 4a2: the refusing seat must be left exactly as it stood, got '
+      || COALESCE(v, '<null>');
+
+  -- 4a3. …and the ROSTER prints the record, not the seat: the Alpha grant seat
+  --      reads `opted_out` on the Call Sheet because the studio's record does.
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+  SELECT sms_consent_status INTO v FROM v_project_roster
+   WHERE roster_id = 'e0000000-0000-4000-8000-000000000001';
+  ASSERT v = 'opted_out',
+    'FAIL 4a3: v_project_roster must read the record, got ' || COALESCE(v, '<null>');
+  PERFORM pg_temp.reset_role();
+
+  -- 4b. Beta's record on the same number is untouched: one studio's STOP is not
+  --     another studio's fact (org isolation).
+  SELECT COALESCE(status, '<none>') INTO v FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000b'
+     AND channel_kind = 'sms' AND channel_value = '+16125550142';
   ASSERT v = 'not_asked',
-    'FAIL 4b: the mirror must not cross studios, Beta row reads ' || COALESCE(v, '<null>');
+    'FAIL 4b: a verdict must not cross studios, Beta record reads ' || COALESCE(v, '<null>');
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000002');
+  SELECT sms_consent_status INTO v FROM v_project_roster
+   WHERE roster_id = 'e0000000-0000-4000-8000-000000000003';
+  ASSERT v = 'not_asked',
+    'FAIL 4b2: Beta''s roster must read Beta''s record, got ' || COALESCE(v, '<null>');
+  PERFORM pg_temp.reset_role();
 
   -- 4c. The record now says opted_out, so the ordinary door is shut: a studio
   --     member cannot type their way back to granted (r2 B-2).
@@ -476,19 +502,13 @@ BEGIN
      AND channel_kind = 'sms' AND channel_value = '+16125550142';
   ASSERT n = 1, 'FAIL 4c2: the RPC must normalise onto the existing record, got ' || n;
 
-  -- 4d. The refusal stands on both Alpha rows, IN ITS OWN WORDS: the party-row
-  --     backstop the send rail falls back on is never cleared by this door
-  --     (r7 M7-2), and since r9 R5-M1 the studio's fresh consent evidence does
-  --     not overwrite the refusal's on the seat either. project_parties has one
-  --     evidence set; under an `opted_out` status it holds the refusal's, so
-  --     R-Q's sentence read off the seat still says the STOP arrived by text.
-  --     The studio's fresh consent lives on the record (4d3 below).
+  -- 4d. The refusal stands ON THE RECORD, in its own words — reconsent never
+  --     touches the refusal's four columns (r7 M7-2, r8 W4-M2) — and the seats
+  --     are still not written (R-AS).
   SELECT COUNT(*) INTO n FROM project_parties
    WHERE id IN ('e0000000-0000-4000-8000-000000000001', 'e0000000-0000-4000-8000-000000000002')
-     AND sms_consent_status = 'opted_out'
-     AND sms_consent_source = 'inbound_sms'
-     AND sms_consent_evidence = 'STOP';
-  ASSERT n = 2, 'FAIL 4d: both Alpha rows must keep the refusal and its own words, got ' || n;
+     AND sms_consent_evidence = 'Fresh written consent';
+  ASSERT n = 0, 'FAIL 4d: no consent act may reach a seat, got ' || n;
 
   SELECT * INTO r FROM studio_channel_consent
    WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
@@ -559,12 +579,13 @@ $$;
 
 -- ─── 6. B1 regression: one recorded `pending` is ONE consent act, not N texts ─
 --
--- mirror_channel_consent_to_parties() writes the studio's verdict, with the
--- whole evidence set, onto every party row in that studio on that number. Each
--- newly-evidenced-`pending` row independently satisfies fc_dispatch_optin_invite
--- (00432), so before the r1 fix one record_channel_consent(...,'pending',...)
--- call sent one real opt-in SMS PER PARTY ROW. 00594 now suppresses the
--- dispatch for the mirror's own UPDATE and only for that.
+-- The retired mirror wrote the studio's verdict, with the whole evidence set,
+-- onto every party row in that studio on that number, and each
+-- newly-evidenced-`pending` row independently satisfied fc_dispatch_optin_invite
+-- (00432): one record_channel_consent(...,'pending',...) call sent one real
+-- opt-in SMS PER PARTY ROW. R-AS removes the copy instead of suppressing the
+-- dispatch, so the fan-out has no path at all — and 00432's trigger keeps its
+-- shipped body, which this block proves is still live.
 --
 -- Dispatches are observed by standing in for public.invoke_edge_function for the
 -- length of this (rolled-back) transaction — the real one calls out over pg_net.
@@ -595,7 +616,7 @@ VALUES
   ('e0000000-0000-4000-8000-000000000013', 'd0000000-0000-4000-8000-00000000000a', 'sub', 'Ray Thao', '+1 612 555 0143', 'not_asked');
 
 -- A fourth number for the maintenance re-run of the backfill (M1): one evidenced
--- pending row, one sibling that the fold's mirror will flip.
+-- pending row and one sibling, so the fold has a group to fold.
 INSERT INTO project_parties (id, project_id, party_kind, display_name, phone,
                              sms_consent_status, sms_consent_source, sms_consent_evidence,
                              sms_consent_recorded_at, sms_consent_disclosure_version)
@@ -626,23 +647,25 @@ BEGIN
     'written', 'Kickoff form', 'field-sms-v1', 'd0000000-0000-4000-8000-00000000000a');
   PERFORM pg_temp.reset_role();
 
-  -- The mirror still does its job: all three rows are fully evidenced pending.
+  -- 6a. The record carries the verdict, and the three seats are untouched.
   SELECT COUNT(*) INTO n FROM project_parties
-   WHERE phone_e164 = '+16125550143'
-     AND sms_consent_status = 'pending'
-     AND sms_consent_source IS NOT NULL
-     AND sms_consent_recorded_at IS NOT NULL
-     AND sms_consent_disclosure_version IS NOT NULL
-     AND btrim(COALESCE(sms_consent_evidence, '')) <> '';
-  ASSERT n = 3, 'FAIL 6a: the mirror should evidence all three rows, got ' || n;
+   WHERE phone_e164 = '+16125550143' AND sms_consent_status = 'not_asked';
+  ASSERT n = 3, 'FAIL 6a: a consent act must reach no seat, got ' || (3 - n);
+  SELECT COUNT(*) INTO n FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_kind = 'sms' AND channel_value = '+16125550143'
+     AND status = 'pending';
+  ASSERT n = 1, 'FAIL 6a2: the record should hold the pending verdict, got ' || n;
 
   -- 6b. …and not one opt-in SMS left the building.
   SELECT COUNT(*) INTO d FROM public._w1a_dispatch_log
    WHERE body->>'templateKey' = 'sms_optin_invite';
-  ASSERT d = 1, 'FAIL 6b: a mirrored pending must dispatch nothing, got ' || (d - 1);
+  ASSERT d = 1, 'FAIL 6b: a recorded pending must dispatch nothing, got ' || (d - 1);
 
-  -- 6c. The suppression is scoped to the mirror's own write: a designer writing
-  --     an evidenced pending onto a party row directly still dispatches, once.
+  -- 6c. 00432's trigger keeps its SHIPPED body — this file redefines it no
+  --     more — so a direct party-row write (with the legacy escape hatch, the
+  --     only way one can happen now) still dispatches exactly once.
+  SET LOCAL app.consent_legacy_write = 'on';
   UPDATE project_parties
      SET sms_consent_status = 'not_asked', sms_consent_source = NULL,
          sms_consent_evidence = NULL, sms_consent_recorded_at = NULL,
@@ -653,28 +676,34 @@ BEGIN
          sms_consent_evidence = 'Kickoff form', sms_consent_recorded_at = now(),
          sms_consent_disclosure_version = 'field-sms-v1'
    WHERE id = 'e0000000-0000-4000-8000-000000000011';
+  SET LOCAL app.consent_legacy_write = '';
   SELECT COUNT(*) INTO d FROM public._w1a_dispatch_log
    WHERE body->>'templateKey' = 'sms_optin_invite';
   ASSERT d = 2, 'FAIL 6c: a direct party-row write must still dispatch once, got ' || (d - 1);
 
-  -- 6d. The flag does not leak past the mirror's own statement.
-  ASSERT COALESCE(current_setting('patina.suppress_consent_dispatch', true), '') <> '1',
-    'FAIL 6d: the suppression flag must not survive the mirror';
+  -- 6d. No suppression flag exists any more: nothing in the tree sets it, and
+  --     nothing reads it.
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM pg_proc pr
+     JOIN pg_namespace ns ON ns.oid = pr.pronamespace
+    WHERE ns.nspname = 'public'
+      AND pr.prosrc LIKE '%suppress_consent_dispatch%'),
+    'FAIL 6d: no function may still carry the mirror''s suppression flag';
 
-  -- 6e. M1: re-running the backfill as maintenance folds a new row, whose mirror
-  --     flips a sibling to evidenced pending — and still sends nothing.
+  -- 6e. M1: re-running the backfill as maintenance folds the new number, writes
+  --     no seat, and still sends nothing.
   SELECT public.backfill_channel_consent_from_parties() INTO folded;
   ASSERT folded = 1, 'FAIL 6e: the re-run should fold the one unrecorded number, got ' || folded;
 
   SELECT COUNT(*) INTO n FROM project_parties
    WHERE phone_e164 = '+16125550144' AND sms_consent_status = 'pending';
-  ASSERT n = 2, 'FAIL 6e: the fold should mirror onto both rows, got ' || n;
+  ASSERT n = 1, 'FAIL 6e2: the fold must not write the seats, got ' || n;
 
   SELECT COUNT(*) INTO d FROM public._w1a_dispatch_log
    WHERE body->>'templateKey' = 'sms_optin_invite';
   ASSERT d = 2, 'FAIL 6f: a backfill re-run must send nothing, got ' || (d - 2);
 
-  RAISE NOTICE '6. mirror fan-out (B1) + backfill re-run (M1): passed';
+  RAISE NOTICE '6. no fan-out is possible (B1) + backfill re-run (M1): passed';
 END
 $$;
 
@@ -739,22 +768,26 @@ BEGIN
 END
 $$;
 
--- ─── 8. r2 B-1: BOTH outward AFTER triggers stand down for a mirror write ──
+-- ─── 8. r2 B-1, under R-AS: the second outward trigger cannot fire either ──
 --
 -- project_parties carries two AFTER-row triggers that reach the outside world.
--- Block 6 proved the opt-in invite is suppressed. This is the other one:
+-- Block 6 covered the opt-in invite. This is the other one:
 -- site_request_consent_granted_dispatch fires whenever sms_consent_status flips
 -- to 'granted', mints durable dispatch work, and calls site-request-dispatch,
--- which calls sendPartySms — a real text to a trade. The mirror's UPDATE flips
+-- which calls sendPartySms — a real text to a trade. The retired mirror flipped
 -- every party row in the studio on the number, so one recorded grant fanned out
--- into one dispatch per open request per seat.
+-- into one dispatch per open request per seat, and 00594 had to graft a guard
+-- into 00374's trigger to hold it off.
 --
--- r4 M-2 sharpened the invariant: it is about SENDING. Suppressing the trigger
--- wholesale also stranded the DURABLE half — the seat read `granted` while its
--- site request sat in awaiting_consent for ever. So the mirror now carries its
--- own narrow release (site_request_dispatch_after_consent() only, never
--- invoke_edge_function), and this block proves both halves: zero edge
--- invocations, two released requests.
+-- With the record as the single source there is nothing to guard: a consent act
+-- writes no seat, so the trigger cannot fire from one. It keeps its SHIPPED
+-- body, and this block proves both halves — nothing dispatches from a recorded
+-- grant, and the shipped trigger is still live for a real party-row transition.
+--
+-- IT ALSO RECORDS THE GAP R-AS LEAVES OPEN FOR W2 (8c): the requests parked in
+-- awaiting_consent are NOT released by the grant any more, because that release
+-- lived on the party-row transition. The site-request rail reads consent off the
+-- seat throughout and has to be repointed at the record.
 --
 -- public.invoke_edge_function is still standing in (installed for block 6).
 
@@ -787,49 +820,41 @@ BEGIN
     'd0000000-0000-4000-8000-00000000000a');
   PERFORM pg_temp.reset_role();
 
-  -- The mirror did its job: both seats read granted.
+  -- 8a. The seats are untouched, and the record holds the grant.
   SELECT COUNT(*) INTO n FROM project_parties
-   WHERE phone_e164 = '+16125550155' AND sms_consent_status = 'granted';
-  ASSERT n = 2, 'FAIL 8a: the mirror should grant both seats, got ' || n;
+   WHERE phone_e164 = '+16125550155' AND sms_consent_status = 'not_asked';
+  ASSERT n = 2, 'FAIL 8a: a recorded grant must reach no seat, got ' || (2 - n);
+  SELECT COUNT(*) INTO n FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550155' AND status = 'granted';
+  ASSERT n = 1, 'FAIL 8a2: the record should hold the grant, got ' || n;
 
   -- 8b. …and NOT ONE site-request dispatch left the building.
   SELECT COUNT(*) INTO d FROM public._w1a_dispatch_log
    WHERE fn_name = 'site-request-dispatch';
-  ASSERT d = 0, 'FAIL 8b: a mirrored grant must dispatch no site request, got ' || d;
+  ASSERT d = 0, 'FAIL 8b: a recorded grant must dispatch no site request, got ' || d;
 
-  -- 8c. The suppression is about SENDING, not about work. The mirror still
-  --     RELEASES the requests parked on the seats it just moved — durable,
-  --     in-transaction: snapshot stamped, one consent-granted outbox row each,
-  --     and (8b) not one edge invocation. Without this the seats read `granted`
-  --     while their requests sat in awaiting_consent for ever, since 00374's
-  --     trigger is the only caller of site_request_dispatch_after_consent() and
-  --     the lifecycle sweep only promotes requests that already hold an outbox
-  --     row (r4 M-2).
+  -- 8c. THE GAP, ASSERTED AS IT STANDS (owed to W2). The parked requests are
+  --     NOT released: 00374's trigger is the only caller of
+  --     site_request_dispatch_after_consent(), it fires on a party-row
+  --     transition, and no consent act makes one any more. The lifecycle sweep
+  --     only promotes requests that already hold an outbox row, so these two
+  --     stay in awaiting_consent until the site-request rail reads the record.
   SELECT COUNT(*) INTO n FROM site_requests
    WHERE id IN ('a1000000-0000-4000-8000-000000000001', 'a1000000-0000-4000-8000-000000000002')
      AND consent_status_snapshot = 'granted';
-  ASSERT n = 2,
-    'FAIL 8c: a mirrored grant must release the parked requests durably, got ' || n;
+  ASSERT n = 0,
+    'FAIL 8c: the consent record does not release parked requests yet — if this '
+    'now passes, the site-request rail was repointed and this assertion is the '
+    'one to update, got ' || n;
 
-  SELECT COUNT(*) INTO n FROM site_request_dispatch_outbox
-   WHERE request_id IN ('a1000000-0000-4000-8000-000000000001',
-                        'a1000000-0000-4000-8000-000000000002')
-     AND action = 'consent-granted';
-  ASSERT n = 2,
-    'FAIL 8c2: one consent-granted outbox row per released request, got ' || n;
-
-  -- 8c3. …and still NOTHING left the building for them.
-  SELECT COUNT(*) INTO d FROM public._w1a_dispatch_log
-   WHERE fn_name = 'site-request-dispatch';
-  ASSERT d = 0,
-    'FAIL 8c3: the durable release must not invoke the edge function, got ' || d;
-
-  -- 8d. The suppression is scoped to the mirror's own write: a designer
-  --     flipping a party row to granted directly still releases its request.
-  UPDATE project_parties SET sms_consent_status = 'not_asked'
-   WHERE id = 'e0000000-0000-4000-8000-000000000021';
+  -- 8d. 00374's trigger keeps its SHIPPED body: a real party-row transition
+  --     (only reachable through the legacy escape hatch now) still dispatches
+  --     and still releases its request, unguarded.
+  SET LOCAL app.consent_legacy_write = 'on';
   UPDATE project_parties SET sms_consent_status = 'granted'
    WHERE id = 'e0000000-0000-4000-8000-000000000021';
+  SET LOCAL app.consent_legacy_write = '';
 
   SELECT COUNT(*) INTO d FROM public._w1a_dispatch_log
    WHERE fn_name = 'site-request-dispatch';
@@ -839,11 +864,7 @@ BEGIN
    WHERE id = 'a1000000-0000-4000-8000-000000000001' AND consent_status_snapshot = 'granted';
   ASSERT n = 1, 'FAIL 8d2: the direct grant should have released its request';
 
-  -- 8e. The flag does not leak past the mirror's own statement.
-  ASSERT COALESCE(current_setting('patina.suppress_consent_dispatch', true), '') <> '1',
-    'FAIL 8e: the suppression flag must not survive the mirror';
-
-  RAISE NOTICE '8. mirror fan-out, site-request leg (B-1): passed';
+  RAISE NOTICE '8. a consent act reaches no seat and sends nothing (B-1): passed';
 END
 $$;
 
@@ -1052,56 +1073,53 @@ BEGIN
 END
 $$;
 
--- ─── 10. r2 M-1: the mirror refreshes evidence, not only status ────────────
+-- ─── 10. r2 M-1 / R-AN: a re-record REFRESHES the record's evidence ────────
 
 DO $$
 DECLARE
   n INTEGER;
 BEGIN
   PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
-  -- Same status twice, different words. Guarded on status alone, the second
-  -- write never reached the party rows, leaving the cache permanently wrong
-  -- about the audit half of the record — the 10DLC evidence for the send.
+  -- Same status twice, different words. The second write must land: the
+  -- evidence set is the 10DLC artifact for the send, and since R-AS the record
+  -- is the only copy of it.
   PERFORM public.record_channel_consent(
     'b0000000-0000-4000-8000-00000000000a', 'sms', '(612) 555-0155', 'granted',
     'verbal', 'Said yes on site', 'field-sms-v1', NULL);
   PERFORM pg_temp.reset_role();
 
-  SELECT COUNT(*) INTO n FROM project_parties
-   WHERE phone_e164 = '+16125550155'
-     AND sms_consent_status = 'granted'
-     AND sms_consent_source = 'verbal'
-     AND sms_consent_evidence = 'Said yes on site'
-     AND sms_consent_recorded_at IS NOT NULL;
-  ASSERT n = 2,
-    'FAIL 10: a same-status re-record must refresh the mirrored evidence on both seats, got ' || n;
+  SELECT COUNT(*) INTO n FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550155'
+     AND status = 'granted'
+     AND source = 'verbal'
+     AND evidence = 'Said yes on site'
+     AND recorded_at IS NOT NULL;
+  ASSERT n = 1,
+    'FAIL 10: a same-status re-record must refresh the record''s evidence, got ' || n;
 
   -- 10b. THE WHOLE EVIDENCE SET — all five columns (r5 M5-2, R-AN). The two
   --      this check used to omit, disclosure_version and recorded_by, are
   --      exactly the two a record can arrive without (the inbound rail mints
-  --      one from a YES), and omitting them here is why the mirror could null
-  --      them on the seat without a test noticing.
-  SELECT COUNT(*) INTO n FROM project_parties
-   WHERE phone_e164 = '+16125550155'
-     AND sms_consent_status = 'granted'
-     AND sms_consent_source = 'verbal'
-     AND sms_consent_evidence = 'Said yes on site'
-     AND sms_consent_recorded_at IS NOT NULL
-     AND sms_consent_disclosure_version = 'field-sms-v1'
-     AND sms_consent_recorded_by = 'a0000000-0000-4000-8000-000000000001';
-  ASSERT n = 2,
-    'FAIL 10b: the mirror must carry all five evidence columns onto both seats, got ' || n;
+  --      one from a YES), so a write that did not restate them must keep them.
+  SELECT COUNT(*) INTO n FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550155'
+     AND disclosure_version = 'field-sms-v1'
+     AND recorded_by = 'a0000000-0000-4000-8000-000000000001';
+  ASSERT n = 1,
+    'FAIL 10b: the record must keep all five evidence columns, got ' || n;
 
-  -- No party row may sit at granted with a hollow evidence set.
-  SELECT COUNT(*) INTO n FROM project_parties
-   WHERE sms_consent_status = 'granted'
-     AND (sms_consent_source IS NULL
-          OR sms_consent_recorded_at IS NULL
-          OR btrim(COALESCE(sms_consent_evidence, '')) = '');
+  -- No consent record may sit at granted with a hollow evidence set.
+  SELECT COUNT(*) INTO n FROM studio_channel_consent
+   WHERE status = 'granted'
+     AND (source IS NULL
+          OR recorded_at IS NULL
+          OR btrim(COALESCE(evidence, '')) = '');
   ASSERT n = 0,
-    'FAIL 10b2: a granted party row with a hollow evidence set, ' || n || ' of them';
+    'FAIL 10b2: a granted record with a hollow evidence set, ' || n || ' of them';
 
-  RAISE NOTICE '10. mirror evidence refresh (M-1): passed';
+  RAISE NOTICE '10. the record''s evidence is refreshed, never erased (M-1/R-AN): passed';
 END
 $$;
 
@@ -1310,124 +1328,110 @@ BEGIN
 END
 $$;
 
--- ─── 13. r2 B-1: an inbound grant RELEASES a parked site request ───────────
+-- ─── 13. R-AS: the legacy consent columns are FROZEN ───────────────────────
 --
--- Block 8 proves the mirror alone dispatches nothing. This is the other half,
--- and the one the shipped rail depends on: when the recipient texts YES or
--- START, sms-inbound/pipeline.ts writes the PARTY ROWS FIRST and the consent
--- record second, so the real pending → granted transition is the one
--- site_request_consent_granted_dispatch (00374) sees. That trigger is the ONLY
--- caller of site_request_dispatch_after_consent(), which mints the
--- 'consent-granted' outbox row and stamps consent_status_snapshot; the
--- lifecycle sweep only promotes requests that already HAVE an outbox row. With
--- the record written first, the mirror consumed the transition under
--- patina.suppress_consent_dispatch, the later party write matched nothing, and
--- the trade's request sat in awaiting_consent for ever.
+-- studio_channel_consent is the single source of truth. project_parties'
+-- sms_consent_* columns are kept — the fold reads them, and they are the 10DLC
+-- evidence of what the studio held before the record existed — but nothing may
+-- write them. refuse_legacy_consent_write() raises consent_legacy_column_frozen
+-- on any real change, so a shipped writer that still reaches for them FAILS
+-- LOUDLY instead of quietly writing a fact no reader reads. The one door is a
+-- deliberate `app.consent_legacy_write = 'on'`, for a data repair and for W2.
 
--- Three seats for one human on one number in ONE studio: two `pending`, and a
--- third the studio never asked on this job. r4 M-2: the YES used to move only
--- the pending seats, while the consent record's mirror flipped the third to
--- `granted` too — silently, under the dispatch guard — so that seat read
--- granted for ever while its site request stayed parked for ever.
 INSERT INTO project_parties (id, project_id, party_kind, display_name, phone, trade, sms_consent_status)
 VALUES
   ('e0000000-0000-4000-8000-000000000031', 'd0000000-0000-4000-8000-00000000000a', 'sub', 'Nell Bracco', '(612) 555-0177', 'plumbing', 'pending'),
-  ('e0000000-0000-4000-8000-000000000032', 'd0000000-0000-4000-8000-00000000000a', 'sub', 'Nell Bracco', '612-555-0177',   'plumbing', 'pending'),
-  ('e0000000-0000-4000-8000-000000000033', 'd0000000-0000-4000-8000-00000000000a', 'sub', 'Nell Bracco', '+16125550177',   'plumbing', 'not_asked');
-
-INSERT INTO site_requests (id, project_id, created_by, assignee_party_id, status, due_at, note)
-VALUES
-  ('a1000000-0000-4000-8000-000000000011', 'd0000000-0000-4000-8000-00000000000a',
-   'a0000000-0000-4000-8000-000000000001', 'e0000000-0000-4000-8000-000000000031',
-   'awaiting_consent', now() + interval '3 days', 'Stack photos'),
-  ('a1000000-0000-4000-8000-000000000012', 'd0000000-0000-4000-8000-00000000000a',
-   'a0000000-0000-4000-8000-000000000001', 'e0000000-0000-4000-8000-000000000032',
-   'awaiting_consent', now() + interval '3 days', 'Valve photos'),
-  ('a1000000-0000-4000-8000-000000000013', 'd0000000-0000-4000-8000-00000000000a',
-   'a0000000-0000-4000-8000-000000000001', 'e0000000-0000-4000-8000-000000000033',
-   'awaiting_consent', now() + interval '3 days', 'Meter photos');
+  ('e0000000-0000-4000-8000-000000000032', 'd0000000-0000-4000-8000-00000000000a', 'sub', 'Nell Bracco', '612-555-0177',   'plumbing', 'not_asked');
 
 DO $$
 DECLARE
-  n INTEGER;
-  d INTEGER;
+  n      INTEGER;
+  raised TEXT;
+  v      TEXT;
 BEGIN
-  -- 13a. The shipped order, step 1: grantPartiesForStudios() — scoped to the
-  --      studios that ASKED, but covering EVERY seat those studios hold on the
-  --      number, exactly as the YES branch now writes it (r4 M-2). No status
-  --      filter: the record's mirror is about to cover all three anyway, and a
-  --      seat the mirror moves takes no real transition.
+  -- 13a. A change to the status is refused.
+  raised := NULL;
+  BEGIN
+    UPDATE project_parties SET sms_consent_status = 'granted'
+     WHERE id = 'e0000000-0000-4000-8000-000000000031';
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM;
+  END;
+  ASSERT raised = 'consent_legacy_column_frozen',
+    'FAIL 13a: a legacy status write must be refused, got ' || COALESCE(raised, '<no error>');
+
+  -- 13a2. …and so is a change to any one of the other seven, one at a time.
+  raised := NULL;
+  BEGIN
+    UPDATE project_parties SET sms_consent_evidence = 'rewritten'
+     WHERE id = 'e0000000-0000-4000-8000-000000000031';
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM;
+  END;
+  ASSERT raised = 'consent_legacy_column_frozen',
+    'FAIL 13a2: a legacy evidence write must be refused, got ' || COALESCE(raised, '<no error>');
+  raised := NULL;
+  BEGIN
+    UPDATE project_parties SET sms_opt_out_at = now()
+     WHERE id = 'e0000000-0000-4000-8000-000000000031';
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM;
+  END;
+  ASSERT raised = 'consent_legacy_column_frozen',
+    'FAIL 13a3: a legacy opt-out date write must be refused, got ' || COALESCE(raised, '<no error>');
+
+  -- 13b. Nothing was written by any of that.
+  SELECT sms_consent_status INTO v FROM project_parties
+   WHERE id = 'e0000000-0000-4000-8000-000000000031';
+  ASSERT v = 'pending',
+    'FAIL 13b: the refused writes must leave the row alone, got ' || COALESCE(v, '<null>');
+
+  -- 13c. RESTATING the same values is not a change, so a whole-row UPDATE that
+  --      happens to name the columns still writes. (display_name moves; the
+  --      eight are named and unchanged.)
   UPDATE project_parties
-     SET sms_consent_status = 'granted', sms_consented_at = now(), sms_opt_out_at = NULL
-   WHERE id IN ('e0000000-0000-4000-8000-000000000031',
-                'e0000000-0000-4000-8000-000000000032',
-                'e0000000-0000-4000-8000-000000000033');
+     SET display_name = 'Nell Bracco Jr',
+         sms_consent_status = sms_consent_status,
+         sms_consent_evidence = sms_consent_evidence
+   WHERE id = 'e0000000-0000-4000-8000-000000000031';
+  SELECT display_name INTO v FROM project_parties
+   WHERE id = 'e0000000-0000-4000-8000-000000000031';
+  ASSERT v = 'Nell Bracco Jr',
+    'FAIL 13c: restating an unchanged legacy column must not block the row';
 
-  -- 13b. Step 2: writeChannelConsent() — the rail's own upsert, as service_role.
-  INSERT INTO studio_channel_consent (
-    organization_id, channel_kind, channel_value, status,
-    consented_at, opt_out_at, source, evidence, recorded_at,
-    disclosure_version, origin_project_id)
-  VALUES (
-    'b0000000-0000-4000-8000-00000000000a', 'sms', '+16125550177', 'granted',
-    now(), NULL, 'inbound_sms', 'Inbound YES', now(),
-    NULL, 'd0000000-0000-4000-8000-00000000000a')
-  ON CONFLICT (organization_id, channel_kind, channel_value) DO UPDATE
-    SET status = EXCLUDED.status, consented_at = EXCLUDED.consented_at,
-        source = EXCLUDED.source, evidence = EXCLUDED.evidence,
-        recorded_at = EXCLUDED.recorded_at;
+  -- 13d. The deliberate door, for a data repair and for W2.
+  SET LOCAL app.consent_legacy_write = 'on';
+  UPDATE project_parties SET sms_consent_status = 'opted_out'
+   WHERE id = 'e0000000-0000-4000-8000-000000000032';
+  SET LOCAL app.consent_legacy_write = '';
+  SELECT sms_consent_status INTO v FROM project_parties
+   WHERE id = 'e0000000-0000-4000-8000-000000000032';
+  ASSERT v = 'opted_out', 'FAIL 13d: the escape hatch must let a repair through';
 
-  -- 13c. ALL THREE requests were RELEASED — including the one on the seat the
-  --      studio never asked on, which the record was going to grant regardless
-  --      (r4 M-2). Durable outbox work, and the snapshot.
-  SELECT COUNT(*) INTO n FROM site_request_dispatch_outbox
-   WHERE request_id IN ('a1000000-0000-4000-8000-000000000011',
-                        'a1000000-0000-4000-8000-000000000012',
-                        'a1000000-0000-4000-8000-000000000013')
-     AND action = 'consent-granted';
-  ASSERT n = 3,
-    'FAIL 13c: an inbound grant must mint one consent-granted outbox row per '
-    'parked request, got ' || n;
+  -- 13d2. …and it closes again with the statement that opened it.
+  raised := NULL;
+  BEGIN
+    UPDATE project_parties SET sms_consent_status = 'granted'
+     WHERE id = 'e0000000-0000-4000-8000-000000000032';
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM;
+  END;
+  ASSERT raised = 'consent_legacy_column_frozen',
+    'FAIL 13d2: the escape hatch must not stay open, got ' || COALESCE(raised, '<no error>');
 
-  SELECT COUNT(*) INTO n FROM site_requests
-   WHERE id IN ('a1000000-0000-4000-8000-000000000011',
-                'a1000000-0000-4000-8000-000000000012',
-                'a1000000-0000-4000-8000-000000000013')
-     AND consent_status_snapshot = 'granted';
-  ASSERT n = 3, 'FAIL 13c2: all three snapshots must read granted, got ' || n;
-
-  -- 13c3. And none of them is still parked with a stale snapshot — the exact
-  --       state the not_asked sibling used to be stranded in.
-  ASSERT NOT EXISTS (
-    SELECT 1 FROM site_requests sr
-      JOIN project_parties pp ON pp.id = sr.assignee_party_id
-     WHERE pp.phone_e164 = '+16125550177'
-       AND sr.status = 'awaiting_consent'
-       AND sr.consent_status_snapshot IS DISTINCT FROM 'granted'),
-    'FAIL 13c3: a granted seat must not still hold a request parked at not_asked';
-
-  -- 13d. …once each. The mirror that follows refreshes evidence under
-  --      suppression and must not dispatch a second time.
-  SELECT COUNT(*) INTO d FROM public._w1a_dispatch_log
-   WHERE fn_name = 'site-request-dispatch'
-     AND body->>'request_id' IN ('a1000000-0000-4000-8000-000000000011',
-                                 'a1000000-0000-4000-8000-000000000012',
-                                 'a1000000-0000-4000-8000-000000000013');
-  ASSERT d = 3,
-    'FAIL 13d: exactly one dispatch per released request, got ' || d;
-
-  -- 13e. And the mirror still did its own job: the seats carry the record's
-  --      evidence, not just its status.
+  -- 13e. INSERT is untouched: a seat may still be BORN carrying what the studio
+  --      recorded at the door (useAddProjectParty). The freeze is BEFORE UPDATE.
+  INSERT INTO project_parties (id, project_id, party_kind, display_name, phone,
+                               sms_consent_status, sms_consent_source,
+                               sms_consent_evidence, sms_consent_recorded_at,
+                               sms_consent_disclosure_version)
+  VALUES ('e0000000-0000-4000-8000-000000000034', 'd0000000-0000-4000-8000-00000000000a',
+          'sub', 'Nell Bracco', '612-555-0178', 'pending', 'written',
+          'Kickoff form', now(), 'field-sms-v1');
   SELECT COUNT(*) INTO n FROM project_parties
-   WHERE phone_e164 = '+16125550177'
-     AND sms_consent_status = 'granted'
-     AND sms_consent_source = 'inbound_sms'
-     AND sms_consent_evidence = 'Inbound YES';
-  ASSERT n = 3, 'FAIL 13e: the mirror must refresh all three seats'' evidence, got ' || n;
+   WHERE id = 'e0000000-0000-4000-8000-000000000034' AND sms_consent_status = 'pending';
+  ASSERT n = 1, 'FAIL 13e: an INSERT carrying consent columns must still land';
 
-  RAISE NOTICE '13. an inbound grant releases its parked site requests (B-1/M-2): passed';
+  RAISE NOTICE '13. the legacy consent columns are frozen (R-AS): passed';
 END
 $$;
+
 
 -- ─── 14. r2 M-1: the opted_out gate lives INSIDE the write ────────────────
 --
@@ -1908,8 +1912,8 @@ BEGIN
     'FAIL 16Bc2: a DATELESS refusal must fail closed like a dated one, got '
     || COALESCE(raised, '<no error>');
 
-  -- 16Bd. And the seats still carry the refusal: the backstop sendPartySms
-  --       falls back on was never cleared.
+  -- 16Bd. And the seat still carries the refusal — frozen legacy since R-AS,
+  --       and still the backstop sendPartySms falls back on.
   SELECT * INTO r FROM studio_channel_consent
    WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
      AND channel_value = '+16125550244';
@@ -1944,6 +1948,29 @@ BEGIN
    WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
      AND channel_value = '+16125550244';
 
+  -- …and R-AL's SEAT gate still stands in front of it. This is the shape of
+  -- the transition R-AS leaves for W2: the legacy seat is frozen at
+  -- `opted_out`, nothing can move it, so PR-x's fail-closed second check keeps
+  -- refusing even after the recipient answered. Fail-closed, and loud.
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+  raised := NULL;
+  BEGIN
+    PERFORM public.record_channel_consent(
+      'b0000000-0000-4000-8000-00000000000a', 'sms', '6125550244', 'granted',
+      'written', 'Kickoff form', 'field-sms-v1', NULL);
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'channel_opted_out',
+    'FAIL 16Be: a frozen opted_out seat still refuses the write door (R-AL), got '
+    || COALESCE(raised, '<no error>');
+  PERFORM pg_temp.reset_role();
+
+  -- 16Bf. Repairing that legacy seat through the deliberate door — which is
+  --       what retiring PR-x's second check means in practice — opens it.
+  SET LOCAL app.consent_legacy_write = 'on';
+  UPDATE project_parties SET sms_consent_status = 'granted'
+   WHERE id = 'e0000000-0000-4000-8000-000000000051';
+  SET LOCAL app.consent_legacy_write = '';
+
   PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
   PERFORM public.record_channel_consent(
     'b0000000-0000-4000-8000-00000000000a', 'sms', '6125550244', 'granted',
@@ -1952,7 +1979,8 @@ BEGIN
    WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
      AND channel_value = '+16125550244';
   ASSERT r.status = 'granted' AND r.evidence = 'Kickoff form',
-    'FAIL 16Be: after the recipient''s own grant the studio may record again';
+    'FAIL 16Bf: after the recipient''s own grant and the seat repair the studio '
+    'may record again';
   PERFORM pg_temp.reset_role();
 
   RAISE NOTICE '16B. a DATELESS refusal fails closed too (r4 B-1): passed';
@@ -2071,9 +2099,11 @@ $$;
 --
 -- A record can carry a verdict without carrying every evidence column: the
 -- inbound rail writes one from a YES on a number whose disclosure version and
--- recorder live only on the seat, where the portal put them. The mirror used to
--- write those NULLs down, so after a real double opt-in neither the record nor
--- any seat said which disclosure the person was shown.
+-- recorder live only on the seat, where the portal put them. The retired mirror
+-- used to write those NULLs down onto the seat; since R-AS the seat is never
+-- written, so the fact to prove is the other half — the RECORD's own evidence
+-- set survives a later write that does not restate it, and the seat's frozen
+-- copy is left exactly as it stands.
 
 INSERT INTO projects (id, name, designer_id, studio_id, created_by, status, created_at, updated_at)
 VALUES ('d0000000-0000-4000-8000-0000000000a1', 'W1A Evidence job',
@@ -2102,21 +2132,59 @@ BEGIN
   VALUES ('b0000000-0000-4000-8000-00000000000a', 'sms', '+16125550344', 'granted',
           NOW(), false, 'inbound_sms', 'Replied YES', NOW(), NULL, NULL);
 
+  -- The seat is untouched — frozen legacy (R-AS).
   SELECT * INTO r FROM project_parties
    WHERE id = 'e0000000-0000-4000-8000-0000000000a1';
+  ASSERT r.sms_consent_status = 'pending'
+     AND r.sms_consent_disclosure_version = 'field-sms-v1'
+     AND r.sms_consent_recorded_by = 'a0000000-0000-4000-8000-000000000001',
+    'FAIL 18a: a record write must leave the frozen seat exactly as it stands, got '
+      || COALESCE(r.sms_consent_status, '<null>');
 
-  ASSERT r.sms_consent_status = 'granted',
-    'FAIL 18a: the verdict must still mirror, got ' || COALESCE(r.sms_consent_status, '<null>');
-  ASSERT r.sms_consent_source = 'inbound_sms' AND r.sms_consent_evidence = 'Replied YES',
-    'FAIL 18b: the evidence the record DOES carry must still refresh';
-  ASSERT r.sms_consent_disclosure_version = 'field-sms-v1',
-    'FAIL 18c: the disclosure version the seat held must survive a record that has none, got '
-      || COALESCE(r.sms_consent_disclosure_version, '<null>');
-  ASSERT r.sms_consent_recorded_by = 'a0000000-0000-4000-8000-000000000001',
-    'FAIL 18d: the recorder the seat held must survive too, got '
-      || COALESCE(r.sms_consent_recorded_by::text, '<null>');
+  -- …and the room reads the RECORD, so the roster prints the rail's verdict.
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+  ASSERT (SELECT sms_consent_status FROM v_project_roster
+           WHERE roster_id = 'e0000000-0000-4000-8000-0000000000a1') = 'granted',
+    'FAIL 18b: v_project_roster must print the record''s verdict';
+  ASSERT (SELECT meta->>'sms_consent_status' FROM people_directory
+           WHERE person_id = 'e0000000-0000-4000-8000-0000000000a1'
+             AND role = 'sub' LIMIT 1) = 'granted',
+    'FAIL 18b2: people_directory''s consent meta must read the record too';
+  PERFORM pg_temp.reset_role();
 
-  RAISE NOTICE '18. the mirror never nulls an evidence column (R-AN): passed';
+  -- R-AN on the record itself: a studio member re-records the same verdict
+  -- with fresh words and NO disclosure version of its own; the one standing
+  -- must survive rather than be nulled.
+  UPDATE studio_channel_consent
+     SET disclosure_version = 'field-sms-v1',
+         recorded_by = 'a0000000-0000-4000-8000-000000000001'
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550344';
+
+  INSERT INTO studio_channel_consent (
+    organization_id, channel_kind, channel_value, status,
+    consented_at, refusal_unanswered, source, evidence, recorded_at,
+    disclosure_version, recorded_by)
+  VALUES ('b0000000-0000-4000-8000-00000000000a', 'sms', '+16125550344', 'granted',
+          NOW(), false, 'inbound_sms', 'Replied YES again', NOW(), NULL, NULL)
+  ON CONFLICT (organization_id, channel_kind, channel_value) DO UPDATE
+    SET evidence = EXCLUDED.evidence,
+        disclosure_version = COALESCE(EXCLUDED.disclosure_version,
+                                      studio_channel_consent.disclosure_version),
+        recorded_by = COALESCE(EXCLUDED.recorded_by,
+                               studio_channel_consent.recorded_by);
+
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550344';
+  ASSERT r.disclosure_version = 'field-sms-v1',
+    'FAIL 18c: the disclosure version must survive a write that has none, got '
+      || COALESCE(r.disclosure_version, '<null>');
+  ASSERT r.recorded_by = 'a0000000-0000-4000-8000-000000000001',
+    'FAIL 18d: the recorder must survive too, got '
+      || COALESCE(r.recorded_by::text, '<null>');
+
+  RAISE NOTICE '18. the record''s evidence is never nulled, and the seat is never written (R-AN/R-AS): passed';
 END
 $$;
 
@@ -2536,13 +2604,11 @@ $$;
 
 -- ─── 23. r6 M6-2: the mirror keeps the two dates ──────────────────────────
 --
--- The mirror COALESCEd the four evidence columns (R-AN) but copied
--- consented_at and opt_out_at straight. A record carrying a verdict without an
--- opt_out_at is the ORDINARY case — the inbound rail mints one for a number
--- with no prior row — so the mirror wrote NULL over a real, dated refusal on
--- every seat. R-Q requires "granted 2 May 2025, opted out 3 Dec 2025" to stay
--- printable, and the RPC goes to trouble to keep the pair on the record; the
--- mirror must not destroy it on the seats.
+-- R-Q requires "granted 2 May 2025, opted out 3 Dec 2025" to stay printable, so
+-- a verdict that does not restate one of the two dates must not erase it. Since
+-- R-AS the record is the only place that pair lives, and the seat beside it is
+-- frozen: this block proves the record keeps both dates and the seat is never
+-- touched by either write.
 
 INSERT INTO project_parties (id, project_id, party_kind, display_name, phone,
                              sms_consent_status, sms_consented_at, sms_opt_out_at,
@@ -2571,15 +2637,18 @@ BEGIN
     '2026-06-01T00:00:00Z', NULL, false,
     'inbound_sms', 'Replied START', '2026-06-01T00:00:00Z', 'field-sms-v1');
 
+  -- The seat is untouched: it still says opted_out, 3 Dec 2025.
   SELECT * INTO r FROM project_parties WHERE id = 'e0000000-0000-4000-8000-0000000000a6';
-  ASSERT r.sms_consent_status = 'granted',
-    'FAIL 23a: the verdict itself is still copied, got ' || COALESCE(r.sms_consent_status, '<null>');
-  ASSERT r.sms_consented_at = '2026-06-01T00:00:00Z'::timestamptz,
-    'FAIL 23a2: a date the record DOES carry is written, got '
-      || COALESCE(r.sms_consented_at::text, '<null>');
-  ASSERT r.sms_opt_out_at = '2025-12-03T00:00:00Z'::timestamptz,
-    'FAIL 23b: the seat''s refusal date must survive a verdict that does not '
-      'restate it, got ' || COALESCE(r.sms_opt_out_at::text, '<null>');
+  ASSERT r.sms_consent_status = 'opted_out'
+     AND r.sms_opt_out_at = '2025-12-03T00:00:00Z'::timestamptz,
+    'FAIL 23a: the frozen seat must be left exactly as it stands, got '
+      || COALESCE(r.sms_consent_status, '<null>');
+  -- …and the room reads the record, which now says granted.
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+  ASSERT (SELECT sms_consent_status FROM v_project_roster
+           WHERE roster_id = 'e0000000-0000-4000-8000-0000000000a6') = 'granted',
+    'FAIL 23b: the roster prints the record''s verdict, not the seat''s';
+  PERFORM pg_temp.reset_role();
 
   -- And the other way round: a refusal that carries no consented_at must not
   -- erase the grant date standing beside it (R-Q's pair, both directions).
@@ -2590,17 +2659,34 @@ BEGIN
    WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
      AND channel_value = '+16125550420';
 
-  SELECT * INTO r FROM project_parties WHERE id = 'e0000000-0000-4000-8000-0000000000a6';
-  ASSERT r.sms_consent_status = 'opted_out',
-    'FAIL 23c: the refusal is mirrored, got ' || COALESCE(r.sms_consent_status, '<null>');
-  ASSERT r.sms_opt_out_at = '2026-07-01T00:00:00Z'::timestamptz,
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550420';
+  ASSERT r.status = 'opted_out',
+    'FAIL 23c: the record holds the refusal, got ' || COALESCE(r.status, '<null>');
+  ASSERT r.opt_out_at = '2026-07-01T00:00:00Z'::timestamptz,
     'FAIL 23c2: the fresh refusal date is written, got '
-      || COALESCE(r.sms_opt_out_at::text, '<null>');
-  ASSERT r.sms_consented_at = '2026-06-01T00:00:00Z'::timestamptz,
-    'FAIL 23d: the grant date must still print beside the refusal (R-Q), got '
-      || COALESCE(r.sms_consented_at::text, '<null>');
+      || COALESCE(r.opt_out_at::text, '<null>');
+  -- The record keeps its OWN pair: consented_at is not restated by this write,
+  -- and the rail's upsert carries it forward (writeChannelConsent keeps the
+  -- prior consent side on a refusal).
+  UPDATE studio_channel_consent SET consented_at = '2026-06-01T00:00:00Z'::timestamptz
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550420';
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550420';
+  ASSERT r.consented_at = '2026-06-01T00:00:00Z'::timestamptz
+     AND r.opt_out_at = '2026-07-01T00:00:00Z'::timestamptz,
+    'FAIL 23d: both dates must stay printable on the record (R-Q)';
 
-  RAISE NOTICE '23. the mirror keeps both dates (r6 M6-2): passed';
+  -- And the seat, still, is untouched by either write.
+  SELECT * INTO r FROM project_parties WHERE id = 'e0000000-0000-4000-8000-0000000000a6';
+  ASSERT r.sms_opt_out_at = '2025-12-03T00:00:00Z'::timestamptz
+     AND r.sms_consented_at = '2025-05-02T00:00:00Z'::timestamptz,
+    'FAIL 23e: the frozen seat keeps its own dates';
+
+  RAISE NOTICE '23. the record keeps both dates, the seat keeps its own (r6 M6-2/R-AS): passed';
 END
 $$;
 
@@ -2997,13 +3083,13 @@ DECLARE
 BEGIN
   PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
 
-  -- The refusal, recorded and mirrored onto the seat.
+  -- The refusal, recorded on the record — and on nothing else (R-AS).
   PERFORM public.record_channel_consent(
     'b0000000-0000-4000-8000-00000000000a', 'sms', '612-555-0431', 'opted_out',
     'inbound_sms', 'Replied STOP', NULL, NULL);
   SELECT * INTO r FROM project_parties WHERE id = 'e0000000-0000-4000-8000-0000000000a8';
-  ASSERT r.sms_consent_status = 'opted_out',
-    'FAIL 27a: the refusal must reach the seat, got ' || COALESCE(r.sms_consent_status, '<null>');
+  ASSERT r.sms_consent_status = 'not_asked',
+    'FAIL 27a: the frozen seat must be untouched, got ' || COALESCE(r.sms_consent_status, '<null>');
 
   -- 27b. The studio's fresh consent goes ON the record; the record stays
   --      opted_out with the refusal unanswered.
@@ -3033,30 +3119,18 @@ BEGIN
      AND r.opt_out_recorded_by = 'a0000000-0000-4000-8000-000000000001',
     'FAIL 27b4: the refusal keeps who wrote it down, and when';
 
-  -- 27c. THE BACKSTOP SURVIVES. The seat still reads opted_out — the `pending`
-  --      hop used to clear exactly this, which is what let the invite out.
-  SELECT * INTO r FROM project_parties WHERE id = 'e0000000-0000-4000-8000-0000000000a8';
-  ASSERT r.sms_consent_status = 'opted_out',
-    'FAIL 27c: the seat''s refusal must survive reconsent, got '
-      || COALESCE(r.sms_consent_status, '<null>');
-  -- 27c2. r9 R5-M1: AND THE SEAT SAYS WHAT THE REFUSAL WAS, not what the
-  --       studio's paperwork says. project_parties has ONE evidence set, so
-  --       mirroring the record's CONSENT columns under an `opted_out` status
-  --       made the seat read (opted_out, written, 'Signed a fresh consent…') —
-  --       R-Q's sentence, read off the seat, became "Opted out in writing", and
-  --       the 10DLC artifact of how the STOP arrived was gone from the only
-  --       copy every shipped surface reads. The mirror now carries the
-  --       refusal's own set when the verdict is a refusal.
-  ASSERT r.sms_consent_source = 'inbound_sms'
-     AND r.sms_consent_evidence = 'Replied STOP',
-    'FAIL 27c2: the seat must keep the refusal''s own source and words, got '
-      || COALESCE(r.sms_consent_source, '<null>') || ' / '
-      || COALESCE(r.sms_consent_evidence, '<null>');
-  -- The disclosure version has no refusal-side twin and still comes from the
-  -- record, so the studio's fresh paperwork does reach the seat there.
-  ASSERT r.sms_consent_disclosure_version = 'field-sms-v1',
-    'FAIL 27c3: the record''s disclosure version still mirrors, got '
-      || COALESCE(r.sms_consent_disclosure_version, '<null>');
+  -- 27c. THE BACKSTOP SURVIVES, on the record: the refusal is what the send
+  --      rail reads, and reconsent did not move it. The whole class of defect
+  --      this block chased — one evidence set on the seat having to speak for
+  --      two acts — cannot recur, because the seat holds no copy at all.
+  ASSERT (SELECT sms_consent_status FROM project_parties
+           WHERE id = 'e0000000-0000-4000-8000-0000000000a8') = 'not_asked',
+    'FAIL 27c: reconsent must reach no seat';
+  PERFORM pg_temp.reset_role();
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+  ASSERT (SELECT sms_consent_status FROM v_project_roster
+           WHERE roster_id = 'e0000000-0000-4000-8000-0000000000a8') = 'opted_out',
+    'FAIL 27c2: the roster reads the refusal off the record';
 
   -- 27d. RE-CALLABLE: the door does not move the row off the status it needs,
   --      so a later, better-evidenced consent can be recorded.
@@ -3070,12 +3144,6 @@ BEGIN
     'FAIL 27d: reconsent must stay re-callable, got ' || COALESCE(r.evidence, '<null>');
   ASSERT r.opt_out_source = 'inbound_sms' AND r.opt_out_evidence = 'Replied STOP',
     'FAIL 27d2: a second reconsent must not reach the refusal''s evidence either';
-  SELECT * INTO r FROM project_parties WHERE id = 'e0000000-0000-4000-8000-0000000000a8';
-  ASSERT r.sms_consent_source = 'inbound_sms'
-     AND r.sms_consent_evidence = 'Replied STOP',
-    'FAIL 27d3: nor may a second reconsent reach the seat''s copy of it, got '
-      || COALESCE(r.sms_consent_source, '<null>') || ' / '
-      || COALESCE(r.sms_consent_evidence, '<null>');
 
   -- 27e. And it buys no grant: the studio still cannot type its way past the
   --      refusal.
@@ -3116,18 +3184,14 @@ BEGIN
   ASSERT r.opt_out_source = 'inbound_sms' AND r.opt_out_evidence = 'Replied STOP',
     'FAIL 27g: a later grant must not speak for the refusal it followed, got '
       || COALESCE(r.opt_out_source, '<null>');
-  -- 27h. r9 R5-M1: the swap is scoped to refusals. Once the verdict is
-  --      `granted` the seat carries the STUDIO's consent set again — the seat
-  --      is the mirror of the verdict that stands, and the verdict that stands
-  --      is a grant.
-  SELECT * INTO r FROM project_parties WHERE id = 'e0000000-0000-4000-8000-0000000000a8';
-  ASSERT r.sms_consent_status = 'granted'
-     AND r.sms_consent_source = 'written'
-     AND r.sms_consent_evidence = 'Kickoff form',
-    'FAIL 27h: a granted verdict mirrors the consent set onto the seat, got '
-      || COALESCE(r.sms_consent_status, '<null>') || ' / '
-      || COALESCE(r.sms_consent_source, '<null>') || ' / '
-      || COALESCE(r.sms_consent_evidence, '<null>');
+  -- 27h. …and the room follows the record all the way: the roster now prints
+  --      the grant, off a seat that has never been written.
+  ASSERT (SELECT sms_consent_status FROM v_project_roster
+           WHERE roster_id = 'e0000000-0000-4000-8000-0000000000a8') = 'granted',
+    'FAIL 27h: the roster must follow the record to granted';
+  ASSERT (SELECT sms_consent_status FROM project_parties
+           WHERE id = 'e0000000-0000-4000-8000-0000000000a8') = 'not_asked',
+    'FAIL 27h2: and the seat is still never written';
   PERFORM pg_temp.reset_role();
 
   -- 27i. r6 R6-M1: A SOURCELESS REFUSAL IS NOT GIVEN THE STUDIO'S OWN CONSENT
@@ -3174,12 +3238,6 @@ BEGIN
       || COALESCE(r.recorded_at::text, '<null>') || ' / '
       || COALESCE(r.recorded_by::text, '<null>') || ' / '
       || COALESCE(r.consented_at::text, '<null>');
-  SELECT * INTO r FROM project_parties WHERE id = 'e0000000-0000-4000-8000-0000000000a9';
-  ASSERT r.sms_consent_status = 'opted_out'
-     AND r.sms_consent_source IS NULL AND r.sms_consent_evidence IS NULL,
-    'FAIL 27i2: the seat says nothing about a refusal it has no words for, got '
-      || COALESCE(r.sms_consent_source, '<null>') || ' / '
-      || COALESCE(r.sms_consent_evidence, '<null>');
 
   PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
   PERFORM public.record_channel_reconsent(
@@ -3192,66 +3250,37 @@ BEGIN
      AND channel_value = '+16125550433';
   ASSERT r.source = 'written' AND r.status = 'opted_out' AND r.refusal_unanswered,
     'FAIL 27i3: the studio''s fresh consent goes on the record, the refusal stands';
-  SELECT * INTO r FROM project_parties WHERE id = 'e0000000-0000-4000-8000-0000000000a9';
-  ASSERT r.sms_consent_source IS NULL AND r.sms_consent_evidence IS NULL,
-    'FAIL 27i4: the studio''s own consent must never be mirrored onto the seat '
-    'as the refusal''s source and words, got '
-      || COALESCE(r.sms_consent_source, '<null>') || ' / '
-      || COALESCE(r.sms_consent_evidence, '<null>');
-  ASSERT r.sms_consent_status = 'opted_out',
-    'FAIL 27i5: the seat''s refusal still stands, got '
-      || COALESCE(r.sms_consent_status, '<null>');
+  -- 27i4. And the record's refusal side stays empty — the studio's own consent
+  --        is never allowed to stand in for words the refusal never had.
+  ASSERT r.opt_out_source IS NULL AND r.opt_out_evidence IS NULL,
+    'FAIL 27i4: the studio''s consent must never become the refusal''s words, got '
+      || COALESCE(r.opt_out_source, '<null>') || ' / '
+      || COALESCE(r.opt_out_evidence, '<null>');
 
-  -- 27i6. r8 R8-M1: AND THE SIBLING SEAT SAYS NOTHING EITHER. Before this,
-  --       27i–27i5 proved only that the seat which CARRIED the sourceless
-  --       refusal was left NULL — which it was, because it had nothing to keep.
-  --       The seat next door had the studio's kickoff consent form on it, the
-  --       COALESCE kept it, and the mirror left that seat reading
-  --       (opted_out, written, 'Signed consent form at kickoff', 2 Jan 2026).
-  --       R-Q's sentence, composed off the seat — which is what every shipped
-  --       surface reads — printed "Opted out in writing, 2 Jan 2026": the
-  --       studio's own consent document named as the refusal, dated to the day
-  --       of the grant. A refusal with no source is a refusal whose evidence is
-  --       known ABSENT, so all four columns are written NULL (R-AQ).
+  -- 27i6. THE SIBLING SEAT IS NEVER WRITTEN AT ALL (R-AS). This is the shape
+  --       r8 R8-M1 was written for: a seat next door holding the GRANT's own
+  --       evidence, which the retired mirror had to be taught to wipe under an
+  --       `opted_out` verdict or it stood there naming the studio's consent
+  --       form as the refusal. With no copy, there is nothing to wipe and
+  --       nothing to get wrong — the seat keeps its own history, untouched, and
+  --       the room reads the record.
   SELECT * INTO r FROM project_parties WHERE id = 'e0000000-0000-4000-8000-0000000000aa';
-  ASSERT r.sms_consent_status = 'opted_out',
-    'FAIL 27i6: the refusal reaches the sibling seat too, got '
-      || COALESCE(r.sms_consent_status, '<null>');
-  ASSERT r.sms_consent_source IS NULL AND r.sms_consent_evidence IS NULL
-     AND r.sms_consent_recorded_at IS NULL AND r.sms_consent_recorded_by IS NULL,
-    'FAIL 27i7: a wordless refusal must not leave the GRANT''s evidence '
-    'standing on a sibling seat, got '
-      || COALESCE(r.sms_consent_source, '<null>') || ' / '
-      || COALESCE(r.sms_consent_evidence, '<null>') || ' / '
-      || COALESCE(r.sms_consent_recorded_at::text, '<null>') || ' / '
-      || COALESCE(r.sms_consent_recorded_by::text, '<null>');
-  -- The grant's own date is NOT evidence and is not in the wiped set: the
-  -- record still says the number was once granted, and R-Q prints both halves.
-  ASSERT r.sms_consented_at IS NOT NULL,
-    'FAIL 27i8: the wipe is the four evidence columns, not the consent date';
-
-  -- 27j. r9 R5-M2: A MIRRORED REFUSAL NEVER LENDS THE SEAT THE GRANT'S
-  --      RECORDER. R-AQ's wipe used to be decided by ONE column —
-  --      `NEW.opt_out_source IS NULL` — and the other three still COALESCEd to
-  --      the seat whenever the source was filled. The ordinary inbound STOP is
-  --      exactly that shape: opt_out_source = 'inbound_sms', so the one-column
-  --      test said "this refusal has words", while opt_out_recorded_by is
-  --      DELIBERATELY AND ALWAYS NULL on a rail-written STOP (the edge pipeline
-  --      writes it null on purpose — nobody in the studio recorded it, the
-  --      recipient did, R7-M1). The COALESCE then handed the seat
-  --      pp.sms_consent_recorded_by: the studio member who recorded THE GRANT,
-  --      now named on the seat as the person who refused. The seat is the only
-  --      copy any shipped surface reads. The four refusal columns are now
-  --      decided as a SET, straight from the record, NULLs included.
+  ASSERT r.sms_consent_status = 'granted'
+     AND r.sms_consent_source = 'written'
+     AND r.sms_consent_evidence = 'Signed consent form at kickoff',
+    'FAIL 27i6: the sibling seat must be left exactly as it stands, got '
+      || COALESCE(r.sms_consent_status, '<null>') || ' / '
+      || COALESCE(r.sms_consent_evidence, '<null>');
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+  ASSERT (SELECT sms_consent_status FROM v_project_roster
+           WHERE roster_id = 'e0000000-0000-4000-8000-0000000000aa') = 'opted_out',
+    'FAIL 27i7: …and the roster still prints the studio''s standing refusal';
   PERFORM pg_temp.reset_role();
 
-  SELECT * INTO r FROM project_parties WHERE id = 'e0000000-0000-4000-8000-0000000000ab';
-  ASSERT r.sms_consent_status = 'granted'
-     AND r.sms_consent_recorded_by = 'a0000000-0000-4000-8000-000000000002',
-    'FAIL 27j: the seat must start out holding the GRANT''s recorder, got '
-      || COALESCE(r.sms_consent_status, '<null>') || ' / '
-      || COALESCE(r.sms_consent_recorded_by::text, '<null>');
-
+  -- 27j. r9 R5-M2, on the record: a rail-written STOP names NOBODY in the
+  --      studio as its recorder. The defect this chased was the retired
+  --      mirror's COALESCE handing the seat the GRANT's recorder under an
+  --      opted_out status; the fact that survives it is the record's own.
   -- The inbound STOP rail's own write, verbatim: dated, with the carrier's
   -- words, and NO recorder. An UPSERT, as writeChannelConsent does it — 27i's
   -- fold has already minted this number's record from the seat, so the record
@@ -3280,68 +3309,28 @@ BEGIN
   ASSERT r.opt_out_recorded_by IS NULL,
     'FAIL 27j2: the record must say nobody in the studio recorded the refusal, got '
       || COALESCE(r.opt_out_recorded_by::text, '<null>');
-
+  ASSERT r.opt_out_source = 'inbound_sms' AND r.opt_out_evidence = 'Replied STOP',
+    'FAIL 27j3: the refusal keeps its own words on the record';
+  -- The grant's side is untouched: the record holds both acts at once, which is
+  -- what one evidence set on a seat never could (R-Q).
+  ASSERT r.source = 'written'
+     AND r.evidence = 'Signed the Lindqvist kickoff form'
+     AND r.consented_at = '2025-05-02T00:00:00Z'::timestamptz,
+    'FAIL 27j4: the grant''s evidence must stand beside the refusal''s, got '
+      || COALESCE(r.evidence, '<null>');
+  -- …and the seat it was folded from is untouched by the rail's write.
   SELECT * INTO r FROM project_parties WHERE id = 'e0000000-0000-4000-8000-0000000000ab';
-  ASSERT r.sms_consent_status = 'opted_out'
-     AND r.sms_consent_source = 'inbound_sms'
-     AND r.sms_consent_evidence = 'Replied STOP'
-     AND r.sms_consent_recorded_at = '2025-12-03T00:00:00Z',
-    'FAIL 27j3: the seat must carry the refusal''s own words and date, got '
-      || COALESCE(r.sms_consent_status, '<null>') || ' / '
-      || COALESCE(r.sms_consent_source, '<null>') || ' / '
-      || COALESCE(r.sms_consent_evidence, '<null>') || ' / '
-      || COALESCE(r.sms_consent_recorded_at::text, '<null>');
-  ASSERT r.sms_consent_recorded_by IS NULL,
-    'FAIL 27j4: a refusal the recipient made must never name a studio member as '
-    'the one who refused — the seat may not borrow the GRANT''s recorder, got '
-      || COALESCE(r.sms_consent_recorded_by::text, '<null>');
-  -- The grant's own date is not evidence and is not in the set the refusal
-  -- writes: the record still says the number was once granted (R-Q).
-  ASSERT r.sms_consented_at = '2025-05-02T00:00:00Z',
-    'FAIL 27j5: the grant''s date is not part of the refusal''s evidence set, got '
-      || COALESCE(r.sms_consented_at::text, '<null>');
+  ASSERT r.sms_consent_status = 'granted'
+     AND r.sms_consent_recorded_by = 'a0000000-0000-4000-8000-000000000002',
+    'FAIL 27j5: the frozen seat keeps the grant it was carrying, got '
+      || COALESCE(r.sms_consent_status, '<null>');
 
-  -- 27j6. THE TWO SIBLING HOLES, from the same one-column test: a refusal that
-  --       HAS a source but no words and no date of its own must not be given
-  --       the seat's grant words and grant date under that source.
-  INSERT INTO studio_channel_consent (
-    organization_id, channel_kind, channel_value, status,
-    opt_out_at, refusal_unanswered,
-    opt_out_source, opt_out_evidence, opt_out_recorded_at, opt_out_recorded_by)
-  VALUES (
-    'b0000000-0000-4000-8000-00000000000a', 'sms', '+16125550438', 'opted_out',
-    '2025-12-04T00:00:00Z', true,
-    'inbound_sms', NULL, NULL, NULL)
-  ON CONFLICT (organization_id, channel_kind, channel_value) DO UPDATE
-    SET status              = EXCLUDED.status,
-        opt_out_at          = EXCLUDED.opt_out_at,
-        refusal_unanswered  = EXCLUDED.refusal_unanswered,
-        opt_out_source      = EXCLUDED.opt_out_source,
-        opt_out_evidence    = EXCLUDED.opt_out_evidence,
-        opt_out_recorded_at = EXCLUDED.opt_out_recorded_at,
-        opt_out_recorded_by = EXCLUDED.opt_out_recorded_by;
-
-  SELECT * INTO r FROM project_parties WHERE id = 'e0000000-0000-4000-8000-0000000000ac';
-  ASSERT r.sms_consent_status = 'opted_out' AND r.sms_consent_source = 'inbound_sms',
-    'FAIL 27j6: the refusal must reach the seat, got '
-      || COALESCE(r.sms_consent_status, '<null>') || ' / '
-      || COALESCE(r.sms_consent_source, '<null>');
-  ASSERT r.sms_consent_evidence IS NULL
-     AND r.sms_consent_recorded_at IS NULL
-     AND r.sms_consent_recorded_by IS NULL,
-    'FAIL 27j7: a refusal that carries no words, no date and no recorder must '
-    'not borrow the grant''s, got '
-      || COALESCE(r.sms_consent_evidence, '<null>') || ' / '
-      || COALESCE(r.sms_consent_recorded_at::text, '<null>') || ' / '
-      || COALESCE(r.sms_consent_recorded_by::text, '<null>');
 
   RAISE NOTICE '27. reconsent is evidence-only and re-callable (r7 M7-2), '
-               'leaves the refusal''s own evidence standing (r8 W4-M2), the '
-               'seat carries the refusal''s own words too (r9 R5-M1), a '
+               'leaves the refusal''s own evidence standing (r8 W4-M2), a '
                'sourceless refusal is never given the studio''s consent as its '
-               'words (r6 R6-M1) — nor left standing on the sibling seat '
-               '(r8 R8-M1) — and a mirrored refusal never lends the seat the '
-               'GRANT''s recorder, words or date (r9 R5-M2): passed';
+               'words (r6 R6-M1), and no consent act reaches a seat at all '
+               '(R-AS): passed';
 END
 $$;
 
@@ -3384,16 +3373,17 @@ BEGIN
     '2025-12-03T00:00:00Z', true,
     'inbound_sms', 'Inbound STOP', '2025-12-03T00:00:00Z', NULL);
 
-  SELECT * INTO seat FROM project_parties
-   WHERE id = 'e0000000-0000-4000-8000-0000000000b1';
-  ASSERT seat.sms_consent_status = 'opted_out'
-     AND seat.sms_opt_out_at = '2025-12-03T00:00:00Z'
-     AND seat.sms_consent_source = 'inbound_sms'
-     AND seat.sms_consent_evidence = 'Inbound STOP',
-    'FAIL 28a: the rail''s refusal must reach the seat first, got '
-      || COALESCE(seat.sms_consent_status, '<null>') || ' / '
-      || COALESCE(seat.sms_opt_out_at::text, '<null>') || ' / '
-      || COALESCE(seat.sms_consent_source, '<null>');
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550435';
+  ASSERT r.status = 'opted_out'
+     AND r.opt_out_at = '2025-12-03T00:00:00Z'
+     AND r.opt_out_source = 'inbound_sms'
+     AND r.opt_out_evidence = 'Inbound STOP',
+    'FAIL 28a: the rail''s refusal lands on the record, got '
+      || COALESCE(r.status, '<null>') || ' / '
+      || COALESCE(r.opt_out_at::text, '<null>') || ' / '
+      || COALESCE(r.opt_out_source, '<null>');
 
   -- 28b. One ordinary call, by an ordinary member, through the door the hint
   --      names. It is ACCEPTED -- recording a refusal is always the way
@@ -3433,19 +3423,15 @@ BEGIN
     'FAIL 28b5: the refusal still stands unanswered, got '
       || COALESCE(r.status, '<null>');
 
-  -- 28c. AND ON THE SEAT. The mirror carries the refusal's own set, so a seat
-  --      that has been saying "opted out by text, 3 Dec 2025" keeps saying it.
+  -- 28c. AND THE SEAT IS NOT WRITTEN AT ALL (R-AS) — the record is where the
+  --      refusal's own words live, and the only place any surface reads them.
   SELECT * INTO seat FROM project_parties
    WHERE id = 'e0000000-0000-4000-8000-0000000000b1';
-  ASSERT seat.sms_opt_out_at = '2025-12-03T00:00:00Z'
-     AND seat.sms_consent_source = 'inbound_sms'
-     AND seat.sms_consent_evidence = 'Inbound STOP'
-     AND seat.sms_consent_recorded_by IS NULL,
-    'FAIL 28c: the seat must keep the texted refusal too, got '
-      || COALESCE(seat.sms_opt_out_at::text, '<null>') || ' / '
-      || COALESCE(seat.sms_consent_source, '<null>') || ' / '
-      || COALESCE(seat.sms_consent_evidence, '<null>') || ' / '
-      || COALESCE(seat.sms_consent_recorded_by::text, '<null>');
+  ASSERT seat.sms_consent_status = 'not_asked'
+     AND seat.sms_consent_source IS NULL,
+    'FAIL 28c: the frozen seat must be untouched, got '
+      || COALESCE(seat.sms_consent_status, '<null>') || ' / '
+      || COALESCE(seat.sms_consent_source, '<null>');
 
   -- 28d. THE CARRIER MAY STILL SPEAK AGAIN. A second inbound_sms refusal
   --      restates the words -- that is the rail, not hearsay -- while the date
@@ -3497,13 +3483,11 @@ BEGIN
   ASSERT r.opt_out_recorded_at > r.opt_out_at,
     'FAIL 28e3: the refusal cannot be written down before it happened, got '
       || COALESCE(r.opt_out_recorded_at::text, '<null>');
-  SELECT * INTO seat FROM project_parties
-   WHERE id = 'e0000000-0000-4000-8000-0000000000b2';
-  ASSERT seat.sms_consent_source = 'written'
-     AND seat.sms_opt_out_at = '2026-01-05T00:00:00Z',
-    'FAIL 28e4: the seat follows the record, got '
-      || COALESCE(seat.sms_consent_source, '<null>') || ' / '
-      || COALESCE(seat.sms_opt_out_at::text, '<null>');
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+  ASSERT (SELECT sms_consent_status FROM v_project_roster
+           WHERE roster_id = 'e0000000-0000-4000-8000-0000000000b2') = 'opted_out',
+    'FAIL 28e4: the roster follows the record';
+  PERFORM pg_temp.reset_role();
 
   RAISE NOTICE '28. a studio-recorded refusal never speaks for a texted one, '
                'and the refusal keeps the date it arrived (r7 R7-M1): passed';
@@ -3776,9 +3760,10 @@ BEGIN
       || COALESCE(r.opt_out_source, '<null>') || ' / '
       || COALESCE(r.opt_out_evidence, '<null>');
 
-  -- 30b. And so does EVERY SEAT, the dateless one included: the mirror has
-  --      already run, and a record that knows the refusal's words is not the
-  --      wordless-refusal case R-AQ wipes.
+  -- 30b. And EVERY SEAT is left exactly as the fixture wrote it: the fold
+  --      READS project_parties and writes only the record (R-AS). Both seats
+  --      print the record's refusal through the roster all the same.
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
   FOR seat IN
     SELECT * FROM project_parties
      WHERE id IN ('e0000000-0000-4000-8000-0000000000c1',
@@ -3786,16 +3771,12 @@ BEGIN
      ORDER BY id
   LOOP
     ASSERT seat.sms_consent_status = 'opted_out',
-      'FAIL 30b: seat ' || seat.id || ' must read opted_out';
-    ASSERT seat.sms_opt_out_at = '2025-12-03T00:00:00Z'::timestamptz,
-      'FAIL 30b2: seat ' || seat.id || ' must keep the STOP''s date, got '
-        || COALESCE(seat.sms_opt_out_at::text, '<null>');
-    ASSERT seat.sms_consent_source = 'inbound_sms'
-       AND seat.sms_consent_evidence = 'Replied STOP on the Lindqvist thread',
-      'FAIL 30b3: seat ' || seat.id || ' must keep the STOP''s words, got '
-        || COALESCE(seat.sms_consent_source, '<null>') || ' / '
-        || COALESCE(seat.sms_consent_evidence, '<null>');
+      'FAIL 30b: seat ' || seat.id || ' must be left as the fixture wrote it';
+    ASSERT (SELECT sms_consent_status FROM v_project_roster
+             WHERE roster_id = seat.id) = 'opted_out',
+      'FAIL 30b2: seat ' || seat.id || ' must print the record''s refusal';
   END LOOP;
+  PERFORM pg_temp.reset_role();
 
   -- 30c. Words on one refusing seat, the date on another: the record takes the
   --      words from the seat that has them and the date from the group, rather
@@ -3819,7 +3800,7 @@ BEGIN
 
   RAISE NOTICE '30. the fold picks the sibling that HOLDS the refusal, so a '
                'dateless portal refusal never erases the STOP''s date or '
-               'words — on the record or on the seats (r2 R2-M1): passed';
+               'words on the record (r2 R2-M1): passed';
 END
 $$;
 
@@ -3898,32 +3879,23 @@ BEGIN
   --       paperwork. Before the fix the branch was suppressed by the fold's own
   --       contamination and both seats read (opted_out, written, "Signed the
   --       Lindqvist kickoff form").
+  -- …and the seats are untouched, but every one of them prints the record's
+  --  refusal through the roster (R-AS).
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
   FOR seat IN
     SELECT * FROM project_parties
      WHERE id IN ('e0000000-0000-4000-8000-0000000000c5',
                   'e0000000-0000-4000-8000-0000000000c6')
      ORDER BY id
   LOOP
-    ASSERT seat.sms_consent_status = 'opted_out',
-      'FAIL 30e4: seat ' || seat.id || ' must read opted_out, got '
-        || COALESCE(seat.sms_consent_status, '<null>');
-    ASSERT seat.sms_opt_out_at = '2025-11-16T00:00:00Z'::timestamptz,
-      'FAIL 30e5: seat ' || seat.id || ' must carry the refusal date, got '
-        || COALESCE(seat.sms_opt_out_at::text, '<null>');
-    ASSERT seat.sms_consent_source IS NULL
-       AND seat.sms_consent_evidence IS NULL
-       AND seat.sms_consent_recorded_at IS NULL
-       AND seat.sms_consent_recorded_by IS NULL,
-      'FAIL 30e6: seat ' || seat.id || ' must say nothing about a refusal it '
-      'has no words for, got ' || COALESCE(seat.sms_consent_source, '<null>')
-        || ' / ' || COALESCE(seat.sms_consent_evidence, '<null>') || ' / '
-        || COALESCE(seat.sms_consent_recorded_at::text, '<null>') || ' / '
-        || COALESCE(seat.sms_consent_recorded_by::text, '<null>');
+    ASSERT (SELECT sms_consent_status FROM v_project_roster
+             WHERE roster_id = seat.id) = 'opted_out',
+      'FAIL 30e4: seat ' || seat.id || ' must print the record''s refusal';
   END LOOP;
+  PERFORM pg_temp.reset_role();
 
   RAISE NOTICE '30e. a grant''s paperwork is never filed as the refusal''s own '
-               'words, and the wordless refusal reaches both seats '
-               '(r4 R4-M1): passed';
+               'words on the record (r4 R4-M1): passed';
 END
 $$;
 
@@ -4029,31 +4001,22 @@ BEGIN
       || ' / ' || COALESCE(r.recorded_at::text, '<null>') || ' / '
       || COALESCE(r.recorded_by::text, '<null>');
 
-  -- 30f5. A sourceless refusal reaching the mirror is the wordless case, so
-  --       R-AQ's branch fires and BOTH seats stop claiming a refusal they have
-  --       no words for — including the sibling that never received the STOP.
-  --       Before the fix the branch was suppressed by the fold's own
-  --       contamination and both seats read (opted_out, written, "Signed the
-  --       Lindqvist kickoff form", recorded_by the studio).
+  -- 30f5. The seats keep their own history — the fold READS them and writes
+  --       only the record (R-AS) — and both print the record's refusal. The
+  --       whole hazard this block was written for (a seat left asserting the
+  --       studio's kickoff form AS the refusal) belonged to the copy.
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
   FOR seat IN
     SELECT * FROM project_parties
      WHERE id IN ('e0000000-0000-4000-8000-0000000000c7',
                   'e0000000-0000-4000-8000-0000000000c8')
      ORDER BY id
   LOOP
-    ASSERT seat.sms_consent_status = 'opted_out',
-      'FAIL 30f5: seat ' || seat.id || ' must read opted_out, got '
-        || COALESCE(seat.sms_consent_status, '<null>');
-    ASSERT seat.sms_consent_source IS NULL
-       AND seat.sms_consent_evidence IS NULL
-       AND seat.sms_consent_recorded_at IS NULL
-       AND seat.sms_consent_recorded_by IS NULL,
-      'FAIL 30f6: seat ' || seat.id || ' must say nothing about a refusal it '
-      'has no words for, got ' || COALESCE(seat.sms_consent_source, '<null>')
-        || ' / ' || COALESCE(seat.sms_consent_evidence, '<null>') || ' / '
-        || COALESCE(seat.sms_consent_recorded_at::text, '<null>') || ' / '
-        || COALESCE(seat.sms_consent_recorded_by::text, '<null>');
+    ASSERT (SELECT sms_consent_status FROM v_project_roster
+             WHERE roster_id = seat.id) = 'opted_out',
+      'FAIL 30f5: seat ' || seat.id || ' must print the record''s refusal';
   END LOOP;
+  PERFORM pg_temp.reset_role();
 
   -- 30f7. CONTROL A — the fixed rail's own write. `inbound_sms` is a source
   --       only the rail writes, so the words ARE the refusal's however the
@@ -4575,17 +4538,22 @@ BEGIN
       || COALESCE(r.opt_out_at::text, '<null>') || ' / '
       || COALESCE(r.opt_out_source, '<null>');
 
-  -- 35d. And the seat the mirror keeps agrees with itself: the disclosure
-  --      version it carries is the one standing beside the date it carries.
-  --      Before the fix the seat read v9 against a consented_at of 2 May 2025 —
-  --      a version stamped onto a grant whose recipient never saw it.
+  -- 35d. And the record agrees with itself: the disclosure version it carries
+  --      is the one standing beside the date it carries. Before the fix it read
+  --      v9 against a consented_at of 2 May 2025 — a version stamped onto a
+  --      grant whose recipient never saw it. The seat is untouched (R-AS).
+  ASSERT r.disclosure_version = 'field-sms-v9'
+     AND r.consented_at IS NOT NULL
+     AND r.consented_at > '2025-05-02T00:00:00Z'::timestamptz,
+    'FAIL 35d: the record''s disclosure version and consent date must name the '
+    'same act, got ' || COALESCE(r.disclosure_version, '<null>')
+      || ' / ' || COALESCE(r.consented_at::text, '<null>');
   SELECT * INTO seat FROM project_parties
    WHERE id = 'e0000000-0000-4000-8000-0000000000d0';
-  ASSERT seat.sms_consent_disclosure_version = 'field-sms-v9'
-     AND seat.sms_consented_at = r.consented_at,
-    'FAIL 35d: the seat''s disclosure version and consent date must name the '
-    'same act, got ' || COALESCE(seat.sms_consent_disclosure_version, '<null>')
-      || ' / ' || COALESCE(seat.sms_consented_at::text, '<null>');
+  ASSERT seat.sms_consent_disclosure_version IS NOT DISTINCT FROM
+         (SELECT sms_consent_disclosure_version FROM project_parties
+           WHERE id = 'e0000000-0000-4000-8000-0000000000d0'),
+    'FAIL 35d2: the seat is frozen legacy and is not written by reconsent';
 
   RAISE NOTICE '35. a fresh consent recorded over a refusal carries its own '
                'date, so source, words, disclosure version and date name one '
@@ -4668,23 +4636,30 @@ BEGIN
       || COALESCE(r.recorded_by::text, '<null>') || ' / '
       || COALESCE(r.consented_at::text, '<null>');
 
-  -- 36c. The seats are still wiped — that is R-AQ, and it is why the record has
-  --      to be the one that keeps the proof. This is the whole point: after the
-  --      mirror the ONLY surviving copy of the studio's written consent is the
-  --      record's consent side.
-  FOR seat IN
-    SELECT * FROM project_parties
-     WHERE id IN ('e0000000-0000-4000-8000-0000000000d1',
-                  'e0000000-0000-4000-8000-0000000000d2')
-     ORDER BY id
-  LOOP
-    ASSERT seat.sms_consent_status = 'opted_out'
-       AND seat.sms_consent_source IS NULL
-       AND seat.sms_consent_evidence IS NULL,
-      'FAIL 36c: seat ' || seat.id || ' must carry the wordless refusal, got '
-        || COALESCE(seat.sms_consent_status, '<null>') || ' / '
-        || COALESCE(seat.sms_consent_source, '<null>');
-  END LOOP;
+  -- 36c. The seats keep their own history — the sourceless refusal on one, the
+  --      studio's written grant on the other — because the fold only READS them
+  --      (R-AS). R-AQ's wipe was the mirror's answer to one evidence set having
+  --      to describe two acts; with no copy, both facts simply stay where they
+  --      were written and the record carries both sides at once.
+  SELECT * INTO seat FROM project_parties
+   WHERE id = 'e0000000-0000-4000-8000-0000000000d1';
+  ASSERT seat.sms_consent_status = 'opted_out' AND seat.sms_consent_source IS NULL,
+    'FAIL 36c: the sourceless refusing seat is left as it stands, got '
+      || COALESCE(seat.sms_consent_status, '<null>');
+  SELECT * INTO seat FROM project_parties
+   WHERE id = 'e0000000-0000-4000-8000-0000000000d2';
+  ASSERT seat.sms_consent_status = 'granted' AND seat.sms_consent_source = 'written',
+    'FAIL 36c2: the grant seat keeps the studio''s paperwork, got '
+      || COALESCE(seat.sms_consent_status, '<null>') || ' / '
+      || COALESCE(seat.sms_consent_source, '<null>');
+  -- …and both print the record's refusal.
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+  ASSERT (SELECT COUNT(*) FROM v_project_roster
+           WHERE roster_id IN ('e0000000-0000-4000-8000-0000000000d1',
+                               'e0000000-0000-4000-8000-0000000000d2')
+             AND sms_consent_status = 'opted_out') = 2,
+    'FAIL 36c3: both seats must print the record''s refusal';
+  PERFORM pg_temp.reset_role();
 
   -- 36d. CONTROL — a group whose only evidence is the REFUSAL's own words, so
   --      there is no grant anywhere in it. The refusal side takes those words
@@ -4715,6 +4690,74 @@ BEGIN
   RAISE NOTICE '36. the fold keeps the group''s grant evidence when the winning '
                'row carries none, and never invents one for a group that holds '
                'none (r9 M2): passed';
+END
+$$;
+
+-- ─── 37. R-AS: the single source, as objects and as access ─────────────────
+--
+-- The shape of the ruling, asserted directly: the mirror is gone, the freeze is
+-- on, both shipped readers go through channel_consent_status(), and that
+-- function is SECURITY INVOKER so the consent table's own member-only RLS is
+-- what decides who may read a studio's verdict.
+
+DO $$
+DECLARE
+  n INTEGER;
+  v TEXT;
+BEGIN
+  -- 37a. The mirror and its trigger are gone, wholly.
+  SELECT COUNT(*) INTO n FROM pg_proc pr
+    JOIN pg_namespace ns ON ns.oid = pr.pronamespace
+   WHERE ns.nspname = 'public' AND pr.proname = 'mirror_channel_consent_to_parties';
+  ASSERT n = 0, 'FAIL 37a: the mirror function must not exist, got ' || n;
+  SELECT COUNT(*) INTO n FROM pg_trigger
+   WHERE tgrelid = 'public.studio_channel_consent'::regclass
+     AND NOT tgisinternal AND tgname = 'mirror_channel_consent_to_parties_trg';
+  ASSERT n = 0, 'FAIL 37a2: the mirror trigger must not exist, got ' || n;
+
+  -- 37b. The freeze is on the table.
+  SELECT COUNT(*) INTO n FROM pg_trigger
+   WHERE tgrelid = 'public.project_parties'::regclass
+     AND NOT tgisinternal AND tgname = 'refuse_legacy_consent_write_trg';
+  ASSERT n = 1, 'FAIL 37b: the freeze trigger must exist, got ' || n;
+
+  -- 37c. Both shipped readers go through the one function.
+  ASSERT (SELECT definition FROM pg_views
+           WHERE schemaname = 'public' AND viewname = 'v_project_roster')
+         ILIKE '%channel_consent_status%',
+    'FAIL 37c: v_project_roster must read the record';
+  ASSERT (SELECT definition FROM pg_views
+           WHERE schemaname = 'public' AND viewname = 'people_directory')
+         ILIKE '%channel_consent_status%',
+    'FAIL 37c2: people_directory must read the record';
+
+  -- 37d. …and neither one still reads the frozen column for its consent word.
+  ASSERT (SELECT definition FROM pg_views
+           WHERE schemaname = 'public' AND viewname = 'v_project_roster')
+         NOT ILIKE '%pp.sms_consent_status%',
+    'FAIL 37d: v_project_roster must not read the frozen seat column';
+
+  -- 37e. ORG ISOLATION, through RLS. Alpha's member sees Alpha's verdict for
+  --      the shared number; Beta's member asks the same question of Alpha's org
+  --      and is answered nothing at all — the function is SECURITY INVOKER, so
+  --      studio_channel_consent's member-only policy is the whole access rule.
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+  SELECT public.channel_consent_status(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '+16125550142') INTO v;
+  ASSERT v IS NOT NULL,
+    'FAIL 37e: a member must read their own studio''s verdict, got <null>';
+  PERFORM pg_temp.reset_role();
+
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000002');
+  SELECT public.channel_consent_status(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '+16125550142') INTO v;
+  ASSERT v IS NULL,
+    'FAIL 37e2: another studio''s verdict must not be readable, got ' || COALESCE(v, '<null>');
+  PERFORM pg_temp.reset_role();
+
+  RAISE NOTICE '37. the record is the single source: no mirror, the legacy '
+               'columns frozen, both readers on channel_consent_status(), and '
+               'org isolation through RLS (R-AS): passed';
   RAISE NOTICE 'All W1a assertions passed.';
 END
 $$;

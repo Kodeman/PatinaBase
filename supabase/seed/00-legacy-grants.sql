@@ -15818,7 +15818,25 @@ END $g$;
 
 -- 00594_studio_channel_consent.sql
 DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.mirror_channel_consent_to_parties() FROM PUBLIC, anon;
+  REVOKE ALL ON FUNCTION public.refuse_legacy_consent_write() FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00594_studio_channel_consent.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.channel_consent_status(uuid, text, text) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00594_studio_channel_consent.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.channel_consent_status(uuid, text, text) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00594_studio_channel_consent.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.v_project_roster TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
