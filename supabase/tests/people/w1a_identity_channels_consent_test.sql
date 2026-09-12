@@ -3867,6 +3867,174 @@ BEGIN
 END
 $$;
 
+-- ─── 30f. r10 M1: a STOP over a standing grant is not a refusal IN WRITING ──
+--
+-- 30e covered one of the two shapes whose evidence set does not belong to the
+-- refusal. This is the other, and it is the commonest real refusal on the
+-- books: a seat with a recorded grant that later texted STOP. The shipped
+-- inbound rail flipped sms_consent_status to `opted_out` and stamped the date
+-- while LEAVING THE GRANT'S FOUR EVIDENCE COLUMNS STANDING, so the row reads
+-- (opted_out, written, "Signed the Lindqvist kickoff form", recorded
+-- 2025-05-02) against an opt_out_at of 2025-12-03. Folded on status alone the
+-- record came out saying the person opted out IN WRITING, seven months before
+-- they did, recorded_by the studio member who wrote down the GRANT — the
+-- attribution R7-M1 and R5-M2 both ruled must be NULL on a rail-written STOP.
+-- And because opt_out_source came out non-NULL, R-AQ's wordless branch never
+-- fired, so the grant's paperwork was stamped onto every sibling seat in the
+-- studio on that number. Nothing repaired it: ON CONFLICT DO NOTHING, and
+-- record_channel_reconsent never touches opt_out_*.
+--
+-- The grant's paperwork is not DESTROYED here — it is a true fact about the
+-- consent, and 30f4 holds it on the record's CONSENT side, which is where the
+-- 10DLC artifact of a grant belongs. Only the refusal's own four columns must
+-- not borrow it.
+
+INSERT INTO project_parties (id, project_id, party_kind, display_name, phone,
+                             sms_consent_status, sms_consented_at, sms_opt_out_at,
+                             sms_consent_source, sms_consent_evidence,
+                             sms_consent_recorded_at, sms_consent_disclosure_version,
+                             sms_consent_recorded_by)
+VALUES
+  -- the seat that texted STOP over a standing written grant: the rail flipped
+  -- the status and the date and left the GRANT's evidence set behind
+  ('e0000000-0000-4000-8000-0000000000c7', 'd0000000-0000-4000-8000-00000000000a', 'sub', 'Ruth Ojala', '(612) 555-0504',
+   'opted_out', '2025-05-02T00:00:00Z', '2025-12-03T00:00:00Z',
+   'written', 'Signed the Lindqvist kickoff form', '2025-05-02T00:00:00Z',
+   'field-sms-v1', 'a0000000-0000-4000-8000-000000000001'),
+  -- a sibling seat the studio holds on the same number, still granted, with
+  -- its own paperwork: the seat R-AQ's branch must reach
+  ('e0000000-0000-4000-8000-0000000000c8', 'd0000000-0000-4000-8000-00000000000a', 'installer', 'Ruth Ojala', '612.555.0504',
+   'granted', '2025-06-01T00:00:00Z', NULL,
+   'verbal', 'Said yes on the walk-through', '2025-06-01T00:00:00Z',
+   'field-sms-v1', 'a0000000-0000-4000-8000-000000000001'),
+  -- CONTROL A: the same STOP as written by the FIXED rail. Its evidence says
+  -- `inbound_sms`, which only the rail writes, so the record must keep it.
+  ('e0000000-0000-4000-8000-0000000000c9', 'd0000000-0000-4000-8000-00000000000a', 'sub', 'Ivar Melby', '(612) 555-0505',
+   'opted_out', '2025-05-02T00:00:00Z', '2025-12-03T00:00:00Z',
+   'inbound_sms', 'Inbound STOP', '2025-12-03T00:00:00Z',
+   'field-sms-v1', NULL),
+  -- CONTROL B: a studio-recorded refusal over a standing grant — written down
+  -- the day AFTER the person refused. Nothing about it contradicts the
+  -- refusal, so its words are the refusal's and must survive.
+  ('e0000000-0000-4000-8000-0000000000ca', 'd0000000-0000-4000-8000-00000000000a', 'sub', 'Ada Sorem', '(612) 555-0506',
+   'opted_out', '2025-05-02T00:00:00Z', '2025-12-03T00:00:00Z',
+   'verbal', 'Told me on site to stop texting', '2025-12-04T00:00:00Z',
+   'field-sms-v1', 'a0000000-0000-4000-8000-000000000001');
+
+DO $$
+DECLARE
+  r    RECORD;
+  seat RECORD;
+BEGIN
+  PERFORM public.backfill_channel_consent_from_parties();
+
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_kind = 'sms' AND channel_value = '+16125550504';
+
+  -- 30f1/30f2. Still an unanswered refusal, still dated: the fix is about the
+  --            words, not the verdict or the date.
+  ASSERT r.status = 'opted_out' AND r.refusal_unanswered,
+    'FAIL 30f1: the folded record must be an unanswered refusal, got '
+      || COALESCE(r.status, '<none>');
+  ASSERT r.opt_out_at = '2025-12-03T00:00:00Z'::timestamptz,
+    'FAIL 30f2: the refusal date must still land, got '
+      || COALESCE(r.opt_out_at::text, '<null>');
+
+  -- 30f3. And the record says NOTHING about HOW they refused. A grant's
+  --       paperwork, written down seven months before the STOP, is not the
+  --       refusal's words, and the studio member who recorded that grant did
+  --       not record this refusal.
+  ASSERT r.opt_out_source IS NULL
+     AND r.opt_out_evidence IS NULL
+     AND r.opt_out_recorded_at IS NULL
+     AND r.opt_out_recorded_by IS NULL,
+    'FAIL 30f3: a STOP over a standing grant must never be recorded as a '
+    'refusal in writing, got ' || COALESCE(r.opt_out_source, '<null>') || ' / '
+      || COALESCE(r.opt_out_evidence, '<null>') || ' / '
+      || COALESCE(r.opt_out_recorded_at::text, '<null>') || ' / '
+      || COALESCE(r.opt_out_recorded_by::text, '<null>');
+
+  -- 30f4. The grant's paperwork is not thrown away — it is the CONSENT's own
+  --       10DLC artifact and it lands on the consent side, next to the
+  --       consent's date. Nothing is lost; it is filed under the right act.
+  ASSERT r.source = 'written'
+     AND r.evidence = 'Signed the Lindqvist kickoff form'
+     AND r.recorded_at = '2025-05-02T00:00:00Z'::timestamptz
+     AND r.recorded_by = 'a0000000-0000-4000-8000-000000000001'
+     AND r.disclosure_version = 'field-sms-v1'
+     AND r.consented_at = '2025-05-02T00:00:00Z'::timestamptz,
+    'FAIL 30f4: the grant''s own paperwork must stand on the consent side, got '
+      || COALESCE(r.source, '<null>') || ' / ' || COALESCE(r.evidence, '<null>')
+      || ' / ' || COALESCE(r.recorded_at::text, '<null>') || ' / '
+      || COALESCE(r.recorded_by::text, '<null>');
+
+  -- 30f5. A sourceless refusal reaching the mirror is the wordless case, so
+  --       R-AQ's branch fires and BOTH seats stop claiming a refusal they have
+  --       no words for — including the sibling that never received the STOP.
+  --       Before the fix the branch was suppressed by the fold's own
+  --       contamination and both seats read (opted_out, written, "Signed the
+  --       Lindqvist kickoff form", recorded_by the studio).
+  FOR seat IN
+    SELECT * FROM project_parties
+     WHERE id IN ('e0000000-0000-4000-8000-0000000000c7',
+                  'e0000000-0000-4000-8000-0000000000c8')
+     ORDER BY id
+  LOOP
+    ASSERT seat.sms_consent_status = 'opted_out',
+      'FAIL 30f5: seat ' || seat.id || ' must read opted_out, got '
+        || COALESCE(seat.sms_consent_status, '<null>');
+    ASSERT seat.sms_consent_source IS NULL
+       AND seat.sms_consent_evidence IS NULL
+       AND seat.sms_consent_recorded_at IS NULL
+       AND seat.sms_consent_recorded_by IS NULL,
+      'FAIL 30f6: seat ' || seat.id || ' must say nothing about a refusal it '
+      'has no words for, got ' || COALESCE(seat.sms_consent_source, '<null>')
+        || ' / ' || COALESCE(seat.sms_consent_evidence, '<null>') || ' / '
+        || COALESCE(seat.sms_consent_recorded_at::text, '<null>') || ' / '
+        || COALESCE(seat.sms_consent_recorded_by::text, '<null>');
+  END LOOP;
+
+  -- 30f7. CONTROL A — the fixed rail's own write. `inbound_sms` is a source
+  --       only the rail writes, so the words ARE the refusal's however the
+  --       dates fall, and the record keeps every one of them. This is the leg
+  --       that proves the test above is a test and not a blanket NULL.
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_kind = 'sms' AND channel_value = '+16125550505';
+  ASSERT r.opt_out_source = 'inbound_sms'
+     AND r.opt_out_evidence = 'Inbound STOP'
+     AND r.opt_out_recorded_at = '2025-12-03T00:00:00Z'::timestamptz
+     AND r.opt_out_recorded_by IS NULL,
+    'FAIL 30f7: a texted refusal must keep its own words, got '
+      || COALESCE(r.opt_out_source, '<null>') || ' / '
+      || COALESCE(r.opt_out_evidence, '<null>') || ' / '
+      || COALESCE(r.opt_out_recorded_at::text, '<null>') || ' / '
+      || COALESCE(r.opt_out_recorded_by::text, '<null>');
+
+  -- 30f8. CONTROL B — a studio-recorded refusal written down AFTER the person
+  --       refused. Nothing contradicts it, so it keeps its words and its
+  --       recorder: this is the ordinary "told me on site to stop" refusal and
+  --       the fix must not touch it.
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_kind = 'sms' AND channel_value = '+16125550506';
+  ASSERT r.opt_out_source = 'verbal'
+     AND r.opt_out_evidence = 'Told me on site to stop texting'
+     AND r.opt_out_recorded_at = '2025-12-04T00:00:00Z'::timestamptz
+     AND r.opt_out_recorded_by = 'a0000000-0000-4000-8000-000000000001',
+    'FAIL 30f8: a refusal recorded after the fact must keep its own words, got '
+      || COALESCE(r.opt_out_source, '<null>') || ' / '
+      || COALESCE(r.opt_out_evidence, '<null>') || ' / '
+      || COALESCE(r.opt_out_recorded_at::text, '<null>') || ' / '
+      || COALESCE(r.opt_out_recorded_by::text, '<null>');
+
+  RAISE NOTICE '30f. a STOP over a standing grant is recorded wordless, the '
+               'grant''s paperwork stays on the consent side, and a real '
+               'refusal keeps its words (r10 M1): passed';
+END
+$$;
+
 -- ─── 31. r8 F1: the rule's SUBJECT is held to its own noun ──────────────────
 --
 -- subject_id is polymorphic and unFK'd. Block 24 proved the ROUTE is guarded,

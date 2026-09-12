@@ -12,9 +12,9 @@ Local Supabase only. Nothing was pushed to Strata; no `supabase db push`, no
 
 | File | Carries |
 |---|---|
-| `supabase/migrations/00592_people_cards_affiliations_rules.sql` | `studio_contact_org()` + `project_party_designer()` helpers · `studio_contacts` person columns (`is_sole_proprietor`, `studio_verdict`, `studio_verdict_at`) and company columns (`legal_name`, `dba_name`, `company_kind` + CHECK, `trades`, `w9_on_file_at`, `tax_id_last4`, `remit_to`, `retainage_bps`, `warranty_until`, `paperwork_contact_person_id`, `signer_person_id`, `site_contact_person_id`) · new table `studio_person_affiliations` (+ `assert_affiliation_card_kinds()` and `studio_person_affiliations_distinct_cards_check`) · new table `studio_contact_rules` (+ `studio_contact_rules_channels_allowed_check` and `studio_contact_rules_channels_forbidden_check`, both `<@` the seven-name channel vocabulary — r6 M6-5) · **`assert_studio_contact_designations()`** BEFORE INSERT/UPDATE on `studio_contacts` — `paperwork_contact_person_id` / `signer_person_id` / `site_contact_person_id` must each name a PERSON card in the SAME organization and never the row itself (r5 R-AP) · **`assert_studio_contact_rule_route()`** BEFORE INSERT/UPDATE on `studio_contact_rules` — the same test for `route_to_person_id` (r6 M6-4) |
+| `supabase/migrations/00592_people_cards_affiliations_rules.sql` | `studio_contact_org()` + `project_party_designer()` helpers · `studio_contacts` person columns (`is_sole_proprietor`, `studio_verdict`, `studio_verdict_at`) and company columns (`legal_name`, `dba_name`, `company_kind` + CHECK, `trades`, `w9_on_file_at`, `tax_id_last4`, `remit_to`, `retainage_bps`, `warranty_until`, `paperwork_contact_person_id`, `signer_person_id`, `site_contact_person_id`) · new table `studio_person_affiliations` (+ `assert_affiliation_card_kinds()` and `studio_person_affiliations_distinct_cards_check`) · new table `studio_contact_rules` (+ `studio_contact_rules_channels_allowed_check` and `studio_contact_rules_channels_forbidden_check`, both `<@` an **EIGHT**-name vocabulary — the seven channel kinds plus the rule-only `sms` token, so "phone yes, text no" is writable on one line — r6 M6-5 widened by r4 R4-M2; `sms` is deliberately NOT a `studio_contact_channels.channel_kind`) · **`assert_studio_contact_designations()`** BEFORE INSERT/UPDATE on `studio_contacts` — `paperwork_contact_person_id` / `signer_person_id` / `site_contact_person_id` must each name a PERSON card in the SAME organization and never the row itself (r5 R-AP) · **`assert_studio_contact_rule_route()`** BEFORE INSERT/UPDATE on `studio_contact_rules` — the same test for `route_to_person_id` (r6 M6-4), and since r8 F1 it inspects EVERY rule, routed or not: `subject_type` person/company must equal the named card's own `entity_kind` (`rule_subject_kind_mismatch`) and `subject_type` engagement must name a `project_parties` row (`rule_subject_not_found`) |
 | `supabase/migrations/00593_studio_contact_channels.sql` | New table `studio_contact_channels` · **`normalize_channel_value(kind, value)`** — the one channel-key rule, shared with 00594's consent RPCs · **`channel_value_was_on_sms_rail(value)`** — the `sms_capable` evidence test (an `sms_conversations` thread, or an asked FIELD-kind seat) · `normalize_studio_contact_channel()` trigger (defers to the normaliser) · `assert_channel_owner_kind()` trigger — `owner_type` must equal the card's own `entity_kind` · four-part backfill from `studio_contacts.phone/email` and from `project_parties.phone/email` where `studio_contact_id` is set, carrying the `sms_capable` evidence rule below · **`assert_studio_contact_identity_stable()`** BEFORE UPDATE OF `entity_kind`, `organization_id` on `studio_contacts` (r8 R-AR) — the change is refused with `studio_contact_identity_held` while any channel, designation, rule route or affiliation still points at the card, with a HINT naming what holds it; a restatement of the same values still writes, and after 00593's backfill essentially every card with a phone or an email is held |
-| `supabase/migrations/00594_studio_channel_consent.sql` | New table `studio_channel_consent` (PK `(organization_id, channel_kind, channel_value)`, carrying `refusal_unanswered` — the stored "a refusal stands that has not been answered" — and **THE REFUSAL'S OWN EVIDENCE SET**, `opt_out_source` / `opt_out_evidence` / `opt_out_recorded_at` / `opt_out_recorded_by`, with `studio_channel_consent_opt_out_source_check` over the same five-name source vocabulary as the consent side (r8 W4-M2); those four are written by the fold, by `record_channel_consent`'s `opted_out` branch and by the inbound STOP rail, and by nothing else — `record_channel_reconsent` never touches them) · `backfill_channel_consent_from_parties()` + its one call · `mirror_channel_consent_to_parties()` trigger · RPC `record_channel_consent(...)` · RPC `record_channel_reconsent(...)` (PR-m's named way back) · **REDEFINES two existing trigger functions**: `fc_dispatch_optin_invite` (lineage `00432:27-68`) and `_site_request_consent_granted_dispatch` (lineage `00374:3399-3444`) · `COMMENT ON TABLE public.project_parties` restating the mirror invariant (lineage `00212:46`) |
+| `supabase/migrations/00594_studio_channel_consent.sql` | New table `studio_channel_consent` (PK `(organization_id, channel_kind, channel_value)`, carrying `refusal_unanswered` — the stored "a refusal stands that has not been answered" — and **THE REFUSAL'S OWN EVIDENCE SET**, `opt_out_source` / `opt_out_evidence` / `opt_out_recorded_at` / `opt_out_recorded_by`, with `studio_channel_consent_opt_out_source_check` over the same five-name source vocabulary as the consent side (r8 W4-M2); those four are written by the fold, by `record_channel_consent`'s `opted_out` branch and by the inbound STOP rail, and by nothing else — `record_channel_reconsent` never touches them) · `backfill_channel_consent_from_parties()` + its one call (its `refusal` CTE takes the refusal's words only off a row whose evidence could BE the refusal's — r4 R4-M1, widened r10 M1) · `mirror_channel_consent_to_parties()` trigger · RPC `record_channel_consent(...)` · RPC `record_channel_consent`'s **email asymmetry** (r6 R6-M3): on `channel_kind = 'email'` — and only there — a fully evidenced `granted` passes the `opted_out` gate AND lowers `refusal_unanswered`, because email has no inbound START to answer with · RPC `record_channel_reconsent(...)` (PR-m's named way back) · **REDEFINES two existing trigger functions**: `fc_dispatch_optin_invite` (lineage `00432:27-68`) and `_site_request_consent_granted_dispatch` (lineage `00374:3399-3444`) · `COMMENT ON TABLE public.project_parties` restating the mirror invariant (lineage `00212:46`) |
 
 **Two functions are redefined, both grafted from their grep-winner bodies
 verbatim** (`grep -rln "CREATE OR REPLACE FUNCTION[^(]*<name>" supabase/migrations/*.sql | sort | tail -1`):
@@ -39,10 +39,20 @@ before I wrote them (`normalize_channel_value`, `record_channel_reconsent`,
 `assert_studio_contact_rule_route`, `assert_studio_contact_identity_stable`).
 
 `python3 scripts/generate-legacy-grants.py` was re-run after the grants:
-`supabase/seed/00-legacy-grants.sql` gained 210 lines over this wave's base
-commit `700261663` ("baseline + 2632 replayed statements"; the count was 186 /
-2628 before the r5 and r6 rounds added their guards). It regenerates with an
-empty diff.
+`supabase/seed/00-legacy-grants.sql` gained **216 lines** over this wave's base
+commit `700261663`, and the generator's own line reads **"baseline + 2633
+replayed statements"** (it was 210 / 2632 when this paragraph was last written,
+and 186 / 2628 before the r5 and r6 rounds added their guards). Re-run at the
+tip it regenerates with an empty diff:
+
+```
+$ git diff --stat 700261663 -- supabase/seed/00-legacy-grants.sql
+ supabase/seed/00-legacy-grants.sql | 216 +++++++++++++++++++++++++++++++++++++
+$ python3 scripts/generate-legacy-grants.py
+wrote …/supabase/seed/00-legacy-grants.sql — baseline + 2633 replayed statements
+$ git diff --stat -- supabase/seed/00-legacy-grants.sql
+(empty)
+```
 
 ### Edge functions
 
@@ -105,6 +115,30 @@ empty diff.
   says so at the call site, and SQL block 13 asserts the released request. STOP
   keeps the opposite order (the record first, then the phone-global party
   write), since a refusal has no transition to consume.
+  Three further rail rules landed in r7's second cycle and r10. **The STOP no
+  longer restates the GRANT** (r7 R7-M1): `source` / `evidence` / `recorded_at`
+  are carried through from the standing record on a refusal and written fresh
+  only when this act MINTS the record, matching `record_channel_consent`'s
+  UPDATE and INSERT legs one for one. **A failed read is a refusal, never an
+  "unknown"** (r7 R7-M2): `channelConsentVerdict()`'s last phone-global scan now
+  destructures `error` like its four siblings and refuses on it; before, a
+  denied read read as "nobody here opted out" and lifted the primary gate.
+  **And a STOP the rail could not fully record is not acknowledged** (r7 R7-M3):
+  `loadPhoneParties()` and `studiosHoldingRecord()` check and log their reads,
+  `writeChannelConsent()` reports `failed`, and if any of the three failed the
+  branch answers Twilio **500** after clearing the inbound row's `twilio_sid` —
+  releasing the idempotency claim so the retry actually re-runs, while the
+  inbound STOP row itself (a 10DLC artifact) survives. That is a live
+  Twilio-webhook behaviour change: this path used to answer 200 regardless.
+  **And `optOutAllForPhone()` writes the refusal's own evidence set alongside
+  the status** (r10 M1) — `sms_consent_source = 'inbound_sms'`, the keyword as
+  it arrived, `recorded_at = now`, `recorded_by = NULL` — the same set the
+  record gets and the same set 00594's mirror writes onto these seats for this
+  verdict. Leaving the four alone left the commonest real refusal on the books —
+  a seat with a recorded grant that then texted STOP — saying it was refused IN
+  WRITING, per the studio's own form, months before the STOP, by the member who
+  recorded the GRANT. `sms_consent_disclosure_version` is not touched: which
+  disclosure the person was shown is a fact about the grant.
 - `supabase/functions/_tests/fake-supabase.ts` — `upsert({onConflict})` now
   accepts a composite key (`"a,b,c"`). It previously treated the whole string as
   one column name, so a composite upsert matched the first row in the table.
@@ -183,7 +217,11 @@ empty diff.
     `record_channel_consent()` requires source + evidence + disclosure_version
     for `pending`/`granted` and source + evidence for `opted_out` (PR-m), and
     refuses every transition OUT of `opted_out` — including to `not_asked`,
-    which would erase the only stored record of the refusal. **`not_asked` is
+    which would erase the only stored record of the refusal. **On `sms`.** On
+    `channel_kind = 'email'` a fully evidenced `granted` passes this gate and
+    lowers `refusal_unanswered`, because email has no inbound START to answer a
+    refusal with; that is decision 27 below and it is a ruling-level amendment
+    to how PR-m reads on the two channels. **`not_asked` is
     refused outright as a target status** (`consent_not_recordable`, R-AG):
     there is nothing to record — it is the absence of a consent, not a verdict —
     and taking it was the one evidence-free door into the table, where four
@@ -314,8 +352,11 @@ empty diff.
     population verbatim, so the date test failed OPEN for exactly the records
     the first prod push creates. The flag is raised by every writer that records
     a refusal (the fold, `record_channel_consent`, `record_channel_reconsent`,
-    the inbound STOP rail) and lowered by ONE writer: the inbound rail's own
-    `service_role` write on a YES/START. **No RPC in 00594 lowers it** (r7
+    the inbound STOP rail) and lowered, ON SMS, by ONE writer: the inbound
+    rail's own `service_role` write on a YES/START. **No RPC in 00594 lowers it
+    on SMS** — on EMAIL exactly one does, and deliberately (decision 27, r6
+    R6-M3): there is no inbound START on an email address, so the studio's own
+    fresh recorded consent is the whole of PR-m's way back there. On SMS (r7
     M7-1): the upsert used to exempt a record already AT `granted` from the
     gate — so its evidence could be restated — and then set the flag `false` on
     that very write, which after r6's M6-3 fix is the fact the SEND rail rests
@@ -524,8 +565,9 @@ empty diff.
     including the seat holding `inbound_sms` / "Replied STOP". R-AQ's premise
     ("a NULL here means there were never any refusal words") is true of the
     RECORD's writers and false of this picker, so the picker is what had to
-    change: the `refusal` CTE now orders by words first
-    (`sms_consent_source IS NOT NULL`), then a date
+    change: the `refusal` CTE now orders by words first — since r4 R4-M1 and
+    r10 M1 that leg is "this row's evidence could BE the refusal's" rather than
+    a bare `sms_consent_source IS NOT NULL` (decision 26) — then a date
     (`sms_opt_out_at IS NOT NULL`), then recency, and `ranked`'s within-status
     tiebreak carries the same two legs — written so they score equal for every
     row outside the refusal bucket, leaving "then the most recent granted"
@@ -538,15 +580,129 @@ empty diff.
     `artifacts/people-room-crm-2026-09-11/build/probe20-r2-negative-control.sql`
     runs the pre-fix body beside the fixed one in one rolled-back transaction.
 
+26. **The refusal's words come only off evidence that could BE the refusal's**
+    (r4 R4-M1, widened by r10 M1). `project_parties` holds ONE evidence set per
+    seat, and it belongs to whatever wrote the row's CURRENT status. The
+    `refusal` CTE reads two shapes, and on both of them a status test alone
+    hands the record the GRANT's paperwork as the refusal's own words:
+    (a) the r8 W4-M1 shape — a seat whose status still says `granted` while it
+    carries an unanswered opt-out date — where the evidence is plainly the
+    grant's; and (b) **the commonest real refusal on the books** — a seat with a
+    recorded grant that later texted STOP, which the shipped rail flipped to
+    `opted_out` while leaving the grant's four columns standing (the other half
+    of r10 M1 fixes the rail; see decision 30). Either way the fold minted
+    `opt_out_source = 'written'`, `opt_out_evidence = "Signed the … kickoff
+    form"`, an `opt_out_recorded_at` MONTHS BEFORE `opt_out_at`, and an
+    `opt_out_recorded_by` naming the studio member who recorded the GRANT — the
+    attribution r7 R7-M1 and r9 R5-M2 both ruled must be NULL on a rail-written
+    STOP. R-Q's sentence printed "Opted out IN WRITING" for a refusal that
+    arrived by text; and because `opt_out_source` came out non-NULL, decision
+    23's wordless-refusal branch never fired, so the grant's paperwork was
+    stamped onto every sibling seat in the studio on that number. Permanent:
+    `ON CONFLICT DO NOTHING` never repairs it and `record_channel_reconsent`
+    never touches `opt_out_*`. The four are now projected only when the row's
+    evidence could plausibly belong to the refusal — it says so itself
+    (`sms_consent_source = 'inbound_sms'`, which only the rail writes), or
+    nothing contradicts it (`sms_consent_recorded_at >= sms_opt_out_at`, or one
+    of the two dates is absent) — and otherwise NULL, all four together, which
+    is the shape R-AQ reads. The same test is the `refusal` CTE's ranking leg,
+    so a contaminated row no longer outranks an honest wordless refusal. The
+    `ranked` picker is deliberately NOT given the test: its winner supplies the
+    record's status, origin and CONSENT set, and on a STOP-flipped seat all
+    three are right — the grant really was signed, and that belongs on the
+    consent side. SQL blocks 30e and 30f (30f4 asserts the grant's paperwork
+    standing on the consent side; 30f7/30f8 are the controls — a texted refusal
+    and a refusal written down the day after it happened both keep their words).
+
+27. **An email refusal has a way back; an SMS one does not** (r6 R6-M3, ruling
+    branch (a)). Decision 18's "nothing but the recipient's own YES/START lowers
+    `refusal_unanswered`" is an SMS sentence: on email that reply DOES NOT
+    EXIST. The inbound rail is SMS-only, nothing in the tree writes an email
+    consent row, and `record_channel_reconsent()` leaves the status where it
+    stands — so an email refusal recorded by a studio member was PERMANENT, a
+    dead end with no door. PR-m's way back is "a fresh recorded consent **or**
+    an inbound START"; email has only the first half, so on email — and on email
+    alone — `record_channel_consent` accepts a fully evidenced `granted` over an
+    unanswered refusal and lowers the flag with it (`00594` upsert:
+    `refusal_unanswered = CASE … WHEN EXCLUDED.channel_kind = 'email' AND
+    EXCLUDED.status = 'granted' THEN false …`, plus the matching legs in the
+    `WHERE`). Lowering the flag is not decoration — `channelConsentVerdict`
+    refuses on it whatever the status says (r6 M6-3), so a door that did not
+    would open onto nothing. Three things deliberately did not change: `pending`
+    stays refused on email (the double opt-in is the SMS rail's dance, and the
+    hint now says so instead of telling an email address to reply START); the
+    evidence gate is untouched, so an email `granted` still needs source +
+    evidence + disclosure_version; and the seat legs join on `pp.phone_e164`,
+    which an email value never matches. SQL block 34 (34e/34e2 are the SMS
+    control: the identical two acts, and the reconsent-then-grant composition,
+    are still refused).
+
+28. **The one home of the forbidding rule can say "never text"** (r4 R4-M2).
+    `sms` was added to both `studio_contact_rules` CHECK arrays as a
+    **rule-only** token, making the vocabulary eight names, not seven. It is
+    deliberately NOT a `studio_contact_channels.channel_kind` (00593 still holds
+    exactly seven): SMS is not a kind of channel in this model — it rides on
+    `mobile` and is settled by `sms_capable`, which 00593 insists is a fact
+    about the LINE, not a studio preference. Without the token decision 1's ONE
+    home could not hold the fixture's own sentences (F-10 Sam Rowe "email only;
+    phone for emergencies … never texted"; F-27 Ray Thao "phone and email only;
+    NEVER texted; scheduled through 311"), both of which permit the voice call
+    and forbid the text on the SAME line. SQL block 25 (25e writes that
+    sentence; 25f holds the asymmetry — a `studio_contact_channels` row with
+    `channel_kind = 'sms'` is still refused `23514`).
+
+29. **A rule is filed under the noun its subject actually is** (r8 F1).
+    `subject_type` was checked against nothing, and
+    `assert_studio_contact_rule_route()` returned at its very first statement
+    when `route_to_person_id IS NULL` — so a ROUTELESS rule, which is exactly
+    what a plain "never texted" rule is, was never inspected at all. A rule with
+    `subject_type = 'person'` naming a COMPANY card was accepted, and the RLS
+    legs catch only the cross-FAMILY slip, never the wrong noun inside
+    `studio_contacts`. The room looks a rule up by the noun of the card it is
+    holding, so a rule filed under the other noun is invisible to every correct
+    reader and a FORBIDDING rule fails OPEN — the two fixture cards above, lost
+    inside the one home decision 1 gave them. The early return now sits BELOW a
+    new subject test: for `person`/`company` the named card must exist and its
+    `entity_kind` must equal `subject_type` (`rule_subject_kind_mismatch`), for
+    `engagement` the id must exist in `project_parties`
+    (`rule_subject_not_found`), and the org the route legs compare against comes
+    off that same lookup. SQL block 31.
+
+30. **The rail tells the truth about a STOP, or does not acknowledge it**
+    (r7 R7-M1/R7-M2/R7-M3, r10 M1). Four rules on one act.
+    (a) A STOP writes none of the CONSENT's five columns over a standing grant
+    — the rail is held to the same rule `record_channel_consent` is (r6 R6-M1),
+    leg for leg: the UPDATE leg carries the prior through, the MINTING leg
+    writes the act's own source and words (r7 R7-M1).
+    (b) The last phone-global scan in `channelConsentVerdict()` refuses on a
+    read error instead of answering `"unknown"` — an "unknown" lifts the primary
+    gate, and the legacy party-row check then carried the send past another
+    studio's standing STOP (r7 R7-M2).
+    (c) A STOP that could not be fully recorded is answered **500**, not 200,
+    after clearing the inbound row's `twilio_sid` so Twilio's retry is not
+    swallowed by the idempotency claim — a record-only studio (one holding a
+    consent record but no seat) has no party-row backstop by construction, so a
+    silently dropped write leaves its record at `granted` while the number has
+    said STOP (r7 R7-M3). This changes what the live Twilio webhook returns.
+    (d) `optOutAllForPhone()` writes the refusal's own evidence set onto the
+    seats alongside the status (r10 M1) — see decision 26 for what the old
+    behaviour cost. `_tests/sms-inbound.test.ts` covers all four.
+
 ---
 
 ## 3. Probes
 
-Every output below was re-taken after the r2 round (R2-M1, the fold's refusal
-picker), against a full `supabase:reset` of the local stack — the section is at
-the branch tip, not behind it. It had drifted twice before: three rounds behind
-at r9 (R5-M2), and a round and a half behind at r2 (R2-M2), which is why the
-re-take now happens AFTER the round's code lands, never before it.
+Every output below was re-taken after the **r10** round (M1, the fold's words
+test and the rail's seat write), against a full `supabase:reset` of the local
+stack. It has drifted three times in this wave: three rounds behind at r9
+(R5-M2), a round and a half behind at r2 (R2-M2), and **five commits behind at
+r10 (M2)** — where the paragraph standing here claimed the section was at the
+tip while §2 was missing the email door, the rule-only `sms` token, the r8 F1
+guard and the whole r7 second cycle, and the transcripts below printed a
+seven-name CHECK the database contradicted. The re-take happens AFTER the
+round's code lands; "it was re-taken last round" is not evidence that it is
+current, so the counts below are the ones that catch it — 37 blocks, 36 notices,
+80 deno cases, 216 / 2633 grant lines.
 
 ### Reset applies clean
 
@@ -723,13 +879,22 @@ disclosure_version · recorded_by ·
 opt_out_source · opt_out_evidence · opt_out_recorded_at · opt_out_recorded_by ·
 origin_project_id · created_at · updated_at            (19 columns)
 
+ studio_channel_consent_channel_kind_check     | CHECK (channel_kind = ANY (ARRAY['sms','email']))
  studio_channel_consent_opt_out_source_check   | CHECK (opt_out_source = ANY (ARRAY['verbal','written','web_form','inbound_sms','other']))
  studio_channel_consent_source_check           | CHECK (source = ANY (ARRAY['verbal','written','web_form','inbound_sms','other']))
  studio_channel_consent_status_check           | CHECK (status = ANY (ARRAY['not_asked','pending','granted','opted_out']))
- studio_contact_rules_channels_allowed_check   | CHECK (channels_allowed <@ ARRAY['mobile','office','dispatch','after_hours','email','ap_email','portal_311'])
- studio_contact_rules_channels_forbidden_check | CHECK (channels_forbidden <@ ARRAY['mobile','office','dispatch','after_hours','email','ap_email','portal_311'])
+ studio_contact_rules_channels_allowed_check   | CHECK (channels_allowed <@ ARRAY['mobile','office','dispatch','after_hours','email','ap_email','portal_311','sms'])
+ studio_contact_rules_channels_forbidden_check | CHECK (channels_forbidden <@ ARRAY['mobile','office','dispatch','after_hours','email','ap_email','portal_311','sms'])
  studio_contact_rules_subject_type_check       | CHECK (subject_type = ANY (ARRAY['person','company','engagement']))
 ```
+
+**EIGHT** names in the two rule vocabularies, not the seven this transcript
+printed until r10 (M2): the rule-only `sms` token landed in r4 (R4-M2, decision
+28) and the stale transcript was a printed CHECK the database contradicted.
+`studio_contact_channels.channel_kind` still holds exactly seven — the asymmetry
+is the point, and SQL block 25f holds it. The `channel_kind` CHECK on
+`studio_channel_consent` (`sms | email`) is the one the email door of decision
+27 turns on.
 
 ### SQL test
 
@@ -760,28 +925,46 @@ NOTICE:  21. the designated people are people, in this studio (R-AP): passed
 NOTICE:  22. the seat gate is on the refusal, not the verdict (r6 B6-1/M6-1): passed
 NOTICE:  23. the mirror keeps both dates (r6 M6-2): passed
 NOTICE:  24. the routed person is a person, in this studio (r6 M6-4): passed
-NOTICE:  25. the channel vocabulary is checked, both ways (r6 M6-5): passed
+NOTICE:  25. the channel vocabulary is checked, both ways (r6 M6-5), and
+         carries the rule-only `sms` token so "phone yes, text no" is
+         writable (r4 R4-M2): passed
 NOTICE:  26. no studio-side verdict lowers refusal_unanswered (r7 M7-1): passed
 NOTICE:  27. reconsent is evidence-only and re-callable (r7 M7-2), leaves the
          refusal's own evidence standing (r8 W4-M2), the seat carries the
-         refusal's own words too (r9 R5-M1), and a sourceless refusal is never
+         refusal's own words too (r9 R5-M1), a sourceless refusal is never
          given the studio's consent as its words (r6 R6-M1) — nor left standing
-         on the sibling seat (r8 R8-M1): passed
+         on the sibling seat (r8 R8-M1) — and a mirrored refusal never lends the
+         seat the GRANT's recorder, words or date (r9 R5-M2): passed
 NOTICE:  28. a studio-recorded refusal never speaks for a texted one, and the
          refusal keeps the date it arrived (r7 R7-M1): passed
-NOTICE:  29. a held card cannot change what it is or whose it is
-         (r8 R8-M2, R-AR): passed
+NOTICE:  29. a held card cannot change what it is or whose it is — including
+         the card a contact rule is filed against (r8 R8-M2, R-AR; r9 R5-M1):
+         passed
 NOTICE:  30. the fold picks the sibling that HOLDS the refusal, so a dateless
          portal refusal never erases the STOP's date or words — on the record
          or on the seats (r2 R2-M1): passed
+NOTICE:  30e. a grant's paperwork is never filed as the refusal's own words,
+         and the wordless refusal reaches both seats (r4 R4-M1): passed
+NOTICE:  30f. a STOP over a standing grant is recorded wordless, the grant's
+         paperwork stays on the consent side, and a real refusal keeps its
+         words (r10 M1): passed
+NOTICE:  31. a rule is filed under the noun its subject actually is (r8 F1): passed
+NOTICE:  32. a recorded refusal never speaks for the grant it stands beside
+         (r6 R6-M1): passed
+NOTICE:  33. a blank evidence field cannot empty the evidence set (r6 R6-M2): passed
+NOTICE:  34. an email refusal is recoverable by a fresh recorded consent and an
+         SMS one is not (r6 R6-M3): passed
 NOTICE:  All W1a assertions passed.
 ROLLBACK
 ```
 
-**31 blocks** (1–30 plus 16B; block 5's assertions live inside block 4's `DO`,
-which is why the transcript shows 30 notices and not 31). This transcript has
-been stale twice — it ended at block 17 while eleven more had shipped (r9
-R5-M2), and at block 27 while blocks 28 and 29 were passing (r2 R2-M2).
+**37 blocks** — 1–34 plus 16B, 30e and 30f — and **36 notices**, because block
+5's assertions live inside block 4's `DO`. This transcript has now been stale
+three times: it ended at block 17 while eleven more had shipped (r9 R5-M2), at
+block 27 while blocks 28 and 29 were passing (r2 R2-M2), and at block 30 while
+30e and 31–34 were passing and block 25's own notice had changed under it
+(r10 M2). The count is the check: `… | grep -c NOTICE` must read 37 (36 blocks
+plus the closing line).
 
 What it asserts: a studio member writes and reads an affiliation; a cross-studio
 pair is refused; a stranger studio sees none and cannot write one. Phones
@@ -849,7 +1032,11 @@ door's seat test asks the send gate's own question — `sms_consent_status =
 carrying a verdict without an `opt_out_at` no longer wipes a real dated refusal
 off every seat (23); `route_to_person_id` gets the same person-and-studio test
 as the three designations (24); and `channels_allowed` / `channels_forbidden`
-are held to the seven-name channel vocabulary in both directions (25). Blocks
+are held to the channel vocabulary in both directions — EIGHT names since r4
+R4-M2, the seven channel kinds plus the rule-only `sms` token, with 25e writing
+the fixture's "phone yes, text no" sentence on one line and 25f holding the
+asymmetry, a `studio_contact_channels` row with `channel_kind = 'sms'` still
+refused `23514` (25). Blocks
 26–27 are the r7/r8/r9 rounds: no studio-side verdict lowers
 `refusal_unanswered` — only the inbound rail's own write does (26, r7 M7-1); and
 `record_channel_reconsent()` is evidence-only, leaves the record at `opted_out`,
@@ -863,16 +1050,39 @@ the refusal the studio's own consent document (27i–27i5); block 3 carries r6
 R6-M2 — the refusing sibling's own `sms_opt_out_at` lands on the record, so the
 refusal's words and the refusal's date come off the same row (3c6).
 
+Blocks 30e, 30f and 31–34 close the list, and until the r10 re-take none of them
+appeared here. **30e** (r4 R4-M1): the fold never files a GRANT's paperwork as
+the refusal's own words when the seat's status still reads `granted` over an
+unanswered opt-out date — the date still lands, the words come out NULL, and the
+wordless refusal then reaches both seats through R-AQ's branch. **30f** (r10 M1)
+is the other shape and the commonest one: a seat with a recorded grant that
+later texted STOP. The record is minted wordless (30f3), the refusal keeps its
+date (30f2), and the grant's paperwork is not destroyed — 30f4 finds it on the
+record's CONSENT side where it belongs. 30f7 and 30f8 are the controls that keep
+the test a test: a refusal whose source says `inbound_sms`, and one a studio
+wrote down the day AFTER it happened, both keep every one of their four columns.
+**31** (r8 F1): a rule whose `subject_type` says `person` while `subject_id`
+names a company card is refused `rule_subject_kind_mismatch` — routed or not,
+which is the leg that was never inspected — and an `engagement` subject must
+exist in `project_parties`. **32** (r6 R6-M1): a recorded refusal writes none of
+the consent's five columns, so the grant it stands beside keeps its own 10DLC
+artifact. **33** (r6 R6-M2): a blank evidence string is a blank, not a value, so
+it cannot empty the evidence set. **34** (r6 R6-M3): an email refusal IS
+recoverable by the studio's own fully evidenced `granted`, which lowers
+`refusal_unanswered` and leaves `opt_out_at` and the refusal's words standing —
+while 34e/34e2 prove the identical two acts on SMS, and the
+reconsent-then-grant composition, are still refused.
+
 ### Deno tests
 
 ```
 $ deno test --no-check --allow-all --config supabase/functions/deno.json \
     supabase/functions/_shared/sms.test.ts supabase/functions/_tests/sms-inbound.test.ts
-ok | 71 passed | 0 failed (105ms)    # 36 in sms.test.ts, 35 in sms-inbound.test.ts
+ok | 80 passed | 0 failed (307ms)    # 38 in sms.test.ts, 42 in sms-inbound.test.ts
 
 $ deno test --no-check --allow-all --config supabase/functions/deno.json \
     supabase/functions/_tests/ supabase/functions/_shared/
-FAILED | 694 passed | 1 failed (3s)
+FAILED | 703 passed | 1 failed (3s)
   ./supabase/functions/_tests/stripe-rail.test.ts (uncaught error)
     error: (in promise) Error: supabaseKey is required.
 ```
@@ -918,6 +1128,18 @@ carries a send for a studio that never asked (a real outbound SMS before this),
 and with no party on the deferred row the phone-global reduction still refuses
 a STOP. Both failing directions were confirmed against the pre-fix code
 (2 failed) before the narrowing landed.
+
+**r7 second cycle / r10**: `_shared/sms.test.ts` — the last phone-global scan
+refuses on a failed read instead of answering `"unknown"` (R7-M2).
+`_tests/sms-inbound.test.ts` — a STOP over a standing written grant leaves the
+grant's `source` / `evidence` / `recorded_at` alone on the record (R7-M1); a
+STOP whose consent-record read fails, and one whose party read fails, are each
+answered 500 with `twilio_sid` released, and the retry completes them, while a
+STOP with every read clean still answers 200 (R7-M3); and **the two r10 cases**
+— a STOP writes `inbound_sms` / "Inbound STOP" / `recorded_at = now` /
+`recorded_by = null` over the grant's four columns on every seat while leaving
+`sms_consent_disclosure_version` alone, and an `UNSUBSCRIBE` stamps its own
+keyword on both the seats and the record rather than a generic "STOP".
 
 **r3**: `_shared/sms.test.ts` — with no record, an opted-out sibling party row
 **in the same studio** still blocks, another studio's does not, and with no
@@ -1067,11 +1289,22 @@ deploys.)
   says the record about to be minted is UNSENDABLE until the recipient's own
   YES/START (r1 review m14, r8 W4-M1, r9 R5-M2).
 
-  **The script was re-cut again for r2 R2-M1** and must be re-run from the
-  branch tip, not from a copy taken earlier in this wave: both of its pickers
-  now rank the refusing seats by the refusal's own facts — words, then date,
-  then row recency — and carry the group-wide `max(sms_opt_out_at)` fallback,
-  exactly as the function does. A dry run taken with the old picker prints
+  **The script was re-cut again for r2 R2-M1 and once more for r10 M1**, and
+  must be re-run from the branch tip, not from a copy taken earlier in this
+  wave: both of its pickers now rank the refusing seats by the refusal's own
+  facts — words, then date, then row recency — and carry the group-wide
+  `max(sms_opt_out_at)` fallback, exactly as the function does; and since r10
+  the WORDS leg is "this row's evidence could BE the refusal's" (`inbound_sms`,
+  or an evidence date no earlier than the refusal), not a bare status test. A
+  copy taken before r10 prints the studio's own kickoff paperwork in
+  `opt_out_source` / `opt_out_evidence` for every seat that held a grant and
+  then texted STOP — which on Strata is the commonest refusal there is — so the
+  operator would sign off a fold that is about to record those refusals as made
+  IN WRITING, months before they happened, by the member who recorded the grant.
+  Checked on the r10 fixture, the dry run and the fold agree row for row:
+  `+16125550504` comes back `opted_out / refusal_unanswered = t / opt_out_at
+  2025-12-03` with all four `opt_out_*` blank, which is exactly what
+  `backfill_channel_consent_from_parties()` then writes. A dry run taken with the old picker prints
   `opt_out_at`, `opt_out_source` and `opt_out_evidence` EMPTY for every studio
   whose dateless portal refusal happens to be the most recently touched seat on
   the number, so the operator reads "a refusal stands here and nothing is known
