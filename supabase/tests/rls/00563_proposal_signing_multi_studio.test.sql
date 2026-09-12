@@ -115,6 +115,19 @@ BEGIN
   ASSERT v_relationship IS NOT NULL,
     'FIXTURE: seeded proposal b0000000-…-0002 must carry a designer_client_id';
 
+  -- 00602 (hour tracking, HT-3-a ruled 2026-09-12) stamps projects.studio_id at
+  -- INSERT from a studio the lead designer OWNS, so the seeded projects for this
+  -- pair now anchor a studio and section 2 below would measure the activation
+  -- bridge's sibling-project PREFERENCE instead of 00317's order. Clear it for this
+  -- pair only, which restores the fixture shape this section was written against —
+  -- 00602's trigger is BEFORE INSERT only, so the UPDATE sticks (and 00563's own
+  -- discovery leaves it NULL too: this designer has more than one candidate studio
+  -- and the ambiguity arm is INSERT-only).
+  UPDATE public.projects SET studio_id = NULL
+   WHERE designer_id = 'a0000000-0000-0000-0000-000000000004'
+     AND client_id = 'a0000000-0000-0000-0000-000000000005'
+     AND studio_id IS NOT NULL;
+
   SELECT count(*) INTO v_anchored
     FROM public.projects
    WHERE designer_id = 'a0000000-0000-0000-0000-000000000004'

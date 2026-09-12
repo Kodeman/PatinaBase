@@ -117,9 +117,17 @@ VALUES ('a7200000-0000-4000-8000-0000000000d3', 'a7200000-0000-4000-8000-0000000
         'a7200000-0000-4000-8000-000000000003', 12000, CURRENT_DATE - 60,
         'a7200000-0000-4000-8000-000000000001');
 
-INSERT INTO projects (id, name, designer_id, created_by)
+-- studio_id is NAMED (HT-3-a step 1, the shape every project created since 00563
+-- carries). Without it the `UPDATE profiles SET is_designer = true` above — which
+-- fires 00295's fc_provision_studio_on_designer while she belongs to no
+-- organization — leaves her owning TWO studios whose owner seats carry the identical
+-- transaction timestamp, so HT-3-a's "oldest owner membership" key ties and the
+-- studio.id determinism backstop decides between a fixed uuid and a generated one.
+-- The live0 assert below would then be a coin flip rather than a measurement.
+INSERT INTO projects (id, name, designer_id, created_by, studio_id)
 VALUES ('a7200000-0000-4000-8000-0000000000e1', 'Unbilled House',
-        'a7200000-0000-4000-8000-000000000001', 'a7200000-0000-4000-8000-000000000001');
+        'a7200000-0000-4000-8000-000000000001', 'a7200000-0000-4000-8000-000000000001',
+        'a7200000-0000-4000-8000-0000000000a1');
 
 -- The vendor holds a roster seat (so they may author time) and nothing else.
 -- The designer deliberately gets NO project_team_members row — a seat of their
