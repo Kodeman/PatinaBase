@@ -66,13 +66,17 @@
 --     rail (00162), and printing a studio_channel_consent word there would
 --     claim a record that does not exist — and NULL on a contacts row that
 --     carries no number anywhere.
---   · paper_state reads the FIRM's paper for a person and the card's own for a
---     firm — COALESCE(company_id, id) — because a COI is the firm's and a
---     master licence is the person's (crm-model §2, direction §2.2 E10), and a
---     sole proprietor has no company_id so falls back to their own card.
---     R-A/C13/C24 (a lender or inspector prints no paper word at all) is a
---     DISPLAY rule and stays in the app: the view reports the fact, the room
---     decides whether the fact is owed.
+--   · paper_state is identity_paper_state(card, firm): the person's OWN paper
+--     AND their firm's, reduced worst-first, because a COI is the firm's and a
+--     master licence is the person's (crm-model §2, direction §2.2 E10,
+--     CS2-21) — both are facts about the same human and the worse one holds
+--     the gate. It was COALESCE(company_id, id), which consults the person's
+--     own card only when they have NO firm, so a holder_type='person' lapse
+--     was reportable on a sole proprietor and invisible on everybody else (r4
+--     MAJOR-2). A firm card answers with its own paper; `not_on_file` means
+--     neither holder has any paper at all. R-A/C13/C24 (a lender or inspector
+--     prints no paper word at all) is a DISPLAY rule and stays in the app: the
+--     view reports the fact, the room decides whether the fact is owed.
 --   · reach_state is direction §3.8's reach family, PD-12's order: a login is
 --     `account`, else a live unexpired field link on one of this identity's
 --     seats is `field_link`, else `on_paper`. The party branch asks that of
@@ -124,6 +128,26 @@
 --     the identity's PROFILE id claimed N seats and nested none; PR-c's own
 --     client_rep seat, stamped with the household member's login, reached it
 --     with one ordinary INSERT.
+--   · r4 MAJOR-2 — the paper word asks BOTH holders, through one formula
+--     (identity_paper_state()) called from all three sites. A person's own
+--     gating lapse was invisible on every reader whenever they carried a firm,
+--     which is the whole population holder_type='person' exists for. Closes
+--     carried MINOR-11 (three formulas for one word) with it.
+--   · r4 MAJOR-3 — identity_consent_status()'s number set moves into
+--     identity_phone_numbers(), SECURITY DEFINER and gated on
+--     is_active_studio_member(). The reduction is worst-first, so an
+--     RLS-invisible seat dropped its refusal and the word got MORE permissive:
+--     one ordinary organization_members.status='removed' flipped a Directory
+--     row from opted_out to granted over a record that still refuses the
+--     number, and that row is the send door party-profile-sheet.tsx:262/:742
+--     opens the composer on. The verdict is still read by
+--     channel_consent_status() under the caller's own RLS; only the number set
+--     is definer, and R-AY/R-AW holds — seats are read for phone_e164 alone.
+--   · r4 MAJOR-4 — the party branch's two consent DATES come off the record
+--     whose verdict WON the reduction (identity_consent_evidence()), not off
+--     the winning SEAT's number. The word was already the identity's after r3
+--     while the dates were still the seat's, so R-Q's one consent sentence
+--     composed "Written consent, 2 May 2025" over a human the record refuses.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -392,6 +416,172 @@ COMMENT ON FUNCTION public.reach_state_for_identity(uuid, text) IS
   'designer-only RLS (00283), so a co-member without that visibility reads '
   'on_paper where a link exists (00626).';
 
+-- ── identity_paper_state — the paper word over BOTH holders ───────────────
+-- compliance_state() answers for ONE holder card. Every reader asked it
+-- through COALESCE(company_id, card_id), which consults the person's own card
+-- only when they have NO firm — so a person-held paper was reportable on a
+-- sole proprietor and unreportable on everybody else, which is the entire
+-- population holder_type = 'person' was added for (00623:16-17, :174-176,
+-- CS2-21: "a COI is the firm's and a master licence is the person's").
+--
+-- Walked on the seeded fixture with one honest record change and no
+-- adversarial write (w1b final review r4 MAJOR-2): Luis Ochoa's own
+-- site_access-gating OSHA 30 card expires, compliance_state(his card) reads
+-- `lapsed`, compliance_state(his firm) reads `current`, and BOTH shipped
+-- readers printed `current` for him — on his Directory row and on his seat
+-- line. The gate this program built the site_access vocabulary for was held
+-- by a lapsed card and no surface in the room could say so.
+--
+-- So the paper word is asked of the IDENTITY: the person's own card AND their
+-- firm, reduced WORST-FIRST, the way identity_consent_status() reduces
+-- numbers. `not_on_file` is the weakest claim, not the worst one — a person
+-- holding no personal paper at all must not drag a firm's `current` down to
+-- `not_on_file` (C21/R-K: no paper is a different fact from a lapse) — so the
+-- order is lapsed, lapses_soon, current, and not_on_file only when neither
+-- holder has any paper at all.
+--
+-- ONE formula, called from all three sites (the party branch, the contacts
+-- branch and people_directory_seats), which is also carried MINOR-11's
+-- request: three copies of the paper word were three places for it to drift.
+-- SECURITY INVOKER, so studio_compliance_documents' member-only RLS stays the
+-- whole access rule and an outsider reads `not_on_file` — compliance_state()'s
+-- own posture (00623), unchanged.
+CREATE OR REPLACE FUNCTION public.identity_paper_state(
+  p_card_id    uuid,
+  p_company_id uuid
+)
+RETURNS text
+LANGUAGE sql
+STABLE
+SET search_path TO 'public'
+AS $$
+  WITH words AS (
+    SELECT public.compliance_state(p_card_id) AS w
+     WHERE p_card_id IS NOT NULL
+    UNION ALL
+    SELECT public.compliance_state(p_company_id) AS w
+     WHERE p_company_id IS NOT NULL
+       AND p_company_id IS DISTINCT FROM p_card_id
+  )
+  SELECT CASE
+           WHEN EXISTS (SELECT 1 FROM words WHERE w = 'lapsed')      THEN 'lapsed'
+           WHEN EXISTS (SELECT 1 FROM words WHERE w = 'lapses_soon') THEN 'lapses_soon'
+           WHEN EXISTS (SELECT 1 FROM words WHERE w = 'current')     THEN 'current'
+           ELSE 'not_on_file'
+         END;
+$$;
+
+REVOKE ALL ON FUNCTION public.identity_paper_state(uuid, uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.identity_paper_state(uuid, uuid)
+  TO authenticated, service_role;
+
+COMMENT ON FUNCTION public.identity_paper_state(uuid, uuid) IS
+  'direction §3.8''s paper word for one IDENTITY rather than for one holder '
+  'card: compliance_state() over the person''s OWN card and over their firm, '
+  'reduced worst-first — lapsed, else lapses_soon, else current, else '
+  'not_on_file when neither holder has any paper at all, because no paper is a '
+  'different fact from a lapse (C21/R-K) and a person holding nothing '
+  'personally must not drag their firm''s word down. Exists because every '
+  'reader asked compliance_state(COALESCE(company_id, card_id)), which '
+  'consults a person''s own card only when they have no firm — so a '
+  'holder_type=''person'' lapse (a master licence, an OSHA card: the reason '
+  'the column exists, CS2-21) was invisible on everyone who carries a firm '
+  '(w1b final review r4 MAJOR-2). Called from all three sites, so the paper '
+  'word has ONE formula (carried MINOR-11). For a firm card pass the firm as '
+  'p_card_id. SECURITY INVOKER — studio_compliance_documents'' member-only RLS '
+  'is the access rule, so an outsider reads not_on_file (00626).';
+
+-- ── identity_phone_numbers — every number one identity carries ────────────
+-- The number set identity_consent_status() reduces over, lifted into its own
+-- SECURITY DEFINER function (w1b final review r4 MAJOR-3).
+--
+-- The reduction was SECURITY INVOKER over a project_parties scan, and the
+-- reduction is WORST-FIRST: a seat the caller cannot see contributes no
+-- number, and REMOVING a number can only make the printed word MORE
+-- PERMISSIVE. So the function's own banner and COMMENT called it "fail-closed"
+-- while RLS made it fail OPEN, and it was walked with an ordinary studio act:
+-- the designer of record on one job is set to organization_members.status =
+-- 'removed', and the owner's Directory row for the same rolodex card flips
+-- from `opted_out` to `granted` while channel_consent_status() still returns
+-- `opted_out` for the number and the seat line that would have argued is gone
+-- with it. The misled reader is a send door — party-profile-sheet.tsx:262
+-- computes `granted` from this word and :742 opens the text composer on it —
+-- so the studio was invited to text a number the rail refuses (G-3).
+--
+-- The INVOKER degrade is only safe where the failure direction is safe, which
+-- is true of reach_state (`on_paper`) and of paper_state (`not_on_file`) and
+-- is not true of consent. So the NUMBER SET is definer and GATED: nothing is
+-- returned unless the caller is an active member of p_organization_id, which
+-- is 00594's channel_consent_status() posture stated as a predicate rather
+-- than left to RLS, and is the same population the contacts branch's own WHERE
+-- clause already requires. The VERDICT is still read by
+-- channel_consent_status() under the CALLER's own RLS, so this adds no
+-- consent-word oracle: it answers "which numbers is this human reachable on,
+-- inside my studio", for a member of that studio.
+--
+-- Record-only (R-AY/R-AW): the seats are read for their phone_e164 ONLY. No
+-- frozen project_parties.sms_consent_* column is read here or anywhere in this
+-- file — the consent VERDICT has exactly one source, studio_channel_consent.
+--
+-- Cross-studio, precisely: party_identity_key() keys a CARDED human on their
+-- studio-scoped card id, so a contacts-branch identity can only collect its
+-- own studio's seats. An UNCARDED identity keyed on a login, a phone or an
+-- email may hold seats in another studio, and those seats' numbers do enter
+-- the set — deliberately, because every verdict is still resolved at
+-- p_organization_id (R-AK: one studio's record, never another's), so such a
+-- number can only ADD `not_asked`, never borrow a foreign `granted`. Widening
+-- the set can only make the word more restrictive, which is the direction
+-- fail-closed requires; narrowing it is the defect this fix closes.
+CREATE OR REPLACE FUNCTION public.identity_phone_numbers(
+  p_organization_id uuid,
+  p_identity_key    text,
+  p_card_phone_e164 text
+)
+RETURNS SETOF text
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+  SELECT n.v FROM (
+    SELECT NULLIF(btrim(COALESCE(p_card_phone_e164, '')), '') AS v
+     WHERE public.is_active_studio_member(p_organization_id)
+    UNION
+    SELECT NULLIF(btrim(COALESCE(pp.phone_e164, '')), '')
+      FROM public.project_parties pp
+     WHERE public.is_active_studio_member(p_organization_id)
+       AND p_identity_key IS NOT NULL
+       AND public.party_identity_key(
+             pp.studio_contact_id, pp.profile_id,
+             pp.phone_e164, pp.email, pp.id
+           ) = p_identity_key
+  ) n
+  WHERE n.v IS NOT NULL;
+$$;
+
+REVOKE ALL ON FUNCTION public.identity_phone_numbers(uuid, text, text)
+  FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.identity_phone_numbers(uuid, text, text)
+  TO authenticated, service_role;
+
+COMMENT ON FUNCTION public.identity_phone_numbers(uuid, text, text) IS
+  'Every SMS number one identity carries: the card''s phone_e164 plus the '
+  'phone_e164 of every project_parties seat whose party_identity_key() is this '
+  'key. SECURITY DEFINER, GATED on is_active_studio_member(p_organization_id) '
+  '— a non-member gets nothing. Definer because the set feeds a WORST-FIRST '
+  'consent reduction, where a seat the caller cannot see used to drop out and '
+  'make the printed word MORE PERMISSIVE: an ordinary '
+  'organization_members.status = ''removed'' flipped a Directory row from '
+  'opted_out to granted over a record that still refused the number, and that '
+  'row is a send door (w1b final review r4 MAJOR-3). Returns NUMBERS, never a '
+  'verdict: channel_consent_status() still reads studio_channel_consent under '
+  'the CALLER''s RLS, so this is no consent oracle. Record-only (R-AY/R-AW) — '
+  'seats are read for phone_e164 alone, never for a frozen sms_consent_* '
+  'column. An uncarded identity (keyed on a login, a phone or an email) may '
+  'contribute a seat from another studio; every verdict is still resolved at '
+  'p_organization_id (R-AK), so such a number can only add `not_asked` and '
+  'make the word more restrictive, never borrow a foreign permission (00626).';
+
 -- ── identity_consent_status — the consent word over every number ──────────
 -- The contacts branch read channel_consent_status() off the CARD's
 -- phone_e164 alone. v4 moves every carded human to that branch, so a recorded
@@ -426,10 +616,12 @@ COMMENT ON FUNCTION public.reach_state_for_identity(uuid, text) IS
 -- whole identity rather than of the card alone.
 --
 -- One studio: every number is read at p_organization_id, the card's own org
--- (R-AK — the reduction is scoped to the resolving studio, never across
--- tenants), so a seat on another studio's project can neither contribute nor
--- borrow a word. SECURITY INVOKER, so project_parties' and
--- studio_channel_consent's own RLS decide what the caller may see.
+-- (R-AK — a verdict is always the resolving studio's own, never another
+-- tenant's). The NUMBER SET is identity_phone_numbers(), a gated SECURITY
+-- DEFINER function, because a worst-first reduction over an RLS-filtered scan
+-- fails OPEN — see that function's banner (w1b final review r4 MAJOR-3). This
+-- one stays SECURITY INVOKER: studio_channel_consent's member-only RLS is
+-- still what decides whether the caller may read the record at all.
 CREATE OR REPLACE FUNCTION public.identity_consent_status(
   p_organization_id uuid,
   p_identity_key    text,
@@ -440,23 +632,12 @@ LANGUAGE sql
 STABLE
 SET search_path TO 'public'
 AS $$
-  WITH numbers AS (
-    SELECT NULLIF(btrim(COALESCE(p_card_phone_e164, '')), '') AS v
-    UNION
-    SELECT NULLIF(btrim(COALESCE(pp.phone_e164, '')), '')
-      FROM public.project_parties pp
-     WHERE p_identity_key IS NOT NULL
-       AND public.party_identity_key(
-             pp.studio_contact_id, pp.profile_id,
-             pp.phone_e164, pp.email, pp.id
-           ) = p_identity_key
-  ),
-  verdicts AS (
+  WITH verdicts AS (
     SELECT COALESCE(
              public.channel_consent_status(p_organization_id, 'sms', n.v),
              'not_asked') AS word
-      FROM numbers n
-     WHERE n.v IS NOT NULL
+      FROM public.identity_phone_numbers(
+             p_organization_id, p_identity_key, p_card_phone_e164) AS n(v)
   )
   SELECT CASE
            WHEN NOT EXISTS (SELECT 1 FROM verdicts)                        THEN NULL
@@ -484,8 +665,86 @@ COMMENT ON FUNCTION public.identity_consent_status(uuid, text, text) IS
   'Record-only (R-AY): the frozen project_parties.sms_consent_* columns are '
   'not read. Exists because v4 moved every carded human to the Directory''s '
   'contacts branch, which read the CARD''s number alone, so a refusal recorded '
-  'on the number a seat carries left the face (w1b final review r2 MAJOR-2) '
-  '(00626).';
+  'on the number a seat carries left the face (w1b final review r2 MAJOR-2). '
+  'The number set comes from identity_phone_numbers(), gated SECURITY DEFINER, '
+  'because this reduction read the seats under the caller''s own RLS and a '
+  'worst-first reduction over a filtered set fails OPEN — an invisible seat '
+  'dropped its refusal and the row printed `granted` (r4 MAJOR-3). Its dates '
+  'are identity_consent_evidence()''s, off the same deciding record (00626).';
+
+-- ── identity_consent_evidence — the DATES of the record that decided ──────
+-- The word and its two dates have to come off the SAME number, and on the
+-- party branch they did not (w1b final review r4 MAJOR-4). r3 lifted the word
+-- above the DISTINCT ON and keyed it on the identity; the LEFT JOIN supplying
+-- meta.sms_consented_at / meta.sms_opt_out_at still joined
+-- studio_channel_consent on the WINNING SEAT's phone_e164 and was projected
+-- beside it. For exactly the population the r3 fix exists for — an uncarded
+-- identity keyed on a login or an email, holding two seats with two numbers —
+-- the three values could not all be true: the walked row printed
+-- consent_status `opted_out` with sms_consented_at 2025-05-02 and
+-- sms_opt_out_at NULL, while the record said one number opted out on
+-- 2025-12-03 and the other was granted on 2025-05-02. R-Q fixes ONE consent
+-- sentence for every surface — "<Source> consent, <d Mon yyyy>, on the
+-- <project>." — and composed from that row it read "Written consent, 2 May
+-- 2025" for a human the record refuses, with the refusal's own date nowhere on
+-- the row.
+--
+-- So the dates are taken from the record whose verdict WON the reduction. No
+-- ordering and no fold is restated here: the winning word is
+-- identity_consent_status()'s, each number's verdict is
+-- channel_consent_status()'s (R-AS/R-AY — one home for the rule), and this
+-- picks the record among the identity's numbers whose verdict equals the
+-- printed word, most recently updated first so two records carrying the same
+-- word answer deterministically. No row when the word is `not_asked` because a
+-- number has NO record: the room then prints R-V's "no record" line rather
+-- than a date it cannot source.
+CREATE OR REPLACE FUNCTION public.identity_consent_evidence(
+  p_organization_id uuid,
+  p_identity_key    text,
+  p_card_phone_e164 text
+)
+RETURNS TABLE (
+  channel_value text,
+  consented_at  timestamptz,
+  opt_out_at    timestamptz
+)
+LANGUAGE sql
+STABLE
+SET search_path TO 'public'
+AS $$
+  SELECT scc.channel_value, scc.consented_at, scc.opt_out_at
+    FROM public.identity_phone_numbers(
+           p_organization_id, p_identity_key, p_card_phone_e164) AS n(v)
+    JOIN public.studio_channel_consent scc
+      ON scc.organization_id = p_organization_id
+     AND scc.channel_kind    = 'sms'
+     AND scc.channel_value   = n.v
+   WHERE public.channel_consent_status(p_organization_id, 'sms', n.v)
+         IS NOT DISTINCT FROM public.identity_consent_status(
+           p_organization_id, p_identity_key, p_card_phone_e164)
+   ORDER BY scc.updated_at DESC, scc.channel_value
+   LIMIT 1;
+$$;
+
+REVOKE ALL ON FUNCTION public.identity_consent_evidence(uuid, text, text)
+  FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.identity_consent_evidence(uuid, text, text)
+  TO authenticated, service_role;
+
+COMMENT ON FUNCTION public.identity_consent_evidence(uuid, text, text) IS
+  'The consented_at / opt_out_at of the studio_channel_consent record that '
+  'DECIDED identity_consent_status() for this identity — the number whose '
+  'verdict won the worst-first reduction — plus that record''s channel_value. '
+  'At most one row; none at all when the winning word came from a number with '
+  'no record, so the room falls back to R-V''s "no record" line. Exists '
+  'because the party branch''s word was the identity''s while its two dates '
+  'were still joined on the WINNING SEAT''s number, so R-Q''s one consent '
+  'sentence composed a dated consent claim over a recorded refusal (w1b final '
+  'review r4 MAJOR-4). Restates no rule: the word is '
+  'identity_consent_status()''s, each number''s verdict is '
+  'channel_consent_status()''s (R-AS/R-AY), the number set is '
+  'identity_phone_numbers()''s. SECURITY INVOKER — the record is read under '
+  'the caller''s own member RLS (00626).';
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- 3. people_directory v4
@@ -661,10 +920,12 @@ UNION ALL
 -- on a real seat; seat_count is what says how many there are.
 --
 -- The two consent DATES now come off studio_channel_consent (00594 §5.3's
--- debt to W1b) through a LEFT JOIN on the record's own primary key, resolved
--- by the ONE resolver project_consent_org(). The VERDICT still comes from
--- channel_consent_status(), which folds refusal_unanswered — a rule with one
--- home (R-AY); only the raw dates are joined.
+-- debt to W1b) — off the record whose verdict DECIDED the printed word,
+-- through identity_consent_evidence(), resolved at the org the ONE resolver
+-- project_consent_org() names. They were joined on the winning SEAT's number
+-- while the word was the identity's, which is r4 MAJOR-4. The VERDICT still
+-- comes from channel_consent_status(), which folds refusal_unanswered — a rule
+-- with one home (R-AY); only the raw dates are read beside it.
 SELECT
   q.id,
   q.party_kind,
@@ -698,7 +959,11 @@ SELECT
   -- the IDENTITY's links, not the winning seat's (r2 MAJOR-3)
   public.reach_state_for_identity(q.profile_id, q.identity_key),
   q.consent_word,
-  public.compliance_state(q.company_id),
+  -- the identity's own card AND its firm, worst-first (r4 MAJOR-2). This
+  -- branch emits only UNSTAMPED seats, so q.studio_contact_id is NULL by
+  -- construction and the firm is the whole answer here; the call shape is the
+  -- one the other two sites use, so the paper word has one formula.
+  public.identity_paper_state(q.studio_contact_id, q.company_id),
   public.contact_rule_summary('engagement', q.id),
   public.identity_seat_count(q.identity_key)
 -- The consent word belongs to the IDENTITY, not to whichever seat won the
@@ -722,12 +987,22 @@ SELECT
 -- 00594's party-branch shape, where status_raw and meta.sms_consent_status
 -- have always carried a word rather than NULL; the contacts branch's
 -- NULL-means-no-number-anywhere is its own rule (R-V).
+-- The two consent DATES belong to the number whose verdict WON that
+-- reduction, not to the winning seat's number, which is what the LEFT JOIN
+-- inside q0 used to supply while the word above was already the identity's
+-- (w1b final review r4 MAJOR-4). identity_consent_evidence() returns the
+-- deciding record's own consented_at / opt_out_at, or no row at all when the
+-- word came from a number with no record — in which case both dates are NULL
+-- and the room prints R-V's "no record" line rather than a date it cannot
+-- source. One LATERAL, evaluated once per emitted identity like the word.
 FROM (
   SELECT
     q0.*,
     COALESCE(public.identity_consent_status(
       public.project_consent_org(q0.project_id),
-      q0.identity_key, NULL), 'not_asked')    AS consent_word
+      q0.identity_key, NULL), 'not_asked')    AS consent_word,
+    ev.consented_at                           AS record_consented_at,
+    ev.opt_out_at                             AS record_opt_out_at
   FROM (
     SELECT DISTINCT ON (
       public.party_identity_key(pp.studio_contact_id, pp.profile_id,
@@ -740,8 +1015,6 @@ FROM (
       pp.phone_e164, pp.show_to_client, pp.studio_contact_id, pp.stage,
       pp.on_site_from, pp.on_site_to, pp.company_id,
       pj.name AS project_name,
-      scc.consented_at                          AS record_consented_at,
-      scc.opt_out_at                            AS record_opt_out_at,
       (CASE
          WHEN pj.designer_id      = (select auth.uid())
            OR pj.lead_designer_id = (select auth.uid())
@@ -750,10 +1023,6 @@ FROM (
        END)::text                               AS scope
     FROM public.project_parties pp
     JOIN public.projects pj ON pj.id = pp.project_id
-    LEFT JOIN public.studio_channel_consent scc
-      ON scc.organization_id = public.project_consent_org(pp.project_id)
-     AND scc.channel_kind    = 'sms'
-     AND scc.channel_value   = pp.phone_e164
     WHERE public.party_kind_in_directory(pp.party_kind)
       AND pp.studio_contact_id IS NULL
       AND ( public.is_studio_comember(pj.designer_id)
@@ -764,6 +1033,8 @@ FROM (
                                 pp.phone_e164, pp.email, pp.id),
       pp.updated_at DESC, pp.id
   ) q0
+  LEFT JOIN LATERAL public.identity_consent_evidence(
+    public.project_consent_org(q0.project_id), q0.identity_key, NULL) ev ON true
 ) q
 
 UNION ALL
@@ -855,7 +1126,12 @@ SELECT
   -- every number this identity carries, worst-first — the card's AND its
   -- seats' (r2 MAJOR-2). NULL only when there is no number anywhere.
   public.identity_consent_status(sc.organization_id, sc.id::text, sc.phone_e164),
-  public.compliance_state(COALESCE(sc.company_id, sc.id)),
+  -- the card's OWN paper AND its firm's, worst-first (r4 MAJOR-2). It was
+  -- COALESCE(company_id, id), which asks the person's own card only when they
+  -- have no firm — so a person-held lapse, the reason holder_type='person'
+  -- exists, was invisible on everyone who carries one. A firm card passes
+  -- itself as the card and its own paper is the answer.
+  public.identity_paper_state(sc.id, sc.company_id),
   public.contact_rule_summary(sc.entity_kind, sc.id),
   public.identity_seat_count(sc.id::text)
 FROM public.studio_contacts sc
@@ -881,9 +1157,10 @@ COMMENT ON VIEW public.people_directory IS
   'carries, the card''s and its seats'', by identity_consent_status(); NULL on '
   'the client/lead/maker/team branches, whose SMS permission is '
   'profiles.sms_opt_in on a different rail), paper_state '
-  '(compliance_state(COALESCE(company_id, id)) — the firm''s paper for a '
-  'person, the card''s own for a firm and for a sole proprietor; R-A/C13''s '
-  '"no paper word for a lender or inspector" is a DISPLAY rule and stays in '
+  '(identity_paper_state(card, firm) — the person''s OWN paper AND their '
+  'firm''s, worst-first, because a COI is the firm''s and a master licence is '
+  'the person''s; R-A/C13''s "no paper word for a lender or inspector" is a '
+  'DISPLAY rule and stays in '
   'the app), contact_rule_summary (E7 as one line, PR-e/R-S) and seat_count. '
   'v6 (00589): PHONE ONLY is profile-first on the client and lead branches — '
   'COALESCE(NULLIF(btrim(profiles.phone), ''''), '
@@ -908,7 +1185,13 @@ COMMENT ON VIEW public.people_directory IS
   'rather than identity_seat_count() keyed on a PROFILE id, because person_id '
   'there is a designer_clients / leads / vendors / project_team_members id '
   'that people_directory_seats.person_id can never equal — the row claimed N '
-  'seats and nested none (migrations MAJOR-1).';
+  'seats and nested none (migrations MAJOR-1). w1b final review r4: '
+  'paper_state asks BOTH holders through one formula, identity_paper_state() '
+  '(MAJOR-2); the consent reduction''s number set is the gated definer '
+  'identity_phone_numbers(), because an RLS-invisible seat dropped its refusal '
+  'and softened the word (MAJOR-3); and the party branch''s two consent DATES '
+  'come from identity_consent_evidence() — the record whose verdict won — '
+  'instead of from the winning seat''s number (MAJOR-4).';
 
 GRANT SELECT ON public.people_directory TO authenticated;
 
@@ -988,7 +1271,10 @@ SELECT
     public.project_consent_org(pp.project_id),
     'sms', pp.phone_e164), 'not_asked')                          AS consent_status,
   public.reach_state_for(pp.profile_id, NULL, pp.id)             AS reach_state,
-  public.compliance_state(COALESCE(pp.company_id, pp.studio_contact_id)) AS paper_state,
+  -- the stamped card's OWN paper AND the seat's firm, worst-first (r4
+  -- MAJOR-2): it was COALESCE(company_id, studio_contact_id), so a person-held
+  -- lapse never reached a seat line for anyone who carries a firm.
+  public.identity_paper_state(pp.studio_contact_id, pp.company_id) AS paper_state,
   public.contact_rule_summary('engagement', pp.id)               AS contact_rule_summary,
   pp.updated_at                                                  AS updated_at,
   (CASE
@@ -1015,7 +1301,10 @@ COMMENT ON VIEW public.people_directory_seats IS
   'is this human seated" is a different question from "who is in the six '
   'chips" and PR-c''s client_rep seat must appear under the household '
   'member''s card. consent_status is the RECORD''s verdict (R-AY); paper_state '
-  'is the seat''s firm, else the stamped card; both degrade to the caller''s '
+  'is identity_paper_state(stamped card, firm) — the person''s own paper AND '
+  'the seat''s firm, worst-first, since r4 MAJOR-2 found a person-held lapse '
+  'invisible behind COALESCE for everyone who carries a firm; both degrade to '
+  'the caller''s '
   'own RLS. Stage, the window, the access mode and the warranty are the seat''s '
   'own facts (00624) and PR-p says they print HERE, never as a person-level '
   'column (00626).';

@@ -1,0 +1,36 @@
+BEGIN
+=== who the outsider is (resolved as postgres, before any role switch) ===
+               outsider               |             their_studio             | role  
+--------------------------------------+--------------------------------------+-------
+ cf100000-0000-4000-8000-000000000001 | cf120000-0000-4000-8000-000000000001 | owner
+(1 row)
+
+              set_config              
+--------------------------------------
+ cf100000-0000-4000-8000-000000000001
+(1 row)
+
+SET
+                                 set_config                                 
+----------------------------------------------------------------------------
+ {"sub" : "cf100000-0000-4000-8000-000000000001", "role" : "authenticated"}
+(1 row)
+
+              acting_as               | member_of_the_seed_studio 
+--------------------------------------+---------------------------
+ cf100000-0000-4000-8000-000000000001 | f
+(1 row)
+
+=== the seed studio, asked by that outsider ===
+ numbers_pulled | consent_word | paper_word  | evidence_rows | directory_rows_visible | seat_rows_visible 
+----------------+--------------+-------------+---------------+------------------------+-------------------
+              0 |              | not_on_file |             0 |                      0 |                 0
+(1 row)
+
+=== and their OWN studio still answers, so the gate is a gate and not a wall ===
+ own_studio_card_number_echoed 
+-------------------------------
+                             1
+(1 row)
+
+ROLLBACK
