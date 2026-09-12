@@ -50,11 +50,17 @@
 --      authority, and the check has to sit where the portal cannot be
 --      bypassed — PostgREST is a writer too.
 --
--- RLS: is_studio_comember() via the project (project_party_designer(), 00592),
--- matching project_parties' own posture (00584:884-921). The new resolver
--- project_party_org() answers the org question through the ONE resolver
--- project_consent_org() — close-review r1 MAJOR-1's lesson: an inlined copy
--- of a definer lookup inside an invoker context is a different function.
+-- RLS: is_active_studio_member(project_party_org(engagement_id)) AND
+-- is_studio_comember() via the project (project_party_designer(), 00592).
+-- project_parties' own posture is the co-member leg alone (00584:884-921), and
+-- that leg is satisfied by sharing ANY active organization with the designer
+-- of record — so on this table, which carries scope and the money THRESHOLD
+-- beside it, a second studio the designer also works for read every grant
+-- (w1b final review r5 MAJOR-3). The tenant conjunct comes first. The new
+-- resolver project_party_org() answers the org question through the ONE
+-- resolver project_consent_org() — close-review r1 MAJOR-1's lesson: an
+-- inlined copy of a definer lookup inside an invoker context is a different
+-- function.
 --
 -- Adds GRANT/REVOKE → regenerate seed/00-legacy-grants.sql after this
 -- migration (python3 scripts/generate-legacy-grants.py).
@@ -344,6 +350,12 @@ COMMENT ON TABLE public.project_party_authority IS
   'key". PR-n gates the writers: the lead designer may set any scope except '
   'money and draw_certify, which need an owner or admin of the studio, '
   'enforced in the INSERT/UPDATE policies because PostgREST is a writer too. '
+  'Every policy is tenant-scoped FIRST — is_active_studio_member('
+  'project_party_org(engagement_id)) beside the co-member leg — because '
+  'is_studio_comember(designer) is true whenever the caller shares ANY active '
+  'organization with the designer of record, so a second studio that designer '
+  'also works for read every grant and its money threshold (w1b final review '
+  'r5 MAJOR-3). '
   'PR-t: a phone shows the yes or no, the figure only on the desk (00624).';
 
 COMMENT ON COLUMN public.project_party_authority.threshold_cents IS
@@ -426,6 +438,14 @@ CREATE TRIGGER assert_party_authority_copy_to_trg
   FOR EACH ROW EXECUTE FUNCTION public.assert_party_authority_copy_to();
 
 -- ── RLS: the project's studio reads and writes; PR-n narrows two scopes ─────
+-- TENANT FIRST, then the designer (w1b final review r5 MAJOR-3).
+-- is_studio_comember(p_owner) is true whenever the caller shares ANY active
+-- organization with that owner, so the designer leg alone handed every
+-- authority grant — scope, and the money THRESHOLD beside it — to a second
+-- studio the designer of record also works for. project_party_org(engagement)
+-- is project_consent_org(pp.project_id), the one org resolver (00594), and is
+-- already the argument PR-n's admin leg uses below, so the table now answers
+-- to exactly one studio on both legs.
 ALTER TABLE public.project_party_authority ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS project_party_authority_studio_select
@@ -433,7 +453,10 @@ DROP POLICY IF EXISTS project_party_authority_studio_select
 CREATE POLICY project_party_authority_studio_select
   ON public.project_party_authority FOR SELECT
   TO authenticated
-  USING (public.is_studio_comember(public.project_party_designer(engagement_id)));
+  USING (
+    public.is_active_studio_member(public.project_party_org(engagement_id))
+    AND public.is_studio_comember(public.project_party_designer(engagement_id))
+  );
 
 -- PR-n: the principal by default; the lead designer may set a grant whose
 -- scope excludes money and draw certification. A wrong grant silently over-
@@ -444,7 +467,8 @@ CREATE POLICY project_party_authority_studio_insert
   ON public.project_party_authority FOR INSERT
   TO authenticated
   WITH CHECK (
-    public.is_studio_comember(public.project_party_designer(engagement_id))
+    public.is_active_studio_member(public.project_party_org(engagement_id))
+    AND public.is_studio_comember(public.project_party_designer(engagement_id))
     AND (
       scope NOT IN ('money', 'draw_certify')
       OR public.is_org_admin_or_owner(public.project_party_org(engagement_id))
@@ -457,14 +481,16 @@ CREATE POLICY project_party_authority_studio_update
   ON public.project_party_authority FOR UPDATE
   TO authenticated
   USING (
-    public.is_studio_comember(public.project_party_designer(engagement_id))
+    public.is_active_studio_member(public.project_party_org(engagement_id))
+    AND public.is_studio_comember(public.project_party_designer(engagement_id))
     AND (
       scope NOT IN ('money', 'draw_certify')
       OR public.is_org_admin_or_owner(public.project_party_org(engagement_id))
     )
   )
   WITH CHECK (
-    public.is_studio_comember(public.project_party_designer(engagement_id))
+    public.is_active_studio_member(public.project_party_org(engagement_id))
+    AND public.is_studio_comember(public.project_party_designer(engagement_id))
     AND (
       scope NOT IN ('money', 'draw_certify')
       OR public.is_org_admin_or_owner(public.project_party_org(engagement_id))
@@ -477,7 +503,8 @@ CREATE POLICY project_party_authority_studio_delete
   ON public.project_party_authority FOR DELETE
   TO authenticated
   USING (
-    public.is_studio_comember(public.project_party_designer(engagement_id))
+    public.is_active_studio_member(public.project_party_org(engagement_id))
+    AND public.is_studio_comember(public.project_party_designer(engagement_id))
     AND (
       scope NOT IN ('money', 'draw_certify')
       OR public.is_org_admin_or_owner(public.project_party_org(engagement_id))

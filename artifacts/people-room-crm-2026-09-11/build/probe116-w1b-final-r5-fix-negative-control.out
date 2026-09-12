@@ -1,0 +1,84 @@
+Pager usage is off.
+BEGIN
+=== the side studio this run resolved (minted at seed time) ===
+               side_org               | side_org_name 
+--------------------------------------+---------------
+ c8f16427-2e34-43dc-a9f9-7b0b9efbb637 | Leah Hartwell
+(1 row)
+
+INSERT 0 1
+INSERT 0 0
+INSERT 0 1
+INSERT 0 1
+=== the records, as postgres ===
+           organization_id            | channel_value |  status   |  verdict  
+--------------------------------------+---------------+-----------+-----------
+ b0000000-0000-0000-0000-000000000001 | +16125550112  | opted_out | opted_out
+ b0000000-0000-0000-0000-000000000001 | +16125550219  | opted_out | opted_out
+(2 rows)
+
+SET
+SET
+=== the side-studio member: co-member of the Local Dev designer, NOT a member of Local Dev Studio ===
+ comember_of_the_designer | member_of_local_dev_studio 
+--------------------------+----------------------------
+ t                        | f
+(1 row)
+
+=== MAJOR-1: the seat rows they read of Local Dev Studio (was 31) ===
+ seat_rows_they_read 
+---------------------
+                   0
+(1 row)
+
+ party_branch_directory_rows 
+-----------------------------
+                          11
+(1 row)
+
+ display_name | phone_e164 | consent_status 
+--------------+------------+----------------
+(0 rows)
+
+=== MAJOR-3: the sensitive objects (was 1 card / 11 grants) ===
+                o                 | count 
+----------------------------------+-------
+ studio_compliance_documents      |     0
+ people_directory contacts branch |     0
+ project_party_authority          |     0
+ project_site_access_cards        |     0
+(4 rows)
+
+=== the site access card itself (was the lockbox version, the alarm account, six lines) ===
+ project_id | lockbox_version | alarm_ref 
+------------+-----------------+-----------
+(0 rows)
+
+=== can they WRITE, too? (an UPDATE landed on 1 row before the fix) ===
+psql:probe116-w1b-final-r5-fix-negative-control.sql:91: NOTICE:  UPDATE landed on 0 row(s)
+DO
+=== THE POSITIVE CONTROL: the OWNER of Local Dev Studio still reads all of it, refusal included ===
+RESET
+SET
+SET
+             o             | count 
+---------------------------+-------
+ people_directory_seats    |    31
+ project_party_authority   |    11
+ project_site_access_cards |     1
+ people_directory          |    62
+(4 rows)
+
+  display_name   |  phone_e164  | consent_status 
+-----------------+--------------+----------------
+ Pete Rusk       | +16125550112 | opted_out
+ Pete Rusk       | +16125550112 | opted_out
+ Rivera Finishes | +16125550219 | opted_out
+(3 rows)
+
+  lockbox_version   |           alarm_ref           
+--------------------+-------------------------------
+ Lockbox, version 3 | Sentry Alarm, account 88-4412
+(1 row)
+
+ROLLBACK
