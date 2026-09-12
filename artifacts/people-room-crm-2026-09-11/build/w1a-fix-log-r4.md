@@ -321,3 +321,225 @@ mirror's suppression is about sending, not work — the narrow release plus the
 widened YES party write), the two file-table rows, the §1 inbound-rail
 paragraph, the SQL-block narrative, and the prod-fold note about re-running the
 backfill.
+
+---
+
+# W1a fix log — the W4 round (W4-M1, W4-M2)
+
+Appended to this file per the round brief ("append a section to
+`w1a-fix-log-r4.md` per finding"); the findings are the two MAJORs in
+`w1a-review-r4-migrations.md`. Scope: exactly those two. Nothing else in the
+wave was touched — the four MINORs in that review (W4-m3 … W4-m6) are
+deliberately untouched.
+
+Local stack only — no `supabase db push`, no `supabase functions deploy`, no
+Strata contact. `ls apps/designer-portal/.env.local` → missing (exit 2), so
+nothing in this worktree points at prod.
+
+---
+
+## W4-M1 — the fold read the refusal off the winning row
+
+**What changed.** `supabase/migrations/00594_studio_channel_consent.sql`, the
+`backfill_channel_consent_from_parties()` CTE chain. A new `refusal` CTE sits
+beside `ranked` and asks the refusal question of **every** seat in the
+`(org, phone_e164)` group:
+
+```sql
+  refusal AS (
+    SELECT org, phone_e164,
+           sms_consent_source      AS opt_out_source,
+           sms_consent_evidence    AS opt_out_evidence,
+           sms_consent_recorded_at AS opt_out_recorded_at,
+           sms_consent_recorded_by AS opt_out_recorded_by
+      FROM (
+        SELECT party_org.*,
+               ROW_NUMBER() OVER (
+                 PARTITION BY org, phone_e164
+                 ORDER BY COALESCE(sms_opt_out_at, sms_consent_recorded_at,
+                                   updated_at) DESC NULLS LAST
+               ) AS rrn
+          FROM party_org
+         WHERE org IS NOT NULL
+           AND (sms_consent_status = 'opted_out'
+                OR (sms_opt_out_at IS NOT NULL
+                    AND (sms_consented_at IS NULL
+                         OR sms_consented_at <= sms_opt_out_at)))
+      ) refusals
+     WHERE rrn = 1
+  ),
+```
+
+The INSERT now reads `FROM ranked r LEFT JOIN refusal f ON f.org = r.org AND
+f.phone_e164 = r.phone_e164 WHERE r.rn = 1`, and `refusal_unanswered` is
+`(f.org IS NOT NULL)` in place of the per-row predicate that used to sit at
+`:311-313`.
+
+The review's suggested shape was `bool_or(...) GROUP BY org, phone_e164`. The
+CTE above is the same boolean by construction — a group has a `refusal` row
+exactly when `bool_or` would be true — and it carries the refusing row's own
+evidence as well, which W4-M2 needs and a bare `bool_or` cannot give. Most
+recently refused wins when a group holds more than one refusal.
+
+**Not changed:** the winner's `opt_out_at` still comes from the ranked winner,
+not from the refusing sibling. A dateless refusal is the shape this design
+already treats as normal (16B), and moving the date is a behaviour change the
+finding did not ask for. Flagging it rather than doing it.
+
+**Evidence — the reviewer's exact shape, re-staged**
+(`artifacts/people-room-crm-2026-09-11/build/probe9-r8.sql`, rolled back):
+
+```
+$ psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 \
+    -f artifacts/people-room-crm-2026-09-11/build/probe9-r8.sql
+ folded
+--------
+      1
+
+=== W4-M1: the record the fold mints (was: granted / f / NULL) ===
+ status  | refusal_unanswered | consented_at | opt_out_at | opt_out_source | opt_out_evidence | opt_out_recorded_at
+---------+--------------------+--------------+------------+----------------+------------------+---------------------
+ granted | t                  | 2026-09-02   |            | inbound_sms    | Replied STOP     | 2025-11-16
+
+=== W4-M1: what the send gate sees on the seats (status only) ===
+ display_name | sms_consent_status | sms_opt_out_at
+--------------+--------------------+----------------
+ Seat One     | granted            |
+ Seat Two     | granted            | 2025-11-16
+```
+
+`refusal_unanswered` is now `t` where the review demonstrated `f`. The seats are
+unchanged (both still read `granted`, which is why neither status-only gate
+could catch this) — the record is what fails closed now, and
+`channelConsentVerdict` refuses on that flag since r6 M6-3.
+
+**Regression test.** `supabase/tests/people/w1a_identity_channels_consent_test.sql`
+block 3 now stages the two-seat studio the review asked for: a third Alpha seat
+`e0000000-…-000006` on `+16125550199` reading `granted` with a 2025-11-16
+opt-out and no `sms_consented_at`, beside the existing clean 2026 grant that
+wins the ranking. New assertions `3c3` (the record is minted unsendable), `3c4`
+(the refusal's own source and words landed), `3c5` (the shared evidence set
+still belongs to the winning grant, so the two facts do not smear).
+
+---
+
+## W4-M2 — reconsent erased the refusal's own 10DLC evidence
+
+**What changed.** Fix (a) from the review, which is R-AN-shaped: the record now
+carries a **refusal-side evidence set** of its own.
+
+1. `studio_channel_consent` gains `opt_out_source` (same five-value CHECK as
+   `source`), `opt_out_evidence`, `opt_out_recorded_at`, `opt_out_recorded_by`
+   (FK to `profiles`, ON DELETE SET NULL). Stated in the `CREATE TABLE` body
+   **and** as `ADD COLUMN IF NOT EXISTS` + a name-matched guarded
+   `ADD CONSTRAINT`, the 00592/00593 idiom, so the rerun path is a no-op.
+   `COMMENT ON COLUMN … .opt_out_source` states the rule for all four.
+2. **The fold** writes them (the `refusal` CTE above).
+3. **`record_channel_consent`** writes them when and only when the verdict *is*
+   the refusal — `CASE WHEN p_status = 'opted_out' THEN … END` in the INSERT,
+   and in `DO UPDATE` `CASE WHEN EXCLUDED.status = 'opted_out' THEN
+   EXCLUDED.opt_out_… ELSE scc.opt_out_… END`. Every other verdict leaves them
+   exactly as they stand.
+4. **`record_channel_reconsent`** does not name them at all — they are absent
+   from its `SET` list, with a comment saying they must stay absent and why.
+5. **The inbound STOP rail** (`supabase/functions/sms-inbound/pipeline.ts`,
+   `writeChannelConsent`) stamps `opt_out_source: "inbound_sms"`,
+   `opt_out_evidence: evidence`, `opt_out_recorded_at: now` on a STOP, and
+   carries the prior values forward untouched on a YES/START (the read's
+   `select` was widened to fetch them). `opt_out_recorded_by` stays NULL on a
+   rail write — nobody in the studio recorded it; the recipient did.
+6. **The mirror is untouched.** These four have no `project_parties`
+   counterpart, so nothing propagates and the tuple guard is unchanged — which
+   is exactly why the review preferred (a).
+
+**Evidence** (same probe file, rolled back): a recorded inbound STOP, then one
+`record_channel_reconsent()` by an ordinary member:
+
+```
+=== W4-M2: the record after reconsent (was: source written / "Signed re-consent form" only) ===
+  status   | refusal_unanswered | source  |              evidence               | disclosure_version | opt_out_source | opt_out_evidence
+-----------+--------------------+---------+-------------------------------------+--------------------+----------------+------------------
+ opted_out | t                  | written | Signed re-consent form, 11 Sep 2026 | v2                 | inbound_sms    | Replied STOP
+
+=== W4-M2: the seat after the mirror ran ===
+ sms_consent_status | sms_consent_source |        sms_consent_evidence
+--------------------+--------------------+-------------------------------------
+ opted_out          | written            | Signed re-consent form, 11 Sep 2026
+```
+
+Both facts are now printable off one record: `opt_out_source = 'inbound_sms'`
+is R-Q's "by text", and the studio's fresh consent sits beside it. The seat
+still mirrors the consent side only — the record is where the refusal's own
+words live, which is the division fix (a) chose.
+
+**R-AG is not reopened.** Nothing here nulls or overwrites
+`source`/`evidence`/`disclosure_version`/`recorded_by`; the four new columns are
+additive and are written only by a refusal.
+
+**Regression tests.**
+- SQL block 27: `27b3` (reconsent leaves `opt_out_source`/`opt_out_evidence`
+  standing), `27b4` (it keeps who wrote the refusal down, and when), `27d2` (a
+  *second* reconsent does not reach them either), `27g` (the recipient's own
+  answer plus the studio's later `granted` do not speak for the refusal that
+  preceded them).
+- `supabase/functions/_tests/sms-inbound.test.ts`: the per-studio STOP test now
+  asserts the rail stamps the refusal's own source, words and date; the
+  START test seeds them and asserts they survive the re-grant.
+
+---
+
+## Verification run
+
+```
+$ pnpm --dir …/agent-people-build supabase:reset
+… Finished supabase db reset on branch main.
+{"target":"local","version":"","message":"Reset local database."}
+
+$ psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 \
+    -f supabase/tests/people/w1a_identity_channels_consent_test.sql
+NOTICE:  1. affiliations + RLS: passed
+NOTICE:  2. channel normalisation: passed
+NOTICE:  3. consent backfill precedence: passed
+… (blocks 4–26 unchanged, all passed) …
+NOTICE:  27. reconsent is evidence-only and re-callable (r7 M7-2), and leaves the refusal's own evidence standing (r8 W4-M2): passed
+NOTICE:  All W1a assertions passed.
+ROLLBACK
+
+$ deno test --allow-all --config deno.json _tests/sms-inbound.test.ts
+ok | 35 passed | 0 failed (29ms)
+
+$ deno test --allow-all --config deno.json _shared/sms.test.ts
+ok | 36 passed | 0 failed (41ms)
+
+$ SUPABASE_DB_URL=… pnpm --dir …/agent-people-build db:generate
+$ git -C … diff --stat packages/supabase/src/database.types.ts
+ packages/supabase/src/database.types.ts | 34 +++++++++++++++++++++++++++++++++
+ 1 file changed, 34 insertions(+)
+```
+
+The 34 lines are the four columns in `Row`/`Insert`/`Update`, the two composite
+RPC return types (`record_channel_consent`, `record_channel_reconsent`), and the
+`opt_out_recorded_by` FK relationship. Nothing else moved.
+
+Object probe (never the ledger):
+
+```
+     column_name     |        data_type         | is_nullable
+---------------------+--------------------------+-------------
+ opt_out_evidence    | text                     | YES
+ opt_out_recorded_at | timestamp with time zone | YES
+ opt_out_recorded_by | uuid                     | YES
+ opt_out_source      | text                     | YES
+
+ studio_channel_consent_opt_out_recorded_by_fkey | FOREIGN KEY (opt_out_recorded_by) REFERENCES profiles(id) ON DELETE SET NULL
+ studio_channel_consent_opt_out_source_check     | CHECK ((opt_out_source = ANY (ARRAY['verbal'…,'written'…,'web_form'…,'inbound_sms'…,'other'…])))
+```
+
+Re-applying the `ADD COLUMN IF NOT EXISTS` block plus the guarded
+`ADD CONSTRAINT` a second time is a no-op (four "already exists, skipping"
+notices, constraint count unchanged) — the rerun path is idempotent.
+
+No `GRANT` or `REVOKE` was added or removed. `python3
+scripts/generate-legacy-grants.py` was re-run anyway and
+`supabase/seed/00-legacy-grants.sql` came back byte-identical (`git diff --stat`
+empty).

@@ -333,7 +333,9 @@ async function writeChannelConsent(
     const { data: existing } = await supabase
       .from("studio_channel_consent")
       .select(
-        "consented_at, opt_out_at, disclosure_version, recorded_by, origin_project_id",
+        "consented_at, opt_out_at, disclosure_version, recorded_by, " +
+          "opt_out_source, opt_out_evidence, opt_out_recorded_at, " +
+          "opt_out_recorded_by, origin_project_id",
       )
       .eq("organization_id", t.org)
       .eq("channel_kind", "sms")
@@ -344,6 +346,10 @@ async function writeChannelConsent(
       opt_out_at?: string | null;
       disclosure_version?: string | null;
       recorded_by?: string | null;
+      opt_out_source?: string | null;
+      opt_out_evidence?: string | null;
+      opt_out_recorded_at?: string | null;
+      opt_out_recorded_by?: string | null;
       origin_project_id?: string | null;
     };
     // WHICH DISCLOSURE THE PERSON WAS SHOWN, AND WHO RECORDED IT, ARE FACTS THE
@@ -375,6 +381,28 @@ async function writeChannelConsent(
       recorded_at: now,
       disclosure_version: prior.disclosure_version ?? seat.disclosureVersion,
       recorded_by: prior.recorded_by ?? seat.recordedBy,
+      // THE REFUSAL'S OWN EVIDENCE SET (00594, r8 W4-M2). The rail is the one
+      // writer that can say a STOP arrived BY TEXT, and that is the noun the
+      // room prints ("Opted out by text, 3 Dec 2025"). It lives in its own four
+      // columns because the shared set holds whatever act happened LAST — a
+      // studio recording its fresh consent through record_channel_reconsent()
+      // used to overwrite "Replied STOP" / inbound_sms outright. So a STOP
+      // stamps them, and a YES/START carries them forward untouched: the
+      // refusal that was answered is still a fact the carrier audit asks about.
+      // opt_out_recorded_by stays NULL on a rail write — nobody in the studio
+      // recorded this; the recipient did.
+      opt_out_source: status === "opted_out"
+        ? "inbound_sms"
+        : (prior.opt_out_source ?? null),
+      opt_out_evidence: status === "opted_out"
+        ? evidence
+        : (prior.opt_out_evidence ?? null),
+      opt_out_recorded_at: status === "opted_out"
+        ? now
+        : (prior.opt_out_recorded_at ?? null),
+      opt_out_recorded_by: status === "opted_out"
+        ? null
+        : (prior.opt_out_recorded_by ?? null),
       // The origin follows the CURRENT verdict, the same rule 00594's
       // record_channel_consent applies (COALESCE(new, prior)). R-Q's sentence
       // names the job the verdict on the books came from; taking the prior made

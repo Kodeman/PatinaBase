@@ -138,7 +138,11 @@ VALUES
 -- Party rows. The SHARED number +16125550142 is held by both studios.
 --   Alpha: one granted row (newer) and one opted_out row (older)  → opted_out wins
 --   Beta : one not_asked row on the same number                   → stays not_asked
--- A second Alpha number +16125550199 has two granted rows → the NEWER evidence wins.
+-- A second Alpha number +16125550199 has THREE Alpha rows: two granted (the
+-- NEWER evidence wins) and a third that reads `granted` while carrying an
+-- opt-out no later consent answered — the legacy shape r8's W4-M1 found the
+-- fold throwing away. The clean grant outranks it, so the refusal only survives
+-- if the fold asks the whole group rather than the winning row.
 INSERT INTO project_parties (id, project_id, party_kind, display_name, phone,
                              sms_consent_status, sms_consented_at, sms_opt_out_at,
                              sms_consent_source, sms_consent_evidence,
@@ -153,7 +157,10 @@ VALUES
   ('e0000000-0000-4000-8000-000000000004', 'd0000000-0000-4000-8000-00000000000a', 'sub', 'Pete Rusk', '6125550199',
    'granted', '2025-01-01T00:00:00Z', NULL, 'verbal', 'older grant', '2025-01-01T00:00:00Z', 'field-sms-v1'),
   ('e0000000-0000-4000-8000-000000000005', 'd0000000-0000-4000-8000-00000000000a', 'sub', 'Pete Rusk', '612 555 0199',
-   'granted', '2026-02-02T00:00:00Z', NULL, 'written', 'newer grant', '2026-02-02T00:00:00Z', 'field-sms-v1');
+   'granted', '2026-02-02T00:00:00Z', NULL, 'written', 'newer grant', '2026-02-02T00:00:00Z', 'field-sms-v1'),
+  ('e0000000-0000-4000-8000-000000000006', 'd0000000-0000-4000-8000-00000000000a', 'sub', 'Pete Rusk', '(612) 555-0199',
+   'granted', NULL, '2025-11-16T00:00:00Z', 'inbound_sms', 'Replied STOP on the Rusk thread',
+   '2025-11-16T00:00:00Z', 'field-sms-v1');
 
 -- ─── helpers ───────────────────────────────────────────────────────────────
 
@@ -310,6 +317,31 @@ BEGIN
     'FAIL 3c: should be granted, got ' || COALESCE(r.status, '<none>');
   ASSERT r.evidence = 'newer grant',
     'FAIL 3c2: the most recent grant should win, got ' || COALESCE(r.evidence, '<null>');
+
+  -- 3c3. r8 W4-M1: the SIBLING seat's unanswered refusal is not thrown away with
+  --     the row that carried it. Seat e…0006 reads `granted` while holding a
+  --     300-day-old opt-out no consent answered; the clean 2026 grant wins the
+  --     ranking, so before the fix the record above was minted fully sendable
+  --     (refusal_unanswered = false) and neither the send gate's second check
+  --     nor the write door's seat gate could see it — both filter on
+  --     sms_consent_status = 'opted_out', and the contaminated seat says
+  --     `granted`.
+  ASSERT r.refusal_unanswered,
+    'FAIL 3c3: a sibling seat''s unanswered refusal must mint the record '
+    'UNSENDABLE, even when a clean grant wins the ranking';
+
+  -- 3c4. …and it carries the REFUSAL's own evidence (r8 W4-M2), which is not
+  --      the winning row's: that row is the grant.
+  ASSERT r.opt_out_source = 'inbound_sms'
+     AND r.opt_out_evidence = 'Replied STOP on the Rusk thread'
+     AND r.opt_out_recorded_at = '2025-11-16T00:00:00Z'::timestamptz,
+    'FAIL 3c4: the refusal''s own source and words must land in the refusal '
+    'evidence set, got ' || COALESCE(r.opt_out_source, '<null>') || ' / '
+      || COALESCE(r.opt_out_evidence, '<null>');
+
+  -- 3c5. The consent half is still the winning grant's — two facts, two sets.
+  ASSERT r.source = 'written' AND r.evidence = 'newer grant',
+    'FAIL 3c5: the shared evidence set still belongs to the winning verdict';
 
   -- 3d. One row per (studio, kind, value) — never one per party row.
   SELECT COUNT(*) INTO n FROM studio_channel_consent
@@ -2785,6 +2817,20 @@ BEGIN
      AND r.source = 'written' AND r.disclosure_version = 'field-sms-v1',
     'FAIL 27b2: the studio''s fresh consent must be on the record';
 
+  -- 27b3. r8 W4-M2: AND THE REFUSAL'S OWN WORDS ARE STILL THERE. With one
+  --       shared evidence set this call wrote `written` / 'Signed a fresh
+  --       consent…' straight over `inbound_sms` / 'Replied STOP' — the record
+  --       still refused every send, but it could no longer say what the refusal
+  --       was or that it arrived BY TEXT, which is the noun R-Q's sentence
+  --       prints. The mirror then pushed the same overwrite onto every seat.
+  ASSERT r.opt_out_source = 'inbound_sms' AND r.opt_out_evidence = 'Replied STOP',
+    'FAIL 27b3: reconsent must not touch the refusal''s own evidence, got '
+      || COALESCE(r.opt_out_source, '<null>') || ' / '
+      || COALESCE(r.opt_out_evidence, '<null>');
+  ASSERT r.opt_out_recorded_at IS NOT NULL
+     AND r.opt_out_recorded_by = 'a0000000-0000-4000-8000-000000000001',
+    'FAIL 27b4: the refusal keeps who wrote it down, and when';
+
   -- 27c. THE BACKSTOP SURVIVES. The seat still reads opted_out — the `pending`
   --      hop used to clear exactly this, which is what let the invite out.
   SELECT * INTO r FROM project_parties WHERE id = 'e0000000-0000-4000-8000-0000000000a8';
@@ -2805,6 +2851,8 @@ BEGIN
      AND channel_value = '+16125550431';
   ASSERT r.evidence = 'Countersigned at the second walkthrough' AND r.status = 'opted_out',
     'FAIL 27d: reconsent must stay re-callable, got ' || COALESCE(r.evidence, '<null>');
+  ASSERT r.opt_out_source = 'inbound_sms' AND r.opt_out_evidence = 'Replied STOP',
+    'FAIL 27d2: a second reconsent must not reach the refusal''s evidence either';
 
   -- 27e. And it buys no grant: the studio still cannot type its way past the
   --      refusal.
@@ -2840,9 +2888,15 @@ BEGIN
      AND channel_value = '+16125550431';
   ASSERT r.status = 'granted' AND r.evidence = 'Kickoff form',
     'FAIL 27f: after the recipient''s own answer the studio may record again';
+  -- 27g. The answered refusal is still on the books, in its own words: a
+  --      carrier audit asks about the STOP whether or not it was answered.
+  ASSERT r.opt_out_source = 'inbound_sms' AND r.opt_out_evidence = 'Replied STOP',
+    'FAIL 27g: a later grant must not speak for the refusal it followed, got '
+      || COALESCE(r.opt_out_source, '<null>');
   PERFORM pg_temp.reset_role();
 
-  RAISE NOTICE '27. reconsent is evidence-only and re-callable (r7 M7-2): passed';
+  RAISE NOTICE '27. reconsent is evidence-only and re-callable (r7 M7-2), and '
+               'leaves the refusal''s own evidence standing (r8 W4-M2): passed';
   RAISE NOTICE 'All W1a assertions passed.';
 END
 $$;

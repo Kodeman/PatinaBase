@@ -136,6 +136,16 @@
 --     does not restate them (R-AG). Laundering is closed by the evidence gate,
 --     not by nulling — every status this door accepts must supply its own
 --     source and evidence, so a status change has always restated them.
+--   · AND THE REFUSAL HAS AN EVIDENCE SET OF ITS OWN: opt_out_source /
+--     opt_out_evidence / opt_out_recorded_at / opt_out_recorded_by, written by
+--     every writer that records a refusal (the fold, record_channel_consent's
+--     opted_out branch, the inbound STOP rail) and by nothing else — reconsent
+--     included (r8 W4-M2). With one shared set, the studio's fresh consent
+--     recorded over a STOP destroyed the refusal's own "Replied STOP",
+--     inbound_sms, on the record and on every mirrored seat: sending stayed
+--     blocked, but the carrier-audit artifact and R-Q's "opted out BY TEXT"
+--     were gone. The four columns have no party-row counterpart, so the mirror
+--     does not carry them.
 --
 -- Adds GRANT/REVOKE → regenerate seed/00-legacy-grants.sql after this migration
 -- (python3 scripts/generate-legacy-grants.py).
@@ -165,6 +175,17 @@ CREATE TABLE IF NOT EXISTS public.studio_channel_consent (
   disclosure_version text,
   recorded_by        uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
 
+  -- THE REFUSAL'S OWN EVIDENCE SET, BESIDE THE CONSENT'S (r8 W4-M2). The record
+  -- holds two facts at once once record_channel_reconsent() has been called —
+  -- "opted out by text, 3 Dec 2025" AND "fresh signed consent, 11 Sep 2026" —
+  -- and one evidence set could only hold the later of them. See the column
+  -- comments below.
+  opt_out_source text
+    CHECK (opt_out_source IN ('verbal', 'written', 'web_form', 'inbound_sms', 'other')),
+  opt_out_evidence    text,
+  opt_out_recorded_at timestamptz,
+  opt_out_recorded_by uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
+
   -- "opted out on Lindqvist 2025-12-03" (CS3-14, ruling R-Q).
   origin_project_id uuid REFERENCES public.projects(id) ON DELETE SET NULL,
 
@@ -178,6 +199,29 @@ CREATE TABLE IF NOT EXISTS public.studio_channel_consent (
 -- stated as an ALTER (the 00592/00593 idiom).
 ALTER TABLE public.studio_channel_consent
   ADD COLUMN IF NOT EXISTS refusal_unanswered boolean NOT NULL DEFAULT false;
+
+ALTER TABLE public.studio_channel_consent
+  ADD COLUMN IF NOT EXISTS opt_out_source      text,
+  ADD COLUMN IF NOT EXISTS opt_out_evidence    text,
+  ADD COLUMN IF NOT EXISTS opt_out_recorded_at timestamptz,
+  ADD COLUMN IF NOT EXISTS opt_out_recorded_by uuid
+    REFERENCES public.profiles(id) ON DELETE SET NULL;
+
+-- Same constraint name the inline CHECK above produces, so this is a no-op on
+-- the fresh-create path and adds the rule on the ALTER path.
+DO $ck$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+     WHERE conrelid = 'public.studio_channel_consent'::regclass
+       AND conname  = 'studio_channel_consent_opt_out_source_check'
+  ) THEN
+    ALTER TABLE public.studio_channel_consent
+      ADD CONSTRAINT studio_channel_consent_opt_out_source_check
+      CHECK (opt_out_source IN ('verbal', 'written', 'web_form', 'inbound_sms', 'other'));
+  END IF;
+END
+$ck$;
 
 COMMENT ON TABLE public.studio_channel_consent IS
   'E8: ONE consent record per studio per channel value. Never per project '
@@ -194,6 +238,23 @@ COMMENT ON COLUMN public.studio_channel_consent.channel_value IS
 COMMENT ON COLUMN public.studio_channel_consent.origin_project_id IS
   'The job the consent (or the STOP) came from, so the room can name it in '
   'words. Not a scope: consent is studio-wide.';
+COMMENT ON COLUMN public.studio_channel_consent.opt_out_source IS
+  'THE REFUSAL''S OWN evidence set (with opt_out_evidence / opt_out_recorded_at '
+  '/ opt_out_recorded_by): how the refusal arrived, in its own words, and who '
+  'wrote it down. Separate from source/evidence/recorded_at/... because the '
+  'record has to hold the refusal AND the studio''s later fresh consent at the '
+  'same time — R-Q''s sentence "Opted out by text, 3 Dec 2025, on the Lindqvist '
+  'kitchen" is composed from THIS source plus opt_out_at plus '
+  'origin_project_id, and record_channel_reconsent() writes the consent side. '
+  'Written by every writer that records a refusal — the fold, '
+  'record_channel_consent''s opted_out branch, the inbound STOP rail — and '
+  'touched by NOTHING else: no consent verdict, and never reconsent (r8 W4-M2, '
+  'which found reconsent overwriting source/evidence/recorded_at/'
+  'disclosure_version/recorded_by while leaving status opted_out, so the STOP''s '
+  'own "Replied STOP" / inbound_sms was destroyed on the record and, through '
+  'the mirror, on every seat). These four have no party-row counterpart, so the '
+  'mirror never carries them.';
+
 COMMENT ON COLUMN public.studio_channel_consent.refusal_unanswered IS
   'TRUE while a refusal stands that the person who made it has not answered. '
   'Set by every writer that records a refusal (the fold, record_channel_consent, '
@@ -288,14 +349,56 @@ BEGIN
     FROM party_org
     WHERE org IS NOT NULL
   ),
+  -- THE REFUSAL IS ASKED OF THE WHOLE GROUP, NOT OF THE WINNING ROW (r8 W4-M1).
+  -- ROW_NUMBER() above drops every sibling seat before the predicate below can
+  -- see it, so a studio holding two seats on one number — a clean recent grant
+  -- and a legacy row reading `granted` while carrying a stale opt-out no later
+  -- consent answered — folded to a fully SENDABLE record: inside `granted` the
+  -- tiebreak is the most recent date, so the clean grant won and the refusal
+  -- went in the bin with the row that carried it. Nothing downstream caught it
+  -- either — the send gate's second check (orgHasOptedOutParty) and this file's
+  -- own seat gate both filter on sms_consent_status = 'opted_out', and the
+  -- contaminated seat reads `granted`. That is exactly the record r7's M7-1
+  -- ruled must be minted UNSENDABLE, and it only bites on the first prod fold,
+  -- over real project_parties data.
+  --
+  -- The same CTE carries the refusal's OWN evidence (r8 W4-M2): the refusing
+  -- sibling is not the row whose source and words land in the consent evidence
+  -- set, so without this the record would say "a refusal stands here" and hold
+  -- nothing at all about it. Most recently refused wins when there is more than
+  -- one.
+  refusal AS (
+    SELECT org, phone_e164,
+           sms_consent_source      AS opt_out_source,
+           sms_consent_evidence    AS opt_out_evidence,
+           sms_consent_recorded_at AS opt_out_recorded_at,
+           sms_consent_recorded_by AS opt_out_recorded_by
+      FROM (
+        SELECT party_org.*,
+               ROW_NUMBER() OVER (
+                 PARTITION BY org, phone_e164
+                 ORDER BY COALESCE(sms_opt_out_at, sms_consent_recorded_at,
+                                   updated_at) DESC NULLS LAST
+               ) AS rrn
+          FROM party_org
+         WHERE org IS NOT NULL
+           AND (sms_consent_status = 'opted_out'
+                OR (sms_opt_out_at IS NOT NULL
+                    AND (sms_consented_at IS NULL
+                         OR sms_consented_at <= sms_opt_out_at)))
+      ) refusals
+     WHERE rrn = 1
+  ),
   ins AS (
     INSERT INTO public.studio_channel_consent (
       organization_id, channel_kind, channel_value, status,
       consented_at, opt_out_at, refusal_unanswered, source, evidence,
-      recorded_at, disclosure_version, recorded_by, origin_project_id
+      recorded_at, disclosure_version, recorded_by,
+      opt_out_source, opt_out_evidence, opt_out_recorded_at, opt_out_recorded_by,
+      origin_project_id
     )
-    SELECT org, 'sms', phone_e164, sms_consent_status,
-           sms_consented_at, sms_opt_out_at,
+    SELECT r.org, 'sms', r.phone_e164, r.sms_consent_status,
+           r.sms_consented_at, r.sms_opt_out_at,
            -- An unanswered refusal is recorded as a FACT here, never inferred
            -- later from opt_out_at: a folded `opted_out` row is routinely
            -- DATELESS (the shipped portal writes one deliberately —
@@ -303,19 +406,24 @@ BEGIN
            -- read the date failed open for that whole population. A row that is
            -- not opted_out still counts as an unanswered refusal when it carries
            -- an opt-out date no later consent has answered — INCLUDING a winner
-           -- whose status reads `granted` (r7 M7-1, ruled here). A legacy seat
+           -- whose status reads `granted` (r7 M7-1, ruled here), and INCLUDING a
+           -- LOSING SIBLING the ranking discarded (r8 W4-M1). A legacy seat
            -- saying granted while carrying a dated opt-out and no later
            -- consented_at is contradictory data, and the refusal is the half
            -- that fails closed: the record is minted UNSENDABLE and only the
-           -- recipient's own YES/START reopens it.
-           (sms_consent_status = 'opted_out'
-            OR (sms_opt_out_at IS NOT NULL
-                AND (sms_consented_at IS NULL OR sms_consented_at <= sms_opt_out_at))),
-           sms_consent_source,
-           sms_consent_evidence, sms_consent_recorded_at,
-           sms_consent_disclosure_version, sms_consent_recorded_by, project_id
-    FROM ranked
-    WHERE rn = 1
+           -- recipient's own YES/START reopens it. `refusal` holds one row per
+           -- group exactly when such a refusal stands anywhere in it.
+           (f.org IS NOT NULL),
+           r.sms_consent_source,
+           r.sms_consent_evidence, r.sms_consent_recorded_at,
+           r.sms_consent_disclosure_version, r.sms_consent_recorded_by,
+           f.opt_out_source, f.opt_out_evidence,
+           f.opt_out_recorded_at, f.opt_out_recorded_by,
+           r.project_id
+    FROM ranked r
+    LEFT JOIN refusal f
+      ON f.org = r.org AND f.phone_e164 = r.phone_e164
+    WHERE r.rn = 1
     ON CONFLICT (organization_id, channel_kind, channel_value) DO NOTHING
     RETURNING 1
   )
@@ -333,7 +441,9 @@ COMMENT ON FUNCTION public.backfill_channel_consent_from_parties() IS
   'Folds project_parties.sms_consent_* into studio_channel_consent, one row per '
   '(studio, sms, phone_e164). Precedence: opted_out over everything, then the '
   'most recent granted, then pending, then not_asked. Stamps '
-  'refusal_unanswered on any folded refusal, dated or not, so the granted door '
+  'refusal_unanswered on any folded refusal, dated or not — and asks for one '
+  'across EVERY seat the studio holds on that number, not just the winning row '
+  '(r8 W4-M1) — so the granted door '
   'fails closed for the dateless opted_out rows the shipped portal writes on '
   'purpose. Idempotent — ON CONFLICT '
   'DO NOTHING never overwrites a later decision — and side-effect-free to '
@@ -760,6 +870,15 @@ CREATE TRIGGER mirror_channel_consent_to_parties_trg
 --      disclosure — and the version the person WAS shown when they consented
 --      is a fact the audit still needs.
 --
+--      AND THE REFUSAL KEEPS ITS OWN EVIDENCE SET (r8 W4-M2). A refusal writes
+--      opt_out_source / opt_out_evidence / opt_out_recorded_at /
+--      opt_out_recorded_by as well as the shared set; no later verdict, and no
+--      reconsent, may write them. One evidence set could only ever hold the
+--      LATEST act, so the studio's fresh consent recorded over a STOP erased
+--      "Replied STOP", source inbound_sms — the carrier-audit artifact of the
+--      refusal itself, and the noun R-Q's "Opted out BY TEXT, 3 Dec 2025"
+--      prints — from the record and, through the mirror, from every seat.
+--
 -- Dates still survive a verdict that does not restate them: "granted 2 May
 -- 2025, opted out 3 Dec 2025" must both stay printable (R-Q).
 CREATE OR REPLACE FUNCTION public.record_channel_consent(
@@ -964,6 +1083,7 @@ BEGIN
     organization_id, channel_kind, channel_value, status,
     consented_at, opt_out_at, refusal_unanswered,
     source, evidence, recorded_at, disclosure_version, recorded_by,
+    opt_out_source, opt_out_evidence, opt_out_recorded_at, opt_out_recorded_by,
     origin_project_id
   )
   VALUES (
@@ -972,6 +1092,14 @@ BEGIN
     CASE WHEN p_status = 'opted_out' THEN v_now END,
     p_status = 'opted_out',
     p_source, p_evidence, v_now, p_disclosure_version, auth.uid(),
+    -- THE REFUSAL'S OWN EVIDENCE (r8 W4-M2). Written only when the verdict IS
+    -- the refusal, so "Replied STOP" / inbound_sms stays on the record beside
+    -- whatever the studio records later. Nothing in this file but a fresh
+    -- refusal touches these four again — reconsent() in particular does not.
+    CASE WHEN p_status = 'opted_out' THEN p_source END,
+    CASE WHEN p_status = 'opted_out' THEN p_evidence END,
+    CASE WHEN p_status = 'opted_out' THEN v_now END,
+    CASE WHEN p_status = 'opted_out' THEN auth.uid() END,
     p_origin_project_id
   )
   ON CONFLICT (organization_id, channel_kind, channel_value) DO UPDATE
@@ -995,6 +1123,21 @@ BEGIN
       recorded_at        = EXCLUDED.recorded_at,
       disclosure_version = COALESCE(EXCLUDED.disclosure_version, scc.disclosure_version),
       recorded_by        = COALESCE(EXCLUDED.recorded_by, scc.recorded_by),
+      -- A NEW refusal restates the refusal's own evidence; every other verdict
+      -- leaves it exactly as it stands (r8 W4-M2). This is the half of the
+      -- record a later consent must not be able to speak for.
+      opt_out_source      = CASE WHEN EXCLUDED.status = 'opted_out'
+                                 THEN EXCLUDED.opt_out_source
+                                 ELSE scc.opt_out_source END,
+      opt_out_evidence    = CASE WHEN EXCLUDED.status = 'opted_out'
+                                 THEN EXCLUDED.opt_out_evidence
+                                 ELSE scc.opt_out_evidence END,
+      opt_out_recorded_at = CASE WHEN EXCLUDED.status = 'opted_out'
+                                 THEN EXCLUDED.opt_out_recorded_at
+                                 ELSE scc.opt_out_recorded_at END,
+      opt_out_recorded_by = CASE WHEN EXCLUDED.status = 'opted_out'
+                                 THEN EXCLUDED.opt_out_recorded_by
+                                 ELSE scc.opt_out_recorded_by END,
       -- The origin follows the CURRENT verdict, in both writers (the inbound
       -- rail agrees: pipeline.ts writes t.projectId ?? prior). R-Q's sentence
       -- names the job the verdict on the books came from, not an older one.
@@ -1110,6 +1253,10 @@ COMMENT ON FUNCTION public.record_channel_consent(uuid, text, text, text, text, 
   '(R-AL, r6 B6-1/M6-1: gated on whether a refusal stands, never on which '
   'verdict is being written — a recorded `pending` mirrors onto the seats '
   'exactly as a `granted` does, and was the ungated first hop); '
+  'stamps the refusal''s OWN evidence set (opt_out_source, opt_out_evidence, '
+  'opt_out_recorded_at, opt_out_recorded_by) when and only when the verdict is '
+  'opted_out, and leaves it untouched on every other verdict, so a later '
+  'consent cannot speak for the refusal (r8 W4-M2); '
   'never empties the evidence set — source, '
   'evidence, disclosure_version and recorded_by are kept when the new verdict '
   'does not restate them, and laundering is closed by the evidence gate, since '
@@ -1213,6 +1360,16 @@ BEGIN
          -- Stated rather than left alone, so this door is correct even on a row
          -- some other writer left at opted_out without raising the flag.
          refusal_unanswered = true,
+         -- opt_out_source / opt_out_evidence / opt_out_recorded_at /
+         -- opt_out_recorded_by ARE NOT IN THIS LIST, and must never be (r8
+         -- W4-M2). They are the REFUSAL's evidence; the five columns below are
+         -- the STUDIO's. Before they existed this UPDATE wrote the studio's
+         -- source and words over "Replied STOP" / inbound_sms while leaving the
+         -- status at opted_out — so the record still refused every send but
+         -- could no longer say what the refusal was or how it arrived, and the
+         -- mirror pushed the same overwrite onto every seat in the studio on
+         -- that number, taking the party-row copy with it. R-Q's sentence needs
+         -- both halves printable at once.
          source             = p_source,
          evidence           = p_evidence,
          recorded_at        = v_now,
@@ -1248,7 +1405,11 @@ COMMENT ON FUNCTION public.record_channel_reconsent(uuid, text, text, text, text
   'concurrent writer cannot move the row out from under it). It is EVIDENCE-ONLY '
   'and LEAVES THE RECORD AT opted_out (r7 M7-2): it writes source, evidence, '
   'recorded_at, disclosure_version, recorded_by and origin_project_id, and keeps '
-  'status, opt_out_at and refusal_unanswered exactly as they stand. It does NOT '
+  'status, opt_out_at, refusal_unanswered AND THE REFUSAL''S OWN EVIDENCE SET '
+  '(opt_out_source / opt_out_evidence / opt_out_recorded_at / '
+  'opt_out_recorded_by) exactly as they stand — before that set existed this '
+  'door overwrote the STOP''s own source and words with the studio''s, on the '
+  'record and, through the mirror, on every seat (r8 W4-M2). It does NOT '
   'run the double opt-in — it used to land on `pending`, but since r6 M6-3 the '
   'send rail refuses on refusal_unanswered whatever the status says, so that hop '
   'sent nothing, cleared the mirrored refusal off every seat, and left the row '
