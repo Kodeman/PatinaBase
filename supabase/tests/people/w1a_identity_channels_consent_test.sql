@@ -5575,6 +5575,189 @@ BEGIN
   RAISE NOTICE '42. the two 00284 dispatch gates reach a party the record '
                'granted, and still refuse an unasked, a refused and a '
                'non-field one (close-out r3 MAJOR-3): passed';
+END
+$$;
+
+
+-- ─── 43. close-out r5 MAJOR-1: an opted_out seat's NUMBER is frozen too ────
+--
+-- The freeze was BEFORE UPDATE OF the eight consent columns, so an UPDATE
+-- naming only phone/phone_e164 never fired it — and that is precisely the shape
+-- that MOVES a refusal, because the refusal is identified by phone_e164. The
+-- transplanted seat then made orgHasOptedOutParty() refuse every send to the
+-- corrected number and all three write doors refuse a grant for it, while the
+-- room printed the RECORD's word for that number (`granted` where the studio
+-- already holds a real grant for it — the commonest typo — `not_asked` where it
+-- holds none). Record and reader disagree with nothing on any surface naming
+-- the seat: G-3's sentence restored inside the record built to end it, and
+-- reachable by any authenticated studio member through PostgREST, because
+-- project_parties' UPDATE policy is is_studio_comember(designer_id)
+-- (00584:895-921). use-coordination.ts refuses it at the portal door; the rule
+-- now lives where the hook cannot be bypassed.
+
+INSERT INTO project_parties (id, project_id, party_kind, display_name, phone, sms_consent_status)
+VALUES
+  ('e0000000-0000-4000-8000-0000000000f6', 'd0000000-0000-4000-8000-00000000000a',
+   'sub', 'Wren Sodek', '(612) 555-0801', 'opted_out'),
+  ('e0000000-0000-4000-8000-0000000000f7', 'd0000000-0000-4000-8000-00000000000a',
+   'sub', 'Cal Dorn', '(612) 555-0803', 'not_asked'),
+  ('e0000000-0000-4000-8000-0000000000f8', 'd0000000-0000-4000-8000-00000000000a',
+   'sub', 'Ida Meech', '(612) 555-0805', 'granted'),
+  ('e0000000-0000-4000-8000-0000000000f9', 'd0000000-0000-4000-8000-00000000000a',
+   'sub', 'Jo Lammer', '(612) 555-0807', 'opted_out');
+
+DO $$
+DECLARE
+  raised TEXT;
+  hinted TEXT;
+  v      TEXT;
+  n      INTEGER;
+BEGIN
+  -- 43a. The exploit shape: a phone-only UPDATE on an opted_out seat, naming no
+  --      frozen column at all.
+  raised := NULL;
+  BEGIN
+    UPDATE project_parties SET phone = '612-555-0802'
+     WHERE id = 'e0000000-0000-4000-8000-0000000000f6';
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM;
+  END;
+  ASSERT raised = 'consent_opted_out_phone_frozen',
+    'FAIL 43a: moving an opted_out seat''s number must be refused, got '
+    || COALESCE(raised, '<no error>');
+
+  -- 43a2. Writing phone_e164 DIRECTLY needs no refusal, because it cannot move
+  --       the number at all: 00281's normalize_party_phone_e164() fires first
+  --       (earlier in trigger-name order) and re-derives phone_e164 from the
+  --       unchanged `phone`, so the freeze sees no change and there is none.
+  --       Asserted rather than assumed — it is why 43a is the only door.
+  raised := NULL;
+  BEGIN
+    UPDATE project_parties SET phone_e164 = '+16125550802'
+     WHERE id = 'e0000000-0000-4000-8000-0000000000f6';
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM;
+  END;
+  ASSERT raised IS NULL,
+    'FAIL 43a2: a direct phone_e164 write is inert, not refused, got '
+    || COALESCE(raised, '<no error>');
+  SELECT phone_e164 INTO v FROM project_parties
+   WHERE id = 'e0000000-0000-4000-8000-0000000000f6';
+  ASSERT v = '+16125550801',
+    'FAIL 43a3: …and the normalizer must have put the number back, got '
+    || COALESCE(v, '<null>');
+
+  -- 43b. Nothing moved. The refusal is still attached to the number that
+  --      refused.
+  SELECT phone_e164 INTO v FROM project_parties
+   WHERE id = 'e0000000-0000-4000-8000-0000000000f6';
+  ASSERT v = '+16125550801',
+    'FAIL 43b: the refused writes must leave the number alone, got '
+    || COALESCE(v, '<null>');
+
+  -- 43c. A COSMETIC REFORMAT of the same digits is not a change and still
+  --      lands — the whole reason the test is on phone_e164 and not on phone.
+  UPDATE project_parties
+     SET phone = '612.555.0801', display_name = 'Wren Sodek Sr'
+   WHERE id = 'e0000000-0000-4000-8000-0000000000f6';
+  SELECT display_name INTO v FROM project_parties
+   WHERE id = 'e0000000-0000-4000-8000-0000000000f6';
+  ASSERT v = 'Wren Sodek Sr',
+    'FAIL 43c: reformatting the same digits must still write';
+  SELECT phone_e164 INTO v FROM project_parties
+   WHERE id = 'e0000000-0000-4000-8000-0000000000f6';
+  ASSERT v = '+16125550801',
+    'FAIL 43c2: …and the normalized number is unchanged, got '
+    || COALESCE(v, '<null>');
+
+  -- 43d. EVERY LEGITIMATE EDIT IS UNTOUCHED. A not_asked seat's number moves,
+  --      and so does a granted one's — the eight are not named, so the
+  --      eight-column clause does not fire either.
+  UPDATE project_parties SET phone = '612-555-0804'
+   WHERE id = 'e0000000-0000-4000-8000-0000000000f7';
+  SELECT phone_e164 INTO v FROM project_parties
+   WHERE id = 'e0000000-0000-4000-8000-0000000000f7';
+  ASSERT v = '+16125550804',
+    'FAIL 43d: a not_asked seat''s number must still move, got '
+    || COALESCE(v, '<null>');
+  UPDATE project_parties SET phone = '612-555-0806'
+   WHERE id = 'e0000000-0000-4000-8000-0000000000f8';
+  SELECT phone_e164 INTO v FROM project_parties
+   WHERE id = 'e0000000-0000-4000-8000-0000000000f8';
+  ASSERT v = '+16125550806',
+    'FAIL 43d2: a granted seat''s number must still move, got '
+    || COALESCE(v, '<null>');
+  -- …and an unrelated edit on the opted_out seat itself is fine: the trigger
+  -- does not even fire when neither phone column is named.
+  UPDATE project_parties SET trade = 'plumbing'
+   WHERE id = 'e0000000-0000-4000-8000-0000000000f6';
+  SELECT trade INTO v FROM project_parties
+   WHERE id = 'e0000000-0000-4000-8000-0000000000f6';
+  ASSERT v = 'plumbing', 'FAIL 43d3: an unrelated edit must not be refused';
+
+  -- 43e. The deliberate door still opens, for a data repair and for W2.
+  SET LOCAL app.consent_legacy_write = 'on';
+  UPDATE project_parties SET phone = '612-555-0808'
+   WHERE id = 'e0000000-0000-4000-8000-0000000000f9';
+  SET LOCAL app.consent_legacy_write = '';
+  SELECT phone_e164 INTO v FROM project_parties
+   WHERE id = 'e0000000-0000-4000-8000-0000000000f9';
+  ASSERT v = '+16125550808',
+    'FAIL 43e: the escape hatch must let a repair move the number, got '
+    || COALESCE(v, '<null>');
+
+  -- 43e2. …and it closes again with the statement that opened it.
+  raised := NULL;
+  BEGIN
+    UPDATE project_parties SET phone = '612-555-0809'
+     WHERE id = 'e0000000-0000-4000-8000-0000000000f9';
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM;
+  END;
+  ASSERT raised = 'consent_opted_out_phone_frozen',
+    'FAIL 43e2: the escape hatch must not stay open, got '
+    || COALESCE(raised, '<no error>');
+
+  -- 43f. The refusal carries the sentence the portal shows, so a client that
+  --      is not the party sheet has something to print.
+  hinted := NULL;
+  BEGIN
+    UPDATE project_parties SET phone = '612-555-0810'
+     WHERE id = 'e0000000-0000-4000-8000-0000000000f6';
+  EXCEPTION WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS hinted = PG_EXCEPTION_HINT;
+  END;
+  ASSERT hinted LIKE '%replied STOP%'
+     AND hinted LIKE '%never refused%'
+     AND hinted LIKE '%corrected number%',
+    'FAIL 43f: the refusal must carry the written sentence, got '
+    || COALESCE(hinted, '<none>');
+
+  -- 43g. And the guard is on the TRIGGER's column list, not only in the body:
+  --      both phone columns are named, beside the eight.
+  SELECT COUNT(*) INTO n
+    FROM pg_trigger tg
+    JOIN pg_class c ON c.oid = tg.tgrelid
+    JOIN pg_attribute a
+      ON a.attrelid = tg.tgrelid
+     AND a.attnum = ANY(tg.tgattr::int2[])
+   WHERE c.relname = 'project_parties'
+     AND tg.tgname = 'refuse_legacy_consent_write_trg'
+     AND a.attname IN ('phone', 'phone_e164');
+  ASSERT n = 2,
+    'FAIL 43g: phone and phone_e164 must be on the freeze trigger''s UPDATE OF '
+    'list, got ' || n;
+  SELECT COUNT(*) INTO n
+    FROM pg_trigger tg
+    JOIN pg_class c ON c.oid = tg.tgrelid
+    JOIN pg_attribute a
+      ON a.attrelid = tg.tgrelid
+     AND a.attnum = ANY(tg.tgattr::int2[])
+   WHERE c.relname = 'project_parties'
+     AND tg.tgname = 'refuse_legacy_consent_write_trg'
+     AND a.attname LIKE 'sms_%';
+  ASSERT n = 8,
+    'FAIL 43g2: the eight consent columns must still be on the list, got ' || n;
+
+  RAISE NOTICE '43. an opted_out seat''s number cannot move, and every other '
+               'phone edit still can (close-out r5 MAJOR-1): passed';
   RAISE NOTICE 'All W1a assertions passed.';
 END
 $$;

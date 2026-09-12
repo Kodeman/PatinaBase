@@ -791,6 +791,13 @@ SELECT public.backfill_channel_consent_from_parties();
 --     that still reaches for these columns FAILS LOUDLY rather than quietly
 --     writing a fact nobody reads. The escape hatch exists for a deliberate
 --     data repair, and for W2, which retires those writers.
+--   · and an `opted_out` seat's NUMBER is frozen with them (close-out r5
+--     MAJOR-1). The seat's refusal is identified by phone_e164, so an UPDATE
+--     naming only phone/phone_e164 transplanted the refusal onto a corrected
+--     number without naming any of the eight — refusing every send to a number
+--     that never refused while the room printed the record's word for it. Both
+--     columns are on the trigger's UPDATE OF list and the change raises
+--     consent_opted_out_phone_frozen.
 --
 -- The writers that will now fail, found by grep and listed in the build report:
 --   · public.site_request_send() (00374:1265-1269) — moves a not_asked
@@ -876,6 +883,43 @@ BEGIN
                    'studio_channel_consent / channel_consent_status().';
   END IF;
 
+  -- AND AN `opted_out` SEAT'S NUMBER CANNOT MOVE (close-out r5 MAJOR-1).
+  --
+  -- The refusal on a seat is identified by phone_e164, not by the eight
+  -- columns, so an UPDATE naming ONLY phone/phone_e164 moved the refusal onto
+  -- a corrected number without naming a frozen column at all — and a
+  -- `BEFORE UPDATE OF <the eight>` trigger never fired for it. From that
+  -- moment orgHasOptedOutParty() (_shared/sms.ts) refused every send to the
+  -- corrected number and all three write doors refused a grant for it, while
+  -- the room printed the RECORD's word for that number — `granted` where the
+  -- studio already holds a real grant for it (the commonest typo), `not_asked`
+  -- where it holds none. Record and reader disagree with nothing on any
+  -- surface naming the transplanted seat: G-3's sentence restored inside the
+  -- record built to end it, reachable by fixing a digit. Reachable, too, by
+  -- any authenticated studio member — project_parties' UPDATE policy is
+  -- is_studio_comember(designer_id) (00584:895-921) — so PATCH
+  -- /rest/v1/project_parties?id=eq.X with {"phone": "..."} is the whole
+  -- exploit. use-coordination.ts refuses it at the portal door
+  -- (OPTED_OUT_PHONE_EDIT_SENTENCE, close-review r3 MAJOR-4); the rule belongs
+  -- where the hook cannot be bypassed.
+  --
+  -- Symmetrical with the clause above: a genuine phone change on a
+  -- pending/granted seat restates the eight and is refused there, so this
+  -- covers the one status the hook has to null the columns for. A COSMETIC
+  -- reformat of the same digits still lands, because
+  -- normalize_party_phone_e164() (00281, trigger normalize_phone_project_
+  -- parties — earlier in name order, so it fires first) has already derived
+  -- NEW.phone_e164 by the time this comparison runs. Every legitimate edit on
+  -- a not_asked / pending / granted seat is untouched.
+  IF OLD.sms_consent_status = 'opted_out'
+     AND NEW.phone_e164 IS DISTINCT FROM OLD.phone_e164 THEN
+    RAISE EXCEPTION 'consent_opted_out_phone_frozen'
+      USING HINT = 'This person replied STOP, and that refusal is attached to '
+                   'the number on file. Changing it would carry the refusal '
+                   'onto a number that never refused. Add them again with the '
+                   'corrected number instead.';
+  END IF;
+
   RETURN NEW;
 END;
 $$;
@@ -889,14 +933,25 @@ COMMENT ON FUNCTION public.refuse_legacy_consent_write() IS
   'same values is allowed, so a whole-row UPDATE that happens to name them '
   'still writes. Nothing in the send rails sets the flag: a shipped writer '
   'that still reaches for these columns is meant to fail loudly, not to write '
-  'a fact no reader reads (00594).';
+  'a fact no reader reads (00594). It also refuses a genuine phone_e164 change '
+  'on an opted_out seat with consent_opted_out_phone_frozen (close-out r5 '
+  'MAJOR-1): the seat''s refusal is identified by the number, so moving the '
+  'number transplants the refusal onto one that never refused, and neither the '
+  'eight-column list nor any reader could see it happen. A cosmetic reformat '
+  'of the same digits is not a change and still lands.';
 
 DROP TRIGGER IF EXISTS refuse_legacy_consent_write_trg ON public.project_parties;
 CREATE TRIGGER refuse_legacy_consent_write_trg
   BEFORE UPDATE OF sms_consent_status, sms_consented_at, sms_opt_out_at,
                    sms_consent_source, sms_consent_evidence,
                    sms_consent_recorded_at, sms_consent_recorded_by,
-                   sms_consent_disclosure_version
+                   sms_consent_disclosure_version,
+                   -- phone/phone_e164 are on the list because the REFUSAL is
+                   -- identified by the number: an UPDATE naming only these
+                   -- moved an opted_out seat's refusal onto a number that
+                   -- never refused without naming a frozen column at all
+                   -- (close-out r5 MAJOR-1).
+                   phone, phone_e164
   ON public.project_parties
   FOR EACH ROW EXECUTE FUNCTION public.refuse_legacy_consent_write();
 

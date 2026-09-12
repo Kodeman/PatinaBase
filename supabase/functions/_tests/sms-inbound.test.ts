@@ -1637,6 +1637,115 @@ Deno.test("a STOP with a clean studio-attribution read records the seat-only stu
   assertEquals(byOrg["org-beta"], "opted_out");
 });
 
+// ── close-out r5 BLOCKING-1: a STOP no studio can be resolved for ───────────
+//
+// `projects.studio_id` is nullable, and 00317 backfilled it from
+// _primary_studio_for(designer_id) — so what is left on a live book is exactly
+// the designers with no active design_studio membership. For those projects
+// COALESCE(studio_id, primary studio) is NULL on both legs. Nothing ERRORS, so
+// none of the four r4 flags fire; 00594's fold skipped the project too
+// (`WHERE org IS NOT NULL`), so studiosHoldingRecord() has nothing to union in
+// either. The STOP was therefore written for NOBODY, acknowledged Twilio 200
+// with its twilio_sid claim kept, and the next send went out: the gate's
+// no-studio branch finds no record and — R-AS having deleted the phone-global
+// seat write — no opted_out seat, answers `unknown`, and the frozen `granted`
+// seat carries the field-daily cron and sendPartySms's legacy leg. Both room
+// readers printed "Not asked" for the same person the rail kept texting.
+Deno.test("a STOP on a project no studio can be resolved for is not acknowledged", async () => {
+  const phone = "+15551110069";
+  const seed = () =>
+    createFakeSupabase(baseSeed({
+      // No studio_id, and dz9 holds no organization_members row at all — the
+      // population 00317's backfill could not reach.
+      projects: [{ id: "proj9", name: "Orphan job", designer_id: "dz9", studio_id: null }],
+      project_parties: [
+        { id: "p9", phone_e164: phone, project_id: "proj9", party_kind: "sub", sms_consent_status: "granted" },
+      ],
+    }));
+
+  const fake = seed();
+  const res = await processInbound(
+    params({ From: phone, Body: "STOP", MessageSid: "SMstoporphan" }),
+    { supabase: fake as never, getEnv: NO_POSTHOG },
+  );
+  assertEquals(
+    res.status,
+    500,
+    "a refusal this rail cannot record is not a refusal it may acknowledge",
+  );
+  assertEquals(res.disposition, "opt_out_incomplete");
+  assertEquals(
+    ((fake._data.studio_channel_consent ?? []) as unknown[]).length,
+    0,
+    "there is no studio to write a ledger for — which is the whole finding",
+  );
+  assert(
+    (fake._data.project_parties as Array<{ sms_consent_status: string }>)
+      .every((p) => p.sms_consent_status === "granted"),
+    "and the frozen seat is still not a second copy",
+  );
+  // The claim is released, so the retry runs the branch again rather than
+  // answering `duplicate`.
+  const inbound = ((fake._data.sms_messages ?? []) as Array<{ twilio_sid: string | null; direction: string }>)
+    .filter((m) => m.direction === "inbound");
+  assertEquals(inbound.length, 1, "the inbound STOP itself survives — it is a 10DLC artifact");
+  assertEquals(inbound[0].twilio_sid, null, "the MessageSid claim is released for the retry");
+});
+
+// The control: the SAME shape, once the designer's primary studio resolves, is
+// a 200 with the record written — so the 500 above is the fifth flag, not the
+// fixture. (A studio-less project is the only difference between the two.)
+Deno.test("the same STOP is acknowledged once a studio resolves for the project", async () => {
+  const phone = "+15551110070";
+  const fake = createFakeSupabase(baseSeed({
+    projects: [{ id: "proj9", name: "Orphan job", designer_id: "dz9", studio_id: null }],
+    organization_members: [
+      { user_id: "dz9", organization_id: "org-alpha", role: "owner", status: "active", joined_at: "2025-01-01T00:00:00Z" },
+    ],
+    organizations: [{ id: "org-alpha", type: "design_studio" }],
+    project_parties: [
+      { id: "p9", phone_e164: phone, project_id: "proj9", party_kind: "sub", sms_consent_status: "granted" },
+    ],
+  }));
+  const res = await processInbound(
+    params({ From: phone, Body: "STOP", MessageSid: "SMstoporphanclean" }),
+    { supabase: fake as never, getEnv: NO_POSTHOG },
+  );
+  assertEquals(res.status, 200);
+  assertEquals(res.disposition, "opted_out");
+  const consent = (fake._data.studio_channel_consent ?? []) as Array<{
+    organization_id: string;
+    status: string;
+  }>;
+  assertEquals(consent.length, 1);
+  assertEquals(consent[0].organization_id, "org-alpha");
+  assertEquals(consent[0].status, "opted_out");
+});
+
+// A START on the same studio-less shape is NOT gated: a studio-less seat can
+// hold no record, so there is no refusal to lift and nothing is lost by
+// granting nobody. The fail-closed direction stays 200.
+Deno.test("a START on a project no studio can be resolved for still answers 200 and grants nobody", async () => {
+  const phone = "+15551110071";
+  const fake = createFakeSupabase(baseSeed({
+    projects: [{ id: "proj9", name: "Orphan job", designer_id: "dz9", studio_id: null }],
+    project_parties: [
+      { id: "p9", phone_e164: phone, project_id: "proj9", party_kind: "sub", sms_consent_status: "opted_out" },
+    ],
+  }));
+  const res = await processInbound(
+    params({ From: phone, Body: "START", MessageSid: "SMstartorphan" }),
+    { supabase: fake as never, getEnv: NO_POSTHOG },
+  );
+  assertEquals(res.status, 200);
+  assertEquals(res.disposition, "resubscribed");
+  assertEquals(
+    ((fake._data.studio_channel_consent ?? []) as unknown[]).length,
+    0,
+    "no studio, no record, no manufactured grant",
+  );
+});
+
 // ── close-out r4 MAJOR-1: the START filter asks the VERDICT, not the column ──
 //
 // The fold mints records at status='granted' and at status='not_asked' with

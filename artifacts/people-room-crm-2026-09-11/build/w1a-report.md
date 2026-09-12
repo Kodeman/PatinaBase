@@ -20,6 +20,15 @@ reachable portal write path (§5.2, a phone correction on an `opted_out` seat).
 All five are fixed in this pass rather than owed to W2; §5.1's site-request gap
 is sharpened, not fixed, and stays W2's.
 
+**Amended again after close-out review round 5 (2026-09-12).** Two fixes, both
+on the same population — a seat whose studio cannot be resolved, or whose
+refusal lives only on a frozen seat. The phone-correction refusal above was
+closed at the portal door and not in the database, so it moved to 00594's own
+freeze trigger (§5.2 bullet 1, SQL block 43); and a STOP on a project no studio
+can be resolved for is no longer acknowledged 200 with nothing recorded anywhere
+(§5.2 bullet 3, three Deno tests). The SEND fail-open for that population is
+still Fable's policy call (§8).
+
 ---
 
 ## 1. The model, in one paragraph
@@ -447,13 +456,30 @@ shipping W1a before it.
   sentence ("This person replied STOP, and that refusal is attached to the number
   on file…"), symmetrically with the freeze's refusal on a `pending`/`granted`
   seat; a cosmetic reformat of the same digits is not a change and still lands.
+  **And since close-out r5 (MAJOR-1) the rule lives in the DATABASE, not only at
+  the portal door.** `refuse_legacy_consent_write_trg` now names `phone` and
+  `phone_e164` beside the eight consent columns, and
+  `refuse_legacy_consent_write()` raises `consent_opted_out_phone_frozen` — with
+  the hook's own sentence as the HINT — when `OLD.sms_consent_status =
+  'opted_out'` and `NEW.phone_e164` genuinely moves. The hook's refusal was
+  closed in the hook and not in the database: a `BEFORE UPDATE OF <the eight>`
+  trigger never fires for an UPDATE naming only `phone`, which is exactly the
+  shape that moves a refusal, and `PATCH /rest/v1/project_parties?id=eq.X` with
+  `{"phone": …}` is reachable by **any authenticated studio member**
+  (`project_parties`' UPDATE policy is `is_studio_comember(designer_id)`,
+  `00584:895-921`) — not a service_role-only path. Writing `phone_e164` directly
+  cannot move it either: 00281's `normalize_party_phone_e164()` fires first and
+  re-derives it from the unchanged `phone`. Every legitimate edit is untouched —
+  a `not_asked`/`pending`/`granted` seat's number still moves, an unrelated edit
+  on the refused seat does not even fire the trigger, a cosmetic reformat of the
+  same digits still lands, and `app.consent_legacy_write = 'on'` still opens the
+  door for a deliberate repair. SQL test block 43 walks all seven legs.
   **The population that remains:** seats already transplanted before this fix —
   any `opted_out` seat whose `phone_e164` is not the number its
-  `sms_opt_out_at`/evidence actually belongs to — plus any future transplant done
-  outside the hook (service_role, SQL, a direct PostgREST call). Nothing on any
-  surface names them, and the durable fix is W2 retiring PR-x's seat check, which
+  `sms_opt_out_at`/evidence actually belongs to. Nothing on any surface names
+  them, and the durable fix is W2 retiring PR-x's seat check, which
   `rulings.md` PR-x already contemplates ("then retire it in a named
-  follow-up"). Five hook tests hold the refusal.
+  follow-up"). Five hook tests and SQL block 43 hold the refusal.
 - **A refusal on ONE seat makes the whole number unsendable for that studio,
   even where another seat holds a genuine later grant** (close-review r1/r2
   MINOR-7). `00594:666` sets `refusal_unanswered = (f.org IS NOT NULL)` and the
@@ -479,16 +505,36 @@ shipping W1a before it.
   gate (`orgHasOptedOutParty()`, and both write doors' seat tests) still refuses
   the send after the START has cleared the record — the way out of that one is
   W2 retiring PR-x's seat check.
-- **One fail-open, narrow and named.** A project with `studio_id IS NULL` whose
-  designer holds no active `design_studio` membership resolves to no org at all.
-  The fold skipped it (`WHERE org IS NOT NULL`), so it has no record; the
-  inbound STOP now writes no record for it either, and no longer writes its
-  seats. If such a seat carries a legacy `sms_consent_status = 'granted'`, a
-  STOP does not stop it. Before this wave the phone-global party write covered
-  it. The phone-global RECORD read added to `channelConsentVerdict` closes the
-  case where **some** studio recorded the STOP; it cannot close the case where
-  **no** studio could. Fable's call: leave it, refuse every unattributable send
-  outright, or make an unresolvable org a loud 500 on the STOP branch.
+- **One fail-open, narrow and named — and now LOUD rather than lost.** A project
+  with `studio_id IS NULL` whose designer holds no active `design_studio`
+  membership resolves to no org at all. The fold skipped it (`WHERE org IS NOT
+  NULL`), so it has no record; the inbound STOP can write no record for it
+  either, and no longer writes its seats. If such a seat carries a legacy
+  `sms_consent_status = 'granted'`, a STOP did not stop it. Before this wave the
+  phone-global party write covered it. The phone-global RECORD read added to
+  `channelConsentVerdict` closes the case where **some** studio recorded the
+  STOP; it cannot close the case where **no** studio could.
+  **And the same population made both room readers print the wrong word** —
+  `channel_consent_status(NULL, 'sms', …)` can never match a row, so
+  `v_project_roster` and `people_directory` `COALESCE` to `not_asked` and
+  `roster-derivation.ts:390`'s "N reachable by text" under-counts, for a seat the
+  `field-daily` cron, both 00621 dispatch gates and `sendPartySms`'s legacy leg
+  all still treat as textable. The Call Sheet says "Not asked" about somebody the
+  rail is texting.
+  **Close-out r5 BLOCKING-1 took the third of the three options**, the one that
+  decides no policy: `studiosHoldingPhone()` now also reports `unattributed` —
+  "a seat resolved to no studio at all", a different fact from `failed`, which
+  means a read errored — and the STOP branch gates on it beside the four flags it
+  already checks, answering `500 / opt_out_incomplete` with the `twilio_sid`
+  claim released so Twilio retries. A refusal this rail cannot record is no
+  longer a refusal it acknowledges: the loss is loud in the logs instead of
+  silent on the wire. The SEND fail-open itself is unchanged and still owed — it
+  cannot be closed inside a consent migration, because there is no studio to
+  record a verdict for. Fable's remaining call is the policy one: leave the send
+  as it is, refuse every unattributable send outright, or give these projects a
+  studio. START is deliberately NOT gated on the new flag — a studio-less seat
+  can hold no record, so there is no refusal for a START to lift. Three Deno
+  tests hold the 500, its control, and START's 200.
 
 ### 5.3 Smaller, owed to W1b
 
@@ -689,6 +735,55 @@ $ pnpm --dir … --filter @patina/designer-portal type-check   # clean
 $ ls deno.lock → No such file or directory
 ```
 
+### The close-out r5 fixes (00594's freeze + the STOP's fifth flag)
+
+One reset, clean, head `00621`; the SQL suite and the consent Deno subset re-run
+after both edits. Nothing but the two findings' own files changed.
+
+```
+$ pnpm --dir … supabase:reset
+RESET_EXIT=0   errors=0
+Finished supabase db reset on branch main.
+$ psql … -At -c "select version from supabase_migrations.schema_migrations order by version desc limit 4;"
+20260910152111 / 00621 / 00594 / 00593
+
+# MAJOR-1: both phone columns are now on the freeze trigger, beside the eight
+$ psql … -At -c "select a.attname from pg_trigger tg join pg_class c on c.oid=tg.tgrelid
+                 join pg_attribute a on a.attrelid=tg.tgrelid and a.attnum = ANY(tg.tgattr::int2[])
+                 where c.relname='project_parties'
+                   and tg.tgname='refuse_legacy_consent_write_trg' order by a.attname;"
+phone / phone_e164 / sms_consent_disclosure_version / sms_consent_evidence /
+sms_consent_recorded_at / sms_consent_recorded_by / sms_consent_source /
+sms_consent_status / sms_consented_at / sms_opt_out_at
+
+# …and the r5 review's own P5b probe, re-run (one rolled-back transaction)
+NOTICE:  P5b AFTER FIX: phone-only UPDATE on an opted_out seat ->
+         consent_opted_out_phone_frozen  (number now +16125550302)
+NOTICE:  P5b HINT: This person replied STOP, and that refusal is attached to the
+         number on file. Changing it would carry the refusal onto a number that
+         never refused. Add them again with the corrected number instead.
+
+$ psql … -v ON_ERROR_STOP=1 -f supabase/tests/people/w1a_identity_channels_consent_test.sql
+PSQL_EXIT=0
+45                                    # lines matching ": passed" (44 + block 43)
+NOTICE:  43. an opted_out seat's number cannot move, and every other phone edit
+         still can (close-out r5 MAJOR-1): passed
+NOTICE:  All W1a assertions passed.
+ROLLBACK
+
+$ deno test --no-check -A --node-modules-dir=auto --config supabase/functions/deno.json \
+    supabase/functions/_shared/sms.test.ts supabase/functions/_tests/sms-inbound.test.ts \
+    supabase/functions/_tests/field-daily.test.ts
+ok | 103 passed | 0 failed (366ms)    # 100 + the three BLOCKING-1 covers
+
+# replay, each migration inside its own rolled-back transaction
+--- replay 00594_studio_channel_consent --- EXIT=0 errors=0
+--- replay 00621_consent_readers_repointed --- EXIT=0 errors=0
+
+$ python3 scripts/generate-legacy-grants.py     # byte-identical, no GRANT/REVOKE moved
+$ SUPABASE_DB_URL=… pnpm --dir … db:generate    # GEN_EXIT=0, no drift (a trigger is not a type)
+```
+
 ---
 
 ## 7. Unchanged by this pass
@@ -750,9 +845,16 @@ Owed:
   `v_project_roster` first.
 - Retiring PR-x's seat check, which is what finally un-strands a transplanted or
   legacy `opted_out` seat (§5.2) — W2.
-- The unattributable-send fail-open (§5.2) — needs Fable's ruling. Close-review
-  r1 (F1) confirms it independently and names it a REGRESSION against pre-00594
-  behaviour: the phone-global party write used to catch exactly this case.
+- The unattributable-**send** fail-open (§5.2) — still needs Fable's ruling.
+  Close-review r1 (F1) confirms it independently and names it a REGRESSION
+  against pre-00594 behaviour: the phone-global party write used to catch exactly
+  this case. Close-out r5 (BLOCKING-1) closed the half that could be closed here:
+  the STOP no longer ACKNOWLEDGES a refusal it cannot record — `500 /
+  opt_out_incomplete`, claim released, Twilio retries — and §5.2 now also states
+  that both room readers print "Not asked" for this population while the rail
+  still texts it. What is owed is the policy: a studio-less project has no
+  ledger to write, so the send can only be closed by refusing every
+  unattributable send or by giving those projects a studio.
 - Nothing deployed. This close-out added **00621**
   (`00621_consent_readers_repointed.sql`), so **W1b mints from 00622**;
   00595–00620 remain reserved for another program. A `_shared/sms.ts` edit is in

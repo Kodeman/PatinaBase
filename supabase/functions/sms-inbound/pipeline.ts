@@ -229,13 +229,31 @@ interface StudioTarget {
  * and could later tick "text updates" and send an opt-in invite to a number
  * that has replied STOP to the platform. Since R-AS deleted
  * optOutAllForPhone()'s phone-global party write there is no backstop left.
+ *
+ * `unattributed` is the OTHER way a seat goes unreached, and it is a different
+ * fact from `failed` (close-out r5 BLOCKING-1): nothing errored, the project
+ * was read cleanly, and it simply belongs to no studio — `projects.studio_id`
+ * is NULL and the designer holds no active design_studio membership, so
+ * COALESCE(studio_id, _primary_studio_for(designer_id)) is NULL on both legs.
+ * 00594's fold skips that project too (`WHERE org IS NOT NULL`), so there is no
+ * record to reach either, and the seats are frozen — which left a STOP on such
+ * a number acknowledged 200, recorded on NO ledger anywhere, with the next send
+ * going out: channelConsentVerdict()'s no-studio branch finds no record and, R-AS
+ * having deleted the phone-global seat write, no opted_out seat, so it answers
+ * `unknown` and both the field-daily cron and sendPartySms's legacy leg honour
+ * the frozen `granted` seat. Both room readers print "Not asked" for the same
+ * person. There is no ledger this rail can write for a studio that does not
+ * exist, so the honest answer is to refuse the acknowledgement and let Twilio
+ * retry: an unrecordable refusal is loud instead of lost.
  */
 async function studiosHoldingPhone(
   supabase: SupabaseClient,
   parties: PhoneParty[],
-): Promise<{ targets: StudioTarget[]; failed: boolean }> {
+): Promise<{ targets: StudioTarget[]; failed: boolean; unattributed: boolean }> {
   const projectIds = [...new Set(parties.map((p) => p.project_id))];
-  if (projectIds.length === 0) return { targets: [], failed: false };
+  if (projectIds.length === 0) {
+    return { targets: [], failed: false, unattributed: false };
+  }
   // One resolver, shared with the send gate (_shared/sms.ts), so the two sides
   // of the rail cannot disagree about which studio a project belongs to.
   const { orgs: orgOfProject, failed } = await orgsOfProjects(
@@ -256,9 +274,16 @@ async function studiosHoldingPhone(
 
   const out: StudioTarget[] = [];
   const byOrg = new Map<string, StudioTarget>();
+  // A seat that resolved to NO STUDIO AT ALL. Counted separately from `failed`
+  // because the read was clean: there is simply no studio to write a ledger
+  // for, which is not a thing a STOP may be acknowledged over.
+  let unattributed = false;
   for (const p of parties) {
     const org = orgOfProject.get(p.project_id);
-    if (!org) continue;
+    if (!org) {
+      unattributed = true;
+      continue;
+    }
     let target = byOrg.get(org);
     if (!target) {
       target = { org, projectId: p.project_id, partyIds: [] };
@@ -267,7 +292,13 @@ async function studiosHoldingPhone(
     }
     target.partyIds.push(p.id);
   }
-  return { targets: out, failed };
+  if (unattributed) {
+    console.error(
+      "studiosHoldingPhone: some seats belong to no studio at all",
+      { projectIds },
+    );
+  }
+  return { targets: out, failed, unattributed };
 }
 
 /**
@@ -735,9 +766,19 @@ export async function processInbound(
     // org could not be read is a studio this STOP reaches by no other leg,
     // because withRecordOnlyStudios() can only union in studios that already
     // hold a record.
+    // AND A FIFTH FLAG, which is not a failure (close-out r5 BLOCKING-1): a
+    // seat that resolved to no studio at all. Nothing errored, so none of the
+    // four fire — and there is no record for withRecordOnlyStudios() to union
+    // in either, because 00594's fold skips a project with no org. So the
+    // refusal lands on NO ledger: writeChannelConsent() loops over an empty
+    // target list, and since R-AS the frozen seats are not a second copy. The
+    // next send then reads `unknown` on the no-studio branch of the gate and
+    // goes out. A refusal this rail cannot record is not a refusal it may
+    // acknowledge; Twilio retries, and if the project is still studio-less the
+    // loss is loud in the logs instead of silent on the wire.
     if (
       stopPhoneParties.failed || stopRecordStudios.failed ||
-      stopPartyOrgs.failed || stopWrite.failed
+      stopPartyOrgs.failed || stopPartyOrgs.unattributed || stopWrite.failed
     ) {
       console.error(
         "sms-inbound STOP: refusing to acknowledge — the refusal was not fully recorded",
@@ -746,6 +787,7 @@ export async function processInbound(
           partiesReadFailed: stopPhoneParties.failed,
           recordReadFailed: stopRecordStudios.failed,
           partyOrgReadFailed: stopPartyOrgs.failed,
+          partyOrgUnattributed: stopPartyOrgs.unattributed,
           consentWriteFailed: stopWrite.failed,
         },
       );
@@ -778,7 +820,10 @@ export async function processInbound(
     // A failed read here logs (loadPhoneParties / studiosHoldingRecord /
     // studiosHoldingPhone) and grants fewer studios, which leaves the standing
     // refusal standing — the fail-closed direction, so unlike the STOP branch
-    // this one still answers 200 rather than replaying a re-subscription.
+    // this one still answers 200 rather than replaying a re-subscription. The
+    // same goes for studiosHoldingPhone's `unattributed` (close-out r5
+    // BLOCKING-1): a studio-less seat can hold no record, so there is no
+    // refusal for this START to lift and nothing is lost by not granting one.
     const startOrgs = (await studiosHoldingRecord(supabase, from, [
       "opted_out",
       "pending",
