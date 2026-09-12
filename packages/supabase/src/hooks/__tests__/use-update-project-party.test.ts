@@ -6,10 +6,15 @@
  * `pending`/`granted` party to `not_asked` — unless the number being moved TO
  * already has its own `opted_out` sibling row, in which case this row is set
  * to `opted_out` too rather than wrongly reopening an already-opted-out
- * number. An `opted_out` party is NEVER touched by this hook (F3-R2-01): that
- * status is the only stored record of a recipient's STOP, and lifting it
- * would both erase that record and reopen the invite path for a number that
- * opted out. A `not_asked` party has nothing to revert. A save that never
+ * number. An `opted_out` party's number cannot MOVE at all (F3-R2-01 +
+ * close-review r3 MAJOR-4): that status is the only stored record of a
+ * recipient's STOP, lifting it would erase that record, and letting the row
+ * ride onto a corrected number would carry the refusal to a number that never
+ * refused — where the send gate and both write doors read it while the room
+ * prints the record's own, unrelated word. So the edit is refused in a
+ * sentence, symmetrically with 00594's freeze on a pending/granted seat. A
+ * cosmetic reformat of the same digits is not a change and still lands.
+ * A `not_asked` party has nothing to revert. A save that never
  * touches the phone must leave consent columns untouched, and neither must a
  * save whose phone patch normalizes to the same number already on file
  * (F3-R2-03's cosmetic-reformat case, mirrored here at the hook level).
@@ -184,26 +189,63 @@ describe('useUpdateProjectParty — phone change resets SMS consent', () => {
     );
   });
 
-  it('never lifts an opted-out party’s consent — the phone changes, the compliance record does not (F3-R2-01)', async () => {
+  it('refuses the phone edit on an opted-out party — the refusal cannot travel to a corrected number (F3-R2-01, close-review r3 MAJOR-4)', async () => {
     const currentRow = currentRowBuilder({
       data: { sms_consent_status: 'opted_out', phone_e164: '+15550001111' },
       error: null,
     });
-    // opted_out never reaches the sibling check — only two `from` calls.
+    // opted_out never reaches the sibling check, and never reaches the write:
+    // exactly ONE `from` call, so exactly one queued return (from.mockClear()
+    // in beforeEach does not drain a leftover mockReturnValueOnce).
+    from.mockReturnValueOnce({ select: currentRow.select });
+
+    const mutationFn = mutationFnOf(useUpdateProjectParty());
+    await expect(
+      mutationFn({
+        id: 'party-2',
+        projectId: 'project-1',
+        patch: { phone: '5551112222' },
+      }),
+    ).rejects.toThrow(/replied STOP/);
+
+    expect(from).toHaveBeenCalledTimes(1);
+    expect(builder.update).not.toHaveBeenCalled();
+  });
+
+  it('still lets a cosmetic reformat through on an opted-out party — same digits is not a change', async () => {
+    const currentRow = currentRowBuilder({
+      data: { sms_consent_status: 'opted_out', phone_e164: '+15550001111' },
+      error: null,
+    });
     from.mockReturnValueOnce({ select: currentRow.select }).mockReturnValueOnce(builder);
 
     const mutationFn = mutationFnOf(useUpdateProjectParty());
     await mutationFn({
       id: 'party-2',
       projectId: 'project-1',
-      patch: { phone: '5551112222' },
+      patch: { phone: '(555) 000-1111' },
     });
 
     expect(from).toHaveBeenCalledTimes(2);
-    expect(builder.update).toHaveBeenCalledWith({ phone: '5551112222' });
+    expect(builder.update).toHaveBeenCalledWith({ phone: '(555) 000-1111' });
     const patchArg = builder.update.mock.calls[0][0];
     expect(patchArg).not.toHaveProperty('sms_consent_status');
     expect(patchArg).not.toHaveProperty('sms_opt_out_at');
+  });
+
+  it('refuses clearing the phone on an opted-out party too — the freeze refuses the same clear on a granted seat', async () => {
+    const currentRow = currentRowBuilder({
+      data: { sms_consent_status: 'opted_out', phone_e164: '+15550001111' },
+      error: null,
+    });
+    from.mockReturnValueOnce({ select: currentRow.select });
+
+    const mutationFn = mutationFnOf(useUpdateProjectParty());
+    await expect(
+      mutationFn({ id: 'party-2', projectId: 'project-1', patch: { phone: null } }),
+    ).rejects.toThrow(/replied STOP/);
+
+    expect(builder.update).not.toHaveBeenCalled();
   });
 
   it('leaves a not_asked party’s consent columns alone on a phone change — nothing to revert', async () => {

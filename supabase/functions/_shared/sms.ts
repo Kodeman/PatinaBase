@@ -436,8 +436,16 @@ export type ChannelConsentVerdict = "refuse" | "allow" | "unknown";
  * answers a refusal is the recipient's own YES or START, which that rail
  * writes — lowering the flag and stamping a fresh consented_at; nothing the
  * studio can type reopens this door (00594's RPCs never lower the flag).
+ *
+ * EXPORTED so a caller that PRE-FILTERS recipients asks this question rather
+ * than inventing its own (close-out r3 MAJOR-2). field-daily used to select its
+ * digest recipients with `.eq("sms_consent_status", "granted")` on
+ * project_parties — the column 00594 froze — so the cron's recipient set could
+ * only ever contain pre-fold rows and the whole daily digest went dead for
+ * every consent recorded after the freeze. A pre-filter that asks the same
+ * function the send gate asks cannot drift from it.
  */
-async function channelConsentVerdict(
+export async function channelConsentVerdict(
   supabase: SupabaseClient,
   phone: string,
   projectId: string | null,

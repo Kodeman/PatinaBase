@@ -173,3 +173,148 @@ Deno.test("runFieldDaily keys the digest conversation on SMS_CONVERSATION_NUMBER
     "conversation keyed on the physical override, not the MG SID",
   );
 });
+
+// ── close-out r3 MAJOR-2: the digest reads the RECORD, not the frozen seat ───
+//
+// Both recipient selects used to carry `.eq("sms_consent_status", "granted")`
+// on project_parties — the column 00594 froze. Nothing writes a seat to
+// 'granted' any more, so the cron's recipient set could only ever contain
+// pre-fold rows and the daily digest went dead for every consent recorded
+// after the freeze. The gate is now channelConsentVerdict — the same function
+// sendPartySms asks — plus the legacy seat leg sendPartySms still honours.
+
+/** A studio, a project under it, and a consent record for one number. */
+function consentScenario(opts: {
+  seatStatus: string;
+  record?: { status: string; refusal_unanswered?: boolean };
+  partyKind?: string;
+  withTask?: boolean;
+  deliveryEvent?: boolean;
+}) {
+  return createFakeSupabase({
+    organizations: [{ id: "org1", type: "design_studio", status: "active" }],
+    projects: [{ id: "proj1", studio_id: "org1", designer_id: "designer1" }],
+    project_parties: [
+      {
+        id: "pty1",
+        phone_e164: "+15550001111",
+        project_id: "proj1",
+        party_kind: opts.partyKind ?? "sub",
+        sms_consent_status: opts.seatStatus,
+        display_name: "Sal",
+      },
+    ],
+    studio_channel_consent: opts.record
+      ? [{
+        organization_id: "org1",
+        channel_kind: "sms",
+        channel_value: "+15550001111",
+        status: opts.record.status,
+        refusal_unanswered: opts.record.refusal_unanswered ?? false,
+      }]
+      : [],
+    project_tasks: opts.withTask === false ? [] : [
+      { id: "task1", title: "Install vanity", due_date: TODAY, project_id: "proj1", owner_party_id: "pty1", status: "todo" },
+    ],
+    client_decisions: [],
+    delivery_events: opts.deliveryEvent
+      ? [{ event_id: "ev9", project_id: "proj1", vendor_name: "RH", event_date: TODAY, event_type: "delivery_expected" }]
+      : [],
+    sms_conversations: [],
+  });
+}
+
+function runWith(fake: unknown, sent: SendPartySmsInput[]) {
+  return runFieldDaily(fake as never, {
+    getEnv: (k) => (k === "TWILIO_FROM_NUMBER" ? "+15559990000" : undefined),
+    now: new Date(`${TODAY}T17:00:00Z`),
+    sendFn: (_s, input) => { sent.push(input); return Promise.resolve({ sent: true }); },
+    flushFn: () => Promise.resolve({ flushed: 0, skipped: 0 }),
+  });
+}
+
+Deno.test("runFieldDaily digests a party the RECORD granted while the frozen seat still says pending (close-out r3 MAJOR-2)", async () => {
+  const sent: SendPartySmsInput[] = [];
+  const summary = await runWith(
+    consentScenario({ seatStatus: "pending", record: { status: "granted" } }),
+    sent,
+  );
+  assertEquals(summary.digests_sent, 1);
+  assertEquals(sent.length, 1);
+  assertEquals(sent[0].templateKey, "sms_daily_digest");
+});
+
+Deno.test("runFieldDaily texts nobody when the record refuses, whatever the frozen seat says", async () => {
+  const sent: SendPartySmsInput[] = [];
+  const summary = await runWith(
+    consentScenario({ seatStatus: "granted", record: { status: "opted_out" } }),
+    sent,
+  );
+  assertEquals(summary.digests_sent, 0);
+  assertEquals(sent.length, 0);
+  assertEquals(summary.parties_skipped, 1);
+});
+
+Deno.test("runFieldDaily texts nobody when a standing refusal is unanswered under a granted record", async () => {
+  const sent: SendPartySmsInput[] = [];
+  const summary = await runWith(
+    consentScenario({
+      seatStatus: "granted",
+      record: { status: "granted", refusal_unanswered: true },
+    }),
+    sent,
+  );
+  assertEquals(summary.digests_sent, 0);
+  assertEquals(sent.length, 0);
+});
+
+Deno.test("runFieldDaily texts nobody the studio never asked — no record, and a seat nobody moved", async () => {
+  const sent: SendPartySmsInput[] = [];
+  const summary = await runWith(
+    consentScenario({ seatStatus: "not_asked" }),
+    sent,
+  );
+  assertEquals(summary.digests_sent, 0);
+  assertEquals(sent.length, 0);
+  assertEquals(summary.parties_skipped, 1);
+});
+
+Deno.test("runFieldDaily still digests a pre-fold seat that holds a real granted, with no record yet", async () => {
+  const sent: SendPartySmsInput[] = [];
+  const summary = await runWith(
+    consentScenario({ seatStatus: "granted" }),
+    sent,
+  );
+  assertEquals(summary.digests_sent, 1);
+  assertEquals(sent.length, 1);
+});
+
+Deno.test("runFieldDaily's delivery confirm follows the same record (MAJOR-2's second filter)", async () => {
+  const sent: SendPartySmsInput[] = [];
+  const granted = await runWith(
+    consentScenario({
+      seatStatus: "pending",
+      record: { status: "granted" },
+      partyKind: "receiver",
+      withTask: false,
+      deliveryEvent: true,
+    }),
+    sent,
+  );
+  assertEquals(granted.delivery_confirms_sent, 1);
+  assertEquals(sent.filter((s) => s.templateKey === "sms_delivery_confirm").length, 1);
+
+  const refusedSent: SendPartySmsInput[] = [];
+  const refused = await runWith(
+    consentScenario({
+      seatStatus: "granted",
+      record: { status: "opted_out" },
+      partyKind: "receiver",
+      withTask: false,
+      deliveryEvent: true,
+    }),
+    refusedSent,
+  );
+  assertEquals(refused.delivery_confirms_sent, 0);
+  assertEquals(refusedSent.length, 0);
+});

@@ -1,5 +1,7 @@
 // field-daily — the once-daily Field Coordination digest cron (00284 schedules
-// it at 13:00 UTC). Per consented ('granted') field party per project it:
+// it at 13:00 UTC). Per consented field party per project — consent read off
+// the studio's own record via mayTextField() below, never off the seat column
+// 00594 froze — it:
 //   · composes a numbered open-item digest (open owned tasks + court items
 //     older than 48h), persists the numbered menu to the conversation's
 //     state_context.menu so an inbound "DONE 2" resolves deterministically,
@@ -7,13 +9,17 @@
 //   · sends sms_delivery_confirm to receiver/gc parties for deliveries in the
 //     next 48h (deduped via state_context.delivery_confirms_sent),
 //   · flushes any 'deferred' outbound rows.
-// Parties with nothing to say are skipped (A2P-friendly — one predictable msg).
+// Parties with nothing to say are skipped (A2P-friendly — one predictable msg),
+// and so are parties whose consent the gate refuses — both counted in
+// parties_skipped, so a run that texts nobody says why in its own summary
+// instead of going quietly empty.
 //
 // Env-gated like the other crons (service role). The send + flush functions are
 // injectable so the composition/persistence/dedupe logic unit-tests offline.
 
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
+  channelConsentVerdict,
   flushDeferredMessages,
   sendPartySms,
   smsConversationNumber,
@@ -23,6 +29,46 @@ import {
 } from "../_shared/sms.ts";
 
 const FIELD_KINDS = ["gc", "sub", "installer", "receiver"];
+
+/**
+ * May this party be texted an ordinary (non-invite) field message?
+ *
+ * THE RECORD, NOT THE SEAT (R-AS, close-out r3 MAJOR-2). Both recipient
+ * selects below used to pre-filter on `project_parties.sms_consent_status =
+ * 'granted'` — the column 00594 froze. Nothing writes a seat to 'granted' any
+ * more (the mirror is gone, the rail writes the record only, and
+ * useAddProjectParty's INSERT is born 'pending'), so the cron's recipient set
+ * could only shrink: the daily digest and the delivery confirms went dead for
+ * every consent recorded after the freeze, and the send gate's own "allow"
+ * branch — the half of G-3 the record exists to provide — was unreachable
+ * through this caller.
+ *
+ * The gate asked here is `channelConsentVerdict`, the same function
+ * sendPartySms asks first, so the pre-filter cannot drift from the authority:
+ *   · "allow"   — the studio's own record says granted and no seat of that
+ *                 studio on that number refuses.
+ *   · "refuse"  — never texted, whichever ledger carries the refusal.
+ *   · "unknown" — no record yet (the fold has not reached this pair). The
+ *                 legacy seat is honoured here exactly as sendPartySms's
+ *                 second, legacy gate still honours it, so a pre-fold
+ *                 'granted' row keeps its digest and nothing regresses while
+ *                 both ledgers are live.
+ * sendPartySms re-runs the whole gate for real; this only decides whom it is
+ * worth composing a digest for, so it never widens what may be sent.
+ */
+async function mayTextField(
+  supabase: SupabaseClient,
+  party: { phone_e164: string | null; project_id: string; sms_consent_status?: string | null },
+): Promise<boolean> {
+  if (!party.phone_e164) return false;
+  const verdict = await channelConsentVerdict(
+    supabase,
+    party.phone_e164,
+    party.project_id,
+  );
+  if (verdict === "refuse") return false;
+  return verdict === "allow" || party.sms_consent_status === "granted";
+}
 
 // ── Pure digest composition (unit-tested) ───────────────────────────────────
 export interface DigestItem {
@@ -150,19 +196,26 @@ export async function runFieldDaily(
   };
 
   // ── Consented field parties ───────────────────────────────────────────────
+  // The consent test is mayTextField() below, not a WHERE on the frozen seat
+  // (close-out r3 MAJOR-2). The seat column is still SELECTed because the
+  // legacy leg of that gate reads it.
   const { data: parties } = await supabase
     .from("project_parties")
     .select("id, phone_e164, project_id, display_name, party_kind, sms_consent_status")
-    .in("party_kind", FIELD_KINDS)
-    .eq("sms_consent_status", "granted");
+    .in("party_kind", FIELD_KINDS);
 
   for (const party of (parties ?? []) as Array<{
     id: string;
     phone_e164: string | null;
     project_id: string;
     party_kind: string;
+    sms_consent_status?: string | null;
   }>) {
     if (!party.phone_e164) {
+      summary.parties_skipped++;
+      continue;
+    }
+    if (!(await mayTextField(supabase, party))) {
       summary.parties_skipped++;
       continue;
     }
@@ -246,16 +299,25 @@ export async function runFieldDaily(
     vendor_name: string | null;
     event_date: string;
   }>) {
-    // Consented receiver/gc parties on the event's project.
+    // Consented receiver/gc parties on the event's project — consent asked of
+    // the record through mayTextField(), not the frozen seat (close-out r3
+    // MAJOR-2).
     const { data: recvParties } = await supabase
       .from("project_parties")
       .select("id, phone_e164, project_id, party_kind, sms_consent_status")
       .eq("project_id", ev.project_id)
-      .in("party_kind", ["receiver", "gc"])
-      .eq("sms_consent_status", "granted");
+      .in("party_kind", ["receiver", "gc"]);
 
-    for (const party of (recvParties ?? []) as Array<{ id: string; phone_e164: string | null; project_id: string }>) {
+    for (
+      const party of (recvParties ?? []) as Array<{
+        id: string;
+        phone_e164: string | null;
+        project_id: string;
+        sms_consent_status?: string | null;
+      }>
+    ) {
       if (!party.phone_e164) continue;
+      if (!(await mayTextField(supabase, party))) continue;
       if (!conversationNumber) {
         summary.parties_skipped++;
         continue;

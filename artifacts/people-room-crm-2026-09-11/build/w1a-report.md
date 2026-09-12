@@ -13,6 +13,13 @@ the eight legacy columns are frozen, and every reader goes through one function.
 Sections 1–4 describe the shape as it now stands; section 5 is what that costs
 and who owes it.
 
+**Amended after close-out review round 3 (2026-09-12).** That round found the
+blast radius of the freeze on readers nobody had counted: three SQL readers
+(§2.3b, migration `00621`), one shipped cron (§4, `field-daily`) and one
+reachable portal write path (§5.2, a phone correction on an `opted_out` seat).
+All five are fixed in this pass rather than owed to W2; §5.1's site-request gap
+is sharpened, not fixed, and stays W2's.
+
 ---
 
 ## 1. The model, in one paragraph
@@ -132,6 +139,31 @@ the confident wrong answer. Test block 38 holds it.
 the frozen columns: `channel_consent_status()` returns a status, not dates.
 Those two belong to W1b's v4 rebuild (§5.3).
 
+### 2.3b Three more SQL readers, repointed at the close-out (00621)
+
+00594 repointed the two readers the ROOM prints. The close-out review found
+three more SQL readers of the frozen column that no round had counted — one of
+them designer-facing today, two of them dispatch gates that had gone silent —
+and `00621_consent_readers_repointed.sql` grafts all three from their
+grep-winners, one expression each.
+
+| Object | Lineage (grep-winner) | Change |
+|---|---|---|
+| `public.field_activity_summary` | `00282_sms_core.sql:571-593` (its only definition site) | `awaiting_reply_count`: `pp.sms_consent_status = 'pending'` → `channel_consent_status(project_consent_org(pp.project_id), 'sms', pp.phone_e164) = 'pending'`. The unreviewed-SMS and overdue-task counts, the party kinds, the `security_invoker` marker and the two grants are byte-identical |
+| `public.fc_dispatch_court_assignment()` | `00284_field_dispatch_wiring.sql:101-145` | the consent gate: `v_party.sms_consent_status <> 'granted'` → `NOT COALESCE(channel_consent_status(project_consent_org(NEW.project_id),'sms',v_party.phone_e164) = 'granted', false) AND v_party.sms_consent_status <> 'granted'`. Every early return, the party-kind filter, the fire-and-forget `BEGIN/EXCEPTION`, the template key, the vars, the REVOKE and the trigger itself unchanged |
+| `public.fc_dispatch_task_assignment()` | `00284_field_dispatch_wiring.sql:160-203` | the same one gate, the same way |
+
+**Why the two dispatch gates keep a seat leg.** `sendPartySms` is the authority
+on every message these triggers cause, and it still honours a frozen seat
+holding a real pre-fold `granted` (the legacy reduction behind
+`channelConsentVerdict`). A gate that read the record ALONE would refuse
+dispatches the send rail itself would allow — a new silence in the name of
+fixing one. The record word is `COALESCE`d to `false` because
+`channel_consent_status()` returns NULL for "no record": without it a party with
+no record would fall THROUGH a plpgsql `IF … OR NOT (NULL)` guard and dispatch.
+Test block 42 asserts both the grant and the three refusals (unasked, recorded
+refusal, non-field party).
+
 ---
 
 ## 3. Every writer of the frozen columns, found by grep
@@ -178,6 +210,33 @@ its four siblings. `flushDeferredMessages` is unchanged: R-AH's re-check through
 `channelConsentVerdict`, keyed off the deferred row's own party, then the legacy
 party-row check narrowed to that same party.
 
+`channelConsentVerdict` is now **exported** (close-out r3 MAJOR-2). It was
+module-private, so a caller that pre-filtered its own recipients had to invent
+its own consent test — and `field-daily` invented one on the frozen seat. A
+pre-filter that asks this exact function cannot drift from what the send gate
+will decide. Editing `_shared/sms.ts` means every importing function must be
+redeployed, not only `field-daily` (§8).
+
+### `supabase/functions/field-daily/core.ts`
+
+Both recipient selects carried `.eq("sms_consent_status", "granted")` on
+`project_parties` — the column 00594 froze — before `sendPartySms` was ever
+called (`:154-157` for the digest, `:251-255` for the delivery confirms). Since
+nothing writes a seat to `granted` any more, the cron's recipient set could only
+shrink as the book turned over: **the daily digest and the delivery confirms
+were dead for every consent recorded after the freeze**, and the send gate's
+whole `"allow"` branch — the half of G-3 the record exists to provide — was
+unreachable through this caller. It failed closed, silently, on a shipped
+un-flagged pg_cron feature.
+
+The filter is now `mayTextField(supabase, party)`: refuse on the gate's
+`"refuse"`, send on its `"allow"`, and on `"unknown"` (no record yet, the fold
+has not reached this pair) honour a pre-fold `granted` seat exactly as
+`sendPartySms`'s own legacy gate still honours it. A refused party is counted in
+`parties_skipped`, so a run that texts nobody says why in its own summary
+instead of going quietly empty. Six Deno tests cover it, and the pre-fix core
+fails two of them (§6).
+
 ### `supabase/functions/sms-inbound/pipeline.ts`
 
 `optOutAllForPhone()` and `grantPartiesForStudios()` are deleted with their call
@@ -217,6 +276,26 @@ transition any more, so:
   failing, the rail was repointed and the assertion is the one to update);
 - `site_request_send()` **raises** for a `not_asked` assignee (§3).
 
+**It is worse than "not released yet", and the close-out review sharpened it
+(r3, tests §7).** `site_request_send()` (`00374:1265-1271`),
+`site_request_resend()` (`:1364`) and `site_request_dispatch_after_consent()`
+(`:1424`) each gate on `project_parties.sms_consent_status = 'granted'`, and a
+grep of the whole tree finds **no live writer that can set a seat to `granted`
+any more** — the inbound rail's `grantPartiesForStudios()` was deleted this wave
+and `useRecordPartySmsConsent` only ever flipped `not_asked` → `pending`. So
+resend and dispatch-after-consent can never succeed for **any** party created
+after this wave, for any number, whatever the studio's real
+`studio_channel_consent` record says. Both RPCs are `GRANT EXECUTE … TO
+authenticated` and reachable from the portal and from Patina Field.
+
+A fourth file belongs beside `SiteRequestContract.swift` in that repoint:
+`apps/mobile/Capture/Capture/Features/SiteRequests/SupabaseSiteRequestService.swift`
+selects `project_parties.sms_consent_status` directly (`:17` party columns) and
+turns it into a client-facing boolean (`:516`, `:524` —
+`smsConsentGranted: consentStatus == "granted"`). Patina Field's assignee picker
+will therefore show that badge FALSE for ever for a party whose consent the
+studio holds and the room correctly prints as `granted`.
+
 Repointing the site-request rail at the record is one change and it belongs with
 that rail, not inside a consent migration. It is stated in 00594's header, in
 `COMMENT ON TABLE public.project_parties`, and here.
@@ -227,13 +306,29 @@ names the RPC at `apps/mobile/Capture/Capture/Features/SiteRequests/SiteRequestC
 So the iOS "send a site request" act fails for any `not_asked` assignee too, not
 only the portal's.
 
-### 5.1b The rest of the rails that still read the frozen seat (W2)
+### 5.1b The rest of the rails that still read the frozen seat
 
 Added after close-review r1 (MAJOR-4). §5.1 and §8 named the site-request rail
 and the portal's two UPDATE writers; these four are on the seat as well, and
 **replacing the two portal writers is not sufficient to restore the double
 opt-in**, because the invite dispatch fires on a party row and the YES gate
 reads a party row.
+
+**Four more were found in the close-out round and are FIXED in this wave, not
+owed to W2** (close-out r3 MAJOR-1/MAJOR-2/MAJOR-3). They were all silent, they
+all failed closed, and one of them was designer-facing today:
+
+| Rail | Where | Now |
+|---|---|---|
+| the Field Coordination **Desk rollup** | `field_activity_summary.awaiting_reply_count`, `00282:578-582` → `use-field-activity.ts:48-55` → `field-desk.tsx:44-52` ("N parties haven't opted in") | **repointed at the record**, 00621 §1. On the frozen column the count could never clear, so the Desk said a party had not opted in while the Call Sheet printed "Texting" for the same row. SQL test block 41 |
+| `fc_dispatch_court_assignment` | `00284:118-123`, SECURITY DEFINER trigger on `client_decisions` | **repointed**, 00621 §2a. Assigning a coordination item to a sub whose consent the studio holds on the record dispatched no `sms_court_assignment` at all. SQL test block 42 |
+| `fc_dispatch_task_assignment` | `00284:176-181`, SECURITY DEFINER trigger on `project_tasks` | **repointed**, 00621 §2b. Same mechanism, on task assignment. SQL test block 42 |
+| `field-daily` (the 13:00 UTC cron) | `field-daily/core.ts:154-157` and `:251-255`, both `.eq("sms_consent_status","granted")` | **repointed at the send gate itself** — `mayTextField()` asks the exported `channelConsentVerdict`, the same function `sendPartySms` asks, so the pre-filter cannot drift from the authority. The daily digest and the delivery confirms were dead for every consent recorded after the freeze. Six Deno tests, and the pre-fix core fails two of them |
+
+`fc_dispatch_optin_invite` (00432) and `_site_request_consent_granted_dispatch`
+(00374) are deliberately left on the seat — the first is the invite rail the
+portal's INSERT still drives (§3), the second belongs to the site-request
+repoint (§5.1).
 
 | Rail | Where | What it reads off the frozen seat |
 |---|---|---|
@@ -256,7 +351,29 @@ and `resolveRecipient` / `flushDeferredMessages` — all repointed at
   un-sendable for that studio **even after the recipient replies START**. It
   fails CLOSED, and the way out is either W2 retiring PR-x's check or a
   deliberate `app.consent_legacy_write` repair — test block 16Bf walks exactly
-  that.
+  that. **And a phone edit can no longer create one on a number that never
+  refused** (close-out r3 MAJOR-4). `useUpdateProjectParty` used to leave an
+  `opted_out` seat's consent columns alone on a phone change — deliberately, so
+  the refusal was never erased — which meant the UPDATE named only
+  `phone`/`phone_e164`, the freeze never fired, and the refusal rode onto the
+  corrected number, where `orgHasOptedOutParty()` and both write doors' seat
+  gates read it. The room then printed `not_asked` over a dead number (all three
+  write doors refusing, nothing to reconsent against), or — where the corrected
+  number was one the studio already held a real grant for, the commonest typo —
+  printed `granted` while every send came back `opted_out`: G-3's sentence
+  restored inside the record built to end it, reachable by fixing a digit.
+  Pre-freeze the seat itself printed "Opted out", which was the visible clue.
+  The hook now REFUSES a genuine phone change on an `opted_out` seat, in a
+  sentence ("This person replied STOP, and that refusal is attached to the number
+  on file…"), symmetrically with the freeze's refusal on a `pending`/`granted`
+  seat; a cosmetic reformat of the same digits is not a change and still lands.
+  **The population that remains:** seats already transplanted before this fix —
+  any `opted_out` seat whose `phone_e164` is not the number its
+  `sms_opt_out_at`/evidence actually belongs to — plus any future transplant done
+  outside the hook (service_role, SQL, a direct PostgREST call). Nothing on any
+  surface names them, and the durable fix is W2 retiring PR-x's seat check, which
+  `rulings.md` PR-x already contemplates ("then retire it in a named
+  follow-up"). Five hook tests hold the refusal.
 - **A refusal on ONE seat makes the whole number unsendable for that studio,
   even where another seat holds a genuine later grant** (close-review r1/r2
   MINOR-7). `00594:666` sets `refusal_unanswered = (f.org IS NOT NULL)` and the
@@ -419,6 +536,67 @@ probe 1 is what proves it.
  {postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres,authenticated=r/postgres}
 ```
 
+### The close-out fixes (00621 + the two TypeScript doors)
+
+Two resets, both clean, head `00621`; legacy grants regenerated (*baseline +
+2644 replayed statements* — the diff is 00621's two restated view GRANTs and the
+two trigger-function REVOKEs); `db:generate` shows **no drift** (a view's column
+list and two trigger functions are not in generated types); the SQL suite is
+**45 passed, exit 0**, the only `ERROR|FAIL` match being a block title:
+
+```
+NOTICE:  41. the Desk rollup counts the record's pending, not the frozen seat's,
+         and agrees with the Call Sheet about the same person (close-out r3 MAJOR-1): passed
+NOTICE:  42. the two 00284 dispatch gates reach a party the record granted, and still
+         refuse an unasked, a refused and a non-field one (close-out r3 MAJOR-3): passed
+NOTICE:  All W1a assertions passed.
+```
+
+**The negative control** —
+`build/probe39-close-r3-fix-negative-control.sql` restores the pre-00621 bodies
+inside one rolled-back transaction and walks the same fixtures, so the new
+assertions are visibly not tautologies. One project, three field seats: Ove and
+Vi hold the studio's recorded GRANT with their seats frozen at `pending`, Nan
+holds the recorded INVITE with her seat frozen at `not_asked`:
+
+```
+=== AFTER 00621 (what ships) ===
+ desk_awaiting_reply_count_after_00621 = 1
+ counted_as_awaiting_after_00621       = Nan Sorley
+ dispatches_after_00621                = 2      (task + court, for the granted party)
+
+=== BEFORE 00621 (the shipped objects the review found) ===
+ desk_awaiting_reply_count_before_00621 = 2
+ counted_as_awaiting_before_00621       = Ove Berglund, Vi Odom
+ dispatches_before_00621                = 0
+
+ display_name | roster_word
+ Nan Sorley   | pending
+ Ove Berglund | granted     ← the Desk was counting these two as "haven't opted in"
+ Vi Odom      | granted
+```
+
+`field-daily`, `_shared/sms.ts` and the two hooks:
+
+```
+$ deno test --no-check -A --node-modules-dir=auto --config supabase/functions/deno.json     supabase/functions/_shared/sms.test.ts supabase/functions/_tests/sms-inbound.test.ts     supabase/functions/_tests/field-daily.test.ts
+ok | 96 passed | 0 failed (151ms)          # 83 + 13, six of them new
+
+# negative control: the PRE-fix core against the new tests
+$ git stash push -- supabase/functions/field-daily/core.ts
+$ deno test … --filter "MAJOR-2" supabase/functions/_tests/field-daily.test.ts
+FAILED | 0 passed | 2 failed | 11 filtered out
+$ git stash pop
+
+$ pnpm --dir … --filter @patina/supabase test
+Test Files  100 passed (100)
+     Tests  1253 passed | 12 skipped (1265)
+
+$ pnpm --dir … --filter @patina/supabase   type-check   # clean
+$ pnpm --dir … --filter @patina/designer-portal type-check   # clean
+$ ls deno.lock → No such file or directory
+```
+
 ---
 
 ## 7. Unchanged by this pass
@@ -443,12 +621,17 @@ own leaves two designer-facing acts refusing:
 
 - `site_request_send()` raises `consent_legacy_column_frozen` for any
   `not_asked` assignee — from the portal AND from Patina Field (§5.1). That is a
-  hard error on a live, un-flag-gated act, with no flag to hide it behind.
+  hard error on a live, un-flag-gated act, with no flag to hide it behind. And
+  `site_request_resend()` / `site_request_dispatch_after_consent()` can never
+  succeed for any party created after this wave, whatever the record says,
+  because nothing can move a seat to `granted` again (§5.1). Patina Field's
+  `smsConsentGranted` badge reads FALSE for ever for the same reason.
 - Every phone edit of a seat currently `pending` or `granted`, and every use of
   the party sheet's own consent act, raises too (§3). Since close-review r1 the
   hooks turn that into a written sentence instead of the raw Postgres string —
   but the act still fails, and until W2 there is no working substitute in the
-  room.
+  room. Since the close-out round a phone edit of an `opted_out` seat is refused
+  too, in its own sentence, because the refusal cannot travel (§5.2).
 
 Owed:
 
@@ -458,8 +641,15 @@ Owed:
   writers does NOT restore the double opt-in.
 - The portal's two UPDATE writers (§3) — W2.
 - `people_directory`'s two consent DATES (§5.3) — W1b's v4 rebuild.
+- Patina Field's `SupabaseSiteRequestService.swift` party-column select and its
+  `smsConsentGranted` badge (§5.1) — W2, with the site-request rail.
+- Retiring PR-x's seat check, which is what finally un-strands a transplanted or
+  legacy `opted_out` seat (§5.2) — W2.
 - The unattributable-send fail-open (§5.2) — needs Fable's ruling. Close-review
   r1 (F1) confirms it independently and names it a REGRESSION against pre-00594
   behaviour: the phone-global party write used to catch exactly this case.
-- Nothing deployed. W1b mints from **00621**; 00595–00620 are reserved for
-  another program.
+- Nothing deployed. This close-out added **00621**
+  (`00621_consent_readers_repointed.sql`), so **W1b mints from 00622**;
+  00595–00620 remain reserved for another program. A `_shared/sms.ts` edit is in
+  this pass (the `channelConsentVerdict` export), so the deploy chain must
+  redeploy EVERY function importing `_shared/sms.ts`, not only `field-daily`.
