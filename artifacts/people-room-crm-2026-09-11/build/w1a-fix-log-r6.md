@@ -530,3 +530,271 @@ artifacts/.../build/w1a-report.md                               §5 dry-run shap
                                                                 the pasted block-27 notice, the block prose
 artifacts/.../build/rerun.sql                                   regenerated from the edited migrations
 ```
+
+---
+
+# W1a — fix log, round 6 · SECOND PASS (`w1a-review-r6-migrations.md`)
+
+> **ID collision, read this first.** The review that drove this pass is
+> `w1a-review-r6-migrations.md`, and it numbers its majors **R6-M1 / R6-M2 /
+> R6-M3**. The first half of this file closes a *different* set that also
+> carries r6 ids (B6-1, M6-1 … M6-5, and a `R6-M1`/`R6-M2` pair quoted from a
+> later reviewer's numbering). Everything below this line is the second pass and
+> refers only to `w1a-review-r6-migrations.md` §2.
+
+Worktree `/Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build`,
+branch `build/people-room-crm-2026-09-11`. Local Supabase only — no
+`supabase db push`, no `supabase functions deploy`, no Strata contact.
+`apps/designer-portal/.env.local` → `No such file or directory` (checked before
+the first reset; no portal env in this worktree points anywhere).
+
+Scope: the three majors, and nothing else. The seven minors (R6-m1 … R6-m7) are
+untouched.
+
+## Gates run
+
+```
+$ pnpm --dir <worktree> supabase:reset
+Finished supabase db reset on branch main.
+{"target":"local","version":"","message":"Reset local database."}
+
+$ psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 \
+    -f supabase/tests/people/w1a_identity_channels_consent_test.sql
+NOTICE:  32. a recorded refusal never speaks for the grant it stands beside (r6 R6-M1): passed
+NOTICE:  33. a blank evidence field cannot empty the evidence set (r6 R6-M2): passed
+NOTICE:  34. an email refusal is recoverable by a fresh recorded consent and an SMS one is not (r6 R6-M3): passed
+NOTICE:  All W1a assertions passed.
+                                                          # 36 NOTICE lines, 0 ERROR
+
+$ python3 scripts/generate-legacy-grants.py
+wrote …/supabase/seed/00-legacy-grants.sql — baseline + 2633 replayed statements
+$ git diff --stat supabase/seed/00-legacy-grants.sql
+                                                          # (empty — no GRANT/REVOKE changed)
+
+$ SUPABASE_DB_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres \
+    pnpm --dir <worktree> db:generate
+$ git diff --stat packages/supabase/src/database.types.ts
+                                                          # (empty — function bodies only, no
+                                                          #  column or signature shape change)
+
+$ psql … -v ON_ERROR_STOP=1 -f artifacts/.../build/rerun.sql   # regenerated; all three re-executed, rolled back
+ rerun 00592 ok
+ rerun 00593 ok
+ backfill_channel_consent_from_parties
+ rerun 00594 ok
+
+$ deno test --no-check --allow-all --config supabase/functions/deno.json \
+    supabase/functions/_shared/sms.test.ts supabase/functions/_tests/sms-inbound.test.ts
+ok | 71 passed | 0 failed (106ms)
+```
+
+## Files touched
+
+```
+supabase/migrations/00594_studio_channel_consent.sql            R6-M1 (DO UPDATE consent columns,
+                                                                header, the r7 R7-M1 prose it narrows,
+                                                                COMMENT), R6-M2 (same five columns),
+                                                                R6-M3 (both WHERE legs,
+                                                                refusal_unanswered CASE, the
+                                                                channel_opted_out hint, header,
+                                                                reconsent header, COMMENT)
+supabase/tests/people/w1a_identity_channels_consent_test.sql    new blocks 32 / 33 / 34;
+                                                                9d3 + 9f + 28b4 restated;
+                                                                14a pattern widened, 14a6 added
+artifacts/.../build/rerun.sql                                   regenerated from the edited migrations
+```
+
+Nothing outside `00594` and the SQL test changed. No TypeScript was touched:
+`grep -rln 'record_channel_consent\|record_channel_reconsent' supabase/functions
+packages apps services` returns `pipeline.ts`, `_shared/sms.ts`,
+`_shared/sms.test.ts` and `database.types.ts`, and in the first three every hit
+is a prose comment — which is exactly why R6-M3 is latent today.
+
+## Negative control
+
+The pre-fix body was reinstalled verbatim from `git HEAD` inside a rolled-back
+transaction (`artifacts/.../build/probe22-r6r2-negative-control.sql`, which
+`\i`s the `CREATE OR REPLACE FUNCTION public.record_channel_consent` block cut
+out of `git show HEAD:supabase/migrations/00594_…sql`) and the three scenarios
+replayed as an ordinary studio member. All three reproduce:
+
+```
+=== R6-M1 (pre-fix): a written grant, then a verbal refusal ===
+  status   | grant_source_now | grant_evidence_now | granted_on | grant_recorded_at_now
+-----------+------------------+--------------------+------------+-----------------------
+ opted_out | verbal           | He told me on site | 2026-09-12 | 2026-09-12
+
+=== R6-M2 (pre-fix): a grant with v2, then a refusal with disclosure = empty string ===
+  status   | disclosure_version
+-----------+--------------------
+ opted_out | <BLANK>
+
+=== R6-M3 (pre-fix): an email refusal, then a fully evidenced grant ===
+NOTICE:  email granted over the refusal -> channel_opted_out
+NOTICE:  reconsent -> ACCEPTED
+NOTICE:  email granted after reconsent -> channel_opted_out
+ channel_kind |  channel_value   |  status   | refusal_unanswered
+--------------+------------------+-----------+--------------------
+ email        | dana@example.com | opted_out | t
+```
+
+The same script against the live, fixed body
+(`probe23-r6r2-positive-control.sql`):
+
+```
+=== R6-M1 (fixed) ===
+  status   | grant_source_now |        grant_evidence_now         | granted_on | grant_recorded_at_now
+-----------+------------------+-----------------------------------+------------+-----------------------
+ opted_out | written          | Signed the Lindqvist kickoff form | 2026-09-12 | 2026-09-12
+
+=== R6-M2 (fixed) ===
+  status   | disclosure_version
+-----------+--------------------
+ opted_out | v2
+
+=== R6-M3 (fixed) ===
+NOTICE:  email granted over the refusal -> ACCEPTED
+NOTICE:  reconsent -> no_opt_out_to_supersede          (the record has moved to granted — correct)
+NOTICE:  email granted after reconsent -> ACCEPTED
+ channel_kind |  channel_value   | status  | refusal_unanswered
+--------------+------------------+---------+--------------------
+ email        | dana@example.com | granted | f
+```
+
+---
+
+## R6-M1 — a recorded refusal no longer writes the CONSENT side
+
+**What changed.** In `record_channel_consent`'s `ON CONFLICT … DO UPDATE`, the
+five consent columns take the inverse of the `CASE` shape the four `opt_out_*`
+columns already use:
+
+```sql
+      source             = CASE WHEN EXCLUDED.status = 'opted_out' THEN scc.source
+                                ELSE COALESCE(NULLIF(btrim(EXCLUDED.source), ''), scc.source) END,
+      evidence           = CASE WHEN EXCLUDED.status = 'opted_out' THEN scc.evidence
+                                ELSE COALESCE(NULLIF(btrim(EXCLUDED.evidence), ''), scc.evidence) END,
+      recorded_at        = CASE WHEN EXCLUDED.status = 'opted_out' THEN scc.recorded_at
+                                ELSE EXCLUDED.recorded_at END,
+      disclosure_version = CASE WHEN EXCLUDED.status = 'opted_out' THEN scc.disclosure_version
+                                ELSE COALESCE(NULLIF(btrim(EXCLUDED.disclosure_version), ''),
+                                              scc.disclosure_version) END,
+      recorded_by        = CASE WHEN EXCLUDED.status = 'opted_out' THEN scc.recorded_by
+                                ELSE COALESCE(EXCLUDED.recorded_by, scc.recorded_by) END,
+```
+
+The `INSERT` leg is unchanged: a first-ever record has no grant standing behind
+it, so there is nothing there to protect and the refusal's own account is the
+only account the row has.
+
+**A prose consequence, recorded rather than hidden.** r7 R7-M1's consolation —
+"the studio's own account of the refusal lands on the CONSENT side, where
+recorded_at says when the studio told us" — is **withdrawn**, in the header
+(`00594` bullet "NOR MAY A LATER REFUSAL SPEAK FOR AN EARLIER ONE"), in the
+inline comment above `opt_out_source`, and in the function COMMENT. The consent
+side is not free space; it holds the grant's evidence. A studio-sourced refusal
+recorded over an `inbound_sms` one therefore writes **nothing** now — which is
+what a duplicate refusal is worth. Block 9f and block 28b4 were restated to
+assert exactly that, and block 28e (a studio refusal restating a *studio*
+refusal) still passes unchanged.
+
+**Evidence.** New block 32 stages the review's own F-12 shape and asserts the
+grant's `source`, `evidence`, `disclosure_version`, `recorded_at`, `recorded_by`
+and `consented_at` all survive the refusal, then composes R-Q's grant sentence
+off the row and asserts it still says *written*:
+
+```
+NOTICE:  32. a recorded refusal never speaks for the grant it stands beside (r6 R6-M1): passed
+```
+
+Existing block 9d3 was the test that had been asserting the defect (`ASSERT
+r.source = 'verbal'` after a grant → refusal). It now asserts `opt_out_source =
+'verbal'` **and** `source = 'written' AND evidence = 'Signed 2025 form'`.
+
+---
+
+## R6-M2 — blankness is tested the way every other gate in the RPC tests it
+
+**What changed.** `NULLIF(btrim(EXCLUDED.x), '')` on `source`, `evidence` and
+`disclosure_version` (shown above). With R6-M1's `CASE` in place the
+demonstrated hole is already shut — a refusal writes none of the three — so this
+is the second lock on the same door, and it is the lock that does not depend on
+which verdict the caller happens to send.
+
+**Evidence.** New block 33 records a grant with `v2`, then an `opted_out` with
+`p_disclosure_version = ''`, and asserts `v2` still stands; 33b asserts the
+blank is still *refused* where the disclosure is required
+(`consent_evidence_required`), so the empty form field cannot launder a grant
+either; 33c holds all three `NULLIF(btrim(…), '')` forms on the installed source
+text, since no verdict the RPC accepts can reach those columns with a blank
+today — which is precisely why the guard must not rely on a caller.
+
+```
+NOTICE:  33. a blank evidence field cannot empty the evidence set (r6 R6-M2): passed
+```
+
+---
+
+## R6-M3 — an email refusal has a way back; an SMS one still does not
+
+Option (a) from the review, and the ruling's first branch: `record_channel_consent`
+accepts `granted` over an unanswered refusal **when the channel is email**.
+Option (b) was tried on paper and does not work alone — `record_channel_reconsent`
+leaves `status = 'opted_out'`, so lowering the flag there still leaves the first
+`WHERE` leg (`scc.status IS DISTINCT FROM 'opted_out'`) refusing the grant that
+follows.
+
+**What changed**, all three inside the one upsert:
+
+```sql
+      refusal_unanswered = CASE
+                             WHEN EXCLUDED.status = 'opted_out' THEN true
+                             WHEN EXCLUDED.channel_kind = 'email'
+                              AND EXCLUDED.status = 'granted' THEN false
+                             ELSE scc.refusal_unanswered END,
+…
+  WHERE (scc.status IS DISTINCT FROM 'opted_out'
+         OR EXCLUDED.status = 'opted_out'
+         OR (EXCLUDED.channel_kind = 'email' AND EXCLUDED.status = 'granted'))
+…
+    AND (EXCLUDED.status = 'opted_out'
+         OR (EXCLUDED.channel_kind = 'email' AND EXCLUDED.status = 'granted')
+         OR (scc.refusal_unanswered IS NOT TRUE …))
+```
+
+Lowering the flag is not decoration: `channelConsentVerdict` refuses on
+`refusal_unanswered` whatever the status says (r6 M6-3), so a leg that let the
+grant through without it would be a door onto nothing.
+
+Three things deliberately did **not** change. `pending` stays refused on email —
+the double opt-in is the SMS rail's dance, and the `channel_opted_out` hint
+raised on that path now says so instead of telling an email address to reply
+START. The evidence gate is untouched, so an email `granted` still needs source
++ evidence + disclosure_version, which is what PR-m's "a fresh recorded consent"
+means. And the seat legs are untouched: they join on `pp.phone_e164`, which an
+email value never matches.
+
+**Where the asymmetry is named.** The `00594` header gains a bullet of its own
+("EXCEPT ON EMAIL, WHERE THE STUDIO'S FRESH CONSENT IS THE WHOLE WAY BACK"); the
+"NOTHING HERE LOWERS IT" comment on the transition gate now reads "NOTHING HERE
+LOWERS IT ON SMS … email is the one exception"; `record_channel_reconsent`'s
+header says it is not the email door; and the function COMMENT carries the rule.
+
+**Evidence.** New block 34: an email refusal is recorded; `pending` over it is
+still `channel_opted_out`; a `granted` without a disclosure version is still
+`consent_evidence_required`; a fully evidenced `granted` is accepted, lowers the
+flag, keeps `opt_out_at` **and** stamps `consented_at` (both halves of R-Q stay
+printable), and leaves `opt_out_source` / `opt_out_evidence` standing. 34e/34e2
+are the control: the identical two acts on SMS — and the reconsent-then-grant
+composition — are still refused, and the SMS record still reads
+`opted_out / refusal_unanswered = t`.
+
+```
+NOTICE:  34. an email refusal is recoverable by a fresh recorded consent and an SMS one is not (r6 R6-M3): passed
+```
+
+Block 14's structural assertions were widened to match: 14a's `LIKE` pattern now
+spells the email exemption out in both `WHERE` legs so it cannot broaden
+unnoticed, 14a5 (`NOT LIKE '%WHEN EXCLUDED.status = ''granted'' THEN false%'`)
+still passes untouched — the new leg is keyed off the channel as well as the
+verdict — and a new 14a6 asserts the email leg positively.

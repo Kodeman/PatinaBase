@@ -1,157 +1,192 @@
-# W1a — adversarial migration review, round 6 (r6/R6)
+# W1a — adversarial migration review, round 6 (second cycle)
 
-Scope: `supabase/migrations/00592_people_cards_affiliations_rules.sql`,
-`00593_studio_contact_channels.sql`, `00594_studio_channel_consent.sql`, the
-two redefined trigger functions they carry, and the edge files
-`supabase/functions/_shared/sms.ts` and `supabase/functions/sms-inbound/pipeline.ts`
-where the migrations' invariants land there.
+Worktree `/Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build`,
+branch `build/people-room-crm-2026-09-11`. Local Supabase only
+(`postgresql://postgres:postgres@127.0.0.1:54322/postgres`). No `supabase db
+push`, no `supabase functions deploy`, no Strata contact, no `.env.local`
+repoint (`ls apps/*/.env.local` → `no matches found`, checked before the reset).
 
-Read first, in full: `rulings.md` (all six sections), `synthesis/direction.md`
-§2.2/§3.8/§7/§8, `synthesis/crm-model.md` §1/§2/§4/§5,
-`briefing/current-state.md` §B–§E, `build/inventory.md`, `briefing/fixture.md`,
-`build/w1a-report.md`, `build/w1a-fix-log-r5.md`.
+The earlier round-6 review that held this filename was preserved as
+`w1a-review-r6-migrations.prior.md` before this file was written.
 
-Local stack only. No `supabase db push`, no `supabase functions deploy`, no
-Strata contact, no `.env.local` in the worktree
-(`ls apps/*/.env.local` → `no matches found`, checked before the first reset).
+**Verdict: NOT clean — 3 major, 0 blocking, 7 new minors, 15 prior minors still open.**
 
-**Verdict: NOT clean — 0 blocking, 2 major, 22 minor.**
+Both of the prior round's majors (R5-M1, R5-M2) are **fixed**, verified
+independently of the suite. The three majors below are new, all in
+`record_channel_consent()`, all demonstrated against the live stack, and all in
+the same family the wave has been closing for eleven rounds: consent evidence
+destroyed by a write that did not mean to destroy it.
 
 ---
 
-## 0. Gates run, with output
+## 1. What I ran
 
-### Reset
-
-`apps/*/.env.local` absent, so nothing could point at prod. Two attempts died
-mid-replay with `LegacyMigrationApplyError: Connection error` (at 00578, then at
-00293) — the shared local stack was under load from the second stack on the box
-(`supabase_db_patina-hours`, port 54422; ours is `supabase_db_supabase`, 54322).
-The third ran clean:
+### 1.1 Reset — full replay + seeds
 
 ```
 $ pnpm --dir /Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build supabase:reset
 …
-Seeding data from supabase/seed/99-local-edge-settings.sql...
+Applying migration 00591_notification_log_delivery.sql...
+Applying migration 00592_people_cards_affiliations_rules.sql...
+Applying migration 00593_studio_contact_channels.sql...
+Applying migration 00594_studio_channel_consent.sql...
+Applying migration 20260910152111_create_contact_messages.sql...
+Seeding data from supabase/seed/00-legacy-grants.sql...
+[…29 seed files…]
 Restarting containers...
 Finished supabase db reset on branch main.
 {"target":"local","version":"","message":"Reset local database."}
-
-$ psql … -c "select version from supabase_migrations.schema_migrations order by version desc limit 6"
-    version
-----------------
- 20260910152111
- 00594
- 00593
- 00592
- 00591
- 00590
 ```
 
-### SQL tests — 28 blocks, all pass
+(The first attempt failed inside the sandbox on `EPERM … /Users/kody/.supabase/telemetry.json.tmp…`
+— a CLI telemetry write, not a migration error. Re-run with the sandbox
+disabled for that one command.)
+
+### 1.2 SQL suite
 
 ```
 $ psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 \
     -f supabase/tests/people/w1a_identity_channels_consent_test.sql
-NOTICE:  1. affiliations + RLS: passed
 …
-NOTICE:  26. no studio-side verdict lowers refusal_unanswered (r7 M7-1): passed
-NOTICE:  27. reconsent is evidence-only and re-callable (r7 M7-2), leaves the refusal's own
-         evidence standing (r8 W4-M2), and the seat carries the refusal's own words too
-         (r9 R5-M1): passed
+NOTICE:  29. a held card cannot change what it is or whose it is — including the
+         card a contact rule is filed against (r8 R8-M2, R-AR; r9 R5-M1): passed
+NOTICE:  30. the fold picks the sibling that HOLDS the refusal … : passed
+NOTICE:  30e. a grant's paperwork is never filed as the refusal's own words … : passed
+NOTICE:  31. a rule is filed under the noun its subject actually is (r8 F1): passed
 NOTICE:  All W1a assertions passed.
 ROLLBACK
+$ … | grep -c "NOTICE:"
+33
 ```
 
-### Deno tests
+33 notices. The report's §3 transcript prints 30 and ends at block 30 — see
+**R6-m1**.
+
+### 1.3 Deno suites
 
 ```
 $ deno test --no-check --allow-all --config supabase/functions/deno.json \
     supabase/functions/_shared/sms.test.ts supabase/functions/_tests/sms-inbound.test.ts
-ok | 71 passed | 0 failed (111ms)
+ok | 71 passed | 0 failed (93ms)
 ```
 
-### Idempotent re-run — clean
-
-All three files re-executed against the already-migrated database in one
-rolled-back transaction. Only `IF NOT EXISTS` notices; the fold returns 0 and
-writes nothing:
+### 1.4 Idempotent rerun — all three files, twice, one rolled-back transaction
 
 ```
-NOTICE:  relation "studio_person_affiliations" already exists, skipping
-NOTICE:  relation "studio_contact_rules" already exists, skipping
-NOTICE:  relation "studio_contact_channels" already exists, skipping
-NOTICE:  relation "studio_channel_consent" already exists, skipping
-NOTICE:  column "refusal_unanswered" of relation "studio_channel_consent" already exists, skipping
-NOTICE:  column "opt_out_source" … "opt_out_evidence" … "opt_out_recorded_at" … "opt_out_recorded_by" … skipping
- backfill_channel_consent_from_parties
----------------------------------------
-                                     0
+$ { echo BEGIN;; cat 00592…; cat 00593…; cat 00594…; echo "SELECT 'PASS-1';";
+    cat 00592…; cat 00593…; cat 00594…; echo "SELECT 'PASS-2';"; echo ROLLBACK; } > $TMPDIR/idem.sql
+$ psql … -v ON_ERROR_STOP=1 -f $TMPDIR/idem.sql
+psql exit=0
+ERROR lines: 0
+ PASS-1
+ PASS-2
+ROLLBACK
 ```
 
-The named-constraint DROP/ADD idiom (`studio_contacts_company_kind_check`, the
-two `studio_contact_rules_channels_*_check`, the two 00593 vocabulary CHECKs)
-and the `DO $ck$` guard for `studio_channel_consent_opt_out_source_check` all
-re-apply without error.
+Only `… already exists, skipping` notices. Every `ADD COLUMN` is `IF NOT
+EXISTS`, every CHECK is stated in the DROP/ADD idiom, every function is `CREATE
+OR REPLACE`, every trigger is `DROP … IF EXISTS` + `CREATE`, and both backfills
+are `ON CONFLICT … DO NOTHING`, so the second pass inserts nothing and fires no
+trigger.
 
-### Legacy grants + generated types regenerate identically
+### 1.5 Grants seed + generated types
 
 ```
 $ python3 scripts/generate-legacy-grants.py
-wrote …/supabase/seed/00-legacy-grants.sql — baseline + 2632 replayed statements
-$ git diff --stat -- supabase/seed/00-legacy-grants.sql      → (empty)
+wrote …/supabase/seed/00-legacy-grants.sql — baseline + 2633 replayed statements
+$ git diff --stat -- supabase/seed/00-legacy-grants.sql
+(empty)
+$ git diff --stat 700261663 -- supabase/seed/00-legacy-grants.sql
+ supabase/seed/00-legacy-grants.sql | 216 ++++++++++++++++++++++++++++++++++++
 
-$ SUPABASE_DB_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres pnpm … db:generate
-$ git diff --stat -- packages/supabase/src/database.types.ts → (empty)
+$ SUPABASE_DB_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres pnpm db:generate
+$ git diff --stat packages/supabase/src/database.types.ts
+(empty)
+$ git diff --stat 700261663 -- packages/supabase/src/database.types.ts
+ packages/supabase/src/database.types.ts | 508 ++++++++++++++++++++++++++++++++
+ 1 file changed, 508 insertions(+)
 ```
 
-### Lineage — both redefined bodies ARE the grep-winner, verbatim
+508 insertions, zero deletions; regenerating leaves the committed file
+unchanged. The seed regenerates with an empty diff. The report says 210 lines /
+2632 statements — **R6-m1**.
 
-Every `CREATE (OR REPLACE) FUNCTION` name in the three files, checked against
-every earlier migration:
-
-```
-$ for f in <18 names>; do grep -rln "CREATE OR REPLACE FUNCTION[^(]*\b$f\b" \
-    supabase/migrations/*.sql | grep -v '0059[234]_' | sort | tail -1; done
-_site_request_consent_granted_dispatch :: supabase/migrations/00374_field_site_request_loop.sql
-fc_dispatch_optin_invite               :: supabase/migrations/00432_twilio_activation_hardening.sql
-(the other 16 :: NONE — all new)
-```
-
-I extracted `00432:27-68` and `00374:3399-3444` and compared them line by line
-against `00594:486-533` and `00594:553-605`. Both are byte-identical apart from
-the single first-statement guard
-(`IF COALESCE(current_setting('patina.suppress_consent_dispatch', true),'') = '1' THEN RETURN NEW; END IF;`)
-and its comment. 00374's trigger `site_request_consent_granted_dispatch`
-(`00374:3446-3455`) is left untouched. No signature changed, which is why
-neither appears in the types diff. **Lineage check passes.**
-
-### Object probes — RLS, policies, grants
+### 1.6 Grep-winner lineage — diffed, not read
 
 ```
-          relname           | rls | force | policies
-----------------------------+-----+-------+----------
- studio_channel_consent     | t   | f     |        1
- studio_contact_channels    | t   | f     |        4
- studio_contact_rules       | t   | f     |        4
- studio_person_affiliations | t   | f     |        4
+$ grep -rln "CREATE OR REPLACE FUNCTION[^(]*fc_dispatch_optin_invite" supabase/migrations/*.sql | sort
+00284_field_dispatch_wiring.sql
+00432_twilio_activation_hardening.sql
+00594_studio_channel_consent.sql          ← this wave
+$ grep -rln "CREATE OR REPLACE FUNCTION[^(]*_site_request_consent_granted_dispatch" … | sort
+00374_field_site_request_loop.sql
+00594_studio_channel_consent.sql          ← this wave
 ```
 
-Predicates read back from `pg_policy`, and they are the ones the brief requires:
-
-- `studio_person_affiliations` — `is_active_studio_member(studio_contact_org(person_id))`
-  on all four, with INSERT/UPDATE `WITH CHECK` additionally requiring
-  `studio_contact_org(person_id) = studio_contact_org(company_id)`.
-- `studio_contact_channels` — `is_active_studio_member(studio_contact_org(owner_id))` on all four.
-- `studio_contact_rules` — `CASE subject_type WHEN 'engagement' THEN is_studio_comember(project_party_designer(subject_id)) ELSE is_active_studio_member(studio_contact_org(subject_id)) END`
-  on all four (the `project_parties` posture of `00584:884-921` for the job leg).
-- `studio_channel_consent` — SELECT only, `is_active_studio_member(organization_id)`.
-  No client branch anywhere; a client account is `authenticated` but not a studio
-  member, so every one of these reads empty for it.
+Bodies extracted with `awk '/CREATE OR REPLACE FUNCTION public.<name>/,/^\$\$;/'`
+from the grep-winner *before* this wave and from 00594, then `diff -u`:
 
 ```
-         table_name         |    grantee    |                          privs
-----------------------------+---------------+----------------------------------
+--- 00432 fc_dispatch_optin_invite      +++ 00594
+@@ -5,6 +5,12 @@ SET search_path = public AS $$ BEGIN
++  IF COALESCE(current_setting('patina.suppress_consent_dispatch', true), '') = '1' THEN
++    RETURN NEW;
++  END IF;
+```
+
+```
+--- 00374 _site_request_consent_granted_dispatch    +++ 00594
+@@ -8,6 +8,13 @@ v_dispatch jsonb; BEGIN
++  IF COALESCE(current_setting('patina.suppress_consent_dispatch', true), '') = '1' THEN
++    RETURN NEW;
++  END IF;
+```
+
+Both are the grep-winner body **verbatim** plus one guard as the first
+statement. Nothing else moved — no signature, no `SET search_path` spelling, no
+`SECURITY DEFINER`, no dispatch payload. **Clean.**
+
+Every other function in the three files is new. Each name grepped across
+`supabase/migrations/*.sql` returns this wave's file and nothing else
+(`studio_contact_org`, `project_party_designer`, `assert_studio_contact_designations`,
+`assert_affiliation_card_kinds`, `_sync_person_company_pointer`,
+`sync_studio_contact_company_pointer`, `sync_person_affiliation_from_pointer`,
+`assert_studio_contact_rule_route`, `normalize_channel_value`,
+`channel_value_was_on_sms_rail`, `normalize_studio_contact_channel`,
+`assert_channel_owner_kind`, `assert_studio_contact_identity_stable`,
+`backfill_channel_consent_from_parties`, `mirror_channel_consent_to_parties`,
+`record_channel_consent`, `record_channel_reconsent`).
+
+### 1.7 Numbering
+
+Worktree head is `00591_notification_log_delivery`; this wave mints
+00592/00593/00594. Scanned every local and remote ref:
+
+```
+refs/heads/build/people-room-crm-2026-09-11        :: 00592 00593 00594
+refs/heads/hour-tracking/integration               :: 00595 00596 00597
+refs/heads/hour-tracking/server                    :: 00595 … 00599
+refs/remotes/origin/… (same three)
+```
+
+No collision. The timestamp file `20260910152111_create_contact_messages.sql`
+is outside the NNNNN sequence, as `inventory.md` (b) says. Numbers stay
+provisional to merge.
+
+### 1.8 Objects, RLS, grants, definer posture — probed, never the ledger
+
+```
+          relname           | rls | policies
+----------------------------+-----+----------
+ studio_channel_consent     | t   |        1      (SELECT only — by design)
+ studio_contact_channels    | t   |        4
+ studio_contact_rules       | t   |        4
+ studio_person_affiliations | t   |        4
+```
+
+```
+         table_name         |    grantee    | privileges
+----------------------------+---------------+-----------------------------------
  studio_channel_consent     | authenticated | SELECT
  studio_channel_consent     | service_role  | DELETE,INSERT,…,UPDATE
  studio_contact_channels    | authenticated | DELETE,INSERT,SELECT,UPDATE
@@ -159,14 +194,9 @@ Predicates read back from `pg_policy`, and they are the ones the brief requires:
  studio_person_affiliations | authenticated | DELETE,INSERT,SELECT,UPDATE
 ```
 
-`anon` holds nothing on any of the four. The RPC really is the only door:
-
-```
---- direct INSERT into studio_channel_consent as authenticated ---
-NOTICE:  refused: 42501 / permission denied for table studio_channel_consent
-```
-
-### SECURITY DEFINER + pinned search_path — 18 functions, all pinned
+`anon` holds nothing on any of the four tables and EXECUTE on none of the
+nineteen functions. All nineteen pin a `search_path`; all the definer ones pin
+`public`:
 
 ```
                 proname                 | prosecdef |            proconfig            | anon | auth | svc
@@ -176,6 +206,7 @@ NOTICE:  refused: 42501 / permission denied for table studio_channel_consent
  assert_affiliation_card_kinds          | t         | {search_path=public}            | f    | f    | t
  assert_channel_owner_kind              | t         | {search_path=public}            | f    | f    | t
  assert_studio_contact_designations     | t         | {search_path=public}            | f    | f    | t
+ assert_studio_contact_identity_stable  | t         | {search_path=public}            | f    | f    | t
  assert_studio_contact_rule_route       | t         | {search_path=public}            | f    | f    | t
  backfill_channel_consent_from_parties  | t         | {search_path=public}            | f    | f    | t
  channel_value_was_on_sms_rail          | f         | {search_path=public}            | f    | f    | t
@@ -189,506 +220,318 @@ NOTICE:  refused: 42501 / permission denied for table studio_channel_consent
  studio_contact_org                     | t         | {search_path=public}            | f    | t    | t
  sync_person_affiliation_from_pointer   | t         | {search_path=public}            | f    | f    | t
  sync_studio_contact_company_pointer    | t         | {search_path=public}            | f    | f    | t
-(18 rows)
+(19 rows)
 ```
 
-Every `SECURITY DEFINER` body pins `search_path`. The two `auth=t` trigger
-functions (`fc_dispatch_optin_invite`, `mirror_channel_consent_to_parties`) hold
-that EXECUTE only from the local `00-legacy-grants.sql` baseline; both take no
-arguments and return `trigger`, so a direct call raises before it does anything.
-`normalize_channel_value` is declared `IMMUTABLE` and its one dependency
-`normalize_phone_e164` really is `IMMUTABLE` (`provolatile = i`), so the
-declaration is sound.
+RLS predicates match the brief: `is_active_studio_member(studio_contact_org(<card>))`
+on the three card-owned tables, `is_active_studio_member(organization_id)` on
+`studio_channel_consent`, and `is_studio_comember(project_party_designer(subject_id))`
+on `studio_contact_rules`' engagement leg only. No client-portal branch anywhere.
 
-### The mirror cannot loop
+Applied CHECKs (note the eight-name channel arrays, not seven):
 
 ```
-$ psql … "select tgname, p.proname from pg_trigger t … where tgrelid='public.project_parties'::regclass and not tgisinternal"
- fc_optin_invite_dispatch              | fc_dispatch_optin_invite                ← guarded
- normalize_phone_project_parties       | normalize_party_phone_e164              (BEFORE, pure)
- set_updated_at_project_parties        | update_updated_at_column                (BEFORE, pure)
- site_request_consent_granted_dispatch | _site_request_consent_granted_dispatch  ← guarded
+ studio_channel_consent_opt_out_source_check   | CHECK (opt_out_source = ANY (ARRAY['verbal','written','web_form','inbound_sms','other']))
+ studio_channel_consent_source_check           | CHECK (source = ANY (…same five…))
+ studio_channel_consent_status_check           | CHECK (status = ANY (ARRAY['not_asked','pending','granted','opted_out']))
+ studio_contact_channels_channel_kind_check    | CHECK (channel_kind = ANY (ARRAY['mobile','office','dispatch','after_hours','email','ap_email','portal_311']))
+ studio_contact_channels_status_check          | CHECK (status = ANY (ARRAY['active','bounced','unsubscribed','dead']))
+ studio_contact_rules_channels_allowed_check   | CHECK (channels_allowed <@ ARRAY['mobile','office','dispatch','after_hours','email','ap_email','portal_311','sms'])
+ studio_contact_rules_channels_forbidden_check | CHECK (… same eight …)
+ studio_person_affiliations_distinct_cards_check | CHECK (person_id <> company_id)
 ```
 
-No trigger on `project_parties` writes `studio_channel_consent`, so the mirror
-has no return path; and its own UPDATE is guarded `IS DISTINCT FROM` over the
-whole cached tuple, so a re-fire would be a no-op anyway. The release loop calls
-`site_request_dispatch_after_consent(uuid)` only — I read that body back out of
-the database: it writes `site_requests` and `site_request_dispatch_outbox` and
-calls `_site_request_enqueue_dispatch`, with **no** `invoke_edge_function` and
-no write to `project_parties` or `studio_channel_consent`. The "durable only, no
-outward act" claim holds.
+Vocabulary vs `direction.md` §3.8 / `crm-model.md` §2: `channel_kind` is
+crm-model's Reach list minus `app/account/field_link/paper`, which the file's
+banner justifies as E9-derived reach tiers (§3.8's Reach family words: Account ·
+Field link · On paper) — a documented, defensible deviation. `status` is
+crm-model's `ok/bounced/unsubscribed/dead` with `ok` spelled `active`, stated in
+the file. Consent `status` and `source` are crm-model verbatim. No enums added
+anywhere — TEXT + CHECK throughout, per the brief and PD-4. No money column is
+added; `retainage_bps` is an `integer` in basis points, `char(4)` `tax_id_last4`
+is not money (see R5-m7, still open).
 
-The affiliation pair is loop-free for the same reason: `_sync_person_company_pointer`
-guards its UPDATE `IS DISTINCT FROM`, `sync_person_affiliation_from_pointer`
-returns at its first test when pointer and open affiliation already agree, and it
-holds `patina.suppress_affiliation_sync` across its own write.
+### 1.9 Other spot checks
 
-### Vocabulary, money, crons, prod
-
-- No `CREATE TYPE` / `ALTER TYPE … ADD VALUE` anywhere in the three files. Every
-  new vocabulary is `TEXT` + a named CHECK stated in the DROP/ADD idiom, per PD-4.
-- `studio_contacts_company_kind_check` is crm-model §2's list verbatim plus
-  `inspector` and `other`, and is a superset of the shipped UI's
-  `COMPANY_KIND_LABELS`. ✓
-- `studio_channel_consent_status_check` = not_asked/pending/granted/opted_out,
-  matching direction §3.8's Consent family (Not asked / Invited / Texting /
-  Opted out). ✓ Both source CHECKs are crm-model §2's five names. ✓
-- Money: `retainage_bps integer` (basis points, crm-model §2), the only
-  money-adjacent column in the wave. No float, no decimal, no cents column
-  omitted. ✓
-- `grep -n "cron\."` over the three files → no cron. ✓
-- `grep -niE "db push|functions deploy|bkvcixdmuyejfzcijpdg|strata|\.supabase\.co|wrangler"` over
-  the three migrations and the SQL test → **none**. ✓
-- `grep -n "people_directory"` over the three files → **not touched**; the view
-  still reads back its twelve columns after the reset
-  (`person_id, role, display_name, email, phone, profile_id, project_id,
-  designer_id, status_raw, last_touch_at, meta, scope`), and adding columns to
-  `studio_contacts` cannot change an explicit-column view. The rebuild is
-  correctly listed out of scope in the report's §5. ✓
-- Site access card (`project_site_access_cards`, PR-w): not built in this wave,
-  so there is no client-portal path to it because there is no table. Nothing in
-  W1a adds a client RLS branch to anything. ✓
-- Numbering: 00592–00594 appear on this wave's branch and its origin mirror and
-  on no other ref (141 refs scanned); `origin/main`'s tip is still
-  `00591_notification_log_delivery`. No collision today.
-
-### Repro scripts
-
-Every demonstration below is a single rolled-back transaction against the reset
-stack; the three scripts are committed beside this file:
-
-```
-build/probe11-r6-sourceless-refusal.sql   → R6-M1
-build/probe12-r6-fold-refusal-date.sql    → R6-M2
-build/probe13-r6-open-minors.sql          → R6-m6, m8, m9, m17, and the 42501 write-door probe
-```
-
-Run: `psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -f <file>`
-
----
-
-## 1. Prior findings — re-checked
-
-| Finding | Status | Evidence |
-|---|---|---|
-| r3 M3-1…M3-4, F3 (R-AG/AH/AI/AJ/AK) | closed | blocks 9, 12, 13; `sms.ts:440-513` |
-| r2r2 BLOCKING (flush's second gate) | closed | `sms.ts:1048-1090` |
-| r4 B-1 (dateless STOP) | closed | `refusal_unanswered` stored; block 16B |
-| r4 M-1 (`sms_capable` evidence) | closed | `channel_value_was_on_sms_rail`, both legs; block 15 |
-| r4 M-2 (parked site requests) | closed | mirror release loop `00594:789-805`; block 13 |
-| r5 B5-1…M5-4 (R-AL/AM/AN/AO/AP) | closed | blocks 18–21 |
-| r6 B6-1, M6-1…M6-5 | closed | blocks 22–25; `00592:766-786`, `:827-904` |
-| r7 M7-1, M7-2 | closed | blocks 26, 27 |
-| r8 W4-M1 (fold read the refusal off one row) | **closed for the flag, NOT for the date** | see R6-M2 |
-| r9 R5-M1 (mirrored refusal keeps its own words) | **closed only where the refusal HAS words** | see R6-M1 |
-| r9 R5-M2 (report behind the code) | closed for §1–§3/§5; **§5's migration survey is stale again** | see R6-m19 |
-| R5-m3 … R5-m18 (16 minors) | **all still open** | re-demonstrated below where cheap |
+- **`normalize_channel_value` IMMUTABLE is honest**: `normalize_phone_e164` is
+  `provolatile = i`. No index depends on either.
+- **Extension-function qualification**: the three files call no extension
+  function. `gen_random_uuid()` is used bare and resolved to `pg_catalog`
+  (the stored defaults print unqualified, i.e. not `extensions.`), so the 00282
+  trap does not apply.
+- **Crons**: none added.
+- **`_primary_studio_for` is called only from SECURITY DEFINER SQL**
+  (`assert_studio_contact_rule_route`, `backfill_…`, the mirror,
+  `record_channel_consent`), never from the edge rail — `proacl` is still
+  `{postgres=X/postgres}` and `sms.ts`/`pipeline.ts` resolve orgs off
+  `organization_members`/`organizations` (R-AM holds).
+- **`project_parties.sms_consent_status` is `NOT NULL DEFAULT 'not_asked'` with a
+  CHECK matching the record's**, so the fold's `SELECT … r.sms_consent_status`
+  into a NOT NULL column cannot abort the prod fold on a NULL.
+- **`people_directory` is untouched** by this wave (`grep people_directory
+  supabase/migrations/0059[234]*.sql` → nothing; the view's 12 columns are
+  unchanged), so every existing reader keeps every column it selects. The
+  rebuild is correctly listed in the report's "out of W1a scope".
+- **No site-access object exists yet** (`grep site_access supabase/migrations/0059[234]*.sql`
+  → nothing), so PR-w is vacuously satisfied; and none of the four new tables
+  carries a client-portal branch or a `show_to_client` column.
+- **No prod command** appears in any changed file (`db push`, `functions
+  deploy`, `supabase.co`, the Strata ref, `wrangler deploy` — all absent). The
+  one textual hit in `build/probe10-r9-fold-dry-run.sql:3` is a comment saying
+  when to run a read-only dry run.
+- **Working tree is clean**; the wave touches 11 files (3 migrations, 1 SQL
+  test, 3 edge-function sources, 2 edge test files, the grants seed, the
+  generated types).
+- **The shipped card editor never sends `entity_kind`** on update
+  (`add-person-sheet.tsx:439` — "patches only what changed; entity_kind/contact_kind
+  are never sent"), and the R-AR guard early-returns on a restatement, so
+  00593's new trigger is not a live regression on the designer portal.
 
 ---
 
 ## 2. Findings
 
-### MAJOR — R6-M1. A refusal with no recorded source still reads as the studio's own consent on every seat
+Severity: **blocking** = must change before merge; **major** = must change
+before the prod fold / before the surface it corrupts is read; **minor** = worth
+a line. Confidence is stated separately.
 
-**Confidence: high (demonstrated).**
-`supabase/migrations/00594_studio_channel_consent.sql:673-683`, consumed at `:725-735`.
+### MAJOR
 
-r9's R5-M1 made the mirror give the seat the refusal's own evidence when the
-verdict is a refusal. The fallback chain it wrote is:
+---
+
+#### R6-M1 — a recorded refusal overwrites the CONSENT side's evidence, so the record can no longer say how the grant it still dates arrived
+**severity: major · confidence: high (demonstrated) ·
+`supabase/migrations/00594_studio_channel_consent.sql:1403-1405`, against its own
+invariant at `:1131-1142`**
+
+W4-M2 gave the refusal its own four columns for one stated reason
+(`00594:187-191`): *"The record holds two facts at once … 'opted out by text, 3
+Dec 2025' AND 'fresh signed consent, 11 Sep 2026' — and one evidence set could
+only hold the later of them."* The **symmetric** pair — the record holds a GRANT
+and a later REFUSAL at the same time — is not handled. The `opted_out` branch
+writes the refusal's set *and* the consent set:
 
 ```sql
-673  IF NEW.status = 'opted_out' THEN
-674    v_seat_source      := COALESCE(NEW.opt_out_source,      NEW.source);
-675    v_seat_evidence    := COALESCE(NEW.opt_out_evidence,    NEW.evidence);
-676    v_seat_recorded_at := COALESCE(NEW.opt_out_recorded_at, NEW.recorded_at);
-677    v_seat_recorded_by := COALESCE(NEW.opt_out_recorded_by, NEW.recorded_by);
+      source             = COALESCE(EXCLUDED.source, scc.source),        -- :1403
+      evidence           = COALESCE(EXCLUDED.evidence, scc.evidence),    -- :1404
+      recorded_at        = EXCLUDED.recorded_at,                          -- :1405
 ```
 
-The second term is justified in the comment at `:657-672` as "the legacy rows
-minted before `opt_out_*` existed". **That population does not exist.**
-`studio_channel_consent` is created in this same file with all four `opt_out_*`
-columns present (`00594:183-187` in the CREATE, restated at `:204-208` as an
-ALTER for the rerun path), so no database can hold a row of that shape. What the
-fallback actually hits is a different, real, and large population: a refusal
-that carries **no source of its own**, where `NEW.source` is then the studio's
-own fresh consent written by `record_channel_reconsent()` at `:1418-1422`.
+and the evidence gate forces a refusal to supply a non-blank `p_source` and
+`p_evidence` (`:1215-1221`), so `EXCLUDED.source`/`EXCLUDED.evidence` are never
+NULL on this path and the COALESCE never protects anything. `consented_at`
+survives (`:1380-1381`), so the record keeps the grant's DATE and loses the
+grant's SOURCE, WORDS and `recorded_at`.
 
-That shape is not exotic. It is what the shipped portal writes on purpose —
-`use-coordination.ts:601-618` writes `opted_out` together with
-`NOT_ASKED_CONSENT_COLUMNS`, nulling `sms_consent_source`, `sms_consent_evidence`,
-`sms_consent_recorded_at`, `sms_consent_disclosure_version` and
-`sms_consent_recorded_by` — and it is what every pre-00432 row carries. The fold
-mints those verbatim, and this file's own header calls that "exactly the records
-the first prod push creates".
+The file says this must not happen. `00594:1139-1142`: *"The only field a change
+may legitimately omit is `disclosure_version` on an `opted_out` — a refusal is
+not shown a disclosure — and the version the person WAS shown when they
+consented is a fact the audit still needs."* If the disclosure the person was
+shown is a fact the audit needs, so is the source and the words of the consent
+it belonged to.
 
-Demonstrated end to end against the reset stack (one transaction, rolled back):
+**Demonstrated** (`$TMPDIR/fresh1.sql`, rolled back; F-12's shape — a written
+kickoff-form grant, then PR-m's manual verbal refusal, both through the RPC as
+an ordinary studio member):
 
 ```
---- record after the fold (the shipped portal's sourceless, dateless refusal) ---
-  status   | refusal_unanswered | source | evidence | opt_out_source | opt_out_evidence
------------+--------------------+--------+----------+----------------+------------------
- opted_out | t                  |        |          |                |
+=== 1. record a WRITTEN grant (the kickoff form) ===
+ status  | source  |             evidence              | consented_at | recorded_at | disclosure_version
+---------+---------+-----------------------------------+--------------+-------------+--------------------
+ granted | written | Signed the Lindqvist kickoff form | 2026-09-12   | 2026-09-12  | v2
 
---- seat BEFORE reconsent ---
- sms_consent_status | sms_consent_source | sms_consent_evidence
---------------------+--------------------+----------------------
- opted_out          |                    |
+=== 2. PR-m: the studio marks a VERBAL refusal it heard ===
+  status   | source |      evidence      | recorded_at | consented_at
+-----------+--------+--------------------+-------------+--------------
+ opted_out | verbal | He told me on site | 2026-09-12  | 2026-09-12
 
---- seat AFTER record_channel_reconsent(…, 'written', 'Signed a fresh consent form 11 Sep 2026', 'field-sms-v2') ---
- sms_consent_status | sms_consent_source |          sms_consent_evidence           |    sms_consent_recorded_at
---------------------+--------------------+-----------------------------------------+-------------------------------
- opted_out          | written            | Signed a fresh consent form 11 Sep 2026 | 2026-09-12 02:08:22.410234+00
+=== 3. what the record now says about the GRANT that still has its date ===
+  status   | granted_on | grant_source_now | grant_evidence_now | grant_recorded_at_now
+-----------+------------+------------------+--------------------+-----------------------
+ opted_out | 2026-09-12 | verbal           | He told me on site | 2026-09-12
 ```
 
-This is R5-M1's exact failure, surviving for the population R5-M1 was raised
-about. R-Q's sentence, read off the seat — which is the only copy every shipped
-surface reads, since W1a ships no hook for the new table — becomes "Opted out in
-writing, 12 Sep 2026", naming the studio's own consent document as the refusal
-and dating the refusal to the day the studio filed its paperwork. The seat went
-from saying nothing about the refusal (honest) to asserting something false.
+Report decision 9 and R-Q require both halves printable: *"the room has to be
+able to print 'granted 2 May 2025, opted out 3 Dec 2025'"*, and R-Q's canonical
+form is `"<Source> consent, <d Mon yyyy>, on the <project>."` After one PR-m
+act the grant half composes to **"Verbal consent, 2 May 2025, on the Lindqvist
+kitchen"** — the wrong noun for a written consent — and the 10DLC artifact of
+the consent itself ("Signed the Lindqvist kickoff form", recorded 2025-05-02) is
+gone from the record with no audit row. `record_channel_reconsent()` does not
+restore it; it writes the *studio's fresh* consent into the same five columns.
 
-Fix, two candidates, either narrow:
+This is verbatim the failure W4-M2 found in the other direction, arriving from
+the verdict that W4-M2's own columns were minted to make survivable.
 
-- drop the `NEW.source` / `NEW.evidence` / `NEW.recorded_at` / `NEW.recorded_by`
-  terms from the refusal branch entirely (the seat's own standing value is then
-  the fallback, which is what R-AN wants), since the population the second term
-  was written for cannot exist; **or**
-- have `record_channel_reconsent()` promote the standing consent set into the
-  refusal set before overwriting it — `opt_out_source = COALESCE(scc.opt_out_source, scc.source)`
-  and the three siblings — so `opt_out_*` is never NULL beside a consent set the
-  studio has since replaced.
+**Fix.** The refusal's account of itself already has a home. On the `opted_out`
+branch write `opt_out_source / opt_out_evidence / opt_out_recorded_at /
+opt_out_recorded_by` only, and leave `source / evidence / recorded_at /
+disclosure_version / recorded_by` exactly as they stand (the same `CASE WHEN
+EXCLUDED.status <> 'opted_out' THEN scc.… ` shape the four `opt_out_*` columns
+already use, inverted). That keeps `00594:1412-1424`'s intent — the studio's own
+account of a refusal is recorded — while putting it where the refusal's account
+belongs, and it removes the one remaining way an ordinary studio act destroys a
+consent's 10DLC evidence. Add a block asserting that a `granted` followed by an
+`opted_out` leaves `source = 'written'` and the grant's words intact.
 
 ---
 
-### MAJOR — R6-M2. The fold keeps the refusal's words and throws away its date
+#### R6-M2 — an empty-string disclosure version wipes the one column the file promises a refusal may not touch
+**severity: major · confidence: high on the behaviour (demonstrated), medium on
+reachability (no caller exists yet) ·
+`supabase/migrations/00594_studio_channel_consent.sql:1406`**
 
-**Confidence: high (demonstrated).**
-`supabase/migrations/00594_studio_channel_consent.sql:370-391` (the `refusal`
-CTE), consumed at `:401` and `:420-421`.
-
-r8's W4-M1 added the `refusal` CTE so the fold asks the refusal of every seat in
-the group rather than of the winning row. The CTE selects four columns —
-`sms_consent_source`, `sms_consent_evidence`, `sms_consent_recorded_at`,
-`sms_consent_recorded_by` (`:372-375`) — and **not `sms_opt_out_at`**. The
-INSERT then takes `opt_out_at` from the *winning* row (`:401`,
-`r.sms_opt_out_at`) while taking the refusal's source and words from the
-*refusing sibling* (`:420-421`). In the W4-M1 population the winner is a clean
-grant, so `opt_out_at` is NULL:
-
-```
--- one studio, one number: a clean 2026 grant and a legacy seat reading `granted`
--- while carrying an unanswered, DATED 2025-11-16 opt-out.
- status  | refusal_unanswered | opt_out_at | opt_out_source |        opt_out_evidence         |  opt_out_recorded_at   |      consented_at
----------+--------------------+------------+----------------+---------------------------------+------------------------+------------------------
- granted | t                  |            | inbound_sms    | Replied STOP on the Rusk thread | 2025-11-16 00:00:00+00 | 2026-02-02 00:00:00+00
+```sql
+      disclosure_version = COALESCE(EXCLUDED.disclosure_version, scc.disclosure_version),
 ```
 
-The record now says, of the same refusal, "it arrived by text, it said Replied
-STOP, it was written down on 2025-11-16" — and leaves `opt_out_at`, the column
-that actually carries *when they refused*, empty. The date has not moved
-anywhere; it is still only on the losing sibling seat, which is the thing W4-M1
-existed to stop relying on.
+Every gate in this RPC tests blankness the SQL way — `COALESCE(btrim(x), '') = ''`
+(`:1208-1220`, `:1646-1652`). This one line tests NULL. And
+`p_disclosure_version` is the one evidence argument the `opted_out` branch does
+**not** require (`:1215-1221`, deliberately: "a refusal is not shown a
+disclosure"), so a caller that sends an empty form field rather than omitting it
+passes straight through, and `''` is not NULL.
 
-Three consequences, all in live behaviour:
+**Demonstrated** (`$TMPDIR/fresh1.sql`, same fixture, `p_disclosure_version = ''`
+on the refusal):
 
-1. **R-Q's sentence loses its date for exactly this population.** "Opted out by
-   text, 3 Dec 2025, on the Lindqvist kitchen" is composed from
-   `opt_out_source` + `opt_out_at` + `origin_project_id` — the migration's own
-   comment at `:243-249` says so. Two of the three are present and the date is
-   NULL.
-2. **The defence-in-depth the file claims is absent where it is claimed.**
-   `00594:1103-1105` and the gate itself at `:1201-1205` say the `opt_out_at` date test
-   is "KEPT alongside" `refusal_unanswered` so a writer that dates a refusal
-   without raising the flag still fails closed. The fold — the writer W4-M1 was
-   about, and the one that mints the first prod population — does the mirror
-   image: it raises the flag and leaves the date NULL, so the belt-and-braces
-   pair collapses to one strand for every record it mints.
-3. **The pre-push dry run hides it.** `probe10-r9-fold-dry-run.sql` and the
-   report's §5 both print `f.opt_out_recorded_at` and never `opt_out_at`, so the
-   operator reading the dry run sees a dated refusal where the row about to be
-   written has none.
+```
+=== 3. what the record now says ===
+  status   | granted_on | disclosure_version
+-----------+------------+--------------------
+ opted_out | 2026-09-12 |                     ← was 'v2'
+```
 
-Sendability is not affected (`refusal_unanswered` carries it, and
-`channelConsentVerdict` reads the flag at `sms.ts:487`), which is why this is
-major and not blocking.
+With `NULL` instead of `''` the same call keeps `v2` — so the protection works
+and is defeated by the blank. Nothing restores it: `record_channel_reconsent()`
+overwrites `disclosure_version` with its own argument, the mirror only ever
+COALESCEs *from* the record onto the seat, and the fold is `ON CONFLICT DO
+NOTHING`. `00594:1139-1142` names this exact column as the one the audit still
+needs, and `00594:134-138` states the invariant it breaks ("No write may EMPTY
+the evidence set").
 
-Fix: add `sms_opt_out_at` to the `refusal` CTE's select list and write
-`opt_out_at = COALESCE(r.sms_opt_out_at, f.sms_opt_out_at)` at `:401`. Then
-extend the dry-run script and §5 to print `opt_out_at` beside
-`opt_out_recorded_at`.
+W1a ships no caller, which is the wave's own stated reason for closing things
+now rather than at W1b (`00592:764-766`).
+
+**Fix.** `disclosure_version = COALESCE(NULLIF(btrim(EXCLUDED.disclosure_version), ''), scc.disclosure_version)`,
+and the same `NULLIF(btrim(…), '')` on `source`, `evidence` and
+`origin_project_id`'s siblings for consistency. Add a block that records a
+grant with `v2`, then an `opted_out` with `p_disclosure_version = ''`, and
+asserts `v2` still stands.
 
 ---
 
-### MINOR — R6-m1. `record_channel_consent`'s `opted_out` branch overwrites an inbound STOP's own date, source and words (was R5-m3)
+#### R6-M3 — an EMAIL refusal is permanent: the "fresh recorded consent" half of PR-m's way back does not exist for email
+**severity: major · confidence: high (demonstrated) ·
+`supabase/migrations/00594_studio_channel_consent.sql:1470-1474`, `:1671-1680`,
+`:168`**
 
-**Confidence: high.** `00594:1137`, `:1143-1146` (the INSERT), `:1156-1157` and `:1174-1184` (the DO UPDATE). Unchanged this round. Any
-member typing two fields replaces `inbound_sms` / "Replied STOP" / 3 Dec 2025
-with `verbal` / "He told me on site" / today, on the record and, through the
-mirror, on every seat. It never opens a send, but the carrier-audit artifact is
-one ordinary RPC call from being replaced by hearsay. Keeping the earliest
-`opt_out_at`, or refusing to overwrite an `inbound_sms` refusal with a
-studio-sourced one, closes it.
+`studio_channel_consent.channel_kind` is `CHECK (channel_kind IN ('sms','email'))`
+(`:168`) and `record_channel_consent` accepts both (`:1182-1184`). A refusal sets
+`refusal_unanswered = true` (`:1364`, `:1401`), and the write gate then refuses
+every verdict but `opted_out` while it stands (`:1470-1474`).
 
-### MINOR — R6-m2. `p_origin_project_id` is never checked against the studio (was R5-m4/W4-m5)
+The whole design rests on one sentence, stated in the header and in six
+comments: *"What answers a refusal is the recipient's own YES or START, which
+the inbound rail writes directly — lowering the flag"* (`:1331-1334`). That rail
+is `sms-inbound/pipeline.ts`, and it writes **only** `channel_kind: 'sms'`
+(`pipeline.ts:364-369`). Nothing in the tree ever writes an `email` consent row
+(`grep -rn studio_channel_consent supabase/functions packages apps` → three SMS
+call sites and comments). `record_channel_reconsent()` deliberately no longer
+moves the status (r7 M7-2, `:1671`). So for email there is **no writer that can
+ever lower the flag**, and no door back to `granted`.
 
-**Confidence: high.** `00594:1149` and `:1189` (`record_channel_consent`), `:1423`
-(`record_channel_reconsent`). Neither door checks that the project resolves to
-`p_organization_id` by the `COALESCE(studio_id, _primary_studio_for(designer_id))`
-rule the rest of the file uses, so a record can permanently point at another
-tenant's project row. `projects` RLS blanks the join, so R-Q renders empty
-rather than leaking a name. One guard beside the membership check closes it.
-
-### MINOR — R6-m3. The one fail-open read left in `channelConsentVerdict` (was R5-m5/W4-m3)
-
-**Confidence: high, impact low.** `supabase/functions/_shared/sms.ts:504-513`.
-The final no-studio branch destructures only `data`, so a failed read reads as
-"nobody on this number has opted out" — the one branch in that function that
-does not follow `orgHasOptedOutParty`'s rule ("A refusal we could not read is
-not a refusal we may assume away", `:365-370`). Re-tracing the callers this
-round, the fail-open is currently masked: the branch can only return `"unknown"`,
-and `resolveRecipient` (`:514-553`) would have to have read the same rows
-successfully for `recipient.consent` to be anything but `not_asked`, which
-`sendPartySms:775-788` refuses outright. Still worth the two lines — destructure
-`error` and `return "refuse"` — because the masking is incidental.
-
-### MINOR — R6-m4. The fold's tiebreak ranks a `granted` row by its opt-out date (was R5-m6/W4-m4)
-
-**Confidence: medium.** `00594:340-348`. Inside a status class the order is
-`COALESCE(sms_opt_out_at, sms_consented_at, sms_consent_recorded_at, updated_at) DESC`,
-so two `granted` seats are compared on whichever date each happens to carry. It
-no longer decides sendability (the flag is raised either way) but it still
-decides which source, words, disclosure version and `origin_project_id` the
-record keeps. Make the tiebreak status-aware.
-
-### MINOR — R6-m5. The mirror fans studio-private consent evidence onto client-visible seats (was R5-m7/W4-m6)
-
-**Confidence: medium.** `00594:725-735`. `project_parties_client_select`
-(`00420:373-383`) is row-wide, not column-wide, so every `sms_consent_*` column
-the mirror writes is readable by the homeowner for any seat with
-`show_to_client = true`. Unchanged by this wave, but this wave is what starts
-writing studio-authored evidence text into those columns.
-
-### MINOR — R6-m6. `studio_contacts.trades` takes any string (was R5-m8/W4-m11)
-
-**Confidence: high (demonstrated).** `00592:115`. crm-model §2 types it
-`array FieldTrade`; `company_kind` beside it got a CHECK and this did not.
+**Demonstrated** (`$TMPDIR/fresh2.sql`, rolled back, as an ordinary member):
 
 ```
-NOTICE:  trades accepted a non-FieldTrade value      -- UPDATE … SET trades='{not-a-trade}'
+=== email: record an opted_out (an unsubscribe the studio heard) ===
+  status   | refusal_unanswered
+-----------+--------------------
+ opted_out | t
+
+=== email: the person later signs a fresh consent — record_channel_consent granted ===
+NOTICE:  REFUSED: channel_opted_out
+
+=== email: reconsent, then granted again ===
+NOTICE:  reconsent ACCEPTED
+NOTICE:  REFUSED: channel_opted_out
+
+=== final state ===
+ channel_kind |  channel_value   |  status   | refusal_unanswered
+--------------+------------------+-----------+--------------------
+ email        | dana@example.com | opted_out | t
 ```
 
-### MINOR — R6-m7. `studio_contact_rules` engagement rows orphan invisibly and undeletably (was R5-m9/W4-m12)
+PR-m, ruled STAND by Kody: *"The way back is always a fresh recorded consent **or**
+an inbound START."* For SMS the wave chose the START half and defended it on
+10DLC grounds (r7 M7-2) — a reading a carrier audit supports. For email there is
+no START, no carrier, and no CTIA rule requiring one, so the ruled way back
+collapses to nothing. Today no data can reach this state (nothing writes email
+consent); the moment P3's email channel status lands
+(`direction.md` §7, `notification_log` row), an unsubscribe recorded by a studio
+member is a permanently dead address in that studio's book.
 
-**Confidence: high (demonstrated).** `00592:715-719` (`subject_id`, no FK,
-polymorphic). `is_active_studio_member(NULL)` returns `f` (probed), so a rule
-whose subject card or party row is deleted becomes a row no member can SELECT,
-UPDATE or DELETE, while the UNIQUE index on `(subject_type, subject_id)` still
-holds the slot. A `project_parties` delete is an ordinary portal act
-(`useRemoveProjectParty`).
-
-### MINOR — R6-m8. A channel row can be stored with an empty value (was R5-m10)
-
-**Confidence: high (demonstrated).** `00593:242-250`. The normaliser
-`COALESCE(..., '')` exists because `value` is `NOT NULL`; there is no
-`CHECK (btrim(value) <> '')` behind it.
-
-```
-NOTICE:  stored value = [] (length 0)                -- INSERT … value = '   '
-```
-
-### MINOR — R6-m9. Nothing enforces one preferred channel per kind (was R5-m11)
-
-**Confidence: high (demonstrated).** `00593:69`. crm-model §2 says "one
-preferred channel per kind"; nothing says it in SQL.
-
-```
-NOTICE:  preferred mobiles on one card = 2
-```
-
-### MINOR — R6-m10. `reach_preference` is neither built nor listed as not built (was R5-m12/W4-m7)
-
-**Confidence: high.** `grep -n "reach_preference" supabase/migrations/0059*.sql
-artifacts/…/build/w1a-report.md` → **no match in either**. direction §7 lists it
-in the P1 `studio_contacts` (person) row and crm-model §2 carries it (CS4-5,
-F-13). The three rule columns dropped beside it are documented as a deliberate
-ruling at `00592:33-37`; this one is simply absent, and the report's §5 "Out of
-W1a scope by instruction" list does not name it, so W1b has no way to know.
-Either build it or add one line to §5. Third round open.
-
-### MINOR — R6-m11. The rule vocabulary cannot say "never text, calling is fine" (was R5-m13/W4-m8)
-
-**Confidence: medium.** `00592:770-786`. `channels_forbidden` is CHECKed against
-00593's seven kinds, which are line *types* (`mobile`, `office`, …) and carry no
-`sms`/`text` member. F-27 Ray Thao ("phone and email only; NEVER texted") and
-F-10 Sam Rowe ("email only; phone for emergencies") both need "this number, but
-not by text" and can only be expressed by forbidding `mobile` outright.
-
-### MINOR — R6-m12. 00593 leg (c) is non-sargable and now calls the evidence test twice per row (was R5-m14/W4-m10)
-
-**Confidence: high.** `00593:430-442`. `channel_value_was_on_sms_rail` appears
-twice in the leg-(c) select list (once for `sms_capable`, once inside the
-`CASE`), and its own inner `EXISTS` predicate wraps the column in
-`normalize_channel_value(...)`, so `idx_project_parties_phone_e164` cannot be
-used and each call is a sequential scan of `project_parties`. Two scans per
-folded party row on the first Strata push. Hoist it into a `LATERAL` the way leg
-(a) already does at `:409-414`.
-
-### MINOR — R6-m13. The seat gate is a read-then-write on the INSERT path (was R5-m15)
-
-**Confidence: high.** `00594:1041-1066`. The in-write legs at `:1201-1222` cover
-the DO UPDATE path, but when no record exists the only seat test is the read at
-`:1041-1051`. A seat marked `opted_out` between that read and the INSERT is not seen.
-Narrow window, and the mirror would not clear a refusal it never saw, but it is
-the one place the file's own "state the gate inside the write" rule is not kept.
-
-### MINOR — R6-m14. An `email` refusal is a one-way door with no writer that can reopen it (was R5-m16)
-
-**Confidence: high.** `00594:159` (`channel_kind IN ('sms','email')`),
-`:1164-1165`, `:1407`. `refusal_unanswered` is lowered by exactly one
-writer, `sms-inbound/pipeline.ts`'s `writeChannelConsent`. There is no inbound
-email rail, so an `email` record that reaches `opted_out` can never be moved by
-any door in the system. Nothing writes email consent yet, which is why this is
-minor — but it should be a ruling before something does.
-
-### MINOR — R6-m15. Dropped-error reads on the send path (was R5-m17)
-
-**Confidence: medium.** `sms.ts:517-521` (`resolveRecipient`'s party read),
-`:536-540` (its phone-only read), `pipeline.ts` `writeChannelConsent`'s prior
-read at `:331-341`. Each destructures only `data`. A failed party read yields
-`consent = 'not_asked'`, which happens to block; a failed prior read in
-`writeChannelConsent` silently discards an earlier `consented_at` /
-`disclosure_version` / `opt_out_*` the upsert is supposed to carry forward.
-
-### MINOR — R6-m16. 00593's channel vocabulary drops four kinds crm-model §2 lists, and the report still does not say so (was R5-m18)
-
-**Confidence: high.** `00593:54-60`, `:85-89`. crm-model §2's `channel_kind` has
-eleven values; the table has seven. `app`, `account`, `field_link` and `paper`
-are deliberately excluded, and the migration explains why at `:85-89` (they are
-reach tiers derived from an access grant, E9). `w1a-report.md` calls it "the
-seven-name channel vocabulary" without naming the four or the reason, so the
-divergence from the model is invisible to anyone reading only the report.
-
-### MINOR — R6-m17. `escalation_by_class` takes channel names nothing can match — the hole r6 M6-5 closed one column over
-
-**Confidence: high (demonstrated).** `00592:728`. `channels_allowed` and
-`channels_forbidden` were CHECKed against the seven-name vocabulary precisely
-because "a value the composer cannot match is not a forbidding, it is a silent
-permission" (`00592:748-765`). `escalation_by_class` is the third channel-bearing
-column on the same row, is read by the same composer (crm-model §2: "map
-decision_class to channel", CS5-21 — F-05 wants a phone call over $2,500), and
-has no validation of either half:
-
-```
-NOTICE:  escalation_by_class accepted unmatched channel names
-   -- '{"co":"carrier pigeon","draw":"SMS"}'
-```
-
-A `jsonb` CHECK over the values (and over the decision-class keys) is the same
-two ALTER statements the arrays got.
-
-### MINOR — R6-m18. The fold's `opt_out_recorded_by` names whoever recorded the *consent*, not the refusal
-
-**Confidence: high.** `00594:371-376`. The `refusal` CTE maps the refusing seat's
-`sms_consent_recorded_by` onto `opt_out_recorded_by`. On a seat whose refusal
-came in by text, that column holds the studio member who recorded the original
-*grant* — which is why the inbound rail deliberately writes NULL there
-(`pipeline.ts:391-393`: "nobody in the studio recorded this; the recipient
-did"). The fold therefore attributes an inbound STOP to a studio member. Prefer
-NULL when the refusing seat's source is `inbound_sms`.
-
-### MINOR — R6-m19. The report's §5 migration-number survey is stale again
-
-**Confidence: high.** `w1a-report.md` §5 says `hour-tracking/integration` carries
-00595–00597 and `hour-tracking/server` carries those plus 00598 and 00599. Read
-back this round:
-
-```
-origin/hour-tracking/server  → …00599_resolve_time_rate_cents, 00600_time_entry_rate_provenance, 00601_classifier_rate_resolver
-origin/hour-tracking/edge    → …00591_notification_log_delivery, 00614_time_nudges_cron
-```
-
-The load-bearing claim survives — 00592–00594 are held by this wave's branch and
-its mirror and by nothing else, across all 141 refs, and `origin/main` is still
-at 00591 — but the survey itself is one round out of date, which is the shape
-R5-M2 was raised for. Re-run it at merge rather than trusting the paragraph.
-
-### MINOR — R6-m20. The mirror has no DELETE branch
-
-**Confidence: high.** `00594:840-842` — the trigger is `AFTER INSERT OR UPDATE`.
-`service_role` holds DELETE on the table. A deleted consent record leaves every
-seat in the studio frozen at the deleted verdict, with the send gate then
-falling through to those very seats. No caller deletes today; a
-`FOR EACH ROW … AFTER DELETE` that re-derives, or a DELETE-refusing rule, would
-make that explicit.
-
-### MINOR — R6-m21. `studio_verdict` has no recorder
-
-**Confidence: high.** `00592:109-110`. crm-model §5's Retired row wants "reason,
-date, who decided" and §2 types the field "text + dated". The date is there
-(`studio_verdict_at`); the "who decided" is not.
-
-### MINOR — R6-m22. A seat-only refusal is still destroyed by removing the seat, and W1a ships no door that writes the durable record
-
-**Confidence: high.** `use-coordination.ts:808` (`useRemoveProjectParty`),
-report §5 ("No portal hook or UI"). The whole R-AL mechanism rests on a refusal
-standing on a seat being visible to the write door; deleting the seat removes it,
-and until W2's hook there is no surface that puts the fact in
-`studio_channel_consent` instead. Pre-existing (the seat has always been the only
-ledger) and explicitly deferred, but it is the live exposure for the whole
-W1a→W2 window and is worth one sentence in the report's §5 beside "no portal
-hook".
+**Fix.** Either (a) let `record_channel_consent` accept `granted` over an
+unanswered refusal when `p_channel_kind = 'email'` and the call supplies a fresh
+source + evidence + disclosure_version — the "fresh recorded consent" PR-m names
+— or (b) make `record_channel_reconsent()` lower `refusal_unanswered` for
+`email` only, keeping `status = 'opted_out'` until the studio records the grant.
+Either way name the asymmetry in the header (the SMS half stays the
+recipient's), and add a block proving an email refusal is recoverable and an SMS
+one is not.
 
 ---
 
-## 3. Checks that came back clean
+### MINOR (new this round)
 
-- Both redefined bodies are the grep-winner, verbatim, with one guard grafted;
-  lineage is named in the banner and at each function. 00374's trigger untouched.
-- Every other object in the three files is new; `grep` over all earlier
-  migrations finds no prior definition for any of the sixteen new names.
-- Banner header on all three files; every DDL idempotent (`IF NOT EXISTS`,
-  `CREATE OR REPLACE`, `ADD COLUMN IF NOT EXISTS`, named-constraint DROP/ADD,
-  `DROP TRIGGER IF EXISTS` before every `CREATE TRIGGER`, `DROP POLICY IF EXISTS`
-  before every `CREATE POLICY`); re-run in one transaction is clean.
-- Every new table gets `ENABLE ROW LEVEL SECURITY` and its policies in the same
-  file, with `REVOKE ALL … FROM PUBLIC, anon, authenticated` followed by the
-  explicit positive grants, and `REVOKE … FROM PUBLIC, anon` on every definer
-  RPC (plus `authenticated` on the seven that only triggers call).
-- All eleven `SECURITY DEFINER` bodies pin `search_path`.
-- `gen_random_uuid()` is the only UUID generator used; no unqualified extension
-  function anywhere in the three files.
-- Consent backfill precedence: `opted_out` (class 0) over `granted` over
-  `pending` over `not_asked`, per `(org, phone_e164)`, org resolved
-  `COALESCE(projects.studio_id, _primary_studio_for(designer_id))` — the same
-  rule the mirror, the write door and the edge rail use. Per-org isolation is
-  asserted by test block 3 (Alpha's older STOP beats Alpha's newer grant while
-  Beta's `not_asked` on the same number is untouched).
-- The mirror cannot loop, and its release path is durable-only.
-- The send gate fails closed on the studio-resolution failure, on the record read
-  failure, on `opted_out`, on `refusal_unanswered` at any status, and on a seat
-  refusal in the same studio; `flushDeferredMessages` runs the same two gates in
-  the same order keyed off the deferred row's own party. The single fail-open
-  read is R6-m3, and it is masked downstream.
-- No client-portal read path to any new table (all four gate on studio
-  membership); the site access card is not built in this wave.
-- `people_directory` untouched, all twelve columns intact after the reset.
-- No enum `ADD VALUE`, no cron, no money column outside integer basis points, no
-  prod command or Strata reference anywhere in the wave's SQL.
-- Legacy-grants seed and generated types both regenerate byte-identical.
+| # | Finding | Evidence |
+|---|---|---|
+| R6-m1 | **`w1a-report.md` is stale for the seventh consecutive round, and this time it mis-describes the fix that closed the prior round's major.** Decision 23 (`:480-482`) still says the mirror writes NULL "when `NEW.status = 'opted_out'` **and `NEW.opt_out_source IS NULL`**" — the one-column-wide test r5's R5-M2 replaced; the shipped code writes all four straight from `NEW.opt_out_*` whenever the verdict is a refusal (`00594:870-881`), which is the whole point of the fix. Also: §1 `:15` and §3 `:852` say "the seven-name channel vocabulary" (applied: eight, with `sms`); §3's SQL transcript ends at block 30 and claims 30 notices (actual 33 — 30e and 31 are missing); §1 `:42-44` says "gained 210 lines … baseline + 2632 replayed statements" (actual 216 / 2633). | report `:15`, `:42-44`, `:480-482`, `:774-784`, `:852`; `grep -c NOTICE:` → 33; `git diff --stat 700261663 -- supabase/seed/00-legacy-grants.sql` → 216; generator stdout → 2633 |
+| R6-m2 | An out-of-vocabulary `p_source` reaches the table and raises a raw `23514`, unlike every other input in the RPC (`invalid_channel_kind`, `invalid_consent_status`, `invalid_channel_value`, `consent_not_recordable` are all named). A portal that passes a free-text source gets a constraint name, not a sentence. | `00594:1182-1204`; probe → `REFUSED: 23514 / new row … violates check constraint "studio_channel_consent_source_check"` |
+| R6-m3 | 00593's four backfill legs have no `archived_at IS NULL` filter, so an archived card gains reach channels and is then permanently **identity-held** by 00593's R-AR guard — a card the studio archived can no longer be re-kinded or moved, and W1a ships no channel editor to detach the rows. | `00593:407-459`; `00593:517-522` |
+| R6-m4 | `studio_contact_channels.created_by` and `studio_person_affiliations.created_by` carry no `DEFAULT auth.uid()` while the sibling table's `studio_contact_rules.set_by` does (`00592:733`). Neither table has a writer yet, so every row W1b creates will record no author unless the hook remembers to send one. | `00593:83`; `00592:289` vs `00592:733` |
+| R6-m5 | `company_kind`'s CHECK does not carry PR-f's shape: there is no `other_named`-with-a-required-label (the CHECK takes a bare `'other'` with nothing requiring a label), and no `inspector_subtype` (`ahj / lender / third_party`) anywhere — crm-model §2 names the subtype as its own field and R-A/R-H both turn on telling an AHJ from a draw inspector. Neither is listed in the report's "Not done". | `00592:132-146`; `rulings.md` PR-f; `crm-model.md` §2 `inspector_subtype` |
+| R6-m6 | `escalation_by_class jsonb NOT NULL DEFAULT '{}'` takes any shape at all. The contract is `decision_class → channel_kind` (crm-model §2, F-05's "phone call over $2,500"), and this table is the ONE home of the routing fact by decision 1 — the same argument r6 M6-5 used to CHECK `channels_allowed`/`channels_forbidden`. A key or value the composer cannot match is a silent non-escalation. | `00592:730`; cf. `00592:754-766` |
+| R6-m7 | `record_channel_consent` never checks `p_origin_project_id` against `p_organization_id`. A member may stamp any project id they hold — including another studio's — as the origin R-Q's sentence names ("opted out … on the <project>"). The three other cross-tenant pointers this wave added all got a guard (R-AP, M6-4, R-AR); this one did not. | `00594:1163`, `:1374`, `:1458` |
 
 ---
 
-## 4. Recommendation
+## 3. Prior-round findings, re-checked
 
-Two majors, both in the same seam — the refusal's own evidence set. R6-M1 is
-R5-M1's fallback firing for the population R5-M1 was raised about; R6-M2 is
-W4-M1's CTE keeping the refusal's words and dropping its date. Neither opens a
-send: `refusal_unanswered` carries sendability in both cases and the send gate
-reads it at `sms.ts:487`. Both corrupt the 10DLC artifact and R-Q's sentence for
-exactly the rows the first prod fold mints, and both fixes are small and local
-(one COALESCE chain, one CTE column). Fix those two, re-run the SQL suite with
-an assertion for each, and re-take the dry-run script so it prints `opt_out_at`.
-The twenty-two minors can be triaged; R6-m10 (`reach_preference` absent and
-unlisted) and R6-m17 (`escalation_by_class` unvalidated) are the two I would
-take with them, being one line and two ALTERs respectively.
+| Prior | Ruling | State |
+|---|---|---|
+| **R5-M1** — R-AR guard omitted `studio_contact_rules.subject_id` | count the fifth holder | **fixed** (`00593:556-562`). Independently probed (`$TMPDIR/fresh4.sql`): flipping a rule subject's `entity_kind` → `REFUSED: studio_contact_identity_held`; moving it to another studio → `REFUSED: studio_contact_identity_held`. Block 29 passes. |
+| **R5-M2** — a mirrored refusal lent the seat the GRANT's recorder | decide the four as a set, no seat fallback | **fixed** (`00594:779`, `:870-881`, `:933-941`, `:958-974`). Independently probed (`$TMPDIR/fresh3.sql`, F-12's shape): seat before = `granted / written / "Signed the Lindqvist kickoff form" / …0002`; after the rail's STOP = `opted_out / inbound_sms / "Replied STOP" / (null)` → `seat_names_a_studio_member_as_refuser = f`. Block 27 passes. |
+| R5-m1 report staleness | — | **open again** → **R6-m1** (and now mis-describes R5-M2's fix) |
+| R5-m2 `channelConsentVerdict`'s last branch swallows its read error | — | **open** (`sms.ts:504-507` — `const { data: rows }` with no `error`) |
+| R5-m3 inbound rail swallows its write errors (`upsert`/two `update`s) | — | **open** (`pipeline.ts:364`, `:423`, `:463`) |
+| R5-m4 `origin_project_id` follows the current verdict | — | **open** by design (`00594:1458`; `pipeline.ts:409`) |
+| R5-m5 `grantPartiesForStudios` writes `sms_opt_out_at: null` | — | **open** (`pipeline.ts:465`); mitigated by the mirror restoring `prior.opt_out_at` |
+| R5-m6 `studio_contact_org` / `project_party_designer` answer for any uuid to `authenticated` | — | **open** (`00592:75-76`, `:98-99`; probed) |
+| R5-m7 `tax_id_last4 char(4)` blank-pads; crm-model says `text` | — | **open** (`00592:119`) |
+| R5-m8 `normalize_studio_contact_channel` pins a different search_path spelling | — | **open** (`00593:248`; probe §1.8) |
+| R5-m9 the designation trigger's `UPDATE OF` list omits `entity_kind` | — | **open** (`00592:252-256`) |
+| R5-m10 `reach_preference` neither built nor recorded as not built | — | **open** (`grep -rn reach_preference supabase/ packages/` → empty; `direction.md` §7 lists it; report §5 does not) |
+| R5-m11 orphan rules from a deleted card | — | **open** (`00592:718-721`, no FK by design) |
+| R5-m12 fold keeps the latest `opt_out_at`, the RPC the earliest | — | **open** (`00594:376-377`, `:488-490` vs `:1392-1394`) |
+| R5-m13 fold is `O(cards × party rows)` on a non-sargable predicate | — | **open** (`00593:222-227`, `:440`, `:442`) |
+| R5-m14 a member may launder a carrier refusal by passing `p_source = 'inbound_sms'` | — | **open** (`00594:1427-1433`) |
+| R5-m15 no partial unique index for "one preferred channel per kind" | — | **open** (`00593:77`) |
+| r4 R4-M1 grant's paperwork never filed as the refusal's words | — | **fixed** (`00594:465-472`, `:485-490`; block 30e) |
+| r4 R4-M2 `sms` as a rule-only token | — | **fixed** (`00592:796-822`; block 25) |
+| r2 R2-M1 fold picks the sibling that holds the refusal | — | **fixed** (block 30) |
+| r8 R8-M1 / R-AQ, r8 R8-M2 / R-AR, r8 F1, r8 W4-M1/W4-M2, r7 M7-1/M7-2/R7-M1, r6 B6-1/M6-1..M6-5, r5 R-AL..R-AP, r4 B-1/M-1/M-2, r3r2 BLOCKING, r2 B-1, M3-1..M3-4, F3 | — | **all still fixed** (blocks 3, 8–31 pass; grep-winner diffs §1.6; 71 Deno tests) |
+
+---
+
+## 4. Not checked
+
+- **Strata.** Nothing pushed, deployed, or probed against prod.
+- **The pre-push fold dry run** (`probe10-r9-fold-dry-run.sql`) was not re-run;
+  none of this round's three majors touches the fold's CTE chain, so it does not
+  need re-cutting.
+- **The wider Deno suite** beyond the two SMS files; the report's note about
+  `stripe-rail.test.ts` failing on missing env was not re-verified.
+- **Portal type-check / build.** No portal source changed
+  (`git diff --stat 700261663 -- apps packages` touches only
+  `packages/supabase/src/database.types.ts`).
