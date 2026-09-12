@@ -365,9 +365,7 @@ function isVerifiedLegacyServiceRoleJwt(
   let claims: Record<string, unknown>;
   try {
     const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-    claims = JSON.parse(
-      atob(b64.padEnd(Math.ceil(b64.length / 4) * 4, "=")),
-    );
+    claims = JSON.parse(atob(b64.padEnd(Math.ceil(b64.length / 4) * 4, "=")));
   } catch {
     return false;
   }

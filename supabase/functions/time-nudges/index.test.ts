@@ -145,7 +145,9 @@ Deno.test(
     // D-R1-02: read_at must be stamped so useUnreadInboxCount's "any in_app
     // row with no read_at is unread" rule never turns this Record row into a
     // badge — a nudge is supposed to be quiet.
-    assert(typeof log[0].metadata.read_at === "string" && log[0].metadata.read_at);
+    assert(
+      typeof log[0].metadata.read_at === "string" && log[0].metadata.read_at,
+    );
     // D-R1-07: documentHrefFor reads `sheet` (post-derivation.ts), not just
     // `deep_link` — a project-bearing notice's docHref otherwise wins over
     // the deep_link's own `?sheet=hours` query and silently drops it.
@@ -239,7 +241,9 @@ Deno.test(
     assertEquals(log[0].channel, "in_app");
     assertEquals(log[0].metadata.week_key, isoWeekKey(NOW));
     // D-R1-02, same reasoning as the running-timer record: never a badge.
-    assert(typeof log[0].metadata.read_at === "string" && log[0].metadata.read_at);
+    assert(
+      typeof log[0].metadata.read_at === "string" && log[0].metadata.read_at,
+    );
 
     // The opted-out member never appears, and never would even if quiet.
     assert(!log.some((r) => r.user_id === "opted-out-quiet"));
@@ -405,10 +409,10 @@ Deno.test(
 // claims, not a real signature.
 function legacyJwt(claims: Record<string, unknown>): string {
   const seg = (o: unknown) =>
-    btoa(JSON.stringify(o)).replace(/\+/g, "-").replace(/\//g, "_").replace(
-      /=+$/,
-      "",
-    );
+    btoa(JSON.stringify(o))
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/, "");
   return `${seg({ alg: "HS256", typ: "JWT" })}.${seg(claims)}.c2ln`;
 }
 const SERVICE_ROLE_CLAIMS = {
@@ -454,7 +458,9 @@ Deno.test("the service role is one principal in three shapes", () => {
     isServiceRoleCaller(`Bearer ${NEW}`, NEW, DICT, "bkvcixdmuyejfzcijpdg"),
   );
   // 2. A key listed only in SUPABASE_SECRET_KEYS — the env key having moved on.
-  assert(isServiceRoleCaller(`Bearer ${NEW}`, "sb_secret_someother", DICT, null));
+  assert(
+    isServiceRoleCaller(`Bearer ${NEW}`, "sb_secret_someother", DICT, null),
+  );
   // 3. A caller still holding the legacy service-role JWT, which matches
   //    neither the env key nor any listed secret key.
   assert(
@@ -504,12 +510,10 @@ Deno.test(
     // An expired service-role JWT.
     assert(
       !isServiceRoleCaller(
-        `Bearer ${
-          legacyJwt({
-            ...SERVICE_ROLE_CLAIMS,
-            exp: Math.floor(Date.now() / 1000) - 1,
-          })
-        }`,
+        `Bearer ${legacyJwt({
+          ...SERVICE_ROLE_CLAIMS,
+          exp: Math.floor(Date.now() / 1000) - 1,
+        })}`,
         NEW,
         DICT,
         REF,

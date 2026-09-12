@@ -138,9 +138,7 @@ function buildPort(supabase: SupabaseClient): TimeNudgesPort {
         // caught a race the pre-check missed — another concurrent sweep (or
         // request) already recorded this exact (user, entry)/(user, week)
         // pair. That IS the idempotency guarantee working, not a failure.
-        if (
-          (error as { code?: string }).code === "23505"
-        ) {
+        if ((error as { code?: string }).code === "23505") {
           return;
         }
         throw error;
