@@ -469,7 +469,14 @@ $ grep -rn --include="*.ts" --include="*.tsx" -e identity_phone_numbers -e ident
 (nothing)
 ```
 
-No edge function, hook or portal file changed, so no Deno or vitest suite is in scope.
+No edge function, hook or portal file changed, so no Deno or vitest suite is in scope. The three
+Deno suites the pre-push hook names for a `supabase/` change were run anyway, and pass:
+
+```
+$ deno test --allow-all --config supabase/functions/deno.json supabase/functions/_shared/sms.test.ts        exit=0
+$ deno test --allow-all --config supabase/functions/deno.json supabase/functions/_tests/field-daily.test.ts  exit=0
+$ deno test --allow-all --config supabase/functions/deno.json supabase/functions/_tests/sms-inbound.test.ts  exit=0
+```
 
 ### 5.7 The diff's whole footprint
 
