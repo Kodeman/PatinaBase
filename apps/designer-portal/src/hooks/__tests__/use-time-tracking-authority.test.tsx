@@ -3,6 +3,7 @@ import { act, renderHook } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   filterProjectUnbilledEntries,
+  useCreateTimeEntry,
   useStopTimer,
   type UnbilledTimeRow,
 } from "@patina/supabase";
@@ -85,6 +86,67 @@ describe("authority-aware time writes", () => {
         rated_amount_cents: expect.anything(),
         hourly_rate_cents: expect.anything(),
       }),
+    );
+  });
+
+  // HT-1 (migrations 00599-00601): the server owns the rate on every project
+  // kind, and 00600's guard REJECTS a caller-supplied rate_source or
+  // rated_amount_cents on INSERT outright. The insert row builder sends none of
+  // them today; this pins that, so a future edit cannot quietly reintroduce one.
+  // rate_role (HT-41) IS the member's to send, and is asserted to pass through.
+  it("creates an entry without sending any rate, amount, billing state or provenance", async () => {
+    let inserted: Record<string, unknown> | null = null;
+    const from = jest.fn(() => ({
+      insert: (row: Record<string, unknown>) => {
+        inserted = row;
+        return {
+          select: () => ({
+            single: async () => ({
+              data: { id: "entry-2", project_id: "project-1", duration_minutes: 45 },
+              error: null,
+            }),
+          }),
+        };
+      },
+    }));
+    mockCreateBrowserClient.mockReturnValue({
+      from,
+      auth: { getUser: async () => ({ data: { user: { id: "user-1" } } }) },
+    });
+
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(() => useCreateTimeEntry(), { wrapper });
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        projectId: "project-1",
+        durationMinutes: 45,
+        startedAt: "2026-09-11T12:00:00.000Z",
+        source: "manual_entry",
+        rateRole: "support_designer",
+      });
+    });
+
+    expect(from).toHaveBeenCalledWith("project_time_entries");
+    expect(Object.keys(inserted ?? {}).sort()).toEqual([
+      "billable",
+      "duration_minutes",
+      "notes",
+      "phase_key",
+      "project_id",
+      "rate_role",
+      "source",
+      "started_at",
+      "task_id",
+      "user_id",
+    ]);
+    expect(inserted).toEqual(
+      expect.objectContaining({ rate_role: "support_designer", user_id: "user-1" }),
     );
   });
 });

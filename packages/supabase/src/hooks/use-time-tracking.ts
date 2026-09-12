@@ -87,6 +87,17 @@ export function studioPeriodStartISO(period: StudioPeriod, now: Date = new Date(
 
 // ── Types ──
 
+/**
+ * 00600: which leg of resolve_time_rate_cents (00599) priced an hour.
+ * 'profile_default' is reserved by the CHECK and has no writer (HT-2 unruled).
+ * NULL on any row written before 00600 — a legacy snapshot of unknown
+ * provenance, which is NOT the same as 'none' ("rate pending", HT-26).
+ */
+export type TimeRateSource = 'authority' | 'studio_member' | 'profile_default' | 'none';
+
+/** HT-41: the roster role that priced the hour. 'client' is deliberately out. */
+export type TimeRateRole = 'lead_designer' | 'support_designer' | 'bookkeeper' | 'vendor';
+
 export interface ProjectTimeEntry {
   id: string;
   project_id: string;
@@ -102,6 +113,10 @@ export interface ProjectTimeEntry {
   authority_rate_id?: string | null;
   billing_state?: TimeBillingState | null;
   rated_amount_cents?: number | null;
+  /** 00600, server-owned on every branch (HT-1). A supplied value raises. */
+  rate_source?: TimeRateSource | null;
+  /** 00600 (HT-41). Caller-suppliable on INSERT, validated server-side. */
+  rate_role?: TimeRateRole | null;
   invoice_id: string | null;
   created_at: string;
   updated_at: string;
@@ -325,6 +340,11 @@ export interface CreateTimeEntryInput {
    *  callers keep the DB defaults ('timer_manual', activity NULL). */
   activity?: string | null;
   source?: 'timer_auto' | 'timer_manual' | 'manual_entry';
+  /** HT-41 (00600/00601): the role pick, shown only when the member holds more
+   *  than one on the project. The server raises on a role they do not hold, and
+   *  derives one when this is omitted. No rate is ever sent — the server owns
+   *  it on every project kind (HT-1). */
+  rateRole?: TimeRateRole | null;
 }
 
 export function useCreateTimeEntry(options?: { errorSurface?: 'inline' }) {
@@ -351,6 +371,11 @@ export function useCreateTimeEntry(options?: { errorSurface?: 'inline' }) {
       };
       if (input.activity !== undefined) row.activity = input.activity;
       if (input.source !== undefined) row.source = input.source;
+      if (input.rateRole !== undefined) row.rate_role = input.rateRole;
+      // No hourly_rate_cents, rated_amount_cents, billing_state or rate_source is
+      // ever sent: HT-1 makes them server-owned, and 00600's guard REJECTS a
+      // supplied rate_source or rated_amount_cents outright. Pinned by
+      // apps/designer-portal/src/hooks/__tests__/use-time-tracking-authority.test.tsx.
       const { data, error } = await supabase
         .from('project_time_entries')
         .insert(row)

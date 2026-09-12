@@ -26,13 +26,23 @@
 --   1. the regression: with the designer in ≥2 active studios the client's
 --      signature lands, and the activated project is stamped with a studio the
 --      lead designer actively belongs to — not left NULL and not refused
---   2. the tie-break is the documented one: with no project yet anchoring the
---      relationship, the winner is 00317's order (owner first, then earliest
---      joined, then organization_id)
+--   2. the tie-break is the documented one. AMENDED 2026-09-12 by 00603 (hour
+--      tracking, HT-3-b ruled 2026-09-12): where the caller NAMED no studio,
+--      the lead designer's ONE employer-tier seat (active, non-guest,
+--      role <> 'owner') decides, and 00317's order decides only when that tier
+--      is empty or ambiguous. This fixture gives her exactly one employer seat
+--      — the extra studio added below — so that is what section 2 now measures,
+--      and the section computes whichever rule the fixture actually puts in
+--      charge. Before 00603 the activation bridge's own
+--      `(membership.role = 'owner') DESC` preference decided and stamped the
+--      workspace a hire OWNS on her employer's project (W1-R11-02, measured).
 --   3. the relationship wins over that order: point an existing project for
---      this exact (designer_id, client_id) pair at the extra studio — which
---      sorts LAST on the 00317 order because the membership is not an owner —
---      and the activation follows the relationship
+--      this exact (designer_id, client_id) pair at the extra studio and the
+--      activation follows the relationship. Section 3 seats the designer in a
+--      SECOND extra studio first, so her employer tier is AMBIGUOUS and 00603
+--      leaves the bridge's own preference in charge — otherwise the employer
+--      tier would reach the same studio for a different reason and this section
+--      would measure nothing.
 --   4. zero candidates still fails closed: suspend every candidate studio and
 --      the same signature raises `studio_id_not_designer_studio` again
 --   5. the relaxation does not leak: a direct authenticated project INSERT by
@@ -115,6 +125,19 @@ BEGIN
   ASSERT v_relationship IS NOT NULL,
     'FIXTURE: seeded proposal b0000000-…-0002 must carry a designer_client_id';
 
+  -- 00602 (hour tracking, HT-3-a ruled 2026-09-12) stamps projects.studio_id at
+  -- INSERT from a studio the lead designer OWNS, so the seeded projects for this
+  -- pair now anchor a studio and section 2 below would measure the activation
+  -- bridge's sibling-project PREFERENCE instead of 00317's order. Clear it for this
+  -- pair only, which restores the fixture shape this section was written against —
+  -- 00602's trigger is BEFORE INSERT only, so the UPDATE sticks (and 00563's own
+  -- discovery leaves it NULL too: this designer has more than one candidate studio
+  -- and the ambiguity arm is INSERT-only).
+  UPDATE public.projects SET studio_id = NULL
+   WHERE designer_id = 'a0000000-0000-0000-0000-000000000004'
+     AND client_id = 'a0000000-0000-0000-0000-000000000005'
+     AND studio_id IS NOT NULL;
+
   SELECT count(*) INTO v_anchored
     FROM public.projects
    WHERE designer_id = 'a0000000-0000-0000-0000-000000000004'
@@ -159,15 +182,33 @@ SAVEPOINT s_order;
 
 DO $$
 DECLARE
-  v_result   jsonb;
-  v_project  uuid;
-  v_studio   uuid;
-  v_expected uuid;
+  v_result    jsonb;
+  v_project   uuid;
+  v_studio    uuid;
+  v_expected  uuid;
+  v_rule      text;
+  v_employers uuid[];
 BEGIN
-  SELECT studio_id INTO v_expected
-    FROM pg_temp.candidate_studios()
-   ORDER BY is_owner DESC, joined_at NULLS LAST, created_at, studio_id
-   LIMIT 1;
+  -- 00603 (HT-3-b): a single employer-tier seat outranks the bridge's own
+  -- preference whenever the caller named no studio. Compute whichever rule this
+  -- fixture actually puts in charge, so the section keeps measuring the live
+  -- answer rather than a remembered one.
+  SELECT array_agg(studio_id) INTO v_employers
+    FROM pg_temp.candidate_studios() WHERE NOT is_owner;
+
+  IF COALESCE(array_length(v_employers, 1), 0) = 1 THEN
+    v_expected := v_employers[1];
+    v_rule := 'HT-3-b''s employer tier (00603): the designer''s ONE active '
+              'non-guest seat with role <> ''owner''';
+  ELSE
+    SELECT studio_id INTO v_expected
+      FROM pg_temp.candidate_studios()
+     ORDER BY is_owner DESC, joined_at NULLS LAST, created_at, studio_id
+     LIMIT 1;
+    v_rule := '00317''s order (owner first, earliest joined, organization_id '
+              'last), which 00603 leaves in charge for an empty or ambiguous '
+              'employer tier';
+  END IF;
 
   PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000005');
   v_result := public.sign_proposal(
@@ -195,12 +236,12 @@ BEGIN
     'belongs to (00511''s predicate), got ' || v_studio;
 
   ASSERT v_studio = v_expected,
-    'FAIL 2: with no project anchoring the relationship the winner is 00317''s '
-    'order (owner first, earliest joined, organization_id last); expected '
+    'FAIL 2: with no project anchoring the relationship and no studio named by '
+    'the caller, the winner is ' || v_rule || '; expected '
       || v_expected || ' got ' || v_studio;
 
-  RAISE NOTICE '00563 section 1+2 passed: project % stamped studio %',
-    v_project, v_studio;
+  RAISE NOTICE '00563 section 1+2 passed: project % stamped studio % by %',
+    v_project, v_studio, v_rule;
 END $$;
 
 ROLLBACK TO SAVEPOINT s_order;
@@ -208,6 +249,24 @@ ROLLBACK TO SAVEPOINT s_order;
 -- ─── 3. the proposal's own relationship outranks that order ────────────────
 
 SAVEPOINT s_relationship;
+
+-- A SECOND non-owner seat, so the designer's employer tier holds two candidates.
+-- 00603 (HT-3-b) never chooses between two, so it leaves the activation bridge's
+-- own preference in charge — which is the thing this section exists to measure.
+-- With one employer seat the tier would reach 59000000-…-0001 for its own reason
+-- and the assert below would pass without proving anything about the bridge.
+INSERT INTO public.organizations (id, type, name, slug, status)
+VALUES ('59000000-0000-4000-8000-000000000003'::uuid,
+        'design_studio', 'p559 Third Studio', 'p559-third-studio', 'active')
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO public.organization_members
+  (id, user_id, organization_id, role, status, joined_at)
+VALUES ('59000000-0000-4000-8000-000000000004'::uuid,
+        'a0000000-0000-0000-0000-000000000004',
+        '59000000-0000-4000-8000-000000000003'::uuid,
+        'member', 'active', now())
+ON CONFLICT (user_id, organization_id) DO NOTHING;
 
 UPDATE public.projects
 SET studio_id = '59000000-0000-4000-8000-000000000001'::uuid
@@ -221,9 +280,10 @@ WHERE id = (
 
 DO $$
 DECLARE
-  v_result  jsonb;
-  v_studio  uuid;
-  v_last    uuid;
+  v_result    jsonb;
+  v_studio    uuid;
+  v_last      uuid;
+  v_employers integer;
 BEGIN
   SELECT studio_id INTO v_last
     FROM pg_temp.candidate_studios()
@@ -232,6 +292,13 @@ BEGIN
   ASSERT v_last <> '59000000-0000-4000-8000-000000000001'::uuid,
     'FIXTURE: the extra studio must NOT win 00317''s order, or section 3 '
     'proves nothing';
+
+  SELECT count(*) INTO v_employers
+    FROM pg_temp.candidate_studios() WHERE NOT is_owner;
+  ASSERT v_employers > 1,
+    'FIXTURE: the designer''s employer tier must be AMBIGUOUS here, or 00603 '
+    'stamps that tier''s single candidate and the bridge''s relationship '
+    'preference is never exercised; got ' || v_employers;
 
   PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000005');
   v_result := public.sign_proposal(
