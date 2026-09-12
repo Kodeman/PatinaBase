@@ -4,24 +4,45 @@
 // Deno.serve and wires the real service-role client; everything else lives
 // here.
 //
-// HT-34 ruled two nudges. Both are implemented; only rule (a) is reachable
-// in prod (see the "what dark means" block in index.ts and 00614's banner):
+// HT-34 ruled two nudges. Both are implemented; only rule (a) actually fires
+// (see the "what dark means" block in index.ts and 00614's banner) — but
+// "reachable" and "fires" are not the same claim (round-1 review, D-R1-01).
+// verify_jwt=true is satisfied by ANY JWT signed with the project secret,
+// including the publishable anon key that ships in every portal's
+// wrangler.jsonc as a committed literal — so before this fix, a POST here
+// with an anon bearer routed straight into either rule's handler. index.ts
+// now runs `isServiceRoleCaller` (this module, mirroring client-invite's
+// lib.ts pattern) before either sweep executes: only the platform's
+// service-role credential — what `invoke_edge_function`'s cron bridge
+// presents — gets past the door. So each rule now has TWO independent
+// reasons it does not fire for anyone but the cron: the request-routing gate
+// below, AND (for rule (b) specifically) the opt-in column defaulting to
+// false with no writer.
 //
 //   (a) running_timer  — a running timer over 8h writes ONE quiet Record row
-//       (notification_log, channel='in_app'). No push, no email, no SMS —
-//       structurally true here, not just by convention: this module never
-//       imports a dispatch/email/sms helper, and the TimeNudgesPort below
-//       exposes no method that could reach one. Idempotent per (user, entry)
-//       via the existing notification_log "query before insert" claim idiom
-//       (lead-expiration-check / back-in-stock-check / price-drop-check),
-//       so a nine-hour timer produces exactly one row across nine hourly
+//       (notification_log, channel='in_app'), with `read_at` already stamped
+//       so it never inflates the inbox unread badge (D-R1-02 — a nudge is
+//       supposed to be a quiet Record row, not an engagement ping). No push,
+//       no email, no SMS — structurally true here, not just by convention:
+//       this module never imports a dispatch/email/sms helper, and the
+//       TimeNudgesPort below exposes no method that could reach one.
+//       Idempotent per (user, entry): a fast pre-check (the existing
+//       notification_log "query before insert" claim idiom — see
+//       lead-expiration-check / back-in-stock-check / price-drop-check) plus
+//       a partial UNIQUE index on notification_log backing it at the
+//       database layer (00614 — D-R1-03), so two concurrent sweeps can no
+//       longer both win the pre-check and both insert. index.ts's port
+//       tolerates the resulting 23505 as "someone else already recorded it".
+//       A nine-hour timer produces exactly one row across nine hourly
 //       sweeps.
 //
 //   (b) weekly_unlogged — opt-in, at most weekly, reachable ONLY when the
-//       caller's body is exactly {"rule":"weekly_unlogged"}. Nothing in prod
-//       ever sends that body (00614 schedules only rule "running_timer" and
-//       leaves the weekly cron.schedule call commented out) — this is what
-//       "built dark" means in code, not a flag.
+//       caller (a) presents the service-role credential AND (b) sends a body
+//       of exactly {"rule":"weekly_unlogged"}. Nothing in prod ever sends
+//       that body (00614 schedules only rule "running_timer" and leaves the
+//       weekly cron.schedule call commented out), and the opted-in column it
+//       reads defaults to false with no portal writer — three independent
+//       reasons, not one, is what "built dark" means in code here.
 
 export type NudgeRule = "running_timer" | "weekly_unlogged";
 
@@ -153,9 +174,23 @@ export function buildRunningTimerRecord(
       message:
         "A timer you started has been running for more than 8 hours. " +
         "Open the Hours ledger if it should be stopped.",
+      // documentHrefFor (post-derivation.ts) reads `project_id` FIRST and
+      // always wins over `deep_link` for a project-bearing notice, so a
+      // `?sheet=hours` query on deep_link alone never survived (D-R1-07).
+      // `sheet` is the key documentHrefFor now honours (post-derivation.ts).
+      // deep_link stays: it is the only address for the project-less case
+      // (`/desk?book=hours`) and lets any non-Document reader of this row's
+      // metadata still find the link without re-deriving it.
+      sheet: "hours",
       deep_link: entry.project_id
         ? `/doc/${entry.project_id}?sheet=hours`
         : "/desk?book=hours",
+      // A nudge is a quiet Record row (HT-34), not an engagement ping —
+      // useUnreadInboxCount treats any in_app row with no `read_at` as
+      // unread, so an un-stamped nudge would raise the inbox badge despite
+      // "no push, no email, no badge" (D-R1-02). Stamping it here, at
+      // write time, is the row's own promise: it always reads as read.
+      read_at: now.toISOString(),
     },
     sent_at: now.toISOString(),
   };
@@ -177,6 +212,11 @@ export function buildWeeklyUnloggedRecord(
         "You opted in to a nudge when nothing's logged — the Hours ledger " +
         "has been quiet this week.",
       deep_link: "/desk?book=hours",
+      // Same D-R1-02 reasoning as buildRunningTimerRecord: a quiet Record
+      // row never raises the unread badge, even for a rule that cannot fire
+      // in prod today — the moment it is ever turned on, this must already
+      // be true.
+      read_at: now.toISOString(),
     },
     sent_at: now.toISOString(),
   };
@@ -245,4 +285,121 @@ export function runTimeNudges(
   return rule === "weekly_unlogged"
     ? runWeeklyUnloggedSweep(port, now)
     : runRunningTimerSweep(port, now);
+}
+
+// ─── caller verification (D-R1-01 / D-R1-11) ───────────────────────────────
+//
+// verify_jwt=true (config.toml) proves the bearer is SOME token the project
+// signed — the publishable anon key qualifies, since it too is a JWT signed
+// with the project secret, and it ships as a committed literal in every
+// portal's wrangler.jsonc (CLAUDE.md). That is not "no caller but the cron
+// bridge", it is "no caller we bothered to check". This block is the check,
+// ported verbatim in shape from client-invite/lib.ts's isServiceRoleCaller —
+// same reasoning, same 2026-09-09 key-rotation trap (never string-compare a
+// bearer against the injected key alone; Strata carries the new `sb_secret_…`
+// format AND long-lived legacy service-role JWTs at once).
+//
+// Unlike client-invite, this function names no arbitrary writer/signer/
+// recipient — every write it makes is a fixed-shape, idempotent, in-app-only
+// Record row keyed off data it looked up itself. So a missing check here was
+// never a data-integrity hole; the exposure D-R1-01/D-R1-11 named was an
+// unauthenticated-in-practice caller being able to run the sweep at an
+// attacker-chosen rate (cost: bounded, per D-R1-11; still not a caller this
+// function should answer to).
+
+/** Timing-safe string compare. Length is allowed to leak; the bytes are not. */
+function secretEquals(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+/**
+ * `SUPABASE_SECRET_KEYS` is injected by the platform as a JSON dictionary of
+ * name -> secret key (verified on Strata: {"default":"sb_secret_…"}). Parsed
+ * defensively so a future array, or a comma-separated list, still works.
+ */
+export function parseSecretKeys(raw: string | null | undefined): string[] {
+  const text = (raw ?? "").trim();
+  if (!text) return [];
+  const out: string[] = [];
+  const push = (v: unknown) => {
+    if (typeof v === "string" && v.trim()) out.push(v.trim());
+    else if (v && typeof v === "object") {
+      const k = (v as { api_key?: unknown }).api_key;
+      if (typeof k === "string" && k.trim()) out.push(k.trim());
+    }
+  };
+  try {
+    const parsed = JSON.parse(text);
+    if (Array.isArray(parsed)) parsed.forEach(push);
+    else if (parsed && typeof parsed === "object") {
+      Object.values(parsed).forEach(push);
+    } else push(parsed);
+  } catch {
+    text.split(",").forEach((part) => push(part));
+  }
+  return out;
+}
+
+/**
+ * The legacy service-role credential is a project-signed HS256 JWT. It may
+ * be absent from this function's environment once a project has fully moved
+ * to the new key format, so it cannot be string-compared — but the gateway
+ * (verify_jwt = true, config.toml) has already verified its signature
+ * against the project before the handler runs; a forged one is turned away
+ * upstream and never reaches this code. So the claims can be read at face
+ * value, and only the service_role of THIS project, unexpired, is admitted.
+ *
+ * If verify_jwt is ever set false for this function, this arm must go with
+ * it — there would then be no gateway signature check to lean on.
+ */
+function isVerifiedLegacyServiceRoleJwt(
+  token: string,
+  projectRef?: string | null,
+): boolean {
+  if (!projectRef) return false;
+  const parts = token.split(".");
+  if (parts.length !== 3 || !parts[0] || !parts[1] || !parts[2]) return false;
+  let claims: Record<string, unknown>;
+  try {
+    const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    claims = JSON.parse(
+      atob(b64.padEnd(Math.ceil(b64.length / 4) * 4, "=")),
+    );
+  } catch {
+    return false;
+  }
+  if (claims.role !== "service_role") return false;
+  if (claims.iss !== "supabase") return false;
+  if (claims.ref !== projectRef) return false;
+  const exp = claims.exp;
+  if (typeof exp !== "number" || exp * 1000 <= Date.now()) return false;
+  return true;
+}
+
+/**
+ * True only for the platform's own service-role principal — what
+ * `public.invoke_edge_function`'s cron bridge presents (00258: `apikey` +
+ * `Authorization: Bearer <service-role>` from Vault). A project carries TWO
+ * shapes of that one principal during Supabase's key-format migration: the
+ * new `sb_secret_…` key (what SUPABASE_SERVICE_ROLE_KEY / SUPABASE_SECRET_KEYS
+ * now hold) and the legacy service-role JWT (what long-lived callers may
+ * still present) — both admitted, neither trusted by exact-string-compare
+ * alone.
+ */
+export function isServiceRoleCaller(
+  authorizationHeader: string | null,
+  serviceRoleKey: string,
+  secretKeys?: string | null,
+  projectRef?: string | null,
+): boolean {
+  const token = (authorizationHeader ?? "").replace(/^Bearer\s+/i, "").trim();
+  if (!token) return false;
+  if (serviceRoleKey && secretEquals(token, serviceRoleKey)) return true;
+  for (const key of parseSecretKeys(secretKeys)) {
+    if (secretEquals(token, key)) return true;
+  }
+  return isVerifiedLegacyServiceRoleJwt(token, projectRef);
 }

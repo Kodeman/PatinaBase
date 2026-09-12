@@ -236,6 +236,35 @@ describe('metadata readers', () => {
     expect(documentHrefFor(notif({ metadata: {} }))).toBeNull();
   });
 
+  it('documentHrefFor carries a `sheet` key as a query string (D-R1-07)', () => {
+    // Before this fix, a project-bearing notice's own deep_link query string
+    // (e.g. hour-tracking's `/doc/{id}?sheet=hours`) was silently discarded,
+    // because deriveRecordRow prefers docHref over deep_link and docHref was
+    // always the bare `/doc/{id}`.
+    expect(documentHrefFor(notif({ metadata: { project_id: 'a', sheet: 'hours' } }))).toBe(
+      '/doc/a?sheet=hours',
+    );
+    // A section anchor still wins when both are present — the two are not
+    // expected together, but section is the more specific address.
+    expect(
+      documentHrefFor(notif({ metadata: { project_id: 'a', section: 'project', sheet: 'hours' } })),
+    ).toBe('/doc/a#doc-section-project');
+  });
+
+  it('deriveRecordRow points a project-bearing notice at its `sheet`, not a bare document href (D-R1-07)', () => {
+    const row = deriveRecordRow(
+      notif({
+        type: 'time_entry_running_long',
+        metadata: {
+          project_id: 'p1',
+          sheet: 'hours',
+          deep_link: '/doc/p1?sheet=hours',
+        },
+      }),
+    );
+    expect(row.href).toBe('/doc/p1?sheet=hours');
+  });
+
   it('deepLinkFor reads deep_link then url', () => {
     expect(deepLinkFor(notif({ metadata: { deep_link: '/x' } }))).toBe('/x');
     expect(deepLinkFor(notif({ metadata: { url: '/y' } }))).toBe('/y');

@@ -147,14 +147,19 @@ function metaString(
 }
 
 /** The document address a notification points at, if any: `/doc/{id}` (with a
- *  section anchor when the notice names one). Null when the notice carries no
- *  project. */
+ *  section anchor when the notice names one, or a `sheet` query when it names
+ *  that instead — D-R1-07: without this, a project-bearing notice's own
+ *  `deep_link` query string, e.g. hour-tracking's `?sheet=hours`, was silently
+ *  discarded, because this function's plain `/doc/{id}` always won over it in
+ *  `deriveRecordRow` below). Null when the notice carries no project. */
 export function documentHrefFor(n: InboxNotification): string | null {
   const md = n.metadata ?? {};
   const projectId = metaString(md, 'project_id', 'projectId');
   if (!projectId) return null;
   const section = metaString(md, 'section', 'section_key') as SectionKey | null;
-  return section ? `/doc/${projectId}#${sectionAnchorId(section)}` : `/doc/${projectId}`;
+  if (section) return `/doc/${projectId}#${sectionAnchorId(section)}`;
+  const sheet = metaString(md, 'sheet');
+  return sheet ? `/doc/${projectId}?sheet=${encodeURIComponent(sheet)}` : `/doc/${projectId}`;
 }
 
 /** The raw deep link a notice carries (metadata.deep_link ?? metadata.url) —

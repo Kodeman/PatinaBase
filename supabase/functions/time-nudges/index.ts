@@ -5,28 +5,42 @@
 // bearer + apikey from Vault, 00258's invoke_edge_function/app_setting
 // pattern) — same cron->edge bridge as decision-reminders/field-daily/
 // morning-brief. verify_jwt = true is the platform default (explicit in
-// config.toml for intent, matching those functions); neither the cron path
-// nor any other caller can reach this function without a valid Supabase JWT,
-// and the function does not need to resolve caller identity beyond that — it
-// reads no per-caller scope and writes only quiet, idempotent in-app rows, so
-// there is no in-code service-role check to get wrong (contrast client-invite,
-// which names an arbitrary writer/signer and therefore DOES assert
-// role === 'service_role' in code). No CORS: never browser-called.
+// config.toml for intent, matching those functions).
 //
-// Two rules, one reachable:
+// CORRECTED, round-1 review (D-R1-01 / D-R1-11): verify_jwt=true does NOT
+// mean "only the cron can call this". It is satisfied by any JWT signed with
+// the project secret, including the publishable anon key — a committed
+// literal in every portal's wrangler.jsonc (CLAUDE.md). Before this fix,
+// `POST /functions/v1/time-nudges` with `Authorization: Bearer <anon key>`
+// and body `{"rule":"weekly_unlogged"}` reached `runWeeklyUnloggedSweep`
+// exactly as readily as the cron does; the only thing that kept rule (b)
+// inert was the opt-in column defaulting to false with no writer (still
+// true, and still asserted below), which is a different guarantee than "the
+// rule cannot fire" and one write-surface away from no longer holding. So
+// this function now runs `isServiceRoleCaller` (logic.ts, ported in shape
+// from client-invite's lib.ts — same 2026-09-09 key-rotation trap: never
+// string-compare the bearer against the injected key alone) before EITHER
+// rule executes, and 403s anyone who is not the platform's own service-role
+// principal. No CORS: never browser-called.
+//
+// Two rules, one reachable in prod, both now behind the same door:
 //
 //   (a) running_timer  — LIVE. A running timer (duration_minutes IS NULL)
 //       started more than 8 hours ago gets exactly one quiet Record row
-//       (notification_log, channel='in_app') per sweep-cycle — idempotent
-//       per (user_id, entry_id), so a 9-hour timer swept hourly produces
-//       exactly one row across nine sweeps. No push, no email, no SMS: this
-//       function never imports or calls sendCompliantEmail, sms-dispatch, or
-//       apns-send — the notification_log insert below is the entire effect.
+//       (notification_log, channel='in_app', `read_at` pre-stamped so it
+//       never raises the inbox badge — D-R1-02) per sweep-cycle — idempotent
+//       per (user_id, entry_id): a fast pre-check plus a partial UNIQUE
+//       index on notification_log (00614 — D-R1-03) backing it at the
+//       database layer, so a 9-hour timer swept hourly (or raced) produces
+//       exactly one row. No push, no email, no SMS: this function never
+//       imports or calls sendCompliantEmail, sms-dispatch, or apns-send —
+//       the notification_log insert below is the entire effect.
 //
-//   (b) weekly_unlogged — BUILT DARK. Reachable only when the POST body is
-//       exactly {"rule":"weekly_unlogged"}. 00614 never schedules that body
-//       (its weekly cron.schedule call is a commented-out block), so in prod
-//       this arm never runs. See logic.ts's header for the full contract.
+//   (b) weekly_unlogged — BUILT DARK. Reachable only when the caller is the
+//       platform's service-role principal AND the POST body is exactly
+//       {"rule":"weekly_unlogged"}. 00614 never schedules that body (its
+//       weekly cron.schedule call is a commented-out block) and no profile
+//       is opted in by default. See logic.ts's header for the full contract.
 //
 // All decisions and every dedupe check live in logic.ts, tested without a
 // live Postgres via the TimeNudgesPort fake (deno suite: index.test.ts).
@@ -36,6 +50,7 @@ import {
   type SupabaseClient,
 } from "https://esm.sh/@supabase/supabase-js@2";
 import {
+  isServiceRoleCaller,
   type NotificationLogInsert,
   type OptedInMemberRow,
   RUNNING_TIMER_NUDGE_TYPE,
@@ -47,6 +62,17 @@ import {
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const SUPABASE_SECRET_KEYS = Deno.env.get("SUPABASE_SECRET_KEYS") ?? "";
+// Host label of https://<ref>.supabase.co — pins the legacy-JWT arm to this
+// project (isVerifiedLegacyServiceRoleJwt, logic.ts), same derivation as
+// client-invite/index.ts.
+const PROJECT_REF = (() => {
+  try {
+    return new URL(SUPABASE_URL).hostname.split(".")[0] || null;
+  } catch {
+    return null;
+  }
+})();
 
 /** The one and only real implementation of TimeNudgesPort — talks to Postgres. */
 function buildPort(supabase: SupabaseClient): TimeNudgesPort {
@@ -107,7 +133,18 @@ function buildPort(supabase: SupabaseClient): TimeNudgesPort {
 
     async insertRecord(row: NotificationLogInsert) {
       const { error } = await supabase.from("notification_log").insert(row);
-      if (error) throw error;
+      if (error) {
+        // 23505 = unique_violation: 00614's partial UNIQUE index (D-R1-03)
+        // caught a race the pre-check missed — another concurrent sweep (or
+        // request) already recorded this exact (user, entry)/(user, week)
+        // pair. That IS the idempotency guarantee working, not a failure.
+        if (
+          (error as { code?: string }).code === "23505"
+        ) {
+          return;
+        }
+        throw error;
+      }
     },
   };
 }
@@ -129,6 +166,24 @@ Deno.serve(async (req: Request) => {
     });
   }
 
+  // D-R1-01 / D-R1-11: verify_jwt=true only proves SOME project-signed JWT
+  // was presented — the publishable anon key qualifies. Require the
+  // platform's own service-role principal (what invoke_edge_function's cron
+  // bridge presents) before either rule runs.
+  if (
+    !isServiceRoleCaller(
+      req.headers.get("Authorization"),
+      SUPABASE_SERVICE_ROLE_KEY,
+      SUPABASE_SECRET_KEYS,
+      PROJECT_REF,
+    )
+  ) {
+    return new Response(JSON.stringify({ error: "forbidden" }), {
+      status: 403,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
   const body = await readBody(req);
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
   const port = buildPort(supabase);
@@ -139,10 +194,13 @@ Deno.serve(async (req: Request) => {
       headers: { "Content-Type": "application/json" },
     });
   } catch (err) {
+    // D-R1-10: log the real detail server-side only. Echoing it in the
+    // response leaks Postgres/PostgREST internals (relation, column and
+    // constraint names) to the caller.
     const detail =
       err instanceof Error ? `${err.name}: ${err.message}` : String(err);
     console.error("time-nudges: run failed", detail);
-    return new Response(JSON.stringify({ error: "internal_error", detail }), {
+    return new Response(JSON.stringify({ error: "internal_error" }), {
       status: 500,
       headers: { "Content-Type": "application/json" },
     });

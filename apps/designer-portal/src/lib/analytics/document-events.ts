@@ -15,6 +15,38 @@
  *                         notes recede).
  *
  * No-ops when PostHog is not initialized (the track() guard).
+ *
+ * ─── Hour tracking (HT-27) — canonical event names, reserved here ─────────
+ * D-R1-05 (round-1 review, W4/lane D): this file is named the SOLE writer of
+ * hour-tracking's PostHog vocabulary for the whole program (plan-v2 §11 —
+ * "otherwise a four-lane conflict surface"), so the names are fixed here even
+ * though the emitter functions land wave-by-wave, each with the code that
+ * measures it (HT-27: the events must ship BEFORE any iOS extension wave, so
+ * data accumulates before a widget/intent decision rests on it). Reserved,
+ * not yet wired to a call site — do not invent a different string for any of
+ * these; do not add a new one without updating this block.
+ *
+ *   · time_entry_logged      — surface, source, activity, billable,
+ *                              rate_source, rate_role, duration_minutes,
+ *                              latency_ms. Every capture path emits this,
+ *                              including internal time (source='internal',
+ *                              W4) and Field (surface='field_sheet' |
+ *                              'field_visit', source='field_manual' |
+ *                              'field_visit', W6 — posthog-ios call sites
+ *                              read the name from here, not from a guess).
+ *   · time_rate_unresolved   — project_kind, rate_source='none', project_id.
+ *                              The alarm: fired wherever a row renders or
+ *                              returns with rate_source='none'.
+ *   · time_timer_started     — (W3, instrument only)
+ *   · time_timer_stopped     — adjusted, idle_minutes, and the
+ *                              cumulative-idle-to-raw-elapsed ratio (W3 —
+ *                              instrument only; do NOT touch the 30-minute
+ *                              R64 bound while adding this)
+ *   · time_scope_viewed      — scope, group_by (W2)
+ *   · time_entry_adjusted    — by_admin boolean (W2)
+ *   · time_entry_deleted     — (W2)
+ *   · time_autostart_disclosed  — (W2, HT-35)
+ *   · time_autostart_opted_out  — (W2, HT-35)
  */
 
 import posthog from "posthog-js";

@@ -16,8 +16,10 @@ import {
   buildRunningTimerRecord,
   buildWeeklyUnloggedRecord,
   isoWeekKey,
+  isServiceRoleCaller,
   type NotificationLogInsert,
   type OptedInMemberRow,
+  parseSecretKeys,
   resolveNudgeRule,
   RUNNING_TIMER_NUDGE_TYPE,
   type RunningTimerRow,
@@ -140,6 +142,14 @@ Deno.test(
     assertEquals(log[0].channel, "in_app");
     assertEquals(log[0].status, "delivered");
     assertEquals(log[0].metadata.entry_id, "entry-1");
+    // D-R1-02: read_at must be stamped so useUnreadInboxCount's "any in_app
+    // row with no read_at is unread" rule never turns this Record row into a
+    // badge — a nudge is supposed to be quiet.
+    assert(typeof log[0].metadata.read_at === "string" && log[0].metadata.read_at);
+    // D-R1-07: documentHrefFor reads `sheet` (post-derivation.ts), not just
+    // `deep_link` — a project-bearing notice's docHref otherwise wins over
+    // the deep_link's own `?sheet=hours` query and silently drops it.
+    assertEquals(log[0].metadata.sheet, "hours");
 
     // Structural proof of "no push, no email, no SMS, no badge": the fake port
     // exposes exactly one write method, and every row it ever received is
@@ -176,28 +186,20 @@ Deno.test(
   },
 );
 
-Deno.test(
-  "rule (a): a completed entry (duration_minutes set) never reaches the port's stale-timer query surface",
-  () => {
-    // listStaleRunningTimers itself is defined (in index.ts) to select rows
-    // WHERE duration_minutes IS NULL — a completed entry is never a candidate
-    // regardless of how old started_at is. The fake mirrors that contract by
-    // construction (it is only ever seeded with running rows), and
-    // runningTimers here is intentionally empty to assert the zero case.
-    return runTimeNudges(
-      makeFakePort({
-        runningTimers: [],
-        weeklyOptIn: new Map(),
-        recentEntryByUser: new Map(),
-      }).port,
-      {},
-      NOW,
-    ).then((result) => {
-      assertEquals(result.scanned, 0);
-      assertEquals(result.recorded, 0);
-    });
-  },
-);
+// D-R1-08 (round-1 review): a test formerly lived here named "a completed
+// entry (duration_minutes set) never reaches the port's stale-timer query
+// surface" — it seeded `runningTimers: []` and asserted `scanned === 0`,
+// without ever constructing a completed entry or reading a `duration_minutes`
+// value anywhere in the assertion. Its own comment conceded "the fake mirrors
+// that contract by construction", i.e. it was tautological: any empty world
+// asserts `scanned === 0` regardless of what the test's name claims to cover.
+// The real predicate (`.is("duration_minutes", null)`, index.ts's
+// `listStaleRunningTimers`) has zero execution coverage in this deno suite —
+// TimeNudgesPort is a structural fake that never runs a real query, and
+// nothing here imports index.ts. Removed rather than promoted: proving the
+// real filter requires a live Postgres, which is exactly what D-R1-09 names
+// as owed at the ship chain (a live probe after `supabase functions deploy`),
+// not something a deno-only fake can honestly assert.
 
 // ─── rule (b): the dark weekly-unlogged sweep ──────────────────────────────
 
@@ -236,6 +238,8 @@ Deno.test(
     assertEquals(log[0].type, WEEKLY_UNLOGGED_NUDGE_TYPE);
     assertEquals(log[0].channel, "in_app");
     assertEquals(log[0].metadata.week_key, isoWeekKey(NOW));
+    // D-R1-02, same reasoning as the running-timer record: never a badge.
+    assert(typeof log[0].metadata.read_at === "string" && log[0].metadata.read_at);
 
     // The opted-out member never appears, and never would even if quiet.
     assert(!log.some((r) => r.user_id === "opted-out-quiet"));
@@ -387,5 +391,132 @@ Deno.test(
     assertEquals(row.metadata.week_key, isoWeekKey(NOW));
     assertEquals(row.user_id, "user-9");
     assertEquals(row.type, WEEKLY_UNLOGGED_NUDGE_TYPE);
+  },
+);
+
+// ─── caller verification (D-R1-01 / D-R1-11) ───────────────────────────────
+// Ported in shape from client-invite/index.test.ts's coverage of the
+// identical helper (client-invite/lib.ts) — same claims, same fixtures,
+// because it is the same principal (the platform service role) verified the
+// same way.
+
+// A legacy service-role credential is a project-signed HS256 JWT. The
+// gateway verifies the signature upstream, so this fixture only needs real
+// claims, not a real signature.
+function legacyJwt(claims: Record<string, unknown>): string {
+  const seg = (o: unknown) =>
+    btoa(JSON.stringify(o)).replace(/\+/g, "-").replace(/\//g, "_").replace(
+      /=+$/,
+      "",
+    );
+  return `${seg({ alg: "HS256", typ: "JWT" })}.${seg(claims)}.c2ln`;
+}
+const SERVICE_ROLE_CLAIMS = {
+  iss: "supabase",
+  ref: "bkvcixdmuyejfzcijpdg",
+  role: "service_role",
+  iat: 1_768_268_432,
+  exp: Math.floor(Date.now() / 1000) + 3600,
+};
+
+Deno.test("only the service role may run either sweep", () => {
+  assert(isServiceRoleCaller("Bearer sr-key", "sr-key"));
+  assert(!isServiceRoleCaller("Bearer anon-key", "sr-key"));
+  assert(!isServiceRoleCaller(null, "sr-key"));
+  assert(!isServiceRoleCaller("Bearer ", "sr-key"));
+  // An empty configured key can never be satisfied.
+  assert(!isServiceRoleCaller("Bearer ", ""));
+});
+
+Deno.test(
+  "SUPABASE_SECRET_KEYS is parsed as a dictionary, an array, or a list",
+  () => {
+    assertEquals(parseSecretKeys(null), []);
+    assertEquals(parseSecretKeys("   "), []);
+    assertEquals(parseSecretKeys('{"default":"sb_secret_aaa"}'), [
+      "sb_secret_aaa",
+    ]);
+    assertEquals(parseSecretKeys('["sb_secret_aaa"]'), ["sb_secret_aaa"]);
+    assertEquals(parseSecretKeys("sb_secret_aaa, sb_secret_bbb"), [
+      "sb_secret_aaa",
+      "sb_secret_bbb",
+    ]);
+  },
+);
+
+Deno.test("the service role is one principal in three shapes", () => {
+  const NEW = "sb_secret_newformat";
+  const LEGACY = legacyJwt(SERVICE_ROLE_CLAIMS);
+  const DICT = `{"default":"${NEW}"}`;
+
+  // 1. The env key itself, whichever shape the platform injects.
+  assert(
+    isServiceRoleCaller(`Bearer ${NEW}`, NEW, DICT, "bkvcixdmuyejfzcijpdg"),
+  );
+  // 2. A key listed only in SUPABASE_SECRET_KEYS — the env key having moved on.
+  assert(isServiceRoleCaller(`Bearer ${NEW}`, "sb_secret_someother", DICT, null));
+  // 3. A caller still holding the legacy service-role JWT, which matches
+  //    neither the env key nor any listed secret key.
+  assert(
+    isServiceRoleCaller(`Bearer ${LEGACY}`, NEW, DICT, "bkvcixdmuyejfzcijpdg"),
+  );
+  // ...but only for THIS project, and only when the project is known at all.
+  assert(!isServiceRoleCaller(`Bearer ${LEGACY}`, NEW, DICT, null));
+});
+
+Deno.test(
+  "the two callers this function must turn away: an anon-key bearer, and a signed-in member's JWT",
+  () => {
+    const NEW = "sb_secret_newformat";
+    const DICT = `{"default":"${NEW}"}`;
+    const REF = "bkvcixdmuyejfzcijpdg";
+
+    // D-R1-01's exact scenario: the publishable anon key is itself a
+    // project-signed JWT and passes verify_jwt, but must not pass this.
+    assert(!isServiceRoleCaller("Bearer sb_publishable_aaa", NEW, DICT, REF));
+    assert(
+      !isServiceRoleCaller(
+        `Bearer ${legacyJwt({ ...SERVICE_ROLE_CLAIMS, role: "anon" })}`,
+        NEW,
+        DICT,
+        REF,
+      ),
+    );
+    // A signed-in designer or homeowner: the gateway lets her JWT through
+    // (verify_jwt=true), this must not.
+    assert(
+      !isServiceRoleCaller(
+        `Bearer ${legacyJwt({ ...SERVICE_ROLE_CLAIMS, role: "authenticated" })}`,
+        NEW,
+        DICT,
+        REF,
+      ),
+    );
+    // A service-role JWT minted for a DIFFERENT Supabase project.
+    assert(
+      !isServiceRoleCaller(
+        `Bearer ${legacyJwt({ ...SERVICE_ROLE_CLAIMS, ref: "someotherproject" })}`,
+        NEW,
+        DICT,
+        REF,
+      ),
+    );
+    // An expired service-role JWT.
+    assert(
+      !isServiceRoleCaller(
+        `Bearer ${
+          legacyJwt({
+            ...SERVICE_ROLE_CLAIMS,
+            exp: Math.floor(Date.now() / 1000) - 1,
+          })
+        }`,
+        NEW,
+        DICT,
+        REF,
+      ),
+    );
+    // Not a JWT at all.
+    assert(!isServiceRoleCaller("Bearer a.b", NEW, DICT, REF));
+    assert(!isServiceRoleCaller("Bearer a.b.c", NEW, DICT, REF));
   },
 );
