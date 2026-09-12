@@ -1,0 +1,55 @@
+=== I1: studio_channel_consent PK / uniqueness (the party branch LEFT JOIN) ===
+           conname           |                    pg_get_constraintdef                    
+-----------------------------+------------------------------------------------------------
+ studio_channel_consent_pkey | PRIMARY KEY (organization_id, channel_kind, channel_value)
+(1 row)
+
+=== I2: studio_contact_rules.subject_type vocabulary vs studio_contacts.entity_kind ===
+                 conname                 |                                   pg_get_constraintdef                                    
+-----------------------------------------+-------------------------------------------------------------------------------------------
+ studio_contact_rules_subject_type_check | CHECK ((subject_type = ANY (ARRAY['person'::text, 'company'::text, 'engagement'::text])))
+(1 row)
+
+              conname              |                         pg_get_constraintdef                         
+-----------------------------------+----------------------------------------------------------------------
+ studio_contacts_entity_kind_check | CHECK ((entity_kind = ANY (ARRAY['person'::text, 'company'::text])))
+(1 row)
+
+=== I3: a company rule really does print through contact_rule_summary ===
+BEGIN
+INSERT 0 1
+SET
+                              set_config                               
+-----------------------------------------------------------------------
+ {"sub":"a0000000-0000-0000-0000-000000000004","role":"authenticated"}
+(1 row)
+
+      display_name      | contact_rule_summary 
+------------------------+----------------------
+ Beck + Rowe Architects | Never text.
+(1 row)
+
+ROLLBACK
+=== I4: PR-n — DELETE of a money grant by a plain member ===
+BEGIN
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+SET
+                              set_config                               
+-----------------------------------------------------------------------
+ {"sub":"a0000000-0000-0000-0000-0000000000f3","role":"authenticated"}
+(1 row)
+
+ money_grants_visible 
+----------------------
+                    2
+(1 row)
+
+psql:probe101-w1b-final-r4-prn-and-rules.sql:38: NOTICE:  I4 plain member DELETE of money grants removed 0 rows
+DO
+psql:probe101-w1b-final-r4-prn-and-rules.sql:45: NOTICE:  I4 plain member UPDATE of money thresholds changed 0 rows
+DO
+psql:probe101-w1b-final-r4-prn-and-rules.sql:51: NOTICE:  I4 plain member INSERT draw_certify refused -> new row violates row-level security policy for table "project_party_authority"
+DO
+ROLLBACK

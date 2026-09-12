@@ -1,0 +1,65 @@
+BEGIN
+INSERT 0 1
+UPDATE 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+=== F1: the record, as the studio holds it ===
+ channel_value |  status   
+---------------+-----------
+ +16125559001  | granted
+ +16125559002  | opted_out
+(2 rows)
+
+SET
+                              set_config                               
+-----------------------------------------------------------------------
+ {"sub":"a0000000-0000-0000-0000-000000000004","role":"authenticated"}
+(1 row)
+
+=== F2: while the leaver is still a member, the owner reads the honest word ===
+  display_name  | consent_status | seat_count 
+----------------+----------------+------------
+ Two Line Trade | opted_out      |          1
+(1 row)
+
+  display_name  | project_name |  phone_e164  | consent_status 
+----------------+--------------+--------------+----------------
+ Two Line Trade | Leaver job   | +16125559002 | opted_out
+(1 row)
+
+RESET
+=== F3: the leaver leaves the studio (an ordinary act) ===
+UPDATE 1
+SET
+                              set_config                               
+-----------------------------------------------------------------------
+ {"sub":"a0000000-0000-0000-0000-000000000004","role":"authenticated"}
+(1 row)
+
+=== F4: what the owner now reads for the same card, over the same record ===
+  display_name  | consent_status | reach_state | seat_count 
+----------------+----------------+-------------+------------
+ Two Line Trade | granted        | on_paper    |          0
+(1 row)
+
+ display_name | project_name | phone_e164 | consent_status 
+--------------+--------------+------------+----------------
+(0 rows)
+
+=== F5: the record itself is unchanged and still says opted_out ===
+RESET
+ channel_value |  status   
+---------------+-----------
+ +16125559002  | opted_out
+(1 row)
+
+ record_verdict 
+----------------
+ opted_out
+(1 row)
+
+ROLLBACK

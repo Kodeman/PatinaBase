@@ -1,0 +1,74 @@
+=== E1: no new object reads a frozen consent column or the seat verdict ===
+ proname 
+---------
+(0 rows)
+
+   (no rows above = no frozen column is read by any new function)
+ relname 
+---------
+(0 rows)
+
+   (no rows above = no view reads the frozen seat verdict)
+BEGIN
+SET
+                              set_config                               
+-----------------------------------------------------------------------
+ {"sub":"a0000000-0000-0000-0000-000000000004","role":"authenticated"}
+(1 row)
+
+=== E2: every Directory row with a consent word, vs the record recomputed from scratch ===
+  role   |             display_name              |  printed  | record_word | flag 
+---------+---------------------------------------+-----------+-------------+------
+ contact | Adaeze Okonkwo                        | not_asked | not_asked   | 
+ contact | Amara Osei                            | granted   | granted     | 
+ contact | Ashgrove Millwork                     | not_asked | not_asked   | 
+ contact | Beck + Rowe Architects                | not_asked | not_asked   | 
+ contact | Ben Ostrom                            | not_asked | not_asked   | 
+ contact | Boreal HVAC                           | not_asked | not_asked   | 
+ contact | Carol Nyström                         | not_asked | not_asked   | 
+ contact | Cedar & Iron Framing                  | not_asked | not_asked   | 
+ contact | Chidi Okonkwo                         | not_asked | not_asked   | 
+ contact | City of Minneapolis, CPED Inspections | not_asked | not_asked   | 
+ contact | Claire Bissett                        | not_asked | not_asked   | 
+ contact | Dale Whitcomb                         | not_asked | not_asked   | 
+ contact | Dana Kowalski                         | granted   | granted     | 
+ contact | Erin Sato                             | granted   | granted     | 
+ contact | Frank Bauer                           | not_asked | not_asked   | 
+ contact | Granite North                         | not_asked | not_asked   | 
+ contact | Great Northern Bank                   | not_asked | not_asked   | 
+ contact | Halvorsen Cabinet Works               | not_asked | not_asked   | 
+ contact | Ingrid Halvorsen                      | not_asked | not_asked   | 
+ contact | Jim Lindgren                          | not_asked | not_asked   | 
+ contact | Joe Wozniak                           | pending   | pending     | 
+ contact | Jonah Feld                            | not_asked | not_asked   | 
+ contact | Jonah Feld Photography                | not_asked | not_asked   | 
+ contact | Kelly Marsh                           | not_asked | not_asked   | 
+ contact | Kestrel Staging                       | not_asked | not_asked   | 
+ contact | Lakeshore Painting Co.                | not_asked | not_asked   | 
+ contact | Leah Hartwell                         | not_asked | not_asked   | 
+ contact | Luis Ochoa                            | granted   | granted     | 
+ contact | Lumen & Co.                           | not_asked | not_asked   | 
+ contact | Marcus Hale                           | not_asked | not_asked   | 
+ contact | Marrow & Sons                         | not_asked | not_asked   | 
+ contact | Nadia Brooks                          | not_asked | not_asked   | 
+ contact | Ngozi Eze                             | granted   | granted     | 
+ contact | Northgate Electric                    | not_asked | not_asked   | 
+ contact | Ostrom Builders                       | not_asked | not_asked   | 
+ contact | Owen Ashby                            | not_asked | not_asked   | 
+ contact | Pete Rusk                             | opted_out | opted_out   | 
+ contact | Priya Natarajan                       | not_asked | not_asked   | 
+ contact | Radon Solutions North                 | not_asked | not_asked   | 
+ contact | Ray Thao                              | not_asked | not_asked   | 
+ contact | Rivera Finishes                       | not_asked | not_asked   | 
+ sub     | Rivera Finishes                       | not_asked | not_asked   | 
+ contact | Rosa Delgado                          | not_asked | not_asked   | 
+ contact | Rusk Mechanical                       | not_asked | not_asked   | 
+ contact | Sam Rowe                              | not_asked | not_asked   | 
+ contact | Sofia Ferraro                         | not_asked | not_asked   | 
+ contact | Stonehaven Tile Gallery               | not_asked | not_asked   | 
+ contact | Tom Marrow                            | not_asked | not_asked   | 
+ contact | Twin Cities Drywall & Plaster         | not_asked | not_asked   | 
+ contact | Waterline Supply                      | not_asked | not_asked   | 
+(50 rows)
+
+ROLLBACK

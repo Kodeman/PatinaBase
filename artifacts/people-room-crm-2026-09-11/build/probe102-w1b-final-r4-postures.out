@@ -1,0 +1,64 @@
+=== J1: the freeze trigger still names exactly the eight consent columns plus phone/phone_e164 ===
+                                                                                                  string_agg                                                                                                  
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ phone · phone_e164 · sms_consent_disclosure_version · sms_consent_evidence · sms_consent_recorded_at · sms_consent_recorded_by · sms_consent_source · sms_consent_status · sms_consented_at · sms_opt_out_at
+(1 row)
+
+=== J2: the new functions — definer? volatility? search_path? acl? ===
+               proname               |   sec   | vol |                   cfg                   |                 acl                 
+-------------------------------------+---------+-----+-----------------------------------------+-------------------------------------
+ access_grants_invoice_links         | definer | s   | search_path=public                      | authenticated,postgres,service_role
+ access_grants_plan_transmittals     | definer | s   | search_path=public                      | authenticated,postgres,service_role
+ access_grants_trade_agreement_links | definer | s   | search_path=public                      | authenticated,postgres,service_role
+ access_grants_trade_rfq             | definer | s   | search_path=public                      | authenticated,postgres,service_role
+ assert_compliance_holder            | definer | v   | search_path=public                      | postgres,service_role
+ assert_party_authority_copy_to      | definer | v   | search_path=public                      | postgres,service_role
+ assert_project_party_cards          | definer | v   | search_path=public                      | postgres,service_role
+ assert_site_access_key_holder       | definer | v   | search_path=public                      | postgres,service_role
+ compliance_state                    | INVOKER | s   | search_path=public                      | authenticated,postgres,service_role
+ contact_rule_summary                | INVOKER | s   | search_path=public                      | authenticated,postgres,service_role
+ create_field_link                   | definer | v   | search_path=public, extensions, pg_temp | authenticated,postgres,service_role
+ create_field_link                   | definer | v   | search_path=public, extensions, pg_temp | authenticated,postgres,service_role
+ identity_consent_status             | INVOKER | s   | search_path=public                      | authenticated,postgres,service_role
+ identity_seat_count                 | INVOKER | s   | search_path=public                      | authenticated,postgres,service_role
+ party_identity_key                  | INVOKER | i   | (none)                                  | authenticated,postgres,service_role
+ party_kind_in_directory             | INVOKER | i   | (none)                                  | authenticated,postgres,service_role
+ project_designer                    | definer | s   | search_path=public                      | authenticated,postgres,service_role
+ project_party_org                   | definer | s   | search_path=public                      | authenticated,postgres,service_role
+ reach_state_for                     | INVOKER | s   | search_path=public                      | authenticated,postgres,service_role
+ reach_state_for_identity            | INVOKER | s   | search_path=public                      | authenticated,postgres,service_role
+(20 rows)
+
+BEGIN
+SET
+                              set_config                               
+-----------------------------------------------------------------------
+ {"sub":"a0000000-0000-0000-0000-000000000004","role":"authenticated"}
+(1 row)
+
+=== J3: the party branch — does the WORD and the two DATES belong to the same number? ===
+  display_name   | consent_status | winning_seat_number | consented_at | opt_out_at 
+-----------------+----------------+---------------------+--------------+------------
+ Rivera Finishes | not_asked      | +16125550219        |              | 
+(1 row)
+
+=== J4: and on the contacts branch, where every carded human now lives ===
+ carded_rows_with_a_consent_word | rows_carrying_a_consent_date 
+---------------------------------+------------------------------
+                              49 |                            0
+(1 row)
+
+=== J5: v_access_grants tiers, as the studio owner ===
+      tier      | count 
+----------------+-------
+ client_account |     3
+ field_link     |     6
+ studio_member  |     3
+(3 rows)
+
+ grant_ids_that_look_like_a_64hex_token 
+----------------------------------------
+                                      0
+(1 row)
+
+ROLLBACK

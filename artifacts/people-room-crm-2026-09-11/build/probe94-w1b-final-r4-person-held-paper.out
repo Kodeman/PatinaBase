@@ -1,0 +1,101 @@
+BEGIN
+INSERT 0 1
+INSERT 0 0
+INSERT 0 1
+SET
+                              set_config                               
+-----------------------------------------------------------------------
+ {"sub":"a0000000-0000-0000-0000-0000000000f1","role":"authenticated"}
+(1 row)
+
+ member | admin 
+--------+-------
+ t      | f
+(1 row)
+
+=== B0: Luis Ochoa, as the shipped readers print him today ===
+ display_name | paper_state | seat_count 
+--------------+-------------+------------
+ Luis Ochoa   | current     |          1
+(1 row)
+
+ display_name |   project_name    | paper_state 
+--------------+-------------------+-------------
+ Luis Ochoa   | Okonkwo residence | current
+(1 row)
+
+=== B1: the honest act — the OSHA card expired last month ===
+UPDATE 1
+ display_name | paper_state 
+--------------+-------------
+ Luis Ochoa   | current
+(1 row)
+
+ display_name |   project_name    | paper_state 
+--------------+-------------------+-------------
+ Luis Ochoa   | Okonkwo residence | current
+(1 row)
+
+=== B2: the launder — an UNDATED other_named successor carrying the same gate ===
+INSERT 0 1
+UPDATE 1
+=== B3: what the two shipped readers print now, over an expired gate still on file ===
+ display_name | paper_state 
+--------------+-------------
+ Luis Ochoa   | current
+(1 row)
+
+ display_name |   project_name    | paper_state 
+--------------+-------------------+-------------
+ Luis Ochoa   | Okonkwo residence | current
+(1 row)
+
+                  id                  |  doc_type   |  doc_label   | expires_on |    blocks     | retired 
+--------------------------------------+-------------+--------------+------------+---------------+---------
+ dd000000-0000-4000-8000-0000000000b2 | other_named | OSHA 30 card |            | {site_access} | f
+ d0e50000-0000-0000-0000-000000000036 | other_named | OSHA 30 card | 2026-08-13 | {site_access} | t
+(2 rows)
+
+ROLLBACK
+BEGIN
+=== C1: the honest record — Luis Ochoa personal OSHA card gating site_access, EXPIRED ===
+UPDATE 1
+ his_own_card_word | his_firm_word 
+-------------------+---------------
+ lapsed            | current
+(1 row)
+
+SET
+                              set_config                               
+-----------------------------------------------------------------------
+ {"sub":"a0000000-0000-0000-0000-000000000004","role":"authenticated"}
+(1 row)
+
+=== C2: what the two shipped readers print for him ===
+ display_name | paper_state 
+--------------+-------------
+ Luis Ochoa   | current
+(1 row)
+
+ display_name |   project_name    | paper_state 
+--------------+-------------------+-------------
+ Luis Ochoa   | Okonkwo residence | current
+(1 row)
+
+=== C3: and a sole proprietor (no company_id) with the same expired card, as a control ===
+ROLLBACK
+BEGIN
+INSERT 0 1
+INSERT 0 1
+SET
+                              set_config                               
+-----------------------------------------------------------------------
+ {"sub":"a0000000-0000-0000-0000-000000000004","role":"authenticated"}
+(1 row)
+
+ display_name  | paper_state 
+---------------+-------------
+ Sole Prop Sam | lapsed
+(1 row)
+
+ROLLBACK

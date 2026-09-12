@@ -1,0 +1,59 @@
+BEGIN
+SET
+                              set_config                               
+-----------------------------------------------------------------------
+ {"sub":"cf100000-0000-4000-8000-000000000001","role":"authenticated"}
+(1 row)
+
+=== D1: a foreign studio owner reads the four new relations ===
+         rel          | count 
+----------------------+-------
+ compliance_documents |     0
+ party_authority      |     0
+ site_access_cards    |     0
+ directory_seats      |     0
+ directory            |     0
+ access_grants        |     1
+(6 rows)
+
+=== D2: does the foreign caller get another studio paper word out of compliance_state? ===
+ northgate_word_seen_by_outsider 
+---------------------------------
+ not_on_file
+(1 row)
+
+=== D3: identity_consent_status / channel_consent_status across the tenant line ===
+ pete_word_seen_by_outsider | raw_word_seen_by_outsider 
+----------------------------+---------------------------
+                            | 
+(1 row)
+
+=== D4: can the outsider WRITE into the seeded studio? ===
+psql:probe97-w1b-final-r4-cross-tenant.sql:29: NOTICE:  D4 compliance INSERT refused -> new row violates row-level security policy for table "studio_compliance_documents"
+DO
+psql:probe97-w1b-final-r4-cross-tenant.sql:36: NOTICE:  D4 compliance UPDATE affected 0 rows
+DO
+psql:probe97-w1b-final-r4-cross-tenant.sql:43: NOTICE:  D4 site card INSERT refused -> new row violates row-level security policy for table "project_site_access_cards"
+DO
+psql:probe97-w1b-final-r4-cross-tenant.sql:53: NOTICE:  D4 outsider can see a seat id: (none - RLS blocked)
+psql:probe97-w1b-final-r4-cross-tenant.sql:53: NOTICE:  D4 authority INSERT refused -> new row violates row-level security policy for table "project_party_authority"
+DO
+psql:probe97-w1b-final-r4-cross-tenant.sql:59: NOTICE:  D4 create_field_link refused -> party <NULL> not found
+DO
+ROLLBACK
+=== D5: anon ===
+BEGIN
+SET
+psql:probe97-w1b-final-r4-cross-tenant.sql:68: NOTICE:  anon compliance_documents -> permission denied for table studio_compliance_documents
+DO
+psql:probe97-w1b-final-r4-cross-tenant.sql:72: NOTICE:  anon site_access_cards -> permission denied for table project_site_access_cards
+DO
+psql:probe97-w1b-final-r4-cross-tenant.sql:76: NOTICE:  anon party_authority -> permission denied for table project_party_authority
+DO
+psql:probe97-w1b-final-r4-cross-tenant.sql:80: NOTICE:  anon directory_seats -> permission denied for view people_directory_seats
+DO
+psql:probe97-w1b-final-r4-cross-tenant.sql:84: NOTICE:  anon access_grants -> permission denied for view v_access_grants
+DO
+psql:probe97-w1b-final-r4-cross-tenant.sql:89: NOTICE:  anon people_directory -> permission denied for table studio_contacts
+DO
+ROLLBACK
