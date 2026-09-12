@@ -25,16 +25,50 @@
 --     adds two NEW names and a column.
 --   · `Designers manage their project time entries` (00177:136-137).
 --
--- ONE INTERACTION, STATED: the policy predicate below is the plan's — an
--- owner/admin of ANY studio the project's lead designer actively belongs to —
--- because §0.13 forbids keying a policy on projects.studio_id. 00601's own
--- refusal and 00599's caller assert key on the PROJECT's studio (HT-3-a). Where
--- those differ (an admin of a studio the designer belongs to that is not the
--- project's pricing studio), an adjust that re-fires the classifier — any UPDATE
--- of duration_minutes, billable, started_at, project_id, user_id or rate_role —
--- raises insufficient_privilege from the resolver rather than being denied by
--- RLS. That is a loud refusal, not a silent one, and narrowing the policy to the
--- pricing studio would breach §0.13.
+-- THE KEY IS THE STUDIO THAT OWNS THE WORK, NOT THE DESIGNER'S MEMBERSHIP SET
+-- (amended in W2 review round 1, finding B1 — measured, not argued):
+-- plan-v2 §3 wrote these policies as "an owner/admin of ANY studio the project's
+-- designer actively belongs to". That predicate is SELF-GRANTABLE. The attacker
+-- controls its set: `Org owners can insert members` (00484-registered) has
+-- WITH CHECK (is_org_admin_or_owner(organization_id) AND role <> 'owner'), no
+-- consent gate, and organization_members.status DEFAULTs to 'active' — so any
+-- authenticated person who owns any organization, which is the ordinary state of
+-- every Patina designer, seats a victim project's designer in her own studio with
+-- ONE INSERT and thereby reads, adjusts and DELETEs that project's hours. That
+-- reopens W1-R10-03 (a colleague's notes and per-person studio rate, the leak
+-- 00606 exists to close) and makes HT-10/HT-10-a's narrowing reversible at will.
+-- Measured on this program's stack before the amendment: attacker reads 0 rows,
+-- writes one organization_members row, reads the teammate's notes + 22500 /
+-- studio_member, and deletes the hour.
+--
+-- So all three new policies (the two here and 00606's read) key on
+-- `is_org_admin_or_owner(project_pricing_studio_id(project_id))` — 00604's one
+-- callable form of HT-3-a/b. Three consequences, stated here rather than
+-- discovered later:
+--   (i) §0.13 is honoured, and deliberately read rather than recited. §0.13
+--       forbids the projects.studio_id COLUMN as a policy key because a legacy
+--       NULL WIDENS visibility (00317:15-18). Here a NULL resolves to
+--       is_org_admin_or_owner(NULL), which is FALSE (00484:604-623 — the EXISTS
+--       finds no membership for a NULL organization_id), so the same legacy row
+--       fails CLOSED. That is the safe direction, and §0.13 already admits a
+--       policy key whose guard replicates 00317:31-47's anti-aiming assert.
+--  (ii) The trade: the owner of a legacy project whose studio_id is NULL and
+--       whose designer's tier is ambiguous loses her studio read until she stamps
+--       the project — which is exactly the repair HT-3-a step 3 already asks of
+--       her ('rate pending', fixed by naming the studio).
+-- (iii) RLS and the resolver now key on the SAME studio, so the divergence this
+--       banner previously described (an adjust the policy allowed and 00601's
+--       resolver then refused with insufficient_privilege) no longer exists.
+--
+-- Residue, flagged rather than implied: on a legacy studio_id IS NULL project
+-- whose designer holds NO employer seat anywhere (a sole proprietor), the seat an
+-- attacker writes becomes that designer's single EMPLOYER-tier candidate and
+-- therefore the pricing studio — the same W1 pricing residue already pinned in
+-- 00599's banner and in time_rate_resolution_test.sql cases (ad-i)/(ad-ii)/(af).
+-- After this amendment the read/write half is no longer a SECOND surface: it is
+-- coextensive with that one W1 residue, which the orchestrator owns. Closing it
+-- outright means keying on step 1 alone, which costs every legacy NULL-studio
+-- owner her studio read — a ruling, not a fix.
 --
 -- An admin INSERT on a member's behalf is deliberately NOT granted here (the
 -- widening is UPDATE + DELETE only). plan-v2 §3's closing note is the reason:
@@ -155,25 +189,13 @@ DROP POLICY IF EXISTS time_entries_owner_admin_update ON public.project_time_ent
 CREATE POLICY time_entries_owner_admin_update ON public.project_time_entries
   FOR UPDATE TO authenticated
   USING (
-    EXISTS (
-      SELECT 1
-      FROM public.projects p
-      JOIN public.organization_members om
-        ON om.user_id = p.designer_id
-       AND om.status = 'active'
-      WHERE p.id = project_time_entries.project_id
-        AND public.is_org_admin_or_owner(om.organization_id)
+    public.is_org_admin_or_owner(
+      public.project_pricing_studio_id(project_time_entries.project_id)
     )
   )
   WITH CHECK (
-    EXISTS (
-      SELECT 1
-      FROM public.projects p
-      JOIN public.organization_members om
-        ON om.user_id = p.designer_id
-       AND om.status = 'active'
-      WHERE p.id = project_time_entries.project_id
-        AND public.is_org_admin_or_owner(om.organization_id)
+    public.is_org_admin_or_owner(
+      public.project_pricing_studio_id(project_time_entries.project_id)
     )
   );
 
@@ -181,14 +203,8 @@ DROP POLICY IF EXISTS time_entries_owner_admin_delete ON public.project_time_ent
 CREATE POLICY time_entries_owner_admin_delete ON public.project_time_entries
   FOR DELETE TO authenticated
   USING (
-    EXISTS (
-      SELECT 1
-      FROM public.projects p
-      JOIN public.organization_members om
-        ON om.user_id = p.designer_id
-       AND om.status = 'active'
-      WHERE p.id = project_time_entries.project_id
-        AND public.is_org_admin_or_owner(om.organization_id)
+    public.is_org_admin_or_owner(
+      public.project_pricing_studio_id(project_time_entries.project_id)
     )
   );
 
@@ -252,12 +268,44 @@ BEGIN
     FROM pg_policy
     WHERE polrelid = 'public.project_time_entries'::regclass
       AND polname IN ('time_entries_owner_admin_update', 'time_entries_owner_admin_delete')
+    UNION ALL
+    SELECT pg_get_expr(polwithcheck, polrelid, false)
+    FROM pg_policy
+    WHERE polrelid = 'public.project_time_entries'::regclass
+      AND polname = 'time_entries_owner_admin_update'
   LOOP
     ASSERT v_qual LIKE '%is_org_admin_or_owner%',
       '00605: the write widening must go through is_org_admin_or_owner (§0.14)';
-    ASSERT v_qual NOT LIKE '%studio_id%',
-      '00605: never key an RLS policy on projects.studio_id (§0.13, 00317:15-18)';
+    ASSERT v_qual LIKE '%project_pricing_studio_id%',
+      '00605: the write widening keys on the studio that PRICES the work '
+      '(HT-3-a, through 00604''s callable form), never on the designer''s '
+      'membership set — keyed the other way one organization_members INSERT buys '
+      'an outsider the studio''s hours (review round 1, finding B1); qual = '
+      || v_qual;
+    ASSERT regexp_replace(v_qual, 'project_pricing_studio_id', '', 'g')
+             NOT LIKE '%studio_id%',
+      '00605: never key an RLS policy on the projects.studio_id COLUMN (§0.13, '
+      '00317:15-18) — a legacy NULL there WIDENS visibility, whereas '
+      'is_org_admin_or_owner(project_pricing_studio_id(...)) = false on NULL and '
+      'so fails closed; qual = ' || v_qual;
   END LOOP;
+
+  -- The fail-closed direction is the whole reason §0.13 permits this key, so it
+  -- is measured rather than asserted-about: no studio, no studio-wide access.
+  -- A real actor is impersonated for the duration (auth.uid() must be NOT NULL or
+  -- is_org_admin_or_owner's first conjunct answers and the EXISTS half — the half
+  -- that could regress — is never reached). set_config is LOCAL and reverts at
+  -- this migration's COMMIT.
+  PERFORM set_config('request.jwt.claims',
+    json_build_object('sub', pg_catalog.gen_random_uuid()::text,
+                      'role', 'authenticated')::text, true);
+  ASSERT auth.uid() IS NOT NULL, '00605: the impersonation above did not take';
+  ASSERT NOT COALESCE(public.is_org_admin_or_owner(NULL), false),
+    '00605: is_org_admin_or_owner(NULL) must be FALSE for a real actor — that is '
+    'what makes a NULL pricing studio (a legacy unstamped project, or an '
+    'ambiguous designer tier) fail CLOSED instead of widening the way the '
+    'projects.studio_id column would (§0.13)';
+  PERFORM set_config('request.jwt.claims', NULL, true);
 
   ASSERT 2 = (
     SELECT count(*) FROM pg_policy

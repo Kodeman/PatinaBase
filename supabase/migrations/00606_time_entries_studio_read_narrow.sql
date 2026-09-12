@@ -26,6 +26,32 @@
 -- `time_entries_owner_admin_read`, via `is_org_admin_or_owner` (§0.14), the same
 -- predicate 00605's write widening uses.
 --
+-- THE PREDICATE IS THE PRICING STUDIO, NOT THE DESIGNER'S MEMBERSHIP SET
+-- (amended in W2 review round 1, finding B1 — measured). plan-v2 §3 wrote this
+-- read as "an owner/admin of ANY studio the project's designer actively belongs
+-- to", which is SELF-GRANTABLE: `Org owners can insert members` lets anyone who
+-- owns any organization seat another person in it with one INSERT (WITH CHECK
+-- is_org_admin_or_owner(organization_id) AND role <> 'owner'; no consent gate;
+-- status DEFAULT 'active'), so an outsider who seats a victim project's designer
+-- in her own studio would read — and 00605 would let her delete — exactly the
+-- notes and per-person rate (`22500 / studio_member`) that THIS FILE exists to
+-- hide. The narrowing has to be un-reversible by its own attacker to be a
+-- narrowing at all. So the read keys on the studio that OWNS the work:
+-- `is_org_admin_or_owner(project_pricing_studio_id(project_id))`, 00604's one
+-- callable form of HT-3-a/b, the same studio 00599's ASSERT 2 and 00601's refusal
+-- already key on.
+--   (i) §0.13 is honoured on its reasoning, not its letter: it forbids the
+--       projects.studio_id COLUMN as a policy key because a legacy NULL WIDENS
+--       visibility (00317:15-18). Here NULL resolves to
+--       is_org_admin_or_owner(NULL) = FALSE (00484:604-623), so the same legacy
+--       row fails CLOSED — the safe direction — and §0.13 already admits a key
+--       whose guard replicates 00317:31-47's anti-aiming assert.
+--  (ii) The trade: the owner of a legacy NULL-studio_id project whose designer's
+--       tier is ambiguous loses her studio read until she stamps the project,
+--       which is the repair HT-3-a step 3 already asks of her.
+-- The residue (a sole-proprietor designer on a legacy NULL-studio project) is
+-- stated in 00605's banner and belongs to W1's pricing residue, not to this read.
+--
 -- THE 00484 REGISTRATION CONTRACT, followed rather than voided (§0.17):
 -- `Team can view their project time entries` is one of the four policies
 -- 00484:1712-1760 registers and asserts, and this file RE-QUALIFIES it. That is
@@ -93,14 +119,8 @@ DROP POLICY IF EXISTS time_entries_owner_admin_read ON public.project_time_entri
 CREATE POLICY time_entries_owner_admin_read ON public.project_time_entries
   FOR SELECT TO authenticated
   USING (
-    EXISTS (
-      SELECT 1
-      FROM public.projects p
-      JOIN public.organization_members om
-        ON om.user_id = p.designer_id
-       AND om.status = 'active'
-      WHERE p.id = project_time_entries.project_id
-        AND public.is_org_admin_or_owner(om.organization_id)
+    public.is_org_admin_or_owner(
+      public.project_pricing_studio_id(project_time_entries.project_id)
     )
   );
 
@@ -182,8 +202,17 @@ BEGIN
     'without it leaves an owner unable to see her own studio''s hours';
   ASSERT v_qual LIKE '%is_org_admin_or_owner%',
     '00606: the replacement read must go through is_org_admin_or_owner (§0.14)';
-  ASSERT v_qual NOT LIKE '%studio_id%',
-    '00606: never key an RLS policy on projects.studio_id (§0.13, 00317:15-18)';
+  ASSERT v_qual LIKE '%project_pricing_studio_id%',
+    '00606: the replacement read keys on the studio that PRICES the work '
+    '(HT-3-a, through 00604''s callable form), never on the designer''s '
+    'membership set — keyed the other way one organization_members INSERT undoes '
+    'this whole file (review round 1, finding B1); qual = ' || v_qual;
+  ASSERT regexp_replace(v_qual, 'project_pricing_studio_id', '', 'g')
+           NOT LIKE '%studio_id%',
+    '00606: never key an RLS policy on the projects.studio_id COLUMN (§0.13, '
+    '00317:15-18) — a legacy NULL there WIDENS visibility, whereas '
+    'is_org_admin_or_owner(project_pricing_studio_id(...)) = false on NULL and so '
+    'fails closed; qual = ' || v_qual;
 
   -- (e) the own-row studio write policies and the designer policy are untouched.
   ASSERT 4 = (

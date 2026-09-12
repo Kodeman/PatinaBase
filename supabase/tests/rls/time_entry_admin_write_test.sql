@@ -20,6 +20,16 @@
 --       guard_invoiced_time_entry (00177:51-84) still raises for both.
 --   (h) a server-side write (auth.uid() NULL: cron, migration, service_role)
 --       leaves the last human in updated_by rather than blanking it.
+--   (i) THE SELF-GRANT IS NOT A KEY (W2 review round 1, finding B1). An outsider
+--       who owns any organization may seat ANOTHER person in it with one INSERT
+--       (`Org owners can insert members`: WITH CHECK is_org_admin_or_owner(org)
+--       AND role <> 'owner'; no consent gate, status DEFAULT 'active'). So she
+--       seats the victim project's DESIGNER in her own studio and then must still
+--       read nothing, adjust nothing and delete nothing: the owner/admin policies
+--       key on the studio that PRICES the work (project_pricing_studio_id,
+--       HT-3-a), never on the designer's membership set. The INSERT itself is
+--       asserted to SUCCEED — it is the attacker's one move, and if it ever stops
+--       succeeding this case is measuring the wrong thing.
 --
 -- How to run:
 --   psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 \
@@ -39,7 +49,8 @@ VALUES
   ('c6050000-0000-4000-8000-000000000004', 'adminwrite-peer@test.invalid',    '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
   ('c6050000-0000-4000-8000-000000000005', 'adminwrite-guest@test.invalid',   '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
   ('c6050000-0000-4000-8000-000000000006', 'adminwrite-outside@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
-  ('c6050000-0000-4000-8000-000000000007', 'adminwrite-client@test.invalid',  '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+  ('c6050000-0000-4000-8000-000000000007', 'adminwrite-client@test.invalid',  '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('c6050000-0000-4000-8000-000000000008', 'adminwrite-attacker@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
 
 INSERT INTO profiles (id, email, full_name, created_at, updated_at)
 VALUES
@@ -49,7 +60,8 @@ VALUES
   ('c6050000-0000-4000-8000-000000000004', 'adminwrite-peer@test.invalid',    'AW Peer',    NOW(), NOW()),
   ('c6050000-0000-4000-8000-000000000005', 'adminwrite-guest@test.invalid',   'AW Guest',   NOW(), NOW()),
   ('c6050000-0000-4000-8000-000000000006', 'adminwrite-outside@test.invalid', 'AW Outside', NOW(), NOW()),
-  ('c6050000-0000-4000-8000-000000000007', 'adminwrite-client@test.invalid',  'AW Client',  NOW(), NOW())
+  ('c6050000-0000-4000-8000-000000000007', 'adminwrite-client@test.invalid',  'AW Client',  NOW(), NOW()),
+  ('c6050000-0000-4000-8000-000000000008', 'adminwrite-attacker@test.invalid', 'AW Attacker', NOW(), NOW())
 -- DO UPDATE, not DO NOTHING: handle_new_user has already inserted a profile
 -- row for each auth.users row above, with a NULL full_name — so DO NOTHING
 -- would leave every name NULL and the member-name asserts below would pass
@@ -59,7 +71,10 @@ ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name;
 INSERT INTO organizations (id, type, name, slug, status)
 VALUES
   ('c6050000-0000-4000-8000-0000000000a1', 'design_studio', 'AW Studio',  'aw-studio-test',  'active'),
-  ('c6050000-0000-4000-8000-0000000000a2', 'design_studio', 'AW Outside', 'aw-outside-test', 'active');
+  ('c6050000-0000-4000-8000-0000000000a2', 'design_studio', 'AW Outside', 'aw-outside-test', 'active'),
+  -- Case (i): a studio with no connection to AW House at all, owned by the
+  -- attacker, whose roster she therefore controls.
+  ('c6050000-0000-4000-8000-0000000000a3', 'design_studio', 'AW Attacker', 'aw-attacker-test', 'active');
 
 INSERT INTO organization_members (id, user_id, organization_id, role, status, joined_at)
 VALUES
@@ -74,7 +89,9 @@ VALUES
   ('c6050000-0000-4000-8000-0000000000c5', 'c6050000-0000-4000-8000-000000000005',
    'c6050000-0000-4000-8000-0000000000a1', 'guest',  'active', NOW()),
   ('c6050000-0000-4000-8000-0000000000c6', 'c6050000-0000-4000-8000-000000000006',
-   'c6050000-0000-4000-8000-0000000000a2', 'owner',  'active', NOW());
+   'c6050000-0000-4000-8000-0000000000a2', 'owner',  'active', NOW()),
+  ('c6050000-0000-4000-8000-0000000000c8', 'c6050000-0000-4000-8000-000000000008',
+   'c6050000-0000-4000-8000-0000000000a3', 'owner',  'active', NOW());
 
 -- The project is the studio owner's, and NAMES its studio: the admin's standing
 -- in 00605's policy and the resolver's own ASSERT 2 must land on the SAME studio,
@@ -384,6 +401,85 @@ BEGIN
     'than blanking the trace; got ' || COALESCE(right(v_updated::text, 4), 'NULL');
 
   RAISE NOTICE 'time_entry_admin_write: case (h) passed.';
+END
+$$;
+
+-- ─── (i) the self-grant is not a key (review round 1, finding B1) ───────────
+DO $$
+DECLARE
+  v_before   integer;
+  v_after    integer;
+  v_seated   integer;
+  v_rows     integer;
+  v_audits   integer;
+  v_pricing  uuid;
+BEGIN
+  SELECT count(*) INTO v_audits FROM audit_logs WHERE resource_type = 'project_time_entries';
+
+  -- The attacker owns a studio of her own and nothing else. AW House is not hers
+  -- and its hours are not her business.
+  PERFORM pg_temp.assume_user('c6050000-0000-4000-8000-000000000008');
+  SELECT count(*) INTO v_before FROM project_time_entries
+   WHERE id = 'c6050000-0000-4000-8000-0000000000b1';
+
+  -- Her one move: as owner of her OWN org she seats AW House's designer in it.
+  -- `Org owners can insert members` allows exactly this — no consent gate, and
+  -- organization_members.status defaults to 'active'.
+  INSERT INTO organization_members (user_id, organization_id, role)
+  VALUES ('c6050000-0000-4000-8000-000000000001', 'c6050000-0000-4000-8000-0000000000a3', 'member');
+  GET DIAGNOSTICS v_seated = ROW_COUNT;
+
+  SELECT count(*) INTO v_after FROM project_time_entries
+   WHERE id = 'c6050000-0000-4000-8000-0000000000b1';
+
+  BEGIN
+    UPDATE project_time_entries SET duration_minutes = 603
+     WHERE id = 'c6050000-0000-4000-8000-0000000000b1';
+    GET DIAGNOSTICS v_rows = ROW_COUNT;
+  EXCEPTION WHEN insufficient_privilege THEN v_rows := 0;
+  END;
+  ASSERT v_rows = 0,
+    'FAIL i4 (B1): the seat must not buy an adjust either; rows affected = ' || v_rows;
+
+  BEGIN
+    DELETE FROM project_time_entries WHERE id = 'c6050000-0000-4000-8000-0000000000b1';
+    GET DIAGNOSTICS v_rows = ROW_COUNT;
+  EXCEPTION WHEN insufficient_privilege THEN v_rows := 0;
+  END;
+  PERFORM pg_temp.reset_role();
+
+  ASSERT v_before = 0,
+    'FAIL i1 (precondition): the attacker must start with no sight of the hour; '
+    'rows = ' || v_before;
+  ASSERT v_seated = 1,
+    'FAIL i2 (precondition): the attacker''s seat INSERT must actually succeed — '
+    'this case exists because `Org owners can insert members` permits it. If it '
+    'now fails, the vector closed elsewhere and this case is measuring nothing';
+  ASSERT v_after = 0,
+    'FAIL i3 (B1, the leak this case exists for): seating the project''s DESIGNER '
+    'in a studio the attacker owns must NOT hand her the hour. The owner/admin '
+    'read keys on the studio that PRICES the work (project_pricing_studio_id, '
+    'HT-3-a), not on the designer''s membership set — keyed the other way, one '
+    'INSERT reopens W1-R10-03 (a colleague''s notes and per-person rate); rows = '
+    || v_after;
+  ASSERT v_rows = 0,
+    'FAIL i5 (B1): nor may she DELETE it; rows affected = ' || v_rows;
+  ASSERT EXISTS (SELECT 1 FROM project_time_entries
+                  WHERE id = 'c6050000-0000-4000-8000-0000000000b1'),
+    'FAIL i6 (B1): the member''s hour must survive the attempt';
+  ASSERT (SELECT count(*) FROM audit_logs WHERE resource_type = 'project_time_entries') = v_audits,
+    'FAIL i7: refused writes leave no audit row — and therefore no permanently '
+    'readable old_values copy of the notes and rate they could not read';
+
+  -- The pricing studio is what decides, and it is AW Studio throughout: the seat
+  -- the attacker wrote changed nothing about who prices AW House (HT-3-a step 1).
+  SELECT public.project_pricing_studio_id('c6050000-0000-4000-8000-0000000000e1')
+    INTO v_pricing;
+  ASSERT v_pricing = 'c6050000-0000-4000-8000-0000000000a1',
+    'FAIL i8: AW House NAMES its studio, so HT-3-a step 1 answers and no seat '
+    'written elsewhere can move it; got ' || COALESCE(v_pricing::text, 'NULL');
+
+  RAISE NOTICE 'time_entry_admin_write: case (i) passed — the self-grant buys nothing.';
 END
 $$;
 
