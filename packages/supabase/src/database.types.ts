@@ -2282,6 +2282,13 @@ export type Database = {
             foreignKeyName: "client_decisions_court_party_id_fkey"
             columns: ["court_party_id"]
             isOneToOne: false
+            referencedRelation: "people_directory_seats"
+            referencedColumns: ["seat_id"]
+          },
+          {
+            foreignKeyName: "client_decisions_court_party_id_fkey"
+            columns: ["court_party_id"]
+            isOneToOne: false
             referencedRelation: "project_parties"
             referencedColumns: ["id"]
           },
@@ -6843,6 +6850,13 @@ export type Database = {
             foreignKeyName: "field_link_tokens_party_id_fkey"
             columns: ["party_id"]
             isOneToOne: false
+            referencedRelation: "people_directory_seats"
+            referencedColumns: ["seat_id"]
+          },
+          {
+            foreignKeyName: "field_link_tokens_party_id_fkey"
+            columns: ["party_id"]
+            isOneToOne: false
             referencedRelation: "project_parties"
             referencedColumns: ["id"]
           },
@@ -11276,6 +11290,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "plan_issues"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_transmittals_party_id_fkey"
+            columns: ["party_id"]
+            isOneToOne: false
+            referencedRelation: "people_directory_seats"
+            referencedColumns: ["seat_id"]
           },
           {
             foreignKeyName: "plan_transmittals_party_id_fkey"
@@ -16158,18 +16179,25 @@ export type Database = {
       }
       project_parties: {
         Row: {
+          company_id: string | null
           company_name: string | null
+          contracted_through: string | null
           created_at: string
           created_by: string | null
           display_name: string
           email: string | null
           id: string
+          off_job_at: string | null
+          off_job_reason: string | null
+          on_site_from: string | null
+          on_site_to: string | null
           party_kind: string
           phone: string | null
           phone_e164: string | null
           profile_id: string | null
           project_id: string
           show_to_client: boolean
+          site_access_mode: string | null
           sms_consent_disclosure_version: string | null
           sms_consent_evidence: string | null
           sms_consent_recorded_at: string | null
@@ -16178,24 +16206,34 @@ export type Database = {
           sms_consent_status: string
           sms_consented_at: string | null
           sms_opt_out_at: string | null
+          stage: string
           studio_contact_id: string | null
           trade: string | null
           updated_at: string
           vendor_id: string | null
+          warranty_contact_person_id: string | null
+          warranty_until: string | null
         }
         Insert: {
+          company_id?: string | null
           company_name?: string | null
+          contracted_through?: string | null
           created_at?: string
           created_by?: string | null
           display_name: string
           email?: string | null
           id?: string
+          off_job_at?: string | null
+          off_job_reason?: string | null
+          on_site_from?: string | null
+          on_site_to?: string | null
           party_kind: string
           phone?: string | null
           phone_e164?: string | null
           profile_id?: string | null
           project_id: string
           show_to_client?: boolean
+          site_access_mode?: string | null
           sms_consent_disclosure_version?: string | null
           sms_consent_evidence?: string | null
           sms_consent_recorded_at?: string | null
@@ -16204,24 +16242,34 @@ export type Database = {
           sms_consent_status?: string
           sms_consented_at?: string | null
           sms_opt_out_at?: string | null
+          stage?: string
           studio_contact_id?: string | null
           trade?: string | null
           updated_at?: string
           vendor_id?: string | null
+          warranty_contact_person_id?: string | null
+          warranty_until?: string | null
         }
         Update: {
+          company_id?: string | null
           company_name?: string | null
+          contracted_through?: string | null
           created_at?: string
           created_by?: string | null
           display_name?: string
           email?: string | null
           id?: string
+          off_job_at?: string | null
+          off_job_reason?: string | null
+          on_site_from?: string | null
+          on_site_to?: string | null
           party_kind?: string
           phone?: string | null
           phone_e164?: string | null
           profile_id?: string | null
           project_id?: string
           show_to_client?: boolean
+          site_access_mode?: string | null
           sms_consent_disclosure_version?: string | null
           sms_consent_evidence?: string | null
           sms_consent_recorded_at?: string | null
@@ -16230,12 +16278,22 @@ export type Database = {
           sms_consent_status?: string
           sms_consented_at?: string | null
           sms_opt_out_at?: string | null
+          stage?: string
           studio_contact_id?: string | null
           trade?: string | null
           updated_at?: string
           vendor_id?: string | null
+          warranty_contact_person_id?: string | null
+          warranty_until?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "project_parties_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "studio_contacts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "project_parties_created_by_fkey"
             columns: ["created_by"]
@@ -16304,6 +16362,87 @@ export type Database = {
             columns: ["vendor_id"]
             isOneToOne: false
             referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_parties_warranty_contact_person_id_fkey"
+            columns: ["warranty_contact_person_id"]
+            isOneToOne: false
+            referencedRelation: "studio_contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_party_authority: {
+        Row: {
+          copy_to: string[]
+          created_at: string
+          effective_from: string
+          effective_to: string | null
+          engagement_id: string
+          granted_by: string | null
+          id: string
+          prepares_only: boolean
+          scope: string
+          source_clause: string | null
+          threshold_cents: number | null
+          updated_at: string
+        }
+        Insert: {
+          copy_to?: string[]
+          created_at?: string
+          effective_from?: string
+          effective_to?: string | null
+          engagement_id: string
+          granted_by?: string | null
+          id?: string
+          prepares_only?: boolean
+          scope: string
+          source_clause?: string | null
+          threshold_cents?: number | null
+          updated_at?: string
+        }
+        Update: {
+          copy_to?: string[]
+          created_at?: string
+          effective_from?: string
+          effective_to?: string | null
+          engagement_id?: string
+          granted_by?: string | null
+          id?: string
+          prepares_only?: boolean
+          scope?: string
+          source_clause?: string | null
+          threshold_cents?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_party_authority_engagement_id_fkey"
+            columns: ["engagement_id"]
+            isOneToOne: false
+            referencedRelation: "people_directory_seats"
+            referencedColumns: ["seat_id"]
+          },
+          {
+            foreignKeyName: "project_party_authority_engagement_id_fkey"
+            columns: ["engagement_id"]
+            isOneToOne: false
+            referencedRelation: "project_parties"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_party_authority_granted_by_fkey"
+            columns: ["granted_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_party_authority_granted_by_fkey"
+            columns: ["granted_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
             referencedColumns: ["id"]
           },
         ]
@@ -17359,6 +17498,117 @@ export type Database = {
           },
         ]
       }
+      project_site_access_cards: {
+        Row: {
+          alarm_ref: string | null
+          changed_at: string | null
+          changed_by: string | null
+          created_at: string
+          created_by: string | null
+          emergency_lines: Json
+          id: string
+          key_holder_engagement_id: string | null
+          lockbox_version: string | null
+          project_id: string
+          receiver_instructions: string | null
+          site_hours: string | null
+          site_notes: string | null
+          told_refs: string[]
+          updated_at: string
+        }
+        Insert: {
+          alarm_ref?: string | null
+          changed_at?: string | null
+          changed_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          emergency_lines?: Json
+          id?: string
+          key_holder_engagement_id?: string | null
+          lockbox_version?: string | null
+          project_id: string
+          receiver_instructions?: string | null
+          site_hours?: string | null
+          site_notes?: string | null
+          told_refs?: string[]
+          updated_at?: string
+        }
+        Update: {
+          alarm_ref?: string | null
+          changed_at?: string | null
+          changed_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          emergency_lines?: Json
+          id?: string
+          key_holder_engagement_id?: string | null
+          lockbox_version?: string | null
+          project_id?: string
+          receiver_instructions?: string | null
+          site_hours?: string | null
+          site_notes?: string | null
+          told_refs?: string[]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_site_access_cards_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_site_access_cards_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_site_access_cards_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_site_access_cards_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_site_access_cards_key_holder_engagement_id_fkey"
+            columns: ["key_holder_engagement_id"]
+            isOneToOne: false
+            referencedRelation: "people_directory_seats"
+            referencedColumns: ["seat_id"]
+          },
+          {
+            foreignKeyName: "project_site_access_cards_key_holder_engagement_id_fkey"
+            columns: ["key_holder_engagement_id"]
+            isOneToOne: false
+            referencedRelation: "project_parties"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_site_access_cards_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: true
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "project_site_access_cards_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: true
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_tasks: {
         Row: {
           blocked_by_item_id: string | null
@@ -17461,6 +17711,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "field_captures"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_tasks_owner_party_id_fkey"
+            columns: ["owner_party_id"]
+            isOneToOne: false
+            referencedRelation: "people_directory_seats"
+            referencedColumns: ["seat_id"]
           },
           {
             foreignKeyName: "project_tasks_owner_party_id_fkey"
@@ -23167,6 +23424,13 @@ export type Database = {
             foreignKeyName: "site_requests_assignee_party_id_fkey"
             columns: ["assignee_party_id"]
             isOneToOne: false
+            referencedRelation: "people_directory_seats"
+            referencedColumns: ["seat_id"]
+          },
+          {
+            foreignKeyName: "site_requests_assignee_party_id_fkey"
+            columns: ["assignee_party_id"]
+            isOneToOne: false
             referencedRelation: "project_parties"
             referencedColumns: ["id"]
           },
@@ -23254,6 +23518,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "projects"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sms_conversations_party_id_fkey"
+            columns: ["party_id"]
+            isOneToOne: false
+            referencedRelation: "people_directory_seats"
+            referencedColumns: ["seat_id"]
           },
           {
             foreignKeyName: "sms_conversations_party_id_fkey"
@@ -23379,6 +23650,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "task_blocked_state"
             referencedColumns: ["waiting_on_task_id"]
+          },
+          {
+            foreignKeyName: "sms_messages_party_id_fkey"
+            columns: ["party_id"]
+            isOneToOne: false
+            referencedRelation: "people_directory_seats"
+            referencedColumns: ["seat_id"]
           },
           {
             foreignKeyName: "sms_messages_party_id_fkey"
@@ -24478,6 +24756,142 @@ export type Database = {
           {
             foreignKeyName: "studio_channel_consent_recorded_by_fkey"
             columns: ["recorded_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      studio_compliance_documents: {
+        Row: {
+          blocks: string[]
+          created_at: string
+          created_by: string | null
+          doc_label: string | null
+          doc_type: string
+          expires_on: string | null
+          file_path: string | null
+          held_by: string
+          holder_id: string
+          holder_type: string
+          id: string
+          inbound: boolean
+          issued_on: string | null
+          issuer: string | null
+          number: string | null
+          organization_id: string
+          source: string
+          superseded_by: string | null
+          updated_at: string
+          verified_at: string | null
+          verified_by: string | null
+        }
+        Insert: {
+          blocks?: string[]
+          created_at?: string
+          created_by?: string | null
+          doc_label?: string | null
+          doc_type: string
+          expires_on?: string | null
+          file_path?: string | null
+          held_by?: string
+          holder_id: string
+          holder_type: string
+          id?: string
+          inbound?: boolean
+          issued_on?: string | null
+          issuer?: string | null
+          number?: string | null
+          organization_id: string
+          source?: string
+          superseded_by?: string | null
+          updated_at?: string
+          verified_at?: string | null
+          verified_by?: string | null
+        }
+        Update: {
+          blocks?: string[]
+          created_at?: string
+          created_by?: string | null
+          doc_label?: string | null
+          doc_type?: string
+          expires_on?: string | null
+          file_path?: string | null
+          held_by?: string
+          holder_id?: string
+          holder_type?: string
+          id?: string
+          inbound?: boolean
+          issued_on?: string | null
+          issuer?: string | null
+          number?: string | null
+          organization_id?: string
+          source?: string
+          superseded_by?: string | null
+          updated_at?: string
+          verified_at?: string | null
+          verified_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "studio_compliance_documents_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_compliance_documents_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_compliance_documents_holder_id_fkey"
+            columns: ["holder_id"]
+            isOneToOne: false
+            referencedRelation: "studio_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_compliance_documents_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "admin_studio_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_compliance_documents_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_compliance_documents_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "v_studios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_compliance_documents_superseded_by_fkey"
+            columns: ["superseded_by"]
+            isOneToOne: false
+            referencedRelation: "studio_compliance_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_compliance_documents_verified_by_fkey"
+            columns: ["verified_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_compliance_documents_verified_by_fkey"
+            columns: ["verified_by"]
             isOneToOne: false
             referencedRelation: "user_engagement_scores"
             referencedColumns: ["id"]
@@ -26223,6 +26637,13 @@ export type Database = {
             foreignKeyName: "trade_rfq_requests_party_id_fkey"
             columns: ["party_id"]
             isOneToOne: false
+            referencedRelation: "people_directory_seats"
+            referencedColumns: ["seat_id"]
+          },
+          {
+            foreignKeyName: "trade_rfq_requests_party_id_fkey"
+            columns: ["party_id"]
+            isOneToOne: false
             referencedRelation: "project_parties"
             referencedColumns: ["id"]
           },
@@ -26294,6 +26715,13 @@ export type Database = {
             foreignKeyName: "trade_rfq_tokens_party_id_fkey"
             columns: ["party_id"]
             isOneToOne: false
+            referencedRelation: "people_directory_seats"
+            referencedColumns: ["seat_id"]
+          },
+          {
+            foreignKeyName: "trade_rfq_tokens_party_id_fkey"
+            columns: ["party_id"]
+            isOneToOne: false
             referencedRelation: "project_parties"
             referencedColumns: ["id"]
           },
@@ -26360,6 +26788,13 @@ export type Database = {
           status?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "trade_scope_bids_party_id_fkey"
+            columns: ["party_id"]
+            isOneToOne: false
+            referencedRelation: "people_directory_seats"
+            referencedColumns: ["seat_id"]
+          },
           {
             foreignKeyName: "trade_scope_bids_party_id_fkey"
             columns: ["party_id"]
@@ -26600,6 +27035,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "user_engagement_scores"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trade_scope_terms_party_id_fkey"
+            columns: ["party_id"]
+            isOneToOne: false
+            referencedRelation: "people_directory_seats"
+            referencedColumns: ["seat_id"]
           },
           {
             foreignKeyName: "trade_scope_terms_party_id_fkey"
@@ -28538,20 +28980,110 @@ export type Database = {
       }
       people_directory: {
         Row: {
+          consent_status: string | null
+          contact_rule_summary: string | null
           designer_id: string | null
           display_name: string | null
           email: string | null
           last_touch_at: string | null
           meta: Json | null
+          paper_state: string | null
           person_id: string | null
           phone: string | null
           profile_id: string | null
           project_id: string | null
+          reach_state: string | null
           role: string | null
           scope: string | null
+          seat_count: number | null
           status_raw: string | null
         }
         Relationships: []
+      }
+      people_directory_seats: {
+        Row: {
+          company_id: string | null
+          company_name: string | null
+          consent_status: string | null
+          contact_rule_summary: string | null
+          contracted_through: string | null
+          designer_id: string | null
+          display_name: string | null
+          identity_key: string | null
+          off_job_at: string | null
+          off_job_reason: string | null
+          on_site_from: string | null
+          on_site_to: string | null
+          paper_state: string | null
+          party_kind: string | null
+          person_id: string | null
+          phone_e164: string | null
+          project_id: string | null
+          project_name: string | null
+          project_status: string | null
+          reach_state: string | null
+          scope: string | null
+          seat_id: string | null
+          show_to_client: boolean | null
+          site_access_mode: string | null
+          stage: string | null
+          studio_contact_id: string | null
+          trade: string | null
+          updated_at: string | null
+          warranty_contact_person_id: string | null
+          warranty_until: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_parties_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "studio_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_parties_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "project_parties_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_parties_studio_contact_id_fkey"
+            columns: ["studio_contact_id"]
+            isOneToOne: false
+            referencedRelation: "studio_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_parties_warranty_contact_person_id_fkey"
+            columns: ["warranty_contact_person_id"]
+            isOneToOne: false
+            referencedRelation: "studio_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "projects_designer_id_fkey"
+            columns: ["designer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "projects_designer_id_fkey"
+            columns: ["designer_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       product_behavior_stats: {
         Row: {
@@ -29267,6 +29799,23 @@ export type Database = {
           id?: string | null
           last_active_at?: string | null
           role?: string | null
+        }
+        Relationships: []
+      }
+      v_access_grants: {
+        Row: {
+          expires_at: string | null
+          grant_id: string | null
+          granted_at: string | null
+          granted_by: string | null
+          last_used_at: string | null
+          revoke_reason: string | null
+          revoked_at: string | null
+          scope_id: string | null
+          scope_type: string | null
+          subject_id: string | null
+          subject_type: string | null
+          tier: string | null
         }
         Relationships: []
       }
@@ -31317,6 +31866,74 @@ export type Database = {
           organization_name: string
         }[]
       }
+      access_grants_invoice_links: {
+        Args: never
+        Returns: {
+          expires_at: string
+          grant_id: string
+          granted_at: string
+          granted_by: string
+          last_used_at: string
+          revoke_reason: string
+          revoked_at: string
+          scope_id: string
+          scope_type: string
+          subject_id: string
+          subject_type: string
+          tier: string
+        }[]
+      }
+      access_grants_plan_transmittals: {
+        Args: never
+        Returns: {
+          expires_at: string
+          grant_id: string
+          granted_at: string
+          granted_by: string
+          last_used_at: string
+          revoke_reason: string
+          revoked_at: string
+          scope_id: string
+          scope_type: string
+          subject_id: string
+          subject_type: string
+          tier: string
+        }[]
+      }
+      access_grants_trade_agreement_links: {
+        Args: never
+        Returns: {
+          expires_at: string
+          grant_id: string
+          granted_at: string
+          granted_by: string
+          last_used_at: string
+          revoke_reason: string
+          revoked_at: string
+          scope_id: string
+          scope_type: string
+          subject_id: string
+          subject_type: string
+          tier: string
+        }[]
+      }
+      access_grants_trade_rfq: {
+        Args: never
+        Returns: {
+          expires_at: string
+          grant_id: string
+          granted_at: string
+          granted_by: string
+          last_used_at: string
+          revoke_reason: string
+          revoked_at: string
+          scope_id: string
+          scope_type: string
+          subject_id: string
+          subject_type: string
+          tier: string
+        }[]
+      }
       acknowledge_budget_checkpoint: {
         Args: { p_checkpoint_id: string }
         Returns: Json
@@ -32374,6 +32991,7 @@ export type Database = {
         }
         Returns: Json
       }
+      compliance_state: { Args: { p_holder_id: string }; Returns: string }
       compose_agreement_consent: {
         Args: { p_proposal_id: string }
         Returns: string
@@ -32425,6 +33043,10 @@ export type Database = {
           p_qty?: number
           p_scope_room_id: string
         }
+        Returns: string
+      }
+      contact_rule_summary: {
+        Args: { p_subject_id: string; p_subject_type: string }
         Returns: string
       }
       continue_board_in_project: {
@@ -32633,13 +33255,21 @@ export type Database = {
         }
         Returns: string
       }
-      create_field_link: {
-        Args: { p_party_id: string }
-        Returns: {
-          id: string
-          token: string
-        }[]
-      }
+      create_field_link:
+        | {
+            Args: { p_party_id: string }
+            Returns: {
+              id: string
+              token: string
+            }[]
+          }
+        | {
+            Args: { p_expires_at: string; p_party_id: string }
+            Returns: {
+              id: string
+              token: string
+            }[]
+          }
       create_furnishing_wave_draft: {
         Args: { p_project_id: string; p_title: string }
         Returns: Json
@@ -34056,6 +34686,7 @@ export type Database = {
         Args: { p_ends_on: string; p_project_id: string; p_starts_on: string }
         Returns: string
       }
+      identity_seat_count: { Args: { p_identity_key: string }; Returns: number }
       immutable_array_to_string: {
         Args: { arr: string[]; sep: string }
         Returns: string
@@ -34606,6 +35237,16 @@ export type Database = {
         Args: { p_checkpoint_id: string; p_reason: string }
         Returns: Json
       }
+      party_identity_key: {
+        Args: {
+          p_email: string
+          p_party_id: string
+          p_phone_e164: string
+          p_profile_id: string
+          p_studio_contact_id: string
+        }
+        Returns: string
+      }
       persist_proposal_send_request: {
         Args: {
           p_cc: string[]
@@ -34711,11 +35352,13 @@ export type Database = {
         Returns: Json
       }
       project_consent_org: { Args: { p_project_id: string }; Returns: string }
+      project_designer: { Args: { p_project_id: string }; Returns: string }
       project_note_enclosures_ok: {
         Args: { p_enclosures: Json }
         Returns: boolean
       }
       project_party_designer: { Args: { p_party_id: string }; Returns: string }
+      project_party_org: { Args: { p_party_id: string }; Returns: string }
       promote_batch_to_studio: { Args: { p_items: Json }; Returns: string[] }
       promote_board_reference_to_selection: {
         Args: { p_board_item_id: string; p_request: Json }
@@ -34794,6 +35437,10 @@ export type Database = {
       purge_client_account: { Args: { p_user_id: string }; Returns: string }
       push_deliver_after: {
         Args: { p_now?: string; p_user_id: string }
+        Returns: string
+      }
+      reach_state_for: {
+        Args: { p_card_id: string; p_party_id: string; p_profile_id: string }
         Returns: string
       }
       react_to_feedback: {

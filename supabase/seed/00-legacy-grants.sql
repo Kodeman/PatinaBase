@@ -15978,6 +15978,282 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00623_studio_compliance_documents.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.assert_compliance_holder() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00623_studio_compliance_documents.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.studio_compliance_documents FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00623_studio_compliance_documents.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON public.studio_compliance_documents TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00623_studio_compliance_documents.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.studio_compliance_documents TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00623_studio_compliance_documents.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.compliance_state(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00623_studio_compliance_documents.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.compliance_state(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00624_project_party_window_and_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.project_party_org(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00624_project_party_window_and_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.project_party_org(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00624_project_party_window_and_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.assert_project_party_cards() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00624_project_party_window_and_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.assert_party_authority_copy_to() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00624_project_party_window_and_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.project_party_authority FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00624_project_party_window_and_authority.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON public.project_party_authority TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00624_project_party_window_and_authority.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.project_party_authority TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00625_project_site_access_cards.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.project_designer(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00625_project_site_access_cards.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.project_designer(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00625_project_site_access_cards.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.assert_site_access_key_holder() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00625_project_site_access_cards.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.project_site_access_cards FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00625_project_site_access_cards.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON public.project_site_access_cards TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00625_project_site_access_cards.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.project_site_access_cards TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00626_people_directory_v4_seats.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.party_identity_key(uuid, uuid, text, text, uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00626_people_directory_v4_seats.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.party_identity_key(uuid, uuid, text, text, uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00626_people_directory_v4_seats.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.reach_state_for(uuid, uuid, uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00626_people_directory_v4_seats.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.reach_state_for(uuid, uuid, uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00626_people_directory_v4_seats.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.identity_seat_count(text) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00626_people_directory_v4_seats.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.identity_seat_count(text) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00626_people_directory_v4_seats.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.contact_rule_summary(text, uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00626_people_directory_v4_seats.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.contact_rule_summary(text, uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00626_people_directory_v4_seats.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.people_directory TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00626_people_directory_v4_seats.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.people_directory_seats FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00626_people_directory_v4_seats.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.people_directory_seats TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00626_people_directory_v4_seats.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.people_directory_seats TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00627_access_grants_and_field_link_window.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.access_grants_trade_rfq() FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00627_access_grants_and_field_link_window.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.access_grants_trade_rfq() TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00627_access_grants_and_field_link_window.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.access_grants_trade_agreement_links() FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00627_access_grants_and_field_link_window.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.access_grants_trade_agreement_links() TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00627_access_grants_and_field_link_window.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.access_grants_plan_transmittals() FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00627_access_grants_and_field_link_window.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.access_grants_plan_transmittals() TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00627_access_grants_and_field_link_window.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.access_grants_invoice_links() FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00627_access_grants_and_field_link_window.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.access_grants_invoice_links() TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00627_access_grants_and_field_link_window.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.v_access_grants FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00627_access_grants_and_field_link_window.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.v_access_grants TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00627_access_grants_and_field_link_window.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.v_access_grants TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00627_access_grants_and_field_link_window.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.create_field_link(UUID, TIMESTAMPTZ) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00627_access_grants_and_field_link_window.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.create_field_link(UUID, TIMESTAMPTZ) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00627_access_grants_and_field_link_window.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.create_field_link(UUID) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00627_access_grants_and_field_link_window.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.create_field_link(UUID) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 20260910152111_create_contact_messages.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON TABLE public.contact_messages FROM PUBLIC, anon, authenticated, service_role;
