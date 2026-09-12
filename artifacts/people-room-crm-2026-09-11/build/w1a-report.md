@@ -195,9 +195,11 @@ an empty diff.
     ("always a fresh recorded consent or an inbound START") is a separate named
     door, `record_channel_reconsent()`, landing on `pending` — `granted` stays
     the recipient's to give by replying YES or START, and that is now enforced
-    ACROSS the pair, not only at each door: this door refuses `granted` while
-    the refusal reconsent superseded is still unanswered
-    (`consent_awaiting_recipient`; decision 18 below). Read those two
+    ACROSS the pair, not only at each door: this door refuses EVERY verdict but
+    `opted_out` while the refusal reconsent superseded is still unanswered
+    (`consent_awaiting_recipient`; decision 18 below — r6 B6-1 widened that gate
+    off the verdict being written, because `pending` mirrors onto the seats
+    exactly as `granted` does and was the ungated first hop). Read those two
     sentences together — a studio member holds both doors, so a guarantee that
     holds only per-door is not a guarantee at all. The optional half of the
     review's suggestion — capping the sms RPC at `pending` outright — was NOT
@@ -293,8 +295,11 @@ an empty diff.
     `opted_out`, and the next recorded grant found a row the first gate no
     longer refused — two calls, any studio member, and a recorded STOP was back
     at `granted`, with the mirror clearing the party-row backstop `sendPartySms`
-    falls back on. So the write door now ALSO refuses `granted` while an
-    **unanswered** refusal stands — and (r4 B-1) that is read off a STORED
+    falls back on. So the write door now ALSO refuses every verdict but
+    `opted_out` while an **unanswered** refusal stands (r6 B6-1: the gate asks
+    whether a REFUSAL STANDS, never which verdict the caller is writing — a
+    recorded `pending` erased the refusal and its date from every seat and left
+    the `granted` behind it passing every leg, unrecoverable by reconsent()) — and (r4 B-1) that is read off a STORED
     FACT, `studio_channel_consent.refusal_unanswered`, not inferred from
     `opt_out_at`. A refusal is routinely DATELESS: the shipped portal writes
     `opted_out` party rows with a NULL `sms_opt_out_at` on purpose

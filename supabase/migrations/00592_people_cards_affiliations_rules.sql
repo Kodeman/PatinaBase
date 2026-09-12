@@ -23,7 +23,12 @@
 --      affiliation row, invisible to the company card's crew list (R-W).
 --   3. studio_contact_rules — E7: the contact rule (allowed / forbidden /
 --      routed / hours / escalation), one per subject, person · company ·
---      engagement.
+--      engagement. channels_allowed / channels_forbidden are CHECKed against
+--      00593's channel_kind vocabulary (a value the composer cannot match is a
+--      silent permission, not a forbidding), and route_to_person_id — the
+--      fourth self-FK into studio_contacts — is guarded by
+--      assert_studio_contact_rule_route() to a PERSON card in the subject's
+--      OWN studio, never the subject itself.
 --
 -- NOT DONE HERE, DELIBERATELY (orchestrator ruling, W1a):
 --   · studio_contacts does NOT gain never_text / do_not_contact /
@@ -740,6 +745,56 @@ COMMENT ON COLUMN public.studio_contact_rules.subject_id IS
   'studio_contacts.id when subject_type is person or company; '
   'project_parties.id when it is engagement. No FK — polymorphic.';
 
+-- ── The channel vocabulary is CHECKED, both ways (r6 M6-5) ─────────────────
+-- This table's own COMMENT promises "Omission fails closed at the composer,
+-- never open." A WRONG value is not an omission, and it fails OPEN: unchecked
+-- text[] took channels_forbidden = '{carrier pigeon,sms}' happily, and would
+-- equally have taken '{never_text}', '{SMS}' or '{txt}' — none of which match
+-- anything the composer compares against, so R-S's blocked clause never prints
+-- and the forbidding fact is silently not there. Decision 1 made this table the
+-- ONE home of that fact precisely so a second reader could not miss it; a
+-- non-matching value is that same failure inside the one home. The fixture
+-- cases it loses are F-27 Ray Thao (NEVER texted; scheduled through 311) and
+-- F-10 Sam Rowe (never texted). W1a ships no writer for this table, which is
+-- exactly why it is cheap to close now, before W1b's rule editor becomes the
+-- thing that has to be trusted.
+--
+-- The vocabulary is 00593's channel_kind, verbatim — the rule names the kinds
+-- of channel a card actually carries, and the two lists must be comparable to
+-- studio_contact_channels.channel_kind without translation. Stated in the
+-- DROP IF EXISTS / ADD idiom so a rerun can widen it.
+ALTER TABLE public.studio_contact_rules
+  DROP CONSTRAINT IF EXISTS studio_contact_rules_channels_allowed_check;
+ALTER TABLE public.studio_contact_rules
+  ADD CONSTRAINT studio_contact_rules_channels_allowed_check CHECK (
+    channels_allowed <@ ARRAY[
+      'mobile', 'office', 'dispatch', 'after_hours',
+      'email', 'ap_email',
+      'portal_311'
+    ]::text[]
+  );
+
+ALTER TABLE public.studio_contact_rules
+  DROP CONSTRAINT IF EXISTS studio_contact_rules_channels_forbidden_check;
+ALTER TABLE public.studio_contact_rules
+  ADD CONSTRAINT studio_contact_rules_channels_forbidden_check CHECK (
+    channels_forbidden <@ ARRAY[
+      'mobile', 'office', 'dispatch', 'after_hours',
+      'email', 'ap_email',
+      'portal_311'
+    ]::text[]
+  );
+
+COMMENT ON COLUMN public.studio_contact_rules.channels_allowed IS
+  'The channel kinds this subject may be reached on, from 00593''s '
+  'channel_kind vocabulary and CHECKed against it. An empty array is the '
+  'ordinary state: the rule forbids or routes without narrowing.';
+COMMENT ON COLUMN public.studio_contact_rules.channels_forbidden IS
+  'The channel kinds this subject must NEVER be reached on — F-27''s "never '
+  'texted", F-10''s "never texted". CHECKed against 00593''s channel_kind '
+  'vocabulary: a value the composer cannot match is not a forbidding, it is a '
+  'silent permission, and this table is the one home of the fact (r6 M6-5).';
+
 CREATE UNIQUE INDEX IF NOT EXISTS idx_studio_contact_rules_subject
   ON public.studio_contact_rules(subject_type, subject_id);
 
@@ -747,6 +802,106 @@ DROP TRIGGER IF EXISTS set_updated_at_studio_contact_rules ON public.studio_cont
 CREATE TRIGGER set_updated_at_studio_contact_rules
   BEFORE UPDATE ON public.studio_contact_rules
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+-- ── The routed person is a person, in the subject's own studio (r6 M6-4) ────
+-- route_to_person_id is the FOURTH self-FK into studio_contacts and the only
+-- one R-AP's assert_studio_contact_designations() does not cover — and the FK
+-- says nothing for the same reason stated at the top of this file: the table
+-- holds BOTH kinds of card AND every studio's cards. Unguarded it took a
+-- cross-studio route, a route to a COMPANY card, and a card routed to itself.
+--
+-- It is not a read leak today (studio_contacts RLS blanks the fetch), and that
+-- is precisely the damage: R-L prints the routed person's email and office
+-- phone on that line, direction §5.4's do-not-contact state collapses Channels
+-- to "Do not contact directly. Write <name> instead.", and R-S appends the
+-- routed line wherever a rule blocks. So a dangling or cross-tenant route
+-- blanks the ONE line that tells a designer how to reach a do-not-contact
+-- person, and a self-route renders "write themselves instead".
+--
+-- Same shape as assert_affiliation_card_kinds() / R-AP: a CHECK cannot see
+-- another table, so a BEFORE trigger asserts it. The subject's org is resolved
+-- the way this table's own RLS resolves the subject — through
+-- studio_contact_org() for a card subject, through the project for an
+-- engagement subject — and an org that will not resolve REFUSES rather than
+-- passing a NULL comparison.
+CREATE OR REPLACE FUNCTION public.assert_studio_contact_rule_route()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+DECLARE
+  v_subject_org uuid;
+  v_route_kind  text;
+  v_route_org   uuid;
+BEGIN
+  IF NEW.route_to_person_id IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  IF NEW.route_to_person_id = NEW.subject_id THEN
+    RAISE EXCEPTION 'rule_route_is_self'
+      USING HINT = 'route_to_person_id may not name the rule''s own subject: '
+                   '"write themselves instead" is not a route.';
+  END IF;
+
+  IF NEW.subject_type = 'engagement' THEN
+    SELECT COALESCE(p.studio_id, public._primary_studio_for(p.designer_id))
+      INTO v_subject_org
+      FROM public.project_parties pp
+      JOIN public.projects p ON p.id = pp.project_id
+     WHERE pp.id = NEW.subject_id;
+  ELSE
+    v_subject_org := public.studio_contact_org(NEW.subject_id);
+  END IF;
+
+  IF v_subject_org IS NULL THEN
+    RAISE EXCEPTION 'rule_subject_studio_unresolved'
+      USING HINT = 'The studio this rule''s subject belongs to could not be '
+                   'resolved, so the route cannot be checked against it. A '
+                   'route that cannot be checked is not a route that may be '
+                   'stored.';
+  END IF;
+
+  SELECT sc.entity_kind, sc.organization_id INTO v_route_kind, v_route_org
+    FROM public.studio_contacts sc WHERE sc.id = NEW.route_to_person_id;
+
+  IF v_route_kind IS DISTINCT FROM 'person' THEN
+    RAISE EXCEPTION 'rule_route_not_a_person'
+      USING HINT = 'route_to_person_id must name a PERSON card. "Write '
+                   '<firm> instead" is not a name a designer can write to.';
+  END IF;
+  IF v_route_org IS DISTINCT FROM v_subject_org THEN
+    RAISE EXCEPTION 'rule_route_other_studio'
+      USING HINT = 'route_to_person_id must name a card in the SAME studio as '
+                   'the rule''s subject. A route is a fact inside one rolodex.';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.assert_studio_contact_rule_route()
+  FROM PUBLIC, anon, authenticated;
+
+COMMENT ON FUNCTION public.assert_studio_contact_rule_route() IS
+  'BEFORE INSERT/UPDATE on studio_contact_rules: route_to_person_id must name '
+  'a PERSON card in the SAME studio as the rule''s subject, and never the '
+  'subject itself (rule_route_not_a_person / rule_route_other_studio / '
+  'rule_route_is_self / rule_subject_studio_unresolved). The fourth self-FK '
+  'into studio_contacts, and the one R-AP''s '
+  'assert_studio_contact_designations() does not cover; the FK cannot say this '
+  'because studio_contacts holds both kinds of card and every studio''s cards. '
+  'The routed line is what the room prints where a rule blocks (R-L, R-S, '
+  'direction §5.4), so a dangling or cross-tenant route blanks the one line '
+  'that says how to reach the person (00592, r6 M6-4).';
+
+DROP TRIGGER IF EXISTS assert_studio_contact_rule_route_trg
+  ON public.studio_contact_rules;
+CREATE TRIGGER assert_studio_contact_rule_route_trg
+  BEFORE INSERT OR UPDATE OF route_to_person_id, subject_id, subject_type
+  ON public.studio_contact_rules
+  FOR EACH ROW EXECUTE FUNCTION public.assert_studio_contact_rule_route();
 
 ALTER TABLE public.studio_contact_rules ENABLE ROW LEVEL SECURITY;
 

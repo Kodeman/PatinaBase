@@ -1288,13 +1288,27 @@ DECLARE
   r RECORD;
   raised TEXT;
 BEGIN
-  SELECT regexp_replace(pg_get_functiondef(p.oid), '\s+', ' ', 'g') INTO norm
+  -- The line comments are stripped BEFORE the whitespace is collapsed: the
+  -- body's own prose quotes the wording these assertions are checking is gone,
+  -- and a NOT LIKE that a comment can satisfy proves nothing.
+  SELECT regexp_replace(
+           regexp_replace(pg_get_functiondef(p.oid), '--[^\n]*', '', 'g'),
+           '\s+', ' ', 'g') INTO norm
     FROM pg_proc p JOIN pg_namespace ns ON ns.oid = p.pronamespace
    WHERE ns.nspname = 'public' AND p.proname = 'record_channel_consent';
-  ASSERT norm LIKE '%WHERE (scc.status IS DISTINCT FROM ''opted_out'' OR EXCLUDED.status = ''opted_out'') AND (EXCLUDED.status <> ''granted''%RETURNING%',
+  -- r6 B6-1: the second and third legs are stated on the REFUSAL
+  -- (EXCLUDED.status = 'opted_out' is the only exemption), never on
+  -- "which verdict is being written".
+  ASSERT norm LIKE '%WHERE (scc.status IS DISTINCT FROM ''opted_out'' OR EXCLUDED.status = ''opted_out'') AND (EXCLUDED.status = ''opted_out'' OR scc.status = ''granted''%RETURNING%',
     'FAIL 14a: record_channel_consent must gate opted_out AND the unanswered refusal in the upsert''s DO UPDATE … WHERE';
+  ASSERT norm NOT LIKE '%EXCLUDED.status <> ''granted''%',
+    'FAIL 14a2: no leg may be stated on the verdict being written (r6 B6-1)';
+  ASSERT norm NOT LIKE '%pp.sms_opt_out_at IS NOT NULL%',
+    'FAIL 14a3: the seat test must not require a DATED refusal (r6 M6-1)';
 
-  SELECT regexp_replace(pg_get_functiondef(p.oid), '\s+', ' ', 'g') INTO norm
+  SELECT regexp_replace(
+           regexp_replace(pg_get_functiondef(p.oid), '--[^\n]*', '', 'g'),
+           '\s+', ' ', 'g') INTO norm
     FROM pg_proc p JOIN pg_namespace ns ON ns.oid = p.pronamespace
    WHERE ns.nspname = 'public' AND p.proname = 'record_channel_reconsent';
   ASSERT norm LIKE '%AND scc.status = ''opted_out'' RETURNING%',
@@ -1560,16 +1574,37 @@ BEGIN
   ASSERT r.status = 'pending' AND r.consented_at IS NULL,
     'FAIL 16c2: the refused grant must leave the record at pending with no consent date';
 
-  -- 16d. A further `pending` re-record is still allowed — the studio may keep
-  --      restating the consent it holds; it just may not call it granted.
-  PERFORM public.record_channel_consent(
-    'b0000000-0000-4000-8000-00000000000a', 'sms', '6125550233', 'pending',
-    'written', 'Re-sent the confirmation text', 'field-sms-v1', NULL);
+  -- 16d. AND `pending` IS NOT A FREE HOP EITHER (r6 B6-1). The gate used to be
+  --      stated as "refuse granted", so the studio could keep re-recording
+  --      `pending` over an unanswered refusal — and every one of those writes
+  --      mirrors onto the seats exactly as a grant does. The gate is on whether
+  --      the REFUSAL STANDS, so this is refused too, and refused as what it is.
+  raised := NULL;
+  BEGIN
+    PERFORM public.record_channel_consent(
+      'b0000000-0000-4000-8000-00000000000a', 'sms', '6125550233', 'pending',
+      'written', 'Re-sent the confirmation text', 'field-sms-v1', NULL);
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'consent_awaiting_recipient',
+    'FAIL 16d: a pending re-record over an unanswered refusal must be refused, got '
+      || COALESCE(raised, '<no error>');
   SELECT * INTO r FROM studio_channel_consent
    WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
      AND channel_value = '+16125550233';
-  ASSERT r.status = 'pending' AND r.evidence = 'Re-sent the confirmation text',
-    'FAIL 16d: a pending re-record must still be accepted';
+  ASSERT r.evidence = 'Signed a fresh consent at the walkthrough',
+    'FAIL 16d2: the refused pending must not have restated the record''s evidence, got '
+      || COALESCE(r.evidence, '<null>');
+
+  -- 16d3. Recording the REFUSAL is always open — that is the way forward, and
+  --       it is what puts the fact back where reconsent() can act on it.
+  PERFORM public.record_channel_consent(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '6125550233', 'opted_out',
+    'verbal', 'Said it again on site', NULL, NULL);
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550233';
+  ASSERT r.status = 'opted_out' AND r.refusal_unanswered,
+    'FAIL 16d3: re-recording the refusal must be accepted';
 
   PERFORM pg_temp.reset_role();
 
@@ -2151,6 +2186,372 @@ BEGIN
 
   PERFORM pg_temp.reset_role();
   RAISE NOTICE '21. the designated people are people, in this studio (R-AP): passed';
+END
+$$;
+
+-- ─── 22. r6 B6-1 / M6-1: the seat gate is on the REFUSAL, not the verdict ──
+--
+-- R-AL's seat gate arrived narrowed twice, and both narrowings were walkable:
+--   · it ran only for p_status = 'granted', so `pending` was a free first hop.
+--     A recorded `pending` mirrors `pending` — and, before M6-2, a NULL
+--     opt_out_at — onto every seat in the studio on that number, erasing the
+--     refusal AND its date; the `granted` call behind it then passed every leg,
+--     and reconsent() could not recover the row (it requires opted_out).
+--   · it required sms_opt_out_at IS NOT NULL, so it failed OPEN for a DATELESS
+--     refusal — the shape the shipped portal writes on purpose
+--     (use-coordination.ts, "opted out, date unknown") and the shape every
+--     pre-00432 row carries. The SEND gate it mirrors (orgHasOptedOutParty)
+--     has no date test at all.
+
+INSERT INTO projects (id, name, designer_id, studio_id, created_by, status, created_at, updated_at)
+VALUES ('d0000000-0000-4000-8000-0000000000a4', 'W1A r6 seat-gate job',
+        'a0000000-0000-4000-8000-000000000001', 'b0000000-0000-4000-8000-00000000000a',
+        'a0000000-0000-4000-8000-000000000001', 'active', NOW(), NOW());
+
+INSERT INTO project_parties (id, project_id, party_kind, display_name, phone,
+                             sms_consent_status, sms_opt_out_at,
+                             sms_consent_source, sms_consent_evidence,
+                             sms_consent_recorded_at)
+VALUES
+  -- DATELESS, exactly as the portal writes it.
+  ('e0000000-0000-4000-8000-0000000000a4', 'd0000000-0000-4000-8000-0000000000a4',
+   'sub', 'Ray Thao', '612-555-0411',
+   'opted_out', NULL, 'other', 'Opted out, date unknown', '2026-04-01T00:00:00Z'),
+  -- DATED, and fully evidenced — B6-1's own repro.
+  ('e0000000-0000-4000-8000-0000000000a5', 'd0000000-0000-4000-8000-0000000000a4',
+   'sub', 'Sam Rowe', '612-555-0412',
+   'opted_out', '2025-12-03T00:00:00Z', 'inbound_sms', 'Replied STOP', '2025-12-03T00:00:00Z');
+
+DO $$
+DECLARE
+  raised TEXT;
+  r      RECORD;
+  n      INTEGER;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+
+  -- 22a. M6-1: a DATELESS seat refusal refuses the grant, like a dated one.
+  raised := NULL;
+  BEGIN
+    PERFORM public.record_channel_consent(
+      'b0000000-0000-4000-8000-00000000000a', 'sms', '612-555-0411', 'granted',
+      'written', 'We have a new signed form', 'field-sms-v1', NULL);
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'channel_opted_out',
+    'FAIL 22a: a DATELESS seat refusal must refuse the grant, got '
+      || COALESCE(raised, '<no error>');
+
+  -- 22b. B6-1: and `pending` is refused over it too — it is not a free hop.
+  raised := NULL;
+  BEGIN
+    PERFORM public.record_channel_consent(
+      'b0000000-0000-4000-8000-00000000000a', 'sms', '612-555-0411', 'pending',
+      'written', 'Sending the confirmation text', 'field-sms-v1', NULL);
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'channel_opted_out',
+    'FAIL 22b: pending over a seat refusal must be refused, got '
+      || COALESCE(raised, '<no error>');
+
+  -- 22c. B6-1's named case: a DATED, fully evidenced seat refusal + `pending`.
+  raised := NULL;
+  BEGIN
+    PERFORM public.record_channel_consent(
+      'b0000000-0000-4000-8000-00000000000a', 'sms', '612-555-0412', 'pending',
+      'written', 'Sending the confirmation text', 'field-sms-v1', NULL);
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'channel_opted_out',
+    'FAIL 22c: pending over a dated seat refusal must be refused, got '
+      || COALESCE(raised, '<no error>');
+
+  -- 22d. Nothing was minted, and neither seat moved: the refusal and its date
+  --      are still on the books the send gate reads.
+  SELECT COUNT(*) INTO n FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value IN ('+16125550411', '+16125550412');
+  ASSERT n = 0, 'FAIL 22d: a refused write must mint no record, got ' || n;
+
+  SELECT * INTO r FROM project_parties WHERE id = 'e0000000-0000-4000-8000-0000000000a4';
+  ASSERT r.sms_consent_status = 'opted_out' AND r.sms_opt_out_at IS NULL
+     AND r.sms_consent_evidence = 'Opted out, date unknown',
+    'FAIL 22d2: the dateless refusal must survive untouched';
+
+  SELECT * INTO r FROM project_parties WHERE id = 'e0000000-0000-4000-8000-0000000000a5';
+  ASSERT r.sms_consent_status = 'opted_out'
+     AND r.sms_opt_out_at = '2025-12-03T00:00:00Z'::timestamptz,
+    'FAIL 22d3: the dated refusal and its date must survive untouched';
+
+  -- 22e. The two-call walk is dead end to end. Recording the refusal is the
+  --      way forward — and the way back is still reconsent() plus the
+  --      recipient's own answer, never a second studio-side call.
+  PERFORM public.record_channel_consent(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '612-555-0412', 'opted_out',
+    'inbound_sms', 'Replied STOP', NULL, NULL);
+  PERFORM public.record_channel_reconsent(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '612-555-0412',
+    'written', 'Signed a fresh consent', 'field-sms-v1', NULL);
+  raised := NULL;
+  BEGIN
+    PERFORM public.record_channel_consent(
+      'b0000000-0000-4000-8000-00000000000a', 'sms', '612-555-0412', 'granted',
+      'written', 'We have a new signed form', 'field-sms-v1', NULL);
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'consent_awaiting_recipient',
+    'FAIL 22e: the walk must still end at the recipient, got '
+      || COALESCE(raised, '<no error>');
+
+  -- 22f. The gate does not over-refuse: a number this studio holds no refusal
+  --      on takes `pending` exactly as before.
+  PERFORM public.record_channel_consent(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '612-555-0413', 'pending',
+    'written', 'Signed the studio''s field-SMS form', 'field-sms-v1', NULL);
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550413';
+  ASSERT r.status = 'pending',
+    'FAIL 22f: a clean number must still take pending, got ' || COALESCE(r.status, '<null>');
+
+  PERFORM pg_temp.reset_role();
+  RAISE NOTICE '22. the seat gate is on the refusal, not the verdict (r6 B6-1/M6-1): passed';
+END
+$$;
+
+-- ─── 23. r6 M6-2: the mirror keeps the two dates ──────────────────────────
+--
+-- The mirror COALESCEd the four evidence columns (R-AN) but copied
+-- consented_at and opt_out_at straight. A record carrying a verdict without an
+-- opt_out_at is the ORDINARY case — the inbound rail mints one for a number
+-- with no prior row — so the mirror wrote NULL over a real, dated refusal on
+-- every seat. R-Q requires "granted 2 May 2025, opted out 3 Dec 2025" to stay
+-- printable, and the RPC goes to trouble to keep the pair on the record; the
+-- mirror must not destroy it on the seats.
+
+INSERT INTO project_parties (id, project_id, party_kind, display_name, phone,
+                             sms_consent_status, sms_consented_at, sms_opt_out_at,
+                             sms_consent_source, sms_consent_evidence,
+                             sms_consent_recorded_at, sms_consent_disclosure_version)
+VALUES
+  ('e0000000-0000-4000-8000-0000000000a6', 'd0000000-0000-4000-8000-0000000000a4',
+   'sub', 'Bo Ferrand', '612-555-0420',
+   'opted_out', '2025-05-02T00:00:00Z', '2025-12-03T00:00:00Z',
+   'inbound_sms', 'Replied STOP', '2025-12-03T00:00:00Z', 'field-sms-v1');
+
+DO $$
+DECLARE
+  r RECORD;
+BEGIN
+  -- The inbound rail's own write, as it really lands: service_role, status
+  -- granted, a fresh consented_at, NO opt_out_at (the rail mints the row from
+  -- the START it just received). This is the only writer that still reaches a
+  -- number with a standing seat refusal — the studio's door now refuses it.
+  INSERT INTO studio_channel_consent (
+    organization_id, channel_kind, channel_value, status,
+    consented_at, opt_out_at, refusal_unanswered,
+    source, evidence, recorded_at, disclosure_version)
+  VALUES (
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '+16125550420', 'granted',
+    '2026-06-01T00:00:00Z', NULL, false,
+    'inbound_sms', 'Replied START', '2026-06-01T00:00:00Z', 'field-sms-v1');
+
+  SELECT * INTO r FROM project_parties WHERE id = 'e0000000-0000-4000-8000-0000000000a6';
+  ASSERT r.sms_consent_status = 'granted',
+    'FAIL 23a: the verdict itself is still copied, got ' || COALESCE(r.sms_consent_status, '<null>');
+  ASSERT r.sms_consented_at = '2026-06-01T00:00:00Z'::timestamptz,
+    'FAIL 23a2: a date the record DOES carry is written, got '
+      || COALESCE(r.sms_consented_at::text, '<null>');
+  ASSERT r.sms_opt_out_at = '2025-12-03T00:00:00Z'::timestamptz,
+    'FAIL 23b: the seat''s refusal date must survive a verdict that does not '
+      'restate it, got ' || COALESCE(r.sms_opt_out_at::text, '<null>');
+
+  -- And the other way round: a refusal that carries no consented_at must not
+  -- erase the grant date standing beside it (R-Q's pair, both directions).
+  UPDATE studio_channel_consent
+     SET status = 'opted_out', consented_at = NULL, opt_out_at = '2026-07-01T00:00:00Z',
+         refusal_unanswered = true, source = 'inbound_sms', evidence = 'Replied STOP again',
+         recorded_at = NOW()
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550420';
+
+  SELECT * INTO r FROM project_parties WHERE id = 'e0000000-0000-4000-8000-0000000000a6';
+  ASSERT r.sms_consent_status = 'opted_out',
+    'FAIL 23c: the refusal is mirrored, got ' || COALESCE(r.sms_consent_status, '<null>');
+  ASSERT r.sms_opt_out_at = '2026-07-01T00:00:00Z'::timestamptz,
+    'FAIL 23c2: the fresh refusal date is written, got '
+      || COALESCE(r.sms_opt_out_at::text, '<null>');
+  ASSERT r.sms_consented_at = '2026-06-01T00:00:00Z'::timestamptz,
+    'FAIL 23d: the grant date must still print beside the refusal (R-Q), got '
+      || COALESCE(r.sms_consented_at::text, '<null>');
+
+  RAISE NOTICE '23. the mirror keeps both dates (r6 M6-2): passed';
+END
+$$;
+
+-- ─── 24. r6 M6-4: the routed person is a person, in the subject's studio ───
+--
+-- route_to_person_id is the fourth self-FK into studio_contacts and the only
+-- one R-AP's guard did not cover. R-L prints the routed person's email and
+-- office phone on that line, §5.4 collapses Channels to "Do not contact
+-- directly. Write <name> instead.", and R-S appends the routed line wherever a
+-- rule blocks — so a dangling or cross-tenant route blanks the one line that
+-- says how to reach a do-not-contact person, and a self-route renders "write
+-- themselves instead".
+
+DO $$
+DECLARE
+  raised TEXT;
+  r      RECORD;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+
+  -- 24a. Another studio's card.
+  raised := NULL;
+  BEGIN
+    INSERT INTO studio_contact_rules (subject_type, subject_id, route_to_person_id, reason)
+    VALUES ('company', 'c0000000-0000-4000-8000-000000000063',
+            'c0000000-0000-4000-8000-000000000061', 'cross-tenant route');
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'rule_route_other_studio',
+    'FAIL 24a: a cross-studio route must be refused, got ' || COALESCE(raised, '<no error>');
+
+  -- 24b. The subject itself.
+  raised := NULL;
+  BEGIN
+    INSERT INTO studio_contact_rules (subject_type, subject_id, route_to_person_id, reason)
+    VALUES ('person', 'c0000000-0000-4000-8000-000000000062',
+            'c0000000-0000-4000-8000-000000000062', 'write themselves instead');
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'rule_route_is_self',
+    'FAIL 24b: a self-route must be refused, got ' || COALESCE(raised, '<no error>');
+
+  -- 24c. A COMPANY card.
+  raised := NULL;
+  BEGIN
+    INSERT INTO studio_contact_rules (subject_type, subject_id, route_to_person_id, reason)
+    VALUES ('person', 'c0000000-0000-4000-8000-000000000001',
+            'c0000000-0000-4000-8000-000000000002', 'write the firm instead');
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'rule_route_not_a_person',
+    'FAIL 24c: a route to a firm must be refused, got ' || COALESCE(raised, '<no error>');
+
+  -- 24d. A person card in the same studio is accepted.
+  INSERT INTO studio_contact_rules (subject_type, subject_id, route_to_person_id,
+                                    channels_forbidden, reason)
+  VALUES ('person', 'c0000000-0000-4000-8000-000000000001',
+          'c0000000-0000-4000-8000-000000000062', ARRAY['mobile'],
+          'Never texted; write the office manager');
+  SELECT * INTO r FROM studio_contact_rules
+   WHERE subject_type = 'person' AND subject_id = 'c0000000-0000-4000-8000-000000000001';
+  ASSERT r.route_to_person_id = 'c0000000-0000-4000-8000-000000000062',
+    'FAIL 24d: a well-formed route must write';
+
+  -- 24e. The UPDATE path is guarded too.
+  raised := NULL;
+  BEGIN
+    UPDATE studio_contact_rules
+       SET route_to_person_id = 'c0000000-0000-4000-8000-000000000061'
+     WHERE subject_id = 'c0000000-0000-4000-8000-000000000001';
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'rule_route_other_studio',
+    'FAIL 24e: the UPDATE path must be guarded, got ' || COALESCE(raised, '<no error>');
+
+  -- 24f. The engagement leg resolves the studio through the project, not
+  --      through studio_contacts — and holds the same line.
+  raised := NULL;
+  BEGIN
+    INSERT INTO studio_contact_rules (subject_type, subject_id, route_to_person_id, reason)
+    VALUES ('engagement', 'e0000000-0000-4000-8000-000000000001',
+            'c0000000-0000-4000-8000-000000000061', 'cross-tenant job override');
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'rule_route_other_studio',
+    'FAIL 24f: a cross-studio job override must be refused, got ' || COALESCE(raised, '<no error>');
+
+  INSERT INTO studio_contact_rules (subject_type, subject_id, route_to_person_id, reason)
+  VALUES ('engagement', 'e0000000-0000-4000-8000-000000000001',
+          'c0000000-0000-4000-8000-000000000062', 'On this job, write the PM');
+  SELECT * INTO r FROM studio_contact_rules
+   WHERE subject_type = 'engagement' AND subject_id = 'e0000000-0000-4000-8000-000000000001';
+  ASSERT r.route_to_person_id = 'c0000000-0000-4000-8000-000000000062',
+    'FAIL 24f2: a same-studio job override must write';
+
+  -- 24g. A rule with no route at all is untouched by the guard.
+  INSERT INTO studio_contact_rules (subject_type, subject_id, channels_forbidden, reason)
+  VALUES ('company', 'c0000000-0000-4000-8000-000000000002', ARRAY['mobile'],
+          'Dispatch only');
+  SELECT * INTO r FROM studio_contact_rules
+   WHERE subject_type = 'company' AND subject_id = 'c0000000-0000-4000-8000-000000000002';
+  ASSERT r.route_to_person_id IS NULL,
+    'FAIL 24g: a routeless rule must still write';
+
+  PERFORM pg_temp.reset_role();
+  RAISE NOTICE '24. the routed person is a person, in this studio (r6 M6-4): passed';
+END
+$$;
+
+-- ─── 25. r6 M6-5: the channel vocabulary is CHECKED, both ways ─────────────
+--
+-- The table's own COMMENT promises "Omission fails closed at the composer,
+-- never open." A WRONG value is not an omission and fails OPEN: '{never_text}',
+-- '{SMS}', '{txt}', '{carrier pigeon}' all match nothing the composer compares
+-- against, so R-S's blocked clause never prints and the forbidding fact is
+-- silently absent from the one table that is supposed to hold it. F-27 Ray Thao
+-- ("NEVER texted; scheduled through 311") and F-10 Sam Rowe ("never texted")
+-- are the fixture cases that lose.
+
+DO $$
+DECLARE
+  state TEXT;
+  r     RECORD;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+
+  -- 25a. The reviewer's own probe value.
+  state := NULL;
+  BEGIN
+    UPDATE studio_contact_rules SET channels_forbidden = ARRAY['carrier pigeon', 'sms']
+     WHERE subject_type = 'person' AND subject_id = 'c0000000-0000-4000-8000-000000000001';
+  EXCEPTION WHEN check_violation THEN state := SQLSTATE; END;
+  ASSERT state = '23514',
+    'FAIL 25a: an out-of-vocabulary channels_forbidden must be refused, got '
+      || COALESCE(state, '<no error>');
+
+  -- 25b. The near-misses that read like the real thing.
+  FOR r IN SELECT unnest(ARRAY['never_text', 'SMS', 'txt', 'phone']) AS v LOOP
+    state := NULL;
+    BEGIN
+      UPDATE studio_contact_rules SET channels_forbidden = ARRAY[r.v]
+       WHERE subject_type = 'person' AND subject_id = 'c0000000-0000-4000-8000-000000000001';
+    EXCEPTION WHEN check_violation THEN state := SQLSTATE; END;
+    ASSERT state = '23514',
+      'FAIL 25b: channels_forbidden = {' || r.v || '} must be refused, got '
+        || COALESCE(state, '<no error>');
+  END LOOP;
+
+  -- 25c. channels_allowed is checked the same way — one door, not one and a half.
+  state := NULL;
+  BEGIN
+    UPDATE studio_contact_rules SET channels_allowed = ARRAY['text_message']
+     WHERE subject_type = 'person' AND subject_id = 'c0000000-0000-4000-8000-000000000001';
+  EXCEPTION WHEN check_violation THEN state := SQLSTATE; END;
+  ASSERT state = '23514',
+    'FAIL 25c: an out-of-vocabulary channels_allowed must be refused, got '
+      || COALESCE(state, '<no error>');
+
+  -- 25d. The whole real vocabulary is accepted, on both columns, and the empty
+  --      array (the default, and the ordinary state) stays legal.
+  UPDATE studio_contact_rules
+     SET channels_allowed   = ARRAY['portal_311', 'office', 'dispatch', 'after_hours',
+                                    'email', 'ap_email', 'mobile'],
+         channels_forbidden = ARRAY['mobile']
+   WHERE subject_type = 'person' AND subject_id = 'c0000000-0000-4000-8000-000000000001';
+  SELECT * INTO r FROM studio_contact_rules
+   WHERE subject_type = 'person' AND subject_id = 'c0000000-0000-4000-8000-000000000001';
+  ASSERT array_length(r.channels_allowed, 1) = 7 AND r.channels_forbidden = ARRAY['mobile'],
+    'FAIL 25d: the real vocabulary must be accepted on both columns';
+
+  UPDATE studio_contact_rules SET channels_allowed = '{}', channels_forbidden = '{}'
+   WHERE subject_type = 'person' AND subject_id = 'c0000000-0000-4000-8000-000000000001';
+
+  PERFORM pg_temp.reset_role();
+  RAISE NOTICE '25. the channel vocabulary is checked, both ways (r6 M6-5): passed';
   RAISE NOTICE 'All W1a assertions passed.';
 END
 $$;

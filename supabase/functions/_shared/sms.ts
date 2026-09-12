@@ -407,8 +407,8 @@ export type ChannelConsentVerdict = "refuse" | "allow" | "unknown";
  *     mirror fires on a consent write, never on a party-row insert), and
  *     without this branch the send is refused as not_consented and the studio
  *     has to re-record a consent it already holds (fixture F-11).
- *   · "unknown" — record says not_asked/pending, or there is none: the legacy
- *     party-row gates below decide.
+ *   · "unknown" — record says not_asked/pending with no refusal standing
+ *     behind it, or there is none: the legacy party-row gates below decide.
  *   · "refuse", logged — the owning studio could not be RESOLVED at all (a
  *     failed read, not an absent studio). A failure is not a fact about the
  *     number, and the no-studio branch below would answer this send out of
@@ -419,6 +419,19 @@ export type ChannelConsentVerdict = "refuse" | "allow" | "unknown";
  * and an inbound STOP reaches party rows phone-globally — so the owning
  * studio's own party rows are scanned for a refusal BEFORE `granted` is
  * honoured. Every opted_out path still refuses, whichever ledger carries it.
+ *
+ * AND `status` IS NOT THE WHOLE VERDICT (r6 M6-3). refusal_unanswered is the
+ * stored fact the WRITE door treats as load-bearing — a refusal the person who
+ * made it has not answered — and it was invisible to the rail that actually
+ * sends. record_channel_reconsent() moves a record opted_out -> pending
+ * keeping opt_out_at and the flag, and the mirror then stamps `pending` onto
+ * every seat in the studio on that number, removing the party-row backstop
+ * below: `status` read alone said "unknown", the seats said "pending", and the
+ * opt-in invite went out to a number that had replied STOP, on a 10DLC
+ * campaign. So the flag refuses here too. What answers a refusal is the
+ * recipient's own YES or START, which the inbound rail writes directly —
+ * lowering the flag and stamping a fresh consented_at; nothing the studio can
+ * type reopens this door.
  */
 async function channelConsentVerdict(
   supabase: SupabaseClient,
@@ -442,7 +455,7 @@ async function channelConsentVerdict(
   if (org) {
     const { data: record, error: recordError } = await supabase
       .from("studio_channel_consent")
-      .select("status")
+      .select("status, refusal_unanswered")
       .eq("organization_id", org)
       .eq("channel_kind", "sms")
       .eq("channel_value", phone)
@@ -455,8 +468,19 @@ async function channelConsentVerdict(
       return "refuse";
     }
     if (record) {
-      const status = (record as { status: string }).status;
+      const row = record as {
+        status: string;
+        refusal_unanswered?: boolean | null;
+      };
+      const status = row.status;
       if (status === "opted_out") return "refuse";
+      // A refusal the recipient has not answered still stands, whatever the
+      // status now says (r6 M6-3). reconsent() lands the studio's fresh
+      // consent on `pending` and keeps this flag raised precisely because the
+      // person who said STOP has not spoken since — and the mirror has by then
+      // cleared `opted_out` off the seats, so this is the only ledger left
+      // that remembers. Only the inbound YES/START lowers it.
+      if (row.refusal_unanswered === true) return "refuse";
       // The record is not self-certifying: a refusal recorded on one of this
       // studio's own party rows since the record was written still refuses.
       if (await orgHasOptedOutParty(supabase, phone, org)) return "refuse";
