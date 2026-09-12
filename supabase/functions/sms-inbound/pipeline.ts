@@ -417,7 +417,8 @@ async function writeChannelConsent(
       ? await seatConsentEvidence(supabase, t.partyIds)
       : { disclosureVersion: null, recordedBy: null };
     const keepsPriorConsent = status === "opted_out" && hadRecord;
-    await supabase.from("studio_channel_consent").upsert({
+    const { error: writeError } = await supabase
+      .from("studio_channel_consent").upsert({
       organization_id: t.org,
       channel_kind: "sms",
       channel_value: phone,
@@ -483,6 +484,24 @@ async function writeChannelConsent(
       // a STOP print the job the earlier grant came from.
       origin_project_id: t.projectId ?? prior.origin_project_id ?? null,
     }, { onConflict: "organization_id,channel_kind,channel_value" });
+    // AND THE WRITE IS LOAD-BEARING TOO. Since R-AS the record is the only copy
+    // of the verdict — the phone-global party write that used to stand behind a
+    // failed upsert is gone and the seats are frozen — so an upsert that errors
+    // (a transient PostgREST/DB error, or an FK violation when origin_project_id
+    // names a project deleted between the read above and this write) leaves this
+    // studio's record NON-REFUSING while the recipient has texted STOP. Unchecked,
+    // `failed` stayed false, the STOP branch answered Twilio 200, kept the
+    // twilio_sid idempotency claim so no retry ever came, and the next
+    // sendPartySms read a record that still said granted. The caller decides what
+    // an incomplete act is worth; it cannot decide on a result it never saw.
+    if (writeError) {
+      console.error(
+        "writeChannelConsent: the record could not be written — this studio is not recorded",
+        { org: t.org, phone, status, error: writeError },
+      );
+      failed = true;
+      continue;
+    }
   }
   return { failed };
 }

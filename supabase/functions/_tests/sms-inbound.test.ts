@@ -1443,6 +1443,73 @@ Deno.test("a STOP whose consent-record read fails is not acknowledged, and the r
   assertEquals(byOrg["org-beta"], "opted_out", "the seatless record is reached on the retry");
 });
 
+// close-review r1 BLOCKING-1: the WRITE is load-bearing too, now the record is
+// the only copy. An upsert that errors used to leave `failed` false — Twilio got
+// a 200, the idempotency claim stood so no retry came, and the studio's record
+// still said granted for a number that had texted STOP.
+const WRITE_DENIED = { message: "could not serialize access due to concurrent update", code: "40001" };
+
+/** Reads pass, the upsert fails — the shape a transient write error takes. */
+function denyUpsert(fake: FakeSupabase, table: string) {
+  return {
+    ...fake,
+    from: (t: string) => {
+      const real = fake.from(t);
+      if (t !== table) return real;
+      const denied = Promise.resolve({ data: null, error: WRITE_DENIED });
+      // deno-lint-ignore no-explicit-any
+      const shim: any = Object.create(real);
+      shim.upsert = () => ({
+        select: () => shim.upsert(),
+        single: () => denied,
+        maybeSingle: () => denied,
+        // deno-lint-ignore no-explicit-any
+        then: (cb: any, rj: any) => denied.then(cb, rj),
+      });
+      return shim;
+    },
+  } as unknown as FakeSupabase;
+}
+
+Deno.test("a STOP whose consent-record WRITE fails is not acknowledged, and the retry completes it", async () => {
+  const fake = createFakeSupabase(seatlessRecordSeed("+15551110065"));
+  const res = await processInbound(
+    params({ From: "+15551110065", Body: "STOP", MessageSid: "SMstopwrite" }),
+    { supabase: denyUpsert(fake, "studio_channel_consent") as never, getEnv: NO_POSTHOG },
+  );
+  assertEquals(res.status, 500, "a STOP the record did not take is not a STOP that landed");
+  assertEquals(res.disposition, "opt_out_incomplete");
+  // Nothing moved: the record is the only copy and its write was refused.
+  assert(
+    ((fake._data.studio_channel_consent ?? []) as Array<{ status: string }>)
+      .every((c) => c.status === "granted"),
+    "no record was written",
+  );
+  assert(
+    ((fake._data.project_parties ?? []) as Array<{ sms_consent_status: string }>)
+      .every((p) => p.sms_consent_status === "granted"),
+    "the frozen seats are untouched — there is no second copy to fall back on",
+  );
+  const inbound = ((fake._data.sms_messages ?? []) as Array<{ twilio_sid: string | null; direction: string }>)
+    .filter((m) => m.direction === "inbound");
+  assertEquals(inbound.length, 1);
+  assertEquals(inbound[0].twilio_sid, null, "the MessageSid claim is released for the retry");
+
+  // Twilio retries the same MessageSid — now the write goes through.
+  const retry = await processInbound(
+    params({ From: "+15551110065", Body: "STOP", MessageSid: "SMstopwrite" }),
+    { supabase: fake as never, getEnv: NO_POSTHOG },
+  );
+  assertEquals(retry.status, 200);
+  assertEquals(retry.disposition, "opted_out");
+  const byOrg = Object.fromEntries(
+    ((fake._data.studio_channel_consent ?? []) as Array<{ organization_id: string; status: string }>)
+      .map((c) => [c.organization_id, c.status]),
+  );
+  assertEquals(byOrg["org-alpha"], "opted_out");
+  assertEquals(byOrg["org-beta"], "opted_out");
+});
+
 Deno.test("a STOP whose party read fails is not acknowledged either", async () => {
   const fake = createFakeSupabase(seatlessRecordSeed("+15551110063"));
   const res = await processInbound(

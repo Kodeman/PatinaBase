@@ -65,6 +65,7 @@ can fire from a consent act at all, and both keep their shipped bodies.
 | Object | Shape |
 |---|---|
 | `public.refuse_legacy_consent_write()` + trigger `refuse_legacy_consent_write_trg` | `BEFORE UPDATE OF` the eight `sms_consent_*` / `sms_opt_out_at` columns on `project_parties`. Refuses a real change with `consent_legacy_column_frozen` unless `current_setting('app.consent_legacy_write', true) = 'on'`. Compares OLD/NEW as a tuple, so **restating** the same values (a whole-row UPDATE that names them) still writes; `BEFORE UPDATE OF` fires on column MENTION, not on change, and the shipped portal writes whole rows |
+| `public.project_consent_org(uuid)` | STABLE SQL, **SECURITY DEFINER**, `SET search_path TO 'public'`, `REVOKE ALL … FROM PUBLIC, anon` + `GRANT EXECUTE … TO authenticated, service_role`. `COALESCE(projects.studio_id, _primary_studio_for(designer_id))` — the one resolver both views and every writer answer from (close-review r1 MAJOR-1, §2.3) |
 | `public.channel_consent_status(uuid, text, text)` | STABLE SQL, SECURITY INVOKER, `SET search_path TO 'public'`, `REVOKE ALL … FROM PUBLIC, anon` + `GRANT EXECUTE … TO authenticated, service_role`. Returns NULL when the studio holds no record, which is what `not_asked` means; callers that must print a word COALESCE it |
 | `COMMENT ON COLUMN` × 8 | each of the frozen columns reads `legacy; read studio_channel_consent …` |
 | `COMMENT ON TABLE public.project_parties` | 00212:46's text, with the mirror invariant replaced by the freeze |
@@ -73,14 +74,19 @@ can fire from a consent act at all, and both keep their shipped bodies.
 
 | View | Lineage (grep-winner) | Change |
 |---|---|---|
-| `public.v_project_roster` | `00419_project_roster_wiring.sql:94-156` | party branch: `pp.sms_consent_status` → `COALESCE(channel_consent_status(<party org>, 'sms', pp.phone_e164), 'not_asked')`; one `LEFT JOIN public.projects prj` added for the org. Team branch, every other column, byte-identical |
+| `public.v_project_roster` | `00419_project_roster_wiring.sql:94-156` | party branch: `pp.sms_consent_status` → `COALESCE(channel_consent_status(project_consent_org(pp.project_id), 'sms', pp.phone_e164), 'not_asked')`. Team branch, every other column, byte-identical — and since close-review r1 the view needs no join to `projects` at all, so this is again exactly one expression changed |
 | `public.people_directory` | `00221 → 00281 → 00420 → 00478 → 00583 → 00589:696-935` (v6) | party branch: `status_raw` and `meta->>'sms_consent_status'` both read the same function. Five other branches byte-identical. W1b's v4 rebuild keeps this read |
 
-**The org expression** is `COALESCE(<projects>.studio_id, <inlined
-_primary_studio_for body>)`. It is inlined rather than calling
-`public._primary_studio_for()` because 00483 revoked EXECUTE on that function
-from every PostgREST role and a `security_invoker` view checks function
-permissions against the CALLER — probed directly:
+**The org expression** is one call: `public.project_consent_org(pp.project_id)`
+— `COALESCE(projects.studio_id, _primary_studio_for(designer_id))`, SECURITY
+DEFINER, `SET search_path TO 'public'`, `REVOKE ALL … FROM PUBLIC, anon` +
+`GRANT EXECUTE … TO authenticated, service_role`. The shape
+`studio_contact_org(uuid)` already takes (`00592:65-76`).
+
+It cannot simply call `public._primary_studio_for()` from inside the view:
+`00484:1221`/`:1278-1289` revoked EXECUTE on that function from every PostgREST
+role and a `security_invoker` view checks function permissions against the
+CALLER — probed directly:
 
 ```
 $ psql … -c "CREATE VIEW zz WITH (security_invoker=true) AS
@@ -89,11 +95,37 @@ $ psql … -c "CREATE VIEW zz WITH (security_invoker=true) AS
 ERROR:  permission denied for function _primary_studio_for
 ```
 
-The inlined subquery reads `organization_members` + `organizations` under the
-caller's own RLS, where the policy *"Active members can view co-members"*
-answers for exactly the population that reads these views. For anyone else it
-degrades to NULL and the consent word with it — the same degrade posture
-`v_project_roster`'s `om` join already documents.
+**This was inlined in the first cut, and that was a defect** (close-review r1
+MAJOR-1). The inlined subquery is textually identical to `00315:64-79` and
+behaviourally is not: the function is a definer and a subquery in an invoker
+view is not, so the copy saw only the memberships the CALLER's own
+`organization_members` RLS showed it, while `backfill_channel_consent_from_parties()`,
+`record_channel_consent()`'s seat gate and the send rail saw every membership.
+For a project with `studio_id IS NULL` whose designer belongs to two studios the
+reader and the writer named different studios, and the reader then printed the
+OTHER studio's verdict. Probed on a fixture (`probe29-close-r1-major1.sql`,
+Carol a member of Alpha and an admin of Beta, her project carrying no
+`studio_id`, Beta holding the refusal and Alpha a grant for the same number):
+
+```
+=== the DEFINER answer (every writer: fold, RPC seat gate, send rail) ===
+             definer_org              |             resolver_org
+--------------------------------------+--------------------------------------
+ b1000000-…-00000000000b              | b1000000-…-00000000000b   ← Beta
+
+=== BEFORE: the expression the views used to inline, as Alpha's owner ===
+ inlined_org = b1000000-…-00000000000a   ← Alpha
+ word_before = granted                   ← Alpha's ledger, for Beta's seat
+
+=== AFTER: the resolver, and the word the shipped view now prints ===
+ resolver_org_as_alice = b1000000-…-00000000000b
+ word_after            = not_asked        ← Beta's ledger is closed to her
+```
+
+`channel_consent_status()` stays SECURITY INVOKER, so the degrade posture is
+unchanged in the direction that matters: a caller who is not a member of the
+owning studio reads NULL and the view COALESCEs to `not_asked`. What is gone is
+the confident wrong answer. Test block 38 holds it.
 
 `meta.sms_consented_at` / `meta.sms_opt_out_at` on `people_directory` still read
 the frozen columns: `channel_consent_status()` returns a status, not dates.
@@ -111,7 +143,7 @@ Those two belong to W1b's v4 rebuild (§5.3).
 | `public.site_request_send(uuid)` | `00374_field_site_request_loop.sql:1265-1269` — moves a `not_asked` assignee to `pending` before dispatching a site request | **raises `consent_legacy_column_frozen`.** The site-request rail reads consent off the seat throughout; repointing it is W2's (§5.1) |
 | `useRecordPartySmsConsent` | `packages/supabase/src/hooks/use-coordination.ts:745-754` (UPDATE … `.eq('sms_consent_status','not_asked')`) | **raises.** Its replacement is `record_channel_consent(…, 'pending', …)` |
 | `useUpdateProjectParty`'s `revertsToOptedOut` branch | `use-coordination.ts:~604` (phone edit re-refuses) | **raises.** Its replacement is `record_channel_consent(…, 'opted_out', …)` |
-| `useAddProjectParty` | `use-coordination.ts:439-443` — an **INSERT** carrying the consent columns | **unaffected.** The freeze is BEFORE UPDATE, so a seat may still be born carrying what the studio recorded at the door |
+| `useAddProjectParty` | `use-coordination.ts` — an **INSERT** carrying the consent columns | **unaffected by the freeze** (it is BEFORE UPDATE), so a seat is still born carrying what the studio recorded at the door — and since close-review r1 (MAJOR-2) the same act ALSO records the invite on `studio_channel_consent` through `record_channel_consent(…, 'pending', …)`, before the insert. Without it both readers printed "Not asked" for a party Patina had just texted, and §3.8's `Invited` word was unreachable for every new party |
 | `sms-inbound/pipeline.ts` `optOutAllForPhone()` / `grantPartiesForStudios()` | the phone-global STOP write and the scoped grant write | **deleted this wave.** The rail writes `studio_channel_consent` only (R-AJ's START scope unchanged) |
 | `mirror_channel_consent_to_parties()` | 00594 | **deleted this wave** |
 | one-time migration statements | `00281:142`, `00418:300,322` | untouched — they replay long before 00594 creates the trigger |
@@ -157,6 +189,16 @@ reads `opted_out` or `pending` (R-AJ). `seatConsentEvidence()` remains — it
 READS the studio's own seats for the disclosure version and recorder a grant
 needs (R-AN).
 
+Since close-review r1 (BLOCKING-1) `writeChannelConsent()` checks its **upsert**
+as well as its prior read. The read guard was there from r7; the write was not,
+so `failed` could only ever be raised by a read — and with the record now the
+only copy, an upsert that errored left the studio's record non-refusing while
+the pipeline answered Twilio 200 and kept the `twilio_sid` idempotency claim, so
+no retry ever came. A failed write now raises `failed` exactly as a failed read
+does, and the STOP branch answers 500 / `opt_out_incomplete` and releases the
+claim. Covered by "a STOP whose consent-record WRITE fails is not acknowledged,
+and the retry completes it".
+
 ---
 
 ## 5. What this costs — owed, and to whom
@@ -177,6 +219,32 @@ transition any more, so:
 Repointing the site-request rail at the record is one change and it belongs with
 that rail, not inside a consent migration. It is stated in 00594's header, in
 `COMMENT ON TABLE public.project_parties`, and here.
+
+`site_request_send()` is `GRANT EXECUTE … TO authenticated` (`00374:3546`), and
+it is called from the portal **and from Patina Field** — `SiteRequestContract`
+names the RPC at `apps/mobile/Capture/Capture/Features/SiteRequests/SiteRequestContract.swift:15`.
+So the iOS "send a site request" act fails for any `not_asked` assignee too, not
+only the portal's.
+
+### 5.1b The rest of the rails that still read the frozen seat (W2)
+
+Added after close-review r1 (MAJOR-4). §5.1 and §8 named the site-request rail
+and the portal's two UPDATE writers; these four are on the seat as well, and
+**replacing the two portal writers is not sufficient to restore the double
+opt-in**, because the invite dispatch fires on a party row and the YES gate
+reads a party row.
+
+| Rail | Where | What it reads off the frozen seat |
+|---|---|---|
+| the opt-in invite's own evidence proof | `_shared/sms.ts:830-845` | `sms_consent_source / _evidence / _recorded_at / _disclosure_version` on the party row. A consent recorded ONLY through `record_channel_consent()` leaves those NULL, so the invite returns `consent_evidence_required`. Today the invite still works because the add-party INSERT writes the seat as well as the record (§3) — which is exactly what R-AS says nothing should rely on |
+| the inbound YES gate | `sms-inbound/pipeline.ts:766` | `parties.some(p => p.sms_consent_status === 'pending')` — a seat state no consent ACT can produce any more (only the add-party INSERT can) |
+| `resolveRecipient` | `_shared/sms.ts:552-568` | `recipient.consent` comes off the party row, now frozen at whatever it held at fold time |
+| `flushDeferredMessages` | `_shared/sms.ts:1070-1085` | the deferred row's party consent, read the same way, so the flush answers the same question the same way |
+
+W2's scope is therefore: the site-request rail, the portal's two UPDATE writers,
+**the opt-in invite dispatch and its evidence proof**, **the inbound YES gate**,
+and `resolveRecipient` / `flushDeferredMessages` — all repointed at
+`studio_channel_consent`.
 
 ### 5.2 Two consequences of keeping PR-x's second check over frozen rows
 
@@ -205,7 +273,11 @@ that rail, not inside a consent migration. It is stated in 00594's header, in
   frozen columns. `channel_consent_status()` returns a status only; the v4
   rebuild should read `studio_channel_consent.consented_at` / `.opt_out_at`.
 - The portal's two UPDATE writers (§3) still exist and now fail loudly. W2
-  replaces them with the RPCs.
+  replaces them with the RPCs. Since close-review r1 (MAJOR-3 / F2 / F3) they
+  fail in a SENTENCE rather than in Postgres: both hooks catch
+  `consent_legacy_column_frozen` and throw "Texting consent has moved to the
+  studio's own record, and this screen hasn't caught up yet. Nothing was
+  changed." The refusal itself is unchanged — the edit does not land.
 
 ---
 
@@ -221,8 +293,8 @@ Finished supabase db reset on branch main.
 ```
 
 Clean, with `supabase/seed/00-legacy-grants.sql` regenerated first
-(`python3 scripts/generate-legacy-grants.py` → *baseline + 2636 replayed
-statements*; the diff is the two new function REVOKE/GRANTs and
+(`python3 scripts/generate-legacy-grants.py` → *baseline + 2638 replayed
+statements* after close-review r1 added `project_consent_org`'s REVOKE/GRANT; the diff is the two new function REVOKE/GRANTs and
 `v_project_roster`'s re-stated `GRANT SELECT … TO authenticated`, minus the
 mirror's REVOKE).
 
@@ -243,6 +315,7 @@ the record-based assertion of the same fact:
 | 23 | the mirror keeps both dates on the seat | the record keeps both dates; the seat keeps its own; the roster prints the record's |
 | 27, 28, 30, 30e, 30f, 35, 36 | seat-side assertions of the mirror's evidence rules | the record-side assertion of the same fact, plus "the seat is never written" and "the roster prints the record" |
 | 37 (new) | — | the mirror function and trigger are gone; the freeze trigger is on `project_parties`; both views reference `channel_consent_status`; neither still reads `pp.sms_consent_status`; **org isolation through RLS** — Alpha's member reads Alpha's verdict, Beta's member asking for Alpha's org gets NULL |
+| 38 (new, close-review r1) | — | **one resolver**: on a `studio_id IS NULL` project whose designer belongs to two studios, `project_consent_org()` answers the writers' studio for every caller; the Alpha reader no longer prints Alpha's word for Beta's seat, the Beta reader reads its own refusal, neither view still inlines the primary-studio lookup, and the resolver is a definer with a pinned search_path, closed to anon |
 
 ```
 $ psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 \
@@ -250,6 +323,8 @@ $ psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STO
 …
 NOTICE:  37. the record is the single source: no mirror, the legacy columns frozen,
          both readers on channel_consent_status(), and org isolation through RLS (R-AS): passed
+NOTICE:  38. one resolver for the seat's studio: reader and writer agree, and no view
+         prints another studio's consent word (close-review r1 MAJOR-1): passed
 NOTICE:  All W1a assertions passed.
 ROLLBACK
 ```
@@ -259,8 +334,14 @@ ROLLBACK
 ```
 $ deno test --no-check -A --node-modules-dir=auto --config supabase/functions/deno.json \
     supabase/functions/_shared/sms.test.ts supabase/functions/_tests/sms-inbound.test.ts
-ok | 82 passed | 0 failed (127ms)
+ok | 83 passed | 0 failed (119ms)
 ```
+
+The 83rd is close-review r1's BLOCKING-1 cover: "a STOP whose consent-record
+WRITE fails is not acknowledged, and the retry completes it" — reads pass, the
+upsert errors, and the branch must answer 500 / `opt_out_incomplete`, write
+nothing on either ledger, release the `twilio_sid` claim, and complete on the
+retry.
 
 Nine sms-inbound tests were rewritten from party-row assertions to record
 assertions (STOP per studio; the refusal's own evidence on the record beside the
@@ -280,9 +361,10 @@ $ diff -u <before> packages/supabase/src/database.types.ts
 +        Args: { p_channel_kind: string; p_channel_value: string; p_organization_id: string }
 +        Returns: string
 +      }
++      project_consent_org: { Args: { p_project_id: string }; Returns: string }
 ```
 
-8 changed lines, all additions: the one new function. Trigger functions do not
+9 changed lines, all additions: the two new functions. Trigger functions do not
 appear in generated types, so the mirror's removal shows there as nothing —
 probe 1 is what proves it.
 
@@ -342,9 +424,28 @@ recorded wordless).
 
 ## 8. Not done
 
+**W1a MUST NOT SHIP ALONE.** Rulings §6 deploys one chain, and this wave on its
+own leaves two designer-facing acts refusing:
+
+- `site_request_send()` raises `consent_legacy_column_frozen` for any
+  `not_asked` assignee — from the portal AND from Patina Field (§5.1). That is a
+  hard error on a live, un-flag-gated act, with no flag to hide it behind.
+- Every phone edit of a seat currently `pending` or `granted`, and every use of
+  the party sheet's own consent act, raises too (§3). Since close-review r1 the
+  hooks turn that into a written sentence instead of the raw Postgres string —
+  but the act still fails, and until W2 there is no working substitute in the
+  room.
+
+Owed:
+
 - The site-request rail (§5.1) — W2.
+- The opt-in invite's evidence proof, the inbound YES gate, `resolveRecipient`
+  and `flushDeferredMessages` (§5.1b) — W2. Repointing only the two portal
+  writers does NOT restore the double opt-in.
 - The portal's two UPDATE writers (§3) — W2.
 - `people_directory`'s two consent DATES (§5.3) — W1b's v4 rebuild.
-- The unattributable-send fail-open (§5.2) — needs Fable's ruling.
+- The unattributable-send fail-open (§5.2) — needs Fable's ruling. Close-review
+  r1 (F1) confirms it independently and names it a REGRESSION against pre-00594
+  behaviour: the phone-global party write used to catch exactly this case.
 - Nothing deployed. W1b mints from **00621**; 00595–00620 are reserved for
   another program.
