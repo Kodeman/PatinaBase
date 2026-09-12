@@ -789,26 +789,25 @@ BEGIN
 END
 $$;
 
--- ─── 8. r2 B-1, under R-AS: the second outward trigger cannot fire either ──
+-- ─── 8. R-AW: the record releases the parked site requests ─────────────────
 --
--- project_parties carries two AFTER-row triggers that reach the outside world.
--- Block 6 covered the opt-in invite. This is the other one:
--- site_request_consent_granted_dispatch fires whenever sms_consent_status flips
--- to 'granted', mints durable dispatch work, and calls site-request-dispatch,
--- which calls sendPartySms — a real text to a trade. The retired mirror flipped
--- every party row in the studio on the number, so one recorded grant fanned out
--- into one dispatch per open request per seat, and 00594 had to graft a guard
--- into 00374's trigger to hold it off.
+-- project_parties carries AFTER-row triggers that reach the outside world.
+-- Block 6 covered the opt-in invite, which is still on the seat and still
+-- cannot fire from a consent act. This is the other one:
+-- site_request_consent_granted_dispatch mints durable dispatch work and calls
+-- site-request-dispatch, which calls sendPartySms — a real text to a trade.
 --
--- With the record as the single source there is nothing to guard: a consent act
--- writes no seat, so the trigger cannot fire from one. It keeps its SHIPPED
--- body, and this block proves both halves — nothing dispatches from a recorded
--- grant, and the shipped trigger is still live for a real party-row transition.
+-- Under R-AS it fired AFTER UPDATE OF project_parties.sms_consent_status, and
+-- no consent act makes a party-row transition any more: requests parked in
+-- awaiting_consent were never released, and the gap was asserted here (8c) as
+-- W2's debt. R-AW pays it. 00622 moves the trigger onto studio_channel_consent
+-- — AFTER INSERT OR UPDATE OF status, when the verdict becomes a standing
+-- `granted` — so the release happens where the consent actually lands.
 --
--- IT ALSO RECORDS THE GAP R-AS LEAVES OPEN FOR W2 (8c): the requests parked in
--- awaiting_consent are NOT released by the grant any more, because that release
--- lived on the party-row transition. The site-request rail reads consent off the
--- seat throughout and has to be repointed at the record.
+-- The fan-out that forced 00594 to graft a guard into 00374's body is gone by
+-- construction: the loop is over REQUESTS, not over seats. Two seats for one
+-- human on one number, each holding one parked request, release exactly two
+-- requests — one dispatch each, which is what each request needs.
 --
 -- public.invoke_edge_function is still standing in (installed for block 6).
 
@@ -841,7 +840,8 @@ BEGIN
     'd0000000-0000-4000-8000-00000000000a');
   PERFORM pg_temp.reset_role();
 
-  -- 8a. The seats are untouched, and the record holds the grant.
+  -- 8a. The seats are STILL untouched — the release reads them, never writes
+  --     them — and the record holds the grant.
   SELECT COUNT(*) INTO n FROM project_parties
    WHERE phone_e164 = '+16125550155' AND sms_consent_status = 'not_asked';
   ASSERT n = 2, 'FAIL 8a: a recorded grant must reach no seat, got ' || (2 - n);
@@ -850,28 +850,46 @@ BEGIN
      AND channel_value = '+16125550155' AND status = 'granted';
   ASSERT n = 1, 'FAIL 8a2: the record should hold the grant, got ' || n;
 
-  -- 8b. …and NOT ONE site-request dispatch left the building.
+  -- 8b. THE RELEASE (R-AW). One dispatch per parked request, and no more:
+  --     two requests, two dispatches, whatever the number of seats.
   SELECT COUNT(*) INTO d FROM public._w1a_dispatch_log
    WHERE fn_name = 'site-request-dispatch';
-  ASSERT d = 0, 'FAIL 8b: a recorded grant must dispatch no site request, got ' || d;
+  ASSERT d = 2,
+    'FAIL 8b: the recorded grant must release each parked request exactly once, got ' || d;
 
-  -- 8c. THE GAP, ASSERTED AS IT STANDS (owed to W2). The parked requests are
-  --     NOT released: 00374's trigger is the only caller of
-  --     site_request_dispatch_after_consent(), it fires on a party-row
-  --     transition, and no consent act makes one any more. The lifecycle sweep
-  --     only promotes requests that already hold an outbox row, so these two
-  --     stay in awaiting_consent until the site-request rail reads the record.
+  -- 8c. …and both requests carry the granted snapshot the release writes.
   SELECT COUNT(*) INTO n FROM site_requests
    WHERE id IN ('a1000000-0000-4000-8000-000000000001', 'a1000000-0000-4000-8000-000000000002')
      AND consent_status_snapshot = 'granted';
-  ASSERT n = 0,
-    'FAIL 8c: the consent record does not release parked requests yet — if this '
-    'now passes, the site-request rail was repointed and this assertion is the '
-    'one to update, got ' || n;
+  ASSERT n = 2,
+    'FAIL 8c: the consent record must release both parked requests, got ' || n;
 
-  -- 8d. 00374's trigger keeps its SHIPPED body: a real party-row transition
-  --     (only reachable through the legacy escape hatch now) still dispatches
-  --     and still releases its request, unguarded.
+  -- 8d. A SECOND recorded grant on the same number releases nothing more: the
+  --     trigger gates on the TRANSITION, not on the row's state, so a restated
+  --     grant cannot re-enqueue dispatch work for a request already released.
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+  PERFORM public.record_channel_consent(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '(612) 555-0155', 'granted',
+    'written', 'Signed kickoff form, countersigned', 'field-sms-v1',
+    'd0000000-0000-4000-8000-00000000000a');
+  PERFORM pg_temp.reset_role();
+  SELECT COUNT(*) INTO d FROM public._w1a_dispatch_log
+   WHERE fn_name = 'site-request-dispatch';
+  ASSERT d = 2, 'FAIL 8d: a restated grant must release nothing again, got ' || d;
+
+  -- 8e. The old trigger is GONE from project_parties, so a deliberate
+  --     app.consent_legacy_write repair of a frozen seat cannot text a trade.
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM pg_trigger tg JOIN pg_class c ON c.oid = tg.tgrelid
+     WHERE c.relname = 'project_parties'
+       AND tg.tgname = 'site_request_consent_granted_dispatch'),
+    'FAIL 8e: the release trigger must no longer sit on project_parties (R-AW)';
+  ASSERT EXISTS (
+    SELECT 1 FROM pg_trigger tg JOIN pg_class c ON c.oid = tg.tgrelid
+     WHERE c.relname = 'studio_channel_consent'
+       AND tg.tgname = 'site_request_consent_granted_dispatch'),
+    'FAIL 8e2: the release trigger must sit on studio_channel_consent (R-AW)';
+
   SET LOCAL app.consent_legacy_write = 'on';
   UPDATE project_parties SET sms_consent_status = 'granted'
    WHERE id = 'e0000000-0000-4000-8000-000000000021';
@@ -879,13 +897,10 @@ BEGIN
 
   SELECT COUNT(*) INTO d FROM public._w1a_dispatch_log
    WHERE fn_name = 'site-request-dispatch';
-  ASSERT d = 1, 'FAIL 8d: a direct party-row grant must still dispatch once, got ' || d;
+  ASSERT d = 2,
+    'FAIL 8e3: a direct party-row write must dispatch nothing at all now, got ' || d;
 
-  SELECT COUNT(*) INTO n FROM site_requests
-   WHERE id = 'a1000000-0000-4000-8000-000000000001' AND consent_status_snapshot = 'granted';
-  ASSERT n = 1, 'FAIL 8d2: the direct grant should have released its request';
-
-  RAISE NOTICE '8. a consent act reaches no seat and sends nothing (B-1): passed';
+  RAISE NOTICE '8. the record releases the parked site requests, once each (R-AW): passed';
 END
 $$;
 
@@ -1969,29 +1984,13 @@ BEGIN
    WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
      AND channel_value = '+16125550244';
 
-  -- …and R-AL's SEAT gate still stands in front of it. This is the shape of
-  -- the transition R-AS leaves for W2: the legacy seat is frozen at
-  -- `opted_out`, nothing can move it, so PR-x's fail-closed second check keeps
-  -- refusing even after the recipient answered. Fail-closed, and loud.
-  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
-  raised := NULL;
-  BEGIN
-    PERFORM public.record_channel_consent(
-      'b0000000-0000-4000-8000-00000000000a', 'sms', '6125550244', 'granted',
-      'written', 'Kickoff form', 'field-sms-v1', NULL);
-  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
-  ASSERT raised = 'channel_opted_out',
-    'FAIL 16Be: a frozen opted_out seat still refuses the write door (R-AL), got '
-    || COALESCE(raised, '<no error>');
-  PERFORM pg_temp.reset_role();
-
-  -- 16Bf. Repairing that legacy seat through the deliberate door — which is
-  --       what retiring PR-x's second check means in practice — opens it.
-  SET LOCAL app.consent_legacy_write = 'on';
-  UPDATE project_parties SET sms_consent_status = 'granted'
-   WHERE id = 'e0000000-0000-4000-8000-000000000051';
-  SET LOCAL app.consent_legacy_write = '';
-
+  -- 16Be. R-AW: THE RECIPIENT'S OWN ANSWER IS ENOUGH. Under R-AS the frozen
+  --       `opted_out` seat beside this record went on refusing the write door
+  --       for ever (R-AL's seat gate), so a number whose owner had texted START
+  --       was still un-grantable and the only way out was a deliberate
+  --       app.consent_legacy_write repair. The seat carries no fact the record
+  --       does not: it folded to this very record at 16Ba. So the studio may
+  --       record again the moment the refusal is answered, with no repair.
   PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
   PERFORM public.record_channel_consent(
     'b0000000-0000-4000-8000-00000000000a', 'sms', '6125550244', 'granted',
@@ -2000,11 +1999,27 @@ BEGIN
    WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
      AND channel_value = '+16125550244';
   ASSERT r.status = 'granted' AND r.evidence = 'Kickoff form',
-    'FAIL 16Bf: after the recipient''s own grant and the seat repair the studio '
-    'may record again';
+    'FAIL 16Be: after the recipient''s own START the studio may record again, '
+    'with no seat repair (R-AW), got ' || COALESCE(r.status, '<null>');
+  ASSERT r.refusal_unanswered IS NOT TRUE,
+    'FAIL 16Be2: the recipient answered, so nothing stands unanswered';
+
+  -- 16Bf. …AND BOTH ROOM READERS PRINT IT. The seat is still frozen at
+  --       `opted_out` — nothing wrote it — and neither view is looking at it.
+  ASSERT (SELECT sms_consent_status FROM project_parties
+           WHERE id = 'e0000000-0000-4000-8000-000000000051') = 'opted_out',
+    'FAIL 16Bf: the frozen seat must still say what it said';
+  ASSERT (SELECT sms_consent_status FROM v_project_roster
+           WHERE roster_id = 'e0000000-0000-4000-8000-000000000051') = 'granted',
+    'FAIL 16Bf2: v_project_roster must print the record''s verdict, not the seat''s';
+  ASSERT (SELECT meta->>'sms_consent_status' FROM people_directory
+           WHERE person_id = 'e0000000-0000-4000-8000-000000000051'
+             AND role = 'sub' LIMIT 1) = 'granted',
+    'FAIL 16Bf3: people_directory must print the record''s verdict, not the seat''s';
   PERFORM pg_temp.reset_role();
 
-  RAISE NOTICE '16B. a DATELESS refusal fails closed too (r4 B-1): passed';
+  RAISE NOTICE '16B. a DATELESS refusal fails closed too, and the recipient''s '
+               'START is the whole way out (r4 B-1 / R-AW): passed';
 END
 $$;
 
@@ -2209,13 +2224,22 @@ BEGIN
 END
 $$;
 
--- ─── 19. r5 B5-1 (R-AL): the write door reads the seats too ────────────────
+-- ─── 19. R-AW: the write door reads the RECORD, and only the record ────────
 --
--- project_parties.sms_consent_* is still writable by the portal (PR-x), so a
--- refusal can stand on a seat with no record behind it — PR-m's manually marked
--- verbal STOP. The send gate tests both ledgers; before R-AL the write door
--- tested only the record, wrote `granted` over the refusal, and the mirror then
--- cleared the very seat the send gate was going to test.
+-- R-AL made record_channel_consent read a second ledger — this studio's own
+-- party rows — because PR-x left them writable and a refusal could stand on a
+-- seat with no record behind it. R-AW retires that, and the reason is the fold:
+-- 00594's backfill folds EVERY seat into a record inside the same migration,
+-- opted_out winning per org, and the freeze stops the seats carrying news
+-- afterwards. A seat marked opted_out with NO record behind it is therefore a
+-- shape the shipped system cannot produce — this block STAGES it directly, as
+-- the pre-fold books would have held it — and reading it could only contradict
+-- the one live ledger.
+--
+-- So the gate is the record's. 19a proves the seat is not read; 19c proves the
+-- real population still fails closed, because the refusal the seat carried is
+-- a refusal the FOLD put on the record, and from there reconsent() plus the
+-- recipient's own answer is the only way through.
 
 INSERT INTO projects (id, name, designer_id, studio_id, created_by, status, created_at, updated_at)
 VALUES ('d0000000-0000-4000-8000-0000000000a2', 'W1A Seat-refusal job',
@@ -2233,8 +2257,7 @@ VALUES
    'opted_out', '2026-04-01T00:00:00Z', 'verbal', 'Told the PM to stop texting him',
    '2026-04-01T00:00:00Z'),
   -- BETA's seat, on a different number Alpha has never contacted. R-AK: one
-  -- studio's refusal is not another studio's fact, and this door must not
-  -- re-open the phone-global reduction.
+  -- studio's refusal is not another studio's fact.
   ('e0000000-0000-4000-8000-0000000000a3', 'd0000000-0000-4000-8000-00000000000b',
    'sub', 'Pete Rusk', '612-555-0333',
    'opted_out', '2026-04-01T00:00:00Z', 'inbound_sms', 'Replied STOP to Beta',
@@ -2246,46 +2269,67 @@ DECLARE
   r      RECORD;
   n      INTEGER;
 BEGIN
+  -- 19pre. THE SOURCE TEXT, so the three inlined seat tests cannot come back
+  --        unnoticed. Comments are stripped before the whitespace is collapsed:
+  --        the body's own prose still names project_parties historically, and a
+  --        NOT LIKE a comment can satisfy proves nothing.
+  ASSERT (SELECT regexp_replace(
+                   regexp_replace(pg_get_functiondef(p.oid), '--[^\n]*', '', 'g'),
+                   '\s+', ' ', 'g')
+            FROM pg_proc p JOIN pg_namespace ns ON ns.oid = p.pronamespace
+           WHERE ns.nspname = 'public' AND p.proname = 'record_channel_consent')
+         NOT LIKE '%project_parties%',
+    'FAIL 19pre: record_channel_consent must read no party row (R-AW)';
+  ASSERT (SELECT COUNT(*) FROM pg_proc p JOIN pg_namespace ns ON ns.oid = p.pronamespace
+           WHERE ns.nspname = 'public'
+             AND p.proname IN ('record_channel_consent', 'record_channel_invite',
+                               'record_channel_reconsent', 'channel_consent_status')
+             AND regexp_replace(
+                   regexp_replace(pg_get_functiondef(p.oid), '--[^\n]*', '', 'g'),
+                   '\s+', ' ', 'g') LIKE '%sms_consent_%') = 0,
+    'FAIL 19pre2: no consent RPC may read a frozen seat column — the fold is the '
+    'one permitted reader, at migration time (R-AW)';
+
   PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
 
-  -- 19a. The grant is refused, and refused as what it is.
-  raised := NULL;
-  BEGIN
-    PERFORM public.record_channel_consent(
-      'b0000000-0000-4000-8000-00000000000a', 'sms', '(612) 555-0322', 'granted',
-      'written', 'We have a new signed form', 'field-sms-v1', NULL);
-  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
-  ASSERT raised = 'channel_opted_out',
-    'FAIL 19a: a dated refusal on this studio''s own seat must refuse the grant, got '
-      || COALESCE(raised, '<no error>');
-
-  -- 19b. And the refusal survives byte for byte — no record was minted, and
-  --      the seat still says what it said.
-  SELECT COUNT(*) INTO n FROM studio_channel_consent
+  -- 19a. The seat is not read: the studio's fresh grant lands.
+  PERFORM public.record_channel_consent(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '(612) 555-0322', 'granted',
+    'written', 'We have a new signed form', 'field-sms-v1', NULL);
+  SELECT * INTO r FROM studio_channel_consent
    WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
      AND channel_kind = 'sms' AND channel_value = '+16125550322';
-  ASSERT n = 0, 'FAIL 19b: a refused write must mint no record, got ' || n;
+  ASSERT r.status = 'granted' AND r.evidence = 'We have a new signed form',
+    'FAIL 19a: with no record on the books the grant must land — a frozen seat '
+    'is not a verdict (R-AW), got ' || COALESCE(r.status, '<null>');
 
+  -- 19b. And the seat is still untouched: read, written, neither.
   SELECT * INTO r FROM project_parties
    WHERE id = 'e0000000-0000-4000-8000-0000000000a2';
   ASSERT r.sms_consent_status = 'opted_out'
      AND r.sms_opt_out_at IS NOT NULL
      AND r.sms_consent_source = 'verbal'
      AND r.sms_consent_evidence = 'Told the PM to stop texting him',
-    'FAIL 19b2: the seat''s refusal must survive the refused grant untouched';
+    'FAIL 19b2: the seat''s columns must survive the recorded grant untouched';
 
-  -- 19c. The way past is to put the refusal ON THE BOOKS first…
-  PERFORM public.record_channel_consent(
-    'b0000000-0000-4000-8000-00000000000a', 'sms', '(612) 555-0322', 'opted_out',
-    'verbal', 'Told the PM to stop texting him, recorded by the studio', NULL, NULL);
+  -- 19c. THE REAL POPULATION, and it still fails closed. A seat like the one
+  --      above does not reach the shipped system unfolded: the backfill turns
+  --      it into an unanswered refusal ON THE RECORD, which is what the gate
+  --      reads. Fold it here and walk the same act again.
+  PERFORM pg_temp.reset_role();
+  DELETE FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_kind = 'sms' AND channel_value = '+16125550322';
+  PERFORM public.backfill_channel_consent_from_parties();
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+
   SELECT * INTO r FROM studio_channel_consent
    WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
      AND channel_kind = 'sms' AND channel_value = '+16125550322';
   ASSERT r.status = 'opted_out' AND r.refusal_unanswered,
-    'FAIL 19c: recording the refusal must be accepted and stand unanswered';
+    'FAIL 19c: the fold must record that seat''s refusal as unanswered, got '
+      || COALESCE(r.status, '<null>');
 
-  --      …after which the record''s own gate governs: still no grant, and
-  --      reconsent() is the named door.
   raised := NULL;
   BEGIN
     PERFORM public.record_channel_consent(
@@ -2293,9 +2337,12 @@ BEGIN
       'written', 'We have a new signed form', 'field-sms-v1', NULL);
   EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
   ASSERT raised = 'channel_opted_out',
-    'FAIL 19c2: the recorded refusal must still refuse the grant, got '
+    'FAIL 19c2: the folded refusal must refuse the grant, got '
       || COALESCE(raised, '<no error>');
 
+  --      …and reconsent() is the named door: the studio's fresh consent goes on
+  --      the record as EVIDENCE, and the refusal keeps standing until the
+  --      recipient answers it.
   PERFORM public.record_channel_reconsent(
     'b0000000-0000-4000-8000-00000000000a', 'sms', '(612) 555-0322',
     'written', 'Fresh signed consent, 12 Sep', 'field-sms-v1', NULL);
@@ -2307,8 +2354,25 @@ BEGIN
     'FAIL 19c3: reconsent() must record the fresh consent and leave the refusal '
     'standing, got ' || COALESCE(r.status, '<null>') || '/' || COALESCE(r.evidence, '<null>');
 
-  -- 19d. R-AK is not re-opened: BETA's dated refusal on +16125550333 is not
-  --      Alpha''s fact, and Alpha''s first outreach to that number stands.
+  --      …and the walk still ends at the recipient.
+  raised := NULL;
+  BEGIN
+    PERFORM public.record_channel_consent(
+      'b0000000-0000-4000-8000-00000000000a', 'sms', '(612) 555-0322', 'granted',
+      'written', 'We have a new signed form', 'field-sms-v1', NULL);
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'channel_opted_out',
+    'FAIL 19c4: reconsent + grant must not compose past the refusal, got '
+      || COALESCE(raised, '<no error>');
+
+  -- 19d. R-AK is not re-opened: BETA's refusal is not Alpha's fact, and the
+  --      fold above wrote it to BETA's ledger, not Alpha's.
+  SELECT COUNT(*) INTO n FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_kind = 'sms' AND channel_value = '+16125550333';
+  ASSERT n = 0,
+    'FAIL 19d: Beta''s seat must fold to Beta''s ledger, not Alpha''s, got ' || n;
+
   PERFORM public.record_channel_consent(
     'b0000000-0000-4000-8000-00000000000a', 'sms', '612-555-0333', 'granted',
     'written', 'Signed at the Alpha kickoff', 'field-sms-v1', NULL);
@@ -2316,7 +2380,7 @@ BEGIN
    WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
      AND channel_kind = 'sms' AND channel_value = '+16125550333';
   ASSERT r.status = 'granted',
-    'FAIL 19d: another studio''s refusal must not refuse this studio''s grant, got '
+    'FAIL 19d2: another studio''s refusal must not refuse this studio''s grant, got '
       || COALESCE(r.status, '<null>');
 
   PERFORM pg_temp.reset_role();
@@ -2326,9 +2390,9 @@ BEGIN
   SELECT * INTO r FROM project_parties
    WHERE id = 'e0000000-0000-4000-8000-0000000000a3';
   ASSERT r.sms_consent_status = 'opted_out',
-    'FAIL 19d2: Alpha''s grant must not reach Beta''s seat, got ' || COALESCE(r.sms_consent_status, '<null>');
+    'FAIL 19d3: Alpha''s grant must not reach Beta''s seat, got ' || COALESCE(r.sms_consent_status, '<null>');
 
-  RAISE NOTICE '19. the write door reads the seats too (R-AL): passed';
+  RAISE NOTICE '19. the write door reads the record, and only the record (R-AW): passed';
 END
 $$;
 
@@ -2497,19 +2561,24 @@ BEGIN
 END
 $$;
 
--- ─── 22. r6 B6-1 / M6-1: the seat gate is on the REFUSAL, not the verdict ──
+-- ─── 22. R-AW: the RECORD'S gate is on the refusal, not the verdict ────────
 --
--- R-AL's seat gate arrived narrowed twice, and both narrowings were walkable:
---   · it ran only for p_status = 'granted', so `pending` was a free first hop.
---     A recorded `pending` mirrors `pending` — and, before M6-2, a NULL
---     opt_out_at — onto every seat in the studio on that number, erasing the
---     refusal AND its date; the `granted` call behind it then passed every leg,
---     and reconsent() could not recover the row (it requires opted_out).
---   · it required sms_opt_out_at IS NOT NULL, so it failed OPEN for a DATELESS
---     refusal — the shape the shipped portal writes on purpose
---     (use-coordination.ts, "opted out, date unknown") and the shape every
---     pre-00432 row carries. The SEND gate it mirrors (orgHasOptedOutParty)
---     has no date test at all.
+-- r6 B6-1 / M6-1 were findings about R-AL's seat gate, and both narrowings it
+-- arrived with were walkable: the gate ran only for p_status = 'granted', so
+-- `pending` was a free first hop that cleared the refusal; and it required a
+-- DATED refusal, so it failed open for the dateless shape the shipped portal
+-- writes on purpose. R-AW removes the seat gate outright — so this block holds
+-- the same two rules where they still live, on the RECORD:
+--
+--   · every verdict but `opted_out` is refused while a refusal stands, so
+--     `pending` is not a free first hop;
+--   · a DATELESS refusal fails closed like a dated one, because the fact is
+--     stored (refusal_unanswered), never inferred from opt_out_at.
+--
+-- And it proves the seat is genuinely out of the question: two pre-fold seat
+-- refusals — one dateless, one dated and fully evidenced — refuse NOTHING on
+-- their own. The fold is what puts them on the record, and this block walks
+-- both halves.
 
 INSERT INTO projects (id, name, designer_id, studio_id, created_by, status, created_at, updated_at)
 VALUES ('d0000000-0000-4000-8000-0000000000a4', 'W1A r6 seat-gate job',
@@ -2538,7 +2607,55 @@ DECLARE
 BEGIN
   PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
 
-  -- 22a. M6-1: a DATELESS seat refusal refuses the grant, like a dated one.
+  -- 22a. Unfolded, neither seat refuses anything: `pending` lands on the
+  --      dateless one, `granted` on the dated one. The seat is not a verdict.
+  PERFORM public.record_channel_consent(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '612-555-0411', 'pending',
+    'written', 'Sending the confirmation text', 'field-sms-v1', NULL);
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550411';
+  ASSERT r.status = 'pending',
+    'FAIL 22a: a frozen seat refusal must not refuse the write door (R-AW), got '
+      || COALESCE(r.status, '<null>');
+
+  PERFORM public.record_channel_consent(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '612-555-0412', 'granted',
+    'written', 'We have a new signed form', 'field-sms-v1', NULL);
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550412';
+  ASSERT r.status = 'granted',
+    'FAIL 22a2: nor may a DATED, evidenced seat refusal, got '
+      || COALESCE(r.status, '<null>');
+
+  -- 22b. Neither seat was written, either — read, written, neither.
+  SELECT * INTO r FROM project_parties WHERE id = 'e0000000-0000-4000-8000-0000000000a4';
+  ASSERT r.sms_consent_status = 'opted_out' AND r.sms_opt_out_at IS NULL
+     AND r.sms_consent_evidence = 'Opted out, date unknown',
+    'FAIL 22b: the dateless refusal must survive untouched';
+  SELECT * INTO r FROM project_parties WHERE id = 'e0000000-0000-4000-8000-0000000000a5';
+  ASSERT r.sms_consent_status = 'opted_out'
+     AND r.sms_opt_out_at = '2025-12-03T00:00:00Z'::timestamptz,
+    'FAIL 22b2: the dated refusal and its date must survive untouched';
+
+  -- 22c. THE FOLD IS THE GATE. Clear what 22a wrote, fold both seats, and the
+  --      two rules move onto the record — where a DATELESS refusal fails
+  --      closed exactly like a dated one (M6-1's rule, kept).
+  PERFORM pg_temp.reset_role();
+  DELETE FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value IN ('+16125550411', '+16125550412');
+  PERFORM public.backfill_channel_consent_from_parties();
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+
+  SELECT COUNT(*) INTO n FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value IN ('+16125550411', '+16125550412')
+     AND status = 'opted_out' AND refusal_unanswered;
+  ASSERT n = 2,
+    'FAIL 22c: the fold must record both refusals as unanswered, dated or not, got ' || n;
+
   raised := NULL;
   BEGIN
     PERFORM public.record_channel_consent(
@@ -2546,10 +2663,10 @@ BEGIN
       'written', 'We have a new signed form', 'field-sms-v1', NULL);
   EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
   ASSERT raised = 'channel_opted_out',
-    'FAIL 22a: a DATELESS seat refusal must refuse the grant, got '
+    'FAIL 22c2: a DATELESS recorded refusal must refuse the grant, got '
       || COALESCE(raised, '<no error>');
 
-  -- 22b. B6-1: and `pending` is refused over it too — it is not a free hop.
+  -- 22d. B6-1's rule, on the record: `pending` is not a free first hop either.
   raised := NULL;
   BEGIN
     PERFORM public.record_channel_consent(
@@ -2557,10 +2674,9 @@ BEGIN
       'written', 'Sending the confirmation text', 'field-sms-v1', NULL);
   EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
   ASSERT raised = 'channel_opted_out',
-    'FAIL 22b: pending over a seat refusal must be refused, got '
+    'FAIL 22d: pending over a recorded refusal must be refused, got '
       || COALESCE(raised, '<no error>');
 
-  -- 22c. B6-1's named case: a DATED, fully evidenced seat refusal + `pending`.
   raised := NULL;
   BEGIN
     PERFORM public.record_channel_consent(
@@ -2568,27 +2684,18 @@ BEGIN
       'written', 'Sending the confirmation text', 'field-sms-v1', NULL);
   EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
   ASSERT raised = 'channel_opted_out',
-    'FAIL 22c: pending over a dated seat refusal must be refused, got '
+    'FAIL 22d2: pending over a dated recorded refusal must be refused, got '
       || COALESCE(raised, '<no error>');
 
-  -- 22d. Nothing was minted, and neither seat moved: the refusal and its date
-  --      are still on the books the send gate reads.
+  -- 22e. And nothing was half-written by the refusals: both records still say
+  --      what the fold recorded.
   SELECT COUNT(*) INTO n FROM studio_channel_consent
    WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
-     AND channel_value IN ('+16125550411', '+16125550412');
-  ASSERT n = 0, 'FAIL 22d: a refused write must mint no record, got ' || n;
+     AND channel_value IN ('+16125550411', '+16125550412')
+     AND status = 'opted_out' AND refusal_unanswered;
+  ASSERT n = 2, 'FAIL 22e: a refused write must leave both refusals standing, got ' || n;
 
-  SELECT * INTO r FROM project_parties WHERE id = 'e0000000-0000-4000-8000-0000000000a4';
-  ASSERT r.sms_consent_status = 'opted_out' AND r.sms_opt_out_at IS NULL
-     AND r.sms_consent_evidence = 'Opted out, date unknown',
-    'FAIL 22d2: the dateless refusal must survive untouched';
-
-  SELECT * INTO r FROM project_parties WHERE id = 'e0000000-0000-4000-8000-0000000000a5';
-  ASSERT r.sms_consent_status = 'opted_out'
-     AND r.sms_opt_out_at = '2025-12-03T00:00:00Z'::timestamptz,
-    'FAIL 22d3: the dated refusal and its date must survive untouched';
-
-  -- 22e. The two-call walk is dead end to end. Recording the refusal is the
+  -- 22f. The two-call walk is dead end to end. Recording the refusal is the
   --      way forward — and the way back is still reconsent() plus the
   --      recipient's own answer, never a second studio-side call.
   PERFORM public.record_channel_consent(
@@ -2604,10 +2711,10 @@ BEGIN
       'written', 'We have a new signed form', 'field-sms-v1', NULL);
   EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
   ASSERT raised = 'channel_opted_out',
-    'FAIL 22e: the walk must still end at the recipient, got '
+    'FAIL 22f: the walk must still end at the recipient, got '
       || COALESCE(raised, '<no error>');
 
-  -- 22f. The gate does not over-refuse: a number this studio holds no refusal
+  -- 22g. The gate does not over-refuse: a number this studio holds no refusal
   --      on takes `pending` exactly as before.
   PERFORM public.record_channel_consent(
     'b0000000-0000-4000-8000-00000000000a', 'sms', '612-555-0413', 'pending',
@@ -2616,10 +2723,11 @@ BEGIN
    WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
      AND channel_value = '+16125550413';
   ASSERT r.status = 'pending',
-    'FAIL 22f: a clean number must still take pending, got ' || COALESCE(r.status, '<null>');
+    'FAIL 22g: a clean number must still take pending, got ' || COALESCE(r.status, '<null>');
 
   PERFORM pg_temp.reset_role();
-  RAISE NOTICE '22. the seat gate is on the refusal, not the verdict (r6 B6-1/M6-1): passed';
+  RAISE NOTICE '22. the record''s gate is on the refusal, not the verdict, and '
+               'the seat is not consulted at all (r6 B6-1/M6-1 under R-AW): passed';
 END
 $$;
 
@@ -5758,8 +5866,196 @@ BEGIN
 
   RAISE NOTICE '43. an opted_out seat''s number cannot move, and every other '
                'phone edit still can (close-out r5 MAJOR-1): passed';
-  RAISE NOTICE 'All W1a assertions passed.';
 END
 $$;
+
+-- ─── 44. R-AW: the site-request rail asks the record, and writes no seat ───
+--
+-- R-AS's own report called this rail "the casualty". site_request_send() read
+-- the assignee's verdict off project_parties.sms_consent_status and, for a
+-- not_asked assignee, WROTE that column to `pending` — the write 00594 froze.
+-- So a live, un-flag-gated designer button, and Patina Field's own
+-- "send a site request", raised consent_legacy_column_frozen; and
+-- site_request_dispatch_after_consent() gated on a seat reading `granted`,
+-- which nothing can set any more. 00622 repoints both at the record.
+--
+-- 44a/44b walk the send door. 44c walks the case R-AW names in so many words:
+-- a legacy `opted_out` seat whose studio record reads `granted`. That shape is
+-- only reachable the honest way — the fold records the seat's refusal, the
+-- studio reconsents as evidence, and the RECIPIENT's own START answers it —
+-- and once it is reached the rail must treat the number as sendable, because
+-- the record is the consent.
+
+INSERT INTO projects (id, name, designer_id, studio_id, created_by, status, created_at, updated_at)
+VALUES ('d0000000-0000-4000-8000-0000000000c1', 'W1A site-request rail job',
+        'a0000000-0000-4000-8000-000000000001', 'b0000000-0000-4000-8000-00000000000a',
+        'a0000000-0000-4000-8000-000000000001', 'active', NOW(), NOW());
+
+INSERT INTO project_parties (id, project_id, party_kind, display_name, phone, trade,
+                             sms_consent_status, sms_opt_out_at,
+                             sms_consent_source, sms_consent_evidence,
+                             sms_consent_recorded_at)
+VALUES
+  -- Never asked: no record, seat at not_asked. The ordinary first send.
+  ('e0000000-0000-4000-8000-000000000091', 'd0000000-0000-4000-8000-0000000000c1',
+   'sub', 'Nils Aune', '612-555-0701', 'electrical',
+   'not_asked', NULL, NULL, NULL, NULL),
+  -- A pre-fold refusal on the seat, dated and evidenced. 44c's subject.
+  ('e0000000-0000-4000-8000-000000000092', 'd0000000-0000-4000-8000-0000000000c1',
+   'sub', 'Vera Holm', '612-555-0702', 'plumbing',
+   'opted_out', '2025-12-03T00:00:00Z', 'inbound_sms', 'Replied STOP',
+   '2025-12-03T00:00:00Z');
+
+INSERT INTO site_requests (id, project_id, created_by, assignee_party_id, status, due_at, note)
+VALUES
+  ('a1000000-0000-4000-8000-0000000000c1', 'd0000000-0000-4000-8000-0000000000c1',
+   'a0000000-0000-4000-8000-000000000001', 'e0000000-0000-4000-8000-000000000091',
+   'draft', now() + interval '4 days', 'Panel photos'),
+  ('a1000000-0000-4000-8000-0000000000c2', 'd0000000-0000-4000-8000-0000000000c1',
+   'a0000000-0000-4000-8000-000000000001', 'e0000000-0000-4000-8000-000000000092',
+   'draft', now() + interval '4 days', 'Rough-in photos');
+
+INSERT INTO site_request_items (id, request_id, sort_order, status, current_version_number, current_version_id)
+VALUES
+  ('a2000000-0000-4000-8000-0000000000c1', 'a1000000-0000-4000-8000-0000000000c1', 1, 'open', 1, NULL),
+  ('a2000000-0000-4000-8000-0000000000c2', 'a1000000-0000-4000-8000-0000000000c2', 1, 'open', 1, NULL);
+
+INSERT INTO site_request_item_versions (id, item_id, version_number, kit_code, title, configuration, created_by)
+VALUES
+  ('a3000000-0000-4000-8000-0000000000c1', 'a2000000-0000-4000-8000-0000000000c1', 1,
+   'K-01', 'Panel photos', '{}'::jsonb, 'a0000000-0000-4000-8000-000000000001'),
+  ('a3000000-0000-4000-8000-0000000000c2', 'a2000000-0000-4000-8000-0000000000c2', 1,
+   'K-01', 'Rough-in photos', '{}'::jsonb, 'a0000000-0000-4000-8000-000000000001');
+
+UPDATE site_request_items SET current_version_id = 'a3000000-0000-4000-8000-0000000000c1'
+ WHERE id = 'a2000000-0000-4000-8000-0000000000c1';
+UPDATE site_request_items SET current_version_id = 'a3000000-0000-4000-8000-0000000000c2'
+ WHERE id = 'a2000000-0000-4000-8000-0000000000c2';
+
+DO $$
+DECLARE
+  res    jsonb;
+  raised TEXT;
+  r      RECORD;
+  n      INTEGER;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+
+  -- 44a. THE SEND DOOR, on a never-asked assignee. Before 00622 this raised
+  --      consent_legacy_column_frozen. Now it parks the request awaiting
+  --      consent, snapshots the word the record gives (`not_asked`), and
+  --      writes NO seat.
+  raised := NULL;
+  BEGIN
+    res := public.site_request_send('a1000000-0000-4000-8000-0000000000c1', NULL);
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised IS NULL,
+    'FAIL 44a: site_request_send must not raise for a not_asked assignee (R-AW), got '
+      || COALESCE(raised, '<none>');
+
+  SELECT * INTO r FROM site_requests WHERE id = 'a1000000-0000-4000-8000-0000000000c1';
+  ASSERT r.status = 'awaiting_consent' AND r.consent_status_snapshot = 'not_asked',
+    'FAIL 44a2: the request must park awaiting consent with the record''s word, got '
+      || r.status || '/' || r.consent_status_snapshot;
+
+  SELECT * INTO r FROM project_parties WHERE id = 'e0000000-0000-4000-8000-000000000091';
+  ASSERT r.sms_consent_status = 'not_asked',
+    'FAIL 44a3: the send door must write no seat, got ' || COALESCE(r.sms_consent_status, '<null>');
+  SELECT COUNT(*) INTO n FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550701';
+  ASSERT n = 0,
+    'FAIL 44a4: recording the invite belongs to the consent doors, not to this one, got ' || n;
+
+  -- 44b. …and the studio's recorded grant releases it, through the record's
+  --      own trigger, with the seat still frozen at not_asked.
+  PERFORM public.record_channel_consent(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '612-555-0701', 'granted',
+    'written', 'Signed the field-SMS form', 'field-sms-v1', NULL);
+  SELECT * INTO r FROM site_requests WHERE id = 'a1000000-0000-4000-8000-0000000000c1';
+  ASSERT r.consent_status_snapshot = 'granted' AND r.expires_at IS NOT NULL,
+    'FAIL 44b: the record''s grant must release the parked request, got '
+      || r.consent_status_snapshot;
+  SELECT * INTO r FROM project_parties WHERE id = 'e0000000-0000-4000-8000-000000000091';
+  ASSERT r.sms_consent_status = 'not_asked',
+    'FAIL 44b2: the release must write no seat either, got '
+      || COALESCE(r.sms_consent_status, '<null>');
+
+  -- 44c. R-AW's named case. Fold Vera's pre-fold refusal, reconsent as
+  --      evidence, then let the RECIPIENT answer — the only honest route to a
+  --      `granted` record over an `opted_out` seat.
+  PERFORM pg_temp.reset_role();
+  PERFORM public.backfill_channel_consent_from_parties();
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550702';
+  ASSERT r.status = 'opted_out' AND r.refusal_unanswered,
+    'FAIL 44c: the fold must record Vera''s refusal as unanswered, got '
+      || COALESCE(r.status, '<null>');
+
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+  PERFORM public.record_channel_reconsent(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '612-555-0702',
+    'written', 'Signed a fresh consent at the walkthrough', 'field-sms-v1', NULL);
+  PERFORM pg_temp.reset_role();
+
+  --      The rail is STILL refused while the refusal stands.
+  ASSERT COALESCE(public.channel_consent_status(
+           'b0000000-0000-4000-8000-00000000000a', 'sms', '+16125550702'), 'not_asked')
+         = 'opted_out',
+    'FAIL 44c2: the studio''s reconsent may not make the number sendable';
+
+  --      The recipient's own START, as the inbound rail writes it.
+  UPDATE studio_channel_consent
+     SET status = 'granted', consented_at = clock_timestamp(), refusal_unanswered = false,
+         source = 'inbound_sms', evidence = 'Replied START', recorded_at = clock_timestamp()
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550702';
+
+  --      Now the whole rail reads sendable — off the record, with the seat
+  --      still frozen at `opted_out` and read by nothing.
+  ASSERT (SELECT sms_consent_status FROM project_parties
+           WHERE id = 'e0000000-0000-4000-8000-000000000092') = 'opted_out',
+    'FAIL 44c3: the frozen seat must still say what it said';
+  ASSERT public.channel_consent_status(
+           'b0000000-0000-4000-8000-00000000000a', 'sms', '+16125550702') = 'granted',
+    'FAIL 44c4: the record is the verdict, and it says granted';
+  ASSERT (SELECT sms_consent_status FROM v_project_roster
+           WHERE roster_id = 'e0000000-0000-4000-8000-000000000092') = 'granted',
+    'FAIL 44c5: v_project_roster must print Texting for a record-granted seat';
+
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+  res := public.site_request_send('a1000000-0000-4000-8000-0000000000c2', NULL);
+  ASSERT res->>'action' = 'send',
+    'FAIL 44c6: a record-granted assignee must go straight to send, got '
+      || COALESCE(res->>'action', '<null>');
+  SELECT * INTO r FROM site_requests WHERE id = 'a1000000-0000-4000-8000-0000000000c2';
+  ASSERT r.consent_status_snapshot = 'granted' AND r.expires_at IS NOT NULL,
+    'FAIL 44c7: the send must snapshot the record''s grant and set an expiry, got '
+      || r.consent_status_snapshot;
+  PERFORM pg_temp.reset_role();
+
+  -- 44d. site_request_dispatch_after_consent — the only thing the release
+  --      trigger calls — succeeds on the same shape. Under R-AS it raised
+  --      'assignee has not granted SMS consent' for every party created after
+  --      the freeze, whatever the record said.
+  UPDATE site_requests SET status = 'awaiting_consent'
+   WHERE id = 'a1000000-0000-4000-8000-0000000000c2';
+  raised := NULL;
+  BEGIN
+    res := public.site_request_dispatch_after_consent('a1000000-0000-4000-8000-0000000000c2', NULL);
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised IS NULL AND res->>'action' = 'consent-granted',
+    'FAIL 44d: dispatch-after-consent must succeed on a record-granted, '
+    'seat-frozen assignee, got ' || COALESCE(raised, COALESCE(res->>'action', '<null>'));
+
+  RAISE NOTICE '44. the site-request rail asks the record and writes no seat, and '
+               'a record-granted / seat-refused number is sendable (R-AW): passed';
+END
+$$;
+
+DO $$ BEGIN
+  RAISE NOTICE 'All W1a assertions passed.';
+END $$;
 
 ROLLBACK;

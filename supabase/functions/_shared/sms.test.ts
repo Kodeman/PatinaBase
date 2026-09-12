@@ -573,7 +573,7 @@ Deno.test("another studio's opt-out does not block this studio's send", async ()
   assert(res.sent, "the owning studio's grant should carry the send");
 });
 
-Deno.test("with no studio record, an opted-out sibling party row in the SAME studio still blocks (fail closed)", async () => {
+Deno.test("with no studio record at all the send is refused — not_asked is a refusal (R-AW)", async () => {
   const fake = createFakeSupabase({
     project_parties: [
       party("p1", "granted"),
@@ -589,15 +589,59 @@ Deno.test("with no studio record, an opted-out sibling party row in the SAME stu
     getEnv: envOf(CONSENT_ENV),
     now: OPEN_HOURS,
   });
-  assert(!res.sent, "an unbacked-filled number with this studio's own STOP must fail closed");
+  assert(!res.sent, "a number this studio holds no record for must not be texted");
   assertEquals(res.reason, "opted_out");
 });
 
-// R-AK: …but that fallback reduces across the studio's OWN projects, never
-// across tenants. Before this, a studio's very first outreach to a number it
-// had never contacted was silently blocked because some unrelated studio once
-// got a STOP from it — with no operator-visible reason, and indefinitely.
-Deno.test("with no studio record, ANOTHER studio's opted-out party row does not block", async () => {
+// ── R-AW's own rule, stated positively: a missing record is a refusal ───────
+//
+// This is the leg the ruling closes. Before it, a pair with no record fell
+// through to the party row, and a pre-fold seat reading `granted` carried the
+// send — the one path by which a frozen column could still AUTHORISE a text.
+// 00594's fold folded every seat into a record inside the same migration and
+// the freeze stopped the seats carrying news, so "no record" means "this studio
+// never asked", and nobody may text somebody nobody asked.
+Deno.test("no record refuses even a seat frozen at granted (R-AW)", async () => {
+  const fake = createFakeSupabase({
+    project_parties: [party("p1", "granted")],
+    projects: [{ id: "proj1", studio_id: "org-alpha" }],
+    // studio_channel_consent deliberately empty.
+  });
+  const res = await sendPartySms(fake as never, { partyId: "p1", body: "hello" }, {
+    getEnv: envOf(CONSENT_ENV),
+    now: OPEN_HOURS,
+  });
+  assert(!res.sent, "a frozen granted seat may not authorise a send on its own");
+  assertEquals(res.reason, "opted_out");
+  assertEquals((fake._data.sms_messages ?? []).length, 0, "no row on a blocked send");
+});
+
+// …and a record the FOLD minted at `not_asked` says the same thing as none.
+Deno.test("a not_asked record refuses, exactly as no record does (R-AW)", async () => {
+  const fake = createFakeSupabase({
+    project_parties: [party("p1", "granted")],
+    projects: [{ id: "proj1", studio_id: "org-alpha" }],
+    studio_channel_consent: [{
+      organization_id: "org-alpha",
+      channel_kind: "sms",
+      channel_value: "+15551230001",
+      status: "not_asked",
+      refusal_unanswered: false,
+    }],
+  });
+  const res = await sendPartySms(fake as never, { partyId: "p1", body: "hello" }, {
+    getEnv: envOf(CONSENT_ENV),
+    now: OPEN_HOURS,
+  });
+  assert(!res.sent, "not_asked is the absence of a consent, and it refuses");
+  assertEquals(res.reason, "opted_out");
+});
+
+// R-AW: and it is the RECORD's absence that refuses, not the seat's word.
+// Whose seat it is no longer matters — neither studio's is read. R-AK's own
+// rule (one studio's STOP is not another's fact) now lives entirely in the
+// per-studio record, asserted two tests above.
+Deno.test("with no studio record the send is refused whoever's seat carries the STOP", async () => {
   const fake = createFakeSupabase({
     project_parties: [
       party("p1", "granted"),
@@ -613,13 +657,17 @@ Deno.test("with no studio record, ANOTHER studio's opted-out party row does not 
     getEnv: envOf(CONSENT_ENV),
     now: OPEN_HOURS,
   });
-  assert(res.sent, "Beta's STOP is not Alpha's fact");
+  assert(!res.sent, "no record for Alpha means not_asked, and not_asked refuses");
+  assertEquals(res.reason, "opted_out");
 });
 
-// The one place the reduction stays phone-global: no studio resolves at all,
-// so there is nothing to scope to and an unattributable send must not outrun
-// a STOP.
-Deno.test("with no record and no resolvable studio, any opted-out row on the number still blocks", async () => {
+// The one place the reduction stays phone-global is the unattributable branch —
+// no studio resolves at all — and since R-AW it asks the RECORDS, never the
+// seats. A party-row STOP on the number no longer blocks there: the frozen
+// seats carry no fact the records do not, and a studio-less project has no
+// ledger to hold one. That fail-open is named in the W1a report §5.2/§8 and is
+// a policy ruling owed, not something this function can close.
+Deno.test("with no record and no resolvable studio, an opted-out party row no longer blocks (R-AW)", async () => {
   const fake = createFakeSupabase({
     project_parties: [
       party("p1", "granted"),
@@ -632,8 +680,7 @@ Deno.test("with no record and no resolvable studio, any opted-out row on the num
     getEnv: envOf(CONSENT_ENV),
     now: OPEN_HOURS,
   });
-  assert(!res.sent, "an unattributable send must fail closed");
-  assertEquals(res.reason, "opted_out");
+  assert(res.sent, "nothing on the RECORDS has refused, so the unattributable send stands");
 });
 
 // ── r1 review fixes ─────────────────────────────────────────────────────────
@@ -660,8 +707,13 @@ Deno.test("the studio's granted record carries a send the party row would refuse
   assert(res.sent, "the studio's own grant must authorise the send");
 });
 
-// …but never over an opt-out, from either ledger.
-Deno.test("a granted record does not override an opted-out party row", async () => {
+// …and since R-AW the VERDICT no longer reads the seat at all: it answers
+// "allow" here. What still refuses this send is sendPartySms's own surviving
+// PR-x leg (`recipient.consent === "opted_out"`, off resolveRecipient) — the
+// last frozen-column reader in the send path, W2's to retire (report §5.1b).
+// The asymmetry is deliberate: an over-refusal is safe, an under-refusal is a
+// 10DLC incident.
+Deno.test("a granted record does not override an opted-out party row — sendPartySms's legacy leg, not the verdict", async () => {
   const fake = createFakeSupabase({
     project_parties: [party("p1", "opted_out")],
     projects: [{ id: "proj1", studio_id: "org-alpha" }],
@@ -939,14 +991,17 @@ Deno.test("a failed org resolve refuses the send instead of reading as no studio
   assertEquals(res.reason, "opted_out");
 });
 
-// ── r2 review B-3: a `granted` record is never self-certifying ──────────────
+// ── R-AW: a `granted` record IS self-certifying ─────────────────────────────
 //
-// The record and the party rows drift: the portal still writes
-// project_parties.sms_consent_* directly (PR-x), an inbound STOP writes party
-// rows phone-globally, and the mirror fires on a consent write but never on a
-// party-row insert. So `allow` may not rest on the record alone — this studio's
-// own party rows are scanned for a refusal first.
-Deno.test("a stale granted record does not carry a send past this studio's own STOP", async () => {
+// r2 review B-3 scanned this studio's own party rows for a refusal before
+// honouring its record, because the two ledgers could drift. They cannot any
+// more: 00594's fold folded every seat into a record inside the same migration
+// (opted_out winning per org) and the freeze stopped the seats carrying news,
+// so a sibling seat reading `opted_out` with a `granted` record beside it means
+// the refusal was folded and then ANSWERED — by the recipient's own START, the
+// only thing that lowers refusal_unanswered. Re-deriving a verdict from the
+// frozen copy could only contradict the live one.
+Deno.test("a granted record carries the send, and a sibling seat's frozen STOP does not second-guess it", async () => {
   const fake = createFakeSupabase({
     project_parties: [
       party("p1", "not_asked"), // the new seat, proj1 / org-alpha
@@ -967,13 +1022,12 @@ Deno.test("a stale granted record does not carry a send past this studio's own S
     getEnv: envOf(CONSENT_ENV),
     now: OPEN_HOURS,
   });
-  assert(!res.sent, "a refusal on this studio's own rows outranks its stale record");
-  assertEquals(res.reason, "opted_out");
-  assertEquals((fake._data.sms_messages ?? []).length, 0, "no row on a blocked send");
+  assert(res.sent, "the record is the consent; a frozen sibling seat is not a verdict");
 });
 
-// …and the scan stays studio-scoped: phone-globally it would re-open G-3,
-// because an inbound STOP opts out every party row on the number everywhere.
+// …and no seat of any studio blocks it, which is R-AK holding by construction
+// now rather than by a scope on a scan: the only ledger read is this studio's
+// own record.
 Deno.test("another studio's opted-out party row does not block this studio's granted record", async () => {
   const fake = createFakeSupabase({
     project_parties: [
@@ -998,42 +1052,9 @@ Deno.test("another studio's opted-out party row does not block this studio's gra
   assert(res.sent, "Beta's STOP must not silence Alpha (G-3)");
 });
 
-// The org-scoped scan follows the same NULL-studio_id fallback the table uses,
-// so a refusal on a project with no studio_id still reaches the record's org.
-Deno.test("the stale-record scan resolves a NULL-studio_id project from organization_members", async () => {
-  const fake = createFakeSupabase(
-    {
-      project_parties: [
-        party("p1", "not_asked"),
-        { ...party("p2", "opted_out"), project_id: "proj2" },
-      ],
-      projects: [
-        { id: "proj1", studio_id: "org-alpha" },
-        { id: "proj2", studio_id: null, designer_id: "dz1" },
-      ],
-      organization_members: [{
-        user_id: "dz1",
-        organization_id: "org-alpha",
-        role: "owner",
-        status: "active",
-        joined_at: "2025-01-01T00:00:00Z",
-      }],
-      organizations: [{ id: "org-alpha", type: "design_studio" }],
-      studio_channel_consent: [{
-        organization_id: "org-alpha",
-        channel_kind: "sms",
-        channel_value: "+15551230001",
-        status: "granted",
-      }],
-    },
-  );
-  const res = await sendPartySms(fake as never, { partyId: "p1", body: "hello" }, {
-    getEnv: envOf(CONSENT_ENV),
-    now: OPEN_HOURS,
-  });
-  assert(!res.sent, "a studio-less project's STOP still belongs to the same studio");
-  assertEquals(res.reason, "opted_out");
-});
+// (The stale-record party-row scan this file used to test at NULL-studio_id
+// projects is gone with R-AW. The resolver itself is still covered — "a
+// NULL-studio_id project resolves its org from organization_members" above.)
 
 // ── r3 R-AH: the flush is a send path, and reads the SAME primary gate ──────
 //
@@ -1231,7 +1252,9 @@ Deno.test("flush: an unrelated studio's granted row does not carry a send for a 
     error_message: string;
   };
   assertEquals(row.twilio_status, "suppressed");
-  assertEquals(row.error_message, "not_consented");
+  // R-AW: Alpha holds no record, so the primary gate refuses outright rather
+  // than falling through to the legacy leg's "not_consented".
+  assertEquals(row.error_message, "opted_out");
 });
 
 Deno.test("flush: with no party on the deferred row the phone-global reduction still refuses a STOP", async () => {
@@ -1271,63 +1294,14 @@ Deno.test("flush: with no party on the deferred row the phone-global reduction s
   assertEquals(fetchCalls, 0);
 });
 
-// ── r7 R7-M2: the last phone-global branch obeys R-AM like its four siblings ──
+// ── r7 R7-M2 under R-AW: the last phone-global branch is a RECORD scan ──────
 //
-// When no studio resolves for a send there is nothing to scope to, so the
-// reduction across every party row on the number is the ONLY line left between
-// an unattributable send and a STOP. That read used to be taken without its
-// `error`: a denied read came back as an empty row set, "nobody has refused",
-// verdict `unknown` — and the legacy party-row gate then carried the send on
-// the seat's own `granted`, past another studio's standing STOP on the same
-// number.
-const SCAN_DENIED = {
-  message: "permission denied for table project_parties",
-  code: "42501",
-};
-
-/** Denies exactly the phone-keyed project_parties reads; id-keyed ones stand. */
-function denyPhoneScan(fake: ReturnType<typeof createFakeSupabase>) {
-  const wrap = (inner: Record<string, (...a: never[]) => unknown>) => {
-    let denied = false;
-    // deno-lint-ignore no-explicit-any
-    const proxy: any = {
-      select: (c?: string) => {
-        inner = (inner as never as { select: (c?: string) => typeof inner })
-          .select(c);
-        return proxy;
-      },
-      eq: (col: string, val: unknown) => {
-        if (col === "phone_e164") denied = true;
-        inner = (inner as never as {
-          eq: (c: string, v: unknown) => typeof inner;
-        }).eq(col, val);
-        return proxy;
-      },
-      in: (col: string, arr: unknown[]) => {
-        inner = (inner as never as {
-          in: (c: string, v: unknown[]) => typeof inner;
-        }).in(col, arr);
-        return proxy;
-      },
-      maybeSingle: () =>
-        denied
-          ? Promise.resolve({ data: null, error: SCAN_DENIED })
-          : (inner as never as { maybeSingle: () => unknown }).maybeSingle(),
-      // deno-lint-ignore no-explicit-any
-      then: (cb: any) =>
-        denied
-          ? Promise.resolve({ data: null, error: SCAN_DENIED }).then(cb)
-          : (inner as never as { then: (cb: unknown) => Promise<unknown> })
-            .then(cb),
-    };
-    return proxy;
-  };
-  return {
-    ...fake,
-    from: (table: string) =>
-      table === "project_parties" ? wrap(fake.from(table) as never) : fake.from(table),
-  };
-}
+// When no studio resolves for a send there is nothing to scope to, so the scan
+// across the number is the only line left between an unattributable send and a
+// STOP. It used to reduce over project_parties; R-AW makes it a scan of the
+// consent records, and R-AM still governs it — a read that errored is not a
+// read that found nothing. The party-row version of this test is gone with the
+// leg it covered; the record version is directly below.
 
 function unattributableSeed() {
   return {
@@ -1335,17 +1309,6 @@ function unattributableSeed() {
     project_parties: [{ ...party("p1", "granted"), project_id: null }],
   };
 }
-
-Deno.test("a failed phone-global scan refuses the send instead of reading as no refusal", async () => {
-  const fake = createFakeSupabase(unattributableSeed());
-  const res = await sendPartySms(
-    denyPhoneScan(fake) as never,
-    { partyId: "p1", body: "hello" },
-    { getEnv: envOf(CONSENT_ENV), now: OPEN_HOURS },
-  );
-  assert(!res.sent, "a scan we could not read is not a scan that found nothing");
-  assertEquals(res.reason, "opted_out");
-});
 
 // ── R-AS: the unattributable branch reads the RECORDS first ────────────────
 //

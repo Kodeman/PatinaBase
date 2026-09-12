@@ -45,14 +45,17 @@ const FIELD_KINDS = ["gc", "sub", "installer", "receiver"];
  *
  * The gate asked here is `channelConsentVerdict`, the same function
  * sendPartySms asks first, so the pre-filter cannot drift from the authority:
- *   · "allow"   — the studio's own record says granted and no seat of that
- *                 studio on that number refuses.
- *   · "refuse"  — never texted, whichever ledger carries the refusal.
- *   · "unknown" — no record yet (the fold has not reached this pair). The
- *                 legacy seat is honoured here exactly as sendPartySms's
- *                 second, legacy gate still honours it, so a pre-fold
- *                 'granted' row keeps its digest and nothing regresses while
- *                 both ledgers are live.
+ *   · "allow"   — the studio's own record says granted, with no refusal
+ *                 standing behind it.
+ *   · "refuse"  — never texted. Since R-AW that includes "this studio holds NO
+ *                 record for the number": 00594's fold folded every seat in
+ *                 the same migration, so a pair with no record was never asked,
+ *                 and a seat frozen at 'granted' can no longer carry a digest
+ *                 on its own.
+ *   · "unknown" — the record says 'pending': the invite is out and unanswered.
+ *                 The legacy seat is honoured here exactly as sendPartySms's
+ *                 second, legacy gate still honours it, so this pre-filter
+ *                 cannot be narrower than the authority it stands in front of.
  * sendPartySms re-runs the whole gate for real; this only decides whom it is
  * worth composing a digest for, so it never widens what may be sent.
  */

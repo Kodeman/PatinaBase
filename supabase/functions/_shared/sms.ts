@@ -341,101 +341,47 @@ export async function orgsOfProjects(
   return { orgs: out, failed };
 }
 
-/**
- * Is there a party row on this number, IN THIS STUDIO, that says opted_out?
- *
- * PR-x's fail-closed SECOND check, and after R-AS the only thing the seats are
- * still asked. project_parties.sms_consent_* is frozen legacy — nothing writes
- * it any more — but the rows already on the books carry real refusals that
- * predate the fold, and a record minted after one of them would otherwise
- * outrank it. Only `opted_out` is read: a seat may refuse a send, never
- * authorise one. Scoped to the owning studio on purpose — phone-globally it
- * would re-open G-3, the bug the consent record exists to fix.
- */
-async function orgHasOptedOutParty(
-  supabase: SupabaseClient,
-  phone: string,
-  org: string,
-): Promise<boolean> {
-  const { data, error } = await supabase
-    .from("project_parties")
-    .select("project_id, sms_consent_status")
-    .eq("phone_e164", phone)
-    .eq("sms_consent_status", "opted_out");
-  if (error) {
-    // A refusal we could not read is not a refusal we may assume away.
-    console.error("orgHasOptedOutParty: project_parties read failed", error);
-    return true;
-  }
-  const rows = (data ?? []) as Array<{ project_id?: string | null }>;
-  const projectIds = [
-    ...new Set(rows.map((r) => r.project_id).filter(Boolean)),
-  ] as string[];
-  if (projectIds.length === 0) return false;
-  const { orgs, failed } = await orgsOfProjects(supabase, projectIds);
-  // Some of those opted-out seats could not be attributed to a studio. Which
-  // studio they belong to is exactly the question, so an unresolved one counts
-  // against the send (R-AM).
-  if (failed) return true;
-  return projectIds.some((id) => orgs.get(id) === org);
-}
-
 /** What the studio's own consent record says about this number. */
 export type ChannelConsentVerdict = "refuse" | "allow" | "unknown";
 
 /**
- * PRIMARY consent gate (migration 00594). Consent is a fact about a (studio,
- * channel value) pair, held in studio_channel_consent — not a per-party-row
- * ledger. This is read BEFORE reduceConsent() below: the studio that owns the
- * job is the only studio whose verdict may silence this send, and the only one
- * whose grant may authorise it.
+ * THE ONLY consent gate (migration 00594, ruling R-AW). Consent is a fact about
+ * a (studio, channel value) pair, held in studio_channel_consent — and that
+ * record is the only ledger this function reads. project_parties.sms_consent_*
+ * is frozen legacy: 00594's own backfill folded every seat into a record in the
+ * same migration (opted_out winning per org), and the freeze trigger means no
+ * seat has carried news since. A seat therefore holds no fact the record does
+ * not already hold, and reading one could only ever contradict the record.
  *
- *   · "refuse" — the studio's own record says opted_out; or there is NO record
- *     for that studio AND some party row on this number IN THAT SAME STUDIO
- *     has opted out, which fails closed for the refusals written before the
- *     fold (PR-x). That fallback reduces across the studio's own
- *     projects, never across tenants (R-AK): a STOP given to a studio this
- *     send has nothing to do with is not this studio's fact, and treating it
- *     as one silently blocked a studio's very first outreach to a number it
- *     had never contacted. Phone-global survives in exactly one place — when
- *     NO studio can be resolved for the send at all, where there is nothing to
- *     scope to and an unattributable send must not outrun a STOP.
- *   · "allow" — the studio's own record says granted AND no party row in that
- *     same studio on that number says opted_out. This is the half of G-3 the
- *     per-party ledger cannot do: a seat created today for a number the studio
- *     recorded a grant for in 2025 starts `not_asked` on its own row (the
- *     mirror fires on a consent write, never on a party-row insert), and
- *     without this branch the send is refused as not_consented and the studio
- *     has to re-record a consent it already holds (fixture F-11).
- *   · "unknown" — record says not_asked/pending with no refusal standing
- *     behind it, or there is none: the legacy party-row gates below decide.
+ *   · "refuse" — the studio's record says opted_out, or carries an unanswered
+ *     refusal, or THERE IS NO RECORD AT ALL. A missing record is `not_asked`,
+ *     and `not_asked` is a refusal: nobody asked this person, so nobody may
+ *     text them. Before R-AW a missing record fell through to the party row,
+ *     and a pre-fold seat reading `granted` then carried the send — the one leg
+ *     by which a frozen column could still authorise a text.
+ *   · "allow" — the studio's record says granted with no refusal standing
+ *     behind it. This is the half of G-3 a per-party ledger cannot do: a seat
+ *     created today for a number the studio recorded a grant for in 2025 is
+ *     sendable because the STUDIO holds the grant (fixture F-11).
+ *   · "unknown" — the record says `pending`: the invite has gone out and the
+ *     recipient has not answered. The double opt-in's first half lives there,
+ *     so sendPartySms's own invite gate decides that one.
  *   · "refuse", logged — the owning studio could not be RESOLVED at all (a
  *     failed read, not an absent studio). A failure is not a fact about the
  *     number, and the no-studio branch below would answer this send out of
  *     every tenant's rows, so it refuses instead (R-AM).
  *
- * "allow" lifts only the POSITIVE gates, and it is never taken on a record
- * alone. The frozen party rows (R-AS) still carry refusals written before the
- * fold, so the owning studio's own rows are scanned for one BEFORE `granted`
- * is honoured. Every opted_out path still refuses, whichever ledger carries it
- * — but only the record can ever authorise a send.
- *
  * AND `status` IS NOT THE WHOLE VERDICT (r6 M6-3). refusal_unanswered is the
  * stored fact the WRITE door treats as load-bearing — a refusal the person who
  * made it has not answered — and it was invisible to the rail that actually
- * sends. record_channel_reconsent() USED TO move a record opted_out -> pending
- * keeping opt_out_at and the flag, and the mirror then stamped `pending` onto
- * every seat in the studio on that number, removing the party-row backstop
- * below: `status` read alone said "unknown", the seats said "pending", and the
- * opt-in invite went out to a number that had replied STOP, on a 10DLC
- * campaign. That door is evidence-only now and leaves the record at
- * `opted_out` (r7 M7-2) — but the flag is still read here, because an
- * unanswered refusal can stand at ANY status: the first prod fold mints
- * `granted` records for legacy seats whose stale opt-out no later consent
+ * sends. An unanswered refusal can stand at ANY status: the first prod fold
+ * mints `granted` records for legacy seats whose stale opt-out no later consent
  * answered (r7 M7-1), and the inbound rail writes this table directly. What
  * answers a refusal is the recipient's own YES or START, which that rail
  * writes — lowering the flag and stamping a fresh consented_at; nothing the
  * studio can type reopens this door (00594's RPCs never lower the flag).
+ * public.channel_consent_status() folds status and the flag exactly this way,
+ * so the room and the rail agree by construction.
  *
  * EXPORTED so a caller that PRE-FILTERS recipients asks this question rather
  * than inventing its own (close-out r3 MAJOR-2). field-daily used to select its
@@ -479,49 +425,45 @@ export async function channelConsentVerdict(
       );
       return "refuse";
     }
-    if (record) {
-      const row = record as {
-        status: string;
-        refusal_unanswered?: boolean | null;
-      };
-      const status = row.status;
-      if (status === "opted_out") return "refuse";
-      // A refusal the recipient has not answered still stands, whatever the
-      // status now says (r6 M6-3). The fold mints `granted` records for legacy
-      // seats carrying a stale, unanswered opt-out (r7 M7-1), and reconsent()
-      // records the studio's fresh consent while the refusal keeps standing
-      // (r7 M7-2). No studio-side write lowers this flag — only the inbound
-      // YES/START, written by the rail itself.
-      if (row.refusal_unanswered === true) return "refuse";
-      // The record is not self-certifying: a refusal recorded on one of this
-      // studio's own party rows since the record was written still refuses.
-      if (await orgHasOptedOutParty(supabase, phone, org)) return "refuse";
-      if (status === "granted") return "allow";
-      return "unknown";
+    if (!record) {
+      // No record is `not_asked`, and `not_asked` refuses (R-AW). The fold ran
+      // inside 00594, so every seat that ever carried a verdict has a record
+      // behind it; a pair with none was never asked by this studio.
+      return "refuse";
     }
-  }
-
-  // No record for this studio yet (the backfill has not reached this pair):
-  // fail closed on a refusal already on this studio's own books.
-  if (org) {
-    return (await orgHasOptedOutParty(supabase, phone, org)) ? "refuse" : "unknown";
+    const row = record as {
+      status: string;
+      refusal_unanswered?: boolean | null;
+    };
+    // A refusal the recipient has not answered still stands, whatever the
+    // status now says (r6 M6-3), so it is read before the status is.
+    if (row.refusal_unanswered === true) return "refuse";
+    if (row.status === "granted") return "allow";
+    // `pending` is the invite in flight — sendPartySms's invite gate owns it.
+    if (row.status === "pending") return "unknown";
+    // `opted_out`, and `not_asked` recorded by the fold: both refuse.
+    return "refuse";
   }
 
   // No studio resolves at all — nothing to scope to, so the reduction stays
   // phone-global here and only here. This is the last line between an
-  // unattributable send and a STOP, so it obeys R-AM like its four siblings: a
-  // read that ERRORED comes back as an empty row set, and an empty row set read
-  // as "nobody has refused" would lift the primary gate on exactly the send
-  // that has no other check (r7 R7-M2).
+  // unattributable send and a STOP, so it obeys R-AM: a read that ERRORED comes
+  // back as an empty row set, and an empty row set read as "nobody has refused"
+  // would lift the primary gate on exactly the send that has no other check
+  // (r7 R7-M2).
   //
-  // THE RECORDS ARE READ FIRST, EVEN HERE (R-AS). The inbound STOP used to
-  // write project_parties phone-globally as well as writing the records, and
-  // that write was this branch's backstop for a seat whose studio cannot be
-  // resolved. project_parties.sms_consent_* is frozen legacy now and the rail
-  // writes the record only, so the phone-global reduction has to be asked of
-  // the records: any studio's recorded refusal on this number refuses a send
-  // that belongs to no studio at all. Scoped sends are untouched — the branch
-  // above answered them off the owning studio's own record (R-AK).
+  // IT IS THE RECORDS THAT ARE ASKED, HERE TOO (R-AW). The inbound STOP used to
+  // write project_parties phone-globally, and that write was this branch's
+  // backstop for a seat whose studio cannot be resolved. The seats are frozen
+  // and the rail writes the record only, so the phone-global question is asked
+  // of the records: any studio's recorded refusal on this number refuses a send
+  // that belongs to no studio at all. Scoped sends never reach here — the
+  // branch above answered them off the owning studio's own record (R-AK).
+  //
+  // The send itself is NOT refused when nothing on the number has refused: a
+  // studio-less project has no ledger to hold a verdict, so there is no record
+  // to require. That fail-open is named in the W1a report §5.2 and §8 and is a
+  // policy ruling owed, not a defect this function can close.
   const { data: recordRows, error: recordScanError } = await supabase
     .from("studio_channel_consent")
     .select("status, refusal_unanswered")
@@ -538,23 +480,7 @@ export async function channelConsentVerdict(
     const row = r as { status: string; refusal_unanswered?: boolean | null };
     return row.status === "opted_out" || row.refusal_unanswered === true;
   });
-  if (anyRecordRefuses) return "refuse";
-
-  const { data: rows, error: scanError } = await supabase
-    .from("project_parties")
-    .select("sms_consent_status")
-    .eq("phone_e164", phone);
-  if (scanError) {
-    console.error(
-      "channelConsentVerdict: refusing, the phone-global scan failed",
-      scanError,
-    );
-    return "refuse";
-  }
-  const anyOptedOut = (rows ?? []).some(
-    (r) => (r as { sms_consent_status: string }).sms_consent_status === "opted_out",
-  );
-  return anyOptedOut ? "refuse" : "unknown";
+  return anyRecordRefuses ? "refuse" : "unknown";
 }
 
 async function resolveRecipient(
