@@ -1,0 +1,12 @@
+Pager usage is off.
+BEGIN
+INSERT 0 6
+psql:/Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/artifacts/people-room-crm-2026-09-11/build/probe111-w1b-final-r5-field-link-branches.sql:31: NOTICE:  A live window + caller date 5d out     -> 2026-10-23 (today+41)
+psql:/Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/artifacts/people-room-crm-2026-09-11/build/probe111-w1b-final-r5-field-link-branches.sql:31: NOTICE:  B window + warranty (later of two)     -> 2027-10-18 (today+401)
+psql:/Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/artifacts/people-room-crm-2026-09-11/build/probe111-w1b-final-r5-field-link-branches.sql:31: NOTICE:  C closed window                        -> 2026-12-11 (today+90)
+psql:/Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/artifacts/people-room-crm-2026-09-11/build/probe111-w1b-final-r5-field-link-branches.sql:31: NOTICE:  D no window + caller date 7d           -> 2026-09-19 (today+7)
+psql:/Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/artifacts/people-room-crm-2026-09-11/build/probe111-w1b-final-r5-field-link-branches.sql:31: NOTICE:  E no window, no caller date            -> 2026-12-11 (today+90)
+psql:/Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/artifacts/people-room-crm-2026-09-11/build/probe111-w1b-final-r5-field-link-branches.sql:31: NOTICE:  F warranty only                        -> 2027-04-01 (today+201)
+psql:/Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/artifacts/people-room-crm-2026-09-11/build/probe111-w1b-final-r5-field-link-branches.sql:31: NOTICE:  G off_job seat                         -> 2026-12-11 (today+90)
+DO
+ROLLBACK

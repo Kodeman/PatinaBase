@@ -1,0 +1,42 @@
+Pager usage is off.
+=== U. RLS posture of every v_access_grants base table read WITHOUT a view predicate ===
+              relname               | rls | forced | policies | auth_sel | anon_sel 
+------------------------------------+-----+--------+----------+----------+----------
+ designer_clients                   | t   | f      |        4 | t        | t
+ document_shares                    | t   | f      |        1 | t        | t
+ field_link_tokens                  | t   | f      |        2 | t        | t
+ fulfillment_evidence_upload_tokens | t   | f      |        2 | t        | f
+ invoice_links                      | t   | f      |        0 | f        | f
+ organization_members               | t   | f      |        7 | t        | t
+ plan_transmittal_tokens            | t   | f      |        1 | f        | f
+ project_review_access              | t   | f      |        1 | t        | f
+ site_request_access                | t   | f      |        1 | t        | f
+ site_requests                      | t   | f      |        1 | t        | f
+ studio_trade_agreement_tokens      | t   | f      |        0 | f        | f
+ trade_rfq_tokens                   | t   | f      |        1 | f        | f
+(12 rows)
+
+=== U2. policies on the five no-predicate branches ===
+              relname               |                        polname                         | polcmd |      roles      |                                     using_expr                                     
+------------------------------------+--------------------------------------------------------+--------+-----------------+------------------------------------------------------------------------------------
+ document_shares                    | document_shares_design_studio_select                   | r      | {authenticated} | (((proposal_id IS NOT NULL) AND (EXISTS ( SELECT 1                                +
+                                    |                                                        |        |                 |    FROM proposals proposal                                                        +
+                                    |                                                        |        |                 |   WHERE ((proposal.id = document_shares.proposal_id) AND is_design_studio_comember
+ fulfillment_evidence_upload_tokens | fulfillment_evidence_upload_tokens_select_admin        | r      | {authenticated} | (EXISTS ( SELECT 1                                                                +
+                                    |                                                        |        |                 |    FROM (user_roles ur                                                            +
+                                    |                                                        |        |                 |      JOIN roles r ON ((ur.role_id = r.id)))                                       +
+                                    |                                                        |        |                 |   WHERE ((ur.user_id = auth.uid()) AND (r.domain = 'admin'::role_domain)))
+ fulfillment_evidence_upload_tokens | fulfillment_evidence_upload_tokens_select_agent_reader | r      | {agent_reader}  | true
+ organization_members               | Active members can view co-members                     | r      | {authenticated} | is_active_org_member(organization_id)
+ organization_members               | Org admins can view all members                        | r      | {authenticated} | is_org_admin_or_owner(organization_id)
+ organization_members               | Users can view their org memberships                   | r      | {}              | (user_id = auth.uid())
+ project_review_access              | project_review_access_studio_read                      | r      | {authenticated} | (EXISTS ( SELECT 1                                                                +
+                                    |                                                        |        |                 |    FROM (project_review_editions edition                                          +
+                                    |                                                        |        |                 |      JOIN projects project ON ((project.id = edition.project_id)))                +
+                                    |                                                        |        |                 |   WHERE ((edition.id = project_re
+ site_request_access                | site_access_designer_read                              | r      | {authenticated} | (EXISTS ( SELECT 1                                                                +
+                                    |                                                        |        |                 |    FROM (site_requests sr                                                         +
+                                    |                                                        |        |                 |      JOIN projects p ON ((p.id = sr.project_id)))                                 +
+                                    |                                                        |        |                 |   WHERE ((sr.id = site_request_access.request_id) AND is_studio_c
+(8 rows)
+

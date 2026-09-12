@@ -1,0 +1,92 @@
+Pager usage is off.
+BEGIN
+SET
+SET
+ member | admin 
+--------+-------
+ t      | t
+(1 row)
+
+=== W0. Northgate Electric: the lapsed gating COI ===
+                 card                 |    company_name    |  word  
+--------------------------------------+--------------------+--------
+ d0e20000-0000-0000-0000-000000000003 | Northgate Electric | lapsed
+(1 row)
+
+                  id                  | doc_type | expires_on |       blocks       | superseded_by 
+--------------------------------------+----------+------------+--------------------+---------------
+ d0e50000-0000-0000-0000-000000000006 | coi_gl   | 2026-03-31 | {site_access,draw} | 
+ d0e50000-0000-0000-0000-000000000008 | license  | 2027-12-31 | {}                 | 
+ d0e50000-0000-0000-0000-000000000007 | w9       |            | {payment}          | 
+(3 rows)
+
+=== W1. MINOR-31: clear blocks on the lapse (one ordinary member UPDATE) ===
+UPDATE 1
+ word_after_clearing_blocks 
+----------------------------
+ current
+(1 row)
+
+ROLLBACK
+BEGIN
+SET
+SET
+=== W2. the holder_id move: reparent the lapse onto another firm card ===
+ before 
+--------
+ lapsed
+(1 row)
+
+UPDATE 1
+ after_reparent | granite_now 
+----------------+-------------
+ current        | lapsed
+(1 row)
+
+ROLLBACK
+BEGIN
+SET
+SET
+=== W3. the expires_on edit in place ===
+UPDATE 1
+ after_date_edit 
+-----------------
+ current
+(1 row)
+
+ROLLBACK
+BEGIN
+=== W4. compliance_state 30-day boundaries ===
+INSERT 0 1
+INSERT 0 1
+         d         |   w    
+-------------------+--------
+ expires yesterday | lapsed
+(1 row)
+
+UPDATE 1
+   ?column?    | compliance_state 
+---------------+------------------
+ expires today | lapses_soon
+(1 row)
+
+UPDATE 1
+  ?column?   | compliance_state 
+-------------+------------------
+ expires +30 | lapses_soon
+(1 row)
+
+UPDATE 1
+  ?column?   | compliance_state 
+-------------+------------------
+ expires +31 | current
+(1 row)
+
+UPDATE 1
+UPDATE 1
+    ?column?    | compliance_state 
+----------------+------------------
+ gateless lapse | current
+(1 row)
+
+ROLLBACK

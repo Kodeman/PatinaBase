@@ -1,0 +1,65 @@
+Pager usage is off.
+BEGIN
+INSERT 0 1
+SET
+SET
+=== who I am ===
+              acting_as               | member_of_my_own_studio | member_of_the_victim_studio 
+--------------------------------------+-------------------------+-----------------------------
+ cf100000-0000-4000-8000-000000000001 | t                       | f
+(1 row)
+
+=== what RLS lets me see of the victim studio ===
+ victim_seats_visible 
+----------------------
+                    0
+(1 row)
+
+ victim_cards_visible 
+----------------------
+                    0
+(1 row)
+
+ victim_directory_rows 
+-----------------------
+                     0
+(1 row)
+
+ victim_seat_rows 
+------------------
+                0
+(1 row)
+
+=== THE LEAK: my own org id + a FOREIGN identity key (a login) ===
+ identity_phone_numbers 
+------------------------
+ +16125559871
+(1 row)
+
+=== THE LEAK: my own org id + a FOREIGN rolodex card uuid ===
+        which        |      v       
+---------------------+--------------
+ Adaeze Okonkwo card | +16125550104
+ Amara Osei card     | +16125550116
+(2 rows)
+
+=== the existence oracle on a guessed number ===
+                        probe                        | hits 
+-----------------------------------------------------+------
+ a number seated in the victim studio (+16125550219) |    1
+ a number seated nowhere (+19995550000)              |    0
+(2 rows)
+
+=== the CONTROL the r4 round ran, which passes: the victim org id refuses ===
+ numbers_when_i_name_the_victim_org 
+------------------------------------
+                                  0
+(1 row)
+
+=== and the consent WORD does not leak (verdicts resolve at p_organization_id) ===
+ consent_word_at_my_own_org 
+----------------------------
+ not_asked
+(1 row)
+
+ROLLBACK
