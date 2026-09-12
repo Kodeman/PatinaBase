@@ -186,3 +186,140 @@ same timestamp as the refusal it answered and the surviving date leg
 `clock_timestamp()`, which is what a real deployment produces (the rail's write
 is a later transaction). Block 4 also needed `r RECORD` declared for the new
 assertion.
+
+---
+
+## R7-M1 — the instructed door destroyed the inbound STOP's own date, source, words and recorder
+
+**Finding (r7 migrations review, MAJOR).** `record_channel_consent`'s
+`opted_out` branch stamped `v_now` into `opt_out_at` and wrote the caller's
+`p_source` / `p_evidence` / `auth.uid()` straight over `opt_out_source` /
+`opt_out_evidence` / `opt_out_recorded_at` / `opt_out_recorded_by`. Since r6's
+B6-1 made "record that refusal here first" the only path past a seat refusal —
+and both `channel_opted_out` hints now say so in words — one ordinary call by
+any studio member turned `(inbound_sms, 'Inbound STOP', 3 Dec 2025, NULL)` into
+`(verbal, 'He told me on site', today, that member)`, on the record and,
+through the mirror, on every seat.
+
+**What changed** — `supabase/migrations/00594_studio_channel_consent.sql`, five
+`CASE` arms in the upsert's `DO UPDATE`, in the idiom already standing there:
+
+- `opt_out_at = CASE WHEN EXCLUDED.status = 'opted_out' THEN LEAST(scc.opt_out_at, EXCLUDED.opt_out_at) ELSE scc.opt_out_at END`
+  — the refusal keeps the date it arrived. `LEAST` skips NULLs, so a DATELESS
+  refusal (what the shipped portal writes on purpose, and what the fold mints)
+  does take the date of the refusal being recorded now: dating a refusal that
+  had none, not overwriting one.
+- `opt_out_source` / `opt_out_evidence` / `opt_out_recorded_at` /
+  `opt_out_recorded_by` each grew a middle arm:
+  `WHEN scc.opt_out_source = 'inbound_sms' AND EXCLUDED.opt_out_source IS DISTINCT FROM 'inbound_sms' THEN scc.<col>`.
+  A studio-sourced refusal never speaks for a texted one. A second INBOUND
+  refusal still restates all four (the carrier speaking again), and a studio
+  refusal over a studio refusal still restates itself — the guard is about who
+  said it, not about freezing the column.
+
+The studio's own account is not lost: it lands on the CONSENT side (`source`,
+`evidence`, `recorded_at`, `recorded_by`), which is where "we also heard it
+verbally, and here is when we were told" belongs. Nothing here touches
+`refusal_unanswered` (r7 M7-1 still holds) and no send is opened either way.
+
+Header invariant (`:139-` bullet) and the function `COMMENT` both restate the
+new rule.
+
+**Test** — `supabase/tests/people/w1a_identity_channels_consent_test.sql`,
+new block 28 (two new seats on the r6 seat-gate project, phones
+`612-555-0435` / `612-555-0436`):
+
+- 28a the inbound rail's own write (dated 3 Dec 2025, `inbound_sms`,
+  'Inbound STOP', recorder NULL) reaches the seat;
+- 28b one studio-side `opted_out` re-record (`verbal`, 'He told me on site') is
+  ACCEPTED and leaves `opt_out_at`, `opt_out_source`, `opt_out_evidence`,
+  `opt_out_recorded_at` and `opt_out_recorded_by` exactly as they stood, while
+  the studio's account lands on the consent side;
+- 28c the same assertions ON THE SEAT;
+- 28d a second `inbound_sms` refusal restates the words and keeps the earliest
+  date;
+- 28e a studio refusal over a studio refusal restates itself, keeps the earliest
+  date, and `opt_out_recorded_at > opt_out_at` (no refusal written down before
+  it happened); the seat follows.
+
+### Evidence
+
+```
+$ pnpm --dir …/agent-people-build supabase:reset
+…
+Restarting containers...
+Finished supabase db reset on branch main.
+{"target":"local","version":"","message":"Reset local database."}
+
+$ psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 \
+    -f supabase/tests/people/w1a_identity_channels_consent_test.sql
+…
+NOTICE:  27. reconsent is evidence-only and re-callable (r7 M7-2), leaves the refusal's own
+         evidence standing (r8 W4-M2), the seat carries the refusal's own words too (r9 R5-M1),
+         and a sourceless refusal is never given the studio's consent as its words (r6 R6-M1): passed
+NOTICE:  28. a studio-recorded refusal never speaks for a texted one, and the refusal keeps the
+         date it arrived (r7 R7-M1): passed
+NOTICE:  All W1a assertions passed.
+ROLLBACK
+```
+
+Negative control — the SAME scenario run first against the PRE-FIX body
+(restored inside the transaction from `git HEAD`) and then against the shipped
+one (`artifacts/people-room-crm-2026-09-11/build/probe14-r7-M1-negative-control.sql`):
+
+```
+--- the refusal as the carrier rail recorded it ---
+       opt_out_at       | opt_out_source | opt_out_evidence |  opt_out_recorded_at   | opt_out_recorded_by
+------------------------+----------------+------------------+------------------------+---------------------
+ 2025-12-03 00:00:00+00 | inbound_sms    | Inbound STOP     | 2025-12-03 00:00:00+00 |
+
+--- PRE-FIX: after one studio-side opted_out re-record (record) ---
+          opt_out_at           | opt_out_source |  opt_out_evidence  |      opt_out_recorded_at      |         opt_out_recorded_by
+-------------------------------+----------------+--------------------+-------------------------------+--------------------------------------
+ 2026-09-12 02:55:18.424342+00 | verbal         | He told me on site | 2026-09-12 02:55:18.424342+00 | a0000000-0000-4000-8000-0000000000f1
+
+--- PRE-FIX: and on the seat ---
+        sms_opt_out_at         | sms_consent_source | sms_consent_evidence
+-------------------------------+--------------------+----------------------
+ 2026-09-12 02:55:18.424342+00 | verbal             | He told me on site
+
+--- SHIPPED: after the same studio-side opted_out re-record (record) ---
+       opt_out_at       | opt_out_source | opt_out_evidence |  opt_out_recorded_at   | opt_out_recorded_by | consent_source |  consent_evidence  |         consent_recorded_by
+------------------------+----------------+------------------+------------------------+---------------------+----------------+--------------------+--------------------------------------
+ 2025-12-03 00:00:00+00 | inbound_sms    | Inbound STOP     | 2025-12-03 00:00:00+00 |                     | verbal         | He told me on site | a0000000-0000-4000-8000-0000000000f1
+
+--- SHIPPED: and on the seat ---
+     sms_opt_out_at     | sms_consent_source | sms_consent_evidence | sms_consent_recorded_by
+------------------------+--------------------+----------------------+-------------------------
+ 2025-12-03 00:00:00+00 | inbound_sms        | Inbound STOP         |
+```
+
+Idempotent re-run of 00594 against the already-migrated database:
+
+```
+$ psql … -v ON_ERROR_STOP=1 -f $TMPDIR/rerun_00594.sql
+…
+ rerun 00594 ok
+ROLLBACK
+```
+
+No `GRANT`/`REVOKE` changed, but the generator was run to prove it:
+
+```
+$ python3 scripts/generate-legacy-grants.py
+wrote …/supabase/seed/00-legacy-grants.sql — baseline + 2632 replayed statements
+$ git diff --stat supabase/seed/00-legacy-grants.sql
+(empty)
+
+$ SUPABASE_DB_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres \
+    pnpm --dir …/agent-people-build db:generate
+$ git diff --stat packages/supabase/src/database.types.ts
+(empty — no signature or column changed)
+
+$ git diff --stat
+ supabase/migrations/00594_studio_channel_consent.sql   |  84 +++++++++--
+ supabase/tests/people/w1a_identity_channels_consent_test.sql | 161 +++++++++++++++++++++
+ 2 files changed, 231 insertions(+), 14 deletions(-)
+```
+
+No edge-function file was touched, so the Deno suites were not re-run.

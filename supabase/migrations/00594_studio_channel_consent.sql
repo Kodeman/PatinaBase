@@ -146,6 +146,15 @@
 --     blocked, but the carrier-audit artifact and R-Q's "opted out BY TEXT"
 --     were gone. The four columns have no party-row counterpart, so the mirror
 --     does not carry them.
+--   · NOR MAY A LATER REFUSAL SPEAK FOR AN EARLIER ONE (r7 R7-M1). The record
+--     keeps the EARLIEST opt_out_at, and a studio-sourced refusal recorded over
+--     an inbound_sms one leaves all four opt_out_* columns standing. The seat
+--     gate's hint sends a studio through that door on purpose ("record that
+--     refusal here first"), and one ordinary call used to turn
+--     (inbound_sms, "Inbound STOP", 3 Dec 2025, NULL) into
+--     (verbal, "He told me on site", today, that member) on the record and on
+--     every mirrored seat. The studio's own account of the refusal lands on the
+--     CONSENT side, where recorded_at says when the studio told us.
 --
 -- Adds GRANT/REVOKE → regenerate seed/00-legacy-grants.sql after this migration
 -- (python3 scripts/generate-legacy-grants.py).
@@ -1198,8 +1207,19 @@ BEGIN
       -- "granted 2 May 2025, opted out 3 Dec 2025" must both survive.
       consented_at = CASE WHEN EXCLUDED.status = 'granted'
                           THEN EXCLUDED.consented_at ELSE scc.consented_at END,
+      -- THE REFUSAL KEEPS THE DATE IT ALREADY HAS (r7 R7-M1). A second refusal
+      -- recorded over a standing one is not a new refusal: it has stood since
+      -- the day it arrived, and that day is what R-Q's sentence prints and what
+      -- a carrier audit asks for. Stamping v_now walked "opted out 3 Dec 2025"
+      -- forward to today on one ordinary call, through the very door the
+      -- channel_opted_out HINT instructs the studio to use. LEAST skips NULLs,
+      -- so a DATELESS refusal -- the shape the shipped portal writes on purpose
+      -- and the fold mints verbatim -- does take the date of the refusal being
+      -- recorded now: that is dating a refusal that had none, not overwriting
+      -- one.
       opt_out_at   = CASE WHEN EXCLUDED.status = 'opted_out'
-                          THEN EXCLUDED.opt_out_at ELSE scc.opt_out_at END,
+                          THEN LEAST(scc.opt_out_at, EXCLUDED.opt_out_at)
+                          ELSE scc.opt_out_at END,
       -- A refusal raises the flag; NO verdict written through this door lowers
       -- it (r7 M7-1). Only the inbound rail's own write does, when the person
       -- who refused answers. A studio re-recording the consent it holds —
@@ -1216,18 +1236,50 @@ BEGIN
       -- A NEW refusal restates the refusal's own evidence; every other verdict
       -- leaves it exactly as it stands (r8 W4-M2). This is the half of the
       -- record a later consent must not be able to speak for.
-      opt_out_source      = CASE WHEN EXCLUDED.status = 'opted_out'
-                                 THEN EXCLUDED.opt_out_source
-                                 ELSE scc.opt_out_source END,
-      opt_out_evidence    = CASE WHEN EXCLUDED.status = 'opted_out'
-                                 THEN EXCLUDED.opt_out_evidence
-                                 ELSE scc.opt_out_evidence END,
-      opt_out_recorded_at = CASE WHEN EXCLUDED.status = 'opted_out'
-                                 THEN EXCLUDED.opt_out_recorded_at
-                                 ELSE scc.opt_out_recorded_at END,
-      opt_out_recorded_by = CASE WHEN EXCLUDED.status = 'opted_out'
-                                 THEN EXCLUDED.opt_out_recorded_by
-                                 ELSE scc.opt_out_recorded_by END,
+      --
+      -- AND A STUDIO-SOURCED REFUSAL NEVER SPEAKS FOR A TEXTED ONE (r7 R7-M1).
+      -- The seat gate's HINT tells a studio facing an opted_out seat to
+      -- "record that refusal here first"; obeying it over a number that really
+      -- replied STOP used to write (verbal, "He told me on site", today, that
+      -- member) straight over (inbound_sms, "Inbound STOP", 3 Dec 2025, NULL) --
+      -- on the record and, through the mirror, on every seat. Sending stayed
+      -- blocked, but the 10DLC artifact that the refusal ARRIVED BY TEXT was
+      -- gone with no audit row, and opt_out_recorded_by named a studio member
+      -- for a refusal the recipient made -- the attribution the inbound rail
+      -- deliberately writes NULL to avoid. "They texted STOP / we also heard it
+      -- verbally" is not a pair this record has to collapse: the studio's own
+      -- account lands on the CONSENT side (source / evidence / recorded_at /
+      -- recorded_by, set above) and says when the studio told us.
+      -- A second INBOUND refusal does restate all four -- that is the carrier
+      -- speaking again, and its later words are the better ones.
+      opt_out_source      = CASE
+                              WHEN EXCLUDED.status <> 'opted_out'
+                                THEN scc.opt_out_source
+                              WHEN scc.opt_out_source = 'inbound_sms'
+                               AND EXCLUDED.opt_out_source IS DISTINCT FROM 'inbound_sms'
+                                THEN scc.opt_out_source
+                              ELSE EXCLUDED.opt_out_source END,
+      opt_out_evidence    = CASE
+                              WHEN EXCLUDED.status <> 'opted_out'
+                                THEN scc.opt_out_evidence
+                              WHEN scc.opt_out_source = 'inbound_sms'
+                               AND EXCLUDED.opt_out_source IS DISTINCT FROM 'inbound_sms'
+                                THEN scc.opt_out_evidence
+                              ELSE EXCLUDED.opt_out_evidence END,
+      opt_out_recorded_at = CASE
+                              WHEN EXCLUDED.status <> 'opted_out'
+                                THEN scc.opt_out_recorded_at
+                              WHEN scc.opt_out_source = 'inbound_sms'
+                               AND EXCLUDED.opt_out_source IS DISTINCT FROM 'inbound_sms'
+                                THEN scc.opt_out_recorded_at
+                              ELSE EXCLUDED.opt_out_recorded_at END,
+      opt_out_recorded_by = CASE
+                              WHEN EXCLUDED.status <> 'opted_out'
+                                THEN scc.opt_out_recorded_by
+                              WHEN scc.opt_out_source = 'inbound_sms'
+                               AND EXCLUDED.opt_out_source IS DISTINCT FROM 'inbound_sms'
+                                THEN scc.opt_out_recorded_by
+                              ELSE EXCLUDED.opt_out_recorded_by END,
       -- The origin follows the CURRENT verdict, in both writers (the inbound
       -- rail agrees: pipeline.ts writes t.projectId ?? prior). R-Q's sentence
       -- names the job the verdict on the books came from, not an older one.
@@ -1346,7 +1398,11 @@ COMMENT ON FUNCTION public.record_channel_consent(uuid, text, text, text, text, 
   'stamps the refusal''s OWN evidence set (opt_out_source, opt_out_evidence, '
   'opt_out_recorded_at, opt_out_recorded_by) when and only when the verdict is '
   'opted_out, and leaves it untouched on every other verdict, so a later '
-  'consent cannot speak for the refusal (r8 W4-M2); '
+  'consent cannot speak for the refusal (r8 W4-M2) — nor may a later REFUSAL: '
+  'the record keeps the earliest opt_out_at, and a studio-sourced refusal '
+  'recorded over an inbound_sms one (the path the seat-gate hint instructs) '
+  'leaves all four columns standing, its own account going on the consent side '
+  '(r7 R7-M1); '
   'never empties the evidence set — source, '
   'evidence, disclosure_version and recorded_by are kept when the new verdict '
   'does not restate them, and laundering is closed by the evidence gate, since '
