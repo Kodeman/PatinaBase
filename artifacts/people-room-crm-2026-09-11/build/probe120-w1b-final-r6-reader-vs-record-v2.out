@@ -1,0 +1,54 @@
+BEGIN
+=== ground truth from the record table, no membership predicate ===
+SELECT 49
+DELETE 0
+SELECT 49
+SELECT 31
+GRANT
+-- the truth, by word
+   word    | count 
+-----------+-------
+ granted   |     5
+ not_asked |    42
+ opted_out |     1
+ pending   |     1
+(4 rows)
+
+
+################ AS THE OWNER ################
+                                 set_config                                 
+----------------------------------------------------------------------------
+ {"sub" : "a0000000-0000-0000-0000-000000000004", "role" : "authenticated"}
+(1 row)
+
+SET
+-- A1: contacts-branch consent word vs the record-derived truth
+ nm | reader | record 
+----+--------+--------
+(0 rows)
+
+-- A1b: and the count
+ consent_mismatches 
+--------------------
+                  0
+(1 row)
+
+-- A4: seat line vs the record for its own number (COALESCEd)
+ seat_mismatches 
+-----------------
+               0
+(1 row)
+
+-- A3: a permissive identity word over ANY number the record refuses
+ display_name | consent_status | v | rec 
+--------------+----------------+---+-----
+(0 rows)
+
+-- A8: the party branch (uncarded) vs its own numbers
+  display_name   | consent_status |     num      |    rec    
+-----------------+----------------+--------------+-----------
+ Rivera Finishes | not_asked      | +16125550219 | not_asked
+(1 row)
+
+RESET
+ROLLBACK

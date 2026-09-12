@@ -35395,6 +35395,7 @@ export type Database = {
       }
       project_party_designer: { Args: { p_party_id: string }; Returns: string }
       project_party_org: { Args: { p_party_id: string }; Returns: string }
+      project_tenant_org: { Args: { p_project_id: string }; Returns: string }
       promote_batch_to_studio: { Args: { p_items: Json }; Returns: string[] }
       promote_board_reference_to_selection: {
         Args: { p_board_item_id: string; p_request: Json }

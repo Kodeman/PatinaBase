@@ -1,0 +1,98 @@
+BEGIN
+=== actors ===
+SELECT 1
+INSERT 0 1
+INSERT 0 0
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+GRANT
+                                 set_config                                 
+----------------------------------------------------------------------------
+ {"sub" : "aa100000-0000-4000-8000-000000000001", "role" : "authenticated"}
+(1 row)
+
+SET
+-- premise: comember of the seeded studio designer, NOT a member of Local Dev Studio
+ comember_of_designer | member_of_local_dev 
+----------------------+---------------------
+ t                    | f
+(1 row)
+
+RESET
+ set_config 
+------------
+ 
+(1 row)
+
+=== fixture: one grant row in EACH of the four grant-closed sources, all owned by Local Dev Studio ===
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+-- what landed
+           src           | count 
+-------------------------+-------
+ invoice_links           |     1
+ plan_transmittal_tokens |     1
+ trade_rfq_tokens        |     1
+(3 rows)
+
+=== AS THE OUTSIDER: the four definer readers ===
+GRANT
+                                 set_config                                 
+----------------------------------------------------------------------------
+ {"sub" : "aa100000-0000-4000-8000-000000000001", "role" : "authenticated"}
+(1 row)
+
+SET
+-- access_grants_invoice_links() (invoice_links: RLS ON, ZERO policies, no auth SELECT grant)
+                     grant_id                     |    tier     | scope_type |               scope_id               | has_granted_by | has_last_used 
+--------------------------------------------------+-------------+------------+--------------------------------------+----------------+---------------
+ invoice_pay:aa300000-0000-4000-8000-000000000001 | invoice_pay | invoice    | b0000000-0000-0000-0000-00000000e141 | t              | t
+(1 row)
+
+-- access_grants_plan_transmittals()
+                    grant_id                    |   tier    |              subject_id              | scope_type |               scope_id               
+------------------------------------------------+-----------+--------------------------------------+------------+--------------------------------------
+ plan_link:aa500000-0000-4000-8000-000000000001 | plan_link | aa500000-0000-4000-8000-000000000001 | project    | d0e00000-0000-0000-0000-00000000000a
+(1 row)
+
+-- access_grants_trade_rfq()
+ rfq_rows 
+----------
+        1
+(1 row)
+
+-- access_grants_trade_agreement_links()
+ agreement_rows 
+----------------
+              0
+(1 row)
+
+-- and the whole ledger, by tier
+      tier      | count 
+----------------+-------
+ client_account |     2
+ field_link     |     6
+ invoice_pay    |     1
+ plan_link      |     1
+ rfq_link       |     1
+ studio_member  |     2
+(6 rows)
+
+-- CONTROL: the same outsider on the objects r5 tightened
+ site_cards | authority | seats | docs 
+------------+-----------+-------+------
+          0 |         0 |     0 |    0
+(1 row)
+
+RESET
+ set_config 
+------------
+ 
+(1 row)
+
+ROLLBACK

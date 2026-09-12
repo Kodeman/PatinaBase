@@ -1,0 +1,47 @@
+BEGIN
+INSERT 0 1
+INSERT 0 1
+INSERT 0 2
+                              set_config                               
+-----------------------------------------------------------------------
+ {"sub":"ae100000-0000-4000-8000-000000000001","role":"authenticated"}
+(1 row)
+
+SET
+-- premise
+ comember_of_designer | design_studio_comember | member_of_local_dev 
+----------------------+------------------------+---------------------
+ t                    | f                      | f
+(1 row)
+
+-- what this caller reads from people_directory, by role
+  role  | count 
+--------+-------
+ client |     6
+ lead   |     5
+(2 rows)
+
+-- the client rows, in full-ish
+  role  |            display_name            |             email             |     phone      | reach_state | revenue 
+--------+------------------------------------+-------------------------------+----------------+-------------+---------
+ client | Client User                        | client@patina.dev             |                | account     | 0
+ client | Elena Marlowe (no-login household) |                               |                | on_paper    | 0
+ client | Karin Lindqvist                    | karin@lindqvist-household.com | (612) 555-0190 | on_paper    | 0
+ client | Nora Ellison                       | client-solo@patina.dev        |                | account     | 0
+ client | The Ashfords (no-login household)  |                               |                | on_paper    | 0
+ client | The Okonkwo household              | adaeze@okonkwo-household.com  | (612) 555-0104 | on_paper    | 0
+ lead   | Elena Ruiz                         | elena.ruiz@example.com        |                | account     | 
+ lead   | Marcus Wright                      | marcus.wright@example.com     |                | account     | 
+ lead   | New lead                           |                               |                | account     | 
+ lead   | New lead                           |                               |                | account     | 
+ lead   | New lead                           |                               |                | account     | 
+(11 rows)
+
+-- and the objects r5 tightened, for contrast
+ seats | cards | authority | docs 
+-------+-------+-----------+------
+     0 |     0 |         0 |    0
+(1 row)
+
+RESET
+ROLLBACK

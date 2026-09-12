@@ -1,0 +1,67 @@
+BEGIN
+INSERT 0 1
+INSERT 0 1
+INSERT 0 2
+-- the shipped policies on the base tables of the four branches
+    tablename     |         policyname         |  cmd   |              qual               
+------------------+----------------------------+--------+---------------------------------
+ designer_clients | designer_clients_studio_rw | ALL    | is_studio_comember(designer_id)
+ leads            | leads_studio_select        | SELECT | is_studio_comember(designer_id)
+(2 rows)
+
+-- and the table grants those policies run behind
+    table_name    | privilege_type 
+------------------+----------------
+ designer_clients | SELECT
+ leads            | SELECT
+(2 rows)
+
+                              set_config                               
+-----------------------------------------------------------------------
+ {"sub":"ae100000-0000-4000-8000-000000000001","role":"authenticated"}
+(1 row)
+
+SET
+-- premise
+ comember_of_designer | design_studio_comember | member_of_local_dev 
+----------------------+------------------------+---------------------
+ t                    | f                      | f
+(1 row)
+
+-- what this caller reads from people_directory, by role (unchanged by this round)
+  role  | count 
+--------+-------
+ client |     6
+ lead   |     5
+(2 rows)
+
+-- THE VIEW IS NOT THE DOOR: the same names, emails and phones off the BASE TABLES
+ designer_clients_rows 
+-----------------------
+                     6
+(1 row)
+
+      client_name      |         client_email          |  client_phone  
+-----------------------+-------------------------------+----------------
+ Client User           | client@patina.dev             | 
+ Karin Lindqvist       | karin@lindqvist-household.com | (612) 555-0190
+ The Okonkwo household | adaeze@okonkwo-household.com  | (612) 555-0104
+(3 rows)
+
+ leads_rows 
+------------
+          7
+(1 row)
+
+ contact_name | contact_email | contact_phone 
+--------------+---------------+---------------
+(0 rows)
+
+-- and the objects this wave gates, for contrast
+ seats | cards | authority | docs 
+-------+-------+-----------+------
+     0 |     0 |         0 |    0
+(1 row)
+
+RESET
+ROLLBACK

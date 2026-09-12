@@ -1,0 +1,98 @@
+BEGIN
+SELECT 1
+GRANT
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+=== the rows exist, as service_role sees them ===
+ rfq_rows | plan_rows | invoice_rows 
+----------+-----------+--------------
+        1 |         1 |            1
+(1 row)
+
+                                 set_config                                 
+----------------------------------------------------------------------------
+ {"sub" : "ab100000-0000-4000-8000-000000000001", "role" : "authenticated"}
+(1 row)
+
+SET
+=== A premise: manufacturer-org co-member of the designer ===
+ comember_any_org | design_studio_comember | member_of_the_owning_studio 
+------------------+------------------------+-----------------------------
+ t                | f                      | f
+(1 row)
+
+=== A: all four definer readers ===
+     branch     | count 
+----------------+-------
+ rfq_link       |     0
+ plan_link      |     0
+ invoice_pay    |     0
+ agreement_link |     0
+(4 rows)
+
+=== A: the whole ledger, by tier ===
+      tier      | count 
+----------------+-------
+ client_account |     2
+ field_link     |     6
+ studio_member  |     2
+(3 rows)
+
+RESET
+                                 set_config                                 
+----------------------------------------------------------------------------
+ {"sub" : "ab100000-0000-4000-8000-000000000002", "role" : "authenticated"}
+(1 row)
+
+SET
+=== B premise: DESIGN-studio co-member, not a member of the owning studio ===
+ shipped_policy_gate | member_of_the_owning_studio |         tenant_org_resolved          
+---------------------+-----------------------------+--------------------------------------
+ t                   | f                           | b0000000-0000-0000-0000-000000000001
+(1 row)
+
+=== B: all four definer readers ===
+     branch     | count 
+----------------+-------
+ rfq_link       |     1
+ plan_link      |     0
+ invoice_pay    |     1
+ agreement_link |     0
+(4 rows)
+
+RESET
+                                 set_config                                 
+----------------------------------------------------------------------------
+ {"sub" : "a0000000-0000-0000-0000-000000000004", "role" : "authenticated"}
+(1 row)
+
+SET
+=== C positive control: the studio owner still reads every branch ===
+     branch     | count 
+----------------+-------
+ rfq_link       |     1
+ plan_link      |     1
+ invoice_pay    |     1
+ agreement_link |     0
+(4 rows)
+
+=== C: no bearer credential in the ledger (the carried rule) ===
+ rows_carrying_a_64_hex_token 
+------------------------------
+                            0
+(1 row)
+
+RESET
+ROLLBACK

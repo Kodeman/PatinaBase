@@ -2145,6 +2145,15 @@ END $$;
 --   MAJOR-3     project_site_access_cards and project_party_authority are
 --               read and written by a co-member of another tenant
 --
+-- r6 BLOCKING-1 adds the four SECURITY DEFINER access-grant readers of 00627
+-- to the same block. Three of them were gated on is_studio_comember(designer)
+-- alone, and because they are definer that WHERE clause is the whole rule —
+-- r5's clean list tested "a foreign owner", who shares nothing, which is the
+-- wrong actor. The actor below is the right one: a co-member of the designer
+-- who is not a member of the owning studio. The fixture writes one rfq token,
+-- one plan transmittal token and one invoice link, each on a project or
+-- invoice that RECORDS its studio, so the tenant leg is the thing under test.
+--
 -- A third studio, holding the seeded studio's designer AND one outsider, is
 -- the whole fixture. It is created HERE rather than at the top of the file so
 -- no earlier block's actor changes.
@@ -2162,6 +2171,42 @@ BEGIN
     -- the seeded studio at all
     ('a0000000-0000-0000-0000-000000000002','f1000000-0000-4000-8000-00000000000b','member','active', now())
   ON CONFLICT (user_id, organization_id) DO UPDATE SET role = EXCLUDED.role, status = 'active';
+
+  -- r6 BLOCKING-1's fixture: one grant on each of the three sources whose
+  -- reader was loose, every one of them on paperwork whose tenant IS recorded
+  -- (proposal …cb03 sits on project …c0d1, invoice …cc01 names studio_id,
+  -- the plan token is on the seeded Okonkwo job).
+  INSERT INTO public.trade_rfq_requests (id, proposal_id, party_id, scope_snapshot, status)
+  VALUES ('f1800000-0000-4000-8000-00000000000b','b0000000-0000-0000-0000-00000000cb03',
+          (SELECT id FROM public.project_parties
+            WHERE project_id = 'd0e00000-0000-0000-0000-00000000000a' LIMIT 1),
+          '{}'::jsonb,'sent');
+  INSERT INTO public.trade_rfq_tokens (id, rfq_request_id, proposal_id, party_id,
+                                       token_hash, status, created_by)
+  VALUES ('f1700000-0000-4000-8000-00000000000b','f1800000-0000-4000-8000-00000000000b',
+          'b0000000-0000-0000-0000-00000000cb03',
+          (SELECT id FROM public.project_parties
+            WHERE project_id = 'd0e00000-0000-0000-0000-00000000000a' LIMIT 1),
+          repeat('e',64),'active','a0000000-0000-0000-0000-000000000004');
+  INSERT INTO public.plan_issues (id, project_id, issue_number, name, idempotency_key,
+                                  request_hash, set_checksum, sheet_count, created_by)
+  VALUES ('f1600000-0000-4000-8000-00000000000b','d0e00000-0000-0000-0000-00000000000a',
+          9013,'W1b block 13 issue','w1b-b13-key',repeat('c',64),repeat('d',64),1,
+          'a0000000-0000-0000-0000-000000000004');
+  INSERT INTO public.plan_transmittals (id, project_id, issue_id, party_display_name,
+                                        purpose, sent_at, created_by)
+  VALUES ('f1400000-0000-4000-8000-00000000000b','d0e00000-0000-0000-0000-00000000000a',
+          'f1600000-0000-4000-8000-00000000000b','Block 13','pricing',now(),
+          'a0000000-0000-0000-0000-000000000004');
+  INSERT INTO public.plan_transmittal_tokens (id, transmittal_id, project_id, token_hash,
+                                              status, created_by)
+  VALUES ('f1500000-0000-4000-8000-00000000000b','f1400000-0000-4000-8000-00000000000b',
+          'd0e00000-0000-0000-0000-00000000000a',repeat('b',64),'active',
+          'a0000000-0000-0000-0000-000000000004');
+  INSERT INTO public.invoice_links (id, invoice_id, token, status, created_by,
+                                    created_at, last_viewed_at)
+  VALUES ('f1300000-0000-4000-8000-00000000000b','b0000000-0000-0000-0000-00000000cc01',
+          repeat('a',64),'active','a0000000-0000-0000-0000-000000000004',now(),now());
 
   PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000002');
 
@@ -2278,6 +2323,43 @@ BEGIN
     RAISE EXCEPTION '13n1 a number the caller named yielded % evidence row(s) from another studio''s record', n;
   END IF;
 
+  -- ── r6 BLOCKING-1: 00627's four definer readers ────────────────────────
+  -- Definer, EXECUTE to authenticated, published at /rest/v1/rpc/<name>, so
+  -- each WHERE clause is the whole access rule with no RLS behind it. This
+  -- caller is a co-member of the designer AND a co-member through a
+  -- design_studio, so is_design_studio_comember() — the predicate the shipped
+  -- policies carry — is true for them: the tenant leg is what must refuse.
+  IF NOT public.is_design_studio_comember('a0000000-0000-0000-0000-000000000004') THEN
+    RAISE EXCEPTION '13u the outsider must also satisfy the shipped policies'' own predicate, or the tenant leg is not what this proves';
+  END IF;
+  SELECT count(*) INTO n FROM public.access_grants_trade_rfq()
+   WHERE grant_id = 'rfq_link:f1700000-0000-4000-8000-00000000000b';
+  IF n <> 0 THEN
+    RAISE EXCEPTION '13v a co-member of another tenant read % rfq_link grant(s) of the seeded studio through a SECURITY DEFINER reader', n;
+  END IF;
+  SELECT count(*) INTO n FROM public.access_grants_plan_transmittals()
+   WHERE grant_id = 'plan_link:f1500000-0000-4000-8000-00000000000b';
+  IF n <> 0 THEN
+    RAISE EXCEPTION '13w a co-member of another tenant read % plan_link grant(s) of the seeded studio through a SECURITY DEFINER reader', n;
+  END IF;
+  SELECT count(*) INTO n FROM public.access_grants_invoice_links()
+   WHERE grant_id = 'invoice_pay:f1300000-0000-4000-8000-00000000000b';
+  IF n <> 0 THEN
+    RAISE EXCEPTION '13x a co-member of another tenant read % invoice_pay grant(s) — which invoices have live pay links and when each was last viewed', n;
+  END IF;
+  SELECT count(*) INTO n FROM public.access_grants_trade_agreement_links();
+  IF n <> 0 THEN
+    RAISE EXCEPTION '13y the agreement_link reader, which was already tenant-scoped, returned % row(s)', n;
+  END IF;
+  -- and none of them reaches the ledger either
+  SELECT count(*) INTO n FROM public.v_access_grants
+   WHERE grant_id IN ('rfq_link:f1700000-0000-4000-8000-00000000000b',
+                      'plan_link:f1500000-0000-4000-8000-00000000000b',
+                      'invoice_pay:f1300000-0000-4000-8000-00000000000b');
+  IF n <> 0 THEN
+    RAISE EXCEPTION '13z v_access_grants handed the same % row(s) through the union', n;
+  END IF;
+
   -- ── the positive control: the studio's own owner still reads it all ────
   -- A tenant conjunct that closed the room to its own members would be the
   -- worse defect.
@@ -2313,9 +2395,243 @@ BEGIN
    WHERE project_id IN ('d0e00000-0000-0000-0000-00000000000a',
                         'd0e00000-0000-0000-0000-00000000000b');
   IF n < 31 THEN RAISE EXCEPTION '13t the studio admin lost the seeded seat rows, got %', n; END IF;
+  -- and the three definer readers still answer for the studio's own admin: a
+  -- tenant leg that closed the ledger to its own studio would be the worse
+  -- defect, and the admin is not the designer of record on any of the three
+  SELECT count(*) INTO n FROM public.access_grants_trade_rfq()
+   WHERE grant_id = 'rfq_link:f1700000-0000-4000-8000-00000000000b';
+  IF n <> 1 THEN RAISE EXCEPTION '13u1 the studio admin lost the rfq_link grant, got %', n; END IF;
+  SELECT count(*) INTO n FROM public.access_grants_plan_transmittals()
+   WHERE grant_id = 'plan_link:f1500000-0000-4000-8000-00000000000b';
+  IF n <> 1 THEN RAISE EXCEPTION '13u2 the studio admin lost the plan_link grant, got %', n; END IF;
+  SELECT count(*) INTO n FROM public.access_grants_invoice_links()
+   WHERE grant_id = 'invoice_pay:f1300000-0000-4000-8000-00000000000b';
+  IF n <> 1 THEN RAISE EXCEPTION '13u3 the studio admin lost the invoice_pay grant, got %', n; END IF;
+  -- through the ledger too, and with no bearer credential in it
+  SELECT count(*) INTO n FROM public.v_access_grants
+   WHERE grant_id IN ('rfq_link:f1700000-0000-4000-8000-00000000000b',
+                      'plan_link:f1500000-0000-4000-8000-00000000000b',
+                      'invoice_pay:f1300000-0000-4000-8000-00000000000b');
+  IF n <> 3 THEN RAISE EXCEPTION '13u4 the ledger lost the studio''s own grants, got % of 3', n; END IF;
+  SELECT count(*) INTO n FROM public.v_access_grants WHERE grant_id ~ '[0-9a-f]{64}';
+  IF n <> 0 THEN RAISE EXCEPTION '13u5 % ledger row(s) carry a 64-hex bearer credential', n; END IF;
 
   PERFORM pg_temp.reset_role();
-  RAISE NOTICE '13. the tenant boundary: a co-member of another studio reads no site access card, no authority grant, no seat row and no party-branch Directory row of the seeded studio, cannot change the lockbox version, and cannot pull a foreign identity''s numbers, consent word or consent dates by naming their OWN org — while the studio''s own owner and admin still read all of it, refusal included: passed';
+  RAISE NOTICE '13. the tenant boundary: a co-member of another studio reads no site access card, no authority grant, no seat row, no party-branch Directory row and no access-grant row of the seeded studio through any of 00627''s four definer readers, cannot change the lockbox version, and cannot pull a foreign identity''s numbers, consent word or consent dates by naming their OWN org — while the studio''s own owner and admin still read all of it, refusal and all three grants included: passed';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 14. A project that records no studio: the gate may not guess
+-- ═══════════════════════════════════════════════════════════════════════════
+-- w1b final review r6 MAJOR-1. r5's tenant conjunct resolved through
+-- project_consent_org(), whose fallback is _primary_studio_for(designer_id) —
+-- on a project whose studio_id is NULL that names whatever studio the
+-- designer's own memberships rank first, which need not be the studio doing
+-- the work. Five of eight local projects are in that state and their designer
+-- owns two design studios, so nothing in the record chooses: an ADMIN of the
+-- studio doing the work read 0 seats, 0 site access cards and 0 authority
+-- grants, and an INSERT of a card was refused. For people_directory that was
+-- a REGRESSION — 00594's party branch carried no tenant leg at all.
+--
+-- The gate now resolves through project_tenant_org() (00624 §1): the recorded
+-- studio when there is one, else the DESIGN studio the caller and the job's
+-- designer share. This block walks both sides on the same studio-less job.
+DO $$
+DECLARE
+  n integer;
+  v_org uuid;
+BEGIN
+  -- premise: the project records no studio, and the two resolvers disagree
+  SELECT count(*) INTO n FROM public.projects
+   WHERE id = 'b0000000-0000-0000-0000-0000000000d1' AND studio_id IS NULL;
+  IF n <> 1 THEN
+    RAISE EXCEPTION '14a the fixture project must record NO studio for this block to mean anything';
+  END IF;
+  IF public.project_consent_org('b0000000-0000-0000-0000-0000000000d1')
+     = 'b0000000-0000-0000-0000-000000000001' THEN
+    RAISE EXCEPTION '14b the consent resolver already names the studio doing the work; the disagreement this block is about is gone';
+  END IF;
+
+  -- a manufacturer organization holding the designer of record and one
+  -- outsider: the caller is_studio_comember() lets through and the tenant
+  -- must not
+  INSERT INTO public.organizations (id, type, name, slug, status) VALUES
+    ('f2000000-0000-4000-8000-00000000000c','manufacturer','Test Manufacturer C','w1b-mfr-c','active')
+  ON CONFLICT (id) DO NOTHING;
+  INSERT INTO auth.users (id, instance_id, aud, role, email, encrypted_password,
+                          email_confirmed_at, created_at, updated_at,
+                          raw_app_meta_data, raw_user_meta_data)
+  VALUES ('f2100000-0000-4000-8000-00000000000c','00000000-0000-0000-0000-000000000000',
+          'authenticated','authenticated','w1b-mfr-c@test.local','x',now(),now(),now(),
+          '{}'::jsonb,'{}'::jsonb)
+  ON CONFLICT (id) DO NOTHING;
+  INSERT INTO public.organization_members (user_id, organization_id, role, status, joined_at) VALUES
+    ('f2100000-0000-4000-8000-00000000000c','f2000000-0000-4000-8000-00000000000c','owner','active',now()),
+    ('a0000000-0000-0000-0000-000000000004','f2000000-0000-4000-8000-00000000000c','member','active',now())
+  ON CONFLICT (user_id, organization_id) DO UPDATE SET role = EXCLUDED.role, status = 'active';
+
+  -- a seat, a card and an authority grant on that studio-less job
+  INSERT INTO public.project_parties (id, project_id, party_kind, display_name, phone_e164, trade)
+  VALUES ('f2200000-0000-4000-8000-00000000000c','b0000000-0000-0000-0000-0000000000d1',
+          'sub','Block 14 Studioless Sub','+16125559991','electrical');
+  INSERT INTO public.project_site_access_cards (project_id, lockbox_version)
+  VALUES ('b0000000-0000-0000-0000-0000000000d1','Block 14 lockbox v1');
+  INSERT INTO public.project_party_authority (engagement_id, scope)
+  VALUES ('f2200000-0000-4000-8000-00000000000c','selections');
+
+  -- ── the ADMIN of the studio actually doing the work ────────────────────
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000003');
+  IF NOT public.is_active_studio_member('b0000000-0000-0000-0000-000000000001') THEN
+    RAISE EXCEPTION '14c the actor must be a member of the studio doing the work';
+  END IF;
+  IF public.is_active_studio_member(
+       public.project_consent_org('b0000000-0000-0000-0000-0000000000d1')) THEN
+    RAISE EXCEPTION '14d the actor must NOT be a member of the org the consent resolver guesses, or the regression cannot be observed';
+  END IF;
+  v_org := public.project_tenant_org('b0000000-0000-0000-0000-0000000000d1');
+  IF v_org <> 'b0000000-0000-0000-0000-000000000001' THEN
+    RAISE EXCEPTION '14e the gate resolver named % instead of the studio doing the work', COALESCE(v_org::text,'NULL');
+  END IF;
+  SELECT count(*) INTO n FROM public.people_directory_seats
+   WHERE project_id = 'b0000000-0000-0000-0000-0000000000d1';
+  IF n <> 1 THEN
+    RAISE EXCEPTION '14f the admin of the studio doing the work reads % seat row(s) on its own job', n;
+  END IF;
+  SELECT count(*) INTO n FROM public.people_directory
+   WHERE display_name = 'Block 14 Studioless Sub';
+  IF n <> 1 THEN
+    RAISE EXCEPTION '14g the Directory shows % row(s) for a human the record seats on that job', n;
+  END IF;
+  SELECT count(*) INTO n FROM public.project_site_access_cards
+   WHERE project_id = 'b0000000-0000-0000-0000-0000000000d1';
+  IF n <> 1 THEN
+    RAISE EXCEPTION '14h the admin reads % site access card(s) on its own job', n;
+  END IF;
+  SELECT count(*) INTO n FROM public.project_party_authority
+   WHERE engagement_id = 'f2200000-0000-4000-8000-00000000000c';
+  IF n <> 1 THEN
+    RAISE EXCEPTION '14i the admin reads % authority grant(s) on its own job', n;
+  END IF;
+  -- and the room's own acts land: record the way in, record who signs money
+  INSERT INTO public.project_site_access_cards (project_id, lockbox_version)
+  VALUES ('b0000000-0000-0000-0000-0000000000d3','Block 14 admin write');
+  INSERT INTO public.project_party_authority (engagement_id, scope, threshold_cents)
+  VALUES ('f2200000-0000-4000-8000-00000000000c','money',250000);
+
+  -- ── and the word on that restored seat may not be the affirmative one ──
+  -- The record that decides it lives at the org project_consent_org() guesses,
+  -- which this admin is not a member of, so the COALESCE to 'not_asked' is
+  -- gated: unknown prints as NULL. Without the gate the wider visibility
+  -- reintroduces r5 MAJOR-1 — the affirmative word over a recorded refusal,
+  -- on the row the composer opens from.
+  PERFORM pg_temp.reset_role();
+  INSERT INTO public.project_parties (id, project_id, party_kind, display_name, phone_e164, trade)
+  VALUES ('f2300000-0000-4000-8000-00000000000c','b0000000-0000-0000-0000-0000000000d1',
+          'sub','Block 14 Studioless Refuser','+16125559992','electrical');
+  INSERT INTO public.studio_channel_consent (organization_id, channel_kind, channel_value,
+                                             status, opt_out_at, opt_out_source)
+  VALUES (public.project_consent_org('b0000000-0000-0000-0000-0000000000d1'),
+          'sms','+16125559992','opted_out',now(),'inbound_sms')
+  ON CONFLICT (organization_id, channel_kind, channel_value)
+    DO UPDATE SET status = 'opted_out', opt_out_at = now(), opt_out_source = 'inbound_sms';
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000003');
+  SELECT count(*) INTO n FROM public.people_directory_seats
+   WHERE seat_id = 'f2300000-0000-4000-8000-00000000000c'
+     AND consent_status IS NOT NULL;
+  IF n <> 0 THEN
+    RAISE EXCEPTION '14q the seats view printed a consent word (%) over a record this caller cannot read',
+      (SELECT consent_status FROM public.people_directory_seats
+        WHERE seat_id = 'f2300000-0000-4000-8000-00000000000c');
+  END IF;
+  SELECT count(*) INTO n FROM public.people_directory
+   WHERE display_name = 'Block 14 Studioless Refuser' AND consent_status IS NOT NULL;
+  IF n <> 0 THEN
+    RAISE EXCEPTION '14r the party branch printed a consent word over a record this caller cannot read';
+  END IF;
+  -- and to a member of the org the record lives at, the refusal still reads
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  SELECT count(*) INTO n FROM public.people_directory_seats
+   WHERE seat_id = 'f2300000-0000-4000-8000-00000000000c'
+     AND consent_status = 'opted_out';
+  IF n <> 1 THEN
+    RAISE EXCEPTION '14s the refusal no longer reads for a member of the record''s own org (% row(s))', n;
+  END IF;
+
+  -- ── the co-member through a NON-design organization ────────────────────
+  PERFORM pg_temp.assume_user('f2100000-0000-4000-8000-00000000000c');
+  IF NOT public.is_studio_comember('a0000000-0000-0000-0000-000000000004') THEN
+    RAISE EXCEPTION '14j the outsider must be a co-member of the designer of record';
+  END IF;
+  IF public.is_design_studio_comember('a0000000-0000-0000-0000-000000000004') THEN
+    RAISE EXCEPTION '14k the outsider must NOT share a design studio with the designer';
+  END IF;
+  IF public.project_tenant_org('b0000000-0000-0000-0000-0000000000d1') IS NOT NULL THEN
+    RAISE EXCEPTION '14l the gate resolver named a tenant for a caller who shares no design studio with the job';
+  END IF;
+  SELECT count(*) INTO n FROM public.people_directory_seats
+   WHERE project_id = 'b0000000-0000-0000-0000-0000000000d1';
+  IF n <> 0 THEN
+    RAISE EXCEPTION '14m a co-member through a manufacturer org read % seat row(s) of a studio-less job', n;
+  END IF;
+  SELECT count(*) INTO n FROM public.project_site_access_cards
+   WHERE project_id = 'b0000000-0000-0000-0000-0000000000d1';
+  IF n <> 0 THEN
+    RAISE EXCEPTION '14n a co-member through a manufacturer org read % site access card(s) of a studio-less job', n;
+  END IF;
+  SELECT count(*) INTO n FROM public.project_party_authority
+   WHERE engagement_id = 'f2200000-0000-4000-8000-00000000000c';
+  IF n <> 0 THEN
+    RAISE EXCEPTION '14o a co-member through a manufacturer org read % authority grant(s) of a studio-less job', n;
+  END IF;
+  BEGIN
+    INSERT INTO public.project_site_access_cards (project_id, lockbox_version)
+    VALUES ('b0000000-0000-0000-0000-0000000000d4','outsider write');
+    RAISE EXCEPTION '14p a co-member through a manufacturer org RECORDED a site access card on a studio-less job';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+
+  PERFORM pg_temp.reset_role();
+  RAISE NOTICE '14. a studio-less job: the admin of the studio doing the work reads its seat, its site access card and its authority grant and may record both, the consent word on that seat reads NULL rather than the affirmative one because the deciding record lives where it cannot be read, and a co-member of the designer through a non-design organization reads none of it and may write nothing (r6 MAJOR-1): passed';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 15. The four designer-scoped branches, on the record
+-- ═══════════════════════════════════════════════════════════════════════════
+-- w1b final review r6 MAJOR-2, RULED: the client, lead, maker and team
+-- branches of people_directory stay is_studio_comember(designer_id), carried
+-- from 00594/00420, and the view's COMMENT now says which branches are
+-- tenant-scoped and which are designer-scoped by inheritance. The reason it is
+-- a ruling and not a fix is that THIS VIEW IS NOT THE DOOR:
+-- designer_clients_studio_rw and leads_studio_select carry the same predicate
+-- on the base tables with SELECT granted to authenticated, so tightening the
+-- branches alone would close nothing and would repeat MAJOR-1 (the only
+-- tenant resolver those branches reach is the guessing one).
+--
+-- The invariant this block holds is exactly that: the client branch is no
+-- broader and no narrower than designer_clients itself for the same caller.
+-- If someone later tightens the view alone, this leg fails and points at the
+-- ruling; if the 00584-shaped sweep tightens the base tables too, both counts
+-- go to 0 together and it still passes.
+DO $$
+DECLARE
+  n_view integer;
+  n_base integer;
+BEGIN
+  PERFORM pg_temp.assume_user('f2100000-0000-4000-8000-00000000000c');
+  SELECT count(*) INTO n_view FROM public.people_directory WHERE role = 'client';
+  SELECT count(*) INTO n_base FROM public.designer_clients;
+  IF n_view <> n_base THEN
+    RAISE EXCEPTION '15a the client branch (%) and designer_clients itself (%) disagree for the same caller — r6 MAJOR-2 was ruled on the ground that they cannot, so either the view was tightened alone (which closes nothing) or the base table was, and the ruling needs revisiting', n_view, n_base;
+  END IF;
+  -- and the objects this wave DOES gate stay shut to that same caller
+  IF (SELECT count(*) FROM public.people_directory_seats) <> 0
+     OR (SELECT count(*) FROM public.project_site_access_cards) <> 0
+     OR (SELECT count(*) FROM public.project_party_authority) <> 0
+     OR (SELECT count(*) FROM public.studio_compliance_documents) <> 0 THEN
+    RAISE EXCEPTION '15b the tenant-scoped objects answered a co-member through a manufacturer org';
+  END IF;
+  PERFORM pg_temp.reset_role();
+  RAISE NOTICE '15. the client branch inherits designer_clients'' own posture exactly (% row(s) each) while every tenant-scoped object of this wave stays shut to the same caller — r6 MAJOR-2 is a ruling of record, not a silent inconsistency: passed', n_view;
 END $$;
 
 DO $$ BEGIN RAISE NOTICE 'All W1b assertions passed.'; END $$;

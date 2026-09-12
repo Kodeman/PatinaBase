@@ -1,0 +1,56 @@
+BEGIN
+=== MINOR-37: one firm, two Directory rows ===
+                                 set_config                                 
+----------------------------------------------------------------------------
+ {"sub" : "a0000000-0000-0000-0000-000000000004", "role" : "authenticated"}
+(1 row)
+
+SET
+              person_id               |  role   |  display_name   | seat_count | consent_status | paper_state |  kind   
+--------------------------------------+---------+-----------------+------------+----------------+-------------+---------
+ d0e20000-0000-0000-0000-000000000019 | contact | Rivera Finishes |          0 | not_asked      | not_on_file | company
+ d0e30000-0000-0000-0000-000000000091 | sub     | Rivera Finishes |          1 | not_asked      | not_on_file | 
+(2 rows)
+
+-- and the card that shares its number
+                  id                  |  company_name   |  phone_e164  
+--------------------------------------+-----------------+--------------
+ d0e20000-0000-0000-0000-000000000019 | Rivera Finishes | +16125550219
+(1 row)
+
+                  id                  |  display_name   |  phone_e164  | studio_contact_id 
+--------------------------------------+-----------------+--------------+-------------------
+ d0e30000-0000-0000-0000-000000000091 | Rivera Finishes | +16125550219 | 
+(1 row)
+
+
+=== MINOR-1: a caller date cannot beat a LIVE window ===
+                  id                  | display_name | on_site_to | warranty_until |  stage  
+--------------------------------------+--------------+------------+----------------+---------
+ d0e30000-0000-0000-0000-000000000018 | Joe Wozniak  | 2026-11-20 |                | active
+ d0e30000-0000-0000-0000-000000000019 | Kelly Marsh  | 2027-02-19 |                | awarded
+ d0e30000-0000-0000-0000-000000000015 | Frank Bauer  | 2027-03-15 |                | awarded
+(3 rows)
+
+psql:artifacts/people-room-crm-2026-09-11/build/probe127-w1b-final-r6-mint-and-oracles.sql:29: NOTICE:  asked for 5 days; got 2026-11-21  (days = 69)
+DO
+
+=== MINOR-20: a mint on an OFF_JOB seat ===
+psql:artifacts/people-room-crm-2026-09-11/build/probe127-w1b-final-r6-mint-and-oracles.sql:43: NOTICE:  off_job seat (off_job): minted, expires 2026-12-11 (days = 90)
+DO
+RESET
+
+=== MINOR-12: the two ungated definer uuid oracles, called by a FOREIGN studio owner ===
+                              set_config                               
+-----------------------------------------------------------------------
+ {"sub":"cf100000-0000-4000-8000-000000000001","role":"authenticated"}
+(1 row)
+
+SET
+    designer_of_a_foreign_project     | org_of_a_foreign_seat | am_i_a_member 
+--------------------------------------+-----------------------+---------------
+ a0000000-0000-0000-0000-000000000004 |                       | f
+(1 row)
+
+RESET
+ROLLBACK

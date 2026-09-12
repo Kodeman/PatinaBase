@@ -1,0 +1,67 @@
+BEGIN
+INSERT 0 1
+INSERT 0 2
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+=== AFTER the fix: block 13 legs 13v/13w/13x, and the MAJOR-1 walk ===
+                              set_config                               
+-----------------------------------------------------------------------
+ {"sub":"a0000000-0000-0000-0000-000000000002","role":"authenticated"}
+(1 row)
+
+SET
+ leg_13v_rfq | leg_13w_plan | leg_13x_invoice 
+-------------+--------------+-----------------
+           0 |            0 |               0
+(1 row)
+
+RESET
+                              set_config                               
+-----------------------------------------------------------------------
+ {"sub":"a0000000-0000-0000-0000-000000000003","role":"authenticated"}
+(1 row)
+
+SET
+ admin_seats | admin_cards | admin_grants 
+-------------+-------------+--------------
+           1 |           1 |            1
+(1 row)
+
+RESET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+=== BEFORE the fix (reverted): the same four numbers ===
+                              set_config                               
+-----------------------------------------------------------------------
+ {"sub":"a0000000-0000-0000-0000-000000000002","role":"authenticated"}
+(1 row)
+
+SET
+ leg_13v_rfq | leg_13w_plan | leg_13x_invoice 
+-------------+--------------+-----------------
+           1 |            1 |               1
+(1 row)
+
+RESET
+                              set_config                               
+-----------------------------------------------------------------------
+ {"sub":"a0000000-0000-0000-0000-000000000003","role":"authenticated"}
+(1 row)
+
+SET
+ admin_seats | admin_cards | admin_grants 
+-------------+-------------+--------------
+           0 |           0 |            0
+(1 row)
+
+RESET
+ROLLBACK
