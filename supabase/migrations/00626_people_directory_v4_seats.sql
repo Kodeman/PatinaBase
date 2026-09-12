@@ -55,11 +55,17 @@
 --
 -- Column semantics worth stating once:
 --   · consent_status is the RECORD's verdict (R-AY): channel_consent_status(),
---     which folds refusal_unanswered, never the frozen seat column. It is
+--     which folds refusal_unanswered, never the frozen seat column. On the
+--     CONTACTS branch it is that verdict reduced worst-first over every number
+--     the identity carries — the card's phone_e164 and its seats' — through
+--     identity_consent_status(), because v4 moved every carded human to that
+--     branch and reading the card's number alone dropped a recorded refusal
+--     on the number a seat carries off the face (r2 MAJOR-2). It is
 --     NULL on the client, lead, maker and team branches on purpose — an
 --     account holder's SMS permission is profiles.sms_opt_in on a different
 --     rail (00162), and printing a studio_channel_consent word there would
---     claim a record that does not exist.
+--     claim a record that does not exist — and NULL on a contacts row that
+--     carries no number anywhere.
 --   · paper_state reads the FIRM's paper for a person and the card's own for a
 --     firm — COALESCE(company_id, id) — because a COI is the firm's and a
 --     master licence is the person's (crm-model §2, direction §2.2 E10), and a
@@ -69,7 +75,10 @@
 --     decides whether the fact is owed.
 --   · reach_state is direction §3.8's reach family, PD-12's order: a login is
 --     `account`, else a live unexpired field link on one of this identity's
---     seats is `field_link`, else `on_paper`. field_link_tokens is
+--     seats is `field_link`, else `on_paper`. The party branch asks that of
+--     the IDENTITY (reach_state_for_identity, r2 MAJOR-3); the contacts
+--     branch asks it of the card, which already matches every seat stamped
+--     with that card. field_link_tokens is
 --     designer-only RLS (00283), so a co-member without designer visibility
 --     reads `on_paper` where a link exists — the same degrade posture
 --     v_project_roster.has_active_field_link already carries (00594's own
@@ -302,6 +311,161 @@ COMMENT ON FUNCTION public.contact_rule_summary(text, uuid) IS
   '(R-V). SECURITY INVOKER: studio_contact_rules'' member RLS is the access '
   'rule (00626).';
 
+-- ── reach_state_for_identity — the same word, over an IDENTITY ────────────
+-- reach_state_for() answers for one CARD or one SEAT. The Directory's party
+-- branch had no card to pass, so it passed the winning seat's id and the
+-- EXISTS clause could only match a link minted on that one seat: an uncarded
+-- two-seat trade whose live door hangs on the OLDER seat read `on_paper` on
+-- the identity row while the seat line beneath it printed `field_link`, and
+-- the studio's next act is to mint a second door for someone who already
+-- holds one (w1b final review r2 MAJOR-3). The migration's own comment above
+-- already stated the intended rule — "a live unexpired field link on one of
+-- this identity's seats" — and the contacts branch, which passes a card, met
+-- it; only the branch with no card did not.
+--
+-- So the question is asked of the identity: every seat whose
+-- party_identity_key() is this key, which is exactly the set
+-- identity_seat_count() counts and people_directory_seats nests. SECURITY
+-- INVOKER, same posture and same designer-only field_link_tokens degrade as
+-- reach_state_for().
+CREATE OR REPLACE FUNCTION public.reach_state_for_identity(
+  p_profile_id   uuid,
+  p_identity_key text
+)
+RETURNS text
+LANGUAGE sql
+STABLE
+SET search_path TO 'public'
+AS $$
+  SELECT CASE
+    WHEN p_profile_id IS NOT NULL THEN 'account'
+    WHEN p_identity_key IS NOT NULL
+      AND EXISTS (
+        SELECT 1
+          FROM public.field_link_tokens f
+          JOIN public.project_parties pp ON pp.id = f.party_id
+         WHERE f.status = 'active'
+           AND f.expires_at > now()
+           AND public.party_identity_key(
+                 pp.studio_contact_id, pp.profile_id,
+                 pp.phone_e164, pp.email, pp.id
+               ) = p_identity_key
+      ) THEN 'field_link'
+    ELSE 'on_paper'
+  END;
+$$;
+
+REVOKE ALL ON FUNCTION public.reach_state_for_identity(uuid, text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.reach_state_for_identity(uuid, text)
+  TO authenticated, service_role;
+
+COMMENT ON FUNCTION public.reach_state_for_identity(uuid, text) IS
+  'direction §3.8''s reach family for one IDENTITY: account | field_link | '
+  'on_paper, in PD-12''s order, over every project_parties seat whose '
+  'party_identity_key() is this key — the same set identity_seat_count() '
+  'counts and people_directory_seats nests. reach_state_for()''s sibling for '
+  'the Directory''s party branch, which holds no card id and was therefore '
+  'reading the winning seat alone: an uncarded identity whose live link hung '
+  'on a non-winning seat printed on_paper over a seat line reading field_link '
+  '(w1b final review r2 MAJOR-3). SECURITY INVOKER — field_link_tokens is '
+  'designer-only RLS (00283), so a co-member without that visibility reads '
+  'on_paper where a link exists (00626).';
+
+-- ── identity_consent_status — the consent word over every number ──────────
+-- The contacts branch read channel_consent_status() off the CARD's
+-- phone_e164 alone. v4 moves every carded human to that branch, so a recorded
+-- `opted_out` on the number the person's SEAT carries stopped appearing on the
+-- identity row: a card with a different number read `not_asked` and a card
+-- with no number read no word at all, while people_directory_seats printed
+-- `opted_out` for the same human off the same record. That is a regression
+-- against what 00594 shipped for the seated population — the old party branch
+-- emitted a row per seat carrying that seat's own verdict — and direction §1.4
+-- is explicit that consent is printed against the number "everywhere that
+-- number appears" (w1b final review r2 MAJOR-2).
+--
+-- RULED (Fable's fix instruction, first option): reduce the record's verdict
+-- over every number this identity actually carries — the card's phone_e164
+-- plus the phone_e164 of every seat keyed to the same identity — rather than
+-- adding a second column the room would have to learn to print. This is
+-- R-AK/PR-x's own reduction restated on the READ side, and it stays
+-- record-only (R-AY/R-AW): every number is resolved through
+-- channel_consent_status(), the frozen project_parties.sms_consent_* columns
+-- are not read here or anywhere.
+--
+-- WORST-FIRST, which is least-permission-first:
+--   opted_out  a refusal on ANY number this identity carries is a refusal
+--              (fail-closed, and G-3's defect is a row promising reach the
+--              rail refuses)
+--   not_asked  a number with no record at all: nothing may be sent to it, and
+--              "Not asked" is the honest call to action
+--   pending    asked, unanswered
+--   granted    only when EVERY number on file is permitted
+-- NULL when the identity carries no number at all — the same fact the branch
+-- used to state with `CASE WHEN sc.phone_e164 IS NOT NULL`, now true of the
+-- whole identity rather than of the card alone.
+--
+-- One studio: every number is read at p_organization_id, the card's own org
+-- (R-AK — the reduction is scoped to the resolving studio, never across
+-- tenants), so a seat on another studio's project can neither contribute nor
+-- borrow a word. SECURITY INVOKER, so project_parties' and
+-- studio_channel_consent's own RLS decide what the caller may see.
+CREATE OR REPLACE FUNCTION public.identity_consent_status(
+  p_organization_id uuid,
+  p_identity_key    text,
+  p_card_phone_e164 text
+)
+RETURNS text
+LANGUAGE sql
+STABLE
+SET search_path TO 'public'
+AS $$
+  WITH numbers AS (
+    SELECT NULLIF(btrim(COALESCE(p_card_phone_e164, '')), '') AS v
+    UNION
+    SELECT NULLIF(btrim(COALESCE(pp.phone_e164, '')), '')
+      FROM public.project_parties pp
+     WHERE p_identity_key IS NOT NULL
+       AND public.party_identity_key(
+             pp.studio_contact_id, pp.profile_id,
+             pp.phone_e164, pp.email, pp.id
+           ) = p_identity_key
+  ),
+  verdicts AS (
+    SELECT COALESCE(
+             public.channel_consent_status(p_organization_id, 'sms', n.v),
+             'not_asked') AS word
+      FROM numbers n
+     WHERE n.v IS NOT NULL
+  )
+  SELECT CASE
+           WHEN NOT EXISTS (SELECT 1 FROM verdicts)                        THEN NULL
+           WHEN EXISTS (SELECT 1 FROM verdicts WHERE word = 'opted_out')   THEN 'opted_out'
+           WHEN EXISTS (SELECT 1 FROM verdicts WHERE word = 'not_asked')   THEN 'not_asked'
+           WHEN EXISTS (SELECT 1 FROM verdicts WHERE word = 'pending')     THEN 'pending'
+           ELSE 'granted'
+         END;
+$$;
+
+REVOKE ALL ON FUNCTION public.identity_consent_status(uuid, text, text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.identity_consent_status(uuid, text, text)
+  TO authenticated, service_role;
+
+COMMENT ON FUNCTION public.identity_consent_status(uuid, text, text) IS
+  'The studio''s SMS consent word for one IDENTITY rather than for one number: '
+  'channel_consent_status() reduced worst-first over the card''s phone_e164 '
+  'plus the phone_e164 of every project_parties seat keyed to the same '
+  'party_identity_key(), all read at p_organization_id (R-AK: one studio, '
+  'never across tenants). Order is least-permission-first — opted_out on any '
+  'number, else not_asked on any, else pending, else granted only when every '
+  'number on file is permitted — because direction §1.4 prints consent '
+  '"everywhere that number appears" and G-3''s defect is a row promising reach '
+  'the send rail refuses. NULL when the identity carries no number at all. '
+  'Record-only (R-AY): the frozen project_parties.sms_consent_* columns are '
+  'not read. Exists because v4 moved every carded human to the Directory''s '
+  'contacts branch, which read the CARD''s number alone, so a refusal recorded '
+  'on the number a seat carries left the face (w1b final review r2 MAJOR-2) '
+  '(00626).';
+
 -- ═══════════════════════════════════════════════════════════════════════════
 -- 3. people_directory v4
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -484,7 +648,8 @@ SELECT
     'company_id',         q.company_id
   ),
   q.scope,
-  public.reach_state_for(q.profile_id, NULL, q.id),
+  -- the IDENTITY's links, not the winning seat's (r2 MAJOR-3)
+  public.reach_state_for_identity(q.profile_id, q.identity_key),
   q.consent_word,
   public.compliance_state(q.company_id),
   public.contact_rule_summary('engagement', q.id),
@@ -612,10 +777,9 @@ SELECT
   ),
   (CASE WHEN sc.created_by = (select auth.uid()) THEN 'mine' ELSE 'studio' END)::text,
   public.reach_state_for(sc.profile_id, sc.id, NULL),
-  CASE WHEN sc.phone_e164 IS NOT NULL
-       THEN COALESCE(public.channel_consent_status(
-              sc.organization_id, 'sms', sc.phone_e164), 'not_asked')
-       END,
+  -- every number this identity carries, worst-first — the card's AND its
+  -- seats' (r2 MAJOR-2). NULL only when there is no number anywhere.
+  public.identity_consent_status(sc.organization_id, sc.id::text, sc.phone_e164),
   public.compliance_state(COALESCE(sc.company_id, sc.id)),
   public.contact_rule_summary(sc.entity_kind, sc.id),
   public.identity_seat_count(sc.id::text)
@@ -638,7 +802,9 @@ COMMENT ON VIEW public.people_directory IS
   'Five columns are APPENDED, never inserted, because CREATE OR REPLACE VIEW '
   'cannot reorder: reach_state (direction §3.8, PD-12''s order), '
   'consent_status (the RECORD''s verdict via channel_consent_status(), R-AY — '
-  'NULL on the client/lead/maker/team branches, whose SMS permission is '
+  'on the contacts branch reduced worst-first over every number the identity '
+  'carries, the card''s and its seats'', by identity_consent_status(); NULL on '
+  'the client/lead/maker/team branches, whose SMS permission is '
   'profiles.sms_opt_in on a different rail), paper_state '
   '(compliance_state(COALESCE(company_id, id)) — the firm''s paper for a '
   'person, the card''s own for a firm and for a sole proprietor; R-A/C13''s '
@@ -655,7 +821,10 @@ COMMENT ON VIEW public.people_directory IS
   'client branch''s meta gains has_sent_proposal and issued_on_paper from '
   'designer_client_send_evidence(). 00594: the party branch''s consent word '
   'comes from the record, never the frozen seat column; 00626 moves the two '
-  'consent DATES onto the record too (00594 §5.3).';
+  'consent DATES onto the record too (00594 §5.3). w1b final review r2: the '
+  'party branch''s reach reads the IDENTITY''s field links rather than the '
+  'winning seat''s (MAJOR-3), and the contacts branch''s consent word reduces '
+  'worst-first over every number the identity carries (MAJOR-2).';
 
 GRANT SELECT ON public.people_directory TO authenticated;
 

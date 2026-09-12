@@ -34686,6 +34686,14 @@ export type Database = {
         Args: { p_ends_on: string; p_project_id: string; p_starts_on: string }
         Returns: string
       }
+      identity_consent_status: {
+        Args: {
+          p_card_phone_e164: string
+          p_identity_key: string
+          p_organization_id: string
+        }
+        Returns: string
+      }
       identity_seat_count: { Args: { p_identity_key: string }; Returns: number }
       immutable_array_to_string: {
         Args: { arr: string[]; sep: string }
@@ -35445,6 +35453,10 @@ export type Database = {
       }
       reach_state_for: {
         Args: { p_card_id: string; p_party_id: string; p_profile_id: string }
+        Returns: string
+      }
+      reach_state_for_identity: {
+        Args: { p_identity_key: string; p_profile_id: string }
         Returns: string
       }
       react_to_feedback: {

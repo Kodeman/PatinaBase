@@ -16154,6 +16154,30 @@ END $g$;
 
 -- 00626_people_directory_v4_seats.sql
 DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.reach_state_for_identity(uuid, text) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00626_people_directory_v4_seats.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.reach_state_for_identity(uuid, text) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00626_people_directory_v4_seats.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.identity_consent_status(uuid, text, text) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00626_people_directory_v4_seats.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.identity_consent_status(uuid, text, text) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00626_people_directory_v4_seats.sql
+DO $g$ BEGIN
   GRANT SELECT ON public.people_directory TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
