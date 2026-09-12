@@ -24,8 +24,10 @@
 --   3. studio_contact_rules — E7: the contact rule (allowed / forbidden /
 --      routed / hours / escalation), one per subject, person · company ·
 --      engagement. channels_allowed / channels_forbidden are CHECKed against
---      00593's channel_kind vocabulary (a value the composer cannot match is a
---      silent permission, not a forbidding), and route_to_person_id — the
+--      00593's channel_kind vocabulary plus the rule-only token `sms` (a value
+--      the composer cannot match is a silent permission, not a forbidding; and
+--      without `sms` the fixtures' "phone yes, text no" cannot be written down
+--      at all — r4 R4-M2), and route_to_person_id — the
 --      fourth self-FK into studio_contacts — is guarded by
 --      assert_studio_contact_rule_route() to a PERSON card in the subject's
 --      OWN studio, never the subject itself.
@@ -763,10 +765,34 @@ COMMENT ON COLUMN public.studio_contact_rules.subject_id IS
 -- exactly why it is cheap to close now, before W1b's rule editor becomes the
 -- thing that has to be trusted.
 --
--- The vocabulary is 00593's channel_kind, verbatim — the rule names the kinds
--- of channel a card actually carries, and the two lists must be comparable to
--- studio_contact_channels.channel_kind without translation. Stated in the
--- DROP IF EXISTS / ADD idiom so a rerun can widen it.
+-- The vocabulary is 00593's channel_kind — the rule names the kinds of channel
+-- a card actually carries, and the two lists must be comparable to
+-- studio_contact_channels.channel_kind without translation — PLUS ONE TOKEN
+-- THAT IS NOT A CHANNEL KIND: `sms` (r4 R4-M2).
+--
+-- SMS is not a channel kind in this model. It rides on `mobile`, distinguished
+-- only by studio_contact_channels.sms_capable — which 00593's header insists is
+-- a fact about THE LINE, settled by an evidence test, not a studio's
+-- preference. So with the seven kinds alone the two fixture cases this CHECK's
+-- own comment names cannot be written down at all: F-10 Sam Rowe is "email
+-- only; phone for emergencies … never texted" and F-27 Ray Thao is "phone and
+-- email only; NEVER texted; scheduled through 311". Forbidding `mobile`
+-- forbids the voice call BOTH fixtures explicitly permit; permitting `mobile`
+-- permits the text. Decision 1 removed never_text from studio_contacts and made
+-- this table the ONE home of the forbidding fact (crm-model §2 carries
+-- Person.never_text as a required field in its own right, CS4-5, distinct from
+-- Reach channel.sms_capable, CS4-7) — so the fact has to be sayable HERE, and
+-- "phone yes, text no" is exactly the sentence it has to say.
+--
+-- `sms` is therefore RULE vocabulary, not channel-row vocabulary: it never
+-- appears in studio_contact_channels.channel_kind, and a composer reading a
+-- rule resolves it against the mobile line's sms_capable rather than against a
+-- channel row of its own. W1a ships no writer for this table, which is why the
+-- token is cheap to mint now and expensive at W1b — a rule editor without it
+-- writes `mobile` into channels_forbidden and silently loses the distinction
+-- the whole fixture pair is built on.
+--
+-- Stated in the DROP IF EXISTS / ADD idiom so a rerun can widen it.
 ALTER TABLE public.studio_contact_rules
   DROP CONSTRAINT IF EXISTS studio_contact_rules_channels_allowed_check;
 ALTER TABLE public.studio_contact_rules
@@ -774,7 +800,9 @@ ALTER TABLE public.studio_contact_rules
     channels_allowed <@ ARRAY[
       'mobile', 'office', 'dispatch', 'after_hours',
       'email', 'ap_email',
-      'portal_311'
+      'portal_311',
+      -- Not a channel kind — the rule-only token (r4 R4-M2).
+      'sms'
     ]::text[]
   );
 
@@ -785,19 +813,32 @@ ALTER TABLE public.studio_contact_rules
     channels_forbidden <@ ARRAY[
       'mobile', 'office', 'dispatch', 'after_hours',
       'email', 'ap_email',
-      'portal_311'
+      'portal_311',
+      -- Not a channel kind — the rule-only token (r4 R4-M2). '{sms}' is
+      -- F-10's and F-27's "never texted" WITHOUT forbidding the voice call
+      -- on the same mobile line.
+      'sms'
     ]::text[]
   );
 
 COMMENT ON COLUMN public.studio_contact_rules.channels_allowed IS
   'The channel kinds this subject may be reached on, from 00593''s '
-  'channel_kind vocabulary and CHECKed against it. An empty array is the '
-  'ordinary state: the rule forbids or routes without narrowing.';
+  'channel_kind vocabulary and CHECKed against it, PLUS the rule-only token '
+  '`sms` (r4 R4-M2) — SMS is not a channel kind, it rides on `mobile` and is '
+  'settled by studio_contact_channels.sms_capable, a fact about the line. An '
+  'empty array is the ordinary state: the rule forbids or routes without '
+  'narrowing.';
 COMMENT ON COLUMN public.studio_contact_rules.channels_forbidden IS
   'The channel kinds this subject must NEVER be reached on — F-27''s "never '
   'texted", F-10''s "never texted". CHECKed against 00593''s channel_kind '
   'vocabulary: a value the composer cannot match is not a forbidding, it is a '
-  'silent permission, and this table is the one home of the fact (r6 M6-5).';
+  'silent permission, and this table is the one home of the fact (r6 M6-5). '
+  'The vocabulary carries ONE token that is not a channel kind — `sms` '
+  '(r4 R4-M2) — because those two fixtures forbid the TEXT while permitting '
+  'the voice call on the same mobile line, and decision 1 left this table as '
+  'the only place that sentence can be written. A composer resolves a '
+  'forbidden `sms` against the mobile line''s sms_capable, not against a '
+  'channel row of its own.';
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_studio_contact_rules_subject
   ON public.studio_contact_rules(subject_type, subject_id);
