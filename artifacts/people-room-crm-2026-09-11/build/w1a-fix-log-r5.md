@@ -298,3 +298,218 @@ this round and are worth handing back: **m5-7** (report §3 prints "61 passed"
 for the Deno suites — the real number is now **66** — and "465 insertions" for
 the types diff, which has been 474 since r4) and **m5-9** (a `service_role`
 DELETE of a consent record still leaves the mirrored seats frozen).
+
+---
+
+# W1a fix log — the R5 round (R5-M1, R5-M2)
+
+Scope: exactly the two findings handed to this round. Nothing else was touched.
+Local stack only — no `supabase db push`, no `supabase functions deploy`, no
+Strata contact. `ls apps/*/.env.local` → `no matches found` (checked before the
+first reset).
+
+> **Path note.** The brief named `w1a-fix-log-r5.md`; this round's section is
+> appended here, the way the W4 round appended its own to `w1a-fix-log-r4.md`.
+
+---
+
+## R5-M1 — the seat read the studio's consent as the refusal
+
+`supabase/migrations/00594_studio_channel_consent.sql`
+(`mirror_channel_consent_to_parties()`),
+`supabase/tests/people/w1a_identity_channels_consent_test.sql` (blocks 4 and 27)
+
+### The hole
+
+W4-M2 gave the RECORD a second evidence set — `opt_out_source` /
+`opt_out_evidence` / `opt_out_recorded_at` / `opt_out_recorded_by` — and kept
+`record_channel_reconsent()` off it. `project_parties` has no second set. The
+mirror was still copying the record's CONSENT columns onto the seat under every
+verdict, `opted_out` included, so the studio's own fresh paperwork landed on the
+seat as the refusal's source and words. The seat is what every shipped surface
+reads (W1a ships no hook for `studio_channel_consent`), so R-Q's sentence read
+off the seat became "Opted out in writing" — the studio's consent named as the
+refusal — and the 10DLC artifact of how the STOP arrived was gone from the only
+copy those surfaces see.
+
+Demonstrated against the PRE-FIX function body (`pg_get_functiondef`, the four
+`v_seat_*` terms swapped back to `NEW.<consent>`, loaded inside a transaction
+and rolled back):
+
+```
+--- seat after the STOP ---
+ opted_out | inbound_sms | Replied STOP
+--- seat after the studio reconsent ---
+ opted_out | written     | Signed consent form 11 Sep 2026     ← the refusal, in the studio's words
+```
+
+### What changed
+
+`mirror_channel_consent_to_parties()` decides the seat's evidence from the
+verdict it is mirroring. Four locals are computed once, before the UPDATE:
+
+```sql
+IF NEW.status = 'opted_out' THEN
+  v_seat_source      := COALESCE(NEW.opt_out_source,      NEW.source);
+  v_seat_evidence    := COALESCE(NEW.opt_out_evidence,    NEW.evidence);
+  v_seat_recorded_at := COALESCE(NEW.opt_out_recorded_at, NEW.recorded_at);
+  v_seat_recorded_by := COALESCE(NEW.opt_out_recorded_by, NEW.recorded_by);
+ELSE
+  v_seat_source      := NEW.source;  …
+END IF;
+```
+
+and the UPDATE writes `COALESCE(v_seat_<x>, pp.sms_consent_<x>)` — refusal side
+first, then the record's consent set (the legacy rows minted before `opt_out_*`
+existed), then what the seat already holds, so R-AN's "never a NULL over a
+non-null" still stands. The same four expressions went into the tuple guard,
+or a refusal arriving with its own words would have been suppressed as identical
+to the consent set already on the seat. `sms_consent_disclosure_version` has no
+refusal-side twin — it belongs to the disclosure the person was shown, not to
+how they refused — so it still comes from `NEW.disclosure_version`.
+`COMMENT ON FUNCTION` says all of this.
+
+### Evidence
+
+Same fixture, post-fix:
+
+```
+--- seat after the STOP ---
+ opted_out | inbound_sms | Replied STOP
+--- seat after the studio reconsent ---
+ opted_out | inbound_sms | Replied STOP | field-sms-v1   ← the disclosure version still mirrors
+--- seat after a grant (the swap is scoped to refusals) ---
+ granted   | written     | Kickoff form
+```
+
+SQL test, both amended blocks:
+
+- **Block 4** — `4d` asserted the OPPOSITE of the ruling (it required both Alpha
+  seats to carry `'Fresh written consent'` under `opted_out`) and failed on the
+  first run after the fix; it now asserts `sms_consent_source = 'inbound_sms'`
+  and `sms_consent_evidence = 'STOP'` on both seats, with a new `4d3` asserting
+  the record carries BOTH sets at once.
+- **Block 27** — `27c2` rewritten to the same assertion; new `27c3` (the
+  disclosure version still mirrors), `27d3` (a second reconsent does not reach
+  the seat either) and `27h` (a `granted` verdict mirrors the consent set, so
+  the swap is scoped).
+
+```
+$ psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 \
+    -f supabase/tests/people/w1a_identity_channels_consent_test.sql
+NOTICE:  1. affiliations + RLS: passed
+…
+NOTICE:  27. reconsent is evidence-only and re-callable (r7 M7-2), leaves the refusal's
+         own evidence standing (r8 W4-M2), and the seat carries the refusal's own words
+         too (r9 R5-M1): passed
+NOTICE:  All W1a assertions passed.
+ROLLBACK
+```
+
+28 blocks, all green (run twice: after the edit, and again after a second full
+`supabase:reset`).
+
+No GRANT or REVOKE changed. `python3 scripts/generate-legacy-grants.py` was
+re-run anyway — `supabase/seed/00-legacy-grants.sql` came back byte-identical
+(`git diff --stat` empty, "baseline + 2632 replayed statements").
+
+`db:generate` after the reset leaves `packages/supabase/src/database.types.ts`
+unchanged (`git diff --stat packages/supabase/src/database.types.ts` → empty):
+the change is a function body, no column and no signature.
+
+---
+
+## R5-M2 — the report had fallen three rounds behind
+
+`artifacts/people-room-crm-2026-09-11/build/w1a-report.md`,
+`artifacts/people-room-crm-2026-09-11/build/probe10-r9-fold-dry-run.sql` (new)
+
+### What changed
+
+**§1.** The 00592 row gained `assert_studio_contact_designations()` (r5 R-AP),
+`assert_studio_contact_rule_route()` (r6 M6-4) and the two
+`studio_contact_rules` channel CHECKs (r6 M6-5). The 00594 row gained the
+refusal's own evidence set — the four `opt_out_*` columns and
+`studio_channel_consent_opt_out_source_check` — and the sentence naming its
+three writers and the one door that must never touch it. The legacy-grants line
+was 186 lines / 2628 statements; it is 210 / 2632. The "grep found nothing
+before I wrote them" list gained the three new names.
+
+**§2.** Two decisions appended. **21** is the W4 round: (a) the fold asks the
+refusal of every seat in the group rather than of the winning row, with
+`refusal_unanswered` coming off a LEFT JOIN to the new `refusal` CTE; (b) the
+refusal's own evidence set on the record, with the three writers that fill it
+and reconsent's hands-off rule. **22** is this round's R5-M1: the mirrored
+refusal carries its own words onto the seat.
+
+**§3.** Every output re-taken against a fresh reset. The functions table was 15
+rows and is 18 (`assert_studio_contact_designations`,
+`assert_studio_contact_rule_route`, `channel_value_was_on_sms_rail` had all
+shipped without reaching it). The triggers block gained
+`assert_studio_contact_rule_route_trg` and a second listing for
+`studio_contacts`, plus the nineteen `studio_channel_consent` columns and the
+six CHECK constraints. The SQL transcript ended at block 17 and now runs to 28
+(1–27 plus 16B), with a paragraph covering blocks 18–27. Deno: `61 passed` →
+**71 passed** (36 in `sms.test.ts`, 35 in `_tests/sms-inbound.test.ts`), the
+whole-directory run `684` → **694 passed | 1 failed** (the pre-existing
+`stripe-rail.test.ts` env failure). Types: `465` → **508 insertions**, with the
+four `opt_out_*` columns named.
+
+```
+$ deno test --no-check --allow-all --config supabase/functions/deno.json \
+    supabase/functions/_shared/sms.test.ts supabase/functions/_tests/sms-inbound.test.ts
+ok | 71 passed | 0 failed (105ms)
+
+$ git diff --stat 700261663 -- packages/supabase/src/database.types.ts
+ packages/supabase/src/database.types.ts | 508 ++++++++++++++++++++++++++++++++
+```
+
+**§5 — the pre-push dry run.** This was the serious half. The instruction told
+the operator to read the fold as a bare
+`SELECT org, phone_e164, sms_consent_status FROM ranked WHERE rn = 1` — the
+winning seat only, which cannot show `refusal_unanswered`: the column the
+`refusal` CTE's LEFT JOIN decides, the one behaviour W4-M1 changed, and the one
+that decides whether a studio may text the number at all after the fold. §5 now
+carries the JOINed query and points at a runnable script,
+`build/probe10-r9-fold-dry-run.sql` (the function's own CTE chain verbatim,
+INSERT replaced by SELECT, plus a status × unsendable count).
+
+It runs clean locally (0 rows — no seeded party phones). On the W4-M1 fixture —
+two seats on one number in one studio, a clean 2026 grant and a legacy row
+reading `granted` while carrying an unanswered 2025-11-16 opt-out — the two dry
+runs disagree, which is the whole point:
+
+```
+NEW: org … | +16125550777 | granted | refusal_unanswered = t
+            inbound_sms | Replied STOP on the Rusk thread | 2025-11-16 00:00:00+00
+            granted | unsendable 1 | records 1
+OLD: org … | +16125550777 | granted
+```
+
+The old dry run hands the operator a sendable-looking `granted`; the new one
+says the record about to be minted is UNSENDABLE until the recipient's own
+YES/START.
+
+---
+
+## Gates run
+
+```
+$ pnpm --dir <worktree> supabase:reset                    # full replay + seeds, twice
+$ psql … -v ON_ERROR_STOP=1 -f supabase/tests/people/w1a_identity_channels_consent_test.sql
+  → 28 blocks, All W1a assertions passed
+$ deno test … _shared/sms.test.ts _tests/sms-inbound.test.ts   → ok | 71 passed | 0 failed
+$ SUPABASE_DB_URL=… pnpm --dir <worktree> db:generate
+$ git diff --stat packages/supabase/src/database.types.ts       → empty
+$ python3 scripts/generate-legacy-grants.py                     → byte-identical
+```
+
+## Files touched
+
+```
+supabase/migrations/00594_studio_channel_consent.sql            mirror_channel_consent_to_parties() + its COMMENT
+supabase/tests/people/w1a_identity_channels_consent_test.sql    blocks 4 and 27 amended (4d/4d3, 27c2/27c3/27d3/27h)
+artifacts/.../build/w1a-report.md                               §1, §2 (decisions 21–22), §3 re-taken, §5 dry run
+artifacts/.../build/probe10-r9-fold-dry-run.sql                 new — the runnable pre-push dry run
+artifacts/.../build/w1a-fix-log-r5.md                           this section
+```

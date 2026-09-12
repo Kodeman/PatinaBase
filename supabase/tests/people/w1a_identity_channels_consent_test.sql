@@ -86,6 +86,9 @@
 --      studio's fresh consent, leaves the record at `opted_out` with the
 --      refusal standing, leaves the mirrored refusal on the seats, and stays
 --      re-callable. Sending resumes on the recipient's YES/START alone.
+--      r9 R5-M1: the SEAT keeps the refusal's own source and words too — the
+--      mirror carries opt_out_source/evidence/recorded_at/recorded_by onto
+--      project_parties whenever the verdict it is mirroring is a refusal.
 --
 -- How to run:
 --   psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
@@ -422,15 +425,19 @@ BEGIN
      AND channel_kind = 'sms' AND channel_value = '+16125550142';
   ASSERT n = 1, 'FAIL 4c2: the RPC must normalise onto the existing record, got ' || n;
 
-  -- 4d. The mirror carries the fresh EVIDENCE onto both Alpha rows and leaves
-  --     the refusal standing on them: the party-row backstop the send rail
-  --     falls back on is never cleared by this door (r7 M7-2).
+  -- 4d. The refusal stands on both Alpha rows, IN ITS OWN WORDS: the party-row
+  --     backstop the send rail falls back on is never cleared by this door
+  --     (r7 M7-2), and since r9 R5-M1 the studio's fresh consent evidence does
+  --     not overwrite the refusal's on the seat either. project_parties has one
+  --     evidence set; under an `opted_out` status it holds the refusal's, so
+  --     R-Q's sentence read off the seat still says the STOP arrived by text.
+  --     The studio's fresh consent lives on the record (4d3 below).
   SELECT COUNT(*) INTO n FROM project_parties
    WHERE id IN ('e0000000-0000-4000-8000-000000000001', 'e0000000-0000-4000-8000-000000000002')
      AND sms_consent_status = 'opted_out'
-     AND sms_consent_evidence = 'Fresh written consent';
-  ASSERT n = 2, 'FAIL 4d: the mirror should carry the fresh consent onto both Alpha rows '
-    'without clearing the refusal, got ' || n;
+     AND sms_consent_source = 'inbound_sms'
+     AND sms_consent_evidence = 'STOP';
+  ASSERT n = 2, 'FAIL 4d: both Alpha rows must keep the refusal and its own words, got ' || n;
 
   SELECT * INTO r FROM studio_channel_consent
    WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
@@ -438,6 +445,12 @@ BEGIN
   ASSERT r.status = 'opted_out' AND r.refusal_unanswered,
     'FAIL 4d2: reconsent must leave the refusal standing, got '
       || COALESCE(r.status, '<null>');
+  -- 4d3. The studio's fresh consent IS on the record — it is the record's
+  --      consent set that holds it, next to the refusal's own set.
+  ASSERT r.evidence = 'Fresh written consent' AND r.source = 'written'
+     AND r.opt_out_evidence = 'STOP' AND r.opt_out_source = 'inbound_sms',
+    'FAIL 4d3: the record carries both sets, got '
+      || COALESCE(r.evidence, '<null>') || ' / ' || COALESCE(r.opt_out_evidence, '<null>');
 
   -- 4e. The earlier opt-out date survives the new grant.
   SELECT opt_out_at::text INTO v FROM studio_channel_consent
@@ -2837,9 +2850,24 @@ BEGIN
   ASSERT r.sms_consent_status = 'opted_out',
     'FAIL 27c: the seat''s refusal must survive reconsent, got '
       || COALESCE(r.sms_consent_status, '<null>');
-  ASSERT r.sms_consent_evidence = 'Signed a fresh consent at the walkthrough',
-    'FAIL 27c2: the fresh evidence is still mirrored onto the seat, got '
+  -- 27c2. r9 R5-M1: AND THE SEAT SAYS WHAT THE REFUSAL WAS, not what the
+  --       studio's paperwork says. project_parties has ONE evidence set, so
+  --       mirroring the record's CONSENT columns under an `opted_out` status
+  --       made the seat read (opted_out, written, 'Signed a fresh consent…') —
+  --       R-Q's sentence, read off the seat, became "Opted out in writing", and
+  --       the 10DLC artifact of how the STOP arrived was gone from the only
+  --       copy every shipped surface reads. The mirror now carries the
+  --       refusal's own set when the verdict is a refusal.
+  ASSERT r.sms_consent_source = 'inbound_sms'
+     AND r.sms_consent_evidence = 'Replied STOP',
+    'FAIL 27c2: the seat must keep the refusal''s own source and words, got '
+      || COALESCE(r.sms_consent_source, '<null>') || ' / '
       || COALESCE(r.sms_consent_evidence, '<null>');
+  -- The disclosure version has no refusal-side twin and still comes from the
+  -- record, so the studio's fresh paperwork does reach the seat there.
+  ASSERT r.sms_consent_disclosure_version = 'field-sms-v1',
+    'FAIL 27c3: the record''s disclosure version still mirrors, got '
+      || COALESCE(r.sms_consent_disclosure_version, '<null>');
 
   -- 27d. RE-CALLABLE: the door does not move the row off the status it needs,
   --      so a later, better-evidenced consent can be recorded.
@@ -2853,6 +2881,12 @@ BEGIN
     'FAIL 27d: reconsent must stay re-callable, got ' || COALESCE(r.evidence, '<null>');
   ASSERT r.opt_out_source = 'inbound_sms' AND r.opt_out_evidence = 'Replied STOP',
     'FAIL 27d2: a second reconsent must not reach the refusal''s evidence either';
+  SELECT * INTO r FROM project_parties WHERE id = 'e0000000-0000-4000-8000-0000000000a8';
+  ASSERT r.sms_consent_source = 'inbound_sms'
+     AND r.sms_consent_evidence = 'Replied STOP',
+    'FAIL 27d3: nor may a second reconsent reach the seat''s copy of it, got '
+      || COALESCE(r.sms_consent_source, '<null>') || ' / '
+      || COALESCE(r.sms_consent_evidence, '<null>');
 
   -- 27e. And it buys no grant: the studio still cannot type its way past the
   --      refusal.
@@ -2893,10 +2927,23 @@ BEGIN
   ASSERT r.opt_out_source = 'inbound_sms' AND r.opt_out_evidence = 'Replied STOP',
     'FAIL 27g: a later grant must not speak for the refusal it followed, got '
       || COALESCE(r.opt_out_source, '<null>');
+  -- 27h. r9 R5-M1: the swap is scoped to refusals. Once the verdict is
+  --      `granted` the seat carries the STUDIO's consent set again — the seat
+  --      is the mirror of the verdict that stands, and the verdict that stands
+  --      is a grant.
+  SELECT * INTO r FROM project_parties WHERE id = 'e0000000-0000-4000-8000-0000000000a8';
+  ASSERT r.sms_consent_status = 'granted'
+     AND r.sms_consent_source = 'written'
+     AND r.sms_consent_evidence = 'Kickoff form',
+    'FAIL 27h: a granted verdict mirrors the consent set onto the seat, got '
+      || COALESCE(r.sms_consent_status, '<null>') || ' / '
+      || COALESCE(r.sms_consent_source, '<null>') || ' / '
+      || COALESCE(r.sms_consent_evidence, '<null>');
   PERFORM pg_temp.reset_role();
 
-  RAISE NOTICE '27. reconsent is evidence-only and re-callable (r7 M7-2), and '
-               'leaves the refusal''s own evidence standing (r8 W4-M2): passed';
+  RAISE NOTICE '27. reconsent is evidence-only and re-callable (r7 M7-2), '
+               'leaves the refusal''s own evidence standing (r8 W4-M2), and the '
+               'seat carries the refusal''s own words too (r9 R5-M1): passed';
   RAISE NOTICE 'All W1a assertions passed.';
 END
 $$;
