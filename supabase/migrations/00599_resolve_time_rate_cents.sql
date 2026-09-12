@@ -156,6 +156,39 @@
 --    assert is a rule about the caller again and not a property of the ordering.
 --    Recorded here so a future ladder edit cannot silently reopen the depth-0 door.
 --
+-- REVIEW ROUND 4 — THE SAME HOLE, ONE KEY DEEPER:
+--
+--  · W1-R4-01 + W1-R4-02 (one repair). Round 3's fix was a PROXY, and the member
+--    controls the proxy. organization_members' only INSERT policy is
+--    `is_org_admin_or_owner(organization_id) AND (role <> 'owner')`, and 00295
+--    makes her the OWNER of her personal workspace — so she can seat a second,
+--    non-owner member there from the browser through RLS. Her workspace is then
+--    "multi-member", the count key ties, the rate-existence key ties (both studios
+--    hold a rate) and `(membership.role = 'owner') DESC` hands the pricing back to
+--    her own number: measured end to end as the actor named, a self-set 99900
+--    priced a 120-minute hour at $1,998.00 authorized — the identical figure round
+--    3 reported as closed. Case (p) passed throughout, because its fixture leaves
+--    the personal workspace at one member.
+--
+--    The count key also ASKED THE WRONG QUESTION. It asks "is this a real studio",
+--    never "is this the studio that holds her rate", so it can pick a studio with
+--    no rate row for her at all: a designer priced at 18000 in her own one-person
+--    studio who is also a plain member of a three-person studio that has never
+--    priced her resolved to 'none' — $0 into the unbilled view, the studio balance,
+--    the composer and claim_time_entries' invoice lock (W1-R4-02, a regression
+--    round 3 introduced; measured against round 2's ordering as a negative
+--    control).
+--
+--    Both are one repair: rank first on an ARM'S-LENGTH rate — a rate this studio
+--    holds for her whose created_by is not her. That is the only key the member
+--    cannot manufacture (the INSERT policy's `created_by = auth.uid()` leg stamps
+--    her own id on her own writes, and the UPDATE policy is owner/admin-only), and
+--    an arm's-length rate is the only kind HT-3 contemplates. The bare
+--    rate-existence key stays second and is what carries the solo designer; the
+--    multi-member count survives as a third-level tiebreak. A naive strengthening
+--    — `OR (member count) = 1` on the first key — was measured and FAILS case (p).
+--    Case (r) pins the shape, with the collaborator seat written through RLS.
+--
 -- Lineage: new function — nothing is redefined.
 -- Reconciles: the three 00578 branches that leave the rate client-owned are
 -- fixed in 00601, not here; this file only supplies the answer.
@@ -211,28 +244,55 @@ BEGIN
       AND studio.status = 'active'
       AND membership.status = 'active'
       AND membership.role <> 'guest'
-    -- W1-R3-01: "is this a REAL studio" outranks "does this studio hold a rate
-    -- for her". A plain member of a multi-member studio is the OWNER of the
-    -- personal workspace 00295 auto-provisions for her, and
-    -- studio_member_rates_admin_insert admits an owner writing her own rate
-    -- there — so with the rate-existence key first, a rate she set herself in
-    -- her one-person workspace tied with her studio's rate and the owner
-    -- tiebreak handed the pricing to HER number (measured: a self-set 99900
-    -- priced a 120-minute hour at $1,998.00 authorized). A one-person workspace
-    -- can never be the studio that employs her, so it loses first. A solo
-    -- designer's only studio still wins — her single studio is the only
-    -- candidate, so every key ties and LIMIT 1 takes it.
-    ORDER BY ((
-               SELECT count(*) FROM public.organization_members AS peer
-               WHERE peer.organization_id = studio.id
-                 AND peer.status = 'active'
-                 AND peer.role <> 'guest'
-             ) > 1) DESC,
+    -- W1-R3-01 / W1-R4-01: the first key is "this studio holds a rate for her
+    -- that she did NOT write herself". An ARM'S-LENGTH rate is the only kind
+    -- HT-3 contemplates, and it is the one key the member cannot manufacture.
+    --
+    -- Round 3 ranked first on "is this a REAL studio" (more than one active
+    -- non-guest member). That was a PROXY, and the member controls the proxy:
+    -- organization_members' only INSERT policy is
+    -- `is_org_admin_or_owner(organization_id) AND role <> 'owner'`, and 00295's
+    -- fc_provision_studio_on_designer makes her the OWNER of a personal
+    -- workspace — so she can seat a second, non-owner member there through RLS
+    -- from the browser, her workspace becomes "multi-member", the count key ties,
+    -- the rate-existence key ties (both studios hold a rate) and
+    -- `(membership.role = 'owner') DESC` hands the pricing back to her own
+    -- number. Measured through RLS as the actor named: a self-set 99900 priced a
+    -- 120-minute hour at $1,998.00 authorized, defeating HT-3 (owner/admin only)
+    -- and HT-1 (the server owns the rate) — the identical figure round 3
+    -- reported as closed (W1-R4-01).
+    --
+    -- The member cannot write an arm's-length row about herself: the INSERT
+    -- policy's `created_by = auth.uid()` leg means her own writes always stamp
+    -- her own id, and studio_member_rates_admin_update is owner/admin-only, so
+    -- she cannot relabel a row in a studio she is a plain member of either.
+    -- created_by is nullable with ON DELETE SET NULL, so a row whose author's
+    -- profile is gone reads as arm's-length — the safe direction.
+    --
+    -- The second key (a rate exists here at ALL) is what carries the solo
+    -- designer whose only studio is her own workspace: her self-set rate is not
+    -- arm's-length, so key 1 ties at false across her one candidate and key 2
+    -- takes it. Adding an `OR (member count) = 1` escape to key 1 instead was
+    -- measured and FAILS case (p) — it re-admits the one-person workspace above
+    -- the studio that employs her. The multi-member count survives as a
+    -- third-level tiebreak only, where it can no longer outrank a real rate.
+    ORDER BY EXISTS (
+               SELECT 1 FROM public.studio_member_rates AS arms_length
+               WHERE arms_length.studio_id = studio.id
+                 AND arms_length.user_id   = p_user_id
+                 AND arms_length.created_by IS DISTINCT FROM p_user_id
+             ) DESC,
              EXISTS (
                SELECT 1 FROM public.studio_member_rates AS priced
                WHERE priced.studio_id = studio.id
                  AND priced.user_id   = p_user_id
              ) DESC,
+             ((
+               SELECT count(*) FROM public.organization_members AS peer
+               WHERE peer.organization_id = studio.id
+                 AND peer.status = 'active'
+                 AND peer.role <> 'guest'
+             ) > 1) DESC,
              (membership.role = 'owner') DESC,
              membership.joined_at NULLS LAST,
              membership.created_at,
@@ -489,10 +549,26 @@ BEGIN
   THEN
     RAISE EXCEPTION '00599: the studio fallback must rank a multi-member studio above a one-person workspace (W1-R3-01)';
   END IF;
+  -- ── review round 4 ──────────────────────────────────────────────
+  -- W1-R4-01: the FIRST key must be the ARM'S-LENGTH rate — a rate this studio
+  -- holds for her that she did not write herself. Round 3's multi-member count is
+  -- a proxy the member controls (organization_members' INSERT policy lets the
+  -- owner of her auto-provisioned personal workspace seat a second member there
+  -- through RLS), so ranking on it first handed the pricing back to her own
+  -- self-set number.
   IF pg_get_functiondef('public.resolve_time_rate_cents(uuid,uuid,timestamptz,text)'::regprocedure)
-       !~ 'peer\.organization_id = studio\.id[\s\S]*priced\.studio_id = studio\.id'
+       !~ 'arms_length\.created_by IS DISTINCT FROM p_user_id'
   THEN
-    RAISE EXCEPTION '00599: the multi-member key must be ordered BEFORE the rate-existence key — below it the member''s self-set rate wins the tie (W1-R3-01)';
+    RAISE EXCEPTION '00599: the studio fallback must rank first on an ARM''S-LENGTH rate (created_by IS DISTINCT FROM the subject) — a member-count proxy is one the member controls (W1-R4-01)';
+  END IF;
+  -- And the ORDER of the three keys, pinned as text: arm's-length rate, then a
+  -- bare rate, then the multi-member count. Below the bare rate-existence key the
+  -- member's self-set rate wins the tie (W1-R3-01); above it, a studio that has
+  -- never priced her wins and the hour resolves to $0 (W1-R4-02).
+  IF pg_get_functiondef('public.resolve_time_rate_cents(uuid,uuid,timestamptz,text)'::regprocedure)
+       !~ 'arms_length\.studio_id = studio\.id[\s\S]*priced\.studio_id = studio\.id[\s\S]*peer\.organization_id = studio\.id'
+  THEN
+    RAISE EXCEPTION '00599: the studio fallback keys must be ordered arm''s-length rate → any rate → multi-member count (W1-R4-01, W1-R4-02)';
   END IF;
 
   -- W1-R2-03: the designer-on-behalf leg is for the classifier, not for callers.
