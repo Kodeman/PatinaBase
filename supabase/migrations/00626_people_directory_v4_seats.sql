@@ -103,6 +103,27 @@
 -- No GRANT/REVOKE is added beyond the two views' own restated GRANT SELECT and
 -- the new functions' REVOKE/GRANT → regenerate seed/00-legacy-grants.sql after
 -- this migration (python3 scripts/generate-legacy-grants.py).
+--
+-- LINEAGE OF THE FIX ROUNDS (this file is unapplied on Strata, so every fix is
+-- an edit in place):
+--   · r1 MAJOR-2 — one candidate set for the identity winner
+--     (party_kind_in_directory()), so a row claims what it nests.
+--   · r2 MAJOR-2 — the CONTACTS branch's consent word reduces worst-first
+--     over every number the identity carries (identity_consent_status()).
+--   · r2 MAJOR-3 — the PARTY branch's reach asks the identity, not the
+--     winning seat (reach_state_for_identity()).
+--   · r3 tests MAJOR-1 — the PARTY branch's consent word asks the identity
+--     too: identity_consent_status() in a wrapper ABOVE the DISTINCT ON,
+--     replacing the winning seat's own phone_e164. An uncarded identity keyed
+--     on a login or an email may hold two seats with two different numbers,
+--     and the most recently updated seat decided the printed word.
+--   · r3 migrations MAJOR-1 — seat_count is 0 on the client, lead, maker and
+--     team branches. Their person_id is a domain-table id
+--     (designer_clients / leads / vendors / project_team_members), which
+--     people_directory_seats.person_id can never equal, so a count keyed on
+--     the identity's PROFILE id claimed N seats and nested none; PR-c's own
+--     client_rep seat, stamped with the household member's login, reached it
+--     with one ordinary INSERT.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -505,7 +526,28 @@ SELECT
   NULL::text                                                     AS consent_status,
   NULL::text                                                     AS paper_state,
   NULL::text                                                     AS contact_rule_summary,
-  public.identity_seat_count(dc.client_id::text)                 AS seat_count
+-- seat_count is 0, not identity_seat_count(<a profile id>). person_id on this
+-- branch is a designer_clients id, while people_directory_seats.person_id is
+-- only ever a rolodex card id or a project_parties id (its COALESCE at §4), so
+-- NOTHING can
+-- nest under this row by construction — the count claimed N seats and unfolded
+-- to none, and the seats themselves hung under a person_id the Directory never
+-- returns. One ordinary INSERT reached it: PR-c's own client_rep seat stamped
+-- with the household member's LOGIN (w1b final review r3 MAJOR-1 in the
+-- migrations review, r2's MINOR-24 promoted). 0 is what this row can nest, so
+-- 0 is what it claims.
+--
+-- Keying the seats view at these rows instead (the other option) would move
+-- the same defect rather than close it: an uncarded, profile-stamped seat of
+-- one of the Directory's seven kinds ALSO gets a party-branch row keyed on
+-- that same login, whose person_id is the winning seat's id, so the party row
+-- would then claim N and nest 0 — and one login holding both a
+-- designer_clients row and an open lead has no single right answer. PR-c's
+-- "read the seats under the household member's card" is served today by
+-- STAMPING the seat with that person's rolodex card (studio_contact_id), which
+-- is what the dev seed does for Chidi Okonkwo and what puts the identity on
+-- the contacts branch; the household OBJECT is P2.
+  0::integer                                                     AS seat_count
 FROM public.designer_clients dc
 LEFT JOIN public.profiles pr ON pr.id = dc.client_id
 WHERE public.is_studio_comember(dc.designer_id)
@@ -541,7 +583,9 @@ SELECT
   NULL::text,
   NULL::text,
   NULL::text,
-  public.identity_seat_count(l.homeowner_id::text)
+-- seat_count is 0 for the same reason as the client branch above: person_id
+-- here is a leads id, which people_directory_seats.person_id can never be, so this row can nest nothing (r3 MAJOR-1, migrations review).
+  0::integer
 FROM public.leads l
 LEFT JOIN public.profiles hp ON hp.id = l.homeowner_id
 WHERE public.is_studio_comember(l.designer_id)
@@ -585,7 +629,10 @@ SELECT
   NULL::text,
   NULL::text,
   NULL::text,
-  public.identity_seat_count(v.contact_profile_id::text)
+-- seat_count is 0 for the same reason as the client branch above: person_id
+-- here is a vendors id, which people_directory_seats.person_id can never be,
+-- so this row can nest nothing (r3 MAJOR-1, migrations review).
+  0::integer
 FROM public.vendors v
 WHERE v.id IN (
   SELECT sv.vendor_id
@@ -654,44 +701,69 @@ SELECT
   public.compliance_state(q.company_id),
   public.contact_rule_summary('engagement', q.id),
   public.identity_seat_count(q.identity_key)
+-- The consent word belongs to the IDENTITY, not to whichever seat won the
+-- DISTINCT ON. It used to be computed INSIDE that subquery off the winning
+-- seat's own phone_e164, while reach_state three lines above already asked the
+-- identity through reach_state_for_identity(): an uncarded identity keyed on a
+-- login or an email (party_identity_key()'s 2nd and 4th precedence legs) may
+-- hold two seats with two DIFFERENT numbers, and the most recently updated one
+-- decided the printed word even when a different number of that same identity
+-- is the one the studio's record says opted_out (w1b final review r3 tests
+-- MAJOR-1 — the carve-out the r2 fix log named as out of scope).
+--
+-- identity_consent_status() is r2 MAJOR-2's own reduction, already wired into
+-- the contacts branch: worst-first over every number the identity carries,
+-- each resolved through channel_consent_status() at ONE studio (R-AK),
+-- record-only (R-AY) — the frozen project_parties.sms_consent_* columns are
+-- read nowhere here. It sits in the wrapper below, AFTER the DISTINCT ON, so
+-- it is evaluated once per emitted identity rather than once per candidate
+-- seat, and its card-phone argument is NULL because an uncarded identity has
+-- no card: its numbers are exactly its seats'. COALESCE to 'not_asked' keeps
+-- 00594's party-branch shape, where status_raw and meta.sms_consent_status
+-- have always carried a word rather than NULL; the contacts branch's
+-- NULL-means-no-number-anywhere is its own rule (R-V).
 FROM (
-  SELECT DISTINCT ON (
-    public.party_identity_key(pp.studio_contact_id, pp.profile_id,
-                              pp.phone_e164, pp.email, pp.id)
-  )
-    public.party_identity_key(pp.studio_contact_id, pp.profile_id,
-                              pp.phone_e164, pp.email, pp.id) AS identity_key,
-    pp.id, pp.party_kind, pp.display_name, pp.email, pp.phone, pp.profile_id,
-    pp.project_id, pp.updated_at, pp.company_name, pp.vendor_id, pp.trade,
-    pp.phone_e164, pp.show_to_client, pp.studio_contact_id, pp.stage,
-    pp.on_site_from, pp.on_site_to, pp.company_id,
-    pj.name AS project_name,
-    COALESCE(public.channel_consent_status(
-      public.project_consent_org(pp.project_id),
-      'sms', pp.phone_e164), 'not_asked')     AS consent_word,
-    scc.consented_at                          AS record_consented_at,
-    scc.opt_out_at                            AS record_opt_out_at,
-    (CASE
-       WHEN pj.designer_id      = (select auth.uid())
-         OR pj.lead_designer_id = (select auth.uid())
-         OR pj.created_by       = (select auth.uid())
-       THEN 'mine' ELSE 'studio'
-     END)::text                               AS scope
-  FROM public.project_parties pp
-  JOIN public.projects pj ON pj.id = pp.project_id
-  LEFT JOIN public.studio_channel_consent scc
-    ON scc.organization_id = public.project_consent_org(pp.project_id)
-   AND scc.channel_kind    = 'sms'
-   AND scc.channel_value   = pp.phone_e164
-  WHERE public.party_kind_in_directory(pp.party_kind)
-    AND pp.studio_contact_id IS NULL
-    AND ( public.is_studio_comember(pj.designer_id)
-       OR public.is_studio_comember(pj.lead_designer_id)
-       OR public.is_studio_comember(pj.created_by) )
-  ORDER BY
-    public.party_identity_key(pp.studio_contact_id, pp.profile_id,
-                              pp.phone_e164, pp.email, pp.id),
-    pp.updated_at DESC, pp.id
+  SELECT
+    q0.*,
+    COALESCE(public.identity_consent_status(
+      public.project_consent_org(q0.project_id),
+      q0.identity_key, NULL), 'not_asked')    AS consent_word
+  FROM (
+    SELECT DISTINCT ON (
+      public.party_identity_key(pp.studio_contact_id, pp.profile_id,
+                                pp.phone_e164, pp.email, pp.id)
+    )
+      public.party_identity_key(pp.studio_contact_id, pp.profile_id,
+                                pp.phone_e164, pp.email, pp.id) AS identity_key,
+      pp.id, pp.party_kind, pp.display_name, pp.email, pp.phone, pp.profile_id,
+      pp.project_id, pp.updated_at, pp.company_name, pp.vendor_id, pp.trade,
+      pp.phone_e164, pp.show_to_client, pp.studio_contact_id, pp.stage,
+      pp.on_site_from, pp.on_site_to, pp.company_id,
+      pj.name AS project_name,
+      scc.consented_at                          AS record_consented_at,
+      scc.opt_out_at                            AS record_opt_out_at,
+      (CASE
+         WHEN pj.designer_id      = (select auth.uid())
+           OR pj.lead_designer_id = (select auth.uid())
+           OR pj.created_by       = (select auth.uid())
+         THEN 'mine' ELSE 'studio'
+       END)::text                               AS scope
+    FROM public.project_parties pp
+    JOIN public.projects pj ON pj.id = pp.project_id
+    LEFT JOIN public.studio_channel_consent scc
+      ON scc.organization_id = public.project_consent_org(pp.project_id)
+     AND scc.channel_kind    = 'sms'
+     AND scc.channel_value   = pp.phone_e164
+    WHERE public.party_kind_in_directory(pp.party_kind)
+      AND pp.studio_contact_id IS NULL
+      AND ( public.is_studio_comember(pj.designer_id)
+         OR public.is_studio_comember(pj.lead_designer_id)
+         OR public.is_studio_comember(pj.created_by) )
+    ORDER BY
+      public.party_identity_key(pp.studio_contact_id, pp.profile_id,
+                                pp.phone_e164, pp.email, pp.id),
+      pp.updated_at DESC, pp.id
+  ) q0
 ) q
 
 UNION ALL
@@ -722,7 +794,10 @@ SELECT
   NULL::text,
   NULL::text,
   NULL::text,
-  public.identity_seat_count(t.user_id::text)
+-- seat_count is 0 for the same reason as the client branch above: person_id
+-- here is a project_team_members id, which people_directory_seats.person_id
+-- can never be, so this row can nest nothing (r3 MAJOR-1, migrations review).
+  0::integer
 FROM (
   SELECT DISTINCT ON (tm.user_id)
     tm.id, tm.user_id, tm.role, tm.project_id, tm.assigned_at, pj.name AS project_name,
@@ -824,7 +899,16 @@ COMMENT ON VIEW public.people_directory IS
   'consent DATES onto the record too (00594 §5.3). w1b final review r2: the '
   'party branch''s reach reads the IDENTITY''s field links rather than the '
   'winning seat''s (MAJOR-3), and the contacts branch''s consent word reduces '
-  'worst-first over every number the identity carries (MAJOR-2).';
+  'worst-first over every number the identity carries (MAJOR-2). w1b final '
+  'review r3: the PARTY branch''s consent word does the same — '
+  'identity_consent_status() keyed on identity_key in a wrapper above the '
+  'DISTINCT ON, replacing the winning seat''s own phone_e164, which printed '
+  'one seat''s word over an identity holding two different numbers (tests '
+  'MAJOR-1); and seat_count on the client, lead, maker and team branches is 0 '
+  'rather than identity_seat_count() keyed on a PROFILE id, because person_id '
+  'there is a designer_clients / leads / vendors / project_team_members id '
+  'that people_directory_seats.person_id can never equal — the row claimed N '
+  'seats and nested none (migrations MAJOR-1).';
 
 GRANT SELECT ON public.people_directory TO authenticated;
 
@@ -837,16 +921,27 @@ GRANT SELECT ON public.people_directory TO authenticated;
 -- set (unstamped, party_kind_in_directory()) first and then by its ORDER BY
 -- verbatim, so the two computations cannot name different winners. So a UI
 -- joining people_directory_seats.person_id = people_directory.person_id nests
--- every seat under exactly one row, and no seat dangles for any identity the
--- Directory emits — carded or not.
+-- every seat under exactly one row, and no Directory row ever claims a
+-- seat_count it cannot nest.
 --
 -- EVERY party kind, not the Directory's seven: "where is this human seated" is
 -- a different question from "who belongs in the six chips", and PR-c's
--- client_rep seat must appear under the household member's card. An identity
--- with NO seat in the seven has no Directory row of its own (an uncarded,
--- loginless `vendor` or `other` party), so its seats still list here and
--- simply join to nothing — the one dangle that is by design, and a different
--- thing from the winner divergence r1 MAJOR-2 found.
+-- client_rep seat must appear under the household member's card. Two dangles
+-- are therefore by design, and both are different from the winner divergence
+-- r1 MAJOR-2 found:
+--   · an identity with NO seat in the seven has no Directory row of its own
+--     (an uncarded, loginless `vendor` or `other` party), so its seats list
+--     here and join to nothing;
+--   · a seat stamped with neither a rolodex card nor one of the seven kinds —
+--     PR-c's client_rep seat carrying only the household member's LOGIN —
+--     nests under its own party id, which the client/lead/maker/team branches
+--     of people_directory do not carry, because their person_id is a
+--     designer_clients / leads / vendors / project_team_members id. Those four
+--     branches therefore report seat_count 0 rather than an
+--     identity_seat_count() keyed on a profile id (r3 MAJOR-1, migrations
+--     review): a row claims only what it can nest. Stamp such a seat with the
+--     person's rolodex card and the identity moves to the CONTACTS branch,
+--     where the count and the nesting are the same key.
 CREATE OR REPLACE VIEW public.people_directory_seats
 WITH (security_invoker = true) AS
 SELECT

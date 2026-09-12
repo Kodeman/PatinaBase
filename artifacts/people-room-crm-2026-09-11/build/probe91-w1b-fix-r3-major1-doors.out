@@ -1,0 +1,67 @@
+BEGIN
+CREATE FUNCTION
+GRANT
+CREATE FUNCTION
+GRANT
+=== before: the seeded fixture reads its own words ===
+ assume_user 
+-------------
+ 
+(1 row)
+
+    display_name    | paper_state 
+--------------------+-------------
+ Dana Kowalski      | lapsed
+ Northgate Electric | lapsed
+(2 rows)
+
+=== V1: the walked act — a coi_gl dated 5 days ago, blocks NEVER typed ===
+psql:artifacts/people-room-crm-2026-09-11/build/probe91-w1b-fix-r3-major1-doors.sql:42: NOTICE:  V1 leg 1 (the INSERT) landed: 11e2cbb3-920f-46aa-827e-5c6053ddff87
+psql:artifacts/people-room-crm-2026-09-11/build/probe91-w1b-fix-r3-major1-doors.sql:42: NOTICE:  V1 leg 2 (point the lapse at it): compliance_successor_already_lapsed
+DO
+    display_name    | paper_state 
+--------------------+-------------
+ Dana Kowalski      | lapsed
+ Northgate Electric | lapsed
+(2 rows)
+
+ display_name  |   project_name    | paper_state 
+---------------+-------------------+-------------
+ Dana Kowalski | Lindqvist kitchen | lapsed
+ Dana Kowalski | Okonkwo residence | lapsed
+(2 rows)
+
+=== V2: the same act, but the certificate CARRIES the gates (still expired) ===
+psql:artifacts/people-room-crm-2026-09-11/build/probe91-w1b-fix-r3-major1-doors.sql:67: NOTICE:  V2 (gates carried, itself expired): compliance_successor_already_lapsed
+DO
+=== V3: an HONEST future-dated renewal, gates left at the empty default ===
+psql:artifacts/people-room-crm-2026-09-11/build/probe91-w1b-fix-r3-major1-doors.sql:96: NOTICE:  V3 (future date, no gates typed): compliance_successor_drops_a_gate
+psql:artifacts/people-room-crm-2026-09-11/build/probe91-w1b-fix-r3-major1-doors.sql:96: NOTICE:  V3 positive control (gates typed): ACCEPTED — the renewal lands
+DO
+    display_name    | paper_state 
+--------------------+-------------
+ Dana Kowalski      | lapsed
+ Northgate Electric | lapsed
+(2 rows)
+
+ display_name  |   project_name    | paper_state 
+---------------+-------------------+-------------
+ Dana Kowalski | Lindqvist kitchen | lapsed
+ Dana Kowalski | Okonkwo residence | lapsed
+(2 rows)
+
+=== why the word is STILL lapsed after V3 landed: V2 left a GATING expired row on file ===
+          issuer          | expires_on |       blocks       | retired 
+--------------------------+------------+--------------------+---------
+ Lakes Regional Insurance | 2026-03-31 | {site_access,draw} | t
+ Acme Mutual              | 2026-09-07 | {}                 | f
+ Acme Mutual              | 2026-09-07 | {site_access,draw} | f
+ Acme Mutual              | 2027-09-12 | {site_access,draw} | f
+(4 rows)
+
+ reset_role 
+------------
+ 
+(1 row)
+
+ROLLBACK

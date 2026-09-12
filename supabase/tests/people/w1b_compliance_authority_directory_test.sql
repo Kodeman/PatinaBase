@@ -418,9 +418,17 @@ BEGIN
   -- Only self-reference was blocked, so A -> B then B -> A passed both r1 legs
   -- whenever the two rows shared a doc_type and a date — and compliance_state()
   -- excludes EVERY superseded row, so a card fell back to whatever gateless
-  -- paper it holds. r1 measured the cycle as lapsed -> not_on_file; after the
-  -- blocks[] fix it is lapsed -> current on any card holding a W-9, which every
-  -- real firm in the fixture holds. This card gets both.
+  -- paper it holds, or to nothing at all.
+  --
+  -- The cycle's two rows used to be one expired duplicate retiring the other.
+  -- r3 MAJOR-1 refuses that on its own now (compliance_successor_already_lapsed
+  -- on the first leg), and a later-dated successor would answer
+  -- compliance_successor_not_later on the closing edge — so the only shape in
+  -- which a cycle is still reachable, and therefore the only shape that tests
+  -- the head-of-chain guard, is two IN-FORCE duplicates of the same
+  -- certificate carrying the same date and the same gates. That is also the
+  -- realistic act: the same COI recorded twice. The card holds a W-9 as well,
+  -- because the fallback a closed loop buys is whatever gateless paper remains.
   INSERT INTO public.studio_contacts
     (id, organization_id, entity_kind, contact_kind, company_name, company_kind, created_by)
   VALUES ('f2000000-0000-4000-8000-000000000004','f1000000-0000-4000-8000-00000000000a',
@@ -428,23 +436,33 @@ BEGIN
   INSERT INTO public.studio_compliance_documents
     (id, organization_id, holder_type, holder_id, doc_type, expires_on, blocks) VALUES
     ('f5000000-0000-4000-8000-000000000041','f1000000-0000-4000-8000-00000000000a','company',
-     'f2000000-0000-4000-8000-000000000004','coi_gl', CURRENT_DATE - 1,'{site_access,draw}'),
+     'f2000000-0000-4000-8000-000000000004','coi_gl', CURRENT_DATE + 100,'{site_access,draw}'),
     ('f5000000-0000-4000-8000-000000000042','f1000000-0000-4000-8000-00000000000a','company',
-     'f2000000-0000-4000-8000-000000000004','coi_gl', CURRENT_DATE - 1,'{site_access,draw}');
+     'f2000000-0000-4000-8000-000000000004','coi_gl', CURRENT_DATE + 100,'{site_access,draw}');
   INSERT INTO public.studio_compliance_documents
     (id, organization_id, holder_type, holder_id, doc_type, blocks) VALUES
     ('f5000000-0000-4000-8000-000000000043','f1000000-0000-4000-8000-00000000000a','company',
      'f2000000-0000-4000-8000-000000000004','w9','{payment}');
 
-  IF public.compliance_state('f2000000-0000-4000-8000-000000000004') <> 'lapsed' THEN
-    RAISE EXCEPTION '2l the cycle card must start lapsed, got %',
+  IF public.compliance_state('f2000000-0000-4000-8000-000000000004') <> 'current' THEN
+    RAISE EXCEPTION '2l the cycle card must start current on two in-force duplicates, got %',
       public.compliance_state('f2000000-0000-4000-8000-000000000004');
   END IF;
+  IF (SELECT count(*) FROM public.studio_compliance_documents
+       WHERE holder_id = 'f2000000-0000-4000-8000-000000000004'
+         AND doc_type = 'coi_gl' AND superseded_by IS NULL) <> 2 THEN
+    RAISE EXCEPTION '2l0 the cycle card must start with two live certificates';
+  END IF;
 
-  -- the first leg is a legitimate supersede of one duplicate by the other
+  -- the first leg is legitimate: one duplicate retired by its twin — same
+  -- paper, same date, same gates, and the twin is in force
   UPDATE public.studio_compliance_documents
      SET superseded_by = 'f5000000-0000-4000-8000-000000000042'
    WHERE id = 'f5000000-0000-4000-8000-000000000041';
+  IF public.compliance_state('f2000000-0000-4000-8000-000000000004') <> 'current' THEN
+    RAISE EXCEPTION '2l1 retiring one duplicate by its twin was not honoured, got %',
+      public.compliance_state('f2000000-0000-4000-8000-000000000004');
+  END IF;
 
   -- the second leg closes the loop, and is refused
   BEGIN
@@ -458,10 +476,24 @@ BEGIN
     RAISE EXCEPTION '2m a supersede CYCLE was accepted: %', COALESCE(raised,'no error');
   END IF;
 
-  -- and the consequence the cycle bought is gone: the lapse still holds the card
-  IF public.compliance_state('f2000000-0000-4000-8000-000000000004') <> 'lapsed' THEN
-    RAISE EXCEPTION '2n the refused cycle still moved the word to %',
+  -- and the consequence the cycle bought is gone. Had it closed, BOTH dated
+  -- COIs would have left the reckoning and the card would rest on its W-9
+  -- alone; the head of the chain is still standing and still dated in force,
+  -- which is what the word is resting on.
+  IF public.compliance_state('f2000000-0000-4000-8000-000000000004') <> 'current' THEN
+    RAISE EXCEPTION '2n the refused cycle moved the word to %',
       public.compliance_state('f2000000-0000-4000-8000-000000000004');
+  END IF;
+  IF EXISTS (SELECT 1 FROM public.studio_compliance_documents
+              WHERE id = 'f5000000-0000-4000-8000-000000000042'
+                AND superseded_by IS NOT NULL) THEN
+    RAISE EXCEPTION '2n1 the loop-closing edge was recorded after all';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.studio_compliance_documents
+                  WHERE holder_id = 'f2000000-0000-4000-8000-000000000004'
+                    AND doc_type = 'coi_gl' AND superseded_by IS NULL
+                    AND expires_on >= CURRENT_DATE) THEN
+    RAISE EXCEPTION '2n2 the card''s word no longer rests on a dated certificate in force';
   END IF;
 
   -- a genuine three-row chain is untouched: the head is always in force
@@ -477,7 +509,116 @@ BEGIN
       public.compliance_state('f2000000-0000-4000-8000-000000000004');
   END IF;
 
-  RAISE NOTICE '2. the holder guard: a person is not a firm, a document belongs to one studio, other_named needs its label, blocks is a closed vocabulary, a supersede must be the same paper covering at least as long, a dated type must carry its date (and may not be renewed by an undated one), and a supersede may not close a chain: passed';
+  -- ═══ r3 MAJOR-1 door (c): a successor must itself be IN FORCE ════════════
+  -- Reachable with two ordinary member writes on the seeded Okonkwo fixture:
+  -- record a coi_gl dated five days ago and point the 2026-03-31 lapse at it.
+  -- Every r1 and r2 guard passes — same doc_type, a date not earlier, a date
+  -- present, a successor at the head of its own chain — and compliance_state()
+  -- excludes every superseded row, so Northgate Electric, Dana Kowalski's
+  -- identity row and both her seat lines flipped from lapsed to current over a
+  -- record holding no in-force general-liability certificate at all. This leg
+  -- carries the gates forward, so it isolates the date from door (d).
+  INSERT INTO public.studio_contacts
+    (id, organization_id, entity_kind, contact_kind, company_name, company_kind, created_by)
+  VALUES ('f2000000-0000-4000-8000-000000000005','f1000000-0000-4000-8000-00000000000a',
+          'company','sub','Stale Renewal Co','sub','a0000000-0000-0000-0000-000000000004');
+  INSERT INTO public.studio_compliance_documents
+    (id, organization_id, holder_type, holder_id, doc_type, issuer, expires_on, blocks) VALUES
+    ('f5000000-0000-4000-8000-000000000051','f1000000-0000-4000-8000-00000000000a','company',
+     'f2000000-0000-4000-8000-000000000005','coi_gl','Lakes Regional', CURRENT_DATE - 200,'{site_access,draw}'),
+    ('f5000000-0000-4000-8000-000000000052','f1000000-0000-4000-8000-00000000000a','company',
+     'f2000000-0000-4000-8000-000000000005','coi_gl','Acme Mutual', CURRENT_DATE - 5,'{site_access,draw}');
+
+  IF public.compliance_state('f2000000-0000-4000-8000-000000000005') <> 'lapsed' THEN
+    RAISE EXCEPTION '2p0 the stale-renewal card must start lapsed, got %',
+      public.compliance_state('f2000000-0000-4000-8000-000000000005');
+  END IF;
+
+  BEGIN
+    UPDATE public.studio_compliance_documents
+       SET superseded_by = 'f5000000-0000-4000-8000-000000000052'
+     WHERE id = 'f5000000-0000-4000-8000-000000000051';
+    raised := NULL;
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM;
+  END;
+  IF raised IS NULL OR raised NOT LIKE '%compliance_successor_already_lapsed%' THEN
+    RAISE EXCEPTION '2p a certificate that expired five days ago was accepted as a renewal: %', COALESCE(raised,'no error');
+  END IF;
+  IF public.compliance_state('f2000000-0000-4000-8000-000000000005') <> 'lapsed' THEN
+    RAISE EXCEPTION '2p1 the refused stale renewal still moved the word to %',
+      public.compliance_state('f2000000-0000-4000-8000-000000000005');
+  END IF;
+
+  -- ═══ r3 MAJOR-1 door (d): a successor must carry the gates it retires ════
+  -- The other half, and the one that bites on an HONEST renewal: blocks
+  -- defaults to '{}', so a future-dated certificate recorded without its gates
+  -- retires a gating lapse with a gateless row. compliance_state() counts only
+  -- paper with a non-empty blocks[], so the card reads `current` with nothing
+  -- gating site access or the draw — and reads `current` forever once the
+  -- renewal itself lapses, which is the same hole one renewal later. The
+  -- INSERT below never names blocks, exactly as the walked act did.
+  INSERT INTO public.studio_contacts
+    (id, organization_id, entity_kind, contact_kind, company_name, company_kind, created_by)
+  VALUES ('f2000000-0000-4000-8000-000000000006','f1000000-0000-4000-8000-00000000000a',
+          'company','sub','Gateless Renewal Co','sub','a0000000-0000-0000-0000-000000000004');
+  INSERT INTO public.studio_compliance_documents
+    (id, organization_id, holder_type, holder_id, doc_type, issuer, expires_on, blocks) VALUES
+    ('f5000000-0000-4000-8000-000000000061','f1000000-0000-4000-8000-00000000000a','company',
+     'f2000000-0000-4000-8000-000000000006','coi_gl','Lakes Regional', CURRENT_DATE - 200,'{site_access,draw}');
+  INSERT INTO public.studio_compliance_documents
+    (id, organization_id, holder_type, holder_id, doc_type, issuer, expires_on) VALUES
+    ('f5000000-0000-4000-8000-000000000062','f1000000-0000-4000-8000-00000000000a','company',
+     'f2000000-0000-4000-8000-000000000006','coi_gl','Acme Mutual', CURRENT_DATE + 365);
+
+  IF EXISTS (SELECT 1 FROM public.studio_compliance_documents
+              WHERE id = 'f5000000-0000-4000-8000-000000000062'
+                AND cardinality(blocks) <> 0) THEN
+    RAISE EXCEPTION '2q0 the gateless renewal was not recorded with the empty default';
+  END IF;
+
+  BEGIN
+    UPDATE public.studio_compliance_documents
+       SET superseded_by = 'f5000000-0000-4000-8000-000000000062'
+     WHERE id = 'f5000000-0000-4000-8000-000000000061';
+    raised := NULL;
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM;
+  END;
+  IF raised IS NULL OR raised NOT LIKE '%compliance_successor_drops_a_gate%' THEN
+    RAISE EXCEPTION '2q a renewal carrying none of the retired row''s gates was accepted: %', COALESCE(raised,'no error');
+  END IF;
+  IF public.compliance_state('f2000000-0000-4000-8000-000000000006') <> 'lapsed' THEN
+    RAISE EXCEPTION '2q1 the refused gateless renewal still moved the word to %',
+      public.compliance_state('f2000000-0000-4000-8000-000000000006');
+  END IF;
+
+  -- and the positive control: the same act with the gates typed on the renewal
+  -- lands, and the word moves honestly.
+  UPDATE public.studio_compliance_documents
+     SET blocks = '{site_access,draw}'
+   WHERE id = 'f5000000-0000-4000-8000-000000000062';
+  UPDATE public.studio_compliance_documents
+     SET superseded_by = 'f5000000-0000-4000-8000-000000000062'
+   WHERE id = 'f5000000-0000-4000-8000-000000000061';
+  IF public.compliance_state('f2000000-0000-4000-8000-000000000006') <> 'current' THEN
+    RAISE EXCEPTION '2q2 a renewal carrying the gates was refused, word reads %',
+      public.compliance_state('f2000000-0000-4000-8000-000000000006');
+  END IF;
+  -- a SUPERSET of the retired gates is a renewal too (<@, not =)
+  UPDATE public.studio_compliance_documents
+     SET superseded_by = NULL
+   WHERE id = 'f5000000-0000-4000-8000-000000000061';
+  UPDATE public.studio_compliance_documents
+     SET blocks = '{site_access,draw,payment}'
+   WHERE id = 'f5000000-0000-4000-8000-000000000062';
+  UPDATE public.studio_compliance_documents
+     SET superseded_by = 'f5000000-0000-4000-8000-000000000062'
+   WHERE id = 'f5000000-0000-4000-8000-000000000061';
+  IF public.compliance_state('f2000000-0000-4000-8000-000000000006') <> 'current' THEN
+    RAISE EXCEPTION '2q3 a renewal widening the gates was refused, word reads %',
+      public.compliance_state('f2000000-0000-4000-8000-000000000006');
+  END IF;
+
+  RAISE NOTICE '2. the holder guard: a person is not a firm, a document belongs to one studio, other_named needs its label, blocks is a closed vocabulary, a supersede must be the same paper covering at least as long, a dated type must carry its date (and may not be renewed by an undated one), a supersede may not close a chain, and a renewal must itself be in force and carry at least the gates it retires: passed';
 END $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -788,6 +929,76 @@ BEGIN
    WHERE id = 'f6000000-0000-4000-8000-000000000101';
   PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
 
+  -- ═══ r3 tests MAJOR-1: the PARTY branch's consent word is the IDENTITY's ══
+  -- The word was computed INSIDE the DISTINCT ON, off the winning seat's own
+  -- phone_e164, while reach three legs above already asked the identity. An
+  -- uncarded identity keyed on a LOGIN (party_identity_key()'s 2nd leg, which
+  -- outranks the phone) may hold two seats with two different numbers, and
+  -- whichever seat was updated most recently decided the printed word — even
+  -- when a different number of that same identity is the one the studio's
+  -- record says opted_out. The refusal here sits on the OLDER seat's number;
+  -- the winner's number has no record at all, so the old expression printed
+  -- `not_asked` over a recorded refusal.
+  PERFORM pg_temp.reset_role();
+  INSERT INTO public.project_parties
+    (id, project_id, party_kind, display_name, profile_id, phone, stage,
+     created_by, updated_at)
+  VALUES
+    ('f4000000-0000-4000-8000-000000000141','f3000000-0000-4000-8000-00000000000a','sub',
+     'Two Number Login','a0000000-0000-0000-0000-000000000002','(612) 555-0771','active',
+     'a0000000-0000-0000-0000-000000000004','2026-01-01T00:00:00Z'),
+    ('f4000000-0000-4000-8000-000000000142','d0e00000-0000-0000-0000-00000000000a','sub',
+     'Two Number Login','a0000000-0000-0000-0000-000000000002','(612) 555-0772','active',
+     'a0000000-0000-0000-0000-000000000004','2026-06-01T00:00:00Z');
+  INSERT INTO public.studio_channel_consent
+    (organization_id, channel_kind, channel_value, status, opt_out_at,
+     opt_out_source, opt_out_evidence, opt_out_recorded_at, opt_out_recorded_by)
+  VALUES
+    ('b0000000-0000-0000-0000-000000000001','sms','+16125550771','opted_out', now(),
+     'verbal','said stop on site', now(),'a0000000-0000-0000-0000-000000000004');
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+
+  -- one row, and it points at the NEWER seat, whose number holds no record
+  SELECT count(*) INTO n FROM public.people_directory
+   WHERE display_name = 'Two Number Login';
+  IF n <> 1 THEN
+    RAISE EXCEPTION '4e6 a login-keyed identity on two jobs must be ONE row, found %', n;
+  END IF;
+  SELECT person_id INTO v_person FROM public.people_directory
+   WHERE display_name = 'Two Number Login';
+  IF v_person <> 'f4000000-0000-4000-8000-000000000142' THEN
+    RAISE EXCEPTION '4e7 the winning seat must be the newer one for this leg to mean anything, got %', v_person;
+  END IF;
+
+  -- the refusal on the identity's OTHER number is the word, worst-first
+  SELECT consent_status INTO w FROM public.people_directory
+   WHERE display_name = 'Two Number Login';
+  IF w IS DISTINCT FROM 'opted_out' THEN
+    RAISE EXCEPTION '4e8 a refusal on a NON-winning seat''s number must be the identity''s word, got %', COALESCE(w,'NULL');
+  END IF;
+
+  -- and the three faces of the party branch agree: status_raw, meta and the
+  -- appended column are one value, so no reader can print a softer word
+  SELECT status_raw INTO w FROM public.people_directory
+   WHERE display_name = 'Two Number Login';
+  IF w IS DISTINCT FROM 'opted_out' THEN
+    RAISE EXCEPTION '4e9 status_raw disagrees with the record, got %', COALESCE(w,'NULL');
+  END IF;
+  SELECT meta->>'sms_consent_status' INTO w FROM public.people_directory
+   WHERE display_name = 'Two Number Login';
+  IF w IS DISTINCT FROM 'opted_out' THEN
+    RAISE EXCEPTION '4e10 meta.sms_consent_status disagrees with the record, got %', COALESCE(w,'NULL');
+  END IF;
+
+  -- the negative control: the winning seat's number ALONE, which is what the
+  -- old expression read, has no record and would have printed not_asked
+  SELECT COALESCE(public.channel_consent_status(
+           public.project_consent_org('d0e00000-0000-0000-0000-00000000000a'),
+           'sms','+16125550772'), 'not_asked') INTO w;
+  IF w IS DISTINCT FROM 'not_asked' THEN
+    RAISE EXCEPTION '4e11 the winning seat''s own number must carry no record for this leg to mean anything, got %', w;
+  END IF;
+
   -- MIXED KINDS (w1b r1 MAJOR-2): the same human seated under a kind the
   -- Directory does not emit. people_directory picked its winner over the seven
   -- kinds and people_directory_seats over every kind, so the newest seat being
@@ -827,8 +1038,59 @@ BEGIN
     RAISE EXCEPTION '4j the vendor seat must nest under the same identity row, found %', n;
   END IF;
 
+  -- ═══ r3 MAJOR-1 (migrations review): PR-c's OWN client_rep seat ══════════
+  -- The client, lead, maker and team branches carry a DOMAIN-TABLE id as
+  -- person_id (designer_clients.id, leads.id, vendors.id,
+  -- project_team_members.id) while seat_count was identity_seat_count() keyed
+  -- on a PROFILE id, and people_directory_seats.person_id is only ever a
+  -- rolodex card id or a party id. One ordinary INSERT — the thing PR-c rules
+  -- in, a household member's own client_rep seat stamped with their LOGIN —
+  -- made the client row read seat_count 2 and nest ZERO, with both seats
+  -- hanging under a person_id no Directory row carries. The whole-fixture
+  -- assertion below only ever ran over data that could not break it, because
+  -- every seeded designer_clients row has a null client_id.
+  -- The household is a SEEDED designer_clients row carrying a real login
+  -- (d0000000-…-c001 / client-solo@patina.dev), so the shape is the shipped
+  -- one, not an invention of this test.
+  PERFORM pg_temp.reset_role();
+  INSERT INTO public.project_parties
+    (id, project_id, party_kind, display_name, profile_id, email, stage, created_by)
+  VALUES
+    ('f4000000-0000-4000-8000-000000000131','f3000000-0000-4000-8000-00000000000a',
+     'client_rep','Household Rep','a0000000-0000-0000-0000-00000000c005',
+     'client-solo@patina.dev','active','a0000000-0000-0000-0000-000000000004'),
+    ('f4000000-0000-4000-8000-000000000132','f3000000-0000-4000-8000-00000000000a',
+     'other','Household Rep (second seat)','a0000000-0000-0000-0000-00000000c005',
+     'client-solo@patina.dev','active','a0000000-0000-0000-0000-000000000004');
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+
+  -- the identity really does hold two seats …
+  SELECT count(*) INTO n FROM public.people_directory_seats
+   WHERE seat_id IN ('f4000000-0000-4000-8000-000000000131',
+                     'f4000000-0000-4000-8000-000000000132');
+  IF n <> 2 THEN
+    RAISE EXCEPTION '4l the two client_rep seats are not visible to the studio, found %', n;
+  END IF;
+
+  -- … and the client Directory row claims only what it can nest: 0
+  SELECT seat_count INTO n FROM public.people_directory
+   WHERE role = 'client' AND person_id = 'd0000000-0000-0000-0000-00000000c001';
+  IF n <> 0 THEN
+    RAISE EXCEPTION '4m the client branch claims % seats and can nest none', n;
+  END IF;
+
+  -- the seats nest under their own party id, and PR-c's read is the STAMPED
+  -- path: no Directory row carries the seat's person_id while it is uncarded
+  SELECT count(DISTINCT person_id) INTO n FROM public.people_directory_seats
+   WHERE seat_id IN ('f4000000-0000-4000-8000-000000000131',
+                     'f4000000-0000-4000-8000-000000000132');
+  IF n <> 1 THEN
+    RAISE EXCEPTION '4n the two seats of one login keyed to % person_ids', n;
+  END IF;
+
   -- the invariant itself, over EVERY Directory row the caller can see:
-  -- what a row claims is what it nests.
+  -- what a row claims is what it nests. The client_rep seats above are staged
+  -- BEFORE it, so it now runs over data that could break it.
   SELECT count(*) INTO n
     FROM public.people_directory pd
    WHERE pd.seat_count > 0
@@ -840,7 +1102,7 @@ BEGIN
   END IF;
 
   PERFORM pg_temp.reset_role();
-  RAISE NOTICE '4. the uncarded identity: two seats on two jobs collapse to one row keyed on the phone, pointing at the newest seat, reach reads a live door on a NON-winning seat (and stops reading a revoked or expired one), a mixed-kind identity nests every seat it claims, and no row anywhere claims a count it cannot nest: passed';
+  RAISE NOTICE '4. the uncarded identity: two seats on two jobs collapse to one row keyed on the phone, pointing at the newest seat, reach reads a live door on a NON-winning seat (and stops reading a revoked or expired one), a mixed-kind identity nests every seat it claims, PR-c''s login-stamped client_rep seats leave the client row claiming 0, and no row anywhere claims a count it cannot nest: passed';
 END $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════

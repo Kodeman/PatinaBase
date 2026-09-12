@@ -1,0 +1,97 @@
+BEGIN
+CREATE FUNCTION
+GRANT
+CREATE FUNCTION
+GRANT
+=== A0: the whole-fixture invariant BEFORE the act ===
+ assume_user 
+-------------
+ 
+(1 row)
+
+ rows_where_count_disagrees | total_rows 
+----------------------------+------------
+                          0 |         62
+(1 row)
+
+=== A1: the act — two login-stamped seats for the household member ===
+ assume_user 
+-------------
+ 
+(1 row)
+
+INSERT 0 2
+ assume_user 
+-------------
+ 
+(1 row)
+
+--- the CLIENT Directory row for that household: claimed vs nested ---
+  role  | display_name |              person_id               | seat_count | nested 
+--------+--------------+--------------------------------------+------------+--------
+ client | Client User  | 573b2449-cd41-41cd-94db-747a1418c18e |          0 |      0
+(1 row)
+
+--- the NEGATIVE CONTROL: what the old expression claimed ---
+ old_seat_count_keyed_on_the_profile 
+-------------------------------------
+                                   2
+(1 row)
+
+--- where those two seats nest ---
+              person_id               | party_kind |         display_name          
+--------------------------------------+------------+-------------------------------
+ aa000000-0000-4000-8000-000000000001 | client_rep | Client User (rep seat)
+ aa000000-0000-4000-8000-000000000001 | other      | Client User (second rep seat)
+(2 rows)
+
+=== A2: the whole-fixture invariant AFTER the act ===
+ rows_where_count_disagrees | total_rows 
+----------------------------+------------
+                          0 |         62
+(1 row)
+
+=== B: the party branch, an identity keyed on a LOGIN with two numbers ===
+ reset_role 
+------------
+ 
+(1 row)
+
+INSERT 0 2
+INSERT 0 1
+ assume_user 
+-------------
+ 
+(1 row)
+
+--- the row, its three consent faces, and the seat it points at ---
+   display_name   |              person_id               | status_raw | meta_word | consent_status | seat_count 
+------------------+--------------------------------------+------------+-----------+----------------+------------
+ Two Number Login | aa000000-0000-4000-8000-000000000012 | opted_out  | opted_out | opted_out      |          2
+(1 row)
+
+--- its two seat lines ---
+               seat_id                |  phone_e164  | consent_status 
+--------------------------------------+--------------+----------------
+ aa000000-0000-4000-8000-000000000011 | +16125550771 | opted_out
+ aa000000-0000-4000-8000-000000000012 | +16125550772 | not_asked
+(2 rows)
+
+--- the NEGATIVE CONTROL: the winning seat's own number alone ---
+ old_expression_word 
+---------------------
+ not_asked
+(1 row)
+
+=== B2: no Directory row is more permissive than the record, whole fixture ===
+ pairs | face_hides_a_refusal 
+-------+----------------------
+    11 |                    0
+(1 row)
+
+ reset_role 
+------------
+ 
+(1 row)
+
+ROLLBACK
