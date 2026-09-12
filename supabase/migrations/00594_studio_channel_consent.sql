@@ -41,7 +41,17 @@
 --      ONLY write path the portal gets: the table grants authenticated SELECT
 --      and nothing else, so a consent fact cannot be written without passing
 --      through the membership check, the evidence requirement and the
---      transition gate below.
+--      transition gate below. It never lowers a standing verdict either:
+--      `pending` over `granted` is refused (consent_already_granted,
+--      close-review r2 MAJOR-1).
+--   4b. record_channel_invite(...) — the ADD path's door. The room's most
+--      ordinary act — a repeat sub added to a second job with "text updates"
+--      ticked — recorded a `pending` unconditionally and so demoted the
+--      studio's own recorded grant, printed "Invited" for a granted number,
+--      refused every non-invite send as not_consented, and filed the new act's
+--      words under the old grant's date. This door records the invite through
+--      the RPC above only when no sendable grant stands; where one does, the
+--      record is returned untouched.
 --   5. record_channel_reconsent(...) — the one named door beside that gate:
 --      PR-m's fresh recorded consent after a refusal, written as EVIDENCE onto
 --      a record that stays `opted_out` (r7 M7-2). It does not move the status
@@ -52,7 +62,7 @@
 --      date, and the disclosure version that grant was given under is not
 --      overwritten by one its recipient never saw.
 --
--- Both RPCs key on public.normalize_channel_value(kind, value) — 00593's own
+-- All three RPCs key on public.normalize_channel_value(kind, value) — 00593's own
 -- rule, in one function, so a channel row and its consent record can never land
 -- on different keys (the RPC used to refuse an unparseable phone the channels
 -- table deliberately keeps).
@@ -900,6 +910,33 @@ COMMENT ON TABLE public.project_parties IS
 -- SECURITY INVOKER on purpose: studio_channel_consent's own RLS
 -- (is_active_studio_member) is the access rule, and a definer here would hand
 -- any caller any studio's verdict for the price of an org id.
+--
+-- ONE VERDICT, NOT ONE COLUMN (close-review r2 MAJOR-2). This used to return
+-- scc.status alone, and status is only HALF the verdict this record carries.
+-- refusal_unanswered is the other half and it is verdict-bearing everywhere
+-- else: _shared/sms.ts channelConsentVerdict refuses every send on it whatever
+-- the status says, and record_channel_consent's DO UPDATE … WHERE refuses every
+-- studio-side write on it. The fold MINTS records where it is TRUE while the
+-- status reads `granted` — that is the r8 W4-M1 shape, ruled at :655-666 as
+-- "the record is minted UNSENDABLE": a legacy seat saying granted while a
+-- sibling seat holds a dated refusal no later consent answered.
+--
+-- Reading the column alone, both views printed `granted` for such a record, and
+-- `granted` renders as "Texting" (field-config.ts, §3.8, R-Q). So the Call
+-- Sheet and the Directory told the designer the number was on the rail while
+-- every sendPartySms to it came back opted_out — G-3 verbatim ("one row can
+-- read 'Texting' while the same phone is opted out"), restored inside the
+-- record built to end it, and unfixable by the studio because
+-- record_channel_consent refuses every verdict but opted_out while the flag
+-- stands.
+--
+-- So the ONE reader carries the ONE verdict, and it is the honest word: a
+-- refusal stands and has not been answered, so the number is opted out until
+-- the recipient's own YES or START lowers the flag on the inbound rail. The
+-- same applies to a folded `pending` or `not_asked` winner with a refusing
+-- sibling. Fixing it HERE rather than in the two views is what R-AS exists for
+-- — the rule lives in one place, and the send gate and the room now agree by
+-- construction.
 CREATE OR REPLACE FUNCTION public.channel_consent_status(
   p_organization_id uuid,
   p_channel_kind    text,
@@ -910,7 +947,8 @@ LANGUAGE sql
 STABLE
 SET search_path TO 'public'
 AS $$
-  SELECT scc.status
+  SELECT CASE WHEN scc.refusal_unanswered IS TRUE THEN 'opted_out'
+              ELSE scc.status END
     FROM public.studio_channel_consent scc
    WHERE scc.organization_id = p_organization_id
      AND scc.channel_kind    = p_channel_kind
@@ -926,7 +964,14 @@ COMMENT ON FUNCTION public.channel_consent_status(uuid, text, text) IS
   'The studio''s verdict for one channel value, read off '
   'studio_channel_consent — the single source since R-AS. NULL means this '
   'studio holds no record for that value, which is what `not_asked` means; '
-  'callers that must print a word COALESCE it. SECURITY INVOKER, so the '
+  'callers that must print a word COALESCE it. THE VERDICT IS status AND '
+  'refusal_unanswered TOGETHER (close-review r2 MAJOR-2): an unanswered refusal '
+  'reads `opted_out` whatever the status column says, because that is what the '
+  'send gate (_shared/sms.ts channelConsentVerdict) and the write gate '
+  '(record_channel_consent) both already do with the flag, and the fold mints '
+  '`granted` records carrying it on purpose (:655-666, r8 W4-M1). One reader, '
+  'one verdict — patching the two views instead would put the rule in two '
+  'places, which is the thing R-AS exists to stop. SECURITY INVOKER, so the '
   'table''s member-only RLS decides what a caller may read. Used by '
   'v_project_roster and people_directory in place of '
   'project_parties.sms_consent_*, which is frozen legacy (00594).';
@@ -1860,6 +1905,33 @@ BEGIN
                  AND pp.sms_consent_status = 'opted_out'
                  AND COALESCE(p.studio_id, public._primary_studio_for(p.designer_id))
                      = scc.organization_id))
+    -- NO WRITE THROUGH THIS DOOR LOWERS A STANDING GRANT (close-review r2
+    -- MAJOR-1). `pending` is an INVITE — the first half of the SMS double
+    -- opt-in — and an invite is not news about a number the studio already
+    -- holds a recorded, evidenced grant for. Every other leg above asks
+    -- whether a REFUSAL stands; none of them looked at the other direction, so
+    -- granted -> pending passed cleanly, and the act the room performs most
+    -- often (adding a repeat sub to a second job with "text updates" ticked)
+    -- walked the studio's own grant down to `pending` on every add. Three
+    -- things went with it: the room printed "Invited" for a number it holds a
+    -- grant for; channelConsentVerdict dropped from "allow" to "unknown", so
+    -- sms.ts refused every non-invite send as not_consented against a seat born
+    -- `pending` (fixture F-11 — exactly the half of G-3 sms.ts:404-410 says
+    -- this record exists to fix); and the five evidence columns were restated
+    -- by the new act while consented_at kept the OLD grant's date, so R-Q
+    -- composed "Verbal consent, 2 May 2025" and the disclosure version the
+    -- person was actually shown was gone from the only copy there is — r6
+    -- R6-M1 / r9 M1 arriving through a third door.
+    --
+    -- The gate is stated HERE, inside the write, for the same reason every
+    -- other gate in this statement is: a read-then-write ahead of the upsert
+    -- cannot see a grant that lands in the gap. record_channel_invite() is the
+    -- named door the add path uses — it mints a `pending` only when no grant
+    -- stands, and treats this refusal as "the grant already covers it".
+    --
+    -- Narrow on purpose: only `pending` over `granted`. A studio that really
+    -- means to withdraw a grant records the REFUSAL, which is always open.
+    AND NOT (EXCLUDED.status = 'pending' AND scc.status = 'granted')
   RETURNING * INTO v_row;
 
   IF NOT FOUND THEN
@@ -1907,6 +1979,30 @@ BEGIN
                      'evidence); record_channel_reconsent() then puts your fresh '
                      'consent on the record, and the grant stays the '
                      'recipient''s to give by replying YES or START.';
+    END IF;
+
+    -- The downgrade leg (close-review r2 MAJOR-1). Named, so the caller can
+    -- tell "your invite is redundant, the grant already stands" apart from
+    -- "a refusal stands and you may not write at all" — the two are opposite
+    -- facts and the generic sentence below says the wrong one.
+    --
+    -- IT IS THE SECOND-WEAKEST CLAIM ON THIS BRANCH, so it is tested last but
+    -- one: a `granted` carrying an UNANSWERED REFUSAL is not a grant that
+    -- stands — it is unsendable (channel_consent_status reads it as opted_out)
+    -- and what refused the write was the refusal leg, not this one. The
+    -- condition therefore mirrors that leg exactly, so such a row still reports
+    -- consent_awaiting_recipient and reconsent() is still the door named.
+    IF p_status = 'pending'
+       AND v_row.status = 'granted'
+       AND v_row.refusal_unanswered IS NOT TRUE
+       AND (v_row.opt_out_at IS NULL
+            OR (v_row.consented_at IS NOT NULL
+                AND v_row.consented_at > v_row.opt_out_at)) THEN
+      RAISE EXCEPTION 'consent_already_granted'
+        USING HINT = 'This studio already holds a recorded grant for this '
+                     'number, so there is no invite to send and nothing to '
+                     'lower it to. record_channel_invite() is the add path''s '
+                     'door: it leaves a standing grant exactly as it is.';
     END IF;
 
     RAISE EXCEPTION 'consent_awaiting_recipient'
@@ -1978,8 +2074,139 @@ COMMENT ON FUNCTION public.record_channel_consent(uuid, text, text, text, text, 
   'standing beside the consented_at this door keeps, and the refusal has its own '
   'four; normalises '
   'the channel value through normalize_channel_value(); stamps '
-  'recorded_by/recorded_at; and keeps an earlier granted/opt-out date when the '
-  'new verdict does not restate it (00594).';
+  'recorded_by/recorded_at; keeps an earlier granted/opt-out date when the '
+  'new verdict does not restate it; and REFUSES `pending` over a standing '
+  '`granted` (consent_already_granted, close-review r2 MAJOR-1) — an invite is '
+  'not news about a grant the studio already holds, and letting it land '
+  'demoted the record, printed "Invited" for a granted number, refused every '
+  'non-invite send as not_consented, and filed the new act''s words under the '
+  'old grant''s date; record_channel_invite() is the add path''s door (00594).';
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 4b. record_channel_invite — the add path's door, which never lowers a grant
+-- ═══════════════════════════════════════════════════════════════════════════
+-- close-review r2 MAJOR-1. useAddProjectParty records the studio's consent
+-- BEFORE it writes the seat, so the room never prints "Not asked" for someone
+-- Patina has just texted (close-review r1 MAJOR-2). It did that by calling
+-- record_channel_consent(…, 'pending', …) unconditionally — and `pending` is
+-- the FIRST half of the double opt-in, so on a repeat sub the studio already
+-- holds a grant for, the most ordinary act in the room walked that grant down.
+--
+-- The gate inside record_channel_consent now refuses that write. This is the
+-- other half of the fix: the add path needs a door that says "record the
+-- invite IF there is nothing better on the books", and asking it to read the
+-- record first from the client would be a read-then-write across the network —
+-- the one shape this file has refused everywhere else.
+--
+-- So: one statement's worth of decision, server-side, under the same
+-- membership gate. A standing `granted` is returned UNTOUCHED — no write, no
+-- audit row, no date moved, and the seat that follows inherits the studio's
+-- grant through channelConsentVerdict's "allow" branch (sms.ts:404-410, the
+-- half of G-3 the per-party ledger cannot do, fixture F-11). Anything else
+-- goes to record_channel_consent, which applies every gate it always did:
+-- evidence required, the seat refusal, the unanswered refusal, the normalizer.
+--
+-- The EXCEPTION handler is the race, not a second opinion: a grant that lands
+-- between the read and the call comes back as consent_already_granted from the
+-- statement-level gate, and the honest answer to it is the same answer —
+-- the grant stands, return it.
+CREATE OR REPLACE FUNCTION public.record_channel_invite(
+  p_organization_id    uuid,
+  p_channel_kind       text,
+  p_channel_value      text,
+  p_source             text DEFAULT NULL,
+  p_evidence           text DEFAULT NULL,
+  p_disclosure_version text DEFAULT NULL,
+  p_origin_project_id  uuid DEFAULT NULL
+)
+RETURNS public.studio_channel_consent
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+DECLARE
+  v_value text;
+  v_row   public.studio_channel_consent;
+BEGIN
+  -- The membership gate is stated HERE as well as inside the sibling: this
+  -- door READS the record on the standing-grant leg and returns it, so a
+  -- non-member must be refused before the read, not after it. (SECURITY
+  -- DEFINER, so the table's RLS is not the backstop it is for the views.)
+  IF NOT public.is_active_studio_member(p_organization_id) THEN
+    RAISE EXCEPTION 'not_a_studio_member'
+      USING HINT = 'Only an active, non-guest member of this studio may record consent.';
+  END IF;
+
+  IF p_channel_kind NOT IN ('sms', 'email') THEN
+    RAISE EXCEPTION 'invalid_channel_kind';
+  END IF;
+
+  -- The same normalizer both siblings use (00593), so this door cannot look up
+  -- a different key than the one record_channel_consent would write.
+  v_value := public.normalize_channel_value(p_channel_kind, p_channel_value);
+  IF v_value IS NULL THEN
+    RAISE EXCEPTION 'invalid_channel_value';
+  END IF;
+
+  SELECT * INTO v_row
+    FROM public.studio_channel_consent scc
+   WHERE scc.organization_id = p_organization_id
+     AND scc.channel_kind    = p_channel_kind
+     AND scc.channel_value   = v_value;
+
+  -- A STANDING GRANT IS THE BETTER FACT — but only a SENDABLE one. A record
+  -- reading `granted` with an unanswered refusal under it is unsendable
+  -- (channel_consent_status reads it as opted_out and the send gate refuses),
+  -- so there is no grant to protect: the call below is allowed to refuse it
+  -- properly and name reconsent(). The predicate is the sibling's own refusal
+  -- leg, word for word, so the two doors cannot drift apart on what "stands".
+  IF FOUND
+     AND v_row.status = 'granted'
+     AND v_row.refusal_unanswered IS NOT TRUE
+     AND (v_row.opt_out_at IS NULL
+          OR (v_row.consented_at IS NOT NULL
+              AND v_row.consented_at > v_row.opt_out_at)) THEN
+    RETURN v_row;
+  END IF;
+
+  BEGIN
+    RETURN public.record_channel_consent(
+      p_organization_id, p_channel_kind, v_value, 'pending',
+      p_source, p_evidence, p_disclosure_version, p_origin_project_id);
+  EXCEPTION WHEN SQLSTATE 'P0001' THEN
+    IF SQLERRM <> 'consent_already_granted' THEN
+      RAISE;
+    END IF;
+    -- The race: a grant landed between the read above and the write. Same
+    -- answer as the read would have given a moment later.
+    SELECT * INTO v_row
+      FROM public.studio_channel_consent scc
+     WHERE scc.organization_id = p_organization_id
+       AND scc.channel_kind    = p_channel_kind
+       AND scc.channel_value   = v_value;
+    RETURN v_row;
+  END;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.record_channel_invite(uuid, text, text, text, text, text, uuid)
+  FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.record_channel_invite(uuid, text, text, text, text, text, uuid)
+  TO authenticated, service_role;
+
+COMMENT ON FUNCTION public.record_channel_invite(uuid, text, text, text, text, text, uuid) IS
+  'The add path''s door onto studio_channel_consent (close-review r2 MAJOR-1). '
+  'Records the SMS opt-in invite as `pending` through record_channel_consent — '
+  'every gate of that door applies — but ONLY when this studio holds no '
+  'standing, sendable `granted` for the value; where one stands the record is '
+  'returned untouched and nothing is written, so adding a repeat sub to a '
+  'second job cannot demote the studio''s own recorded grant, refile its '
+  'evidence under a new act''s words, or turn an "allow" send verdict into '
+  '"unknown". A `granted` carrying an unanswered refusal is NOT treated as '
+  'standing — it is unsendable (channel_consent_status reads it as opted_out), '
+  'so the call falls through and is refused properly. Studio-member gated '
+  'before the read, since it is SECURITY DEFINER; normalises through '
+  'normalize_channel_value() so both doors share one key (00594).';
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- 5. record_channel_reconsent — PR-m's fresh recorded consent, on the record

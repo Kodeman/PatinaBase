@@ -66,7 +66,8 @@ can fire from a consent act at all, and both keep their shipped bodies.
 |---|---|
 | `public.refuse_legacy_consent_write()` + trigger `refuse_legacy_consent_write_trg` | `BEFORE UPDATE OF` the eight `sms_consent_*` / `sms_opt_out_at` columns on `project_parties`. Refuses a real change with `consent_legacy_column_frozen` unless `current_setting('app.consent_legacy_write', true) = 'on'`. Compares OLD/NEW as a tuple, so **restating** the same values (a whole-row UPDATE that names them) still writes; `BEFORE UPDATE OF` fires on column MENTION, not on change, and the shipped portal writes whole rows |
 | `public.project_consent_org(uuid)` | STABLE SQL, **SECURITY DEFINER**, `SET search_path TO 'public'`, `REVOKE ALL … FROM PUBLIC, anon` + `GRANT EXECUTE … TO authenticated, service_role`. `COALESCE(projects.studio_id, _primary_studio_for(designer_id))` — the one resolver both views and every writer answer from (close-review r1 MAJOR-1, §2.3) |
-| `public.channel_consent_status(uuid, text, text)` | STABLE SQL, SECURITY INVOKER, `SET search_path TO 'public'`, `REVOKE ALL … FROM PUBLIC, anon` + `GRANT EXECUTE … TO authenticated, service_role`. Returns NULL when the studio holds no record, which is what `not_asked` means; callers that must print a word COALESCE it |
+| `public.channel_consent_status(uuid, text, text)` | STABLE SQL, SECURITY INVOKER, `SET search_path TO 'public'`, `REVOKE ALL … FROM PUBLIC, anon` + `GRANT EXECUTE … TO authenticated, service_role`. Returns NULL when the studio holds no record, which is what `not_asked` means; callers that must print a word COALESCE it. **The verdict is `status` AND `refusal_unanswered` together** (close-review r2 MAJOR-2): a record carrying an unanswered refusal reads `opted_out` whatever its status column says, which is what the send gate (`channelConsentVerdict`) and the write gate already do with the flag — so the room cannot print "Texting" for a number every send is refused on |
+| `public.record_channel_invite(uuid, text, text, text, text, text, uuid)` | plpgsql, **SECURITY DEFINER**, `SET search_path TO 'public'`, `REVOKE ALL … FROM PUBLIC, anon` + `GRANT EXECUTE … TO authenticated, service_role`. The ADD path's door (close-review r2 MAJOR-1). Studio-member gated **before** its read, normalises through `normalize_channel_value()`, and records the invite through `record_channel_consent(…, 'pending', …)` — every gate of that door applies — only when this studio holds no standing, **sendable** `granted`. Where one stands the record is returned untouched and nothing is written. A `granted` carrying an unanswered refusal is not "standing": the call falls through and is refused as `consent_awaiting_recipient` |
 | `COMMENT ON COLUMN` × 8 | each of the frozen columns reads `legacy; read studio_channel_consent …` |
 | `COMMENT ON TABLE public.project_parties` | 00212:46's text, with the mirror invariant replaced by the freeze |
 
@@ -256,6 +257,19 @@ and `resolveRecipient` / `flushDeferredMessages` — all repointed at
   fails CLOSED, and the way out is either W2 retiring PR-x's check or a
   deliberate `app.consent_legacy_write` repair — test block 16Bf walks exactly
   that.
+- **A refusal on ONE seat makes the whole number unsendable for that studio,
+  even where another seat holds a genuine later grant** (close-review r1/r2
+  MINOR-7). `00594:666` sets `refusal_unanswered = (f.org IS NOT NULL)` and the
+  `refusal` population (`:567-570`) tests each row against **its own**
+  `sms_consented_at` only — never across seats. So a studio holding a 2025 STOP
+  on one seat and a real 2026 re-grant on a *different* seat folds to one record
+  that is permanently unsendable until the recipient texts START. It fails
+  CLOSED, consistent with r8 W4-M1's ruling ("the record is minted UNSENDABLE"),
+  and since close-review r2 MAJOR-2 the room now SAYS so — `channel_consent_status()`
+  reads that record as `opted_out`, so the Call Sheet and the Directory print
+  "Opted out" rather than "Texting" for it. What W2 owes is the repair path: the
+  studio cannot lower the flag through any door, and `record_channel_reconsent()`
+  only adds evidence beside it.
 - **One fail-open, narrow and named.** A project with `studio_id IS NULL` whose
   designer holds no active `design_studio` membership resolves to no org at all.
   The fold skipped it (`WHERE org IS NOT NULL`), so it has no record; the

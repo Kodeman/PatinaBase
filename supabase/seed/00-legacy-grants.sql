@@ -15866,6 +15866,18 @@ END $g$;
 
 -- 00594_studio_channel_consent.sql
 DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.record_channel_invite(uuid, text, text, text, text, text, uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00594_studio_channel_consent.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.record_channel_invite(uuid, text, text, text, text, text, uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00594_studio_channel_consent.sql
+DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.record_channel_reconsent(uuid, text, text, text, text, text, uuid) FROM PUBLIC, anon;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
