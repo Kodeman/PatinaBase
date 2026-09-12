@@ -68,6 +68,23 @@
 --   unconditionally, so a value supplied by postgres (a seed, a migration) is
 --   replaced by the ladder's answer rather than trusted.
 --
+-- REVIEW ROUND 5 (W1-R5-01) — created_by is authorship, and 00599's authorization key:
+--   Round 2 deliberately left created_by un-frozen on the open row so a studio's
+--   second admin could blur-save a correction (W1-R2-04). Round 4 then made that
+--   same column the key 00599's studio ladder ranks first on ("a rate this studio
+--   holds for her that she did not write"), which made the key caller-writable: she
+--   is the OWNER of the personal workspace 00295 provisions for every is_designer
+--   profile, so studio_member_rates_admin_update admits her there and one UPDATE
+--   relabelled her own self-set 99900 as arm's-length — measured end to end through
+--   RLS as her, $1,998.00 authorized on a 120-minute entry, with both negative
+--   controls (seat without forge, forge without seat) returning 15000/30000. The
+--   same move let a studio admin re-stamp a COLLEAGUE's row as self-authored,
+--   disarming the employing studio's rate for him too.
+--   The repair is an ACTOR check, not a freeze: created_by may change, but only to
+--   the acting admin's own id. That is precisely what PostgREST's upsert assigns,
+--   so W1-R2-04's blur-save is untouched. studio_member_rates_test case (j) carries
+--   the UPDATE vector.
+--
 -- Lineage: new table and new trigger functions — nothing is redefined.
 -- Reconciles: nothing. Additive (plan-v2 §0.1); project_time_entries is not
 -- touched by this file.
@@ -243,6 +260,26 @@ BEGIN
       USING ERRCODE = 'check_violation';
   END IF;
 
+  -- W1-R5-01: created_by stays un-frozen (the blur-save above needs it) but it is
+  -- AUTHORSHIP, not a free column — it may only ever be re-stamped with the acting
+  -- admin's own id. 00599's studio ladder ranks on "a rate this studio holds for her
+  -- that she did NOT write", so an un-checked UPDATE made the authorization key
+  -- caller-writable: she is the OWNER of the personal workspace 00295's
+  -- fc_provision_studio_on_designer provisions for every is_designer profile, so
+  -- studio_member_rates_admin_update admits her there, and re-stamping a third
+  -- party's id relabelled her own self-set 99900 as arm's-length — measured at
+  -- $1,998.00 authorized on a 120-minute entry, with the negative controls
+  -- (seat-no-forge, forge-no-seat) both returning 15000/30000. It also let a studio
+  -- admin re-stamp a COLLEAGUE's row as self-authored, disarming the employing
+  -- studio's own rate. The blur-save is untouched: PostgREST's upsert always
+  -- assigns the acting admin's own id, which is exactly what this permits.
+  IF NEW.created_by IS DISTINCT FROM OLD.created_by
+     AND NEW.created_by IS DISTINCT FROM (select auth.uid())
+  THEN
+    RAISE EXCEPTION 'studio member rate authorship records the actor — created_by may only be re-stamped with your own id'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
   RETURN NEW;
 END;
 $$;
@@ -388,6 +425,15 @@ BEGIN
   IF pg_get_functiondef('public.close_prior_studio_member_rate()'::regprocedure)
        ~ 'IF NEW\.effective_to IS NULL THEN' THEN
     RAISE EXCEPTION '00598: the close must recompute effective_to unconditionally — a supplied value is not trusted (W1-R3-04)';
+  END IF;
+
+  -- ── review round 5 ───────────────────────────────────────────────────────
+  -- W1-R5-01: created_by is 00599's authorization key, so it may only ever be
+  -- re-stamped with the actor's own id. Without this the key is caller-writable
+  -- and the member prices her own hour again out of her personal workspace.
+  IF pg_get_functiondef('public.guard_studio_member_rate_history()'::regprocedure)
+       !~ 'NEW\.created_by IS DISTINCT FROM \(select auth\.uid\(\)\)' THEN
+    RAISE EXCEPTION '00598: created_by may only be re-stamped with the actor''s own id — it is 00599''s arm''s-length key (W1-R5-01)';
   END IF;
 
   -- W1-R1-09: the rate's subject must be a studio member.

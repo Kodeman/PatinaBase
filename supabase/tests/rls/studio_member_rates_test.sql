@@ -43,6 +43,11 @@
 --       dates — or leave NO open row at all, after which every new hour resolves
 --       'none' and prints "rate pending" until somebody inserts again. Case (g)
 --       could not catch it: it never supplies the column.
+--   (j4)/(j5) W1-R5-01 (review round 5): created_by stays writable on the open row
+--       for (j)'s blur-save, but it is AUTHORSHIP and 00599's authorization key, so
+--       an UPDATE that stamps a THIRD party's id is refused. Unchecked, the owner of
+--       her auto-provisioned personal workspace relabelled her own self-set 99900 as
+--       arm's-length and it priced a 120-minute hour at $1,998.00 authorized.
 --
 -- How to run:
 --   psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 \
@@ -481,11 +486,20 @@ $$;
 -- rate the first had set the same day: the UPDATE raised 'identity and authorship
 -- are immutable' and her number was silently lost. Cases (a2)/(b2) could not catch
 -- it — they update hourly_rate_cents alone, as the same actor.
+--
+-- REVIEW ROUND 5 (W1-R5-01) extends it with the UPDATE vector. created_by is the
+-- key 00599's studio ladder ranks on, so leaving it writable left the key
+-- caller-writable: the owner of her auto-provisioned personal workspace re-stamped
+-- her own self-set rate with a third party's id and it read as arm's-length, and a
+-- studio admin could re-stamp a COLLEAGUE's row as self-authored. The arms (j1)-(j3)
+-- above are the blur-save that must keep working; (j4)/(j5) are the forge that must
+-- not. (b2) could not catch it: it asserts created_by = auth.uid() on INSERT only.
 DO $$
 DECLARE
   v_rate   INTEGER;
   v_author uuid;
   v_open   INTEGER;
+  v_forge_raised BOOLEAN := false;
 BEGIN
   -- The OWNER types a rate for the second member today.
   PERFORM pg_temp.assume_user('c2200000-0000-4000-8000-000000000001');
@@ -526,6 +540,31 @@ BEGIN
      AND effective_to IS NULL;
   ASSERT v_open = 1,
     'FAIL j3: the correction must not leave a second open row, found ' || v_open;
+
+  -- W1-R5-01: the same admin, same open row, stamping SOMEONE ELSE's id.
+  PERFORM pg_temp.assume_user('c2200000-0000-4000-8000-000000000002');
+  BEGIN
+    UPDATE public.studio_member_rates
+       SET created_by = 'c2200000-0000-4000-8000-000000000001'
+     WHERE studio_id = 'c2200000-0000-4000-8000-0000000000a1'
+       AND user_id   = 'c2200000-0000-4000-8000-000000000006'
+       AND effective_from = CURRENT_DATE;
+  EXCEPTION WHEN check_violation THEN v_forge_raised := true;
+  END;
+  PERFORM pg_temp.reset_role();
+
+  ASSERT v_forge_raised,
+    'FAIL j4 (W1-R5-01): created_by is 00599''s arm''s-length key — re-stamping it with a '
+    'THIRD party''s id must raise, or the key is caller-writable and a member prices her own hour';
+
+  SELECT created_by INTO v_author
+  FROM public.studio_member_rates
+  WHERE studio_id = 'c2200000-0000-4000-8000-0000000000a1'
+    AND user_id   = 'c2200000-0000-4000-8000-000000000006'
+    AND effective_from = CURRENT_DATE;
+  ASSERT v_author = 'c2200000-0000-4000-8000-000000000002',
+    'FAIL j5 (W1-R5-01): the refused forge must leave the recorded author standing, got '
+    || COALESCE(v_author::text, 'NULL');
 
   RAISE NOTICE 'studio_member_rates: case (j) passed.';
 END

@@ -92,6 +92,32 @@
 --       rate and the second is a bare rate, so both cases land on the studio that
 --       actually prices her.
 --
+-- REVIEW ROUND 5 added four cases. The round-4 key was a property the member can
+-- WRITE, two different ways, and HT-41's pick was a lever in the one hand 00578 held
+-- shut:
+--   (t) W1-R5-01 — created_by was left un-frozen on the open row in round 2 for the
+--       settings page's blur-save, and round 4 then made that same column the
+--       authorization key. One UPDATE as her relabelled her self-set 99900 as
+--       arm's-length: $1,998.00 authorized, the identical figure (p) and (r) each
+--       report as closed. 00598 now refuses any re-stamp that is not the actor's own
+--       id, which leaves the blur-save untouched (the upsert always names the actor).
+--   (u) W1-R5-02 — the same key with nothing forged: 'admin' <> 'owner', so she
+--       seats a SECOND ACCOUNT as an admin of her own workspace and that account
+--       writes her 99900 under its own created_by. The only keys she cannot
+--       manufacture are about her standing INSIDE the candidate studio, so the new
+--       FIRST key is "this studio holds a rate for her AND she does not run it".
+--   (v) W1-R5-03 — the project's own DESIGNER writes her own roster rows
+--       (`Lead designers manage team members` is an ALL policy on
+--       projects.designer_id = auth.uid()), so putting HT-41's pick above 00578's
+--       hard-coded 'lead_designer' let her bill the client at the best-paying signed
+--       card: 40000 where her own card says 10000, rate_source still 'authority'.
+--       The designer branch regains precedence and the row records the role that
+--       priced it.
+--   (w) the fall-through (u)'s key needs: for a studio's OWNER logging her own
+--       hours BOTH candidates are studios she runs, so the new first key ties at
+--       false and the lower keys must decide — or the principal of a real studio
+--       bills $0.
+--
 -- Every write runs as the member under `SET LOCAL ROLE authenticated` + a JWT
 -- claim: the guard returns early for current_user = 'postgres' (00412:2354), so
 -- a test written as postgres would assert nothing.
@@ -1449,6 +1475,425 @@ BEGIN
     'FAIL s4: 120 minutes at 18000/h is 36000, not ' || COALESCE(v_amount::text, 'NULL');
 
   RAISE NOTICE 'time_rate_resolution: case (s) passed.';
+END
+$$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- REVIEW ROUND 5 — the round-4 key was manufacturable two ways, and HT-41's own
+-- pick was a lever in the one hand the server used to hold shut.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, instance_id, aud, role)
+VALUES
+  ('b1100000-0000-4000-8000-000000005001', 'r5-forge@test.invalid',    '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('b1100000-0000-4000-8000-000000005002', 'r5-collab@test.invalid',   '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('b1100000-0000-4000-8000-000000005003', 'r5-twoacct@test.invalid',  '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('b1100000-0000-4000-8000-000000005004', 'r5-second@test.invalid',   '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('b1100000-0000-4000-8000-000000005005', 'r5-selfseat@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('b1100000-0000-4000-8000-000000005006', 'r5-soleowner@test.invalid','', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('b1100000-0000-4000-8000-000000005007', 'r5-peer@test.invalid',     '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+
+-- ─── (t) W1-R5-01: created_by is the key, and the key is not hers to write ──
+-- Case (r) closed the shape where both studios held a rate and the member's own
+-- number won. Round 4 closed it by ranking first on an ARM'S-LENGTH rate — "this
+-- studio holds a rate for her whose created_by is not her" — and justified that key
+-- on the claim that she cannot write such a row. She could: she is the OWNER of the
+-- personal workspace 00295's fc_provision_studio_on_designer provisions for every
+-- is_designer profile, studio_member_rates_admin_update admits her there, and round
+-- 2 deliberately left created_by UN-frozen on the open row for the settings page's
+-- blur-save (W1-R2-04). One UPDATE relabelled her self-set 99900 as arm's-length and
+-- it priced a 120-minute hour at $1,998.00 authorized again. Case (r) cannot catch
+-- it: nothing in it attempts the UPDATE.
+-- DO UPDATE, not DO NOTHING: auth.users' own handle_new_user trigger has already
+-- created these profile rows, so the flip below is only a real change — and 00295
+-- only fires — if is_designer is pinned false first. Same reason as case (r).
+INSERT INTO public.profiles (id, email, full_name, is_designer, created_at, updated_at)
+VALUES
+  ('b1100000-0000-4000-8000-000000005001', 'r5-forge@test.invalid',  'R5 Forge',  false, NOW(), NOW()),
+  ('b1100000-0000-4000-8000-000000005002', 'r5-collab@test.invalid', 'R5 Collab', false, NOW(), NOW())
+ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name, is_designer = false;
+
+-- The flip happens while she belongs to no organization, or 00295 no-ops.
+UPDATE public.profiles SET is_designer = true
+ WHERE id = 'b1100000-0000-4000-8000-000000005001';
+
+INSERT INTO public.organization_members (id, user_id, organization_id, role, status, joined_at)
+VALUES ('b1100000-0000-4000-8000-0000000050c1', 'b1100000-0000-4000-8000-000000005001',
+        'b1100000-0000-4000-8000-0000000000a1', 'member', 'active', NOW());
+
+INSERT INTO public.projects (id, name, designer_id, created_by)
+VALUES ('b1100000-0000-4000-8000-0000000050e1', 'Forge House',
+        'b1100000-0000-4000-8000-000000005001', 'b1100000-0000-4000-8000-000000005001');
+
+DO $$
+DECLARE
+  v_personal     uuid;
+  v_forge_raised BOOLEAN := false;
+  v_author       uuid;
+  v_rate         INTEGER;
+  v_source       TEXT;
+  v_amount       INTEGER;
+BEGIN
+  SELECT studio.id INTO v_personal
+  FROM public.organizations studio
+  JOIN public.organization_members m ON m.organization_id = studio.id
+  WHERE m.user_id = 'b1100000-0000-4000-8000-000000005001'
+    AND studio.id <> 'b1100000-0000-4000-8000-0000000000a1';
+  ASSERT v_personal IS NOT NULL,
+    'FAIL t0 (precondition): 00295 must have provisioned her personal workspace';
+  ASSERT (SELECT studio_id FROM public.projects
+           WHERE id = 'b1100000-0000-4000-8000-0000000050e1') IS NULL,
+    'FAIL t0b (precondition): the project must carry studio_id NULL — the fallback ladder is under test';
+
+  -- Her two moves, both through shipped policies, as her.
+  PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000005001');
+  INSERT INTO public.organization_members (id, user_id, organization_id, role, status, joined_at)
+  VALUES ('b1100000-0000-4000-8000-0000000050c2', 'b1100000-0000-4000-8000-000000005002',
+          v_personal, 'member', 'active', NOW());
+  INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
+  VALUES (v_personal, 'b1100000-0000-4000-8000-000000005001', 99900, CURRENT_DATE - 30,
+          'b1100000-0000-4000-8000-000000005001');
+  PERFORM pg_temp.reset_role();
+
+  -- The studio that employs her prices her arm's-length at 15000.
+  PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000000001');
+  INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
+  VALUES ('b1100000-0000-4000-8000-0000000000a1', 'b1100000-0000-4000-8000-000000005001',
+          15000, CURRENT_DATE - 20, 'b1100000-0000-4000-8000-000000000001');
+  PERFORM pg_temp.reset_role();
+
+  -- THE MOVE: re-stamp her own row's authorship with the collaborator's id.
+  PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000005001');
+  BEGIN
+    UPDATE public.studio_member_rates
+       SET created_by = 'b1100000-0000-4000-8000-000000005002'
+     WHERE studio_id = v_personal
+       AND user_id   = 'b1100000-0000-4000-8000-000000005001';
+  EXCEPTION WHEN check_violation THEN v_forge_raised := true;
+  END;
+  PERFORM pg_temp.reset_role();
+
+  ASSERT v_forge_raised,
+    'FAIL t1 (W1-R5-01): the member must not be able to re-stamp created_by with another '
+    'id — that column is 00599''s arm''s-length key';
+
+  SELECT created_by INTO v_author FROM public.studio_member_rates
+   WHERE studio_id = v_personal AND user_id = 'b1100000-0000-4000-8000-000000005001';
+  ASSERT v_author = 'b1100000-0000-4000-8000-000000005001',
+    'FAIL t2 (W1-R5-01): her workspace rate must still read as SELF-authored, got '
+    || COALESCE(v_author::text, 'NULL');
+
+  PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000005001');
+  INSERT INTO public.project_time_entries
+    (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('b1100000-0000-4000-8000-0000000050b1', 'b1100000-0000-4000-8000-0000000050e1',
+          'b1100000-0000-4000-8000-000000005001', NOW() - INTERVAL '2 hours', 120, true, 'manual_entry');
+  PERFORM pg_temp.reset_role();
+
+  SELECT hourly_rate_cents, rate_source, rated_amount_cents INTO v_rate, v_source, v_amount
+  FROM public.project_time_entries WHERE id = 'b1100000-0000-4000-8000-0000000050b1';
+
+  ASSERT v_rate <> 99900,
+    'FAIL t3 (W1-R5-01, HT-1 + HT-3): a forged created_by priced her hour at her own number';
+  ASSERT v_rate = 15000 AND v_source = 'studio_member' AND v_amount = 30000,
+    'FAIL t4 (W1-R5-01): the employing studio''s 15000 must price the hour (30000 for 120 min); got '
+    || COALESCE(v_rate::text, 'NULL') || ' / ' || COALESCE(v_source, 'NULL') || ' / '
+    || COALESCE(v_amount::text, 'NULL');
+
+  RAISE NOTICE 'time_rate_resolution: case (t) passed.';
+END
+$$;
+
+-- ─── (u) W1-R5-02: the arm's-length key, bought with one extra signup ───────
+-- No forge at all. organization_members' INSERT policy is
+-- `is_org_admin_or_owner(organization_id) AND (role <> 'owner')`, and
+-- 'admin' <> 'owner' — so the owner of her personal workspace seats a SECOND
+-- ACCOUNT there as an ADMIN, and that account satisfies
+-- studio_member_rates_admin_insert in full (owner/admin of the studio,
+-- created_by = auth.uid(), subject an active non-guest member) and writes her
+-- 99900. The row is genuinely arm's-length by the key's own definition. Cost: one
+-- signup. Case (t) cannot catch it — nothing is re-stamped; case (r) cannot, because
+-- its second seat never writes a rate.
+-- The key that closes it is about her standing INSIDE the candidate, which she
+-- cannot change: `Org admins can update members` and `Members can leave` both carry
+-- role <> 'owner', so she can neither resign nor demote her own owner seat.
+INSERT INTO public.profiles (id, email, full_name, is_designer, created_at, updated_at)
+VALUES
+  ('b1100000-0000-4000-8000-000000005003', 'r5-twoacct@test.invalid', 'R5 Twoacct', false, NOW(), NOW()),
+  ('b1100000-0000-4000-8000-000000005004', 'r5-second@test.invalid',  'R5 Second',  false, NOW(), NOW())
+ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name, is_designer = false;
+
+UPDATE public.profiles SET is_designer = true
+ WHERE id = 'b1100000-0000-4000-8000-000000005003';
+
+INSERT INTO public.organization_members (id, user_id, organization_id, role, status, joined_at)
+VALUES ('b1100000-0000-4000-8000-0000000050c3', 'b1100000-0000-4000-8000-000000005003',
+        'b1100000-0000-4000-8000-0000000000a1', 'member', 'active', NOW());
+
+INSERT INTO public.projects (id, name, designer_id, created_by)
+VALUES ('b1100000-0000-4000-8000-0000000050e2', 'Two-account House',
+        'b1100000-0000-4000-8000-000000005003', 'b1100000-0000-4000-8000-000000005003');
+
+DO $$
+DECLARE
+  v_personal uuid;
+  v_author   uuid;
+  v_rate     INTEGER;
+  v_source   TEXT;
+  v_amount   INTEGER;
+BEGIN
+  SELECT studio.id INTO v_personal
+  FROM public.organizations studio
+  JOIN public.organization_members m ON m.organization_id = studio.id
+  WHERE m.user_id = 'b1100000-0000-4000-8000-000000005003'
+    AND studio.id <> 'b1100000-0000-4000-8000-0000000000a1';
+  ASSERT v_personal IS NOT NULL,
+    'FAIL u0 (precondition): 00295 must have provisioned her personal workspace';
+  ASSERT (SELECT studio_id FROM public.projects
+           WHERE id = 'b1100000-0000-4000-8000-0000000050e2') IS NULL,
+    'FAIL u0b (precondition): the project must carry studio_id NULL';
+
+  -- She seats her second account as an ADMIN of her own workspace, through RLS.
+  PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000005003');
+  INSERT INTO public.organization_members (id, user_id, organization_id, role, status, joined_at)
+  VALUES ('b1100000-0000-4000-8000-0000000050c4', 'b1100000-0000-4000-8000-000000005004',
+          v_personal, 'admin', 'active', NOW());
+  PERFORM pg_temp.reset_role();
+
+  -- The second account writes her 99900 there. Nothing is forged.
+  PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000005004');
+  INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
+  VALUES (v_personal, 'b1100000-0000-4000-8000-000000005003', 99900, CURRENT_DATE - 30,
+          'b1100000-0000-4000-8000-000000005004');
+  PERFORM pg_temp.reset_role();
+
+  -- The studio that employs her prices her arm's-length at 15000.
+  PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000000001');
+  INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
+  VALUES ('b1100000-0000-4000-8000-0000000000a1', 'b1100000-0000-4000-8000-000000005003',
+          15000, CURRENT_DATE - 20, 'b1100000-0000-4000-8000-000000000001');
+  PERFORM pg_temp.reset_role();
+
+  SELECT created_by INTO v_author FROM public.studio_member_rates
+   WHERE studio_id = v_personal AND user_id = 'b1100000-0000-4000-8000-000000005003';
+  ASSERT v_author = 'b1100000-0000-4000-8000-000000005004',
+    'FAIL u0c (precondition): her workspace row must read ARM''S-LENGTH (authored by the second '
+    'account) or this case proves nothing; got ' || COALESCE(v_author::text, 'NULL');
+  ASSERT (SELECT count(*) FROM public.organization_members
+           WHERE organization_id = v_personal AND status = 'active' AND role <> 'guest') = 2,
+    'FAIL u0d (precondition): the admin seat must have landed through RLS';
+
+  PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000005003');
+  INSERT INTO public.project_time_entries
+    (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('b1100000-0000-4000-8000-0000000050b2', 'b1100000-0000-4000-8000-0000000050e2',
+          'b1100000-0000-4000-8000-000000005003', NOW() - INTERVAL '2 hours', 120, true, 'manual_entry');
+  PERFORM pg_temp.reset_role();
+
+  SELECT hourly_rate_cents, rate_source, rated_amount_cents INTO v_rate, v_source, v_amount
+  FROM public.project_time_entries WHERE id = 'b1100000-0000-4000-8000-0000000050b2';
+
+  ASSERT v_rate <> 99900,
+    'FAIL u1 (W1-R5-02, HT-1 + HT-3): a second account she controls priced her own hour — '
+    'every key that asks a question ABOUT a candidate studio is one a studio she owns can answer';
+  ASSERT v_rate = 15000 AND v_source = 'studio_member' AND v_amount = 30000,
+    'FAIL u2 (W1-R5-02): the studio she does NOT run must price the hour at 15000 / 30000; got '
+    || COALESCE(v_rate::text, 'NULL') || ' / ' || COALESCE(v_source, 'NULL') || ' / '
+    || COALESCE(v_amount::text, 'NULL');
+
+  RAISE NOTICE 'time_rate_resolution: case (u) passed.';
+END
+$$;
+
+-- ─── (v) W1-R5-03: a project designer may not pick her own client-billed card ─
+-- 00578:2708-2710 hard-coded 'lead_designer' for the project's own designer BEFORE
+-- any roster read, so her roster rows were never consulted for her. W1 put HT-41's
+-- pick above that branch and validated it against project_team_members — a table
+-- she WRITES: `Lead designers manage team members` is an ALL policy qualified on
+-- projects.designer_id = auth.uid() with no with_check of its own. So she seats
+-- herself as 'vendor', names it, and the 40000 Vendor card prices her hour where her
+-- own Lead designer card says 10000 — rate_source still 'authority', so the row
+-- prints as a signed, client-agreed rate and claim_time_entries invoice-locks it.
+-- Case (e) cannot catch it (its two-hat member is NOT the project designer) and
+-- neither can (g) (its role is one she does not hold at all).
+-- is_designer stays FALSE: she never needs a personal workspace here (the signed
+-- authority prices this hour), and a second studio would only add noise.
+INSERT INTO public.profiles (id, email, full_name, is_designer, created_at, updated_at)
+VALUES ('b1100000-0000-4000-8000-000000005005', 'r5-selfseat@test.invalid', 'R5 Selfseat', false, NOW(), NOW())
+ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name, is_designer = false;
+
+-- A plain 'member' on purpose: the lever under test is the PROJECT designer's, not
+-- a studio admin's.
+INSERT INTO public.organization_members (id, user_id, organization_id, role, status, joined_at)
+VALUES ('b1100000-0000-4000-8000-0000000050c5', 'b1100000-0000-4000-8000-000000005005',
+        'b1100000-0000-4000-8000-0000000000a1', 'member', 'active', NOW());
+
+INSERT INTO public.projects (id, name, designer_id, created_by)
+VALUES ('b1100000-0000-4000-8000-0000000050e3', 'Self-seat House',
+        'b1100000-0000-4000-8000-000000005005', 'b1100000-0000-4000-8000-000000005005');
+
+INSERT INTO public.proposals (id, designer_id, title, status, document_kind)
+VALUES ('b1100000-0000-4000-8000-0000000050d1', 'b1100000-0000-4000-8000-000000005005',
+        'Self-seat agreement', 'draft', 'design_services');
+
+-- Her own card pays 10000; the Vendor card pays four times that.
+INSERT INTO public.proposal_service_rates (id, proposal_id, version, role_name, hourly_rate_cents, sort_order, effective_at)
+VALUES
+  ('b1100000-0000-4000-8000-0000000050f1', 'b1100000-0000-4000-8000-0000000050d1', 1, 'Lead designer', 10000, 0, NOW() - INTERVAL '20 days'),
+  ('b1100000-0000-4000-8000-0000000050f2', 'b1100000-0000-4000-8000-0000000050d1', 1, 'Vendor',        40000, 1, NOW() - INTERVAL '20 days');
+
+INSERT INTO public.project_commercial_documents
+  (id, project_id, proposal_id, document_kind, is_origin, created_by, executed_at)
+VALUES ('b1100000-0000-4000-8000-0000000050cd', 'b1100000-0000-4000-8000-0000000050e3',
+        'b1100000-0000-4000-8000-0000000050d1', 'design_services', true,
+        'b1100000-0000-4000-8000-000000005005', NOW() - INTERVAL '5 days');
+
+INSERT INTO public.project_billing_authorities
+  (id, project_id, commercial_document_id, source_proposal_id, billing_ceiling_cents,
+   retainer_amount_cents, retainer_activation_policy, billing_cadence, effective_at, status)
+VALUES ('b1100000-0000-4000-8000-0000000050ba', 'b1100000-0000-4000-8000-0000000050e3',
+        'b1100000-0000-4000-8000-0000000050cd', 'b1100000-0000-4000-8000-0000000050d1',
+        100000000, 0, 'immediate', 'monthly', NOW() - INTERVAL '5 days', 'active');
+
+INSERT INTO public.project_billing_authority_rates
+  (id, billing_authority_id, source_rate_id, version, role_name, hourly_rate_cents)
+VALUES
+  ('b1100000-0000-4000-8000-0000000050a1', 'b1100000-0000-4000-8000-0000000050ba', 'b1100000-0000-4000-8000-0000000050f1', 1, 'Lead designer', 10000),
+  ('b1100000-0000-4000-8000-0000000050a2', 'b1100000-0000-4000-8000-0000000050ba', 'b1100000-0000-4000-8000-0000000050f2', 1, 'Vendor',        40000);
+
+DO $$
+DECLARE
+  v_seated BOOLEAN := false;
+  v_rate   INTEGER;
+  v_source TEXT;
+  v_role   TEXT;
+  v_amount INTEGER;
+BEGIN
+  -- THE MOVE, as her, through the shipped roster policy. Nothing privileged.
+  PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000005005');
+  INSERT INTO public.project_team_members (id, project_id, user_id, role, assigned_by)
+  VALUES ('b1100000-0000-4000-8000-0000000050dd', 'b1100000-0000-4000-8000-0000000050e3',
+          'b1100000-0000-4000-8000-000000005005', 'vendor', 'b1100000-0000-4000-8000-000000005005');
+  PERFORM pg_temp.reset_role();
+
+  SELECT EXISTS (SELECT 1 FROM public.project_team_members
+                  WHERE project_id = 'b1100000-0000-4000-8000-0000000050e3'
+                    AND user_id = 'b1100000-0000-4000-8000-000000005005'
+                    AND role = 'vendor' AND removed_at IS NULL) INTO v_seated;
+  ASSERT v_seated,
+    'FAIL v0 (precondition): the project designer must be able to seat herself as vendor — if '
+    'that is closed, this case is vacuous and the finding should be re-derived';
+
+  PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000005005');
+  INSERT INTO public.project_time_entries
+    (id, project_id, user_id, started_at, duration_minutes, billable, source, rate_role)
+  VALUES ('b1100000-0000-4000-8000-0000000050b3', 'b1100000-0000-4000-8000-0000000050e3',
+          'b1100000-0000-4000-8000-000000005005', NOW() - INTERVAL '2 hours', 120, true,
+          'manual_entry', 'vendor');
+  PERFORM pg_temp.reset_role();
+
+  SELECT hourly_rate_cents, rate_source, rate_role, rated_amount_cents
+    INTO v_rate, v_source, v_role, v_amount
+  FROM public.project_time_entries WHERE id = 'b1100000-0000-4000-8000-0000000050b3';
+
+  ASSERT v_rate <> 40000,
+    'FAIL v1 (W1-R5-03, HT-1): the project designer named the Vendor card and billed the client '
+    '$400.00/h where her own signed card says $100.00/h';
+  ASSERT v_rate = 10000 AND v_source = 'authority' AND v_amount = 20000,
+    'FAIL v2 (W1-R5-03): her own Lead designer card must price the hour (10000 / 20000 for 120 '
+    'min); got ' || COALESCE(v_rate::text, 'NULL') || ' / ' || COALESCE(v_source, 'NULL')
+    || ' / ' || COALESCE(v_amount::text, 'NULL');
+  ASSERT v_role = 'lead_designer',
+    'FAIL v3 (W1-R5-03): the row must record the role that PRICED it, not the pick it discarded; got '
+    || COALESCE(v_role, 'NULL');
+
+  RAISE NOTICE 'time_rate_resolution: case (v) passed.';
+END
+$$;
+
+-- ─── (w) the round-5 key must not strand a studio's OWNER on her own project ─
+-- The new first key asks "does this studio hold a rate for her AND is she not the
+-- one who runs it". For a studio's OWNER logging her own hours both candidates are
+-- studios she runs, so the key TIES AT FALSE and the ladder must fall through to the
+-- keys below — otherwise the commonest shape in the product (the principal of a real
+-- studio) resolves 'none' and bills $0. Her own one-person workspace also holds a
+-- self-set 99900 here, so the fall-through has to land on the real studio by the
+-- multi-member count, the key round 4 demoted to third. Cases (n), (p) and (s) are
+-- adjacent but none of them has an owner whose BOTH candidates are hers.
+INSERT INTO public.profiles (id, email, full_name, is_designer, created_at, updated_at)
+VALUES
+  ('b1100000-0000-4000-8000-000000005006', 'r5-soleowner@test.invalid', 'R5 Soleowner', false, NOW(), NOW()),
+  ('b1100000-0000-4000-8000-000000005007', 'r5-peer@test.invalid',      'R5 Peer',      false, NOW(), NOW())
+ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name, is_designer = false;
+
+UPDATE public.profiles SET is_designer = true
+ WHERE id = 'b1100000-0000-4000-8000-000000005006';
+
+INSERT INTO public.organizations (id, type, name, slug, status)
+VALUES ('b1100000-0000-4000-8000-0000000050a3', 'design_studio', 'R5 Real Studio', 'r5-real-studio', 'active');
+
+INSERT INTO public.organization_members (id, user_id, organization_id, role, status, joined_at)
+VALUES
+  ('b1100000-0000-4000-8000-0000000050c6', 'b1100000-0000-4000-8000-000000005006',
+   'b1100000-0000-4000-8000-0000000050a3', 'owner',  'active', NOW()),
+  ('b1100000-0000-4000-8000-0000000050c7', 'b1100000-0000-4000-8000-000000005007',
+   'b1100000-0000-4000-8000-0000000050a3', 'member', 'active', NOW());
+
+INSERT INTO public.projects (id, name, designer_id, created_by)
+VALUES ('b1100000-0000-4000-8000-0000000050e4', 'Principal House',
+        'b1100000-0000-4000-8000-000000005006', 'b1100000-0000-4000-8000-000000005006');
+
+DO $$
+DECLARE
+  v_personal uuid;
+  v_rate     INTEGER;
+  v_source   TEXT;
+  v_amount   INTEGER;
+BEGIN
+  SELECT studio.id INTO v_personal
+  FROM public.organizations studio
+  JOIN public.organization_members m ON m.organization_id = studio.id
+  WHERE m.user_id = 'b1100000-0000-4000-8000-000000005006'
+    AND studio.id <> 'b1100000-0000-4000-8000-0000000050a3';
+  ASSERT v_personal IS NOT NULL,
+    'FAIL w0 (precondition): 00295 must have provisioned her personal workspace, or the tie this '
+    'case is about does not exist';
+  ASSERT (SELECT studio_id FROM public.projects
+           WHERE id = 'b1100000-0000-4000-8000-0000000050e4') IS NULL,
+    'FAIL w0b (precondition): the project must carry studio_id NULL';
+  ASSERT (SELECT count(*) FROM public.organization_members
+           WHERE organization_id = 'b1100000-0000-4000-8000-0000000050a3'
+             AND status = 'active' AND role <> 'guest') > 1,
+    'FAIL w0c (precondition): her real studio must be multi-member';
+
+  -- Both rates are hers to write (she owns both studios) — which is exactly why the
+  -- new first key ties at false on both and the lower keys have to decide.
+  PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000005006');
+  INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
+  VALUES
+    ('b1100000-0000-4000-8000-0000000050a3', 'b1100000-0000-4000-8000-000000005006', 22000,
+     CURRENT_DATE - 30, 'b1100000-0000-4000-8000-000000005006'),
+    (v_personal, 'b1100000-0000-4000-8000-000000005006', 99900,
+     CURRENT_DATE - 30, 'b1100000-0000-4000-8000-000000005006');
+
+  INSERT INTO public.project_time_entries
+    (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('b1100000-0000-4000-8000-0000000050b4', 'b1100000-0000-4000-8000-0000000050e4',
+          'b1100000-0000-4000-8000-000000005006', NOW() - INTERVAL '2 hours', 120, true, 'manual_entry');
+  PERFORM pg_temp.reset_role();
+
+  SELECT hourly_rate_cents, rate_source, rated_amount_cents INTO v_rate, v_source, v_amount
+  FROM public.project_time_entries WHERE id = 'b1100000-0000-4000-8000-0000000050b4';
+
+  ASSERT v_source <> 'none',
+    'FAIL w1 (W1-R5-02 regression guard): the round-5 key ties at false for a studio''s OWNER, so '
+    'the ladder must fall through — it resolved ''none'' and billed $0 instead';
+  ASSERT v_rate = 22000 AND v_source = 'studio_member' AND v_amount = 44000,
+    'FAIL w2: her real studio''s 22000 must price the hour (44000 for 120 min), not her one-person '
+    'workspace''s 99900; got ' || COALESCE(v_rate::text, 'NULL') || ' / '
+    || COALESCE(v_source, 'NULL') || ' / ' || COALESCE(v_amount::text, 'NULL');
+
+  RAISE NOTICE 'time_rate_resolution: case (w) passed.';
   RAISE NOTICE 'All time_rate_resolution assertions passed.';
 END
 $$;

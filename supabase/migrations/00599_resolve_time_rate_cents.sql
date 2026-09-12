@@ -189,6 +189,44 @@
 --    — `OR (member count) = 1` on the first key — was measured and FAILS case (p).
 --    Case (r) pins the shape, with the collaborator seat written through RLS.
 --
+-- REVIEW ROUND 5 — THE STRUCTURAL FORM OF THE SAME HOLE, AND HT-41's OWN LEVER:
+--
+--  · W1-R5-01 + W1-R5-02 (one repair here, one in 00598). Round 4's arm's-length
+--    key was manufacturable TWO ways. (a) created_by was deliberately un-frozen on
+--    the open row in round 2 (W1-R2-04, the blur-save), so the owner of her
+--    personal workspace simply UPDATEd it to a third party's id — 00598 now refuses
+--    any re-stamp that is not the actor's own. (b) With nothing forged at all:
+--    organization_members' INSERT policy carries `role <> 'owner'`, and
+--    'admin' <> 'owner', so she seats a SECOND ACCOUNT in her own workspace as an
+--    admin and that account writes her 99900 under its own created_by — genuinely
+--    arm's-length, cost one signup. Both measured at the identical $1,998.00
+--    authorized that rounds 3 and 4 each reported as closed.
+--
+--    Three rounds running the first key was something the member can manufacture
+--    (the member count, then the row's authorship). The pattern is structural:
+--    every key that asks a question ABOUT a candidate studio is answerable by a
+--    studio she owns. The keys she cannot manufacture are about her own standing
+--    INSIDE the candidate — `Org admins can update members` and `Members can leave`
+--    both carry `role <> 'owner'`, so she can neither resign nor demote her own
+--    owner seat. The new FIRST key is therefore "this studio holds a rate for her
+--    AND she is not the one who runs it" (membership.role NOT IN ('owner','admin')),
+--    with every round-4 key unchanged below it. The rate leg must live INSIDE that
+--    key: ranking on employment alone was measured and re-breaks W1-R4-02 (the
+--    employing studio wins and has never priced her → 'none', $0).
+--
+--  · W1-R5-03 — HT-41's role pick must not reach the project's own DESIGNER.
+--    `Lead designers manage team members` (00177) is an ALL policy qualified on
+--    projects.designer_id = auth.uid() with no with_check of its own, so she writes
+--    her own roster rows: she seats herself as 'vendor', names it, and the signed
+--    Vendor card prices her hour in place of her own Lead designer card —
+--    rate_source still reading 'authority', so the row prints as a signed,
+--    client-agreed rate and claim_time_entries invoice-locks it. Measured on cards
+--    of 10000 / 40000: 40000 with the pick, 10000 with the pick omitted (negative
+--    control). 00578:2708-2710 hard-coded her role BEFORE any roster read, so this
+--    was W1's own regression; the designer branch regains precedence here and in
+--    00601's ladder. Her pick is DISCARDED, not refused (§0.7's idiom) — ASSERT 3
+--    still raises on a role she does not hold at all.
+--
 -- Lineage: new function — nothing is redefined.
 -- Reconciles: the three 00578 branches that leave the rate client-owned are
 -- fixed in 00601, not here; this file only supplies the answer.
@@ -276,7 +314,34 @@ BEGIN
     -- measured and FAILS case (p) — it re-admits the one-person workspace above
     -- the studio that employs her. The multi-member count survives as a
     -- third-level tiebreak only, where it can no longer outrank a real rate.
+    --
+    -- W1-R5-02: the arm's-length key is still MANUFACTURABLE, with nothing forged.
+    -- organization_members' INSERT policy is
+    -- `is_org_admin_or_owner(organization_id) AND (role <> 'owner')`, and
+    -- 'admin' <> 'owner' — so the owner of her personal workspace seats a SECOND
+    -- ACCOUNT there as an admin, and that account satisfies
+    -- studio_member_rates_admin_insert in full and writes her 99900 under its own
+    -- created_by. Genuinely arm's-length by the key's own definition; cost, one
+    -- extra signup. Measured at the same $1,998.00 authorized.
+    --
+    -- Three rounds running, the first key was a property the member can
+    -- manufacture (the member count, then the row's authorship), because every
+    -- key that asks a question ABOUT a candidate studio is answerable by a studio
+    -- she owns. The keys she CANNOT manufacture are about her own standing INSIDE
+    -- the candidate: `Org admins can update members` and `Members can leave` both
+    -- carry `role <> 'owner'`, so she can neither stop being her workspace's owner
+    -- nor demote herself there. Hence the first key below: "this studio holds a
+    -- rate for her AND she is not the one who runs it." The rate leg must sit
+    -- INSIDE the key — ranking on employment alone was measured and re-breaks
+    -- W1-R4-02 (the employing studio wins and has never priced her, so the hour
+    -- resolves 'none' and bills $0).
     ORDER BY EXISTS (
+               SELECT 1 FROM public.studio_member_rates AS employer
+               WHERE employer.studio_id = studio.id
+                 AND employer.user_id   = p_user_id
+                 AND membership.role NOT IN ('owner', 'admin')
+             ) DESC,
+             EXISTS (
                SELECT 1 FROM public.studio_member_rates AS arms_length
                WHERE arms_length.studio_id = studio.id
                  AND arms_length.user_id   = p_user_id
@@ -370,17 +435,29 @@ BEGIN
       USING ERRCODE = 'check_violation';
   END IF;
 
-  IF v_role IS NULL THEN
-    IF v_designer_id IS NOT NULL AND v_designer_id IS NOT DISTINCT FROM p_user_id THEN
-      v_role := 'lead_designer';
-    ELSE
-      SELECT CASE WHEN count(DISTINCT member.role) = 1 THEN min(member.role) END
-        INTO v_role
-      FROM public.project_team_members AS member
-      WHERE member.project_id = p_project_id
-        AND member.user_id    = p_user_id
-        AND member.removed_at IS NULL;
-    END IF;
+  -- ── W1-R5-03: the project's own designer is lead_designer, ABOVE her pick ──
+  -- 00578:2708-2710 hard-coded 'lead_designer' for the project's own designer
+  -- BEFORE any roster read, so her roster rows were never consulted for her.
+  -- Taking p_rate_role first handed the one actor whose role the server used to fix
+  -- a lever over her own client-billed rate: `Lead designers manage team members`
+  -- is an ALL policy qualified on projects.designer_id = auth.uid() with no
+  -- with_check of its own, so she seats HERSELF as 'vendor' through RLS, names it,
+  -- and the signed Vendor card prices her hour in place of her own Lead designer
+  -- card — rate_source still reading 'authority', so the row prints as a signed,
+  -- client-agreed rate and claim_time_entries invoice-locks it. Measured on cards
+  -- of 10000 (Lead designer) / 40000 (Vendor): 40000 with the pick, 10000 without.
+  -- The pick is DISCARDED, not refused (§0.7's idiom) — ASSERT 3 above still
+  -- refuses a role she does not hold at all. No capability is lost relative to the
+  -- shipped 00578 baseline, which never consulted her roster.
+  IF v_designer_id IS NOT NULL AND v_designer_id IS NOT DISTINCT FROM p_user_id THEN
+    v_role := 'lead_designer';
+  ELSIF v_role IS NULL THEN
+    SELECT CASE WHEN count(DISTINCT member.role) = 1 THEN min(member.role) END
+      INTO v_role
+    FROM public.project_team_members AS member
+    WHERE member.project_id = p_project_id
+      AND member.user_id    = p_user_id
+      AND member.removed_at IS NULL;
   END IF;
 
   -- ── Tier 1: the signed authority rate covering p_at ──────────────────────
@@ -569,6 +646,33 @@ BEGIN
        !~ 'arms_length\.studio_id = studio\.id[\s\S]*priced\.studio_id = studio\.id[\s\S]*peer\.organization_id = studio\.id'
   THEN
     RAISE EXCEPTION '00599: the studio fallback keys must be ordered arm''s-length rate → any rate → multi-member count (W1-R4-01, W1-R4-02)';
+  END IF;
+
+  -- ── review round 5 ───────────────────────────────────────────────────────
+  -- W1-R5-02: the FIRST key must be the one the member cannot manufacture — "this
+  -- studio holds a rate for her AND she does not run it". Every key that asks a
+  -- question about the candidate studio (its member count, its row's authorship)
+  -- is answerable by a studio she owns; her own OWNER seat there is not, because
+  -- `Org admins can update members` and `Members can leave` both carry
+  -- role <> 'owner'. The rate leg must be inside the same key or W1-R4-02 returns.
+  IF pg_get_functiondef('public.resolve_time_rate_cents(uuid,uuid,timestamptz,text)'::regprocedure)
+       !~ 'employer\.user_id\s+= p_user_id\s+AND membership\.role NOT IN \(''owner'', ''admin''\)'
+  THEN
+    RAISE EXCEPTION '00599: the studio fallback must rank first on a rate held by a studio the member does NOT run — an arm''s-length row is one she can buy with a second account (W1-R5-02)';
+  END IF;
+  IF pg_get_functiondef('public.resolve_time_rate_cents(uuid,uuid,timestamptz,text)'::regprocedure)
+       !~ 'employer\.studio_id = studio\.id[\s\S]*arms_length\.studio_id = studio\.id'
+  THEN
+    RAISE EXCEPTION '00599: the employment key must sit ABOVE the arm''s-length key (W1-R5-02)';
+  END IF;
+
+  -- W1-R5-03: HT-41's pick must not reach the project's own designer, whose role
+  -- the server fixes. Pinned as the designer branch standing ABOVE the argument in
+  -- the role ladder: the IF tests the designer and the ELSIF tests v_role IS NULL.
+  IF pg_get_functiondef('public.resolve_time_rate_cents(uuid,uuid,timestamptz,text)'::regprocedure)
+       !~ 'IF v_designer_id IS NOT NULL AND v_designer_id IS NOT DISTINCT FROM p_user_id THEN\s+v_role := ''lead_designer'';\s+ELSIF v_role IS NULL THEN'
+  THEN
+    RAISE EXCEPTION '00599: the project designer''s lead_designer role must be fixed ABOVE p_rate_role, or she bills the client at the best-paying signed card (W1-R5-03)';
   END IF;
 
   -- W1-R2-03: the designer-on-behalf leg is for the classifier, not for callers.

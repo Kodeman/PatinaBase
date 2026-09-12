@@ -93,6 +93,23 @@
 --  · W1-R1-03 — delta 1 validates only a NEW role pick, not every fire. See the
 --    comment on delta 1.
 --
+-- REVIEW ROUND 5 (W1-R5-03) — HT-41's pick does not reach the project's designer:
+--   The first revision put `IF NEW.rate_role IS NOT NULL` ABOVE 00578's
+--   `v_project_designer_id IS NOT DISTINCT FROM NEW.user_id` branch. 00578 fixed the
+--   project designer's role at 'lead_designer' BEFORE any roster read, so her roster
+--   rows were never consulted; delta 1 validates a pick against
+--   project_team_members, a table she WRITES (`Lead designers manage team members`
+--   is an ALL policy on projects.designer_id = auth.uid() with no with_check), so
+--   the one actor whose role the server used to own could mint any roster role and
+--   name it. Measured on a services project with signed cards of 10000 (Lead
+--   designer) and 40000 (Vendor), as a designer who is a plain studio member: a
+--   self-seat as vendor then a named pick billed the client 40000 with
+--   rate_source 'authority' — $800.00 where her own signed card says $200.00, and
+--   claim_time_entries would invoice-lock it. With the pick omitted, 10000.
+--   The designer branch regains precedence in the ladder below and in 00599's
+--   mirror, and delta 4 now records the resolver's role rather than the pick, so the
+--   row cannot print a role that did not price it. Nothing is lost against 00578.
+--
 -- Reconciles: nothing reverted — the body is 00578's, verbatim, this session.
 -- ═══════════════════════════════════════════════════════════════════════════
 
@@ -179,9 +196,13 @@ BEGIN
   ) AS resolved;
 
   -- delta 4: the row records the role that priced it.
-  IF NEW.rate_role IS NULL
-     AND v_rate_role IN ('lead_designer', 'support_designer', 'bookkeeper', 'vendor')
-  THEN
+  -- W1-R5-03: the resolver's answer, not the caller's pick, because those are the
+  -- same value EXCEPT where the server owns the role — the project's own designer,
+  -- whose 'lead_designer' is fixed above p_rate_role in 00599. Keeping the old
+  -- `NEW.rate_role IS NULL` guard would have left her row printing the 'vendor' she
+  -- asked for while the Lead designer card priced it: a row that lies about the
+  -- number on it. For every other member v_rate_role IS her validated pick.
+  IF v_rate_role IN ('lead_designer', 'support_designer', 'bookkeeper', 'vendor') THEN
     NEW.rate_role := v_rate_role;
   END IF;
 
@@ -307,10 +328,19 @@ BEGIN
     -- 00601 (HT-41): the member's validated pick decides which card prices the
     -- hour when she holds more than one role. With no pick, 00578's
     -- count(DISTINCT role) = 1 collapse is unchanged.
-    IF NEW.rate_role IS NOT NULL THEN
-      v_team_role := NEW.rate_role;
-    ELSIF v_project_designer_id IS NOT DISTINCT FROM NEW.user_id THEN
+    --
+    -- W1-R5-03: the project's own DESIGNER is not one of those members. 00578's
+    -- branch fixed her role at 'lead_designer' before any roster read; putting the
+    -- pick above it let her seat herself as 'vendor' (`Lead designers manage team
+    -- members` is an ALL policy on projects.designer_id = auth.uid()) and bill the
+    -- client at whichever signed card pays best — measured 40000 where her own card
+    -- said 10000, rate_source still 'authority'. The designer branch therefore
+    -- regains precedence; nothing is lost against 00578, which never read her
+    -- roster at all.
+    IF v_project_designer_id IS NOT DISTINCT FROM NEW.user_id THEN
       v_team_role := 'lead_designer';
+    ELSIF NEW.rate_role IS NOT NULL THEN
+      v_team_role := NEW.rate_role;
     ELSE
       SELECT CASE WHEN count(DISTINCT member.role) = 1 THEN min(member.role) END
       INTO v_team_role
@@ -482,6 +512,16 @@ BEGIN
   -- author's current studio rate (P-4).
   IF v_src !~ 'OLD\.rate_source IS NULL' THEN
     RAISE EXCEPTION '00601: delta 5 must preserve a pre-00600 rate snapshot even when the chain resolves (P-4, W1-R3-02)';
+  END IF;
+
+  -- ── review round 5 ───────────────────────────────────────────────────────
+  -- W1-R5-03: the designer branch must stand ABOVE HT-41's pick in the role
+  -- ladder. `Lead designers manage team members` is an ALL policy on
+  -- projects.designer_id = auth.uid(), so a pick the server honours above its own
+  -- fixed role lets the project's designer choose her client-billed card.
+  IF v_src !~ 'IF v_project_designer_id IS NOT DISTINCT FROM NEW\.user_id THEN\s+v_team_role := ''lead_designer'';\s+ELSIF NEW\.rate_role IS NOT NULL THEN'
+  THEN
+    RAISE EXCEPTION '00601: the project designer''s lead_designer role must be fixed ABOVE NEW.rate_role in the role ladder (W1-R5-03)';
   END IF;
 END
 $postcondition$;
