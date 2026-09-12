@@ -680,6 +680,106 @@ Deno.test("a granted record does not override an opted-out party row", async () 
   assertEquals(res.reason, "opted_out");
 });
 
+// r6 M6-3: `status` is not the whole verdict. refusal_unanswered is the stored
+// fact the WRITE door treats as load-bearing, and it was invisible here.
+// record_channel_reconsent() moves a record opted_out -> pending keeping
+// opt_out_at and the flag, and the mirror then stamps `pending` onto every seat
+// in the studio on that number — so the party-row backstop below is gone and
+// the record reads `pending`. Traced from that state the invite branch passed
+// and a real SMS went to a number that had replied STOP, on a 10DLC campaign.
+Deno.test("an unanswered refusal refuses the send, whatever the status now says", async () => {
+  const fake = createFakeSupabase({
+    // The seat as the mirror leaves it after reconsent(): no longer opted_out.
+    project_parties: [party("p1", "pending")],
+    projects: [{ id: "proj1", studio_id: "org-alpha" }],
+    studio_channel_consent: [{
+      organization_id: "org-alpha",
+      channel_kind: "sms",
+      channel_value: "+15551230001",
+      status: "pending",
+      refusal_unanswered: true,
+      opt_out_at: "2025-12-03T00:00:00Z",
+    }],
+  });
+  const res = await sendPartySms(fake as never, { partyId: "p1", body: "hello" }, {
+    getEnv: envOf(CONSENT_ENV),
+    now: OPEN_HOURS,
+  });
+  assert(!res.sent, "a refusal nobody has answered must still refuse");
+  assertEquals(res.reason, "opted_out");
+});
+
+// …and the opt-in invite is not an exception to it. This is the send the trace
+// actually reached: templateKey sms_optin_invite, a `pending` seat carrying the
+// fresh evidence reconsent() mirrored onto it.
+Deno.test("the opt-in invite does not slip past an unanswered refusal", async () => {
+  const fake = createFakeSupabase({
+    project_parties: [party("p1", "pending")],
+    projects: [{ id: "proj1", studio_id: "org-alpha" }],
+    studio_channel_consent: [{
+      organization_id: "org-alpha",
+      channel_kind: "sms",
+      channel_value: "+15551230001",
+      status: "pending",
+      refusal_unanswered: true,
+      opt_out_at: "2025-12-03T00:00:00Z",
+    }],
+  });
+  const res = await sendPartySms(fake as never, {
+    partyId: "p1",
+    templateKey: "sms_optin_invite",
+    body: "Reply YES for updates",
+  }, { getEnv: envOf(CONSENT_ENV), now: OPEN_HOURS });
+  assert(!res.sent, "the invite must not reach a number that replied STOP");
+  assertEquals(res.reason, "opted_out");
+  assertEquals((fake._data.sms_messages ?? []).length, 0, "no row on a blocked send");
+});
+
+// The gate does not over-refuse: an ordinary pending record with no refusal
+// behind it still takes the invite, exactly as before.
+Deno.test("a pending record with no refusal behind it still takes the invite", async () => {
+  const fake = createFakeSupabase({
+    project_parties: [party("p1", "pending")],
+    projects: [{ id: "proj1", studio_id: "org-alpha" }],
+    studio_channel_consent: [{
+      organization_id: "org-alpha",
+      channel_kind: "sms",
+      channel_value: "+15551230001",
+      status: "pending",
+      refusal_unanswered: false,
+    }],
+  });
+  const res = await sendPartySms(fake as never, {
+    partyId: "p1",
+    templateKey: "sms_optin_invite",
+    body: "Reply YES for updates",
+  }, { getEnv: envOf(CONSENT_ENV), now: OPEN_HOURS });
+  assert(res.sent, "an ordinary pending invite must still go");
+});
+
+// And the recipient's own answer reopens it: the inbound rail writes
+// refusal_unanswered = (status === "opted_out"), so a START lowers the flag.
+Deno.test("the recipient's own START reopens the door", async () => {
+  const fake = createFakeSupabase({
+    project_parties: [party("p1", "granted")],
+    projects: [{ id: "proj1", studio_id: "org-alpha" }],
+    studio_channel_consent: [{
+      organization_id: "org-alpha",
+      channel_kind: "sms",
+      channel_value: "+15551230001",
+      status: "granted",
+      refusal_unanswered: false,
+      opt_out_at: "2025-12-03T00:00:00Z",
+      consented_at: "2026-06-01T00:00:00Z",
+    }],
+  });
+  const res = await sendPartySms(fake as never, { partyId: "p1", body: "hello" }, {
+    getEnv: envOf(CONSENT_ENV),
+    now: OPEN_HOURS,
+  });
+  assert(res.sent, "an answered refusal is no longer a refusal");
+});
+
 // M7: sms.ts resolves the org the same way 00594 does — studio_id, then the
 // designer's primary studio — so the gate and the table cannot disagree about
 // which studio a NULL-studio_id project belongs to.

@@ -188,8 +188,8 @@ COMMENT ON COLUMN public.studio_channel_consent.refusal_unanswered IS
   'Set by every writer that records a refusal (the fold, record_channel_consent, '
   'record_channel_reconsent, the inbound STOP rail) and cleared ONLY by a '
   '`granted` write — in practice the recipient''s own inbound YES/START. '
-  'record_channel_consent refuses `granted` while it stands, so reconsent() plus '
-  'a recorded grant cannot compose their way past a STOP. It is a stored FACT '
+  'record_channel_consent refuses every verdict but opted_out while it stands, '
+  'so reconsent() plus a recorded grant cannot compose their way past a STOP. It is a stored FACT '
   'rather than a test on opt_out_at, because a refusal is routinely dateless: '
   'the shipped portal writes opted_out party rows with a NULL sms_opt_out_at on '
   'purpose (use-coordination.ts — "opted out, date unknown" is the truth), every '
@@ -534,20 +534,32 @@ BEGIN
   -- `pending` becomes one real opt-in SMS per party row on the number.
   PERFORM set_config('patina.suppress_consent_dispatch', '1', true);
 
-  -- THE VERDICT AND ITS DATES ARE COPIED; THE EVIDENCE IS COALESCED, PER
-  -- COLUMN (r5 M5-2, ruling R-AN). A record can carry a verdict without
-  -- carrying every evidence column — the inbound rail mints one from a YES on
-  -- a number whose evidence so far lives only on the seat — and before this,
-  -- the mirror wrote those NULLs down over a disclosure version and a recorder
-  -- the portal had recorded. That is the same hollow-evidence state r2 M-1
-  -- closed, arriving from the other side: the 10DLC evidence for the send
-  -- cannot be erased by a write that simply did not restate it. So the mirror
-  -- never overwrites a non-null evidence column with NULL; the record's own
-  -- door (record_channel_consent) already refuses to empty the set.
+  -- THE VERDICT IS COPIED; THE DATES AND THE EVIDENCE ARE COALESCED, PER
+  -- COLUMN (r5 M5-2, ruling R-AN; r6 M6-2 for the two dates). A record can
+  -- carry a verdict without carrying every evidence column — the inbound rail
+  -- mints one from a YES on a number whose evidence so far lives only on the
+  -- seat — and before this, the mirror wrote those NULLs down over a disclosure
+  -- version and a recorder the portal had recorded. That is the same
+  -- hollow-evidence state r2 M-1 closed, arriving from the other side: the
+  -- 10DLC evidence for the send cannot be erased by a write that simply did
+  -- not restate it. So the mirror never overwrites a non-null evidence column
+  -- with NULL; the record's own door (record_channel_consent) already refuses
+  -- to empty the set.
+  --
+  -- THE SAME IS TRUE OF THE TWO DATES, and for the same reason (r6 M6-2). A
+  -- record carrying a verdict without an opt_out_at is the ordinary case —
+  -- every record record_channel_consent mints for pending or granted, and
+  -- every record the inbound rail mints for a number with no prior row — and
+  -- copying it straight wrote NULL over a real, dated refusal on every seat in
+  -- the studio. The RPC goes to trouble to keep both dates on the RECORD
+  -- ("granted 2 May 2025, opted out 3 Dec 2025" must both stay printable, R-Q)
+  -- and the mirror must not destroy the pair on the seats. So each date keeps
+  -- what stands when the new verdict does not restate it. The verdict itself
+  -- is still copied — the status is the fact the record owns.
   UPDATE public.project_parties pp
      SET sms_consent_status             = NEW.status,
-         sms_consented_at               = NEW.consented_at,
-         sms_opt_out_at                 = NEW.opt_out_at,
+         sms_consented_at               = COALESCE(NEW.consented_at, pp.sms_consented_at),
+         sms_opt_out_at                 = COALESCE(NEW.opt_out_at, pp.sms_opt_out_at),
          sms_consent_source             = COALESCE(NEW.source, pp.sms_consent_source),
          sms_consent_evidence           = COALESCE(NEW.evidence, pp.sms_consent_evidence),
          sms_consent_recorded_at        = COALESCE(NEW.recorded_at, pp.sms_consent_recorded_at),
@@ -572,7 +584,9 @@ BEGIN
           pp.sms_consent_recorded_at, pp.sms_consent_disclosure_version,
           pp.sms_consent_recorded_by)
          IS DISTINCT FROM
-         (NEW.status, NEW.consented_at, NEW.opt_out_at,
+         (NEW.status,
+          COALESCE(NEW.consented_at, pp.sms_consented_at),
+          COALESCE(NEW.opt_out_at, pp.sms_opt_out_at),
           COALESCE(NEW.source, pp.sms_consent_source),
           COALESCE(NEW.evidence, pp.sms_consent_evidence),
           COALESCE(NEW.recorded_at, pp.sms_consent_recorded_at),
@@ -670,16 +684,22 @@ CREATE TRIGGER mirror_channel_consent_to_parties_trg
 --      evidence at all, and it erased a recorded grant, its source, its words
 --      and its disclosure version — from the record AND, through the mirror,
 --      from every seat in the studio on that number.
---   2. TRANSITION — AND IT READS BOTH LEDGERS. The send gate refuses on the
---      record OR on a refusal standing on one of this studio's own party rows;
---      this door does the same (R-AL), because until PR-x retires those writes
---      a refusal can stand on a seat with no record behind it, and granting
---      over it also cleared — through the mirror — the very seat the send gate
---      would have tested. Nothing leaves `opted_out` through this door. Not to
---      granted (that is the recipient's to give), not to pending, and not to
---      not_asked — a STOP is the only stored record of a refusal and the RPC
---      may not erase it. PR-m's way back is a fresh recorded consent, which
---      has its own named door: record_channel_reconsent() below.
+--   2. TRANSITION — AND IT READS BOTH LEDGERS, AND IT ASKS ONE QUESTION.
+--      The send gate refuses on the record OR on a refusal standing on one of
+--      this studio's own party rows; this door does the same (R-AL), because
+--      until PR-x retires those writes a refusal can stand on a seat with no
+--      record behind it, and granting over it also cleared — through the mirror
+--      — the very seat the send gate would have tested. The seat test asks what
+--      the send gate asks and nothing more: `sms_consent_status = 'opted_out'`,
+--      in this org, DATED OR NOT (r6 M6-1 — orgHasOptedOutParty has no date
+--      test, the shipped portal writes dateless refusals on purpose, and every
+--      pre-00432 row is dateless).
+--
+--      Nothing leaves `opted_out` through this door. Not to granted (that is
+--      the recipient's to give), not to pending, and not to not_asked — a STOP
+--      is the only stored record of a refusal and the RPC may not erase it.
+--      PR-m's way back is a fresh recorded consent, which has its own named
+--      door: record_channel_reconsent() below.
 --
 --      AND THE TWO DOORS COMPOSE. The gate above is stated on the row's
 --      CURRENT status, so on its own it was walked around: reconsent() moves
@@ -687,13 +707,22 @@ CREATE TRIGGER mirror_channel_consent_to_parties_trg
 --      no longer `opted_out` and wrote `granted` over it. Two calls, any
 --      studio member, and a recorded STOP was back to granted with only
 --      opt_out_at left behind — and the mirror cleared the party-row backstop
---      sendPartySms falls back on. So this door ALSO refuses `granted` while
---      an unanswered refusal stands: `opt_out_at IS NOT NULL` with no
---      `consented_at` after it. The answer is the recipient's, not the
+--      sendPartySms falls back on. So this door ALSO refuses while an
+--      unanswered refusal stands — refusal_unanswered TRUE, or an opt_out_at
+--      with no later consented_at. The answer is the recipient's, not the
 --      studio's — an inbound YES/START, which the rail writes with a fresh
---      consented_at. What the studio may always do is record the fresh consent
---      it holds: reconsent() lands it on `pending`, which is exactly what the
---      double opt-in confirmation is for.
+--      consented_at.
+--
+--      THE GATE IS ON THE REFUSAL, NOT ON THE VERDICT (r6 B6-1). Stated as
+--      "refuse `granted`", it left `pending` as a free first hop: a recorded
+--      `pending` mirrored `pending` and a NULL opt_out_at onto the seats,
+--      erasing the refusal and its date, and the `granted` behind it then
+--      passed every leg — strictly worse than the composition above, because
+--      reconsent() cannot recover a row that no longer says opted_out. So every
+--      verdict but `opted_out` is tested. The one act always open to the studio
+--      is recording the refusal it is holding; the fresh consent it holds goes
+--      through reconsent(), which is exactly what the double opt-in
+--      confirmation is for, and the answer stays the recipient's.
 --   3. NO LAUNDERING, AND NO ERASURE. Every status this door still accepts
 --      requires its own source and evidence, so a status change always
 --      RESTATES them — a grant can never inherit the STOP's own words
@@ -797,14 +826,37 @@ BEGIN
   -- refusal it is holding (status opted_out, with its own evidence), which puts
   -- the fact on the books where reconsent() and the recipient's own YES/START
   -- can act on it.
-  IF p_status = 'granted' THEN
+  --
+  -- TWO NARROWINGS ARE GONE (r6 B6-1 / M6-1), because both were walkable.
+  --
+  --   THE VERDICT. The gate asked `p_status = 'granted'`, so `pending` was an
+  --   ungated first hop: one recorded `pending` over a dated, evidenced seat
+  --   refusal mirrored `pending` and a NULL opt_out_at back onto the seat,
+  --   erasing the refusal and its date, and the `granted` call after it then
+  --   passed every leg. Two ordinary calls by any studio member walked a real
+  --   inbound STOP back to granted with no trace on either ledger, and
+  --   reconsent() could not recover it (it requires status opted_out). So the
+  --   gate asks whether a REFUSAL STANDS, not which verdict is being written:
+  --   everything but `opted_out` is tested. Recording the refusal is always
+  --   allowed — that is the way forward, not around.
+  --
+  --   THE DATE. The gate also required `sms_opt_out_at IS NOT NULL`, so it
+  --   failed OPEN for a DATELESS refusal — which is the shape the shipped
+  --   portal writes on purpose (use-coordination.ts: "opted out, date unknown"
+  --   is the truth) and the shape every pre-00432 row carries. That is the very
+  --   population r4's B-1 forced the RECORD-level test off dates for, which is
+  --   why refusal_unanswered exists; the seat test kept the date and kept the
+  --   hole. And the SEND gate this door is meant to mirror
+  --   (_shared/sms.ts orgHasOptedOutParty) filters on sms_consent_status alone
+  --   with no date test at all. So the write door now asks exactly the question
+  --   the read door asks.
+  IF p_status <> 'opted_out' THEN
     SELECT EXISTS (
       SELECT 1
         FROM public.project_parties pp
         JOIN public.projects p ON p.id = pp.project_id
        WHERE pp.phone_e164 = v_value
          AND pp.sms_consent_status = 'opted_out'
-         AND pp.sms_opt_out_at IS NOT NULL
          AND COALESCE(p.studio_id, public._primary_studio_for(p.designer_id))
              = p_organization_id
     ) INTO v_seat_refusal;
@@ -846,8 +898,10 @@ BEGIN
   -- pending (it is meant to — granted is the recipient's to give), and this
   -- door then saw a row that is no longer `opted_out` and wrote `granted` over
   -- it, leaving opt_out_at as the only trace and clearing, through the mirror,
-  -- the party-row backstop sendPartySms falls back on. So `granted` is also
-  -- refused while an UNANSWERED refusal stands.
+  -- the party-row backstop sendPartySms falls back on. So every verdict but
+  -- `opted_out` is refused while an UNANSWERED refusal stands (r6 B6-1 — read
+  -- on the refusal, never on which verdict the caller happens to be writing;
+  -- `pending` mirrors onto the seats exactly as `granted` does).
   --
   -- THAT IS READ OFF refusal_unanswered, A STORED FACT — never inferred from
   -- opt_out_at alone. A refusal is routinely DATELESS: the shipped portal
@@ -915,7 +969,13 @@ BEGIN
       origin_project_id  = COALESCE(EXCLUDED.origin_project_id, scc.origin_project_id)
   WHERE (scc.status IS DISTINCT FROM 'opted_out'
          OR EXCLUDED.status = 'opted_out')
-    AND (EXCLUDED.status <> 'granted'
+    -- Stated on whether a refusal STANDS, not on which verdict is written
+    -- (r6 B6-1). `EXCLUDED.status <> 'granted'` let `pending` through while an
+    -- unanswered refusal stood, and a `pending` that lands is a `pending` the
+    -- mirror stamps on every seat in the studio — the backstop gone, and the
+    -- record moved off the status reconsent() needs to act on. Only `opted_out`
+    -- is exempt: recording the refusal is the way forward.
+    AND (EXCLUDED.status = 'opted_out'
          OR scc.status = 'granted'
          OR (scc.refusal_unanswered IS NOT TRUE
              AND (scc.opt_out_at IS NULL
@@ -924,15 +984,17 @@ BEGIN
     -- 2a's seat test again, inside the write. The check above is what refuses
     -- the INSERT case (no record yet, refusal on a seat only); this leg is the
     -- same rule where the row already exists, so a seat marked opted_out
-    -- between that read and this write cannot be written over either.
-    AND (EXCLUDED.status <> 'granted'
+    -- between that read and this write cannot be written over either. Same two
+    -- narrowings removed: every verdict but `opted_out` is tested (r6 B6-1),
+    -- and a DATELESS refusal counts (r6 M6-1) — it is what the portal really
+    -- writes and what the send gate really reads.
+    AND (EXCLUDED.status = 'opted_out'
          OR NOT EXISTS (
               SELECT 1
                 FROM public.project_parties pp
                 JOIN public.projects p ON p.id = pp.project_id
                WHERE pp.phone_e164 = scc.channel_value
                  AND pp.sms_consent_status = 'opted_out'
-                 AND pp.sms_opt_out_at IS NOT NULL
                  AND COALESCE(p.studio_id, public._primary_studio_for(p.designer_id))
                      = scc.organization_id))
   RETURNING * INTO v_row;
@@ -955,13 +1017,12 @@ BEGIN
 
     -- The seat leg (2a) raced in between: name it for what it is rather than
     -- letting it print as an unanswered refusal on the record.
-    IF p_status = 'granted' AND EXISTS (
+    IF p_status <> 'opted_out' AND EXISTS (
          SELECT 1
            FROM public.project_parties pp
            JOIN public.projects p ON p.id = pp.project_id
           WHERE pp.phone_e164 = v_value
             AND pp.sms_consent_status = 'opted_out'
-            AND pp.sms_opt_out_at IS NOT NULL
             AND COALESCE(p.studio_id, public._primary_studio_for(p.designer_id))
                 = p_organization_id) THEN
       RAISE EXCEPTION 'channel_opted_out'
@@ -995,16 +1056,19 @@ COMMENT ON FUNCTION public.record_channel_consent(uuid, text, text, text, text, 
   'transition OUT of opted_out (channel_opted_out — record_channel_reconsent() '
   'is the named way back, PR-m), and states that gate inside the upsert''s '
   'DO UPDATE … WHERE so a concurrent STOP cannot land in a read-then-write '
-  'window; also refuses `granted` while a refusal stands unanswered — '
-  'refusal_unanswered TRUE, or an opt_out_at with no later consented_at '
-  '(consent_awaiting_recipient) — so '
+  'window; also refuses EVERY verdict but opted_out while a refusal stands '
+  'unanswered — refusal_unanswered TRUE, or an opt_out_at with no later '
+  'consented_at (consent_awaiting_recipient) — so '
   'reconsent() plus a grant cannot compose their way back to granted without '
   'the recipient''s own YES or START, and a DATELESS refusal (the shipped '
   'portal writes them on purpose and the fold mints them) fails closed like a '
-  'dated one; refuses `granted` (channel_opted_out) while a DATED opted_out '
-  'seat stands in THIS studio on that number even when the record knows '
-  'nothing of it, since the portal still writes party rows directly and the '
-  'send gate reads both ledgers — the write door now reads both too (R-AL); '
+  'dated one; refuses the same verdicts (channel_opted_out) while an opted_out '
+  'seat stands in THIS studio on that number — dated or not — even when the '
+  'record knows nothing of it, since the portal still writes party rows '
+  'directly and the send gate reads both ledgers with no date test of its own '
+  '(R-AL, r6 B6-1/M6-1: gated on whether a refusal stands, never on which '
+  'verdict is being written — a recorded `pending` mirrors onto the seats '
+  'exactly as a `granted` does, and was the ungated first hop); '
   'never empties the evidence set — source, '
   'evidence, disclosure_version and recorded_by are kept when the new verdict '
   'does not restate them, and laundering is closed by the evidence gate, since '
@@ -1027,10 +1091,13 @@ COMMENT ON FUNCTION public.record_channel_consent(uuid, text, text, text, text, 
 -- holds fresh prior express consent, which is exactly the state the double
 -- opt-in confirmation exists for. `granted` stays the recipient's to give, by
 -- replying YES or START — and that holds THROUGH this door, not merely at it:
--- record_channel_consent() refuses `granted` while the refusal this door
--- superseded is still unanswered (opt_out_at set, no later consented_at), so
--- the pair reconsent() -> record_channel_consent('granted') cannot walk a STOP
--- back to granted in two calls. The answer has to arrive on the inbound rail. (The invite itself is W2's hook on the consent record
+-- record_channel_consent() refuses every verdict but `opted_out` while the
+-- refusal this door superseded is still unanswered (refusal_unanswered TRUE,
+-- or opt_out_at set with no later consented_at), so neither the pair
+-- reconsent() -> record_channel_consent('granted') nor the cheaper
+-- record_channel_consent('pending') -> ('granted') can walk a STOP
+-- back to granted in two calls. The answer has to arrive on the inbound rail.
+-- (The invite itself is W2's hook on the consent record
 -- — the mirror still suppresses the per-row trigger fan-out.)
 CREATE OR REPLACE FUNCTION public.record_channel_reconsent(
   p_organization_id    uuid,
