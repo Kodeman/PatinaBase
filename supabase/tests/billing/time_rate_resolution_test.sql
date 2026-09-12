@@ -2654,6 +2654,207 @@ BEGIN
     || COALESCE(v_amount::text, 'NULL');
 
   RAISE NOTICE 'time_rate_resolution: case (aa) passed — W1-R8-01 pinned as built, owed ruling HT-3-b.';
+END
+$$;
+
+-- ─── (ab) W1-R9-01: the hour is logged by the person who worked it, because the
+--         rate on the row is confidential ──────────────────────────────────────
+-- The studio's per-member rate is readable only by that member and the studio's
+-- owner/admin (studio_member_rates_read_self_or_admin, 00598). The moment W1 stamps
+-- it onto project_time_entries it also becomes readable by every active non-guest
+-- co-member (time_entries_studio_read, 00316:237-240) — so a designer who is only a
+-- plain `member` of the studio could mint a row naming any colleague's user_id on
+-- her own project (`Designers manage their project time entries`, 00177:136-137, is
+-- an ALL policy on projects.designer_id = auth.uid() with a NULL with_check and no
+-- user_id leg), read his confidential rate off it, and delete the row after.
+-- Measured before the fix: 0 rows of his rate visible to her on studio_member_rates,
+-- 15000 / 'studio_member' visible to her on a row she minted for him; and the same
+-- number again by logging her own hour and repointing user_id at him with an UPDATE.
+--
+-- Both write shapes are refused below, and the two controls are the things that must
+-- NOT move: the project designer may still correct a teammate's existing entry
+-- (W1-R1-05 — user_id unchanged), and an owner/admin of the studio that owns the
+-- work may still write on a member's behalf.
+--
+-- The READ half is W2's (00606 must narrow time_entries_studio_read as well as the
+-- 00484-registered SELECT policy — recorded as an amendment to HT-10-a). This case
+-- asserts only what W1 owns.
+INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, instance_id, aud, role)
+VALUES
+  ('b1100000-0000-4000-8000-000000009101', 'r9-owner@test.invalid',   '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('b1100000-0000-4000-8000-000000009102', 'r9-subject@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('b1100000-0000-4000-8000-000000009103', 'r9-snoopdes@test.invalid','', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+
+INSERT INTO public.profiles (id, email, full_name, is_designer, created_at, updated_at)
+VALUES
+  ('b1100000-0000-4000-8000-000000009101', 'r9-owner@test.invalid',   'R9 Owner',    false, NOW(), NOW()),
+  ('b1100000-0000-4000-8000-000000009102', 'r9-subject@test.invalid', 'R9 Subject',  false, NOW(), NOW()),
+  ('b1100000-0000-4000-8000-000000009103', 'r9-snoopdes@test.invalid','R9 SnoopDes', false, NOW(), NOW())
+ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name;
+
+INSERT INTO public.organizations (id, type, name, slug, status)
+VALUES ('b1100000-0000-4000-8000-0000000091a1', 'design_studio', 'R9 Studio', 'r9-confidential-rate', 'active');
+
+-- All three seated BEFORE any designer grant, so 00295's early exit leaves nobody
+-- owning a second workspace and S is the only studio in play.
+INSERT INTO public.organization_members (id, user_id, organization_id, role, status, joined_at)
+VALUES
+  ('b1100000-0000-4000-8000-0000000091c1', 'b1100000-0000-4000-8000-000000009101',
+   'b1100000-0000-4000-8000-0000000091a1', 'owner',  'active', NOW()),
+  ('b1100000-0000-4000-8000-0000000091c2', 'b1100000-0000-4000-8000-000000009102',
+   'b1100000-0000-4000-8000-0000000091a1', 'member', 'active', NOW()),
+  ('b1100000-0000-4000-8000-0000000091c3', 'b1100000-0000-4000-8000-000000009103',
+   'b1100000-0000-4000-8000-0000000091a1', 'member', 'active', NOW());
+
+-- The snoop is a real designer (00563's authenticated INSERT arm reads
+-- has_designer_domain_role), and a plain `member` of the studio — not its admin.
+INSERT INTO public.user_roles (user_id, role_id)
+SELECT 'b1100000-0000-4000-8000-000000009103', id FROM public.roles WHERE name = 'studio_designer';
+INSERT INTO public.user_roles (user_id, role_id)
+SELECT 'b1100000-0000-4000-8000-000000009101', id FROM public.roles WHERE name = 'studio_owner';
+
+DO $$
+DECLARE
+  v_owner_seats INTEGER;
+  v_studio      uuid;
+  v_visible     INTEGER;
+  v_state       TEXT;
+  v_message     TEXT;
+  v_rate        INTEGER;
+  v_source      TEXT;
+  v_duration    INTEGER;
+  v_user        uuid;
+BEGIN
+  -- The owner prices the subject on HT-3's own surface, through RLS.
+  PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000009101');
+  INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
+  VALUES ('b1100000-0000-4000-8000-0000000091a1', 'b1100000-0000-4000-8000-000000009102',
+          15000, CURRENT_DATE - 30, 'b1100000-0000-4000-8000-000000009101');
+  PERFORM pg_temp.reset_role();
+
+  -- The snoop creates her own project, stamped with the studio she is a plain
+  -- member of — which 00563's authenticated arm permits (active non-guest
+  -- membership), and which 00602 would never have stamped (owner seats only).
+  PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000009103');
+  INSERT INTO public.projects (id, name, designer_id, created_by, studio_id)
+  VALUES ('b1100000-0000-4000-8000-0000000091e1', 'R9 Snoop House',
+          'b1100000-0000-4000-8000-000000009103', 'b1100000-0000-4000-8000-000000009103',
+          'b1100000-0000-4000-8000-0000000091a1');
+  PERFORM pg_temp.reset_role();
+
+  SELECT count(*) INTO v_owner_seats FROM public.organization_members
+   WHERE user_id = 'b1100000-0000-4000-8000-000000009103' AND role = 'owner';
+  ASSERT v_owner_seats = 0,
+    'FAIL ab0 (precondition): the snoop must own no studio, or the 15000 below could be '
+    'explained by something other than the studio that owns the work; owner seats = '
+    || v_owner_seats;
+
+  SELECT studio_id INTO v_studio FROM public.projects
+   WHERE id = 'b1100000-0000-4000-8000-0000000091e1';
+  ASSERT v_studio = 'b1100000-0000-4000-8000-0000000091a1',
+    'FAIL ab0b (precondition): the project must carry the studio, or tier 2 never runs and '
+    'the case asserts nothing; got ' || COALESCE(v_studio::text, 'NULL');
+
+  -- ab1 CONTROL: RLS gives her nothing of the subject's rate.
+  PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000009103');
+  SELECT count(*) INTO v_visible FROM public.studio_member_rates
+   WHERE user_id = 'b1100000-0000-4000-8000-000000009102';
+  PERFORM pg_temp.reset_role();
+  ASSERT v_visible = 0,
+    'FAIL ab1 (control, 00598): studio_member_rates_read_self_or_admin must hide a colleague''s '
+    'rate from a plain member — if it does not, the asserts below measure the wrong leak; rows = '
+    || v_visible;
+
+  -- ab2: she may not MINT a priced row naming him.
+  v_state := NULL;
+  PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000009103');
+  BEGIN
+    INSERT INTO public.project_time_entries
+      (id, project_id, user_id, started_at, duration_minutes, billable, source)
+    VALUES ('b1100000-0000-4000-8000-0000000091b1', 'b1100000-0000-4000-8000-0000000091e1',
+            'b1100000-0000-4000-8000-000000009102', NOW() - INTERVAL '2 hours', 60, true, 'manual_entry');
+  EXCEPTION WHEN OTHERS THEN
+    v_state := SQLSTATE; v_message := SQLERRM;
+  END;
+  PERFORM pg_temp.reset_role();
+  ASSERT v_state = '42501',
+    'FAIL ab2 (W1-R9-01): minting an entry for another member''s user_id must be refused with '
+    'insufficient_privilege — the rate the server then stamps on it is confidential pay. Got '
+    || COALESCE(v_state, 'NO RAISE') || ' / ' || COALESCE(v_message, 'the insert succeeded');
+  ASSERT NOT EXISTS (SELECT 1 FROM public.project_time_entries
+                      WHERE id = 'b1100000-0000-4000-8000-0000000091b1'),
+    'FAIL ab2b (W1-R9-01): the refused insert must leave no row behind';
+
+  -- ab3: nor may she log her own hour and repoint it at him. An INSERT-only
+  -- refusal leaves the same enumeration primitive open in two statements.
+  v_state := NULL;
+  PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000009103');
+  INSERT INTO public.project_time_entries
+    (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('b1100000-0000-4000-8000-0000000091b2', 'b1100000-0000-4000-8000-0000000091e1',
+          'b1100000-0000-4000-8000-000000009103', NOW() - INTERVAL '3 hours', 60, true, 'manual_entry');
+  BEGIN
+    UPDATE public.project_time_entries
+       SET user_id = 'b1100000-0000-4000-8000-000000009102'
+     WHERE id = 'b1100000-0000-4000-8000-0000000091b2';
+  EXCEPTION WHEN OTHERS THEN
+    v_state := SQLSTATE; v_message := SQLERRM;
+  END;
+  PERFORM pg_temp.reset_role();
+  SELECT user_id, hourly_rate_cents, rate_source INTO v_user, v_rate, v_source
+  FROM public.project_time_entries WHERE id = 'b1100000-0000-4000-8000-0000000091b2';
+  ASSERT v_state = '42501',
+    'FAIL ab3 (W1-R9-01): repointing an own-logged row at a colleague must be refused too, or the '
+    'minting refusal is one statement wide. Got ' || COALESCE(v_state, 'NO RAISE') || ' / '
+    || COALESCE(v_message, 'the update succeeded');
+  ASSERT v_user = 'b1100000-0000-4000-8000-000000009103'
+     AND v_rate IS NULL AND v_source = 'none',
+    'FAIL ab3b (W1-R9-01): her own row must stay hers and stay unpriced (she holds no studio rate); '
+    'got user ' || COALESCE(right(v_user::text, 4), 'NULL') || ' rate '
+    || COALESCE(v_rate::text, 'NULL') || ' / ' || COALESCE(v_source, 'NULL');
+
+  -- ab4 CONTROL (W1-R1-05): the designer still corrects a teammate's OWN entry.
+  PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000009102');
+  INSERT INTO public.project_time_entries
+    (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('b1100000-0000-4000-8000-0000000091b3', 'b1100000-0000-4000-8000-0000000091e1',
+          'b1100000-0000-4000-8000-000000009102', NOW() - INTERVAL '4 hours', 60, true, 'manual_entry');
+  PERFORM pg_temp.reset_role();
+  PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000009103');
+  UPDATE public.project_time_entries SET duration_minutes = 90
+   WHERE id = 'b1100000-0000-4000-8000-0000000091b3';
+  PERFORM pg_temp.reset_role();
+  SELECT duration_minutes, hourly_rate_cents, rate_source INTO v_duration, v_rate, v_source
+  FROM public.project_time_entries WHERE id = 'b1100000-0000-4000-8000-0000000091b3';
+  ASSERT v_duration = 90,
+    'FAIL ab4 (control, W1-R1-05): the refusal must not narrow the project designer''s correction '
+    'of a teammate''s existing entry — user_id does not change there; duration is '
+    || COALESCE(v_duration::text, 'NULL');
+  ASSERT v_rate = 15000 AND v_source = 'studio_member',
+    'FAIL ab4b: the subject''s own hour is priced by the studio that owns the work, as before; got '
+    || COALESCE(v_rate::text, 'NULL') || ' / ' || COALESCE(v_source, 'NULL');
+
+  -- ab5 CONTROL: the studio's owner may write on a member's behalf. She is the one
+  -- actor the rate is not confidential from (studio_member_rates_read_self_or_admin),
+  -- which is the same authority the resolver's ASSERT 2 names.
+  PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000009101');
+  INSERT INTO public.projects (id, name, designer_id, created_by, studio_id)
+  VALUES ('b1100000-0000-4000-8000-0000000091e2', 'R9 Owner House',
+          'b1100000-0000-4000-8000-000000009101', 'b1100000-0000-4000-8000-000000009101',
+          'b1100000-0000-4000-8000-0000000091a1');
+  INSERT INTO public.project_time_entries
+    (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('b1100000-0000-4000-8000-0000000091b4', 'b1100000-0000-4000-8000-0000000091e2',
+          'b1100000-0000-4000-8000-000000009102', NOW() - INTERVAL '5 hours', 120, true, 'manual_entry');
+  PERFORM pg_temp.reset_role();
+  SELECT hourly_rate_cents, rate_source INTO v_rate, v_source
+  FROM public.project_time_entries WHERE id = 'b1100000-0000-4000-8000-0000000091b4';
+  ASSERT v_rate = 15000 AND v_source = 'studio_member',
+    'FAIL ab5 (control): an owner/admin of the studio that owns the work may still log on a '
+    'member''s behalf, priced by that studio; got ' || COALESCE(v_rate::text, 'NULL') || ' / '
+    || COALESCE(v_source, 'NULL');
+
+  RAISE NOTICE 'time_rate_resolution: case (ab) passed — W1-R9-01, the confidential rate stays off a row its subject did not write.';
   RAISE NOTICE 'All time_rate_resolution assertions passed.';
 END
 $$;

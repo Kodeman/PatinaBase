@@ -110,6 +110,44 @@
 --   mirror, and delta 4 now records the resolver's role rather than the pick, so the
 --   row cannot print a role that did not price it. Nothing is lost against 00578.
 --
+-- REVIEW ROUND 9 (W1-R9-01) — an hour is logged by the person who worked it:
+--   Tier 2 is the first thing that writes a PER-PERSON studio rate onto
+--   project_time_entries, and that table is already readable in full by every
+--   active non-guest studio co-member (time_entries_studio_read, 00316:237-240).
+--   `Designers manage their project time entries` (00177:136-137) is an ALL policy
+--   qualified on projects.designer_id = auth.uid() with a NULL with_check — no
+--   user_id leg — so the project's designer could name ANY user_id on a row of her
+--   own project. Measured through RLS on a production-shaped fixture (a designer
+--   who is only a plain `member` of the studio, her project stamped with that
+--   studio the way 00563's authenticated arm allows, a colleague priced 15000 by
+--   the owner on HT-3's own surface): she reads 0 rows of that colleague's
+--   studio_member_rates row — RLS denies her — and 15000 / 'studio_member' off an
+--   entry she minted for him, for a colleague who logged nothing, deletable
+--   afterwards. An enumeration primitive for a number 00598's
+--   studio_member_rates_read_self_or_admin exists to keep between the studio and
+--   its member, and the leak W1-R2-03 closed at the RPC boundary re-opened through
+--   the trigger path.
+--
+--   Refused below, and the refusal covers BOTH ways of writing a user_id that is
+--   not yours — the INSERT the finding names, and (measured in the same fixture)
+--   the UPDATE that repoints an own-logged row at a colleague, which re-prices it
+--   to his rate and is the same primitive in two statements. W1-R1-05 is untouched:
+--   that finding is about a designer CORRECTING a teammate's existing entry, where
+--   user_id does not change. An owner/admin of the studio that owns the work may
+--   still log on a member's behalf.
+--
+--   The gate is auth.uid(), not current_user: this function is SECURITY DEFINER, so
+--   current_user inside it is its owner ('postgres') for every caller and a
+--   current_user test here can never fire — the same measurement 00598:63-64
+--   records for its own DEFINER guard. A NULL auth.uid() is the migration / seed /
+--   service context, which 00317:38-39 and 00599's three asserts already treat as
+--   the bypass.
+--
+--   The read half is NOT W1's: 00606 (W2) must narrow time_entries_studio_read as
+--   well as the 00484-registered SELECT policy, or every co-member keeps every row
+--   — notes and rate included — however narrow this write half is. Recorded as an
+--   amendment to HT-10-a in rulings.md.
+--
 -- Reconciles: nothing reverted — the body is 00578's, verbatim, this session.
 -- ═══════════════════════════════════════════════════════════════════════════
 
@@ -186,6 +224,25 @@ BEGIN
       RAISE EXCEPTION 'rate_role % is not a role this member holds on the project', NEW.rate_role
         USING ERRCODE = 'check_violation';
     END IF;
+  END IF;
+
+  -- ── 00601 delta 1a (W1-R9-01): the hour belongs to the person who worked it ──
+  -- Writing somebody else's user_id onto a priced row is the act of an owner or
+  -- admin OF THE STUDIO THAT OWNS THE WORK — the same authority ASSERT 2 of the
+  -- resolver names. Anyone else may only write their own. Both statements that can
+  -- introduce another person's user_id are covered; a correction to a teammate's
+  -- existing row (user_id unchanged) is not one of them, so W1-R1-05 stands. See
+  -- the round-9 section of the banner for the measurement and for why the gate is
+  -- auth.uid() rather than current_user.
+  IF auth.uid() IS NOT NULL
+     AND NEW.user_id IS DISTINCT FROM auth.uid()
+     AND (TG_OP = 'INSERT' OR NEW.user_id IS DISTINCT FROM OLD.user_id)
+     AND NOT COALESCE(public.is_org_admin_or_owner(
+           (SELECT project.studio_id FROM public.projects AS project
+             WHERE project.id = NEW.project_id)), false)
+  THEN
+    RAISE EXCEPTION 'a time entry is logged by the person who worked the hour'
+      USING ERRCODE = 'insufficient_privilege';
   END IF;
 
   -- ── 00601 delta 2: the ONE rate chain, resolved once ────────────────────
@@ -522,6 +579,18 @@ BEGIN
   IF v_src !~ 'IF v_project_designer_id IS NOT DISTINCT FROM NEW\.user_id THEN\s+v_team_role := ''lead_designer'';\s+ELSIF NEW\.rate_role IS NOT NULL THEN'
   THEN
     RAISE EXCEPTION '00601: the project designer''s lead_designer role must be fixed ABOVE NEW.rate_role in the role ladder (W1-R5-03)';
+  END IF;
+
+  -- ── review round 9 ───────────────────────────────────────────────────────
+  -- W1-R9-01: the per-person studio rate this file stamps is readable by the whole
+  -- studio, so nobody but the work's studio owner/admin may write a user_id that is
+  -- not their own. Both write shapes are asserted, because an INSERT-only refusal
+  -- leaves the repoint-on-UPDATE primitive open.
+  IF v_src !~ 'a time entry is logged by the person who worked the hour' THEN
+    RAISE EXCEPTION '00601: a non-self user_id must be refused to anyone but the studio owner/admin — the rate on the row is confidential (W1-R9-01)';
+  END IF;
+  IF v_src !~ 'TG_OP = ''INSERT'' OR NEW\.user_id IS DISTINCT FROM OLD\.user_id' THEN
+    RAISE EXCEPTION '00601: the non-self user_id refusal must cover the UPDATE repoint as well as the INSERT, or the enumeration primitive survives in two statements (W1-R9-01)';
   END IF;
 END
 $postcondition$;
