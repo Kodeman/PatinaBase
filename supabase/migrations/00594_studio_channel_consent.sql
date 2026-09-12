@@ -19,7 +19,14 @@
 --      ruling R-Q).
 --   2. backfill_channel_consent_from_parties() — folds the party ledgers in,
 --      per org, with opted_out winning over everything, then the most recent
---      granted, then pending, then not_asked.
+--      granted, then pending, then not_asked. The EVIDENCE on both sides is
+--      asked of the whole group rather than of the winning row: the refusal's
+--      own words and date off the seat that actually holds the refusal
+--      (r8 W4-M1, r6 R6-M2, r2 R2-M1), and the grant's paperwork off the
+--      group's best evidenced consent where the winner carries none (r9 M2) —
+--      otherwise the shipped portal's sourceless `opted_out` seat wins the
+--      bucket and the studio's signed grant on the seat next door is minted
+--      away, then wiped off the seats by R-AQ's mirror branch.
 --   3. mirror_channel_consent_to_parties() — an AFTER trigger that pushes the
 --      record back onto every party row in that org on that number. The
 --      project_parties.sms_consent_* columns become a READ-ONLY CACHED MIRROR:
@@ -35,7 +42,11 @@
 --      PR-m's fresh recorded consent after a refusal, written as EVIDENCE onto
 --      a record that stays `opted_out` (r7 M7-2). It does not move the status
 --      and does not run the double opt-in; only the recipient's YES/START on
---      the inbound rail reopens sending.
+--      the inbound rail reopens sending. The evidence it writes is DATED BY IT
+--      (consented_at = now, r9 M1): the five evidence columns and the date name
+--      one act, so a fresh source can never be filed under an older grant's
+--      date, and the disclosure version that grant was given under is not
+--      overwritten by one its recipient never saw.
 --
 -- Both RPCs key on public.normalize_channel_value(kind, value) — 00593's own
 -- rule, in one function, so a channel row and its consent record can never land
@@ -370,6 +381,30 @@ BEGIN
            pp.sms_consent_disclosure_version,
            pp.sms_consent_recorded_by,
            pp.updated_at,
+           -- WHOSE ACT DOES THIS ROW'S ONE EVIDENCE SET DESCRIBE? (r4 R4-M1,
+           -- widened by r10 M1, hoisted here by r9 M2.) project_parties has a
+           -- SINGLE evidence set, so before anything is projected anywhere the
+           -- fold has to say which act it belongs to. It is the REFUSAL's own
+           -- words only when the row's STATUS is the refusal and nothing about
+           -- the evidence contradicts that: it says so itself (`inbound_sms` —
+           -- only the rail writes it), or it was written down no earlier than
+           -- the refusal happened, or one of the two dates is missing so there
+           -- is nothing to contradict. Otherwise the words are the GRANT's —
+           -- the ordinary STOP-flipped seat — and the consent side is where
+           -- they belong.
+           --
+           -- Computed ONCE, here, because two CTEs below read it in opposite
+           -- directions (`refusal` takes the words only when it is true,
+           -- `grant_evidence` only when it is false); stated twice they could
+           -- drift apart and file one row's paperwork under both acts, or
+           -- neither.
+           (pp.sms_consent_status = 'opted_out'
+            AND pp.sms_consent_source IS NOT NULL
+            AND (pp.sms_consent_source = 'inbound_sms'
+                 OR pp.sms_opt_out_at IS NULL
+                 OR pp.sms_consent_recorded_at IS NULL
+                 OR pp.sms_consent_recorded_at >= pp.sms_opt_out_at))
+             AS refusal_words_are_its_own,
            COALESCE(p.studio_id, public._primary_studio_for(p.designer_id)) AS org
     FROM public.project_parties pp
     JOIN public.projects p ON p.id = pp.project_id
@@ -553,14 +588,10 @@ BEGIN
                                    updated_at) DESC NULLS LAST
                ) AS rrn
           FROM (
-            SELECT party_org.*,
-                   (sms_consent_status = 'opted_out'
-                    AND sms_consent_source IS NOT NULL
-                    AND (sms_consent_source = 'inbound_sms'
-                         OR sms_opt_out_at IS NULL
-                         OR sms_consent_recorded_at IS NULL
-                         OR sms_consent_recorded_at >= sms_opt_out_at))
-                     AS refusal_words_are_its_own
+            -- refusal_words_are_its_own comes off party_org (r9 M2) — one
+            -- definition, read here and by grant_evidence below. This
+            -- subquery is now the refusal POPULATION and nothing else.
+            SELECT party_org.*
               FROM party_org
              WHERE org IS NOT NULL
                AND (sms_consent_status = 'opted_out'
@@ -571,6 +602,67 @@ BEGIN
       ) refusals
      WHERE rrn = 1
   ),
+  -- AND THE CONSENT SIDE IS ASKED OF THE WHOLE GROUP TOO (r9 M2).
+  --
+  -- The winning row supplies the record's consent set, and for the COMMONEST
+  -- legacy shape it has none to give: the shipped portal writes a SOURCELESS,
+  -- DATELESS `opted_out` seat on purpose (use-coordination.ts), that seat wins
+  -- the refusal bucket, and the studio's fully evidenced grant — written,
+  -- "Signed the kickoff form", 2 May 2025, v3, a named recorder — is sitting on
+  -- THE SEAT NEXT DOOR. The record was minted with source / evidence /
+  -- recorded_at / disclosure_version / recorded_by all NULL and the group's real
+  -- consent paperwork nowhere on it.
+  --
+  -- That is not merely a gap in the record. opt_out_source comes out NULL on the
+  -- same fold, and a NULL there is exactly what R-AQ's mirror branch reads as
+  -- "this refusal has no words", so the mirror writes NULL over
+  -- sms_consent_source / _evidence / _recorded_at / _recorded_by on EVERY seat
+  -- in the studio on that number — INCLUDING THE SEAT THAT HELD THE GRANT. One
+  -- ordinary act is enough to trigger it, and nothing puts any of it back:
+  -- ON CONFLICT DO NOTHING means no later fold repairs the record, and
+  -- record_channel_reconsent never touches opt_out_*. The studio's proof of
+  -- prior express written consent for that number then exists NOWHERE, which is
+  -- the one artifact a 10DLC audit asks for.
+  --
+  -- So the group's best evidenced consent is carried the way r8 W4-M1 already
+  -- carries its refusal: one row per (studio, number), projected onto the
+  -- record's consent side ONLY where the winning row carries no consent
+  -- evidence at all. A winner that carries its own keeps it — including a
+  -- STOP-flipped seat, whose words belong to the grant that really was signed
+  -- (r10 M1), and including a refusal that MINTS the record with its own words,
+  -- which is what the other two writers of a mint do (the RPC's INSERT leg
+  -- :1444, sms-inbound/pipeline.ts writeChannelConsent).
+  --
+  -- The population is the mirror image of `refusal`'s words test: a row may
+  -- speak for the GRANT when it has a source and that source is not the
+  -- refusal's own words. Otherwise "Replied STOP" would be filed as the
+  -- consent's evidence — r4 R4-M1 in reverse. Most recent grant first, then the
+  -- most recently written down, then row recency.
+  --
+  -- AND consented_at TRAVELS WITH THE FIVE (R-Q, :159-170): whichever row's
+  -- paperwork lands on the consent side supplies the date of the act it
+  -- describes, so the record can never read "<this source> consent, <another
+  -- act's date>" — the failure r6 R6-M1 closed in the RPC and r9 M1 closed in
+  -- reconsent, arriving here from a third door.
+  grant_evidence AS (
+    SELECT org, phone_e164, sms_consented_at, sms_consent_source,
+           sms_consent_evidence, sms_consent_recorded_at,
+           sms_consent_disclosure_version, sms_consent_recorded_by
+      FROM (
+        SELECT party_org.*,
+               ROW_NUMBER() OVER (
+                 PARTITION BY org, phone_e164
+                 ORDER BY sms_consented_at        DESC NULLS LAST,
+                          sms_consent_recorded_at DESC NULLS LAST,
+                          updated_at              DESC NULLS LAST
+               ) AS grn
+          FROM party_org
+         WHERE org IS NOT NULL
+           AND sms_consent_source IS NOT NULL
+           AND NOT refusal_words_are_its_own
+      ) grants
+     WHERE grn = 1
+  ),
   ins AS (
     INSERT INTO public.studio_channel_consent (
       organization_id, channel_kind, channel_value, status,
@@ -580,7 +672,11 @@ BEGIN
       origin_project_id
     )
     SELECT r.org, 'sms', r.phone_e164, r.sms_consent_status,
-           r.sms_consented_at,
+           -- The grant's DATE comes off the same row as the grant's WORDS
+           -- (r9 M2, R-Q): the winner's own where it carries paperwork, the
+           -- group's best evidenced grant where it carries none.
+           CASE WHEN r.sms_consent_source IS NULL AND g.org IS NOT NULL
+                THEN g.sms_consented_at ELSE r.sms_consented_at END,
            -- The winning row's date, or THE REFUSING SIBLING'S when the winner
            -- has none (r6 R6-M2) — the refusal's words and the refusal's date
            -- come off the same row.
@@ -600,15 +696,28 @@ BEGIN
            -- recipient's own YES/START reopens it. `refusal` holds one row per
            -- group exactly when such a refusal stands anywhere in it.
            (f.org IS NOT NULL),
-           r.sms_consent_source,
-           r.sms_consent_evidence, r.sms_consent_recorded_at,
-           r.sms_consent_disclosure_version, r.sms_consent_recorded_by,
+           -- THE GROUP'S CONSENT EVIDENCE, NOT THE WINNING ROW'S ALONE
+           -- (r9 M2 — see grant_evidence above). All five move together with
+           -- the date above: a set half from one act and half from another is
+           -- the thing every consent rule in this file refuses.
+           CASE WHEN r.sms_consent_source IS NULL AND g.org IS NOT NULL
+                THEN g.sms_consent_source             ELSE r.sms_consent_source             END,
+           CASE WHEN r.sms_consent_source IS NULL AND g.org IS NOT NULL
+                THEN g.sms_consent_evidence           ELSE r.sms_consent_evidence           END,
+           CASE WHEN r.sms_consent_source IS NULL AND g.org IS NOT NULL
+                THEN g.sms_consent_recorded_at        ELSE r.sms_consent_recorded_at        END,
+           CASE WHEN r.sms_consent_source IS NULL AND g.org IS NOT NULL
+                THEN g.sms_consent_disclosure_version ELSE r.sms_consent_disclosure_version END,
+           CASE WHEN r.sms_consent_source IS NULL AND g.org IS NOT NULL
+                THEN g.sms_consent_recorded_by        ELSE r.sms_consent_recorded_by        END,
            f.opt_out_source, f.opt_out_evidence,
            f.opt_out_recorded_at, f.opt_out_recorded_by,
            r.project_id
     FROM ranked r
     LEFT JOIN refusal f
       ON f.org = r.org AND f.phone_e164 = r.phone_e164
+    LEFT JOIN grant_evidence g
+      ON g.org = r.org AND g.phone_e164 = r.phone_e164
     WHERE r.rn = 1
     ON CONFLICT (organization_id, channel_kind, channel_value) DO NOTHING
     RETURNING 1
@@ -645,6 +754,19 @@ COMMENT ON FUNCTION public.backfill_channel_consent_from_parties() IS
   'left standing on a seat the inbound STOP rail flipped to `opted_out` '
   '(r10 M1) is ever filed as the refusal''s own words; such a refusal is '
   'recorded wordless, which is what R-AQ''s mirror branch reads. '
+  'THE CONSENT SIDE IS ASKED OF THE WHOLE GROUP TOO (r9 M2): where the winning '
+  'row carries no consent evidence at all — the sourceless dateless opted_out '
+  'seat the shipped portal writes on purpose, which wins the refusal bucket — '
+  'the record takes source, evidence, recorded_at, disclosure_version, '
+  'recorded_by AND consented_at, as one set, off the group''s best evidenced '
+  'grant (grant_evidence), so a studio holding a signed grant on the seat next '
+  'door does not have it minted away. It matters twice over, because a record '
+  'minted with a NULL opt_out_source is the one R-AQ''s mirror branch then '
+  'wipes the seats for — the grant seat included — leaving the proof of prior '
+  'express written consent nowhere at all. A winner that carries its own '
+  'consent evidence keeps it (a STOP-flipped seat''s grant paperwork, or a '
+  'refusal minting the record with its own words, as both other writers of a '
+  'mint do). '
   'Idempotent — ON CONFLICT '
   'DO NOTHING never overwrites a later decision — and side-effect-free to '
   're-run once the trigger exists: a folded `pending` reaches the party rows '
@@ -1772,7 +1894,10 @@ COMMENT ON FUNCTION public.record_channel_consent(uuid, text, text, text, text, 
 -- So: the refusal keeps standing, the seats keep it, the studio's fresh consent
 -- goes on the record where the room can print it ("opted out by text, 3 Dec
 -- 2025; fresh signed consent 11 Sep 2026, waiting on their reply"), and the
--- door stays re-callable. THE DOUBLE OPT-IN DOES NOT RUN FROM HERE, and no
+-- door stays re-callable. THAT SECOND HALF OF THE SENTENCE IS DATED BY THIS
+-- DOOR (r9 M1): the five evidence columns and consented_at are one set, so the
+-- consent recorded here carries today, not whatever older grant the record was
+-- keeping — see the SET list. THE DOUBLE OPT-IN DOES NOT RUN FROM HERE, and no
 -- invite is dispatched (fc_dispatch_optin_invite fires on a mirrored `pending`,
 -- which this no longer writes). `granted` is the recipient's to give by
 -- replying YES or START, which the inbound rail writes directly — the one
@@ -1859,6 +1984,27 @@ BEGIN
          -- mirror pushed the same overwrite onto every seat in the studio on
          -- that number, taking the party-row copy with it. R-Q's sentence needs
          -- both halves printable at once.
+         -- AND THE FRESH CONSENT DATES ITSELF (r9 M1). The five columns
+         -- below are restated by every call, and consented_at is THE DATE OF
+         -- THE ACT THEY DESCRIBE (R-Q, :159-170). Left on the older grant this
+         -- door composed the exact sentence r6 R6-M1 closed one function up: a
+         -- record holding (2 May 2025, written, "Signed the kickoff form", v3)
+         -- came out of one ordinary call reading (verbal, "He said it is fine
+         -- now", recorded today, v9) AGAINST 2 May 2025 — the new source and
+         -- words filed under the old grant's date, so R-Q's grant sentence
+         -- printed "Verbal consent, 2 May 2025"; and v3, the disclosure the
+         -- person was actually shown at that grant, was destroyed on the record
+         -- and, through the mirror's COALESCE (:1016), stamped as v9 onto every
+         -- seat in the studio on that number. The studio's fresh consent is a
+         -- NEW act: it gets today's date, and the five belong to it.
+         --
+         -- This moves NOTHING else (r7 M7-2): status stays opted_out,
+         -- opt_out_at keeps the day the refusal arrived, refusal_unanswered
+         -- stays TRUE. It opens no gate either — record_channel_consent's
+         -- granted leg tests refusal_unanswered (:1608-1612), which this door
+         -- keeps true, so "opted out 3 Dec 2025, fresh signed consent today,
+         -- waiting on their reply" is exactly what the record now says.
+         consented_at       = v_now,
          source             = p_source,
          evidence           = p_evidence,
          recorded_at        = v_now,
@@ -1893,7 +2039,12 @@ COMMENT ON FUNCTION public.record_channel_reconsent(uuid, text, text, text, text
   '(no_opt_out_to_supersede — the condition is in the UPDATE''s own WHERE, so a '
   'concurrent writer cannot move the row out from under it). It is EVIDENCE-ONLY '
   'and LEAVES THE RECORD AT opted_out (r7 M7-2): it writes source, evidence, '
-  'recorded_at, disclosure_version, recorded_by and origin_project_id, and keeps '
+  'recorded_at, disclosure_version, recorded_by, origin_project_id AND THE DATE '
+  'OF THE CONSENT IT RECORDS (consented_at = now, r9 M1 — the five evidence '
+  'columns and the date name the SAME act; leaving the older grant''s date under '
+  'a fresh source composed R-Q''s sentence as "<new source> consent, <old grant '
+  'date>" and silently replaced the disclosure version the person was shown at a '
+  'grant this is not the grant for), and keeps '
   'status, opt_out_at, refusal_unanswered AND THE REFUSAL''S OWN EVIDENCE SET '
   '(opt_out_source / opt_out_evidence / opt_out_recorded_at / '
   'opt_out_recorded_by) exactly as they stand — before that set existed this '

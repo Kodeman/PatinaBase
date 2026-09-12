@@ -14,7 +14,7 @@ Local Supabase only. Nothing was pushed to Strata; no `supabase db push`, no
 |---|---|
 | `supabase/migrations/00592_people_cards_affiliations_rules.sql` | `studio_contact_org()` + `project_party_designer()` helpers · `studio_contacts` person columns (`is_sole_proprietor`, `studio_verdict`, `studio_verdict_at`) and company columns (`legal_name`, `dba_name`, `company_kind` + CHECK, `trades`, `w9_on_file_at`, `tax_id_last4`, `remit_to`, `retainage_bps`, `warranty_until`, `paperwork_contact_person_id`, `signer_person_id`, `site_contact_person_id`) · new table `studio_person_affiliations` (+ `assert_affiliation_card_kinds()` and `studio_person_affiliations_distinct_cards_check`) · new table `studio_contact_rules` (+ `studio_contact_rules_channels_allowed_check` and `studio_contact_rules_channels_forbidden_check`, both `<@` an **EIGHT**-name vocabulary — the seven channel kinds plus the rule-only `sms` token, so "phone yes, text no" is writable on one line — r6 M6-5 widened by r4 R4-M2; `sms` is deliberately NOT a `studio_contact_channels.channel_kind`) · **`assert_studio_contact_designations()`** BEFORE INSERT/UPDATE on `studio_contacts` — `paperwork_contact_person_id` / `signer_person_id` / `site_contact_person_id` must each name a PERSON card in the SAME organization and never the row itself (r5 R-AP) · **`assert_studio_contact_rule_route()`** BEFORE INSERT/UPDATE on `studio_contact_rules` — the same test for `route_to_person_id` (r6 M6-4), and since r8 F1 it inspects EVERY rule, routed or not: `subject_type` person/company must equal the named card's own `entity_kind` (`rule_subject_kind_mismatch`) and `subject_type` engagement must name a `project_parties` row (`rule_subject_not_found`) |
 | `supabase/migrations/00593_studio_contact_channels.sql` | New table `studio_contact_channels` · **`normalize_channel_value(kind, value)`** — the one channel-key rule, shared with 00594's consent RPCs · **`channel_value_was_on_sms_rail(value)`** — the `sms_capable` evidence test (an `sms_conversations` thread, or an asked FIELD-kind seat) · `normalize_studio_contact_channel()` trigger (defers to the normaliser) · `assert_channel_owner_kind()` trigger — `owner_type` must equal the card's own `entity_kind` · four-part backfill from `studio_contacts.phone/email` and from `project_parties.phone/email` where `studio_contact_id` is set, carrying the `sms_capable` evidence rule below · **`assert_studio_contact_identity_stable()`** BEFORE UPDATE OF `entity_kind`, `organization_id` on `studio_contacts` (r8 R-AR) — the change is refused with `studio_contact_identity_held` while any channel, designation, rule route or affiliation still points at the card, with a HINT naming what holds it; a restatement of the same values still writes, and after 00593's backfill essentially every card with a phone or an email is held |
-| `supabase/migrations/00594_studio_channel_consent.sql` | New table `studio_channel_consent` (PK `(organization_id, channel_kind, channel_value)`, carrying `refusal_unanswered` — the stored "a refusal stands that has not been answered" — and **THE REFUSAL'S OWN EVIDENCE SET**, `opt_out_source` / `opt_out_evidence` / `opt_out_recorded_at` / `opt_out_recorded_by`, with `studio_channel_consent_opt_out_source_check` over the same five-name source vocabulary as the consent side (r8 W4-M2); those four are written by the fold, by `record_channel_consent`'s `opted_out` branch and by the inbound STOP rail, and by nothing else — `record_channel_reconsent` never touches them) · `backfill_channel_consent_from_parties()` + its one call (its `refusal` CTE takes the refusal's words only off a row whose evidence could BE the refusal's — r4 R4-M1, widened r10 M1) · `mirror_channel_consent_to_parties()` trigger · RPC `record_channel_consent(...)` · RPC `record_channel_consent`'s **email asymmetry** (r6 R6-M3): on `channel_kind = 'email'` — and only there — a fully evidenced `granted` passes the `opted_out` gate AND lowers `refusal_unanswered`, because email has no inbound START to answer with · RPC `record_channel_reconsent(...)` (PR-m's named way back) · **REDEFINES two existing trigger functions**: `fc_dispatch_optin_invite` (lineage `00432:27-68`) and `_site_request_consent_granted_dispatch` (lineage `00374:3399-3444`) · `COMMENT ON TABLE public.project_parties` restating the mirror invariant (lineage `00212:46`) |
+| `supabase/migrations/00594_studio_channel_consent.sql` | New table `studio_channel_consent` (PK `(organization_id, channel_kind, channel_value)`, carrying `refusal_unanswered` — the stored "a refusal stands that has not been answered" — and **THE REFUSAL'S OWN EVIDENCE SET**, `opt_out_source` / `opt_out_evidence` / `opt_out_recorded_at` / `opt_out_recorded_by`, with `studio_channel_consent_opt_out_source_check` over the same five-name source vocabulary as the consent side (r8 W4-M2); those four are written by the fold, by `record_channel_consent`'s `opted_out` branch and by the inbound STOP rail, and by nothing else — `record_channel_reconsent` never touches them) · `backfill_channel_consent_from_parties()` + its one call (its `refusal` CTE takes the refusal's words only off a row whose evidence could BE the refusal's — r4 R4-M1, widened r10 M1 — and its `grant_evidence` CTE gives the record the group's best evidenced grant, five columns and the date together, where the winning row carries none, r9 M2) · `mirror_channel_consent_to_parties()` trigger · RPC `record_channel_consent(...)` · RPC `record_channel_consent`'s **email asymmetry** (r6 R6-M3): on `channel_kind = 'email'` — and only there — a fully evidenced `granted` passes the `opted_out` gate AND lowers `refusal_unanswered`, because email has no inbound START to answer with · RPC `record_channel_reconsent(...)` (PR-m's named way back; it dates the consent it records — `consented_at = now` beside the five evidence columns, r9 M1) · **REDEFINES two existing trigger functions**: `fc_dispatch_optin_invite` (lineage `00432:27-68`) and `_site_request_consent_granted_dispatch` (lineage `00374:3399-3444`) · `COMMENT ON TABLE public.project_parties` restating the mirror invariant (lineage `00212:46`) |
 
 **Two functions are redefined, both grafted from their grep-winner bodies
 verbatim** (`grep -rln "CREATE OR REPLACE FUNCTION[^(]*<name>" supabase/migrations/*.sql | sort | tail -1`):
@@ -688,20 +688,71 @@ $ git diff --stat -- supabase/seed/00-legacy-grants.sql
     seats alongside the status (r10 M1) — see decision 26 for what the old
     behaviour cost. `_tests/sms-inbound.test.ts` covers all four.
 
+31. **A fresh consent recorded over a refusal dates itself** (r9 M1).
+    `record_channel_reconsent()` restates the studio's five evidence columns on
+    every call, and `consented_at` was left alone on the reading that "the
+    dates are kept". But `consented_at` is not an independent fact: it is the
+    date OF THOSE FIVE (R-Q, `00594:159-170`), which is the rule decision 22
+    (r6 R6-M1) enforces one function up. Left standing, one ordinary call
+    through the door the `channel_opted_out` HINT sends studios to turned a
+    record holding (`2 May 2025`, `written`, "Signed the kickoff form", `v3`)
+    into one reading (`verbal`, "He said it is fine now", recorded today, `v9`)
+    AGAINST 2 May 2025 — R-Q's grant sentence composing to "Verbal consent,
+    2 May 2025", verbatim the failure r6 R6-M1 closed. And `v3`, the disclosure
+    the person was actually shown at that grant, was destroyed on the record
+    and, through the mirror's `COALESCE` (`00594:1016`), stamped as `v9` onto
+    every seat in the studio on that number under an `opted_out` status.
+    `consented_at = v_now` is now restated beside the five. Nothing else moves:
+    `status` stays `opted_out`, `opt_out_at` keeps the day the refusal arrived,
+    `refusal_unanswered` stays TRUE (r7 M7-2), and no gate opens —
+    `record_channel_consent`'s granted leg tests `refusal_unanswered`, which
+    this door keeps true, so "opted out 3 Dec 2025, fresh signed consent today,
+    waiting on their reply" is exactly what the record says. SQL block 35, with
+    16b4/16c2 and 16Bd carrying it on the composition path.
+
+32. **The fold takes the CONSENT side off the group, not off the winning row**
+    (r9 M2) — decision 26's mirror image. The commonest legacy shape is a
+    studio holding a fully evidenced grant on one seat and the shipped portal's
+    SOURCELESS, DATELESS `opted_out` on another seat on the same number
+    (`use-coordination.ts` writes exactly that). The sourceless refusal wins the
+    bucket — it must, it is the refusal — and the consent set came off that
+    winner alone, so the record was minted with `source` / `evidence` /
+    `recorded_at` / `disclosure_version` / `recorded_by` all NULL. Then the
+    second half: `opt_out_source` came out NULL too, which is what decision
+    23's (R-AQ) mirror branch reads as "this refusal has no words", so the
+    mirror wrote NULL over all four evidence columns on EVERY seat in the studio
+    on that number — including the seat that held the grant. `ON CONFLICT DO
+    NOTHING` means no later fold repairs the record and `record_channel_reconsent`
+    never touches `opt_out_*`, so the studio's proof of prior express written
+    consent survived nowhere at all. A `grant_evidence` CTE now sits beside
+    `refusal`, in the shape r8 W4-M1 established: one row per (studio, number),
+    the group's best evidenced consent, projected onto the record's five consent
+    columns AND `consented_at` — as one set, so the evidence and the date name
+    the same act — where the winning row carries none. Its population is
+    decision 26's words test read backwards (`refusal_words_are_its_own`, now
+    computed once in `party_org` so the two CTEs cannot drift), so a refusal's
+    own "Replied STOP" is never filed as a consent's evidence. A winner that
+    carries its own consent evidence keeps it, unchanged: a STOP-flipped seat's
+    grant paperwork (decision 26), and a refusal MINTING the record with its own
+    words, which is what both other writers of a mint do (`record_channel_consent`'s
+    INSERT leg, `sms-inbound/pipeline.ts`: "when this act MINTS the record there
+    is no grant standing to protect"). SQL blocks 36 and 27i1b; 36d is the
+    control — a group holding no grant has none invented for it.
+
 ---
 
 ## 3. Probes
 
-Every output below was re-taken after the **r10** round (M1, the fold's words
-test and the rail's seat write), against a full `supabase:reset` of the local
-stack. It has drifted three times in this wave: three rounds behind at r9
+Every output below was re-taken after the **r9 M1/M2** round (reconsent dating
+its own consent, and the fold taking the consent side off the group), against a
+full `supabase:reset` of the local stack. It has drifted three times in this wave: three rounds behind at r9
 (R5-M2), a round and a half behind at r2 (R2-M2), and **five commits behind at
 r10 (M2)** — where the paragraph standing here claimed the section was at the
 tip while §2 was missing the email door, the rule-only `sms` token, the r8 F1
 guard and the whole r7 second cycle, and the transcripts below printed a
 seven-name CHECK the database contradicted. The re-take happens AFTER the
 round's code lands; "it was re-taken last round" is not evidence that it is
-current, so the counts below are the ones that catch it — 37 blocks, 36 notices,
+current, so the counts below are the ones that catch it — 39 blocks, 38 notices,
 80 deno cases, 216 / 2633 grant lines.
 
 ### Reset applies clean
@@ -954,16 +1005,21 @@ NOTICE:  32. a recorded refusal never speaks for the grant it stands beside
 NOTICE:  33. a blank evidence field cannot empty the evidence set (r6 R6-M2): passed
 NOTICE:  34. an email refusal is recoverable by a fresh recorded consent and an
          SMS one is not (r6 R6-M3): passed
+NOTICE:  35. a fresh consent recorded over a refusal carries its own date, so
+         source, words, disclosure version and date name one act (r9 M1): passed
+NOTICE:  36. the fold keeps the group's grant evidence when the winning row
+         carries none, and never invents one for a group that holds none
+         (r9 M2): passed
 NOTICE:  All W1a assertions passed.
 ROLLBACK
 ```
 
-**37 blocks** — 1–34 plus 16B, 30e and 30f — and **36 notices**, because block
+**39 blocks** — 1–36 plus 16B, 30e and 30f — and **38 notices**, because block
 5's assertions live inside block 4's `DO`. This transcript has now been stale
 three times: it ended at block 17 while eleven more had shipped (r9 R5-M2), at
 block 27 while blocks 28 and 29 were passing (r2 R2-M2), and at block 30 while
 30e and 31–34 were passing and block 25's own notice had changed under it
-(r10 M2). The count is the check: `… | grep -c NOTICE` must read 37 (36 blocks
+(r10 M2). The count is the check: `… | grep -c NOTICE` must read 39 (38 blocks
 plus the closing line).
 
 What it asserts: a studio member writes and reads an affiliation; a cross-studio
@@ -1044,9 +1100,11 @@ stays re-callable, leaves the refusal's OWN evidence set untouched on the record
 (27b3/27b4/27d2/27g, r8 W4-M2) and leaves the refusal's own source and words on
 the SEAT (27c2/27d3, r9 R5-M1), while a later `granted` verdict mirrors the
 consent set onto the seat as before (27h). Block 27 also carries the r6 R6-M1
-case: the fold mints the shipped portal's SOURCELESS refusal verbatim, and a
-reconsent over it leaves the seat's source and words NULL rather than lending
-the refusal the studio's own consent document (27i–27i5); block 3 carries r6
+case: the fold mints the shipped portal's SOURCELESS refusal wordless — while
+27i1b (r9 M2) finds the group's real grant on the record's CONSENT side, which
+is the only copy that survives R-AQ's seat wipe two legs later — and a reconsent
+over it leaves the seat's source and words NULL rather than lending the refusal
+the studio's own consent document (27i–27i5); block 3 carries r6
 R6-M2 — the refusing sibling's own `sms_opt_out_at` lands on the record, so the
 refusal's words and the refusal's date come off the same row (3c6).
 
@@ -1071,7 +1129,18 @@ it cannot empty the evidence set. **34** (r6 R6-M3): an email refusal IS
 recoverable by the studio's own fully evidenced `granted`, which lowers
 `refusal_unanswered` and leaves `opt_out_at` and the refusal's words standing —
 while 34e/34e2 prove the identical two acts on SMS, and the
-reconsent-then-grant composition, are still refused.
+reconsent-then-grant composition, are still refused. **35** (r9 M1): a fresh
+consent recorded over a refusal carries its own date — 35b2 asserts
+`consented_at = recorded_at` and not the 2 May 2025 grant it superseded, 35c
+that nothing else moved (status, `opt_out_at`, `refusal_unanswered` and the
+refusal's own words all stand), and 35d that the seat's disclosure version and
+consent date name the same act. **36** (r9 M2): the fold folds a sourceless
+portal refusal sitting beside a fully evidenced grant and puts that grant's five
+columns AND its date on the record's consent side (36b) while the refusal stays
+wordless (36a) and the seats are wiped by R-AQ (36c) — the record being the only
+place the studio's proof of prior express written consent now survives; 36d is
+the control, a group whose only evidence is a texted refusal's own words, which
+gets no grant invented for it and no consent date at all.
 
 ### Deno tests
 
@@ -1257,7 +1326,12 @@ deploys.)
   SELECT r.org, r.phone_e164, r.sms_consent_status,
          (f.org IS NOT NULL) AS refusal_unanswered,
          COALESCE(r.sms_opt_out_at, f.sms_opt_out_at) AS opt_out_at,
-         f.opt_out_source, f.opt_out_evidence, f.opt_out_recorded_at
+         f.opt_out_source, f.opt_out_evidence, f.opt_out_recorded_at,
+         -- r9 M2: and the CONSENT side as the fold will write it
+         CASE WHEN r.sms_consent_source IS NULL AND g.org IS NOT NULL
+              THEN g.sms_consent_source ELSE r.sms_consent_source END AS consent_source,
+         CASE WHEN r.sms_consent_source IS NULL AND g.org IS NOT NULL
+              THEN g.sms_consented_at   ELSE r.sms_consented_at   END AS consented_at
     FROM ranked r
     LEFT JOIN refusal f ON f.org = r.org AND f.phone_e164 = r.phone_e164
    WHERE r.rn = 1
@@ -1315,8 +1389,16 @@ deploys.)
   `refusal_unanswered = t` with all four `opt_out_*` empty is a group whose only
   refusals really are wordless (the portal's own shape) — and on those, and only
   those, the mirror will write NULL over the seats' four evidence columns
-  (decision 23, R-AQ). Checked on this fixture, the dry run and the fold now
-  agree row for row;
+  (decision 23, R-AQ). The dry run carries the `grant_evidence` CTE too since
+  r9 M2, so its `consent_source` / `consented_at` columns are the paperwork the
+  fold will actually file: a group whose winning seat is the portal's sourceless
+  refusal comes back showing the grant standing on the seat next door rather
+  than a blank the operator would read as "this studio has no consent evidence
+  for this number". Re-checked on a two-group fixture after that change, the dry
+  run and the fold agree row for row on all seven columns (`+16125550911` and
+  `+16125550912`, both `opted_out / refusal_unanswered = t`, both
+  `consent_source = written / consented_at = 2025-05-02`). Checked on the
+  earlier fixture, the dry run and the fold now agree row for row;
   `artifacts/people-room-crm-2026-09-11/build/probe20-r2-negative-control.sql`
   runs the pre-fix fold body beside the fixed one in one rolled-back transaction
   and shows the difference (record and both seats keep

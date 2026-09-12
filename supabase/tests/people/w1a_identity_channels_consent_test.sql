@@ -103,6 +103,17 @@
 --      portal writes — and the record AND both seats keep the STOP's date and
 --      its words; where the words and the date sit on different refusing
 --      seats, the record still ends up with both.
+--  35. r9 M1: record_channel_reconsent dates the consent it records. The five
+--      evidence columns and consented_at are one act, so a fresh verbal
+--      consent is never filed under an older written grant's date, and the
+--      disclosure version on the record (and on the seats) is the one standing
+--      beside the date on the same row.
+--  36. r9 M2: the fold takes the CONSENT side off the whole group, not off the
+--      winning row alone — the shipped portal's sourceless `opted_out` seat
+--      wins the bucket, and the studio's signed grant on the seat next door
+--      lands on the record's consent side instead of being minted away and
+--      then wiped off every seat by R-AQ's mirror branch. It does not invent a
+--      grant for a group that holds none.
 --
 -- How to run:
 --   psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
@@ -1693,8 +1704,9 @@ $$;
 
 DO $$
 DECLARE
-  r      RECORD;
-  raised TEXT;
+  r        RECORD;
+  raised   TEXT;
+  v_dated  timestamptz;
 BEGIN
   PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
 
@@ -1726,6 +1738,14 @@ BEGIN
   ASSERT r.opt_out_at IS NOT NULL, 'FAIL 16b2: the refusal date must survive';
   ASSERT r.evidence = 'Signed a fresh consent at the walkthrough',
     'FAIL 16b3: the fresh consent must be on the record, got ' || COALESCE(r.evidence, '<null>');
+  -- 16b4. r9 M1: AND IT IS DATED BY THE ACT THAT RECORDED IT. The five
+  --       evidence columns and consented_at are one set; this record carried no
+  --       prior grant, so before the fix the studio's written consent sat on the
+  --       record against a NULL date, and on a record that DID carry one it sat
+  --       against the older grant's.
+  ASSERT r.consented_at IS NOT NULL,
+    'FAIL 16b4: reconsent must date the consent it records';
+  v_dated := r.consented_at;
 
   -- 16c. THE COMPOSITION. The grant is still refused — now by the first gate
   --      itself, because reconsent no longer moves the row off `opted_out`.
@@ -1741,8 +1761,17 @@ BEGIN
   SELECT * INTO r FROM studio_channel_consent
    WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
      AND channel_value = '+16125550233';
-  ASSERT r.status = 'opted_out' AND r.consented_at IS NULL,
-    'FAIL 16c2: the refused grant must leave the record at opted_out with no consent date';
+  -- The refused grant changed nothing: the record is still the refusal with
+  -- the studio's own reconsent standing on it, and the date on that consent is
+  -- still reconsent's own (r9 M1 — the grant that was refused wrote no date,
+  -- and the one standing is not its).
+  ASSERT r.status = 'opted_out' AND r.refusal_unanswered
+     AND r.consented_at = v_dated
+     AND r.evidence = 'Signed a fresh consent at the walkthrough',
+    'FAIL 16c2: the refused grant must leave the record at opted_out with the '
+    'reconsent''s own evidence and date, got ' || COALESCE(r.status, '<null>')
+      || ' / ' || COALESCE(r.consented_at::text, '<null>') || ' / '
+      || COALESCE(r.evidence, '<null>');
 
   -- 16d. AND `pending` IS NOT A FREE HOP EITHER (r6 B6-1). The gate used to be
   --      stated as "refuse granted", so the studio could keep re-recording
@@ -1884,8 +1913,18 @@ BEGIN
   SELECT * INTO r FROM studio_channel_consent
    WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
      AND channel_value = '+16125550244';
-  ASSERT r.status = 'opted_out' AND r.consented_at IS NULL,
-    'FAIL 16Bd: the refused grant must leave the record at opted_out, undated';
+  -- The record still refuses, and the only consent date on it is the one
+  -- reconsent() stamped on its own evidence (r9 M1) — the refused grant wrote
+  -- nothing, and a DATELESS refusal stays dateless on the refusal side, which
+  -- is the whole point of this block.
+  ASSERT r.status = 'opted_out' AND r.refusal_unanswered
+     AND r.opt_out_at IS NULL
+     AND r.evidence = 'Signed a fresh consent at the walkthrough'
+     AND r.consented_at IS NOT NULL,
+    'FAIL 16Bd: the refused grant must leave the record at opted_out with the '
+    'reconsent''s own evidence standing, got ' || COALESCE(r.status, '<null>')
+      || ' / ' || COALESCE(r.evidence, '<null>') || ' / '
+      || COALESCE(r.opt_out_at::text, '<null>');
   ASSERT NOT EXISTS (
     SELECT 1 FROM project_parties pp
      WHERE pp.phone_e164 = '+16125550244' AND pp.sms_consent_status = 'granted'),
@@ -3108,12 +3147,33 @@ BEGIN
    WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
      AND channel_value = '+16125550433';
   ASSERT r.status = 'opted_out' AND r.refusal_unanswered
-     AND r.opt_out_source IS NULL AND r.opt_out_evidence IS NULL
-     AND r.source IS NULL AND r.evidence IS NULL,
+     AND r.opt_out_source IS NULL AND r.opt_out_evidence IS NULL,
     'FAIL 27i: the fold must mint the portal''s sourceless refusal verbatim, got '
       || COALESCE(r.status, '<null>') || ' / '
       || COALESCE(r.opt_out_source, '<null>') || ' / '
       || COALESCE(r.source, '<null>');
+  -- 27i1b. r9 M2: AND THE GROUP'S REAL GRANT IS ON THE RECORD'S CONSENT SIDE.
+  --        The winning row here is the portal's sourceless, dateless
+  --        `opted_out` seat, and the studio's fully evidenced grant is on the
+  --        seat NEXT DOOR (Nils Ek, 'Signed consent form at kickoff',
+  --        2 Jan 2026). Taking the consent set off the winner alone minted this
+  --        record with all five NULL — and then, because opt_out_source is NULL
+  --        too, R-AQ's wordless branch wiped that evidence off every seat
+  --        (27i6/27i7 below, which still hold). Between the two, the studio's
+  --        proof of prior express written consent for this number existed
+  --        nowhere. The five and the DATE move together (R-Q): evidence and
+  --        consented_at name the same act.
+  ASSERT r.source = 'written'
+     AND r.evidence = 'Signed consent form at kickoff'
+     AND r.recorded_at = '2026-01-02 00:00:00+00'::timestamptz
+     AND r.recorded_by = 'a0000000-0000-4000-8000-000000000001'
+     AND r.consented_at = '2026-01-02 00:00:00+00'::timestamptz,
+    'FAIL 27i1b: the fold must keep the group''s grant evidence on the consent '
+    'side, got ' || COALESCE(r.source, '<null>') || ' / '
+      || COALESCE(r.evidence, '<null>') || ' / '
+      || COALESCE(r.recorded_at::text, '<null>') || ' / '
+      || COALESCE(r.recorded_by::text, '<null>') || ' / '
+      || COALESCE(r.consented_at::text, '<null>');
   SELECT * INTO r FROM project_parties WHERE id = 'e0000000-0000-4000-8000-0000000000a9';
   ASSERT r.sms_consent_status = 'opted_out'
      AND r.sms_consent_source IS NULL AND r.sms_consent_evidence IS NULL,
@@ -4428,6 +4488,233 @@ BEGIN
   PERFORM pg_temp.reset_role();
   RAISE NOTICE '34. an email refusal is recoverable by a fresh recorded '
                'consent and an SMS one is not (r6 R6-M3): passed';
+END
+$$;
+
+-- ─── 35. r9 M1: a fresh consent recorded over a refusal DATES ITSELF ───────
+--
+-- record_channel_reconsent() restates the studio's five evidence columns on
+-- every call — source, evidence, recorded_at, disclosure_version, recorded_by —
+-- and consented_at was deliberately left alone on the reading that "the dates
+-- are kept". But consented_at is the date OF THOSE FIVE (R-Q, 00594:159-170),
+-- not a fact of its own: left on the older grant, one ordinary call through the
+-- door the channel_opted_out HINT sends studios to turned a record holding
+-- (2 May 2025, written, "Signed the kickoff form", v3) into one reading
+-- (verbal, "He said it is fine now", recorded today, v9) AGAINST 2 May 2025 —
+-- R-Q's grant sentence composing to "Verbal consent, 2 May 2025", which is
+-- verbatim the failure r6 R6-M1 closed in record_channel_consent. Worse, v3 —
+-- the disclosure the person was actually shown at that grant — was destroyed on
+-- the record and, through the mirror's COALESCE, stamped as v9 onto every seat
+-- in the studio on that number, under an opted_out status.
+
+INSERT INTO project_parties (id, project_id, party_kind, display_name, phone,
+                             sms_consent_status)
+VALUES
+  ('e0000000-0000-4000-8000-0000000000d0', 'd0000000-0000-4000-8000-00000000000a',
+   'sub', 'Hetty Vance', '(612) 555-0507', 'not_asked');
+
+DO $$
+DECLARE
+  r       RECORD;
+  seat    RECORD;
+  v_grant CONSTANT timestamptz := '2025-05-02 00:00:00+00';
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+
+  -- A real, evidenced, DATED grant on the record…
+  PERFORM public.record_channel_consent(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '612-555-0507', 'granted',
+    'written', 'Signed the kickoff form', 'field-sms-v3', NULL);
+  PERFORM pg_temp.reset_role();
+  UPDATE studio_channel_consent
+     SET consented_at = v_grant, recorded_at = v_grant
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550507';
+
+  -- …then the STOP, which keeps the grant's five and its date (r6 R6-M1).
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+  PERFORM public.record_channel_consent(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '612-555-0507', 'opted_out',
+    'inbound_sms', 'Replied STOP', NULL, NULL);
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550507';
+  ASSERT r.consented_at = v_grant AND r.source = 'written'
+     AND r.disclosure_version = 'field-sms-v3',
+    'FAIL 35a: the refusal must leave the grant''s dated evidence standing, got '
+      || COALESCE(r.consented_at::text, '<null>') || ' / '
+      || COALESCE(r.source, '<null>') || ' / '
+      || COALESCE(r.disclosure_version, '<null>');
+
+  -- 35b. THE FRESH CONSENT. Its source, its words, its disclosure version AND
+  --      its date are one act.
+  PERFORM public.record_channel_reconsent(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '612-555-0507',
+    'verbal', 'He said it is fine now', 'field-sms-v9', NULL);
+  PERFORM pg_temp.reset_role();
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550507';
+  ASSERT r.source = 'verbal' AND r.evidence = 'He said it is fine now'
+     AND r.disclosure_version = 'field-sms-v9',
+    'FAIL 35b: the studio''s fresh consent must be on the record, got '
+      || COALESCE(r.source, '<null>') || ' / ' || COALESCE(r.evidence, '<null>');
+  ASSERT r.consented_at <> v_grant AND r.consented_at = r.recorded_at,
+    'FAIL 35b2: the fresh consent must carry its OWN date, not the older '
+    'grant''s — R-Q would otherwise compose "verbal consent, 2 May 2025", got '
+      || COALESCE(r.consented_at::text, '<null>') || ' vs recorded_at '
+      || COALESCE(r.recorded_at::text, '<null>');
+
+  -- 35c. AND NOTHING ELSE MOVED (r7 M7-2). The refusal still stands, on its own
+  --      date, with its own words: this is an evidence-only door.
+  ASSERT r.status = 'opted_out' AND r.refusal_unanswered
+     AND r.opt_out_at IS NOT NULL
+     AND r.opt_out_source = 'inbound_sms' AND r.opt_out_evidence = 'Replied STOP',
+    'FAIL 35c: reconsent must move nothing but the consent evidence, got '
+      || COALESCE(r.status, '<null>') || ' / '
+      || COALESCE(r.opt_out_at::text, '<null>') || ' / '
+      || COALESCE(r.opt_out_source, '<null>');
+
+  -- 35d. And the seat the mirror keeps agrees with itself: the disclosure
+  --      version it carries is the one standing beside the date it carries.
+  --      Before the fix the seat read v9 against a consented_at of 2 May 2025 —
+  --      a version stamped onto a grant whose recipient never saw it.
+  SELECT * INTO seat FROM project_parties
+   WHERE id = 'e0000000-0000-4000-8000-0000000000d0';
+  ASSERT seat.sms_consent_disclosure_version = 'field-sms-v9'
+     AND seat.sms_consented_at = r.consented_at,
+    'FAIL 35d: the seat''s disclosure version and consent date must name the '
+    'same act, got ' || COALESCE(seat.sms_consent_disclosure_version, '<null>')
+      || ' / ' || COALESCE(seat.sms_consented_at::text, '<null>');
+
+  RAISE NOTICE '35. a fresh consent recorded over a refusal carries its own '
+               'date, so source, words, disclosure version and date name one '
+               'act (r9 M1): passed';
+END
+$$;
+
+-- ─── 36. r9 M2: the fold takes the CONSENT side off the group, not off the ──
+--        winning row alone
+--
+-- The commonest legacy shape on the books: a studio holding a fully evidenced
+-- grant on one seat and the shipped portal's SOURCELESS, DATELESS `opted_out`
+-- on another seat on the same number (use-coordination.ts writes exactly that).
+-- The sourceless refusal wins the bucket — it must, it is the refusal — and the
+-- consent set used to come off that winner alone, so the record was minted with
+-- source / evidence / recorded_at / disclosure_version / recorded_by all NULL.
+-- Then the second half: opt_out_source came out NULL too, which is what R-AQ's
+-- mirror branch reads as "this refusal has no words", so the mirror wrote NULL
+-- over all four evidence columns on EVERY seat in the studio on that number —
+-- including the seat that held the grant. ON CONFLICT DO NOTHING means no later
+-- fold repairs the record and reconsent never touches opt_out_*, so the
+-- studio's proof of prior express written consent survived nowhere.
+
+INSERT INTO project_parties (id, project_id, party_kind, display_name, phone,
+                             sms_consent_status, sms_consented_at, sms_opt_out_at,
+                             sms_consent_source, sms_consent_evidence,
+                             sms_consent_recorded_at, sms_consent_disclosure_version,
+                             sms_consent_recorded_by)
+VALUES
+  -- the portal's refusal: a status and nothing else
+  ('e0000000-0000-4000-8000-0000000000d1', 'd0000000-0000-4000-8000-00000000000a', 'sub', 'Bo Ferris', '(612) 555-0511',
+   'opted_out', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  -- the seat next door, carrying the studio's whole 10DLC artifact
+  ('e0000000-0000-4000-8000-0000000000d2', 'd0000000-0000-4000-8000-00000000000a', 'installer', 'Bo Ferris', '612.555.0511',
+   'granted', '2025-05-02T00:00:00Z', NULL,
+   'written', 'Signed the kickoff form', '2025-05-02T00:00:00Z',
+   'field-sms-v3', 'a0000000-0000-4000-8000-000000000001'),
+  -- CONTROL: the same sourceless refusal, but the only sibling's evidence is
+  -- the REFUSAL'S OWN WORDS (a rail-written STOP). A refusal is not a grant, so
+  -- nothing may be projected onto the consent side from it — "Replied STOP"
+  -- filed as the consent's evidence is r4 R4-M1 in reverse.
+  ('e0000000-0000-4000-8000-0000000000d3', 'd0000000-0000-4000-8000-00000000000a', 'sub', 'Cleo Hart', '(612) 555-0512',
+   'opted_out', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  ('e0000000-0000-4000-8000-0000000000d4', 'd0000000-0000-4000-8000-00000000000a', 'installer', 'Cleo Hart', '612.555.0512',
+   'opted_out', NULL, '2025-12-03T00:00:00Z',
+   'inbound_sms', 'Inbound STOP', '2025-12-03T00:00:00Z',
+   'field-sms-v3', NULL);
+
+DO $$
+DECLARE
+  r    RECORD;
+  seat RECORD;
+BEGIN
+  PERFORM public.backfill_channel_consent_from_parties();
+
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_kind = 'sms' AND channel_value = '+16125550511';
+
+  -- 36a. The verdict is unchanged: the refusal wins, unanswered and wordless.
+  ASSERT r.status = 'opted_out' AND r.refusal_unanswered
+     AND r.opt_out_source IS NULL AND r.opt_out_evidence IS NULL
+     AND r.opt_out_recorded_at IS NULL AND r.opt_out_recorded_by IS NULL,
+    'FAIL 36a: the folded record must be a wordless unanswered refusal, got '
+      || COALESCE(r.status, '<null>') || ' / '
+      || COALESCE(r.opt_out_source, '<null>');
+
+  -- 36b. AND THE GROUP'S GRANT IS ON THE CONSENT SIDE, ALL SIX TOGETHER.
+  ASSERT r.source = 'written'
+     AND r.evidence = 'Signed the kickoff form'
+     AND r.recorded_at = '2025-05-02T00:00:00Z'::timestamptz
+     AND r.disclosure_version = 'field-sms-v3'
+     AND r.recorded_by = 'a0000000-0000-4000-8000-000000000001'
+     AND r.consented_at = '2025-05-02T00:00:00Z'::timestamptz,
+    'FAIL 36b: the fold must take the group''s grant evidence, not the winning '
+    'row''s emptiness, got ' || COALESCE(r.source, '<null>') || ' / '
+      || COALESCE(r.evidence, '<null>') || ' / '
+      || COALESCE(r.recorded_at::text, '<null>') || ' / '
+      || COALESCE(r.disclosure_version, '<null>') || ' / '
+      || COALESCE(r.recorded_by::text, '<null>') || ' / '
+      || COALESCE(r.consented_at::text, '<null>');
+
+  -- 36c. The seats are still wiped — that is R-AQ, and it is why the record has
+  --      to be the one that keeps the proof. This is the whole point: after the
+  --      mirror the ONLY surviving copy of the studio's written consent is the
+  --      record's consent side.
+  FOR seat IN
+    SELECT * FROM project_parties
+     WHERE id IN ('e0000000-0000-4000-8000-0000000000d1',
+                  'e0000000-0000-4000-8000-0000000000d2')
+     ORDER BY id
+  LOOP
+    ASSERT seat.sms_consent_status = 'opted_out'
+       AND seat.sms_consent_source IS NULL
+       AND seat.sms_consent_evidence IS NULL,
+      'FAIL 36c: seat ' || seat.id || ' must carry the wordless refusal, got '
+        || COALESCE(seat.sms_consent_status, '<null>') || ' / '
+        || COALESCE(seat.sms_consent_source, '<null>');
+  END LOOP;
+
+  -- 36d. CONTROL — a group whose only evidence is the REFUSAL's own words, so
+  --      there is no grant anywhere in it. The refusal side takes those words
+  --      (that is what they are). The consent side takes the WINNER's own set,
+  --      unchanged by this fix — which here is the same refusal minting the
+  --      record, exactly as the other two writers of a mint do
+  --      (record_channel_consent's INSERT leg 00594, sms-inbound/pipeline.ts:
+  --      "when this act MINTS the record there is no grant standing to
+  --      protect"). What must NOT happen is the fold reaching into the group
+  --      and inventing a grant out of a refusing sibling's words, or DATING
+  --      one: consented_at stays NULL, so no grant sentence composes.
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_kind = 'sms' AND channel_value = '+16125550512';
+  ASSERT r.opt_out_source = 'inbound_sms' AND r.opt_out_evidence = 'Inbound STOP'
+     AND r.opt_out_at = '2025-12-03T00:00:00Z'::timestamptz,
+    'FAIL 36d: the texted refusal must keep its own words, got '
+      || COALESCE(r.opt_out_source, '<null>') || ' / '
+      || COALESCE(r.opt_out_evidence, '<null>');
+  ASSERT r.consented_at IS NULL AND r.recorded_by IS NULL
+     AND r.source = 'inbound_sms' AND r.evidence = 'Inbound STOP',
+    'FAIL 36d2: a group holding no grant must not have one invented for it — '
+    'the winner''s own set stands and no consent DATE appears, got '
+      || COALESCE(r.source, '<null>') || ' / ' || COALESCE(r.evidence, '<null>')
+      || ' / ' || COALESCE(r.consented_at::text, '<null>') || ' / '
+      || COALESCE(r.recorded_by::text, '<null>');
+
+  RAISE NOTICE '36. the fold keeps the group''s grant evidence when the winning '
+               'row carries none, and never invents one for a group that holds '
+               'none (r9 M2): passed';
   RAISE NOTICE 'All W1a assertions passed.';
 END
 $$;
