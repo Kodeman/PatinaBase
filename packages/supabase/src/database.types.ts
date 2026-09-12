@@ -36396,6 +36396,10 @@ export type Database = {
         Args: { p_association_id: string; p_reason?: string }
         Returns: boolean
       }
+      rolodex_card_for_party_phone: {
+        Args: { p_phone_e164: string; p_project_id: string }
+        Returns: string
+      }
       route_field_capture: {
         Args: {
           p_capture_id: string

@@ -1,0 +1,12 @@
+Pager usage is off.
+BEGIN
+SET
+psql:artifacts/people-room-crm-2026-09-11/build/probe205-w1b-fix-r12-m2-boundaries.sql:82: NOTICE:  CROSS-TENANT: a card of another studio stamped nothing (unstamped seats = 1 of 1)
+psql:artifacts/people-room-crm-2026-09-11/build/probe205-w1b-fix-r12-m2-boundaries.sql:82: NOTICE:  CROSS-TENANT: hand-written foreign stamp still refused: party_studio_contact_other_studio
+psql:artifacts/people-room-crm-2026-09-11/build/probe205-w1b-fix-r12-m2-boundaries.sql:82: NOTICE:  R-AX: Pete seat=d0e30000-0000-0000-0000-000000000012 phone=+16125550112 frozen-consent status=not_asked
+psql:artifacts/people-room-crm-2026-09-11/build/probe205-w1b-fix-r12-m2-boundaries.sql:82: NOTICE:  R-AX: seats on Pete's number now carrying his card: 3
+psql:artifacts/people-room-crm-2026-09-11/build/probe205-w1b-fix-r12-m2-boundaries.sql:82: NOTICE:  R-AY: the RECORD still decides, and it still says: opted_out
+psql:artifacts/people-room-crm-2026-09-11/build/probe205-w1b-fix-r12-m2-boundaries.sql:82: NOTICE:  R-AX: the number moved — the seat's FROZEN column reads not_asked, not opted_out (pre-existing, see note)
+psql:artifacts/people-room-crm-2026-09-11/build/probe205-w1b-fix-r12-m2-boundaries.sql:82: NOTICE:  R-AX CONTROL: an opted_out seat's number is still frozen: consent_opted_out_phone_frozen
+DO
+ROLLBACK

@@ -1,0 +1,14 @@
+Pager usage is off.
+BEGIN
+SET
+psql:probe197-w1b-final-r12-unstamped-seat-of-a-carded-human.sql:46: NOTICE:  Dana card=d0e10000-0000-0000-0000-000000000011  phone=+16125550111
+psql:probe197-w1b-final-r12-unstamped-seat-of-a-carded-human.sql:46: NOTICE:  BEFORE  person_id=d0e10000-0000-0000-0000-000000000011 role=contact seats=2 consent=granted
+psql:probe197-w1b-final-r12-unstamped-seat-of-a-carded-human.sql:46: NOTICE:  AFTER   person_id=2b86efe2-5e93-424e-add7-f1fa0e53012d role=sub seats=1 consent=granted
+psql:probe197-w1b-final-r12-unstamped-seat-of-a-carded-human.sql:46: NOTICE:  AFTER   person_id=d0e10000-0000-0000-0000-000000000011 role=contact seats=2 consent=granted
+psql:probe197-w1b-final-r12-unstamped-seat-of-a-carded-human.sql:46: NOTICE:  people_directory rows: 62 -> 63  (one human, one new seat)
+psql:probe197-w1b-final-r12-unstamped-seat-of-a-carded-human.sql:46: NOTICE:  people_directory_seats rows for Dana: 3
+psql:probe197-w1b-final-r12-unstamped-seat-of-a-carded-human.sql:46: NOTICE:     seat identity_key=+16125550111 person_id=2b86efe2-5e93-424e-add7-f1fa0e53012d project=Okonkwo residence
+psql:probe197-w1b-final-r12-unstamped-seat-of-a-carded-human.sql:46: NOTICE:     seat identity_key=d0e10000-0000-0000-0000-000000000011 person_id=d0e10000-0000-0000-0000-000000000011 project=Okonkwo residence
+psql:probe197-w1b-final-r12-unstamped-seat-of-a-carded-human.sql:46: NOTICE:     seat identity_key=d0e10000-0000-0000-0000-000000000011 person_id=d0e10000-0000-0000-0000-000000000011 project=Lindqvist kitchen
+DO
+ROLLBACK

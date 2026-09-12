@@ -16463,6 +16463,30 @@ END $g$;
 
 -- 00626_people_directory_v4_seats.sql
 DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.rolodex_card_for_party_phone(uuid, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00626_people_directory_v4_seats.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.rolodex_card_for_party_phone(uuid, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00626_people_directory_v4_seats.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.link_party_to_rolodex_card() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00626_people_directory_v4_seats.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.link_rolodex_card_to_parties() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00626_people_directory_v4_seats.sql
+DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.party_kind_in_directory(text) FROM PUBLIC, anon;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;

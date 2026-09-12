@@ -18,6 +18,12 @@
 --        -v ON_ERROR_STOP=1 -f supabase/tests/people/w1b_compliance_authority_directory_test.sql
 --
 -- One transaction, ROLLBACKed. Requires the dev seed (pnpm supabase:reset).
+--
+-- Blocks 21 and 22 are the r12 regression legs: 21 stages its own two seats
+-- and executes 00624's stage backfill BOTH ways, because that statement is a
+-- no-op on every reset (migrations run before seeds) and only ever really
+-- runs at the deploy; 22 walks the shipped inline add on a carded human's own
+-- number and the three cases the auto-link must refuse.
 -- ═══════════════════════════════════════════════════════════════════════════
 BEGIN;
 
@@ -3741,6 +3747,220 @@ BEGIN
 
   PERFORM pg_temp.reset_role();
   RAISE NOTICE '20. studio_contact_id is guarded like the rest of the R-AP family: a PERSON card and a COMPANY card of another studio are both refused party_studio_contact_other_studio, on UPDATE and on INSERT, by a caller who is a member of BOTH studios — so the seated human named as the site access card''s key holder stays in her own studio''s Directory, her row nests every seat it claims, and the roster still names her seat; while either kind of card from the project''s OWN studio lands, because 00418''s fold stamps a company card on a vendor-bearing seat (r9 MAJOR-2): passed';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 21. 00624's stage backfill may not move project_parties.updated_at
+--     (w1b final review r12 MAJOR-1)
+-- ═══════════════════════════════════════════════════════════════════════════
+-- The statement is unreachable on a reset — migrations run before seeds, so
+-- project_parties is empty when 00624 executes it and eleven rounds measured
+-- a no-op. This block stages the two seats itself and executes the statement
+-- both ways: unbracketed (the mechanism, trapped and rolled back) and in the
+-- shipped bracketed form. It guards the MECHANISM — if the two readers ever
+-- stop ranking one identity's seats by updated_at, 21b fails and 00624's
+-- brackets have to be re-argued.
+DO $$
+DECLARE
+  d uuid; a uuid; b uuid;
+  win_person uuid; win_project uuid; win_touch timestamptz;
+  now_person uuid; now_project uuid; now_touch timestamptz;
+  st text;
+BEGIN
+  SELECT id INTO d FROM public.profiles WHERE email='designer@patina.dev';
+
+  -- one uncarded human on a phone no card carries: a seat on the COMPLETED
+  -- Lindqvist kitchen, 400 days quiet, and a seat on the ACTIVE Okonkwo
+  -- residence, 10 days quiet.
+  INSERT INTO public.project_parties (project_id, party_kind, display_name, phone_e164, updated_at)
+  VALUES ('d0e00000-0000-0000-0000-00000000000b','sub','R12 M1 Probe','+16125559977',
+          now() - interval '400 days')
+  RETURNING id INTO a;
+  INSERT INTO public.project_parties (project_id, party_kind, display_name, phone_e164, updated_at)
+  VALUES ('d0e00000-0000-0000-0000-00000000000a','sub','R12 M1 Probe','+16125559977',
+          now() - interval '10 days')
+  RETURNING id INTO b;
+
+  PERFORM pg_temp.assume_user(d);
+  SELECT person_id, project_id, last_touch_at
+    INTO win_person, win_project, win_touch
+    FROM public.people_directory WHERE display_name = 'R12 M1 Probe';
+  PERFORM pg_temp.reset_role();
+
+  IF win_person IS DISTINCT FROM b THEN
+    RAISE EXCEPTION '21a the LIVE seat should be the Directory winner before any backfill, got %',
+      win_person;
+  END IF;
+
+  -- (b) the mechanism, in a trapped sub-block so the table is untouched after
+  BEGIN
+    UPDATE public.project_parties pp
+       SET stage = CASE
+                     WHEN COALESCE(pj.completed_at, pj.updated_at) > now() - interval '12 months'
+                       THEN 'warranty' ELSE 'off_job' END
+      FROM public.projects pj
+     WHERE pj.id = pp.project_id AND pj.status = 'completed' AND pp.stage = 'active';
+
+    PERFORM pg_temp.assume_user(d);
+    SELECT person_id INTO now_person
+      FROM public.people_directory WHERE display_name = 'R12 M1 Probe';
+    PERFORM pg_temp.reset_role();
+
+    IF now_person IS DISTINCT FROM a THEN
+      RAISE EXCEPTION
+        '21b the UNBRACKETED backfill no longer flips the winner onto the closed job (got %) — '
+        'the identity tie-break has changed and 00624''s brackets must be re-argued', now_person;
+    END IF;
+    RAISE EXCEPTION 'w1b21_rollback_control';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM <> 'w1b21_rollback_control' THEN RAISE; END IF;
+  END;
+
+  -- (c) the shipped form: 00624's own two ALTERs around the same statement
+  EXECUTE 'ALTER TABLE public.project_parties DISABLE TRIGGER set_updated_at_project_parties';
+  UPDATE public.project_parties pp
+     SET stage = CASE
+                   WHEN COALESCE(pj.completed_at, pj.updated_at) > now() - interval '12 months'
+                     THEN 'warranty' ELSE 'off_job' END
+    FROM public.projects pj
+   WHERE pj.id = pp.project_id AND pj.status = 'completed' AND pp.stage = 'active';
+  EXECUTE 'ALTER TABLE public.project_parties ENABLE TRIGGER set_updated_at_project_parties';
+
+  SELECT stage INTO st FROM public.project_parties WHERE id = a;
+  IF st <> 'warranty' THEN
+    RAISE EXCEPTION '21c the bracketed backfill must still MOVE the stage; the closed seat reads %', st;
+  END IF;
+
+  PERFORM pg_temp.assume_user(d);
+  SELECT person_id, project_id, last_touch_at
+    INTO now_person, now_project, now_touch
+    FROM public.people_directory WHERE display_name = 'R12 M1 Probe';
+  PERFORM pg_temp.reset_role();
+
+  IF now_person IS DISTINCT FROM win_person
+     OR now_project IS DISTINCT FROM win_project
+     OR now_touch IS DISTINCT FROM win_touch THEN
+    RAISE EXCEPTION
+      '21d the bracketed backfill moved the Directory row: person %->%, project %->%, last_touch %->%',
+      win_person, now_person, win_project, now_project, win_touch, now_touch;
+  END IF;
+
+  -- and the column itself: the closed job's seat is still 400 days quiet
+  IF (SELECT now() - updated_at FROM public.project_parties WHERE id = a)
+       < interval '399 days' THEN
+    RAISE EXCEPTION '21e the closed job''s seat had its updated_at stamped by the backfill (now %)',
+      (SELECT updated_at FROM public.project_parties WHERE id = a);
+  END IF;
+
+  DELETE FROM public.project_parties WHERE id IN (a, b);
+  RAISE NOTICE '21. 00624''s stage backfill: the UNBRACKETED statement does flip an uncarded human''s Directory row onto the job that finished — person_id, project_id and last_touch_at all follow updated_at — and the shipped bracketed form moves the stage while moving none of the three, on seats this block stages itself because a reset runs the migration against an empty table (r12 MAJOR-1): passed';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 22. A carded human's UNSTAMPED seat is not a second identity
+--     (w1b final review r12 MAJOR-2)
+-- ═══════════════════════════════════════════════════════════════════════════
+DO $$
+DECLARE
+  d uuid; card uuid; ph text; later_card uuid;
+  before_rows int; after_rows int; c int; n int;
+BEGIN
+  SELECT id INTO d FROM public.profiles WHERE email='designer@patina.dev';
+  SELECT sc.id, sc.phone_e164 INTO card, ph
+    FROM public.studio_contacts sc
+   WHERE sc.organization_id = 'b0000000-0000-0000-0000-000000000001'
+     AND sc.full_name = 'Dana Kowalski';
+
+  PERFORM pg_temp.assume_user(d);
+  SELECT count(*) INTO before_rows FROM public.people_directory;
+  PERFORM pg_temp.reset_role();
+
+  -- (a) the shipped inline add: useAddProjectParty with studioContactId
+  -- omitted, on the number the card already carries
+  INSERT INTO public.project_parties (project_id, party_kind, display_name, phone_e164, trade)
+  VALUES ('d0e00000-0000-0000-0000-00000000000a','sub','Dana Kowalski', ph, 'electrical');
+
+  SELECT count(*) INTO n FROM public.project_parties
+   WHERE phone_e164 = ph AND studio_contact_id IS NULL;
+  IF n <> 0 THEN
+    RAISE EXCEPTION '22a % seat(s) carry Dana''s number with no rolodex stamp', n;
+  END IF;
+
+  PERFORM pg_temp.assume_user(d);
+  SELECT count(*) INTO after_rows FROM public.people_directory;
+  IF after_rows <> before_rows THEN
+    RAISE EXCEPTION '22b one inline add moved people_directory from % rows to %', before_rows, after_rows;
+  END IF;
+  SELECT count(*) INTO n FROM public.people_directory WHERE display_name = 'Dana Kowalski';
+  IF n <> 1 THEN
+    RAISE EXCEPTION '22c Dana holds % Directory rows', n;
+  END IF;
+  SELECT seat_count INTO c FROM public.people_directory WHERE person_id = card;
+  SELECT count(*) INTO n FROM public.people_directory_seats WHERE person_id = card;
+  IF c <> 3 OR n <> 3 THEN
+    RAISE EXCEPTION '22d Dana''s row claims % seat(s) and nests % (three were expected)', c, n;
+  END IF;
+  PERFORM pg_temp.reset_role();
+
+  -- (b) the mirror: the card written AFTER the seat
+  INSERT INTO public.project_parties (project_id, party_kind, display_name, phone_e164, trade)
+  VALUES ('d0e00000-0000-0000-0000-00000000000a','sub','R12 Later Card','+16125559911','plumbing');
+  IF (SELECT studio_contact_id FROM public.project_parties WHERE display_name='R12 Later Card')
+       IS NOT NULL THEN
+    RAISE EXCEPTION '22e the seat was stamped before any card existed';
+  END IF;
+
+  INSERT INTO public.studio_contacts (organization_id, entity_kind, contact_kind, full_name, phone, created_by)
+  VALUES ('b0000000-0000-0000-0000-000000000001','person','trade','R12 Later Card','+16125559911', d)
+  RETURNING id INTO later_card;
+
+  SELECT count(*) INTO n FROM public.project_parties
+   WHERE display_name='R12 Later Card' AND studio_contact_id = later_card;
+  IF n <> 1 THEN
+    RAISE EXCEPTION '22f the card minted after the seat claimed % of its 1 seat(s)', n;
+  END IF;
+  PERFORM pg_temp.assume_user(d);
+  SELECT count(*) INTO n FROM public.people_directory WHERE display_name='R12 Later Card';
+  IF n <> 1 THEN
+    RAISE EXCEPTION '22g that human holds % Directory rows after the card was written', n;
+  END IF;
+  PERFORM pg_temp.reset_role();
+
+  -- (c) two cards share the number: PR-o/R-Y's duplicate band, not a merge a
+  -- trigger may decide
+  INSERT INTO public.studio_contacts (organization_id, entity_kind, contact_kind, full_name, phone, created_by)
+  VALUES ('b0000000-0000-0000-0000-000000000001','person','trade','R12 Twin One','+16125559922', d),
+         ('b0000000-0000-0000-0000-000000000001','person','trade','R12 Twin Two','+16125559922', d);
+  INSERT INTO public.project_parties (project_id, party_kind, display_name, phone_e164, trade)
+  VALUES ('d0e00000-0000-0000-0000-00000000000a','sub','R12 Twin Seat','+16125559922','framing');
+  IF (SELECT studio_contact_id FROM public.project_parties WHERE display_name='R12 Twin Seat')
+       IS NOT NULL THEN
+    RAISE EXCEPTION '22h an ambiguous number stamped a card anyway';
+  END IF;
+
+  -- (d) a COMPANY card on the same number is not the human
+  INSERT INTO public.studio_contacts (organization_id, entity_kind, contact_kind, company_name, phone, created_by)
+  VALUES ('b0000000-0000-0000-0000-000000000001','company','trade','R12 Firm Line','+16125559944', d);
+  INSERT INTO public.project_parties (project_id, party_kind, display_name, phone_e164, trade)
+  VALUES ('d0e00000-0000-0000-0000-00000000000a','sub','R12 Firm Seat','+16125559944','roofing');
+  IF (SELECT studio_contact_id FROM public.project_parties WHERE display_name='R12 Firm Seat')
+       IS NOT NULL THEN
+    RAISE EXCEPTION '22i a firm''s main line stamped a company card on a human''s seat';
+  END IF;
+
+  -- (e) a project that records NO studio resolves no card at all, so the
+  -- auto-link can never collide with r11 MAJOR-3's
+  -- party_card_project_has_no_studio refusal
+  INSERT INTO public.studio_contacts (organization_id, entity_kind, contact_kind, full_name, phone, created_by)
+  VALUES ('b0000000-0000-0000-0000-000000000001','person','trade','R12 Studioless','+16125559933', d);
+  INSERT INTO public.project_parties (project_id, party_kind, display_name, phone_e164, trade)
+  VALUES ('b0000000-0000-0000-0000-0000000000d1','sub','R12 Studioless','+16125559933','tile');
+  IF (SELECT studio_contact_id FROM public.project_parties WHERE display_name='R12 Studioless')
+       IS NOT NULL THEN
+    RAISE EXCEPTION '22j a seat on a studio-less job was stamped';
+  END IF;
+
+  RAISE NOTICE '22. the auto-link keeps one human one identity IN THE RECORD: the shipped inline add on a carded human''s own number comes out stamped, so people_directory holds the same % rows and Dana''s one row claims 3 seats and nests 3 (it was 62 -> 63, one row claiming 2 and one claiming 1); a card minted AFTER the seat claims it; and none of an ambiguous number, a firm''s main line or a studio-less job stamps anything (r12 MAJOR-2): passed', before_rows;
 END $$;
 
 DO $$ BEGIN RAISE NOTICE 'All W1b assertions passed.'; END $$;

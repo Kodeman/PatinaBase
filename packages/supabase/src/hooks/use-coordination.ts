@@ -399,7 +399,12 @@ export interface AddProjectPartyInput {
   smsConsentEvidence?: string;
   /** Lineage into the shared studio rolodex (00417/00418) — set when the row
    *  is added FROM a rolodex pick (Call Sheet Wave 3's rolodex-picker). Omit
-   *  or null for an inline add with no rolodex link. */
+   *  or null for an inline add with no rolodex link. Note that omitting it
+   *  does NOT guarantee an unlinked row: 00626's auto-link stamps the seat
+   *  with the one person card in the project's studio carrying its exact
+   *  phone_e164 (crm-model §4 rule 2), so an inline add on a number the
+   *  rolodex already holds comes back linked rather than as a second
+   *  Directory identity. */
   studioContactId?: string | null;
   /** Call Sheet (00419, R4/U2): per-row client-portal visibility opt-in.
    *  Defaults false — nothing shows on the client roster unless chosen. */

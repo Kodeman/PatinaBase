@@ -29,7 +29,13 @@
 --      `warranty` while the close is inside twelve months and `off_job`
 --      after, which is crm-model §5's ladder read backwards from the only
 --      dated fact the schema has. Everything else keeps the column default
---      `active`, which is what every live seat means today.
+--      `active`, which is what every live seat means today. That backfill
+--      runs with set_updated_at_project_parties BRACKETED OFF, because
+--      project_parties.updated_at is 00626's identity tie-break and the
+--      statement would otherwise stamp `now()` on every seat of every closed
+--      job at the deploy instant, flipping each affected Directory row onto
+--      the job that finished (w1b final review r12 MAJOR-1; the § at the
+--      backfill carries the walk).
 --
 --      NOT the consent columns. 00594's refuse_legacy_consent_write_trg
 --      freezes the eight sms_consent_* columns plus phone/phone_e164 (R-AX);
@@ -753,6 +759,34 @@ CREATE INDEX IF NOT EXISTS idx_project_parties_stage
 -- best available stand-in and is named as such rather than silently assumed.
 -- Guarded by `stage = 'active'` so a rerun after a studio has moved a stage by
 -- hand does not overwrite it.
+--
+-- project_parties.updated_at MUST NOT MOVE HERE (w1b final review r12 MAJOR-1).
+-- `stage` is added NOT NULL DEFAULT 'active' a few lines above, so on a
+-- populated database this statement touches EVERY seat of EVERY completed
+-- project — and set_updated_at_project_parties is a BEFORE UPDATE FOR EACH ROW
+-- trigger whose body (update_updated_at_column) sets NEW.updated_at := now()
+-- unconditionally. updated_at is not a bookkeeping column here: it is the
+-- tie-break people_directory's party branch ranks one identity's seats by
+-- (00626 §3's DISTINCT ON … pp.updated_at DESC, pp.id) and the same order
+-- people_directory_seats' first_value() window uses to name person_id (00626
+-- §4). Stamped by this statement, every seat on every CLOSED job becomes the
+-- most recently updated seat its identity holds, all at the same instant, so
+-- an uncarded human working a live job this week has their Directory row —
+-- person_id, project_id, and the seat party-profile-sheet.tsx opens the text
+-- composer against — flipped onto the job that finished, with last_touch_at
+-- reading the deploy. Walked in probe201: Okonkwo residence / 2026-09-02
+-- became Lindqvist kitchen / the deploy instant for one seat pair.
+--
+-- Local resets cannot see it: `supabase db reset` runs every migration before
+-- any seed, so project_parties is empty here and the statement touches 0 rows.
+-- Its only real execution is the deploy.
+--
+-- `SET … , updated_at = pp.updated_at` does NOT work — update_updated_at_column()
+-- overwrites NEW after the SET list is evaluated. The trigger is therefore
+-- bracketed off for exactly this statement. Any future migration that
+-- rewrites a project_parties column in bulk owes the same two lines.
+ALTER TABLE public.project_parties DISABLE TRIGGER set_updated_at_project_parties;
+
 UPDATE public.project_parties pp
    SET stage = CASE
                  WHEN COALESCE(pj.completed_at, pj.updated_at)
@@ -763,6 +797,8 @@ UPDATE public.project_parties pp
  WHERE pj.id = pp.project_id
    AND pj.status = 'completed'
    AND pp.stage = 'active';
+
+ALTER TABLE public.project_parties ENABLE TRIGGER set_updated_at_project_parties;
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- 3. project_party_authority — E12, who may approve what on this job

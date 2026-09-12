@@ -1,0 +1,19 @@
+Pager usage is off.
+BEGIN
+SET
+psql:probe194-w1b-final-r12-foreign-card-stamp.sql:87: NOTICE:  Z in LDS? f  in Leah? t  project_tenant_org(Aspen Loft as Z) = 5996ea1d-7e47-4582-a18a-7e5bda9ace5f
+psql:probe194-w1b-final-r12-foreign-card-stamp.sql:87: NOTICE:  project_recorded_studio(Aspen Loft) = NULL
+psql:probe194-w1b-final-r12-foreign-card-stamp.sql:87: NOTICE:  Z filed a card in Leah Hartwell: b5b40680-9c47-49a7-a24f-4be21ce70bd7
+psql:probe194-w1b-final-r12-foreign-card-stamp.sql:87: NOTICE:  A1 refused: party_card_project_has_no_studio
+psql:probe194-w1b-final-r12-foreign-card-stamp.sql:87: NOTICE:  A2 refused: party_studio_contact_other_studio
+psql:probe194-w1b-final-r12-foreign-card-stamp.sql:87: NOTICE:  A3 refused: party_studio_contact_other_studio
+psql:probe194-w1b-final-r12-foreign-card-stamp.sql:87: NOTICE:  A4 company_id on the studio-less job LANDED (r7 posture kept)
+psql:probe194-w1b-final-r12-foreign-card-stamp.sql:87: NOTICE:  Z reads compliance docs: 0
+psql:probe194-w1b-final-r12-foreign-card-stamp.sql:87: NOTICE:  Z reads authority grants: 0
+psql:probe194-w1b-final-r12-foreign-card-stamp.sql:87: NOTICE:  Z reads site access cards: 0
+psql:probe194-w1b-final-r12-foreign-card-stamp.sql:87: NOTICE:  Z reads directory seats: 1
+psql:probe194-w1b-final-r12-foreign-card-stamp.sql:87: NOTICE:  Z reads people_directory: 13
+psql:probe194-w1b-final-r12-foreign-card-stamp.sql:87: NOTICE:  Z reads v_access_grants: 11
+psql:probe194-w1b-final-r12-foreign-card-stamp.sql:87: NOTICE:  Z reads raw project_parties (shipped RLS): 32
+DO
+ROLLBACK
