@@ -15,8 +15,13 @@
 -- A column that does not exist needs no sensitivity treatment, no re-auth
 -- gate and no hide-on-glance — which is the whole argument for the ruling.
 --
--- PR-w IS THE RLS: studio-only, is_studio_comember(designer_id) through the
--- project, NO client branch and no show_to_client toggle, in writing. Every
+-- PR-w IS THE RLS: studio-only — is_active_studio_member(project_consent_org(
+-- project_id)) AND is_studio_comember(designer_id) through the project (the
+-- tenant conjunct is w1b final review r5 MAJOR-3: the designer leg alone is
+-- true whenever the caller shares ANY active org with the designer of record,
+-- so a second studio the designer also works for read the lockbox version,
+-- the alarm account and six emergency lines, and could UPDATE them) —
+-- NO client branch and no show_to_client toggle, in writing. Every
 -- other project-scoped table in this family carries a client leg
 -- (project_parties' own show_to_client row policy, 00420:373-383); this one
 -- must not, because show_to_client is per ROW and this table is one row per
@@ -101,8 +106,14 @@ COMMENT ON TABLE public.project_site_access_cards IS
   'and there is not meant to be one (crm-model §2 and direction §7 both name '
   'one; PR-r overrules them). The room prints that the code is held off '
   'Patina and names the key holder to ask. PR-w: STUDIO ONLY — '
+  'is_active_studio_member(project_consent_org(project_id)) AND '
   'is_studio_comember(project_designer(project_id)), no client policy, no '
-  'show_to_client toggle, anon revoked. show_to_client is per row '
+  'show_to_client toggle, anon revoked. The tenant conjunct is w1b final '
+  'review r5 MAJOR-3: the designer leg alone is true whenever the caller '
+  'shares ANY active organization with the designer of record, so a second '
+  'studio that same designer works for read the lockbox version, the alarm '
+  'account, the hours, the key holder and six emergency lines — and an UPDATE '
+  'of lockbox_version landed. show_to_client is per row '
   '(00419:61-62) and this table is one row per project, so a single toggle '
   'would expose the whole card (00625).';
 
@@ -176,6 +187,18 @@ CREATE TRIGGER assert_site_access_key_holder_trg
   FOR EACH ROW EXECUTE FUNCTION public.assert_site_access_key_holder();
 
 -- ── RLS: PR-w. Studio only. No client branch. ───────────────────────────────
+-- TENANT FIRST, then the designer (w1b final review r5 MAJOR-3).
+-- is_studio_comember(p_owner) is true whenever the caller shares ANY active
+-- organization with that owner, so scoping this table through the designer
+-- alone opened it to a second studio the designer of record also works for:
+-- one ordinary member of that second studio read the lockbox version, the
+-- alarm account, the site hours, the key holder and six emergency lines for
+-- this studio's job, and an UPDATE of lockbox_version landed. Direction §7
+-- rates this table risk High and calls it the first genuinely sensitive text
+-- in the room; PR-w rules it studio-only, which is the ruling this conjunct
+-- enforces (PR-w names no studio predicate, so nothing is reopened).
+-- project_consent_org() is the one org resolver (00594), the same one
+-- project_party_org() composes.
 ALTER TABLE public.project_site_access_cards ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS project_site_access_cards_studio_select
@@ -183,29 +206,44 @@ DROP POLICY IF EXISTS project_site_access_cards_studio_select
 CREATE POLICY project_site_access_cards_studio_select
   ON public.project_site_access_cards FOR SELECT
   TO authenticated
-  USING (public.is_studio_comember(public.project_designer(project_id)));
+  USING (
+    public.is_active_studio_member(public.project_consent_org(project_id))
+    AND public.is_studio_comember(public.project_designer(project_id))
+  );
 
 DROP POLICY IF EXISTS project_site_access_cards_studio_insert
   ON public.project_site_access_cards;
 CREATE POLICY project_site_access_cards_studio_insert
   ON public.project_site_access_cards FOR INSERT
   TO authenticated
-  WITH CHECK (public.is_studio_comember(public.project_designer(project_id)));
+  WITH CHECK (
+    public.is_active_studio_member(public.project_consent_org(project_id))
+    AND public.is_studio_comember(public.project_designer(project_id))
+  );
 
 DROP POLICY IF EXISTS project_site_access_cards_studio_update
   ON public.project_site_access_cards;
 CREATE POLICY project_site_access_cards_studio_update
   ON public.project_site_access_cards FOR UPDATE
   TO authenticated
-  USING (public.is_studio_comember(public.project_designer(project_id)))
-  WITH CHECK (public.is_studio_comember(public.project_designer(project_id)));
+  USING (
+    public.is_active_studio_member(public.project_consent_org(project_id))
+    AND public.is_studio_comember(public.project_designer(project_id))
+  )
+  WITH CHECK (
+    public.is_active_studio_member(public.project_consent_org(project_id))
+    AND public.is_studio_comember(public.project_designer(project_id))
+  );
 
 DROP POLICY IF EXISTS project_site_access_cards_studio_delete
   ON public.project_site_access_cards;
 CREATE POLICY project_site_access_cards_studio_delete
   ON public.project_site_access_cards FOR DELETE
   TO authenticated
-  USING (public.is_studio_comember(public.project_designer(project_id)));
+  USING (
+    public.is_active_studio_member(public.project_consent_org(project_id))
+    AND public.is_studio_comember(public.project_designer(project_id))
+  );
 
 -- No anon leg, ever (PR-w). Revoked explicitly, not left to defaults.
 REVOKE ALL ON TABLE public.project_site_access_cards

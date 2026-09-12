@@ -148,6 +148,29 @@
 --     the winning SEAT's number. The word was already the identity's after r3
 --     while the dates were still the seat's, so R-Q's one consent sentence
 --     composed "Written consent, 2 May 2025" over a human the record refuses.
+--   · r5 BLOCKING-1 — identity_phone_numbers()' seat leg is scoped to the
+--     studio it answers for (project_consent_org(pp.project_id) =
+--     p_organization_id). Both arguments are caller-supplied and the definer
+--     scan had no organization predicate, so any authenticated member of any
+--     studio could POST /rest/v1/rpc/identity_phone_numbers and read another
+--     studio's trade's mobile number. Suite leg 4e8 is re-stated intra-studio
+--     and leg 3x3 walks the closed door.
+--   · r5 MAJOR-1 — the party branch and the seats view require
+--     is_active_studio_member(project_consent_org(project_id)) BESIDE the
+--     three co-member legs. Seat visibility was satisfied by sharing any
+--     active org with the designer of record while the consent word is
+--     resolved at the project's studio, and both paths COALESCE an unreadable
+--     record to `not_asked` — the affirmative word, over a record that
+--     refuses, on a send door.
+--   · r5 MAJOR-2 — identity_consent_evidence()'s two dates are one-sided: no
+--     consented_at when the deciding verdict is `opted_out`, no opt_out_at
+--     when it is not. channel_consent_status() folds refusal_unanswered into
+--     the word and 00594's backfill mints `granted` records carrying an
+--     unanswered, dateless refusal, so the deciding record is itself
+--     contradictory and R-Q composed a dated consent claim over a refusal.
+--   · r5 MAJOR-3 — the seats view's half of the same tenant conjunct; the
+--     other two thirds are 00625's four site-access policies and 00624's four
+--     authority policies.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -523,15 +546,28 @@ COMMENT ON FUNCTION public.identity_paper_state(uuid, uuid) IS
 -- frozen project_parties.sms_consent_* column is read here or anywhere in this
 -- file — the consent VERDICT has exactly one source, studio_channel_consent.
 --
--- Cross-studio, precisely: party_identity_key() keys a CARDED human on their
--- studio-scoped card id, so a contacts-branch identity can only collect its
--- own studio's seats. An UNCARDED identity keyed on a login, a phone or an
--- email may hold seats in another studio, and those seats' numbers do enter
--- the set — deliberately, because every verdict is still resolved at
--- p_organization_id (R-AK: one studio's record, never another's), so such a
--- number can only ADD `not_asked`, never borrow a foreign `granted`. Widening
--- the set can only make the word more restrictive, which is the direction
--- fail-closed requires; narrowing it is the defect this fix closes.
+-- ONE STUDIO, on BOTH sides (w1b final review r5 BLOCKING-1). The seat leg
+-- also requires project_consent_org(pp.project_id) = p_organization_id, which
+-- is the population R-AK already resolves the RECORD at. Without it the
+-- function was a cross-tenant phone-number oracle: p_organization_id and
+-- p_identity_key are BOTH caller-supplied, the gate proved only that the
+-- caller belonged to the studio they NAMED, and the seat scan — definer, so
+-- no RLS — reached every project_parties row on the platform. Walked as the
+-- owner of one unrelated studio, `identity_phone_numbers('<my own org>', '<a
+-- foreign rolodex card uuid>', NULL)` returned another studio's trade's mobile
+-- number, over `POST /rest/v1/rpc/identity_phone_numbers` as well as in SQL,
+-- while people_directory, people_directory_seats and project_site_access_cards
+-- all correctly returned nothing. It was also a yes/no existence oracle on any
+-- number, login, card uuid or email.
+--
+-- The earlier round argued the wide scan was the fail-closed direction: a
+-- foreign seat's number can only ADD `not_asked` and never borrow a foreign
+-- `granted`. True, and not worth a cross-tenant read of PII. A number no seat
+-- of THIS studio carries is not a number this studio can reach the human on,
+-- so `not_asked` is the honest word for it, and the record the word is
+-- resolved at is this studio's own either way (R-AK). Suite leg 4e8, whose
+-- premise was constructible only through the cross-studio scan, is re-stated
+-- intra-studio, and leg 3x3 walks the closed door.
 CREATE OR REPLACE FUNCTION public.identity_phone_numbers(
   p_organization_id uuid,
   p_identity_key    text,
@@ -549,8 +585,16 @@ AS $$
     UNION
     SELECT NULLIF(btrim(COALESCE(pp.phone_e164, '')), '')
       FROM public.project_parties pp
+      JOIN public.projects pj ON pj.id = pp.project_id
      WHERE public.is_active_studio_member(p_organization_id)
        AND p_identity_key IS NOT NULL
+       -- the seat must belong to the studio this call answers FOR, not merely
+       -- to a studio the caller happens to belong to (w1b final review r5
+       -- BLOCKING-1). Both arguments are caller-supplied and this leg had no
+       -- organization predicate at all, so the gate proved only that the
+       -- caller belonged to the studio they NAMED while the scan reached
+       -- every seat on the platform.
+       AND public.project_consent_org(pj.id) = p_organization_id
        AND public.party_identity_key(
              pp.studio_contact_id, pp.profile_id,
              pp.phone_e164, pp.email, pp.id
@@ -577,10 +621,16 @@ COMMENT ON FUNCTION public.identity_phone_numbers(uuid, text, text) IS
   'verdict: channel_consent_status() still reads studio_channel_consent under '
   'the CALLER''s RLS, so this is no consent oracle. Record-only (R-AY/R-AW) — '
   'seats are read for phone_e164 alone, never for a frozen sms_consent_* '
-  'column. An uncarded identity (keyed on a login, a phone or an email) may '
-  'contribute a seat from another studio; every verdict is still resolved at '
-  'p_organization_id (R-AK), so such a number can only add `not_asked` and '
-  'make the word more restrictive, never borrow a foreign permission (00626).';
+  'column. ONE STUDIO on both sides: the seat leg requires '
+  'project_consent_org(pp.project_id) = p_organization_id, the population '
+  'R-AK resolves the record at. Without it this was a cross-tenant oracle — '
+  'both arguments are caller-supplied, the gate proved only that the caller '
+  'belonged to the studio they NAMED, and the definer scan reached every '
+  'project_parties row on the platform, so a member of any studio could POST '
+  '/rest/v1/rpc/identity_phone_numbers and read another studio''s trade''s '
+  'mobile number (w1b final review r5 BLOCKING-1). A number no seat of this '
+  'studio carries is not a number this studio can reach the human on, so '
+  '`not_asked` is the honest word for it (00626).';
 
 -- ── identity_consent_status — the consent word over every number ──────────
 -- The contacts branch read channel_consent_status() off the CARD's
@@ -698,6 +748,27 @@ COMMENT ON FUNCTION public.identity_consent_status(uuid, text, text) IS
 -- word answer deterministically. No row when the word is `not_asked` because a
 -- number has NO record: the room then prints R-V's "no record" line rather
 -- than a date it cannot source.
+--
+-- AND THE DATES ARE ONE-SIDED (w1b final review r5 MAJOR-2). R-BC was
+-- satisfied — both dates off the DECIDING record — and r4 MAJOR-4's
+-- consequence came back anyway, because channel_consent_status() folds
+-- refusal_unanswered INTO the word (00594:1016) and 00594's own backfill
+-- deliberately mints records that read status='granted' WITH an unanswered
+-- refusal, carrying a real consented_at and, since a folded refusal is
+-- routinely dateless, frequently no opt_out_at. The deciding record is then
+-- internally contradictory and projecting it faithfully gave the room
+-- consent_status `opted_out` beside sms_consented_at 2025-05-02 and an empty
+-- sms_opt_out_at — R-Q's one fixed sentence composes "Written consent, 2 May
+-- 2025" for a human the rail refuses, which is G-3's defect verbatim. The
+-- local fixture carries refusal_unanswered false on every record, so nothing
+-- in the wave touched this population; the Strata backfill creates it.
+--
+-- So: when the deciding verdict is `opted_out` no consented_at is projected
+-- (the grant it names has been answered by a refusal), and when it is not
+-- `opted_out` no opt_out_at is. R-BC is unaffected — the dates still come off
+-- the deciding record, or are left empty, which R-BC explicitly permits — and
+-- the word is still channel_consent_status()'s, unchanged: this suppresses a
+-- DATE the word contradicts, never the word itself.
 CREATE OR REPLACE FUNCTION public.identity_consent_evidence(
   p_organization_id uuid,
   p_identity_key    text,
@@ -712,16 +783,24 @@ LANGUAGE sql
 STABLE
 SET search_path TO 'public'
 AS $$
-  SELECT scc.channel_value, scc.consented_at, scc.opt_out_at
-    FROM public.identity_phone_numbers(
+  WITH decided AS (
+    SELECT public.identity_consent_status(
+             p_organization_id, p_identity_key, p_card_phone_e164) AS word
+  )
+  SELECT scc.channel_value,
+         -- one-sided, so the dates cannot compose a clause the word
+         -- contradicts (w1b final review r5 MAJOR-2)
+         CASE WHEN d.word = 'opted_out' THEN NULL ELSE scc.consented_at END,
+         CASE WHEN d.word = 'opted_out' THEN scc.opt_out_at ELSE NULL END
+    FROM decided d
+    CROSS JOIN public.identity_phone_numbers(
            p_organization_id, p_identity_key, p_card_phone_e164) AS n(v)
     JOIN public.studio_channel_consent scc
       ON scc.organization_id = p_organization_id
      AND scc.channel_kind    = 'sms'
      AND scc.channel_value   = n.v
    WHERE public.channel_consent_status(p_organization_id, 'sms', n.v)
-         IS NOT DISTINCT FROM public.identity_consent_status(
-           p_organization_id, p_identity_key, p_card_phone_e164)
+         IS NOT DISTINCT FROM d.word
    ORDER BY scc.updated_at DESC, scc.channel_value
    LIMIT 1;
 $$;
@@ -743,8 +822,15 @@ COMMENT ON FUNCTION public.identity_consent_evidence(uuid, text, text) IS
   'review r4 MAJOR-4). Restates no rule: the word is '
   'identity_consent_status()''s, each number''s verdict is '
   'channel_consent_status()''s (R-AS/R-AY), the number set is '
-  'identity_phone_numbers()''s. SECURITY INVOKER — the record is read under '
-  'the caller''s own member RLS (00626).';
+  'identity_phone_numbers()''s. The two dates are ONE-SIDED: no consented_at '
+  'when the deciding verdict is `opted_out`, no opt_out_at when it is not, so '
+  'the dates cannot compose a clause the word contradicts. '
+  'channel_consent_status() folds refusal_unanswered into the word and '
+  '00594''s backfill mints `granted` records carrying an unanswered, dateless '
+  'refusal, so the deciding record itself is contradictory and projecting it '
+  'faithfully put "Written consent, 2 May 2025" beside a refusal (w1b final '
+  'review r5 MAJOR-2). R-BC permits dates left empty. SECURITY INVOKER — the '
+  'record is read under the caller''s own member RLS (00626).';
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- 3. people_directory v4
@@ -1025,6 +1111,16 @@ FROM (
     JOIN public.projects pj ON pj.id = pp.project_id
     WHERE public.party_kind_in_directory(pp.party_kind)
       AND pp.studio_contact_id IS NULL
+      -- the seat is visible only to a member of the studio whose CONSENT
+      -- RECORD decides its word (w1b final review r5 MAJOR-1/MAJOR-3). The
+      -- three co-member legs below are satisfied by sharing ANY active
+      -- organization with the designer of record, while the word is resolved
+      -- at project_consent_org(project_id) — so a caller who could see the
+      -- seat but could not read the record had the unreadable record rendered
+      -- as the affirmative word `not_asked`, over a record that says
+      -- opted_out, on the row party-profile-sheet.tsx:262/:742 opens the text
+      -- composer from.
+      AND public.is_active_studio_member(public.project_consent_org(pp.project_id))
       AND ( public.is_studio_comember(pj.designer_id)
          OR public.is_studio_comember(pj.lead_designer_id)
          OR public.is_studio_comember(pj.created_by) )
@@ -1191,7 +1287,17 @@ COMMENT ON VIEW public.people_directory IS
   'identity_phone_numbers(), because an RLS-invisible seat dropped its refusal '
   'and softened the word (MAJOR-3); and the party branch''s two consent DATES '
   'come from identity_consent_evidence() — the record whose verdict won — '
-  'instead of from the winning seat''s number (MAJOR-4).';
+  'instead of from the winning seat''s number (MAJOR-4). w1b final review r5: '
+  'the party branch requires is_active_studio_member(project_consent_org('
+  'project_id)) beside its three co-member legs, because seat visibility was '
+  'satisfied by sharing any active org with the designer of record while the '
+  'consent word is resolved at the project''s studio, and the COALESCE '
+  'rendered an unreadable record as the affirmative word `not_asked` on a send '
+  'door (MAJOR-1/MAJOR-3); identity_phone_numbers()'' seat leg is scoped to '
+  'the studio it answers for, closing a cross-tenant phone-number oracle that '
+  'answered over PostgREST (BLOCKING-1); and identity_consent_evidence()''s '
+  'two dates are one-sided, so a folded refusal_unanswered can no longer put a '
+  'dated consent claim beside a refusal (MAJOR-2).';
 
 GRANT SELECT ON public.people_directory TO authenticated;
 
@@ -1285,9 +1391,19 @@ SELECT
    END)::text                                                    AS scope
 FROM public.project_parties pp
 JOIN public.projects pj ON pj.id = pp.project_id
-WHERE public.is_studio_comember(pj.designer_id)
-   OR public.is_studio_comember(pj.lead_designer_id)
-   OR public.is_studio_comember(pj.created_by);
+-- TENANT FIRST, then the designer (w1b final review r5 MAJOR-1/MAJOR-3).
+-- is_studio_comember(designer) is true whenever the caller shares ANY active
+-- organization with the designer of record, so an outside designer who also
+-- works for a second studio handed every member of that second studio all 31
+-- of this studio's seat rows — and consent_status below COALESCEs the
+-- unreadable record to `not_asked`, so each of them read the affirmative word
+-- over records that say opted_out. The word is resolved at
+-- project_consent_org(project_id); the seat is visible to that studio's own
+-- active members.
+WHERE public.is_active_studio_member(public.project_consent_org(pp.project_id))
+  AND ( public.is_studio_comember(pj.designer_id)
+     OR public.is_studio_comember(pj.lead_designer_id)
+     OR public.is_studio_comember(pj.created_by) );
 
 COMMENT ON VIEW public.people_directory_seats IS
   'E5 on its own surface: one row per project_parties SEAT, keyed by '
@@ -1307,7 +1423,13 @@ COMMENT ON VIEW public.people_directory_seats IS
   'the caller''s '
   'own RLS. Stage, the window, the access mode and the warranty are the seat''s '
   'own facts (00624) and PR-p says they print HERE, never as a person-level '
-  'column (00626).';
+  'column. TENANT-SCOPED: is_active_studio_member(project_consent_org('
+  'project_id)) is required beside the three co-member legs, because '
+  'is_studio_comember(designer) is true whenever the caller shares ANY active '
+  'organization with the designer of record — an outside designer working for '
+  'two studios handed every member of the second studio all of the first '
+  'studio''s seat rows, each reading the COALESCEd `not_asked` over records '
+  'that say opted_out (w1b final review r5 MAJOR-1/MAJOR-3) (00626).';
 
 REVOKE ALL ON TABLE public.people_directory_seats FROM PUBLIC, anon;
 GRANT SELECT ON public.people_directory_seats TO authenticated;

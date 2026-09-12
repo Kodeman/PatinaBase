@@ -1,0 +1,25 @@
+Pager usage is off.
+BEGIN
+INSERT 0 1
+INSERT 0 1
+=== the record ===
+ channel_value | status  | refusal_unanswered |      consented_at      | opt_out_at |  verdict  
+---------------+---------+--------------------+------------------------+------------+-----------
+ +16125559301  | granted | t                  | 2025-05-02 00:00:00+00 |            | opted_out
+(1 row)
+
+SET
+SET
+=== the Directory row the room renders, and R-Q composed from it ===
+     display_name     | consent_status | meta_word | sms_consented_at | sms_opt_out_at 
+----------------------+----------------+-----------+------------------+----------------
+ Folded Refusal Trade | opted_out      | opted_out |                  | 
+(1 row)
+
+=== identity_consent_evidence, which is R-BC-correct and still yields it ===
+ channel_value | consented_at | opt_out_at 
+---------------+--------------+------------
+ +16125559301  |              | 
+(1 row)
+
+ROLLBACK

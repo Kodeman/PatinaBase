@@ -1,0 +1,5 @@
+a FOREIGN rolodex card (Adaeze Okonkwo)       -> HTTP 200 []
+a FOREIGN rolodex card (Amara Osei)           -> HTTP 200 []
+GET people_directory             -> HTTP 200 []
+GET people_directory_seats       -> HTTP 200 []
+GET project_site_access_cards    -> HTTP 200 []
