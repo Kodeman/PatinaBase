@@ -130,6 +130,14 @@ Deno.test("YES grants a pending party and confirms", async () => {
     project_parties: [
       { id: "p1", phone_e164: "+15551110001", project_id: "proj1", party_kind: "sub", sms_consent_status: "pending", display_name: "Sal Sub" },
     ],
+    // WHAT THE YES ANSWERS IS THE RECORD (final-run BLOCKING-1): the invite
+    // record record_channel_invite() writes, not the frozen seat beside it.
+    studio_channel_consent: [{
+      organization_id: "org-alpha",
+      channel_kind: "sms",
+      channel_value: "+15551110001",
+      status: "pending",
+    }],
   }));
   const res = await processInbound(
     params({ From: "+15551110001", Body: "YES", MessageSid: "SMyes" }),
@@ -168,6 +176,12 @@ Deno.test("an inbound YES carries the seat's disclosure version and recorder ont
         sms_consent_recorded_by: "dz1",
       },
     ],
+    studio_channel_consent: [{
+      organization_id: "org-alpha",
+      channel_kind: "sms",
+      channel_value: "+15551110033",
+      status: "pending",
+    }],
   }));
   const res = await processInbound(
     params({ From: "+15551110033", Body: "YES", MessageSid: "SMyesevidence" }),
@@ -867,10 +881,19 @@ Deno.test("YES grants consent only for the studios that actually invited", async
       { id: "proj1", name: "Maple St", designer_id: "dz1", studio_id: "org-alpha" },
       { id: "proj2", name: "Beta job", designer_id: "dz2", studio_id: "org-beta" },
     ],
+    // BOTH seats read `pending` — the state every invited seat is born in and
+    // frozen at — and only Alpha holds an invite ON THE RECORD. Which studio
+    // asked is the record's answer now (final-run BLOCKING-1).
     project_parties: [
       { id: "p1", phone_e164: "+15551110011", project_id: "proj1", party_kind: "sub", sms_consent_status: "pending", display_name: "Sal Sub" },
-      { id: "p2", phone_e164: "+15551110011", project_id: "proj2", party_kind: "sub", sms_consent_status: "not_asked", display_name: "Sal Sub" },
+      { id: "p2", phone_e164: "+15551110011", project_id: "proj2", party_kind: "sub", sms_consent_status: "pending", display_name: "Sal Sub" },
     ],
+    studio_channel_consent: [{
+      organization_id: "org-alpha",
+      channel_kind: "sms",
+      channel_value: "+15551110011",
+      status: "pending",
+    }],
   }));
   const res = await processInbound(
     params({ From: "+15551110011", Body: "YES", MessageSid: "SMyesorg" }),
@@ -884,6 +907,101 @@ Deno.test("YES grants consent only for the studios that actually invited", async
   assertEquals(consent[0].organization_id, "org-alpha");
   assertEquals(consent[0].status, "granted");
   assert(consent[0].consented_at, "a grant is dated");
+});
+
+// ── final-run BLOCKING-1: a YES is not a way back from a STOP ──────────────
+//
+// Pre-wave, an inbound STOP wrote `opted_out` onto every party row on the
+// number, so a later YES found nothing `pending` and granted nobody. R-AS
+// deleted that write and froze the seats at the `pending` every invited seat is
+// born in — and the YES gate was still reading that column, so it was armed for
+// ever: a bare YES, weeks after a STOP, wrote the refusal back to `granted`,
+// lowered refusal_unanswered, and the next send went out on a 10DLC campaign.
+// The target set is the RECORD's `pending` now, and a record whose verdict is
+// `opted_out` is answered by START and by nothing else.
+Deno.test("a bare YES does not lift a standing recorded STOP", async () => {
+  const fake = createFakeSupabase(baseSeed({
+    project_parties: [
+      { id: "p1", phone_e164: "+15551110077", project_id: "proj1", party_kind: "sub", sms_consent_status: "pending", display_name: "Sal Sub" },
+    ],
+    // The state a STOP leaves behind, with the seat frozen at `pending`.
+    studio_channel_consent: [{
+      organization_id: "org-alpha",
+      channel_kind: "sms",
+      channel_value: "+15551110077",
+      status: "opted_out",
+      refusal_unanswered: true,
+      opt_out_at: "2026-02-01T00:00:00Z",
+      opt_out_source: "inbound_sms",
+      opt_out_evidence: "Inbound STOP",
+    }],
+  }));
+  const res = await processInbound(
+    params({ From: "+15551110077", Body: "YES", MessageSid: "SMyesafterstop" }),
+    { supabase: fake as never, getEnv: NO_POSTHOG },
+  );
+  assert(res.disposition !== "granted", "a YES may not answer a refusal");
+  const consent = (fake._data.studio_channel_consent ?? []) as Array<{
+    status: string; refusal_unanswered: boolean | null; opt_out_at: string | null;
+    consented_at: string | null;
+  }>;
+  assertEquals(consent.length, 1);
+  assertEquals(consent[0].status, "opted_out", "the refusal stands");
+  assertEquals(consent[0].refusal_unanswered, true, "and it is still unanswered");
+  assertEquals(consent[0].opt_out_at, "2026-02-01T00:00:00Z");
+  assert(!consent[0].consented_at, "nothing was granted");
+  // The seat never moves either way: it is frozen legacy.
+  const p1 = (fake._data.project_parties as Array<{ id: string; sms_consent_status: string }>)
+    .find((p) => p.id === "p1")!;
+  assertEquals(p1.sms_consent_status, "pending");
+});
+
+// The sharpest shape of the same defect: the `Y` belongs to a DIFFERENT studio.
+// Beta invited today; Alpha was STOPped months ago and never invited again.
+// Answering Beta must not speak for Alpha.
+Deno.test("a Y answering one studio's invite leaves another studio's recorded STOP standing", async () => {
+  const fake = createFakeSupabase(baseSeed({
+    projects: [
+      { id: "proj1", name: "Maple St", designer_id: "dz1", studio_id: "org-alpha" },
+      { id: "proj2", name: "Beta job", designer_id: "dz2", studio_id: "org-beta" },
+    ],
+    project_parties: [
+      { id: "p1", phone_e164: "+15551110078", project_id: "proj1", party_kind: "sub", sms_consent_status: "pending", display_name: "Sal Sub" },
+      { id: "p2", phone_e164: "+15551110078", project_id: "proj2", party_kind: "sub", sms_consent_status: "pending", display_name: "Sal Sub" },
+    ],
+    studio_channel_consent: [
+      {
+        organization_id: "org-alpha",
+        channel_kind: "sms",
+        channel_value: "+15551110078",
+        status: "opted_out",
+        refusal_unanswered: true,
+        opt_out_at: "2026-02-01T00:00:00Z",
+      },
+      {
+        organization_id: "org-beta",
+        channel_kind: "sms",
+        channel_value: "+15551110078",
+        status: "pending",
+      },
+    ],
+  }));
+  const res = await processInbound(
+    params({ From: "+15551110078", Body: "Y", MessageSid: "SMyxstudio" }),
+    { supabase: fake as never, getEnv: NO_POSTHOG },
+  );
+  assertEquals(res.disposition, "granted");
+  const byOrg = Object.fromEntries(
+    ((fake._data.studio_channel_consent ?? []) as Array<{
+      organization_id: string; status: string; refusal_unanswered: boolean | null;
+    }>).map((c) => [c.organization_id, `${c.status}/${c.refusal_unanswered}`]),
+  );
+  assertEquals(byOrg["org-beta"], "granted/false", "the studio that asked is answered");
+  assertEquals(
+    byOrg["org-alpha"],
+    "opted_out/true",
+    "the studio that was refused is untouched",
+  );
 });
 
 Deno.test("START re-grants per studio and keeps the earlier opt-out date", async () => {
@@ -941,10 +1059,15 @@ Deno.test("YES does not grant a studio that never invited", async () => {
       { id: "p1", phone_e164: "+15551110020", project_id: "proj1", party_kind: "sub", sms_consent_status: "pending", display_name: "Sal Sub" },
       { id: "p2", phone_e164: "+15551110020", project_id: "proj2", party_kind: "sub", sms_consent_status: "pending", display_name: "Sal Sub" },
     ],
+    // Only org-alpha has an invite standing on the record at the moment of the
+    // YES; both frozen seats say `pending` and neither is read.
+    studio_channel_consent: [{
+      organization_id: "org-alpha",
+      channel_kind: "sms",
+      channel_value: "+15551110020",
+      status: "pending",
+    }],
   }));
-  // Only org-alpha's row is pending at the moment of the YES.
-  (fake._data.project_parties as Array<{ id: string; sms_consent_status: string }>)
-    .find((p) => p.id === "p2")!.sms_consent_status = "not_asked";
 
   const res = await processInbound(
     params({ From: "+15551110020", Body: "YES", MessageSid: "SMyesscope" }),
@@ -960,7 +1083,7 @@ Deno.test("YES does not grant a studio that never invited", async () => {
   // Neither seat moves: they are frozen legacy.
   const parties = fake._data.project_parties as Array<{ id: string; sms_consent_status: string }>;
   assertEquals(parties.find((p) => p.id === "p1")!.sms_consent_status, "pending");
-  assertEquals(parties.find((p) => p.id === "p2")!.sms_consent_status, "not_asked");
+  assertEquals(parties.find((p) => p.id === "p2")!.sms_consent_status, "pending");
 });
 
 // M7: a project with a NULL studio_id resolves through the designer's primary
@@ -1217,6 +1340,13 @@ Deno.test("YES grants the inviting studio once, whatever its other seats say", a
       { id: "pB", phone_e164: "+15551110050", project_id: "projB", party_kind: "sub", sms_consent_status: "not_asked", display_name: "Sal Sub" },
       { id: "pC", phone_e164: "+15551110050", project_id: "projC", party_kind: "sub", sms_consent_status: "not_asked", display_name: "Sal Sub" },
     ],
+    studio_channel_consent: [{
+      organization_id: "org-alpha",
+      channel_kind: "sms",
+      channel_value: "+15551110050",
+      status: "pending",
+      origin_project_id: "projA",
+    }],
   }));
   const res = await processInbound(
     params({ From: "+15551110050", Body: "YES", MessageSid: "SMyessibling" }),

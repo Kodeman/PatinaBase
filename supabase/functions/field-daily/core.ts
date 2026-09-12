@@ -52,16 +52,18 @@ const FIELD_KINDS = ["gc", "sub", "installer", "receiver"];
  *                 the same migration, so a pair with no record was never asked,
  *                 and a seat frozen at 'granted' can no longer carry a digest
  *                 on its own.
- *   · "unknown" — the record says 'pending': the invite is out and unanswered.
- *                 The legacy seat is honoured here exactly as sendPartySms's
- *                 second, legacy gate still honours it, so this pre-filter
- *                 cannot be narrower than the authority it stands in front of.
+ *   · "unknown" — the record says 'pending': the invite is out and unanswered,
+ *                 and a digest is not an invite, so it is not composed. The
+ *                 legacy seat leg that used to widen this branch — "or the
+ *                 frozen seat says granted" — is deleted with sendPartySms's
+ *                 own second check (R-AY, final-run MAJOR-1): the pre-filter
+ *                 and the authority ask one question again.
  * sendPartySms re-runs the whole gate for real; this only decides whom it is
  * worth composing a digest for, so it never widens what may be sent.
  */
 async function mayTextField(
   supabase: SupabaseClient,
-  party: { phone_e164: string | null; project_id: string; sms_consent_status?: string | null },
+  party: { phone_e164: string | null; project_id: string },
 ): Promise<boolean> {
   if (!party.phone_e164) return false;
   const verdict = await channelConsentVerdict(
@@ -69,8 +71,7 @@ async function mayTextField(
     party.phone_e164,
     party.project_id,
   );
-  if (verdict === "refuse") return false;
-  return verdict === "allow" || party.sms_consent_status === "granted";
+  return verdict === "allow";
 }
 
 // ── Pure digest composition (unit-tested) ───────────────────────────────────
@@ -200,11 +201,11 @@ export async function runFieldDaily(
 
   // ── Consented field parties ───────────────────────────────────────────────
   // The consent test is mayTextField() below, not a WHERE on the frozen seat
-  // (close-out r3 MAJOR-2). The seat column is still SELECTed because the
-  // legacy leg of that gate reads it.
+  // (close-out r3 MAJOR-2), and the frozen column is no longer SELECTed either:
+  // the legacy leg that read it is gone (R-AY, final-run MAJOR-1).
   const { data: parties } = await supabase
     .from("project_parties")
-    .select("id, phone_e164, project_id, display_name, party_kind, sms_consent_status")
+    .select("id, phone_e164, project_id, display_name, party_kind")
     .in("party_kind", FIELD_KINDS);
 
   for (const party of (parties ?? []) as Array<{
@@ -212,7 +213,6 @@ export async function runFieldDaily(
     phone_e164: string | null;
     project_id: string;
     party_kind: string;
-    sms_consent_status?: string | null;
   }>) {
     if (!party.phone_e164) {
       summary.parties_skipped++;
@@ -307,7 +307,7 @@ export async function runFieldDaily(
     // MAJOR-2).
     const { data: recvParties } = await supabase
       .from("project_parties")
-      .select("id, phone_e164, project_id, party_kind, sms_consent_status")
+      .select("id, phone_e164, project_id, party_kind")
       .eq("project_id", ev.project_id)
       .in("party_kind", ["receiver", "gc"]);
 
@@ -316,7 +316,6 @@ export async function runFieldDaily(
         id: string;
         phone_e164: string | null;
         project_id: string;
-        sms_consent_status?: string | null;
       }>
     ) {
       if (!party.phone_e164) continue;

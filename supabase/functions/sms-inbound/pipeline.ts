@@ -167,7 +167,6 @@ async function renderSms(
 interface PhoneParty {
   id: string;
   project_id: string;
-  sms_consent_status: string;
 }
 
 /**
@@ -182,7 +181,7 @@ async function loadPhoneParties(
 ): Promise<{ parties: PhoneParty[]; failed: boolean }> {
   const { data, error } = await supabase
     .from("project_parties")
-    .select("id, project_id, sms_consent_status")
+    .select("id, project_id")
     .eq("phone_e164", phone);
   if (error) {
     console.error("loadPhoneParties: project_parties read failed", {
@@ -849,53 +848,84 @@ export async function processInbound(
     return { status: 200, twiml: twimlBody(), disposition: "resubscribed" };
   }
 
-  // Resolve candidate parties (needed for YES-on-pending + everything below).
+  // Resolve candidate parties (needed for the YES grant's evidence + everything
+  // below). The frozen sms_consent_status column is NOT selected: no branch of
+  // this rail asks a seat for a verdict any more (R-AY).
   const { data: partyRows } = await supabase
     .from("project_parties")
-    .select("id, project_id, party_kind, sms_consent_status, display_name")
+    .select("id, project_id, party_kind, display_name")
     .eq("phone_e164", from);
   const parties = (partyRows ?? []) as Array<{
-    id: string; project_id: string; party_kind: string; sms_consent_status: string; display_name: string | null;
+    id: string; project_id: string; party_kind: string; display_name: string | null;
   }>;
 
   if (upper === "YES" || upper === "Y") {
-    const hasPending = parties.some((p) => p.sms_consent_status === "pending");
-    if (hasPending) {
-      // Only the studios that actually asked: a YES confirms the invite that
-      // was sent, never a studio that never invited this number.
-      const askedTargets = (await studiosHoldingPhone(
-        supabase,
-        parties.filter((p) => p.sms_consent_status === "pending"),
-      )).targets;
-      // …but the RECORD is per studio, not per seat, so the target is the
-      // studio: every seat it holds on the number is carried only to give the
-      // grant its evidence (seatConsentEvidence) and its origin. Which studios
-      // are targeted is the narrow question (R-AJ) — only the ones that
-      // actually asked. The origin project stays the one that ASKED, so R-Q's
-      // sentence names the job the invite went out on.
-      const originByOrg = new Map(askedTargets.map((t) => [t.org, t.projectId]));
-      const yesTargets = (await studiosHoldingPhone(supabase, parties)).targets
-        .filter((t) => originByOrg.has(t.org))
-        .map((t) => ({ ...t, projectId: originByOrg.get(t.org) ?? t.projectId }));
+    // THE RECORD SAYS WHO ASKED, AND THE SEAT SAYS NOTHING (final-run
+    // BLOCKING-1, R-AU's rule applied to the other re-subscription keyword).
+    // This gate read `parties.some(p => p.sms_consent_status === 'pending')`,
+    // and that column is born `pending` on every invited seat
+    // (use-coordination.ts useAddProjectParty) and frozen there for ever
+    // (00594's BEFORE UPDATE trigger): no consent act can move it, so the gate
+    // was permanently armed for every studio holding an invited seat on the
+    // number. Pre-wave a STOP wrote `opted_out` onto every seat on the phone,
+    // which disarmed it; R-AS deleted that write and left the gate reading the
+    // frozen copy — so a bare YES, or a `Y` answering a DIFFERENT studio's
+    // brand-new invite, lifted a standing recorded STOP and the next send went
+    // out. The target set is now the studios whose OWN RECORD for this number
+    // reads `pending` by verdict — an invite in flight, and nothing else. A
+    // record whose verdict is `opted_out` is untouched: a refusal is answered
+    // by START, which is the word the party sheet and the STOP auto-reply tell
+    // the recipient to send, or by a freshly recorded invite.
+    const yesOrgs = (await studiosHoldingRecord(supabase, from, ["pending"]))
+      .orgs;
+    if (yesOrgs.length > 0) {
+      // The RECORD is per studio, not per seat, so the target is the studio:
+      // its seats on the number are carried only to give the grant its evidence
+      // (seatConsentEvidence) and its origin, and a studio whose record is
+      // waiting with no seat left on the number is unioned in the way START
+      // does it.
+      const yesOrgSet = new Set(yesOrgs);
+      const yesTargets = withRecordOnlyStudios(
+        (await studiosHoldingPhone(supabase, parties)).targets
+          .filter((t) => yesOrgSet.has(t.org)),
+        yesOrgs,
+      );
       await writeChannelConsent(
         supabase,
         yesTargets,
         from, "granted", nowIso, `Inbound ${upper}`,
       );
       await captureServerEvent("sms-inbound", "sms_opt_in", { phone: from }, { getEnv: deps.getEnv, fetchImpl: deps.fetchImpl });
-      const pending = parties.find((p) => p.sms_consent_status === "pending")!;
-      const projectNames = await loadProjectNames(supabase, [pending.project_id]);
+      // The confirmation names a job this YES actually answered — a seat held
+      // by one of the studios just granted. A record-only studio has no seat to
+      // name and the copy falls back, as it does everywhere else.
+      const answeredIds = new Set(yesTargets.flatMap((t) => t.partyIds));
+      const answered = parties.find((p) => answeredIds.has(p.id)) ?? null;
+      const projectNames = answered
+        ? await loadProjectNames(supabase, [answered.project_id])
+        : {};
       const confirm = await renderSms(supabase, "sms_optin_confirm", {
-        party_first_name: pending.display_name ? pending.display_name.trim().split(/\s+/)[0] : "there",
-        studio_name: (await resolveStudioName(supabase, pending.project_id)) ?? "your studio",
-        project_name: projectNames[pending.project_id] ?? "your project",
+        party_first_name: answered?.display_name ? answered.display_name.trim().split(/\s+/)[0] : "there",
+        studio_name: (answered
+          ? await resolveStudioName(supabase, answered.project_id)
+          : null) ?? "your studio",
+        project_name: (answered ? projectNames[answered.project_id] : null) ??
+          "your project",
       });
       await captureServerEvent("sms-inbound", "sms_parse_outcome",
         { path: "keyword", intent: "opt_in", confidence_bucket: "n/a", disposition: "granted" },
         { getEnv: deps.getEnv, fetchImpl: deps.fetchImpl });
-      return await reply(supabase, conv.id, confirm || "You're all set for job updates.", pending.id, pending.project_id, "granted");
+      return await reply(
+        supabase,
+        conv.id,
+        confirm || "You're all set for job updates.",
+        answered?.id ?? conv.party_id,
+        answered?.project_id ?? conv.active_project_id,
+        "granted",
+      );
     }
-    // else: a YES with nothing pending falls through to the normal parse.
+    // else: a YES no studio's record is waiting on falls through to the normal
+    // parse — including a YES over a standing refusal, which stays refused.
   }
 
   if (upper === "HELP" || upper === "INFO") {

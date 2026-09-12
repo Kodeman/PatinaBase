@@ -67,15 +67,24 @@
 --        because the loop is over REQUESTS, not over seats.
 --      · site_request_dispatch_after_consent() (00374:1395-1460) is the only
 --        thing that trigger calls, and it gated on the seat being `granted` —
---        which nothing can set. Repointed at the record too: without it the
---        release above raises inside the consent write and takes the whole
---        consent act down with it.
+--        which nothing can set. Repointed at the record too. AND the release
+--        loop no longer lets it take the consent act down: the call is wrapped
+--        in its own handler and the loop's JOIN pins the seat to the request's
+--        own project, because a seat MOVED to another job left a parked request
+--        the callee could not find and the raise aborted every grant on that
+--        number — including the recipient's own inbound START, which the rail
+--        acknowledged 200 while recording nothing (final-run MAJOR-3).
+--      · site_request_resend() (00374:1333-1393), section 5 — the last live
+--        seat gate on the site-request rail. It refused every consent recorded
+--        after the freeze. On the record now (R-AY, final-run MAJOR-1).
 --
---      site_request_resend() is NOT repointed here: R-AW enumerates the
---      dispatch trigger and site_request_send(), and resend is not on the
---      release path. It still gates on the frozen seat and still cannot
---      succeed for a party created after 00594 — owed, and named in the W1a
---      report §8.
+--   3. THE SEAT LEG COMES OUT OF 00621's TWO DISPATCH GATES (section 6).
+--      00621 kept `AND v_party.sms_consent_status <> 'granted'` beside the
+--      record test, because sendPartySms still honoured a grant sitting on a
+--      pre-fold seat. This pass deletes that leg of sendPartySms — and of
+--      flushDeferredMessages and field-daily's pre-filter (R-AY, final-run
+--      MAJOR-1/MAJOR-2, supabase/functions/_shared/sms.ts) — so the reason is
+--      gone and the leg only ever dispatched work the send rail refuses.
 --
 -- NOT CHANGED, ON PURPOSE
 --   · the freeze trigger (00594 refuse_legacy_consent_write) and R-AX's
@@ -83,9 +92,11 @@
 --     column is still a column nothing may quietly rewrite.
 --   · people_directory's meta.sms_consented_at / .sms_opt_out_at — dates, not
 --     a verdict; W1b's v4 rebuild reads them off the record.
---   · 00621's two dispatch gates keep their seat leg (`… AND
---     v_party.sms_consent_status <> 'granted'`), which only ever makes them
---     MORE permissive than the send gate that follows. Named in the report.
+--   · fc_dispatch_optin_invite (00432) still fires off the seat INSERT that
+--     records the invite — an INSERT the freeze allows and the only thing that
+--     puts the double-opt-in invite on the wire. It is a dispatch trigger on
+--     the act of asking, not a verdict reader standing between a record and a
+--     send, and the send gate it wakes still asks the record.
 --
 -- Idempotent: CREATE OR REPLACE throughout, DROP TRIGGER IF EXISTS before each
 -- CREATE TRIGGER. Re-runnable on a database at 00621 or at 00622.
@@ -850,6 +861,17 @@ BEGIN
     FROM public.site_requests sr
     JOIN public.project_parties pp
       ON pp.id = sr.assignee_party_id
+      -- AND ON THE REQUEST'S OWN PROJECT (final-run MAJOR-3). The body called
+      -- below re-fetches the assignee by id AND by the request's project_id
+      -- (00374's own shape), and the two agree only because
+      -- _site_request_validate_request() enforces it on site_requests writes —
+      -- never on project_parties. A seat MOVED to another job (a PATCH of
+      -- project_parties.project_id, which any authenticated studio co-member
+      -- can send and which is not on the freeze trigger's column list) leaves a
+      -- parked request whose assignee that fetch cannot find, and the raise
+      -- came back out here. A moved seat now drops out of the loop instead:
+      -- the request stays parked for the lifecycle sweep.
+      AND pp.project_id = sr.project_id
     WHERE sr.status = 'awaiting_consent'
       AND pp.phone_e164 = NEW.channel_value
       AND public.project_consent_org(pp.project_id) = NEW.organization_id
@@ -860,7 +882,25 @@ BEGIN
     -- retry, or arrive after a worker restart without stranding the request in
     -- awaiting_consent. The lifecycle sweep will claim this identifier-only
     -- row and mint a raw guest token only when an SMS attempt actually begins.
-    v_dispatch := public.site_request_dispatch_after_consent(v_request.id);
+    --
+    -- AND THE RELEASE CANNOT TAKE THE CONSENT ACT DOWN WITH IT (final-run
+    -- MAJOR-3). This call was bare, so any raise inside it — the "assignee has
+    -- not granted SMS consent" gate above all, reachable while a parked request
+    -- points at a seat this loop's own JOIN no longer matches — aborted the
+    -- whole transaction: record_channel_consent() answered the designer with a
+    -- raw Postgres string, and the inbound rail's own service_role grant upsert
+    -- failed while the START branch (which deliberately discards a failed
+    -- write) still answered Twilio 200 / resubscribed. A refusal the recipient
+    -- has answered would have stayed standing with nothing recorded anywhere.
+    -- A site request that cannot be released is a WARNING and the lifecycle
+    -- sweep's problem; the consent act stands either way.
+    BEGIN
+      v_dispatch := public.site_request_dispatch_after_consent(v_request.id);
+    EXCEPTION WHEN OTHERS THEN
+      RAISE WARNING 'site request consent release failed for request %: % — the consent write stands',
+        v_request.id, SQLERRM;
+      CONTINUE;
+    END;
     BEGIN
       PERFORM public.invoke_edge_function(
         'site-request-dispatch',
@@ -904,7 +944,243 @@ COMMENT ON FUNCTION public._site_request_consent_granted_dispatch() IS
   'froze that column, so no consent act made a party-row transition and parked '
   'requests were never released at all. Since 00622 the trigger is on '
   'studio_channel_consent (R-AW) and the loop finds requests whose assignee '
-  'seat carries this record''s phone in this record''s studio, resolved through '
-  'project_consent_org(). Durable work (site_request_dispatch_after_consent) is '
-  'part of the consent transaction; the edge invocation is a fire-and-forget '
-  'wake-up and the lifecycle sweep is the backstop. 00374''s body otherwise.';
+  'seat carries this record''s phone, ON THE REQUEST''S OWN PROJECT, in this '
+  'record''s studio, resolved through project_consent_org(). Durable work '
+  '(site_request_dispatch_after_consent) is part of the consent transaction but '
+  'wrapped in its own handler: a release that raises is a WARNING and the '
+  'lifecycle sweep''s problem, never an abort of the consent write (final-run '
+  'MAJOR-3). The edge invocation is a fire-and-forget wake-up. 00374''s body '
+  'otherwise.';
+
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 5. site_request_resend — the same question, of the record
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Grafted from 00374:1333-1393 (its only definition). One gate changed, for the
+-- same reason as sections 2 and 3: `v_party.sms_consent_status <> 'granted'`
+-- names a column 00594 froze and nothing can set to `granted`, so "Resend" —
+-- a live designer act on a request whose assignee consented after the freeze —
+-- raised "granted SMS consent and phone are required to resend" for ever.
+-- R-AY: the record is the only thing any gate consults (final-run MAJOR-1).
+-- Everything else, including _site_request_designer_authorized(), the status
+-- guard, the snapshots and the outbox enqueue, is 00374's body verbatim.
+CREATE OR REPLACE FUNCTION public.site_request_resend(
+  p_request_id uuid,
+  p_expires_at timestamptz DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+DECLARE
+  v_request public.site_requests;
+  v_party public.project_parties;
+  v_expiry timestamptz;
+  v_event_id uuid;
+  v_outbox_id uuid;
+BEGIN
+  SELECT * INTO v_request FROM public.site_requests WHERE id = p_request_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'site request % not found', p_request_id USING errcode = 'no_data_found';
+  END IF;
+  IF NOT public._site_request_designer_authorized(v_request.project_id) THEN
+    RAISE EXCEPTION 'not authorized' USING errcode = 'insufficient_privilege';
+  END IF;
+  IF v_request.status IN ('draft','completed','closed','expired') THEN
+    RAISE EXCEPTION 'request in % cannot be resent', v_request.status USING errcode = '55000';
+  END IF;
+
+  SELECT * INTO v_party
+  FROM public.project_parties
+  WHERE id = v_request.assignee_party_id
+  FOR UPDATE;
+  IF v_party.phone_e164 IS NULL
+     OR COALESCE(
+          public.channel_consent_status(
+            public.project_consent_org(v_request.project_id), 'sms', v_party.phone_e164),
+          'not_asked') <> 'granted' THEN
+    RAISE EXCEPTION 'granted SMS consent and phone are required to resend'
+      USING errcode = '55000';
+  END IF;
+
+  v_expiry := COALESCE(
+    p_expires_at,
+    GREATEST(v_request.due_at + interval '7 days', now() + interval '7 days')
+  );
+  UPDATE public.site_requests
+  SET consent_status_snapshot = 'granted',
+      assignee_name_snapshot = v_party.display_name,
+      assignee_phone_snapshot = v_party.phone_e164,
+      assignee_trade_snapshot = v_party.trade,
+      expires_at = v_expiry
+  WHERE id = p_request_id;
+
+  v_event_id := public._site_request_append_event(
+    p_request_id, 'request_resend_requested', 'designer', auth.uid(), NULL,
+    NULL, NULL,
+    jsonb_build_object('expires_at', v_expiry), NULL
+  );
+  v_outbox_id := public._site_request_enqueue_dispatch(
+    p_request_id, 'resend', v_event_id
+  );
+  RETURN public._site_request_dispatch_result(
+    p_request_id, 'resend', NULL, NULL, false, false, v_outbox_id
+  );
+END;
+$$;
+
+-- 00374:3537 and :3547, restated verbatim.
+REVOKE ALL ON FUNCTION public.site_request_resend(uuid, timestamptz)
+  FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.site_request_resend(uuid, timestamptz)
+  TO authenticated;
+
+COMMENT ON FUNCTION public.site_request_resend(uuid, timestamptz) IS
+  'Re-sends a live site request, refreshing its snapshots and expiry and '
+  'enqueueing a `resend` dispatch. Since 00622 the assignee''s SMS consent is '
+  'read from studio_channel_consent through channel_consent_status('
+  'project_consent_org(project_id), ''sms'', phone_e164) rather than '
+  'project_parties.sms_consent_status, which 00594 froze: on the frozen column '
+  'this act refused every consent recorded after the freeze (R-AY). '
+  'Otherwise 00374''s body.';
+
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 6. 00621's two dispatch gates — the record, and only the record
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Grafted from 00621:128-183 and :194-247, which are themselves 00284:101-145
+-- and :160-203 with the consent test moved. 00621 kept a SECOND leg — `AND
+-- v_party.sms_consent_status <> 'granted'` — for one stated reason: sendPartySms
+-- still honoured a real grant sitting on a pre-fold seat, so a gate narrower
+-- than the send path would have dropped work the send path would have sent.
+-- That leg of sendPartySms is deleted in this pass (R-AY, final-run MAJOR-1 and
+-- MAJOR-2), so the reason is gone and what remains is a gate that dispatches
+-- for a number whose record says `opted_out` — work the send rail then refuses,
+-- one row at a time, off a column nothing can move. One question, one ledger.
+-- Everything else in both bodies is 00621's verbatim.
+
+-- ── 6a. client_decisions.court_party_id → sms_court_assignment ──────────────
+CREATE OR REPLACE FUNCTION public.fc_dispatch_court_assignment()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_party public.project_parties;
+BEGIN
+  -- Only when a court party is actually (re)assigned and the item is live.
+  IF NEW.court_party_id IS NULL OR NEW.status <> 'pending' THEN
+    RETURN NEW;
+  END IF;
+  IF TG_OP = 'UPDATE' AND NEW.court_party_id IS NOT DISTINCT FROM OLD.court_party_id THEN
+    RETURN NEW;
+  END IF;
+
+  SELECT * INTO v_party FROM public.project_parties WHERE id = NEW.court_party_id;
+  IF NOT FOUND
+     OR v_party.party_kind NOT IN ('gc', 'sub', 'installer', 'receiver')
+     -- THE RECORD, AND NOTHING ELSE (R-AY). COALESCEd to false because "no
+     -- record" comes back NULL, and NULL is not a grant.
+     OR NOT COALESCE(
+          public.channel_consent_status(
+            public.project_consent_org(NEW.project_id),
+            'sms', v_party.phone_e164) = 'granted',
+          false) THEN
+    RETURN NEW;
+  END IF;
+
+  BEGIN
+    PERFORM public.invoke_edge_function(
+      'sms-dispatch',
+      jsonb_build_object(
+        'partyId',     NEW.court_party_id,
+        'projectId',   NEW.project_id,
+        'templateKey', 'sms_court_assignment',
+        'type',        'field_court_assignment',
+        'vars', jsonb_build_object(
+          'item_title', NEW.title,
+          'kind',       NEW.coordination_kind
+        )
+      )
+    );
+  EXCEPTION WHEN OTHERS THEN
+    RAISE WARNING 'fc_dispatch_court_assignment: dispatch failed for item %: %', NEW.id, SQLERRM;
+  END;
+
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.fc_dispatch_court_assignment() FROM PUBLIC, anon;
+
+COMMENT ON FUNCTION public.fc_dispatch_court_assignment() IS
+  'Field Coordination (00284): on a court_party_id (re)assignment to a consented '
+  'field party (gc/sub/installer/receiver), fire sms-dispatch with the '
+  'sms_court_assignment template. Fire-and-forget (00105 pattern). Since 00622 '
+  'the consent test is the STUDIO RECORD ALONE — channel_consent_status('
+  'project_consent_org(project_id), ''sms'', phone_e164) = ''granted''. 00621 '
+  'also accepted a pre-fold seat still reading ''granted'' because sendPartySms '
+  'did; that leg of the send gate is gone (R-AY), so this one is too — it could '
+  'only dispatch work the send rail refuses.';
+
+-- ── 6b. project_tasks.owner_party_id → sms_court_assignment ─────────────────
+CREATE OR REPLACE FUNCTION public.fc_dispatch_task_assignment()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_party public.project_parties;
+BEGIN
+  IF NEW.owner_party_id IS NULL OR NEW.status = 'done' THEN
+    RETURN NEW;
+  END IF;
+  IF TG_OP = 'UPDATE' AND NEW.owner_party_id IS NOT DISTINCT FROM OLD.owner_party_id THEN
+    RETURN NEW;
+  END IF;
+
+  SELECT * INTO v_party FROM public.project_parties WHERE id = NEW.owner_party_id;
+  IF NOT FOUND
+     OR v_party.party_kind NOT IN ('gc', 'sub', 'installer', 'receiver')
+     -- The record, and nothing else — the sibling's reason, verbatim (6a).
+     OR NOT COALESCE(
+          public.channel_consent_status(
+            public.project_consent_org(NEW.project_id),
+            'sms', v_party.phone_e164) = 'granted',
+          false) THEN
+    RETURN NEW;
+  END IF;
+
+  BEGIN
+    PERFORM public.invoke_edge_function(
+      'sms-dispatch',
+      jsonb_build_object(
+        'partyId',     NEW.owner_party_id,
+        'projectId',   NEW.project_id,
+        'templateKey', 'sms_court_assignment',
+        'type',        'field_task_assignment',
+        'vars', jsonb_build_object(
+          'item_title', NEW.title,
+          'kind',       'task'
+        )
+      )
+    );
+  EXCEPTION WHEN OTHERS THEN
+    RAISE WARNING 'fc_dispatch_task_assignment: dispatch failed for task %: %', NEW.id, SQLERRM;
+  END;
+
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.fc_dispatch_task_assignment() FROM PUBLIC, anon;
+
+COMMENT ON FUNCTION public.fc_dispatch_task_assignment() IS
+  'Field Coordination (00284): on an owner_party_id (re)assignment to a consented '
+  'field party, fire sms-dispatch with the sms_court_assignment template. Since '
+  '00622 the consent test is the studio record ALONE, the pre-fold seat leg '
+  '00621 carried having gone with sendPartySms''s (R-AY) — see '
+  'fc_dispatch_court_assignment.';

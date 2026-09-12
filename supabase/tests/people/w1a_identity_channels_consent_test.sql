@@ -5607,8 +5607,14 @@ BEGIN
   ASSERT d = 0,
     'FAIL 42d: a refused number must dispatch nothing, got ' || d;
 
-  -- 42e. The pre-fold leg still stands: a seat holding a real legacy `granted`
-  --      with no record dispatches, because sendPartySms still honours it.
+  -- 42e. THE PRE-FOLD LEG IS GONE (R-AY, final-run MAJOR-1). 00621 kept `AND
+  --      v_party.sms_consent_status <> 'granted'` beside the record test for one
+  --      stated reason: sendPartySms still honoured a grant sitting on a
+  --      pre-fold seat, so a narrower gate would have dropped work the send
+  --      path would have sent. That leg of the send path is deleted in this
+  --      pass, so a seat holding a legacy `granted` with NO record behind it
+  --      dispatches nothing: the send rail refuses it anyway, and one question
+  --      now has one ledger.
   INSERT INTO project_parties (id, project_id, party_kind, display_name, phone,
                                sms_consent_status)
   VALUES ('e0000000-0000-4000-8000-0000000000f4',
@@ -5621,8 +5627,17 @@ BEGIN
   SELECT COUNT(*) INTO d FROM public._w1a_dispatch_log
    WHERE body->>'templateKey' = 'sms_court_assignment'
      AND body->>'partyId' = 'e0000000-0000-4000-8000-0000000000f4';
-  ASSERT d = 1,
-    'FAIL 42e: a pre-fold granted seat must still dispatch, got ' || d;
+  ASSERT d = 0,
+    'FAIL 42e: a frozen `granted` seat with no record must dispatch nothing, got '
+      || d;
+  ASSERT (SELECT prosrc FROM pg_proc pr JOIN pg_namespace ns ON ns.oid = pr.pronamespace
+           WHERE ns.nspname = 'public' AND pr.proname = 'fc_dispatch_court_assignment')
+         NOT ILIKE '%sms_consent_status%',
+    'FAIL 42e2: the court gate must not read the frozen seat at all';
+  ASSERT (SELECT prosrc FROM pg_proc pr JOIN pg_namespace ns ON ns.oid = pr.pronamespace
+           WHERE ns.nspname = 'public' AND pr.proname = 'fc_dispatch_task_assignment')
+         NOT ILIKE '%sms_consent_status%',
+    'FAIL 42e3: the task gate must not read the frozen seat at all';
 
   -- 42f. The party-kind filter and the shipped trigger wiring are untouched by
   --      the graft: a non-field party is still never texted, and both triggers
@@ -5681,8 +5696,9 @@ BEGIN
     'FAIL 42g5: anon must not execute the task gate';
 
   RAISE NOTICE '42. the two 00284 dispatch gates reach a party the record '
-               'granted, and still refuse an unasked, a refused and a '
-               'non-field one (close-out r3 MAJOR-3): passed';
+               'granted, refuse an unasked, a refused and a non-field one, and '
+               'no longer read the frozen seat at all (close-out r3 MAJOR-3, '
+               'final-run MAJOR-1): passed';
 END
 $$;
 
@@ -6053,6 +6069,252 @@ BEGIN
                'a record-granted / seat-refused number is sendable (R-AW): passed';
 END
 $$;
+
+-- ─── 45. final-run MAJOR-3: a release the loop cannot dispatch does not take
+--         the consent write down with it, and resend asks the record ────────
+--
+-- 00622's release trigger called site_request_dispatch_after_consent() bare,
+-- and the body it calls re-fetches the assignee by id AND by the REQUEST's
+-- project_id. Those agree only because _site_request_validate_request() fires
+-- on site_requests writes — never on project_parties. So MOVING a seat to
+-- another job (a PATCH of project_parties.project_id, which any authenticated
+-- studio co-member can send, and which is not on the freeze trigger's column
+-- list) left a parked request whose assignee that fetch could not find, and the
+-- raise came back out of the trigger and rolled the consent act back: the
+-- studio's grant door was dead for that number with a raw Postgres string, and
+-- the inbound rail's own service_role grant failed while the START branch —
+-- which deliberately discards a failed write — still answered Twilio
+-- 200/resubscribed. Two independent fixes, both asserted here: the loop pins
+-- the seat to the request's own project, and the call is wrapped.
+--
+-- 45g also walks site_request_resend(), the last live seat gate on this rail
+-- (final-run MAJOR-1): on the frozen column it refused every consent recorded
+-- after 00594.
+
+INSERT INTO projects (id, name, designer_id, studio_id, created_by, status, created_at, updated_at)
+VALUES ('d0000000-0000-4000-8000-0000000000c2', 'W1A site-request rail second job',
+        'a0000000-0000-4000-8000-000000000001', 'b0000000-0000-4000-8000-00000000000a',
+        'a0000000-0000-4000-8000-000000000001', 'active', NOW(), NOW());
+
+INSERT INTO project_parties (id, project_id, party_kind, display_name, phone, trade,
+                             sms_consent_status)
+VALUES ('e0000000-0000-4000-8000-000000000093', 'd0000000-0000-4000-8000-0000000000c1',
+        'sub', 'Ilse Bragg', '612-555-0703', 'tile', 'not_asked');
+
+INSERT INTO site_requests (id, project_id, created_by, assignee_party_id, status, due_at, note)
+VALUES ('a1000000-0000-4000-8000-0000000000c3', 'd0000000-0000-4000-8000-0000000000c1',
+        'a0000000-0000-4000-8000-000000000001', 'e0000000-0000-4000-8000-000000000093',
+        'draft', now() + interval '4 days', 'Tile photos');
+
+INSERT INTO site_request_items (id, request_id, sort_order, status, current_version_number, current_version_id)
+VALUES ('a2000000-0000-4000-8000-0000000000c3', 'a1000000-0000-4000-8000-0000000000c3',
+        1, 'open', 1, NULL);
+
+INSERT INTO site_request_item_versions (id, item_id, version_number, kit_code, title, configuration, created_by)
+VALUES ('a3000000-0000-4000-8000-0000000000c3', 'a2000000-0000-4000-8000-0000000000c3', 1,
+        'K-01', 'Tile photos', '{}'::jsonb, 'a0000000-0000-4000-8000-000000000001');
+
+UPDATE site_request_items SET current_version_id = 'a3000000-0000-4000-8000-0000000000c3'
+ WHERE id = 'a2000000-0000-4000-8000-0000000000c3';
+
+DO $$
+DECLARE
+  res    jsonb;
+  raised TEXT;
+  r      RECORD;
+  src    TEXT;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+
+  -- 45a. Park it: nobody has asked Ilse, so the send door parks the request.
+  res := public.site_request_send('a1000000-0000-4000-8000-0000000000c3', NULL);
+  SELECT * INTO r FROM site_requests WHERE id = 'a1000000-0000-4000-8000-0000000000c3';
+  ASSERT r.status = 'awaiting_consent',
+    'FAIL 45a: the request must park awaiting consent, got ' || r.status;
+
+  -- 45b. A studio co-member MOVES the seat to the studio's other job. This is
+  --      an ordinary authenticated UPDATE — no freeze column is named — and it
+  --      is allowed, which is the whole premise.
+  raised := NULL;
+  BEGIN
+    UPDATE project_parties SET project_id = 'd0000000-0000-4000-8000-0000000000c2'
+     WHERE id = 'e0000000-0000-4000-8000-000000000093';
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised IS NULL,
+    'FAIL 45b: moving a seat between the studio''s own jobs must stay allowed, got '
+      || COALESCE(raised, '<none>');
+  ASSERT (SELECT project_id FROM project_parties
+           WHERE id = 'e0000000-0000-4000-8000-000000000093')
+         = 'd0000000-0000-4000-8000-0000000000c2',
+    'FAIL 45b2: the seat must have moved';
+
+  -- 45c. THE FINDING, studio side. The grant door must still work for that
+  --      number. Before the fix: 'assignee has not granted SMS consent',
+  --      raised inside the release trigger, which rolled the consent act back.
+  raised := NULL;
+  BEGIN
+    PERFORM public.record_channel_consent(
+      'b0000000-0000-4000-8000-00000000000a', 'sms', '612-555-0703', 'granted',
+      'written', 'Signed the field-SMS form', 'field-sms-v1', NULL);
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised IS NULL,
+    'FAIL 45c: a parked request the release cannot dispatch must not abort the '
+    'consent write, got ' || COALESCE(raised, '<none>');
+  ASSERT public.channel_consent_status(
+           'b0000000-0000-4000-8000-00000000000a', 'sms', '+16125550703') = 'granted',
+    'FAIL 45c2: the grant must be on the books';
+
+  -- 45d. …and the request the loop dropped is still parked, waiting for the
+  --      lifecycle sweep. Not released, not raised over.
+  SELECT * INTO r FROM site_requests WHERE id = 'a1000000-0000-4000-8000-0000000000c3';
+  ASSERT r.status = 'awaiting_consent' AND r.consent_status_snapshot = 'not_asked',
+    'FAIL 45d: a moved seat''s request must stay parked, got '
+      || r.status || '/' || COALESCE(r.consent_status_snapshot, '<null>');
+
+  PERFORM pg_temp.reset_role();
+
+  -- 45e. THE FINDING, recipient side — the one that matters. This is the
+  --      inbound rail's own write: a STOP, then the recipient's own START, as
+  --      service_role upserts them. Before the fix the second UPDATE raised,
+  --      writeChannelConsent set `failed`, and the START branch discards
+  --      `failed` — so Twilio was answered 200/resubscribed with the refusal
+  --      still standing and nothing recorded anywhere.
+  raised := NULL;
+  BEGIN
+    UPDATE studio_channel_consent
+       SET status = 'opted_out', refusal_unanswered = true,
+           opt_out_at = clock_timestamp(), opt_out_source = 'inbound_sms',
+           opt_out_evidence = 'Replied STOP', opt_out_recorded_at = clock_timestamp()
+     WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+       AND channel_kind = 'sms' AND channel_value = '+16125550703';
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised IS NULL,
+    'FAIL 45e: the rail''s refusal write must land, got ' || COALESCE(raised, '<none>');
+
+  raised := NULL;
+  BEGIN
+    UPDATE studio_channel_consent
+       SET status = 'granted', refusal_unanswered = false,
+           consented_at = clock_timestamp(), source = 'inbound_sms',
+           evidence = 'Replied START', recorded_at = clock_timestamp()
+     WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+       AND channel_kind = 'sms' AND channel_value = '+16125550703';
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised IS NULL,
+    'FAIL 45e2: the recipient''s own START must be recordable while a parked '
+    'request points at a moved seat, got ' || COALESCE(raised, '<none>');
+  ASSERT public.channel_consent_status(
+           'b0000000-0000-4000-8000-00000000000a', 'sms', '+16125550703') = 'granted',
+    'FAIL 45e3: the START must stand on the record';
+
+  -- 45f. Both fixes are IN the shipped body, not just in this fixture.
+  SELECT prosrc INTO src FROM pg_proc pr
+    JOIN pg_namespace ns ON ns.oid = pr.pronamespace
+   WHERE ns.nspname = 'public'
+     AND pr.proname = '_site_request_consent_granted_dispatch';
+  ASSERT src ILIKE '%pp.project_id = sr.project_id%',
+    'FAIL 45f: the release loop must pin the seat to the request''s own project';
+  ASSERT src ILIKE '%EXCEPTION WHEN OTHERS THEN%RAISE WARNING%site request consent release failed%',
+    'FAIL 45f2: the release call must be wrapped in its own handler';
+
+  -- 45g. site_request_resend, on the record (final-run MAJOR-1). Vera's seat is
+  --      frozen at `opted_out` and her studio record reads `granted` (block
+  --      44c). On the frozen column this act raised for every consent recorded
+  --      after the freeze.
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+  raised := NULL;
+  BEGIN
+    res := public.site_request_resend('a1000000-0000-4000-8000-0000000000c2', NULL);
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised IS NULL AND res->>'action' = 'resend',
+    'FAIL 45g: resend must succeed on a record-granted, seat-frozen assignee, got '
+      || COALESCE(raised, COALESCE(res->>'action', '<null>'));
+
+  --      NEGATIVE CONTROL: a recorded refusal still refuses the resend.
+  PERFORM pg_temp.reset_role();
+  UPDATE studio_channel_consent
+     SET status = 'opted_out', refusal_unanswered = true,
+         opt_out_at = clock_timestamp()
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_kind = 'sms' AND channel_value = '+16125550703';
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+  raised := NULL;
+  BEGIN
+    res := public.site_request_resend('a1000000-0000-4000-8000-0000000000c3', NULL);
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'granted SMS consent and phone are required to resend',
+    'FAIL 45g2: a recorded refusal must refuse the resend, got '
+      || COALESCE(raised, '<none>');
+  PERFORM pg_temp.reset_role();
+
+  -- 45h. The seat goes home, so the request is back INSIDE the loop — and the
+  --      wrapper is what is under test now, not the JOIN.
+  UPDATE project_parties SET project_id = 'd0000000-0000-4000-8000-0000000000c1'
+   WHERE id = 'e0000000-0000-4000-8000-000000000093';
+
+  RAISE NOTICE '45. a moved seat''s parked request no longer aborts the consent '
+               'write, and resend asks the record (final-run MAJOR-3, MAJOR-1): '
+               'passed';
+END
+$$;
+
+-- 45h, continued. A release that raises for ANY reason must not abort the
+-- consent act either — the JOIN fix closes the one reachable cause, the wrapper
+-- closes the class. The callee is replaced by a raising stub for the remainder
+-- of this transaction (block 45 is the last block, and the whole file is
+-- BEGIN … ROLLBACK, so nothing outlives the test).
+CREATE OR REPLACE FUNCTION public.site_request_dispatch_after_consent(
+  p_request_id uuid,
+  p_expires_at timestamptz DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $stub$
+BEGIN
+  RAISE EXCEPTION 'w1a probe: this release cannot be dispatched'
+    USING errcode = '55000';
+END;
+$stub$;
+
+DO $$
+DECLARE
+  raised TEXT;
+  r      RECORD;
+BEGIN
+  -- Back to `opted_out`, so the next write is a real granted TRANSITION and the
+  -- release trigger actually fires.
+  UPDATE studio_channel_consent
+     SET status = 'opted_out', refusal_unanswered = true
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_kind = 'sms' AND channel_value = '+16125550703';
+
+  raised := NULL;
+  BEGIN
+    UPDATE studio_channel_consent
+       SET status = 'granted', refusal_unanswered = false,
+           consented_at = clock_timestamp(), source = 'inbound_sms',
+           evidence = 'Replied START', recorded_at = clock_timestamp()
+     WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+       AND channel_kind = 'sms' AND channel_value = '+16125550703';
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised IS NULL,
+    'FAIL 45h: a release that raises must not abort the consent write, got '
+      || COALESCE(raised, '<none>');
+  ASSERT public.channel_consent_status(
+           'b0000000-0000-4000-8000-00000000000a', 'sms', '+16125550703') = 'granted',
+    'FAIL 45h2: the consent write must stand after a failed release';
+  SELECT * INTO r FROM site_requests WHERE id = 'a1000000-0000-4000-8000-0000000000c3';
+  ASSERT r.status = 'awaiting_consent',
+    'FAIL 45h3: the request the release could not dispatch must stay parked, got '
+      || r.status;
+
+  RAISE NOTICE '45h. a release that raises is a warning, not an aborted consent '
+               'act (final-run MAJOR-3): passed';
+END
+$$;
+
 
 DO $$ BEGIN
   RAISE NOTICE 'All W1a assertions passed.';
