@@ -62,8 +62,11 @@
 --       authenticated caller could write projects.studio_id after the row
 --       existed, and the read was permanently absent rather than conditionally
 --       so. 00606 section (4) ships the act — `public.stamp_project_pricing_studio`
---       — callable by the project's designer, or by an owner/admin of a studio
---       that already holds one of that designer's projects. Not by an owner/admin
+--       — callable by the project's designer for a studio that EMPLOYS her (and
+--       for one she owns only where she holds no employer seat at all — W2-R3-02),
+--       or by an owner/admin of a studio that already holds another project that
+--       designer both LEADS AND CREATED (W2-R3-01: `reassign_project_lead` lets an
+--       outsider manufacture the lead, but not `created_by`). Not by an owner/admin
 --       on the strength of the designer's seat alone: that is this banner's own
 --       B1 predicate, and with the stamp behind it an attacker moves the pricing
 --       studio permanently.

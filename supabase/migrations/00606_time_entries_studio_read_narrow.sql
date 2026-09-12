@@ -173,20 +173,64 @@ CREATE POLICY time_entries_owner_admin_read ON public.project_time_entries
 -- org — permanently taking the hours, the money and the audit trail from the
 -- studio that did the work. Measured on this program's stack; asserted closed as
 -- case (f) of supabase/tests/rls/time_entry_studio_stamp_test.sql. So the two arms
--- are both NON-manufacturable:
---   · ARM 1 — the project's own DESIGNER names a studio she actively, non-guestly
---     belongs to. This is exactly the bound 00563's authenticated-INSERT arm
---     already applies to the same column at creation (HT-3-c arm (a), ruled
---     2026-09-12), now available after the fact. `projects.designer_id` is frozen
---     on UPDATE by 00563 itself, so it is the one standing an attacker cannot
---     manufacture.
+-- are both NON-manufacturable — and ROUND 3 MEASURED that the first draft of both
+-- was (W2-R3-01 BLOCKER, W2-R3-02 MAJOR; each reproduced end to end through RLS on
+-- this program's stack before the fix and refused after it, pinned as cases (k) and
+-- (l) of supabase/tests/rls/time_entry_studio_stamp_test.sql):
+--   · ARM 1 — the project's own DESIGNER names a studio whose rate card she does
+--     NOT write, in the same tier HT-3-b itself would have considered for her.
+--     The first draft read "a studio she actively, non-guestly belongs to", and
+--     that let the member being priced move her own resolved rate to a number she
+--     set (W2-R3-02, measured: 'none' → 99900 / studio_member on the next hour).
+--     A designer seated a plain `member` in TWO employer studios has an ambiguous
+--     employer tier, so her legacy project prices 'none'; she wrote herself 99900
+--     in the one-person workspace 00295 provisions at every designer grant — she
+--     is its OWNER, so studio_member_rates_admin_insert permits it — stamped THAT
+--     workspace, and neither employer could see the project, the hour or the rate
+--     afterwards (so HT-3-c arm (a)'s stated mitigation, "the composer and the
+--     studio settings page are where a suspicious studio_member_rates row is
+--     seen", does not reach it). The bound is therefore HT-3-b's own tier
+--     structure, read against the studio she names:
+--       — while she holds ANY employer seat (active, non-guest, role <> 'owner'),
+--         the studio she names must be one where her seat is NEITHER `owner` NOR
+--         `admin` — a studio whose studio_member_rates she cannot write
+--         (studio_member_rates_admin_insert asks only is_org_admin_or_owner);
+--       — only where she holds NO employer seat anywhere may she name a studio she
+--         OWNS. That is HT-3-c arm (a)'s ruled sole proprietor, and the principal
+--         with two owned candidates and no employer whom HT-3-b records as priced
+--         by neither (cases (n)/(w) of time_rate_resolution_test.sql) — for whom
+--         this is the only repair that exists. W2-R3-02's literal narrowing
+--         (`role NOT IN ('owner','admin')` alone) would have taken that shape with
+--         it, which is why the TIER is read and not the role alone.
+--     What both halves serve is HT-3-b's operative sentence: a member can only
+--     push the outcome toward 'none', never toward a number she set.
 --   · ARM 2 — an owner/admin of p_studio_id, WHERE p_studio_id already holds
---     another project led by this project's designer. An attacker cannot
---     manufacture that: `set_project_studio_id`'s authenticated-INSERT arm
---     requires NEW.designer_id = auth.uid(), so nobody can create a project led
---     by somebody else. It is also the realistic shape of the repair — a studio
---     whose designer's later projects 00563 has been stamping all along, holding
---     one legacy project from before it.
+--     another project led by this project's designer AND CREATED BY HER. The first
+--     draft omitted the second half, on the justification that "nobody can create
+--     a project led by somebody else" — FALSE, and with it round 1's B1 came back
+--     in its worst form, permanent (W2-R3-01, measured). Nobody has to CREATE such
+--     a project: `reassign_project_lead` (00399:301) is SECURITY DEFINER, GRANTed
+--     to `authenticated` (00399:510), and admits the current lead of her OWN
+--     project with any `is_designer` target who holds an active, non-guest seat in
+--     that project's studio — a seat the attacker writes herself, consent-free,
+--     through `Org owners can insert members`. Three authenticated statements
+--     therefore moved an unstamped project's pricing studio into an outsider's org
+--     for ever: seat the victim project's designer (which also makes her employer
+--     tier ambiguous, so bound (c) passes), reassign her own project's lead to
+--     that designer (her org now holds "another project led by her"), stamp. After
+--     it the attacker read the row, the notes and the 25000, got the project total
+--     and could UPDATE and DELETE the hour, while the studio that did the work
+--     read 0 rows, was refused 42501 on the total, and could not re-stamp.
+--     `projects.created_by` is the one column in that shape she cannot author:
+--     00563 RAISES on any UPDATE that changes it, its authenticated-INSERT arm
+--     admits only `NEW.created_by = auth.uid()` on a project the actor leads
+--     herself, `reassign_project_lead` never touches it, and every real creation
+--     path writes the DESIGNER's own id into it (`_activate_proposal_as_project_impl`
+--     and `activate_project_v2`/`create_project_v2` — verified, not assumed). So a
+--     sibling created by the designer is both the realistic shape of the repair —
+--     a studio whose designer's later projects 00563 has been stamping all along,
+--     holding one legacy project from before it — and exactly what a manufactured
+--     sibling is not.
 -- Either way the project must still be unstamped AND unpriced: where
 -- project_pricing_studio_id already answers, the owner HAS her read and this
 -- function would only be a way to move the money. A stamped project stays final
@@ -205,6 +249,7 @@ DECLARE
   v_designer_id uuid;
   v_existing    uuid;
   v_actor       uuid := auth.uid();
+  v_designer_has_employer_seat boolean := false;
 BEGIN
   IF v_actor IS NULL THEN
     RAISE EXCEPTION 'stamp_project_pricing_studio: no actor'
@@ -228,7 +273,9 @@ BEGIN
   END IF;
 
   -- (a) standing: the project's designer, or an owner/admin of a studio that
-  --     already holds one of her projects. Nothing an attacker can author.
+  --     already holds a project she LEADS AND CREATED. Nothing an attacker can
+  --     author: `created_by` is what `reassign_project_lead` cannot move
+  --     (W2-R3-01).
   IF NOT (
     v_designer_id = v_actor
     OR (
@@ -238,13 +285,14 @@ BEGIN
         FROM public.projects AS sibling
         WHERE sibling.studio_id = p_studio_id
           AND sibling.designer_id = v_designer_id
+          AND sibling.created_by = v_designer_id
           AND sibling.id <> p_project_id
       )
     )
   ) THEN
     RAISE EXCEPTION 'stamp_project_pricing_studio: only this project''s designer, '
-                    'or an owner/admin of a studio that already holds one of her '
-                    'projects, may name its studio'
+                    'or an owner/admin of a studio that already holds a project '
+                    'she leads and created, may name its studio'
       USING ERRCODE = 'insufficient_privilege';
   END IF;
 
@@ -287,6 +335,52 @@ BEGIN
       USING ERRCODE = 'insufficient_privilege';
   END IF;
 
+  -- (e) W2-R3-02: where the caller IS the member being priced, the studio she
+  --     names must be one HT-3-b's own tiers would have considered for her — an
+  --     EMPLOYER seat while she holds any (and not one where that seat is `owner`
+  --     or `admin`, because studio_member_rates_admin_insert would let her write
+  --     her own rate there), and a studio she OWNS only where she holds no
+  --     employer seat at all (HT-3-c arm (a)'s sole proprietor). The tiers are
+  --     00604's, verbatim: employer = active, non-guest, role <> 'owner'.
+  IF v_designer_id = v_actor THEN
+    v_designer_has_employer_seat := EXISTS (
+      SELECT 1
+      FROM public.organization_members AS employer_seat
+      JOIN public.organizations AS studio
+        ON studio.id = employer_seat.organization_id
+      WHERE employer_seat.user_id = v_designer_id
+        AND employer_seat.status = 'active'
+        AND employer_seat.role <> 'guest'
+        AND employer_seat.role <> 'owner'
+        AND studio.type = 'design_studio'
+        AND studio.status = 'active'
+    );
+
+    IF NOT EXISTS (
+      SELECT 1
+      FROM public.organization_members AS designer_seat
+      JOIN public.organizations AS studio
+        ON studio.id = designer_seat.organization_id
+      WHERE designer_seat.organization_id = p_studio_id
+        AND designer_seat.user_id = v_designer_id
+        AND designer_seat.status = 'active'
+        AND designer_seat.role <> 'guest'
+        AND studio.type = 'design_studio'
+        AND studio.status = 'active'
+        AND CASE
+              WHEN v_designer_has_employer_seat
+                THEN designer_seat.role NOT IN ('owner', 'admin')
+              ELSE designer_seat.role = 'owner'
+            END
+    ) THEN
+      RAISE EXCEPTION 'stamp_project_pricing_studio: a designer may name one of '
+                      'the studios that EMPLOY her, not one whose rate card she '
+                      'writes — a studio she owns or administers only where she '
+                      'holds no employer seat at all'
+        USING ERRCODE = 'insufficient_privilege';
+    END IF;
+  END IF;
+
   UPDATE public.projects
      SET studio_id = p_studio_id
    WHERE id = p_project_id
@@ -305,13 +399,19 @@ COMMENT ON FUNCTION public.stamp_project_pricing_studio(uuid, uuid) IS
   'legacy NULL-studio or ambiguous-tier project (W2 review round 2, finding '
   'W2-R2-02 — before this function no authenticated caller could write '
   'projects.studio_id at all, because set_project_studio_id''s authenticated arm '
-  'raises unless TG_OP = ''INSERT''). Callable by the project''s DESIGNER for a '
-  'studio she actively non-guestly belongs to (00563''s own INSERT bound, '
-  'HT-3-c arm (a)), or by an owner/admin of a studio that ALREADY holds another '
-  'project led by that designer. Deliberately NOT callable by an owner/admin on '
-  'the strength of the designer''s seat alone: that set is self-grantable with one '
-  'consent-free organization_members INSERT, and with it an attacker takes a '
-  'studio''s hours permanently. Refuses a stamped project, and refuses one whose '
+  'raises unless TG_OP = ''INSERT''). Callable by the project''s DESIGNER, for a '
+  'studio that EMPLOYS her (an active non-guest seat that is neither owner nor '
+  'admin) while she holds any employer seat, and for a studio she owns only where '
+  'she holds none — HT-3-b''s own tiers, so that the member being priced cannot '
+  'move her rate to a number she set (W2-R3-02). Also callable by an owner/admin '
+  'of a studio that ALREADY holds another project that designer both LEADS and '
+  'CREATED — created_by, because reassign_project_lead (SECURITY DEFINER, GRANTed '
+  'to authenticated) otherwise lets an outsider put a victim designer in the lead '
+  'of her own project and manufacture that standing (W2-R3-01). Deliberately NOT '
+  'callable by an owner/admin on the strength of the designer''s seat alone: that '
+  'set is self-grantable with one consent-free organization_members INSERT, and '
+  'with it an attacker takes a studio''s hours permanently. Refuses a stamped '
+  'project, and refuses one whose '
   'hours a studio already prices. SECURITY DEFINER so the write does not meet '
   'set_project_studio_id''s authenticated arm; that trigger''s owner-executed arm '
   'still re-validates the bound.';
@@ -454,6 +554,29 @@ BEGIN
      'owner/admin of a studio that already holds one of her projects — never an '
      'owner/admin on the strength of a seat anyone can write (W2-R2-02''s fix, '
      'and round 1''s B1)';
+  ASSERT (
+    SELECT prosrc LIKE '%sibling.created_by = v_designer_id%'
+    FROM pg_proc
+    WHERE oid = to_regprocedure('public.stamp_project_pricing_studio(uuid,uuid)')
+  ), '00606: ARM 2''s sibling must have been CREATED BY the designer (W2-R3-01, '
+     'measured): reassign_project_lead is SECURITY DEFINER and GRANTed to '
+     'authenticated, so an outsider who seats a victim project''s designer in her '
+     'own org can put that designer in the lead of her OWN project and manufacture '
+     '"a project led by that designer" in three authenticated statements. '
+     'created_by is the half she cannot forge — 00563 raises on any UPDATE that '
+     'moves it and reassign_project_lead never touches it';
+  ASSERT (
+    SELECT prosrc LIKE '%v_designer_has_employer_seat%'
+       AND prosrc LIKE '%designer_seat.role NOT IN (''owner'', ''admin'')%'
+    FROM pg_proc
+    WHERE oid = to_regprocedure('public.stamp_project_pricing_studio(uuid,uuid)')
+  ), '00606: where the caller IS the member being priced, the studio she names '
+     'must sit in the tier HT-3-b would have considered for her — an employer seat '
+     'that is neither owner nor admin while she holds any employer seat, a studio '
+     'she owns only where she holds none (W2-R3-02, measured: without it she wrote '
+     'herself 99900 in the workspace 00295 provisions, stamped it, and her next '
+     'hour came back 99900 / studio_member with no employer able to see the '
+     'project at all)';
   ASSERT (
     SELECT prosrc LIKE '%project_pricing_studio_id(p_project_id) IS NOT NULL%'
     FROM pg_proc
