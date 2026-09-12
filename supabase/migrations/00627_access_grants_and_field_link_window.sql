@@ -54,8 +54,36 @@
 -- untrue twice over: the shipped policies carry is_design_studio_comember
 -- (the shared organization must be type design_studio), and the other two
 -- sources had no policy to restate. So each reader now puts the TENANT first
--- — is_active_studio_member(project_tenant_org(...)), 00624 §1, the one gate
--- resolver this wave uses — and keeps the narrow shipped predicate beside it.
+-- and keeps the narrow shipped predicate beside it.
+--
+-- AND THE TENANT LEG ASKS THE RECORD, NOT THE CALLER (w1b final review r9
+-- BLOCKING-1). r6's fix resolved that leg through project_tenant_org(), whose
+-- second leg answers with the CALLER'S OWN active non-guest design studio
+-- wherever the job's record names none (00624:171-188) — so on the
+-- projects.studio_id IS NULL population (5 of 8 local projects)
+-- is_active_studio_member(project_tenant_org(p)) is SELF-SATISFYING, and
+-- because these functions are definer that WHERE clause is the whole rule.
+-- Walked as a plain member of the designer's SECOND design studio, never a
+-- member of the studio doing the work (is_active_studio_member(LocalDev) =
+-- false), with a manufacturer-org co-member, an unrelated studio owner and
+-- the working studio's own admin as controls (0 / 0 / 1): that caller read
+-- the owning studio's invoice pay link (grant_id, invoice, minted date,
+-- last_viewed_at), its plan transmittal link (project, granted_by,
+-- expires_at, last_used_at) and its RFQ link, while a direct read of
+-- invoice_links and of plan_transmittal_tokens.created_by was permission
+-- denied for the same caller — the reader is the only authenticated door.
+-- This is r8 BLOCKING-1's own mechanism, removed from 00624/00625 and left
+-- here; 00624:277-298's residue list does not name these readers, and
+-- nothing in this program reads v_access_grants yet, so narrowing them
+-- regresses no shipped surface. The three project-bearing legs now resolve
+-- project_recorded_studio() (00624 §1c), and the cost is r8's cost, stated:
+-- on the studio_id IS NULL population NO studio reads those three tiers
+-- until R-BD's W3 backfill names one. The genuinely tenant-less populations
+-- (a proposal with no project; an invoice naming neither studio_id nor
+-- project_id) have no record to gate on and stay on the design-studio
+-- predicate alone — that residue is stated at each reader.
+-- access_grants_trade_agreement_links() needs no change: studio_contact_org()
+-- is record-based with no caller-relative leg.
 -- Where a row records no tenant at all (a proposal with no project, an
 -- invoice with neither studio_id nor project_id) the design-studio predicate
 -- is the whole gate, and each COMMENT says so.
@@ -122,7 +150,7 @@ AS $$
   WHERE public.is_design_studio_comember(pr.designer_id)
     AND (pr.project_id IS NULL
          OR public.is_active_studio_member(
-              public.project_tenant_org(pr.project_id)));
+              public.project_recorded_studio(pr.project_id)));
 $$;
 
 REVOKE ALL ON FUNCTION public.access_grants_trade_rfq() FROM PUBLIC, anon;
@@ -135,8 +163,15 @@ COMMENT ON FUNCTION public.access_grants_trade_rfq() IS
    service_role-only), so a security_invoker view naming it raises at plan
    time — and because it is definer, this WHERE clause is the WHOLE access
    rule, with no RLS behind it. TENANT FIRST, then the shipped predicate:
-   is_active_studio_member(project_tenant_org(proposal''s project)) AND
-   is_design_studio_comember(the proposal''s designer). It was
+   is_active_studio_member(project_recorded_studio(proposal''s project)) AND
+   is_design_studio_comember(the proposal''s designer). THE RECORD, NOT THE
+   CALLER: it resolved project_tenant_org(), whose second leg answers with the
+   caller''s OWN design studio where the job records none, so on the
+   studio_id IS NULL population the conjunct was self-satisfying and a plain
+   member of the designer''s SECOND design studio read this studio''s RFQ
+   grants (w1b final review r9 BLOCKING-1, r8 BLOCKING-1''s mechanism). The
+   cost is stated rather than discovered: on a project that records no studio
+   NO studio reads this tier until R-BD''s W3 backfill names one. It was
    is_studio_comember(designer) alone, which is true whenever the caller
    shares ANY active organization with that designer — a manufacturer-org
    co-member who was not a member of the owning studio read the studio''s RFQ
@@ -203,7 +238,7 @@ AS $$
     NULL::text
   FROM public.plan_transmittal_tokens p
   JOIN public.projects pj ON pj.id = p.project_id
-  WHERE public.is_active_studio_member(public.project_tenant_org(pj.id))
+  WHERE public.is_active_studio_member(public.project_recorded_studio(pj.id))
     AND public.is_design_studio_comember(pj.designer_id);
 $$;
 
@@ -219,8 +254,15 @@ COMMENT ON FUNCTION public.access_grants_plan_transmittals() IS
    security_invoker view naming it raises at plan time — and because it is
    definer, this WHERE clause is the WHOLE access rule, with no RLS behind it.
    TENANT FIRST, then that dead policy''s own predicate:
-   is_active_studio_member(project_tenant_org(project_id)) AND
-   is_design_studio_comember(designer_id). It was is_studio_comember(designer)
+   is_active_studio_member(project_recorded_studio(project_id)) AND
+   is_design_studio_comember(designer_id). THE RECORD, NOT THE CALLER: it
+   resolved project_tenant_org(), whose caller-relative second leg made the
+   conjunct self-satisfying on every studio_id IS NULL project, and a plain
+   member of the designer''s SECOND design studio read this studio''s live
+   plan transmittals with granted_by and last_used_at (w1b final review r9
+   BLOCKING-1). The cost, stated: a project that records no studio hands this
+   tier to NO studio until R-BD''s W3 backfill names one.
+   It was is_studio_comember(designer)
    alone, which is true whenever the caller shares ANY active organization
    with that designer — a manufacturer-org co-member who was not a member of
    the owning studio read the studio''s live plan transmittals over
@@ -254,7 +296,7 @@ AS $$
              THEN public.is_active_studio_member(inv.studio_id)
            WHEN inv.project_id IS NOT NULL
              THEN public.is_active_studio_member(
-                    public.project_tenant_org(inv.project_id))
+                    public.project_recorded_studio(inv.project_id))
            ELSE true
          END);
 $$;
@@ -271,10 +313,18 @@ COMMENT ON FUNCTION public.access_grants_invoice_links() IS
    this function is definer, the gate is not a restatement of anything: it is
    stated here for the first time, and it is the WHOLE access rule.
    TENANT FIRST — invoices.studio_id when the invoice names one, else the
-   tenant of its project through project_tenant_org(), and a studio invoice
-   that names neither (00588''s standalone invoice) is gated on the
+   studio its project RECORDS through project_recorded_studio(), and a studio
+   invoice that names neither (00588''s standalone invoice) is gated on the
    design-studio predicate alone — AND is_design_studio_comember(designer_id)
-   beside it. It was is_studio_comember(designer) alone, which is true
+   beside it. THE RECORD, NOT THE CALLER: the project leg resolved
+   project_tenant_org(), whose caller-relative second leg made it
+   self-satisfying wherever projects.studio_id is NULL, and a plain member of
+   the designer''s SECOND design studio read which of this studio''s invoices
+   hold live pay links and when each was last viewed — through the only
+   authenticated door to invoice_links (w1b final review r9 BLOCKING-1). The
+   cost, stated: an invoice whose project records no studio is readable by NO
+   studio through this tier until R-BD''s W3 backfill names one.
+   It was is_studio_comember(designer) alone, which is true
    whenever the caller shares ANY active organization with that designer: a
    manufacturer-org co-member who was not a member of the owning studio read
    which of the studio''s invoices have live pay links and when each was last

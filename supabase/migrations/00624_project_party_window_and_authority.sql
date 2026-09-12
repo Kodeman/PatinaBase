@@ -128,6 +128,17 @@
 -- seat row carries no lockbox version and no threshold. §1c carries the
 -- argument and names what stays open.
 --
+-- AND THE CARD GUARD NOW NAMES studio_contact_id (w1b final review r9
+-- MAJOR-2). It was the one pointer of the 00592 R-AP family with no guard of
+-- any kind, and 00626 made it the v4 identity key, so one ordinary UPDATE
+-- through PostgREST stamping a card of the designer's OTHER studio dropped a
+-- seated human out of her own studio's Directory while the roster and the
+-- site access card still named her seat, and made the other studio's row
+-- claim a seat_count it cannot nest. The leg is kind-agnostic and resolves
+-- the same project_tenant_org() as the other two — the guard's own §, below,
+-- carries the walk and the reason a record-only resolver there would be r7
+-- BLOCKING-1's inversion.
+--
 -- Adds GRANT/REVOKE → regenerate seed/00-legacy-grants.sql after this
 -- migration (python3 scripts/generate-legacy-grants.py).
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -479,6 +490,38 @@ COMMENT ON COLUMN public.project_parties.warranty_contact_person_id IS
 -- resolves to no studio at all. Every project the seed and both suites write a
 -- pointer on records its studio_id, so nothing in the chain relies on the old
 -- guess.
+--
+-- AND studio_contact_id IS THE THIRD POINTER, WHICH v4 MADE THE IDENTITY KEY
+-- (w1b final review r9 MAJOR-2). It was the one pointer of the 00592 R-AP
+-- family with no card guard of any kind: a bare self-FK into studio_contacts,
+-- which holds every studio's cards, named by no trigger and tested by no
+-- policy (project_parties_studio_update tests only the project), so
+-- PATCH /rest/v1/project_parties with any card uuid landed. 00626 rests the
+-- whole v4 identity model on it — the party branch excludes every stamped
+-- seat (00626:1226) on the ground that a stamped seat's identity lives in the
+-- CONTACTS branch, people_directory_seats.person_id COALESCEs to the stamp,
+-- and party_identity_key()'s first precedence leg IS the stamp — so one
+-- UPDATE by the designer who owns two studios (the shipped local shape)
+-- re-stamped Ngozi Eze's Okonkwo seat with a card of the OTHER studio and:
+-- the working studio's admin read her seat nesting under a card it cannot
+-- read (person_id foreign, paper_state degraded to not_on_file), her own
+-- Directory row's identity_seat_count fell to 0 while v_project_roster and
+-- the site access card still named that seat as the key holder, and the other
+-- studio's Directory row claimed seat_count 1 and nested 0 — breaking
+-- 00626:1463-1465's promise that no Directory row ever claims a seat_count it
+-- cannot nest, because identity_seat_count() is INVOKER over project_parties'
+-- is_studio_comember(designer) RLS while people_directory_seats additionally
+-- requires the tenant leg (00626:1566).
+--
+-- The leg is KIND-AGNOSTIC (00418's fold pass D2 stamps a COMPANY card on a
+-- vendor_id-bearing seat, legitimately), and it resolves through the same
+-- project_tenant_org() as the other two rather than project_recorded_studio()
+-- — a record-only tenant HERE is r7 BLOCKING-1's inversion, stated above —
+-- so the existing party_card_project_has_no_studio branch covers the NULL
+-- case. It costs nothing on the shipped data: all five studio-less local
+-- projects carry 0 seats, all 28 stamped seats name a card in their own
+-- project's studio, and 00418's fold only ever stamps where
+-- pj.studio_id IS NOT NULL AND sc.organization_id = pj.studio_id.
 CREATE OR REPLACE FUNCTION public.assert_project_party_cards()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -490,7 +533,9 @@ DECLARE
   v_kind text;
   v_card uuid;
 BEGIN
-  IF NEW.company_id IS NULL AND NEW.warranty_contact_person_id IS NULL THEN
+  IF NEW.company_id IS NULL
+     AND NEW.warranty_contact_person_id IS NULL
+     AND NEW.studio_contact_id IS NULL THEN
     RETURN NEW;
   END IF;
 
@@ -535,6 +580,25 @@ BEGIN
     END IF;
   END IF;
 
+  -- studio_contact_id, the identity key (w1b final review r9 MAJOR-2). No
+  -- entity_kind test: 00418's fold pass D2 (00418:321-332) legitimately stamps
+  -- a COMPANY card on a vendor_id-bearing seat, so the only question the guard
+  -- may ask is whose rolodex the card is in.
+  IF NEW.studio_contact_id IS NOT NULL THEN
+    SELECT sc.entity_kind INTO v_kind
+      FROM public.studio_contacts sc
+     WHERE sc.id = NEW.studio_contact_id AND sc.organization_id = v_org;
+    IF v_kind IS NULL THEN
+      RAISE EXCEPTION 'party_studio_contact_other_studio'
+        USING HINT = 'project_parties.studio_contact_id must name a card in '
+                     'the project''s own studio rolodex — of either kind. It '
+                     'is the identity key people_directory v4 groups a human '
+                     'by, so a card from another studio drops the seated '
+                     'human out of the working studio''s Directory and makes '
+                     'the other studio''s row claim a seat it cannot nest.';
+    END IF;
+  END IF;
+
   RETURN NEW;
 END;
 $$;
@@ -544,12 +608,20 @@ REVOKE ALL ON FUNCTION public.assert_project_party_cards()
 
 COMMENT ON FUNCTION public.assert_project_party_cards() IS
   'BEFORE INSERT/UPDATE on project_parties: company_id must name a COMPANY '
-  'card and warranty_contact_person_id a PERSON card, both in the studio '
+  'card, warranty_contact_person_id a PERSON card and studio_contact_id a '
+  'card of EITHER kind (00418''s fold stamps a company card on a '
+  'vendor-bearing seat), all three in the studio '
   'project_tenant_org() resolves for the project — this wave''s ONE gate '
   'resolver, never project_consent_org() '
   '(party_company_not_a_company / party_company_other_studio / '
   'party_warranty_contact_not_a_person / _other_studio / '
-  'party_card_project_has_no_studio). The self-FKs cannot say this — '
+  'party_studio_contact_other_studio / '
+  'party_card_project_has_no_studio). studio_contact_id was the one pointer '
+  'of the R-AP family with no guard at all, and 00626 made it the v4 identity '
+  'key: one UPDATE stamping a foreign card dropped a seated human out of her '
+  'own studio''s Directory while the roster and the site access card still '
+  'named her seat, and made the other studio''s row claim a seat_count it '
+  'cannot nest (w1b final review r9 MAJOR-2). The self-FKs cannot say this — '
   'studio_contacts holds both kinds of card and every studio''s cards (00624, '
   'the 00592 R-AP shape). It resolved through project_consent_org() until r7 '
   'BLOCKING-1: on a studio_id IS NULL project that guess INVERTED the guard — '
@@ -562,7 +634,8 @@ COMMENT ON FUNCTION public.assert_project_party_cards() IS
 
 DROP TRIGGER IF EXISTS assert_project_party_cards_trg ON public.project_parties;
 CREATE TRIGGER assert_project_party_cards_trg
-  BEFORE INSERT OR UPDATE OF company_id, warranty_contact_person_id, project_id
+  BEFORE INSERT OR UPDATE OF company_id, warranty_contact_person_id,
+                             studio_contact_id, project_id
   ON public.project_parties
   FOR EACH ROW EXECUTE FUNCTION public.assert_project_party_cards();
 
