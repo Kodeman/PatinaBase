@@ -770,10 +770,13 @@ DECLARE
   v_seat_evidence    text;
   v_seat_recorded_at timestamptz;
   v_seat_recorded_by uuid;
-  -- TRUE when the verdict being mirrored is a refusal that carries NO WORDS OF
-  -- ITS OWN. Then the seat's four evidence columns are WRITTEN NULL rather than
-  -- COALESCEd: see the branch below (r8 R8-M1, ruling R-AQ).
-  v_refusal_wordless boolean := false;
+  -- TRUE when the verdict being mirrored is a REFUSAL. Then the seat's four
+  -- evidence columns are written STRAIGHT FROM the record's opt_out_* set, with
+  -- no seat fallback at all — NULLs included: see the branch below (r8 R8-M1
+  -- and r9 R5-M2, rulings R-AQ and its refinement). This used to be a
+  -- one-column test (`NEW.opt_out_source IS NULL`), which decided the four
+  -- columns individually and let three of them fall back to the seat.
+  v_refusal boolean := false;
 BEGIN
   IF NEW.channel_kind <> 'sms' THEN
     RETURN NEW;
@@ -839,12 +842,37 @@ BEGIN
   -- every other transition, including a refusal that DOES carry its own words.
   -- disclosure_version is not in this set — it belongs to the disclosure the
   -- person was shown, not to how they refused, and keeps coming from the record.
+  --
+  -- AND THE REFUSAL'S FOUR COLUMNS ARE DECIDED AS A SET, NOT ONE BY ONE (r9
+  -- R5-M2). The test above used to be ONE COLUMN WIDE — `NEW.opt_out_source IS
+  -- NULL` — and the other three fell back to the seat whenever the source was
+  -- filled. That is the ordinary inbound STOP: opt_out_source is 'inbound_sms',
+  -- so the one-column test said "this refusal has words", while
+  -- opt_out_recorded_by is DELIBERATELY AND ALWAYS NULL on a rail-written STOP
+  -- (the edge pipeline writes it null on purpose: nobody in the studio recorded
+  -- it, the recipient did — R7-M1, and the column comment below). The COALESCE
+  -- then handed the seat pp.sms_consent_recorded_by — THE STUDIO MEMBER WHO
+  -- RECORDED THE GRANT — so every seat that had held a recorded grant came out
+  -- of a STOP naming a named studio member as the person who refused: the exact
+  -- carrier-audit attribution R7-M1 ruled against, one table over, on the
+  -- ordinary path. The two siblings follow from the same one-column test on
+  -- folded legacy data: a refusal with no opt_out_evidence took the seat's
+  -- GRANT WORDS under the refusal's source, one with no opt_out_recorded_at
+  -- took the grant's DATE.
+  --
+  -- So: when the verdict is a refusal, THE RECORD IS THE AUTHORITY FOR THE
+  -- REFUSAL'S OWN EVIDENCE and the four columns are written straight from
+  -- NEW.opt_out_* with no seat fallback at all. Every writer that has refusal
+  -- words fills what it has, and what it leaves NULL is known absent — which is
+  -- R-AQ's rule, now applied to all four columns instead of keyed off one of
+  -- them. R-AN's refresh-never-erase COALESCE governs every other transition,
+  -- unchanged.
   IF NEW.status = 'opted_out' THEN
     v_seat_source      := NEW.opt_out_source;
     v_seat_evidence    := NEW.opt_out_evidence;
     v_seat_recorded_at := NEW.opt_out_recorded_at;
     v_seat_recorded_by := NEW.opt_out_recorded_by;
-    v_refusal_wordless := NEW.opt_out_source IS NULL;
+    v_refusal          := true;
   ELSE
     v_seat_source      := NEW.source;
     v_seat_evidence    := NEW.evidence;
@@ -898,16 +926,18 @@ BEGIN
          sms_opt_out_at                 = COALESCE(NEW.opt_out_at, pp.sms_opt_out_at),
          -- v_seat_* is the record's consent set, or THE REFUSAL'S OWN SET
          -- when the verdict being mirrored is a refusal (r9 R5-M1, above).
-         -- CASE, not COALESCE, on the four: a wordless refusal wipes them
-         -- (R-AQ), every other transition refreshes-never-erases (R-AN).
-         sms_consent_source             = CASE WHEN v_refusal_wordless THEN NULL
+         -- CASE, not COALESCE, on the four: a refusal writes its own set
+         -- STRAIGHT, NULLs included and all four together (R-AQ as refined by
+         -- r9 R5-M2 — never a grant's recorder, words or date under an
+         -- opt-out); every other transition refreshes-never-erases (R-AN).
+         sms_consent_source             = CASE WHEN v_refusal THEN v_seat_source
                                                ELSE COALESCE(v_seat_source, pp.sms_consent_source) END,
-         sms_consent_evidence           = CASE WHEN v_refusal_wordless THEN NULL
+         sms_consent_evidence           = CASE WHEN v_refusal THEN v_seat_evidence
                                                ELSE COALESCE(v_seat_evidence, pp.sms_consent_evidence) END,
-         sms_consent_recorded_at        = CASE WHEN v_refusal_wordless THEN NULL
+         sms_consent_recorded_at        = CASE WHEN v_refusal THEN v_seat_recorded_at
                                                ELSE COALESCE(v_seat_recorded_at, pp.sms_consent_recorded_at) END,
          sms_consent_disclosure_version = COALESCE(NEW.disclosure_version, pp.sms_consent_disclosure_version),
-         sms_consent_recorded_by        = CASE WHEN v_refusal_wordless THEN NULL
+         sms_consent_recorded_by        = CASE WHEN v_refusal THEN v_seat_recorded_by
                                                ELSE COALESCE(v_seat_recorded_by, pp.sms_consent_recorded_by) END
     FROM public.projects p
    WHERE p.id = pp.project_id
@@ -933,14 +963,14 @@ BEGIN
          (NEW.status,
           COALESCE(NEW.consented_at, pp.sms_consented_at),
           COALESCE(NEW.opt_out_at, pp.sms_opt_out_at),
-          CASE WHEN v_refusal_wordless THEN NULL
+          CASE WHEN v_refusal THEN v_seat_source
                ELSE COALESCE(v_seat_source, pp.sms_consent_source) END,
-          CASE WHEN v_refusal_wordless THEN NULL
+          CASE WHEN v_refusal THEN v_seat_evidence
                ELSE COALESCE(v_seat_evidence, pp.sms_consent_evidence) END,
-          CASE WHEN v_refusal_wordless THEN NULL
+          CASE WHEN v_refusal THEN v_seat_recorded_at
                ELSE COALESCE(v_seat_recorded_at, pp.sms_consent_recorded_at) END,
           COALESCE(NEW.disclosure_version, pp.sms_consent_disclosure_version),
-          CASE WHEN v_refusal_wordless THEN NULL
+          CASE WHEN v_refusal THEN v_seat_recorded_by
                ELSE COALESCE(v_seat_recorded_by, pp.sms_consent_recorded_by) END);
 
   PERFORM set_config('patina.suppress_consent_dispatch', '', true);
@@ -1002,13 +1032,18 @@ COMMENT ON FUNCTION public.mirror_channel_consent_to_parties() IS
   '(R-AN). WHEN THE VERDICT IS `opted_out` THE SEAT GETS THE REFUSAL''S OWN '
   'EVIDENCE SET (opt_out_source / opt_out_evidence / opt_out_recorded_at / '
   'opt_out_recorded_by), AND NEVER THE STUDIO''S CONSENT SET IN ITS PLACE — '
-  'and where the refusal has NO WORDS OF ITS OWN the four are WRITTEN NULL on '
-  'every seat, never left standing (r8 R8-M1, R-AQ): a sibling seat in the same '
-  'studio on the same number routinely holds the GRANT''s evidence, so keeping '
-  'it left that seat naming the studio''s own consent document as the refusal, '
-  'dated to the day of the grant. A refusal with no source is a refusal whose '
-  'evidence is known ABSENT, which is not the case R-AN''s never-NULL-over-'
-  'non-null rule was written about; R-AN still governs every other transition. '
+  'written STRAIGHT FROM the record with NO SEAT FALLBACK AT ALL, all four '
+  'together, so whatever the refusal leaves NULL the seat says NULL too (r8 '
+  'R8-M1 / R-AQ, widened from one column to the set by r9 R5-M2): a sibling '
+  'seat in the same studio on the same number routinely holds the GRANT''s '
+  'evidence, so keeping it left that seat naming the studio''s own consent '
+  'document as the refusal, dated to the day of the grant — and on the ordinary '
+  'inbound STOP, whose opt_out_recorded_by is deliberately NULL, it left the '
+  'seat naming the studio member who recorded the GRANT as the person who '
+  'refused (R7-M1''s attribution, one table over). A refusal that does not fill '
+  'one of its four columns is a refusal whose evidence is known ABSENT, which '
+  'is not the case R-AN''s never-NULL-over-non-null rule was written about; '
+  'R-AN still governs every other transition. '
   'project_parties has ONE '
   'evidence set, and mirroring the studio''s consent evidence under an '
   'opted_out status made the seat say the refusal arrived the way the studio''s '

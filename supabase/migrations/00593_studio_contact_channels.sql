@@ -485,8 +485,8 @@ ON CONFLICT (owner_id, channel_kind, value) DO NOTHING;
 --     a do-not-contact person.
 --
 -- The cheapest correct answer, and the one ruled: REFUSE the change while any
--- channel, designation, rule route or affiliation still points at the card, and
--- name in the hint what holds it. The studio's way out is the same one the room
+-- channel, designation, rule route, rule SUBJECT or affiliation still points at
+-- the card, and name in the hint what holds it. The studio's way out is the same one the room
 -- already offers — detach the dependents (or merge the card, PR-o) and then
 -- change it — and the refusal is legible rather than a constraint violation
 -- three tables away.
@@ -537,6 +537,30 @@ BEGIN
     v_holders := v_holders || (v_n || ' contact rule(s) routing to it');
   END IF;
 
+  -- THE FIFTH HOLDER: the card a rule is ABOUT, not only the card it routes TO
+  -- (r9 R5-M1). studio_contact_rules.subject_id (00592:721) is polymorphic and
+  -- deliberately unFK'd, and assert_studio_contact_rule_route() polices it from
+  -- the RULE side only (rule_subject_kind_mismatch, 00592:929-937 — added for
+  -- r8 F1 because "a rule filed under the other noun is invisible to every
+  -- reader that asks correctly, and a FORBIDDING rule nobody finds fails
+  -- OPEN"). Omitting it here left the card side of that same hole open: one
+  -- member-reachable `UPDATE studio_contacts SET entity_kind` — a column the
+  -- shipped hook writes on every edit — flipped a rule's subject to the other
+  -- noun and the forbidding rule went unfindable; and the organization_id leg
+  -- did the same for rule_route_other_studio, leaving the rule ruling about a
+  -- card in another tenant. Worse, the stranded row could never be repaired:
+  -- any later write to it raises the very error the rule-side guard exists to
+  -- raise, so W1b's rule editor could not undo what the card editor did.
+  -- 'engagement' subjects name a project_parties row, not a card, so they are
+  -- not this card's holders.
+  SELECT count(*) INTO v_n
+    FROM public.studio_contact_rules r
+   WHERE r.subject_type IN ('person', 'company')
+     AND r.subject_id = OLD.id;
+  IF v_n > 0 THEN
+    v_holders := v_holders || (v_n || ' contact rule(s) filed against this card');
+  END IF;
+
   SELECT count(*) INTO v_n
     FROM public.studio_person_affiliations a
    WHERE a.person_id = OLD.id OR a.company_id = OLD.id;
@@ -547,12 +571,13 @@ BEGIN
   IF array_length(v_holders, 1) IS NOT NULL THEN
     RAISE EXCEPTION 'studio_contact_identity_held'
       USING HINT = 'This card cannot change its entity_kind or its studio '
-                   'while something still points at it: '
+                   'while something still points at it or is filed about it: '
                    || array_to_string(v_holders, ', ')
                    || '. Detach or move those first — a company card carrying '
-                      'a person''s channels, a designation naming a firm, or a '
-                      'route into another studio are states the three guards '
-                      'on those rows exist to refuse.';
+                      'a person''s channels, a designation naming a firm, a '
+                      'route into another studio, or a contact rule filed under '
+                      'the other noun are states the three guards on those rows '
+                      'exist to refuse.';
   END IF;
 
   RETURN NEW;
@@ -565,15 +590,19 @@ REVOKE ALL ON FUNCTION public.assert_studio_contact_identity_stable()
 COMMENT ON FUNCTION public.assert_studio_contact_identity_stable() IS
   'BEFORE UPDATE OF entity_kind, organization_id on studio_contacts: refuses '
   'the change (studio_contact_identity_held) while any reach channel, '
-  'designation, contact-rule route or affiliation still points at the card, '
-  'with a HINT naming what holds it. The three guards this wave adds — '
+  'designation, contact-rule route, contact-rule SUBJECT or affiliation still '
+  'points at the card, with a HINT naming what holds it. The three guards this wave adds — '
   'assert_channel_owner_kind, assert_studio_contact_designations, '
   'assert_studio_contact_rule_route — all fire on the REFERENCING row, so one '
   'ordinary UPDATE of the REFERENCED card undid all three at once: a company '
   'card carrying owner_type = person channels, a paperwork designation naming a '
-  'firm in another studio, a rule routing across tenants. A restatement of the '
-  'same values passes through; only an actual change is refused '
-  '(00593, r8 R8-M2, R-AR).';
+  'firm in another studio, a rule routing across tenants. subject_id is counted '
+  'alongside route_to_person_id (r9 R5-M1): flipping a rule SUBJECT''s '
+  'entity_kind filed a forbidding rule under the other noun — unfindable to a '
+  'reader that asks by the card''s own kind, and unrepairable, since '
+  'rule_subject_kind_mismatch then refuses every later write to that row. A '
+  'restatement of the same values passes through; only an actual change is '
+  'refused (00593, r8 R8-M2, R-AR).';
 
 DROP TRIGGER IF EXISTS assert_studio_contact_identity_stable_trg
   ON public.studio_contacts;

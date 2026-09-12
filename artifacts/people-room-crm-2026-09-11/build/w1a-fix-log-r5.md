@@ -513,3 +513,209 @@ artifacts/.../build/w1a-report.md                               §1, §2 (decisi
 artifacts/.../build/probe10-r9-fold-dry-run.sql                 new — the runnable pre-push dry run
 artifacts/.../build/w1a-fix-log-r5.md                           this section
 ```
+
+---
+
+# W1a — fix log, r5 review round 9 (R5-M1, R5-M2)
+
+Same worktree and branch. Local Supabase only — no `supabase db push`, no
+`supabase functions deploy`, no Strata contact. `ls apps/*/.env.local` →
+`no matches found` (re-checked before the reset).
+
+Scope: exactly the two majors in
+`artifacts/people-room-crm-2026-09-11/build/w1a-review-r5-migrations.md`
+(**R5-M1**, **R5-M2**). Nothing else touched — the minors (R5-m9, R5-m11 and
+the rest) are left standing.
+
+---
+
+## R5-M1 — the identity guard did not count `studio_contact_rules.subject_id`
+
+`supabase/migrations/00593_studio_contact_channels.sql`
+
+### What changed
+
+`assert_studio_contact_identity_stable()` counted four holders (channels,
+designations, rule ROUTES, affiliations) and omitted the fifth pointer this
+wave mints at `studio_contacts`: `studio_contact_rules.subject_id`
+(`00592:721`). A fifth count was added, in the shape of the four already there:
+
+```sql
+  SELECT count(*) INTO v_n
+    FROM public.studio_contact_rules r
+   WHERE r.subject_type IN ('person', 'company')
+     AND r.subject_id = OLD.id;
+  IF v_n > 0 THEN
+    v_holders := v_holders || (v_n || ' contact rule(s) filed against this card');
+  END IF;
+```
+
+`'engagement'` subjects name a `project_parties` row, not a card, so they are
+not this card's holders and are excluded by the `subject_type` test.
+
+The HINT, the narrative header at `:488`, and the function COMMENT were widened
+to name the fifth holder. No GRANT/REVOKE change, so
+`scripts/generate-legacy-grants.py` was not re-run.
+
+### Why
+
+`assert_studio_contact_rule_route()` polices `subject_id` from the RULE side
+only (`rule_subject_kind_mismatch`, `00592:929-937` — added for r8 F1). With the
+card side open, one member-reachable `UPDATE studio_contacts SET entity_kind` —
+a column the shipped hook writes on every card edit
+(`use-studio-contacts.ts:232`) under `studio_contacts_member_update` — filed a
+FORBIDDING rule under the other noun, which is r8 F1's fail-open exactly, and
+left it unrepairable: `rule_subject_kind_mismatch` refuses every later write to
+the stranded row, so W1b's rule editor could not undo what the card editor did.
+The `organization_id` leg was the mirror image: it left the rule ruling about a
+card in another tenant, the state `rule_route_other_studio` exists to refuse.
+
+### Evidence — the guard now holds, and the test catches its absence
+
+Test block 29 extended with **29g** (kind flip on a rule SUBJECT card refused),
+**29g2** (the rule still agrees with its subject's noun), **29h** (studio move
+refused) and **29h2** (detach the rule and the card is free again). A third
+fixture card `c0000000-…-000000000073` carries nothing but the rule, so the
+rule is provably the only thing holding it.
+
+Negative control — the pre-fix body from `HEAD` installed over the live DB,
+test file rerun unchanged:
+
+```
+$ psql … -f $TMPDIR/negctl/old_guard.sql        # HEAD's four-holder body
+CREATE FUNCTION
+$ psql … -f supabase/tests/people/w1a_identity_channels_consent_test.sql
+ERROR:  FAIL 29g: a card a contact rule is filed against may not change its
+        kind, got <no error>
+```
+
+Green after a clean replay from the migrations:
+
+```
+$ pnpm --dir <worktree> supabase:reset && psql … -f …w1a_identity_channels_consent_test.sql
+NOTICE:  29. a held card cannot change what it is or whose it is — including
+         the card a contact rule is filed against (r8 R8-M2, R-AR; r9 R5-M1): passed
+```
+
+---
+
+## R5-M2 — a mirrored refusal lent the seat the GRANT's recorder
+
+`supabase/migrations/00594_studio_channel_consent.sql`
+
+### What changed
+
+The wordless test in `mirror_channel_consent_to_parties()` was one column wide
+(`v_refusal_wordless := NEW.opt_out_source IS NULL`), which decided the
+refusal's four evidence columns individually and let three of them fall back to
+the seat. The refusal's four columns are now decided **as a set**, written
+straight from `NEW.opt_out_*` with no seat fallback at all:
+
+```sql
+  v_refusal boolean := false;          -- was v_refusal_wordless
+  …
+    v_refusal          := true;        -- was := NEW.opt_out_source IS NULL
+  …
+    sms_consent_source      = CASE WHEN v_refusal THEN v_seat_source
+                                   ELSE COALESCE(v_seat_source, pp.sms_consent_source) END,
+    sms_consent_evidence    = CASE WHEN v_refusal THEN v_seat_evidence
+                                   ELSE COALESCE(v_seat_evidence, pp.sms_consent_evidence) END,
+    sms_consent_recorded_at = CASE WHEN v_refusal THEN v_seat_recorded_at
+                                   ELSE COALESCE(v_seat_recorded_at, pp.sms_consent_recorded_at) END,
+    sms_consent_recorded_by = CASE WHEN v_refusal THEN v_seat_recorded_by
+                                   ELSE COALESCE(v_seat_recorded_by, pp.sms_consent_recorded_by) END
+```
+
+Mirrored verbatim into the tuple guard at the foot of the same `UPDATE`, so a
+refusal that would leave a column NULL is not read as "identical, skip". R-AQ's
+wipe is preserved — a refusal with a NULL column still writes NULL — it is now
+keyed off the whole set instead of off `opt_out_source` alone. R-AN's
+refresh-never-erase COALESCE governs every other transition, unchanged.
+`sms_consent_disclosure_version` is not in the set and still comes from the
+record's own column (no refusal-side twin). Narrative comment, the inline
+comment on the `SET` list, and the function COMMENT amended to say so.
+
+### Why
+
+`opt_out_recorded_by` is deliberately and always NULL on a rail-written STOP
+(`pipeline.ts:403-405`; 00594's own column comment and R7-M1 name that NULL as
+the point). But an inbound STOP carries `opt_out_source = 'inbound_sms'`, so the
+one-column test called the refusal "worded" and the COALESCE handed the seat
+`pp.sms_consent_recorded_by` — the studio member who recorded **the grant** —
+now named on the seat as the person who refused. The seat is the only copy any
+shipped surface reads (W1a ships no hook for `studio_channel_consent`). Two
+siblings followed from the same test: a refusal with a source but no
+`opt_out_evidence` took the seat's grant WORDS under the refusal's source, and
+one with no `opt_out_recorded_at` took the grant's DATE.
+
+### Evidence — F-12 Pete Rusk's exact shape
+
+Test block 27 extended with two fixture seats and **27j–27j7**:
+`e0000000-…-0000000000ab` "Pete Rusk" / `612-555-0437` holds a written grant
+recorded by `a0000000-…-000000000002` (fixture.md:96 — "granted 2025-05-02,
+then STOP 2025-12-03"), and `e0000000-…-0000000000ac` "Ruth Calder" /
+`612-555-0438` holds a written grant for the sibling-hole probe. Both refusals
+are written as the rail writes them — an upsert on
+`(organization_id, channel_kind, channel_value)`, since 27i's fold has already
+minted each number's record from the seat, which is F-12's shape exactly.
+
+* **27j** — the seat starts out holding the GRANT's recorder.
+* **27j2** — the record says `opt_out_recorded_by IS NULL`.
+* **27j3** — the seat carries the refusal's own words and date
+  (`inbound_sms` / `Replied STOP` / 2025-12-03).
+* **27j4** — the seat's `sms_consent_recorded_by` comes out **NULL**.
+* **27j5** — the grant's own date survives (not evidence, not in the set).
+* **27j6/27j7** — a refusal with a source but no words, no date and no recorder
+  leaves all three NULL on a seat that held the grant's.
+
+Negative control — the pre-fix body from `HEAD` installed over the live DB,
+test file rerun unchanged:
+
+```
+$ psql … -f $TMPDIR/negctl/old_mirror.sql      # HEAD's one-column wordless test
+CREATE FUNCTION
+$ psql … -f supabase/tests/people/w1a_identity_channels_consent_test.sql
+ERROR:  FAIL 27j4: a refusal the recipient made must never name a studio member
+        as the one who refused — the seat may not borrow the GRANT's recorder,
+        got a0000000-0000-4000-8000-000000000002
+```
+
+That is the finding reproduced verbatim: the grant's recorder on the seat as the
+refuser. Green after a clean replay from the migrations:
+
+```
+NOTICE:  27. reconsent is evidence-only and re-callable (r7 M7-2), leaves the
+         refusal's own evidence standing (r8 W4-M2), the seat carries the
+         refusal's own words too (r9 R5-M1), a sourceless refusal is never given
+         the studio's consent as its words (r6 R6-M1) — nor left standing on the
+         sibling seat (r8 R8-M1) — and a mirrored refusal never lends the seat
+         the GRANT's recorder, words or date (r9 R5-M2): passed
+```
+
+---
+
+## Gates run
+
+```
+$ ls apps/*/.env.local                                          → no matches found
+$ pnpm --dir <worktree> supabase:reset                          → Finished supabase db reset (x3)
+$ psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 \
+    -f supabase/tests/people/w1a_identity_channels_consent_test.sql
+  → NOTICE:  All W1a assertions passed.   (31 blocks, 0 ERROR, ends ROLLBACK)
+$ SUPABASE_DB_URL=… pnpm --dir <worktree> db:generate
+$ git diff --stat packages/supabase/src/database.types.ts        → empty
+```
+
+`database.types.ts` is unchanged, and that is the expected result: both fixes
+are function bodies and comments only — no column, table, enum or RPC signature
+moved. No GRANT or REVOKE was added or changed, so
+`scripts/generate-legacy-grants.py` was not re-run.
+
+## Files touched
+
+```
+supabase/migrations/00593_studio_contact_channels.sql         assert_studio_contact_identity_stable() + HINT + narrative + COMMENT
+supabase/migrations/00594_studio_channel_consent.sql          mirror_channel_consent_to_parties() + narrative + COMMENT
+supabase/tests/people/w1a_identity_channels_consent_test.sql  block 27 (+27j…27j7, 2 fixture seats), block 29 (+29g/29g2/29h/29h2, 1 fixture card)
+artifacts/.../build/w1a-fix-log-r5.md                         this section
+```
