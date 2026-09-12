@@ -3014,6 +3014,167 @@ BEGIN
                'seat carries the refusal''s own words too (r9 R5-M1), and a '
                'sourceless refusal is never given the studio''s consent as its '
                'words (r6 R6-M1): passed';
+END
+$$;
+
+-- ─── 28. r7 R7-M1: a studio-recorded refusal never speaks for a texted one ──
+--
+-- r6's B6-1 made "record that refusal here first" the ONLY way past a seat
+-- refusal, and both channel_opted_out hints now instruct the studio to do it.
+-- A studio that obeys, over a number that really replied STOP, used to
+-- overwrite the refusal's whole evidence set with hearsay and today's date, on
+-- the record and -- through the mirror -- on every seat in the studio: R-Q's
+-- sentence went from "Opted out by text, 3 Dec 2025" to "Opted out verbally,
+-- <today>", the 10DLC artifact of how the STOP arrived was gone with no audit
+-- row, and opt_out_recorded_by named a studio member for a refusal the
+-- recipient made -- the attribution the inbound rail writes NULL to avoid.
+-- Sending stayed blocked throughout (nothing here lowers refusal_unanswered);
+-- what was destroyed is the record's ability to say what the refusal WAS.
+
+INSERT INTO project_parties (id, project_id, party_kind, display_name, phone,
+                             sms_consent_status)
+VALUES
+  ('e0000000-0000-4000-8000-0000000000b1', 'd0000000-0000-4000-8000-0000000000a4',
+   'sub', 'Ari Benet', '612-555-0435', 'not_asked'),
+  ('e0000000-0000-4000-8000-0000000000b2', 'd0000000-0000-4000-8000-0000000000a4',
+   'sub', 'Nora Vance', '612-555-0436', 'not_asked');
+
+DO $$
+DECLARE
+  r    RECORD;
+  seat RECORD;
+BEGIN
+  -- 28a. The inbound STOP rail's own write: service_role, straight into the
+  --      table (sms-inbound/pipeline.ts writeChannelConsent), dated, with the
+  --      carrier's words and NO recorder -- nobody in the studio wrote it down.
+  INSERT INTO studio_channel_consent (
+    organization_id, channel_kind, channel_value, status,
+    opt_out_at, refusal_unanswered,
+    opt_out_source, opt_out_evidence, opt_out_recorded_at, opt_out_recorded_by)
+  VALUES (
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '+16125550435', 'opted_out',
+    '2025-12-03T00:00:00Z', true,
+    'inbound_sms', 'Inbound STOP', '2025-12-03T00:00:00Z', NULL);
+
+  SELECT * INTO seat FROM project_parties
+   WHERE id = 'e0000000-0000-4000-8000-0000000000b1';
+  ASSERT seat.sms_consent_status = 'opted_out'
+     AND seat.sms_opt_out_at = '2025-12-03T00:00:00Z'
+     AND seat.sms_consent_source = 'inbound_sms'
+     AND seat.sms_consent_evidence = 'Inbound STOP',
+    'FAIL 28a: the rail''s refusal must reach the seat first, got '
+      || COALESCE(seat.sms_consent_status, '<null>') || ' / '
+      || COALESCE(seat.sms_opt_out_at::text, '<null>') || ' / '
+      || COALESCE(seat.sms_consent_source, '<null>');
+
+  -- 28b. One ordinary call, by an ordinary member, through the door the hint
+  --      names. It is ACCEPTED -- recording a refusal is always the way
+  --      forward -- and it changes nothing about what the refusal was.
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+  PERFORM public.record_channel_consent(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '612-555-0435', 'opted_out',
+    'verbal', 'He told me on site', NULL, NULL);
+  PERFORM pg_temp.reset_role();
+
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550435';
+  ASSERT r.opt_out_at = '2025-12-03T00:00:00Z',
+    'FAIL 28b: the refusal keeps the date it arrived, got '
+      || COALESCE(r.opt_out_at::text, '<null>');
+  ASSERT r.opt_out_source = 'inbound_sms' AND r.opt_out_evidence = 'Inbound STOP',
+    'FAIL 28b2: a studio-sourced refusal must not speak for a texted one, got '
+      || COALESCE(r.opt_out_source, '<null>') || ' / '
+      || COALESCE(r.opt_out_evidence, '<null>');
+  ASSERT r.opt_out_recorded_at = '2025-12-03T00:00:00Z'
+     AND r.opt_out_recorded_by IS NULL,
+    'FAIL 28b3: nor may it claim to have written the refusal down, got '
+      || COALESCE(r.opt_out_recorded_at::text, '<null>') || ' / '
+      || COALESCE(r.opt_out_recorded_by::text, '<null>');
+  -- The studio's own account is not lost: it lands on the CONSENT side, with
+  -- recorded_at saying when the studio told us and recorded_by naming who.
+  ASSERT r.source = 'verbal' AND r.evidence = 'He told me on site'
+     AND r.recorded_by = 'a0000000-0000-4000-8000-000000000001',
+    'FAIL 28b4: the studio''s own account belongs on the consent side, got '
+      || COALESCE(r.source, '<null>') || ' / ' || COALESCE(r.evidence, '<null>');
+  ASSERT r.status = 'opted_out' AND r.refusal_unanswered,
+    'FAIL 28b5: the refusal still stands unanswered, got '
+      || COALESCE(r.status, '<null>');
+
+  -- 28c. AND ON THE SEAT. The mirror carries the refusal's own set, so a seat
+  --      that has been saying "opted out by text, 3 Dec 2025" keeps saying it.
+  SELECT * INTO seat FROM project_parties
+   WHERE id = 'e0000000-0000-4000-8000-0000000000b1';
+  ASSERT seat.sms_opt_out_at = '2025-12-03T00:00:00Z'
+     AND seat.sms_consent_source = 'inbound_sms'
+     AND seat.sms_consent_evidence = 'Inbound STOP'
+     AND seat.sms_consent_recorded_by IS NULL,
+    'FAIL 28c: the seat must keep the texted refusal too, got '
+      || COALESCE(seat.sms_opt_out_at::text, '<null>') || ' / '
+      || COALESCE(seat.sms_consent_source, '<null>') || ' / '
+      || COALESCE(seat.sms_consent_evidence, '<null>') || ' / '
+      || COALESCE(seat.sms_consent_recorded_by::text, '<null>');
+
+  -- 28d. THE CARRIER MAY STILL SPEAK AGAIN. A second inbound_sms refusal
+  --      restates the words -- that is the rail, not hearsay -- while the date
+  --      the refusal has stood since stays the earliest one.
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+  PERFORM public.record_channel_consent(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '612-555-0435', 'opted_out',
+    'inbound_sms', 'Replied STOP again', NULL, NULL);
+  PERFORM pg_temp.reset_role();
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550435';
+  ASSERT r.opt_out_source = 'inbound_sms'
+     AND r.opt_out_evidence = 'Replied STOP again'
+     AND r.opt_out_at = '2025-12-03T00:00:00Z',
+    'FAIL 28d: a second texted refusal restates the words and keeps the date, got '
+      || COALESCE(r.opt_out_evidence, '<null>') || ' / '
+      || COALESCE(r.opt_out_at::text, '<null>');
+
+  -- 28e. The guard is about WHO SAID IT, not about freezing the column. A
+  --      studio refusal recorded over a studio refusal still restates itself;
+  --      only the date the refusal has stood since is kept.
+  INSERT INTO studio_channel_consent (
+    organization_id, channel_kind, channel_value, status,
+    opt_out_at, refusal_unanswered,
+    opt_out_source, opt_out_evidence, opt_out_recorded_at, opt_out_recorded_by)
+  VALUES (
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '+16125550436', 'opted_out',
+    '2026-01-05T00:00:00Z', true,
+    'verbal', 'Told us at the walkthrough', '2026-01-05T00:00:00Z',
+    'a0000000-0000-4000-8000-000000000001');
+
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+  PERFORM public.record_channel_consent(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '612-555-0436', 'opted_out',
+    'written', 'Signed an opt-out form', NULL, NULL);
+  PERFORM pg_temp.reset_role();
+
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550436';
+  ASSERT r.opt_out_source = 'written' AND r.opt_out_evidence = 'Signed an opt-out form',
+    'FAIL 28e: a studio refusal may restate a studio refusal, got '
+      || COALESCE(r.opt_out_source, '<null>') || ' / '
+      || COALESCE(r.opt_out_evidence, '<null>');
+  ASSERT r.opt_out_at = '2026-01-05T00:00:00Z',
+    'FAIL 28e2: and the date the refusal has stood since is still the earliest, got '
+      || COALESCE(r.opt_out_at::text, '<null>');
+  ASSERT r.opt_out_recorded_at > r.opt_out_at,
+    'FAIL 28e3: the refusal cannot be written down before it happened, got '
+      || COALESCE(r.opt_out_recorded_at::text, '<null>');
+  SELECT * INTO seat FROM project_parties
+   WHERE id = 'e0000000-0000-4000-8000-0000000000b2';
+  ASSERT seat.sms_consent_source = 'written'
+     AND seat.sms_opt_out_at = '2026-01-05T00:00:00Z',
+    'FAIL 28e4: the seat follows the record, got '
+      || COALESCE(seat.sms_consent_source, '<null>') || ' / '
+      || COALESCE(seat.sms_opt_out_at::text, '<null>');
+
+  RAISE NOTICE '28. a studio-recorded refusal never speaks for a texted one, '
+               'and the refusal keeps the date it arrived (r7 R7-M1): passed';
   RAISE NOTICE 'All W1a assertions passed.';
 END
 $$;
