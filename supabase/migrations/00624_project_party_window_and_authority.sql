@@ -139,6 +139,25 @@
 -- carries the walk and the reason a record-only resolver there would be r7
 -- BLOCKING-1's inversion.
 --
+-- AND THAT LEG NOW ASKS THE RECORD (w1b final review r11 MAJOR-3). The r9
+-- guard resolved the caller-relative project_tenant_org(), which on a
+-- studio_id IS NULL project checks the card against the WRITER's own studio:
+-- walked, a plain member of the designer of record's SECOND design studio —
+-- never a member of the studio doing the work — filed a card in their own
+-- rolodex and landed it as studio_contact_id on the working studio's job,
+-- which then read the seat nesting under a person_id it can open no Directory
+-- row for. The file's claim that the leg "costs nothing on the shipped data"
+-- was true of the data and false of the door. So studio_contact_id — the
+-- identity key, and only it — must name a card in
+-- project_recorded_studio(project_id), and is refused
+-- party_card_project_has_no_studio while the project records no studio at
+-- all, until R-BD's W3 backfill names one. company_id and
+-- warranty_contact_person_id keep the caller-relative posture, because
+-- neither decides which studio's Directory a human appears in and narrowing
+-- them IS r7 BLOCKING-1's inversion. The guard's own § carries the walk, and
+-- the preflight SELECT that sizes the existing stamps on Strata sits beside
+-- the trigger.
+--
 -- Adds GRANT/REVOKE → regenerate seed/00-legacy-grants.sql after this
 -- migration (python3 scripts/generate-legacy-grants.py).
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -517,8 +536,40 @@ COMMENT ON COLUMN public.project_parties.warranty_contact_person_id IS
 -- vendor_id-bearing seat, legitimately), and it resolves through the same
 -- project_tenant_org() as the other two rather than project_recorded_studio()
 -- — a record-only tenant HERE is r7 BLOCKING-1's inversion, stated above —
--- so the existing party_card_project_has_no_studio branch covers the NULL
--- case. It costs nothing on the shipped data: all five studio-less local
+-- so the existing party_card_project_has_no_studio branch covers the case
+-- where the CALLER resolves no studio either.
+--
+-- THAT WAS TRUE OF THE DATA AND FALSE OF THE DOOR (w1b final review r11
+-- MAJOR-3). project_tenant_org() is CALLER-RELATIVE on exactly the
+-- studio_id IS NULL population, so the guard checked the card against the
+-- WRITER's own studio rather than the working studio's, and a plain member of
+-- the designer of record's SECOND design studio — never a member of the
+-- studio doing the work — filed a card in their own rolodex and landed it as
+-- studio_contact_id on the working studio's job. Walked: the stamped seat
+-- landed, the working studio's admin then read the seat (1 row) nesting under
+-- a person_id they can open 0 Directory rows for, and read 0 rows of the card
+-- itself. That is r9 MAJOR-2's consequence verbatim, through the door the r9
+-- guard left open, on 5 of 8 local projects and an unknown count on Strata
+-- (R-BD's W7 preflight owes it; the SELECT at the end of §2 sizes the stamps).
+--
+-- So the IDENTITY-KEY leg, and only that leg, additionally asks the RECORD:
+--   · where projects.studio_id names a studio, the card must be in THAT
+--     studio. (project_tenant_org() COALESCEs studio_id first, so on this
+--     population the conjunct restates what v_org already says — it is
+--     written anyway, because the identity key may not depend on which of the
+--     two resolvers a later editor reaches for.)
+--   · where it names none, a studio_contact_id stamp is REFUSED outright
+--     (party_card_project_has_no_studio) until R-BD's W3 backfill writes
+--     projects.studio_id. There is no third answer available: a card's studio
+--     can only be checked against a studio, and the only studio this
+--     population offers is the writer's own — which is the defect.
+-- This does NOT invert r7 BLOCKING-1, which was about the working studio's
+-- OWN cards being REFUSED on its own studio-less job; this is the other
+-- direction — a foreign card being ACCEPTED. company_id and
+-- warranty_contact_person_id keep r7's caller-relative posture deliberately:
+-- neither is the v4 identity key, so neither decides which studio's Directory
+-- a seated human appears in, and narrowing them is r7's inversion exactly.
+-- It costs nothing on the shipped local data: all five studio-less local
 -- projects carry 0 seats, all 28 stamped seats name a card in their own
 -- project's studio, and 00418's fold only ever stamps where
 -- pj.studio_id IS NOT NULL AND sc.organization_id = pj.studio_id.
@@ -529,9 +580,10 @@ SECURITY DEFINER
 SET search_path TO 'public'
 AS $$
 DECLARE
-  v_org  uuid;
-  v_kind text;
-  v_card uuid;
+  v_org      uuid;
+  v_recorded uuid;
+  v_kind     text;
+  v_card     uuid;
 BEGIN
   IF NEW.company_id IS NULL
      AND NEW.warranty_contact_person_id IS NULL
@@ -539,7 +591,8 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  v_org := public.project_tenant_org(NEW.project_id);
+  v_org      := public.project_tenant_org(NEW.project_id);
+  v_recorded := public.project_recorded_studio(NEW.project_id);
   IF v_org IS NULL THEN
     RAISE EXCEPTION 'party_card_project_has_no_studio'
       USING HINT = 'This project resolves to no studio, so a rolodex card on '
@@ -585,9 +638,28 @@ BEGIN
   -- a COMPANY card on a vendor_id-bearing seat, so the only question the guard
   -- may ask is whose rolodex the card is in.
   IF NEW.studio_contact_id IS NOT NULL THEN
+    -- THE RECORD, NOT THE WRITER (w1b final review r11 MAJOR-3). v_org is
+    -- caller-relative where the project records no studio, so checking the
+    -- card against it checks the card against the WRITER's own studio: a
+    -- member of the designer's SECOND design studio stamped their own
+    -- rolodex card on the working studio's seat and this guard accepted it.
+    -- The identity key decides which studio's Directory a seated human
+    -- appears in, so it is checked against the studio the project RECORDS,
+    -- and refused outright while the project records none.
+    IF v_recorded IS NULL THEN
+      RAISE EXCEPTION 'party_card_project_has_no_studio'
+        USING HINT = 'This project records no studio, and '
+                     'project_parties.studio_contact_id is the identity key '
+                     'people_directory groups a human by — checked against '
+                     'the writer''s own studio it would let a member of '
+                     'another studio decide which Directory this human '
+                     'appears in. Give the project a studio first.';
+    END IF;
     SELECT sc.entity_kind INTO v_kind
       FROM public.studio_contacts sc
-     WHERE sc.id = NEW.studio_contact_id AND sc.organization_id = v_org;
+     WHERE sc.id = NEW.studio_contact_id
+       AND sc.organization_id = v_org
+       AND sc.organization_id = v_recorded;
     IF v_kind IS NULL THEN
       RAISE EXCEPTION 'party_studio_contact_other_studio'
         USING HINT = 'project_parties.studio_contact_id must name a card in '
@@ -630,8 +702,35 @@ COMMENT ON FUNCTION public.assert_project_party_cards() IS
   'LANDED on their seat and printed paper_state not_on_file on their own seat '
   'line. project_tenant_org() is caller-relative on that population, so a '
   'writer with no auth.uid() (service_role, seed, backfill) resolves NULL and '
-  'takes the party_card_project_has_no_studio refusal rather than a guess.';
+  'takes the party_card_project_has_no_studio refusal rather than a guess. '
+  'THE studio_contact_id LEG ALSO ASKS THE RECORD (w1b final review r11 '
+  'MAJOR-3): the card must be in project_recorded_studio(project_id), and a '
+  'stamp is refused party_card_project_has_no_studio while the project '
+  'records no studio at all — because the caller-relative resolver checked '
+  'the card against the WRITER''s studio there, and a plain member of the '
+  'designer''s SECOND design studio landed a card of their own rolodex on the '
+  'working studio''s seat, leaving that studio reading a seat whose person_id '
+  'it can open no Directory row for. company_id and '
+  'warranty_contact_person_id deliberately keep the caller-relative posture: '
+  'neither is the v4 identity key, and narrowing them is r7 BLOCKING-1''s '
+  'inversion.';
 
+-- THE PREFLIGHT THIS GUARD DOES NOT RUN (w1b final review r11 MAJOR-3, m11).
+-- The trigger covers writes from here on; nothing counts or repairs the
+-- stamps already on the table, and R-BD's W7 preflight looks only for
+-- projects.studio_id IS NULL. Run this on Strata before the chain, beside
+-- R-BD's count — it is the only way to size the door this guard closes:
+--
+--   SELECT count(*) FROM project_parties pp
+--     JOIN projects pj       ON pj.id = pp.project_id
+--     JOIN studio_contacts sc ON sc.id = pp.studio_contact_id
+--    WHERE pp.studio_contact_id IS NOT NULL
+--      AND (pj.studio_id IS NULL OR sc.organization_id <> pj.studio_id);
+--
+-- Locally it is 0: all five studio-less projects carry 0 seats and all 28
+-- stamped seats name a card in their own project's studio. It is NOT run
+-- here, because a migration that repaired those rows would be choosing a
+-- studio for a seated human on evidence the record does not carry.
 DROP TRIGGER IF EXISTS assert_project_party_cards_trg ON public.project_parties;
 CREATE TRIGGER assert_project_party_cards_trg
   BEFORE INSERT OR UPDATE OF company_id, warranty_contact_person_id,

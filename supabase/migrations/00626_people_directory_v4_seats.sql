@@ -210,6 +210,44 @@
 --     columns of one wave disagreeing, and W2's head count and seat lines are
 --     what print it. The counter now carries the seats view's WHERE clause
 --     verbatim (§2).
+--   · r11 MAJOR-1 — that same tenant leg ERASED a designer who belongs to NO
+--     design studio. project_tenant_org()'s second leg needs an active
+--     non-guest design-studio membership shared with the job's own designer;
+--     a designer with no organization at all has none, so the resolver
+--     answers NULL, is_active_studio_member(NULL) is false (00417), and every
+--     party row of their OWN job left people_directory and
+--     people_directory_seats while project_parties (RLS) and v_project_roster
+--     still carried the seat. 00594's party branch carried no tenant leg at
+--     all, so this was a REGRESSION on shipped behaviour, and the repo's own
+--     tests/rls/people_directory_scope_test.sql case (h3) already asserts
+--     that population is unchanged — the file never reached it, aborting
+--     three cases earlier at (a2) on a column COUNT this wave invalidated by
+--     appending five columns. The leg is widened, in all THREE places that
+--     state it (§2's counter, §3's party branch, §4's seats view), to admit
+--     the job's own designer of record:
+--       is_active_studio_member(project_tenant_org(project_id))
+--       OR designer_id / lead_designer_id / created_by = auth.uid()
+--     It admits nobody but the three people the job itself names — never a
+--     member of anybody's studio — so r5 MAJOR-1/MAJOR-3 (a SECOND studio's
+--     members reading this studio's seats) stays closed, and r6 MAJOR-1's
+--     admin of the studio doing the work still comes in through the first
+--     leg.
+--   · r11 MAJOR-2 — identity_seat_count() is LANGUAGE sql STABLE with a SET
+--     clause, so it is never inlined, and its body is an RLS-filtered scan of
+--     project_parties that idx_project_parties_identity_key cannot serve
+--     (project_parties' RLS filter is not leakproof, so it is applied in the
+--     same scan): 21 ms, measured, PER CALL at 631 seats. The Directory
+--     called it ONCE PER ROW on two branches, so SELECT * FROM
+--     people_directory — literally what usePeopleDirectory issues
+--     (use-people.ts:125, .select('*'), no limit, no pagination) — cost
+--     rows × seats: 0.10 s at 62 rows, 1.3 s at 262, 7.1 s at 662, 32.5 s at
+--     1462, 140 s at 3062; and at 649 cards / 631 seats it exceeded
+--     `authenticated`'s own statement_timeout=8s, which is what PostgREST
+--     runs under, so the room's one feed returned nothing at all rather than
+--     something wrong. The seats are now counted ONCE for the whole view, in
+--     the MATERIALIZED CTE `identity_seats` (§3), LEFT JOINed onto the two
+--     branches that carry a count. identity_seat_count() survives, carrying
+--     the IDENTICAL predicate (R-BG), for the single-identity question.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -371,7 +409,21 @@ AS $$
     FROM public.project_parties pp
     JOIN public.projects pj ON pj.id = pp.project_id
    WHERE p_identity_key IS NOT NULL
-     AND public.is_active_studio_member(public.project_tenant_org(pp.project_id))
+     -- THE JOB'S OWN DESIGNER IS ADMITTED BESIDE THE TENANT (r11 MAJOR-1).
+     -- project_tenant_org() resolves NULL for a designer who belongs to no
+     -- organization at all — there is no membership to rank — so the tenant
+     -- leg alone dropped every seat of their own job out of this count and
+     -- out of both views, while project_parties' RLS and v_project_roster
+     -- still carried it. The three legs below name the job's designer of
+     -- record, lead designer and creator and nobody else, so the r5
+     -- MAJOR-1/MAJOR-3 conjunct (no member of a SECOND studio) is untouched.
+     -- Stated identically in people_directory's identity_seats CTE (§3) and
+     -- in people_directory_seats' WHERE (§4): R-BG's "counts exactly what it
+     -- nests" is these three predicates staying the same predicate.
+     AND ( public.is_active_studio_member(public.project_tenant_org(pp.project_id))
+        OR pj.designer_id      = (select auth.uid())
+        OR pj.lead_designer_id = (select auth.uid())
+        OR pj.created_by       = (select auth.uid()) )
      AND ( public.is_studio_comember(pj.designer_id)
         OR public.is_studio_comember(pj.lead_designer_id)
         OR public.is_studio_comember(pj.created_by) )
@@ -395,8 +447,18 @@ COMMENT ON FUNCTION public.identity_seat_count(text) IS
   'the seats view shows: one human seated on a job of each of two studios that '
   'merely share a designer made the row claim 2 and nest 1 for an admin of '
   'only one of them, with no cross-tenant stamp and no adversarial write (w1b '
-  'final review r10 MAJOR-2). SECURITY INVOKER, so the caller''s own RLS still '
-  'bounds it from beneath (00626).';
+  'final review r10 MAJOR-2). The job''s OWN designer of record, lead '
+  'designer and creator are admitted BESIDE that tenant leg, because '
+  'project_tenant_org() answers NULL for a designer who belongs to no '
+  'organization at all and the leg alone erased every seat of their own job '
+  'from both views while project_parties and v_project_roster still carried '
+  'it — a regression on 00594, which had no tenant leg here (w1b final review '
+  'r11 MAJOR-1). people_directory no longer CALLS this per row: it was 21 ms '
+  'per call at 631 seats, and rows x seats passed authenticated''s own '
+  'statement_timeout=8s at 649 cards (r11 MAJOR-2), so the view counts the '
+  'seats once in its identity_seats CTE, whose predicate is this body '
+  'grouped. The two must stay identical — that is R-BG. SECURITY INVOKER, so '
+  'the caller''s own RLS still bounds it from beneath (00626).';
 
 CREATE OR REPLACE FUNCTION public.contact_rule_summary(
   p_subject_type text,
@@ -982,6 +1044,48 @@ COMMENT ON FUNCTION public.identity_consent_evidence(uuid, text, text) IS
 CREATE OR REPLACE VIEW public.people_directory
 WITH (security_invoker = true) AS
 
+-- ── identity_seats — every identity's seat count, computed ONCE ───────────
+-- w1b final review r11 MAJOR-2. This was identity_seat_count(), called once
+-- per emitted row on the CONTACTS branch and once more on the PARTY branch.
+-- The function is LANGUAGE sql STABLE with a SET clause, so the planner
+-- cannot inline it; each call is its own RLS-filtered sequential scan of
+-- project_parties (the expression index cannot be used, because
+-- project_parties' RLS filter is not leakproof and is applied in the same
+-- scan) — 21 ms per call at 631 seats, measured. Cost was rows × seats, and
+-- `SELECT * FROM people_directory`, which is exactly what
+-- usePeopleDirectory issues with no limit, passed `authenticated`'s own
+-- statement_timeout=8s at 649 cards / 631 seats: the room's one feed
+-- returned nothing at all.
+--
+-- The CTE is identity_seat_count()'s body, grouped: the same tenant leg with
+-- the same r11 MAJOR-1 designer-of-record disjunction, the same three
+-- co-member legs, the same party_identity_key(). MATERIALIZED so it is
+-- evaluated ONCE for the whole view rather than once per branch — both
+-- branches reference it, and a filtered read (usePerson filters person_id
+-- ABOVE the view) then pays one scan instead of one per row.
+--
+-- EVERY party kind and no kind filter, because that is what
+-- people_directory_seats nests (§4) — R-BG: a row claims exactly what it can
+-- nest, so this predicate, identity_seat_count()'s and the seats view's are
+-- one predicate written three times, and any change to one is a change to
+-- all three.
+WITH identity_seats AS MATERIALIZED (
+  SELECT
+    public.party_identity_key(pp.studio_contact_id, pp.profile_id,
+                              pp.phone_e164, pp.email, pp.id) AS identity_key,
+    count(*)::integer                                         AS seat_count
+  FROM public.project_parties pp
+  JOIN public.projects pj ON pj.id = pp.project_id
+  WHERE ( public.is_active_studio_member(public.project_tenant_org(pp.project_id))
+       OR pj.designer_id      = (select auth.uid())
+       OR pj.lead_designer_id = (select auth.uid())
+       OR pj.created_by       = (select auth.uid()) )
+    AND ( public.is_studio_comember(pj.designer_id)
+       OR public.is_studio_comember(pj.lead_designer_id)
+       OR public.is_studio_comember(pj.created_by) )
+  GROUP BY 1
+)
+
 -- ── CLIENTS ───────────────────────────────────────────────────────────────
 -- Carried verbatim from 00594:1217-1252, plus the five appended columns.
 SELECT
@@ -1195,7 +1299,11 @@ SELECT
   -- one the other two sites use, so the paper word has one formula.
   public.identity_paper_state(q.studio_contact_id, q.company_id),
   public.contact_rule_summary('engagement', q.id),
-  public.identity_seat_count(q.identity_key)
+  -- counted once for the whole view by the identity_seats CTE above, not
+  -- once per row by identity_seat_count() (r11 MAJOR-2). COALESCE because an
+  -- identity with no seat the caller may count has no CTE row; the function
+  -- returned 0 for the same case.
+  COALESCE(iseat.seat_count, 0)
 -- The consent word belongs to the IDENTITY, not to whichever seat won the
 -- DISTINCT ON. It used to be computed INSIDE that subquery off the winning
 -- seat's own phone_e164, while reach_state three lines above already asked the
@@ -1287,7 +1395,22 @@ FROM (
       -- projects (w1b final review r6 MAJOR-1). The consent WORD below still
       -- resolves at project_consent_org(), which must read the same for every
       -- caller; only the visibility gate is caller-relative.
-      AND public.is_active_studio_member(public.project_tenant_org(pp.project_id))
+      --
+      -- BESIDE THE TENANT, THE JOB'S OWN DESIGNER (r11 MAJOR-1). A designer
+      -- who belongs to no organization at all resolves project_tenant_org()
+      -- to NULL — studio_id is NULL and there is no membership to rank — and
+      -- is_active_studio_member(NULL) is false, so the tenant leg alone
+      -- erased every party row of their own job from this branch while
+      -- project_parties' RLS and v_project_roster still carried the seat.
+      -- 00594's party branch had no tenant leg, so that was a regression, and
+      -- people_directory_scope_test.sql case (h3) asserts this population is
+      -- unchanged. The three legs name the job's designer of record, lead
+      -- designer and creator and nobody else, so no member of any second
+      -- studio comes in with them.
+      AND ( public.is_active_studio_member(public.project_tenant_org(pp.project_id))
+         OR pj.designer_id      = (select auth.uid())
+         OR pj.lead_designer_id = (select auth.uid())
+         OR pj.created_by       = (select auth.uid()) )
       AND ( public.is_studio_comember(pj.designer_id)
          OR public.is_studio_comember(pj.lead_designer_id)
          OR public.is_studio_comember(pj.created_by) )
@@ -1299,6 +1422,7 @@ FROM (
   LEFT JOIN LATERAL public.identity_consent_evidence(
     public.project_consent_org(q0.project_id), q0.identity_key, NULL) ev ON true
 ) q
+LEFT JOIN identity_seats iseat ON iseat.identity_key = q.identity_key
 
 UNION ALL
 
@@ -1396,8 +1520,12 @@ SELECT
   -- itself as the card and its own paper is the answer.
   public.identity_paper_state(sc.id, sc.company_id),
   public.contact_rule_summary(sc.entity_kind, sc.id),
-  public.identity_seat_count(sc.id::text)
+  -- counted once for the whole view by the identity_seats CTE above (r11
+  -- MAJOR-2). A card's identity key IS its id — party_identity_key()'s first
+  -- precedence leg — so the join key is the card id as text.
+  COALESCE(iseat.seat_count, 0)
 FROM public.studio_contacts sc
+LEFT JOIN identity_seats iseat ON iseat.identity_key = sc.id::text
 WHERE public.is_active_studio_member(sc.organization_id);
 
 COMMENT ON VIEW public.people_directory IS
@@ -1492,7 +1620,20 @@ COMMENT ON VIEW public.people_directory IS
   'an 00584-shaped tenant sweep over designer_clients, leads, vendors and '
   'project_team_members TOGETHER with these four branches; it changes who '
   'sees what platform-wide and is owed a ruling of its own, named here rather '
-  'than left silent.';
+  'than left silent. '
+  'w1b final review r11: the PARTY branch''s tenant leg admits the job''s OWN '
+  'designer of record, lead designer and creator beside it, because '
+  'project_tenant_org() answers NULL for a designer who belongs to no '
+  'organization at all and the leg alone erased every party row of their own '
+  'job from this view — a regression on 00594, which carried no tenant leg '
+  'there (MAJOR-1). And seat_count comes from the MATERIALIZED identity_seats '
+  'CTE, computed ONCE for the whole view, not from identity_seat_count() '
+  'called once per row: that call is an RLS-filtered scan of project_parties '
+  'no index can serve, 21 ms each, so SELECT * FROM people_directory — what '
+  'usePeopleDirectory issues, unlimited — cost rows x seats and passed '
+  'authenticated''s own statement_timeout=8s at 649 cards / 631 seats '
+  '(MAJOR-2). The CTE, identity_seat_count() and people_directory_seats'' '
+  'WHERE are ONE predicate written three times (R-BG).';
 
 GRANT SELECT ON public.people_directory TO authenticated;
 
@@ -1607,7 +1748,22 @@ JOIN public.projects pj ON pj.id = pp.project_id
 -- studio nobody on the job belongs to on a studio_id IS NULL project and hid
 -- every seat from the admin of the studio doing the work (w1b final review r6
 -- MAJOR-1).
-WHERE public.is_active_studio_member(public.project_tenant_org(pp.project_id))
+--
+-- AND THE JOB'S OWN DESIGNER BESIDE THE TENANT (w1b final review r11
+-- MAJOR-1). project_tenant_org() answers NULL for a designer who belongs to
+-- no organization at all: studio_id is NULL and its second leg has no
+-- membership to rank. is_active_studio_member(NULL) is false, so the tenant
+-- leg alone dropped every seat of that designer's OWN job out of this view
+-- and out of the Directory's party branch, while project_parties' RLS and
+-- v_project_roster still carried it — a regression on 00594, which carried no
+-- tenant leg here at all. The three legs below name the job's designer of
+-- record, lead designer and creator and NOBODY else, so r5 MAJOR-1/MAJOR-3 —
+-- a member of the designer's SECOND studio reading this studio's seats — is
+-- untouched: that caller is not the designer of record.
+WHERE ( public.is_active_studio_member(public.project_tenant_org(pp.project_id))
+     OR pj.designer_id      = (select auth.uid())
+     OR pj.lead_designer_id = (select auth.uid())
+     OR pj.created_by       = (select auth.uid()) )
   AND ( public.is_studio_comember(pj.designer_id)
      OR public.is_studio_comember(pj.lead_designer_id)
      OR public.is_studio_comember(pj.created_by) );
@@ -1644,7 +1800,13 @@ COMMENT ON VIEW public.people_directory_seats IS
   'is COALESCEd to `not_asked` only for a caller who can read the deciding '
   'record: on a studio-less job the record lives at the org '
   'project_consent_org() guesses, and the wider gate would otherwise print '
-  'the affirmative word over a recorded refusal (00626).';
+  'the affirmative word over a recorded refusal. w1b final review r11: the '
+  'tenant leg admits the job''s OWN designer of record, lead designer and '
+  'creator beside it, because project_tenant_org() answers NULL for a '
+  'designer who belongs to no organization and the leg alone erased every '
+  'seat of their own job from this view and from the Directory''s party '
+  'branch while project_parties and v_project_roster still carried it — a '
+  'regression on 00594 (MAJOR-1) (00626).';
 
 REVOKE ALL ON TABLE public.people_directory_seats FROM PUBLIC, anon;
 GRANT SELECT ON public.people_directory_seats TO authenticated;

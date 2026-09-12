@@ -2936,18 +2936,46 @@ BEGIN
   ON CONFLICT (organization_id, channel_kind, channel_value)
     DO UPDATE SET status = 'opted_out', opt_out_at = now(), opt_out_source = 'inbound_sms';
   -- and the seat that carries the refused number, on the STUDIO-LESS job.
-  -- Written AS the admin of the studio doing the work, not as the table owner:
-  -- since r9 MAJOR-2 the card guard names studio_contact_id, and on a
-  -- studio_id IS NULL project only a caller project_tenant_org() resolves a
-  -- studio for can have a stamp checked at all — a NULL-uid writer takes the
-  -- party_card_project_has_no_studio refusal (00624 §2). This is the honest
-  -- actor anyway: the studio stamping its own card on its own seat.
+  --
+  -- THIS ROW IS NOW LEGACY-ONLY, AND THE TRIGGER IS LIFTED TO WRITE IT (w1b
+  -- final review r11 MAJOR-3). Since r9 MAJOR-2 the card guard names
+  -- studio_contact_id, and since r11 MAJOR-3 that leg asks the RECORD: on a
+  -- project whose studio_id is NULL a stamp is refused outright
+  -- (party_card_project_has_no_studio), because the caller-relative resolver
+  -- checked the card against the WRITER's own studio and a member of the
+  -- designer's SECOND design studio landed a foreign card on the working
+  -- studio's seat. No authenticated path can create this row any more — not
+  -- this admin's INSERT, and not a project_id move of an already-stamped seat.
+  -- What the guard cannot do is REPAIR the stamps already on the table (m11),
+  -- and r7 MAJOR-1's fail-open is a READ of exactly that population. So the
+  -- guard is lifted for one INSERT, as the table's owner, to stage the legacy
+  -- row — and put back immediately, so every later write in this block and in
+  -- blocks 17-21 is judged by the live guard. Leg 16h below proves the door is
+  -- shut on the way in while this leg proves the word is right on the way out.
+  ALTER TABLE public.project_parties DISABLE TRIGGER assert_project_party_cards_trg;
   PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000003');  -- admin of the studio doing the work
   INSERT INTO public.project_parties (id, project_id, party_kind, display_name, trade,
                                       phone_e164, studio_contact_id, created_by)
   VALUES ('f2900000-0000-4000-8000-00000000000c','b0000000-0000-0000-0000-0000000000d1',
           'sub','Block 16 Carded Trade','electrical','+16125559997',
           'f2800000-0000-4000-8000-00000000000c','a0000000-0000-0000-0000-000000000004');
+  PERFORM pg_temp.reset_role();
+  ALTER TABLE public.project_parties ENABLE TRIGGER assert_project_party_cards_trg;
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000003');
+
+  -- 16h: and the live guard refuses to mint that row, for the honest actor as
+  -- flatly as for the foreign one — there is nothing in a record that names no
+  -- studio to tell the studio doing the work from the designer's second one.
+  BEGIN
+    INSERT INTO public.project_parties (id, project_id, party_kind, display_name,
+                                        phone_e164, studio_contact_id, created_by)
+    VALUES ('f2950000-0000-4000-8000-00000000000c','b0000000-0000-0000-0000-0000000000d1',
+            'sub','Block 16 Guard Control','+16125559995',
+            'f2800000-0000-4000-8000-00000000000c','a0000000-0000-0000-0000-000000000004');
+    RAISE EXCEPTION '16h a studio_contact_id stamp LANDED on a project that records no studio — the identity key was checked against the writer''s own studio (r11 MAJOR-3)';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM <> 'party_card_project_has_no_studio' THEN RAISE; END IF;
+  END;
 
   IF NOT public.is_active_studio_member('b0000000-0000-0000-0000-000000000001') THEN
     RAISE EXCEPTION '16a the actor must be a member of the studio whose card and records these are';
@@ -2993,7 +3021,7 @@ BEGIN
   END IF;
 
   PERFORM pg_temp.reset_role();
-  RAISE NOTICE '16. the number set and the identity''s consent word: a seat on a STUDIO-LESS job of this studio contributes its number, so the studio''s own recorded refusal decides the Directory word (opted_out, not the affirmative one), and the same seat moved onto a job that RECORDS its studio reads identically — projects.studio_id no longer decides whether a refusal reaches the face (r7 MAJOR-1, probe138''s control both ways): passed';
+  RAISE NOTICE '16. the number set and the identity''s consent word: a LEGACY seat on a STUDIO-LESS job of this studio contributes its number, so the studio''s own recorded refusal decides the Directory word (opted_out, not the affirmative one), and the same seat moved onto a job that RECORDS its studio reads identically — projects.studio_id no longer decides whether a refusal reaches the face (r7 MAJOR-1, probe138''s control both ways). The staging INSERT now needs the card guard lifted, and 16h proves why: since r11 MAJOR-3 a studio_contact_id stamp on a project that records no studio is refused party_card_project_has_no_studio for every writer, so this population can only be inherited, never minted — which is exactly why the READ still has to be right: passed';
 END $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════
