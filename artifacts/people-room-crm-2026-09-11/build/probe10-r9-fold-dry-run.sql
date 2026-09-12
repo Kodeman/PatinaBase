@@ -16,7 +16,11 @@
 -- never shown the studio's own consent paperwork standing in the refusal's
 -- evidence columns, whether the seat refuses on a date alone or the inbound
 -- STOP rail flipped its status and left the grant's evidence behind it. Such a
--- row comes back with all four blank, which is what the fold will write. The `refusal` CTE is the half that matters and
+-- row comes back with all four blank, which is what the fold will write. The
+-- CONSENT side is shown the same way the fold writes it since r9 M2: where the
+-- winning row carries no consent evidence, the columns come off the group's
+-- best evidenced grant, so the operator is not shown a blank for a number the
+-- studio holds signed paperwork for. The `refusal` CTE is the half that matters and
 -- the half an earlier version of this dry run omitted (r9 R5-M2): it is asked
 -- of EVERY seat in the group, not of the winning row, and its LEFT JOIN is what
 -- decides `refusal_unanswered` — the one column that decides whether a studio
@@ -39,6 +43,17 @@ WITH party_org AS (
          pp.sms_consent_disclosure_version,
          pp.sms_consent_recorded_by,
          pp.updated_at,
+         -- r4 R4-M1 / r10 M1, hoisted in r9 M2 exactly as the fold hoists it:
+         -- whose act does this row's ONE evidence set describe? The refusal's
+         -- only when the status IS the refusal and nothing about the evidence
+         -- contradicts it; otherwise the GRANT's.
+         (pp.sms_consent_status = 'opted_out'
+          AND pp.sms_consent_source IS NOT NULL
+          AND (pp.sms_consent_source = 'inbound_sms'
+               OR pp.sms_opt_out_at IS NULL
+               OR pp.sms_consent_recorded_at IS NULL
+               OR pp.sms_consent_recorded_at >= pp.sms_opt_out_at))
+           AS refusal_words_are_its_own,
          COALESCE(p.studio_id, public._primary_studio_for(p.designer_id)) AS org
   FROM public.project_parties pp
   JOIN public.projects p ON p.id = pp.project_id
@@ -115,14 +130,7 @@ refusal AS (
                                  updated_at) DESC NULLS LAST
              ) AS rrn
         FROM (
-          SELECT party_org.*,
-                 (sms_consent_status = 'opted_out'
-                  AND sms_consent_source IS NOT NULL
-                  AND (sms_consent_source = 'inbound_sms'
-                       OR sms_opt_out_at IS NULL
-                       OR sms_consent_recorded_at IS NULL
-                       OR sms_consent_recorded_at >= sms_opt_out_at))
-                   AS refusal_words_are_its_own
+          SELECT party_org.*
             FROM party_org
            WHERE org IS NOT NULL
              AND (sms_consent_status = 'opted_out'
@@ -132,6 +140,30 @@ refusal AS (
         ) owned
     ) refusals
    WHERE rrn = 1
+),
+-- r9 M2: the CONSENT side is asked of the whole group too. Where the winning
+-- row carries no consent evidence — the shipped portal's sourceless, dateless
+-- `opted_out` seat, which wins the refusal bucket — the record takes the
+-- group's best evidenced grant, all five columns AND the date, so the operator
+-- sees the paperwork the fold will actually file rather than a blank.
+grant_evidence AS (
+  SELECT org, phone_e164, sms_consented_at, sms_consent_source,
+         sms_consent_evidence, sms_consent_recorded_at,
+         sms_consent_disclosure_version, sms_consent_recorded_by
+    FROM (
+      SELECT party_org.*,
+             ROW_NUMBER() OVER (
+               PARTITION BY org, phone_e164
+               ORDER BY sms_consented_at        DESC NULLS LAST,
+                        sms_consent_recorded_at DESC NULLS LAST,
+                        updated_at              DESC NULLS LAST
+             ) AS grn
+        FROM party_org
+       WHERE org IS NOT NULL
+         AND sms_consent_source IS NOT NULL
+         AND NOT refusal_words_are_its_own
+    ) grants
+   WHERE grn = 1
 )
 SELECT r.org,
        r.phone_e164,
@@ -144,10 +176,19 @@ SELECT r.org,
        COALESCE(r.sms_opt_out_at, f.sms_opt_out_at) AS opt_out_at,
        f.opt_out_source,
        f.opt_out_evidence,
-       f.opt_out_recorded_at
+       f.opt_out_recorded_at,
+       -- The CONSENT side as the fold will write it (r9 M2): the winner's own
+       -- paperwork where it has some, the group's best evidenced grant where it
+       -- has none — source and date always off the same act.
+       CASE WHEN r.sms_consent_source IS NULL AND g.org IS NOT NULL
+            THEN g.sms_consent_source ELSE r.sms_consent_source END AS consent_source,
+       CASE WHEN r.sms_consent_source IS NULL AND g.org IS NOT NULL
+            THEN g.sms_consented_at   ELSE r.sms_consented_at   END AS consented_at
   FROM ranked r
   LEFT JOIN refusal f
     ON f.org = r.org AND f.phone_e164 = r.phone_e164
+  LEFT JOIN grant_evidence g
+    ON g.org = r.org AND g.phone_e164 = r.phone_e164
  WHERE r.rn = 1
  ORDER BY refusal_unanswered DESC, r.org, r.phone_e164;
 
