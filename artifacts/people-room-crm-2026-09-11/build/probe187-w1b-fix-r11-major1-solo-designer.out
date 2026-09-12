@@ -1,0 +1,15 @@
+Pager usage is off.
+BEGIN
+SET
+INSERT 0 1
+INSERT 0 0
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+psql:/Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/artifacts/people-room-crm-2026-09-11/build/probe187-w1b-fix-r11-major1-solo-designer.sql:92: NOTICE:  organizations this designer belongs to: 0   project_tenant_org(their own project) = NULL  (is_active_studio_member -> f)
+psql:/Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/artifacts/people-room-crm-2026-09-11/build/probe187-w1b-fix-r11-major1-solo-designer.sql:92: NOTICE:  project_parties (RLS): 1   people_directory: 1   people_directory_seats: 1   v_project_roster: 1   seat_count on the row: 1
+psql:/Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/artifacts/people-room-crm-2026-09-11/build/probe187-w1b-fix-r11-major1-solo-designer.sql:92: NOTICE:  POSITIVE: the reader agrees with the record, and the row claims exactly what it nests.
+psql:/Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/artifacts/people-room-crm-2026-09-11/build/probe187-w1b-fix-r11-major1-solo-designer.sql:92: NOTICE:  the second studio's plain member: raw project_parties (the shipped RLS door) 31 · people_directory_seats 0 · Directory party rows on those jobs 0
+psql:/Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/artifacts/people-room-crm-2026-09-11/build/probe187-w1b-fix-r11-major1-solo-designer.sql:92: NOTICE:  NEGATIVE CONTROL: 0 and 0 — the widened leg admits the job's own designer and nobody else.
+DO
+ROLLBACK

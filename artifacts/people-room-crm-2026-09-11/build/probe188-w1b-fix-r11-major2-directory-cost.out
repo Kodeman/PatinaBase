@@ -1,0 +1,14 @@
+Pager usage is off.
+BEGIN
+SET
+NOTICE:  cards+seats added=0 -> people_directory SELECT * : 62 rows in 00:00:00.101297
+NOTICE:  cards+seats added=100 -> people_directory SELECT * : 262 rows in 00:00:00.597205
+NOTICE:  cards+seats added=200 -> people_directory SELECT * : 662 rows in 00:00:01.645471
+NOTICE:  cards+seats added=400 -> people_directory SELECT * : 1462 rows in 00:00:03.674984
+NOTICE:  cards+seats added=800 -> people_directory SELECT * : 3062 rows in 00:00:07.866959
+NOTICE:  the fixture the gate runs on: 1549 rolodex cards · 1531 seat rows
+NOTICE:  GATE: SELECT * FROM people_directory under statement_timeout=8s returned 3062 rows in 00:00:07.990889
+NOTICE:  Directory rows claiming a seat_count they cannot nest: 0
+NOTICE:  contacts rows where the CTE and identity_seat_count() disagree: 0
+DO
+ROLLBACK
