@@ -682,14 +682,18 @@ Deno.test("a granted record does not override an opted-out party row", async () 
 
 // r6 M6-3: `status` is not the whole verdict. refusal_unanswered is the stored
 // fact the WRITE door treats as load-bearing, and it was invisible here.
-// record_channel_reconsent() moves a record opted_out -> pending keeping
-// opt_out_at and the flag, and the mirror then stamps `pending` onto every seat
-// in the studio on that number — so the party-row backstop below is gone and
-// the record reads `pending`. Traced from that state the invite branch passed
+// record_channel_reconsent() used to move a record opted_out -> pending keeping
+// opt_out_at and the flag, and the mirror then stamped `pending` onto every seat
+// in the studio on that number — so the party-row backstop below was gone and
+// the record read `pending`. Traced from that state the invite branch passed
 // and a real SMS went to a number that had replied STOP, on a 10DLC campaign.
+// Since r7 M7-2 reconsent() leaves the record at `opted_out`, but a service_role
+// writer can still leave this shape, so the gate stays and is tested here.
 Deno.test("an unanswered refusal refuses the send, whatever the status now says", async () => {
   const fake = createFakeSupabase({
-    // The seat as the mirror leaves it after reconsent(): no longer opted_out.
+    // A seat the mirror left at `pending` while the record still carries an
+    // unanswered refusal — the shape reconsent() used to write, and one a
+    // service_role writer can still produce.
     project_parties: [party("p1", "pending")],
     projects: [{ id: "proj1", studio_id: "org-alpha" }],
     studio_channel_consent: [{
@@ -710,8 +714,8 @@ Deno.test("an unanswered refusal refuses the send, whatever the status now says"
 });
 
 // …and the opt-in invite is not an exception to it. This is the send the trace
-// actually reached: templateKey sms_optin_invite, a `pending` seat carrying the
-// fresh evidence reconsent() mirrored onto it.
+// actually reached: templateKey sms_optin_invite, a `pending` seat carrying
+// fresh evidence over a refusal nobody answered.
 Deno.test("the opt-in invite does not slip past an unanswered refusal", async () => {
   const fake = createFakeSupabase({
     project_parties: [party("p1", "pending")],
@@ -733,6 +737,31 @@ Deno.test("the opt-in invite does not slip past an unanswered refusal", async ()
   assert(!res.sent, "the invite must not reach a number that replied STOP");
   assertEquals(res.reason, "opted_out");
   assertEquals((fake._data.sms_messages ?? []).length, 0, "no row on a blocked send");
+});
+
+// r7 M7-1: the same flag standing on a record that reads `granted` — which is
+// exactly what backfill_channel_consent_from_parties() mints for a legacy seat
+// whose stale sms_opt_out_at no later consent answered. `status` says granted,
+// the refusal underneath it was never answered, and the send must refuse.
+Deno.test("a granted record carrying an unanswered refusal still refuses", async () => {
+  const fake = createFakeSupabase({
+    project_parties: [party("p1", "granted")],
+    projects: [{ id: "proj1", studio_id: "org-alpha" }],
+    studio_channel_consent: [{
+      organization_id: "org-alpha",
+      channel_kind: "sms",
+      channel_value: "+15551230001",
+      status: "granted",
+      refusal_unanswered: true,
+      opt_out_at: "2025-12-03T00:00:00Z",
+    }],
+  });
+  const res = await sendPartySms(fake as never, { partyId: "p1", body: "hello" }, {
+    getEnv: envOf(CONSENT_ENV),
+    now: OPEN_HOURS,
+  });
+  assert(!res.sent, "a folded granted row over an unanswered refusal must refuse");
+  assertEquals(res.reason, "opted_out");
 });
 
 // The gate does not over-refuse: an ordinary pending record with no refusal

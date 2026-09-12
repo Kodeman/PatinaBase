@@ -76,6 +76,16 @@
 --  21. r5 M5-4 (R-AP): paperwork_contact_person_id / signer_person_id /
 --      site_contact_person_id must each name a PERSON card in the SAME studio,
 --      never the row itself — on INSERT as well as UPDATE.
+--  26. r7 M7-1: no verdict written through record_channel_consent lowers
+--      refusal_unanswered. The fold mints `granted` records for legacy seats
+--      whose stale opt-out no later consent answered; a granted-on-granted
+--      re-record over one of those used to be exempt from the gate AND lower
+--      the flag the send rail now reads, turning sending back on with no
+--      recipient involved. Only the inbound rail's own write lowers it.
+--  27. r7 M7-2: record_channel_reconsent is EVIDENCE-ONLY. It records the
+--      studio's fresh consent, leaves the record at `opted_out` with the
+--      refusal standing, leaves the mirrored refusal on the seats, and stays
+--      re-callable. Sending resumes on the recipient's YES/START alone.
 --
 -- How to run:
 --   psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
@@ -328,6 +338,7 @@ DECLARE
   n INTEGER;
   raised TEXT;
   v TEXT;
+  r RECORD;
 BEGIN
   -- Put Alpha back to opted_out so the mirror's effect is unambiguous. Even
   -- this setup step has to run as a member: the RPC gates on auth.uid(), so a
@@ -365,8 +376,9 @@ BEGIN
   ASSERT raised = 'channel_opted_out',
     'FAIL 4c: opted_out -> granted must be refused, got ' || COALESCE(raised, '<no error>');
 
-  -- 4c2. PR-m's named way back: a fresh recorded consent, landing on pending,
-  --      normalised onto the SAME record (no second row).
+  -- 4c2. PR-m's named door: the studio's fresh consent, written as EVIDENCE
+  --      onto the SAME record (no second row) — and the record stays
+  --      `opted_out`, refusal standing (r7 M7-2).
   PERFORM public.record_channel_reconsent(
     'b0000000-0000-4000-8000-00000000000a', 'sms', '(612) 555-0142',
     'written', 'Fresh written consent', 'field-sms-v1',
@@ -378,11 +390,22 @@ BEGIN
      AND channel_kind = 'sms' AND channel_value = '+16125550142';
   ASSERT n = 1, 'FAIL 4c2: the RPC must normalise onto the existing record, got ' || n;
 
+  -- 4d. The mirror carries the fresh EVIDENCE onto both Alpha rows and leaves
+  --     the refusal standing on them: the party-row backstop the send rail
+  --     falls back on is never cleared by this door (r7 M7-2).
   SELECT COUNT(*) INTO n FROM project_parties
    WHERE id IN ('e0000000-0000-4000-8000-000000000001', 'e0000000-0000-4000-8000-000000000002')
-     AND sms_consent_status = 'pending'
+     AND sms_consent_status = 'opted_out'
      AND sms_consent_evidence = 'Fresh written consent';
-  ASSERT n = 2, 'FAIL 4d: the mirror should carry the fresh consent onto both Alpha rows, got ' || n;
+  ASSERT n = 2, 'FAIL 4d: the mirror should carry the fresh consent onto both Alpha rows '
+    'without clearing the refusal, got ' || n;
+
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550142';
+  ASSERT r.status = 'opted_out' AND r.refusal_unanswered,
+    'FAIL 4d2: reconsent must leave the refusal standing, got '
+      || COALESCE(r.status, '<null>');
 
   -- 4e. The earlier opt-out date survives the new grant.
   SELECT opt_out_at::text INTO v FROM studio_channel_consent
@@ -853,26 +876,42 @@ BEGIN
   ASSERT raised = 'consent_evidence_required',
     'FAIL 9g: reconsent needs a disclosure version, got ' || COALESCE(raised, '<no error>');
 
-  -- 9h. It lands on pending — never granted — and keeps the opt-out date.
+  -- 9h. It writes EVIDENCE ONLY (r7 M7-2): the record stays opted_out, the
+  --     refusal stays unanswered, and the opt-out date stays printable.
   PERFORM public.record_channel_reconsent(
     'b0000000-0000-4000-8000-00000000000a', 'sms', '6125550166',
     'written', 'Signed 2026 form', 'field-sms-v1', NULL);
   SELECT * INTO r FROM studio_channel_consent
    WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
      AND channel_value = '+16125550166';
-  ASSERT r.status = 'pending',
-    'FAIL 9h: reconsent must land on pending, got ' || COALESCE(r.status, '<none>');
+  ASSERT r.status = 'opted_out',
+    'FAIL 9h: reconsent must leave the record at opted_out, got ' || COALESCE(r.status, '<none>');
+  ASSERT r.refusal_unanswered,
+    'FAIL 9h1: the refusal must still stand unanswered after reconsent';
   ASSERT r.evidence = 'Signed 2026 form' AND r.source = 'written',
     'FAIL 9h2: reconsent must stamp its own evidence';
   ASSERT r.opt_out_at IS NOT NULL,
-    'FAIL 9h3: the refusal it superseded must stay printable';
+    'FAIL 9h3: the refusal it was recorded against must stay printable';
+
+  -- 9h4. And it stays RE-CALLABLE (r7 M7-2): it no longer moves the row off
+  --      the one status it can act on, so a later, better-evidenced consent
+  --      can be recorded over the same standing refusal.
+  PERFORM public.record_channel_reconsent(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '6125550166',
+    'written', 'Countersigned 2026 form', 'field-sms-v1', NULL);
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550166';
+  ASSERT r.evidence = 'Countersigned 2026 form' AND r.status = 'opted_out',
+    'FAIL 9h4: a second reconsent must restate the evidence and keep the refusal, got '
+      || COALESCE(r.evidence, '<null>');
 
   -- 9i. And it is not a general-purpose door: with no refusal on the books it
   --     refuses and points back at record_channel_consent.
   raised := NULL;
   BEGIN
     PERFORM public.record_channel_reconsent(
-      'b0000000-0000-4000-8000-00000000000a', 'sms', '6125550166',
+      'b0000000-0000-4000-8000-00000000000a', 'sms', '6125550167',
       'written', 'again', 'field-sms-v1', NULL);
   EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
   ASSERT raised = 'no_opt_out_to_supersede',
@@ -1299,12 +1338,19 @@ BEGIN
   -- r6 B6-1: the second and third legs are stated on the REFUSAL
   -- (EXCLUDED.status = 'opted_out' is the only exemption), never on
   -- "which verdict is being written".
-  ASSERT norm LIKE '%WHERE (scc.status IS DISTINCT FROM ''opted_out'' OR EXCLUDED.status = ''opted_out'') AND (EXCLUDED.status = ''opted_out'' OR scc.status = ''granted''%RETURNING%',
+  ASSERT norm LIKE '%WHERE (scc.status IS DISTINCT FROM ''opted_out'' OR EXCLUDED.status = ''opted_out'') AND (EXCLUDED.status = ''opted_out'' OR (scc.refusal_unanswered IS NOT TRUE%RETURNING%',
     'FAIL 14a: record_channel_consent must gate opted_out AND the unanswered refusal in the upsert''s DO UPDATE … WHERE';
   ASSERT norm NOT LIKE '%EXCLUDED.status <> ''granted''%',
     'FAIL 14a2: no leg may be stated on the verdict being written (r6 B6-1)';
   ASSERT norm NOT LIKE '%pp.sms_opt_out_at IS NOT NULL%',
     'FAIL 14a3: the seat test must not require a DATED refusal (r6 M6-1)';
+  -- r7 M7-1: a record already AT `granted` was exempt from that gate, and the
+  -- write that came through then lowered the flag the send rail reads. Both
+  -- halves are gone, and the source text is where that is cheapest to hold.
+  ASSERT norm NOT LIKE '%OR scc.status = ''granted''%',
+    'FAIL 14a4: a record already at granted must not be exempt from the refusal gate (r7 M7-1)';
+  ASSERT norm NOT LIKE '%WHEN EXCLUDED.status = ''granted'' THEN false%',
+    'FAIL 14a5: no verdict written through this door may lower refusal_unanswered (r7 M7-1)';
 
   SELECT regexp_replace(
            regexp_replace(pg_get_functiondef(p.oid), '--[^\n]*', '', 'g'),
@@ -1313,6 +1359,12 @@ BEGIN
    WHERE ns.nspname = 'public' AND p.proname = 'record_channel_reconsent';
   ASSERT norm LIKE '%AND scc.status = ''opted_out'' RETURNING%',
     'FAIL 14b: record_channel_reconsent must gate on status in the UPDATE''s own WHERE';
+  -- r7 M7-2: and it writes EVIDENCE ONLY — the status it sets is the status it
+  -- requires, so the refusal stays on the books and the door stays re-callable.
+  ASSERT norm LIKE '%SET status = ''opted_out'', refusal_unanswered = true%',
+    'FAIL 14b2: record_channel_reconsent must leave the record at opted_out (r7 M7-2)';
+  ASSERT norm NOT LIKE '%SET status = ''pending''%',
+    'FAIL 14b3: record_channel_reconsent must not move the row to pending (r7 M7-2)';
 
   -- 14c. Behaviour: a refused grant leaves the refusal byte-for-byte intact —
   --      no half-write of the evidence set or the dates.
@@ -1547,32 +1599,36 @@ BEGIN
   ASSERT raised = 'channel_opted_out',
     'FAIL 16a: a direct grant over a refusal must be refused, got ' || COALESCE(raised, '<no error>');
 
-  -- 16b. The named way back lands on pending and keeps the opt-out date.
+  -- 16b. The named door records the studio's fresh consent as EVIDENCE and
+  --      leaves the record at opted_out, refusal standing (r7 M7-2).
   PERFORM public.record_channel_reconsent(
     'b0000000-0000-4000-8000-00000000000a', 'sms', '6125550233',
     'written', 'Signed a fresh consent at the walkthrough', 'field-sms-v1', NULL);
   SELECT * INTO r FROM studio_channel_consent
    WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
      AND channel_value = '+16125550233';
-  ASSERT r.status = 'pending', 'FAIL 16b: reconsent must land on pending, got ' || r.status;
+  ASSERT r.status = 'opted_out' AND r.refusal_unanswered,
+    'FAIL 16b: reconsent must leave the refusal standing, got ' || r.status;
   ASSERT r.opt_out_at IS NOT NULL, 'FAIL 16b2: the refusal date must survive';
+  ASSERT r.evidence = 'Signed a fresh consent at the walkthrough',
+    'FAIL 16b3: the fresh consent must be on the record, got ' || COALESCE(r.evidence, '<null>');
 
-  -- 16c. THE COMPOSITION. The grant is still refused, because the refusal has
-  --      not been answered by the person who made it.
+  -- 16c. THE COMPOSITION. The grant is still refused — now by the first gate
+  --      itself, because reconsent no longer moves the row off `opted_out`.
   raised := NULL;
   BEGIN
     PERFORM public.record_channel_consent(
       'b0000000-0000-4000-8000-00000000000a', 'sms', '6125550233', 'granted',
       'written', 'Kickoff form', 'field-sms-v1', NULL);
   EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
-  ASSERT raised = 'consent_awaiting_recipient',
+  ASSERT raised = 'channel_opted_out',
     'FAIL 16c: reconsent + grant must not compose into granted, got ' || COALESCE(raised, '<no error>');
 
   SELECT * INTO r FROM studio_channel_consent
    WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
      AND channel_value = '+16125550233';
-  ASSERT r.status = 'pending' AND r.consented_at IS NULL,
-    'FAIL 16c2: the refused grant must leave the record at pending with no consent date';
+  ASSERT r.status = 'opted_out' AND r.consented_at IS NULL,
+    'FAIL 16c2: the refused grant must leave the record at opted_out with no consent date';
 
   -- 16d. AND `pending` IS NOT A FREE HOP EITHER (r6 B6-1). The gate used to be
   --      stated as "refuse granted", so the studio could keep re-recording
@@ -1585,7 +1641,7 @@ BEGIN
       'b0000000-0000-4000-8000-00000000000a', 'sms', '6125550233', 'pending',
       'written', 'Re-sent the confirmation text', 'field-sms-v1', NULL);
   EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
-  ASSERT raised = 'consent_awaiting_recipient',
+  ASSERT raised = 'channel_opted_out',
     'FAIL 16d: a pending re-record over an unanswered refusal must be refused, got '
       || COALESCE(raised, '<no error>');
   SELECT * INTO r FROM studio_channel_consent
@@ -1613,8 +1669,12 @@ BEGIN
   --      refusal_unanswered and stamping a FRESH consented_at — which is what
   --      reopens the studio's door.
   UPDATE studio_channel_consent
-     SET status = 'granted', consented_at = now(), refusal_unanswered = false,
-         source = 'inbound_sms', evidence = 'Replied START', recorded_at = now()
+     -- clock_timestamp(), not now(): in a real deployment the rail's write is a
+     -- LATER transaction than the refusal it answers, and the gate asks for a
+     -- consent date strictly after the opt-out date. now() is frozen at
+     -- transaction start for the whole of this test file.
+     SET status = 'granted', consented_at = clock_timestamp(), refusal_unanswered = false,
+         source = 'inbound_sms', evidence = 'Replied START', recorded_at = clock_timestamp()
    WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
      AND channel_value = '+16125550233';
 
@@ -1684,16 +1744,16 @@ BEGIN
     'FAIL 16Bb: a direct grant over a dateless refusal must be refused, got '
     || COALESCE(raised, '<no error>');
 
-  -- 16Bc. THE COMPOSITION, on a refusal with no date. reconsent() moves the row
-  --       off opted_out; the grant that follows must STILL be refused.
+  -- 16Bc. THE COMPOSITION, on a refusal with no date. reconsent() records the
+  --       fresh consent; the grant that follows must STILL be refused.
   PERFORM public.record_channel_reconsent(
     'b0000000-0000-4000-8000-00000000000a', 'sms', '6125550244',
     'written', 'Signed a fresh consent at the walkthrough', 'field-sms-v1', NULL);
   SELECT * INTO r FROM studio_channel_consent
    WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
      AND channel_value = '+16125550244';
-  ASSERT r.status = 'pending' AND r.refusal_unanswered,
-    'FAIL 16Bc: reconsent lands on pending and the refusal still stands unanswered';
+  ASSERT r.status = 'opted_out' AND r.refusal_unanswered,
+    'FAIL 16Bc: reconsent keeps the record at opted_out and the refusal unanswered';
 
   raised := NULL;
   BEGIN
@@ -1701,7 +1761,7 @@ BEGIN
       'b0000000-0000-4000-8000-00000000000a', 'sms', '6125550244', 'granted',
       'written', 'Kickoff form', 'field-sms-v1', NULL);
   EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
-  ASSERT raised = 'consent_awaiting_recipient',
+  ASSERT raised = 'channel_opted_out',
     'FAIL 16Bc2: a DATELESS refusal must fail closed like a dated one, got '
     || COALESCE(raised, '<no error>');
 
@@ -1710,8 +1770,8 @@ BEGIN
   SELECT * INTO r FROM studio_channel_consent
    WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
      AND channel_value = '+16125550244';
-  ASSERT r.status = 'pending' AND r.consented_at IS NULL,
-    'FAIL 16Bd: the refused grant must leave the record at pending, undated';
+  ASSERT r.status = 'opted_out' AND r.consented_at IS NULL,
+    'FAIL 16Bd: the refused grant must leave the record at opted_out, undated';
   ASSERT NOT EXISTS (
     SELECT 1 FROM project_parties pp
      WHERE pp.phone_e164 = '+16125550244' AND pp.sms_consent_status = 'granted'),
@@ -1722,8 +1782,12 @@ BEGIN
   -- 16Be. Only the recipient's own answer opens the door — the rail lowers the
   --       flag, exactly as writeChannelConsent does.
   UPDATE studio_channel_consent
-     SET status = 'granted', consented_at = now(), refusal_unanswered = false,
-         source = 'inbound_sms', evidence = 'Replied START', recorded_at = now()
+     -- clock_timestamp(), not now(): in a real deployment the rail's write is a
+     -- LATER transaction than the refusal it answers, and the gate asks for a
+     -- consent date strictly after the opt-out date. now() is frozen at
+     -- transaction start for the whole of this test file.
+     SET status = 'granted', consented_at = clock_timestamp(), refusal_unanswered = false,
+         source = 'inbound_sms', evidence = 'Replied START', recorded_at = clock_timestamp()
    WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
      AND channel_value = '+16125550244';
 
@@ -1996,8 +2060,10 @@ BEGIN
   SELECT * INTO r FROM studio_channel_consent
    WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
      AND channel_kind = 'sms' AND channel_value = '+16125550322';
-  ASSERT r.status = 'pending',
-    'FAIL 19c3: reconsent() must still be the way back, got ' || COALESCE(r.status, '<null>');
+  ASSERT r.status = 'opted_out' AND r.refusal_unanswered
+     AND r.evidence = 'Fresh signed consent, 12 Sep',
+    'FAIL 19c3: reconsent() must record the fresh consent and leave the refusal '
+    'standing, got ' || COALESCE(r.status, '<null>') || '/' || COALESCE(r.evidence, '<null>');
 
   -- 19d. R-AK is not re-opened: BETA's dated refusal on +16125550333 is not
   --      Alpha''s fact, and Alpha''s first outreach to that number stands.
@@ -2295,7 +2361,7 @@ BEGIN
       'b0000000-0000-4000-8000-00000000000a', 'sms', '612-555-0412', 'granted',
       'written', 'We have a new signed form', 'field-sms-v1', NULL);
   EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
-  ASSERT raised = 'consent_awaiting_recipient',
+  ASSERT raised = 'channel_opted_out',
     'FAIL 22e: the walk must still end at the recipient, got '
       || COALESCE(raised, '<no error>');
 
@@ -2552,6 +2618,231 @@ BEGIN
 
   PERFORM pg_temp.reset_role();
   RAISE NOTICE '25. the channel vocabulary is checked, both ways (r6 M6-5): passed';
+END
+$$;
+
+-- ─── 26. r7 M7-1: this door never lowers refusal_unanswered ────────────────
+--
+-- After r6's M6-3 fix the send rail refuses on refusal_unanswered whatever the
+-- status says, so the flag is the fact sending rests on. The upsert exempted a
+-- record already AT `granted` from the transition gate — so its evidence could
+-- be restated — and the write that came through then set the flag FALSE. One
+-- ordinary record_channel_consent(…,'granted',…) by any studio member, no
+-- recipient involved, and the number was sendable again.
+--
+-- The state is reachable from the FIRST PROD FOLD:
+-- backfill_channel_consent_from_parties() raises the flag for any winning row
+-- carrying an opt-out date no later consent answered, whatever its status — a
+-- legacy seat reading `granted` with a stale sms_opt_out_at and no
+-- sms_consented_at folds to `granted` + flag true. That fold behaviour is ruled
+-- correct (the refusal is the half that fails closed); what is fixed is the
+-- door that lowered the flag on it.
+
+INSERT INTO project_parties (id, project_id, party_kind, display_name, phone,
+                             sms_consent_status, sms_consented_at, sms_opt_out_at,
+                             sms_consent_source, sms_consent_evidence,
+                             sms_consent_recorded_at, sms_consent_disclosure_version)
+VALUES
+  ('e0000000-0000-4000-8000-0000000000a7', 'd0000000-0000-4000-8000-0000000000a4',
+   'sub', 'Nils Brandt', '612-555-0430',
+   'granted', NULL, '2025-12-03T00:00:00Z',
+   'verbal', 'Said yes on site, years ago', '2024-02-01T00:00:00Z', 'field-sms-v1');
+
+DO $$
+DECLARE
+  r      RECORD;
+  raised TEXT;
+BEGIN
+  -- 26a. The fold mints the contradictory legacy row: granted, with a refusal
+  --      nobody answered standing under it.
+  PERFORM public.backfill_channel_consent_from_parties();
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550430';
+  ASSERT FOUND, 'FAIL 26a: the fold should mint a record for the granted row';
+  ASSERT r.status = 'granted' AND r.refusal_unanswered
+     AND r.opt_out_at = '2025-12-03T00:00:00Z'::timestamptz,
+    'FAIL 26a2: a granted winner with an unanswered opt-out must fold to '
+    'granted + refusal_unanswered, got ' || COALESCE(r.status, '<null>');
+
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+
+  -- 26b. THE FINDING: a granted-on-granted re-record must NOT get through, and
+  --      must not lower the flag.
+  raised := NULL;
+  BEGIN
+    PERFORM public.record_channel_consent(
+      'b0000000-0000-4000-8000-00000000000a', 'sms', '612-555-0430', 'granted',
+      'verbal', 'I asked him again today', 'field-sms-v1', NULL);
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'consent_awaiting_recipient',
+    'FAIL 26b: granted-on-granted over an unanswered refusal must be refused, got '
+      || COALESCE(raised, '<no error>');
+
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550430';
+  ASSERT r.refusal_unanswered,
+    'FAIL 26b2: the refused write must leave the flag standing';
+  ASSERT r.consented_at IS NULL AND r.evidence = 'Said yes on site, years ago',
+    'FAIL 26b3: the refused write must not stamp a consent date or new evidence, got '
+      || COALESCE(r.evidence, '<null>');
+
+  -- 26c. `pending` is not a way round it either.
+  raised := NULL;
+  BEGIN
+    PERFORM public.record_channel_consent(
+      'b0000000-0000-4000-8000-00000000000a', 'sms', '612-555-0430', 'pending',
+      'written', 'Sending the confirmation text', 'field-sms-v1', NULL);
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'consent_awaiting_recipient',
+    'FAIL 26c: pending over an unanswered refusal must be refused, got '
+      || COALESCE(raised, '<no error>');
+
+  -- 26d. Recording the REFUSAL is still open — the way forward, not around —
+  --      and it leaves the fact where reconsent() can act on it.
+  PERFORM public.record_channel_consent(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '612-555-0430', 'opted_out',
+    'other', 'The date on the old record is a refusal nobody answered', NULL, NULL);
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550430';
+  ASSERT r.status = 'opted_out' AND r.refusal_unanswered,
+    'FAIL 26d: recording the refusal must be accepted';
+
+  PERFORM pg_temp.reset_role();
+
+  -- 26e. Only the inbound rail lowers the flag (service_role, writing this
+  --      table directly on a YES/START), and then the studio's door opens.
+  UPDATE studio_channel_consent
+     -- clock_timestamp(), not now(): in a real deployment the rail's write is a
+     -- LATER transaction than the refusal it answers, and the gate asks for a
+     -- consent date strictly after the opt-out date. now() is frozen at
+     -- transaction start for the whole of this test file.
+     SET status = 'granted', consented_at = clock_timestamp(), refusal_unanswered = false,
+         source = 'inbound_sms', evidence = 'Replied START', recorded_at = clock_timestamp()
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550430';
+
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+  PERFORM public.record_channel_consent(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '612-555-0430', 'granted',
+    'written', 'Kickoff form', 'field-sms-v1', NULL);
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550430';
+  ASSERT r.status = 'granted' AND r.evidence = 'Kickoff form' AND NOT r.refusal_unanswered,
+    'FAIL 26e: after the recipient''s own answer the studio may record again';
+  PERFORM pg_temp.reset_role();
+
+  RAISE NOTICE '26. no studio-side verdict lowers refusal_unanswered (r7 M7-1): passed';
+END
+$$;
+
+-- ─── 27. r7 M7-2: reconsent is evidence-only, and re-callable ──────────────
+--
+-- PR-m names a studio-side act after a STOP: a fresh recorded consent. It used
+-- to land the record on `pending` "so the double opt-in still runs" — but after
+-- r6's M6-3 fix the flag refuses EVERY send including the opt-in invite, so
+-- nothing ran; the mirrored `pending` erased the party-row refusal the send
+-- rail falls back on; and the row was no longer at the one status reconsent()
+-- can act on, so it could not be called again. The studio was strictly worse
+-- off for calling it. It now writes evidence and leaves everything else
+-- standing.
+
+INSERT INTO project_parties (id, project_id, party_kind, display_name, phone,
+                             sms_consent_status)
+VALUES
+  ('e0000000-0000-4000-8000-0000000000a8', 'd0000000-0000-4000-8000-0000000000a4',
+   'sub', 'Ida Ruiz', '612-555-0431', 'not_asked');
+
+DO $$
+DECLARE
+  r      RECORD;
+  raised TEXT;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+
+  -- The refusal, recorded and mirrored onto the seat.
+  PERFORM public.record_channel_consent(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '612-555-0431', 'opted_out',
+    'inbound_sms', 'Replied STOP', NULL, NULL);
+  SELECT * INTO r FROM project_parties WHERE id = 'e0000000-0000-4000-8000-0000000000a8';
+  ASSERT r.sms_consent_status = 'opted_out',
+    'FAIL 27a: the refusal must reach the seat, got ' || COALESCE(r.sms_consent_status, '<null>');
+
+  -- 27b. The studio's fresh consent goes ON the record; the record stays
+  --      opted_out with the refusal unanswered.
+  PERFORM public.record_channel_reconsent(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '612-555-0431',
+    'written', 'Signed a fresh consent at the walkthrough', 'field-sms-v1', NULL);
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550431';
+  ASSERT r.status = 'opted_out' AND r.refusal_unanswered,
+    'FAIL 27b: reconsent must leave the refusal standing, got ' || COALESCE(r.status, '<null>');
+  ASSERT r.evidence = 'Signed a fresh consent at the walkthrough'
+     AND r.source = 'written' AND r.disclosure_version = 'field-sms-v1',
+    'FAIL 27b2: the studio''s fresh consent must be on the record';
+
+  -- 27c. THE BACKSTOP SURVIVES. The seat still reads opted_out — the `pending`
+  --      hop used to clear exactly this, which is what let the invite out.
+  SELECT * INTO r FROM project_parties WHERE id = 'e0000000-0000-4000-8000-0000000000a8';
+  ASSERT r.sms_consent_status = 'opted_out',
+    'FAIL 27c: the seat''s refusal must survive reconsent, got '
+      || COALESCE(r.sms_consent_status, '<null>');
+  ASSERT r.sms_consent_evidence = 'Signed a fresh consent at the walkthrough',
+    'FAIL 27c2: the fresh evidence is still mirrored onto the seat, got '
+      || COALESCE(r.sms_consent_evidence, '<null>');
+
+  -- 27d. RE-CALLABLE: the door does not move the row off the status it needs,
+  --      so a later, better-evidenced consent can be recorded.
+  PERFORM public.record_channel_reconsent(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '612-555-0431',
+    'written', 'Countersigned at the second walkthrough', 'field-sms-v1', NULL);
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550431';
+  ASSERT r.evidence = 'Countersigned at the second walkthrough' AND r.status = 'opted_out',
+    'FAIL 27d: reconsent must stay re-callable, got ' || COALESCE(r.evidence, '<null>');
+
+  -- 27e. And it buys no grant: the studio still cannot type its way past the
+  --      refusal.
+  raised := NULL;
+  BEGIN
+    PERFORM public.record_channel_consent(
+      'b0000000-0000-4000-8000-00000000000a', 'sms', '612-555-0431', 'granted',
+      'written', 'Countersigned at the second walkthrough', 'field-sms-v1', NULL);
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'channel_opted_out',
+    'FAIL 27e: a grant after reconsent must still be refused, got '
+      || COALESCE(raised, '<no error>');
+
+  PERFORM pg_temp.reset_role();
+
+  -- 27f. The recipient answers on the rail, and only then does the door open.
+  UPDATE studio_channel_consent
+     -- clock_timestamp(), not now(): in a real deployment the rail's write is a
+     -- LATER transaction than the refusal it answers, and the gate asks for a
+     -- consent date strictly after the opt-out date. now() is frozen at
+     -- transaction start for the whole of this test file.
+     SET status = 'granted', consented_at = clock_timestamp(), refusal_unanswered = false,
+         source = 'inbound_sms', evidence = 'Replied START', recorded_at = clock_timestamp()
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550431';
+
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+  PERFORM public.record_channel_consent(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '612-555-0431', 'granted',
+    'written', 'Kickoff form', 'field-sms-v1', NULL);
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550431';
+  ASSERT r.status = 'granted' AND r.evidence = 'Kickoff form',
+    'FAIL 27f: after the recipient''s own answer the studio may record again';
+  PERFORM pg_temp.reset_role();
+
+  RAISE NOTICE '27. reconsent is evidence-only and re-callable (r7 M7-2): passed';
   RAISE NOTICE 'All W1a assertions passed.';
 END
 $$;
