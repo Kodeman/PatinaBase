@@ -903,6 +903,14 @@ BEGIN
   --      person was shown when they consented is the audit's, and it stays.
   --      Laundering is closed by the evidence gate instead: source and evidence
   --      were restated by this very call.
+  --
+  --      AND THE REFUSAL'S WORDS GO ON THE REFUSAL'S SIDE (r6 R6-M1). The
+  --      refusal used to write the CONSENT columns too, so this one ordinary
+  --      pair of acts left the record reading (verbal, "Told me at the
+  --      walk-through to stop") against the GRANT's surviving consented_at:
+  --      R-Q's grant sentence composed to "Verbal consent, <the grant's date>"
+  --      and "Signed 2025 form" — the 10DLC artifact of the consent itself —
+  --      was gone with no audit row.
   PERFORM public.record_channel_consent(
     'b0000000-0000-4000-8000-00000000000a', 'sms', '6125550166', 'opted_out',
     'verbal', 'Told me at the walk-through to stop', NULL, NULL);
@@ -910,8 +918,12 @@ BEGIN
    WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
      AND channel_value = '+16125550166';
   ASSERT r.status = 'opted_out', 'FAIL 9d3: expected opted_out, got ' || COALESCE(r.status, '<none>');
-  ASSERT r.source = 'verbal' AND r.evidence = 'Told me at the walk-through to stop',
+  ASSERT r.opt_out_source = 'verbal'
+     AND r.opt_out_evidence = 'Told me at the walk-through to stop',
     'FAIL 9d3: the refusal must carry its OWN words, got '
+    || COALESCE(r.opt_out_source, '<null>') || ' / ' || COALESCE(r.opt_out_evidence, '<null>');
+  ASSERT r.source = 'written' AND r.evidence = 'Signed 2025 form',
+    'FAIL 9d3b: and it must not speak for the GRANT it is recorded over (r6 R6-M1), got '
     || COALESCE(r.source, '<null>') || ' / ' || COALESCE(r.evidence, '<null>');
   ASSERT r.disclosure_version = 'field-sms-v1',
     'FAIL 9d3: the disclosure version must not be nulled by a change, got '
@@ -941,15 +953,25 @@ BEGIN
   ASSERT raised = 'channel_opted_out',
     'FAIL 9e2: opted_out -> pending must be refused, got ' || COALESCE(raised, '<no error>');
 
-  -- 9f. …but a re-record of the SAME refusal is fine, and restates its words.
+  -- 9f. …but a re-record of the SAME refusal is fine. What it may CHANGE is
+  --     bounded by two rules that both bite here: a studio-sourced refusal does
+  --     not speak for the texted one 9e just recorded (r7 R7-M1), and it does
+  --     not fall back onto the consent side either (r6 R6-M1). So the call is
+  --     accepted and writes nothing — which is what a duplicate refusal is
+  --     worth. Block 28e covers a studio refusal restating a studio refusal.
   PERFORM public.record_channel_consent(
     'b0000000-0000-4000-8000-00000000000a', 'sms', '6125550166', 'opted_out',
     'verbal', 'Told me on site to stop texting', NULL, NULL);
   SELECT * INTO r FROM studio_channel_consent
    WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
      AND channel_value = '+16125550166';
-  ASSERT r.evidence = 'Told me on site to stop texting',
-    'FAIL 9f: a same-status re-record should restate the evidence, got ' || COALESCE(r.evidence, '<null>');
+  ASSERT r.status = 'opted_out' AND r.opt_out_source = 'inbound_sms'
+     AND r.opt_out_evidence = 'Replied STOP',
+    'FAIL 9f: hearsay must not speak for the texted refusal, got '
+      || COALESCE(r.opt_out_source, '<null>') || ' / ' || COALESCE(r.opt_out_evidence, '<null>');
+  ASSERT r.source = 'written' AND r.evidence = 'Signed 2025 form',
+    'FAIL 9f2: nor may it land on the consent side instead (r6 R6-M1), got '
+      || COALESCE(r.source, '<null>') || ' / ' || COALESCE(r.evidence, '<null>');
 
   -- 9g. The named way back needs the full evidence set.
   raised := NULL;
@@ -1423,7 +1445,9 @@ BEGIN
   -- r6 B6-1: the second and third legs are stated on the REFUSAL
   -- (EXCLUDED.status = 'opted_out' is the only exemption), never on
   -- "which verdict is being written".
-  ASSERT norm LIKE '%WHERE (scc.status IS DISTINCT FROM ''opted_out'' OR EXCLUDED.status = ''opted_out'') AND (EXCLUDED.status = ''opted_out'' OR (scc.refusal_unanswered IS NOT TRUE%RETURNING%',
+  -- r6 R6-M3 adds ONE exemption to both legs, and it is spelled out here so it
+  -- cannot widen unnoticed: email, and `granted`, and nothing else.
+  ASSERT norm LIKE '%WHERE (scc.status IS DISTINCT FROM ''opted_out'' OR EXCLUDED.status = ''opted_out'' OR (EXCLUDED.channel_kind = ''email'' AND EXCLUDED.status = ''granted'')) AND (EXCLUDED.status = ''opted_out'' OR (EXCLUDED.channel_kind = ''email'' AND EXCLUDED.status = ''granted'') OR (scc.refusal_unanswered IS NOT TRUE%RETURNING%',
     'FAIL 14a: record_channel_consent must gate opted_out AND the unanswered refusal in the upsert''s DO UPDATE … WHERE';
   ASSERT norm NOT LIKE '%EXCLUDED.status <> ''granted''%',
     'FAIL 14a2: no leg may be stated on the verdict being written (r6 B6-1)';
@@ -1436,6 +1460,11 @@ BEGIN
     'FAIL 14a4: a record already at granted must not be exempt from the refusal gate (r7 M7-1)';
   ASSERT norm NOT LIKE '%WHEN EXCLUDED.status = ''granted'' THEN false%',
     'FAIL 14a5: no verdict written through this door may lower refusal_unanswered (r7 M7-1)';
+  -- r6 R6-M3: the one thing that DOES lower it is the email grant, and it is
+  -- keyed off the channel as well as the verdict. Asserted positively so the
+  -- SMS half of M7-1 and the email door cannot be confused for each other.
+  ASSERT norm LIKE '%WHEN EXCLUDED.channel_kind = ''email'' AND EXCLUDED.status = ''granted'' THEN false%',
+    'FAIL 14a6: the email grant must lower refusal_unanswered — nothing else answers an email refusal (r6 R6-M3)';
 
   SELECT regexp_replace(
            regexp_replace(pg_get_functiondef(p.oid), '--[^\n]*', '', 'g'),
@@ -3330,12 +3359,16 @@ BEGIN
     'FAIL 28b3: nor may it claim to have written the refusal down, got '
       || COALESCE(r.opt_out_recorded_at::text, '<null>') || ' / '
       || COALESCE(r.opt_out_recorded_by::text, '<null>');
-  -- The studio's own account is not lost: it lands on the CONSENT side, with
-  -- recorded_at saying when the studio told us and recorded_by naming who.
-  ASSERT r.source = 'verbal' AND r.evidence = 'He told me on site'
-     AND r.recorded_by = 'a0000000-0000-4000-8000-000000000001',
-    'FAIL 28b4: the studio''s own account belongs on the consent side, got '
-      || COALESCE(r.source, '<null>') || ' / ' || COALESCE(r.evidence, '<null>');
+  -- AND IT DOES NOT LAND ON THE CONSENT SIDE INSTEAD (r6 R6-M1). That side
+  -- holds the GRANT's evidence, beside the consented_at the record keeps; a
+  -- refusal writing there composed R-Q's grant sentence out of the refusal's
+  -- own words. A duplicate refusal writes nothing, which is what it is worth —
+  -- here the record has never held a grant, so all five stay NULL.
+  ASSERT r.source IS NULL AND r.evidence IS NULL AND r.recorded_by IS NULL
+     AND r.recorded_at IS NULL AND r.disclosure_version IS NULL,
+    'FAIL 28b4: a refusal must not write the consent side (r6 R6-M1), got '
+      || COALESCE(r.source, '<null>') || ' / ' || COALESCE(r.evidence, '<null>') || ' / '
+      || COALESCE(r.recorded_by::text, '<null>');
   ASSERT r.status = 'opted_out' AND r.refusal_unanswered,
     'FAIL 28b5: the refusal still stands unanswered, got '
       || COALESCE(r.status, '<null>');
@@ -3956,6 +3989,277 @@ BEGIN
   PERFORM pg_temp.reset_role();
   RAISE NOTICE '31. a rule is filed under the noun its subject actually is '
                '(r8 F1): passed';
+END
+$$;
+
+-- ─── 32. r6 R6-M1: a refusal never writes the CONSENT side ─────────────────
+--
+-- The record holds a GRANT and a later REFUSAL at once, and R-Q has to print
+-- both: "Written consent, 2 May 2025 · Opted out verbally, 3 Dec 2025". The
+-- opted_out branch used to write the consent's five columns as well as the
+-- refusal's own four, and the evidence gate forces a refusal to carry a
+-- non-blank source and evidence, so the COALESCEs never protected anything.
+-- One ordinary PR-m act — the F-12 shape, a written kickoff-form grant then the
+-- verbal refusal the studio heard — left the record dating the grant to 2 May
+-- and sourcing it to the refusal: R-Q's grant sentence composed to "Verbal
+-- consent, 2 May 2025" and the consent's own 10DLC artifact was gone with no
+-- audit row. This is W4-M2's finding arriving from the opposite direction.
+
+DO $$
+DECLARE
+  grant_row RECORD;
+  r         RECORD;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+
+  PERFORM public.record_channel_consent(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '612-555-0490', 'granted',
+    'written', 'Signed the Lindqvist kickoff form', 'field-sms-v1', NULL);
+  SELECT * INTO grant_row FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550490';
+
+  -- PR-m: the studio marks the refusal it heard. Accepted — recording a
+  -- refusal is always the way forward.
+  PERFORM public.record_channel_consent(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '612-555-0490', 'opted_out',
+    'verbal', 'He told me on site', NULL, NULL);
+  PERFORM pg_temp.reset_role();
+
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550490';
+
+  -- 32a. The refusal is on the books, with its own account of itself.
+  ASSERT r.status = 'opted_out' AND r.refusal_unanswered
+     AND r.opt_out_source = 'verbal' AND r.opt_out_evidence = 'He told me on site'
+     AND r.opt_out_recorded_by = 'a0000000-0000-4000-8000-000000000001',
+    'FAIL 32a: the refusal must be recorded with its own evidence, got '
+      || COALESCE(r.status, '<null>') || ' / '
+      || COALESCE(r.opt_out_source, '<null>') || ' / '
+      || COALESCE(r.opt_out_evidence, '<null>');
+
+  -- 32b. And the GRANT the record still dates is still the grant that happened.
+  ASSERT r.source = 'written',
+    'FAIL 32b: the grant''s source must survive the refusal, got '
+      || COALESCE(r.source, '<null>');
+  ASSERT r.evidence = 'Signed the Lindqvist kickoff form',
+    'FAIL 32b2: the grant''s words must survive the refusal, got '
+      || COALESCE(r.evidence, '<null>');
+  ASSERT r.disclosure_version = 'field-sms-v1',
+    'FAIL 32b3: the disclosure the person was shown must survive, got '
+      || COALESCE(r.disclosure_version, '<null>');
+  ASSERT r.recorded_at = grant_row.recorded_at,
+    'FAIL 32b4: the grant''s recorded_at must not walk forward to the refusal, got '
+      || COALESCE(r.recorded_at::text, '<null>') || ' vs '
+      || COALESCE(grant_row.recorded_at::text, '<null>');
+  ASSERT r.recorded_by = grant_row.recorded_by,
+    'FAIL 32b5: the grant''s recorder must survive the refusal';
+  ASSERT r.consented_at = grant_row.consented_at,
+    'FAIL 32b6: the grant''s DATE must survive the refusal (R-Q)';
+
+  -- 32c. Which is the point: both halves of R-Q's sentence compose, and the
+  --      grant half names a WRITTEN consent, not the refusal's verbal one.
+  ASSERT (r.source || ' consent, ' || to_char(r.consented_at, 'DD Mon YYYY'))
+         = ('written consent, ' || to_char(grant_row.consented_at, 'DD Mon YYYY')),
+    'FAIL 32c: R-Q''s grant sentence must still be the grant''s, got '
+      || COALESCE(r.source, '<null>');
+
+  RAISE NOTICE '32. a recorded refusal never speaks for the grant it stands '
+               'beside (r6 R6-M1): passed';
+END
+$$;
+
+-- ─── 33. r6 R6-M2: an EMPTY disclosure version is a blank, not a value ─────
+--
+-- Every gate in record_channel_consent tests blankness the SQL way —
+-- COALESCE(btrim(x), '') = ''. The DO UPDATE's disclosure_version tested NULL,
+-- and p_disclosure_version is the one evidence argument the opted_out branch
+-- does NOT require (deliberately: a refusal is not shown a disclosure). So a
+-- caller sending an empty form field rather than omitting it wrote '' straight
+-- over the stored version — the single column the file names as the one a
+-- refusal may not touch — and nothing restores it: reconsent overwrites it, the
+-- mirror only COALESCEs record → seat, the fold is ON CONFLICT DO NOTHING.
+
+DO $$
+DECLARE
+  r    RECORD;
+  norm TEXT;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+  PERFORM public.record_channel_consent(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '612-555-0491', 'granted',
+    'written', 'Signed the 2026 form', 'v2', NULL);
+
+  -- The blank, not the omission.
+  PERFORM public.record_channel_consent(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '612-555-0491', 'opted_out',
+    'verbal', 'Asked us to stop', '', NULL);
+  PERFORM pg_temp.reset_role();
+
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550491';
+  ASSERT r.status = 'opted_out',
+    'FAIL 33a: the refusal must still be recorded, got ' || COALESCE(r.status, '<null>');
+  ASSERT r.disclosure_version = 'v2',
+    'FAIL 33a2: a blank disclosure version must not wipe the stored one, got '
+      || COALESCE(NULLIF(r.disclosure_version, ''), '<blank>');
+
+  -- 33b. And the blank is refused where the disclosure IS required, so the
+  --      empty form field cannot launder a grant either.
+  DECLARE raised TEXT; BEGIN
+    PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+    raised := NULL;
+    BEGIN
+      PERFORM public.record_channel_consent(
+        'b0000000-0000-4000-8000-00000000000a', 'sms', '612-555-0492', 'granted',
+        'written', 'Signed', '', NULL);
+    EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+    ASSERT raised = 'consent_evidence_required',
+      'FAIL 33b: a blank disclosure version must be refused on a grant, got '
+        || COALESCE(raised, '<no error>');
+    PERFORM pg_temp.reset_role();
+  END;
+
+  -- 33c. The three consent-side columns all test blankness the same way, so a
+  --      future caller-side blank cannot empty any of them either. Held on the
+  --      source text: no verdict this RPC accepts can reach them with a blank
+  --      today, which is exactly why the rule needs a guard that does not rely
+  --      on a caller.
+  SELECT regexp_replace(
+           regexp_replace(pg_get_functiondef(p.oid), '--[^\n]*', '', 'g'),
+           '\s+', ' ', 'g') INTO norm
+    FROM pg_proc p JOIN pg_namespace ns ON ns.oid = p.pronamespace
+   WHERE ns.nspname = 'public' AND p.proname = 'record_channel_consent';
+  ASSERT norm LIKE '%COALESCE(NULLIF(btrim(EXCLUDED.source), ''''), scc.source)%',
+    'FAIL 33c: source must test blankness, not NULL (r6 R6-M2)';
+  ASSERT norm LIKE '%COALESCE(NULLIF(btrim(EXCLUDED.evidence), ''''), scc.evidence)%',
+    'FAIL 33c2: evidence must test blankness, not NULL (r6 R6-M2)';
+  ASSERT norm LIKE '%COALESCE(NULLIF(btrim(EXCLUDED.disclosure_version), ''''), scc.disclosure_version)%',
+    'FAIL 33c3: disclosure_version must test blankness, not NULL (r6 R6-M2)';
+
+  RAISE NOTICE '33. a blank evidence field cannot empty the evidence set '
+               '(r6 R6-M2): passed';
+END
+$$;
+
+-- ─── 34. r6 R6-M3: an EMAIL refusal has a way back; an SMS one does not ────
+--
+-- PR-m: "The way back is always a fresh recorded consent OR an inbound START."
+-- For SMS the wave chose the START half and defended it on 10DLC grounds — the
+-- inbound rail is the one writer that lowers refusal_unanswered. channel_kind
+-- also admits 'email', and on email that rail does not exist: pipeline.ts
+-- writes channel_kind 'sms' only, nothing in the tree writes an email consent
+-- row, and reconsent() no longer moves the status. So an email refusal was
+-- PERMANENT — recorded, then granted → channel_opted_out; reconsent, then
+-- granted → channel_opted_out; for ever, with no carrier rule asking for it.
+-- Latent only until direction §7's P3 email channel status lands.
+
+DO $$
+DECLARE
+  r      RECORD;
+  raised TEXT;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+
+  -- 34a. An unsubscribe the studio heard, recorded on the email channel.
+  PERFORM public.record_channel_consent(
+    'b0000000-0000-4000-8000-00000000000a', 'email', ' Dana@Example.COM ', 'opted_out',
+    'verbal', 'Asked to be taken off the list', NULL, NULL);
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_kind = 'email' AND channel_value = 'dana@example.com';
+  ASSERT r.status = 'opted_out' AND r.refusal_unanswered,
+    'FAIL 34a: the email refusal must be on the books, got '
+      || COALESCE(r.status, '<null>');
+
+  -- 34b. `pending` stays refused: the double opt-in is the SMS rail's dance,
+  --      and there is no inbound START on email to complete it.
+  raised := NULL;
+  BEGIN
+    PERFORM public.record_channel_consent(
+      'b0000000-0000-4000-8000-00000000000a', 'email', 'dana@example.com', 'pending',
+      'written', 'Signed the 2026 form', 'email-v1', NULL);
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'channel_opted_out',
+    'FAIL 34b: pending must still be refused on an email refusal, got '
+      || COALESCE(raised, '<no error>');
+
+  -- 34c. The evidence is still mandatory — "a fresh recorded consent" means a
+  --      source, the words, and the disclosure the person was shown.
+  raised := NULL;
+  BEGIN
+    PERFORM public.record_channel_consent(
+      'b0000000-0000-4000-8000-00000000000a', 'email', 'dana@example.com', 'granted',
+      'written', 'Signed the 2026 form', NULL, NULL);
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'consent_evidence_required',
+    'FAIL 34c: an email grant still needs its full evidence set, got '
+      || COALESCE(raised, '<no error>');
+
+  -- 34d. And with it, the door opens — the flag comes down, because nothing
+  --      else on email can ever lower it.
+  PERFORM public.record_channel_consent(
+    'b0000000-0000-4000-8000-00000000000a', 'email', 'dana@example.com', 'granted',
+    'written', 'Signed the 2026 form', 'email-v1', NULL);
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_kind = 'email' AND channel_value = 'dana@example.com';
+  ASSERT r.status = 'granted' AND NOT r.refusal_unanswered,
+    'FAIL 34d: a fresh recorded consent must be email''s way back, got '
+      || COALESCE(r.status, '<null>') || ' / ' || COALESCE(r.refusal_unanswered::text, '<null>');
+  ASSERT r.consented_at IS NOT NULL AND r.opt_out_at IS NOT NULL,
+    'FAIL 34d2: both dates must stay printable — "opted out …, consented again …" (R-Q)';
+  ASSERT r.opt_out_source = 'verbal'
+     AND r.opt_out_evidence = 'Asked to be taken off the list',
+    'FAIL 34d3: the refusal''s own account must survive the grant that answers it, got '
+      || COALESCE(r.opt_out_source, '<null>');
+  ASSERT r.source = 'written' AND r.evidence = 'Signed the 2026 form'
+     AND r.disclosure_version = 'email-v1',
+    'FAIL 34d4: and the grant must carry its own evidence, got '
+      || COALESCE(r.source, '<null>') || ' / ' || COALESCE(r.disclosure_version, '<null>');
+
+  -- 34e. THE ASYMMETRY IS THE WHOLE POINT. The same two acts on SMS are still
+  --      refused: there the recipient's own YES/START is the only answer, and
+  --      10DLC is why.
+  PERFORM public.record_channel_consent(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '612-555-0493', 'opted_out',
+    'verbal', 'Asked to be taken off the list', NULL, NULL);
+  raised := NULL;
+  BEGIN
+    PERFORM public.record_channel_consent(
+      'b0000000-0000-4000-8000-00000000000a', 'sms', '612-555-0493', 'granted',
+      'written', 'Signed the 2026 form', 'field-sms-v1', NULL);
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'channel_opted_out',
+    'FAIL 34e: an SMS refusal must still refuse a studio-recorded grant, got '
+      || COALESCE(raised, '<no error>');
+
+  -- 34e2. Including after reconsent() — the composed path r3r2 M-1 closed.
+  PERFORM public.record_channel_reconsent(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '612-555-0493',
+    'written', 'Signed the 2026 form', 'field-sms-v1', NULL);
+  raised := NULL;
+  BEGIN
+    PERFORM public.record_channel_consent(
+      'b0000000-0000-4000-8000-00000000000a', 'sms', '612-555-0493', 'granted',
+      'written', 'Signed the 2026 form', 'field-sms-v1', NULL);
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'channel_opted_out',
+    'FAIL 34e2: reconsent plus a grant must still not compose on SMS, got '
+      || COALESCE(raised, '<no error>');
+
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_kind = 'sms' AND channel_value = '+16125550493';
+  ASSERT r.status = 'opted_out' AND r.refusal_unanswered,
+    'FAIL 34e3: the SMS refusal must still stand unanswered, got '
+      || COALESCE(r.status, '<null>');
+
+  PERFORM pg_temp.reset_role();
+  RAISE NOTICE '34. an email refusal is recoverable by a fresh recorded '
+               'consent and an SMS one is not (r6 R6-M3): passed';
   RAISE NOTICE 'All W1a assertions passed.';
 END
 $$;
