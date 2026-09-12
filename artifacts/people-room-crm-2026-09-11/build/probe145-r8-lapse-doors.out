@@ -1,0 +1,74 @@
+BEGIN
+SET
+                              set_config                               
+-----------------------------------------------------------------------
+ {"sub":"a0000000-0000-0000-0000-000000000003","role":"authenticated"}
+(1 row)
+
+                 leg                  | member 
+--------------------------------------+--------
+ actor is a plain admin of the studio | t
+(1 row)
+
+       leg        |  word  
+------------------+--------
+ Northgate before | lapsed
+(1 row)
+
+       leg        |                  id                  | doc_type | expires_on |       blocks       
+------------------+--------------------------------------+----------+------------+--------------------
+ the gating lapse | d0e50000-0000-0000-0000-000000000006 | coi_gl   | 2026-03-31 | {site_access,draw}
+(1 row)
+
+DELETE 1
+                 leg                 |  word   
+-------------------------------------+---------
+ Northgate after ONE ordinary DELETE | current
+(1 row)
+
+         leg          | display_name  | paper_state 
+----------------------+---------------+-------------
+ Dana's Directory row | Dana Kowalski | current
+(1 row)
+
+ROLLBACK
+BEGIN
+SET
+                              set_config                               
+-----------------------------------------------------------------------
+ {"sub":"a0000000-0000-0000-0000-000000000003","role":"authenticated"}
+(1 row)
+
+INSERT 0 1
+UPDATE 1
+                           leg                            |  word   
+----------------------------------------------------------+---------
+ after a CORRECT renewal (gates carried, in force, dated) | current
+(1 row)
+
+UPDATE 1
+                                  leg                                   |  word   
+------------------------------------------------------------------------+---------
+ after UPDATE SET blocks = {} (trigger silent: blocks not in UPDATE OF) | current
+(1 row)
+
+UPDATE 1
+                           leg                            |  word   
+----------------------------------------------------------+---------
+ after the renewal itself expires (trigger fires, passes) | current
+(1 row)
+
+         leg          | display_name  | paper_state 
+----------------------+---------------+-------------
+ Dana's Directory row | Dana Kowalski | current
+(1 row)
+
+               leg                | doc_type | expires_on |       blocks       | retired 
+----------------------------------+----------+------------+--------------------+---------
+ what the card actually holds now | coi_gl   | 2026-03-31 | {site_access,draw} | t
+ what the card actually holds now | coi_gl   | 2026-09-11 | {}                 | f
+ what the card actually holds now | license  | 2027-12-31 | {}                 | f
+ what the card actually holds now | w9       |            | {payment}          | f
+(4 rows)
+
+ROLLBACK

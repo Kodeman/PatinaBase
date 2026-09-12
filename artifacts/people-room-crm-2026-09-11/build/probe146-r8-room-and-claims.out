@@ -1,0 +1,63 @@
+BEGIN
+SET
+SET
+  role   | count 
+---------+-------
+ client  |     7
+ contact |    49
+ lead    |     5
+ sub     |     1
+(4 rows)
+
+ entity_kind | count 
+-------------+-------
+ company     |    21
+ person      |    28
+(2 rows)
+
+ display_name  | consent_status 
+---------------+----------------
+ Amara Osei    | granted
+ Dana Kowalski | granted
+ Erin Sato     | granted
+ Joe Wozniak   | pending
+ Luis Ochoa    | granted
+ Ngozi Eze     | granted
+ Pete Rusk     | opted_out
+(7 rows)
+
+      display_name       | paper_state 
+-------------------------+-------------
+ Ashgrove Millwork       | current
+ Beck + Rowe Architects  | current
+ Boreal HVAC             | current
+ Cedar & Iron Framing    | current
+ Claire Bissett          | current
+ Erin Sato               | current
+ Frank Bauer             | current
+ Granite North           | current
+ Halvorsen Cabinet Works | current
+ Ingrid Halvorsen        | current
+ Jim Lindgren            | current
+ Joe Wozniak             | current
+ Jonah Feld              | current
+ Jonah Feld Photography  | current
+ Kelly Marsh             | current
+(15 rows)
+
+ display_name | seat_count | nested 
+--------------+------------+--------
+(0 rows)
+
+        leg        | count 
+-------------------+-------
+ rows_overclaiming |     0
+(1 row)
+
+       leg        | count 
+------------------+-------
+ orphan_seat_rows |     2
+(1 row)
+
+RESET
+ROLLBACK
