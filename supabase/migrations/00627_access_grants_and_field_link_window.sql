@@ -449,12 +449,34 @@ BEGIN
     CROSS JOIN LATERAL (VALUES (pp.on_site_to), (pp.warranty_until)) AS v(d)
    WHERE pp.id = p_party_id;
 
+  -- Every branch must land in the FUTURE. A window that has already closed
+  -- cannot date a live grant: taking it unconditionally stamped the token in
+  -- the past (w1b final review r1 MAJOR-1), and because the supersede below
+  -- runs first, the trade's working link was revoked in the same call while
+  -- the text carried a URL that was dead on arrival (_shared/sms.ts:624-629
+  -- mints for any {{link}} template — field-daily's digest, both fc_dispatch
+  -- triggers and the site-request rail). A closed window is the same fact as
+  -- no window: the 90-day DEFAULT answers, exactly as it does for a windowless
+  -- seat, rather than the studio being handed a dead date.
   v_expires := CASE
-    -- Through the END of the window's last day, not its midnight.
-    WHEN v_window_end IS NOT NULL THEN v_window_end::timestamptz + interval '1 day'
-    WHEN p_expires_at IS NOT NULL THEN p_expires_at
+    -- Through the END of the window's last day, not its midnight — while that
+    -- day is still ahead.
+    WHEN v_window_end IS NOT NULL
+     AND v_window_end::timestamptz + interval '1 day' > now()
+         THEN v_window_end::timestamptz + interval '1 day'
+    WHEN p_expires_at IS NOT NULL AND p_expires_at > now() THEN p_expires_at
     ELSE now() + interval '90 days'
   END;
+
+  -- The invariant, stated where it cannot be edited around: a mint that cannot
+  -- produce a usable date revokes nothing. It must raise BEFORE the supersede.
+  IF v_expires IS NULL OR v_expires <= now() THEN
+    RAISE EXCEPTION 'field_link_window_closed'
+      USING HINT = 'A field link may not be minted with an expiry in the past, '
+                   'and a mint that cannot produce one must not revoke the '
+                   'token the trade is already using.',
+            ERRCODE = 'check_violation';
+  END IF;
 
   -- Supersede prior active tokens (regenerate — hash-at-rest precludes reuse).
   UPDATE public.field_link_tokens
@@ -479,9 +501,14 @@ COMMENT ON FUNCTION public.create_field_link(UUID, TIMESTAMPTZ) IS
   'callers must own the party''s project; service-role/internal callers '
   '(auth.uid() IS NULL) bypass the ownership check with created_by NULL '
   '(00284). EXPIRY (PR-d, 00627): the seat''s window end — the later of '
-  'on_site_to and warranty_until — through the end of that day; else the '
-  'caller''s p_expires_at; else the old 90 days. The 90-day clock is retired '
-  'as a DEFAULT, not removed: a seat with no window still needs a date.';
+  'on_site_to and warranty_until — through the end of that day, WHILE THAT DAY '
+  'IS STILL AHEAD; else the caller''s p_expires_at when that is in the future; '
+  'else the old 90 days. The 90-day clock is retired as a DEFAULT, not '
+  'removed: a seat with no LIVE window still needs a date, and a closed window '
+  'is the same fact as no window. No branch may date a token in the past: a '
+  'mint that cannot produce a usable date raises field_link_window_closed '
+  'BEFORE the supersede, so the link the trade is already using is never '
+  'revoked on behalf of a dead one (w1b final review r1 MAJOR-1).';
 
 REVOKE ALL ON FUNCTION public.create_field_link(UUID, TIMESTAMPTZ) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.create_field_link(UUID, TIMESTAMPTZ)
@@ -506,7 +533,8 @@ COMMENT ON FUNCTION public.create_field_link(UUID) IS
   'create_field_link(uuid, timestamptz) so the window-based expiry (PR-d, '
   '00627) applies to every existing caller — the party sheet, the roster row, '
   'sms-dispatch and the field-daily cron — with no call site changed. With no '
-  'window on the seat the old 90-day fallback still applies.';
+  'window on the seat, or a window that has already closed, the old 90-day '
+  'fallback still applies; no caller ever receives a link dated in the past.';
 
 REVOKE ALL ON FUNCTION public.create_field_link(UUID) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.create_field_link(UUID) TO authenticated, service_role;

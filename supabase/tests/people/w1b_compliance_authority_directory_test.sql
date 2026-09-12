@@ -170,7 +170,50 @@ BEGIN
     RAISE EXCEPTION '1j a superseded lapse must not still hold the card; got %', w;
   END IF;
 
-  RAISE NOTICE '1. compliance_state: four words, the 30-day boundary both ways, worst-first precedence, and a superseded lapse released: passed';
+  -- a paper that holds NO gate cannot move the word (w1b r1 MAJOR-3).
+  -- CS2 §4: "a date with no gate changes nothing"; PR-h puts the word in the
+  -- blocked family, so a lapsed training card that gates nothing must not make
+  -- a firm whose COI is current print the blocked word.
+  INSERT INTO public.studio_compliance_documents
+    (id, organization_id, holder_type, holder_id, doc_type, doc_label, expires_on, blocks)
+  VALUES ('f5000000-0000-4000-8000-000000000003','f1000000-0000-4000-8000-00000000000a','company',
+          'f2000000-0000-4000-8000-000000000001','other_named','a training card',
+          CURRENT_DATE - 1, '{}');
+  w := public.compliance_state('f2000000-0000-4000-8000-000000000001');
+  IF w <> 'current' THEN
+    RAISE EXCEPTION '1k a gateless lapse changed the word (CS2 §4), got %', w;
+  END IF;
+
+  -- nor inside the 30-day window
+  UPDATE public.studio_compliance_documents SET expires_on = CURRENT_DATE + 10
+   WHERE id = 'f5000000-0000-4000-8000-000000000003';
+  w := public.compliance_state('f2000000-0000-4000-8000-000000000001');
+  IF w <> 'current' THEN
+    RAISE EXCEPTION '1l a gateless paper 10 days out changed the word, got %', w;
+  END IF;
+
+  -- give that SAME paper one gate and the same date now holds the card
+  UPDATE public.studio_compliance_documents
+     SET blocks = '{payment}', expires_on = CURRENT_DATE - 1
+   WHERE id = 'f5000000-0000-4000-8000-000000000003';
+  w := public.compliance_state('f2000000-0000-4000-8000-000000000001');
+  IF w <> 'lapsed' THEN
+    RAISE EXCEPTION '1m a gated lapse must hold the card, got %', w;
+  END IF;
+
+  -- and not_on_file still means NO paper, not no GATING paper: a card holding
+  -- only a gateless expired certificate is on file, and reads current.
+  INSERT INTO public.studio_compliance_documents
+    (id, organization_id, holder_type, holder_id, doc_type, doc_label, expires_on, blocks)
+  VALUES ('f5000000-0000-4000-8000-000000000004','f1000000-0000-4000-8000-00000000000a','company',
+          'f2000000-0000-4000-8000-000000000003','other_named','a courtesy letter',
+          CURRENT_DATE - 1, '{}');
+  w := public.compliance_state('f2000000-0000-4000-8000-000000000003');
+  IF w <> 'current' THEN
+    RAISE EXCEPTION '1n a card holding only gateless paper must read current, got %', w;
+  END IF;
+
+  RAISE NOTICE '1. compliance_state: four words, the 30-day boundary both ways, worst-first precedence, a superseded lapse released, and a gateless lapse that changes nothing until it holds a gate: passed';
 END $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -236,7 +279,70 @@ BEGIN
     RAISE EXCEPTION '2d a gate no surface honours was accepted: %', COALESCE(raised,'no error');
   END IF;
 
-  RAISE NOTICE '2. the holder guard: a person is not a firm, a document belongs to one studio, other_named needs its label, and blocks is a closed vocabulary: passed';
+  -- a supersede is a RENEWAL, not a way to hide a lapse (w1b r1 MAJOR-4).
+  -- Card and studio were the whole guard, so one UPDATE through PostgREST by a
+  -- plain studio member pointed a lapsed COI at the firm's undated W-9 and the
+  -- paper word flipped from lapsed to current with the lapse still on file.
+  INSERT INTO public.studio_compliance_documents
+    (id, organization_id, holder_type, holder_id, doc_type, expires_on, blocks) VALUES
+    ('f5000000-0000-4000-8000-000000000021','f1000000-0000-4000-8000-00000000000a','company',
+     'f2000000-0000-4000-8000-000000000001','coi_gl', CURRENT_DATE - 1, '{site_access}'),
+    ('f5000000-0000-4000-8000-000000000022','f1000000-0000-4000-8000-00000000000a','company',
+     'f2000000-0000-4000-8000-000000000001','w9', NULL, '{payment}'),
+    ('f5000000-0000-4000-8000-000000000023','f1000000-0000-4000-8000-00000000000a','company',
+     'f2000000-0000-4000-8000-000000000001','coi_gl', CURRENT_DATE - 10, '{site_access}'),
+    ('f5000000-0000-4000-8000-000000000024','f1000000-0000-4000-8000-00000000000a','company',
+     'f2000000-0000-4000-8000-000000000001','coi_gl', CURRENT_DATE + 365, '{site_access}'),
+    ('f5000000-0000-4000-8000-000000000025','f1000000-0000-4000-8000-00000000000a','company',
+     'f2000000-0000-4000-8000-000000000001','w9', CURRENT_DATE - 1, '{payment}');
+
+  -- the walked laundering: a W-9 as the renewal of a COI
+  BEGIN
+    UPDATE public.studio_compliance_documents
+       SET superseded_by = 'f5000000-0000-4000-8000-000000000022'
+     WHERE id = 'f5000000-0000-4000-8000-000000000021';
+    raised := NULL;
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM;
+  END;
+  IF raised IS NULL OR raised NOT LIKE '%compliance_successor_wrong_type%' THEN
+    RAISE EXCEPTION '2e a W-9 was accepted as the renewal of a lapsed COI: %', COALESCE(raised,'no error');
+  END IF;
+
+  -- and a COI that expired even earlier is not a renewal either
+  BEGIN
+    UPDATE public.studio_compliance_documents
+       SET superseded_by = 'f5000000-0000-4000-8000-000000000023'
+     WHERE id = 'f5000000-0000-4000-8000-000000000021';
+    raised := NULL;
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM;
+  END;
+  IF raised IS NULL OR raised NOT LIKE '%compliance_successor_not_later%' THEN
+    RAISE EXCEPTION '2f a shorter-dated COI was accepted as a renewal: %', COALESCE(raised,'no error');
+  END IF;
+
+  -- the real renewal lands: the same paper, covering longer
+  UPDATE public.studio_compliance_documents
+     SET superseded_by = 'f5000000-0000-4000-8000-000000000024'
+   WHERE id = 'f5000000-0000-4000-8000-000000000021';
+  IF NOT EXISTS (
+    SELECT 1 FROM public.studio_compliance_documents
+     WHERE id = 'f5000000-0000-4000-8000-000000000021'
+       AND superseded_by = 'f5000000-0000-4000-8000-000000000024') THEN
+    RAISE EXCEPTION '2g a genuine renewal was refused';
+  END IF;
+
+  -- an UNDATED successor of the same paper is open-ended and qualifies
+  UPDATE public.studio_compliance_documents
+     SET superseded_by = 'f5000000-0000-4000-8000-000000000022'
+   WHERE id = 'f5000000-0000-4000-8000-000000000025';
+  IF NOT EXISTS (
+    SELECT 1 FROM public.studio_compliance_documents
+     WHERE id = 'f5000000-0000-4000-8000-000000000025'
+       AND superseded_by = 'f5000000-0000-4000-8000-000000000022') THEN
+    RAISE EXCEPTION '2h an undated W-9 was refused as the renewal of a dated one';
+  END IF;
+
+  RAISE NOTICE '2. the holder guard: a person is not a firm, a document belongs to one studio, other_named needs its label, blocks is a closed vocabulary, and a supersede must be the same paper covering at least as long: passed';
 END $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -371,8 +477,59 @@ BEGIN
    WHERE seat_id IN ('f4000000-0000-4000-8000-000000000101','f4000000-0000-4000-8000-000000000102');
   IF n <> 1 THEN RAISE EXCEPTION '4e the two seats keyed differently'; END IF;
 
+  -- MIXED KINDS (w1b r1 MAJOR-2): the same human seated under a kind the
+  -- Directory does not emit. people_directory picked its winner over the seven
+  -- kinds and people_directory_seats over every kind, so the newest seat being
+  -- a `vendor` made the row claim two seats and nest none — the one join the
+  -- redesign rests on.
   PERFORM pg_temp.reset_role();
-  RAISE NOTICE '4. the uncarded identity: two seats on two jobs collapse to one row keyed on the phone, pointing at the newest seat: passed';
+  INSERT INTO public.project_parties
+    (id, project_id, party_kind, display_name, phone, stage, created_by, updated_at)
+  VALUES
+    ('f4000000-0000-4000-8000-000000000111','f3000000-0000-4000-8000-00000000000a','sub',
+     'Mixed Kinds','(612) 555-0888','active','a0000000-0000-0000-0000-000000000004','2026-01-01T00:00:00Z'),
+    ('f4000000-0000-4000-8000-000000000112','d0e00000-0000-0000-0000-00000000000a','vendor',
+     'Mixed Kinds','(612) 555-0888','active','a0000000-0000-0000-0000-000000000004','2026-06-01T00:00:00Z');
+
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+
+  SELECT count(*) INTO n FROM public.people_directory WHERE display_name = 'Mixed Kinds';
+  IF n <> 1 THEN
+    RAISE EXCEPTION '4f a mixed-kind uncarded human must be ONE row, found %', n;
+  END IF;
+
+  SELECT person_id, seat_count INTO v_person, n
+    FROM public.people_directory WHERE display_name = 'Mixed Kinds';
+  IF v_person <> 'f4000000-0000-4000-8000-000000000111' THEN
+    RAISE EXCEPTION '4g the Directory must win on a seat it actually emits (the sub), got %', v_person;
+  END IF;
+  IF n <> 2 THEN RAISE EXCEPTION '4h seat_count must count every kind, got %', n; END IF;
+
+  SELECT count(*) INTO n FROM public.people_directory_seats WHERE person_id = v_person;
+  IF n <> 2 THEN
+    RAISE EXCEPTION '4i the row claims 2 seats and nests % — the two views picked different winners', n;
+  END IF;
+
+  SELECT count(*) INTO n FROM public.people_directory_seats
+   WHERE person_id = v_person AND party_kind = 'vendor';
+  IF n <> 1 THEN
+    RAISE EXCEPTION '4j the vendor seat must nest under the same identity row, found %', n;
+  END IF;
+
+  -- the invariant itself, over EVERY Directory row the caller can see:
+  -- what a row claims is what it nests.
+  SELECT count(*) INTO n
+    FROM public.people_directory pd
+   WHERE pd.seat_count > 0
+     AND pd.seat_count <> (
+           SELECT count(*) FROM public.people_directory_seats s
+            WHERE s.person_id = pd.person_id);
+  IF n <> 0 THEN
+    RAISE EXCEPTION '4k % Directory rows claim a seat count they cannot nest', n;
+  END IF;
+
+  PERFORM pg_temp.reset_role();
+  RAISE NOTICE '4. the uncarded identity: two seats on two jobs collapse to one row keyed on the phone, pointing at the newest seat, a mixed-kind identity nests every seat it claims, and no row anywhere claims a count it cannot nest: passed';
 END $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -607,9 +764,12 @@ END $$;
 -- ═══════════════════════════════════════════════════════════════════════════
 DO $$
 DECLARE
-  v_id    uuid;
-  v_exp   timestamptz;
-  raised  text;
+  v_id     uuid;
+  v_prior  uuid;
+  v_exp    timestamptz;
+  v_status text;
+  n        integer;
+  raised   text;
 BEGIN
   -- a seat with a window: 2026-12-18 → through the end of that day
   SELECT id INTO v_id FROM public.create_field_link('f4000000-0000-4000-8000-000000000001');
@@ -670,7 +830,64 @@ BEGIN
     RAISE EXCEPTION '10g a non-owner minted a field link, sqlstate %', COALESCE(raised,'none');
   END IF;
 
-  RAISE NOTICE '10. create_field_link: the engagement window sets the expiry and outranks a caller date, warranty answers alone, the 90-day fallback survives for a windowless seat, the supersede and 00284''s ownership guard are untouched: passed';
+  -- A CLOSED window cannot date a live grant (w1b r1 MAJOR-1). Taking it
+  -- unconditionally stamped the token in the past and revoked the link the
+  -- trade was already using in the same call, and the shipped SMS rail
+  -- (_shared/sms.ts:624-629, any {{link}} template) texted that dead URL.
+  INSERT INTO public.project_parties
+    (id, project_id, party_kind, display_name, phone, stage,
+     on_site_from, on_site_to, created_by)
+  VALUES ('f4000000-0000-4000-8000-000000000004','f3000000-0000-4000-8000-00000000000a','sub',
+          'Closed Window Person','(612) 555-0914','off_job',
+          CURRENT_DATE - 90, CURRENT_DATE - 30,'a0000000-0000-0000-0000-000000000004');
+
+  SELECT id INTO v_prior FROM public.create_field_link('f4000000-0000-4000-8000-000000000004');
+  SELECT expires_at INTO v_exp FROM public.field_link_tokens WHERE id = v_prior;
+  IF v_exp <= now() THEN
+    RAISE EXCEPTION '10h a closed window minted a token dated in the past: %', v_exp;
+  END IF;
+  IF v_exp::date <> (now() + interval '90 days')::date THEN
+    RAISE EXCEPTION '10i a closed window must fall to the 90-day default, got %', v_exp;
+  END IF;
+
+  -- and the link the studio just copied is actually live
+  IF public.reach_state_for(NULL, NULL, 'f4000000-0000-4000-8000-000000000004') <> 'field_link' THEN
+    RAISE EXCEPTION '10j the minted link is not live: reach reads %',
+      public.reach_state_for(NULL, NULL, 'f4000000-0000-4000-8000-000000000004');
+  END IF;
+
+  -- a caller date in the past is not stamped either
+  SELECT id INTO v_id
+    FROM public.create_field_link('f4000000-0000-4000-8000-000000000004',
+                                  now() - interval '1 day');
+  SELECT expires_at INTO v_exp FROM public.field_link_tokens WHERE id = v_id;
+  IF v_exp <= now() THEN
+    RAISE EXCEPTION '10k a caller date in the past was stamped: %', v_exp;
+  END IF;
+
+  -- the prior token was superseded only by a mint that could succeed
+  SELECT status INTO v_status FROM public.field_link_tokens WHERE id = v_prior;
+  IF v_status <> 'revoked' THEN
+    RAISE EXCEPTION '10l the prior token reads % after a successful mint', v_status;
+  END IF;
+  SELECT count(*) INTO n FROM public.field_link_tokens
+   WHERE party_id = 'f4000000-0000-4000-8000-000000000004' AND status = 'active';
+  IF n <> 1 THEN
+    RAISE EXCEPTION '10m the closed-window seat carries % active tokens', n;
+  END IF;
+
+  -- no mint anywhere in this block left a live token dated in the past
+  SELECT count(*) INTO n FROM public.field_link_tokens
+   WHERE status = 'active' AND expires_at <= now()
+     AND party_id IN ('f4000000-0000-4000-8000-000000000001',
+                      'f4000000-0000-4000-8000-000000000002',
+                      'f4000000-0000-4000-8000-000000000003',
+                      'f4000000-0000-4000-8000-000000000004');
+  IF n <> 0 THEN
+    RAISE EXCEPTION '10n % live tokens are dated in the past', n;
+  END IF;
+
+  RAISE NOTICE '10. create_field_link: the engagement window sets the expiry and outranks a caller date, warranty answers alone, the 90-day fallback survives for a windowless seat and for a CLOSED one, no mint is dated in the past or revokes on behalf of one, and the supersede and 00284''s ownership guard are untouched: passed';
 END $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════

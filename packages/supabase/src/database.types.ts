@@ -35247,6 +35247,10 @@ export type Database = {
         }
         Returns: string
       }
+      party_kind_in_directory: {
+        Args: { p_party_kind: string }
+        Returns: boolean
+      }
       persist_proposal_send_request: {
         Args: {
           p_cc: string[]
