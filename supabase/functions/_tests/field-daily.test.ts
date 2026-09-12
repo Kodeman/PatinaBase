@@ -279,14 +279,21 @@ Deno.test("runFieldDaily texts nobody the studio never asked — no record, and 
   assertEquals(summary.parties_skipped, 1);
 });
 
-Deno.test("runFieldDaily still digests a pre-fold seat that holds a real granted, with no record yet", async () => {
+// R-AW: there is no such population as "a granted seat with no record". 00594's
+// fold folded every seat into a record inside the same migration, and the
+// freeze stopped the seats carrying news afterwards — so a pair with no record
+// was never asked, and not_asked refuses. This test used to assert the opposite
+// (the pre-fold seat kept its digest, PR-x's fail-closed second check); it now
+// asserts the leg's removal, and the skip is counted so an empty run says why.
+Deno.test("runFieldDaily does not digest a frozen granted seat the record knows nothing about (R-AW)", async () => {
   const sent: SendPartySmsInput[] = [];
   const summary = await runWith(
     consentScenario({ seatStatus: "granted" }),
     sent,
   );
-  assertEquals(summary.digests_sent, 1);
-  assertEquals(sent.length, 1);
+  assertEquals(summary.digests_sent, 0);
+  assertEquals(sent.length, 0);
+  assertEquals(summary.parties_skipped, 1);
 });
 
 Deno.test("runFieldDaily's delivery confirm follows the same record (MAJOR-2's second filter)", async () => {
