@@ -574,8 +574,8 @@ COMMENT ON FUNCTION public.identity_paper_state(uuid, uuid) IS
 -- file — the consent VERDICT has exactly one source, studio_channel_consent.
 --
 -- ONE STUDIO, on BOTH sides (w1b final review r5 BLOCKING-1). The seat leg
--- also requires project_consent_org(pp.project_id) = p_organization_id, which
--- is the population R-AK already resolves the RECORD at. Without it the
+-- also requires the seat's project to belong to p_organization_id, which is
+-- the population R-AK already resolves the RECORD at. Without it the
 -- function was a cross-tenant phone-number oracle: p_organization_id and
 -- p_identity_key are BOTH caller-supplied, the gate proved only that the
 -- caller belonged to the studio they NAMED, and the seat scan — definer, so
@@ -595,6 +595,42 @@ COMMENT ON FUNCTION public.identity_paper_state(uuid, uuid) IS
 -- resolved at is this studio's own either way (R-AK). Suite leg 4e8, whose
 -- premise was constructible only through the cross-studio scan, is re-stated
 -- intra-studio, and leg 3x3 walks the closed door.
+--
+-- AND "BELONGS TO" IS NOT project_consent_org() ALONE (w1b final review r7
+-- MAJOR-1). r5's leg was a single equality against the GUESSING resolver, and
+-- an equality test is the wrong instrument in front of a WORST-FIRST
+-- reduction: dropping a number can only make the printed word MORE PERMISSIVE
+-- (this function's own r4 MAJOR-3 argument). On a project that records no
+-- studio_id, project_consent_org() names whatever studio the designer's
+-- memberships rank first, which need not be the studio whose rolodex card the
+-- row belongs to — so that seat's number dropped out and the identity row
+-- printed the affirmative word over the studio's OWN recorded refusal. Walked:
+-- Dana Kowalski's card (Local Dev Studio, +16125550111 granted) takes a seat
+-- carrying +16125558888 on a studio-less job of the same studio, for which
+-- that studio's record says opted_out; the reduction saw only +16125550111 and
+-- her Directory row printed `granted`, while the seat line for that job
+-- printed NULL so nothing on the face argued. Mutation control: the same seat
+-- on a project that RECORDS its studio_id printed opted_out. Fail-OPEN, on the
+-- row party-profile-sheet.tsx opens the composer from — the fix log's
+-- "fail-closed" claim for this leg is retired.
+--
+-- So the leg names the STUDIO DOING THE WORK beside the record's studio
+-- (R-BD/R-BB): projects.studio_id when the record names one, else EITHER
+-- project_consent_org()'s guess (kept: that is where the record lives, R-AK)
+-- OR the studio p_organization_id itself, when the job's designer / lead
+-- designer / creator actively belongs to it and it is an active design studio.
+-- That last leg is project_tenant_org()'s own second leg stated as a SET
+-- rather than as its ranked LIMIT 1 pick: the pick answers "which ONE of the
+-- CALLER's studios is this job's", and a caller who belongs to two studios of
+-- the same designer would otherwise drop the number again for whichever
+-- studio lost the ranking — the same fail-open by another route. It is a
+-- strict superset of project_tenant_org(pp.project_id) = p_organization_id.
+-- It cannot widen across tenants: the function is gated on
+-- is_active_studio_member(p_organization_id), so every number it returns is
+-- carried by a seat on a job that studio's own designer of record is doing,
+-- read by a member of that studio, with the VERDICT still resolved at
+-- p_organization_id under the caller's own RLS. A wider same-studio number set
+-- can only make the word LESS permissive, which is R-BB's requirement.
 CREATE OR REPLACE FUNCTION public.identity_phone_numbers(
   p_organization_id uuid,
   p_identity_key    text,
@@ -621,7 +657,34 @@ AS $$
        -- organization predicate at all, so the gate proved only that the
        -- caller belonged to the studio they NAMED while the scan reached
        -- every seat on the platform.
-       AND public.project_consent_org(pj.id) = p_organization_id
+       --
+       -- "Belongs to" is the recorded studio, else the record's studio OR the
+       -- studio DOING THE WORK — never the guess alone, which dropped a
+       -- refused number and made the word more permissive (r7 MAJOR-1; the
+       -- banner above carries the walk). The third leg is
+       -- project_tenant_org()'s membership leg as a SET, not its ranked pick.
+       AND (
+             pj.studio_id = p_organization_id
+             OR (
+               pj.studio_id IS NULL
+               AND (
+                 public.project_consent_org(pj.id) = p_organization_id
+                 OR EXISTS (
+                   SELECT 1
+                     FROM public.organization_members om
+                     JOIN public.organizations o
+                       ON o.id = om.organization_id
+                    WHERE om.organization_id = p_organization_id
+                      AND o.type   = 'design_studio'
+                      AND o.status = 'active'
+                      AND om.user_id IN (pj.designer_id, pj.lead_designer_id,
+                                         pj.created_by)
+                      AND om.status = 'active'
+                      AND om.role  <> 'guest'
+                 )
+               )
+             )
+           )
        AND public.party_identity_key(
              pp.studio_contact_id, pp.profile_id,
              pp.phone_e164, pp.email, pp.id
@@ -648,9 +711,19 @@ COMMENT ON FUNCTION public.identity_phone_numbers(uuid, text, text) IS
   'verdict: channel_consent_status() still reads studio_channel_consent under '
   'the CALLER''s RLS, so this is no consent oracle. Record-only (R-AY/R-AW) — '
   'seats are read for phone_e164 alone, never for a frozen sms_consent_* '
-  'column. ONE STUDIO on both sides: the seat leg requires '
-  'project_consent_org(pp.project_id) = p_organization_id, the population '
-  'R-AK resolves the record at. Without it this was a cross-tenant oracle — '
+  'column. ONE STUDIO on both sides: the seat leg requires the seat''s project '
+  'to BELONG to p_organization_id — projects.studio_id when the record names '
+  'one, else project_consent_org()''s studio (where the record lives, R-AK) OR '
+  'p_organization_id itself when the job''s designer / lead designer / creator '
+  'actively belongs to it, which is project_tenant_org()''s membership leg as '
+  'a SET rather than its ranked pick (R-BD/R-BB). It was that first equality '
+  'ALONE, and against the guessing resolver: on a studio_id IS NULL job the '
+  'studio''s own seat dropped out of a WORST-FIRST reduction and the Directory '
+  'row printed `granted` over the studio''s own recorded `opted_out`, with the '
+  'seat line printing NULL so nothing argued — fail-OPEN, not fail-closed, on '
+  'the row the text composer opens from (w1b final review r7 MAJOR-1). The '
+  'first equality exists because without ANY organization predicate this was a '
+  'cross-tenant oracle — '
   'both arguments are caller-supplied, the gate proved only that the caller '
   'belonged to the studio they NAMED, and the definer scan reached every '
   'project_parties row on the platform, so a member of any studio could POST '

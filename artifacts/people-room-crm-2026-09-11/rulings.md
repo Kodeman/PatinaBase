@@ -102,6 +102,8 @@ These were decided mid-build to keep the specimens moving. They stand unless Kod
 | R-BA | The paper word for an identity reduces worst-first over BOTH the person's own documents and their firm's; one formula (identity_paper_state) serves every reader (W1b MAJOR-2). (Fable, 2026-09-12) |
 | R-BB | identity_consent_status reduces over the studio's consent records, not over seats visible to the caller, so it cannot fail open under RLS; it is gated on studio membership (W1b MAJOR-3). (Fable, 2026-09-12) |
 | R-BC | Consent dates on a directory row come from the same record that decided the verdict; when an identity carries several numbers the dates follow the deciding number or are left empty, never taken from another number (W1b MAJOR-4). (Fable, 2026-09-12) |
+| R-BD | Every tenant resolution for a project uses project_tenant_org(); project_consent_org() is retired from guards and reducers; projects with studio_id IS NULL are a legacy population: W3 backfills projects.studio_id from the designer's single active studio membership (ambiguous ones stay NULL and are listed), and the W7 preflight counts the remaining NULLs on Strata before deploy (W1b r7 BLOCKING-1 / MAJOR-1). (Fable, 2026-09-12) |
+| R-BE | The party-profile sheet resolving a seat by person_id + role against people_directory v4 (usePerson) is a W2 reader repoint, owed to W2 with the directory chips, head count and seat lines: the sheet reads people_directory_seats for the seat and the identity's consent_status, and renders no consent chip when the identity is null. It is not a W1 finding (W1b r7 MAJOR-2). (Fable, 2026-09-12) |
 
 ## 4. Parked (side journeys under VISION)
 

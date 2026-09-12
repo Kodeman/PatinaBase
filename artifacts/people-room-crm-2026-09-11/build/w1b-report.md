@@ -554,6 +554,16 @@ the view is `security_invoker`, so anon reads nothing through RLS. `people_direc
 - **The Directory UI has to move with the view.** `directory-view.tsx`'s chips map `role` to bands and every
   carded human is now `role='contact'`; PR-g's mixed list, the honest head count and the seat lines are W2's,
   and the room will read oddly until they land. No flag exists to hide it (rulings §6).
+- **The party-profile sheet is the THIRD reader W2 owes** (R-BE, w1b final review r7 MAJOR-2).
+  `usePerson` (`packages/supabase/src/hooks/use-people.ts:154-166`) filters `people_directory` on
+  `person_id = <seat id> AND role = <party_kind>`, which is what the Call Sheet chevron
+  (`roster/call-sheet-mount.tsx:72`) and the roster row pass. v4 keys a carded human on their rolodex
+  card, so of the studio's 22 field seats only the one uncarded identity still resolves and 21 open an
+  empty sheet. W2 repoints it: read `people_directory_seats` for the seat, join the identity on
+  `person_id`, and take the consent word from the new `consent_status` column — never from `status_raw`,
+  which on a card row carries the ARCHIVE state (`active`), a third answer again. Landed here in the
+  meantime: `party-profile-sheet.tsx` renders **no** consent chip when `person` is null, because the
+  fallback chain printed "Not asked" over a record the same screen's seat line reads `opted_out`.
 - **`bid_due_at` / `bid_outcome` / `bid_amount_cents` / `bid_valid_until` / `bid_quoted_by_person_id` are
   P2**, so §3.4's Bidding band's dates carry no column yet; Rivera Finishes' seat holds the whole fact in
   `stage = 'no_response'`.
