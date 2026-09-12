@@ -48,6 +48,18 @@
 --
 -- Adds GRANT/REVOKE → regenerate seed/00-legacy-grants.sql after this
 -- migration (python3 scripts/generate-legacy-grants.py).
+--
+-- LINEAGE (this file is unapplied on Strata, so the fixes are edits in place):
+--   · w1b final review r1 MAJOR-3 — compliance_state() now reads blocks[].
+--   · w1b final review r1 MAJOR-4 — a supersede must be the same doc_type,
+--     expiring no earlier.
+--   · w1b final review r2 MAJOR-1 — the same consequence through two more
+--     doors: (a) a DATED type may no longer be recorded, or accepted as a
+--     successor, with no expires_on
+--     (studio_compliance_documents_dated_expiry_check +
+--     compliance_successor_undated); (b) a supersede must name the head of its
+--     own chain (compliance_successor_already_superseded), which makes the
+--     two-row cycle that emptied a card of its dated paper unreachable.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 CREATE TABLE IF NOT EXISTS public.studio_compliance_documents (
@@ -119,6 +131,27 @@ ALTER TABLE public.studio_compliance_documents
     doc_type <> 'other_named' OR btrim(COALESCE(doc_label, '')) <> ''
   );
 
+-- A DATED type must carry its date (w1b final review r2 MAJOR-1, door a).
+-- crm-model §2 already states the rule — expires_on, "yes for dated types" —
+-- and nothing enforced it, so a COI could be recorded with no expiry at all.
+-- compliance_state() counts an undated paper as HELD and unable to lapse (a
+-- W-9, a signed waiver are genuinely open-ended), so an undated COI reads
+-- `current` forever; and because assert_compliance_holder() exempts an undated
+-- successor, two ordinary member writes — record the renewal without typing
+-- the date, mark the old one superseded — flipped Northgate Electric AND every
+-- person reading its paper from `lapsed` to `current` with the 2026-03-31
+-- lapse still on file. The single most likely data entry a studio makes ("we
+-- got the renewal, I didn't have the certificate in front of me") was the
+-- door. A certificate, a licence and a bond all expire by construction; the
+-- other types (w9, both lien waivers, other_named) legitimately do not.
+ALTER TABLE public.studio_compliance_documents
+  DROP CONSTRAINT IF EXISTS studio_compliance_documents_dated_expiry_check;
+ALTER TABLE public.studio_compliance_documents
+  ADD CONSTRAINT studio_compliance_documents_dated_expiry_check CHECK (
+    doc_type NOT IN ('coi_gl', 'coi_wc', 'coi_auto', 'license', 'bond')
+    OR expires_on IS NOT NULL
+  );
+
 -- blocks is a SUBSET of the three gates that have a surface. `<@` is the
 -- array-containment operator, so an empty array passes (a dated paper that
 -- gates nothing is a legitimate record) and an unknown token does not.
@@ -157,6 +190,22 @@ COMMENT ON COLUMN public.studio_compliance_documents.verified_at IS
   'NULL means unconfirmed. PR-a''s inbound document lands unverified and a '
   'studio member confirms it; "yes" was true last spring (CS4-1) is why the '
   'date is here at all.';
+COMMENT ON COLUMN public.studio_compliance_documents.expires_on IS
+  'When the paper stops covering. REQUIRED for the dated types (coi_gl, '
+  'coi_wc, coi_auto, license, bond) by '
+  'studio_compliance_documents_dated_expiry_check — crm-model §2''s "yes for '
+  'dated types". NULL means genuinely open-ended (a W-9, a signed waiver), '
+  'which compliance_state() reads as held and unable to lapse; an undated '
+  'certificate would therefore read `current` forever, which is how r2 '
+  'MAJOR-1 door (a) hid a lapse.';
+COMMENT ON COLUMN public.studio_compliance_documents.superseded_by IS
+  'The paper that replaced this one. Must name the document still IN FORCE for '
+  'the same card in the same studio — same doc_type, expiring no earlier, '
+  'dated when the type is dated, and its own superseded_by null, all asserted '
+  'by assert_compliance_holder(). The head-of-chain rule is what makes a '
+  'supersede cycle unreachable: compliance_state() ignores every superseded '
+  'row, so a two-row loop silently emptied a card of its dated paper (r2 '
+  'MAJOR-1 door b).';
 COMMENT ON COLUMN public.studio_compliance_documents.doc_label IS
   'Required when doc_type = other_named (PR-f). An unnamed other is the row '
   'that goes dark.';
@@ -198,8 +247,9 @@ AS $$
 DECLARE
   v_kind         text;
   v_org          uuid;
-  v_succ_type    text;
-  v_succ_expires date;
+  v_succ_type       text;
+  v_succ_expires    date;
+  v_succ_superseded uuid;
 BEGIN
   SELECT sc.entity_kind, sc.organization_id INTO v_kind, v_org
     FROM public.studio_contacts sc WHERE sc.id = NEW.holder_id;
@@ -222,7 +272,8 @@ BEGIN
   END IF;
 
   IF NEW.superseded_by IS NOT NULL THEN
-    SELECT d.doc_type, d.expires_on INTO v_succ_type, v_succ_expires
+    SELECT d.doc_type, d.expires_on, d.superseded_by
+      INTO v_succ_type, v_succ_expires, v_succ_superseded
       FROM public.studio_compliance_documents d
       WHERE d.id = NEW.superseded_by
         AND d.organization_id = NEW.organization_id
@@ -254,8 +305,45 @@ BEGIN
         USING HINT = 'A renewal covers at least as long as the paper it '
                      'retires: superseded_by must name a document whose '
                      'expires_on is not earlier than this row''s. An undated '
-                     'successor (a signed waiver, a W-9) is open-ended and '
-                     'always qualifies.';
+                     'successor is open-ended and qualifies only for a type '
+                     'that has no expiry at all (a W-9, a signed waiver); a '
+                     'certificate, a licence and a bond must carry the date.';
+    END IF;
+
+    -- w1b final review r2 MAJOR-1, door (a): the exemption above was the
+    -- second half of the undated-COI door. The CHECK
+    -- (studio_compliance_documents_dated_expiry_check) makes an undated
+    -- certificate unrecordable, and this says the same thing where the CHECK
+    -- cannot see: over a row that predates the constraint, an undated
+    -- successor of a DATED type is refused rather than silently retiring a
+    -- lapse the card still holds.
+    IF NEW.doc_type IN ('coi_gl', 'coi_wc', 'coi_auto', 'license', 'bond')
+       AND v_succ_expires IS NULL THEN
+      RAISE EXCEPTION 'compliance_successor_undated'
+        USING HINT = 'A certificate, a licence and a bond expire, so their '
+                     'renewal must carry its own expires_on. An undated '
+                     'successor of a dated paper would read `current` forever '
+                     'while the lapse it retired is still on file.';
+    END IF;
+
+    -- w1b final review r2 MAJOR-1, door (b): the two-row supersede CYCLE.
+    -- The CHECK could only see self-reference (superseded_by <> id), so
+    -- A -> B and then B -> A passed both legs above whenever the two rows
+    -- shared a doc_type and a date — and compliance_state() excludes EVERY
+    -- superseded row, so the card fell back to whatever gateless paper it
+    -- holds and printed `current` (every real firm in the fixture holds a
+    -- W-9), or `not_on_file` on a card holding nothing else. Requiring the
+    -- successor to be the HEAD of its own chain makes a cycle of any length
+    -- unreachable in any number of statements: the edge that would close one
+    -- must always point at a row that is already superseded. It costs nothing
+    -- — the row was already being read.
+    IF v_succ_superseded IS NOT NULL THEN
+      RAISE EXCEPTION 'compliance_successor_already_superseded'
+        USING HINT = 'superseded_by must name the paper that is STILL in '
+                     'force — a document whose own superseded_by is null. '
+                     'Pointing at an already-retired row is how a supersede '
+                     'closes a loop and takes every one of a card''s dated '
+                     'papers out of the reckoning at once.';
     END IF;
   END IF;
 
@@ -270,12 +358,19 @@ COMMENT ON FUNCTION public.assert_compliance_holder() IS
   'BEFORE INSERT/UPDATE on studio_compliance_documents: holder_id must name a '
   'card whose entity_kind equals holder_type, in the SAME organization_id, and '
   'superseded_by must name another document for the same card in the same '
-  'studio, of the SAME doc_type, expiring no earlier than the row it retires '
+  'studio, of the SAME doc_type, expiring no earlier than the row it retires, '
+  'carrying its own expires_on when the type is a dated one, and still in '
+  'force — its own superseded_by null '
   '(compliance_holder_not_found / _kind_mismatch / _other_studio / '
   'compliance_successor_other_holder / compliance_successor_wrong_type / '
-  'compliance_successor_not_later). The last two are what keeps a supersede a '
-  'renewal rather than a way to hide a lapse, since compliance_state() reads '
-  'only non-superseded rows and UPDATE is granted to authenticated. The FKs '
+  'compliance_successor_not_later / compliance_successor_undated / '
+  'compliance_successor_already_superseded). The last four are what keeps a '
+  'supersede a renewal rather than a way to hide a lapse, since '
+  'compliance_state() reads only non-superseded rows and UPDATE is granted to '
+  'authenticated: the wrong type and the shorter date were r1 MAJOR-4, the '
+  'undated successor and the head-of-chain rule are r2 MAJOR-1 doors (a) and '
+  '(b), the second of which took every dated paper on a card out of the '
+  'reckoning with two UPDATEs. The FKs '
   'cannot say any of this — studio_contacts holds both kinds of card and every '
   'studio''s cards (00623, the 00592 R-AP shape).';
 

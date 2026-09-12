@@ -225,9 +225,9 @@ DECLARE
 BEGIN
   BEGIN
     INSERT INTO public.studio_compliance_documents
-      (organization_id, holder_type, holder_id, doc_type)
+      (organization_id, holder_type, holder_id, doc_type, expires_on)
     VALUES ('f1000000-0000-4000-8000-00000000000a','company',
-            'f2000000-0000-4000-8000-000000000011','coi_gl');
+            'f2000000-0000-4000-8000-000000000011','coi_gl', CURRENT_DATE + 100);
     raised := NULL;
   EXCEPTION WHEN OTHERS THEN raised := SQLERRM;
   END;
@@ -237,9 +237,9 @@ BEGIN
 
   BEGIN
     INSERT INTO public.studio_compliance_documents
-      (organization_id, holder_type, holder_id, doc_type)
+      (organization_id, holder_type, holder_id, doc_type, expires_on)
     VALUES ('b0000000-0000-0000-0000-000000000001','company',
-            'f2000000-0000-4000-8000-000000000001','coi_gl');
+            'f2000000-0000-4000-8000-000000000001','coi_gl', CURRENT_DATE + 100);
     raised := NULL;
   EXCEPTION WHEN OTHERS THEN raised := SQLERRM;
   END;
@@ -269,9 +269,9 @@ BEGIN
   -- and blocks is a subset of the three gates that have a surface
   BEGIN
     INSERT INTO public.studio_compliance_documents
-      (organization_id, holder_type, holder_id, doc_type, blocks)
+      (organization_id, holder_type, holder_id, doc_type, expires_on, blocks)
     VALUES ('f1000000-0000-4000-8000-00000000000a','company',
-            'f2000000-0000-4000-8000-000000000001','coi_gl','{permit}');
+            'f2000000-0000-4000-8000-000000000001','coi_gl', CURRENT_DATE + 100,'{permit}');
     raised := NULL;
   EXCEPTION WHEN OTHERS THEN raised := SQLERRM;
   END;
@@ -342,7 +342,142 @@ BEGIN
     RAISE EXCEPTION '2h an undated W-9 was refused as the renewal of a dated one';
   END IF;
 
-  RAISE NOTICE '2. the holder guard: a person is not a firm, a document belongs to one studio, other_named needs its label, blocks is a closed vocabulary, and a supersede must be the same paper covering at least as long: passed';
+  -- ═══ r2 MAJOR-1 door (a): a DATED type must carry its date ═══════════════
+  -- r1 MAJOR-4 was closed by requiring the same doc_type and a date no earlier,
+  -- and the leg above (2h) states the deliberate exemption for an undated
+  -- successor. Nothing required expires_on on a COI, so the successor could be
+  -- an undated COI: compliance_state() counts an undated paper as held and
+  -- unable to lapse, so two ordinary member writes — record the renewal without
+  -- typing the date, mark the old one superseded — flipped a firm holding a
+  -- lapsed, GATING certificate from `lapsed` to `current` with the lapse still
+  -- on file.
+  BEGIN
+    INSERT INTO public.studio_compliance_documents
+      (organization_id, holder_type, holder_id, doc_type, issuer, blocks)
+    VALUES ('f1000000-0000-4000-8000-00000000000a','company',
+            'f2000000-0000-4000-8000-000000000001','coi_gl',
+            'Acme Mutual (renewal, no date typed)','{site_access,draw}');
+    raised := NULL;
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM;
+  END;
+  IF raised IS NULL OR raised NOT LIKE '%dated_expiry_check%' THEN
+    RAISE EXCEPTION '2i an undated COI was recorded, and an undated certificate reads current forever: %', COALESCE(raised,'no error');
+  END IF;
+
+  -- a licence and a bond are dated types too
+  BEGIN
+    INSERT INTO public.studio_compliance_documents
+      (organization_id, holder_type, holder_id, doc_type, blocks)
+    VALUES ('f1000000-0000-4000-8000-00000000000a','company',
+            'f2000000-0000-4000-8000-000000000001','bond','{}');
+    raised := NULL;
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM;
+  END;
+  IF raised IS NULL OR raised NOT LIKE '%dated_expiry_check%' THEN
+    RAISE EXCEPTION '2j an undated bond was recorded: %', COALESCE(raised,'no error');
+  END IF;
+
+  -- an UNDATED type is untouched: a W-9 and a signed waiver are open-ended
+  INSERT INTO public.studio_compliance_documents
+    (id, organization_id, holder_type, holder_id, doc_type, blocks)
+  VALUES ('f5000000-0000-4000-8000-000000000031','f1000000-0000-4000-8000-00000000000a','company',
+          'f2000000-0000-4000-8000-000000000002','lien_waiver_unconditional','{payment}');
+
+  -- and the trigger says the same thing where the CHECK cannot see it — over a
+  -- row that predates the constraint. The constraint is dropped and restored
+  -- inside this rolled-back transaction so the second guard is exercised on its
+  -- own; a successor with no date is refused for a dated paper.
+  EXECUTE 'ALTER TABLE public.studio_compliance_documents '
+          'DROP CONSTRAINT studio_compliance_documents_dated_expiry_check';
+  INSERT INTO public.studio_compliance_documents
+    (id, organization_id, holder_type, holder_id, doc_type, issuer, blocks) VALUES
+    ('f5000000-0000-4000-8000-000000000032','f1000000-0000-4000-8000-00000000000a','company',
+     'f2000000-0000-4000-8000-000000000002','coi_gl','Acme Mutual (no date typed)','{site_access}');
+  INSERT INTO public.studio_compliance_documents
+    (id, organization_id, holder_type, holder_id, doc_type, expires_on, blocks) VALUES
+    ('f5000000-0000-4000-8000-000000000033','f1000000-0000-4000-8000-00000000000a','company',
+     'f2000000-0000-4000-8000-000000000002','coi_gl', CURRENT_DATE - 1,'{site_access}');
+  BEGIN
+    UPDATE public.studio_compliance_documents
+       SET superseded_by = 'f5000000-0000-4000-8000-000000000032'
+     WHERE id = 'f5000000-0000-4000-8000-000000000033';
+    raised := NULL;
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM;
+  END;
+  IF raised IS NULL OR raised NOT LIKE '%compliance_successor_undated%' THEN
+    RAISE EXCEPTION '2k an undated COI was accepted as the renewal of a lapsed one: %', COALESCE(raised,'no error');
+  END IF;
+  DELETE FROM public.studio_compliance_documents
+   WHERE id = 'f5000000-0000-4000-8000-000000000032';
+  EXECUTE 'ALTER TABLE public.studio_compliance_documents '
+          'ADD CONSTRAINT studio_compliance_documents_dated_expiry_check CHECK ('
+          '  doc_type NOT IN (''coi_gl'', ''coi_wc'', ''coi_auto'', ''license'', ''bond'')'
+          '  OR expires_on IS NOT NULL)';
+
+  -- ═══ r2 MAJOR-1 door (b): a supersede may not close a chain ══════════════
+  -- Only self-reference was blocked, so A -> B then B -> A passed both r1 legs
+  -- whenever the two rows shared a doc_type and a date — and compliance_state()
+  -- excludes EVERY superseded row, so a card fell back to whatever gateless
+  -- paper it holds. r1 measured the cycle as lapsed -> not_on_file; after the
+  -- blocks[] fix it is lapsed -> current on any card holding a W-9, which every
+  -- real firm in the fixture holds. This card gets both.
+  INSERT INTO public.studio_contacts
+    (id, organization_id, entity_kind, contact_kind, company_name, company_kind, created_by)
+  VALUES ('f2000000-0000-4000-8000-000000000004','f1000000-0000-4000-8000-00000000000a',
+          'company','sub','Cycle Paper Co','sub','a0000000-0000-0000-0000-000000000004');
+  INSERT INTO public.studio_compliance_documents
+    (id, organization_id, holder_type, holder_id, doc_type, expires_on, blocks) VALUES
+    ('f5000000-0000-4000-8000-000000000041','f1000000-0000-4000-8000-00000000000a','company',
+     'f2000000-0000-4000-8000-000000000004','coi_gl', CURRENT_DATE - 1,'{site_access,draw}'),
+    ('f5000000-0000-4000-8000-000000000042','f1000000-0000-4000-8000-00000000000a','company',
+     'f2000000-0000-4000-8000-000000000004','coi_gl', CURRENT_DATE - 1,'{site_access,draw}');
+  INSERT INTO public.studio_compliance_documents
+    (id, organization_id, holder_type, holder_id, doc_type, blocks) VALUES
+    ('f5000000-0000-4000-8000-000000000043','f1000000-0000-4000-8000-00000000000a','company',
+     'f2000000-0000-4000-8000-000000000004','w9','{payment}');
+
+  IF public.compliance_state('f2000000-0000-4000-8000-000000000004') <> 'lapsed' THEN
+    RAISE EXCEPTION '2l the cycle card must start lapsed, got %',
+      public.compliance_state('f2000000-0000-4000-8000-000000000004');
+  END IF;
+
+  -- the first leg is a legitimate supersede of one duplicate by the other
+  UPDATE public.studio_compliance_documents
+     SET superseded_by = 'f5000000-0000-4000-8000-000000000042'
+   WHERE id = 'f5000000-0000-4000-8000-000000000041';
+
+  -- the second leg closes the loop, and is refused
+  BEGIN
+    UPDATE public.studio_compliance_documents
+       SET superseded_by = 'f5000000-0000-4000-8000-000000000041'
+     WHERE id = 'f5000000-0000-4000-8000-000000000042';
+    raised := NULL;
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM;
+  END;
+  IF raised IS NULL OR raised NOT LIKE '%compliance_successor_already_superseded%' THEN
+    RAISE EXCEPTION '2m a supersede CYCLE was accepted: %', COALESCE(raised,'no error');
+  END IF;
+
+  -- and the consequence the cycle bought is gone: the lapse still holds the card
+  IF public.compliance_state('f2000000-0000-4000-8000-000000000004') <> 'lapsed' THEN
+    RAISE EXCEPTION '2n the refused cycle still moved the word to %',
+      public.compliance_state('f2000000-0000-4000-8000-000000000004');
+  END IF;
+
+  -- a genuine three-row chain is untouched: the head is always in force
+  INSERT INTO public.studio_compliance_documents
+    (id, organization_id, holder_type, holder_id, doc_type, expires_on, blocks) VALUES
+    ('f5000000-0000-4000-8000-000000000044','f1000000-0000-4000-8000-00000000000a','company',
+     'f2000000-0000-4000-8000-000000000004','coi_gl', CURRENT_DATE + 365,'{site_access,draw}');
+  UPDATE public.studio_compliance_documents
+     SET superseded_by = 'f5000000-0000-4000-8000-000000000044'
+   WHERE id = 'f5000000-0000-4000-8000-000000000042';
+  IF public.compliance_state('f2000000-0000-4000-8000-000000000004') <> 'current' THEN
+    RAISE EXCEPTION '2o a real renewal at the head of the chain was not honoured, got %',
+      public.compliance_state('f2000000-0000-4000-8000-000000000004');
+  END IF;
+
+  RAISE NOTICE '2. the holder guard: a person is not a firm, a document belongs to one studio, other_named needs its label, blocks is a closed vocabulary, a supersede must be the same paper covering at least as long, a dated type must carry its date (and may not be renewed by an undated one), and a supersede may not close a chain: passed';
 END $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -353,6 +488,7 @@ DECLARE
   r          record;
   n          integer;
   seats      text;
+  w          text;
 BEGIN
   PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
 
@@ -427,8 +563,122 @@ BEGIN
     RAISE EXCEPTION '3n Erin Sato holds two seats on two projects and must still be ONE row, found %', n;
   END IF;
 
+  -- ═══ r2 MAJOR-2: the consent word covers every number the identity carries ═
+  -- v4 moves every carded human to the CONTACTS branch, which read the CARD's
+  -- phone_e164 alone — so a recorded refusal on the number the person's SEAT
+  -- carries left the face, and the identity row printed `not_asked` (or no word
+  -- at all) over people_directory_seats printing `opted_out` for the same human
+  -- off the same record. The seeded fixture cannot show it: every card there
+  -- shares its seat's number, zero disagreements across all 62 rows. These are
+  -- the two shapes that disagree, plus the control that must still read NULL.
   PERFORM pg_temp.reset_role();
-  RAISE NOTICE '3. people_directory v4: one row per identity, Dana''s two seats beneath it, her four fixture words, no person-level stage, and an honest 28 + 21: passed';
+
+  INSERT INTO public.studio_contacts
+    (id, organization_id, entity_kind, contact_kind, full_name, phone, company_id, created_by)
+  VALUES
+    ('f2000000-0000-4000-8000-000000000021','f1000000-0000-4000-8000-00000000000a','person','sub',
+     'Two Number Sub','(612) 555-7100','f2000000-0000-4000-8000-000000000001',
+     'a0000000-0000-0000-0000-000000000004'),
+    ('f2000000-0000-4000-8000-000000000022','f1000000-0000-4000-8000-00000000000a','person','sub',
+     'Cardless Number Sub',NULL,'f2000000-0000-4000-8000-000000000001',
+     'a0000000-0000-0000-0000-000000000004'),
+    ('f2000000-0000-4000-8000-000000000023','f1000000-0000-4000-8000-00000000000a','person','sub',
+     'No Number Anywhere Sub',NULL,'f2000000-0000-4000-8000-000000000001',
+     'a0000000-0000-0000-0000-000000000004');
+
+  INSERT INTO public.project_parties
+    (id, project_id, party_kind, display_name, phone, studio_contact_id, company_id,
+     stage, created_by)
+  VALUES
+    -- a card whose number is NOT the number its seat carries
+    ('f4000000-0000-4000-8000-000000000121','f3000000-0000-4000-8000-00000000000a','sub',
+     'Two Number Sub','(612) 555-7200','f2000000-0000-4000-8000-000000000021',
+     'f2000000-0000-4000-8000-000000000001','active','a0000000-0000-0000-0000-000000000004'),
+    -- a card with no number at all, seated on a number that refused
+    ('f4000000-0000-4000-8000-000000000122','f3000000-0000-4000-8000-00000000000a','sub',
+     'Cardless Number Sub','(612) 555-7001','f2000000-0000-4000-8000-000000000022',
+     'f2000000-0000-4000-8000-000000000001','active','a0000000-0000-0000-0000-000000000004');
+
+  -- the record: a refusal on each SEAT's number, nothing on the card's own
+  INSERT INTO public.studio_channel_consent
+    (organization_id, channel_kind, channel_value, status, opt_out_at,
+     opt_out_source, opt_out_evidence, opt_out_recorded_at, opt_out_recorded_by)
+  VALUES
+    ('f1000000-0000-4000-8000-00000000000a','sms','+16125557200','opted_out', now(),
+     'verbal','said stop on site', now(),'a0000000-0000-0000-0000-000000000004'),
+    ('f1000000-0000-4000-8000-00000000000a','sms','+16125557001','opted_out', now(),
+     'verbal','said stop on site', now(),'a0000000-0000-0000-0000-000000000004');
+
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+
+  SELECT consent_status INTO w FROM public.people_directory
+   WHERE display_name = 'Two Number Sub';
+  IF w IS DISTINCT FROM 'opted_out' THEN
+    RAISE EXCEPTION '3o a refusal on the number this person''s SEAT carries must be on the identity row (§1.4), got %', COALESCE(w,'NULL');
+  END IF;
+
+  SELECT consent_status INTO w FROM public.people_directory
+   WHERE display_name = 'Cardless Number Sub';
+  IF w IS DISTINCT FROM 'opted_out' THEN
+    RAISE EXCEPTION '3p a card with NO number must still print its seat''s refusal, got %', COALESCE(w,'NULL');
+  END IF;
+
+  -- the seat line beneath agrees, which is the whole point
+  SELECT count(*) INTO n FROM public.people_directory_seats
+   WHERE display_name IN ('Two Number Sub','Cardless Number Sub')
+     AND consent_status <> 'opted_out';
+  IF n <> 0 THEN
+    RAISE EXCEPTION '3q % seat lines disagree with the record the row now reads', n;
+  END IF;
+
+  -- NULL still means no number ANYWHERE, not "no number on the card"
+  SELECT consent_status INTO w FROM public.people_directory
+   WHERE display_name = 'No Number Anywhere Sub';
+  IF w IS NOT NULL THEN
+    RAISE EXCEPTION '3r a carded human with no number anywhere must print no consent word, got %', w;
+  END IF;
+
+  -- and the reduction is least-permission-first, not last-write-wins: a
+  -- granted card number does not answer for an un-recorded seat number
+  PERFORM pg_temp.reset_role();
+  UPDATE public.studio_channel_consent
+     SET status = 'granted', refusal_unanswered = false, opt_out_at = NULL,
+         consented_at = now(), source = 'written', evidence = 'signed form',
+         recorded_at = now(), recorded_by = 'a0000000-0000-0000-0000-000000000004',
+         opt_out_source = NULL, opt_out_evidence = NULL,
+         opt_out_recorded_at = NULL, opt_out_recorded_by = NULL
+   WHERE organization_id = 'f1000000-0000-4000-8000-00000000000a'
+     AND channel_kind = 'sms' AND channel_value = '+16125557200';
+  INSERT INTO public.studio_channel_consent
+    (organization_id, channel_kind, channel_value, status, consented_at,
+     source, evidence, recorded_at, recorded_by)
+  VALUES
+    ('f1000000-0000-4000-8000-00000000000a','sms','+16125557100','granted', now(),
+     'written','signed form', now(),'a0000000-0000-0000-0000-000000000004');
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+
+  SELECT consent_status INTO w FROM public.people_directory
+   WHERE display_name = 'Two Number Sub';
+  IF w IS DISTINCT FROM 'granted' THEN
+    RAISE EXCEPTION '3s both of this identity''s numbers are granted and the row reads %', COALESCE(w,'NULL');
+  END IF;
+
+  PERFORM pg_temp.reset_role();
+  UPDATE public.studio_channel_consent
+     SET status = 'not_asked', consented_at = NULL, source = NULL,
+         evidence = NULL, recorded_at = NULL, recorded_by = NULL
+   WHERE organization_id = 'f1000000-0000-4000-8000-00000000000a'
+     AND channel_kind = 'sms' AND channel_value = '+16125557100';
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+
+  SELECT consent_status INTO w FROM public.people_directory
+   WHERE display_name = 'Two Number Sub';
+  IF w IS DISTINCT FROM 'not_asked' THEN
+    RAISE EXCEPTION '3t one un-asked number must pull the identity word back to not_asked, got %', COALESCE(w,'NULL');
+  END IF;
+
+  PERFORM pg_temp.reset_role();
+  RAISE NOTICE '3. people_directory v4: one row per identity, Dana''s two seats beneath it, her four fixture words, no person-level stage, an honest 28 + 21, and the consent word reduced worst-first over every number the identity carries — the card''s and its seats'': passed';
 END $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -442,6 +692,7 @@ DO $$
 DECLARE
   n        integer;
   v_person uuid;
+  w        text;
 BEGIN
   INSERT INTO public.project_parties
     (id, project_id, party_kind, display_name, phone, stage, created_by, updated_at)
@@ -476,6 +727,66 @@ BEGIN
   SELECT count(DISTINCT identity_key) INTO n FROM public.people_directory_seats
    WHERE seat_id IN ('f4000000-0000-4000-8000-000000000101','f4000000-0000-4000-8000-000000000102');
   IF n <> 1 THEN RAISE EXCEPTION '4e the two seats keyed differently'; END IF;
+
+  -- ═══ r2 MAJOR-3: reach reads the IDENTITY's links, not the winner's ══════
+  -- The party branch passed the winning seat's id, so the EXISTS clause could
+  -- only match a link minted on that one seat. The live door here hangs on the
+  -- OLDER seat — the one the Directory does NOT point at — and the row read
+  -- `on_paper` while the seat line beneath it printed `field_link`, which is
+  -- the reach drift G-20/G-21 this program exists to remove: the studio's next
+  -- act is to mint a second door for someone who already holds one.
+  PERFORM pg_temp.reset_role();
+  INSERT INTO public.field_link_tokens
+    (id, party_id, project_id, token_hash, status, expires_at, created_by)
+  VALUES ('f6000000-0000-4000-8000-000000000101',
+          'f4000000-0000-4000-8000-000000000101','f3000000-0000-4000-8000-00000000000a',
+          'w1b-r2-major3-identity-link','active', now() + interval '30 days',
+          'a0000000-0000-0000-0000-000000000004');
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+
+  SELECT reach_state INTO w FROM public.people_directory
+   WHERE display_name = 'Twice Seated';
+  IF w IS DISTINCT FROM 'field_link' THEN
+    RAISE EXCEPTION '4e1 a live link on a NON-winning seat must read field_link on the identity row, got %', COALESCE(w,'NULL');
+  END IF;
+
+  -- and it really is the non-winning seat that holds it
+  SELECT reach_state INTO w FROM public.people_directory_seats
+   WHERE seat_id = 'f4000000-0000-4000-8000-000000000101';
+  IF w IS DISTINCT FROM 'field_link' THEN
+    RAISE EXCEPTION '4e2 the seat holding the link reads %', COALESCE(w,'NULL');
+  END IF;
+  SELECT reach_state INTO w FROM public.people_directory_seats
+   WHERE seat_id = 'f4000000-0000-4000-8000-000000000102';
+  IF w IS DISTINCT FROM 'on_paper' THEN
+    RAISE EXCEPTION '4e3 the WINNING seat must hold no link for this leg to mean anything, got %', COALESCE(w,'NULL');
+  END IF;
+
+  -- a revoked or expired door is not a door
+  PERFORM pg_temp.reset_role();
+  UPDATE public.field_link_tokens SET status = 'revoked'
+   WHERE id = 'f6000000-0000-4000-8000-000000000101';
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  SELECT reach_state INTO w FROM public.people_directory
+   WHERE display_name = 'Twice Seated';
+  IF w IS DISTINCT FROM 'on_paper' THEN
+    RAISE EXCEPTION '4e4 a revoked link still reads %', COALESCE(w,'NULL');
+  END IF;
+
+  PERFORM pg_temp.reset_role();
+  UPDATE public.field_link_tokens
+     SET status = 'active', expires_at = now() - interval '1 day'
+   WHERE id = 'f6000000-0000-4000-8000-000000000101';
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  SELECT reach_state INTO w FROM public.people_directory
+   WHERE display_name = 'Twice Seated';
+  IF w IS DISTINCT FROM 'on_paper' THEN
+    RAISE EXCEPTION '4e5 an expired link still reads %', COALESCE(w,'NULL');
+  END IF;
+  PERFORM pg_temp.reset_role();
+  UPDATE public.field_link_tokens SET status = 'revoked'
+   WHERE id = 'f6000000-0000-4000-8000-000000000101';
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
 
   -- MIXED KINDS (w1b r1 MAJOR-2): the same human seated under a kind the
   -- Directory does not emit. people_directory picked its winner over the seven
@@ -529,7 +840,7 @@ BEGIN
   END IF;
 
   PERFORM pg_temp.reset_role();
-  RAISE NOTICE '4. the uncarded identity: two seats on two jobs collapse to one row keyed on the phone, pointing at the newest seat, a mixed-kind identity nests every seat it claims, and no row anywhere claims a count it cannot nest: passed';
+  RAISE NOTICE '4. the uncarded identity: two seats on two jobs collapse to one row keyed on the phone, pointing at the newest seat, reach reads a live door on a NON-winning seat (and stops reading a revoked or expired one), a mixed-kind identity nests every seat it claims, and no row anywhere claims a count it cannot nest: passed';
 END $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════
