@@ -423,15 +423,19 @@ export type ChannelConsentVerdict = "refuse" | "allow" | "unknown";
  * AND `status` IS NOT THE WHOLE VERDICT (r6 M6-3). refusal_unanswered is the
  * stored fact the WRITE door treats as load-bearing — a refusal the person who
  * made it has not answered — and it was invisible to the rail that actually
- * sends. record_channel_reconsent() moves a record opted_out -> pending
- * keeping opt_out_at and the flag, and the mirror then stamps `pending` onto
+ * sends. record_channel_reconsent() USED TO move a record opted_out -> pending
+ * keeping opt_out_at and the flag, and the mirror then stamped `pending` onto
  * every seat in the studio on that number, removing the party-row backstop
  * below: `status` read alone said "unknown", the seats said "pending", and the
  * opt-in invite went out to a number that had replied STOP, on a 10DLC
- * campaign. So the flag refuses here too. What answers a refusal is the
- * recipient's own YES or START, which the inbound rail writes directly —
- * lowering the flag and stamping a fresh consented_at; nothing the studio can
- * type reopens this door.
+ * campaign. That door is evidence-only now and leaves the record at
+ * `opted_out` (r7 M7-2) — but the flag is still read here, because an
+ * unanswered refusal can stand at ANY status: the first prod fold mints
+ * `granted` records for legacy seats whose stale opt-out no later consent
+ * answered (r7 M7-1), and the inbound rail writes this table directly. What
+ * answers a refusal is the recipient's own YES or START, which that rail
+ * writes — lowering the flag and stamping a fresh consented_at; nothing the
+ * studio can type reopens this door (00594's RPCs never lower the flag).
  */
 async function channelConsentVerdict(
   supabase: SupabaseClient,
@@ -475,11 +479,11 @@ async function channelConsentVerdict(
       const status = row.status;
       if (status === "opted_out") return "refuse";
       // A refusal the recipient has not answered still stands, whatever the
-      // status now says (r6 M6-3). reconsent() lands the studio's fresh
-      // consent on `pending` and keeps this flag raised precisely because the
-      // person who said STOP has not spoken since — and the mirror has by then
-      // cleared `opted_out` off the seats, so this is the only ledger left
-      // that remembers. Only the inbound YES/START lowers it.
+      // status now says (r6 M6-3). The fold mints `granted` records for legacy
+      // seats carrying a stale, unanswered opt-out (r7 M7-1), and reconsent()
+      // records the studio's fresh consent while the refusal keeps standing
+      // (r7 M7-2). No studio-side write lowers this flag — only the inbound
+      // YES/START, written by the rail itself.
       if (row.refusal_unanswered === true) return "refuse";
       // The record is not self-certifying: a refusal recorded on one of this
       // studio's own party rows since the record was written still refuses.

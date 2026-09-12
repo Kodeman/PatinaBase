@@ -31,8 +31,11 @@
 --      and nothing else, so a consent fact cannot be written without passing
 --      through the membership check, the evidence requirement and the
 --      transition gate below.
---   5. record_channel_reconsent(...) — the one named exception to that gate:
---      PR-m's fresh recorded consent after a refusal, landing on `pending`.
+--   5. record_channel_reconsent(...) — the one named door beside that gate:
+--      PR-m's fresh recorded consent after a refusal, written as EVIDENCE onto
+--      a record that stays `opted_out` (r7 M7-2). It does not move the status
+--      and does not run the double opt-in; only the recipient's YES/START on
+--      the inbound rail reopens sending.
 --
 -- Both RPCs key on public.normalize_channel_value(kind, value) — 00593's own
 -- rule, in one function, so a channel row and its consent record can never land
@@ -106,15 +109,23 @@
 --     pending, not to not_asked. A STOP is the only stored record of a refusal
 --     and the RPC may not erase it. And `granted` is refused for as long as
 --     refusal_unanswered stands — a STORED FACT, raised by every writer that
---     records a refusal and lowered only by a grant, which in practice means
---     the recipient's own inbound YES/START. It is a column rather than a test
+--     records a refusal and lowered by NOTHING THIS FILE'S RPCs CAN WRITE
+--     (r7 M7-1): only the inbound rail's own service_role write, made when the
+--     recipient texts YES or START. It is a column rather than a test
 --     on opt_out_at because a refusal is routinely DATELESS (the shipped portal
 --     writes opted_out party rows with a NULL sms_opt_out_at on purpose, and the
 --     fold mints those records verbatim), and a date test failed OPEN for
 --     exactly that population: reconsent() plus a grant walked a real STOP back
 --     to `granted` in two calls. PR-m's way back is a FRESH recorded
---     consent, which gets its own named door, record_channel_reconsent(),
---     landing on `pending` so the double opt-in still runs. Both doors state
+--     consent, which gets its own named door, record_channel_reconsent() —
+--     and that door is EVIDENCE-ONLY (r7 M7-2). It writes the studio's fresh
+--     consent onto the record and LEAVES the record at `opted_out`, refusal
+--     standing. After r6's M6-3 fix an unanswered refusal refuses EVERY send,
+--     the opt-in invite included, so a door that moved the row to `pending`
+--     sent nothing, cleared the seats' own backstop through the mirror, and
+--     could not be called again (it needs `opted_out`) — the studio was
+--     strictly worse off for using it. Sending resumes on the recipient's
+--     YES/START and on nothing a studio can type. Both doors state
 --     that gate INSIDE the write (the upsert's DO UPDATE … WHERE, the UPDATE's
 --     own WHERE) rather than as a read before it: a SELECT … FOR UPDATE locks
 --     nothing when the row does not exist yet, and the inbound STOP rail writes
@@ -186,8 +197,14 @@ COMMENT ON COLUMN public.studio_channel_consent.origin_project_id IS
 COMMENT ON COLUMN public.studio_channel_consent.refusal_unanswered IS
   'TRUE while a refusal stands that the person who made it has not answered. '
   'Set by every writer that records a refusal (the fold, record_channel_consent, '
-  'record_channel_reconsent, the inbound STOP rail) and cleared ONLY by a '
-  '`granted` write — in practice the recipient''s own inbound YES/START. '
+  'record_channel_reconsent, the inbound STOP rail) and cleared by ONE writer: '
+  'the inbound rail''s own service_role write, made when the recipient replies '
+  'YES or START (sms-inbound/pipeline.ts writeChannelConsent). No RPC in this '
+  'file lowers it (r7 M7-1 — the upsert used to exempt a record already AT '
+  '`granted` from the gate and then set the flag false on that very write, so '
+  'one ordinary granted-on-granted call by any studio member turned sending '
+  'back on for a folded row carrying an unanswered refusal, with no recipient '
+  'involved). '
   'record_channel_consent refuses every verdict but opted_out while it stands, '
   'so reconsent() plus a recorded grant cannot compose their way past a STOP. It is a stored FACT '
   'rather than a test on opt_out_at, because a refusal is routinely dateless: '
@@ -285,7 +302,12 @@ BEGIN
            -- use-coordination.ts; so does every pre-00432 row), and a gate that
            -- read the date failed open for that whole population. A row that is
            -- not opted_out still counts as an unanswered refusal when it carries
-           -- an opt-out date no later consent has answered.
+           -- an opt-out date no later consent has answered — INCLUDING a winner
+           -- whose status reads `granted` (r7 M7-1, ruled here). A legacy seat
+           -- saying granted while carrying a dated opt-out and no later
+           -- consented_at is contradictory data, and the refusal is the half
+           -- that fails closed: the record is minted UNSENDABLE and only the
+           -- recipient's own YES/START reopens it.
            (sms_consent_status = 'opted_out'
             OR (sms_opt_out_at IS NOT NULL
                 AND (sms_consented_at IS NULL OR sms_consented_at <= sms_opt_out_at))),
@@ -701,9 +723,10 @@ CREATE TRIGGER mirror_channel_consent_to_parties_trg
 --      PR-m's way back is a fresh recorded consent, which has its own named
 --      door: record_channel_reconsent() below.
 --
---      AND THE TWO DOORS COMPOSE. The gate above is stated on the row's
---      CURRENT status, so on its own it was walked around: reconsent() moves
---      the row opted_out -> pending, and a second call then found a row that is
+--      AND THE TWO DOORS COMPOSED. The gate above is stated on the row's
+--      CURRENT status, so on its own it was walked around: reconsent() USED TO
+--      move the row opted_out -> pending (it no longer moves the status at all,
+--      r7 M7-2), and a second call then found a row that is
 --      no longer `opted_out` and wrote `granted` over it. Two calls, any
 --      studio member, and a recorded STOP was back to granted with only
 --      opt_out_at left behind — and the mirror cleared the party-row backstop
@@ -721,8 +744,9 @@ CREATE TRIGGER mirror_channel_consent_to_parties_trg
 --      reconsent() cannot recover a row that no longer says opted_out. So every
 --      verdict but `opted_out` is tested. The one act always open to the studio
 --      is recording the refusal it is holding; the fresh consent it holds goes
---      through reconsent(), which is exactly what the double opt-in
---      confirmation is for, and the answer stays the recipient's.
+--      on the record through reconsent(), as EVIDENCE beside the refusal (r7
+--      M7-2 — no double opt-in runs from there), and the answer stays the
+--      recipient's.
 --   3. NO LAUNDERING, AND NO ERASURE. Every status this door still accepts
 --      requires its own source and evidence, so a status change always
 --      RESTATES them — a grant can never inherit the STOP's own words
@@ -871,8 +895,9 @@ BEGIN
       RAISE EXCEPTION 'channel_opted_out'
         USING HINT = 'A seat in this studio on this number is marked opted out. '
                      'Record that refusal here first (status opted_out, with the '
-                     'evidence), then record_channel_reconsent() is the way back '
-                     'and the grant is the recipient''s to give.';
+                     'evidence); record_channel_reconsent() then puts your fresh '
+                     'consent on the record, and the grant stays the '
+                     'recipient''s to give by replying YES or START.';
     END IF;
   END IF;
 
@@ -894,9 +919,9 @@ BEGIN
   --
   -- The SECOND leg of that WHERE is the two doors composed. A gate stated on
   -- the row's CURRENT status alone was walked around in two calls, by any
-  -- studio member: record_channel_reconsent() moves the row opted_out ->
-  -- pending (it is meant to — granted is the recipient's to give), and this
-  -- door then saw a row that is no longer `opted_out` and wrote `granted` over
+  -- studio member: record_channel_reconsent() USED TO move the row opted_out ->
+  -- pending (since r7 M7-2 it writes evidence only and leaves the status), and
+  -- this door then saw a row that is no longer `opted_out` and wrote `granted` over
   -- it, leaving opt_out_at as the only trace and clearing, through the mirror,
   -- the party-row backstop sendPartySms falls back on. So every verdict but
   -- `opted_out` is refused while an UNANSWERED refusal stands (r6 B6-1 — read
@@ -916,11 +941,17 @@ BEGIN
   -- What answers a refusal is the recipient's own YES or START, which the
   -- inbound rail writes directly — lowering the flag and stamping a fresh
   -- consented_at (sms-inbound/pipeline.ts writeChannelConsent); after that this
-  -- door opens again. A record already AT
-  -- `granted` may still restate its evidence — the number is sendable either
-  -- way, and refusing there would strand a folded row whose dates disagree
-  -- with its status, since reconsent() requires status = 'opted_out' and would
-  -- have no door left to offer.
+  -- door opens again. NOTHING HERE LOWERS IT (r7 M7-1). A record already AT
+  -- `granted` used to be exempt from this gate so it could restate its
+  -- evidence, and the write that came through then set the flag FALSE — one
+  -- ordinary granted-on-granted call by any member, no recipient involved, and
+  -- the send gate (channelConsentVerdict, which refuses on this flag since r6
+  -- M6-3) opened. The first prod fold mints exactly that row: a legacy seat
+  -- reading `granted` with a stale, unanswered opt-out. So the exemption is
+  -- gone and this door never lowers the flag. Such a row is not stranded:
+  -- recording the REFUSAL is always open — it is the way forward — and from
+  -- there record_channel_reconsent() puts the studio's fresh consent on the
+  -- record. What makes the number sendable again is the recipient's answer.
 
   -- ── 3. Write ──────────────────────────────────────────────────────────────
   -- No write may empty the evidence set (R-AG): each of source, evidence,
@@ -951,12 +982,13 @@ BEGIN
                           THEN EXCLUDED.consented_at ELSE scc.consented_at END,
       opt_out_at   = CASE WHEN EXCLUDED.status = 'opted_out'
                           THEN EXCLUDED.opt_out_at ELSE scc.opt_out_at END,
-      -- A refusal raises the flag; only a `granted` write lowers it, and the
-      -- WHERE below means the only grants that get here are ones no unanswered
-      -- refusal stands against. `pending` keeps whatever stands — a studio
-      -- re-recording the consent it holds does not answer the refusal.
+      -- A refusal raises the flag; NO verdict written through this door lowers
+      -- it (r7 M7-1). Only the inbound rail's own write does, when the person
+      -- who refused answers. A studio re-recording the consent it holds —
+      -- `granted` or `pending` — does not answer the refusal, and the WHERE
+      -- below means the only writes that reach here while one stands are the
+      -- refusals themselves.
       refusal_unanswered = CASE WHEN EXCLUDED.status = 'opted_out' THEN true
-                                WHEN EXCLUDED.status = 'granted'   THEN false
                                 ELSE scc.refusal_unanswered END,
       source             = COALESCE(EXCLUDED.source, scc.source),
       evidence           = COALESCE(EXCLUDED.evidence, scc.evidence),
@@ -974,9 +1006,11 @@ BEGIN
     -- unanswered refusal stood, and a `pending` that lands is a `pending` the
     -- mirror stamps on every seat in the studio — the backstop gone, and the
     -- record moved off the status reconsent() needs to act on. Only `opted_out`
-    -- is exempt: recording the refusal is the way forward.
+    -- is exempt: recording the refusal is the way forward. A record already at
+    -- `granted` is NOT exempt either (r7 M7-1): the escape that let it restate
+    -- its evidence was the one write that lowered the flag, and the fold mints
+    -- the row it fired on.
     AND (EXCLUDED.status = 'opted_out'
-         OR scc.status = 'granted'
          OR (scc.refusal_unanswered IS NOT TRUE
              AND (scc.opt_out_at IS NULL
                   OR (scc.consented_at IS NOT NULL
@@ -1011,8 +1045,9 @@ BEGIN
     IF v_row.status = 'opted_out' THEN
       RAISE EXCEPTION 'channel_opted_out'
         USING HINT = 'This number or address already opted out. Only they can '
-                     'rejoin by replying START, or the studio can record a fresh '
-                     'consent through record_channel_reconsent().';
+                     'rejoin, by replying START. record_channel_reconsent() puts '
+                     'the studio''s fresh consent on the record — the refusal '
+                     'keeps standing until they answer.';
     END IF;
 
     -- The seat leg (2a) raced in between: name it for what it is rather than
@@ -1028,14 +1063,16 @@ BEGIN
       RAISE EXCEPTION 'channel_opted_out'
         USING HINT = 'A seat in this studio on this number is marked opted out. '
                      'Record that refusal here first (status opted_out, with the '
-                     'evidence), then record_channel_reconsent() is the way back '
-                     'and the grant is the recipient''s to give.';
+                     'evidence); record_channel_reconsent() then puts your fresh '
+                     'consent on the record, and the grant stays the '
+                     'recipient''s to give by replying YES or START.';
     END IF;
 
     RAISE EXCEPTION 'consent_awaiting_recipient'
-      USING HINT = 'A refusal on this channel has not been answered yet. The '
-                   'fresh consent is recorded (pending); granted is the '
-                   'recipient''s to give, by replying YES or START.';
+      USING HINT = 'A refusal on this channel has not been answered yet. Put the '
+                   'studio''s fresh consent on the record with '
+                   'record_channel_reconsent() if it is not there; sending '
+                   'resumes only when they reply YES or START.';
   END IF;
 
   RETURN v_row;
@@ -1054,13 +1091,17 @@ COMMENT ON FUNCTION public.record_channel_consent(uuid, text, text, text, text, 
   '(consent_evidence_required); REFUSES not_asked outright '
   '(consent_not_recordable — there is nothing to record, R-AG); refuses every '
   'transition OUT of opted_out (channel_opted_out — record_channel_reconsent() '
-  'is the named way back, PR-m), and states that gate inside the upsert''s '
+  'is the named door for putting the studio''s fresh consent on the record, '
+  'PR-m, and it leaves the refusal standing, r7 M7-2), and states that gate '
+  'inside the upsert''s '
   'DO UPDATE … WHERE so a concurrent STOP cannot land in a read-then-write '
   'window; also refuses EVERY verdict but opted_out while a refusal stands '
   'unanswered — refusal_unanswered TRUE, or an opt_out_at with no later '
   'consented_at (consent_awaiting_recipient) — so '
   'reconsent() plus a grant cannot compose their way back to granted without '
-  'the recipient''s own YES or START, and a DATELESS refusal (the shipped '
+  'the recipient''s own YES or START; it never LOWERS refusal_unanswered on any '
+  'verdict either (r7 M7-1 — only the inbound rail does), and a DATELESS '
+  'refusal (the shipped '
   'portal writes them on purpose and the fold mints them) fails closed like a '
   'dated one; refuses the same verdicts (channel_opted_out) while an opted_out '
   'seat stands in THIS studio on that number — dated or not — even when the '
@@ -1078,7 +1119,7 @@ COMMENT ON FUNCTION public.record_channel_consent(uuid, text, text, text, text, 
   'new verdict does not restate it (00594).';
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- 5. record_channel_reconsent — PR-m's named way back from a STOP
+-- 5. record_channel_reconsent — PR-m's fresh recorded consent, on the record
 -- ═══════════════════════════════════════════════════════════════════════════
 -- PR-m: "The way back is always a fresh recorded consent or an inbound START."
 -- The inbound START is the rail's own path. This is the other one, and it is
@@ -1087,18 +1128,28 @@ COMMENT ON FUNCTION public.record_channel_consent(uuid, text, text, text, text, 
 -- recording one, it must be visible in the audit, and it must not be reachable
 -- by a caller that merely got the status string wrong.
 --
--- It lands on `pending`, never `granted`. The person said stop; the studio now
--- holds fresh prior express consent, which is exactly the state the double
--- opt-in confirmation exists for. `granted` stays the recipient's to give, by
--- replying YES or START — and that holds THROUGH this door, not merely at it:
--- record_channel_consent() refuses every verdict but `opted_out` while the
--- refusal this door superseded is still unanswered (refusal_unanswered TRUE,
--- or opt_out_at set with no later consented_at), so neither the pair
--- reconsent() -> record_channel_consent('granted') nor the cheaper
--- record_channel_consent('pending') -> ('granted') can walk a STOP
--- back to granted in two calls. The answer has to arrive on the inbound rail.
--- (The invite itself is W2's hook on the consent record
--- — the mirror still suppresses the per-row trigger fan-out.)
+-- IT IS EVIDENCE-ONLY, AND IT LEAVES THE RECORD AT `opted_out` (r7 M7-2).
+-- It used to land on `pending`, on the reading that the studio's fresh consent
+-- put the record into the state the double opt-in confirmation exists for. That
+-- reading died with r6's M6-3 fix: channelConsentVerdict refuses on
+-- refusal_unanswered whatever the status says, so NO send could follow — the
+-- opt-in invite included (sms.test.ts, "the opt-in invite does not slip past an
+-- unanswered refusal", stages exactly the row this door used to write). What
+-- the `pending` hop DID do was mirror `pending` onto every seat in the studio
+-- on that number, erasing the party-row refusal the send rail falls back on,
+-- and move the record off the one status this door can act on, so it could not
+-- be called twice. The studio was strictly worse off for having called it.
+--
+-- So: the refusal keeps standing, the seats keep it, the studio's fresh consent
+-- goes on the record where the room can print it ("opted out by text, 3 Dec
+-- 2025; fresh signed consent 11 Sep 2026, waiting on their reply"), and the
+-- door stays re-callable. THE DOUBLE OPT-IN DOES NOT RUN FROM HERE, and no
+-- invite is dispatched (fc_dispatch_optin_invite fires on a mirrored `pending`,
+-- which this no longer writes). `granted` is the recipient's to give by
+-- replying YES or START, which the inbound rail writes directly — the one
+-- writer that lowers refusal_unanswered. PR-m's "a fresh recorded consent OR an
+-- inbound START" is read this way on the record: the fresh recorded consent is
+-- what the studio may WRITE; the inbound START is what reopens SENDING.
 CREATE OR REPLACE FUNCTION public.record_channel_reconsent(
   p_organization_id    uuid,
   p_channel_kind       text,
@@ -1148,13 +1199,17 @@ BEGIN
   -- WHERE, so `AND scc.status = 'opted_out'` IS the gate and zero rows returned
   -- is the refusal.
   UPDATE public.studio_channel_consent scc
-     SET status             = 'pending',
+         -- status is NOT MOVED (r7 M7-2). The refusal stays on the books at
+         -- `opted_out`, and through the mirror so does the refusal on every
+         -- seat. It is restated rather than left alone so the row is normalised
+         -- whatever a prior writer left, and so the WHERE below is the gate.
+     SET status             = 'opted_out',
          -- opt_out_at is KEPT. The room still has to be able to say "opted out
-         -- by text, 3 Dec 2025" alongside the fresh consent that superseded it.
+         -- by text, 3 Dec 2025" alongside the fresh consent recorded against it.
          -- refusal_unanswered is KEPT TRUE for the same reason, and it is the
-         -- fact record_channel_consent's granted door reads: the studio has
-         -- superseded the refusal with its own fresh consent, but the person
-         -- who refused still has not answered. Only their YES/START lowers it.
+         -- fact record_channel_consent's granted door AND the send rail read:
+         -- the studio holds its own fresh consent, but the person who refused
+         -- still has not answered. Only their YES/START lowers it.
          -- Stated rather than left alone, so this door is correct even on a row
          -- some other writer left at opted_out without raising the flag.
          refusal_unanswered = true,
@@ -1186,14 +1241,20 @@ GRANT EXECUTE ON FUNCTION public.record_channel_reconsent(uuid, text, text, text
   TO authenticated, service_role;
 
 COMMENT ON FUNCTION public.record_channel_reconsent(uuid, text, text, text, text, text, uuid) IS
-  'PR-m''s named way back from a recorded opt-out: a FRESH recorded consent, '
-  'with source + evidence + disclosure_version all required. Refuses unless the '
-  'channel is currently opted_out (no_opt_out_to_supersede — the condition is in '
-  'the UPDATE''s own WHERE, so a concurrent writer cannot move the row out from '
-  'under it). Lands on `pending`, '
-  'never `granted` — granted stays the recipient''s to give by replying YES or '
-  'START, which record_channel_consent enforces on the far side too '
-  '(consent_awaiting_recipient, read off refusal_unanswered) so the two doors '
-  'cannot compose their way past a STOP, dated refusal or not — and keeps '
-  'opt_out_at AND refusal_unanswered so the refusal it superseded stays '
-  'printable and still stands unanswered (00594).';
+  'PR-m''s named door for putting the studio''s OWN fresh consent on the record '
+  'over a recorded opt-out, with source + evidence + disclosure_version all '
+  'required. Refuses unless the channel is currently opted_out '
+  '(no_opt_out_to_supersede — the condition is in the UPDATE''s own WHERE, so a '
+  'concurrent writer cannot move the row out from under it). It is EVIDENCE-ONLY '
+  'and LEAVES THE RECORD AT opted_out (r7 M7-2): it writes source, evidence, '
+  'recorded_at, disclosure_version, recorded_by and origin_project_id, and keeps '
+  'status, opt_out_at and refusal_unanswered exactly as they stand. It does NOT '
+  'run the double opt-in — it used to land on `pending`, but since r6 M6-3 the '
+  'send rail refuses on refusal_unanswered whatever the status says, so that hop '
+  'sent nothing, cleared the mirrored refusal off every seat, and left the row '
+  'on a status this door cannot act on (so it could not be called again). '
+  'Sending resumes only when the recipient replies YES or START, which the '
+  'inbound rail writes directly — the one writer that lowers '
+  'refusal_unanswered — after which record_channel_consent opens again. Safe to '
+  'call more than once: each call restates the studio''s latest evidence '
+  '(00594).';

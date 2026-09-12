@@ -676,3 +676,11 @@ $ SUPABASE_DB_URL=…54322/postgres pnpm --dir …/agent-people-build db:generat
 $ git diff --stat packages/supabase/src/database.types.ts
 (empty — no drift; 465 insertions against the wave's base commit, unchanged)
 ```
+
+---
+
+## R7 addendum (2026-09-11)
+
+Round-7 findings M7-1 and M7-2 were fixed in a separate pass; the per-finding
+sections (what changed, ruling taken, evidence) are in
+`w1a-fix-log-r7.md` in this directory.

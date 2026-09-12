@@ -193,7 +193,9 @@ an empty diff.
     own source and evidence, so a status change has already restated them by the
     time it reaches the write. PR-m's way back
     ("always a fresh recorded consent or an inbound START") is a separate named
-    door, `record_channel_reconsent()`, landing on `pending` — `granted` stays
+    door, `record_channel_reconsent()`, which is EVIDENCE-ONLY: it records the
+    studio's fresh consent and leaves the record at `opted_out` with the
+    refusal standing (r7 M7-2) — `granted` stays
     the recipient's to give by replying YES or START, and that is now enforced
     ACROSS the pair, not only at each door: this door refuses EVERY verdict but
     `opted_out` while the refusal reconsent superseded is still unanswered
@@ -290,7 +292,8 @@ an empty diff.
 
 18. **The two consent doors compose, and neither walks a STOP back on its own**
     (r3r2 M-1). `record_channel_consent()` refuses every transition out of
-    `opted_out`, and `record_channel_reconsent()` lands on `pending`. Stated
+    `opted_out`, and `record_channel_reconsent()` used to land on `pending`
+    (since r7 M7-2 it does not move the status at all). Stated
     that way each door held, but the PAIR did not: reconsent moved the row off
     `opted_out`, and the next recorded grant found a row the first gate no
     longer refused — two calls, any studio member, and a recorded STOP was back
@@ -308,17 +311,36 @@ an empty diff.
     population verbatim, so the date test failed OPEN for exactly the records
     the first prod push creates. The flag is raised by every writer that records
     a refusal (the fold, `record_channel_consent`, `record_channel_reconsent`,
-    the inbound STOP rail) and lowered only by a `granted` write. The date test
+    the inbound STOP rail) and lowered by ONE writer: the inbound rail's own
+    `service_role` write on a YES/START. **No RPC in 00594 lowers it** (r7
+    M7-1): the upsert used to exempt a record already AT `granted` from the
+    gate — so its evidence could be restated — and then set the flag `false` on
+    that very write, which after r6's M6-3 fix is the fact the SEND rail rests
+    on. One ordinary granted-on-granted call by any studio member turned
+    sending back on with no recipient involved, and
+    `backfill_channel_consent_from_parties()` mints exactly that row on the
+    first prod fold (a legacy seat reading `granted` with a stale
+    `sms_opt_out_at` no later consent answered). The fold's behaviour is ruled
+    correct — the refusal is the half that fails closed, whatever the status
+    says — and the escape is gone. The date test
     is KEPT alongside it, so a `service_role` writer that dates a refusal
     without raising the flag still fails closed
     (`consent_awaiting_recipient`). What answers a refusal is the
     recipient's own YES/START, which the inbound rail writes directly — lowering
     the flag and stamping a fresh `consented_at`; after that this door opens
-    again. A record already at
-    `granted` may still restate its evidence — the number is sendable either
-    way, and refusing there would strand a folded row whose dates disagree with
-    its status, since `reconsent()` requires `status = 'opted_out'`. SQL
-    blocks 16 and 16B (the dateless refusal).
+    again. A record already at `granted` is NOT exempt (r7 M7-1), and such a
+    folded row is not stranded: recording the refusal is always open — the way
+    forward — and from there `record_channel_reconsent()` puts the studio's
+    fresh consent on the record. That door is evidence-only and re-callable
+    (r7 M7-2): it used to land on `pending` "so the double opt-in still runs",
+    but after M6-3 the flag refuses EVERY send including the opt-in invite, so
+    the hop sent nothing, mirrored `pending` over the party-row refusal the
+    send rail falls back on, and left the record off the one status the door
+    needs — the studio was strictly worse off for calling it. PR-m's "a fresh
+    recorded consent **or** an inbound START" now reads: the fresh recorded
+    consent is what the studio may WRITE; the inbound START is what reopens
+    SENDING. SQL
+    blocks 16 and 16B (the dateless refusal), 26 (r7 M7-1) and 27 (r7 M7-2).
 
 19. **Both sides of an affiliation must be the card they claim to be**
     (r3r2 M-2). `person_id` and `company_id` are both FKs into
