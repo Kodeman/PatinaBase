@@ -17612,6 +17612,7 @@ export type Database = {
           started_at: string
           task_id: string | null
           updated_at: string
+          updated_by: string | null
           user_id: string
         }
         Insert: {
@@ -17637,6 +17638,7 @@ export type Database = {
           started_at?: string
           task_id?: string | null
           updated_at?: string
+          updated_by?: string | null
           user_id: string
         }
         Update: {
@@ -17662,6 +17664,7 @@ export type Database = {
           started_at?: string
           task_id?: string | null
           updated_at?: string
+          updated_by?: string | null
           user_id?: string
         }
         Relationships: [
@@ -17720,6 +17723,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "task_blocked_state"
             referencedColumns: ["waiting_on_task_id"]
+          },
+          {
+            foreignKeyName: "project_time_entries_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_time_entries_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "project_time_entries_user_id_fkey"
@@ -28919,6 +28936,109 @@ export type Database = {
           },
         ]
       }
+      time_entry_ledger: {
+        Row: {
+          activity: string | null
+          amount_cents: number | null
+          authority_rate_id: string | null
+          billable: boolean | null
+          billing_authority_id: string | null
+          billing_state: string | null
+          created_at: string | null
+          day: string | null
+          duration_minutes: number | null
+          id: string | null
+          invoice_id: string | null
+          is_running: boolean | null
+          iso_week: string | null
+          member_name: string | null
+          month: string | null
+          phase_key: string | null
+          project_id: string | null
+          project_name: string | null
+          rate_role: string | null
+          rate_source: string | null
+          resolved_rate_cents: number | null
+          source: string | null
+          started_at: string | null
+          studio_id: string | null
+          task_id: string | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_time_entries_invoice"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_time_entries_authority_rate_id_fkey"
+            columns: ["authority_rate_id"]
+            isOneToOne: false
+            referencedRelation: "project_billing_authority_rates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_time_entries_billing_authority_id_fkey"
+            columns: ["billing_authority_id"]
+            isOneToOne: false
+            referencedRelation: "project_billing_authorities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_time_entries_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "project_time_entries_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_time_entries_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "project_tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_time_entries_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "task_blocked_state"
+            referencedColumns: ["task_id"]
+          },
+          {
+            foreignKeyName: "project_time_entries_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "task_blocked_state"
+            referencedColumns: ["waiting_on_task_id"]
+          },
+          {
+            foreignKeyName: "project_time_entries_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_time_entries_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_engagement_scores: {
         Row: {
           current_score: number | null
@@ -34369,9 +34489,21 @@ export type Database = {
         Args: { quiz_answers: Json; timings?: Json }
         Returns: Json
       }
+      project_hours_total: {
+        Args: { p_project_id: string }
+        Returns: {
+          amount_cents: number
+          billable_minutes: number
+          minutes: number
+        }[]
+      }
       project_note_enclosures_ok: {
         Args: { p_enclosures: Json }
         Returns: boolean
+      }
+      project_pricing_studio_id: {
+        Args: { p_project_id: string }
+        Returns: string
       }
       promote_batch_to_studio: { Args: { p_items: Json }; Returns: string[] }
       promote_board_reference_to_selection: {
@@ -36183,6 +36315,27 @@ export type Database = {
       studio_has_live_license_attestation: {
         Args: { p_studio_id: string }
         Returns: boolean
+      }
+      studio_hours_rollup: {
+        Args: {
+          p_from: string
+          p_group_by?: string
+          p_project_id?: string
+          p_studio_id: string
+          p_to: string
+          p_user_id?: string
+        }
+        Returns: {
+          billable_cents: number
+          billable_minutes: number
+          bucket_key: string
+          bucket_label: string
+          entry_count: number
+          internal_minutes: number
+          member_id: string
+          member_name: string
+          total_minutes: number
+        }[]
       }
       submit_board_share_reaction: {
         Args: {

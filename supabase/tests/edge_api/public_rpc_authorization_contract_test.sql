@@ -533,7 +533,19 @@ BEGIN
         ('public', 'project_time_entries', 'Team can delete their own time entries', 'd', '((user_id = auth.uid()) AND is_project_team_member(project_id))', NULL),
         ('public', 'project_time_entries', 'Team can log their own time entries', 'a', NULL, '((user_id = auth.uid()) AND is_project_team_member(project_id))'),
         ('public', 'project_time_entries', 'Team can update their own time entries', 'w', '((user_id = auth.uid()) AND is_project_team_member(project_id))', NULL),
-        ('public', 'project_time_entries', 'Team can view their project time entries', 'r', 'is_project_team_member(project_id)', NULL),
+        -- RE-REGISTERED 2026-09-12 by migration 00606 (HT-10 / HT-10-a, W2 of the
+        -- hour-tracking program). The qual 00484:1712-1760 registered was
+        -- `is_project_team_member(project_id)` alone — a rostered member read EVERY
+        -- row of that project, notes and, since W1's per-person studio rate, each
+        -- colleague's confidential number (measured: W1 review round 10,
+        -- W1-R10-03). HT-10-a narrows it to OWN rows. The policy keeps its name,
+        -- its command, its role set, its permissive flag and its postgres
+        -- ownership — every other property the contract checks — and none of the
+        -- four registered policies is dropped or renamed. 00484's own DO block
+        -- still passes at its own replay point; this VALUES row is the contract's
+        -- live-state home, so it moves with the ruling rather than being silently
+        -- broken by it. If 00484 is ever re-derived, carry this qual into it.
+        ('public', 'project_time_entries', 'Team can view their project time entries', 'r', '((user_id = auth.uid()) AND is_project_team_member(project_id))', NULL),
         ('public', 'projects', 'Project participants can view projects', 'r', '((designer_id = auth.uid()) OR (client_id = auth.uid()) OR is_project_team_member(id))', NULL)
     )
     SELECT 1

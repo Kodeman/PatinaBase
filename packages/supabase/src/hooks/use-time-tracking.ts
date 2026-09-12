@@ -39,7 +39,13 @@ const timeKeys = {
   timeline: (projectId: string) => ['projects', projectId, 'timeline'] as const,
   all: ['time'] as const,
   runningTimer: () => ['time', 'running-timer', undefined] as const,
-  studioReport: (period: string) => ['time', 'studio-report', period] as const,
+  // W2's three reads sit UNDER timeKeys.all ('time'), so invalidateProjectTime's
+  // blanket invalidation refreshes the ledger, the studio rollup and the project
+  // total after every write — one canonical key per read, no second family.
+  ledger: (params: unknown) => ['time', 'ledger', params] as const,
+  studioRollup: (params: unknown) => ['time', 'studio-rollup', params] as const,
+  projectHoursTotal: (projectId: string | null) =>
+    ['time', 'project-total', projectId] as const,
 };
 
 // ── Billing state (the server's verdict on an hour) ──
@@ -693,137 +699,172 @@ export function useClaimTimeEntries(options?: { errorSurface?: 'inline' }) {
   });
 }
 
-// ── Studio time report ──
+// ── The four scopes (W2: 00604 view + 00607 rollups) ──
+//
+// HT-37 (ruled): `useStudioTimeReport` is DELETED, not wired. It pulled every
+// studio entry plus the whole unbilled view into the browser and grouped them
+// there; the per-member group-by is `studio_hours_rollup` (00607) now, and the
+// rows come from `time_entry_ledger` (00604). Both are SECURITY INVOKER, so RLS
+// (as narrowed by 00606) is the scope — these hooks pass no secret and enforce
+// nothing the server does not.
 
-export interface StudioTimeEntry extends ProjectTimeEntry {
-  project?: { name: string | null } | null;
+/** A row of public.time_entry_ledger (00604). No `notes`: HT-36. */
+export interface TimeEntryLedgerRow {
+  id: string;
+  project_id: string;
+  project_name: string | null;
+  /** The studio that PRICES this project's hours (HT-3-a/b). Never a policy key. */
+  studio_id: string | null;
+  user_id: string;
+  member_name: string | null;
+  phase_key: string | null;
+  task_id: string | null;
+  started_at: string;
+  /** UTC buckets, matching the resolver's own date basis. */
+  day: string;
+  iso_week: string;
+  month: string;
+  duration_minutes: number | null;
+  is_running: boolean;
+  billable: boolean;
+  activity: string | null;
+  source: string;
+  billing_state?: TimeBillingState | null;
+  rate_source?: TimeRateSource | null;
+  rate_role?: TimeRateRole | null;
+  resolved_rate_cents: number;
+  amount_cents: number;
+  invoice_id: string | null;
+  billing_authority_id?: string | null;
+  authority_rate_id?: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
-export interface StudioProjectRollup {
-  projectId: string;
-  projectName: string;
-  totalMinutes: number;
-  billableMinutes: number;
-  entryCount: number;
-  /** All-time unbilled balance on the project (not period-scoped). */
-  unbilledMinutes: number;
-  unbilledAmountCents: number;
+export interface TimeEntryLedgerParams {
+  /** The studio scope. Omit for "every studio this caller can read". */
+  studioId?: string | null;
+  /** The member scope. */
+  userId?: string | null;
+  /** The project scope. */
+  projectId?: string | null;
+  /** Inclusive ISO date bounds on the UTC day bucket. */
+  from?: string | null;
+  to?: string | null;
+  /** Running timers are included by default — the sheet shows them as rows. */
+  includeRunning?: boolean;
+  limit?: number;
 }
 
-export interface StudioTimeReport {
-  /** Completed entries inside the period, newest first, with project names. */
-  entries: StudioTimeEntry[];
-  totalMinutes: number;
-  billableMinutes: number;
-  invoicedMinutes: number;
-  /** All-time unbilled balance across every project (a balance, not a flow). */
-  unbilledMinutes: number;
-  unbilledAmountCents: number;
-  /** Per-project rollups, most period-minutes first. */
-  projects: StudioProjectRollup[];
+/** Rows for any of the four scopes (00604). RLS decides what comes back. */
+export function useTimeEntryLedger(params: TimeEntryLedgerParams = {}) {
+  const { studioId, userId, projectId, from, to, includeRunning = true, limit } = params;
+
+  return useQuery({
+    queryKey: timeKeys.ledger(params),
+    queryFn: async (): Promise<TimeEntryLedgerRow[]> => {
+      const supabase = getSupabase();
+      let query = supabase
+        .from('time_entry_ledger')
+        .select('*')
+        .order('started_at', { ascending: false });
+
+      if (studioId) query = query.eq('studio_id', studioId);
+      if (userId) query = query.eq('user_id', userId);
+      if (projectId) query = query.eq('project_id', projectId);
+      if (from) query = query.gte('day', from);
+      if (to) query = query.lte('day', to);
+      if (!includeRunning) query = query.eq('is_running', false);
+      if (limit) query = query.limit(limit);
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return (data ?? []) as TimeEntryLedgerRow[];
+    },
+  });
+}
+
+/** The five buckets public.studio_hours_rollup accepts; a sixth raises. */
+export type TimeHoursGroupBy = 'member' | 'project' | 'day' | 'iso_week' | 'activity';
+
+export interface StudioHoursRollupParams {
+  studioId: string | null;
+  /** Inclusive ISO date bounds. */
+  from: string;
+  to: string;
+  groupBy?: TimeHoursGroupBy;
+  /** The member scope. */
+  userId?: string | null;
+  /** The project scope. */
+  projectId?: string | null;
+}
+
+/** A bucket of public.studio_hours_rollup (00607). Never carries notes (HT-36). */
+export interface StudioHoursRollupRow {
+  bucket_key: string;
+  bucket_label: string;
+  member_id: string | null;
+  member_name: string | null;
+  entry_count: number;
+  total_minutes: number;
+  billable_minutes: number;
+  billable_cents: number;
+  internal_minutes: number;
 }
 
 /**
- * Cross-project rollup for the studio time report. Two RLS-scoped reads:
- * the period's completed entries (rolling window per studioPeriodStartISO,
- * mirroring the earnings page's periods) and the all-time unbilled view —
- * unbilled is shown as a balance, so it deliberately ignores the period.
+ * Aggregates for the member / project / studio scopes (00607, SECURITY INVOKER).
+ * Running timers are excluded server-side: a total never counts an unfinished
+ * hour.
  */
-export function useStudioTimeReport(period: StudioPeriod) {
+export function useStudioHoursRollup(params: StudioHoursRollupParams) {
+  const { studioId, from, to, groupBy = 'member', userId = null, projectId = null } = params;
+
   return useQuery({
-    queryKey: timeKeys.studioReport(period),
-    queryFn: async (): Promise<StudioTimeReport> => {
+    queryKey: timeKeys.studioRollup(params),
+    enabled: Boolean(studioId),
+    queryFn: async (): Promise<StudioHoursRollupRow[]> => {
       const supabase = getSupabase();
-      const startISO = studioPeriodStartISO(period);
+      const { data, error } = await supabase.rpc('studio_hours_rollup', {
+        p_studio_id: studioId,
+        p_from: from,
+        p_to: to,
+        p_group_by: groupBy,
+        p_user_id: userId,
+        p_project_id: projectId,
+      });
+      if (error) throw error;
+      return (data ?? []) as StudioHoursRollupRow[];
+    },
+  });
+}
 
-      const [entriesRes, unbilledRes] = await Promise.all([
-        supabase
-          .from('project_time_entries')
-          .select(
-            '*, project:projects(name), profile:profiles!project_time_entries_user_id_fkey(full_name)'
-          )
-          .not('duration_minutes', 'is', null)
-          .gte('started_at', startISO)
-          .order('started_at', { ascending: false }),
-        supabase
-          .from('project_unbilled_time')
-          .select('*'),
-      ]);
-      if (entriesRes.error) throw entriesRes.error;
-      if (unbilledRes.error) throw unbilledRes.error;
+/** public.project_hours_total's return shape (00607). Minutes and money only. */
+export interface ProjectHoursTotal {
+  minutes: number;
+  billable_minutes: number;
+  amount_cents: number;
+}
 
-      const entries = (entriesRes.data ?? []) as StudioTimeEntry[];
-      const unbilledRows = (unbilledRes.data ?? []) as Array<{
-        project_id: string;
-        duration_minutes: number;
-        amount_cents: number;
-        rated_amount_cents?: number | null;
-        billing_state?: TimeBillingState | null;
-      }>;
-
-      const byProject = new Map<string, StudioProjectRollup>();
-      const ensure = (projectId: string, name?: string | null) => {
-        let rollup = byProject.get(projectId);
-        if (!rollup) {
-          rollup = {
-            projectId,
-            projectName: name || 'Untitled project',
-            totalMinutes: 0,
-            billableMinutes: 0,
-            entryCount: 0,
-            unbilledMinutes: 0,
-            unbilledAmountCents: 0,
-          };
-          byProject.set(projectId, rollup);
-        } else if (name && rollup.projectName === 'Untitled project') {
-          rollup.projectName = name;
-        }
-        return rollup;
-      };
-
-      let totalMinutes = 0;
-      let billableMinutes = 0;
-      let invoicedMinutes = 0;
-      for (const entry of entries) {
-        const minutes = entry.duration_minutes || 0;
-        totalMinutes += minutes;
-        if (entry.billable) billableMinutes += minutes;
-        if (entry.invoice_id) invoicedMinutes += minutes;
-        const rollup = ensure(entry.project_id, entry.project?.name);
-        rollup.totalMinutes += minutes;
-        if (entry.billable) rollup.billableMinutes += minutes;
-        rollup.entryCount += 1;
-      }
-
-      let unbilledMinutes = 0;
-      let unbilledAmountCents = 0;
-      for (const row of unbilledRows) {
-        if (
-          !isInvoiceEligibleTimeEntry({
-            billable: true,
-            invoice_id: null,
-            billing_state: row.billing_state,
-          })
-        ) {
-          continue;
-        }
-        const amountCents = row.rated_amount_cents ?? row.amount_cents ?? 0;
-        unbilledMinutes += row.duration_minutes || 0;
-        unbilledAmountCents += amountCents;
-        const rollup = ensure(row.project_id);
-        rollup.unbilledMinutes += row.duration_minutes || 0;
-        rollup.unbilledAmountCents += amountCents;
-      }
-
-      return {
-        entries,
-        totalMinutes,
-        billableMinutes,
-        invoicedMinutes,
-        unbilledMinutes,
-        unbilledAmountCents,
-        projects: [...byProject.values()].sort((a, b) => b.totalMinutes - a.totalMinutes),
-      };
+/**
+ * HT-10-a: the project total a member keeps after 00606 narrowed her per-row
+ * read to her own rows. SECURITY DEFINER server-side, with the standing assert
+ * first — it throws for a caller who is not on the project, so the project lens
+ * must surface that rather than rendering a zero.
+ */
+export function useProjectHoursTotal(projectId: string | null) {
+  return useQuery({
+    queryKey: timeKeys.projectHoursTotal(projectId),
+    enabled: Boolean(projectId),
+    queryFn: async (): Promise<ProjectHoursTotal> => {
+      if (!projectId) throw new Error('Project ID required');
+      const supabase = getSupabase();
+      const { data, error } = await supabase.rpc('project_hours_total', {
+        p_project_id: projectId,
+      });
+      if (error) throw error;
+      const row = (Array.isArray(data) ? data[0] : data) as ProjectHoursTotal | undefined;
+      return row ?? { minutes: 0, billable_minutes: 0, amount_cents: 0 };
     },
   });
 }

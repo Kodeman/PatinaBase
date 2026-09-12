@@ -15720,6 +15720,60 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00604_time_entry_ledger_view.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.project_pricing_studio_id(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00604_time_entry_ledger_view.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.project_pricing_studio_id(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00604_time_entry_ledger_view.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.time_entry_ledger FROM anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00604_time_entry_ledger_view.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.time_entry_ledger TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00605_time_entry_admin_write_and_trace.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.audit_time_entry_change() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00607_studio_hours_rollup.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.studio_hours_rollup(uuid, date, date, text, uuid, uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00607_studio_hours_rollup.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.studio_hours_rollup(uuid, date, date, text, uuid, uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00607_studio_hours_rollup.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.project_hours_total(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00607_studio_hours_rollup.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.project_hours_total(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 20260910152111_create_contact_messages.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON TABLE public.contact_messages FROM PUBLIC, anon, authenticated, service_role;

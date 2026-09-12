@@ -2148,7 +2148,9 @@ export {
   useStopTimer,
   useDiscardTimer,
   useClaimTimeEntries,
-  useStudioTimeReport,
+  useTimeEntryLedger,
+  useStudioHoursRollup,
+  useProjectHoursTotal,
   useUpdatePhaseEstimates,
 } from "./use-time-tracking";
 export type {
@@ -2170,7 +2172,10 @@ export type {
   StopTimerInput,
   TimeToast,
   ClaimTimeEntriesInput,
-  StudioTimeEntry,
-  StudioProjectRollup,
-  StudioTimeReport,
+  TimeEntryLedgerRow,
+  TimeEntryLedgerParams,
+  TimeHoursGroupBy,
+  StudioHoursRollupParams,
+  StudioHoursRollupRow,
+  ProjectHoursTotal,
 } from "./use-time-tracking";
