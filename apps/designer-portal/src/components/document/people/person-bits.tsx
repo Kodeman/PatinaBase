@@ -160,8 +160,9 @@ export function RoleBadge({ role }: { role: PartyRole }) {
 }
 
 /**
- * The SMS-consent chip a field party's row wears (00281 sms_consent_status) —
- * Not asked / Invited / Texting / Opted out, in the field-config vocab.
+ * The SMS-consent chip a field party's row wears (the studio's consent RECORD,
+ * studio_channel_consent) — Not asked / Invited / Texting / Opted out, in the
+ * field-config vocab, plus No record for a NULL the caller cannot source.
  * Extracted here from person-row.tsx (Call Sheet Wave 3) so the directory row
  * and the call sheet's roster row can never drift apart.
  *
@@ -176,8 +177,18 @@ export function ConsentChip({
   status: string | null | undefined;
   dotOnly?: boolean;
 }) {
-  const key = (status ?? 'not_asked') as SmsConsentStatus;
-  const cfg = SMS_CONSENT_DISPLAY[key] ?? SMS_CONSENT_DISPLAY.not_asked;
+  // A NULL status is UNKNOWN, not "Not asked" (R-V). The readers that feed
+  // this chip print NULL when the caller cannot read the record that decides
+  // the word (00594's v_project_roster, 00626's two directory readers), and
+  // "Not asked" over a studio's dated `opted_out` is the fail-open word this
+  // program exists to remove (w1b final review r8 MAJOR-1). No record is its
+  // own face: the pearl dot with the words "No record".
+  const noRecord = status === null || status === undefined || status === '';
+  const key = (noRecord ? 'not_asked' : status) as SmsConsentStatus;
+  const cfg = noRecord
+    ? { label: 'No record', dotClass: 'bg-patina-pearl' }
+    : (SMS_CONSENT_DISPLAY[key] ?? SMS_CONSENT_DISPLAY.not_asked);
+  const dotKey = noRecord ? 'no_record' : key;
 
   if (dotOnly) {
     return (
@@ -185,7 +196,7 @@ export function ConsentChip({
         role="img"
         aria-label={cfg.label}
         title={cfg.label}
-        data-consent-dot={key}
+        data-consent-dot={dotKey}
         className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${cfg.dotClass}`}
       />
     );
@@ -195,7 +206,7 @@ export function ConsentChip({
     <span className="inline-flex shrink-0 items-center gap-1 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
       <span
         aria-hidden
-        data-consent-dot={key}
+        data-consent-dot={dotKey}
         className={`inline-block h-1.5 w-1.5 rounded-full ${cfg.dotClass}`}
       />
       {cfg.label}

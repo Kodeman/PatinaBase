@@ -1144,18 +1144,36 @@ SELECT
   )                                                               AS has_active_field_link,
   -- THE RECORD, NOT THE SEAT (R-AS). project_parties.sms_consent_* is frozen
   -- legacy since 00594; the studio's verdict for this number lives in
-  -- studio_channel_consent. No record is what `not_asked` means, and this
-  -- column was NOT NULL before, so the absence is COALESCEd to the word.
-  COALESCE(
-    public.channel_consent_status(
-      -- One resolver, shared with every writer (3c-2). It is SECURITY DEFINER,
-      -- so a caller who cannot see the project — or who belongs to a different
-      -- studio than the one the seat's consent lives under — still gets the
-      -- studio this seat's ledger actually belongs to, and the join this
-      -- expression used to need is gone with the inlined copy.
-      public.project_consent_org(pp.project_id),
-      'sms', pp.phone_e164),
-    'not_asked')                                                 AS sms_consent_status,
+  -- studio_channel_consent. No record is what `not_asked` means — but only
+  -- for a caller who can READ the record that decides the word.
+  --
+  -- COALESCEd ONLY BEHIND THE MEMBERSHIP TEST (w1b final review r8 MAJOR-1).
+  -- project_consent_org() is SECURITY DEFINER, so a caller who belongs to a
+  -- different studio than the one the seat's consent lives under still gets
+  -- the studio this seat's ledger actually belongs to — and then
+  -- channel_consent_status(), which is INVOKER, returns NULL under that
+  -- caller's own RLS and the COALESCE turned the unknown into the AFFIRMATIVE
+  -- word. Walked: a plain member of the designer's second design studio,
+  -- reading 0 rows of studio_channel_consent, saw `not_asked` on a seat whose
+  -- record at the project's studio says `opted_out` with opt_out_at
+  -- 2025-12-03 — fixture row F-12, the defect this program exists to fix,
+  -- printed on the Call Sheet row, the letterhead instrument, the kickoff
+  -- band and (R-AV) the Patina Field roster screen. 00626's two readers carry
+  -- exactly this CASE for exactly this reason (r6 MAJOR-1); this view is the
+  -- one reader that gate was never applied to. Unknown prints as NULL —
+  -- R-V's "no record" line — never as the affirmative word. The team branch
+  -- below has always been NULL here, so nothing new appears in the column.
+  -- The send rail is unaffected: it asks channel_consent_status() itself at
+  -- the project's studio (R-AY) and NULL is not `granted`.
+  CASE WHEN public.is_active_studio_member(
+              public.project_consent_org(pp.project_id))
+       THEN COALESCE(
+              public.channel_consent_status(
+                -- One resolver, shared with every writer (3c-2).
+                public.project_consent_org(pp.project_id),
+                'sms', pp.phone_e164),
+              'not_asked')
+  END                                                            AS sms_consent_status,
   pp.updated_at                                                  AS updated_at
 FROM public.project_parties pp
 
@@ -1206,7 +1224,18 @@ COMMENT ON VIEW public.v_project_roster IS
   'visibility is intended, not a leak. has_active_field_link checks '
   'field_link_tokens (00283) for a live, unexpired, unrevoked token; that '
   'table is designer-only RLS, so a non-designer viewer sees false even when '
-  'a link exists — same degrade posture as the om join.';
+  'a link exists — same degrade posture as the om join. sms_consent_status '
+  'reads THE RECORD (studio_channel_consent, R-AS/R-AY) and is COALESCEd to '
+  '''not_asked'' ONLY for a caller who is an active member of '
+  'project_consent_org(project_id) — the studio whose ledger decides it. '
+  'Without that test the definer resolver named the right studio, the INVOKER '
+  'channel_consent_status() returned NULL under the caller''s own RLS, and the '
+  'COALESCE printed the AFFIRMATIVE word over a dated `opted_out`: measured, '
+  'a member of the designer''s second design studio read `not_asked` on a '
+  'seat the project''s studio has refused (w1b final review r8 MAJOR-1, the '
+  'same fail-open 00626''s two readers close with this CASE). Unknown is '
+  'NULL — R-V''s "no record" line — and the team branch was always NULL here, '
+  'so readers already tolerate it.';
 
 CREATE OR REPLACE VIEW public.people_directory
 WITH (security_invoker = true) AS
