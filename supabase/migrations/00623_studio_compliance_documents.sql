@@ -93,6 +93,19 @@
 --     while its successor is still in force and still contains its gates.
 --     `blocks` joins the trigger's UPDATE OF list beside it — worth doing,
 --     not sufficient alone, since the trigger cannot see predecessors.
+--   · w1b final review r10 MAJOR-1 — that reader-side reckoning was ONE HOP,
+--     which broke the same word in the opposite direction on the ordinary
+--     SECOND renewal. A chain A -> B -> C (four honest writes, all ten guards
+--     passing) is the steady state of any firm a studio keeps two years; the
+--     day B's own certificate expires, A's immediate successor is no longer in
+--     force, so A re-enters the count and the card reads `lapsed` while C — in
+--     force, non-superseded, gating — is on file. It arrives from the CALENDAR
+--     ALONE, with no write, no audit line and no act to point at, and
+--     identity_paper_state() (00626) carries it to the company card, the
+--     person's Directory row and both her seat lines. compliance_state() now
+--     walks superseded_by TRANSITIVELY (WITH RECURSIVE, depth-capped): a row
+--     leaves the count while ANY REACHABLE successor is in force and carries
+--     that row's gates. r9's walk still ends `lapsed`.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 CREATE TABLE IF NOT EXISTS public.studio_compliance_documents (
@@ -589,12 +602,59 @@ GRANT ALL ON public.studio_compliance_documents TO service_role;
 -- trigger's UPDATE OF list beside this (the trigger still cannot see a row's
 -- predecessors, so it is not sufficient alone). The formula stays in ONE
 -- place, which is direction §3.8's rule for the word.
+--
+-- AND THE RECKONING IS TRANSITIVE, NOT ONE HOP (w1b final review r10 MAJOR-1).
+-- r9's predicate asked only about the row's IMMEDIATE successor, which breaks
+-- the same word the other way on the ordinary SECOND renewal. A certificate is
+-- renewed every year, so any firm a studio keeps for two years is a chain: A
+-- retired by B, then B retired by C. All four writes are honest and pass all
+-- ten guards — when B is retired, C is in force and carries B's gates, and the
+-- head-of-chain leg is satisfied because B's own superseded_by is still NULL.
+-- The day B's OWN certificate expires, A re-entered the reckoning: its
+-- immediate successor was no longer in force, so the one-hop NOT EXISTS was
+-- true, A is expired and gating, and the word was `lapsed` — while C, an
+-- in-force, non-superseded, gating coi_gl, sat on the card. That arrives with
+-- NO write at all, from the calendar alone, so there is no audit line and no
+-- act to point at; identity_paper_state() (00626) then carries it to the
+-- company card, the person's Directory row and every one of their seat lines,
+-- and `lapsed` is direction §3.8 / PR-h's blocking word that gates site_access
+-- and draw. So a row leaves the count while ANY REACHABLE successor is in
+-- force and carries the ROOT's gates — the WITH RECURSIVE walk below. The
+-- head-of-chain write guard (the compliance_successor_already_superseded leg
+-- above) keeps superseded_by acyclic, so the recursion terminates on its own;
+-- the depth cap is for a chain written before that guard existed. r9's own
+-- case stays closed: a successor that is back-dated and then de-gated earns
+-- nothing at hop 1 and has no successor of its own at hop 2, so the retired
+-- lapse is still counted and the word is still `lapsed`.
 CREATE OR REPLACE FUNCTION public.compliance_state(p_holder_id uuid)
 RETURNS text
 LANGUAGE sql
 STABLE
 SET search_path TO 'public'
 AS $$
+  WITH RECURSIVE chain(root, root_blocks, succ, depth) AS (
+    -- every retired row of this card, and the first hop of its chain
+    SELECT d.id, d.blocks, d.superseded_by, 0
+      FROM public.studio_compliance_documents d
+     WHERE d.holder_id = p_holder_id
+       AND d.superseded_by IS NOT NULL
+    UNION ALL
+    -- … then the next hop, carrying the ROOT's gates forward unchanged
+    SELECT c.root, c.root_blocks, s.superseded_by, c.depth + 1
+      FROM chain c
+      JOIN public.studio_compliance_documents s ON s.id = c.succ
+     WHERE c.depth < 64                        -- the head-of-chain guard makes
+  ),                                           -- superseded_by acyclic; this
+                                               -- caps a chain written before it
+  retired AS (
+    -- a row leaves the reckoning while ANY reachable successor still earns
+    -- the retirement: in force, and carrying at least the root's gates
+    SELECT DISTINCT c.root
+      FROM chain c
+      JOIN public.studio_compliance_documents s ON s.id = c.succ
+     WHERE (s.expires_on IS NULL OR s.expires_on >= CURRENT_DATE)
+       AND c.root_blocks <@ s.blocks
+  )
   SELECT CASE
            WHEN count(*) = 0 THEN 'not_on_file'
            WHEN count(*) FILTER (
@@ -610,12 +670,7 @@ AS $$
     FROM public.studio_compliance_documents d
    WHERE d.holder_id = p_holder_id
      AND (d.superseded_by IS NULL
-          OR NOT EXISTS (                      -- the retirement holds only
-            SELECT 1                           -- while the successor earns it
-              FROM public.studio_compliance_documents s
-             WHERE s.id = d.superseded_by
-               AND (s.expires_on IS NULL OR s.expires_on >= CURRENT_DATE)
-               AND d.blocks <@ s.blocks));
+          OR d.id NOT IN (SELECT root FROM retired));
 $$;
 
 REVOKE ALL ON FUNCTION public.compliance_state(uuid) FROM PUBLIC, anon;
@@ -637,6 +692,14 @@ COMMENT ON FUNCTION public.compliance_state(uuid) IS
   'successor (back-date it, then empty its gates) left a lapsed gating '
   'certificate on file while this function said current, with no in-force '
   'cover anywhere on the card (w1b final review r9 MAJOR-1). The reader is '
-  'the one place a later write cannot outrun. SECURITY INVOKER — the table''s '
+  'the one place a later write cannot outrun. The walk is TRANSITIVE over '
+  'superseded_by, not one hop: on the ordinary second renewal (A retired by B, '
+  'B retired by C, four honest writes) the day B''s own certificate expired A '
+  're-entered a one-hop reckoning and the card read `lapsed` over C, an '
+  'in-force non-superseded gating coi_gl — from the calendar alone, with no '
+  'write and no audit line (w1b final review r10 MAJOR-1). A row leaves the '
+  'count while ANY REACHABLE successor is in force and carries that row''s '
+  'gates; the head-of-chain write guard keeps the pointer acyclic and the '
+  'depth cap covers chains written before it. SECURITY INVOKER — the table''s '
   'member-only RLS is the access rule, so a caller outside the studio reads '
   'not_on_file rather than another studio''s word (00623).';

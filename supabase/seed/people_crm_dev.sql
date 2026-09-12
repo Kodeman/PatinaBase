@@ -890,6 +890,17 @@ ON CONFLICT (project_id) DO UPDATE
 -- not 90 days from today. Her LINDQVIST seat carries warranty_until
 -- 2026-11-21 with an on_site_to of 2025-10-15, so the later of the two wins
 -- (PR-l) and that link ends 2026-11-22.
+--
+-- F-12 Pete Rusk holds one too (w1b final review r10, tests F2). crm-model §
+-- "Reach tiers" lists him in the field-link row and his access matrix reads
+-- "Phone, Field link by another channel"; fixture.md's "Patina reach today"
+-- column says `field link`. He is opted out of TEXT, which is a different
+-- axis from the reach MECHANISM (direction §"the three reach words", PR-e) —
+-- the link reaches him by hand, by email or in person. Without this row the
+-- seeded Directory printed reach `on_paper` for him, the same word as someone
+-- Patina has never tried to reach at all, teaching the opposite of the design:
+-- that an opted-out number degrades a party's tier. His Okonkwo window runs to
+-- 2027-05-31, so the link ends 2027-06-01 (PR-d).
 -- ═══════════════════════════════════════════════════════════════════════════
 DO $$
 DECLARE
@@ -899,6 +910,7 @@ BEGIN
     'd0e30000-0000-0000-0000-000000000008'::uuid,  -- F-08 Erin, Okonkwo
     'd0e30000-0000-0000-0000-000000000009'::uuid,  -- F-09 Luis, Okonkwo
     'd0e30000-0000-0000-0000-000000000011'::uuid,  -- F-11 Dana, Okonkwo
+    'd0e30000-0000-0000-0000-000000000012'::uuid,  -- F-12 Pete, Okonkwo
     'd0e30000-0000-0000-0000-000000000018'::uuid,  -- F-18 Joe, Okonkwo
     'd0e30000-0000-0000-0000-000000000006'::uuid,  -- F-06 Ngozi, Okonkwo
     'd0e40000-0000-0000-0000-000000000008'::uuid   -- F-28 Erin's second seat

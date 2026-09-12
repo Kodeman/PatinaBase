@@ -1,0 +1,9 @@
+NOTICE:  seeded word: lapsed
+NOTICE:  chain A->B->C, today          shipped=current
+NOTICE:  B has lapsed, C in force      shipped=current
+NOTICE:    in-force non-superseded gating coi_gl on file: 1
+NOTICE:    Dana Kowalski Directory paper word: current
+NOTICE:  head of chain gutted          shipped=lapsed
+NOTICE:  SAME ROWS, r9 ONE-HOP body    shipped=lapsed  <-- the defect
+NOTICE:    Dana Kowalski Directory paper word: lapsed
+ROLLBACK

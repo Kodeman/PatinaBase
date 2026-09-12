@@ -1,0 +1,7 @@
+NOTICE:  LDS admin is a member of Leah Hartwell? f
+NOTICE:  seats the caller reads on project_parties directly: 2  (not a read door)
+NOTICE:  ONE-STUDIO caller  claims=1  nests=1   <-- must be equal
+NOTICE:  CONTROL both studios  claims=2  nests=2
+NOTICE:  SAME ROWS, pre-fix body: ONE-STUDIO caller claims=2 nests=1  <-- the defect
+NOTICE:    Directory rows claiming a count they cannot nest: 1
+ROLLBACK
