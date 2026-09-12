@@ -356,9 +356,19 @@ $ psql … -v ON_ERROR_STOP=1 -c BEGIN -f 00623 -f 00626 -f 00627 -c ROLLBACK
 RERUN_EXIT=0   (output: five "already exists, skipping" NOTICEs, no error)
 ```
 
-**No Deno/edge test was run because no Deno or TypeScript file was edited** —
-`_shared/sms.ts` is named in MAJOR-1 as the *consumer* of the RPC and is
-deliberately untouched; the fix is entirely inside `create_field_link`.
+**No Deno or TypeScript file was edited** — `_shared/sms.ts` is named in
+MAJOR-1 as the *consumer* of the RPC and is deliberately untouched; the fix is
+entirely inside `create_field_link`. The three Deno suites the pre-push hook
+names for that rail were run anyway, and are green:
+
+```
+$ deno test --allow-all --config supabase/functions/deno.json supabase/functions/_shared/sms.test.ts
+ok | 40 passed | 0 failed
+$ deno test … supabase/functions/_tests/field-daily.test.ts
+ok | 13 passed | 0 failed
+$ deno test … supabase/functions/_tests/sms-inbound.test.ts
+ok | 52 passed | 0 failed
+```
 
 ### The seeded fixture, before and after all four SQL fixes
 
