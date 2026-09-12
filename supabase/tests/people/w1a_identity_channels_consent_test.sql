@@ -97,6 +97,12 @@
 --      or an affiliation may not change its entity_kind or its studio; a
 --      restatement of the same values still writes; detaching the dependents
 --      opens the door again.
+--  30. r2 R2-M1: the fold picks the refusing sibling by the refusal's OWN
+--      facts, not by row age. Two refusals on one number in one studio — the
+--      dated, worded inbound STOP and the dateless sourceless one the shipped
+--      portal writes — and the record AND both seats keep the STOP's date and
+--      its words; where the words and the date sit on different refusing
+--      seats, the record still ends up with both.
 --
 -- How to run:
 --   psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
@@ -3363,6 +3369,115 @@ BEGIN
 
   RAISE NOTICE '29. a held card cannot change what it is or whose it is '
                '(r8 R8-M2, R-AR): passed';
+END
+$$;
+
+-- ─── 30. r2 R2-M1: the fold picks the sibling that HOLDS the refusal ───────
+--
+-- Two refusing seats on one number in one studio: the real inbound STOP, dated
+-- and worded, and the dateless sourceless `opted_out` the shipped portal writes
+-- on purpose (use-coordination.ts). Ranked by COALESCE(..., updated_at) the
+-- portal row wins on row age alone — it is touched whenever anything on the
+-- roster changes — and every fact the record carries about the refusal comes
+-- off a row that carries none: opt_out_at NULL, all four opt_out_* NULL, for
+-- good (ON CONFLICT DO NOTHING; reconsent never writes opt_out_*). The mirror
+-- then reads the NULL source as "this refusal has no words" (R-AQ) and wipes
+-- the STOP's own words off EVERY seat, including the one that received it.
+-- 30c is the other half of the same rule: where the words and the date are on
+-- different refusing seats, the record must still end up with both.
+
+INSERT INTO project_parties (id, project_id, party_kind, display_name, phone,
+                             sms_consent_status, sms_consented_at, sms_opt_out_at,
+                             sms_consent_source, sms_consent_evidence,
+                             sms_consent_recorded_at, sms_consent_disclosure_version)
+VALUES
+  -- the STOP, with its date and its words
+  ('e0000000-0000-4000-8000-0000000000c1', 'd0000000-0000-4000-8000-00000000000a', 'sub', 'Pete Rusk', '(612) 555-0501',
+   'opted_out', NULL, '2025-12-03T00:00:00Z', 'inbound_sms', 'Replied STOP on the Lindqvist thread',
+   '2025-12-03T00:00:00Z', 'field-sms-v1'),
+  -- the portal's refusal: opted out, date unknown, no source, no words
+  ('e0000000-0000-4000-8000-0000000000c2', 'd0000000-0000-4000-8000-00000000000a', 'sub', 'Pete Rusk', '612-555-0501',
+   'opted_out', NULL, NULL, NULL, NULL, NULL, NULL),
+  -- 30c: a dated refusal with no words, and a worded refusal with no date
+  ('e0000000-0000-4000-8000-0000000000c3', 'd0000000-0000-4000-8000-00000000000a', 'sub', 'Ada Fenn', '(612) 555-0502',
+   'opted_out', NULL, '2025-10-09T00:00:00Z', NULL, NULL, NULL, NULL),
+  ('e0000000-0000-4000-8000-0000000000c4', 'd0000000-0000-4000-8000-00000000000a', 'sub', 'Ada Fenn', '612-555-0502',
+   'opted_out', NULL, NULL, 'written', 'Told the PM to stop texting', '2025-10-10T00:00:00Z', 'field-sms-v1');
+
+-- The roster touch that makes the dateless row the most recently TOUCHED one —
+-- the whole mechanism of the defect, and ordinary portal traffic.
+UPDATE project_parties SET display_name = 'Pete Rusk (crew lead)'
+ WHERE id = 'e0000000-0000-4000-8000-0000000000c2';
+
+DO $$
+DECLARE
+  r    RECORD;
+  seat RECORD;
+  n    INTEGER;
+BEGIN
+  PERFORM public.backfill_channel_consent_from_parties();
+
+  -- 30a. The RECORD keeps the STOP's own date and words.
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_kind = 'sms' AND channel_value = '+16125550501';
+  ASSERT r.status = 'opted_out' AND r.refusal_unanswered,
+    'FAIL 30a: the folded record must be an unanswered refusal, got '
+      || COALESCE(r.status, '<none>');
+  ASSERT r.opt_out_at = '2025-12-03T00:00:00Z'::timestamptz,
+    'FAIL 30a2: the STOP''s own date must land on the record, not the dateless '
+    'sibling''s NULL, got ' || COALESCE(r.opt_out_at::text, '<null>');
+  ASSERT r.opt_out_source = 'inbound_sms'
+     AND r.opt_out_evidence = 'Replied STOP on the Lindqvist thread'
+     AND r.opt_out_recorded_at = '2025-12-03T00:00:00Z'::timestamptz,
+    'FAIL 30a3: the STOP''s own words must land on the record, got '
+      || COALESCE(r.opt_out_source, '<null>') || ' / '
+      || COALESCE(r.opt_out_evidence, '<null>');
+
+  -- 30b. And so does EVERY SEAT, the dateless one included: the mirror has
+  --      already run, and a record that knows the refusal's words is not the
+  --      wordless-refusal case R-AQ wipes.
+  FOR seat IN
+    SELECT * FROM project_parties
+     WHERE id IN ('e0000000-0000-4000-8000-0000000000c1',
+                  'e0000000-0000-4000-8000-0000000000c2')
+     ORDER BY id
+  LOOP
+    ASSERT seat.sms_consent_status = 'opted_out',
+      'FAIL 30b: seat ' || seat.id || ' must read opted_out';
+    ASSERT seat.sms_opt_out_at = '2025-12-03T00:00:00Z'::timestamptz,
+      'FAIL 30b2: seat ' || seat.id || ' must keep the STOP''s date, got '
+        || COALESCE(seat.sms_opt_out_at::text, '<null>');
+    ASSERT seat.sms_consent_source = 'inbound_sms'
+       AND seat.sms_consent_evidence = 'Replied STOP on the Lindqvist thread',
+      'FAIL 30b3: seat ' || seat.id || ' must keep the STOP''s words, got '
+        || COALESCE(seat.sms_consent_source, '<null>') || ' / '
+        || COALESCE(seat.sms_consent_evidence, '<null>');
+  END LOOP;
+
+  -- 30c. Words on one refusing seat, the date on another: the record takes the
+  --      words from the seat that has them and the date from the group, rather
+  --      than printing half a sentence.
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_kind = 'sms' AND channel_value = '+16125550502';
+  ASSERT r.opt_out_source = 'written'
+     AND r.opt_out_evidence = 'Told the PM to stop texting',
+    'FAIL 30c: the refusal''s words must come from the seat that has them, got '
+      || COALESCE(r.opt_out_source, '<null>');
+  ASSERT r.opt_out_at = '2025-10-09T00:00:00Z'::timestamptz,
+    'FAIL 30c2: a worded refusal with no date of its own must still take a '
+    'real date from the refusing group, got '
+      || COALESCE(r.opt_out_at::text, '<null>');
+
+  -- 30d. Still one record per (studio, kind, value).
+  SELECT COUNT(*) INTO n FROM studio_channel_consent
+   WHERE channel_value IN ('+16125550501', '+16125550502');
+  ASSERT n = 2, 'FAIL 30d: expected 2 consent records, got ' || n;
+
+  RAISE NOTICE '30. the fold picks the sibling that HOLDS the refusal, so a '
+               'dateless portal refusal never erases the STOP''s date or '
+               'words — on the record or on the seats (r2 R2-M1): passed';
   RAISE NOTICE 'All W1a assertions passed.';
 END
 $$;

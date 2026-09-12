@@ -794,3 +794,276 @@ Files touched this round:
  M supabase/tests/people/w1a_identity_channels_consent_test.sql   (12b rewritten; 13/14/15 new)
  M artifacts/people-room-crm-2026-09-11/build/w1a-report.md (decision 15, M-3)
 ```
+
+---
+
+# W1a — fix log, round 9 (the r2 fresh-pass review: R2-M1, R2-M2, P-1)
+
+Appended to this file per the round's brief. Worktree
+`/Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build`, branch
+`build/people-room-crm-2026-09-11`, on top of `7376cea54` (r8 R-AQ/R-AR).
+Local stack only — no `supabase db push`, no `supabase functions deploy`,
+nothing touched on Strata. `apps/designer-portal/.env.local` still does not
+exist in this worktree:
+
+```
+$ ls -la .../apps/designer-portal/.env.local
+"…/apps/designer-portal/.env.local": No such file or directory (os error 2)
+```
+
+Scope: the three findings named in the brief and nothing else. The seventeen
+minors of the r2 review (m1–m17) are untouched — no ruling covers them.
+
+---
+
+## R2-M1 — the fold picked the refusing sibling by most recently TOUCHED
+
+**What changed** — `supabase/migrations/00594_studio_channel_consent.sql`,
+`backfill_channel_consent_from_parties()`:
+
+1. The `refusal` CTE's `ROW_NUMBER()` now orders by the refusal's own facts
+   before row age:
+
+   ```sql
+   ORDER BY (sms_consent_source IS NOT NULL) DESC,
+            (sms_opt_out_at IS NOT NULL) DESC,
+            COALESCE(sms_opt_out_at, sms_consent_recorded_at,
+                     updated_at) DESC NULLS LAST
+   ```
+
+2. The same CTE carries `max(sms_opt_out_at) OVER (PARTITION BY org,
+   phone_e164)` and exposes `COALESCE(sms_opt_out_at, group_opt_out_at) AS
+   sms_opt_out_at`, so a refusal that carries words but no date of its own
+   still lands a real date on the record instead of NULL. `ins` is unchanged —
+   it still reads `COALESCE(r.sms_opt_out_at, f.sms_opt_out_at)`.
+
+3. `ranked`'s within-status tiebreak carries the same two legs, written so they
+   score equal for every row outside the refusal bucket:
+
+   ```sql
+   CASE WHEN sms_consent_status = 'opted_out'
+         AND sms_consent_source IS NOT NULL THEN 0 ELSE 1 END,
+   CASE WHEN sms_consent_status = 'opted_out'
+         AND sms_opt_out_at IS NOT NULL THEN 0 ELSE 1 END,
+   ```
+
+   so "then the most recent granted" is behaviourally untouched (SQL block 3c2
+   still asserts it, and passes).
+
+4. The function COMMENT says the refusing sibling is chosen by the refusal's
+   own facts.
+
+`supabase/tests/people/w1a_identity_channels_consent_test.sql` gains **block
+30** (and the header index entry): two refusing seats on `+16125550501` in one
+studio — the dated, worded inbound STOP and the dateless sourceless `opted_out`
+the shipped portal writes — with the dateless one touched last by an ordinary
+roster edit, plus a second number `+16125550502` where the words sit on one
+refusing seat and the date on another. It asserts the record keeps
+`2025-12-03` / `inbound_sms` / "Replied STOP on the Lindqvist thread" (30a),
+that BOTH seats keep them after the mirror runs (30b), that the split pair is
+reassembled (30c), and that there is still one record per (studio, kind, value)
+(30d).
+
+`artifacts/people-room-crm-2026-09-11/build/probe10-r9-fold-dry-run.sql` — the
+pre-push dry run §5 instructs the operator to run — was re-cut to the same two
+pickers, in both of its queries, so it cannot disagree with the fold.
+
+### Evidence
+
+Reset, then the suite — 31 blocks (1–30 plus 16B), all pass:
+
+```
+$ pnpm --dir .../agent-people-build supabase:reset
+…
+Applying migration 00594_studio_channel_consent.sql...
+Finished supabase db reset on branch main.
+{"target":"local","version":"","message":"Reset local database."}
+
+$ psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 \
+    -f supabase/tests/people/w1a_identity_channels_consent_test.sql
+…
+NOTICE:  29. a held card cannot change what it is or whose it is (r8 R8-M2, R-AR): passed
+NOTICE:  30. the fold picks the sibling that HOLDS the refusal, so a dateless
+         portal refusal never erases the STOP's date or words — on the record
+         or on the seats (r2 R2-M1): passed
+NOTICE:  All W1a assertions passed.
+ROLLBACK
+```
+
+The reviewer's own repro, `probe16-r2-fold-refusal-picker.sql`, unchanged and
+re-run against the fixed fold (it printed an empty record and two stripped
+seats before):
+
+```
+--- the record the fold minted ---
+  status   |       opt_out_at       | refusal_unanswered | opt_out_source |           opt_out_evidence
+-----------+------------------------+--------------------+----------------+--------------------------------------
+ opted_out | 2025-12-03 00:00:00+00 | t                  | inbound_sms    | Replied STOP on the Lindqvist thread
+
+--- seats BEFORE any later write ---
+ e1000000-…-000000000008 | opted_out | 2025-12-03 00:00:00+00 | inbound_sms | Replied STOP on the Lindqvist thread
+ e1000000-…-000000000009 | opted_out | 2025-12-03 00:00:00+00 | inbound_sms | Replied STOP on the Lindqvist thread
+
+--- seats AFTER the reconsent (the mirror ran) ---
+ e1000000-…-000000000008 | opted_out | 2025-12-03 00:00:00+00 | inbound_sms | Replied STOP on the Lindqvist thread
+ e1000000-…-000000000009 | opted_out | 2025-12-03 00:00:00+00 | inbound_sms | Replied STOP on the Lindqvist thread
+```
+
+The reviewer's single-refusal control `probe17-…` is unchanged by the fix
+(record and seat still carry the date and the words).
+
+Negative control, new this round —
+`artifacts/people-room-crm-2026-09-11/build/probe20-r2-negative-control.sql`
+runs block 30's fixture through the fixed fold, then restores the PRE-FIX body
+from `git show HEAD:…00594…` and folds the same seats again, all inside one
+rolled-back transaction:
+
+```
+=== WITH THE FIX (the fold as it now stands) ===
+  status   |       opt_out_at       | opt_out_source |           opt_out_evidence
+-----------+------------------------+----------------+--------------------------------------
+ opted_out | 2025-12-03 00:00:00+00 | inbound_sms    | Replied STOP on the Lindqvist thread
+ e2000000-…-0000000000c1 | 2025-12-03 00:00:00+00 | inbound_sms | Replied STOP on the Lindqvist thread
+ e2000000-…-0000000000c2 | 2025-12-03 00:00:00+00 | inbound_sms | Replied STOP on the Lindqvist thread
+
+=== NOW THE PRE-FIX PICKER (HEAD 7376cea54 body, restored) ===
+  status   | opt_out_at | opt_out_source | opt_out_evidence
+-----------+------------+----------------+------------------
+ opted_out |            |                |
+ e2000000-…-0000000000c1 | 2025-12-03 00:00:00+00 |  |
+ e2000000-…-0000000000c2 |                        |  |
+```
+
+The pre-fix body mints a record with no date and no words and then wipes the
+STOP's words off both seats — the R-AQ branch firing on a NULL the picker
+created. The fixed body keeps all of it.
+
+The dry run and the fold agree row for row on that same fixture:
+
+```
+$ psql … -1 -f <block-30 fixture + probe10 + the real fold>
+ org=b2000000-…-00000000000a | +16125550501 | opted_out | refusal_unanswered=t
+   opt_out_at 2025-12-03 00:00:00+00 | inbound_sms | Replied STOP on the Lindqvist thread | 2025-12-03
+ opted_out | unsendable 1 | records 1
+ folded 1
+ opted_out | 2025-12-03 00:00:00+00 | t | inbound_sms | Replied STOP on the Lindqvist thread
+```
+
+Idempotent replay of the edited 00594 against the already-migrated database —
+exit 0, fold returns 0:
+
+```
+$ psql … -v ON_ERROR_STOP=1 -f supabase/migrations/00594_studio_channel_consent.sql
+ backfill_channel_consent_from_parties
+                                     0
+exit=0
+```
+
+Grants and generated types regenerate with an empty diff (no grant or column
+changed this round):
+
+```
+$ python3 scripts/generate-legacy-grants.py
+wrote …/supabase/seed/00-legacy-grants.sql — baseline + 2633 replayed statements
+$ git diff --stat -- supabase/seed/00-legacy-grants.sql
+(empty)
+
+$ SUPABASE_DB_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres pnpm db:generate
+$ git diff --stat packages/supabase/src/database.types.ts
+(empty)
+```
+
+---
+
+## R2-M2 — the report was a round and a half behind the branch
+
+`artifacts/people-room-crm-2026-09-11/build/w1a-report.md`, brought to the tip
+AFTER the R2-M1 code landed, not before it:
+
+- **§1 object table** — the 00593 row now carries
+  `assert_studio_contact_identity_stable()` and its BEFORE UPDATE OF
+  `entity_kind`, `organization_id` trigger, with what it refuses
+  (`studio_contact_identity_held`), its HINT, and the note that after 00593's
+  backfill essentially every card with a phone or an email is held.
+- **§1 new-name grep list** — `assert_studio_contact_identity_stable` added.
+- **§2 decisions** — three added: **23** (R-AQ, the wordless refusal wipes the
+  seat's four evidence columns), **24** (R-AR, a held card cannot change what
+  it is or whose it is), **25** (R2-M1, the fold's refusal picker, with the
+  negative control named).
+- **§3 preamble** — says the section was re-taken after the r2 round, and that
+  the re-take now happens after the round's code lands.
+- **§3 SECURITY DEFINER table** — re-taken: **19 rows**, with
+  `assert_studio_contact_identity_stable` in place, and the prose corrected
+  from "Eighteen, not the fifteen".
+- **§3 `studio_contacts` triggers** — re-taken: **5 rows**, with the identity
+  guard, plus why it sorts after the designation guard (block 29d).
+- **§3 SQL test transcript** — re-taken through blocks 28, 29 and 30;
+  **31 blocks** (1–30 plus 16B), with the note that block 5 lives inside block
+  4's `DO`, which is why 30 notices print.
+- **§5 pre-push runbook** — the dry-run note now says the script was re-cut for
+  R2-M1 and must be re-run from the branch tip, states **what the dry run must
+  show before the push** (every `refusal_unanswered = t` row whose group holds
+  a dated, worded STOP comes back with `opt_out_at` and `opt_out_source`
+  non-empty; an all-empty `opt_out_*` row is a genuinely wordless refusal, and
+  those and only those are the ones whose seats the mirror will blank per
+  decision 23), and names `probe20-r2-negative-control.sql`.
+
+Probe output the three re-takes were copied from:
+
+```
+$ psql … -c "select p.proname, p.prosecdef, p.proconfig,
+             has_function_privilege('anon', p.oid,'execute') anon_exec,
+             has_function_privilege('authenticated', p.oid,'execute') auth_exec
+             from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+             where n.nspname='public' and p.proname in (<the wave's 19>) order by 1"
+ … assert_studio_contact_identity_stable  | t | {search_path=public} | f | f …
+(19 rows)
+
+$ psql … -c "select t.tgname, p.proname from pg_trigger t join pg_proc p on p.oid=t.tgfoid
+             where t.tgrelid='public.studio_contacts'::regclass and not t.tgisinternal order by 1"
+ assert_studio_contact_designations_trg    | assert_studio_contact_designations
+ assert_studio_contact_identity_stable_trg | assert_studio_contact_identity_stable
+ normalize_phone_studio_contacts           | normalize_party_phone_e164
+ set_updated_at_studio_contacts            | update_updated_at_column
+ sync_person_affiliation_from_pointer_trg  | sync_person_affiliation_from_pointer
+(5 rows)
+```
+
+---
+
+## P-1 — the shared local stack is reset out from under a wave
+
+**No W1a code defect and no fix in this wave's files**, per the finding's own
+fix line. Recorded here so the orchestration layer owns it: the local Supabase
+stack is shared machine state, and this wave's review saw the ledger tip jump
+from `20260910152111`/`00594` back to `00515_capture_enrichment_rpcs` between
+two consecutive `psql` calls with no reset issued by the reviewer — at least
+the fourth occurrence across this wave. It needs a per-worktree local stack, or
+a lock/queue around `supabase:reset`, per patina-parallel-work. Until then every
+SQL/RLS/psql result in this file is only as good as the reset immediately
+preceding it.
+
+This round's own evidence was taken after the reset quoted above, and the
+ledger was confirmed at the wave's own tip before and after the run:
+
+```
+$ psql … -tAc "select version from supabase_migrations.schema_migrations order by version desc limit 5"
+20260910152111
+00594
+00593
+00592
+00591
+```
+
+---
+
+## Files touched this round
+
+```
+ M supabase/migrations/00594_studio_channel_consent.sql                 (R2-M1)
+ M supabase/tests/people/w1a_identity_channels_consent_test.sql         (R2-M1, block 30 + header)
+ M artifacts/people-room-crm-2026-09-11/build/probe10-r9-fold-dry-run.sql (R2-M1)
+ M artifacts/people-room-crm-2026-09-11/build/w1a-report.md             (R2-M2)
+ M artifacts/people-room-crm-2026-09-11/build/w1a-fix-log-r2.md         (this section)
+?? artifacts/people-room-crm-2026-09-11/build/probe20-r2-negative-control.sql
+```

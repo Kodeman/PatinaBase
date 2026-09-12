@@ -13,7 +13,7 @@ Local Supabase only. Nothing was pushed to Strata; no `supabase db push`, no
 | File | Carries |
 |---|---|
 | `supabase/migrations/00592_people_cards_affiliations_rules.sql` | `studio_contact_org()` + `project_party_designer()` helpers · `studio_contacts` person columns (`is_sole_proprietor`, `studio_verdict`, `studio_verdict_at`) and company columns (`legal_name`, `dba_name`, `company_kind` + CHECK, `trades`, `w9_on_file_at`, `tax_id_last4`, `remit_to`, `retainage_bps`, `warranty_until`, `paperwork_contact_person_id`, `signer_person_id`, `site_contact_person_id`) · new table `studio_person_affiliations` (+ `assert_affiliation_card_kinds()` and `studio_person_affiliations_distinct_cards_check`) · new table `studio_contact_rules` (+ `studio_contact_rules_channels_allowed_check` and `studio_contact_rules_channels_forbidden_check`, both `<@` the seven-name channel vocabulary — r6 M6-5) · **`assert_studio_contact_designations()`** BEFORE INSERT/UPDATE on `studio_contacts` — `paperwork_contact_person_id` / `signer_person_id` / `site_contact_person_id` must each name a PERSON card in the SAME organization and never the row itself (r5 R-AP) · **`assert_studio_contact_rule_route()`** BEFORE INSERT/UPDATE on `studio_contact_rules` — the same test for `route_to_person_id` (r6 M6-4) |
-| `supabase/migrations/00593_studio_contact_channels.sql` | New table `studio_contact_channels` · **`normalize_channel_value(kind, value)`** — the one channel-key rule, shared with 00594's consent RPCs · **`channel_value_was_on_sms_rail(value)`** — the `sms_capable` evidence test (an `sms_conversations` thread, or an asked FIELD-kind seat) · `normalize_studio_contact_channel()` trigger (defers to the normaliser) · `assert_channel_owner_kind()` trigger — `owner_type` must equal the card's own `entity_kind` · four-part backfill from `studio_contacts.phone/email` and from `project_parties.phone/email` where `studio_contact_id` is set, carrying the `sms_capable` evidence rule below |
+| `supabase/migrations/00593_studio_contact_channels.sql` | New table `studio_contact_channels` · **`normalize_channel_value(kind, value)`** — the one channel-key rule, shared with 00594's consent RPCs · **`channel_value_was_on_sms_rail(value)`** — the `sms_capable` evidence test (an `sms_conversations` thread, or an asked FIELD-kind seat) · `normalize_studio_contact_channel()` trigger (defers to the normaliser) · `assert_channel_owner_kind()` trigger — `owner_type` must equal the card's own `entity_kind` · four-part backfill from `studio_contacts.phone/email` and from `project_parties.phone/email` where `studio_contact_id` is set, carrying the `sms_capable` evidence rule below · **`assert_studio_contact_identity_stable()`** BEFORE UPDATE OF `entity_kind`, `organization_id` on `studio_contacts` (r8 R-AR) — the change is refused with `studio_contact_identity_held` while any channel, designation, rule route or affiliation still points at the card, with a HINT naming what holds it; a restatement of the same values still writes, and after 00593's backfill essentially every card with a phone or an email is held |
 | `supabase/migrations/00594_studio_channel_consent.sql` | New table `studio_channel_consent` (PK `(organization_id, channel_kind, channel_value)`, carrying `refusal_unanswered` — the stored "a refusal stands that has not been answered" — and **THE REFUSAL'S OWN EVIDENCE SET**, `opt_out_source` / `opt_out_evidence` / `opt_out_recorded_at` / `opt_out_recorded_by`, with `studio_channel_consent_opt_out_source_check` over the same five-name source vocabulary as the consent side (r8 W4-M2); those four are written by the fold, by `record_channel_consent`'s `opted_out` branch and by the inbound STOP rail, and by nothing else — `record_channel_reconsent` never touches them) · `backfill_channel_consent_from_parties()` + its one call · `mirror_channel_consent_to_parties()` trigger · RPC `record_channel_consent(...)` · RPC `record_channel_reconsent(...)` (PR-m's named way back) · **REDEFINES two existing trigger functions**: `fc_dispatch_optin_invite` (lineage `00432:27-68`) and `_site_request_consent_granted_dispatch` (lineage `00374:3399-3444`) · `COMMENT ON TABLE public.project_parties` restating the mirror invariant (lineage `00212:46`) |
 
 **Two functions are redefined, both grafted from their grep-winner bodies
@@ -36,7 +36,7 @@ before I wrote them (`normalize_channel_value`, `record_channel_reconsent`,
 `normalize_studio_contact_channel`, `backfill_channel_consent_from_parties`,
 `mirror_channel_consent_to_parties`, `record_channel_consent`,
 `channel_value_was_on_sms_rail`, `assert_studio_contact_designations`,
-`assert_studio_contact_rule_route`).
+`assert_studio_contact_rule_route`, `assert_studio_contact_identity_stable`).
 
 `python3 scripts/generate-legacy-grants.py` was re-run after the grants:
 `supabase/seed/00-legacy-grants.sql` gained 210 lines over this wave's base
@@ -467,13 +467,86 @@ empty diff.
     mirrors the consent set as before. SQL blocks 4 (4d) and 27
     (27c2/27c3/27d3/27h/27i–27i5).
 
+23. **A refusal with no words of its own leaves the SEAT with none either**
+    (r8 R8-M1, ruling R-AQ). Decision 22's "never a NULL over a non-null"
+    (R-AN) is right about a verdict that simply did not restate its evidence,
+    and wrong about a refusal that HAS no evidence. `project_parties` holds one
+    evidence set per seat, and a sibling seat in the same studio on the same
+    number routinely holds the GRANT's — the studio's paperwork, dated the day
+    of the grant. So on the sourceless refusal the portal and the fold really
+    write, every COALESCE kept what the sibling held, and that seat sat at
+    `opted_out` asserting the studio's own consent document AS the refusal:
+    R-Q's sentence off the seat read "Opted out in writing, 2 Jan 2026". The
+    mirror now decides the four evidence columns with a CASE, not a COALESCE:
+    when `NEW.status = 'opted_out'` and `NEW.opt_out_source IS NULL`, all four
+    are written NULL on every seat in the studio on that number — absent is
+    what the seat must say, and it is what the shipped portal writes for the
+    same verdict. Every other transition keeps R-AN's refresh-never-erase rule,
+    including a refusal that does carry its own words.
+    `sms_consent_disclosure_version` is not in the set: it belongs to the
+    disclosure the person was shown, not to how they refused. SQL block 27
+    (27i–27i5, sibling seat included).
+
+24. **A card something points at cannot change what it is, or whose it is**
+    (r8 R8-M2, ruling R-AR). The three card guards this wave adds all fire on
+    the REFERENCING row, so one ordinary `UPDATE studio_contacts SET
+    entity_kind = …` undid all three at once — a company card left carrying
+    `owner_type = 'person'` channels, a designation naming a firm or a card in
+    another studio, a rule routing across tenants — and `entity_kind` is a
+    column the shipped data layer already writes on update
+    (`use-studio-contacts.ts`). 00593 adds
+    `assert_studio_contact_identity_stable()` as one BEFORE UPDATE OF
+    `entity_kind`, `organization_id` trigger on `studio_contacts`, in the shape
+    of the other three: it refuses with `studio_contact_identity_held` while
+    any channel, designation, rule route or affiliation still points at the
+    card, and its HINT names what holds it. A restatement of the same values is
+    not a change and still writes (the shipped edit sheet sends a diff-only
+    patch that never includes `entity_kind`); detaching the dependents opens
+    the door again. SQL block 29 (29a–29f).
+
+25. **The fold picks the refusing sibling by the refusal's own facts, not by
+    row age** (r2 R2-M1). Both pickers in
+    `backfill_channel_consent_from_parties()` fell back to
+    `COALESCE(sms_opt_out_at, …, updated_at) DESC`, which ranks the refusing
+    seats by most recently TOUCHED. The shipped portal writes `opted_out` party
+    rows with a NULL date, a NULL source and no words on purpose
+    (`use-coordination.ts`), and such a row is touched whenever anything on the
+    roster changes — so its `updated_at` routinely outranks the 2025
+    `sms_opt_out_at` of the seat that actually received the STOP. Everything
+    the record then knows about the refusal comes off a row that knows nothing:
+    `opt_out_at` NULL and all four `opt_out_*` NULL, permanently, because
+    `ON CONFLICT DO NOTHING` means no later fold repairs it and
+    `record_channel_reconsent()` never touches `opt_out_*` by design. R-Q's
+    "Opted out by text, 3 Dec 2025" becomes unprintable and the carrier-audit
+    artifact is gone. And because `opt_out_source` is NULL, decision 23's
+    wordless-refusal branch then writes NULL over source / evidence /
+    recorded_at / recorded_by on EVERY seat in the studio on that number —
+    including the seat holding `inbound_sms` / "Replied STOP". R-AQ's premise
+    ("a NULL here means there were never any refusal words") is true of the
+    RECORD's writers and false of this picker, so the picker is what had to
+    change: the `refusal` CTE now orders by words first
+    (`sms_consent_source IS NOT NULL`), then a date
+    (`sms_opt_out_at IS NOT NULL`), then recency, and `ranked`'s within-status
+    tiebreak carries the same two legs — written so they score equal for every
+    row outside the refusal bucket, leaving "then the most recent granted"
+    exactly as it was. The refusal's date also has a group-wide last resort,
+    `max(sms_opt_out_at)` over the refusing seats, so a refusal that carries
+    words but no date of its own still lands a real date instead of NULL. Fails
+    closed either way — `refusal_unanswered` stood throughout — so this was
+    evidence destruction, not a send-safety hole. SQL block 30
+    (30a–30d); negative control
+    `artifacts/people-room-crm-2026-09-11/build/probe20-r2-negative-control.sql`
+    runs the pre-fix body beside the fixed one in one rolled-back transaction.
+
 ---
 
 ## 3. Probes
 
-Every output below was re-taken after the r9 (R5-M1) round, against a full
-`supabase:reset` of the local stack — the section had drifted behind three
-rounds of shipped work (r9 R5-M2).
+Every output below was re-taken after the r2 round (R2-M1, the fold's refusal
+picker), against a full `supabase:reset` of the local stack — the section is at
+the branch tip, not behind it. It had drifted twice before: three rounds behind
+at r9 (R5-M2), and a round and a half behind at r2 (R2-M2), which is why the
+re-take now happens AFTER the round's code lands, never before it.
 
 ### Reset applies clean
 
@@ -533,6 +606,7 @@ Finished supabase db reset on branch main.
  assert_affiliation_card_kinds          | t         | {search_path=public}            | f         | f
  assert_channel_owner_kind              | t         | {search_path=public}            | f         | f
  assert_studio_contact_designations     | t         | {search_path=public}            | f         | f
+ assert_studio_contact_identity_stable  | t         | {search_path=public}            | f         | f
  assert_studio_contact_rule_route       | t         | {search_path=public}            | f         | f
  backfill_channel_consent_from_parties  | t         | {search_path=public}            | f         | f
  channel_value_was_on_sms_rail          | f         | {search_path=public}            | f         | f
@@ -546,14 +620,16 @@ Finished supabase db reset on branch main.
  studio_contact_org                     | t         | {search_path=public}            | f         | t
  sync_person_affiliation_from_pointer   | t         | {search_path=public}            | f         | f
  sync_studio_contact_company_pointer    | t         | {search_path=public}            | f         | f
-(18 rows)
+(19 rows)
 ```
 
-Eighteen, not the fifteen this section listed before r9's re-take: the two
-designation guards (`assert_studio_contact_designations`, r5 R-AP;
-`assert_studio_contact_rule_route`, r6 M6-4) and 00593's `sms_capable` evidence
-test `channel_value_was_on_sms_rail` had all shipped without reaching this
-table.
+Nineteen, not the eighteen this section listed before the r2 re-take and not
+the fifteen it listed before r9's: the two designation guards
+(`assert_studio_contact_designations`, r5 R-AP;
+`assert_studio_contact_rule_route`, r6 M6-4), 00593's `sms_capable` evidence
+test `channel_value_was_on_sms_rail`, and now the R-AR identity guard
+`assert_studio_contact_identity_stable` (r8 R8-M2) had each shipped without
+reaching this table.
 
 (The THREE pointer functions added by R-AI — `_sync_person_company_pointer`,
 `sync_studio_contact_company_pointer` and the reverse binding
@@ -613,17 +689,26 @@ explicit `REVOKE ... FROM authenticated` held.)
 (10 rows)
 ```
 
-`studio_contacts` carries the reverse half of the R-AI binding and the R-AP
-designation guard, neither of which lives on the four tables above:
+`studio_contacts` carries the reverse half of the R-AI binding, the R-AP
+designation guard and the R-AR identity guard, none of which lives on the four
+tables above:
 
 ```
-                  tgname                  |               proname
-------------------------------------------+--------------------------------------
- assert_studio_contact_designations_trg   | assert_studio_contact_designations
- normalize_phone_studio_contacts          | normalize_party_phone_e164
- set_updated_at_studio_contacts           | update_updated_at_column
- sync_person_affiliation_from_pointer_trg | sync_person_affiliation_from_pointer
+                  tgname                   |                proname
+-------------------------------------------+---------------------------------------
+ assert_studio_contact_designations_trg    | assert_studio_contact_designations
+ assert_studio_contact_identity_stable_trg | assert_studio_contact_identity_stable
+ normalize_phone_studio_contacts           | normalize_party_phone_e164
+ set_updated_at_studio_contacts            | update_updated_at_column
+ sync_person_affiliation_from_pointer_trg  | sync_person_affiliation_from_pointer
+(5 rows)
 ```
+
+Five, not the four this section listed before the r2 re-take: the R-AR identity
+guard (`assert_studio_contact_identity_stable_trg`, BEFORE UPDATE OF
+`entity_kind`, `organization_id`) is the fifth, and it sorts after the
+designation guard by name — which is why SQL block 29d clears the designation
+first, so that the OLDER guard is not the one that answers.
 
 And the columns the refusal's own evidence set added to
 `studio_channel_consent` (r8 W4-M2), with its CHECK:
@@ -680,14 +765,23 @@ NOTICE:  26. no studio-side verdict lowers refusal_unanswered (r7 M7-1): passed
 NOTICE:  27. reconsent is evidence-only and re-callable (r7 M7-2), leaves the
          refusal's own evidence standing (r8 W4-M2), the seat carries the
          refusal's own words too (r9 R5-M1), and a sourceless refusal is never
-         given the studio's consent as its words (r6 R6-M1): passed
+         given the studio's consent as its words (r6 R6-M1) — nor left standing
+         on the sibling seat (r8 R8-M1): passed
+NOTICE:  28. a studio-recorded refusal never speaks for a texted one, and the
+         refusal keeps the date it arrived (r7 R7-M1): passed
+NOTICE:  29. a held card cannot change what it is or whose it is
+         (r8 R8-M2, R-AR): passed
+NOTICE:  30. the fold picks the sibling that HOLDS the refusal, so a dateless
+         portal refusal never erases the STOP's date or words — on the record
+         or on the seats (r2 R2-M1): passed
 NOTICE:  All W1a assertions passed.
 ROLLBACK
 ```
 
-**28 blocks** (1–27 plus 16B; block 5's assertions live inside block 4's `DO`).
-This transcript had been stale since r4 — it ended at block 17 while eleven more
-had shipped (r9 R5-M2).
+**31 blocks** (1–30 plus 16B; block 5's assertions live inside block 4's `DO`,
+which is why the transcript shows 30 notices and not 31). This transcript has
+been stale twice — it ended at block 17 while eleven more had shipped (r9
+R5-M2), and at block 27 while blocks 28 and 29 were passing (r2 R2-M2).
 
 What it asserts: a studio member writes and reads an affiliation; a cross-studio
 pair is refused; a stranger studio sees none and cannot write one. Phones
@@ -972,6 +1066,30 @@ deploys.)
   The old dry run hands the operator a sendable-looking `granted`; the new one
   says the record about to be minted is UNSENDABLE until the recipient's own
   YES/START (r1 review m14, r8 W4-M1, r9 R5-M2).
+
+  **The script was re-cut again for r2 R2-M1** and must be re-run from the
+  branch tip, not from a copy taken earlier in this wave: both of its pickers
+  now rank the refusing seats by the refusal's own facts — words, then date,
+  then row recency — and carry the group-wide `max(sms_opt_out_at)` fallback,
+  exactly as the function does. A dry run taken with the old picker prints
+  `opt_out_at`, `opt_out_source` and `opt_out_evidence` EMPTY for every studio
+  whose dateless portal refusal happens to be the most recently touched seat on
+  the number, so the operator reads "a refusal stands here and nothing is known
+  about it" for records the fold will in fact mint with the STOP's own date and
+  words. **What this dry run must show before the push**: for every row with
+  `refusal_unanswered = t` that has a dated, worded STOP anywhere in its group,
+  `opt_out_at` and `opt_out_source` are non-empty. A row coming back
+  `refusal_unanswered = t` with all four `opt_out_*` empty is a group whose only
+  refusals really are wordless (the portal's own shape) — and on those, and only
+  those, the mirror will write NULL over the seats' four evidence columns
+  (decision 23, R-AQ). Checked on this fixture, the dry run and the fold now
+  agree row for row;
+  `artifacts/people-room-crm-2026-09-11/build/probe20-r2-negative-control.sql`
+  runs the pre-fix fold body beside the fixed one in one rolled-back transaction
+  and shows the difference (record and both seats keep
+  `inbound_sms` / "Replied STOP…" / 2025-12-03 with the fix; record and the
+  sibling seat come out holding nothing without it).
+
   `backfill_channel_consent_from_parties()` can then be re-run afterwards as
   `service_role` without overwriting anything: the rows it folds reach the party
   rows through the mirror, which stands BOTH of `project_parties`' outward
