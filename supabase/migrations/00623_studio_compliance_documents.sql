@@ -79,6 +79,20 @@
 --     one rule covers all nine types and no type list has to be kept in
 --     step. The dated-expiry CHECK keeps its five-type list on purpose: it
 --     says which types MUST carry a date, which is a different question.
+--   · w1b final review r9 MAJOR-1 — the FIFTH door, and the one the guard
+--     family could never close: both r3/r4 invariants are asserted at the
+--     instant superseded_by is written and never re-checked, `blocks` was not
+--     in the trigger's UPDATE OF list at all, and the guard body is wrapped
+--     in `IF NEW.superseded_by IS NOT NULL`, so it reads the row's OWN
+--     successor and never the rows pointing AT it. An honest in-force
+--     supersede followed by two edits to the SUCCESSOR (back-date it, then
+--     empty its blocks) left Northgate Electric's 2026-03-31 gating lapse on
+--     file, unchanged, while the card read `current` with zero in-force
+--     gating coi_gl. The reckoning moves into compliance_state(), where no
+--     later write can outrun it: a superseded row leaves the count only
+--     while its successor is still in force and still contains its gates.
+--     `blocks` joins the trigger's UPDATE OF list beside it — worth doing,
+--     not sufficient alone, since the trigger cannot see predecessors.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 CREATE TABLE IF NOT EXISTS public.studio_compliance_documents (
@@ -232,6 +246,12 @@ COMMENT ON COLUMN public.studio_compliance_documents.doc_label IS
 CREATE INDEX IF NOT EXISTS idx_studio_compliance_documents_holder
   ON public.studio_compliance_documents(holder_id, doc_type)
   WHERE superseded_by IS NULL;
+
+-- compliance_state() re-reckons a supersede at every read (r9 MAJOR-1), so it
+-- scans EVERY row of a holder, not only the non-superseded ones the partial
+-- index above covers.
+CREATE INDEX IF NOT EXISTS idx_studio_compliance_documents_holder_all
+  ON public.studio_compliance_documents(holder_id);
 
 -- The expiry sweep (P2) and the paper word both scan by org and date.
 CREATE INDEX IF NOT EXISTS idx_studio_compliance_documents_org_expiry
@@ -475,7 +495,7 @@ DROP TRIGGER IF EXISTS assert_compliance_holder_trg
   ON public.studio_compliance_documents;
 CREATE TRIGGER assert_compliance_holder_trg
   BEFORE INSERT OR UPDATE OF holder_id, holder_type, organization_id,
-                             superseded_by, doc_type, expires_on
+                             superseded_by, doc_type, expires_on, blocks
   ON public.studio_compliance_documents
   FOR EACH ROW EXECUTE FUNCTION public.assert_compliance_holder();
 
@@ -544,6 +564,31 @@ GRANT ALL ON public.studio_compliance_documents TO service_role;
 -- 00594's channel_consent_status() posture. A caller outside the owning studio
 -- sees no rows and reads 'not_on_file'; it can never print another studio's
 -- word. That degrade is intended (PR-u), not a leak.
+--
+-- AND A SUPERSEDE IS RE-RECKONED AT EVERY READ, NOT ONLY WHERE IT WAS WRITTEN
+-- (w1b final review r9 MAJOR-1). This function used to drop every
+-- superseded_by IS NOT NULL row unconditionally, which made r3/r4's two
+-- invariants — a successor must be IN FORCE, and must carry at least the gates
+-- of the row it retires — point-in-time assertions about the instant the
+-- pointer was created. Nothing re-checked them afterwards, and `blocks` was
+-- not even in assert_compliance_holder_trg's UPDATE OF list, so two ordinary
+-- member writes outran both: record an honest in-force coi_gl renewal carrying
+-- {site_access,draw}, point Northgate Electric's 2026-03-31 lapse at it (all
+-- ten guards pass, the word is correctly `current`), then back-date the
+-- successor (the trigger fires but the guard body is wrapped in
+-- `IF NEW.superseded_by IS NOT NULL`, so it examines the row's OWN successor
+-- and never the rows pointing AT it) and empty its blocks (the trigger does
+-- not fire at all). The card then read `current` while the 2026-03-31
+-- certificate was still on file saying blocks = {site_access,draw}, its
+-- successor was expired, and the count of non-superseded, in-force, gating
+-- coi_gl was 0 — which identity_paper_state() (00626) carries straight to
+-- Dana Kowalski's Directory row and both her seat lines. So the retirement is
+-- conditional here, where no later write can outrun it: a superseded row
+-- leaves the reckoning only while its successor is still in force and still
+-- contains its gates, and writes 3 and 4 become inert. `blocks` joins the
+-- trigger's UPDATE OF list beside this (the trigger still cannot see a row's
+-- predecessors, so it is not sufficient alone). The formula stays in ONE
+-- place, which is direction §3.8's rule for the word.
 CREATE OR REPLACE FUNCTION public.compliance_state(p_holder_id uuid)
 RETURNS text
 LANGUAGE sql
@@ -564,7 +609,13 @@ AS $$
          END
     FROM public.studio_compliance_documents d
    WHERE d.holder_id = p_holder_id
-     AND d.superseded_by IS NULL;
+     AND (d.superseded_by IS NULL
+          OR NOT EXISTS (                      -- the retirement holds only
+            SELECT 1                           -- while the successor earns it
+              FROM public.studio_compliance_documents s
+             WHERE s.id = d.superseded_by
+               AND (s.expires_on IS NULL OR s.expires_on >= CURRENT_DATE)
+               AND d.blocks <@ s.blocks));
 $$;
 
 REVOKE ALL ON FUNCTION public.compliance_state(uuid) FROM PUBLIC, anon;
@@ -578,6 +629,14 @@ COMMENT ON FUNCTION public.compliance_state(uuid) IS
   'current — CS2 §4, "a date with no gate changes nothing", and PR-h''s '
   'blocked family. Undated paper (a W-9) is held and cannot lapse; NO paper '
   'at all is not_on_file, a different fact from no GATING paper, which reads '
-  'current. SECURITY INVOKER — the table''s member-only RLS is the access '
-  'rule, so a caller outside the studio reads not_on_file rather than another '
-  'studio''s word (00623).';
+  'current. A SUPERSEDED row leaves the reckoning only while its successor '
+  'STILL earns the retirement — in force, and carrying at least the retired '
+  'row''s blocks[] — because r3/r4''s two supersede invariants are checked '
+  'where superseded_by is written and never again, and `blocks` was outside '
+  'the trigger entirely: an honest supersede followed by two edits to the '
+  'successor (back-date it, then empty its gates) left a lapsed gating '
+  'certificate on file while this function said current, with no in-force '
+  'cover anywhere on the card (w1b final review r9 MAJOR-1). The reader is '
+  'the one place a later write cannot outrun. SECURITY INVOKER — the table''s '
+  'member-only RLS is the access rule, so a caller outside the studio reads '
+  'not_on_file rather than another studio''s word (00623).';
