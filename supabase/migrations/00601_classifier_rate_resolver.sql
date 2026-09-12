@@ -59,6 +59,18 @@
 --     "invoiced and unbilled history keep their amounts"; HT-1 is about who
 --     owns the rate on a NEW entry. A new row with no resolvable rate is
 --     NULL + 'none' — "rate pending" (HT-26), never a blank.
+--     EXTENDED in review round 3 (W1-R3-02): the preservation also covers a
+--     PRE-00600 row (OLD.rate_source IS NULL) even when the chain DOES have an
+--     answer. Gated on 'none' alone it fired only where no money moved: measured,
+--     a legacy unbilled entry carrying its own 17500 snapshot, whose author holds
+--     a 15000 studio rate, was re-priced to 15000 / 'studio_member' by a plain
+--     duration correction — the $175 rate became $150 and the row stopped reading
+--     as legacy. Invoiced rows were never exposed (guard_invoiced_time_entry
+--     refuses a duration change once invoice_id is set), so the exposure was
+--     exactly the unbilled history P-4 names. Case (i) could not catch it: its
+--     member holds no studio rate, so it exercised only the 'none' arm. If HT-1 is
+--     ever ruled to beat P-4 on an edit, flip the assert in case (q) and record
+--     the ruling beside HT-6-a — it must not become the silent default again.
 --     CORRECTED in review round 2 (W1-R2-05): this branch used to force
 --     rate_source to NULL, which erased provenance from a row W1 itself wrote.
 --     HT-13 makes backdating a first-class act, and a W1-era entry backdated
@@ -177,9 +189,17 @@ BEGIN
   -- chain has no answer — and W1-R2-05: the provenance stays with the snapshot it
   -- describes. Forcing NULL here relabelled a W1-era row as pre-00600 legacy the
   -- moment HT-13's backdating moved it outside its rate's span.
+  -- W1-R3-02: the preservation also fires when the chain HAS an answer but the row
+  -- is PRE-00600 (rate_source NULL). Gated on 'none' alone, P-4 was honoured
+  -- exactly where it cost nothing and dropped where it moved money: a legacy
+  -- unbilled row carrying its own $175.00 snapshot, whose author holds a $150.00
+  -- studio rate, was silently re-priced to 15000 by the only edit
+  -- useUpdateTimeEntry offers (a duration correction) — and stopped being
+  -- identifiable as legacy. A billable off/on round trip did the same through the
+  -- non-billable branch below.
   IF TG_OP = 'UPDATE'
-     AND v_rate_source = 'none'
      AND OLD.hourly_rate_cents IS NOT NULL
+     AND (v_rate_source = 'none' OR OLD.rate_source IS NULL)
   THEN
     v_rate_cents  := OLD.hourly_rate_cents;
     v_rate_source := OLD.rate_source;
@@ -454,6 +474,14 @@ BEGIN
   -- that way), which is a lie about money the studio can read.
   IF v_src !~ 'v_rate_source := OLD\.rate_source' THEN
     RAISE EXCEPTION '00601: delta 5 must preserve OLD.rate_source, not NULL it — NULL means "written before 00600" (W1-R2-05)';
+  END IF;
+
+  -- ── review round 3 ───────────────────────────────────────────────────────
+  -- W1-R3-02: delta 5 must also preserve a PRE-00600 snapshot when the chain has
+  -- an answer, or an ordinary duration edit writes a legacy rate down to the
+  -- author's current studio rate (P-4).
+  IF v_src !~ 'OLD\.rate_source IS NULL' THEN
+    RAISE EXCEPTION '00601: delta 5 must preserve a pre-00600 rate snapshot even when the chain resolves (P-4, W1-R3-02)';
   END IF;
 END
 $postcondition$;

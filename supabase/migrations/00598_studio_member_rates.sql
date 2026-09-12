@@ -47,6 +47,27 @@
 --     (supabase/CLAUDE.md convention), added while the table is still empty, so
 --     an in-place correction of the open row leaves a trace.
 --
+-- REVIEW ROUND 3 (W1-R3-04) — effective_to belongs to the ladder, not to a caller:
+--   A caller-supplied effective_to defeated the W1-R1-06 non-overlap invariant
+--   case (g6) asserts. Measured through the real policies, all three inserts as
+--   the owner: 10000 [-30 .. -9], 30000 [backdated, with an explicit
+--   effective_to], 20000 [open] left TWO rows covering one day. The same shape can
+--   leave NO open row at all — insert with effective_to set and nothing later, and
+--   every new hour resolves 'none' and prints "rate pending" until somebody
+--   inserts again. Money stayed deterministic (tier 2 takes the greatest
+--   effective_from <= the date) and useSetStudioMemberRate never sends the column,
+--   which is why this was minor — but the invariant this file asserts was
+--   reachable-breakable by the only role allowed to write here.
+--   The refusal lives in its OWN SECURITY INVOKER trigger, not inside
+--   close_prior_studio_member_rate as the finding proposed: that function is
+--   SECURITY DEFINER, so current_user inside it is its OWNER ('postgres' —
+--   measured) and a current_user test there can never fire. The guard is named to
+--   sort BEFORE close_prior_studio_member_rate_trg, because the close COMPUTES
+--   effective_to and a guard running after it would refuse the ladder's own value;
+--   a postcondition pins that ordering. The close now recomputes the column
+--   unconditionally, so a value supplied by postgres (a seed, a migration) is
+--   replaced by the ladder's answer rather than trusted.
+--
 -- Lineage: new table and new trigger functions — nothing is redefined.
 -- Reconciles: nothing. Additive (plan-v2 §0.1); project_time_entries is not
 -- touched by this file.
@@ -78,6 +99,16 @@ COMMENT ON TABLE public.studio_member_rates IS
 COMMENT ON COLUMN public.studio_member_rates.effective_to IS
   'NULL = the open row. Closed by close_prior_studio_member_rate() when a later '
   'row supersedes it — never by hand.';
+-- W1-R3-07: the day is a UTC day on both sides — 00599 anchors tier 2 on
+-- (p_at AT TIME ZONE 'UTC')::date and the hook stamps new Date().toISOString().
+-- Writer and reader therefore agree, but a studio west of UTC typing a rate after
+-- roughly 17:00 local stamps TOMORROW's date and the hours it already logged that
+-- local afternoon keep the old rate. Lane B's copy says "UTC day"; making it the
+-- studio's local day would mean passing the studio's zone into the resolver and is
+-- an owed ruling, not a silent change.
+COMMENT ON COLUMN public.studio_member_rates.effective_from IS
+  'The UTC day this rate starts pricing hours (00599 anchors on '
+  '(p_at AT TIME ZONE ''UTC'')::date).';
 COMMENT ON COLUMN public.studio_member_rates.created_by IS
   'The owner/admin who last wrote this row. Frozen once the row closes; on the '
   'OPEN row a second admin''s same-day correction re-stamps it (W1-R2-04) — the '
@@ -89,6 +120,40 @@ CREATE INDEX IF NOT EXISTS idx_studio_member_rates_lookup
 CREATE UNIQUE INDEX IF NOT EXISTS uniq_studio_member_rates_open
   ON public.studio_member_rates(studio_id, user_id)
   WHERE effective_to IS NULL;
+
+-- ── effective_to is the ladder's column, never the caller's (W1-R3-04) ─────
+-- SECURITY INVOKER on purpose: current_user inside a SECURITY DEFINER function is
+-- the function's OWNER (measured: 'postgres'), so the refusal cannot live inside
+-- close_prior_studio_member_rate below. The postgres early return is the
+-- 00412:2354 idiom — seeds and migrations still write freely, and the close
+-- recomputes whatever they send.
+CREATE OR REPLACE FUNCTION public.guard_studio_member_rate_insert()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  IF current_user IS NOT DISTINCT FROM 'postgres' THEN RETURN NEW; END IF;
+
+  IF NEW.effective_to IS NOT NULL THEN
+    RAISE EXCEPTION 'effective_to is closed by the ladder, never by hand — write a new dated row'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.guard_studio_member_rate_insert()
+  FROM PUBLIC, anon, authenticated, service_role;
+
+-- Named to sort BEFORE close_prior_studio_member_rate_trg: the close computes
+-- effective_to, so a guard firing after it would refuse the ladder's own value.
+-- A postcondition at the foot of this file pins that ordering.
+DROP TRIGGER IF EXISTS aaa_guard_studio_member_rate_insert_trg ON public.studio_member_rates;
+CREATE TRIGGER aaa_guard_studio_member_rate_insert_trg
+BEFORE INSERT ON public.studio_member_rates
+FOR EACH ROW EXECUTE FUNCTION public.guard_studio_member_rate_insert();
 
 -- ── The open-row ladder ────────────────────────────────────────────────────
 -- SECURITY DEFINER, changed in review round 1 (W1-R1-06 + W1-R1-08): the close
@@ -119,13 +184,15 @@ BEGIN
      AND r.effective_from < NEW.effective_from
      AND (r.effective_to IS NULL OR r.effective_to >= NEW.effective_from);
 
-  IF NEW.effective_to IS NULL THEN
-    SELECT min(r.effective_from) - 1 INTO NEW.effective_to
-    FROM public.studio_member_rates r
-    WHERE r.studio_id = NEW.studio_id
-      AND r.user_id   = NEW.user_id
-      AND r.effective_from > NEW.effective_from;
-  END IF;
+  -- W1-R3-04: recomputed UNCONDITIONALLY. The ladder owns this column; a value
+  -- that arrived with the row (only postgres can still supply one — the INVOKER
+  -- guard above refuses every other writer) is replaced, never trusted, because a
+  -- hand-set effective_to is exactly what left two rows covering one day.
+  SELECT min(r.effective_from) - 1 INTO NEW.effective_to
+  FROM public.studio_member_rates r
+  WHERE r.studio_id = NEW.studio_id
+    AND r.user_id   = NEW.user_id
+    AND r.effective_from > NEW.effective_from;
 
   RETURN NEW;
 END;
@@ -303,6 +370,24 @@ BEGIN
       AND tgname = 'aaa_guard_studio_member_rate_history_trg'
   ) THEN
     RAISE EXCEPTION '00598: the closed-row freeze trigger must be installed (W1-R1-08)';
+  END IF;
+
+  -- ── review round 3 ───────────────────────────────────────────────────────
+  -- W1-R3-04: the caller may not hand-close a row, and the guard must fire BEFORE
+  -- the close computes the column (triggers on one event fire in name order).
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger
+    WHERE tgrelid = 'public.studio_member_rates'::regclass AND NOT tgisinternal
+      AND tgname = 'aaa_guard_studio_member_rate_insert_trg'
+  ) THEN
+    RAISE EXCEPTION '00598: the caller-supplied effective_to refusal must be installed (W1-R3-04)';
+  END IF;
+  IF 'aaa_guard_studio_member_rate_insert_trg' >= 'close_prior_studio_member_rate_trg' THEN
+    RAISE EXCEPTION '00598: the effective_to guard must sort before the close trigger, or it refuses the ladder''s own value (W1-R3-04)';
+  END IF;
+  IF pg_get_functiondef('public.close_prior_studio_member_rate()'::regprocedure)
+       ~ 'IF NEW\.effective_to IS NULL THEN' THEN
+    RAISE EXCEPTION '00598: the close must recompute effective_to unconditionally — a supplied value is not trusted (W1-R3-04)';
   END IF;
 
   -- W1-R1-09: the rate's subject must be a studio member.

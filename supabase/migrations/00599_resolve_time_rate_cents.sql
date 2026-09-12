@@ -115,6 +115,47 @@
 --    boundary a project designer who is not a studio owner/admin may resolve only
 --    her OWN rate.
 --
+-- REVIEW ROUND 3 — ONE REPAIR AND ONE RECORDED COUPLING:
+--
+--  · W1-R3-01 (a member could price her own hour). The fallback ladder's first key
+--    was "this studio holds a rate row for p_user_id", which TIES the moment the
+--    member holds a rate in two studios — and she can always create the second
+--    one: 00295's fc_provision_studio_on_designer seats every is_designer profile
+--    as OWNER of a personal one-person workspace, and
+--    studio_member_rates_admin_insert (00598:213-226) asks only for
+--    is_org_admin_or_owner(studio_id) plus subject membership, both of which she
+--    satisfies about herself there. With the key tied, `(membership.role =
+--    'owner') DESC` handed the pricing to the personal studio. Measured end to end
+--    through RLS: a plain member of a multi-member studio priced at 15000 self-set
+--    99900 in her own workspace and her next 120-minute entry stored
+--    hourly_rate_cents=99900 rated_amount_cents=199800 rate_source=studio_member
+--    billing_state=authorized — $1,998.00 authorized into project_unbilled_time,
+--    the studio balance and the invoice composer, defeating HT-3 (owner/admin
+--    only) and HT-1 (the server owns the rate). It needs no malice either: a
+--    designer carrying a solo rate from before she joined a studio had that old
+--    number beat her studio's. The live path is the fallback because
+--    activate_proposal_as_project never sets projects.studio_id (probed: 5 of 6
+--    seeded projects carry NULL). The repair is one key ABOVE the rate-existence
+--    one — a studio with more than one active non-guest member outranks a
+--    one-person workspace — so a solo designer's only studio still wins by being
+--    the only candidate. Tightening the INSERT policy instead (refuse
+--    user_id = auth.uid() unless a second owner/admin exists) would forbid a solo
+--    owner setting her own rate at all, and populating projects.studio_id is
+--    backfill-adjacent and outside W1 (§0.6, §0.13).
+--
+--  · W1-R3-06 (recorded, no separate change). ASSERT 2's pay-rate gate used to hold
+--    INCIDENTALLY: a plain member of a multi-member studio who is the designer of a
+--    studio_id-NULL project was refused a colleague's rate at depth 0 only because
+--    the colleague HAD a rate row in the multi-member studio, which is what made
+--    the rate-existence key pick a studio she is not an admin of. With no rate row
+--    anywhere for the subject, the key tied, the owner tiebreak resolved v_studio_id
+--    to HER personal studio and ASSERT 2 passed at depth 0 (no pay leaked, because
+--    tier 2 then found nothing and tier 1 only returns a signed card rate a
+--    co-member may already read). W1-R3-01's multi-member key removes the coupling:
+--    the studio that employs her now wins regardless of where rate rows sit, so the
+--    assert is a rule about the caller again and not a property of the ordering.
+--    Recorded here so a future ladder edit cannot silently reopen the depth-0 door.
+--
 -- Lineage: new function — nothing is redefined.
 -- Reconciles: the three 00578 branches that leave the rate client-owned are
 -- fixed in 00601, not here; this file only supplies the answer.
@@ -170,7 +211,24 @@ BEGIN
       AND studio.status = 'active'
       AND membership.status = 'active'
       AND membership.role <> 'guest'
-    ORDER BY EXISTS (
+    -- W1-R3-01: "is this a REAL studio" outranks "does this studio hold a rate
+    -- for her". A plain member of a multi-member studio is the OWNER of the
+    -- personal workspace 00295 auto-provisions for her, and
+    -- studio_member_rates_admin_insert admits an owner writing her own rate
+    -- there — so with the rate-existence key first, a rate she set herself in
+    -- her one-person workspace tied with her studio's rate and the owner
+    -- tiebreak handed the pricing to HER number (measured: a self-set 99900
+    -- priced a 120-minute hour at $1,998.00 authorized). A one-person workspace
+    -- can never be the studio that employs her, so it loses first. A solo
+    -- designer's only studio still wins — her single studio is the only
+    -- candidate, so every key ties and LIMIT 1 takes it.
+    ORDER BY ((
+               SELECT count(*) FROM public.organization_members AS peer
+               WHERE peer.organization_id = studio.id
+                 AND peer.status = 'active'
+                 AND peer.role <> 'guest'
+             ) > 1) DESC,
+             EXISTS (
                SELECT 1 FROM public.studio_member_rates AS priced
                WHERE priced.studio_id = studio.id
                  AND priced.user_id   = p_user_id
@@ -422,6 +480,21 @@ BEGIN
   THEN
     RAISE EXCEPTION '00599: organizations.created_at must sit above studio.id so no tiebreak is ever a uuid (W1-R2-02)';
   END IF;
+  -- ── review round 3 ────────────────────────────────────────────────────────
+  -- W1-R3-01: the one-person-workspace key must sit ABOVE the rate-existence key,
+  -- or a member prices her own hour out of the personal studio 00295 makes her the
+  -- owner of.
+  IF pg_get_functiondef('public.resolve_time_rate_cents(uuid,uuid,timestamptz,text)'::regprocedure)
+       !~ 'peer\.organization_id = studio\.id'
+  THEN
+    RAISE EXCEPTION '00599: the studio fallback must rank a multi-member studio above a one-person workspace (W1-R3-01)';
+  END IF;
+  IF pg_get_functiondef('public.resolve_time_rate_cents(uuid,uuid,timestamptz,text)'::regprocedure)
+       !~ 'peer\.organization_id = studio\.id[\s\S]*priced\.studio_id = studio\.id'
+  THEN
+    RAISE EXCEPTION '00599: the multi-member key must be ordered BEFORE the rate-existence key — below it the member''s self-set rate wins the tie (W1-R3-01)';
+  END IF;
+
   -- W1-R2-03: the designer-on-behalf leg is for the classifier, not for callers.
   IF pg_get_functiondef('public.resolve_time_rate_cents(uuid,uuid,timestamptz,text)'::regprocedure)
        !~ 'pg_trigger_depth\(\) > 0'

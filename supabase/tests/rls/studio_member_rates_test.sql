@@ -37,6 +37,12 @@
 --       created_by. The freeze used to cover created_by, so that correction raised
 --       and the second admin's number was silently lost. (a2)/(b2) could not catch
 --       it: they update the rate alone, as the same actor.
+--   (k) W1-R3-04 (review round 3): a caller-supplied effective_to is REFUSED, and
+--       the one-rate-per-day invariant (g6) still holds afterwards. An owner could
+--       otherwise hand-close a backdated row and leave two rows covering the same
+--       dates — or leave NO open row at all, after which every new hour resolves
+--       'none' and prints "rate pending" until somebody inserts again. Case (g)
+--       could not catch it: it never supplies the column.
 --
 -- How to run:
 --   psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 \
@@ -522,6 +528,85 @@ BEGIN
     'FAIL j3: the correction must not leave a second open row, found ' || v_open;
 
   RAISE NOTICE 'studio_member_rates: case (j) passed.';
+END
+$$;
+
+-- ─── (k) effective_to is the ladder's, not the caller's (W1-R3-04) ──────────
+-- Member …003's history at this point is the ladder case (g) built and (h) left
+-- alone: f1 [CURRENT_DATE-30 .. CURRENT_DATE-11], f4 [CURRENT_DATE-10 ..
+-- CURRENT_DATE-1], f3 [CURRENT_DATE .. open]. The probe that broke the invariant
+-- inserts a backdated row WITH an explicit effective_to, so the close's own
+-- "- 1" never applies and two rows end up covering the same dates.
+DO $$
+DECLARE
+  v_refused BOOLEAN := false;
+  v_no_open BOOLEAN := false;
+  v_covered INTEGER;
+  v_open    INTEGER;
+BEGIN
+  PERFORM pg_temp.assume_user('c2200000-0000-4000-8000-000000000001');
+
+  BEGIN
+    INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, effective_to, created_by)
+    VALUES ('c2200000-0000-4000-8000-0000000000a1', 'c2200000-0000-4000-8000-000000000003',
+            30000, CURRENT_DATE - 20, CURRENT_DATE - 5,
+            'c2200000-0000-4000-8000-000000000001');
+  EXCEPTION WHEN check_violation THEN v_refused := true;
+  END;
+
+  -- The second shape the same hole allowed: a rate that closes with nothing after
+  -- it, leaving the member with NO open row — every later hour resolves 'none'.
+  BEGIN
+    INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, effective_to, created_by)
+    VALUES ('c2200000-0000-4000-8000-0000000000a1', 'c2200000-0000-4000-8000-000000000006',
+            31000, CURRENT_DATE + 1, CURRENT_DATE + 2,
+            'c2200000-0000-4000-8000-000000000001');
+  EXCEPTION WHEN check_violation THEN v_no_open := true;
+  END;
+
+  -- The ladder's own close still works for an ordinary dated write: no
+  -- effective_to sent, so the column is computed.
+  -- A DIFFERENT effective_from from the refused row above on purpose: if the
+  -- refusal ever regresses, this must fail on k1 rather than on the unique index.
+  INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
+  VALUES ('c2200000-0000-4000-8000-0000000000a1', 'c2200000-0000-4000-8000-000000000003',
+          21000, CURRENT_DATE - 25, 'c2200000-0000-4000-8000-000000000001');
+
+  -- g6, re-asserted after the refusals and the legitimate backdated write.
+  SELECT count(*) INTO v_covered
+  FROM generate_series(CURRENT_DATE - 30, CURRENT_DATE, INTERVAL '1 day') AS d(day)
+  WHERE (
+    SELECT count(*) FROM public.studio_member_rates r
+    WHERE r.studio_id = 'c2200000-0000-4000-8000-0000000000a1'
+      AND r.user_id   = 'c2200000-0000-4000-8000-000000000003'
+      AND r.effective_from <= d.day::date
+      AND (r.effective_to IS NULL OR r.effective_to >= d.day::date)
+  ) <> 1;
+
+  SELECT count(*) INTO v_open FROM public.studio_member_rates
+   WHERE studio_id = 'c2200000-0000-4000-8000-0000000000a1'
+     AND user_id   = 'c2200000-0000-4000-8000-000000000003'
+     AND effective_to IS NULL;
+  PERFORM pg_temp.reset_role();
+
+  ASSERT v_refused,
+    'FAIL k1 (W1-R3-04): a caller-supplied effective_to must be refused — hand-closing a '
+    'backdated row is how two rates came to cover one day';
+  ASSERT v_no_open,
+    'FAIL k2 (W1-R3-04): the same refusal must cover the shape that leaves NO open row';
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM public.studio_member_rates
+    WHERE studio_id = 'c2200000-0000-4000-8000-0000000000a1'
+      AND user_id   = 'c2200000-0000-4000-8000-000000000003'
+      AND hourly_rate_cents = 30000),
+    'FAIL k3 (W1-R3-04): the refused row must not exist';
+  ASSERT v_covered = 0,
+    'FAIL k4 (W1-R3-04, HT-3): exactly one rate row must still cover every date in the span; '
+    || v_covered || ' day(s) are covered by none or by more than one';
+  ASSERT v_open = 1,
+    'FAIL k5: exactly one open row must survive the legitimate backdated write, found ' || v_open;
+
+  RAISE NOTICE 'studio_member_rates: case (k) passed.';
   RAISE NOTICE 'All studio_member_rates assertions passed.';
 END
 $$;
