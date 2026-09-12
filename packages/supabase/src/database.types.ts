@@ -34686,6 +34686,18 @@ export type Database = {
         Args: { p_ends_on: string; p_project_id: string; p_starts_on: string }
         Returns: string
       }
+      identity_consent_evidence: {
+        Args: {
+          p_card_phone_e164: string
+          p_identity_key: string
+          p_organization_id: string
+        }
+        Returns: {
+          channel_value: string
+          consented_at: string
+          opt_out_at: string
+        }[]
+      }
       identity_consent_status: {
         Args: {
           p_card_phone_e164: string
@@ -34693,6 +34705,18 @@ export type Database = {
           p_organization_id: string
         }
         Returns: string
+      }
+      identity_paper_state: {
+        Args: { p_card_id: string; p_company_id: string }
+        Returns: string
+      }
+      identity_phone_numbers: {
+        Args: {
+          p_card_phone_e164: string
+          p_identity_key: string
+          p_organization_id: string
+        }
+        Returns: string[]
       }
       identity_seat_count: { Args: { p_identity_key: string }; Returns: number }
       immutable_array_to_string: {

@@ -1,0 +1,112 @@
+BEGIN
+=== A: posture of the four functions the fix adds or changes ===
+          proname          | security_definer | volatility |     proconfig      |                                                returns                                                
+---------------------------+------------------+------------+--------------------+-------------------------------------------------------------------------------------------------------
+ identity_consent_evidence | f                | s          | search_path=public | TABLE(channel_value text, consented_at timestamp with time zone, opt_out_at timestamp with time zone)
+ identity_consent_status   | f                | s          | search_path=public | text
+ identity_paper_state      | f                | s          | search_path=public | text
+ identity_phone_numbers    | t                | s          | search_path=public | SETOF text
+(4 rows)
+
+=== A2: grants both directions on those four ===
+          proname          | anon | authenticated | service_role 
+---------------------------+------+---------------+--------------
+ identity_consent_evidence | f    | t             | t
+ identity_consent_status   | f    | t             | t
+ identity_paper_state      | f    | t             | t
+ identity_phone_numbers    | f    | t             | t
+(4 rows)
+
+=== B: R-AW/R-AY — no function of this wave reads a frozen seat column ===
+ functions_reading_a_frozen_consent_column 
+-------------------------------------------
+                                         0
+(1 row)
+
+ views_reading_the_frozen_seat_verdict 
+---------------------------------------
+                                     0
+(1 row)
+
+=== B2: identity_consent_status still resolves every number through the record ===
+ reaches_the_record | uses_the_gated_number_set 
+--------------------+---------------------------
+ t                  | t
+(1 row)
+
+SET
+                              set_config                               
+-----------------------------------------------------------------------
+ {"sub":"a0000000-0000-0000-0000-000000000004","role":"authenticated"}
+(1 row)
+
+=== C: every printed consent word vs the record, no Patina function in the path ===
+ carded_rows_compared | rows_where_the_word_diverges 
+----------------------+------------------------------
+                   49 |                            0
+(1 row)
+
+=== D: the paper word — new formula vs the old COALESCE, and vs hand ===
+ contact_rows | rows_the_old_formula_would_differ_on | rows_disagreeing_with_hand_worst_first 
+--------------+--------------------------------------+----------------------------------------
+           49 |                                    0 |                                      0
+(1 row)
+
+=== D2: F-09 Luis Ochoa, the fixture row holder_type=person exists for ===
+ display_name | paper_state | his_own_card | his_firm 
+--------------+-------------+--------------+----------
+ Luis Ochoa   | current     | current      | current
+(1 row)
+
+=== E: cross-tenant, as the owner of a genuinely foreign studio ===
+ set_config 
+------------
+ 
+(1 row)
+
+ acting_as | member_of_the_seed_studio 
+-----------+---------------------------
+           | f
+(1 row)
+
+ numbers_the_outsider_can_pull 
+-------------------------------
+                             0
+(1 row)
+
+ outsider_consent_word | outsider_paper_word | outsider_evidence_rows 
+-----------------------+---------------------+------------------------
+                       | not_on_file         |                      0
+(1 row)
+
+RESET
+SET
+=== E2: anon ===
+psql:artifacts/people-room-crm-2026-09-11/build/probe103-w1b-r4-fix-controls.sql:166: NOTICE:  anon identity_phone_numbers -> permission denied for function identity_phone_numbers
+DO
+psql:artifacts/people-room-crm-2026-09-11/build/probe103-w1b-r4-fix-controls.sql:172: NOTICE:  anon identity_consent_evidence -> permission denied for function identity_consent_evidence
+DO
+psql:artifacts/people-room-crm-2026-09-11/build/probe103-w1b-r4-fix-controls.sql:178: NOTICE:  anon identity_paper_state -> permission denied for function identity_paper_state
+DO
+RESET
+SET
+                              set_config                               
+-----------------------------------------------------------------------
+ {"sub":"a0000000-0000-0000-0000-000000000004","role":"authenticated"}
+(1 row)
+
+=== F: the shape of the room is unchanged ===
+ directory_rows | seat_rows | directory_columns | rows_claiming_a_count_they_cannot_nest 
+----------------+-----------+-------------------+----------------------------------------
+             62 |        31 |                17 |                                      0
+(1 row)
+
+ display_name  | reach_state | consent_status | paper_state | seat_count 
+---------------+-------------+----------------+-------------+------------
+ Amara Osei    | on_paper    | granted        | lapses_soon |          1
+ Dana Kowalski | field_link  | granted        | lapsed      |          2
+ Pete Rusk     | on_paper    | opted_out      | current     |          2
+ Ray Thao      | on_paper    | not_asked      | not_on_file |          1
+(4 rows)
+
+ROLLBACK

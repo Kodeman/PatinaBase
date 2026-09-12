@@ -67,6 +67,18 @@
 --     of the row it retires (compliance_successor_drops_a_gate). Without the
 --     second leg, `blocks`' empty default retires a gating lapse with a
 --     gateless row and the card reads `current` with no cover on file.
+--   · w1b final review r4 MAJOR-1 — the FOURTH door, and the last of that
+--     family: the undated leg and the in-force leg both enumerated the five
+--     DATED doc_types, so for w9, lien_waiver_conditional,
+--     lien_waiver_unconditional and other_named an UNDATED successor still
+--     retired a gating, already-expired paper (walked: an expired
+--     lien_waiver_conditional gating {draw,payment} went `lapsed` ->
+--     `current` in two ordinary member writes). Both legs now key on the
+--     PAPER'S OWN DATE — a dated row may only be retired by a dated one, and
+--     the in-force test applies whenever the successor carries a date — so
+--     one rule covers all nine types and no type list has to be kept in
+--     step. The dated-expiry CHECK keeps its five-type list on purpose: it
+--     says which types MUST carry a date, which is a different question.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 CREATE TABLE IF NOT EXISTS public.studio_compliance_documents (
@@ -313,25 +325,40 @@ BEGIN
         USING HINT = 'A renewal covers at least as long as the paper it '
                      'retires: superseded_by must name a document whose '
                      'expires_on is not earlier than this row''s. An undated '
-                     'successor is open-ended and qualifies only for a type '
-                     'that has no expiry at all (a W-9, a signed waiver); a '
-                     'certificate, a licence and a bond must carry the date.';
+                     'successor qualifies only for an undated row — see '
+                     'compliance_successor_undated, which keys on the paper''s '
+                     'own date rather than on its type.';
     END IF;
 
-    -- w1b final review r2 MAJOR-1, door (a): the exemption above was the
-    -- second half of the undated-COI door. The CHECK
+    -- w1b final review r2 MAJOR-1, door (a), re-keyed in r4 (MAJOR-1): the
+    -- exemption above was the second half of the undated-COI door. The CHECK
     -- (studio_compliance_documents_dated_expiry_check) makes an undated
     -- certificate unrecordable, and this says the same thing where the CHECK
     -- cannot see: over a row that predates the constraint, an undated
-    -- successor of a DATED type is refused rather than silently retiring a
+    -- successor of a dated paper is refused rather than silently retiring a
     -- lapse the card still holds.
-    IF NEW.doc_type IN ('coi_gl', 'coi_wc', 'coi_auto', 'license', 'bond')
-       AND v_succ_expires IS NULL THEN
+    --
+    -- r4 MAJOR-1: this leg, and the in-force leg below, both enumerated the
+    -- five DATED doc_types — so for w9, lien_waiver_conditional,
+    -- lien_waiver_unconditional and other_named the whole door stayed open,
+    -- and it was walked: an expired lien_waiver_conditional gating
+    -- {draw,payment} went from `lapsed` to `current` in two ordinary member
+    -- writes with the expired certificate still on file. The rule does not
+    -- belong to a type list, it belongs to the PAPER: only a DATED row can
+    -- lapse, and a dated row may only be retired by a dated one. One rule
+    -- covers all nine types and needs no vocabulary kept in step. (An undated
+    -- row can never read `lapsed` — compliance_state() counts only
+    -- expires_on IS NOT NULL — so retiring one with another undated paper
+    -- hides nothing and stays legitimate.)
+    IF NEW.expires_on IS NOT NULL AND v_succ_expires IS NULL THEN
       RAISE EXCEPTION 'compliance_successor_undated'
-        USING HINT = 'A certificate, a licence and a bond expire, so their '
-                     'renewal must carry its own expires_on. An undated '
-                     'successor of a dated paper would read `current` forever '
-                     'while the lapse it retired is still on file.';
+        USING HINT = 'A DATED paper may only be retired by a dated one: this '
+                     'row carries an expires_on, so its renewal must carry '
+                     'its own. An undated successor is held and can never '
+                     'lapse, so it would read `current` forever while the '
+                     'lapse it retired is still on file — whatever the '
+                     'doc_type. An undated paper may still be retired by '
+                     'another undated one.';
     END IF;
 
     -- w1b final review r2 MAJOR-1, door (b): the two-row supersede CYCLE.
@@ -378,15 +405,20 @@ BEGIN
     -- edge that is also expired still answers
     -- compliance_successor_already_superseded — the cycle is the worse fact
     -- and the error a reader should see.
-    IF NEW.doc_type IN ('coi_gl', 'coi_wc', 'coi_auto', 'license', 'bond')
-       AND v_succ_expires < CURRENT_DATE THEN
+    --
+    -- r4 MAJOR-1: keyed on the successor's own DATE rather than on the same
+    -- five-type list, for the reason stated at the undated leg above — a
+    -- lapsed lien waiver, W-9 or named card is exactly as expired as a lapsed
+    -- certificate, and its retirement was unguarded. The in-force test now
+    -- applies whenever the successor carries a date at all.
+    IF v_succ_expires IS NOT NULL AND v_succ_expires < CURRENT_DATE THEN
       RAISE EXCEPTION 'compliance_successor_already_lapsed'
         USING HINT = 'A renewal must still be in force: superseded_by may not '
-                     'name a certificate, licence or bond that has already '
-                     'expired. Retiring a lapse with an equally lapsed '
-                     'successor takes the first lapse out of the reckoning '
-                     'and, when the successor carries no gate of its own, '
-                     'prints `current` over a firm with no cover.';
+                     'name a paper whose own expires_on has already passed, '
+                     'whatever the doc_type. Retiring a lapse with an equally '
+                     'lapsed successor takes the first lapse out of the '
+                     'reckoning and, when the successor carries no gate of '
+                     'its own, prints `current` over a firm with no cover.';
     END IF;
 
     IF NOT (NEW.blocks <@ v_succ_blocks) THEN
@@ -413,7 +445,8 @@ COMMENT ON FUNCTION public.assert_compliance_holder() IS
   'card whose entity_kind equals holder_type, in the SAME organization_id, and '
   'superseded_by must name another document for the same card in the same '
   'studio, of the SAME doc_type, expiring no earlier than the row it retires, '
-  'carrying its own expires_on when the type is a dated one, still at the head '
+  'carrying its own expires_on whenever the row it retires carries one, still '
+  'at the head '
   'of its own chain (its superseded_by null), still IN FORCE (not itself '
   'expired), and carrying at least the blocks[] of the row it retires '
   '(compliance_holder_not_found / _kind_mismatch / _other_studio / '
@@ -431,7 +464,10 @@ COMMENT ON FUNCTION public.assert_compliance_holder() IS
   'reckoning with two UPDATEs, and the already-lapsed successor and the '
   'dropped gate are r3 MAJOR-1 — two ordinary member writes with blocks left '
   'at its empty default printed `current` over a firm holding no in-force '
-  'general-liability cover. The FKs '
+  'general-liability cover; and r4 MAJOR-1 re-keyed the undated and in-force '
+  'legs off the five-type list onto the paper''s own date, because for w9, '
+  'both lien waivers and other_named an undated successor still retired a '
+  'gating, expired paper. The FKs '
   'cannot say any of this — studio_contacts holds both kinds of card and every '
   'studio''s cards (00623, the 00592 R-AP shape).';
 

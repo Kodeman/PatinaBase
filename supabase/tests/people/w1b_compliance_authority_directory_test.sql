@@ -222,6 +222,9 @@ END $$;
 DO $$
 DECLARE
   raised text;
+  v_type text;
+  v_old  uuid;
+  v_new  uuid;
 BEGIN
   BEGIN
     INSERT INTO public.studio_compliance_documents
@@ -331,15 +334,39 @@ BEGIN
     RAISE EXCEPTION '2g a genuine renewal was refused';
   END IF;
 
-  -- an UNDATED successor of the same paper is open-ended and qualifies
+  -- an UNDATED successor may NOT retire a DATED paper, whatever the type
+  -- (w1b final review r4 MAJOR-1). This leg used to assert the opposite as a
+  -- deliberate exemption — "an undated successor of the same paper is
+  -- open-ended and qualifies" — and the exemption was the door: the row below
+  -- is a W-9 that expired yesterday and gates `payment`, so retiring it with
+  -- an undated W-9 takes a gating lapse out of the reckoning and the card
+  -- reads `current` forever with the lapse still on file. What decides is the
+  -- PAPER, not its type: only a dated row can lapse.
+  BEGIN
+    UPDATE public.studio_compliance_documents
+       SET superseded_by = 'f5000000-0000-4000-8000-000000000022'
+     WHERE id = 'f5000000-0000-4000-8000-000000000025';
+    raised := NULL;
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM;
+  END;
+  IF raised IS NULL OR raised NOT LIKE '%compliance_successor_undated%' THEN
+    RAISE EXCEPTION '2h a DATED W-9 was retired by an undated one: %', COALESCE(raised,'no error');
+  END IF;
+
+  -- and the honest open-ended case still lands: an UNDATED paper retired by
+  -- another undated one hides nothing, because neither can ever read lapsed.
+  INSERT INTO public.studio_compliance_documents
+    (id, organization_id, holder_type, holder_id, doc_type, expires_on, blocks) VALUES
+    ('f5000000-0000-4000-8000-000000000026','f1000000-0000-4000-8000-00000000000a','company',
+     'f2000000-0000-4000-8000-000000000001','w9', NULL, '{payment}');
   UPDATE public.studio_compliance_documents
      SET superseded_by = 'f5000000-0000-4000-8000-000000000022'
-   WHERE id = 'f5000000-0000-4000-8000-000000000025';
+   WHERE id = 'f5000000-0000-4000-8000-000000000026';
   IF NOT EXISTS (
     SELECT 1 FROM public.studio_compliance_documents
-     WHERE id = 'f5000000-0000-4000-8000-000000000025'
+     WHERE id = 'f5000000-0000-4000-8000-000000000026'
        AND superseded_by = 'f5000000-0000-4000-8000-000000000022') THEN
-    RAISE EXCEPTION '2h an undated W-9 was refused as the renewal of a dated one';
+    RAISE EXCEPTION '2h1 an undated W-9 was refused as the renewal of another undated one';
   END IF;
 
   -- ═══ r2 MAJOR-1 door (a): a DATED type must carry its date ═══════════════
@@ -618,7 +645,99 @@ BEGIN
       public.compliance_state('f2000000-0000-4000-8000-000000000006');
   END IF;
 
-  RAISE NOTICE '2. the holder guard: a person is not a firm, a document belongs to one studio, other_named needs its label, blocks is a closed vocabulary, a supersede must be the same paper covering at least as long, a dated type must carry its date (and may not be renewed by an undated one), a supersede may not close a chain, and a renewal must itself be in force and carry at least the gates it retires: passed';
+  -- ═══ r4 MAJOR-1: the FOURTH door — the four NON-DATED types ══════════════
+  -- Both the undated leg (r2 door a) and the in-force leg (r3 door c)
+  -- enumerated the five dated doc_types, so for w9, lien_waiver_conditional,
+  -- lien_waiver_unconditional and other_named the whole door stayed open. It
+  -- was walked as a plain studio member through RLS: an expired
+  -- lien_waiver_conditional gating {draw,payment} went from `lapsed` to
+  -- `current` in two ordinary writes — record an UNDATED successor of the same
+  -- type carrying the same gates, then retire the lapse with it — with the
+  -- expired paper still on file, while the same act with a coi_gl was refused.
+  -- A conditional waiver is dated by construction ("through 31 Oct") and the
+  -- seed already holds a dated, site_access-gating other_named (F-09's OSHA 30
+  -- card), so the only thing between the fixture and this door was the
+  -- calendar. One leg per non-dated type, each with its dated-successor
+  -- positive control, so the rule is proven to key on the PAPER and not on a
+  -- vocabulary anyone has to keep in step.
+  INSERT INTO public.studio_contacts
+    (id, organization_id, entity_kind, contact_kind, company_name, company_kind, created_by)
+  VALUES ('f2000000-0000-4000-8000-000000000007','f1000000-0000-4000-8000-00000000000a',
+          'company','sub','Nondated Paper Co','sub','a0000000-0000-0000-0000-000000000004');
+
+  FOREACH v_type IN ARRAY ARRAY['w9','lien_waiver_conditional',
+                                'lien_waiver_unconditional','other_named'] LOOP
+    v_old := gen_random_uuid();
+    v_new := gen_random_uuid();
+
+    INSERT INTO public.studio_compliance_documents
+      (id, organization_id, holder_type, holder_id, doc_type, doc_label, expires_on, blocks)
+    VALUES (v_old,'f1000000-0000-4000-8000-00000000000a','company',
+            'f2000000-0000-4000-8000-000000000007', v_type,
+            CASE WHEN v_type = 'other_named' THEN 'an OSHA 30 card' END,
+            CURRENT_DATE - 40, '{draw,payment}');
+    IF public.compliance_state('f2000000-0000-4000-8000-000000000007') <> 'lapsed' THEN
+      RAISE EXCEPTION '2r0 % must start lapsed for this leg to mean anything, got %',
+        v_type, public.compliance_state('f2000000-0000-4000-8000-000000000007');
+    END IF;
+
+    -- the successor: undated, same type, the gates carried forward, which is
+    -- every guard r1–r3 added satisfied
+    INSERT INTO public.studio_compliance_documents
+      (id, organization_id, holder_type, holder_id, doc_type, doc_label, expires_on, blocks)
+    VALUES (v_new,'f1000000-0000-4000-8000-00000000000a','company',
+            'f2000000-0000-4000-8000-000000000007', v_type,
+            CASE WHEN v_type = 'other_named' THEN 'an OSHA 30 card' END,
+            NULL, '{draw,payment}');
+    BEGIN
+      UPDATE public.studio_compliance_documents
+         SET superseded_by = v_new WHERE id = v_old;
+      raised := NULL;
+    EXCEPTION WHEN OTHERS THEN raised := SQLERRM;
+    END;
+    IF raised IS NULL OR raised NOT LIKE '%compliance_successor_undated%' THEN
+      RAISE EXCEPTION '2r % : an UNDATED successor retired a dated, gating lapse: %',
+        v_type, COALESCE(raised,'no error');
+    END IF;
+    IF public.compliance_state('f2000000-0000-4000-8000-000000000007') <> 'lapsed' THEN
+      RAISE EXCEPTION '2r1 % : the refused launder still moved the word to %',
+        v_type, public.compliance_state('f2000000-0000-4000-8000-000000000007');
+    END IF;
+
+    -- an expired DATED successor is refused for these types too: the in-force
+    -- test keys on the successor's own date, not on a type list
+    UPDATE public.studio_compliance_documents
+       SET expires_on = CURRENT_DATE - 5 WHERE id = v_new;
+    BEGIN
+      UPDATE public.studio_compliance_documents
+         SET superseded_by = v_new WHERE id = v_old;
+      raised := NULL;
+    EXCEPTION WHEN OTHERS THEN raised := SQLERRM;
+    END;
+    IF raised IS NULL OR raised NOT LIKE '%compliance_successor_already_lapsed%' THEN
+      RAISE EXCEPTION '2r2 % : a successor that expired five days ago was accepted: %',
+        v_type, COALESCE(raised,'no error');
+    END IF;
+
+    -- and the positive control: dated, in force, gates carried — a renewal
+    UPDATE public.studio_compliance_documents
+       SET expires_on = CURRENT_DATE + 200 WHERE id = v_new;
+    UPDATE public.studio_compliance_documents
+       SET superseded_by = v_new WHERE id = v_old;
+    IF public.compliance_state('f2000000-0000-4000-8000-000000000007') <> 'current' THEN
+      RAISE EXCEPTION '2r3 % : a genuine dated renewal was refused, word reads %',
+        v_type, public.compliance_state('f2000000-0000-4000-8000-000000000007');
+    END IF;
+
+    -- clear the card so the next type starts from nothing
+    DELETE FROM public.studio_compliance_documents WHERE id = v_old;
+    DELETE FROM public.studio_compliance_documents WHERE id = v_new;
+    IF public.compliance_state('f2000000-0000-4000-8000-000000000007') <> 'not_on_file' THEN
+      RAISE EXCEPTION '2r4 % : the card did not clear between legs', v_type;
+    END IF;
+  END LOOP;
+
+  RAISE NOTICE '2. the holder guard: a person is not a firm, a document belongs to one studio, other_named needs its label, blocks is a closed vocabulary, a supersede must be the same paper covering at least as long, a dated type must carry its date, a supersede may not close a chain, and — for ALL NINE types, keyed on the paper''s own date and not on a vocabulary — a DATED paper may only be retired by a dated successor that is itself in force and carries at least the gates it retires: passed';
 END $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -818,8 +937,195 @@ BEGIN
     RAISE EXCEPTION '3t one un-asked number must pull the identity word back to not_asked, got %', COALESCE(w,'NULL');
   END IF;
 
+  -- ═══ r4 MAJOR-2: a person's OWN gating lapse reaches every reader ════════
+  -- paper_state was compliance_state(COALESCE(company_id, card_id)) on both
+  -- readers, so the person's own card was consulted ONLY when they had no
+  -- firm — and holder_type='person' exists precisely for person-held paper (a
+  -- master licence, an OSHA card; 00623's banner, CS2-21). Walked on the
+  -- seeded fixture with one honest record change and zero adversarial writes:
+  -- Luis Ochoa's own site_access-gating OSHA 30 card expires,
+  -- compliance_state(his card) = lapsed, compliance_state(his firm) = current,
+  -- and BOTH shipped readers printed `current` for him. Block 3 could not see
+  -- it because Dana Kowalski holds no personal paper at all.
   PERFORM pg_temp.reset_role();
-  RAISE NOTICE '3. people_directory v4: one row per identity, Dana''s two seats beneath it, her four fixture words, no person-level stage, an honest 28 + 21, and the consent word reduced worst-first over every number the identity carries — the card''s and its seats'': passed';
+
+  INSERT INTO public.studio_contacts
+    (id, organization_id, entity_kind, contact_kind, company_name, company_kind, created_by)
+  VALUES ('f2000000-0000-4000-8000-000000000031','f1000000-0000-4000-8000-00000000000a',
+          'company','sub','Current Firm Co','sub','a0000000-0000-0000-0000-000000000004');
+  INSERT INTO public.studio_contacts
+    (id, organization_id, entity_kind, contact_kind, full_name, company_id, created_by)
+  VALUES
+    ('f2000000-0000-4000-8000-000000000032','f1000000-0000-4000-8000-00000000000a','person',
+     'sub','Own Paper Sub','f2000000-0000-4000-8000-000000000031',
+     'a0000000-0000-0000-0000-000000000004'),
+    ('f2000000-0000-4000-8000-000000000033','f1000000-0000-4000-8000-00000000000a','person',
+     'sub','No Own Paper Sub','f2000000-0000-4000-8000-000000000031',
+     'a0000000-0000-0000-0000-000000000004');
+
+  -- the firm's certificate is in force; the PERSON's own card gates site
+  -- access and expired ten days ago
+  INSERT INTO public.studio_compliance_documents
+    (id, organization_id, holder_type, holder_id, doc_type, doc_label, expires_on, blocks)
+  VALUES
+    ('f5000000-0000-4000-8000-000000000081','f1000000-0000-4000-8000-00000000000a','company',
+     'f2000000-0000-4000-8000-000000000031','coi_gl', NULL, CURRENT_DATE + 365,'{site_access,draw}'),
+    ('f5000000-0000-4000-8000-000000000082','f1000000-0000-4000-8000-00000000000a','person',
+     'f2000000-0000-4000-8000-000000000032','other_named','OSHA 30 card',
+     CURRENT_DATE - 10,'{site_access}');
+
+  INSERT INTO public.project_parties
+    (id, project_id, party_kind, display_name, studio_contact_id, company_id, stage, created_by)
+  VALUES
+    ('f4000000-0000-4000-8000-000000000161','f3000000-0000-4000-8000-00000000000a','sub',
+     'Own Paper Sub','f2000000-0000-4000-8000-000000000032',
+     'f2000000-0000-4000-8000-000000000031','active','a0000000-0000-0000-0000-000000000004'),
+    ('f4000000-0000-4000-8000-000000000162','f3000000-0000-4000-8000-00000000000a','sub',
+     'No Own Paper Sub','f2000000-0000-4000-8000-000000000033',
+     'f2000000-0000-4000-8000-000000000031','active','a0000000-0000-0000-0000-000000000004');
+
+  -- the record, before any reader: the two holders disagree
+  IF public.compliance_state('f2000000-0000-4000-8000-000000000031') <> 'current' THEN
+    RAISE EXCEPTION '3u the firm must read current for this leg to mean anything, got %',
+      public.compliance_state('f2000000-0000-4000-8000-000000000031');
+  END IF;
+  IF public.compliance_state('f2000000-0000-4000-8000-000000000032') <> 'lapsed' THEN
+    RAISE EXCEPTION '3u1 the person''s own card must read lapsed, got %',
+      public.compliance_state('f2000000-0000-4000-8000-000000000032');
+  END IF;
+
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+
+  SELECT paper_state INTO w FROM public.people_directory
+   WHERE display_name = 'Own Paper Sub';
+  IF w IS DISTINCT FROM 'lapsed' THEN
+    RAISE EXCEPTION '3v a person''s OWN gating lapse must reach their Directory row even though their firm is current, got %', COALESCE(w,'NULL');
+  END IF;
+  SELECT paper_state INTO w FROM public.people_directory_seats
+   WHERE seat_id = 'f4000000-0000-4000-8000-000000000161';
+  IF w IS DISTINCT FROM 'lapsed' THEN
+    RAISE EXCEPTION '3v1 and their seat line must say so too, got %', COALESCE(w,'NULL');
+  END IF;
+
+  -- the control that keeps the reduction honest in the other direction: a
+  -- person holding NO personal paper must still read their firm's word, not
+  -- `not_on_file` (C21/R-K — no paper is a different fact from a lapse)
+  SELECT paper_state INTO w FROM public.people_directory
+   WHERE display_name = 'No Own Paper Sub';
+  IF w IS DISTINCT FROM 'current' THEN
+    RAISE EXCEPTION '3v2 a person with no personal paper must read their firm''s word, got %', COALESCE(w,'NULL');
+  END IF;
+  SELECT paper_state INTO w FROM public.people_directory_seats
+   WHERE seat_id = 'f4000000-0000-4000-8000-000000000162';
+  IF w IS DISTINCT FROM 'current' THEN
+    RAISE EXCEPTION '3v3 nor on their seat line, got %', COALESCE(w,'NULL');
+  END IF;
+
+  -- and the firm's own row is unchanged: a firm answers with its own paper
+  SELECT paper_state INTO w FROM public.people_directory
+   WHERE display_name = 'Current Firm Co';
+  IF w IS DISTINCT FROM 'current' THEN
+    RAISE EXCEPTION '3v4 the firm row must read its own paper, got %', COALESCE(w,'NULL');
+  END IF;
+
+  -- ═══ r4 MAJOR-3: a seat the caller cannot see may not soften the word ════
+  -- identity_consent_status() reduced worst-first over a SECURITY INVOKER
+  -- project_parties scan, so a seat outside the caller's visibility
+  -- contributed no number — and removing a number can only make the word MORE
+  -- permissive. Walked with an ordinary studio act: the designer of record on
+  -- one job is set to organization_members.status='removed', and the owner's
+  -- row for the same card flipped from `opted_out` to `granted` while the
+  -- record still refused the number and the seat line that would have argued
+  -- was gone with it. That row is a send door (party-profile-sheet.tsx:262
+  -- computes `granted` from this word, :742 opens the composer on it).
+  PERFORM pg_temp.reset_role();
+
+  INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at,
+                          created_at, updated_at, instance_id, aud, role)
+  VALUES ('a0000000-0000-4000-8000-0000000000f3','w1b-leaver@test.invalid','',NOW(),NOW(),NOW(),
+          '00000000-0000-0000-0000-000000000000','authenticated','authenticated');
+  INSERT INTO public.profiles (id, email, full_name)
+  VALUES ('a0000000-0000-4000-8000-0000000000f3','w1b-leaver@test.invalid','Leaver Designer')
+  ON CONFLICT (id) DO NOTHING;
+  INSERT INTO public.organization_members (user_id, organization_id, role, status, joined_at)
+  VALUES ('a0000000-0000-4000-8000-0000000000f3','f1000000-0000-4000-8000-00000000000a',
+          'member','active', now());
+
+  -- his job, in the same studio, and a card whose OFFICE line is permitted
+  INSERT INTO public.projects
+    (id, name, designer_id, studio_id, status, created_by, client_visibility_tier)
+  VALUES ('f3000000-0000-4000-8000-0000000000f3','W1b leaver job',
+          'a0000000-0000-4000-8000-0000000000f3','f1000000-0000-4000-8000-00000000000a',
+          'active','a0000000-0000-4000-8000-0000000000f3','full');
+  INSERT INTO public.studio_contacts
+    (id, organization_id, entity_kind, contact_kind, full_name, phone, created_by)
+  VALUES ('f2000000-0000-4000-8000-000000000041','f1000000-0000-4000-8000-00000000000a',
+          'person','sub','Two Line Trade','(612) 555-9001',
+          'a0000000-0000-0000-0000-000000000004');
+  -- and his MOBILE, which said STOP, carried ONLY by a seat on that job
+  INSERT INTO public.project_parties
+    (id, project_id, party_kind, display_name, studio_contact_id, phone, stage, created_by)
+  VALUES ('f4000000-0000-4000-8000-000000000171','f3000000-0000-4000-8000-0000000000f3','sub',
+          'Two Line Trade','f2000000-0000-4000-8000-000000000041','(612) 555-9002','active',
+          'a0000000-0000-4000-8000-0000000000f3');
+  INSERT INTO public.studio_channel_consent
+    (organization_id, channel_kind, channel_value, status, consented_at, source,
+     evidence, recorded_at, recorded_by)
+  VALUES ('f1000000-0000-4000-8000-00000000000a','sms','+16125559001','granted', now(),
+          'written','signed form', now(),'a0000000-0000-0000-0000-000000000004');
+  INSERT INTO public.studio_channel_consent
+    (organization_id, channel_kind, channel_value, status, opt_out_at, opt_out_source,
+     opt_out_evidence, opt_out_recorded_at, opt_out_recorded_by)
+  VALUES ('f1000000-0000-4000-8000-00000000000a','sms','+16125559002','opted_out', now(),
+          'inbound_sms','replied STOP', now(),'a0000000-0000-0000-0000-000000000004');
+
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  SELECT consent_status INTO w FROM public.people_directory
+   WHERE person_id = 'f2000000-0000-4000-8000-000000000041';
+  IF w IS DISTINCT FROM 'opted_out' THEN
+    RAISE EXCEPTION '3w while the seat is visible the word must already be opted_out, got %', COALESCE(w,'NULL');
+  END IF;
+
+  -- the ordinary act: the designer of record leaves the studio
+  PERFORM pg_temp.reset_role();
+  UPDATE public.organization_members SET status = 'removed'
+   WHERE user_id = 'a0000000-0000-4000-8000-0000000000f3'
+     AND organization_id = 'f1000000-0000-4000-8000-00000000000a';
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+
+  -- the seat really is invisible now — otherwise this leg proves nothing
+  SELECT count(*) INTO n FROM public.people_directory_seats
+   WHERE person_id = 'f2000000-0000-4000-8000-000000000041';
+  IF n <> 0 THEN
+    RAISE EXCEPTION '3w1 the seat must be outside the caller''s visibility for this leg to mean anything, found %', n;
+  END IF;
+  SELECT seat_count INTO n FROM public.people_directory
+   WHERE person_id = 'f2000000-0000-4000-8000-000000000041';
+  IF n <> 0 THEN
+    RAISE EXCEPTION '3w2 the invisible seat is still counted (%), so the leg is not testing the degrade', n;
+  END IF;
+
+  -- and the word is STILL the record's refusal: the reduction is as
+  -- authoritative as the verdict it reduces
+  SELECT consent_status INTO w FROM public.people_directory
+   WHERE person_id = 'f2000000-0000-4000-8000-000000000041';
+  IF w IS DISTINCT FROM 'opted_out' THEN
+    RAISE EXCEPTION '3x a seat the caller cannot see dropped its refusal and the row printed % over a record that says opted_out', COALESCE(w,'NULL');
+  END IF;
+  -- the record, unchanged, said so all along
+  IF public.channel_consent_status('f1000000-0000-4000-8000-00000000000a','sms','+16125559002')
+     IS DISTINCT FROM 'opted_out' THEN
+    RAISE EXCEPTION '3x1 the record itself moved, which is not what this leg is about';
+  END IF;
+  -- and a non-member still reads nothing at all: the number set is gated
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000002');
+  IF public.identity_consent_status('f1000000-0000-4000-8000-00000000000a',
+       'f2000000-0000-4000-8000-000000000041', '+16125559001') IS NOT NULL THEN
+    RAISE EXCEPTION '3x2 a non-member of the studio read a consent word through the definer number set';
+  END IF;
+
+  PERFORM pg_temp.reset_role();
+  RAISE NOTICE '3. people_directory v4: one row per identity, Dana''s two seats beneath it, her four fixture words, no person-level stage, an honest 28 + 21, the consent word reduced worst-first over every number the identity carries — the card''s and its seats'', including a seat outside the caller''s visibility — and the paper word reduced worst-first over the person''s own card AND their firm: passed';
 END $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -999,6 +1305,79 @@ BEGIN
     RAISE EXCEPTION '4e11 the winning seat''s own number must carry no record for this leg to mean anything, got %', w;
   END IF;
 
+  -- ═══ r4 MAJOR-4: the WORD and its two DATES come off the SAME record ═════
+  -- r3 lifted the word above the DISTINCT ON and keyed it on the identity, and
+  -- left the two dates joined on the WINNING SEAT's phone_e164 — projected
+  -- beside it as meta.sms_consented_at / meta.sms_opt_out_at. Give the winning
+  -- seat's number a DATED GRANT and the older seat's number keeps the refusal:
+  -- the row then printed consent_status `opted_out` with sms_consented_at
+  -- 2 May 2025 and sms_opt_out_at NULL, so R-Q's one consent sentence
+  -- ("<Source> consent, <d Mon yyyy>, on the <project>.") composed "Written
+  -- consent, 2 May 2025" for a human the record refuses — and the refusal's
+  -- own date was nowhere on the row.
+  PERFORM pg_temp.reset_role();
+  UPDATE public.studio_channel_consent
+     SET opt_out_at = '2025-12-03T00:00:00Z'::timestamptz
+   WHERE organization_id = 'b0000000-0000-0000-0000-000000000001'
+     AND channel_kind = 'sms' AND channel_value = '+16125550771';
+  INSERT INTO public.studio_channel_consent
+    (organization_id, channel_kind, channel_value, status, consented_at,
+     source, evidence, recorded_at, recorded_by)
+  VALUES ('b0000000-0000-0000-0000-000000000001','sms','+16125550772','granted',
+          '2025-05-02T00:00:00Z'::timestamptz,'written','signed form', now(),
+          'a0000000-0000-0000-0000-000000000004');
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+
+  -- the word is still the refusal, worst-first
+  SELECT consent_status INTO w FROM public.people_directory
+   WHERE display_name = 'Two Number Login';
+  IF w IS DISTINCT FROM 'opted_out' THEN
+    RAISE EXCEPTION '4e12 a dated grant on the WINNING seat''s number softened the word to %', COALESCE(w,'NULL');
+  END IF;
+
+  -- and both dates belong to the record that decided it
+  SELECT meta->>'sms_opt_out_at' INTO w FROM public.people_directory
+   WHERE display_name = 'Two Number Login';
+  IF w IS NULL OR (w::timestamptz) IS DISTINCT FROM '2025-12-03T00:00:00Z'::timestamptz THEN
+    RAISE EXCEPTION '4e13 an opted_out row must carry the REFUSAL''s own date, got %', COALESCE(w,'NULL');
+  END IF;
+  SELECT meta->>'sms_consented_at' INTO w FROM public.people_directory
+   WHERE display_name = 'Two Number Login';
+  IF w IS NOT NULL THEN
+    RAISE EXCEPTION '4e14 an opted_out row printed a consent date off ANOTHER number (%), which R-Q composes into a consent claim over a refusal', w;
+  END IF;
+
+  -- the other direction, same rule: lift the refusal and the grant's own date
+  -- is the one that prints
+  PERFORM pg_temp.reset_role();
+  UPDATE public.studio_channel_consent
+     SET status = 'granted', refusal_unanswered = false, opt_out_at = NULL,
+         consented_at = '2026-02-09T00:00:00Z'::timestamptz, source = 'written',
+         evidence = 'signed form', recorded_at = now(),
+         recorded_by = 'a0000000-0000-0000-0000-000000000004',
+         opt_out_source = NULL, opt_out_evidence = NULL,
+         opt_out_recorded_at = NULL, opt_out_recorded_by = NULL
+   WHERE organization_id = 'b0000000-0000-0000-0000-000000000001'
+     AND channel_kind = 'sms' AND channel_value = '+16125550771';
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+
+  SELECT consent_status INTO w FROM public.people_directory
+   WHERE display_name = 'Two Number Login';
+  IF w IS DISTINCT FROM 'granted' THEN
+    RAISE EXCEPTION '4e15 both numbers are granted and the row reads %', COALESCE(w,'NULL');
+  END IF;
+  SELECT meta->>'sms_consented_at' INTO w FROM public.people_directory
+   WHERE display_name = 'Two Number Login';
+  IF w IS NULL OR (w::timestamptz) NOT IN ('2026-02-09T00:00:00Z'::timestamptz,
+                                           '2025-05-02T00:00:00Z'::timestamptz) THEN
+    RAISE EXCEPTION '4e16 a granted row must carry the consent date of one of this identity''s own granted records, got %', COALESCE(w,'NULL');
+  END IF;
+  SELECT meta->>'sms_opt_out_at' INTO w FROM public.people_directory
+   WHERE display_name = 'Two Number Login';
+  IF w IS NOT NULL THEN
+    RAISE EXCEPTION '4e17 a granted row still carries an opt-out date (%)', w;
+  END IF;
+
   -- MIXED KINDS (w1b r1 MAJOR-2): the same human seated under a kind the
   -- Directory does not emit. people_directory picked its winner over the seven
   -- kinds and people_directory_seats over every kind, so the newest seat being
@@ -1102,7 +1481,7 @@ BEGIN
   END IF;
 
   PERFORM pg_temp.reset_role();
-  RAISE NOTICE '4. the uncarded identity: two seats on two jobs collapse to one row keyed on the phone, pointing at the newest seat, reach reads a live door on a NON-winning seat (and stops reading a revoked or expired one), a mixed-kind identity nests every seat it claims, PR-c''s login-stamped client_rep seats leave the client row claiming 0, and no row anywhere claims a count it cannot nest: passed';
+  RAISE NOTICE '4. the uncarded identity: two seats on two jobs collapse to one row keyed on the phone, pointing at the newest seat, reach reads a live door on a NON-winning seat (and stops reading a revoked or expired one), the consent word AND its two dates come off the one record that decided them rather than off the winning seat''s number, a mixed-kind identity nests every seat it claims, PR-c''s login-stamped client_rep seats leave the client row claiming 0, and no row anywhere claims a count it cannot nest: passed';
 END $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════
