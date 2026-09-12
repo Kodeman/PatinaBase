@@ -112,137 +112,105 @@
 --    still raises on a role she does not hold at all.
 --
 -- ═══════════════════════════════════════════════════════════════════════════
--- REVIEW ROUND 8 — HT-3-a IS RULED, AND THE LADDER IT STOOD IN FOR IS DELETED
+-- HT-3-a + HT-3-b + HT-3-c — WHICH STUDIO PRICES THE HOUR (all three RULED)
 -- ═══════════════════════════════════════════════════════════════════════════
 --
 -- HT-3-a (RULED by Kody, 2026-09-12): **the studio that prices an hour is derived
--- FROM THE PROJECT ONLY, and never from the member's own memberships.**
+-- FROM THE PROJECT ONLY, and never from the MEMBER BEING PRICED.**
 --
---   1. `projects.studio_id` when it is not NULL. 00317's anti-aiming guard
---      (00317:31-47, head 00563) refuses a user-context write that points a
---      project at a studio its lead designer does not actively belong to, which is
---      what makes the column trustworthy as a pricing key here. (§0.13 still
---      forbids it as an RLS POLICY key — a legacy NULL must not silently widen or
---      narrow visibility. Pricing is not visibility.)
---   2. otherwise a studio the project's DESIGNER holds with
---      `organization_members.role = 'owner'` and `status = 'active'`. If she owns
---      more than one: prefer the one holding a `studio_member_rates` row for the
---      member being priced, then the OLDEST owner membership by
---      `organization_members.created_at`.
+--   1. `projects.studio_id` when it is not NULL.
+--   2. otherwise HT-3-b's two tiers over the PROJECT'S DESIGNER's own seats.
 --   3. otherwise `rate_source = 'none'` — "rate pending" (HT-26).
 --
--- The member's own memberships, org creation, seat dates and
--- `organizations.created_at` play NO part. 00602 additionally stamps
--- `projects.studio_id` at project INSERT by the same rule so that (1) is the
--- normal path.
+-- 00602 stamps `projects.studio_id` at project INSERT by the same step-2 rule, so
+-- (1) is the normal path.
 --
--- WHAT THIS DELETES, and why none of it can come back:
+-- HT-3-b (RULED 2026-09-12, review round 11): step 2's candidates are the studios
+-- where the project's DESIGNER (`projects.designer_id`) holds an ACTIVE, NON-GUEST
+-- `organization_members` row, taken in two tiers:
+--   · the EMPLOYER tier — her seats with `role <> 'owner'`. EXACTLY ONE → it prices.
+--   · only if there is no employer at all — the OWNED tier, `role = 'owner'`.
+--     EXACTLY ONE → it prices.
+--   · any tier with more than one candidate → NULL → step 3's 'none'.
+-- There is NO rate-existence, seat-date, org-age, member-count or `created_by` key
+-- anywhere and NO `ORDER BY` at all: the choice is independent of the member being
+-- priced, so a member can only push the outcome toward 'none' — never toward a
+-- number she set. The owner repairs a 'none' by NAMING the studio on the project.
 --
---  · the member-employment key (`employer.user_id = p_user_id AND
---    membership.role NOT IN ('owner','admin')`, round 5),
---  · the arm's-length key (`arms_length.created_by IS DISTINCT FROM p_user_id`,
---    round 4),
---  · the bare rate-existence key as a CANDIDACY key (round 2) — it survives only
---    as a tiebreak BETWEEN studios the project's designer owns,
---  · the multi-member count key (round 3),
---  · `membership.joined_at` and `membership.created_at` ON THE MEMBER'S OWN SEAT
---    (round 6),
---  · `organizations.created_at` (round 7),
+-- HT-3-c (RULED by the orchestrator 2026-09-12, arm (a) — flagged to Kody): a
+-- project whose designer NAMED its `studio_id` at creation prices from that studio
+-- EVEN WHEN SHE OWNS IT. That is a sole proprietor billing her own studio's client,
+-- not a member gaming her employer's books; step 1 stands as written. W2's composer
+-- and the studio settings page are where a suspicious `studio_member_rates` row is
+-- seen.
 --
---  and with them six rounds of postconditions that pinned the order of those keys.
---  Every one of those keys asked a question about a studio the MEMBER stands in,
---  which is why each was manufacturable in turn: she can be seated in a studio, a
---  second account can seat her, a second account can author her rate, and a seat's
---  dates are written by whoever seats her. A question about the PROJECT is not
---  hers to answer: she cannot make the project's designer an owner anywhere
---  (`Org owners can insert members` carries `role <> 'owner'`, so an owner seat is
---  created only by provisioning — 00295's fc_provision_studio_on_designer — or by
---  ownership transfer), and she cannot aim `projects.studio_id` (00317/00563).
+-- RETRACTED HERE RATHER THAN EDITED (W1-R10-01, measured 1/1 with two controls in
+-- review round 10): three sentences of this banner and of 00602's claimed that
+-- 00317's anti-aiming guard "is what makes the column trustworthy as a pricing
+-- key". What the guard (00317:31-47, head 00563) does is BOUND the column to the
+-- studios the project's lead designer actively belongs to — it says nothing about
+-- WHICH member of that set she names, and its authenticated-INSERT arm requires only
+-- `membership.role <> 'guest'`. As a visibility guard that is enough; as a pricing
+-- key the choice is the designer's, which is what HT-3-c rules on. The pin is case
+-- (ac) of supabase/tests/billing/time_rate_resolution_test.sql, which performs the
+-- INSERT through RLS as a plain-member designer naming the workspace she owns.
+-- (§0.13 still forbids this column as an RLS POLICY key: a legacy NULL must not move
+-- visibility. Pricing is not visibility.)
 --
---  The round-7 blocker (W1-R7-01, a one-UPDATE backdate of
---  `organizations.created_at` through `Org admins can update organization`) is
---  therefore not repaired but REMOVED: that column is no longer read. Its proposed
---  `guard_organization_admin_columns` freeze is NOT shipped, and 00602 carries the
---  projects trigger instead. Three sentences of this banner, one in-body paragraph
---  and one postcondition rationale claimed that `organizations.created_at` was
---  server-set because `organizations` has no INSERT policy for `authenticated`;
---  that premise was measured FALSE (the table has an unrestricted-by-column UPDATE
---  policy for org admins) and all four texts are deleted here rather than edited.
+-- WHAT STEP 2 NO LONGER CONTAINS, and why none of it can come back:
+--   · the member-employment key (round 5), the arm's-length `created_by` key
+--     (round 4), the multi-member count key (round 3), the member's own `joined_at`
+--     / `created_at` (round 6) and `organizations.created_at` (round 7). Every one
+--     asked a question about a studio the MEMBER stands in, and each was
+--     manufacturable in turn: she can be seated in a studio, a second account can
+--     seat her, a second account can author her rate, and a seat's dates are
+--     written by whoever seats her.
+--   · the rate-existence preference (`ORDER BY EXISTS (… studio_member_rates …)`)
+--     and the `owner_seat.created_at` tiebreak, both DELETED in round 11 because
+--     HT-3-b replaces "choose between candidates" with "more than one is 'none'".
+--     The rate-existence key was also date-blind — W1-R10-02, measured 2/2 across
+--     four review rounds: a studio holding only a `CURRENT_DATE + 30` scheduled
+--     raise outranked the studio that can price today, and the hour came out
+--     NULL / 'none' / $0 into project_unbilled_time. **W1-R10-02 dissolves with the
+--     key's removal**: there is no preference left to give a date span to.
+-- Their postconditions are deleted with them. What is pinned below instead is the
+-- new derivation: the employer tier keyed on `role <> 'owner'`, read BEFORE the
+-- owned tier; EXACTLY TWO `organization_members` reads, both of the project
+-- designer's own seats; and no `effective_from` / `created_at` / `joined_at` term in
+-- the choice at all (`effective_from` survives in tier 2's rate span, where
+-- W1-R1-11's UTC anchor lives, and nowhere else).
 --
---  WHAT THE RULING ACCEPTS, stated so nobody re-derives it as a defect: a designer
---  logging hours on HER OWN project, who owns the workspace 00295 provisions at
---  the is_designer flip, prices that hour from her own studio — including from a
---  rate she set about herself there. That is a solo practitioner pricing her own
---  work, and HT-3-a rules it explicitly. What it closes is the employee case: an
---  hour on a STUDIO's project (its principal is the designer) is priced by that
---  studio, and no workspace the member owns, buys or is seated in can reach it.
+-- WHAT THE RULING ACCEPTS, stated so nobody re-derives it as a defect:
+--   · a designer with NO employer seat who owns exactly one studio prices her hours
+--     from it, including from a rate she set about herself — a sole practitioner
+--     pricing her own work (cases (p4-style) legs, (ac) LEG2);
+--   · a designer who owns a workspace AND has one employer is priced by the
+--     EMPLOYER, on her own projects too, unless the project NAMES a studio (HT-3-c);
+--   · an ambiguous tier (two employers, or two owned studios and no employer) is
+--     priced by nobody until someone names the studio on the project. The commonest
+--     shape that reaches it is the principal who also owns the workspace 00295
+--     provisioned at her `is_designer` flip — pinned in cases (n) and (w) with the
+--     repair asserted beside it.
 --
--- ═══════════════════════════════════════════════════════════════════════════
--- REVIEW ROUND 8, FIX PASS — THE CONSEQUENCE THE RULING'S TEXT DOES NOT
--- CONTEMPLATE: OWED RULING HT-3-b. PINNED HERE, NOT WIDENED.
--- ═══════════════════════════════════════════════════════════════════════════
+-- WHAT IT BUYS, measured in round 8 and closed here (W1-R8-01): a studio whose lead
+-- designer is an `admin` or `member` — the shape of a studio the moment it adds its
+-- first designer, this program's own customer — can now price every hour on that
+-- designer's projects. Arm A (her self-set 99900 reaching her employer's client as
+-- an authorized $1,998.00) and arm B (a teammate's hour resolving 'none' at $0) are
+-- both gone: case (aa)'s asserts move from the defect to the employing studio's own
+-- rates, which is exactly what the ruling's text said would happen.
 --
--- W1-R8-01 (blocker, measured 3/3 with a 2/2 negative control in review round 8,
--- re-measured from scratch in this fix pass): step 2 admits only studios the
--- project's designer OWNS, so a studio whose lead designer is NOT its owner — the
--- shape of a studio the moment it adds its first designer, this program's own
--- customer — cannot price ANY hour on that designer's projects. No attacker, no
--- manoeuvre, no extra signup:
---
---   Leah owns studio S and seats her new designer `admin`, her assistant `member`,
---   and prices both of them IN S through RLS on HT-3's own surface. The hire got
---   her designer role BEFORE Leah seated her (the self-signup order), so 00295's
---   fc_provision_studio_on_designer gave her a one-person workspace she OWNS —
---   the only candidate step 2 admits for her, hence what 00602 stamps and what
---   step 1 reads for ever. Measured on the studio's client project:
---     · her own hour  → 99900 / 'studio_member' / 199800 / 'authorized', i.e. the
---       number SHE set about HERSELF, $1,998.00 into project_unbilled_time (the
---       invoice composer's feed and claim_time_entries' invoice lock), while
---       Leah's 20000 for her is ignored;
---     · her assistant's hour on the same project → NULL / 'none', reported by the
---       view as $0, although Leah priced him at 12000 in S.
---   Control, in the SAME fixture: a second hire seated BEFORE her designer grant
---   owns no workspace, 00563's one-candidate discovery stamps S, and both hours
---   price correctly (20000/40000 and 12000/24000). The whole difference is the
---   order in which she signed up and was seated.
---
--- So HT-1 ("the server owns hourly_rate_cents") and HT-3 ("owner/admin of the
--- studio sets it") are defeated in BOTH directions for any studio with more than
--- one designer — and arm A is not a 'none' row W2's composer can filter: it is an
--- authorized 'studio_member' row indistinguishable from a legitimate one,
--- authorized by the only party being paid for it.
---
--- NOTHING IS WIDENED HERE, and the ladder above is byte-unchanged, because every
--- code-only widening re-opens rounds 4-6. Recorded so no later hand re-spends them:
---   · widening step 2 to "active non-guest membership" lets an attacker seat the
---     PROJECT'S DESIGNER in a workspace the attacker controls — `Org owners can
---     insert members` needs no consent from the invitee — so the designer's own
---     candidate set re-opens and the attacker's rate wins the preference key. That
---     INSERT is the same door rounds 4 and 6 used.
---   · "prefer a studio with >= 2 active members", "prefer a studio she does not
---     run", "prefer a rate she did not author" are each satisfiable with one extra
---     signup seating the designer (rounds 5 and 6 rated all three blocker-grade).
---   · narrowing instead — refusing step 2 when the member also holds a seat in a
---     studio she does not own — keys on the member's own memberships (which
---     HT-3-a forbids) and hands any org owner a $0 denial-of-service on her hours
---     through the same consent-free INSERT (W1-R8-12).
--- The single door under all of them is that `organization_members` INSERT requires
--- no consent from the person being seated. Closing it (seats land
--- `status = 'invited'`; only the named user may flip their own seat to 'active')
--- changes how every invite in Patina works — provisioning, studio invites, the
--- admin portal's seat adds and `accept_workspace_invitation` all have to be read
--- against it — and it is the enabling condition for widening step 2 safely. That
--- is a RULING, not a patch: **HT-3-b, owed**, recorded in
--- artifacts/hour-tracking-2026-09-11/rulings.md with this measurement, its two
--- arms and the three refuted widenings.
---
--- Until it is ruled, today's behaviour is PINNED by case (aa) of
--- supabase/tests/billing/time_rate_resolution_test.sql, whose failure messages name
--- HT-3-b and state the value each assert takes when the ruling lands — so the
--- ruling moves the asserts and nothing else. The interim consequences are owed to
--- Leah's studio in words (a project led by anyone but the studio's owner prices
--- from that designer's personal workspace), and W2's composer must refuse to claim
--- `rate_source = 'none'` rows so arm B is visible instead of $0.
+-- THE RESIDUE HT-3-b ACCEPTS, and the only thing that closes it: seating somebody in
+-- an organization still needs NO consent from them (`Org owners can insert members`
+-- carries `role <> 'owner'` and nothing about the invitee). For a designer who
+-- already has an employer, a second consent-free seat makes her tier ambiguous — a
+-- $0 denial-of-service (the pre-existing W1-R8-12), never somebody else's number.
+-- For a designer who has NO employer, a consent-free seat in a workspace a second
+-- account owns makes that workspace her sole employer tier and its owner's rates
+-- price her studio's hours. HT-3-b(c)'s consent door (seats land
+-- `status = 'invited'`; only the named user activates her own seat) is the closure,
+-- it is product-wide, and it stays OWED — recorded in
+-- artifacts/hour-tracking-2026-09-11/rulings.md.
 --
 --  · W1-R7-03 (applied, 00598): `effective_from` / `effective_to` are frozen on
 --    the open row, so a rate-setter cannot hand-close a colleague's only open row
@@ -285,65 +253,84 @@ DECLARE
   v_version        integer;
   v_match_count    integer := 0;
   v_cents          integer;
+  -- HT-3-b's two tiers are collected as arrays, not ordered and LIMIT 1'd: the rule
+  -- is "exactly one candidate prices; more than one is 'none'", so the COUNT is the
+  -- answer and there is no ordering key to choose with.
+  v_employer_studios uuid[];
+  v_owned_studios    uuid[];
 BEGIN
   SELECT project.designer_id, project.studio_id
     INTO v_designer_id, v_studio_id
   FROM public.projects AS project
   WHERE project.id = p_project_id;
 
-  -- ── HT-3-a (RULED 2026-09-12): the PROJECT names the studio, never the member ──
-  -- Step 1 is projects.studio_id, read above. It is trustworthy as a PRICING key
-  -- because 00317's anti-aiming guard (00317:31-47, head 00563) refuses any
-  -- user-context write that points a project at a studio its lead designer does not
-  -- actively belong to, and 00602 stamps it at INSERT by the same rule as step 2
-  -- below, so on every new project step 1 is the path actually taken. (§0.13 still
-  -- forbids this column as an RLS POLICY key: a legacy NULL must not move
-  -- visibility. Pricing is not visibility.)
+  -- ── HT-3-a / HT-3-b / HT-3-c (all RULED 2026-09-12) ─────────────────────────
+  -- Step 1 is projects.studio_id, read above. 00317's anti-aiming guard
+  -- (00317:31-47, head 00563) BOUNDS that column to the studios the project's lead
+  -- designer actively belongs to; it does NOT choose among them, and its
+  -- authenticated-INSERT arm asks only for `membership.role <> 'guest'`. The claim
+  -- this comment used to carry — that the guard "is what makes the column
+  -- trustworthy as a pricing key" — is retracted (W1-R10-01, measured). HT-3-c arm
+  -- (a) rules what is left: a project whose designer NAMED its studio_id at creation
+  -- prices from that studio even when she owns it, because that is a sole proprietor
+  -- billing her own studio's client rather than a member gaming her employer's
+  -- books. W2's composer and the studio settings page are where a suspicious
+  -- studio_member_rates row is seen. (§0.13 still forbids this column as an RLS
+  -- POLICY key: a legacy NULL must not move visibility. Pricing is not visibility.)
   --
-  -- Step 2, here: a studio the project's DESIGNER OWNS. Ties are broken by whether
-  -- that studio holds a rate for the member being priced, then by the oldest owner
-  -- membership — exactly as ruled. Nothing about the MEMBER's own standing enters:
+  -- Step 2, here, is HT-3-b: the candidates are the studios where the PROJECT'S
+  -- DESIGNER holds an ACTIVE, NON-GUEST organization_members row, in two tiers —
+  -- the EMPLOYER tier (`role <> 'owner'`) first, and only if she has no employer at
+  -- all the OWNED tier (`role = 'owner'`). EXACTLY ONE candidate in a tier prices;
+  -- more than one is NULL, which step 3 reports as 'none' for the owner to repair by
+  -- naming the studio on the project. Nothing about the MEMBER BEING PRICED enters —
   -- not her memberships, not her seat dates, not a rate's authorship, not an org's
-  -- created_at. Six review rounds each deleted one such key and shipped the next,
-  -- because every question about a studio the member stands in is a question she
-  -- can answer (she can be seated; a second account can seat her, author her rate,
-  -- or hold a workspace she is a plain member of; a seat's dates are written by
-  -- whoever seats her). She cannot make the project's designer an OWNER anywhere:
-  -- `Org owners can insert members` carries `role <> 'owner'`, so an owner seat
-  -- exists only by 00295's provisioning at the designer's own signup or by an
-  -- ownership transfer.
+  -- created_at, not whether a studio holds a rate for her — so the worst a member
+  -- can do to the answer is push it to 'none'. Seven review rounds each deleted one
+  -- key that was a question about a studio SHE stands in (she can be seated; a
+  -- second account can seat her, author her rate, or hold a workspace she is a plain
+  -- member of; a seat's dates are written by whoever seats her), and round 11
+  -- deleted the last two — the rate-existence preference and the owner-seat date
+  -- tiebreak — by making ambiguity an answer instead of a contest (W1-R10-02
+  -- dissolves with them: there is no preference left to give a date span to).
   --
-  -- Step 3 is the absence of both: 'none', "rate pending" (HT-26), and the
+  -- Step 3 is the absence of both tiers: 'none', "rate pending" (HT-26), and the
   -- composer — not the resolver — is where such a row is kept off an invoice.
-  -- W1-R8-01, OWED RULING HT-3-b: because the candidate set is OWNERSHIP, a studio
-  -- whose lead designer is not its owner prices nothing here, and her own
-  -- auto-provisioned workspace prices her client-billed hours instead. Measured,
-  -- pinned in case (aa), and deliberately NOT widened — see the banner: every
-  -- widening is manufacturable while seating somebody in an organization needs no
-  -- consent from them.
-  --
-  -- `studio.id` last is a determinism backstop, not a ruled key: it is reached only
-  -- when the designer holds two owner seats created at the same microsecond, with
-  -- the rate-row preference tied as well. Without it LIMIT 1 over a tie is
-  -- arbitrary, which is the defect W1-R2-02 opened this whole sequence with.
   IF v_studio_id IS NULL AND v_designer_id IS NOT NULL THEN
-    SELECT studio.id INTO v_studio_id
+    -- EMPLOYER tier: the designer's active non-guest seats that are NOT owner seats.
+    SELECT array_agg(DISTINCT studio.id)
+      INTO v_employer_studios
     FROM public.organizations AS studio
-    JOIN public.organization_members AS owner_seat
-      ON owner_seat.organization_id = studio.id
-     AND owner_seat.user_id = v_designer_id
+    JOIN public.organization_members AS designer_seat
+      ON designer_seat.organization_id = studio.id
+     AND designer_seat.user_id = v_designer_id
     WHERE studio.type = 'design_studio'
       AND studio.status = 'active'
-      AND owner_seat.role = 'owner'
-      AND owner_seat.status = 'active'
-    ORDER BY EXISTS (
-               SELECT 1 FROM public.studio_member_rates AS priced
-               WHERE priced.studio_id = studio.id
-                 AND priced.user_id   = p_user_id
-             ) DESC,
-             owner_seat.created_at ASC NULLS LAST,
-             studio.id
-    LIMIT 1;
+      AND designer_seat.status = 'active'
+      AND designer_seat.role <> 'guest'
+      AND designer_seat.role <> 'owner';
+
+    IF COALESCE(array_length(v_employer_studios, 1), 0) = 1 THEN
+      v_studio_id := v_employer_studios[1];
+    ELSIF COALESCE(array_length(v_employer_studios, 1), 0) = 0 THEN
+      -- OWNED tier, reached ONLY when she has no employer seat anywhere. An employer
+      -- tier of two or more falls through to NULL on purpose: choosing between them
+      -- is what every deleted key did.
+      SELECT array_agg(DISTINCT studio.id)
+        INTO v_owned_studios
+      FROM public.organizations AS studio
+      JOIN public.organization_members AS designer_seat
+        ON designer_seat.organization_id = studio.id
+       AND designer_seat.user_id = v_designer_id
+      WHERE studio.type = 'design_studio'
+        AND studio.status = 'active'
+        AND designer_seat.status = 'active'
+        AND designer_seat.role = 'owner';
+
+      IF COALESCE(array_length(v_owned_studios, 1), 0) = 1 THEN
+        v_studio_id := v_owned_studios[1];
+      END IF;
+    END IF;
   END IF;
 
   -- ── ASSERT 1 (W1-R1-01): a relationship to THIS project ──────────────────
@@ -603,11 +590,13 @@ BEGIN
     RAISE EXCEPTION '00599: the rate-boundary date anchor must be explicitly UTC (W1-R1-11)';
   END IF;
 
-  -- ══ review round 8 — HT-3-a, RULED 2026-09-12 ═════════════════════════════
+  -- ══ HT-3-a + HT-3-b + HT-3-c, all RULED 2026-09-12 ═══════════════════════
   -- The studio that prices an hour is derived FROM THE PROJECT ONLY. Rounds 2-7
   -- each pinned the order of a ladder of keys about studios the MEMBER stands in;
-  -- every one of those keys was manufacturable, and all of them are deleted. What
-  -- is pinned now is the derivation itself.
+  -- every one of those keys was manufacturable, and all of them are deleted. Round
+  -- 11 deleted the last two — the rate-existence preference and the owner-seat date
+  -- tiebreak — when HT-3-b replaced "choose between candidates" with "more than one
+  -- is 'none'". What is pinned now is the derivation itself.
 
   -- Step 1: the project's own column is read.
   IF pg_get_functiondef('public.resolve_time_rate_cents(uuid,uuid,timestamptz,text)'::regprocedure)
@@ -616,32 +605,72 @@ BEGIN
     RAISE EXCEPTION '00599: projects.studio_id is step 1 of HT-3-a and must be read before any fallback';
   END IF;
 
-  -- Step 2: the candidate set is studios the project's DESIGNER OWNS — nothing
-  -- about the member's own standing may appear.
+  -- Step 2 (HT-3-b): the candidates are the PROJECT DESIGNER's own active non-guest
+  -- seats, employer tier first. Nothing about the member being priced may appear.
   IF pg_get_functiondef('public.resolve_time_rate_cents(uuid,uuid,timestamptz,text)'::regprocedure)
-       !~ 'owner_seat\.user_id = v_designer_id'
+       !~ 'designer_seat\.user_id = v_designer_id'
   THEN
     RAISE EXCEPTION '00599: the studio fallback must key on the PROJECT DESIGNER''s seat (v_designer_id), never on the member''s (HT-3-a)';
   END IF;
   IF pg_get_functiondef('public.resolve_time_rate_cents(uuid,uuid,timestamptz,text)'::regprocedure)
-       !~ 'owner_seat\.role = ''owner'''
+       !~ 'designer_seat\.role <> ''owner'''
   THEN
-    RAISE EXCEPTION '00599: the studio fallback admits only an OWNER seat — an owner row cannot be inserted through RLS, which is what makes it unmanufacturable (HT-3-a)';
+    RAISE EXCEPTION '00599: step 2''s FIRST tier is the EMPLOYER tier — the designer''s active non-guest seats with role <> ''owner'' (HT-3-b, RULED 2026-09-12)';
   END IF;
-  -- ONE organization_members reference in the whole body, and the assert above says
-  -- whose seat it is. Two would mean a second question about somebody's membership
-  -- crept back in.
-  IF (SELECT count(*) FROM regexp_matches(pg_get_functiondef('public.resolve_time_rate_cents(uuid,uuid,timestamptz,text)'::regprocedure), 'public\.organization_members', 'g')) <> 1
+  IF pg_get_functiondef('public.resolve_time_rate_cents(uuid,uuid,timestamptz,text)'::regprocedure)
+       !~ 'designer_seat\.role = ''owner'''
   THEN
-    RAISE EXCEPTION '00599: the resolver reads organization_members EXACTLY once — for the project designer''s owner seat. A second read is a membership question about somebody, which is what HT-3-a removed (HT-3-a)';
+    RAISE EXCEPTION '00599: step 2''s SECOND tier is the OWNED tier — role = ''owner'', reached only when the designer has no employer seat (HT-3-b)';
+  END IF;
+  -- And in that order: employer before owned. Reversed, a member who owns her
+  -- auto-provisioned workspace outranks the studio that employs her, which is
+  -- exactly the W1-R8-01 defect HT-3-b was ruled to close.
+  IF pg_get_functiondef('public.resolve_time_rate_cents(uuid,uuid,timestamptz,text)'::regprocedure)
+       !~ 'designer_seat\.role <> ''owner''[\s\S]*designer_seat\.role = ''owner'''
+  THEN
+    RAISE EXCEPTION '00599: the EMPLOYER tier must be consulted BEFORE the OWNED tier (HT-3-b) — reversed, the hire''s own workspace prices her employer''s client again (W1-R8-01)';
+  END IF;
+  -- Non-guest, active, and a design_studio: the three things a candidate seat must
+  -- be, in both tiers.
+  IF pg_get_functiondef('public.resolve_time_rate_cents(uuid,uuid,timestamptz,text)'::regprocedure) !~ 'designer_seat\.role <> ''guest''' THEN
+    RAISE EXCEPTION '00599: a guest seat is not a candidate studio (HT-3-b: ACTIVE, NON-GUEST membership)';
+  END IF;
+  -- EXACTLY TWO organization_members reads — the two tiers, both of the project
+  -- designer's own seats. A third is a membership question about somebody else,
+  -- which is what HT-3-a removed.
+  IF (SELECT count(*) FROM regexp_matches(pg_get_functiondef('public.resolve_time_rate_cents(uuid,uuid,timestamptz,text)'::regprocedure), 'public\.organization_members', 'g')) <> 2
+  THEN
+    RAISE EXCEPTION '00599: the resolver reads organization_members EXACTLY twice — the employer tier and the owned tier, both of the PROJECT DESIGNER''s seats. A third read is a membership question about somebody else (HT-3-a / HT-3-b)';
   END IF;
 
-  -- The tiebreak between two owned studios, in the ruled order: a rate held for the
-  -- member being priced, THEN the oldest owner membership.
-  IF pg_get_functiondef('public.resolve_time_rate_cents(uuid,uuid,timestamptz,text)'::regprocedure)
-       !~ 'priced\.studio_id = studio\.id[\s\S]*owner_seat\.created_at'
+  -- ── round 11: the choice carries NO ordering key of any kind ────────────────
+  -- HT-3-b is a count, not a contest: exactly one candidate prices and two or more
+  -- are 'none'. So the candidate queries must carry no date term, no rate-existence
+  -- term and no ORDER BY at all. Exactly TWO ORDER BY clauses survive in the whole
+  -- body — tier 1's signed-authority pick and tier 2's rate span — and neither may
+  -- mention a seat date or a membership.
+  IF (SELECT count(*) FROM regexp_matches(pg_get_functiondef('public.resolve_time_rate_cents(uuid,uuid,timestamptz,text)'::regprocedure), 'ORDER BY', 'g')) <> 2
   THEN
-    RAISE EXCEPTION '00599: between two studios the designer owns, a rate held for the member outranks the oldest owner seat (HT-3-a)';
+    RAISE EXCEPTION '00599: exactly two ORDER BY clauses belong in this body (tier 1''s authority pick, tier 2''s rate span). A third orders step 2''s candidates, and under HT-3-b ambiguity is ''none'' rather than a contest';
+  END IF;
+  IF pg_get_functiondef('public.resolve_time_rate_cents(uuid,uuid,timestamptz,text)'::regprocedure) ~ 'ORDER BY[^;]*created_at'
+     OR pg_get_functiondef('public.resolve_time_rate_cents(uuid,uuid,timestamptz,text)'::regprocedure) ~ 'ORDER BY[^;]*joined_at'
+  THEN
+    RAISE EXCEPTION '00599: no seat or organization date may order anything here — joined_at (W1-R6-01), the membership row''s created_at (W1-R6-01) and organizations.created_at (W1-R7-01) are each written by whoever seats the member or administers the org';
+  END IF;
+  IF pg_get_functiondef('public.resolve_time_rate_cents(uuid,uuid,timestamptz,text)'::regprocedure) ~ 'ORDER BY[^;]*EXISTS'
+     OR pg_get_functiondef('public.resolve_time_rate_cents(uuid,uuid,timestamptz,text)'::regprocedure) ~ 'priced\.'
+  THEN
+    RAISE EXCEPTION '00599: the rate-existence preference key (ORDER BY EXISTS over studio_member_rates) is DELETED by HT-3-b — it chose between candidates, and it was date-blind, so a studio holding only a future scheduled raise outranked the studio that could price today (W1-R10-02)';
+  END IF;
+  -- studio_member_rates is read in ONE place: tier 2.
+  IF (SELECT count(*) FROM regexp_matches(pg_get_functiondef('public.resolve_time_rate_cents(uuid,uuid,timestamptz,text)'::regprocedure), 'public\.studio_member_rates', 'g')) <> 1
+  THEN
+    RAISE EXCEPTION '00599: public.studio_member_rates is read EXACTLY once, in tier 2. A second read is the preference key HT-3-b deleted (W1-R10-02)';
+  END IF;
+  -- And no qualified created_at column anywhere in the body.
+  IF pg_get_functiondef('public.resolve_time_rate_cents(uuid,uuid,timestamptz,text)'::regprocedure) ~ '[A-Za-z_]+\.created_at' THEN
+    RAISE EXCEPTION '00599: no created_at column is a pricing key — not a seat''s (W1-R6-01), not an organization''s (W1-R7-01), and not the owner-seat tiebreak HT-3-b deleted';
   END IF;
 
   -- And the deleted keys, each refused by name so no future graft can restore one
