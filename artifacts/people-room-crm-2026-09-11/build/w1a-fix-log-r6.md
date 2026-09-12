@@ -320,3 +320,213 @@ supabase/seed/00-legacy-grants.sql                              regenerated (1 n
 artifacts/.../build/probe8-r6.sql                               new confirmation probe
 artifacts/.../build/w1a-report.md                               decisions 12 and 18 restated for B6-1
 ```
+
+---
+
+# W1a — fix log, R6 round (`w1a-review-r6-migrations.md`)
+
+> **Name note.** This section is appended to `w1a-fix-log-r6.md` by the brief.
+> It is NOT the round-6 log above (B6-1 / M6-1…M6-5); it is the round whose
+> review file is `w1a-review-r6-migrations.md` and whose findings are
+> **R6-M1** and **R6-M2**. Nothing else in that review — the 22 minors — was
+> touched.
+
+Worktree `/Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build`,
+branch `build/people-room-crm-2026-09-11`. Local Supabase only — no
+`supabase db push`, no `supabase functions deploy`, no Strata contact.
+`ls apps/*/.env.local` → `no matches found` (checked before the reset).
+
+## R6-M1 — a refusal with no recorded source no longer reads as the studio's own consent on every seat
+
+**What changed.** `supabase/migrations/00594_studio_channel_consent.sql`,
+`mirror_channel_consent_to_parties()`, the refusal branch:
+
+```diff
+   IF NEW.status = 'opted_out' THEN
+-    v_seat_source      := COALESCE(NEW.opt_out_source,      NEW.source);
+-    v_seat_evidence    := COALESCE(NEW.opt_out_evidence,    NEW.evidence);
+-    v_seat_recorded_at := COALESCE(NEW.opt_out_recorded_at, NEW.recorded_at);
+-    v_seat_recorded_by := COALESCE(NEW.opt_out_recorded_by, NEW.recorded_by);
++    v_seat_source      := NEW.opt_out_source;
++    v_seat_evidence    := NEW.opt_out_evidence;
++    v_seat_recorded_at := NEW.opt_out_recorded_at;
++    v_seat_recorded_by := NEW.opt_out_recorded_by;
+```
+
+The first of the finding's two candidate fixes, taken because it is the one that
+actually closes the demonstrated case. The second (promote the standing consent
+set into the refusal set inside `record_channel_reconsent()`) does **not**: on
+the demonstrated record both `opt_out_source` and `source` are NULL at the
+moment of promotion, so `COALESCE(scc.opt_out_source, scc.source)` is still
+NULL, `source` is then overwritten with the studio's fresh consent, and the
+mirror's `COALESCE(NEW.opt_out_source, NEW.source)` fires exactly as before.
+Dropping the consent-set terms is also what R-AN asks for — the seat's own
+standing value is the fallback, and `COALESCE(v_seat_*, pp.sms_consent_*)` in
+the UPDATE (and in the tuple guard) still means no non-null column is ever
+overwritten with NULL.
+
+The removed fallback is safe to remove: every writer that mints a refusal WITH
+words fills `opt_out_*` — `record_channel_consent`'s `opted_out` branch writes
+`CASE WHEN p_status = 'opted_out' THEN p_source END` and its three siblings
+(and `p_source`/`p_evidence` are required), and the inbound STOP rail writes all
+four (`supabase/functions/sms-inbound/pipeline.ts:394-405`). A NULL there
+therefore means the refusal never had words, not that they live on the consent
+side. The population the comment claimed the fallback existed for — "legacy rows
+minted before `opt_out_*` existed" — cannot exist, because 00594 creates the
+table with all four columns.
+
+Prose updated in the same file: the block comment above the branch, and
+`COMMENT ON FUNCTION public.mirror_channel_consent_to_parties()`.
+
+**Evidence — the reviewer's own repro, re-run against the fixed stack.**
+
+```
+$ psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
+    -f artifacts/people-room-crm-2026-09-11/build/probe11-r6-sourceless-refusal.sql
+--- record after the fold (the shipped portal's sourceless, dateless refusal) ---
+  status   | refusal_unanswered | source | evidence | opt_out_source | opt_out_evidence
+-----------+--------------------+--------+----------+----------------+------------------
+ opted_out | t                  |        |          |                |
+
+--- seat BEFORE reconsent ---
+ sms_consent_status | sms_consent_source | sms_consent_evidence
+--------------------+--------------------+----------------------
+ opted_out          |                    |
+
+  status   | source  |                evidence                 | opt_out_source
+-----------+---------+-----------------------------------------+----------------
+ opted_out | written | Signed a fresh consent form 11 Sep 2026  |
+
+--- seat AFTER the studio reconsent (R-Q reads THIS) ---
+ sms_consent_status | sms_consent_source | sms_consent_evidence | sms_consent_recorded_at
+--------------------+--------------------+----------------------+-------------------------
+ opted_out          |                    |                      |
+```
+
+Before the fix that last row read
+`opted_out | written | Signed a fresh consent form 11 Sep 2026 | 2026-09-12 …`.
+The studio's fresh consent still lands on the RECORD (middle result, `source =
+written`), which is what `record_channel_reconsent()` is for; it no longer
+travels onto the seat as the refusal's own words.
+
+**Assertion added** — SQL test block 27, sub-cases 27i–27i5
+(`supabase/tests/people/w1a_identity_channels_consent_test.sql`). A new seat
+`e…a9` (Ola Nyquist, `612-555-0433`) carries the portal's sourceless refusal;
+the block folds it, asserts the record is minted `opted_out` /
+`refusal_unanswered` with `opt_out_source`, `opt_out_evidence`, `source` and
+`evidence` all NULL, asserts the seat says nothing about the refusal, then calls
+`record_channel_reconsent(...,'written','Signed a fresh consent form at the
+walkthrough','field-sms-v1')` and asserts the record took the studio's consent
+while the seat's `sms_consent_source` / `sms_consent_evidence` stayed NULL and
+its status stayed `opted_out`.
+
+## R6-M2 — the fold keeps the refusal's date as well as its words
+
+**What changed.** Same file, `backfill_channel_consent_from_parties()`:
+
+```diff
+   refusal AS (
+     SELECT org, phone_e164,
++           sms_opt_out_at,
+            sms_consent_source      AS opt_out_source,
+ ...
+     SELECT r.org, 'sms', r.phone_e164, r.sms_consent_status,
+-           r.sms_consented_at, r.sms_opt_out_at,
++           r.sms_consented_at,
++           COALESCE(r.sms_opt_out_at, f.sms_opt_out_at),
+```
+
+Exactly the finding's fix. Prose updated above the CTE and in
+`COMMENT ON FUNCTION public.backfill_channel_consent_from_parties()`.
+
+**Evidence — the reviewer's own repro, re-run against the fixed stack.**
+
+```
+$ psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
+    -f artifacts/people-room-crm-2026-09-11/build/probe12-r6-fold-refusal-date.sql
+ status  | refusal_unanswered |       opt_out_at       | opt_out_source |        opt_out_evidence         |  opt_out_recorded_at   |      consented_at
+---------+--------------------+------------------------+----------------+---------------------------------+------------------------+------------------------
+ granted | t                  | 2025-11-16 00:00:00+00 | inbound_sms    | Replied STOP on the Rusk thread | 2025-11-16 00:00:00+00 | 2026-02-02 00:00:00+00
+```
+
+`opt_out_at` was empty in that column before the fix. Sendability is unchanged
+(`refusal_unanswered = t` either way); what is restored is R-Q's date and the
+second strand of the write gate's belt-and-braces pair.
+
+**Assertion added** — SQL test block 3, sub-case 3c6, on the fixture the block
+already carries (seat `e…0006` reads `granted` while holding an unanswered
+2025-11-16 opt-out, and the clean 2026 grant wins the ranking):
+
+```sql
+ASSERT r.opt_out_at = '2025-11-16T00:00:00Z'::timestamptz,
+  'FAIL 3c6: the refusing sibling''s own opt-out date must land on the record, got ' …
+```
+
+**Dry run and report.** `artifacts/.../build/probe10-r9-fold-dry-run.sql` now
+selects `sms_opt_out_at` in its `refusal` CTE and prints
+`COALESCE(r.sms_opt_out_at, f.sms_opt_out_at) AS opt_out_at` beside
+`opt_out_recorded_at`; §5 of `w1a-report.md` carries the same shape and says why
+the two dates are printed together. Run locally it is still 0 rows (no seeded
+party phones); run over the W4-M1 fixture it now agrees with the fold:
+
+```
+                 org                  |  phone_e164  | sms_consent_status | refusal_unanswered |       opt_out_at       | opt_out_source |        opt_out_evidence         |  opt_out_recorded_at
+--------------------------------------+--------------+--------------------+--------------------+------------------------+----------------+---------------------------------+------------------------
+ b2000000-0000-4000-8000-00000000000a | +16125550777 | granted            | t                  | 2025-11-16 00:00:00+00 | inbound_sms    | Replied STOP on the Rusk thread | 2025-11-16 00:00:00+00
+```
+
+## Gates run, with output
+
+```
+$ pnpm --dir <worktree> supabase:reset
+…
+Finished supabase db reset on branch main.
+{"target":"local","version":"","message":"Reset local database."}
+
+$ psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 \
+    -f supabase/tests/people/w1a_identity_channels_consent_test.sql
+NOTICE:  1. affiliations + RLS: passed
+…
+NOTICE:  3. consent backfill precedence: passed          # now carries 3c6
+…
+NOTICE:  27. reconsent is evidence-only and re-callable (r7 M7-2), leaves the
+         refusal's own evidence standing (r8 W4-M2), the seat carries the
+         refusal's own words too (r9 R5-M1), and a sourceless refusal is never
+         given the studio's consent as its words (r6 R6-M1): passed
+NOTICE:  All W1a assertions passed.
+ROLLBACK
+                                                          # 28 blocks, all pass
+
+$ deno test --no-check --allow-all --config supabase/functions/deno.json \
+    supabase/functions/_shared/sms.test.ts supabase/functions/_tests/sms-inbound.test.ts
+ok | 71 passed | 0 failed (116ms)
+
+$ psql … -v ON_ERROR_STOP=1 -f artifacts/.../build/rerun.sql   # all three files re-executed, rolled back
+ rerun 00592 ok
+ rerun 00593 ok
+ backfill_channel_consent_from_parties
+                                     0
+ rerun 00594 ok
+
+$ SUPABASE_DB_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres \
+    pnpm --dir <worktree> db:generate
+$ git diff --stat packages/supabase/src/database.types.ts
+                                                          # (empty — bodies only, no signature or column change)
+```
+
+No GRANT or REVOKE line changed in this round
+(`git diff 00594 | grep -c '^[+-].*GRANT\|^[+-].*REVOKE'` → `0`), so
+`scripts/generate-legacy-grants.py` was not re-run and
+`supabase/seed/00-legacy-grants.sql` is untouched.
+
+## Files touched
+
+```
+supabase/migrations/00594_studio_channel_consent.sql            R6-M1 (mirror branch + COMMENT),
+                                                                R6-M2 (refusal CTE + INSERT + COMMENT)
+supabase/tests/people/w1a_identity_channels_consent_test.sql    3c6 (R6-M2); 27i–27i5 + new seat e…a9 (R6-M1)
+artifacts/.../build/probe10-r9-fold-dry-run.sql                 prints opt_out_at (R6-M2)
+artifacts/.../build/w1a-report.md                               §5 dry-run shape, decisions 21(b) and 22,
+                                                                the pasted block-27 notice, the block prose
+artifacts/.../build/rerun.sql                                   regenerated from the edited migrations
+```

@@ -342,6 +342,17 @@ BEGIN
     'evidence set, got ' || COALESCE(r.opt_out_source, '<null>') || ' / '
       || COALESCE(r.opt_out_evidence, '<null>');
 
+  -- 3c6. r6 R6-M2: AND THE REFUSAL'S DATE, not only its words. opt_out_at used
+  --      to be taken from the WINNING row — here a clean grant with no opt-out
+  --      date — so the record said "it arrived by text, it said Replied STOP,
+  --      it was written down on 2025-11-16" with the column that carries WHEN
+  --      THEY REFUSED left empty. R-Q's sentence lost its date for exactly this
+  --      population, and the date test the write gate keeps alongside
+  --      refusal_unanswered had nothing to read on every record the fold mints.
+  ASSERT r.opt_out_at = '2025-11-16T00:00:00Z'::timestamptz,
+    'FAIL 3c6: the refusing sibling''s own opt-out date must land on the '
+    'record, got ' || COALESCE(r.opt_out_at::text, '<null>');
+
   -- 3c5. The consent half is still the winning grant's — two facts, two sets.
   ASSERT r.source = 'written' AND r.evidence = 'newer grant',
     'FAIL 3c5: the shared evidence set still belongs to the winning verdict';
@@ -2799,7 +2810,13 @@ INSERT INTO project_parties (id, project_id, party_kind, display_name, phone,
                              sms_consent_status)
 VALUES
   ('e0000000-0000-4000-8000-0000000000a8', 'd0000000-0000-4000-8000-0000000000a4',
-   'sub', 'Ida Ruiz', '612-555-0431', 'not_asked');
+   'sub', 'Ida Ruiz', '612-555-0431', 'not_asked'),
+  -- r6 R6-M1's population: a refusal with NO SOURCE AND NO WORDS of its own.
+  -- This is what the shipped portal writes on purpose (use-coordination.ts
+  -- writes `opted_out` together with the not-asked columns) and what every
+  -- pre-00432 row carries; the fold mints it verbatim.
+  ('e0000000-0000-4000-8000-0000000000a9', 'd0000000-0000-4000-8000-0000000000a4',
+   'sub', 'Ola Nyquist', '612-555-0433', 'opted_out');
 
 DO $$
 DECLARE
@@ -2941,9 +2958,62 @@ BEGIN
       || COALESCE(r.sms_consent_evidence, '<null>');
   PERFORM pg_temp.reset_role();
 
+  -- 27i. r6 R6-M1: A SOURCELESS REFUSAL IS NOT GIVEN THE STUDIO'S OWN CONSENT
+  --      AS ITS WORDS. The mirror's refusal branch used to fall back to the
+  --      record's CONSENT set (COALESCE(NEW.opt_out_source, NEW.source) and
+  --      three siblings), justified as covering "legacy rows minted before
+  --      opt_out_* existed" — a population 00594 makes impossible, since it
+  --      creates the table with all four columns. What the fallback really hit
+  --      is this: a refusal carrying no source of its own, where NEW.source is
+  --      the studio's FRESH CONSENT put there by record_channel_reconsent().
+  --      The seat went from saying nothing about the refusal (honest) to
+  --      reading (opted_out, written, 'Signed a fresh consent form…', recorded
+  --      today) — R-Q's sentence off the seat became "Opted out in writing,
+  --      <today>", naming the studio's own consent document as the refusal.
+  PERFORM public.backfill_channel_consent_from_parties();
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550433';
+  ASSERT r.status = 'opted_out' AND r.refusal_unanswered
+     AND r.opt_out_source IS NULL AND r.opt_out_evidence IS NULL
+     AND r.source IS NULL AND r.evidence IS NULL,
+    'FAIL 27i: the fold must mint the portal''s sourceless refusal verbatim, got '
+      || COALESCE(r.status, '<null>') || ' / '
+      || COALESCE(r.opt_out_source, '<null>') || ' / '
+      || COALESCE(r.source, '<null>');
+  SELECT * INTO r FROM project_parties WHERE id = 'e0000000-0000-4000-8000-0000000000a9';
+  ASSERT r.sms_consent_status = 'opted_out'
+     AND r.sms_consent_source IS NULL AND r.sms_consent_evidence IS NULL,
+    'FAIL 27i2: the seat says nothing about a refusal it has no words for, got '
+      || COALESCE(r.sms_consent_source, '<null>') || ' / '
+      || COALESCE(r.sms_consent_evidence, '<null>');
+
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+  PERFORM public.record_channel_reconsent(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '612-555-0433',
+    'written', 'Signed a fresh consent form at the walkthrough', 'field-sms-v1', NULL);
+  PERFORM pg_temp.reset_role();
+
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550433';
+  ASSERT r.source = 'written' AND r.status = 'opted_out' AND r.refusal_unanswered,
+    'FAIL 27i3: the studio''s fresh consent goes on the record, the refusal stands';
+  SELECT * INTO r FROM project_parties WHERE id = 'e0000000-0000-4000-8000-0000000000a9';
+  ASSERT r.sms_consent_source IS NULL AND r.sms_consent_evidence IS NULL,
+    'FAIL 27i4: the studio''s own consent must never be mirrored onto the seat '
+    'as the refusal''s source and words, got '
+      || COALESCE(r.sms_consent_source, '<null>') || ' / '
+      || COALESCE(r.sms_consent_evidence, '<null>');
+  ASSERT r.sms_consent_status = 'opted_out',
+    'FAIL 27i5: the seat''s refusal still stands, got '
+      || COALESCE(r.sms_consent_status, '<null>');
+
   RAISE NOTICE '27. reconsent is evidence-only and re-callable (r7 M7-2), '
-               'leaves the refusal''s own evidence standing (r8 W4-M2), and the '
-               'seat carries the refusal''s own words too (r9 R5-M1): passed';
+               'leaves the refusal''s own evidence standing (r8 W4-M2), the '
+               'seat carries the refusal''s own words too (r9 R5-M1), and a '
+               'sourceless refusal is never given the studio''s consent as its '
+               'words (r6 R6-M1): passed';
   RAISE NOTICE 'All W1a assertions passed.';
 END
 $$;

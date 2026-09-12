@@ -367,8 +367,22 @@ BEGIN
   -- set, so without this the record would say "a refusal stands here" and hold
   -- nothing at all about it. Most recently refused wins when there is more than
   -- one.
+  --
+  -- IT CARRIES THE REFUSAL'S DATE TOO (r6 R6-M2). `opt_out_at` used to be taken
+  -- from the WINNING row while the source and the words came from the refusing
+  -- sibling — and in this CTE's own population the winner is a clean grant, so
+  -- the record was minted saying "it arrived by text, it said Replied STOP, it
+  -- was written down on 2025-11-16" with opt_out_at, the column that carries
+  -- WHEN THEY REFUSED, empty. R-Q's sentence ("opted out by text, 3 Dec 2025,
+  -- on the Lindqvist kitchen") lost its date for exactly this population, and
+  -- the belt-and-braces pair the gate below relies on — the date test KEPT
+  -- alongside refusal_unanswered — collapsed to one strand for every record the
+  -- fold mints, since the fold raises the flag and left the date NULL. The date
+  -- had not moved anywhere: it was still only on the losing sibling seat, which
+  -- is the thing this CTE exists to stop relying on.
   refusal AS (
     SELECT org, phone_e164,
+           sms_opt_out_at,
            sms_consent_source      AS opt_out_source,
            sms_consent_evidence    AS opt_out_evidence,
            sms_consent_recorded_at AS opt_out_recorded_at,
@@ -398,7 +412,11 @@ BEGIN
       origin_project_id
     )
     SELECT r.org, 'sms', r.phone_e164, r.sms_consent_status,
-           r.sms_consented_at, r.sms_opt_out_at,
+           r.sms_consented_at,
+           -- The winning row's date, or THE REFUSING SIBLING'S when the winner
+           -- has none (r6 R6-M2) — the refusal's words and the refusal's date
+           -- come off the same row.
+           COALESCE(r.sms_opt_out_at, f.sms_opt_out_at),
            -- An unanswered refusal is recorded as a FACT here, never inferred
            -- later from opt_out_at: a folded `opted_out` row is routinely
            -- DATELESS (the shipped portal writes one deliberately —
@@ -445,7 +463,10 @@ COMMENT ON FUNCTION public.backfill_channel_consent_from_parties() IS
   'across EVERY seat the studio holds on that number, not just the winning row '
   '(r8 W4-M1) — so the granted door '
   'fails closed for the dateless opted_out rows the shipped portal writes on '
-  'purpose. Idempotent — ON CONFLICT '
+  'purpose. The refusing sibling gives the record the refusal''s own source, '
+  'words, recorder AND DATE: opt_out_at is the winning row''s date or, where '
+  'the winner has none, the refusing sibling''s, so the date and the words come '
+  'off the same row (r6 R6-M2). Idempotent — ON CONFLICT '
   'DO NOTHING never overwrites a later decision — and side-effect-free to '
   're-run once the trigger exists: a folded `pending` reaches the party rows '
   'through the mirror, which suppresses 00432''s opt-in dispatch (00594).';
@@ -664,17 +685,36 @@ BEGIN
   -- the studio's consent as the refusal, and the 10DLC artifact of how the STOP
   -- arrived was gone from the only copy those surfaces see. The refusal's
   -- evidence is the evidence OF the verdict being mirrored, so when the verdict
-  -- is `opted_out` the refusal's set is what the seat gets; the studio's set is
-  -- the fallback for the legacy rows minted before opt_out_* existed, and the
-  -- seat's own standing value is the fallback after that (never NULL over
-  -- non-null, R-AN). disclosure_version has no refusal-side twin — it belongs
-  -- to the disclosure the person was shown, not to how they refused — so it
-  -- keeps coming from the record's own column.
+  -- is `opted_out` the refusal's set is what the seat gets, AND NOTHING ELSE IS
+  -- ALLOWED TO STAND IN FOR IT (r6 R6-M1). This branch used to fall back to the
+  -- record's CONSENT set — COALESCE(NEW.opt_out_source, NEW.source) and three
+  -- siblings — justified as covering "the legacy rows minted before opt_out_*
+  -- existed". That population cannot exist: this same file creates the table
+  -- with all four opt_out_* columns (the CREATE below, restated as an ALTER for
+  -- the rerun path), so no database can hold a row of that shape. What the
+  -- fallback actually hit is a refusal that carries NO SOURCE OF ITS OWN — the
+  -- shape the shipped portal writes on purpose (use-coordination.ts writes
+  -- `opted_out` together with the not-asked columns, nulling source, evidence,
+  -- recorded_at, disclosure_version and recorded_by), the shape every pre-00432
+  -- row carries, and the shape the fold mints verbatim. On such a record
+  -- NEW.source is the studio's OWN fresh consent, written by
+  -- record_channel_reconsent(), so the fallback made the seat read
+  -- (opted_out, written, "Signed a fresh consent form…", recorded today):
+  -- R-Q's sentence off the seat became "Opted out in writing, 12 Sep 2026",
+  -- naming the studio's consent document as the refusal and dating the refusal
+  -- to the day the studio filed its paperwork. A seat that said nothing about
+  -- the refusal (honest) started asserting something false. Every writer that
+  -- mints a refusal WITH words fills opt_out_* — record_channel_consent's
+  -- opted_out branch and the inbound STOP rail both do — so a NULL here means
+  -- there were never any refusal words, and the seat's own standing value is
+  -- the fallback (never NULL over non-null, R-AN). disclosure_version has no
+  -- refusal-side twin — it belongs to the disclosure the person was shown, not
+  -- to how they refused — so it keeps coming from the record's own column.
   IF NEW.status = 'opted_out' THEN
-    v_seat_source      := COALESCE(NEW.opt_out_source,      NEW.source);
-    v_seat_evidence    := COALESCE(NEW.opt_out_evidence,    NEW.evidence);
-    v_seat_recorded_at := COALESCE(NEW.opt_out_recorded_at, NEW.recorded_at);
-    v_seat_recorded_by := COALESCE(NEW.opt_out_recorded_by, NEW.recorded_by);
+    v_seat_source      := NEW.opt_out_source;
+    v_seat_evidence    := NEW.opt_out_evidence;
+    v_seat_recorded_at := NEW.opt_out_recorded_at;
+    v_seat_recorded_by := NEW.opt_out_recorded_by;
   ELSE
     v_seat_source      := NEW.source;
     v_seat_evidence    := NEW.evidence;
@@ -821,10 +861,15 @@ COMMENT ON FUNCTION public.mirror_channel_consent_to_parties() IS
   '(the shape the inbound rail mints) cannot null the ones the portal recorded '
   '(R-AN). WHEN THE VERDICT IS `opted_out` THE SEAT GETS THE REFUSAL''S OWN '
   'EVIDENCE SET (opt_out_source / opt_out_evidence / opt_out_recorded_at / '
-  'opt_out_recorded_by), falling back to the studio''s set and then to what the '
-  'seat already holds: project_parties has ONE evidence set, and mirroring the '
-  'studio''s consent evidence under an opted_out status made the seat say the '
-  'refusal arrived the way the studio''s paperwork did (r9 R5-M1). '
+  'opt_out_recorded_by), AND NEVER THE STUDIO''S CONSENT SET IN ITS PLACE — '
+  'where the refusal has no words of its own the fallback is what the seat '
+  'already holds, never NEW.source/evidence (r6 R6-M1): project_parties has ONE '
+  'evidence set, and mirroring the studio''s consent evidence under an '
+  'opted_out status made the seat say the refusal arrived the way the studio''s '
+  'paperwork did (r9 R5-M1) — which, for the sourceless refusals the portal and '
+  'the fold really write, is every refusal on the books once '
+  'record_channel_reconsent() has put the studio''s fresh consent on the '
+  'record. '
   'disclosure_version has no refusal-side twin and always comes from the '
   'record. It also sets '
   'patina.suppress_consent_dispatch for the duration of its own UPDATE so a '

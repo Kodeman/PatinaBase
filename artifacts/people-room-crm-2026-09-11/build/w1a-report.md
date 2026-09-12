@@ -420,7 +420,15 @@ empty diff.
     source and words into that set (the winning row is the grant, so its words
     are not the refusal's); `record_channel_consent`'s `opted_out` branch and
     the inbound STOP rail write it; **`record_channel_reconsent` never touches
-    it** and the migration says so at the line. SQL blocks 3 (3c4/3c5), 4
+    it** and the migration says so at the line. **The refusal's DATE comes off
+    that same sibling** (r6 R6-M2): `opt_out_at` is
+    `COALESCE(r.sms_opt_out_at, f.sms_opt_out_at)`, the winning row's date or,
+    where the winner has none, the refusing sibling's. Taking it from the winner
+    alone minted the record saying "it arrived by text, it said Replied STOP, it
+    was written down on 2025-11-16" with the column that carries WHEN THEY
+    REFUSED empty — R-Q's sentence lost its date for exactly this population,
+    and the date test the write gate keeps alongside `refusal_unanswered` had
+    nothing to read on any record the fold mints. SQL blocks 3 (3c4/3c5/3c6), 4
     (4d/4d2/4d3) and 27 (27b3/27b4/27d2/27g).
 
 22. **A mirrored refusal carries the refusal's own words onto the seat, too**
@@ -437,16 +445,27 @@ empty diff.
     `mirror_channel_consent_to_parties()` now decides the seat's evidence from
     the verdict it is mirroring: when `NEW.status = 'opted_out'` the seat's
     `sms_consent_source` / `sms_consent_evidence` / `sms_consent_recorded_at` /
-    `sms_consent_recorded_by` come from `NEW.opt_out_*` first, then the record's
-    consent set (the legacy rows minted before those columns existed), then what
-    the seat already holds — never a NULL over a non-null (R-AN). The four
+    `sms_consent_recorded_by` come from `NEW.opt_out_*` and from nothing else,
+    falling back only to what the seat already holds — never a NULL over a
+    non-null (R-AN). The record's CONSENT set is **not** a fallback here (r6
+    R6-M1): it was, justified as covering "legacy rows minted before `opt_out_*`
+    existed", a population 00594 makes impossible because it creates the table
+    with all four columns. What that fallback really hit is the refusal with no
+    source of its own — what the shipped portal writes on purpose
+    (`use-coordination.ts` writes `opted_out` beside the not-asked columns),
+    what every pre-00432 row carries, and what the fold mints verbatim — where
+    `NEW.source` is the studio's own fresh consent from
+    `record_channel_reconsent()`. The seat went from saying nothing about the
+    refusal (honest) to reading (`opted_out`, `written`, "Signed a fresh consent
+    form…", recorded today). Every writer that mints a refusal WITH words fills
+    `opt_out_*`, so a NULL there means there were never any refusal words. The four
     precomputed values go into the tuple guard as well, or the write is
     suppressed as identical to what the seat already carries.
     `sms_consent_disclosure_version` has no refusal-side twin — it belongs to
     the disclosure the person was shown, not to how they refused — so it keeps
     coming from the record. The swap is scoped to refusals: a `granted` verdict
     mirrors the consent set as before. SQL blocks 4 (4d) and 27
-    (27c2/27c3/27d3/27h).
+    (27c2/27c3/27d3/27h/27i–27i5).
 
 ---
 
@@ -659,8 +678,9 @@ NOTICE:  24. the routed person is a person, in this studio (r6 M6-4): passed
 NOTICE:  25. the channel vocabulary is checked, both ways (r6 M6-5): passed
 NOTICE:  26. no studio-side verdict lowers refusal_unanswered (r7 M7-1): passed
 NOTICE:  27. reconsent is evidence-only and re-callable (r7 M7-2), leaves the
-         refusal's own evidence standing (r8 W4-M2), and the seat carries the
-         refusal's own words too (r9 R5-M1): passed
+         refusal's own evidence standing (r8 W4-M2), the seat carries the
+         refusal's own words too (r9 R5-M1), and a sourceless refusal is never
+         given the studio's consent as its words (r6 R6-M1): passed
 NOTICE:  All W1a assertions passed.
 ROLLBACK
 ```
@@ -742,7 +762,12 @@ are held to the seven-name channel vocabulary in both directions (25). Blocks
 stays re-callable, leaves the refusal's OWN evidence set untouched on the record
 (27b3/27b4/27d2/27g, r8 W4-M2) and leaves the refusal's own source and words on
 the SEAT (27c2/27d3, r9 R5-M1), while a later `granted` verdict mirrors the
-consent set onto the seat as before (27h).
+consent set onto the seat as before (27h). Block 27 also carries the r6 R6-M1
+case: the fold mints the shipped portal's SOURCELESS refusal verbatim, and a
+reconsent over it leaves the seat's source and words NULL rather than lending
+the refusal the studio's own consent document (27i–27i5); block 3 carries r6
+R6-M2 — the refusing sibling's own `sms_opt_out_at` lands on the record, so the
+refusal's words and the refusal's date come off the same row (3c6).
 
 ### Deno tests
 
@@ -915,6 +940,7 @@ deploys.)
   ```sql
   SELECT r.org, r.phone_e164, r.sms_consent_status,
          (f.org IS NOT NULL) AS refusal_unanswered,
+         COALESCE(r.sms_opt_out_at, f.sms_opt_out_at) AS opt_out_at,
          f.opt_out_source, f.opt_out_evidence, f.opt_out_recorded_at
     FROM ranked r
     LEFT JOIN refusal f ON f.org = r.org AND f.phone_e164 = r.phone_e164
@@ -922,16 +948,25 @@ deploys.)
    ORDER BY refusal_unanswered DESC, r.org, r.phone_e164;
   ```
 
+  `opt_out_at` — WHEN THEY REFUSED — is printed beside `opt_out_recorded_at`
+  (when it was written down) because those are two different facts and until
+  r6's R6-M2 the dry run showed only the second: the fold took `opt_out_at` from
+  the WINNING row while taking the refusal's words from the refusing sibling, so
+  on this very fixture the operator read a dated refusal off a row about to be
+  minted with none. The fold now takes both off the same row, and so does this
+  script.
+
   It runs clean locally (0 rows — no seeded party phones), and on the W4-M1
   fixture the two dry runs disagree, which is the point:
 
   ```
   -- two seats, one number, one studio: a clean 2026 grant and a legacy row
   -- reading `granted` while carrying an unanswered 2025-11-16 opt-out
-  NEW:  org=b0000000-…-000000000001  +16125550777  granted  refusal_unanswered=t
+  NEW:  org=b2000000-…-00000000000a  +16125550777  granted  refusal_unanswered=t
+        opt_out_at 2025-11-16 00:00:00+00
         inbound_sms | Replied STOP on the Rusk thread | 2025-11-16 00:00:00+00
         granted | unsendable 1 | records 1
-  OLD:  org=b0000000-…-000000000001  +16125550777  granted
+  OLD:  org=b2000000-…-00000000000a  +16125550777  granted
   ```
 
   The old dry run hands the operator a sendable-looking `granted`; the new one
