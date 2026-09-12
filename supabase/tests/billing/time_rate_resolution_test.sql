@@ -187,9 +187,19 @@
 -- EMPLOYER tier (role <> 'owner') first, then, only if she has no employer seat at
 -- all, the OWNED tier (role = 'owner'). EXACTLY ONE candidate in a tier prices; more
 -- than one is 'none', which the owner repairs by NAMING the studio on the project.
--- No rate-existence, seat-date, org-age, member-count or created_by key survives, and
--- no ORDER BY: W1-R10-02 (the date-blind rate-existence preference) dissolves with
--- the key rather than being repaired.
+-- No rate-existence, seat-date, org-age, member-count or created_by key CHOOSES
+-- BETWEEN STUDIOS, and no ORDER BY: W1-R10-02 (the date-blind rate-existence
+-- preference) dissolves with the key rather than being repaired.
+--   CORRECTED IN W2 ROUND 7: that sentence used to read "no … created_by key
+--   survives", flat. It is no longer true, and the difference matters. HT-3-e(2)
+--   (RULED 2026-09-12, migration 00615) makes `created_by` a test OF ONE ROW inside
+--   the studio HT-3-b has already chosen — a studio_member_rates row whose
+--   created_by IS its own user_id prices an hour ONLY where that person is that
+--   studio's OWNER. It ranks nothing and chooses nothing, which is what W1's
+--   deleted round-4 "arm's-length key" did (it preferred a candidate STUDIO holding
+--   a rate somebody else wrote, and W1-R5-02 measured that buyable with one
+--   signup). New case (ag) pins both halves, including the OWNER exemption that
+--   keeps HT-3-c's sole proprietor billing.
 --
 -- HT-3-c (RULED by the orchestrator 2026-09-12, arm (a)): a project whose designer
 -- NAMED its studio_id prices from that studio even when she owns it — a sole
@@ -230,6 +240,20 @@
 --        where the studio_id column is left NULL for HT-3-b to fill — so the
 --        green suite proved nothing about where real projects are born. 00603
 --        closes it for a designer with ONE employer seat.
+--
+-- W2 REVIEW ROUND 7 adds one case, and it is a RULING landing rather than a pin:
+--   (ag) HT-3-e(2) — the number she wrote for herself prices her hour only where
+--        she OWNS the studio. Measured before it (W2 round 7, probe P8): an `admin`
+--        of an HONEST employer writes her own 99900 on that employer's card with
+--        ONE account and ONE statement, and her next hour came back
+--        99900 / studio_member / 199800 where the owner had written 20000. Every
+--        candidate bound at the stamp was measured and failed, so the rule lives at
+--        the resolver. Five legs: her own row ignored ⇒ 'none' (ag1, with the
+--        resolver and the classifier agreeing), an hour inside the employer's own
+--        span still priced by the employer's row (ag2), the studio repairing it
+--        with one new row (ag3), THE OWNER'S OWN ROW STILL PRICING in the studio
+--        she owns (ag4 — the non-regression HT-3-c depends on), and the
+--        created_by-NULL branch recorded (ag5).
 --
 -- REVIEW ROUND 12 adds one case, PINNED not fixed:
 --   (af) W1-R12-01 — on that same LIVE path an AMBIGUOUS employer tier is NOT
@@ -4390,6 +4414,217 @@ BEGIN
     || ' / ' || COALESCE(v_vamt::text, 'NULL');
 
   RAISE NOTICE 'time_rate_resolution: case (af) passed — W1-R12-01 pinned on the live activation path with its control, HT-3-b arm (c) OWED and 00603''s ambiguous arm an OPEN SUB-QUESTION.';
+END
+$$;
+
+-- ─── (ag) HT-3-e(2) (RULED 2026-09-12, migration 00615): the number she wrote
+--          for herself prices her hour only where she OWNS the studio ──────────
+-- Three W2 review rounds measured the same taking: a member moves her own resolved
+-- rate to a number SHE set. Round 7 measured the ONE-ACCOUNT form (probe P8) — an
+-- `admin` of an HONEST employer satisfies studio_member_rates_admin_insert
+-- (is_org_admin_or_owner(studio_id) AND created_by = auth.uid()), so one statement
+-- puts her own 99900 on her employer's card and her next hour came back
+-- 99900 / 199800 where the owner had written 20000. Every bound at the STAMP was
+-- measured and failed (the stamp succeeds with zero rate rows and the number is
+-- written afterwards; the tier's only temporal witness is a column any People-room
+-- edit moves; and the same taking works in an organization she has never owned), so
+-- the rule is HERE, where the hour is priced.
+-- FOUR measurements, one per clause of the ruling, every write through RLS as the
+-- named actor:
+--   ag1  her own row, in a studio she does NOT own            → ignored ⇒ 'none'
+--   ag2  an hour inside the employer's OWN earlier span       → the employer's row
+--   ag3  the employer writes a new row over hers              → that row prices
+--   ag4  the OWNER's own row, in the studio she OWNS          → PRICES (HT-3-c's
+--        sole proprietor, untouched — the non-regression this ruling must keep)
+--   ag5  created_by NULL (a deleted author: profiles ON DELETE SET NULL)
+--        → PRICES, recorded rather than assumed
+INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, instance_id, aud, role)
+VALUES
+  ('b1300000-0000-4000-8000-000000000001', 'rate-e2-owner@test.invalid', '', NOW(), NOW(), NOW(),
+   '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('b1300000-0000-4000-8000-000000000002', 'rate-e2-admin@test.invalid', '', NOW(), NOW(), NOW(),
+   '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('b1300000-0000-4000-8000-000000000003', 'rate-e2-ghost@test.invalid', '', NOW(), NOW(), NOW(),
+   '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+
+INSERT INTO public.profiles (id, email, full_name, is_designer, created_at, updated_at)
+VALUES
+  ('b1300000-0000-4000-8000-000000000001', 'rate-e2-owner@test.invalid', 'Rate E2 Owner', false, NOW(), NOW()),
+  ('b1300000-0000-4000-8000-000000000002', 'rate-e2-admin@test.invalid', 'Rate E2 Admin', false, NOW(), NOW()),
+  ('b1300000-0000-4000-8000-000000000003', 'rate-e2-ghost@test.invalid', 'Rate E2 Ghost', false, NOW(), NOW())
+ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name, is_designer = false;
+
+INSERT INTO public.organizations (id, type, name, slug, status)
+VALUES ('b1300000-0000-4000-8000-0000000000a1', 'design_studio', 'E2 Studio', 'e2-studio-test', 'active');
+
+-- Seats FIRST, designer flips after, so 00295 provisions nothing: E2 Studio is the
+-- only studio any of them belongs to, and it is an EMPLOYER to the admin and the
+-- ghost while the owner owns it. One employer seat each ⇒ HT-3-b answers E2 Studio
+-- for every project below and no stamp is needed anywhere in this case.
+INSERT INTO public.organization_members (user_id, organization_id, role, status, joined_at)
+VALUES
+  ('b1300000-0000-4000-8000-000000000001', 'b1300000-0000-4000-8000-0000000000a1', 'owner',  'active', NOW()),
+  ('b1300000-0000-4000-8000-000000000002', 'b1300000-0000-4000-8000-0000000000a1', 'admin',  'active', NOW()),
+  ('b1300000-0000-4000-8000-000000000003', 'b1300000-0000-4000-8000-0000000000a1', 'member', 'active', NOW());
+
+UPDATE public.profiles SET is_designer = true
+ WHERE id IN ('b1300000-0000-4000-8000-000000000001',
+              'b1300000-0000-4000-8000-000000000002',
+              'b1300000-0000-4000-8000-000000000003');
+
+INSERT INTO public.projects (id, name, designer_id, created_by)
+VALUES
+  ('b1300000-0000-4000-8000-0000000000e1', 'E2 Admin House',
+   'b1300000-0000-4000-8000-000000000002', 'b1300000-0000-4000-8000-000000000002'),
+  ('b1300000-0000-4000-8000-0000000000e2', 'E2 Owner House',
+   'b1300000-0000-4000-8000-000000000001', 'b1300000-0000-4000-8000-000000000001'),
+  ('b1300000-0000-4000-8000-0000000000e3', 'E2 Ghost House',
+   'b1300000-0000-4000-8000-000000000003', 'b1300000-0000-4000-8000-000000000003');
+
+DO $$
+DECLARE
+  v_rate     INTEGER;
+  v_source   TEXT;
+  v_amount   INTEGER;
+  v_resolved INTEGER;
+  v_rsource  TEXT;
+BEGIN
+  ASSERT (SELECT studio_id FROM public.projects
+           WHERE id = 'b1300000-0000-4000-8000-0000000000e1')
+         = 'b1300000-0000-4000-8000-0000000000a1',
+    'FAIL ag0 (precondition, HT-3-b): each project must name E2 Studio, so the '
+    'studio is settled before tier 2 is reached and this case measures the ROW and '
+    'nothing else';
+
+  -- The studio prices her, properly, 30 days ago.
+  PERFORM pg_temp.assume_user('b1300000-0000-4000-8000-000000000001');
+  INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
+  VALUES ('b1300000-0000-4000-8000-0000000000a1', 'b1300000-0000-4000-8000-000000000002', 20000,
+          CURRENT_DATE - 30, 'b1300000-0000-4000-8000-000000000001');
+  PERFORM pg_temp.reset_role();
+
+  -- ── ag1: she writes her OWN number, 10 days ago. The write is ALLOWED (the
+  --    capability is W1's — studio_member_rates_admin_insert has no
+  --    self-exclusion, W2-R7-07) and the ROW does not price.
+  PERFORM pg_temp.assume_user('b1300000-0000-4000-8000-000000000002');
+  INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
+  VALUES ('b1300000-0000-4000-8000-0000000000a1', 'b1300000-0000-4000-8000-000000000002', 99900,
+          CURRENT_DATE - 10, 'b1300000-0000-4000-8000-000000000002');
+  INSERT INTO public.project_time_entries
+    (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('b1300000-0000-4000-8000-0000000000b1', 'b1300000-0000-4000-8000-0000000000e1',
+          'b1300000-0000-4000-8000-000000000002', NOW() - INTERVAL '2 hours', 120, true, 'manual_entry');
+  PERFORM pg_temp.reset_role();
+
+  SELECT hourly_rate_cents, rate_source, rated_amount_cents INTO v_rate, v_source, v_amount
+  FROM public.project_time_entries WHERE id = 'b1300000-0000-4000-8000-0000000000b1';
+  SELECT resolved.cents, resolved.source INTO v_resolved, v_rsource
+  FROM public.resolve_time_rate_cents(
+    'b1300000-0000-4000-8000-0000000000e1', 'b1300000-0000-4000-8000-000000000002',
+    NOW() - INTERVAL '2 hours', NULL) AS resolved;
+
+  ASSERT v_rate IS NULL AND v_source = 'none' AND v_amount IS NULL,
+    'FAIL ag1 (HT-3-e(2), THE RULING): the admin-designer''s own row (created_by = '
+    'user_id) must not price her hour in a studio she does not own. Measured before '
+    'this rule: 99900 / studio_member / 199800, with ONE account and one statement '
+    '(review round 7, probe P8). 00598''s ladder closed the owner''s 20000 at her '
+    'start date, so what is left for today is HT-26''s ''rate pending'' — an '
+    'UNPRICED hour the studio repairs with one rate row (ag3), never her number; '
+    'got ' || COALESCE(v_rate::text, 'NULL') || ' / ' || COALESCE(v_source, 'NULL')
+    || ' / ' || COALESCE(v_amount::text, 'NULL');
+  ASSERT v_resolved IS NULL AND v_rsource = 'none',
+    'FAIL ag1b: and the resolver must say the same thing the classifier wrote — one '
+    'rate chain, one answer (HT-1); resolver said '
+    || COALESCE(v_resolved::text, 'NULL') || ' / ' || COALESCE(v_rsource, 'NULL');
+
+  -- ── ag2: an hour dated inside the EMPLOYER's own span still prices at the
+  --    employer's number. "The next qualifying row, authored by someone else,
+  --    prices" — and a self-authored row cannot reach back and re-price the
+  --    history it closed.
+  PERFORM pg_temp.assume_user('b1300000-0000-4000-8000-000000000002');
+  INSERT INTO public.project_time_entries
+    (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('b1300000-0000-4000-8000-0000000000b2', 'b1300000-0000-4000-8000-0000000000e1',
+          'b1300000-0000-4000-8000-000000000002', NOW() - INTERVAL '20 days', 60, true, 'manual_entry');
+  PERFORM pg_temp.reset_role();
+  SELECT hourly_rate_cents, rate_source INTO v_rate, v_source
+  FROM public.project_time_entries WHERE id = 'b1300000-0000-4000-8000-0000000000b2';
+  ASSERT v_rate = 20000 AND v_source = 'studio_member',
+    'FAIL ag2 (HT-3-e(2), second clause): an hour inside the employer''s own span '
+    'must price at the 20000 its owner wrote — the filter ignores ROWS by '
+    'authorship, not studios. If this comes back ''none'', the rule is unpricing '
+    'priced history; got ' || COALESCE(v_rate::text, 'NULL') || ' / '
+    || COALESCE(v_source, 'NULL');
+
+  -- ── ag3: the studio writes its own number over hers, and the next hour prices.
+  --    The cost of this ruling to an honest studio is one rate row.
+  PERFORM pg_temp.assume_user('b1300000-0000-4000-8000-000000000001');
+  INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
+  VALUES ('b1300000-0000-4000-8000-0000000000a1', 'b1300000-0000-4000-8000-000000000002', 21000,
+          CURRENT_DATE, 'b1300000-0000-4000-8000-000000000001');
+  PERFORM pg_temp.reset_role();
+  PERFORM pg_temp.assume_user('b1300000-0000-4000-8000-000000000002');
+  INSERT INTO public.project_time_entries
+    (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('b1300000-0000-4000-8000-0000000000b3', 'b1300000-0000-4000-8000-0000000000e1',
+          'b1300000-0000-4000-8000-000000000002', NOW() - INTERVAL '1 hour', 60, true, 'manual_entry');
+  PERFORM pg_temp.reset_role();
+  SELECT hourly_rate_cents, rate_source INTO v_rate, v_source
+  FROM public.project_time_entries WHERE id = 'b1300000-0000-4000-8000-0000000000b3';
+  ASSERT v_rate = 21000 AND v_source = 'studio_member',
+    'FAIL ag3 (HT-3-e(2), the repair): once the studio writes its own row, the hour '
+    'prices again — an unpriced member is a state the studio can fix on the '
+    'settings page, which is where HT-3 put the rate in the first place; got '
+    || COALESCE(v_rate::text, 'NULL') || ' / ' || COALESCE(v_source, 'NULL');
+
+  -- ── ag4: THE NON-REGRESSION. The OWNER writes her own rate in the studio she
+  --    OWNS and it PRICES her hour — HT-3-a arm (a) and HT-3-c's sole proprietor,
+  --    the shape the ruling's `role = 'owner'` exemption exists for. Break this and
+  --    every one-person studio in the product stops billing.
+  PERFORM pg_temp.assume_user('b1300000-0000-4000-8000-000000000001');
+  INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
+  VALUES ('b1300000-0000-4000-8000-0000000000a1', 'b1300000-0000-4000-8000-000000000001', 45000,
+          CURRENT_DATE - 30, 'b1300000-0000-4000-8000-000000000001');
+  INSERT INTO public.project_time_entries
+    (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('b1300000-0000-4000-8000-0000000000b4', 'b1300000-0000-4000-8000-0000000000e2',
+          'b1300000-0000-4000-8000-000000000001', NOW() - INTERVAL '2 hours', 120, true, 'manual_entry');
+  PERFORM pg_temp.reset_role();
+  SELECT hourly_rate_cents, rate_source, rated_amount_cents INTO v_rate, v_source, v_amount
+  FROM public.project_time_entries WHERE id = 'b1300000-0000-4000-8000-0000000000b4';
+  ASSERT v_rate = 45000 AND v_source = 'studio_member' AND v_amount = 90000,
+    'FAIL ag4 (HT-3-e(2)''s OWNER EXEMPTION — the non-regression): a studio OWNER''s '
+    'own rate row must still price her own hours (HT-3-a arm (a), HT-3-c''s sole '
+    'proprietor). She is the party the studio''s money belongs to; there is nobody '
+    'else to write her number. A ''none'' here means the rule was written as "no '
+    'self-authored row prices" and every one-person studio stopped billing; got '
+    || COALESCE(v_rate::text, 'NULL') || ' / ' || COALESCE(v_source, 'NULL') || ' / '
+    || COALESCE(v_amount::text, 'NULL');
+
+  -- ── ag5: created_by NULL prices, recorded rather than assumed. The only writer
+  --    of NULL is `created_by uuid REFERENCES profiles(id) ON DELETE SET NULL` —
+  --    a deleted author — and 00598's freeze guard lets an actor re-stamp
+  --    created_by only with her OWN id, so NULL is not a value a member can choose
+  --    for a row of her own. Inserted as the fixture (postgres), which is how a
+  --    row with a deleted author looks after the fact.
+  INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
+  VALUES ('b1300000-0000-4000-8000-0000000000a1', 'b1300000-0000-4000-8000-000000000003', 19000,
+          CURRENT_DATE - 30, NULL);
+  PERFORM pg_temp.assume_user('b1300000-0000-4000-8000-000000000003');
+  INSERT INTO public.project_time_entries
+    (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('b1300000-0000-4000-8000-0000000000b5', 'b1300000-0000-4000-8000-0000000000e3',
+          'b1300000-0000-4000-8000-000000000003', NOW() - INTERVAL '2 hours', 60, true, 'manual_entry');
+  PERFORM pg_temp.reset_role();
+  SELECT hourly_rate_cents, rate_source INTO v_rate, v_source
+  FROM public.project_time_entries WHERE id = 'b1300000-0000-4000-8000-0000000000b5';
+  ASSERT v_rate = 19000 AND v_source = 'studio_member',
+    'FAIL ag5 (HT-3-e(2), the NULL branch — RECORDED): a row whose author has been '
+    'deleted (created_by NULL) is not self-authorship and prices. The clause is '
+    '`created_by IS DISTINCT FROM user_id`, so NULL passes it; got '
+    || COALESCE(v_rate::text, 'NULL') || ' / ' || COALESCE(v_source, 'NULL');
+
+  RAISE NOTICE 'time_rate_resolution: case (ag) passed — HT-3-e(2): her own number prices only where she owns the studio, and the owner''s own row still prices.';
 END
 $$;
 
