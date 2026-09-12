@@ -1,0 +1,28 @@
+Pager usage is off.
+BEGIN
+psql:/Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/artifacts/people-room-crm-2026-09-11/build/probe112-w1b-final-r5-pr-n-by-role.sql:5: ERROR:  invalid input syntax for type uuid: "cc000000-0000-4000-8000-0000000000m1"
+LINE 2: VALUES ('cc000000-0000-4000-8000-0000000000m1','plainmember@...
+                ^
+ROLLBACK
+BEGIN
+INSERT 0 1
+INSERT 0 0
+INSERT 0 1
+SET
+SET
+ member | admin | comember 
+--------+-------+----------
+ t      | f     | t
+(1 row)
+
+=== Y. PR-n as a PLAIN MEMBER ===
+psql:/Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/artifacts/people-room-crm-2026-09-11/build/probe112-w1b-final-r5-pr-n-by-role.sql:44: NOTICE:  Y1 selections REFUSED: duplicate key value violates unique constraint "idx_project_party_authority_open"
+psql:/Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/artifacts/people-room-crm-2026-09-11/build/probe112-w1b-final-r5-pr-n-by-role.sql:44: NOTICE:  Y2 money REFUSED: new row violates row-level security policy for table "project_party_authority" (42501)
+psql:/Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/artifacts/people-room-crm-2026-09-11/build/probe112-w1b-final-r5-pr-n-by-role.sql:44: NOTICE:  Y3 draw_certify REFUSED: new row violates row-level security policy for table "project_party_authority" (42501)
+psql:/Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/artifacts/people-room-crm-2026-09-11/build/probe112-w1b-final-r5-pr-n-by-role.sql:44: NOTICE:  Y4 escalation REFUSED: new row violates row-level security policy for table "project_party_authority" (42501)
+DO
+=== Y5. as the OWNER, money lands ===
+SET
+psql:/Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/artifacts/people-room-crm-2026-09-11/build/probe112-w1b-final-r5-pr-n-by-role.sql:56: NOTICE:  Y5 money as owner: LANDED (correct)
+DO
+ROLLBACK

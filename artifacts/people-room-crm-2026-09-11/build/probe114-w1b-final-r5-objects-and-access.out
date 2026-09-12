@@ -1,0 +1,124 @@
+Pager usage is off.
+=== 1. relations: kind, RLS, policy count, grants ===
+           relname           | relkind | rls | policies | auth_sel | anon_sel | auth_ins 
+-----------------------------+---------+-----+----------+----------+----------+----------
+ people_directory            | v       | f   |        0 | t        | t        | t
+ people_directory_seats      | v       | f   |        0 | t        | f        | t
+ project_party_authority     | r       | t   |        4 | t        | f        | t
+ project_site_access_cards   | r       | t   |        4 | t        | f        | t
+ studio_compliance_documents | r       | t   |        4 | t        | f        | t
+ v_access_grants             | v       | f   |        0 | t        | f        | t
+(6 rows)
+
+=== 2. PR-r: no code-like column on the site access card ===
+ code_like_columns 
+-------------------
+                 0
+(1 row)
+
+=== 3. PR-w: the site access card policies, roles and predicates ===
+                 polname                 | polcmd |      roles      |                    using_expr                    |                    check_expr                    
+-----------------------------------------+--------+-----------------+--------------------------------------------------+--------------------------------------------------
+ project_site_access_cards_studio_delete | d      | {authenticated} | is_studio_comember(project_designer(project_id)) | 
+ project_site_access_cards_studio_insert | a      | {authenticated} |                                                  | is_studio_comember(project_designer(project_id))
+ project_site_access_cards_studio_select | r      | {authenticated} | is_studio_comember(project_designer(project_id)) | 
+ project_site_access_cards_studio_update | w      | {authenticated} | is_studio_comember(project_designer(project_id)) | is_studio_comember(project_designer(project_id))
+(4 rows)
+
+=== 4. PR-n: the authority write policies ===
+                polname                | polcmd | using_gate | check_gate 
+---------------------------------------+--------+------------+------------
+ project_party_authority_studio_delete | d      | t          | 
+ project_party_authority_studio_insert | a      |            | t
+ project_party_authority_studio_select | r      | f          | 
+ project_party_authority_studio_update | w      | t          | t
+(4 rows)
+
+=== 5. every new function: definer? volatility? search_path? acl ===
+               proname               |   sec   | vol |                     cfg                     |                  acl                  
+-------------------------------------+---------+-----+---------------------------------------------+---------------------------------------
+ access_grants_invoice_links         | definer | s   | {search_path=public}                        | {postgres,authenticated,service_role}
+ access_grants_plan_transmittals     | definer | s   | {search_path=public}                        | {postgres,authenticated,service_role}
+ access_grants_trade_agreement_links | definer | s   | {search_path=public}                        | {postgres,authenticated,service_role}
+ access_grants_trade_rfq             | definer | s   | {search_path=public}                        | {postgres,authenticated,service_role}
+ assert_compliance_holder            | definer | v   | {search_path=public}                        | {postgres,service_role}
+ assert_party_authority_copy_to      | definer | v   | {search_path=public}                        | {postgres,service_role}
+ assert_project_party_cards          | definer | v   | {search_path=public}                        | {postgres,service_role}
+ assert_site_access_key_holder       | definer | v   | {search_path=public}                        | {postgres,service_role}
+ compliance_state                    | INVOKER | s   | {search_path=public}                        | {postgres,authenticated,service_role}
+ contact_rule_summary                | INVOKER | s   | {search_path=public}                        | {postgres,authenticated,service_role}
+ create_field_link                   | definer | v   | {"search_path=public, extensions, pg_temp"} | {postgres,authenticated,service_role}
+ create_field_link                   | definer | v   | {"search_path=public, extensions, pg_temp"} | {postgres,authenticated,service_role}
+ identity_consent_evidence           | INVOKER | s   | {search_path=public}                        | {postgres,authenticated,service_role}
+ identity_consent_status             | INVOKER | s   | {search_path=public}                        | {postgres,authenticated,service_role}
+ identity_paper_state                | INVOKER | s   | {search_path=public}                        | {postgres,authenticated,service_role}
+ identity_phone_numbers              | definer | s   | {search_path=public}                        | {postgres,authenticated,service_role}
+ identity_seat_count                 | INVOKER | s   | {search_path=public}                        | {postgres,authenticated,service_role}
+ party_identity_key                  | INVOKER | i   |                                             | {postgres,authenticated,service_role}
+ party_kind_in_directory             | INVOKER | i   |                                             | {postgres,authenticated,service_role}
+ project_designer                    | definer | s   | {search_path=public}                        | {postgres,authenticated,service_role}
+ project_party_org                   | definer | s   | {search_path=public}                        | {postgres,authenticated,service_role}
+ reach_state_for                     | INVOKER | s   | {search_path=public}                        | {postgres,authenticated,service_role}
+ reach_state_for_identity            | INVOKER | s   | {search_path=public}                        | {postgres,authenticated,service_role}
+(23 rows)
+
+=== 6. people_directory column order and types ===
+ ordinal_position |     column_name      |        data_type         
+------------------+----------------------+--------------------------
+                1 | person_id            | uuid
+                2 | role                 | text
+                3 | display_name         | text
+                4 | email                | text
+                5 | phone                | text
+                6 | profile_id           | uuid
+                7 | project_id           | uuid
+                8 | designer_id          | uuid
+                9 | status_raw           | text
+               10 | last_touch_at        | timestamp with time zone
+               11 | meta                 | jsonb
+               12 | scope                | text
+               13 | reach_state          | text
+               14 | consent_status       | text
+               15 | paper_state          | text
+               16 | contact_rule_summary | text
+               17 | seat_count           | integer
+(17 rows)
+
+=== 7. the freeze trigger column list ===
+             tgname              |                                                                                             cols                                                                                             
+---------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ assert_project_party_cards_trg  | {project_id,company_id,warranty_contact_person_id}
+ fc_optin_invite_dispatch        | {}
+ normalize_phone_project_parties | {}
+ refuse_legacy_consent_write_trg | {phone,phone_e164,sms_consent_status,sms_consented_at,sms_opt_out_at,sms_consent_source,sms_consent_evidence,sms_consent_recorded_at,sms_consent_recorded_by,sms_consent_disclosure_version}
+ set_updated_at_project_parties  | {}
+(5 rows)
+
+=== 8. stage backfill: completed projects vs stages ===
+  status   |    stage    | count 
+-----------+-------------+-------
+ active    | active      |    13
+ active    | awarded     |     9
+ active    | no_response |     1
+ active    | off_job     |     1
+ completed | warranty    |     7
+(5 rows)
+
+=== 9. v_access_grants tiers ===
+psql:/Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/artifacts/people-room-crm-2026-09-11/build/probe114-w1b-final-r5-objects-and-access.sql:67: WARNING:  SET LOCAL can only be used in transaction blocks
+SET
+psql:/Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/artifacts/people-room-crm-2026-09-11/build/probe114-w1b-final-r5-objects-and-access.sql:68: WARNING:  SET LOCAL can only be used in transaction blocks
+SET
+      tier      | count 
+----------------+-------
+ client_account |     5
+ field_link     |     6
+ studio_member  |     5
+(3 rows)
+
+ grant_ids_that_look_like_a_hash 
+---------------------------------
+                               0
+(1 row)
+
+RESET

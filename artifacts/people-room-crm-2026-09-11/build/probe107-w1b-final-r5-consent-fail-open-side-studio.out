@@ -1,0 +1,56 @@
+Pager usage is off.
+BEGIN
+INSERT 0 1
+INSERT 0 0
+INSERT 0 1
+INSERT 0 1
+=== the record, as postgres ===
+           organization_id            | channel_value |  status   |  verdict  
+--------------------------------------+---------------+-----------+-----------
+ b0000000-0000-0000-0000-000000000001 | +16125550112  | opted_out | opted_out
+ b0000000-0000-0000-0000-000000000001 | +16125550219  | opted_out | opted_out
+(2 rows)
+
+SET
+SET
+=== the side-studio member: co-member of the Local Dev designer, NOT a member of Local Dev Studio ===
+ comember_of_the_designer | member_of_local_dev_studio 
+--------------------------+----------------------------
+ t                        | f
+(1 row)
+
+=== and yet they read 31 of Local Dev Studio seat rows ===
+ seat_rows_they_read 
+---------------------
+                  31
+(1 row)
+
+=== the word they read, over a record that says opted_out ===
+  display_name   | role | status_raw | consent_status | meta_word 
+-----------------+------+------------+----------------+-----------
+ Rivera Finishes | sub  | not_asked  | not_asked      | not_asked
+(1 row)
+
+  display_name   |  phone_e164  | consent_status 
+-----------------+--------------+----------------
+ Pete Rusk       | +16125550112 | not_asked
+ Pete Rusk       | +16125550112 | not_asked
+ Rivera Finishes | +16125550219 | not_asked
+(3 rows)
+
+=== the control: the OWNER of Local Dev Studio reads the record honestly ===
+SET
+  display_name   |  role   | status_raw | consent_status 
+-----------------+---------+------------+----------------
+ Rivera Finishes | contact | active     | opted_out
+ Rivera Finishes | sub     | opted_out  | opted_out
+(2 rows)
+
+  display_name   |  phone_e164  | consent_status 
+-----------------+--------------+----------------
+ Pete Rusk       | +16125550112 | opted_out
+ Pete Rusk       | +16125550112 | opted_out
+ Rivera Finishes | +16125550219 | opted_out
+(3 rows)
+
+ROLLBACK
