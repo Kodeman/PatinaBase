@@ -137,8 +137,22 @@ BEGIN
     COALESCE(sum(keyed.duration_minutes) FILTER (WHERE keyed.billable), 0)::integer,
     COALESCE(sum(keyed.amount_cents) FILTER (WHERE keyed.billable), 0)::bigint,
     -- Internal time as the schema can express it today: W0's `source = 'internal'`
-    -- value (00595) and W4's project-less row, whose NULL leg is already here so
-    -- that W4 needs no edit to this function.
+    -- value (00595). The `project_id IS NULL` leg is a FAIL-SAFE, not a feature —
+    -- corrected in review round 4 (W2-R4-09), where the comment here claimed that
+    -- "W4 needs no edit to this function" and that claim was false: the `scoped`
+    -- CTE filters `ledger.studio_id = p_studio_id`, and time_entry_ledger's
+    -- studio_id is project_pricing_studio_id(te.project_id), which is NULL for a
+    -- NULL project_id (00604) — so a project-less row cannot enter this rollup at
+    -- all, whatever this FILTER says. W4 MUST edit this function (and the `scoped`
+    -- CTE, with an OR leg on the row's own studio_id column) when
+    -- project_time_entries.studio_id lands (W4 00611); the leg is kept only so
+    -- that the arithmetic is right on the day it does.
+    --
+    -- W2-R4-12, stated so lane B does not derive the internal group by
+    -- subtraction: billable_minutes/billable_cents and internal_minutes can count
+    -- the SAME row (nothing forbids `source = 'internal'` with `billable = true`),
+    -- while total_minutes counts it once. A bucket may therefore read
+    -- total 60 / billable 60 / internal 60.
     COALESCE(sum(keyed.duration_minutes)
       FILTER (WHERE keyed.source = 'internal' OR keyed.project_id IS NULL), 0)::integer
   FROM keyed

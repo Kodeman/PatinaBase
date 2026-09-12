@@ -30,6 +30,15 @@
 --       HT-3-a), never on the designer's membership set. The INSERT itself is
 --       asserted to SUCCEED — it is the attacker's one move, and if it ever stops
 --       succeeding this case is measuring the wrong thing.
+--   (j) HT-23'S TRACE IS NOT CALLER-SUPPLIED (W2 review round 4, finding W2-R4-07,
+--       measured): the author of a brand-new row may not name somebody else as
+--       its last editor. `updated_by` was in neither of
+--       guard_commercial_time_entry_derived_fields' two lists, so an ordinary
+--       member INSERTed her own hour with `updated_by` = the studio owner's id and
+--       the never-edited row read as though he had touched it — a forged trace on
+--       exactly the rows no audit_logs row exists for (the audit trigger fires on
+--       UPDATE and DELETE only). 00605 now refuses it on INSERT; the UPDATE half
+--       was never open, because the stamp trigger overwrites whatever is sent.
 --
 -- How to run:
 --   psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 \
@@ -480,6 +489,50 @@ BEGIN
     'written elsewhere can move it; got ' || COALESCE(v_pricing::text, 'NULL');
 
   RAISE NOTICE 'time_entry_admin_write: case (i) passed — the self-grant buys nothing.';
+END
+$$;
+
+-- ─── (j) the trace may not be forged on INSERT (W2-R4-07) ───────────────────
+DO $$
+DECLARE
+  v_state   text;
+  v_updated uuid;
+BEGIN
+  PERFORM pg_temp.assume_user('c6050000-0000-4000-8000-000000000003');
+
+  v_state := NULL;
+  BEGIN
+    INSERT INTO project_time_entries (id, project_id, user_id, started_at, duration_minutes, billable, source, updated_by)
+    VALUES ('c6050000-0000-4000-8000-0000000000b4', 'c6050000-0000-4000-8000-0000000000e1',
+            'c6050000-0000-4000-8000-000000000003', NOW() - INTERVAL '6 hours', 30, true,
+            'manual_entry', 'c6050000-0000-4000-8000-000000000002');
+  EXCEPTION WHEN OTHERS THEN v_state := SQLSTATE;
+  END;
+
+  -- The ordinary INSERT, without the forgery, must still work and must leave the
+  -- trace empty: a new row has no editor (00605's column COMMENT).
+  INSERT INTO project_time_entries (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('c6050000-0000-4000-8000-0000000000b5', 'c6050000-0000-4000-8000-0000000000e1',
+          'c6050000-0000-4000-8000-000000000003', NOW() - INTERVAL '7 hours', 30, true, 'manual_entry');
+  SELECT updated_by INTO v_updated FROM project_time_entries
+   WHERE id = 'c6050000-0000-4000-8000-0000000000b5';
+  PERFORM pg_temp.reset_role();
+
+  ASSERT v_state = '23514',
+    'FAIL j1 (W2-R4-07, measured): a caller-supplied updated_by must be REFUSED on '
+    'INSERT, the same way rate_source and rated_amount_cents are. Without it the '
+    'author of a row nobody has ever edited names any profile as its last editor, '
+    'and HT-23''s trace is a lie precisely where no audit_logs row exists to '
+    'contradict it (the audit trigger fires on UPDATE and DELETE only); got '
+    || COALESCE(v_state, 'NO RAISE');
+  ASSERT NOT EXISTS (SELECT 1 FROM project_time_entries
+                      WHERE id = 'c6050000-0000-4000-8000-0000000000b4'),
+    'FAIL j2: the refused INSERT must leave no row behind';
+  ASSERT v_updated IS NULL,
+    'FAIL j3: an ordinary INSERT must still succeed and leave updated_by NULL — a '
+    'new row has no editor; got ' || COALESCE(v_updated::text, 'NULL');
+
+  RAISE NOTICE 'time_entry_admin_write: case (j) passed — the trace cannot be forged.';
 END
 $$;
 

@@ -62,14 +62,19 @@
 --       authenticated caller could write projects.studio_id after the row
 --       existed, and the read was permanently absent rather than conditionally
 --       so. 00606 section (4) ships the act — `public.stamp_project_pricing_studio`
---       — callable by the project's designer for a studio that EMPLOYS her (and
---       for one she owns only where she holds no employer seat at all — W2-R3-02),
---       or by an owner/admin of a studio that already holds another project that
---       designer both LEADS AND CREATED (W2-R3-01: `reassign_project_lead` lets an
---       outsider manufacture the lead, but not `created_by`). Not by an owner/admin
---       on the strength of the designer's seat alone: that is this banner's own
---       B1 predicate, and with the stamp behind it an attacker moves the pricing
---       studio permanently.
+--       — whose standing is HT-3-d (RULED 2026-09-12): the studio named must sit
+--       inside the project DESIGNER's own HT-3-b tier at call time (a studio that
+--       EMPLOYS her while she holds any employer seat; one she OWNS only where she
+--       holds none), and the caller must be an OWNER or ADMIN of that studio —
+--       plus, where that caller is not the designer herself, a studio that already
+--       holds another project the designer both LEADS AND CREATED (W2-R3-01:
+--       `reassign_project_lead` lets an outsider manufacture the lead, but not
+--       `created_by`). Not by an owner/admin on the strength of the designer's
+--       seat alone: that is this banner's own B1 predicate, and with the stamp
+--       behind it an attacker moves the pricing studio permanently. Not by the
+--       designer on the strength of being the designer either (W2-R4-02), and not
+--       by an account she seats as admin in her own workspace (W2-R4-01 — the tier
+--       bound is a property of the designer/studio pair, not of the actor).
 -- (iii) RLS and the resolver now key on the SAME studio, so the divergence this
 --       banner previously described (an adjust the policy allowed and 00601's
 --       resolver then refused with insufficient_privilege) no longer exists.
@@ -90,9 +95,14 @@
 -- admin inserted FOR a member seats nobody and resolves no role rate at all.
 -- Such a path must seat the member deliberately, in the same statement.
 --
--- Lineage: NEW column, NEW policies, NEW functions and triggers. Nothing is
--- redefined. P-4: no existing row is rewritten; `updated_by` lands NULL on
--- every row that exists and is stamped from the first edit onward.
+-- Lineage: NEW column, NEW policies, NEW functions and triggers — plus ONE
+-- redefinition, `guard_commercial_time_entry_derived_fields`
+-- (00412 → 00600 → HERE), whose body is 00600's verbatim with a single INSERT
+-- refusal added: the `updated_by` column this file creates must not be supplied
+-- by the caller (W2-R4-07, measured — an author INSERTed her own row with
+-- `updated_by` = the studio owner's id and the never-edited row then read as
+-- though he had touched it). P-4: no existing row is rewritten; `updated_by`
+-- lands NULL on every row that exists and is stamped from the first edit onward.
 --
 -- Adds GRANT/REVOKE → supabase/seed/00-legacy-grants.sql is regenerated
 -- (`python3 scripts/generate-legacy-grants.py`, plan-v2 §0.20).
@@ -134,6 +144,73 @@ DROP TRIGGER IF EXISTS zzz_stamp_time_entry_updated_by_trg ON public.project_tim
 CREATE TRIGGER zzz_stamp_time_entry_updated_by_trg
 BEFORE UPDATE ON public.project_time_entries
 FOR EACH ROW EXECUTE FUNCTION public.stamp_time_entry_updated_by();
+
+-- ── (1b) the trace is not caller-supplied either (W2-R4-07) ────────────────
+-- `guard_commercial_time_entry_derived_fields` (00412 → 00600 → here) already
+-- refuses caller-supplied `rate_source` / `rated_amount_cents` / `invoice_id` on
+-- INSERT. `updated_by` is the same kind of column — a server-stamped fact about
+-- who last touched the row — and it was NOT in either of the guard's two lists,
+-- so HT-23's trace could be a lie on a row nobody had ever edited. Measured as
+-- the author, a plain member: `INSERT … updated_by = <the studio owner's id>`
+-- succeeded and the row read `updated_by = <the owner>`. On UPDATE the stamp
+-- trigger above overwrites whatever a caller sends, so only the INSERT was open.
+-- The body below is 00600's verbatim; the delta is the one refusal.
+CREATE OR REPLACE FUNCTION public.guard_commercial_time_entry_derived_fields()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  -- Canonical SECURITY DEFINER rails (classifier and addendum promotion) run as
+  -- postgres. Browser/table writes may edit source facts such as duration and
+  -- notes, but never the commercial classification derived from those facts.
+  IF current_user IS NOT DISTINCT FROM 'postgres' THEN RETURN NEW; END IF;
+
+  -- Invoice attachment is a server transition, never caller-supplied creation
+  -- state. Reject it before the classifier can derive the rest of the row.
+  IF TG_OP = 'INSERT' THEN
+    IF NEW.invoice_id IS NOT NULL THEN
+      RAISE EXCEPTION 'time entries cannot be created already attached to an invoice'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    -- HT-1 (§0.7c): provenance is the server's, on every project kind. The rate
+    -- itself is discarded by the classifier rather than refused (see the banner).
+    IF NEW.rate_source IS NOT NULL OR NEW.rated_amount_cents IS NOT NULL THEN
+      RAISE EXCEPTION 'time entry rate provenance and rated amount are server-derived'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    -- HT-23 / W2-R4-07: the trace is the server's too. A new row has no editor.
+    IF NEW.updated_by IS NOT NULL THEN
+      RAISE EXCEPTION 'time entry edit trace is server-derived'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  -- HT-1 (§0.7b): 00412 returned here for every non-design-services project,
+  -- which left rate, amount, billing state and provenance caller-editable on
+  -- exactly the project kind HT-1 was ruled about. The exit is gone.
+
+  IF OLD.billing_authority_id IS NOT NULL
+     AND NEW.project_id IS DISTINCT FROM OLD.project_id THEN
+    RAISE EXCEPTION 'bound commercial time entries cannot change projects'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF NEW.billing_authority_id IS DISTINCT FROM OLD.billing_authority_id
+     OR NEW.authority_rate_id IS DISTINCT FROM OLD.authority_rate_id
+     OR NEW.hourly_rate_cents IS DISTINCT FROM OLD.hourly_rate_cents
+     OR NEW.rated_amount_cents IS DISTINCT FROM OLD.rated_amount_cents
+     OR NEW.billing_state IS DISTINCT FROM OLD.billing_state
+     OR NEW.rate_source IS DISTINCT FROM OLD.rate_source
+     OR NEW.rate_role IS DISTINCT FROM OLD.rate_role
+  THEN
+    RAISE EXCEPTION 'commercial time authority, rate, amount, billing state, and rate provenance are server-derived'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NEW;
+END;
+$$;
 
 -- ── (2) the audit row ──────────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION public.audit_time_entry_change()
@@ -328,6 +405,25 @@ BEGIN
       AND polpermissive
       AND polroles = ARRAY[to_regrole('authenticated')::oid]
   ), '00605: both new write policies must exist, permissive, TO authenticated';
+
+  -- The trace column is not caller-supplied (W2-R4-07). Pinned by source because
+  -- the column is new here and the guard's two lists are what §0.8 freezes.
+  ASSERT (
+    SELECT prosrc LIKE '%NEW.updated_by IS NOT NULL%'
+    FROM pg_proc
+    WHERE oid = to_regprocedure('public.guard_commercial_time_entry_derived_fields()')
+  ), '00605: guard_commercial_time_entry_derived_fields must refuse a '
+     'caller-supplied updated_by on INSERT (W2-R4-07, measured) — without it the '
+     'author of a row nobody has ever edited can name any profile as its last '
+     'editor, and HT-23''s trace is a lie on exactly the rows no audit row exists '
+     'for';
+  ASSERT (
+    SELECT prosrc LIKE '%rate_source IS NOT NULL OR NEW.rated_amount_cents IS NOT NULL%'
+       AND prosrc LIKE '%rate_role IS DISTINCT FROM OLD.rate_role%'
+    FROM pg_proc
+    WHERE oid = to_regprocedure('public.guard_commercial_time_entry_derived_fields()')
+  ), '00605: the redefinition above must keep 00600''s own two lists intact — it '
+     'grafts one INSERT refusal onto that body and changes nothing else (§0.8)';
 
   -- The invoiced lock is untouched (§0.12).
   ASSERT 1 = (
