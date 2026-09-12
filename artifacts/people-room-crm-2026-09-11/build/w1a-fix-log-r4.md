@@ -543,3 +543,215 @@ No `GRANT` or `REVOKE` was added or removed. `python3
 scripts/generate-legacy-grants.py` was re-run anyway and
 `supabase/seed/00-legacy-grants.sql` came back byte-identical (`git diff --stat`
 empty).
+
+---
+
+# Round 4 (r4 review) — R4-M1 and R4-M2
+
+Two findings handed to this pass, from
+`w1a-review-r4-migrations.md`. Nothing else was changed. Local Supabase only —
+no `supabase db push`, no `supabase functions deploy`, no Strata contact.
+`apps/designer-portal/.env.local` → **does not exist** (checked before the
+reset), so no prod-pointing env could be read.
+
+---
+
+## R4-M1 — the fold took the refusal's words off a row that is not a refusal
+
+`supabase/migrations/00594_studio_channel_consent.sql`
+(`backfill_channel_consent_from_parties()`, the `refusal` CTE),
+`supabase/tests/people/w1a_identity_channels_consent_test.sql` (3c4, new 30e),
+`artifacts/people-room-crm-2026-09-11/build/probe10-r9-fold-dry-run.sql`,
+new `probe21-r4-M1-negative-control.sql`.
+
+### What changed
+
+1. **The projection.** All four `opt_out_*` columns are now taken only from a
+   row whose status IS the refusal:
+
+```sql
+           CASE WHEN sms_consent_status = 'opted_out'
+                THEN sms_consent_source      END AS opt_out_source,
+           CASE WHEN sms_consent_status = 'opted_out'
+                THEN sms_consent_evidence    END AS opt_out_evidence,
+           CASE WHEN sms_consent_status = 'opted_out'
+                THEN sms_consent_recorded_at END AS opt_out_recorded_at,
+           CASE WHEN sms_consent_status = 'opted_out'
+                THEN sms_consent_recorded_by END AS opt_out_recorded_by
+```
+
+   The r8 W4-M1 shape — status `granted` (or `pending`) carrying an unanswered
+   opt-out date — is still admitted by the CTE's second disjunct, because its
+   *date* is a real refusal date and is still what raises
+   `refusal_unanswered`. But its single evidence set belongs to whatever wrote
+   its current status — the grant — so it now yields NULL, which reads
+   downstream as the wordless refusal it is and lets R-AQ's mirror branch fire.
+
+2. **The ordering leg** asks the same question, in the same `CASE … THEN 0 ELSE
+   1 END` shape `ranked` already uses (also NULL-safe, though
+   `sms_consent_status` is `NOT NULL DEFAULT 'not_asked'`):
+
+```sql
+                 ORDER BY CASE WHEN sms_consent_status = 'opted_out'
+                                AND sms_consent_source IS NOT NULL
+                               THEN 0 ELSE 1 END,
+                          (sms_opt_out_at IS NOT NULL) DESC,
+                          COALESCE(sms_opt_out_at, sms_consent_recorded_at,
+                                   updated_at) DESC NULLS LAST
+```
+
+   so a grant's paperwork never outranks a real refusal that happens to be
+   wordless — the shape the shipped portal writes on purpose.
+
+3. **The date legs are untouched** (`sms_opt_out_at`, `group_opt_out_at`, and
+   `COALESCE(r.sms_opt_out_at, f.sms_opt_out_at)` at the INSERT): a date is a
+   date whichever status carries it.
+
+4. The function `COMMENT` gained the rule; the CTE's block comment carries the
+   reasoning and the demonstrated failure.
+
+### Evidence
+
+Negative control, both halves in one file, everything rolled back
+(`probe21-r4-M1-negative-control.sql`, which restores the PRE-FIX body inside
+TX1 and runs the shipped one in TX2 over an identical fixture: one studio, one
+number, a sourceless `opted_out` seat plus a `granted` seat carrying
+`sms_opt_out_at 2025-11-16` and `'written'` / "Signed the Lindqvist kickoff
+form" recorded `2025-01-01`):
+
+```
+════════ TX1 — the PRE-FIX projection (the defect) ════════
+--- THE RECORD THE FOLD MINTS ---
+  status   |       opt_out_at       | refusal_unanswered | opt_out_source |         opt_out_evidence          |  opt_out_recorded_at   |         opt_out_recorded_by
+-----------+------------------------+--------------------+----------------+-----------------------------------+------------------------+--------------------------------------
+ opted_out | 2025-11-16 00:00:00+00 | t                  | written        | Signed the Lindqvist kickoff form | 2025-01-01 00:00:00+00 | a2000000-0000-4000-8000-000000000001
+
+--- THE SEATS AFTER THE MIRROR ---
+ e2000000-…0001 | opted_out | 2025-11-16 00:00:00+00 | written | Signed the Lindqvist kickoff form | 2025-01-01 00:00:00+00 | a2000000-…0001
+ e2000000-…0002 | opted_out | 2025-11-16 00:00:00+00 | written | Signed the Lindqvist kickoff form | 2025-01-01 00:00:00+00 | a2000000-…0001
+
+════════ TX2 — the shipped projection (the fix) ════════
+--- THE RECORD THE FOLD MINTS ---
+  status   |       opt_out_at       | refusal_unanswered | opt_out_source | opt_out_evidence | opt_out_recorded_at | opt_out_recorded_by
+-----------+------------------------+--------------------+----------------+------------------+---------------------+---------------------
+ opted_out | 2025-11-16 00:00:00+00 | t                  |                |                  |                     |
+
+--- THE SEATS AFTER THE MIRROR ---
+ e2000000-…0001 | opted_out | 2025-11-16 00:00:00+00 |  |  |  |
+ e2000000-…0002 | opted_out | 2025-11-16 00:00:00+00 |  |  |  |
+```
+
+The date still lands, `refusal_unanswered` is still `true`, and R-AQ's wipe now
+reaches both seats instead of being suppressed.
+
+Object probe of the applied function (never the ledger):
+
+```
+ projection_guarded | old_ordering_still_present
+--------------------+----------------------------
+ t                  | f
+```
+
+### Tests
+
+- **New block 30e** (beside 30), with the probed shape, asserting the record
+  keeps `opted_out` + `refusal_unanswered` + `opt_out_at 2025-11-16` and that
+  **all four `opt_out_*` are NULL on the record and on both seats**.
+- **Block 3c4 revised.** It was r8 W4-M2's assertion that the refusal evidence
+  from sibling `e…0006` lands — and `e…0006` is exactly the contaminated shape
+  (status `granted`, one evidence set, `inbound_sms` / "Replied STOP on the Rusk
+  thread"). Under R4-M1 that row has no refusal words to give, so 3c4 now
+  asserts all four come out NULL, with the supersession written into the
+  comment. 3c6 (the date lands) and 3c3 (`refusal_unanswered`) are unchanged and
+  still pass, and block 30 still covers the case W4-M2 was really about: a
+  sibling that says `opted_out` and carries the STOP's own words.
+
+```
+psql …:407: NOTICE:  3. consent backfill precedence: passed
+psql …:3522: NOTICE:  30. the fold picks the sibling that HOLDS the refusal … (r2 R2-M1): passed
+psql …:3626: NOTICE:  30e. a grant's paperwork is never filed as the refusal's own words, and the wordless refusal reaches both seats (r4 R4-M1): passed
+psql …:3765: NOTICE:  All W1a assertions passed.
+```
+
+### probe10 re-cut
+
+`probe10-r9-fold-dry-run.sql` mirrors the function's CTE chain, so it carries
+the same `CASE` projection and the same ordering leg, plus a header paragraph
+saying the operator will never be shown the studio's consent paperwork standing
+in the refusal's evidence columns. Verified against the same fixture, in a
+rolled-back transaction, that the dry run now prints exactly what the fold
+writes:
+
+```
+                 org                  |  phone_e164  | sms_consent_status | refusal_unanswered |       opt_out_at       | opt_out_source | opt_out_evidence | opt_out_recorded_at
+ b3000000-0000-4000-8000-00000000000a | +16125550555 | opted_out          | t                  | 2025-11-16 00:00:00+00 |                |                  |
+```
+
+---
+
+## R4-M2 — the one home of the forbidding rule can now say "never text"
+
+`supabase/migrations/00592_people_cards_affiliations_rules.sql:770-830`,
+`supabase/tests/people/w1a_identity_channels_consent_test.sql` (block 25).
+
+### What changed
+
+`sms` was added to **both** CHECK arrays — `channels_allowed` and
+`channels_forbidden` — as a **rule-only token**. It is deliberately **not**
+added to `studio_contact_channels.channel_kind` (00593 still holds exactly the
+seven kinds): SMS is not a kind of channel in this model, it rides on `mobile`
+and is settled by `sms_capable`, which 00593's header insists is a fact about
+the LINE, not a studio preference. The preamble comment, both column COMMENTs
+and the file header now carry that distinction, the fixture reasoning (F-10 Sam
+Rowe "email only; phone for emergencies … never texted"; F-27 Ray Thao "phone
+and email only; NEVER texted; scheduled through 311" — both permit the voice
+call and forbid the text on the same line), and the note that a composer
+resolves a forbidden `sms` against the mobile line's `sms_capable`.
+
+Written in the existing `DROP CONSTRAINT IF EXISTS` / `ADD CONSTRAINT` idiom, so
+the rerun path stays idempotent. No GRANT/REVOKE touched, so
+`scripts/generate-legacy-grants.py` was not re-run.
+
+### Evidence
+
+```
+                    conname                    |                                  pg_get_constraintdef
+-----------------------------------------------+-----------------------------------------------------------------------------------
+ studio_contact_rules_channels_allowed_check   | CHECK ((channels_allowed <@ ARRAY['mobile'…, 'office'…, 'dispatch'…, 'after_hours'…, 'email'…, 'ap_email'…, 'portal_311'…, 'sms'::text]))
+ studio_contact_rules_channels_forbidden_check | CHECK ((channels_forbidden <@ ARRAY['mobile'…, 'office'…, 'dispatch'…, 'after_hours'…, 'email'…, 'ap_email'…, 'portal_311'…, 'sms'::text]))
+```
+
+### Tests (block 25)
+
+- **25d** widened: the real vocabulary is now eight tokens on `channels_allowed`
+  and `ARRAY['mobile','sms']` on `channels_forbidden`.
+- **25e** (new): the fixture sentence is writable —
+  `channels_allowed = {mobile,email,portal_311}` with
+  `channels_forbidden = {sms}`: phone yes, text no, on one line.
+- **25f** (new): the asymmetry is held — inserting a
+  `studio_contact_channels` row with `channel_kind = 'sms'` is refused with
+  `23514`, so the token stays rule vocabulary and never becomes a channel row.
+- **25a/25b/25c unchanged and still passing**: `{carrier pigeon, sms}` is still
+  refused (`<@` needs every element), and `never_text`, `SMS`, `txt`, `phone`,
+  `text_message` are still refused.
+
+```
+psql …:2745: NOTICE:  25. the channel vocabulary is checked, both ways (r6 M6-5), and carries the rule-only `sms` token so "phone yes, text no" is writable (r4 R4-M2): passed
+```
+
+---
+
+## Gates
+
+```
+pnpm --dir … supabase:reset            → Finished supabase db reset on branch main.
+psql -f supabase/tests/people/w1a_identity_channels_consent_test.sql
+                                       → All W1a assertions passed. (31 blocks)
+SUPABASE_DB_URL=… pnpm --dir … db:generate
+git diff --stat packages/supabase/src/database.types.ts
+                                       → (empty — a function body and two CHECK
+                                          constraints do not reach the generated
+                                          types)
+```
+
+No edge-function code changed this pass, so the Deno suite was not re-run.

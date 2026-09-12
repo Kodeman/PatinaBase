@@ -9,7 +9,12 @@
 -- dated refusal off a row about to be minted without one (r6 R6-M2), and it
 -- picks the refusing sibling by the refusal's OWN facts — words, then date,
 -- then row recency — so a dateless sourceless portal refusal does not take the
--- STOP's place in this output any more than it does in the fold (r2 R2-M1). The `refusal` CTE is the half that matters and
+-- STOP's place in this output any more than it does in the fold (r2 R2-M1).
+-- The refusal's WORDS are read only off a row whose status IS `opted_out`
+-- (r4 R4-M1), so an operator reading this output is never shown the studio's
+-- own consent paperwork standing in the refusal's evidence columns — a row
+-- that refuses on a date alone comes back with all four blank, which is what
+-- the fold will write. The `refusal` CTE is the half that matters and
 -- the half an earlier version of this dry run omitted (r9 R5-M2): it is asked
 -- of EVERY seat in the group, not of the winning row, and its LEFT JOIN is what
 -- decides `refusal_unanswered` — the one column that decides whether a studio
@@ -65,10 +70,20 @@ refusal AS (
          -- r2 R2-M1: the chosen refusal's own date, or a real date from
          -- another refusing seat in the group where it has none.
          COALESCE(sms_opt_out_at, group_opt_out_at) AS sms_opt_out_at,
-         sms_consent_source      AS opt_out_source,
-         sms_consent_evidence    AS opt_out_evidence,
-         sms_consent_recorded_at AS opt_out_recorded_at,
-         sms_consent_recorded_by AS opt_out_recorded_by
+         -- r4 R4-M1: the words only ever off a row that IS a refusal. The seat
+         -- admitted by the second disjunct below says `granted` and carries an
+         -- unanswered opt-out date; its ONE evidence set belongs to whatever
+         -- wrote that status — the GRANT — so projecting it files the studio's
+         -- own consent paperwork as the refusal's own words. NULL is the
+         -- honest answer, and it is what the fold now writes.
+         CASE WHEN sms_consent_status = 'opted_out'
+              THEN sms_consent_source      END AS opt_out_source,
+         CASE WHEN sms_consent_status = 'opted_out'
+              THEN sms_consent_evidence    END AS opt_out_evidence,
+         CASE WHEN sms_consent_status = 'opted_out'
+              THEN sms_consent_recorded_at END AS opt_out_recorded_at,
+         CASE WHEN sms_consent_status = 'opted_out'
+              THEN sms_consent_recorded_by END AS opt_out_recorded_by
     FROM (
       SELECT party_org.*,
              max(sms_opt_out_at) OVER (
@@ -81,7 +96,12 @@ refusal AS (
                -- TOUCHED, and the dateless sourceless `opted_out` the shipped
                -- portal writes on purpose then wins over the seat that
                -- received the STOP.
-               ORDER BY (sms_consent_source IS NOT NULL) DESC,
+               -- r4 R4-M1: and the words leg asks the same question the
+               -- projection above asks, so a grant's paperwork never outranks
+               -- a real refusal that happens to be wordless.
+               ORDER BY CASE WHEN sms_consent_status = 'opted_out'
+                              AND sms_consent_source IS NOT NULL
+                             THEN 0 ELSE 1 END,
                         (sms_opt_out_at IS NOT NULL) DESC,
                         COALESCE(sms_opt_out_at, sms_consent_recorded_at,
                                  updated_at) DESC NULLS LAST

@@ -437,10 +437,39 @@ BEGIN
   refusal AS (
     SELECT org, phone_e164,
            COALESCE(sms_opt_out_at, group_opt_out_at) AS sms_opt_out_at,
-           sms_consent_source      AS opt_out_source,
-           sms_consent_evidence    AS opt_out_evidence,
-           sms_consent_recorded_at AS opt_out_recorded_at,
-           sms_consent_recorded_by AS opt_out_recorded_by
+           -- AND THE WORDS ARE ONLY EVER TAKEN OFF A ROW THAT IS ITSELF A
+           -- REFUSAL (r4 R4-M1). This CTE's population is two shapes, not one:
+           -- a seat whose STATUS is `opted_out`, and a seat carrying an
+           -- unanswered opt-out date while its status still reads granted /
+           -- pending (the r8 W4-M1 shape, admitted by the second disjunct
+           -- below). project_parties has ONE evidence set, and on that second
+           -- shape it belongs to whatever wrote the row's CURRENT status — THE
+           -- GRANT. Projected straight across, the studio's own consent
+           -- paperwork was filed as the refusal's own words: a record reading
+           -- (opted_out, written, "Signed the Lindqvist kickoff form",
+           -- recorded 2025-01-01) against an opt_out_at of 2025-11-16 — the
+           -- refusal written down ten months before it happened, and R-Q's
+           -- sentence printing "Opted out in writing, 16 Nov 2025", naming the
+           -- consent document as the refusal. That is verbatim the failure
+           -- R-AQ and R5-M1 exist to prevent, arriving from the fold instead of
+           -- from the mirror; and because opt_out_source came out non-NULL the
+           -- mirror's wordless-refusal branch never fired, so R-AQ's protective
+           -- NULL-write was suppressed exactly where it was needed and the
+           -- grant's paperwork was mirrored onto every seat.
+           --
+           -- A refusal whose row is not a refusal has no words of its own, and
+           -- NULL is what the record must say: it then reads as the wordless
+           -- refusal it is, and R-AQ's branch does its job. The DATE legs are
+           -- untouched — a date is a date whichever status carries it, and the
+           -- unanswered opt-out date is the whole reason the row is here.
+           CASE WHEN sms_consent_status = 'opted_out'
+                THEN sms_consent_source      END AS opt_out_source,
+           CASE WHEN sms_consent_status = 'opted_out'
+                THEN sms_consent_evidence    END AS opt_out_evidence,
+           CASE WHEN sms_consent_status = 'opted_out'
+                THEN sms_consent_recorded_at END AS opt_out_recorded_at,
+           CASE WHEN sms_consent_status = 'opted_out'
+                THEN sms_consent_recorded_by END AS opt_out_recorded_by
       FROM (
         SELECT party_org.*,
                max(sms_opt_out_at) OVER (
@@ -448,7 +477,14 @@ BEGIN
                ) AS group_opt_out_at,
                ROW_NUMBER() OVER (
                  PARTITION BY org, phone_e164
-                 ORDER BY (sms_consent_source IS NOT NULL) DESC,
+                 -- The words leg asks the same question the projection above
+                 -- asks (r4 R4-M1): a source that belongs to a GRANT is not
+                 -- refusal words, so it must not outrank a real refusal that
+                 -- happens to be wordless — which is the shape the shipped
+                 -- portal writes on purpose (use-coordination.ts).
+                 ORDER BY CASE WHEN sms_consent_status = 'opted_out'
+                                AND sms_consent_source IS NOT NULL
+                               THEN 0 ELSE 1 END,
                           (sms_opt_out_at IS NOT NULL) DESC,
                           COALESCE(sms_opt_out_at, sms_consent_recorded_at,
                                    updated_at) DESC NULLS LAST
@@ -529,7 +565,10 @@ COMMENT ON FUNCTION public.backfill_channel_consent_from_parties() IS
   'refusal''s OWN facts — its words first, then its date, and only then row '
   'recency — so a dateless sourceless portal refusal never outranks the seat '
   'that received the STOP and empties the record''s refusal evidence set '
-  '(r2 R2-M1). Idempotent — ON CONFLICT '
+  '(r2 R2-M1); and the words are only ever taken off a row whose status IS '
+  '`opted_out`, so the GRANT''s paperwork on a seat carrying a stale unanswered '
+  'opt-out is never filed as the refusal''s own words (r4 R4-M1). '
+  'Idempotent — ON CONFLICT '
   'DO NOTHING never overwrites a later decision — and side-effect-free to '
   're-run once the trigger exists: a folded `pending` reaches the party rows '
   'through the mirror, which suppresses 00432''s opt-in dispatch (00594).';

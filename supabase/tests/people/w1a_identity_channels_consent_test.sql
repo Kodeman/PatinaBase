@@ -347,13 +347,28 @@ BEGIN
     'FAIL 3c3: a sibling seat''s unanswered refusal must mint the record '
     'UNSENDABLE, even when a clean grant wins the ranking';
 
-  -- 3c4. …and it carries the REFUSAL's own evidence (r8 W4-M2), which is not
-  --      the winning row's: that row is the grant.
-  ASSERT r.opt_out_source = 'inbound_sms'
-     AND r.opt_out_evidence = 'Replied STOP on the Rusk thread'
-     AND r.opt_out_recorded_at = '2025-11-16T00:00:00Z'::timestamptz,
-    'FAIL 3c4: the refusal''s own source and words must land in the refusal '
-    'evidence set, got ' || COALESCE(r.opt_out_source, '<null>') || ' / '
+  -- 3c4. …and it carries NO refusal evidence at all — r8 W4-M2 as REFINED by
+  --      r4 R4-M1. W4-M2 asked that the refusal's own words come off the
+  --      refusing sibling rather than the winning grant, and this fixture's
+  --      sibling (e…0006) is the legacy shape: STATUS `granted`, an unanswered
+  --      opt-out date, and one evidence set. That set belongs to whatever wrote
+  --      the row's CURRENT status — the grant — whatever it happens to read,
+  --      and project_parties gives no way to tell the two apart on a single
+  --      row. Copied across, the studio's own paperwork gets filed as the
+  --      refusal's own words (demonstrated: 'written' / "Signed the Lindqvist
+  --      kickoff form" recorded ten months BEFORE opt_out_at) and, being
+  --      non-NULL, it suppresses R-AQ's protective wipe in the mirror. So the
+  --      words are taken only off a row whose status IS `opted_out`; a refusal
+  --      inferred from a date alone is a refusal with no words, and NULL is the
+  --      honest record of that. The DATE still lands (3c6), and block 30
+  --      covers the case W4-M2 was really about: a sibling that says
+  --      `opted_out` and carries the STOP's own words.
+  ASSERT r.opt_out_source IS NULL
+     AND r.opt_out_evidence IS NULL
+     AND r.opt_out_recorded_at IS NULL
+     AND r.opt_out_recorded_by IS NULL,
+    'FAIL 3c4: a row whose status is not opted_out has no refusal words to '
+    'give, got ' || COALESCE(r.opt_out_source, '<null>') || ' / '
       || COALESCE(r.opt_out_evidence, '<null>');
 
   -- 3c6. r6 R6-M2: AND THE REFUSAL'S DATE, not only its words. opt_out_at used
@@ -2672,22 +2687,60 @@ BEGIN
       || COALESCE(state, '<no error>');
 
   -- 25d. The whole real vocabulary is accepted, on both columns, and the empty
-  --      array (the default, and the ordinary state) stays legal.
+  --      array (the default, and the ordinary state) stays legal. `sms` is in
+  --      it (r4 R4-M2) — the one token that is NOT a 00593 channel kind.
   UPDATE studio_contact_rules
      SET channels_allowed   = ARRAY['portal_311', 'office', 'dispatch', 'after_hours',
-                                    'email', 'ap_email', 'mobile'],
-         channels_forbidden = ARRAY['mobile']
+                                    'email', 'ap_email', 'mobile', 'sms'],
+         channels_forbidden = ARRAY['mobile', 'sms']
    WHERE subject_type = 'person' AND subject_id = 'c0000000-0000-4000-8000-000000000001';
   SELECT * INTO r FROM studio_contact_rules
    WHERE subject_type = 'person' AND subject_id = 'c0000000-0000-4000-8000-000000000001';
-  ASSERT array_length(r.channels_allowed, 1) = 7 AND r.channels_forbidden = ARRAY['mobile'],
+  ASSERT array_length(r.channels_allowed, 1) = 8
+     AND r.channels_forbidden = ARRAY['mobile', 'sms'],
     'FAIL 25d: the real vocabulary must be accepted on both columns';
+
+  -- 25e. r4 R4-M2: THE FIXTURE SENTENCE — "phone yes, TEXT NO" — IS WRITABLE.
+  --      F-10 Sam Rowe ("email only; phone for emergencies … never texted")
+  --      and F-27 Ray Thao ("phone and email only; NEVER texted; scheduled
+  --      through 311") both permit the voice call on the mobile line and
+  --      forbid the text on it. With the seven channel kinds alone that pair
+  --      collapses: forbidding `mobile` forbids the emergency call, permitting
+  --      it permits the text. Decision 1 left this table as the ONE home of
+  --      the forbidding fact, so the sentence has to be sayable here.
+  UPDATE studio_contact_rules
+     SET channels_allowed   = ARRAY['mobile', 'email', 'portal_311'],
+         channels_forbidden = ARRAY['sms']
+   WHERE subject_type = 'person' AND subject_id = 'c0000000-0000-4000-8000-000000000001';
+  SELECT * INTO r FROM studio_contact_rules
+   WHERE subject_type = 'person' AND subject_id = 'c0000000-0000-4000-8000-000000000001';
+  ASSERT r.channels_forbidden = ARRAY['sms']
+     AND 'mobile' = ANY(r.channels_allowed),
+    'FAIL 25e: "never texted" must be sayable without forbidding the voice '
+    'call on the same line, got forbidden='
+      || COALESCE(r.channels_forbidden::text, '<null>') || ' allowed='
+      || COALESCE(r.channels_allowed::text, '<null>');
+
+  -- 25f. And the token stays on THIS side of the line: `sms` is rule
+  --      vocabulary, never a channel row. 00593's channel_kind is still the
+  --      seven kinds, and sms_capable on the mobile line is what a composer
+  --      resolves a forbidden `sms` against.
+  state := NULL;
+  BEGIN
+    INSERT INTO studio_contact_channels (owner_type, owner_id, channel_kind, value)
+    VALUES ('person', 'c0000000-0000-4000-8000-000000000001', 'sms', '+16125550101');
+  EXCEPTION WHEN check_violation THEN state := SQLSTATE; END;
+  ASSERT state = '23514',
+    'FAIL 25f: `sms` must not be a channel KIND — it rides on mobile, and '
+    'sms_capable is a fact about the line, got ' || COALESCE(state, '<no error>');
 
   UPDATE studio_contact_rules SET channels_allowed = '{}', channels_forbidden = '{}'
    WHERE subject_type = 'person' AND subject_id = 'c0000000-0000-4000-8000-000000000001';
 
   PERFORM pg_temp.reset_role();
-  RAISE NOTICE '25. the channel vocabulary is checked, both ways (r6 M6-5): passed';
+  RAISE NOTICE '25. the channel vocabulary is checked, both ways (r6 M6-5), '
+               'and carries the rule-only `sms` token so "phone yes, text no" '
+               'is writable (r4 R4-M2): passed';
 END
 $$;
 
@@ -3478,6 +3531,110 @@ BEGIN
   RAISE NOTICE '30. the fold picks the sibling that HOLDS the refusal, so a '
                'dateless portal refusal never erases the STOP''s date or '
                'words — on the record or on the seats (r2 R2-M1): passed';
+END
+$$;
+
+-- ─── 30e. r4 R4-M1: the refusal's WORDS only ever come off a refusal ───────
+--
+-- The refusal CTE admits two shapes, and only one of them is a refusal. The
+-- second — a seat whose STATUS reads `granted` while it carries an opt-out date
+-- no later consent answered (the r8 W4-M1 population) — is admitted precisely
+-- BECAUSE its status lies about the refusal. project_parties has ONE evidence
+-- set, so on that row the source, the words, the recorder and the recorded-at
+-- belong to whatever wrote the CURRENT status: THE GRANT, i.e. the studio's own
+-- consent paperwork. Projected across as the refusal's own evidence, the record
+-- reads "opted out IN WRITING, per the Lindqvist kickoff form, written down
+-- 2025-01-01" against an opt_out_at of 2025-11-16 — the refusal recorded ten
+-- months before it happened, the studio's consent document named as the
+-- refusal. That is decisions 22 and 23 (R5-M1, R-AQ) failing from the FOLD
+-- rather than from the mirror; and because opt_out_source came out non-NULL,
+-- the mirror's wordless-refusal branch never fired, so R-AQ's protective
+-- NULL-write was suppressed exactly where it was needed and the grant's
+-- paperwork reached BOTH seats.
+--
+-- The date legs are not the defect and are not changed: 2025-11-16 is a real
+-- refusal date whichever status carries it, and it must still land.
+
+INSERT INTO project_parties (id, project_id, party_kind, display_name, phone,
+                             sms_consent_status, sms_consented_at, sms_opt_out_at,
+                             sms_consent_source, sms_consent_evidence,
+                             sms_consent_recorded_at, sms_consent_disclosure_version,
+                             sms_consent_recorded_by)
+VALUES
+  -- the portal's honest refusal: opted out, no date, no source, no words
+  ('e0000000-0000-4000-8000-0000000000c5', 'd0000000-0000-4000-8000-00000000000a', 'sub', 'Pete Rusk', '(612) 555-0503',
+   'opted_out', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  -- the legacy seat: says granted, carries an unanswered opt-out date, and its
+  -- evidence set is THE GRANT'S — the studio's own kickoff paperwork
+  ('e0000000-0000-4000-8000-0000000000c6', 'd0000000-0000-4000-8000-00000000000a', 'sub', 'Pete Rusk', '612-555-0503',
+   'granted', '2025-01-01T00:00:00Z', '2025-11-16T00:00:00Z',
+   'written', 'Signed the Lindqvist kickoff form', '2025-01-01T00:00:00Z',
+   'field-sms-v1', 'a0000000-0000-4000-8000-000000000001');
+
+DO $$
+DECLARE
+  r    RECORD;
+  seat RECORD;
+BEGIN
+  PERFORM public.backfill_channel_consent_from_parties();
+
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_kind = 'sms' AND channel_value = '+16125550503';
+
+  -- 30e1. Still an unanswered refusal, and still dated: the fix is about the
+  --       words, not the date.
+  ASSERT r.status = 'opted_out' AND r.refusal_unanswered,
+    'FAIL 30e1: the folded record must be an unanswered refusal, got '
+      || COALESCE(r.status, '<none>');
+  ASSERT r.opt_out_at = '2025-11-16T00:00:00Z'::timestamptz,
+    'FAIL 30e2: the real opt-out date must still land, got '
+      || COALESCE(r.opt_out_at::text, '<null>');
+
+  -- 30e3. And the record says NOTHING about how they refused, because no row
+  --       here knows: a grant's paperwork is not a refusal's words.
+  ASSERT r.opt_out_source IS NULL
+     AND r.opt_out_evidence IS NULL
+     AND r.opt_out_recorded_at IS NULL
+     AND r.opt_out_recorded_by IS NULL,
+    'FAIL 30e3: the GRANT''s evidence must never be filed as the refusal''s '
+    'own words, got ' || COALESCE(r.opt_out_source, '<null>') || ' / '
+      || COALESCE(r.opt_out_evidence, '<null>') || ' / '
+      || COALESCE(r.opt_out_recorded_at::text, '<null>') || ' / '
+      || COALESCE(r.opt_out_recorded_by::text, '<null>');
+
+  -- 30e4. A sourceless refusal reaching the mirror is the wordless case, so
+  --       R-AQ's branch fires and BOTH seats are left saying nothing about the
+  --       refusal either — including the seat that was holding the grant's
+  --       paperwork. Before the fix the branch was suppressed by the fold's own
+  --       contamination and both seats read (opted_out, written, "Signed the
+  --       Lindqvist kickoff form").
+  FOR seat IN
+    SELECT * FROM project_parties
+     WHERE id IN ('e0000000-0000-4000-8000-0000000000c5',
+                  'e0000000-0000-4000-8000-0000000000c6')
+     ORDER BY id
+  LOOP
+    ASSERT seat.sms_consent_status = 'opted_out',
+      'FAIL 30e4: seat ' || seat.id || ' must read opted_out, got '
+        || COALESCE(seat.sms_consent_status, '<null>');
+    ASSERT seat.sms_opt_out_at = '2025-11-16T00:00:00Z'::timestamptz,
+      'FAIL 30e5: seat ' || seat.id || ' must carry the refusal date, got '
+        || COALESCE(seat.sms_opt_out_at::text, '<null>');
+    ASSERT seat.sms_consent_source IS NULL
+       AND seat.sms_consent_evidence IS NULL
+       AND seat.sms_consent_recorded_at IS NULL
+       AND seat.sms_consent_recorded_by IS NULL,
+      'FAIL 30e6: seat ' || seat.id || ' must say nothing about a refusal it '
+      'has no words for, got ' || COALESCE(seat.sms_consent_source, '<null>')
+        || ' / ' || COALESCE(seat.sms_consent_evidence, '<null>') || ' / '
+        || COALESCE(seat.sms_consent_recorded_at::text, '<null>') || ' / '
+        || COALESCE(seat.sms_consent_recorded_by::text, '<null>');
+  END LOOP;
+
+  RAISE NOTICE '30e. a grant''s paperwork is never filed as the refusal''s own '
+               'words, and the wordless refusal reaches both seats '
+               '(r4 R4-M1): passed';
 END
 $$;
 
