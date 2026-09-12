@@ -125,6 +125,17 @@
 --      unanswered refusal reads `opted_out` through channel_consent_status()
 --      whatever its status column says, so both shipped readers print what the
 --      send rail decides — and the rule lives in the reader alone (R-AS).
+--  41. close-out r3 MAJOR-1 (00621): field_activity_summary.awaiting_reply_count
+--      counts the RECORD's `pending`, not the frozen seat's, so the Field
+--      Coordination Desk and the Call Sheet say the same thing about the same
+--      person — and a recorded refusal is not a party awaiting a reply. The
+--      rest of the 00282 rollup is untouched by the graft.
+--  42. close-out r3 MAJOR-3 (00621): 00284's two dispatch gates
+--      (fc_dispatch_court_assignment / fc_dispatch_task_assignment) reach a
+--      party whose consent the studio holds on the record while the seat stays
+--      frozen, and still dispatch nothing for an unasked number, a recorded
+--      refusal, or a non-field party. A pre-fold `granted` seat with no record
+--      still dispatches, because sendPartySms still honours one.
 --
 -- How to run:
 --   psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
@@ -5272,6 +5283,298 @@ BEGIN
   RAISE NOTICE '40. one reader, one verdict: an unanswered refusal reads '
                'opted_out everywhere the room prints it (close-review r2 '
                'MAJOR-2): passed';
+END
+$$;
+
+-- ─── 41. close-out r3 MAJOR-1: the Desk rollup reads the record (00621) ────
+--
+-- field_activity_summary.awaiting_reply_count counted
+-- project_parties.sms_consent_status = 'pending' (00282:578-582). The Field
+-- Coordination Desk renders it as "N parties haven't opted in"
+-- (use-field-activity.ts:48-55 -> field-desk.tsx:44-52). After the freeze no
+-- consent act moves a seat, so the count could never clear: the Call Sheet
+-- printed "Texting" and the Desk said the same person had not opted in, off
+-- the same row. 00621 repoints the subquery at
+-- channel_consent_status(project_consent_org(...)).
+
+INSERT INTO projects (id, name, designer_id, studio_id, created_by, status, created_at, updated_at)
+VALUES ('d0000000-0000-4000-8000-0000000000a6', 'W1A Desk rollup job',
+        'a0000000-0000-4000-8000-000000000001', 'b0000000-0000-4000-8000-00000000000a',
+        'a0000000-0000-4000-8000-000000000001', 'active', NOW(), NOW());
+
+-- Three field seats on one project, all frozen where the fold left them:
+--   · 0620 — the record says GRANTED, the seat still says pending. The Desk
+--            used to count this one. It must not any more.
+--   · 0621 — the record says PENDING (the studio invited, nobody replied),
+--            the seat says not_asked. The Desk never counted this one. It
+--            must now.
+--   · 0622 — nobody asked at all: no record, seat not_asked. Counted by
+--            neither.
+INSERT INTO project_parties (id, project_id, party_kind, display_name, phone, sms_consent_status)
+VALUES
+  ('e0000000-0000-4000-8000-0000000000f1', 'd0000000-0000-4000-8000-0000000000a6',
+   'sub', 'Ove Berglund', '(612) 555-0620', 'pending'),
+  ('e0000000-0000-4000-8000-0000000000f2', 'd0000000-0000-4000-8000-0000000000a6',
+   'sub', 'Nan Sorley', '(612) 555-0621', 'not_asked'),
+  ('e0000000-0000-4000-8000-0000000000f3', 'd0000000-0000-4000-8000-0000000000a6',
+   'sub', 'Cy Marchetti', '(612) 555-0622', 'not_asked');
+
+DO $$
+DECLARE
+  n         BIGINT;
+  w         TEXT;
+  view_def  TEXT;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+  PERFORM public.record_channel_consent(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '(612) 555-0620', 'granted',
+    'written', 'Signed the kickoff form', 'field-sms-v1',
+    'd0000000-0000-4000-8000-0000000000a6');
+  PERFORM public.record_channel_invite(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '(612) 555-0621',
+    'written', 'Kickoff form', 'field-sms-v1',
+    'd0000000-0000-4000-8000-0000000000a6');
+  PERFORM pg_temp.reset_role();
+
+  -- 41a. The seats are exactly where the freeze left them — this block is
+  --      about the READER, so the premise is asserted, not assumed.
+  ASSERT (SELECT sms_consent_status FROM project_parties
+           WHERE id = 'e0000000-0000-4000-8000-0000000000f1') = 'pending',
+    'FAIL 41a: the granted party''s seat must still read pending (frozen)';
+  ASSERT (SELECT sms_consent_status FROM project_parties
+           WHERE id = 'e0000000-0000-4000-8000-0000000000f2') = 'not_asked',
+    'FAIL 41a2: the invited party''s seat must still read not_asked (frozen)';
+
+  -- 41b. THE FINDING. One awaiting reply on this project: the one the RECORD
+  --      says was invited. On the frozen column it was the other one.
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+  SELECT awaiting_reply_count INTO n FROM field_activity_summary
+   WHERE project_id = 'd0000000-0000-4000-8000-0000000000a6';
+  ASSERT n = 1,
+    'FAIL 41b: the Desk must count the record''s pending, not the seat''s — got '
+      || n;
+
+  -- 41c. …and the Desk and the Call Sheet now say the same thing about the
+  --      same person, which is the whole of MAJOR-1.
+  SELECT sms_consent_status INTO w FROM v_project_roster
+   WHERE roster_id = 'e0000000-0000-4000-8000-0000000000f1';
+  ASSERT w = 'granted',
+    'FAIL 41c: the roster must print the grant, got ' || COALESCE(w, '<null>');
+  SELECT sms_consent_status INTO w FROM v_project_roster
+   WHERE roster_id = 'e0000000-0000-4000-8000-0000000000f2';
+  ASSERT w = 'pending',
+    'FAIL 41c2: the roster must print the invite, got ' || COALESCE(w, '<null>');
+  PERFORM pg_temp.reset_role();
+
+  -- 41d. A recorded refusal is not a party awaiting a reply either.
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+  PERFORM public.record_channel_consent(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '(612) 555-0621', 'opted_out',
+    'inbound_sms', 'Replied STOP', 'field-sms-v1',
+    'd0000000-0000-4000-8000-0000000000a6');
+  SELECT awaiting_reply_count INTO n FROM field_activity_summary
+   WHERE project_id = 'd0000000-0000-4000-8000-0000000000a6';
+  ASSERT n = 0,
+    'FAIL 41d: a refusal is not an awaited reply, got ' || n;
+  PERFORM pg_temp.reset_role();
+
+  -- 41e. The rest of the rollup is byte-identical to 00282 — the graft moved
+  --      one expression and nothing else. The overdue-task count still counts.
+  INSERT INTO project_tasks (id, project_id, title, status, owner, due_date)
+  VALUES ('f0000000-0000-4000-8000-0000000000f1',
+          'd0000000-0000-4000-8000-0000000000a6', 'Hang the pendants',
+          'todo', 'sub', current_date - 3);
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+  SELECT overdue_field_task_count INTO n FROM field_activity_summary
+   WHERE project_id = 'd0000000-0000-4000-8000-0000000000a6';
+  ASSERT n = 1,
+    'FAIL 41e: the overdue-task count must be untouched by the graft, got ' || n;
+  PERFORM pg_temp.reset_role();
+
+  -- 41f. The view still reads the record through the ONE reader (R-AS) and
+  --      still takes no consent word off the frozen column.
+  SELECT definition INTO view_def FROM pg_views
+   WHERE schemaname = 'public' AND viewname = 'field_activity_summary';
+  ASSERT view_def ILIKE '%channel_consent_status%',
+    'FAIL 41f: the Desk rollup must read the record';
+  ASSERT view_def NOT ILIKE '%sms_consent_status%',
+    'FAIL 41f2: the Desk rollup must not read the frozen seat any more';
+  ASSERT view_def NOT ILIKE '%refusal_unanswered%',
+    'FAIL 41f3: the Desk rollup must not restate the refusal rule';
+
+  RAISE NOTICE '41. the Desk rollup counts the record''s pending, not the '
+               'frozen seat''s, and agrees with the Call Sheet about the same '
+               'person (close-out r3 MAJOR-1): passed';
+END
+$$;
+
+-- ─── 42. close-out r3 MAJOR-3: the two 00284 dispatch gates (00621) ────────
+--
+-- fc_dispatch_court_assignment (00284:118-123) and fc_dispatch_task_assignment
+-- (:176-181) RETURN NEW early when v_party.sms_consent_status <> 'granted'.
+-- Nothing writes a seat to 'granted' any more, so assigning a coordination item
+-- or a task to a sub whose consent the studio holds ON THE RECORD dispatched
+-- nothing at all — closed, silent, on a live un-flagged path. Dispatches are
+-- observed through public._w1a_dispatch_log (block 6's stand-in for
+-- invoke_edge_function).
+
+INSERT INTO designer_clients (id, designer_id, client_name, status, created_at, updated_at)
+VALUES ('a9000000-0000-4000-8000-0000000000d1',
+        'a0000000-0000-4000-8000-000000000001', 'Berglund household',
+        'active', NOW(), NOW());
+
+DO $$
+DECLARE
+  d_before BIGINT;
+  d        BIGINT;
+BEGIN
+  -- 42a. THE FINDING, task leg. The record grants; the seat is frozen at
+  --      `pending` (asserted in 41a). Assigning a task must dispatch.
+  SELECT COUNT(*) INTO d_before FROM public._w1a_dispatch_log
+   WHERE body->>'templateKey' = 'sms_court_assignment';
+
+  INSERT INTO project_tasks (id, project_id, title, status, owner, owner_party_id)
+  VALUES ('f0000000-0000-4000-8000-0000000000f2',
+          'd0000000-0000-4000-8000-0000000000a6', 'Set the sconces',
+          'todo', 'sub', 'e0000000-0000-4000-8000-0000000000f1');
+
+  SELECT COUNT(*) INTO d FROM public._w1a_dispatch_log
+   WHERE body->>'templateKey' = 'sms_court_assignment'
+     AND body->>'partyId' = 'e0000000-0000-4000-8000-0000000000f1';
+  ASSERT d = 1,
+    'FAIL 42a: a task assigned to a party the RECORD granted must dispatch, got '
+      || d;
+
+  -- 42b. THE FINDING, court leg. Same party, same record, a coordination item.
+  INSERT INTO client_decisions (id, designer_client_id, designer_id, project_id,
+                                title, status, court, court_party_id,
+                                coordination_kind)
+  VALUES ('a9000000-0000-4000-8000-0000000000c1',
+          'a9000000-0000-4000-8000-0000000000d1',
+          'a0000000-0000-4000-8000-000000000001',
+          'd0000000-0000-4000-8000-0000000000a6',
+          'Confirm the grout colour', 'pending', 'gc',
+          'e0000000-0000-4000-8000-0000000000f1', 'rfi');
+
+  SELECT COUNT(*) INTO d FROM public._w1a_dispatch_log
+   WHERE body->>'templateKey' = 'sms_court_assignment'
+     AND body->>'partyId' = 'e0000000-0000-4000-8000-0000000000f1';
+  ASSERT d = 2,
+    'FAIL 42b: a court item assigned to a party the RECORD granted must '
+    'dispatch, got ' || (d - 1);
+
+  -- 42c. NEGATIVE CONTROL — a party nobody asked (no record, seat not_asked)
+  --      dispatches nothing, on either leg. The gate still fails CLOSED, and
+  --      the NULL channel_consent_status() returns for "no record" does not
+  --      fall through the guard.
+  INSERT INTO project_tasks (id, project_id, title, status, owner, owner_party_id)
+  VALUES ('f0000000-0000-4000-8000-0000000000f3',
+          'd0000000-0000-4000-8000-0000000000a6', 'Crate the mirror',
+          'todo', 'sub', 'e0000000-0000-4000-8000-0000000000f3');
+  INSERT INTO client_decisions (id, designer_client_id, designer_id, project_id,
+                                title, status, court, court_party_id,
+                                coordination_kind)
+  VALUES ('a9000000-0000-4000-8000-0000000000c2',
+          'a9000000-0000-4000-8000-0000000000d1',
+          'a0000000-0000-4000-8000-000000000001',
+          'd0000000-0000-4000-8000-0000000000a6',
+          'Pick the crate route', 'pending', 'gc',
+          'e0000000-0000-4000-8000-0000000000f3', 'rfi');
+  SELECT COUNT(*) INTO d FROM public._w1a_dispatch_log
+   WHERE body->>'templateKey' = 'sms_court_assignment'
+     AND body->>'partyId' = 'e0000000-0000-4000-8000-0000000000f3';
+  ASSERT d = 0,
+    'FAIL 42c: an unasked party must dispatch nothing, got ' || d;
+
+  -- 42d. NEGATIVE CONTROL — a RECORDED REFUSAL dispatches nothing either,
+  --      even though 0621's seat still reads not_asked (block 41d recorded the
+  --      STOP for that number).
+  INSERT INTO project_tasks (id, project_id, title, status, owner, owner_party_id)
+  VALUES ('f0000000-0000-4000-8000-0000000000f4',
+          'd0000000-0000-4000-8000-0000000000a6', 'Return the pendant',
+          'todo', 'sub', 'e0000000-0000-4000-8000-0000000000f2');
+  SELECT COUNT(*) INTO d FROM public._w1a_dispatch_log
+   WHERE body->>'templateKey' = 'sms_court_assignment'
+     AND body->>'partyId' = 'e0000000-0000-4000-8000-0000000000f2';
+  ASSERT d = 0,
+    'FAIL 42d: a refused number must dispatch nothing, got ' || d;
+
+  -- 42e. The pre-fold leg still stands: a seat holding a real legacy `granted`
+  --      with no record dispatches, because sendPartySms still honours it.
+  INSERT INTO project_parties (id, project_id, party_kind, display_name, phone,
+                               sms_consent_status)
+  VALUES ('e0000000-0000-4000-8000-0000000000f4',
+          'd0000000-0000-4000-8000-0000000000a6', 'sub', 'Vi Odom',
+          '(612) 555-0623', 'granted');
+  INSERT INTO project_tasks (id, project_id, title, status, owner, owner_party_id)
+  VALUES ('f0000000-0000-4000-8000-0000000000f5',
+          'd0000000-0000-4000-8000-0000000000a6', 'Shim the vanity',
+          'todo', 'sub', 'e0000000-0000-4000-8000-0000000000f4');
+  SELECT COUNT(*) INTO d FROM public._w1a_dispatch_log
+   WHERE body->>'templateKey' = 'sms_court_assignment'
+     AND body->>'partyId' = 'e0000000-0000-4000-8000-0000000000f4';
+  ASSERT d = 1,
+    'FAIL 42e: a pre-fold granted seat must still dispatch, got ' || d;
+
+  -- 42f. The party-kind filter and the shipped trigger wiring are untouched by
+  --      the graft: a non-field party is still never texted, and both triggers
+  --      are still the ones 00284 created.
+  INSERT INTO project_parties (id, project_id, party_kind, display_name, phone,
+                               sms_consent_status)
+  VALUES ('e0000000-0000-4000-8000-0000000000f5',
+          'd0000000-0000-4000-8000-0000000000a6', 'architect', 'Ann Reyes',
+          '(612) 555-0623', 'granted');
+  INSERT INTO project_tasks (id, project_id, title, status, owner, owner_party_id)
+  VALUES ('f0000000-0000-4000-8000-0000000000f6',
+          'd0000000-0000-4000-8000-0000000000a6', 'Stamp the drawings',
+          'todo', 'designer', 'e0000000-0000-4000-8000-0000000000f5');
+  SELECT COUNT(*) INTO d FROM public._w1a_dispatch_log
+   WHERE body->>'templateKey' = 'sms_court_assignment'
+     AND body->>'partyId' = 'e0000000-0000-4000-8000-0000000000f5';
+  ASSERT d = 0,
+    'FAIL 42f: a non-field party must never be texted, got ' || d;
+
+  ASSERT EXISTS (
+    SELECT 1 FROM pg_trigger tg
+      JOIN pg_class c ON c.oid = tg.tgrelid
+     WHERE c.relname = 'project_tasks'
+       AND tg.tgname = 'fc_task_assignment_dispatch' AND NOT tg.tgisinternal),
+    'FAIL 42f2: 00284''s task-assignment trigger must still be wired';
+  ASSERT EXISTS (
+    SELECT 1 FROM pg_trigger tg
+      JOIN pg_class c ON c.oid = tg.tgrelid
+     WHERE c.relname = 'client_decisions'
+       AND tg.tgname = 'fc_court_assignment_dispatch' AND NOT tg.tgisinternal),
+    'FAIL 42f3: 00284''s court-assignment trigger must still be wired';
+
+  -- 42g. Both gates read the record, and neither reads it as anything but the
+  --      one reader (R-AS), and both are still definers with a pinned path.
+  ASSERT (SELECT prosrc FROM pg_proc pr JOIN pg_namespace ns ON ns.oid = pr.pronamespace
+           WHERE ns.nspname = 'public' AND pr.proname = 'fc_dispatch_court_assignment')
+         ILIKE '%channel_consent_status%',
+    'FAIL 42g: the court gate must read the record';
+  ASSERT (SELECT prosrc FROM pg_proc pr JOIN pg_namespace ns ON ns.oid = pr.pronamespace
+           WHERE ns.nspname = 'public' AND pr.proname = 'fc_dispatch_task_assignment')
+         ILIKE '%channel_consent_status%',
+    'FAIL 42g2: the task gate must read the record';
+  ASSERT (SELECT COUNT(*) FROM pg_proc pr
+            JOIN pg_namespace ns ON ns.oid = pr.pronamespace
+           WHERE ns.nspname = 'public'
+             AND pr.proname IN ('fc_dispatch_court_assignment',
+                                'fc_dispatch_task_assignment')
+             AND pr.prosecdef
+             AND 'search_path=public' = ANY(pr.proconfig)) = 2,
+    'FAIL 42g3: both gates must stay SECURITY DEFINER with search_path pinned';
+  ASSERT NOT has_function_privilege('anon',
+    'public.fc_dispatch_court_assignment()', 'EXECUTE'),
+    'FAIL 42g4: anon must not execute the court gate';
+  ASSERT NOT has_function_privilege('anon',
+    'public.fc_dispatch_task_assignment()', 'EXECUTE'),
+    'FAIL 42g5: anon must not execute the task gate';
+
+  RAISE NOTICE '42. the two 00284 dispatch gates reach a party the record '
+               'granted, and still refuse an unasked, a refused and a '
+               'non-field one (close-out r3 MAJOR-3): passed';
   RAISE NOTICE 'All W1a assertions passed.';
 END
 $$;

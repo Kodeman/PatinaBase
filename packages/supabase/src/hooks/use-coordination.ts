@@ -557,6 +557,13 @@ const CONSENT_LEGACY_FROZEN = 'consent_legacy_column_frozen';
 const CONSENT_FROZEN_SENTENCE =
   "Texting consent has moved to the studio's own record, and this screen hasn't caught up yet. Nothing was changed.";
 
+/** What a phone edit on an `opted_out` seat is refused with (close-review r3
+ *  MAJOR-4). The seat's refusal cannot travel — see `useUpdateProjectParty`. */
+const OPTED_OUT_PHONE_EDIT_SENTENCE =
+  'This person replied STOP, and that refusal is attached to the number on file. ' +
+  'Changing it would carry the refusal onto a number that never refused. ' +
+  'Add them again with the corrected number instead.';
+
 /** Re-throws 00594's freeze as a written sentence. Any other error passes
  *  through untouched. */
 function asWrittenConsentError(error: unknown): unknown {
@@ -627,14 +634,17 @@ export function normalizePartyPhoneForCompare(phone: string | null | undefined):
  *    an already-opted-out number, and INHERITS that sibling's
  *    `sms_opt_out_at` rather than stamping the edit's own clock over an
  *    opt-out that happened elsewhere, earlier, to someone else's row.
- *  · `opted_out` is left untouched entirely (status, evidence, timestamps).
+ *  · `opted_out` REFUSES the edit outright (close-review r3 MAJOR-4). The
+ *    refusal is attached to the number on file and cannot travel to a
+ *    corrected one; the branch below says why, in a sentence.
  *  · `not_asked` has nothing to revert.
- * `opted_out` left in place means that row stays permanently un-inviteable
- * through this hook even once its number changes — a deliberate
+ * `opted_out` refusing means that row stays permanently un-inviteable through
+ * this hook AND keeps the number its refusal belongs to — a deliberate
  * compliance-first tradeoff; un-stranding it needs its own (per-number)
- * opt-out ledger, out of scope for this fix. `useRecordPartySmsConsent`'s
- * sibling check cannot help there: its UPDATE is guarded on not_asked, so a
- * stranded opted_out row never reaches it.
+ * opt-out ledger, which is what `studio_channel_consent` (00594) now is, and
+ * W2 retiring PR-x's seat check is where the strand ends.
+ * `useRecordPartySmsConsent`'s sibling check cannot help there: its UPDATE is
+ * guarded on not_asked, so a stranded opted_out row never reaches it.
  */
 export function useUpdateProjectParty() {
   const queryClient = useQueryClient();
@@ -719,8 +729,31 @@ export function useUpdateProjectParty() {
               : NOT_ASKED_CONSENT_COLUMNS,
           );
         }
-        // currentStatus 'opted_out' or 'not_asked' (or the row vanished from
-        // under us): consent columns are never rewritten by a phone edit.
+        // AN `opted_out` SEAT'S NUMBER CANNOT MOVE (close-review r3 MAJOR-4).
+        // Leaving the consent columns alone used to mean the UPDATE named only
+        // phone/phone_e164, so 00594's `BEFORE UPDATE OF` freeze never fired
+        // and the edit landed — carrying the refusal onto the corrected number,
+        // where `orgHasOptedOutParty` (_shared/sms.ts) and both write doors'
+        // seat gates read it. The room then printed `not_asked` (or, where the
+        // corrected number already held a real grant, `granted`) off a record
+        // that knows nothing about the transplanted seat, while every send came
+        // back opted_out and all three write doors refused: G-3's sentence
+        // restored inside the record built to end it, reachable by fixing a
+        // digit. Pre-freeze the seat itself printed "Opted out", which was the
+        // visible clue and the thing `revertsToOptedOut` could act on.
+        //
+        // So this refuses, symmetrically with the freeze: a genuine phone
+        // change on a `pending`/`granted` seat restates the consent columns and
+        // the freeze refuses it, and a genuine phone change on an `opted_out`
+        // seat is refused here. A cosmetic reformat of the same digits is not a
+        // change and still lands. The durable fix is W2 retiring PR-x's seat
+        // check (rulings PR-x, "then retire it in a named follow-up"), after
+        // which the refusal lives in one place and the seat's number is inert.
+        if (phoneGenuinelyChanged && currentStatus === 'opted_out') {
+          throw new Error(OPTED_OUT_PHONE_EDIT_SENTENCE);
+        }
+        // currentStatus 'not_asked' (or the row vanished from under us):
+        // consent columns are never rewritten by a phone edit.
       }
       if (patch.email !== undefined) dbPatch.email = patch.email?.trim() || null;
       if (patch.showToClient !== undefined) dbPatch.show_to_client = patch.showToClient;
