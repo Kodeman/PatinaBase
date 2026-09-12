@@ -663,6 +663,17 @@ verify_jwt = true
 [functions.invoice-check-intent]
 verify_jwt = true
 
+# Hour-tracking HT-34 (00614): an hourly sweep for running timers older than
+# 8 hours, invoked by pg_cron -> public.invoke_edge_function (same cron->edge
+# bridge as decision-reminders/field-daily/morning-brief — service-role
+# apikey + Bearer from Vault). No browser calls it. verify_jwt = true is the
+# platform default; explicit here for intent, matching those functions. The
+# function writes only quiet in-app notification_log rows and resolves no
+# caller-scoped data, so — like those functions — it carries no in-code
+# service-role check.
+[functions.time-nudges]
+verify_jwt = true
+
 [analytics]
 enabled = true
 port = 54327
