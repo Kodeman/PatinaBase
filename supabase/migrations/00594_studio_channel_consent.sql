@@ -26,13 +26,14 @@
 --      group's best evidenced consent where the winner carries none (r9 M2) —
 --      otherwise the shipped portal's sourceless `opted_out` seat wins the
 --      bucket and the studio's signed grant on the seat next door is minted
---      away, then wiped off the seats by R-AQ's mirror branch.
---   3. mirror_channel_consent_to_parties() — an AFTER trigger that pushes the
---      record back onto every party row in that org on that number. The
---      project_parties.sms_consent_* columns become a READ-ONLY CACHED MIRROR:
---      two readers, one writer. They are kept, not dropped — every existing
---      reader (the roster view, the chips, the send gate's secondary check)
---      keeps working while the room repoints.
+--      away. The fold reads project_parties; it is the one act that ever does.
+--   3. THE FREEZE (R-AS). project_parties.sms_consent_* becomes legacy:
+--      commented as such, refused by refuse_legacy_consent_write(), and read by
+--      nobody. v_project_roster and people_directory take the consent word off
+--      the record through channel_consent_status(). There is no mirror and no
+--      second copy — that copy is what ten review rounds kept finding defects
+--      in, because one evidence set on the seat can only ever describe the act
+--      that happened last.
 --   4. record_channel_consent(...) — SECURITY DEFINER, studio-member gated. The
 --      ONLY write path the portal gets: the table grants authenticated SELECT
 --      and nothing else, so a consent fact cannot be written without passing
@@ -53,58 +54,29 @@
 -- on different keys (the RPC used to refuse an unparseable phone the channels
 -- table deliberately keeps).
 --
--- ORDER IS LOAD-BEARING: the mirror trigger is created AFTER the backfill runs.
--- Creating it first would make the backfill push a consent verdict back down
--- onto sibling party rows, and a row moving to evidenced-`pending` fires
--- 00432's fc_dispatch_optin_invite — a real opt-in SMS, from a migration.
+-- WHAT THE SINGLE SOURCE BUYS. project_parties carries two AFTER-row triggers
+-- that reach the OUTSIDE WORLD — fc_dispatch_optin_invite (00432:27-68, trigger
+-- created 00284:254-257, fires on an evidenced `pending` and sends the opt-in
+-- invite SMS) and _site_request_consent_granted_dispatch (00374:3399-3444,
+-- trigger created 00374:3446-3455, fires on a flip to `granted` and calls
+-- site-request-dispatch, which calls sendPartySms). A mirror had to reach past
+-- both of them, one shared suppression flag and two grafted redefinitions deep,
+-- or one recorded `pending` became one real opt-in text per seat on the number,
+-- on a 10DLC campaign where duplicate opt-in traffic is what gets a campaign
+-- filtered. With nothing writing the seats, neither trigger can fire from a
+-- consent act at all: both keep their shipped bodies, unguarded, and this file
+-- redefines neither. Sending for a consent RECORD is W2's hook — once,
+-- deliberately, not a trigger's fan-out.
 --
--- That ordering only protects THIS file's own fold. At runtime the same hazard
--- is live and worse: one recorded `pending` fans out to every party row in the
--- studio on that number, and each newly-evidenced-pending row fires its own
--- opt-in text — N identical messages to one human from one studio act, on a
--- 10DLC campaign where duplicate opt-in traffic is exactly what gets a campaign
--- filtered.
---
--- THE INVARIANT: project_parties carries AFTER-row triggers that reach the
--- OUTSIDE WORLD, and a mirror write must fire none of them. A mirror write is
--- cache maintenance of a verdict decided elsewhere, never a studio act. So this
--- file REDEFINES BOTH of project_parties' outward-facing AFTER triggers to
--- stand down while the mirror is the one writing, reading one shared flag,
--- patina.suppress_consent_dispatch:
---
---   · fc_dispatch_optin_invite  — lineage 00432:27-68 (the grep-winner body,
---     verbatim below), trigger fc_optin_invite_dispatch created 00284:254-257.
---     Fires on an evidenced `pending`; sends the opt-in invite SMS.
---   · _site_request_consent_granted_dispatch — lineage 00374:3399-3444 (the
---     grep-winner body, verbatim below), trigger
---     site_request_consent_granted_dispatch created 00374:3446-3455. Fires when
---     sms_consent_status flips to `granted`; mints site-request dispatch work
---     and calls site-request-dispatch, which calls sendPartySms — a real text.
---
--- Before this file there was no studio-side path to `granted` at all (the
--- portal caps its own party-row write at `pending`), so the second trigger
--- could only ever fire from the recipient's own inbound YES/START. The mirror
--- creates that path, so the mirror has to close it. A designer writing an
--- evidenced `pending` (or a `granted`) onto a party row DIRECTLY still
--- dispatches, unchanged. Sending for a consent RECORD is W2's hook, once,
--- deliberately — not a trigger's fan-out. The invariant is restated as a
--- COMMENT on project_parties so the third such trigger cannot land unguarded.
---
--- IT IS AN INVARIANT ABOUT SENDING, NOT ABOUT WORK. Standing the triggers down
--- wholesale also stranded the DURABLE half: 00374's trigger is the only caller
--- of site_request_dispatch_after_consent(), and the lifecycle sweep only
--- promotes requests that already hold an outbox row. So a seat the mirror moved
--- to `granted` — every sibling seat an inbound YES covers beyond the ones it
--- transitioned itself, and every seat of a studio-recorded grant — read
--- `granted` while its site request sat in awaiting_consent for ever, its
--- consent_status_snapshot still saying not_asked. The mirror therefore carries
--- its own narrow release: for the seats it just moved onto `granted` it calls
--- site_request_dispatch_after_consent() directly, and ONLY that — no
--- invoke_edge_function. Snapshot and outbox row land in this transaction; the
--- eager wake-up, the one outward act, stays with the party-row trigger, and the
--- lifecycle sweep carries the outbox row the ordinary way. (The inbound rail
--- also writes the party rows FIRST, so on a YES/START the real transition fires
--- the real trigger and the mirror's release finds nothing left to do.)
+-- WHAT IT COSTS, STATED HERE SO W2 CANNOT MISS IT. 00374's trigger is the only
+-- caller of site_request_dispatch_after_consent(), and the lifecycle sweep only
+-- promotes site requests that already hold an outbox row. The trigger fires on
+-- a party-row transition, and party rows no longer transition. So a site
+-- request parked in awaiting_consent is not released by consent arriving any
+-- more, and site_request_send() — which moves a not_asked assignee to `pending`
+-- before dispatching — now raises consent_legacy_column_frozen. The whole
+-- site-request rail reads consent off the seat; repointing it at the record is
+-- one change and it belongs with that rail, not inside a consent migration.
 --
 -- THE WRITE DOOR IS A TRANSITION GATE, not just a value check.
 -- record_channel_consent() is granted to every authenticated studio member, so
@@ -115,7 +87,7 @@
 --     `not_asked` is refused outright (R-AG) — it is the absence of a record,
 --     not a verdict, and taking it was the one evidence-free door into this
 --     table: four arguments erased a recorded grant and its whole 10DLC
---     evidence set, from the record and from every mirrored seat.
+--     evidence set.
 --   · Nothing leaves `opted_out` through this door — not to granted, not to
 --     pending, not to not_asked. A STOP is the only stored record of a refusal
 --     and the RPC may not erase it. And `granted` is refused for as long as
@@ -280,9 +252,10 @@ COMMENT ON TABLE public.studio_channel_consent IS
   'E8: ONE consent record per studio per channel value. Never per project '
   '(00417''s "consent is per engagement" note is superseded by the six '
   'construction seats: consent follows the phone, inside one studio). '
-  'project_parties.sms_consent_* is now a read-only cached mirror of this table, '
-  'maintained by mirror_channel_consent_to_parties(). Written ONLY through '
-  'record_channel_consent() or service_role (the inbound SMS rail).';
+  'project_parties.sms_consent_* is FROZEN LEGACY beside it (R-AS): read by '
+  'nobody, refused by refuse_legacy_consent_write(), kept only as the evidence '
+  'the fold was built from. Written ONLY through record_channel_consent() / '
+  'record_channel_reconsent(), or service_role (the inbound SMS rail).';
 
 COMMENT ON COLUMN public.studio_channel_consent.channel_value IS
   'The phone in E.164 or the lowercased email — the fact consent is about. '
@@ -304,9 +277,9 @@ COMMENT ON COLUMN public.studio_channel_consent.opt_out_source IS
   'touched by NOTHING else: no consent verdict, and never reconsent (r8 W4-M2, '
   'which found reconsent overwriting source/evidence/recorded_at/'
   'disclosure_version/recorded_by while leaving status opted_out, so the STOP''s '
-  'own "Replied STOP" / inbound_sms was destroyed on the record and, through '
-  'the mirror, on every seat). These four have no party-row counterpart, so the '
-  'mirror never carries them.';
+  'own "Replied STOP" / inbound_sms was destroyed). These four have no '
+  'party-row counterpart at all, which is one more reason the seat was never '
+  'able to hold this record''s facts (R-AS).';
 
 COMMENT ON COLUMN public.studio_channel_consent.refusal_unanswered IS
   'TRUE while a refusal stands that the person who made it has not answered. '
@@ -490,13 +463,12 @@ BEGIN
   -- NULL, permanently (ON CONFLICT DO NOTHING means no later fold repairs it,
   -- and record_channel_reconsent never touches opt_out_* by design), so R-Q's
   -- "Opted out by text, 3 Dec 2025" is unprintable and the carrier-audit
-  -- artifact is gone. Worse, a NULL opt_out_source is what the mirror reads as
-  -- "this refusal has no words" (R-AQ), so it then writes NULL over
-  -- source/evidence/recorded_at/recorded_by on EVERY seat in the studio on that
-  -- number — including the seat that was holding the STOP's own words. R-AQ's
-  -- premise (a NULL here means there were never any refusal words) is true of
-  -- the RECORD's writers and false of this picker, which is why the picker has
-  -- to be the one that is right.
+  -- artifact is gone. (Under the retired mirror it was worse still: a NULL
+  -- opt_out_source was read as "this refusal has no words" — R-AQ — and the
+  -- NULL was written down over every seat's evidence, the seat holding the
+  -- STOP's own words included. R-AS retired the mirror and with it that branch;
+  -- the picker still has to be right, because the record is now the only copy
+  -- there is.)
   --
   -- So: words first, then a date, then recency. And the date has a group-wide
   -- last resort — max(sms_opt_out_at) across the refusing seats — so a refusal
@@ -535,13 +507,11 @@ BEGIN
            -- ruled must be NULL on a rail-written STOP). R-Q then printed
            -- "Opted out IN WRITING" for a refusal that arrived by text.
            --
-           -- Either way the damage is the same and permanent: because
-           -- opt_out_source came out non-NULL the mirror's wordless-refusal
-           -- branch never fired, so R-AQ's protective NULL-write was suppressed
-           -- exactly where it was needed and the grant's paperwork was stamped
-           -- onto every sibling seat; ON CONFLICT DO NOTHING means no later
-           -- fold repairs the record, and record_channel_reconsent never
-           -- touches opt_out_* by design.
+           -- Either way the damage is permanent: ON CONFLICT DO NOTHING means
+           -- no later fold repairs the record, and record_channel_reconsent
+           -- never touches opt_out_* by design. Since R-AS the record is the
+           -- only copy, so a lie minted here is the only thing the room can
+           -- read.
            --
            -- So the evidence must PLAUSIBLY BELONG TO THE REFUSAL: either it
            -- says so itself (`inbound_sms` — only the rail writes that), or
@@ -613,15 +583,10 @@ BEGIN
   -- recorded_at / disclosure_version / recorded_by all NULL and the group's real
   -- consent paperwork nowhere on it.
   --
-  -- That is not merely a gap in the record. opt_out_source comes out NULL on the
-  -- same fold, and a NULL there is exactly what R-AQ's mirror branch reads as
-  -- "this refusal has no words", so the mirror writes NULL over
-  -- sms_consent_source / _evidence / _recorded_at / _recorded_by on EVERY seat
-  -- in the studio on that number — INCLUDING THE SEAT THAT HELD THE GRANT. One
-  -- ordinary act is enough to trigger it, and nothing puts any of it back:
-  -- ON CONFLICT DO NOTHING means no later fold repairs the record, and
-  -- record_channel_reconsent never touches opt_out_*. The studio's proof of
-  -- prior express written consent for that number then exists NOWHERE, which is
+  -- And nothing puts it back: ON CONFLICT DO NOTHING means no later fold
+  -- repairs the record, and record_channel_reconsent never touches opt_out_*.
+  -- Since R-AS the record is the only copy, so the studio's proof of prior
+  -- express written consent for that number would then exist NOWHERE, which is
   -- the one artifact a 10DLC audit asks for.
   --
   -- So the group's best evidenced consent is carried the way r8 W4-M1 already
@@ -753,187 +718,164 @@ COMMENT ON FUNCTION public.backfill_channel_consent_from_parties() IS
   'carrying a stale unanswered opt-out (r4 R4-M1) nor the GRANT''s paperwork '
   'left standing on a seat the inbound STOP rail flipped to `opted_out` '
   '(r10 M1) is ever filed as the refusal''s own words; such a refusal is '
-  'recorded wordless, which is what R-AQ''s mirror branch reads. '
+  'recorded wordless, which is the honest record of it. '
   'THE CONSENT SIDE IS ASKED OF THE WHOLE GROUP TOO (r9 M2): where the winning '
   'row carries no consent evidence at all — the sourceless dateless opted_out '
   'seat the shipped portal writes on purpose, which wins the refusal bucket — '
   'the record takes source, evidence, recorded_at, disclosure_version, '
   'recorded_by AND consented_at, as one set, off the group''s best evidenced '
   'grant (grant_evidence), so a studio holding a signed grant on the seat next '
-  'door does not have it minted away. It matters twice over, because a record '
-  'minted with a NULL opt_out_source is the one R-AQ''s mirror branch then '
-  'wipes the seats for — the grant seat included — leaving the proof of prior '
-  'express written consent nowhere at all. A winner that carries its own '
+  'door does not have it minted away — and since R-AS the record is the only '
+  'copy, so a grant lost at the fold is lost outright. A winner that carries '
+  'its own '
   'consent evidence keeps it (a STOP-flipped seat''s grant paperwork, or a '
   'refusal minting the record with its own words, as both other writers of a '
   'mint do). '
   'Idempotent — ON CONFLICT '
   'DO NOTHING never overwrites a later decision — and side-effect-free to '
-  're-run once the trigger exists: a folded `pending` reaches the party rows '
-  'through the mirror, which suppresses 00432''s opt-in dispatch (00594).';
+  're-run: it writes studio_channel_consent and nothing else, so a folded '
+  '`pending` reaches no party row and fires no opt-in dispatch (00594, R-AS).';
 
 SELECT public.backfill_channel_consent_from_parties();
-
 -- ═══════════════════════════════════════════════════════════════════════════
--- 3. The mirror — created AFTER the backfill, see the header
+-- 3. THE RECORD IS THE SINGLE SOURCE — the mirror is retired (R-AS)
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Ten review rounds (r5–r10) found the same class of defect over and over, and
+-- every one of them lived in the COPY: a verdict and an evidence set held in
+-- two places, with one set of columns on project_parties that has to speak for
+-- whichever act happened last. The refusal's words under the grant's date; the
+-- grant's recorder named as the person who refused; a sibling seat's paperwork
+-- standing in for a refusal that had none. Each was patched where it was
+-- found, and the next round found the next one.
+--
+-- R-AS ends the class rather than the instance. studio_channel_consent is the
+-- single source of truth for consent. Nothing writes
+-- project_parties.sms_consent_* any more:
+--
+--   · mirror_channel_consent_to_parties() and its trigger are GONE, and so are
+--     the two redefinitions that existed only to serve them —
+--     fc_dispatch_optin_invite (00432) and
+--     _site_request_consent_granted_dispatch (00374) keep their shipped bodies,
+--     unguarded, because no mirror write can reach them any more. The flag
+--     patina.suppress_consent_dispatch is not set by anything in this file.
+--   · the inbound SMS rail writes the record only
+--     (supabase/functions/sms-inbound/pipeline.ts).
+--   · the eight legacy columns are FROZEN: readable, commented as legacy, and
+--     guarded by a BEFORE UPDATE trigger that refuses any change to them
+--     unless current_setting('app.consent_legacy_write', true) = 'on'.
+--     Nothing in the send rails sets that flag, on purpose: a shipped writer
+--     that still reaches for these columns FAILS LOUDLY rather than quietly
+--     writing a fact nobody reads. The escape hatch exists for a deliberate
+--     data repair, and for W2, which retires those writers.
+--
+-- The writers that will now fail, found by grep and listed in the build report:
+--   · public.site_request_send() (00374:1265-1269) — moves a not_asked
+--     assignee to `pending` before dispatching a site request.
+--   · useRecordPartySmsConsent and the phone-edit revertsToOptedOut branch
+--     (packages/supabase/src/hooks/use-coordination.ts) — the portal's two
+--     UPDATE paths. useAddProjectParty INSERTs and is untouched: the freeze is
+--     BEFORE UPDATE, so a seat may still be born carrying what the studio
+--     recorded at the door.
+--
+-- ONE CONSEQUENCE IS DELIBERATELY LEFT OPEN FOR W2, not closed here. 00374's
+-- site_request_consent_granted_dispatch fires on a party-row transition to
+-- `granted`. With the legacy columns frozen and the rail writing the record,
+-- no party row transitions any more, so a site request parked in
+-- awaiting_consent is no longer released by consent arriving. The site-request
+-- rail reads consent off the seat throughout (site_request_send,
+-- consent_status_snapshot, the lifecycle sweep); repointing it at the record is
+-- one change, and it belongs with the rail, not inside a consent migration.
 -- ═══════════════════════════════════════════════════════════════════════════
 
--- ── 3a. Teach BOTH outward-facing party triggers to stand down for a mirror ──
---
--- project_parties' non-internal trigger set, probed on the local stack:
---
---   set_updated_at_project_parties        update_updated_at_column        BEFORE
---   normalize_phone_project_parties       normalize_party_phone_e164      BEFORE
---   fc_optin_invite_dispatch              fc_dispatch_optin_invite        AFTER
---   site_request_consent_granted_dispatch _site_request_consent_granted_… AFTER
---
--- The two BEFORE triggers are pure row shaping. BOTH AFTER triggers reach the
--- outside world, and the mirror's UPDATE satisfies both of them — one on an
--- evidenced `pending`, one on any flip to `granted`. Guarding only the first
--- left a recorded `granted` minting site-request dispatch work and texting a
--- trade out of a cache write. Both are redefined here, from their grep-winner
--- bodies verbatim, with the same first-statement guard:
---
---   3a-1  fc_dispatch_optin_invite               lineage 00432:27-68
---   3a-2  _site_request_consent_granted_dispatch lineage 00374:3399-3444
---
--- patina.suppress_consent_dispatch is set (SET LOCAL, via set_config(...,true))
--- only by mirror_channel_consent_to_parties() below, around its own UPDATE, and
--- cleared immediately after it. AFTER-row triggers queued by that UPDATE fire
--- at the end of that statement, before the mirror's next statement, so the
--- window is exactly the mirror's own write and nothing else in the transaction.
+-- Idempotent retirement: this file has only ever run locally, but a stack that
+-- replayed an earlier 00594 still carries the mirror.
+DROP TRIGGER IF EXISTS mirror_channel_consent_to_parties_trg ON public.studio_channel_consent;
+DROP FUNCTION IF EXISTS public.mirror_channel_consent_to_parties();
 
--- ── 3a-1. The opt-in invite (lineage 00432:27-68, verbatim + one guard) ──────
--- Trigger fc_optin_invite_dispatch created at 00284:254-257.
-CREATE OR REPLACE FUNCTION public.fc_dispatch_optin_invite()
-RETURNS TRIGGER
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-BEGIN
-  -- 00594: the mirror is maintaining the cached copy of a consent record that
-  -- was already decided elsewhere. Mirroring a verdict is not asking for one.
-  IF COALESCE(current_setting('patina.suppress_consent_dispatch', true), '') = '1' THEN
-    RETURN NEW;
-  END IF;
+-- ── 3a. The eight legacy columns say what they are ──────────────────────────
+COMMENT ON COLUMN public.project_parties.sms_consent_status IS
+  'legacy; read studio_channel_consent. Frozen by 00594 (R-AS): the consent '
+  'record for (this project''s studio, ''sms'', phone_e164) is the single '
+  'source of truth, and v_project_roster / people_directory read it through '
+  'public.channel_consent_status(). Kept for the rows already written and for '
+  'backfill_channel_consent_from_parties(), which folds them in once.';
+COMMENT ON COLUMN public.project_parties.sms_consented_at IS
+  'legacy; read studio_channel_consent.consented_at (00594, R-AS).';
+COMMENT ON COLUMN public.project_parties.sms_opt_out_at IS
+  'legacy; read studio_channel_consent.opt_out_at (00594, R-AS).';
+COMMENT ON COLUMN public.project_parties.sms_consent_source IS
+  'legacy; read studio_channel_consent.source, or opt_out_source when the '
+  'verdict is a refusal — the record holds the grant''s evidence and the '
+  'refusal''s side by side, which one column never could (00594, R-AS).';
+COMMENT ON COLUMN public.project_parties.sms_consent_evidence IS
+  'legacy; read studio_channel_consent.evidence / opt_out_evidence '
+  '(00594, R-AS).';
+COMMENT ON COLUMN public.project_parties.sms_consent_recorded_at IS
+  'legacy; read studio_channel_consent.recorded_at / opt_out_recorded_at '
+  '(00594, R-AS).';
+COMMENT ON COLUMN public.project_parties.sms_consent_recorded_by IS
+  'legacy; read studio_channel_consent.recorded_by / opt_out_recorded_by '
+  '(00594, R-AS).';
+COMMENT ON COLUMN public.project_parties.sms_consent_disclosure_version IS
+  'legacy; read studio_channel_consent.disclosure_version (00594, R-AS).';
 
-  IF NEW.sms_consent_status <> 'pending' OR NEW.phone_e164 IS NULL THEN
-    RETURN NEW;
-  END IF;
-  IF NEW.sms_consent_source IS NULL
-     OR NEW.sms_consent_recorded_at IS NULL
-     OR NEW.sms_consent_disclosure_version IS NULL
-     OR btrim(COALESCE(NEW.sms_consent_evidence, '')) = '' THEN
-    RETURN NEW;
-  END IF;
-  IF TG_OP = 'UPDATE'
-     AND OLD.sms_consent_status IS NOT DISTINCT FROM 'pending'
-     AND OLD.sms_consent_source IS NOT NULL
-     AND OLD.sms_consent_recorded_at IS NOT NULL
-     AND OLD.sms_consent_disclosure_version IS NOT NULL
-     AND btrim(COALESCE(OLD.sms_consent_evidence, '')) <> '' THEN
-    RETURN NEW;
-  END IF;
-
-  BEGIN
-    PERFORM public.invoke_edge_function(
-      'sms-dispatch',
-      jsonb_build_object(
-        'partyId',     NEW.id,
-        'projectId',   NEW.project_id,
-        'templateKey', 'sms_optin_invite',
-        'type',        'field_optin_confirmation'
-      )
-    );
-  EXCEPTION WHEN OTHERS THEN
-    RAISE WARNING 'fc_dispatch_optin_invite: dispatch failed for party %: %', NEW.id, SQLERRM;
-  END;
-
-  RETURN NEW;
-END;
-$$;
-
-COMMENT ON FUNCTION public.fc_dispatch_optin_invite() IS
-  'Dispatches the SMS double-confirmation only after auditable prior express '
-  'consent is recorded (00432), and never for a write made by '
-  'mirror_channel_consent_to_parties(), which sets patina.suppress_consent_dispatch '
-  'for the duration of its own UPDATE — one recorded consent must not fan out '
-  'into one text per party row on the number (00594).';
-
--- ── 3a-2. The site-request consent dispatch ─────────────────────────────────
--- Lineage: 00374:3399-3444 (current head — the body below is that body
--- verbatim), trigger site_request_consent_granted_dispatch created at
--- 00374:3446-3455 and left exactly as it is. Delta: one guard, first statement.
---
--- This one is the sharper of the two: it calls site_request_dispatch_after_consent()
--- (durable work, in-transaction) and then invoke_edge_function('site-request-dispatch',
--- …), whose handler calls sendPartySms — a real outbound text per awaiting_consent
--- request on the seat. The mirror's UPDATE flips sms_consent_status to 'granted'
--- on EVERY party row in the studio on that number, so one recorded grant fanned
--- out into one dispatch per open request per seat.
-CREATE OR REPLACE FUNCTION public._site_request_consent_granted_dispatch()
+-- ── 3b. …and refuse to be written ───────────────────────────────────────────
+CREATE OR REPLACE FUNCTION public.refuse_legacy_consent_write()
 RETURNS trigger
 LANGUAGE plpgsql
-SECURITY DEFINER
 SET search_path TO 'public'
 AS $$
-DECLARE
-  v_request record;
-  v_dispatch jsonb;
 BEGIN
-  -- 00594: the mirror is maintaining the cached copy of a consent record that
-  -- was already decided elsewhere. Mirroring a verdict is not asking for one,
-  -- and it is not the moment a trade learns there is work waiting.
-  IF COALESCE(current_setting('patina.suppress_consent_dispatch', true), '') = '1' THEN
+  -- The deliberate door: a data repair, or W2 retiring a writer, opens it with
+  -- SET LOCAL app.consent_legacy_write = 'on' around its own statement.
+  IF COALESCE(current_setting('app.consent_legacy_write', true), '') = 'on' THEN
     RETURN NEW;
   END IF;
 
-  IF NEW.sms_consent_status <> 'granted'
-     OR OLD.sms_consent_status = 'granted' THEN
-    RETURN NEW;
+  -- BEFORE UPDATE OF fires whenever a column is NAMED in the SET list, whether
+  -- or not its value moves, and the shipped portal writes whole rows. Only a
+  -- real change is refused.
+  IF (NEW.sms_consent_status, NEW.sms_consented_at, NEW.sms_opt_out_at,
+      NEW.sms_consent_source, NEW.sms_consent_evidence,
+      NEW.sms_consent_recorded_at, NEW.sms_consent_recorded_by,
+      NEW.sms_consent_disclosure_version)
+     IS DISTINCT FROM
+     (OLD.sms_consent_status, OLD.sms_consented_at, OLD.sms_opt_out_at,
+      OLD.sms_consent_source, OLD.sms_consent_evidence,
+      OLD.sms_consent_recorded_at, OLD.sms_consent_recorded_by,
+      OLD.sms_consent_disclosure_version) THEN
+    RAISE EXCEPTION 'consent_legacy_column_frozen'
+      USING HINT = 'project_parties.sms_consent_* is legacy since 00594. '
+                   'Consent is a fact about (studio, channel, value): record '
+                   'it with record_channel_consent(), or record_channel_'
+                   'reconsent() over a standing refusal. Reads go through '
+                   'studio_channel_consent / channel_consent_status().';
   END IF;
 
-  FOR v_request IN
-    SELECT id
-    FROM public.site_requests
-    WHERE assignee_party_id = NEW.id
-      AND status = 'awaiting_consent'
-    ORDER BY created_at
-  LOOP
-    -- Durable work is part of the same transaction as the consent update.
-    -- The Edge invocation below is only an eager wake-up: pg_net can miss,
-    -- retry, or arrive after a worker restart without stranding the request in
-    -- awaiting_consent. The lifecycle sweep will claim this identifier-only
-    -- row and mint a raw guest token only when an SMS attempt actually begins.
-    v_dispatch := public.site_request_dispatch_after_consent(v_request.id);
-    BEGIN
-      PERFORM public.invoke_edge_function(
-        'site-request-dispatch',
-        jsonb_build_object(
-          'action', 'consent-granted',
-          'request_id', v_request.id,
-          'party_id', NEW.id,
-          'outbox_id', v_dispatch->>'outbox_id'
-        )
-      );
-    EXCEPTION WHEN OTHERS THEN
-      RAISE WARNING 'site request consent dispatch failed for request %: %',
-        v_request.id, SQLERRM;
-    END;
-  END LOOP;
   RETURN NEW;
 END;
 $$;
 
-COMMENT ON FUNCTION public._site_request_consent_granted_dispatch() IS
-  'Releases site requests parked in awaiting_consent when the assignee''s '
-  'consent turns granted (00374), and never for a write made by '
-  'mirror_channel_consent_to_parties(), which sets patina.suppress_consent_dispatch '
-  'for the duration of its own UPDATE — a cached verdict must not mint dispatch '
-  'work or text a trade (00594).';
+REVOKE ALL ON FUNCTION public.refuse_legacy_consent_write() FROM PUBLIC, anon;
 
--- The invariant, on the table itself, so the third one cannot land unguarded.
+COMMENT ON FUNCTION public.refuse_legacy_consent_write() IS
+  'Freezes project_parties.sms_consent_* (R-AS). A change to any of the eight '
+  'columns is refused with consent_legacy_column_frozen unless the caller has '
+  'set app.consent_legacy_write = ''on'' for its own statement. Restating the '
+  'same values is allowed, so a whole-row UPDATE that happens to name them '
+  'still writes. Nothing in the send rails sets the flag: a shipped writer '
+  'that still reaches for these columns is meant to fail loudly, not to write '
+  'a fact no reader reads (00594).';
+
+DROP TRIGGER IF EXISTS refuse_legacy_consent_write_trg ON public.project_parties;
+CREATE TRIGGER refuse_legacy_consent_write_trg
+  BEFORE UPDATE OF sms_consent_status, sms_consented_at, sms_opt_out_at,
+                   sms_consent_source, sms_consent_evidence,
+                   sms_consent_recorded_at, sms_consent_recorded_by,
+                   sms_consent_disclosure_version
+  ON public.project_parties
+  FOR EACH ROW EXECUTE FUNCTION public.refuse_legacy_consent_write();
+
 COMMENT ON TABLE public.project_parties IS
   'Track 5 coordination courts (R46): GC / vendor / client_rep / other parties '
   'on a project. profile_id NULLABLE — v1 parties do NOT log in; the designer '
@@ -941,330 +883,485 @@ COMMENT ON TABLE public.project_parties IS
   'gives that party a real login (a flag flip, not a migration). vendor_id '
   'soft-links a known vendor; both back-links ON DELETE SET NULL so item/task '
   'court history survives (00212). '
-  'sms_consent_* is a READ-ONLY CACHED MIRROR '
-  'of studio_channel_consent since 00594, maintained by '
-  'mirror_channel_consent_to_parties(). INVARIANT: any AFTER-row trigger added '
-  'to this table that reaches outside the transaction (an SMS, an email, an '
-  'edge invocation, durable dispatch work) MUST stand down when '
-  'current_setting(''patina.suppress_consent_dispatch'', true) = ''1'' — that '
-  'flag marks a mirror write, which is cache maintenance of a verdict already '
-  'decided, never a studio act. Guarded so far: fc_dispatch_optin_invite, '
-  '_site_request_consent_granted_dispatch. The invariant is about SENDING: '
-  'mirror_channel_consent_to_parties() still releases the site requests parked '
-  'on the seats it moves to granted, by calling '
-  'site_request_dispatch_after_consent() itself — durable, in-transaction, no '
-  'edge invocation.';
+  'sms_consent_* is FROZEN LEGACY since 00594 (R-AS): studio_channel_consent '
+  'is the single source of truth for consent, refuse_legacy_consent_write() '
+  'refuses any change to those eight columns, and every reader goes through '
+  'channel_consent_status(). They are not dropped — '
+  'backfill_channel_consent_from_parties() folds them in once, and the rows '
+  'themselves are 10DLC evidence of what the studio held before the record '
+  'existed.';
 
--- ── 3b. The mirror ──────────────────────────────────────────────────────────
-CREATE OR REPLACE FUNCTION public.mirror_channel_consent_to_parties()
-RETURNS TRIGGER
-LANGUAGE plpgsql
-SECURITY DEFINER
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 3c. The one reader — channel_consent_status()
+-- ═══════════════════════════════════════════════════════════════════════════
+-- SECURITY INVOKER on purpose: studio_channel_consent's own RLS
+-- (is_active_studio_member) is the access rule, and a definer here would hand
+-- any caller any studio's verdict for the price of an org id.
+CREATE OR REPLACE FUNCTION public.channel_consent_status(
+  p_organization_id uuid,
+  p_channel_kind    text,
+  p_channel_value   text
+)
+RETURNS text
+LANGUAGE sql
+STABLE
 SET search_path TO 'public'
 AS $$
-DECLARE
-  v_newly_granted    uuid[];
-  v_request          uuid;
-  v_seat_source      text;
-  v_seat_evidence    text;
-  v_seat_recorded_at timestamptz;
-  v_seat_recorded_by uuid;
-  -- TRUE when the verdict being mirrored is a REFUSAL. Then the seat's four
-  -- evidence columns are written STRAIGHT FROM the record's opt_out_* set, with
-  -- no seat fallback at all — NULLs included: see the branch below (r8 R8-M1
-  -- and r9 R5-M2, rulings R-AQ and its refinement). This used to be a
-  -- one-column test (`NEW.opt_out_source IS NULL`), which decided the four
-  -- columns individually and let three of them fall back to the seat.
-  v_refusal boolean := false;
-BEGIN
-  IF NEW.channel_kind <> 'sms' THEN
-    RETURN NEW;
-  END IF;
-
-  -- WHEN THE VERDICT IS A REFUSAL, THE SEAT CARRIES THE REFUSAL'S OWN EVIDENCE
-  -- (r9 R5-M1). W4-M2 kept opt_out_source / opt_out_evidence /
-  -- opt_out_recorded_at / opt_out_recorded_by off the studio's side of the
-  -- record — but project_parties has no second set of columns, and the mirror
-  -- was still copying the CONSENT side onto the seat. So a seat that read
-  -- (opted_out, inbound_sms, 'Replied STOP') read (opted_out, written, 'Signed
-  -- a fresh consent…') the moment record_channel_reconsent() put the studio's
-  -- own paperwork on the record: R-Q's sentence, read off the seat — which is
-  -- what every shipped surface reads — became "Opted out in writing", naming
-  -- the studio's consent as the refusal, and the 10DLC artifact of how the STOP
-  -- arrived was gone from the only copy those surfaces see. The refusal's
-  -- evidence is the evidence OF the verdict being mirrored, so when the verdict
-  -- is `opted_out` the refusal's set is what the seat gets, AND NOTHING ELSE IS
-  -- ALLOWED TO STAND IN FOR IT (r6 R6-M1). This branch used to fall back to the
-  -- record's CONSENT set — COALESCE(NEW.opt_out_source, NEW.source) and three
-  -- siblings — justified as covering "the legacy rows minted before opt_out_*
-  -- existed". That population cannot exist: this same file creates the table
-  -- with all four opt_out_* columns (the CREATE below, restated as an ALTER for
-  -- the rerun path), so no database can hold a row of that shape. What the
-  -- fallback actually hit is a refusal that carries NO SOURCE OF ITS OWN — the
-  -- shape the shipped portal writes on purpose (use-coordination.ts writes
-  -- `opted_out` together with the not-asked columns, nulling source, evidence,
-  -- recorded_at, disclosure_version and recorded_by), the shape every pre-00432
-  -- row carries, and the shape the fold mints verbatim. On such a record
-  -- NEW.source is the studio's OWN fresh consent, written by
-  -- record_channel_reconsent(), so the fallback made the seat read
-  -- (opted_out, written, "Signed a fresh consent form…", recorded today):
-  -- R-Q's sentence off the seat became "Opted out in writing, 12 Sep 2026",
-  -- naming the studio's consent document as the refusal and dating the refusal
-  -- to the day the studio filed its paperwork. A seat that said nothing about
-  -- the refusal (honest) started asserting something false. Every writer that
-  -- mints a refusal WITH words fills opt_out_* — record_channel_consent's
-  -- opted_out branch and the inbound STOP rail both do — so a NULL here means
-  -- there were never any refusal words, and the seat's own standing value is
-  -- the fallback (never NULL over non-null, R-AN). disclosure_version has no
-  -- refusal-side twin — it belongs to the disclosure the person was shown, not
-  -- to how they refused — so it keeps coming from the record's own column.
-  --
-  -- AND WHERE THE REFUSAL HAS NO WORDS, THE SEAT IS LEFT WITH NONE (r8 R8-M1,
-  -- ruling R-AQ). "The seat's own standing value is the fallback" is true only
-  -- while that standing value is itself about the refusal. It is not, for the
-  -- seat NEXT DOOR. project_parties has ONE evidence set and a sibling seat in
-  -- the same studio on the same number routinely holds the GRANT's evidence —
-  -- the studio's paperwork, dated the day of the grant. So on the sourceless
-  -- refusal the portal and the fold really write, every COALESCE below kept
-  -- what the sibling held and left that seat asserting the studio's own consent
-  -- document AS the refusal: R-Q's sentence, composed off the seat, printed
-  -- "Opted out in writing, 2 Jan 2026" — the studio's consent form named as the
-  -- refusal, dated to the day of the grant. It bites on the first prod fold,
-  -- over real project_parties data, and needs no later act by anyone.
-  --
-  -- R-AN's "never NULL over non-null" was written about a verdict that simply
-  -- did not restate its evidence. A REFUSAL WITH NO SOURCE IS NOT THAT CASE: it
-  -- is a refusal whose evidence is known to be ABSENT, and absent is what the
-  -- seat must say. NULL here is therefore the honest write, and it is exactly
-  -- what the shipped portal writes for the same verdict (use-coordination.ts
-  -- writes `opted_out` together with the not-asked columns). R-AN still governs
-  -- every other transition, including a refusal that DOES carry its own words.
-  -- disclosure_version is not in this set — it belongs to the disclosure the
-  -- person was shown, not to how they refused, and keeps coming from the record.
-  --
-  -- AND THE REFUSAL'S FOUR COLUMNS ARE DECIDED AS A SET, NOT ONE BY ONE (r9
-  -- R5-M2). The test above used to be ONE COLUMN WIDE — `NEW.opt_out_source IS
-  -- NULL` — and the other three fell back to the seat whenever the source was
-  -- filled. That is the ordinary inbound STOP: opt_out_source is 'inbound_sms',
-  -- so the one-column test said "this refusal has words", while
-  -- opt_out_recorded_by is DELIBERATELY AND ALWAYS NULL on a rail-written STOP
-  -- (the edge pipeline writes it null on purpose: nobody in the studio recorded
-  -- it, the recipient did — R7-M1, and the column comment below). The COALESCE
-  -- then handed the seat pp.sms_consent_recorded_by — THE STUDIO MEMBER WHO
-  -- RECORDED THE GRANT — so every seat that had held a recorded grant came out
-  -- of a STOP naming a named studio member as the person who refused: the exact
-  -- carrier-audit attribution R7-M1 ruled against, one table over, on the
-  -- ordinary path. The two siblings follow from the same one-column test on
-  -- folded legacy data: a refusal with no opt_out_evidence took the seat's
-  -- GRANT WORDS under the refusal's source, one with no opt_out_recorded_at
-  -- took the grant's DATE.
-  --
-  -- So: when the verdict is a refusal, THE RECORD IS THE AUTHORITY FOR THE
-  -- REFUSAL'S OWN EVIDENCE and the four columns are written straight from
-  -- NEW.opt_out_* with no seat fallback at all. Every writer that has refusal
-  -- words fills what it has, and what it leaves NULL is known absent — which is
-  -- R-AQ's rule, now applied to all four columns instead of keyed off one of
-  -- them. R-AN's refresh-never-erase COALESCE governs every other transition,
-  -- unchanged.
-  IF NEW.status = 'opted_out' THEN
-    v_seat_source      := NEW.opt_out_source;
-    v_seat_evidence    := NEW.opt_out_evidence;
-    v_seat_recorded_at := NEW.opt_out_recorded_at;
-    v_seat_recorded_by := NEW.opt_out_recorded_by;
-    v_refusal          := true;
-  ELSE
-    v_seat_source      := NEW.source;
-    v_seat_evidence    := NEW.evidence;
-    v_seat_recorded_at := NEW.recorded_at;
-    v_seat_recorded_by := NEW.recorded_by;
-  END IF;
-
-  -- The seats this write is about to move ONTO `granted`, captured before the
-  -- UPDATE because after it they all read granted. See the release loop below.
-  IF NEW.status = 'granted' THEN
-    SELECT array_agg(pp.id)
-      INTO v_newly_granted
-      FROM public.project_parties pp
-      JOIN public.projects p ON p.id = pp.project_id
-     WHERE pp.phone_e164 = NEW.channel_value
-       AND COALESCE(p.studio_id, public._primary_studio_for(p.designer_id))
-           = NEW.organization_id
-       AND pp.sms_consent_status IS DISTINCT FROM 'granted';
-  END IF;
-
-  -- Transaction-local, cleared below: fc_dispatch_optin_invite (redefined in
-  -- 3a) reads this and returns without dispatching. Without it, one recorded
-  -- `pending` becomes one real opt-in SMS per party row on the number.
-  PERFORM set_config('patina.suppress_consent_dispatch', '1', true);
-
-  -- THE VERDICT IS COPIED; THE DATES AND THE EVIDENCE ARE COALESCED, PER
-  -- COLUMN (r5 M5-2, ruling R-AN; r6 M6-2 for the two dates). A record can
-  -- carry a verdict without carrying every evidence column — the inbound rail
-  -- mints one from a YES on a number whose evidence so far lives only on the
-  -- seat — and before this, the mirror wrote those NULLs down over a disclosure
-  -- version and a recorder the portal had recorded. That is the same
-  -- hollow-evidence state r2 M-1 closed, arriving from the other side: the
-  -- 10DLC evidence for the send cannot be erased by a write that simply did
-  -- not restate it. So the mirror never overwrites a non-null evidence column
-  -- with NULL; the record's own door (record_channel_consent) already refuses
-  -- to empty the set.
-  --
-  -- THE SAME IS TRUE OF THE TWO DATES, and for the same reason (r6 M6-2). A
-  -- record carrying a verdict without an opt_out_at is the ordinary case —
-  -- every record record_channel_consent mints for pending or granted, and
-  -- every record the inbound rail mints for a number with no prior row — and
-  -- copying it straight wrote NULL over a real, dated refusal on every seat in
-  -- the studio. The RPC goes to trouble to keep both dates on the RECORD
-  -- ("granted 2 May 2025, opted out 3 Dec 2025" must both stay printable, R-Q)
-  -- and the mirror must not destroy the pair on the seats. So each date keeps
-  -- what stands when the new verdict does not restate it. The verdict itself
-  -- is still copied — the status is the fact the record owns.
-  UPDATE public.project_parties pp
-     SET sms_consent_status             = NEW.status,
-         sms_consented_at               = COALESCE(NEW.consented_at, pp.sms_consented_at),
-         sms_opt_out_at                 = COALESCE(NEW.opt_out_at, pp.sms_opt_out_at),
-         -- v_seat_* is the record's consent set, or THE REFUSAL'S OWN SET
-         -- when the verdict being mirrored is a refusal (r9 R5-M1, above).
-         -- CASE, not COALESCE, on the four: a refusal writes its own set
-         -- STRAIGHT, NULLs included and all four together (R-AQ as refined by
-         -- r9 R5-M2 — never a grant's recorder, words or date under an
-         -- opt-out); every other transition refreshes-never-erases (R-AN).
-         sms_consent_source             = CASE WHEN v_refusal THEN v_seat_source
-                                               ELSE COALESCE(v_seat_source, pp.sms_consent_source) END,
-         sms_consent_evidence           = CASE WHEN v_refusal THEN v_seat_evidence
-                                               ELSE COALESCE(v_seat_evidence, pp.sms_consent_evidence) END,
-         sms_consent_recorded_at        = CASE WHEN v_refusal THEN v_seat_recorded_at
-                                               ELSE COALESCE(v_seat_recorded_at, pp.sms_consent_recorded_at) END,
-         sms_consent_disclosure_version = COALESCE(NEW.disclosure_version, pp.sms_consent_disclosure_version),
-         sms_consent_recorded_by        = CASE WHEN v_refusal THEN v_seat_recorded_by
-                                               ELSE COALESCE(v_seat_recorded_by, pp.sms_consent_recorded_by) END
-    FROM public.projects p
-   WHERE p.id = pp.project_id
-     AND pp.phone_e164 = NEW.channel_value
-     AND COALESCE(p.studio_id, public._primary_studio_for(p.designer_id))
-         = NEW.organization_id
-     -- The whole cached tuple, not the status alone. Guarding on status only
-     -- suppressed every EVIDENCE refresh too, so a row could sit at `granted`
-     -- with NULL source / recorded_at / evidence — a state the portal's own
-     -- write path cannot produce and project_parties has no CHECK against,
-     -- and it is the 10DLC evidence for the send. Re-firing is already held
-     -- off by patina.suppress_consent_dispatch above, so the narrow status
-     -- test is no longer load-bearing. Compared against the values this write
-     -- would actually leave — v_seat_* included, so a refusal arriving with its
-     -- own source and words is not suppressed as identical to the studio's
-     -- consent set already on the seat (r9 R5-M1) — so a NULL the COALESCE is
-     -- not going to write no longer counts as a difference.
-     AND (pp.sms_consent_status, pp.sms_consented_at, pp.sms_opt_out_at,
-          pp.sms_consent_source, pp.sms_consent_evidence,
-          pp.sms_consent_recorded_at, pp.sms_consent_disclosure_version,
-          pp.sms_consent_recorded_by)
-         IS DISTINCT FROM
-         (NEW.status,
-          COALESCE(NEW.consented_at, pp.sms_consented_at),
-          COALESCE(NEW.opt_out_at, pp.sms_opt_out_at),
-          CASE WHEN v_refusal THEN v_seat_source
-               ELSE COALESCE(v_seat_source, pp.sms_consent_source) END,
-          CASE WHEN v_refusal THEN v_seat_evidence
-               ELSE COALESCE(v_seat_evidence, pp.sms_consent_evidence) END,
-          CASE WHEN v_refusal THEN v_seat_recorded_at
-               ELSE COALESCE(v_seat_recorded_at, pp.sms_consent_recorded_at) END,
-          COALESCE(NEW.disclosure_version, pp.sms_consent_disclosure_version),
-          CASE WHEN v_refusal THEN v_seat_recorded_by
-               ELSE COALESCE(v_seat_recorded_by, pp.sms_consent_recorded_by) END);
-
-  PERFORM set_config('patina.suppress_consent_dispatch', '', true);
-
-  -- ── The narrow release path ───────────────────────────────────────────────
-  -- The suppression above is about OUTWARD acts: a cached verdict must not text
-  -- anyone. It is not a reason to strand durable work. 00374's trigger is the
-  -- only caller of site_request_dispatch_after_consent(), and the lifecycle
-  -- sweep only promotes requests that already hold an outbox row — so a seat
-  -- this write moved to `granted` whose site request is parked in
-  -- awaiting_consent stayed parked FOR EVER, reading `granted` with a
-  -- consent_status_snapshot still saying not_asked. That is the studio-side
-  -- grant (record_channel_consent) and every sibling seat an inbound YES covers
-  -- beyond the ones it transitioned itself.
-  --
-  -- So the mirror releases them itself, and releases them the durable way only:
-  -- site_request_dispatch_after_consent() stamps the snapshot and mints the
-  -- 'consent-granted' outbox row, all inside this transaction. It does NOT call
-  -- invoke_edge_function — the eager wake-up is the one outward act, and it
-  -- stays with the party-row trigger. The lifecycle sweep claims the outbox row
-  -- the ordinary way.
-  --
-  -- Idempotent against the party-first path the inbound rail uses: when the
-  -- party write already moved the seat, v_newly_granted does not contain it,
-  -- and consent_status_snapshot already reads granted.
-  IF v_newly_granted IS NOT NULL THEN
-    FOR v_request IN
-      SELECT sr.id
-        FROM public.site_requests sr
-       WHERE sr.assignee_party_id = ANY (v_newly_granted)
-         AND sr.status = 'awaiting_consent'
-         AND sr.consent_status_snapshot IS DISTINCT FROM 'granted'
-       ORDER BY sr.created_at
-    LOOP
-      BEGIN
-        PERFORM public.site_request_dispatch_after_consent(v_request);
-      EXCEPTION WHEN OTHERS THEN
-        RAISE WARNING 'mirrored consent could not release site request %: %',
-          v_request, SQLERRM;
-      END;
-    END LOOP;
-  END IF;
-
-  RETURN NEW;
-END;
+  SELECT scc.status
+    FROM public.studio_channel_consent scc
+   WHERE scc.organization_id = p_organization_id
+     AND scc.channel_kind    = p_channel_kind
+     AND scc.channel_value   = p_channel_value
 $$;
 
-REVOKE ALL ON FUNCTION public.mirror_channel_consent_to_parties() FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.channel_consent_status(uuid, text, text)
+  FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.channel_consent_status(uuid, text, text)
+  TO authenticated, service_role;
 
-COMMENT ON FUNCTION public.mirror_channel_consent_to_parties() IS
-  'AFTER INSERT/UPDATE on studio_channel_consent: pushes the studio''s verdict '
-  'onto every party row in that studio carrying the same phone_e164, making '
-  'project_parties.sms_consent_* a read-only cached mirror. Guarded on the '
-  'whole cached tuple (status AND the evidence set) so a re-record does not '
-  'rewrite already-identical rows but DOES refresh evidence — refresh, never '
-  'erase: each evidence column is COALESCEd over what the seat holds, so a '
-  'record that carries a verdict without a disclosure version or a recorder '
-  '(the shape the inbound rail mints) cannot null the ones the portal recorded '
-  '(R-AN). WHEN THE VERDICT IS `opted_out` THE SEAT GETS THE REFUSAL''S OWN '
-  'EVIDENCE SET (opt_out_source / opt_out_evidence / opt_out_recorded_at / '
-  'opt_out_recorded_by), AND NEVER THE STUDIO''S CONSENT SET IN ITS PLACE — '
-  'written STRAIGHT FROM the record with NO SEAT FALLBACK AT ALL, all four '
-  'together, so whatever the refusal leaves NULL the seat says NULL too (r8 '
-  'R8-M1 / R-AQ, widened from one column to the set by r9 R5-M2): a sibling '
-  'seat in the same studio on the same number routinely holds the GRANT''s '
-  'evidence, so keeping it left that seat naming the studio''s own consent '
-  'document as the refusal, dated to the day of the grant — and on the ordinary '
-  'inbound STOP, whose opt_out_recorded_by is deliberately NULL, it left the '
-  'seat naming the studio member who recorded the GRANT as the person who '
-  'refused (R7-M1''s attribution, one table over). A refusal that does not fill '
-  'one of its four columns is a refusal whose evidence is known ABSENT, which '
-  'is not the case R-AN''s never-NULL-over-non-null rule was written about; '
-  'R-AN still governs every other transition. '
-  'project_parties has ONE '
-  'evidence set, and mirroring the studio''s consent evidence under an '
-  'opted_out status made the seat say the refusal arrived the way the studio''s '
-  'paperwork did (r9 R5-M1) — which, for the sourceless refusals the portal and '
-  'the fold really write, is every refusal on the books once '
-  'record_channel_reconsent() has put the studio''s fresh consent on the '
-  'record. '
-  'disclosure_version has no refusal-side twin and always comes from the '
-  'record. It also sets '
-  'patina.suppress_consent_dispatch for the duration of its own UPDATE so a '
-  'mirrored verdict cannot fire 00432''s opt-in dispatch or 00374''s '
-  'site-request dispatch once per row. A mirrored `granted` DOES release the '
-  'site requests parked in awaiting_consent on the seats it just moved — '
-  'site_request_dispatch_after_consent() only, never invoke_edge_function, so '
-  'the durable work lands in this transaction and the lifecycle sweep carries '
-  'it out; without that a studio-recorded grant left the seat reading granted '
-  'and its request parked for ever (00594).';
+COMMENT ON FUNCTION public.channel_consent_status(uuid, text, text) IS
+  'The studio''s verdict for one channel value, read off '
+  'studio_channel_consent — the single source since R-AS. NULL means this '
+  'studio holds no record for that value, which is what `not_asked` means; '
+  'callers that must print a word COALESCE it. SECURITY INVOKER, so the '
+  'table''s member-only RLS decides what a caller may read. Used by '
+  'v_project_roster and people_directory in place of '
+  'project_parties.sms_consent_*, which is frozen legacy (00594).';
 
-DROP TRIGGER IF EXISTS mirror_channel_consent_to_parties_trg ON public.studio_channel_consent;
-CREATE TRIGGER mirror_channel_consent_to_parties_trg
-  AFTER INSERT OR UPDATE ON public.studio_channel_consent
-  FOR EACH ROW EXECUTE FUNCTION public.mirror_channel_consent_to_parties();
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 3d. The two shipped readers, repointed at the record
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Both views are grafted from their grep-winning bodies and changed in exactly
+-- one place each — the consent word:
+--   · v_project_roster  lineage 00419:94-156 (the Call Sheet's own view)
+--   · people_directory  lineage 00221 -> 00281 -> 00420 -> 00478 -> 00583 ->
+--                       00589:696-935 (v6)
+-- Everything else, every other branch and column, is byte-identical to the
+-- winner. people_directory's v4 rebuild in W1b keeps this read.
+
+CREATE OR REPLACE VIEW public.v_project_roster
+WITH (security_invoker = true) AS
+
+-- ── PARTY BRANCH ─────────────────────────────────────────────────────────
+SELECT
+  pp.id                                                          AS roster_id,
+  'party'::text                                                  AS source,
+  pp.project_id                                                  AS project_id,
+  pp.party_kind                                                  AS kind,
+  pp.display_name                                                AS display_name,
+  pp.company_name                                                AS company_name,
+  pp.email                                                       AS email,
+  pp.phone                                                       AS phone,
+  pp.trade                                                       AS trade,
+  NULL::text                                                     AS job_title,
+  NULL::text                                                     AS staff_role,
+  pp.studio_contact_id                                           AS studio_contact_id,
+  pp.profile_id                                                  AS profile_id,
+  pp.show_to_client                                              AS show_to_client,
+  EXISTS (
+    SELECT 1 FROM public.field_link_tokens flt
+    WHERE flt.party_id = pp.id
+      AND flt.status = 'active'
+      AND (flt.expires_at IS NULL OR flt.expires_at > now())
+  )                                                               AS has_active_field_link,
+  -- THE RECORD, NOT THE SEAT (R-AS). project_parties.sms_consent_* is frozen
+  -- legacy since 00594; the studio's verdict for this number lives in
+  -- studio_channel_consent. No record is what `not_asked` means, and this
+  -- column was NOT NULL before, so the absence is COALESCEd to the word.
+  COALESCE(
+    public.channel_consent_status(
+      COALESCE(
+          prj.studio_id,
+          -- _primary_studio_for() is the SQL side's fallback, but 00483 revoked
+          -- EXECUTE on it from every PostgREST role, and a security_invoker view
+          -- checks function permissions against the CALLER — so it is inlined here,
+          -- ORDER BY for ORDER BY (00315:64-79). Under the caller's own RLS
+          -- organization_members answers for a co-member ("Active members can view
+          -- co-members"), which is exactly the population that reads these views;
+          -- for anyone else it degrades to NULL, and the consent word with it.
+          (SELECT om2.organization_id
+             FROM public.organization_members om2
+             JOIN public.organizations o2 ON o2.id = om2.organization_id
+            WHERE om2.user_id = prj.designer_id
+              AND om2.status  = 'active'
+              AND o2.type     = 'design_studio'
+            ORDER BY (om2.role = 'owner') DESC, om2.joined_at NULLS LAST, om2.created_at
+            LIMIT 1)
+        ),
+      'sms', pp.phone_e164),
+    'not_asked')                                                 AS sms_consent_status,
+  pp.updated_at                                                  AS updated_at
+FROM public.project_parties pp
+-- LEFT, not INNER: a caller who can see the seat but not the project keeps
+-- the roster row and loses only the consent word.
+LEFT JOIN public.projects prj ON prj.id = pp.project_id
+
+UNION ALL
+
+-- ── TEAM BRANCH ──────────────────────────────────────────────────────────
+SELECT
+  tm.id                                                          AS roster_id,
+  'team'::text                                                   AS source,
+  tm.project_id                                                  AS project_id,
+  tm.role                                                        AS kind,
+  COALESCE(
+    NULLIF(trim(p.display_name), ''),
+    NULLIF(trim(p.full_name), ''),
+    NULLIF(trim(split_part(p.email, '@', 1)), ''),
+    'Teammate'
+  )                                                               AS display_name,
+  NULL::text                                                     AS company_name,
+  p.email                                                        AS email,
+  p.phone                                                        AS phone,
+  NULL::text                                                     AS trade,
+  om.job_title                                                   AS job_title,
+  om.staff_role                                                  AS staff_role,
+  NULL::uuid                                                     AS studio_contact_id,
+  tm.user_id                                                     AS profile_id,
+  false                                                           AS show_to_client,
+  false                                                           AS has_active_field_link,
+  NULL::text                                                     AS sms_consent_status,
+  tm.updated_at                                                  AS updated_at
+FROM public.project_team_members tm
+JOIN public.projects pj ON pj.id = tm.project_id
+LEFT JOIN public.profiles p ON p.id = tm.user_id
+LEFT JOIN public.organization_members om
+  ON om.user_id = tm.user_id
+ AND om.organization_id = pj.studio_id
+ AND om.status = 'active'
+WHERE tm.removed_at IS NULL;
+
+GRANT SELECT ON public.v_project_roster TO authenticated;
+
+COMMENT ON VIEW public.v_project_roster IS
+  'Call Sheet (Wave 3): the project roster — every tracked project_parties '
+  'row (source=party) UNION ALL every active project_team_members login '
+  '(source=team), one shape for the Call Sheet UI. security_invoker = true: '
+  'base-table RLS on project_parties, project_team_members, profiles, and '
+  'organization_members governs what each caller actually sees; the om join '
+  'degrading to NULL job_title/staff_role for a viewer without co-member '
+  'visibility is intended, not a leak. has_active_field_link checks '
+  'field_link_tokens (00283) for a live, unexpired, unrevoked token; that '
+  'table is designer-only RLS, so a non-designer viewer sees false even when '
+  'a link exists — same degrade posture as the om join.';
+
+CREATE OR REPLACE VIEW public.people_directory
+WITH (security_invoker = true) AS
+
+-- ── CLIENTS ───────────────────────────────────────────────────────────────
+-- v4: meta gains has_sent_proposal + issued_on_paper (this migration).
+-- Everything else in this branch is unchanged from 00420.
+SELECT
+  dc.id                                                          AS person_id,
+  'client'::text                                                 AS role,
+  COALESCE(dc.client_name, pr.full_name, pr.display_name, dc.client_email, 'Unnamed client') AS display_name,
+  COALESCE(dc.client_email, pr.email)                            AS email,
+  -- NULLIF(btrim(...)) — COALESCE only falls through on NULL, and an
+  -- empty-string profiles.phone would otherwise win over a real captured
+  -- number and read the row blank (review R2 F11). Nothing forbids '' on that
+  -- column; only the studio's own capture answers for it here. Both legs are
+  -- guarded, not just the profile one: a whitespace-only captured number
+  -- would otherwise fall straight through and render the same blank cell
+  -- (review R3-05).
+  COALESCE(NULLIF(btrim(pr.phone), ''), NULLIF(btrim(dc.client_phone), '')) AS phone,
+  dc.client_id                                                   AS profile_id,
+  NULL::uuid                                                     AS project_id,
+  dc.designer_id                                                 AS designer_id,
+  dc.status                                                      AS status_raw,
+  COALESCE(dc.last_contacted_at, dc.last_project_at, dc.updated_at) AS last_touch_at,
+  jsonb_build_object(
+    'total_projects',     dc.total_projects,
+    'total_revenue',      dc.total_revenue,
+    'last_project_at',    dc.last_project_at,
+    'last_contacted_at',  dc.last_contacted_at,
+    'first_project_at',   dc.first_project_at,
+    'style_tags',         dc.style_tags,
+    'source',             dc.source,
+    'satisfaction_score', dc.satisfaction_score,
+    'nickname',           dc.nickname,
+    'location',           dc.location,
+    'lead_id',            dc.lead_id
+  ) || public.designer_client_send_evidence(dc.id, dc.designer_id, dc.client_id)
+                                                                 AS meta,
+  (CASE WHEN dc.designer_id = (select auth.uid()) THEN 'mine' ELSE 'studio' END)::text AS scope
+FROM public.designer_clients dc
+LEFT JOIN public.profiles pr ON pr.id = dc.client_id
+WHERE public.is_studio_comember(dc.designer_id)
+
+UNION ALL
+
+-- ── LEADS (open only) ─────────────────────────────────────────────────────
+-- Unchanged from 00420.
+SELECT
+  l.id,
+  'lead',
+  COALESCE(l.contact_name, hp.full_name, hp.display_name, l.contact_email, 'New lead'),
+  COALESCE(l.contact_email, hp.email),
+  COALESCE(NULLIF(btrim(hp.phone), ''), NULLIF(btrim(l.contact_phone), '')),
+  l.homeowner_id,
+  NULL::uuid,
+  l.designer_id,
+  l.status,
+  COALESCE(l.contacted_at, l.created_at),
+  jsonb_build_object(
+    'project_type',      l.project_type,
+    'project_description', l.project_description,
+    'budget_range',      l.budget_range,
+    'timeline',          l.timeline,
+    'match_score',       l.match_score,
+    'location_city',     l.location_city,
+    'location_state',    l.location_state,
+    'response_deadline', l.response_deadline,
+    'created_at',        l.created_at
+  ),
+  (CASE WHEN l.designer_id = (select auth.uid()) THEN 'mine' ELSE 'studio' END)::text
+FROM public.leads l
+LEFT JOIN public.profiles hp ON hp.id = l.homeowner_id
+WHERE public.is_studio_comember(l.designer_id)
+  AND l.status NOT IN ('accepted', 'declined', 'expired')
+
+UNION ALL
+
+-- ── MAKERS / VENDORS (saved or engaged, studio-wide) ──────────────────────
+-- Unchanged from 00420.
+SELECT
+  v.id,
+  'maker',
+  v.name,
+  COALESCE(v.orders_email, v.trade_account_email),
+  NULL::text,
+  v.contact_profile_id,
+  NULL::uuid,
+  auth.uid(),
+  v.nomination_status,
+  v.updated_at,
+  jsonb_build_object(
+    'primary_category',      v.primary_category,
+    'lead_times',            v.lead_times,
+    'default_payment_terms', v.default_payment_terms,
+    'founding_circle',       v.founding_circle,
+    'made_in',               v.made_in,
+    'trade_terms',           v.trade_terms,
+    'is_patina_catalog',     v.is_patina_catalog,
+    'review_count',          v.review_count,
+    'designer_rating_avg',   v.designer_rating_avg
+  ),
+  (CASE
+     WHEN EXISTS (
+       SELECT 1 FROM public.saved_vendors mine
+       WHERE mine.vendor_id = v.id
+         AND mine.designer_id = (select auth.uid())
+     ) THEN 'mine'
+     ELSE 'studio'
+   END)::text
+FROM public.vendors v
+WHERE v.id IN (
+  SELECT sv.vendor_id
+  FROM public.saved_vendors sv
+  WHERE public.is_studio_comember(sv.designer_id)
+  UNION
+  SELECT pp.vendor_id
+  FROM public.project_parties pp
+  JOIN public.projects pj ON pj.id = pp.project_id
+  WHERE pp.vendor_id IS NOT NULL
+    AND ( public.is_studio_comember(pj.designer_id)
+       OR public.is_studio_comember(pj.lead_designer_id)
+       OR public.is_studio_comember(pj.created_by) )
+)
+
+UNION ALL
+
+-- ── FIELD / ROSTER PARTIES on studio projects ─────────────────────────────
+-- Unchanged from 00420.
+SELECT
+  pp.id,
+  pp.party_kind,
+  pp.display_name,
+  pp.email,
+  pp.phone,
+  pp.profile_id,
+  pp.project_id,
+  auth.uid(),
+  -- status_raw and the meta both read the RECORD (R-AS): the seat's own
+  -- column is frozen legacy since 00594.
+  COALESCE(public.channel_consent_status(
+    COALESCE(
+        pj.studio_id,
+        -- _primary_studio_for() is the SQL side's fallback, but 00483 revoked
+        -- EXECUTE on it from every PostgREST role, and a security_invoker view
+        -- checks function permissions against the CALLER — so it is inlined here,
+        -- ORDER BY for ORDER BY (00315:64-79). Under the caller's own RLS
+        -- organization_members answers for a co-member ("Active members can view
+        -- co-members"), which is exactly the population that reads these views;
+        -- for anyone else it degrades to NULL, and the consent word with it.
+        (SELECT om2.organization_id
+           FROM public.organization_members om2
+           JOIN public.organizations o2 ON o2.id = om2.organization_id
+          WHERE om2.user_id = pj.designer_id
+            AND om2.status  = 'active'
+            AND o2.type     = 'design_studio'
+          ORDER BY (om2.role = 'owner') DESC, om2.joined_at NULLS LAST, om2.created_at
+          LIMIT 1)
+      ),
+    'sms', pp.phone_e164), 'not_asked'),
+  pp.updated_at,
+  jsonb_build_object(
+    'company_name',       pp.company_name,
+    'vendor_id',          pp.vendor_id,
+    'project_name',       pj.name,
+    'party_kind',         pp.party_kind,
+    'trade',              pp.trade,
+    'phone_e164',         pp.phone_e164,
+    'sms_consent_status', COALESCE(public.channel_consent_status(
+      COALESCE(
+          pj.studio_id,
+          -- _primary_studio_for() is the SQL side's fallback, but 00483 revoked
+          -- EXECUTE on it from every PostgREST role, and a security_invoker view
+          -- checks function permissions against the CALLER — so it is inlined here,
+          -- ORDER BY for ORDER BY (00315:64-79). Under the caller's own RLS
+          -- organization_members answers for a co-member ("Active members can view
+          -- co-members"), which is exactly the population that reads these views;
+          -- for anyone else it degrades to NULL, and the consent word with it.
+          (SELECT om2.organization_id
+             FROM public.organization_members om2
+             JOIN public.organizations o2 ON o2.id = om2.organization_id
+            WHERE om2.user_id = pj.designer_id
+              AND om2.status  = 'active'
+              AND o2.type     = 'design_studio'
+            ORDER BY (om2.role = 'owner') DESC, om2.joined_at NULLS LAST, om2.created_at
+            LIMIT 1)
+        ),
+      'sms', pp.phone_e164), 'not_asked'),
+    'sms_consented_at',   pp.sms_consented_at,
+    'sms_opt_out_at',     pp.sms_opt_out_at,
+    'show_to_client',     pp.show_to_client,
+    'studio_contact_id',  pp.studio_contact_id
+  ),
+  (CASE
+     WHEN pj.designer_id      = (select auth.uid())
+       OR pj.lead_designer_id = (select auth.uid())
+       OR pj.created_by       = (select auth.uid())
+     THEN 'mine' ELSE 'studio'
+   END)::text
+FROM public.project_parties pp
+JOIN public.projects pj ON pj.id = pp.project_id
+WHERE pp.party_kind IN ('gc', 'sub', 'installer', 'receiver',
+                        'architect', 'photographer', 'stager')
+  AND ( public.is_studio_comember(pj.designer_id)
+     OR public.is_studio_comember(pj.lead_designer_id)
+     OR public.is_studio_comember(pj.created_by) )
+
+UNION ALL
+
+-- ── TEAM (studio collaborators on studio projects, one row per teammate) ───
+-- Unchanged from 00420.
+SELECT
+  t.id,
+  'team',
+  COALESCE(tp.full_name, tp.display_name, tp.email, 'Teammate'),
+  tp.email,
+  tp.phone,
+  t.user_id,
+  t.project_id,
+  auth.uid(),
+  t.role,
+  t.assigned_at,
+  jsonb_build_object(
+    'role',         t.role,
+    'project_name', t.project_name,
+    'job_title',    t.job_title,
+    'staff_role',   t.staff_role
+  ),
+  (CASE WHEN t.is_mine THEN 'mine' ELSE 'studio' END)::text
+FROM (
+  SELECT DISTINCT ON (tm.user_id)
+    tm.id, tm.user_id, tm.role, tm.project_id, tm.assigned_at, pj.name AS project_name,
+    om.job_title  AS job_title,
+    om.staff_role AS staff_role,
+    ( pj.designer_id      = (select auth.uid())
+   OR pj.lead_designer_id = (select auth.uid())
+   OR pj.created_by       = (select auth.uid()) ) AS is_mine
+  FROM public.project_team_members tm
+  JOIN public.projects pj ON pj.id = tm.project_id
+  LEFT JOIN public.organization_members om
+    ON om.user_id = tm.user_id
+   AND om.organization_id = pj.studio_id
+   AND om.status = 'active'
+  WHERE tm.removed_at IS NULL
+    AND tm.user_id <> auth.uid()
+    AND tm.role IN ('lead_designer', 'support_designer', 'bookkeeper', 'previous_lead')
+    AND ( public.is_studio_comember(pj.designer_id)
+       OR public.is_studio_comember(pj.lead_designer_id)
+       OR public.is_studio_comember(pj.created_by) )
+  ORDER BY tm.user_id, tm.assigned_at DESC
+) t
+LEFT JOIN public.profiles tp ON tp.id = t.user_id
+
+UNION ALL
+
+-- ── CONTACTS (the shared rolodex, 00417) ──────────────────────────────────
+-- Unchanged from 00420.
+SELECT
+  sc.id,
+  'contact',
+  COALESCE(sc.full_name, sc.company_name),
+  sc.email,
+  sc.phone,
+  sc.profile_id,
+  NULL::uuid,
+  sc.created_by,
+  (CASE WHEN sc.archived_at IS NULL THEN 'active' ELSE 'archived' END)::text,
+  sc.updated_at,
+  jsonb_build_object(
+    'contact_kind',    sc.contact_kind,
+    'entity_kind',     sc.entity_kind,
+    'company_name',    sc.company_name,
+    'company_id',      sc.company_id,
+    'specialties',     sc.specialties,
+    'vendor_id',       sc.vendor_id,
+    'organization_id', sc.organization_id,
+    'archived_at',     sc.archived_at
+  ),
+  (CASE WHEN sc.created_by = (select auth.uid()) THEN 'mine' ELSE 'studio' END)::text
+FROM public.studio_contacts sc
+WHERE public.is_active_studio_member(sc.organization_id);
+
+COMMENT ON VIEW public.people_directory IS
+  'R57 / People Room roster (client|lead|maker|gc|sub|installer|receiver|'
+  'architect|photographer|stager|team|contact) for the querying user. v6 '
+  '(00589): PHONE ONLY is profile-first on the client and lead branches — '
+  'COALESCE(NULLIF(btrim(profiles.phone), ''''), '
+  'NULLIF(btrim(designer_clients.client_phone), '''')) and the same over '
+  'leads.contact_phone, so a whitespace-only number on either side reads as '
+  'no number rather than as a blank cell. An '
+  'account holder''s own number is theirs to manage and the studio is given no '
+  'field to edit it, so it wins over a number taken at the front door, which '
+  'is the order the household sheet and the Brief already read. display_name '
+  'and email in those branches stay CAPTURED-first, so one directory row can '
+  'pair the studio''s captured name with the household''s own number — '
+  'deliberate, and display-only: no SMS or email dispatch reads this view''s '
+  'phone (dispatch reads project_parties.phone_e164). The captured column '
+  'still answers for a household with no Patina account, and on the lead '
+  'branch it answers for nearly every open lead: profiles RLS hides a '
+  'homeowner from a studio that has no designer_clients row with them yet, so '
+  'the profile leg only speaks once some other relationship exists. v5 '
+  '(00583): those two '
+  'branches gained the captured columns at all, so a phone taken at capture '
+  'shows instead of reading blank. v4 (00478): the client branch''s meta gains '
+  'has_sent_proposal and issued_on_paper from '
+  'designer_client_send_evidence(), so the directory/Nurture derivations can '
+  'tell a merely-drafted agreement from one that was really emailed and from '
+  'one handed over on paper (00477), instead of all three reading as '
+  'status_raw = ''proposal''. Read them paper-first, then send evidence, then '
+  'draft. v3 (00420): every branch is STUDIO-scoped via is_studio_comember '
+  '(00315), a contacts branch surfaces the shared rolodex (studio_contacts, '
+  '00417), and the appended `scope` column reads ''mine'' | ''studio'' for the '
+  'scope lens. The party branch admits the 00419 roster kinds but excludes '
+  '''client'' (it would collide with the clients branch''s role semantics). '
+  'security_invoker view — base-table RLS still governs, so branches over '
+  'tables that are not studio-widened (project_parties, project_team_members, '
+  'saved_vendors) widen only for callers those tables already admit.';
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- 4. record_channel_consent — the portal's only write path
@@ -1432,7 +1529,7 @@ BEGIN
   -- turned a refusal into a sendable number with no trace left.
   --
   -- So the write door reads the same two ledgers the read door does. Scoped to
-  -- THIS org, resolved the way the mirror resolves it, so R-AK is not reopened:
+  -- THIS org, resolved the way the fold resolves it, so R-AK is not reopened:
   -- another studio's STOP is not this studio's fact.
   --
   -- The way past is not a second call to this door: the studio records the
@@ -1444,8 +1541,8 @@ BEGIN
   --
   --   THE VERDICT. The gate asked `p_status = 'granted'`, so `pending` was an
   --   ungated first hop: one recorded `pending` over a dated, evidenced seat
-  --   refusal mirrored `pending` and a NULL opt_out_at back onto the seat,
-  --   erasing the refusal and its date, and the `granted` call after it then
+  --   refusal wrote `pending` and a NULL opt_out_at over the record's own
+  --   refusal and its date, and the `granted` call after it then
   --   passed every leg. Two ordinary calls by any studio member walked a real
   --   inbound STOP back to granted with no trace on either ledger, and
   --   reconsent() could not recover it (it requires status opted_out). So the
@@ -1515,7 +1612,7 @@ BEGIN
   -- the party-row backstop sendPartySms falls back on. So every verdict but
   -- `opted_out` is refused while an UNANSWERED refusal stands (r6 B6-1 — read
   -- on the refusal, never on which verdict the caller happens to be writing;
-  -- `pending` mirrors onto the seats exactly as `granted` does).
+  -- `pending` clears the refusal off the record exactly as `granted` does).
   --
   -- THAT IS READ OFF refusal_unanswered, A STORED FACT — never inferred from
   -- opt_out_at alone. A refusal is routinely DATELESS: the shipped portal
@@ -1715,7 +1812,7 @@ BEGIN
     -- Stated on whether a refusal STANDS, not on which verdict is written
     -- (r6 B6-1). `EXCLUDED.status <> 'granted'` let `pending` through while an
     -- unanswered refusal stood, and a `pending` that lands is a `pending` the
-    -- mirror stamps on every seat in the studio — the backstop gone, and the
+    -- moves the record off its refusal — the standing fact gone, and the
     -- record moved off the status reconsent() needs to act on. Only `opted_out`
     -- is exempt: recording the refusal is the way forward. A record already at
     -- `granted` is NOT exempt either (r7 M7-1): the escape that let it restate
@@ -1837,8 +1934,8 @@ COMMENT ON FUNCTION public.record_channel_consent(uuid, text, text, text, text, 
   'record knows nothing of it, since the portal still writes party rows '
   'directly and the send gate reads both ledgers with no date test of its own '
   '(R-AL, r6 B6-1/M6-1: gated on whether a refusal stands, never on which '
-  'verdict is being written — a recorded `pending` mirrors onto the seats '
-  'exactly as a `granted` does, and was the ungated first hop); '
+  'verdict is being written — a recorded `pending` clears the record''s own '
+  'refusal exactly as a `granted` does, and was the ungated first hop); '
   'stamps the refusal''s OWN evidence set (opt_out_source, opt_out_evidence, '
   'opt_out_recorded_at, opt_out_recorded_by) when and only when the verdict is '
   'opted_out, and leaves it untouched on every other verdict, so a later '
@@ -1886,20 +1983,21 @@ COMMENT ON FUNCTION public.record_channel_consent(uuid, text, text, text, text, 
 -- refusal_unanswered whatever the status says, so NO send could follow — the
 -- opt-in invite included (sms.test.ts, "the opt-in invite does not slip past an
 -- unanswered refusal", stages exactly the row this door used to write). What
--- the `pending` hop DID do was mirror `pending` onto every seat in the studio
--- on that number, erasing the party-row refusal the send rail falls back on,
--- and move the record off the one status this door can act on, so it could not
--- be called twice. The studio was strictly worse off for having called it.
+-- the `pending` hop DID do was move the record off the one status this door
+-- can act on, so it could not be called twice, while clearing the refusal the
+-- send rail falls back on. The studio was strictly worse off for having called
+-- it.
 --
--- So: the refusal keeps standing, the seats keep it, the studio's fresh consent
+-- So: the refusal keeps standing, the studio's fresh consent
 -- goes on the record where the room can print it ("opted out by text, 3 Dec
 -- 2025; fresh signed consent 11 Sep 2026, waiting on their reply"), and the
 -- door stays re-callable. THAT SECOND HALF OF THE SENTENCE IS DATED BY THIS
 -- DOOR (r9 M1): the five evidence columns and consented_at are one set, so the
 -- consent recorded here carries today, not whatever older grant the record was
 -- keeping — see the SET list. THE DOUBLE OPT-IN DOES NOT RUN FROM HERE, and no
--- invite is dispatched (fc_dispatch_optin_invite fires on a mirrored `pending`,
--- which this no longer writes). `granted` is the recipient's to give by
+-- invite is dispatched (fc_dispatch_optin_invite fires on a PARTY ROW moving to
+-- an evidenced `pending`, and no consent act writes party rows since R-AS).
+-- `granted` is the recipient's to give by
 -- replying YES or START, which the inbound rail writes directly — the one
 -- writer that lowers refusal_unanswered. PR-m's "a fresh recorded consent OR an
 -- inbound START" is read this way on the record: the fresh recorded consent is

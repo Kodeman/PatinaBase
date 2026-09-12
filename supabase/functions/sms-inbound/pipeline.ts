@@ -7,8 +7,9 @@
 //   (c) idempotency: INSERT sms_messages ON CONFLICT (twilio_sid) DO NOTHING —
 //       a duplicate MessageSid returns 200 empty TwiML and does nothing
 //   (d) COMPLIANCE KEYWORDS before anything else (STOP/START/YES/HELP) —
-//       each writes studio_channel_consent (00594) FIRST, once per studio
-//       holding the number, then mirrors onto the party rows
+//       each writes studio_channel_consent (00594) and nothing else, once per
+//       studio holding the number; project_parties.sms_consent_* is frozen
+//       legacy and this rail no longer touches it (R-AS)
 //   (e) resolve conversation + candidate parties by phone (unknown → brush-off)
 //   (f) MMS: fetch each MediaUrl with Twilio auth → field-media
 //   (g) deterministic parse: project-choice / confirmation / numbered menu
@@ -160,9 +161,9 @@ async function renderSms(
 // ── keyword compliance ───────────────────────────────────────────────────────
 // Consent is a fact about a (studio, channel value) pair (studio_channel_consent,
 // migration 00594), not a per-party-row ledger. Every compliance keyword writes
-// that record FIRST, once per studio that holds the number; the party-row writes
-// below remain as the mirror the DB trigger also maintains, so every reader that
-// still joins on project_parties.sms_consent_* keeps working.
+// that record, once per studio that holds the number, and writes nothing else:
+// the record is the single source of truth (R-AS) and every reader — the send
+// gate, v_project_roster, people_directory — reads it.
 interface PhoneParty {
   id: string;
   project_id: string;
@@ -404,10 +405,11 @@ async function writeChannelConsent(
     // RAIL DOES NOT HOLD — the studio does, on its own seats, from the portal's
     // own write. With no record yet (the ordinary case: W1a ships no hook that
     // writes one), carrying only `prior` minted a `granted` record with a NULL
-    // disclosure version, which the mirror then wrote down over the seat that
-    // had it. record_channel_consent refuses a granted without a disclosure
-    // version (00594); the rail's door falls back to the studio's own seats
-    // instead of inventing one (R-AN).
+    // disclosure version — and since R-AS the record is the only copy, so the
+    // studio's 10DLC paperwork for that grant would exist nowhere.
+    // record_channel_consent refuses a granted without a disclosure version
+    // (00594); the rail's door falls back to the studio's own seats instead of
+    // inventing one (R-AN).
     // Only a GRANT needs the studio's own paperwork behind it — R-AN scopes
     // this fallback to the inbound YES/START. On a refusal the consent side is
     // not written at all (below), so the seats are not read either.
@@ -485,88 +487,23 @@ async function writeChannelConsent(
   return { failed };
 }
 
-// The party-row writes below mirror the consent records written above. The two
-// directions are deliberately NOT symmetric.
+// THE PARTY ROWS ARE NOT WRITTEN HERE, OR ANYWHERE (R-AS).
 //
-// A STOP stays phone-global. It is a carrier-level act against the sending
-// number, it can only ever REFUSE a send, and the only rows it reaches that the
-// scoped write would not are rows whose org cannot be resolved at all — rows
-// that have no consent record either, so nothing is left disagreeing.
+// project_parties.sms_consent_* used to carry a second copy of the verdict:
+// this rail wrote it phone-globally on a STOP and per-studio on a grant, and
+// migration 00594's mirror trigger wrote it again from the record. Ten review
+// rounds of evidence defects all lived in that copy — one evidence set on the
+// seat can only ever describe the act that happened last — so the copy is gone.
+// studio_channel_consent is the single source of truth, the eight legacy
+// columns are frozen by refuse_legacy_consent_write() (a write raises
+// consent_legacy_column_frozen), and writeChannelConsent() above is the whole
+// of what a compliance keyword writes.
 //
-// IT WRITES THE REFUSAL'S OWN EVIDENCE SET ALONGSIDE THE STATUS (r10 M1).
-// project_parties holds ONE evidence set, and under a given status it belongs
-// to whatever wrote that status. Flipping the status and the date while leaving
-// the four evidence columns alone left the commonest real refusal on the books
-// — a seat with a recorded grant that later texted STOP — saying it was refused
-// IN WRITING, per the studio's own kickoff form, written down months BEFORE the
-// refusal happened, by the studio member who recorded the GRANT (the
-// attribution R7-M1 and R5-M2 ruled must be NULL on a rail-written STOP). The
-// seat is what R-Q's sentence is read off and what the first prod fold
-// (backfill_channel_consent_from_parties) mints the record from, so the lie
-// travelled. This is the same set the record gets above and the same set 00594's
-// mirror writes onto these seats for this verdict, so all three now agree:
-// `inbound_sms`, the keyword as it arrived, the moment it arrived — and
-// recorded_by NULL, because nobody in the studio recorded this; the recipient
-// did. The disclosure version is not touched: which disclosure the person was
-// shown is a fact about the grant, and the mirror keeps it too.
-async function optOutAllForPhone(
-  supabase: SupabaseClient,
-  phone: string,
-  now: string,
-  evidence: string,
-) {
-  await supabase
-    .from("project_parties")
-    .update({
-      sms_consent_status: "opted_out",
-      sms_opt_out_at: now,
-      sms_consent_source: "inbound_sms",
-      sms_consent_evidence: evidence,
-      sms_consent_recorded_at: now,
-      sms_consent_recorded_by: null,
-    })
-    .eq("phone_e164", phone);
-}
-
-// A grant is scoped to the same studios the consent records were written for —
-// never phone-globally. Flipping every row on the number to `granted` is the
-// "two writers" hazard direction.md C10 names: it hands a studio that never
-// invited this number a granted party row, which the send gate still reads,
-// while that studio's own consent record stays `not_asked`. Scoped, the record
-// and the mirror agree by construction.
-//
-// IT ALSO RUNS BEFORE writeChannelConsent(), NOT AFTER. The consent record's
-// mirror (00594 mirror_channel_consent_to_parties) flips this studio's party
-// rows to `granted` itself, under patina.suppress_consent_dispatch — which is
-// exactly what 00374's _site_request_consent_granted_dispatch stands down for.
-// Writing the record first therefore consumed the pending -> granted transition
-// silently: this update then matched nothing (YES filters on `pending`) or was a
-// granted -> granted non-transition (START), the trigger never fired, and every
-// site request parked in `awaiting_consent` on that seat stayed parked for ever
-// — that trigger is the only caller of site_request_dispatch_after_consent(),
-// and the lifecycle sweep only promotes requests that already have an outbox
-// row. Party row first, record second: the transition is real, the trigger
-// fires once, and the mirror that follows only refreshes evidence.
-//
-// IT ALSO COVERS EVERY SEAT THE TARGET STUDIOS HOLD ON THE NUMBER, not only the
-// seats already at `pending`. The mirror grants all of them anyway, and a seat
-// the mirror moves takes no real transition — so a `not_asked` sibling ended up
-// reading `granted` with its site request parked in awaiting_consent for ever.
-// Which studios are targeted is still the narrow question (R-AJ): only the ones
-// that actually asked, or that were already opted_out/pending on a START.
-// Which of their seats move is not.
-async function grantPartiesForStudios(
-  supabase: SupabaseClient,
-  targets: StudioTarget[],
-  now: string,
-) {
-  const ids = targets.flatMap((t) => t.partyIds);
-  if (ids.length === 0) return;
-  await supabase
-    .from("project_parties")
-    .update({ sms_consent_status: "granted", sms_consented_at: now, sms_opt_out_at: null })
-    .in("id", ids);
-}
+// The STOP's phone-global reach survives where it matters: withRecordOnlyStudios
+// carries every studio that holds a RECORD on the number, seat or no seat, and
+// the send gate's last line (_shared/sms.ts channelConsentVerdict, the branch
+// for a send whose studio cannot be resolved at all) reads the records
+// phone-globally before it reads anything else.
 
 // ── candidate items across the phone's parties ───────────────────────────────
 interface CandidateItem {
@@ -717,8 +654,6 @@ export async function processInbound(
       stopTargets,
       from, "opted_out", nowIso, stopEvidence,
     );
-    // Phone-global on purpose — see optOutAllForPhone.
-    await optOutAllForPhone(supabase, from, nowIso, stopEvidence);
     await supabase.from("sms_messages")
       .update({ parsed_intent: { path: "keyword", keyword: "stop" } }).eq("id", messageId);
     await captureServerEvent("sms-inbound", "sms_opt_out", { phone: from }, { getEnv: deps.getEnv, fetchImpl: deps.fetchImpl });
@@ -770,7 +705,7 @@ export async function processInbound(
     // it holds a seat on the number — holding a seat is not having asked, and
     // granting on a seat manufactured consent for a studio that never invited
     // this person (R-AJ). The seat-derived arm survives only to carry each
-    // qualifying studio's party rows, so the record and the mirror still agree.
+    // qualifying studio's party rows, which the grant reads for its evidence.
     // A failed read here logs (loadPhoneParties / studiosHoldingRecord) and
     // grants fewer studios, which leaves the standing refusal standing — the
     // fail-closed direction, so unlike the STOP branch this one still answers
@@ -788,12 +723,6 @@ export async function processInbound(
         .filter((t) => startOrgSet.has(t.org)),
       startOrgs,
     );
-    // ORDER IS LOAD-BEARING — see grantPartiesForStudios. The party write goes
-    // FIRST so the real opted_out/pending -> granted transition is the one that
-    // fires 00374's site_request_consent_granted_dispatch and releases the
-    // trade's parked requests. The record write that follows only refreshes the
-    // evidence, under the mirror's suppression.
-    await grantPartiesForStudios(supabase, startTargets, nowIso);
     await writeChannelConsent(
       supabase,
       startTargets,
@@ -823,24 +752,16 @@ export async function processInbound(
         supabase,
         parties.filter((p) => p.sms_consent_status === "pending"),
       );
-      // …but WITHIN those studios, every seat on the number — not only the
-      // seats that happen to be `pending`. The consent record written below
-      // mirrors `granted` onto all of them (00594), and a seat the mirror moves
-      // takes no real pending -> granted transition, so 00374's
-      // site_request_consent_granted_dispatch never fires for it: that seat read
-      // `granted` for ever while its site request sat in awaiting_consent for
-      // ever. Party-first has to cover exactly what the record covers. (The
-      // mirror carries its own durable release as a backstop; this is the path
-      // that also sends the eager wake-up.) The START branch already covered
-      // every seat, for the same reason.
-      // The origin project stays the one that ASKED, so R-Q's sentence names
-      // the job the invite went out on.
+      // …but the RECORD is per studio, not per seat, so the target is the
+      // studio: every seat it holds on the number is carried only to give the
+      // grant its evidence (seatConsentEvidence) and its origin. Which studios
+      // are targeted is the narrow question (R-AJ) — only the ones that
+      // actually asked. The origin project stays the one that ASKED, so R-Q's
+      // sentence names the job the invite went out on.
       const originByOrg = new Map(askedTargets.map((t) => [t.org, t.projectId]));
       const yesTargets = (await studiosHoldingPhone(supabase, parties))
         .filter((t) => originByOrg.has(t.org))
         .map((t) => ({ ...t, projectId: originByOrg.get(t.org) ?? t.projectId }));
-      // Party write FIRST — see the START branch and grantPartiesForStudios.
-      await grantPartiesForStudios(supabase, yesTargets, nowIso);
       await writeChannelConsent(
         supabase,
         yesTargets,

@@ -32133,6 +32133,14 @@ export type Database = {
         }
         Returns: Json
       }
+      channel_consent_status: {
+        Args: {
+          p_channel_kind: string
+          p_channel_value: string
+          p_organization_id: string
+        }
+        Returns: string
+      }
       channel_value_was_on_sms_rail: {
         Args: { p_value: string }
         Returns: boolean
