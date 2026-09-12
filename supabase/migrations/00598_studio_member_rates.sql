@@ -252,9 +252,23 @@ BEGIN
   -- (measured through the real policies — admin B's 15500 dropped, the row stayed
   -- at admin A's 14000). created_by therefore records the LAST author of the open
   -- row; the closed rows below it keep theirs, frozen outright by the raise above.
-  IF NEW.studio_id  IS DISTINCT FROM OLD.studio_id
-     OR NEW.user_id    IS DISTINCT FROM OLD.user_id
-     OR NEW.created_at IS DISTINCT FROM OLD.created_at
+  -- W1-R7-03: the open row's DATES are frozen too. They were named nowhere, so a
+  -- studio owner or admin could hand-close a colleague's only open row
+  -- (`UPDATE … SET effective_to = CURRENT_DATE - 1`) and leave ZERO open rows —
+  -- every later hour then resolves 'none' and invoices at $0 — or leave two rows
+  -- covering one day, which this file's own non-overlap invariant (case g6) exists
+  -- to forbid. effective_to is the ladder's column on INSERT
+  -- (guard_studio_member_rate_insert above) and it is the ladder's column on UPDATE
+  -- too: only close_prior_studio_member_rate writes it, and that function is
+  -- SECURITY DEFINER, so its UPDATE arrives here as current_user = 'postgres' and
+  -- takes the early return at the top. The settings page's blur-save is untouched —
+  -- PostgREST's upsert assigns only payload columns, effective_from is the conflict
+  -- key, and effective_to is never sent.
+  IF NEW.studio_id      IS DISTINCT FROM OLD.studio_id
+     OR NEW.user_id        IS DISTINCT FROM OLD.user_id
+     OR NEW.created_at     IS DISTINCT FROM OLD.created_at
+     OR NEW.effective_from IS DISTINCT FROM OLD.effective_from
+     OR NEW.effective_to   IS DISTINCT FROM OLD.effective_to
   THEN
     RAISE EXCEPTION 'studio member rate identity is immutable'
       USING ERRCODE = 'check_violation';
@@ -434,6 +448,18 @@ BEGIN
   IF pg_get_functiondef('public.guard_studio_member_rate_history()'::regprocedure)
        !~ 'NEW\.created_by IS DISTINCT FROM \(select auth\.uid\(\)\)' THEN
     RAISE EXCEPTION '00598: created_by may only be re-stamped with the actor''s own id — it is 00599''s arm''s-length key (W1-R5-01)';
+  END IF;
+
+  -- ── review round 8 ───────────────────────────────────────────────────────
+  -- W1-R7-03: the open row's dates are frozen. Without this a rate-setter can
+  -- hand-close a colleague's only open row and every later hour resolves 'none'.
+  IF pg_get_functiondef('public.guard_studio_member_rate_history()'::regprocedure)
+       !~ 'NEW\.effective_from IS DISTINCT FROM OLD\.effective_from' THEN
+    RAISE EXCEPTION '00598: effective_from must be frozen on the open row (W1-R7-03)';
+  END IF;
+  IF pg_get_functiondef('public.guard_studio_member_rate_history()'::regprocedure)
+       !~ 'NEW\.effective_to   IS DISTINCT FROM OLD\.effective_to' THEN
+    RAISE EXCEPTION '00598: effective_to is the ladder''s column on UPDATE as well as on INSERT — a hand-close leaves zero open rows and every later hour at $0 (W1-R7-03)';
   END IF;
 
   -- W1-R1-09: the rate's subject must be a studio member.
