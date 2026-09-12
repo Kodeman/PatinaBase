@@ -42,6 +42,15 @@ Deno.test("shouldSendDeliveryConfirm dedupes on sent event ids", () => {
 
 Deno.test("runFieldDaily composes + persists the menu and sends one digest", async () => {
   const fake = createFakeSupabase({
+    // The consent is the RECORD's (R-AY): the seat word beside it is read by
+    // nothing, here or in the send gate this cron stands in front of.
+    projects: [{ id: "proj1", studio_id: "org1", designer_id: "designer1" }],
+    studio_channel_consent: [{
+      organization_id: "org1",
+      channel_kind: "sms",
+      channel_value: "+15550001111",
+      status: "granted",
+    }],
     project_parties: [
       { id: "pty1", phone_e164: "+15550001111", project_id: "proj1", party_kind: "sub", sms_consent_status: "granted", display_name: "Sal" },
     ],
@@ -74,6 +83,13 @@ Deno.test("runFieldDaily composes + persists the menu and sends one digest", asy
 
 Deno.test("runFieldDaily skips a party with nothing to say", async () => {
   const fake = createFakeSupabase({
+    projects: [{ id: "proj1", studio_id: "org1", designer_id: "designer1" }],
+    studio_channel_consent: [{
+      organization_id: "org1",
+      channel_kind: "sms",
+      channel_value: "+15550001111",
+      status: "granted",
+    }],
     project_parties: [
       { id: "pty1", phone_e164: "+15550001111", project_id: "proj1", party_kind: "sub", sms_consent_status: "granted", display_name: "Sal" },
     ],
@@ -97,6 +113,13 @@ Deno.test("runFieldDaily skips a party with nothing to say", async () => {
 Deno.test("runFieldDaily sends a delivery confirm once, then dedupes", async () => {
   function scenario(alreadySent: string[]) {
     return createFakeSupabase({
+      projects: [{ id: "proj1", studio_id: "org1", designer_id: "designer1" }],
+      studio_channel_consent: [{
+        organization_id: "org1",
+        channel_kind: "sms",
+        channel_value: "+15550002222",
+        status: "granted",
+      }],
       project_parties: [
         { id: "recv1", phone_e164: "+15550002222", project_id: "proj1", party_kind: "receiver", sms_consent_status: "granted", display_name: "Rex" },
       ],
@@ -140,6 +163,13 @@ Deno.test("runFieldDaily sends a delivery confirm once, then dedupes", async () 
 
 Deno.test("runFieldDaily keys the digest conversation on SMS_CONVERSATION_NUMBER when TWILIO_FROM_NUMBER is an MG… Messaging Service SID", async () => {
   const fake = createFakeSupabase({
+    projects: [{ id: "proj1", studio_id: "org1", designer_id: "designer1" }],
+    studio_channel_consent: [{
+      organization_id: "org1",
+      channel_kind: "sms",
+      channel_value: "+15550001111",
+      status: "granted",
+    }],
     project_parties: [
       { id: "pty1", phone_e164: "+15550001111", project_id: "proj1", party_kind: "sub", sms_consent_status: "granted", display_name: "Sal" },
     ],

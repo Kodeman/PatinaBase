@@ -31,8 +31,25 @@ function party(id: string, consent: string) {
   };
 }
 
+// THE RECORD IS THE ONLY CONSENT (R-AY, final-run MAJOR-1/MAJOR-2). A send
+// needs the studio's own `granted` record for the number; the seat word beside
+// it in these fixtures decides nothing, in either direction. So every baseline
+// fixture below carries the project's studio pointer and that record — before
+// this pass a frozen `granted` seat was enough on its own.
+const ORG_ALPHA_PROJECTS = [{ id: "proj1", studio_id: "org-alpha" }];
+function grant(phone = "+15551230001") {
+  return {
+    organization_id: "org-alpha",
+    channel_kind: "sms",
+    channel_value: phone,
+    status: "granted",
+  };
+}
+
 Deno.test("dry_run writes a row and never calls Twilio", async () => {
   const fake = createFakeSupabase({
+    projects: ORG_ALPHA_PROJECTS,
+    studio_channel_consent: [grant()],
     project_parties: [party("p1", "granted")],
   });
   let fetchCalls = 0;
@@ -61,15 +78,16 @@ Deno.test("dry_run writes a row and never calls Twilio", async () => {
   );
 });
 
-Deno.test("consent gate blocks not_asked and opted_out", async () => {
-  for (
-    const [consent, reason] of [["not_asked", "not_consented"], [
-      "opted_out",
-      "opted_out",
-    ]]
-  ) {
+Deno.test("the consent gate blocks a record at not_asked and one at opted_out", async () => {
+  // Both words are the RECORD's now (R-AY): the gate reads
+  // studio_channel_consent and refuses everything that is not a standing
+  // grant, which is why both come back with the one refusal reason. The seat
+  // beside them is left at `granted` on purpose — it is read by nothing.
+  for (const status of ["not_asked", "opted_out"]) {
     const fake = createFakeSupabase({
-      project_parties: [party("p1", consent)],
+      project_parties: [party("p1", "granted")],
+      projects: ORG_ALPHA_PROJECTS,
+      studio_channel_consent: [{ ...grant(), status }],
     });
     const res = await sendPartySms(
       fake as never,
@@ -79,8 +97,8 @@ Deno.test("consent gate blocks not_asked and opted_out", async () => {
         now: new Date("2026-07-08T18:00:00Z"),
       },
     );
-    assert(!res.sent, `${consent} must not send`);
-    assertEquals(res.reason, reason);
+    assert(!res.sent, `a record at ${status} must not send`);
+    assertEquals(res.reason, "opted_out");
     assertEquals(
       (fake._data.sms_messages ?? []).length,
       0,
@@ -110,6 +128,8 @@ Deno.test("sms_optin_invite is allowed to a pending party", async () => {
 
 Deno.test("quiet hours defer stores the body without sending", async () => {
   const fake = createFakeSupabase({
+    projects: ORG_ALPHA_PROJECTS,
+    studio_channel_consent: [grant()],
     project_parties: [party("p1", "granted")],
   });
   let fetchCalls = 0;
@@ -145,6 +165,8 @@ Deno.test("caller-owned sensitive outbox never persists a raw guest URL", async 
   const raw = "Open https://client.patina.cloud/field/sr_SECRET_RAW_TOKEN";
   const audit = "Patina Site Request private link [redacted]";
   const quietFake = createFakeSupabase({
+    projects: ORG_ALPHA_PROJECTS,
+    studio_channel_consent: [grant()],
     project_parties: [party("p1", "granted")],
   });
   const deferred = await sendPartySms(
@@ -166,6 +188,8 @@ Deno.test("caller-owned sensitive outbox never persists a raw guest URL", async 
 
   const redirectFake = createFakeSupabase({
     project_parties: [party("p1", "granted")],
+    projects: ORG_ALPHA_PROJECTS,
+    studio_channel_consent: [grant()],
   });
   let providerBody = "";
   const sent = await sendPartySms(
@@ -216,6 +240,8 @@ Deno.test("caller-owned sensitive outbox never persists a raw guest URL", async 
 
 Deno.test("MG From + SMS_CONVERSATION_NUMBER keys the conversation on the physical number while Twilio still gets the MG SID", async () => {
   const fake = createFakeSupabase({
+    projects: ORG_ALPHA_PROJECTS,
+    studio_channel_consent: [grant()],
     project_parties: [party("p1", "granted")],
   });
   let capturedBody = "";
@@ -260,6 +286,8 @@ Deno.test("MG From + SMS_CONVERSATION_NUMBER keys the conversation on the physic
 
 Deno.test("MG From without SMS_CONVERSATION_NUMBER refuses to send (would split the inbound thread)", async () => {
   const fake = createFakeSupabase({
+    projects: ORG_ALPHA_PROJECTS,
+    studio_channel_consent: [grant()],
     project_parties: [party("p1", "granted")],
   });
   let fetchCalls = 0;
@@ -297,6 +325,8 @@ Deno.test("MG From without SMS_CONVERSATION_NUMBER refuses to send (would split 
 
 Deno.test("MG-prefixed SMS_CONVERSATION_NUMBER is treated as unset and refuses to send", async () => {
   const fake = createFakeSupabase({
+    projects: ORG_ALPHA_PROJECTS,
+    studio_channel_consent: [grant()],
     project_parties: [party("p1", "granted")],
   });
   let fetchCalls = 0;
@@ -362,9 +392,18 @@ Deno.test("flush: an opted-out recipient is suppressed and never sent", async ()
         created_at: new Date(now.getTime() - 60 * 60 * 1000).toISOString(),
       },
     ],
+    // The refusal is the RECORD's; the seat is left reading `granted` to prove
+    // the flush no longer asks it (R-AY, final-run MAJOR-1).
     project_parties: [
-      { id: "p1", phone_e164: "+15551230001", sms_consent_status: "opted_out" },
+      {
+        id: "p1",
+        phone_e164: "+15551230001",
+        project_id: "proj1",
+        sms_consent_status: "granted",
+      },
     ],
+    projects: ORG_ALPHA_PROJECTS,
+    studio_channel_consent: [{ ...grant(), status: "opted_out" }],
   });
   let fetchCalls = 0;
   const result = await flushDeferredMessages(fake as never, {
@@ -386,7 +425,14 @@ Deno.test("flush: an opted-out recipient is suppressed and never sent", async ()
   assertEquals(row.error_message, "opted_out");
 });
 
-Deno.test("flush: a deferred sms_optin_invite with no project_parties rows on the phone is suppressed as not_invitable", async () => {
+// A deferred INVITE with no seat and no record: the `not_invitable` leg that
+// suppressed it read the frozen seat reduction and is deleted (R-AY, final-run
+// MAJOR-1), so what decides it now is the record scan on the unattributable
+// branch — a recorded refusal anywhere on the number suppresses it, and with
+// nothing recorded at all the double-opt-in invite still goes. That last
+// fail-open is the studio-less-project policy question named in the W1a report
+// §5.2/§8, and it is no longer a frozen column's decision either way.
+Deno.test("flush: a deferred sms_optin_invite on a number some studio has RECORDED a stop for is suppressed", async () => {
   const now = new Date("2026-07-08T18:00:00Z"); // ~1pm Chicago — not quiet
   const fake = createFakeSupabase({
     sms_conversations: [
@@ -405,6 +451,13 @@ Deno.test("flush: a deferred sms_optin_invite with no project_parties rows on th
       },
     ],
     project_parties: [],
+    studio_channel_consent: [{
+      organization_id: "org-beta",
+      channel_kind: "sms",
+      channel_value: "+15551239999",
+      status: "opted_out",
+      refusal_unanswered: true,
+    }],
   });
   let fetchCalls = 0;
   const result = await flushDeferredMessages(fake as never, {
@@ -423,7 +476,7 @@ Deno.test("flush: a deferred sms_optin_invite with no project_parties rows on th
     error_message: string;
   };
   assertEquals(row.twilio_status, "suppressed");
-  assertEquals(row.error_message, "not_invitable");
+  assertEquals(row.error_message, "opted_out");
 });
 
 Deno.test("flush: a row older than 24h expires without sending", async () => {
@@ -488,8 +541,15 @@ Deno.test("flush: a Twilio send failure marks the row failed with the error, sin
       },
     ],
     project_parties: [
-      { id: "p1", phone_e164: "+15551230003", sms_consent_status: "granted" },
+      {
+        id: "p1",
+        phone_e164: "+15551230003",
+        project_id: "proj1",
+        sms_consent_status: "granted",
+      },
     ],
+    projects: ORG_ALPHA_PROJECTS,
+    studio_channel_consent: [grant("+15551230003")],
   });
   let fetchCalls = 0;
   const result = await flushDeferredMessages(fake as never, {
@@ -661,26 +721,30 @@ Deno.test("with no studio record the send is refused whoever's seat carries the 
   assertEquals(res.reason, "opted_out");
 });
 
-// The one place the reduction stays phone-global is the unattributable branch —
-// no studio resolves at all — and since R-AW it asks the RECORDS, never the
-// seats. A party-row STOP on the number no longer blocks there: the frozen
-// seats carry no fact the records do not, and a studio-less project has no
-// ledger to hold one. That fail-open is named in the W1a report §5.2/§8 and is
-// a policy ruling owed, not something this function can close.
-Deno.test("with no record and no resolvable studio, an opted-out party row no longer blocks (R-AW)", async () => {
-  const fake = createFakeSupabase({
-    project_parties: [
-      party("p1", "granted"),
-      { ...party("p2", "opted_out"), project_id: "proj2" },
-    ],
-    // proj1 carries neither studio_id nor designer_id.
-    projects: [{ id: "proj1", studio_id: null, designer_id: null }],
-  });
-  const res = await sendPartySms(fake as never, { partyId: "p1", body: "hello" }, {
-    getEnv: envOf(CONSENT_ENV),
-    now: OPEN_HOURS,
-  });
-  assert(res.sent, "nothing on the RECORDS has refused, so the unattributable send stands");
+// The unattributable branch — no studio resolves at all — asks the RECORDS and
+// never the seats (R-AW), and since final-run MAJOR-2 it also refuses an
+// ordinary send uniformly. It used to hand the decision to
+// `recipient.consent`: a frozen `granted` seat sent, a frozen `not_asked` seat
+// on the same population did not, which is a frozen column deciding a live
+// text. With that leg gone, `unknown` is not a grant, so no ordinary message
+// leaves for a project no studio owns — whatever either seat says.
+Deno.test("with no record and no resolvable studio, NO seat word authorises the send (final-run MAJOR-2)", async () => {
+  for (const seat of ["granted", "not_asked"]) {
+    const fake = createFakeSupabase({
+      project_parties: [
+        party("p1", seat),
+        { ...party("p2", "opted_out"), project_id: "proj2" },
+      ],
+      // proj1 carries neither studio_id nor designer_id.
+      projects: [{ id: "proj1", studio_id: null, designer_id: null }],
+    });
+    const res = await sendPartySms(fake as never, { partyId: "p1", body: "hello" }, {
+      getEnv: envOf(CONSENT_ENV),
+      now: OPEN_HOURS,
+    });
+    assert(!res.sent, `a seat frozen at ${seat} may not carry an unattributable send`);
+    assertEquals(res.reason, "not_consented");
+  }
 });
 
 // ── r1 review fixes ─────────────────────────────────────────────────────────
@@ -707,13 +771,14 @@ Deno.test("the studio's granted record carries a send the party row would refuse
   assert(res.sent, "the studio's own grant must authorise the send");
 });
 
-// …and since R-AW the VERDICT no longer reads the seat at all: it answers
-// "allow" here. What still refuses this send is sendPartySms's own surviving
-// PR-x leg (`recipient.consent === "opted_out"`, off resolveRecipient) — the
-// last frozen-column reader in the send path, W2's to retire (report §5.1b).
-// The asymmetry is deliberate: an over-refusal is safe, an under-refusal is a
-// 10DLC incident.
-Deno.test("a granted record does not override an opted-out party row — sendPartySms's legacy leg, not the verdict", async () => {
+// …and THE RECORD CARRIES IT OVER A FROZEN REFUSAL (R-AY, final-run MAJOR-1).
+// This is the design's own recovery path — the fold records the seat's
+// refusal, the studio reconsents as evidence, the recipient replies START — and
+// until this pass sendPartySms's surviving PR-x leg refused every send on it
+// while the Call Sheet row, the Call Sheet vitals, the Directory row and
+// field_activity_summary all printed "Texting" off the same record. One ledger,
+// one answer: the seat is read by nothing.
+Deno.test("a granted record carries the send over a seat frozen at opted_out (R-AY)", async () => {
   const fake = createFakeSupabase({
     project_parties: [party("p1", "opted_out")],
     projects: [{ id: "proj1", studio_id: "org-alpha" }],
@@ -728,8 +793,7 @@ Deno.test("a granted record does not override an opted-out party row — sendPar
     getEnv: envOf(CONSENT_ENV),
     now: OPEN_HOURS,
   });
-  assert(!res.sent);
-  assertEquals(res.reason, "opted_out");
+  assert(res.sent, "the studio's own standing grant is the consent");
 });
 
 // r6 M6-3: `status` is not the whole verdict. refusal_unanswered is the stored
@@ -1362,14 +1426,19 @@ Deno.test("an unattributable send whose record scan fails is refused, not allowe
   assertEquals(res.reason, "opted_out");
 });
 
-// The control: the same send, same shape, with the read working — otherwise the
-// assertion above would pass for the wrong reason.
-Deno.test("the unattributable send still goes when the phone-global scan reads clean", async () => {
+// The control: the same send, same shape, with the read working. Since
+// final-run MAJOR-2 it is refused too — `unknown` is not a grant and no seat
+// gets to say otherwise — so the two refusals are told apart by their REASON:
+// a scan that could not be read is an `opted_out`, a scan that read clean is a
+// `not_consented`. Without that the assertion above would pass for the wrong
+// reason.
+Deno.test("the unattributable send with a clean scan is refused as not_consented, not as an opt-out", async () => {
   const fake = createFakeSupabase(unattributableSeed());
   const res = await sendPartySms(
     fake as never,
     { partyId: "p1", body: "hello" },
     { getEnv: envOf(CONSENT_ENV), now: OPEN_HOURS },
   );
-  assert(res.sent, "nothing on this number has refused, so the send stands");
+  assert(!res.sent, "no record grants this number, so nothing ordinary goes out");
+  assertEquals(res.reason, "not_consented");
 });
