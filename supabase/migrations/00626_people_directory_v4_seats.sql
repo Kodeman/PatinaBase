@@ -171,6 +171,33 @@
 --   · r5 MAJOR-3 — the seats view's half of the same tenant conjunct; the
 --     other two thirds are 00625's four site-access policies and 00624's four
 --     authority policies.
+--   · r6 MAJOR-1 — that tenant conjunct resolves through project_tenant_org()
+--     (00624 §1) and NOT project_consent_org(). The consent resolver's
+--     _primary_studio_for() fallback names whatever studio the designer's
+--     membership ranks first, which on a project that records no studio_id
+--     need not be — and locally never is — the studio doing the work: 5 of 8
+--     local projects, designer an owner of two design studios. Used as a
+--     GATE it hid every seat from an ADMIN of the studio doing the work, and
+--     since 00594's party branch carried no tenant leg at all that was a
+--     regression, not merely a new object being unreachable. The consent WORD
+--     and every consent DATE still resolve at project_consent_org(), which
+--     must read the same for every caller — and BECAUSE they do, the word's
+--     COALESCE to 'not_asked' is now gated on the caller being able to read
+--     that record: on a studio-less job the record lives at the guessed org,
+--     so the wider gate would otherwise have printed the affirmative word
+--     over a recorded refusal (measured: `not_asked` on a seat the record
+--     says `opted_out`), which is r5 MAJOR-1 reintroduced. Unknown prints as
+--     NULL on both the party branch and the seats view.
+--   · r6 MAJOR-2 — the client, lead, maker and team branches stay
+--     DESIGNER-SCOPED (is_studio_comember(designer_id), carried from
+--     00594/00420) and the view's COMMENT now says so branch by branch. A
+--     manufacturer-org co-member of the designer reads 6 client and 5 lead
+--     rows with names, emails and phones — and reads the same columns
+--     straight off designer_clients and leads, whose shipped policies carry
+--     that same predicate with SELECT granted to authenticated. This view is
+--     not the door; the close is an 00584-shaped tenant sweep over those
+--     base tables together with these branches, which changes who sees what
+--     platform-wide and is owed its own ruling. Recorded, not silently left.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -1084,9 +1111,22 @@ SELECT
 FROM (
   SELECT
     q0.*,
-    COALESCE(public.identity_consent_status(
-      public.project_consent_org(q0.project_id),
-      q0.identity_key, NULL), 'not_asked')    AS consent_word,
+    -- COALESCEd to 'not_asked' ONLY for a caller who can read the record
+    -- that decides the word. r6 MAJOR-1 restored this branch's visibility on
+    -- a project that records no studio, where the RECORD lives at the org
+    -- project_consent_org() guesses and the studio doing the work is not a
+    -- member of it: measured, an admin of the working studio read `not_asked`
+    -- over a record that says `opted_out`, which is r5 MAJOR-1's fail-open
+    -- word on a send door, reintroduced by the wider gate. Unknown prints as
+    -- NULL — R-V's "no record" line — never as the affirmative word. The send
+    -- rail is unaffected: it asks channel_consent_status() itself (R-AY) and
+    -- NULL is not `granted`.
+    CASE WHEN public.is_active_studio_member(
+                public.project_consent_org(q0.project_id))
+         THEN COALESCE(public.identity_consent_status(
+                public.project_consent_org(q0.project_id),
+                q0.identity_key, NULL), 'not_asked')
+    END                                       AS consent_word,
     ev.consented_at                           AS record_consented_at,
     ev.opt_out_at                             AS record_opt_out_at
   FROM (
@@ -1120,7 +1160,17 @@ FROM (
       -- as the affirmative word `not_asked`, over a record that says
       -- opted_out, on the row party-profile-sheet.tsx:262/:742 opens the text
       -- composer from.
-      AND public.is_active_studio_member(public.project_consent_org(pp.project_id))
+      --
+      -- The GATE resolves through project_tenant_org() (00624 §1), not
+      -- project_consent_org(): on a project that records no studio_id the
+      -- consent resolver's _primary_studio_for() fallback names a studio
+      -- nobody on the job belongs to, and an ADMIN of the studio doing the
+      -- work lost the seat rows it used to read — 00594's party branch carried
+      -- no tenant leg at all, so that was a REGRESSION on 5 of 8 local
+      -- projects (w1b final review r6 MAJOR-1). The consent WORD below still
+      -- resolves at project_consent_org(), which must read the same for every
+      -- caller; only the visibility gate is caller-relative.
+      AND public.is_active_studio_member(public.project_tenant_org(pp.project_id))
       AND ( public.is_studio_comember(pj.designer_id)
          OR public.is_studio_comember(pj.lead_designer_id)
          OR public.is_studio_comember(pj.created_by) )
@@ -1297,7 +1347,35 @@ COMMENT ON VIEW public.people_directory IS
   'the studio it answers for, closing a cross-tenant phone-number oracle that '
   'answered over PostgREST (BLOCKING-1); and identity_consent_evidence()''s '
   'two dates are one-sided, so a folded refusal_unanswered can no longer put a '
-  'dated consent claim beside a refusal (MAJOR-2).';
+  'dated consent claim beside a refusal (MAJOR-2). '
+  'w1b final review r6: the consent word''s COALESCE to `not_asked` is gated '
+  'on the caller being an active member of the org the deciding record lives '
+  'at, so an unreadable record prints NULL (unknown) and never the '
+  'affirmative word; the party branch''s tenant leg resolves through '
+  'project_tenant_org() (00624 §1) rather than project_consent_org(), whose '
+  '_primary_studio_for() fallback names a studio nobody on the job belongs to '
+  'on a studio_id IS NULL project — 00594''s party branch carried no tenant '
+  'leg, so the admin of the studio doing the work LOST seats they used to '
+  'read, on 5 of 8 local projects (MAJOR-1). '
+  'WHICH BRANCHES ARE TENANT-SCOPED, on the record (r6 MAJOR-2): the '
+  'CONTACTS branch is, is_active_studio_member(sc.organization_id); the PARTY '
+  'branch is, is_active_studio_member(project_tenant_org(project_id)) beside '
+  'its three co-member legs. The CLIENT, LEAD, MAKER and TEAM branches are '
+  'DESIGNER-SCOPED BY INHERITANCE — is_studio_comember(designer_id) alone, '
+  'carried verbatim from 00594/00420 — so a caller who shares ANY active '
+  'organization with the designer of record, a manufacturer org included, '
+  'reads those rows: measured, 6 client rows and 5 lead rows with names, '
+  'emails and telephone numbers. THIS VIEW IS NOT THE DOOR: '
+  'designer_clients_studio_rw and leads_studio_select carry that same '
+  'predicate on the BASE TABLES with SELECT granted to authenticated, so the '
+  'same caller reads the same columns from /rest/v1/designer_clients and '
+  '/rest/v1/leads with the view out of the picture — tightening the four '
+  'branches here would close nothing and would repeat MAJOR-1, since the only '
+  'tenant resolver those branches can reach is the guessing one. The close is '
+  'an 00584-shaped tenant sweep over designer_clients, leads, vendors and '
+  'project_team_members TOGETHER with these four branches; it changes who '
+  'sees what platform-wide and is owed a ruling of its own, named here rather '
+  'than left silent.';
 
 GRANT SELECT ON public.people_directory TO authenticated;
 
@@ -1373,9 +1451,17 @@ SELECT
   pp.show_to_client                                              AS show_to_client,
   pp.studio_contact_id                                           AS studio_contact_id,
   pp.phone_e164                                                  AS phone_e164,
-  COALESCE(public.channel_consent_status(
-    public.project_consent_org(pp.project_id),
-    'sms', pp.phone_e164), 'not_asked')                          AS consent_status,
+  -- COALESCEd to 'not_asked' ONLY for a caller who can read the deciding
+  -- record; see the party branch's note above (r6 MAJOR-1). On a project that
+  -- records no studio the record lives at the org project_consent_org()
+  -- guesses, which the studio doing the work need not belong to, so the word
+  -- there is unknown — NULL — and never the affirmative one.
+  CASE WHEN public.is_active_studio_member(
+              public.project_consent_org(pp.project_id))
+       THEN COALESCE(public.channel_consent_status(
+              public.project_consent_org(pp.project_id),
+              'sms', pp.phone_e164), 'not_asked')
+  END                                                            AS consent_status,
   public.reach_state_for(pp.profile_id, NULL, pp.id)             AS reach_state,
   -- the stamped card's OWN paper AND the seat's firm, worst-first (r4
   -- MAJOR-2): it was COALESCE(company_id, studio_contact_id), so a person-held
@@ -1399,8 +1485,12 @@ JOIN public.projects pj ON pj.id = pp.project_id
 -- unreadable record to `not_asked`, so each of them read the affirmative word
 -- over records that say opted_out. The word is resolved at
 -- project_consent_org(project_id); the seat is visible to that studio's own
--- active members.
-WHERE public.is_active_studio_member(public.project_consent_org(pp.project_id))
+-- active members — resolved for the GATE through project_tenant_org() (00624
+-- §1), because the consent resolver's _primary_studio_for() fallback names a
+-- studio nobody on the job belongs to on a studio_id IS NULL project and hid
+-- every seat from the admin of the studio doing the work (w1b final review r6
+-- MAJOR-1).
+WHERE public.is_active_studio_member(public.project_tenant_org(pp.project_id))
   AND ( public.is_studio_comember(pj.designer_id)
      OR public.is_studio_comember(pj.lead_designer_id)
      OR public.is_studio_comember(pj.created_by) );
@@ -1423,13 +1513,21 @@ COMMENT ON VIEW public.people_directory_seats IS
   'the caller''s '
   'own RLS. Stage, the window, the access mode and the warranty are the seat''s '
   'own facts (00624) and PR-p says they print HERE, never as a person-level '
-  'column. TENANT-SCOPED: is_active_studio_member(project_consent_org('
+  'column. TENANT-SCOPED: is_active_studio_member(project_tenant_org('
   'project_id)) is required beside the three co-member legs, because '
   'is_studio_comember(designer) is true whenever the caller shares ANY active '
   'organization with the designer of record — an outside designer working for '
   'two studios handed every member of the second studio all of the first '
   'studio''s seat rows, each reading the COALESCEd `not_asked` over records '
-  'that say opted_out (w1b final review r5 MAJOR-1/MAJOR-3) (00626).';
+  'that say opted_out (w1b final review r5 MAJOR-1/MAJOR-3). The gate''s '
+  'resolver is project_tenant_org() (00624 §1), not project_consent_org(): a '
+  'project that records no studio_id resolved through _primary_studio_for() '
+  'to a studio nobody on the job belongs to, and the admin of the studio '
+  'doing the work read 0 seats (w1b final review r6 MAJOR-1). consent_status '
+  'is COALESCEd to `not_asked` only for a caller who can read the deciding '
+  'record: on a studio-less job the record lives at the org '
+  'project_consent_org() guesses, and the wider gate would otherwise print '
+  'the affirmative word over a recorded refusal (00626).';
 
 REVOKE ALL ON TABLE public.people_directory_seats FROM PUBLIC, anon;
 GRANT SELECT ON public.people_directory_seats TO authenticated;

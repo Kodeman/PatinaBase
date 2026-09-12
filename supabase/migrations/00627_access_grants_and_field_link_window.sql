@@ -31,13 +31,34 @@
 -- `permission denied for table trade_rfq_tokens` for every studio member —
 -- probed, not guessed. NO SHIPPED TABLE'S ACL IS MOVED HERE. Each of the four
 -- comes through its own narrow SECURITY DEFINER reader that returns the
--- normalised columns ONLY (no token, no hash) behind an explicit studio gate
--- copied from that table's own policy where it has one. Two of them
--- (studio_trade_agreement_tokens, invoice_links) have RLS enabled with ZERO
--- policies, so they are service-role-only by design and their gate is stated
--- here for the first time; the other two carry `FOR ALL TO authenticated`
--- studio-co-member policies that cannot fire today because the SELECT grant
--- was never given — a separate finding, not fixed here.
+-- normalised columns ONLY (no token, no hash) behind an explicit TENANT gate.
+-- Two of them (studio_trade_agreement_tokens, invoice_links) have RLS enabled
+-- with ZERO policies, so they are service-role-only by design and their gate
+-- is stated here for the first time; the other two carry `FOR ALL TO
+-- authenticated` studio-co-member policies that cannot fire today because the
+-- SELECT grant was never given — a separate finding, not fixed here.
+--
+-- BECAUSE THESE FOUR ARE DEFINER, EACH ONE'S WHERE CLAUSE IS THE WHOLE ACCESS
+-- RULE — there is no RLS behind it — and all four are executable by
+-- `authenticated`, so PostgREST publishes them at /rest/v1/rpc/<name>. Three
+-- of the four were gated on is_studio_comember(<designer of record>) alone,
+-- which is true whenever the caller shares ANY active organization of ANY
+-- type with that designer. Walked: a member of a MANUFACTURER organization
+-- that also holds the designer, who is not a member of the owning studio at
+-- all, got HTTP 200 and the studio's rows from three of them — which invoices
+-- have live pay links and when each was last viewed, which projects have live
+-- plan transmittals, which seat on which proposal was sent an RFQ, and which
+-- profile opened each door. No bearer credential is in any of it; the shape
+-- of another studio's paperwork is (w1b final review r6 BLOCKING-1). The
+-- claim that those gates were "the table's own shipped policy, restated" was
+-- untrue twice over: the shipped policies carry is_design_studio_comember
+-- (the shared organization must be type design_studio), and the other two
+-- sources had no policy to restate. So each reader now puts the TENANT first
+-- — is_active_studio_member(project_tenant_org(...)), 00624 §1, the one gate
+-- resolver this wave uses — and keeps the narrow shipped predicate beside it.
+-- Where a row records no tenant at all (a proposal with no project, an
+-- invoice with neither studio_id nor project_id) the design-studio predicate
+-- is the whole gate, and each COMMENT says so.
 --
 -- Two rules the view keeps:
 --   · NO BEARER CREDENTIAL APPEARS IN IT. invoice_links.token (00574:63-89)
@@ -98,7 +119,10 @@ AS $$
     NULL::text
   FROM public.trade_rfq_tokens t
   JOIN public.proposals pr ON pr.id = t.proposal_id
-  WHERE public.is_studio_comember(pr.designer_id);
+  WHERE public.is_design_studio_comember(pr.designer_id)
+    AND (pr.project_id IS NULL
+         OR public.is_active_studio_member(
+              public.project_tenant_org(pr.project_id)));
 $$;
 
 REVOKE ALL ON FUNCTION public.access_grants_trade_rfq() FROM PUBLIC, anon;
@@ -109,8 +133,20 @@ COMMENT ON FUNCTION public.access_grants_trade_rfq() IS
   'v_access_grants'' rfq_link branch. SECURITY DEFINER because
    trade_rfq_tokens has no SELECT grant for authenticated (00424 mints
    service_role-only), so a security_invoker view naming it raises at plan
-   time. The gate is the table''s own shipped policy, restated: the proposal''s
-   designer must be a studio co-member. No token_hash is returned (00627).';
+   time — and because it is definer, this WHERE clause is the WHOLE access
+   rule, with no RLS behind it. TENANT FIRST, then the shipped predicate:
+   is_active_studio_member(project_tenant_org(proposal''s project)) AND
+   is_design_studio_comember(the proposal''s designer). It was
+   is_studio_comember(designer) alone, which is true whenever the caller
+   shares ANY active organization with that designer — a manufacturer-org
+   co-member who was not a member of the owning studio read the studio''s RFQ
+   grants over POST /rest/v1/rpc/access_grants_trade_rfq (w1b final review r6
+   BLOCKING-1). is_design_studio_comember is the predicate
+   trade_rfq_tokens_studio_rw actually carries (org type must be
+   design_studio), which is what the old comment claimed to restate and did
+   not. A proposal with no project_id records no tenant to scope to, so that
+   population is gated on the design-studio predicate alone — stated here
+   rather than left to be discovered. No token_hash is returned (00627).';
 
 CREATE OR REPLACE FUNCTION public.access_grants_trade_agreement_links()
 RETURNS TABLE (
@@ -167,7 +203,8 @@ AS $$
     NULL::text
   FROM public.plan_transmittal_tokens p
   JOIN public.projects pj ON pj.id = p.project_id
-  WHERE public.is_studio_comember(pj.designer_id);
+  WHERE public.is_active_studio_member(public.project_tenant_org(pj.id))
+    AND public.is_design_studio_comember(pj.designer_id);
 $$;
 
 REVOKE ALL ON FUNCTION public.access_grants_plan_transmittals()
@@ -179,8 +216,18 @@ COMMENT ON FUNCTION public.access_grants_plan_transmittals() IS
   'v_access_grants'' plan_link branch. SECURITY DEFINER because
    plan_transmittal_tokens has no SELECT grant for authenticated, so its own
    `FOR ALL TO authenticated` studio policy (00429) cannot fire and a
-   security_invoker view naming it raises at plan time. The gate is that
-   policy, restated. No token_hash is returned (00627).';
+   security_invoker view naming it raises at plan time — and because it is
+   definer, this WHERE clause is the WHOLE access rule, with no RLS behind it.
+   TENANT FIRST, then that dead policy''s own predicate:
+   is_active_studio_member(project_tenant_org(project_id)) AND
+   is_design_studio_comember(designer_id). It was is_studio_comember(designer)
+   alone, which is true whenever the caller shares ANY active organization
+   with that designer — a manufacturer-org co-member who was not a member of
+   the owning studio read the studio''s live plan transmittals over
+   POST /rest/v1/rpc/access_grants_plan_transmittals (w1b final review r6
+   BLOCKING-1). The old comment said "the gate is that policy, restated";
+   it was broader than the policy, which requires the shared organization to
+   be of type design_studio. No token_hash is returned (00627).';
 
 CREATE OR REPLACE FUNCTION public.access_grants_invoice_links()
 RETURNS TABLE (
@@ -201,7 +248,15 @@ AS $$
     CASE WHEN il.status = 'closed' THEN 'closed' END
   FROM public.invoice_links il
   JOIN public.invoices inv ON inv.id = il.invoice_id
-  WHERE public.is_studio_comember(inv.designer_id);
+  WHERE public.is_design_studio_comember(inv.designer_id)
+    AND (CASE
+           WHEN inv.studio_id IS NOT NULL
+             THEN public.is_active_studio_member(inv.studio_id)
+           WHEN inv.project_id IS NOT NULL
+             THEN public.is_active_studio_member(
+                    public.project_tenant_org(inv.project_id))
+           ELSE true
+         END);
 $$;
 
 REVOKE ALL ON FUNCTION public.access_grants_invoice_links() FROM PUBLIC, anon;
@@ -212,8 +267,19 @@ COMMENT ON FUNCTION public.access_grants_invoice_links() IS
   'v_access_grants'' invoice_pay branch. invoice_links has RLS enabled and ZERO
    policies (00574) and stores its 64-hex token in PLAINTEXT, so it stays
    closed to authenticated and this reader never selects the token column at
-   all — grant_id is the row uuid. Gate: the invoice''s designer must be a
-   studio co-member (00627).';
+   all — grant_id is the row uuid. Because the table is service-role-only and
+   this function is definer, the gate is not a restatement of anything: it is
+   stated here for the first time, and it is the WHOLE access rule.
+   TENANT FIRST — invoices.studio_id when the invoice names one, else the
+   tenant of its project through project_tenant_org(), and a studio invoice
+   that names neither (00588''s standalone invoice) is gated on the
+   design-studio predicate alone — AND is_design_studio_comember(designer_id)
+   beside it. It was is_studio_comember(designer) alone, which is true
+   whenever the caller shares ANY active organization with that designer: a
+   manufacturer-org co-member who was not a member of the owning studio read
+   which of the studio''s invoices have live pay links and when each was last
+   viewed, over POST /rest/v1/rpc/access_grants_invoice_links (w1b final
+   review r6 BLOCKING-1) (00627).';
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- 2. v_access_grants — every door, one shape

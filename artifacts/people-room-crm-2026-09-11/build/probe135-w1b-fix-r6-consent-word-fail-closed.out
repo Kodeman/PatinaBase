@@ -1,0 +1,45 @@
+BEGIN
+INSERT 0 1
+INSERT 0 1
+ record_lives_at 
+-----------------
+ Leah Hartwell
+(1 row)
+
+                              set_config                               
+-----------------------------------------------------------------------
+ {"sub":"a0000000-0000-0000-0000-000000000003","role":"authenticated"}
+(1 row)
+
+SET
+-- as the admin of the studio doing the work, who cannot read that record
+  phone_e164  | consent_status 
+--------------+----------------
+ +16125559992 | 
+(1 row)
+
+    display_name    | consent_status 
+--------------------+----------------
+ Studioless Refuser | 
+(1 row)
+
+ raw_word_to_this_caller 
+-------------------------
+ 
+(1 row)
+
+RESET
+-- and to a member of the org the record lives at, for contrast
+                              set_config                               
+-----------------------------------------------------------------------
+ {"sub":"a0000000-0000-0000-0000-000000000004","role":"authenticated"}
+(1 row)
+
+SET
+  phone_e164  | consent_status 
+--------------+----------------
+ +16125559992 | opted_out
+(1 row)
+
+RESET
+ROLLBACK

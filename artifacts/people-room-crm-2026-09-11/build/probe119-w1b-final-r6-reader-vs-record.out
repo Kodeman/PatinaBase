@@ -1,0 +1,146 @@
+BEGIN
+=== the record, as postgres (ground truth) ===
+           organization_id            | channel_value |  status   | refusal_unanswered |  verdict  | consented_at | opt_out_at 
+--------------------------------------+---------------+-----------+--------------------+-----------+--------------+------------
+ b0000000-0000-0000-0000-000000000001 | +16125550106  | granted   | f                  | granted   | 2026-10-10   | 
+ b0000000-0000-0000-0000-000000000001 | +16125550108  | granted   | f                  | granted   | 2026-10-08   | 
+ b0000000-0000-0000-0000-000000000001 | +16125550109  | granted   | f                  | granted   | 2026-10-12   | 
+ b0000000-0000-0000-0000-000000000001 | +16125550111  | granted   | f                  | granted   | 2025-05-02   | 
+ b0000000-0000-0000-0000-000000000001 | +16125550112  | opted_out | f                  | opted_out | 2025-05-02   | 2025-12-03
+ b0000000-0000-0000-0000-000000000001 | +16125550116  | granted   | f                  | granted   | 2026-10-14   | 
+ b0000000-0000-0000-0000-000000000001 | +16125550118  | pending   | f                  | pending   |              | 
+(7 rows)
+
+=== ground truth: identity -> worst-first verdict over every number, as postgres ===
+SELECT 49
+--- and every seat number, with the record verdict, as postgres
+SELECT 31
+GRANT
+
+################ AS THE OWNER ################
+                                 set_config                                 
+----------------------------------------------------------------------------
+ {"sub" : "a0000000-0000-0000-0000-000000000004", "role" : "authenticated"}
+(1 row)
+
+SET
+-- A1: any contacts-branch row whose consent word differs from the worst-first truth?
+ mismatches 
+------------
+         49
+(1 row)
+
+-- A2: any contacts-branch row whose paper word differs from the truth?
+ paper_mismatches 
+------------------
+                0
+(1 row)
+
+-- A3: any row reading a PERMISSIVE word over a number the record refuses?
+ display_name | consent_status | phone_e164 | rec 
+--------------+----------------+------------+-----
+(0 rows)
+
+-- A4: any SEAT line reading a permissive word over its own refused number?
+   display_name   |  phone_e164  | consent_status | rec 
+------------------+--------------+----------------+-----
+ Adaeze Okonkwo   | +16125550104 | not_asked      | 
+ Chidi Okonkwo    | +16125550105 | not_asked      | 
+ Tom Marrow       | +16125550107 | not_asked      | 
+ Sam Rowe         | +16125550110 | not_asked      | 
+ Ingrid Halvorsen | +16125550113 | not_asked      | 
+ Rosa Delgado     | +16125550114 | not_asked      | 
+ Frank Bauer      | +16125550115 | not_asked      | 
+ Jim Lindgren     | +16125550117 | not_asked      | 
+ Kelly Marsh      | +16125550119 | not_asked      | 
+ Claire Bissett   | +16125550120 | not_asked      | 
+ Owen Ashby       | +16125550123 | not_asked      | 
+ Nadia Brooks     | +16125550124 | not_asked      | 
+ Jonah Feld       | +16125550125 | not_asked      | 
+ Carol Nyström    | +16125550126 | not_asked      | 
+ Ray Thao         | +16125550127 | not_asked      | 
+ Rivera Finishes  | +16125550219 | not_asked      | 
+ Granite North    | +16125550220 | not_asked      | 
+ Karin Lindqvist  | +16125550190 | not_asked      | 
+ Ben Ostrom       | +16125550128 | not_asked      | 
+ Ingrid Halvorsen | +16125550113 | not_asked      | 
+ Claire Bissett   | +16125550120 | not_asked      | 
+(21 rows)
+
+-- A5: any row claiming a seat_count it cannot nest?
+ rows_overclaiming 
+-------------------
+                 0
+(1 row)
+
+-- A6: a dated consent claim beside a refusal (R-Q composability)
+ display_name | consent_status | consented | opted 
+--------------+----------------+-----------+-------
+(0 rows)
+
+-- A7: total row counts by role
+  role   | count 
+---------+-------
+ client  |     7
+ contact |    49
+ lead    |     5
+ sub     |     1
+(4 rows)
+
+RESET
+
+################ AS THE ADMIN (studio_manager) ################
+                                 set_config                                 
+----------------------------------------------------------------------------
+ {"sub" : "a0000000-0000-0000-0000-000000000003", "role" : "authenticated"}
+(1 row)
+
+SET
+-- B1/B2: same two mismatch counts
+ consent_mismatch | paper_mismatch | seat_mismatch 
+------------------+----------------+---------------
+               49 |              0 |            21
+(1 row)
+
+-- B3: rows/seats the admin reads
+ dir | seats | cards | authority | docs 
+-----+-------+-------+-----------+------
+  62 |    31 |     1 |        11 |   36
+(1 row)
+
+RESET
+
+################ AS A FOREIGN STUDIO OWNER (Phase One Synthetic) ################
+                                 set_config                                 
+----------------------------------------------------------------------------
+ {"sub" : "cf100000-0000-4000-8000-000000000001", "role" : "authenticated"}
+(1 row)
+
+SET
+ dir | seats | cards | authority | docs | grants 
+-----+-------+-------+-----------+------+--------
+   0 |     0 |     0 |         0 |    0 |      1
+(1 row)
+
+-- the r5 BLOCKING-1 oracle, replayed by naming MY OWN org with a foreign key
+ foreign_numbers 
+-----------------
+               0
+(1 row)
+
+RESET
+
+################ AS A CLIENT ACCOUNT ################
+                                 set_config                                 
+----------------------------------------------------------------------------
+ {"sub" : "a0000000-0000-0000-0000-000000000005", "role" : "authenticated"}
+(1 row)
+
+SET
+ cards | authority | seats | docs 
+-------+-----------+-------+------
+     0 |         0 |     0 |    0
+(1 row)
+
+RESET
+ROLLBACK

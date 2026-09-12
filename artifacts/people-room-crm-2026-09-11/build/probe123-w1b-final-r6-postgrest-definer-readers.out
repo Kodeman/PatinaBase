@@ -1,0 +1,18 @@
+=== 00627's four definer readers, over /rest/v1/rpc ===
+  access_grants_invoice_links            -> HTTP 200 [{"grant_id":"invoice_pay:ad300000-0000-4000-8000-000000000001","tier":"invoice_pay","subject_type":"link","subject_id":"ad300000-0000-4000-8000-000000000001","scope_type":"invoice","scope_id":"b0000000-0000-0000-0000-00000000e141","granted_by":"a0000000-0000-0000-0000-000000000004","granted_at":"20
+  access_grants_plan_transmittals        -> HTTP 200 [{"grant_id":"plan_link:ad500000-0000-4000-8000-000000000001","tier":"plan_link","subject_type":"link","subject_id":"ad500000-0000-4000-8000-000000000001","scope_type":"project","scope_id":"d0e00000-0000-0000-0000-00000000000a","granted_by":"a0000000-0000-0000-0000-000000000004","granted_at":"2026-0
+  access_grants_trade_rfq                -> HTTP 200 [{"grant_id":"rfq_link:ad700000-0000-4000-8000-000000000001","tier":"rfq_link","subject_type":"engagement","subject_id":"d0e30000-0000-0000-0000-000000000004","scope_type":"proposal","scope_id":"b0000000-0000-0000-0000-000000000001","granted_by":"a0000000-0000-0000-0000-000000000004","granted_at":"2
+  access_grants_trade_agreement_links    -> HTTP 200 []
+=== v_access_grants, over /rest/v1 ===
+  v_access_grants -> HTTP 200 [{"tier":"client_account","scope_type":"designer_client","scope_id":"ba4ef5d5-3bae-47e1-af7b-7571ce1062e1"}, 
+ {"tier":"client_account","scope_type":"designer_client","scope_id":"d0000000-0000-0000-0000-00000000c001"}, 
+ {"tier":"field_link","scope_type":"project","scope_id":"d0e00000-0000-0000-0000-00000000000a"}, 
+ {"tier":"field_link","scope_type":"project","scope_id":"d0e00000-0000-0000-0000-0
+=== r5 BLOCKING-1 control: identity_phone_numbers with my own org + a foreign key ===
+  identity_phone_numbers -> HTTP 200 []
+=== controls: the objects r5 tightened ===
+  people_directory             -> HTTP 200 [{"person_id":"ba4ef5d5-3bae-47e1-af7b-7571ce1062e1","role":"client","display_name":"Client User","email":"client@patina
+  people_directory_seats       -> HTTP 200 []
+  project_site_access_cards    -> HTTP 200 []
+  project_party_authority      -> HTTP 200 []
+  studio_compliance_documents  -> HTTP 200 []

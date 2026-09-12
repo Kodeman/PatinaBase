@@ -1,0 +1,59 @@
+BEGIN
+=== premise ===
+               project                | studio_id |               resolved               | resolved_name |             designer_id              
+--------------------------------------+-----------+--------------------------------------+---------------+--------------------------------------
+ b0000000-0000-0000-0000-0000000000d1 |           | 8f1fc618-8a5c-4fb6-a6c2-68ff7f828c01 | Leah Hartwell | a0000000-0000-0000-0000-000000000004
+(1 row)
+
+-- the admin of the studio actually doing the work
+                                 set_config                                 
+----------------------------------------------------------------------------
+ {"sub" : "a0000000-0000-0000-0000-000000000003", "role" : "authenticated"}
+(1 row)
+
+SET
+ member_of_local_dev | member_of_the_resolved_org | comember_of_the_designer 
+---------------------+----------------------------+--------------------------
+ t                   | f                          | t
+(1 row)
+
+RESET
+=== a seat and a site access card on that project, written by service_role ===
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+   ok    
+---------
+ written
+(1 row)
+
+=== AS THE ADMIN of Local Dev Studio (the studio doing the work) ===
+                                 set_config                                 
+----------------------------------------------------------------------------
+ {"sub" : "a0000000-0000-0000-0000-000000000003", "role" : "authenticated"}
+(1 row)
+
+SET
+ seats_seen | directory_rows | cards_seen | grants_seen | raw_seats_seen 
+------------+----------------+------------+-------------+----------------
+          0 |              0 |          0 |           0 |              1
+(1 row)
+
+-- and may the admin RECORD a card on such a project at all?
+psql:artifacts/people-room-crm-2026-09-11/build/probe121-w1b-final-r6-studioless-project.sql:51: NOTICE:  admin INSERT refused: new row violates row-level security policy for table "project_site_access_cards"
+DO
+RESET
+=== AS THE OWNER (member of BOTH orgs) — the control ===
+                                 set_config                                 
+----------------------------------------------------------------------------
+ {"sub" : "a0000000-0000-0000-0000-000000000004", "role" : "authenticated"}
+(1 row)
+
+SET
+ seats_seen | cards_seen | grants_seen 
+------------+------------+-------------
+          1 |          1 |           1
+(1 row)
+
+RESET
+ROLLBACK

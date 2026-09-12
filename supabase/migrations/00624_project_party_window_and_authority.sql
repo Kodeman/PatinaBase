@@ -57,21 +57,113 @@
 -- of record — so on this table, which carries scope and the money THRESHOLD
 -- beside it, a second studio the designer also works for read every grant
 -- (w1b final review r5 MAJOR-3). The tenant conjunct comes first. The new
--- resolver project_party_org() answers the org question through the ONE
--- resolver project_consent_org() — close-review r1 MAJOR-1's lesson: an
--- inlined copy of a definer lookup inside an invoker context is a different
--- function.
+-- resolver project_party_org() answers the org question through
+-- project_tenant_org() — close-review r1 MAJOR-1's lesson: an inlined copy of
+-- a definer lookup inside an invoker context is a different function.
+--
+-- WHY THE GATE'S RESOLVER IS NOT project_consent_org() (w1b final review r6
+-- MAJOR-1). project_consent_org() is COALESCE(studio_id,
+-- _primary_studio_for(designer_id)), and on a project that records NO studio
+-- the fallback names whatever studio the designer's own membership list
+-- happens to rank first — which need not be the studio doing the work. On the
+-- local fixture it never is: 5 of 8 projects carry studio_id IS NULL, their
+-- designer of record belongs to TWO active design studios, and the resolver
+-- names the other one. Used as an access gate that read as "this job belongs
+-- to nobody you know": an ADMIN of the studio doing the work saw 0 seats, 0
+-- site access cards, 0 authority grants, and an INSERT of a site access card
+-- was refused — while the raw project_parties row stayed visible. The consent
+-- LEDGER still resolves through project_consent_org(), because a record's
+-- studio must be the same for every reader; a GATE may not guess. So
+-- project_tenant_org() names the recorded studio when there is one and,
+-- where the record names none, the DESIGN STUDIO the caller and the job's
+-- designer both belong to — never a guess, never a non-design organization.
+-- Backfilling projects.studio_id (the other candidate fix) would have to
+-- guess the same way: the designer of all five studio-less local projects is
+-- an owner of two design studios, so nothing in the record chooses. THE COUNT
+-- OF studio_id IS NULL PROJECTS ON STRATA IS OWED BEFORE THIS CHAIN RUNS:
+-- locally it is 5 of 8, and every gate in this wave turns on it.
 --
 -- Adds GRANT/REVOKE → regenerate seed/00-legacy-grants.sql after this
 -- migration (python3 scripts/generate-legacy-grants.py).
 -- ═══════════════════════════════════════════════════════════════════════════
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- 1. project_party_org(seat) → the studio that owns the seat's project
+-- 1. project_tenant_org(project) → the studio an ACCESS GATE answers to
 -- ═══════════════════════════════════════════════════════════════════════════
--- Delegates to project_consent_org() rather than restating its COALESCE. One
--- resolver, so the authority policy and the consent ledger can never name
--- different studios for the same seat.
+-- The banner above is the whole argument. Two legs, in order:
+--   · projects.studio_id, when the record names a studio. Nothing else is
+--     consulted, so a member of a second studio the designer also works for
+--     is still refused — that is r5 MAJOR-1/MAJOR-3's conjunct, unchanged.
+--   · where the record names NONE: the design studio that the caller and the
+--     job's designer / lead designer / creator both actively belong to. This
+--     leg is CALLER-RELATIVE by design — it answers "which of your studios is
+--     this job's, as far as the record can tell" — so it may only ever gate
+--     access. It must never resolve a consent record's studio, which has to
+--     read the same for everybody (project_consent_org(), 00594).
+--     organizations.type = 'design_studio' is load-bearing: without it a
+--     manufacturer organization shared with the designer would resolve as the
+--     tenant, which is exactly the hole r5 closed.
+--   · owner/admin first in the ORDER BY so PR-n's money narrowing
+--     (is_org_admin_or_owner) resolves at a studio where the caller actually
+--     holds the standing, not at an arbitrary one of two.
+CREATE OR REPLACE FUNCTION public.project_tenant_org(p_project_id uuid)
+RETURNS uuid
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+  SELECT COALESCE(
+    p.studio_id,
+    (
+      SELECT om.organization_id
+        FROM public.organization_members om
+        JOIN public.organizations o
+          ON o.id = om.organization_id
+        JOIN public.organization_members owner_m
+          ON owner_m.organization_id = om.organization_id
+       WHERE om.user_id = (SELECT auth.uid())
+         AND om.status = 'active'
+         AND om.role <> 'guest'
+         AND o.type = 'design_studio'
+         AND o.status = 'active'
+         AND owner_m.user_id IN (p.designer_id, p.lead_designer_id, p.created_by)
+         AND owner_m.status = 'active'
+         AND owner_m.role <> 'guest'
+       ORDER BY (om.role IN ('owner', 'admin')) DESC, om.organization_id
+       LIMIT 1
+    )
+  )
+    FROM public.projects p
+   WHERE p.id = p_project_id;
+$$;
+
+REVOKE ALL ON FUNCTION public.project_tenant_org(uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.project_tenant_org(uuid) TO authenticated, service_role;
+
+COMMENT ON FUNCTION public.project_tenant_org(uuid) IS
+  'The studio an ACCESS GATE answers to for a project: projects.studio_id '
+  'when the record names one, else the design studio the CALLER and the job''s '
+  'designer / lead designer / creator all actively belong to (owner/admin '
+  'preferred, so PR-n''s money narrowing resolves where the caller holds the '
+  'standing). Caller-relative by construction, so it may gate access and may '
+  'NEVER resolve a consent record''s studio — that stays '
+  'project_consent_org() (00594), which must read the same for every caller. '
+  'Exists because project_consent_org()''s _primary_studio_for() fallback, '
+  'used as a gate, hid every seat, site access card and authority grant on a '
+  'studio_id IS NULL project from the admin of the studio doing the work and '
+  'refused their writes — 5 of 8 local projects, whose designer owns two '
+  'design studios (w1b final review r6 MAJOR-1). SECURITY DEFINER; '
+  'organizations.type = ''design_studio'' keeps a shared manufacturer org from '
+  'resolving as the tenant (00624).';
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 1b. project_party_org(seat) → the studio that owns the seat's project
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Delegates to project_tenant_org() rather than restating its legs. One
+-- resolver for every gate in this wave, so the authority policy, the site
+-- access card and the seats view can never name different studios for the
+-- same seat.
 CREATE OR REPLACE FUNCTION public.project_party_org(p_party_id uuid)
 RETURNS uuid
 LANGUAGE sql
@@ -79,7 +171,7 @@ STABLE
 SECURITY DEFINER
 SET search_path TO 'public'
 AS $$
-  SELECT public.project_consent_org(pp.project_id)
+  SELECT public.project_tenant_org(pp.project_id)
     FROM public.project_parties pp
    WHERE pp.id = p_party_id;
 $$;
@@ -88,9 +180,12 @@ REVOKE ALL ON FUNCTION public.project_party_org(uuid) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.project_party_org(uuid) TO authenticated, service_role;
 
 COMMENT ON FUNCTION public.project_party_org(uuid) IS
-  'The studio that owns a seat''s project, through the ONE resolver '
-  'project_consent_org() (00594). SECURITY DEFINER; feeds PR-n''s '
-  'owner/admin gate on project_party_authority (00624).';
+  'The studio that owns a seat''s project FOR GATING PURPOSES, through the ONE '
+  'gate resolver project_tenant_org() (00624). Was project_consent_org(), '
+  'whose _primary_studio_for() fallback named a studio nobody on the job '
+  'belongs to on every studio_id IS NULL project (w1b final review r6 '
+  'MAJOR-1). SECURITY DEFINER; feeds PR-n''s owner/admin gate on '
+  'project_party_authority (00624).';
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- 2. project_parties — the stage, the window, and the firm
@@ -443,7 +538,9 @@ CREATE TRIGGER assert_party_authority_copy_to_trg
 -- organization with that owner, so the designer leg alone handed every
 -- authority grant — scope, and the money THRESHOLD beside it — to a second
 -- studio the designer of record also works for. project_party_org(engagement)
--- is project_consent_org(pp.project_id), the one org resolver (00594), and is
+-- is project_tenant_org(pp.project_id), the one GATE resolver (§1, w1b final
+-- review r6 MAJOR-1 — it was project_consent_org(), whose fallback named a
+-- studio nobody on the job belongs to on a studio_id IS NULL project), and is
 -- already the argument PR-n's admin leg uses below, so the table now answers
 -- to exactly one studio on both legs.
 ALTER TABLE public.project_party_authority ENABLE ROW LEVEL SECURITY;
