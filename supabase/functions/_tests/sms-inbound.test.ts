@@ -1539,3 +1539,185 @@ Deno.test("a STOP with every read clean still answers Twilio 200", async () => {
     .filter((m) => m.direction === "inbound");
   assertEquals(inbound[0].twilio_sid, "SMstopclean", "a recorded STOP keeps its claim");
 });
+
+// ── close-out r4 BLOCKING-1: the fourth read the STOP gate did not ask about ─
+//
+// studiosHoldingPhone() got orgsOfProjects()'s `failed` flag, logged it, and
+// dropped it. orgsOfProjects() returns an EMPTY map when the `projects` select
+// errors, so a transient failure there looked exactly like "no seat belongs to
+// any studio": the STOP was written only for the studios that happen to hold a
+// RECORD on the number, Twilio was answered 200, and the twilio_sid claim stood
+// so the retry came back `duplicate` and the branch never ran again. A studio
+// holding a seat and NO record — the ordinary case, "text updates" unticked —
+// lost the refusal outright, and could later tick "text updates" and send an
+// opt-in invite to a number that had replied STOP to the platform. R-AS deleted
+// the phone-global party write that used to cover it.
+Deno.test("a STOP whose studio-attribution read fails is not acknowledged, and the retry records the seat-only studio", async () => {
+  const phone = "+15551110066";
+  const seed = () =>
+    createFakeSupabase(baseSeed({
+      projects: [{ id: "proj1", name: "Maple St", designer_id: "dz1", studio_id: "org-alpha" }],
+      project_parties: [
+        // org-alpha holds a seat and NO record: "text updates" was never
+        // ticked, so record_channel_invite was never called. The attribution
+        // read is the only leg that can reach it.
+        { id: "p1", phone_e164: phone, project_id: "proj1", party_kind: "sub", sms_consent_status: "not_asked" },
+      ],
+      studio_channel_consent: [
+        // org-beta holds a record and no seat: reached by studiosHoldingRecord().
+        { organization_id: "org-beta", channel_kind: "sms", channel_value: phone, status: "granted" },
+      ],
+    }));
+
+  const fake = seed();
+  const res = await processInbound(
+    params({ From: phone, Body: "STOP", MessageSid: "SMstopattr" }),
+    { supabase: denyTable(fake, "projects") as never, getEnv: NO_POSTHOG },
+  );
+  assertEquals(res.status, 500, "a STOP whose studio could not be READ is not a STOP that landed");
+  assertEquals(res.disposition, "opt_out_incomplete");
+  // The record-only leg read clean, so that write did land — every write that
+  // could, did, and each one moves only toward refusal.
+  const byOrgFirst = Object.fromEntries(
+    ((fake._data.studio_channel_consent ?? []) as Array<{ organization_id: string; status: string }>)
+      .map((c) => [c.organization_id, c.status]),
+  );
+  assertEquals(byOrgFirst["org-beta"], "opted_out");
+  assertEquals(
+    byOrgFirst["org-alpha"],
+    undefined,
+    "the seat-only studio was never reached — which is exactly why this is not a 200",
+  );
+  // The claim is released, or the retry answers `duplicate` and org-alpha's
+  // refusal is lost for ever.
+  const inbound = ((fake._data.sms_messages ?? []) as Array<{ twilio_sid: string | null; direction: string }>)
+    .filter((m) => m.direction === "inbound");
+  assertEquals(inbound.length, 1);
+  assertEquals(inbound[0].twilio_sid, null, "the MessageSid claim is released for the retry");
+
+  // Twilio retries the same MessageSid — now the attribution read succeeds.
+  const retry = await processInbound(
+    params({ From: phone, Body: "STOP", MessageSid: "SMstopattr" }),
+    { supabase: fake as never, getEnv: NO_POSTHOG },
+  );
+  assertEquals(retry.status, 200);
+  assertEquals(retry.disposition, "opted_out");
+  const byOrg = Object.fromEntries(
+    ((fake._data.studio_channel_consent ?? []) as Array<{ organization_id: string; status: string }>)
+      .map((c) => [c.organization_id, c.status]),
+  );
+  assertEquals(byOrg["org-alpha"], "opted_out", "the retry records the studio the failed read hid");
+  assertEquals(byOrg["org-beta"], "opted_out");
+});
+
+// The control: the same seed with every read clean is a 200, and BOTH studios
+// are recorded — so the 500 above is the flag, not the shape of the fixture.
+Deno.test("a STOP with a clean studio-attribution read records the seat-only studio and answers 200", async () => {
+  const phone = "+15551110067";
+  const fake = createFakeSupabase(baseSeed({
+    projects: [{ id: "proj1", name: "Maple St", designer_id: "dz1", studio_id: "org-alpha" }],
+    project_parties: [
+      { id: "p1", phone_e164: phone, project_id: "proj1", party_kind: "sub", sms_consent_status: "not_asked" },
+    ],
+    studio_channel_consent: [
+      { organization_id: "org-beta", channel_kind: "sms", channel_value: phone, status: "granted" },
+    ],
+  }));
+  const res = await processInbound(
+    params({ From: phone, Body: "STOP", MessageSid: "SMstopattrclean" }),
+    { supabase: fake as never, getEnv: NO_POSTHOG },
+  );
+  assertEquals(res.status, 200);
+  assertEquals(res.disposition, "opted_out");
+  const byOrg = Object.fromEntries(
+    ((fake._data.studio_channel_consent ?? []) as Array<{ organization_id: string; status: string }>)
+      .map((c) => [c.organization_id, c.status]),
+  );
+  assertEquals(byOrg["org-alpha"], "opted_out");
+  assertEquals(byOrg["org-beta"], "opted_out");
+});
+
+// ── close-out r4 MAJOR-1: the START filter asks the VERDICT, not the column ──
+//
+// The fold mints records at status='granted' and at status='not_asked' with
+// refusal_unanswered=true on purpose (00594:655-666, the r8 W4-M1 shape).
+// channel_consent_status() reads both as `opted_out` and every studio-side door
+// refuses them, so the design's whole answer is the recipient's own START. The
+// START target filter read the raw `status` column, so it reached neither: the
+// number was unsendable for ever while the party sheet told the designer "Only
+// they can rejoin by replying START" (use-coordination.ts:585, :870), and
+// record_channel_reconsent() answered no_opt_out_to_supersede.
+Deno.test("START lifts an unanswered refusal standing on a record whose status column still says granted", async () => {
+  const phone = "+15551110068";
+  const fake = createFakeSupabase(baseSeed({
+    projects: [{ id: "proj1", name: "Maple St", designer_id: "dz1", studio_id: "org-alpha" }],
+    project_parties: [
+      { id: "p1", phone_e164: phone, project_id: "proj1", party_kind: "sub", sms_consent_status: "granted" },
+    ],
+    studio_channel_consent: [{
+      organization_id: "org-alpha",
+      channel_kind: "sms",
+      channel_value: phone,
+      status: "granted",
+      refusal_unanswered: true,
+      opt_out_at: "2025-11-16T00:00:00.000Z",
+      opt_out_source: "verbal",
+      opt_out_evidence: "told the PM on site",
+      consented_at: "2025-03-02T00:00:00.000Z",
+      source: "written",
+      evidence: "signed trade sheet",
+    }],
+  }));
+  const res = await processInbound(
+    params({ From: phone, Body: "START", MessageSid: "SMstartflaggranted" }),
+    { supabase: fake as never, getEnv: NO_POSTHOG },
+  );
+  assertEquals(res.disposition, "resubscribed");
+  const rec = ((fake._data.studio_channel_consent ?? []) as Array<{
+    status: string;
+    refusal_unanswered: boolean | null;
+    opt_out_at: string | null;
+    opt_out_evidence: string | null;
+    source: string | null;
+    evidence: string | null;
+  }>)[0];
+  // The status column already said `granted`, so the proof the record was
+  // REACHED is the flag and the grant's own fresh evidence.
+  assertEquals(rec.refusal_unanswered, false, "the one writer that can lower the flag, lowered it");
+  assertEquals(rec.status, "granted");
+  assertEquals(rec.source, "inbound_sms");
+  assertEquals(rec.evidence, "Inbound START");
+  // …and the refusal that was answered is still a fact the carrier audit asks
+  // about (r8 W4-M2).
+  assertEquals(rec.opt_out_at, "2025-11-16T00:00:00.000Z");
+  assertEquals(rec.opt_out_evidence, "told the PM on site");
+});
+
+Deno.test("START lifts an unanswered refusal standing on a record whose status column says not_asked", async () => {
+  const phone = "+15551110069";
+  const fake = createFakeSupabase(baseSeed({
+    projects: [{ id: "proj1", name: "Maple St", designer_id: "dz1", studio_id: "org-alpha" }],
+    project_parties: [
+      { id: "p1", phone_e164: phone, project_id: "proj1", party_kind: "sub", sms_consent_status: "not_asked" },
+    ],
+    studio_channel_consent: [{
+      organization_id: "org-alpha",
+      channel_kind: "sms",
+      channel_value: phone,
+      status: "not_asked",
+      refusal_unanswered: true,
+      opt_out_at: "2025-11-16T00:00:00.000Z",
+      opt_out_source: "verbal",
+    }],
+  }));
+  const res = await processInbound(
+    params({ From: phone, Body: "START", MessageSid: "SMstartflagnotasked" }),
+    { supabase: fake as never, getEnv: NO_POSTHOG },
+  );
+  assertEquals(res.disposition, "resubscribed");
+  const rec = ((fake._data.studio_channel_consent ?? []) as Array<
+    { status: string; refusal_unanswered: boolean | null }
+  >)[0];
+  assertEquals(rec.status, "granted");
+  assertEquals(rec.refusal_unanswered, false);
+});

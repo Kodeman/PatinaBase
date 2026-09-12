@@ -92,6 +92,9 @@ These were decided mid-build to keep the specimens moving. They stand unless Kod
 | R-AQ | R-AN refined: a refusal with no source has evidence known absent, so a sourceless opt-out mirrors NULL into every sibling seat's evidence columns; COALESCE governs every other transition (W1a R8-M1). (Fable, 2026-09-11) |
 | R-AR | A BEFORE UPDATE OF entity_kind, organization_id trigger on studio_contacts refuses the change while any channel, designation, rule route, or affiliation still points at the card (W1a R8-M2). (Fable, 2026-09-11) |
 | R-AS | The consent mirror trigger (00594 mirror_channel_consent_to_parties) is retired: studio_channel_consent is the single source of truth; project_parties.sms_consent_* columns are frozen legacy (readable, never written by new code); every reader (people_directory, v_project_roster, the roster derivations, the party sheet, the send gate's second check) reads the record; ten review rounds of mirror-evidence findings (r5–r10) are closed by removing the copy rather than patching it (W1a close-out). (Fable, 2026-09-12) |
+| R-AT | An inbound STOP whose studio attribution read failed is answered 500 / opt_out_incomplete with the Twilio idempotency claim released, never acknowledged; studiosHoldingPhone returns its failed flag and the STOP gate checks it (close-out BLOCKING-1). (Fable, 2026-09-12) |
+| R-AU | START targets are chosen by the consent verdict, not the raw status column: opted_out, pending, or any record with refusal_unanswered; a not_asked record with no refusal stays untouched (close-out MAJOR-1). (Fable, 2026-09-12) |
+| R-AV | Patina Field reads consent from v_project_roster.sms_consent_status (the record's verdict), never from the frozen party column; PunchCourtResolver and SupabaseSiteRequestService are repointed in this program (close-out MAJOR-2). (Fable, 2026-09-12) |
 
 ## 4. Parked (side journeys under VISION)
 

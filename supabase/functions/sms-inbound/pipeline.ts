@@ -215,13 +215,27 @@ interface StudioTarget {
  * fallback a project with a NULL studio_id gets a consent record written by the
  * migration that an inbound STOP could never reach — the record would keep
  * saying granted while the party rows went opted_out.
+ *
+ * `failed` says the ATTRIBUTION READ errored, not that no studio holds the
+ * number (R-AM) — and it is returned rather than only logged (close-out r4
+ * BLOCKING-1). orgsOfProjects() returns an EMPTY map when the `projects` select
+ * errors, so a swallowed error here looks exactly like "no seat belongs to any
+ * studio": the target list comes back short, the STOP is written for the
+ * studios that happen to hold a RECORD on the number and for nobody else, and
+ * the branch answered Twilio 200 with its twilio_sid claim intact — so the
+ * retry was answered `duplicate` and the branch never ran again. A studio
+ * holding a seat and no record (the ordinary case: "text updates" unticked, so
+ * record_channel_invite is never called) then had its refusal lost outright,
+ * and could later tick "text updates" and send an opt-in invite to a number
+ * that has replied STOP to the platform. Since R-AS deleted
+ * optOutAllForPhone()'s phone-global party write there is no backstop left.
  */
 async function studiosHoldingPhone(
   supabase: SupabaseClient,
   parties: PhoneParty[],
-): Promise<StudioTarget[]> {
+): Promise<{ targets: StudioTarget[]; failed: boolean }> {
   const projectIds = [...new Set(parties.map((p) => p.project_id))];
-  if (projectIds.length === 0) return [];
+  if (projectIds.length === 0) return { targets: [], failed: false };
   // One resolver, shared with the send gate (_shared/sms.ts), so the two sides
   // of the rail cannot disagree about which studio a project belongs to.
   const { orgs: orgOfProject, failed } = await orgsOfProjects(
@@ -229,10 +243,10 @@ async function studiosHoldingPhone(
     projectIds,
   );
   // A seat whose studio could not be read is a studio this keyword will not
-  // reach. Say so in the log rather than letting the map come back quietly
-  // short (R-AM); the phone-global party-row write below still carries the
-  // STOP, and studiosHoldingRecord() still carries every studio that holds a
-  // record.
+  // reach. Say so in the log AND hand the flag back, so the STOP branch can
+  // refuse to acknowledge rather than act on a map that is short some entries
+  // (R-AM). A START/YES wants the opposite: a short list there grants FEWER
+  // studios, which leaves the standing refusal standing.
   if (failed) {
     console.error(
       "studiosHoldingPhone: some seats could not be attributed to a studio",
@@ -253,7 +267,7 @@ async function studiosHoldingPhone(
     }
     target.partyIds.push(p.id);
   }
-  return out;
+  return { targets: out, failed };
 }
 
 /**
@@ -269,11 +283,11 @@ async function studiosHoldingPhone(
 async function studiosHoldingRecord(
   supabase: SupabaseClient,
   phone: string,
-  onlyStatuses?: string[],
+  onlyVerdicts?: string[],
 ): Promise<{ orgs: string[]; failed: boolean }> {
   const { data, error } = await supabase
     .from("studio_channel_consent")
-    .select("organization_id, status")
+    .select("organization_id, status, refusal_unanswered")
     .eq("channel_kind", "sms")
     .eq("channel_value", phone);
   // A read that ERRORED is not "no studio holds a record" (R-AM, r7 R7-M3).
@@ -289,14 +303,35 @@ async function studiosHoldingRecord(
     return { orgs: [], failed: true };
   }
   const rows = (data ?? []) as Array<
-    { organization_id: string; status: string }
+    { organization_id: string; status: string; refusal_unanswered?: boolean | null }
   >;
   return {
     orgs: rows
-      .filter((r) => !onlyStatuses || onlyStatuses.includes(r.status))
+      .filter((r) => !onlyVerdicts || onlyVerdicts.includes(recordVerdict(r)))
       .map((r) => r.organization_id),
     failed: false,
   };
+}
+
+/**
+ * The record's VERDICT, which is not its `status` column (close-out r4 MAJOR-1).
+ *
+ * This is `channel_consent_status()` (00594:948-956) in TypeScript: an
+ * unanswered refusal reads `opted_out` whatever the column says. The fold mints
+ * records at `granted` and at `not_asked` with `refusal_unanswered = true` on
+ * purpose (00594:655-666, the r8 W4-M1 shape — a legacy seat reading granted
+ * while a sibling carries a dated opt-out no later consent answered), and every
+ * studio-side door correctly refuses them. The design's whole answer for such a
+ * record is the recipient's own START, and the START target filter used to read
+ * the raw column, so the one writer that can lower the flag could never reach
+ * the population the flag was invented for: the number was unsendable for ever,
+ * while the party sheet told the designer "Only they can rejoin by replying
+ * START". The rail now asks the same question the room asks.
+ */
+function recordVerdict(
+  row: { status: string; refusal_unanswered?: boolean | null },
+): string {
+  return row.refusal_unanswered === true ? "opted_out" : row.status;
 }
 
 /** Seat-derived targets first, then any record-only studio, once each. */
@@ -661,8 +696,12 @@ export async function processInbound(
     // saying granted, and the send gate honours it.
     const stopPhoneParties = await loadPhoneParties(supabase, from);
     const stopRecordStudios = await studiosHoldingRecord(supabase, from);
+    const stopPartyOrgs = await studiosHoldingPhone(
+      supabase,
+      stopPhoneParties.parties,
+    );
     const stopTargets = withRecordOnlyStudios(
-      await studiosHoldingPhone(supabase, stopPhoneParties.parties),
+      stopPartyOrgs.targets,
       stopRecordStudios.orgs,
     );
     // One string for both writers: the record and the seats must say the same
@@ -691,8 +730,14 @@ export async function processInbound(
     // the claim on this MessageSid is released first — by clearing twilio_sid,
     // not by deleting the row: the inbound STOP is itself a 10DLC artifact and
     // must survive even if the retry never comes.
+    // FOUR reads, four flags (close-out r4 BLOCKING-1). The fourth —
+    // studiosHoldingPhone's own — is the studio ATTRIBUTION read: a seat whose
+    // org could not be read is a studio this STOP reaches by no other leg,
+    // because withRecordOnlyStudios() can only union in studios that already
+    // hold a record.
     if (
-      stopPhoneParties.failed || stopRecordStudios.failed || stopWrite.failed
+      stopPhoneParties.failed || stopRecordStudios.failed ||
+      stopPartyOrgs.failed || stopWrite.failed
     ) {
       console.error(
         "sms-inbound STOP: refusing to acknowledge — the refusal was not fully recorded",
@@ -700,6 +745,7 @@ export async function processInbound(
           phone: from,
           partiesReadFailed: stopPhoneParties.failed,
           recordReadFailed: stopRecordStudios.failed,
+          partyOrgReadFailed: stopPartyOrgs.failed,
           consentWriteFailed: stopWrite.failed,
         },
       );
@@ -718,17 +764,21 @@ export async function processInbound(
   }
   if (START_WORDS.includes(upper)) {
     // A START is a RE-subscription: it answers a sender that asked. So the
-    // target set is the studios whose own record for this number is currently
-    // `opted_out` (the refusal it lifts) or `pending` (the invite it answers).
-    // A studio at `not_asked`, or with no record at all, is untouched even when
-    // it holds a seat on the number — holding a seat is not having asked, and
-    // granting on a seat manufactured consent for a studio that never invited
-    // this person (R-AJ). The seat-derived arm survives only to carry each
+    // target set is the studios whose own record for this number currently
+    // READS `opted_out` (the refusal it lifts) or `pending` (the invite it
+    // answers) — the VERDICT, through recordVerdict(), not the raw `status`
+    // column (close-out r4 MAJOR-1). A studio at `not_asked`, or with no record
+    // at all, is untouched even when it holds a seat on the number — holding a
+    // seat is not having asked, and granting on a seat manufactured consent for
+    // a studio that never invited this person (R-AJ). R-AJ's narrowing is
+    // unchanged by the verdict fold: a `not_asked` record with no refusal
+    // standing still reads `not_asked` and is still untouched.
+    // The seat-derived arm survives only to carry each
     // qualifying studio's party rows, which the grant reads for its evidence.
-    // A failed read here logs (loadPhoneParties / studiosHoldingRecord) and
-    // grants fewer studios, which leaves the standing refusal standing — the
-    // fail-closed direction, so unlike the STOP branch this one still answers
-    // 200 rather than replaying a re-subscription.
+    // A failed read here logs (loadPhoneParties / studiosHoldingRecord /
+    // studiosHoldingPhone) and grants fewer studios, which leaves the standing
+    // refusal standing — the fail-closed direction, so unlike the STOP branch
+    // this one still answers 200 rather than replaying a re-subscription.
     const startOrgs = (await studiosHoldingRecord(supabase, from, [
       "opted_out",
       "pending",
@@ -739,6 +789,7 @@ export async function processInbound(
         supabase,
         (await loadPhoneParties(supabase, from)).parties,
       ))
+        .targets
         .filter((t) => startOrgSet.has(t.org)),
       startOrgs,
     );
@@ -767,10 +818,10 @@ export async function processInbound(
     if (hasPending) {
       // Only the studios that actually asked: a YES confirms the invite that
       // was sent, never a studio that never invited this number.
-      const askedTargets = await studiosHoldingPhone(
+      const askedTargets = (await studiosHoldingPhone(
         supabase,
         parties.filter((p) => p.sms_consent_status === "pending"),
-      );
+      )).targets;
       // …but the RECORD is per studio, not per seat, so the target is the
       // studio: every seat it holds on the number is carried only to give the
       // grant its evidence (seatConsentEvidence) and its origin. Which studios
@@ -778,7 +829,7 @@ export async function processInbound(
       // actually asked. The origin project stays the one that ASKED, so R-Q's
       // sentence names the job the invite went out on.
       const originByOrg = new Map(askedTargets.map((t) => [t.org, t.projectId]));
-      const yesTargets = (await studiosHoldingPhone(supabase, parties))
+      const yesTargets = (await studiosHoldingPhone(supabase, parties)).targets
         .filter((t) => originByOrg.has(t.org))
         .map((t) => ({ ...t, projectId: originByOrg.get(t.org) ?? t.projectId }));
       await writeChannelConsent(
