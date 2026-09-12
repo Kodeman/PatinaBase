@@ -684,3 +684,98 @@ $ git diff --stat packages/supabase/src/database.types.ts
 Round-7 findings M7-1 and M7-2 were fixed in a separate pass; the per-finding
 sections (what changed, ruling taken, evidence) are in
 `w1a-fix-log-r7.md` in this directory.
+
+---
+
+## F1 (r8 W1a) — a contact rule was never held to its subject's own noun
+
+**Finding.** `studio_contact_rules.subject_type` was checked against nothing.
+`assert_studio_contact_rule_route()` (00592) returned at its very first
+statement when `route_to_person_id IS NULL`, so a routeless rule — which is
+exactly what a plain "never texted" rule is — was never inspected, and
+`subject_type = 'person'` naming a COMPANY card (or `'company'` naming a PERSON
+card) was accepted by a studio owner over `authenticated`. The RLS legs catch
+only the cross-FAMILY slip (`studio_contact_org()` / `project_party_designer()`
+return NULL for the wrong table), never the wrong noun inside `studio_contacts`.
+The room looks a rule up by the noun of the card it is holding, so a rule filed
+under the other noun is invisible to every correct reader and a FORBIDDING rule
+fails OPEN — F-27 Ray Thao (NEVER texted; scheduled through 311) and F-10 Sam
+Rowe (never texted), lost inside the ONE home decision 1 gave them.
+
+**What changed** — `supabase/migrations/00592_people_cards_affiliations_rules.sql`:
+
+1. The route's early return moved BELOW a new subject test, so every rule is
+   inspected, routed or not. For `subject_type IN ('person','company')` the
+   named `studio_contacts` row must exist and its `entity_kind` must equal
+   `subject_type` (`rule_subject_kind_mismatch`); for `'engagement'` the id must
+   exist in `project_parties` (`rule_subject_not_found`). The org that the route
+   legs compare against is now resolved by that same lookup (off the card's
+   `organization_id` rather than a second `studio_contact_org()` call), so the
+   guard reads the card once.
+2. `rule_subject_not_found` is new and distinguishes a dangling subject from a
+   subject whose studio will not resolve (`rule_subject_studio_unresolved`,
+   unchanged, still the gate the route checks against).
+3. Section comment, function COMMENT and the `subject_id` column COMMENT now
+   state the pairing is enforced and why an unfound forbidding rule fails open.
+
+The trigger's `UPDATE OF route_to_person_id, subject_id, subject_type` list
+already covered both columns the subject test reads, so no trigger change.
+
+**Tests** — `supabase/tests/people/w1a_identity_channels_consent_test.sql`,
+new block 31 in the shape of blocks 17/24: 31a/31b refuse both crossings on
+INSERT with no route at all (the case the early return waved through), 31c/31d
+accept both matching pairs routeless, 31e/31f guard the UPDATE path on
+`subject_type` and on `subject_id`, 31g/31h refuse a dangling card subject and a
+dangling engagement subject, 31i shows the accepted rule still stands.
+
+**Evidence.**
+
+```
+$ pnpm --dir … supabase:reset
+…
+Finished supabase db reset on branch main.
+{"target":"local","version":"","message":"Reset local database."}
+
+$ psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 \
+    -f supabase/tests/people/w1a_identity_channels_consent_test.sql
+…
+NOTICE:  24. the routed person is a person, in this studio (r6 M6-4): passed
+…
+NOTICE:  31. a rule is filed under the noun its subject actually is (r8 F1): passed
+NOTICE:  All W1a assertions passed.
+DO
+ROLLBACK
+exit=0
+```
+
+An independent probe, as the studio's owner over `authenticated` (the reviewer's
+own shape), with no route on any of the three rules:
+
+```
+--- A: subject_type=person naming a COMPANY card, routeless (the r8 F1 case) ---
+ERROR:  rule_subject_kind_mismatch
+HINT:  subject_type says person, but that card is a company card. The room looks
+       a rule up by the noun on the card it is holding, so a rule filed under the
+       other noun is a rule no reader finds — and a forbidding rule nobody finds
+       fails OPEN.
+--- B: subject_type=company naming a PERSON card, routeless ---
+ERROR:  rule_subject_kind_mismatch
+HINT:  subject_type says company, but that card is a person card. …
+--- C: the matching pair ---
+INSERT 0 1
+ subject_type |              subject_id              | channels_forbidden |               reason
+--------------+--------------------------------------+--------------------+-------------------------------------
+ person       | c1110000-0000-4000-8000-000000000001 | {mobile}           | NEVER texted; scheduled through 311
+```
+
+Types regenerated; the change is a trigger function and comments, so there is
+nothing for it to move:
+
+```
+$ SUPABASE_DB_URL=… pnpm --dir … db:generate
+$ git diff --stat packages/supabase/src/database.types.ts
+(no output)
+```
+
+No GRANT/REVOKE changed, so `generate-legacy-grants.py` was not re-run. No
+`supabase db push`, no `functions deploy`, no Strata contact.

@@ -3478,6 +3478,131 @@ BEGIN
   RAISE NOTICE '30. the fold picks the sibling that HOLDS the refusal, so a '
                'dateless portal refusal never erases the STOP''s date or '
                'words — on the record or on the seats (r2 R2-M1): passed';
+END
+$$;
+
+-- ─── 31. r8 F1: the rule's SUBJECT is held to its own noun ──────────────────
+--
+-- subject_id is polymorphic and unFK'd. Block 24 proved the ROUTE is guarded,
+-- but assert_studio_contact_rule_route() returned at its first statement when
+-- route_to_person_id was NULL, so a routeless rule — which is what a plain
+-- "never texted" rule is — was never inspected at all, and subject_type was
+-- free to name the other kind of card. The RLS legs catch only the cross-FAMILY
+-- slip (studio_contact_org() and project_party_designer() return NULL for the
+-- wrong table), never the wrong noun inside studio_contacts.
+--
+-- The room asks for a rule by the noun of the card it is holding, so a rule
+-- filed under the other noun is invisible to every correct reader, and a
+-- FORBIDDING rule nobody finds fails OPEN — F-27 Ray Thao (NEVER texted) and
+-- F-10 Sam Rowe (never texted), lost inside the ONE home decision 1 gave them.
+--
+-- Fixtures in hand: c…0062 is a PERSON card at studio A, c…0063 a COMPANY card
+-- at the same studio, and neither carries a rule yet (the unique index is on
+-- (subject_type, subject_id)).
+
+DO $$
+DECLARE
+  raised TEXT;
+  r      RECORD;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+
+  -- 31a. 'person' naming a COMPANY card, with NO route — the case the early
+  --      return used to wave through.
+  raised := NULL;
+  BEGIN
+    INSERT INTO studio_contact_rules (subject_type, subject_id, channels_forbidden, reason)
+    VALUES ('person', 'c0000000-0000-4000-8000-000000000063', ARRAY['mobile'],
+            'Never texted');
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'rule_subject_kind_mismatch',
+    'FAIL 31a: a person rule filed against a company card must be refused, got '
+      || COALESCE(raised, '<no error>');
+
+  -- 31b. The other crossing: 'company' naming a PERSON card.
+  raised := NULL;
+  BEGIN
+    INSERT INTO studio_contact_rules (subject_type, subject_id, channels_forbidden, reason)
+    VALUES ('company', 'c0000000-0000-4000-8000-000000000062', ARRAY['mobile'],
+            'Dispatch only');
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'rule_subject_kind_mismatch',
+    'FAIL 31b: a company rule filed against a person card must be refused, got '
+      || COALESCE(raised, '<no error>');
+
+  -- 31c/31d. Both matching pairs write, routeless.
+  INSERT INTO studio_contact_rules (subject_type, subject_id, channels_forbidden, reason)
+  VALUES ('person', 'c0000000-0000-4000-8000-000000000062', ARRAY['mobile'],
+          'Never texted; scheduled through the office');
+  SELECT * INTO r FROM studio_contact_rules
+   WHERE subject_type = 'person' AND subject_id = 'c0000000-0000-4000-8000-000000000062';
+  ASSERT r.channels_forbidden = ARRAY['mobile']
+     AND r.route_to_person_id IS NULL,
+    'FAIL 31c: a person rule on a person card must write, routeless';
+
+  INSERT INTO studio_contact_rules (subject_type, subject_id, channels_forbidden, reason)
+  VALUES ('company', 'c0000000-0000-4000-8000-000000000063', ARRAY['mobile'],
+          'The firm is reached at the desk');
+  SELECT * INTO r FROM studio_contact_rules
+   WHERE subject_type = 'company' AND subject_id = 'c0000000-0000-4000-8000-000000000063';
+  ASSERT r.channels_forbidden = ARRAY['mobile'],
+    'FAIL 31d: a company rule on a company card must write, routeless';
+
+  -- 31e. The UPDATE path is guarded on subject_type …
+  raised := NULL;
+  BEGIN
+    UPDATE studio_contact_rules SET subject_type = 'company'
+     WHERE subject_type = 'person'
+       AND subject_id = 'c0000000-0000-4000-8000-000000000062';
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'rule_subject_kind_mismatch',
+    'FAIL 31e: re-filing a person rule as a company rule must be refused, got '
+      || COALESCE(raised, '<no error>');
+
+  -- 31f. … and on subject_id.
+  raised := NULL;
+  BEGIN
+    UPDATE studio_contact_rules
+       SET subject_id = 'c0000000-0000-4000-8000-000000000063'
+     WHERE subject_type = 'person'
+       AND subject_id = 'c0000000-0000-4000-8000-000000000062';
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'rule_subject_kind_mismatch',
+    'FAIL 31f: moving a person rule onto a company card must be refused, got '
+      || COALESCE(raised, '<no error>');
+
+  -- 31g. A card subject that names no card at all.
+  raised := NULL;
+  BEGIN
+    INSERT INTO studio_contact_rules (subject_type, subject_id, channels_forbidden, reason)
+    VALUES ('person', 'c0000000-0000-4000-8000-0000000009ff', ARRAY['mobile'],
+            'Never texted');
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'rule_subject_not_found',
+    'FAIL 31g: a rule on a card that does not exist must be refused, got '
+      || COALESCE(raised, '<no error>');
+
+  -- 31h. An engagement subject that names no party — and the real one, which
+  --      is checked against project_parties rather than against a card kind.
+  raised := NULL;
+  BEGIN
+    INSERT INTO studio_contact_rules (subject_type, subject_id, channels_forbidden, reason)
+    VALUES ('engagement', 'e0000000-0000-4000-8000-0000000009ff', ARRAY['mobile'],
+            'On this job, never texted');
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'rule_subject_not_found',
+    'FAIL 31h: a job override on a party that does not exist must be refused, '
+    'got ' || COALESCE(raised, '<no error>');
+
+  -- 31i. Nothing above moved the well-formed row.
+  SELECT * INTO r FROM studio_contact_rules
+   WHERE subject_type = 'person' AND subject_id = 'c0000000-0000-4000-8000-000000000062';
+  ASSERT r.reason = 'Never texted; scheduled through the office',
+    'FAIL 31i: the accepted rule must still stand where it was filed';
+
+  PERFORM pg_temp.reset_role();
+  RAISE NOTICE '31. a rule is filed under the noun its subject actually is '
+               '(r8 F1): passed';
   RAISE NOTICE 'All W1a assertions passed.';
 END
 $$;

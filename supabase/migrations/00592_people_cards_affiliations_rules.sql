@@ -743,7 +743,11 @@ COMMENT ON TABLE public.studio_contact_rules IS
 
 COMMENT ON COLUMN public.studio_contact_rules.subject_id IS
   'studio_contacts.id when subject_type is person or company; '
-  'project_parties.id when it is engagement. No FK — polymorphic.';
+  'project_parties.id when it is engagement. No FK — polymorphic. The pairing '
+  'is ENFORCED anyway, on every rule whether it routes or not, by '
+  'assert_studio_contact_rule_route(): the card must be OF the named kind and '
+  'the party must exist (r8 F1). A rule filed under the wrong noun is a rule '
+  'the room never finds, and an unfound forbidding rule fails open.';
 
 -- ── The channel vocabulary is CHECKED, both ways (r6 M6-5) ─────────────────
 -- This table's own COMMENT promises "Omission fails closed at the composer,
@@ -820,10 +824,27 @@ CREATE TRIGGER set_updated_at_studio_contact_rules
 --
 -- Same shape as assert_affiliation_card_kinds() / R-AP: a CHECK cannot see
 -- another table, so a BEFORE trigger asserts it. The subject's org is resolved
--- the way this table's own RLS resolves the subject — through
--- studio_contact_org() for a card subject, through the project for an
--- engagement subject — and an org that will not resolve REFUSES rather than
--- passing a NULL comparison.
+-- the way this table's own RLS resolves the subject — off the card for a card
+-- subject, through the project for an engagement subject — and an org that will
+-- not resolve REFUSES rather than passing a NULL comparison.
+--
+-- ── And the SUBJECT is held to its own noun, on every rule (r8 F1) ───────────
+-- subject_id is polymorphic and unFK'd, so nothing but this trigger can say
+-- that subject_type='person' names a PERSON card. Unguarded it took both
+-- crossings: a 'person' rule filed against a COMPANY card and a 'company' rule
+-- filed against a PERSON card. The RLS legs below catch only the cross-FAMILY
+-- slip (studio_contact_org() / project_party_designer() return NULL for the
+-- wrong table), never the wrong noun inside studio_contacts.
+--
+-- The damage is the damage decision 1 made this table the ONE home of that
+-- fact to avoid: the room looks a rule up by the noun it is holding — the
+-- person card asks for ('person', card_id), the firm card for
+-- ('company', card_id) — so a rule filed under the other noun is invisible to
+-- every reader that asks correctly, and a FORBIDDING rule nobody finds fails
+-- OPEN. That is F-27 Ray Thao (NEVER texted; scheduled through 311) and F-10
+-- Sam Rowe (never texted) lost, exactly as the unchecked channel vocabulary
+-- below loses them. So the route's early return now sits BELOW the subject
+-- test: a routeless rule is still a rule, and it is still inspected.
 CREATE OR REPLACE FUNCTION public.assert_studio_contact_rule_route()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -831,10 +852,50 @@ SECURITY DEFINER
 SET search_path TO 'public'
 AS $$
 DECLARE
-  v_subject_org uuid;
-  v_route_kind  text;
-  v_route_org   uuid;
+  v_subject_kind text;
+  v_subject_org  uuid;
+  v_route_kind   text;
+  v_route_org    uuid;
 BEGIN
+  -- The subject is inspected on EVERY rule, routed or not (r8 F1).
+  IF NEW.subject_type = 'engagement' THEN
+    SELECT COALESCE(p.studio_id, public._primary_studio_for(p.designer_id))
+      INTO v_subject_org
+      FROM public.project_parties pp
+      JOIN public.projects p ON p.id = pp.project_id
+     WHERE pp.id = NEW.subject_id;
+
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'rule_subject_not_found'
+        USING HINT = 'subject_type engagement means subject_id names a row in '
+                     'project_parties — the one per-job override (PD-3). No '
+                     'party carries that id, so there is no engagement to rule '
+                     'on.';
+    END IF;
+  ELSE
+    SELECT sc.entity_kind, sc.organization_id
+      INTO v_subject_kind, v_subject_org
+      FROM public.studio_contacts sc
+     WHERE sc.id = NEW.subject_id;
+
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'rule_subject_not_found'
+        USING HINT = 'subject_type ' || NEW.subject_type || ' means subject_id '
+                     'names a studio_contacts card, and no card carries that '
+                     'id.';
+    END IF;
+
+    IF v_subject_kind IS DISTINCT FROM NEW.subject_type THEN
+      RAISE EXCEPTION 'rule_subject_kind_mismatch'
+        USING HINT = 'subject_type says ' || NEW.subject_type || ', but that '
+                     'card is a ' || COALESCE(v_subject_kind, '<no kind>') ||
+                     ' card. The room looks a rule up by the noun on the card '
+                     'it is holding, so a rule filed under the other noun is a '
+                     'rule no reader finds — and a forbidding rule nobody '
+                     'finds fails OPEN.';
+    END IF;
+  END IF;
+
   IF NEW.route_to_person_id IS NULL THEN
     RETURN NEW;
   END IF;
@@ -843,16 +904,6 @@ BEGIN
     RAISE EXCEPTION 'rule_route_is_self'
       USING HINT = 'route_to_person_id may not name the rule''s own subject: '
                    '"write themselves instead" is not a route.';
-  END IF;
-
-  IF NEW.subject_type = 'engagement' THEN
-    SELECT COALESCE(p.studio_id, public._primary_studio_for(p.designer_id))
-      INTO v_subject_org
-      FROM public.project_parties pp
-      JOIN public.projects p ON p.id = pp.project_id
-     WHERE pp.id = NEW.subject_id;
-  ELSE
-    v_subject_org := public.studio_contact_org(NEW.subject_id);
   END IF;
 
   IF v_subject_org IS NULL THEN
@@ -885,7 +936,14 @@ REVOKE ALL ON FUNCTION public.assert_studio_contact_rule_route()
   FROM PUBLIC, anon, authenticated;
 
 COMMENT ON FUNCTION public.assert_studio_contact_rule_route() IS
-  'BEFORE INSERT/UPDATE on studio_contact_rules: route_to_person_id must name '
+  'BEFORE INSERT/UPDATE on studio_contact_rules, in two parts. THE SUBJECT, on '
+  'every rule whether it routes or not (r8 F1): subject_type person/company '
+  'must match the named card''s entity_kind and subject_type engagement must '
+  'name a live project_parties row (rule_subject_kind_mismatch / '
+  'rule_subject_not_found) — subject_id is polymorphic and unFK''d, the RLS '
+  'legs catch only the cross-FAMILY slip, and a rule filed under the wrong '
+  'noun is invisible to the reader that asks by the right one, so a FORBIDDING '
+  'rule fails OPEN. THE ROUTE: route_to_person_id must name '
   'a PERSON card in the SAME studio as the rule''s subject, and never the '
   'subject itself (rule_route_not_a_person / rule_route_other_studio / '
   'rule_route_is_self / rule_subject_studio_unresolved). The fourth self-FK '
