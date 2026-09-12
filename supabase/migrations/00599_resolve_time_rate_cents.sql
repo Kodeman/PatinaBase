@@ -227,6 +227,55 @@
 --    00601's ladder. Her pick is DISCARDED, not refused (§0.7's idiom) — ASSERT 3
 --    still raises on a role she does not hold at all.
 --
+-- REVIEW ROUND 6 — THE LAST CALLER-WRITABLE TIEBREAK, AND THE QUESTION THE
+-- LADDER IS STANDING IN FOR:
+--
+--  · W1-R6-01 (one repair). Round 5's premise — she cannot make herself a plain
+--    member of a candidate studio — is true of HER OWN workspace and false of
+--    someone else's. A second account she controls is given its own design_studio
+--    at designer signup (00295), and `Org owners can insert members` is
+--    `is_org_admin_or_owner(organization_id) AND (role <> 'owner')`, so that
+--    account seats HER there as a plain `member` and, as the workspace's owner,
+--    writes her studio_member_rates row at any number under its own created_by.
+--    Key 1 is then TRUE for a studio she effectively controls; against the studio
+--    that really employs her every key down to `(membership.role = 'owner') DESC`
+--    ties, and the decision fell to the SEAT's own dates — joined_at, then the
+--    membership row's created_at — both nullable, without defaults, and both
+--    SUPPLIED BY THE SEATING INSERT (guard_org_membership_changes freezes only
+--    organization_id and user_id, and only on UPDATE). Measured through RLS with a
+--    realistic timeline: a backdated puppet seat priced a 120-minute hour at her
+--    own 99900, $1,998.00 authorized — the identical figure rounds 3, 4 and 5 each
+--    reported as closed. Negative controls on the same fixture: seat her as
+--    `admin` instead of `member` → 15000/30000; omit the puppet's rate row →
+--    15000/30000.
+--
+--    The repair is to delete both terms, so the last resort below the owner key is
+--    a fact she has no write path to: `organizations` has NO INSERT policy for
+--    `authenticated` (SELECT and UPDATE only), so organizations.created_at is
+--    server-set at the signup that provisioned the studio and a puppet minted
+--    today cannot predate the studio that employs her. Pinned by a postcondition
+--    that refuses either term's return, and by case (x) of
+--    supabase/tests/billing/time_rate_resolution_test.sql — the `member` seat in a
+--    SECOND ACCOUNT's workspace, which case (u) (a seat in her own workspace) and
+--    case (r) (a second seat that writes no rate) cannot reach.
+--
+--  · W1-R6-02 — recorded, NOT repaired here, because it is governance. When no
+--    studio that employs her has ever priced her, key 1 is false everywhere and the
+--    ladder falls to the bare rate-existence key, which a workspace she owns always
+--    satisfies (studio_member_rates_admin_insert asks only for
+--    is_org_admin_or_owner, and 00295 makes her its owner). No permutation of these
+--    keys fixes that: the alternative is 'none' — which HT-26 rules a DISPLAY state
+--    ("rate pending", not a blank) but which reaches the composer and
+--    claim_time_entries as $0 until lane B excludes it. W1-R4-02 demanded the
+--    current behaviour and case (s) pins it; the unanswered question is WHICH
+--    studio may price an hour on a project whose studio_id is NULL (5 of 6 seeded
+--    projects and the live shape, because activate_proposal_as_project never sets
+--    the column). Raised as HT-3-a in rulings.md — OWED, shipped as written, with
+--    case (s)'s failure message naming it. A ruling the other way is one WHERE
+--    clause (`AND membership.role NOT IN ('owner','admin')` on the candidate query,
+--    with an explicit fall-through to 'none') plus moved asserts in cases (s), (p)
+--    and (w).
+--
 -- Lineage: new function — nothing is redefined.
 -- Reconciles: the three 00578 branches that leave the rate client-owned are
 -- fixed in 00601, not here; this file only supplies the answer.
@@ -335,6 +384,34 @@ BEGIN
     -- INSIDE the key — ranking on employment alone was measured and re-breaks
     -- W1-R4-02 (the employing studio wins and has never priced her, so the hour
     -- resolves 'none' and bills $0).
+    --
+    -- W1-R6-01: round 5's premise ("she cannot make herself a plain member of a
+    -- candidate") holds only for HER OWN auto-provisioned workspace. A second
+    -- account she controls gets its own design_studio at designer signup (00295),
+    -- and `Org owners can insert members` (is_org_admin_or_owner AND role <>
+    -- 'owner') lets that account seat HER there as a plain `member` and then, as
+    -- that workspace's owner, write her studio_member_rates row at any number
+    -- under its own created_by. Key 1 is then TRUE for a studio she effectively
+    -- controls, keys 1-5 all tie against the studio that really employs her, and
+    -- the decision used to fall to the SEAT's own date columns (joined_at, then the
+    -- row's created_at) — which the puppet's owner SUPPLIES on the seating INSERT
+    -- (both nullable, no default; guard_org_membership_changes freezes only
+    -- organization_id and user_id on UPDATE). Measured through RLS: a backdated
+    -- seat priced a 120-minute hour at her 99900, $1,998.00 authorized. Those two
+    -- terms are deleted, and the postcondition below refuses their return.
+    --
+    -- So the last resort is now a fact she has no write path to at all:
+    -- `organizations` carries NO INSERT policy for `authenticated` (SELECT and
+    -- UPDATE only), so organizations.created_at is server-set at the signup that
+    -- provisioned the studio, and a puppet minted today cannot predate the studio
+    -- that employs her. No caller-writable column appears below
+    -- `(membership.role = 'owner') DESC`.
+    --
+    -- This ladder still answers "which studio prices an hour on a studio_id-NULL
+    -- project" by a chain of tiebreaks rather than by a rule — see HT-3-a in
+    -- rulings.md (OWED) and W1-R6-02. The bare rate-existence key below remains
+    -- satisfiable by a workspace the subject owns, which is governance, not an
+    -- ordering bug: no permutation of these keys fixes it.
     ORDER BY EXISTS (
                SELECT 1 FROM public.studio_member_rates AS employer
                WHERE employer.studio_id = studio.id
@@ -359,8 +436,6 @@ BEGIN
                  AND peer.role <> 'guest'
              ) > 1) DESC,
              (membership.role = 'owner') DESC,
-             membership.joined_at NULLS LAST,
-             membership.created_at,
              studio.created_at,
              studio.id
     LIMIT 1;
@@ -673,6 +748,25 @@ BEGIN
        !~ 'IF v_designer_id IS NOT NULL AND v_designer_id IS NOT DISTINCT FROM p_user_id THEN\s+v_role := ''lead_designer'';\s+ELSIF v_role IS NULL THEN'
   THEN
     RAISE EXCEPTION '00599: the project designer''s lead_designer role must be fixed ABOVE p_rate_role, or she bills the client at the best-paying signed card (W1-R5-03)';
+  END IF;
+
+  -- ── review round 6 ───────────────────────────────────────────────────────
+  -- W1-R6-01: no tiebreak below the owner key may be a column the caller can
+  -- WRITE. organization_members.joined_at and .created_at are both supplied on the
+  -- seating INSERT by whoever seats the member, and `Org owners can insert members`
+  -- lets a second account the subject controls seat her as a plain `member` of its
+  -- own auto-provisioned studio — so a backdated seat decided which studio priced
+  -- her hour. organizations has no INSERT policy for authenticated, which is why
+  -- studio.created_at is the last resort above the uuid.
+  IF pg_get_functiondef('public.resolve_time_rate_cents(uuid,uuid,timestamptz,text)'::regprocedure)
+       ~ 'membership\.joined_at'
+  THEN
+    RAISE EXCEPTION '00599: membership.joined_at is written by whoever seats the member — it must not be a pricing tiebreak (W1-R6-01)';
+  END IF;
+  IF pg_get_functiondef('public.resolve_time_rate_cents(uuid,uuid,timestamptz,text)'::regprocedure)
+       ~ 'membership\.created_at'
+  THEN
+    RAISE EXCEPTION '00599: membership.created_at is written by whoever seats the member — it must not be a pricing tiebreak (W1-R6-01)';
   END IF;
 
   -- W1-R2-03: the designer-on-behalf leg is for the classifier, not for callers.

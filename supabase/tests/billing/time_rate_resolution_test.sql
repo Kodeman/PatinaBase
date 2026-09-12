@@ -118,6 +118,26 @@
 --       false and the lower keys must decide — or the principal of a real studio
 --       bills $0.
 --
+-- REVIEW ROUND 6 added one case:
+--   (x) W1-R6-01 — round 5's key ("she is not the one who runs it") is TRUE for a
+--       studio she controls as soon as the puppet is a SECOND ACCOUNT's
+--       auto-provisioned workspace instead of her own: `Org owners can insert
+--       members` lets that account seat her there as a plain `member`, and as the
+--       workspace's owner it writes her rate at any number under its own
+--       created_by. Keys 1-5 then tie against the studio that employs her and the
+--       tie fell to the SEAT's own dates — joined_at, then the membership row's
+--       created_at — which the seating INSERT supplies. Both terms are deleted;
+--       organizations.created_at is the last resort because `organizations` has no
+--       INSERT policy for `authenticated`. Case (u) cannot reach this (its second
+--       account is seated in HER OWN workspace, so key 1 stays false there) and
+--       case (r) cannot (its second seat never writes a rate).
+--
+-- Recorded, NOT closed in code: W1-R6-02. When no studio that employs her has ever
+-- priced her, the ladder falls to the bare rate-existence key, which a workspace
+-- she owns always satisfies — the behaviour W1-R4-02 demanded and case (s) pins.
+-- No permutation of these keys fixes it; it is the owed ruling HT-3-a (which studio
+-- may price an hour on a studio_id-NULL project), named in case (s)'s messages.
+--
 -- Every write runs as the member under `SET LOCAL ROLE authenticated` + a JWT
 -- claim: the guard returns early for current_user = 'postgres' (00412:2354), so
 -- a test written as postgres would assert nothing.
@@ -1449,6 +1469,15 @@ BEGIN
 
   -- Her own studio prices her. She is its owner, so this is self-authored and not
   -- arm's-length: the SECOND key (a rate exists here at all) is what must carry it.
+  --
+  -- W1-R6-02 / HT-3-a (OWED — rulings.md): this is also the shape where a rate the
+  -- SUBJECT wrote about herself, in a workspace she owns, prices the client's hour —
+  -- because no studio that employs her has priced her at all. Shipped deliberately
+  -- (W1-R4-02 called the alternative, 'none' at $0 into the composer and the invoice
+  -- lock, a money bug), and no ordering of the ladder's keys changes it. If HT-3-a
+  -- is ruled the other way — the winning studio must be one she does not run, with
+  -- an explicit fall-through to 'none' — s1/s2/s3/s4 below are the asserts that
+  -- move, together with cases (p) and (w).
   PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-00000000000a');
   INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
   VALUES (v_personal, 'b1100000-0000-4000-8000-00000000000a', 18000, CURRENT_DATE - 30,
@@ -1467,8 +1496,10 @@ BEGIN
     'FAIL s1 (W1-R4-02): a studio that has never priced her won the ladder and the hour resolved '
     'to ''none'' — $0 into the unbilled view, the balance, the composer and the invoice lock';
   ASSERT v_rate = 18000,
-    'FAIL s2 (W1-R4-02): the only studio that prices her is her own (18000); got '
-    || COALESCE(v_rate::text, 'NULL');
+    'FAIL s2 (W1-R4-02; governance HT-3-a, OWED): the only studio that prices her is her own '
+    '(18000) — a rate she set about herself in a workspace she owns, which ships because the '
+    'alternative is $0 on the client''s invoice. A failure here means HT-3-a was ruled the other '
+    'way and this assert must move with it; got ' || COALESCE(v_rate::text, 'NULL');
   ASSERT v_source = 'studio_member',
     'FAIL s3: rate_source must be ''studio_member''; got ' || COALESCE(v_source, 'NULL');
   ASSERT v_amount = 36000,
@@ -1894,6 +1925,167 @@ BEGIN
     || COALESCE(v_source, 'NULL') || ' / ' || COALESCE(v_amount::text, 'NULL');
 
   RAISE NOTICE 'time_rate_resolution: case (w) passed.';
+END
+$$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- REVIEW ROUND 6 — the round-5 key is true for a studio she controls the moment
+-- the puppet is a SECOND ACCOUNT's workspace rather than her own, and the seat
+-- dates that then decided the tie are written by whoever seats her.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, instance_id, aud, role)
+VALUES
+  ('b1100000-0000-4000-8000-000000006001', 'r6-subject@test.invalid',  '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('b1100000-0000-4000-8000-000000006002', 'r6-puppet@test.invalid',   '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('b1100000-0000-4000-8000-000000006003', 'r6-employer@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+
+-- ─── (x) W1-R6-01: a plain `member` seat in a SECOND ACCOUNT's workspace ────
+-- Round 5's key is "this studio holds a rate for her AND she is not the one who
+-- runs it", justified on the claim that she cannot make herself a plain member of
+-- a candidate studio. True of HER OWN auto-provisioned workspace (case (u)); false
+-- of someone else's. A second account she controls is given its own design_studio
+-- at designer signup (00295), and `Org owners can insert members` is
+-- `is_org_admin_or_owner(organization_id) AND (role <> 'owner')` — so that account
+-- seats HER there as a plain `member` and, as the workspace's owner, writes her
+-- studio_member_rates row at any number under its own created_by. Key 1 is then
+-- TRUE for a studio she effectively controls; against the studio that really
+-- employs her keys 1-5 all tie, and the decision fell to the SEAT's own dates
+-- (joined_at, then the membership row's created_at) — nullable, no defaults, and
+-- supplied by the puppet owner on the seating INSERT, since
+-- guard_org_membership_changes freezes only organization_id / user_id and only on
+-- UPDATE. Measured: a backdated seat priced a 120-minute hour at her own 99900,
+-- $1,998.00 authorized — the identical figure rounds 3, 4 and 5 each reported
+-- closed. Case (u) cannot catch it (its second account is seated in HER OWN
+-- workspace, where key 1 stays false); case (r) cannot (its second seat writes no
+-- rate).
+-- Both date terms are deleted, so the last resort below the owner key is
+-- organizations.created_at — server-set, because `organizations` carries NO INSERT
+-- policy for `authenticated`. Hence x0e: a puppet minted today cannot predate the
+-- studio that employs her, and the employing studio must be genuinely older or
+-- the case would be resting on a uuid tiebreak.
+INSERT INTO public.profiles (id, email, full_name, is_designer, created_at, updated_at)
+VALUES
+  ('b1100000-0000-4000-8000-000000006001', 'r6-subject@test.invalid',  'R6 Subject',  false, NOW(), NOW()),
+  ('b1100000-0000-4000-8000-000000006002', 'r6-puppet@test.invalid',   'R6 Puppet',   false, NOW(), NOW()),
+  ('b1100000-0000-4000-8000-000000006003', 'r6-employer@test.invalid', 'R6 Employer', false, NOW(), NOW())
+ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name, is_designer = false;
+
+-- The flip is what makes 00295 provision each designer her own workspace: the
+-- subject's (irrelevant to the outcome, key 1 is false there) and the puppet
+-- account's (the workspace this case is about).
+UPDATE public.profiles SET is_designer = true
+ WHERE id IN ('b1100000-0000-4000-8000-000000006001', 'b1100000-0000-4000-8000-000000006002');
+
+-- The studio that really employs her, two years old, with its own owner.
+INSERT INTO public.organizations (id, type, name, slug, status, created_at, updated_at)
+VALUES ('b1100000-0000-4000-8000-0000000060a1', 'design_studio', 'R6 Employing Studio',
+        'r6-employing-studio', 'active', NOW() - INTERVAL '2 years', NOW() - INTERVAL '2 years');
+
+INSERT INTO public.organization_members (id, user_id, organization_id, role, status, joined_at)
+VALUES
+  ('b1100000-0000-4000-8000-0000000060c3', 'b1100000-0000-4000-8000-000000006003',
+   'b1100000-0000-4000-8000-0000000060a1', 'owner',  'active', NOW() - INTERVAL '2 years'),
+  ('b1100000-0000-4000-8000-0000000060c1', 'b1100000-0000-4000-8000-000000006001',
+   'b1100000-0000-4000-8000-0000000060a1', 'member', 'active', NOW() - INTERVAL '1 year');
+
+INSERT INTO public.projects (id, name, designer_id, created_by)
+VALUES ('b1100000-0000-4000-8000-0000000060e1', 'Puppet-seat House',
+        'b1100000-0000-4000-8000-000000006001', 'b1100000-0000-4000-8000-000000006001');
+
+DO $$
+DECLARE
+  v_puppet   uuid;
+  v_own      uuid;
+  v_author   uuid;
+  v_seatrole TEXT;
+  v_rate     INTEGER;
+  v_source   TEXT;
+  v_amount   INTEGER;
+BEGIN
+  SELECT studio.id INTO v_puppet
+  FROM public.organizations studio
+  JOIN public.organization_members m ON m.organization_id = studio.id
+  WHERE m.user_id = 'b1100000-0000-4000-8000-000000006002'
+    AND m.role = 'owner';
+  ASSERT v_puppet IS NOT NULL,
+    'FAIL x0 (precondition): 00295 must have provisioned the SECOND account its own workspace — '
+    'that workspace is the whole attack';
+
+  SELECT studio.id INTO v_own
+  FROM public.organizations studio
+  JOIN public.organization_members m ON m.organization_id = studio.id
+  WHERE m.user_id = 'b1100000-0000-4000-8000-000000006001'
+    AND m.role = 'owner';
+  ASSERT v_own IS NOT NULL AND v_own <> v_puppet,
+    'FAIL x0b (precondition): she must also hold her own workspace, distinct from the puppet''s';
+  ASSERT (SELECT studio_id FROM public.projects
+           WHERE id = 'b1100000-0000-4000-8000-0000000060e1') IS NULL,
+    'FAIL x0c (precondition): the project must carry studio_id NULL — the ladder is only reached '
+    'there (activate_proposal_as_project never sets the column)';
+  ASSERT (SELECT created_at FROM public.organizations
+           WHERE id = 'b1100000-0000-4000-8000-0000000060a1')
+         < (SELECT created_at FROM public.organizations WHERE id = v_puppet),
+    'FAIL x0e (precondition): the employing studio must be OLDER than the puppet workspace, or the '
+    'last resort is studio.id and this case measures a coin flip';
+
+  -- The studio that employs her prices her arm's-length at 15000, written by its
+  -- own owner.
+  PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000006003');
+  INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
+  VALUES ('b1100000-0000-4000-8000-0000000060a1', 'b1100000-0000-4000-8000-000000006001',
+          15000, CURRENT_DATE - 20, 'b1100000-0000-4000-8000-000000006003');
+  PERFORM pg_temp.reset_role();
+
+  -- The second account seats her in ITS workspace as a plain `member` — which is
+  -- what round 5's key asks for — and backdates the seat. Both writes are through
+  -- RLS as the puppet account; nothing is forged.
+  PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000006002');
+  INSERT INTO public.organization_members (id, user_id, organization_id, role, status, joined_at)
+  VALUES ('b1100000-0000-4000-8000-0000000060c2', 'b1100000-0000-4000-8000-000000006001',
+          v_puppet, 'member', 'active', NOW() - INTERVAL '3 years');
+
+  INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
+  VALUES (v_puppet, 'b1100000-0000-4000-8000-000000006001', 99900, CURRENT_DATE - 30,
+          'b1100000-0000-4000-8000-000000006002');
+  PERFORM pg_temp.reset_role();
+
+  SELECT role::text INTO v_seatrole FROM public.organization_members
+   WHERE organization_id = v_puppet AND user_id = 'b1100000-0000-4000-8000-000000006001';
+  ASSERT v_seatrole = 'member',
+    'FAIL x0f (precondition): she must be a plain `member` of the puppet workspace — that is what '
+    'makes round 5''s first key TRUE there; got ' || COALESCE(v_seatrole, 'NULL');
+
+  SELECT created_by INTO v_author FROM public.studio_member_rates
+   WHERE studio_id = v_puppet AND user_id = 'b1100000-0000-4000-8000-000000006001';
+  ASSERT v_author = 'b1100000-0000-4000-8000-000000006002',
+    'FAIL x0g (precondition): the puppet''s rate row must read arm''s-length (authored by the '
+    'second account) or this case proves nothing; got ' || COALESCE(v_author::text, 'NULL');
+  ASSERT (SELECT count(*) FROM public.organization_members
+           WHERE organization_id = v_puppet AND status = 'active' AND role <> 'guest') = 2,
+    'FAIL x0h (precondition): the puppet workspace must be multi-member, so the count key ties too';
+
+  PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000006001');
+  INSERT INTO public.project_time_entries
+    (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('b1100000-0000-4000-8000-0000000060b1', 'b1100000-0000-4000-8000-0000000060e1',
+          'b1100000-0000-4000-8000-000000006001', NOW() - INTERVAL '2 hours', 120, true, 'manual_entry');
+  PERFORM pg_temp.reset_role();
+
+  SELECT hourly_rate_cents, rate_source, rated_amount_cents INTO v_rate, v_source, v_amount
+  FROM public.project_time_entries WHERE id = 'b1100000-0000-4000-8000-0000000060b1';
+
+  ASSERT v_rate <> 99900,
+    'FAIL x1 (W1-R6-01, HT-1 + HT-3): a rate set in a SECOND ACCOUNT''s workspace, where she sits '
+    'as a plain member with a backdated seat, priced her own hour at $1,998.00 — no tiebreak below '
+    'the owner key may be a column the seating caller writes';
+  ASSERT v_rate = 15000 AND v_source = 'studio_member' AND v_amount = 30000,
+    'FAIL x2 (W1-R6-01): the studio that actually employs her must price the hour at 15000 / 30000 '
+    '(it is the older studio, and organizations.created_at is server-set); got '
+    || COALESCE(v_rate::text, 'NULL') || ' / ' || COALESCE(v_source, 'NULL') || ' / '
+    || COALESCE(v_amount::text, 'NULL');
+
+  RAISE NOTICE 'time_rate_resolution: case (x) passed.';
   RAISE NOTICE 'All time_rate_resolution assertions passed.';
 END
 $$;
