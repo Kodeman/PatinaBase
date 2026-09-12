@@ -92,7 +92,13 @@ export function RosterRow({
   const projectId = row.project_id ?? '';
   const name = row.display_name ?? row.company_name ?? 'Unnamed';
   const reach = reachState(row);
-  const consent = row.sms_consent_status ?? 'not_asked';
+  // NULL is UNKNOWN, never the affirmative word (R-V). v_project_roster
+  // COALESCEs to 'not_asked' only for a caller who can read the record that
+  // decides it (00594, w1b final review r8 MAJOR-1); a `?? 'not_asked'` here
+  // would print the same fail-open word the view stopped printing — on a
+  // dated `opted_out` the caller's studio cannot see. ConsentChip renders the
+  // absence as "No record".
+  const consent = row.sms_consent_status;
   // No Twilio-availability probe exists in the client (the rails are dormant
   // until 10DLC clears), so "can text" is exactly what the party sheet already
   // gates its composer on: a party row, an opted-in consent, and a number.

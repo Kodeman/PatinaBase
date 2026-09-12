@@ -2528,21 +2528,75 @@ BEGIN
   IF n <> 1 THEN
     RAISE EXCEPTION '14g the Directory shows % row(s) for a human the record seats on that job', n;
   END IF;
+  -- ── AND THE TWO SENSITIVE OBJECTS ASK THE RECORD, NOT THE CALLER ──────
+  -- w1b final review r8 BLOCKING-1. project_tenant_org() above still names
+  -- this studio for THIS caller — and that is exactly why the site access
+  -- card and the authority grant may not ask it: the same expression named
+  -- the OTHER studio for a member of the other studio, who then read the
+  -- lockbox version, the alarm account, the hours, the key holder and the gas
+  -- line, and landed an UPDATE (block 17). is_active_studio_member(
+  -- project_tenant_org(p)) is self-satisfying on this population, so it is no
+  -- tenant boundary here. Both tables now resolve
+  -- project_recorded_studio()/project_party_recorded_studio() (00624 §1c):
+  -- where the record names NO studio the job refuses BOTH studios, this admin
+  -- included, and the studio-less population carries neither feature until
+  -- R-BD's W3 backfill names a studio. PR-w's posture, paid for in the open.
   SELECT count(*) INTO n FROM public.project_site_access_cards
    WHERE project_id = 'b0000000-0000-0000-0000-0000000000d1';
-  IF n <> 1 THEN
-    RAISE EXCEPTION '14h the admin reads % site access card(s) on its own job', n;
+  IF n <> 0 THEN
+    RAISE EXCEPTION '14h a job that records NO studio held % readable site access card(s) — the sensitive text may not be gated on a caller-relative tenant', n;
   END IF;
   SELECT count(*) INTO n FROM public.project_party_authority
    WHERE engagement_id = 'f2200000-0000-4000-8000-00000000000c';
-  IF n <> 1 THEN
-    RAISE EXCEPTION '14i the admin reads % authority grant(s) on its own job', n;
+  IF n <> 0 THEN
+    RAISE EXCEPTION '14i a job that records NO studio held % readable authority grant(s), money threshold included', n;
   END IF;
-  -- and the room's own acts land: record the way in, record who signs money
+  UPDATE public.project_site_access_cards
+     SET lockbox_version = 'changed on a job that records no studio'
+   WHERE project_id = 'b0000000-0000-0000-0000-0000000000d1';
+  GET DIAGNOSTICS n = ROW_COUNT;
+  IF n <> 0 THEN
+    RAISE EXCEPTION '14h2 the lockbox version on a studio-less job was changed on % row(s)', n;
+  END IF;
+  BEGIN
+    INSERT INTO public.project_site_access_cards (project_id, lockbox_version)
+    VALUES ('b0000000-0000-0000-0000-0000000000d3','Block 14 admin write');
+    RAISE EXCEPTION '14h3 a site access card was RECORDED on a job that names no studio';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+  BEGIN
+    INSERT INTO public.project_party_authority (engagement_id, scope, threshold_cents)
+    VALUES ('f2200000-0000-4000-8000-00000000000c','money',250000);
+    RAISE EXCEPTION '14i2 a money authority grant was RECORDED on a seat of a job that names no studio';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+
+  -- ── and the room's own acts LAND on a job that RECORDS this studio ─────
+  -- The same two writes, one field different: Cedar Lane Study names
+  -- studio_id. Nothing about the caller, the designer or the seat changes, so
+  -- this is the mutation control for the four refusals above — the record,
+  -- not the gate, is what moved.
+  INSERT INTO public.project_parties (id, project_id, party_kind, display_name,
+                                      phone_e164, trade)
+  VALUES ('f7000000-0000-4000-8000-000000000014',
+          'b0000000-0000-0000-0000-00000000c0d1','sub','Block 14 Recorded Sub',
+          '+16125559994','electrical');
   INSERT INTO public.project_site_access_cards (project_id, lockbox_version)
-  VALUES ('b0000000-0000-0000-0000-0000000000d3','Block 14 admin write');
+  VALUES ('b0000000-0000-0000-0000-00000000c0d1','Block 14 admin write');
   INSERT INTO public.project_party_authority (engagement_id, scope, threshold_cents)
-  VALUES ('f2200000-0000-4000-8000-00000000000c','money',250000);
+  VALUES ('f7000000-0000-4000-8000-000000000014','money',250000);
+  SELECT count(*) INTO n FROM public.project_site_access_cards
+   WHERE project_id = 'b0000000-0000-0000-0000-00000000c0d1'
+     AND lockbox_version = 'Block 14 admin write';
+  IF n <> 1 THEN
+    RAISE EXCEPTION '14h4 the admin reads % site access card(s) it just recorded on a job that RECORDS its studio', n;
+  END IF;
+  SELECT count(*) INTO n FROM public.project_party_authority
+   WHERE engagement_id = 'f7000000-0000-4000-8000-000000000014'
+     AND scope = 'money' AND threshold_cents = 250000;
+  IF n <> 1 THEN
+    RAISE EXCEPTION '14i3 the admin reads % money grant(s) it just recorded on a job that RECORDS its studio (PR-n standing resolves at the RECORDED studio)', n;
+  END IF;
 
   -- ── and the two ROLODEX POINTERS, the third and fourth write on this job ──
   -- w1b final review r7 BLOCKING-1. assert_project_party_cards() was the one
@@ -2664,7 +2718,7 @@ BEGIN
   END;
 
   PERFORM pg_temp.reset_role();
-  RAISE NOTICE '14. a studio-less job: the admin of the studio doing the work reads its seat, its site access card and its authority grant and may record all four — the card, the grant, the seat''s FIRM pointer and its WARRANTY CONTACT, both naming their own rolodex cards — while a firm card and a person card of the studio the consent resolver guesses are refused party_company_other_studio / party_warranty_contact_other_studio (r7 BLOCKING-1), the consent word on that seat reads NULL rather than the affirmative one because the deciding record lives where it cannot be read, and a co-member of the designer through a non-design organization reads none of it and may write nothing (r6 MAJOR-1): passed';
+  RAISE NOTICE '14. a studio-less job: the admin of the studio doing the work reads its SEAT and its Directory row and may record the seat''s FIRM pointer and its WARRANTY CONTACT, both naming their own rolodex cards (r6/r7 BLOCKING-1) — while the two SENSITIVE objects ask the RECORD and refuse it the card and the grant on that job, read and write alike, and land the same two writes on a job that RECORDS its studio (r8 BLOCKING-1) — while a firm card and a person card of the studio the consent resolver guesses are refused party_company_other_studio / party_warranty_contact_other_studio, the consent word on that seat reads NULL rather than the affirmative one because the deciding record lives where it cannot be read, and a co-member of the designer through a NON-DESIGN organization reads none of it and may write nothing. The second DESIGN studio of the same designer — the actor the caller-relative gate resolver admits, and this block does not test — is block 17: passed';
 END $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -2805,6 +2859,161 @@ BEGIN
 
   PERFORM pg_temp.reset_role();
   RAISE NOTICE '16. the number set and the identity''s consent word: a seat on a STUDIO-LESS job of this studio contributes its number, so the studio''s own recorded refusal decides the Directory word (opted_out, not the affirmative one), and the same seat moved onto a job that RECORDS its studio reads identically — projects.studio_id no longer decides whether a refusal reaches the face (r7 MAJOR-1, probe138''s control both ways): passed';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 17. The designer's SECOND DESIGN STUDIO, on a job that records no studio
+-- ═══════════════════════════════════════════════════════════════════════════
+-- w1b final review r8 BLOCKING-1, the leg block 14 lacked. Block 13's actor
+-- is a co-member through a design studio but on projects that RECORD their
+-- studio; block 14's studio-less actor is a co-member through a MANUFACTURER
+-- organization, which organizations.type = 'design_studio' refuses. Neither
+-- is the actor the gate admits: an ordinary member of a DESIGN studio the
+-- job's designer of record also works for, on a job whose record names no
+-- studio at all. For that caller project_tenant_org() answers with the
+-- CALLER'S OWN studio, so is_active_studio_member() over it is
+-- self-satisfying — measured, that caller read the lockbox version, the alarm
+-- account 'ALARM-ACCT-99812', the site hours, the key holder and the gas
+-- emergency line, landed an UPDATE of lockbox_version, and read the money
+-- grant's 250000 threshold. The premise legs below assert that the resolver
+-- still names this caller's own studio and the membership test still passes,
+-- because the fix is NOT in the conjunct: the two sensitive objects stopped
+-- asking it (project_recorded_studio(), 00624 §1c).
+--
+-- WHAT STAYS READABLE HERE IS RECORDED, NOT ASSUMED (legs D). The seat row
+-- and the Directory's party row on that job remain visible to this caller,
+-- deliberately: r6 MAJOR-1 (the admin of the studio doing the work read 0
+-- seats on its own studio-less job) and r7 MAJOR-1 (a refused number dropped
+-- out of a worst-first reduction and the row printed the affirmative word)
+-- are what a record-only gate THERE reintroduces, and block 14 asserts the
+-- other side of both. A seat row carries a name, a trade, a number and a
+-- paper word; no lockbox version, no alarm account, no threshold — and its
+-- consent word is already NULL for this caller. That residue is a ruling owed
+-- to Kody with the Strata studio_id IS NULL count, and it is asserted here so
+-- that a change to it cannot pass unnoticed.
+DO $$
+DECLARE
+  n     integer;
+  v_org uuid;
+  v_lock text;
+BEGIN
+  -- the actor: block 13's ordinary member of Test Studio B — a DESIGN studio
+  -- whose owner is this job's designer of record — never a member of the
+  -- studio doing the work.
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000002');
+  IF NOT public.is_active_studio_member('f1000000-0000-4000-8000-00000000000b') THEN
+    RAISE EXCEPTION '17a the actor must be a member of the designer''s SECOND design studio';
+  END IF;
+  IF public.is_active_studio_member('b0000000-0000-0000-0000-000000000001') THEN
+    RAISE EXCEPTION '17b the actor must NOT be a member of the studio doing the work';
+  END IF;
+  IF NOT public.is_design_studio_comember('a0000000-0000-0000-0000-000000000004') THEN
+    RAISE EXCEPTION '17c the actor must share a DESIGN studio with the designer of record — a manufacturer co-member is block 14''s actor, not this one';
+  END IF;
+
+  -- the premise: the caller-relative resolver names the CALLER'S OWN studio
+  -- on this job, and the membership test over it passes. Without both halves
+  -- this block proves nothing, and with them the conjunct is not a boundary.
+  v_org := public.project_tenant_org('b0000000-0000-0000-0000-0000000000d1');
+  IF v_org IS DISTINCT FROM 'f1000000-0000-4000-8000-00000000000b' THEN
+    RAISE EXCEPTION '17d the gate resolver named % for this caller; the self-satisfying leg this block is about is gone, so the assertions below prove something else', COALESCE(v_org::text,'NULL');
+  END IF;
+  IF NOT public.is_active_studio_member(v_org) THEN
+    RAISE EXCEPTION '17e is_active_studio_member(project_tenant_org(job)) is false for a caller in the designer''s second design studio; the premise of r8 BLOCKING-1 no longer holds';
+  END IF;
+
+  -- ── A. the site access card: the sensitive text, read ──────────────────
+  SELECT count(*) INTO n FROM public.project_site_access_cards
+   WHERE project_id = 'b0000000-0000-0000-0000-0000000000d1';
+  IF n <> 0 THEN
+    RAISE EXCEPTION '17f a member of the designer''s SECOND design studio read % site access card(s) of a studio-less job — the lockbox version, the alarm account, the hours, the key holder and the emergency lines', n;
+  END IF;
+  SELECT count(*) INTO n FROM public.project_site_access_cards;
+  IF n <> 0 THEN
+    RAISE EXCEPTION '17g the same caller read % site access card(s) anywhere on the platform', n;
+  END IF;
+
+  -- ── B. and the WRITE, which is the half r7 never walked ────────────────
+  UPDATE public.project_site_access_cards
+     SET lockbox_version = 'CHANGED BY THE OTHER STUDIO'
+   WHERE project_id = 'b0000000-0000-0000-0000-0000000000d1';
+  GET DIAGNOSTICS n = ROW_COUNT;
+  IF n <> 0 THEN
+    RAISE EXCEPTION '17h a member of the designer''s SECOND design studio changed the lockbox version on % row(s)', n;
+  END IF;
+  BEGIN
+    INSERT INTO public.project_site_access_cards (project_id, lockbox_version)
+    VALUES ('b0000000-0000-0000-0000-0000000000d4','other studio write');
+    RAISE EXCEPTION '17i a member of the designer''s SECOND design studio RECORDED a site access card on a studio-less job';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+
+  -- ── C. the money authority grant and its threshold ─────────────────────
+  SELECT count(*) INTO n FROM public.project_party_authority
+   WHERE engagement_id = 'f2200000-0000-4000-8000-00000000000c';
+  IF n <> 0 THEN
+    RAISE EXCEPTION '17j the same caller read % authority grant(s) of a studio-less job, money threshold included', n;
+  END IF;
+  SELECT count(*) INTO n FROM public.project_party_authority;
+  IF n <> 0 THEN
+    RAISE EXCEPTION '17k the same caller read % authority grant(s) anywhere on the platform', n;
+  END IF;
+
+  -- ── D. the recorded residue: the seat row, and its NULL consent word ───
+  SELECT count(*) INTO n FROM public.people_directory_seats
+   WHERE project_id = 'b0000000-0000-0000-0000-0000000000d1';
+  IF n < 1 THEN
+    RAISE EXCEPTION '17l the seats view now hides a studio-less job from a design co-member (% row(s)) — that is r6 MAJOR-1 restored, not a fix; block 14 asserts the working studio''s admin reads it', n;
+  END IF;
+  -- only meaningful while the deciding record is somewhere this caller
+  -- cannot read; _primary_studio_for() may rank this very studio first, and
+  -- then the word is legitimately sourced.
+  IF NOT public.is_active_studio_member(
+           public.project_consent_org('b0000000-0000-0000-0000-0000000000d1')) THEN
+    SELECT count(*) INTO n FROM public.people_directory_seats
+     WHERE project_id = 'b0000000-0000-0000-0000-0000000000d1'
+       AND consent_status IS NOT NULL;
+    IF n <> 0 THEN
+      RAISE EXCEPTION '17m a seat row printed a consent word for a caller who cannot read the deciding record (% row(s))', n;
+    END IF;
+  END IF;
+
+  -- ── E. and the card the record DOES name reads for its own studio ──────
+  -- "while the working studio's admin reads all three": same three objects,
+  -- on the seeded job that RECORDS Local Dev Studio.
+  SELECT count(*) INTO n FROM public.project_site_access_cards
+   WHERE project_id = 'd0e00000-0000-0000-0000-00000000000a';
+  IF n <> 0 THEN
+    RAISE EXCEPTION '17n the second design studio read % site access card(s) of a job that RECORDS the other studio', n;
+  END IF;
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000003');
+  SELECT count(*) INTO n FROM public.project_site_access_cards
+   WHERE project_id = 'd0e00000-0000-0000-0000-00000000000a';
+  IF n <> 1 THEN
+    RAISE EXCEPTION '17o the admin of the studio doing the work reads % site access card(s) on the job that records its studio', n;
+  END IF;
+  SELECT count(*) INTO n FROM public.project_party_authority a
+    JOIN public.project_parties pp ON pp.id = a.engagement_id
+   WHERE pp.project_id = 'd0e00000-0000-0000-0000-00000000000a';
+  IF n < 1 THEN
+    RAISE EXCEPTION '17p the same admin reads % authority grant(s) on that job', n;
+  END IF;
+  SELECT count(*) INTO n FROM public.people_directory_seats
+   WHERE project_id = 'd0e00000-0000-0000-0000-00000000000a';
+  IF n < 1 THEN
+    RAISE EXCEPTION '17q the same admin reads % seat row(s) on that job', n;
+  END IF;
+
+  -- and the lockbox version on the studio-less job is the one the studio
+  -- wrote, read back with RLS off: the refused UPDATE changed nothing.
+  PERFORM pg_temp.reset_role();
+  SELECT lockbox_version INTO v_lock FROM public.project_site_access_cards
+   WHERE project_id = 'b0000000-0000-0000-0000-0000000000d1';
+  IF v_lock IS DISTINCT FROM 'Block 14 lockbox v1' THEN
+    RAISE EXCEPTION '17r the stored lockbox version is now % — a refused UPDATE still landed', COALESCE(v_lock,'NULL');
+  END IF;
+
+  RAISE NOTICE '17. the designer''s SECOND DESIGN STUDIO on a studio-less job: the gate resolver still names that caller''s own studio and the membership test still passes (the conjunct is not the boundary), and the two sensitive objects — which now ask the RECORD — give it 0 site access cards, 0 authority grants, 0 rows changed on the lockbox version and a refused INSERT, platform-wide as well as on the job; the seat row and its NULL consent word stay readable on purpose (r6/r7 MAJOR-1, the residue named in 00624 §1c and owed to Kody with the Strata studio_id IS NULL count); and the admin of the studio doing the work reads the card, the grants and the seats on the job that RECORDS its studio (r8 BLOCKING-1): passed';
 END $$;
 
 DO $$ BEGIN RAISE NOTICE 'All W1b assertions passed.'; END $$;

@@ -1,0 +1,97 @@
+BEGIN
+               leg               |            working_studio            |             other_studio             |  other_name   
+---------------------------------+--------------------------------------+--------------------------------------+---------------
+ the two studios of one designer | b0000000-0000-0000-0000-000000000001 | 8a9a0c06-ecbc-45ad-9c6f-88395e0a57f1 | Leah Hartwell
+(1 row)
+
+INSERT 0 1
+INSERT 0 0
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+SET
+                              set_config                               
+-----------------------------------------------------------------------
+ {"sub":"c8000000-0000-4000-8000-0000000000a1","role":"authenticated"}
+(1 row)
+
+                  leg                   | in_working_studio | in_other_studio |        tenant_org_x_resolves         | old_gate_still_passes | recorded_studio | new_gate_passes 
+----------------------------------------+-------------------+-----------------+--------------------------------------+-----------------------+-----------------+-----------------
+ PREMISE: X is in the OTHER studio only | f                 | t               | 8a9a0c06-ecbc-45ad-9c6f-88395e0a57f1 | t                     |                 | f
+(1 row)
+
+              leg               | cards 
+--------------------------------+-------
+ A. site access card READ, as X |     0
+(1 row)
+
+                 leg                  | cards 
+--------------------------------------+-------
+ A2. site access cards anywhere, as X |     0
+(1 row)
+
+UPDATE 0
+                      leg                       | rows_visible_after 
+------------------------------------------------+--------------------
+ B. site access card WRITE, as X — rows changed |                  0
+(1 row)
+
+              leg               | grants 
+--------------------------------+--------
+ C. money authority grant, as X |      0
+(1 row)
+
+                               leg                                | seat_rows | directory_rows | seat_consent_word 
+------------------------------------------------------------------+-----------+----------------+-------------------
+ D. RESIDUE (deliberate, r6/r7): seats view + directory row, as X |         1 |              1 | not_asked
+(1 row)
+
+                                leg                                 |   number_set   
+--------------------------------------------------------------------+----------------
+ E. identity_phone_numbers naming X's OWN org (unchanged by design) | {+16125557001}
+(1 row)
+
+                              leg                               | display_name | sms_consent_status 
+----------------------------------------------------------------+--------------+--------------------
+ G. v_project_roster consent word on the RECORDED project, as X | Joe Wozniak  | 
+ G. v_project_roster consent word on the RECORDED project, as X | Ngozi Eze    | 
+ G. v_project_roster consent word on the RECORDED project, as X | Pete Rusk    | 
+(3 rows)
+
+                              set_config                               
+-----------------------------------------------------------------------
+ {"sub":"a0000000-0000-0000-0000-000000000003","role":"authenticated"}
+(1 row)
+
+                             leg                             | cards | grants | seats 
+-------------------------------------------------------------+-------+--------+-------
+ P1. admin of the working studio, on the job that RECORDS it |     1 |     11 |    24
+(1 row)
+
+                      leg                       | display_name | sms_consent_status 
+------------------------------------------------+--------------+--------------------
+ P2. and the refusal still reads as the refusal | Joe Wozniak  | pending
+ P2. and the refusal still reads as the refusal | Ngozi Eze    | granted
+ P2. and the refusal still reads as the refusal | Pete Rusk    | opted_out
+(3 rows)
+
+                              leg                               | cards | grants | seat_rows 
+----------------------------------------------------------------+-------+--------+-----------
+ P3. the studio-less job costs the working studio these two too |     0 |      0 |         1
+(1 row)
+
+RESET
+                          leg                           | channel_value |  status   |       opt_out_at       
+--------------------------------------------------------+---------------+-----------+------------------------
+ H. what the record at the working studio actually says | +16125550106  | granted   | 
+ H. what the record at the working studio actually says | +16125550112  | opted_out | 2025-12-03 21:00:00+00
+ H. what the record at the working studio actually says | +16125550118  | pending   | 
+(3 rows)
+
+                      leg                       |      lockbox_version       
+------------------------------------------------+----------------------------
+ I. and the stored lockbox version is untouched | third code, changed 16 Oct
+(1 row)
+
+ROLLBACK

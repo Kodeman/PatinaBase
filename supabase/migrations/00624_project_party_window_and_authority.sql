@@ -50,8 +50,11 @@
 --      authority, and the check has to sit where the portal cannot be
 --      bypassed — PostgREST is a writer too.
 --
--- RLS: is_active_studio_member(project_party_org(engagement_id)) AND
--- is_studio_comember() via the project (project_party_designer(), 00592).
+-- RLS: is_active_studio_member(project_party_recorded_studio(engagement_id))
+-- AND is_studio_comember() via the project (project_party_designer(), 00592).
+-- The tenant leg asks the RECORD — projects.studio_id — never the caller: a
+-- job that names no studio refuses BOTH studios rather than admitting both
+-- (§1c, w1b final review r8 BLOCKING-1).
 -- project_parties' own posture is the co-member leg alone (00584:884-921), and
 -- that leg is satisfied by sharing ANY active organization with the designer
 -- of record — so on this table, which carries scope and the money THRESHOLD
@@ -103,6 +106,28 @@
 -- local ones are all ambiguous: their designer owns two design studios, so
 -- nothing in the record chooses and the backfill may not guess either.)
 --
+-- AND THE TWO SENSITIVE OBJECTS DO NOT ASK IT (w1b final review r8
+-- BLOCKING-1). project_tenant_org()'s second leg is CALLER-RELATIVE, so on a
+-- studio_id IS NULL project is_active_studio_member(project_tenant_org(p)) is
+-- self-satisfying: it is false only for a caller who shares no design studio
+-- with the job's designer, which makes r5 MAJOR-3's tenant conjunct a
+-- narrowing of is_studio_comember from any organization to a design-studio
+-- organization and nothing more. Walked as a plain member of the designer's
+-- SECOND design studio, on a studio-less job of the first: the lockbox
+-- version, the alarm account, the site hours, the key holder and the gas
+-- emergency line read; an UPDATE of lockbox_version landed; the money grant's
+-- 250000 threshold read. So project_party_authority (the policies below) and
+-- project_site_access_cards (00625) resolve project_recorded_studio() (§1c)
+-- instead, and a studio-less job refuses BOTH studios until R-BD's W3
+-- backfill names one — PR-w's own posture, in writing. The seats view, the
+-- Directory's party branch and identity_phone_numbers()' seat leg keep the
+-- caller-relative resolver deliberately: r6 MAJOR-1 (the admin of the studio
+-- doing the work read 0 seats on its own job) and r7 MAJOR-1 (a refused
+-- number dropped out of a worst-first reduction and the row printed the
+-- affirmative word) are the defects a narrower gate THERE reintroduces, and a
+-- seat row carries no lockbox version and no threshold. §1c carries the
+-- argument and names what stays open.
+--
 -- Adds GRANT/REVOKE → regenerate seed/00-legacy-grants.sql after this
 -- migration (python3 scripts/generate-legacy-grants.py).
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -126,6 +151,14 @@
 --   · owner/admin first in the ORDER BY so PR-n's money narrowing
 --     (is_org_admin_or_owner) resolves at a studio where the caller actually
 --     holds the standing, not at an arbitrary one of two.
+-- THE TWO SENSITIVE OBJECTS DO NOT ASK THIS FUNCTION (r8 BLOCKING-1): because
+-- the second leg is caller-relative, is_active_studio_member() over it is
+-- self-satisfying on the studio-less population, so the site access card
+-- (00625) and the authority grant (the policies below) ask
+-- project_recorded_studio() (§1c) and refuse both studios where the record
+-- names none. What still resolves through here — the seats view, the
+-- Directory's party branch, identity_phone_numbers()' seat leg — is named in
+-- §1c with the reason.
 CREATE OR REPLACE FUNCTION public.project_tenant_org(p_project_id uuid)
 RETURNS uuid
 LANGUAGE sql
@@ -175,7 +208,14 @@ COMMENT ON FUNCTION public.project_tenant_org(uuid) IS
   'refused their writes — 5 of 8 local projects, whose designer owns two '
   'design studios (w1b final review r6 MAJOR-1). SECURITY DEFINER; '
   'organizations.type = ''design_studio'' keeps a shared manufacturer org from '
-  'resolving as the tenant (00624).';
+  'resolving as the tenant. NOT the resolver for the site access card or the '
+  'authority grant: the caller-relative leg makes is_active_studio_member() '
+  'over this function self-satisfying on the studio-less population, where a '
+  'plain member of the designer''s SECOND design studio read the lockbox '
+  'version, the alarm account, the hours, the key holder and the gas line, '
+  'landed an UPDATE of lockbox_version, and read the money grant''s 250000 '
+  'threshold (w1b final review r8 BLOCKING-1) — those two tables ask '
+  'project_recorded_studio() (§1c) (00624).';
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- 1b. project_party_org(seat) → the studio that owns the seat's project
@@ -206,6 +246,113 @@ COMMENT ON FUNCTION public.project_party_org(uuid) IS
   'belongs to on every studio_id IS NULL project (w1b final review r6 '
   'MAJOR-1). SECURITY DEFINER; feeds PR-n''s owner/admin gate on '
   'project_party_authority (00624).';
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 1c. project_recorded_studio(project) / project_party_recorded_studio(seat)
+--     → the studio the RECORD names, and nothing else
+-- ═══════════════════════════════════════════════════════════════════════════
+-- w1b final review r8 BLOCKING-1. project_tenant_org()'s second leg answers
+-- with the CALLER's own active non-guest design studio whenever the job's
+-- designer / lead designer / creator also belongs to it, so on a
+-- studio_id IS NULL project is_active_studio_member(project_tenant_org(p)) is
+-- SELF-SATISFYING: it is false only for a caller who shares no design studio
+-- with the job's designer. Walked on a freshly reset database as a plain
+-- member of the designer's SECOND design studio (never a member of the studio
+-- doing the work): the site access card's lockbox version, alarm account,
+-- site hours, key holder and gas emergency line all read; an UPDATE of
+-- lockbox_version landed; and the money authority grant read with its 250000
+-- threshold. Direction §7 rates the site access card risk High and calls it
+-- the first genuinely sensitive text in the room; PR-w rules it studio-only.
+--
+-- So the two objects that carry the sensitive text and the money figure ask
+-- the RECORD and never the caller. Where projects.studio_id is NULL these
+-- resolvers answer NULL, is_active_studio_member(NULL) is false (00417), and
+-- the job refuses BOTH studios rather than admitting both — PR-w's own
+-- posture. It costs the studio-less population those two features until
+-- R-BD's W3 backfill writes projects.studio_id from the designer's single
+-- active design-studio membership; the projects it leaves NULL (locally all
+-- five, whose designer owns two design studios) keep neither feature, and the
+-- Strata count of studio_id IS NULL projects is owed before this chain runs.
+--
+-- WHAT DELIBERATELY STAYS ON project_tenant_org(), and why a narrower gate
+-- there would be a regression, not a fix:
+--   · people_directory_seats and the Directory's party branch (00626) — r6
+--     MAJOR-1: resolving those through a record-only studio hid every seat on
+--     a studio-less job from the ADMIN of the studio doing the work, on 5 of
+--     8 local projects. A seat row carries a name, a trade, a number and a
+--     paper word; it carries no lockbox version and no threshold, and its
+--     consent word is already NULL for a caller who cannot read the deciding
+--     record.
+--   · identity_phone_numbers()' seat leg (00626 §…) — r7 MAJOR-1: that leg is
+--     a deliberate SUPERSET, because a number dropping out of a WORST-FIRST
+--     consent reduction makes the printed word MORE permissive. Narrowing it
+--     reintroduces the affirmative word over a recorded refusal.
+--   · assert_project_party_cards() (§… below) — r7 BLOCKING-1: a record-only
+--     tenant there refuses the working studio's own firm card and warranty
+--     contact on its own studio-less job, which is the inversion that finding
+--     closed.
+-- On the studio-less population those three remain readable by a second
+-- design studio of the same designer. That residue is recorded here, in the
+-- 00625 COMMENT and in the suite's block 17, and it is a ruling owed to Kody
+-- with the Strata count — not a claim that the conjunct is a tenant boundary
+-- there.
+CREATE OR REPLACE FUNCTION public.project_recorded_studio(p_project_id uuid)
+RETURNS uuid
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+  SELECT p.studio_id FROM public.projects p WHERE p.id = p_project_id;
+$$;
+
+REVOKE ALL ON FUNCTION public.project_recorded_studio(uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.project_recorded_studio(uuid)
+  TO authenticated, service_role;
+
+COMMENT ON FUNCTION public.project_recorded_studio(uuid) IS
+  'The studio a project''s RECORD names — projects.studio_id, with no '
+  'fallback and no caller-relative leg. The gate for the two objects PR-w and '
+  'direction §7 rule studio-only: project_site_access_cards (00625) and '
+  'project_party_authority (00624). project_tenant_org()''s second leg is '
+  'caller-relative, which makes is_active_studio_member() over it '
+  'self-satisfying on a studio_id IS NULL project: a plain member of the '
+  'designer''s SECOND design studio read the lockbox version, the alarm '
+  'account, the site hours, the key holder and the gas emergency line, landed '
+  'an UPDATE of lockbox_version, and read the money grant''s 250000 threshold '
+  '(w1b final review r8 BLOCKING-1). NULL here means the job names no studio, '
+  'is_active_studio_member(NULL) is false, and BOTH studios are refused until '
+  'R-BD''s W3 backfill names one. SECURITY DEFINER for 00625 §1''s stated '
+  'reason: a policy that resolved the studio through the caller''s own '
+  'projects SELECT would make one table''s RLS depend on another''s, and a '
+  'project the caller cannot see would read as "no studio" rather than "not '
+  'yours" (00624).';
+
+CREATE OR REPLACE FUNCTION public.project_party_recorded_studio(p_party_id uuid)
+RETURNS uuid
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+  SELECT public.project_recorded_studio(pp.project_id)
+    FROM public.project_parties pp
+   WHERE pp.id = p_party_id;
+$$;
+
+REVOKE ALL ON FUNCTION public.project_party_recorded_studio(uuid)
+  FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.project_party_recorded_studio(uuid)
+  TO authenticated, service_role;
+
+COMMENT ON FUNCTION public.project_party_recorded_studio(uuid) IS
+  'The studio a SEAT''s project RECORDS, through project_recorded_studio() so '
+  'the two sensitive objects of this wave can never name different studios '
+  'for the same seat. Sibling of project_party_org(), which composes the '
+  'caller-relative gate resolver instead and is therefore not the gate for '
+  'project_party_authority (w1b final review r8 BLOCKING-1). Feeds both the '
+  'tenant leg and PR-n''s owner/admin narrowing on that table, so money and '
+  'draw_certify need the standing AT THE RECORDED STUDIO (00624).';
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- 2. project_parties — the stage, the window, and the firm
@@ -499,11 +646,17 @@ COMMENT ON TABLE public.project_party_authority IS
   'money and draw_certify, which need an owner or admin of the studio, '
   'enforced in the INSERT/UPDATE policies because PostgREST is a writer too. '
   'Every policy is tenant-scoped FIRST — is_active_studio_member('
-  'project_party_org(engagement_id)) beside the co-member leg — because '
-  'is_studio_comember(designer) is true whenever the caller shares ANY active '
-  'organization with the designer of record, so a second studio that designer '
-  'also works for read every grant and its money threshold (w1b final review '
-  'r5 MAJOR-3). '
+  'project_party_recorded_studio(engagement_id)) beside the co-member leg — '
+  'because is_studio_comember(designer) is true whenever the caller shares '
+  'ANY active organization with the designer of record, so a second studio '
+  'that designer also works for read every grant and its money threshold '
+  '(w1b final review r5 MAJOR-3). The tenant leg asks the RECORD '
+  '(projects.studio_id) and not the caller: project_tenant_org()''s '
+  'caller-relative leg left that same second studio reading the grant and its '
+  '250000 threshold on a studio-less job, so a job that names no studio now '
+  'refuses BOTH studios — PR-w''s posture — until R-BD''s W3 backfill names '
+  'one (w1b final review r8 BLOCKING-1). PR-n''s owner/admin narrowing '
+  'resolves at the RECORDED studio for the same reason. '
   'PR-t: a phone shows the yes or no, the figure only on the desk (00624).';
 
 COMMENT ON COLUMN public.project_party_authority.threshold_cents IS
@@ -590,12 +743,19 @@ CREATE TRIGGER assert_party_authority_copy_to_trg
 -- is_studio_comember(p_owner) is true whenever the caller shares ANY active
 -- organization with that owner, so the designer leg alone handed every
 -- authority grant — scope, and the money THRESHOLD beside it — to a second
--- studio the designer of record also works for. project_party_org(engagement)
--- is project_tenant_org(pp.project_id), the one GATE resolver (§1, w1b final
--- review r6 MAJOR-1 — it was project_consent_org(), whose fallback named a
--- studio nobody on the job belongs to on a studio_id IS NULL project), and is
--- already the argument PR-n's admin leg uses below, so the table now answers
--- to exactly one studio on both legs.
+-- studio the designer of record also works for.
+--
+-- AND THE TENANT LEG ASKS THE RECORD, NOT THE CALLER (w1b final review r8
+-- BLOCKING-1). It was project_party_org(engagement) = project_tenant_org(
+-- pp.project_id), whose second leg answers with the CALLER's own design
+-- studio where the record names none — self-satisfying, so a plain member of
+-- the designer's SECOND design studio read this table's grant and its 250000
+-- threshold on a studio-less job of the first. project_party_recorded_studio()
+-- (§1c) is projects.studio_id alone: where the record names no studio the
+-- table refuses BOTH studios until R-BD's W3 backfill names one. PR-n's
+-- owner/admin narrowing resolves the same way, so money and draw_certify need
+-- the standing AT THE RECORDED STUDIO and not at whichever of the caller's
+-- studios a ranking picked.
 ALTER TABLE public.project_party_authority ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS project_party_authority_studio_select
@@ -604,7 +764,8 @@ CREATE POLICY project_party_authority_studio_select
   ON public.project_party_authority FOR SELECT
   TO authenticated
   USING (
-    public.is_active_studio_member(public.project_party_org(engagement_id))
+    public.is_active_studio_member(
+      public.project_party_recorded_studio(engagement_id))
     AND public.is_studio_comember(public.project_party_designer(engagement_id))
   );
 
@@ -617,11 +778,13 @@ CREATE POLICY project_party_authority_studio_insert
   ON public.project_party_authority FOR INSERT
   TO authenticated
   WITH CHECK (
-    public.is_active_studio_member(public.project_party_org(engagement_id))
+    public.is_active_studio_member(
+      public.project_party_recorded_studio(engagement_id))
     AND public.is_studio_comember(public.project_party_designer(engagement_id))
     AND (
       scope NOT IN ('money', 'draw_certify')
-      OR public.is_org_admin_or_owner(public.project_party_org(engagement_id))
+      OR public.is_org_admin_or_owner(
+           public.project_party_recorded_studio(engagement_id))
     )
   );
 
@@ -631,19 +794,23 @@ CREATE POLICY project_party_authority_studio_update
   ON public.project_party_authority FOR UPDATE
   TO authenticated
   USING (
-    public.is_active_studio_member(public.project_party_org(engagement_id))
+    public.is_active_studio_member(
+      public.project_party_recorded_studio(engagement_id))
     AND public.is_studio_comember(public.project_party_designer(engagement_id))
     AND (
       scope NOT IN ('money', 'draw_certify')
-      OR public.is_org_admin_or_owner(public.project_party_org(engagement_id))
+      OR public.is_org_admin_or_owner(
+           public.project_party_recorded_studio(engagement_id))
     )
   )
   WITH CHECK (
-    public.is_active_studio_member(public.project_party_org(engagement_id))
+    public.is_active_studio_member(
+      public.project_party_recorded_studio(engagement_id))
     AND public.is_studio_comember(public.project_party_designer(engagement_id))
     AND (
       scope NOT IN ('money', 'draw_certify')
-      OR public.is_org_admin_or_owner(public.project_party_org(engagement_id))
+      OR public.is_org_admin_or_owner(
+           public.project_party_recorded_studio(engagement_id))
     )
   );
 
@@ -653,11 +820,13 @@ CREATE POLICY project_party_authority_studio_delete
   ON public.project_party_authority FOR DELETE
   TO authenticated
   USING (
-    public.is_active_studio_member(public.project_party_org(engagement_id))
+    public.is_active_studio_member(
+      public.project_party_recorded_studio(engagement_id))
     AND public.is_studio_comember(public.project_party_designer(engagement_id))
     AND (
       scope NOT IN ('money', 'draw_certify')
-      OR public.is_org_admin_or_owner(public.project_party_org(engagement_id))
+      OR public.is_org_admin_or_owner(
+           public.project_party_recorded_studio(engagement_id))
     )
   );
 

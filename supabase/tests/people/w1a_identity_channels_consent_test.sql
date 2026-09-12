@@ -4961,13 +4961,23 @@ BEGIN
 
   -- 38c. So Alpha's owner no longer reads Alpha's word for Beta's seat. She is
   --      not a member of Beta, and channel_consent_status() is SECURITY
-  --      INVOKER, so Beta's ledger is closed to her: the roster degrades to
-  --      `not_asked` rather than printing another studio's verdict.
+  --      INVOKER, so Beta's ledger is closed to her.
+  --
+  --      AND THE DEGRADE IS NULL, NOT `not_asked` (w1b final review r8
+  --      MAJOR-1). This leg used to assert the affirmative word here: the
+  --      COALESCE turned "the record is unreadable" into "nobody has been
+  --      asked", which on Beta's dated `opted_out` is the fail-open word on a
+  --      send door, printed on the Call Sheet row, the letterhead
+  --      instrument, the kickoff band and (R-AV) Patina Field's roster.
+  --      00594's party branch now COALESCEs only behind
+  --      is_active_studio_member(project_consent_org(project_id)), which is
+  --      the same CASE 00626's two readers carry (r6 MAJOR-1). Unknown is
+  --      NULL — R-V's "no record" line — and the reader prints "No record".
   SELECT sms_consent_status INTO v_alice FROM v_project_roster
    WHERE roster_id = 'e0000000-0000-4000-8000-00000000000c';
-  ASSERT v_alice = 'not_asked',
-    'FAIL 38c: an Alpha reader must not be answered off Alpha''s ledger, got '
-      || COALESCE(v_alice, '<null>');
+  ASSERT v_alice IS NULL,
+    'FAIL 38c: an Alpha reader must read NULL, never a word, off a ledger she '
+    'cannot see, got ' || COALESCE(v_alice, '<null>');
   PERFORM pg_temp.reset_role();
 
   -- 38d. Beta's owner — the studio whose ledger this is — reads the refusal.
@@ -5019,8 +5029,10 @@ BEGIN
     'FAIL 38f4: authenticated must execute project_consent_org';
 
   RAISE NOTICE '38. one resolver for the seat''s studio: reader and writer '
-               'agree, and no view prints another studio''s consent word '
-               '(close-review r1 MAJOR-1): passed';
+               'agree, no view prints another studio''s consent word '
+               '(close-review r1 MAJOR-1), and an unreadable record degrades '
+               'to NULL rather than to the affirmative `not_asked` '
+               '(w1b final review r8 MAJOR-1): passed';
 END
 $$;
 
@@ -6047,11 +6059,16 @@ BEGIN
   ASSERT public.channel_consent_status(
            'b0000000-0000-4000-8000-00000000000a', 'sms', '+16125550702') = 'granted',
     'FAIL 44c4: the record is the verdict, and it says granted';
+  --      Read as a MEMBER of the studio whose ledger this is: the roster's
+  --      consent word is COALESCEd only behind is_active_studio_member(
+  --      project_consent_org(project_id)) since w1b final review r8 MAJOR-1,
+  --      so a caller with no JWT at all (this block's reset_role) now reads
+  --      NULL rather than a word — the same posture 00626's two readers have
+  --      carried since r6 MAJOR-1.
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
   ASSERT (SELECT sms_consent_status FROM v_project_roster
            WHERE roster_id = 'e0000000-0000-4000-8000-000000000092') = 'granted',
     'FAIL 44c5: v_project_roster must print Texting for a record-granted seat';
-
-  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
   res := public.site_request_send('a1000000-0000-4000-8000-0000000000c2', NULL);
   ASSERT res->>'action' = 'send',
     'FAIL 44c6: a record-granted assignee must go straight to send, got '
