@@ -177,6 +177,73 @@
 --  hour on a STUDIO's project (its principal is the designer) is priced by that
 --  studio, and no workspace the member owns, buys or is seated in can reach it.
 --
+-- ═══════════════════════════════════════════════════════════════════════════
+-- REVIEW ROUND 8, FIX PASS — THE CONSEQUENCE THE RULING'S TEXT DOES NOT
+-- CONTEMPLATE: OWED RULING HT-3-b. PINNED HERE, NOT WIDENED.
+-- ═══════════════════════════════════════════════════════════════════════════
+--
+-- W1-R8-01 (blocker, measured 3/3 with a 2/2 negative control in review round 8,
+-- re-measured from scratch in this fix pass): step 2 admits only studios the
+-- project's designer OWNS, so a studio whose lead designer is NOT its owner — the
+-- shape of a studio the moment it adds its first designer, this program's own
+-- customer — cannot price ANY hour on that designer's projects. No attacker, no
+-- manoeuvre, no extra signup:
+--
+--   Leah owns studio S and seats her new designer `admin`, her assistant `member`,
+--   and prices both of them IN S through RLS on HT-3's own surface. The hire got
+--   her designer role BEFORE Leah seated her (the self-signup order), so 00295's
+--   fc_provision_studio_on_designer gave her a one-person workspace she OWNS —
+--   the only candidate step 2 admits for her, hence what 00602 stamps and what
+--   step 1 reads for ever. Measured on the studio's client project:
+--     · her own hour  → 99900 / 'studio_member' / 199800 / 'authorized', i.e. the
+--       number SHE set about HERSELF, $1,998.00 into project_unbilled_time (the
+--       invoice composer's feed and claim_time_entries' invoice lock), while
+--       Leah's 20000 for her is ignored;
+--     · her assistant's hour on the same project → NULL / 'none', reported by the
+--       view as $0, although Leah priced him at 12000 in S.
+--   Control, in the SAME fixture: a second hire seated BEFORE her designer grant
+--   owns no workspace, 00563's one-candidate discovery stamps S, and both hours
+--   price correctly (20000/40000 and 12000/24000). The whole difference is the
+--   order in which she signed up and was seated.
+--
+-- So HT-1 ("the server owns hourly_rate_cents") and HT-3 ("owner/admin of the
+-- studio sets it") are defeated in BOTH directions for any studio with more than
+-- one designer — and arm A is not a 'none' row W2's composer can filter: it is an
+-- authorized 'studio_member' row indistinguishable from a legitimate one,
+-- authorized by the only party being paid for it.
+--
+-- NOTHING IS WIDENED HERE, and the ladder above is byte-unchanged, because every
+-- code-only widening re-opens rounds 4-6. Recorded so no later hand re-spends them:
+--   · widening step 2 to "active non-guest membership" lets an attacker seat the
+--     PROJECT'S DESIGNER in a workspace the attacker controls — `Org owners can
+--     insert members` needs no consent from the invitee — so the designer's own
+--     candidate set re-opens and the attacker's rate wins the preference key. That
+--     INSERT is the same door rounds 4 and 6 used.
+--   · "prefer a studio with >= 2 active members", "prefer a studio she does not
+--     run", "prefer a rate she did not author" are each satisfiable with one extra
+--     signup seating the designer (rounds 5 and 6 rated all three blocker-grade).
+--   · narrowing instead — refusing step 2 when the member also holds a seat in a
+--     studio she does not own — keys on the member's own memberships (which
+--     HT-3-a forbids) and hands any org owner a $0 denial-of-service on her hours
+--     through the same consent-free INSERT (W1-R8-12).
+-- The single door under all of them is that `organization_members` INSERT requires
+-- no consent from the person being seated. Closing it (seats land
+-- `status = 'invited'`; only the named user may flip their own seat to 'active')
+-- changes how every invite in Patina works — provisioning, studio invites, the
+-- admin portal's seat adds and `accept_workspace_invitation` all have to be read
+-- against it — and it is the enabling condition for widening step 2 safely. That
+-- is a RULING, not a patch: **HT-3-b, owed**, recorded in
+-- artifacts/hour-tracking-2026-09-11/rulings.md with this measurement, its two
+-- arms and the three refuted widenings.
+--
+-- Until it is ruled, today's behaviour is PINNED by case (aa) of
+-- supabase/tests/billing/time_rate_resolution_test.sql, whose failure messages name
+-- HT-3-b and state the value each assert takes when the ruling lands — so the
+-- ruling moves the asserts and nothing else. The interim consequences are owed to
+-- Leah's studio in words (a project led by anyone but the studio's owner prices
+-- from that designer's personal workspace), and W2's composer must refuse to claim
+-- `rate_source = 'none'` rows so arm B is visible instead of $0.
+--
 --  · W1-R7-03 (applied, 00598): `effective_from` / `effective_to` are frozen on
 --    the open row, so a rate-setter cannot hand-close a colleague's only open row
 --    and leave every later hour at 'none'.
@@ -248,6 +315,12 @@ BEGIN
   --
   -- Step 3 is the absence of both: 'none', "rate pending" (HT-26), and the
   -- composer — not the resolver — is where such a row is kept off an invoice.
+  -- W1-R8-01, OWED RULING HT-3-b: because the candidate set is OWNERSHIP, a studio
+  -- whose lead designer is not its owner prices nothing here, and her own
+  -- auto-provisioned workspace prices her client-billed hours instead. Measured,
+  -- pinned in case (aa), and deliberately NOT widened — see the banner: every
+  -- widening is manufacturable while seating somebody in an organization needs no
+  -- consent from them.
   --
   -- `studio.id` last is a determinism backstop, not a ruled key: it is reached only
   -- when the designer holds two owner seats created at the same microsecond, with

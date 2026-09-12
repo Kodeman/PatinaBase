@@ -52,6 +52,27 @@
 --     admits — so the invariant the guard protects holds by construction rather
 --     than by inspection.
 --
+-- ── W1-R8-01, OWED RULING HT-3-b: what this stamp CANNOT reach ──────────────
+-- The candidate set here is the same ownership set 00599's step 2 uses, so a
+-- project led by a designer who is an `admin` or `member` of the studio she works
+-- for — and who owns the one-person workspace 00295 provisioned at her own
+-- designer grant — is stamped with THAT WORKSPACE, not with her employer. Measured
+-- in review round 8 and again in its fix pass: her own hour then prices at the
+-- number she set about herself (99900 → $1,998.00 in project_unbilled_time) and a
+-- teammate's on the same project resolves 'none' / $0, while the employing studio's
+-- rates for both are ignored. The control — the same designer seated BEFORE her
+-- designer grant, so she owns no workspace — is stamped with the employer and
+-- prices both correctly, which is the whole of the difference.
+--
+-- Nothing is widened here. Admitting a non-owner seat would let an attacker seat
+-- the project's designer in a workspace the attacker controls (`Org owners can
+-- insert members` needs no consent from the invitee) and aim the stamp, which is
+-- the door rounds 4-6 closed. The fix is the ruling HT-3-b (consent on seating,
+-- then ownership can widen to active non-guest membership) — see 00599's banner and
+-- artifacts/hour-tracking-2026-09-11/rulings.md. Today's behaviour is pinned by
+-- case (aa) of supabase/tests/billing/time_rate_resolution_test.sql (aa1 is this
+-- trigger's stamp), whose failure messages name HT-3-b.
+--
 -- HT-3-a's rate-row preference key has no meaning here: at project creation there
 -- is no member being priced. The DESIGNER is the only person the row names, so the
 -- preference is applied to her — which is also what makes this trigger and 00599's

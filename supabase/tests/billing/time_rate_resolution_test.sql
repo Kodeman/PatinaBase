@@ -175,6 +175,20 @@
 --       HT-3-a the deleted ladder reached the studio she is a plain MEMBER of and
 --       priced it at 15000.
 --
+--
+-- Round 8's FIX PASS adds one more, and it is the only case in this file that
+-- asserts a DEFECT rather than a contract:
+--   (aa) W1-R8-01 — a studio whose lead designer is not its owner cannot price any
+--        hour on her projects. Her own hour is priced at the number she set about
+--        herself in the workspace 00295 provisioned for her (arm A, $1,998.00 into
+--        the composer), her assistant's resolves 'none' and reports $0 (arm B), and
+--        the control in the same fixture — the identical studio with the designer
+--        seated BEFORE her designer grant — prices both correctly. Pinned, not
+--        fixed: every code-only widening re-opens rounds 4-6, because seating
+--        somebody in an organization needs no consent from them. Owed ruling
+--        **HT-3-b**; when it lands, aa1-aa4's expected values move and nothing else
+--        in this file does.
+--
 -- Where the resolver is probed directly it is probed as postgres (auth.uid() IS
 -- NULL — the 00317:38-39 precedent), because no signed-in role holds EXECUTE.
 --
@@ -2414,6 +2428,232 @@ BEGIN
     || COALESCE(v_amount::text, 'NULL');
 
   RAISE NOTICE 'time_rate_resolution: case (z) passed.';
+END
+$$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- REVIEW ROUND 8 BLOCKER (W1-R8-01) — PINNED, NOT FIXED: owed ruling HT-3-b
+-- ═══════════════════════════════════════════════════════════════════════════
+--
+-- ─── (aa) the studio whose lead designer is not its owner cannot price any hour
+--          on her projects — and her own rate, about herself, prices them instead
+--
+-- HT-3-a's step 2 admits only studios the project's DESIGNER **owns**. A studio
+-- that adds its first designer is therefore unable to price that designer's
+-- projects at all, with no attacker, no manoeuvre and no extra signup:
+--
+--   · Leah owns studio S. She hires a designer and seats her `admin`; an
+--     assistant is seated `member`. Leah prices both of them IN S, through RLS,
+--     on the surface HT-3 ruled.
+--   · The hire got her designer role BEFORE Leah seated her — the default
+--     self-signup order — so 00295's fc_provision_studio_on_designer gave her a
+--     one-person workspace she OWNS. That workspace is the only candidate step 2
+--     admits for her, so it is what 00602 stamps and what step 1 reads for ever.
+--   · Her own client-billed hour is then priced at the number SHE set about
+--     HERSELF in her own workspace, rate_source='studio_member', and it reaches
+--     project_unbilled_time — the invoice composer's feed and claim_time_entries'
+--     invoice lock — as real money. Leah's rate for her is ignored.
+--   · Her assistant's hour on the same project resolves 'none' and the view
+--     reports $0, although Leah priced him in S.
+--
+-- Both halves defeat HT-1 ("the server owns hourly_rate_cents") and HT-3
+-- ("owner/admin of the studio sets it") for every studio with more than one
+-- designer — the program's own customer. Round 8 measured it 3/3 with a 2/2
+-- negative control; the assertions below carry the control in the SAME fixture,
+-- because the whole difference is the order in which the hire was seated.
+--
+-- It is NOT fixed here, and no code-only widening is shipped, because every one
+-- re-opens rounds 4-6: `organization_members` INSERT requires no consent from the
+-- person being seated (`Org owners can insert members`), so "active non-guest
+-- membership", "a studio with >= 2 members", "a studio she does not run" and
+-- "a rate she did not author" are each satisfiable by seating the PROJECT'S
+-- DESIGNER in a workspace the attacker controls. The door under all of them is
+-- consent on seating, and closing it is a product-wide change to how every invite
+-- in Patina works. That is a ruling, not a patch: **HT-3-b, owed.**
+--
+-- So these asserts PIN TODAY'S BEHAVIOUR on purpose. When HT-3-b is ruled, the
+-- expected values in aa1-aa4 move and NOTHING ELSE in this file does.
+INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, instance_id, aud, role)
+VALUES
+  ('b1100000-0000-4000-8000-000000009001', 'r8aa-leah@test.invalid',  '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('b1100000-0000-4000-8000-000000009002', 'r8aa-hire@test.invalid',  '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('b1100000-0000-4000-8000-000000009003', 'r8aa-asst@test.invalid',  '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('b1100000-0000-4000-8000-000000009004', 'r8aa-hire2@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+
+-- S exists before anyone is seated, so seating can precede a designer grant where
+-- this fixture needs it to.
+INSERT INTO public.organizations (id, type, name, slug, status)
+VALUES ('b1100000-0000-4000-8000-0000000090a1', 'design_studio', 'R8aa Hartwell Studio', 'r8aa-hartwell', 'active');
+
+-- profiles rows are auto-created from auth.users by an existing trigger, so the
+-- designer flip is driven the way the product drives it: a user_roles grant in the
+-- `designer` domain fires fc_sync_is_designer_from_role → is_designer → 00295's
+-- provisioning trigger, UNLESS the user already holds a membership row (any status).
+UPDATE public.profiles SET full_name = 'R8aa Leah'      WHERE id = 'b1100000-0000-4000-8000-000000009001';
+UPDATE public.profiles SET full_name = 'R8aa Hire'      WHERE id = 'b1100000-0000-4000-8000-000000009002';
+UPDATE public.profiles SET full_name = 'R8aa Assistant' WHERE id = 'b1100000-0000-4000-8000-000000009003';
+UPDATE public.profiles SET full_name = 'R8aa Hire Two'  WHERE id = 'b1100000-0000-4000-8000-000000009004';
+
+-- Leah: seated first, designer role second → she owns S and nothing else.
+INSERT INTO public.organization_members (id, user_id, organization_id, role, status, joined_at)
+VALUES ('b1100000-0000-4000-8000-0000000090c1', 'b1100000-0000-4000-8000-000000009001',
+        'b1100000-0000-4000-8000-0000000090a1', 'owner', 'active', NOW());
+INSERT INTO public.user_roles (user_id, role_id)
+SELECT 'b1100000-0000-4000-8000-000000009001', id FROM public.roles WHERE name = 'studio_owner';
+
+-- THE HIRE: designer role FIRST (the self-signup order), so 00295 provisions her a
+-- workspace she owns. Leah then seats her `admin` in S.
+INSERT INTO public.user_roles (user_id, role_id)
+SELECT 'b1100000-0000-4000-8000-000000009002', id FROM public.roles WHERE name = 'studio_designer';
+INSERT INTO public.organization_members (id, user_id, organization_id, role, status, joined_at)
+VALUES ('b1100000-0000-4000-8000-0000000090c2', 'b1100000-0000-4000-8000-000000009002',
+        'b1100000-0000-4000-8000-0000000090a1', 'admin', 'active', NOW());
+
+-- The assistant: a plain member, no designer role.
+INSERT INTO public.organization_members (id, user_id, organization_id, role, status, joined_at)
+VALUES ('b1100000-0000-4000-8000-0000000090c3', 'b1100000-0000-4000-8000-000000009003',
+        'b1100000-0000-4000-8000-0000000090a1', 'member', 'active', NOW());
+
+-- THE CONTROL HIRE: seated FIRST, designer role second → 00295's early exit leaves
+-- her owning no workspace. That single difference is the whole defect.
+INSERT INTO public.organization_members (id, user_id, organization_id, role, status, joined_at)
+VALUES ('b1100000-0000-4000-8000-0000000090c4', 'b1100000-0000-4000-8000-000000009004',
+        'b1100000-0000-4000-8000-0000000090a1', 'admin', 'active', NOW());
+INSERT INTO public.user_roles (user_id, role_id)
+SELECT 'b1100000-0000-4000-8000-000000009004', id FROM public.roles WHERE name = 'studio_designer';
+
+DO $$
+DECLARE
+  v_workspace  uuid;
+  v_ctrl_owned integer;
+  v_stamp      uuid;
+  v_ctrl_stamp uuid;
+  v_rate       INTEGER;
+  v_source     TEXT;
+  v_amount     INTEGER;
+  v_state      TEXT;
+  v_view_rate  INTEGER;
+  v_view_amt   INTEGER;
+BEGIN
+  SELECT organization_id INTO v_workspace
+  FROM public.organization_members
+  WHERE user_id = 'b1100000-0000-4000-8000-000000009002' AND role = 'owner' AND status = 'active';
+  SELECT count(*) INTO v_ctrl_owned
+  FROM public.organization_members
+  WHERE user_id = 'b1100000-0000-4000-8000-000000009004' AND role = 'owner';
+
+  ASSERT v_workspace IS NOT NULL AND v_workspace <> 'b1100000-0000-4000-8000-0000000090a1'
+         AND v_ctrl_owned = 0,
+    'FAIL aa0 (precondition): the hire must own the workspace 00295 provisions at her designer '
+    'grant and the control hire must own none — without that asymmetry this case measures nothing';
+
+  -- Leah prices both of her people IN S, through RLS, on HT-3's own surface.
+  PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000009001');
+  INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
+  VALUES
+    ('b1100000-0000-4000-8000-0000000090a1', 'b1100000-0000-4000-8000-000000009002', 20000, CURRENT_DATE - 20, 'b1100000-0000-4000-8000-000000009001'),
+    ('b1100000-0000-4000-8000-0000000090a1', 'b1100000-0000-4000-8000-000000009003', 12000, CURRENT_DATE - 20, 'b1100000-0000-4000-8000-000000009001'),
+    ('b1100000-0000-4000-8000-0000000090a1', 'b1100000-0000-4000-8000-000000009004', 20000, CURRENT_DATE - 20, 'b1100000-0000-4000-8000-000000009001');
+  PERFORM pg_temp.reset_role();
+
+  -- The hire prices HERSELF in her own workspace, where she is the owner and
+  -- is_org_admin_or_owner therefore admits her (HT-3 satisfied in letter).
+  PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000009002');
+  INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
+  VALUES (v_workspace, 'b1100000-0000-4000-8000-000000009002', 99900, CURRENT_DATE - 10, 'b1100000-0000-4000-8000-000000009002');
+  PERFORM pg_temp.reset_role();
+
+  -- The studio's two client projects, one led by each hire.
+  INSERT INTO public.projects (id, name, designer_id, created_by)
+  VALUES ('b1100000-0000-4000-8000-0000000090e1', 'R8aa Client House',
+          'b1100000-0000-4000-8000-000000009002', 'b1100000-0000-4000-8000-000000009002'),
+         ('b1100000-0000-4000-8000-0000000090e2', 'R8aa Control House',
+          'b1100000-0000-4000-8000-000000009004', 'b1100000-0000-4000-8000-000000009004');
+
+  SELECT studio_id INTO v_stamp      FROM public.projects WHERE id = 'b1100000-0000-4000-8000-0000000090e1';
+  SELECT studio_id INTO v_ctrl_stamp FROM public.projects WHERE id = 'b1100000-0000-4000-8000-0000000090e2';
+
+  ASSERT v_stamp = v_workspace,
+    'FAIL aa1 (W1-R8-01, PINS TODAY — owed ruling HT-3-b): the studio''s project is stamped with '
+    'the HIRE''S OWN WORKSPACE, because HT-3-a step 2 admits only studios she OWNS and S is not '
+    'one. When HT-3-b is ruled this becomes S (b1100000-0000-4000-8000-0000000090a1); got '
+    || COALESCE(v_stamp::text, 'NULL');
+
+  PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000009002');
+  INSERT INTO public.project_time_entries
+    (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('b1100000-0000-4000-8000-0000000090b1', 'b1100000-0000-4000-8000-0000000090e1',
+          'b1100000-0000-4000-8000-000000009002', NOW() - INTERVAL '3 hours', 120, true, 'manual_entry');
+  PERFORM pg_temp.reset_role();
+
+  SELECT hourly_rate_cents, rate_source, rated_amount_cents, billing_state
+    INTO v_rate, v_source, v_amount, v_state
+  FROM public.project_time_entries WHERE id = 'b1100000-0000-4000-8000-0000000090b1';
+
+  ASSERT v_rate = 99900 AND v_source = 'studio_member' AND v_amount = 199800 AND v_state = 'authorized',
+    'FAIL aa2 (W1-R8-01 arm A, PINS TODAY — owed ruling HT-3-b): the hire''s client-billed hour is '
+    'priced at the 99900 SHE set about HERSELF, authorized, $1,998.00 for 120 min, while Leah''s '
+    '20000 for her in S is ignored. When HT-3-b is ruled this becomes 20000 / 40000; got '
+    || COALESCE(v_rate::text, 'NULL') || ' / ' || COALESCE(v_source, 'NULL') || ' / '
+    || COALESCE(v_amount::text, 'NULL') || ' / ' || COALESCE(v_state, 'NULL');
+
+  PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000009003');
+  INSERT INTO public.project_time_entries
+    (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('b1100000-0000-4000-8000-0000000090b2', 'b1100000-0000-4000-8000-0000000090e1',
+          'b1100000-0000-4000-8000-000000009003', NOW() - INTERVAL '3 hours', 120, true, 'manual_entry');
+  PERFORM pg_temp.reset_role();
+
+  SELECT hourly_rate_cents, rate_source INTO v_rate, v_source
+  FROM public.project_time_entries WHERE id = 'b1100000-0000-4000-8000-0000000090b2';
+
+  ASSERT v_rate IS NULL AND v_source = 'none',
+    'FAIL aa3 (W1-R8-01 arm B, PINS TODAY — owed ruling HT-3-b): the assistant''s hour on the same '
+    'project resolves ''none'' although Leah priced him at 12000 in S — the hire''s workspace holds '
+    'no rate for him and S is not a candidate. When HT-3-b is ruled this becomes 12000 / '
+    'studio_member; got ' || COALESCE(v_rate::text, 'NULL') || ' / ' || COALESCE(v_source, 'NULL');
+
+  -- The composer's own feed, which is what turns both arms into money.
+  SELECT resolved_rate_cents, amount_cents INTO v_view_rate, v_view_amt
+  FROM public.project_unbilled_time
+  WHERE id = 'b1100000-0000-4000-8000-0000000090b1';
+  ASSERT v_view_rate = 99900 AND v_view_amt = 199800,
+    'FAIL aa4a (W1-R8-01, PINS TODAY — owed ruling HT-3-b): project_unbilled_time reports the '
+    'self-set 99900 / $1,998.00 to the invoice composer and to claim_time_entries'' invoice lock; got '
+    || COALESCE(v_view_rate::text, 'NULL') || ' / ' || COALESCE(v_view_amt::text, 'NULL');
+
+  SELECT resolved_rate_cents, amount_cents INTO v_view_rate, v_view_amt
+  FROM public.project_unbilled_time
+  WHERE id = 'b1100000-0000-4000-8000-0000000090b2';
+  ASSERT v_view_rate = 0 AND v_view_amt = 0,
+    'FAIL aa4b (W1-R8-01 arm B, PINS TODAY — owed ruling HT-3-b): the assistant''s priced hour '
+    'reports $0, not "rate pending" — a ''none'' row reaching the composer is invoiced at zero '
+    'until W2 refuses to claim it; got ' || COALESCE(v_view_rate::text, 'NULL') || ' / '
+    || COALESCE(v_view_amt::text, 'NULL');
+
+  -- ── the control, in the same fixture: this assert SURVIVES HT-3-b ──────────
+  ASSERT v_ctrl_stamp = 'b1100000-0000-4000-8000-0000000090a1',
+    'FAIL aa5 (the control): the SAME studio, the SAME rates, the SAME admin seat — the only '
+    'difference is that this designer was seated before her designer grant, so she owns no '
+    'workspace and 00563''s one-candidate discovery stamps S; got ' || COALESCE(v_ctrl_stamp::text, 'NULL');
+
+  PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000009004');
+  INSERT INTO public.project_time_entries
+    (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('b1100000-0000-4000-8000-0000000090b3', 'b1100000-0000-4000-8000-0000000090e2',
+          'b1100000-0000-4000-8000-000000009004', NOW() - INTERVAL '3 hours', 120, true, 'manual_entry');
+  PERFORM pg_temp.reset_role();
+
+  SELECT hourly_rate_cents, rate_source, rated_amount_cents INTO v_rate, v_source, v_amount
+  FROM public.project_time_entries WHERE id = 'b1100000-0000-4000-8000-0000000090b3';
+
+  ASSERT v_rate = 20000 AND v_source = 'studio_member' AND v_amount = 40000,
+    'FAIL aa6 (the control): the employing studio''s own 20000 must price her hour (40000 for '
+    '120 min) — this is the behaviour HT-3-b must extend to the hire in aa2; got '
+    || COALESCE(v_rate::text, 'NULL') || ' / ' || COALESCE(v_source, 'NULL') || ' / '
+    || COALESCE(v_amount::text, 'NULL');
+
+  RAISE NOTICE 'time_rate_resolution: case (aa) passed — W1-R8-01 pinned as built, owed ruling HT-3-b.';
   RAISE NOTICE 'All time_rate_resolution assertions passed.';
 END
 $$;
