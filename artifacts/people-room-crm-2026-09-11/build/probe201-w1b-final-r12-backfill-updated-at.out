@@ -1,0 +1,9 @@
+Pager usage is off.
+BEGIN
+SET
+psql:probe201-w1b-final-r12-backfill-updated-at.sql:55: NOTICE:  seat on the COMPLETED job = 36087bce-0970-4cbd-a7d3-919a8d1d8322   seat on the ACTIVE job = 4860ec64-dbee-4098-892d-1e770afae470
+psql:probe201-w1b-final-r12-backfill-updated-at.sql:55: NOTICE:  BEFORE the backfill: Directory row person_id=4860ec64-dbee-4098-892d-1e770afae470 project=Okonkwo residence last_touch_at=2026-09-02 22:56:33.515062+00
+psql:probe201-w1b-final-r12-backfill-updated-at.sql:55: NOTICE:  AFTER  the backfill: Directory row person_id=36087bce-0970-4cbd-a7d3-919a8d1d8322 project=Lindqvist kitchen last_touch_at=2026-09-12 22:56:33.515062+00
+psql:probe201-w1b-final-r12-backfill-updated-at.sql:55: ERROR:  invalid input syntax for type uuid: "8"
+CONTEXT:  PL/pgSQL function inline_code_block line 43 at SQL statement
+ROLLBACK

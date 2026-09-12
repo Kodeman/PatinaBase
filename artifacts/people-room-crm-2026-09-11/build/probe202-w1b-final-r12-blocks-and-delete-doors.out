@@ -1,0 +1,13 @@
+Pager usage is off.
+BEGIN
+SET
+psql:probe202-w1b-final-r12-blocks-and-delete-doors.sql:19: NOTICE:  Northgate paper word BEFORE: lapsed
+psql:probe202-w1b-final-r12-blocks-and-delete-doors.sql:19: NOTICE:  m9  blocks emptied on 1 row(s) by a plain admin -> paper word now: current
+DO
+ROLLBACK
+BEGIN
+SET
+psql:probe202-w1b-final-r12-blocks-and-delete-doors.sql:37: NOTICE:  Northgate paper word BEFORE: lapsed
+psql:probe202-w1b-final-r12-blocks-and-delete-doors.sql:37: NOTICE:  m9b the lapsed gating certificate DELETED outright (1 row(s)) -> paper word now: current
+DO
+ROLLBACK

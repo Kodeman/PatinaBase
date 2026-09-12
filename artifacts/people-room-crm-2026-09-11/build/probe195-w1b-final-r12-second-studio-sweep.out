@@ -1,0 +1,10 @@
+Pager usage is off.
+BEGIN
+SET
+psql:probe195-w1b-final-r12-second-studio-sweep.sql:19: NOTICE:  Z people_directory role=client count=6 eg=Client User
+psql:probe195-w1b-final-r12-second-studio-sweep.sql:19: NOTICE:  Z people_directory role=lead count=5 eg=Elena Ruiz
+psql:probe195-w1b-final-r12-second-studio-sweep.sql:19: NOTICE:  Z v_access_grants tier=client_account count=2
+psql:probe195-w1b-final-r12-second-studio-sweep.sql:19: NOTICE:  Z v_access_grants tier=field_link count=7
+psql:probe195-w1b-final-r12-second-studio-sweep.sql:19: NOTICE:  Z v_access_grants tier=studio_member count=2
+DO
+ROLLBACK

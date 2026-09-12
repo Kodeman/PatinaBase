@@ -32,6 +32,16 @@
 --      stated ONCE in a function so the Directory and the seats view cannot
 --      key the same human differently.
 --
+--      That COALESCE terminates at the stamp, so it is only ever right while
+--      the stamp itself is right. §1b keeps it right IN THE RECORD: a seat
+--      whose number already names exactly one person card in the studio the
+--      project RECORDS is auto-linked to it — crm-model §4 rule 2's
+--      "auto-link within one studio" — on write, from the card side, and once
+--      over the rows already on the table. Without it a carded human's
+--      unstamped seat is a second Directory identity, which one ordinary
+--      inline add produced: 62 rows to 63 for one human, one row claiming 2
+--      seats and the other 1 while she held 3 (w1b final review r12 MAJOR-2).
+--
 --      The winning row per identity is the most recently updated seat, and
 --      project_id stays the winner's project so every shipped reader that
 --      opens a person from a Directory row still lands on a real seat. The
@@ -290,12 +300,235 @@ COMMENT ON FUNCTION public.party_identity_key(uuid, uuid, text, text, uuid) IS
   'E.164 number (rule 2), then the lowercased email (rule 3), then the row '
   'itself — rule 5, name alone, never merges. IMMUTABLE so people_directory, '
   'people_directory_seats and the expression index all key the same human the '
-  'same way (00626).';
+  'same way. The COALESCE is TERMINAL at the stamp, which is safe only '
+  'because the stamp is kept true in the RECORD: '
+  'link_party_to_rolodex_card() and link_rolodex_card_to_parties() (§1b) '
+  'auto-link a seat to the one person card in the project''s recorded studio '
+  'that carries its exact number, which is crm-model §4 rule 2. Without that '
+  'invariant an unstamped seat of a carded human is a SECOND identity — one '
+  'ordinary inline add put one human on the feed twice (w1b final review r12 '
+  'MAJOR-2) (00626).';
 
 CREATE INDEX IF NOT EXISTS idx_project_parties_identity_key
   ON public.project_parties(
     public.party_identity_key(studio_contact_id, profile_id, phone_e164, email, id)
   );
+
+-- ── the link the key COALESCEs on lives in the RECORD ──────────────────────
+-- w1b final review r12 MAJOR-2. party_identity_key() is a COALESCE, so the
+-- rolodex stamp is TERMINAL: a seat carrying one never consults its number,
+-- and a seat carrying none never consults the card that shares its number.
+-- The two halves of one human therefore never met. Walked: one ordinary
+-- inline add of a second seat for a carded human, on her own +16125550111,
+-- with studio_contact_id omitted — exactly what useAddProjectParty writes
+-- (use-coordination.ts:400-402, :500) — put her on the feed TWICE, 62 rows to
+-- 63, one row claiming 2 seats and the other 1 while she held 3, each
+-- computing paper_state and contact_rule_summary independently. That is G-9's
+-- over-count (§0 above), surviving the rebuild for a shipped write path.
+--
+-- crm-model §4 settles the precedence: rule 2, an exact phone_e164 match, is
+-- "strong — AUTO-LINK WITHIN ONE STUDIO", while rule 6 says the lineage stamp
+-- is "provenance only — never a merge key on its own". So the answer is the
+-- auto-link the model already names, taken on the RECORD rather than guessed
+-- again by every reader: the seat is stamped when its number already names
+-- exactly one PERSON card in the studio the project RECORDS. party_identity_key()
+-- is unchanged and stays IMMUTABLE (it carries the expression index above),
+-- the three sites that state the seat predicate (§2's counter, §3's CTE and
+-- party branch, §4's seats view) are unchanged, and R-BG therefore cannot
+-- drift — nothing about "one identity" is re-decided at read time. Option 1
+-- of the finding (a LEFT JOIN onto studio_contacts in all three read sites)
+-- is deliberately NOT taken: it re-derives the link at every seam, which is
+-- G-1's own complaint, and it leaves the record still holding two halves.
+--
+-- Exactly ONE card, and person cards only: two cards sharing a number is
+-- PR-o/R-Y's duplicate band, a card-to-card merge the studio rules on, and a
+-- firm's main line is not the human. Archived cards are NOT excluded, because
+-- the CONTACTS branch emits them too (§3) — an archived card is still one
+-- identity's row. A project that records no studio resolves no card at all,
+-- so this never collides with r11 MAJOR-3's party_card_project_has_no_studio
+-- refusal.
+--
+-- NO CONSENT IS READ OR WRITTEN HERE (R-AY): the number is an identity fact.
+-- The seat's consent word still comes from studio_channel_consent alone.
+CREATE INDEX IF NOT EXISTS idx_studio_contacts_org_phone_e164
+  ON public.studio_contacts(organization_id, phone_e164)
+  WHERE phone_e164 IS NOT NULL;
+
+CREATE OR REPLACE FUNCTION public.rolodex_card_for_party_phone(
+  p_project_id uuid,
+  p_phone_e164 text
+)
+RETURNS uuid
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+  WITH m AS (
+    SELECT sc.id
+      FROM public.studio_contacts sc
+     WHERE p_project_id IS NOT NULL
+       AND p_phone_e164 IS NOT NULL
+       AND btrim(p_phone_e164) <> ''
+       AND sc.entity_kind = 'person'
+       AND sc.phone_e164 = p_phone_e164
+       AND sc.organization_id = public.project_recorded_studio(p_project_id)
+     ORDER BY sc.id
+     LIMIT 2
+  )
+  -- (array_agg)[1] rather than min(): there is no min(uuid) in Postgres.
+  SELECT (array_agg(id))[1] FROM m HAVING count(*) = 1;
+$$;
+
+-- Not granted to `authenticated`: the only callers are the two trigger
+-- functions below, which are SECURITY DEFINER and therefore run as the owner.
+-- Granting it would add a twelfth uuid->fact oracle to the platform count
+-- (w1b final review r12 m13) for nothing.
+REVOKE ALL ON FUNCTION public.rolodex_card_for_party_phone(uuid, text)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.rolodex_card_for_party_phone(uuid, text)
+  TO service_role;
+
+COMMENT ON FUNCTION public.rolodex_card_for_party_phone(uuid, text) IS
+  'crm-model §4 rule 2''s auto-link, resolved: the ONE person card in the '
+  'studio a project RECORDS (project_recorded_studio(), never the '
+  'caller-relative resolver — the link is a fact about the record, not about '
+  'the writer) whose phone_e164 is exactly this number. NULL when there is '
+  'none, when two cards share the number (PR-o/R-Y''s duplicate band is a '
+  'card-to-card merge the studio rules on, not something a trigger decides) '
+  'or when the project records no studio. Reads and writes NO consent '
+  '(R-AY). Called only by link_party_to_rolodex_card() and '
+  'link_rolodex_card_to_parties(); not granted to authenticated (00626).';
+
+CREATE OR REPLACE FUNCTION public.link_party_to_rolodex_card()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public', 'pg_temp'
+AS $$
+DECLARE
+  v_phone text;
+  v_card  uuid;
+BEGIN
+  IF NEW.studio_contact_id IS NOT NULL THEN
+    RETURN NEW;
+  END IF;
+
+  -- normalize_phone_project_parties fires AFTER this trigger (BEFORE-row
+  -- triggers run in trigger-name order, and 'apply_' < 'assert_' < 'normalize_'),
+  -- so the seat's number is derived here exactly as that trigger derives it
+  -- rather than read half-normalized.
+  v_phone := public.normalize_phone_e164(COALESCE(NEW.phone, NEW.phone_e164));
+  IF v_phone IS NULL OR btrim(v_phone) = '' THEN
+    RETURN NEW;
+  END IF;
+
+  v_card := public.rolodex_card_for_party_phone(NEW.project_id, v_phone);
+  IF v_card IS NOT NULL THEN
+    NEW.studio_contact_id := v_card;
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.link_party_to_rolodex_card()
+  FROM PUBLIC, anon, authenticated;
+
+COMMENT ON FUNCTION public.link_party_to_rolodex_card() IS
+  'BEFORE INSERT/UPDATE on project_parties: an UNSTAMPED seat whose number '
+  'already names exactly one person card in the studio the project records is '
+  'stamped with that card, so party_identity_key()''s COALESCE reaches the '
+  'right identity through its FIRST leg instead of terminating at a NULL '
+  'stamp and keying the same human twice (w1b final review r12 MAJOR-2). '
+  'crm-model §4 rule 2''s "auto-link within one studio", taken on the record. '
+  'Named to sort BEFORE assert_project_party_cards_trg so the stamp this '
+  'trigger writes is validated by the R-AP guard like any other; it can only '
+  'ever name a card in project_recorded_studio(project_id), which is exactly '
+  'what that guard requires (r11 MAJOR-3). Fires on studio_contact_id too, so '
+  'nulling the stamp on a seat that still carries the card''s number does not '
+  'reopen the second identity. Touches NO consent column (R-AY) (00626).';
+
+DROP TRIGGER IF EXISTS apply_party_rolodex_link_trg ON public.project_parties;
+CREATE TRIGGER apply_party_rolodex_link_trg
+  BEFORE INSERT OR UPDATE OF phone, phone_e164, studio_contact_id, project_id
+  ON public.project_parties
+  FOR EACH ROW EXECUTE FUNCTION public.link_party_to_rolodex_card();
+
+-- The mirror: the card minted AFTER the seat. The studio adds a sub to the
+-- roster inline this week and writes their rolodex card next week — an
+-- ordinary sequence, and without this the seat stays unstamped and the human
+-- is two Directory rows again, which is the same defect from the other end.
+CREATE OR REPLACE FUNCTION public.link_rolodex_card_to_parties()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public', 'pg_temp'
+AS $$
+BEGIN
+  IF NEW.entity_kind IS DISTINCT FROM 'person'
+     OR NEW.phone_e164 IS NULL
+     OR btrim(NEW.phone_e164) = ''
+     OR NEW.organization_id IS NULL THEN
+    RETURN NULL;
+  END IF;
+
+  UPDATE public.project_parties pp
+     SET studio_contact_id = NEW.id
+    FROM public.projects pj
+   WHERE pj.id = pp.project_id
+     AND pj.studio_id = NEW.organization_id
+     AND pp.studio_contact_id IS NULL
+     AND pp.phone_e164 = NEW.phone_e164
+     -- the same "exactly one card" test, so a number that now names two cards
+     -- stamps nobody.
+     AND public.rolodex_card_for_party_phone(pp.project_id, pp.phone_e164) = NEW.id;
+
+  RETURN NULL;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.link_rolodex_card_to_parties()
+  FROM PUBLIC, anon, authenticated;
+
+COMMENT ON FUNCTION public.link_rolodex_card_to_parties() IS
+  'AFTER INSERT/UPDATE OF phone, phone_e164 on studio_contacts: the mirror of '
+  'link_party_to_rolodex_card(). A person card minted or renumbered AFTER the '
+  'seat claims the unstamped seats in its own studio that carry exactly its '
+  'number, so the "card written next week" sequence cannot leave one human as '
+  'two Directory identities (w1b final review r12 MAJOR-2). It writes '
+  'studio_contact_id only — never a consent column (R-AY), never phone or '
+  'phone_e164, so R-AX''s freeze is untouched — and only on projects whose '
+  'projects.studio_id IS the card''s own organization, which is precisely '
+  'what assert_project_party_cards() will then accept (00626).';
+
+DROP TRIGGER IF EXISTS link_rolodex_card_to_parties_trg ON public.studio_contacts;
+CREATE TRIGGER link_rolodex_card_to_parties_trg
+  AFTER INSERT OR UPDATE OF phone, phone_e164
+  ON public.studio_contacts
+  FOR EACH ROW EXECUTE FUNCTION public.link_rolodex_card_to_parties();
+
+-- ── and the seats already on the table ────────────────────────────────────
+-- The triggers above cover writes from here on. Every legacy seat whose
+-- number already names one card is stamped once, here, so the deploy does not
+-- ship the duplicate identities it just closed the door on. Bracketed against
+-- set_updated_at_project_parties for 00624's reason (r12 MAJOR-1): a stamped
+-- seat leaves the party branch for the CONTACTS branch and stops being ranked
+-- by updated_at at all, but a bulk rewrite of project_parties does not get to
+-- move that column, and this migration is not the place to make an exception
+-- to the rule the sibling file just wrote down.
+ALTER TABLE public.project_parties DISABLE TRIGGER set_updated_at_project_parties;
+
+UPDATE public.project_parties pp
+   SET studio_contact_id =
+         public.rolodex_card_for_party_phone(pp.project_id, pp.phone_e164)
+ WHERE pp.studio_contact_id IS NULL
+   AND pp.phone_e164 IS NOT NULL
+   AND btrim(pp.phone_e164) <> ''
+   AND public.rolodex_card_for_party_phone(pp.project_id, pp.phone_e164)
+         IS NOT NULL;
+
+ALTER TABLE public.project_parties ENABLE TRIGGER set_updated_at_project_parties;
 
 -- ── party_kind_in_directory — the Directory's seven kinds, in ONE place ────
 -- The winner per identity was computed twice over DIFFERENT candidate sets:
