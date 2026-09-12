@@ -4855,10 +4855,21 @@ BEGIN
            WHERE schemaname = 'public' AND viewname = 'v_project_roster')
          ILIKE '%channel_consent_status%',
     'FAIL 37c: v_project_roster must read the record';
+  -- people_directory reaches the record through identity_consent_status() on
+  -- BOTH of its consent-bearing branches since w1b final review r3 (the
+  -- contacts branch from r2 MAJOR-2, the party branch from r3 tests MAJOR-1),
+  -- so the view text may name either reader — and the chain to the record is
+  -- asserted rather than assumed: identity_consent_status()'s own body is what
+  -- calls channel_consent_status().
   ASSERT (SELECT definition FROM pg_views
            WHERE schemaname = 'public' AND viewname = 'people_directory')
-         ILIKE '%channel_consent_status%',
+         ILIKE ANY (ARRAY['%channel_consent_status%', '%identity_consent_status%']),
     'FAIL 37c2: people_directory must read the record';
+  ASSERT (SELECT pr.prosrc FROM pg_proc pr
+            JOIN pg_namespace ns ON ns.oid = pr.pronamespace
+           WHERE ns.nspname = 'public' AND pr.proname = 'identity_consent_status')
+         ILIKE '%channel_consent_status%',
+    'FAIL 37c3: identity_consent_status must resolve every number through the record';
 
   -- 37d. …and neither one still reads the frozen column for its consent word.
   ASSERT (SELECT definition FROM pg_views

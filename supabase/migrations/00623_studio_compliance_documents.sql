@@ -60,6 +60,13 @@
 --     compliance_successor_undated); (b) a supersede must name the head of its
 --     own chain (compliance_successor_already_superseded), which makes the
 --     two-row cycle that emptied a card of its dated paper unreachable.
+--   · w1b final review r3 MAJOR-1 — the THIRD door to the same consequence,
+--     reachable with two ordinary member writes and `blocks` never typed: a
+--     successor must itself be IN FORCE
+--     (compliance_successor_already_lapsed) and must carry at least the gates
+--     of the row it retires (compliance_successor_drops_a_gate). Without the
+--     second leg, `blocks`' empty default retires a gating lapse with a
+--     gateless row and the card reads `current` with no cover on file.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 CREATE TABLE IF NOT EXISTS public.studio_compliance_documents (
@@ -250,6 +257,7 @@ DECLARE
   v_succ_type       text;
   v_succ_expires    date;
   v_succ_superseded uuid;
+  v_succ_blocks     text[];
 BEGIN
   SELECT sc.entity_kind, sc.organization_id INTO v_kind, v_org
     FROM public.studio_contacts sc WHERE sc.id = NEW.holder_id;
@@ -272,8 +280,8 @@ BEGIN
   END IF;
 
   IF NEW.superseded_by IS NOT NULL THEN
-    SELECT d.doc_type, d.expires_on, d.superseded_by
-      INTO v_succ_type, v_succ_expires, v_succ_superseded
+    SELECT d.doc_type, d.expires_on, d.superseded_by, d.blocks
+      INTO v_succ_type, v_succ_expires, v_succ_superseded, v_succ_blocks
       FROM public.studio_compliance_documents d
       WHERE d.id = NEW.superseded_by
         AND d.organization_id = NEW.organization_id
@@ -345,6 +353,52 @@ BEGIN
                      'closes a loop and takes every one of a card''s dated '
                      'papers out of the reckoning at once.';
     END IF;
+
+    -- w1b final review r3 MAJOR-1, the THIRD door to r1 MAJOR-4's and r2
+    -- MAJOR-1's consequence. Both legs below were reachable with two ordinary
+    -- member writes on the seeded Okonkwo fixture, with `blocks` never typed:
+    -- record a coi_gl dated CURRENT_DATE - 5 (the column default leaves blocks
+    -- '{}'), then point Northgate Electric's 2026-03-31 lapse at it. Every
+    -- guard above passes — same doc_type, a date not earlier, a date present,
+    -- a successor at the head of its chain — and compliance_state() excludes
+    -- every superseded row and counts only cardinality(blocks) > 0, so
+    -- Northgate Electric, Dana Kowalski's identity row and BOTH her seat lines
+    -- flipped from lapsed to current over a record holding no in-force
+    -- general-liability certificate at all.
+    --
+    -- The two missing invariants, measured apart: with the gates carried
+    -- forward the word stays honest even when the successor is itself expired
+    -- (the successor's own lapse then holds the card), and an honest
+    -- future-dated renewal with blocks left at the default silently drops
+    -- {site_access,draw} — the same hole one renewal later. So a successor
+    -- must be IN FORCE, and must carry at least the gates of the row it
+    -- retires.
+    --
+    -- Both are checked LAST, after the head-of-chain leg, so a loop-closing
+    -- edge that is also expired still answers
+    -- compliance_successor_already_superseded — the cycle is the worse fact
+    -- and the error a reader should see.
+    IF NEW.doc_type IN ('coi_gl', 'coi_wc', 'coi_auto', 'license', 'bond')
+       AND v_succ_expires < CURRENT_DATE THEN
+      RAISE EXCEPTION 'compliance_successor_already_lapsed'
+        USING HINT = 'A renewal must still be in force: superseded_by may not '
+                     'name a certificate, licence or bond that has already '
+                     'expired. Retiring a lapse with an equally lapsed '
+                     'successor takes the first lapse out of the reckoning '
+                     'and, when the successor carries no gate of its own, '
+                     'prints `current` over a firm with no cover.';
+    END IF;
+
+    IF NOT (NEW.blocks <@ v_succ_blocks) THEN
+      RAISE EXCEPTION 'compliance_successor_drops_a_gate'
+        USING HINT = 'A renewal carries at least the gates of the paper it '
+                     'retires: superseded_by must name a document whose '
+                     'blocks[] contains every gate this row holds. blocks '
+                     'defaults to empty, so a renewal recorded without its '
+                     'gates would retire a gating lapse with a gateless row '
+                     'and read `current` forever — record the gates on the '
+                     'renewal, or do not retire the lapse.';
+    END IF;
   END IF;
 
   RETURN NEW;
@@ -359,18 +413,25 @@ COMMENT ON FUNCTION public.assert_compliance_holder() IS
   'card whose entity_kind equals holder_type, in the SAME organization_id, and '
   'superseded_by must name another document for the same card in the same '
   'studio, of the SAME doc_type, expiring no earlier than the row it retires, '
-  'carrying its own expires_on when the type is a dated one, and still in '
-  'force — its own superseded_by null '
+  'carrying its own expires_on when the type is a dated one, still at the head '
+  'of its own chain (its superseded_by null), still IN FORCE (not itself '
+  'expired), and carrying at least the blocks[] of the row it retires '
   '(compliance_holder_not_found / _kind_mismatch / _other_studio / '
   'compliance_successor_other_holder / compliance_successor_wrong_type / '
   'compliance_successor_not_later / compliance_successor_undated / '
-  'compliance_successor_already_superseded). The last four are what keeps a '
+  'compliance_successor_already_superseded / '
+  'compliance_successor_already_lapsed / compliance_successor_drops_a_gate). '
+  'The last six are what keeps a '
   'supersede a renewal rather than a way to hide a lapse, since '
-  'compliance_state() reads only non-superseded rows and UPDATE is granted to '
+  'compliance_state() reads only non-superseded rows, counts only paper with a '
+  'non-empty blocks[], and UPDATE is granted to '
   'authenticated: the wrong type and the shorter date were r1 MAJOR-4, the '
   'undated successor and the head-of-chain rule are r2 MAJOR-1 doors (a) and '
   '(b), the second of which took every dated paper on a card out of the '
-  'reckoning with two UPDATEs. The FKs '
+  'reckoning with two UPDATEs, and the already-lapsed successor and the '
+  'dropped gate are r3 MAJOR-1 — two ordinary member writes with blocks left '
+  'at its empty default printed `current` over a firm holding no in-force '
+  'general-liability cover. The FKs '
   'cannot say any of this — studio_contacts holds both kinds of card and every '
   'studio''s cards (00623, the 00592 R-AP shape).';
 
