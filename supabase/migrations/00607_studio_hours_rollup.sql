@@ -26,6 +26,14 @@
 -- first, returning minutes / billable_minutes / amount_cents and nothing else.
 -- Lane B's project lens for a plain member reads this function, not the ledger.
 --
+-- W2 review round 2 (finding W2-R2-01), amended here: the standing assert's third
+-- leg now keys on the studio that PRICES the work, not on "any studio the
+-- project's designer belongs to". The long note sits on the assert itself; the
+-- short form is that the deleted predicate is self-grantable with one
+-- consent-free `organization_members` INSERT, so as a DEFINER aggregate it handed
+-- a stranger a project's whole minutes and billable money — measured, and closed
+-- by the same key round 1's B1 fix gave the three policies.
+--
 -- HT-30 / §0.23 are a UI contract, not a SQL one, and are satisfied by the
 -- caller: a total is permitted as the front matter of the rows that produced it.
 -- Both functions here return totals; the rows come from 00604's view in the same
@@ -166,11 +174,32 @@ SET search_path = public, pg_temp
 AS $$
 BEGIN
   -- The standing assert, first, per HT-10-a. `is_project_team_member` is the
-  -- ruled leg; the project's own designer and an owner/admin of a studio its
-  -- designer actively belongs to are added because each of them can already sum
-  -- these rows with a plain SELECT (00177:136-137 and 00606's
-  -- time_entries_owner_admin_read) — admitting them escalates nothing and keeps
-  -- one total function instead of three. Everyone else is refused.
+  -- ruled leg; the project's own designer (00177:136-137) and an owner/admin of
+  -- the studio that PRICES the work (00606's time_entries_owner_admin_read) are
+  -- added because each of them can already sum these rows with a plain SELECT —
+  -- admitting them escalates nothing and keeps one total function instead of
+  -- three. Everyone else is refused.
+  --
+  -- THE THIRD LEG IS THE PRICING STUDIO, NOT THE DESIGNER'S MEMBERSHIP SET
+  -- (amended in W2 review round 2, finding W2-R2-01 — measured, not argued).
+  -- As first written this leg read "an owner/admin of ANY studio the project's
+  -- designer actively belongs to", which is verbatim the SELF-GRANTABLE
+  -- predicate round 1's B1 fix deleted from 00605/00606's three policies:
+  -- `Org owners can insert members` (00484-registered, WITH CHECK
+  -- is_org_admin_or_owner(organization_id) AND role <> 'owner', no consent gate,
+  -- status DEFAULT 'active') lets anyone who owns any organization seat a victim
+  -- project's designer in it with ONE INSERT. Its justification — "each of them
+  -- can already sum these rows with a plain SELECT" — was TRUE before that fix
+  -- and FALSE after it: the read policy now keys on the pricing studio, so this
+  -- leg admitted a strictly WIDER, attacker-authored set than any SELECT policy
+  -- grants. Measured on this program's stack before the amendment: an attacker
+  -- owning only her own org reads 0 rows of the project and is refused the
+  -- total; after one consent-free organization_members INSERT she still reads 0
+  -- rows and project_pricing_studio_id is unmoved, but the total came back
+  -- 120 / 120 / 50000. That contradicts HT-10-a ("asserting
+  -- is_project_team_member") and HT-10 ("aggregates on rostered projects"), so
+  -- the leg now uses the same key the three policies use. Pinned by case (i) of
+  -- supabase/tests/rls/project_hours_total_test.sql and by postcondition (g).
   IF NOT (
     public.is_project_team_member(p_project_id)
     OR EXISTS (
@@ -178,15 +207,7 @@ BEGIN
       WHERE project.id = p_project_id
         AND project.designer_id = auth.uid()
     )
-    OR EXISTS (
-      SELECT 1
-      FROM public.projects AS project
-      JOIN public.organization_members AS designer_seat
-        ON designer_seat.user_id = project.designer_id
-       AND designer_seat.status = 'active'
-      WHERE project.id = p_project_id
-        AND public.is_org_admin_or_owner(designer_seat.organization_id)
-    )
+    OR public.is_org_admin_or_owner(public.project_pricing_studio_id(p_project_id))
   ) THEN
     RAISE EXCEPTION 'project_hours_total: the caller is not on this project'
       USING ERRCODE = 'insufficient_privilege';
@@ -219,10 +240,13 @@ GRANT  EXECUTE ON FUNCTION public.project_hours_total(uuid) TO authenticated;
 COMMENT ON FUNCTION public.project_hours_total(uuid) IS
   'HT-10-a: the project total a member keeps after 00606 narrowed her per-row '
   'read to own rows. SECURITY DEFINER with the standing assert FIRST '
-  '(is_project_team_member, or the project''s designer, or an owner/admin of a '
-  'studio its designer belongs to — each of whom can already sum these rows '
-  'directly). Returns minutes / billable_minutes / amount_cents and nothing '
-  'else: no member names, no notes, no per-person rate. Running timers excluded.';
+  '(is_project_team_member, or the project''s designer, or an owner/admin of the '
+  'studio that PRICES the work — each of whom can already sum these rows '
+  'directly). Never an owner/admin of ANY studio the designer belongs to: that '
+  'set is authored by its own attacker through one consent-free '
+  'organization_members INSERT (W2 review round 2, finding W2-R2-01). Returns '
+  'minutes / billable_minutes / amount_cents and nothing else: no member names, '
+  'no notes, no per-person rate. Running timers excluded.';
 
 -- ── postconditions ─────────────────────────────────────────────────────────
 DO $postcondition$
@@ -296,6 +320,27 @@ BEGIN
   ASSERT v_args = 'p_studio_id uuid, p_from date, p_to date, p_group_by text, '
                   'p_user_id uuid, p_project_id uuid',
     '00607: studio_hours_rollup''s signature drifted from plan-v2 §3; got ' || v_args;
+
+  -- (g) W2-R2-01: the standing assert's third leg is the PRICING studio, and it
+  --     reads organization_members through nothing but that one call. A leg that
+  --     joins organization_members itself is the self-grantable predicate the
+  --     round-1 B1 fix deleted from the three policies, and it hands a stranger
+  --     the project's minutes and money for one consent-free INSERT.
+  ASSERT (
+    SELECT prosrc LIKE '%is_org_admin_or_owner(public.project_pricing_studio_id(p_project_id))%'
+    FROM pg_proc WHERE oid = to_regprocedure('public.project_hours_total(uuid)')
+  ), '00607: project_hours_total''s third standing leg must be '
+     'is_org_admin_or_owner(project_pricing_studio_id(p_project_id)) — the same '
+     'key 00605/00606''s three policies use (W2-R2-01)';
+  ASSERT (
+    SELECT prosrc NOT LIKE '%FROM public.organization_members%'
+       AND prosrc NOT LIKE '%JOIN public.organization_members%'
+    FROM pg_proc WHERE oid = to_regprocedure('public.project_hours_total(uuid)')
+  ), '00607: project_hours_total must not read organization_members directly — '
+     '"an owner/admin of ANY studio the designer belongs to" is a set the '
+     'attacker authors herself (`Org owners can insert members`, no consent '
+     'gate), and as a DEFINER aggregate it leaks the whole project''s minutes '
+     'and billable money (W2 review round 2, finding W2-R2-01)';
 
   RAISE NOTICE '00607 postconditions passed.';
 END

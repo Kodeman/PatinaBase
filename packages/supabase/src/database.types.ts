@@ -36286,6 +36286,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      stamp_project_pricing_studio: {
+        Args: { p_project_id: string; p_studio_id: string }
+        Returns: string
+      }
       start_purchase_order_change: { Args: { p_request: Json }; Returns: Json }
       stripe_balance_tx_ingest: {
         Args: { p_cursor: string; p_txns: Json }

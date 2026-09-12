@@ -15750,6 +15750,18 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00606_time_entries_studio_read_narrow.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.stamp_project_pricing_studio(uuid, uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00606_time_entries_studio_read_narrow.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.stamp_project_pricing_studio(uuid, uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 00607_studio_hours_rollup.sql
 DO $g$ BEGIN
   REVOKE EXECUTE ON FUNCTION public.studio_hours_rollup(uuid, date, date, text, uuid, uuid) FROM PUBLIC, anon;

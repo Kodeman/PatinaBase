@@ -25,6 +25,14 @@
 --       spirit and HT-10-a's letter).
 --   (h) a RUNNING timer is in no total, and non-billable minutes count in
 --       minutes but never in money.
+--   (i) THE SELF-GRANT IS NOT A KEY (review round 2, finding W2-R2-01), in the
+--       shape of case (i) of time_entry_admin_write_test.sql: an attacker who
+--       owns only her own org seats the project's DESIGNER in it — one
+--       consent-free `organization_members` INSERT, asserted to SUCCEED because
+--       `Org owners can insert members` permits exactly that — and the total
+--       stays REFUSED. Keyed the other way ("an owner/admin of ANY studio the
+--       designer belongs to") that one INSERT returned 120 / 120 / 50000 of a
+--       project she reads not one row of.
 --
 -- How to run:
 --   psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 \
@@ -45,7 +53,8 @@ VALUES
   ('c6080000-0000-4000-8000-000000000005', 'pht-unrostered@test.invalid','', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
   ('c6080000-0000-4000-8000-000000000006', 'pht-guest@test.invalid',    '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
   ('c6080000-0000-4000-8000-000000000007', 'pht-outside@test.invalid',  '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
-  ('c6080000-0000-4000-8000-000000000008', 'pht-designer@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+  ('c6080000-0000-4000-8000-000000000008', 'pht-designer@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('c6080000-0000-4000-8000-000000000009', 'pht-attacker@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
 
 INSERT INTO profiles (id, email, full_name, created_at, updated_at)
 VALUES
@@ -56,13 +65,16 @@ VALUES
   ('c6080000-0000-4000-8000-000000000005', 'pht-unrostered@test.invalid','PHT Unrostered', NOW(), NOW()),
   ('c6080000-0000-4000-8000-000000000006', 'pht-guest@test.invalid',     'PHT Guest',      NOW(), NOW()),
   ('c6080000-0000-4000-8000-000000000007', 'pht-outside@test.invalid',   'PHT Outside',    NOW(), NOW()),
-  ('c6080000-0000-4000-8000-000000000008', 'pht-designer@test.invalid',  'PHT Designer',   NOW(), NOW())
+  ('c6080000-0000-4000-8000-000000000008', 'pht-designer@test.invalid',  'PHT Designer',   NOW(), NOW()),
+  ('c6080000-0000-4000-8000-000000000009', 'pht-attacker@test.invalid',  'PHT Attacker',   NOW(), NOW())
 ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name;
 
 INSERT INTO organizations (id, type, name, slug, status)
 VALUES
   ('c6080000-0000-4000-8000-0000000000a1', 'design_studio', 'PHT Studio',  'pht-studio-test',  'active'),
-  ('c6080000-0000-4000-8000-0000000000a2', 'design_studio', 'PHT Outside', 'pht-outside-test', 'active');
+  ('c6080000-0000-4000-8000-0000000000a2', 'design_studio', 'PHT Outside', 'pht-outside-test', 'active'),
+  -- Case (i): an org the ATTACKER owns, so she controls its roster outright.
+  ('c6080000-0000-4000-8000-0000000000a3', 'design_studio', 'PHT Attacker', 'pht-attacker-test', 'active');
 
 INSERT INTO organization_members (id, user_id, organization_id, role, status, joined_at)
 VALUES
@@ -81,7 +93,9 @@ VALUES
   ('c6080000-0000-4000-8000-0000000000c7', 'c6080000-0000-4000-8000-000000000007',
    'c6080000-0000-4000-8000-0000000000a2', 'owner',  'active', NOW()),
   ('c6080000-0000-4000-8000-0000000000c8', 'c6080000-0000-4000-8000-000000000008',
-   'c6080000-0000-4000-8000-0000000000a1', 'member', 'active', NOW());
+   'c6080000-0000-4000-8000-0000000000a1', 'member', 'active', NOW()),
+  ('c6080000-0000-4000-8000-0000000000c9', 'c6080000-0000-4000-8000-000000000009',
+   'c6080000-0000-4000-8000-0000000000a3', 'owner',  'active', NOW());
 
 -- The project belongs to the plain-member DESIGNER, so case (b)'s designer leg is
 -- not also satisfied by owner/admin standing. It NAMES the studio, so the
@@ -302,6 +316,78 @@ BEGIN
     'desk''s business); got ' || COALESCE(v_minutes::text, 'NULL');
 
   RAISE NOTICE 'project_hours_total: case (h) passed.';
+END
+$$;
+
+-- ─── (i) the self-grant is not a key (review round 2, finding W2-R2-01) ─────
+DO $$
+DECLARE
+  v_state_before text;
+  v_state_after  text;
+  v_seated       integer;
+  v_visible      integer;
+  v_min          integer;
+  v_pricing      uuid;
+BEGIN
+  PERFORM pg_temp.assume_user('c6080000-0000-4000-8000-000000000009');
+
+  -- Before: she is nobody on this project, so the standing assert refuses her.
+  v_state_before := NULL;
+  BEGIN
+    SELECT minutes INTO v_min
+    FROM public.project_hours_total('c6080000-0000-4000-8000-0000000000e1');
+  EXCEPTION WHEN OTHERS THEN v_state_before := SQLSTATE;
+  END;
+
+  -- Her one move: as owner of her OWN org she seats PHT House's DESIGNER in it.
+  -- `Org owners can insert members` allows exactly this — no consent gate, and
+  -- organization_members.status defaults to 'active'.
+  INSERT INTO organization_members (user_id, organization_id, role)
+  VALUES ('c6080000-0000-4000-8000-000000000008', 'c6080000-0000-4000-8000-0000000000a3', 'member');
+  GET DIAGNOSTICS v_seated = ROW_COUNT;
+
+  SELECT count(*) INTO v_visible FROM project_time_entries
+   WHERE project_id = 'c6080000-0000-4000-8000-0000000000e1';
+
+  v_state_after := NULL;
+  v_min := NULL;
+  BEGIN
+    SELECT minutes INTO v_min
+    FROM public.project_hours_total('c6080000-0000-4000-8000-0000000000e1');
+  EXCEPTION WHEN OTHERS THEN v_state_after := SQLSTATE;
+  END;
+  PERFORM pg_temp.reset_role();
+
+  ASSERT v_state_before = '42501',
+    'FAIL i1 (precondition): the attacker must start refused — if she already '
+    'gets the total, this case measures nothing; got '
+    || COALESCE(v_state_before, 'NO RAISE');
+  ASSERT v_seated = 1,
+    'FAIL i2 (precondition): the attacker''s seat INSERT must actually succeed — '
+    'this case exists because `Org owners can insert members` permits it. If it '
+    'now fails, the vector closed elsewhere and this case is measuring nothing';
+  ASSERT v_visible = 0,
+    'FAIL i3: the seat must not hand her a single ROW either (that half is '
+    '00606''s, case (i) of time_entry_admin_write_test.sql); rows = ' || v_visible;
+  ASSERT v_state_after = '42501',
+    'FAIL i4 (W2-R2-01, the leak this case exists for): seating the project''s '
+    'DESIGNER in a studio the attacker owns must NOT hand her the project''s '
+    'minutes and billable money. The standing assert''s third leg keys on the '
+    'studio that PRICES the work (project_pricing_studio_id, HT-3-a), never on '
+    '"any studio the designer belongs to" — keyed the other way this returned '
+    '120 / 120 / 50000 to a caller who reads no row of the project and whom the '
+    'three policies of 00605/00606 refuse; got '
+    || COALESCE(v_state_after, 'NO RAISE (minutes = ' || COALESCE(v_min::text, 'NULL') || ')');
+
+  -- The pricing studio is what decides, and it is PHT Studio throughout: the
+  -- seat she wrote changed nothing about who prices PHT House (HT-3-a step 1).
+  SELECT public.project_pricing_studio_id('c6080000-0000-4000-8000-0000000000e1')
+    INTO v_pricing;
+  ASSERT v_pricing = 'c6080000-0000-4000-8000-0000000000a1',
+    'FAIL i5: PHT House NAMES its studio, so HT-3-a step 1 answers and no seat '
+    'written elsewhere can move it; got ' || COALESCE(v_pricing::text, 'NULL');
+
+  RAISE NOTICE 'project_hours_total: case (i) passed — the self-grant buys nothing.';
 END
 $$;
 

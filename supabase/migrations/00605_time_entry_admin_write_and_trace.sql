@@ -53,9 +53,20 @@
 --       fails CLOSED. That is the safe direction, and §0.13 already admits a
 --       policy key whose guard replicates 00317:31-47's anti-aiming assert.
 --  (ii) The trade: the owner of a legacy project whose studio_id is NULL and
---       whose designer's tier is ambiguous loses her studio read until she stamps
---       the project — which is exactly the repair HT-3-a step 3 already asks of
---       her ('rate pending', fixed by naming the studio).
+--       whose designer's tier is ambiguous loses her studio read until the
+--       project NAMES its studio — which is exactly the repair HT-3-a step 3
+--       already asks of her ('rate pending', fixed by naming the studio).
+--       CORRECTED in W2 review round 2 (finding W2-R2-02 — measured): that
+--       repair did not exist. `set_project_studio_id`'s authenticated arm (00563)
+--       raises `studio_id_not_designer_studio` unless TG_OP = 'INSERT', so NO
+--       authenticated caller could write projects.studio_id after the row
+--       existed, and the read was permanently absent rather than conditionally
+--       so. 00606 section (4) ships the act — `public.stamp_project_pricing_studio`
+--       — callable by the project's designer, or by an owner/admin of a studio
+--       that already holds one of that designer's projects. Not by an owner/admin
+--       on the strength of the designer's seat alone: that is this banner's own
+--       B1 predicate, and with the stamp behind it an attacker moves the pricing
+--       studio permanently.
 -- (iii) RLS and the resolver now key on the SAME studio, so the divergence this
 --       banner previously described (an adjust the policy allowed and 00601's
 --       resolver then refused with insufficient_privilege) no longer exists.

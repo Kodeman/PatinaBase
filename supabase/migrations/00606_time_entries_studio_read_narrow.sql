@@ -47,8 +47,19 @@
 --       row fails CLOSED — the safe direction — and §0.13 already admits a key
 --       whose guard replicates 00317:31-47's anti-aiming assert.
 --  (ii) The trade: the owner of a legacy NULL-studio_id project whose designer's
---       tier is ambiguous loses her studio read until she stamps the project,
---       which is the repair HT-3-a step 3 already asks of her.
+--       tier is ambiguous loses her studio read until the project NAMES its
+--       studio — the repair HT-3-a step 3 already asks of her ("the owner fixes
+--       'none' by stamping projects.studio_id").
+--       CORRECTED in W2 review round 2 (finding W2-R2-02 — measured): that
+--       sentence used to read "until she stamps the project", and NO
+--       authenticated caller could stamp it. `set_project_studio_id`'s
+--       authenticated arm (00563) raises `studio_id_not_designer_studio` unless
+--       TG_OP = 'INSERT', so the column was immutable after the row existed for
+--       designer, owner and admin alike, and no other writer of it exists in the
+--       database or in any portal. So the read HT-10 grants was permanently
+--       absent on every legacy NULL-studio project and every ambiguous-tier one,
+--       with no act available to anybody. Section (4) of this file is the missing
+--       act: `public.stamp_project_pricing_studio(p_project_id, p_studio_id)`.
 -- The residue (a sole-proprietor designer on a legacy NULL-studio project) is
 -- stated in 00605's banner and belongs to W1's pricing residue, not to this read.
 --
@@ -86,8 +97,14 @@
 -- THIS IS THE ONLY CHANGE IN THIS MIGRATION (risk 5 of plan-v2 §12): it reverts
 -- without touching the ledger view, the rollup or the lens.
 --
--- Lineage: policies only. No function, no column, no grant.
--- P-4: no row is touched.
+-- Lineage: policies, plus ONE new function (section 4 — NEW name, nothing
+-- redefined; `set_project_studio_id` is NOT touched). No column.
+-- P-4: no row is touched by this migration. The new function writes
+-- `projects.studio_id` only when a caller asks it to, one project at a time, and
+-- only where that column is still NULL — it is a repair act, not a backfill.
+--
+-- Adds GRANT/REVOKE → supabase/seed/00-legacy-grants.sql is regenerated
+-- (`python3 scripts/generate-legacy-grants.py`, plan-v2 §0.20).
 -- ═══════════════════════════════════════════════════════════════════════════
 
 BEGIN;
@@ -123,6 +140,181 @@ CREATE POLICY time_entries_owner_admin_read ON public.project_time_entries
       public.project_pricing_studio_id(project_time_entries.project_id)
     )
   );
+
+-- ── (4) the repair path the narrowing promises (W2-R2-02) ──────────────────
+-- HT-3-a's ruled remedy is one sentence: *"The owner fixes 'none' by stamping
+-- projects.studio_id."* It had no implementation, and `set_project_studio_id`
+-- (00317 → 00511 → 00563) makes the column immutable for every authenticated
+-- session once the row exists — its authenticated arm raises unless
+-- TG_OP = 'INSERT' — so a project that reached 'none' stayed there and the studio
+-- read this file grants its owner was unreachable (measured in review round 2:
+-- a studio owner who is also the project's designer was REFUSED P0001
+-- studio_id_not_designer_studio on `UPDATE projects SET studio_id = <her own
+-- studio>`, and the only other writer of the column, `reassign_project_lead`,
+-- requires a non-NULL studio_id to begin with).
+--
+-- This function is that act, and NOTHING more: it names a studio on a project
+-- whose column is still NULL and whose derivation is silent. `set_project_studio_id`
+-- is not redefined; the write happens as the DEFINER, so the trigger's
+-- owner-executed arm (00563's `current_user = 'postgres'` branch) re-validates the
+-- same bound independently — the assert below is not the only thing standing
+-- between a caller and the column.
+--
+-- WHO MAY CALL IT, and why it is not simply "an owner/admin of the named studio"
+-- (the narrower shape is deliberate, and the wider one was MEASURED before it was
+-- rejected): "an owner/admin of p_studio_id, where the project's designer holds a
+-- seat in p_studio_id" is the SAME self-grantable predicate round 1's B1 fix
+-- deleted from the three policies. `Org owners can insert members` lets anyone who
+-- owns any organization seat a victim project's designer in it with one
+-- consent-free INSERT (WITH CHECK is_org_admin_or_owner(organization_id) AND
+-- role <> 'owner'; status DEFAULT 'active'). With that shape an attacker seats the
+-- designer of a project priced by her real employer, which makes the employer tier
+-- AMBIGUOUS and the pricing studio NULL, and then stamps the project with her own
+-- org — permanently taking the hours, the money and the audit trail from the
+-- studio that did the work. Measured on this program's stack; asserted closed as
+-- case (f) of supabase/tests/rls/time_entry_studio_stamp_test.sql. So the two arms
+-- are both NON-manufacturable:
+--   · ARM 1 — the project's own DESIGNER names a studio she actively, non-guestly
+--     belongs to. This is exactly the bound 00563's authenticated-INSERT arm
+--     already applies to the same column at creation (HT-3-c arm (a), ruled
+--     2026-09-12), now available after the fact. `projects.designer_id` is frozen
+--     on UPDATE by 00563 itself, so it is the one standing an attacker cannot
+--     manufacture.
+--   · ARM 2 — an owner/admin of p_studio_id, WHERE p_studio_id already holds
+--     another project led by this project's designer. An attacker cannot
+--     manufacture that: `set_project_studio_id`'s authenticated-INSERT arm
+--     requires NEW.designer_id = auth.uid(), so nobody can create a project led
+--     by somebody else. It is also the realistic shape of the repair — a studio
+--     whose designer's later projects 00563 has been stamping all along, holding
+--     one legacy project from before it.
+-- Either way the project must still be unstamped AND unpriced: where
+-- project_pricing_studio_id already answers, the owner HAS her read and this
+-- function would only be a way to move the money. A stamped project stays final
+-- (HT-3-c, and 00603's case (z)).
+CREATE OR REPLACE FUNCTION public.stamp_project_pricing_studio(
+  p_project_id uuid,
+  p_studio_id  uuid
+)
+RETURNS uuid
+LANGUAGE plpgsql
+VOLATILE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_designer_id uuid;
+  v_existing    uuid;
+  v_actor       uuid := auth.uid();
+BEGIN
+  IF v_actor IS NULL THEN
+    RAISE EXCEPTION 'stamp_project_pricing_studio: no actor'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF p_project_id IS NULL OR p_studio_id IS NULL THEN
+    RAISE EXCEPTION 'stamp_project_pricing_studio: both the project and the studio are required'
+      USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+
+  SELECT project.designer_id, project.studio_id
+    INTO v_designer_id, v_existing
+  FROM public.projects AS project
+  WHERE project.id = p_project_id;
+
+  IF v_designer_id IS NULL THEN
+    -- No such project, or a project with no lead. Both are refusals, and both
+    -- answer identically so that a caller cannot enumerate project ids.
+    RAISE EXCEPTION 'stamp_project_pricing_studio: this project cannot be stamped'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  -- (a) standing: the project's designer, or an owner/admin of a studio that
+  --     already holds one of her projects. Nothing an attacker can author.
+  IF NOT (
+    v_designer_id = v_actor
+    OR (
+      public.is_org_admin_or_owner(p_studio_id)
+      AND EXISTS (
+        SELECT 1
+        FROM public.projects AS sibling
+        WHERE sibling.studio_id = p_studio_id
+          AND sibling.designer_id = v_designer_id
+          AND sibling.id <> p_project_id
+      )
+    )
+  ) THEN
+    RAISE EXCEPTION 'stamp_project_pricing_studio: only this project''s designer, '
+                    'or an owner/admin of a studio that already holds one of her '
+                    'projects, may name its studio'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  -- (b) a stamped project is final (HT-3-c arm (a); 00603 case (z)). Naming the
+  --     studio it already names is a no-op rather than an error, so a retry is
+  --     safe.
+  IF v_existing IS NOT NULL THEN
+    IF v_existing = p_studio_id THEN
+      RETURN v_existing;
+    END IF;
+    RAISE EXCEPTION 'stamp_project_pricing_studio: this project already names a studio'
+      USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+
+  -- (c) only where the derivation is silent. Where HT-3-b answers, the owner
+  --     already reads these hours and this function must not re-price them.
+  IF public.project_pricing_studio_id(p_project_id) IS NOT NULL THEN
+    RAISE EXCEPTION 'stamp_project_pricing_studio: a studio already prices this '
+                    'project''s hours — there is nothing to repair'
+      USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+
+  -- (d) 00563's own bound on this column, replicated rather than trusted: the
+  --     project's DESIGNER holds an active, non-guest seat in an active design
+  --     studio. The trigger checks it again as the write goes through.
+  IF NOT EXISTS (
+    SELECT 1
+    FROM public.organization_members AS designer_seat
+    JOIN public.organizations AS studio
+      ON studio.id = designer_seat.organization_id
+    WHERE designer_seat.organization_id = p_studio_id
+      AND designer_seat.user_id = v_designer_id
+      AND designer_seat.status = 'active'
+      AND designer_seat.role <> 'guest'
+      AND studio.type = 'design_studio'
+      AND studio.status = 'active'
+  ) THEN
+    RAISE EXCEPTION 'stamp_project_pricing_studio: this project''s designer holds '
+                    'no active, non-guest seat in that studio'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  UPDATE public.projects
+     SET studio_id = p_studio_id
+   WHERE id = p_project_id
+     AND studio_id IS NULL;
+
+  RETURN p_studio_id;
+END;
+$$;
+
+REVOKE EXECUTE ON FUNCTION public.stamp_project_pricing_studio(uuid, uuid) FROM PUBLIC, anon;
+GRANT  EXECUTE ON FUNCTION public.stamp_project_pricing_studio(uuid, uuid) TO authenticated;
+
+COMMENT ON FUNCTION public.stamp_project_pricing_studio(uuid, uuid) IS
+  'HT-3-a''s ruled remedy, as an act: name the studio that prices an unstamped, '
+  'unpriced project, so the owner/admin read 00606 grants becomes reachable on a '
+  'legacy NULL-studio or ambiguous-tier project (W2 review round 2, finding '
+  'W2-R2-02 — before this function no authenticated caller could write '
+  'projects.studio_id at all, because set_project_studio_id''s authenticated arm '
+  'raises unless TG_OP = ''INSERT''). Callable by the project''s DESIGNER for a '
+  'studio she actively non-guestly belongs to (00563''s own INSERT bound, '
+  'HT-3-c arm (a)), or by an owner/admin of a studio that ALREADY holds another '
+  'project led by that designer. Deliberately NOT callable by an owner/admin on '
+  'the strength of the designer''s seat alone: that set is self-grantable with one '
+  'consent-free organization_members INSERT, and with it an attacker takes a '
+  'studio''s hours permanently. Refuses a stamped project, and refuses one whose '
+  'hours a studio already prices. SECURITY DEFINER so the write does not meet '
+  'set_project_studio_id''s authenticated arm; that trigger''s owner-executed arm '
+  'still re-validates the bound.';
 
 -- ── postconditions ─────────────────────────────────────────────────────────
 DO $postcondition$
@@ -226,6 +418,55 @@ BEGIN
       )
   ), '00606: 00316''s own-row write policies and 00177''s designer policy must '
      'all still exist — this file narrows reads only';
+
+  -- (f) the repair path exists, is a DEFINER, pins search_path, and is granted
+  --     in both directions (§0.16). Without it (ii) above is a promise the
+  --     product cannot keep (W2-R2-02).
+  ASSERT to_regprocedure('public.stamp_project_pricing_studio(uuid,uuid)') IS NOT NULL,
+    '00606: stamp_project_pricing_studio is missing — the studio read narrowed '
+    'here is then permanently absent on every unstamped project, because '
+    'set_project_studio_id''s authenticated arm refuses to write the column '
+    'after INSERT (W2-R2-02)';
+  ASSERT (SELECT prosecdef FROM pg_proc
+           WHERE oid = to_regprocedure('public.stamp_project_pricing_studio(uuid,uuid)')),
+    '00606: stamp_project_pricing_studio must be SECURITY DEFINER — as INVOKER '
+    'it meets set_project_studio_id''s authenticated arm and always raises';
+  ASSERT (SELECT proconfig::text LIKE '%search_path%' FROM pg_proc
+           WHERE oid = to_regprocedure('public.stamp_project_pricing_studio(uuid,uuid)')),
+    '00606: stamp_project_pricing_studio must pin search_path (§0.16)';
+  ASSERT NOT has_function_privilege('anon',
+    'public.stamp_project_pricing_studio(uuid,uuid)', 'EXECUTE'),
+    '00606: anon must not execute stamp_project_pricing_studio';
+  ASSERT has_function_privilege('authenticated',
+    'public.stamp_project_pricing_studio(uuid,uuid)', 'EXECUTE'),
+    '00606: authenticated must execute stamp_project_pricing_studio';
+
+  -- The standing test is the one an attacker cannot author. A body that admits
+  -- an owner/admin on the strength of the designer's seat alone re-opens B1 in
+  -- its worst form (the pricing studio moves permanently), so the two legs are
+  -- pinned by source.
+  ASSERT (
+    SELECT prosrc LIKE '%v_designer_id = v_actor%'
+       AND prosrc LIKE '%sibling.designer_id = v_designer_id%'
+    FROM pg_proc
+    WHERE oid = to_regprocedure('public.stamp_project_pricing_studio(uuid,uuid)')
+  ), '00606: the stamp''s standing must be the project''s DESIGNER, or an '
+     'owner/admin of a studio that already holds one of her projects — never an '
+     'owner/admin on the strength of a seat anyone can write (W2-R2-02''s fix, '
+     'and round 1''s B1)';
+  ASSERT (
+    SELECT prosrc LIKE '%project_pricing_studio_id(p_project_id) IS NOT NULL%'
+    FROM pg_proc
+    WHERE oid = to_regprocedure('public.stamp_project_pricing_studio(uuid,uuid)')
+  ), '00606: the stamp must refuse a project a studio already prices — it '
+     'repairs ''none'', it does not move money';
+
+  -- set_project_studio_id is NOT redefined by this file (§0.4 / 00603's own rule).
+  ASSERT (
+    SELECT prosrc LIKE '%studio_id_not_designer_studio%'
+    FROM pg_proc WHERE oid = to_regprocedure('public.set_project_studio_id()')
+  ), '00606: set_project_studio_id must still be the 00563 body — this file adds '
+     'a DEFINER act beside it and redefines nothing';
 
   RAISE NOTICE '00606 postconditions passed.';
 END
