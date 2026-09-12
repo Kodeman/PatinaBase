@@ -169,15 +169,28 @@ interface PhoneParty {
   sms_consent_status: string;
 }
 
+/**
+ * Every party row on this number, with `failed` saying the read ERRORED rather
+ * than came back empty (R-AM, r7 R7-M3). A swallowed error here is a keyword
+ * that reaches no studio at all: the target list comes back empty, no consent
+ * record is written, and the branch still answers Twilio 200.
+ */
 async function loadPhoneParties(
   supabase: SupabaseClient,
   phone: string,
-): Promise<PhoneParty[]> {
-  const { data } = await supabase
+): Promise<{ parties: PhoneParty[]; failed: boolean }> {
+  const { data, error } = await supabase
     .from("project_parties")
     .select("id, project_id, sms_consent_status")
     .eq("phone_e164", phone);
-  return (data ?? []) as PhoneParty[];
+  if (error) {
+    console.error("loadPhoneParties: project_parties read failed", {
+      phone,
+      error,
+    });
+    return { parties: [], failed: true };
+  }
+  return { parties: (data ?? []) as PhoneParty[], failed: false };
 }
 
 interface StudioTarget {
@@ -256,18 +269,33 @@ async function studiosHoldingRecord(
   supabase: SupabaseClient,
   phone: string,
   onlyStatuses?: string[],
-): Promise<string[]> {
-  const { data } = await supabase
+): Promise<{ orgs: string[]; failed: boolean }> {
+  const { data, error } = await supabase
     .from("studio_channel_consent")
     .select("organization_id, status")
     .eq("channel_kind", "sms")
     .eq("channel_value", phone);
+  // A read that ERRORED is not "no studio holds a record" (R-AM, r7 R7-M3).
+  // This is the one leg that reaches a record-only studio, and a record-only
+  // studio has no party-row backstop by construction — swallowing the error
+  // leaves its record saying `granted` after the number has said STOP, which
+  // is the positive branch of the send gate.
+  if (error) {
+    console.error("studiosHoldingRecord: studio_channel_consent read failed", {
+      phone,
+      error,
+    });
+    return { orgs: [], failed: true };
+  }
   const rows = (data ?? []) as Array<
     { organization_id: string; status: string }
   >;
-  return rows
-    .filter((r) => !onlyStatuses || onlyStatuses.includes(r.status))
-    .map((r) => r.organization_id);
+  return {
+    orgs: rows
+      .filter((r) => !onlyStatuses || onlyStatuses.includes(r.status))
+      .map((r) => r.organization_id),
+    failed: false,
+  };
 }
 
 /** Seat-derived targets first, then any record-only studio, once each. */
@@ -326,14 +354,16 @@ async function writeChannelConsent(
   status: "granted" | "opted_out",
   now: string,
   evidence: string,
-) {
+): Promise<{ failed: boolean }> {
+  let failed = false;
   for (const t of targets) {
     // Read-then-upsert so a date already earned survives the new verdict:
     // "granted 2 May 2025, opted out 3 Dec 2025" must both stay printable.
-    const { data: existing } = await supabase
+    const { data: existing, error: priorError } = await supabase
       .from("studio_channel_consent")
       .select(
-        "consented_at, opt_out_at, disclosure_version, recorded_by, " +
+        "consented_at, opt_out_at, source, evidence, recorded_at, " +
+          "disclosure_version, recorded_by, " +
           "opt_out_source, opt_out_evidence, opt_out_recorded_at, " +
           "opt_out_recorded_by, origin_project_id",
       )
@@ -341,9 +371,27 @@ async function writeChannelConsent(
       .eq("channel_kind", "sms")
       .eq("channel_value", phone)
       .maybeSingle();
+    // THIS READ IS LOAD-BEARING, so it is not allowed to fail quietly (R-AM).
+    // Everything the upsert carries forward comes off it, and a read that
+    // errored looks exactly like "no record yet" — the one case in which the
+    // refusal below is allowed to write the consent side. So an unreadable
+    // prior skips the write entirely and says so; the caller decides whether
+    // that is worth refusing the whole act over.
+    if (priorError) {
+      console.error(
+        "writeChannelConsent: the standing record could not be read — skipping this studio",
+        { org: t.org, phone, status, error: priorError },
+      );
+      failed = true;
+      continue;
+    }
+    const hadRecord = existing != null;
     const prior = (existing ?? {}) as {
       consented_at?: string | null;
       opt_out_at?: string | null;
+      source?: string | null;
+      evidence?: string | null;
+      recorded_at?: string | null;
       disclosure_version?: string | null;
       recorded_by?: string | null;
       opt_out_source?: string | null;
@@ -360,7 +408,13 @@ async function writeChannelConsent(
     // had it. record_channel_consent refuses a granted without a disclosure
     // version (00594); the rail's door falls back to the studio's own seats
     // instead of inventing one (R-AN).
-    const seat = await seatConsentEvidence(supabase, t.partyIds);
+    // Only a GRANT needs the studio's own paperwork behind it — R-AN scopes
+    // this fallback to the inbound YES/START. On a refusal the consent side is
+    // not written at all (below), so the seats are not read either.
+    const seat = status === "granted"
+      ? await seatConsentEvidence(supabase, t.partyIds)
+      : { disclosureVersion: null, recordedBy: null };
+    const keepsPriorConsent = status === "opted_out" && hadRecord;
     await supabase.from("studio_channel_consent").upsert({
       organization_id: t.org,
       channel_kind: "sms",
@@ -376,9 +430,27 @@ async function writeChannelConsent(
       // with a NULL sms_opt_out_at on purpose, and the fold mints those
       // records verbatim, so a date test failed open for that whole population.
       refusal_unanswered: status === "opted_out",
-      source: "inbound_sms",
-      evidence,
-      recorded_at: now,
+      // A REFUSAL WRITES NONE OF THE CONSENT'S FIVE (00594:159-170, r6 R6-M1,
+      // r7 R7-M1). These five columns are the GRANT's own 10DLC artifact — how
+      // the consent arrived, the words the person agreed to, and when the
+      // studio wrote them down. Written unconditionally, an ordinary STOP over
+      // a number the studio holds a signed grant for restated that grant as
+      // "arrived by text, today", with consented_at left contradicting
+      // recorded_at and no audit row anywhere. record_channel_consent has
+      // carried the prior values through a refusal since 00594:1469-1479; the
+      // rail is the other writer of refusals — the one that writes every real
+      // STOP — and it is held to the same rule here. The refusal's own words
+      // live in the four opt_out_* columns below.
+      // …with ONE exception, which is the same exception record_channel_consent
+      // makes: when this act MINTS the record there is no grant standing to
+      // protect, and the RPC's INSERT leg writes the act's own source, words
+      // and date into those columns (00594:1396). Only the UPDATE leg carries
+      // the prior through. The rail matches leg for leg.
+      source: keepsPriorConsent ? (prior.source ?? null) : "inbound_sms",
+      evidence: keepsPriorConsent ? (prior.evidence ?? null) : evidence,
+      recorded_at: keepsPriorConsent ? (prior.recorded_at ?? null) : now,
+      // seat is {null, null} unless this is a grant, so a refusal carries only
+      // what already stood.
       disclosure_version: prior.disclosure_version ?? seat.disclosureVersion,
       recorded_by: prior.recorded_by ?? seat.recordedBy,
       // THE REFUSAL'S OWN EVIDENCE SET (00594, r8 W4-M2). The rail is the one
@@ -410,6 +482,7 @@ async function writeChannelConsent(
       origin_project_id: t.projectId ?? prior.origin_project_id ?? null,
     }, { onConflict: "organization_id,channel_kind,channel_value" });
   }
+  return { failed };
 }
 
 // The party-row writes below mirror the consent records written above. The two
@@ -601,11 +674,13 @@ export async function processInbound(
     // Every studio holding the number — by seat, and by record even with no
     // seat left. A refusal that cannot reach a record leaves that record
     // saying granted, and the send gate honours it.
+    const stopPhoneParties = await loadPhoneParties(supabase, from);
+    const stopRecordStudios = await studiosHoldingRecord(supabase, from);
     const stopTargets = withRecordOnlyStudios(
-      await studiosHoldingPhone(supabase, await loadPhoneParties(supabase, from)),
-      await studiosHoldingRecord(supabase, from),
+      await studiosHoldingPhone(supabase, stopPhoneParties.parties),
+      stopRecordStudios.orgs,
     );
-    await writeChannelConsent(
+    const stopWrite = await writeChannelConsent(
       supabase,
       stopTargets,
       from, "opted_out", nowIso, `Inbound ${upper}`,
@@ -618,6 +693,40 @@ export async function processInbound(
     await captureServerEvent("sms-inbound", "sms_parse_outcome",
       { path: "keyword", intent: "opt_out", confidence_bucket: "n/a", disposition: "opted_out" },
       { getEnv: deps.getEnv, fetchImpl: deps.fetchImpl });
+    // A STOP WE COULD NOT FULLY RECORD IS NOT ACKNOWLEDGED (r7 R7-M3). Every
+    // write above is idempotent and moves only toward refusal, so the partial
+    // result stands; what a retry completes is the consent record of a studio
+    // holding one WITHOUT a seat, which has no party-row backstop by
+    // construction — its record would otherwise sit at `granted` for ever while
+    // the number has said STOP, and that is the send gate's positive branch.
+    //
+    // A 5xx alone would not do it: the idempotency claim at (c) would answer
+    // Twilio's retry with `duplicate` and the branch would never run again. So
+    // the claim on this MessageSid is released first — by clearing twilio_sid,
+    // not by deleting the row: the inbound STOP is itself a 10DLC artifact and
+    // must survive even if the retry never comes.
+    if (
+      stopPhoneParties.failed || stopRecordStudios.failed || stopWrite.failed
+    ) {
+      console.error(
+        "sms-inbound STOP: refusing to acknowledge — the refusal was not fully recorded",
+        {
+          phone: from,
+          partiesReadFailed: stopPhoneParties.failed,
+          recordReadFailed: stopRecordStudios.failed,
+          consentWriteFailed: stopWrite.failed,
+        },
+      );
+      await supabase
+        .from("sms_messages")
+        .update({ twilio_sid: null })
+        .eq("id", messageId);
+      return {
+        status: 500,
+        twiml: twimlBody(),
+        disposition: "opt_out_incomplete",
+      };
+    }
     // Twilio Advanced Opt-Out already auto-replied — do NOT reply.
     return { status: 200, twiml: twimlBody(), disposition: "opted_out" };
   }
@@ -630,13 +739,20 @@ export async function processInbound(
     // granting on a seat manufactured consent for a studio that never invited
     // this person (R-AJ). The seat-derived arm survives only to carry each
     // qualifying studio's party rows, so the record and the mirror still agree.
-    const startOrgs = await studiosHoldingRecord(supabase, from, [
+    // A failed read here logs (loadPhoneParties / studiosHoldingRecord) and
+    // grants fewer studios, which leaves the standing refusal standing — the
+    // fail-closed direction, so unlike the STOP branch this one still answers
+    // 200 rather than replaying a re-subscription.
+    const startOrgs = (await studiosHoldingRecord(supabase, from, [
       "opted_out",
       "pending",
-    ]);
+    ])).orgs;
     const startOrgSet = new Set(startOrgs);
     const startTargets = withRecordOnlyStudios(
-      (await studiosHoldingPhone(supabase, await loadPhoneParties(supabase, from)))
+      (await studiosHoldingPhone(
+        supabase,
+        (await loadPhoneParties(supabase, from)).parties,
+      ))
         .filter((t) => startOrgSet.has(t.org)),
       startOrgs,
     );

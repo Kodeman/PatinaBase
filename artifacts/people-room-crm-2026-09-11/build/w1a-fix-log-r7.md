@@ -323,3 +323,245 @@ $ git diff --stat
 ```
 
 No edge-function file was touched, so the Deno suites were not re-run.
+
+---
+
+# W1a fix log — round 7, SECOND CYCLE (R7-M1, R7-M2, R7-M3)
+
+Scope: exactly the three findings of `w1a-review-r7-migrations.md` §2. Nothing
+else in the wave was touched. All three live in the edge rail — **no migration,
+no SQL test, no grant and no generated type changed**, so no reset was needed;
+the SQL suite was re-run anyway as a regression check and is unchanged. Local
+stack only — no `supabase db push`, no `functions deploy`, no Strata.
+
+Files: `supabase/functions/sms-inbound/pipeline.ts`,
+`supabase/functions/_shared/sms.ts`, plus the two Deno suites.
+
+---
+
+## R7-M1 — the rail's STOP destroyed the grant's own 10DLC evidence
+
+**Finding.** `writeChannelConsent()` wrote `source: "inbound_sms"`, `evidence`
+and `recorded_at: now` unconditionally, outside any status test — unlike the
+four `opt_out_*` columns directly below it. r6's R6-M1 rule ("a refusal writes
+none of the consent's five", `00594:159-170`) was closed only in
+`record_channel_consent` (`00594:1469-1479`). So an ordinary inbound STOP over a
+number the studio held a *written* grant for restated that grant as "arrived by
+text, today".
+
+**Changed.**
+
+1. `source, evidence, recorded_at` added to the `prior` select
+   (`pipeline.ts` ~:361).
+2. The three columns made conditional, split on the same leg
+   `record_channel_consent` splits on — because the RPC is not uniform either:
+   its **UPDATE** leg carries the prior through (`00594:1469-1479`), its
+   **INSERT** leg writes the act's own source/words/date (`00594:1396`). The
+   rail now matches leg for leg:
+
+```ts
+const keepsPriorConsent = status === "opted_out" && hadRecord;
+...
+source:      keepsPriorConsent ? (prior.source ?? null)      : "inbound_sms",
+evidence:    keepsPriorConsent ? (prior.evidence ?? null)    : evidence,
+recorded_at: keepsPriorConsent ? (prior.recorded_at ?? null) : now,
+```
+
+   Taking the reviewer's literal `prior.source ?? null` instead would have made
+   a STOP that MINTS a record write a NULL source, which is neither what the RPC
+   writes on that leg nor what the suite already asserted (the existing case
+   "STOP writes an opted_out consent record for every studio holding the phone"
+   asserts `source === 'inbound_sms'`). Both legs are now asserted separately.
+3. The `seatConsentEvidence()` fallback for `disclosure_version` / `recorded_by`
+   is now taken **only on a grant** — R-AN scopes it to the inbound YES/START,
+   and on a refusal it would have put a grant's disclosure version on the
+   consent side of a record the same write was refusing. On a refusal those two
+   columns now carry only what already stood (`prior.x ?? null`).
+4. **The prior read is no longer swallowed** (R-AM). It is load-bearing for all
+   of the above: a denied read looks exactly like "no record yet", which is the
+   one leg on which a refusal may write the consent side — so a 42501 would have
+   reproduced this very finding. An unreadable prior now logs, SKIPS that
+   studio's write, and reports `{ failed: true }` to the caller, which the STOP
+   branch folds into R7-M3's retry decision below.
+
+**Evidence — new Deno case, and the negative control against the pre-fix file.**
+
+```
+$ deno test --config supabase/functions/deno.json --no-check -A \
+    --filter "/STOP keeps the grant|not acknowledged|mints the record/" \
+    supabase/functions/_tests/sms-inbound.test.ts
+a STOP keeps the grant's own evidence and restates only the refusal's ... ok
+a STOP that mints the record writes itself onto the consent side ... ok
+a STOP whose consent-record read fails is not acknowledged, and the retry completes it ... ok
+a STOP whose party read fails is not acknowledged either ... ok
+
+# same tests, with `git show HEAD:…/pipeline.ts` put back in place:
+a STOP keeps the grant's own evidence and restates only the refusal's ... FAILED
+a STOP that mints the record writes itself onto the consent side ... ok      # unchanged leg
+a STOP whose consent-record read fails is not acknowledged, and the retry completes it ... FAILED
+a STOP whose party read fails is not acknowledged either ... FAILED
+error: AssertionError: the consent still says how it arrived
+error: AssertionError: Twilio must not be told a STOP landed when it did not
+FAILED | 1 passed | 3 failed
+```
+
+The new case seeds the reviewer's own repro — `(granted, written, "Signed the
+Lindqvist kickoff form", consented 2025-05-02, recorded 2025-05-02)` — texts
+STOP, and asserts the five consent columns are byte-identical afterwards while
+`opt_out_source/opt_out_evidence/opt_out_recorded_at` are stamped and
+`opt_out_recorded_by` stays NULL.
+
+I took the reviewer's "**or** add a Deno case in `_tests/sms-inbound.test.ts`"
+branch rather than transcribing the rail's upsert into SQL beside block 32: the
+Deno case exercises the rail's actual code, where a SQL transcription can drift
+from it silently — which is how this finding came to exist.
+
+---
+
+## R7-M2 — the last phone-global branch answered "unknown" on a failed read
+
+**Finding.** `channelConsentVerdict()`'s final branch — the one scan the design
+keeps phone-global (R-AK, decision 13), the last line between an unattributable
+send and a STOP — did not destructure `error`. A denied read gave `data: null` →
+`rows ?? []` → `anyOptedOut === false` → `"unknown"`, which lifts the primary
+gate; the legacy party-row check then carried the send on the seat's own
+`granted`, past another studio's standing STOP on the same number.
+
+**Changed** (`_shared/sms.ts` ~:504), matching its four siblings exactly:
+
+```ts
+const { data: rows, error: scanError } = await supabase
+  .from("project_parties").select("sms_consent_status").eq("phone_e164", phone);
+if (scanError) {
+  console.error("channelConsentVerdict: refusing, the phone-global scan failed", scanError);
+  return "refuse";
+}
+```
+
+**Evidence.** Two new cases in `_shared/sms.test.ts` — the refusal and its
+control, so the assertion cannot pass for the wrong reason. The denial is
+surgical: only the `phone_e164`-keyed `project_parties` reads are denied, so
+`resolveRecipient()`'s id-keyed read still returns a `granted` seat.
+
+```
+a failed phone-global scan refuses the send instead of reading as no refusal ... ok
+the unattributable send still goes when the phone-global scan reads clean ... ok
+
+# negative control — the `if (scanError)` block removed:
+a failed phone-global scan refuses the send instead of reading as no refusal ... FAILED
+the unattributable send still goes when the phone-global scan reads clean ... ok
+FAILED | 1 passed | 1 failed | 36 filtered out
+```
+
+**Not changed, with reason.** The finding also names the two reads in
+`flushDeferredMessages` (`:1048-1052`, `:1077`). Both already fail closed: a
+denied party read leaves `deferredPartyConsent` at `"not_asked"` (the
+`?? "not_asked"` default), and a denied phone-global read reduces `[]` to
+`"not_asked"` — neither is `granted`, so neither carries a send. They are cited
+in the review as the path a failed `channelConsentVerdict` takes to a real send,
+not as separate defects, and that path is closed above.
+
+---
+
+## R7-M3 — a STOP that reached no record was still acknowledged 200
+
+**Finding.** `loadPhoneParties()` and `studiosHoldingRecord()` both swallowed
+their reads while `studiosHoldingPhone()` between them checked and logged, so
+one failed query gave an empty target list, **no** consent record, and a 200 to
+Twilio. A seat-holding studio has `optOutAllForPhone()` as its backstop; a
+**record-only** studio has none by construction — its record then sits at
+`granted` while the number has said STOP, which is `channelConsentVerdict`'s
+positive branch.
+
+**Changed.**
+
+1. Both helpers now check and log, and return `{ parties | orgs, failed }`.
+   Call sites updated (STOP branch, START branch).
+2. `writeChannelConsent()` returns `{ failed }` (see R7-M1 item 4).
+3. The STOP branch does every write it can — the partial result is monotonic
+   toward refusal — and then, if any of the three says `failed`, refuses to
+   acknowledge:
+
+```ts
+if (stopPhoneParties.failed || stopRecordStudios.failed || stopWrite.failed) {
+  console.error("sms-inbound STOP: refusing to acknowledge — the refusal was not fully recorded", {...});
+  await supabase.from("sms_messages").update({ twilio_sid: null }).eq("id", messageId);
+  return { status: 500, twiml: twimlBody(), disposition: "opt_out_incomplete" };
+}
+```
+
+   **A 5xx alone would not have done it.** The idempotency claim at step (c) is
+   `upsert(…, { onConflict: "twilio_sid", ignoreDuplicates: true })`, so Twilio's
+   retry of the same `MessageSid` would have returned `duplicate` and the branch
+   would never have run again. The claim is therefore released first — by
+   clearing `twilio_sid` (`TEXT UNIQUE`, nullable, `00282:74`), **not** by
+   deleting the row: the inbound STOP is itself a 10DLC artifact and must
+   survive even if the retry never comes. `index.ts` already passes
+   `result.status` straight into the `Response` (`:43`), so no change there.
+4. The **START** branch is deliberately left answering 200 on a failed read: it
+   grants fewer studios, which leaves a standing refusal standing — the
+   fail-closed direction. It now at least logs, through the same two helpers.
+   `studiosHoldingPhone()`'s own `failed` is likewise left as the log-and-
+   continue the reviewer describes as correct R-AM discipline: its seats are
+   covered phone-globally by `optOutAllForPhone()` and caught by
+   `orgHasOptedOutParty`.
+
+**Evidence.** Three new cases (two failures + the clean control). The
+record-read case runs the full round trip: denied read → 500 +
+`opt_out_incomplete`, party rows still `opted_out`, the inbound row's
+`twilio_sid` released to NULL — then the *same MessageSid* is replayed against a
+healthy client and both records, including the **seatless** `org-beta` one, come
+back `opted_out`.
+
+```
+a STOP whose consent-record read fails is not acknowledged, and the retry completes it ... ok
+a STOP whose party read fails is not acknowledged either ... ok
+a STOP with every read clean still answers Twilio 200 ... ok
+
+sms-inbound STOP: refusing to acknowledge — the refusal was not fully recorded {
+  phone: "+15551110063",
+  partiesReadFailed: true,
+  recordReadFailed: false,
+  consentWriteFailed: false
+}
+```
+
+---
+
+## Gates
+
+```
+$ deno check --config supabase/functions/deno.json \
+    supabase/functions/sms-inbound/pipeline.ts supabase/functions/_shared/sms.ts
+Check supabase/functions/sms-inbound/pipeline.ts
+Check supabase/functions/_shared/sms.ts
+
+$ deno test --config supabase/functions/deno.json --no-check -A \
+    supabase/functions/_tests/sms-inbound.test.ts supabase/functions/_shared/sms.test.ts
+ok | 78 passed | 0 failed          # was 71 before this cycle (+7 new cases)
+
+$ deno test --config supabase/functions/deno.json --no-check -A \
+    supabase/functions/_tests/ supabase/functions/_shared/
+FAILED | 701 passed | 1 failed
+  # the one failure is ./supabase/functions/_tests/stripe-rail.test.ts:
+  #   "error: (in promise) Error: supabaseKey is required."
+  # — the local-stack harness that _tests/run.sh exports keys for. Pre-existing
+  #   and unrelated: it fails identically with none of this cycle's files loaded.
+
+$ psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 \
+    -f supabase/tests/people/w1a_identity_channels_consent_test.sql
+…34. an email refusal is recoverable by a fresh recorded consent and an SMS one is not (r6 R6-M3): passed
+NOTICE:  All W1a assertions passed.        # 36 notices, block 34 last
+ROLLBACK
+
+$ git diff --stat
+ supabase/functions/_shared/sms.test.ts        |  88 ++++++++++++
+ supabase/functions/_shared/sms.ts             |  15 +-
+ supabase/functions/_tests/sms-inbound.test.ts | 196 ++++++++++++++++++++++++++
+ supabase/functions/sms-inbound/pipeline.ts    | 158 ++++++++++++++++++---
+ 4 files changed, 434 insertions(+), 23 deletions(-)
+```
+
+No migration, seed, grant or generated type changed, so
+`generate-legacy-grants.py`, `db:generate` and a reset were not run — nothing
+this cycle touched can move them.
