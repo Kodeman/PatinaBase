@@ -7,7 +7,10 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendCompliantEmail } from "../_shared/send-email.ts";
-import { DIGEST_ELIGIBLE_NOTIFICATION_STATUSES } from "./status.ts";
+import {
+  DIGEST_ELIGIBLE_NOTIFICATION_STATUSES,
+  DIGEST_EXCLUDED_TYPES,
+} from "./status.ts";
 import {
   renderBrandedShell,
   heading,
@@ -43,20 +46,6 @@ interface NotificationRow {
   metadata: Record<string, unknown> | null;
   created_at: string;
 }
-
-// Notification types that should NOT appear in a digest. Transactional
-// emails are always sent immediately and contain time-critical content.
-const DIGEST_EXCLUDED_TYPES = new Set([
-  "account_verification",
-  "password_reset",
-  "security_alert",
-  "order_confirmation",
-  "payment_receipt",
-  "client_confirmation",
-  // In-app messages already have their own coalescing channel.
-  "in_app_message",
-  "in_app_message_mention",
-]);
 
 const DIGEST_BASE_URL =
   Deno.env.get("CLIENT_PORTAL_URL") ?? "https://app.patina.cloud";
