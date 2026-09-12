@@ -198,6 +198,18 @@
 --     not the door; the close is an 00584-shaped tenant sweep over those
 --     base tables together with these branches, which changes who sees what
 --     platform-wide and is owed its own ruling. Recorded, not silently left.
+--   · r10 MAJOR-2 — identity_seat_count() counted over project_parties' RLS
+--     alone while people_directory_seats requires the tenant leg beside the
+--     three co-member legs, so §4's promise that "no Directory row ever claims
+--     a seat_count it cannot nest" broke with no cross-tenant stamp and no
+--     adversarial write: one human seated on a job of each of two studios that
+--     merely SHARE a designer of record made the row claim 2 and nest 1 for an
+--     admin of only one of them (walked; the both-studios caller is the
+--     control at 2 and 2). Not a read door — that same caller already reads
+--     both party rows directly, r6 MAJOR-2's recorded posture — but two
+--     columns of one wave disagreeing, and W2's head count and seat lines are
+--     what print it. The counter now carries the seats view's WHERE clause
+--     verbatim (§2).
 -- ═══════════════════════════════════════════════════════════════════════════
 
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -330,6 +342,25 @@ COMMENT ON FUNCTION public.reach_state_for(uuid, uuid, uuid) IS
   'exists, the same degrade v_project_roster.has_active_field_link carries '
   '(00626).';
 
+-- THE SEATS VIEW'S OWN GATE, not project_parties' RLS alone (w1b final review
+-- r10 MAJOR-2). This counted every seat the CALLER could read, whose whole
+-- access rule is project_parties' RLS — is_studio_comember(designer), true
+-- whenever the caller shares ANY active organization with the designer of
+-- record — while people_directory_seats additionally requires
+-- is_active_studio_member(project_tenant_org(project_id)) beside the three
+-- co-member legs (§4 below). Two different sets, so §4's promise that "no
+-- Directory row ever claims a seat_count it cannot nest" broke with no
+-- cross-tenant stamp, no adversarial write and nothing unusual in the data:
+-- one human seated on a job of each of two studios that merely SHARE a
+-- designer of record — the shipped local shape — made the row claim 2 and
+-- nest 1 for an admin who belongs to only one of them (r9 MAJOR-2's surviving
+-- consequence, reached through the phone-, email- and login-keyed identities
+-- the studio_contact_id card guard cannot cover). It was never a read door:
+-- the same caller already reads both party rows directly, which is r6
+-- MAJOR-2's recorded ruling that this view is not the door. The defect was two
+-- columns of one wave disagreeing, and W2's head count and seat lines are the
+-- readers that print it. The predicate below is the seats view's WHERE clause
+-- verbatim, so "this identity's seats" keeps ONE definition.
 CREATE OR REPLACE FUNCTION public.identity_seat_count(p_identity_key text)
 RETURNS integer
 LANGUAGE sql
@@ -338,7 +369,12 @@ SET search_path TO 'public'
 AS $$
   SELECT count(*)::integer
     FROM public.project_parties pp
+    JOIN public.projects pj ON pj.id = pp.project_id
    WHERE p_identity_key IS NOT NULL
+     AND public.is_active_studio_member(public.project_tenant_org(pp.project_id))
+     AND ( public.is_studio_comember(pj.designer_id)
+        OR public.is_studio_comember(pj.lead_designer_id)
+        OR public.is_studio_comember(pj.created_by) )
      AND public.party_identity_key(
            pp.studio_contact_id, pp.profile_id, pp.phone_e164, pp.email, pp.id
          ) = p_identity_key;
@@ -351,8 +387,16 @@ COMMENT ON FUNCTION public.identity_seat_count(text) IS
   'How many project_parties seats one identity holds, across every project and '
   'every party kind. The honest answer to G-9: the Directory''s head counts '
   'CARDS and this counts SEATS, so one human is one row with N seats beneath '
-  'instead of N rows. SECURITY INVOKER — project_parties'' own RLS scopes it '
-  '(00626).';
+  'instead of N rows. Counted over people_directory_seats'' OWN predicate — '
+  'is_active_studio_member(project_tenant_org(project_id)) beside the three '
+  'co-member legs — not over project_parties'' RLS alone, so a row claims '
+  'exactly what it nests. RLS admits every seat whose designer of record '
+  'shares ANY active organization with the caller, which is a wider set than '
+  'the seats view shows: one human seated on a job of each of two studios that '
+  'merely share a designer made the row claim 2 and nest 1 for an admin of '
+  'only one of them, with no cross-tenant stamp and no adversarial write (w1b '
+  'final review r10 MAJOR-2). SECURITY INVOKER, so the caller''s own RLS still '
+  'bounds it from beneath (00626).';
 
 CREATE OR REPLACE FUNCTION public.contact_rule_summary(
   p_subject_type text,

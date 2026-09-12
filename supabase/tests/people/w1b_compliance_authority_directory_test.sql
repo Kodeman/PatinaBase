@@ -1599,6 +1599,94 @@ BEGIN
     RAISE EXCEPTION '4n the two seats of one login keyed to % person_ids', n;
   END IF;
 
+  -- ── r10 MAJOR-2: two studios that merely SHARE a designer of record ────
+  -- identity_seat_count() counted over project_parties' RLS alone, whose whole
+  -- rule is is_studio_comember(designer) — true whenever the caller shares ANY
+  -- active organization with the designer of record — while
+  -- people_directory_seats and the Directory's own party branch additionally
+  -- require is_active_studio_member(project_tenant_org(project_id)). Two
+  -- different sets, and separating them needs no cross-tenant stamp (r9
+  -- MAJOR-2's card guard) and no adversarial write: one human seated on a job
+  -- of each of two studios that share a designer does it, which is the shipped
+  -- local shape. Staged BEFORE the whole-fixture invariant below, so that
+  -- assertion runs over data that can break it — as one caller in one studio
+  -- it could not.
+  PERFORM pg_temp.reset_role();
+  INSERT INTO public.organizations (id, type, name, slug, status) VALUES
+    ('f1000000-0000-4000-8000-00000000000c','design_studio','Test Studio C','w1b-studio-c','active');
+  INSERT INTO public.organization_members (user_id, organization_id, role, status, joined_at) VALUES
+    -- the SAME designer of record, consulting for a second design studio, and
+    -- nobody else: the one-studio caller below belongs to Test Studio A and to
+    -- the seeded studio, and to this one not at all
+    -- `admin`, not `owner`: 00484's last_owner_protected guard would refuse the
+    -- teardown DELETE below, and nothing here turns on the owner role
+    ('a0000000-0000-0000-0000-000000000004','f1000000-0000-4000-8000-00000000000c','admin','active', now())
+  ON CONFLICT (user_id, organization_id) DO UPDATE SET role = EXCLUDED.role, status = 'active';
+  INSERT INTO public.projects
+    (id, name, designer_id, studio_id, status, created_by, client_visibility_tier) VALUES
+    ('f3000000-0000-4000-8000-00000000000c','W1b second-studio job',
+     'a0000000-0000-0000-0000-000000000004','f1000000-0000-4000-8000-00000000000c',
+     'active','a0000000-0000-0000-0000-000000000004','full');
+  INSERT INTO public.project_parties
+    (id, project_id, party_kind, display_name, phone, stage, created_by) VALUES
+    ('f4000000-0000-4000-8000-000000000151','f3000000-0000-4000-8000-00000000000a',
+     'sub','Wendell Pike','(612) 555-7777','active','a0000000-0000-0000-0000-000000000004'),
+    ('f4000000-0000-4000-8000-000000000152','f3000000-0000-4000-8000-00000000000c',
+     'sub','Wendell Pike','(612) 555-7777','active','a0000000-0000-0000-0000-000000000004');
+
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000003');
+  -- the premise, stated rather than assumed
+  IF NOT public.is_active_studio_member('f1000000-0000-4000-8000-00000000000a') THEN
+    RAISE EXCEPTION '4o the one-studio caller must be a member of the studio whose job holds the first seat';
+  END IF;
+  IF public.is_active_studio_member('f1000000-0000-4000-8000-00000000000c') THEN
+    RAISE EXCEPTION '4p the one-studio caller must NOT be a member of the second design studio';
+  END IF;
+  IF NOT public.is_studio_comember('a0000000-0000-0000-0000-000000000004') THEN
+    RAISE EXCEPTION '4q the one-studio caller must be a co-member of the shared designer, or project_parties'' RLS hides the second seat and there is nothing to diverge';
+  END IF;
+  -- and it is NOT a read door: RLS already shows this caller BOTH party rows.
+  -- The defect under test is two columns of one wave disagreeing (r6 MAJOR-2's
+  -- recorded ruling is that this view is not the door).
+  SELECT count(*) INTO n FROM public.project_parties
+   WHERE id IN ('f4000000-0000-4000-8000-000000000151',
+                'f4000000-0000-4000-8000-000000000152');
+  IF n <> 2 THEN
+    RAISE EXCEPTION '4r the caller reads % of the two party rows directly; both must be visible or this leg measures visibility instead of the disagreement', n;
+  END IF;
+  -- the seats view shows exactly one of them …
+  SELECT count(*) INTO n FROM public.people_directory_seats
+   WHERE seat_id IN ('f4000000-0000-4000-8000-000000000151',
+                     'f4000000-0000-4000-8000-000000000152');
+  IF n <> 1 THEN
+    RAISE EXCEPTION '4s the seats view shows the one-studio caller % of the two seats; the tenant leg should show exactly the one', n;
+  END IF;
+  -- … so the Directory row must claim exactly that one
+  SELECT seat_count INTO n FROM public.people_directory
+   WHERE role = 'sub' AND display_name = 'Wendell Pike';
+  IF n IS NULL THEN
+    RAISE EXCEPTION '4t the one-studio caller reads no Directory row for the shared identity, so its claim cannot be measured';
+  END IF;
+  IF n <> 1 THEN
+    RAISE EXCEPTION '4u the Directory row claims % seats and nests 1: identity_seat_count() is counting over a wider set than the seats view shows', n;
+  END IF;
+
+  -- the control: the designer, a member of BOTH studios, claims 2 and nests 2,
+  -- which is what makes the line above a defect and not an access rule
+  PERFORM pg_temp.reset_role();
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  SELECT seat_count INTO n FROM public.people_directory
+   WHERE role = 'sub' AND display_name = 'Wendell Pike';
+  IF n <> 2 THEN
+    RAISE EXCEPTION '4v the both-studios caller claims % seats; the control must see both', n;
+  END IF;
+  SELECT count(*) INTO n FROM public.people_directory_seats
+   WHERE seat_id IN ('f4000000-0000-4000-8000-000000000151',
+                     'f4000000-0000-4000-8000-000000000152');
+  IF n <> 2 THEN
+    RAISE EXCEPTION '4w the both-studios caller nests % of the two seats; the control must nest both', n;
+  END IF;
+
   -- the invariant itself, over EVERY Directory row the caller can see:
   -- what a row claims is what it nests. The client_rep seats above are staged
   -- BEFORE it, so it now runs over data that could break it.
@@ -1612,8 +1700,31 @@ BEGIN
     RAISE EXCEPTION '4k % Directory rows claim a seat count they cannot nest', n;
   END IF;
 
+  -- and once more as the ONE-STUDIO caller, over the same staged data
   PERFORM pg_temp.reset_role();
-  RAISE NOTICE '4. the uncarded identity: two seats on two jobs collapse to one row keyed on the phone, pointing at the newest seat, reach reads a live door on a NON-winning seat (and stops reading a revoked or expired one), the consent word AND its two dates come off the one record that decided them rather than off the winning seat''s number, a seat in ANOTHER studio contributes no number to the set, a folded refusal_unanswered on a granted record prints no consent date beside the refusal it decides, a mixed-kind identity nests every seat it claims, PR-c''s login-stamped client_rep seats leave the client row claiming 0, and no row anywhere claims a count it cannot nest: passed';
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000003');
+  SELECT count(*) INTO n
+    FROM public.people_directory pd
+   WHERE pd.seat_count > 0
+     AND pd.seat_count <> (
+           SELECT count(*) FROM public.people_directory_seats s
+            WHERE s.person_id = pd.person_id);
+  IF n <> 0 THEN
+    RAISE EXCEPTION '4x % Directory rows claim a seat count the ONE-STUDIO caller cannot nest', n;
+  END IF;
+
+  -- unwind the second design studio, so blocks 13 and 17 build the only ones
+  PERFORM pg_temp.reset_role();
+  DELETE FROM public.project_parties
+   WHERE id IN ('f4000000-0000-4000-8000-000000000151',
+                'f4000000-0000-4000-8000-000000000152');
+  DELETE FROM public.projects WHERE id = 'f3000000-0000-4000-8000-00000000000c';
+  DELETE FROM public.organization_members
+   WHERE organization_id = 'f1000000-0000-4000-8000-00000000000c';
+  DELETE FROM public.organizations WHERE id = 'f1000000-0000-4000-8000-00000000000c';
+
+  PERFORM pg_temp.reset_role();
+  RAISE NOTICE '4. the uncarded identity: two seats on two jobs collapse to one row keyed on the phone, pointing at the newest seat, reach reads a live door on a NON-winning seat (and stops reading a revoked or expired one), the consent word AND its two dates come off the one record that decided them rather than off the winning seat''s number, a seat in ANOTHER studio contributes no number to the set, a folded refusal_unanswered on a granted record prints no consent date beside the refusal it decides, a mixed-kind identity nests every seat it claims, PR-c''s login-stamped client_rep seats leave the client row claiming 0, a shared identity seated on a job of each of TWO design studios that merely share a designer of record claims exactly the one seat the one-studio caller can nest while the both-studios caller claims and nests both (r10 MAJOR-2), and no row anywhere claims a count it cannot nest, for either caller: passed';
 END $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -2071,6 +2182,24 @@ BEGIN
   IF n <> 0 THEN
     RAISE EXCEPTION '12c % of Pete Rusk''s seats disagree with his record', n;
   END IF;
+  -- … and the refusal does NOT move his REACH word. crm-model's reach-tier
+  -- table lists F-12 in the field-link row and his access matrix reads "Phone,
+  -- Field link by another channel"; fixture.md's "Patina reach today" column
+  -- says `field link`. The mechanism and the text consent are two axes (PR-e),
+  -- and the seed used to mint no link for his Okonkwo seat, so the Directory
+  -- printed `on_paper` — the word for someone Patina has never tried to reach
+  -- at all — and taught the opposite of the design (w1b final review r10,
+  -- tests F2).
+  SELECT reach_state INTO w FROM public.people_directory
+   WHERE display_name = 'Pete Rusk';
+  IF w <> 'field_link' THEN
+    RAISE EXCEPTION '12c2 Pete Rusk must read reach field_link (crm-model''s field-link tier; his phone is opted out of TEXT, not of the link), got %', w;
+  END IF;
+  SELECT count(*) INTO n FROM public.people_directory_seats
+   WHERE display_name = 'Pete Rusk' AND reach_state = 'field_link';
+  IF n < 1 THEN
+    RAISE EXCEPTION '12c3 no seat of Pete Rusk carries the field link the fixture gives him';
+  END IF;
 
   -- F-18 Joe Wozniak is invited and has not answered
   SELECT consent_status INTO w FROM public.people_directory WHERE display_name = 'Joe Wozniak';
@@ -2122,7 +2251,7 @@ BEGIN
   IF n <> 1 THEN RAISE EXCEPTION '12j the key holder is not Ngozi Eze'; END IF;
 
   PERFORM pg_temp.reset_role();
-  RAISE NOTICE '12. the seeded fixture reads as the fixture: five granted numbers, Pete''s Lindqvist refusal answering on Okonkwo, Joe invited, Frank routed to Rosa, Ray never texted, the lender''s paper reported as a fact, Chidi''s $2,500 line in cents, Erin preparing only, and Ngozi holding the key: passed';
+  RAISE NOTICE '12. the seeded fixture reads as the fixture: five granted numbers, Pete''s Lindqvist refusal answering on Okonkwo while his REACH still reads field_link (r10 tests F2), Joe invited, Frank routed to Rosa, Ray never texted, the lender''s paper reported as a fact, Chidi''s $2,500 line in cents, Erin preparing only, and Ngozi holding the key: passed';
 END $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -3341,8 +3470,108 @@ BEGIN
     RAISE EXCEPTION '19m the fixture did not unwind: Northgate reads % rather than the seeded lapsed', w;
   END IF;
 
+  -- ── the SECOND renewal: the reckoning is transitive, not one hop ───────
+  -- r10 MAJOR-1. A certificate is renewed every year, so the ordinary steady
+  -- state of a firm a studio keeps two years is a CHAIN: A retired by B, then
+  -- B retired by C. All four writes below are honest and pass all ten guards.
+  -- A one-hop reckoning breaks the same word in the opposite direction: the
+  -- day B's own certificate expires, A's IMMEDIATE successor is no longer in
+  -- force, A re-enters the count, and the card reads `lapsed` while C — in
+  -- force, non-superseded, gating — is on file. It arrives from the CALENDAR
+  -- ALONE, with no write, so there is no audit line and no act to point at.
+  -- Both directions are pinned here at once: `current` today, `current` with
+  -- the middle certificate's date already past, and `lapsed` once the head of
+  -- the chain is gutted.
+  INSERT INTO public.studio_compliance_documents
+    (id, organization_id, holder_type, holder_id, doc_type, expires_on, blocks)
+  VALUES ('f9000000-0000-4000-8000-00000000001b',
+          'b0000000-0000-0000-0000-000000000001','company',
+          'd0e20000-0000-0000-0000-000000000003','coi_gl',
+          CURRENT_DATE + 10,'{site_access,draw}');
+  UPDATE public.studio_compliance_documents
+     SET superseded_by = 'f9000000-0000-4000-8000-00000000001b'
+   WHERE id = 'd0e50000-0000-0000-0000-000000000006';          -- A -> B
+  INSERT INTO public.studio_compliance_documents
+    (id, organization_id, holder_type, holder_id, doc_type, expires_on, blocks)
+  VALUES ('f9000000-0000-4000-8000-00000000001c',
+          'b0000000-0000-0000-0000-000000000001','company',
+          'd0e20000-0000-0000-0000-000000000003','coi_gl',
+          CURRENT_DATE + 400,'{site_access,draw}');
+  UPDATE public.studio_compliance_documents
+     SET superseded_by = 'f9000000-0000-4000-8000-00000000001c'
+   WHERE id = 'f9000000-0000-4000-8000-00000000001b';          -- B -> C
+  w := public.compliance_state('d0e20000-0000-0000-0000-000000000003');
+  IF w <> 'current' THEN
+    RAISE EXCEPTION '19n the chain A->B->C is four honest writes and must read current, got %', w;
+  END IF;
+
+  -- now the calendar alone: B's own certificate has passed. NOTHING is written
+  -- to A and nothing is written to C.
+  UPDATE public.studio_compliance_documents
+     SET expires_on = CURRENT_DATE - 1
+   WHERE id = 'f9000000-0000-4000-8000-00000000001b';
+  IF NOT EXISTS (SELECT 1 FROM public.studio_compliance_documents
+                  WHERE id = 'f9000000-0000-4000-8000-00000000001b'
+                    AND expires_on = CURRENT_DATE - 1) THEN
+    RAISE EXCEPTION '19o the middle certificate did not age, so this leg tests nothing';
+  END IF;
+  -- the premise, stated rather than assumed: a ONE-HOP reckoning would now
+  -- re-admit A, which is expired and gating, and print the blocking word
+  SELECT count(*) INTO n FROM public.studio_compliance_documents d
+   WHERE d.holder_id = 'd0e20000-0000-0000-0000-000000000003'
+     AND cardinality(d.blocks) > 0
+     AND d.expires_on IS NOT NULL AND d.expires_on < CURRENT_DATE
+     AND (d.superseded_by IS NULL
+          OR NOT EXISTS (SELECT 1 FROM public.studio_compliance_documents s
+                          WHERE s.id = d.superseded_by
+                            AND (s.expires_on IS NULL OR s.expires_on >= CURRENT_DATE)
+                            AND d.blocks <@ s.blocks));
+  IF n = 0 THEN
+    RAISE EXCEPTION '19p the one-hop reckoning would not have re-admitted a lapse here, so this leg proves nothing';
+  END IF;
+  -- and the record says cover is on file
+  SELECT count(*) INTO n FROM public.studio_compliance_documents
+   WHERE holder_id = 'd0e20000-0000-0000-0000-000000000003'
+     AND doc_type = 'coi_gl' AND superseded_by IS NULL
+     AND cardinality(blocks) > 0
+     AND (expires_on IS NULL OR expires_on >= CURRENT_DATE);
+  IF n <> 1 THEN
+    RAISE EXCEPTION '19q the firm must hold exactly one in-force, non-superseded, gating coi_gl here, found %', n;
+  END IF;
+  w := public.compliance_state('d0e20000-0000-0000-0000-000000000003');
+  IF w <> 'current' THEN
+    RAISE EXCEPTION '19r the second renewal must not re-admit the first lapse: the card reads % over an in-force gating coi_gl, from the calendar alone', w;
+  END IF;
+  -- the word reaches the face the same way
+  SELECT paper_state INTO v_dana FROM public.people_directory
+   WHERE display_name = 'Dana Kowalski' AND role = 'contact';
+  IF v_dana IS DISTINCT FROM 'current' THEN
+    RAISE EXCEPTION '19s Dana Kowalski''s Directory row reads % while her firm is covered through the chain''s head', COALESCE(v_dana,'NULL');
+  END IF;
+
+  -- and the transitive walk is still CONDITIONAL, not a refusal to forget:
+  -- gut the head of the chain and every root behind it comes back
+  UPDATE public.studio_compliance_documents SET blocks = '{}'
+   WHERE id = 'f9000000-0000-4000-8000-00000000001c';
+  w := public.compliance_state('d0e20000-0000-0000-0000-000000000003');
+  IF w <> 'lapsed' THEN
+    RAISE EXCEPTION '19t a gutted head of chain retired the 2026-03-31 lapse through two hops: got %', w;
+  END IF;
+
+  -- unwind this leg too
+  UPDATE public.studio_compliance_documents SET superseded_by = NULL
+   WHERE id IN ('d0e50000-0000-0000-0000-000000000006',
+                'f9000000-0000-4000-8000-00000000001b');
+  DELETE FROM public.studio_compliance_documents
+   WHERE id IN ('f9000000-0000-4000-8000-00000000001b',
+                'f9000000-0000-4000-8000-00000000001c');
+  w := public.compliance_state('d0e20000-0000-0000-0000-000000000003');
+  IF w <> 'lapsed' THEN
+    RAISE EXCEPTION '19u the chain leg did not unwind: Northgate reads % rather than the seeded lapsed', w;
+  END IF;
+
   PERFORM pg_temp.reset_role();
-  RAISE NOTICE '19. the supersede is re-reckoned at every READ: an honest in-force renewal carrying both gates releases the 2026-03-31 lapse, and the two ordinary member writes that used to outrun r3/r4 — back-date the successor, then empty its blocks — still LAND and no longer move the word, because compliance_state() drops a superseded row only while its successor is in force and still contains that row''s gates. Dana Kowalski''s Directory row follows the firm, and the honest release still works (r9 MAJOR-1): passed';
+  RAISE NOTICE '19. the supersede is re-reckoned at every READ: an honest in-force renewal carrying both gates releases the 2026-03-31 lapse, and the two ordinary member writes that used to outrun r3/r4 — back-date the successor, then empty its blocks — still LAND and no longer move the word, because compliance_state() drops a superseded row only while its successor is in force and still contains that row''s gates. Dana Kowalski''s Directory row follows the firm, and the honest release still works (r9 MAJOR-1). And the reckoning is TRANSITIVE, not one hop: the ordinary second renewal A->B->C reads current today and still current the day the middle certificate''s own date has passed — where a one-hop rule re-admitted the 2026-03-31 lapse from the calendar alone — while gutting the head of the chain still brings every root behind it back (r10 MAJOR-1): passed';
 END $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════

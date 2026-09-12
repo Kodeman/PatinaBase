@@ -1,0 +1,12 @@
+NOTICE:  -- the four identities the r10 tests round was told to check --
+NOTICE:    Dana Kowalski  | contact  | reach=field_link | consent=granted    | paper=lapsed
+NOTICE:    Erin Sato      | contact  | reach=field_link | consent=granted    | paper=current
+NOTICE:    Joe Wozniak    | contact  | reach=field_link | consent=pending    | paper=current
+NOTICE:    Pete Rusk      | contact  | reach=field_link | consent=opted_out  | paper=current
+NOTICE:  active, unexpired field links on Pete Rusk's Okonkwo seat: 1
+NOTICE:    its expiry (his window ends 2027-05-31, PR-d): 2027-06-01
+NOTICE:  seats of Pete Rusk reading field_link: 1
+NOTICE:  caller a0000000-0000-0000-0000-000000000004 : Directory rows claiming a count they cannot nest = 0
+NOTICE:  caller a0000000-0000-0000-0000-000000000003 : Directory rows claiming a count they cannot nest = 0
+NOTICE:  of 50 keyed Directory rows, 0 differ from the PRE-FIX (RLS-only) count on the untouched seed (0 = the fix costs the shipped fixture nothing)
+ROLLBACK
