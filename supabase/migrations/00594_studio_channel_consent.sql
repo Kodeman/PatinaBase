@@ -352,6 +352,27 @@ BEGIN
                         WHEN 'pending'   THEN 2
                         ELSE 3                    -- not_asked last
                       END,
+                      -- INSIDE THE REFUSAL BUCKET, THE SEAT THAT CARRIES THE
+                      -- REFUSAL'S OWN FACTS OUTRANKS ONE THAT CARRIES NONE
+                      -- (r2 R2-M1). The date fallback below is COALESCE(...,
+                      -- updated_at) — a row-maintenance timestamp, not a
+                      -- refusal date. The shipped portal writes `opted_out`
+                      -- seats with a NULL sms_opt_out_at, a NULL source and no
+                      -- words on purpose (use-coordination.ts), and such a row
+                      -- is touched whenever anything on the roster changes, so
+                      -- its updated_at routinely outranks the 2025
+                      -- sms_opt_out_at of the seat that actually received the
+                      -- STOP. The winner supplies the record's status, its
+                      -- origin project and (where the winner has one) its
+                      -- opt-out date, so picking the dateless sibling mints the
+                      -- record with none of the refusal's facts. These two
+                      -- legs are inert outside the refusal bucket — every row
+                      -- in a granted / pending / not_asked group scores 1 — so
+                      -- "then the most recent granted" is unchanged.
+                      CASE WHEN sms_consent_status = 'opted_out'
+                            AND sms_consent_source IS NOT NULL THEN 0 ELSE 1 END,
+                      CASE WHEN sms_consent_status = 'opted_out'
+                            AND sms_opt_out_at IS NOT NULL THEN 0 ELSE 1 END,
                       COALESCE(sms_opt_out_at, sms_consented_at,
                                sms_consent_recorded_at, updated_at) DESC NULLS LAST
            ) AS rn
@@ -389,18 +410,47 @@ BEGIN
   -- fold mints, since the fold raises the flag and left the date NULL. The date
   -- had not moved anywhere: it was still only on the losing sibling seat, which
   -- is the thing this CTE exists to stop relying on.
+  --
+  -- AND THE SIBLING IT PICKS IS THE ONE THAT ACTUALLY HOLDS THE REFUSAL
+  -- (r2 R2-M1). Ranking the refusing seats by COALESCE(sms_opt_out_at,
+  -- sms_consent_recorded_at, updated_at) alone ranks them by most recently
+  -- TOUCHED: a dateless, sourceless portal refusal (the shape
+  -- use-coordination.ts writes on purpose) wins over the seat carrying
+  -- `inbound_sms` / "Replied STOP" / 2025-12-03 as soon as anything on the
+  -- roster touches it. Everything the record knows about the refusal then
+  -- comes off a row that knows nothing: opt_out_at NULL and all four opt_out_*
+  -- NULL, permanently (ON CONFLICT DO NOTHING means no later fold repairs it,
+  -- and record_channel_reconsent never touches opt_out_* by design), so R-Q's
+  -- "Opted out by text, 3 Dec 2025" is unprintable and the carrier-audit
+  -- artifact is gone. Worse, a NULL opt_out_source is what the mirror reads as
+  -- "this refusal has no words" (R-AQ), so it then writes NULL over
+  -- source/evidence/recorded_at/recorded_by on EVERY seat in the studio on that
+  -- number — including the seat that was holding the STOP's own words. R-AQ's
+  -- premise (a NULL here means there were never any refusal words) is true of
+  -- the RECORD's writers and false of this picker, which is why the picker has
+  -- to be the one that is right.
+  --
+  -- So: words first, then a date, then recency. And the date has a group-wide
+  -- last resort — max(sms_opt_out_at) across the refusing seats — so a refusal
+  -- that carries words but no date of its own still lands a real date on the
+  -- record instead of NULL, rather than the pair being silently split.
   refusal AS (
     SELECT org, phone_e164,
-           sms_opt_out_at,
+           COALESCE(sms_opt_out_at, group_opt_out_at) AS sms_opt_out_at,
            sms_consent_source      AS opt_out_source,
            sms_consent_evidence    AS opt_out_evidence,
            sms_consent_recorded_at AS opt_out_recorded_at,
            sms_consent_recorded_by AS opt_out_recorded_by
       FROM (
         SELECT party_org.*,
+               max(sms_opt_out_at) OVER (
+                 PARTITION BY org, phone_e164
+               ) AS group_opt_out_at,
                ROW_NUMBER() OVER (
                  PARTITION BY org, phone_e164
-                 ORDER BY COALESCE(sms_opt_out_at, sms_consent_recorded_at,
+                 ORDER BY (sms_consent_source IS NOT NULL) DESC,
+                          (sms_opt_out_at IS NOT NULL) DESC,
+                          COALESCE(sms_opt_out_at, sms_consent_recorded_at,
                                    updated_at) DESC NULLS LAST
                ) AS rrn
           FROM party_org
@@ -475,7 +525,11 @@ COMMENT ON FUNCTION public.backfill_channel_consent_from_parties() IS
   'purpose. The refusing sibling gives the record the refusal''s own source, '
   'words, recorder AND DATE: opt_out_at is the winning row''s date or, where '
   'the winner has none, the refusing sibling''s, so the date and the words come '
-  'off the same row (r6 R6-M2). Idempotent — ON CONFLICT '
+  'off the same row (r6 R6-M2). The refusing sibling is chosen by the '
+  'refusal''s OWN facts — its words first, then its date, and only then row '
+  'recency — so a dateless sourceless portal refusal never outranks the seat '
+  'that received the STOP and empties the record''s refusal evidence set '
+  '(r2 R2-M1). Idempotent — ON CONFLICT '
   'DO NOTHING never overwrites a later decision — and side-effect-free to '
   're-run once the trigger exists: a folded `pending` reaches the party rows '
   'through the mirror, which suppresses 00432''s opt-in dispatch (00594).';
