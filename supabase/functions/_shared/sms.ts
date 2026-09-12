@@ -500,11 +500,22 @@ async function channelConsentVerdict(
   }
 
   // No studio resolves at all — nothing to scope to, so the reduction stays
-  // phone-global here and only here.
-  const { data: rows } = await supabase
+  // phone-global here and only here. This is the last line between an
+  // unattributable send and a STOP, so it obeys R-AM like its four siblings: a
+  // read that ERRORED comes back as an empty row set, and an empty row set read
+  // as "nobody has refused" would lift the primary gate on exactly the send
+  // that has no other check (r7 R7-M2).
+  const { data: rows, error: scanError } = await supabase
     .from("project_parties")
     .select("sms_consent_status")
     .eq("phone_e164", phone);
+  if (scanError) {
+    console.error(
+      "channelConsentVerdict: refusing, the phone-global scan failed",
+      scanError,
+    );
+    return "refuse";
+  }
   const anyOptedOut = (rows ?? []).some(
     (r) => (r as { sms_consent_status: string }).sms_consent_status === "opted_out",
   );

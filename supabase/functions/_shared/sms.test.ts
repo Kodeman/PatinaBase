@@ -1270,3 +1270,91 @@ Deno.test("flush: with no party on the deferred row the phone-global reduction s
   assertEquals(result.suppressed, 1);
   assertEquals(fetchCalls, 0);
 });
+
+// ── r7 R7-M2: the last phone-global branch obeys R-AM like its four siblings ──
+//
+// When no studio resolves for a send there is nothing to scope to, so the
+// reduction across every party row on the number is the ONLY line left between
+// an unattributable send and a STOP. That read used to be taken without its
+// `error`: a denied read came back as an empty row set, "nobody has refused",
+// verdict `unknown` — and the legacy party-row gate then carried the send on
+// the seat's own `granted`, past another studio's standing STOP on the same
+// number.
+const SCAN_DENIED = {
+  message: "permission denied for table project_parties",
+  code: "42501",
+};
+
+/** Denies exactly the phone-keyed project_parties reads; id-keyed ones stand. */
+function denyPhoneScan(fake: ReturnType<typeof createFakeSupabase>) {
+  const wrap = (inner: Record<string, (...a: never[]) => unknown>) => {
+    let denied = false;
+    // deno-lint-ignore no-explicit-any
+    const proxy: any = {
+      select: (c?: string) => {
+        inner = (inner as never as { select: (c?: string) => typeof inner })
+          .select(c);
+        return proxy;
+      },
+      eq: (col: string, val: unknown) => {
+        if (col === "phone_e164") denied = true;
+        inner = (inner as never as {
+          eq: (c: string, v: unknown) => typeof inner;
+        }).eq(col, val);
+        return proxy;
+      },
+      in: (col: string, arr: unknown[]) => {
+        inner = (inner as never as {
+          in: (c: string, v: unknown[]) => typeof inner;
+        }).in(col, arr);
+        return proxy;
+      },
+      maybeSingle: () =>
+        denied
+          ? Promise.resolve({ data: null, error: SCAN_DENIED })
+          : (inner as never as { maybeSingle: () => unknown }).maybeSingle(),
+      // deno-lint-ignore no-explicit-any
+      then: (cb: any) =>
+        denied
+          ? Promise.resolve({ data: null, error: SCAN_DENIED }).then(cb)
+          : (inner as never as { then: (cb: unknown) => Promise<unknown> })
+            .then(cb),
+    };
+    return proxy;
+  };
+  return {
+    ...fake,
+    from: (table: string) =>
+      table === "project_parties" ? wrap(fake.from(table) as never) : fake.from(table),
+  };
+}
+
+function unattributableSeed() {
+  return {
+    // A seat whose project has no studio_id and no designer — nothing resolves.
+    project_parties: [{ ...party("p1", "granted"), project_id: null }],
+  };
+}
+
+Deno.test("a failed phone-global scan refuses the send instead of reading as no refusal", async () => {
+  const fake = createFakeSupabase(unattributableSeed());
+  const res = await sendPartySms(
+    denyPhoneScan(fake) as never,
+    { partyId: "p1", body: "hello" },
+    { getEnv: envOf(CONSENT_ENV), now: OPEN_HOURS },
+  );
+  assert(!res.sent, "a scan we could not read is not a scan that found nothing");
+  assertEquals(res.reason, "opted_out");
+});
+
+// The control: the same send, same shape, with the read working — otherwise the
+// assertion above would pass for the wrong reason.
+Deno.test("the unattributable send still goes when the phone-global scan reads clean", async () => {
+  const fake = createFakeSupabase(unattributableSeed());
+  const res = await sendPartySms(
+    fake as never,
+    { partyId: "p1", body: "hello" },
+    { getEnv: envOf(CONSENT_ENV), now: OPEN_HOURS },
+  );
+  assert(res.sent, "nothing on this number has refused, so the send stands");
+});

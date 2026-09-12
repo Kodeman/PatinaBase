@@ -1199,3 +1199,199 @@ Deno.test("STOP records the refusal as unanswered; a START lowers the flag", asy
     "only the recipient's own answer lowers it — this is what reopens the studio's door",
   );
 });
+
+// ── r7 R7-M1: the rail is held to the record's own invariant ─────────────────
+//
+// "A REFUSAL WRITES NONE OF THE CONSENT'S FIVE" (00594:159-170) was closed
+// inside record_channel_consent (00594:1469-1479) and left open in the rail —
+// the writer that handles every REAL stop. Writing source/evidence/recorded_at
+// unconditionally, one ordinary STOP over a number the studio holds a signed
+// grant for restated that grant as "arrived by text, today": R-Q's grant
+// sentence read "Consent by text, 2 May 2025", recorded_at contradicted
+// consented_at on one row, recorded_by still named the studio member who wrote
+// the paperwork down, and nothing anywhere held the original. Unrecoverable —
+// reconsent() writes the studio's NEW paperwork onto that side.
+Deno.test("a STOP keeps the grant's own evidence and restates only the refusal's", async () => {
+  const fake = createFakeSupabase(baseSeed({
+    project_parties: [
+      { id: "p1", phone_e164: "+15551110060", project_id: "proj1", party_kind: "sub", sms_consent_status: "granted" },
+    ],
+    studio_channel_consent: [{
+      organization_id: "org-alpha",
+      channel_kind: "sms",
+      channel_value: "+15551110060",
+      status: "granted",
+      consented_at: "2025-05-02T15:00:00Z",
+      source: "written",
+      evidence: "Signed the Lindqvist kickoff form",
+      recorded_at: "2025-05-02T15:00:00Z",
+      disclosure_version: "field-sms-v1",
+      recorded_by: "dz1",
+      refusal_unanswered: false,
+    }],
+  }));
+  const res = await processInbound(
+    params({ From: "+15551110060", Body: "STOP", MessageSid: "SMstopevidence" }),
+    { supabase: fake as never, getEnv: NO_POSTHOG },
+  );
+  assertEquals(res.disposition, "opted_out");
+  const rec = ((fake._data.studio_channel_consent ?? []) as Array<{
+    status: string; consented_at: string | null; source: string | null;
+    evidence: string | null; recorded_at: string | null;
+    disclosure_version: string | null; recorded_by: string | null;
+    refusal_unanswered: boolean; opt_out_source: string | null;
+    opt_out_evidence: string | null; opt_out_recorded_at: string | null;
+    opt_out_recorded_by: string | null;
+  }>)[0];
+  assertEquals(rec.status, "opted_out");
+  assertEquals(rec.refusal_unanswered, true);
+  // The grant's own 10DLC artifact, untouched.
+  assertEquals(rec.source, "written", "the consent still says how it arrived");
+  assertEquals(rec.evidence, "Signed the Lindqvist kickoff form");
+  assertEquals(rec.recorded_at, "2025-05-02T15:00:00Z");
+  assertEquals(rec.consented_at, "2025-05-02T15:00:00Z");
+  assertEquals(rec.disclosure_version, "field-sms-v1");
+  assertEquals(rec.recorded_by, "dz1");
+  // The refusal's own four, and only those.
+  assertEquals(rec.opt_out_source, "inbound_sms");
+  assertEquals(rec.opt_out_evidence, "Inbound STOP");
+  assert(rec.opt_out_recorded_at, "the refusal is dated on its own set");
+  assertEquals(rec.opt_out_recorded_by, null, "the recipient refused, not the studio");
+});
+
+// The other leg, matched to record_channel_consent's own split (00594:1396): a
+// STOP that MINTS the record has no grant to protect, so it names itself.
+Deno.test("a STOP that mints the record writes itself onto the consent side", async () => {
+  const fake = createFakeSupabase(baseSeed({
+    project_parties: [
+      { id: "p1", phone_e164: "+15551110061", project_id: "proj1", party_kind: "sub", sms_consent_status: "granted" },
+    ],
+  }));
+  await processInbound(
+    params({ From: "+15551110061", Body: "STOP", MessageSid: "SMstopmint" }),
+    { supabase: fake as never, getEnv: NO_POSTHOG },
+  );
+  const rec = ((fake._data.studio_channel_consent ?? []) as Array<{
+    source: string | null; evidence: string | null; recorded_at: string | null;
+    disclosure_version: string | null; recorded_by: string | null;
+  }>)[0];
+  assertEquals(rec.source, "inbound_sms");
+  assertEquals(rec.evidence, "Inbound STOP");
+  assert(rec.recorded_at);
+  assertEquals(rec.disclosure_version ?? null, null, "the rail invents no disclosure");
+  assertEquals(rec.recorded_by ?? null, null, "nobody in the studio recorded this");
+});
+
+// ── r7 R7-M3: a STOP that was not fully recorded is not acknowledged ─────────
+//
+// The STOP branch's targets come from three reads; two of them swallowed their
+// error, so one failed query produced an empty target list, no consent record
+// at all, and a 200 to Twilio. A studio holding a record WITHOUT a seat has no
+// backstop by construction — that is why studiosHoldingRecord() exists — so its
+// record sat at `granted` after the number had said STOP, which is the send
+// gate's positive branch.
+const READ_DENIED = { message: "permission denied", code: "42501" };
+
+function denyTable(fake: FakeSupabase, table: string) {
+  const denied = Promise.resolve({ data: null, error: READ_DENIED });
+  // deno-lint-ignore no-explicit-any
+  const failing: any = {
+    select: () => failing,
+    eq: () => failing,
+    neq: () => failing,
+    in: () => failing,
+    is: () => failing,
+    order: () => failing,
+    limit: () => failing,
+    insert: () => failing,
+    update: () => failing,
+    upsert: () => failing,
+    maybeSingle: () => denied,
+    single: () => denied,
+    // deno-lint-ignore no-explicit-any
+    then: (cb: any) => denied.then(cb),
+  };
+  return {
+    ...fake,
+    from: (t: string) => (t === table ? failing : fake.from(t)),
+  } as unknown as FakeSupabase;
+}
+
+function seatlessRecordSeed(phone: string) {
+  return baseSeed({
+    project_parties: [
+      { id: "p1", phone_e164: phone, project_id: "proj1", party_kind: "sub", sms_consent_status: "granted" },
+    ],
+    studio_channel_consent: [
+      { organization_id: "org-alpha", channel_kind: "sms", channel_value: phone, status: "granted" },
+      // org-beta holds a record and no seat anywhere: nothing else can reach it.
+      { organization_id: "org-beta", channel_kind: "sms", channel_value: phone, status: "granted" },
+    ],
+  });
+}
+
+Deno.test("a STOP whose consent-record read fails is not acknowledged, and the retry completes it", async () => {
+  const fake = createFakeSupabase(seatlessRecordSeed("+15551110062"));
+  const res = await processInbound(
+    params({ From: "+15551110062", Body: "STOP", MessageSid: "SMstopblind" }),
+    { supabase: denyTable(fake, "studio_channel_consent") as never, getEnv: NO_POSTHOG },
+  );
+  assertEquals(res.status, 500, "Twilio must not be told a STOP landed when it did not");
+  assertEquals(res.disposition, "opt_out_incomplete");
+  // The party rows still carry the refusal — every write that could land, did.
+  assert(
+    ((fake._data.project_parties ?? []) as Array<{ sms_consent_status: string }>)
+      .every((p) => p.sms_consent_status === "opted_out"),
+    "the carrier-level refusal still reaches every seat",
+  );
+  // The idempotency claim is released, or the retry would answer `duplicate`
+  // and the seatless record would keep saying granted for ever.
+  const inbound = ((fake._data.sms_messages ?? []) as Array<{ twilio_sid: string | null; direction: string }>)
+    .filter((m) => m.direction === "inbound");
+  assertEquals(inbound.length, 1);
+  assertEquals(inbound[0].twilio_sid, null, "the MessageSid claim is released for the retry");
+
+  // Twilio retries the same MessageSid — now it goes through.
+  const retry = await processInbound(
+    params({ From: "+15551110062", Body: "STOP", MessageSid: "SMstopblind" }),
+    { supabase: fake as never, getEnv: NO_POSTHOG },
+  );
+  assertEquals(retry.status, 200);
+  assertEquals(retry.disposition, "opted_out");
+  const byOrg = Object.fromEntries(
+    ((fake._data.studio_channel_consent ?? []) as Array<{ organization_id: string; status: string }>)
+      .map((c) => [c.organization_id, c.status]),
+  );
+  assertEquals(byOrg["org-alpha"], "opted_out");
+  assertEquals(byOrg["org-beta"], "opted_out", "the seatless record is reached on the retry");
+});
+
+Deno.test("a STOP whose party read fails is not acknowledged either", async () => {
+  const fake = createFakeSupabase(seatlessRecordSeed("+15551110063"));
+  const res = await processInbound(
+    params({ From: "+15551110063", Body: "STOP", MessageSid: "SMstopblindparties" }),
+    { supabase: denyTable(fake, "project_parties") as never, getEnv: NO_POSTHOG },
+  );
+  assertEquals(res.status, 500);
+  assertEquals(res.disposition, "opt_out_incomplete");
+  // The record-only leg still read clean, so those records did land.
+  assert(
+    ((fake._data.studio_channel_consent ?? []) as Array<{ status: string }>)
+      .every((c) => c.status === "opted_out"),
+    "every write that could land, did",
+  );
+});
+
+// The control: with both reads clean the STOP is acknowledged as before.
+Deno.test("a STOP with every read clean still answers Twilio 200", async () => {
+  const fake = createFakeSupabase(seatlessRecordSeed("+15551110064"));
+  const res = await processInbound(
+    params({ From: "+15551110064", Body: "STOP", MessageSid: "SMstopclean" }),
+    { supabase: fake as never, getEnv: NO_POSTHOG },
+  );
+  assertEquals(res.status, 200);
+  assertEquals(res.disposition, "opted_out");
+  const inbound = ((fake._data.sms_messages ?? []) as Array<{ twilio_sid: string | null; direction: string }>)
+    .filter((m) => m.direction === "inbound");
+  assertEquals(inbound[0].twilio_sid, "SMstopclean", "a recorded STOP keeps its claim");
+});
