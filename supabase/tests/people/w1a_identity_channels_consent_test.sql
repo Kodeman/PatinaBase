@@ -2899,6 +2899,29 @@ VALUES
    'Signed consent form at kickoff', '2026-01-02 00:00:00+00',
    'a0000000-0000-4000-8000-000000000001', '2026-01-02 00:00:00+00');
 
+-- r9 R5-M2's population: F-12 Pete Rusk's shape (fixture.md:96 — "granted
+-- 2025-05-02, then STOP 2025-12-03"). A seat holding a WRITTEN GRANT that a
+-- named studio member recorded. The refusal that lands on it next is the
+-- ordinary inbound STOP, whose opt_out_recorded_by is deliberately NULL — and
+-- the mirror's one-column wordless test called that refusal "worded" (its
+-- source is 'inbound_sms') and let the other three columns fall back to this
+-- seat, handing the refusal the GRANT's recorder. The second seat is the
+-- sibling hole: a refusal that has a source but no words and no date of its
+-- own must not take this seat's grant words and grant date under it.
+INSERT INTO project_parties (id, project_id, party_kind, display_name, phone,
+                             sms_consent_status, sms_consent_source,
+                             sms_consent_evidence, sms_consent_recorded_at,
+                             sms_consent_recorded_by, sms_consented_at)
+VALUES
+  ('e0000000-0000-4000-8000-0000000000ab', 'd0000000-0000-4000-8000-0000000000a4',
+   'sub', 'Pete Rusk', '612-555-0437', 'granted', 'written',
+   'Signed the Lindqvist kickoff form', '2025-05-02 00:00:00+00',
+   'a0000000-0000-4000-8000-000000000002', '2025-05-02 00:00:00+00'),
+  ('e0000000-0000-4000-8000-0000000000ac', 'd0000000-0000-4000-8000-0000000000a4',
+   'sub', 'Ruth Calder', '612-555-0438', 'granted', 'written',
+   'Signed the porch-swap form', '2025-06-01 00:00:00+00',
+   'a0000000-0000-4000-8000-000000000002', '2025-06-01 00:00:00+00');
+
 DO $$
 DECLARE
   r      RECORD;
@@ -3118,12 +3141,118 @@ BEGIN
   ASSERT r.sms_consented_at IS NOT NULL,
     'FAIL 27i8: the wipe is the four evidence columns, not the consent date';
 
+  -- 27j. r9 R5-M2: A MIRRORED REFUSAL NEVER LENDS THE SEAT THE GRANT'S
+  --      RECORDER. R-AQ's wipe used to be decided by ONE column —
+  --      `NEW.opt_out_source IS NULL` — and the other three still COALESCEd to
+  --      the seat whenever the source was filled. The ordinary inbound STOP is
+  --      exactly that shape: opt_out_source = 'inbound_sms', so the one-column
+  --      test said "this refusal has words", while opt_out_recorded_by is
+  --      DELIBERATELY AND ALWAYS NULL on a rail-written STOP (the edge pipeline
+  --      writes it null on purpose — nobody in the studio recorded it, the
+  --      recipient did, R7-M1). The COALESCE then handed the seat
+  --      pp.sms_consent_recorded_by: the studio member who recorded THE GRANT,
+  --      now named on the seat as the person who refused. The seat is the only
+  --      copy any shipped surface reads. The four refusal columns are now
+  --      decided as a SET, straight from the record, NULLs included.
+  PERFORM pg_temp.reset_role();
+
+  SELECT * INTO r FROM project_parties WHERE id = 'e0000000-0000-4000-8000-0000000000ab';
+  ASSERT r.sms_consent_status = 'granted'
+     AND r.sms_consent_recorded_by = 'a0000000-0000-4000-8000-000000000002',
+    'FAIL 27j: the seat must start out holding the GRANT''s recorder, got '
+      || COALESCE(r.sms_consent_status, '<null>') || ' / '
+      || COALESCE(r.sms_consent_recorded_by::text, '<null>');
+
+  -- The inbound STOP rail's own write, verbatim: dated, with the carrier's
+  -- words, and NO recorder. An UPSERT, as writeChannelConsent does it — 27i's
+  -- fold has already minted this number's record from the seat, so the record
+  -- carries the studio's GRANT on its consent side, which is F-12's shape
+  -- exactly.
+  INSERT INTO studio_channel_consent (
+    organization_id, channel_kind, channel_value, status,
+    opt_out_at, refusal_unanswered,
+    opt_out_source, opt_out_evidence, opt_out_recorded_at, opt_out_recorded_by)
+  VALUES (
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '+16125550437', 'opted_out',
+    '2025-12-03T00:00:00Z', true,
+    'inbound_sms', 'Replied STOP', '2025-12-03T00:00:00Z', NULL)
+  ON CONFLICT (organization_id, channel_kind, channel_value) DO UPDATE
+    SET status              = EXCLUDED.status,
+        opt_out_at          = EXCLUDED.opt_out_at,
+        refusal_unanswered  = EXCLUDED.refusal_unanswered,
+        opt_out_source      = EXCLUDED.opt_out_source,
+        opt_out_evidence    = EXCLUDED.opt_out_evidence,
+        opt_out_recorded_at = EXCLUDED.opt_out_recorded_at,
+        opt_out_recorded_by = EXCLUDED.opt_out_recorded_by;
+
+  SELECT * INTO r FROM studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-4000-8000-00000000000a'
+     AND channel_value = '+16125550437';
+  ASSERT r.opt_out_recorded_by IS NULL,
+    'FAIL 27j2: the record must say nobody in the studio recorded the refusal, got '
+      || COALESCE(r.opt_out_recorded_by::text, '<null>');
+
+  SELECT * INTO r FROM project_parties WHERE id = 'e0000000-0000-4000-8000-0000000000ab';
+  ASSERT r.sms_consent_status = 'opted_out'
+     AND r.sms_consent_source = 'inbound_sms'
+     AND r.sms_consent_evidence = 'Replied STOP'
+     AND r.sms_consent_recorded_at = '2025-12-03T00:00:00Z',
+    'FAIL 27j3: the seat must carry the refusal''s own words and date, got '
+      || COALESCE(r.sms_consent_status, '<null>') || ' / '
+      || COALESCE(r.sms_consent_source, '<null>') || ' / '
+      || COALESCE(r.sms_consent_evidence, '<null>') || ' / '
+      || COALESCE(r.sms_consent_recorded_at::text, '<null>');
+  ASSERT r.sms_consent_recorded_by IS NULL,
+    'FAIL 27j4: a refusal the recipient made must never name a studio member as '
+    'the one who refused — the seat may not borrow the GRANT''s recorder, got '
+      || COALESCE(r.sms_consent_recorded_by::text, '<null>');
+  -- The grant's own date is not evidence and is not in the set the refusal
+  -- writes: the record still says the number was once granted (R-Q).
+  ASSERT r.sms_consented_at = '2025-05-02T00:00:00Z',
+    'FAIL 27j5: the grant''s date is not part of the refusal''s evidence set, got '
+      || COALESCE(r.sms_consented_at::text, '<null>');
+
+  -- 27j6. THE TWO SIBLING HOLES, from the same one-column test: a refusal that
+  --       HAS a source but no words and no date of its own must not be given
+  --       the seat's grant words and grant date under that source.
+  INSERT INTO studio_channel_consent (
+    organization_id, channel_kind, channel_value, status,
+    opt_out_at, refusal_unanswered,
+    opt_out_source, opt_out_evidence, opt_out_recorded_at, opt_out_recorded_by)
+  VALUES (
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '+16125550438', 'opted_out',
+    '2025-12-04T00:00:00Z', true,
+    'inbound_sms', NULL, NULL, NULL)
+  ON CONFLICT (organization_id, channel_kind, channel_value) DO UPDATE
+    SET status              = EXCLUDED.status,
+        opt_out_at          = EXCLUDED.opt_out_at,
+        refusal_unanswered  = EXCLUDED.refusal_unanswered,
+        opt_out_source      = EXCLUDED.opt_out_source,
+        opt_out_evidence    = EXCLUDED.opt_out_evidence,
+        opt_out_recorded_at = EXCLUDED.opt_out_recorded_at,
+        opt_out_recorded_by = EXCLUDED.opt_out_recorded_by;
+
+  SELECT * INTO r FROM project_parties WHERE id = 'e0000000-0000-4000-8000-0000000000ac';
+  ASSERT r.sms_consent_status = 'opted_out' AND r.sms_consent_source = 'inbound_sms',
+    'FAIL 27j6: the refusal must reach the seat, got '
+      || COALESCE(r.sms_consent_status, '<null>') || ' / '
+      || COALESCE(r.sms_consent_source, '<null>');
+  ASSERT r.sms_consent_evidence IS NULL
+     AND r.sms_consent_recorded_at IS NULL
+     AND r.sms_consent_recorded_by IS NULL,
+    'FAIL 27j7: a refusal that carries no words, no date and no recorder must '
+    'not borrow the grant''s, got '
+      || COALESCE(r.sms_consent_evidence, '<null>') || ' / '
+      || COALESCE(r.sms_consent_recorded_at::text, '<null>') || ' / '
+      || COALESCE(r.sms_consent_recorded_by::text, '<null>');
+
   RAISE NOTICE '27. reconsent is evidence-only and re-callable (r7 M7-2), '
                'leaves the refusal''s own evidence standing (r8 W4-M2), the '
-               'seat carries the refusal''s own words too (r9 R5-M1), and a '
+               'seat carries the refusal''s own words too (r9 R5-M1), a '
                'sourceless refusal is never given the studio''s consent as its '
                'words (r6 R6-M1) — nor left standing on the sibling seat '
-               '(r8 R8-M1): passed';
+               '(r8 R8-M1) — and a mirrored refusal never lends the seat the '
+               'GRANT''s recorder, words or date (r9 R5-M2): passed';
 END
 $$;
 
@@ -3307,7 +3436,13 @@ VALUES
    'person', 'sub', 'Held Person', 'Held Person LLC',
    'a0000000-0000-4000-8000-000000000001'),
   ('c0000000-0000-4000-8000-000000000072', 'b0000000-0000-4000-8000-00000000000a',
-   'company', 'gc', NULL, 'Holder GC', 'a0000000-0000-4000-8000-000000000001');
+   'company', 'gc', NULL, 'Holder GC', 'a0000000-0000-4000-8000-000000000001'),
+  -- r9 R5-M1's card: the SUBJECT of a rule, not its route. Legal as both kinds
+  -- for the same reason as 071 — the entity-name check must not be what
+  -- refuses the flip.
+  ('c0000000-0000-4000-8000-000000000073', 'b0000000-0000-4000-8000-00000000000a',
+   'person', 'sub', 'Ruled Person', 'Ruled Person LLC',
+   'a0000000-0000-4000-8000-000000000001');
 
 DO $$
 DECLARE
@@ -3420,8 +3555,69 @@ BEGIN
     'FAIL 29f: an unheld card must still be free to change, got '
       || COALESCE(r.entity_kind, '<null>');
 
-  RAISE NOTICE '29. a held card cannot change what it is or whose it is '
-               '(r8 R8-M2, R-AR): passed';
+  -- 29g. r9 R5-M1: THE FIFTH HOLDER — the card a rule is ABOUT, not only the
+  --      card it routes TO. studio_contact_rules.subject_id is polymorphic and
+  --      unFK'd, and assert_studio_contact_rule_route() polices it from the
+  --      RULE side only. With subject_id missing from the holder list, ONE
+  --      member-reachable `UPDATE studio_contacts SET entity_kind` — a column
+  --      the shipped hook writes on every card edit — filed a FORBIDDING rule
+  --      under the other noun: unfindable to a reader that asks by the card's
+  --      own kind, which is r8 F1's fail-open exactly. And unrepairable, since
+  --      rule_subject_kind_mismatch then refuses every later write to the
+  --      stranded row, so W1b's rule editor could not undo what the card
+  --      editor did. Nothing else points at this card: the rule is the only
+  --      thing that can be holding it.
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+  INSERT INTO studio_contact_rules (subject_type, subject_id, channels_forbidden, reason)
+  VALUES ('person', 'c0000000-0000-4000-8000-000000000073', ARRAY['mobile'],
+          'Never text this one');
+
+  raised := NULL;
+  BEGIN
+    UPDATE studio_contacts
+       SET entity_kind = 'company'
+     WHERE id = 'c0000000-0000-4000-8000-000000000073';
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'studio_contact_identity_held',
+    'FAIL 29g: a card a contact rule is filed against may not change its kind, got '
+      || COALESCE(raised, '<no error>');
+  SELECT * INTO r FROM studio_contact_rules
+   WHERE subject_id = 'c0000000-0000-4000-8000-000000000073';
+  ASSERT r.subject_type = 'person',
+    'FAIL 29g2: the rule must still agree with its subject''s noun, got '
+      || COALESCE(r.subject_type, '<null>');
+
+  -- 29h. And the studio move, the mirror-image half: it would leave the rule
+  --      ruling about a card in ANOTHER TENANT — the state
+  --      rule_route_other_studio exists to refuse, which then also blocks the
+  --      re-save.
+  raised := NULL;
+  BEGIN
+    UPDATE studio_contacts
+       SET organization_id = 'b0000000-0000-4000-8000-00000000000b'
+     WHERE id = 'c0000000-0000-4000-8000-000000000073';
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'studio_contact_identity_held',
+    'FAIL 29h: a card a contact rule is filed against may not move studios, got '
+      || COALESCE(raised, '<no error>');
+
+  -- 29h2. Detach the rule and the card is free again — the same way out the
+  --       other four holders have.
+  DELETE FROM studio_contact_rules
+   WHERE subject_id = 'c0000000-0000-4000-8000-000000000073';
+  UPDATE studio_contacts
+     SET entity_kind = 'company'
+   WHERE id = 'c0000000-0000-4000-8000-000000000073';
+  PERFORM pg_temp.reset_role();
+  SELECT * INTO r FROM studio_contacts
+   WHERE id = 'c0000000-0000-4000-8000-000000000073';
+  ASSERT r.entity_kind = 'company',
+    'FAIL 29h2: once the rule is gone the card must be free to change, got '
+      || COALESCE(r.entity_kind, '<null>');
+
+  RAISE NOTICE '29. a held card cannot change what it is or whose it is — '
+               'including the card a contact rule is filed against '
+               '(r8 R8-M2, R-AR; r9 R5-M1): passed';
 END
 $$;
 
