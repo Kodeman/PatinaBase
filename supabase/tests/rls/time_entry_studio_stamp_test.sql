@@ -3651,25 +3651,54 @@ BEGIN
     'relationship to the work (case (t) t5); got ' || COALESCE(v_rate::text, 'NULL')
     || ' / ' || COALESCE(v_source, 'NULL') || ' / ' || COALESCE(v_rows::text, 'NULL');
 
-  -- ── z7: and she cannot repair it. There is no unpin; bound (b) is final.
+  -- ── z7: SHE NOW REPAIRS IT, and that is new. HT-3-g AMENDED (b) (orchestrator
+  --    2026-09-12, round 13) gives the stamp a REMEDY ARM: the project's CURRENT
+  --    designer, where she is the OWNER of the studio she names, may stamp AND
+  --    OVERWRITE. She is both on her own legacy project, so the irreversibility z5b
+  --    records — which stood through twelve review rounds — is over for this shape.
+  --    The amendment was written for an EMPLOYER's recovery; measured here, it
+  --    discharges the part of HT-3-f(4)'s owed UNPIN that belongs to a victim who owns
+  --    a studio of her own. WHAT IS STILL OWED, unchanged: the consent door itself
+  --    (HT-3-b arm (c)) so the seat cannot be written at all, and an unpin for a victim
+  --    who owns NO studio — she has no arm here, because the remedy arm asks for an
+  --    owner seat.
   PERFORM pg_temp.assume_user('c6120000-0000-4000-8000-000000000002');
-  v_state := NULL;
-  BEGIN
-    SELECT public.stamp_project_pricing_studio(
-      'c6120000-0000-4000-8000-0000000000e1', 'c6120000-0000-4000-8000-0000000000a2') INTO v_got;
-  EXCEPTION WHEN OTHERS THEN v_state := SQLSTATE;
-  END;
+  SELECT public.stamp_project_pricing_studio(
+    'c6120000-0000-4000-8000-0000000000e1', 'c6120000-0000-4000-8000-0000000000a2') INTO v_got;
   PERFORM pg_temp.reset_role();
-  ASSERT v_state IS NOT NULL
-     AND (SELECT studio_id = 'c6120000-0000-4000-8000-0000000000a1' FROM projects
+  ASSERT v_got = 'c6120000-0000-4000-8000-0000000000a2'
+     AND (SELECT studio_id = 'c6120000-0000-4000-8000-0000000000a2' FROM projects
            WHERE id = 'c6120000-0000-4000-8000-0000000000e1'),
-    'FAIL z7 (HT-3-f(4) — the OWED act): naming her own workspace is refused (bound '
-    '(b): the project already names a studio) and the column does not move. This is '
-    'the sentence the owed ruling must change — an owner-initiated UNPIN or '
-    're-derivation, landing with HT-3-b arm (c)''s consent door. Got SQLSTATE '
-    || COALESCE(v_state, 'NO RAISE (returned ' || COALESCE(v_got::text, 'NULL') || ')');
+    'FAIL z7 (HT-3-g AMENDED (b) — THE WAY BACK): she is this project''s designer and '
+    'the OWNER of the studio she names, so the remedy arm lets her re-point her own '
+    'legacy project off the stranger''s org. Through round 12 this was 22023 and z5b''s '
+    'cost was permanent; got ' || COALESCE(v_got::text, 'NULL');
+  ASSERT EXISTS (
+    SELECT 1 FROM audit_logs
+    WHERE resource_id = 'c6120000-0000-4000-8000-0000000000e1'
+      AND action = 'project.pricing_studio_restamped'
+      AND old_values->>'studio_id' = 'c6120000-0000-4000-8000-0000000000a1'
+      AND new_values->>'studio_id' = 'c6120000-0000-4000-8000-0000000000a2'
+  ), 'FAIL z7a: and the overwrite is audited with both studios, which is the only trace '
+     'the displaced org gets';
+  PERFORM pg_temp.assume_user('c6120000-0000-4000-8000-000000000002');
+  INSERT INTO project_time_entries (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('c6120000-0000-4000-8000-0000000000b3', 'c6120000-0000-4000-8000-0000000000e1',
+          'c6120000-0000-4000-8000-000000000002', NOW() - INTERVAL '30 minutes', 120, true, 'manual_entry');
+  PERFORM pg_temp.reset_role();
+  SELECT hourly_rate_cents, rate_source INTO v_rate, v_source
+  FROM project_time_entries WHERE id = 'c6120000-0000-4000-8000-0000000000b3';
+  ASSERT v_rate = 28000 AND v_source = 'studio_member',
+    'FAIL z7b (and the money comes back): her next hour prices at her own 28000 rather '
+    'than the stranger''s 99900. P-4 still holds of the hour logged while his org held '
+    'the column (z6), which keeps its number; got ' || COALESCE(v_rate::text, 'NULL')
+    || ' / ' || COALESCE(v_source, 'NULL');
+  ASSERT (SELECT hourly_rate_cents = 99900 FROM project_time_entries
+           WHERE id = 'c6120000-0000-4000-8000-0000000000b2'),
+    'FAIL z7c (P-4): the hour he priced keeps his number — no hour is re-rated in '
+    'either direction, which is why the remedy is a repair and not a reversal';
 
-  RAISE NOTICE 'stamp_project_pricing_studio: case (z) recorded — HT-3-f(4) SURVIVES HT-3-g: the consent-free outsider''s STAMP succeeds and is irreversible (owed: HT-3-b arm (c) consent door + an owner-initiated unpin).';
+  RAISE NOTICE 'stamp_project_pricing_studio: case (z) — HT-3-f(4)''s SEAT still works, and under HT-3-g AMENDED (b) its victim now has a way back where she owns a studio (still owed: the consent door, and an unpin for a victim who owns none).';
 END
 $$;
 

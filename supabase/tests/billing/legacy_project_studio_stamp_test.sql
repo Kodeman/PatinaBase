@@ -44,6 +44,25 @@
 --       an outsider who holds a seat in another studio is still stamped to the one
 --       studio that employs its designer, because a single employer seat IS the book
 --       the project belongs to, whoever opened it.
+--   (j) HT-3-g AMENDED (a) — THE ROSTER KEY, the round-13 amendment's own question, and
+--       the first one in this file that is asked about the PROJECT rather than about a
+--       person: a project whose live project_team_members roster carries somebody who
+--       answers to a studio the designer does NOT own is left NULL, while the Leah
+--       shape — a sole proprietor whose own assistant opened her project and sits on
+--       its roster — is stamped. Both keys must pass for an owned-tier answer, and
+--       (j-i) is measured to be a row the author key alone would have stamped.
+--   (k) W2-R13-01 FORM S and (l) FORM H — the two residuals the keys do NOT reach,
+--       asserted as PASSING and loudly labelled, each followed by the remedy of HT-3-g
+--       AMENDED (b) measured leg by leg: the employer's own owner is REFUSED the
+--       reassignment that reaches the arm (reassign_project_lead is pinned to the
+--       project's current studio), and once she is the lead her one stamp overwrites
+--       the workspace, audits both studios, and the designer's next hour prices from
+--       the employer's card again.
+--   (m) the remedy arm's own surface: refused to a designer who is only an ADMIN of the
+--       studio she names, refused to an OWNER who is not the project's lead — and,
+--       asserted as PASSING and loudly labelled, ADMITTED to a designer who owns a
+--       studio on a project an HONEST studio had already stamped, which is the
+--       amendment's width rather than a defect of this file.
 --
 -- How to run:
 --   psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 \
@@ -71,7 +90,22 @@ VALUES
   ('c6200000-0000-4000-8000-000000000009', 'l620-former-assistant@test.invalid','', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
   ('c6200000-0000-4000-8000-00000000000a', 'l620-former-owner@test.invalid',   '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
   ('c6200000-0000-4000-8000-00000000000b', 'l620-hired-designer@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
-  ('c6200000-0000-4000-8000-00000000000c', 'l620-outside-author@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+  ('c6200000-0000-4000-8000-00000000000c', 'l620-outside-author@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  -- ROUND 13 (HT-3-g AMENDED): W2-R13-01 form S's seatless author; the client every
+  -- reassign_project_lead needs a canonical relationship to; form H's hire, the
+  -- assistant whose seat she removes and her employer's owner; the roster key's three
+  -- shapes; and case (m)'s designer who owns one studio and merely administers another.
+  ('c6200000-0000-4000-8000-00000000000d', 'l620-seatless-author@test.invalid',  '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('c6200000-0000-4000-8000-00000000000e', 'l620-remedy-designer@test.invalid',  '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('c6200000-0000-4000-8000-00000000000f', 'l620-remedy-client@test.invalid',    '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('c6200000-0000-4000-8000-000000000010', 'l620-formh-hire@test.invalid',       '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('c6200000-0000-4000-8000-000000000011', 'l620-formh-assistant@test.invalid',  '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('c6200000-0000-4000-8000-000000000012', 'l620-formh-owner@test.invalid',      '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('c6200000-0000-4000-8000-000000000013', 'l620-roster-outsider@test.invalid',  '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('c6200000-0000-4000-8000-000000000014', 'l620-leah-assistant@test.invalid',   '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('c6200000-0000-4000-8000-000000000015', 'l620-leah@test.invalid',             '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('c6200000-0000-4000-8000-000000000016', 'l620-roster-principal@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('c6200000-0000-4000-8000-000000000017', 'l620-foreign-owner@test.invalid',    '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
 
 UPDATE public.profiles SET full_name = 'L620 One Employer'   WHERE id = 'c6200000-0000-4000-8000-000000000001';
 UPDATE public.profiles SET full_name = 'L620 Two Employers'  WHERE id = 'c6200000-0000-4000-8000-000000000002';
@@ -85,6 +119,17 @@ UPDATE public.profiles SET full_name = 'L620 Former Assistant' WHERE id = 'c6200
 UPDATE public.profiles SET full_name = 'L620 Former Owner'   WHERE id = 'c6200000-0000-4000-8000-00000000000a';
 UPDATE public.profiles SET full_name = 'L620 Hired Designer' WHERE id = 'c6200000-0000-4000-8000-00000000000b';
 UPDATE public.profiles SET full_name = 'L620 Outside Author' WHERE id = 'c6200000-0000-4000-8000-00000000000c';
+UPDATE public.profiles SET full_name = 'L620 Seatless Author'  WHERE id = 'c6200000-0000-4000-8000-00000000000d';
+UPDATE public.profiles SET full_name = 'L620 Remedy Designer'  WHERE id = 'c6200000-0000-4000-8000-00000000000e';
+UPDATE public.profiles SET full_name = 'L620 Remedy Client'    WHERE id = 'c6200000-0000-4000-8000-00000000000f';
+UPDATE public.profiles SET full_name = 'L620 Form H Hire'      WHERE id = 'c6200000-0000-4000-8000-000000000010';
+UPDATE public.profiles SET full_name = 'L620 Form H Assistant' WHERE id = 'c6200000-0000-4000-8000-000000000011';
+UPDATE public.profiles SET full_name = 'L620 Form H Owner'     WHERE id = 'c6200000-0000-4000-8000-000000000012';
+UPDATE public.profiles SET full_name = 'L620 Roster Outsider'  WHERE id = 'c6200000-0000-4000-8000-000000000013';
+UPDATE public.profiles SET full_name = 'L620 Leah Assistant'   WHERE id = 'c6200000-0000-4000-8000-000000000014';
+UPDATE public.profiles SET full_name = 'L620 Leah'             WHERE id = 'c6200000-0000-4000-8000-000000000015';
+UPDATE public.profiles SET full_name = 'L620 Roster Principal' WHERE id = 'c6200000-0000-4000-8000-000000000016';
+UPDATE public.profiles SET full_name = 'L620 Foreign Owner'    WHERE id = 'c6200000-0000-4000-8000-000000000017';
 
 INSERT INTO public.organizations (id, type, name, slug, status)
 VALUES
@@ -96,7 +141,16 @@ VALUES
   -- also (i)'s employer), and the unrelated studio (i)'s author is seated in.
   ('c6200000-0000-4000-8000-0000000000a5', 'design_studio', 'L620 Departed WS',    'l620-departed-ws-test',    'active'),
   ('c6200000-0000-4000-8000-0000000000a6', 'design_studio', 'L620 Former Employer','l620-former-employer-test','active'),
-  ('c6200000-0000-4000-8000-0000000000a7', 'design_studio', 'L620 Outside Studio', 'l620-outside-studio-test', 'active');
+  ('c6200000-0000-4000-8000-0000000000a7', 'design_studio', 'L620 Outside Studio', 'l620-outside-studio-test', 'active'),
+  -- ROUND 13 (HT-3-g AMENDED): case (m)'s pair (one she merely administers, one she
+  -- OWNS), form H's employer and her own workspace, and the roster key's three studios.
+  ('c6200000-0000-4000-8000-0000000000a8', 'design_studio', 'L620 Remedy Admin Studio', 'l620-remedy-admin-studio-test', 'active'),
+  ('c6200000-0000-4000-8000-0000000000a9', 'design_studio', 'L620 Form H Employer',     'l620-formh-employer-test',      'active'),
+  ('c6200000-0000-4000-8000-0000000000aa', 'design_studio', 'L620 Form H Workspace',    'l620-formh-workspace-test',     'active'),
+  ('c6200000-0000-4000-8000-0000000000ab', 'design_studio', 'L620 Roster Studio',       'l620-roster-studio-test',       'active'),
+  ('c6200000-0000-4000-8000-0000000000ac', 'design_studio', 'L620 Foreign Studio',      'l620-foreign-studio-test',      'active'),
+  ('c6200000-0000-4000-8000-0000000000ad', 'design_studio', 'L620 Leah Studio',         'l620-leah-studio-test',         'active'),
+  ('c6200000-0000-4000-8000-0000000000ae', 'design_studio', 'L620 Remedy Owned Studio', 'l620-remedy-owned-studio-test', 'active');
 
 -- Every project is inserted BEFORE any seat exists, so 00563's one-candidate
 -- discovery and 00602/00603's INSERT stamp both find nothing and the column stays
@@ -129,6 +183,42 @@ VALUES
   -- (i) the employer tier: an OUTSIDE author, seated in a studio of his own.
   ('c6200000-0000-4000-8000-0000000000e8', 'L620 Outside-Opened House',
    'c6200000-0000-4000-8000-00000000000b', 'c6200000-0000-4000-8000-00000000000c', NULL);
+
+-- ROUND 13 (HT-3-g AMENDED) fixtures. Inserted here for the same reason as every
+-- project above — BEFORE any seat or designer role exists, so 00563's one-candidate
+-- discovery and 00602/00603's INSERT stamp both find nothing and the column stays
+-- NULL. Two of them carry a client_id, because reassign_project_lead demands a
+-- canonical designer_clients row and the remedy arm is reached through it.
+INSERT INTO public.projects (id, name, designer_id, created_by, studio_id, client_id)
+VALUES
+  -- (k) W2-R13-01 FORM S, the narrowest residual: the departed hire leads it, a hand
+  -- who holds no seat anywhere opened it (an ex-contractor, a platform hand, an
+  -- assistant whose seat somebody closed long ago), and nobody else is on its roster.
+  -- Both keys are silent on it, so her ONE statement — leaving her own employer seat —
+  -- hands it to the workspace she owns.
+  ('c6200000-0000-4000-8000-0000000000e9', 'L620 Form S House',
+   'c6200000-0000-4000-8000-000000000008', 'c6200000-0000-4000-8000-00000000000d', NULL,
+   'c6200000-0000-4000-8000-00000000000f'),
+  -- (j-i) THE ROSTER KEY's own shape: her own hand opened it (so the AUTHOR key is
+  -- silent), but a support designer on its roster answers to a studio she does not own.
+  ('c6200000-0000-4000-8000-0000000000ea', 'L620 Foreign Roster House',
+   'c6200000-0000-4000-8000-000000000016', 'c6200000-0000-4000-8000-000000000016', NULL, NULL),
+  -- (j-ii) THE LEAH SHAPE the roster key must not touch: a sole proprietor whose own
+  -- assistant opened her project and sits on its roster, seated only in HER studio.
+  ('c6200000-0000-4000-8000-0000000000eb', 'L620 Leah House',
+   'c6200000-0000-4000-8000-000000000015', 'c6200000-0000-4000-8000-000000000014', NULL, NULL),
+  -- (l) W2-R13-01 FORM H: her employer's client work, its own assistant the author AND
+  -- on its roster. Both keys read HIS seat, so the statement she makes as an admin —
+  -- setting his row status = 'removed' — silences both at once.
+  ('c6200000-0000-4000-8000-0000000000ec', 'L620 Form H Client House',
+   'c6200000-0000-4000-8000-000000000010', 'c6200000-0000-4000-8000-000000000011', NULL,
+   'c6200000-0000-4000-8000-00000000000f'),
+  -- (m) the remedy arm's own surface: a project an HONEST studio already names, led by
+  -- a designer who did not open it. a6 is written here directly, which is the state
+  -- every project created since 00602 is in.
+  ('c6200000-0000-4000-8000-0000000000ed', 'L620 Honest Stamped House',
+   'c6200000-0000-4000-8000-00000000000e', 'c6200000-0000-4000-8000-00000000000d',
+   'c6200000-0000-4000-8000-0000000000a6', NULL);
 
 INSERT INTO public.organization_members (id, user_id, organization_id, role, status, joined_at)
 VALUES
@@ -164,8 +254,46 @@ VALUES
   ('c6200000-0000-4000-8000-0000000000cb', 'c6200000-0000-4000-8000-00000000000b',
    'c6200000-0000-4000-8000-0000000000a6', 'member', 'active', NOW()),
   ('c6200000-0000-4000-8000-0000000000cc', 'c6200000-0000-4000-8000-00000000000c',
-   'c6200000-0000-4000-8000-0000000000a7', 'member', 'active', NOW());
--- (d) the seatless designer gets no row at all.
+   'c6200000-0000-4000-8000-0000000000a7', 'member', 'active', NOW()),
+  -- ── ROUND 13 (HT-3-g AMENDED) ────────────────────────────────────────────
+  -- (l) form H: the hire is an ADMIN of her employer (which is what lets her move the
+  -- assistant's seat), the assistant is a plain member there, the employer has an
+  -- owner, and she OWNS the workspace 00295 provisions for her.
+  -- The OWNER row of each studio comes FIRST: guard_org_membership_changes admits an
+  -- owner INSERT only into an organization that has no members yet, or from a caller who
+  -- already owns it (owner_insert_requires_owner).
+  ('c6200000-0000-4000-8000-0000000000cf', 'c6200000-0000-4000-8000-000000000012',
+   'c6200000-0000-4000-8000-0000000000a9', 'owner',  'active', NOW()),
+  ('c6200000-0000-4000-8000-0000000000cd', 'c6200000-0000-4000-8000-000000000010',
+   'c6200000-0000-4000-8000-0000000000a9', 'admin',  'active', NOW()),
+  ('c6200000-0000-4000-8000-0000000000ce', 'c6200000-0000-4000-8000-000000000011',
+   'c6200000-0000-4000-8000-0000000000a9', 'member', 'active', NOW()),
+  ('c6200000-0000-4000-8000-0000000000d6', 'c6200000-0000-4000-8000-000000000010',
+   'c6200000-0000-4000-8000-0000000000aa', 'owner',  'active', NOW()),
+  -- (j-i) the roster principal owns one studio and holds no employer seat; the
+  -- support designer on her project's roster answers to a studio of its own, which
+  -- has an owner of its own.
+  ('c6200000-0000-4000-8000-0000000000d7', 'c6200000-0000-4000-8000-000000000016',
+   'c6200000-0000-4000-8000-0000000000ab', 'owner',  'active', NOW()),
+  ('c6200000-0000-4000-8000-0000000000d9', 'c6200000-0000-4000-8000-000000000017',
+   'c6200000-0000-4000-8000-0000000000ac', 'owner',  'active', NOW()),
+  ('c6200000-0000-4000-8000-0000000000d8', 'c6200000-0000-4000-8000-000000000013',
+   'c6200000-0000-4000-8000-0000000000ac', 'member', 'active', NOW()),
+  -- (j-ii) Leah owns her studio; her assistant is its admin and is seated NOWHERE else.
+  ('c6200000-0000-4000-8000-0000000000da', 'c6200000-0000-4000-8000-000000000015',
+   'c6200000-0000-4000-8000-0000000000ad', 'owner',  'active', NOW()),
+  ('c6200000-0000-4000-8000-0000000000db', 'c6200000-0000-4000-8000-000000000014',
+   'c6200000-0000-4000-8000-0000000000ad', 'admin',  'active', NOW()),
+  -- (m) the remedy designer ADMINISTERS one studio and OWNS another. The difference
+  -- between those two seats is the whole of what the remedy arm turns on.
+  ('c6200000-0000-4000-8000-0000000000dc', 'c6200000-0000-4000-8000-00000000000e',
+   'c6200000-0000-4000-8000-0000000000a8', 'admin',  'active', NOW()),
+  ('c6200000-0000-4000-8000-0000000000dd', 'c6200000-0000-4000-8000-00000000000e',
+   'c6200000-0000-4000-8000-0000000000ae', 'owner',  'active', NOW());
+-- (d) the seatless designer gets no row at all, and NEITHER DOES form S's AUTHOR:
+-- a seatless hand who were granted the designer role would be provisioned a workspace
+-- by 00295 and stop being seatless, which would make the author key TRUE and leave
+-- form S measuring nothing.
 
 -- Granted AFTER the seats so 00295's fc_provision_studio_on_designer takes its
 -- early exit (it provisions a workspace only for a designer who holds NO membership
@@ -179,7 +307,18 @@ SELECT unnest(ARRAY['c6200000-0000-4000-8000-000000000001'::uuid,
                     'c6200000-0000-4000-8000-000000000003'::uuid,
                     'c6200000-0000-4000-8000-000000000005'::uuid,
                     'c6200000-0000-4000-8000-000000000008'::uuid,
-                    'c6200000-0000-4000-8000-00000000000b'::uuid]),
+                    'c6200000-0000-4000-8000-00000000000b'::uuid,
+                    -- ROUND 13. Each of these already holds a seat, so 00295's
+                    -- provisioning takes its early exit. The two EMPLOYER OWNERS are
+                    -- here because HT-3-g AMENDED (b)'s remedy is reached through
+                    -- reassign_project_lead, which demands an is_designer target, and
+                    -- 00563's own arm asks has_designer_domain_role of the new lead.
+                    'c6200000-0000-4000-8000-00000000000e'::uuid,
+                    'c6200000-0000-4000-8000-000000000010'::uuid,
+                    'c6200000-0000-4000-8000-000000000012'::uuid,
+                    'c6200000-0000-4000-8000-000000000015'::uuid,
+                    'c6200000-0000-4000-8000-000000000016'::uuid,
+                    'c6200000-0000-4000-8000-00000000000a'::uuid]),
        id FROM public.roles WHERE name = 'studio_designer'
 ON CONFLICT DO NOTHING;
 
@@ -201,7 +340,50 @@ VALUES
    (NOW() AT TIME ZONE 'UTC')::date - 30, 'c6200000-0000-4000-8000-000000000008'),
   -- (i) the employer's arm's-length card for the designer it employs.
   ('c6200000-0000-4000-8000-0000000000a6', 'c6200000-0000-4000-8000-00000000000b', 26000,
-   (NOW() AT TIME ZONE 'UTC')::date - 30, 'c6200000-0000-4000-8000-00000000000a');
+   (NOW() AT TIME ZONE 'UTC')::date - 30, 'c6200000-0000-4000-8000-00000000000a'),
+  -- ── ROUND 13 (HT-3-g AMENDED) ────────────────────────────────────────────
+  -- (k) the former employer's own arm's-length card for the departed hire — the number
+  -- her hour must come back to once its owner has recovered the project.
+  ('c6200000-0000-4000-8000-0000000000a6', 'c6200000-0000-4000-8000-000000000008', 26000,
+   (NOW() AT TIME ZONE 'UTC')::date - 30, 'c6200000-0000-4000-8000-00000000000a'),
+  -- (l) form H: her own 99900 in the workspace she owns (HT-3-e(2)'s owner exemption
+  -- prices it), against her employer's arm's-length 26000.
+  ('c6200000-0000-4000-8000-0000000000aa', 'c6200000-0000-4000-8000-000000000010', 99900,
+   (NOW() AT TIME ZONE 'UTC')::date - 30, 'c6200000-0000-4000-8000-000000000010'),
+  ('c6200000-0000-4000-8000-0000000000a9', 'c6200000-0000-4000-8000-000000000010', 26000,
+   (NOW() AT TIME ZONE 'UTC')::date - 30, 'c6200000-0000-4000-8000-000000000012'),
+  -- (j-ii) Leah's own card in the studio she owns, so leg (j-ii) measures the key and
+  -- not a missing rate.
+  ('c6200000-0000-4000-8000-0000000000ad', 'c6200000-0000-4000-8000-000000000015', 41000,
+   (NOW() AT TIME ZONE 'UTC')::date - 30, 'c6200000-0000-4000-8000-000000000015'),
+  -- (m) the honest studio's arm's-length 24000 for the designer it stamped, and her own
+  -- 88800 in the studio she OWNS — the two numbers the remedy arm sits between.
+  ('c6200000-0000-4000-8000-0000000000a6', 'c6200000-0000-4000-8000-00000000000e', 24000,
+   (NOW() AT TIME ZONE 'UTC')::date - 30, 'c6200000-0000-4000-8000-00000000000a'),
+  ('c6200000-0000-4000-8000-0000000000ae', 'c6200000-0000-4000-8000-00000000000e', 88800,
+   (NOW() AT TIME ZONE 'UTC')::date - 30, 'c6200000-0000-4000-8000-00000000000e');
+
+-- ── ROUND 13 (HT-3-g AMENDED) — the ROSTERS the roster key reads, and the two
+--    canonical designer_clients rows reassign_project_lead demands. Form S's project
+--    deliberately gets NO roster row: an empty roster is the residual's own premise.
+INSERT INTO public.project_team_members (id, project_id, user_id, role, removed_at)
+VALUES
+  ('c6200000-0000-4000-8000-0000000000f1', 'c6200000-0000-4000-8000-0000000000ea',
+   'c6200000-0000-4000-8000-000000000013', 'support_designer', NULL),
+  ('c6200000-0000-4000-8000-0000000000f2', 'c6200000-0000-4000-8000-0000000000eb',
+   'c6200000-0000-4000-8000-000000000014', 'support_designer', NULL),
+  ('c6200000-0000-4000-8000-0000000000f3', 'c6200000-0000-4000-8000-0000000000ec',
+   'c6200000-0000-4000-8000-000000000011', 'support_designer', NULL);
+
+INSERT INTO public.designer_clients
+  (id, designer_id, client_id, client_name, client_email, status, source)
+VALUES
+  ('c6200000-0000-4000-8000-0000000000d1', 'c6200000-0000-4000-8000-000000000008',
+   'c6200000-0000-4000-8000-00000000000f', 'L620 Remedy Client',
+   'l620-remedy-client@test.invalid', 'active', 'direct'),
+  ('c6200000-0000-4000-8000-0000000000d2', 'c6200000-0000-4000-8000-000000000010',
+   'c6200000-0000-4000-8000-00000000000f', 'L620 Remedy Client',
+   'l620-remedy-client@test.invalid', 'active', 'direct');
 
 CREATE OR REPLACE FUNCTION pg_temp.assume_user(p_user_id UUID)
 RETURNS VOID AS $$
@@ -285,10 +467,100 @@ BEGIN
 END
 $$;
 
+-- ─── (l) W2-R13-01 FORM H — HER TWO STATEMENTS, BEFORE THE SHIP ─────────────
+-- Form H is the shape the ROSTER KEY cannot reach, and it is measured here rather
+-- than argued: where the project's author is a colleague she ADMINISTERS, the one
+-- statement that silences the author key silences the roster key too, because both
+-- read the same seat. This block is the whole manoeuvre, through RLS, in her own
+-- hand — and it runs BEFORE the statement below, which is the real-world ordering:
+-- her seats are whatever she left them at the instant the ship runs.
+DO $$
+DECLARE
+  v_studio uuid;
+  v_tier   text;
+  v_rows   integer;
+BEGIN
+  -- THE CONTROL, measured in this same fixture rather than duplicated beside it:
+  -- before she acts, her tier is her EMPLOYER and BOTH keys would have left an
+  -- owned-tier answer off this project anyway.
+  SELECT answer.studio_id, answer.tier INTO v_studio, v_tier
+  FROM public.designer_tier_pricing_studio('c6200000-0000-4000-8000-000000000010') AS answer;
+  ASSERT v_studio = 'c6200000-0000-4000-8000-0000000000a9' AND v_tier = 'employer',
+    'FAIL l0 (FORM H control): while she holds her employer seat the tier rule answers '
+    'her EMPLOYER, so 00620 would stamp this project to the studio whose client it is; '
+    'got ' || COALESCE(v_studio::text, 'NULL') || ' / ' || COALESCE(v_tier, 'NULL');
+  ASSERT public.project_author_books_elsewhere(
+           'c6200000-0000-4000-8000-000000000011',
+           'c6200000-0000-4000-8000-0000000000aa'),
+    'FAIL l0a (FORM H control): and the AUTHOR key is TRUE of her employer''s '
+    'assistant while his seat is live';
+  ASSERT public.project_roster_books_elsewhere(
+           'c6200000-0000-4000-8000-0000000000ec',
+           'c6200000-0000-4000-8000-000000000010',
+           'c6200000-0000-4000-8000-0000000000aa'),
+    'FAIL l0b (FORM H control): and so is the ROSTER key — he is on the project''s '
+    'live roster and seated in a studio she does not own';
+
+  PERFORM pg_temp.assume_user('c6200000-0000-4000-8000-000000000010');
+
+  -- X1 — ONE statement, on somebody else's seat, admitted by the shipped
+  -- `Org admins can update members` policy (guard_org_membership_changes guards only
+  -- owner-role transitions, so nothing refuses it). It silences BOTH keys at once.
+  UPDATE public.organization_members
+     SET status = 'removed'
+   WHERE user_id = 'c6200000-0000-4000-8000-000000000011'
+     AND organization_id = 'c6200000-0000-4000-8000-0000000000a9';
+  GET DIAGNOSTICS v_rows = ROW_COUNT;
+  ASSERT v_rows = 1,
+    'FAIL l1 (FORM H, statement 1): an ADMIN may set a colleague''s seat '
+    'status = ''removed'' — 1 row, no raise. If this ever touches 0 rows the policy '
+    'changed and form H is measuring nothing; rows = ' || v_rows;
+
+  -- X2 — her own seat (W2-R9-01 probe D2), which empties her employer tier.
+  UPDATE public.organization_members
+     SET status = 'removed'
+   WHERE user_id = 'c6200000-0000-4000-8000-000000000010'
+     AND organization_id = 'c6200000-0000-4000-8000-0000000000a9';
+  GET DIAGNOSTICS v_rows = ROW_COUNT;
+  ASSERT v_rows = 1,
+    'FAIL l2 (FORM H, statement 2): and her own seat goes the same way; rows = '
+    || v_rows;
+
+  PERFORM pg_temp.reset_role();
+
+  SELECT answer.studio_id, answer.tier INTO v_studio, v_tier
+  FROM public.designer_tier_pricing_studio('c6200000-0000-4000-8000-000000000010') AS answer;
+  ASSERT v_studio = 'c6200000-0000-4000-8000-0000000000aa' AND v_tier = 'owned',
+    'FAIL l3 (FORM H): her tier is now the workspace she OWNS; got '
+    || COALESCE(v_studio::text, 'NULL') || ' / ' || COALESCE(v_tier, 'NULL');
+  ASSERT NOT public.project_author_books_elsewhere(
+           'c6200000-0000-4000-8000-000000000011',
+           'c6200000-0000-4000-8000-0000000000aa'),
+    'FAIL l4 (FORM H): the AUTHOR key is now FALSE — the author''s seat is the fact it '
+    'reads, and she moved it';
+  ASSERT NOT public.project_roster_books_elsewhere(
+           'c6200000-0000-4000-8000-0000000000ec',
+           'c6200000-0000-4000-8000-000000000010',
+           'c6200000-0000-4000-8000-0000000000aa'),
+    'FAIL l5 (FORM H, and the ROSTER KEY''S OWN LIMIT, stated rather than hidden): the '
+    'roster key is FALSE too. He is still ON the roster — she removed his SEAT, not his '
+    'roster row — and the key asks whether a roster member holds a live seat elsewhere. '
+    'So the roster key closes form S''s realistic population and does NOT close form H, '
+    'which is why HT-3-g AMENDED (c) grades form H a residual with a remedy rather '
+    'than a shape this key was ever going to reach';
+
+  RAISE NOTICE 'legacy_project_studio_stamp: form H — two statements, both keys silent, before the ship.';
+END
+$$;
+
 -- ─── 00620's own statement, verbatim, over this fixture ─────────────────────
 DO $$
 DECLARE
   v_stamped        integer := 0;
+  -- ROUND 13 (W2-R13-02): the statement reports its stamp PER TIER, so this file
+  -- measures the NOTICE's own split and not just a total.
+  v_stamped_employer integer := 0;
+  v_stamped_owned    integer := 0;
   v_again          integer := 0;
   v_entries_before bigint;
   v_entries_after  bigint;
@@ -315,29 +587,42 @@ BEGIN
     INTO v_entries_before, v_rate_before
   FROM public.project_time_entries;
 
-  -- 00620's statement, copied rather than paraphrased — W2-R12-01's key included,
+  -- 00620's statement, copied rather than paraphrased — BOTH keys included,
+  -- W2-R12-01's author key and HT-3-g AMENDED (a)'s roster key,
   -- because a copy without it measures a statement the migration no longer runs.
   WITH tiered AS (
-    SELECT project.id         AS project_id,
-           project.created_by AS author_id,
+    SELECT project.id          AS project_id,
+           project.created_by  AS author_id,
+           project.designer_id AS designer_id,
            answer.studio_id,
            answer.tier
     FROM public.projects AS project
     CROSS JOIN LATERAL public.designer_tier_pricing_studio(project.designer_id) AS answer
     WHERE project.studio_id IS NULL
       AND project.designer_id IS NOT NULL
+  ),
+  stamped AS (
+    UPDATE public.projects AS project
+       SET studio_id = tiered.studio_id
+      FROM tiered
+     WHERE project.id = tiered.project_id
+       AND tiered.studio_id IS NOT NULL
+       AND project.studio_id IS NULL
+       AND (
+         tiered.tier = 'employer'
+         OR (
+           NOT public.project_author_books_elsewhere(tiered.author_id, tiered.studio_id)
+           AND NOT public.project_roster_books_elsewhere(
+                     tiered.project_id, tiered.designer_id, tiered.studio_id)
+         )
+       )
+    RETURNING project.id AS project_id, tiered.tier AS tier
   )
-  UPDATE public.projects AS project
-     SET studio_id = tiered.studio_id
-    FROM tiered
-   WHERE project.id = tiered.project_id
-     AND tiered.studio_id IS NOT NULL
-     AND project.studio_id IS NULL
-     AND (
-       tiered.tier = 'employer'
-       OR NOT public.project_author_books_elsewhere(tiered.author_id, tiered.studio_id)
-     );
-  GET DIAGNOSTICS v_stamped = ROW_COUNT;
+  SELECT count(*),
+         count(*) FILTER (WHERE stamped.tier = 'employer'),
+         count(*) FILTER (WHERE stamped.tier = 'owned')
+    INTO v_stamped, v_stamped_employer, v_stamped_owned
+  FROM stamped;
 
   SELECT count(*), COALESCE(sum(COALESCE(hourly_rate_cents, 0)), 0)
     INTO v_entries_after, v_rate_after
@@ -348,6 +633,16 @@ BEGIN
     'fixtures (one employer, owned only, the principal, the departed hire''s own '
     'SELF-OPENED project, and the employer-tier project an outsider opened); stamped '
     || v_stamped;
+  ASSERT v_stamped = v_stamped_employer + v_stamped_owned,
+    'FAIL g1a (W2-R13-02, the NOTICE''s own arithmetic): every stamped row is '
+    'accounted for by ONE of HT-3-b''s two tiers, because the statement RETURNS the '
+    'tier that wrote it rather than re-deriving the split afterwards; ' || v_stamped
+    || ' stamped against ' || v_stamped_employer || ' employer + ' || v_stamped_owned
+    || ' owned';
+  ASSERT v_stamped_employer >= 2 AND v_stamped_owned >= 3,
+    'FAIL g1b (W2-R13-02): and BOTH tiers must appear in the split, or the per-tier '
+    'counts the ship reads are untested in one direction; got ' || v_stamped_employer
+    || ' employer / ' || v_stamped_owned || ' owned';
   ASSERT v_entries_after = v_entries_before AND v_rate_after = v_rate_before,
     'FAIL g2 (P-4): 00620''s statement writes projects.studio_id and NOTHING else — '
     'no time entry is added, removed or re-rated. ' || v_entries_before || ' rows '
@@ -439,26 +734,36 @@ BEGIN
 
   -- IDEMPOTENCE: the same statement again writes nothing.
   WITH tiered AS (
-    SELECT project.id         AS project_id,
-           project.created_by AS author_id,
+    SELECT project.id          AS project_id,
+           project.created_by  AS author_id,
+           project.designer_id AS designer_id,
            answer.studio_id,
            answer.tier
     FROM public.projects AS project
     CROSS JOIN LATERAL public.designer_tier_pricing_studio(project.designer_id) AS answer
     WHERE project.studio_id IS NULL
       AND project.designer_id IS NOT NULL
+  ),
+  stamped AS (
+    UPDATE public.projects AS project
+       SET studio_id = tiered.studio_id
+      FROM tiered
+     WHERE project.id = tiered.project_id
+       AND tiered.studio_id IS NOT NULL
+       AND project.studio_id IS NULL
+       AND (
+         tiered.tier = 'employer'
+         OR (
+           NOT public.project_author_books_elsewhere(tiered.author_id, tiered.studio_id)
+           AND NOT public.project_roster_books_elsewhere(
+                     tiered.project_id, tiered.designer_id, tiered.studio_id)
+         )
+       )
+    RETURNING project.id AS project_id, tiered.tier AS tier
   )
-  UPDATE public.projects AS project
-     SET studio_id = tiered.studio_id
-    FROM tiered
-   WHERE project.id = tiered.project_id
-     AND tiered.studio_id IS NOT NULL
-     AND project.studio_id IS NULL
-     AND (
-       tiered.tier = 'employer'
-       OR NOT public.project_author_books_elsewhere(tiered.author_id, tiered.studio_id)
-     );
-  GET DIAGNOSTICS v_again = ROW_COUNT;
+  SELECT count(*)
+    INTO v_again
+  FROM stamped;
   ASSERT v_again = 0,
     'FAIL g7 (IDEMPOTENCE): a second run writes NOTHING — the `WHERE studio_id IS '
     'NULL` predicate is the whole of it, and a non-zero count here would mean the '
@@ -558,6 +863,463 @@ BEGIN
 END
 $$;
 
+-- ─── (j) HT-3-g AMENDED (a) — THE ROSTER KEY, both directions ───────────────
+-- The key asks about the PROJECT's own working party rather than about any one
+-- person's standing, which is the whole reason it exists: the author key is already
+-- false on four of the five standings a legacy author can hold, and movable in one
+-- statement on the fifth (form H above). Two shapes, in the same fixture: a roster
+-- carrying another studio's people is left NULL; a sole proprietor whose own assistant
+-- is on the roster is stamped.
+DO $$
+DECLARE
+  v_studio uuid;
+  v_tier   text;
+BEGIN
+  -- (j-i) the shape the key is FOR.
+  ASSERT (SELECT studio_id IS NULL FROM public.projects
+           WHERE id = 'c6200000-0000-4000-8000-0000000000ea'),
+    'FAIL j1 (THE ROSTER KEY): her own hand opened this project, so the AUTHOR key is '
+    'silent on it — and a support designer on its LIVE roster answers to a studio she '
+    'does not own, so 00620 leaves it NULL rather than handing her book a project whose '
+    'working party belongs to somebody else (HT-3-g AMENDED (a), W2-R13-01)';
+  SELECT answer.studio_id, answer.tier INTO v_studio, v_tier
+  FROM public.designer_tier_pricing_studio('c6200000-0000-4000-8000-000000000016') AS answer;
+  ASSERT v_studio = 'c6200000-0000-4000-8000-0000000000ab' AND v_tier = 'owned',
+    'FAIL j1a (the rule still answers): j1 must be the ROSTER KEY leaving that row, not '
+    'an ambiguous tier. If the tier rule stops answering her studio this fixture has '
+    'drifted and j1 is measuring nothing; got ' || COALESCE(v_studio::text, 'NULL')
+    || ' / ' || COALESCE(v_tier, 'NULL');
+  ASSERT public.project_roster_books_elsewhere(
+           'c6200000-0000-4000-8000-0000000000ea',
+           'c6200000-0000-4000-8000-000000000016',
+           'c6200000-0000-4000-8000-0000000000ab'),
+    'FAIL j1b: the key itself — a live roster member other than the designer holds an '
+    'active, non-guest seat in an active design_studio she does not own';
+  ASSERT NOT public.project_author_books_elsewhere(
+           'c6200000-0000-4000-8000-000000000016',
+           'c6200000-0000-4000-8000-0000000000ab'),
+    'FAIL j1c (and the two keys are INDEPENDENT): the AUTHOR key is FALSE here, so j1 '
+    'is a row the round-12 key alone would have stamped. That is the population '
+    'HT-3-g AMENDED (a) adds, and dropping either key loses rows the other reaches';
+
+  -- (j-ii) the shape the key must NOT touch.
+  ASSERT (SELECT studio_id FROM public.projects
+           WHERE id = 'c6200000-0000-4000-8000-0000000000eb')
+         = 'c6200000-0000-4000-8000-0000000000ad',
+    'FAIL j2 (THE LEAH SHAPE): a sole proprietor whose own ASSISTANT opened her project '
+    'and sits on its roster IS stamped to her own studio. The assistant answers to HER '
+    'studio and to no other, so neither key speaks. A NULL here is the roster key '
+    'over-reaching into exactly the honest shape 00620 exists for — the same shape leg '
+    '(e)/g5 protects against HT-3-f(2)';
+  ASSERT NOT public.project_roster_books_elsewhere(
+           'c6200000-0000-4000-8000-0000000000eb',
+           'c6200000-0000-4000-8000-000000000015',
+           'c6200000-0000-4000-8000-0000000000ad'),
+    'FAIL j2a: and the predicate itself answers FALSE of her roster';
+
+  -- The ruling says "a studio the designer does NOT own", not "a studio other than
+  -- this one", and that clause is asked as an owner-seat EXISTS. Probed directly,
+  -- because no stamp can exhibit it: a designer who owns the studio her roster member
+  -- is seated in has a roster that books nowhere else. (The predicate is a pure
+  -- function of its three arguments, so asking it of a designer who does not lead this
+  -- project measures the clause and nothing else.)
+  ASSERT NOT public.project_roster_books_elsewhere(
+           'c6200000-0000-4000-8000-0000000000ea',
+           'c6200000-0000-4000-8000-000000000017',
+           'c6200000-0000-4000-8000-0000000000ab'),
+    'FAIL j3 (the ownership clause): the roster member''s only seat is in a studio this '
+    'designer OWNS, so it is part of her own book and the key is FALSE. Spelled merely '
+    'as `<> p_studio_id` the key would leave NULL every project of a principal who runs '
+    'two studios and staffs one from the other';
+
+  RAISE NOTICE 'legacy_project_studio_stamp: the roster key leaves a foreign roster and keeps the sole proprietor''s own assistant.';
+END
+$$;
+
+-- ─── (k) W2-R13-01 FORM S — THE NARROWEST RESIDUAL, AND ITS REMEDY ──────────
+-- ONE statement by ONE account with no second party: she leaves her own employer seat
+-- (`Members can leave`, or `status = 'removed'` as an admin — at the instant the ship
+-- runs they are the same fixture), and a legacy project of that employer's whose author
+-- holds no live seat and whose roster carries nobody else is stamped to the workspace
+-- she owns. ASSERTED AS PASSING AND LOUDLY LABELLED: it is a residual under HT-3-g
+-- AMENDED (c), not a closed shape. What follows its taking is the REMEDY of HT-3-g
+-- AMENDED (b), measured leg by leg — including the leg that is NOT available to the
+-- employer acting alone.
+DO $$
+DECLARE
+  v_rate   integer;
+  v_source text;
+  v_amount integer;
+  v_state  text;
+  v_got    uuid;
+  v_lead   uuid;
+BEGIN
+  ASSERT (SELECT studio_id FROM public.projects
+           WHERE id = 'c6200000-0000-4000-8000-0000000000e9')
+         = 'c6200000-0000-4000-8000-0000000000a5',
+    'FAIL k1 (FORM S — THE RESIDUAL, asserted as PASSING): both keys are silent on a '
+    'project whose author holds no seat anywhere and whose roster carries nobody but '
+    'her, so the one-off stamp hands her former employer''s client work to the '
+    'workspace she owns. The ROSTER key narrows this population to rosters that carry '
+    'nobody from another studio; it does not empty it, and HT-3-g AMENDED (c) grades '
+    'the remainder a residual because the manoeuvre needs her to leave a SEAT';
+  ASSERT NOT public.project_author_books_elsewhere(
+           'c6200000-0000-4000-8000-00000000000d',
+           'c6200000-0000-4000-8000-0000000000a5')
+     AND NOT public.project_roster_books_elsewhere(
+               'c6200000-0000-4000-8000-0000000000e9',
+               'c6200000-0000-4000-8000-000000000008',
+               'c6200000-0000-4000-8000-0000000000a5'),
+    'FAIL k1a: and both keys are measured false here, so k1 is the residual rather '
+    'than a key that failed to fire';
+
+  PERFORM pg_temp.assume_user('c6200000-0000-4000-8000-000000000008');
+  INSERT INTO public.project_time_entries
+    (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('c6200000-0000-4000-8000-0000000000b5', 'c6200000-0000-4000-8000-0000000000e9',
+          'c6200000-0000-4000-8000-000000000008', NOW() - INTERVAL '4 hours', 120, true, 'manual_entry');
+  PERFORM pg_temp.reset_role();
+  SELECT hourly_rate_cents, rate_source, rated_amount_cents
+    INTO v_rate, v_source, v_amount
+  FROM public.project_time_entries WHERE id = 'c6200000-0000-4000-8000-0000000000b5';
+  ASSERT v_rate = 99900 AND v_source = 'studio_member' AND v_amount = 199800,
+    'FAIL k2 (FORM S — THE MONEY, asserted as PASSING): her hour on her former '
+    'employer''s project prices at the 99900 she wrote for herself (HT-3-e(2)''s owner '
+    'exemption), where that employer''s own card says 26000; got '
+    || COALESCE(v_rate::text, 'NULL') || ' / ' || COALESCE(v_source, 'NULL') || ' / '
+    || COALESCE(v_amount::text, 'NULL');
+
+  -- REMEDY, leg 1 — THE EMPLOYER ACTING ALONE. Measured, and it is a refusal: HT-3-g
+  -- AMENDED (b) reaches the stamp through the project's LEAD, and reassign_project_lead
+  -- (00399) is pinned to the project's CURRENT studio_id — both the outgoing and the
+  -- incoming lead must hold an active non-guest seat THERE, which after the taking is
+  -- the taker's own workspace.
+  PERFORM pg_temp.assume_user('c6200000-0000-4000-8000-00000000000a');
+  v_state := NULL;
+  BEGIN
+    PERFORM public.reassign_project_lead(
+      'c6200000-0000-4000-8000-0000000000e9',
+      'c6200000-0000-4000-8000-000000000008',
+      'c6200000-0000-4000-8000-00000000000a');
+  EXCEPTION WHEN OTHERS THEN v_state := SQLSTATE;
+  END;
+  PERFORM pg_temp.reset_role();
+  ASSERT v_state = '42501',
+    'FAIL k3 (THE REMEDY''S MISSING HALF, measured rather than assumed): the employer''s '
+    'own OWNER cannot make herself the lead of the taken project, because '
+    'reassign_project_lead asks for a seat in the studio the project NOW names. So the '
+    'remedy arm exists and the employer cannot reach it unaided — the residual recovers '
+    'only with the taker''s own hand, or once reassign_project_lead learns to follow the '
+    'project''s book rather than its current column. Recorded for the orchestrator; got '
+    || COALESCE(v_state, 'NO RAISE');
+  ASSERT (SELECT designer_id FROM public.projects
+           WHERE id = 'c6200000-0000-4000-8000-0000000000e9')
+         = 'c6200000-0000-4000-8000-000000000008',
+    'FAIL k3a: and the refusal moved no lead';
+
+  -- REMEDY, leg 2 — the two statements the taker must make for the employer to reach
+  -- the arm at all: a seat in her workspace for the employer's owner, and the
+  -- reassignment itself.
+  PERFORM pg_temp.assume_user('c6200000-0000-4000-8000-000000000008');
+  INSERT INTO public.organization_members (user_id, organization_id, role, status, joined_at)
+  VALUES ('c6200000-0000-4000-8000-00000000000a', 'c6200000-0000-4000-8000-0000000000a5',
+          'member', 'active', NOW());
+  PERFORM public.reassign_project_lead(
+    'c6200000-0000-4000-8000-0000000000e9',
+    'c6200000-0000-4000-8000-000000000008',
+    'c6200000-0000-4000-8000-00000000000a');
+  PERFORM pg_temp.reset_role();
+  SELECT designer_id INTO v_lead FROM public.projects
+   WHERE id = 'c6200000-0000-4000-8000-0000000000e9';
+  ASSERT v_lead = 'c6200000-0000-4000-8000-00000000000a',
+    'FAIL k4 (precondition for the remedy arm): the employer''s owner is now the '
+    'project''s lead. If this stops working the remedy arm has no reachable caller at '
+    'all and k5 measures nothing; lead = ' || COALESCE(v_lead::text, 'NULL');
+
+  -- REMEDY, leg 3 — THE ARM ITSELF. She is the project's CURRENT designer and the OWNER
+  -- of the studio she names, so bound (b) yields and the column is re-pointed.
+  PERFORM pg_temp.assume_user('c6200000-0000-4000-8000-00000000000a');
+  SELECT public.stamp_project_pricing_studio(
+    'c6200000-0000-4000-8000-0000000000e9',
+    'c6200000-0000-4000-8000-0000000000a6') INTO v_got;
+  PERFORM pg_temp.reset_role();
+  ASSERT v_got = 'c6200000-0000-4000-8000-0000000000a6'
+     AND (SELECT studio_id FROM public.projects
+           WHERE id = 'c6200000-0000-4000-8000-0000000000e9')
+         = 'c6200000-0000-4000-8000-0000000000a6',
+    'FAIL k5 (HT-3-g AMENDED (b) — THE REMEDY ARM OVERWRITES): the employer''s owner, '
+    'now the lead, names her own studio on a project that already named the taker''s '
+    'workspace, and the column moves. Through round 12 this was 22023 for every caller '
+    'alive, which is what made W2-R13-01 a taking with no way back; got '
+    || COALESCE(v_got::text, 'NULL');
+  ASSERT EXISTS (
+    SELECT 1 FROM public.audit_logs
+    WHERE resource_type = 'project'
+      AND resource_id = 'c6200000-0000-4000-8000-0000000000e9'
+      AND action = 'project.pricing_studio_restamped'
+      AND organization_id = 'c6200000-0000-4000-8000-0000000000a6'
+      AND old_values->>'studio_id' = 'c6200000-0000-4000-8000-0000000000a5'
+      AND new_values->>'studio_id' = 'c6200000-0000-4000-8000-0000000000a6'
+  ), 'FAIL k6 (the overwrite is AUDITED, with both studios): an overwrite takes a '
+     'project''s hours OFF a studio that was reading them, so it carries its own action '
+     'name and the OLD studio. A row spelling the old value NULL would say the opposite '
+     'of what happened';
+  ASSERT (SELECT hourly_rate_cents = 99900 AND rate_source = 'studio_member'
+            FROM public.project_time_entries
+           WHERE id = 'c6200000-0000-4000-8000-0000000000b5'),
+    'FAIL k7 (P-4): the hour logged while the workspace held the project keeps the '
+    'number it was priced at. The remedy changes what the NEXT hour resolves; it '
+    're-rates nothing in either direction';
+
+  PERFORM pg_temp.assume_user('c6200000-0000-4000-8000-000000000008');
+  INSERT INTO public.project_time_entries
+    (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('c6200000-0000-4000-8000-0000000000b6', 'c6200000-0000-4000-8000-0000000000e9',
+          'c6200000-0000-4000-8000-000000000008', NOW() - INTERVAL '30 minutes', 120, true, 'manual_entry');
+  PERFORM pg_temp.reset_role();
+  SELECT hourly_rate_cents, rate_source, rated_amount_cents
+    INTO v_rate, v_source, v_amount
+  FROM public.project_time_entries WHERE id = 'c6200000-0000-4000-8000-0000000000b6';
+  ASSERT v_rate = 26000 AND v_source = 'studio_member' AND v_amount = 52000,
+    'FAIL k8 (THE REMEDY RECOVERS THE MONEY): her next hour on the recovered project '
+    'prices from the EMPLOYER''s card — 26000, the number its owner wrote — and not '
+    'from the 99900 she wrote for herself. She holds no seat there at all, which is '
+    'deliberate: tier 2 asks for a RATE ROW, not a seat, so a recovered project bills at '
+    'the studio''s number even after the hire has gone; got '
+    || COALESCE(v_rate::text, 'NULL') || ' / ' || COALESCE(v_source, 'NULL') || ' / '
+    || COALESCE(v_amount::text, 'NULL');
+
+  RAISE NOTICE 'legacy_project_studio_stamp: form S is a residual whose remedy arm recovers the money, and whose reassign leg the employer cannot reach alone.';
+END
+$$;
+
+-- ─── (l) W2-R13-01 FORM H — the taking, the money, and the same remedy ──────
+DO $$
+DECLARE
+  v_rate   integer;
+  v_source text;
+  v_amount integer;
+  v_state  text;
+  v_got    uuid;
+BEGIN
+  ASSERT (SELECT studio_id FROM public.projects
+           WHERE id = 'c6200000-0000-4000-8000-0000000000ec')
+         = 'c6200000-0000-4000-8000-0000000000aa',
+    'FAIL l6 (FORM H — THE RESIDUAL, asserted as PASSING): two statements of hers, both '
+    'on rows her own shipped policies admit, and her employer''s client work — opened by '
+    'that employer''s own assistant and carrying him on its roster — is stamped to the '
+    'workspace she owns. The roster key cannot reach this shape by construction: it '
+    'reads the same seat the author key reads';
+
+  PERFORM pg_temp.assume_user('c6200000-0000-4000-8000-000000000010');
+  INSERT INTO public.project_time_entries
+    (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('c6200000-0000-4000-8000-0000000000b7', 'c6200000-0000-4000-8000-0000000000ec',
+          'c6200000-0000-4000-8000-000000000010', NOW() - INTERVAL '4 hours', 120, true, 'manual_entry');
+  PERFORM pg_temp.reset_role();
+  SELECT hourly_rate_cents, rate_source, rated_amount_cents
+    INTO v_rate, v_source, v_amount
+  FROM public.project_time_entries WHERE id = 'c6200000-0000-4000-8000-0000000000b7';
+  ASSERT v_rate = 99900 AND v_source = 'studio_member' AND v_amount = 199800,
+    'FAIL l7 (FORM H — THE MONEY, asserted as PASSING): 99900 where her employer''s '
+    'owner wrote 26000; got ' || COALESCE(v_rate::text, 'NULL') || ' / '
+    || COALESCE(v_source, 'NULL') || ' / ' || COALESCE(v_amount::text, 'NULL');
+
+  -- The same remedy, and the same missing half.
+  PERFORM pg_temp.assume_user('c6200000-0000-4000-8000-000000000012');
+  v_state := NULL;
+  BEGIN
+    PERFORM public.reassign_project_lead(
+      'c6200000-0000-4000-8000-0000000000ec',
+      'c6200000-0000-4000-8000-000000000010',
+      'c6200000-0000-4000-8000-000000000012');
+  EXCEPTION WHEN OTHERS THEN v_state := SQLSTATE;
+  END;
+  PERFORM pg_temp.reset_role();
+  ASSERT v_state = '42501',
+    'FAIL l8: the employer''s owner is refused the reassignment here too, for the same '
+    'reason as k3 — the project now names the taker''s workspace and he holds no seat '
+    'in it; got ' || COALESCE(v_state, 'NO RAISE');
+
+  PERFORM pg_temp.assume_user('c6200000-0000-4000-8000-000000000010');
+  INSERT INTO public.organization_members (user_id, organization_id, role, status, joined_at)
+  VALUES ('c6200000-0000-4000-8000-000000000012', 'c6200000-0000-4000-8000-0000000000aa',
+          'member', 'active', NOW());
+  PERFORM public.reassign_project_lead(
+    'c6200000-0000-4000-8000-0000000000ec',
+    'c6200000-0000-4000-8000-000000000010',
+    'c6200000-0000-4000-8000-000000000012');
+  PERFORM pg_temp.reset_role();
+
+  PERFORM pg_temp.assume_user('c6200000-0000-4000-8000-000000000012');
+  SELECT public.stamp_project_pricing_studio(
+    'c6200000-0000-4000-8000-0000000000ec',
+    'c6200000-0000-4000-8000-0000000000a9') INTO v_got;
+  PERFORM pg_temp.reset_role();
+  ASSERT v_got = 'c6200000-0000-4000-8000-0000000000a9'
+     AND (SELECT studio_id FROM public.projects
+           WHERE id = 'c6200000-0000-4000-8000-0000000000ec')
+         = 'c6200000-0000-4000-8000-0000000000a9',
+    'FAIL l9 (the remedy arm, on form H): the employer''s owner recovers its own client '
+    'work; got ' || COALESCE(v_got::text, 'NULL');
+  ASSERT EXISTS (
+    SELECT 1 FROM public.audit_logs
+    WHERE resource_id = 'c6200000-0000-4000-8000-0000000000ec'
+      AND action = 'project.pricing_studio_restamped'
+      AND old_values->>'studio_id' = 'c6200000-0000-4000-8000-0000000000aa'
+      AND new_values->>'studio_id' = 'c6200000-0000-4000-8000-0000000000a9'
+  ), 'FAIL l10: and the overwrite is audited with both studios';
+
+  PERFORM pg_temp.assume_user('c6200000-0000-4000-8000-000000000010');
+  INSERT INTO public.project_time_entries
+    (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('c6200000-0000-4000-8000-0000000000b8', 'c6200000-0000-4000-8000-0000000000ec',
+          'c6200000-0000-4000-8000-000000000010', NOW() - INTERVAL '20 minutes', 120, true, 'manual_entry');
+  PERFORM pg_temp.reset_role();
+  SELECT hourly_rate_cents, rate_source, rated_amount_cents
+    INTO v_rate, v_source, v_amount
+  FROM public.project_time_entries WHERE id = 'c6200000-0000-4000-8000-0000000000b8';
+  ASSERT v_rate = 26000 AND v_source = 'studio_member' AND v_amount = 52000,
+    'FAIL l11 (the remedy recovers the money on form H too): 26000 from the employer''s '
+    'card; got ' || COALESCE(v_rate::text, 'NULL') || ' / ' || COALESCE(v_source, 'NULL')
+    || ' / ' || COALESCE(v_amount::text, 'NULL');
+  ASSERT (SELECT hourly_rate_cents = 99900 FROM public.project_time_entries
+           WHERE id = 'c6200000-0000-4000-8000-0000000000b7'),
+    'FAIL l12 (P-4): and the hour logged before the recovery keeps its number';
+
+  RAISE NOTICE 'legacy_project_studio_stamp: form H is a residual with the same remedy and the same missing half.';
+END
+$$;
+
+-- ─── (m) THE REMEDY ARM'S OWN SURFACE: two refusals, and ONE OPEN DOOR ──────
+-- The arm turns on TWO facts and the refusals below are each the absence of one of
+-- them. The third leg is what the arm's WIDTH costs, and it is asserted as PASSING and
+-- loudly labelled rather than left for the next round to find: read as written, the arm
+-- admits any designer who OWNS a studio to re-point any project she LEADS — an honest
+-- employer's already-stamped project included — at the studio she owns, where
+-- HT-3-e(2)'s owner exemption prices her own number. That is W2-R11-01 form A with the
+-- power to overwrite. HT-3-g(3)'s "DESIGNERS NEVER STAMP" forbade it; HT-3-g AMENDED
+-- (b) expressly admits it, and it is not narrowed here on a guess.
+DO $$
+DECLARE
+  v_rate   integer;
+  v_source text;
+  v_amount integer;
+  v_state  text;
+  v_got    uuid;
+BEGIN
+  ASSERT (SELECT studio_id FROM public.projects
+           WHERE id = 'c6200000-0000-4000-8000-0000000000ed')
+         = 'c6200000-0000-4000-8000-0000000000a6',
+    'FAIL m0 (precondition): an HONEST studio names this project, which is the state '
+    'every project created since 00602 is in';
+
+  PERFORM pg_temp.assume_user('c6200000-0000-4000-8000-00000000000e');
+  INSERT INTO public.project_time_entries
+    (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('c6200000-0000-4000-8000-0000000000b9', 'c6200000-0000-4000-8000-0000000000ed',
+          'c6200000-0000-4000-8000-00000000000e', NOW() - INTERVAL '5 hours', 120, true, 'manual_entry');
+  PERFORM pg_temp.reset_role();
+  SELECT hourly_rate_cents, rate_source INTO v_rate, v_source
+  FROM public.project_time_entries WHERE id = 'c6200000-0000-4000-8000-0000000000b9';
+  ASSERT v_rate = 24000 AND v_source = 'studio_member',
+    'FAIL m1 (precondition): the honest studio''s arm''s-length 24000 prices her hour; '
+    'got ' || COALESCE(v_rate::text, 'NULL') || ' / ' || COALESCE(v_source, 'NULL');
+
+  -- REFUSAL 1 — the project's designer, but only an ADMIN of the studio she names.
+  PERFORM pg_temp.assume_user('c6200000-0000-4000-8000-00000000000e');
+  v_state := NULL;
+  BEGIN
+    SELECT public.stamp_project_pricing_studio(
+      'c6200000-0000-4000-8000-0000000000ed',
+      'c6200000-0000-4000-8000-0000000000a8') INTO v_got;
+  EXCEPTION WHEN OTHERS THEN v_state := SQLSTATE;
+  END;
+  PERFORM pg_temp.reset_role();
+  ASSERT v_state = '22023',
+    'FAIL m2 (the remedy arm asks for an OWNER seat): she IS this project''s designer '
+    'and she IS an owner-or-admin of the studio she names, so bound (a) admits her — and '
+    'the overwrite is still refused, because the arm asks for an OWNER seat and hers is '
+    '`admin`. Spelled as is_org_admin_or_owner the arm would hand every ADMIN of any '
+    'studio the power to re-point a project that studio had no part in; got '
+    || COALESCE(v_state, 'NO RAISE (returned ' || COALESCE(v_got::text, 'NULL') || ')');
+  ASSERT (SELECT studio_id FROM public.projects
+           WHERE id = 'c6200000-0000-4000-8000-0000000000ed')
+         = 'c6200000-0000-4000-8000-0000000000a6',
+    'FAIL m3: and the refusal wrote nothing';
+
+  -- REFUSAL 2 — an OWNER of the studio named who is NOT the project's designer.
+  PERFORM pg_temp.assume_user('c6200000-0000-4000-8000-00000000000a');
+  v_state := NULL;
+  BEGIN
+    SELECT public.stamp_project_pricing_studio(
+      'c6200000-0000-4000-8000-0000000000e1',
+      'c6200000-0000-4000-8000-0000000000a6') INTO v_got;
+  EXCEPTION WHEN OTHERS THEN v_state := SQLSTATE;
+  END;
+  PERFORM pg_temp.reset_role();
+  ASSERT v_state = '22023',
+    'FAIL m4 (the remedy arm asks for the LEAD): an owner of the studio she names, who '
+    'is not this project''s designer, is refused the overwrite — a stamp stays final for '
+    'every caller but the one the amendment names (HT-3-c). Without this leg any studio '
+    'owner could pull any stamped project into her own books; got '
+    || COALESCE(v_state, 'NO RAISE (returned ' || COALESCE(v_got::text, 'NULL') || ')');
+  ASSERT (SELECT studio_id FROM public.projects
+           WHERE id = 'c6200000-0000-4000-8000-0000000000e1')
+         = 'c6200000-0000-4000-8000-0000000000a1',
+    'FAIL m5: and that refusal wrote nothing either';
+
+  -- THE OPEN DOOR — both facts present, on a project an honest studio was pricing.
+  PERFORM pg_temp.assume_user('c6200000-0000-4000-8000-00000000000e');
+  SELECT public.stamp_project_pricing_studio(
+    'c6200000-0000-4000-8000-0000000000ed',
+    'c6200000-0000-4000-8000-0000000000ae') INTO v_got;
+  PERFORM pg_temp.reset_role();
+  ASSERT v_got = 'c6200000-0000-4000-8000-0000000000ae'
+     AND (SELECT studio_id FROM public.projects
+           WHERE id = 'c6200000-0000-4000-8000-0000000000ed')
+         = 'c6200000-0000-4000-8000-0000000000ae',
+    'FAIL m6 (HT-3-g AMENDED (b) IS WIDER THAN ITS PURPOSE — asserted as PASSING and '
+    'LOUDLY LABELLED): a designer who owns a studio re-points a project she did NOT '
+    'create, which an HONEST studio had already stamped, at the studio she owns — ONE '
+    'statement, no seat touched, no second party. The amendment''s sentence authorises '
+    'it; HT-3-g(3)''s "DESIGNERS NEVER STAMP" is what used to forbid it. If this is not '
+    'what the orchestrator meant, the narrowing is a fact about the project''s BOOK at '
+    'this call site, not a fact about the caller, and this assertion is the one that '
+    'inverts; got ' || COALESCE(v_got::text, 'NULL');
+  ASSERT EXISTS (
+    SELECT 1 FROM public.audit_logs
+    WHERE resource_id = 'c6200000-0000-4000-8000-0000000000ed'
+      AND action = 'project.pricing_studio_restamped'
+      AND old_values->>'studio_id' = 'c6200000-0000-4000-8000-0000000000a6'
+      AND new_values->>'studio_id' = 'c6200000-0000-4000-8000-0000000000ae'
+  ), 'FAIL m7: and the one trace of it is the audit row — which is why the overwrite '
+     'carries the OLD studio and its own action name. Lane B owes the displaced studio a '
+     'visible fact about a project whose hours it stops reading';
+
+  PERFORM pg_temp.assume_user('c6200000-0000-4000-8000-00000000000e');
+  INSERT INTO public.project_time_entries
+    (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('c6200000-0000-4000-8000-0000000000ba', 'c6200000-0000-4000-8000-0000000000ed',
+          'c6200000-0000-4000-8000-00000000000e', NOW() - INTERVAL '10 minutes', 120, true, 'manual_entry');
+  PERFORM pg_temp.reset_role();
+  SELECT hourly_rate_cents, rate_source, rated_amount_cents
+    INTO v_rate, v_source, v_amount
+  FROM public.project_time_entries WHERE id = 'c6200000-0000-4000-8000-0000000000ba';
+  ASSERT v_rate = 88800 AND v_source = 'studio_member' AND v_amount = 177600,
+    'FAIL m8 (and the door moves money): her next hour prices at the 88800 she wrote '
+    'for herself, where the honest studio''s card says 24000. HT-3-e(2)''s exemption is '
+    'OWNERSHIP and she owns the studio she just named; got '
+    || COALESCE(v_rate::text, 'NULL') || ' / ' || COALESCE(v_source, 'NULL') || ' / '
+    || COALESCE(v_amount::text, 'NULL');
+  ASSERT (SELECT hourly_rate_cents = 24000 FROM public.project_time_entries
+           WHERE id = 'c6200000-0000-4000-8000-0000000000b9'),
+    'FAIL m9 (P-4): the hour the honest studio already priced keeps its 24000';
+
+  RAISE NOTICE 'legacy_project_studio_stamp: the remedy arm needs BOTH facts, and with both it can re-point an honest studio''s project.';
+END
+$$;
+
 -- ─── (g) the LIVE migration's end state, re-asserted here ──────────────────
 -- 00620 ran at replay, before this file's fixtures existed. Its own postcondition
 -- asserted the end state then; this leg asserts it again over whatever rows the
@@ -575,13 +1337,17 @@ BEGIN
     AND answer.studio_id IS NOT NULL
     AND (
       answer.tier = 'employer'
-      OR NOT public.project_author_books_elsewhere(project.created_by, answer.studio_id)
+      OR (
+        NOT public.project_author_books_elsewhere(project.created_by, answer.studio_id)
+        AND NOT public.project_roster_books_elsewhere(
+                  project.id, project.designer_id, answer.studio_id)
+      )
     );
   ASSERT v_left = 0,
     'FAIL h1 (00620''s end state): no project the migration was WILLING to stamp may '
     'be left with studio_id NULL — one left behind prices ''none'' for ever and '
     'HT-3-g(3) gives its own studio no act. The predicate is the migration''s own, '
-    'W2-R12-01''s key included: a row the key deliberately left is not a row the '
+    'BOTH keys included: a row a key deliberately left is not a row the '
     'statement failed to reach. Count = ' || v_left;
 
   ASSERT to_regprocedure('public.owned_tier_prices_project(uuid,uuid)') IS NULL,
@@ -600,6 +1366,16 @@ BEGIN
     'FAIL h4 (HT-3-g(1)): and no authenticated caller may hold EXECUTE on it. It is a '
     'migration-time key; reachable at read time it is a derivation, and the AUTHOR''s '
     'seats move as freely as the designer''s';
+
+  ASSERT to_regprocedure('public.project_roster_books_elsewhere(uuid,uuid,uuid)') IS NOT NULL,
+    'FAIL h5 (HT-3-g AMENDED (a), W2-R13-01): the ROSTER key must exist on the live '
+    'stack. Without it the author key alone carries the owned tier, and it is already '
+    'false on four of the five standings a legacy project''s author can hold';
+  ASSERT NOT COALESCE(has_function_privilege('authenticated',
+           'public.project_roster_books_elsewhere(uuid,uuid,uuid)', 'EXECUTE'), false),
+    'FAIL h6 (HT-3-g(1)): and no authenticated caller may hold EXECUTE on it either — a '
+    'roster is edited by a lead designer on an ordinary afternoon, so read at pricing '
+    'time it would be the most movable lever in the program';
 
   RAISE NOTICE 'legacy_project_studio_stamp: the live migration left nothing answerable unstamped.';
 END
