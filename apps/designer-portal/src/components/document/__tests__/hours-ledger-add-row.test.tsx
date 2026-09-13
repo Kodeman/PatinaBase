@@ -255,6 +255,32 @@ describe('the Hours add row', () => {
     expect(prompt.container.textContent).not.toContain('backdated');
   });
 
+  it('answers the rate question with HT-12\u2019s reason, and never with a figure it cannot know (HT-26)', async () => {
+    // plan-v2 \u00a74 asks for a "rate readout" on the add row. The resolved rate
+    // is not knowable before the row is written: `resolve_time_rate_cents` is
+    // the only thing that knows it and 00599 REVOKEs EXECUTE from
+    // `authenticated` (W1-R7-04), with a postcondition in the migration that
+    // keeps it revoked. So the pre-write row states the reason it does have and
+    // prints no money \u2014 a re-derived figure here would be a false fact on the
+    // one surface built to stop them. This case is the pin on that decision.
+    renderLedger();
+    await waitFor(() =>
+      expect(
+        screen.getByLabelText('Project').querySelectorAll('option'),
+      ).toHaveLength(2),
+    );
+    fireEvent.change(screen.getByLabelText('Project'), {
+      target: { value: 'project-1' },
+    });
+
+    const strip = screen
+      .getByRole('button', { name: /Non-billable \u2014 press to make billable/ })
+      .closest('div') as HTMLElement;
+    expect(strip.textContent).toContain('non-billable \u00b7 no agreement');
+    expect(strip.textContent).not.toMatch(/\$/);
+    expect(strip.textContent).not.toMatch(/rate not recorded|rate pending/);
+  });
+
   it('carries the billable pill on the add row, and the role chip only for a multi-role member (HT-11/HT-41)', async () => {
     const single = renderLedger();
     expect(

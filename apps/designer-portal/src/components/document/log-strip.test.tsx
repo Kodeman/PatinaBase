@@ -186,6 +186,26 @@ describe('LogStrip', () => {
     expect(screen.getByText(/\$180/)).toBeInTheDocument();
   });
 
+  it('drops the amount the moment the pill says the hour is not billable (HT-12/HT-26)', () => {
+    // The strip passes the LIVE pill state and the STORED amount, so the two
+    // disagree between the tap and the write. A money figure beside "not
+    // billable" is three facts wearing one face, which is what this surface
+    // exists to stop.
+    mockOffer = offerFixture({
+      billable: true,
+      rateSource: 'studio_member',
+      hourlyRateCents: 18000,
+      ratedAmountCents: 7800,
+    });
+    render(<LogStrip />);
+    expect(screen.getByText(/\$78/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Billable/ }));
+
+    expect(screen.getByText(/not billable/)).toBeInTheDocument();
+    expect(screen.queryByText(/\$78/)).not.toBeInTheDocument();
+  });
+
   it('names the role only for a member who holds more than one seat (HT-41)', () => {
     mockRateRoles = ['lead_designer'];
     mockOffer = offerFixture({ rateRole: 'lead_designer' });

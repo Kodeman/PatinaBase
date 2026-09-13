@@ -1051,7 +1051,12 @@ export function HoursLedger({
         </DocumentAction>
       </div>
       {/* HT-11/HT-12/HT-41 — the same controls every other capture surface
-          carries, seeded from the resolved answer for the document picked. */}
+          carries, seeded from the resolved answer for the document picked.
+          plan-v2 §4's "rate readout" is served HERE by HT-12's reason sentence
+          and by nothing else: the resolved rate is not knowable before the row
+          is written (`resolve_time_rate_cents` is REVOKEd from `authenticated`,
+          00599, W1-R7-04), so a figure re-derived in the browser would be a
+          false fact. The written rows carry the real readout. */}
       <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
         <BillablePill
           value={addBillable}

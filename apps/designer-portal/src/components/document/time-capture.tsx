@@ -196,7 +196,16 @@ export function RateReadout({
         provenance.kind === 'rated'
           ? `${provenance.label} · ${fmtUsd(provenance.hourlyRateCents)}/hr`
           : provenance.label,
-        amount > 0 ? fmtUsd(amount) : null,
+        // A money figure is never printed beside its own negation. The log
+        // strip passes the LIVE pill state as `billable` and the STORED
+        // `rated_amount_cents` as the amount, so one tap on the pill after a
+        // billable, priced hour used to render "not billable · $150.00" — the
+        // server zeroes the amount only once the row is written (00601:309).
+        provenance.kind === 'nonbillable'
+          ? null
+          : amount > 0
+            ? fmtUsd(amount)
+            : null,
       ]
         .filter(Boolean)
         .join(' · ')}
