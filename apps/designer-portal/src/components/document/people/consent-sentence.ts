@@ -12,7 +12,7 @@
  * word with a fabricated date is worse than a word standing alone.
  */
 
-import type { ChannelConsentRecord, ConsentSource } from "@patina/supabase";
+import type { ChannelConsentResolution, ConsentSource } from "@patina/supabase";
 import { formatSeatDate } from "./seat-line";
 
 const GRANT_PHRASE: Record<ConsentSource, string> = {
@@ -62,14 +62,32 @@ export function consentSentence(facts: ConsentSentenceFacts): string | null {
   return `${phrase}, ${date}${where}.`;
 }
 
-/** The same sentence, read straight off a `studio_channel_consent` row. */
+/**
+ * The same sentence, read off a resolved consent — THE VERDICT AND THE RECORD
+ * TOGETHER (CR-2).
+ *
+ * ⚠ NEVER `record.status`. `channel_consent_status()` folds
+ * `refusal_unanswered` into `opted_out` whatever the row's own `status` says
+ * (00594:1062-1063), and 00594's own comment (:655-666) records that `granted`
+ * rows carrying that flag are minted ON PURPOSE. Reading `status` here made
+ * the word and the clause on the SAME LINE contradict each other: the
+ * Directory row printed `Opted out` in terracotta beside "Written consent,
+ * 2 May 2025, on the Lindqvist kitchen." The verdict is the only thing that
+ * decides which half of the record the sentence reads, so the caller must hand
+ * it over — `useChannelConsent`'s resolution, or the identity's own
+ * `people_directory.consent_status` paired with the record behind it.
+ */
 export function consentSentenceForRecord(
-  record: ChannelConsentRecord | null | undefined,
+  resolved:
+    | Pick<ChannelConsentResolution, "verdict" | "record">
+    | null
+    | undefined,
   projectName?: string | null,
 ): string | null {
+  const record = resolved?.record;
   if (!record) return null;
   return consentSentence({
-    status: record.status,
+    status: resolved?.verdict ?? null,
     source: record.source,
     optOutSource: record.opt_out_source,
     consentedAt: record.consented_at,

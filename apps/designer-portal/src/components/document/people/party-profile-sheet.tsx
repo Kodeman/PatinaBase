@@ -487,7 +487,13 @@ export function PartyProfileSheet({
     if (!partyId || !activeLink) return;
     setLinkError(null);
     try {
-      await revokeLink.mutateAsync({ tokenId: activeLink.id, partyId });
+      // CR-5: the roster reads by project, so the revoke must name it or the
+      // rows behind this sheet keep printing reach `Field link`.
+      await revokeLink.mutateAsync({
+        tokenId: activeLink.id,
+        partyId,
+        projectId: seatProjectId,
+      });
       setMintedUrl(null);
     } catch (e) {
       setLinkError(

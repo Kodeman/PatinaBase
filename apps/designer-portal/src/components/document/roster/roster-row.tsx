@@ -552,8 +552,18 @@ export function RosterRow({
               </DocumentActionRow>
             )}
 
+            {/* CR-7: direction §5.5 and SPEC §7 #4 ask a gated act for
+                `aria-disabled` + `aria-describedby` + a VISIBLE consequence
+                sentence. This one was `sr-only` — position:absolute,
+                clip-path:inset(50%) — so a sighted designer saw a dead Text
+                button with nothing beside it, while SPEC §5.4's own string
+                list names the sentence as a FACE string. Printed the way the
+                Send act three regions down prints its own. */}
             {!canText && showFieldActs && (
-              <p id={`${panelId}-text-held`} className="sr-only">
+              <p
+                id={`${panelId}-text-held`}
+                className="mt-1 text-[0.7rem] text-[var(--color-aged-oak)]"
+              >
                 {textHeldSentence}
               </p>
             )}

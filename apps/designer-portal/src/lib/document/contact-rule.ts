@@ -64,9 +64,11 @@ export function contactChannelWord(token: string): string {
 /**
  * THREE FACTS, NOT ONE (CR-4 / CR-16 / CR3-7 / CR3-9).
  *
- *  · A HARD BLOCK is a rule that CLOSES THE RAIL PATINA ITSELF SENDS ON — the
- *    text — or one that leaves no direct channel open at all. It earns the 2px
- *    terracotta leading rule, and nothing else.
+ *  · A HARD BLOCK (R-BL, Fable 2026-09-13) is a rule that leaves no direct
+ *    channel open at all (do-not-contact), or that routes contact to another
+ *    person (`route_to_person_id` set) — never a rule that merely closes one
+ *    direct channel while another stays open. It earns the 2px terracotta
+ *    leading rule, and nothing else.
  *  · DO NOT CONTACT is the Channels-region STATE direction §5.4 describes:
  *    "`channels_forbidden` covers every channel", so the region collapses to
  *    one line and routes somewhere reachable. It also takes the person's own
@@ -75,13 +77,20 @@ export function contactChannelWord(token: string): string {
  *    designation"). A recorded grant is not permission when the studio has
  *    written down that this person is never texted.
  *
- * CR3-7, AND WHAT IS STILL OWED. r2's ruling made the block "ANY forbidden
- * channel", which painted the leading rule on F-11 Dana Kowalski —
- * `forbidden={email}`, the canonical specimen row, which SPEC §5.1 #8 describes
- * with NO leading rule while #10 and #11 name one explicitly for Frank Bauer
- * and Ray Thao. That is the verified break, and closing the rail is the reading
- * that fixes it: Dana loses the rule, Frank and Ray keep it, and the predicate
- * says something a designer can state out loud.
+ * CR3-7, AND R-BL'S SETTLEMENT (Fable, 2026-09-13). r2's ruling made the block
+ * "ANY forbidden channel", which painted the leading rule on F-11 Dana
+ * Kowalski — `forbidden={email}`, the canonical specimen row, which SPEC
+ * §5.1 #8 describes with NO leading rule. A later reading closed the rail
+ * instead — treating "forbids sms" as its own hard block — but that painted
+ * the rule on F-27 Ray Thao, whose row forbids only text while email and
+ * phone stay open. R-BL settles it: a HARD BLOCK is a rule that forbids
+ * EVERY direct channel (do-not-contact) or that ROUTES contact to another
+ * person (`route_to_person_id` set) — never a rule that merely closes one
+ * channel while another direct one stays open. So:
+ *
+ *   · F-15 Frank Bauer  — do not contact, write Rosa  → hard block (routes).
+ *   · F-27 Ray Thao     — never text; email/phone open → NOT a hard block.
+ *   · F-11 Dana Kowalski — text only; the email is dead → NOT a hard block.
  *
  * It does not reproduce SPEC §3's fixture exactly, and it cannot. F-26 Carol
  * Nyström (`block: true`) and F-10 Sam Rowe (`block: false`) carry BYTE-FOR-BYTE
@@ -93,14 +102,15 @@ export function contactChannelWord(token: string): string {
  * STILL OWES A RULING: either the fact moves onto the rule row (a column, a
  * W3 migration) or SPEC §3's fixture is amended to match the derivation.
  *
- * All three answers are computed HERE, from `channels_forbidden`, so the
- * Directory row, the roster row, the person card, the company card's crew line
- * and the picker's mini row all read the same facts (R-S / C29).
+ * All three answers are computed HERE, from `channels_forbidden` and
+ * `route_to_person_id`, so the Directory row, the roster row, the person
+ * card, the company card's crew line and the picker's mini row all read the
+ * same facts (R-S / C29).
  */
 export function contactRuleIsHardBlock(
   rule: StudioContactRule | null | undefined,
 ): boolean {
-  return contactRuleForbidsSms(rule) || contactRuleIsDoNotContact(rule);
+  return contactRuleIsDoNotContact(rule) || Boolean(rule?.route_to_person_id);
 }
 
 /**

@@ -176,19 +176,39 @@ export function useCreateFieldLink() {
   });
 }
 
-/** Revoke a field link (kills it immediately). */
+/**
+ * Revoke a field link (kills it immediately).
+ *
+ * CR-5 — THE REACH WORD MUST SHUT WITH THE DOOR. This used to invalidate the
+ * link list alone, so revoking from the seat sheet left the Directory row, the
+ * seat line and every roster row still printing reach `Field link` for a door
+ * that was already shut — CR-12's defect in a second door. The mint three
+ * functions above already fans out to all four; so does this.
+ */
 export function useRevokeFieldLink() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ tokenId }: { tokenId: string; partyId: string }) => {
+    mutationFn: async ({
+      tokenId,
+    }: {
+      tokenId: string;
+      partyId: string;
+      projectId?: string | null;
+    }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
       const { error } = await supabase.rpc('revoke_field_link', { p_token_id: tokenId });
       if (error) throw error;
       return true;
     },
-    onSuccess: (_data, { partyId }) => {
+    onSuccess: (_data, { partyId, projectId }) => {
       void queryClient.invalidateQueries({ queryKey: partySmsKeys.links(partyId) });
+      void queryClient.invalidateQueries({ queryKey: ['access-grants'] });
+      void queryClient.invalidateQueries({ queryKey: ['people-directory'] });
+      void queryClient.invalidateQueries({ queryKey: ['people-directory-seats'] });
+      if (projectId) {
+        void queryClient.invalidateQueries({ queryKey: ['project-roster', projectId] });
+      }
     },
   });
 }

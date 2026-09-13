@@ -293,13 +293,21 @@ export function DirectoryView({
         (p) => [p.id, p.name ?? null] as const,
       ),
     );
+    // CR-2: the WORD the row prints comes off `people_directory.consent_status`
+    // (`channel_consent_status()`, which folds `refusal_unanswered` into
+    // `opted_out`); the record's own `status` does not. Pairing the two here
+    // is what keeps the clause from saying "Written consent, 2 May 2025" under
+    // a terracotta `Opted out`.
+    const verdicts = new Map(
+      rows.map((row) => [row.person_id, row.consent_status ?? null] as const),
+    );
     const clauses = new Map<string, string>();
     for (const c of contacts ?? []) {
       if (!c.phone_e164) continue;
       const record = byValue.get(c.phone_e164);
       if (!record) continue;
       const sentence = consentSentenceForRecord(
-        record,
+        { verdict: verdicts.get(c.id) ?? null, record },
         record.origin_project_id
           ? (projectNames.get(record.origin_project_id) ?? null)
           : null,
@@ -307,7 +315,7 @@ export function DirectoryView({
       if (sentence) clauses.set(c.id, sentence);
     }
     return clauses;
-  }, [consentRecords, contacts, projects]);
+  }, [consentRecords, contacts, projects, rows]);
 
   const narrowed = useMemo(() => {
     const admitted = rows.filter((row) => {

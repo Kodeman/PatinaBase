@@ -70,6 +70,46 @@ const REGION_HEAD = "t-head mb-3 text-[var(--ink-subtle)]";
 export const NO_CREW_SENTENCE = "Nobody on file at this firm yet.";
 export const NO_JOBS_SENTENCE = "Not on a job yet.";
 export const NO_VERDICT_SENTENCE = "No verdict recorded.";
+
+/**
+ * CR-10 — SPEC §5.3 #8's History region is THREE FACTS, not one: "First job
+ * 2025, the Lindqvist kitchen. Two projects. No verdict recorded." Direction
+ * §3.3 R6 names the same three. The region printed only the verdict; the first
+ * job, its year, its name and the count were all absent, though the Jobs region
+ * directly above already holds the seats that answer them.
+ *
+ * Counted in words the way SPEC writes them — a figure belongs to money and to
+ * dates, not to two jobs.
+ */
+const COUNT_WORDS = [
+  "No",
+  "One",
+  "Two",
+  "Three",
+  "Four",
+  "Five",
+  "Six",
+  "Seven",
+  "Eight",
+  "Nine",
+  "Ten",
+];
+
+export function firmHistorySentence(facts: {
+  firstJobYear: number | null;
+  firstJobName: string | null;
+  projectCount: number;
+}): string | null {
+  const parts: string[] = [];
+  if (facts.firstJobYear && facts.firstJobName) {
+    parts.push(`First job ${facts.firstJobYear}, the ${facts.firstJobName}.`);
+  }
+  if (facts.projectCount > 0) {
+    const word = COUNT_WORDS[facts.projectCount] ?? String(facts.projectCount);
+    parts.push(`${word} ${facts.projectCount === 1 ? "project" : "projects"}.`);
+  }
+  return parts.length ? parts.join(" ") : null;
+}
 export const MONEY_BOOK_LINE =
   "Waiver ledger and draw state, in the money book.";
 
@@ -290,6 +330,38 @@ export function CompanyCard({
     () => [...seatsByPerson.values()].flat().map((seat) => seat.seat_id),
     [seatsByPerson],
   );
+
+  /** SPEC §5.3 #8 / CR-10 — the first job and its year, off the same seats. */
+  const historySentence = useMemo(() => {
+    const projects = new Map<string, { name: string | null; from: string | null }>();
+    for (const seats of seatsByPerson.values()) {
+      for (const seat of seats) {
+        if (!seat.project_id) continue;
+        const standing = projects.get(seat.project_id);
+        // The firm's first day on a job is the EARLIEST of its crew's starts.
+        if (
+          !standing ||
+          (seat.on_site_from &&
+            (!standing.from || seat.on_site_from < standing.from))
+        ) {
+          projects.set(seat.project_id, {
+            name: seat.project_name ?? standing?.name ?? null,
+            from: seat.on_site_from ?? standing?.from ?? null,
+          });
+        }
+      }
+    }
+    const dated = [...projects.values()]
+      .filter((p) => p.from)
+      .sort((a, b) => (a.from ?? "").localeCompare(b.from ?? ""));
+    const first = dated[0] ?? null;
+    const year = first?.from ? Number(first.from.slice(0, 4)) : null;
+    return firmHistorySentence({
+      firstJobYear: Number.isFinite(year) ? year : null,
+      firstJobName: first?.name ?? null,
+      projectCount: projects.size,
+    });
+  }, [seatsByPerson]);
 
   /** SPEC §5.3 #1 — "Electrical sub · 1 person · 2 projects · warranty …". */
   const openJobs = useMemo(() => {
@@ -860,6 +932,11 @@ export function CompanyCard({
       {/* R6 — History */}
       <section className={REGION}>
         <h3 className={REGION_HEAD}>History</h3>
+        {historySentence && (
+          <p data-firm-history className="t-body-sm text-[var(--ink)]">
+            {historySentence}
+          </p>
+        )}
         <p className="t-body-sm text-[var(--ink)]">
           {card.studio_verdict ?? NO_VERDICT_SENTENCE}
         </p>

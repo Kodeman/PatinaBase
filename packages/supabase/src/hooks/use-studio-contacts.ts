@@ -984,13 +984,25 @@ function invalidateRuleFanout(
   void queryClient.invalidateQueries({ queryKey: studioContactKeys.detail(subjectId) });
 }
 
-/** Write the rule, creating it or replacing it in place. One rule per subject. */
+/**
+ * Write the rule, creating it or replacing it in place. One rule per subject.
+ *
+ * CR-8 — `set_by` IS SENT, NOT LEFT TO THE DEFAULT. `studio_contact_rules
+ * .set_by` carries `DEFAULT auth.uid()` (00592), and a DEFAULT fires on the
+ * INSERT leg alone. On `ON CONFLICT DO UPDATE` the row kept the ORIGINAL
+ * setter while `set_at` moved to today, so the person card's Contact rule
+ * region would read "Set by Priya Natarajan, 13 September 2026" for a rule
+ * somebody else had just changed. The two columns move together or the
+ * provenance is a lie.
+ */
 export function useSetContactRule() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (input: SetStudioContactRuleInput): Promise<StudioContactRule> => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      if (userError) throw userError;
       // CR3-2: in merge mode the standing row is the baseline, so a caller that
       // knows only the reason cannot blank the forbidden list, the route or the
       // hours somebody else wrote.
@@ -1030,6 +1042,7 @@ export function useSetContactRule() {
                 ? input.reason?.trim() || null
                 : (standing?.reason ?? null),
             set_at: new Date().toISOString(),
+            set_by: userData?.user?.id ?? null,
           },
           { onConflict: 'subject_type,subject_id' },
         )
