@@ -26,6 +26,7 @@ struct SeatRow: Decodable {
     let stage: String?
     let onSiteFrom: String?
     let onSiteTo: String?
+    let companyID: String?
     let companyName: String?
     let offJobAt: String?
     let offJobReason: String?
@@ -46,6 +47,7 @@ struct SeatRow: Decodable {
         case stage
         case onSiteFrom = "on_site_from"
         case onSiteTo = "on_site_to"
+        case companyID = "company_id"
         case companyName = "company_name"
         case offJobAt = "off_job_at"
         case offJobReason = "off_job_reason"
@@ -113,26 +115,115 @@ struct SeatRow: Decodable {
 
 // MARK: - The identity row
 
+/// `people_directory` (00626) is ONE ROW PER IDENTITY and its key is
+/// `person_id`; it carries no `id`, no `name` and no `company_name` column at
+/// all. It also carries no `role_at_firm`: its `role` is the PARTY
+/// CLASSIFICATION (client / lead / maker / team / contact — 00626:1437 assigns
+/// `'client'::text AS role`, 00626:111 says every carded seat now reads
+/// `role='contact'`), which is not a job title and is not read here. The job
+/// title at the firm is `studio_person_affiliations.role_at_firm` (00592:280)
+/// and arrives through `AffiliationRow`.
 struct DirectoryRow: Decodable {
     let id: String
     let name: String?
-    let companyName: String?
-    let role: String?
     let reachState: String?
     let consentStatus: String?
     let paperState: String?
     let contactRuleSummary: String?
 
     enum CodingKeys: String, CodingKey {
-        case id
-        case name
-        case companyName = "company_name"
-        case role
+        case id = "person_id"
+        case name = "display_name"
         case reachState = "reach_state"
         case consentStatus = "consent_status"
         case paperState = "paper_state"
         case contactRuleSummary = "contact_rule_summary"
     }
+}
+
+// MARK: - The firm, and the job held at it (E4)
+
+/// `studio_person_affiliations` (00592) — "which person does what at which
+/// firm, dated". `role_at_firm` is free text the studio wrote (owner / signer /
+/// pm / superintendent / …) and is printed as written, the same way the
+/// portal's person profile prints it.
+struct AffiliationRow: Decodable {
+    let id: String
+    let personID: String
+    let companyID: String
+    let roleAtFirm: String?
+    let fromDate: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case personID = "person_id"
+        case companyID = "company_id"
+        case roleAtFirm = "role_at_firm"
+        case fromDate = "from_date"
+    }
+}
+
+/// The card's own number, which `identity_phone_numbers()` cannot see unless
+/// the caller passes it — the seats' numbers it finds for itself.
+struct PeopleContactPhoneRow: Decodable {
+    let id: String
+    let phoneE164: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case phoneE164 = "phone_e164"
+    }
+}
+
+// MARK: - Consent, R-Q's one sentence
+
+struct ConsentEvidenceParams: Encodable {
+    let organizationID: String
+    let identityKey: String
+    let cardPhone: String?
+
+    enum CodingKeys: String, CodingKey {
+        case organizationID = "p_organization_id"
+        case identityKey = "p_identity_key"
+        case cardPhone = "p_card_phone_e164"
+    }
+}
+
+/// `identity_consent_evidence` (00626): the number whose verdict WON the
+/// identity's worst-first reduction, plus that record's two dates, already
+/// one-sided there so the pair can never compose a clause the word
+/// contradicts. No row at all when the winning word came from a number with no
+/// record — and then there is no sentence to say.
+struct ConsentEvidenceRow: Decodable {
+    let channelValue: String
+    let consentedAt: String?
+    let optOutAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case channelValue = "channel_value"
+        case consentedAt = "consented_at"
+        case optOutAt = "opt_out_at"
+    }
+}
+
+/// The rest of R-Q's sentence, off the record the evidence named: which source
+/// it was, and the job it was given on.
+struct ChannelConsentRow: Decodable {
+    let channelValue: String
+    let source: String?
+    let optOutSource: String?
+    let originProject: PeopleEmbeddedProjectName?
+
+    enum CodingKeys: String, CodingKey {
+        case channelValue = "channel_value"
+        case source
+        case optOutSource = "opt_out_source"
+        case originProject = "origin_project"
+    }
+}
+
+struct PeopleEmbeddedProjectName: Decodable {
+    let name: String?
 }
 
 // MARK: - Channels

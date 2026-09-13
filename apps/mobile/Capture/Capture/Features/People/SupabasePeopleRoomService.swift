@@ -47,9 +47,9 @@ struct SupabasePeopleRoomService: PeopleRoomService {
 
     private static let seatColumns = """
         seat_id, person_id, project_id, project_name, party_kind, display_name, \
-        trade, stage, on_site_from, on_site_to, company_name, off_job_at, \
-        off_job_reason, phone_e164, consent_status, reach_state, paper_state, \
-        contact_rule_summary
+        trade, stage, on_site_from, on_site_to, company_id, company_name, \
+        off_job_at, off_job_reason, phone_e164, consent_status, reach_state, \
+        paper_state, contact_rule_summary
         """
 
     // MARK: Roster
@@ -89,26 +89,33 @@ struct SupabasePeopleRoomService: PeopleRoomService {
     func person(projectID: String, personID: String) async throws -> FieldPersonCard {
         let owner = try await requireOwner()
         let seatRows = try await fetchSeats(personID: personID)
-        guard seatRows.contains(where: { $0.projectID == projectID }) else {
+        guard let here = seatRows.first(where: { $0.projectID == projectID }) else {
             throw PeopleRoomError.notOnThisJob
         }
         async let channels = fetchChannels(personID: personID)
         async let authority = fetchAuthority(seatIDs: seatRows.map(\.seatID))
+        async let roleAtFirm = fetchRoleAtFirm(personID: personID, companyID: here.companyID)
+        async let cardPhone = fetchCardPhone(personID: personID)
         let row: DirectoryRow = try await client
             .from("people_directory")
-            .select("id, name, company_name, role, reach_state, consent_status, "
+            .select("person_id, display_name, reach_state, consent_status, "
                 + "paper_state, contact_rule_summary")
-            .eq("id", value: personID)
+            .eq("person_id", value: personID)
             .single()
             .execute()
             .value
+        let said = await consentSentence(organizationID: owner.workspaceID,
+                                         personID: personID,
+                                         cardPhone: await cardPhone,
+                                         status: row.consentStatus)
         let card = try await FieldPersonCard(
             personID: row.id,
             name: row.name ?? "Someone on this job",
-            firmName: row.companyName,
-            roleAtFirm: row.role,
+            firmName: here.companyName,
+            roleAtFirm: roleAtFirm,
             reachWord: FieldPeopleVocabulary.reach(row.reachState),
             consentWord: FieldPeopleVocabulary.consent(row.consentStatus),
+            consentSentence: said,
             paperWord: FieldPeopleVocabulary.paper(row.paperState),
             channels: channels,
             contactRule: row.contactRuleSummary,
@@ -116,6 +123,90 @@ struct SupabasePeopleRoomService: PeopleRoomService {
             authorityWords: authority)
         try await confirm(owner)
         return card
+    }
+
+    /// The job this person holds AT THIS FIRM — `studio_person_affiliations`
+    /// (E4, 00592:280: owner / signer / pm / superintendent / …), which is what
+    /// the identity header's second half means.
+    ///
+    /// It is NOT `people_directory.role`: that column is the party
+    /// classification (`client` / `lead` / `maker` / `team` / `contact`), and
+    /// aliasing it here printed "Northgate Electric · contact" on a job site
+    /// where the designer reads a job title. `people_directory` exposes no
+    /// `role_at_firm` at all, so the affiliation is its own read.
+    ///
+    /// Open rows only (`to_date IS NULL`), keyed to the firm on the seat in
+    /// front of the designer, because a person who has moved firms keeps the
+    /// closed row. No affiliation, no second half: the header then prints the
+    /// firm alone rather than a word that means something else.
+    private func fetchRoleAtFirm(personID: String, companyID: String?) async -> String? {
+        let rows: [AffiliationRow]? = try? await client
+            .from("studio_person_affiliations")
+            .select("id, person_id, company_id, role_at_firm, from_date")
+            .eq("person_id", value: personID)
+            .is("to_date", value: nil)
+            .execute()
+            .value
+        guard let rows, let first = rows.first else { return nil }
+        let atThisFirm = companyID.flatMap { id in rows.first { $0.companyID == id } }
+        let role = (atThisFirm ?? first).roleAtFirm?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return (role?.isEmpty ?? true) ? nil : role
+    }
+
+    /// R-Q's consent sentence, composed off the record that DECIDED the word
+    /// the card prints.
+    ///
+    /// `identity_consent_evidence` (00626) is what picks that record — the
+    /// number whose verdict won the identity's worst-first reduction — and it
+    /// one-sides the two dates there, so the phone can never put a dated
+    /// consent claim beside a recorded refusal. The rule is not restated here;
+    /// only the record it names is read, for the source and the job the
+    /// consent was given on. `identity_phone_numbers()` finds the seats'
+    /// numbers itself but cannot see the card's own, so that one is passed in.
+    ///
+    /// Every leg is best-effort: a sentence that cannot be sourced is not
+    /// printed, and it never costs the designer the rest of the card.
+    private func consentSentence(organizationID: String, personID: String,
+                                 cardPhone: String?, status: String?) async -> String? {
+        let evidence: [ConsentEvidenceRow]? = try? await client
+            .rpc("identity_consent_evidence",
+                 params: ConsentEvidenceParams(organizationID: organizationID,
+                                               identityKey: personID,
+                                               cardPhone: cardPhone))
+            .execute()
+            .value
+        guard let decided = evidence?.first else { return nil }
+        let records: [ChannelConsentRow]? = try? await client
+            .from("studio_channel_consent")
+            .select("channel_value, source, opt_out_source, "
+                + "origin_project:projects(name)")
+            .eq("organization_id", value: organizationID)
+            .eq("channel_kind", value: "sms")
+            .eq("channel_value", value: decided.channelValue)
+            .limit(1)
+            .execute()
+            .value
+        let record = records?.first
+        return FieldConsentSentence.compose(
+            status: status,
+            record: FieldConsentSentence.Record(
+                source: record?.source,
+                consentedAt: decided.consentedAt,
+                optOutSource: record?.optOutSource,
+                optOutAt: decided.optOutAt,
+                projectName: record?.originProject?.name))
+    }
+
+    private func fetchCardPhone(personID: String) async -> String? {
+        let rows: [PeopleContactPhoneRow]? = try? await client
+            .from("studio_contacts")
+            .select("id, phone_e164")
+            .eq("id", value: personID)
+            .limit(1)
+            .execute()
+            .value
+        return rows?.first?.phoneE164
     }
 
     private func fetchChannels(personID: String) async throws -> [FieldPersonChannel] {
