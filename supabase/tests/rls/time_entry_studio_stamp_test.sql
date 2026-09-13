@@ -3619,6 +3619,32 @@ BEGIN
     'this now raises, one of the two landed: rewrite this leg. Got SQLSTATE '
     || COALESCE(v_state, 'none') || ' / returned ' || COALESCE(v_got::text, 'NULL');
 
+  -- ── z4b: HT-3-g(b) CORRECTED (orchestrator 2026-09-13, resolving W2-R14-01) — THE
+  --    ORDER THE VICTIM MUST ACT IN, measured. The overwrite is admitted only where the
+  --    studio being REPLACED does not EMPLOY the project's designer, and his
+  --    consent-free seat IS an employer-tier seat for her (z3b). So while that seat is
+  --    live she cannot re-point her own project: she must remove the seat first, which
+  --    is the very statement z5 makes and one she has always been able to make. The
+  --    correction therefore costs HT-3-f(4)'s victim an ordering and not a remedy.
+  PERFORM pg_temp.assume_user('c6120000-0000-4000-8000-000000000002');
+  v_state := NULL;
+  BEGIN
+    SELECT public.stamp_project_pricing_studio(
+      'c6120000-0000-4000-8000-0000000000e1', 'c6120000-0000-4000-8000-0000000000a2') INTO v_got;
+  EXCEPTION WHEN OTHERS THEN v_state := SQLSTATE;
+  END;
+  PERFORM pg_temp.reset_role();
+  ASSERT v_state = '22023',
+    'FAIL z4b (HT-3-g(b) CORRECTED): with the consent-free seat still live, the org '
+    'being replaced EMPLOYS her by the only test the stamp has, so the remedy arm is '
+    'refused and the stamp stays final for now. This is the bound that stops a designer '
+    'an HONEST studio employs from re-pointing that studio''s stamped project at her own '
+    '(W2-R14-01, measured 1/1 in round 14); got ' || COALESCE(v_state, 'NO RAISE '
+    '(returned ' || COALESCE(v_got::text, 'NULL') || ')');
+  ASSERT (SELECT studio_id = 'c6120000-0000-4000-8000-0000000000a1' FROM projects
+           WHERE id = 'c6120000-0000-4000-8000-0000000000e1'),
+    'FAIL z4c: and that refusal wrote nothing';
+
   -- ── z5: AND THE TAKING IS NOW IRREVERSIBLE. Before round 9 her removal of the
   --    bogus seat reverted the derivation; the pin makes the column final.
   PERFORM pg_temp.assume_user('c6120000-0000-4000-8000-000000000002');
@@ -3661,7 +3687,9 @@ BEGIN
   --    a studio of her own. WHAT IS STILL OWED, unchanged: the consent door itself
   --    (HT-3-b arm (c)) so the seat cannot be written at all, and an unpin for a victim
   --    who owns NO studio — she has no arm here, because the remedy arm asks for an
-  --    owner seat.
+  --    owner seat. ROUND 14: and she must remove his seat BEFORE she stamps, which z4b
+  --    measures as a refusal and z5 performs — HT-3-g(b) CORRECTED reads the studio
+  --    being REPLACED, and his consent-free seat is an employer seat of hers there.
   PERFORM pg_temp.assume_user('c6120000-0000-4000-8000-000000000002');
   SELECT public.stamp_project_pricing_studio(
     'c6120000-0000-4000-8000-0000000000e1', 'c6120000-0000-4000-8000-0000000000a2') INTO v_got;
@@ -3681,6 +3709,13 @@ BEGIN
       AND new_values->>'studio_id' = 'c6120000-0000-4000-8000-0000000000a2'
   ), 'FAIL z7a: and the overwrite is audited with both studios, which is the only trace '
      'the displaced org gets';
+  ASSERT (SELECT organization_id = 'c6120000-0000-4000-8000-0000000000a1' FROM audit_logs
+           WHERE resource_id = 'c6120000-0000-4000-8000-0000000000e1'
+             AND action = 'project.pricing_studio_restamped'),
+    'FAIL z7d (W2-R14-03): and that trace is filed under the DISPLACED org, which is the '
+    'only organization_id audit_logs'' SELECT policies let the party losing the project '
+    'read. Through round 13 it carried the NEW studio, so the one trace of the act was '
+    'visible to everybody except the party that needed it';
   PERFORM pg_temp.assume_user('c6120000-0000-4000-8000-000000000002');
   INSERT INTO project_time_entries (id, project_id, user_id, started_at, duration_minutes, billable, source)
   VALUES ('c6120000-0000-4000-8000-0000000000b3', 'c6120000-0000-4000-8000-0000000000e1',

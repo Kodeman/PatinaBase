@@ -55,14 +55,23 @@
 --       asserted as PASSING and loudly labelled, each followed by the remedy of HT-3-g
 --       AMENDED (b) measured leg by leg: the employer's own owner is REFUSED the
 --       reassignment that reaches the arm (reassign_project_lead is pinned to the
---       project's current studio), and once she is the lead her one stamp overwrites
---       the workspace, audits both studios, and the designer's next hour prices from
---       the employer's card again.
---   (m) the remedy arm's own surface: refused to a designer who is only an ADMIN of the
---       studio she names, refused to an OWNER who is not the project's lead — and,
---       asserted as PASSING and loudly labelled, ADMITTED to a designer who owns a
---       studio on a project an HONEST studio had already stamped, which is the
---       amendment's width rather than a defect of this file.
+--       project's current studio); ROUND 14 adds the one statement HT-3-g(b) CORRECTED
+--       costs the recovery — while she holds the courtesy seat the taker had to give
+--       her in the workspace being replaced, that workspace EMPLOYS her and the
+--       overwrite is refused (k4b / l8b), so she drops the seat (k4d / l8c) — and then
+--       her one stamp overwrites the workspace, audits both studios under the DISPLACED
+--       studio's organization_id, and the designer's next hour prices from the
+--       employer's card again.
+--   (m) the remedy arm's own surface, and ROUND 14's MAJOR: refused to a designer who is
+--       only an ADMIN of the studio she names, refused to an OWNER who is not the
+--       project's lead, and — HT-3-g(b) CORRECTED (orchestrator 2026-09-13, resolving
+--       W2-R14-01) — REFUSED to the project's own lead-and-owner while the studio being
+--       replaced EMPLOYS her, which is what stops an honest employer's stamped project
+--       being re-pointed in one statement. What is left is asserted as PASSING and
+--       loudly labelled: she can reach her own studio by LEAVING the employer's seat
+--       first, two statements with a seat act in them, which HT-3-g AMENDED (c) grades
+--       a residual. m7/m7a are W2-R14-03 — the overwrite's audit row is filed under the
+--       DISPLACED studio and its owner reads it through RLS.
 --
 -- How to run:
 --   psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 \
@@ -285,11 +294,19 @@ VALUES
   ('c6200000-0000-4000-8000-0000000000db', 'c6200000-0000-4000-8000-000000000014',
    'c6200000-0000-4000-8000-0000000000ad', 'admin',  'active', NOW()),
   -- (m) the remedy designer ADMINISTERS one studio and OWNS another. The difference
-  -- between those two seats is the whole of what the remedy arm turns on.
+  -- between those two seats is the whole of what the remedy ARM turns on.
   ('c6200000-0000-4000-8000-0000000000dc', 'c6200000-0000-4000-8000-00000000000e',
    'c6200000-0000-4000-8000-0000000000a8', 'admin',  'active', NOW()),
   ('c6200000-0000-4000-8000-0000000000dd', 'c6200000-0000-4000-8000-00000000000e',
-   'c6200000-0000-4000-8000-0000000000ae', 'owner',  'active', NOW());
+   'c6200000-0000-4000-8000-0000000000ae', 'owner',  'active', NOW()),
+  -- ROUND 14 (HT-3-g(b) CORRECTED): and she is EMPLOYED by the honest studio a6 that
+  -- stamped her project — an active, non-guest `member` seat, the ordinary hire. That
+  -- seat is the whole of what the correction's third bound reads, and it is the shape
+  -- round 14 measured the one-statement taking on (W2-R14-01). Through round 13 this
+  -- fixture gave her no seat in a6 at all, which measured the arm against a FORMER
+  -- employer rather than against the employer it was taking from.
+  ('c6200000-0000-4000-8000-0000000000de', 'c6200000-0000-4000-8000-00000000000e',
+   'c6200000-0000-4000-8000-0000000000a6', 'member', 'active', NOW());
 -- (d) the seatless designer gets no row at all, and NEITHER DOES form S's AUTHOR:
 -- a seatless hand who were granted the designer role would be provisioned a workspace
 -- by 00295 and stop being seatless, which would make the author key TRUE and leave
@@ -954,6 +971,9 @@ DECLARE
   v_got    uuid;
   v_lead   uuid;
 BEGIN
+  -- ROUND 14: the legs below are in the order HT-3-g(b) CORRECTED puts them in —
+  -- k3 the reassign the employer cannot reach alone, k4b the overwrite refused while
+  -- she holds the taker's courtesy seat, k4d her dropping it, k5 the recovery.
   ASSERT (SELECT studio_id FROM public.projects
            WHERE id = 'c6200000-0000-4000-8000-0000000000e9')
          = 'c6200000-0000-4000-8000-0000000000a5',
@@ -1036,8 +1056,50 @@ BEGIN
     'project''s lead. If this stops working the remedy arm has no reachable caller at '
     'all and k5 measures nothing; lead = ' || COALESCE(v_lead::text, 'NULL');
 
+  -- REMEDY, leg 2b — WHAT HT-3-g(b) CORRECTED COSTS THE REMEDY, measured rather than
+  -- assumed. The seat the taker had to give her for reassign_project_lead to run at all
+  -- is an active non-guest `member` seat in the TAKER'S WORKSPACE — which is the studio
+  -- about to be replaced. So at this instant the replaced studio EMPLOYS the project's
+  -- designer and the corrected third bound refuses the overwrite. It is one statement's
+  -- worth of cost and the statement is the recovering owner's OWN.
+  PERFORM pg_temp.assume_user('c6200000-0000-4000-8000-00000000000a');
+  v_state := NULL;
+  BEGIN
+    SELECT public.stamp_project_pricing_studio(
+      'c6200000-0000-4000-8000-0000000000e9',
+      'c6200000-0000-4000-8000-0000000000a6') INTO v_got;
+  EXCEPTION WHEN OTHERS THEN v_state := SQLSTATE;
+  END;
+  PERFORM pg_temp.reset_role();
+  ASSERT v_state = '22023',
+    'FAIL k4b (HT-3-g(b) CORRECTED — the courtesy seat is itself an employer seat): the '
+    'employer''s owner is the lead and owns the studio she names, and the overwrite is '
+    'still refused while she holds the seat the taker gave her in the workspace being '
+    'replaced. The correction reads the REPLACED studio, and it cannot tell a courtesy '
+    'seat from employment; got ' || COALESCE(v_state, 'NO RAISE (returned '
+    || COALESCE(v_got::text, 'NULL') || ')');
+  ASSERT (SELECT studio_id FROM public.projects
+           WHERE id = 'c6200000-0000-4000-8000-0000000000e9')
+         = 'c6200000-0000-4000-8000-0000000000a5',
+    'FAIL k4c: and that refusal wrote nothing';
+
+  -- REMEDY, leg 2c — SHE DROPS THAT SEAT. One statement on her own row
+  -- (`Members can leave`), by the party doing the recovering.
+  PERFORM pg_temp.assume_user('c6200000-0000-4000-8000-00000000000a');
+  WITH gone AS (
+    DELETE FROM public.organization_members
+     WHERE user_id = 'c6200000-0000-4000-8000-00000000000a'
+       AND organization_id = 'c6200000-0000-4000-8000-0000000000a5'
+    RETURNING 1
+  ) SELECT count(*) INTO v_amount FROM gone;
+  PERFORM pg_temp.reset_role();
+  ASSERT v_amount = 1,
+    'FAIL k4d (precondition): the recovering owner must be able to leave the workspace '
+    'seat she was given; rows = ' || COALESCE(v_amount::text, 'NULL');
+
   -- REMEDY, leg 3 — THE ARM ITSELF. She is the project's CURRENT designer and the OWNER
-  -- of the studio she names, so bound (b) yields and the column is re-pointed.
+  -- of the studio she names, and the studio being replaced no longer employs her, so
+  -- bound (b) yields and the column is re-pointed.
   PERFORM pg_temp.assume_user('c6200000-0000-4000-8000-00000000000a');
   SELECT public.stamp_project_pricing_studio(
     'c6200000-0000-4000-8000-0000000000e9',
@@ -1048,22 +1110,29 @@ BEGIN
            WHERE id = 'c6200000-0000-4000-8000-0000000000e9')
          = 'c6200000-0000-4000-8000-0000000000a6',
     'FAIL k5 (HT-3-g AMENDED (b) — THE REMEDY ARM OVERWRITES): the employer''s owner, '
-    'now the lead, names her own studio on a project that already named the taker''s '
+    'now the lead and holding no seat in the workspace being replaced, names her own '
+    'studio on a project that already named the taker''s '
     'workspace, and the column moves. Through round 12 this was 22023 for every caller '
-    'alive, which is what made W2-R13-01 a taking with no way back; got '
+    'alive, which is what made W2-R13-01 a taking with no way back, and HT-3-g(b) '
+    'CORRECTED leaves it reachable because a taker''s workspace is a studio she OWNS '
+    'rather than one that employs the lead; got '
     || COALESCE(v_got::text, 'NULL');
   ASSERT EXISTS (
     SELECT 1 FROM public.audit_logs
     WHERE resource_type = 'project'
       AND resource_id = 'c6200000-0000-4000-8000-0000000000e9'
       AND action = 'project.pricing_studio_restamped'
-      AND organization_id = 'c6200000-0000-4000-8000-0000000000a6'
+      AND organization_id = 'c6200000-0000-4000-8000-0000000000a5'
       AND old_values->>'studio_id' = 'c6200000-0000-4000-8000-0000000000a5'
       AND new_values->>'studio_id' = 'c6200000-0000-4000-8000-0000000000a6'
-  ), 'FAIL k6 (the overwrite is AUDITED, with both studios): an overwrite takes a '
+  ), 'FAIL k6 (the overwrite is AUDITED, with both studios, FILED UNDER THE DISPLACED '
+     'ONE — W2-R14-03): an overwrite takes a '
      'project''s hours OFF a studio that was reading them, so it carries its own action '
-     'name and the OLD studio. A row spelling the old value NULL would say the opposite '
-     'of what happened';
+     'name, the OLD studio, and the OLD studio''s organization_id — which is the only '
+     'organization_id audit_logs'' SELECT policies let the losing party read. A row '
+     'spelling the old value NULL would say the opposite of what happened. Here the '
+     'party displaced is the taker''s own workspace, which is exactly the symmetry the '
+     'rule buys: whoever loses a project can see who took it';
   ASSERT (SELECT hourly_rate_cents = 99900 AND rate_source = 'studio_member'
             FROM public.project_time_entries
            WHERE id = 'c6200000-0000-4000-8000-0000000000b5'),
@@ -1151,6 +1220,35 @@ BEGIN
     'c6200000-0000-4000-8000-000000000012');
   PERFORM pg_temp.reset_role();
 
+  -- HT-3-g(b) CORRECTED, the same cost as k4b on this fixture: while the employer's
+  -- owner holds the courtesy seat the taker gave her in the workspace being replaced,
+  -- that workspace EMPLOYS the project's designer and the overwrite is refused.
+  PERFORM pg_temp.assume_user('c6200000-0000-4000-8000-000000000012');
+  v_state := NULL;
+  BEGIN
+    SELECT public.stamp_project_pricing_studio(
+      'c6200000-0000-4000-8000-0000000000ec',
+      'c6200000-0000-4000-8000-0000000000a9') INTO v_got;
+  EXCEPTION WHEN OTHERS THEN v_state := SQLSTATE;
+  END;
+  PERFORM pg_temp.reset_role();
+  ASSERT v_state = '22023',
+    'FAIL l8b (HT-3-g(b) CORRECTED, on form H): refused while the recovering owner holds '
+    'the taker''s courtesy seat in the workspace being replaced; got '
+    || COALESCE(v_state, 'NO RAISE (returned ' || COALESCE(v_got::text, 'NULL') || ')');
+
+  PERFORM pg_temp.assume_user('c6200000-0000-4000-8000-000000000012');
+  WITH gone AS (
+    DELETE FROM public.organization_members
+     WHERE user_id = 'c6200000-0000-4000-8000-000000000012'
+       AND organization_id = 'c6200000-0000-4000-8000-0000000000aa'
+    RETURNING 1
+  ) SELECT count(*) INTO v_amount FROM gone;
+  PERFORM pg_temp.reset_role();
+  ASSERT v_amount = 1,
+    'FAIL l8c (precondition): she leaves that seat in one statement of her own; rows = '
+    || COALESCE(v_amount::text, 'NULL');
+
   PERFORM pg_temp.assume_user('c6200000-0000-4000-8000-000000000012');
   SELECT public.stamp_project_pricing_studio(
     'c6200000-0000-4000-8000-0000000000ec',
@@ -1166,9 +1264,11 @@ BEGIN
     SELECT 1 FROM public.audit_logs
     WHERE resource_id = 'c6200000-0000-4000-8000-0000000000ec'
       AND action = 'project.pricing_studio_restamped'
+      AND organization_id = 'c6200000-0000-4000-8000-0000000000aa'
       AND old_values->>'studio_id' = 'c6200000-0000-4000-8000-0000000000aa'
       AND new_values->>'studio_id' = 'c6200000-0000-4000-8000-0000000000a9'
-  ), 'FAIL l10: and the overwrite is audited with both studios';
+  ), 'FAIL l10 (W2-R14-03): and the overwrite is audited with both studios, under the '
+     'DISPLACED studio''s organization_id';
 
   PERFORM pg_temp.assume_user('c6200000-0000-4000-8000-000000000010');
   INSERT INTO public.project_time_entries
@@ -1187,19 +1287,30 @@ BEGIN
            WHERE id = 'c6200000-0000-4000-8000-0000000000b7'),
     'FAIL l12 (P-4): and the hour logged before the recovery keeps its number';
 
-  RAISE NOTICE 'legacy_project_studio_stamp: form H is a residual with the same remedy and the same missing half.';
+  RAISE NOTICE 'legacy_project_studio_stamp: form H is a residual with the same remedy, the same missing half, and the one extra statement HT-3-g(b) CORRECTED costs it.';
 END
 $$;
 
--- ─── (m) THE REMEDY ARM'S OWN SURFACE: two refusals, and ONE OPEN DOOR ──────
--- The arm turns on TWO facts and the refusals below are each the absence of one of
--- them. The third leg is what the arm's WIDTH costs, and it is asserted as PASSING and
--- loudly labelled rather than left for the next round to find: read as written, the arm
--- admits any designer who OWNS a studio to re-point any project she LEADS — an honest
+-- ─── (m) THE REMEDY ARM'S OWN SURFACE: THREE refusals, and the RESIDUAL ─────
+-- The arm turns on THREE facts and the refusals below are each the absence of one of
+-- them: an OWNER seat in the studio named, the LEAD of the project, and — HT-3-g(b)
+-- CORRECTED (orchestrator 2026-09-13, resolving W2-R14-01) — a studio being REPLACED
+-- that does not EMPLOY this project's designer.
+--
+-- ROUND 13 SHIPPED THIS CASE THE OTHER WAY UP. Read as the amendment worded it, the arm
+-- admitted any designer who OWNS a studio to re-point any project she LEADS — an honest
 -- employer's already-stamped project included — at the studio she owns, where
--- HT-3-e(2)'s owner exemption prices her own number. That is W2-R11-01 form A with the
--- power to overwrite. HT-3-g(3)'s "DESIGNERS NEVER STAMP" forbade it; HT-3-g AMENDED
--- (b) expressly admits it, and it is not narrowed here on a guess.
+-- HT-3-e(2)'s owner exemption priced her own number: W2-R11-01 form A with the power to
+-- overwrite, ONE statement by ONE account, no seat touched, nothing transferred, no
+-- second party, on a project she did not create. Round 13 asserted it as a passing,
+-- loudly-labelled door (m6-m8); round 14 measured what it was worth — an honest
+-- employer's arm's-length 26000 became the 77700 she had written for herself, and the
+-- displaced employer could neither undo it nor read the audit row — and the correction
+-- closes it. The legs below measure the closure and THEN the residual that is left:
+-- she can still reach the studio she owns, but only by LEAVING the employer's seat
+-- first, which is a seat act and so a NOTE — RESIDUAL under HT-3-g AMENDED (c) rather
+-- than a one-statement taking. m7a is W2-R14-03: the audit row is now filed under the
+-- DISPLACED studio, so the party losing the work can read it.
 DO $$
 DECLARE
   v_rate   integer;
@@ -1269,33 +1380,101 @@ BEGIN
          = 'c6200000-0000-4000-8000-0000000000a1',
     'FAIL m5: and that refusal wrote nothing either';
 
-  -- THE OPEN DOOR — both facts present, on a project an honest studio was pricing.
+  -- REFUSAL 3, AND ROUND 14'S WHOLE POINT — both of round 13's facts present, on a
+  -- project an HONEST EMPLOYER was pricing. HT-3-g(b) CORRECTED refuses it: the studio
+  -- being replaced EMPLOYS her (an active `member` seat in an active design_studio).
   PERFORM pg_temp.assume_user('c6200000-0000-4000-8000-00000000000e');
+  v_state := NULL;
+  BEGIN
+    SELECT public.stamp_project_pricing_studio(
+      'c6200000-0000-4000-8000-0000000000ed',
+      'c6200000-0000-4000-8000-0000000000ae') INTO v_got;
+  EXCEPTION WHEN OTHERS THEN v_state := SQLSTATE;
+  END;
+  PERFORM pg_temp.reset_role();
+  ASSERT v_state = '22023',
+    'FAIL m6 (HT-3-g(b) CORRECTED, resolving W2-R14-01 MAJOR): an HONEST EMPLOYER''S '
+    'STAMPED PROJECT CANNOT BE OVERWRITTEN BY THE DESIGNER IT EMPLOYS. She is this '
+    'project''s lead AND the owner of the studio she names — round 13''s two facts — and '
+    'the overwrite is refused anyway, because the studio being REPLACED holds an active '
+    'non-guest seat of hers with role <> ''owner''. Through round 13 this call SUCCEEDED: '
+    'ONE statement by ONE account, no seat touched, nothing transferred, no second '
+    'party, on a project she did not create, and the employer''s arm''s-length number '
+    'became the one she had written for herself. That is the brief''s blocker clause word '
+    'for word; got ' || COALESCE(v_state, 'NO RAISE (returned '
+    || COALESCE(v_got::text, 'NULL') || ')');
+  ASSERT (SELECT studio_id FROM public.projects
+           WHERE id = 'c6200000-0000-4000-8000-0000000000ed')
+         = 'c6200000-0000-4000-8000-0000000000a6',
+    'FAIL m6b: and the refusal wrote nothing — the honest studio still names it';
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM public.audit_logs
+    WHERE resource_id = 'c6200000-0000-4000-8000-0000000000ed'
+      AND action = 'project.pricing_studio_restamped'
+  ), 'FAIL m6c: and a refused overwrite audits nothing';
+  SELECT hourly_rate_cents INTO v_rate
+  FROM public.project_time_entries WHERE id = 'c6200000-0000-4000-8000-0000000000b9';
+  ASSERT v_rate = 24000,
+    'FAIL m6d (the money stays where the honest studio put it): her hour still prices '
+    'at the employer''s 24000; got ' || COALESCE(v_rate::text, 'NULL');
+
+  -- WHAT IS LEFT, AND IT IS A RESIDUAL — HT-3-g AMENDED (c). The correction is a fact
+  -- about the project's BOOK, and she can still change that fact: she LEAVES the
+  -- employer's seat (`Members can leave`, one statement on her own row) and the
+  -- overwrite is then admitted. Two statements, the first a seat act, so this is a
+  -- NOTE — RESIDUAL and not a blocker under the discipline, and it is asserted as
+  -- PASSING and loudly labelled rather than left for the next round to find. The
+  -- remedy is the same one every residual in this family has: the displaced employer
+  -- reassigns to its own owner and stamps (cases (k) k4b-k8).
+  PERFORM pg_temp.assume_user('c6200000-0000-4000-8000-00000000000e');
+  WITH gone AS (
+    DELETE FROM public.organization_members
+     WHERE user_id = 'c6200000-0000-4000-8000-00000000000e'
+       AND organization_id = 'c6200000-0000-4000-8000-0000000000a6'
+    RETURNING 1
+  ) SELECT count(*) INTO v_amount FROM gone;
   SELECT public.stamp_project_pricing_studio(
     'c6200000-0000-4000-8000-0000000000ed',
     'c6200000-0000-4000-8000-0000000000ae') INTO v_got;
   PERFORM pg_temp.reset_role();
+  ASSERT v_amount = 1,
+    'FAIL m6e (precondition): `Members can leave` must still admit her leaving the '
+    'employer''s seat; rows = ' || COALESCE(v_amount::text, 'NULL');
   ASSERT v_got = 'c6200000-0000-4000-8000-0000000000ae'
      AND (SELECT studio_id FROM public.projects
            WHERE id = 'c6200000-0000-4000-8000-0000000000ed')
          = 'c6200000-0000-4000-8000-0000000000ae',
-    'FAIL m6 (HT-3-g AMENDED (b) IS WIDER THAN ITS PURPOSE — asserted as PASSING and '
-    'LOUDLY LABELLED): a designer who owns a studio re-points a project she did NOT '
-    'create, which an HONEST studio had already stamped, at the studio she owns — ONE '
-    'statement, no seat touched, no second party. The amendment''s sentence authorises '
-    'it; HT-3-g(3)''s "DESIGNERS NEVER STAMP" is what used to forbid it. If this is not '
-    'what the orchestrator meant, the narrowing is a fact about the project''s BOOK at '
-    'this call site, not a fact about the caller, and this assertion is the one that '
-    'inverts; got ' || COALESCE(v_got::text, 'NULL');
+    'FAIL m6a (THE RESIDUAL THE CORRECTION LEAVES — asserted as PASSING and LOUDLY '
+    'LABELLED): with the employer''s seat gone the replaced studio no longer employs '
+    'her, so the overwrite is admitted. The taking is not closed, it is priced at a '
+    'SEAT — which is what HT-3-g AMENDED (c) grades a residual, and what the remedy arm '
+    'exists to undo. It is also why the arm remains reachable at all: after a form-S/H '
+    'taking the replaced studio is the taker''s own workspace, in which the recovering '
+    'lead holds no employer seat; got ' || COALESCE(v_got::text, 'NULL');
   ASSERT EXISTS (
     SELECT 1 FROM public.audit_logs
     WHERE resource_id = 'c6200000-0000-4000-8000-0000000000ed'
       AND action = 'project.pricing_studio_restamped'
+      AND organization_id = 'c6200000-0000-4000-8000-0000000000a6'
       AND old_values->>'studio_id' = 'c6200000-0000-4000-8000-0000000000a6'
       AND new_values->>'studio_id' = 'c6200000-0000-4000-8000-0000000000ae'
-  ), 'FAIL m7: and the one trace of it is the audit row — which is why the overwrite '
-     'carries the OLD studio and its own action name. Lane B owes the displaced studio a '
-     'visible fact about a project whose hours it stops reading';
+  ), 'FAIL m7 (W2-R14-03): the overwrite''s audit row carries the OLD studio, its own '
+     'action name, AND the DISPLACED studio''s organization_id. Through round 13 it '
+     'carried the NEW studio, and audit_logs'' only SELECT policies are `Org admins can '
+     'view org audit logs` (organization_id + owner/admin) and `Users can view their '
+     'audit logs` (user_id) — so the one trace of the act was readable by the taker and '
+     'by the studio she had just named, and by nobody else';
+  PERFORM pg_temp.assume_user('c6200000-0000-4000-8000-00000000000a');
+  SELECT count(*) INTO v_amount
+  FROM public.audit_logs
+  WHERE resource_id = 'c6200000-0000-4000-8000-0000000000ed'
+    AND action = 'project.pricing_studio_restamped';
+  PERFORM pg_temp.reset_role();
+  ASSERT v_amount = 1,
+    'FAIL m7a (W2-R14-03 — THE DISPLACED STUDIO CAN READ IT): the owner of the studio '
+    'that LOST the project reads the restamp row through RLS. Measured at 0 in round '
+    '14 before the fix, which is why lane B had no fact it could show her at all; got '
+    || COALESCE(v_amount::text, 'NULL');
 
   PERFORM pg_temp.assume_user('c6200000-0000-4000-8000-00000000000e');
   INSERT INTO public.project_time_entries
@@ -1307,8 +1486,9 @@ BEGIN
     INTO v_rate, v_source, v_amount
   FROM public.project_time_entries WHERE id = 'c6200000-0000-4000-8000-0000000000ba';
   ASSERT v_rate = 88800 AND v_source = 'studio_member' AND v_amount = 177600,
-    'FAIL m8 (and the door moves money): her next hour prices at the 88800 she wrote '
-    'for herself, where the honest studio''s card says 24000. HT-3-e(2)''s exemption is '
+    'FAIL m8 (and the RESIDUAL moves money, which is why it is a residual and not '
+    'nothing): her next hour prices at the 88800 she wrote for herself, where the '
+    'honest studio''s card says 24000. HT-3-e(2)''s exemption is '
     'OWNERSHIP and she owns the studio she just named; got '
     || COALESCE(v_rate::text, 'NULL') || ' / ' || COALESCE(v_source, 'NULL') || ' / '
     || COALESCE(v_amount::text, 'NULL');
@@ -1316,7 +1496,7 @@ BEGIN
            WHERE id = 'c6200000-0000-4000-8000-0000000000b9'),
     'FAIL m9 (P-4): the hour the honest studio already priced keeps its 24000';
 
-  RAISE NOTICE 'legacy_project_studio_stamp: the remedy arm needs BOTH facts, and with both it can re-point an honest studio''s project.';
+  RAISE NOTICE 'legacy_project_studio_stamp: the remedy arm needs THREE facts — HT-3-g(b) CORRECTED refuses an honest employer''s stamped project to the designer it employs; what is left is a residual priced at a seat, and the displaced studio can now read the audit row.';
 END
 $$;
 
