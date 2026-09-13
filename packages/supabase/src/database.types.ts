@@ -13741,6 +13741,7 @@ export type Database = {
           updated_at: string
           verified_at: string | null
           website: string | null
+          weekly_hours_reminder_opt_in: boolean
           zip: string | null
         }
         Insert: {
@@ -13780,6 +13781,7 @@ export type Database = {
           updated_at?: string
           verified_at?: string | null
           website?: string | null
+          weekly_hours_reminder_opt_in?: boolean
           zip?: string | null
         }
         Update: {
@@ -13819,6 +13821,7 @@ export type Database = {
           updated_at?: string
           verified_at?: string | null
           website?: string | null
+          weekly_hours_reminder_opt_in?: boolean
           zip?: string | null
         }
         Relationships: []
