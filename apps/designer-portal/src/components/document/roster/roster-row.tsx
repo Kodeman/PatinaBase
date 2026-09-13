@@ -54,6 +54,7 @@ import {
 } from '@/lib/document/roster-derivation';
 import {
   contactRuleClause,
+  contactRuleForbidsSms,
   contactRuleIsDoNotContact,
   contactRuleIsHardBlock,
 } from '@/lib/document/contact-rule';
@@ -212,7 +213,18 @@ export function RosterRow({
     projectName,
   });
 
-  const canText = isSeat && row.consent === 'granted' && !!row.phone;
+  /**
+   * CR3-9 — THE RULE OUTRANKS THE GRANT (C7). A recorded grant is not
+   * permission when the studio has written down that this person is never
+   * texted; the act was live for exactly that pair until now, and there is no
+   * server backstop behind it on the rule.
+   */
+  const ruleForbidsText = contactRuleForbidsSms(rule);
+  const canText =
+    isSeat && row.consent === 'granted' && !!row.phone && !ruleForbidsText;
+  const textHeldSentence = ruleForbidsText
+    ? `The studio’s rule for ${row.name} says never text. Change the rule on their card first.`
+    : 'Texting opens once they have said yes on the record and a number is on file.';
   const showFieldActs = isSeat && isFieldPartyKind(row.partyKind ?? '');
   const windowClause = rosterWindowClause(row, band);
 
@@ -491,11 +503,7 @@ export function RosterRow({
                     disabled={!canText}
                     held={!canText}
                     aria-describedby={!canText ? `${panelId}-text-held` : undefined}
-                    onHeldActivate={() =>
-                      setNote(
-                        'Texting opens once they have said yes on the record and a number is on file.',
-                      )
-                    }
+                    onHeldActivate={() => setNote(textHeldSentence)}
                   >
                     Text
                   </DocumentAction>
@@ -546,8 +554,7 @@ export function RosterRow({
 
             {!canText && showFieldActs && (
               <p id={`${panelId}-text-held`} className="sr-only">
-                Texting opens once they have said yes on the record and a number is on
-                file.
+                {textHeldSentence}
               </p>
             )}
 

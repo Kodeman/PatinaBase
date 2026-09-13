@@ -62,27 +62,61 @@ export function contactChannelWord(token: string): string {
 }
 
 /**
- * TWO FACTS, NOT ONE (CR-4 / CR-16).
+ * THREE FACTS, NOT ONE (CR-4 / CR-16 / CR3-7 / CR3-9).
  *
- *  · A HARD BLOCK is a rule that FORBIDS A CHANNEL OUTRIGHT. It earns the 2px
- *    terracotta leading rule, and nothing else. SPEC §5.1 #11 names Ray Thao's
- *    row — `forbidden={sms}`, office and the 311 portal wide open — as carrying
- *    that rule, and SPEC §3's fixture marks F-15, F-26 and F-27 `block: true`.
- *    The narrower reading (a rule that leaves NO channel open) painted only
- *    Frank Bauer and contradicted the visual contract.
+ *  · A HARD BLOCK is a rule that CLOSES THE RAIL PATINA ITSELF SENDS ON — the
+ *    text — or one that leaves no direct channel open at all. It earns the 2px
+ *    terracotta leading rule, and nothing else.
  *  · DO NOT CONTACT is the Channels-region STATE direction §5.4 describes:
  *    "`channels_forbidden` covers every channel", so the region collapses to
  *    one line and routes somewhere reachable. It also takes the person's own
  *    number off every row (SPEC §5.1 #10) — which a mere preference must not.
+ *  · FORBIDS TEXT is the send gate's own question (C7: "the rule outranks the
+ *    designation"). A recorded grant is not permission when the studio has
+ *    written down that this person is never texted.
  *
- * Both answers are computed HERE, from `channels_forbidden`, so the Directory
- * row, the roster row, the person card, the company card's crew line and the
- * picker's mini row all read the same two facts (R-S / C29).
+ * CR3-7, AND WHAT IS STILL OWED. r2's ruling made the block "ANY forbidden
+ * channel", which painted the leading rule on F-11 Dana Kowalski —
+ * `forbidden={email}`, the canonical specimen row, which SPEC §5.1 #8 describes
+ * with NO leading rule while #10 and #11 name one explicitly for Frank Bauer
+ * and Ray Thao. That is the verified break, and closing the rail is the reading
+ * that fixes it: Dana loses the rule, Frank and Ray keep it, and the predicate
+ * says something a designer can state out loud.
+ *
+ * It does not reproduce SPEC §3's fixture exactly, and it cannot. F-26 Carol
+ * Nyström (`block: true`) and F-10 Sam Rowe (`block: false`) carry BYTE-FOR-BYTE
+ * identical rule rows in the seed — `allowed={email,mobile}`,
+ * `forbidden={sms}` — so no formula over `channels_forbidden` can separate
+ * them. The fixture's `block` is a fact the rule row does not hold. Two rows
+ * (F-10 Sam Rowe, F-13 Ingrid Halvorsen) therefore wear a rule the fixture
+ * marks `false`; neither is described in any §5 requirement. THE ORCHESTRATOR
+ * STILL OWES A RULING: either the fact moves onto the rule row (a column, a
+ * W3 migration) or SPEC §3's fixture is amended to match the derivation.
+ *
+ * All three answers are computed HERE, from `channels_forbidden`, so the
+ * Directory row, the roster row, the person card, the company card's crew line
+ * and the picker's mini row all read the same facts (R-S / C29).
  */
 export function contactRuleIsHardBlock(
   rule: StudioContactRule | null | undefined,
 ): boolean {
-  return (rule?.channels_forbidden ?? []).length > 0;
+  return contactRuleForbidsSms(rule) || contactRuleIsDoNotContact(rule);
+}
+
+/**
+ * CR3-9 — THE RULE OUTRANKS THE GRANT, on every composer.
+ *
+ * The roster row gated Text on `consent === 'granted' && phone`, and the person
+ * card on `consent_status === 'granted'` alone; neither consulted the rule. A
+ * person with a recorded grant AND a "Never text" rule got a live Text act and
+ * a live Send — exactly what PR-m's manual path and the Add sheet's free-text
+ * rule can produce together. Direction §2.2 lists E7's readers as "every
+ * composer before consent"; C7 rules that the rule outranks.
+ */
+export function contactRuleForbidsSms(
+  rule: StudioContactRule | null | undefined,
+): boolean {
+  return (rule?.channels_forbidden ?? []).includes("sms");
 }
 
 /**

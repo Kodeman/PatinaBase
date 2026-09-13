@@ -10,6 +10,7 @@ import {
   contactChannelWord,
   contactRouteTarget,
   contactRuleClause,
+  contactRuleForbidsSms,
   contactRuleIsDoNotContact,
   contactRuleIsHardBlock,
   indexChannelsByOwner,
@@ -108,7 +109,22 @@ describe("CR-6 — the studio's own sentence is the clause", () => {
   });
 });
 
-describe("CR-16 — a hard block is any forbidden channel (SPEC §5.1 #11)", () => {
+/**
+ * CR3-7 — the block is the rule that CLOSES THE TEXT RAIL, or leaves no direct
+ * channel open at all.
+ *
+ * r2's "any forbidden channel" painted the 2px leading rule on F-11 Dana
+ * Kowalski — `forbidden={email}`, the canonical specimen row — which SPEC §5.1
+ * #8 describes with NO leading rule while #10 and #11 name one explicitly for
+ * Frank Bauer and Ray Thao.
+ *
+ * It does not reproduce SPEC §3's fixture exactly, and no formula can: F-26
+ * Carol Nyström (`block: true`) and F-10 Sam Rowe (`block: false`) carry
+ * byte-for-byte identical rule rows in the seed. That residue is an
+ * orchestrator ruling still owed — the fact belongs on the rule row, or the
+ * fixture moves.
+ */
+describe("CR3-7 — a hard block closes the text rail (SPEC §5.1 #8/#10/#11)", () => {
   it("Frank Bauer is a hard block", () => {
     expect(contactRuleIsHardBlock(FRANK_RULE)).toBe(true);
   });
@@ -117,12 +133,64 @@ describe("CR-16 — a hard block is any forbidden channel (SPEC §5.1 #11)", () 
     expect(contactRuleIsHardBlock(RAY_RULE)).toBe(true);
   });
 
+  // SPEC §5.1 #8: her row prints the clause and NO leading rule. This is the
+  // row the whole deck is built around.
+  it("Dana Kowalski's bounced-email rule is a preference, not a wall", () => {
+    expect(
+      contactRuleIsHardBlock(
+        rule({
+          channels_forbidden: ["email"],
+          channels_allowed: [],
+          reason: "Text only. The email on file bounces.",
+        }),
+      ),
+    ).toBe(false);
+  });
+
+  // A rule that leaves no direct channel open blocks even where it never names
+  // the text rail — it has already closed everything.
+  it("a rule with no direct channel left open blocks without naming sms", () => {
+    expect(
+      contactRuleIsHardBlock(
+        rule({ channels_forbidden: ["mobile", "office", "email"] }),
+      ),
+    ).toBe(false);
+    expect(
+      contactRuleIsHardBlock(
+        rule({ channels_forbidden: ["mobile", "office", "email", "sms"] }),
+      ),
+    ).toBe(true);
+  });
+
   it("a rule forbidding nothing is never a block", () => {
     expect(contactRuleIsHardBlock(rule({ channels_allowed: ["email"] }))).toBe(false);
   });
 
   it("no rule at all is never a block", () => {
     expect(contactRuleIsHardBlock(null)).toBe(false);
+  });
+});
+
+/**
+ * CR3-9 — the same column, asked the send gate's own question. Direction §2.2
+ * lists E7's readers as "every composer before consent"; C7 rules that the rule
+ * outranks the designation.
+ */
+describe("CR3-9 — contactRuleForbidsSms", () => {
+  it("is true for a rule that names the text rail", () => {
+    expect(contactRuleForbidsSms(RAY_RULE)).toBe(true);
+    expect(contactRuleForbidsSms(FRANK_RULE)).toBe(true);
+  });
+
+  it("is false for a rule that bars only the email", () => {
+    expect(
+      contactRuleForbidsSms(rule({ channels_forbidden: ["email"] })),
+    ).toBe(false);
+  });
+
+  it("is false where there is no rule at all", () => {
+    expect(contactRuleForbidsSms(null)).toBe(false);
+    expect(contactRuleForbidsSms(undefined)).toBe(false);
   });
 });
 

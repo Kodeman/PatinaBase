@@ -38,6 +38,7 @@ import {
 } from '@patina/supabase';
 import { getPartyKindLabel, type PartyKind } from '@patina/types';
 import { rosterHasIdentity } from '@/lib/document/roster-derivation';
+import { directoryRolodexOrgId } from '@/lib/document/people-derivation';
 import {
   contactRuleClause,
   contactRuleIsHardBlock,
@@ -160,21 +161,32 @@ export function RolodexPicker({
   }, [open, startInAdd]);
 
   const { data: orgs } = useOrganizations({ enabled: open });
-  const organizationId = useMemo(
-    () => orgs?.find((o) => o.type === 'design_studio')?.id ?? orgs?.[0]?.id ?? null,
-    [orgs],
-  );
-
-  const { data: contacts } = useStudioContacts(open ? organizationId : null, {
-    kind,
-    search,
-  });
 
   // The three words and the rule come from the directory, which already
   // reduces them per identity — a carded human is keyed on their rolodex card,
   // so `person_id` IS `studio_contacts.id` here (v4). One read for the page of
   // hits, never one per row.
   const { data: directory } = usePeopleDirectory();
+
+  // QA-R3-1: WHICH STUDIO HOLDS THE BOOK. `orgs.find(o => o.type ===
+  // 'design_studio')` is a first match over an UNORDERED membership read, and
+  // `designer@patina.dev` belongs to two design studios while all 49 cards
+  // belong to one — so the picker's hits came back empty about half the time.
+  // The directory rows carry each card's own `organization_id`, so the org that
+  // actually holds the book answers first (`directoryRolodexOrgId`, the same
+  // fold people-room/directory-view/company-card/person-profile use); the
+  // membership list is the fallback, sorted so it never moves between renders.
+  const organizationId = useMemo(() => {
+    const sorted = [...(orgs ?? [])].sort((a, b) => a.id.localeCompare(b.id));
+    const memberOrgId =
+      sorted.find((o) => o.type === 'design_studio')?.id ?? sorted[0]?.id ?? null;
+    return directoryRolodexOrgId(directory ?? []) ?? memberOrgId;
+  }, [orgs, directory]);
+
+  const { data: contacts } = useStudioContacts(open ? organizationId : null, {
+    kind,
+    search,
+  });
   const wordsByCard = useMemo(() => {
     const map = new Map<string, PeopleDirectoryRow>();
     for (const row of directory ?? []) if (row.person_id) map.set(row.person_id, row);

@@ -134,6 +134,42 @@ const showsTrade = (k: AddedPersonKind) => k === "sub" || k === "installer";
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/**
+ * QA-R3-1 — SAY WHAT ACTUALLY WENT WRONG.
+ *
+ * PostgREST rejections arrive as a PLAIN OBJECT (`{message, code, details,
+ * hint}`), not an `Error`. Both submit paths tested `e instanceof Error` and
+ * fell through to "Could not add them just now. Try again." for every one of
+ * them, which is how a wrong-studio `promoteToStudioContact` refusal reached
+ * the designer as a shrug. A raw Postgres string is still never printed: an RLS
+ * or permission refusal is translated, and a schema word (SPEC §8 #3) is
+ * replaced by the fallback rather than shown.
+ */
+function writeErrorMessage(err: unknown, fallback: string): string {
+  const code = (err as { code?: unknown } | null)?.code;
+  const raw =
+    err instanceof Error
+      ? err.message
+      : (((err as { message?: unknown } | null)?.message as
+          | string
+          | undefined) ?? "");
+  const haystack = `${typeof code === "string" ? code : ""} ${raw}`;
+  if (/row-level security|permission denied|42501|PGRST116/i.test(haystack)) {
+    return "This studio's book is not yours to write. Ask an owner or admin.";
+  }
+  // Never a schema word on a face: a constraint or index name, a relation, a
+  // column. Those sentences are for the log, not the studio.
+  if (
+    !raw.trim() ||
+    /duplicate key|violates|constraint|idx_|_fkey|_pkey|column |relation /i.test(
+      raw,
+    )
+  ) {
+    return fallback;
+  }
+  return raw;
+}
+
 const FIELD_LABEL =
   "mb-1 block font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]";
 const FIELD_INPUT =
@@ -213,9 +249,23 @@ export function AddPersonSheet({
   initialKind = "client",
   contact = null,
   onSaved,
+  organizationId: organizationIdProp = null,
 }: {
   open: boolean;
   onClose: () => void;
+  /**
+   * QA-R3-1 — THE STUDIO THE BOOK IS IN, resolved by the caller.
+   *
+   * This sheet used to guess with `orgs.find(o => o.type === 'design_studio')`
+   * — a first match over an UNORDERED membership read. `designer@patina.dev`
+   * belongs to two design studios and every rolodex card and the Okonkwo
+   * project belong to only one of them, so `promoteToStudioContact` and the
+   * authority grant wrote against the wrong org about half the time and the
+   * sheet answered "Could not add them just now." Both callers already hold
+   * the answer: the People Room's `directoryRolodexOrgId` fold, and the
+   * rolodex review sheet's own studio id.
+   */
+  organizationId?: string | null;
   /** The kind the sheet opens on (⌘K "Add a maker" cold-starts on 'maker'). */
   initialKind?: AddedPersonKind;
   /** Fired with a confirmation line + the directory filter to land on, so the
@@ -246,13 +296,20 @@ export function AddPersonSheet({
   const contactRuleWrite = useSetContactRule();
   const setAuthority = useSetPartyAuthority();
   const { data: orgs } = useOrganizations();
-  const organizationId = useMemo(
-    () =>
-      orgs?.find((o) => o.type === "design_studio")?.id ??
-      orgs?.[0]?.id ??
-      null,
-    [orgs],
-  );
+  // QA-R3-1: the caller's answer wins. The fallback is the membership list
+  // SORTED by id — never `.find()` over an unordered read, which is the defect
+  // itself: a designer in two design studios got a different answer between
+  // renders, and half of them were the studio that holds neither the project
+  // nor the cards.
+  const organizationId = useMemo(() => {
+    if (organizationIdProp) return organizationIdProp;
+    const sorted = [...(orgs ?? [])].sort((a, b) => a.id.localeCompare(b.id));
+    return (
+      sorted.find((o) => o.type === "design_studio")?.id ??
+      sorted[0]?.id ??
+      null
+    );
+  }, [organizationIdProp, orgs]);
   const { data: rolodex } = useStudioContacts(organizationId, {
     includeArchived: false,
   });
@@ -516,11 +573,7 @@ export function AddPersonSheet({
       reset();
       onClose();
     } catch (e) {
-      setError(
-        e instanceof Error
-          ? e.message
-          : "Could not add them just now. Try again.",
-      );
+      setError(writeErrorMessage(e, "Could not add them just now. Try again."));
     }
   };
 
@@ -549,9 +602,7 @@ export function AddPersonSheet({
       onClose();
     } catch (e) {
       setError(
-        e instanceof Error
-          ? e.message
-          : "Could not add the maker just now. Try again.",
+        writeErrorMessage(e, "Could not add the maker just now. Try again."),
       );
     }
   };
@@ -666,6 +717,15 @@ export function AddPersonSheet({
             // the person card, where there are controls that say so.
             channelsForbidden: [],
             reason: contactRule.trim(),
+            // CR3-2: MERGE. `chain.cardId` is often an EXISTING card — 00626's
+            // `apply_party_rolodex_link_trg` links a new seat to the one card in
+            // the studio carrying that phone — and the default write is a
+            // full-row upsert. Adding Frank Bauer to a second job with a
+            // sentence typed here erased his standing do-not-contact rule and
+            // the route to Rosa Delgado behind it. The forbidden list IS
+            // supplied (empty, deliberately — CR-21: nothing is inferred) for a
+            // NEW rule; merge keeps a standing one's list, route and hours.
+            merge: true,
           });
           chain.ruleWritten = true;
         }
@@ -708,11 +768,7 @@ export function AddPersonSheet({
       reset();
       onClose();
     } catch (e) {
-      setError(
-        e instanceof Error
-          ? e.message
-          : "Could not add them just now. Try again.",
-      );
+      setError(writeErrorMessage(e, "Could not add them just now. Try again."));
     }
   };
 
@@ -804,9 +860,7 @@ export function AddPersonSheet({
       reset();
       onClose();
     } catch (e) {
-      setError(
-        e instanceof Error ? e.message : "Could not save just now. Try again.",
-      );
+      setError(writeErrorMessage(e, "Could not save just now. Try again."));
     }
   };
 

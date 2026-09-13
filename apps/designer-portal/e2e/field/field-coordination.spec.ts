@@ -59,35 +59,74 @@ test.describe('Field Coordination · People Room add a sub', () => {
     await page.waitForLoadState('networkidle');
 
     // Open the add sheet from the Room header.
-    await page.getByRole('button', { name: /\bAdd\b/ }).first().click();
+    await page.getByRole('button', { name: 'Add person' }).click();
     // Choose the sub kind (DM-mono page link).
     await page.getByRole('button', { name: 'a sub' }).click();
 
-    // Project (required) + name + phone.
+    // Project (required) + name + trade + phone.
     await page.getByLabel('Project').selectOption({ label: PROJECT_NAME });
-    await page.getByPlaceholder('e.g. Sal Moretti').fill('Sal Moretti (e2e)');
-    await page.getByPlaceholder('(555) 123-4567').fill('555-123-9876');
-    // "Text updates" is on by default → the row is written with consent 'pending'.
+    await page.getByLabel('Full name').fill('Sal Moretti (e2e)');
+    await page.getByLabel('Trade').selectOption('plumbing');
+    await page.getByLabel('Mobile').fill('555-123-9876');
 
-    await page.getByRole('button', { name: /Add to roster/i }).click();
+    // CR3-10(a): the opt-in is NEVER preselected, and it is not what it was.
+    // R-AS took both consent halves off the seat INSERT — a seat is born at the
+    // column default `not_asked` and the eight `sms_consent_*` columns are
+    // frozen legacy — so the fact this act records lands on
+    // `studio_channel_consent`, through `record_channel_invite`, and nowhere
+    // else. Which means the evidence is required before the sheet will write.
+    await page
+      .getByRole('checkbox', {
+        name: 'They gave prior express consent for text updates',
+      })
+      .check();
+    await page.getByLabel('How consent was given').selectOption('verbal');
+    await page
+      .getByLabel('Where and when they agreed')
+      .fill('Verbal at the site kickoff, recorded by the designer.');
+
+    await page.getByRole('button', { name: 'Add to the roster' }).click();
 
     // The Directory lands on the Field group with the new party row (the roster
     // row is a button; the inline confirmation band also names them, so target
     // the row specifically).
     const row = page.getByRole('button', { name: /Sal Moretti \(e2e\)/ });
     await expect(row).toBeVisible({ timeout: 15_000 });
-    // The consent chip reads "Invited" (sms_consent_status = 'pending').
+    // The consent chip reads "Invited" — off the RECORD, not off the seat.
     await expect(row).toContainText('Invited');
 
-    // The party row exists in the DB with consent 'pending'.
-    const { data: party } = await adminDb
-      .from('project_parties')
-      .select('display_name, party_kind, sms_consent_status, phone_e164')
-      .eq('project_id', projectId)
-      .eq('party_kind', 'sub')
-      .maybeSingle();
-    expect(party?.sms_consent_status).toBe('pending');
-    expect(party?.phone_e164).toBe('+15551239876');
+    // The seat exists, carrying the number and no consent word of its own.
+    await expect
+      .poll(
+        async () => {
+          const { data } = await adminDb
+            .from('project_parties')
+            .select('display_name, party_kind, phone_e164')
+            .eq('project_id', projectId)
+            .eq('party_kind', 'sub')
+            .maybeSingle();
+          return data?.phone_e164 ?? null;
+        },
+        { timeout: 15_000 },
+      )
+      .toBe('+15551239876');
+
+    // And the consent itself is on the studio's own ledger, at `pending` —
+    // the first half of the double opt-in.
+    await expect
+      .poll(
+        async () => {
+          const { data } = await adminDb
+            .from('studio_channel_consent')
+            .select('status')
+            .eq('channel_kind', 'sms')
+            .eq('channel_value', '+15551239876')
+            .maybeSingle();
+          return data?.status ?? null;
+        },
+        { timeout: 15_000 },
+      )
+      .toBe('pending');
   });
 });
 
@@ -136,7 +175,12 @@ test.describe('Field Coordination · Desk triage', () => {
         display_name: 'Sal Moretti',
         trade: 'plumbing',
         phone: rawPhone,
-        sms_consent_status: 'granted',
+        // CR3-10(a): `sms_consent_status` is FROZEN LEGACY (R-AS / 00594). A
+        // BEFORE UPDATE trigger refuses a change to it and every send gate
+        // reads `studio_channel_consent` instead, so seeding it here recorded
+        // nothing and taught the spec a fact that is no longer true. This
+        // triage slice does not need a consent at all — it seeds an inbound
+        // message and applies it.
       })
       .select('id, phone_e164')
       .single();

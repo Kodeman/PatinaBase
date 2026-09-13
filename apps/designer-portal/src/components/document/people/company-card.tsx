@@ -212,7 +212,6 @@ export function CompanyCard({
   const [verdict, setVerdict] = useState("");
   const [chased, setChased] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [announcement, setAnnouncement] = useState<string | null>(null);
   // CR-8 — the two write bands direction §3.3 names and the card did not have.
   const [designationsOpen, setDesignationsOpen] = useState(false);
   const [payeeOpen, setPayeeOpen] = useState(false);
@@ -320,6 +319,28 @@ export function CompanyCard({
     });
   }, [designationsOpen, card]);
 
+  /**
+   * CR3-8 — SEED THE VERDICT FROM THE VERDICT IT EDITS.
+   *
+   * `verdict` was `useState("")` and nothing ever seeded it, while
+   * `recordVerdict` writes `verdict.trim() || null`. Opening a firm that holds
+   * a verdict and pressing "Record a verdict" then "Save the verdict" without
+   * typing wrote NULL over it — two clicks, no confirm, no undo, with the text
+   * it destroyed printed one line above. The same class as CR-3, in the same
+   * file; the designations and payee bands added in the same round both carry a
+   * seeding ref and this one was left out.
+   */
+  const seededVerdictRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!verdictOpen || !card) {
+      if (!verdictOpen) seededVerdictRef.current = null;
+      return;
+    }
+    if (seededVerdictRef.current === card.id) return;
+    seededVerdictRef.current = card.id;
+    setVerdict(card.studio_verdict ?? "");
+  }, [verdictOpen, card]);
+
   const seededPayeeRef = useRef<string | null>(null);
   useEffect(() => {
     if (!payeeOpen || !card) {
@@ -363,10 +384,15 @@ export function CompanyCard({
   const heldClause = paperHeldClause(docs, today);
   const chaseSentence = chaseConsequenceSentence(name);
 
-  const announce = (message: string) => {
-    setAnnouncement(message);
-    onAnnounce(message);
-  };
+  /**
+   * CR3-11 — ONE LIVE REGION, and it is the Room's.
+   *
+   * This card kept its own `role="status"` beside the Room's
+   * (people-room.tsx), so every designation, payee, document and verdict change
+   * was announced TWICE from two live regions on one screen. Direction §5.5
+   * names one destination; SPEC §7 #3 asks for exactly one.
+   */
+  const announce = onAnnounce;
 
   const recordVerdict = async () => {
     setError(null);
@@ -451,11 +477,6 @@ export function CompanyCard({
       >
         Back
       </DocumentAction>
-
-      {/* One live region for the whole card (SPEC §7 #3). */}
-      <p role="status" aria-live="polite" className="sr-only">
-        {announcement}
-      </p>
 
       {/* R1 — Identity */}
       <header className="flex items-center gap-4 pb-6">

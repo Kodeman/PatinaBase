@@ -335,4 +335,77 @@ describe('RosterRow — unfolded', () => {
       'true',
     );
   });
+
+  /**
+   * CR3-9 — THE RULE OUTRANKS THE GRANT (C7). The row gated on consent and the
+   * phone alone, so a person carrying BOTH a recorded grant and a "Never text"
+   * rule got a live Text act and a live Send — and there was no server backstop
+   * behind it either.
+   */
+  it('holds Text on a recorded grant when the studio’s rule says never text', () => {
+    const { container } = ul(
+      <RosterRow
+        row={seatRow({ consent: 'granted' })}
+        band="this_week"
+        expanded
+        onToggle={jest.fn()}
+        rule={
+          {
+            id: 'rule-1',
+            subject_type: 'person',
+            subject_id: 'card-dana',
+            channels_allowed: ['office'],
+            channels_forbidden: ['sms'],
+            route_to_person_id: null,
+            contact_hours: null,
+            escalation_by_class: {},
+            reason: 'Never text. Office phone only.',
+            set_by: null,
+            set_at: '2026-10-06T00:00:00Z',
+            created_at: '',
+            updated_at: '',
+          } as never
+        }
+      />,
+    );
+    const act = screen.getByRole('button', { name: /^Text$/ });
+    expect(act).toHaveAttribute('aria-disabled', 'true');
+    const reason = container.querySelector(
+      `#${act.getAttribute('aria-describedby')}`,
+    );
+    expect(reason).toHaveTextContent(
+      'The studio’s rule for Dana Kowalski says never text. Change the rule on their card first.',
+    );
+  });
+
+  it('leaves Text open for a rule that bars only the email', () => {
+    ul(
+      <RosterRow
+        row={seatRow({ consent: 'granted' })}
+        band="this_week"
+        expanded
+        onToggle={jest.fn()}
+        rule={
+          {
+            id: 'rule-2',
+            subject_type: 'person',
+            subject_id: 'card-dana',
+            channels_allowed: [],
+            channels_forbidden: ['email'],
+            route_to_person_id: null,
+            contact_hours: null,
+            escalation_by_class: {},
+            reason: 'Text only. The email on file bounces.',
+            set_by: null,
+            set_at: '2026-10-12T00:00:00Z',
+            created_at: '',
+            updated_at: '',
+          } as never
+        }
+      />,
+    );
+    expect(
+      screen.getByRole('button', { name: /^Text$/ }),
+    ).not.toHaveAttribute('aria-disabled');
+  });
 });

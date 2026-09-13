@@ -73,11 +73,22 @@ test.describe("the add sheet writes the studio’s book", () => {
         })
         .toBe("Text only. The email on file bounces.");
 
+      // CR3-10(b) — THE RULING: CR-21 stands, and this assertion moves.
+      //
+      // The sheet used to infer the forbidden list from whether the Email box
+      // happened to be blank, so "Email only. No cell for work." typed beside
+      // an empty Email box wrote a rule FORBIDDING EMAIL — the opposite of what
+      // the studio said, and what every send gate would then read. CR-21 made
+      // the sheet infer NOTHING: the studio's sentence is recorded as the
+      // reason, and which channel is barred is written on the person card,
+      // where there are controls that say so. Task 1's acceptance is the RULE
+      // ON THE PERSON carrying the studio's own words — asserted above — not a
+      // machine-readable list nobody typed.
       await expect
         .poll(
-          async () => (await ruleForSubject(card))?.channels_forbidden ?? [],
+          async () => (await ruleForSubject(card))?.channels_forbidden ?? null,
         )
-        .toContain("email");
+        .toEqual([]);
 
       await expect
         .poll(async () =>

@@ -45,6 +45,7 @@ import {
 import { directoryContactKind } from "@/lib/document/people-derivation";
 import {
   contactRouteTarget,
+  contactRuleForbidsSms,
   indexChannelsByOwner,
   indexContactRules,
 } from "@/lib/document/contact-rule";
@@ -72,6 +73,9 @@ export const SEND_TEXT_CONSEQUENCE =
   "This sends one text to the number on file. They can stop it at any time by replying STOP.";
 export const CANNOT_TEXT_SENTENCE =
   "The studio holds no standing consent for this number, so no text may go out.";
+/** CR3-9 — a rule that bars the text rail outranks a recorded grant (C7). */
+export const RULE_FORBIDS_TEXT_SENTENCE =
+  "The studio’s rule for this person says never text. Change the rule above before any text goes out.";
 
 /** A seat is done when its stage says so — nothing about the window decides it. */
 const DONE_STAGES = new Set([
@@ -139,7 +143,6 @@ export function PersonProfile({
   const { data: documents } = useComplianceDocuments({ holderId: personId });
   const { data: ownPaperState } = useComplianceState(personId);
   const [recordOpen, setRecordOpen] = useState(false);
-  const [announcement, setAnnouncement] = useState<string | null>(null);
   const now = useMemo(() => new Date(), []);
 
   // ── The rule, the route and who it may route to (QA-R2-3 / CR-10) ────────
@@ -273,7 +276,9 @@ export function PersonProfile({
   ].filter(Boolean) as string[];
 
   const firstSeat = liveSeats[0] ?? null;
-  const canText = person.consent_status === "granted";
+  // CR3-9: consent is necessary, not sufficient — the rule outranks it (C7).
+  const ruleForbidsText = contactRuleForbidsSms(rule);
+  const canText = person.consent_status === "granted" && !ruleForbidsText;
   const soleProprietor = card?.is_sole_proprietor === true;
   const owesPaper = partyKindOwesPaper(directoryContactKind(person));
   // R-BA: one formula, worst-first over the person's OWN documents and their
@@ -283,10 +288,16 @@ export function PersonProfile({
     : (documents ?? []);
   const heldClause = paperHeldClause(docs, now);
 
-  const announce = (message: string) => {
-    setAnnouncement(message);
-    notify(message);
-  };
+  /**
+   * CR3-11 — ONE LIVE REGION, and it is the Room's.
+   *
+   * This card kept its own `role="status"` beside the Room's (people-room.tsx),
+   * so every consent, grant, document and designation change was announced
+   * TWICE from two live regions on one screen. Direction §5.5 names one
+   * destination — "the room's existing role='status' line" — and SPEC §7 #3
+   * asks for exactly one.
+   */
+  const announce = notify;
 
   return (
     <div data-person-card={person.person_id} className="mx-auto max-w-[720px]">
@@ -299,11 +310,6 @@ export function PersonProfile({
       >
         Back
       </DocumentAction>
-
-      {/* One live region for the whole card (SPEC §7 #3). */}
-      <p role="status" aria-live="polite" className="sr-only">
-        {announcement}
-      </p>
 
       {/* R1 — Identity */}
       <header className="flex items-center gap-4 pb-6">
@@ -350,7 +356,11 @@ export function PersonProfile({
           id={`person-text-consequence-${person.person_id}`}
           className="t-body-sm mt-2 max-w-[56ch] text-[var(--ink-subtle)]"
         >
-          {canText ? SEND_TEXT_CONSEQUENCE : CANNOT_TEXT_SENTENCE}
+          {canText
+            ? SEND_TEXT_CONSEQUENCE
+            : ruleForbidsText
+              ? RULE_FORBIDS_TEXT_SENTENCE
+              : CANNOT_TEXT_SENTENCE}
         </p>
         <DocumentAction
           actionKey="send-a-text"

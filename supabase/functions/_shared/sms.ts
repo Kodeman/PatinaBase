@@ -478,6 +478,97 @@ export async function channelConsentVerdict(
   return anyRecordRefuses ? "refuse" : "unknown";
 }
 
+/**
+ * CR3-9 — THE RULE IS A SEND GATE, NOT DECORATION.
+ *
+ * `studio_contact_rules.channels_forbidden` containing `sms` is the studio's
+ * own written instruction that this person is never texted, and C7 rules that
+ * the rule OUTRANKS the designation. Until this, `grep -rl channels_forbidden
+ * supabase/functions/` returned nothing: the whole rail gated on the consent
+ * record alone, so a person carrying BOTH a recorded grant and a "Never text"
+ * rule — exactly what PR-m's manual path and the Add sheet's free-text rule can
+ * produce together — was sendable from every surface and from the crons.
+ *
+ * Asked of the ENGAGEMENT first (a per-job override is the same table with
+ * `subject_type = 'engagement'`), then of the person's CARD, then — for a
+ * phone-only send with no seat — of every card holding that number.
+ *
+ * Fail-closed, like `channelConsentVerdict`: a rule that cannot be READ is not
+ * a rule that does not exist, and this is a recipient-protection fact.
+ */
+export async function contactRuleForbidsSms(
+  supabase: SupabaseClient,
+  partyId: string | null,
+  phone: string,
+): Promise<boolean> {
+  const subjects: Array<{ type: string; id: string }> = [];
+
+  if (partyId) {
+    subjects.push({ type: "engagement", id: partyId });
+    const { data: party, error: partyError } = await supabase
+      .from("project_parties")
+      .select("studio_contact_id")
+      .eq("id", partyId)
+      .maybeSingle();
+    if (partyError) {
+      console.error(
+        "contactRuleForbidsSms: refusing, the seat's card could not be read",
+        partyError,
+      );
+      return true;
+    }
+    const cardId = (party as { studio_contact_id?: string | null } | null)
+      ?.studio_contact_id;
+    if (cardId) subjects.push({ type: "person", id: cardId });
+  }
+
+  if (subjects.length === 0 || !partyId) {
+    // No seat: the number is the only handle there is. Any card in any studio
+    // holding it answers, exactly as the phone-global consent scan does.
+    const { data: channels, error: channelError } = await supabase
+      .from("studio_contact_channels")
+      .select("owner_id")
+      .eq("value", phone);
+    if (channelError) {
+      console.error(
+        "contactRuleForbidsSms: refusing, the channel scan failed",
+        channelError,
+      );
+      return true;
+    }
+    for (const row of (channels ?? []) as Array<{ owner_id: string }>) {
+      subjects.push({ type: "person", id: row.owner_id });
+    }
+  }
+
+  if (subjects.length === 0) return false;
+
+  const { data: rules, error: ruleError } = await supabase
+    .from("studio_contact_rules")
+    .select("subject_type, subject_id, channels_forbidden")
+    .in("subject_id", subjects.map((s) => s.id));
+  if (ruleError) {
+    console.error(
+      "contactRuleForbidsSms: refusing, the rule could not be read",
+      ruleError,
+    );
+    return true;
+  }
+
+  const rows = (rules ?? []) as Array<{
+    subject_type: string;
+    subject_id: string;
+    channels_forbidden: string[] | null;
+  }>;
+  return subjects.some((subject) =>
+    rows.some((row) =>
+      row.subject_type === subject.type &&
+      row.subject_id === subject.id &&
+      (row.channels_forbidden ?? []).includes("sms")
+    )
+  );
+}
+
 async function resolveRecipient(
   supabase: SupabaseClient,
   input: SendPartySmsInput,
@@ -749,6 +840,13 @@ export async function sendPartySms(
   // same migration; the freeze means none has carried news since), so the
   // record answers alone: a non-invite needs `allow`, and the invite keeps its
   // own door below (`unknown` is the invite in flight).
+  // CR3-9: AND THE STUDIO'S OWN RULE. A recorded grant is not permission when
+  // the studio has written down that this person is never texted, and the rule
+  // binds the double-opt-in invite too: "never text" is not "never text except
+  // once, to ask".
+  if (await contactRuleForbidsSms(supabase, recipient.partyId, recipient.phone)) {
+    return { sent: false, reason: "contact_rule_forbids_sms" };
+  }
   const studioGranted = verdict === "allow";
   if (!isInvite && !studioGranted) {
     // Only the double-opt-in invite may reach a number the record has not
