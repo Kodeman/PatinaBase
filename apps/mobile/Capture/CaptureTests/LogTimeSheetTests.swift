@@ -15,18 +15,35 @@ import Testing
 struct LogTimeSheetTests {
     private let now = Date(timeIntervalSince1970: 1_800_000_000)
 
+    /// UTC, so the calendar-day rule inside `visitState` is deterministic
+    /// wherever the gate runs.
+    private var utc: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        return calendar
+    }
+
     private func openVisit(startedAt: Date,
+                           lastActivityAt: Date? = nil,
                            projectID: String? = "6f1d1b9c-0000-4000-8000-000000000001",
                            projectName: String? = "Maple St") -> CaptureSessionContext {
         CaptureSessionContext(
             identity: CaptureSessionIdentity(userID: "u", workspaceID: "w"),
             startedAt: startedAt,
-            lastActivityAt: startedAt,
+            lastActivityAt: lastActivityAt ?? startedAt,
             routing: CaptureRoutingMemory(destination: .library,
                                           projectID: projectID,
                                           projectName: projectName),
             kind: .site,
             label: projectName)
+    }
+
+    /// The sheet reads `CaptureSessionContextStore.visitState`, never a bare
+    /// context — `.stale` carries a non-nil context and used to pre-fill a
+    /// multi-hour wall clock through it. Every pre-fill test therefore goes
+    /// through the real policy rather than asserting a state by hand.
+    private func state(_ context: CaptureSessionContext, now: Date) -> CaptureVisitState {
+        CaptureSessionContextPolicy.visitState(for: context, now: now, calendar: utc)
     }
 
     // MARK: three taps to a logged drive
@@ -36,8 +53,9 @@ struct LogTimeSheetTests {
     /// already the activity. Three taps — open the sheet, adjust to 45m, Log.
     @Test func threeTapsToALoggedDrive() throws {
         // Tap 1: the sheet opens, pre-filled from the visit it found.
-        var draft = FieldLogTimeDraft(visit: openVisit(startedAt: now.addingTimeInterval(-30 * 60)),
-                                      now: now)
+        let visit = openVisit(startedAt: now.addingTimeInterval(-30 * 60),
+                              lastActivityAt: now.addingTimeInterval(-10 * 60))
+        var draft = FieldLogTimeDraft(visit: state(visit, now: now), now: now)
         #expect(draft.projectID == "6f1d1b9c-0000-4000-8000-000000000001")
         #expect(draft.projectName == "Maple St")
         #expect(draft.durationMinutes == 30)
@@ -60,7 +78,8 @@ struct LogTimeSheetTests {
     }
 
     @Test func theBillableAnswerIsCarriedThroughExactlyAsStated() throws {
-        var draft = FieldLogTimeDraft(visit: openVisit(startedAt: now), now: now)
+        var draft = FieldLogTimeDraft(visit: state(openVisit(startedAt: now), now: now),
+                                      now: now)
         draft.billable = false
         let record = try #require(draft.record(entryID: UUID(), ownerUserID: UUID()))
         #expect(record.billable == false)
@@ -69,8 +88,9 @@ struct LogTimeSheetTests {
     // MARK: the pre-fill
 
     @Test func anOpenVisitPreFillsTheProjectAndTheElapsedMinutes() {
-        let draft = FieldLogTimeDraft(
-            visit: openVisit(startedAt: now.addingTimeInterval(-95 * 60)), now: now)
+        let visit = openVisit(startedAt: now.addingTimeInterval(-95 * 60),
+                              lastActivityAt: now.addingTimeInterval(-10 * 60))
+        let draft = FieldLogTimeDraft(visit: state(visit, now: now), now: now)
         #expect(draft.durationMinutes == 95)
         #expect(draft.startedAt == now.addingTimeInterval(-95 * 60))
     }
@@ -79,14 +99,14 @@ struct LogTimeSheetTests {
     /// the act is HELD — the sheet shows its picker rather than accepting input
     /// and saving nothing (CR-1).
     @Test func aVisitWithNoProjectCannotLogYet() {
-        let draft = FieldLogTimeDraft(
-            visit: openVisit(startedAt: now, projectID: nil, projectName: nil), now: now)
+        let visit = openVisit(startedAt: now, projectID: nil, projectName: nil)
+        let draft = FieldLogTimeDraft(visit: state(visit, now: now), now: now)
         #expect(draft.canLog == false)
         #expect(draft.record(entryID: UUID(), ownerUserID: UUID()) == nil)
     }
 
     @Test func noVisitFallsBackToHalfAnHourEndingNow() {
-        let draft = FieldLogTimeDraft(visit: nil, now: now)
+        let draft = FieldLogTimeDraft(visit: CaptureVisitState.none, now: now)
         #expect(draft.projectID == nil)
         #expect(draft.durationMinutes == FieldLogTimeDraft.defaultMinutes)
         #expect(draft.canLog == false)
@@ -98,7 +118,39 @@ struct LogTimeSheetTests {
     @Test func anEndedVisitContributesNothing() {
         var visit = openVisit(startedAt: now.addingTimeInterval(-11 * 3_600))
         visit.endedAt = now.addingTimeInterval(-3_600)
-        let draft = FieldLogTimeDraft(visit: visit, now: now)
+        let draft = FieldLogTimeDraft(visit: state(visit, now: now), now: now)
+        #expect(draft.durationMinutes == FieldLogTimeDraft.defaultMinutes)
+        #expect(draft.projectID == nil)
+    }
+
+    /// W6-R1-01. The walk that put a six-hour billable drive one tap away: a
+    /// visit opened at 08:00 and last touched at 09:00, Hours tapped at 14:00.
+    /// `visitState` calls that STALE — open, same day, under the 12-hour
+    /// auto-end — and `CaptureVisitState.context` is non-nil for it, so reading
+    /// the context alone pre-filled six hours with Billable on and Drive picked.
+    /// A stale visit hands over NEITHER answer; she picks the project herself.
+    @Test func aStaleVisitPreFillsNeitherTheProjectNorTheWallClock() {
+        let opened = now.addingTimeInterval(-6 * 3_600)
+        let visit = openVisit(startedAt: opened,
+                              lastActivityAt: now.addingTimeInterval(-5 * 3_600))
+        let live = state(visit, now: now)
+        #expect(live == .stale(visit))
+        #expect(live.context != nil)
+
+        let draft = FieldLogTimeDraft(visit: live, now: now)
+        #expect(draft.durationMinutes == FieldLogTimeDraft.defaultMinutes)
+        #expect(draft.projectID == nil)
+        #expect(draft.projectName == nil)
+        #expect(draft.canLog == false)
+    }
+
+    /// The other half of the same guard: a visit that rolled over the calendar
+    /// day is not live at all, so forty hours never reaches the clamp.
+    @Test func aVisitCarriedOverFromAnotherDayPreFillsNothing() {
+        let visit = openVisit(startedAt: now.addingTimeInterval(-40 * 3_600))
+        #expect(state(visit, now: now) == CaptureVisitState.none)
+
+        let draft = FieldLogTimeDraft(visit: state(visit, now: now), now: now)
         #expect(draft.durationMinutes == FieldLogTimeDraft.defaultMinutes)
         #expect(draft.projectID == nil)
     }
@@ -106,7 +158,7 @@ struct LogTimeSheetTests {
     // MARK: the sheet can never express a nil duration (HT-7 / 00177:39-41)
 
     @Test func theDurationCanNeverReachZeroOrBelow() {
-        var draft = FieldLogTimeDraft(visit: nil, now: now)
+        var draft = FieldLogTimeDraft(visit: CaptureVisitState.none, now: now)
         for _ in 0..<20 { draft.step(by: -FieldLogTimeDraft.stepMinutes) }
         #expect(draft.durationMinutes == FieldLogTimeDraft.minimumMinutes)
         #expect(draft.canStepDown == false)
@@ -114,21 +166,29 @@ struct LogTimeSheetTests {
     }
 
     @Test func theDurationIsBoundedAboveSoOneHeldThumbCannotBillTheYear() {
-        var draft = FieldLogTimeDraft(visit: nil, now: now)
+        var draft = FieldLogTimeDraft(visit: CaptureVisitState.none, now: now)
         for _ in 0..<200 { draft.step(by: FieldLogTimeDraft.stepMinutes) }
         #expect(draft.durationMinutes == FieldLogTimeDraft.maximumMinutes)
         #expect(draft.canStepUp == false)
     }
 
-    @Test func aPreFillLongerThanTheBoundIsClamped() {
-        let draft = FieldLogTimeDraft(
-            visit: openVisit(startedAt: now.addingTimeInterval(-40 * 3_600)), now: now)
+    /// The bound still holds for anything that DOES reach it: an install day
+    /// opened at 06:00 and worked through, with Hours tapped at 20:00, is
+    /// active by every rule `visitState` has — and still cannot offer more than
+    /// the day's maximum.
+    @Test func anActivePreFillLongerThanTheBoundIsClamped() {
+        // 20:00 UTC, so a 14-hour visit opened at 06:00 is still TODAY'S —
+        // `now` itself is 08:00 UTC and nothing over eight hours can be.
+        let evening = now.addingTimeInterval(12 * 3_600)
+        let visit = openVisit(startedAt: evening.addingTimeInterval(-14 * 3_600),
+                              lastActivityAt: evening.addingTimeInterval(-5 * 60))
+        let draft = FieldLogTimeDraft(visit: state(visit, now: evening), now: evening)
         #expect(draft.durationMinutes == FieldLogTimeDraft.maximumMinutes)
     }
 
     @Test func aSubMinuteVisitStillLogsAMinute() {
-        let draft = FieldLogTimeDraft(
-            visit: openVisit(startedAt: now.addingTimeInterval(-5)), now: now)
+        let visit = openVisit(startedAt: now.addingTimeInterval(-5))
+        let draft = FieldLogTimeDraft(visit: state(visit, now: now), now: now)
         #expect(draft.durationMinutes == FieldLogTimeDraft.minimumMinutes)
     }
 
@@ -163,7 +223,8 @@ struct LogTimeSheetTests {
     }
 
     @Test func theRoleReachesTheRecord() throws {
-        var draft = FieldLogTimeDraft(visit: openVisit(startedAt: now), now: now)
+        var draft = FieldLogTimeDraft(visit: state(openVisit(startedAt: now), now: now),
+                                      now: now)
         draft.rateRole = .supportDesigner
         let record = try #require(draft.record(entryID: UUID(), ownerUserID: UUID()))
         #expect(record.rateRoleRaw == "support_designer")

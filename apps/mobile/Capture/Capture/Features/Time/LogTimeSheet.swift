@@ -14,7 +14,7 @@
 //  `capture-gate.sh test` (which runs `-scheme CaptureKit` alone).
 //
 //  ⚠ HT-7 — nothing here starts a timer. The duration is a snapshot of how long
-//  the open visit has been open, taken once when the sheet appears; the single
+//  the ACTIVE visit has been open, taken once when the sheet appears; the single
 //  running-timer slot (00177:39-41) stays with the desk in v1.
 //
 //  ⚠ CR-1 — the act is HELD until there is a project to file the hour against.
@@ -35,6 +35,7 @@ struct LogTimeSheet: View {
     @State private var projects: [CaptureProjectSnapshot] = []
     @State private var roles: [FieldRateRole] = []
     @State private var isPickingProject = false
+    @State private var isPickingDay = false
     @State private var hasLoaded = false
     @State private var ownerIsMissing = false
     @State private var isLogging = false
@@ -92,10 +93,18 @@ struct LogTimeSheet: View {
                         .font(CaptureType.body)
                         .foregroundStyle(CaptureColor.ink)
                     Spacer(minLength: 8)
-                    Button("Change") { isPickingProject = true }
-                        .font(CaptureType.footnote)
-                        .foregroundStyle(CaptureColor.verdigrisInk)
-                        .frame(minHeight: 44)
+                    // The sizing lives INSIDE the label: on a plain button the
+                    // hit region is the label's rendered content, so a frame
+                    // hung outside grows the layout and not the target.
+                    Button { isPickingProject = true } label: {
+                        Text("Change")
+                            .font(CaptureType.footnote)
+                            .foregroundStyle(CaptureColor.verdigrisInk)
+                            .padding(.horizontal, 8)
+                            .frame(minHeight: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
                 }
             }
         } else {
@@ -147,10 +156,10 @@ struct LogTimeSheet: View {
                 Spacer(minLength: 8)
             }
             .padding(.vertical, 12)
+            .frame(minHeight: 44)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .frame(minHeight: 44)
         .accessibilityAddTraits(isOn ? .isSelected : [])
     }
 
@@ -195,13 +204,43 @@ struct LogTimeSheet: View {
 
     // MARK: - Which day (HT-13)
 
+    /// The compact `DatePicker` renders its own 34pt control and owns its own
+    /// hit region, so no frame hung around it can reach 44pt. The act is
+    /// therefore ours — a full-width row that opens the calendar underneath it.
     private var dayStep: some View {
         RouteFieldShell(label: "Day") {
-            DatePicker("Day", selection: $draft.startedAt,
-                       in: ...Date(), displayedComponents: .date)
-                .labelsHidden()
-                .frame(minHeight: 44, alignment: .leading)
+            VStack(alignment: .leading, spacing: 10) {
+                Button { isPickingDay.toggle() } label: {
+                    HStack(spacing: 8) {
+                        Text(dayLabel)
+                            .font(CaptureType.body)
+                            .foregroundStyle(CaptureColor.ink)
+                        Spacer(minLength: 8)
+                        Text(isPickingDay ? "Done" : "Change")
+                            .font(CaptureType.footnote)
+                            .foregroundStyle(CaptureColor.verdigrisInk)
+                    }
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Day \(dayLabel)")
+                .accessibilityHint("Picks the day this hour belongs to.")
+
+                if isPickingDay {
+                    DatePicker("Day", selection: $draft.startedAt,
+                               in: ...Date(), displayedComponents: .date)
+                        .datePickerStyle(.graphical)
+                        .labelsHidden()
+                        .tint(CaptureColor.verdigris)
+                }
+            }
         }
+    }
+
+    private var dayLabel: String {
+        draft.startedAt.formatted(
+            .dateTime.weekday(.abbreviated).day().month(.abbreviated))
     }
 
     // MARK: - What it was (HT-19)
@@ -323,10 +362,15 @@ struct LogTimeSheet: View {
             "source": record.source
         ])
 
+        // The record is durable the moment `save()` returns, so the act is
+        // over. Holding the sheet on the drain would spend the URLSession
+        // timeout under copy that promises the opposite — on the one-bar road
+        // this queue exists for. `V4VisitReviewScreen.resumeCloseOutbox` fires
+        // the same `.userInitiated` drain and returns immediately.
+        isLogging = false
+        coordinator.dismissSheet()
         Task { @MainActor in
             await container.timeEntryOutboxDrainer?.resume(trigger: .userInitiated)
-            isLogging = false
-            coordinator.dismissSheet()
         }
     }
 
@@ -351,10 +395,12 @@ struct LogTimeSheet: View {
             ownerIsMissing = true
             return
         }
-        // The pre-fill: an open visit hands over both the project and how long
-        // it has been open. A stale or absent visit hands over neither.
+        // The pre-fill: an ACTIVE visit hands over both the project and how
+        // long it has been open today. A stale, ended or absent visit hands
+        // over neither — `.context` is non-nil for `.stale` too, so the whole
+        // state crosses, never the context alone.
         draft = FieldLogTimeDraft(
-            visit: contextStore.visitState(identity: identity).context,
+            visit: contextStore.visitState(identity: identity),
             now: Date())
         projects = container.projectCache.snapshots(owner: owner)
         isPickingProject = !draft.canLog
@@ -402,14 +448,17 @@ private struct LogTimeChips: View {
                         Text(chip.title)
                             .font(CaptureType.footnote)
                             .foregroundStyle(chip.isOn ? CaptureColor.paper3 : CaptureColor.ink)
-                            .padding(.horizontal, 14).padding(.vertical, 9)
+                            .padding(.horizontal, 14)
+                            // Before the background, so the capsule itself grows
+                            // to the target rather than a frame around it.
+                            .frame(minHeight: 44)
                             .background(chip.isOn ? CaptureColor.verdigris : CaptureColor.paper,
                                         in: Capsule())
                             .overlay(Capsule().stroke(CaptureColor.line,
                                                       lineWidth: chip.isOn ? 0 : 1))
+                            .contentShape(Capsule())
                     }
                     .buttonStyle(.plain)
-                    .frame(minHeight: 44)
                     .accessibilityAddTraits(chip.isOn ? .isSelected : [])
                 }
             }

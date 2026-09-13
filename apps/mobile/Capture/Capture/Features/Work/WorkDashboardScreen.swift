@@ -105,7 +105,13 @@ struct WorkDashboardScreen: View {
             }
             .padding(.horizontal, 20)
             .padding(.top, 12)
-            .padding(.bottom, 40)
+            // The companion strip floats over this screen and `RootView`'s
+            // `.safeAreaInset` does not reach inside the realm's own
+            // `NavigationStack` scroll view, so the inset is spent here. 40pt
+            // cleared the Browse tiles it used to end on; "My hours this week"
+            // ends on a line a reader has to READ, and at max scroll the
+            // bubble (64pt + 8pt padding) and its hint capsule sat across it.
+            .padding(.bottom, 112)
         }
         .background(CaptureColor.paper)
         .navigationTitle("Today")

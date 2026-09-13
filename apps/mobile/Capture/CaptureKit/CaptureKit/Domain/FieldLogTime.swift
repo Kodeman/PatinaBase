@@ -15,9 +15,9 @@
 //  ⚠ HT-7 — Field never owns the running-timer slot. `durationMinutes` is a
 //  plain Int with a floor of 1 and no nil-shaped state, on purpose: the slot is
 //  a partial UNIQUE index on (user_id) WHERE duration_minutes IS NULL
-//  (00177:39-41) and it stays with the desk in v1. The elapsed-since-visit-open
-//  pre-fill is a SNAPSHOT taken when the sheet opens — it feels like a timer
-//  without being one.
+//  (00177:39-41) and it stays with the desk in v1. The active-visit pre-fill is
+//  a SNAPSHOT taken when the sheet opens — it feels like a timer without being
+//  one.
 
 import Foundation
 
@@ -111,27 +111,40 @@ public struct FieldLogTimeDraft: Equatable, Sendable {
         self.rateRole = rateRole
     }
 
-    /// The pre-fill. An open visit hands over both answers at once: its project,
-    /// and how long it has been open. Nothing is started and nothing keeps
-    /// running — this reads the clock once (R69: no per-second motion).
+    /// The pre-fill. An ACTIVE visit hands over both answers at once: its
+    /// project, and how long it has been open today. Nothing is started and
+    /// nothing keeps running — this reads the clock once (R69: no per-second
+    /// motion).
     ///
-    /// A STALE or absent visit contributes neither: her drive is not the eleven
-    /// hours since she forgot to end Tuesday's walk-through.
-    public init(visit: CaptureSessionContext?, now: Date) {
-        if let visit, visit.isVisit {
-            let elapsed = Int((now.timeIntervalSince(visit.startedAt) / 60).rounded())
-            self.init(
-                projectID: visit.routing.projectID?.nilIfBlank,
-                projectName: visit.routing.projectName?.nilIfBlank ?? visit.label?.nilIfBlank,
-                startedAt: visit.startedAt,
-                durationMinutes: elapsed,
-                activity: .travel)
-        } else {
+    /// A STALE, ended or absent visit contributes NEITHER: her drive is not the
+    /// six hours since she last touched a visit she forgot to end. The argument
+    /// is `CaptureVisitState`, not a bare context, precisely because
+    /// `CaptureVisitState.context` is non-nil for `.stale` too — taking the
+    /// context alone is how the wall clock got back in.
+    ///
+    /// HT-16 binds every surface that proposes a duration, not only the desk.
+    /// `.active` is what bounds this one: `CaptureSessionContextPolicy
+    /// .visitState` only returns it while the visit was touched inside the
+    /// 30-minute window AND opened on today's calendar date, so the wall clock
+    /// it hands over is a span she is demonstrably still working. It is NOT
+    /// bounded by `lastActivityAt` the way `VisitReviewComposer.activeMinutes`
+    /// is bounded by the last capture: there the offer IS the visit, here the
+    /// hour being logged is the un-captured tail — the drive away from the
+    /// house — and the last capture is exactly the wrong end of it.
+    public init(visit state: CaptureVisitState, now: Date) {
+        guard case .active(let visit) = state, visit.isVisit else {
             self.init(
                 startedAt: now.addingTimeInterval(-Double(Self.defaultMinutes) * 60),
                 durationMinutes: Self.defaultMinutes,
                 activity: .travel)
+            return
         }
+        self.init(
+            projectID: visit.routing.projectID?.nilIfBlank,
+            projectName: visit.routing.projectName?.nilIfBlank ?? visit.label?.nilIfBlank,
+            startedAt: visit.startedAt,
+            durationMinutes: Int((now.timeIntervalSince(visit.startedAt) / 60).rounded()),
+            activity: .travel)
     }
 
     /// An hour with no project is an hour `project_time_entries` cannot file:
