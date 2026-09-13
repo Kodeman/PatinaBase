@@ -49,8 +49,11 @@ import { ContactRuleLine, type ContactRouteTarget } from "../contact-rule-line";
 import { SeatLine } from "../seat-line";
 
 /** What the open-person control says to a screen reader, and nothing more. */
-export function openPersonLabel(person: DirectoryPerson): string {
-  const line = personIdentityLine(person);
+export function openPersonLabel(
+  person: DirectoryPerson,
+  seatTrade?: string | null,
+): string {
+  const line = personIdentityLine(person, seatTrade);
   return line ? `${person.display_name}, ${line}` : person.display_name;
 }
 
@@ -62,6 +65,7 @@ export function PersonRow({
   routeTo: routeTarget,
   consentClause,
   routeTargets,
+  seatTrade,
   highlighted = false,
 }: {
   person: DirectoryPerson;
@@ -80,6 +84,14 @@ export function PersonRow({
   consentClause?: string | null;
   /** Legacy name-keyed lookup, kept for the summary fallback path. */
   routeTargets?: ReadonlyMap<string, ContactRouteTarget>;
+  /**
+   * QA-R7-1 — the trade off this identity's most relevant seat. A carded crew
+   * member carries no trade on the card (it is a seat fact), so without this
+   * the identity line prints the firm's name alone where SPEC §5.1 #8 asks for
+   * "Northgate Electric · electrical". The Directory resolves it once, from the
+   * seats it already reads, and hands it down.
+   */
+  seatTrade?: string | null;
   highlighted?: boolean;
 }) {
   const [seatsOpen, setSeatsOpen] = useState(false);
@@ -136,7 +148,7 @@ export function PersonRow({
           {person.display_name}
         </button>
         <p className="t-meta text-[var(--ink-subtle)]">
-          {personIdentityLine(person)}
+          {personIdentityLine(person, seatTrade)}
         </p>
         <ContactRuleLine summary={clause} blocked={blocked} routeTo={routeTo} />
 

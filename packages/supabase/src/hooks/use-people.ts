@@ -318,7 +318,15 @@ export function usePeopleSeats(filters?: PeopleSeatFilters) {
       if (filters?.personId) query = query.eq('person_id', filters.personId);
       if (filters?.projectId) query = query.eq('project_id', filters.projectId);
       if (filters?.scope === 'mine') query = query.eq('scope', 'mine');
-      const { data, error } = await query;
+      // CR7-3: DETERMINISTIC ORDER. Without an ORDER BY, PostgREST hands back
+      // whatever order the plan produced, and the person card's `liveSeats[0]`
+      // — which chooses the seat a field link is minted on, the job a recorded
+      // consent is stamped with, and the sheet "Send a text" opens — moved
+      // between reads. Most recently started first, seats with no start date
+      // last, ties broken by seat id, so one card reads the same way twice.
+      const { data, error } = await query
+        .order('on_site_from', { ascending: false, nullsFirst: false })
+        .order('seat_id', { ascending: true });
       if (error) throw error;
       return (data ?? []) as PeopleDirectorySeat[];
     },

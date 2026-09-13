@@ -338,10 +338,22 @@ export function CompanyCard({
     return map;
   }, [allSeats, firmId]);
 
-  /** The doors open onto this firm's crew — grants key on the ENGAGEMENT. */
-  const firmSeatIds = useMemo(
-    () => [...seatsByPerson.values()].flat().map((seat) => seat.seat_id),
-    [seatsByPerson],
+  /**
+   * CR7-2 — THE FIRM'S OWN TOKENS, NEVER ITS CREW'S.
+   *
+   * This handed `ReachAccess` every seat id of every crew member, and
+   * `v_access_grants.subject_id` on a `field_link` IS the engagement — so the
+   * firm's card listed its people's PERSONAL doors: the reach word "Field
+   * link" on a card SPEC §5.3 #9 says carries no reach word at all, and a live
+   * Revoke that closed a person's own door from their firm's page. Direction
+   * §5.1's company variant reads firm-scoped tokens only, and the one tier
+   * keyed on a firm is `agreement_link` (`subject_type = 'contact'`,
+   * `subject_id = studio_trade_agreements.contact_id`, 00627:199) — which is
+   * this card's own id.
+   */
+  const firmGrantSubjectIds = useMemo(
+    () => (card?.id ? [card.id] : []),
+    [card?.id],
   );
 
   /** SPEC §5.3 #8 / CR-10 — the first job and its year, off the same seats. */
@@ -721,7 +733,7 @@ export function CompanyCard({
             peopleById,
             channelsByOwner,
           )}
-          grantSubjectIds={firmSeatIds}
+          grantSubjectIds={firmGrantSubjectIds}
           onAnnounce={announce}
           now={today}
         />
