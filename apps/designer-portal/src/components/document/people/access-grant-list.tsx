@@ -111,6 +111,33 @@ function daysLeftClause(expiresAt: string, now: Date): string {
 }
 
 /**
+ * QA-R8-1 — THE LAST DAY THE DOOR IS OPEN, not the first day it is shut.
+ *
+ * `create_field_link` stores a field link's `expires_at` as an EXCLUSIVE
+ * boundary — for a seat with a window, `max(on_site_to, warranty_until) +
+ * interval '1 day'`, i.e. midnight at the head of the following day
+ * (`00627_access_grants_and_field_link_window.sql:578-585`), so the token
+ * works "through the end of that day". Printing `expires_at.slice(0, 10)`
+ * therefore named the day AFTER the job: Dana Kowalski's card said the grant
+ * ends 25 May 2027 while the same card's Seats-on-projects line and its Mint
+ * Access consequence sentence both said 24 May 2027, off the seat's own
+ * `on_site_to`. One card, one seat, three regions, two dates.
+ *
+ * Backing the boundary off by an instant answers all three branches of the
+ * RPC with one rule rather than a blanket minus-one-day: the window branch's
+ * midnight lands back on the window's last day; the caller-supplied branch's
+ * `…T23:59:59Z` and the ninety-day fallback's mid-afternoon stamp both stay on
+ * their own day. It is scoped to the field link, because no other tier stores
+ * an inclusive-through-end-of-day boundary — a document share or an invoice
+ * pay link simply dies at the instant it carries.
+ */
+function lastOpenDay(expiresAt: string): string | null {
+  const at = Date.parse(expiresAt);
+  if (!Number.isFinite(at)) return expiresAt.slice(0, 10) || null;
+  return new Date(at - 1000).toISOString().slice(0, 10);
+}
+
+/**
  * "Ends with the job, 13 August 2027. Renews when they use it." — the end date
  * in words, in the wording its own tier earns.
  */
@@ -122,8 +149,13 @@ export function grantEndsSentence(
   if (tier && ACCOUNT_TIERS.has(tier)) {
     return "No end date. Revoked by removing the account.";
   }
-  const long = expiresAt ? formatLongDate(expiresAt.slice(0, 10)) : null;
   const fieldLink = !tier || tier === "field_link";
+  const endsOn = expiresAt
+    ? fieldLink
+      ? lastOpenDay(expiresAt)
+      : expiresAt.slice(0, 10)
+    : null;
+  const long = endsOn ? formatLongDate(endsOn) : null;
   if (!long) {
     return fieldLink
       ? "Ends with the job. Renews when they use it."

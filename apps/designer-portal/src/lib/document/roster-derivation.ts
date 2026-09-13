@@ -898,6 +898,35 @@ export function callSheetVitalsLine(projection: CallSheetProjection): string {
 // ============================================================================
 
 /**
+ * CR8-1 / CR3-15 — THE ROW'S NOUN, NOT THE COLUMN HEAD'S.
+ *
+ * `COMPLIANCE_DOC_TYPE_LABELS` is the company card's Paper TABLE vocabulary,
+ * where "COI, general liability" is the right Type column head (SPEC §5.3 #3).
+ * Dropped into this sentence it read "Northgate Electric's COI, general
+ * liability lapsed 31 March 2026." where SPEC §5.4 #7 fixes the acceptance
+ * string as "Northgate Electric's insurance lapsed 31 March 2026." — a clause
+ * in words does not speak in filing-cabinet tabs.
+ *
+ * Only a DATED paper can lapse into this clause (`DATED_COMPLIANCE_DOC_TYPES`
+ * — the three certificates, the licence and the bond), so those five are the
+ * whole map; anything else falls through to whatever label the caller holds.
+ */
+const HELD_CLAUSE_PAPER_NOUNS: Readonly<Record<string, string>> = {
+  coi_gl: 'insurance',
+  coi_wc: 'workers comp insurance',
+  coi_auto: 'auto insurance',
+  license: 'licence',
+  bond: 'bond',
+};
+
+export function heldClausePaperNoun(
+  docType: string | null | undefined,
+  fallbackLabel: string,
+): string {
+  return HELD_CLAUSE_PAPER_NOUNS[String(docType)] ?? fallbackLabel;
+}
+
+/**
  * PR-h / R-S — a firm's lapsed paper prints on the roster row as a CLAUSE IN
  * WORDS, never a badge: "Site access held. Northgate Electric's insurance
  * lapsed 31 March 2026." The document lives on the company card; this is the

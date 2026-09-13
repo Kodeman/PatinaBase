@@ -42,13 +42,14 @@ import {
   type ProjectPartyAuthority,
   type StudioContactRule,
 } from '@patina/supabase';
-import { isFieldPartyKind } from '@patina/types';
+import { isFieldPartyKind, partyKindOwesPaper } from '@patina/types';
 import {
   MINT_FALLBACK_SENTENCE,
   authorityPhrase,
   fieldLinkExpirySentence,
   grantWindowEnd,
   heldClause,
+  heldClausePaperNoun,
   rosterShortDate,
   seatProfileRole,
   seatWindowText,
@@ -112,6 +113,7 @@ export function RosterRow({
   projectName,
   rule,
   routeTo,
+  contactKind,
 }: {
   row: CallSheetRow;
   band: CallSheetBand;
@@ -131,6 +133,17 @@ export function RosterRow({
   rule?: StudioContactRule | null;
   /** How to reach the person the rule routes to (R-L / CR-15). */
   routeTo?: ContactRouteTarget | null;
+  /**
+   * CR8-5 — the CARD's `contact_kind` for this row's identity, resolved once
+   * for the whole sheet by `RosterGroups`. Direction §3.8 is categorical: an
+   * inspector's or a lender's paper word prints "on any surface", and this row
+   * was the one surface in the build with no gate on it at all. The seat's own
+   * `party_kind` cannot answer — `project_parties_party_kind_check` has not
+   * been widened, so Ray Thao and Carol Nyström are both stored `other` (a
+   * declared W3 gap, w2a-report §6 item 2) — so the card's kind answers, and
+   * `row.partyKind` is the fallback where no card is resolved.
+   */
+  contactKind?: string | null;
 }) {
   const isSeat = row.source === 'seat';
   // One predicate, one clause, wherever a rule is shown (R-S).
@@ -185,12 +198,16 @@ export function RosterRow({
   );
   const held = blocking
     ? heldClause(row.companyName, {
-        docLabel:
+        // CR8-1: the row's sentence takes the plain noun ("insurance"), never
+        // the company card's Type column head ("COI, general liability").
+        docLabel: heldClausePaperNoun(
+          blocking.doc_type,
           COMPLIANCE_DOC_TYPE_LABELS[
             blocking.doc_type as keyof typeof COMPLIANCE_DOC_TYPE_LABELS
           ] ??
-          blocking.doc_label ??
-          blocking.doc_type,
+            blocking.doc_label ??
+            blocking.doc_type,
+        ),
         expiresOn: blocking.expires_on,
         blocks: blocking.blocks,
       })
@@ -419,7 +436,11 @@ export function RosterRow({
                 </span>
               )}
               <StateWord family="consent" value={row.consent} />
-              <StateWord family="paper" value={row.paper} />
+              {/* CR8-5 — a firm the studio never asked paper of owes no paper
+                  word anywhere (direction §3.8, R-A, C13/C24). */}
+              {partyKindOwesPaper(contactKind ?? row.partyKind) && (
+                <StateWord family="paper" value={row.paper} />
+              )}
             </div>
 
             {consentLine && (

@@ -55,7 +55,7 @@ import {
   directoryIdentityRows,
   directoryRolodexOrgId,
   directorySeatTradeIndex,
-  directoryTradeOf,
+  directoryTradeAdmits,
   entryPaperWord,
   firmIdentityLine,
   seatIsDone,
@@ -333,7 +333,12 @@ export function DirectoryView({
         return false;
       }
       if (!directoryEntryMatches(row, search)) return false;
-      if (trade !== "all" && directoryTradeOf(row) !== trade) return false;
+      // CR8-3: the chip narrows on the trade the ROW prints — the card's own
+      // value first, then the seat's, off the same index the line reads
+      // (`seatTrades`, built above).
+      if (!directoryTradeAdmits(row, trade, seatTrades.get(row.person_id))) {
+        return false;
+      }
       return true;
     });
     // PR-g: a firm is ADMITTED under the band of the crew it carries, and must
@@ -352,7 +357,7 @@ export function DirectoryView({
       if (kindA !== kindB) return kindA - kindB;
       return a.display_name.localeCompare(b.display_name);
     });
-  }, [rows, chip, search, trade, firmBands]);
+  }, [rows, chip, search, trade, firmBands, seatTrades]);
 
   const duplicates = useMemo(() => directoryDuplicatePairs(rows), [rows]);
 

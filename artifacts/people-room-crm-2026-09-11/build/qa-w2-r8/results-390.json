@@ -1,0 +1,127 @@
+{
+  "directory": {
+    "overflow": {
+      "scrollWidth": 390,
+      "clientWidth": 390
+    },
+    "headingPresent": true,
+    "headCount": "34 people · 21 firms",
+    "danaLine": "Northgate Electric · electrical",
+    "claireLine": "Stonehaven Tile Gallery · tile & stone",
+    "frankClause": "No direct contact, at his request. Write Rosa Delgado; she forwards what he has to sign. rosa@twin-cities-drywall-plaster.com (612) 555-0114",
+    "rayClause": "Never text. Inspections are scheduled through the 311 portal. Hours: Weekdays 08:00 to 16:00.",
+    "greatNorthernPresent": true,
+    "cpedPresent": true,
+    "duplicateBandLine": null,
+    "okonkwoHouseholdRow": false,
+    "nobodyUnderNarrowing": false
+  },
+  "hardBlockCheck": {
+    "danaHeldAttr": false,
+    "rayHeldAttr": false,
+    "frankHeldAttr": false
+  },
+  "person": {
+    "overflow": {
+      "scrollWidth": 390,
+      "clientWidth": 390
+    },
+    "hasReachAccess": true,
+    "hasChannels": false,
+    "hasContactRule": false,
+    "hasAccessGrants": false,
+    "hasSeatsOnProjects": true,
+    "hasPastSeats": true,
+    "hasPaperRegion": false,
+    "hasHistory": false,
+    "hasTextOnlyRule": true,
+    "hasEditTheRule": false,
+    "hasSendAText": true,
+    "hasDisabledAttr": false
+  },
+  "company": {
+    "overflow": {
+      "scrollWidth": 416,
+      "clientWidth": 390
+    },
+    "hasCrew": true,
+    "hasPaperTable": true,
+    "hasPayee": true,
+    "hasJobs": true,
+    "hasHistoryVerdict": true,
+    "lapsedPresent": false,
+    "reachOrConsentWordPresent": false
+  },
+  "roster": {
+    "opened": true,
+    "overflow": {
+      "scrollWidth": 390,
+      "clientWidth": 390
+    },
+    "hasSiteAccessLine": true,
+    "siteAccessLineText": "Key held by Ngozi Eze. Luis Ochoa controls the gate. Changed 16 Oct 2026.",
+    "vitalsLine": "14 on the job this week · 4 reachable by text · 2 with accounts · 7 on paper",
+    "studioSide": false,
+    "clientSide": false,
+    "heldClausePresent": true,
+    "heldClauseText": "Site access held. Northgate Electric’s COI, general liability lapsed 31 March 2026.",
+    "optedOutNotePresent": true,
+    "removeWordAbsent": true,
+    "frankNoPhoneClause": "No direct contact, at his request. Write Rosa Delgado; she forwards what he has to sign. rosa@twin-cities-drywall-plaster.com (612) 555-0114"
+  },
+  "access": {
+    "opened": true,
+    "overflow": {
+      "scrollWidth": 390,
+      "clientWidth": 390
+    },
+    "studioOnlyLine": true,
+    "whoToCallFirst": true,
+    "firstTelLinkText": "(612) 555-0104",
+    "wayInText": "The code is held off Patina; ask Luis Ochoa.",
+    "noCodeLabel": true,
+    "hoursLine": true,
+    "receivingLine": true,
+    "whoWasTold": true
+  },
+  "add": {
+    "opened": true,
+    "overflow": {
+      "scrollWidth": 390,
+      "clientWidth": 390
+    },
+    "kindSwitchWords": [
+      "a client",
+      "a household member",
+      "a maker",
+      "a GC",
+      "a sub",
+      "an installer",
+      "a receiver",
+      "someone else"
+    ],
+    "placeholderAttrCount": 1,
+    "noWorkingEmailField": false,
+    "terminalActPresent": true
+  },
+  "pick": {
+    "opened": true,
+    "hasTravelListPane": false,
+    "hasMultiSelectConfirm": false,
+    "dana": true,
+    "pete": true,
+    "ingrid": true,
+    "claire": true,
+    "greatNorthernNoPaperWord": null
+  },
+  "console": [
+    {
+      "type": "error",
+      "text": "TypeError: Failed to fetch\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:15165\n    at tO (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21424)\n    at tE (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21172)\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36993\n    at rE._useSession (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:35244)\n    at async rE._getUser (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36824)\n    at async http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36618"
+    },
+    {
+      "type": "error",
+      "text": "Error logged: AppError: Not authenticated\n    at w (http://localhost:3000/_next/static/chunks/4734-85343c01acdcee41.js:1:13299)\n    at Object.onError (http://localhost:3000/_next/static/chunks/4734-85343c01acdcee41.js:1:1941)\n    at u.fetch (http://localhost:3000/_next/static/chunks/3077-530a2a57a0b7a863.js:1:35074) {queryKey: Array(1), meta: undefined}"
+    }
+  ]
+}

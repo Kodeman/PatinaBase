@@ -655,7 +655,18 @@ export function CompanyCard({
           aria-controls={`company-designations-${card.id}`}
           onClick={() => setDesignationsOpen((open) => !open)}
         >
-          Set paperwork contact, signer and site contact
+          {/* QA-R8-2 — the act's own label was the company card's whole 390
+              overflow: `.da-act` carries `whitespace-nowrap`, and this
+              39-character sentence measured 398px against a 390px viewport,
+              pushing `documentElement.scrollWidth` to 416 and clipping its own
+              tail past the edge. The full sentence is the act at the desk; at
+              phone width the act keeps the shorter name for the same three
+              designations, and the three fields it opens name themselves
+              ("Paperwork contact", "Signer", "Site contact"). */}
+          <span className="sm:hidden">Set designations</span>
+          <span className="hidden sm:inline">
+            Set paperwork contact, signer and site contact
+          </span>
         </DocumentAction>
         <div
           id={`company-designations-${card.id}`}

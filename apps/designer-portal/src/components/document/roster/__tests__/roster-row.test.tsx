@@ -35,7 +35,12 @@ jest.mock('@patina/supabase', () => ({
     site_access: 'Controls site access',
     key: 'Holds a key',
   },
-  COMPLIANCE_DOC_TYPE_LABELS: { coi_general_liability: 'insurance' },
+  // CR8-1: the REAL table — this is the company card's Type column head, and
+  // the row's clause must NOT speak it.
+  COMPLIANCE_DOC_TYPE_LABELS: {
+    coi_gl: 'COI, general liability',
+    coi_wc: 'COI, workers compensation',
+  },
   SEAT_DELETE_REFUSAL_SENTENCES: {
     consent:
       'This number has a texting record behind it. Close the seat instead — the record stays either way, and the seat is how you can still see it.',
@@ -156,11 +161,17 @@ describe('RosterRow — folded', () => {
     expect(tel?.closest('button')).toBeNull();
   });
 
+  /**
+   * CR8-1 — SPEC §5.4 #7 fixes this string as "…Northgate Electric's insurance
+   * lapsed 31 March 2026." The row used to speak the company card's Type
+   * column head ("COI, general liability") because it read
+   * `COMPLIANCE_DOC_TYPE_LABELS` straight into a sentence.
+   */
   it('prints the held clause in words with a terracotta leading rule (PR-h)', () => {
     complianceDocs = [
       {
         id: 'doc-1',
-        doc_type: 'coi_general_liability',
+        doc_type: 'coi_gl',
         doc_label: null,
         expires_on: '2026-03-31',
         blocks: ['site_access', 'payment', 'draw'],
@@ -173,7 +184,52 @@ describe('RosterRow — folded', () => {
     expect(clause).toHaveTextContent(
       'Site access held. Northgate Electric’s insurance lapsed 31 March 2026.',
     );
+    expect(clause?.textContent).not.toContain('COI');
     expect(clause?.className).toContain('border-[var(--color-terracotta-ink)]');
+  });
+
+  /**
+   * CR8-5 — direction §3.8: an inspector's or a lender's paper word prints on
+   * NO surface. Every other surface gated it; this row was the one that did
+   * not, and the seat's own `party_kind` cannot answer, because
+   * `project_parties_party_kind_check` is not widened yet (a declared W3 gap)
+   * and Ray Thao is stored `other`. The CARD's kind answers.
+   */
+  describe('CR8-5 — the paper word is owed before it is printed', () => {
+    it('prints no paper word for an inspector, off the card kind', () => {
+      render(
+        <RosterRow
+          row={seatRow({
+            key: 'seat:ray',
+            seatId: 'seat-ray',
+            personId: 'card-ray',
+            name: 'Ray Thao',
+            partyKind: 'other',
+            companyName: 'City of Minneapolis, CPED Inspections',
+            paper: 'not_on_file',
+          })}
+          band="this_week"
+          expanded
+          onToggle={jest.fn()}
+          contactKind="inspector"
+        />,
+        { wrapper: ({ children }) => <ul>{children}</ul> },
+      );
+      expect(screen.queryByText('Not on file')).toBeNull();
+    });
+
+    it('still prints it for a sub, and falls back to the seat kind', () => {
+      render(
+        <RosterRow
+          row={seatRow({ paper: 'not_on_file' })}
+          band="this_week"
+          expanded
+          onToggle={jest.fn()}
+        />,
+        { wrapper: ({ children }) => <ul>{children}</ul> },
+      );
+      expect(screen.getByText('Not on file')).toBeInTheDocument();
+    });
   });
 
   it('prints an opted-out note on the COLLAPSED row (R-T)', () => {

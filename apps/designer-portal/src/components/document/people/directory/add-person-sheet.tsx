@@ -41,6 +41,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   useAddClient,
   useAddProjectParty,
+  useAddStudioContact,
   useAddStudioContactChannel,
   useFindOrCreateVendor,
   usePromoteToStudioContact,
@@ -272,6 +273,20 @@ export function AddPersonSheet({
   // and 2). A seat alone cannot hold a contact rule — the rule belongs to the
   // person, so every add that types one mints the card too.
   const promoteToCard = usePromoteToStudioContact();
+  /**
+   * CR8-4 — THE ROOM'S SECOND ENTRY TYPE NEEDS A WRITER.
+   *
+   * Direction §1 line 5 makes the company card the ONLY place a compliance
+   * document, a payee identity, a signer or a paperwork contact is written —
+   * and nothing in the portal could create one. This field's "A firm not on
+   * this list" branch wrote the typed name as a snapshot string on the seat
+   * with `company_id` NULL and no affiliation, so a firm the studio met for
+   * the first time got no Directory row, no card, no Paper region and no
+   * chase: the whole compliance spine W2 built was unreachable for it, and
+   * `directoryFirmOf` (which reads `meta.company_id`) dropped the firm from
+   * the person's own row too.
+   */
+  const addFirmCard = useAddStudioContact();
   const addChannel = useAddStudioContactChannel();
   const contactRuleWrite = useSetContactRule();
   const setAuthority = useSetPartyAuthority();
@@ -420,6 +435,9 @@ export function AddPersonSheet({
     /** QA-R5-1 — the card 00626's trigger stamped on the seat, as distinct
      *  from `cardId`, which may instead be a card this sheet minted. */
     autoLinkedCardId: string | null;
+    /** CR8-4 — the company card this sheet minted for a firm typed by hand,
+     *  so a retry attaches to it rather than filing the firm twice. */
+    firmCardId: string | null;
     mobileWritten: boolean;
     emailWritten: boolean;
     ruleWritten: boolean;
@@ -428,6 +446,7 @@ export function AddPersonSheet({
     party: null,
     cardId: null,
     autoLinkedCardId: null,
+    firmCardId: null,
     mobileWritten: false,
     emailWritten: false,
     ruleWritten: false,
@@ -567,6 +586,7 @@ export function AddPersonSheet({
       party: null,
       cardId: null,
       autoLinkedCardId: null,
+      firmCardId: null,
       mobileWritten: false,
       emailWritten: false,
       ruleWritten: false,
@@ -695,11 +715,49 @@ export function AddPersonSheet({
       return;
     }
     const matchedFirm = firms.find((f) => f.id === firmId) ?? null;
-    const firmName = matchedFirm?.company_name ?? company;
+    const typedFirm = company.trim();
+    const firmName = matchedFirm?.company_name ?? typedFirm;
     try {
       // CR-20: RESUME, never restart. A press that failed at step four must
       // not write a second seat on the retry.
       const chain = chainRef.current;
+      /**
+       * CR8-4 — create-or-match, not match-only. A firm typed by hand that the
+       * studio's book does not already hold becomes a company CARD before the
+       * seat is written, so the seat carries a real `company_id` and the
+       * person's affiliation names a card that can hold paper and a payee.
+       *
+       * · The card is filed in the studio the JOB records (CR5-1): a card
+       *   minted into the book's org on a job that records another studio
+       *   fails `assert_project_party_cards()` and strands a row. Where the
+       *   job records no studio there is no rolodex the card may live in, so
+       *   the typed name stays the snapshot string it is today and
+       *   `noBookClause` below already says so.
+       * · A name the list already holds is MATCHED, case- and space-
+       *   insensitively, rather than filed twice — "a firm typed twice is a
+       *   firm the rolodex holds twice", which is this field group's own rule.
+       * · The firm takes the person's own kind (`sub`, `gc`, …), the shape
+       *   every seeded company card carries.
+       */
+      if (!chain.firmCardId && !matchedFirm && typedFirm && recordedStudioId) {
+        const already = firms.find(
+          (f) =>
+            (f.company_name ?? "").trim().toLowerCase() ===
+            typedFirm.toLowerCase(),
+        );
+        chain.firmCardId =
+          already?.id ??
+          (
+            await addFirmCard.mutateAsync({
+              organizationId: recordedStudioId,
+              entityKind: "company",
+              contactKind: partyKind,
+              companyName: typedFirm,
+            })
+          ).id;
+      }
+      /** The firm this seat belongs to, picked or newly filed. */
+      const firmCardId = matchedFirm?.id ?? chain.firmCardId;
       if (!chain.party) {
         const party = await addParty.mutateAsync({
           projectId,
@@ -710,8 +768,9 @@ export function AddPersonSheet({
           // `firmId` and then threw it away — so a person added through the
           // front door had no firm IDENTITY, and `directoryFirmOf` (which
           // reads `meta.company_id`) returned null for every one of them.
-          // A firm typed by hand has no card yet and stays a snapshot string.
-          companyId: matchedFirm?.id ?? null,
+          // CR8-4: and a firm typed by hand now has a card of its own, filed
+          // above, rather than staying a snapshot string forever.
+          companyId: firmCardId ?? null,
           // A named other carries its written label where the seat has room
           // for it; a trade kind carries its trade (see SEAT_PARTY_KIND's
           // note).
@@ -807,10 +866,10 @@ export function AddPersonSheet({
         // row's "N on the crew" and the person card's firm line all read.
         // Designations (signer, paperwork, licence) are the company card's to
         // set — this only records that they work there.
-        if (matchedFirm && !chain.affiliationWritten) {
+        if (firmCardId && !chain.affiliationWritten) {
           await setAffiliation.mutateAsync({
             personId: cardId,
-            companyId: matchedFirm.id,
+            companyId: firmCardId,
           });
           chain.affiliationWritten = true;
         }

@@ -852,15 +852,64 @@ export function directoryEntryIsLegacyClientRecord(
   return p.role === "client";
 }
 
+/**
+ * CR8-2 — A DUPLICATE IS NOT THE SAME THING AS A BRANCH.
+ *
+ * QA-R7-3's fix dropped the whole CLIENTS branch from the list and the head,
+ * and 00626:1437 emits `'client'` for every `designer_clients` row — so the
+ * studio's own client records left the room with the household: Karin
+ * Lindqvist, the Ashfords, Elena Marlowe, Nora Ellison and two Client User
+ * rows, none of which holds a `studio_contacts` card. The head fell from
+ * 41 people to 34 while `portfolio-view` and `nurture-view` went on reading
+ * those very rows, and SPEC §3's own head derivation counts Karin Lindqvist
+ * among the 29.
+ *
+ * The row QA-R7-3 was actually about is the one that DUPLICATES a card: "The
+ * Okonkwo household" carries Adaeze's own number, and the branch hard-codes
+ * NULL consent/paper/rule and `seat_count` 0, so the card is always the better
+ * record of the same human. So the exclusion is what it always meant — a
+ * legacy record whose profile or whose phone already resolves to a person
+ * card — and a client the studio has no card for stays in its own book,
+ * exactly as a `lead` row does.
+ *
+ * (`directoryDuplicatePairs` keeps its UNCONDITIONAL exclusion: a branch that
+ * can never carry consent, paper or a rule can never win a dedupe, so it has
+ * no business naming itself in the duplicate band whether or not a card
+ * exists.)
+ */
+export function directoryEntryIsCardedElsewhere(
+  p: DirectoryPerson,
+  carded: { profileIds: ReadonlySet<string>; phones: ReadonlySet<string> },
+): boolean {
+  if (!directoryEntryIsLegacyClientRecord(p)) return false;
+  if (p.profile_id && carded.profileIds.has(p.profile_id)) return true;
+  const phone = digits(p.phone);
+  return phone.length >= 10 && carded.phones.has(phone);
+}
+
 /** The rows the Directory and its head actually stand for (QA-R2-9,
- *  QA-R7-3). */
+ *  QA-R7-3, CR8-2). */
 export function directoryIdentityRows(
   rows: readonly DirectoryPerson[],
 ): DirectoryPerson[] {
+  // The person CARDS in hand — the only thing a legacy client record can be a
+  // duplicate OF. `people_directory`'s contacts branch is where every card
+  // lives (00626:1845-1869); a firm is not a human, and a legacy client row
+  // cannot vouch for another legacy client row.
+  const profileIds = new Set<string>();
+  const phones = new Set<string>();
+  for (const row of rows) {
+    if (row.role !== "contact") continue;
+    if (directoryEntryKind(row) === "firm") continue;
+    if (row.profile_id) profileIds.add(row.profile_id);
+    const phone = digits(row.phone);
+    if (phone.length >= 10) phones.add(phone);
+  }
+  const carded = { profileIds, phones };
   return rows.filter(
     (row) =>
       !directoryEntryIsCompanyOnlySeat(row) &&
-      !directoryEntryIsLegacyClientRecord(row),
+      !directoryEntryIsCardedElsewhere(row, carded),
   );
 }
 
@@ -936,6 +985,27 @@ export function directoryTradeEntryOf(
 /** The raw value alone — what the trade chip narrows on. */
 export function directoryTradeOf(p: DirectoryPerson): string | null {
   return directoryTradeEntryOf(p)?.value ?? null;
+}
+
+/**
+ * CR8-3 — THE CHIP NARROWS ON THE TRADE THE ROW PRINTS.
+ *
+ * `personIdentityLine` takes the card's own trade or specialty first and the
+ * SEAT's trade after it, because 00626's contacts branch — where every carded
+ * human lives — emits no `trade` key at all for a crew or sub card (trade is a
+ * seat fact, QA-R7-1). The chip predicate kept asking only the card, so on the
+ * seeded studio every one of the eight trade chips narrowed to zero rows over
+ * a list visibly reading "· electrical", "· drywall", "· plumbing" — the room
+ * printing "Nobody under this narrowing yet." about people it had just listed.
+ * One precedence, both places.
+ */
+export function directoryTradeAdmits(
+  p: DirectoryPerson,
+  trade: string,
+  seatTrade: string | null | undefined,
+): boolean {
+  if (trade === "all") return true;
+  return (directoryTradeOf(p) ?? seatTrade ?? null) === trade;
 }
 
 /**
