@@ -75,6 +75,7 @@ import {
 } from '@/lib/document/contact-rule';
 import { noticedPaperClause } from '@/lib/document/compliance-notice';
 import { peopleEvents } from '@/lib/analytics/people-events';
+import { writeErrorMessage } from '@/lib/document/write-error';
 import { useProjects } from '@/hooks/use-projects';
 import { Avatar } from '../people/person-bits';
 import { consentSentence } from '../people/consent-sentence';
@@ -432,7 +433,9 @@ export function RosterRow({
       setEditingBid(false);
       setNote(`The bid is written on ${row.name}\u2019s seat.`);
     } catch (e) {
-      setNote(e instanceof Error ? e.message : 'Could not write the bid.');
+      // MAJOR-3: the bid editor UPDATEs project_parties, so 00624's and
+      // 00631's bare card tokens answer here too.
+      setNote(writeErrorMessage(e, 'Could not write the bid.'));
     }
   };
 

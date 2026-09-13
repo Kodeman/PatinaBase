@@ -214,15 +214,15 @@ BEGIN
     RAISE EXCEPTION 'BLOCK 1 FAIL: rule did not repoint (% rows)', n;
   END IF;
 
-  -- compliance document: crm-model §4 — the absorbed card's paper KEEPS ITS
-  -- ORIGINAL HOLDER ID unless the survivor already holds the same paper in
-  -- force to supersede it. The survivor holds no `license` at all, so this one
-  -- stays where it is rather than being moved onto a card that never earned it
-  -- (r1 B-1).
+  -- compliance document: the absorbed card's paper ARRIVES ON THE SURVIVOR
+  -- (r3 W3-R3-1). The survivor holds no `license` at all, so there is no
+  -- successor to supersede it with — it simply moves, whole, and counts for
+  -- itself. Leaving it behind put it on a card the Directory, the pickers and
+  -- the sweep all skip, which is data loss in a soft-delete model.
   SELECT holder_id INTO v FROM public.studio_compliance_documents
    WHERE id = 'f9400000-0000-4000-8000-00000000000a';
-  IF v <> 'f9100000-0000-4000-8000-00000000000b' THEN
-    RAISE EXCEPTION 'BLOCK 1 FAIL: document holder is % (crm-model §4 keeps it on the absorbed card)', v;
+  IF v <> 'f9100000-0000-4000-8000-00000000000a' THEN
+    RAISE EXCEPTION 'BLOCK 1 FAIL: document holder is % (r3 W3-R3-1: it moves to the survivor)', v;
   END IF;
   SELECT count(*) INTO n FROM public.studio_compliance_documents
    WHERE id = 'f9400000-0000-4000-8000-00000000000a' AND superseded_by IS NOT NULL;
@@ -451,11 +451,6 @@ BEGIN
     'f9200000-0000-4000-8000-00000000000d','f9200000-0000-4000-8000-00000000000e','company_name');
   PERFORM pg_temp.reset_role();
 
-  w_after := public.compliance_state('f9200000-0000-4000-8000-00000000000d');
-  IF w_after <> 'current' THEN
-    RAISE EXCEPTION 'BLOCK 1b FAIL: the merge flipped the survivor''s paper word to % (r1 B-1)', w_after;
-  END IF;
-
   -- the absorbed certificate moved, and says WHY it no longer counts
   SELECT count(*) INTO n FROM public.studio_compliance_documents
    WHERE id = 'f9400000-0000-4000-8000-00000000000d'
@@ -465,13 +460,92 @@ BEGIN
     RAISE EXCEPTION 'BLOCK 1b FAIL: the absorbed certificate was not superseded by the survivor''s';
   END IF;
 
-  -- the absorbed paper with NO successor stays where crm-model §4 puts it
+  -- r3 W3-R3-1: the absorbed paper with NO successor MOVES TOO. It used to be
+  -- left behind, on a card the Directory, the pickers and the sweep all skip —
+  -- so a lapse the studio recorded became unreachable and unprintable, and the
+  -- same rule hid a renewal in the other direction. The studio declared these
+  -- two cards one firm; the firm's paper is the firm's paper.
   SELECT count(*) INTO n FROM public.studio_compliance_documents
    WHERE id = 'f9400000-0000-4000-8000-00000000000e'
-     AND holder_id = 'f9200000-0000-4000-8000-00000000000e'
+     AND holder_id = 'f9200000-0000-4000-8000-00000000000d'
      AND superseded_by IS NULL;
   IF n <> 1 THEN
-    RAISE EXCEPTION 'BLOCK 1b FAIL: a lapsed paper with no successor was moved onto the survivor';
+    RAISE EXCEPTION 'BLOCK 1b FAIL: the absorbed bond did not move onto the survivor (r3 W3-R3-1)';
+  END IF;
+
+  -- nothing at all is left stranded on the absorbed card
+  SELECT count(*) INTO n FROM public.studio_compliance_documents
+   WHERE holder_id = 'f9200000-0000-4000-8000-00000000000e';
+  IF n <> 0 THEN
+    RAISE EXCEPTION 'BLOCK 1b FAIL: % document(s) stranded on the absorbed card (r3 W3-R3-1)', n;
+  END IF;
+
+  -- and the word is now the honest reckoning over BOTH cards' paper: the bond
+  -- lapsed ten days ago, so the firm reads lapsed, where before the fix the
+  -- lapse was simply invisible.
+  w_after := public.compliance_state('f9200000-0000-4000-8000-00000000000d');
+  IF w_after <> 'lapsed' THEN
+    RAISE EXCEPTION 'BLOCK 1b FAIL: the survivor reads % over an absorbed lapsed bond (r3 W3-R3-1)', w_after;
+  END IF;
+END $$;
+
+-- ── r3 W3-R3-1 · THE OTHER DIRECTION: the RENEWAL the merge used to hide ──
+-- The survivor holds a LAPSED certificate; the absorbed duplicate holds the
+-- firm's current renewal. Before the fix the survivor read `lapsed` after the
+-- merge — and 00630's nightly sweep wrote "…'s paper has lapsed" to every
+-- owner and admin — while the renewal that answers it sat on a card
+-- people_directory emits no row for.
+INSERT INTO public.studio_contacts
+  (id, organization_id, entity_kind, contact_kind, company_name, company_kind, created_by) VALUES
+  ('f9200000-0000-4000-8000-00000000001a','f9000000-0000-4000-8000-00000000000a','company','sub','Lapsed Survivor','sub','a0000000-0000-0000-0000-000000000004'),
+  ('f9200000-0000-4000-8000-00000000001b','f9000000-0000-4000-8000-00000000000a','company','sub','Renewal Holder','sub','a0000000-0000-0000-0000-000000000004');
+
+INSERT INTO public.studio_compliance_documents
+  (id, organization_id, holder_type, holder_id, doc_type, blocks, issued_on, expires_on) VALUES
+  ('f9400000-0000-4000-8000-00000000001a','f9000000-0000-4000-8000-00000000000a','company',
+   'f9200000-0000-4000-8000-00000000001a','coi_gl', ARRAY['site_access']::text[],
+   CURRENT_DATE - 400, CURRENT_DATE - 30),
+  ('f9400000-0000-4000-8000-00000000001b','f9000000-0000-4000-8000-00000000000a','company',
+   'f9200000-0000-4000-8000-00000000001b','coi_gl', ARRAY['site_access']::text[],
+   CURRENT_DATE - 20, CURRENT_DATE + 340);
+
+DO $$
+DECLARE
+  w text;
+  n integer;
+BEGIN
+  w := public.compliance_state('f9200000-0000-4000-8000-00000000001a');
+  IF w <> 'lapsed' THEN
+    RAISE EXCEPTION 'BLOCK 1b FAIL: the survivor reads % before the merge', w;
+  END IF;
+
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  PERFORM public.merge_studio_contacts(
+    'f9200000-0000-4000-8000-00000000001a','f9200000-0000-4000-8000-00000000001b','company_name');
+  PERFORM pg_temp.reset_role();
+
+  SELECT count(*) INTO n FROM public.studio_compliance_documents
+   WHERE id = 'f9400000-0000-4000-8000-00000000001b'
+     AND holder_id = 'f9200000-0000-4000-8000-00000000001a';
+  IF n <> 1 THEN
+    RAISE EXCEPTION 'BLOCK 1b FAIL: the renewal stayed on the absorbed card (r3 W3-R3-1)';
+  END IF;
+
+  w := public.compliance_state('f9200000-0000-4000-8000-00000000001a');
+  IF w <> 'lapsed' THEN
+    RAISE EXCEPTION 'BLOCK 1b FAIL: expected lapsed while the old certificate is unretired, got %', w;
+  END IF;
+
+  -- the studio retires the old certificate against the renewal it now holds,
+  -- which is an ordinary member act once both papers are on one card — the
+  -- act that was UNREACHABLE while the renewal sat on the folded card.
+  UPDATE public.studio_compliance_documents
+     SET superseded_by = 'f9400000-0000-4000-8000-00000000001b'
+   WHERE id = 'f9400000-0000-4000-8000-00000000001a';
+
+  w := public.compliance_state('f9200000-0000-4000-8000-00000000001a');
+  IF w <> 'current' THEN
+    RAISE EXCEPTION 'BLOCK 1b FAIL: the firm reads % holding its own renewal (r3 W3-R3-1)', w;
   END IF;
 END $$;
 
@@ -504,6 +578,119 @@ BEGIN
     RAISE EXCEPTION 'BLOCK 1b FAIL: the new seat was stamped % (r1 B-2)', v_stamp;
   END IF;
   DELETE FROM public.project_parties WHERE id = v_seat;
+END $$;
+
+-- ── r3 W3-R3-3 / W3-R3-4 · A MERGE OF TWO CARDS CARRYING DIFFERENT NUMBERS
+-- crm-model §4 rules 3 and 4 (email match; company plus name) fold cards that
+-- do NOT share a number, and the absorbed card was the only card carrying its
+-- own. Excluding a merged card from the auto-link resolver therefore made that
+-- number resolve to NOTHING: the next ordinary roster write landed uncarded
+-- and people_directory emitted a SECOND identity row for the human the merge
+-- had just made one (W3-R3-3). And because the merge moved typed channel rows
+-- but never the card's own phone_e164, the survivor's identity reduced its
+-- consent word over ONE number and printed `Not asked` over the studio's own
+-- recorded refusal (W3-R3-4).
+INSERT INTO public.studio_contacts
+  (id, organization_id, entity_kind, contact_kind, full_name, phone, email, created_by, created_at) VALUES
+  ('f9100000-0000-4000-8000-00000000001c','f9000000-0000-4000-8000-00000000000a','person','sub','Ray Two Numbers','(612) 555-0921','ray.two@northgate.test','a0000000-0000-0000-0000-000000000004','2025-05-01'),
+  ('f9100000-0000-4000-8000-00000000001d','f9000000-0000-4000-8000-00000000000a','person','sub','Ray Two Numbers Dup','(612) 555-0922','ray.two@northgate.test','a0000000-0000-0000-0000-000000000004','2026-05-01');
+
+-- the studio heard STOP on the DUPLICATE's number
+INSERT INTO public.studio_channel_consent
+  (organization_id, channel_kind, channel_value, status, opt_out_at,
+   opt_out_source, opt_out_evidence, opt_out_recorded_at, opt_out_recorded_by)
+VALUES
+  ('f9000000-0000-4000-8000-00000000000a','sms','+16125550922','opted_out', now(),
+   'verbal','said stop on site', now(),'a0000000-0000-0000-0000-000000000004');
+
+DO $$
+DECLARE
+  v_card  uuid;
+  v_seat  uuid;
+  v_stamp uuid;
+  v_word  text;
+  n       integer;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  v_word := public.identity_consent_status(
+    'f9000000-0000-4000-8000-00000000000a',
+    'f9100000-0000-4000-8000-00000000001c', '+16125550921');
+  IF v_word <> 'not_asked' THEN
+    RAISE EXCEPTION 'BLOCK 1b FAIL: the survivor reads % before the merge', v_word;
+  END IF;
+
+  PERFORM public.merge_studio_contacts(
+    'f9100000-0000-4000-8000-00000000001c','f9100000-0000-4000-8000-00000000001d','email');
+  PERFORM pg_temp.reset_role();
+
+  -- W3-R3-3: the absorbed card's own number resolves FORWARD to the survivor
+  v_card := public.rolodex_card_for_party_phone(
+    'f9300000-0000-4000-8000-00000000000a', '+16125550922');
+  IF v_card IS DISTINCT FROM 'f9100000-0000-4000-8000-00000000001c' THEN
+    RAISE EXCEPTION 'BLOCK 1b FAIL: the absorbed number resolves to % not the survivor (r3 W3-R3-3)', v_card;
+  END IF;
+
+  INSERT INTO public.project_parties
+    (project_id, party_kind, display_name, phone, created_by)
+  VALUES
+    ('f9300000-0000-4000-8000-00000000000a','sub','Absorbed Number Add','(612) 555-0922',
+     'a0000000-0000-0000-0000-000000000004')
+  RETURNING id INTO v_seat;
+
+  SELECT studio_contact_id INTO v_stamp FROM public.project_parties WHERE id = v_seat;
+  IF v_stamp IS DISTINCT FROM 'f9100000-0000-4000-8000-00000000001c' THEN
+    RAISE EXCEPTION 'BLOCK 1b FAIL: a seat on the absorbed number was stamped % (r3 W3-R3-3)', v_stamp;
+  END IF;
+  DELETE FROM public.project_parties WHERE id = v_seat;
+
+  -- W3-R3-4: the absorbed card's own number is now a channel row on the
+  -- survivor, so the identity reduces over BOTH numbers
+  SELECT count(*) INTO n FROM public.studio_contact_channels
+   WHERE owner_id = 'f9100000-0000-4000-8000-00000000001c'
+     AND channel_kind = 'mobile' AND value = '+16125550922';
+  IF n <> 1 THEN
+    RAISE EXCEPTION 'BLOCK 1b FAIL: the absorbed number minted % channel row(s) (r3 W3-R3-4)', n;
+  END IF;
+
+  -- the number set and the word are both read as a MEMBER: both functions are
+  -- gated on is_active_studio_member(), which is the point of them.
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  SELECT count(*) INTO n FROM public.identity_phone_numbers(
+    'f9000000-0000-4000-8000-00000000000a',
+    'f9100000-0000-4000-8000-00000000001c', '+16125550921') AS t(v)
+   WHERE t.v = '+16125550922';
+  IF n <> 1 THEN
+    RAISE EXCEPTION 'BLOCK 1b FAIL: identity_phone_numbers misses the absorbed number (r3 W3-R3-4)';
+  END IF;
+
+  v_word := public.identity_consent_status(
+    'f9000000-0000-4000-8000-00000000000a',
+    'f9100000-0000-4000-8000-00000000001c', '+16125550921');
+  PERFORM pg_temp.reset_role();
+  IF v_word <> 'opted_out' THEN
+    RAISE EXCEPTION 'BLOCK 1b FAIL: the survivor reads % over a recorded refusal (r3 W3-R3-4)', v_word;
+  END IF;
+END $$;
+
+-- ── r3 W3-R3-5 · THE LINEAGE TABLE IS NOT HAND-WRITABLE ───────────────────
+-- B2-1 shut the pointer against every writer but the RPC; the table that is
+-- the other half of PR-o's record stayed INSERTable by any studio member,
+-- with no UPDATE or DELETE policy to take a forged row back.
+DO $$
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000003');
+  BEGIN
+    INSERT INTO public.studio_contact_merges
+      (organization_id, survivor_id, merged_id, matched_on)
+    VALUES ('f9000000-0000-4000-8000-00000000000a',
+            'f9100000-0000-4000-8000-00000000000c',
+            'f9100000-0000-4000-8000-00000000000d','manual');
+    PERFORM pg_temp.reset_role();
+    RAISE EXCEPTION 'BLOCK 1b FAIL: a member forged a lineage row (r3 W3-R3-5)';
+  EXCEPTION WHEN insufficient_privilege THEN
+    NULL;
+  END;
+  PERFORM pg_temp.reset_role();
 END $$;
 
 -- ── M-2 · THE SEAT'S BID ESTIMATOR ────────────────────────────────────────
@@ -763,9 +950,13 @@ BEGIN
     'f9200000-0000-4000-8000-000000000010','f9200000-0000-4000-8000-000000000011','company_name');
   PERFORM pg_temp.reset_role();
 
+  -- r3 W3-R3-1: the word is the honest reckoning over BOTH cards' paper. The
+  -- certificate lineage is retired against the survivor's own current one, and
+  -- the absorbed BOND (lapsed ten days ago, gating payment) now counts — where
+  -- before the fix it was simply invisible on a card nothing could open.
   w_after := public.compliance_state('f9200000-0000-4000-8000-000000000010');
-  IF w_after <> 'current' THEN
-    RAISE EXCEPTION 'BLOCK 1c FAIL: the merge flipped the survivor''s paper word to %', w_after;
+  IF w_after <> 'lapsed' THEN
+    RAISE EXCEPTION 'BLOCK 1c FAIL: the survivor reads % over an absorbed lapsed bond', w_after;
   END IF;
 
   -- the whole lineage moved, head and predecessor
@@ -792,13 +983,13 @@ BEGIN
     RAISE EXCEPTION 'BLOCK 1c FAIL: the retired predecessor lost its successor';
   END IF;
 
-  -- the bond with no successor stays where crm-model §4 puts it
+  -- the bond with no successor moves too, carrying no edge (r3 W3-R3-1)
   SELECT count(*) INTO n FROM public.studio_compliance_documents
    WHERE id = 'f9400000-0000-4000-8000-000000000013'
-     AND holder_id = 'f9200000-0000-4000-8000-000000000011'
+     AND holder_id = 'f9200000-0000-4000-8000-000000000010'
      AND superseded_by IS NULL;
   IF n <> 1 THEN
-    RAISE EXCEPTION 'BLOCK 1c FAIL: a lapsed paper with no successor was moved onto the survivor';
+    RAISE EXCEPTION 'BLOCK 1c FAIL: the absorbed bond did not move onto the survivor (r3 W3-R3-1)';
   END IF;
 END $$;
 
@@ -1504,6 +1695,53 @@ BEGIN
       RAISE EXCEPTION 'BLOCK 7 FAIL: expected party_bid_quoted_by_merged_away, got %', SQLERRM;
     END IF;
   END;
+END $$;
+
+-- ── 7c · r3 W3-R3-2 · THE RECORD, NOT THE WRITER ──────────────────────────
+-- Block 6 leaves 'W3 ambiguous legacy job' with studio_id NULL — R-BD/R-BI's
+-- legacy population. project_tenant_org() is caller-relative there, so the
+-- guard used to check the estimator's card against the WRITER's own rolodex: a
+-- member of a second design studio the designer of record also belongs to
+-- wrote their OWN card onto the working studio's seat, while
+-- assert_project_party_cards() refused the identical write on
+-- studio_contact_id. The JWT is set WITHOUT switching role, so RLS is not the
+-- thing under test — the trigger is.
+INSERT INTO public.project_parties
+  (id, project_id, party_kind, display_name, created_by) VALUES
+  ('f9500000-0000-4000-8000-00000000020a','f9300000-0000-4000-8000-0000000000b2','sub',
+   'Studio-less Seat','a0000000-0000-0000-0000-000000000004');
+
+DO $$
+DECLARE
+  v_tenant   uuid;
+  v_recorded uuid;
+BEGIN
+  PERFORM set_config('request.jwt.claims',
+    json_build_object('sub','a0000000-0000-0000-0000-000000000004',
+                      'role','authenticated')::text, true);
+
+  v_tenant   := public.project_tenant_org('f9300000-0000-4000-8000-0000000000b2');
+  v_recorded := public.project_recorded_studio('f9300000-0000-4000-8000-0000000000b2');
+  IF v_tenant IS NULL THEN
+    RAISE EXCEPTION 'BLOCK 7c FAIL: the fixture no longer reproduces — project_tenant_org answers NULL';
+  END IF;
+  IF v_recorded IS NOT NULL THEN
+    RAISE EXCEPTION 'BLOCK 7c FAIL: the fixture no longer reproduces — the job records studio %', v_recorded;
+  END IF;
+
+  BEGIN
+    UPDATE public.project_parties
+       SET bid_quoted_by_person_id = 'f9100000-0000-4000-8000-00000000000a'
+     WHERE id = 'f9500000-0000-4000-8000-00000000020a';
+    PERFORM set_config('request.jwt.claims', NULL, true);
+    RAISE EXCEPTION 'BLOCK 7c FAIL: a card was written onto a studio-less job''s seat (r3 W3-R3-2)';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM NOT LIKE '%party_bid_quoted_by_project_has_no_studio%' THEN
+      RAISE EXCEPTION 'BLOCK 7c FAIL: expected party_bid_quoted_by_project_has_no_studio, got %', SQLERRM;
+    END IF;
+  END;
+
+  PERFORM set_config('request.jwt.claims', NULL, true);
 END $$;
 
 -- ── 7b. THE RFQ BACKFILL, OVER REAL ROWS ──────────────────────────────────

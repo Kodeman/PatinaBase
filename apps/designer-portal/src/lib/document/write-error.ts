@@ -48,6 +48,33 @@ export function writeErrorMessage(err: unknown, fallback: string): string {
   if (/party_company_merged_away/i.test(haystack)) {
     return "That firm's card has been folded into another one. Name the firm that survived.";
   }
+  // MAJOR-3 (code review r3) — the rest of 00624's seat-card vocabulary, and
+  // 00631's. `add_household_member()` INSERTs a seat and `useSetPartyBid`
+  // UPDATEs one, so the same BEFORE trigger answers both doors; neither the
+  // household band nor the bid editor knew a word of it, and
+  // `party_card_project_has_no_studio` printed verbatim on a studio-less job
+  // — the live legacy population R-BI names.
+  if (/party_studio_contact_other_studio/i.test(haystack)) {
+    return "That person's card belongs to another studio's book, so it can't be put on this job's seats.";
+  }
+  if (/party_warranty_contact_other_studio/i.test(haystack)) {
+    return "That warranty contact belongs to another studio's book.";
+  }
+  if (/party_warranty_contact_not_a_person/i.test(haystack)) {
+    return "A warranty call goes to a human — name a person's card, not a firm's.";
+  }
+  if (/party_bid_quoted_by_project_has_no_studio/i.test(haystack)) {
+    return "This project isn't attached to a studio yet, so who priced the work can't be named from the studio's book. Give the project a studio first.";
+  }
+  if (/party_bid_quoted_by_other_studio/i.test(haystack)) {
+    return "That estimator's card belongs to another studio's book.";
+  }
+  if (/party_bid_quoted_by_not_a_person/i.test(haystack)) {
+    return "A firm doesn't price the work — name the estimator's own card.";
+  }
+  if (/party_bid_quoted_by_merged_away/i.test(haystack)) {
+    return "That card has been folded into another one. Name the card that survived.";
+  }
   // Never a schema word on a face: a constraint or index name, a relation, a
   // column. Those sentences are for the log, not the studio.
   if (

@@ -16727,7 +16727,7 @@ END $g$;
 
 -- 00629_studio_contact_merges.sql
 DO $g$ BEGIN
-  GRANT SELECT, INSERT ON TABLE public.studio_contact_merges TO authenticated;
+  GRANT SELECT ON TABLE public.studio_contact_merges TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 

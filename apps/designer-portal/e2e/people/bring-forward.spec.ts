@@ -104,9 +104,13 @@ async function openThePicker(page: import("@playwright/test").Page) {
     timeout: 30_000,
   });
   await page.locator('[data-action-key="open-rolodex-picker"]').click();
-  await expect(page.getByText("From the rolodex")).toBeVisible({
-    timeout: 30_000,
-  });
+  // QA r3 finding 3: an unscoped getByText matches THREE elements once the
+  // sheet is open — the toolbar button, its copy inside the Call-sheet-actions
+  // menu, and the sheet's own title — and Playwright's strict mode then failed
+  // the run before a single assertion. Wait on the SHEET.
+  await expect(
+    page.locator("[data-doc-sheet-title]", { hasText: "From the rolodex" }),
+  ).toBeVisible({ timeout: 30_000 });
 }
 
 test("task 5 — search the prior job, tick four, one confirm", async ({

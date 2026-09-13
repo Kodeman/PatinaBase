@@ -244,6 +244,24 @@ export function RolodexPicker({
   const { data: contacts } = useStudioContacts(open ? organizationId : null, {
     kind,
   });
+  /**
+   * The whole book, for ONE lookup: the firm card a person's `company_id`
+   * names, which is where a construction trade actually lives (see
+   * `tradeFor`). It cannot read `contacts`, because a kind chip narrows that
+   * list by the PERSON's kind and a firm card carries its own — Ingrid
+   * Halvorsen is a `sub` while Halvorsen Cabinet Works is a `workroom`, so the
+   * firm drops out of the very list the chip was set to find her in. With no
+   * chip set this is the same query key as the read above, so React Query
+   * serves both from one fetch.
+   */
+  const { data: allCards } = useStudioContacts(open ? organizationId : null, {
+    kind: 'all',
+  });
+  const firmCardById = useMemo(() => {
+    const map = new Map<string, StudioContact>();
+    for (const c of allCards ?? []) if (c.entity_kind === 'company') map.set(c.id, c);
+    return map;
+  }, [allCards]);
   const wordsByCard = useMemo(() => {
     const map = new Map<string, PeopleDirectoryRow>();
     for (const row of directory ?? []) if (row.person_id) map.set(row.person_id, row);
@@ -417,6 +435,36 @@ export function RolodexPicker({
     return resolved ?? (contact.company_name?.trim() || null);
   };
 
+  /**
+   * QA r3 finding 1 — THE TRADE, resolved the way F1 resolved the firm.
+   *
+   * Every call site read `specialties[0]`, which is 00417's VENDOR-specialty
+   * column. A `sub` / `gc` / `installer` card's trade lives in `trades[]` —
+   * PR-f's widened FieldTrade vocabulary — and on the local book it lives on
+   * the FIRM's card: Dana Kowalski, Pete Rusk and Ingrid Halvorsen all carry
+   * `specialties {}` and `trades {}` while Northgate Electric carries
+   * `trades {electrical}`, Rusk Mechanical `{plumbing}` and Halvorsen Cabinet
+   * Works `{cabinetry}`. So the mini row printed "SUBCONTRACTOR · NORTHGATE
+   * ELECTRIC" where SPEC §5.7 #4 and the shipped 1440/390 specimens both print
+   * "… · electrical", and — because the same expression feeds both inserts —
+   * every brought-forward seat was BORN with `project_parties.trade = ''`,
+   * which PR-b makes a permanent snapshot nothing later recovers. Claire
+   * Bissett landed correctly only because a `vendor` card really does keep its
+   * trade in `specialties`, which is what hid this in a walk.
+   *
+   * Own card first, then the firm's own card, then the legacy vendor column,
+   * so the vendor case keeps the answer it already had.
+   */
+  const tradeFor = (contact: StudioContact): string | null => {
+    const own = contact.trades?.find((t) => t?.trim());
+    if (own) return own;
+    const firmId = contact.company_id ?? null;
+    const firm = firmId ? firmCardById.get(firmId) : undefined;
+    const firmTrade = firm?.trades?.find((t) => t?.trim());
+    if (firmTrade) return firmTrade;
+    return contact.specialties?.find((s) => s?.trim()) ?? null;
+  };
+
   const paperClauseFor = (contact: StudioContact) =>
     noticedPaperClause(
       [contact.company_id, contact.id],
@@ -487,8 +535,12 @@ export function RolodexPicker({
         projectId,
         partyKind: toPartyKind(contact.contact_kind),
         displayName: name,
-        companyName: contact.company_name,
-        trade: contact.specialties?.[0] ?? null,
+        // MAJOR-1 / finding 1: the firm and the trade the ROW printed, not the
+        // two legacy columns the seat used to be born with — `company_name` is
+        // NULL on every carded human with a firm (F1's own measurement) and
+        // `specialties` is empty on every construction trade.
+        companyName: firmNameFor(contact),
+        trade: tradeFor(contact),
         phone: contact.phone,
         email: contact.email,
         studioContactId: contact.id,
@@ -537,9 +589,15 @@ export function RolodexPicker({
       studioContactId: c.id,
       partyKind: toPartyKind(c.contact_kind),
       displayName: contactName(c),
-      trade: c.specialties?.[0] ?? null,
+      // MAJOR-1 / finding 1. `companyName: c.company_name` made bring-forward
+      // the first writer to break the invariant F1's fix relies on (0 seats
+      // with a company_id and no name): the new Call Sheet row printed no firm
+      // at all and the held clause lost its possessive — "Site access held.
+      // insurance lapsed 31 March 2026." `trade: c.specialties?.[0]` wrote an
+      // empty trade onto the seat's own permanent snapshot.
+      trade: tradeFor(c),
       companyId: c.company_id,
-      companyName: c.company_name,
+      companyName: firmNameFor(c),
       phone: c.phone,
       email: c.email,
     }));
@@ -728,7 +786,7 @@ export function RolodexPicker({
                       kind={c.contact_kind}
                       entity={c.entity_kind}
                       company={firmNameFor(c)}
-                      trade={c.specialties?.[0] ?? null}
+                      trade={tradeFor(c)}
                       reach={
                         (words?.reach_state as
                           | 'account'

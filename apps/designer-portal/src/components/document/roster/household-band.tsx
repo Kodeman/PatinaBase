@@ -33,6 +33,7 @@ import {
 } from "@patina/supabase";
 import { formatMoneyFromCents } from "../people/people-format";
 import { peopleEvents } from "@/lib/analytics/people-events";
+import { writeErrorMessage } from "@/lib/document/write-error";
 import { DocumentAction, DocumentActionRow } from "../document-action";
 
 const META =
@@ -169,10 +170,34 @@ export function HouseholdBand({
   const chosenName =
     candidates.find((c) => c.id === personId)?.name ?? "This person";
 
+  /**
+   * MAJOR-2 (code review r3) — the act may not mint a household the band
+   * cannot find again.
+   *
+   * `useProjectHousehold` has exactly two ways in: the
+   * `designer_clients.household_id` pointer, written only when a
+   * `designerClientId` resolves, and the `member_person_ids` overlap, which
+   * needs at least one client-side seat carrying a `studio_contact_id`. With
+   * neither — an ordinary job before the client is seated, `client_profile_id`
+   * NULL, which is the seeded Okonkwo state — the INSERT wrote a row with an
+   * empty member array and no pointer, the resolver returned null, the band
+   * printed the same sentence and the same door, and every further press left
+   * another orphan: 00632 has no uniqueness constraint and the room offers no
+   * delete. r1 BLOCKING-1's shape, narrowed rather than closed.
+   */
+  const householdWouldBeFindable =
+    (resolved?.memberCardIds?.length ?? 0) > 0 || !!resolved?.designerClientId;
+
   const openHousehold = async () => {
     // The client RECORD is optional — a no-login household has none (00632's
     // whole reason for existing). The job's designer and studio are not.
     if (!resolved?.designerId || !organizationId) return;
+    if (!householdWouldBeFindable) {
+      setError(
+        "Seat the client on this job first, then open the household.",
+      );
+      return;
+    }
     const orgId = organizationId;
     setError(null);
     try {
@@ -187,9 +212,11 @@ export function HouseholdBand({
       });
       onAnnounce?.("The household is open.");
     } catch (e) {
-      setError(
-        e instanceof Error ? e.message : "Could not open the household.",
-      );
+      // MAJOR-3: `asHouseholdError` knows 00632's own vocabulary and nothing
+      // of 00624's seat-card guard, which `add_household_member()` fires —
+      // and an RLS rejection arrived as a relation name on a face, which SPEC
+      // §8 #3 forbids by name.
+      setError(writeErrorMessage(e, "Could not open the household."));
     }
   };
 
@@ -208,7 +235,7 @@ export function HouseholdBand({
       setEditingFigure(false);
       onAnnounce?.("The change-order figure is on the record.");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not write the figure.");
+      setError(writeErrorMessage(e, "Could not write the figure."));
     }
   };
 
@@ -231,9 +258,7 @@ export function HouseholdBand({
       setPersonId("");
       onAnnounce?.(`${chosenName} is on the client side.`);
     } catch (e) {
-      setError(
-        e instanceof Error ? e.message : "Could not add the household member.",
-      );
+      setError(writeErrorMessage(e, "Could not add the household member."));
     }
   };
 
@@ -247,11 +272,27 @@ export function HouseholdBand({
           <button
             type="button"
             data-open-household
+            aria-disabled={!householdWouldBeFindable}
+            aria-describedby={
+              !householdWouldBeFindable ? "household-needs-a-seat" : undefined
+            }
             onClick={() => void openHousehold()}
-            className="da-score-hover mt-1 inline-flex min-h-11 items-center font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)] hover:text-[var(--color-mocha)]"
+            className={`da-score-hover mt-1 inline-flex min-h-11 items-center font-mono text-[11px] uppercase tracking-[0.1em] ${
+              householdWouldBeFindable
+                ? "text-[var(--color-aged-oak)] hover:text-[var(--color-mocha)]"
+                : "text-[var(--color-aged-oak)]"
+            }`}
           >
             Open a household
           </button>
+        )}
+        {resolved?.designerId && organizationId && !householdWouldBeFindable && (
+          <p
+            id="household-needs-a-seat"
+            className="mt-1 text-[0.7rem] text-[var(--color-aged-oak)]"
+          >
+            Seat the client on this job first, then open the household.
+          </p>
         )}
         {error && (
           <p

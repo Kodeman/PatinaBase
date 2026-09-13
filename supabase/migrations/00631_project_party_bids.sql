@@ -149,25 +149,48 @@ SECURITY DEFINER
 SET search_path TO 'public'
 AS $$
 DECLARE
-  v_org  uuid;
-  v_kind text;
-  v_gone uuid;
+  v_org      uuid;
+  v_recorded uuid;
+  v_kind     text;
+  v_gone     uuid;
 BEGIN
   IF NEW.bid_quoted_by_person_id IS NULL THEN
     RETURN NEW;
   END IF;
 
-  v_org := public.project_tenant_org(NEW.project_id);
+  v_org      := public.project_tenant_org(NEW.project_id);
+  v_recorded := public.project_recorded_studio(NEW.project_id);
   IF v_org IS NULL THEN
     RAISE EXCEPTION 'party_bid_quoted_by_project_has_no_studio'
       USING HINT = 'This project resolves to no studio, so a rolodex card on '
                    'its seats cannot be checked against one.';
   END IF;
 
+  -- THE RECORD, NOT THE WRITER (00624:645-655, grafted here in migrations
+  -- review r3 W3-R3-2). project_tenant_org() is caller-relative wherever the
+  -- project records no studio — R-BD/R-BI's legacy population, five of the
+  -- eight seeded projects — so checking the card against it alone checks the
+  -- card against the WRITER's own rolodex: a member of a second design studio
+  -- the designer of record also belongs to wrote their OWN card onto the
+  -- working studio's seat, and this guard accepted it while
+  -- assert_project_party_cards() refused the identical write on
+  -- studio_contact_id. Who priced the work is a fact about the job's own book,
+  -- so it is checked against the studio the project RECORDS, and refused
+  -- outright while the project records none.
+  IF v_recorded IS NULL THEN
+    RAISE EXCEPTION 'party_bid_quoted_by_project_has_no_studio'
+      USING HINT = 'This project records no studio, so the estimator who '
+                   'priced the work cannot be checked against the job''s own '
+                   'rolodex — checked against the writer''s studio instead it '
+                   'would let a member of another studio name the seat''s '
+                   'estimator. Give the project a studio first.';
+  END IF;
+
   SELECT sc.entity_kind, sc.merged_into INTO v_kind, v_gone
     FROM public.studio_contacts sc
    WHERE sc.id = NEW.bid_quoted_by_person_id
-     AND sc.organization_id = v_org;
+     AND sc.organization_id = v_org
+     AND sc.organization_id = v_recorded;
 
   IF v_kind IS NULL THEN
     RAISE EXCEPTION 'party_bid_quoted_by_other_studio'
@@ -193,8 +216,13 @@ REVOKE ALL ON FUNCTION public.assert_party_bid_quoted_by()
 
 COMMENT ON FUNCTION public.assert_party_bid_quoted_by() IS
   'BEFORE INSERT/UPDATE on project_parties: holds bid_quoted_by_person_id to '
-  'a live PERSON card in the studio project_tenant_org() resolves for the job '
-  '(the 00624 R-AP shape, plus 00629''s merged-away leg) (00631).';
+  'a live PERSON card in the job''s own studio — project_tenant_org() AND '
+  'project_recorded_studio(), the second because the first is caller-relative '
+  'where the project records no studio and a member of another studio was '
+  'able to write their own card onto the seat (00624''s "THE RECORD, NOT THE '
+  'WRITER", grafted in r3 W3-R3-2). Refuses '
+  'party_bid_quoted_by_project_has_no_studio while the project records none. '
+  'The 00624 R-AP shape, plus 00629''s merged-away leg (00631).';
 
 DROP TRIGGER IF EXISTS assert_party_bid_quoted_by_trg ON public.project_parties;
 CREATE TRIGGER assert_party_bid_quoted_by_trg
