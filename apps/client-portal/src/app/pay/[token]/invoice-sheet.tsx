@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { formatCurrency, onlineSurchargeCents } from "@patina/shared";
+import { formatCurrency, formatMinutesAsHours, onlineSurchargeCents } from "@patina/shared";
 
 import { Colophon } from "@/components/threshold/instruments/colophon";
 import { payLinkEvents } from "@/lib/analytics/events";
@@ -110,6 +110,54 @@ function formatShortDate(value: string): string {
   const parsed = Date.parse(value.length <= 10 ? `${value}T00:00:00Z` : value);
   if (!Number.isFinite(parsed)) return value;
   return shortDate.format(new Date(parsed));
+}
+
+/* ── HT-21 (W5): a time line's dated sub-table ───────────────────────────────
+   `resolve_invoice_link` (00588) reads `metadata.attribution` for a
+   furnishings line's maker name and hands it back as a plain string — the
+   ONE sub-slot every line already renders beneath its description. A time
+   line's composer (`invoice-composer.ts`) writes a JSON-encoded payload into
+   that SAME field instead of a name, so no migration was needed to grow it:
+   this is that field's second shape, discriminated by the `kind` marker
+   below rather than by a second sub-slot. Every other line kind's
+   `attribution` still fails to parse as JSON (or parses to something without
+   this marker) and falls through to the plain-text render unchanged.
+
+   Carries date · minutes · rate ONLY — never a name (LEAH-15, REP-15: the
+   homeowner gets no staffing detail), so there is nothing to scrub here. */
+const TIME_ATTRIBUTION_KIND = "patina_time_subtable";
+
+interface TimeSubtableRow {
+  date: string;
+  minutes: number;
+  rateCents: number;
+}
+
+function parseTimeSubtable(attribution: string | null): TimeSubtableRow[] | null {
+  if (!attribution) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(attribution);
+  } catch {
+    return null;
+  }
+  if (
+    !parsed ||
+    typeof parsed !== "object" ||
+    (parsed as { kind?: unknown }).kind !== TIME_ATTRIBUTION_KIND ||
+    !Array.isArray((parsed as { rows?: unknown }).rows)
+  ) {
+    return null;
+  }
+  const rows = (parsed as { rows: unknown[] }).rows.filter(
+    (r): r is TimeSubtableRow =>
+      !!r &&
+      typeof r === "object" &&
+      typeof (r as TimeSubtableRow).date === "string" &&
+      typeof (r as TimeSubtableRow).minutes === "number" &&
+      typeof (r as TimeSubtableRow).rateCents === "number",
+  );
+  return rows.length > 0 ? rows : null;
 }
 
 /** Whole days since the due date passed, or null while it has not. */
@@ -811,28 +859,49 @@ export function InvoiceSheet({ token, payload }: InvoiceSheetProps) {
                 What&rsquo;s included
               </h2>
               <div className="flex flex-col">
-                {payload.line_items.map((line, index) => (
-                  <div
-                    key={`${line.description ?? "line"}-${index}`}
-                    data-pay-line
-                    className="grid grid-cols-[minmax(0,1fr)_3rem_6.5rem] items-baseline gap-x-3 gap-y-1 border-b border-[var(--border-subtle)] py-3.5"
-                  >
-                    <span className="break-words text-[15.5px] text-[var(--text-primary)]">
-                      {line.description ?? "—"}
-                      {line.attribution && (
-                        <span className="mt-0.5 block font-mono text-[11.5px] text-[var(--color-quiet-ink)]">
-                          {line.attribution}
-                        </span>
-                      )}
-                    </span>
-                    <span className="text-right font-mono text-[12px] text-[var(--color-quiet-ink)]">
-                      {line.quantity ?? ""}
-                    </span>
-                    <span className="text-right font-mono text-[14px] tabular-nums text-[var(--text-primary)]">
-                      {formatCurrency(line.amount_cents, currency)}
-                    </span>
-                  </div>
-                ))}
+                {payload.line_items.map((line, index) => {
+                  // HT-21 — a time line's attribution is a dated sub-table,
+                  // not a name; every other kind's stays plain text.
+                  const timeSubtable =
+                    line.kind === "time" ? parseTimeSubtable(line.attribution) : null;
+                  return (
+                    <div
+                      key={`${line.description ?? "line"}-${index}`}
+                      data-pay-line
+                      className="grid grid-cols-[minmax(0,1fr)_3rem_6.5rem] items-baseline gap-x-3 gap-y-1 border-b border-[var(--border-subtle)] py-3.5"
+                    >
+                      <span className="break-words text-[15.5px] text-[var(--text-primary)]">
+                        {line.description ?? "—"}
+                        {timeSubtable ? (
+                          <span
+                            data-pay-line-time-subtable
+                            className="mt-1 block font-mono text-[11.5px] text-[var(--color-quiet-ink)]"
+                          >
+                            {timeSubtable.map((row, rowIndex) => (
+                              <span key={`${row.date}-${rowIndex}`} className="block">
+                                {formatShortDate(row.date)} ·{" "}
+                                {formatMinutesAsHours(row.minutes)} ·{" "}
+                                {formatCurrency(row.rateCents, currency)}/hr
+                              </span>
+                            ))}
+                          </span>
+                        ) : (
+                          line.attribution && (
+                            <span className="mt-0.5 block font-mono text-[11.5px] text-[var(--color-quiet-ink)]">
+                              {line.attribution}
+                            </span>
+                          )
+                        )}
+                      </span>
+                      <span className="text-right font-mono text-[12px] text-[var(--color-quiet-ink)]">
+                        {line.quantity ?? ""}
+                      </span>
+                      <span className="text-right font-mono text-[14px] tabular-nums text-[var(--text-primary)]">
+                        {formatCurrency(line.amount_cents, currency)}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             </section>
 
