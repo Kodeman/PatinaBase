@@ -124,6 +124,10 @@ export interface ProjectTimeEntry {
   duration_minutes: number;
   notes: string | null;
   billable: boolean;
+  /** R4 (00198) — what the work was. NULL is "activity not set" (HT-24). */
+  activity?: string | null;
+  /** R4 (00198)/00595 — which capture surface wrote the hour. */
+  source?: string;
   hourly_rate_cents: number | null;
   billing_authority_id?: string | null;
   authority_rate_id?: string | null;
@@ -384,18 +388,52 @@ export async function fetchTimeSummary(
 
 // ── Mutations (manual entries) ──
 
+/**
+ * The capture surfaces this package can write from. W0's `00595` bought the
+ * whole DB vocabulary at once; the union widens one wave at a time as each
+ * surface lands — `command_bar` is W3's ⌘K verb. (W4 adds `internal`, W6 adds
+ * `field_manual`.)
+ */
+export type TimeEntrySource =
+  | 'timer_auto'
+  | 'timer_manual'
+  | 'manual_entry'
+  | 'command_bar';
+
+/** A uuid the CALLER mints, so `log_time`'s ON CONFLICT can recognise a replay. */
+function mintEntryId(): string {
+  const c = (globalThis as { crypto?: Crypto }).crypto;
+  if (c && typeof c.randomUUID === 'function') return c.randomUUID();
+  // Test environments and very old browsers. Collision-safe enough for an id
+  // whose only job is to make one retry idempotent.
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (ch) => {
+    const r = (Math.random() * 16) | 0;
+    const v = ch === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
 export interface CreateTimeEntryInput {
+  /** 00608 — the id this write is made under. Omitted, the hook mints one; a
+   *  surface that may retry (an offline drain) mints its own and keeps it. */
+  entryId?: string;
   projectId: string;
   durationMinutes: number;
   startedAt?: string;
   phaseKey?: string | null;
   taskId?: string | null;
   notes?: string | null;
-  billable?: boolean;
+  /**
+   * HT-11 — REQUIRED. The implicit `?? true` is gone: every capture surface
+   * carries the control, and `log_time` raises on a missing value rather than
+   * guessing one. Seed it from the resolved answer
+   * (`automaticTimeBillingIntent`), never from optimism.
+   */
+  billable: boolean;
   /** R4 (00198): activity attribution + entry provenance. Optional — old
    *  callers keep the DB defaults ('timer_manual', activity NULL). */
   activity?: string | null;
-  source?: 'timer_auto' | 'timer_manual' | 'manual_entry';
+  source?: TimeEntrySource;
   /** HT-41 (00600/00601): the role pick, shown only when the member holds more
    *  than one on the project. The server raises on a role they do not hold, and
    *  derives one when this is omitted. No rate is ever sent — the server owns
@@ -411,34 +449,29 @@ export function useCreateTimeEntry(options?: { errorSurface?: 'inline' }) {
     meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
     mutationFn: async (input: CreateTimeEntryInput) => {
       const supabase = getSupabase();
-      const { data: userData } = await supabase.auth.getUser();
-      const userId = userData?.user?.id;
-      if (!userId) throw new Error('Not signed in');
-
-      const row: Record<string, unknown> = {
-        project_id: input.projectId,
-        user_id: userId,
-        duration_minutes: input.durationMinutes,
-        started_at: input.startedAt ?? new Date().toISOString(),
-        phase_key: input.phaseKey ?? null,
-        task_id: input.taskId ?? null,
-        notes: input.notes ?? null,
-        billable: input.billable ?? true,
-      };
-      if (input.activity !== undefined) row.activity = input.activity;
-      if (input.source !== undefined) row.source = input.source;
-      if (input.rateRole !== undefined) row.rate_role = input.rateRole;
-      // No hourly_rate_cents, rated_amount_cents, billing_state or rate_source is
-      // ever sent: HT-1 makes them server-owned, and 00600's guard REJECTS a
+      // 00608 — `log_time`, not a bare insert. The id is minted here so a
+      // retried call re-reads the hour it already wrote instead of writing a
+      // second one; `user_id` is `auth.uid()` server-side, so it is not sent.
+      //
+      // No hourly_rate_cents, rated_amount_cents, billing_state or rate_source
+      // is ever sent: HT-1 makes them server-owned, and 00600's guard REJECTS a
       // supplied rate_source or rated_amount_cents outright. Pinned by
       // apps/designer-portal/src/hooks/__tests__/use-time-tracking-authority.test.tsx.
-      const { data, error } = await supabase
-        .from('project_time_entries')
-        .insert(row)
-        .select()
-        .single();
+      const { data, error } = await supabase.rpc('log_time', {
+        p_entry_id: input.entryId ?? mintEntryId(),
+        p_project_id: input.projectId,
+        p_started_at: input.startedAt ?? new Date().toISOString(),
+        p_duration_minutes: input.durationMinutes,
+        p_activity: input.activity ?? null,
+        p_billable: input.billable,
+        p_notes: input.notes ?? null,
+        p_phase_key: input.phaseKey ?? null,
+        p_task_id: input.taskId ?? null,
+        p_source: input.source ?? 'manual_entry',
+        p_rate_role: input.rateRole ?? null,
+      });
       if (error) throw error;
-      return data as ProjectTimeEntry;
+      return (Array.isArray(data) ? data[0] : data) as ProjectTimeEntry;
     },
     onSuccess: (_, { projectId }) => invalidateProjectTime(queryClient, projectId),
   });
@@ -540,77 +573,60 @@ export interface StartTimerInput {
   phaseKey?: string | null;
   taskId?: string | null;
   /** R4 (00198): 'timer_auto' = the document spine's pick-up timer (D11).
-   *  Omitted = the DB default 'timer_manual' (header TimerButton unchanged). */
+   *  Omitted = 'timer_auto' (the only caller today is the document spine). */
   source?: 'timer_auto' | 'timer_manual';
-  /** Billable intent only. Authority IDs, rate snapshots, billing_state, and
-   *  rated amounts are written by the database classification edge. */
-  billable?: boolean;
-  /** Suppress the conflict/error toasts — the document auto-start resolves
-   *  23505 races by adopting the existing timer, not by nagging. */
-  quiet?: boolean;
+  /**
+   * HT-11 — REQUIRED, same rule as `CreateTimeEntryInput.billable`. The
+   * intent is resolved (`automaticTimeBillingIntent`) and stated; `start_timer`
+   * raises on a missing value rather than letting 00177's `DEFAULT true` price
+   * an hour nobody decided about. Authority IDs, rate snapshots, billing_state
+   * and rated amounts stay the database's.
+   */
+  billable: boolean;
 }
 
-/** The portal's toast surface, injected — the data layer owns no UI. */
-export type TimeToast = (
-  message: string,
-  variant?: 'success' | 'error' | 'warning' | 'info',
-) => void;
+/**
+ * What `start_timer` (00608) hands back: the slot it opened, and the hour it
+ * had to chain out to open it — so the caller can still raise the log-offer
+ * strip for that hour (R20/§0.22). `stopped` is null when the slot was free.
+ */
+export interface StartTimerResult {
+  started: RunningTimer;
+  stopped: ProjectTimeEntry | null;
+}
 
 /**
- * Start a running timer. The partial unique index enforces one per user —
- * a duplicate start surfaces as SQLSTATE 23505, which we toast (and refresh
- * the runningTimer query so the chip shows the existing timer).
+ * Take the one running-timer slot. 00608 made this atomic: the RPC stops the
+ * incumbent and opens the new row in one transaction, so the SQLSTATE 23505
+ * branch this hook used to carry is gone — along with the `quiet` flag and the
+ * injected toast that gated it. (Nothing was ever reported through them: the
+ * shipped call site passed `quiet: true`, and the `(document)` route group
+ * mounts no ToastProvider by R83, so `useToast()` returned a truthy no-op.)
+ * A real failure now surfaces the way every other document mutation's does —
+ * through the mutation's own error, inline at the act site.
  */
-export function useStartTimer(options?: { toast?: TimeToast }) {
+export function useStartTimer() {
   const queryClient = useQueryClient();
-  const toast = options?.toast;
-  /** The 23505 branch below is the ONLY feedback a member gets for the
-   *  one-running-timer index (00177:37-41). A call site that forgets to pass a
-   *  toast must not silence it — it degrades to the console, never to nothing. */
-  const notify: TimeToast = (message, variant) => {
-    if (toast) {
-      toast(message, variant);
-      return;
-    }
-    console.warn(`[useStartTimer] ${message}`);
-  };
 
   return useMutation({
-    mutationFn: async (input: StartTimerInput) => {
+    mutationFn: async (input: StartTimerInput): Promise<StartTimerResult> => {
       const supabase = getSupabase();
-      const { data: userData } = await supabase.auth.getUser();
-      const userId = userData?.user?.id;
-      if (!userId) throw new Error('Not signed in');
-
-      const row: Record<string, unknown> = {
-        project_id: input.projectId,
-        user_id: userId,
-        duration_minutes: null, // running
-        started_at: new Date().toISOString(),
-        phase_key: input.phaseKey ?? null,
-        task_id: input.taskId ?? null,
-      };
-      if (input.source !== undefined) row.source = input.source;
-      if (input.billable !== undefined) row.billable = input.billable;
-      const { data, error } = await supabase
-        .from('project_time_entries')
-        .insert(row)
-        .select()
-        .single();
+      const { data, error } = await supabase.rpc('start_timer', {
+        p_project_id: input.projectId,
+        p_source: input.source ?? 'timer_auto',
+        p_billable: input.billable,
+        p_phase_key: input.phaseKey ?? null,
+        p_task_id: input.taskId ?? null,
+      });
       if (error) throw error;
-      return data as RunningTimer;
+      const row = (Array.isArray(data) ? data[0] : data) as
+        | { started: RunningTimer; stopped: ProjectTimeEntry | null }
+        | undefined;
+      if (!row?.started) throw new Error('The timer did not start. Try again.');
+      return { started: row.started, stopped: row.stopped ?? null };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: timeKeys.runningTimer() });
-    },
-    onError: (error: unknown, input) => {
-      if ((error as { code?: string } | null)?.code === '23505') {
-        if (!input.quiet) notify('You already have a timer running', 'warning');
-        // Another tab/device may have started it — make the chip catch up.
-        queryClient.invalidateQueries({ queryKey: timeKeys.runningTimer() });
-      } else if (!input.quiet) {
-        notify('Could not start the timer. Please try again.', 'error');
-      }
     },
   });
 }
@@ -1018,6 +1034,88 @@ export function useStampProjectPricingStudio() {
       queryClient.invalidateQueries({
         queryKey: ['document-hours-pending-authorization'],
       });
+    },
+  });
+}
+
+// ── Capture inputs (W3: the ⌘K verb, the add row, the strip, the phone) ──
+
+/**
+ * Every document a studio member may log an hour against, by name. NOT
+ * restricted to the projects she is rostered to: HT-25 seats her as a support
+ * designer on first log (00597), so a roster seat is an OUTCOME of capture, not
+ * its precondition. RLS is the only scope.
+ *
+ * Shares `['document-hours-projects']` with the Hours sheet's own selector
+ * deliberately — one canonical key, one fetch, two readers.
+ */
+export interface TimeCaptureProject {
+  id: string;
+  name: string | null;
+  status: string | null;
+}
+
+export function useTimeCaptureProjects() {
+  return useQuery({
+    queryKey: ['document-hours-projects'] as const,
+    queryFn: async (): Promise<TimeCaptureProject[]> => {
+      const supabase = getSupabase();
+      const { data, error } = await supabase
+        .from('projects')
+        .select('id, name, status')
+        .order('name');
+      if (error) throw error;
+      return (data ?? []) as TimeCaptureProject[];
+    },
+  });
+}
+
+/** The four roles a rate card can price. `client`/`previous_lead` never do. */
+const RATE_ROLES: readonly TimeRateRole[] = [
+  'lead_designer',
+  'support_designer',
+  'bookkeeper',
+  'vendor',
+];
+
+/**
+ * HT-41 — the viewer's LIVE roster roles on one document, filtered to the four
+ * a rate card can price. The role chip appears only when this returns more than
+ * one: with a single role the server derives it and asking would be a tap that
+ * decides nothing.
+ *
+ * The project's own designer is fixed at `lead_designer` above any pick
+ * (00599/00601), so she never gets a chip whatever seats she also holds.
+ */
+export function useMyRateRoles(projectId: string | null) {
+  return useQuery({
+    queryKey: ['time', 'my-rate-roles', projectId] as const,
+    enabled: Boolean(projectId),
+    queryFn: async (): Promise<TimeRateRole[]> => {
+      const supabase = getSupabase();
+      const { data: userData } = await supabase.auth.getUser();
+      const userId = userData?.user?.id;
+      if (!userId) return [];
+
+      const { data: project, error: projectError } = await supabase
+        .from('projects')
+        .select('designer_id')
+        .eq('id', projectId)
+        .maybeSingle();
+      if (projectError) throw projectError;
+      if (project?.designer_id === userId) return ['lead_designer'];
+
+      const { data, error } = await supabase
+        .from('project_team_members')
+        .select('role')
+        .eq('project_id', projectId)
+        .eq('user_id', userId)
+        .is('removed_at', null);
+      if (error) throw error;
+      const held = new Set(
+        ((data ?? []) as { role: string }[]).map((row) => row.role),
+      );
+      return RATE_ROLES.filter((role) => held.has(role));
     },
   });
 }
