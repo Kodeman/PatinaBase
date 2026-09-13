@@ -57,12 +57,32 @@ jest.mock("@patina/supabase", () => ({
   COMPANY_CHANNEL_KINDS: ["office", "dispatch", "ap_email"],
   useCreateFieldLink: () => ({ mutate: mintLink, isPending: false }),
   useRevokeAccessGrant: () => ({ mutate: jest.fn(), isPending: false }),
-  isAccessGrantRevokable: (tier: string) => tier === "field_link",
+  isAccessGrantRevokable: (tier: string) =>
+    tier === "field_link" || tier === "project_review",
+  // CR5-2: the row asks the routing table what a revoke actually closes and
+  // whether the RPC demands a reason.
+  accessGrantRevokeRoute: (tier: string) =>
+    tier === "field_link"
+      ? { rpc: "revoke_field_link", idArg: "p_token_id", keySegment: 1 }
+      : tier === "project_review"
+        ? {
+            rpc: "revoke_project_review_access",
+            idArg: "p_edition_id",
+            reasonArg: "p_reason",
+            reasonRequired: true,
+            revokesWholeScope: true,
+            keySegment: 1,
+          }
+        : null,
   ACCESS_GRANT_NOT_REVOKABLE_SENTENCE:
     "This door is closed somewhere else in Patina, not from here.",
-  ACCESS_GRANT_TIER_LABELS: { field_link: "Field link" },
+  ACCESS_GRANT_TIER_LABELS: {
+    field_link: "Field link",
+    project_review: "Review access",
+  },
   ACCESS_GRANT_TIER_OPENS: {
     field_link: "the Call Sheet and the site access card",
+    project_review: "one review edition",
   },
   CONTACT_CHANNEL_KIND_LABELS: { mobile: "Mobile", email: "Email" },
   isContactChannelHeld: (s: string) => !!s && s !== "active",
@@ -184,6 +204,21 @@ describe("a channel row", () => {
       screen.getByRole("link", { name: "(612) 555-0111" }),
     ).toHaveAttribute("href", "tel:+16125550111");
     expect(screen.getByText("Texting")).toBeInTheDocument();
+  });
+
+  /**
+   * QA-4 (w2 r5) — the Directory row printed "(612) 555-0111" and this row,
+   * two clicks away on the same person, printed "+16125550111", because a
+   * channel's value is commonly stored in E.164. The stored value still dials.
+   */
+  it("prints a number stored in E.164 in the same shape the Directory row uses", () => {
+    channelsData.current = [
+      { ...channelsData.current[0], id: "ch-e164", value: "+16125550111" },
+    ];
+    renderReach();
+    expect(
+      screen.getByRole("link", { name: "(612) 555-0111" }),
+    ).toHaveAttribute("href", "tel:+16125550111");
   });
 
   it("R-Q — the consent sentence reads the one wording, with source, date and job", () => {
@@ -500,6 +535,60 @@ describe("a grant row", () => {
     expect(revoke).toHaveAttribute("aria-expanded", "true");
     expect(
       screen.getByRole("button", { name: "Close this door" }),
+    ).toBeInTheDocument();
+  });
+});
+
+/**
+ * CR5-2 (w2 r5) — `revoke_project_review_access` revokes EVERY reviewer on the
+ * edition and raises on a reason under five characters. The row offered the
+ * same fixed "Optional" prompt it offers a field link, and said nothing about
+ * who else the press closes the door on.
+ */
+describe("a whole-scope revoke says so, and asks for the reason its RPC demands", () => {
+  beforeEach(() => {
+    grantsData.current = [
+      {
+        grant_id: "project_review:edition-9:actor-1",
+        tier: "project_review",
+        subject_type: "profile",
+        subject_id: "profile-dana",
+        scope_type: "edition",
+        scope_id: "edition-9",
+        granted_by: null,
+        granted_at: "2026-10-12T00:00:00Z",
+        expires_at: null,
+        last_used_at: null,
+        revoked_at: null,
+        revoke_reason: null,
+      },
+    ];
+  });
+
+  it("names everyone the press closes the door on, before the act", () => {
+    renderReach();
+    fireEvent.click(screen.getByRole("button", { name: "Revoke" }));
+    expect(
+      screen.getByText(
+        "This closes the review for everyone on this edition, not only Dana Kowalski.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("asks for a reason as REQUIRED, never optional, and refuses a short one", () => {
+    renderReach();
+    fireEvent.click(screen.getByRole("button", { name: "Revoke" }));
+    expect(
+      screen.getByText(
+        "Say why the door closes. Required, at least five characters, kept with the record.",
+      ),
+    ).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Why it closes"), {
+      target: { value: "no" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Close this door" }));
+    expect(
+      screen.getByText("Write at least five characters saying why it closes."),
     ).toBeInTheDocument();
   });
 });

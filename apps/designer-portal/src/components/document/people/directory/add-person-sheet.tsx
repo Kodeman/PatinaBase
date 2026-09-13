@@ -48,6 +48,7 @@ import {
   useSetAffiliation,
   useSetContactRule,
   useSetPartyAuthority,
+  useProjectRecordedStudio,
   useStudioContacts,
   useStudioIdentity,
   useUpdateStudioContact,
@@ -64,6 +65,7 @@ import {
 import { ALL_FIELD_TRADES, FIELD_TRADE_LABELS } from "@patina/types";
 import { useOrganizations } from "@patina/supabase";
 import type { DirectoryChip } from "@/lib/document/directory-roles";
+import { writeErrorMessage } from "@/lib/document/write-error";
 import { useProjects } from "@/hooks/use-projects";
 import { useAuth } from "@/hooks/use-auth";
 import { useFeatureFlag } from "@/hooks/use-feature-flag";
@@ -142,54 +144,6 @@ const showsTrade = (k: AddedPersonKind) => k === "sub" || k === "installer";
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/**
- * QA-R3-1 — SAY WHAT ACTUALLY WENT WRONG.
- *
- * PostgREST rejections arrive as a PLAIN OBJECT (`{message, code, details,
- * hint}`), not an `Error`. Both submit paths tested `e instanceof Error` and
- * fell through to "Could not add them just now. Try again." for every one of
- * them, which is how a wrong-studio `promoteToStudioContact` refusal reached
- * the designer as a shrug. A raw Postgres string is still never printed: an RLS
- * or permission refusal is translated, and a schema word (SPEC §8 #3) is
- * replaced by the fallback rather than shown.
- */
-function writeErrorMessage(err: unknown, fallback: string): string {
-  const code = (err as { code?: unknown } | null)?.code;
-  const raw =
-    err instanceof Error
-      ? err.message
-      : (((err as { message?: unknown } | null)?.message as
-          | string
-          | undefined) ?? "");
-  const haystack = `${typeof code === "string" ? code : ""} ${raw}`;
-  if (/row-level security|permission denied|42501|PGRST116/i.test(haystack)) {
-    return "This studio's book is not yours to write. Ask an owner or admin.";
-  }
-  // CR-3 — 00624's `party_card_guard_trg` refusals, said in words. They are
-  // raised as bare tokens, which the schema-word guard below does not catch,
-  // so without these three the token itself reached the face.
-  if (/party_card_project_has_no_studio/i.test(haystack)) {
-    return "This project isn't attached to a studio yet, so a firm from the studio's book can't be put on its seats. Give the project a studio first.";
-  }
-  if (/party_company_other_studio/i.test(haystack)) {
-    return "That firm belongs to another studio's book, so it can't be named on this job.";
-  }
-  if (/party_company_not_a_company/i.test(haystack)) {
-    return "A person doesn't hold the subcontract — name the firm's own card here.";
-  }
-  // Never a schema word on a face: a constraint or index name, a relation, a
-  // column. Those sentences are for the log, not the studio.
-  if (
-    !raw.trim() ||
-    /duplicate key|violates|constraint|idx_|_fkey|_pkey|column |relation /i.test(
-      raw,
-    )
-  ) {
-    return fallback;
-  }
-  return raw;
-}
-
 const FIELD_LABEL =
   "mb-1 block font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]";
 const FIELD_INPUT =
@@ -267,6 +221,7 @@ export function AddPersonSheet({
   onAdded,
   onGoToLeads,
   initialKind = "client",
+  initialProjectId = null,
   contact = null,
   onSaved,
   organizationId: organizationIdProp = null,
@@ -288,6 +243,11 @@ export function AddPersonSheet({
   organizationId?: string | null;
   /** The kind the sheet opens on (⌘K "Add a maker" cold-starts on 'maker'). */
   initialKind?: AddedPersonKind;
+  /** QA-2 — the job the caller is already standing on. The Call Sheet's own
+   *  "New person" opens this sheet from one project, so the seat's project is
+   *  answered rather than asked. The Directory passes nothing and the picker
+   *  stays. */
+  initialProjectId?: string | null;
   /** Fired with a confirmation line + the directory filter to land on, so the
    *  Room can surface the right roster with the line inline (no toast). */
   onAdded?: (message: string, landOn: DirectoryChip) => void;
@@ -380,7 +340,12 @@ export function AddPersonSheet({
   const [trade, setTrade] = useState("");
   const [phone, setPhone] = useState("");
   const [partyEmail, setPartyEmail] = useState("");
-  const [projectId, setProjectId] = useState("");
+  const [projectId, setProjectId] = useState(initialProjectId ?? "");
+  // QA-2 — a caller standing on a job answers the project itself. Re-seeded on
+  // each open, like the kind, so a sheet reopened from another job lands there.
+  useEffect(() => {
+    if (open && initialProjectId) setProjectId(initialProjectId);
+  }, [open, initialProjectId]);
   const [textUpdates, setTextUpdates] = useState(false);
   const [consentSource, setConsentSource] = useState<
     "" | "verbal" | "written" | "web_form" | "other"
@@ -501,6 +466,23 @@ export function AddPersonSheet({
       setAuthorityScope(defaultAuthorityScope);
     }
   }, [isOrgAdmin, authorityScope, defaultAuthorityScope]);
+  /**
+   * CR5-1 — THE STUDIO THE SEAT'S PROJECT RECORDS, never the one holding the
+   * book. `organizationId` above answers "whose rolodex am I reading" and is
+   * the right answer to that question; it is the WRONG answer to "where may
+   * this seat's card live". `assert_project_party_cards()` (00624) checks a
+   * seat's `studio_contact_id` against `project_recorded_studio(project_id)`,
+   * so a mint into the book's org on a job that records another studio — or
+   * none, which five of the eight local projects do — inserts a
+   * `studio_contacts` row and then fails the link, leaving a card with nothing
+   * pointing at it and a retry minting another. `useProjectRecordedStudio` is
+   * that guard's own resolver; NULL means there is no rolodex this seat's card
+   * may live in, so none is minted at all (party-profile-sheet.tsx:257-260
+   * reads it the same way for the same reason).
+   */
+  const { data: recordedStudioId } = useProjectRecordedStudio(
+    open && projectId ? projectId : null,
+  );
   const { data: projectGrants } = useProjectAuthority(
     open && projectId ? projectId : null,
   );
@@ -759,10 +741,19 @@ export function AddPersonSheet({
       // a card is minted when either is written and none was auto-linked.
       const wantsCard =
         !!contactRule.trim() || !!phone.trim() || !!partyEmail.trim();
-      if (!chain.cardId && wantsCard && organizationId) {
-        const card = await promoteToCard.mutateAsync({ organizationId, party });
+      // CR5-1: minted into the studio the JOB records, or not at all.
+      if (!chain.cardId && wantsCard && recordedStudioId) {
+        const card = await promoteToCard.mutateAsync({
+          organizationId: recordedStudioId,
+          party,
+        });
         chain.cardId = (card as { id?: string } | null)?.id ?? null;
       }
+      /** CR5-1 — what could not be kept, said rather than dropped in silence. */
+      const noBookClause =
+        wantsCard && !chain.cardId && !recordedStudioId
+          ? " This job isn’t attached to a studio yet, so the number and the note ride on the seat, not on a card in the book."
+          : "";
       const cardId = chain.cardId;
       if (cardId) {
         if (phone.trim() && !chain.mobileWritten) {
@@ -880,8 +871,8 @@ export function AddPersonSheet({
           : " That number was already on file, so this seat and what you wrote sit on the card that holds it.";
       const message =
         textUpdates && phone.trim()
-          ? `${trimmedName} added to ${proj}.${landedClause} The invite is recorded; nothing has been sent yet.`
-          : `${trimmedName} added to ${proj}.${landedClause}`;
+          ? `${trimmedName} added to ${proj}.${landedClause}${noBookClause} The invite is recorded; nothing has been sent yet.`
+          : `${trimmedName} added to ${proj}.${landedClause}${noBookClause}`;
       onAdded?.(message, kind === "household" ? "clients" : "crew");
       reset();
       onClose();

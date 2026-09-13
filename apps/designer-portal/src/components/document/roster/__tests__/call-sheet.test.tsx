@@ -23,6 +23,10 @@ jest.mock('@patina/supabase', () => {
     useProjectRoster: (...args: unknown[]) => useProjectRoster(...args),
     usePeopleSeats: (...args: unknown[]) => usePeopleSeats(...args),
     useProjectConsentOrg: () => ({ data: 'studio-1' }),
+    // QA-2: the head's Add sheet needs the studio that holds the book, folded
+    // from the directory exactly as the Room and the picker fold it.
+    useOrganizations: () => ({ data: [{ id: 'studio-1', type: 'design_studio' }] }),
+    usePeopleDirectory: () => ({ data: [] }),
     useSiteAccessCard: () => ({
       data: {
         key_holder_engagement_id: 'seat-ngozi',
@@ -75,6 +79,11 @@ jest.mock('../use-project-authority', () => ({
 const mockRolodexPicker = jest.fn(() => null);
 jest.mock('../rolodex-picker', () => ({
   RolodexPicker: (props: unknown) => mockRolodexPicker(props),
+}));
+
+const mockAddPersonSheet = jest.fn(() => null);
+jest.mock('../../people/directory/add-person-sheet', () => ({
+  AddPersonSheet: (props: unknown) => mockAddPersonSheet(props),
 }));
 
 const mockSiteAccessCard = jest.fn(() => null);
@@ -316,11 +325,17 @@ describe('CallSheet — the picker doorways', () => {
     );
   });
 
-  it('opens it already adding on New person', () => {
+  // QA-2 (w2 r5): "New person" opened the rolodex picker's inline form, so the
+  // Call Sheet could not reach direction §3.5's Add sheet — the kind switch,
+  // the contact rule, the consent capture and the authority field — at all.
+  it('opens the Add sheet on New person, on this job, not the picker', () => {
     render(<CallSheet {...props} />);
     fireEvent.click(screen.getByRole('button', { name: /New person/ }));
+    expect(mockAddPersonSheet).toHaveBeenLastCalledWith(
+      expect.objectContaining({ open: true, initialProjectId: 'okonkwo' }),
+    );
     expect(mockRolodexPicker).toHaveBeenLastCalledWith(
-      expect.objectContaining({ open: true, startInAdd: true }),
+      expect.objectContaining({ open: false }),
     );
   });
 

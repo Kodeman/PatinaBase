@@ -1845,7 +1845,22 @@ SELECT
   jsonb_build_object(
     'contact_kind',    sc.contact_kind,
     'entity_kind',     sc.entity_kind,
-    'company_name',    sc.company_name,
+    -- QA-1 (w2 r5): THE FIRM'S OWN NAME, not the person's legacy free-text
+    -- column. `studio_contacts.company_name` on a PERSON row is 00417's
+    -- typed-by-hand snapshot, which nothing since the affiliation table
+    -- (00592) populates — so every carded human whose firm is a real card
+    -- printed a bare kind word ("Subcontractor") where direction §1 line 2
+    -- and SPEC §5.1 #8 ask for "Northgate Electric · electrical".
+    -- `sc.company_id` is the pointer `sync_studio_contact_company_pointer()`
+    -- keeps equal to the open `studio_person_affiliations` row, and the firm's
+    -- own card is where its name lives (`company_name` on an entity_kind =
+    -- 'company' row, `full_name` never). On a firm's OWN row company_id is
+    -- NULL, so the join misses and its own name still answers.
+    'company_name',    COALESCE(
+                         NULLIF(btrim(sc.company_name), ''),
+                         NULLIF(btrim(firm.company_name), ''),
+                         NULLIF(btrim(firm.full_name), '')
+                       ),
     'company_id',      sc.company_id,
     'specialties',     sc.specialties,
     'vendor_id',       sc.vendor_id,
@@ -1887,6 +1902,10 @@ SELECT
   COALESCE(iseat.seat_count, 0)
 FROM public.studio_contacts sc
 LEFT JOIN identity_seats iseat ON iseat.identity_key = sc.id::text
+-- QA-1: the firm card this person's affiliation pointer names, for its NAME
+-- only. A left join on a primary key; where RLS hides it the name comes back
+-- NULL and the row prints exactly what it printed before.
+LEFT JOIN public.studio_contacts firm ON firm.id = sc.company_id
 WHERE public.is_active_studio_member(sc.organization_id);
 
 COMMENT ON VIEW public.people_directory IS

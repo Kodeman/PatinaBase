@@ -23,6 +23,7 @@ import {
   ACCESS_GRANT_NOT_REVOKABLE_SENTENCE,
   ACCESS_GRANT_TIER_LABELS,
   ACCESS_GRANT_TIER_OPENS,
+  accessGrantRevokeRoute,
   isAccessGrantRevokable,
   useRevokeAccessGrant,
   type AccessGrant,
@@ -35,6 +36,40 @@ import { formatLongDate } from "./people-format";
 export const NO_GRANT_SENTENCE = "No grant on file.";
 export const REVOKE_REASON_PROMPT =
   "Say why the door closes. Optional, kept with the record.";
+/**
+ * CR5-2 — the prompt for a route whose RPC REQUIRES a reason. The one route
+ * that sets `reasonRequired` (`revoke_project_review_access`) raises on a
+ * reason under five characters, so the surface asked for something "optional"
+ * that the database then refused.
+ */
+export const REVOKE_REASON_REQUIRED_PROMPT =
+  "Say why the door closes. Required, at least five characters, kept with the record.";
+/** CR5-2 — the shortest reason the reason-taking RPC accepts. */
+export const REVOKE_REASON_MIN_LENGTH = 5;
+export const REVOKE_REASON_TOO_SHORT =
+  "Write at least five characters saying why it closes.";
+
+/**
+ * CR5-2 — WHAT THIS REVOKE ACTUALLY CLOSES, before the act.
+ *
+ * `revoke_project_review_access` updates every `project_review_access` row on
+ * the edition, so a Revoke pressed on ONE reviewer's row — and the row is
+ * reachable from an ordinary person card — closes the review for all of them.
+ * `ACCESS_GRANT_REVOKE_ROUTES.revokesWholeScope` has declared that fact, and
+ * its own docblock has asked the surface to say it, since the table was
+ * written; nothing printed it.
+ */
+export function grantRevokeConsequence(
+  tier: string | null | undefined,
+  subjectName?: string | null,
+): string | null {
+  const route = accessGrantRevokeRoute(tier);
+  if (!route?.revokesWholeScope) return null;
+  const who = (subjectName ?? "").trim();
+  return who
+    ? `This closes the review for everyone on this edition, not only ${who}.`
+    : "This closes the review for everyone on this edition, not only this person.";
+}
 
 /** The tier's own word, or the raw token where a base table drifted. */
 function tierLabel(tier: string): string {
@@ -116,10 +151,14 @@ function GrantRow({
   grant,
   now,
   onAnnounce,
+  subjectName,
 }: {
   grant: AccessGrant;
   now: Date;
   onAnnounce: (message: string) => void;
+  /** CR5-2 — whose card this row is being read on, for the consequence
+   *  sentence a whole-scope revoke owes the studio. */
+  subjectName?: string | null;
 }) {
   const revoke = useRevokeAccessGrant();
   const [confirming, setConfirming] = useState(false);
@@ -129,9 +168,18 @@ function GrantRow({
   const reasonId = useId();
   const revokable = isAccessGrantRevokable(grant.tier);
   const label = tierLabel(String(grant.tier));
+  const route = accessGrantRevokeRoute(grant.tier);
+  const reasonRequired = route?.reasonRequired === true;
+  const consequence = grantRevokeConsequence(grant.tier, subjectName);
 
   const close = () => {
     setError(null);
+    // CR5-2: the RPC raises under five characters. Say so here rather than
+    // letting Postgres answer.
+    if (reasonRequired && reason.trim().length < REVOKE_REASON_MIN_LENGTH) {
+      setError(REVOKE_REASON_TOO_SHORT);
+      return;
+    }
     revoke.mutate(
       {
         grantId: grant.grant_id,
@@ -183,6 +231,9 @@ function GrantRow({
             Revoke
           </DocumentAction>
           <div id={confirmId} hidden={!confirming} className="mt-2">
+            {consequence && (
+              <p className="t-body-sm mb-2 text-[var(--ink)]">{consequence}</p>
+            )}
             <label
               htmlFor={reasonId}
               className="t-head block text-[var(--ink-subtle)]"
@@ -190,12 +241,16 @@ function GrantRow({
               Why it closes
             </label>
             <p className="t-body-sm mt-1 text-[var(--ink-subtle)]">
-              {REVOKE_REASON_PROMPT}
+              {reasonRequired
+                ? REVOKE_REASON_REQUIRED_PROMPT
+                : REVOKE_REASON_PROMPT}
             </p>
             <input
               id={reasonId}
               type="text"
               value={reason}
+              required={reasonRequired}
+              minLength={reasonRequired ? REVOKE_REASON_MIN_LENGTH : undefined}
               onChange={(e) => setReason(e.target.value)}
               className="mt-1 w-full rounded-[2px] border border-[var(--hairline-strong)] border-b-[var(--ink-faint)] bg-[var(--paper-doc)] p-3 text-[16px] leading-[1.55]"
             />
@@ -233,10 +288,13 @@ export function AccessGrantList({
   grants,
   now,
   onAnnounce,
+  subjectName,
 }: {
   grants: readonly AccessGrant[] | undefined;
   now: Date;
   onAnnounce: (message: string) => void;
+  /** CR5-2 — the name the whole-scope consequence sentence uses. */
+  subjectName?: string | null;
 }) {
   if (!grants || grants.length === 0) {
     return (
@@ -251,6 +309,7 @@ export function AccessGrantList({
           grant={grant}
           now={now}
           onAnnounce={onAnnounce}
+          subjectName={subjectName}
         />
       ))}
     </ul>

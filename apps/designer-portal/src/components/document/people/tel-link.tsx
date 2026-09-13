@@ -26,6 +26,34 @@ export function telHref(phone: string | null | undefined): string | null {
   return null;
 }
 
+/**
+ * QA-4 — ONE SHAPE FOR A NUMBER ON A FACE: "(612) 555-0111".
+ *
+ * A Directory row reads `project_parties.phone`, which the studio typed and
+ * the seed wrote formatted; a Channels row reads `studio_contact_channels.value`
+ * and the site access card reads `emergency_lines[].phone`, both of which are
+ * commonly stored in E.164 — so the SAME person printed "(612) 555-0111" on one
+ * surface and "+16125550111" two clicks away.
+ *
+ * This is a display rule, not a rewrite: only an unambiguous North-American
+ * ten-digit number (optionally with its country code) is re-shaped. An
+ * extension, a sentence ("ask the office"), or any international number comes
+ * back exactly as the studio wrote it, which is `TelLink`'s standing contract.
+ */
+export function telDisplay(phone: string | null | undefined): string {
+  const raw = (phone ?? '').trim();
+  if (!raw || /[A-Za-z]/.test(raw)) return raw;
+  const digits = raw.replace(/\D/g, '');
+  const ten =
+    digits.length === 10
+      ? digits
+      : digits.length === 11 && digits.startsWith('1')
+        ? digits.slice(1)
+        : null;
+  if (!ten) return raw;
+  return `(${ten.slice(0, 3)}) ${ten.slice(3, 6)}-${ten.slice(6)}`;
+}
+
 export interface TelLinkProps {
   phone: string | null | undefined;
   /** What prints. Defaults to the phone as the studio wrote it. */

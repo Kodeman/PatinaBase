@@ -1,0 +1,151 @@
+PUT BACK · ESC
+OPEN THE SITE ACCESS CARD
+FROM THE ROLODEX
+NEW PERSON
+PRINT
+LH
+Leah Hartwell
+SM
+Studio Manager
+CL
+Client
+THE CLIENT
+AO
+Adaeze Okonkwo
+CLIENT
+■ Okonkwo household
+Selections.
+CO
+Chidi Okonkwo
+CLIENT REP
+■ Okonkwo household
+Signs money to $2,500. Approves change orders to $2,500. Certifies draws.
+SR
+Sam Rowe
+ARCHITECT
+■ Beck + Rowe Architects
+25 Jun 2026 to 7 Jul 2027
+Approves change orders.
+›
+CN
+Carol Nyström
+OTHER
+■ Great Northern Bank
+5 Sep 2026 to 7 Jul 2027
+Certifies draws.
+ES
+Erin Sato
+GENERAL CONTRACTOR
+■ Marrow & Sons
+5 Sep 2026 to 7 Jul 2027
+Prepares only.
+›
+LO
+Luis Ochoa
+GENERAL CONTRACTOR
+■ Marrow & Sons
+5 Sep 2026 to 7 Jul 2027
+Controls site access.
+›
+NE
+Ngozi Eze
+RECEIVER
+5 Sep 2026 to 24 Aug 2027
+Holds a key.
+›
+TM
+Tom Marrow
+GENERAL CONTRACTOR
+■ Marrow & Sons
+5 Sep 2026 to 7 Jul 2027
+Signs money. Approves change orders.
+›
+DK
+Dana Kowalski
+SUBCONTRACTOR · ELECTRICAL
+■ Northgate Electric
+12 Sep 2026 to 24 May 2027
+›
+JW
+Joe Wozniak
+SUBCONTRACTOR · CARPENTRY & FRAMING
+■ Cedar & Iron Framing
+12 Sep 2026 to 14 Oct 2026
+›
+CB
+Claire Bissett
+VENDOR
+■ Stonehaven Tile Gallery
+RT
+Ray Thao
+OTHER
+■ City of Minneapolis, CPED Inspections
+PR
+Pete Rusk
+SUBCONTRACTOR · PLUMBING
+■ Rusk Mechanical
+From 3 Oct 2026
+›
+FB
+Frank Bauer
+SUBCONTRACTOR · DRYWALL
+■ Twin Cities Drywall & Plaster
+From 5 Dec 2026
+›
+RD
+Rosa Delgado
+SUBCONTRACTOR · DRYWALL
+■ Twin Cities Drywall & Plaster
+From 5 Dec 2026
+›
+JL
+Jim Lindgren
+SUBCONTRACTOR · HVAC
+■ Boreal HVAC
+From 26 Dec 2026
+›
+KM
+Kelly Marsh
+SUBCONTRACTOR
+■ Radon Solutions North
+From 26 Dec 2026
+›
+IH
+Ingrid Halvorsen
+SUBCONTRACTOR · CABINETRY
+■ Halvorsen Cabinet Works
+From 27 Feb 2027
+›
+AO
+Amara Osei
+SUBCONTRACTOR · PAINT
+■ Lakeshore Painting Co.
+From 28 Mar 2027
+›
+OA
+Owen Ashby
+VENDOR
+■ Ashgrove Millwork
+From 15 May 2027
+NB
+Nadia Brooks
+STAGER
+■ Kestrel Staging
+From 10 Jul 2027
+›
+JF
+Jonah Feld
+PHOTOGRAPHER
+■ Jonah Feld Photography
+From 7 Aug 2027
+›
+RF
+Rivera Finishes
+SUBCONTRACTOR · PAINT
+■ Rivera Finishes
+›
+GN
+Granite North
+VENDOR
+■ Granite North
+Off the job 26 Aug 2026. Slab program went to Stonehaven.

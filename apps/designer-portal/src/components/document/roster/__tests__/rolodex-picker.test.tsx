@@ -4,6 +4,8 @@ import { RolodexPicker } from '../rolodex-picker';
 
 const addPartyMutate = jest.fn();
 const addContactMutate = jest.fn();
+/** CR5-1 — what `project_recorded_studio()` answers for this job. */
+const recordedStudio = { current: 'org-1' as string | null };
 const useStudioContacts = jest.fn();
 const useProjectRoster = jest.fn();
 const refetchRoster = jest.fn();
@@ -17,6 +19,9 @@ jest.mock('@patina/supabase', () => ({
   }),
   useStudioContacts: (...args: unknown[]) => useStudioContacts(...args),
   useProjectRoster: (...args: unknown[]) => useProjectRoster(...args),
+  // CR5-1: the stamp mints into the studio the JOB records, not the one
+  // holding the book, so the picker reads that resolver.
+  useProjectRecordedStudio: () => ({ data: recordedStudio.current }),
   useStudioContactHistory: () => ({
     data: {
       'contact-1': {
@@ -91,6 +96,7 @@ const props = {
 };
 
 beforeEach(() => {
+  recordedStudio.current = 'org-1';
   addPartyMutate.mockReset().mockResolvedValue({});
   addContactMutate.mockReset().mockResolvedValue({ id: 'new-contact' });
   props.onClose.mockReset();
@@ -259,6 +265,37 @@ describe('RolodexPicker — the stamp', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'Add to the call sheet' }));
 
+    await waitFor(() => expect(addPartyMutate).toHaveBeenCalled());
+    expect(addContactMutate).not.toHaveBeenCalled();
+    expect(addPartyMutate).toHaveBeenCalledWith(
+      expect.objectContaining({ displayName: 'Hector Salas', studioContactId: null }),
+    );
+  });
+
+  /**
+   * CR5-1 (w2 r5) — the stamp minted into the studio holding the BOOK while
+   * `assert_project_party_cards()` checks the seat's card against the studio
+   * the JOB records. On a studio-less project (five of eight locally) the card
+   * INSERT succeeded and the seat's stamp raised
+   * `party_card_project_has_no_studio`, leaving a card nothing points at — and
+   * a retry minted another.
+   */
+  it('offers no stamp where the job records no studio, and mints no card', async () => {
+    recordedStudio.current = null;
+    render(<RolodexPicker {...props} scopeKinds={['sub']} startInAdd />);
+    expect(
+      screen.queryByRole('checkbox', { name: /Save to the studio rolodex/ }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /This job isn’t attached to a studio yet, so nobody can be saved to the book from here\./,
+      ),
+    ).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Name'), {
+      target: { value: 'Hector Salas' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add to the call sheet' }));
     await waitFor(() => expect(addPartyMutate).toHaveBeenCalled());
     expect(addContactMutate).not.toHaveBeenCalled();
     expect(addPartyMutate).toHaveBeenCalledWith(

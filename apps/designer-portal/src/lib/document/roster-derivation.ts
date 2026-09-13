@@ -810,14 +810,25 @@ export function callSheetProjection(
   bands.bidding.sort(byWindow);
   bands.done.sort(byWindow);
 
+  /**
+   * QA-3 — REAL HOUSEHOLD SEATS REPLACE THIS ROW (direction §4's own component
+   * inventory: "synthetic client row (:85-148) replaced by real household
+   * seats").
+   *
+   * The claim test was a name/profile match against the document's own
+   * `client_name`, which is a household LABEL, not a person: Okonkwo's reads
+   * "Client" and matches neither Adaeze nor Chidi, so the sheet printed a
+   * third, nameless "Client · THE CLIENT" row above the two real seats and
+   * counted three people on the client side where two stand.
+   *
+   * A client side that holds any real seat is a client side that has been
+   * answered. The row survives only where the job lists nobody at all — a
+   * legacy project with no `client`/`client_rep` seat — so the person the job
+   * is for is still named there.
+   */
   const synthetic = syntheticClientRow(client);
-  if (synthetic) {
-    const claimed = bands.clientSide.some(
-      (r) =>
-        (!!synthetic.profile_id && r.profileId === synthetic.profile_id) ||
-        normalizeName(r.name) === normalizeName(synthetic.display_name),
-    );
-    if (!claimed) bands.clientSide.unshift(callSheetRowFromClient(synthetic));
+  if (synthetic && bands.clientSide.length === 0) {
+    bands.clientSide.unshift(callSheetRowFromClient(synthetic));
   }
 
   const rows = CALL_SHEET_BANDS.flatMap((band) => bands[band]);
