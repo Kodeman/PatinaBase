@@ -1,0 +1,6 @@
+{
+  "urlAfterSignin": "http://localhost:3000/unauthorized",
+  "urlAfterDocGoto": "http://localhost:3000/unauthorized",
+  "callSheetButtonCount": 0,
+  "bandCount": 0
+}

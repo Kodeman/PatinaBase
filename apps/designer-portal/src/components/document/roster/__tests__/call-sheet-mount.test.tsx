@@ -78,6 +78,29 @@ jest.mock('@patina/supabase', () => ({
     no_response: 'No response',
     withdrawn: 'They withdrew',
   },
+  // MAJOR-3: the consequence sentence names a destination, so it reads the
+  // STATE map, not the act map.
+  SEAT_BID_OUTCOME_LABELS: {
+    asked: 'Bidding',
+    quoted: 'Bidding',
+    selected: 'Awarded',
+    declined: 'Declined',
+    no_response: 'No response',
+    withdrawn: 'Off the job',
+  },
+  // MAJOR-1 / MAJOR-7: the bid follows its COLUMNS, not the band.
+  seatCarriesBid: (bid: Record<string, unknown> | null | undefined) =>
+    !!bid &&
+    [
+      'bidDueAt',
+      'bidOutcome',
+      'bidValidUntil',
+      'bidQuotedByPersonId',
+      'bidAmountCents',
+      'bidAskedAt',
+      'bidQuotedAt',
+      'bidSelectedAt',
+    ].some((key) => bid[key] != null),
   useProjectHousehold: () => ({ data: null }),
   useAddHouseholdMember: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useCreateClientHousehold: () => ({ mutateAsync: jest.fn(), isPending: false }),

@@ -962,13 +962,26 @@ export function heldClause(
  * number the record does not make.
  */
 export function bidNote(bid: {
+  askedAt?: string | null;
   dueAt?: string | null;
+  quotedAt?: string | null;
+  selectedAt?: string | null;
   validUntil?: string | null;
   quotedByName?: string | null;
 }): string {
   const parts: string[] = [];
+  // Chronological, which is also the order the two acceptance strings are
+  // written in: SPEC §5.4 #9's "Asked 28 September 2026. Due 5 October 2026."
+  // and R-R's "Quoted 2 October 2026. Selected 9 October 2026." (r1 M-6 —
+  // before 00631 minted the three dated columns, the row could print neither).
+  const asked = rosterLongDate(bid.askedAt);
+  if (asked) parts.push(`Asked ${asked}.`);
   const due = rosterLongDate(bid.dueAt);
   if (due) parts.push(`Due ${due}.`);
+  const quoted = rosterLongDate(bid.quotedAt);
+  if (quoted) parts.push(`Quoted ${quoted}.`);
+  const selected = rosterLongDate(bid.selectedAt);
+  if (selected) parts.push(`Selected ${selected}.`);
   const holds = rosterLongDate(bid.validUntil);
   if (holds) parts.push(`Holds until ${holds}.`);
   const by = (bid.quotedByName ?? '').trim();

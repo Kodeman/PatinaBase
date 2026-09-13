@@ -62,7 +62,6 @@ test.beforeAll(async () => {
     .from("projects")
     .insert({
       name: projectName,
-      title: projectName,
       designer_id: seed.data.designer_id ?? DESIGNER,
       studio_id: seed.data.studio_id,
       client_id: seed.data.client_id ?? "bring-forward-e2e",
@@ -239,6 +238,6 @@ test("Put back clears the pick and writes nothing", async ({
   ).toBeVisible();
   await page.getByRole("button", { name: "Put back" }).click();
   await expect(
-    page.getByRole("button", { name: "Add no to the roster" }),
+    page.getByRole("button", { name: "Add to the roster" }),
   ).toBeVisible();
 });

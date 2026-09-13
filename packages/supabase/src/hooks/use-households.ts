@@ -58,6 +58,20 @@ export interface CreateClientHouseholdInput {
   displayName: string;
   /** PR-n: a figure at creation is an owner's or an admin's write. */
   coThresholdCents?: number | null;
+  /**
+   * The PERSON cards the household is born holding — in practice the job's
+   * own client-side identities.
+   *
+   * 00632 defaults `member_person_ids` to `'{}'`, and an empty array overlaps
+   * nothing, so a household born with no members was invisible to
+   * `useProjectHousehold`'s own resolver: the band printed "No household is on
+   * file" over the household it had just made, offered the door again, and
+   * minted another orphan row on every press (code review r1 BLOCKING-1,
+   * QA r1 QA-4). Seeding the membership at creation is the half of the fix
+   * that makes the row findable by the job; the `designer_clients.household_id`
+   * pointer below is the other half.
+   */
+  memberPersonIds?: string[];
   /** The client record this household answers for, pointed at it in the same act. */
   designerClientId?: string | null;
 }
@@ -99,6 +113,8 @@ const HOUSEHOLD_REFUSAL_SENTENCES: Record<string, string> = {
   household_grant_project_has_no_studio:
     "This job is not attached to a studio yet, so there is nothing to record the authority against.",
   household_member_null: "A household member needs a card behind the name.",
+  household_threshold_forbidden:
+    "A change-order figure is the principal’s to set, and the principal’s to take away. Ask an owner or an admin of the studio.",
 };
 
 export function asHouseholdError(error: unknown): string {
@@ -166,6 +182,13 @@ export function useClientHousehold(id: string | null | undefined) {
  * client's auth uid on `projects.client_profile_id`), so opening a household
  * can point that record at it where one exists. NULL there is a fact, not a
  * failure: the household stands on its own.
+ *
+ * TWO WAYS IN, POINTER FIRST (r1 BLOCKING-1). The overlap alone cannot find a
+ * household with no members yet, and that is the state every household is born
+ * in; `useCreateClientHousehold` already writes `designer_clients.household_id`
+ * and this resolver already reads `designerClientId`, so the pointer answers
+ * first and the overlap stays as the way a no-login household — which has no
+ * client record at all — is still found by its seats.
  */
 export function useProjectHousehold(projectId: string | null | undefined) {
   return useQuery({
@@ -177,6 +200,16 @@ export function useProjectHousehold(projectId: string | null | undefined) {
       designerId: string | null;
       /** The client-side cards this job seats — the household's candidates. */
       memberCardIds: string[];
+      /**
+       * Whether this job's client side ALREADY carries a recorded authority
+       * (QA r1 QA-1). The Call Sheet's client rows print "Signs money to
+       * $2,500. Approves change orders to $2,500." off `project_party_authority`
+       * — a record that predates `client_households` — so the band's bare "No
+       * household is on file … there is nowhere to record who else may sign"
+       * stood on the same screen, unqualified, directly contradicting it. The
+       * band says something else when this is true.
+       */
+      clientSideHasAuthority: boolean;
     }> => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
@@ -204,19 +237,72 @@ export function useProjectHousehold(projectId: string | null | undefined) {
 
       const { data: seats, error: seatsError } = await supabase
         .from("project_parties")
-        .select("studio_contact_id, party_kind")
+        .select("id, studio_contact_id, party_kind")
         .eq("project_id", projectId)
         .in("party_kind", ["client", "client_rep"]);
       if (seatsError) throw seatsError;
+      const seatRows = (seats ?? []) as Array<{
+        id: string;
+        studio_contact_id: string | null;
+      }>;
       const memberCardIds = [
         ...new Set(
-          ((seats ?? []) as Array<{ studio_contact_id: string | null }>)
+          seatRows
             .map((seat) => seat.studio_contact_id)
             .filter((id): id is string => !!id),
         ),
       ];
+
+      let clientSideHasAuthority = false;
+      const seatIds = seatRows.map((seat) => seat.id).filter(Boolean);
+      if (seatIds.length > 0) {
+        const { data: grants, error: grantError } = await supabase
+          .from("project_party_authority")
+          .select("id")
+          .in("engagement_id", seatIds)
+          .is("effective_to", null)
+          .limit(1);
+        if (grantError) throw grantError;
+        clientSideHasAuthority = ((grants ?? []) as unknown[]).length > 0;
+      }
+
+      // The pointer the client record already carries, read before the seats
+      // are asked — a household with no members yet is still this job's.
+      if (designerClientId) {
+        const { data: pointer, error: pointerError } = await supabase
+          .from("designer_clients")
+          .select("household_id")
+          .eq("id", designerClientId)
+          .maybeSingle();
+        if (pointerError) throw pointerError;
+        const householdId = (pointer?.household_id as string | null) ?? null;
+        if (householdId) {
+          const { data: byPointer, error: byPointerError } = await supabase
+            .from("client_households")
+            .select("*")
+            .eq("id", householdId)
+            .maybeSingle();
+          if (byPointerError) throw byPointerError;
+          if (byPointer) {
+            return {
+              household: byPointer as ClientHousehold,
+              designerClientId,
+              designerId,
+              memberCardIds,
+              clientSideHasAuthority,
+            };
+          }
+        }
+      }
+
       if (memberCardIds.length === 0) {
-        return { household: null, designerClientId, designerId, memberCardIds };
+        return {
+          household: null,
+          designerClientId,
+          designerId,
+          memberCardIds,
+          clientSideHasAuthority,
+        };
       }
 
       const { data: households, error: householdError } = await supabase
@@ -230,6 +316,7 @@ export function useProjectHousehold(projectId: string | null | undefined) {
         designerClientId,
         designerId,
         memberCardIds,
+        clientSideHasAuthority,
       };
     },
   });
@@ -258,6 +345,11 @@ export function useCreateClientHousehold() {
           designer_id: input.designerId,
           display_name: input.displayName.trim(),
           co_threshold_cents: input.coThresholdCents ?? null,
+          // Born holding the job's own client side, so the resolver's overlap
+          // can find it (r1 BLOCKING-1). 00632 holds every id to a live PERSON
+          // card in this studio, which is exactly what a client-side seat's
+          // `studio_contact_id` is.
+          member_person_ids: [...new Set(input.memberPersonIds ?? [])],
         })
         .select("*")
         .single();

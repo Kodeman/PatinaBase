@@ -16286,9 +16286,12 @@ export type Database = {
       project_parties: {
         Row: {
           bid_amount_cents: number | null
+          bid_asked_at: string | null
           bid_due_at: string | null
           bid_outcome: string | null
+          bid_quoted_at: string | null
           bid_quoted_by_person_id: string | null
+          bid_selected_at: string | null
           bid_valid_until: string | null
           company_id: string | null
           company_name: string | null
@@ -16327,9 +16330,12 @@ export type Database = {
         }
         Insert: {
           bid_amount_cents?: number | null
+          bid_asked_at?: string | null
           bid_due_at?: string | null
           bid_outcome?: string | null
+          bid_quoted_at?: string | null
           bid_quoted_by_person_id?: string | null
+          bid_selected_at?: string | null
           bid_valid_until?: string | null
           company_id?: string | null
           company_name?: string | null
@@ -16368,9 +16374,12 @@ export type Database = {
         }
         Update: {
           bid_amount_cents?: number | null
+          bid_asked_at?: string | null
           bid_due_at?: string | null
           bid_outcome?: string | null
+          bid_quoted_at?: string | null
           bid_quoted_by_person_id?: string | null
+          bid_selected_at?: string | null
           bid_valid_until?: string | null
           company_id?: string | null
           company_name?: string | null

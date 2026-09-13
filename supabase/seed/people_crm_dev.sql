@@ -758,6 +758,18 @@ ON CONFLICT (id) DO UPDATE
       off_job_at = EXCLUDED.off_job_at,
       off_job_reason = EXCLUDED.off_job_reason;
 
+-- SPEC §5.4 #9's Bidding row, verbatim: "Rivera Finishes · paint · Asked 28
+-- September 2026. Due 5 October 2026." with the stage word `No response`.
+-- 00631 minted bid_asked_at with the other two dated events (r1 M-6) — before
+-- it, the row could print neither date and the acceptance string had no
+-- record behind it. Written as its own UPDATE rather than two more columns on
+-- a thirty-row INSERT, and idempotent on replay.
+UPDATE public.project_parties
+   SET bid_asked_at = DATE '2026-09-28',
+       bid_due_at   = DATE '2026-10-05',
+       bid_outcome  = COALESCE(bid_outcome, 'no_response')
+ WHERE id = 'd0e30000-0000-0000-0000-000000000091';
+
 -- ═══════════════════════════════════════════════════════════════════════════
 -- QA-R5-2 — RE-ANCHOR OKONKWO'S ENGAGEMENT DATES ON TODAY.
 --

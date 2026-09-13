@@ -448,6 +448,20 @@ export interface StudioContactHistory {
   projectCount: number;
   /** The most recent of those projects, by the party row's created_at. */
   lastProjectName: string | null;
+  /**
+   * EVERY prior job this card has a seat on, newest first — not only the most
+   * recent one.
+   *
+   * SPEC §5.7 #3 searches a PRIOR JOB ("Lindqvist"), and the population bring
+   * forward exists for is the repeat sub, who by definition has been seated
+   * since. Matching `lastProjectName` alone meant a card could only ever be
+   * found by its single latest job: on a fresh project, searching "Lindqvist"
+   * returned Ben Ostrom and hid Dana Kowalski, Pete Rusk, Ingrid Halvorsen and
+   * Claire Bissett, all four of whom worked it (QA r1 QA-3, code review r1
+   * MAJOR-6). The rows are already in hand — this is the same query, grouped
+   * differently, at no extra request.
+   */
+  projectNames: string[];
   lastAt: string | null;
   /**
    * SPEC §5.7 #4 — the YEAR THAT JOB CLOSED, which is not the year the studio
@@ -481,10 +495,26 @@ export interface StudioContactHistory {
  *    card reuses its source party's uuid as its own id). That is fine here:
  *    this groups by the COLUMN, never by comparing id spaces.
  */
-export function useStudioContactHistory(contactIds: string[]) {
+export function useStudioContactHistory(
+  contactIds: string[],
+  options?: {
+    /**
+     * The job the reader is standing on, left OUT of the rollup.
+     *
+     * `lastProjectName` is the card's most recent seat, and the picker lists
+     * cards already seated on the open job — so opening it on the Okonkwo
+     * residence could print "Worked 1 prior project, Okonkwo residence" on a
+     * row, and "from the Okonkwo residence" in the count line, while adding to
+     * Okonkwo (code review r1 MAJOR-5). A PRIOR job is one that is not this
+     * one.
+     */
+    excludeProjectId?: string | null;
+  },
+) {
   const ids = [...new Set(contactIds.filter(Boolean))].sort();
+  const excludeProjectId = options?.excludeProjectId ?? null;
   return useQuery({
-    queryKey: ['studio-contact-history', ids],
+    queryKey: ['studio-contact-history', ids, excludeProjectId],
     enabled: ids.length > 0,
     queryFn: async (): Promise<Record<string, StudioContactHistory>> => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -501,6 +531,8 @@ export function useStudioContactHistory(contactIds: string[]) {
         string,
         {
           projects: Set<string>;
+          /** project_id -> [name, newest created_at on it] */
+          named: Map<string, { name: string; at: string }>;
           lastAt: string | null;
           lastName: string | null;
           lastClosedAt: string | null;
@@ -517,8 +549,10 @@ export function useStudioContactHistory(contactIds: string[]) {
       }>) {
         const key = raw.studio_contact_id;
         if (!key) continue;
+        if (excludeProjectId && raw.project_id === excludeProjectId) continue;
         const bucket = (acc[key] ??= {
           projects: new Set(),
+          named: new Map(),
           lastAt: null,
           lastName: null,
           lastClosedAt: null,
@@ -526,6 +560,11 @@ export function useStudioContactHistory(contactIds: string[]) {
         if (raw.project_id) bucket.projects.add(raw.project_id);
         const embed = Array.isArray(raw.projects) ? raw.projects[0] : raw.projects;
         const name = embed?.name ?? null;
+        if (raw.project_id && name) {
+          const at = raw.created_at ?? '';
+          const seen = bucket.named.get(raw.project_id);
+          if (!seen || at > seen.at) bucket.named.set(raw.project_id, { name, at });
+        }
         if (!bucket.lastAt || (raw.created_at && raw.created_at > bucket.lastAt)) {
           bucket.lastAt = raw.created_at ?? bucket.lastAt;
           bucket.lastName = name ?? bucket.lastName;
@@ -538,6 +577,13 @@ export function useStudioContactHistory(contactIds: string[]) {
         out[id] = {
           projectCount: b.projects.size,
           lastProjectName: b.lastName,
+          projectNames: [
+            ...new Set(
+              [...b.named.values()]
+                .sort((a, z) => (a.at < z.at ? 1 : a.at > z.at ? -1 : 0))
+                .map((entry) => entry.name),
+            ),
+          ],
           lastAt: b.lastAt,
           lastClosedYear: b.lastClosedAt ? b.lastClosedAt.slice(0, 4) : null,
         };

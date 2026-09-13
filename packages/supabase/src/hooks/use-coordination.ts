@@ -897,11 +897,13 @@ export function seatDeleteRefusal(facts: {
  * survives only for a mistaken add, and refuses the moment the seat carries a
  * consent record, a bid or a document the studio holds.
  *
- * The bid check reads `stage`, because the bid COLUMNS (`bid_due_at`,
- * `bid_outcome`, …) are P2 and do not exist yet: a seat sitting in one of the
- * bid stages is a seat the studio asked for a price, whatever columns the row
- * has. Named here so the check widens with the columns rather than silently
- * staying narrow.
+ * The bid check reads the bid COLUMNS (00631) as well as `stage`. A seat in
+ * one of the bid stages is a seat the studio asked for a price whatever
+ * columns the row has; and a seat carrying any bid column is one whatever
+ * stage it now sits in — `useSetPartyBid` moves `selected → awarded` and
+ * `withdrawn → off_job`, so the stage list alone let a seat with a written
+ * bid, its dates and its estimator be hard-DELETEd by "Added by mistake"
+ * (code review r1 MAJOR-1).
  */
 export function useRemoveProjectParty() {
   const queryClient = useQueryClient();
@@ -912,7 +914,9 @@ export function useRemoveProjectParty() {
 
       const { data: seat, error: seatError } = await supabase
         .from('project_parties')
-        .select('phone_e164, stage, studio_contact_id, company_id, project_id')
+        .select(
+          `phone_e164, stage, studio_contact_id, company_id, project_id, ${SEAT_BID_COLUMNS.join(', ')}`,
+        )
         .eq('id', id)
         .maybeSingle();
       if (seatError) throw seatError;
@@ -942,7 +946,12 @@ export function useRemoveProjectParty() {
       }
 
       const bidStages = ['prospect', 'invited', 'bidding', 'declined', 'no_response'];
-      const hasBid = bidStages.includes((seat?.stage as string | null) ?? '');
+      const hasBid =
+        bidStages.includes((seat?.stage as string | null) ?? '') ||
+        SEAT_BID_COLUMNS.some(
+          (column) =>
+            (seat as Record<string, unknown> | null)?.[column] != null,
+        );
 
       /**
        * CR13-5 — THE GUARD ASKS THE QUESTION THE FACE ASKS.
@@ -2266,6 +2275,49 @@ export interface SeatBid {
   bidValidUntil: string | null;
   bidQuotedByPersonId: string | null;
   bidAmountCents: number | null;
+  /** SPEC §5.4 #9 — "Asked 28 September 2026." */
+  bidAskedAt: string | null;
+  /** R-R — "Quoted 2 October 2026." */
+  bidQuotedAt: string | null;
+  /** R-R — "Selected 9 October 2026." */
+  bidSelectedAt: string | null;
+}
+
+/** The columns that ARE the bid — 00631's five facts plus its three dates. */
+export const SEAT_BID_COLUMNS = [
+  'bid_due_at',
+  'bid_outcome',
+  'bid_valid_until',
+  'bid_quoted_by_person_id',
+  'bid_amount_cents',
+  'bid_asked_at',
+  'bid_quoted_at',
+  'bid_selected_at',
+] as const;
+
+/**
+ * Does this seat carry a bid AT ALL — the question `stage` could only
+ * approximate while the columns were P2.
+ *
+ * `stage` was the whole predicate behind `seatDeleteRefusal`'s `hasBid` and
+ * behind the Bidding band's editor, and `useSetPartyBid` writes `selected →
+ * awarded` and `withdrawn → off_job`, neither of which is a bid stage. So a
+ * seat carrying "Due 5 Oct", "Holds until 4 Nov", "Priced by Tom Marrow" and
+ * outcome Selected answered `false` to "does this carry a bid", and "Added by
+ * mistake" hard-DELETEd the bid history with it (code review r1 MAJOR-1).
+ */
+export function seatCarriesBid(bid: SeatBid | null | undefined): boolean {
+  if (!bid) return false;
+  return (
+    bid.bidDueAt != null ||
+    bid.bidOutcome != null ||
+    bid.bidValidUntil != null ||
+    bid.bidQuotedByPersonId != null ||
+    bid.bidAmountCents != null ||
+    bid.bidAskedAt != null ||
+    bid.bidQuotedAt != null ||
+    bid.bidSelectedAt != null
+  );
 }
 
 export interface SetPartyBidInput {
@@ -2322,9 +2374,7 @@ export function useProjectPartyBids(projectId: string | null | undefined) {
       const supabase = getSupabase() as any;
       const { data, error } = await supabase
         .from('project_parties')
-        .select(
-          'id, bid_due_at, bid_outcome, bid_valid_until, bid_quoted_by_person_id, bid_amount_cents',
-        )
+        .select(`id, ${SEAT_BID_COLUMNS.join(', ')}`)
         .eq('project_id', projectId);
       if (error) throw error;
       const index: Record<string, SeatBid> = {};
@@ -2339,6 +2389,9 @@ export function useProjectPartyBids(projectId: string | null | undefined) {
           bidQuotedByPersonId:
             (row.bid_quoted_by_person_id as string | null) ?? null,
           bidAmountCents: (row.bid_amount_cents as number | null) ?? null,
+          bidAskedAt: (row.bid_asked_at as string | null) ?? null,
+          bidQuotedAt: (row.bid_quoted_at as string | null) ?? null,
+          bidSelectedAt: (row.bid_selected_at as string | null) ?? null,
         };
       }
       return index;
@@ -2367,6 +2420,15 @@ export function useSetPartyBid() {
         dbPatch.bid_quoted_by_person_id = patch.bidQuotedByPersonId || null;
       if (patch.bidAmountCents !== undefined)
         dbPatch.bid_amount_cents = patch.bidAmountCents ?? null;
+      // 00631's three dated events (SPEC §5.4 #9, R-R). They are a RECORD of
+      // what happened, so each is written exactly as the studio typed it and
+      // none is derived from the outcome.
+      if (patch.bidAskedAt !== undefined)
+        dbPatch.bid_asked_at = patch.bidAskedAt || null;
+      if (patch.bidQuotedAt !== undefined)
+        dbPatch.bid_quoted_at = patch.bidQuotedAt || null;
+      if (patch.bidSelectedAt !== undefined)
+        dbPatch.bid_selected_at = patch.bidSelectedAt || null;
       if (patch.bidOutcome !== undefined) {
         dbPatch.bid_outcome = patch.bidOutcome ?? null;
         if (patch.bidOutcome) {

@@ -29,6 +29,8 @@ import { useMemo, useState } from 'react';
 import {
   ALL_SEAT_BID_OUTCOMES,
   SEAT_BID_OUTCOME_ACTS,
+  SEAT_BID_OUTCOME_LABELS,
+  seatCarriesBid,
   fieldLinkUrl,
   indexComplianceNotices,
   seatDeleteRefusal,
@@ -206,11 +208,22 @@ export function RosterRow({
   /** The Bidding band's own editing state (direction §3.4). */
   const [editingBid, setEditingBid] = useState(false);
   const [bidDraft, setBidDraft] = useState<{
+    askedAt: string;
     dueAt: string;
+    quotedAt: string;
+    selectedAt: string;
     outcome: SeatBidOutcome | '';
     validUntil: string;
     quotedBy: string;
-  }>({ dueAt: '', outcome: '', validUntil: '', quotedBy: '' });
+  }>({
+    askedAt: '',
+    dueAt: '',
+    quotedAt: '',
+    selectedAt: '',
+    outcome: '',
+    validUntil: '',
+    quotedBy: '',
+  });
 
   const updateParty = useUpdateProjectParty();
   const setBid = useSetPartyBid();
@@ -359,14 +372,29 @@ export function RosterRow({
   const quotedByName =
     (bidPeople ?? []).find((p) => p.id === bid?.bidQuotedByPersonId)?.name ?? null;
   const bidLine = bidNote({
+    askedAt: bid?.bidAskedAt,
     dueAt: bid?.bidDueAt,
+    quotedAt: bid?.bidQuotedAt,
+    selectedAt: bid?.bidSelectedAt,
     validUntil: bid?.bidValidUntil,
     quotedByName,
   });
+  /**
+   * MAJOR-7 — the editor follows the BID, not the band.
+   *
+   * `selected → awarded` bands by window and `withdrawn → off_job` bands to
+   * Done, and no other surface offers these fields — so a mis-picked line in a
+   * six-option select was a one-way door: the outcome, the stage, the dates and
+   * the estimator could no longer be corrected from anywhere in the portal.
+   */
+  const hasBid = seatCarriesBid(bid);
 
   const openBidEditor = () => {
     setBidDraft({
+      askedAt: bid?.bidAskedAt ?? '',
       dueAt: bid?.bidDueAt ?? '',
+      quotedAt: bid?.bidQuotedAt ?? '',
+      selectedAt: bid?.bidSelectedAt ?? '',
       outcome: bid?.bidOutcome ?? '',
       validUntil: bid?.bidValidUntil ?? '',
       quotedBy: bid?.bidQuotedByPersonId ?? '',
@@ -380,7 +408,10 @@ export function RosterRow({
         id: seatId,
         projectId,
         patch: {
+          bidAskedAt: bidDraft.askedAt || null,
           bidDueAt: bidDraft.dueAt || null,
+          bidQuotedAt: bidDraft.quotedAt || null,
+          bidSelectedAt: bidDraft.selectedAt || null,
           bidOutcome: bidDraft.outcome || null,
           bidValidUntil: bidDraft.validUntil || null,
           bidQuotedByPersonId: bidDraft.quotedBy || null,
@@ -389,7 +420,10 @@ export function RosterRow({
       peopleEvents.bidRecorded({
         outcome: bidDraft.outcome || null,
         fields: [
+          bidDraft.askedAt ? 'asked' : null,
           bidDraft.dueAt ? 'due' : null,
+          bidDraft.quotedAt ? 'quoted' : null,
+          bidDraft.selectedAt ? 'selected' : null,
           bidDraft.outcome ? 'outcome' : null,
           bidDraft.validUntil ? 'valid_until' : null,
           bidDraft.quotedBy ? 'quoted_by' : null,
@@ -407,7 +441,10 @@ export function RosterRow({
   // closed; the sentence beside the held act says which fact is in the way.
   const refusal = seatDeleteRefusal({
     hasConsentRecord: !!row.consent && row.consent !== 'not_asked',
-    hasBid: BID_STAGES.includes(row.stage ?? ''),
+    // MAJOR-1: the STAGE list alone missed every seat the bid editor had
+    // already moved out of the bidding stages — `selected → awarded`,
+    // `withdrawn → off_job`.
+    hasBid: BID_STAGES.includes(row.stage ?? '') || hasBid,
     hasComplianceDocument: !!row.paper && row.paper !== 'not_on_file',
   });
 
@@ -626,7 +663,7 @@ export function RosterRow({
                 has answered is not a body on the site, so the outcome is
                 written as a STAGE WORD and a losing bidder leaves the crew
                 bands the moment the studio records the answer. */}
-            {isSeat && band === 'bidding' && !closing && (
+            {isSeat && (band === 'bidding' || hasBid) && !closing && (
               <div data-bid-editor className="mt-3 border-t border-[var(--color-pearl)] pt-2.5">
                 {!editingBid ? (
                   <button
@@ -635,11 +672,35 @@ export function RosterRow({
                     onClick={openBidEditor}
                     className="da-score-hover inline-flex min-h-11 items-center font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)] hover:text-[var(--color-mocha)]"
                   >
-                    Write the bid
+                    {/* A row that already carries a bid is not being written
+                        for the first time — and MAJOR-7 now offers this door on
+                        an awarded or off-the-job seat, where "Write the bid"
+                        would be the wrong act word. */}
+                    {hasBid ? 'Change what came back' : 'Write the bid'}
                   </button>
                 ) : (
                   <>
                     <div className="flex flex-wrap gap-x-6 gap-y-2">
+                      {/* The three dated events SPEC §5.4 #9 and R-R print.
+                          They are a record of what happened, so each is typed
+                          on its own and none is derived from the outcome. */}
+                      <div>
+                        <label
+                          className={`mb-1 block ${META}`}
+                          htmlFor={`${panelId}-bid-asked`}
+                        >
+                          The studio asked
+                        </label>
+                        <input
+                          id={`${panelId}-bid-asked`}
+                          type="date"
+                          value={bidDraft.askedAt}
+                          onChange={(e) =>
+                            setBidDraft((d) => ({ ...d, askedAt: e.target.value }))
+                          }
+                          className="min-h-11 border-0 border-b border-[var(--color-pearl)] bg-transparent py-2 text-[0.8rem] text-[var(--color-charcoal)] outline-none focus:border-[var(--color-clay)]"
+                        />
+                      </div>
                       <div>
                         <label
                           className={`mb-1 block ${META}`}
@@ -686,6 +747,40 @@ export function RosterRow({
                       <div>
                         <label
                           className={`mb-1 block ${META}`}
+                          htmlFor={`${panelId}-bid-quoted`}
+                        >
+                          The number came back
+                        </label>
+                        <input
+                          id={`${panelId}-bid-quoted`}
+                          type="date"
+                          value={bidDraft.quotedAt}
+                          onChange={(e) =>
+                            setBidDraft((d) => ({ ...d, quotedAt: e.target.value }))
+                          }
+                          className="min-h-11 border-0 border-b border-[var(--color-pearl)] bg-transparent py-2 text-[0.8rem] text-[var(--color-charcoal)] outline-none focus:border-[var(--color-clay)]"
+                        />
+                      </div>
+                      <div>
+                        <label
+                          className={`mb-1 block ${META}`}
+                          htmlFor={`${panelId}-bid-selected`}
+                        >
+                          The studio chose them
+                        </label>
+                        <input
+                          id={`${panelId}-bid-selected`}
+                          type="date"
+                          value={bidDraft.selectedAt}
+                          onChange={(e) =>
+                            setBidDraft((d) => ({ ...d, selectedAt: e.target.value }))
+                          }
+                          className="min-h-11 border-0 border-b border-[var(--color-pearl)] bg-transparent py-2 text-[0.8rem] text-[var(--color-charcoal)] outline-none focus:border-[var(--color-clay)]"
+                        />
+                      </div>
+                      <div>
+                        <label
+                          className={`mb-1 block ${META}`}
                           htmlFor={`${panelId}-bid-holds`}
                         >
                           The number holds until
@@ -725,10 +820,14 @@ export function RosterRow({
                       </div>
                     </div>
                     <p className="mt-2 text-[0.7rem] text-[var(--color-aged-oak)]">
+                      {/* MAJOR-3: the sentence names the DESTINATION, so the
+                          state map answers it — SEAT_BID_OUTCOME_ACTS are acts
+                          ("They declined") and read as "…moves Northgate
+                          Electric to they declined." in this frame. */}
                       {bidDraft.outcome
                         ? `Recording this moves ${row.name} to ${
-                            SEAT_BID_OUTCOME_ACTS[bidDraft.outcome]
-                          .toLowerCase()}. A bidder who did not win never reads as crew.`
+                            SEAT_BID_OUTCOME_LABELS[bidDraft.outcome]
+                          }. A bidder who did not win never reads as crew.`
                         : 'The outcome is what moves them out of the bidding band. Nothing else on this row does.'}
                     </p>
                     <DocumentActionRow

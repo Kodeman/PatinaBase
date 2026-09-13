@@ -57,6 +57,29 @@ jest.mock('@patina/supabase', () => ({
     no_response: 'No response',
     withdrawn: 'They withdrew',
   },
+  // MAJOR-3: the consequence sentence names a destination, so it reads the
+  // STATE map, not the act map.
+  SEAT_BID_OUTCOME_LABELS: {
+    asked: 'Bidding',
+    quoted: 'Bidding',
+    selected: 'Awarded',
+    declined: 'Declined',
+    no_response: 'No response',
+    withdrawn: 'Off the job',
+  },
+  // MAJOR-1 / MAJOR-7: the bid follows its COLUMNS, not the band.
+  seatCarriesBid: (bid: Record<string, unknown> | null | undefined) =>
+    !!bid &&
+    [
+      'bidDueAt',
+      'bidOutcome',
+      'bidValidUntil',
+      'bidQuotedByPersonId',
+      'bidAmountCents',
+      'bidAskedAt',
+      'bidQuotedAt',
+      'bidSelectedAt',
+    ].some((key) => bid[key] != null),
   fieldLinkUrl: (token: string) => `https://client.patina.cloud/field/${token}`,
   AUTHORITY_SCOPE_LABELS: {
     money: 'Signs money',
@@ -703,6 +726,23 @@ describe('RosterRow — the Bidding band', () => {
     bidValidUntil: '2026-11-04',
     bidQuotedByPersonId: 'card-tom',
     bidAmountCents: null,
+    // 00631's three dated events (r1 M-6).
+    bidAskedAt: null,
+    bidQuotedAt: null,
+    bidSelectedAt: null,
+  };
+
+  /** A seat carrying nothing at all — MAJOR-7's negative control. */
+  const NO_BID = {
+    seatId: 'seat-rivera',
+    bidDueAt: null,
+    bidOutcome: null,
+    bidValidUntil: null,
+    bidQuotedByPersonId: null,
+    bidAmountCents: null,
+    bidAskedAt: null,
+    bidQuotedAt: null,
+    bidSelectedAt: null,
   };
 
   const PEOPLE = [{ id: 'card-tom', name: 'Tom Marrow' }];
@@ -723,6 +763,29 @@ describe('RosterRow — the Bidding band', () => {
     );
   });
 
+  it('prints the three dated events SPEC §5.4 #9 and R-R require (r1 M-6)', () => {
+    render(
+      <RosterRow
+        row={bidSeat()}
+        band="bidding"
+        expanded={false}
+        onToggle={jest.fn()}
+        bid={{
+          ...BID,
+          bidAskedAt: '2026-09-28',
+          bidQuotedAt: '2026-10-02',
+          bidSelectedAt: '2026-10-09',
+        }}
+        bidPeople={PEOPLE}
+      />,
+    );
+    const note = document.querySelector('[data-bid-note]')?.textContent ?? '';
+    // SPEC §5.4 #9, verbatim and adjacent
+    expect(note).toContain('Asked 28 September 2026. Due 5 October 2026.');
+    // R-R, verbatim and adjacent
+    expect(note).toContain('Quoted 2 October 2026. Selected 9 October 2026.');
+  });
+
   it('prints nothing where 00631 refused to guess a date', () => {
     render(
       <RosterRow
@@ -730,21 +793,27 @@ describe('RosterRow — the Bidding band', () => {
         band="bidding"
         expanded={false}
         onToggle={jest.fn()}
-        bid={{ ...BID, bidDueAt: null, bidValidUntil: null, bidQuotedByPersonId: null }}
+        bid={NO_BID}
         bidPeople={PEOPLE}
       />,
     );
     expect(document.querySelector('[data-bid-note]')).not.toBeInTheDocument();
   });
 
-  it('offers the editor only inside the Bidding band', () => {
+  /**
+   * MAJOR-7 — "Selected" and "They withdrew" were one-way doors: both band the
+   * seat out of Bidding (`awarded` by window, `off_job` to Done) and no other
+   * surface offers these fields, so a mis-picked line in a six-option select
+   * could not be corrected from anywhere in the portal.
+   */
+  it('offers the editor to any seat that CARRIES a bid, in any band', () => {
     const { rerender } = render(
       <RosterRow
         row={bidSeat()}
         band="this_week"
         expanded
         onToggle={jest.fn()}
-        bid={BID}
+        bid={NO_BID}
         bidPeople={PEOPLE}
       />,
     );
@@ -755,21 +824,48 @@ describe('RosterRow — the Bidding band', () => {
         band="bidding"
         expanded
         onToggle={jest.fn()}
+        bid={NO_BID}
+        bidPeople={PEOPLE}
+      />,
+    );
+    expect(document.querySelector('[data-bid-editor]')).toBeInTheDocument();
+    // an awarded seat, banded by its window, keeps its bid door
+    rerender(
+      <RosterRow
+        row={bidSeat()}
+        band="this_week"
+        expanded
+        onToggle={jest.fn()}
         bid={BID}
+        bidPeople={PEOPLE}
+      />,
+    );
+    expect(document.querySelector('[data-bid-editor]')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Change what came back' }),
+    ).toBeInTheDocument();
+    // a seat off the job through "They withdrew" keeps it too
+    rerender(
+      <RosterRow
+        row={bidSeat()}
+        band="done"
+        expanded
+        onToggle={jest.fn()}
+        bid={{ ...BID, bidOutcome: 'withdrawn' }}
         bidPeople={PEOPLE}
       />,
     );
     expect(document.querySelector('[data-bid-editor]')).toBeInTheDocument();
   });
 
-  it('writes the four facts, and moves the stage with the outcome', async () => {
+  it('writes every fact, and moves the stage with the outcome', async () => {
     render(
       <RosterRow
         row={bidSeat()}
         band="bidding"
         expanded
         onToggle={jest.fn()}
-        bid={BID}
+        bid={NO_BID}
         bidPeople={PEOPLE}
       />,
     );
@@ -777,8 +873,17 @@ describe('RosterRow — the Bidding band', () => {
     fireEvent.change(screen.getByLabelText('How it came back'), {
       target: { value: 'declined' },
     });
+    fireEvent.change(screen.getByLabelText('The studio asked'), {
+      target: { value: '2026-09-28' },
+    });
     fireEvent.change(screen.getByLabelText('The answer was owed'), {
       target: { value: '2026-10-05' },
+    });
+    fireEvent.change(screen.getByLabelText('The number came back'), {
+      target: { value: '2026-10-02' },
+    });
+    fireEvent.change(screen.getByLabelText('The studio chose them'), {
+      target: { value: '2026-10-09' },
     });
     fireEvent.click(
       screen.getAllByRole('button', { name: 'Write the bid' })[0],
@@ -788,10 +893,13 @@ describe('RosterRow — the Bidding band', () => {
       id: 'seat-rivera',
       projectId: 'okonkwo',
       patch: {
+        bidAskedAt: '2026-09-28',
         bidDueAt: '2026-10-05',
+        bidQuotedAt: '2026-10-02',
+        bidSelectedAt: '2026-10-09',
         bidOutcome: 'declined',
-        bidValidUntil: '2026-11-04',
-        bidQuotedByPersonId: 'card-tom',
+        bidValidUntil: null,
+        bidQuotedByPersonId: null,
       },
     });
   });
@@ -807,7 +915,9 @@ describe('RosterRow — the Bidding band', () => {
         bidPeople={PEOPLE}
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Write the bid' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Change what came back' }),
+    );
     const options = Array.from(
       (screen.getByLabelText('How it came back') as HTMLSelectElement).options,
     ).map((o) => o.textContent);
@@ -834,12 +944,17 @@ describe('RosterRow — the Bidding band', () => {
         bidPeople={PEOPLE}
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Write the bid' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Change what came back' }),
+    );
     fireEvent.change(screen.getByLabelText('How it came back'), {
       target: { value: 'declined' },
     });
+    // MAJOR-3: a DESTINATION, not an act — never "…moves them to they declined."
     expect(
-      screen.getByText(/A bidder who did not win never reads as crew\./),
+      screen.getByText(
+        'Recording this moves Rivera Finishes to Declined. A bidder who did not win never reads as crew.',
+      ),
     ).toBeInTheDocument();
   });
 
@@ -854,7 +969,9 @@ describe('RosterRow — the Bidding band', () => {
         bidPeople={PEOPLE}
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Write the bid' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Change what came back' }),
+    );
     const options = Array.from(
       (screen.getByLabelText('Who priced it') as HTMLSelectElement).options,
     ).map((o) => o.textContent);

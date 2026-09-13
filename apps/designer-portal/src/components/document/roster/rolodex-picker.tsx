@@ -264,7 +264,13 @@ export function RolodexPicker({
     return rows.slice(0, HISTORY_SCAN);
   }, [contacts, trade]);
 
-  const { data: history } = useStudioContactHistory(scanned.map((c) => c.id));
+  // MAJOR-5: a PRIOR job is one that is not this one. The picker lists cards
+  // already seated here (it refuses them at the press, not in the list), so an
+  // unexcluded rollup let the sheet name the job it was adding to.
+  const { data: history } = useStudioContactHistory(
+    scanned.map((c) => c.id),
+    { excludeProjectId: projectId },
+  );
 
   const hits = useMemo(() => {
     const needle = search.trim().toLowerCase();
@@ -275,7 +281,10 @@ export function RolodexPicker({
           c.full_name,
           c.company_name,
           c.email,
-          history?.[c.id]?.lastProjectName,
+          // EVERY prior job, not just the latest one (QA-3 / MAJOR-6). A
+          // repeat sub who has been seated since is the population this sheet
+          // exists for, and matching one name hid exactly them.
+          ...(history?.[c.id]?.projectNames ?? []),
         ]
           .filter((field): field is string => !!field)
           .some((field) => field.toLowerCase().includes(needle)),
@@ -322,20 +331,59 @@ export function RolodexPicker({
   const { data: notices } = useComplianceNotices(open ? organizationId : null);
   const noticeIndex = useMemo(() => indexComplianceNotices(notices), [notices]);
 
-  /** The prior job every hit shares, or null where the page is mixed. */
+  /**
+   * The prior job every hit shares, or null where the page is mixed.
+   *
+   * MAJOR-5: rows with NO history used to be filtered out before the
+   * uniqueness test, so one carded person with a prior job named the whole
+   * page — "4 of 5 from the Lindqvist kitchen selected" over four rows that
+   * were never on it. A row with no prior job is its own answer, so it goes
+   * into the set as `null` and a mixed page correctly names nothing.
+   *
+   * A hit matched by its SEARCH is matched against every prior job it has, so
+   * the shared name is the searched one where the whole page carries it.
+   */
   const sharedJobName = useMemo(() => {
-    const names = new Set(
-      hits
-        .map((c) => history?.[c.id]?.lastProjectName)
-        .filter((name): name is string => !!name),
+    if (hits.length === 0) return null;
+    const needle = search.trim().toLowerCase();
+    const names = new Set<string | null>(
+      hits.map((c) => {
+        const jobs = history?.[c.id]?.projectNames ?? [];
+        if (jobs.length === 0) return null;
+        const matched = needle
+          ? jobs.find((name) => name.toLowerCase().includes(needle))
+          : undefined;
+        return matched ?? history?.[c.id]?.lastProjectName ?? null;
+      }),
     );
-    return names.size === 1 && hits.length > 0 ? [...names][0] : null;
-  }, [hits, history]);
+    if (names.size !== 1) return null;
+    return [...names][0] ?? null;
+  }, [hits, history, search]);
 
   const cardById = useMemo(
     () => new Map(hits.map((c) => [c.id, c] as const)),
     [hits],
   );
+
+  /**
+   * MAJOR-2 — the count, the label, the sentence and the insert name the SAME
+   * people.
+   *
+   * `picked` held ids and every consumer resolved them through `cardById`,
+   * which is built from `hits` alone. Ticking four under "Lindqvist" and then
+   * narrowing the search — or pressing a kind chip, which re-filters too —
+   * left the sheet reading "4 of 1 … selected" over a primary act saying "Add
+   * four to the roster", a consequence sentence naming one person, and an
+   * insert that wrote one seat. Pruning on every change is the reconciliation:
+   * a card the studio can no longer see is a card it can no longer be told it
+   * is adding.
+   */
+  useEffect(() => {
+    setPicked((current) => {
+      const next = current.filter((id) => cardById.has(id));
+      return next.length === current.length ? current : next;
+    });
+  }, [cardById]);
 
   const paperClauseFor = (contact: StudioContact) =>
     noticedPaperClause(

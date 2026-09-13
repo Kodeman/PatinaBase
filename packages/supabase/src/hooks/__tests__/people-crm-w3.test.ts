@@ -72,9 +72,12 @@ vi.mock("@tanstack/react-query", () => ({
 }));
 
 import {
+  SEAT_BID_COLUMNS,
+  SEAT_BID_OUTCOME_LABELS,
   SEAT_BID_OUTCOME_STAGE,
   asBidError,
   partyBidKeys,
+  seatCarriesBid,
   useBringForward,
   useSetPartyBid,
 } from "../use-coordination";
@@ -343,5 +346,83 @@ describe("indexComplianceNotices", () => {
   it("keeps a warning where no lapse has been recorded", () => {
     const index = indexComplianceNotices([notice("doc-2", "lapses_soon")]);
     expect(index.get("doc-2")?.state).toBe("lapses_soon");
+  });
+});
+
+/**
+ * MAJOR-1 / MAJOR-7 — a seat carries a bid because of its COLUMNS, never
+ * because of the band it happens to sit in. `useSetPartyBid` writes `selected
+ * → awarded` and `withdrawn → off_job`, so a stage-only predicate answered
+ * `false` over a written bid and the hard delete took the record with it.
+ */
+describe("seatCarriesBid", () => {
+  const EMPTY = {
+    seatId: "seat-1",
+    bidDueAt: null,
+    bidOutcome: null,
+    bidValidUntil: null,
+    bidQuotedByPersonId: null,
+    bidAmountCents: null,
+    bidAskedAt: null,
+    bidQuotedAt: null,
+    bidSelectedAt: null,
+  } as const;
+
+  it("is false for no bid at all", () => {
+    expect(seatCarriesBid(null)).toBe(false);
+    expect(seatCarriesBid(undefined)).toBe(false);
+    expect(seatCarriesBid({ ...EMPTY })).toBe(false);
+  });
+
+  it("is true for EVERY one of 00631's bid columns on its own", () => {
+    const byColumn: Record<string, keyof typeof EMPTY> = {
+      bid_due_at: "bidDueAt",
+      bid_outcome: "bidOutcome",
+      bid_valid_until: "bidValidUntil",
+      bid_quoted_by_person_id: "bidQuotedByPersonId",
+      bid_amount_cents: "bidAmountCents",
+      bid_asked_at: "bidAskedAt",
+      bid_quoted_at: "bidQuotedAt",
+      bid_selected_at: "bidSelectedAt",
+    };
+    for (const column of SEAT_BID_COLUMNS) {
+      const field = byColumn[column];
+      expect(field, `${column} has no camelCase twin`).toBeTruthy();
+      expect(
+        seatCarriesBid({
+          ...EMPTY,
+          [field]: field === "bidAmountCents" ? 1 : "2026-10-05",
+        } as never),
+        column,
+      ).toBe(true);
+    }
+  });
+
+  it("keeps naming a bid on a seat the outcome has banded away", () => {
+    // selected -> awarded, withdrawn -> off_job: neither is a bid stage
+    expect(
+      seatCarriesBid({ ...EMPTY, bidOutcome: "selected" } as never),
+    ).toBe(true);
+    expect(SEAT_BID_OUTCOME_STAGE.selected).toBe("awarded");
+    expect(
+      seatCarriesBid({ ...EMPTY, bidOutcome: "withdrawn" } as never),
+    ).toBe(true);
+    expect(SEAT_BID_OUTCOME_STAGE.withdrawn).toBe("off_job");
+  });
+});
+
+/**
+ * MAJOR-3 — the editor's consequence sentence names a DESTINATION, so it
+ * reads the state map. The act map ("They declined") lower-cased into that
+ * frame produced "Recording this moves Northgate Electric to they declined."
+ */
+describe("SEAT_BID_OUTCOME_LABELS", () => {
+  it("reads as a state a seat can be moved TO", () => {
+    expect(SEAT_BID_OUTCOME_LABELS.declined).toBe("Declined");
+    expect(SEAT_BID_OUTCOME_LABELS.withdrawn).toBe("Off the job");
+    expect(SEAT_BID_OUTCOME_LABELS.asked).toBe("Bidding");
+    for (const label of Object.values(SEAT_BID_OUTCOME_LABELS)) {
+      expect(label.startsWith("They ")).toBe(false);
+    }
   });
 });

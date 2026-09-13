@@ -214,11 +214,20 @@ BEGIN
     RAISE EXCEPTION 'BLOCK 1 FAIL: rule did not repoint (% rows)', n;
   END IF;
 
-  -- compliance document
+  -- compliance document: crm-model §4 — the absorbed card's paper KEEPS ITS
+  -- ORIGINAL HOLDER ID unless the survivor already holds the same paper in
+  -- force to supersede it. The survivor holds no `license` at all, so this one
+  -- stays where it is rather than being moved onto a card that never earned it
+  -- (r1 B-1).
   SELECT holder_id INTO v FROM public.studio_compliance_documents
    WHERE id = 'f9400000-0000-4000-8000-00000000000a';
-  IF v <> 'f9100000-0000-4000-8000-00000000000a' THEN
-    RAISE EXCEPTION 'BLOCK 1 FAIL: document holder is %', v;
+  IF v <> 'f9100000-0000-4000-8000-00000000000b' THEN
+    RAISE EXCEPTION 'BLOCK 1 FAIL: document holder is % (crm-model §4 keeps it on the absorbed card)', v;
+  END IF;
+  SELECT count(*) INTO n FROM public.studio_compliance_documents
+   WHERE id = 'f9400000-0000-4000-8000-00000000000a' AND superseded_by IS NOT NULL;
+  IF n <> 0 THEN
+    RAISE EXCEPTION 'BLOCK 1 FAIL: an absorbed paper with no successor was marked superseded';
   END IF;
 
   -- the three designations another card held
@@ -395,6 +404,236 @@ BEGIN
 END $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════
+-- 1b. What a merge must NOT do, and the four pointers it must not miss
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Round 1 of the adversarial migration review found four defects that a green
+-- suite could not see, because block 1 asserted the GUARDS and never the
+-- REPOINTING: B-1 (a firm merge flipped the survivor's paper word to lapsed),
+-- B-2 (the ordinary roster write was refused outright afterwards), M-1 (the
+-- shared-phone merge left the auto-link ambiguous forever), M-2 (the seat's
+-- bid estimator was never repointed) and M-3 (a household was bricked by a
+-- member merge). Each has an assertion here.
+
+-- ── B-1 · THE SURVIVOR'S PAPER WORD, BEFORE AND AFTER A FIRM MERGE ────────
+INSERT INTO public.studio_contacts
+  (id, organization_id, entity_kind, contact_kind, company_name, company_kind, created_by) VALUES
+  ('f9200000-0000-4000-8000-00000000000d','f9000000-0000-4000-8000-00000000000a','company','sub','Acquiring Firm','sub','a0000000-0000-0000-0000-000000000004'),
+  ('f9200000-0000-4000-8000-00000000000e','f9000000-0000-4000-8000-00000000000a','company','sub','Absorbed Firm','sub','a0000000-0000-0000-0000-000000000004');
+
+INSERT INTO public.studio_compliance_documents
+  (id, organization_id, holder_type, holder_id, doc_type, blocks, issued_on, expires_on) VALUES
+  -- the survivor's own certificate, current for another ten months
+  ('f9400000-0000-4000-8000-00000000000c','f9000000-0000-4000-8000-00000000000a','company',
+   'f9200000-0000-4000-8000-00000000000d','coi_gl', ARRAY['site_access']::text[],
+   CURRENT_DATE - 60, CURRENT_DATE + 300),
+  -- the absorbed firm's, lapsed a month ago — the row that used to move
+  ('f9400000-0000-4000-8000-00000000000d','f9000000-0000-4000-8000-00000000000a','company',
+   'f9200000-0000-4000-8000-00000000000e','coi_gl', ARRAY['site_access']::text[],
+   CURRENT_DATE - 400, CURRENT_DATE - 30),
+  -- and a lapsed paper the survivor holds NOTHING of the same kind to retire
+  ('f9400000-0000-4000-8000-00000000000e','f9000000-0000-4000-8000-00000000000a','company',
+   'f9200000-0000-4000-8000-00000000000e','bond', ARRAY['payment']::text[],
+   CURRENT_DATE - 400, CURRENT_DATE - 10);
+
+DO $$
+DECLARE
+  w_before text;
+  w_after  text;
+  n        integer;
+BEGIN
+  w_before := public.compliance_state('f9200000-0000-4000-8000-00000000000d');
+  IF w_before <> 'current' THEN
+    RAISE EXCEPTION 'BLOCK 1b FAIL: the survivor firm reads % before the merge', w_before;
+  END IF;
+
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  PERFORM public.merge_studio_contacts(
+    'f9200000-0000-4000-8000-00000000000d','f9200000-0000-4000-8000-00000000000e','company_name');
+  PERFORM pg_temp.reset_role();
+
+  w_after := public.compliance_state('f9200000-0000-4000-8000-00000000000d');
+  IF w_after <> 'current' THEN
+    RAISE EXCEPTION 'BLOCK 1b FAIL: the merge flipped the survivor''s paper word to % (r1 B-1)', w_after;
+  END IF;
+
+  -- the absorbed certificate moved, and says WHY it no longer counts
+  SELECT count(*) INTO n FROM public.studio_compliance_documents
+   WHERE id = 'f9400000-0000-4000-8000-00000000000d'
+     AND holder_id     = 'f9200000-0000-4000-8000-00000000000d'
+     AND superseded_by = 'f9400000-0000-4000-8000-00000000000c';
+  IF n <> 1 THEN
+    RAISE EXCEPTION 'BLOCK 1b FAIL: the absorbed certificate was not superseded by the survivor''s';
+  END IF;
+
+  -- the absorbed paper with NO successor stays where crm-model §4 puts it
+  SELECT count(*) INTO n FROM public.studio_compliance_documents
+   WHERE id = 'f9400000-0000-4000-8000-00000000000e'
+     AND holder_id = 'f9200000-0000-4000-8000-00000000000e'
+     AND superseded_by IS NULL;
+  IF n <> 1 THEN
+    RAISE EXCEPTION 'BLOCK 1b FAIL: a lapsed paper with no successor was moved onto the survivor';
+  END IF;
+END $$;
+
+-- ── B-2 / M-1 · THE ORDINARY ROSTER WRITE, AFTER A SHARED-PHONE MERGE ─────
+-- Block 1 merged Dana Duplicate into Dana Survivor on their shared number.
+-- Both cards still carry it, so the "exactly one card" test could only answer
+-- again once merged_into was excluded from the resolver.
+DO $$
+DECLARE
+  v_card uuid;
+  v_seat uuid;
+  v_stamp uuid;
+BEGIN
+  v_card := public.rolodex_card_for_party_phone(
+    'f9300000-0000-4000-8000-00000000000a', '+16125550901');
+  IF v_card IS DISTINCT FROM 'f9100000-0000-4000-8000-00000000000a' THEN
+    RAISE EXCEPTION 'BLOCK 1b FAIL: the shared number resolves to % not the survivor (r1 M-1)', v_card;
+  END IF;
+
+  -- the room's own act: no card named, a phone supplied
+  INSERT INTO public.project_parties
+    (project_id, party_kind, display_name, phone, created_by)
+  VALUES
+    ('f9300000-0000-4000-8000-00000000000a','sub','Ordinary Add','(612) 555-0901',
+     'a0000000-0000-0000-0000-000000000004')
+  RETURNING id INTO v_seat;
+
+  SELECT studio_contact_id INTO v_stamp FROM public.project_parties WHERE id = v_seat;
+  IF v_stamp IS DISTINCT FROM 'f9100000-0000-4000-8000-00000000000a' THEN
+    RAISE EXCEPTION 'BLOCK 1b FAIL: the new seat was stamped % (r1 B-2)', v_stamp;
+  END IF;
+  DELETE FROM public.project_parties WHERE id = v_seat;
+END $$;
+
+-- ── M-2 · THE SEAT'S BID ESTIMATOR ────────────────────────────────────────
+INSERT INTO public.studio_contacts
+  (id, organization_id, entity_kind, contact_kind, full_name, phone, created_by, created_at) VALUES
+  ('f9100000-0000-4000-8000-000000000011','f9000000-0000-4000-8000-00000000000a','person','sub','Tom Estimator','(612) 555-0911','a0000000-0000-0000-0000-000000000004','2025-04-01'),
+  ('f9100000-0000-4000-8000-000000000012','f9000000-0000-4000-8000-00000000000a','person','sub','Tom Estimator Dup','(612) 555-0912','a0000000-0000-0000-0000-000000000004','2026-04-01');
+
+INSERT INTO public.project_parties
+  (id, project_id, party_kind, display_name, created_by,
+   bid_outcome, bid_due_at, bid_asked_at, bid_quoted_at, bid_quoted_by_person_id) VALUES
+  ('f9500000-0000-4000-8000-00000000000b','f9300000-0000-4000-8000-00000000000a','sub','Priced Seat',
+   'a0000000-0000-0000-0000-000000000004','quoted','2026-10-05','2026-09-28','2026-10-02',
+   'f9100000-0000-4000-8000-000000000012');
+
+DO $$
+DECLARE
+  v uuid;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  PERFORM public.merge_studio_contacts(
+    'f9100000-0000-4000-8000-000000000011','f9100000-0000-4000-8000-000000000012','profile');
+  PERFORM pg_temp.reset_role();
+
+  SELECT bid_quoted_by_person_id INTO v FROM public.project_parties
+   WHERE id = 'f9500000-0000-4000-8000-00000000000b';
+  IF v IS DISTINCT FROM 'f9100000-0000-4000-8000-000000000011' THEN
+    RAISE EXCEPTION 'BLOCK 1b FAIL: bid_quoted_by_person_id is % after the merge (r1 M-2)', v;
+  END IF;
+
+  -- and the next ordinary save of that bid is not refused
+  UPDATE public.project_parties
+     SET bid_amount_cents = 1234500, bid_selected_at = '2026-10-09', bid_outcome = 'selected'
+   WHERE id = 'f9500000-0000-4000-8000-00000000000b';
+
+  -- M-6: the three dated events are columns, and they hold what was written
+  PERFORM 1 FROM public.project_parties
+   WHERE id = 'f9500000-0000-4000-8000-00000000000b'
+     AND bid_asked_at    = DATE '2026-09-28'
+     AND bid_quoted_at   = DATE '2026-10-02'
+     AND bid_selected_at = DATE '2026-10-09';
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'BLOCK 1b FAIL: the asked/quoted/selected dates did not round-trip (r1 M-6)';
+  END IF;
+END $$;
+
+-- ── M-3 · A HOUSEHOLD SURVIVES A MEMBER MERGE ─────────────────────────────
+INSERT INTO public.studio_contacts
+  (id, organization_id, entity_kind, contact_kind, full_name, phone, created_by, created_at) VALUES
+  ('f9100000-0000-4000-8000-000000000013','f9000000-0000-4000-8000-00000000000a','person','client_rep','Spouse Survivor','(612) 555-0913','a0000000-0000-0000-0000-000000000004','2025-05-01'),
+  ('f9100000-0000-4000-8000-000000000014','f9000000-0000-4000-8000-00000000000a','person','client_rep','Spouse Duplicate','(612) 555-0914','a0000000-0000-0000-0000-000000000004','2026-05-01');
+
+-- BOTH ids are already members, which is the shape a plain array_replace would
+-- leave carrying the survivor twice.
+INSERT INTO public.client_households
+  (id, organization_id, designer_id, display_name, member_person_ids,
+   primary_member_person_id, created_by) VALUES
+  ('f9600000-0000-4000-8000-00000000000c','f9000000-0000-4000-8000-00000000000a',
+   'a0000000-0000-0000-0000-000000000004','Merge household',
+   ARRAY['f9100000-0000-4000-8000-000000000013','f9100000-0000-4000-8000-000000000014']::uuid[],
+   'f9100000-0000-4000-8000-000000000014','a0000000-0000-0000-0000-000000000004');
+
+DO $$
+DECLARE
+  v_arr  uuid[];
+  v_prim uuid;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  PERFORM public.merge_studio_contacts(
+    'f9100000-0000-4000-8000-000000000013','f9100000-0000-4000-8000-000000000014','profile');
+
+  SELECT member_person_ids, primary_member_person_id INTO v_arr, v_prim
+    FROM public.client_households WHERE id = 'f9600000-0000-4000-8000-00000000000c';
+  IF v_arr <> ARRAY['f9100000-0000-4000-8000-000000000013']::uuid[] THEN
+    RAISE EXCEPTION 'BLOCK 1b FAIL: the household holds % after the merge (r1 M-3)', v_arr;
+  END IF;
+  IF v_prim IS DISTINCT FROM 'f9100000-0000-4000-8000-000000000013' THEN
+    RAISE EXCEPTION 'BLOCK 1b FAIL: the primary member is % after the merge', v_prim;
+  END IF;
+
+  -- the row is not bricked: the room's own act still writes to it
+  PERFORM public.add_household_member(
+    'f9600000-0000-4000-8000-00000000000c','f9100000-0000-4000-8000-00000000000e',
+    'client', NULL);
+  PERFORM pg_temp.reset_role();
+
+  SELECT member_person_ids INTO v_arr
+    FROM public.client_households WHERE id = 'f9600000-0000-4000-8000-00000000000c';
+  IF NOT ('f9100000-0000-4000-8000-00000000000e' = ANY (v_arr)) THEN
+    RAISE EXCEPTION 'BLOCK 1b FAIL: add_household_member could not write after a member merge';
+  END IF;
+END $$;
+
+-- ── M-4 · PR-n OVER A CHANGE: a plain member may not ERASE the figure ─────
+DO $$
+DECLARE
+  v integer;
+BEGIN
+  UPDATE public.client_households SET co_threshold_cents = 250000
+   WHERE id = 'f9600000-0000-4000-8000-00000000000c';
+
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000003');
+  BEGIN
+    UPDATE public.client_households SET co_threshold_cents = NULL
+     WHERE id = 'f9600000-0000-4000-8000-00000000000c';
+    PERFORM pg_temp.reset_role();
+    RAISE EXCEPTION 'BLOCK 1b FAIL: a plain member erased the change-order figure (r1 M-4)';
+  EXCEPTION WHEN OTHERS THEN
+    PERFORM pg_temp.reset_role();
+    IF SQLERRM NOT LIKE '%household_threshold_forbidden%' THEN
+      RAISE EXCEPTION 'BLOCK 1b FAIL: expected household_threshold_forbidden, got %', SQLERRM;
+    END IF;
+  END;
+
+  SELECT co_threshold_cents INTO v FROM public.client_households
+   WHERE id = 'f9600000-0000-4000-8000-00000000000c';
+  IF v IS DISTINCT FROM 250000 THEN
+    RAISE EXCEPTION 'BLOCK 1b FAIL: the figure is % after the refused write', v;
+  END IF;
+
+  -- the owner may, in both directions
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  UPDATE public.client_households SET co_threshold_cents = 500000
+   WHERE id = 'f9600000-0000-4000-8000-00000000000c';
+  UPDATE public.client_households SET co_threshold_cents = NULL
+   WHERE id = 'f9600000-0000-4000-8000-00000000000c';
+  PERFORM pg_temp.reset_role();
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
 -- 2. sweep_compliance_expiries — one notice per (document, state)
 -- ═══════════════════════════════════════════════════════════════════════════
 INSERT INTO public.studio_compliance_documents
@@ -483,6 +722,29 @@ BEGIN
                                         'f9400000-0000-4000-8000-00000000010b');
   IF n <> 0 THEN
     RAISE EXCEPTION 'BLOCK 2 FAIL: a plain member was notified % time(s)', n;
+  END IF;
+
+  -- M-5: NO SCHEMA WORD ON THE FACE. doc_label is blank on ordinary paper, so
+  -- the fallback used to be the raw doc_type token and the principal read
+  -- "coi_gl for Ostrom Builders lapsed 31 Dec 2025." SPEC §7 and §5.7 #8
+  -- forbid it; every token in the vocabulary is checked, not only the one the
+  -- fixture happens to carry.
+  SELECT count(*) INTO n FROM public.notification_log
+   WHERE type = 'compliance_document_expiry'
+     AND (metadata->>'document_id') IN ('f9400000-0000-4000-8000-00000000010a',
+                                        'f9400000-0000-4000-8000-00000000010b')
+     AND ( (metadata->>'message') ~ '(coi_gl|coi_wc|coi_auto|lien_waiver_conditional|lien_waiver_unconditional|other_named)'
+        OR (metadata->>'message') ~ '^w9 '
+        OR (metadata->>'message') ~ '^license ' );
+  IF n <> 0 THEN
+    RAISE EXCEPTION 'BLOCK 2 FAIL: % notice(s) print a schema word (r1 M-5)', n;
+  END IF;
+  SELECT count(*) INTO n FROM public.notification_log
+   WHERE type = 'compliance_document_expiry'
+     AND (metadata->>'document_id') = 'f9400000-0000-4000-8000-00000000010a'
+     AND (metadata->>'message') LIKE 'The certificate of insurance for %';
+  IF n = 0 THEN
+    RAISE EXCEPTION 'BLOCK 2 FAIL: the lapsed notice does not name the paper in words';
   END IF;
 
   -- IDEMPOTENT: a second night tells nobody anything new

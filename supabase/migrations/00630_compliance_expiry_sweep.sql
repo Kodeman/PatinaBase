@@ -206,6 +206,7 @@ DECLARE
   v_doc        record;
   v_notice_id  uuid;
   v_holder     text;
+  v_paper      text;
   v_subject    text;
   v_message    text;
   v_link       text;
@@ -263,13 +264,36 @@ BEGIN
                      WHEN 'lapsed' THEN v_holder || '''s paper has lapsed'
                      ELSE               v_holder || '''s paper lapses soon'
                    END;
+      -- THE PAPER, IN THE STUDIO'S WORDS (migrations review r1 M-5). The
+      -- fallback used to be the raw column token, and doc_label is blank on
+      -- every ordinary paper — so the notice the principal actually read was
+      -- "coi_gl for Ostrom Builders lapsed 31 Dec 2025." SPEC §7 and §5.7 #8
+      -- forbid a schema word on a face, and a notification IS a face. The map
+      -- is the whole doc_type vocabulary (00623), so nothing can fall through
+      -- to the token: an `other_named` row is required by
+      -- studio_compliance_documents_doc_label_check to carry its own label,
+      -- and a type this map has not learned reads "a document" rather than a
+      -- column name. The studio's own typed label still wins where it has one.
+      v_paper := COALESCE(
+        NULLIF(btrim(v_doc.doc_label), ''),
+        CASE v_doc.doc_type
+          WHEN 'coi_gl'                    THEN 'the certificate of insurance'
+          WHEN 'coi_wc'                    THEN 'the workers comp certificate'
+          WHEN 'coi_auto'                  THEN 'the auto insurance certificate'
+          WHEN 'w9'                        THEN 'the W-9'
+          WHEN 'license'                   THEN 'the licence'
+          WHEN 'bond'                      THEN 'the bond'
+          WHEN 'lien_waiver_conditional'   THEN 'the conditional lien waiver'
+          WHEN 'lien_waiver_unconditional' THEN 'the unconditional lien waiver'
+          ELSE 'a document'
+        END);
       v_message := CASE v_doc.state
                      WHEN 'lapsed' THEN
-                       COALESCE(NULLIF(btrim(v_doc.doc_label), ''), v_doc.doc_type)
+                       initcap(left(v_paper, 1)) || right(v_paper, -1)
                        || ' for ' || v_holder || ' lapsed '
                        || to_char(v_doc.expires_on, 'FMDD Mon YYYY') || '.'
                      ELSE
-                       COALESCE(NULLIF(btrim(v_doc.doc_label), ''), v_doc.doc_type)
+                       initcap(left(v_paper, 1)) || right(v_paper, -1)
                        || ' for ' || v_holder || ' lapses '
                        || to_char(v_doc.expires_on, 'FMDD Mon YYYY') || '.'
                    END;
