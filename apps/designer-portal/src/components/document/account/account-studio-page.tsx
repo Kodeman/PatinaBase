@@ -32,6 +32,7 @@ import {
   useUpdateStudioBillingSettings,
   useStudioAgreementDefaults,
   useUpdateStudioAgreementDefaults,
+  useStudioMemberRates,
   type MemberRole,
   type OrganizationMemberWithProfile,
 } from '@patina/supabase';
@@ -44,6 +45,7 @@ import { StudioInviteModal } from './studio-invite-modal';
 import { StudioLogoUploadField } from './studio-logo-upload-field';
 import { StudioSetupChecklist } from './studio-setup-checklist';
 import { MemberTitleLine } from './member-title-line';
+import { StudioRateRows } from './studio-rate-rows';
 import { AgreementLibraryCard } from './agreement-library-card';
 import { LicensingAttestationCard } from './licensing-attestation-card';
 import { studioEvents } from '@/lib/analytics/studio-events';
@@ -186,6 +188,9 @@ export function AccountStudioPage() {
   const { data: agreementDefaults } = useStudioAgreementDefaults(
     agreementPartsOn ? studio?.id : null,
   );
+  // HT-3 — the studio's per-member rates. Owner/admin read the studio's rows;
+  // RLS (00598) decides, and the section below renders only for them.
+  const { data: memberRates } = useStudioMemberRates(studio?.id ?? null);
 
   const createOrg = useCreateOrganization();
   const updateOrg = useUpdateOrganization();
@@ -1585,6 +1590,47 @@ export function AccountStudioPage() {
             );
           })}
         </ul>
+      )}
+
+      {/* Studio rates (HT-3) — tier 2 of the one rate chain, owner/admin only.
+          A signed agreement rate still wins; this is what prices an hour where
+          no card covers the work, and it is the only rate-editing surface
+          outside a contract. Nothing here writes onto a time entry: the server
+          resolves the rate when the hour is priced. */}
+      {canManage && (
+        <div className="mt-6 border-t border-[var(--color-pearl)] pt-5">
+          <h3 className={`${LABEL} mb-3`}>Studio rates</h3>
+          <p className={`${HELP} mb-4 mt-0`}>
+            What an hour of each teammate&rsquo;s time is worth when no signed
+            agreement names a rate for the work. A new figure is a new dated
+            row — the rate an invoice already billed against stays on the
+            record.
+          </p>
+          <ul>
+            {(members ?? [])
+              .filter((m) => m.user_id && m.status === 'active')
+              .map((m) => {
+                const label =
+                  m.profiles?.display_name || m.profiles?.email || 'Teammate';
+                return (
+                  <li
+                    key={m.id}
+                    className="flex flex-wrap items-baseline justify-between gap-3 border-b border-[var(--color-pearl)] py-3"
+                  >
+                    <p className="min-w-0 truncate text-[13px] text-[var(--color-charcoal)]">
+                      {`${label} · ${m.role}`}
+                    </p>
+                    <StudioRateRows
+                      studioId={studio.id}
+                      userId={m.user_id}
+                      memberLabel={label}
+                      rates={memberRates ?? []}
+                    />
+                  </li>
+                );
+              })}
+          </ul>
+        </div>
       )}
 
       {transferOwner.isError && (

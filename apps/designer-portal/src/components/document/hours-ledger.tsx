@@ -22,13 +22,15 @@
  * live there; one act, review before draft). Failures render inline (R83).
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   createBrowserClient,
   filterProjectUnbilledEntries,
   useCreateTimeEntry,
   useDeleteTimeEntry,
+  useOrganizations,
+  useStampProjectPricingStudio,
   useUpdateTimeEntry,
 } from '@patina/supabase';
 import { ACTIVITIES, fmtMinutes } from '@/lib/document/time-derivation';
@@ -48,7 +50,9 @@ import {
   isInvoiceEligibleTimeEntry,
   timeBillingStateLabel,
   timeRateProvenance,
+  timeRateRoleLabel,
 } from '@/lib/document/authority-hours';
+import { documentEvents } from '@/lib/analytics/document-events';
 
 // R96 — the registry is the single source of the surface icon (no drift).
 const HOURS_ICON = STUDIO_LEDGERS.find((l) => l.key === 'hours')!.icon;
@@ -109,7 +113,7 @@ export function HoursLedger({
       if (!userData?.user?.id) return [];
       let query = supabase
         .from('project_time_entries')
-        .select('*, project:projects(name)')
+        .select('*, project:projects(name, studio_id)')
         .eq('user_id', userData.user.id)
         .gte('started_at', weekStart.toISOString())
         .lt('started_at', weekEnd.toISOString())
@@ -121,6 +125,17 @@ export function HoursLedger({
       return (data ?? []) as AnyRecord[];
     },
   });
+
+  // The repair act and the rate card are the studio's, not a member's: HT-3's
+  // card and HT-3-g's stamp both admit an owner or admin only.
+  const { data: orgs } = useOrganizations();
+  const viewerStudio = useMemo(
+    () => orgs?.find((org) => org.type === 'design_studio') ?? orgs?.[0] ?? null,
+    [orgs],
+  );
+  const viewerIsOwnerOrAdmin =
+    viewerStudio?.membership?.role === 'owner' ||
+    viewerStudio?.membership?.role === 'admin';
 
   const { data: projects } = useQuery({
     queryKey: ['document-hours-projects'],
@@ -276,12 +291,25 @@ export function HoursLedger({
     if (!addValid || addBusy) return;
     setAddBusy(true);
     setNote(null);
+    const startedMs = Date.now();
     try {
-      await createEntry.mutateAsync({
+      const written = await createEntry.mutateAsync({
         projectId: addProject,
         durationMinutes: parsedAdd,
         activity: addActivity,
         source: 'manual_entry',
+      });
+      // HT-27 — the capture instrument, read off what the server actually
+      // stored rather than what the form asked for (the rate is the server's).
+      documentEvents.time.entryLogged({
+        surface: 'hours_ledger',
+        source: 'manual_entry',
+        activity: addActivity,
+        billable: written.billable,
+        rate_source: written.rate_source ?? null,
+        rate_role: written.rate_role ?? null,
+        duration_minutes: written.duration_minutes,
+        latency_ms: Date.now() - startedMs,
       });
       setAddMinutes('');
       void refetch();
@@ -301,6 +329,8 @@ export function HoursLedger({
       { id: entry.id, projectId: entry.project_id, updates },
       {
         onSuccess: () => {
+          for (const field of Object.keys(updates))
+            documentEvents.time.entryAdjusted({ field, by_admin: false });
           void refetch();
           void refetchUnbilled();
           void refetchPendingAuthorization();
@@ -426,6 +456,7 @@ export function HoursLedger({
         rows={pendingAuthorizationRows ?? []}
         projects={projects ?? []}
         onSelectProject={setLensProjectId}
+        showStudioRateDoor={viewerIsOwnerOrAdmin}
       />
 
       {/* A project-scoped Hours sheet carries the same RPC-owned authority
@@ -531,7 +562,10 @@ export function HoursLedger({
                 key={e.id}
                 entry={e}
                 unbilled={unbilledById.get(e.id)}
+                viewerStudioId={viewerStudio?.id ?? null}
+                viewerIsOwnerOrAdmin={viewerIsOwnerOrAdmin}
                 onCommit={commit}
+                onOpenAuthority={setLensProjectId}
                 onDeleted={() => {
                   void refetch();
                   void refetchUnbilled();
@@ -602,27 +636,67 @@ export function HoursLedger({
 function EntryRow({
   entry: e,
   unbilled,
+  viewerStudioId,
+  viewerIsOwnerOrAdmin,
   onCommit,
+  onOpenAuthority,
   onDeleted,
 }: {
   entry: AnyRecord;
   unbilled: UnbilledInfo | undefined;
+  /** The viewer's own studio — the one a repair may name (HT-3-g(3)). */
+  viewerStudioId: string | null;
+  viewerIsOwnerOrAdmin: boolean;
   onCommit: (entry: AnyRecord, updates: AnyRecord) => void;
+  onOpenAuthority: (projectId: string) => void;
   onDeleted: () => void;
 }) {
   const deleteEntry = useDeleteTimeEntry({ errorSurface: 'inline' });
+  const stampStudio = useStampProjectPricingStudio();
   const [confirming, setConfirming] = useState(false);
   const [rowNote, setRowNote] = useState<string | null>(null);
   const billed = Boolean(e.invoice_id);
   const authority = useProjectBillingAuthority(e.project_id);
   const provenance = timeRateProvenance(e, authority.data);
+  const roleLabel = timeRateRoleLabel(provenance.rateRole);
   const billingLabel = timeBillingStateLabel(e);
   const amountCents = e.rated_amount_cents ?? unbilled?.amount_cents ?? 0;
+  const pricingStudioId = (e.project?.studio_id as string | null) ?? null;
+  const ratePending = provenance.kind === 'pending';
+
+  // HT-26/HT-27's alarm — an hour nobody can price. Fires once per entry per
+  // session (the emitter dedups); a re-render is not a second unpriced hour.
+  useEffect(() => {
+    if (!ratePending) return;
+    documentEvents.time.rateUnresolved({
+      entry_id: e.id as string,
+      project_id: e.project_id as string,
+      project_kind: null,
+      rate_source: 'none',
+    });
+  }, [ratePending, e.id, e.project_id]);
+
+  const stamp = () => {
+    if (!viewerStudioId) return;
+    setRowNote(null);
+    stampStudio.mutate(
+      { projectId: e.project_id as string, studioId: viewerStudioId },
+      {
+        onError: (err) =>
+          setRowNote(
+            err instanceof Error
+              ? err.message
+              : 'The studio could not be named on this document.',
+          ),
+      },
+    );
+  };
 
   const doDelete = async () => {
     setRowNote(null);
     try {
       await deleteEntry.mutateAsync({ id: e.id, projectId: e.project_id });
+      documentEvents.time.entryDeleted({ by_admin: false });
       onDeleted();
     } catch (err) {
       setRowNote(err instanceof Error ? err.message : 'Could not delete');
@@ -641,9 +715,14 @@ function EntryRow({
             {[
               e.phase_key,
               SOURCE_LABEL[e.source] ?? e.source,
-              provenance
-                ? `${provenance.role} · ${fmtUsd(provenance.hourlyRateCents)}/hr${provenance.version ? ` · v${provenance.version}` : ''}`
-                : null,
+              // HT-26 — the rate and where it came from, and never a blank:
+              // "rate pending" is a fact, an empty cell is three different
+              // facts wearing the same face.
+              provenance.kind === 'rated'
+                ? `${provenance.label} · ${fmtUsd(provenance.hourlyRateCents)}/hr${provenance.version ? ` · v${provenance.version}` : ''}`
+                : provenance.label,
+              // HT-41 — the role the member picked, where they hold more than one.
+              roleLabel,
               // New rows use the server-rated snapshot; legacy rows retain
               // the project_unbilled_time amount alias.
               amountCents > 0
@@ -681,19 +760,30 @@ function EntryRow({
               onCommit(e, { duration_minutes: v });
           }}
         />
-        <span
-          className="whitespace-nowrap rounded-[3px] border px-1.5 py-[2px] font-mono text-[11px] uppercase tracking-[0.06em]"
-          style={
-            billed
-              ? { borderColor: 'var(--color-sage)', color: 'var(--color-sage)' }
-              : {
-                  borderColor: 'var(--color-pearl)',
-                  color: 'var(--color-aged-oak)',
-                }
-          }
-        >
-          {billingLabel}
-        </span>
+        {e.billing_state === 'pending_authorization' && !billed ? (
+          <button
+            type="button"
+            aria-label={`Review billing authority for ${e.project?.name ?? 'this document'}`}
+            onClick={() => onOpenAuthority(e.project_id as string)}
+            className="whitespace-nowrap rounded-[3px] border border-[var(--color-pearl)] px-1.5 py-[2px] font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]"
+          >
+            {billingLabel} →
+          </button>
+        ) : (
+          <span
+            className="whitespace-nowrap rounded-[3px] border px-1.5 py-[2px] font-mono text-[11px] uppercase tracking-[0.06em]"
+            style={
+              billed
+                ? { borderColor: 'var(--color-sage)', color: 'var(--color-sage)' }
+                : {
+                    borderColor: 'var(--color-pearl)',
+                    color: 'var(--color-aged-oak)',
+                  }
+            }
+          >
+            {billingLabel}
+          </span>
+        )}
         {/* R77 — delete-with-confirm; a billed entry is history, immutable. */}
         {!billed ? (
           confirming ? (
@@ -738,6 +828,34 @@ function EntryRow({
           <span aria-hidden className="w-[13px]" />
         )}
       </div>
+      {/* HT-26 + HT-3-g — an hour with no rate has two repairs, and which one
+          it is depends on whether the document names a pricing studio at all.
+          Both are the studio's act: owner or admin only. */}
+      {ratePending && viewerIsOwnerOrAdmin && (
+        <div className="mt-1 flex flex-wrap items-baseline gap-3">
+          {pricingStudioId === null && viewerStudioId ? (
+            <DocumentAction
+              actionKey="stamp-project-pricing-studio"
+              surfaceKey="hours"
+              regionKey="time-entry-rate-pending"
+              variant="tertiary"
+              disabled={stampStudio.isPending}
+              loading={stampStudio.isPending}
+              loadingLabel="Naming…"
+              onClick={stamp}
+            >
+              Name the studio that prices this document
+            </DocumentAction>
+          ) : (
+            <a
+              href="/desk?account=studio"
+              className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-clay-ink)] underline decoration-dotted underline-offset-4 hover:text-[var(--color-charcoal)]"
+            >
+              Set the studio rate →
+            </a>
+          )}
+        </div>
+      )}
       {rowNote && (
         <p
           className="mt-1 font-mono text-[11px] uppercase tracking-[0.05em]"

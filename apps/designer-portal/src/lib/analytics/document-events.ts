@@ -35,6 +35,8 @@ const RECENT_DOCS_MAX = 5;
 // "seen" shape as the rest of this file's session-scoped dedup.
 const nudgeFiredSeen = new Set<string>();
 const freshTimesRequestedSeen = new Set<string>();
+// HT-26's rate alarm is a per-entry fact, not a per-render one (see `time`).
+const rateUnresolvedSeen = new Set<string>();
 
 /** One entry in the recent-documents-in-hand MRU (command bar). */
 export interface RecentDocumentInHand {
@@ -156,6 +158,88 @@ const wayfinding = {
   walkthroughStarted: (props: {
     source: "first_signin" | "command_bar" | "margin_note";
   }) => track("document_walkthrough_started", props),
+};
+
+/**
+ * The hour-tracking event set (HT-27) — the canonical names, so every surface
+ * that captures or reviews an hour reports under one vocabulary and the
+ * widget/intent decision rests on data rather than taste. This module is the
+ * sole writer of those names; iOS (`posthog-ios`) and the edge mirror this list.
+ *
+ * CANONICAL NAMES
+ *   time_entry_logged      — an hour landed, from any surface
+ *   time_timer_started     — a running timer opened (desk only; HT-7)
+ *   time_timer_stopped     — it closed, with what the bound saw (HT-17)
+ *   time_entry_adjusted    — an existing entry was edited
+ *   time_entry_deleted     — an unbilled entry was removed
+ *   time_scope_viewed      — one of the four scopes was read (HT-8)
+ *   time_rate_unresolved   — an hour rendered or returned with no rate (HT-26)
+ *   time_export_taken      — hours left Patina as a file (HT-20)
+ *   time_autostart_disclosed / time_autostart_opted_out — HT-35's disclosure
+ *     band and its per-member opt-out. Owed with that ruling's surfaces; no
+ *     emitter is defined here yet because nothing can fire one honestly.
+ *
+ * Nothing here carries `notes`: free text is the studio's, not telemetry
+ * (HT-36).
+ */
+const time = {
+  /** An hour landed. `latency_ms` is the capture act → written round trip. */
+  entryLogged: (props: {
+    surface: string;
+    source: string;
+    activity: string | null;
+    billable: boolean;
+    rate_source: string | null;
+    rate_role: string | null;
+    duration_minutes: number;
+    latency_ms: number | null;
+  }) => track("time_entry_logged", props),
+
+  /** A running timer opened. One slot per user, and it stays with the desk. */
+  timerStarted: (props: { surface: string; source: string; billable: boolean }) =>
+    track("time_timer_started", props),
+
+  /** It closed. `idle_ratio` is cumulative idle ÷ raw elapsed — the R64
+   *  instrument HT-17 asks for, reported and never acted on here. */
+  timerStopped: (props: {
+    surface: string;
+    duration_minutes: number;
+    adjusted: boolean;
+    idle_minutes: number | null;
+    idle_ratio: number | null;
+  }) => track("time_timer_stopped", props),
+
+  /** An entry was edited. `by_admin` = someone other than its author. */
+  entryAdjusted: (props: { field: string; by_admin: boolean }) =>
+    track("time_entry_adjusted", props),
+
+  /** An unbilled entry was removed (an invoiced one cannot be). */
+  entryDeleted: (props: { by_admin: boolean }) =>
+    track("time_entry_deleted", props),
+
+  /** One of the four scopes was read, and how its buckets were grouped. */
+  scopeViewed: (props: { scope: string; group_by: string | null }) =>
+    track("time_scope_viewed", props),
+
+  /** HT-26's alarm: an hour carries no rate. Once per entry per session —
+   *  a ledger re-render must not inflate the count it is the instrument for. */
+  rateUnresolved: (props: {
+    entry_id: string;
+    project_id: string;
+    project_kind: string | null;
+    rate_source: string;
+  }) => {
+    if (rateUnresolvedSeen.has(props.entry_id)) return;
+    rateUnresolvedSeen.add(props.entry_id);
+    track("time_rate_unresolved", props);
+  },
+
+  /** Hours left Patina as a file. */
+  exportTaken: (props: {
+    scope: string;
+    row_count: number;
+    period: string | null;
+  }) => track("time_export_taken", props),
 };
 
 /**
@@ -407,4 +491,5 @@ export const documentEvents = {
 
   commandBar,
   wayfinding,
+  time,
 };

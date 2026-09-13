@@ -869,6 +869,45 @@ export function useProjectHoursTotal(projectId: string | null) {
   });
 }
 
+/**
+ * HT-3-g's repair act (`stamp_project_pricing_studio`, 00606): names the studio
+ * that prices a legacy project's hours, where `projects.studio_id` is NULL and
+ * every hour on it therefore resolves `rate_source = 'none'` ("rate pending").
+ *
+ * The server admits only an owner or admin of the studio being named, and only
+ * where that studio employs the project's designer; a stamped column is final.
+ * So this hook sends the act and surfaces the refusal — it never pre-judges
+ * standing, and the caller prints the server's words.
+ */
+export function useStampProjectPricingStudio() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      projectId,
+      studioId,
+    }: {
+      projectId: string;
+      studioId: string;
+    }): Promise<string | null> => {
+      const supabase = getSupabase();
+      const { data, error } = await supabase.rpc('stamp_project_pricing_studio', {
+        p_project_id: projectId,
+        p_studio_id: studioId,
+      });
+      if (error) throw error;
+      return (data as string | null) ?? null;
+    },
+    onSuccess: (_studioId, { projectId }) => {
+      // The pricing studio is a column every hours read resolves through, and
+      // it prices only hours logged AFTER the stamp (P-4 — no backfill).
+      invalidateProjectTime(queryClient, projectId);
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      queryClient.invalidateQueries({ queryKey: ['document-hours-week'] });
+    },
+  });
+}
+
 // ── Phase estimates (project_phases.estimated_hours, 00177) ──
 
 /** Batch-save per-phase hour estimates from the project edit page. */
