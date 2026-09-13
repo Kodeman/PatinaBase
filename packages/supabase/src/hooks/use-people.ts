@@ -196,6 +196,13 @@ export interface PeopleSeatFilters {
   personId?: string | null;
   /** One project's seats — the Call Sheet's roster. */
   projectId?: string | null;
+  /**
+   * Every seat the studio can read. The Directory's firm rows need "N open
+   * jobs" per FIRM, and v4 moved every carded human onto the contacts branch
+   * whose `project_id` is NULL — the seats view is the only place the fact
+   * lives, and it carries `company_id` (QA-R2-2).
+   */
+  all?: boolean;
   scope?: 'mine' | 'studio';
 }
 
@@ -298,7 +305,10 @@ export function usePerson(personId: string | null | undefined, role?: PartyRole)
 
 /** The seat lines beneath a Directory row, or a project's whole roster. */
 export function usePeopleSeats(filters?: PeopleSeatFilters) {
-  const enabled = Boolean(filters?.personId) || Boolean(filters?.projectId);
+  const enabled =
+    Boolean(filters?.personId) ||
+    Boolean(filters?.projectId) ||
+    filters?.all === true;
   return useQuery({
     queryKey: peopleSeatKeys.list(filters),
     enabled,

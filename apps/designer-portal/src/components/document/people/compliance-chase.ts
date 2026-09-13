@@ -19,8 +19,9 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-/** The queue's own word for this work. */
-export const COMPLIANCE_CHASE_TASK_TYPE = "compliance_chase";
+/** The queue's own word for this work. One literal, in a plain module the
+ *  route can import too (CR-1). */
+export { COMPLIANCE_CHASE_TASK_TYPE } from "@/lib/document/compliance-chase-task";
 
 /** What the act promises on the face, and what it actually does. */
 export function chaseConsequenceSentence(firmName: string): string {

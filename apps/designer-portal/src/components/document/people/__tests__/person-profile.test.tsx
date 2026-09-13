@@ -43,6 +43,11 @@ jest.mock("@patina/supabase", () => ({
   useComplianceDocuments: () => ({ data: [] }),
   useComplianceState: () => ({ data: "lapsed" }),
   usePartyAuthority: () => ({ data: authorityData.current }),
+  // CR-10 / QA-R2-3: the card resolves the rule, the route and the studio's
+  // other cards, so "Do not contact" can say where to write instead.
+  useStudioContacts: () => ({ data: [] }),
+  useContactRules: () => ({ data: [] }),
+  useStudioContactChannelsFor: () => ({ data: [] }),
   // Reach & access reads these; the card's own regions are what this spec is
   // about, so each is answered with the "nothing on file" shape.
   useStudioContactChannels: () => ({ data: [] }),

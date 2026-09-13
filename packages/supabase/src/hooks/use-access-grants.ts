@@ -102,6 +102,14 @@ export interface AccessGrant {
 export interface AccessGrantFilters {
   /** The seat, card or profile the door was opened FOR. */
   subjectId?: string | null;
+  /**
+   * EVERY subject one identity answers to (CR-2). `subject_id` is an
+   * ENGAGEMENT id on a `field_link` and a PROFILE id on a `client_account` or
+   * `studio_member` — never a rolodex card id — so a person card asking for
+   * their card id matched nothing at all. A card resolves to its seats and its
+   * login, and the region asks for all of them at once.
+   */
+  subjectIds?: readonly string[] | null;
   /** The project, proposal, edition … the door opens ONTO. */
   scopeId?: string | null;
   tier?: AccessGrantTier | null;
@@ -215,7 +223,10 @@ export const accessGrantKeys = {
 
 /** Every door open onto a subject or a scope. Read only. */
 export function useAccessGrants(filters?: AccessGrantFilters) {
-  const enabled = Boolean(filters?.subjectId || filters?.scopeId || filters?.tier);
+  const subjectIds = (filters?.subjectIds ?? []).filter(Boolean);
+  const enabled = Boolean(
+    filters?.subjectId || subjectIds.length > 0 || filters?.scopeId || filters?.tier,
+  );
   return useQuery({
     queryKey: accessGrantKeys.list(filters),
     enabled,
@@ -224,6 +235,7 @@ export function useAccessGrants(filters?: AccessGrantFilters) {
       const supabase = getSupabase() as any;
       let query = supabase.from('v_access_grants').select('*');
       if (filters?.subjectId) query = query.eq('subject_id', filters.subjectId);
+      if (subjectIds.length > 0) query = query.in('subject_id', subjectIds);
       if (filters?.scopeId) query = query.eq('scope_id', filters.scopeId);
       if (filters?.tier) query = query.eq('tier', filters.tier);
       if (!filters?.includeRevoked) query = query.is('revoked_at', null);

@@ -39,6 +39,7 @@ import {
 } from "@/lib/document/people-derivation";
 import {
   contactRuleClause,
+  contactRuleIsDoNotContact,
   contactRuleIsHardBlock,
 } from "@/lib/document/contact-rule";
 import { Avatar } from "../person-bits";
@@ -94,12 +95,16 @@ export function PersonRow({
     (routedName
       ? (routeTargets?.get(routedName.toLowerCase()) ?? { name: routedName })
       : null);
-  // CR-22: ONE predicate, reading `channels_forbidden`. The old regex over the
-  // rendered prose fired on any "Never…"/"Do not…" clause, so Sam Rowe, Carol
-  // Nyström, Ingrid Halvorsen and Ray Thao — all of whom have a channel wide
-  // open — wore the terracotta hard-block rule. A row whose rule has not
-  // loaded prints the clause without the rule rather than guessing.
+  // CR-4 / CR-16: ONE pair of predicates, read off `channels_forbidden` in
+  // lib/document/contact-rule.ts, so this row, the roster row, the person card,
+  // the company card's crew line and the picker all answer alike. The leading
+  // rule and the silenced phone are DIFFERENT facts: Ray Thao forbids text and
+  // still wants his office line printed; Frank Bauer has no direct channel left
+  // open, so his own number comes off the row (SPEC §5.1 #10, §5.4). A row
+  // whose rule has not loaded prints the clause without either rather than
+  // guessing.
   const blocked = contactRuleIsHardBlock(rule);
+  const unreachable = contactRuleIsDoNotContact(rule);
   const paper = entryPaperWord(person);
   const seatCount = person.seat_count ?? 0;
 
@@ -177,12 +182,14 @@ export function PersonRow({
 
       {/* Its own control, 8px clear of the row's own (SPEC §5.1 #15).
 
-          A HARD BLOCK TAKES THE NUMBER OFF THE ROW (SPEC §5.1 #10, §5.4).
-          Frank Bauer is "do not contact, write Rosa instead" and his own
+          A DO-NOT-CONTACT RULE TAKES THE NUMBER OFF THE ROW (SPEC §5.1 #10,
+          §5.4). Frank Bauer is "do not contact, write Rosa instead" and his own
           mobile still printed here as a live `tel:` link — one tap away from
           the call the rule forbids. Channels are HIDDEN, never deleted: the
-          number is still on his card, behind the rule that governs it. */}
-      {blocked ? null : (
+          number is still on his card, behind the rule that governs it. A rule
+          that merely forbids TEXT is not that rule — Ray Thao's own line is
+          what his clause tells the studio to use. */}
+      {unreachable ? null : (
         <TelLink phone={person.phone} personName={person.display_name} />
       )}
 

@@ -52,6 +52,10 @@ import {
   useUpdateStudioContact,
   peopleKeys,
   peopleSeatKeys,
+  ALL_AUTHORITY_SCOPES,
+  AUTHORITY_SCOPE_LABELS,
+  isAdminOnlyAuthorityScope,
+  type AuthorityScope,
   type PartyKind,
   type ProjectParty,
   type StudioContact,
@@ -340,9 +344,38 @@ export function AddPersonSheet({
     ruleWritten: false,
   });
 
-  // The scope this add would write, and whether the project's agreement
-  // already names one (R-J's first branch).
-  const authorityScope = kind === "household" ? "change_order" : "selections";
+  /**
+   * CR-12 — THE SCOPE AND THE FIGURE ARE THE STUDIO'S TO RECORD.
+   *
+   * The scope used to be hard-coded (`household ? 'change_order' :
+   * 'selections'`) and no surface anywhere could write a threshold, so SPEC
+   * §5.4 #5's "Signs money to $2,500." had a renderer and no writer, and PR-n's
+   * client-side gate on the admin-only scopes was vacuously true — the DB
+   * policy was the only half that existed.
+   */
+  const isOrgAdmin = useMemo(() => {
+    const role = (orgs ?? []).find((o) => o.id === organizationId)?.membership
+      ?.role;
+    return role === "owner" || role === "admin";
+  }, [orgs, organizationId]);
+  const defaultAuthorityScope: AuthorityScope =
+    kind === "household" ? "change_order" : "selections";
+  const [authorityScope, setAuthorityScope] = useState<AuthorityScope>(
+    defaultAuthorityScope,
+  );
+  const [authorityThreshold, setAuthorityThreshold] = useState("");
+  // The sheet's kind decides the sensible default; a studio that opens the
+  // band may say something else.
+  useEffect(() => {
+    setAuthorityScope(defaultAuthorityScope);
+  }, [defaultAuthorityScope]);
+  // PR-n: money and draw certification are an owner's or an admin's to grant.
+  // The DB refuses them either way; the face says so before the press.
+  useEffect(() => {
+    if (!isOrgAdmin && isAdminOnlyAuthorityScope(authorityScope)) {
+      setAuthorityScope(defaultAuthorityScope);
+    }
+  }, [isOrgAdmin, authorityScope, defaultAuthorityScope]);
   const { data: projectGrants } = useProjectAuthority(
     open && projectId ? projectId : null,
   );
@@ -420,6 +453,8 @@ export function AddPersonSheet({
     setOtherLabel("");
     setContactRuleText("");
     setAuthorityPhrase("");
+    setAuthorityThreshold("");
+    setAuthorityScope(defaultAuthorityScope);
     setAuthorityOpen(false);
     chainRef.current = {
       party: null,
@@ -635,12 +670,26 @@ export function AddPersonSheet({
           chain.ruleWritten = true;
         }
       }
-      if (authorityPhrase.trim()) {
+      if (authorityPhrase.trim() || authorityThreshold.trim()) {
+        // CR-12: PR-n's client half. The DB policy reserves `money` and
+        // `draw_certify` to an owner or an admin; the sheet refuses them before
+        // the write rather than letting Postgres answer.
+        if (!isOrgAdmin && isAdminOnlyAuthorityScope(authorityScope)) {
+          throw new Error(
+            "Signing money and certifying draws are the studio owner's or an admin's to grant.",
+          );
+        }
+        const dollars = authorityThreshold.trim();
+        const amount = dollars === "" ? null : Number(dollars.replace(/,/g, ""));
+        if (amount != null && (!Number.isFinite(amount) || amount < 0)) {
+          throw new Error("Write the figure in dollars — 2500, not $2.5k.");
+        }
         await setAuthority.mutateAsync({
           engagementId: party.id,
           projectId,
           scope: authorityScope,
-          sourceClause: authorityPhrase.trim(),
+          thresholdCents: amount == null ? null : Math.round(amount * 100),
+          sourceClause: authorityPhrase.trim() || null,
         });
       }
       void queryClient.invalidateQueries({ queryKey: peopleKeys.all });
@@ -1254,7 +1303,59 @@ export function AddPersonSheet({
             </>
           )}
           <div id={authorityFieldId} hidden={!authorityOpen} className="mb-4">
-            <label className={FIELD_LABEL} htmlFor="add-party-authority">
+            {/* CR-12 — the grant is a RECORDED FACT with a scope and, where the
+                scope carries money, a figure. Both are written here. */}
+            <label className={FIELD_LABEL} htmlFor="add-party-authority-scope">
+              What they may decide
+            </label>
+            <select
+              id="add-party-authority-scope"
+              value={authorityScope}
+              onChange={(e) =>
+                setAuthorityScope(e.target.value as AuthorityScope)
+              }
+              className={`${FIELD_INPUT} mt-1`}
+            >
+              {ALL_AUTHORITY_SCOPES.map((scope) => (
+                <option
+                  key={scope}
+                  value={scope}
+                  disabled={!isOrgAdmin && isAdminOnlyAuthorityScope(scope)}
+                >
+                  {AUTHORITY_SCOPE_LABELS[scope]}
+                </option>
+              ))}
+            </select>
+            {!isOrgAdmin && (
+              <p className="mt-1 text-[0.66rem] leading-relaxed text-[var(--color-aged-oak)]">
+                Signing money and certifying draws are the studio owner&rsquo;s
+                or an admin&rsquo;s to grant.
+              </p>
+            )}
+
+            <label
+              className={`${FIELD_LABEL} mt-3`}
+              htmlFor="add-party-authority-threshold"
+            >
+              Up to, in dollars
+            </label>
+            <input
+              id="add-party-authority-threshold"
+              type="text"
+              inputMode="decimal"
+              value={authorityThreshold}
+              onChange={(e) => setAuthorityThreshold(e.target.value)}
+              className={`${FIELD_INPUT} mt-1`}
+            />
+            <p className="mt-1 text-[0.66rem] leading-relaxed text-[var(--color-aged-oak)]">
+              Leave it empty where no figure applies. 2500 reads as
+              &ldquo;Signs money to $2,500.&rdquo;
+            </p>
+
+            <label
+              className={`${FIELD_LABEL} mt-3`}
+              htmlFor="add-party-authority"
+            >
               Authority
             </label>
             <input
@@ -1266,21 +1367,36 @@ export function AddPersonSheet({
             />
           </div>
 
-          <label className="mt-4 flex cursor-pointer items-start gap-2.5 text-[0.74rem] text-[var(--color-mocha)]">
+          {/* QA-R2-5 / C32 — the checkbox's ACCESSIBLE NAME is the short
+              sentence; the disclosure is its DESCRIPTION, outside the label.
+              Wrapping the whole paragraph made the box's own name a run-on
+              that cannot be scanned by ear, and that run-on contained the word
+              "project": every reader (and every locator) asking for "Project"
+              then found two controls — the real Project select and this
+              consent box. Same rule R-W already set for the company card's
+              crew line. */}
+          <div className="mt-4 flex items-start gap-2.5 text-[0.74rem] text-[var(--color-mocha)]">
             <input
+              id="add-party-sms-consent"
               type="checkbox"
               checked={textUpdates}
               onChange={(e) => setTextUpdates(e.target.checked)}
+              aria-describedby="add-party-sms-consent-note"
               className="mt-0.5 h-4 w-4 cursor-pointer rounded border-[var(--color-pearl)] accent-[var(--color-clay)]"
             />
             <span>
-              They gave prior express consent for text updates
-              <span className="mt-0.5 block text-[0.64rem] text-[var(--color-aged-oak)]">
+              <label htmlFor="add-party-sms-consent" className="cursor-pointer">
+                They gave prior express consent for text updates
+              </label>
+              <span
+                id="add-party-sms-consent-note"
+                className="mt-0.5 block text-[0.64rem] text-[var(--color-aged-oak)]"
+              >
                 Optional and never preselected. They agreed to Patina project
                 texts (~1/day, rates may apply, reply STOP to quit).
               </span>
             </span>
-          </label>
+          </div>
 
           {textUpdates && (
             <div className="mt-4 rounded border border-[var(--color-pearl)] bg-[var(--color-linen)]/45 p-3">

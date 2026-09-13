@@ -27,6 +27,7 @@ import { UserPlus } from 'lucide-react';
 import {
   useAddProjectParty,
   useAddStudioContact,
+  useContactRules,
   useOrganizations,
   useProjectRoster,
   usePeopleDirectory,
@@ -37,6 +38,11 @@ import {
 } from '@patina/supabase';
 import { getPartyKindLabel, type PartyKind } from '@patina/types';
 import { rosterHasIdentity } from '@/lib/document/roster-derivation';
+import {
+  contactRuleClause,
+  contactRuleIsHardBlock,
+  indexContactRules,
+} from '@/lib/document/contact-rule';
 import { DocSheet } from '../overlays/doc-sheet';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
 import { TradeChipRow } from '../people/directory/trade-chip-row';
@@ -174,6 +180,14 @@ export function RolodexPicker({
     for (const row of directory ?? []) if (row.person_id) map.set(row.person_id, row);
     return map;
   }, [directory]);
+
+  // CR-5: the RULE ROW, never `contact_rule_summary`. That column is the
+  // mechanical clause list in raw `channel_kind` tokens — "Do not use:
+  // after_hours, ap_email, dispatch…" — and SPEC §8 #3 forbids a schema word on
+  // any face. `contactRuleClause` is the one composer, and CR-4's
+  // `contactRuleIsHardBlock` is the one block answer.
+  const { data: contactRules } = useContactRules();
+  const ruleIndex = useMemo(() => indexContactRules(contactRules), [contactRules]);
 
   const hits = useMemo(() => {
     let rows = contacts ?? [];
@@ -358,6 +372,7 @@ export function RolodexPicker({
         <ul className="mt-3 flex flex-col">
           {hits.map((c) => {
             const words = wordsByCard.get(c.id);
+            const rule = ruleIndex.get(c.id) ?? null;
             return (
               <li key={c.id}>
                 <PartyMiniRow
@@ -371,7 +386,8 @@ export function RolodexPicker({
                   }
                   consent={words?.consent_status ?? null}
                   paper={words?.paper_state ?? null}
-                  rule={words?.contact_rule_summary ?? null}
+                  rule={contactRuleClause(rule)}
+                  ruleBlocked={contactRuleIsHardBlock(rule)}
                   subline={pickerHistoryLine(history?.[c.id])}
                   onSelect={() => void addFromRolodex(c)}
                   disabled={addParty.isPending}

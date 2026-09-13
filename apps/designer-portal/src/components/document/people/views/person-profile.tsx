@@ -27,15 +27,27 @@ import {
   useAffiliations,
   useComplianceDocuments,
   useComplianceState,
+  useContactRules,
   usePartyAuthority,
   usePeopleSeats,
   usePerson,
   useStudioContact,
+  useStudioContacts,
+  useStudioContactChannelsFor,
   type AuthorityScope,
   type PeopleDirectorySeat,
 } from "@patina/supabase";
-import { partyKindOwesPaper } from "@patina/types";
+import {
+  getFieldTradeLabel,
+  getPartyKindLabel,
+  partyKindOwesPaper,
+} from "@patina/types";
 import { directoryContactKind } from "@/lib/document/people-derivation";
+import {
+  contactRouteTarget,
+  indexChannelsByOwner,
+  indexContactRules,
+} from "@/lib/document/contact-rule";
 import { DocumentAction } from "../../document-action";
 import { MakerProfile } from "../profile/maker-profile";
 import { Avatar } from "../person-bits";
@@ -130,6 +142,63 @@ export function PersonProfile({
   const [announcement, setAnnouncement] = useState<string | null>(null);
   const now = useMemo(() => new Date(), []);
 
+  // ── The rule, the route and who it may route to (QA-R2-3 / CR-10) ────────
+  // The same pair of reads `directory-view.tsx` and `roster-groups.tsx` build.
+  // Without them the person card — the surface direction §3.2 R3 calls the
+  // rule's home — printed "Do not contact directly." with no way to reach
+  // Rosa Delgado, and its "Write someone else instead" select offered nobody,
+  // so Leah task 4 could not be performed anywhere in the room.
+  const cardOrgId =
+    card?.organization_id ??
+    organizationId ??
+    (typeof person?.meta?.["organization_id"] === "string"
+      ? (person.meta["organization_id"] as string)
+      : null);
+  const { data: rolodex } = useStudioContacts(cardOrgId, {
+    includeArchived: false,
+  });
+  const { data: rules } = useContactRules();
+  const ruleIndex = useMemo(() => indexContactRules(rules), [rules]);
+  const rule = ruleIndex.get(personId) ?? null;
+  const routedPersonIds = useMemo(
+    () => (rule?.route_to_person_id ? [rule.route_to_person_id] : []),
+    [rule],
+  );
+  const { data: routedChannels } = useStudioContactChannelsFor(routedPersonIds);
+  const channelsByOwner = useMemo(
+    () => indexChannelsByOwner(routedChannels),
+    [routedChannels],
+  );
+  const peopleById = useMemo(() => {
+    const index = new Map<
+      string,
+      { id: string; name: string; email: string | null; phone: string | null }
+    >();
+    for (const c of rolodex ?? []) {
+      if (c.entity_kind !== "person" || !c.full_name) continue;
+      index.set(c.id, {
+        id: c.id,
+        name: c.full_name,
+        email: c.email,
+        phone: c.phone,
+      });
+    }
+    return index;
+  }, [rolodex]);
+  const routeTo = useMemo(
+    () => contactRouteTarget(rule, peopleById, channelsByOwner),
+    [rule, peopleById, channelsByOwner],
+  );
+  /** Every other person card in the studio — the rule's possible routes. */
+  const routeCandidates = useMemo(
+    () =>
+      [...peopleById.values()]
+        .filter((p) => p.id !== personId)
+        .map((p) => ({ id: p.id, name: p.name }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [peopleById, personId],
+  );
+
   const liveSeats = useMemo(
     () => (seats ?? []).filter((s) => !DONE_STAGES.has(String(s.stage))),
     [seats],
@@ -138,6 +207,28 @@ export function PersonProfile({
     () => (seats ?? []).filter((s) => DONE_STAGES.has(String(s.stage))),
     [seats],
   );
+
+  /**
+   * CR-2: the subjects `v_access_grants` keys on — this identity's SEATS
+   * (a field link's subject is the engagement) and their LOGIN (an account's
+   * subject is the profile). Never the rolodex card id.
+   */
+  const grantSubjectIds = useMemo(() => {
+    const ids = (seats ?? []).map((s) => s.seat_id).filter(Boolean);
+    if (person?.profile_id) ids.push(person.profile_id);
+    return ids;
+  }, [seats, person?.profile_id]);
+
+  // QA-R2-7: a sole proprietor IS their own firm, so the Paper region reads the
+  // firm's documents as well as their own, and the WORD is the identity fold
+  // `identity_paper_state(card, company)` the Directory row and the seat line
+  // already print. Reading `compliance_state(card)` alone said "Not on file"
+  // for Dana Kowalski while Northgate Electric's own card said "Lapsed".
+  const firmId =
+    typeof person?.meta?.["company_id"] === "string"
+      ? (person.meta["company_id"] as string)
+      : null;
+  const { data: firmDocuments } = useComplianceDocuments({ holderId: firmId });
 
   // Makers read from the vendor book itself (R78/PRC-02) — the maker's own
   // record, not the studio's card, and it must open pre-admission.
@@ -185,7 +276,11 @@ export function PersonProfile({
   const canText = person.consent_status === "granted";
   const soleProprietor = card?.is_sole_proprietor === true;
   const owesPaper = partyKindOwesPaper(directoryContactKind(person));
-  const docs = documents ?? [];
+  // R-BA: one formula, worst-first over the person's OWN documents and their
+  // firm's. A sole proprietor's firm paper is their paper (direction §3.2 R5).
+  const docs = soleProprietor
+    ? [...(documents ?? []), ...(firmDocuments ?? [])]
+    : (documents ?? []);
   const heldClause = paperHeldClause(docs, now);
 
   const announce = (message: string) => {
@@ -236,13 +331,11 @@ export function PersonProfile({
         <ReachAccess
           cardId={person.person_id}
           cardKind="person"
-          organizationId={
-            organizationId ??
-            (typeof person.meta?.["organization_id"] === "string"
-              ? (person.meta["organization_id"] as string)
-              : null)
-          }
+          organizationId={cardOrgId}
           personName={person.display_name}
+          routeTo={routeTo}
+          routeCandidates={routeCandidates}
+          grantSubjectIds={grantSubjectIds}
           seatId={firstSeat?.seat_id ?? null}
           seatProjectId={firstSeat?.project_id ?? null}
           seatProjectName={firstSeat?.project_name ?? null}
@@ -312,8 +405,16 @@ export function PersonProfile({
                 className="border-t border-[var(--hairline)] py-2"
               >
                 <p className="t-body-sm flex flex-wrap items-center gap-x-2 text-[var(--ink-subtle)]">
+                  {/* CR-11: the studio's words, never the schema's. The live
+                      SeatLine beside this one already labels both axes; this
+                      one printed `client_rep` raw — the one string C5 and SPEC
+                      §8 #3 forbid by name. */}
                   <span>
-                    {[seat.project_name, seat.party_kind, seat.trade]
+                    {[
+                      seat.project_name,
+                      getPartyKindLabel(seat.party_kind),
+                      seat.trade ? getFieldTradeLabel(seat.trade) : null,
+                    ]
                       .filter(Boolean)
                       .join(" · ")}
                   </span>
@@ -356,7 +457,9 @@ export function PersonProfile({
                 <p>
                   <StateWord
                     family="paper"
-                    value={ownPaperState ?? "not_on_file"}
+                    value={
+                      person.paper_state ?? ownPaperState ?? "not_on_file"
+                    }
                   />
                 </p>
               )}
@@ -392,11 +495,11 @@ export function PersonProfile({
         </p>
       </section>
 
-      {organizationId && (
+      {cardOrgId && (
         <RecordDocumentSheet
           open={recordOpen}
           onClose={() => setRecordOpen(false)}
-          organizationId={organizationId}
+          organizationId={cardOrgId}
           holderId={person.person_id}
           holderName={person.display_name}
           holderType="person"

@@ -24,7 +24,7 @@
  * file" reads as a fact (R-V / C32).
  */
 
-import { useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   CONTACT_CHANNEL_KIND_LABELS,
   isContactChannelHeld,
@@ -38,10 +38,16 @@ import {
   useStudioContactChannels,
   fieldLinkUrl,
   type ContactChannelKind,
+  type ContactRuleChannel,
   type ConsentSource,
   type StudioContactChannel,
 } from "@patina/supabase";
 import { peopleEvents } from "@/lib/analytics/people-events";
+import {
+  contactRuleClause,
+  contactRuleIsDoNotContact,
+  contactRuleIsHardBlock,
+} from "@/lib/document/contact-rule";
 import { DocumentAction } from "../document-action";
 import { StateWord } from "./state-word";
 import { TelLink } from "./tel-link";
@@ -113,19 +119,26 @@ function ChannelRow({
   organizationId,
   projectName,
   originProjectId,
+  showConsent,
   onAnnounce,
 }: {
   channel: StudioContactChannel;
   organizationId: string | null;
   projectName: string | null;
   originProjectId: string | null;
+  /**
+   * SPEC §5.3 #9: A FIRM HAS NEITHER CONSENT NOR REACH. A company cannot agree
+   * to a text message, so the company variant of this region prints the firm's
+   * office / dispatch / AP lines and nothing about consent.
+   */
+  showConsent: boolean;
   onAnnounce: (message: string) => void;
 }) {
   const consentKind = isPhoneChannel(String(channel.channel_kind))
     ? "sms"
     : "email";
   const { data: consent } = useChannelConsent(
-    organizationId,
+    showConsent ? organizationId : null,
     consentKind,
     channel.value,
   );
@@ -244,14 +257,16 @@ function ChannelRow({
             {channel.value}
           </a>
         )}
-        <StateWord family="consent" value={consent?.verdict} />
+        {showConsent && (
+          <StateWord family="consent" value={consent?.verdict} />
+        )}
       </p>
       {held && (
         <p className="t-body-sm mt-1 text-[var(--ink)]">
           {heldChannelReason(channel)}
         </p>
       )}
-      {sentence && (
+      {showConsent && sentence && (
         <p
           data-consent-sentence
           className="t-body-sm mt-1 text-[var(--ink-subtle)]"
@@ -259,26 +274,28 @@ function ChannelRow({
           {sentence}
         </p>
       )}
-      <DocumentAction
-        actionKey="record-channel-consent"
-        surfaceKey="people"
-        regionKey="reach-channels"
-        variant="tertiary"
-        aria-expanded={recording}
-        aria-controls={bandId}
-        onClick={() => setRecording((open) => !open)}
-      >
-        {consent?.verdict === "opted_out"
-          ? "Record a fresh consent"
-          : "Record consent"}
-      </DocumentAction>
-      {consent?.verdict === "opted_out" && (
+      {showConsent && (
+        <DocumentAction
+          actionKey="record-channel-consent"
+          surfaceKey="people"
+          regionKey="reach-channels"
+          variant="tertiary"
+          aria-expanded={recording}
+          aria-controls={bandId}
+          onClick={() => setRecording((open) => !open)}
+        >
+          {consent?.verdict === "opted_out"
+            ? "Record a fresh consent"
+            : "Record consent"}
+        </DocumentAction>
+      )}
+      {showConsent && consent?.verdict === "opted_out" && (
         <p className="t-body-sm mt-1 text-[var(--ink-subtle)]">
           They can rejoin by replying START — or the studio can record a fresh
           consent here, with where and when they said so.
         </p>
       )}
-      <div id={bandId} hidden={!recording} className="mt-2">
+      <div id={bandId} hidden={!showConsent || !recording} className="mt-2">
         <label className={FIELD_LABEL} htmlFor={`${bandId}-source`}>
           How consent was given
         </label>
@@ -353,6 +370,15 @@ export interface ReachAccessProps {
   routeCandidates?: ReadonlyArray<{ id: string; name: string }>;
   /** The routed person's own channel, resolved by the caller (R-L). */
   routeTo?: ContactRouteTarget | null;
+  /**
+   * CR-2: the subjects `v_access_grants` actually keys on. `subject_id` is an
+   * ENGAGEMENT id (field_link) or a PROFILE id (client_account, studio_member)
+   * — never a rolodex card id — so asking the view for the card id matched
+   * nothing for every person alive and the region always read "No grant on
+   * file." beside a reach word that already said `Field link`. The caller
+   * resolves the identity's seats and profile and hands them over.
+   */
+  grantSubjectIds?: readonly string[] | null;
   onAnnounce: (message: string) => void;
   now: Date;
 }
@@ -383,13 +409,19 @@ export function ReachAccess({
   warrantyEnd,
   routeCandidates,
   routeTo,
+  grantSubjectIds,
   onAnnounce,
   now,
   personName,
 }: ReachAccessProps & { personName: string }) {
+  const isPerson = cardKind === "person";
   const { data: channels } = useStudioContactChannels(cardId);
   const { data: rule } = useContactRule(cardKind, cardId);
-  const { data: grants } = useAccessGrants({ subjectId: cardId });
+  const grantSubjects = useMemo(
+    () => [...new Set((grantSubjectIds ?? []).filter(Boolean))],
+    [grantSubjectIds],
+  );
+  const { data: grants } = useAccessGrants({ subjectIds: grantSubjects });
   const setRule = useSetContactRule();
   const createLink = useCreateFieldLink();
 
@@ -399,6 +431,13 @@ export function ReachAccess({
   const [forbidEmail, setForbidEmail] = useState(false);
   const [routeId, setRouteId] = useState("");
   const [ruleError, setRuleError] = useState<string | null>(null);
+  /**
+   * CR-3: the channels the two checkboxes DO NOT speak for. Frank Bauer's rule
+   * forbids seven channels; the editor offers two. Saving used to send only
+   * what the checkboxes knew about, so the other five were dropped on the way
+   * out — a full-row upsert erasing facts nothing on this screen ever showed.
+   */
+  const [otherForbidden, setOtherForbidden] = useState<readonly string[]>([]);
   const [mintChoice, setMintChoice] = useState<"window" | "warranty">("window");
   const [mintedUrl, setMintedUrl] = useState<string | null>(null);
   const [mintError, setMintError] = useState<string | null>(null);
@@ -406,32 +445,55 @@ export function ReachAccess({
   const mintBandId = useId();
   const mintReasonId = useId();
 
-  const forbidden = useMemo(() => rule?.channels_forbidden ?? [], [rule]);
-  const doNotContact = forbidden.includes("sms") && forbidden.includes("email");
+  /**
+   * QA-R2-4 / CR-5: the ONE clause composer, in `lib/document/contact-rule.ts`.
+   * This component used to build its own — unconditionally prepending the raw
+   * mechanical channel list ahead of the studio's typed reason, through a label
+   * map with no `sms` key, so Frank Bauer's card read "Never mobile, office,
+   * dispatch, after hours, email, ap email, sms. No direct contact, at his
+   * request…" and Ray Thao's read "Never sms." The studio's own sentence wins,
+   * and no schema word reaches a face (SPEC §8 #3).
+   */
   const ruleSummary = useMemo(() => {
-    if (!rule) return null;
-    const clauses: string[] = [];
-    if (rule.channels_allowed.length > 0) {
-      clauses.push(
-        `Only ${rule.channels_allowed
-          .map((c) => CONTACT_CHANNEL_KIND_LABELS[c as ContactChannelKind] ?? c)
-          .join(", ")
-          .toLowerCase()}.`,
-      );
+    const clause = contactRuleClause(rule);
+    if (!clause) return null;
+    // The card is the rule's home (direction §3.2 R3), so it alone stamps when
+    // the rule was set.
+    const setOn = formatSeatDate(rule?.set_at?.slice(0, 10));
+    return setOn ? `${clause} Set ${setOn}.` : clause;
+  }, [rule]);
+  const ruleBlocks = contactRuleIsHardBlock(rule);
+  const doNotContact = contactRuleIsDoNotContact(rule);
+
+  /**
+   * CR-3: SEED THE EDITOR FROM THE RULE IT EDITS.
+   *
+   * The four fields were declared empty and never read the loaded rule, and
+   * `useSetContactRule` is a full-row upsert — so "Edit the rule" → "Save the
+   * rule", two clicks and no typing, wrote `channels_allowed = {}`,
+   * `channels_forbidden = {}`, `route_to_person_id = NULL`, `reason = NULL`
+   * over Frank Bauer's seeded do-not-contact instruction. Seeded once per
+   * opening (keyed on the rule's own id) so a background refetch can never
+   * clobber what the studio is typing.
+   */
+  const seededRuleRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!editingRule) {
+      seededRuleRef.current = null;
+      return;
     }
-    if (forbidden.length > 0) {
-      clauses.push(
-        `Never ${forbidden
-          .map((c) => CONTACT_CHANNEL_KIND_LABELS[c as ContactChannelKind] ?? c)
-          .join(", ")
-          .toLowerCase()}.`,
-      );
-    }
-    if (rule.reason) clauses.push(rule.reason);
-    const setOn = formatSeatDate(rule.set_at?.slice(0, 10));
-    if (setOn) clauses.push(`Set ${setOn}.`);
-    return clauses.join(" ");
-  }, [rule, forbidden]);
+    const key = rule?.id ?? "none";
+    if (seededRuleRef.current === key) return;
+    seededRuleRef.current = key;
+    const forbidden = rule?.channels_forbidden ?? [];
+    setForbidSms(forbidden.includes("sms"));
+    setForbidEmail(forbidden.includes("email"));
+    setOtherForbidden(
+      forbidden.filter((channel) => channel !== "sms" && channel !== "email"),
+    );
+    setRouteId(rule?.route_to_person_id ?? "");
+    setRuleReason(rule?.reason ?? "");
+  }, [editingRule, rule]);
 
   const expiresAt = mintChoice === "warranty" ? warrantyEnd : seatWindowEnd;
 
@@ -481,10 +543,17 @@ export function ReachAccess({
       {
         subjectType: cardKind,
         subjectId: cardId,
+        // CR-3: the upsert replaces the whole row, so every column this editor
+        // does not own is sent back as it stands.
+        channelsAllowed: (rule?.channels_allowed ??
+          []) as ContactRuleChannel[],
         channelsForbidden: [
-          ...(forbidSms ? (["sms"] as const) : []),
-          ...(forbidEmail ? (["email"] as const) : []),
-        ],
+          ...otherForbidden,
+          ...(forbidSms ? ["sms"] : []),
+          ...(forbidEmail ? ["email"] : []),
+        ] as ContactRuleChannel[],
+        contactHours: rule?.contact_hours ?? null,
+        escalationByClass: rule?.escalation_by_class ?? {},
         routeToPersonId: routeId || null,
         reason: ruleReason.trim() || null,
       },
@@ -525,6 +594,7 @@ export function ReachAccess({
               organizationId={organizationId}
               projectName={seatProjectName ?? null}
               originProjectId={seatProjectId ?? null}
+              showConsent={isPerson}
               onAnnounce={onAnnounce}
             />
           ))}
@@ -537,7 +607,7 @@ export function ReachAccess({
       {ruleSummary ? (
         <ContactRuleLine
           summary={ruleSummary}
-          blocked={forbidden.length > 0}
+          blocked={ruleBlocks}
           routeTo={rule?.route_to_person_id ? (routeTo ?? null) : null}
         />
       ) : (
@@ -622,15 +692,19 @@ export function ReachAccess({
         Access grants
       </h3>
       <AccessGrantList grants={grants} now={now} onAnnounce={onAnnounce} />
-      <p
-        id={mintReasonId}
-        className="t-body-sm mt-3 max-w-[56ch] text-[var(--ink-subtle)]"
-      >
-        {seatId
-          ? mintConsequenceSentence(personName, expiresAt)
-          : MINT_WITHOUT_SEAT_SENTENCE}
-      </p>
-      {warrantyEnd && seatId && (
+      {/* SPEC §5.3 #9: no door is minted onto a FIRM. The company variant reads
+          the doors its people hold and offers none of its own. */}
+      {isPerson && (
+        <p
+          id={mintReasonId}
+          className="t-body-sm mt-3 max-w-[56ch] text-[var(--ink-subtle)]"
+        >
+          {seatId
+            ? mintConsequenceSentence(personName, expiresAt)
+            : MINT_WITHOUT_SEAT_SENTENCE}
+        </p>
+      )}
+      {isPerson && warrantyEnd && seatId && (
         <div id={mintBandId} className="mt-2">
           <label className="t-body-sm flex min-h-11 items-center gap-2 text-[var(--ink)]">
             <input
@@ -652,20 +726,22 @@ export function ReachAccess({
           </label>
         </div>
       )}
-      <DocumentAction
-        actionKey="mint-access-grant"
-        surfaceKey="people"
-        regionKey="access-grants"
-        variant="secondary"
-        held={!seatId}
-        disabled={!seatId}
-        aria-describedby={mintReasonId}
-        loading={createLink.isPending}
-        loadingLabel="Opening…"
-        onClick={mint}
-      >
-        Mint access
-      </DocumentAction>
+      {isPerson && (
+        <DocumentAction
+          actionKey="mint-access-grant"
+          surfaceKey="people"
+          regionKey="access-grants"
+          variant="secondary"
+          held={!seatId}
+          disabled={!seatId}
+          aria-describedby={mintReasonId}
+          loading={createLink.isPending}
+          loadingLabel="Opening…"
+          onClick={mint}
+        >
+          Mint access
+        </DocumentAction>
+      )}
       {mintedUrl && (
         <p className="t-body-sm mt-2 break-all font-mono text-[var(--ink)]">
           {mintedUrl}

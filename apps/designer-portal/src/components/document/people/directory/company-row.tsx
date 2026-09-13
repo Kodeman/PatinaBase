@@ -20,28 +20,14 @@ import { Avatar } from "../person-bits";
 import { StateWord, PlainFact } from "../state-word";
 
 /**
- * A company's OWN kind vocabulary (`studio_contacts.contact_kind` on an
- * `entity_kind='company'` row) — deliberately DISTINCT from a person's
+ * A company's OWN kind vocabulary — deliberately DISTINCT from a person's
  * PartyKind: a firm card names what KIND OF FIRM it is, not a role on a
- * project. Free TEXT (00417, no CHECK), so an unrecognized value prettifies
- * rather than printing raw snake_case. Read by the rolodex seed sheet and the
- * picker's mini row as well as by this one.
+ * project. CR-6 moved the vocabulary itself into `lib/document/people-derivation`
+ * so `firmIdentityLine` can reach it without importing a client component; it
+ * is re-exported here, where the rolodex seed sheet and the picker's mini row
+ * already read it.
  */
-const COMPANY_KIND_LABELS: Record<string, string> = {
-  gc: "GC firm",
-  workroom: "Workroom",
-  showroom: "Showroom",
-  vendor: "Vendor",
-  supplier: "Supplier",
-};
-
-export function companyKindLabel(kind: string | null | undefined): string {
-  if (!kind) return "Company";
-  return (
-    COMPANY_KIND_LABELS[kind] ??
-    kind.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
-  );
-}
+export { companyKindLabel } from "@/lib/document/people-derivation";
 
 export interface CompanyRowProps {
   /** The firm's card id — the `?firm=` the row opens. */

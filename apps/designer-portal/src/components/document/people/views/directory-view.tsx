@@ -30,6 +30,7 @@ import {
   useChannelConsentRecords,
   useContactRules,
   usePeopleDirectory,
+  usePeopleSeats,
   useStudioContactChannelsFor,
   useStudioContacts,
   type PartyRole,
@@ -51,9 +52,12 @@ import {
   directoryEntryKind,
   directoryEntryMatches,
   directoryFirmOf,
+  directoryIdentityRows,
+  directoryRolodexOrgId,
   directoryTradeOf,
   entryPaperWord,
   firmIdentityLine,
+  seatIsDone,
   type DirectoryPerson,
 } from "@/lib/document/people-derivation";
 import {
@@ -141,14 +145,30 @@ export function DirectoryView({
     role: "all",
     scope: scope === "mine" ? "mine" : undefined,
   });
+  // QA-R2-9: a company-only engagement with nobody named is not a head. It
+  // reaches the studio through the firm's own row and the Call Sheet's Bidding
+  // band, never as a second, person-shaped copy of the same entity.
+  const rows = useMemo(
+    () => directoryIdentityRows((data ?? []) as DirectoryPerson[]),
+    [data],
+  );
+
+  // QA-R2-1: the rolodex read is scoped to the org that actually HOLDS these
+  // rows, read off `meta.organization_id`, not to the room's first-match guess
+  // over an unordered membership list. A designer in two design studios used to
+  // get an empty rolodex roughly half the time, and with it "Unnamed" crew and
+  // no payee marker on any firm row.
+  const rolodexOrgId = useMemo(
+    () => directoryRolodexOrgId(rows) ?? organizationId,
+    [rows, organizationId],
+  );
+
   // The rolodex itself, for the two facts `people_directory` does not carry:
   // a firm's signer (its payee marker) and a person's own email/office phone
   // for a routed rule clause.
-  const { data: contacts } = useStudioContacts(organizationId, {
+  const { data: contacts } = useStudioContacts(rolodexOrgId, {
     includeArchived: false,
   });
-
-  const rows = useMemo(() => (data ?? []) as DirectoryPerson[], [data]);
 
   /** Which band a firm belongs to: the band of the crew it carries (PR-g). */
   const firmBands = useMemo(() => {
@@ -162,20 +182,35 @@ export function DirectoryView({
     return bands;
   }, [rows]);
 
-  /** Crew and open jobs per firm, off the rows already in hand. */
+  // QA-R2-2: the firm's open jobs come from the SEATS view. 00626 moved every
+  // carded human onto the contacts branch, whose `project_id` is hard-coded
+  // NULL — counting it printed "0 open jobs" on every firm in the book,
+  // including firms whose people hold live Okonkwo seats.
+  const { data: allSeats } = usePeopleSeats({ all: true });
+
+  /** Crew off the rows in hand; open jobs off the seats view. */
   const firmCounts = useMemo(() => {
     const counts = new Map<string, { crew: number; jobs: Set<string> }>();
+    const bucketFor = (firmId: string) => {
+      const existing = counts.get(firmId);
+      if (existing) return existing;
+      const fresh = { crew: 0, jobs: new Set<string>() };
+      counts.set(firmId, fresh);
+      return fresh;
+    };
     for (const row of rows) {
       if (directoryEntryKind(row) === "firm") continue;
       const firmId = directoryFirmOf(row).id;
       if (!firmId) continue;
-      const bucket = counts.get(firmId) ?? { crew: 0, jobs: new Set<string>() };
-      bucket.crew += 1;
-      if (row.project_id) bucket.jobs.add(row.project_id);
-      counts.set(firmId, bucket);
+      bucketFor(firmId).crew += 1;
+    }
+    for (const seat of allSeats ?? []) {
+      if (!seat.company_id || !seat.project_id) continue;
+      if (seatIsDone(seat.stage)) continue;
+      bucketFor(seat.company_id).jobs.add(seat.project_id);
     }
     return counts;
-  }, [rows]);
+  }, [rows, allSeats]);
 
   /** The signer each firm names, as the payee marker's words. */
   const payeeMarkers = useMemo(() => {
@@ -245,7 +280,7 @@ export function DirectoryView({
 
   // ── The clause behind the consent word (CR-13, SPEC §5.1 #9) ─────────────
   const { data: consentRecords } = useChannelConsentRecords(
-    organizationId ?? null,
+    rolodexOrgId ?? null,
     "sms",
   );
   const { data: projects } = useProjects();
