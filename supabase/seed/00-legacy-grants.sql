@@ -15786,6 +15786,48 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00611_time_entry_studio_id_guard.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_time_entry_studio_id() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00613_classifier_internal_short_circuit.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.classify_project_time_entry_authority() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00613_classifier_internal_short_circuit.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.time_entry_ledger FROM anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00613_classifier_internal_short_circuit.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.time_entry_ledger TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00613_classifier_internal_short_circuit.sql
+DO $g$ BEGIN
+  grant select on public.margin_items to authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00613_classifier_internal_short_circuit.sql
+DO $g$ BEGIN
+  grant select on public.margin_items to service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00613_classifier_internal_short_circuit.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.audit_time_entry_change() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 00615_self_authored_rate_requires_ownership.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.designer_tier_pricing_studio(uuid) FROM PUBLIC, anon, authenticated, service_role;
