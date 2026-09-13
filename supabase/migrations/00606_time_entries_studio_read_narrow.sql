@@ -535,6 +535,22 @@ COMMENT ON COLUMN public.studio_member_rates.original_created_by IS
 -- round 9's confirm arm, bound (e)'s owned branch and bound (a2)'s designer skip
 -- are all DELETED. The act still writes ONE audit_logs row (W2-R4-05) and returns
 -- the studio the UPDATE actually wrote (W2-R4-06).
+--
+-- ── ROUND 14 — HT-3-g(b) CORRECTED (orchestrator 2026-09-13) ────────────────
+-- Round 13 added the REMEDY ARM so an employer had a way back from a W2-R13-01
+-- form-S/H taking. Round 13's own fix report recorded that the arm was WIDER than its
+-- purpose and declined to narrow it on a guess; round 14 measured what the width was
+-- worth (W2-R14-01, MAJOR, 1/1 through RLS with a negative control in the same
+-- fixture) — ONE statement by ONE account, no seat touched, nothing transferred, no
+-- second party, on a project she did not create, moved her own resolved rate from an
+-- honest employer's arm's-length 26000 to the 77700 she had written for herself, and
+-- the displaced employer could neither undo it (reassign refused 42501, stamp refused
+-- 22023) nor even SEE it (0 of the audit rows). The correction adds ONE bound, and it
+-- is the fact about the project's BOOK the amendment's own sentence asked for: the
+-- studio being REPLACED must not EMPLOY this project's designer. Bound (a0) below is
+-- the whole of it, W2-R14-03 re-files the overwrite's audit row under the DISPLACED
+-- studio so its owner can read it, and the remedy survives because after a taking the
+-- replaced studio is the taker's own workspace, which she owns rather than works for.
 CREATE OR REPLACE FUNCTION public.stamp_project_pricing_studio(
   p_project_id uuid,
   p_studio_id  uuid
@@ -556,6 +572,9 @@ DECLARE
   -- this body compares the actor with the designer.
   v_caller_is_designer  boolean := false;
   v_caller_owns_named   boolean := false;
+  -- HT-3-g(b) CORRECTED, round 14: the arm's THIRD bound, and the only one that is a
+  -- fact about the PROJECT'S BOOK rather than about the caller.
+  v_replaced_employs_designer boolean := false;
   v_remedy              boolean := false;
   v_written     uuid;
 BEGIN
@@ -616,7 +635,49 @@ BEGIN
   --      recorded measurement of HT-3-f(3)'s dissolution — goes red. So the arm is
   --      bounded to the shape the amendment names. If the orchestrator means the arm to
   --      reach unstamped projects too, this is one conjunct and aj5 moves with it.
-  v_remedy := v_caller_is_designer AND v_caller_owns_named AND v_existing IS NOT NULL;
+  --      HT-3-g(b) CORRECTED (orchestrator 2026-09-13, resolving W2-R14-01 MAJOR). THE
+  --      THIRD BOUND, AND IT IS A FACT ABOUT THE PROJECT'S BOOK: the studio being
+  --      REPLACED must NOT EMPLOY this project's designer — she holds no active,
+  --      non-guest seat there with role <> 'owner', in an active design_studio. It is
+  --      the same employer-tier question bound (c) asks, turned on the OLD studio
+  --      instead of the named one, so the two are one sentence read in two directions.
+  --      WHAT IT CLOSES, measured 1/1 through RLS before it (W2-R14-01, round 14's
+  --      MAJOR): a designer who owns a studio re-pointed ANY already-stamped project
+  --      she LEADS — an HONEST EMPLOYER's included, one she did not create — at the
+  --      studio she owns, in ONE statement, touching no seat, transferring nothing and
+  --      using no second party, after which HT-3-e(2)'s owner exemption priced her
+  --      hours at the number she had written for herself (26000 -> 77700 in the
+  --      reviewer's fixture) and no party could undo it. That is W2-R11-01 form A with
+  --      the power to overwrite, and it is the brief's blocker clause word for word.
+  --      An honest employer's stamped project can therefore never be overwritten by the
+  --      designer it employs.
+  --      WHY THE REMEDY SURVIVES IT: after a form-S/H taking the studio being replaced
+  --      is the TAKER'S OWN WORKSPACE, which she OWNS, and an owner seat is outside the
+  --      employer tier by definition. So the recovering lead's overwrite is admitted
+  --      wherever she holds no employer seat in that workspace. It costs the recovery
+  --      one statement more than round 13 measured, and that statement is the
+  --      recovering owner's OWN: the seat the taker must give her for
+  --      reassign_project_lead (00399 is pinned to the project's CURRENT studio and
+  --      wants both leads seated there) is itself an employer-tier seat in the
+  --      workspace, so she drops it (`Members can leave`) and then stamps. Cases (k)
+  --      k4b-k5 and (l) measure the refusal and the recovery in that order.
+  v_replaced_employs_designer := v_existing IS NOT NULL AND EXISTS (
+    SELECT 1
+    FROM public.organization_members AS replaced_seat
+    JOIN public.organizations AS replaced_studio
+      ON replaced_studio.id = replaced_seat.organization_id
+    WHERE replaced_seat.organization_id = v_existing
+      AND replaced_seat.user_id = v_designer_id
+      AND replaced_seat.status = 'active'
+      AND replaced_seat.role <> 'guest'
+      AND replaced_seat.role <> 'owner'
+      AND replaced_studio.type = 'design_studio'
+      AND replaced_studio.status = 'active'
+  );
+  v_remedy := v_caller_is_designer
+          AND v_caller_owns_named
+          AND v_existing IS NOT NULL
+          AND NOT v_replaced_employs_designer;
 
   -- (a) standing, HT-3-d and HT-3-g(3): an OWNER or ADMIN of the studio being
   --     named. Being the project's designer is NOT standing in itself (W2-R4-02) —
@@ -814,12 +875,21 @@ BEGIN
   --     first stamp — it takes a project's hours OFF a studio that was reading them —
   --     and a row that spelled the old studio NULL would say the opposite of what
   --     happened.
+  --     ROUND 14, W2-R14-03: AND ON AN OVERWRITE THE ROW IS FILED UNDER THE DISPLACED
+  --     STUDIO. audit_logs' only SELECT policies are `Org admins can view org audit
+  --     logs` (organization_id match + owner/admin) and `Users can view their audit
+  --     logs` (user_id match), so a row carrying the NEW studio is readable by the
+  --     caller and by the studio she just named and by NOBODY ELSE — measured: the
+  --     displaced studio's own owner read 0 rows of the act that took her project.
+  --     The party that needs this row is the one losing the work; the new studio can
+  --     already read the project. A first stamp displaces nobody and keeps the studio
+  --     it wrote.
   INSERT INTO public.audit_logs (
     user_id, organization_id, action, resource_type, resource_id,
     old_values, new_values
   ) VALUES (
     v_actor,
-    v_written,
+    CASE WHEN v_existing IS NULL THEN v_written ELSE v_existing END,
     CASE WHEN v_existing IS NULL
       THEN 'project.pricing_studio_stamped'
       ELSE 'project.pricing_studio_restamped'
@@ -905,20 +975,37 @@ COMMENT ON FUNCTION public.stamp_project_pricing_studio(uuid, uuid) IS
   'which after a taking is the taker''s own workspace (42501); what the arm buys, '
   'measured, is that once the employer''s owner IS the lead her stamp overwrites and '
   'the designer''s next hour prices from the employer''s card again. (2) the arm is '
-  'WIDER than its purpose: as written it admits any designer who owns a studio to '
-  're-point any project she LEADS that ALREADY names a studio — an honest employer''s '
-  'stamped project included — at the studio she owns, where HT-3-e(2)''s owner exemption '
-  'prices her own number. That is W2-R11-01 form A with the power to overwrite. It is '
-  'not narrowed here on a guess beyond the ONE bound the amendment''s own subject '
-  'implies: the arm requires the column to be ALREADY STAMPED, because on a NULL column '
-  'HT-3-g(3)''s "designers never stamp" is unamended and closes forms A and G (aj5, '
-  'ak5). Cases (k), (l) and (m) of '
-  'supabase/tests/billing/legacy_project_studio_stamp_test.sql measure both facts, '
-  'the second as a PASSING, loudly-labelled assertion. Writes one audit_logs row '
+  'bounded to a column that is ALREADY STAMPED (v_existing IS NOT NULL), because on a '
+  'NULL column HT-3-g(3)''s "designers never stamp" is unamended and closes W2-R11-01 '
+  'forms A and G (aj5, ak5). '
+  'HT-3-g(b) CORRECTED (orchestrator 2026-09-13, resolving W2-R14-01 MAJOR) ADDS THE '
+  'THIRD BOUND, AND IT IS A FACT ABOUT THE PROJECT''S BOOK RATHER THAN ABOUT THE '
+  'CALLER: THE STUDIO BEING REPLACED MUST NOT EMPLOY THIS PROJECT''S DESIGNER — she '
+  'holds no active, non-guest seat there with role <> ''owner'', in an active '
+  'design_studio. Round 13 shipped the arm as the amendment worded it and reported that '
+  'it was WIDER than its purpose; round 14 measured the width 1/1 through RLS with a '
+  'negative control in the same fixture — ONE statement by ONE account, no seat '
+  'touched, nothing transferred, no second party, on a project she did not create, '
+  'moved her own resolved rate from an honest employer''s arm''s-length 26000 to the '
+  '77700 she had written for herself, and the displaced employer could neither undo it '
+  '(reassign 42501, stamp 22023) nor read the audit row. So an honest employer''s '
+  'stamped project can never be overwritten by the designer it EMPLOYS; what she can '
+  'still do is LEAVE that seat first, which makes the manoeuvre a RESIDUAL under '
+  'HT-3-g AMENDED (c) rather than a one-statement taking (case (m) m6/m6a measures both '
+  'halves). The remedy the arm exists for survives intact: after a form-S/H taking the '
+  'studio being replaced is the taker''s own WORKSPACE, which the recovering lead owns '
+  'or holds no employer seat in. Cases (k), (l) and (m) of '
+  'supabase/tests/billing/legacy_project_studio_stamp_test.sql measure all of it. '
+  'Writes one audit_logs row '
   '(project.pricing_studio_stamped on a first stamp, '
   'project.pricing_studio_restamped on an overwrite, carrying the OLD and the NEW '
   'studio — W2-R4-05) and returns the studio the UPDATE '
-  'actually wrote (W2-R4-06). SECURITY DEFINER so the write does not meet '
+  'actually wrote (W2-R4-06). W2-R14-03: on an OVERWRITE that row is filed under the '
+  'DISPLACED studio''s organization_id, because audit_logs'' SELECT policies would '
+  'otherwise hide the act from the only party that needs it — the studio losing the '
+  'work (measured: its owner read 0 rows of the act that took her project). A first '
+  'stamp displaces nobody and keeps the studio it wrote. '
+  'SECURITY DEFINER so the write does not meet '
   'set_project_studio_id''s authenticated arm; that trigger''s owner-executed arm '
   'still re-validates the bound.';
 
@@ -1131,18 +1218,23 @@ BEGIN
   -- HT-3-g AMENDED (b): the remedy arm's own shape, pinned by source, so a later hand
   -- can neither delete it (leaving an employer no way back from a taking) nor widen it
   -- from an OWNER seat to bound (a)'s owner-OR-ADMIN standing.
+  -- W2-R14-04 / W2-R8-06: pinned on a WHITESPACE-NORMALISED source, never on the
+  -- body's own alignment. Spelled with the literal spacing, a reformat reds the
+  -- migration while saying nothing about the question the gate asks, and a hand who
+  -- keeps the spacing while changing the semantics passes it.
   ASSERT (
-    SELECT prosrc LIKE '%v_remedy := v_caller_is_designer AND v_caller_owns_named%'
-       AND prosrc LIKE '%AND v_existing IS NOT NULL;%'
+    SELECT regexp_replace(prosrc, '\s+', ' ', 'g')
+             LIKE '%v_remedy := v_caller_is_designer AND v_caller_owns_named AND '
+                  'v_existing IS NOT NULL AND NOT v_replaced_employs_designer;%'
        AND prosrc LIKE '%owner_seat.role = ''owner''%'
        AND prosrc LIKE '%IF NOT v_remedy THEN%'
        AND prosrc LIKE '%AND (studio_id IS NULL OR v_remedy)%'
        AND prosrc LIKE '%IF NOT v_remedy AND NOT EXISTS (%'
        AND prosrc LIKE '%project.pricing_studio_restamped%'
-       AND position('v_remedy := v_caller_is_designer AND v_caller_owns_named' in prosrc)
+       AND position('v_remedy := v_caller_is_designer' in prosrc)
              < position('this project already names a studio' in prosrc)
        AND position('SELECT project.designer_id, project.studio_id' in prosrc)
-             < position('v_remedy := v_caller_is_designer AND v_caller_owns_named' in prosrc)
+             < position('v_remedy := v_caller_is_designer' in prosrc)
     FROM pg_proc
     WHERE oid = to_regprocedure('public.stamp_project_pricing_studio(uuid,uuid)')
   ), '00606: HT-3-g AMENDED (b) — the REMEDY ARM is (the caller IS the project''s '
@@ -1160,6 +1252,44 @@ BEGIN
      'that goes red). An is_org_admin_or_owner spelling '
      'here instead of the owner seat would hand every ADMIN of any studio the power to '
      're-point a project that studio had no part in';
+
+  -- HT-3-g(b) CORRECTED (orchestrator 2026-09-13, resolving W2-R14-01). THE THIRD
+  -- BOUND. Pinned on a whitespace-normalised source for W2-R14-04's reason, and pinned
+  -- by POSITION too, because a test computed after bound (b) has already let the
+  -- overwrite through.
+  ASSERT (
+    SELECT regexp_replace(prosrc, '\s+', ' ', 'g')
+             LIKE '%v_replaced_employs_designer := v_existing IS NOT NULL AND EXISTS (%'
+       AND regexp_replace(prosrc, '\s+', ' ', 'g')
+             LIKE '%replaced_seat.organization_id = v_existing%'
+       AND regexp_replace(prosrc, '\s+', ' ', 'g')
+             LIKE '%replaced_seat.user_id = v_designer_id%'
+       AND regexp_replace(prosrc, '\s+', ' ', 'g')
+             LIKE '%replaced_seat.role <> ''guest''%'
+       AND regexp_replace(prosrc, '\s+', ' ', 'g')
+             LIKE '%replaced_seat.role <> ''owner''%'
+       AND regexp_replace(prosrc, '\s+', ' ', 'g')
+             LIKE '%replaced_studio.type = ''design_studio''%'
+       AND regexp_replace(prosrc, '\s+', ' ', 'g')
+             LIKE '%replaced_studio.status = ''active''%'
+       AND position('v_replaced_employs_designer :=' in prosrc)
+             < position('v_remedy := v_caller_is_designer' in prosrc)
+    FROM pg_proc
+    WHERE oid = to_regprocedure('public.stamp_project_pricing_studio(uuid,uuid)')
+  ), '00606: HT-3-g(b) CORRECTED (orchestrator 2026-09-13, resolving W2-R14-01 MAJOR) — '
+     'THE OVERWRITE IS ADMITTED ONLY WHERE THE STUDIO BEING REPLACED DOES NOT EMPLOY '
+     'THIS PROJECT''S DESIGNER (no active, non-guest seat with role <> ''owner'' in an '
+     'active design_studio). Round 13''s arm, as the amendment worded it, was a '
+     'ONE-STATEMENT taking on every already-stamped project a designer leads: measured '
+     '1/1 through RLS with a negative control in the same fixture, an honest employer''s '
+     'arm''s-length 26000 became the 77700 she had written for herself, no seat was '
+     'touched, nothing was transferred, no second party acted, she had not created the '
+     'project, and the displaced employer could neither undo it (reassign 42501, stamp '
+     '22023) nor read the audit row. Delete this bound and that taking is back. It is a '
+     'fact about the project''s BOOK and not about the caller, which is what HT-3-g '
+     'AMENDED (b)''s own sentence asked for, and it leaves the remedy intact because '
+     'after a form-S/H taking the studio being replaced is the taker''s own WORKSPACE '
+     '(an owner seat is outside the employer tier by definition)';
   ASSERT (
     SELECT prosrc LIKE '%RETURNING studio_id INTO v_written%'
        AND prosrc LIKE '%RETURN v_written;%'
@@ -1197,12 +1327,14 @@ BEGIN
       (SELECT prosrc FROM pg_proc
         WHERE oid = to_regprocedure('public.stamp_project_pricing_studio(uuid,uuid)')),
       'public\.organization_members', 'g')
-  ) = 2,
-    '00606: the stamp reads public.organization_members EXACTLY TWICE — HT-3-g(3)''s '
-    'single employer-seat question about the project''s DESIGNER, and HT-3-g AMENDED '
-    '(b)''s single owner-seat question about the CALLER. A third read is either the '
-    'tier branch HT-3-g(3) deleted or a membership question nobody ruled. (It was ONE '
-    'through round 12; the remedy arm is the whole of the difference.)';
+  ) = 3,
+    '00606: the stamp reads public.organization_members EXACTLY THREE TIMES — '
+    'HT-3-g(3)''s single employer-seat question about the project''s DESIGNER in the '
+    'studio NAMED, HT-3-g AMENDED (b)''s single owner-seat question about the CALLER, '
+    'and HT-3-g(b) CORRECTED''s single employer-seat question about the same designer in '
+    'the studio being REPLACED. A fourth read is either the tier branch HT-3-g(3) '
+    'deleted or a membership question nobody ruled. (It was ONE through round 12, TWO '
+    'through round 13, and round 14''s correction is the whole of the third.)';
 
   -- set_project_studio_id is NOT redefined by this file (§0.4 / 00603's own rule).
   ASSERT (
