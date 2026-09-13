@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * The invoice composer (R74b) — drawing an invoice as an ANTI-WIZARD: one
@@ -12,7 +12,7 @@
  * Prefill contracts (the one-act openers):
  *   initialFfeItemIds  — R76 "Bill →" (the ?ffeItemIds= descendant): arrive
  *                        ticked; covered/unpriced ones fall out with a notice.
- *   initialTimeEntryIds — R75 Export week / bill-it: arrive ticked, per
+ *   initialTimeEntryIds — R75 Bill week / bill-it: arrive ticked, per
  *                        project (the intersection when the composer asks).
  *
  * Time claim: after the draft lands, the selected entries are stamped with
@@ -35,7 +35,7 @@
  * composer's own: ad-hoc lines, tax, terms, memo, totals, one Draft act.
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   useCreateDraftInvoice,
   useCreateDraftStudioInvoice,
@@ -43,18 +43,19 @@ import {
   useFfeInvoiceCoverage,
   useOrganizations,
   useProjectFFEItems,
+  useProjectRoster,
   useProjectInvoices,
   useProjectPaymentMilestones,
   useProjects,
   useClaimTimeEntries,
   useUnbilledTime,
-} from '@patina/supabase';
-import { computeInvoiceTotals, formatCurrency } from '@patina/shared';
-import { formatHoursLabel } from '@/lib/time-billing';
-import { useFeatureFlag } from '@/hooks/use-feature-flag';
-import { ClientPicker } from '@/components/portal/client-picker';
-import { documentEvents } from '@/lib/analytics/document-events';
-import { DocumentAction, DocumentActionGroup } from '../document-action';
+} from "@patina/supabase";
+import { computeInvoiceTotals, formatCurrency } from "@patina/shared";
+import { formatHoursLabel } from "@/lib/time-billing";
+import { useFeatureFlag } from "@/hooks/use-feature-flag";
+import { ClientPicker } from "@/components/portal/client-picker";
+import { documentEvents } from "@/lib/analytics/document-events";
+import { DocumentAction, DocumentActionGroup } from "../document-action";
 import {
   EMPTY_ADHOC,
   STUDIO_TARGET,
@@ -67,19 +68,19 @@ import {
   type ComposerFfeItem,
   type ComposerMilestone,
   type ComposerStudio,
-} from '@/lib/document/invoice-composer';
-import { fmtDay } from '@/lib/document/format';
-import type { InvoiceComposerContext } from './invoice-overlays';
+} from "@/lib/document/invoice-composer";
+import { fmtDay } from "@/lib/document/format";
+import type { InvoiceComposerContext } from "./invoice-overlays";
 
-const TERRACOTTA_INK = 'var(--color-terracotta-ink)';
+const TERRACOTTA_INK = "var(--color-terracotta-ink)";
 
 const LABEL =
-  'font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]';
+  "font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]";
 const INPUT =
-  'rounded-[3px] border border-[var(--color-pearl)] bg-transparent px-2 py-1.5 text-[11.5px] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none';
-const CHECK = 'relative top-[1px] accent-[var(--color-clay)]';
+  "rounded-[3px] border border-[var(--color-pearl)] bg-transparent px-2 py-1.5 text-[11.5px] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none";
+const CHECK = "relative top-[1px] accent-[var(--color-clay)]";
 const ROW =
-  'flex cursor-pointer items-baseline gap-2.5 border-b border-dashed border-[var(--color-pearl)] py-1.5';
+  "flex cursor-pointer items-baseline gap-2.5 border-b border-dashed border-[var(--color-pearl)] py-1.5";
 
 // Untyped hook rows (house style — database.types.ts not regenerated).
 type AnyRecord = any;
@@ -88,11 +89,11 @@ type AnyRecord = any;
 // DocumentAction button — but it is an act, and it rides the same pair every
 // other act in this region rides (no new analytics module).
 const STUDIO_CHOICE_EVENT = {
-  surface_key: 'accounts',
-  region_key: 'invoice-composer',
-  action_key: 'choose-studio-invoice',
-  variant: 'secondary',
-  presentation: 'inline',
+  surface_key: "accounts",
+  region_key: "invoice-composer",
+  action_key: "choose-studio-invoice",
+  variant: "secondary",
+  presentation: "inline",
 } as const;
 
 export function InvoiceComposer({
@@ -106,15 +107,15 @@ export function InvoiceComposer({
 }) {
   // One select, two kinds of target: a project id, or the studio sentinel.
   const [target, setTarget] = useState(
-    context.mode === 'studio' ? STUDIO_TARGET : (context.projectId ?? ''),
+    context.mode === "studio" ? STUDIO_TARGET : (context.projectId ?? ""),
   );
-  const projectId = target === STUDIO_TARGET ? '' : target;
+  const projectId = target === STUDIO_TARGET ? "" : target;
 
   // Fail-closed: the houseless choice never renders while the flag is still
   // resolving. A project-scoped opener has already named its house, so it
   // never offers the choice at all.
   const { value: studioInvoiceOn, isLoading: flagLoading } =
-    useFeatureFlag('studio-invoice');
+    useFeatureFlag("studio-invoice");
   const studioChoiceAvailable =
     studioInvoiceOn && !flagLoading && !context.projectId;
   const studioMode = studioChoiceAvailable && target === STUDIO_TARGET;
@@ -127,6 +128,10 @@ export function InvoiceComposer({
   const { data: unbilledTime, isLoading: timeLoading } = useUnbilledTime(
     projectId || null,
   );
+  // HT-21 (W5) — names the composer's time rows: project_unbilled_time
+  // deliberately carries no author name (00596's dropped profiles join), so
+  // the roster (already-read, project-scoped, RLS-clean) supplies it.
+  const { data: roster } = useProjectRoster(projectId || null);
   const { data: ffeItems, isLoading: ffeLoading } =
     useProjectFFEItems(projectId);
   const { data: coverage, isLoading: coverageLoading } = useFfeInvoiceCoverage(
@@ -136,12 +141,12 @@ export function InvoiceComposer({
     },
   );
 
-  const createDraft = useCreateDraftInvoice({ errorSurface: 'inline' });
+  const createDraft = useCreateDraftInvoice({ errorSurface: "inline" });
   const createStudioDraft = useCreateDraftStudioInvoice({
-    errorSurface: 'inline',
+    errorSurface: "inline",
   });
-  const deleteDraft = useDeleteDraftInvoice({ errorSurface: 'inline' });
-  const claimTime = useClaimTimeEntries({ errorSurface: 'inline' });
+  const deleteDraft = useDeleteDraftInvoice({ errorSurface: "inline" });
+  const claimTime = useClaimTimeEntries({ errorSurface: "inline" });
 
   // ── Selections ────────────────────────────────────────────────────────────
   const [tickedMilestoneIds, setTickedMilestoneIds] = useState<Set<string>>(
@@ -156,17 +161,17 @@ export function InvoiceComposer({
   const [adhoc, setAdhoc] = useState<ComposerAdhocRow[]>([{ ...EMPTY_ADHOC }]);
   // Studio mode's own three fields (S4 · S12 · S8).
   const [studioClientId, setStudioClientId] = useState<string | null>(null);
-  const [title, setTitle] = useState('');
-  const [chosenStudioId, setChosenStudioId] = useState('');
-  const [taxRatePercent, setTaxRatePercent] = useState('0');
-  const [termsDays, setTermsDays] = useState('15');
-  const [memo, setMemo] = useState('');
+  const [title, setTitle] = useState("");
+  const [chosenStudioId, setChosenStudioId] = useState("");
+  const [taxRatePercent, setTaxRatePercent] = useState("0");
+  const [termsDays, setTermsDays] = useState("15");
+  const [memo, setMemo] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const activeProjects = useMemo(
     () =>
       ((projects ?? []) as AnyRecord[]).filter(
-        (p) => p.status === 'active' || p.status === 'planning',
+        (p) => p.status === "active" || p.status === "planning",
       ),
     [projects],
   );
@@ -181,7 +186,7 @@ export function InvoiceComposer({
     [organizations],
   );
   const multiStudio = studios.length > 1;
-  const studioId = chosenStudioId || studios[0]?.id || '';
+  const studioId = chosenStudioId || studios[0]?.id || "";
   // Nothing to bill from: the Draft act can never open, so say so (R83).
   const studioMissing =
     studioMode && !organizationsLoading && studios.length === 0;
@@ -207,9 +212,26 @@ export function InvoiceComposer({
     [ffeItems, coverage, ffeSettled],
   );
 
+  // HT-21 — the roster's `profile_id` is the entry's `user_id`; a member the
+  // roster doesn't carry (e.g. the project's own designer, who logs time but
+  // is not a `project_team_members` row) is left unnamed, matching the
+  // pre-HT-21 generic phrasing rather than guessing.
+  const memberNames = useMemo(
+    () =>
+      new Map(
+        (roster ?? [])
+          .filter((r): r is typeof r & { profile_id: string } => !!r.profile_id)
+          .map((r) => [r.profile_id, r.display_name ?? null] as const),
+      ),
+    [roster],
+  );
   const unbilledEntries = useMemo(
-    () => unbilledTime?.entries ?? [],
-    [unbilledTime],
+    () =>
+      (unbilledTime?.entries ?? []).map((entry) => ({
+        ...entry,
+        member_name: memberNames.get(entry.user_id) ?? null,
+      })),
+    [unbilledTime, memberNames],
   );
 
   // ── Prefill seeding — once per project, after the section queries settle ──
@@ -259,7 +281,7 @@ export function InvoiceComposer({
       try {
         documentEvents.actionSelected(STUDIO_CHOICE_EVENT);
       } catch (e) {
-        console.error('[analytics] actionSelected threw', e);
+        console.error("[analytics] actionSelected threw", e);
       }
     }
     setTarget(next);
@@ -278,7 +300,7 @@ export function InvoiceComposer({
     try {
       documentEvents.actionShown(STUDIO_CHOICE_EVENT);
     } catch (e) {
-      console.error('[analytics] actionShown threw', e);
+      console.error("[analytics] actionShown threw", e);
     }
   }, [studioChoiceAvailable]);
 
@@ -367,13 +389,13 @@ export function InvoiceComposer({
         onDrafted(studioInvoiceId, null);
       } catch (e) {
         setError(
-          e instanceof Error ? e.message : 'Could not draft the invoice',
+          e instanceof Error ? e.message : "Could not draft the invoice",
         );
       }
       return;
     }
 
-    const timeLine = lines.find((l) => l.kind === 'time');
+    const timeLine = lines.find((l) => l.kind === "time");
     let invoice: AnyRecord;
     try {
       invoice = await createDraft.mutateAsync({
@@ -386,7 +408,7 @@ export function InvoiceComposer({
         lines,
       });
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not draft the invoice');
+      setError(e instanceof Error ? e.message : "Could not draft the invoice");
       return;
     }
 
@@ -414,7 +436,7 @@ export function InvoiceComposer({
           stranded = true;
         }
         const reason =
-          e instanceof Error ? e.message : 'Could not attach the time entries';
+          e instanceof Error ? e.message : "Could not attach the time entries";
         setError(
           stranded
             ? `${reason} The draft ${invoice.id} still holds those hours — void it to release them.`
@@ -455,7 +477,7 @@ export function InvoiceComposer({
       {/* ── What it bills: a house, or the studio itself (R136) ─────────── */}
       <div className="mt-3 border-t border-[var(--color-pearl)] pt-2.5">
         <p className={`${LABEL} mb-1`}>
-          {studioChoiceAvailable ? 'for' : 'the document'}
+          {studioChoiceAvailable ? "for" : "the document"}
         </p>
         {context.projectId && selectedProject ? (
           <p className="text-[12.5px] font-medium text-[var(--color-charcoal)]">
@@ -465,7 +487,7 @@ export function InvoiceComposer({
           <select
             value={target}
             onChange={(e) => pickTarget(e.target.value)}
-            aria-label={studioChoiceAvailable ? 'For' : 'Project'}
+            aria-label={studioChoiceAvailable ? "For" : "Project"}
             className={`${INPUT} w-full max-w-[360px] [&_option]:bg-[var(--doc-paper,#FAF7F2)]`}
           >
             <option value="">Pick a document…</option>
@@ -558,7 +580,7 @@ export function InvoiceComposer({
                         {m.label}
                       </span>
                       <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-                        {m.status === 'outstanding' ? 'due now' : 'upcoming'}
+                        {m.status === "outstanding" ? "due now" : "upcoming"}
                       </span>
                       <span className="font-mono text-[11px] text-[var(--color-charcoal)]">
                         {formatCurrency(m.amount_cents)}
@@ -589,8 +611,8 @@ export function InvoiceComposer({
                       className="ml-2 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-clay-ink)] hover:opacity-80"
                     >
                       {tickedTimeIds.size === unbilledEntries.length
-                        ? 'clear all'
-                        : 'tick all'}
+                        ? "clear all"
+                        : "tick all"}
                     </button>
                   )}
                 </p>
@@ -616,6 +638,14 @@ export function InvoiceComposer({
                           }
                         />
                         <span className="min-w-0 flex-1 truncate text-[11.5px] text-[var(--color-charcoal)]">
+                          {/* HT-21 — the composer names the person on every
+                              row; unnamed only where the roster carries none
+                              (the project's own designer, e.g.). */}
+                          {entry.member_name && (
+                            <span className="mr-1.5 text-[var(--color-clay-ink)]">
+                              {entry.member_name} ·
+                            </span>
+                          )}
                           {fmtDay(entry.started_at)}
                           {entry.notes && (
                             <span className="ml-1.5 text-[var(--text-muted)]">
@@ -624,7 +654,7 @@ export function InvoiceComposer({
                           )}
                         </span>
                         <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-                          {formatHoursLabel(entry.duration_minutes)} ·{' '}
+                          {formatHoursLabel(entry.duration_minutes)} ·{" "}
                           {formatCurrency(entry.resolved_rate_cents)}/h
                         </span>
                         <span className="font-mono text-[11px] text-[var(--color-charcoal)]">
@@ -633,8 +663,8 @@ export function InvoiceComposer({
                       </label>
                     ))}
                     <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-                      ticked entries bill as one line and lock to the draft ·
-                      voiding releases them
+                      ticked entries bill as one line, dated beneath, and lock
+                      to the draft · voiding releases them
                     </p>
                   </>
                 ) : (
@@ -696,14 +726,14 @@ export function InvoiceComposer({
                   <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
                     {[
                       skippedFfe.covered > 0
-                        ? `${skippedFfe.covered} asked-for item${skippedFfe.covered === 1 ? '' : 's'} already invoiced · skipped`
+                        ? `${skippedFfe.covered} asked-for item${skippedFfe.covered === 1 ? "" : "s"} already invoiced · skipped`
                         : null,
                       ffePartition.unpriced.length > 0
-                        ? `${ffePartition.unpriced.length} unpriced line${ffePartition.unpriced.length === 1 ? '' : 's'} — set a client price to bill`
+                        ? `${ffePartition.unpriced.length} unpriced line${ffePartition.unpriced.length === 1 ? "" : "s"} — set a client price to bill`
                         : null,
                     ]
                       .filter(Boolean)
-                      .join(' · ')}
+                      .join(" · ")}
                   </p>
                 )}
               </div>
@@ -837,7 +867,7 @@ export function InvoiceComposer({
                 </span>
               </span>
               <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-                {lines.length} line{lines.length === 1 ? '' : 's'}
+                {lines.length} line{lines.length === 1 ? "" : "s"}
               </span>
             </div>
             <DocumentAction

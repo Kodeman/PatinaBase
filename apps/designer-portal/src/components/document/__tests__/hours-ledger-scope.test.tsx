@@ -65,6 +65,13 @@ let unbilledViewRows: Array<Record<string, unknown>> = [];
  *  denial returns no row and no error, which is the absence arm). */
 let noteState: ReadState = 'ready';
 
+/** m10-r3 — the Export act's enrichment sources, overridable per case. */
+let clientsData: Array<Record<string, unknown>> = [];
+let projectsOverride: Array<Record<string, unknown>> | null = null;
+let invoicesOverride: Array<Record<string, unknown>> | null = null;
+/** m4-r4 — whether the invoice-number lookup answers or fails. */
+let invoicesFail = false;
+
 /** Each money read's settle state — a figure must never precede an answer. */
 type ReadState = 'ready' | 'pending' | 'error';
 let rollupState: ReadState = 'ready';
@@ -166,13 +173,22 @@ function makeClient() {
         if (table === 'project_time_entries')
           return [weekEntryOverride ?? WEEK_ENTRY];
         if (table === 'projects')
-          return [{ id: 'project-1', name: 'Okonkwo', status: 'active' }];
+          return (
+            projectsOverride ?? [
+              { id: 'project-1', name: 'Okonkwo', status: 'active' },
+            ]
+          );
         if (table === 'project_unbilled_time') return unbilledViewRows;
+        if (table === 'invoices') return invoicesOverride ?? [];
         return [];
       };
       const builder: Record<string, unknown> = {
         then: (resolve: (value: unknown) => unknown) =>
-          Promise.resolve({ data: rowsFor(), error: null }).then(resolve),
+          Promise.resolve(
+            table === 'invoices' && invoicesFail
+              ? { data: null, error: { message: 'invoice numbers refused' } }
+              : { data: rowsFor(), error: null },
+          ).then(resolve),
       };
       for (const method of [
         'select',
@@ -277,6 +293,8 @@ jest.mock('@patina/supabase', () => ({
       error: ledgerState === 'error' ? new Error('permission denied') : null,
     };
   },
+  // W5 (HT-20) — the studio-scope CSV export's Client column.
+  useClients: () => ({ data: clientsData }),
   useProjectHoursTotal: (projectId: string | null) => {
     projectTotalCalls.push(projectId);
     return {
@@ -304,6 +322,21 @@ jest.mock('../accounts/invoice-overlays', () => ({
 jest.mock('../commercial/project-authority-band', () => ({
   ProjectAuthorityBandForProject: () => null,
 }));
+
+/** m10-r3 — the Export act's CSV build/download, spied rather than executed
+ *  (jsdom has no real download surface); `timeExportFilename` stays real
+ *  (pure string logic, no DOM). */
+const mockBuildTimeExportCsv = jest.fn(() => 'MOCK_CSV');
+const mockDownloadTimeExportCsv = jest.fn();
+jest.mock('@/lib/document/time-export', () => {
+  const actual = jest.requireActual('@/lib/document/time-export');
+  return {
+    ...actual,
+    buildTimeExportCsv: (rows: unknown[]) => mockBuildTimeExportCsv(rows),
+    downloadTimeExportCsv: (csv: string, filename: string) =>
+      mockDownloadTimeExportCsv(csv, filename),
+  };
+});
 
 const makeQueryClient = () =>
   new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -338,6 +371,12 @@ beforeEach(() => {
   onStamp = null;
   hoursMemberScopePending.userId = null;
   hoursMemberScopePending.name = null;
+  clientsData = [];
+  projectsOverride = null;
+  invoicesOverride = null;
+  invoicesFail = false;
+  mockBuildTimeExportCsv.mockClear();
+  mockDownloadTimeExportCsv.mockClear();
 });
 
 describe('the Hours scope lens', () => {
@@ -864,7 +903,7 @@ describe('the sheet’s un-scoped remainder (M5-02)', () => {
       ),
     );
     expect(
-      screen.queryByRole('button', { name: 'Export week → Accounts' }),
+      screen.queryByRole('button', { name: 'Bill week → Accounts' }),
     ).not.toBeInTheDocument();
     expect(
       screen.queryByText(/pending billing authority/),
@@ -885,7 +924,7 @@ describe('the sheet’s un-scoped remainder (M5-02)', () => {
     // hand they are.
     await waitFor(() =>
       expect(
-        screen.getByRole('button', { name: 'Export week → Accounts' }),
+        screen.getByRole('button', { name: 'Bill week → Accounts' }),
       ).toBeInTheDocument(),
     );
     expect(screen.getByText(/pending billing authority/)).toBeInTheDocument();
@@ -948,7 +987,7 @@ describe('the sheet’s un-scoped remainder (M5-02)', () => {
       expect(screen.getByText('unbilled · all time')).toBeInTheDocument(),
     );
     expect(
-      screen.getByRole('button', { name: 'Export week → Accounts' }),
+      screen.getByRole('button', { name: 'Bill week → Accounts' }),
     ).toBeInTheDocument();
     expect(screen.getByLabelText('Minutes')).toBeInTheDocument();
   });
@@ -1023,5 +1062,128 @@ describe('what a chip and a failed note say (n3 · n1)', () => {
       expect(screen.getByText('That note could not be read.')).toBeInTheDocument(),
     );
     expect(screen.queryByText(/not yours to read/)).not.toBeInTheDocument();
+  });
+});
+
+// ── m10-r3: the Export act had no component test of its own ────────────────
+//
+// m2-r4 — what this suite does and does NOT cover: `jest.mock('@patina/supabase')`
+// above replaces the whole package, so `useTimeCaptureProjects` never runs and
+// `MobileSheets` is never mounted here. The enrichment cases below would
+// therefore pass even with M1-r3's colliding cache key restored. The key itself
+// is pinned directly, off the QueryClient's own cache, by the first case.
+
+describe('the Export act (W5, m10-r3)', () => {
+  it('gives the client-bearing projects read its own cache key (M1-r3 · m2-r4)', async () => {
+    const client = makeQueryClient();
+    renderLedger('project-1', client);
+
+    await waitFor(() =>
+      expect(
+        client
+          .getQueryCache()
+          .find({
+            queryKey: ['document-hours-projects', 'with-client'],
+            exact: true,
+          }),
+      ).toBeDefined(),
+    );
+    // The bare key belongs to `useTimeCaptureProjects` (its select carries no
+    // `client_id`); this sheet must never share that cache entry, or whichever
+    // fetch resolves first fills it and the Client column exports empty.
+    expect(
+      client
+        .getQueryCache()
+        .find({ queryKey: ['document-hours-projects'], exact: true }),
+    ).toBeUndefined();
+  });
+
+  it('renders only at studio scope, and is hidden at every other scope', async () => {
+    renderLedger('project-1');
+
+    expect(
+      screen.queryByRole('button', { name: 'Export → CSV' }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'the studio' }));
+    expect(
+      await screen.findByRole('button', { name: 'Export → CSV' }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'this document' }));
+    expect(
+      screen.queryByRole('button', { name: 'Export → CSV' }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'mine' }));
+    expect(
+      screen.queryByRole('button', { name: 'Export → CSV' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('is disabled when the studio window has nothing in it', async () => {
+    ledgerRows = [];
+    renderLedger();
+
+    fireEvent.click(screen.getByRole('button', { name: 'the studio' }));
+
+    const exportButton = await screen.findByRole('button', {
+      name: 'Export → CSV',
+    });
+    expect(exportButton).toBeDisabled();
+  });
+
+  it('exports rows carrying client_name and invoice_number, not the ledger’s bare row (M1-r3)', async () => {
+    projectsOverride = [
+      {
+        id: 'project-1',
+        name: 'Okonkwo',
+        status: 'active',
+        client_id: 'client-1',
+      },
+    ];
+    clientsData = [
+      { client_id: 'client-1', client: { full_name: 'Nora Ellison' } },
+    ];
+    invoicesOverride = [{ id: 'invoice-1', invoice_number: 'INV-0042' }];
+    ledgerRows = [{ ...LEDGER_ROW, invoice_id: 'invoice-1' }];
+    renderLedger();
+
+    fireEvent.click(screen.getByRole('button', { name: 'the studio' }));
+    const exportButton = await screen.findByRole('button', {
+      name: 'Export → CSV',
+    });
+    await waitFor(() => expect(exportButton).toBeEnabled());
+
+    fireEvent.click(exportButton);
+
+    await waitFor(() => expect(mockBuildTimeExportCsv).toHaveBeenCalled());
+    const rows = mockBuildTimeExportCsv.mock.calls[0][0] as Array<
+      Record<string, unknown>
+    >;
+    expect(rows).toContainEqual(
+      expect.objectContaining({
+        id: 'entry-teammate',
+        client_name: 'Nora Ellison',
+        invoice_number: 'INV-0042',
+      }),
+    );
+    expect(mockDownloadTimeExportCsv).toHaveBeenCalledWith(
+      'MOCK_CSV',
+      expect.stringContaining('patina-hours-'),
+    );
+  });
+
+  it('says so when the invoice-number lookup fails, rather than exporting blanks silently (m9-r3 · m4-r4)', async () => {
+    invoicesFail = true;
+    ledgerRows = [{ ...LEDGER_ROW, invoice_id: 'invoice-1' }];
+    renderLedger();
+
+    fireEvent.click(screen.getByRole('button', { name: 'the studio' }));
+    await screen.findByRole('button', { name: 'Export → CSV' });
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(/Invoice numbers could not be read/);
+    expect(alert).toHaveTextContent(/blank Invoice # for invoiced hours/);
   });
 });
