@@ -92,11 +92,17 @@
 --     seats is `field_link`, else `on_paper`. The party branch asks that of
 --     the IDENTITY (reach_state_for_identity, r2 MAJOR-3); the contacts
 --     branch asks it of the card, which already matches every seat stamped
---     with that card. field_link_tokens is
---     designer-only RLS (00283), so a co-member without designer visibility
---     reads `on_paper` where a link exists — the same degrade posture
---     v_project_roster.has_active_field_link already carries (00594's own
---     comment), intended and not a leak.
+--     with that card. field_link_tokens has NOT been designer-only since
+--     00584 (r14 p2): field_link_tokens_studio_rw (00584:982-992) is
+--     is_studio_comember(the project's designer_id), the same width as
+--     project_parties' own policy, so the promised degrade — a co-member
+--     reading `on_paper` where a link exists — does not happen for a studio
+--     co-member at all. What happened without a tenant predicate was the
+--     opposite: a link minted by ANOTHER studio of the same designer decided
+--     this studio's word, which is why reach_state_for_identity() now carries
+--     the seats view's WHERE (r14 MAJOR-1). The narrower degrade survives only
+--     for a caller sharing no active organization with the designer of record,
+--     who reads neither the seat nor the token and is outside the room.
 --
 -- ⚠ DEPLOY SEQUENCING — A HARD CONSTRAINT, NOT A PREFERENCE (w1b r1 MAJOR-5)
 -- This file MUST NOT reach Strata ahead of W2's Directory. Every carded human
@@ -649,10 +655,15 @@ COMMENT ON FUNCTION public.reach_state_for(uuid, uuid, uuid) IS
   'direction §3.8''s reach family for one identity: account | field_link | '
   'on_paper, in PD-12''s order. A login wins; else a live unexpired field link '
   'on a seat this identity holds (by rolodex stamp or by the seat itself); '
-  'else on paper. SECURITY INVOKER — field_link_tokens is designer-only RLS '
-  '(00283), so a co-member without that visibility reads on_paper where a link '
-  'exists, the same degrade v_project_roster.has_active_field_link carries '
-  '(00626).';
+  'else on paper. SECURITY INVOKER — field_link_tokens carries '
+  'field_link_tokens_studio_rw since 00584:982-992, is_studio_comember of the '
+  'project''s designer_id, exactly as wide as project_parties'' own policy, so '
+  'a studio co-member reads every link this identity holds; only a caller '
+  'sharing no active organization with the designer of record degrades to '
+  'on_paper, and that caller reads no seat either (r14 p2 corrects this '
+  'comment''s earlier "designer-only RLS (00283)"). Asked of ONE card or ONE '
+  'seat; the identity-wide sibling is reach_state_for_identity(), which is the '
+  'one that carries the tenant predicate (00626).';
 
 -- THE SEATS VIEW'S OWN GATE, not project_parties' RLS alone (w1b final review
 -- r10 MAJOR-2). This counted every seat the CALLER could read, whose whole
@@ -800,9 +811,25 @@ COMMENT ON FUNCTION public.contact_rule_summary(text, uuid) IS
 --
 -- So the question is asked of the identity: every seat whose
 -- party_identity_key() is this key, which is exactly the set
--- identity_seat_count() counts and people_directory_seats nests. SECURITY
--- INVOKER, same posture and same designer-only field_link_tokens degrade as
--- reach_state_for().
+-- identity_seat_count() counts and people_directory_seats nests — AND ONLY
+-- THOSE (w1b final review r14 MAJOR-1). The clause shipped with no tenant
+-- predicate at all: both base tables' RLS is is_studio_comember(designer of
+-- record) (project_parties 00584:895-921, field_link_tokens_studio_rw
+-- 00584:982-992), satisfied by sharing ANY active organization with that
+-- designer, while every sibling reducer — identity_seat_count(), the
+-- identity_seats CTE, people_directory_seats' WHERE — additionally carries
+-- is_active_studio_member(project_tenant_org(project_id)) beside the job's
+-- own designer, lead designer and creator. Walked: two design studios of the
+-- same designer, one unstamped seat in each on the same number (so both key
+-- on the number, party_identity_key()'s third leg), a live field link on
+-- studio B's seat only; read as an admin of studio A and no member of B, the
+-- Directory row printed `field_link` while studio A held ZERO live links and
+-- the seat line directly beneath it printed `on_paper`. Direction §3.8 /
+-- PD-12 define field_link as a live door THIS studio minted, R-AB puts "Copy
+-- field link" on that row and R-F's vitals count "N on paper", so the room
+-- offered a door it cannot open and suppressed the mint the studio needed.
+-- The predicate below is the seats view's WHERE verbatim. SECURITY INVOKER,
+-- same posture as reach_state_for().
 CREATE OR REPLACE FUNCTION public.reach_state_for_identity(
   p_profile_id   uuid,
   p_identity_key text
@@ -819,8 +846,21 @@ AS $$
         SELECT 1
           FROM public.field_link_tokens f
           JOIN public.project_parties pp ON pp.id = f.party_id
+          JOIN public.projects pj        ON pj.id = pp.project_id
          WHERE f.status = 'active'
            AND f.expires_at > now()
+           -- THE SEATS THE ROW NESTS, AND NO OTHERS (r14 MAJOR-1). Verbatim
+           -- the identity_seats CTE's WHERE (§3) and people_directory_seats'
+           -- (§4), so R-BG's one predicate written three times is written
+           -- four: the reach word reduces over exactly the seats the row
+           -- claims and the room can open.
+           AND ( public.is_active_studio_member(public.project_tenant_org(pp.project_id))
+              OR pj.designer_id      = (select auth.uid())
+              OR pj.lead_designer_id = (select auth.uid())
+              OR pj.created_by       = (select auth.uid()) )
+           AND ( public.is_studio_comember(pj.designer_id)
+              OR public.is_studio_comember(pj.lead_designer_id)
+              OR public.is_studio_comember(pj.created_by) )
            AND public.party_identity_key(
                  pp.studio_contact_id, pp.profile_id,
                  pp.phone_e164, pp.email, pp.id
@@ -842,9 +882,17 @@ COMMENT ON FUNCTION public.reach_state_for_identity(uuid, text) IS
   'the Directory''s party branch, which holds no card id and was therefore '
   'reading the winning seat alone: an uncarded identity whose live link hung '
   'on a non-winning seat printed on_paper over a seat line reading field_link '
-  '(w1b final review r2 MAJOR-3). SECURITY INVOKER — field_link_tokens is '
-  'designer-only RLS (00283), so a co-member without that visibility reads '
-  'on_paper where a link exists (00626).';
+  '(w1b final review r2 MAJOR-3). THE SEATS ARE BOUNDED BY THE SEATS VIEW''S '
+  'OWN WHERE — is_active_studio_member(project_tenant_org(project_id)) beside '
+  'the job''s designer / lead designer / creator, then the three co-member '
+  'legs — so the word reduces over exactly the seats the row nests (R-BG''s '
+  'predicate, now written four times). Without it a live link minted by '
+  'ANOTHER studio of the same designer printed field_link on a row whose own '
+  'studio held none, over a seat line reading on_paper (r14 MAJOR-1): both '
+  'base tables'' RLS is is_studio_comember(designer of record), which is wider '
+  'than this room''s tenant. SECURITY INVOKER — field_link_tokens carries '
+  'is_studio_comember RLS since 00584:982-992, not the designer-only policy '
+  'this comment used to name (r14 p2) (00626).';
 
 -- ── identity_paper_state — the paper word over BOTH holders ───────────────
 -- compliance_state() answers for ONE holder card. Every reader asked it

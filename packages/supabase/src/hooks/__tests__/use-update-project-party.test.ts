@@ -37,8 +37,9 @@ function makeBuilder(result: { data: unknown; error: unknown }): MockBuilder {
   return builder;
 }
 
-/** `.select('sms_consent_status, phone_e164').eq('id', …).maybeSingle()` —
- *  the current-row lookup a phone patch always runs first. */
+/** `.select('sms_consent_status, phone_e164, project_id').eq('id', …)
+ *  .maybeSingle()` — the current-row lookup a phone patch always runs first.
+ *  project_id is what resolves the studio ledger the record lives in. */
 function currentRowBuilder(result: { data: unknown; error: unknown }) {
   const maybeSingle = vi.fn().mockResolvedValue(result);
   const eq = vi.fn(() => ({ maybeSingle }));
@@ -64,8 +65,24 @@ function siblingBuilder(result: { data: unknown; error: unknown }) {
 let builder: MockBuilder;
 const from = vi.fn(() => builder);
 
+/** The two RPCs a genuine phone change asks before anything else: which studio
+ *  ledger this project's consent lives in, then that ledger's verdict for the
+ *  number currently on file. Since R-AY the seat's own `sms_consent_status` is
+ *  frozen at `not_asked`, so the record is the only thing that can say a number
+ *  refused (r14 BLOCKING-1). The default says "this studio holds no record for
+ *  it", which is every test that is not about a refusal. */
+const rpc = vi.fn();
+function defaultRpc(consentVerdict: string | null = null) {
+  rpc.mockImplementation((fn: string) => {
+    if (fn === 'project_consent_org') return Promise.resolve({ data: 'org-1', error: null });
+    if (fn === 'channel_consent_status')
+      return Promise.resolve({ data: consentVerdict, error: null });
+    throw new Error(`unexpected rpc ${fn}`);
+  });
+}
+
 vi.mock('@supabase/ssr', () => ({
-  createBrowserClient: () => ({ from }),
+  createBrowserClient: () => ({ from, rpc }),
 }));
 
 vi.mock('@tanstack/react-query', () => ({
@@ -78,6 +95,8 @@ import { useUpdateProjectParty } from '../use-coordination';
 beforeEach(() => {
   builder = makeBuilder({ data: { id: 'party-1' }, error: null });
   from.mockClear();
+  rpc.mockReset();
+  defaultRpc(null);
 });
 
 function mutationFnOf(hook: unknown) {
@@ -341,6 +360,62 @@ describe('useUpdateProjectParty — phone change resets SMS consent', () => {
     });
 
     expect(builder.update).toHaveBeenCalledWith({ phone: null, phone_e164: null });
+  });
+
+  it('refuses the phone edit when the STUDIO RECORD says the number opted out, even though the seat column reads not_asked (r14 BLOCKING-1)', async () => {
+    // The live shape since R-AY: every seat is born at the column default and
+    // the record carries the truth. Before this fix the guard read the column
+    // alone, so this edit landed silently and an uncarded person's opt-out was
+    // simply gone from every reader.
+    const currentRow = currentRowBuilder({
+      data: {
+        sms_consent_status: 'not_asked',
+        phone_e164: '+15000001111',
+        project_id: 'project-1',
+      },
+      error: null,
+    });
+    from.mockReturnValueOnce({ select: currentRow.select });
+    defaultRpc('opted_out');
+
+    const mutationFn = mutationFnOf(useUpdateProjectParty());
+    await expect(
+      mutationFn({ id: 'party-8', projectId: 'project-1', patch: { phone: '5009998888' } }),
+    ).rejects.toThrow(/replied STOP/);
+
+    expect(rpc).toHaveBeenCalledWith('project_consent_org', { p_project_id: 'project-1' });
+    expect(rpc).toHaveBeenCalledWith('channel_consent_status', {
+      p_organization_id: 'org-1',
+      p_channel_kind: 'sms',
+      p_channel_value: '+15000001111',
+    });
+    // Never reaches the sibling probe or the write.
+    expect(from).toHaveBeenCalledTimes(1);
+    expect(builder.update).not.toHaveBeenCalled();
+  });
+
+  it('asks the record for the OLD number, and lets a cosmetic reformat of a refused number through', async () => {
+    const currentRow = currentRowBuilder({
+      data: {
+        sms_consent_status: 'not_asked',
+        phone_e164: '+15000001111',
+        project_id: 'project-1',
+      },
+      error: null,
+    });
+    from.mockReturnValueOnce({ select: currentRow.select }).mockReturnValueOnce(builder);
+    defaultRpc('opted_out');
+
+    const mutationFn = mutationFnOf(useUpdateProjectParty());
+    await mutationFn({
+      id: 'party-8',
+      projectId: 'project-1',
+      patch: { phone: '(500) 000-1111' },
+    });
+
+    // Same digits is not a change, so the record is never even asked.
+    expect(rpc).not.toHaveBeenCalled();
+    expect(builder.update).toHaveBeenCalledWith({ phone: '(500) 000-1111' });
   });
 
   it('does not send phone_e164 when the phone is set rather than cleared', async () => {

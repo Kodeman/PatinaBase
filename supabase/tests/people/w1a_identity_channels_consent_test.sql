@@ -6344,6 +6344,129 @@ END
 $$;
 
 
+-- ─── 46. r14 BLOCKING-1: the phone freeze asks the RECORD ──────────────────
+--
+-- Block 43 proves the freeze fires for a seat whose own sms_consent_status
+-- reads 'opted_out'. Since R-AY/R-AS no live write path produces such a seat:
+-- the mirror is retired and every seat sits at the column default 'not_asked'
+-- while studio_channel_consent carries the truth. So 43 proved a guard over a
+-- row shape the room can no longer hold, and the actual population — an
+-- UNCARDED person, whose Directory row is keyed on the phone number itself —
+-- could have their opt-out moved off the number with no exception and no
+-- newly recorded consent. This block is 43 asked of the record.
+DO $$
+DECLARE
+  raised TEXT;
+  v      TEXT;
+  seat   UUID := 'e0000000-0000-4000-8000-0000000000fa';
+  clean  UUID := 'e0000000-0000-4000-8000-0000000000fb';
+BEGIN
+  -- The refusal is recorded the only way R-AY allows: through the RPC, by a
+  -- member of the studio.
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+  PERFORM public.record_channel_consent(
+    'b0000000-0000-4000-8000-00000000000a', 'sms', '+16125550821',
+    'opted_out', 'inbound_sms', 'Replied STOP', NULL, NULL);
+  PERFORM pg_temp.reset_role();
+
+  ASSERT public.channel_consent_status(
+           'b0000000-0000-4000-8000-00000000000a', 'sms', '+16125550821') = 'opted_out',
+    'FAIL 46 setup: the record must carry the refusal';
+
+  -- Two seats on that studio's job: one on the refused number, one on a
+  -- number the studio holds no record for. BOTH sit at the frozen column's
+  -- default, which is the whole point.
+  INSERT INTO project_parties (id, project_id, party_kind, display_name, phone)
+  VALUES (seat,  'd0000000-0000-4000-8000-00000000000a', 'sub', 'Wren Sodek II', '(612) 555-0821'),
+         (clean, 'd0000000-0000-4000-8000-00000000000a', 'sub', 'Cal Dorn II',   '(612) 555-0823');
+
+  SELECT sms_consent_status INTO v FROM project_parties WHERE id = seat;
+  ASSERT v = 'not_asked',
+    'FAIL 46a: the seat must be born at the frozen column''s default, got ' || v;
+
+  -- 46b. THE FIX: the number cannot move, though the seat''s own column says
+  --      nothing at all. Walked as the studio member who can reach the row
+  --      through PostgREST, which is who the freeze exists to stop.
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+  raised := NULL;
+  BEGIN
+    UPDATE project_parties SET phone = '612-555-0822' WHERE id = seat;
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM;
+  END;
+  ASSERT raised = 'consent_opted_out_phone_frozen',
+    'FAIL 46b: a number the RECORD refused must not move, got '
+    || COALESCE(raised, '<no error>');
+  PERFORM pg_temp.reset_role();
+
+  SELECT phone_e164 INTO v FROM project_parties WHERE id = seat;
+  ASSERT v = '+16125550821',
+    'FAIL 46b2: …and nothing moved, got ' || COALESCE(v, '<null>');
+
+  -- 46c. A cosmetic reformat of the same digits is still not a change.
+  UPDATE project_parties SET phone = '612.555.0821', trade = 'electrical'
+   WHERE id = seat;
+  SELECT trade INTO v FROM project_parties WHERE id = seat;
+  ASSERT v = 'electrical', 'FAIL 46c: reformatting the same digits must still write';
+
+  -- 46d. THE CONTROL, so the clause refuses a refusal and not a phone edit: a
+  --      seat on a number this studio holds no record for moves freely.
+  UPDATE project_parties SET phone = '612-555-0824' WHERE id = clean;
+  SELECT phone_e164 INTO v FROM project_parties WHERE id = clean;
+  ASSERT v = '+16125550824',
+    'FAIL 46d: an unrefused number must still move, got ' || COALESCE(v, '<null>');
+
+  -- 46e. …and it is THIS studio's ledger that is asked. A refusal recorded by
+  --      a studio the job does not belong to cannot freeze this seat.
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000002');
+  PERFORM public.record_channel_consent(
+    'b0000000-0000-4000-8000-00000000000b', 'sms', '+16125550824',
+    'opted_out', 'inbound_sms', 'Replied STOP to Beta', NULL, NULL);
+  PERFORM pg_temp.reset_role();
+  UPDATE project_parties SET phone = '612-555-0825' WHERE id = clean;
+  SELECT phone_e164 INTO v FROM project_parties WHERE id = clean;
+  ASSERT v = '+16125550825',
+    'FAIL 46e: another studio''s refusal must not freeze this studio''s seat, got '
+    || COALESCE(v, '<null>');
+
+  -- 46f. The deliberate repair door still opens over the record, as R-AX says.
+  SET LOCAL app.consent_legacy_write = 'on';
+  UPDATE project_parties SET phone = '612-555-0826' WHERE id = seat;
+  SET LOCAL app.consent_legacy_write = '';
+  SELECT phone_e164 INTO v FROM project_parties WHERE id = seat;
+  ASSERT v = '+16125550826',
+    'FAIL 46f: app.consent_legacy_write must still let a repair through, got '
+    || COALESCE(v, '<null>');
+
+  -- 46g. The guard reads the record under its OWN rights, not the caller's:
+  --      studio_channel_consent is member-only RLS while project_parties'
+  --      UPDATE policy is the wider is_studio_comember(designer_id), so an
+  --      invoker read would hand exactly the wrong caller an open door.
+  ASSERT (SELECT prosecdef FROM pg_proc pr JOIN pg_namespace ns ON ns.oid = pr.pronamespace
+           WHERE ns.nspname = 'public' AND pr.proname = 'refuse_legacy_consent_write'),
+    'FAIL 46g: the freeze must be SECURITY DEFINER to read the record';
+  ASSERT (SELECT 'search_path=public' = ANY(pr.proconfig) FROM pg_proc pr
+            JOIN pg_namespace ns ON ns.oid = pr.pronamespace
+           WHERE ns.nspname = 'public' AND pr.proname = 'refuse_legacy_consent_write'),
+    'FAIL 46g2: …with search_path pinned';
+  ASSERT NOT has_function_privilege('authenticated',
+    'public.refuse_legacy_consent_write()', 'EXECUTE'),
+    'FAIL 46g3: …and callable by no PostgREST role';
+  ASSERT (SELECT prosrc FROM pg_proc pr JOIN pg_namespace ns ON ns.oid = pr.pronamespace
+           WHERE ns.nspname = 'public' AND pr.proname = 'refuse_legacy_consent_write')
+         ILIKE '%channel_consent_status%',
+    'FAIL 46g4: the freeze must ask the record, not only the frozen column';
+
+  DELETE FROM project_parties WHERE id IN (seat, clean);
+
+  RAISE NOTICE '46. the opted_out phone freeze asks the RECORD, so it fires for '
+               'the seats R-AY actually produces — a number this studio refused '
+               'cannot move though the seat column reads not_asked, another '
+               'studio''s refusal does not freeze it, and the repair door still '
+               'opens (r14 BLOCKING-1): passed';
+END
+$$;
+
+
 DO $$ BEGIN
   RAISE NOTICE 'All W1a assertions passed.';
 END $$;

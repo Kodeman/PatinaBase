@@ -4062,5 +4062,122 @@ BEGIN
   RAISE NOTICE '23. the auto-linked seat prints the identity''s paper word — lapsed under a row reading lapsed, where it read not_on_file (r13 MAJOR-2) — a seat naming its own firm still keeps that firm''s word, and the studio-less population''s second identity is the RULED residue of r13 MAJOR-1: two rows until R-BD''s W3 backfill, and never the affirmative consent word: passed';
 END $$;
 
+-- ─── 24. r14 MAJOR-1: the reach word reduces over the seats the row NESTS ──
+--
+-- reach_state_for_identity() carried no tenant predicate: it matched
+-- party_identity_key() over field_link_tokens JOIN project_parties under the
+-- caller's own RLS, and both of those policies are
+-- is_studio_comember(designer of record) — true of anyone sharing ANY active
+-- organization with that designer — while identity_seat_count(), the
+-- identity_seats CTE and people_directory_seats' WHERE all additionally carry
+-- is_active_studio_member(project_tenant_org(project_id)) beside the job's own
+-- designer / lead / creator. So a live door minted by ANOTHER studio of the
+-- same designer decided this studio's word: the row printed `field_link` with
+-- zero live links of its own, over a seat line printing `on_paper`, and R-AB's
+-- "Copy field link" act on that row opens nothing.
+DO $$
+DECLARE
+  designer  UUID := 'a0000000-0000-0000-0000-000000000004';  -- owns both studios
+  admin_a   UUID := 'a0000000-0000-0000-0000-000000000003';  -- studio A only
+  studio_a  UUID := 'b0000000-0000-0000-0000-000000000001';
+  studio_b  UUID := 'f4000000-0000-4000-8000-00000000000b';
+  proj_a    UUID := 'd0e00000-0000-0000-0000-00000000000a';  -- Okonkwo residence
+  proj_b    UUID := 'f5000000-0000-4000-8000-00000000000b';
+  seat_a    UUID := 'f6000000-0000-4000-8000-00000000000a';
+  seat_b    UUID := 'f6000000-0000-4000-8000-00000000000b';
+  shared    TEXT := '+16125558844';  -- a number no card and no other block holds
+  word      TEXT;
+  seat_word TEXT;
+  n         INTEGER;
+BEGIN
+  -- A SECOND design studio of the same designer, with no other member.
+  INSERT INTO public.organizations (id, type, name, slug, status)
+  VALUES (studio_b, 'design_studio', 'W1B Second Studio', 'w1b-second-studio', 'active');
+  INSERT INTO public.organization_members (organization_id, user_id, role, status, joined_at)
+  VALUES (studio_b, designer, 'owner', 'active', now());
+  INSERT INTO public.projects (id, name, designer_id, studio_id, created_by, status)
+  VALUES (proj_b, 'W1B Studio B job', designer, studio_b, designer, 'active');
+
+  -- One UNSTAMPED seat in each studio on the SAME number, so both key on the
+  -- number itself (party_identity_key()'s third leg) and share one identity.
+  INSERT INTO public.project_parties (id, project_id, party_kind, display_name, phone, studio_contact_id)
+  VALUES (seat_a, proj_a, 'sub', 'W1B Shared Human', shared, NULL),
+         (seat_b, proj_b, 'sub', 'W1B Shared Human', shared, NULL);
+  IF (SELECT count(*) FROM public.project_parties
+       WHERE id IN (seat_a, seat_b) AND studio_contact_id IS NOT NULL) <> 0 THEN
+    RAISE EXCEPTION '24 setup: no card carries this number, so neither seat may be stamped';
+  END IF;
+
+  -- A live field link on STUDIO B's seat only.
+  INSERT INTO public.field_link_tokens (party_id, project_id, token_hash, expires_at, status)
+  VALUES (seat_b, proj_b, encode(extensions.digest('w1b-24-token','sha256'),'hex'),
+          now() + interval '30 days', 'active');
+
+  -- Read as the admin of studio A, who belongs to no part of studio B.
+  PERFORM pg_temp.assume_user(admin_a);
+
+  IF public.is_active_studio_member(studio_b) THEN
+    RAISE EXCEPTION '24 setup: this caller must NOT be a member of studio B';
+  END IF;
+
+  -- (a) the seats view already refuses studio B's seat — that is the record.
+  SELECT count(*) INTO n FROM public.people_directory_seats WHERE seat_id = seat_b;
+  IF n <> 0 THEN
+    RAISE EXCEPTION '24a studio B''s seat nests under studio A''s room (% rows)', n;
+  END IF;
+  SELECT count(*) INTO n FROM public.people_directory_seats WHERE seat_id = seat_a;
+  IF n <> 1 THEN
+    RAISE EXCEPTION '24a2 studio A''s own seat must nest exactly once, got %', n;
+  END IF;
+
+  -- (b) …and the word now agrees with it. Studio A holds no live link.
+  SELECT reach_state INTO word FROM public.people_directory
+   WHERE display_name = 'W1B Shared Human';
+  SELECT reach_state INTO seat_word FROM public.people_directory_seats
+   WHERE seat_id = seat_a;
+  IF word <> 'on_paper' OR seat_word <> 'on_paper' THEN
+    RAISE EXCEPTION '24b the row reads % over a seat line reading % — another '
+                    'studio''s door decided this studio''s word', word, seat_word;
+  END IF;
+  IF public.reach_state_for_identity(NULL, shared) <> 'on_paper' THEN
+    RAISE EXCEPTION '24b2 the function itself still crosses the tenant boundary';
+  END IF;
+  PERFORM pg_temp.reset_role();
+
+  -- (c) THE CONTROL, so the predicate refuses a foreign door and not every
+  --     door: the same identity, a live link on studio A's OWN seat, and the
+  --     word turns.
+  INSERT INTO public.field_link_tokens (party_id, project_id, token_hash, expires_at, status)
+  VALUES (seat_a, proj_a, encode(extensions.digest('w1b-24-token-a','sha256'),'hex'),
+          now() + interval '30 days', 'active');
+  PERFORM pg_temp.assume_user(admin_a);
+  SELECT reach_state INTO word FROM public.people_directory
+   WHERE display_name = 'W1B Shared Human';
+  SELECT reach_state INTO seat_word FROM public.people_directory_seats
+   WHERE seat_id = seat_a;
+  IF word <> 'field_link' OR seat_word <> 'field_link' THEN
+    RAISE EXCEPTION '24c studio A''s own live link must read field_link on both '
+                    'lines, got row % / seat %', word, seat_word;
+  END IF;
+  PERFORM pg_temp.reset_role();
+
+  -- (d) and the designer of record, who belongs to BOTH studios, still reads
+  --     her own job's link through the tenant leg — r11 MAJOR-1 untouched.
+  PERFORM pg_temp.assume_user(designer);
+  IF public.reach_state_for_identity(NULL, shared) <> 'field_link' THEN
+    RAISE EXCEPTION '24d the designer of record lost her own job''s link';
+  END IF;
+  PERFORM pg_temp.reset_role();
+
+  DELETE FROM public.field_link_tokens WHERE party_id IN (seat_a, seat_b);
+  DELETE FROM public.project_parties WHERE id IN (seat_a, seat_b);
+
+  RAISE NOTICE '24. the reach word reduces over exactly the seats the row nests '
+               '— a live field link minted by another studio of the same '
+               'designer no longer prints field_link over a seat line reading '
+               'on_paper, the studio''s own link still does, and the designer of '
+               'record keeps her own job''s door (r14 MAJOR-1): passed';
+END $$;
+
 DO $$ BEGIN RAISE NOTICE 'All W1b assertions passed.'; END $$;
 ROLLBACK;

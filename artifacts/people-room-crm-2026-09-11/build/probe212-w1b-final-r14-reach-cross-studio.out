@@ -1,0 +1,66 @@
+Pager usage is off.
+BEGIN
+SELECT 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+--- neither seat was auto-stamped (no card carries this number) ---
+                  id                  |              project_id              | studio_contact_id |  phone_e164  |     ikey     
+--------------------------------------+--------------------------------------+-------------------+--------------+--------------
+ 669acb74-887d-4140-a367-18685e2d414f | d0e00000-0000-0000-0000-00000000000a |                   | +16125559911 | +16125559911
+ 98a218ee-4e18-4582-8f55-178ffd6d888d | d9d80d0c-07f0-4666-9578-8fc24095c28b |                   | +16125559911 | +16125559911
+(2 rows)
+
+INSERT 0 1
+--- the record: 0 live links on studio A's seat, 1 on studio B's ---
+ live_links_on_a_seat | live_links_on_b_seat 
+----------------------+----------------------
+                    0 |                    1
+(1 row)
+
+GRANT
+SET
+                                 set_config                                 
+----------------------------------------------------------------------------
+ {"sub" : "a0000000-0000-0000-0000-000000000003", "role" : "authenticated"}
+(1 row)
+
+--- is this caller a member of studio B? (expect f) ---
+ member_of_studio_b | member_of_studio_a 
+--------------------+--------------------
+ f                  | t
+(1 row)
+
+--- the Directory / seats views correctly refuse studio B's seat ---
+ b_seat_rows_in_seats_view | a_seat_rows_in_seats_view 
+---------------------------+---------------------------
+                         0 |                         1
+(1 row)
+
+--- but project_parties RLS and field_link_tokens RLS both admit studio B's rows ---
+ b_seat_readable_raw | b_link_readable_raw 
+---------------------+---------------------
+                   1 |                   1
+(1 row)
+
+--- THE WORD: what does studio A's Directory row say about reach? ---
+   display_name   | role | reach_state | seat_count |              project_id              
+------------------+------+-------------+------------+--------------------------------------
+ R14 Shared Human | sub  | field_link  |          1 | d0e00000-0000-0000-0000-00000000000a
+(1 row)
+
+--- and the seat line beneath it ---
+   display_name   |   project_name    | reach_state 
+------------------+-------------------+-------------
+ R14 Shared Human | Okonkwo residence | on_paper
+(1 row)
+
+--- the function, asked directly ---
+ identity_word | seat_a_word 
+---------------+-------------
+ field_link    | on_paper
+(1 row)
+
+ROLLBACK

@@ -1,0 +1,26 @@
+Pager usage is off.
+=== A. anon on people_directory (SELECT is granted by the local legacy seed) ===
+BEGIN
+SET
+--- expect either 0 rows or a permission error, never another studio's data ---
+psql:artifacts/people-room-crm-2026-09-11/build/probe211-w1b-final-r14-anon-and-crosstenant.sql:7: ERROR:  permission denied for table studio_contacts
+HINT:  Grant the required privileges to the current role with: GRANT SELECT ON public.studio_contacts TO anon;
+ROLLBACK
+=== B. anon INSERT into people_directory / v_access_grants (grant exists; view is a UNION) ===
+BEGIN
+SET
+SAVEPOINT
+psql:artifacts/people-room-crm-2026-09-11/build/probe211-w1b-final-r14-anon-and-crosstenant.sql:14: ERROR:  cannot insert into view "people_directory"
+DETAIL:  Views containing UNION, INTERSECT, or EXCEPT are not automatically updatable.
+HINT:  To enable inserting into the view, provide an INSTEAD OF INSERT trigger or an unconditional ON INSERT DO INSTEAD rule.
+ROLLBACK
+ROLLBACK
+=== C. authenticated INSERT into v_access_grants ===
+BEGIN
+SET
+SAVEPOINT
+psql:artifacts/people-room-crm-2026-09-11/build/probe211-w1b-final-r14-anon-and-crosstenant.sql:22: ERROR:  cannot insert into view "v_access_grants"
+DETAIL:  Views containing UNION, INTERSECT, or EXCEPT are not automatically updatable.
+HINT:  To enable inserting into the view, provide an INSTEAD OF INSERT trigger or an unconditional ON INSERT DO INSTEAD rule.
+ROLLBACK
+ROLLBACK
