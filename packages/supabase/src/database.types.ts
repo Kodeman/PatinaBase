@@ -34513,6 +34513,10 @@ export type Database = {
         Args: { quiz_answers: Json; timings?: Json }
         Returns: Json
       }
+      project_author_books_elsewhere: {
+        Args: { p_created_by: string; p_studio_id: string }
+        Returns: boolean
+      }
       project_hours_total: {
         Args: { p_project_id: string }
         Returns: {

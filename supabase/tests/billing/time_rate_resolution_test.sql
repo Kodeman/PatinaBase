@@ -5000,8 +5000,16 @@ $$;
 --     employer's own 26000.
 --   · ai4 — PROBE C, after the stamp: she deletes her own seat and her next hour
 --     still prices 26000. The column is not recomputed, so the manoeuvre that was
---     W2-R9-01 now changes NOTHING, whoever opened the project. Round 9's closure
---     keyed on `created_by`; this one does not need to know.
+--     W2-R9-01 changes nothing HERE. Round 9's closure keyed on `created_by`; this
+--     ordering does not need to know.
+--     SCOPE, corrected in the W2 round-12 fix pass (W2-R12-01): this case measures
+--     the POST-stamp ordering — she leaves AFTER a studio has stamped the column.
+--     The PRE-stamp ordering, where she leaves BEFORE 00620 runs and the one-off stamp
+--     reads her seats at that instant, is a different statement and was NOT closed by
+--     HT-3-g(1) alone; it is closed by W2-R12-01's key on 00620's owned tier (the
+--     AUTHOR's own studio standing) and is measured in cases (h)/(i) of
+--     supabase/tests/billing/legacy_project_studio_stamp_test.sql. What remains true
+--     in BOTH orderings for a project SHE opened herself is rulings.md's aj6, below.
 --   · ai6 — PROBE D2, the same on the second project through `status = 'removed'`.
 -- Both designers carry their own 99900 in a workspace each OWNS, so HT-3-e(2)'s
 -- owner exemption would price it the moment an owned tier were reached: a number
