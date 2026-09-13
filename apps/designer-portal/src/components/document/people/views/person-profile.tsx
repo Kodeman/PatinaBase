@@ -55,6 +55,8 @@ import { directoryContactKind } from "@/lib/document/people-derivation";
 import {
   contactRouteTarget,
   contactRuleForbidsSms,
+  contactRuleIsHardBlock,
+  contactRuleTextHeldClause,
   indexChannelsByOwner,
   indexContactRules,
 } from "@/lib/document/contact-rule";
@@ -84,9 +86,18 @@ export const SEND_TEXT_CONSEQUENCE =
   "This sends one text to the number on file. They can stop it at any time by replying STOP.";
 export const CANNOT_TEXT_SENTENCE =
   "The studio holds no standing consent for this number, so no text may go out.";
-/** CR3-9 — a rule that bars the text rail outranks a recorded grant (C7). */
+/**
+ * CR3-9 — a rule that bars the text rail outranks a recorded grant (C7).
+ *
+ * QA-R9-1: the clause in the middle is the RULE'S own (`contactRuleTextHeldClause`),
+ * so a do-not-contact block reads as one and carries its route, and only a
+ * genuine single-channel rule reads "never text".
+ */
+export function ruleHeldTextSentence(clause: string): string {
+  return `The studio’s rule for this person ${clause}. Change the rule above before any text goes out.`;
+}
 export const RULE_FORBIDS_TEXT_SENTENCE =
-  "The studio’s rule for this person says never text. Change the rule above before any text goes out.";
+  ruleHeldTextSentence("says never text");
 
 /** A seat is done when its stage says so — nothing about the window decides it. */
 const DONE_STAGES = new Set([
@@ -293,8 +304,12 @@ export function PersonProfile({
 
   const firstSeat = liveSeats[0] ?? null;
   // CR3-9: consent is necessary, not sufficient — the rule outranks it (C7).
-  const ruleForbidsText = contactRuleForbidsSms(rule);
-  const canText = person.consent_status === "granted" && !ruleForbidsText;
+  // QA-R9-1: a HARD BLOCK holds the rail too — R-BL's routed rule sends the
+  // studio to another person, which a live composer on this one contradicts.
+  const ruleHoldsText =
+    contactRuleForbidsSms(rule) || contactRuleIsHardBlock(rule);
+  const ruleHeldClause = contactRuleTextHeldClause(rule, routeTo?.name ?? null);
+  const canText = person.consent_status === "granted" && !ruleHoldsText;
   const soleProprietor = card?.is_sole_proprietor === true;
   const owesPaper = partyKindOwesPaper(directoryContactKind(person));
   // R-BA: one formula, worst-first over the person's OWN documents and their
@@ -398,8 +413,8 @@ export function PersonProfile({
         >
           {canText
             ? SEND_TEXT_CONSEQUENCE
-            : ruleForbidsText
-              ? RULE_FORBIDS_TEXT_SENTENCE
+            : ruleHoldsText && ruleHeldClause
+              ? ruleHeldTextSentence(ruleHeldClause)
               : CANNOT_TEXT_SENTENCE}
         </p>
         <DocumentAction

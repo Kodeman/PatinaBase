@@ -241,10 +241,20 @@ describe('RolodexPicker — the hits and their history', () => {
   });
 });
 
+/**
+ * CR9-2 — THE WAY OUT IS ALWAYS VISIBLE; THE SENTENCE IS THE EMPTY SEARCH'S.
+ *
+ * "Add someone new" sits under the hits on every frame. The sentence beside it
+ * — "No one by that name in the rolodex." — was ungated, so it printed directly
+ * beneath the people the search had just found.
+ */
 describe('RolodexPicker — the fallback is always visible', () => {
-  it('shows the way out even when the rolodex has hits', () => {
+  it('shows the way out even when the rolodex has hits, and no empty sentence', () => {
     render(<RolodexPicker {...props} />);
-    expect(screen.getByText('– No one by that name in the rolodex.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Rosa Martínez/ })).toBeInTheDocument();
+    expect(
+      screen.queryByText('– No one by that name in the rolodex.'),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add someone new' })).toBeInTheDocument();
   });
 
@@ -260,8 +270,8 @@ describe('RolodexPicker — the fallback is always visible', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Add someone new' }));
     expect(screen.getByLabelText('Name')).toBeInTheDocument();
     expect(screen.getByLabelText('Phone')).toBeInTheDocument();
-    // Still one sheet — the hits and the fallback band are still on it.
-    expect(screen.getByText('– No one by that name in the rolodex.')).toBeInTheDocument();
+    // Still one sheet — the hits are still on it.
+    expect(screen.getByRole('button', { name: /Rosa Martínez/ })).toBeInTheDocument();
   });
 });
 

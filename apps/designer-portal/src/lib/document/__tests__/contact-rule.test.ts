@@ -13,6 +13,7 @@ import {
   contactRuleForbidsSms,
   contactRuleIsDoNotContact,
   contactRuleIsHardBlock,
+  contactRuleTextHeldClause,
   indexChannelsByOwner,
   indexContactRules,
 } from "../contact-rule";
@@ -291,5 +292,43 @@ describe("the rule index", () => {
     const index = indexContactRules([FRANK_RULE, RAY_RULE]);
     expect(index.get(FRANK)).toBe(FRANK_RULE);
     expect(index.get("nobody")).toBeUndefined();
+  });
+});
+
+/**
+ * QA-R9-1 — the held sentence names the rule it is holding on. One literal,
+ * "says never text", used to speak for every rule carrying `sms` among its
+ * forbidden channels — including Frank Bauer's, which shuts every direct
+ * channel and routes the contact to Rosa Delgado.
+ */
+describe("QA-R9-1 — the text gate's clause", () => {
+  it("calls a do-not-contact block what it is, and carries its route", () => {
+    expect(contactRuleTextHeldClause(FRANK_RULE, "Rosa Delgado")).toBe(
+      "says do not contact directly. Write Rosa Delgado instead",
+    );
+  });
+
+  it("names the block without a name when the route resolves to nobody", () => {
+    expect(contactRuleTextHeldClause(FRANK_RULE, null)).toBe(
+      "says do not contact directly",
+    );
+  });
+
+  it("keeps 'never text' for a rule that only closes the text rail", () => {
+    expect(contactRuleTextHeldClause(RAY_RULE, null)).toBe("says never text");
+  });
+
+  it("routes through the named person where a channel is still open", () => {
+    expect(
+      contactRuleTextHeldClause(
+        rule({ channels_forbidden: ["sms"], route_to_person_id: ROSA }),
+        "Rosa Delgado",
+      ),
+    ).toBe("routes contact through Rosa Delgado");
+  });
+
+  it("has nothing to say about a rule that bars no channel and routes nowhere", () => {
+    expect(contactRuleTextHeldClause(rule({ channels_forbidden: ["email"] }), null)).toBeNull();
+    expect(contactRuleTextHeldClause(null)).toBeNull();
   });
 });

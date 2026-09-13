@@ -22,6 +22,8 @@ const cardData: { current: Record<string, unknown> | null } = { current: null };
 const authorityData: { current: unknown[] } = { current: [] };
 /** CR3-9 — the rule row governing this person, which the composers must read. */
 const rulesData: { current: unknown[] } = { current: [] };
+/** QA-R9-1 — the studio's other cards, so a routed rule can name its door. */
+const rolodexData: { current: unknown[] } = { current: [] };
 
 /** The acting viewer's seat in her own studio — HT-8 gates the Hours door on it. */
 let viewerStudioRole: "owner" | "admin" | "member" = "owner";
@@ -54,7 +56,7 @@ jest.mock("@patina/supabase", () => ({
   usePartyAuthority: () => ({ data: authorityData.current }),
   // CR-10 / QA-R2-3: the card resolves the rule, the route and the studio's
   // other cards, so "Do not contact" can say where to write instead.
-  useStudioContacts: () => ({ data: [] }),
+  useStudioContacts: () => ({ data: rolodexData.current }),
   useContactRules: () => ({ data: rulesData.current }),
   useStudioContactChannelsFor: () => ({ data: [] }),
   // Reach & access reads these; the card's own regions are what this spec is
@@ -212,6 +214,7 @@ function renderCard(props: Record<string, unknown> = {}) {
 beforeEach(() => {
   personData.current = person();
   rulesData.current = [];
+  rolodexData.current = [];
   seatData.current = [seat()];
   cardData.current = {
     id: "card-dana",
@@ -383,6 +386,50 @@ describe("Send a text", () => {
     );
     fireEvent.click(act);
     expect(onOpenSeat).not.toHaveBeenCalled();
+  });
+
+  /**
+   * QA-R9-1 — a full do-not-contact block is not "never text". Frank Bauer's
+   * rule shuts every direct channel and routes the contact to Rosa Delgado;
+   * the old literal named the one channel the rule does not single out and
+   * dropped the only door it leaves open.
+   */
+  it("names a do-not-contact block, and its route, instead of 'never text'", () => {
+    rolodexData.current = [
+      {
+        id: "card-rosa",
+        entity_kind: "person",
+        full_name: "Rosa Delgado",
+        email: "rosa@bauer.example",
+        phone: null,
+      },
+    ];
+    rulesData.current = [
+      {
+        id: "rule-frank",
+        subject_type: "person",
+        subject_id: "card-dana",
+        channels_allowed: [],
+        channels_forbidden: ["sms", "mobile", "office", "email"],
+        route_to_person_id: "card-rosa",
+        contact_hours: null,
+        escalation_by_class: {},
+        reason: "No direct contact, at his request.",
+        set_by: null,
+        set_at: "2026-10-06T00:00:00Z",
+        created_at: "",
+        updated_at: "",
+      },
+    ];
+    renderCard();
+    const act = screen.getByRole("button", { name: "Send a text" });
+    expect(act).toHaveAttribute("aria-disabled", "true");
+    const reason = document.getElementById(
+      act.getAttribute("aria-describedby") as string,
+    );
+    expect(reason).toHaveTextContent(
+      "The studio’s rule for this person says do not contact directly. Write Rosa Delgado instead. Change the rule above before any text goes out.",
+    );
   });
 });
 

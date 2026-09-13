@@ -18,7 +18,7 @@
  * one, which is owed to @patina/supabase (see use-project-authority.ts).
  */
 
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import {
   rosterBandFor,
   rosterDateKey,
@@ -52,6 +52,16 @@ export interface CallSheetRosterResult {
   isLoading: boolean;
   isError: boolean;
   today: string;
+  /**
+   * CR9-4 — THE WAY BACK FROM `isError`.
+   *
+   * `isError` is raised by the roster and seats reads composed here, and the
+   * surfaces that print "The project roster could not be read." offer a "Try
+   * again" beside it. Without this the act could only refetch some OTHER query,
+   * so the band it apologises through never cleared and a page reload was the
+   * only way out.
+   */
+  refetch: () => Promise<unknown>;
 }
 
 export function useCallSheetRoster(
@@ -84,11 +94,20 @@ export function useCallSheetRoster(
     [rosterQuery.data, seatsQuery.data, clientName, clientProfileId, projectId, today],
   );
 
+  const { refetch: refetchRoster } = rosterQuery;
+  const { refetch: refetchSeats } = seatsQuery;
+  const { refetch: refetchAuthority } = authorityQuery;
+  const refetch = useCallback(
+    () => Promise.all([refetchRoster(), refetchSeats(), refetchAuthority()]),
+    [refetchRoster, refetchSeats, refetchAuthority],
+  );
+
   return {
     projection,
     authorityBySeat: authorityQuery.data ?? {},
     isLoading: rosterQuery.isLoading || seatsQuery.isLoading,
     isError: rosterQuery.isError || seatsQuery.isError,
     today,
+    refetch,
   };
 }

@@ -428,11 +428,16 @@ export function RolodexPicker({
         </ul>
       )}
 
-      {/* The way out sits under the hits from the first frame (mnote 3). */}
+      {/* The way out sits under the hits from the first frame (mnote 3) — but
+          the SENTENCE is the empty search's, not the band's (CR9-2). Ungated it
+          printed "No one by that name in the rolodex." directly beneath the
+          people it had just found, on every normal search. */}
       <div className="mt-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1.5 border-l-2 border-[var(--color-pearl)] bg-white/40 px-3 py-2.5">
-        <p className="text-[0.74rem] text-[var(--color-aged-oak)]">
-          – No one by that name in the rolodex.
-        </p>
+        {hits.length === 0 && (
+          <p className="text-[0.74rem] text-[var(--color-aged-oak)]">
+            – No one by that name in the rolodex.
+          </p>
+        )}
         {!adding && (
           <button
             type="button"

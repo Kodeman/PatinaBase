@@ -524,6 +524,48 @@ describe('RosterRow — unfolded', () => {
     );
   });
 
+  /**
+   * QA-R9-1 — the same sentence, on the row, told a do-not-contact block it was
+   * merely a texting preference. Frank Bauer's rule shuts every direct channel
+   * and routes the contact; the row now says so and names the door.
+   */
+  it('names a do-not-contact block and its route, not “never text”', () => {
+    const { container } = ul(
+      <RosterRow
+        row={seatRow({ consent: 'granted' })}
+        band="this_week"
+        expanded
+        onToggle={jest.fn()}
+        routeTo={{ name: 'Rosa Delgado', email: null, officePhone: null }}
+        rule={
+          {
+            id: 'rule-frank',
+            subject_type: 'person',
+            subject_id: 'card-dana',
+            channels_allowed: [],
+            channels_forbidden: ['sms', 'mobile', 'office', 'email'],
+            route_to_person_id: 'card-rosa',
+            contact_hours: null,
+            escalation_by_class: {},
+            reason: 'No direct contact, at his request.',
+            set_by: null,
+            set_at: '2026-10-06T00:00:00Z',
+            created_at: '',
+            updated_at: '',
+          } as never
+        }
+      />,
+    );
+    const act = screen.getByRole('button', { name: /^Text$/ });
+    expect(act).toHaveAttribute('aria-disabled', 'true');
+    const reason = container.querySelector(
+      `#${act.getAttribute('aria-describedby')}`,
+    );
+    expect(reason).toHaveTextContent(
+      'The studio’s rule for Dana Kowalski says do not contact directly. Write Rosa Delgado instead. Change the rule on their card first.',
+    );
+  });
+
   it('leaves Text open for a rule that bars only the email', () => {
     ul(
       <RosterRow
