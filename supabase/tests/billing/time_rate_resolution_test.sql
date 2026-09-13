@@ -5665,6 +5665,223 @@ BEGIN
 END
 $$;
 
+-- ═══════════════════════════════════════════════════════════════════════════
+-- (al) HT-4 (00618) — the rate card binds to the ROSTER ROLE, and the label it
+--      prints for the client can no longer strand an hour.
+--
+-- This is defect #2 of the synthesis, asked as four questions:
+--   al1  a card bound to 'lead_designer' prices that member REGARDLESS of the
+--        label — here "Principal designer", the shipped default that can never
+--        normalize-match and that stranded every entry on the project it priced
+--   al2  the new hire's hour: bound 'support_designer' under the label
+--        "Associate", priced 'authority' with an authority_rate_id, which is
+--        what 00577:2493-2496's promotion loop needs and what the NULL landing
+--        withheld for ever
+--   al3  a LEGACY label-only card (roster_role NULL) still resolves exactly as
+--        it did — the legacy leg is kept whole in both bodies, not replaced
+--   al4  HT-41 on a bound card: two roles, both bound, the member's pick
+--        decides, and the row records the (rate_source, rate_role) pair
+--
+-- WHY THIS FILE AND NOT supabase/tests/commercial/design_services_authority_test.sql,
+-- which plan-v2 §8 names. That file is one of the six documented pre-existing
+-- failures and aborts at :177, 44 lines before its first authority assert — a
+-- case appended to it would never execute. W1-R1-15 already ruled on exactly
+-- this: "the SOLE gate for the classifier is
+-- supabase/tests/billing/time_rate_resolution_test.sql; grow it, not the
+-- commercial suite, when the classifier changes." The countersign CARRY (00619)
+-- does go in the commercial suite, in agreement_fee_schedules_test.sql, which
+-- is green.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, instance_id, aud, role)
+VALUES
+  ('b1600000-0000-4000-8000-000000000001', 'bind-owner@test.invalid',  '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('b1600000-0000-4000-8000-000000000002', 'bind-hire@test.invalid',   '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('b1600000-0000-4000-8000-000000000003', 'bind-twohat@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+
+INSERT INTO public.profiles (id, email, full_name, is_designer, created_at, updated_at)
+VALUES
+  ('b1600000-0000-4000-8000-000000000001', 'bind-owner@test.invalid',  'Bind Owner',  true,  NOW(), NOW()),
+  ('b1600000-0000-4000-8000-000000000002', 'bind-hire@test.invalid',   'Bind Hire',   false, NOW(), NOW()),
+  ('b1600000-0000-4000-8000-000000000003', 'bind-twohat@test.invalid', 'Bind Twohat', false, NOW(), NOW())
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO public.organizations (id, type, name, slug, status)
+VALUES ('b1600000-0000-4000-8000-0000000000a1', 'design_studio', 'Bind Studio', 'role-binding-test', 'active');
+
+INSERT INTO public.organization_members (id, user_id, organization_id, role, status, joined_at)
+VALUES
+  ('b1600000-0000-4000-8000-0000000000c1', 'b1600000-0000-4000-8000-000000000001', 'b1600000-0000-4000-8000-0000000000a1', 'owner',  'active', NOW()),
+  ('b1600000-0000-4000-8000-0000000000c2', 'b1600000-0000-4000-8000-000000000002', 'b1600000-0000-4000-8000-0000000000a1', 'member', 'active', NOW()),
+  ('b1600000-0000-4000-8000-0000000000c3', 'b1600000-0000-4000-8000-000000000003', 'b1600000-0000-4000-8000-0000000000a1', 'member', 'active', NOW());
+
+-- P1 the BOUND card project · P2 the legacy label-only one · P3 the two-hat one,
+-- both of whose cards are bound. Nobody holds a studio_member_rates row here, so
+-- a stranded hour would fall to 'none' and the asserts could not mistake tier 2
+-- for tier 1.
+INSERT INTO public.projects (id, name, designer_id, created_by, studio_id)
+VALUES
+  ('b1600000-0000-4000-8000-0000000000e1', 'Bound House',  'b1600000-0000-4000-8000-000000000001', 'b1600000-0000-4000-8000-000000000001', 'b1600000-0000-4000-8000-0000000000a1'),
+  ('b1600000-0000-4000-8000-0000000000e2', 'Legacy House', 'b1600000-0000-4000-8000-000000000001', 'b1600000-0000-4000-8000-000000000001', 'b1600000-0000-4000-8000-0000000000a1'),
+  ('b1600000-0000-4000-8000-0000000000e3', 'Bound Two-hat','b1600000-0000-4000-8000-000000000001', 'b1600000-0000-4000-8000-000000000001', 'b1600000-0000-4000-8000-0000000000a1');
+
+INSERT INTO public.proposals (id, designer_id, title, status, document_kind)
+VALUES
+  ('b1600000-0000-4000-8000-0000000000d1', 'b1600000-0000-4000-8000-000000000001', 'Bound agreement',  'draft', 'design_services'),
+  ('b1600000-0000-4000-8000-0000000000d2', 'b1600000-0000-4000-8000-000000000001', 'Legacy agreement', 'draft', 'design_services'),
+  ('b1600000-0000-4000-8000-0000000000d3', 'b1600000-0000-4000-8000-000000000001', 'Two-hat agreement','draft', 'design_services');
+
+-- THE LABELS ARE THE POINT. "Principal designer" is the label the drafting room
+-- shipped as its default and the one the synthesis traced the stranding to;
+-- "Associate" is any studio's own word for its second seat. Neither can
+-- normalize-match the roster enum, and under 00618 neither has to.
+INSERT INTO public.proposal_service_rates
+  (id, proposal_id, version, role_name, hourly_rate_cents, sort_order, effective_at, roster_role)
+VALUES
+  ('b1600000-0000-4000-8000-00000000f101', 'b1600000-0000-4000-8000-0000000000d1', 1, 'Principal designer', 26000, 0, NOW() - INTERVAL '20 days', 'lead_designer'),
+  ('b1600000-0000-4000-8000-00000000f102', 'b1600000-0000-4000-8000-0000000000d1', 1, 'Associate',          11000, 1, NOW() - INTERVAL '20 days', 'support_designer'),
+  -- The legacy card: no binding at all, and a label that DOES normalize-match.
+  ('b1600000-0000-4000-8000-00000000f201', 'b1600000-0000-4000-8000-0000000000d2', 1, 'Support designer',   13000, 0, NOW() - INTERVAL '20 days', NULL),
+  ('b1600000-0000-4000-8000-00000000f301', 'b1600000-0000-4000-8000-0000000000d3', 1, 'Principal designer', 27000, 0, NOW() - INTERVAL '20 days', 'lead_designer'),
+  ('b1600000-0000-4000-8000-00000000f302', 'b1600000-0000-4000-8000-0000000000d3', 1, 'Trade partner',       8000, 1, NOW() - INTERVAL '20 days', 'vendor');
+
+INSERT INTO public.project_commercial_documents
+  (id, project_id, proposal_id, document_kind, is_origin, created_by, executed_at)
+VALUES
+  ('b1600000-0000-4000-8000-00000000cd01', 'b1600000-0000-4000-8000-0000000000e1', 'b1600000-0000-4000-8000-0000000000d1',
+   'design_services', true, 'b1600000-0000-4000-8000-000000000001', NOW() - INTERVAL '5 days'),
+  ('b1600000-0000-4000-8000-00000000cd02', 'b1600000-0000-4000-8000-0000000000e2', 'b1600000-0000-4000-8000-0000000000d2',
+   'design_services', true, 'b1600000-0000-4000-8000-000000000001', NOW() - INTERVAL '5 days'),
+  ('b1600000-0000-4000-8000-00000000cd03', 'b1600000-0000-4000-8000-0000000000e3', 'b1600000-0000-4000-8000-0000000000d3',
+   'design_services', true, 'b1600000-0000-4000-8000-000000000001', NOW() - INTERVAL '5 days');
+
+INSERT INTO public.project_billing_authorities
+  (id, project_id, commercial_document_id, source_proposal_id, billing_ceiling_cents,
+   retainer_amount_cents, retainer_activation_policy, billing_cadence, effective_at, status)
+VALUES
+  ('b1600000-0000-4000-8000-0000000000b1', 'b1600000-0000-4000-8000-0000000000e1', 'b1600000-0000-4000-8000-00000000cd01',
+   'b1600000-0000-4000-8000-0000000000d1', 100000000, 0, 'immediate', 'monthly', NOW() - INTERVAL '5 days', 'active'),
+  ('b1600000-0000-4000-8000-0000000000b2', 'b1600000-0000-4000-8000-0000000000e2', 'b1600000-0000-4000-8000-00000000cd02',
+   'b1600000-0000-4000-8000-0000000000d2', 100000000, 0, 'immediate', 'monthly', NOW() - INTERVAL '5 days', 'active'),
+  ('b1600000-0000-4000-8000-0000000000b3', 'b1600000-0000-4000-8000-0000000000e3', 'b1600000-0000-4000-8000-00000000cd03',
+   'b1600000-0000-4000-8000-0000000000d3', 100000000, 0, 'immediate', 'monthly', NOW() - INTERVAL '5 days', 'active');
+
+-- The snapshot carries the binding, which is exactly what 00619 makes the
+-- countersign path do for a real agreement.
+INSERT INTO public.project_billing_authority_rates
+  (id, billing_authority_id, source_rate_id, version, role_name, hourly_rate_cents, roster_role)
+VALUES
+  ('b1600000-0000-4000-8000-00000000aa11', 'b1600000-0000-4000-8000-0000000000b1', 'b1600000-0000-4000-8000-00000000f101', 1, 'Principal designer', 26000, 'lead_designer'),
+  ('b1600000-0000-4000-8000-00000000aa12', 'b1600000-0000-4000-8000-0000000000b1', 'b1600000-0000-4000-8000-00000000f102', 1, 'Associate',          11000, 'support_designer'),
+  ('b1600000-0000-4000-8000-00000000aa21', 'b1600000-0000-4000-8000-0000000000b2', 'b1600000-0000-4000-8000-00000000f201', 1, 'Support designer',   13000, NULL),
+  ('b1600000-0000-4000-8000-00000000aa31', 'b1600000-0000-4000-8000-0000000000b3', 'b1600000-0000-4000-8000-00000000f301', 1, 'Principal designer', 27000, 'lead_designer'),
+  ('b1600000-0000-4000-8000-00000000aa32', 'b1600000-0000-4000-8000-0000000000b3', 'b1600000-0000-4000-8000-00000000f302', 1, 'Trade partner',       8000, 'vendor');
+
+INSERT INTO public.project_team_members (id, project_id, user_id, role, assigned_by)
+VALUES
+  ('b1600000-0000-4000-8000-00000000dd11', 'b1600000-0000-4000-8000-0000000000e1', 'b1600000-0000-4000-8000-000000000002', 'support_designer', 'b1600000-0000-4000-8000-000000000001'),
+  ('b1600000-0000-4000-8000-00000000dd21', 'b1600000-0000-4000-8000-0000000000e2', 'b1600000-0000-4000-8000-000000000002', 'support_designer', 'b1600000-0000-4000-8000-000000000001'),
+  ('b1600000-0000-4000-8000-00000000dd31', 'b1600000-0000-4000-8000-0000000000e3', 'b1600000-0000-4000-8000-000000000003', 'lead_designer',    'b1600000-0000-4000-8000-000000000001'),
+  ('b1600000-0000-4000-8000-00000000dd32', 'b1600000-0000-4000-8000-0000000000e3', 'b1600000-0000-4000-8000-000000000003', 'vendor',           'b1600000-0000-4000-8000-000000000001');
+
+DO $$
+DECLARE
+  v_rate   INTEGER;
+  v_source TEXT;
+  v_role   TEXT;
+  v_state  TEXT;
+  v_rateid UUID;
+BEGIN
+  -- ── al1: the project's own designer is lead_designer above everything, and
+  --    the card bound to 'lead_designer' prices her hour even though its label
+  --    is the one that could never match.
+  PERFORM pg_temp.assume_user('b1600000-0000-4000-8000-000000000001');
+  INSERT INTO public.project_time_entries
+    (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('b1600000-0000-4000-8000-00000000ee01', 'b1600000-0000-4000-8000-0000000000e1',
+          'b1600000-0000-4000-8000-000000000001', NOW() - INTERVAL '1 day', 60, true, 'manual_entry');
+  PERFORM pg_temp.reset_role();
+  SELECT hourly_rate_cents, rate_source, rate_role, billing_state, authority_rate_id
+    INTO v_rate, v_source, v_role, v_state, v_rateid
+  FROM public.project_time_entries WHERE id = 'b1600000-0000-4000-8000-00000000ee01';
+  ASSERT v_rate = 26000 AND v_source = 'authority' AND v_role = 'lead_designer',
+    'FAIL al1 (HT-4): a card bound to lead_designer prices the lead REGARDLESS of its '
+    'label — "Principal designer" is exactly the label that cannot normalize-match; got '
+    || COALESCE(v_rate::text, 'NULL') || ' / ' || COALESCE(v_source, 'NULL') || ' / '
+    || COALESCE(v_role, 'NULL');
+  ASSERT v_rateid = 'b1600000-0000-4000-8000-00000000aa11' AND v_state = 'authorized',
+    'FAIL al1b (HT-4): and the row BINDS to that card. A resolver-only fix answers '
+    '''authority'' here and still lands pending_authorization with a NULL '
+    'authority_rate_id, which is defect #2 under a new name; got '
+    || COALESCE(v_rateid::text, 'NULL') || ' / ' || COALESCE(v_state, 'NULL');
+
+  -- ── al2: THE NEW HIRE. The whole defect, in one row.
+  PERFORM pg_temp.assume_user('b1600000-0000-4000-8000-000000000002');
+  INSERT INTO public.project_time_entries
+    (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('b1600000-0000-4000-8000-00000000ee02', 'b1600000-0000-4000-8000-0000000000e1',
+          'b1600000-0000-4000-8000-000000000002', NOW() - INTERVAL '1 day', 120, true, 'manual_entry');
+  PERFORM pg_temp.reset_role();
+  SELECT hourly_rate_cents, rate_source, rate_role, billing_state
+    INTO v_rate, v_source, v_role, v_state
+  FROM public.project_time_entries WHERE id = 'b1600000-0000-4000-8000-00000000ee02';
+  ASSERT v_rate = 11000 AND v_source = 'authority' AND v_role = 'support_designer'
+     AND v_state = 'authorized',
+    'FAIL al2 (HT-4, defect #2): the new hire''s hour is priced by the card bound to '
+    'her seat, under a label ("Associate") no normalization can reach. Before 00618 '
+    'this row was NULL-rated and pending_authorization for ever, because '
+    '00577:2493-2496 promotes only rows carrying BOTH an authority_rate_id and an '
+    'amount; got ' || COALESCE(v_rate::text, 'NULL') || ' / ' || COALESCE(v_source, 'NULL')
+    || ' / ' || COALESCE(v_role, 'NULL') || ' / ' || COALESCE(v_state, 'NULL');
+  ASSERT (SELECT rated_amount_cents FROM public.project_time_entries
+           WHERE id = 'b1600000-0000-4000-8000-00000000ee02') = 22000,
+    'FAIL al2b: 120 minutes at 11000 is 22000, and the amount is what the promotion '
+    'loop needs beside the id';
+
+  -- ── al3: a LEGACY label-only card still resolves exactly as it did.
+  PERFORM pg_temp.assume_user('b1600000-0000-4000-8000-000000000002');
+  INSERT INTO public.project_time_entries
+    (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('b1600000-0000-4000-8000-00000000ee03', 'b1600000-0000-4000-8000-0000000000e2',
+          'b1600000-0000-4000-8000-000000000002', NOW() - INTERVAL '1 day', 60, true, 'manual_entry');
+  PERFORM pg_temp.reset_role();
+  SELECT hourly_rate_cents, rate_source, rate_role, billing_state
+    INTO v_rate, v_source, v_role, v_state
+  FROM public.project_time_entries WHERE id = 'b1600000-0000-4000-8000-00000000ee03';
+  ASSERT v_rate = 13000 AND v_source = 'authority' AND v_role = 'support_designer'
+     AND v_state = 'authorized',
+    'FAIL al3 (HT-4): a card written before the binding existed carries roster_role '
+    'NULL and must go on pricing by its normalized label — the legacy leg is KEPT in '
+    'both bodies, not replaced. A signed contract is not renormalised to tidy a '
+    'column; got ' || COALESCE(v_rate::text, 'NULL') || ' / ' || COALESCE(v_source, 'NULL')
+    || ' / ' || COALESCE(v_role, 'NULL') || ' / ' || COALESCE(v_state, 'NULL');
+
+  -- ── al4: HT-41 on a bound two-role card — she picks, the pick prices, and
+  --    the row records the (rate_source, rate_role) pair.
+  PERFORM pg_temp.assume_user('b1600000-0000-4000-8000-000000000003');
+  INSERT INTO public.project_time_entries
+    (id, project_id, user_id, started_at, duration_minutes, billable, source, rate_role)
+  VALUES ('b1600000-0000-4000-8000-00000000ee04', 'b1600000-0000-4000-8000-0000000000e3',
+          'b1600000-0000-4000-8000-000000000003', NOW() - INTERVAL '1 day', 60, true, 'manual_entry', 'vendor');
+  PERFORM pg_temp.reset_role();
+  SELECT hourly_rate_cents, rate_source, rate_role, billing_state, authority_rate_id
+    INTO v_rate, v_source, v_role, v_state, v_rateid
+  FROM public.project_time_entries WHERE id = 'b1600000-0000-4000-8000-00000000ee04';
+  ASSERT v_rate = 8000 AND v_source = 'authority' AND v_role = 'vendor'
+     AND v_rateid = 'b1600000-0000-4000-8000-00000000aa32',
+    'FAIL al4 (HT-41 × HT-4): both cards are bound and neither label matches, so the '
+    'member''s pick is the only thing that can decide — and it must decide the BOUND '
+    'card, not strand the hour at count(*) = 0; got ' || COALESCE(v_rate::text, 'NULL')
+    || ' / ' || COALESCE(v_source, 'NULL') || ' / ' || COALESCE(v_role, 'NULL') || ' / '
+    || COALESCE(v_rateid::text, 'NULL');
+  ASSERT v_state = 'authorized',
+    'FAIL al4b: and the hour is authorized by the card that priced it, got '
+    || COALESCE(v_state, 'NULL');
+
+  RAISE NOTICE 'time_rate_resolution: case (al) passed — HT-4: the card binds to the roster role, and the label it prints can no longer strand an hour.';
+END
+$$;
+
 DO $$ BEGIN RAISE NOTICE 'All time_rate_resolution assertions passed.'; END $$;
 
 ROLLBACK;

@@ -15894,6 +15894,24 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00618_authority_rate_role_binding.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._project_agreement_terms(uuid, jsonb, jsonb, boolean) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00618_authority_rate_role_binding.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.resolve_time_rate_cents(uuid, uuid, timestamptz, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00618_authority_rate_role_binding.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.classify_project_time_entry_authority() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 00620_legacy_project_studio_stamp.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.project_author_books_elsewhere(uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;
