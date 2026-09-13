@@ -10,7 +10,7 @@ Bootstrap date: 2026-09-11
 |---|---|---|
 | W0 | Governance — Kody's rulings, DECISIONS.md R-entry, VISION amendment for the trade upload door | **DONE** (commit `700261663`) |
 | W1 | Data — schema/migrations, RLS, RPCs for the People Room CRM domain | **IN PROGRESS** |
-| W2 | Room — the People Room surface (designer portal) | not started |
+| W2 | Room — the People Room surface (designer portal) | **DONE** — close-out commit `cdcc292db` |
 | W3 | P2 — phase-two feature slice per ruling | not started |
 | W4 | P3 web — incl. trade upload door + Sanity help content | not started |
 | W5 | P3 iOS — Patina Field / client app work + TestFlight | **DONE** — see `w5-ship-report.md` |
@@ -32,6 +32,8 @@ Bootstrap date: 2026-09-11
 | W0 | DONE — commit `700261663` |
 | W1 | DONE — final commit `b5f3657c7` |
 | W1 migrations | `00592`–`00594` + `00621`–`00627` |
+| W2 | DONE — close-out commit `cdcc292db` (reviews, QA plates, build sheet; `apps/designer-portal/**` + `e2e/people/**` + `packages/supabase/src/**` + `packages/types/src/**` landed in rounds 1–13) |
+| W5 | DONE — `b8cb49339`; TestFlight build 5 VALID |
 | project_parties.sms_consent_* | frozen legacy (R-AS): W2 must remove every portal writer still touching these columns — see the list in `w1a-report.md` |
 | R-AY | supersedes PR-x's phone-global seat-check lean, pending Kody's overrule |
 | Studio-less projects | R-BD (W3 backfills `projects.studio_id`) / R-BI (no auto-link for a seat added there until backfill) |
