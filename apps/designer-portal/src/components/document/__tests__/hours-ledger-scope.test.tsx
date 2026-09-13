@@ -21,17 +21,44 @@
  * REFUSED one printed it above the refusal), and a resolved stamp actually
  * flips the "priced by" line — which it only can if the repair invalidates the
  * key the document's pricing studio is read on.
+ *
+ * Round-3 fixes pinned here too: the member scope's rows are the rows that
+ * produced its total (both studio-filtered — the total was and the rows were
+ * not), and the studio this sheet answers for is one ordered, named answer
+ * rather than the first row of an unordered membership read.
  */
 
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { HoursLedger } from '../hours-ledger';
-import { hoursMemberScopePending } from '@/lib/document/open-hours-scope';
+import {
+  hoursMemberScopePending,
+  openHoursForMember,
+} from '@/lib/document/open-hours-scope';
 
 type Role = 'owner' | 'admin' | 'member';
 let viewerRole: Role = 'owner';
+/** A second studio, to pin which one the sheet answers for (and says it does). */
+let secondStudio: { id: string; name: string; role: Role } | null = null;
+/** The rollup's buckets, overridable per case. `null` = the default one. */
+let rollupRows: Array<Record<string, unknown>> | null = null;
+const MIXED_BUCKET = {
+  bucket_key: 'maria',
+  bucket_label: 'Maria Obi',
+  member_id: 'maria',
+  member_name: 'Maria Obi',
+  entry_count: 2,
+  total_minutes: 180,
+  billable_minutes: 120,
+  billable_cents: 30_000,
+  internal_minutes: 60,
+};
 /** `projects.studio_id` for project-1 — the studio that PRICES the document. */
 let projectStudioId: string | null = 'studio-1';
+/** The membership read's own settle state — the sheet's landing waits on it. */
+let orgsState: ReadState = 'ready';
+/** The fact view's rows, overridable per case. `null` = the default one. */
+let ledgerRows: Array<Record<string, unknown>> | null = null;
 
 /** Each money read's settle state — a figure must never precede an answer. */
 type ReadState = 'ready' | 'pending' | 'error';
@@ -40,6 +67,29 @@ let ledgerState: ReadState = 'ready';
 let projectTotalState: ReadState = 'ready';
 /** What a resolved `stamp_project_pricing_studio` does to the world. */
 let onStamp: (() => void) | null = null;
+
+/** Every telemetry call the sheet makes, in order. */
+const mockScopeViewedCalls: Array<Record<string, unknown>> = [];
+const mockRateUnresolvedCalls: Array<Record<string, unknown>> = [];
+
+// Only the two instruments under test are replaced; everything else on the
+// module (DocumentAction's own `actionShown`, for one) stays real.
+jest.mock('@/lib/analytics/document-events', () => {
+  const actual = jest.requireActual('@/lib/analytics/document-events');
+  return {
+    ...actual,
+    documentEvents: {
+      ...actual.documentEvents,
+      time: {
+        ...actual.documentEvents.time,
+        scopeViewed: (props: Record<string, unknown>) =>
+          mockScopeViewedCalls.push(props),
+        rateUnresolved: (props: Record<string, unknown>) =>
+          mockRateUnresolvedCalls.push(props),
+      },
+    },
+  };
+});
 
 const ledgerCalls: Array<Record<string, unknown>> = [];
 const rollupCalls: Array<Record<string, unknown>> = [];
@@ -143,34 +193,34 @@ jest.mock('@patina/supabase', () => ({
     isPending: false,
   }),
   useOrganizations: () => ({
-    data: [
+    isError: orgsState === 'error',
+    data:
+      orgsState !== 'ready'
+        ? undefined
+        : [
       {
         id: 'studio-1',
         name: 'Leah Mbeki Studio',
         type: 'design_studio',
         membership: { role: viewerRole, status: 'active' },
       },
-    ],
+      ...(secondStudio
+        ? [
+            {
+              id: secondStudio.id,
+              name: secondStudio.name,
+              type: 'design_studio',
+              membership: { role: secondStudio.role, status: 'active' },
+            },
+          ]
+        : []),
+          ],
   }),
   useStudioHoursRollup: (params: Record<string, unknown>) => {
     rollupCalls.push(params);
     return {
       data:
-        rollupState === 'ready'
-          ? [
-              {
-                bucket_key: 'maria',
-                bucket_label: 'Maria Obi',
-                member_id: 'maria',
-                member_name: 'Maria Obi',
-                entry_count: 2,
-                total_minutes: 180,
-                billable_minutes: 120,
-                billable_cents: 30_000,
-                internal_minutes: 60,
-              },
-            ]
-          : undefined,
+        rollupState === 'ready' ? (rollupRows ?? [MIXED_BUCKET]) : undefined,
       isPending: rollupState === 'pending',
       isError: rollupState === 'error',
       error: rollupState === 'error' ? new Error('permission denied') : null,
@@ -179,7 +229,8 @@ jest.mock('@patina/supabase', () => ({
   useTimeEntryLedger: (params: Record<string, unknown>) => {
     ledgerCalls.push(params);
     return {
-      data: ledgerState === 'ready' ? [LEDGER_ROW] : undefined,
+      data:
+        ledgerState === 'ready' ? (ledgerRows ?? [LEDGER_ROW]) : undefined,
       isPending: ledgerState === 'pending',
       isError: ledgerState === 'error',
       error: ledgerState === 'error' ? new Error('permission denied') : null,
@@ -225,6 +276,12 @@ const renderLedger = (projectId?: string, client: QueryClient = makeQueryClient(
 
 beforeEach(() => {
   viewerRole = 'owner';
+  secondStudio = null;
+  rollupRows = null;
+  orgsState = 'ready';
+  ledgerRows = null;
+  mockScopeViewedCalls.length = 0;
+  mockRateUnresolvedCalls.length = 0;
   projectStudioId = 'studio-1';
   ledgerCalls.length = 0;
   rollupCalls.length = 0;
@@ -238,13 +295,22 @@ beforeEach(() => {
 });
 
 describe('the Hours scope lens', () => {
-  it('is absent for a plain member and present for an owner', () => {
+  it('is absent for a plain member and present for an owner or an admin', () => {
     viewerRole = 'member';
     const plain = renderLedger('project-1');
     expect(
       plain.queryByRole('group', { name: 'Hours scope' }),
     ).not.toBeInTheDocument();
     plain.unmount();
+
+    // Plan §3's assertion is "absent for a plain member, present for
+    // owner/admin" — the admin arm was code-correct and unpinned.
+    viewerRole = 'admin';
+    const asAdmin = renderLedger('project-1');
+    expect(
+      asAdmin.getByRole('group', { name: 'Hours scope' }),
+    ).toBeInTheDocument();
+    asAdmin.unmount();
 
     viewerRole = 'owner';
     renderLedger('project-1');
@@ -358,12 +424,36 @@ describe('the Hours scope lens', () => {
     }
   });
 
-  it('stands internal time in its own group in the studio scope', () => {
+  it('stands internal time in its own group, and counts no bucket twice', () => {
+    // 00607:151-155 — `billable_minutes` and `internal_minutes` can count the
+    // SAME row, so a bucket printed in the main list AND under "— internal —"
+    // was read twice by anyone adding the page up. A WHOLLY internal bucket
+    // belongs under the rule and nowhere else; a mixed one keeps its internal
+    // share as a clause on its own row.
+    rollupRows = [
+      MIXED_BUCKET,
+      {
+        bucket_key: 'studio-admin',
+        bucket_label: 'Studio admin',
+        member_id: 'admin-1',
+        member_name: 'Studio admin',
+        entry_count: 1,
+        total_minutes: 45,
+        billable_minutes: 0,
+        billable_cents: 0,
+        internal_minutes: 45,
+      },
+    ];
     renderLedger();
 
     fireEvent.click(screen.getByRole('button', { name: 'the studio' }));
 
     expect(screen.getByText('— internal —')).toBeInTheDocument();
+    // Each bucket appears exactly once on the page.
+    expect(screen.getAllByText('Studio admin')).toHaveLength(1);
+    expect(screen.getAllByText('Maria Obi')).toHaveLength(1);
+    // And the mixed bucket says what of it was internal, in its own row.
+    expect(screen.getByText(/1h 00m internal/)).toBeInTheDocument();
     expect(rollupCalls.at(-1)).toMatchObject({
       studioId: 'studio-1',
       groupBy: 'member',
@@ -451,6 +541,140 @@ describe('the Hours scope lens', () => {
     expect(screen.queryByText(/support designer/)).not.toBeInTheDocument();
   });
 
+  it('lists the member scope’s rows from the studio that produced its total', async () => {
+    // 00607 filters the rollup on `ledger.studio_id`; the entries carried no
+    // studio at all, so the rows beneath a member's week included every row RLS
+    // let the caller read for her — legacy "rate pending" hours the total
+    // excludes, and any second studio's hours.
+    hoursMemberScopePending.userId = 'maria';
+    hoursMemberScopePending.name = 'Maria Obi';
+    renderLedger();
+
+    fireEvent.click(screen.getByRole('button', { name: 'The entries' }));
+
+    await waitFor(() =>
+      expect(ledgerCalls.at(-1)).toMatchObject({
+        studioId: 'studio-1',
+        userId: 'maria',
+        projectId: null,
+      }),
+    );
+  });
+
+  it('answers for the studio it names, not the first membership row', async () => {
+    // `useOrganizations` has no ORDER BY, so "the first design_studio" was not
+    // stable between loads — and a viewer who is a plain MEMBER of that first
+    // studio but an OWNER of a second lost the lens entirely.
+    viewerRole = 'member';
+    secondStudio = { id: 'studio-2', name: 'Adeyemi & Co', role: 'owner' };
+    renderLedger();
+
+    expect(
+      screen.getByRole('group', { name: 'Hours scope' }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'the studio' }));
+
+    // And the caption says WHOSE week this is — "the studio · this week" named
+    // neither of her two studios.
+    await waitFor(() =>
+      expect(
+        screen.getByText(/the studio · Adeyemi & Co · this week/),
+      ).toBeInTheDocument(),
+    );
+    expect(rollupCalls.at(-1)).toMatchObject({ studioId: 'studio-2' });
+  });
+
+  it('lands once, and tells the instrument once', () => {
+    // `scope` used to initialise to 'project' whenever a document was in hand
+    // and be corrected by an effect afterwards — so every plain member's open
+    // reported a project-scope read she never saw, and HT-27's instrument
+    // counted two scope views for one open.
+    viewerRole = 'member';
+    renderLedger('project-1');
+
+    expect(mockScopeViewedCalls).toEqual([{ scope: 'mine', group_by: null }]);
+    expect(
+      screen.queryByRole('group', { name: 'Hours scope' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('leaves no one stranded when the membership read fails', () => {
+    // The old belt was `if (!orgs) return`, and a FAILED read never produces
+    // `orgs` — so a viewer whose membership read errored was left in the
+    // project scope with no lens, no rollup, no front matter and no rows, with
+    // "The entries" as the only thing on the sheet.
+    orgsState = 'error';
+    renderLedger('project-1');
+
+    expect(mockScopeViewedCalls).toEqual([{ scope: 'mine', group_by: null }]);
+    expect(
+      screen.queryByRole('button', { name: 'The entries' }),
+    ).not.toBeInTheDocument();
+    // Her own week is what she certainly keeps: R5's front matter.
+    expect(screen.getByText('utilization')).toBeInTheDocument();
+  });
+
+  it('says it is reading rather than landing before the standing is known', () => {
+    orgsState = 'pending';
+    renderLedger('project-1');
+
+    expect(mockScopeViewedCalls).toEqual([]);
+    expect(
+      screen.queryByRole('button', { name: 'The entries' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText('Reading…')).toBeInTheDocument();
+  });
+
+  it('takes a person handed to a sheet that is already open, and forgets her after', () => {
+    // The Studio Drawer keys the sheet on its ledger key, so `open-ledger` for
+    // the sheet already in front of you remounts nothing: the click did nothing
+    // visible AND the module value survived to mis-scope the next open.
+    renderLedger();
+    expect(screen.queryByRole('button', { name: 'Maria Obi' })).toBeNull();
+
+    act(() => {
+      openHoursForMember('maria', 'Maria Obi');
+    });
+
+    expect(screen.getByRole('button', { name: 'Maria Obi' })).toHaveAttribute(
+      'aria-current',
+      'true',
+    );
+    expect(rollupCalls.at(-1)).toMatchObject({ userId: 'maria' });
+    // Nothing is left behind to scope a later open.
+    expect(hoursMemberScopePending.userId).toBeNull();
+  });
+
+  it('sounds the rate alarm from the scoped rows, where an admin reads them', async () => {
+    // The alarm fired only from the viewer's OWN week, so an admin looking at
+    // the studio's unpriced hours — the one place unpriced hours are noticed —
+    // set off nothing at all.
+    ledgerRows = [
+      {
+        ...LEDGER_ROW,
+        id: 'entry-unpriced',
+        rate_source: 'none',
+        rate_role: null,
+        resolved_rate_cents: 0,
+        amount_cents: 0,
+      },
+    ];
+    renderLedger();
+
+    fireEvent.click(screen.getByRole('button', { name: 'the studio' }));
+    fireEvent.click(screen.getByRole('button', { name: 'The entries' }));
+
+    await waitFor(() =>
+      expect(mockRateUnresolvedCalls).toContainEqual({
+        entry_id: 'entry-unpriced',
+        project_id: 'project-1',
+        project_kind: null,
+        rate_source: 'none',
+      }),
+    );
+  });
+
   // ── Round-2 fixes: a figure never precedes an answer ─────────────────────
 
   it('says it is reading rather than printing a studio total of zero', () => {
@@ -508,12 +732,14 @@ describe('the Hours scope lens', () => {
     renderLedger('project-1');
 
     await waitFor(() =>
-      expect(screen.getByText('this document · all time')).toBeInTheDocument(),
+      expect(
+        screen.getByText('this document · all time, for its whole team'),
+      ).toBeInTheDocument(),
     );
     // Scoped to that readout: the sheet's own front matter legitimately reads a
     // zero for a week with nothing in it — this section has no answer at all.
     const total = screen
-      .getByText('this document · all time')
+      .getByText('this document · all time, for its whole team')
       .closest('section') as HTMLElement;
     expect(total.textContent).toContain('Reading…');
     expect(total.textContent).not.toContain('0 min');

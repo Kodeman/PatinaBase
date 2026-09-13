@@ -43,13 +43,13 @@ import {
   usePerson,
   useProposals,
   useStartDirectThread,
-  useOrganizations,
   useStudioContact,
   useThreads,
   type ClientDecision,
   type PartyRole,
 } from '@patina/supabase';
 import { usePersonDocuments } from '@/hooks/use-person-documents';
+import { useViewerStudio } from '@/hooks/use-viewer-studio';
 import {
   deriveIssuanceState,
   deriveRelationshipJourney,
@@ -809,14 +809,10 @@ function TeamProfile({
   // lens is the admin's instrument: the sheet renders no lens, no rollup and no
   // own rows for a plain member, so her only way out of the scope this door
   // opens is to close the sheet. The door carries the same gate as the lens.
-  const { data: viewerOrgs } = useOrganizations();
-  const viewerStudio =
-    viewerOrgs?.find((org) => org.type === 'design_studio') ??
-    viewerOrgs?.[0] ??
-    null;
-  const viewerIsOwnerOrAdmin =
-    viewerStudio?.membership?.role === 'owner' ||
-    viewerStudio?.membership?.role === 'admin';
+  // One ordered answer, shared with the sheet itself: the duplicate copy of
+  // this derivation drifted from the lens it was supposed to mirror, and both
+  // read the first row of an unordered membership list.
+  const { isOwnerOrAdmin: viewerIsOwnerOrAdmin } = useViewerStudio();
   const studioRole = humanizeTeamRole(
     statusRaw ?? (meta['role'] as string) ?? null,
   );

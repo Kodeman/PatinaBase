@@ -20,11 +20,33 @@ export const hoursMemberScopePending: {
   name: string | null;
 } = { userId: null, name: null };
 
+/**
+ * The same person, as an event a sheet that is ALREADY OPEN can hear.
+ *
+ * The Studio Drawer keys the sheet on its ledger key, so dispatching
+ * `document:open-ledger` for the sheet in front of you remounts nothing — the
+ * click did nothing visible, and the module value above then survived to
+ * silently open the NEXT mount on a person nobody asked for. A mounted sheet
+ * hears this and both scopes itself and clears the value; an unmounted one
+ * reads the value at mount and clears it there.
+ */
+export const HOURS_MEMBER_SCOPE_EVENT = 'document:hours-member-scope';
+
+export interface HoursMemberScopeDetail {
+  userId: string;
+  name: string | null;
+}
+
 export function openHoursForMember(userId: string, name?: string | null): void {
   hoursMemberScopePending.userId = userId;
   hoursMemberScopePending.name = name ?? null;
   if (typeof window === 'undefined') return;
   window.dispatchEvent(
     new CustomEvent('document:open-ledger', { detail: 'hours' }),
+  );
+  window.dispatchEvent(
+    new CustomEvent<HoursMemberScopeDetail>(HOURS_MEMBER_SCOPE_EVENT, {
+      detail: { userId, name: name ?? null },
+    }),
   );
 }

@@ -52,6 +52,59 @@ describe('StudioRateRows', () => {
     );
   });
 
+  it('puts the rate in force back when the field is cleared', () => {
+    // 00598's CHECK refuses a non-positive rate and there is no DELETE policy,
+    // so clearing the field writes nothing — and an empty field left standing
+    // under a dated history saying $150.00 is in force told two stories.
+    render(
+      <StudioRateRows
+        studioId="studio-1"
+        userId="maria"
+        memberLabel="Maria Obi"
+        rates={[rate()]}
+      />,
+    );
+
+    const field = screen.getByLabelText('Hourly rate for Maria Obi');
+    expect(field).toHaveValue('150.00');
+    fireEvent.change(field, { target: { value: '' } });
+    // The blur carries no `target`: re-assigning the DOM value inside the event
+    // desynchronises React's own value tracker, and the field then reports what
+    // the test wrote rather than what the component rendered.
+    fireEvent.blur(field);
+
+    expect(setRate).not.toHaveBeenCalled();
+    expect(field).toHaveValue('150.00');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('puts the rate in force back when the save is refused, beside the refusal', () => {
+    setRate.mockImplementation(
+      (
+        _input: unknown,
+        options: { onError: (err: Error) => void },
+      ) => options.onError(new Error('Only the studio’s owner may write that.')),
+    );
+    render(
+      <StudioRateRows
+        studioId="studio-1"
+        userId="maria"
+        memberLabel="Maria Obi"
+        rates={[rate()]}
+      />,
+    );
+
+    const field = screen.getByLabelText('Hourly rate for Maria Obi');
+    fireEvent.change(field, { target: { value: '175' } });
+    fireEvent.blur(field);
+
+    expect(
+      screen.getByText(/Only the studio’s owner may write that\./),
+    ).toBeInTheDocument();
+    // The field and the dated history agree on what is actually in force.
+    expect(field).toHaveValue('150.00');
+  });
+
   it('offers no field on the acting admin’s own row, and says why', () => {
     render(
       <StudioRateRows

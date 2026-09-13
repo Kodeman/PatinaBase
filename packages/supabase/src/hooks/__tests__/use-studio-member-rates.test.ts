@@ -147,6 +147,32 @@ describe('useSetStudioMemberRate', () => {
     ]);
   });
 
+  it('dates the row where the studio is standing, not in UTC', async () => {
+    // An evening save in a US timezone used to stamp TOMORROW
+    // (`toISOString().slice(0,10)`), and 00598's BEFORE INSERT trigger then
+    // closed the rate in force at TODAY — so that evening's hours resolved
+    // against the old rate under a card printing a row dated tomorrow.
+    const evening = new Date(2026, 8, 11, 21, 30, 0); // 2026-09-11, 21:30 local
+    vi.useFakeTimers();
+    vi.setSystemTime(evening);
+    try {
+      const mutation = useSetStudioMemberRate() as unknown as {
+        mutationFn: (input: unknown) => Promise<unknown>;
+      };
+      await mutation.mutationFn({
+        studioId: 'studio-1',
+        userId: 'member-1',
+        hourlyRateCents: 18000,
+      });
+      const [payload] = upsert.mock.calls.at(-1) as unknown as [
+        Record<string, unknown>,
+      ];
+      expect(payload.effective_from).toBe('2026-09-11');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('honours an explicit effective_from', async () => {
     const mutation = useSetStudioMemberRate() as unknown as {
       mutationFn: (input: unknown) => Promise<unknown>;

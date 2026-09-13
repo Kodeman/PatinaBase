@@ -762,6 +762,10 @@ export function useTimeEntryLedger(params: TimeEntryLedgerParams = {}) {
 
   return useQuery({
     queryKey: timeKeys.ledger(params),
+    // With no filter at all this selects the whole fact view for the window —
+    // every row RLS lets the caller read. A scope always names at least one of
+    // the three; nothing else may ask.
+    enabled: Boolean(studioId || userId || projectId),
     queryFn: async (): Promise<TimeEntryLedgerRow[]> => {
       const supabase = getSupabase();
       let query = supabase

@@ -51,6 +51,7 @@ import { openPost } from '@/components/document/overlays/post-sheet';
 import { openInvoiceComposer } from '@/components/document/accounts/invoice-overlays';
 import { openDraftProposalPicker } from '@/components/document/rooms/drafting/draft-proposal-opener';
 import { openDraftingRoom } from '@/lib/document/open-drafting-room';
+import { fmtDay } from '@/lib/document/format';
 
 type RowVariant = 'room' | 'ledger' | 'verb';
 
@@ -84,13 +85,11 @@ function HoursInHandAct() {
   const { data: unbilled } = useQuery({
     queryKey: ['desk-contents-unbilled-time'],
     queryFn: async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = createBrowserClient() as any;
       const { data, error } = await supabase
         .from('project_unbilled_time')
         .select('id, project_id, billing_state');
       if (error) throw error;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return ((data ?? []) as any[]).filter((row) =>
         isInvoiceEligibleTimeEntry({
           billable: true,
@@ -102,9 +101,19 @@ function HoursInHandAct() {
   });
 
   const timer = runningTimer.data;
-  const startedToday =
-    timer != null &&
-    new Date(timer.started_at).toDateString() === new Date().toDateString();
+  const startedDay = timer ? new Date(timer.started_at).toDateString() : null;
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const startedToday = startedDay === today.toDateString();
+  // A timer opened three days ago read "from yesterday" — a small lie about the
+  // studio's own clock, on the Desk's one act-bearing line.
+  const whenStarted =
+    startedDay === yesterday.toDateString()
+      ? 'yesterday'
+      : timer
+        ? fmtDay(timer.started_at)
+        : '';
 
   if (timer && !startedToday) {
     return (
@@ -119,7 +128,7 @@ function HoursInHandAct() {
         }}
         className="doc-type-meta pl-[22px] text-left text-[var(--color-clay-ink)] underline decoration-dotted underline-offset-4"
       >
-        a timer is still running from yesterday →
+        a timer is still running from {whenStarted} →
       </button>
     );
   }

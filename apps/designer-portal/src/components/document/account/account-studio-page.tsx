@@ -1597,7 +1597,10 @@ export function AccountStudioPage() {
           no card covers the work, and it is the only rate-editing surface
           outside a contract. Nothing here writes onto a time entry: the server
           resolves the rate when the hour is priced. */}
-      {canManage && (
+      {/* `user` gates the section, not just the row: while useAuth() is
+          unresolved every row's `m.user_id === user?.id` is false, so the acting
+          admin was briefly offered the inert field on her OWN row. */}
+      {canManage && user?.id && (
         <div className="mt-6 border-t border-[var(--color-pearl)] pt-5">
           <h3 className={`${LABEL} mb-3`}>Studio rates</h3>
           <p className={`${HELP} mb-4 mt-0`}>
@@ -1617,7 +1620,7 @@ export function AccountStudioPage() {
                     key={m.id}
                     className="flex flex-wrap items-baseline justify-between gap-3 border-b border-[var(--color-pearl)] py-3"
                   >
-                    <p className="min-w-0 truncate text-[13px] text-[var(--color-charcoal)]">
+                    <p className="min-w-0 t-body-sm text-[var(--color-charcoal)]">
                       {`${label} · ${m.role}`}
                     </p>
                     <StudioRateRows

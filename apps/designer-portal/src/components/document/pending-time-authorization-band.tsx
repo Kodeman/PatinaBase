@@ -8,6 +8,8 @@
  * missing rate as a missing agreement.
  */
 
+import Link from 'next/link';
+
 interface PendingTimeRow {
   project_id: string;
   duration_minutes: number | null;
@@ -55,20 +57,20 @@ export function PendingTimeAuthorizationBand({
       role="status"
       className="mb-4 border-l-2 border-[var(--color-clay)] bg-[rgba(196,165,123,0.08)] px-3 py-2.5"
     >
-      <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.07em] text-[var(--color-charcoal)]">
+      <p className="t-head text-[var(--color-charcoal)]">
         {minutesLabel(totalMinutes)} pending billing authority
       </p>
-      <p className="mt-1 text-[11px] leading-relaxed text-[var(--color-aged-oak)]">
+      <p className="mt-1 t-body-sm text-[var(--color-aged-oak)]">
         These hours are visible, but cannot be billed until a services agreement authorizes a rate.
       </p>
       {showStudioRateDoor && (
         <p className="mt-1.5">
-          <a
+          <Link
             href="/desk?account=studio"
-            className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-clay-ink)] underline decoration-dotted underline-offset-4 hover:text-[var(--color-charcoal)]"
+            className="t-head text-[var(--color-clay-ink)] underline decoration-dotted underline-offset-4 hover:text-[var(--color-charcoal)]"
           >
             Studio rates →
-          </a>
+          </Link>
         </p>
       )}
       <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
@@ -80,7 +82,7 @@ export function PendingTimeAuthorizationBand({
               type="button"
               aria-label={`Review ${name} billing setup`}
               onClick={() => onSelectProject(projectId)}
-              className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-clay-ink)] underline decoration-dotted underline-offset-4 hover:text-[var(--color-charcoal)]"
+              className="t-head text-[var(--color-clay-ink)] underline decoration-dotted underline-offset-4 hover:text-[var(--color-charcoal)]"
             >
               {name} · {minutesLabel(minutes)} →
             </button>

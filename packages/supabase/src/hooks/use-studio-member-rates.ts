@@ -49,7 +49,16 @@ export const studioMemberRateKeys = {
   entity: (userId: string | null | undefined) => ['studio-member-rate', userId] as const,
 };
 
-const todayISODate = () => new Date().toISOString().slice(0, 10);
+/** TODAY where the studio is standing, not in UTC: an evening save in a US
+ *  timezone was stamped TOMORROW, and 00598's BEFORE INSERT trigger then closed
+ *  the rate in force at today — so that evening's hours resolved against the old
+ *  rate while the card printed a row dated tomorrow. */
+const todayISODate = () => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
+    now.getDate(),
+  ).padStart(2, '0')}`;
+};
 
 /**
  * Every dated rate row the caller may read for this studio, newest first per

@@ -77,7 +77,17 @@ export default defineConfig({
   use: { ...base.use, baseURL: BASE_URL },
   // The Hours specs are single-seeded-actor and chromium-pinned in the spec
   // itself; declaring one project keeps the run's output honest about that.
-  projects: [{ name: 'chromium', use: { ...base.projects?.[0]?.use } }],
+  // Found by NAME, not by position: `base.projects[0]` would silently label
+  // another browser's `use` block "chromium" if the base config's order moved.
+  projects: [
+    {
+      name: 'chromium',
+      use: {
+        ...(base.projects?.find((project) => project.name === 'chromium')?.use ??
+          base.projects?.[0]?.use),
+      },
+    },
+  ],
   webServer: {
     ...baseWebServer,
     // `pnpm dev` pins `-p 3000`; the port has to come through next directly.

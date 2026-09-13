@@ -12,6 +12,13 @@
  * Extracted so the Account · Studio page grows by a mount rather than by the
  * field, the history and the error line three times over.
  *
+ * The field is CONTROLLED and always shows the rate actually in force: an
+ * emptied blur writes nothing (00598's CHECK refuses a non-positive rate and
+ * there is no DELETE policy, so the last dated rate stands) and a refused save
+ * changes nothing, and in both cases a field left holding what was typed
+ * contradicted the dated history directly beneath it with nothing saying which
+ * figure was real.
+ *
  * HT-3-e(2) (00615) — a row whose `created_by` IS its own `user_id` prices an
  * hour ONLY where that person is the studio's owner. So for an admin reading her
  * OWN row this field would save, show its dated row, and change nothing about
@@ -26,9 +33,9 @@ import {
 } from '@patina/supabase';
 
 const FIELD =
-  'w-[9rem] border-0 border-b border-[var(--color-pearl)] bg-transparent py-1.5 text-[13px] text-[var(--color-charcoal)] outline-none transition-colors placeholder:text-[var(--text-faint)] focus:border-[var(--color-clay)] disabled:opacity-50';
+  'w-[9rem] border-0 border-b border-[var(--color-pearl)] bg-transparent py-1.5 t-body-sm text-[var(--color-charcoal)] outline-none transition-colors placeholder:text-[var(--text-faint)] focus:border-[var(--color-clay)] disabled:opacity-50';
 const META =
-  'font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]';
+  't-head text-[var(--color-aged-oak)]';
 
 const dollars = (cents: number) => (cents / 100).toFixed(2);
 
@@ -71,23 +78,36 @@ export function StudioRateRows({
     .filter((row) => row.user_id === userId)
     .sort((a, b) => b.effective_from.localeCompare(a.effective_from));
   const open = history.find((row) => row.effective_to === null) ?? history[0];
+  const inForce = open ? dollars(open.hourly_rate_cents) : '';
   const [error, setError] = useState<string | null>(null);
+  const [draft, setDraft] = useState(inForce);
+  // A saved rate arrives as a new dated row, so the field follows the fact
+  // rather than holding the keystroke that produced it.
+  const [seenInForce, setSeenInForce] = useState(inForce);
+  if (inForce !== seenInForce) {
+    setSeenInForce(inForce);
+    setDraft(inForce);
+  }
 
   const save = (value: string) => {
     setError(null);
     const cents = rateInputToCents(value);
     if (cents === null) {
-      if (value.trim() !== '') setError('Enter an hourly rate above zero.');
+      // Cleared: no answer, so the rate in force stands — and says so.
+      if (value.trim() === '') setDraft(inForce);
+      else setError('Enter an hourly rate above zero.');
       return;
     }
     if (open && cents === open.hourly_rate_cents) return;
     setRate.mutate(
       { studioId, userId, hourlyRateCents: cents },
       {
-        onError: (err) =>
+        onError: (err) => {
           setError(
             err instanceof Error ? err.message : 'Could not save that rate.',
-          ),
+          );
+          setDraft(inForce);
+        },
       },
     );
   };
@@ -95,7 +115,7 @@ export function StudioRateRows({
   if (selfAuthoredInert) {
     return (
       <div className="flex flex-col gap-1">
-        <p className="max-w-[38ch] text-right text-[11px] leading-relaxed text-[var(--color-aged-oak)]">
+        <p className="max-w-[38ch] text-right t-body-sm text-[var(--color-aged-oak)]">
           {open === undefined
             ? 'No rate yet.'
             : // `created_by` NULL is a deleted author, not self-authorship
@@ -133,7 +153,8 @@ export function StudioRateRows({
           placeholder="Not set"
           className={FIELD}
           disabled={setRate.isPending}
-          defaultValue={open ? dollars(open.hourly_rate_cents) : ''}
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
           onBlur={(event) => save(event.target.value)}
         />
         <span className={META}>/hr</span>
@@ -142,7 +163,7 @@ export function StudioRateRows({
       {error && (
         <p
           role="alert"
-          className="text-[11px] text-[var(--color-terracotta-ink)]"
+          className="t-body-sm text-[var(--color-terracotta-ink)]"
         >
           {error}
         </p>

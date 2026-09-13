@@ -23,13 +23,13 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import {
   createBrowserClient,
   filterProjectUnbilledEntries,
   useCreateTimeEntry,
   useDeleteTimeEntry,
-  useOrganizations,
   useProjectHoursTotal,
   useStampProjectPricingStudio,
   useStudioHoursRollup,
@@ -51,13 +51,18 @@ import { DocumentAction, DocumentActionGroup } from './document-action';
 import { ProjectAuthorityBandForProject } from './commercial/project-authority-band';
 import { PendingTimeAuthorizationBand } from './pending-time-authorization-band';
 import { useProjectBillingAuthority } from '@/hooks/use-commercial-documents';
+import { useViewerStudio } from '@/hooks/use-viewer-studio';
 import {
   isInvoiceEligibleTimeEntry,
   timeBillingStateLabel,
   timeRateProvenance,
 } from '@/lib/document/authority-hours';
 import { documentEvents } from '@/lib/analytics/document-events';
-import { hoursMemberScopePending } from '@/lib/document/open-hours-scope';
+import {
+  HOURS_MEMBER_SCOPE_EVENT,
+  hoursMemberScopePending,
+  type HoursMemberScopeDetail,
+} from '@/lib/document/open-hours-scope';
 
 // R96 — the registry is the single source of the surface icon (no drift).
 const HOURS_ICON = STUDIO_LEDGERS.find((l) => l.key === 'hours')!.icon;
@@ -133,19 +138,49 @@ export function HoursLedger({
       ? { id: hoursMemberScopePending.userId, name: hoursMemberScopePending.name }
       : null,
   );
-  const [scope, setScope] = useState<HoursScope>(
+  /** Where this open would land IF the viewer has the lens — captured at mount,
+   *  beside `memberScope`, because the module value is cleared straight after. */
+  const [landingScope, setLandingScope] = useState<HoursScope>(
     hoursMemberScopePending.userId
       ? 'member'
       : initialContext?.projectId
         ? 'project'
         : 'mine',
   );
+  /** `null` until the membership read answers. A sheet that lands first and
+   *  corrects itself afterwards told HT-27's instrument that a plain member
+   *  read the project scope — she never did — and left her stranded there for
+   *  good if the read FAILED, since the correction waited on data that never
+   *  came. One settle, one landing, one `time_scope_viewed`. */
+  const [scope, setScope] = useState<HoursScope | null>(null);
   const [groupBy, setGroupBy] = useState<TimeHoursGroupBy>('member');
   const [showEntries, setShowEntries] = useState(false);
 
   useEffect(() => {
     hoursMemberScopePending.userId = null;
     hoursMemberScopePending.name = null;
+  }, []);
+
+  // A person handed to a sheet that is already open. The drawer remounts
+  // nothing in that case, so without this the click was silent and the module
+  // value above outlived it — mis-scoping whatever opened Hours next.
+  useEffect(() => {
+    const onMemberScope = (event: Event) => {
+      const detail = (event as CustomEvent<HoursMemberScopeDetail>).detail;
+      if (!detail?.userId) return;
+      hoursMemberScopePending.userId = null;
+      hoursMemberScopePending.name = null;
+      setMemberScope({ id: detail.userId, name: detail.name });
+      setLensProjectId(null);
+      setShowEntries(false);
+      // If the standing read has not answered yet the landing is what the belt
+      // below will use; if it has, this is the move itself.
+      setLandingScope('member');
+      setScope((current) => (current === null ? current : 'member'));
+    };
+    window.addEventListener(HOURS_MEMBER_SCOPE_EVENT, onMemberScope);
+    return () =>
+      window.removeEventListener(HOURS_MEMBER_SCOPE_EVENT, onMemberScope);
   }, []);
   const [weekOffset, setWeekOffset] = useState(0);
   const { start: weekStart, end: weekEnd } = useMemo(
@@ -161,7 +196,14 @@ export function HoursLedger({
       if (!userData?.user?.id) return [];
       let query = supabase
         .from('project_time_entries')
-        .select('*, project:projects(name, studio_id)')
+        // `origin_documents` is HT-27's `project_kind`: there is no
+        // `projects.kind` column — what the classifier calls a design-services
+        // project is the ORIGIN commercial document's kind
+        // (`_is_design_services_project`, 00578:2584), so the alarm reports that
+        // and says "non_services" where no origin document exists.
+        .select(
+          '*, project:projects(name, studio_id, origin_documents:project_commercial_documents(document_kind, is_origin))',
+        )
         .eq('user_id', userData.user.id)
         .gte('started_at', weekStart.toISOString())
         .lt('started_at', weekEnd.toISOString())
@@ -175,15 +217,17 @@ export function HoursLedger({
   });
 
   // The repair act and the rate card are the studio's, not a member's: HT-3's
-  // card and HT-3-g's stamp both admit an owner or admin only.
-  const { data: orgs } = useOrganizations();
-  const viewerStudio = useMemo(
-    () => orgs?.find((org) => org.type === 'design_studio') ?? orgs?.[0] ?? null,
-    [orgs],
-  );
-  const viewerIsOwnerOrAdmin =
-    viewerStudio?.membership?.role === 'owner' ||
-    viewerStudio?.membership?.role === 'admin';
+  // card and HT-3-g's stamp both admit an owner or admin only. Which studio
+  // that is comes from one ordered, explicit answer (`useViewerStudio`) rather
+  // than from the first row of an unordered membership read — a viewer with two
+  // studios was otherwise keyed on a different one between loads, and the studio
+  // scope named none of them.
+  const {
+    organizations: orgs,
+    studio: viewerStudio,
+    isOwnerOrAdmin: viewerIsOwnerOrAdmin,
+    isSettled: standingKnown,
+  } = useViewerStudio();
 
   const { data: projects } = useQuery({
     queryKey: ['document-hours-projects'],
@@ -459,12 +503,20 @@ export function HoursLedger({
   // the document in hand, with HT-10-a's document total above them. Deferred to
   // an effect because the role arrives with `useOrganizations`, after mount.
   useEffect(() => {
-    if (!orgs || viewerIsOwnerOrAdmin) return;
-    setScope('mine');
-    setShowEntries(false);
-  }, [orgs, viewerIsOwnerOrAdmin]);
+    if (!standingKnown) return;
+    // The landing, once: a viewer with no lens can never be left standing in a
+    // scope she has no word to leave, and one with the lens keeps the scope the
+    // door she came through asked for. A failed membership read counts as no
+    // lens — her own hours are the one thing she is certainly entitled to.
+    setScope((current) => {
+      if (!viewerIsOwnerOrAdmin) return 'mine';
+      return current === null ? landingScope : current;
+    });
+    if (!viewerIsOwnerOrAdmin) setShowEntries(false);
+  }, [standingKnown, viewerIsOwnerOrAdmin, landingScope, scope]);
 
   useEffect(() => {
+    if (scope === null) return;
     documentEvents.time.scopeViewed({
       scope,
       group_by: scope === 'mine' ? null : groupBy,
@@ -574,7 +626,7 @@ export function HoursLedger({
                   setShowEntries(false);
                 }}
                 aria-current={on ? 'true' : undefined}
-                className={`da-score-hover min-h-11 inline-flex items-center font-mono text-[11px] uppercase tracking-[0.1em] transition-colors ${
+                className={`da-score-hover min-h-11 inline-flex items-center t-head transition-colors ${
                   on
                     ? 'da-score-on text-[var(--color-charcoal)]'
                     : 'text-[var(--color-aged-oak)] hover:text-[var(--color-mocha)]'
@@ -584,6 +636,15 @@ export function HoursLedger({
               </button>
             );
           })}
+        </p>
+      )}
+
+      {/* Until the membership read answers, this sheet does not know whose hours
+          it is about, so it says that rather than painting a scope it may have
+          to take back. */}
+      {scope === null && (
+        <p className="py-3 t-body-sm italic text-[var(--color-aged-oak)]">
+          Reading&hellip;
         </p>
       )}
 
@@ -625,6 +686,20 @@ export function HoursLedger({
         <ProjectAuthorityBandForProject projectId={lensProjectId} />
       )}
 
+      {/* A refused or failed read of that column is its own fact, and the only
+          money read on this sheet that used to pass in silence: without an arm
+          here the project scope rendered no line, no rollup and no sentence, and
+          the owner saw the entries act standing alone. */}
+      {scope === 'project' && lensProjectId && lensPricingStudio.isError && (
+        <p
+          role="alert"
+          className="-mt-1 mb-4 t-head"
+          style={{ color: TERRACOTTA_INK }}
+        >
+          Which studio prices this document could not be read.
+        </p>
+      )}
+
       {/* HT-3-e(3) — which studio prices this document's hours, said out loud.
           An unnamed one is why every hour here reads "rate pending". */}
       {scope === 'project' &&
@@ -646,7 +721,7 @@ export function HoursLedger({
       {/* HT-10-a — a viewer with no lens reads her own rows only (00606), so the
           one DEFINER function is where the house's hours add up for her. Above
           the rows, per HT-30. An owner has the lens and the rollup instead. */}
-      {lensProjectId && orgs && !viewerIsOwnerOrAdmin && (
+      {lensProjectId && standingKnown && !viewerIsOwnerOrAdmin && (
         <MemberProjectTotal projectId={lensProjectId} />
       )}
 
@@ -657,7 +732,7 @@ export function HoursLedger({
           entry's pricing studio — the studio that PRICES the document for the
           project scope. Keyed on the viewer's instead, a document another studio
           prices returned zero rows above entries the fact view does read. */}
-      {scope !== 'mine' && viewerIsOwnerOrAdmin && viewerStudio && (
+      {scope !== null && scope !== 'mine' && viewerIsOwnerOrAdmin && viewerStudio && (
         scope === 'project' ? (
           lensProjectId && lensPricingStudioId ? (
             <ScopeRollup
@@ -673,7 +748,7 @@ export function HoursLedger({
               weekLabel={weekLabel}
             />
           ) : lensProjectId && lensPricingStudioId === null ? (
-            <p className="mb-4 py-2 text-[12px] italic text-[var(--color-aged-oak)]">
+            <p className="mb-4 py-2 t-body-sm italic text-[var(--color-aged-oak)]">
               No studio prices this document yet, so its hours do not add up to a
               studio&rsquo;s week. Name one above and they gain a rate.
             </p>
@@ -682,6 +757,9 @@ export function HoursLedger({
           <ScopeRollup
             scope={scope}
             studioId={viewerStudio.id}
+            // Whose week this is, named: a viewer with two studios reads one of
+            // them, and "the studio · this week" said which of them it was not.
+            studioName={viewerStudio.name}
             memberId={scope === 'member' ? (memberScope?.id ?? null) : null}
             memberName={memberScope?.name ?? null}
             projectId={null}
@@ -694,26 +772,39 @@ export function HoursLedger({
         )
       )}
 
-      {scope !== 'mine' && (
+      {scope !== null && scope !== 'mine' && (
         <div className="mb-4">
           <DocumentAction
             actionKey="show-scope-time-entries"
             surfaceKey="hours"
             regionKey="scope-readout"
             variant="tertiary"
+            aria-expanded={showEntries}
+            aria-controls="hours-scope-entries"
             onClick={() => setShowEntries((open) => !open)}
           >
             {showEntries ? 'Hide the entries' : 'The entries'}
           </DocumentAction>
           {showEntries && (
-            <ScopeEntries
-              studioId={scope === 'studio' ? (viewerStudio?.id ?? null) : null}
-              memberId={scope === 'member' ? (memberScope?.id ?? null) : null}
-              projectId={scope === 'project' ? lensProjectId : null}
-              from={fromDate}
-              to={toDate}
-              studioNames={studioNames}
-            />
+            <div id="hours-scope-entries">
+              {/* The member scope carries the SAME studio as its total: 00607
+                  filters the rollup on `ledger.studio_id`, so without it here
+                  the rows beneath a member's week included every row RLS let the
+                  caller read for her — legacy "rate pending" hours the total
+                  excludes, and a second studio's for a viewer with two. */}
+              <ScopeEntries
+                studioId={
+                  scope === 'studio' || scope === 'member'
+                    ? (viewerStudio?.id ?? null)
+                    : null
+                }
+                memberId={scope === 'member' ? (memberScope?.id ?? null) : null}
+                projectId={scope === 'project' ? lensProjectId : null}
+                from={fromDate}
+                to={toDate}
+                studioNames={studioNames}
+              />
+            </div>
           )}
         </div>
       )}
@@ -766,6 +857,7 @@ export function HoursLedger({
 
       {note && (
         <p
+          role="alert"
           className="mb-3 rounded-[3px] border border-[rgba(196,131,111,0.4)] px-2 py-1.5 font-mono text-[11px] uppercase tracking-[0.05em]"
           style={{ color: TERRACOTTA_INK }}
         >
@@ -915,7 +1007,7 @@ function PricingStudioLine({
   const [note, setNote] = useState<string | null>(null);
 
   return (
-    <p className="-mt-1 mb-4 flex flex-wrap items-baseline gap-2 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
+    <p className="-mt-1 mb-4 flex flex-wrap items-baseline gap-2 t-head text-[var(--color-aged-oak)]">
       <span className="text-[var(--color-clay-ink)]">priced by</span>
       <span className="text-[var(--color-charcoal)]">
         {pricingStudioId
@@ -949,7 +1041,11 @@ function PricingStudioLine({
           Name your studio
         </DocumentAction>
       )}
-      {note && <span style={{ color: TERRACOTTA_INK }}>{note}</span>}
+      {note && (
+        <span role="alert" style={{ color: TERRACOTTA_INK }}>
+          {note}
+        </span>
+      )}
     </p>
   );
 }
@@ -964,6 +1060,7 @@ function PricingStudioLine({
 function ScopeRollup({
   scope,
   studioId,
+  studioName = null,
   memberId,
   memberName,
   projectId,
@@ -975,6 +1072,8 @@ function ScopeRollup({
 }: {
   scope: HoursScope;
   studioId: string;
+  /** The studio this total belongs to, named — never left to be inferred. */
+  studioName?: string | null;
   memberId: string | null;
   memberName: string | null;
   projectId: string | null;
@@ -996,15 +1095,23 @@ function ScopeRollup({
   const totalMinutes = rows.reduce((sum, row) => sum + row.total_minutes, 0);
   const billableCents = rows.reduce((sum, row) => sum + row.billable_cents, 0);
   const entryCount = rows.reduce((sum, row) => sum + row.entry_count, 0);
-  const internal = rows.filter((row) => row.internal_minutes > 0);
+  // 00607:151-155 — `billable_minutes`/`billable_cents` and `internal_minutes`
+  // can count the SAME row, so a bucket printed in both lists was read twice by
+  // anyone adding the page up. The two lists are disjoint: a bucket that is
+  // ENTIRELY internal stands under "— internal —" and nowhere else, and a mixed
+  // bucket keeps its internal share as a clause on its own row.
+  const isAllInternal = (row: (typeof rows)[number]) =>
+    row.internal_minutes > 0 && row.internal_minutes === row.total_minutes;
+  const internal = rows.filter(isAllInternal);
+  const billableBuckets = rows.filter((row) => !isAllInternal(row));
 
   return (
     <section className="mb-4">
-      <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.07em] text-[var(--color-clay-ink)]">
+      <p className="t-head text-[var(--color-clay-ink)]">
         {scope === 'member'
           ? (memberName ?? SCOPE_CAPTION.member)
-          : SCOPE_CAPTION[scope]}{' '}
-        · {weekLabel}
+          : SCOPE_CAPTION[scope]}
+        {studioName ? ` · ${studioName}` : ''} · {weekLabel}
       </p>
       {/* A studio's money is never summed from rows that have not arrived, and
           never from rows that were REFUSED: an unread rollup used to print
@@ -1012,9 +1119,9 @@ function ScopeRollup({
           not be read. While it is reading the figure says so; when the read
           fails there is no total at all. */}
       {rollup.isPending ? (
-        <p className="mt-0.5 text-[15px] text-[var(--color-aged-oak)]">Reading…</p>
+        <p className="mt-0.5 t-money text-[var(--color-aged-oak)]">Reading…</p>
       ) : rollup.isError ? null : (
-        <p className="mt-0.5 text-[15px] text-[var(--color-charcoal)]">
+        <p className="mt-0.5 t-money text-[var(--color-charcoal)]">
           {fmtMinutes(totalMinutes)}
           {billableCents > 0 && (
             <>
@@ -1024,7 +1131,7 @@ function ScopeRollup({
             </>
           )}
           {entryCount > 0 && (
-            <span className="ml-2 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
+            <span className="ml-2 t-head text-[var(--color-aged-oak)]">
               {entryCount} {entryCount === 1 ? 'entry' : 'entries'}
             </span>
           )}
@@ -1042,7 +1149,7 @@ function ScopeRollup({
             type="button"
             onClick={() => onGroupBy(key)}
             aria-current={groupBy === key ? 'true' : undefined}
-            className={`da-score-hover inline-flex items-center font-mono text-[11px] uppercase tracking-[0.08em] transition-colors ${
+            className={`da-score-hover min-h-11 inline-flex items-center t-head transition-colors ${
               groupBy === key
                 ? 'da-score-on text-[var(--color-charcoal)]'
                 : 'text-[var(--color-aged-oak)] hover:text-[var(--color-mocha)]'
@@ -1056,30 +1163,32 @@ function ScopeRollup({
       {rollup.isError ? (
         <p
           role="alert"
-          className="mt-2 font-mono text-[11px] uppercase tracking-[0.05em]"
+          className="mt-2 t-head"
           style={{ color: TERRACOTTA_INK }}
         >
           These hours could not be read —{' '}
           {rollup.error instanceof Error ? rollup.error.message : 'try again'}
         </p>
       ) : rollup.isPending ? null : rows.length === 0 ? (
-        <p className="py-3 text-[12px] italic text-[var(--color-aged-oak)]">
+        <p className="py-3 t-body-sm italic text-[var(--color-aged-oak)]">
           Nothing logged in this window.
         </p>
       ) : (
         <ul className="mt-2">
-          {rows.map((row) => (
+          {billableBuckets.map((row) => (
             <li
               key={row.bucket_key}
               className="flex items-baseline justify-between gap-3 border-b border-[var(--color-pearl)] py-1.5"
             >
-              <span className="min-w-0 truncate text-[12.5px] text-[var(--color-charcoal)]">
+              <span className="min-w-0 t-body-sm text-[var(--color-charcoal)]">
                 {row.bucket_label || row.member_name || '—'}
               </span>
-              <span className="shrink-0 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
+              <span className="shrink-0 t-head text-[var(--color-aged-oak)]">
                 {fmtMinutes(row.total_minutes)}
                 {row.billable_minutes > 0 &&
                   ` · ${fmtMinutes(row.billable_minutes)} billable`}
+                {row.internal_minutes > 0 &&
+                  ` · ${fmtMinutes(row.internal_minutes)} internal`}
                 {row.billable_cents > 0 && ` · ${fmtUsd(row.billable_cents)}`}
               </span>
             </li>
@@ -1089,7 +1198,7 @@ function ScopeRollup({
 
       {internal.length > 0 && (
         <>
-          <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.07em] text-[var(--color-aged-oak)]">
+          <p className="mt-3 t-head text-[var(--color-aged-oak)]">
             — internal —
           </p>
           <ul>
@@ -1098,10 +1207,10 @@ function ScopeRollup({
                 key={`internal-${row.bucket_key}`}
                 className="flex items-baseline justify-between gap-3 border-b border-[var(--color-pearl)] py-1.5"
               >
-                <span className="min-w-0 truncate text-[12.5px] text-[var(--color-charcoal)]">
+                <span className="min-w-0 t-body-sm text-[var(--color-charcoal)]">
                   {row.bucket_label || row.member_name || '—'}
                 </span>
-                <span className="shrink-0 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
+                <span className="shrink-0 t-head text-[var(--color-aged-oak)]">
                   {fmtMinutes(row.internal_minutes)}
                 </span>
               </li>
@@ -1122,25 +1231,39 @@ function MemberProjectTotal({ projectId }: { projectId: string }) {
   const total = useProjectHoursTotal(projectId);
 
   if (total.isError) {
+    // Only 42501 is the function's own assert refusing a caller who is not on
+    // the project. A network failure, a 500 or a missing RPC told a rostered
+    // member something false about her standing.
+    const code = (total.error as unknown as { code?: string } | null)?.code;
     return (
-      <p className="mb-4 py-2 text-[12px] italic text-[var(--color-aged-oak)]">
-        This document&rsquo;s total is for its team — you are not on it.
+      <p
+        role="alert"
+        className="mb-4 py-2 t-body-sm italic text-[var(--color-aged-oak)]"
+      >
+        {code === '42501'
+          ? 'This document’s total is for its team — you are not on it.'
+          : 'This document’s total could not be read.'}
       </p>
     );
   }
   const data = total.data;
   return (
     <section className="mb-4">
-      <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.07em] text-[var(--color-clay-ink)]">
-        this document · all time
+      {/* HT-30 in substance, not only in order: this figure is the WHOLE team's
+          all-time total on the document, and the rows under it are the viewer's
+          own seven days — they cannot add up to it, and where she logged
+          nothing this week it stood above "Nothing logged this week." So it
+          says which is which. */}
+      <p className="t-head text-[var(--color-clay-ink)]">
+        this document · all time, for its whole team
       </p>
       {/* The function raises for a caller who is not on the project rather than
           answering zero, so a zero printed before it answers is a reading it
           never gave. */}
       {total.isPending ? (
-        <p className="mt-0.5 text-[15px] text-[var(--color-aged-oak)]">Reading…</p>
+        <p className="mt-0.5 t-money text-[var(--color-aged-oak)]">Reading…</p>
       ) : (
-        <p className="mt-0.5 text-[15px] text-[var(--color-charcoal)]">
+        <p className="mt-0.5 t-money text-[var(--color-charcoal)]">
           {fmtMinutes(data?.minutes ?? 0)}
           {(data?.billable_minutes ?? 0) > 0 && (
             <>
@@ -1158,6 +1281,9 @@ function MemberProjectTotal({ projectId }: { projectId: string }) {
           )}
         </p>
       )}
+      <p className="mt-0.5 t-body-sm italic text-[var(--color-aged-oak)]">
+        Below, your own week.
+      </p>
     </section>
   );
 }
@@ -1196,7 +1322,7 @@ function ScopeEntries({
     return (
       <p
         role="alert"
-        className="mt-2 font-mono text-[11px] uppercase tracking-[0.05em]"
+        className="mt-2 t-head"
         style={{ color: TERRACOTTA_INK }}
       >
         These entries could not be read —{' '}
@@ -1207,14 +1333,14 @@ function ScopeEntries({
   // "No entries in this window." is an answer, so it waits for one.
   if (ledger.isPending) {
     return (
-      <p className="py-2 text-[12px] italic text-[var(--color-aged-oak)]">
+      <p className="py-2 t-body-sm italic text-[var(--color-aged-oak)]">
         Reading…
       </p>
     );
   }
   if (rows.length === 0) {
     return (
-      <p className="py-2 text-[12px] italic text-[var(--color-aged-oak)]">
+      <p className="py-2 t-body-sm italic text-[var(--color-aged-oak)]">
         No entries in this window.
       </p>
     );
@@ -1254,14 +1380,34 @@ function ScopeEntryRow({
     null,
   );
 
+  // HT-26/HT-27's alarm fires wherever an unpriced hour RENDERS, and the scoped
+  // rows are exactly where an admin sees other people's unpriced hours — the
+  // instrument was blind to all of them while it watched only the viewer's own
+  // week. The emitter dedups per entry, so a row an admin also holds herself is
+  // still one event. `project_kind` is null here and only here: the fact view
+  // (00604) carries no kind and this read must not grow a second query to
+  // invent one.
+  const scopedRatePending = provenance.kind === 'pending';
+  const scopedEntryId = row.id;
+  const scopedProjectId = row.project_id;
+  useEffect(() => {
+    if (!scopedRatePending) return;
+    documentEvents.time.rateUnresolved({
+      entry_id: scopedEntryId,
+      project_id: scopedProjectId,
+      project_kind: null,
+      rate_source: 'none',
+    });
+  }, [scopedRatePending, scopedEntryId, scopedProjectId]);
+
   return (
     <li className="border-b border-[var(--color-pearl)] px-1 py-2">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <div className="min-w-0">
-          <p className="truncate text-[12.5px] font-medium text-[var(--color-charcoal)]">
+          <p className="t-body-sm text-[var(--color-charcoal)]">
             {row.member_name ?? 'A teammate'}
           </p>
-          <p className="truncate font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
+          <p className="t-head text-[var(--color-aged-oak)]">
             {[
               row.project_name ?? 'Project',
               row.day,
@@ -1279,11 +1425,11 @@ function ScopeEntryRow({
           </p>
         </div>
         <div className="flex shrink-0 items-baseline gap-2.5">
-          <span className="whitespace-nowrap font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-charcoal)]">
+          <span className="whitespace-nowrap t-head text-[var(--color-charcoal)]">
             {fmtMinutes(row.duration_minutes ?? 0)}
           </span>
           <span
-            className="whitespace-nowrap rounded-[3px] border px-1.5 py-[2px] font-mono text-[11px] uppercase tracking-[0.06em]"
+            className="whitespace-nowrap rounded-[3px] border px-1.5 py-[2px] t-head"
             style={
               row.invoice_id
                 ? { borderColor: 'var(--color-sage)', color: 'var(--color-sage)' }
@@ -1300,20 +1446,24 @@ function ScopeEntryRow({
             surfaceKey="hours"
             regionKey="scope-entry-row"
             variant="tertiary"
+            aria-expanded={showNote}
+            aria-controls={`hours-entry-note-${row.id}`}
             onClick={() => setShowNote((open) => !open)}
           >
             {showNote ? 'Hide note' : 'Note'}
           </DocumentAction>
         </div>
       </div>
-      {showNote && <ScopeEntryNote entryId={row.id} />}
+      {showNote && (
+        <ScopeEntryNote entryId={row.id} id={`hours-entry-note-${row.id}`} />
+      )}
     </li>
   );
 }
 
 /** HT-36 — free text is read from the table, by an act, one entry at a time.
  *  It is never a column of the rollup or of the fact view. */
-function ScopeEntryNote({ entryId }: { entryId: string }) {
+function ScopeEntryNote({ entryId, id }: { entryId: string; id: string }) {
   const note = useQuery({
     queryKey: ['document-hours-entry-note', entryId],
     queryFn: async () => {
@@ -1328,7 +1478,10 @@ function ScopeEntryNote({ entryId }: { entryId: string }) {
   });
 
   return (
-    <p className="mt-1 text-[12px] italic leading-relaxed text-[var(--color-mocha)]">
+    <p
+      id={id}
+      className="mt-1 t-body-sm italic text-[var(--color-mocha)]"
+    >
       {note.isLoading
         ? 'Reading…'
         : note.isError
@@ -1369,6 +1522,13 @@ function EntryRow({
   const amountCents = e.rated_amount_cents ?? unbilled?.amount_cents ?? 0;
   const pricingStudioId = (e.project?.studio_id as string | null) ?? null;
   const ratePending = provenance.kind === 'pending';
+  // HT-27's segmentation: the origin commercial document's kind IS what the
+  // classifier means by a design-services project (`_is_design_services_project`,
+  // 00578:2584). No origin document = a non-services project, measured.
+  const projectKind =
+    ((e.project?.origin_documents as AnyRecord[] | undefined) ?? []).find(
+      (doc) => doc?.is_origin,
+    )?.document_kind ?? 'non_services';
 
   // HT-26/HT-27's alarm — an hour nobody can price. Fires once per entry per
   // session (the emitter dedups); a re-render is not a second unpriced hour.
@@ -1377,10 +1537,10 @@ function EntryRow({
     documentEvents.time.rateUnresolved({
       entry_id: e.id as string,
       project_id: e.project_id as string,
-      project_kind: null,
+      project_kind: projectKind,
       rate_source: 'none',
     });
-  }, [ratePending, e.id, e.project_id]);
+  }, [ratePending, e.id, e.project_id, projectKind]);
 
   const stamp = () => {
     if (!viewerStudioId) return;
@@ -1414,10 +1574,10 @@ function EntryRow({
     <li className="border-b border-[var(--color-pearl)] px-1 py-2">
       <div className="grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-3">
         <div className="min-w-0">
-          <p className="truncate text-[12.5px] font-medium text-[var(--color-charcoal)]">
+          <p className="t-body-sm text-[var(--color-charcoal)]">
             {e.project?.name ?? 'Project'}
           </p>
-          <p className="truncate font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
+          <p className="t-head text-[var(--color-aged-oak)]">
             {[
               e.phase_key,
               SOURCE_LABEL[e.source] ?? e.source,
@@ -1469,13 +1629,13 @@ function EntryRow({
             type="button"
             aria-label={`Review billing authority for ${e.project?.name ?? 'this document'}`}
             onClick={() => onOpenAuthority(e.project_id as string)}
-            className="whitespace-nowrap rounded-[3px] border border-[var(--color-pearl)] px-1.5 py-[2px] font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]"
+            className="whitespace-nowrap rounded-[3px] border border-[var(--color-pearl)] px-1.5 py-[2px] t-head text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]"
           >
             {billingLabel} →
           </button>
         ) : (
           <span
-            className="whitespace-nowrap rounded-[3px] border px-1.5 py-[2px] font-mono text-[11px] uppercase tracking-[0.06em]"
+            className="whitespace-nowrap rounded-[3px] border px-1.5 py-[2px] t-head"
             style={
               billed
                 ? { borderColor: 'var(--color-sage)', color: 'var(--color-sage)' }
@@ -1551,17 +1711,18 @@ function EntryRow({
               Name the studio that prices this document
             </DocumentAction>
           ) : (
-            <a
+            <Link
               href="/desk?account=studio"
-              className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-clay-ink)] underline decoration-dotted underline-offset-4 hover:text-[var(--color-charcoal)]"
+              className="t-head text-[var(--color-clay-ink)] underline decoration-dotted underline-offset-4 hover:text-[var(--color-charcoal)]"
             >
               Set the studio rate →
-            </a>
+            </Link>
           )}
         </div>
       )}
       {rowNote && (
         <p
+          role="alert"
           className="mt-1 font-mono text-[11px] uppercase tracking-[0.05em]"
           style={{ color: TERRACOTTA_INK }}
         >

@@ -185,6 +185,8 @@ const wayfinding = {
  *     reserves HT-35 no migration number and this program's range is spent. It
  *     returns as one stage — band, opt-out and these two emitters together —
  *     once Kody rules where the preference lives and releases a number.
+ *     SCOPED by the orchestrator (2026-09-13) to STAGE 4 of this program, with
+ *     W7: it is no longer owed by W2, and this module stays its home.
  *
  * Nothing here carries `notes`: free text is the studio's, not telemetry
  * (HT-36).
@@ -229,7 +231,18 @@ const time = {
     track("time_scope_viewed", props),
 
   /** HT-26's alarm: an hour carries no rate. Once per entry per session —
-   *  a ledger re-render must not inflate the count it is the instrument for. */
+   *  a ledger re-render must not inflate the count it is the instrument for,
+   *  and neither does one hour seen twice, in the viewer's own week and again
+   *  in a scoped list.
+   *
+   *  `project_kind` is the ORIGIN commercial document's kind
+   *  ('design_services' | 'design_build' | …), or 'non_services' where the
+   *  project has no origin document — which is exactly what
+   *  `_is_design_services_project` (00578:2584) tests. There is no
+   *  `projects.kind` column to read. It is `null` from the SCOPED rows and
+   *  only from those: `time_entry_ledger` (00604) carries no kind, and a
+   *  per-row query to invent one would cost more than the segment is worth.
+   *  Read a null as "not said", never as "not services". */
   rateUnresolved: (props: {
     entry_id: string;
     project_id: string;
