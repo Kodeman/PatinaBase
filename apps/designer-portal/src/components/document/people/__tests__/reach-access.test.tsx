@@ -622,11 +622,30 @@ describe("the pure parts", () => {
   it("heldChannelReason says why, and what still reaches them", () => {
     expect(
       heldChannelReason({
+        channel_kind: "email",
         status: "bounced",
         status_at: "2026-03-12T00:00:00Z",
       } as never),
     ).toBe(
       "This address bounced back, 12 March 2026. Texts and calls still reach them.",
+    );
+  });
+
+  /**
+   * CR10-3 — the status editor offers "It bounces" on every kind, so a
+   * bouncing MOBILE printed "This address bounced back… Texts and calls still
+   * reach them." beside a phone number: it called a number an address, then
+   * promised texts still reach the line it had just declared held.
+   */
+  it("gives a bouncing PHONE its own words", () => {
+    expect(
+      heldChannelReason({
+        channel_kind: "mobile",
+        status: "bounced",
+        status_at: "2026-03-12T00:00:00Z",
+      } as never),
+    ).toBe(
+      "Texts to this number bounced back, 12 March 2026. Calls still reach them.",
     );
   });
 

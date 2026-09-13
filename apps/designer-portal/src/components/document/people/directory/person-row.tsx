@@ -48,6 +48,16 @@ import { TelLink } from "../tel-link";
 import { ContactRuleLine, type ContactRouteTarget } from "../contact-rule-line";
 import { SeatLine } from "../seat-line";
 
+/**
+ * CR10-2 — THE DIRECTORY'S OWN EMPTY SENTENCE.
+ *
+ * R-V's "No open seat on this project." is the PERSON CARD's fallback, under a
+ * region that names one project. The Directory is the cross-project ledger and
+ * names none, so quoting the card's sentence here told the studio a project
+ * that is not on the screen holds no seat.
+ */
+export const DIRECTORY_NO_SEAT_SENTENCE = "No open seat on any job.";
+
 /** What the open-person control says to a screen reader, and nothing more. */
 export function openPersonLabel(
   person: DirectoryPerson,
@@ -96,9 +106,14 @@ export function PersonRow({
 }) {
   const [seatsOpen, setSeatsOpen] = useState(false);
   const seatsPanelId = useId();
-  const { data: seats } = usePeopleSeats({
+  // CR10-2: the READ'S OWN STATE, not `?? []`. `seats` is undefined for the
+  // whole first round-trip of every expand, so an empty-length test printed
+  // "no seat" directly beneath a trigger reading "2 seats" — the count and the
+  // sentence contradicting each other on screen until the query landed.
+  const { data: seats, isFetching: seatsFetching } = usePeopleSeats({
     personId: seatsOpen ? person.person_id : null,
   });
+  const seatsLoaded = seats !== undefined && !seatsFetching;
 
   const { routedName } = splitRoutedClause(person.contact_rule_summary);
   // CR3-2: THE SUMMARY IS NOT A FACE. `contact_rule_summary()` renders
@@ -239,9 +254,9 @@ export function PersonRow({
             />
           </li>
         ))}
-        {seatsOpen && (seats ?? []).length === 0 && (
+        {seatsOpen && seatsLoaded && seats.length === 0 && (
           <li className="t-body-sm py-2 text-[var(--ink-subtle)]">
-            No open seat on this project.
+            {DIRECTORY_NO_SEAT_SENTENCE}
           </li>
         )}
       </ul>

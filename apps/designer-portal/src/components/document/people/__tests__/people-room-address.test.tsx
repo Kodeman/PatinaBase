@@ -15,8 +15,9 @@ import { PeopleRoom } from "../people-room";
 const mockReplace = jest.fn();
 /** CR9-1 — the seat the stubbed person card hands back to the Room. */
 const seatToOpen: { current: Record<string, unknown> } = { current: {} };
+const mockPush = jest.fn();
 jest.mock("next/navigation", () => ({
-  useRouter: () => ({ push: jest.fn(), replace: mockReplace }),
+  useRouter: () => ({ push: mockPush, replace: mockReplace }),
 }));
 
 const ROWS = [
@@ -132,6 +133,7 @@ function goTo(search: string) {
 
 beforeEach(() => {
   mockReplace.mockClear();
+  mockPush.mockClear();
   seatToOpen.current = {};
   goTo("");
 });
@@ -230,16 +232,38 @@ describe("the seat line's destination", () => {
     expect(sheet).toHaveAttribute("data-role", "installer");
   });
 
-  it("sends a household member's seat to their CARD, never to a field sheet", () => {
+  /**
+   * CR10-1 — and it never re-opens the card the reader is already on. A
+   * household member's seat walks to the JOB, where the Call Sheet carries it
+   * (direction §2.1: seat ──► /doc/<project>?sheet=call).
+   */
+  it("walks a household member's seat to the job's Call Sheet, not to a field sheet", () => {
     goTo("?person=card-dana");
     render(<PeopleRoom />);
     seatToOpen.current = {
       seat_id: "seat-2",
       person_id: "card-dana",
       party_kind: "client_rep",
+      project_id: "project-okonkwo",
     };
     fireEvent.click(screen.getByRole("button", { name: "open the seat" }));
     expect(screen.queryByTestId("party-sheet")).toBeNull();
+    expect(mockPush).toHaveBeenCalledWith(
+      "/doc/project-okonkwo?sheet=call",
+    );
+  });
+
+  it("falls back to the card for a seat the view hands us with no project", () => {
+    goTo("?person=card-dana");
+    render(<PeopleRoom />);
+    seatToOpen.current = {
+      seat_id: "seat-3",
+      person_id: "card-dana",
+      party_kind: "client_rep",
+      project_id: null,
+    };
+    fireEvent.click(screen.getByRole("button", { name: "open the seat" }));
+    expect(mockPush).not.toHaveBeenCalled();
     expect(screen.getByTestId("person-card")).toHaveAttribute(
       "data-person",
       "card-dana",

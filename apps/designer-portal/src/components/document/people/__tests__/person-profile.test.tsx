@@ -27,6 +27,10 @@ jest.mock("@patina/supabase", () => ({
     change_order: "Approves change orders",
     selections: "Selections",
   },
+  // CR10-1 — the composer hangs off a FIELD seat, so the card asks which kinds
+  // are field kinds before it offers "Send a text".
+  isFieldRosterRole: (role: string | null) =>
+    ["gc", "sub", "installer", "receiver"].includes(role ?? ""),
   usePerson: () => ({ data: personData.current, isLoading: false }),
   useStudioContact: () => ({ data: cardData.current }),
   useAffiliations: () => ({
@@ -329,6 +333,40 @@ describe("Send a text", () => {
     const { onOpenSeat } = renderCard();
     fireEvent.click(screen.getByRole("button", { name: "Send a text" }));
     expect(onOpenSeat).toHaveBeenCalled();
+  });
+
+  /**
+   * CR10-1 — AN ENABLED ACT THAT SENDS NOTHING. The composer lives on the
+   * field party sheet, which only a gc / sub / installer / receiver seat
+   * opens. On a client or a client_rep seat the act was held only by the
+   * seed's missing consent, so recording consent made it live and inert.
+   */
+  it("is held, with its own sentence, when no seat is a field seat", () => {
+    seatData.current = [seat({ party_kind: "client_rep", trade: null })];
+    const { onOpenSeat } = renderCard();
+    const act = screen.getByRole("button", { name: "Send a text" });
+    expect(act).toHaveAttribute("aria-disabled", "true");
+    expect(act).not.toBeDisabled();
+    const reason = document.getElementById(
+      act.getAttribute("aria-describedby") as string,
+    );
+    expect(reason).toHaveTextContent(
+      "A text goes out from a seat on a job’s field crew, and this person holds none.",
+    );
+    fireEvent.click(act);
+    expect(onOpenSeat).not.toHaveBeenCalled();
+  });
+
+  it("reaches past a non-field seat to the field seat that carries the thread", () => {
+    seatData.current = [
+      seat({ seat_id: "seat-client", party_kind: "client", trade: null }),
+      seat({ seat_id: "seat-sub", party_kind: "sub" }),
+    ];
+    const { onOpenSeat } = renderCard();
+    fireEvent.click(screen.getByRole("button", { name: "Send a text" }));
+    expect(onOpenSeat).toHaveBeenCalledWith(
+      expect.objectContaining({ seat_id: "seat-sub" }),
+    );
   });
 
   /**
