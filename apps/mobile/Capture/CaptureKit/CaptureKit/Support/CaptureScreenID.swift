@@ -1,10 +1,11 @@
 //  CaptureScreenID.swift
 //  CaptureKit
 //
-//  Frozen per-screen accessibility identifiers (75 entries) — the deterministic
+//  Frozen per-screen accessibility identifiers (78 entries) — the deterministic
 //  handles XCUITest, capture-shots.sh and MobAI use to drive and assert every
-//  screen. 74 of them reach a built screen today; wave 3 built v0Visit and
-//  c6Voice. v4VisitReview is the one remaining reserved id, held out of the
+//  screen. 77 of them reach a built screen today; wave 3 built v0Visit and
+//  c6Voice, and W5 built the three PR screens (the People room, scoped to one
+//  job). v4VisitReview is the one remaining reserved id, held out of the
 //  sweep until the screen behind it exists (wave 4).
 
 import Foundation
@@ -82,6 +83,10 @@ public enum CaptureScreenID: String, CaseIterable, Sendable {
     case v0Visit              = "screen.V0.visit"
     case c6Voice              = "screen.C6.voice"
     case v4VisitReview        = "screen.V4.visit-review"
+    // Flow 18 — the People room, scoped to the active project (W5)
+    case pr1Roster            = "screen.PR1.roster"
+    case pr2Person            = "screen.PR2.person"
+    case pr3SiteAccess        = "screen.PR3.site-access"
     // Flow 16 — project-scoped Site Request loop (P1)
     case sr01SiteHub          = "screen.SR01.site-hub"
     case sr02Composer         = "screen.SR02.composer"

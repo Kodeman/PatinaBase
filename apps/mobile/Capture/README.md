@@ -35,11 +35,14 @@ harness, one set of dev-loop scripts drives all 74 built screens.
 | 14 | QR portal-login approval | Q1 qr-scan · Q2 qr-approve |
 | 15 | Pro site-scan | F1 scan-setup · F1 context · F2 site-scan · F3 scan-review · F4 scan-upload |
 | 16 | Site Request P1 | SR01 site-hub → SR12 Binder history · SR13 guest-landing → SR20 returned item |
+| 18 | People room (this job) | PR1 roster · PR2 person · PR3 site-access |
 
 Flows 0–7 are the original 33 screens; flows 8–15 are the 19 Work-flow
 screens added in Phase 2 plus 20 P1 Site Request screens, plus the wave-3
-visit-spine screens V0.visit and C6.voice — 74 built — and one reserved
-visit-spine id, V4.visit-review, held for wave 4 (75 total). Screen ids are defined once, in
+visit-spine screens V0.visit and C6.voice, plus W5's three People-room screens
+(PR1/PR2/PR3, the roster and the way in for the active project) — 77 built — and
+one reserved visit-spine id, V4.visit-review, held for wave 4 (78 total).
+Screen ids are defined once, in
 `CaptureKit/CaptureKit/Support/CaptureScreenID.swift`, and are what
 `capture-run.sh`, `capture-shots.sh`, and the `-CaptureScreen` launch flag
 key off (see Dev loop, below).
@@ -113,13 +116,18 @@ project first, so edits to any `.swift` file are picked up automatically.
 # VERIFY — build + unit tests + lint (CI gate)
 scripts/capture-gate.sh            # or: build | test | lint
 
+# UI TESTS (XCUITest, app-hosted — NOT part of capture-gate.sh)
+xcodebuild test -project Capture.xcodeproj -scheme Capture \
+  -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17' \
+  -only-testing:CaptureUITests CODE_SIGNING_ALLOWED=NO
+
 # RUN — generate → build → boot sim → install → launch
 scripts/capture-run.sh                    # real entry (viewfinder / onboarding)
 scripts/capture-run.sh C5.specimen-sheet  # jump straight to any built screen
 CAPTURE_SIM="iPhone 17 Pro" scripts/capture-run.sh N3.measure
 
 # SWEEP — screenshot every screen (pure simctl, no MCP) → .build/shots/
-scripts/capture-shots.sh                  # all 74 built screens
+scripts/capture-shots.sh                  # all 77 built screens
 scripts/capture-shots.sh C5 N1 S3         # subset (prefix match)
 ```
 

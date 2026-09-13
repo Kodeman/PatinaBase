@@ -31,5 +31,6 @@ enum ScreenRegistry {
         QRApproveScreens.register(into: r, container: container, coordinator: coordinator)          // Q: Q1, Q2
         SiteScanScreens.register(into: r, container: container, coordinator: coordinator)           // F: F1–F4
         SiteRequestScreens.register(into: r, container: container, coordinator: coordinator)        // SR: SR01–SR20
+        PeopleScreens.register(into: r, container: container, coordinator: coordinator)             // PR: PR1–PR3
     }
 }

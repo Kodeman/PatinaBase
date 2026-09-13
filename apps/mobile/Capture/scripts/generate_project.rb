@@ -166,6 +166,19 @@ tests.build_configurations.each do |c|
 end
 add_sources(project, tests, 'CaptureTests', File.join(ROOT, 'CaptureTests'))
 
+# W5: UI tests (XCUITest, app-hosted). The logic bundle above cannot drive a
+# screen, so the one walk that proves PR1 opens and PR3 opens from it lives here.
+# `capture-gate.sh test` still runs the CaptureKit logic bundle; this target runs
+# through the Capture scheme.
+ui_tests = project.new_target(:ui_test_bundle, 'CaptureUITests', :ios, DEPLOYMENT)
+ui_tests.build_configurations.each do |c|
+  common!(c)
+  c.build_settings['PRODUCT_BUNDLE_IDENTIFIER'] = 'cloud.patina.field.uitests'
+  c.build_settings['GENERATE_INFOPLIST_FILE'] = 'YES'
+  c.build_settings['TEST_TARGET_NAME'] = 'Capture'
+end
+add_sources(project, ui_tests, 'CaptureUITests', File.join(ROOT, 'CaptureUITests'))
+
 # Font resources → CaptureKit resources build phase.
 fonts_dir = File.join(ROOT, 'CaptureKit', 'CaptureKit', 'Resources', 'Fonts')
 font_refs = Dir.glob(File.join(fonts_dir, '*.ttf')).sort.map do |p|
@@ -178,11 +191,18 @@ mocks.add_dependency(kit)
 app.add_dependency(kit)
 app.add_dependency(mocks)
 tests.add_dependency(kit)
+# W5: CaptureTests asserts against the Okonkwo fixture (`CaptureKitMocks
+# .PeopleRoomFixtures`), so the test bundle links the mocks framework beside
+# CaptureKit. Both are embedded frameworks with no SDK of their own, so this
+# adds no package dependency to the logic-test bundle.
+tests.add_dependency(mocks)
 
 mocks.frameworks_build_phase.add_file_reference(kit.product_reference)
 app.frameworks_build_phase.add_file_reference(kit.product_reference)
 app.frameworks_build_phase.add_file_reference(mocks.product_reference)
 tests.frameworks_build_phase.add_file_reference(kit.product_reference)
+tests.frameworks_build_phase.add_file_reference(mocks.product_reference)
+ui_tests.add_dependency(app)
 
 embed = app.new_copy_files_build_phase('Embed Frameworks')
 embed.symbol_dst_subfolder_spec = :frameworks
@@ -282,6 +302,7 @@ app_scheme = Xcodeproj::XCScheme.new
 app_scheme.add_build_target(app)
 app_scheme.set_launch_target(app)
 app_scheme.add_test_target(tests)
+app_scheme.add_test_target(ui_tests)
 app_scheme.save_as(PROJECT_PATH, 'Capture', true)
 
 kit_scheme = Xcodeproj::XCScheme.new
