@@ -21,18 +21,22 @@ import {
   type PartyRole,
 } from '@patina/supabase';
 import type { ContactScope } from '@patina/types';
+import { peopleEvents } from '@/lib/analytics/people-events';
 import {
   deriveNurtureQueue,
+  directoryEntryCounts,
+  directoryHeadLine,
   humanizeSince,
 } from '@/lib/document/people-derivation';
-import { DIRECTORY_ROLES } from '@/lib/document/directory-roles';
-import { RoomShell } from '../rooms/room-shell';
 import {
-  DirectoryView,
-  type DirectoryRole,
-  type MakerLens,
-} from './views/directory-view';
+  DEFAULT_DIRECTORY_CHIP,
+  directoryChipFromParam,
+  type DirectoryChip,
+} from '@/lib/document/directory-roles';
+import { RoomShell } from '../rooms/room-shell';
+import { DirectoryView, type MakerLens } from './views/directory-view';
 import { PersonProfile } from './views/person-profile';
+import { CompanyCard } from './company-card';
 import { PartyProfileSheet } from './party-profile-sheet';
 import { ThreadsView } from './views/threads-view';
 import { NurtureView } from './views/nurture-view';
@@ -44,6 +48,7 @@ import { AskBar, routePeopleAsk } from './directory/ask-bar';
 import { DEFAULT_CONTACT_SCOPE } from './directory/scope-lens';
 import { AddPersonSheet } from './directory/add-person-sheet';
 import type { PeopleView, PeopleViewProps } from './types';
+import type { PeopleDirectorySeat } from '@patina/supabase';
 import {
   PeopleCompactSelector,
   PeopleDesktopRail,
@@ -78,8 +83,14 @@ export function PeopleRoom() {
   const [pendingThreadId, setPendingThreadId] = useState<string | null>(null);
   const [ask, setAsk] = useState('');
   const [toast, setToast] = useState<string | null>(null);
-  // The Directory's role filter lives here (controlled) so the ask bar can set it.
-  const [roleFilter, setRoleFilter] = useState<DirectoryRole>('all');
+  // The Directory's chip lives here (controlled) so the ask bar and the
+  // address can both set it. Six chips now, not eleven (direction §1 line 2);
+  // `directoryChipFromParam` forwards every shipped `?role=` link.
+  const [chip, setChip] = useState<DirectoryChip>(DEFAULT_DIRECTORY_CHIP);
+  // PR-j — the trade line under Crew and Makers is addressable too.
+  const [trade, setTrade] = useState('all');
+  // The firm card, opened by `?firm=` or by a Directory firm row.
+  const [openFirm, setOpenFirm] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [addKind, setAddKind] = useState<'client' | 'maker'>('client');
   // R51/R83 — the quiet inline confirmation band the Directory shows after an
@@ -160,7 +171,10 @@ export function PeopleRoom() {
       router.replace(qs ? `/people?${qs}` : '/people', { scroll: false });
     };
     const person = params.get('person');
+    const firm = params.get('firm');
     const roleParam = params.get('role');
+    const tradeParam = params.get('trade');
+    if (tradeParam) setTrade(tradeParam);
     const thread = params.get('thread');
     const add = params.get('add');
     const viewParam = params.get('view');
@@ -200,22 +214,21 @@ export function PeopleRoom() {
       if (isFieldRosterRole(resolved)) {
         setOpenParty({ id: person, role: resolved });
       } else {
-        // Land the tab a click from that row would have left active, so
-        // backing out of the profile shows it in context, not under "All".
-        if (
-          resolved === 'maker' ||
-          resolved === 'client' ||
-          resolved === 'lead' ||
-          resolved === 'team'
-        ) {
-          setRoleFilter(resolved);
-        }
+        // Land the chip a click from that row would have left pressed, so
+        // backing out of the card shows it in context, not under Everyone.
+        setChip(directoryChipFromParam(resolved));
         setHighlightPersonId(person);
         window.setTimeout(() => {
           setHighlightPersonId((h) => (h === person ? null : h));
         }, 2200);
         setOpenPerson({ id: person, role: resolved });
       }
+    } else if (firm) {
+      // `?firm=` names a company card by its own rolodex id — the same shape
+      // `?person=` names a person card with, since v4 keys both on the card.
+      deepLinkHandledRef.current = true;
+      setView('directory');
+      setOpenFirm(firm);
     } else if (thread) {
       deepLinkHandledRef.current = true;
       setPendingThreadId(thread);
@@ -227,14 +240,13 @@ export function PeopleRoom() {
       // (/portal/clients?add=1 → /people?role=client&add=client), so the roster
       // behind the sheet has to be filtered too — closing the sheet should leave
       // the designer on the Clients tab they asked for, not under "All".
-      const wantedRole =
-        roleParam && (DIRECTORY_ROLES as readonly string[]).includes(roleParam)
-          ? (roleParam as DirectoryRole)
-          : null;
-      if (wantedRole) setRoleFilter(wantedRole);
+      if (roleParam) setChip(directoryChipFromParam(roleParam));
       setAddKind(add);
       setAddOpen(true);
-      stripHandledParams(['add', 'role', 'view', 'scope']);
+      // PR-j — only `add` is an opening state that has been answered. `role`,
+      // `view`, `scope` and `trade` NAME WHAT IS ON SCREEN and stay in the
+      // address, so a narrowed room can be shared and refreshed.
+      stripHandledParams(['add']);
     } else {
       deepLinkHandledRef.current = true;
       // R21 dissolve — the rail and the Directory's role filter are addressable
@@ -243,16 +255,35 @@ export function PeopleRoom() {
       // Both together (`?view=directory&role=maker`) is coherent, so neither
       // clobbers the other; an unknown value is ignored in silence.
       const wantedView = peopleViewFromParam(viewParam);
-      const wantedRole =
-        roleParam && (DIRECTORY_ROLES as readonly string[]).includes(roleParam)
-          ? (roleParam as DirectoryRole)
-          : null;
-      if (wantedRole) setRoleFilter(wantedRole);
+      if (roleParam) setChip(directoryChipFromParam(roleParam));
       if (wantedView) setView(wantedView);
-      else if (wantedRole) setView('directory');
-      stripHandledParams(['view', 'role', 'scope']);
+      else if (roleParam) setView('directory');
+      // PR-j — `role`, `view`, `scope` and `trade` stay. Nothing is stripped.
     }
   }, [all, router]);
+
+  // PR-j — THE ADDRESS NAMES WHAT IS ON SCREEN. `?role`, `?view`, `?scope` and
+  // `?trade` are kept and kept CURRENT, so a narrowed room can be shared,
+  // bookmarked and refreshed into the same narrowing. `?person` and `?firm`
+  // name the card that is open. Nothing is written until the deep-link read
+  // has run, so the first paint never clobbers the address it was handed.
+  useEffect(() => {
+    if (!deepLinkHandledRef.current) return;
+    const params = new URLSearchParams(window.location.search);
+    const setOrDelete = (key: string, value: string | null) => {
+      if (value) params.set(key, value);
+      else params.delete(key);
+    };
+    setOrDelete('view', view === 'directory' ? null : view);
+    setOrDelete('role', chip === DEFAULT_DIRECTORY_CHIP ? null : chip);
+    setOrDelete('scope', scope === DEFAULT_CONTACT_SCOPE ? null : scope);
+    setOrDelete('trade', trade === 'all' ? null : trade);
+    setOrDelete('person', openPerson?.id ?? null);
+    setOrDelete('firm', openFirm);
+    const next = params.toString();
+    if (next === window.location.search.replace(/^\?/, '')) return;
+    router.replace(next ? `/people?${next}` : '/people', { scroll: false });
+  }, [view, chip, scope, trade, openPerson, openFirm, router]);
 
   // The live Engine nudge: the strongest dormant tie from the nurture queue.
   // Reads `mine` (scope:'mine'), NOT `all` — see the note above `mine`.
@@ -277,9 +308,16 @@ export function PeopleRoom() {
     openPerson: (id, role) => {
       // A manual open supersedes any stray deep-link highlight (F4).
       setHighlightPersonId(null);
-      // A field party opens the field sheet; everyone else the relationship profile.
-      if (isFieldRosterRole(role)) setOpenParty({ id, role });
-      else setOpenPerson({ id, role });
+      setOpenFirm(null);
+      peopleEvents.personCardOpened({
+        source: 'directory_row',
+        seat_count: all?.find((p) => p.person_id === id)?.seat_count ?? null,
+      });
+      // EVERY Directory row opens the PERSON CARD now — the room's unit is the
+      // card, and the card carries the seats beneath it (direction §1 line 1).
+      // The seat's own sheet, where the SMS thread lives, is opened from a
+      // seat line inside the card, never from the row.
+      setOpenPerson({ id, role });
     },
     openThread: (threadId) => {
       setOpenPerson(null);
@@ -296,9 +334,9 @@ export function PeopleRoom() {
     notify,
   };
 
-  /** Route the directory to a role filter AND surface the Directory view. */
-  const filterDirectory = (role: DirectoryRole) => {
-    setRoleFilter(role);
+  /** Route the directory to a chip AND surface the Directory view. */
+  const filterDirectory = (next: DirectoryChip) => {
+    setChip(next);
     nav.goView('directory');
   };
 
@@ -313,7 +351,7 @@ export function PeopleRoom() {
         );
         break;
       case 'directory': {
-        filterDirectory(route.role);
+        filterDirectory(directoryChipFromParam(route.role));
         const what =
           route.role === 'maker'
             ? 'your makers'
@@ -333,20 +371,50 @@ export function PeopleRoom() {
     }
   };
 
-  const body = openPerson ? (
+  const openSeat = (seat: PeopleDirectorySeat) => {
+    setOpenParty({
+      id: seat.seat_id,
+      role: (isFieldRosterRole(seat.party_kind) ? seat.party_kind : 'sub') as PartyRole,
+    });
+  };
+
+  const body = openFirm ? (
+    <CompanyCard
+      firmId={openFirm}
+      organizationId={organizationId}
+      onOpenPerson={(id) => {
+        setOpenFirm(null);
+        setOpenPerson({ id, role: 'contact' });
+      }}
+      onAnnounce={notify}
+      onBack={() => setOpenFirm(null)}
+    />
+  ) : openPerson ? (
     <PersonProfile
       personId={openPerson.id}
       role={openPerson.role}
+      organizationId={organizationId}
+      onOpenSeat={openSeat}
       onBack={() => setOpenPerson(null)}
       {...nav}
     />
   ) : view === 'directory' ? (
     <DirectoryView
       {...nav}
-      role={roleFilter}
-      onRoleChange={(r) => {
+      chip={chip}
+      onChipChange={(next) => {
         setNotice(null);
-        setRoleFilter(r);
+        setChip(next);
+      }}
+      trade={trade}
+      onTradeChange={setTrade}
+      onOpenFirm={(firmId) => {
+        peopleEvents.companyCardOpened({
+          source: 'directory_row',
+          paper_state:
+            all?.find((p) => p.person_id === firmId)?.paper_state ?? null,
+        });
+        setOpenFirm(firmId);
       }}
       notice={notice}
       makerLens={makerLens}
@@ -356,10 +424,6 @@ export function PeopleRoom() {
       organizationId={organizationId}
       scope={scope}
       onScopeChange={setScope}
-      onAddPerson={(kind) => {
-        setAddKind(kind);
-        setAddOpen(true);
-      }}
     />
   ) : view === 'threads' ? (
     <ThreadsView {...nav} pendingThreadId={pendingThreadId} />
@@ -380,7 +444,7 @@ export function PeopleRoom() {
   return (
     <RoomShell
       title="The People Room"
-      count={all ? `${all.length} people` : undefined}
+      count={all ? directoryHeadLine(directoryEntryCounts(all)) : undefined}
       action={
         <DocumentActionGroup
           surfaceKey="people"
@@ -403,19 +467,22 @@ export function PeopleRoom() {
 
       <PeopleCompactSelector
         currentView={view}
-        profileOpen={!!openPerson}
+        profileOpen={!!openPerson || !!openFirm}
         directoryCount={all?.length}
         nudge={nudge}
         onSelect={nav.goView}
       />
 
+      {/* PR-q / C2 — the Directory is the studio's LEDGER, so the room widens
+          to the 1200 studio band. The 760px cap was a DocSheet measure, and a
+          five-column ledger row cannot live inside one. */}
       <div
         data-people-layout
-        data-people-current-view={openPerson ? 'profile' : view}
-        className="mx-auto flex w-full max-w-[1100px]"
+        data-people-current-view={openPerson ? 'profile' : openFirm ? 'firm' : view}
+        className="mx-auto flex w-full max-w-[1296px]"
       >
         <PeopleDesktopRail
-          activeView={openPerson ? null : view}
+          activeView={openPerson || openFirm ? null : view}
           directoryCount={all?.length}
           nudge={nudge}
           onSelect={nav.goView}
@@ -425,7 +492,7 @@ export function PeopleRoom() {
           data-people-main-panel
           className="min-w-0 w-full flex-1 px-4 py-6 sm:px-6 min-[1180px]:px-8"
         >
-          <div className="mx-auto max-w-[760px]">{body}</div>
+          <div className="mx-auto max-w-[1200px]">{body}</div>
         </main>
       </div>
 
@@ -434,11 +501,11 @@ export function PeopleRoom() {
         open={addOpen}
         initialKind={addKind}
         onClose={() => setAddOpen(false)}
-        onAdded={(message, kind) => {
-          // Land them where they'll show: the Directory, filtered to the kind
-          // just added — with the confirmation INLINE above the roster (R83:
-          // no toast; R51's quiet grammar).
-          filterDirectory(kind);
+        onAdded={(message, landOn) => {
+          // Land them where they'll show: the Directory, narrowed to the chip
+          // the kind just added falls under — with the confirmation INLINE
+          // above the roster (R83: no toast; R51's quiet grammar).
+          filterDirectory(landOn);
           setNotice(message);
         }}
         // R21 dissolve — /portal/pipeline is gone; open leads are Desk folders.

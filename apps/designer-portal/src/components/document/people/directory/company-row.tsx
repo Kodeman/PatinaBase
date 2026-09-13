@@ -1,35 +1,31 @@
 'use client';
 
 /**
- * A company row in the studio rolodex (Call Sheet Wave 2, slides 8–9: "The
- * Rolodex" / "Circles + squares"). The person-row `.prow` grammar, wearing the
- * ONE visual difference a company gets — a rounded SQUARE avatar (8px radius)
- * instead of a circle — plus:
- *   · a bordered KIND pill naming what kind of firm this is (a company's OWN
- *     vocabulary — see COMPANY_KIND_LABELS below — not a person's PartyKind),
- *   · a relationship line that counts people and jobs, not a trade,
- *   · NO consent dot (a firm cannot consent to a text message — slide 9),
- *   · an OPTIONAL status dot (no real "how is this firm doing" signal exists
- *     yet, so callers omit it by default rather than fake one),
- *   · the same hover lift (-2px, clay border) as a person row.
+ * A DIRECTORY FIRM ROW — the person row's grammar, wearing the one visual
+ * difference a firm gets: a 42px rounded SQUARE where a person has a 34px
+ * circle (direction §1 line 2).
  *
- * `companyPeopleCount` / `projectsCount` / `lastProjectName` are accepted as
- * props rather than derived here — the data plumbing (who works at this
- * company, which projects) is partial this wave (00417/00418 land the table
- * and the fold; the join queries are a later wave's work), so this row must
- * render gracefully with any subset of them present or absent.
+ * TWO WORD COLUMNS, NOT THREE (R-G). A firm has no reach and no consent — no
+ * door is minted onto a company and a company cannot agree to a text message —
+ * so the row carries its paper word and its payee marker, and nothing else.
+ *
+ * R-A / C13 / C18: a firm whose only people are inspectors or lenders never
+ * owed the studio paper. The caller passes `paperState: null` and the row
+ * prints NO paper word at all — never "Not on file", never blocked — and no
+ * payee marker either. The word "Not on file" implies an obligation that was
+ * never the studio's to collect.
  */
 
-import { Avatar, companyKindBadgeStyle } from '../person-bits';
-import { StateWord } from '../state-word';
+import { Avatar } from '../person-bits';
+import { StateWord, PlainFact } from '../state-word';
 
 /**
- * A company's OWN kind vocabulary (studio_contacts.contact_kind on an
- * entity_kind='company' row) — deliberately DISTINCT from a person's PartyKind
- * (gc/sub/installer/…): a company card names what KIND OF FIRM it is, not a
- * role on a project. Free TEXT (00417, no CHECK) — an unrecognized value falls
- * back to a prettified raw string via companyKindLabel, never rendering raw
- * snake_case.
+ * A company's OWN kind vocabulary (`studio_contacts.contact_kind` on an
+ * `entity_kind='company'` row) — deliberately DISTINCT from a person's
+ * PartyKind: a firm card names what KIND OF FIRM it is, not a role on a
+ * project. Free TEXT (00417, no CHECK), so an unrecognized value prettifies
+ * rather than printing raw snake_case. Read by the rolodex seed sheet and the
+ * picker's mini row as well as by this one.
  */
 const COMPANY_KIND_LABELS: Record<string, string> = {
   gc: 'GC firm',
@@ -39,8 +35,6 @@ const COMPANY_KIND_LABELS: Record<string, string> = {
   supplier: 'Supplier',
 };
 
-/** Display label for a company kind; falls back to a prettified raw value —
- *  the same posture as @patina/types' getFieldTradeLabel / getPartyKindLabel. */
 export function companyKindLabel(kind: string | null | undefined): string {
   if (!kind) return 'Company';
   return (
@@ -50,90 +44,53 @@ export function companyKindLabel(kind: string | null | undefined): string {
 }
 
 export interface CompanyRowProps {
+  /** The firm's card id — the `?firm=` the row opens. */
+  firmId: string;
   name: string;
-  /** studio_contacts.contact_kind — free text, labeled via companyKindLabel. */
+  /** The firm's own kind vocabulary (`company_kind` / `contact_kind`). */
   kind: string;
-  /** People at this company. Undefined/0 omits the count rather than
-   *  claiming "0 people" for a card the plumbing hasn't wired yet. */
-  companyPeopleCount?: number | null;
-  projectsCount?: number | null;
-  lastProjectName?: string | null;
+  /** "GC · 3 on the crew · 2 open jobs" — composed by `firmIdentityLine`. */
+  line: string;
   /**
-   * The firm's paper word (`compliance_state` / `paper_state`). R-G: a company
-   * row carries two word columns — paper and the payee marker — and no reach
-   * or consent word, because a firm has neither.
-   *
-   * R-A / C13: a firm whose only people are inspectors or lenders never owed
-   * the studio paper, so the CALLER passes `null` and the row prints no paper
-   * word at all. Never "Not on file", never blocked.
+   * The firm's paper word. `null` where none is owed (R-A) — `StateWord` then
+   * prints nothing, which is the whole rule.
    */
   paperState?: string | null;
-  onOpen?: () => void;
+  /** "Signs: Tom Marrow" — plain and uncoloured; a designation is not a state. */
+  payeeMarker?: string | null;
+  onOpen: () => void;
 }
 
 export function CompanyRow({
+  firmId,
   name,
   kind,
-  companyPeopleCount,
-  projectsCount,
-  lastProjectName,
+  line,
   paperState,
+  payeeMarker,
   onOpen,
 }: CompanyRowProps) {
-  const bits: string[] = [];
-  if (companyPeopleCount != null && companyPeopleCount > 0) {
-    bits.push(`${companyPeopleCount} ${companyPeopleCount === 1 ? 'person' : 'people'}`);
-  }
-  if (projectsCount != null && projectsCount > 0) {
-    bits.push(`${projectsCount} ${projectsCount === 1 ? 'project' : 'projects'}`);
-  }
-  if (lastProjectName) bits.push(`last: ${lastProjectName}`);
-  const line = bits.length > 0 ? bits.join(' · ') : 'Not yet on a project';
-  const { color: kindColor, border: kindBorder } = companyKindBadgeStyle(kind);
-
-  const body = (
-    <>
-      <Avatar name={name} role={kind} shape="square" />
-      <span className="min-w-0 flex-1">
-        <span className="flex items-center gap-2.5">
-          <span className="truncate text-[0.92rem] font-semibold text-[var(--color-charcoal)]">
-            {name}
-          </span>
-          <span
-            className="t-meta shrink-0 rounded-[3px] border px-2 py-[2px] font-medium uppercase"
-            style={{ color: kindColor, borderColor: kindBorder }}
-          >
-            {companyKindLabel(kind)}
-          </span>
-        </span>
-        <span className="mt-[0.15rem] block truncate text-[0.7rem] text-[var(--color-aged-oak)]">
-          {line}
-        </span>
-      </span>
-      {/* NO consent or reach word — a firm has neither (SPEC §5.3 #9). The
-          paper word is the firm's own state, and `StateWord` prints nothing
-          for a null (R-A's lender/inspector exemption arrives as a null). */}
-      <StateWord family="paper" value={paperState} />
-      <span aria-hidden className="shrink-0 text-[0.8rem] text-[var(--color-aged-oak)]">
-        ›
-      </span>
-    </>
-  );
-
-  const shared =
-    'flex w-full items-center gap-3.5 rounded-[10px] border border-[var(--color-pearl)] bg-white px-3.5 py-3 text-left';
-
-  if (!onOpen) {
-    return <div className={shared}>{body}</div>;
-  }
-
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className={`${shared} transition-[border-color,background-color,transform] duration-300 hover:-translate-y-[2px] hover:border-[var(--color-clay)]`}
+    <li
+      data-company-row={firmId}
+      className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-[var(--hairline)] px-4 py-3"
     >
-      {body}
-    </button>
+      <Avatar name={name} role={kind} shape="square" />
+      <div className="min-w-0 flex-1 basis-[320px]">
+        <button
+          type="button"
+          data-open-firm={firmId}
+          onClick={onOpen}
+          className="min-h-11 text-left text-[14px] font-semibold leading-[1.4] text-[var(--ink)]"
+        >
+          {name}
+        </button>
+        <p className="t-meta text-[var(--ink-subtle)]">{line}</p>
+      </div>
+      <div className="flex shrink-0 items-center gap-3">
+        <StateWord family="paper" value={paperState} className="w-[108px]" />
+        {payeeMarker ? <PlainFact>{payeeMarker}</PlainFact> : null}
+      </div>
+    </li>
   );
 }

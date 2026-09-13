@@ -43,7 +43,6 @@ const proposalWatch = readComponent('proposal-watch.tsx');
 const library = readComponent('rooms/library/library-room.tsx');
 const people = readComponent('people/people-room.tsx');
 const profileShell = readComponent('people/profile/profile-shell.tsx');
-const personProfile = readComponent('people/views/person-profile.tsx');
 const makerProfile = readComponent('people/profile/maker-profile.tsx');
 const drafting = readComponent('rooms/drafting/drafting-room.tsx');
 const work = readComponent('work-block.tsx');
@@ -112,7 +111,11 @@ describe('I91 shared action grammar', () => {
     expect(profileShell).toContain(
       "variant={tone === 'dark' ? 'primary' : 'secondary'}",
     );
-    expect(personProfile.match(/tone="dark"/g) ?? []).toHaveLength(2);
+    // W2b — person-profile.tsx no longer renders a ProfileShell action row at
+    // all: the four role-branched documents collapsed into one person card
+    // whose acts are DocumentActions inside their own regions. MakerProfile is
+    // the one surviving branch, so its role-led primary is what this still
+    // pins.
     expect(makerProfile.match(/tone="dark"/g) ?? []).toHaveLength(1);
     expect(profileShell).toContain('regionKey="profile-actions"');
   });

@@ -64,7 +64,7 @@ describe('flag OFF — today’s sheet, unchanged', () => {
     fireEvent.change(screen.getByLabelText('Email'), {
       target: { value: 'dave@okonkwo.net' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Add to roster' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add to the roster' }));
     await waitFor(() => expect(mutateAsync).toHaveBeenCalled());
     expect(mutateAsync.mock.calls[0][0]).not.toHaveProperty('letter');
     expect(mutateAsync.mock.calls[0][0]).not.toHaveProperty('note');

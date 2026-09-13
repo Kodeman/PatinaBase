@@ -1,106 +1,173 @@
 'use client';
 
 /**
- * A directory row (Track A) — the prototype's `.prow`: a role-tinted avatar, the
- * name + role badge, a role-adaptive relationship line (terracotta when the tie
- * is "due"), the status dot, and the quiet chevron. Hover lifts the paper 2px
- * and warms the edge to clay. Zero shadows (D4); primitives come from
- * person-bits (never forked); the line + dot come from the directory derivation.
+ * A DIRECTORY PERSON ROW — a hairline ledger row, not a bordered card (PR-q).
  *
- * Wave 4 hardening: `person` can now arrive as any of the 12 PartyRole values
- * (00419's architect/photographer/stager, 00420's 'contact') and in either
- * scope ('mine' or a co-member's 'studio' row) — this row never branches on
- * role or scope itself; it renders whatever `deriveStatusDot` /
- * `deriveRelationshipLine` (people-derivation.ts) and `RoleBadge`
- * (person-bits.tsx, its own `BADGE` record) hand back, and those are the
- * functions kept total (no throw, no `undefined`) for every role/scope
- * combination. A role='contact' row never actually reaches this component in
- * the Directory today (directory-view.tsx filters it out before render — see
- * that module's doc) — this component stays safe for one anyway, since it's
- * one prop change away from being reachable again.
+ * The Directory is the studio's ledger and needs five columns, so it widens to
+ * the 1200 band and the row spans it. What the row carries, in order:
+ *
+ *    34px circle · identity (name, firm, trade) · the rule clause ·
+ *    reach / consent / paper · the phone · the seats disclosure
+ *
+ * THE ROW IS A CONTAINER, NEVER A BUTTON (C11, SPEC §7 #6). Inside it sit
+ * three sibling controls: an open-person `<button>` whose accessible name is
+ * the person's name and role summary ONLY, a separate `<a href="tel:">`, and a
+ * seats disclosure whose panel is a `<ul>` of focusable seat rows. An anchor
+ * cannot nest inside a button, and a run-on accessible name cannot be tabbed
+ * into.
+ *
+ * STAGE IS NEVER A PERSON-LEVEL COLUMN (PR-p / C1 / R-G). One human holds many
+ * seats with many stages; a single person-level stage is a fabrication the
+ * model does not claim. It prints on the seat line beneath, one line per seat.
+ *
+ * At 390 the three words print PLAIN and inline on line 2 of every row, folded
+ * or not (R-M / C23): a narrow row that hides consent and paper until unfold
+ * hides exactly the facts a studio scans fastest for.
  */
 
-import { useMemo } from 'react';
-import { isFieldRosterRole, type PeopleDirectoryRow } from '@patina/supabase';
-import { deriveRelationshipLine } from '@/lib/document/people-derivation';
-import { Avatar, ConsentChip, RoleBadge } from '../person-bits';
+import { useId, useState } from 'react';
+import { usePeopleSeats, type PeopleDirectorySeat } from '@patina/supabase';
+import {
+  contactRuleBlocks,
+  entryPaperWord,
+  personIdentityLine,
+  splitRoutedClause,
+  type DirectoryPerson,
+} from '@/lib/document/people-derivation';
+import { Avatar } from '../person-bits';
+import { StateWord } from '../state-word';
+import { TelLink } from '../tel-link';
+import { ContactRuleLine, type ContactRouteTarget } from '../contact-rule-line';
+import { SeatLine } from '../seat-line';
 
-/** The ROLODEX marker (slide 8's `.rolomark`) — a clay-bordered word saying
- *  the studio keeps this person, not just this job.
- *
- *  Redrawn at the SHARED 3px BOX (direction §4, house sheet §A: radius 2px or
- *  3px only, plus 50% for the person circle and 8px for the company square).
- *  The `rounded-[16px]` pill it shipped as was the room's only fully rounded
- *  control, and SPEC §8 #5 forbids one outright. */
-function RolodexMarker() {
-  return (
-    <span
-      data-rolodex-marker
-      className="inline-flex shrink-0 items-center rounded-[3px] border border-[var(--color-clay)] px-2 py-[1px] font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--color-mocha)]"
-    >
-      Rolodex
-    </span>
-  );
+/** What the open-person control says to a screen reader, and nothing more. */
+export function openPersonLabel(person: DirectoryPerson): string {
+  const line = personIdentityLine(person);
+  return line ? `${person.display_name}, ${line}` : person.display_name;
 }
 
 export function PersonRow({
   person,
-  now,
   onOpen,
+  onOpenSeat,
+  routeTargets,
   highlighted = false,
-  rolodexMarker = false,
 }: {
-  person: PeopleDirectoryRow;
-  now: Date;
+  person: DirectoryPerson;
   onOpen: () => void;
-  /** F4 — a quiet, temporary highlight for a deep-linked/returning-from-
-   *  profile row (the Room clears it on a timer). Border + tint only — no
-   *  ring/shadow (D4). */
+  /** A seat line is a door to the same card (R-AA) — never an inert button. */
+  onOpenSeat?: (seat: PeopleDirectorySeat) => void;
+  /** How to reach a person the rule routes to, by name (R-L). */
+  routeTargets?: ReadonlyMap<string, ContactRouteTarget>;
   highlighted?: boolean;
-  /** Call Sheet Wave 2 — this person is also a live card in the studio
-   *  rolodex. Callers gate this to `scope==='mine'` (slide 8's mnote: STUDIO
-   *  scope IS the rolodex, so the marker would say nothing new there). */
-  rolodexMarker?: boolean;
 }) {
-  const line = useMemo(() => deriveRelationshipLine(person, now), [person, now]);
+  const [seatsOpen, setSeatsOpen] = useState(false);
+  const seatsPanelId = useId();
+  const { data: seats } = usePeopleSeats({
+    personId: seatsOpen ? person.person_id : null,
+  });
+
+  const { rest, routedName } = splitRoutedClause(person.contact_rule_summary);
+  const routeTo = routedName
+    ? (routeTargets?.get(routedName.toLowerCase()) ?? { name: routedName })
+    : null;
+  const blocked = contactRuleBlocks(person.contact_rule_summary);
+  const paper = entryPaperWord(person);
+  const seatCount = person.seat_count ?? 0;
 
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className={`flex w-full items-center gap-3.5 rounded-[10px] border px-3.5 py-3 text-left transition-[border-color,background-color,transform] duration-300 hover:-translate-y-[2px] hover:border-[var(--color-clay)] ${
-        highlighted
-          ? 'border-[var(--color-clay)] bg-[rgba(196,165,123,0.09)]'
-          : 'border-[var(--color-pearl)] bg-white'
+    <li
+      data-person-row={person.person_id}
+      data-highlighted={highlighted ? 'true' : undefined}
+      className={`flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-[var(--hairline)] px-4 py-3 ${
+        highlighted ? 'bg-[var(--rail)]' : ''
       }`}
     >
       <Avatar name={person.display_name} role={person.role} />
-      <span className="min-w-0 flex-1">
-        <span className="flex items-center gap-2.5">
-          <span className="truncate text-[0.92rem] font-semibold text-[var(--color-charcoal)]">
-            {person.display_name}
-          </span>
-          <RoleBadge role={person.role} />
-        </span>
-        <span
-          className={`mt-[0.15rem] block truncate text-[0.7rem] ${
-            line.due
-              ? 'font-medium text-[var(--color-terracotta-ink)]'
-              : 'text-[var(--color-aged-oak)]'
-          }`}
+
+      <div className="min-w-0 flex-1 basis-[320px]">
+        <button
+          type="button"
+          data-open-person={person.person_id}
+          onClick={onOpen}
+          className="min-h-11 text-left text-[14px] font-semibold leading-[1.4] text-[var(--ink)]"
         >
-          {line.text}
-        </span>
-      </span>
-      {rolodexMarker && <RolodexMarker />}
-      {/* R-BE: the consent word comes off the view's own `consent_status`
-          column — NEVER `status_raw`, which on a v4 card row carries the
-          rolodex ARCHIVE state and reads `active` for someone the studio's
-          record says `opted_out`. A NULL prints nothing. */}
-      {isFieldRosterRole(person.role) && <ConsentChip status={person.consent_status} />}
-      <span aria-hidden className="shrink-0 text-[0.8rem] text-[var(--color-aged-oak)]">
-        ›
-      </span>
-    </button>
+          {person.display_name}
+        </button>
+        <p className="t-meta text-[var(--ink-subtle)]">
+          {personIdentityLine(person)}
+        </p>
+        <ContactRuleLine summary={rest} blocked={blocked} routeTo={routeTo} />
+
+        {/* 390 — line 2: reach · consent · paper, plain, on EVERY row (R-M). */}
+        <p
+          data-row-words-390
+          className="mt-1 flex flex-wrap items-center gap-x-2 sm:hidden"
+        >
+          <StateWord family="reach" value={person.reach_state} plain />
+          <span aria-hidden className="text-[var(--ink-faint)]">
+            ·
+          </span>
+          <StateWord family="consent" value={person.consent_status} plain />
+          {paper ? (
+            <>
+              <span aria-hidden className="text-[var(--ink-faint)]">
+                ·
+              </span>
+              <StateWord family="paper" value={paper} plain />
+            </>
+          ) : null}
+        </p>
+      </div>
+
+      {/* 1440 — three bordered word columns, in this order, and only three. */}
+      <div data-row-words className="hidden shrink-0 gap-3 sm:flex">
+        <StateWord family="reach" value={person.reach_state} className="w-[108px]" />
+        <StateWord
+          family="consent"
+          value={person.consent_status}
+          className="w-[108px]"
+        />
+        {paper ? (
+          <StateWord family="paper" value={paper} className="w-[108px]" />
+        ) : null}
+      </div>
+
+      {/* Its own control, 8px clear of the row's own (SPEC §5.1 #15). */}
+      <TelLink phone={person.phone} personName={person.display_name} />
+
+      {seatCount > 0 && (
+        <button
+          type="button"
+          data-seats-disclosure={person.person_id}
+          aria-expanded={seatsOpen}
+          aria-controls={seatsPanelId}
+          onClick={() => setSeatsOpen((open) => !open)}
+          className="t-meta min-h-11 shrink-0 text-[var(--ink-faint)]"
+        >
+          {seatCount} {seatCount === 1 ? 'seat' : 'seats'}
+        </button>
+      )}
+
+      <ul
+        id={seatsPanelId}
+        hidden={!seatsOpen}
+        className="m-0 w-full list-none border-t border-[var(--hairline)] p-0 pl-[50px]"
+      >
+        {(seats ?? []).map((seat) => (
+          <li key={seat.seat_id}>
+            <SeatLine
+              seat={seat}
+              onOpen={(s) => (onOpenSeat ? onOpenSeat(s) : onOpen())}
+            />
+          </li>
+        ))}
+        {seatsOpen && (seats ?? []).length === 0 && (
+          <li className="t-body-sm py-2 text-[var(--ink-subtle)]">
+            No open seat on this project.
+          </li>
+        )}
+      </ul>
+    </li>
   );
 }
