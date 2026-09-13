@@ -926,3 +926,20 @@ END $$;
 -- is a rolodex FIRM card here rather than a `vendors` row, so nothing is
 -- duplicated — which is the answer the redesign gives that question.
 -- ═══════════════════════════════════════════════════════════════════════════
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- THE STUDIO SIDE OF THE CALL SHEET (QA-6).
+--
+-- `project_team_members` held ZERO rows for every project in this seed, so the
+-- Call Sheet's "Studio side" band had nothing to print and Leah task 6 — "who
+-- is on this job, by role" — could not be answered on the studio's own half.
+-- The sheet now says so in words when the band is empty (R-V), and this gives
+-- the Okonkwo fixture a real studio side to read.
+-- ═══════════════════════════════════════════════════════════════════════════
+INSERT INTO public.project_team_members (project_id, user_id, role, assigned_by)
+VALUES
+  ('d0e00000-0000-0000-0000-00000000000a', 'a0000000-0000-0000-0000-000000000004',
+   'lead_designer',    'a0000000-0000-0000-0000-000000000004'),
+  ('d0e00000-0000-0000-0000-00000000000a', 'a0000000-0000-0000-0000-000000000003',
+   'support_designer', 'a0000000-0000-0000-0000-000000000004')
+ON CONFLICT (project_id, user_id, role) DO NOTHING;

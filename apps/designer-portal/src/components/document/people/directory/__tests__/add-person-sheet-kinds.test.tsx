@@ -49,6 +49,13 @@ jest.mock("@patina/supabase", () => ({
   peopleSeatKeys: { all: ["people-directory-seats"] },
 }));
 
+// R-J's first branch reads the project's standing grants; the sheet asks for
+// them through the Call Sheet's own hook (CR-16).
+jest.mock("../../../roster/use-project-authority", () => ({
+  useProjectAuthority: () => ({ data: {} }),
+  projectAuthorityKeys: { project: () => [] },
+}));
+
 jest.mock("@/hooks/use-projects", () => ({
   useProjects: () => ({
     data: [
@@ -183,7 +190,10 @@ describe("a sub", () => {
         subjectType: "person",
         subjectId: "card-new",
         reason: "Text only. The email on file bounces.",
-        channelsForbidden: ["email"],
+        // CR-21: NOTHING is inferred from an empty box. "Text only. The email
+        // on file bounces." typed beside a blank Email field used to write a
+        // rule FORBIDDING email — which is what every send gate then read.
+        channelsForbidden: [],
       }),
     );
   });
@@ -204,19 +214,28 @@ describe("a sub", () => {
     );
   });
 
-  it("R-J — says plainly that nothing defaulted from the agreement", () => {
+  it("R-J — says plainly that nothing defaulted, and offers the act (CR-16)", () => {
     expect(
       screen.getByText("Nothing defaulted from the agreement."),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Record the authority" }),
+    ).toBeInTheDocument();
   });
 
-  it("an invite is an invite, and the sheet says so", () => {
+  it("says what actually happens — nothing is sent from here (CR-4)", () => {
     fireEvent.click(
       screen.getByLabelText(/They gave prior express consent for text updates/),
     );
+    // R-AS took both halves off the seat INSERT, so `fc_optin_invite_dispatch`
+    // no longer fires. Telling the studio to wait for a YES to a message
+    // Patina never sent is a consent-adjacent falsehood.
     expect(
-      screen.getByText(/is invited, not consenting, until they reply YES/),
+      screen.getByText(/Patina has not sent them anything yet\./),
     ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/until they reply YES/),
+    ).not.toBeInTheDocument();
   });
 });
 

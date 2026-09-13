@@ -266,17 +266,36 @@ describe('callSheetProjection — six bands', () => {
 });
 
 describe('the vitals count the window', () => {
-  it('counts this week first, then the three reach facts', () => {
-    const v = callSheetVitals(project());
-    expect(v.onTheJobThisWeek).toBe(1);
+  // CR-9 / SPEC §5.4 #3: ALL FOUR numbers close over ONE population — the
+  // studio side, the client side and who is on the job this week. Before the
+  // fix only the first was scoped and the other three counted every band,
+  // `later`, `bidding` and `done` included, so "2 on paper" read as a dozen.
+  // This fixture: studio 2 + client 1 + this week 1 = 4.
+  it('counts one population, four ways', () => {
+    const p = project();
+    expect(
+      p.bands.studioSide.length + p.bands.clientSide.length + p.bands.this_week.length,
+    ).toBe(4);
+    const v = callSheetVitals(p);
+    expect(v.onTheJobThisWeek).toBe(4);
     expect(v.textable).toBe(2);
     expect(v.withAccounts).toBe(2);
-    expect(v.onPaper).toBe(4);
+    expect(v.onPaper).toBe(1);
+  });
+
+  it('never counts a band the line does not name', () => {
+    const p = project();
+    // `later`, `bidding` and `done` carry rows in this fixture and none of
+    // them may reach any of the four numbers.
+    expect(p.bands.later.length + p.bands.bidding.length + p.bands.done.length).toBeGreaterThan(0);
+    expect(callSheetVitals(p).onPaper).toBeLessThan(
+      p.rows.filter((r) => r.reach === 'on_paper').length,
+    );
   });
 
   it('prints all four counts in the room own words', () => {
     expect(callSheetVitalsLine(project())).toBe(
-      '1 on the job this week · 2 reachable by text · 2 with accounts · 4 on paper',
+      '4 on the job this week · 2 reachable by text · 2 with accounts · 1 on paper',
     );
   });
 });

@@ -542,6 +542,7 @@ export type {
 // People room CRM (W2a) — consent lives on the RECORD, never on a seat.
 export {
   useChannelConsent,
+  useChannelConsentRecords,
   useRecordChannelConsent,
   useRecordChannelInvite,
   useRecordChannelReconsent,
@@ -2118,6 +2119,7 @@ export type {
 // affiliations (E4) and compliance documents (E10), all on the rolodex card.
 export {
   useStudioContactChannels,
+  useStudioContactChannelsFor,
   useAddStudioContactChannel,
   useUpdateStudioContactChannel,
   useSetStudioContactChannelStatus,
@@ -2129,6 +2131,7 @@ export {
   COMPANY_CHANNEL_KINDS,
   ALL_CONTACT_CHANNEL_STATUSES,
   useContactRule,
+  useContactRules,
   useSetContactRule,
   useClearContactRule,
   contactRuleKeys,

@@ -330,9 +330,9 @@ export function PeopleCompactSelector({
 export function ViewHeader({ title, sub }: { title: string; sub?: string }) {
   return (
     <div className="mb-5">
-      <h1 className="font-heading text-[1.6rem] font-medium leading-tight text-[var(--color-charcoal)]">
+      <h2 className="font-heading text-[1.6rem] font-medium leading-tight text-[var(--color-charcoal)]">
         {title}
-      </h1>
+      </h2>
       {sub && <p className="doc-type-body mt-1">{sub}</p>}
     </div>
   );

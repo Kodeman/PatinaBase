@@ -47,6 +47,11 @@ jest.mock('@patina/supabase', () => {
     AUTHORITY_SCOPE_LABELS: {},
     COMPLIANCE_DOC_TYPE_LABELS: {},
     SEAT_DELETE_REFUSAL_SENTENCES: { consent: '', bid: '', waiver: '', unknown: '' },
+    // W2 r1: the sheet reads the rule ROWS and the routed people's channels,
+    // so one predicate and one clause serve every face (CR-5/6/14/15/22).
+    useContactRules: () => ({ data: [] }),
+    useStudioContactChannelsFor: () => ({ data: [] }),
+    useStudioContacts: () => ({ data: [] }),
     seatDeleteRefusal: () => null,
   };
 });

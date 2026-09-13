@@ -24,6 +24,7 @@ const consentData: { current: Record<string, unknown> | null } = {
   current: null,
 };
 const recordConsent = jest.fn();
+const recordReconsent = jest.fn();
 const mintLink = jest.fn();
 
 jest.mock("@patina/supabase", () => ({
@@ -32,6 +33,8 @@ jest.mock("@patina/supabase", () => ({
   useAccessGrants: () => ({ data: grantsData.current }),
   useChannelConsent: () => ({ data: consentData.current }),
   useRecordChannelConsent: () => ({ mutate: recordConsent, isPending: false }),
+  // PR-m / CR-25 — the way back from a refusal the studio may record itself.
+  useRecordChannelReconsent: () => ({ mutate: recordReconsent, isPending: false }),
   useSetContactRule: () => ({ mutate: jest.fn(), isPending: false }),
   useCreateFieldLink: () => ({ mutate: mintLink, isPending: false }),
   useRevokeAccessGrant: () => ({ mutate: jest.fn(), isPending: false }),

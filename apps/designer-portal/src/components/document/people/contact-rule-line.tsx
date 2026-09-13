@@ -15,11 +15,12 @@
  * person card, company card crew line — and the routed line is appended only
  * when a route exists.
  *
- * R-L / C22: the routed line carries a WAY TO REACH the routed person. One
- * channel-selection rule, used everywhere a channel is chosen for display:
- * email if present, then the office phone tel-linked. NEVER a bare phone
- * string — a routing instruction with no channel attached sends the reader
- * nowhere.
+ * R-L / C22: the routed line carries a WAY TO REACH the routed person — her
+ * email AND her office phone as a `tel:` link, both, wherever the studio holds
+ * both (SPEC §5.1 #10, §5.4 #12). An either/or printed one channel and hid the
+ * other on every face. NEVER a bare phone string — a routing instruction with
+ * no channel attached sends the reader nowhere, and one with an unlinked
+ * number makes a superintendent retype it standing on site.
  */
 
 import { TelLink } from './tel-link';
@@ -65,6 +66,12 @@ export function ContactRuleLine({
   // prints no clause at all.
   if (!text && !routeTo) return null;
 
+  // The studio's own sentence often already says where to write ("Write Rosa
+  // Delgado; she forwards what he has to sign."). Repeating the canonical
+  // routed sentence after it is house voice talking over the studio.
+  const alreadyRouted =
+    !!routeTo && !!text && text.includes(`Write ${routeTo.name}`);
+
   return (
     <p
       data-contact-rule
@@ -80,21 +87,21 @@ export function ContactRuleLine({
         <>
           {text ? ' ' : null}
           <span data-contact-rule-route>
-            {routedSentence(routeTo.name)}
+            {alreadyRouted ? null : routedSentence(routeTo.name)}
             {routeTo.email ? (
               <>
                 {' '}
                 <a
+                  data-contact-rule-route-email
                   href={`mailto:${routeTo.email}`}
                   className="underline decoration-[var(--color-clay)] underline-offset-[3px]"
                 >
                   {routeTo.email}
                 </a>
               </>
-            ) : routeTo.officePhone ? (
-              // R-L's order: email if present, THEN the office phone, tel-linked.
-              // The phone is only reached when there is no email, so a routed
-              // person is never shown two channels and never shown none.
+            ) : null}
+            {routeTo.officePhone ? (
+              // BOTH, where the studio holds both (SPEC §5.1 #10 / §5.4 #12).
               <>
                 {' '}
                 {/* Still its own 44px control (SPEC §5.1 #15): a routed phone

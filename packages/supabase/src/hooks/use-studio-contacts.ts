@@ -660,6 +660,9 @@ export const studioChannelKeys = {
   all: ['studio-contact-channels'] as const,
   list: (ownerId: string | null | undefined) =>
     ['studio-contact-channels', ownerId ?? null] as const,
+  /** Several cards at once — the routed-contact line reads this (R-L). */
+  owners: (ownerIds: readonly string[]) =>
+    ['studio-contact-channels', 'owners', [...ownerIds].sort().join(',')] as const,
 };
 
 /** Every channel on one card, preferred first, then by kind. */
@@ -685,11 +688,39 @@ export function useStudioContactChannels(ownerId: string | null | undefined) {
   });
 }
 
+/**
+ * The channels on SEVERAL cards at once, keyed by owner. The Directory needs
+ * this for one thing only: a rule that routes to somebody must print a WAY TO
+ * REACH them (R-L / C22), and R-L names the typed `office` channel — not
+ * `studio_contacts.phone`, which is whatever was typed into the card first.
+ */
+export function useStudioContactChannelsFor(ownerIds: readonly string[]) {
+  const ids = [...new Set(ownerIds.filter(Boolean))].sort();
+  return useQuery({
+    queryKey: studioChannelKeys.owners(ids),
+    enabled: ids.length > 0,
+    queryFn: async (): Promise<StudioContactChannel[]> => {
+      if (ids.length === 0) return [];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase
+        .from('studio_contact_channels')
+        .select('*')
+        .in('owner_id', ids);
+      if (error) throw error;
+      return (data ?? []) as StudioContactChannel[];
+    },
+  });
+}
+
 function invalidateChannelFanout(
   queryClient: ReturnType<typeof useQueryClient>,
   ownerId: string,
 ) {
   void queryClient.invalidateQueries({ queryKey: studioChannelKeys.list(ownerId) });
+  // `studioChannelKeys.owners(...)` is a sibling, not a descendant, of
+  // `.list(ownerId)` — the root reaches both.
+  void queryClient.invalidateQueries({ queryKey: studioChannelKeys.all });
   void queryClient.invalidateQueries({ queryKey: studioContactKeys.detail(ownerId) });
   // A channel is what the Directory row's reach word and `tel:` link read.
   void queryClient.invalidateQueries({ queryKey: peopleKeys.all });
@@ -867,14 +898,36 @@ export function useContactRule(
   });
 }
 
+/**
+ * EVERY rule the studio can read, in one query.
+ *
+ * CR-5 / CR-6 / CR-22: the faces used to print `contact_rule_summary()` — a
+ * mechanical clause list in raw `channel_kind` tokens, with the studio's own
+ * typed sentence nowhere in it — and decided the hard block by running a regex
+ * over that prose. `channels_forbidden`, `channels_allowed`, `reason` and
+ * `route_to_person_id` are the ground truth, and a list read is what lets a
+ * ledger of forty rows use them without forty queries.
+ */
+export function useContactRules() {
+  return useQuery({
+    queryKey: [...contactRuleKeys.all, 'list'] as const,
+    queryFn: async (): Promise<StudioContactRule[]> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase.from('studio_contact_rules').select('*');
+      if (error) throw error;
+      return (data ?? []) as StudioContactRule[];
+    },
+  });
+}
+
 function invalidateRuleFanout(
   queryClient: ReturnType<typeof useQueryClient>,
-  subjectType: ContactRuleSubjectType,
   subjectId: string,
 ) {
-  void queryClient.invalidateQueries({
-    queryKey: contactRuleKeys.detail(subjectType, subjectId),
-  });
+  // The root, not the detail: `useContactRules`' list key is a sibling of the
+  // detail key, and every face now reads the list.
+  void queryClient.invalidateQueries({ queryKey: contactRuleKeys.all });
   // The rule prints as a clause on the Directory row, the roster row, the
   // person card and the company card's crew line (R-S), all of which read
   // `contact_rule_summary` off the two directory views.
@@ -912,7 +965,7 @@ export function useSetContactRule() {
       return data as StudioContactRule;
     },
     onSuccess: (_data, input) =>
-      invalidateRuleFanout(queryClient, input.subjectType, input.subjectId),
+      invalidateRuleFanout(queryClient, input.subjectId),
   });
 }
 
@@ -936,7 +989,7 @@ export function useClearContactRule() {
       return input;
     },
     onSuccess: (_data, input) =>
-      invalidateRuleFanout(queryClient, input.subjectType, input.subjectId),
+      invalidateRuleFanout(queryClient, input.subjectId),
   });
 }
 
@@ -1030,24 +1083,44 @@ export function useSetAffiliation() {
     mutationFn: async (input: SetAffiliationInput): Promise<StudioPersonAffiliation> => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
-      const { data, error } = await supabase
+      // CR-2: `studio_person_affiliations`' only unique index is PARTIAL
+      // (`00592:316-318`, `WHERE to_date IS NULL`), and PostgREST cannot emit
+      // the index predicate an ON CONFLICT arbiter needs — an `.upsert()` here
+      // raises 42P10 every time. Check then write.
+      const row = {
+        person_id: input.personId,
+        company_id: input.companyId,
+        role_at_firm: input.roleAtFirm?.trim() || null,
+        is_paperwork_contact: input.isPaperworkContact ?? false,
+        is_signer: input.isSigner ?? false,
+        holds_trade_license: input.holdsTradeLicense ?? false,
+        from_date: input.fromDate ?? null,
+      };
+
+      const { data: standing, error: readError } = await supabase
         .from('studio_person_affiliations')
-        .upsert(
-          {
-            person_id: input.personId,
-            company_id: input.companyId,
-            role_at_firm: input.roleAtFirm?.trim() || null,
-            is_paperwork_contact: input.isPaperworkContact ?? false,
-            is_signer: input.isSigner ?? false,
-            holds_trade_license: input.holdsTradeLicense ?? false,
-            from_date: input.fromDate ?? null,
-          },
-          { onConflict: 'person_id,company_id' },
-        )
-        .select('*')
-        .single();
-      if (error) throw error;
-      return data as StudioPersonAffiliation;
+        .select('id')
+        .eq('person_id', input.personId)
+        .eq('company_id', input.companyId)
+        .is('to_date', null)
+        .maybeSingle();
+      if (readError) throw readError;
+
+      const written = standing?.id
+        ? await supabase
+            .from('studio_person_affiliations')
+            .update(row)
+            .eq('id', standing.id)
+            .select('*')
+            .single()
+        : await supabase
+            .from('studio_person_affiliations')
+            .insert(row)
+            .select('*')
+            .single();
+
+      if (written.error) throw written.error;
+      return written.data as StudioPersonAffiliation;
     },
     onSuccess: (_data, input) =>
       invalidateAffiliationFanout(queryClient, input.personId, input.companyId),

@@ -12,6 +12,9 @@ const logToldMutate = jest.fn();
 let card: unknown = null;
 
 jest.mock('@patina/supabase', () => ({
+  useContactRules: () => ({ data: [] }),
+  useStudioContactChannelsFor: () => ({ data: [] }),
+  useStudioContacts: () => ({ data: [] }),
   useSiteAccessCard: () => ({ data: card, isLoading: false }),
   useUpdateSiteAccessCard: () => ({ mutateAsync: updateMutate, isPending: false }),
   useLogSiteAccessTold: () => ({ mutateAsync: logToldMutate, isPending: false }),
@@ -168,8 +171,12 @@ describe('SiteAccessCard — the six regions', () => {
 
   it('prints the way in with no code and names who to ask (PR-r)', () => {
     render(<SiteAccessCard {...props} />);
+    // CR-10 / SPEC §5.6 #3: the person to ASK is the GATE CONTROLLER — Luis
+    // Ochoa, the superintendent — not Ngozi Eze, who holds the key. The
+    // fallback order was inverted, so the card sent the reader to somebody who
+    // does not control the code.
     expect(document.querySelector('[data-way-in]')).toHaveTextContent(
-      'Lockbox, version 3. The code is held off Patina; ask Ngozi Eze.',
+      'Lockbox, version 3. The code is held off Patina; ask Luis Ochoa.',
     );
     expect(screen.getByText('Luis Ochoa controls the gate.')).toBeInTheDocument();
   });

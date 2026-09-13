@@ -617,9 +617,9 @@ export function PieceRoom({ productId }: { productId: string }) {
               )}
             </div>
 
-            <h1 className="mt-3 font-heading text-[2rem] leading-tight text-[var(--color-charcoal)]">
+            <h2 className="mt-3 font-heading text-[2rem] leading-tight text-[var(--color-charcoal)]">
               {p.name}
-            </h1>
+            </h2>
             {p.brand && (
               <p className="mt-0.5 font-heading text-[1.05rem] italic text-[var(--color-aged-oak)]">
                 {p.brand}

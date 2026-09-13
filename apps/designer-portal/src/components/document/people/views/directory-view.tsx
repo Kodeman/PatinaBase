@@ -27,7 +27,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
+  useChannelConsentRecords,
+  useContactRules,
   usePeopleDirectory,
+  useStudioContactChannelsFor,
   useStudioContacts,
   type PartyRole,
   type PeopleDirectorySeat,
@@ -53,6 +56,13 @@ import {
   firmIdentityLine,
   type DirectoryPerson,
 } from "@/lib/document/people-derivation";
+import {
+  contactRouteTarget,
+  indexChannelsByOwner,
+  indexContactRules,
+} from "@/lib/document/contact-rule";
+import { consentSentenceForRecord } from "../consent-sentence";
+import { useProjects } from "@/hooks/use-projects";
 import { peopleEvents } from "@/lib/analytics/people-events";
 import { EmptyTeach } from "../view-shell";
 import { PersonRow } from "../directory/person-row";
@@ -183,7 +193,8 @@ export function DirectoryView({
     return markers;
   }, [contacts]);
 
-  /** How to reach a person a rule routes to, keyed by their name (R-L). */
+  /** How to reach a person a rule routes to, keyed by their name (R-L). Kept
+   *  as the fallback for a row whose rule row has not loaded. */
   const routeTargets = useMemo(() => {
     const targets = new Map<string, ContactRouteTarget>();
     for (const c of contacts ?? []) {
@@ -197,6 +208,72 @@ export function DirectoryView({
     return targets;
   }, [contacts]);
 
+  // ── The rule ROW is the ground truth (CR-5 / CR-6 / CR-22) ───────────────
+  const { data: rules } = useContactRules();
+  const ruleIndex = useMemo(() => indexContactRules(rules), [rules]);
+
+  /** Only the people a rule actually routes to need their channels read. */
+  const routedPersonIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const rule of rules ?? []) {
+      if (rule.route_to_person_id) ids.add(rule.route_to_person_id);
+    }
+    return [...ids];
+  }, [rules]);
+  const { data: routedChannels } = useStudioContactChannelsFor(routedPersonIds);
+  const channelsByOwner = useMemo(
+    () => indexChannelsByOwner(routedChannels),
+    [routedChannels],
+  );
+
+  const peopleById = useMemo(() => {
+    const index = new Map<
+      string,
+      { id: string; name: string; email: string | null; phone: string | null }
+    >();
+    for (const c of contacts ?? []) {
+      if (c.entity_kind !== "person" || !c.full_name) continue;
+      index.set(c.id, {
+        id: c.id,
+        name: c.full_name,
+        email: c.email,
+        phone: c.phone,
+      });
+    }
+    return index;
+  }, [contacts]);
+
+  // ── The clause behind the consent word (CR-13, SPEC §5.1 #9) ─────────────
+  const { data: consentRecords } = useChannelConsentRecords(
+    organizationId ?? null,
+    "sms",
+  );
+  const { data: projects } = useProjects();
+  const consentClauses = useMemo(() => {
+    const byValue = new Map(
+      (consentRecords ?? []).map((record) => [record.channel_value, record]),
+    );
+    const projectNames = new Map(
+      ((projects ?? []) as Array<{ id: string; name?: string | null }>).map(
+        (p) => [p.id, p.name ?? null] as const,
+      ),
+    );
+    const clauses = new Map<string, string>();
+    for (const c of contacts ?? []) {
+      if (!c.phone_e164) continue;
+      const record = byValue.get(c.phone_e164);
+      if (!record) continue;
+      const sentence = consentSentenceForRecord(
+        record,
+        record.origin_project_id
+          ? (projectNames.get(record.origin_project_id) ?? null)
+          : null,
+      );
+      if (sentence) clauses.set(c.id, sentence);
+    }
+    return clauses;
+  }, [consentRecords, contacts, projects]);
+
   const narrowed = useMemo(() => {
     const admitted = rows.filter((row) => {
       if (
@@ -208,9 +285,16 @@ export function DirectoryView({
       if (trade !== "all" && directoryTradeOf(row) !== trade) return false;
       return true;
     });
+    // PR-g: a firm is ADMITTED under the band of the crew it carries, and must
+    // SORT there too (CR-17). `directoryBandOf` answers "firms" for every firm,
+    // which sank all 21 of them to the bottom of Everyone.
+    const sortBand = (row: DirectoryPerson) =>
+      directoryEntryKind(row) === "firm"
+        ? (firmBands.get(row.person_id) ?? directoryBandOf(row))
+        : directoryBandOf(row);
     return admitted.sort((a, b) => {
-      const bandA = BAND_ORDER[directoryBandOf(a)];
-      const bandB = BAND_ORDER[directoryBandOf(b)];
+      const bandA = BAND_ORDER[sortBand(a)];
+      const bandB = BAND_ORDER[sortBand(b)];
       if (bandA !== bandB) return bandA - bandB;
       const kindA = directoryEntryKind(a) === "firm" ? 1 : 0;
       const kindB = directoryEntryKind(b) === "firm" ? 1 : 0;
@@ -398,6 +482,13 @@ export function DirectoryView({
                 key={`person:${row.person_id}`}
                 person={row}
                 highlighted={row.person_id === highlightPersonId}
+                rule={ruleIndex.get(row.person_id) ?? null}
+                routeTo={contactRouteTarget(
+                  ruleIndex.get(row.person_id),
+                  peopleById,
+                  channelsByOwner,
+                )}
+                consentClause={consentClauses.get(row.person_id) ?? null}
                 routeTargets={routeTargets}
                 onOpenSeat={onOpenSeat}
                 onOpen={() => openPerson(row.person_id, row.role)}
