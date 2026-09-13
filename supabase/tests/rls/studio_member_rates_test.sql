@@ -43,6 +43,17 @@
 --       dates — or leave NO open row at all, after which every new hour resolves
 --       'none' and prints "rate pending" until somebody inserts again. Case (g)
 --       could not catch it: it never supplies the column.
+--   (l) W2-R8-01 / HT-3-e(4) (review round 8): the one column this guard leaves
+--       writable is the NUMBER, and studio_member_rates_admin_update admits any
+--       owner/admin of the studio including the rate's own SUBJECT — so an
+--       admin-designer rewrote her studio OWNER's open row 25000 → 99900 in place
+--       with created_by untouched, and HT-3-e(2), which prices on authorship, read
+--       the row as arm's-length (measured end to end: 99900 / studio_member /
+--       199800 on a 120-minute hour). Authorship now records whoever set the
+--       number that is there. Cases (a2)/(b2)/(h6)/(j) could not catch it: every
+--       one of them updates as an actor who is ALREADY the recorded author, or
+--       updates a row whose subject is somebody else. The pricing half is
+--       time_rate_resolution_test case (ah).
 --   (j4)/(j5) W1-R5-01 (review round 5): created_by stays writable on the open row
 --       for (j)'s blur-save, but it is AUTHORSHIP and 00599's authorization key, so
 --       an UPDATE that stamps a THIRD party's id is refused. Unchecked, the owner of
@@ -646,6 +657,133 @@ BEGIN
     'FAIL k5: exactly one open row must survive the legitimate backdated write, found ' || v_open;
 
   RAISE NOTICE 'studio_member_rates: case (k) passed.';
+END
+$$;
+
+-- ─── (l) the NUMBER is authored too (W2-R8-01 / HT-3-e(4), review round 8) ───
+-- HT-3-e(2) prices a rate row on WHO AUTHORED IT. This guard freezes a rate row's
+-- identity and dates and lets an actor re-stamp created_by only with her own id —
+-- but the NUMBER stays writable on the open row, on purpose (the settings page
+-- saves on blur; (a2)/(b2)/(h6) assert that), and the UPDATE policy admits every
+-- owner/admin of the studio, the rate's own SUBJECT included. Round 8 measured what
+-- that combination buys: an admin-designer rewrote her employer OWNER's open row
+-- from 25000 to 99900 with created_by untouched, so the row she now controlled was
+-- arm's-length by BOTH of HT-3-e's tests and her 120-minute hour came back
+-- 99900 / studio_member / 199800 — ONE account, two statements, no ownership
+-- transfer, no confederate. `authenticated` holds UPDATE on this table, so that is
+-- a PostgREST PATCH and not a psql-only fact. It was also a visibility regression:
+-- her number carried the OWNER's id as its author.
+-- The arms below are the guard's whole contract on the number:
+--   l1  the subject rewrites her own open row          → allowed, RE-AUTHORED to her
+--   l2  an UPDATE that does not move the number        → authorship STANDS
+--   l3  a forge AND a rate change together             → still RAISES (j4's rule
+--       is not softened into a silent correction), and nothing moves
+--   l4  an honest studio corrects a COLLEAGUE's number → authored by the corrector,
+--       i.e. arm's-length is preserved for the shape HT-3 rules for
+DO $$
+DECLARE
+  v_rate         INTEGER;
+  v_author       uuid;
+  v_forge_raised BOOLEAN := false;
+BEGIN
+  -- The OWNER prices the ADMIN, today, properly.
+  PERFORM pg_temp.assume_user('c2200000-0000-4000-8000-000000000001');
+  INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
+  VALUES ('c2200000-0000-4000-8000-0000000000a1', 'c2200000-0000-4000-8000-000000000002',
+          25000, CURRENT_DATE, 'c2200000-0000-4000-8000-000000000001');
+  PERFORM pg_temp.reset_role();
+
+  -- ── l1: SHE rewrites it. The write is allowed (W1's capability, (b2)); what
+  --    must change is the RECORD of who set the number.
+  PERFORM pg_temp.assume_user('c2200000-0000-4000-8000-000000000002');
+  UPDATE public.studio_member_rates SET hourly_rate_cents = 99900
+   WHERE studio_id = 'c2200000-0000-4000-8000-0000000000a1'
+     AND user_id   = 'c2200000-0000-4000-8000-000000000002'
+     AND effective_to IS NULL;
+  PERFORM pg_temp.reset_role();
+
+  SELECT hourly_rate_cents, created_by INTO v_rate, v_author
+  FROM public.studio_member_rates
+  WHERE studio_id = 'c2200000-0000-4000-8000-0000000000a1'
+    AND user_id   = 'c2200000-0000-4000-8000-000000000002'
+    AND effective_to IS NULL;
+  ASSERT v_rate = 99900,
+    'FAIL l1a: an owner/admin may still correct the open row''s number in place — '
+    'that is the blur-save HT-3 rules for and (b2)/(h6) assert; got '
+    || COALESCE(v_rate::text, 'NULL');
+  ASSERT v_author = 'c2200000-0000-4000-8000-000000000002',
+    'FAIL l1b (W2-R8-01, HT-3-e(4)): created_by must record whoever SET THE NUMBER '
+    'THAT IS THERE. Measured before this rule: the row read 99900 with the OWNER''s '
+    'id as author, which made the rate''s own subject arm''s-length to HT-3-e(2) '
+    'and priced her 120-minute hour at 199800 — and showed HER number under HIS '
+    'name in his own rate-card lens; got ' || COALESCE(v_author::text, 'NULL');
+
+  -- ── l2: an UPDATE that does not move the number does not move authorship.
+  --    The clause is IS DISTINCT FROM, so an unrelated touch cannot take credit
+  --    for somebody else's rate.
+  PERFORM pg_temp.assume_user('c2200000-0000-4000-8000-000000000001');
+  UPDATE public.studio_member_rates SET hourly_rate_cents = 99900
+   WHERE studio_id = 'c2200000-0000-4000-8000-0000000000a1'
+     AND user_id   = 'c2200000-0000-4000-8000-000000000002'
+     AND effective_to IS NULL;
+  PERFORM pg_temp.reset_role();
+  SELECT created_by INTO v_author FROM public.studio_member_rates
+   WHERE studio_id = 'c2200000-0000-4000-8000-0000000000a1'
+     AND user_id   = 'c2200000-0000-4000-8000-000000000002'
+     AND effective_to IS NULL;
+  ASSERT v_author = 'c2200000-0000-4000-8000-000000000002',
+    'FAIL l2 (HT-3-e(4) is narrow): an UPDATE that leaves hourly_rate_cents alone '
+    'must leave authorship standing — the stamp is keyed on the number MOVING, not '
+    'on the statement happening; got ' || COALESCE(v_author::text, 'NULL');
+
+  -- ── l3: the forge and the rate change TOGETHER still raise. The new stamp sits
+  --    AFTER W1-R5-01's actor check on purpose: a caller who names a third party
+  --    is refused, not quietly corrected.
+  PERFORM pg_temp.assume_user('c2200000-0000-4000-8000-000000000002');
+  BEGIN
+    UPDATE public.studio_member_rates
+       SET hourly_rate_cents = 88800,
+           created_by        = 'c2200000-0000-4000-8000-000000000001'
+     WHERE studio_id = 'c2200000-0000-4000-8000-0000000000a1'
+       AND user_id   = 'c2200000-0000-4000-8000-000000000002'
+       AND effective_to IS NULL;
+  EXCEPTION WHEN check_violation THEN v_forge_raised := true;
+  END;
+  PERFORM pg_temp.reset_role();
+  SELECT hourly_rate_cents, created_by INTO v_rate, v_author
+  FROM public.studio_member_rates
+  WHERE studio_id = 'c2200000-0000-4000-8000-0000000000a1'
+    AND user_id   = 'c2200000-0000-4000-8000-000000000002'
+    AND effective_to IS NULL;
+  ASSERT v_forge_raised,
+    'FAIL l3a (W1-R5-01 + HT-3-e(4)): a rate change that ALSO names a third party '
+    'as author must still RAISE — the new stamp must not turn (j4)''s refusal into '
+    'a silent correction';
+  ASSERT v_rate = 99900 AND v_author = 'c2200000-0000-4000-8000-000000000002',
+    'FAIL l3b: the refused statement must leave both the number and its author '
+    'standing; got ' || COALESCE(v_rate::text, 'NULL') || ' / '
+    || COALESCE(v_author::text, 'NULL');
+
+  -- ── l4: the honest shape. An owner corrects a COLLEAGUE's number and the row is
+  --    authored by the corrector — arm's-length to the subject, so it still prices.
+  PERFORM pg_temp.assume_user('c2200000-0000-4000-8000-000000000001');
+  UPDATE public.studio_member_rates SET hourly_rate_cents = 16000
+   WHERE studio_id = 'c2200000-0000-4000-8000-0000000000a1'
+     AND user_id   = 'c2200000-0000-4000-8000-000000000006'
+     AND effective_to IS NULL;
+  PERFORM pg_temp.reset_role();
+  SELECT hourly_rate_cents, created_by INTO v_rate, v_author
+  FROM public.studio_member_rates
+  WHERE studio_id = 'c2200000-0000-4000-8000-0000000000a1'
+    AND user_id   = 'c2200000-0000-4000-8000-000000000006'
+    AND effective_to IS NULL;
+  ASSERT v_rate = 16000 AND v_author = 'c2200000-0000-4000-8000-000000000001',
+    'FAIL l4 (the non-regression): an owner or admin correcting SOMEBODY ELSE''s '
+    'number must be recorded as its author — that is what keeps an honest '
+    'employer''s row arm''s-length and therefore pricing under HT-3-e(2); got '
+    || COALESCE(v_rate::text, 'NULL') || ' / ' || COALESCE(v_author::text, 'NULL');
+
+  RAISE NOTICE 'studio_member_rates: case (l) passed.';
   RAISE NOTICE 'All studio_member_rates assertions passed.';
 END
 $$;
