@@ -106,6 +106,40 @@ export function isPhoneChannel(kind: string): boolean {
   return PHONE_KINDS.has(kind);
 }
 
+const EMAIL_CONSENT_KINDS: ReadonlySet<string> = new Set(["email", "ap_email"]);
+
+/**
+ * CR12-1 — CONSENT IS OFFERED ON A LINE THAT CAN TAKE THE MESSAGE, NOT ON A
+ * KIND THAT LOOKS LIKE ONE.
+ *
+ * The axis used to be `isPhoneChannel(kind) ? "sms" : "email"`, so every stored
+ * kind fell into one of two buckets: an OFFICE landline was an SMS line and a
+ * `portal_311` scheduling handle was an email address. Both are writable from
+ * the person card in two clicks, and both land in `studio_channel_consent` —
+ * the one table R-AY makes the single source of truth. Ray Thao's office line
+ * carries the same digits as his card's `phone_e164`, which
+ * `identity_consent_status` reduces over (00626), so an SMS grant recorded on
+ * his municipal desk phone printed `Texting` on his Directory row, his seat
+ * line and his Call Sheet row — three faces away from the rule clause on that
+ * same card reading "Never text. Office phone or the 311 portal only."
+ *
+ * `sms_capable` is the column that answers "does this line take a text"
+ * (00593: it stays at its `false` default unless there is SMS-rail evidence,
+ * because `channel_kind` is `mobile` for a backfilled person card whether or
+ * not the number is a cell — "the vocabulary has no unknown and a row needs
+ * some kind"). So: SMS on a phone line that is sms_capable, email on `email`
+ * / `ap_email`, and NOTHING on anything else. A portal handle and a landline
+ * are channels the studio reaches somebody on, not channels anybody can
+ * consent to.
+ */
+export function channelConsentAxis(
+  channel: Pick<StudioContactChannel, "channel_kind" | "sms_capable">,
+): "sms" | "email" | null {
+  const kind = String(channel.channel_kind);
+  if (isPhoneChannel(kind)) return channel.sms_capable ? "sms" : null;
+  return EMAIL_CONSENT_KINDS.has(kind) ? "email" : null;
+}
+
 /**
  * Why a channel is held, in words (direction §5.4).
  *
@@ -196,12 +230,14 @@ function ChannelRow({
   showConsent: boolean;
   onAnnounce: (message: string) => void;
 }) {
-  const consentKind = isPhoneChannel(String(channel.channel_kind))
-    ? "sms"
-    : "email";
+  const consentAxis = channelConsentAxis(channel);
+  // A row with no axis is still a row: it prints its kind, its value and its
+  // held reason. It simply carries no consent word, no consent sentence and no
+  // act that would write one.
+  const consentable = showConsent && consentAxis !== null;
   const { data: consent } = useChannelConsent(
-    showConsent ? organizationId : null,
-    consentKind,
+    consentable ? organizationId : null,
+    consentAxis,
     channel.value,
   );
   const record = useRecordChannelConsent();
@@ -289,6 +325,7 @@ function ChannelRow({
 
   const save = () => {
     setError(null);
+    if (!consentAxis) return;
     if (!organizationId) {
       setError(
         "This project is not attached to a studio yet, so there is nowhere to record it.",
@@ -310,7 +347,7 @@ function ChannelRow({
           setEvidence("");
           setOptOut(false);
           peopleEvents.consentRecorded({
-            channel_kind: consentKind,
+            channel_kind: consentAxis,
             status,
             source,
             surface: "person_card",
@@ -335,7 +372,7 @@ function ChannelRow({
       reconsent.mutate(
         {
           organizationId,
-          channelKind: consentKind,
+          channelKind: consentAxis,
           channelValue: channel.value,
           source,
           evidence: evidence.trim(),
@@ -350,7 +387,7 @@ function ChannelRow({
     record.mutate(
       {
         organizationId,
-        channelKind: consentKind,
+        channelKind: consentAxis,
         channelValue: channel.value,
         status,
         source,
@@ -386,7 +423,7 @@ function ChannelRow({
             {channel.value}
           </a>
         )}
-        {showConsent && (
+        {consentable && (
           <StateWord family="consent" value={consent?.verdict} />
         )}
       </p>
@@ -445,7 +482,7 @@ function ChannelRow({
           </p>
         )}
       </div>
-      {showConsent && sentence && (
+      {consentable && sentence && (
         <p
           data-consent-sentence
           className="t-body-sm mt-1 text-[var(--ink-subtle)]"
@@ -454,7 +491,7 @@ function ChannelRow({
           {carriedForward ? ` ${carriedForward}` : ""}
         </p>
       )}
-      {showConsent && (
+      {consentable && (
         <DocumentAction
           actionKey="record-channel-consent"
           surfaceKey="people"
@@ -469,13 +506,13 @@ function ChannelRow({
             : "Record consent"}
         </DocumentAction>
       )}
-      {showConsent && consent?.verdict === "opted_out" && (
+      {consentable && consent?.verdict === "opted_out" && (
         <p className="t-body-sm mt-1 text-[var(--ink-subtle)]">
           They can rejoin by replying START — or the studio can record a fresh
           consent here, with where and when they said so.
         </p>
       )}
-      <div id={bandId} hidden={!showConsent || !recording} className="mt-2">
+      <div id={bandId} hidden={!consentable || !recording} className="mt-2">
         {/* CR7-3: `record_channel_consent` stamps `origin_project_id` with the
             seat this card resolved to, and R-Q prints that job in the consent
             sentence everywhere afterwards ("…on the Lindqvist kitchen."). The
