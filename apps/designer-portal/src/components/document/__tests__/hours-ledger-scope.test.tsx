@@ -59,6 +59,11 @@ let projectStudioId: string | null = 'studio-1';
 let orgsState: ReadState = 'ready';
 /** The fact view's rows, overridable per case. `null` = the default one. */
 let ledgerRows: Array<Record<string, unknown>> | null = null;
+/** `project_unbilled_time`'s rows — R77's all-time balance reads these. */
+let unbilledViewRows: Array<Record<string, unknown>> = [];
+/** Whether an entry's note READ answers or fails (never "is refused": an RLS
+ *  denial returns no row and no error, which is the absence arm). */
+let noteState: ReadState = 'ready';
 
 /** Each money read's settle state — a figure must never precede an answer. */
 type ReadState = 'ready' | 'pending' | 'error';
@@ -156,6 +161,7 @@ function makeClient() {
         if (table === 'project_time_entries') return [WEEK_ENTRY];
         if (table === 'projects')
           return [{ id: 'project-1', name: 'Okonkwo', status: 'active' }];
+        if (table === 'project_unbilled_time') return unbilledViewRows;
         return [];
       };
       const builder: Record<string, unknown> = {
@@ -208,8 +214,11 @@ jest.mock('@patina/supabase', () => ({
   useTimeEntryNote: (entryId: string) => {
     entryNoteCalls.push(entryId);
     return useQuery({
-      queryKey: ['document-hours-entry-note', entryId],
-      queryFn: async () => 'sketching the stair',
+      queryKey: ['document-hours-entry-note', entryId, noteState],
+      queryFn: async () => {
+        if (noteState === 'error') throw new Error('network');
+        return 'sketching the stair';
+      },
     });
   },
   useOrganizations: () => ({
@@ -300,6 +309,8 @@ beforeEach(() => {
   rollupRows = null;
   orgsState = 'ready';
   ledgerRows = null;
+  unbilledViewRows = [];
+  noteState = 'ready';
   mockScopeViewedCalls.length = 0;
   mockRateUnresolvedCalls.length = 0;
   projectStudioId = 'studio-1';
@@ -799,5 +810,136 @@ describe('the Hours scope lens', () => {
     expect(
       screen.queryByRole('button', { name: /Name your studio/ }),
     ).not.toBeInTheDocument();
+  });
+});
+
+// ── Round-5: what the scopes inherited, and what they must not ──────────────
+
+describe('the sheet’s un-scoped remainder (M5-02)', () => {
+  const UNBILLED_ROW = {
+    id: 'unbilled-1',
+    project_id: 'project-1',
+    duration_minutes: 120,
+    amount_cents: 30_000,
+    authority_rate_id: null,
+    billing_state: 'authorized',
+  };
+
+  it('keeps the week export, the pending band, the balance and the add row out of a scope captioned with someone else’s name', async () => {
+    // The four stood outside every `scope ===` guard, so an owner opening Hours
+    // from Maria Obi's profile read a STUDIO-wide all-time balance with a
+    // primary billing act, a band listing documents that are not hers, an
+    // export of the VIEWER's own week, and a capture row that writes
+    // `user_id = auth.uid()` — all under a caption naming Maria.
+    unbilledViewRows = [UNBILLED_ROW];
+    hoursMemberScopePending.userId = 'maria';
+    hoursMemberScopePending.name = 'Maria Obi';
+    renderLedger();
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Maria Obi' })).toHaveAttribute(
+        'aria-current',
+        'true',
+      ),
+    );
+    expect(
+      screen.queryByRole('button', { name: 'Export week → Accounts' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/pending billing authority/),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText('unbilled · all time')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Bill it' }),
+    ).not.toBeInTheDocument();
+    // The capture row — an admin never gets one under another person's caption.
+    expect(screen.queryByLabelText('Minutes')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Add' }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'mine' }));
+
+    // And all four return to the one scope whose week, whose balance and whose
+    // hand they are.
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Export week → Accounts' }),
+      ).toBeInTheDocument(),
+    );
+    expect(screen.getByText(/pending billing authority/)).toBeInTheDocument();
+    expect(screen.getByText('unbilled · all time')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Bill it' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Minutes')).toBeInTheDocument();
+  });
+
+  it('shows no all-time balance in the project scope, where its rows are never listed', async () => {
+    // HT-30 — a total is the front matter of the rows that produced it. The
+    // entries act in this scope lists the WEEK's ledger rows, a different set,
+    // so the balance is hidden rather than captioned into a half-truth.
+    unbilledViewRows = [UNBILLED_ROW];
+    renderLedger('project-1');
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'this document' }),
+      ).toHaveAttribute('aria-current', 'true'),
+    );
+    expect(screen.queryByText('unbilled · all time')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Bill it' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('leaves a plain member her own week’s export, band, balance and add row', async () => {
+    // She has no lens, so her sheet is 'mine' — the guards take nothing from
+    // her that R77 and R75 already gave.
+    viewerRole = 'member';
+    unbilledViewRows = [UNBILLED_ROW];
+    renderLedger();
+
+    await waitFor(() =>
+      expect(screen.getByText('unbilled · all time')).toBeInTheDocument(),
+    );
+    expect(
+      screen.getByRole('button', { name: 'Export week → Accounts' }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText('Minutes')).toBeInTheDocument();
+  });
+});
+
+describe('what a chip and a failed note say (n3 · n1)', () => {
+  it('puts the billed chip’s word in the body ink, not in sage (HT-40)', async () => {
+    // Sage on paper is ≈2.1:1 — under AA's 4.5:1 and under the large-text
+    // floor — and the studio scope multiplies these chips. The state is the
+    // word; the border keeps the quiet mark.
+    ledgerRows = [{ ...LEDGER_ROW, invoice_id: 'invoice-1' }];
+    renderLedger();
+
+    fireEvent.click(screen.getByRole('button', { name: 'the studio' }));
+    fireEvent.click(screen.getByRole('button', { name: 'The entries' }));
+
+    const chip = await screen.findByText('Billed');
+    expect(chip).toHaveStyle({ color: 'var(--color-charcoal)' });
+    expect(chip).toHaveStyle({ borderColor: 'var(--color-sage)' });
+  });
+
+  it('calls a failed note read a failed read, not a refusal', async () => {
+    // An RLS denial on `project_time_entries` returns no row and NO error, so
+    // `maybeSingle()` lands on the absence arm below. Everything `isError` can
+    // see is network/500/schema-cache — never a standing problem of hers.
+    noteState = 'error';
+    renderLedger();
+
+    fireEvent.click(screen.getByRole('button', { name: 'the studio' }));
+    fireEvent.click(screen.getByRole('button', { name: 'The entries' }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Note' }));
+    });
+
+    await waitFor(() =>
+      expect(screen.getByText('That note could not be read.')).toBeInTheDocument(),
+    );
+    expect(screen.queryByText(/not yours to read/)).not.toBeInTheDocument();
   });
 });

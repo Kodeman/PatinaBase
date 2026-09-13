@@ -12,14 +12,46 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { DeskContents } from '../desk-contents';
 
+/** The unbilled read's state — the Desk's one act-bearing line reads it. */
+type UnbilledState = 'empty' | 'rows' | 'pending' | 'error';
+let unbilledState: UnbilledState = 'empty';
+/** The viewer's standing over a studio: billing is an owner/admin act. */
+let viewerRole: 'owner' | 'admin' | 'member' = 'owner';
+
 // HT-29 — the Hours line is act-bearing now (unbilled hours to bill, or a timer
-// still running from yesterday), so the index reads two facts. Both are
-// `@patina/supabase` hooks and both answer empty here: the index under test is
-// the labels-and-doorways one, and the act's own states are the Hours sheet's.
+// still running from yesterday), so the index reads three facts. All three are
+// `@patina/supabase` hooks, and by default they answer empty: the index under
+// test is the labels-and-doorways one, and the act's own states are pinned in
+// their own describe below.
 jest.mock('@patina/supabase', () => ({
   useRunningTimer: () => ({ data: null }),
-  useStudioUnbilledTime: () => ({ data: [] }),
+  useStudioUnbilledTime: () => ({
+    data:
+      unbilledState === 'rows'
+        ? [{ id: 'entry-1', project_id: 'project-1', billing_state: 'authorized' }]
+        : unbilledState === 'empty'
+          ? []
+          : undefined,
+    isPending: unbilledState === 'pending',
+    isError: unbilledState === 'error',
+  }),
+  useOrganizations: () => ({
+    isError: false,
+    data: [
+      {
+        id: 'studio-1',
+        name: 'Leah Mbeki Studio',
+        type: 'design_studio',
+        membership: { role: viewerRole, status: 'active' },
+      },
+    ],
+  }),
 }));
+
+beforeEach(() => {
+  unbilledState = 'empty';
+  viewerRole = 'owner';
+});
 
 const renderContents = (props: { prominent?: boolean } = {}) =>
   render(<DeskContents {...props} />);
@@ -154,5 +186,57 @@ describe('DeskContents — F38 static sub-labels', () => {
         name: /Add a maker.*a vendor on your roster/is,
       }),
     ).toBeInTheDocument();
+  });
+});
+
+describe('DeskContents — the Hours line’s one act (HT-29)', () => {
+  it('offers the composer to an owner with unbilled hours', () => {
+    unbilledState = 'rows';
+    renderContents();
+
+    expect(
+      screen.getByRole('button', { name: /hours to bill →/ }),
+    ).toBeInTheDocument();
+  });
+
+  it('offers no billing act to a plain member', () => {
+    // After 00606 she reads her OWN unbilled rows, so the Desk's one
+    // act-bearing line was offering her the invoice composer. Drawing an
+    // invoice is the studio's act (HT-3); the Hours row above still opens the
+    // sheet for her.
+    unbilledState = 'rows';
+    viewerRole = 'member';
+    renderContents();
+
+    expect(
+      screen.queryByRole('button', { name: /hours to bill →/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('says nothing while the read is still out', () => {
+    unbilledState = 'pending';
+    renderContents();
+
+    expect(
+      screen.queryByRole('button', { name: /hours to bill →|^hours →$/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('does not read a failed money read as nothing to bill', () => {
+    // Undefined data and "no unbilled hours" were the same absence, so a denied
+    // or failed `project_unbilled_time` read silently removed the act. A
+    // terracotta sentence is wrong on an index of labels and doorways (R95), so
+    // the failure reads as the neutral door.
+    unbilledState = 'error';
+    renderContents();
+
+    const door = screen.getByRole('button', { name: /^hours →$/ });
+    expect(door).toBeInTheDocument();
+
+    const { openLedger } = jest.requireMock(
+      '@/components/document/command-bar',
+    ) as { openLedger: jest.Mock };
+    fireEvent.click(door);
+    expect(openLedger).toHaveBeenCalledWith('hours');
   });
 });

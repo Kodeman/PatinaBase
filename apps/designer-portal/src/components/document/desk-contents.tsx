@@ -47,6 +47,7 @@ import { openInvoiceComposer } from '@/components/document/accounts/invoice-over
 import { openDraftProposalPicker } from '@/components/document/rooms/drafting/draft-proposal-opener';
 import { openDraftingRoom } from '@/lib/document/open-drafting-room';
 import { fmtDay } from '@/lib/document/format';
+import { useViewerStudio } from '@/hooks/use-viewer-studio';
 
 type RowVariant = 'room' | 'ledger' | 'verb';
 
@@ -77,7 +78,15 @@ const LEDGER_SUBLABEL: Record<string, string> = {
  */
 function HoursInHandAct() {
   const runningTimer = useRunningTimer();
-  const { data: unbilled } = useStudioUnbilledTime();
+  const {
+    data: unbilled,
+    isPending: unbilledPending,
+    isError: unbilledFailed,
+  } = useStudioUnbilledTime();
+  // Drawing an invoice is the studio's act, not a member's: after 00606 a plain
+  // member reads her OWN unbilled rows, so the Desk offered her the composer on
+  // its one act-bearing line. Her timer line below is still hers.
+  const { isOwnerOrAdmin, isSettled: standingKnown } = useViewerStudio();
 
   const timer = runningTimer.data;
   const startedDay = timer ? new Date(timer.started_at).toDateString() : null;
@@ -112,7 +121,30 @@ function HoursInHandAct() {
     );
   }
 
-  if ((unbilled?.length ?? 0) === 0) return null;
+  if (!standingKnown || !isOwnerOrAdmin) return null;
+
+  // A money read that did not answer is not "nothing to bill". A terracotta
+  // sentence is wrong on an index of labels and doorways (R95), so the failure
+  // reads as the neutral door: the sheet stays reachable and says the rest.
+  if (unbilledFailed) {
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          openLedger('hours');
+          documentEvents.wayfinding.contentsActed({
+            key: 'hours',
+            kind: 'ledger',
+          });
+        }}
+        className="doc-type-meta pl-[22px] text-left text-[var(--color-clay-ink)] underline decoration-dotted underline-offset-4"
+      >
+        hours →
+      </button>
+    );
+  }
+
+  if (unbilledPending || (unbilled?.length ?? 0) === 0) return null;
 
   const projects = [
     ...new Set((unbilled ?? []).map((row) => row.project_id)),

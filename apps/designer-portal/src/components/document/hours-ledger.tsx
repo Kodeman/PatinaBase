@@ -572,6 +572,11 @@ export function HoursLedger({
             )}
           </p>
         </div>
+        {/* R75's export is the HOLDER's week: `weekUnbilled` is derived from the
+            week read, which is `.eq('user_id', me)`. Under a caption naming
+            someone else it pre-ticked the viewer's own hours into the composer,
+            so it belongs to the one scope whose week it is. */}
+        {scope === 'mine' && (
         <button
           type="button"
           disabled={weekUnbilled.length === 0}
@@ -595,6 +600,7 @@ export function HoursLedger({
         >
           Export week → Accounts
         </button>
+        )}
       </div>
 
       {/* HT-8 — the scope lens: two to four DM-mono words, scored. Absent for a
@@ -662,12 +668,18 @@ export function HoursLedger({
       />
       )}
 
-      <PendingTimeAuthorizationBand
-        rows={pendingAuthorizationRows ?? []}
-        projects={projects ?? []}
-        onSelectProject={setLensProjectId}
-        showStudioRateDoor={viewerIsOwnerOrAdmin}
-      />
+      {/* The band is un-scoped: after 00605/00606 an owner reads the STUDIO's
+          pending-authority hours, across documents that are not the person the
+          member scope names. It stands in the one scope that claims no one
+          else's week. */}
+      {scope === 'mine' && (
+        <PendingTimeAuthorizationBand
+          rows={pendingAuthorizationRows ?? []}
+          projects={projects ?? []}
+          onSelectProject={setLensProjectId}
+          showStudioRateDoor={viewerIsOwnerOrAdmin}
+        />
+      )}
 
       {/* A project-scoped Hours sheet carries the same RPC-owned authority
           readout as the open project document. Studio-wide mode stays a
@@ -799,8 +811,16 @@ export function HoursLedger({
         </div>
       )}
 
-      {/* R77 — the all-time unbilled balance, with its one act. */}
-      {unbilledMinutes > 0 && (
+      {/* R77 — the all-time unbilled balance, with its one act.
+          HT-30 — it is a money total whose rows this sheet never lists, and it
+          is keyed on the lens alone, so in a scope captioned with someone
+          else's name it read as that person's balance and put a primary
+          billing act under their caption. The one scope it belongs to is the
+          one that names nobody else. (The project scope could carry the
+          document's own unbilled rows-with-total, but only listed beneath it —
+          the entries act there lists the WEEK's ledger rows, a different set —
+          so it is hidden rather than captioned into a half-truth.) */}
+      {scope === 'mine' && unbilledMinutes > 0 && (
         <div className="-mt-2 mb-4 flex flex-wrap items-baseline gap-2 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
           <span className="text-[var(--color-clay-ink)]">unbilled · all time</span>
           <span className="text-[var(--color-charcoal)]">
@@ -912,7 +932,12 @@ export function HoursLedger({
         </section>
         ))}
 
-      {/* Batch add — the prototype's hours-add row */}
+      {/* Batch add — the prototype's hours-add row. `useCreateTimeEntry` writes
+          `user_id = auth.uid()`, so this row logs against the VIEWER whatever
+          the caption above says. Standing under another person's name it read
+          as a capture row for her hours and wrote them to him; entering an hour
+          on someone else's behalf is a deliberate act, not a shared form. */}
+      {scope === 'mine' && (
       <div className="mt-4 grid grid-cols-[1.2fr_0.7fr_1fr_auto] items-center gap-2">
         <select
           aria-label="Project"
@@ -963,6 +988,7 @@ export function HoursLedger({
           Add
         </DocumentAction>
       </div>
+      )}
     </div>
   );
 }
@@ -1422,7 +1448,15 @@ function ScopeEntryRow({
             className="whitespace-nowrap rounded-[3px] border px-1.5 py-[2px] t-head"
             style={
               row.invoice_id
-                ? { borderColor: 'var(--color-sage)', color: 'var(--color-sage)' }
+                ? {
+                    // HT-40 — the state is the WORD, never the colour. Sage
+                    // on paper is ~2.1:1, under WCAG AA's 4.5:1 and under
+                    // even the large-text floor, and the studio scope
+                    // multiplies these chips. The border keeps the quiet
+                    // mark; the label reads in the body ink.
+                    borderColor: 'var(--color-sage)',
+                    color: 'var(--color-charcoal)',
+                  }
                 : {
                     borderColor: 'var(--color-pearl)',
                     color: 'var(--color-aged-oak)',
@@ -1464,7 +1498,13 @@ function ScopeEntryNote({ entryId, id }: { entryId: string; id: string }) {
       {note.isLoading
         ? 'Reading…'
         : note.isError
-          ? 'That note is not yours to read.'
+          ? // An RLS refusal on `project_time_entries` is not an error: the
+            // read returns no row and no error, so `maybeSingle()` yields
+            // `{ data: null }` and lands on the arm below. Everything `isError`
+            // can actually see is a failed read — network, 500, schema cache —
+            // and calling that a standing problem told the viewer something
+            // untrue about herself.
+            'That note could not be read.'
           : (note.data ?? 'No note on this entry.')}
     </p>
   );
@@ -1617,7 +1657,15 @@ function EntryRow({
             className="whitespace-nowrap rounded-[3px] border px-1.5 py-[2px] t-head"
             style={
               billed
-                ? { borderColor: 'var(--color-sage)', color: 'var(--color-sage)' }
+                ? {
+                    // HT-40 — the state is the WORD, never the colour. Sage
+                    // on paper is ~2.1:1, under WCAG AA's 4.5:1 and under
+                    // even the large-text floor, and the studio scope
+                    // multiplies these chips. The border keeps the quiet
+                    // mark; the label reads in the body ink.
+                    borderColor: 'var(--color-sage)',
+                    color: 'var(--color-charcoal)',
+                  }
                 : {
                     borderColor: 'var(--color-pearl)',
                     color: 'var(--color-aged-oak)',

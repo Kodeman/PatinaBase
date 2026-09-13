@@ -201,6 +201,12 @@ function invalidateProjectTime(queryClient: QueryClient, projectId: string) {
   queryClient.invalidateQueries({ queryKey: timeKeys.unbilledTime(projectId) });
   queryClient.invalidateQueries({ queryKey: timeKeys.keyMetrics(projectId) });
   queryClient.invalidateQueries({ queryKey: timeKeys.all });
+  // The Desk's one act-bearing line reads its own cross-project key, which sits
+  // outside `timeKeys.all` because it predates the module's 'time' family. With
+  // a five-minute staleTime and no refetch on focus, a billed-out studio kept
+  // being offered "hours to bill →" and the click handed the composer entry ids
+  // an invoice already claimed.
+  queryClient.invalidateQueries({ queryKey: timeKeys.studioUnbilled() });
 }
 
 // ── Queries ──
