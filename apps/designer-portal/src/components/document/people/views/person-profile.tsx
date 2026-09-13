@@ -42,6 +42,7 @@ import {
   usePeopleSeats,
   usePerson,
   useStudioContact,
+  useOrganizations,
   useStudioContacts,
   useStudioContactChannelsFor,
   type AuthorityScope,
@@ -70,6 +71,8 @@ import {
   seatLineParts,
   seatWindowText,
 } from "../seat-line";
+import { CloseSeatAct } from "../close-seat-act";
+import { ArchiveCardDoor } from "../archive-card-door";
 import {
   ReachAccess,
   NO_SEAT_SENTENCE,
@@ -211,6 +214,18 @@ export function PersonProfile({
   const { data: rolodex } = useStudioContacts(cardOrgId, {
     includeArchived: false,
   });
+  /**
+   * 00417 / 00629 — putting a card away is an owner's or an admin's act, in
+   * the studio that HOLDS the card. Read here so the door can say so before it
+   * is pressed rather than after the database refuses.
+   */
+  const { data: memberOrgs } = useOrganizations();
+  const canArchiveCard = useMemo(() => {
+    if (!cardOrgId) return false;
+    const role = (memberOrgs ?? []).find((o) => o.id === cardOrgId)?.membership
+      ?.role;
+    return role === "owner" || role === "admin";
+  }, [memberOrgs, cardOrgId]);
   const { data: rules } = useContactRules();
   const ruleIndex = useMemo(() => indexContactRules(rules), [rules]);
   const rule = ruleIndex.get(personId) ?? null;
@@ -426,6 +441,18 @@ export function PersonProfile({
               Sole proprietor
             </p>
           )}
+          {/* direction §8 P2 — archive and restore as a STANDING door, with
+              the reason line visible whether or not the caller may press it. */}
+          {card && (
+            <ArchiveCardDoor
+              contactId={card.id}
+              name={person.display_name}
+              archivedAt={card.archived_at}
+              canArchive={canArchiveCard}
+              onDone={announce}
+              className="mt-2"
+            />
+          )}
         </div>
         {/* HT-8 — the one door into the Hours sheet's member scope, which is
             studio-wide and so belongs to a studio member, never to a client
@@ -527,6 +554,17 @@ export function PersonProfile({
               >
                 <SeatLine seat={seat} onOpen={(s) => onOpenSeat?.(s)} />
                 <SeatFacts seat={seat} />
+                {/* direction §3.2 R4 names this act on the person card, and
+                    the card had none: the seat could only be closed from the
+                    Call Sheet. One component, two surfaces (W3/P2). */}
+                <CloseSeatAct
+                  seatId={seat.seat_id}
+                  projectId={seat.project_id}
+                  name={person?.display_name ?? seat.display_name ?? "This person"}
+                  stage={seat.stage}
+                  onClosed={(message) => notify(message)}
+                  className="mt-1"
+                />
               </li>
             ))}
           </ul>

@@ -256,6 +256,7 @@ export function CallSheet({
                 projection={projection}
                 authorityBySeat={authorityBySeat}
                 consentOrg={consentOrg}
+                projectId={projectId}
                 projectName={projectTitle}
                 onOpenSeat={onOpenSeat}
                 onAnnounce={setAnnouncement}
@@ -280,6 +281,7 @@ export function CallSheet({
         open={pickerOpen}
         onClose={() => setPickerOpen(false)}
         projectId={projectId}
+        projectName={projectTitle}
         startInAdd={pickerStartsInAdd}
         onAdded={(name) => {
           setAdded(`${name} is on the call sheet.`);

@@ -507,6 +507,10 @@ export function PeopleRoom() {
       organizationId={organizationId}
       scope={scope}
       onScopeChange={setScope}
+      onAnnounce={(message) => {
+        setNotice(message);
+        setAnnouncement(message);
+      }}
     />
   ) : view === "threads" ? (
     <ThreadsView {...nav} pendingThreadId={pendingThreadId} />

@@ -37,6 +37,9 @@ export const PEOPLE_EVENT_NAMES = {
   seatClosed: 'people_seat_closed',
   siteAccessChanged: 'people_site_access_changed',
   bringForwardPicked: 'people_bring_forward_picked',
+  cardsMerged: 'people_cards_merged',
+  householdMemberAdded: 'people_household_member_added',
+  bidRecorded: 'people_bid_recorded',
 } as const;
 
 /** One of the six chips (`DirectoryChip`), or the lens beside them. */
@@ -121,7 +124,49 @@ export interface BringForwardPickedProperties {
   carried_opt_out?: boolean;
 }
 
+/** W3/P2 — two cards became one (PR-o). */
+export interface CardsMergedProperties {
+  /** The evidence the studio named: 'profile' | 'phone' | 'email' |
+   *  'company_name' | 'manual'. */
+  matched_on: string;
+  /** PR-o — true when the studio flipped away from the pre-picked older card.
+   *  Its rate is the measure of whether "older survives" is the right default. */
+  survivor_flipped: boolean;
+}
+
+/** W3/P2 — a household member seated on a job (PR-c). */
+export interface HouseholdMemberAddedProperties {
+  /** 'client' | 'client_rep'. */
+  role: string;
+  /** True when the household carried a change-order figure, so the act also
+   *  wrote a money grant (PR-n). */
+  with_threshold: boolean;
+  /** True when the act named a job, so a seat was written. */
+  seated: boolean;
+}
+
+/** W3/P2 — a bid fact written on a seat (direction §3.4, R-R). */
+export interface BidRecordedProperties {
+  /** A `SeatBidOutcome`, or null where only the dates moved. */
+  outcome?: string | null;
+  /** Which fields the studio actually filled, so the band can be judged on
+   *  what it is used for. */
+  fields: string[];
+}
+
 export const peopleEvents = {
+  /** Two cards became one (PR-o) — fired on the mutation's success. */
+  cardsMerged: (properties: CardsMergedProperties) =>
+    track(PEOPLE_EVENT_NAMES.cardsMerged, properties),
+
+  /** A household member was recorded, and seated where a job was named. */
+  householdMemberAdded: (properties: HouseholdMemberAddedProperties) =>
+    track(PEOPLE_EVENT_NAMES.householdMemberAdded, properties),
+
+  /** A bid fact landed on a seat. */
+  bidRecorded: (properties: BidRecordedProperties) =>
+    track(PEOPLE_EVENT_NAMES.bidRecorded, properties),
+
   /** A chip (or the trade line beneath it) narrowed the book. */
   directoryChip: (properties: DirectoryChipProperties) =>
     track(PEOPLE_EVENT_NAMES.directoryChip, properties),

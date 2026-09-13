@@ -26,8 +26,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { partyKindOwesPaper, getFieldTradeLabel } from "@patina/types";
 import {
+  COMPLIANCE_DOC_TYPE_LABELS,
+  indexComplianceNotices,
   useAffiliations,
   useComplianceDocuments,
+  useComplianceNotices,
   useComplianceState,
   useContactRules,
   usePeopleSeats,
@@ -50,6 +53,7 @@ import {
   indexChannelsByOwner,
   indexContactRules,
 } from "@/lib/document/contact-rule";
+import { noticedPaperClause } from "@/lib/document/compliance-notice";
 import { DocumentAction, DocumentActionRow } from "../document-action";
 import { Avatar } from "./person-bits";
 import { StateWord, PlainFact } from "./state-word";
@@ -271,6 +275,12 @@ export function CompanyCard({
   const { data: affiliations } = useAffiliations({ companyId: firmId });
   const { data: documents } = useComplianceDocuments({ holderId: firmId });
   const { data: paperState } = useComplianceState(firmId);
+  // 00630's nightly notices, for the "lapses in 30 days" sentence.
+  const { data: expiryNotices } = useComplianceNotices(cardOrgId);
+  const noticeIndex = useMemo(
+    () => indexComplianceNotices(expiryNotices),
+    [expiryNotices],
+  );
   // CR-14: the head's project count, off the same seats view and the same
   // "open job" test the Directory's firm row uses, so the two agree.
   const { data: allSeats } = usePeopleSeats({ all: true });
@@ -501,6 +511,21 @@ export function CompanyCard({
   const owesPaper = partyKindOwesPaper(card.company_kind ?? card.contact_kind);
   const docs = documents ?? [];
   const heldClause = paperHeldClause(docs, today);
+  /**
+   * 00630 — THE SWEEP'S OWN SENTENCE, on the surface that owns the document.
+   *
+   * `paperHeldClause` says what is HELD, which only a lapsed certificate can
+   * do. A certificate about to lapse holds nothing yet, and the studio has
+   * already been told about it by the nightly sweep; this is that notice, in
+   * the one wording the roster row and the picker's mini row also print.
+   */
+  const noticeClause = noticedPaperClause(
+    [card.id],
+    name,
+    docs,
+    noticeIndex,
+    COMPLIANCE_DOC_TYPE_LABELS,
+  );
   // CR11-5: the one document the chase act names and keys its idempotency on.
   const chaseDoc = chaseTargetDocument(docs, today);
   /**
@@ -803,6 +828,16 @@ export function CompanyCard({
             {heldClause && (
               <p className="t-body-sm mt-3 border-l-2 border-[var(--terracotta-ink)] bg-[var(--rail)] py-[6px] pl-[11px] text-[var(--ink)]">
                 {heldClause}
+              </p>
+            )}
+            {/* 00630 — the notice, in words. No leading rule: a certificate
+                that has not lapsed yet is holding nothing up. */}
+            {noticeClause && (
+              <p
+                data-expiry-notice
+                className="t-body-sm mt-3 text-[var(--ink)]"
+              >
+                {noticeClause}
               </p>
             )}
             <p

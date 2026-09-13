@@ -23,6 +23,9 @@ const seatsData: { current: unknown[] } = { current: [] };
 
 jest.mock("@patina/supabase", () => ({
   useStudioContact: () => ({ data: cardData.current }),
+  // W3/P2 — 00630's nightly notices behind the Paper region's sentence.
+  useComplianceNotices: () => ({ data: [] }),
+  indexComplianceNotices: () => new Map(),
   useStudioContacts: () => ({
     data: [
       { id: "card-dana", entity_kind: "person", full_name: "Dana Kowalski" },

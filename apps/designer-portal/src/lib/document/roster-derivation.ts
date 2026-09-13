@@ -951,6 +951,32 @@ export function heldClause(
 }
 
 /**
+ * THE BID NOTE (direction §3.4, SPEC §5.4 #9, R-R).
+ *
+ * "Due 5 October 2026. Holds until 4 November 2026. Priced by Tom Marrow."
+ *
+ * Printed at BOTH widths on a row carrying a bid history — a studio checking
+ * the roster on a phone needs it as much as at a desk (C28). Only the columns
+ * that hold something speak: 00631 refused to guess `bid_due_at` out of
+ * free-text timeline prose, so an empty date prints nothing rather than a
+ * number the record does not make.
+ */
+export function bidNote(bid: {
+  dueAt?: string | null;
+  validUntil?: string | null;
+  quotedByName?: string | null;
+}): string {
+  const parts: string[] = [];
+  const due = rosterLongDate(bid.dueAt);
+  if (due) parts.push(`Due ${due}.`);
+  const holds = rosterLongDate(bid.validUntil);
+  if (holds) parts.push(`Holds until ${holds}.`);
+  const by = (bid.quotedByName ?? '').trim();
+  if (by) parts.push(`Priced by ${by}.`);
+  return parts.join(' ');
+}
+
+/**
  * PR-d / PR-l — the field link ends with the ENGAGEMENT, and the sentence says
  * so in words. No 90-day clock on a face.
  */

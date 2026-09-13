@@ -67,6 +67,7 @@ import {
   indexContactRules,
 } from "@/lib/document/contact-rule";
 import { consentSentenceForRecord } from "../consent-sentence";
+import { CompareMergeSheet } from "../compare-merge-sheet";
 import { useProjects } from "@/hooks/use-projects";
 import { peopleEvents } from "@/lib/analytics/people-events";
 import { EmptyTeach } from "../view-shell";
@@ -123,6 +124,7 @@ export function DirectoryView({
   onScopeChange,
   onOpenFirm,
   onOpenSeat,
+  onAnnounce,
 }: PeopleViewProps & {
   /** Controlled chip (lifted to the Room so the address and the ask bar can
    *  set it). */
@@ -141,6 +143,8 @@ export function DirectoryView({
   onScopeChange: (scope: ContactScope) => void;
   onOpenFirm: (firmId: string) => void;
   onOpenSeat?: (seat: PeopleDirectorySeat) => void;
+  /** The Room's one announcer — what it says after a merge lands. */
+  onAnnounce?: (message: string) => void;
 }) {
   const { data, isLoading } = usePeopleDirectory({
     role: "all",
@@ -361,6 +365,9 @@ export function DirectoryView({
 
   const duplicates = useMemo(() => directoryDuplicatePairs(rows), [rows]);
 
+  /** The pair the Compare & merge sheet is open on, or null. */
+  const [comparing, setComparing] = useState<[string, string] | null>(null);
+
   // A trade narrowing that no longer has a chip to sit under is a narrowing
   // the studio cannot see or lift.
   const showsTradeLine = chip === "crew" || chip === "makers";
@@ -497,11 +504,38 @@ export function DirectoryView({
                 className="min-h-11 underline decoration-[var(--color-clay)] underline-offset-[3px]"
               >
                 {b.display_name}
+              </button>{" "}
+              {/* The sheet exists now (direction §8 P2), so the band offers the
+                  act R-Y held back in P1. Secondary: naming the two cards is
+                  still the band's first job. */}
+              <button
+                type="button"
+                data-compare-merge={`${a.person_id}:${b.person_id}`}
+                onClick={() => setComparing([a.person_id, b.person_id])}
+                className="min-h-11 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--ink)] underline decoration-[var(--color-clay)] underline-offset-[3px]"
+              >
+                Compare these two
               </button>
             </p>
           ))}
         </div>
       )}
+
+      {/* PR-o's own sheet. The duplicate band detects on an exact phone match
+          (crm-model §4 rule 2), so that is the evidence the sheet opens on. */}
+      <CompareMergeSheet
+        open={!!comparing}
+        onClose={() => setComparing(null)}
+        leftId={comparing?.[0] ?? null}
+        rightId={comparing?.[1] ?? null}
+        matchedOnDefault="phone"
+        onMerged={(message, survivorId) => {
+          setComparing(null);
+          onAnnounce?.(message);
+          const survivor = rows.find((row) => row.person_id === survivorId);
+          if (survivor) openPerson(survivor.person_id, survivor.role);
+        }}
+      />
 
       {marketplace ? (
         <MakersMarketplace onOpenMaker={(id) => openPerson(id, "maker")} />

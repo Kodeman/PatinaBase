@@ -27,25 +27,33 @@
 
 import { useMemo, useState } from 'react';
 import {
+  ALL_SEAT_BID_OUTCOMES,
+  SEAT_BID_OUTCOME_ACTS,
   fieldLinkUrl,
+  indexComplianceNotices,
   seatDeleteRefusal,
   useChannelConsent,
   useCloseProjectPartySeat,
   useComplianceDocuments,
   useCreateFieldLink,
+  useComplianceNotices,
   useRemoveProjectParty,
   useSendPartySms,
+  useSetPartyBid,
   useUpdateProjectParty,
   AUTHORITY_SCOPE_LABELS,
   COMPLIANCE_DOC_TYPE_LABELS,
   SEAT_DELETE_REFUSAL_SENTENCES,
   type ProjectPartyAuthority,
+  type SeatBid,
+  type SeatBidOutcome,
   type StudioContactRule,
 } from '@patina/supabase';
 import { isFieldPartyKind, partyKindOwesPaper } from '@patina/types';
 import {
   MINT_FALLBACK_SENTENCE,
   authorityPhrase,
+  bidNote,
   fieldLinkExpirySentence,
   grantWindowEnd,
   heldClause,
@@ -63,6 +71,7 @@ import {
   contactRuleIsHardBlock,
   contactRuleTextHeldClause,
 } from '@/lib/document/contact-rule';
+import { noticedPaperClause } from '@/lib/document/compliance-notice';
 import { peopleEvents } from '@/lib/analytics/people-events';
 import { useProjects } from '@/hooks/use-projects';
 import { Avatar } from '../people/person-bits';
@@ -117,6 +126,8 @@ export function RosterRow({
   rule,
   routeTo,
   contactKind,
+  bid,
+  bidPeople,
 }: {
   row: CallSheetRow;
   band: CallSheetBand;
@@ -149,6 +160,15 @@ export function RosterRow({
    * `row.partyKind` is the fallback where no card is resolved.
    */
   contactKind?: string | null;
+  /**
+   * 00631's bid columns for this seat. `people_directory_seats` (00626)
+   * predates them, so RosterGroups reads them once for the sheet and hands
+   * each row its own — never one query per row.
+   */
+  bid?: SeatBid | null;
+  /** The studio's person cards, for "who priced it" (00631 requires a PERSON
+   *  card in the job's own studio). */
+  bidPeople?: ReadonlyArray<{ id: string; name: string }>;
 }) {
   const isSeat = row.source === 'seat';
   // One predicate, one clause, wherever a rule is shown (R-S).
@@ -183,7 +203,17 @@ export function RosterRow({
     if (next) onAnnounce?.(next);
   };
 
+  /** The Bidding band's own editing state (direction §3.4). */
+  const [editingBid, setEditingBid] = useState(false);
+  const [bidDraft, setBidDraft] = useState<{
+    dueAt: string;
+    outcome: SeatBidOutcome | '';
+    validUntil: string;
+    quotedBy: string;
+  }>({ dueAt: '', outcome: '', validUntil: '', quotedBy: '' });
+
   const updateParty = useUpdateProjectParty();
+  const setBid = useSetPartyBid();
   const closeSeat = useCloseProjectPartySeat();
   const removeParty = useRemoveProjectParty();
   const createLink = useCreateFieldLink();
@@ -201,8 +231,20 @@ export function RosterRow({
 
   // The held clause needs the paper itself — which document lapsed, and when.
   // Only a LAPSED firm is read; every other row costs no query.
+  const paperNeedsWords = row.paper === 'lapsed' || row.paper === 'lapses_soon';
   const { data: heldPaper } = useComplianceDocuments(
-    row.paper === 'lapsed' && row.companyId ? { holderId: row.companyId } : undefined,
+    paperNeedsWords && row.companyId ? { holderId: row.companyId } : undefined,
+  );
+  // 00630 — the nightly sweep's own record. A paper word says where the
+  // certificate stands; a notice says the studio has already been told, and
+  // that is the sentence the row prints for paper that has not lapsed yet.
+  // One query per sheet: React Query keys it on the studio, not the row.
+  const { data: expiryNotices } = useComplianceNotices(
+    paperNeedsWords ? (consentOrg ?? null) : null,
+  );
+  const noticeIndex = useMemo(
+    () => indexComplianceNotices(expiryNotices),
+    [expiryNotices],
   );
   const blocking = (heldPaper ?? []).find(
     (doc) =>
@@ -210,6 +252,23 @@ export function RosterRow({
       !!doc.expires_on &&
       doc.expires_on < new Date().toISOString().slice(0, 10),
   );
+  /**
+   * "Northgate Electric's insurance lapses in 30 days, on 6 October 2026."
+   *
+   * Printed only where the sweep actually wrote a notice, so the clause never
+   * claims the studio was told about a date nobody has raised yet.
+   */
+  const lapsesSoonClause =
+    row.paper === 'lapses_soon'
+      ? noticedPaperClause(
+          [row.companyId],
+          row.companyName,
+          heldPaper,
+          noticeIndex,
+          COMPLIANCE_DOC_TYPE_LABELS,
+        )
+      : null;
+
   const held = blocking
     ? heldClause(row.companyName, {
         // CR8-1: the row's sentence takes the plain noun ("insurance"), never
@@ -295,6 +354,53 @@ export function RosterRow({
       : 'Texting opens once they have said yes on the record and a number is on file.';
   const showFieldActs = isSeat && isFieldPartyKind(row.partyKind ?? '');
   const windowClause = rosterWindowClause(row, band);
+
+  // R-R / C28 — the bid history prints at BOTH widths on a row that has one.
+  const quotedByName =
+    (bidPeople ?? []).find((p) => p.id === bid?.bidQuotedByPersonId)?.name ?? null;
+  const bidLine = bidNote({
+    dueAt: bid?.bidDueAt,
+    validUntil: bid?.bidValidUntil,
+    quotedByName,
+  });
+
+  const openBidEditor = () => {
+    setBidDraft({
+      dueAt: bid?.bidDueAt ?? '',
+      outcome: bid?.bidOutcome ?? '',
+      validUntil: bid?.bidValidUntil ?? '',
+      quotedBy: bid?.bidQuotedByPersonId ?? '',
+    });
+    setEditingBid(true);
+  };
+
+  const saveBid = async () => {
+    try {
+      await setBid.mutateAsync({
+        id: seatId,
+        projectId,
+        patch: {
+          bidDueAt: bidDraft.dueAt || null,
+          bidOutcome: bidDraft.outcome || null,
+          bidValidUntil: bidDraft.validUntil || null,
+          bidQuotedByPersonId: bidDraft.quotedBy || null,
+        },
+      });
+      peopleEvents.bidRecorded({
+        outcome: bidDraft.outcome || null,
+        fields: [
+          bidDraft.dueAt ? 'due' : null,
+          bidDraft.outcome ? 'outcome' : null,
+          bidDraft.validUntil ? 'valid_until' : null,
+          bidDraft.quotedBy ? 'quoted_by' : null,
+        ].filter((f): f is string => !!f),
+      });
+      setEditingBid(false);
+      setNote(`The bid is written on ${row.name}\u2019s seat.`);
+    } catch (e) {
+      setNote(e instanceof Error ? e.message : 'Could not write the bid.');
+    }
+  };
 
   // THE MISTAKEN-ADD PREDICATE, read BEFORE the act is offered. A seat that
   // carries a consent record, a bid or paper the studio holds can only be
@@ -448,6 +554,27 @@ export function RosterRow({
         </p>
       )}
 
+      {/* 00630 — the expiry notice, in the sweep's own wording, before the
+          paper actually lapses. No leading rule: nothing is held yet. */}
+      {lapsesSoonClause && partyKindOwesPaper(contactKind ?? row.partyKind) && (
+        <p
+          data-expiry-notice
+          className="mb-1.5 ml-[46px] text-[0.74rem] text-[var(--color-charcoal)]"
+        >
+          {lapsesSoonClause}
+        </p>
+      )}
+
+      {/* R-R / C28 — the bid history, at both widths, folded or not. */}
+      {bidLine && (
+        <p
+          data-bid-note
+          className="mb-1.5 ml-[46px] text-[0.74rem] text-[var(--color-aged-oak)]"
+        >
+          {bidLine}
+        </p>
+      )}
+
       {/* R-T — an opted-out note prints on the COLLAPSED row, not only inside
           its unfold: a sub the studio may not text must be visible at a glance. */}
       {!expanded && row.consent === 'opted_out' && (
@@ -493,6 +620,143 @@ export function RosterRow({
               >
                 {consentLine}
               </p>
+            )}
+
+            {/* THE BIDDING BAND'S OWN FACTS (direction §3.4). A price nobody
+                has answered is not a body on the site, so the outcome is
+                written as a STAGE WORD and a losing bidder leaves the crew
+                bands the moment the studio records the answer. */}
+            {isSeat && band === 'bidding' && !closing && (
+              <div data-bid-editor className="mt-3 border-t border-[var(--color-pearl)] pt-2.5">
+                {!editingBid ? (
+                  <button
+                    type="button"
+                    data-edit-bid={seatId}
+                    onClick={openBidEditor}
+                    className="da-score-hover inline-flex min-h-11 items-center font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)] hover:text-[var(--color-mocha)]"
+                  >
+                    Write the bid
+                  </button>
+                ) : (
+                  <>
+                    <div className="flex flex-wrap gap-x-6 gap-y-2">
+                      <div>
+                        <label
+                          className={`mb-1 block ${META}`}
+                          htmlFor={`${panelId}-bid-due`}
+                        >
+                          The answer was owed
+                        </label>
+                        <input
+                          id={`${panelId}-bid-due`}
+                          type="date"
+                          value={bidDraft.dueAt}
+                          onChange={(e) =>
+                            setBidDraft((d) => ({ ...d, dueAt: e.target.value }))
+                          }
+                          className="min-h-11 border-0 border-b border-[var(--color-pearl)] bg-transparent py-2 text-[0.8rem] text-[var(--color-charcoal)] outline-none focus:border-[var(--color-clay)]"
+                        />
+                      </div>
+                      <div>
+                        <label
+                          className={`mb-1 block ${META}`}
+                          htmlFor={`${panelId}-bid-outcome`}
+                        >
+                          How it came back
+                        </label>
+                        <select
+                          id={`${panelId}-bid-outcome`}
+                          value={bidDraft.outcome}
+                          onChange={(e) =>
+                            setBidDraft((d) => ({
+                              ...d,
+                              outcome: e.target.value as SeatBidOutcome | '',
+                            }))
+                          }
+                          className="min-h-11 border-0 border-b border-[var(--color-pearl)] bg-transparent py-2 text-[0.8rem] text-[var(--color-charcoal)] outline-none focus:border-[var(--color-clay)]"
+                        >
+                          <option value="">Nothing recorded yet</option>
+                          {ALL_SEAT_BID_OUTCOMES.map((outcome) => (
+                            <option key={outcome} value={outcome}>
+                              {SEAT_BID_OUTCOME_ACTS[outcome]}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label
+                          className={`mb-1 block ${META}`}
+                          htmlFor={`${panelId}-bid-holds`}
+                        >
+                          The number holds until
+                        </label>
+                        <input
+                          id={`${panelId}-bid-holds`}
+                          type="date"
+                          value={bidDraft.validUntil}
+                          onChange={(e) =>
+                            setBidDraft((d) => ({ ...d, validUntil: e.target.value }))
+                          }
+                          className="min-h-11 border-0 border-b border-[var(--color-pearl)] bg-transparent py-2 text-[0.8rem] text-[var(--color-charcoal)] outline-none focus:border-[var(--color-clay)]"
+                        />
+                      </div>
+                      <div>
+                        <label
+                          className={`mb-1 block ${META}`}
+                          htmlFor={`${panelId}-bid-by`}
+                        >
+                          Who priced it
+                        </label>
+                        <select
+                          id={`${panelId}-bid-by`}
+                          value={bidDraft.quotedBy}
+                          onChange={(e) =>
+                            setBidDraft((d) => ({ ...d, quotedBy: e.target.value }))
+                          }
+                          className="min-h-11 border-0 border-b border-[var(--color-pearl)] bg-transparent py-2 text-[0.8rem] text-[var(--color-charcoal)] outline-none focus:border-[var(--color-clay)]"
+                        >
+                          <option value="">Nobody named</option>
+                          {(bidPeople ?? []).map((person) => (
+                            <option key={person.id} value={person.id}>
+                              {person.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    <p className="mt-2 text-[0.7rem] text-[var(--color-aged-oak)]">
+                      {bidDraft.outcome
+                        ? `Recording this moves ${row.name} to ${
+                            SEAT_BID_OUTCOME_ACTS[bidDraft.outcome]
+                          .toLowerCase()}. A bidder who did not win never reads as crew.`
+                        : 'The outcome is what moves them out of the bidding band. Nothing else on this row does.'}
+                    </p>
+                    <DocumentActionRow
+                      surfaceKey="call-sheet"
+                      regionKey="roster-row-bid"
+                      className="mt-2"
+                      aria-label={`Write the bid for ${row.name}`}
+                    >
+                      <DocumentAction
+                        actionKey="save-bid"
+                        variant="primary"
+                        onClick={() => void saveBid()}
+                        loading={setBid.isPending}
+                        loadingLabel="Writing…"
+                      >
+                        Write the bid
+                      </DocumentAction>
+                      <DocumentAction
+                        actionKey="cancel-bid"
+                        variant="tertiary"
+                        onClick={() => setEditingBid(false)}
+                      >
+                        Leave it
+                      </DocumentAction>
+                    </DocumentActionRow>
+                  </>
+                )}
+              </div>
             )}
 
             {closing ? (

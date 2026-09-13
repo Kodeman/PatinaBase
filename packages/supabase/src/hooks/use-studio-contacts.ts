@@ -369,19 +369,39 @@ export function useUpdateStudioContact() {
  * Postgres RLS rejection (0 rows updated / PGRST116 on .single()) as a thrown
  * error — callers should catch it and show "ask an owner to archive this".
  */
+export const STUDIO_CONTACT_ARCHIVE_STANDING_SENTENCE =
+  'Only an owner or an admin of the studio may put a card away, or bring one back.';
+
+/** `archive_studio_contact()` / `restore_studio_contact()`'s two refusals. */
+export function asArchiveError(error: unknown): string {
+  const message =
+    typeof error === 'object' && error !== null && 'message' in error
+      ? String((error as { message?: unknown }).message ?? '')
+      : String(error ?? '');
+  if (message.includes('studio_contact_archive_forbidden')) {
+    return STUDIO_CONTACT_ARCHIVE_STANDING_SENTENCE;
+  }
+  if (message.includes('studio_contact_not_found')) {
+    return 'That card is not in this studio\u2019s book.';
+  }
+  return message || 'The card did not move.';
+}
+
 export function useArchiveStudioContact() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id }: { id: string }): Promise<StudioContact> => {
-      const supabase = getSupabase();
-      const { data, error } = await supabase
-        .from('studio_contacts')
-        .update({ archived_at: new Date().toISOString() })
-        .eq('id', id)
-        .select('*')
-        .single();
-      if (error) throw error;
-      return data as StudioContact;
+    mutationFn: async ({ id }: { id: string }): Promise<string | null> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      // 00629's RPC, not the table: it restates 00417's owner/admin rule in a
+      // body SECURITY DEFINER cannot bypass, is idempotent on a card already
+      // put away, and answers a non-member `studio_contact_not_found` rather
+      // than leaking which ids exist.
+      const { data, error } = await supabase.rpc('archive_studio_contact', {
+        p_contact_id: id,
+      });
+      if (error) throw new Error(asArchiveError(error));
+      return (data as string | null) ?? null;
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: studioContactKeys.all });
@@ -402,16 +422,14 @@ export function useArchiveStudioContact() {
 export function useRestoreStudioContact() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id }: { id: string }): Promise<StudioContact> => {
-      const supabase = getSupabase();
-      const { data, error } = await supabase
-        .from('studio_contacts')
-        .update({ archived_at: null })
-        .eq('id', id)
-        .select('*')
-        .single();
-      if (error) throw error;
-      return data as StudioContact;
+    mutationFn: async ({ id }: { id: string }): Promise<null> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { error } = await supabase.rpc('restore_studio_contact', {
+        p_contact_id: id,
+      });
+      if (error) throw new Error(asArchiveError(error));
+      return null;
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: studioContactKeys.all });
@@ -431,6 +449,14 @@ export interface StudioContactHistory {
   /** The most recent of those projects, by the party row's created_at. */
   lastProjectName: string | null;
   lastAt: string | null;
+  /**
+   * SPEC §5.7 #4 — the YEAR THAT JOB CLOSED, which is not the year the studio
+   * seated them (w2c-report §6 item 5). `projects.completed_at` is the only
+   * column that knows it; a job still open has none, and the picker's line
+   * then says the year of the seat rather than claiming a close that has not
+   * happened.
+   */
+  lastClosedYear: string | null;
 }
 
 /**
@@ -465,26 +491,45 @@ export function useStudioContactHistory(contactIds: string[]) {
       const supabase = getSupabase() as any;
       const { data, error } = await supabase
         .from('project_parties')
-        .select('studio_contact_id, project_id, created_at, projects(name)')
+        .select(
+          'studio_contact_id, project_id, created_at, projects(name, completed_at)',
+        )
         .in('studio_contact_id', ids);
       if (error) throw error;
 
-      const acc: Record<string, { projects: Set<string>; lastAt: string | null; lastName: string | null }> = {};
+      const acc: Record<
+        string,
+        {
+          projects: Set<string>;
+          lastAt: string | null;
+          lastName: string | null;
+          lastClosedAt: string | null;
+        }
+      > = {};
       for (const raw of (data ?? []) as Array<{
         studio_contact_id: string | null;
         project_id: string | null;
         created_at: string | null;
-        projects?: { name?: string | null } | Array<{ name?: string | null }> | null;
+        projects?:
+          | { name?: string | null; completed_at?: string | null }
+          | Array<{ name?: string | null; completed_at?: string | null }>
+          | null;
       }>) {
         const key = raw.studio_contact_id;
         if (!key) continue;
-        const bucket = (acc[key] ??= { projects: new Set(), lastAt: null, lastName: null });
+        const bucket = (acc[key] ??= {
+          projects: new Set(),
+          lastAt: null,
+          lastName: null,
+          lastClosedAt: null,
+        });
         if (raw.project_id) bucket.projects.add(raw.project_id);
         const embed = Array.isArray(raw.projects) ? raw.projects[0] : raw.projects;
         const name = embed?.name ?? null;
         if (!bucket.lastAt || (raw.created_at && raw.created_at > bucket.lastAt)) {
           bucket.lastAt = raw.created_at ?? bucket.lastAt;
           bucket.lastName = name ?? bucket.lastName;
+          bucket.lastClosedAt = embed?.completed_at ?? null;
         }
       }
 
@@ -494,6 +539,7 @@ export function useStudioContactHistory(contactIds: string[]) {
           projectCount: b.projects.size,
           lastProjectName: b.lastName,
           lastAt: b.lastAt,
+          lastClosedYear: b.lastClosedAt ? b.lastClosedAt.slice(0, 4) : null,
         };
       }
       return out;
@@ -1429,6 +1475,8 @@ export const complianceKeys = {
   all: ['studio-compliance-documents'] as const,
   list: (filters?: ComplianceDocumentFilters) =>
     ['studio-compliance-documents', filters ?? {}] as const,
+  holders: (holderIds: readonly string[]) =>
+    ['studio-compliance-documents', 'holders', [...holderIds].sort()] as const,
   state: (holderId: string | null | undefined) =>
     ['studio-compliance-documents', 'state', holderId ?? null] as const,
 };
@@ -1481,6 +1529,33 @@ export function retainedComplianceDocuments(
   };
 
   return rows.filter((doc) => !doc.superseded_by || !retired(doc));
+}
+
+/**
+ * The paper held against SEVERAL cards at once (W3/P2).
+ *
+ * The picker's mini rows and the bring-forward consequence sentence both need
+ * the DOCUMENT behind a paper word — which certificate, and the day it lapses
+ * — for as many firms as the studio picked. One read for the page, never one
+ * per row.
+ */
+export function useComplianceDocumentsFor(holderIds: readonly string[]) {
+  const ids = [...new Set(holderIds.filter(Boolean))].sort();
+  return useQuery({
+    queryKey: complianceKeys.holders(ids),
+    enabled: ids.length > 0,
+    queryFn: async (): Promise<StudioComplianceDocument[]> => {
+      if (ids.length === 0) return [];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase
+        .from('studio_compliance_documents')
+        .select('*')
+        .in('holder_id', ids);
+      if (error) throw error;
+      return (data ?? []) as StudioComplianceDocument[];
+    },
+  });
 }
 
 /** The paper held against one card. */
@@ -1642,4 +1717,221 @@ export function useConfirmComplianceDocument() {
     },
     onSuccess: (_data, input) => invalidateComplianceFanout(queryClient, input.holderId),
   });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// THE MERGE RECORD (00629, PR-o, crm-model §4) — People room CRM · W3/P2
+//
+// Two cards for one human converge into one. The merged card is NOT deleted
+// and NOT archived: `merged_into` is its tombstone, `resolve_merged_contact()`
+// maps the old id forward, and `studio_contact_merges` holds the act with the
+// evidence word that justified it. PR-o: the studio always chooses which card
+// survives, the OLDER one is pre-picked, and both ids stay resolvable.
+//
+// Consent is untouched by construction — `studio_channel_consent` is keyed on
+// (organization_id, channel_kind, channel_value) and never on a card id, so a
+// number's verdict follows the number with no write at all (R-AY).
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** The evidence that justified a merge (crm-model §4 rules 1–4, plus manual). */
+export type MergeMatchedOn =
+  | 'profile'
+  | 'phone'
+  | 'email'
+  | 'company_name'
+  | 'manual';
+
+export const ALL_MERGE_MATCHED_ON: readonly MergeMatchedOn[] = [
+  'profile',
+  'phone',
+  'email',
+  'company_name',
+  'manual',
+];
+
+/** What the studio reads beside the act — never the column token. */
+export const MERGE_MATCHED_ON_LABELS: Record<MergeMatchedOn, string> = {
+  profile: 'They sign in with the same account',
+  phone: 'They share a phone number',
+  email: 'They share an email address',
+  company_name: 'Same firm, same name',
+  manual: 'The studio says so',
+};
+
+/** A `public.studio_contact_merges` row (00629) — append-only. */
+export interface StudioContactMerge {
+  id: string;
+  organization_id: string;
+  survivor_id: string;
+  merged_id: string;
+  matched_on: MergeMatchedOn | string;
+  merged_by: string | null;
+  merged_at: string;
+}
+
+export interface MergeStudioContactsInput {
+  /** The card that stays. PR-o: the studio's call, older pre-picked. */
+  survivorId: string;
+  /** The card that folds into it. Both ids stay resolvable afterwards. */
+  mergedId: string;
+  matchedOn: MergeMatchedOn;
+}
+
+export const studioContactMergeKeys = {
+  all: ['studio-contact-merges'] as const,
+  list: (organizationId: string | null | undefined) =>
+    ['studio-contact-merges', organizationId ?? null] as const,
+};
+
+/** `merge_studio_contacts()`'s eight named refusals, as sentences. */
+const MERGE_REFUSAL_SENTENCES: Record<string, string> = {
+  merge_contact_not_found: 'One of these cards is no longer in the book.',
+  merge_same_card: 'That is one card, not two.',
+  merge_matched_on_invalid: 'Say what makes these the same person first.',
+  merge_other_studio: 'These two cards belong to different studios.',
+  merge_not_a_member: 'Only a member of this studio may merge its cards.',
+  merge_already_merged: 'That card has already been folded into another one.',
+  merge_survivor_already_merged:
+    'The card you chose to keep has itself been folded into another one. Open that one instead.',
+  merge_kind_mismatch:
+    'A firm and a person are different kinds of card. A firm folds into a person only where the person is recorded as a sole proprietor.',
+};
+
+/** Render a merge refusal as a sentence; anything else comes back as itself. */
+export function asMergeError(error: unknown): string {
+  const message =
+    typeof error === 'object' && error !== null && 'message' in error
+      ? String((error as { message?: unknown }).message ?? '')
+      : String(error ?? '');
+  for (const [code, sentence] of Object.entries(MERGE_REFUSAL_SENTENCES)) {
+    if (message.includes(code)) return sentence;
+  }
+  return message || 'The merge did not go through.';
+}
+
+/** Every merge this studio has recorded, newest first. */
+export function useStudioContactMerges(organizationId: string | null | undefined) {
+  return useQuery({
+    queryKey: studioContactMergeKeys.list(organizationId),
+    enabled: !!organizationId,
+    queryFn: async (): Promise<StudioContactMerge[]> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase
+        .from('studio_contact_merges')
+        .select('*')
+        .eq('organization_id', organizationId)
+        .order('merged_at', { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as StudioContactMerge[];
+    },
+  });
+}
+
+/**
+ * Fold one card into another (`merge_studio_contacts`, 00629).
+ *
+ * One transaction repoints channels, affiliations, the contact rule, every
+ * compliance document, the three firm designations, every SEAT
+ * (`project_parties.studio_contact_id`), then sets `merged_into` and writes
+ * the record. The Directory folds the merged card away because the room's unit
+ * is the identity, not the card.
+ *
+ * Invalidation reaches every key that carries a card's facts: the rolodex, the
+ * directory identities, the seats view (whose rows carry the card's name, firm
+ * and words), the roster read models, channels, rules, affiliations and paper.
+ */
+export function useMergeStudioContacts() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: MergeStudioContactsInput): Promise<string> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase.rpc('merge_studio_contacts', {
+        p_survivor: input.survivorId,
+        p_merged: input.mergedId,
+        p_matched_on: input.matchedOn,
+      });
+      if (error) throw new Error(asMergeError(error));
+      return data as string;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: studioContactKeys.all });
+      void queryClient.invalidateQueries({ queryKey: studioContactMergeKeys.all });
+      void queryClient.invalidateQueries({ queryKey: peopleKeys.all });
+      void queryClient.invalidateQueries({ queryKey: peopleSeatKeys.all });
+      void queryClient.invalidateQueries({ queryKey: studioChannelKeys.all });
+      void queryClient.invalidateQueries({ queryKey: contactRuleKeys.all });
+      void queryClient.invalidateQueries({ queryKey: affiliationKeys.all });
+      void queryClient.invalidateQueries({ queryKey: complianceKeys.all });
+      // The seat's own read models: a repointed `studio_contact_id` moves
+      // which identity every roster row belongs to.
+      void queryClient.invalidateQueries({ queryKey: ['project-parties'] });
+      void queryClient.invalidateQueries({ queryKey: ['project-roster'] });
+    },
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// THE EXPIRY NOTICE (00630) — what the nightly sweep already told the studio
+//
+// `sweep_compliance_expiries()` writes one `studio_compliance_notices` row per
+// (document, state), so a paper that crosses "lapses in 30 days" and later
+// "lapsed" earns exactly two notices and the studio hears each sentence once.
+// The room READS them: a paper word says where the paper stands, a notice says
+// the studio has already been told, and with what date.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** A `public.studio_compliance_notices` row (00630). Read-only to the room. */
+export interface ComplianceNotice {
+  id: string;
+  organization_id: string;
+  document_id: string;
+  state: 'lapses_soon' | 'lapsed' | string;
+  noticed_at: string;
+}
+
+export const complianceNoticeKeys = {
+  all: ['studio-compliance-notices'] as const,
+  list: (organizationId: string | null | undefined) =>
+    ['studio-compliance-notices', organizationId ?? null] as const,
+};
+
+/** Every expiry notice this studio has been given, newest first. */
+export function useComplianceNotices(organizationId: string | null | undefined) {
+  return useQuery({
+    queryKey: complianceNoticeKeys.list(organizationId),
+    enabled: !!organizationId,
+    queryFn: async (): Promise<ComplianceNotice[]> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase
+        .from('studio_compliance_notices')
+        .select('*')
+        .eq('organization_id', organizationId)
+        .order('noticed_at', { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as ComplianceNotice[];
+    },
+  });
+}
+
+/** The newest notice per document, by state — the shape every surface reads. */
+export function indexComplianceNotices(
+  notices: readonly ComplianceNotice[] | undefined,
+): Map<string, ComplianceNotice> {
+  const index = new Map<string, ComplianceNotice>();
+  for (const notice of notices ?? []) {
+    // The list arrives newest first, and `lapsed` outranks `lapses_soon`:
+    // a paper that has already gone is not still "about to".
+    const standing = index.get(notice.document_id);
+    if (!standing) {
+      index.set(notice.document_id, notice);
+      continue;
+    }
+    if (standing.state !== 'lapsed' && notice.state === 'lapsed') {
+      index.set(notice.document_id, notice);
+    }
+  }
+  return index;
 }

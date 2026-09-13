@@ -72,6 +72,35 @@ jest.mock('@patina/supabase', () => {
     useContactRules: () => ({ data: [] }),
     useStudioContactChannelsFor: () => ({ data: [] }),
     useStudioContacts: () => ({ data: [] }),
+    // ── W3/P2 ────────────────────────────────────────────────────────────
+    useProjectPartyBids: () => ({ data: {} }),
+    useSetPartyBid: () => ({ mutateAsync: jest.fn(), isPending: false }),
+    useComplianceNotices: () => ({ data: [] }),
+    indexComplianceNotices: () => new Map(),
+    ALL_SEAT_BID_OUTCOMES: [
+      'asked',
+      'quoted',
+      'selected',
+      'declined',
+      'no_response',
+      'withdrawn',
+    ],
+    SEAT_BID_OUTCOME_ACTS: {
+      asked: 'Asked for a price',
+      quoted: 'They quoted',
+      selected: 'Selected',
+      declined: 'They declined',
+      no_response: 'No response',
+      withdrawn: 'They withdrew',
+    },
+    useProjectHousehold: () => ({ data: null }),
+    useAddHouseholdMember: () => ({ mutateAsync: jest.fn(), isPending: false }),
+    useCreateClientHousehold: () => ({ mutateAsync: jest.fn(), isPending: false }),
+    useSetHouseholdThreshold: () => ({ mutateAsync: jest.fn(), isPending: false }),
+    HOUSEHOLD_MEMBER_ROLE_LABELS: {
+      client: 'decides the work',
+      client_rep: 'signs for the household',
+    },
     seatDeleteRefusal: () => null,
   };
 });
