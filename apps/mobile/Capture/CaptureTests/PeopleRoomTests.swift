@@ -271,6 +271,77 @@ struct FieldPeopleVocabularyTests {
     }
 }
 
+// MARK: - R-Q's one consent sentence
+
+private func consentRecord(source: String? = nil, consentedAt: String? = nil,
+                           optOutSource: String? = nil, optOutAt: String? = nil,
+                           projectName: String? = nil) -> FieldConsentSentence.Record {
+    FieldConsentSentence.Record(source: source, consentedAt: consentedAt,
+                                optOutSource: optOutSource, optOutAt: optOutAt,
+                                projectName: projectName)
+}
+
+struct FieldConsentSentenceTests {
+    @Test func aGrantReadsAsTheSourceTheDateAndTheJob() {
+        #expect(FieldConsentSentence.compose(
+            status: "granted",
+            record: consentRecord(source: "written",
+                                  consentedAt: "2025-05-02T15:00:00+00:00",
+                                  projectName: "Lindqvist kitchen"))
+            == "Written consent, 2 May 2025, on the Lindqvist kitchen.")
+        #expect(FieldConsentSentence.compose(
+            status: "granted",
+            record: consentRecord(source: "verbal", consentedAt: "2026-10-13",
+                                  projectName: "Okonkwo residence"))
+            == "Verbal consent, 13 Oct 2026, on the Okonkwo residence.")
+    }
+
+    @Test func aRefusalReadsOffTheRefusalsOwnSourceAndDate() {
+        #expect(FieldConsentSentence.compose(
+            status: "opted_out",
+            record: consentRecord(source: "written",
+                                  consentedAt: "2025-05-02T15:00:00+00:00",
+                                  optOutSource: "inbound_sms",
+                                  optOutAt: "2025-12-03T09:00:00+00:00",
+                                  projectName: "Lindqvist kitchen"))
+            == "Opted out by text, 3 Dec 2025, on the Lindqvist kitchen.")
+    }
+
+    @Test func noDateMeansNoSentenceRatherThanAFabricatedOne() {
+        #expect(FieldConsentSentence.compose(
+            status: "granted",
+            record: consentRecord(source: "written",
+                                  projectName: "Lindqvist kitchen")) == nil)
+        // The deciding record one-sides its dates, so a refusal carries no
+        // consented_at to borrow (00626, w1b final review r5 MAJOR-2).
+        #expect(FieldConsentSentence.compose(
+            status: "opted_out",
+            record: consentRecord(source: "written",
+                                  consentedAt: "2025-05-02T15:00:00+00:00",
+                                  optOutSource: "inbound_sms",
+                                  projectName: "Lindqvist kitchen")) == nil)
+    }
+
+    @Test func anUnnamedSourceStillSaysTheFactItCanSay() {
+        #expect(FieldConsentSentence.compose(
+            status: "granted", record: consentRecord(consentedAt: "2026-01-09"))
+            == "Recorded consent, 9 Jan 2026.")
+        #expect(FieldConsentSentence.compose(
+            status: "opted_out",
+            record: consentRecord(optOutAt: "2026-01-09", projectName: "  "))
+            == "Opted out, 9 Jan 2026.")
+    }
+
+    /// The date is the one the studio wrote down, not the one the device's
+    /// zone would render: 01:00Z is the previous evening in Chicago.
+    @Test func theDateIsTheRecordsOwnAndNotTheDevicesZone() {
+        #expect(FieldConsentSentence.shortDate("2026-10-10T01:00:00+00:00")
+            == "10 Oct 2026")
+        #expect(FieldConsentSentence.shortDate("not a date") == nil)
+        #expect(FieldConsentSentence.shortDate(nil) == nil)
+    }
+}
+
 // MARK: - Offline
 
 @MainActor

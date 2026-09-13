@@ -364,6 +364,100 @@ public enum FieldPeopleVocabulary {
     }
 }
 
+// MARK: - R-Q: one consent sentence, everywhere
+
+/// "<Source> consent, <d Mon yyyy>, on the <project>." — R-Q's one wording, the
+/// same one `consent-sentence.ts` composes in the portal, mirrored here so a
+/// fact recorded once reads the same on a phone as on the Document. Both
+/// phrase tables are that file's `GRANT_PHRASE` / `REFUSAL_PHRASE` verbatim.
+///
+/// The date is read off the RECORD'S OWN STRING, never off a parsed `Date`
+/// rendered in the device's zone: `2026-10-10T01:00:00+00:00` is 9 October in
+/// Chicago, and a consent dated a day either side of what the studio wrote
+/// down is a different fact. Same reason the portal slices `yyyy-mm-dd` rather
+/// than constructing a Date.
+///
+/// No date, no sentence: a consent word carrying a fabricated date is worse
+/// than the word standing alone.
+public enum FieldConsentSentence {
+    /// The record R-Q's sentence is composed from, as its columns stand.
+    /// Dates are the raw column strings off the record that DECIDED the word
+    /// (`identity_consent_evidence`, 00626), already one-sided there.
+    public struct Record: Sendable, Hashable {
+        public let source: String?
+        public let consentedAt: String?
+        public let optOutSource: String?
+        public let optOutAt: String?
+        /// The job the consent was given on — "on the Okonkwo residence".
+        public let projectName: String?
+
+        public init(source: String? = nil, consentedAt: String? = nil,
+                    optOutSource: String? = nil, optOutAt: String? = nil,
+                    projectName: String? = nil) {
+            self.source = source
+            self.consentedAt = consentedAt
+            self.optOutSource = optOutSource
+            self.optOutAt = optOutAt
+            self.projectName = projectName
+        }
+    }
+
+    /// `studio_channel_consent.source` when the record grants.
+    private static let grantPhrase: [String: String] = [
+        "verbal": "Verbal consent",
+        "written": "Written consent",
+        "web_form": "Consent on a form",
+        "inbound_sms": "Consent by text",
+        "other": "Recorded consent"
+    ]
+
+    /// `studio_channel_consent.opt_out_source` when the record refuses.
+    private static let refusalPhrase: [String: String] = [
+        "verbal": "Opted out in person",
+        "written": "Opted out in writing",
+        "web_form": "Opted out on a form",
+        "inbound_sms": "Opted out by text",
+        "other": "Opted out"
+    ]
+
+    private static let months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                                 "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+    /// The sentence, or nil where the record cannot say one honestly.
+    /// `status` is the word the card prints — `identity_consent_status()`'s,
+    /// never re-derived here.
+    public static func compose(status: String?, record: Record) -> String? {
+        let refused = status == "opted_out"
+        let raw = refused ? record.optOutAt : record.consentedAt
+        guard let date = shortDate(raw) else { return nil }
+        let phrase = refused
+            ? phrase(record.optOutSource, in: refusalPhrase, fallback: "Opted out")
+            : phrase(record.source, in: grantPhrase, fallback: "Recorded consent")
+        let job = record.projectName
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .flatMap { $0.isEmpty ? nil : ", on the \($0)" } ?? ""
+        return "\(phrase), \(date)\(job)."
+    }
+
+    private static func phrase(_ raw: String?, in table: [String: String],
+                               fallback: String) -> String {
+        guard let raw, !raw.isEmpty else { return fallback }
+        return table[raw] ?? fallback
+    }
+
+    /// "2026-10-10T15:00:00+00:00" → "10 Oct 2026". The leading date as
+    /// written, with no zone arithmetic anywhere near it.
+    static func shortDate(_ raw: String?) -> String? {
+        guard let raw, raw.count >= 10 else { return nil }
+        let head = raw.prefix(10).split(separator: "-")
+        guard head.count == 3,
+              head[0].count == 4, let year = Int(head[0]),
+              let month = Int(head[1]), (1...12).contains(month),
+              let day = Int(head[2]), (1...31).contains(day) else { return nil }
+        return "\(day) \(months[month - 1]) \(year)"
+    }
+}
+
 // MARK: - Dates and freshness
 
 public enum FieldPeopleDates {
