@@ -263,12 +263,13 @@ struct SiteAccessScreen: View {
 
     private var logBand: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Button(isLogging ? "Never mind" : "Log who was told") {
-                isLogging.toggle()
+            Button { isLogging.toggle() } label: {
+                Text(isLogging ? "Never mind" : "Log who was told")
+                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    .contentShape(Rectangle())
             }
             .font(CaptureType.bodyEmph)
             .foregroundStyle(CaptureColor.verdigris)
-            .frame(minHeight: 44)
             .accessibilityIdentifier("people.logWhoWasTold")
             if isLogging {
                 Text("WHAT CHANGED AND WHO YOU TOLD")
@@ -280,15 +281,18 @@ struct SiteAccessScreen: View {
                     .overlay(Rectangle().stroke(CaptureColor.line))
                     .accessibilityLabel("What changed and who you told")
                     .accessibilityIdentifier("people.noticeDraft")
-                Button("Save this note") {
+                Button {
                     Task {
                         await model.logWhoWasTold()
                         isLogging = false
                     }
+                } label: {
+                    Text("Save this note")
+                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                        .contentShape(Rectangle())
                 }
                 .font(CaptureType.bodyEmph)
                 .foregroundStyle(CaptureColor.verdigris)
-                .frame(minHeight: 44)
                 .accessibilityIdentifier("people.saveNotice")
             }
             if let outcome = model.noticeOutcome {

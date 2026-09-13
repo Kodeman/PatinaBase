@@ -249,12 +249,15 @@ struct PersonChannelRow: View {
                 PeopleTelLine(display: channel.value, e164: nil,
                               identifier: "people.channel.\(channel.id)")
                 if mayText, let url = textURL {
-                    Link("Text them", destination: url)
-                        .font(CaptureType.callout)
-                        .foregroundStyle(CaptureColor.verdigrisInk)
-                        .padding(.horizontal, 16)
-                        .frame(minHeight: 44)
-                        .accessibilityIdentifier("people.text.\(channel.id)")
+                    Link(destination: url) {
+                        Text("Text them")
+                            .padding(.horizontal, 16)
+                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                            .contentShape(Rectangle())
+                    }
+                    .font(CaptureType.callout)
+                    .foregroundStyle(CaptureColor.verdigrisInk)
+                    .accessibilityIdentifier("people.text.\(channel.id)")
                 }
             } else {
                 Text(channel.value)
