@@ -225,6 +225,29 @@ describe("the duplicate band", () => {
     expect(DIRECTORY_DUPLICATE_SENTENCE).toBe("These two cards share a phone.");
   });
 
+  // M2R-6 — W3 put an ACT on this band, and the act merges two
+  // `studio_contacts` ids. Only the `contact` branch's person_id is one: a
+  // `lead` row carries `leads.contact_phone` and a `team` row the teammate's
+  // profile phone, so a lead or teammate the studio has since carded paired
+  // with their own card and the press answered "One of these cards is no
+  // longer in the book." over a row that was never a card.
+  it("never pairs a row that is not a rolodex card", () => {
+    for (const role of ["lead", "team", "sub", "client"]) {
+      expect(
+        directoryDuplicatePairs([
+          row({ person_id: "card", phone: "(612) 555-0104" }),
+          row({ person_id: "other", role, phone: "6125550104" }),
+        ]),
+      ).toHaveLength(0);
+    }
+    expect(
+      directoryDuplicatePairs([
+        row({ person_id: "card", phone: "(612) 555-0104" }),
+        row({ person_id: "card-2", phone: "6125550104" }),
+      ]),
+    ).toHaveLength(1);
+  });
+
   it("never pairs two firms, and never pairs on a short number", () => {
     expect(
       directoryDuplicatePairs([

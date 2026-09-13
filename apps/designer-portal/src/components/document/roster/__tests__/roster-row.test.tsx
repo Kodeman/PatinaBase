@@ -1005,7 +1005,7 @@ describe('RosterRow — the expiry notice', () => {
       <RosterRow row={soonSeat()} band="this_week" expanded={false} onToggle={jest.fn()} />,
     );
     expect(document.querySelector('[data-expiry-notice]')?.textContent).toBe(
-      'Northgate Electric’s insurance lapses in 30 days, on 6 October 2026.',
+      'Northgate Electric’s insurance lapses on 6 October 2026.',
     );
   });
 

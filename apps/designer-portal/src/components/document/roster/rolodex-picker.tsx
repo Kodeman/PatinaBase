@@ -66,7 +66,10 @@ import {
 } from '@/lib/document/bring-forward';
 import { noticedPaperClause } from '@/lib/document/compliance-notice';
 import { peopleEvents } from '@/lib/analytics/people-events';
-import { directoryRolodexOrgId } from '@/lib/document/people-derivation';
+import {
+  directoryFirmOf,
+  directoryRolodexOrgId,
+} from '@/lib/document/people-derivation';
 import { writeErrorMessage } from '@/lib/document/write-error';
 import {
   contactRuleClause,
@@ -385,10 +388,39 @@ export function RolodexPicker({
     });
   }, [cardById]);
 
+  /**
+   * F1 — THE FIRM'S OWN NAME, resolved the way the Directory resolves it.
+   *
+   * `studio_contacts.company_name` on a PERSON row is 00417's typed-by-hand
+   * snapshot, and NOTHING since the affiliation model (00592) populates it: on
+   * the local book all 22 carded humans with a `company_id` carry NULL there
+   * while their firm's card holds the name. So every caller reading the raw
+   * column fell through its `?? contactName(contact)` fallback and printed the
+   * PERSON where the firm was meant — the picker's mini row lost its firm
+   * segment entirely (SPEC §5.7 #4 asks for "Dana Kowalski · Northgate
+   * Electric · electrical"), and the bring-forward consequence sentence read
+   * "Dana Kowalski's insurance lapsed 31 March 2026." where SPEC §5.7 #7 fixes
+   * the wording as "Northgate Electric's insurance lapsed 31 Mar 2026." The
+   * insurance is the firm's; naming her is a wrong fact on a face.
+   *
+   * W2 round 7 fixed exactly this for the Directory row and the person-card
+   * header, by joining `company_id` to the firm's own card inside
+   * `people_directory` (`meta.company_name`, 00629 §6) — and `directoryFirmOf`
+   * is the one reader of that join. This page already holds the directory row
+   * for every hit (`wordsByCard`, keyed on the card id), so the same answer is
+   * one lookup away and no new query is issued. The legacy column stays the
+   * fallback for a book that really did type a firm name by hand.
+   */
+  const firmNameFor = (contact: StudioContact): string | null => {
+    const row = wordsByCard.get(contact.id);
+    const resolved = row ? directoryFirmOf(row).name : null;
+    return resolved ?? (contact.company_name?.trim() || null);
+  };
+
   const paperClauseFor = (contact: StudioContact) =>
     noticedPaperClause(
       [contact.company_id, contact.id],
-      contact.company_name ?? contactName(contact),
+      firmNameFor(contact) ?? contactName(contact),
       firmPaper,
       noticeIndex,
       COMPLIANCE_DOC_TYPE_LABELS,
@@ -399,18 +431,25 @@ export function RolodexPicker({
       picked
         .map((id) => cardById.get(id))
         .filter((c): c is StudioContact => !!c)
-        .map((c) => ({
-          name: contactName(c),
-          consent: wordsByCard.get(c.id)?.consent_status ?? null,
-          firmName: c.company_name ?? null,
-          paperClause: noticedPaperClause(
-            [c.company_id, c.id],
-            c.company_name ?? contactName(c),
-            firmPaper,
-            noticeIndex,
-            COMPLIANCE_DOC_TYPE_LABELS,
-          ),
-        })),
+        .map((c) => {
+          const firm =
+            (wordsByCard.get(c.id)
+              ? directoryFirmOf(wordsByCard.get(c.id) as PeopleDirectoryRow).name
+              : null) ??
+            (c.company_name?.trim() || null);
+          return {
+            name: contactName(c),
+            consent: wordsByCard.get(c.id)?.consent_status ?? null,
+            firmName: firm,
+            paperClause: noticedPaperClause(
+              [c.company_id, c.id],
+              firm ?? contactName(c),
+              firmPaper,
+              noticeIndex,
+              COMPLIANCE_DOC_TYPE_LABELS,
+            ),
+          };
+        }),
     [picked, cardById, wordsByCard, firmPaper, noticeIndex],
   );
 
@@ -513,10 +552,20 @@ export function RolodexPicker({
       });
       void refetchRoster();
       if (result.refused.length > 0) {
+        // M2R-3: `reason` is the untranslated PostgREST message `useBringForward`
+        // copied off the error, so a constraint name, a relation name or an RLS
+        // string landed on the face under SPEC §8 #3's own prohibition. Every
+        // other write path in this component already routes through
+        // `writeErrorMessage`; the wave's terminal act is the one that skipped
+        // it. The refusal object is shaped like the rejection the translator
+        // reads, so the 00624/00629 bare tokens answer in words.
         setError(
           `${result.refused
             .map((row) => row.name)
-            .join(', ')} did not go on: ${result.refused[0].reason}`,
+            .join(', ')} did not go on the call sheet. ${writeErrorMessage(
+            { message: result.refused[0].reason },
+            'The studio’s book refused the seat.',
+          )}`,
         );
         setPicked(result.refused.map((row) => row.studioContactId));
         return;
@@ -678,6 +727,7 @@ export function RolodexPicker({
                       name={contactName(c)}
                       kind={c.contact_kind}
                       entity={c.entity_kind}
+                      company={firmNameFor(c)}
                       trade={c.specialties?.[0] ?? null}
                       reach={
                         (words?.reach_state as

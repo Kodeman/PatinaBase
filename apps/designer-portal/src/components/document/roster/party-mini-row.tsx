@@ -48,18 +48,30 @@ export function rosterTradeLabel(
     : getFieldTradeLabel(trade);
 }
 
-/** KIND · TRADE — the mono meta line every mini row wears. */
+/**
+ * KIND · FIRM · TRADE — the mono meta line every mini row wears.
+ *
+ * F1: the firm segment is optional and new. SPEC §5.7 #4 asks each pick row to
+ * carry "name, firm and trade" — "Dana Kowalski · Northgate Electric ·
+ * electrical" — and the line printed KIND · TRADE alone, so every seeded sub's
+ * row was missing its firm entirely. Callers that hand no firm are unchanged,
+ * which is every caller but the rolodex picker.
+ */
 export function rosterMetaLine(
   kind: string | null | undefined,
   trade: string | null | undefined,
   entity: 'person' | 'company' = 'person',
+  company?: string | null,
 ): string {
   const kindLabel =
     entity === 'company'
       ? companyKindLabel(kind)
       : getPartyKindLabel(kind) || (kind ?? '');
   const tradeLabel = rosterTradeLabel(kind, trade);
-  return [kindLabel, tradeLabel].filter(Boolean).join(' · ');
+  // A firm card's own name is already the row's NAME; only a person's row
+  // gains a firm segment.
+  const firmLabel = entity === 'company' ? '' : (company?.trim() ?? '');
+  return [kindLabel, firmLabel, tradeLabel].filter(Boolean).join(' · ');
 }
 
 export interface PartyMiniRowProps {
@@ -67,6 +79,13 @@ export interface PartyMiniRowProps {
   /** party_kind (person) or studio_contacts.contact_kind (either). */
   kind: string | null | undefined;
   entity?: 'person' | 'company';
+  /**
+   * The FIRM this person works for, resolved (F1) — never
+   * `studio_contacts.company_name` read raw, which the affiliation model
+   * leaves null on every carded human. Printed between the kind and the trade
+   * on a person's meta line; ignored on a firm's own row.
+   */
+  company?: string | null;
   /** FieldTrade for most kinds, VendorSpecialty for a vendor. */
   trade?: string | null;
   reach?: ReachState | null;
@@ -113,6 +132,7 @@ export function PartyMiniRow({
   name,
   kind,
   entity = 'person',
+  company,
   trade,
   reach,
   consent,
@@ -127,7 +147,7 @@ export function PartyMiniRow({
   disabled = false,
   trailing,
 }: PartyMiniRowProps) {
-  const meta = rosterMetaLine(kind, trade, entity);
+  const meta = rosterMetaLine(kind, trade, entity, company);
 
   const body = (
     <>
@@ -161,7 +181,10 @@ export function PartyMiniRow({
           {name}
         </span>
         {meta && (
-          <span className="mt-[0.1rem] block truncate font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+          <span
+            data-party-mini-meta
+            className="mt-[0.1rem] block truncate font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
+          >
             {meta}
           </span>
         )}

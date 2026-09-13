@@ -57,7 +57,12 @@ function notice(
 }
 
 describe("expiryNoticeClause", () => {
-  it("spells out direction §3.8’s own paper word for paper about to go", () => {
+  // M2R-1: the clause carries the DATE and no interval. `lapses_soon` is a
+  // 30-day window, not a 30-day distance — the sweep writes the notice once, on
+  // entry — so "lapses in 30 days, on 6 October 2026" was two halves of one
+  // sentence disagreeing for the whole window (measured: 23 days out on the
+  // shipped fixture).
+  it("names the day the paper goes, and claims no interval beside it", () => {
     expect(
       expiryNoticeClause({
         holderName: "Northgate Electric",
@@ -65,9 +70,20 @@ describe("expiryNoticeClause", () => {
         expiresOn: "2026-10-06",
         state: "lapses_soon",
       }),
-    ).toBe(
-      "Northgate Electric’s insurance lapses in 30 days, on 6 October 2026.",
-    );
+    ).toBe("Northgate Electric’s insurance lapses on 6 October 2026.");
+  });
+
+  it("never prints an interval it has not counted", () => {
+    for (const days of [1, 12, 23, 30]) {
+      const on = new Date(Date.UTC(2026, 9, days));
+      const clause = expiryNoticeClause({
+        holderName: "Northgate Electric",
+        paperNoun: "insurance",
+        expiresOn: on.toISOString().slice(0, 10),
+        state: "lapses_soon",
+      });
+      expect(clause).not.toContain("in 30 days");
+    }
   });
 
   it("reads in the past tense once it has gone", () => {
@@ -89,7 +105,7 @@ describe("expiryNoticeClause", () => {
         expiresOn: null,
         state: "lapses_soon",
       }),
-    ).toBe("The licence lapses in 30 days.");
+    ).toBe("The licence lapses soon.");
   });
 });
 
@@ -150,9 +166,7 @@ describe("noticedPaperClause", () => {
       new Map([["doc-3", notice("doc-3", "lapses_soon")]]),
       LABELS,
     );
-    expect(clause).toBe(
-      "Dana Kowalski’s licence lapses in 30 days, on 6 October 2026.",
-    );
+    expect(clause).toBe("Dana Kowalski’s licence lapses on 6 October 2026.");
   });
 
   it("answers nothing where there is no holder to ask about", () => {

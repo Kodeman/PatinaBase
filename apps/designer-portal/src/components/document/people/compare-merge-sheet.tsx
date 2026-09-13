@@ -72,16 +72,32 @@ export function preferredSurvivorId(
 
 /**
  * What the studio is told before it presses. Names the card that folds, the
- * card that stays, what travels with it, and the one fact that does not move
- * because it was never on the card.
+ * card that stays, what travels with it, and the two facts that do not move.
+ *
+ * M2R-2 — PAPER DOES NOT TRAVEL. The sentence used to promise that the merged
+ * card's "paper" moved onto the survivor, and round 1's B-1 fix made that
+ * false in the ordinary case: `merge_studio_contacts()` (00629 §5) moves an
+ * absorbed document ONLY where the survivor already holds a qualifying
+ * successor — same doc_type, head of its own chain, in force, expiring no
+ * earlier, carrying at least the absorbed row's gates — because
+ * `compliance_state()` reduces worst-first over a holder, so moving a lapse
+ * would manufacture a block the survivor never earned. On a duplicate-person
+ * merge, where the survivor holds no matching certificate, NO paper moves at
+ * all. crm-model §4 is the wording: the absorbed card's documents keep their
+ * original holder and are superseded, never deleted. The sheet prints the
+ * absorbed card's document COUNT two lines above this sentence, so a promise
+ * that the count moves is contradicted by the survivor's own count not
+ * changing.
  */
 export function mergeConsequenceSentence(
   survivorName: string,
   mergedName: string,
 ): string {
   return (
-    `${mergedName}’s seats, channels, contact rule, paper and firm designations move onto ` +
+    `${mergedName}’s seats, channels, contact rule and firm designations move onto ` +
     `${survivorName}. Consent stays with the number, not with the card, so nobody’s yes or no changes. ` +
+    `${mergedName}’s paper stays on ${mergedName}’s card and is still readable there; where ` +
+    `${survivorName} already holds the same paper, still in force, the older one is marked superseded. ` +
     `${mergedName}’s card is kept as a record of the merge, and both ways of reaching this person still work.`
   );
 }

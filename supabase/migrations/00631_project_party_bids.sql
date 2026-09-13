@@ -118,8 +118,15 @@ COMMENT ON COLUMN public.project_parties.bid_quoted_at IS
   'quoted bid row.';
 COMMENT ON COLUMN public.project_parties.bid_selected_at IS
   'The day the studio CHOSE this firm — R-R''s "Selected 9 October 2026". '
-  'Backfilled from trade_scope_bids.noted_at of a `selected` row, the only '
-  'record Patina holds of when a selection was made.';
+  'TYPED BY THE STUDIO, never backfilled: select_trade_scope_bid() '
+  '(00423:1450-1510) promotes an EXISTING trade_scope_bids row in place and '
+  'never touches its noted_at, and the table carries no updated_at — so the '
+  'only date the rail holds for a `selected` row is the day the NUMBER was '
+  'written down, not the day the studio chose. Backfilling it printed '
+  '"Quoted 2 October 2026. Selected 2 October 2026." on the roster row, the '
+  'two dates always identical and the second one a fact nobody recorded '
+  '(migrations review r2 B2-3). NULL is the honest answer, the one '
+  'bid_due_at already takes.';
 
 -- The Bidding band's read: the seats on one job that carry a bid at all.
 CREATE INDEX IF NOT EXISTS idx_project_parties_bid
@@ -227,14 +234,28 @@ CREATE TRIGGER assert_party_bid_quoted_by_trg
 --                      the day the studio asked; no inference (r1 M-6).
 --   bid_quoted_at      trade_rfq_requests.responded_at where the request came
 --                      back, else the noted_at of that party's earliest
---                      trade_scope_bids row with status 'quoted'. Both are
+--                      trade_scope_bids row with status 'quoted' — status
+--                      'quoted' and nothing else (r2 B2-3: the CTE used to
+--                      read IN ('quoted','selected'), which is how the same
+--                      noted_at answered two different columns). Both are
 --                      records of a number arriving.
---   bid_selected_at    trade_scope_bids.noted_at of a `selected` row — when
---                      the selection was written down. NULL where no bid row
---                      says `selected`, including an outcome inferred from the
---                      RFQ rail alone, which knows nothing about choosing.
 --
 -- WHAT IS DELIBERATELY NOT BACKFILLED, AND WHY
+--
+--   bid_selected_at         no source, however much it looks like one.
+--                           select_trade_scope_bid() (00423:1500-1503)
+--                           promotes an existing bid row IN PLACE — `UPDATE
+--                           trade_scope_bids SET status = 'selected' WHERE id
+--                           = p_bid_id` — and never writes noted_at; the table
+--                           has no updated_at either. So noted_at on a
+--                           `selected` row is the day the NUMBER arrived, and
+--                           writing it here made the Call Sheet print "Quoted
+--                           2 October 2026. Selected 2 October 2026." — the
+--                           two dates identical by construction and the second
+--                           one never recorded (r2 B2-3, reproduced by running
+--                           these CTEs over one bid row in the shipped shape).
+--                           The studio types it; the room prints nothing until
+--                           it does.
 --
 --   bid_due_at              no source. trade_rfq_requests carries `timeline`,
 --                           a free-text sentence ("4 weeks from award"), and
@@ -268,25 +289,19 @@ WITH strongest_bid AS (
            b.noted_at DESC,
            b.id
 ),
--- The SELECTION's own day, which the strongest-bid pick above cannot carry:
--- that row may be a `quoted` one, and a party may hold both.
-selected_bid AS (
-  SELECT DISTINCT ON (b.party_id)
-    b.party_id,
-    b.noted_at
-  FROM public.trade_scope_bids b
-  WHERE b.status = 'selected'
-  ORDER BY b.party_id, b.noted_at DESC, b.id
-),
 -- The day a number first came back, where the RFQ rail did not record a
 -- responded_at of its own. EARLIEST, not latest: a second quote is a revision,
--- and "Quoted" names the first answer.
+-- and "Quoted" names the first answer. Status 'quoted' ONLY — a `selected`
+-- row's noted_at is the day its number was written down too, but reading it
+-- here is what let one date answer both bid_quoted_at and bid_selected_at, and
+-- the comment above already said 'quoted' while the code said otherwise
+-- (r2 B2-3 / m2-3).
 quoted_bid AS (
   SELECT DISTINCT ON (b.party_id)
     b.party_id,
     b.noted_at
   FROM public.trade_scope_bids b
-  WHERE b.status IN ('quoted', 'selected')
+  WHERE b.status = 'quoted'
   ORDER BY b.party_id, b.noted_at, b.id
 ),
 latest_rfq AS (
@@ -311,12 +326,10 @@ mapped AS (
     END                              AS outcome,
     sb.amount_cents                  AS amount_cents,
     lr.sent_at::date                 AS asked_at,
-    COALESCE(lr.responded_at, qb.noted_at)::date AS quoted_at,
-    xb.noted_at::date                AS selected_at
+    COALESCE(lr.responded_at, qb.noted_at)::date AS quoted_at
   FROM strongest_bid sb
   FULL OUTER JOIN latest_rfq lr ON lr.party_id = sb.party_id
   LEFT JOIN quoted_bid   qb ON qb.party_id = COALESCE(sb.party_id, lr.party_id)
-  LEFT JOIN selected_bid xb ON xb.party_id = COALESCE(sb.party_id, lr.party_id)
 )
 UPDATE public.project_parties pp
    SET bid_outcome      = m.outcome,
@@ -324,8 +337,7 @@ UPDATE public.project_parties pp
        -- COALESCE on each, so a studio that already typed one keeps it. The
        -- outcome guard below already means only untouched seats are reached.
        bid_asked_at     = COALESCE(pp.bid_asked_at,    m.asked_at),
-       bid_quoted_at    = COALESCE(pp.bid_quoted_at,   m.quoted_at),
-       bid_selected_at  = COALESCE(pp.bid_selected_at, m.selected_at)
+       bid_quoted_at    = COALESCE(pp.bid_quoted_at,   m.quoted_at)
   FROM mapped m
  WHERE pp.id = m.party_id
    AND m.outcome IS NOT NULL

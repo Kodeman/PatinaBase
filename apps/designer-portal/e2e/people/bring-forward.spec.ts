@@ -64,7 +64,12 @@ test.beforeAll(async () => {
       name: projectName,
       designer_id: seed.data.designer_id ?? DESIGNER,
       studio_id: seed.data.studio_id,
-      client_id: seed.data.client_id ?? "bring-forward-e2e",
+      // F3: `projects.client_id` is a NULLABLE uuid, and the seeded Okonkwo
+      // project carries NULL — so a placeholder STRING fallback sent
+      // "bring-forward-e2e" to a uuid column and every run of this spec died in
+      // beforeAll with 22P02 before either test body ran. null is the column's
+      // own answer for "this job has no client record".
+      client_id: seed.data.client_id ?? null,
       created_by: seed.data.created_by ?? DESIGNER,
       status: seed.data.status,
     })

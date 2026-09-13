@@ -73,7 +73,24 @@ export function householdEmptySentence(clientSideHasAuthority: boolean): string 
     : "No household is on file for this client, so there is nowhere to record who else may sign.";
 }
 
-/** What the act will cost, said before it is pressed. */
+/**
+ * What the act will cost, said before it is pressed.
+ *
+ * B2R-1 — THE SENTENCE NAMES THE GRANT THE ACT ACTUALLY WRITES.
+ *
+ * `add_household_member()` writes exactly ONE authority row, and its scope is
+ * `money` (00632 §4 — `VALUES (v_seat_id, 'money', v_h.co_threshold_cents, …)`;
+ * no `change_order` grant is minted anywhere in that file). And
+ * `threshold_cents` is a CAP: every reader in the portal prints it that way —
+ * `AUTHORITY_SCOPE_LABELS.money` is "Signs money" and `authorityPhrase` renders
+ * "Signs money to $2,500". This sentence used to read "They may sign change
+ * orders over $2,500." — the wrong scope AND the limit inverted from a cap
+ * into a floor, on a money fact, contradicting the band's own
+ * `data-household-threshold` line two elements above ("Change orders over
+ * $2,500 need a signature from the household."). Leah read the second sentence
+ * and pressed; the record then said he signs money UP TO $2,500 and approves
+ * nothing.
+ */
 export function householdMemberConsequence(
   name: string,
   role: HouseholdMemberRole,
@@ -84,9 +101,7 @@ export function householdMemberConsequence(
   const where = job ? ` on the ${job}` : "";
   const money = formatMoneyFromCents(thresholdCents);
   const grant =
-    role === "client_rep" && money
-      ? ` They may sign change orders over ${money}.`
-      : "";
+    role === "client_rep" && money ? ` They may sign money to ${money}.` : "";
   return `${name} joins the household and takes a seat${where}.${grant} Nothing is sent to them.`;
 }
 

@@ -54,6 +54,14 @@ export interface StudioContact {
   created_by: string | null;
   notes: string | null;
   archived_at: string | null;
+  /**
+   * M2R-5 — the MERGE tombstone (00629). Non-null on a card that was folded
+   * into another one: `people_directory` emits no identity row for it, every
+   * seat guard refuses it, and `resolve_merged_contact()` maps its id forward.
+   * Every list read below filters it out; a reader that genuinely wants the
+   * tombstone asks for it with `includeMerged`.
+   */
+  merged_into: string | null;
   created_at: string;
   updated_at: string;
 
@@ -155,6 +163,16 @@ export interface StudioContactFilters {
   search?: string;
   /** false (default) excludes archived_at IS NOT NULL rows. */
   includeArchived?: boolean;
+  /**
+   * false (default) excludes cards 00629 folded into another one. M2R-5: W3
+   * minted `merged_into` as a tombstone and taught `people_directory` to skip
+   * it, and taught the data layer nothing — so the bring-forward picker, the
+   * "who priced it" selector and the household-member selector all went on
+   * offering a card the Directory had already folded away, each ending in a
+   * database refusal rather than a fact. The Directory says one card; nothing
+   * else may say two.
+   */
+  includeMerged?: boolean;
 }
 
 export const studioContactKeys = {
@@ -170,7 +188,8 @@ export const studioContactKeys = {
 
 /**
  * The studio rolodex list. `.eq('organization_id', …)`, `.is('archived_at',
- * null)` unless `includeArchived`, `.eq('contact_kind', …)` when `kind` is set
+ * null)` unless `includeArchived`, `.is('merged_into', null)` unless
+ * `includeMerged` (M2R-5), `.eq('contact_kind', …)` when `kind` is set
  * and not `'all'`, then an in-memory search over full_name / company_name /
  * email (the use-people idiom). Ordered company-first, then name — the People
  * Room's company rows lead their unfolded people.
@@ -191,6 +210,9 @@ export function useStudioContacts(
 
       if (!filters?.includeArchived) {
         query = query.is('archived_at', null);
+      }
+      if (!filters?.includeMerged) {
+        query = query.is('merged_into', null);
       }
       if (filters?.kind && filters.kind !== 'all') {
         query = query.eq('contact_kind', filters.kind);
@@ -1599,7 +1621,22 @@ export function useComplianceDocumentsFor(holderIds: readonly string[]) {
         .select('*')
         .in('holder_id', ids);
       if (error) throw error;
-      return (data ?? []) as StudioComplianceDocument[];
+      // M2R-7 — THE SAME RETIREMENT RULE ITS SIBLING APPLIES. This hook
+      // returned raw rows while `useComplianceDocuments` ten lines below runs
+      // the identical rows through `retainedComplianceDocuments`, for the
+      // reason the comment above it gives: the same paper otherwise prints two
+      // words. `noticedPaperClause` then matched an append-only
+      // `studio_compliance_notices` row against a document the reducers have
+      // retired, so the picker's mini row printed paper `Current` beside
+      // "…'s insurance lapsed 31 March 2026." and `bringForwardConsequence`
+      // carried the same clause into the confirm sentence. The whole chain is
+      // read (a superseded row is what decides whether its predecessor is
+      // retired), and the rule is applied here rather than in the WHERE.
+      const all = (data ?? []) as StudioComplianceDocument[];
+      return retainedComplianceDocuments(
+        all,
+        new Date().toISOString().slice(0, 10),
+      );
     },
   });
 }

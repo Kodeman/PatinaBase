@@ -634,6 +634,229 @@ BEGIN
 END $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════
+-- 1c. merged_into is not an ordinary column, and a renewal chain may be merged
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Migrations review r2: B2-1 (any active member could PATCH merged_into
+-- straight through PostgREST and fold a card out of the room, orphaning its
+-- seats, with none of merge_studio_contacts()'s rules applied) and B2-2 (a
+-- merge aborted outright whenever the absorbed card carried a renewal and the
+-- survivor held a successor). Both were invisible to a green suite: nothing
+-- asserted who may write the column, and block 1b's absorbed document had no
+-- chain behind it.
+
+-- ── B2-1 · NOBODY WRITES THE POINTER BY HAND ──────────────────────────────
+INSERT INTO public.studio_contacts
+  (id, organization_id, entity_kind, contact_kind, company_name, company_kind, created_by) VALUES
+  ('f9200000-0000-4000-8000-000000000010','f9000000-0000-4000-8000-00000000000a','company','sub','Chain Survivor','sub','a0000000-0000-0000-0000-000000000004'),
+  ('f9200000-0000-4000-8000-000000000011','f9000000-0000-4000-8000-00000000000a','company','sub','Chain Absorbed','sub','a0000000-0000-0000-0000-000000000004');
+
+DO $$
+DECLARE
+  v_ptr uuid;
+BEGIN
+  -- a plain member (a0…0003)
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000003');
+  BEGIN
+    UPDATE public.studio_contacts
+       SET merged_into = 'f9200000-0000-4000-8000-000000000010'
+     WHERE id = 'f9200000-0000-4000-8000-000000000011';
+    RAISE EXCEPTION 'BLOCK 1c FAIL: a plain member wrote merged_into (r2 B2-1)';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM NOT LIKE '%studio_contact_merge_pointer_forbidden%' THEN
+      RAISE EXCEPTION 'BLOCK 1c FAIL: expected studio_contact_merge_pointer_forbidden, got %', SQLERRM;
+    END IF;
+  END;
+  PERFORM pg_temp.reset_role();
+
+  -- and the OWNER, whose 00417 admin UPDATE leg carries no column predicate
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  BEGIN
+    UPDATE public.studio_contacts
+       SET merged_into = 'f9200000-0000-4000-8000-000000000010'
+     WHERE id = 'f9200000-0000-4000-8000-000000000011';
+    RAISE EXCEPTION 'BLOCK 1c FAIL: an owner wrote merged_into (r2 B2-1)';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM NOT LIKE '%studio_contact_merge_pointer_forbidden%' THEN
+      RAISE EXCEPTION 'BLOCK 1c FAIL: expected studio_contact_merge_pointer_forbidden for the owner, got %', SQLERRM;
+    END IF;
+  END;
+  PERFORM pg_temp.reset_role();
+
+  SELECT merged_into INTO v_ptr FROM public.studio_contacts
+   WHERE id = 'f9200000-0000-4000-8000-000000000011';
+  IF v_ptr IS NOT NULL THEN
+    RAISE EXCEPTION 'BLOCK 1c FAIL: the pointer is % after two refused writes', v_ptr;
+  END IF;
+END $$;
+
+-- The two structural rules hold for EVERY writer, the door open.
+DO $$
+BEGIN
+  PERFORM set_config('app.contact_merge_in_progress', 'on', true);
+  BEGIN
+    -- a PERSON into a FIRM: crm-model §4's one forbidden merge
+    UPDATE public.studio_contacts
+       SET merged_into = 'f9200000-0000-4000-8000-000000000010'
+     WHERE id = 'f9100000-0000-4000-8000-00000000000a';
+    RAISE EXCEPTION 'BLOCK 1c FAIL: a person was folded into a firm under the door';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM NOT LIKE '%studio_contact_merge_kind_mismatch%' THEN
+      RAISE EXCEPTION 'BLOCK 1c FAIL: expected studio_contact_merge_kind_mismatch, got %', SQLERRM;
+    END IF;
+  END;
+  BEGIN
+    -- a card in ANOTHER studio (the seeded Hartwell book)
+    UPDATE public.studio_contacts
+       SET merged_into = 'd0e20000-0000-0000-0000-000000000001'
+     WHERE id = 'f9200000-0000-4000-8000-000000000011';
+    RAISE EXCEPTION 'BLOCK 1c FAIL: a cross-studio pointer was accepted under the door';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM NOT LIKE '%studio_contact_merge_other_studio%' THEN
+      RAISE EXCEPTION 'BLOCK 1c FAIL: expected studio_contact_merge_other_studio, got %', SQLERRM;
+    END IF;
+  END;
+  PERFORM set_config('app.contact_merge_in_progress', 'off', true);
+END $$;
+
+-- ── B2-2 · A MERGE OVER A RENEWAL CHAIN ───────────────────────────────────
+-- The survivor holds a current certificate. The absorbed card holds a chain:
+-- a retired predecessor behind a head that has since lapsed — the shape a firm
+-- card is folded away FOR. The head is written in force and then aged, because
+-- assert_compliance_holder() will not let a lapse be retired by a lapse (the
+-- negative control below still proves that).
+INSERT INTO public.studio_compliance_documents
+  (id, organization_id, holder_type, holder_id, doc_type, blocks, issued_on, expires_on) VALUES
+  ('f9400000-0000-4000-8000-000000000010','f9000000-0000-4000-8000-00000000000a','company',
+   'f9200000-0000-4000-8000-000000000010','coi_gl', ARRAY['site_access']::text[],
+   CURRENT_DATE - 60,  CURRENT_DATE + 300),
+  ('f9400000-0000-4000-8000-000000000011','f9000000-0000-4000-8000-00000000000a','company',
+   'f9200000-0000-4000-8000-000000000011','coi_gl', ARRAY['site_access']::text[],
+   CURRENT_DATE - 800, CURRENT_DATE - 400),
+  ('f9400000-0000-4000-8000-000000000012','f9000000-0000-4000-8000-00000000000a','company',
+   'f9200000-0000-4000-8000-000000000011','coi_gl', ARRAY['site_access']::text[],
+   CURRENT_DATE - 400, CURRENT_DATE + 100),
+  -- and a lapsed bond the survivor holds nothing to retire: it stays behind
+  ('f9400000-0000-4000-8000-000000000013','f9000000-0000-4000-8000-00000000000a','company',
+   'f9200000-0000-4000-8000-000000000011','bond', ARRAY['payment']::text[],
+   CURRENT_DATE - 400, CURRENT_DATE - 10);
+
+UPDATE public.studio_compliance_documents
+   SET superseded_by = 'f9400000-0000-4000-8000-000000000012'
+ WHERE id = 'f9400000-0000-4000-8000-000000000011';
+UPDATE public.studio_compliance_documents
+   SET expires_on = CURRENT_DATE - 30
+ WHERE id = 'f9400000-0000-4000-8000-000000000012';
+
+DO $$
+DECLARE
+  w_before text;
+  w_after  text;
+  n        integer;
+BEGIN
+  w_before := public.compliance_state('f9200000-0000-4000-8000-000000000010');
+  IF w_before <> 'current' THEN
+    RAISE EXCEPTION 'BLOCK 1c FAIL: the survivor reads % before the merge', w_before;
+  END IF;
+
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  PERFORM public.merge_studio_contacts(
+    'f9200000-0000-4000-8000-000000000010','f9200000-0000-4000-8000-000000000011','company_name');
+  PERFORM pg_temp.reset_role();
+
+  w_after := public.compliance_state('f9200000-0000-4000-8000-000000000010');
+  IF w_after <> 'current' THEN
+    RAISE EXCEPTION 'BLOCK 1c FAIL: the merge flipped the survivor''s paper word to %', w_after;
+  END IF;
+
+  -- the whole lineage moved, head and predecessor
+  SELECT count(*) INTO n FROM public.studio_compliance_documents
+   WHERE id IN ('f9400000-0000-4000-8000-000000000011','f9400000-0000-4000-8000-000000000012')
+     AND holder_id = 'f9200000-0000-4000-8000-000000000010';
+  IF n <> 2 THEN
+    RAISE EXCEPTION 'BLOCK 1c FAIL: % of the 2 lineage rows moved onto the survivor (r2 B2-2)', n;
+  END IF;
+
+  -- and the edge onto the survivor's certificate was written last
+  SELECT count(*) INTO n FROM public.studio_compliance_documents
+   WHERE id = 'f9400000-0000-4000-8000-000000000012'
+     AND superseded_by = 'f9400000-0000-4000-8000-000000000010';
+  IF n <> 1 THEN
+    RAISE EXCEPTION 'BLOCK 1c FAIL: the absorbed head was not superseded by the survivor''s certificate';
+  END IF;
+
+  -- the predecessor still names its own head: the chain is intact
+  SELECT count(*) INTO n FROM public.studio_compliance_documents
+   WHERE id = 'f9400000-0000-4000-8000-000000000011'
+     AND superseded_by = 'f9400000-0000-4000-8000-000000000012';
+  IF n <> 1 THEN
+    RAISE EXCEPTION 'BLOCK 1c FAIL: the retired predecessor lost its successor';
+  END IF;
+
+  -- the bond with no successor stays where crm-model §4 puts it
+  SELECT count(*) INTO n FROM public.studio_compliance_documents
+   WHERE id = 'f9400000-0000-4000-8000-000000000013'
+     AND holder_id = 'f9200000-0000-4000-8000-000000000011'
+     AND superseded_by IS NULL;
+  IF n <> 1 THEN
+    RAISE EXCEPTION 'BLOCK 1c FAIL: a lapsed paper with no successor was moved onto the survivor';
+  END IF;
+END $$;
+
+-- ── B2-2 negative control · the laundering doors are still shut ───────────
+-- Both rows are on the SURVIVOR now, same doc_type, same gates, the target's
+-- date not earlier — so only the leg under test can refuse. §4c narrows the
+-- head-of-chain and in-force legs to the write that CHANGES superseded_by;
+-- these two writes are exactly that.
+INSERT INTO public.studio_compliance_documents
+  (id, organization_id, holder_type, holder_id, doc_type, blocks, issued_on, expires_on) VALUES
+  ('f9400000-0000-4000-8000-000000000014','f9000000-0000-4000-8000-00000000000a','company',
+   'f9200000-0000-4000-8000-000000000010','coi_gl', ARRAY['site_access']::text[],
+   CURRENT_DATE - 900, CURRENT_DATE - 500);
+
+DO $$
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  BEGIN
+    -- onto an ALREADY-RETIRED row
+    UPDATE public.studio_compliance_documents
+       SET superseded_by = 'f9400000-0000-4000-8000-000000000012'
+     WHERE id = 'f9400000-0000-4000-8000-000000000014';
+    RAISE EXCEPTION 'BLOCK 1c FAIL: a supersede onto a retired row was accepted';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM NOT LIKE '%compliance_successor_already_superseded%' THEN
+      RAISE EXCEPTION 'BLOCK 1c FAIL: expected compliance_successor_already_superseded, got %', SQLERRM;
+    END IF;
+  END;
+  PERFORM pg_temp.reset_role();
+END $$;
+
+DO $$
+BEGIN
+  -- free the head's own edge, so only its LAPSE can refuse the next write
+  PERFORM set_config('app.contact_merge_in_progress', 'off', true);
+  UPDATE public.studio_compliance_documents SET superseded_by = NULL
+   WHERE id = 'f9400000-0000-4000-8000-000000000012';
+
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  BEGIN
+    UPDATE public.studio_compliance_documents
+       SET superseded_by = 'f9400000-0000-4000-8000-000000000012'
+     WHERE id = 'f9400000-0000-4000-8000-000000000014';
+    RAISE EXCEPTION 'BLOCK 1c FAIL: a supersede onto a LAPSED head was accepted';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM NOT LIKE '%compliance_successor_already_lapsed%' THEN
+      RAISE EXCEPTION 'BLOCK 1c FAIL: expected compliance_successor_already_lapsed, got %', SQLERRM;
+    END IF;
+  END;
+  PERFORM pg_temp.reset_role();
+
+  -- put the chain back the way the merge left it, for block 2b
+  UPDATE public.studio_compliance_documents
+     SET superseded_by = 'f9400000-0000-4000-8000-000000000010'
+   WHERE id = 'f9400000-0000-4000-8000-000000000012';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
 -- 2. sweep_compliance_expiries — one notice per (document, state)
 -- ═══════════════════════════════════════════════════════════════════════════
 INSERT INTO public.studio_compliance_documents
@@ -800,6 +1023,41 @@ BEGIN
   END IF;
   IF v_sched <> '0 6 * * *' THEN
     RAISE EXCEPTION 'BLOCK 2 FAIL: the sweep runs at %, expected 0 6 * * *', v_sched;
+  END IF;
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 2b. The sweep says nothing about a card the room has folded away
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Migrations review r2 B2-4. Block 1c's absorbed card still holds its lapsed
+-- bond (gating {payment}, inside the sweep's window) because the survivor held
+-- nothing to retire it — which is correct, crm-model §4 — and
+-- compliance_document_state() still reads it `lapsed`. Without the
+-- merged_into leg on the scan the nightly sweep wrote "Chain Absorbed's paper
+-- has lapsed" to every owner and admin, with a deep link to a card
+-- people_directory emits no row for.
+DO $$
+DECLARE
+  n integer;
+BEGIN
+  IF public.compliance_document_state('f9400000-0000-4000-8000-000000000013') <> 'lapsed' THEN
+    RAISE EXCEPTION 'BLOCK 2b FAIL: the folded card''s bond does not read lapsed, so the assertion below proves nothing';
+  END IF;
+
+  PERFORM public.sweep_compliance_expiries();
+
+  SELECT count(*) INTO n
+    FROM public.studio_compliance_notices sn
+    JOIN public.studio_compliance_documents d ON d.id = sn.document_id
+   WHERE d.holder_id = 'f9200000-0000-4000-8000-000000000011';
+  IF n <> 0 THEN
+    RAISE EXCEPTION 'BLOCK 2b FAIL: the sweep wrote % notices about paper on a folded-away card (r2 B2-4)', n;
+  END IF;
+
+  SELECT count(*) INTO n FROM public.people_directory
+   WHERE person_id = 'f9200000-0000-4000-8000-000000000011';
+  IF n <> 0 THEN
+    RAISE EXCEPTION 'BLOCK 2b FAIL: the folded card still emits a directory row';
   END IF;
 END $$;
 
@@ -1246,6 +1504,153 @@ BEGIN
       RAISE EXCEPTION 'BLOCK 7 FAIL: expected party_bid_quoted_by_merged_away, got %', SQLERRM;
     END IF;
   END;
+END $$;
+
+-- ── 7b. THE RFQ BACKFILL, OVER REAL ROWS ──────────────────────────────────
+-- Migrations review r2 B2-3 and m2-1. Block 7 above writes the bid columns by
+-- hand and tests three refusals; it never ran a line of 00631's mapping, and
+-- `trade_scope_bids` / `trade_rfq_requests` both hold ZERO rows locally — so
+-- the one statement in this wave that can only really run on Strata had no
+-- coverage at all, which is how a fabricated selection date survived a green
+-- suite. 00631's mapping is RESTATED here verbatim (the block 6 idiom: a
+-- migration's one-time statement is a no-op on every reset).
+INSERT INTO public.proposals (id, designer_id, title, status) VALUES
+  ('f9600000-0000-4000-8000-00000000000a','a0000000-0000-0000-0000-000000000004','Chain proposal','draft');
+
+-- guard_trade_scope_bid_party() resolves the bid's project through the
+-- commercial-document binding, so the trade scope needs one.
+INSERT INTO public.project_commercial_documents
+  (project_id, proposal_id, document_kind, created_by) VALUES
+  ('f9300000-0000-4000-8000-00000000000a','f9600000-0000-4000-8000-00000000000a','trade_scope',
+   'a0000000-0000-0000-0000-000000000004');
+
+INSERT INTO public.project_parties
+  (id, project_id, party_kind, display_name, created_by) VALUES
+  -- a. asked, quoted and SELECTED: the shape that printed a selection date
+  ('f9500000-0000-4000-8000-00000000010b','f9300000-0000-4000-8000-00000000000a','sub','Bid Selected','a0000000-0000-0000-0000-000000000004'),
+  -- b. asked and answered through the RFQ rail only
+  ('f9500000-0000-4000-8000-00000000010c','f9300000-0000-4000-8000-00000000000a','sub','Bid Responded','a0000000-0000-0000-0000-000000000004'),
+  -- c. asked, nothing back
+  ('f9500000-0000-4000-8000-00000000010d','f9300000-0000-4000-8000-00000000000a','sub','Bid Asked','a0000000-0000-0000-0000-000000000004');
+
+INSERT INTO public.trade_rfq_requests (proposal_id, party_id, status, sent_at, responded_at) VALUES
+  ('f9600000-0000-4000-8000-00000000000a','f9500000-0000-4000-8000-00000000010b','responded',
+   CURRENT_DATE - 20, NULL),
+  ('f9600000-0000-4000-8000-00000000000a','f9500000-0000-4000-8000-00000000010c','responded',
+   CURRENT_DATE - 18, CURRENT_DATE - 12),
+  ('f9600000-0000-4000-8000-00000000000a','f9500000-0000-4000-8000-00000000010d','sent',
+   CURRENT_DATE - 9, NULL);
+
+-- select_trade_scope_bid() (00423) promotes an EXISTING row in place and never
+-- touches noted_at, so this is what a selected bid really looks like: one row,
+-- status 'selected', carrying the day its NUMBER was written down.
+INSERT INTO public.trade_scope_bids (proposal_id, party_id, amount_cents, status, noted_at) VALUES
+  ('f9600000-0000-4000-8000-00000000000a','f9500000-0000-4000-8000-00000000010b',
+   1250000,'selected', (CURRENT_DATE - 16)::timestamptz);
+
+WITH strongest_bid AS (
+  SELECT DISTINCT ON (b.party_id)
+    b.party_id, b.status, b.amount_cents
+  FROM public.trade_scope_bids b
+  ORDER BY b.party_id,
+           CASE b.status WHEN 'selected' THEN 0 WHEN 'quoted' THEN 1 ELSE 2 END,
+           b.noted_at DESC, b.id
+),
+quoted_bid AS (
+  SELECT DISTINCT ON (b.party_id) b.party_id, b.noted_at
+  FROM public.trade_scope_bids b
+  WHERE b.status = 'quoted'
+  ORDER BY b.party_id, b.noted_at, b.id
+),
+latest_rfq AS (
+  SELECT DISTINCT ON (r.party_id) r.party_id, r.status, r.sent_at, r.responded_at
+  FROM public.trade_rfq_requests r
+  ORDER BY r.party_id, r.created_at DESC, r.id
+),
+mapped AS (
+  SELECT
+    COALESCE(sb.party_id, lr.party_id) AS party_id,
+    CASE
+      WHEN sb.status = 'selected'  THEN 'selected'
+      WHEN sb.status = 'quoted'    THEN 'quoted'
+      WHEN sb.status = 'withdrawn' THEN 'withdrawn'
+      WHEN lr.status = 'sent'      THEN 'asked'
+      WHEN lr.status = 'responded' THEN 'quoted'
+      ELSE NULL
+    END                              AS outcome,
+    sb.amount_cents                  AS amount_cents,
+    lr.sent_at::date                 AS asked_at,
+    COALESCE(lr.responded_at, qb.noted_at)::date AS quoted_at
+  FROM strongest_bid sb
+  FULL OUTER JOIN latest_rfq lr ON lr.party_id = sb.party_id
+  LEFT JOIN quoted_bid qb ON qb.party_id = COALESCE(sb.party_id, lr.party_id)
+)
+UPDATE public.project_parties pp
+   SET bid_outcome      = m.outcome,
+       bid_amount_cents = COALESCE(pp.bid_amount_cents, m.amount_cents),
+       bid_asked_at     = COALESCE(pp.bid_asked_at,  m.asked_at),
+       bid_quoted_at    = COALESCE(pp.bid_quoted_at, m.quoted_at)
+  FROM mapped m
+ WHERE pp.id = m.party_id
+   AND m.outcome IS NOT NULL
+   AND pp.bid_outcome IS NULL;
+
+DO $$
+DECLARE
+  r record;
+  n integer;
+BEGIN
+  SELECT bid_outcome, bid_amount_cents, bid_asked_at, bid_quoted_at, bid_selected_at, bid_due_at
+    INTO r FROM public.project_parties WHERE id = 'f9500000-0000-4000-8000-00000000010b';
+  IF r.bid_outcome <> 'selected' THEN
+    RAISE EXCEPTION 'BLOCK 7b FAIL: the selected bid mapped to %', r.bid_outcome;
+  END IF;
+  IF r.bid_amount_cents <> 1250000 THEN
+    RAISE EXCEPTION 'BLOCK 7b FAIL: the amount mapped to %', r.bid_amount_cents;
+  END IF;
+  IF r.bid_asked_at <> CURRENT_DATE - 20 THEN
+    RAISE EXCEPTION 'BLOCK 7b FAIL: asked_at mapped to %', r.bid_asked_at;
+  END IF;
+  -- B2-3: the selected row's noted_at is the day the NUMBER arrived, and it
+  -- may answer NEITHER of these two columns. quoted_bid reads status 'quoted'
+  -- only, and bid_selected_at is not backfilled at all — so the roster row can
+  -- never print "Quoted <d>. Selected <the same d>."
+  IF r.bid_quoted_at IS NOT NULL THEN
+    RAISE EXCEPTION 'BLOCK 7b FAIL: bid_quoted_at was taken from a `selected` row''s noted_at (%) — r2 B2-3', r.bid_quoted_at;
+  END IF;
+  IF r.bid_selected_at IS NOT NULL THEN
+    RAISE EXCEPTION 'BLOCK 7b FAIL: the backfill wrote a selection date (%) the record does not hold — r2 B2-3', r.bid_selected_at;
+  END IF;
+  IF r.bid_due_at IS NOT NULL THEN
+    RAISE EXCEPTION 'BLOCK 7b FAIL: the backfill guessed a due date';
+  END IF;
+
+  -- the RFQ rail's own responded_at still answers bid_quoted_at
+  SELECT bid_outcome, bid_asked_at, bid_quoted_at, bid_selected_at
+    INTO r FROM public.project_parties WHERE id = 'f9500000-0000-4000-8000-00000000010c';
+  IF r.bid_outcome <> 'quoted' OR r.bid_quoted_at <> CURRENT_DATE - 12 THEN
+    RAISE EXCEPTION 'BLOCK 7b FAIL: the responded RFQ mapped to % / %', r.bid_outcome, r.bid_quoted_at;
+  END IF;
+  IF r.bid_selected_at IS NOT NULL THEN
+    RAISE EXCEPTION 'BLOCK 7b FAIL: a selection date landed on a seat nobody chose';
+  END IF;
+
+  -- asked and nothing back
+  SELECT bid_outcome, bid_asked_at, bid_quoted_at
+    INTO r FROM public.project_parties WHERE id = 'f9500000-0000-4000-8000-00000000010d';
+  IF r.bid_outcome <> 'asked' OR r.bid_asked_at <> CURRENT_DATE - 9 OR r.bid_quoted_at IS NOT NULL THEN
+    RAISE EXCEPTION 'BLOCK 7b FAIL: the unanswered ask mapped to % / % / %',
+      r.bid_outcome, r.bid_asked_at, r.bid_quoted_at;
+  END IF;
+
+  -- and the guard: a seat the studio has already typed an outcome onto is
+  -- untouched by a rerun
+  SELECT count(*) INTO n FROM public.project_parties
+   WHERE id = 'f9500000-0000-4000-8000-00000000000a' AND bid_outcome = 'quoted'
+     AND bid_amount_cents = 1850000;
+  IF n <> 1 THEN
+    RAISE EXCEPTION 'BLOCK 7b FAIL: the backfill overwrote a hand-typed bid';
+  END IF;
 END $$;
 
 DO $$ BEGIN RAISE NOTICE 'W3 SQL suite: all blocks passed'; END $$;

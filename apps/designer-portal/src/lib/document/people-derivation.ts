@@ -1355,10 +1355,19 @@ export function directoryDuplicatePairs(
   const byPhone = new Map<string, DirectoryPerson[]>();
   for (const row of rows) {
     if (directoryEntryKind(row) === "firm") continue;
-    // QA-R7-3: the scan is over person CARDS. A legacy `designer_clients` row
-    // carries the household's number and no card behind it, so it collided
-    // with the member whose number it copies and named itself in the band.
-    if (directoryEntryIsLegacyClientRecord(row)) continue;
+    // M2R-6 — BOTH SIDES OF A PAIR MUST BE ROLODEX CARDS, because W3 put an
+    // ACT on this band ("Compare these two") and the act merges two
+    // `studio_contacts` ids. `people_directory` has five identity branches and
+    // only the `contact` branch's `person_id` is a card id: a `lead` row
+    // carries `leads.contact_phone` and a `team` row the teammate's profile
+    // phone, so a lead or a teammate the studio has SINCE carded — the
+    // ordinary case — paired with their own card. Pressing it opened the sheet
+    // with one column reading "—" for every field and answered
+    // `merge_contact_not_found` → "One of these cards is no longer in the
+    // book.", which is false: the row is in the book, it was never a card.
+    // This also subsumes QA-R7-3's legacy-client leg (`role === 'client'`),
+    // whose collision was the same shape one branch over.
+    if (row.role !== "contact") continue;
     const key = digits(row.phone);
     if (key.length < 10) continue;
     const bucket = byPhone.get(key);

@@ -38,6 +38,16 @@ export function writeErrorMessage(err: unknown, fallback: string): string {
   if (/party_company_not_a_company/i.test(haystack)) {
     return "A person doesn't hold the subcontract — name the firm's own card here.";
   }
+  // M2R-4 — 00629's two merged-card refusals, for the same reason as CR-3's
+  // three: they are raised as BARE TOKENS, which the schema-word guard below
+  // does not match, so `party_card_merged_away` reached the face verbatim. One
+  // press gets there — "Add" on a card the Directory has already folded away.
+  if (/party_card_merged_away/i.test(haystack)) {
+    return "That card has been folded into another one. Open the card that survived and add them from there.";
+  }
+  if (/party_company_merged_away/i.test(haystack)) {
+    return "That firm's card has been folded into another one. Name the firm that survived.";
+  }
   // Never a schema word on a face: a constraint or index name, a relation, a
   // column. Those sentences are for the log, not the studio.
   if (

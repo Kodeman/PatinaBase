@@ -15,6 +15,33 @@ let consentRecords: unknown[] = [];
 let firmDocuments: unknown[] = [];
 let expiryNotices: unknown[] = [];
 
+/**
+ * The directory rows the picker reads its words — and, since F1, the FIRM'S
+ * OWN NAME — off. Mutable so a test can hand the row a `meta.company_name` the
+ * affiliation model resolves while the card's legacy `company_name` is null,
+ * which is the shape of every carded human on the local book.
+ */
+const DEFAULT_DIRECTORY: unknown[] = [
+  {
+    person_id: 'contact-1',
+    reach_state: 'on_paper',
+    consent_status: 'opted_out',
+    paper_state: 'lapsed',
+    contact_rule_summary: 'Never text. Do not use: mobile, after_hours.',
+  },
+  // QA-R6-1: the view reports the FACT for a lender firm that has filed
+  // nothing — `not_on_file` — because the lender never owed the studio
+  // paper in the first place. Whether it PRINTS is the display rule.
+  {
+    person_id: 'bank-1',
+    reach_state: 'on_paper',
+    consent_status: 'not_asked',
+    paper_state: 'not_on_file',
+    contact_rule_summary: null,
+  },
+];
+let directoryRows: unknown[] = [...DEFAULT_DIRECTORY];
+
 jest.mock('@patina/supabase', () => ({
   useAddProjectParty: () => ({ mutateAsync: addPartyMutate, isPending: false }),
   useAddStudioContact: () => ({ mutateAsync: addContactMutate, isPending: false }),
@@ -41,27 +68,7 @@ jest.mock('@patina/supabase', () => ({
   },
   // The three words at the pick come from the directory, keyed on the rolodex
   // card (v4). One read for the page of hits.
-  usePeopleDirectory: () => ({
-    data: [
-      {
-        person_id: 'contact-1',
-        reach_state: 'on_paper',
-        consent_status: 'opted_out',
-        paper_state: 'lapsed',
-        contact_rule_summary: 'Never text. Do not use: mobile, after_hours.',
-      },
-      // QA-R6-1: the view reports the FACT for a lender firm that has filed
-      // nothing — `not_on_file` — because the lender never owed the studio
-      // paper in the first place. Whether it PRINTS is the display rule.
-      {
-        person_id: 'bank-1',
-        reach_state: 'on_paper',
-        consent_status: 'not_asked',
-        paper_state: 'not_on_file',
-        contact_rule_summary: null,
-      },
-    ],
-  }),
+  usePeopleDirectory: () => ({ data: directoryRows }),
   // CR-5: the RULE ROW is what the mini row's clause is composed from —
   // `contact_rule_summary` is the mechanical list in schema words and must not
   // reach a face.
@@ -103,6 +110,7 @@ const ROSA: StudioContact = {
   created_by: null,
   notes: null,
   archived_at: null,
+  merged_into: null,
   created_at: '2026-01-01T00:00:00.000Z',
   updated_at: '2026-01-01T00:00:00.000Z',
 };
@@ -158,6 +166,7 @@ beforeEach(() => {
   consentRecords = [];
   firmDocuments = [];
   expiryNotices = [];
+  directoryRows = [...DEFAULT_DIRECTORY];
   useProjectRoster.mockReset();
   useProjectRoster.mockReturnValue({ data: [], refetch: refetchRoster });
 });
@@ -511,7 +520,68 @@ describe('RolodexPicker — bring forward', () => {
     render(<RolodexPicker {...props} />);
     expect(
       document.querySelector('[data-expiry-notice]')?.textContent,
-    ).toBe('Martínez Tile Works’s insurance lapses in 30 days, on 6 October 2026.');
+    ).toBe('Martínez Tile Works’s insurance lapses on 6 October 2026.');
+  });
+
+  /**
+   * F1 — the firm the SPEC names, not the person the legacy column falls back
+   * to. `studio_contacts.company_name` is null on every card the affiliation
+   * model (00592) linked, so `company_name ?? contactName(c)` printed the
+   * person: the mini row lost its firm segment entirely and the consequence
+   * sentence read "Dana Kowalski's insurance lapsed…" where SPEC §5.7 #7 fixes
+   * "Northgate Electric's insurance lapsed…". `people_directory`'s own
+   * `meta.company_name` join is the Directory's answer and now the picker's.
+   */
+  it('names the FIRM from the directory join, not the person (SPEC §5.7 #4, #7)', () => {
+    useStudioContacts.mockReturnValue({
+      data: [{ ...ROSA, company_name: null, company_id: 'firm-tile' }],
+      isLoading: false,
+    });
+    directoryRows = [
+      {
+        person_id: 'contact-1',
+        reach_state: 'on_paper',
+        consent_status: 'not_asked',
+        paper_state: 'lapsed',
+        contact_rule_summary: null,
+        meta: { company_id: 'firm-tile', company_name: 'Martínez Tile Works' },
+      },
+    ];
+    firmDocuments = [
+      {
+        id: 'doc-1',
+        holder_id: 'firm-tile',
+        doc_type: 'coi_gl',
+        doc_label: null,
+        expires_on: '2026-03-31',
+        blocks: ['site_access'],
+        superseded_by: null,
+      },
+    ];
+    expiryNotices = [
+      { id: 'n-1', document_id: 'doc-1', state: 'lapsed', noticed_at: '2026-09-13' },
+    ];
+    render(<RolodexPicker {...props} projectName="Okonkwo residence" />);
+
+    // the mini row's meta line carries the firm between the kind and the trade
+    expect(
+      document.querySelector('[data-party-mini-meta]')?.textContent,
+    ).toBe('Subcontractor · Martínez Tile Works · Tile');
+
+    // the row's own expiry clause names the firm, not Rosa
+    expect(
+      document.querySelector('[data-expiry-notice]')?.textContent,
+    ).toBe('Martínez Tile Works’s insurance lapsed 31 March 2026.');
+
+    // and so does the consequence sentence, which is the SPEC's fixed wording
+    fireEvent.click(screen.getByRole('checkbox', { name: /Rosa Martínez/ }));
+    const consequence = document.querySelector(
+      '[data-bring-forward-consequence]',
+    )?.textContent;
+    expect(consequence).toContain(
+      'Martínez Tile Works’s insurance lapsed 31 March 2026.',
+    );
+    expect(consequence).not.toContain('Rosa Martínez’s insurance');
   });
 
   it('seats every ticked row in ONE confirm, carrying the card', async () => {
@@ -603,9 +673,13 @@ describe('RolodexPicker — bring forward', () => {
     render(<RolodexPicker {...props} />);
     fireEvent.click(screen.getByRole('checkbox', { name: /Rosa Martínez/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Add one to the roster' }));
-    expect(
-      await screen.findByText(/Rosa Martínez did not go on/),
-    ).toBeInTheDocument();
+    // M2R-3: the refusal goes through `writeErrorMessage`, so 00629's bare
+    // token is a sentence and never the token itself (SPEC §8 #3).
+    const banner = await screen.findByText(/Rosa Martínez did not go on/);
+    expect(banner.textContent).toBe(
+      'Rosa Martínez did not go on the call sheet. That card has been folded into another one. Open the card that survived and add them from there.',
+    );
+    expect(banner.textContent).not.toContain('party_card_merged_away');
     expect(props.onClose).not.toHaveBeenCalled();
   });
 });
