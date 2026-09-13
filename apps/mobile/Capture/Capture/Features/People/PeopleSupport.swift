@@ -98,11 +98,18 @@ struct PeopleTelLine: View {
 
     private var url: URL? { FieldPhoneLine.telURL(e164: e164, display: display) }
 
+    /// The words are printed only here, so overriding the label with the call
+    /// action alone is the whole of what VoiceOver gets for reach and stage.
+    private func callLabel(_ display: String) -> String {
+        guard !words.isEmpty else { return "Call \(display)" }
+        return "\(words.joined(separator: ", ")), call \(display)"
+    }
+
     var body: some View {
         if let url, let display {
             Link(destination: url) { line(display, dialable: true) }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Call \(display)")
+                .accessibilityLabel(callLabel(display))
                 .accessibilityAddTraits(.isButton)
                 .modifier(OptionalIdentifier(identifier: identifier))
         } else {
