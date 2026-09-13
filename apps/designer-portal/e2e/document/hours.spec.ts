@@ -16,9 +16,28 @@
  *  · The lens survives to 390 — it wraps rather than clipping or scrolling the
  *    page sideways — and each word keeps its 44px hit at every width.
  */
+import type { Page } from '@playwright/test';
 import { test, expect } from '../fixtures/auth';
 
 const COLD = 30_000;
+
+/**
+ * The Desk Walkthrough's welcome modal is a real `<dialog>`: while it is open
+ * the rest of the page is inert and aria-hidden, so NOTHING inside the Hours
+ * sheet is reachable — the lens renders and the reads still fail. Its
+ * suppression is a server-side tour record (`profiles.help_state`), not the
+ * localStorage marker `e2e/fixtures/auth.ts` pre-sets, so a freshly seeded
+ * designer is offered it. Decline it before reading the sheet; after the first
+ * test in this serial file the record is written and it never returns, which is
+ * why the click is allowed to find nothing.
+ */
+async function declineDeskWalkthrough(page: Page): Promise<void> {
+  await page
+    .getByRole('dialog', { name: 'This is your Desk' })
+    .getByRole('button', { name: 'Skip for now' })
+    .click({ timeout: 10_000 })
+    .catch(() => undefined);
+}
 
 /** The three widths the house sheet is read at. */
 const WIDTHS = [
@@ -41,6 +60,7 @@ test('the sheet doorway opens the Hours book', async ({
   await expect(page.getByRole('dialog', { name: 'Hours' })).toBeVisible({
     timeout: COLD,
   });
+  await declineDeskWalkthrough(page);
   // The doorway is a one-shot instruction: once carried out the address reads
   // `/desk` again, so a refresh shows the Desk's own state.
   await expect.poll(() => new URL(page.url()).search).toBe('');
@@ -55,6 +75,7 @@ for (const { label, width, height } of WIDTHS) {
 
     const sheet = page.getByRole('dialog', { name: 'Hours' });
     await expect(sheet).toBeVisible({ timeout: COLD });
+    await declineDeskWalkthrough(page);
 
     // HT-8 — the admin's instrument. Two words with nothing in hand: her own
     // hours and the studio's. No tab bar, no leaderboard.
@@ -89,6 +110,7 @@ test('the studio scope answers with a total above its buckets', async ({
 
   const sheet = page.getByRole('dialog', { name: 'Hours' });
   await expect(sheet).toBeVisible({ timeout: COLD });
+  await declineDeskWalkthrough(page);
 
   await sheet.getByRole('button', { name: 'the studio' }).click();
 

@@ -178,6 +178,13 @@ const wayfinding = {
  *   time_autostart_disclosed / time_autostart_opted_out — HT-35's disclosure
  *     band and its per-member opt-out. Owed with that ruling's surfaces; no
  *     emitter is defined here yet because nothing can fire one honestly.
+ *     HT-35 is EXPLICITLY DESCOPED from W2, not done: the opt-out is a
+ *     per-member, cross-device, default-on preference and there is no column
+ *     for one (`user_settings` has none, `profiles` has none, and
+ *     `profiles.help_state` is the help-system's own cache), while plan §3
+ *     reserves HT-35 no migration number and this program's range is spent. It
+ *     returns as one stage — band, opt-out and these two emitters together —
+ *     once Kody rules where the preference lives and releases a number.
  *
  * Nothing here carries `notes`: free text is the studio's, not telemetry
  * (HT-36).

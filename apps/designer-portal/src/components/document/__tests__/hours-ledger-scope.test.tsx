@@ -15,6 +15,12 @@
  * rather than on the viewer's own; dropping the document drops the scope that
  * was about it; and a viewer with no lens keeps her own rows, her inline edit
  * and her delete rather than landing in a scope she cannot leave.
+ *
+ * Round-2 fixes pinned here too: no money readout prints a figure before its
+ * read answers (an unanswered rollup printed "0 min" as a studio's week, and a
+ * REFUSED one printed it above the refusal), and a resolved stamp actually
+ * flips the "priced by" line — which it only can if the repair invalidates the
+ * key the document's pricing studio is read on.
  */
 
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -26,6 +32,14 @@ type Role = 'owner' | 'admin' | 'member';
 let viewerRole: Role = 'owner';
 /** `projects.studio_id` for project-1 — the studio that PRICES the document. */
 let projectStudioId: string | null = 'studio-1';
+
+/** Each money read's settle state — a figure must never precede an answer. */
+type ReadState = 'ready' | 'pending' | 'error';
+let rollupState: ReadState = 'ready';
+let ledgerState: ReadState = 'ready';
+let projectTotalState: ReadState = 'ready';
+/** What a resolved `stamp_project_pricing_studio` does to the world. */
+let onStamp: (() => void) | null = null;
 
 const ledgerCalls: Array<Record<string, unknown>> = [];
 const rollupCalls: Array<Record<string, unknown>> = [];
@@ -124,7 +138,10 @@ jest.mock('@patina/supabase', () => ({
   useCreateTimeEntry: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useUpdateTimeEntry: () => ({ mutate: jest.fn() }),
   useDeleteTimeEntry: () => ({ mutateAsync: jest.fn(), isPending: false }),
-  useStampProjectPricingStudio: () => ({ mutate: jest.fn(), isPending: false }),
+  useStampProjectPricingStudio: () => ({
+    mutate: () => onStamp?.(),
+    isPending: false,
+  }),
   useOrganizations: () => ({
     data: [
       {
@@ -138,33 +155,46 @@ jest.mock('@patina/supabase', () => ({
   useStudioHoursRollup: (params: Record<string, unknown>) => {
     rollupCalls.push(params);
     return {
-      data: [
-        {
-          bucket_key: 'maria',
-          bucket_label: 'Maria Obi',
-          member_id: 'maria',
-          member_name: 'Maria Obi',
-          entry_count: 2,
-          total_minutes: 180,
-          billable_minutes: 120,
-          billable_cents: 30_000,
-          internal_minutes: 60,
-        },
-      ],
-      isError: false,
-      error: null,
+      data:
+        rollupState === 'ready'
+          ? [
+              {
+                bucket_key: 'maria',
+                bucket_label: 'Maria Obi',
+                member_id: 'maria',
+                member_name: 'Maria Obi',
+                entry_count: 2,
+                total_minutes: 180,
+                billable_minutes: 120,
+                billable_cents: 30_000,
+                internal_minutes: 60,
+              },
+            ]
+          : undefined,
+      isPending: rollupState === 'pending',
+      isError: rollupState === 'error',
+      error: rollupState === 'error' ? new Error('permission denied') : null,
     };
   },
   useTimeEntryLedger: (params: Record<string, unknown>) => {
     ledgerCalls.push(params);
-    return { data: [LEDGER_ROW], isError: false, error: null };
+    return {
+      data: ledgerState === 'ready' ? [LEDGER_ROW] : undefined,
+      isPending: ledgerState === 'pending',
+      isError: ledgerState === 'error',
+      error: ledgerState === 'error' ? new Error('permission denied') : null,
+    };
   },
   useProjectHoursTotal: (projectId: string | null) => {
     projectTotalCalls.push(projectId);
     return {
-      data: { minutes: 180, billable_minutes: 120, amount_cents: 30_000 },
-      isError: false,
-      error: null,
+      data:
+        projectTotalState === 'ready'
+          ? { minutes: 180, billable_minutes: 120, amount_cents: 30_000 }
+          : undefined,
+      isPending: projectTotalState === 'pending',
+      isError: projectTotalState === 'error',
+      error: projectTotalState === 'error' ? new Error('not on the project') : null,
     };
   },
 }));
@@ -183,13 +213,12 @@ jest.mock('../commercial/project-authority-band', () => ({
   ProjectAuthorityBandForProject: () => null,
 }));
 
-const renderLedger = (projectId?: string) =>
+const makeQueryClient = () =>
+  new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+const renderLedger = (projectId?: string, client: QueryClient = makeQueryClient()) =>
   render(
-    <QueryClientProvider
-      client={
-        new QueryClient({ defaultOptions: { queries: { retry: false } } })
-      }
-    >
+    <QueryClientProvider client={client}>
       <HoursLedger initialContext={projectId ? { projectId } : null} />
     </QueryClientProvider>,
   );
@@ -200,6 +229,10 @@ beforeEach(() => {
   ledgerCalls.length = 0;
   rollupCalls.length = 0;
   projectTotalCalls.length = 0;
+  rollupState = 'ready';
+  ledgerState = 'ready';
+  projectTotalState = 'ready';
+  onStamp = null;
   hoursMemberScopePending.userId = null;
   hoursMemberScopePending.name = null;
 });
@@ -416,5 +449,107 @@ describe('the Hours scope lens', () => {
       expect(screen.getAllByText('Maria Obi').length).toBeGreaterThan(0),
     );
     expect(screen.queryByText(/support designer/)).not.toBeInTheDocument();
+  });
+
+  // ── Round-2 fixes: a figure never precedes an answer ─────────────────────
+
+  it('says it is reading rather than printing a studio total of zero', () => {
+    // fmtMinutes(0) = "0 min", and the rollup's grand total used to be summed
+    // from `rollup.data ?? []` unconditionally — so an unanswered read printed
+    // a studio's week as zero, then called it "Nothing logged in this window."
+    rollupState = 'pending';
+    renderLedger();
+
+    fireEvent.click(screen.getByRole('button', { name: 'the studio' }));
+
+    expect(screen.getByText('Reading…')).toBeInTheDocument();
+    expect(screen.queryByText('0 min')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('Nothing logged in this window.'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows no total at all when the studio rollup is refused', () => {
+    // §0.24's hazard by hand: a denied rollup reading as a zero total for the
+    // studio's money. The refusal says so, and stands alone.
+    rollupState = 'error';
+    renderLedger();
+
+    fireEvent.click(screen.getByRole('button', { name: 'the studio' }));
+
+    expect(
+      screen.getByText(/These hours could not be read/),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('0 min')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('Nothing logged in this window.'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('waits for an answer before saying there are no entries', () => {
+    ledgerState = 'pending';
+    renderLedger();
+
+    fireEvent.click(screen.getByRole('button', { name: 'the studio' }));
+    fireEvent.click(screen.getByRole('button', { name: 'The entries' }));
+
+    expect(screen.getByText('Reading…')).toBeInTheDocument();
+    expect(
+      screen.queryByText('No entries in this window.'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('prints no zero for a document total the function has not given (HT-10-a)', async () => {
+    // project_hours_total raises for a caller who is not on the project rather
+    // than answering zero — so a zero under "this document · all time" is a
+    // reading the server never gave.
+    viewerRole = 'member';
+    projectTotalState = 'pending';
+    renderLedger('project-1');
+
+    await waitFor(() =>
+      expect(screen.getByText('this document · all time')).toBeInTheDocument(),
+    );
+    // Scoped to that readout: the sheet's own front matter legitimately reads a
+    // zero for a week with nothing in it — this section has no answer at all.
+    const total = screen
+      .getByText('this document · all time')
+      .closest('section') as HTMLElement;
+    expect(total.textContent).toContain('Reading…');
+    expect(total.textContent).not.toContain('0 min');
+  });
+
+  it('flips the priced-by line when the stamp resolves', async () => {
+    // The sheet reads the pricing studio off the DOCUMENT, on its own key. The
+    // repair must therefore invalidate THAT key —
+    // `['document-hours-project-studio', projectId]`, which
+    // useStampProjectPricingStudio's onSuccess now does (pinned in
+    // packages/supabase/src/hooks/__tests__/use-time-tracking.test.ts). Without
+    // it a SUCCESSFUL stamp kept printing "no studio yet" under a door 00606
+    // then refused as already-named.
+    projectStudioId = null;
+    const client = makeQueryClient();
+    onStamp = () => {
+      projectStudioId = 'studio-1';
+      client.invalidateQueries({
+        queryKey: ['document-hours-project-studio', 'project-1'],
+      });
+    };
+    renderLedger('project-1', client);
+
+    const door = await screen.findByRole('button', {
+      name: /Name your studio/,
+    });
+    await act(async () => {
+      fireEvent.click(door);
+    });
+
+    await waitFor(() =>
+      expect(screen.getByText('Leah Mbeki Studio')).toBeInTheDocument(),
+    );
+    expect(screen.queryByText(/no studio yet/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /Name your studio/ }),
+    ).not.toBeInTheDocument();
   });
 });

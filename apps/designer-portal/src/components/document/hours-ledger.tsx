@@ -1006,21 +1006,30 @@ function ScopeRollup({
           : SCOPE_CAPTION[scope]}{' '}
         · {weekLabel}
       </p>
-      <p className="mt-0.5 text-[15px] text-[var(--color-charcoal)]">
-        {fmtMinutes(totalMinutes)}
-        {billableCents > 0 && (
-          <>
-            {' '}
-            <span className="text-[var(--color-aged-oak)]">·</span>{' '}
-            {fmtUsd(billableCents)} billable
-          </>
-        )}
-        {entryCount > 0 && (
-          <span className="ml-2 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
-            {entryCount} {entryCount === 1 ? 'entry' : 'entries'}
-          </span>
-        )}
-      </p>
+      {/* A studio's money is never summed from rows that have not arrived, and
+          never from rows that were REFUSED: an unread rollup used to print
+          "0 min" as the grand total — above the terracotta line saying it could
+          not be read. While it is reading the figure says so; when the read
+          fails there is no total at all. */}
+      {rollup.isPending ? (
+        <p className="mt-0.5 text-[15px] text-[var(--color-aged-oak)]">Reading…</p>
+      ) : rollup.isError ? null : (
+        <p className="mt-0.5 text-[15px] text-[var(--color-charcoal)]">
+          {fmtMinutes(totalMinutes)}
+          {billableCents > 0 && (
+            <>
+              {' '}
+              <span className="text-[var(--color-aged-oak)]">·</span>{' '}
+              {fmtUsd(billableCents)} billable
+            </>
+          )}
+          {entryCount > 0 && (
+            <span className="ml-2 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
+              {entryCount} {entryCount === 1 ? 'entry' : 'entries'}
+            </span>
+          )}
+        </p>
+      )}
 
       <p
         role="group"
@@ -1053,7 +1062,7 @@ function ScopeRollup({
           These hours could not be read —{' '}
           {rollup.error instanceof Error ? rollup.error.message : 'try again'}
         </p>
-      ) : rows.length === 0 ? (
+      ) : rollup.isPending ? null : rows.length === 0 ? (
         <p className="py-3 text-[12px] italic text-[var(--color-aged-oak)]">
           Nothing logged in this window.
         </p>
@@ -1125,23 +1134,30 @@ function MemberProjectTotal({ projectId }: { projectId: string }) {
       <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.07em] text-[var(--color-clay-ink)]">
         this document · all time
       </p>
-      <p className="mt-0.5 text-[15px] text-[var(--color-charcoal)]">
-        {fmtMinutes(data?.minutes ?? 0)}
-        {(data?.billable_minutes ?? 0) > 0 && (
-          <>
-            {' '}
-            <span className="text-[var(--color-aged-oak)]">·</span>{' '}
-            {fmtMinutes(data?.billable_minutes ?? 0)} billable
-          </>
-        )}
-        {(data?.amount_cents ?? 0) > 0 && (
-          <>
-            {' '}
-            <span className="text-[var(--color-aged-oak)]">·</span>{' '}
-            {fmtUsd(data?.amount_cents ?? 0)}
-          </>
-        )}
-      </p>
+      {/* The function raises for a caller who is not on the project rather than
+          answering zero, so a zero printed before it answers is a reading it
+          never gave. */}
+      {total.isPending ? (
+        <p className="mt-0.5 text-[15px] text-[var(--color-aged-oak)]">Reading…</p>
+      ) : (
+        <p className="mt-0.5 text-[15px] text-[var(--color-charcoal)]">
+          {fmtMinutes(data?.minutes ?? 0)}
+          {(data?.billable_minutes ?? 0) > 0 && (
+            <>
+              {' '}
+              <span className="text-[var(--color-aged-oak)]">·</span>{' '}
+              {fmtMinutes(data?.billable_minutes ?? 0)} billable
+            </>
+          )}
+          {(data?.amount_cents ?? 0) > 0 && (
+            <>
+              {' '}
+              <span className="text-[var(--color-aged-oak)]">·</span>{' '}
+              {fmtUsd(data?.amount_cents ?? 0)}
+            </>
+          )}
+        </p>
+      )}
     </section>
   );
 }
@@ -1185,6 +1201,14 @@ function ScopeEntries({
       >
         These entries could not be read —{' '}
         {ledger.error instanceof Error ? ledger.error.message : 'try again'}
+      </p>
+    );
+  }
+  // "No entries in this window." is an answer, so it waits for one.
+  if (ledger.isPending) {
+    return (
+      <p className="py-2 text-[12px] italic text-[var(--color-aged-oak)]">
+        Reading…
       </p>
     );
   }

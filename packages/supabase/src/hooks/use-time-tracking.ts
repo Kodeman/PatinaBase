@@ -904,6 +904,16 @@ export function useStampProjectPricingStudio() {
       invalidateProjectTime(queryClient, projectId);
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       queryClient.invalidateQueries({ queryKey: ['document-hours-week'] });
+      // The Hours sheet reads the stamped column off the DOCUMENT, on its own
+      // key — not off the week's entries. Left out, a SUCCESSFUL repair kept
+      // printing "no studio yet" under a door the server then refused as
+      // already-named, so the repair visibly failed to repair.
+      queryClient.invalidateQueries({
+        queryKey: ['document-hours-project-studio', projectId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['document-hours-pending-authorization'],
+      });
     },
   });
 }
