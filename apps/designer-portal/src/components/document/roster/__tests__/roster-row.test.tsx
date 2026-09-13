@@ -122,6 +122,30 @@ describe('RosterRow — folded', () => {
     expect(screen.getByText('On the job')).toBeInTheDocument();
   });
 
+  /**
+   * CR3-2 — the row fell back to `row.ruleSummary` (`contact_rule_summary()`)
+   * whenever the rule row had not arrived, and that column prints raw
+   * `channel_kind` tokens, which SPEC §8 #3 bars from any face. The rules are
+   * a separate query from the roster, so this painted on every cold load.
+   */
+  it('prints no rule clause — and no schema word — while the rule row is unread', () => {
+    const { container } = ul(
+      <RosterRow
+        row={seatRow({
+          ruleSummary:
+            'Never text. Do not use: after_hours, ap_email, dispatch, email, mobile, office. Write Rosa Delgado instead.',
+        })}
+        band="this_week"
+        expanded={false}
+        onToggle={jest.fn()}
+      />,
+    );
+    expect(container.querySelector('[data-contact-rule]')).toBeNull();
+    for (const token of ['after_hours', 'ap_email', 'dispatch', 'portal_311']) {
+      expect(container.textContent).not.toContain(token);
+    }
+  });
+
   it('makes the phone a sibling target, never a link inside the button', () => {
     const { container } = ul(
       <RosterRow row={seatRow()} band="this_week" expanded={false} onToggle={jest.fn()} />,

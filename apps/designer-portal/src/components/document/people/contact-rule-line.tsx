@@ -34,9 +34,12 @@ export interface ContactRouteTarget {
 
 export interface ContactRuleLineProps {
   /**
-   * The rule as one sentence. `contact_rule_summary(subject_type, subject_id)`
-   * already renders this on both directory views, with a fixed clause order —
-   * pass that column straight through rather than re-composing it here.
+   * The rule as one sentence, composed by `contactRuleClause()` off the rule
+   * ROW. CR3-2: never `contact_rule_summary(subject_type, subject_id)` — that
+   * column prints raw `channel_kind` tokens (`after_hours`, `ap_email`,
+   * `portal_311`, `dispatch`), which SPEC §8 #3 bars from any face, and it
+   * drops the studio's own typed reason. A caller whose rule row has not
+   * loaded passes `null` and prints no clause.
    */
   summary: string | null | undefined;
   /**

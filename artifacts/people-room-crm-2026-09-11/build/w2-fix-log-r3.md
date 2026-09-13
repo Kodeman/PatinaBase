@@ -514,3 +514,273 @@ supabase/functions/_shared/sms.test.ts
 3. **CR3-9's deploy** — `_shared/sms.ts` changed; every importing function needs
    redeploying when this ships.
 4. The 26 minors (`CR3‑12..CR3‑37`) and QA‑R3‑2/3/5/6/9 are untouched by design.
+
+---
+
+# W2 — fix log, round 3 (second pass: the six findings dispatched 2026-09-13)
+
+⚠ NUMBERING: this pass answers a LATER review set that reuses the `CR3-n`
+prefix. Its findings are the four majors in `w2-review-r3-code.md` §4
+(`CR3-1` … `CR3-4`, that file as it stands today) plus `QA-1`/`QA-2` from the
+QA brief, which correspond to `QA-R4-1` and `QA-R4-2` in `w2-review-r4-qa.md`.
+They are NOT the `CR3-1..CR3-11` answered above. Scope: those six, nothing
+else.
+
+## Gates, run here after the changes
+
+```
+$ pnpm --dir <worktree> --filter @patina/designer-portal type-check
+    > tsc --noEmit                                                    EXIT 0
+$ pnpm --dir <worktree> --filter @patina/supabase type-check
+    > tsc --noEmit                                                    EXIT 0
+$ pnpm --dir <worktree> --filter @patina/admin-portal build
+    ✓ Compiled successfully in 18.8s · full route table               EXIT 0
+$ pnpm --dir <worktree> --filter @patina/designer-portal test -- --silent
+    Test Suites: 584 passed, 584 total
+    Tests:       7438 passed, 7438 total        (7432 before; +6 new pins)
+$ cd packages/supabase && npx vitest run
+    Test Files  103 passed (103)
+    Tests       1297 passed | 12 skipped        (1295 before; +2 new pins)
+$ cd apps/designer-portal && npx eslint src/components/document/section-eyebrow.tsx \
+      src/components/document/people src/components/document/roster
+    ✖ 4 problems (0 errors, 4 warnings) — all pre-existing, none in a file
+      this pass touched.
+```
+
+No dev server started, no port taken, no prod touched. Local DB
+(`postgresql://postgres:postgres@127.0.0.1:54322/postgres`) read-only —
+the one probe runs inside a transaction it rolls back.
+
+Every fix below carries a NEGATIVE CONTROL: the new pin was re-run against the
+old line, and failed.
+
+---
+
+## QA-1 (BLOCKING) — adding a returning sub died on the channel the card already held
+
+**Fixed at the door, not at the one caller.** `packages/supabase/src/hooks/use-studio-contacts.ts:769-800`
+(`useAddStudioContactChannel`).
+
+The finding named `add-person-sheet.tsx:704-728` and suggested a pre-check in
+the sheet. The root cause is one level down and fails identically for every
+other channel-writing surface (the person card's channel band, `reach-access`),
+so the fix sits in the single hook both go through:
+
+`useAddStudioContactChannel` already caught the `23505` on
+`idx_studio_contact_channels_owner_kind_value` and re-read the standing row —
+but it re-read with `input.value.trim()`, the raw string the studio typed.
+`normalize_studio_contact_channel_trg` rewrites every `value` BEFORE INSERT
+through `normalize_channel_value()`, so the index only ever holds the
+normalised shape. The re-read matched nothing, fell through to
+`if (!existing) throw error`, and the sheet printed the generic
+"Could not add them just now. Try again." — with the seat already written.
+
+Now: on `23505` only, the hook asks the DB for its own key
+(`supabase.rpc('normalize_channel_value', { p_channel_kind, p_value })`, an
+IMMUTABLE SQL function granted EXECUTE to `authenticated` in 00593:183-185) and
+re-reads on that. A failed RPC falls back to the raw value rather than
+inventing a second copy of the rule in TypeScript. The happy path is untouched
+— still one request.
+
+**Evidence (local DB, `probe308-w2-fix-r4-qa1-channel-normalisation.sql/.out`):**
+
+```
+stored_on_danas_card = +16125550111
+INSERT '(612) 555-0111'  → ERROR 23505 … Key (owner_id, channel_kind, value)=
+                            (d0e10000-…-0011, mobile, +16125550111) already exists
+old_recovery_rows  = 0        -- keyed on the typed string
+new_recovery_rows  = 1  status=active  preferred=t
+                              -- keyed through normalize_channel_value()
+```
+
+and `select count(*) from studio_contact_channels where channel_kind in
+('mobile','office','dispatch','after_hours') and value !~ '^\+[0-9]+$'` → **0**:
+every stored phone is E.164, so the old key could never match. Frank Bauer's
+card holds `+16125550115` — the number `person-card.spec.ts`'s `addSub` helper
+types twice.
+
+**Pins:** `packages/supabase/src/hooks/__tests__/use-studio-contact-rules-and-channels.test.ts`
+— the mock client grew an `rpc` that mirrors `normalize_channel_value`, and
+`.eq()` now records its filters. The duplicate test asserts the recovery read
+asked for `+16125550115`; a second test does the same for a lower-cased
+address. **Negative control:** with `.eq('value', value)` restored, both fail
+(`2 failed | 5 passed`).
+
+A HELD channel is still not a deleted one: the standing row is returned as it
+stands, `status` and `preferred` untouched.
+
+---
+
+## QA-2 (MAJOR) — no element's text was ever exactly a band label
+
+`apps/designer-portal/src/components/document/section-eyebrow.tsx`
+
+The label and the count sat as bare siblings inside the `<h2>` with only a flex
+gap, so the heading's own text read `Studio side2` and its accessible name
+"Studio side 2". The label now carries its own `<span>`, and the count is split
+in two: the digits are `aria-hidden` (the visual is unchanged — same span, same
+Clay token, same gap) and a `sr-only` companion says `, N listed`, so the count
+reaches a screen reader as a labelled fact instead of digits glued to the
+heading.
+
+Shared component — checked every one of its 22 call sites: all pass a single
+child (plain text, or one `<span id=…>` for `aria-labelledby`), so the wrapper
+adds one flex item where there was one before. The two specs that assert on a
+SectionEyebrow heading by role (`desk-error-state.spec.ts:73,127`) assert
+`toHaveCount(0)`, and `/Every job/` is a substring regex — neither moves.
+
+**Evidence** (jsdom probe, since deleted):
+
+```
+H2_TEXT       = "Studio side2, 2 listed"
+EXACT_MATCHES = 1  TAG=SPAN     // elements whose whole textContent is "Studio side"
+```
+
+Before the change that count was 0, which is exactly why
+`page.getByText('Studio side', { exact: true })` timed out.
+
+**Pin:** `roster/__tests__/call-sheet.test.tsx` — for all six bands, exactly one
+element inside the band's `<h2>` has `textContent === label`. It walks
+`textContent` on purpose: RTL's `getByText` reads a node's DIRECT text children
+only, so it matched the broken markup too and could never have caught this.
+**Negative control:** unwrap the label and the pin fails.
+
+---
+
+## CR3-1 (MAJOR) — the Add sheet asserted consent the ledger does not hold
+
+`apps/designer-portal/src/components/document/people/directory/add-person-sheet.tsx:1541-1552` and `:798-804`
+
+The sheet's door is `useAddProjectParty` → `record_channel_invite`, which
+leaves a standing grant alone and otherwise records `pending` — the word every
+face beside it prints as `Invited`. Two sentences now say what was written:
+
+* evidence note — "<Name> is invited, not consenting. Patina has not sent them
+  anything yet." (was "…is recorded as consenting on this evidence.")
+* confirmation — "<Name> added to <project>. The invite is recorded; nothing
+  has been sent yet." (was "The consent is recorded…")
+
+The word `consenting` no longer appears on this sheet in any branch; the sheet
+cannot know before the write whether the standing-grant branch was taken, and
+understating an invite is the safe side of a consent surface. SPEC §5.5 #15's
+trailing "until he replies YES" is deliberately NOT restored: R-AS took
+`fc_optin_invite_dispatch` off the seat INSERT, so nothing is sent and no YES
+is coming until W3's record-side dispatch.
+
+**Pin:** `directory/__tests__/add-person-sheet-kinds.test.tsx` — the note reads
+"is invited, not consenting." and never "is recorded as consenting".
+
+---
+
+## CR3-2 (MAJOR) — raw schema tokens reached two faces
+
+`people/directory/person-row.tsx:91-99` · `roster/roster-row.tsx:131-138`
+
+Both faces fell back to `contact_rule_summary` (`row.ruleSummary`) whenever the
+rule row had not arrived. That column renders `channels_forbidden` /
+`channels_allowed` as raw `channel_kind` tokens, which SPEC §8 #3 bars from any
+face, and it drops the studio's own typed `reason`. `useContactRules()` is a
+separate query from both reads, so it painted on every cold load — and forever
+if that read failed.
+
+Both now read `contactRuleClause(rule)` alone. `useContactRules()` selects
+every rule the studio can see, so once it resolves nothing is lost; until then
+the row prints no clause, which is what `ContactRuleLine` is already built for
+("no rule on file is the CARD's sentence to print, not this line's").
+`splitRoutedClause`'s `routedName` is kept in the person row — a person's name
+is not a schema word — so a routed row still prints "Write Rosa Delgado
+instead." while the rules load. `contact-rule-line.tsx`'s prop doc, which told
+callers to "pass that column straight through", now says the opposite.
+
+**Evidence (local DB, as `designer@patina.dev`'s studio):** `contact_rule_summary`
+for Frank Bauer returns "Never text. Do not use: after_hours, ap_email,
+dispatch, email, mobile, office. Write Rosa Delgado instead." — reproduced
+before the change; unreachable from either face after it.
+
+**Pins:** one in `person-row-hardening.test.tsx`, one in `roster-row.test.tsx`:
+a row given a token-laden summary and no rule row renders no
+`[data-contact-rule]` and contains none of `after_hours`, `ap_email`,
+`dispatch`, `portal_311`. **Negative control:** both fallbacks restored → both
+pins fail.
+
+---
+
+## CR3-3 (MAJOR) — "Start the card" stamped a way-in change that never happened
+
+`apps/designer-portal/src/components/document/roster/site-access-card.tsx:328-335`
+
+`save({ projectId, lockboxVersion: null }, 'way_in')` → `save({ projectId }, 'way_in')`.
+`useUpdateSiteAccessCard` reads `lockboxVersion !== undefined` as "the way in
+changed"; `null` is not `undefined`, so starting a blank card stamped
+`changed_at`/`changed_by` and blanked `told_refs`, and the card then printed
+"The way in changed <today>, by <name>. Nobody has been told yet." under "No
+lockbox on file." — with R-U's Call Sheet head fold repeating the wrong date.
+
+**Pin moved to the call site**, where the fix was defeated:
+`roster/__tests__/site-access-card.test.tsx` — clicking "Start the card" calls
+the hook with `{ projectId: 'okonkwo' }` and nothing else. The hook-level pin
+in `use-site-access-and-reach-fanout.test.ts` stands unchanged.
+**Negative control:** restore `lockboxVersion: null` → the pin fails with
+`+ "lockboxVersion": null`.
+
+---
+
+## CR3-4 (MAJOR) — choosing a rail view left the company card on screen
+
+`apps/designer-portal/src/components/document/people/people-room.tsx:345-356`
+
+`setOpenFirm(null)` added to `nav.goView`. The body is chosen
+`openFirm ? <CompanyCard/> : openPerson ? … : view`, so the card outranked
+every view the rail, the compact selector, `filterDirectory` and `askEngine`
+route through; the rail showed nothing active and the address wrote
+`?view=threads&firm=<id>` behind a card whose own Back was the only exit.
+
+**Pin:** `people/__tests__/people-room-address.test.tsx` — open `?firm=…`,
+click Threads in the desktop rail, the company card is gone.
+**Negative control:** drop the line → the pin fails.
+
+---
+
+## Files changed
+
+```
+apps/designer-portal/src/components/document/section-eyebrow.tsx                  QA-2
+apps/designer-portal/src/components/document/people/people-room.tsx             CR3-4
+apps/designer-portal/src/components/document/people/contact-rule-line.tsx       CR3-2
+apps/designer-portal/src/components/document/people/directory/person-row.tsx    CR3-2
+apps/designer-portal/src/components/document/people/directory/add-person-sheet.tsx
+                                                                                CR3-1
+apps/designer-portal/src/components/document/roster/roster-row.tsx              CR3-2
+apps/designer-portal/src/components/document/roster/site-access-card.tsx        CR3-3
+packages/supabase/src/hooks/use-studio-contacts.ts                               QA-1
+
+tests
+packages/supabase/src/hooks/__tests__/use-studio-contact-rules-and-channels.test.ts   QA-1
+apps/designer-portal/src/components/document/roster/__tests__/call-sheet.test.tsx     QA-2
+apps/designer-portal/src/components/document/roster/__tests__/site-access-card.test.tsx
+                                                                                     CR3-3
+apps/designer-portal/src/components/document/roster/__tests__/roster-row.test.tsx    CR3-2
+apps/designer-portal/src/components/document/people/__tests__/person-row-hardening.test.tsx
+                                                                                     CR3-2
+apps/designer-portal/src/components/document/people/__tests__/people-room-address.test.tsx
+                                                                                     CR3-4
+apps/designer-portal/src/components/document/people/directory/__tests__/add-person-sheet-kinds.test.tsx
+                                                                                     CR3-1
+
+probe
+artifacts/people-room-crm-2026-09-11/build/probe308-w2-fix-r4-qa1-channel-normalisation.sql/.out
+```
+
+## Owed to the orchestrator
+
+1. **QA-1's neighbours.** The same normalisation gap would bite any other bare
+   `.insert()` on `studio_contact_channels` that assumes a raw-string match.
+   There is none today (this hook is the only writer), but a W3 author adding
+   one should key on `normalize_channel_value()`.
+2. **SPEC §5.5 #15's sentence** still asks for "until he replies YES", which
+   stays false while nothing is dispatched. Either the spec moves or W3's
+   record-side dispatch lands and the clause comes back — a ruling, not a code
+   change.
+3. **QA-2's count wording** (`, N listed`) is generic because `SectionEyebrow`
+   is shared across 22 surfaces. If the house wants a per-surface noun, it
+   needs a prop and a ruling on the words.

@@ -743,6 +743,18 @@ function invalidateChannelFanout(
  * not a deleted one (direction §5.1), so re-adding a bounced address must not
  * quietly mark it active again, and re-adding a number must not demote the
  * `preferred` flag somebody set on it.
+ *
+ * QA-1 — AND THE RE-READ KEYS ON THE STORED VALUE, NOT THE TYPED ONE.
+ * `normalize_studio_contact_channel_trg` rewrites every `value` BEFORE INSERT
+ * through `normalize_channel_value()` — `(612) 555-0111` is stored
+ * `+16125550111`, `Frank@Example.COM` is stored lower-cased — so the unique
+ * index only ever sees the normalised shape. Re-reading with the raw string
+ * the studio typed matched nothing, fell through to `throw error`, and the Add
+ * sheet showed "Could not add them just now. Try again." for exactly the
+ * returning-sub case the recovery exists to serve — with the seat already
+ * written and the channel, the rule and the authority grant behind it lost on
+ * every retry. The DB's own function is asked for the key rather than a second
+ * copy of the rule living here.
  */
 export function useAddStudioContactChannel() {
   const queryClient = useQueryClient();
@@ -769,12 +781,20 @@ export function useAddStudioContactChannel() {
       if (error) {
         const code = (error as { code?: string } | null)?.code;
         if (code !== '23505') throw error;
+        const { data: normalized, error: normalizeError } = await supabase.rpc(
+          'normalize_channel_value',
+          { p_channel_kind: input.channelKind, p_value: value },
+        );
+        const storedValue =
+          !normalizeError && typeof normalized === 'string' && normalized
+            ? normalized
+            : value;
         const { data: existing, error: readError } = await supabase
           .from('studio_contact_channels')
           .select('*')
           .eq('owner_id', input.ownerId)
           .eq('channel_kind', input.channelKind)
-          .eq('value', value)
+          .eq('value', storedValue)
           .maybeSingle();
         if (readError) throw readError;
         if (!existing) throw error;

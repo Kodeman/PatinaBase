@@ -338,6 +338,25 @@ describe("a sub", () => {
       screen.queryByText(/until they reply YES/),
     ).not.toBeInTheDocument();
   });
+
+  /**
+   * CR3-1 — this sheet's consent door is `record_channel_invite`, which leaves
+   * a standing grant alone and otherwise records `pending`, the word every
+   * face beside it prints as "Invited". Claiming consent here contradicted
+   * the Directory row, the seat line and the Call Sheet row for the same
+   * number. The sheet prints the record's own word.
+   */
+  it("CR3-1 — names the invite, never consent, on the evidence note", () => {
+    fireEvent.click(
+      screen.getByLabelText(/They gave prior express consent for text updates/),
+    );
+    expect(
+      screen.getByText(/is invited, not consenting\./),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/is recorded as consenting/),
+    ).not.toBeInTheDocument();
+  });
 });
 
 describe("a household member (PR-c / C5)", () => {

@@ -246,6 +246,33 @@ describe("the rule clause", () => {
       screen.getByRole("link", { name: "rosa@twincitiesdrywall.com" }),
     ).toHaveAttribute("href", "mailto:rosa@twincitiesdrywall.com");
   });
+
+  /**
+   * CR3-2 — `contact_rule_summary()` renders `channels_forbidden` as raw
+   * `channel_kind` tokens, and the rules are a SEPARATE query from the
+   * directory, so every cold load painted "Do not use: after_hours, ap_email,
+   * dispatch, …" on the row until they arrived — permanently if that read
+   * failed. SPEC §8 #3 bars those words from any face. The row prints no
+   * clause until it holds the rule row.
+   */
+  it("prints no clause — and no schema word — while the rule row is unread", () => {
+    const { container } = render(
+      <ul>
+        <PersonRow
+          person={person({
+            display_name: "Frank Bauer",
+            contact_rule_summary:
+              "Never text. Do not use: after_hours, ap_email, dispatch, email, mobile, office.",
+          })}
+          onOpen={jest.fn()}
+        />
+      </ul>,
+    );
+    expect(container.querySelector("[data-contact-rule]")).toBeNull();
+    for (const token of ["after_hours", "ap_email", "dispatch", "portal_311"]) {
+      expect(container.textContent).not.toContain(token);
+    }
+  });
 });
 
 describe("the seats disclosure", () => {
