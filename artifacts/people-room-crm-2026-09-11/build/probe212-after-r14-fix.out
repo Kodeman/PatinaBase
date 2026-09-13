@@ -1,0 +1,32 @@
+
+--- the Directory / seats views correctly refuse studio B's seat ---
+ b_seat_rows_in_seats_view | a_seat_rows_in_seats_view 
+---------------------------+---------------------------
+                         0 |                         1
+(1 row)
+
+--- but project_parties RLS and field_link_tokens RLS both admit studio B's rows ---
+ b_seat_readable_raw | b_link_readable_raw 
+---------------------+---------------------
+                   1 |                   1
+(1 row)
+
+--- THE WORD: what does studio A's Directory row say about reach? ---
+   display_name   | role | reach_state | seat_count |              project_id              
+------------------+------+-------------+------------+--------------------------------------
+ R14 Shared Human | sub  | on_paper    |          1 | d0e00000-0000-0000-0000-00000000000a
+(1 row)
+
+--- and the seat line beneath it ---
+   display_name   |   project_name    | reach_state 
+------------------+-------------------+-------------
+ R14 Shared Human | Okonkwo residence | on_paper
+(1 row)
+
+--- the function, asked directly ---
+ identity_word | seat_a_word 
+---------------+-------------
+ on_paper      | on_paper
+(1 row)
+
+ROLLBACK

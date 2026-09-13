@@ -639,9 +639,15 @@ export function normalizePartyPhoneForCompare(phone: string | null | undefined):
  *    an already-opted-out number, and INHERITS that sibling's
  *    `sms_opt_out_at` rather than stamping the edit's own clock over an
  *    opt-out that happened elsewhere, earlier, to someone else's row.
- *  · `opted_out` REFUSES the edit outright (close-review r3 MAJOR-4). The
- *    refusal is attached to the number on file and cannot travel to a
- *    corrected one; the branch below says why, in a sentence.
+ *  · A NUMBER THE STUDIO'S RECORD REFUSED cannot move at all (close-review r3
+ *    MAJOR-4; repointed at the record, r14 BLOCKING-1). The refusal belongs to
+ *    the number on file and cannot travel to a corrected one, and since R-AY
+ *    the only thing that knows a number refused is
+ *    `studio_channel_consent` — the seat's own `sms_consent_status` is frozen
+ *    at `not_asked`. So the verdict is read through
+ *    `project_consent_org()` + `channel_consent_status()`, the same pair
+ *    00594's freeze asks, with the frozen column kept only as a second leg;
+ *    the branch below says why, in a sentence.
  *  · `not_asked` has nothing to revert.
  * `opted_out` refusing means that row stays permanently un-inviteable through
  * this hook AND keeps the number its refusal belongs to — a deliberate
@@ -654,7 +660,7 @@ export function normalizePartyPhoneForCompare(phone: string | null | undefined):
 export function useUpdateProjectParty() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, patch }: UpdateProjectPartyInput) => {
+    mutationFn: async ({ id, projectId, patch }: UpdateProjectPartyInput) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
       const dbPatch: Record<string, unknown> = {};
@@ -671,7 +677,7 @@ export function useUpdateProjectParty() {
 
         const { data: currentRow, error: currentRowError } = await supabase
           .from('project_parties')
-          .select('sms_consent_status, phone_e164')
+          .select('sms_consent_status, phone_e164, project_id')
           .eq('id', id)
           .maybeSingle();
         if (currentRowError) throw currentRowError;
@@ -681,6 +687,40 @@ export function useUpdateProjectParty() {
         const currentE164 = (currentRow?.phone_e164 as string | null) ?? null;
         const nextE164 = normalizePartyPhoneForCompare(nextPhone);
         const phoneGenuinelyChanged = nextE164 !== currentE164;
+
+        // A REFUSED NUMBER CANNOT MOVE, AND THE RECORD IS WHAT KNOWS IT
+        // REFUSED (W1b final review r14 BLOCKING-1). The guard below used to
+        // read `currentStatus === 'opted_out'` alone — the seat's own
+        // sms_consent_status, which R-AY/R-AS froze at its `not_asked`
+        // default for every seat any live write path produces once the mirror
+        // was retired. So the refusal this hook exists to show was
+        // unreachable, and an uncarded person's opt-out (their Directory row
+        // is keyed on the phone number itself) was losable by an ordinary
+        // phone correction with no warning anywhere. The record is asked
+        // first, exactly as 00594's freeze now asks it — same two functions,
+        // same order — so the portal refuses what the database would refuse
+        // instead of handing the designer a raw trigger error; the frozen
+        // column stays as a second leg for pre-R-AY rows.
+        let recordRefusedOldNumber = false;
+        if (phoneGenuinelyChanged && currentE164) {
+          const { data: consentOrg, error: orgError } = await supabase.rpc('project_consent_org', {
+            p_project_id: (currentRow?.project_id as string | null) ?? projectId,
+          });
+          if (orgError) throw orgError;
+          if (consentOrg) {
+            const { data: verdict, error: verdictError } = await supabase.rpc(
+              'channel_consent_status',
+              {
+                p_organization_id: consentOrg,
+                p_channel_kind: 'sms',
+                p_channel_value: currentE164,
+              },
+            );
+            if (verdictError) throw verdictError;
+            recordRefusedOldNumber = verdict === 'opted_out';
+          }
+        }
+        if (recordRefusedOldNumber) throw new Error(OPTED_OUT_PHONE_EDIT_SENTENCE);
 
         if (phoneGenuinelyChanged && (currentStatus === 'pending' || currentStatus === 'granted')) {
           let revertsToOptedOut = false;
@@ -754,6 +794,9 @@ export function useUpdateProjectParty() {
         // change and still lands. The durable fix is W2 retiring PR-x's seat
         // check (rulings PR-x, "then retire it in a named follow-up"), after
         // which the refusal lives in one place and the seat's number is inert.
+        // The second leg: a row written before R-AY whose frozen column still
+        // carries the refusal and whose record 00622's backfill could not
+        // fold. Never the only leg any more (r14 BLOCKING-1).
         if (phoneGenuinelyChanged && currentStatus === 'opted_out') {
           throw new Error(OPTED_OUT_PHONE_EDIT_SENTENCE);
         }

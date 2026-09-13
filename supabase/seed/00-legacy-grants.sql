@@ -15818,7 +15818,13 @@ END $g$;
 
 -- 00594_studio_channel_consent.sql
 DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.refuse_legacy_consent_write() FROM PUBLIC, anon;
+  REVOKE ALL ON FUNCTION public.refuse_legacy_consent_write() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00594_studio_channel_consent.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.refuse_legacy_consent_write() TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 

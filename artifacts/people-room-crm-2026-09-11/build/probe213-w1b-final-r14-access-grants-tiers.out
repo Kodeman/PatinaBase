@@ -1,0 +1,63 @@
+Pager usage is off.
+=== the studio owner ===
+BEGIN
+SET
+                              set_config                               
+-----------------------------------------------------------------------
+ {"sub":"a0000000-0000-0000-0000-000000000004","role":"authenticated"}
+(1 row)
+
+      tier      | count 
+----------------+-------
+ client_account |     3
+ field_link     |     7
+ studio_member  |     3
+(3 rows)
+
+--- any bearer-credential-shaped grant_id? (expect 0) ---
+ hexish 
+--------
+      0
+(1 row)
+
+ROLLBACK
+=== an unrelated studio owner ===
+BEGIN
+SET
+                              set_config                               
+-----------------------------------------------------------------------
+ {"sub":"cf100000-0000-4000-8000-000000000001","role":"authenticated"}
+(1 row)
+
+     tier      | count 
+---------------+-------
+ studio_member |     1
+(1 row)
+
+--- and every new object of the wave, for the same caller ---
+ compliance_docs | authority | site_cards | seats | directory 
+-----------------+-----------+------------+-------+-----------
+               0 |         0 |          0 |     0 |         0
+(1 row)
+
+--- the four definer readers, called directly ---
+ rfq | agr | plan | inv 
+-----+-----+------+-----
+   0 |   0 |    0 |   0
+(1 row)
+
+--- naming their OWN org but a FOREIGN identity key: numbers, word, dates ---
+ foreign_numbers | foreign_word | foreign_dates | foreign_paper 
+-----------------+--------------+---------------+---------------
+               0 | not_asked    |             0 | not_on_file
+(1 row)
+
+ROLLBACK
+=== anon on v_access_grants and the seats view ===
+BEGIN
+SET
+SAVEPOINT
+psql:artifacts/people-room-crm-2026-09-11/build/probe213-w1b-final-r14-access-grants-tiers.sql:55: ERROR:  permission denied for view v_access_grants
+ROLLBACK
+psql:artifacts/people-room-crm-2026-09-11/build/probe213-w1b-final-r14-access-grants-tiers.sql:57: ERROR:  permission denied for view people_directory_seats
+ROLLBACK

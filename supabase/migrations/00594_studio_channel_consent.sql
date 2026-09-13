@@ -854,6 +854,15 @@ COMMENT ON COLUMN public.project_parties.sms_consent_disclosure_version IS
 CREATE OR REPLACE FUNCTION public.refuse_legacy_consent_write()
 RETURNS trigger
 LANGUAGE plpgsql
+-- SECURITY DEFINER so the phone-freeze clause below can ask the RECORD.
+-- channel_consent_status() is INVOKER and studio_channel_consent's only policy
+-- is is_active_studio_member(organization_id) (:343-346), while
+-- project_parties' UPDATE policy is the wider is_studio_comember(designer_id)
+-- (00584:895-921): an invoker read would hand the very caller this freeze
+-- exists to stop — a member of ANOTHER of the designer's studios — a NULL
+-- verdict and an open door. The body only reads and RAISEs; it returns NEW
+-- unchanged and writes nothing (W1b final review r14 BLOCKING-1).
+SECURITY DEFINER
 SET search_path TO 'public'
 AS $$
 BEGIN
@@ -911,8 +920,31 @@ BEGIN
   -- parties — earlier in name order, so it fires first) has already derived
   -- NEW.phone_e164 by the time this comparison runs. Every legitimate edit on
   -- a not_asked / pending / granted seat is untouched.
-  IF OLD.sms_consent_status = 'opted_out'
-     AND NEW.phone_e164 IS DISTINCT FROM OLD.phone_e164 THEN
+  --
+  -- AND THE PREDICATE ASKS THE RECORD, NOT THE SEAT (W1b final review r14
+  -- BLOCKING-1). The clause shipped reading OLD.sms_consent_status =
+  -- 'opted_out' — the seat's OWN legacy column — and R-AY/R-AS froze that
+  -- column at its `not_asked` default for every seat any current write path
+  -- produces, because the mirror that used to keep it in step was retired in
+  -- the same breath. So the guard was true of no live row. Walked: an
+  -- UNCARDED seat carrying a number this studio holds a recorded STOP for
+  -- moved to a fresh number with no exception raised, and its Directory row —
+  -- keyed on the phone number itself, party_identity_key()'s third leg —
+  -- printed `not_asked` one statement later, with nothing newly consented and
+  -- the old record orphaned on the books where no reader will ever surface it
+  -- for this person again. The portal's own guard
+  -- (use-coordination.ts useUpdateProjectParty) read the same dead column, so
+  -- the shipped designer-portal allowed it silently too; both are repointed
+  -- together. The record is the only thing that knows a number refused
+  -- (R-AY), so the record is what the freeze asks. The frozen column stays as
+  -- a SECOND leg for rows written before R-AY that 00622's backfill could not
+  -- fold — a seat whose project resolves no consent org has no record to fold
+  -- into — never again as the only leg.
+  IF NEW.phone_e164 IS DISTINCT FROM OLD.phone_e164
+     AND ( public.channel_consent_status(
+             public.project_consent_org(OLD.project_id), 'sms', OLD.phone_e164
+           ) = 'opted_out'
+        OR OLD.sms_consent_status = 'opted_out' ) THEN
     RAISE EXCEPTION 'consent_opted_out_phone_frozen'
       USING HINT = 'This person replied STOP, and that refusal is attached to '
                    'the number on file. Changing it would carry the refusal '
@@ -924,7 +956,12 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.refuse_legacy_consent_write() FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.refuse_legacy_consent_write()
+  FROM PUBLIC, anon, authenticated;
+-- A trigger body, never an RPC: EXECUTE is checked at CREATE TRIGGER time,
+-- so no PostgREST role needs it and a SECURITY DEFINER routine may not be
+-- left callable by one.
+GRANT EXECUTE ON FUNCTION public.refuse_legacy_consent_write() TO service_role;
 
 COMMENT ON FUNCTION public.refuse_legacy_consent_write() IS
   'Freezes project_parties.sms_consent_* (R-AS). A change to any of the eight '
@@ -938,7 +975,16 @@ COMMENT ON FUNCTION public.refuse_legacy_consent_write() IS
   'MAJOR-1): the seat''s refusal is identified by the number, so moving the '
   'number transplants the refusal onto one that never refused, and neither the '
   'eight-column list nor any reader could see it happen. A cosmetic reformat '
-  'of the same digits is not a change and still lands.';
+  'of the same digits is not a change and still lands. THAT REFUSAL IS READ '
+  'OFF THE RECORD — channel_consent_status(project_consent_org(project_id), '
+  '''sms'', OLD.phone_e164) — with the frozen seat column only as a second leg '
+  'for pre-R-AY rows 00622''s backfill could not fold (W1b final review r14 '
+  'BLOCKING-1): R-AY defaults that column to not_asked on every seat any live '
+  'write path produces, so asking it alone froze nothing at all and an '
+  'uncarded identity''s opt-out was losable by an ordinary phone edit. '
+  'SECURITY DEFINER for that one read, because studio_channel_consent is '
+  'member-only RLS while project_parties'' UPDATE policy is the wider '
+  'is_studio_comember(designer_id) (00594).';
 
 DROP TRIGGER IF EXISTS refuse_legacy_consent_write_trg ON public.project_parties;
 CREATE TRIGGER refuse_legacy_consent_write_trg

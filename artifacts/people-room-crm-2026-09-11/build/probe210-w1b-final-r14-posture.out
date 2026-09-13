@@ -1,0 +1,107 @@
+Pager usage is off.
+=== A. the wave relations: rls, policies, who may select ===
+           relname           | relkind | rls | policies | auth_sel | anon_sel | auth_ins | anon_ins 
+-----------------------------+---------+-----+----------+----------+----------+----------+----------
+ people_directory            | v       | f   |        0 | t        | t        | t        | t
+ people_directory_seats      | v       | f   |        0 | t        | f        | t        | f
+ project_parties             | r       | t   |        9 | t        | t        | t        | t
+ project_party_authority     | r       | t   |        4 | t        | f        | t        | f
+ project_site_access_cards   | r       | t   |        4 | t        | f        | t        | f
+ studio_compliance_documents | r       | t   |        4 | t        | f        | t        | f
+ v_access_grants             | v       | f   |        0 | t        | f        | t        | f
+(7 rows)
+
+=== B. policies on the three new tables ===
+           relname           |                  polname                  | polcmd |                                                                                                                                   using_expr                                                                                                                                   |                                                                                                                                   check_expr                                                                                                                                   |     roles     
+-----------------------------+-------------------------------------------+--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+---------------
+ project_party_authority     | project_party_authority_studio_delete     | d      | (is_active_studio_member(project_party_recorded_studio(engagement_id)) AND is_studio_comember(project_party_designer(engagement_id)) AND ((scope <> ALL (ARRAY['money'::text, 'draw_certify'::text])) OR is_org_admin_or_owner(project_party_recorded_studio(engagement_id)))) |                                                                                                                                                                                                                                                                                | authenticated
+ project_party_authority     | project_party_authority_studio_insert     | a      |                                                                                                                                                                                                                                                                                | (is_active_studio_member(project_party_recorded_studio(engagement_id)) AND is_studio_comember(project_party_designer(engagement_id)) AND ((scope <> ALL (ARRAY['money'::text, 'draw_certify'::text])) OR is_org_admin_or_owner(project_party_recorded_studio(engagement_id)))) | authenticated
+ project_party_authority     | project_party_authority_studio_select     | r      | (is_active_studio_member(project_party_recorded_studio(engagement_id)) AND is_studio_comember(project_party_designer(engagement_id)))                                                                                                                                          |                                                                                                                                                                                                                                                                                | authenticated
+ project_party_authority     | project_party_authority_studio_update     | w      | (is_active_studio_member(project_party_recorded_studio(engagement_id)) AND is_studio_comember(project_party_designer(engagement_id)) AND ((scope <> ALL (ARRAY['money'::text, 'draw_certify'::text])) OR is_org_admin_or_owner(project_party_recorded_studio(engagement_id)))) | (is_active_studio_member(project_party_recorded_studio(engagement_id)) AND is_studio_comember(project_party_designer(engagement_id)) AND ((scope <> ALL (ARRAY['money'::text, 'draw_certify'::text])) OR is_org_admin_or_owner(project_party_recorded_studio(engagement_id)))) | authenticated
+ project_site_access_cards   | project_site_access_cards_studio_delete   | d      | (is_active_studio_member(project_recorded_studio(project_id)) AND is_studio_comember(project_designer(project_id)))                                                                                                                                                            |                                                                                                                                                                                                                                                                                | authenticated
+ project_site_access_cards   | project_site_access_cards_studio_insert   | a      |                                                                                                                                                                                                                                                                                | (is_active_studio_member(project_recorded_studio(project_id)) AND is_studio_comember(project_designer(project_id)))                                                                                                                                                            | authenticated
+ project_site_access_cards   | project_site_access_cards_studio_select   | r      | (is_active_studio_member(project_recorded_studio(project_id)) AND is_studio_comember(project_designer(project_id)))                                                                                                                                                            |                                                                                                                                                                                                                                                                                | authenticated
+ project_site_access_cards   | project_site_access_cards_studio_update   | w      | (is_active_studio_member(project_recorded_studio(project_id)) AND is_studio_comember(project_designer(project_id)))                                                                                                                                                            | (is_active_studio_member(project_recorded_studio(project_id)) AND is_studio_comember(project_designer(project_id)))                                                                                                                                                            | authenticated
+ studio_compliance_documents | studio_compliance_documents_member_delete | d      | is_active_studio_member(organization_id)                                                                                                                                                                                                                                       |                                                                                                                                                                                                                                                                                | authenticated
+ studio_compliance_documents | studio_compliance_documents_member_insert | a      |                                                                                                                                                                                                                                                                                | is_active_studio_member(organization_id)                                                                                                                                                                                                                                       | authenticated
+ studio_compliance_documents | studio_compliance_documents_member_select | r      | is_active_studio_member(organization_id)                                                                                                                                                                                                                                       |                                                                                                                                                                                                                                                                                | authenticated
+ studio_compliance_documents | studio_compliance_documents_member_update | w      | is_active_studio_member(organization_id)                                                                                                                                                                                                                                       | is_active_studio_member(organization_id)                                                                                                                                                                                                                                       | authenticated
+(12 rows)
+
+=== C. PR-r: no code-like column on the site access card ===
+ code_like_columns 
+-------------------
+                 0
+(1 row)
+
+=== D. every routine this wave defines: definer? search_path? who may execute? ===
+               proname               | secdef  | vol |                  proconfig                  | anon_exec | auth_exec 
+-------------------------------------+---------+-----+---------------------------------------------+-----------+-----------
+ access_grants_invoice_links         | definer | s   | {search_path=public}                        | f         | t
+ access_grants_plan_transmittals     | definer | s   | {search_path=public}                        | f         | t
+ access_grants_trade_agreement_links | definer | s   | {search_path=public}                        | f         | t
+ access_grants_trade_rfq             | definer | s   | {search_path=public}                        | f         | t
+ assert_compliance_holder            | definer | v   | {search_path=public}                        | f         | f
+ assert_party_authority_copy_to      | definer | v   | {search_path=public}                        | f         | f
+ assert_project_party_cards          | definer | v   | {search_path=public}                        | f         | f
+ assert_site_access_key_holder       | definer | v   | {search_path=public}                        | f         | f
+ compliance_state                    | INVOKER | s   | {search_path=public}                        | f         | t
+ contact_rule_summary                | INVOKER | s   | {search_path=public}                        | f         | t
+ create_field_link                   | definer | v   | {"search_path=public, extensions, pg_temp"} | f         | t
+ create_field_link                   | definer | v   | {"search_path=public, extensions, pg_temp"} | f         | t
+ identity_consent_evidence           | INVOKER | s   | {search_path=public}                        | f         | t
+ identity_consent_status             | INVOKER | s   | {search_path=public}                        | f         | t
+ identity_paper_state                | INVOKER | s   | {search_path=public}                        | f         | t
+ identity_phone_numbers              | definer | s   | {search_path=public}                        | f         | t
+ identity_seat_count                 | INVOKER | s   | {search_path=public}                        | f         | t
+ link_party_to_rolodex_card          | definer | v   | {"search_path=public, pg_temp"}             | f         | f
+ link_rolodex_card_to_parties        | definer | v   | {"search_path=public, pg_temp"}             | f         | f
+ party_identity_key                  | INVOKER | i   |                                             | f         | t
+ party_kind_in_directory             | INVOKER | i   |                                             | f         | t
+ project_designer                    | definer | s   | {search_path=public}                        | f         | t
+ project_party_org                   | definer | s   | {search_path=public}                        | f         | t
+ project_party_recorded_studio       | definer | s   | {search_path=public}                        | f         | t
+ project_recorded_studio             | definer | s   | {search_path=public}                        | f         | t
+ project_tenant_org                  | definer | s   | {search_path=public}                        | f         | t
+ reach_state_for                     | INVOKER | s   | {search_path=public}                        | f         | t
+ reach_state_for_identity            | INVOKER | s   | {search_path=public}                        | f         | t
+ rolodex_card_for_party_phone        | definer | s   | {search_path=public}                        | f         | f
+(29 rows)
+
+=== E. any SECURITY DEFINER routine of this wave with no pinned search_path ===
+ proname 
+---------
+(0 rows)
+
+=== F. people_directory column order (12 carried + 5 appended) ===
+ ordinal_position |     column_name      |        data_type         
+------------------+----------------------+--------------------------
+                1 | person_id            | uuid
+                2 | role                 | text
+                3 | display_name         | text
+                4 | email                | text
+                5 | phone                | text
+                6 | profile_id           | uuid
+                7 | project_id           | uuid
+                8 | designer_id          | uuid
+                9 | status_raw           | text
+               10 | last_touch_at        | timestamp with time zone
+               11 | meta                 | jsonb
+               12 | scope                | text
+               13 | reach_state          | text
+               14 | consent_status       | text
+               15 | paper_state          | text
+               16 | contact_rule_summary | text
+               17 | seat_count           | integer
+(17 rows)
+
+=== G. compliance_state 30-day window, both boundaries, on a probe holder ===
+BEGIN
+psql:artifacts/people-room-crm-2026-09-11/build/probe210-w1b-final-r14-posture.sql:106: NOTICE:  expires yesterday        -> lapsed
+psql:artifacts/people-room-crm-2026-09-11/build/probe210-w1b-final-r14-posture.sql:106: NOTICE:  expires today            -> lapses_soon
+psql:artifacts/people-room-crm-2026-09-11/build/probe210-w1b-final-r14-posture.sql:106: NOTICE:  expires today+30         -> lapses_soon
+psql:artifacts/people-room-crm-2026-09-11/build/probe210-w1b-final-r14-posture.sql:106: NOTICE:  expires today+31         -> current
+psql:artifacts/people-room-crm-2026-09-11/build/probe210-w1b-final-r14-posture.sql:106: NOTICE:  lapsed but GATELESS      -> current
+psql:artifacts/people-room-crm-2026-09-11/build/probe210-w1b-final-r14-posture.sql:106: NOTICE:  no paper at all          -> not_on_file
+DO
+ROLLBACK
