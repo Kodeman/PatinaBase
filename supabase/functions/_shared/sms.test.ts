@@ -1442,3 +1442,126 @@ Deno.test("the unattributable send with a clean scan is refused as not_consented
   assert(!res.sent, "no record grants this number, so nothing ordinary goes out");
   assertEquals(res.reason, "not_consented");
 });
+
+// ── CR3-9 · the studio's own rule is a send gate ─────────────────────────────
+// C7: "the rule outranks the designation". Until this pass the whole rail gated
+// on the consent record alone — `grep -rl channels_forbidden
+// supabase/functions/` returned nothing — so a person carrying BOTH a recorded
+// grant and a "Never text" rule was sendable from every surface and cron.
+
+Deno.test("a 'never text' rule on the person's card refuses a send the record grants", async () => {
+  const fake = createFakeSupabase({
+    projects: ORG_ALPHA_PROJECTS,
+    studio_channel_consent: [grant()],
+    project_parties: [{ ...party("p1", "granted"), studio_contact_id: "card-1" }],
+    studio_contact_rules: [
+      {
+        subject_type: "person",
+        subject_id: "card-1",
+        channels_forbidden: ["sms"],
+      },
+    ],
+  });
+  const res = await sendPartySms(
+    fake as never,
+    { partyId: "p1", body: "hello" },
+    {
+      getEnv: envOf({
+        SMS_DEV_MODE: "dry_run",
+        TWILIO_FROM_NUMBER: "+15550000000",
+      }),
+      now: new Date("2026-07-08T18:00:00Z"),
+    },
+  );
+  assert(!res.sent, "the studio wrote down that this person is never texted");
+  assertEquals(res.reason, "contact_rule_forbids_sms");
+  assertEquals((fake._data.sms_messages ?? []).length, 0);
+});
+
+Deno.test("the rule binds the opt-in invite too — 'never text' is not 'never text except once'", async () => {
+  const fake = createFakeSupabase({
+    projects: ORG_ALPHA_PROJECTS,
+    studio_channel_consent: [{ ...grant(), status: "pending" }],
+    project_parties: [{ ...party("p1", "pending"), studio_contact_id: "card-1" }],
+    studio_contact_rules: [
+      {
+        subject_type: "engagement",
+        subject_id: "p1",
+        channels_forbidden: ["sms"],
+      },
+    ],
+  });
+  const res = await sendPartySms(
+    fake as never,
+    { partyId: "p1", body: "hello", templateKey: "sms_optin_invite" },
+    {
+      getEnv: envOf({
+        SMS_DEV_MODE: "dry_run",
+        TWILIO_FROM_NUMBER: "+15550000000",
+      }),
+      now: new Date("2026-07-08T18:00:00Z"),
+    },
+  );
+  assert(!res.sent);
+  assertEquals(res.reason, "contact_rule_forbids_sms");
+});
+
+Deno.test("a rule that bars only email leaves the text rail open", async () => {
+  const fake = createFakeSupabase({
+    projects: ORG_ALPHA_PROJECTS,
+    studio_channel_consent: [grant()],
+    project_parties: [{ ...party("p1", "granted"), studio_contact_id: "card-1" }],
+    studio_contact_rules: [
+      {
+        subject_type: "person",
+        subject_id: "card-1",
+        channels_forbidden: ["email"],
+      },
+    ],
+  });
+  const res = await sendPartySms(
+    fake as never,
+    { partyId: "p1", body: "hello" },
+    {
+      getEnv: envOf({
+        SMS_DEV_MODE: "dry_run",
+        TWILIO_FROM_NUMBER: "+15550000000",
+      }),
+      now: new Date("2026-07-08T18:00:00Z"),
+    },
+  );
+  assert(res.sent, "Dana Kowalski's rule bars the email, not the text");
+});
+
+Deno.test("a rule read that FAILS refuses the send rather than falling through", async () => {
+  const fake = createFakeSupabase({
+    projects: ORG_ALPHA_PROJECTS,
+    studio_channel_consent: [grant()],
+    project_parties: [{ ...party("p1", "granted"), studio_contact_id: "card-1" }],
+  });
+  const denied = {
+    ...fake,
+    from: (table: string) =>
+      table === "studio_contact_rules"
+        ? {
+          select: () => ({
+            in: () =>
+              Promise.resolve({ data: null, error: { message: "denied" } }),
+          }),
+        }
+        : fake.from(table),
+  };
+  const res = await sendPartySms(
+    denied as never,
+    { partyId: "p1", body: "hello" },
+    {
+      getEnv: envOf({
+        SMS_DEV_MODE: "dry_run",
+        TWILIO_FROM_NUMBER: "+15550000000",
+      }),
+      now: new Date("2026-07-08T18:00:00Z"),
+    },
+  );
+  assert(!res.sent, "a rule that cannot be read is not a rule that is absent");
+  assertEquals(res.reason, "contact_rule_forbids_sms");
+});

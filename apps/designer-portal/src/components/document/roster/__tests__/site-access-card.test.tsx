@@ -264,3 +264,112 @@ describe('SiteAccessCard — logging who was told', () => {
     await screen.findByText('One more name is on the notice.');
   });
 });
+
+/**
+ * CR3-5 — THE TWO COLUMNS NOTHING COULD WRITE.
+ *
+ * `useUpdateSiteAccessCard` has accepted `keyHolderEngagementId` and
+ * `emergencyLines` since 00625 and no surface passed either, so in production
+ * "Who to call first" always printed "– No emergency line on file." and
+ * "Key holder" always printed "– Nobody on the job is marked as holding a
+ * key." The dev seed writes both columns, which is why every local walk passed
+ * while the shipped card could not produce either fact.
+ */
+describe('SiteAccessCard — naming the key holder', () => {
+  it('offers a picker over the job’s own seats and writes the one chosen', async () => {
+    render(<SiteAccessCard {...props} />);
+    const act = screen.getByRole('button', { name: 'Name a different key holder' });
+    expect(act).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(act);
+
+    const picker = screen.getByLabelText('Who holds a key');
+    // Seeded from the card's own pointer, not left empty.
+    expect(picker).toHaveValue('seat-ngozi');
+    // Only SEATS are offered — a studio teammate holds no engagement id.
+    expect(
+      Array.from(picker.querySelectorAll('option')).map((o) => o.textContent),
+    ).toEqual(['Nobody on the job holds one', 'Ngozi Eze', 'Luis Ochoa']);
+
+    fireEvent.change(picker, { target: { value: 'seat-luis' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Write it down' }));
+    expect(updateMutate).toHaveBeenCalledWith({
+      projectId: 'okonkwo',
+      keyHolderEngagementId: 'seat-luis',
+    });
+  });
+
+  it('can take the key off everybody', async () => {
+    render(<SiteAccessCard {...props} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Name a different key holder' }));
+    fireEvent.change(screen.getByLabelText('Who holds a key'), {
+      target: { value: '' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Write it down' }));
+    expect(updateMutate).toHaveBeenCalledWith({
+      projectId: 'okonkwo',
+      keyHolderEngagementId: null,
+    });
+  });
+
+  it('names the act for a card that holds nobody yet', () => {
+    card = { ...(card as Record<string, unknown>), key_holder_engagement_id: null };
+    render(<SiteAccessCard {...props} />);
+    expect(
+      screen.getByRole('button', { name: 'Name the key holder' }),
+    ).toBeInTheDocument();
+  });
+});
+
+describe('SiteAccessCard — who to call first', () => {
+  it('adds a line, keeping every line already on the list', () => {
+    render(<SiteAccessCard {...props} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add someone to call' }));
+    fireEvent.change(screen.getByLabelText('Name'), {
+      target: { value: 'Priya Natarajan' },
+    });
+    fireEvent.change(screen.getByLabelText('What they are to this job'), {
+      target: { value: 'Studio' },
+    });
+    fireEvent.change(screen.getByLabelText('Number'), {
+      target: { value: '(612) 555-0101' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add them' }));
+
+    expect(updateMutate).toHaveBeenCalledWith({
+      projectId: 'okonkwo',
+      emergencyLines: [
+        // The seed writes `label` where the hook's type says `role`; both are
+        // read and normalised, so an edit never drops a word a line carried.
+        { name: 'Luis Ochoa', role: 'Superintendent', phone: '(612) 555-0109' },
+        { name: 'Chidi Okonkwo', role: 'Owner', phone: '(612) 555-0105' },
+        { name: 'Sam Rowe', role: 'Architect', phone: '(612) 555-0110' },
+        { name: 'Priya Natarajan', role: 'Studio', phone: '(612) 555-0101' },
+      ],
+    });
+  });
+
+  it('refuses a nameless line, and writes nothing', () => {
+    render(<SiteAccessCard {...props} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add someone to call' }));
+    fireEvent.change(screen.getByLabelText('Number'), {
+      target: { value: '(612) 555-0101' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add them' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('A line to call needs a name.');
+    expect(updateMutate).not.toHaveBeenCalled();
+  });
+
+  it('takes one line off the list and leaves the rest standing', () => {
+    render(<SiteAccessCard {...props} />);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Take Chidi Okonkwo off the list' }),
+    );
+    expect(updateMutate).toHaveBeenCalledWith({
+      projectId: 'okonkwo',
+      emergencyLines: [
+        { name: 'Luis Ochoa', role: 'Superintendent', phone: '(612) 555-0109' },
+        { name: 'Sam Rowe', role: 'Architect', phone: '(612) 555-0110' },
+      ],
+    });
+  });
+});

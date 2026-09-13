@@ -528,6 +528,8 @@ export function PeopleRoom() {
       <AddPersonSheet
         open={addOpen}
         initialKind={addKind}
+        // QA-R3-1: the room already knows which studio holds the book.
+        organizationId={organizationId}
         onClose={() => setAddOpen(false)}
         onAdded={(message, landOn) => {
           // Land them where they'll show: the Directory, narrowed to the chip

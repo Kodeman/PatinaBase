@@ -255,6 +255,7 @@ export function RolodexSeedSheet({
           open
           onClose={() => setEditingContact(null)}
           contact={editingContact}
+          organizationId={organizationId ?? null}
           onSaved={(message) => {
             setEditingContact(null);
             setNotice(message);

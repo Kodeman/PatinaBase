@@ -26,18 +26,24 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
+  ALL_CONTACT_CHANNEL_STATUSES,
+  COMPANY_CHANNEL_KINDS,
   CONTACT_CHANNEL_KIND_LABELS,
+  PERSON_CHANNEL_KINDS,
   isContactChannelHeld,
   useAccessGrants,
+  useAddStudioContactChannel,
   useChannelConsent,
   useContactRule,
   useCreateFieldLink,
   useRecordChannelConsent,
   useRecordChannelReconsent,
   useSetContactRule,
+  useSetStudioContactChannelStatus,
   useStudioContactChannels,
   fieldLinkUrl,
   type ContactChannelKind,
+  type ContactChannelStatus,
   type ContactRuleChannel,
   type ConsentSource,
   type StudioContactChannel,
@@ -103,6 +109,21 @@ export function channelRowParts(channel: StudioContactChannel): string[] {
   return parts;
 }
 
+/**
+ * CR3-4 — THE HELD STATES, IN THE STUDIO'S OWN WORDS.
+ *
+ * Direction §5.1 defines the four channel statuses the room MOVES; nothing
+ * anywhere could move one, so a bounced address could never be marked bounced.
+ * `status` is a schema word and never reaches a face (SPEC §8 #3) — these are
+ * the words the control offers.
+ */
+const CHANNEL_STATUS_WORDS: Record<ContactChannelStatus, string> = {
+  active: "In use",
+  bounced: "It bounces",
+  unsubscribed: "They unsubscribed",
+  dead: "The line is dead",
+};
+
 const CONSENT_SOURCES: Array<[ConsentSource, string]> = [
   ["verbal", "Verbal agreement"],
   ["written", "Written agreement"],
@@ -151,14 +172,44 @@ function ChannelRow({
   // can rejoin by replying START", which hands the studio's own door to the
   // recipient. `record_channel_reconsent` is that door.
   const reconsent = useRecordChannelReconsent();
+  // CR3-4: the room can move a channel's status. Until this, `status` could
+  // only ever be written by a migration.
+  const setStatus = useSetStudioContactChannelStatus();
   const [recording, setRecording] = useState(false);
   const [source, setSource] = useState<ConsentSource | "">("");
   const [evidence, setEvidence] = useState("");
   const [optOut, setOptOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [holding, setHolding] = useState(false);
+  const [statusDraft, setStatusDraft] = useState<ContactChannelStatus>(
+    (channel.status as ContactChannelStatus) ?? "active",
+  );
+  const [statusError, setStatusError] = useState<string | null>(null);
   const bandId = useId();
+  const statusBandId = useId();
   const held = isContactChannelHeld(channel.status);
   const sentence = consentSentenceForRecord(consent?.record, projectName);
+
+  const saveStatus = () => {
+    setStatusError(null);
+    setStatus.mutate(
+      { id: channel.id, ownerId: channel.owner_id, status: statusDraft },
+      {
+        onSuccess: () => {
+          setHolding(false);
+          onAnnounce(
+            statusDraft === "active"
+              ? `${channel.value} is back in use.`
+              : `${channel.value} is held: ${CHANNEL_STATUS_WORDS[statusDraft].toLowerCase()}.`,
+          );
+        },
+        onError: (e: unknown) =>
+          setStatusError(
+            e instanceof Error ? e.message : "Could not change that just now.",
+          ),
+      },
+    );
+  };
 
   const save = () => {
     setError(null);
@@ -266,6 +317,56 @@ function ChannelRow({
           {heldChannelReason(channel)}
         </p>
       )}
+      {/* CR3-4: direction §5.1's held states are states the ROOM moves. */}
+      <DocumentAction
+        actionKey="hold-channel"
+        surfaceKey="people"
+        regionKey="reach-channels"
+        variant="tertiary"
+        aria-expanded={holding}
+        aria-controls={statusBandId}
+        onClick={() => {
+          setStatusDraft((channel.status as ContactChannelStatus) ?? "active");
+          setHolding((open) => !open);
+        }}
+      >
+        {held ? "Put this line back in use" : "Hold this line"}
+      </DocumentAction>
+      <div id={statusBandId} hidden={!holding} className="mt-2">
+        <label className={FIELD_LABEL} htmlFor={`${statusBandId}-status`}>
+          What is true of this line
+        </label>
+        <select
+          id={`${statusBandId}-status`}
+          value={statusDraft}
+          onChange={(e) =>
+            setStatusDraft(e.target.value as ContactChannelStatus)
+          }
+          className={`${FIELD_INPUT} mb-2`}
+        >
+          {ALL_CONTACT_CHANNEL_STATUSES.map((value) => (
+            <option key={value} value={value}>
+              {CHANNEL_STATUS_WORDS[value]}
+            </option>
+          ))}
+        </select>
+        <DocumentAction
+          actionKey="save-channel-status"
+          surfaceKey="people"
+          regionKey="reach-channels"
+          variant="secondary"
+          loading={setStatus.isPending}
+          loadingLabel="Writing…"
+          onClick={saveStatus}
+        >
+          Write it down
+        </DocumentAction>
+        {statusError && (
+          <p role="alert" className="t-body-sm mt-1 text-[var(--terracotta-ink)]">
+            {statusError}
+          </p>
+        )}
+      </div>
       {showConsent && sentence && (
         <p
           data-consent-sentence
@@ -398,6 +499,46 @@ export function mintConsequenceSentence(
   return `This opens the Call Sheet and the site access card to ${name} ${until}. It never opens billing or the agreement.`;
 }
 
+/**
+ * CR3-6 — THE DATE THE DOOR WILL ACTUALLY CARRY.
+ *
+ * `create_field_link(uuid, timestamptz)` (00627) does NOT take the caller's
+ * date when the seat has a live window. It computes
+ * `max(on_site_to, warranty_until)` and takes that whenever it is still ahead,
+ * falling through to `p_expires_at` only when there is no live window at all,
+ * and to ninety days when there is neither. PR-l's two radios therefore chose
+ * nothing: on a seat whose warranty outlives its window, "Ends with the job"
+ * still minted to the warranty end, the consequence sentence above the act
+ * named a date the token did not carry, and `peopleEvents.grantMinted` recorded
+ * a choice that never reached the database.
+ *
+ * So the room states the one date the RPC will use rather than offering a
+ * choice it cannot honour. Restoring the choice is a W3 migration — let
+ * `p_expires_at` outrank the window when it is supplied — not a second guess
+ * on this side of the wire.
+ */
+export function grantWindowEnd(
+  seatWindowEnd: string | null | undefined,
+  warrantyEnd: string | null | undefined,
+  now: Date,
+): string | null {
+  const days = [seatWindowEnd, warrantyEnd]
+    .map((value) => value?.slice(0, 10))
+    .filter((value): value is string => !!value);
+  if (days.length === 0) return null;
+  const latest = days.sort()[days.length - 1];
+  // The RPC reads a window through the END of its last day, and a window that
+  // has already closed is the same fact as no window at all.
+  const closesAt = new Date(`${latest}T00:00:00Z`);
+  closesAt.setUTCDate(closesAt.getUTCDate() + 1);
+  return closesAt.getTime() > now.getTime() ? latest : null;
+}
+
+/** What the act says when the RPC will fall through to its ninety-day term. */
+export const MINT_FALLBACK_SENTENCE =
+  "This seat carries no window, so the door runs ninety days from today and " +
+  "renews when they use it. It never opens billing or the agreement.";
+
 export function ReachAccess({
   cardId,
   cardKind,
@@ -424,6 +565,21 @@ export function ReachAccess({
   const { data: grants } = useAccessGrants({ subjectIds: grantSubjects });
   const setRule = useSetContactRule();
   const createLink = useCreateFieldLink();
+  // CR3-4: direction §3.2 R2 names "Add a channel" as one of the card's four
+  // controls. `useAddStudioContactChannel` had exactly one call site — the Add
+  // sheet — so a phone or an email could only ever be written at the moment a
+  // seat was created, and the region's own "Add a phone or email to reach them."
+  // named an act that did not exist.
+  const addChannel = useAddStudioContactChannel();
+  const channelKinds = isPerson ? PERSON_CHANNEL_KINDS : COMPANY_CHANNEL_KINDS;
+  const [addingChannel, setAddingChannel] = useState(false);
+  const [channelKind, setChannelKind] = useState<ContactChannelKind>(
+    channelKinds[0],
+  );
+  const [channelValue, setChannelValue] = useState("");
+  const [channelPreferred, setChannelPreferred] = useState(false);
+  const [channelError, setChannelError] = useState<string | null>(null);
+  const channelBandId = useId();
 
   const [editingRule, setEditingRule] = useState(false);
   const [ruleReason, setRuleReason] = useState("");
@@ -438,7 +594,6 @@ export function ReachAccess({
    * out — a full-row upsert erasing facts nothing on this screen ever showed.
    */
   const [otherForbidden, setOtherForbidden] = useState<readonly string[]>([]);
-  const [mintChoice, setMintChoice] = useState<"window" | "warranty">("window");
   const [mintedUrl, setMintedUrl] = useState<string | null>(null);
   const [mintError, setMintError] = useState<string | null>(null);
   const ruleBandId = useId();
@@ -495,7 +650,8 @@ export function ReachAccess({
     setRuleReason(rule?.reason ?? "");
   }, [editingRule, rule]);
 
-  const expiresAt = mintChoice === "warranty" ? warrantyEnd : seatWindowEnd;
+  // CR3-6: the date the RPC will land on, not a date the room would like.
+  const expiresAt = grantWindowEnd(seatWindowEnd, warrantyEnd, now);
 
   const mint = () => {
     setMintError(null);
@@ -518,11 +674,9 @@ export function ReachAccess({
           setMintedUrl(fieldLinkUrl(minted.token));
           peopleEvents.grantMinted({
             tier: "field_link",
-            expiry_source: expiresAt
-              ? mintChoice === "warranty"
-                ? "warranty"
-                : "engagement_window"
-              : "fallback_90_day",
+            // The seat's window IS the expiry whenever there is one; there is
+            // no third source the RPC can be made to take from here.
+            expiry_source: expiresAt ? "engagement_window" : "fallback_90_day",
           });
           onAnnounce(`A field link is open for ${personName}.`);
         },
@@ -531,6 +685,38 @@ export function ReachAccess({
             e instanceof Error
               ? e.message
               : "Could not open that door just now.",
+          ),
+      },
+    );
+  };
+
+  const saveChannel = () => {
+    setChannelError(null);
+    if (!cardId) return;
+    const value = channelValue.trim();
+    if (!value) {
+      setChannelError("Write the number or the address first.");
+      return;
+    }
+    addChannel.mutate(
+      {
+        ownerType: cardKind,
+        ownerId: cardId,
+        channelKind,
+        value,
+        preferred: channelPreferred,
+        smsCapable: channelKind === "mobile",
+      },
+      {
+        onSuccess: () => {
+          setAddingChannel(false);
+          setChannelValue("");
+          setChannelPreferred(false);
+          onAnnounce(`${value} is on ${personName}'s card.`);
+        },
+        onError: (e: unknown) =>
+          setChannelError(
+            e instanceof Error ? e.message : "Could not add that just now.",
           ),
       },
     );
@@ -599,6 +785,82 @@ export function ReachAccess({
             />
           ))}
         </ul>
+      )}
+
+      {/* CR3-4 — the act the empty sentence above has always named. Hidden
+          under a do-not-contact rule: that region collapses to one line and
+          routes elsewhere (direction §5.4), and offering a new channel there
+          would contradict it. */}
+      {!doNotContact && (
+        <>
+          <DocumentAction
+            actionKey="add-channel"
+            surfaceKey="people"
+            regionKey="reach-channels"
+            variant="tertiary"
+            aria-expanded={addingChannel}
+            aria-controls={channelBandId}
+            onClick={() => setAddingChannel((open) => !open)}
+          >
+            Add a channel
+          </DocumentAction>
+          <div id={channelBandId} hidden={!addingChannel} className="mt-2">
+            <label className={FIELD_LABEL} htmlFor={`${channelBandId}-kind`}>
+              Which line
+            </label>
+            <select
+              id={`${channelBandId}-kind`}
+              value={channelKind}
+              onChange={(e) =>
+                setChannelKind(e.target.value as ContactChannelKind)
+              }
+              className={`${FIELD_INPUT} mb-3`}
+            >
+              {channelKinds.map((kind) => (
+                <option key={kind} value={kind}>
+                  {CONTACT_CHANNEL_KIND_LABELS[kind]}
+                </option>
+              ))}
+            </select>
+            <label className={FIELD_LABEL} htmlFor={`${channelBandId}-value`}>
+              The number or address
+            </label>
+            <input
+              id={`${channelBandId}-value`}
+              type="text"
+              value={channelValue}
+              onChange={(e) => setChannelValue(e.target.value)}
+              className={`${FIELD_INPUT} mb-2`}
+            />
+            <label className="t-body-sm flex min-h-11 items-center gap-2 text-[var(--ink)]">
+              <input
+                type="checkbox"
+                checked={channelPreferred}
+                onChange={(e) => setChannelPreferred(e.target.checked)}
+              />
+              Reach them here first
+            </label>
+            <DocumentAction
+              actionKey="save-channel"
+              surfaceKey="people"
+              regionKey="reach-channels"
+              variant="secondary"
+              loading={addChannel.isPending}
+              loadingLabel="Writing…"
+              onClick={saveChannel}
+            >
+              Put it on the card
+            </DocumentAction>
+            {channelError && (
+              <p
+                role="alert"
+                className="t-body-sm mt-1 text-[var(--terracotta-ink)]"
+              >
+                {channelError}
+              </p>
+            )}
+          </div>
+        </>
       )}
 
       <h3 className="t-head mb-3 mt-6 text-[var(--ink-subtle)]">
@@ -699,32 +961,21 @@ export function ReachAccess({
           id={mintReasonId}
           className="t-body-sm mt-3 max-w-[56ch] text-[var(--ink-subtle)]"
         >
-          {seatId
-            ? mintConsequenceSentence(personName, expiresAt)
-            : MINT_WITHOUT_SEAT_SENTENCE}
+          {!seatId
+            ? MINT_WITHOUT_SEAT_SENTENCE
+            : expiresAt
+              ? mintConsequenceSentence(personName, expiresAt)
+              : MINT_FALLBACK_SENTENCE}
         </p>
       )}
-      {isPerson && warrantyEnd && seatId && (
-        <div id={mintBandId} className="mt-2">
-          <label className="t-body-sm flex min-h-11 items-center gap-2 text-[var(--ink)]">
-            <input
-              type="radio"
-              name={`${mintBandId}-clock`}
-              checked={mintChoice === "window"}
-              onChange={() => setMintChoice("window")}
-            />
-            Ends with the job
-          </label>
-          <label className="t-body-sm flex min-h-11 items-center gap-2 text-[var(--ink)]">
-            <input
-              type="radio"
-              name={`${mintBandId}-clock`}
-              checked={mintChoice === "warranty"}
-              onChange={() => setMintChoice("warranty")}
-            />
-            Ends with the warranty, {formatLongDate(warrantyEnd.slice(0, 10))}
-          </label>
-        </div>
+      {/* CR3-6: where the warranty is the later of the two, the sentence above
+          already names the warranty date — because that is the date the token
+          carries. Saying it is the reason this band is a statement and not a
+          choice. */}
+      {isPerson && seatId && expiresAt && expiresAt === warrantyEnd?.slice(0, 10) && (
+        <p id={mintBandId} className="t-body-sm mt-1 text-[var(--ink-subtle)]">
+          This seat runs out a warranty, so the door ends with the warranty.
+        </p>
       )}
       {isPerson && (
         <DocumentAction

@@ -727,6 +727,23 @@ function invalidateChannelFanout(
   void queryClient.invalidateQueries({ queryKey: peopleSeatKeys.all });
 }
 
+/**
+ * CR3-3 — ALREADY ON FILE IS NOT A FAILURE.
+ *
+ * `idx_studio_contact_channels_owner_kind_value` is UNIQUE on
+ * `(owner_id, channel_kind, value)`, and this was a bare `.insert()`. 00626's
+ * `apply_party_rolodex_link_trg` auto-links a new seat to an EXISTING card by
+ * phone, so adding somebody the rolodex already holds raised `23505` and the
+ * Add sheet printed the raw Postgres string — naming the index, on a face,
+ * which SPEC §8 #3 forbids outright. Worse, the sheet's resume chain only
+ * marks a step written AFTER it succeeds, so every retry re-failed on the same
+ * insert and the rule, the email and the authority grant behind it never ran.
+ *
+ * A duplicate is re-read and returned rather than replaced: a HELD channel is
+ * not a deleted one (direction §5.1), so re-adding a bounced address must not
+ * quietly mark it active again, and re-adding a number must not demote the
+ * `preferred` flag somebody set on it.
+ */
 export function useAddStudioContactChannel() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -735,20 +752,34 @@ export function useAddStudioContactChannel() {
     ): Promise<StudioContactChannel> => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
+      const value = input.value.trim();
       const { data, error } = await supabase
         .from('studio_contact_channels')
         .insert({
           owner_type: input.ownerType,
           owner_id: input.ownerId,
           channel_kind: input.channelKind,
-          value: input.value.trim(),
+          value,
           label: input.label?.trim() || null,
           sms_capable: input.smsCapable ?? false,
           preferred: input.preferred ?? false,
         })
         .select('*')
         .single();
-      if (error) throw error;
+      if (error) {
+        const code = (error as { code?: string } | null)?.code;
+        if (code !== '23505') throw error;
+        const { data: existing, error: readError } = await supabase
+          .from('studio_contact_channels')
+          .select('*')
+          .eq('owner_id', input.ownerId)
+          .eq('channel_kind', input.channelKind)
+          .eq('value', value)
+          .maybeSingle();
+        if (readError) throw readError;
+        if (!existing) throw error;
+        return existing as StudioContactChannel;
+      }
       return data as StudioContactChannel;
     },
     onSuccess: (_data, input) => invalidateChannelFanout(queryClient, input.ownerId),
@@ -859,6 +890,23 @@ export interface SetStudioContactRuleInput {
   contactHours?: string | null;
   escalationByClass?: Record<string, unknown>;
   reason?: string | null;
+  /**
+   * CR3-2 — MERGE, DO NOT REPLACE.
+   *
+   * The default write is a FULL-ROW upsert: every column the caller omits is
+   * sent as its empty default. That is right for the person card's rule editor,
+   * which loads the standing row and round-trips every column it does not own.
+   * It is wrong for any caller that knows only part of the rule — the Add
+   * sheet types a `reason` and nothing else, and 00626's
+   * `apply_party_rolodex_link_trg` auto-links a new seat to an EXISTING card by
+   * phone, so adding a repeat sub to a second job erased that person's standing
+   * do-not-contact rule and the route behind it.
+   *
+   * With `merge: true` the standing row is read first and every field the
+   * caller leaves `undefined` is carried across unchanged. An explicitly passed
+   * value still wins, including an explicitly empty array.
+   */
+  merge?: boolean;
 }
 
 export const contactRuleKeys = {
@@ -943,18 +991,44 @@ export function useSetContactRule() {
     mutationFn: async (input: SetStudioContactRuleInput): Promise<StudioContactRule> => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
+      // CR3-2: in merge mode the standing row is the baseline, so a caller that
+      // knows only the reason cannot blank the forbidden list, the route or the
+      // hours somebody else wrote.
+      let standing: StudioContactRule | null = null;
+      if (input.merge) {
+        const { data: existing, error: readError } = await supabase
+          .from('studio_contact_rules')
+          .select('*')
+          .eq('subject_type', input.subjectType)
+          .eq('subject_id', input.subjectId)
+          .maybeSingle();
+        if (readError) throw readError;
+        standing = (existing as StudioContactRule | null) ?? null;
+      }
       const { data, error } = await supabase
         .from('studio_contact_rules')
         .upsert(
           {
             subject_type: input.subjectType,
             subject_id: input.subjectId,
-            channels_allowed: input.channelsAllowed ?? [],
-            channels_forbidden: input.channelsForbidden ?? [],
-            route_to_person_id: input.routeToPersonId ?? null,
-            contact_hours: input.contactHours?.trim() || null,
-            escalation_by_class: input.escalationByClass ?? {},
-            reason: input.reason?.trim() || null,
+            channels_allowed:
+              input.channelsAllowed ?? standing?.channels_allowed ?? [],
+            channels_forbidden:
+              input.channelsForbidden ?? standing?.channels_forbidden ?? [],
+            route_to_person_id:
+              input.routeToPersonId !== undefined
+                ? input.routeToPersonId
+                : (standing?.route_to_person_id ?? null),
+            contact_hours:
+              input.contactHours !== undefined
+                ? input.contactHours?.trim() || null
+                : (standing?.contact_hours ?? null),
+            escalation_by_class:
+              input.escalationByClass ?? standing?.escalation_by_class ?? {},
+            reason:
+              input.reason !== undefined
+                ? input.reason?.trim() || null
+                : (standing?.reason ?? null),
             set_at: new Date().toISOString(),
           },
           { onConflict: 'subject_type,subject_id' },

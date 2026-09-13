@@ -17,12 +17,13 @@
  * accessible name, so a thumb on a site never has to find eleven digits.
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { KeyRound } from 'lucide-react';
 import {
   useSiteAccessCard,
   useUpdateSiteAccessCard,
   type ProjectPartyAuthority,
+  type SiteAccessEmergencyLine,
 } from '@patina/supabase';
 import {
   rosterShortDate,
@@ -41,6 +42,8 @@ import { NoticeLog } from './notice-log';
 const REGION_HEAD =
   'font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--color-clay-ink)]';
 const LINE = 'text-[0.82rem] text-[var(--color-charcoal)]';
+const FIELD_INPUT =
+  'mb-2 min-h-11 w-full border-0 border-b border-[var(--color-pearl)] bg-transparent py-2 text-[0.82rem] text-[var(--color-charcoal)] outline-none focus:border-[var(--color-clay)]';
 
 /** An emergency line as the card stores it. The seed writes `label` where the
  *  hook's type says `role`; both are read, so a line never loses its word. */
@@ -198,6 +201,22 @@ export function SiteAccessCard({
   const { data: card, isLoading } = useSiteAccessCard(open ? projectId : null);
   const updateCard = useUpdateSiteAccessCard();
   const [saveError, setSaveError] = useState<string | null>(null);
+  /**
+   * CR3-5 — THE TWO COLUMNS NOTHING COULD WRITE.
+   *
+   * `useUpdateSiteAccessCard` has accepted `keyHolderEngagementId` and
+   * `emergencyLines` since 00625; no surface passed either, so in production
+   * "Who to call first" always printed "– No emergency line on file." and
+   * "Key holder" always printed "– Nobody on the job is marked as holding a
+   * key.", and R-U's head fold lost its key-holder half. The dev seed writes
+   * both columns, which is why every local walk passed. Direction §3.7 puts
+   * E15's ownership on this card: it is the only place either can be written.
+   */
+  const [namingKeyHolder, setNamingKeyHolder] = useState(false);
+  const [keyHolderDraft, setKeyHolderDraft] = useState('');
+  const [editingLines, setEditingLines] = useState(false);
+  const [lineDraft, setLineDraft] = useState({ name: '', role: '', phone: '' });
+  const [lineError, setLineError] = useState<string | null>(null);
 
   const rows = projection.rows;
   const keyHolder = keyHolderRow(rows, card?.key_holder_engagement_id);
@@ -212,6 +231,28 @@ export function SiteAccessCard({
   const lines = ((card?.emergency_lines ?? []) as StoredLine[]).filter(
     (line) => !!line?.name,
   );
+
+  // Seeded once per opening of the picker, from the card's own pointer.
+  useEffect(() => {
+    if (!namingKeyHolder) return;
+    setKeyHolderDraft(card?.key_holder_engagement_id ?? '');
+  }, [namingKeyHolder, card?.key_holder_engagement_id]);
+
+  const seatChoices = rows.filter(
+    (row): row is CallSheetRow & { seatId: string } => !!row.seatId,
+  );
+
+  /** The card stores `{name, role, phone}`; the seed's `label` is read on the
+   *  way out and normalised on the way back in, so an edit never drops a word
+   *  a seeded row carried. */
+  const storedLines = (): SiteAccessEmergencyLine[] =>
+    ((card?.emergency_lines ?? []) as StoredLine[])
+      .filter((line) => !!line?.name)
+      .map((line) => ({
+        name: String(line.name),
+        role: (line.role ?? line.label ?? null) || null,
+        phone: line.phone ?? null,
+      }));
 
   // CR-11: an RLS refusal, the `key_holder_engagement_id` BEFORE trigger
   // (00625:185-207) or a dropped connection used to leave the card looking
@@ -322,10 +363,135 @@ export function SiteAccessCard({
                       ) : (
                         <span className={LINE}>{text}</span>
                       )}
+                      <DocumentAction
+                        actionKey="drop-emergency-line"
+                        surfaceKey="site-access"
+                        regionKey="emergency-lines"
+                        variant="tertiary"
+                        onClick={() => {
+                          void save(
+                            {
+                              projectId,
+                              emergencyLines: storedLines().filter(
+                                (_l, i) => i !== index,
+                              ),
+                            },
+                            'emergency_lines',
+                          ).catch(() => undefined);
+                        }}
+                      >
+                        Take {line.name} off the list
+                      </DocumentAction>
                     </li>
                   );
                 })}
               </ul>
+              <DocumentAction
+                actionKey="add-emergency-line"
+                surfaceKey="site-access"
+                regionKey="emergency-lines"
+                variant="tertiary"
+                aria-expanded={editingLines}
+                aria-controls="site-access-emergency-lines"
+                onClick={() => {
+                  setLineError(null);
+                  setEditingLines((editing) => !editing);
+                }}
+                className="mt-1"
+              >
+                Add someone to call
+              </DocumentAction>
+              <div
+                id="site-access-emergency-lines"
+                hidden={!editingLines}
+                className="mt-2"
+              >
+                <label className={REGION_HEAD} htmlFor="site-access-line-name">
+                  Name
+                </label>
+                <input
+                  id="site-access-line-name"
+                  value={lineDraft.name}
+                  onChange={(e) =>
+                    setLineDraft((d) => ({ ...d, name: e.target.value }))
+                  }
+                  className={FIELD_INPUT}
+                />
+                <label className={REGION_HEAD} htmlFor="site-access-line-role">
+                  What they are to this job
+                </label>
+                <input
+                  id="site-access-line-role"
+                  value={lineDraft.role}
+                  onChange={(e) =>
+                    setLineDraft((d) => ({ ...d, role: e.target.value }))
+                  }
+                  className={FIELD_INPUT}
+                />
+                <label className={REGION_HEAD} htmlFor="site-access-line-phone">
+                  Number
+                </label>
+                <input
+                  id="site-access-line-phone"
+                  type="tel"
+                  value={lineDraft.phone}
+                  onChange={(e) =>
+                    setLineDraft((d) => ({ ...d, phone: e.target.value }))
+                  }
+                  className={FIELD_INPUT}
+                />
+                <DocumentActionRow
+                  surfaceKey="site-access"
+                  regionKey="emergency-lines"
+                  className="mt-1"
+                  aria-label="Save who to call"
+                >
+                  <DocumentAction
+                    actionKey="save-emergency-line"
+                    variant="primary"
+                    loading={updateCard.isPending}
+                    loadingLabel="Writing…"
+                    onClick={() => {
+                      setLineError(null);
+                      const name = lineDraft.name.trim();
+                      if (!name) {
+                        setLineError('A line to call needs a name.');
+                        return;
+                      }
+                      void save(
+                        {
+                          projectId,
+                          emergencyLines: [
+                            ...storedLines(),
+                            {
+                              name,
+                              role: lineDraft.role.trim() || null,
+                              phone: lineDraft.phone.trim() || null,
+                            },
+                          ],
+                        },
+                        'emergency_lines',
+                      ).then(
+                        () => {
+                          setLineDraft({ name: '', role: '', phone: '' });
+                          setEditingLines(false);
+                        },
+                        () => undefined,
+                      );
+                    }}
+                  >
+                    Add them
+                  </DocumentAction>
+                </DocumentActionRow>
+                {lineError && (
+                  <p
+                    role="alert"
+                    className="mt-1 text-[0.72rem] text-[var(--color-terracotta-ink)]"
+                  >
+                    {lineError}
+                  </p>
+                )}
+              </div>
             </section>
 
             <section>
@@ -378,6 +544,70 @@ export function SiteAccessCard({
                   – Nobody on the job is marked as holding a key.
                 </p>
               )}
+              <DocumentAction
+                actionKey="name-key-holder"
+                surfaceKey="site-access"
+                regionKey="key-holder"
+                variant="tertiary"
+                aria-expanded={namingKeyHolder}
+                aria-controls="site-access-key-holder"
+                onClick={() => setNamingKeyHolder((naming) => !naming)}
+                className="mt-1"
+              >
+                {keyHolder ? 'Name a different key holder' : 'Name the key holder'}
+              </DocumentAction>
+              <div
+                id="site-access-key-holder"
+                hidden={!namingKeyHolder}
+                className="mt-2"
+              >
+                <label
+                  className={REGION_HEAD}
+                  htmlFor="site-access-key-holder-seat"
+                >
+                  Who holds a key
+                </label>
+                <select
+                  id="site-access-key-holder-seat"
+                  value={keyHolderDraft}
+                  onChange={(e) => setKeyHolderDraft(e.target.value)}
+                  className={FIELD_INPUT}
+                >
+                  <option value="">Nobody on the job holds one</option>
+                  {seatChoices.map((row) => (
+                    <option key={row.seatId} value={row.seatId}>
+                      {row.name}
+                    </option>
+                  ))}
+                </select>
+                <DocumentActionRow
+                  surfaceKey="site-access"
+                  regionKey="key-holder"
+                  className="mt-1"
+                  aria-label="Save the key holder"
+                >
+                  <DocumentAction
+                    actionKey="save-key-holder"
+                    variant="primary"
+                    loading={updateCard.isPending}
+                    loadingLabel="Writing…"
+                    onClick={() => {
+                      void save(
+                        {
+                          projectId,
+                          keyHolderEngagementId: keyHolderDraft || null,
+                        },
+                        'key_holder',
+                      ).then(
+                        () => setNamingKeyHolder(false),
+                        () => undefined,
+                      );
+                    }}
+                  >
+                    Write it down
+                  </DocumentAction>
+                </DocumentActionRow>
+              </div>
             </section>
 
             <section>

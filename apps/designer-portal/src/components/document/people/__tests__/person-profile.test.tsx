@@ -20,6 +20,8 @@ const personData: { current: PeopleDirectoryRow | null } = { current: null };
 const seatData: { current: PeopleDirectorySeat[] } = { current: [] };
 const cardData: { current: Record<string, unknown> | null } = { current: null };
 const authorityData: { current: unknown[] } = { current: [] };
+/** CR3-9 — the rule row governing this person, which the composers must read. */
+const rulesData: { current: unknown[] } = { current: [] };
 
 /** The acting viewer's seat in her own studio — HT-8 gates the Hours door on it. */
 let viewerStudioRole: "owner" | "admin" | "member" = "owner";
@@ -53,7 +55,7 @@ jest.mock("@patina/supabase", () => ({
   // CR-10 / QA-R2-3: the card resolves the rule, the route and the studio's
   // other cards, so "Do not contact" can say where to write instead.
   useStudioContacts: () => ({ data: [] }),
-  useContactRules: () => ({ data: [] }),
+  useContactRules: () => ({ data: rulesData.current }),
   useStudioContactChannelsFor: () => ({ data: [] }),
   // Reach & access reads these; the card's own regions are what this spec is
   // about, so each is answered with the "nothing on file" shape.
@@ -63,6 +65,15 @@ jest.mock("@patina/supabase", () => ({
   useChannelConsent: () => ({ data: null }),
   useRecordChannelConsent: () => ({ mutate: jest.fn(), isPending: false }),
   useSetContactRule: () => ({ mutate: jest.fn(), isPending: false }),
+  // CR3-4 — the two channel writers the card grew.
+  useAddStudioContactChannel: () => ({ mutate: jest.fn(), isPending: false }),
+  useSetStudioContactChannelStatus: () => ({
+    mutate: jest.fn(),
+    isPending: false,
+  }),
+  ALL_CONTACT_CHANNEL_STATUSES: ["active", "bounced", "unsubscribed", "dead"],
+  PERSON_CHANNEL_KINDS: ["mobile", "email"],
+  COMPANY_CHANNEL_KINDS: ["office", "dispatch", "ap_email"],
   useCreateFieldLink: () => ({ mutate: jest.fn(), isPending: false }),
   useRevokeAccessGrant: () => ({ mutate: jest.fn(), isPending: false }),
   useRecordComplianceDocument: () => ({
@@ -199,6 +210,7 @@ function renderCard(props: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   personData.current = person();
+  rulesData.current = [];
   seatData.current = [seat()];
   cardData.current = {
     id: "card-dana",
@@ -332,6 +344,56 @@ describe("Send a text", () => {
     const { onOpenSeat } = renderCard();
     fireEvent.click(screen.getByRole("button", { name: "Send a text" }));
     expect(onOpenSeat).toHaveBeenCalled();
+  });
+
+  /**
+   * CR3-9 — THE RULE OUTRANKS THE GRANT (C7). Direction §2.2 lists E7's readers
+   * as "every composer before consent"; this act read `consent_status` alone,
+   * so a person with a recorded grant AND a "Never text" rule got a live act
+   * and a live Send — exactly what PR-m's manual path and the Add sheet's
+   * free-text rule can produce together.
+   */
+  it("is held by a 'never text' rule even where the grant stands", () => {
+    rulesData.current = [
+      {
+        id: "rule-1",
+        subject_type: "person",
+        subject_id: "card-dana",
+        channels_allowed: [],
+        channels_forbidden: ["sms"],
+        route_to_person_id: null,
+        contact_hours: null,
+        escalation_by_class: {},
+        reason: "Never text. Office phone only.",
+        set_by: null,
+        set_at: "2026-10-06T00:00:00Z",
+        created_at: "",
+        updated_at: "",
+      },
+    ];
+    const { onOpenSeat } = renderCard();
+    const act = screen.getByRole("button", { name: "Send a text" });
+    expect(act).toHaveAttribute("aria-disabled", "true");
+    const reason = document.getElementById(
+      act.getAttribute("aria-describedby") as string,
+    );
+    expect(reason).toHaveTextContent(
+      "The studio’s rule for this person says never text. Change the rule above before any text goes out.",
+    );
+    fireEvent.click(act);
+    expect(onOpenSeat).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * CR3-11 — ONE LIVE REGION, and it is the Room's. This card kept its own
+ * `role="status"` beside the Room's (people-room.tsx), so every consent, grant
+ * and document change was announced TWICE from two live regions on one screen.
+ */
+describe("CR3-11 — the card announces through the Room, not beside it", () => {
+  it("mounts no live region of its own", () => {
+    renderCard();
+    expect(screen.queryAllByRole("status")).toHaveLength(0);
   });
 });
 

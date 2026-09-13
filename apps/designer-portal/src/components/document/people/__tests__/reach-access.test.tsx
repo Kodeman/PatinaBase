@@ -26,6 +26,10 @@ const consentData: { current: Record<string, unknown> | null } = {
 const recordConsent = jest.fn();
 const recordReconsent = jest.fn();
 const mintLink = jest.fn();
+// CR3-4 — the two writers the card grew: "Add a channel" (direction §3.2 R2)
+// and the per-row held status (§5.1). Both had ZERO call sites before this.
+const addChannel = jest.fn();
+const setChannelStatus = jest.fn();
 
 jest.mock("@patina/supabase", () => ({
   useStudioContactChannels: () => ({ data: channelsData.current }),
@@ -36,6 +40,14 @@ jest.mock("@patina/supabase", () => ({
   // PR-m / CR-25 — the way back from a refusal the studio may record itself.
   useRecordChannelReconsent: () => ({ mutate: recordReconsent, isPending: false }),
   useSetContactRule: () => ({ mutate: jest.fn(), isPending: false }),
+  useAddStudioContactChannel: () => ({ mutate: addChannel, isPending: false }),
+  useSetStudioContactChannelStatus: () => ({
+    mutate: setChannelStatus,
+    isPending: false,
+  }),
+  ALL_CONTACT_CHANNEL_STATUSES: ["active", "bounced", "unsubscribed", "dead"],
+  PERSON_CHANNEL_KINDS: ["mobile", "email"],
+  COMPANY_CHANNEL_KINDS: ["office", "dispatch", "ap_email"],
   useCreateFieldLink: () => ({ mutate: mintLink, isPending: false }),
   useRevokeAccessGrant: () => ({ mutate: jest.fn(), isPending: false }),
   isAccessGrantRevokable: (tier: string) => tier === "field_link",
@@ -86,6 +98,8 @@ beforeEach(() => {
   consentData.current = null;
   recordConsent.mockClear();
   mintLink.mockClear();
+  addChannel.mockClear();
+  setChannelStatus.mockClear();
 });
 
 describe("the three sections", () => {
@@ -283,12 +297,53 @@ describe("minting a door", () => {
     expect(act).toHaveAttribute("aria-disabled", "true");
   });
 
-  it("PR-l — a warranty term is offered as the second clock, in words", () => {
-    renderReach({ warrantyEnd: "2026-11-21" });
-    expect(screen.getByLabelText("Ends with the job")).toBeInTheDocument();
+  /**
+   * CR3-6 — PR-l's two radios chose NOTHING, so they are gone and the room
+   * states the one date the RPC will land on.
+   *
+   * `create_field_link(uuid, timestamptz)` (00627) computes
+   * `max(on_site_to, warranty_until)` and takes it whenever it is still ahead;
+   * the caller's `p_expires_at` is only read when there is no live window at
+   * all. So "Ends with the job" on a seat whose warranty outlives its window
+   * still minted to the warranty end, the sentence above the act named a date
+   * the token did not carry, and the analytics event recorded a choice that
+   * never reached the database. Restoring the choice is a W3 migration.
+   */
+  it("CR3-6 — a warranty that outlives the window IS the date, and the card says so", () => {
+    renderReach({ warrantyEnd: "2027-11-21" });
+    expect(screen.queryByLabelText("Ends with the job")).not.toBeInTheDocument();
+    const act = screen.getByRole("button", { name: "Mint access" });
+    const reason = document.getElementById(
+      act.getAttribute("aria-describedby") as string,
+    );
+    expect(reason).toHaveTextContent(
+      "until the job's window closes, 21 November 2027",
+    );
     expect(
-      screen.getByLabelText("Ends with the warranty, 21 November 2026"),
+      screen.getByText(
+        "This seat runs out a warranty, so the door ends with the warranty.",
+      ),
     ).toBeInTheDocument();
+  });
+
+  it("CR3-6 — a seat with no window at all says the ninety-day term, not a date", () => {
+    renderReach({ seatWindowEnd: null, warrantyEnd: null });
+    const act = screen.getByRole("button", { name: "Mint access" });
+    const reason = document.getElementById(
+      act.getAttribute("aria-describedby") as string,
+    );
+    expect(reason).toHaveTextContent(
+      "the door runs ninety days from today and renews when they use it",
+    );
+  });
+
+  it("CR3-6 — a window that has already closed is the same fact as no window", () => {
+    renderReach({ seatWindowEnd: "2026-01-04", warrantyEnd: null });
+    const act = screen.getByRole("button", { name: "Mint access" });
+    const reason = document.getElementById(
+      act.getAttribute("aria-describedby") as string,
+    );
+    expect(reason).toHaveTextContent("ninety days from today");
   });
 });
 

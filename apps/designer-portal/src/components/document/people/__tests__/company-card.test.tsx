@@ -3,10 +3,18 @@
  * a firm has neither consent nor reach, the Paper region always prints, and on
  * the crew line only the name is a control.
  */
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { CompanyCard } from "../company-card";
 
 const cardData: { current: Record<string, unknown> | null } = { current: null };
+/** CR3-8 — what the verdict band actually writes. */
+const updateCardMutate = jest.fn();
 const docsData: { current: unknown[] } = { current: [] };
 const chaseMutate = jest.fn();
 
@@ -37,7 +45,10 @@ jest.mock("@patina/supabase", () => ({
     data: docsData.current.length === 0 ? "not_on_file" : "lapsed",
   }),
   usePeopleSeats: () => ({ data: [] }),
-  useUpdateStudioContact: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useUpdateStudioContact: () => ({
+    mutateAsync: updateCardMutate,
+    isPending: false,
+  }),
   useRecordComplianceDocument: () => ({
     mutateAsync: jest.fn(),
     isPending: false,
@@ -53,6 +64,15 @@ jest.mock("@patina/supabase", () => ({
   useRecordChannelConsent: () => ({ mutate: jest.fn(), isPending: false }),
   useRecordChannelReconsent: () => ({ mutate: jest.fn(), isPending: false }),
   useSetContactRule: () => ({ mutate: jest.fn(), isPending: false }),
+  // CR3-4 — the two channel writers the card grew.
+  useAddStudioContactChannel: () => ({ mutate: jest.fn(), isPending: false }),
+  useSetStudioContactChannelStatus: () => ({
+    mutate: jest.fn(),
+    isPending: false,
+  }),
+  ALL_CONTACT_CHANNEL_STATUSES: ["active", "bounced", "unsubscribed", "dead"],
+  PERSON_CHANNEL_KINDS: ["mobile", "email"],
+  COMPANY_CHANNEL_KINDS: ["office", "dispatch", "ap_email"],
   useCreateFieldLink: () => ({ mutate: jest.fn(), isPending: false }),
   useRevokeAccessGrant: () => ({ mutate: jest.fn(), isPending: false }),
   isAccessGrantRevokable: () => false,
@@ -271,6 +291,10 @@ describe("the payee region", () => {
 });
 
 describe("the history region", () => {
+  beforeEach(() => {
+    updateCardMutate.mockReset().mockResolvedValue({});
+  });
+
   it("says no verdict is recorded, and offers to record one", () => {
     renderCard();
     expect(screen.getByText("No verdict recorded.")).toBeInTheDocument();
@@ -278,5 +302,58 @@ describe("the history region", () => {
     expect(act).toHaveAttribute("aria-expanded", "false");
     fireEvent.click(act);
     expect(act).toHaveAttribute("aria-expanded", "true");
+  });
+
+  /**
+   * CR3-8 — the band opened EMPTY over a standing verdict and saved
+   * `verdict.trim() || null` over it: two clicks, no confirm, no undo, with the
+   * text it destroyed printed one line above. The same class as CR-3, in the
+   * same file; the designations and payee bands added in the same round both
+   * carry a seeding ref and this one was left out.
+   */
+  it("seeds the editor from the verdict it edits, so an untouched save keeps it", async () => {
+    cardData.current = {
+      ...(cardData.current as object),
+      studio_verdict: "Good crew. Slow to send paper.",
+    };
+    renderCard();
+    fireEvent.click(screen.getByRole("button", { name: "Record a verdict" }));
+    expect(screen.getByLabelText("What the studio thinks")).toHaveValue(
+      "Good crew. Slow to send paper.",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Save the verdict" }));
+    await waitFor(() => expect(updateCardMutate).toHaveBeenCalled());
+    expect(updateCardMutate.mock.calls[0][0].card).toEqual({
+      studioVerdict: "Good crew. Slow to send paper.",
+    });
+  });
+
+  it("still records a first verdict on a card that holds none", async () => {
+    renderCard();
+    fireEvent.click(screen.getByRole("button", { name: "Record a verdict" }));
+    expect(screen.getByLabelText("What the studio thinks")).toHaveValue("");
+    fireEvent.change(screen.getByLabelText("What the studio thinks"), {
+      target: { value: "Would hire again." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save the verdict" }));
+    await waitFor(() => expect(updateCardMutate).toHaveBeenCalled());
+    expect(updateCardMutate.mock.calls[0][0].card).toEqual({
+      studioVerdict: "Would hire again.",
+    });
+  });
+});
+
+/**
+ * CR3-11 — ONE LIVE REGION, and it is the Room's. This card kept its own
+ * `role="status"` beside the Room's (people-room.tsx), so every designation,
+ * payee, document and verdict change was announced TWICE from two live regions
+ * on one screen. Direction §5.5 names one destination; SPEC §7 #3 asks for
+ * exactly one.
+ */
+describe("CR3-11 — the card announces through the Room, not beside it", () => {
+  it("mounts no live region of its own", () => {
+    renderCard();
+    expect(screen.queryAllByRole("status")).toHaveLength(0);
   });
 });
