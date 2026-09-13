@@ -54,6 +54,7 @@ import {
   directoryFirmOf,
   directoryIdentityRows,
   directoryRolodexOrgId,
+  directorySeatTradeIndex,
   directoryTradeOf,
   entryPaperWord,
   firmIdentityLine,
@@ -187,6 +188,13 @@ export function DirectoryView({
   // NULL — counting it printed "0 open jobs" on every firm in the book,
   // including firms whose people hold live Okonkwo seats.
   const { data: allSeats } = usePeopleSeats({ all: true });
+
+  // QA-R7-1: the trade a carded crew member works in lives on their SEAT, not
+  // on their card, so the identity line reads it off the seats already in hand.
+  const seatTrades = useMemo(
+    () => directorySeatTradeIndex(allSeats),
+    [allSeats],
+  );
 
   /** Crew off the rows in hand; open jobs off the seats view. */
   const firmCounts = useMemo(() => {
@@ -533,6 +541,7 @@ export function DirectoryView({
                 )}
                 consentClause={consentClauses.get(row.person_id) ?? null}
                 routeTargets={routeTargets}
+                seatTrade={seatTrades.get(row.person_id) ?? null}
                 onOpenSeat={onOpenSeat}
                 onOpen={() => openPerson(row.person_id, row.role)}
               />

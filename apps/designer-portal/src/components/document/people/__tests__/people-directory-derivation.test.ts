@@ -7,6 +7,7 @@
  */
 
 import type { PeopleDirectoryRow } from "@patina/supabase";
+import type { PeopleDirectorySeat } from "@patina/supabase";
 import {
   DIRECTORY_DUPLICATE_SENTENCE,
   contactRuleBlocks,
@@ -17,6 +18,9 @@ import {
   directoryEntryKind,
   directoryEntryMatches,
   directoryHeadLine,
+  directoryIdentityRows,
+  directorySeatTradeIndex,
+  directoryTradeLabel,
   entryOwesPaperWord,
   entryPaperWord,
   firmIdentityLine,
@@ -235,5 +239,161 @@ describe("the duplicate band", () => {
         }),
       ]),
     ).toHaveLength(0);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Round 7
+// ═══════════════════════════════════════════════════════════════════════════
+
+function seat(over: Partial<PeopleDirectorySeat> = {}): PeopleDirectorySeat {
+  return {
+    identity_key: "p1",
+    person_id: "p1",
+    seat_id: "s1",
+    project_id: "proj-okonkwo",
+    project_name: "Okonkwo residence",
+    project_status: "active",
+    designer_id: null,
+    party_kind: "sub",
+    display_name: "Dana Kowalski",
+    trade: "electrical",
+    stage: "active",
+    on_site_from: "2026-10-12",
+    on_site_to: "2027-08-13",
+    site_access_mode: null,
+    contracted_through: null,
+    company_id: "firm-northgate",
+    company_name: "Northgate Electric",
+    warranty_until: null,
+    warranty_contact_person_id: null,
+    off_job_at: null,
+    off_job_reason: null,
+    show_to_client: null,
+    studio_contact_id: "p1",
+    phone_e164: null,
+    consent_status: "granted",
+    reach_state: "field_link",
+    paper_state: "lapsed",
+    contact_rule_summary: null,
+    updated_at: null,
+    scope: "studio",
+    ...over,
+  } as PeopleDirectorySeat;
+}
+
+describe("QA-R7-1 — the trade lives on the seat", () => {
+  it("prints the firm alone when nothing carries a trade", () => {
+    expect(
+      personIdentityLine(row({ meta: { company_name: "Northgate Electric" } })),
+    ).toBe("Northgate Electric");
+  });
+
+  it("appends the seat's trade when the card carries none", () => {
+    expect(
+      personIdentityLine(
+        row({ meta: { company_name: "Northgate Electric" } }),
+        "electrical",
+      ),
+    ).toBe("Northgate Electric · electrical");
+  });
+
+  it("lets the card's own value outrank the seat's", () => {
+    expect(personIdentityLine(row(), "plumbing")).toBe(
+      "Northgate Electric · electrical",
+    );
+  });
+
+  it("indexes an OPEN seat's trade over a finished one's, on both keys", () => {
+    const index = directorySeatTradeIndex([
+      seat({ seat_id: "s-warranty", stage: "warranty", trade: "plumbing" }),
+      seat({ seat_id: "s-live", stage: "active", trade: "electrical" }),
+    ]);
+    expect(index.get("p1")).toBe("electrical");
+  });
+
+  it("falls back to a finished seat when nothing is open, and skips blanks", () => {
+    const index = directorySeatTradeIndex([
+      seat({ seat_id: "s-blank", stage: "active", trade: "  " }),
+      seat({ seat_id: "s-warranty", stage: "warranty", trade: "tile" }),
+    ]);
+    expect(index.get("p1")).toBe("tile");
+  });
+});
+
+describe("QA-R7-2 — two vocabularies, no schema words", () => {
+  it("labels a maker's SPECIALTY out of the specialty list", () => {
+    expect(directoryTradeLabel("tile_stone", "specialty")).toBe("Tile & stone");
+    expect(
+      personIdentityLine(
+        row({
+          display_name: "Claire Bissett",
+          meta: {
+            company_name: "Stonehaven Tile Gallery",
+            specialties: ["tile_stone"],
+          },
+        }),
+      ),
+    ).toBe("Stonehaven Tile Gallery · tile & stone");
+  });
+
+  it("never prints a raw snake_case token, whichever list it came from", () => {
+    expect(directoryTradeLabel("tile_stone")).toBe("Tile & stone");
+    expect(directoryTradeLabel("radon_mitigation")).toBe("Radon mitigation");
+    expect(directoryTradeLabel("chimney_sweep")).toBe("Chimney Sweep");
+  });
+
+  it("matches the ask bar on the words the row prints", () => {
+    const claire = row({
+      display_name: "Claire Bissett",
+      meta: { specialties: ["tile_stone"] },
+    });
+    expect(directoryEntryMatches(claire, "tile & stone")).toBe(true);
+  });
+});
+
+describe("QA-R7-3 — a legacy designer_clients row is not a person card", () => {
+  const household = row({
+    person_id: "d0e80000-0000-0000-0000-000000000001",
+    role: "client",
+    display_name: "The Okonkwo household",
+    phone: "(612) 555-0104",
+    seat_count: 0,
+    consent_status: null,
+    paper_state: null,
+    meta: {},
+  });
+  const adaeze = row({
+    person_id: "card-adaeze",
+    display_name: "Adaeze Okonkwo",
+    phone: "(612) 555-0104",
+    meta: { entity_kind: "person", contact_kind: "client" },
+  });
+
+  it("keeps it out of the identity list the head counts", () => {
+    const rows = directoryIdentityRows([household, adaeze]);
+    expect(rows.map((r) => r.display_name)).toEqual(["Adaeze Okonkwo"]);
+    expect(directoryEntryCounts(rows)).toEqual({ people: 1, firms: 0 });
+  });
+
+  it("keeps it out of the duplicate-phone scan", () => {
+    expect(directoryDuplicatePairs([household, adaeze])).toHaveLength(0);
+  });
+
+  it("still pairs the two real cards that share a number", () => {
+    const chidi = row({
+      person_id: "card-chidi",
+      display_name: "Chidi Okonkwo",
+      phone: "6125550104",
+      meta: { entity_kind: "person", contact_kind: "client" },
+    });
+    const pairs = directoryDuplicatePairs(
+      directoryIdentityRows([household, adaeze, chidi]),
+    );
+    expect(pairs).toHaveLength(1);
+    expect(pairs[0].map((p) => p.display_name)).toEqual([
+      "Adaeze Okonkwo",
+      "Chidi Okonkwo",
+    ]);
   });
 });

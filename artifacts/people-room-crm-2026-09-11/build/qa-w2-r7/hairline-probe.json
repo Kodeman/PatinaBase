@@ -1,0 +1,69 @@
+{
+  "root-vars": [
+    "--hairline-strong: #D8CCB8",
+    "--hairline: ",
+    "--rule-hair: 1px solid rgba(44,41,38,0.10)"
+  ],
+  "sample-rows": [
+    {
+      "tag": "HEADER",
+      "cls": "sticky top-0 z-20 grid grid-cols-[minmax(0,1fr)_auto_minmax(",
+      "borderBottomColor": "rgba(44, 41, 38, 0.18)"
+    },
+    {
+      "tag": "DIV",
+      "cls": "mt-1 flex min-h-12 items-center gap-2 border-b border-[var(-",
+      "borderBottomColor": "rgb(229, 226, 221)"
+    },
+    {
+      "tag": "BUTTON",
+      "cls": "flex min-h-11 w-full items-center justify-between gap-4 bord",
+      "borderBottomColor": "rgba(229, 226, 221, 0.6)"
+    },
+    {
+      "tag": "NAV",
+      "cls": "space-y-6 border-b border-[var(--border-subtle)] py-5",
+      "borderBottomColor": "rgba(229, 226, 221, 0.6)"
+    },
+    {
+      "tag": "BUTTON",
+      "cls": "min-h-11 rounded-[3px] border px-3 py-1.5 font-mono text-[11",
+      "borderBottomColor": "rgb(101, 89, 78)"
+    },
+    {
+      "tag": "BUTTON",
+      "cls": "min-h-11 rounded-[3px] border px-3 py-1.5 font-mono text-[11",
+      "borderBottomColor": "rgb(216, 204, 184)"
+    },
+    {
+      "tag": "BUTTON",
+      "cls": "min-h-11 rounded-[3px] border px-3 py-1.5 font-mono text-[11",
+      "borderBottomColor": "rgb(216, 204, 184)"
+    },
+    {
+      "tag": "BUTTON",
+      "cls": "min-h-11 rounded-[3px] border px-3 py-1.5 font-mono text-[11",
+      "borderBottomColor": "rgb(216, 204, 184)"
+    },
+    {
+      "tag": "BUTTON",
+      "cls": "min-h-11 rounded-[3px] border px-3 py-1.5 font-mono text-[11",
+      "borderBottomColor": "rgb(216, 204, 184)"
+    },
+    {
+      "tag": "BUTTON",
+      "cls": "min-h-11 rounded-[3px] border px-3 py-1.5 font-mono text-[11",
+      "borderBottomColor": "rgb(216, 204, 184)"
+    },
+    {
+      "tag": "P",
+      "cls": "mb-4 flex items-baseline gap-x-3 border-b border-[var(--colo",
+      "borderBottomColor": "oklch(0.8606 0.0321 84.5881)"
+    },
+    {
+      "tag": "DIV",
+      "cls": "mb-4 border-y border-[var(--hairline-strong)] py-3",
+      "borderBottomColor": "rgb(216, 204, 184)"
+    }
+  ]
+}

@@ -34,6 +34,7 @@ const PAPER_GRAIN =
 export function RoomShell({
   title,
   count,
+  countAtEveryWidth = false,
   action,
   backTo,
   backLabel,
@@ -43,6 +44,18 @@ export function RoomShell({
   title: string;
   /** A quiet count beside the title (e.g. "336 pieces"). */
   count?: string;
+  /**
+   * CR7-1 — PRINT THE COUNT AT EVERY WIDTH.
+   *
+   * The count is `hidden … sm:inline` by default, so below Tailwind's 640px it
+   * computes to `display:none`. That is right for a Room whose count is decor;
+   * it is wrong for the People Room, whose head fact SPEC §5.1 #1 fixes as the
+   * heading AND, beside it, "N people · N firms" — the one number the
+   * `people_directory` v4 rebuild exists to make honest, read on a job site.
+   * Opt in rather than dropping `hidden` for all nine Rooms; the head row then
+   * wraps instead of widening, so a narrow screen never scrolls sideways.
+   */
+  countAtEveryWidth?: boolean;
   /** The Room's single head action (e.g. the Capture button). */
   action?: React.ReactNode;
   /** A nested Room (one reached FROM another Room, e.g. Compose from the
@@ -143,13 +156,22 @@ export function RoomShell({
             plain <span>, so a heading query returned nothing on every Room
             and a screen-reader user had nothing to navigate to. The type is
             unchanged — the element is what was wrong, not the treatment. */}
-        <div className="flex items-center justify-self-center gap-2.5">
+        <div
+          className={`flex items-center justify-self-center gap-2.5 ${
+            countAtEveryWidth ? 'min-w-0 flex-wrap justify-center gap-y-0.5' : ''
+          }`}
+        >
           <StrataMark state="active" size="sm" />
           <h1 className="m-0 font-mono text-[12px] font-semibold uppercase tracking-[0.2em] text-[var(--color-aged-oak)]">
             {title}
           </h1>
           {count && (
-            <span className="hidden font-mono text-[12px] tracking-[0.04em] text-[var(--color-aged-oak)] opacity-70 sm:inline">
+            <span
+              data-room-count
+              className={`font-mono text-[12px] tracking-[0.04em] text-[var(--color-aged-oak)] opacity-70 ${
+                countAtEveryWidth ? 'inline' : 'hidden sm:inline'
+              }`}
+            >
               · {count}
             </span>
           )}

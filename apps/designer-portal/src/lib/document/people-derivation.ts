@@ -18,7 +18,11 @@
  *    + input contract are frozen here, the body is a stub returning []).
  */
 
-import type { PartyRole, PeopleDirectoryRow } from "@patina/supabase";
+import type {
+  PartyRole,
+  PeopleDirectoryRow,
+  PeopleDirectorySeat,
+} from "@patina/supabase";
 import {
   getFieldTradeLabel,
   getPartyKindLabel,
@@ -824,11 +828,40 @@ export function seatIsDone(stage: string | null | undefined): boolean {
   return seatIsClosed(stage) || String(stage) === "warranty";
 }
 
-/** The rows the Directory and its head actually stand for (QA-R2-9). */
+/**
+ * A LEGACY `designer_clients` ROW IS NOT A PERSON CARD (QA-R7-3).
+ *
+ * `people_directory`'s CLIENTS branch emits one row per `designer_clients`
+ * row — the pre-People-CRM lead/client tracker. The Okonkwo seed's row there
+ * is the HOUSEHOLD ("The Okonkwo household"), not a human, and it carries
+ * Adaeze's own number, so the duplicate-phone scan paired her with it and the
+ * band named a legacy artifact where R-Y asks for the two people who share a
+ * number. The row it also stood up in the list opened a card that contradicts
+ * it: the branch hard-codes `seat_count` 0 and NULL for consent, paper and the
+ * contact rule, and the card reads "Nothing on file yet…" under a row printing
+ * a live `tel:` link to that very number.
+ *
+ * E1 person identity is `studio_contacts` (direction §2.2's object-to-surface
+ * table) — Adaeze and Chidi each hold one, and those are the rows the Directory
+ * stands for. A household's own Directory presence is PR-c's `client_households`
+ * object, P2 scope, not an incidental collision against an older table.
+ */
+export function directoryEntryIsLegacyClientRecord(
+  p: DirectoryPerson,
+): boolean {
+  return p.role === "client";
+}
+
+/** The rows the Directory and its head actually stand for (QA-R2-9,
+ *  QA-R7-3). */
 export function directoryIdentityRows(
   rows: readonly DirectoryPerson[],
 ): DirectoryPerson[] {
-  return rows.filter((row) => !directoryEntryIsCompanyOnlySeat(row));
+  return rows.filter(
+    (row) =>
+      !directoryEntryIsCompanyOnlySeat(row) &&
+      !directoryEntryIsLegacyClientRecord(row),
+  );
 }
 
 /** The head counts CARDS, not rows (`people-room.tsx:383` counted rows, and v4
@@ -864,14 +897,98 @@ export function directoryContactKind(p: DirectoryPerson): string | null {
   return p.role === "contact" ? null : p.role;
 }
 
-/** The trade or specialty this identity works in, if one is on file. */
-export function directoryTradeOf(p: DirectoryPerson): string | null {
+/**
+ * WHICH LIST A TRADE VALUE CAME OUT OF (QA-R7-2).
+ *
+ * They are two different vocabularies and neither map answers for the other:
+ * `FieldTrade` (00281 — what a body does on a job) and `VendorSpecialty` (the
+ * maker's own list). `studio_contacts.specialties` holds the second, so
+ * labelling it through the trade map fell to that map's raw-value fallback and
+ * printed `tile_stone` on Claire Bissett's Directory row — a schema word on a
+ * face, which SPEC §8 #3 forbids.
+ */
+export type DirectoryTradeVocabulary = "trade" | "specialty";
+
+export interface DirectoryTrade {
+  value: string;
+  vocabulary: DirectoryTradeVocabulary;
+}
+
+/** The trade or specialty this identity works in, WITH the list it came from. */
+export function directoryTradeEntryOf(
+  p: DirectoryPerson,
+): DirectoryTrade | null {
   const specialties = p.meta?.["specialties"];
-  if (Array.isArray(specialties) && typeof specialties[0] === "string") {
-    return specialties[0];
+  if (
+    Array.isArray(specialties) &&
+    typeof specialties[0] === "string" &&
+    specialties[0]
+  ) {
+    return { value: specialties[0], vocabulary: "specialty" };
   }
   const trade = p.meta?.["trade"];
-  return typeof trade === "string" && trade ? trade : null;
+  if (typeof trade === "string" && trade) {
+    return { value: trade, vocabulary: "trade" };
+  }
+  return null;
+}
+
+/** The raw value alone — what the trade chip narrows on. */
+export function directoryTradeOf(p: DirectoryPerson): string | null {
+  return directoryTradeEntryOf(p)?.value ?? null;
+}
+
+/**
+ * The WORDS a studio reads for a trade or a specialty (QA-R7-2).
+ *
+ * `getFieldTradeLabel` hands back the raw token for anything outside
+ * `FieldTrade`, so an unrecognized value — a specialty, or legacy free text on
+ * an older seat — is put through the specialty map, whose own fallback
+ * humanizes what it does not know. Nothing reaches a face as snake_case.
+ */
+export function directoryTradeLabel(
+  value: string | null | undefined,
+  vocabulary: DirectoryTradeVocabulary = "trade",
+): string {
+  if (!value) return "";
+  if (vocabulary === "specialty") return getVendorSpecialtyLabel(value);
+  const label = getFieldTradeLabel(value);
+  return label === value ? getVendorSpecialtyLabel(value) : label;
+}
+
+/**
+ * THE TRADE LIVES ON THE SEAT, NOT ON THE CARD (QA-R7-1).
+ *
+ * A carded crew member holds no trade of their own: `trade` is a seat fact
+ * (`project_parties.trade`) and `people_directory`'s contacts branch — where
+ * every carded human now lives — has no column for it. So the Directory's
+ * identity line printed the firm's name alone for every crew and sub row in
+ * the book, where SPEC §5.1 #8 fixes it as "Northgate Electric · electrical".
+ *
+ * One pass over the seats the Directory already reads, keyed on both joins a
+ * row can answer to (`identity_key` and `person_id`). An OPEN seat's trade
+ * wins over a finished one's; within either, the first seat naming a trade
+ * wins, and the seats arrive in the view's deterministic order (CR7-3), so one
+ * row reads the same way twice.
+ */
+export function directorySeatTradeIndex(
+  seats: readonly PeopleDirectorySeat[] | undefined,
+): Map<string, string> {
+  const open = new Map<string, string>();
+  const finished = new Map<string, string>();
+  for (const seat of seats ?? []) {
+    const trade = typeof seat.trade === "string" ? seat.trade.trim() : "";
+    if (!trade) continue;
+    const target = seatIsDone(seat.stage) ? finished : open;
+    for (const key of [seat.identity_key, seat.person_id]) {
+      if (!key || target.has(key)) continue;
+      target.set(key, trade);
+    }
+  }
+  for (const [key, trade] of finished) {
+    if (!open.has(key)) open.set(key, trade);
+  }
+  return open;
 }
 
 /** The firm this identity works at, by name and by card id. */
@@ -1022,13 +1139,14 @@ export function directoryEntryMatches(
   const query = rawQuery.trim().toLowerCase();
   if (!query) return true;
   const firm = directoryFirmOf(p).name ?? "";
-  const trade = directoryTradeOf(p);
+  const trade = directoryTradeEntryOf(p);
   const haystack = [
     p.display_name,
     firm,
     p.email ?? "",
-    trade ? getFieldTradeLabel(trade) : "",
-    trade ?? "",
+    // QA-R7-2: the words the row actually prints, out of the right list.
+    trade ? directoryTradeLabel(trade.value, trade.vocabulary) : "",
+    trade?.value ?? "",
     getPartyKindLabel(directoryContactKind(p) ?? ""),
   ]
     .join(" ")
@@ -1038,13 +1156,29 @@ export function directoryEntryMatches(
   return typed.length >= 4 && digits(p.phone).endsWith(typed);
 }
 
-/** "Northgate Electric · electrical" — the person row's second line. */
-export function personIdentityLine(p: DirectoryPerson): string {
+/**
+ * "Northgate Electric · electrical" — the person row's second line.
+ *
+ * QA-R7-1: `seatTrade` is the trade off this identity's most relevant seat,
+ * resolved by `directorySeatTradeIndex` from the seats the caller already
+ * holds. The card's own trade or specialty still wins when it carries one; the
+ * seat answers for every carded crew member, who carries none.
+ */
+export function personIdentityLine(
+  p: DirectoryPerson,
+  seatTrade?: string | null,
+): string {
   const parts: string[] = [];
   const firm = directoryFirmOf(p).name;
   if (firm) parts.push(firm);
-  const trade = directoryTradeOf(p);
-  if (trade) parts.push(getFieldTradeLabel(trade).toLowerCase());
+  const trade: DirectoryTrade | null =
+    directoryTradeEntryOf(p) ??
+    (seatTrade ? { value: seatTrade, vocabulary: "trade" } : null);
+  if (trade) {
+    parts.push(
+      directoryTradeLabel(trade.value, trade.vocabulary).toLowerCase(),
+    );
+  }
   if (parts.length === 0) {
     // CR-15: the CARD vocabulary, not the party map — a studio person with no
     // firm and no specialty printed the raw token `studio` here.
@@ -1105,6 +1239,10 @@ export function directoryDuplicatePairs(
   const byPhone = new Map<string, DirectoryPerson[]>();
   for (const row of rows) {
     if (directoryEntryKind(row) === "firm") continue;
+    // QA-R7-3: the scan is over person CARDS. A legacy `designer_clients` row
+    // carries the household's number and no card behind it, so it collided
+    // with the member whose number it copies and named itself in the band.
+    if (directoryEntryIsLegacyClientRecord(row)) continue;
     const key = digits(row.phone);
     if (key.length < 10) continue;
     const bucket = byPhone.get(key);

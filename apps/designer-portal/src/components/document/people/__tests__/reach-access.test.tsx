@@ -79,10 +79,13 @@ jest.mock("@patina/supabase", () => ({
   ACCESS_GRANT_TIER_LABELS: {
     field_link: "Field link",
     project_review: "Review access",
+    // CR7-2 — the one tier keyed on a FIRM (`subject_type = 'contact'`).
+    agreement_link: "Agreement link",
   },
   ACCESS_GRANT_TIER_OPENS: {
     field_link: "the Call Sheet and the site access card",
     project_review: "one review edition",
+    agreement_link: "one trade agreement",
   },
   CONTACT_CHANNEL_KIND_LABELS: { mobile: "Mobile", email: "Email" },
   isContactChannelHeld: (s: string) => !!s && s !== "active",
@@ -434,7 +437,9 @@ describe("minting a door", () => {
       act.getAttribute("aria-describedby") as string,
     );
     expect(reason).toHaveTextContent(
-      "This opens the Call Sheet and the site access card to Dana Kowalski until the job's window closes, 13 August 2027. It never opens billing or the agreement.",
+      // CR7-3: the sentence names the JOB the door is minted on, not a date
+      // alone — a person on two live seats holds two possible doors.
+      "This opens the Call Sheet and the site access card to Dana Kowalski, on the Okonkwo residence, until the job's window closes, 13 August 2027. It never opens billing or the agreement.",
     );
     fireEvent.click(act);
     expect(mintLink).toHaveBeenCalledWith(
@@ -679,5 +684,87 @@ describe("the pure parts", () => {
     expect(mintConsequenceSentence("Erin Sato", null)).toBe(
       "This opens the Call Sheet and the site access card to Erin Sato until the job's window closes. It never opens billing or the agreement.",
     );
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Round 7
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe("CR7-2 — a firm's card reads firm-scoped tokens only", () => {
+  const crewFieldLink = {
+    grant_id: "field_link:tok-1",
+    tier: "field_link",
+    subject_type: "engagement",
+    subject_id: "seat-dana",
+    scope_type: "project",
+    scope_id: "proj-okonkwo",
+    granted_by: null,
+    granted_at: "2026-10-12",
+    expires_at: "2027-08-13",
+    last_used_at: null,
+    revoked_at: null,
+    revoke_reason: null,
+  };
+  const firmAgreementLink = {
+    ...crewFieldLink,
+    grant_id: "agreement_link:agr-1",
+    tier: "agreement_link",
+    subject_type: "contact",
+    subject_id: "card-northgate",
+  };
+
+  it("withholds a crew member's personal door — its word AND its Revoke", () => {
+    grantsData.current = [crewFieldLink];
+    renderReach({ cardKind: "company", personName: "Northgate Electric" });
+    // "Field link" is one of the three reach words, and SPEC §5.3 #9 bars every
+    // one of them from a company card.
+    expect(screen.queryByText(/Field link/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Revoke/ }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText(NO_GRANT_SENTENCE)).toBeInTheDocument();
+  });
+
+  it("still prints a token the FIRM itself holds", () => {
+    grantsData.current = [firmAgreementLink];
+    renderReach({ cardKind: "company", personName: "Northgate Electric" });
+    expect(screen.queryByText(NO_GRANT_SENTENCE)).not.toBeInTheDocument();
+    expect(screen.getByText(/Agreement link/)).toBeInTheDocument();
+  });
+
+  it("leaves a PERSON's own card untouched", () => {
+    grantsData.current = [crewFieldLink];
+    renderReach();
+    expect(screen.getByText(/Field link/)).toBeInTheDocument();
+  });
+});
+
+describe("CR7-3 — the acts name the job they land on", () => {
+  it("names the job in the mint consequence sentence", () => {
+    expect(
+      mintConsequenceSentence("Dana Kowalski", "2027-08-13", "Okonkwo residence"),
+    ).toBe(
+      "This opens the Call Sheet and the site access card to Dana Kowalski, on the Okonkwo residence, until the job's window closes, 13 August 2027. It never opens billing or the agreement.",
+    );
+  });
+
+  it("names the job in the Record-consent band", () => {
+    channelsData.current = [
+      {
+        id: "ch-1",
+        owner_type: "person",
+        owner_id: "card-dana",
+        channel_kind: "mobile",
+        value: "+16125550111",
+        status: "active",
+        is_preferred: true,
+      },
+    ];
+    renderReach();
+    fireEvent.click(screen.getByRole("button", { name: "Record consent" }));
+    expect(
+      screen.getByText("This is recorded on the Okonkwo residence."),
+    ).toBeInTheDocument();
   });
 });

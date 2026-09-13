@@ -452,6 +452,16 @@ function ChannelRow({
         </p>
       )}
       <div id={bandId} hidden={!showConsent || !recording} className="mt-2">
+        {/* CR7-3: `record_channel_consent` stamps `origin_project_id` with the
+            seat this card resolved to, and R-Q prints that job in the consent
+            sentence everywhere afterwards ("…on the Lindqvist kitchen."). The
+            band that writes it says which job it is writing, so a person on
+            two live seats is never recorded against a job by surprise. */}
+        {projectName && (
+          <p data-consent-origin className="t-body-sm mb-3 text-[var(--ink-subtle)]">
+            This is recorded on the {projectName}.
+          </p>
+        )}
         <label className={FIELD_LABEL} htmlFor={`${bandId}-source`}>
           How consent was given
         </label>
@@ -542,18 +552,25 @@ export interface ReachAccessProps {
 }
 
 /**
- * "This opens the Call Sheet and the site access card to <name> until the
- * job's window closes, <date>. It never opens billing or the agreement."
+ * "This opens the Call Sheet and the site access card to <name>, on the
+ * <job>, until the job's window closes, <date>. It never opens billing or the
+ * agreement."
+ *
+ * CR7-3: THE ACT NAMES ITS OWN SUBJECT. A door is minted on ONE seat, and a
+ * person holding two live jobs has two; the sentence named a date, which a
+ * studio cannot read back to a job. It names the job.
  */
 export function mintConsequenceSentence(
   name: string,
   windowEnd: string | null | undefined,
+  projectName?: string | null,
 ): string {
   const date = formatLongDate(windowEnd?.slice(0, 10));
   const until = date
     ? `until the job's window closes, ${date}`
     : "until the job's window closes";
-  return `This opens the Call Sheet and the site access card to ${name} ${until}. It never opens billing or the agreement.`;
+  const job = projectName?.trim() ? `, on the ${projectName.trim()},` : "";
+  return `This opens the Call Sheet and the site access card to ${name}${job} ${until}. It never opens billing or the agreement.`;
 }
 
 export function ReachAccess({
@@ -585,6 +602,20 @@ export function ReachAccess({
     [grantSubjectIds],
   );
   const { data: grants } = useAccessGrants({ subjectIds: grantSubjects });
+  /**
+   * CR7-2 — a FIRM's card reads firm-scoped tokens only (direction §5.1). The
+   * caller now hands the company variant the firm's own card id, so an
+   * engagement-keyed door cannot match; this holds that promise at the render
+   * too, so no reach word and no Revoke of a person's own door can ever reach
+   * a page SPEC §5.3 #9 bars them from.
+   */
+  const shownGrants = useMemo(
+    () =>
+      isPerson
+        ? grants
+        : (grants ?? []).filter((grant) => grant.subject_type === "contact"),
+    [grants, isPerson],
+  );
   const setRule = useSetContactRule();
   const createLink = useCreateFieldLink();
   // CR3-4: direction §3.2 R2 names "Add a channel" as one of the card's four
@@ -1001,7 +1032,7 @@ export function ReachAccess({
         Access grants
       </h3>
       <AccessGrantList
-        grants={grants}
+        grants={shownGrants}
         now={now}
         onAnnounce={onAnnounce}
         subjectName={personName}
@@ -1016,7 +1047,11 @@ export function ReachAccess({
           {!seatId
             ? MINT_WITHOUT_SEAT_SENTENCE
             : expiresAt
-              ? mintConsequenceSentence(personName, expiresAt)
+              ? mintConsequenceSentence(
+                  personName,
+                  expiresAt,
+                  seatProjectName,
+                )
               : MINT_FALLBACK_SENTENCE}
         </p>
       )}

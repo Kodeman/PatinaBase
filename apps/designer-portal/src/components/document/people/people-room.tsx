@@ -476,6 +476,10 @@ export function PeopleRoom() {
             directoryHeadLine(directoryEntryCounts(directoryIdentityRows(all)))
           : undefined
       }
+      // CR7-1: SPEC §3's preamble is "Both widths must show identical facts",
+      // and §6.2's 390 adaptations do not name the head. The count prints on a
+      // phone.
+      countAtEveryWidth
       action={
         <DocumentActionGroup
           surfaceKey="people"
