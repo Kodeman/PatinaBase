@@ -12,23 +12,23 @@
  * word with a fabricated date is worse than a word standing alone.
  */
 
-import type { ChannelConsentRecord, ConsentSource } from '@patina/supabase';
-import { formatSeatDate } from './seat-line';
+import type { ChannelConsentRecord, ConsentSource } from "@patina/supabase";
+import { formatSeatDate } from "./seat-line";
 
 const GRANT_PHRASE: Record<ConsentSource, string> = {
-  verbal: 'Verbal consent',
-  written: 'Written consent',
-  web_form: 'Consent on a form',
-  inbound_sms: 'Consent by text',
-  other: 'Recorded consent',
+  verbal: "Verbal consent",
+  written: "Written consent",
+  web_form: "Consent on a form",
+  inbound_sms: "Consent by text",
+  other: "Recorded consent",
 };
 
 const REFUSAL_PHRASE: Record<ConsentSource, string> = {
-  verbal: 'Opted out in person',
-  written: 'Opted out in writing',
-  web_form: 'Opted out on a form',
-  inbound_sms: 'Opted out by text',
-  other: 'Opted out',
+  verbal: "Opted out in person",
+  written: "Opted out in writing",
+  web_form: "Opted out on a form",
+  inbound_sms: "Opted out by text",
+  other: "Opted out",
 };
 
 function phraseFor(
@@ -52,13 +52,13 @@ export interface ConsentSentenceFacts {
 
 /** The sentence, or `null` where the record cannot say one honestly. */
 export function consentSentence(facts: ConsentSentenceFacts): string | null {
-  const refused = facts.status === 'opted_out';
+  const refused = facts.status === "opted_out";
   const date = formatSeatDate(refused ? facts.optOutAt : facts.consentedAt);
   if (!date) return null;
   const phrase = refused
-    ? phraseFor(facts.optOutSource, REFUSAL_PHRASE, 'Opted out')
-    : phraseFor(facts.source, GRANT_PHRASE, 'Recorded consent');
-  const where = facts.projectName ? `, on the ${facts.projectName}` : '';
+    ? phraseFor(facts.optOutSource, REFUSAL_PHRASE, "Opted out")
+    : phraseFor(facts.source, GRANT_PHRASE, "Recorded consent");
+  const where = facts.projectName ? `, on the ${facts.projectName}` : "";
   return `${phrase}, ${date}${where}.`;
 }
 

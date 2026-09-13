@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * REACH & ACCESS — one control, three fixed sections, in this order:
@@ -24,7 +24,7 @@
  * file" reads as a fact (R-V / C32).
  */
 
-import { useId, useMemo, useState } from 'react';
+import { useId, useMemo, useState } from "react";
 import {
   CONTACT_CHANNEL_KIND_LABELS,
   isContactChannelHeld,
@@ -39,29 +39,29 @@ import {
   type ContactChannelKind,
   type ConsentSource,
   type StudioContactChannel,
-} from '@patina/supabase';
-import { peopleEvents } from '@/lib/analytics/people-events';
-import { DocumentAction } from '../document-action';
-import { StateWord } from './state-word';
-import { TelLink } from './tel-link';
-import { ContactRuleLine, type ContactRouteTarget } from './contact-rule-line';
-import { AccessGrantList } from './access-grant-list';
-import { consentSentenceForRecord } from './consent-sentence';
-import { formatLongDate } from './people-format';
-import { formatSeatDate } from './seat-line';
+} from "@patina/supabase";
+import { peopleEvents } from "@/lib/analytics/people-events";
+import { DocumentAction } from "../document-action";
+import { StateWord } from "./state-word";
+import { TelLink } from "./tel-link";
+import { ContactRuleLine, type ContactRouteTarget } from "./contact-rule-line";
+import { AccessGrantList } from "./access-grant-list";
+import { consentSentenceForRecord } from "./consent-sentence";
+import { formatLongDate } from "./people-format";
+import { formatSeatDate } from "./seat-line";
 
 export const REACH_EMPTY_SENTENCE =
-  'Nothing on file yet. Add a phone or email to reach them.';
-export const NO_RULE_SENTENCE = 'No contact rule on file.';
-export const NO_SEAT_SENTENCE = 'No open seat on this project.';
+  "Nothing on file yet. Add a phone or email to reach them.";
+export const NO_RULE_SENTENCE = "No contact rule on file.";
+export const NO_SEAT_SENTENCE = "No open seat on this project.";
 export const MINT_WITHOUT_SEAT_SENTENCE =
-  'A field link ends with a job, so this person needs a seat on one first.';
+  "A field link ends with a job, so this person needs a seat on one first.";
 
 const PHONE_KINDS: ReadonlySet<string> = new Set([
-  'mobile',
-  'office',
-  'dispatch',
-  'after_hours',
+  "mobile",
+  "office",
+  "dispatch",
+  "after_hours",
 ]);
 
 export function isPhoneChannel(kind: string): boolean {
@@ -71,13 +71,13 @@ export function isPhoneChannel(kind: string): boolean {
 /** Why a channel is held, in words (direction §5.4). */
 export function heldChannelReason(channel: StudioContactChannel): string {
   const when = formatLongDate(channel.status_at?.slice(0, 10));
-  const dated = when ? `, ${when}` : '';
+  const dated = when ? `, ${when}` : "";
   switch (channel.status) {
-    case 'bounced':
+    case "bounced":
       return `This address bounced back${dated}. Texts and calls still reach them.`;
-    case 'unsubscribed':
+    case "unsubscribed":
       return `They unsubscribed${dated}. Calls still reach them.`;
-    case 'dead':
+    case "dead":
       return `This line is dead${dated}.`;
     default:
       return `This line is held${dated}.`;
@@ -90,22 +90,22 @@ export function channelRowParts(channel: StudioContactChannel): string[] {
     CONTACT_CHANNEL_KIND_LABELS[channel.channel_kind as ContactChannelKind] ??
       String(channel.channel_kind),
   ];
-  if (channel.preferred) parts.push('preferred');
+  if (channel.preferred) parts.push("preferred");
   const verified = formatSeatDate(channel.verified_at?.slice(0, 10));
   if (channel.verified && verified) parts.push(`verified ${verified}`);
   return parts;
 }
 
 const CONSENT_SOURCES: Array<[ConsentSource, string]> = [
-  ['verbal', 'Verbal agreement'],
-  ['written', 'Written agreement'],
-  ['web_form', 'Website or form'],
-  ['other', 'Other documented consent'],
+  ["verbal", "Verbal agreement"],
+  ["written", "Written agreement"],
+  ["web_form", "Website or form"],
+  ["other", "Other documented consent"],
 ];
 
-const FIELD_LABEL = 't-head mb-1 block text-[var(--ink-subtle)]';
+const FIELD_LABEL = "t-head mb-1 block text-[var(--ink-subtle)]";
 const FIELD_INPUT =
-  'w-full rounded-[2px] border border-[var(--hairline-strong)] border-b-[var(--ink-faint)] bg-[var(--paper-doc)] p-3 text-[16px] leading-[1.55] text-[var(--ink)]';
+  "w-full rounded-[2px] border border-[var(--hairline-strong)] border-b-[var(--ink-faint)] bg-[var(--paper-doc)] p-3 text-[16px] leading-[1.55] text-[var(--ink)]";
 
 function ChannelRow({
   channel,
@@ -120,7 +120,9 @@ function ChannelRow({
   originProjectId: string | null;
   onAnnounce: (message: string) => void;
 }) {
-  const consentKind = isPhoneChannel(String(channel.channel_kind)) ? 'sms' : 'email';
+  const consentKind = isPhoneChannel(String(channel.channel_kind))
+    ? "sms"
+    : "email";
   const { data: consent } = useChannelConsent(
     organizationId,
     consentKind,
@@ -128,8 +130,8 @@ function ChannelRow({
   );
   const record = useRecordChannelConsent();
   const [recording, setRecording] = useState(false);
-  const [source, setSource] = useState<ConsentSource | ''>('');
-  const [evidence, setEvidence] = useState('');
+  const [source, setSource] = useState<ConsentSource | "">("");
+  const [evidence, setEvidence] = useState("");
   const [optOut, setOptOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const bandId = useId();
@@ -139,14 +141,18 @@ function ChannelRow({
   const save = () => {
     setError(null);
     if (!organizationId) {
-      setError('This project is not attached to a studio yet, so there is nowhere to record it.');
+      setError(
+        "This project is not attached to a studio yet, so there is nowhere to record it.",
+      );
       return;
     }
     if (!source || !evidence.trim()) {
-      setError('Record how and where they agreed before this goes on the books.');
+      setError(
+        "Record how and where they agreed before this goes on the books.",
+      );
       return;
     }
-    const status = optOut ? 'opted_out' : 'granted';
+    const status = optOut ? "opted_out" : "granted";
     record.mutate(
       {
         organizationId,
@@ -155,20 +161,20 @@ function ChannelRow({
         status,
         source,
         evidence: evidence.trim(),
-        disclosureVersion: 'field-sms-v1',
+        disclosureVersion: "field-sms-v1",
         originProjectId,
       },
       {
         onSuccess: () => {
           setRecording(false);
-          setSource('');
-          setEvidence('');
+          setSource("");
+          setEvidence("");
           setOptOut(false);
           peopleEvents.consentRecorded({
             channel_kind: consentKind,
             status,
             source,
-            surface: 'person_card',
+            surface: "person_card",
             manual_opt_out: optOut,
           });
           onAnnounce(
@@ -178,7 +184,9 @@ function ChannelRow({
           );
         },
         onError: (e) =>
-          setError(e instanceof Error ? e.message : 'Could not record that just now.'),
+          setError(
+            e instanceof Error ? e.message : "Could not record that just now.",
+          ),
       },
     );
   };
@@ -186,13 +194,15 @@ function ChannelRow({
   return (
     <li
       data-reach-channel={channel.id}
-      data-reach-channel-held={held ? 'true' : undefined}
+      data-reach-channel-held={held ? "true" : undefined}
       className={`border-t border-[var(--hairline)] py-3 ${
-        held ? 'border-l-2 border-l-[var(--terracotta-ink)] bg-[var(--rail)] pl-[11px]' : ''
+        held
+          ? "border-l-2 border-l-[var(--terracotta-ink)] bg-[var(--rail)] pl-[11px]"
+          : ""
       }`}
     >
       <p className="t-body-sm flex flex-wrap items-center gap-x-2 text-[var(--ink)]">
-        <span>{channelRowParts(channel).join(' · ')}</span>
+        <span>{channelRowParts(channel).join(" · ")}</span>
         {isPhoneChannel(String(channel.channel_kind)) ? (
           <TelLink phone={channel.value} />
         ) : (
@@ -206,10 +216,15 @@ function ChannelRow({
         <StateWord family="consent" value={consent?.verdict} />
       </p>
       {held && (
-        <p className="t-body-sm mt-1 text-[var(--ink)]">{heldChannelReason(channel)}</p>
+        <p className="t-body-sm mt-1 text-[var(--ink)]">
+          {heldChannelReason(channel)}
+        </p>
       )}
       {sentence && (
-        <p data-consent-sentence className="t-body-sm mt-1 text-[var(--ink-subtle)]">
+        <p
+          data-consent-sentence
+          className="t-body-sm mt-1 text-[var(--ink-subtle)]"
+        >
           {sentence}
         </p>
       )}
@@ -231,7 +246,7 @@ function ChannelRow({
         <select
           id={`${bandId}-source`}
           value={source}
-          onChange={(e) => setSource(e.target.value as ConsentSource | '')}
+          onChange={(e) => setSource(e.target.value as ConsentSource | "")}
           className={`${FIELD_INPUT} mb-3`}
         >
           <option value="">Choose a method…</option>
@@ -271,7 +286,10 @@ function ChannelRow({
           Put it on the books
         </DocumentAction>
         {error && (
-          <p role="alert" className="t-body-sm mt-1 text-[var(--terracotta-ink)]">
+          <p
+            role="alert"
+            className="t-body-sm mt-1 text-[var(--terracotta-ink)]"
+          >
             {error}
           </p>
         )}
@@ -283,7 +301,7 @@ function ChannelRow({
 export interface ReachAccessProps {
   /** The `studio_contacts` card this reach belongs to. */
   cardId: string | null;
-  cardKind: 'person' | 'company';
+  cardKind: "person" | "company";
   organizationId: string | null;
   /** The seat a field link would end with, when the person holds one. */
   seatId?: string | null;
@@ -309,7 +327,9 @@ export function mintConsequenceSentence(
   windowEnd: string | null | undefined,
 ): string {
   const date = formatLongDate(windowEnd?.slice(0, 10));
-  const until = date ? `until the job's window closes, ${date}` : "until the job's window closes";
+  const until = date
+    ? `until the job's window closes, ${date}`
+    : "until the job's window closes";
   return `This opens the Call Sheet and the site access card to ${name} ${until}. It never opens billing or the agreement.`;
 }
 
@@ -335,12 +355,12 @@ export function ReachAccess({
   const createLink = useCreateFieldLink();
 
   const [editingRule, setEditingRule] = useState(false);
-  const [ruleReason, setRuleReason] = useState('');
+  const [ruleReason, setRuleReason] = useState("");
   const [forbidSms, setForbidSms] = useState(false);
   const [forbidEmail, setForbidEmail] = useState(false);
-  const [routeId, setRouteId] = useState('');
+  const [routeId, setRouteId] = useState("");
   const [ruleError, setRuleError] = useState<string | null>(null);
-  const [mintChoice, setMintChoice] = useState<'window' | 'warranty'>('window');
+  const [mintChoice, setMintChoice] = useState<"window" | "warranty">("window");
   const [mintedUrl, setMintedUrl] = useState<string | null>(null);
   const [mintError, setMintError] = useState<string | null>(null);
   const ruleBandId = useId();
@@ -348,7 +368,7 @@ export function ReachAccess({
   const mintReasonId = useId();
 
   const forbidden = useMemo(() => rule?.channels_forbidden ?? [], [rule]);
-  const doNotContact = forbidden.includes('sms') && forbidden.includes('email');
+  const doNotContact = forbidden.includes("sms") && forbidden.includes("email");
   const ruleSummary = useMemo(() => {
     if (!rule) return null;
     const clauses: string[] = [];
@@ -356,7 +376,7 @@ export function ReachAccess({
       clauses.push(
         `Only ${rule.channels_allowed
           .map((c) => CONTACT_CHANNEL_KIND_LABELS[c as ContactChannelKind] ?? c)
-          .join(', ')
+          .join(", ")
           .toLowerCase()}.`,
       );
     }
@@ -364,17 +384,17 @@ export function ReachAccess({
       clauses.push(
         `Never ${forbidden
           .map((c) => CONTACT_CHANNEL_KIND_LABELS[c as ContactChannelKind] ?? c)
-          .join(', ')
+          .join(", ")
           .toLowerCase()}.`,
       );
     }
     if (rule.reason) clauses.push(rule.reason);
     const setOn = formatSeatDate(rule.set_at?.slice(0, 10));
     if (setOn) clauses.push(`Set ${setOn}.`);
-    return clauses.join(' ');
+    return clauses.join(" ");
   }, [rule, forbidden]);
 
-  const expiresAt = mintChoice === 'warranty' ? warrantyEnd : seatWindowEnd;
+  const expiresAt = mintChoice === "warranty" ? warrantyEnd : seatWindowEnd;
 
   const mint = () => {
     setMintError(null);
@@ -386,7 +406,9 @@ export function ReachAccess({
       {
         partyId: seatId,
         projectId: seatProjectId ?? undefined,
-        expiresAt: expiresAt ? `${expiresAt.slice(0, 10)}T23:59:59Z` : undefined,
+        expiresAt: expiresAt
+          ? `${expiresAt.slice(0, 10)}T23:59:59Z`
+          : undefined,
       },
       {
         onSuccess: (minted) => {
@@ -394,18 +416,20 @@ export function ReachAccess({
           // a readable copy of it afterwards.
           setMintedUrl(fieldLinkUrl(minted.token));
           peopleEvents.grantMinted({
-            tier: 'field_link',
+            tier: "field_link",
             expiry_source: expiresAt
-              ? mintChoice === 'warranty'
-                ? 'warranty'
-                : 'engagement_window'
-              : 'fallback_90_day',
+              ? mintChoice === "warranty"
+                ? "warranty"
+                : "engagement_window"
+              : "fallback_90_day",
           });
           onAnnounce(`A field link is open for ${personName}.`);
         },
         onError: (e) =>
           setMintError(
-            e instanceof Error ? e.message : 'Could not open that door just now.',
+            e instanceof Error
+              ? e.message
+              : "Could not open that door just now.",
           ),
       },
     );
@@ -419,8 +443,8 @@ export function ReachAccess({
         subjectType: cardKind,
         subjectId: cardId,
         channelsForbidden: [
-          ...(forbidSms ? (['sms'] as const) : []),
-          ...(forbidEmail ? (['email'] as const) : []),
+          ...(forbidSms ? (["sms"] as const) : []),
+          ...(forbidEmail ? (["email"] as const) : []),
         ],
         routeToPersonId: routeId || null,
         reason: ruleReason.trim() || null,
@@ -431,7 +455,11 @@ export function ReachAccess({
           onAnnounce(`The contact rule for ${personName} is saved.`);
         },
         onError: (e) =>
-          setRuleError(e instanceof Error ? e.message : 'Could not save that rule just now.'),
+          setRuleError(
+            e instanceof Error
+              ? e.message
+              : "Could not save that rule just now.",
+          ),
       },
     );
   };
@@ -446,7 +474,9 @@ export function ReachAccess({
           routeTo={routeTo ?? null}
         />
       ) : !channels || channels.length === 0 ? (
-        <p className="t-body-sm text-[var(--ink-subtle)]">{REACH_EMPTY_SENTENCE}</p>
+        <p className="t-body-sm text-[var(--ink-subtle)]">
+          {REACH_EMPTY_SENTENCE}
+        </p>
       ) : (
         <ul className="m-0 list-none p-0">
           {channels.map((channel) => (
@@ -462,7 +492,9 @@ export function ReachAccess({
         </ul>
       )}
 
-      <h3 className="t-head mb-3 mt-6 text-[var(--ink-subtle)]">Contact rule</h3>
+      <h3 className="t-head mb-3 mt-6 text-[var(--ink-subtle)]">
+        Contact rule
+      </h3>
       {ruleSummary ? (
         <ContactRuleLine
           summary={ruleSummary}
@@ -538,13 +570,18 @@ export function ReachAccess({
           Save the rule
         </DocumentAction>
         {ruleError && (
-          <p role="alert" className="t-body-sm mt-1 text-[var(--terracotta-ink)]">
+          <p
+            role="alert"
+            className="t-body-sm mt-1 text-[var(--terracotta-ink)]"
+          >
             {ruleError}
           </p>
         )}
       </div>
 
-      <h3 className="t-head mb-3 mt-6 text-[var(--ink-subtle)]">Access grants</h3>
+      <h3 className="t-head mb-3 mt-6 text-[var(--ink-subtle)]">
+        Access grants
+      </h3>
       <AccessGrantList grants={grants} now={now} onAnnounce={onAnnounce} />
       <p
         id={mintReasonId}
@@ -560,8 +597,8 @@ export function ReachAccess({
             <input
               type="radio"
               name={`${mintBandId}-clock`}
-              checked={mintChoice === 'window'}
-              onChange={() => setMintChoice('window')}
+              checked={mintChoice === "window"}
+              onChange={() => setMintChoice("window")}
             />
             Ends with the job
           </label>
@@ -569,8 +606,8 @@ export function ReachAccess({
             <input
               type="radio"
               name={`${mintBandId}-clock`}
-              checked={mintChoice === 'warranty'}
-              onChange={() => setMintChoice('warranty')}
+              checked={mintChoice === "warranty"}
+              onChange={() => setMintChoice("warranty")}
             />
             Ends with the warranty, {formatLongDate(warrantyEnd.slice(0, 10))}
           </label>

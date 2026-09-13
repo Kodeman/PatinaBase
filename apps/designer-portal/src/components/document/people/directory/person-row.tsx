@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * A DIRECTORY PERSON ROW — a hairline ledger row, not a bordered card (PR-q).
@@ -25,20 +25,20 @@
  * hides exactly the facts a studio scans fastest for.
  */
 
-import { useId, useState } from 'react';
-import { usePeopleSeats, type PeopleDirectorySeat } from '@patina/supabase';
+import { useId, useState } from "react";
+import { usePeopleSeats, type PeopleDirectorySeat } from "@patina/supabase";
 import {
   contactRuleBlocks,
   entryPaperWord,
   personIdentityLine,
   splitRoutedClause,
   type DirectoryPerson,
-} from '@/lib/document/people-derivation';
-import { Avatar } from '../person-bits';
-import { StateWord } from '../state-word';
-import { TelLink } from '../tel-link';
-import { ContactRuleLine, type ContactRouteTarget } from '../contact-rule-line';
-import { SeatLine } from '../seat-line';
+} from "@/lib/document/people-derivation";
+import { Avatar } from "../person-bits";
+import { StateWord } from "../state-word";
+import { TelLink } from "../tel-link";
+import { ContactRuleLine, type ContactRouteTarget } from "../contact-rule-line";
+import { SeatLine } from "../seat-line";
 
 /** What the open-person control says to a screen reader, and nothing more. */
 export function openPersonLabel(person: DirectoryPerson): string {
@@ -78,9 +78,9 @@ export function PersonRow({
   return (
     <li
       data-person-row={person.person_id}
-      data-highlighted={highlighted ? 'true' : undefined}
+      data-highlighted={highlighted ? "true" : undefined}
       className={`flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-[var(--hairline)] px-4 py-3 ${
-        highlighted ? 'bg-[var(--rail)]' : ''
+        highlighted ? "bg-[var(--rail)]" : ""
       }`}
     >
       <Avatar name={person.display_name} role={person.role} />
@@ -122,7 +122,11 @@ export function PersonRow({
 
       {/* 1440 — three bordered word columns, in this order, and only three. */}
       <div data-row-words className="hidden shrink-0 gap-3 sm:flex">
-        <StateWord family="reach" value={person.reach_state} className="w-[108px]" />
+        <StateWord
+          family="reach"
+          value={person.reach_state}
+          className="w-[108px]"
+        />
         <StateWord
           family="consent"
           value={person.consent_status}
@@ -145,7 +149,7 @@ export function PersonRow({
           onClick={() => setSeatsOpen((open) => !open)}
           className="t-meta min-h-11 shrink-0 text-[var(--ink-faint)]"
         >
-          {seatCount} {seatCount === 1 ? 'seat' : 'seats'}
+          {seatCount} {seatCount === 1 ? "seat" : "seats"}
         </button>
       )}
 

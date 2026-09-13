@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * RECORD A DOCUMENT — the one door a compliance paper enters through.
@@ -13,7 +13,7 @@
  * than refusing in silence.
  */
 
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useState } from "react";
 import {
   ALL_COMPLIANCE_BLOCKS,
   ALL_COMPLIANCE_DOC_TYPES,
@@ -23,16 +23,16 @@ import {
   useRecordComplianceDocument,
   type ComplianceBlock,
   type ComplianceDocType,
-} from '@patina/supabase';
-import { DocumentAction, DocumentActionGroup } from '../document-action';
-import { RoomSheet } from '../rooms/room-sheet';
+} from "@patina/supabase";
+import { DocumentAction, DocumentActionGroup } from "../document-action";
+import { RoomSheet } from "../rooms/room-sheet";
 
-const LABEL = 't-head mb-1 block text-[var(--ink-subtle)]';
+const LABEL = "t-head mb-1 block text-[var(--ink-subtle)]";
 const INPUT =
-  'w-full rounded-[2px] border border-[var(--hairline-strong)] border-b-[var(--ink-faint)] bg-[var(--paper-doc)] p-3 text-[16px] leading-[1.55] text-[var(--ink)]';
+  "w-full rounded-[2px] border border-[var(--hairline-strong)] border-b-[var(--ink-faint)] bg-[var(--paper-doc)] p-3 text-[16px] leading-[1.55] text-[var(--ink)]";
 
 export const EXPIRY_REQUIRED_SENTENCE =
-  'A certificate that can lapse needs the date it lapses on.';
+  "A certificate that can lapse needs the date it lapses on.";
 
 export function RecordDocumentSheet({
   open,
@@ -40,7 +40,7 @@ export function RecordDocumentSheet({
   organizationId,
   holderId,
   holderName,
-  holderType = 'company',
+  holderType = "company",
   onRecorded,
 }: {
   open: boolean;
@@ -48,30 +48,30 @@ export function RecordDocumentSheet({
   organizationId: string;
   holderId: string;
   holderName: string;
-  holderType?: 'person' | 'company';
+  holderType?: "person" | "company";
   onRecorded?: (message: string) => void;
 }) {
   const record = useRecordComplianceDocument();
-  const [docType, setDocType] = useState<ComplianceDocType>('coi_gl');
-  const [docLabel, setDocLabel] = useState('');
-  const [number, setNumber] = useState('');
-  const [issuer, setIssuer] = useState('');
-  const [issuedOn, setIssuedOn] = useState('');
-  const [expiresOn, setExpiresOn] = useState('');
-  const [heldBy, setHeldBy] = useState<'studio' | 'gc'>('studio');
+  const [docType, setDocType] = useState<ComplianceDocType>("coi_gl");
+  const [docLabel, setDocLabel] = useState("");
+  const [number, setNumber] = useState("");
+  const [issuer, setIssuer] = useState("");
+  const [issuedOn, setIssuedOn] = useState("");
+  const [expiresOn, setExpiresOn] = useState("");
+  const [heldBy, setHeldBy] = useState<"studio" | "gc">("studio");
   const [blocks, setBlocks] = useState<ComplianceBlock[]>([]);
   const [error, setError] = useState<string | null>(null);
   const ids = useId();
 
   useEffect(() => {
     if (!open) return;
-    setDocType('coi_gl');
-    setDocLabel('');
-    setNumber('');
-    setIssuer('');
-    setIssuedOn('');
-    setExpiresOn('');
-    setHeldBy('studio');
+    setDocType("coi_gl");
+    setDocLabel("");
+    setNumber("");
+    setIssuer("");
+    setIssuedOn("");
+    setExpiresOn("");
+    setHeldBy("studio");
     setBlocks([]);
     setError(null);
   }, [open]);
@@ -84,8 +84,10 @@ export function RecordDocumentSheet({
       setError(EXPIRY_REQUIRED_SENTENCE);
       return;
     }
-    if (docType === 'other_named' && !docLabel.trim()) {
-      setError('Name this document — an unnamed one is the one that goes dark.');
+    if (docType === "other_named" && !docLabel.trim()) {
+      setError(
+        "Name this document — an unnamed one is the one that goes dark.",
+      );
       return;
     }
     try {
@@ -106,7 +108,9 @@ export function RecordDocumentSheet({
       onClose();
     } catch (e) {
       setError(
-        e instanceof Error ? e.message : 'Could not file that just now. Try again.',
+        e instanceof Error
+          ? e.message
+          : "Could not file that just now. Try again.",
       );
     }
   };
@@ -136,7 +140,7 @@ export function RecordDocumentSheet({
         ))}
       </select>
 
-      {docType === 'other_named' && (
+      {docType === "other_named" && (
         <>
           <label className={LABEL} htmlFor={`${ids}-label`}>
             What it is
@@ -197,7 +201,7 @@ export function RecordDocumentSheet({
       <p className="t-body-sm mb-4 text-[var(--ink-subtle)]">
         {needsExpiry
           ? EXPIRY_REQUIRED_SENTENCE
-          : 'This one does not lapse, so it needs no date.'}
+          : "This one does not lapse, so it needs no date."}
       </p>
 
       <label className={LABEL} htmlFor={`${ids}-held`}>
@@ -206,7 +210,7 @@ export function RecordDocumentSheet({
       <select
         id={`${ids}-held`}
         value={heldBy}
-        onChange={(e) => setHeldBy(e.target.value as 'studio' | 'gc')}
+        onChange={(e) => setHeldBy(e.target.value as "studio" | "gc")}
         className={`${INPUT} mb-4`}
       >
         <option value="studio">The studio</option>
@@ -242,7 +246,10 @@ export function RecordDocumentSheet({
         </p>
       )}
 
-      <DocumentActionGroup surfaceKey="people" regionKey="record-document-sheet">
+      <DocumentActionGroup
+        surfaceKey="people"
+        regionKey="record-document-sheet"
+      >
         <DocumentAction
           actionKey="save-compliance-document"
           variant="primary"

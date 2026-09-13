@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * A DIRECTORY FIRM ROW — the person row's grammar, wearing the one visual
@@ -16,8 +16,8 @@
  * never the studio's to collect.
  */
 
-import { Avatar } from '../person-bits';
-import { StateWord, PlainFact } from '../state-word';
+import { Avatar } from "../person-bits";
+import { StateWord, PlainFact } from "../state-word";
 
 /**
  * A company's OWN kind vocabulary (`studio_contacts.contact_kind` on an
@@ -28,18 +28,18 @@ import { StateWord, PlainFact } from '../state-word';
  * picker's mini row as well as by this one.
  */
 const COMPANY_KIND_LABELS: Record<string, string> = {
-  gc: 'GC firm',
-  workroom: 'Workroom',
-  showroom: 'Showroom',
-  vendor: 'Vendor',
-  supplier: 'Supplier',
+  gc: "GC firm",
+  workroom: "Workroom",
+  showroom: "Showroom",
+  vendor: "Vendor",
+  supplier: "Supplier",
 };
 
 export function companyKindLabel(kind: string | null | undefined): string {
-  if (!kind) return 'Company';
+  if (!kind) return "Company";
   return (
     COMPANY_KIND_LABELS[kind] ??
-    kind.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+    kind.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
   );
 }
 

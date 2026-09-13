@@ -1,4 +1,4 @@
-import { adminDb } from '../helpers/supabase-admin';
+import { adminDb } from "../helpers/supabase-admin";
 
 /**
  * Shared reads for the People room specs. Every one of these asks the DATABASE
@@ -16,9 +16,9 @@ export function uniqueName(prefix: string): string {
 
 export async function cardByName(name: string) {
   const { data, error } = await adminDb
-    .from('studio_contacts')
-    .select('*')
-    .eq('full_name', name)
+    .from("studio_contacts")
+    .select("*")
+    .eq("full_name", name)
     .maybeSingle();
   if (error) throw error;
   return data;
@@ -26,9 +26,9 @@ export async function cardByName(name: string) {
 
 export async function seatByName(name: string) {
   const { data, error } = await adminDb
-    .from('project_parties')
-    .select('*')
-    .eq('display_name', name)
+    .from("project_parties")
+    .select("*")
+    .eq("display_name", name)
     .maybeSingle();
   if (error) throw error;
   return data;
@@ -36,10 +36,10 @@ export async function seatByName(name: string) {
 
 export async function ruleForSubject(subjectId: string) {
   const { data, error } = await adminDb
-    .from('studio_contact_rules')
-    .select('*')
-    .eq('subject_type', 'person')
-    .eq('subject_id', subjectId)
+    .from("studio_contact_rules")
+    .select("*")
+    .eq("subject_type", "person")
+    .eq("subject_id", subjectId)
     .maybeSingle();
   if (error) throw error;
   return data;
@@ -47,18 +47,18 @@ export async function ruleForSubject(subjectId: string) {
 
 export async function channelsFor(ownerId: string) {
   const { data, error } = await adminDb
-    .from('studio_contact_channels')
-    .select('*')
-    .eq('owner_id', ownerId);
+    .from("studio_contact_channels")
+    .select("*")
+    .eq("owner_id", ownerId);
   if (error) throw error;
   return data ?? [];
 }
 
 export async function authorityForSeat(seatId: string) {
   const { data, error } = await adminDb
-    .from('project_party_authority')
-    .select('*')
-    .eq('engagement_id', seatId);
+    .from("project_party_authority")
+    .select("*")
+    .eq("engagement_id", seatId);
   if (error) throw error;
   return data ?? [];
 }
@@ -67,14 +67,26 @@ export async function authorityForSeat(seatId: string) {
 export async function removePerson(name: string): Promise<void> {
   const seat = await seatByName(name);
   if (seat) {
-    await adminDb.from('project_party_authority').delete().eq('engagement_id', seat.id);
-    await adminDb.from('project_parties').delete().eq('id', seat.id);
+    await adminDb
+      .from("project_party_authority")
+      .delete()
+      .eq("engagement_id", seat.id);
+    await adminDb.from("project_parties").delete().eq("id", seat.id);
   }
   const card = await cardByName(name);
   if (card) {
-    await adminDb.from('studio_contact_rules').delete().eq('subject_id', card.id);
-    await adminDb.from('studio_contact_channels').delete().eq('owner_id', card.id);
-    await adminDb.from('studio_person_affiliations').delete().eq('person_id', card.id);
-    await adminDb.from('studio_contacts').delete().eq('id', card.id);
+    await adminDb
+      .from("studio_contact_rules")
+      .delete()
+      .eq("subject_id", card.id);
+    await adminDb
+      .from("studio_contact_channels")
+      .delete()
+      .eq("owner_id", card.id);
+    await adminDb
+      .from("studio_person_affiliations")
+      .delete()
+      .eq("person_id", card.id);
+    await adminDb.from("studio_contacts").delete().eq("id", card.id);
   }
 }

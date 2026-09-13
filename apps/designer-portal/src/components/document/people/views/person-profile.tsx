@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * THE PERSON CARD — the room's unit (direction §1 line 1).
@@ -30,7 +30,7 @@
  * for a plain member and she could only leave that scope by closing the sheet.
  */
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState } from "react";
 import {
   AUTHORITY_SCOPE_LABELS,
   useAffiliations,
@@ -42,34 +42,44 @@ import {
   useStudioContact,
   type AuthorityScope,
   type PeopleDirectorySeat,
-} from '@patina/supabase';
-import { partyKindOwesPaper } from '@patina/types';
-import { directoryContactKind } from '@/lib/document/people-derivation';
-import { DocumentAction } from '../../document-action';
-import { MakerProfile } from '../profile/maker-profile';
-import { Avatar } from '../person-bits';
-import { StateWord, PlainFact } from '../state-word';
-import { SeatLine, formatSeatDate, seatWindowText } from '../seat-line';
-import { ReachAccess, NO_SEAT_SENTENCE } from '../reach-access';
-import { ComplianceTable, NO_PAPER_OWED_SENTENCE, paperHeldClause } from '../compliance-table';
-import { RecordDocumentSheet } from '../record-document-sheet';
-import { formatMoneyFromCents } from '../people-format';
-import { useViewerStudio } from '@/hooks/use-viewer-studio';
-import { openHoursForMember } from '@/lib/document/open-hours-scope';
-import type { PersonProfileProps } from '../types';
+} from "@patina/supabase";
+import { partyKindOwesPaper } from "@patina/types";
+import { directoryContactKind } from "@/lib/document/people-derivation";
+import { DocumentAction } from "../../document-action";
+import { MakerProfile } from "../profile/maker-profile";
+import { Avatar } from "../person-bits";
+import { StateWord, PlainFact } from "../state-word";
+import { SeatLine, formatSeatDate, seatWindowText } from "../seat-line";
+import { ReachAccess, NO_SEAT_SENTENCE } from "../reach-access";
+import {
+  ComplianceTable,
+  NO_PAPER_OWED_SENTENCE,
+  paperHeldClause,
+} from "../compliance-table";
+import { RecordDocumentSheet } from "../record-document-sheet";
+import { formatMoneyFromCents } from "../people-format";
+import { useViewerStudio } from "@/hooks/use-viewer-studio";
+import { openHoursForMember } from "@/lib/document/open-hours-scope";
+import type { PersonProfileProps } from "../types";
 
-const REGION = 'border-t border-[var(--hairline-strong)] py-6';
-const REGION_HEAD = 't-head mb-3 text-[var(--ink-subtle)]';
+const REGION = "border-t border-[var(--hairline-strong)] py-6";
+const REGION_HEAD = "t-head mb-3 text-[var(--ink-subtle)]";
 
-export const NO_AUTHORITY_SENTENCE = 'No authority on this job';
-export const NO_PAST_SEATS_SENTENCE = 'No closed seat on file.';
+export const NO_AUTHORITY_SENTENCE = "No authority on this job";
+export const NO_PAST_SEATS_SENTENCE = "No closed seat on file.";
 export const SEND_TEXT_CONSEQUENCE =
-  'This sends one text to the number on file. They can stop it at any time by replying STOP.';
+  "This sends one text to the number on file. They can stop it at any time by replying STOP.";
 export const CANNOT_TEXT_SENTENCE =
-  'The studio holds no standing consent for this number, so no text may go out.';
+  "The studio holds no standing consent for this number, so no text may go out.";
 
 /** A seat is done when its stage says so — nothing about the window decides it. */
-const DONE_STAGES = new Set(['off_job', 'retired', 'declined', 'no_response', 'warranty']);
+const DONE_STAGES = new Set([
+  "off_job",
+  "retired",
+  "declined",
+  "no_response",
+  "warranty",
+]);
 
 /** "Signs money to $2,500" / "Selections" / "Prepares only" — plain text. */
 export function authorityPhrase(grant: {
@@ -77,7 +87,7 @@ export function authorityPhrase(grant: {
   threshold_cents: number | null;
   prepares_only: boolean;
 }): string {
-  if (grant.prepares_only) return 'Prepares only';
+  if (grant.prepares_only) return "Prepares only";
   const label =
     AUTHORITY_SCOPE_LABELS[grant.scope as AuthorityScope] ?? grant.scope;
   const money = formatMoneyFromCents(grant.threshold_cents);
@@ -89,16 +99,21 @@ function SeatFacts({ seat }: { seat: PeopleDirectorySeat }) {
   const { data: authority } = usePartyAuthority(seat.seat_id);
   const phrases = (authority ?? []).map(authorityPhrase);
   const extras: string[] = [];
-  if (seat.site_access_mode === 'escorted') extras.push('Escorted on site');
-  if (seat.contracted_through) extras.push(`Contracted through ${seat.contracted_through}`);
-  if (seat.show_to_client === false) extras.push('Hidden from the client');
+  if (seat.site_access_mode === "escorted") extras.push("Escorted on site");
+  if (seat.contracted_through)
+    extras.push(`Contracted through ${seat.contracted_through}`);
+  if (seat.show_to_client === false) extras.push("Hidden from the client");
   return (
     <div className="pl-2">
       <p className="t-body-sm">
-        <PlainFact>{phrases.length > 0 ? phrases.join(' · ') : NO_AUTHORITY_SENTENCE}</PlainFact>
+        <PlainFact>
+          {phrases.length > 0 ? phrases.join(" · ") : NO_AUTHORITY_SENTENCE}
+        </PlainFact>
       </p>
       {extras.length > 0 && (
-        <p className="t-body-sm text-[var(--ink-subtle)]">{extras.join(' · ')}</p>
+        <p className="t-body-sm text-[var(--ink-subtle)]">
+          {extras.join(" · ")}
+        </p>
       )}
     </div>
   );
@@ -142,7 +157,7 @@ export function PersonProfile({
 
   // Makers read from the vendor book itself (R78/PRC-02) — the maker's own
   // record, not the studio's card, and it must open pre-admission.
-  if (role === 'maker') {
+  if (role === "maker") {
     return <MakerProfile vendorId={personId} onBack={onBack} notify={notify} />;
   }
 
@@ -159,7 +174,9 @@ export function PersonProfile({
           Back
         </DocumentAction>
         <p className="t-body-sm py-6 text-[var(--ink-subtle)]">
-          {isLoading ? 'Reading the card…' : 'This card is not on the studio book.'}
+          {isLoading
+            ? "Reading the card…"
+            : "This card is not on the studio book."}
         </p>
       </>
     );
@@ -167,8 +184,8 @@ export function PersonProfile({
 
   const affiliation = affiliations?.[0] ?? null;
   const firmName =
-    (typeof person.meta?.['company_name'] === 'string'
-      ? (person.meta['company_name'] as string)
+    (typeof person.meta?.["company_name"] === "string"
+      ? (person.meta["company_name"] as string)
       : null) ?? null;
   const sinceYear = formatSeatDate(affiliation?.from_date)?.slice(-4) ?? null;
   const identityBits = [
@@ -181,7 +198,7 @@ export function PersonProfile({
   ].filter(Boolean) as string[];
 
   const firstSeat = liveSeats[0] ?? null;
-  const canText = person.consent_status === 'granted';
+  const canText = person.consent_status === "granted";
   const soleProprietor = card?.is_sole_proprietor === true;
   const owesPaper = partyKindOwesPaper(directoryContactKind(person));
   const docs = documents ?? [];
@@ -216,46 +233,52 @@ export function PersonProfile({
           <h2 className="t-d3 font-heading">{person.display_name}</h2>
           {identityBits.length > 0 && (
             <p className="t-meta mt-1 text-[var(--ink-subtle)]">
-              {identityBits.join(' · ')}
+              {identityBits.join(" · ")}
             </p>
           )}
           {soleProprietor && (
-            <p className="t-meta mt-1 text-[var(--ink-subtle)]">Sole proprietor</p>
+            <p className="t-meta mt-1 text-[var(--ink-subtle)]">
+              Sole proprietor
+            </p>
           )}
         </div>
         {/* HT-8 — the one door into the Hours sheet's member scope, which is
             studio-wide and so belongs to a studio member, never to a client
             who merely holds a portal account. */}
-        {person.role === 'team' && person.profile_id && viewerIsOwnerOrAdmin && (
-          <div className="ml-auto shrink-0">
-            <DocumentAction
-              actionKey="open-person-hours"
-              surfaceKey="people"
-              regionKey="person-card"
-              variant="secondary"
-              onClick={() =>
-                openHoursForMember(
-                  person.profile_id as string,
-                  person.display_name,
-                )
-              }
-            >
-              Hours
-            </DocumentAction>
-          </div>
-        )}
+        {person.role === "team" &&
+          person.profile_id &&
+          viewerIsOwnerOrAdmin && (
+            <div className="ml-auto shrink-0">
+              <DocumentAction
+                actionKey="open-person-hours"
+                surfaceKey="people"
+                regionKey="person-card"
+                variant="secondary"
+                onClick={() =>
+                  openHoursForMember(
+                    person.profile_id as string,
+                    person.display_name,
+                  )
+                }
+              >
+                Hours
+              </DocumentAction>
+            </div>
+          )}
       </header>
 
       {/* R2 — Reach & access: Channels, Contact rule, Access grants */}
       <section className={REGION}>
-        <h3 className="t-head mb-4 text-[var(--ink-subtle)]">Reach &amp; access</h3>
+        <h3 className="t-head mb-4 text-[var(--ink-subtle)]">
+          Reach &amp; access
+        </h3>
         <ReachAccess
           cardId={person.person_id}
           cardKind="person"
           organizationId={
             organizationId ??
-            (typeof person.meta?.['organization_id'] === 'string'
-              ? (person.meta['organization_id'] as string)
+            (typeof person.meta?.["organization_id"] === "string"
+              ? (person.meta["organization_id"] as string)
               : null)
           }
           personName={person.display_name}
@@ -263,7 +286,9 @@ export function PersonProfile({
           seatProjectId={firstSeat?.project_id ?? null}
           seatProjectName={firstSeat?.project_name ?? null}
           seatWindowEnd={firstSeat?.on_site_to ?? null}
-          warrantyEnd={firstSeat?.warranty_until ?? card?.warranty_until ?? null}
+          warrantyEnd={
+            firstSeat?.warranty_until ?? card?.warranty_until ?? null
+          }
           onAnnounce={announce}
           now={now}
         />
@@ -293,15 +318,17 @@ export function PersonProfile({
       <section className={REGION}>
         <h3 className={REGION_HEAD}>Seats on projects</h3>
         {liveSeats.length === 0 ? (
-          <p className="t-body-sm text-[var(--ink-subtle)]">{NO_SEAT_SENTENCE}</p>
+          <p className="t-body-sm text-[var(--ink-subtle)]">
+            {NO_SEAT_SENTENCE}
+          </p>
         ) : (
           <ul className="m-0 list-none p-0">
             {liveSeats.map((seat) => (
-              <li key={seat.seat_id} className="border-t border-[var(--hairline)] py-2">
-                <SeatLine
-                  seat={seat}
-                  onOpen={(s) => onOpenSeat?.(s)}
-                />
+              <li
+                key={seat.seat_id}
+                className="border-t border-[var(--hairline)] py-2"
+              >
+                <SeatLine seat={seat} onOpen={(s) => onOpenSeat?.(s)} />
                 <SeatFacts seat={seat} />
               </li>
             ))}
@@ -313,27 +340,37 @@ export function PersonProfile({
       <section className={REGION}>
         <h3 className={REGION_HEAD}>Past seats</h3>
         {pastSeats.length === 0 ? (
-          <p className="t-body-sm text-[var(--ink-subtle)]">{NO_PAST_SEATS_SENTENCE}</p>
+          <p className="t-body-sm text-[var(--ink-subtle)]">
+            {NO_PAST_SEATS_SENTENCE}
+          </p>
         ) : (
           <ul className="m-0 list-none p-0">
             {pastSeats.map((seat) => (
-              <li key={seat.seat_id} className="border-t border-[var(--hairline)] py-2">
+              <li
+                key={seat.seat_id}
+                className="border-t border-[var(--hairline)] py-2"
+              >
                 <p className="t-body-sm flex flex-wrap items-center gap-x-2 text-[var(--ink-subtle)]">
                   <span>
                     {[seat.project_name, seat.party_kind, seat.trade]
                       .filter(Boolean)
-                      .join(' · ')}
+                      .join(" · ")}
                   </span>
                   <StateWord family="stage" value={seat.stage} />
                   {formatSeatDate(seat.off_job_at) && (
                     <span>Closed {formatSeatDate(seat.off_job_at)}</span>
                   )}
                   {formatSeatDate(seat.warranty_until) && (
-                    <span>Warranty through {formatSeatDate(seat.warranty_until)}</span>
+                    <span>
+                      Warranty through {formatSeatDate(seat.warranty_until)}
+                    </span>
                   )}
-                  {!seat.off_job_at && seatWindowText(seat.on_site_from, seat.on_site_to) && (
-                    <span>{seatWindowText(seat.on_site_from, seat.on_site_to)}</span>
-                  )}
+                  {!seat.off_job_at &&
+                    seatWindowText(seat.on_site_from, seat.on_site_to) && (
+                      <span>
+                        {seatWindowText(seat.on_site_from, seat.on_site_to)}
+                      </span>
+                    )}
                 </p>
               </li>
             ))}
@@ -347,14 +384,19 @@ export function PersonProfile({
         <section className={REGION} data-person-paper>
           <h3 className={REGION_HEAD}>Paper</h3>
           {!owesPaper ? (
-            <p className="t-body-sm text-[var(--ink-subtle)]">{NO_PAPER_OWED_SENTENCE}</p>
+            <p className="t-body-sm text-[var(--ink-subtle)]">
+              {NO_PAPER_OWED_SENTENCE}
+            </p>
           ) : (
             <>
               {docs.length > 0 ? (
                 <ComplianceTable documents={docs} today={now} />
               ) : (
                 <p>
-                  <StateWord family="paper" value={ownPaperState ?? 'not_on_file'} />
+                  <StateWord
+                    family="paper"
+                    value={ownPaperState ?? "not_on_file"}
+                  />
                 </p>
               )}
               {heldClause && (
@@ -381,11 +423,11 @@ export function PersonProfile({
         <h3 className={REGION_HEAD}>History</h3>
         <p className="t-body-sm text-[var(--ink)]">
           {`Worked ${person.seat_count ?? 0} of the studio's ${
-            (person.seat_count ?? 0) === 1 ? 'projects' : 'projects'
+            (person.seat_count ?? 0) === 1 ? "projects" : "projects"
           }.`}
           {formatSeatDate(person.last_touch_at?.slice(0, 10))
             ? ` Last touch ${formatSeatDate(person.last_touch_at?.slice(0, 10))}.`
-            : ''}
+            : ""}
         </p>
       </section>
 
