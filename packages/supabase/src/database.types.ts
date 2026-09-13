@@ -17603,13 +17603,14 @@ export type Database = {
           invoice_id: string | null
           notes: string | null
           phase_key: string | null
-          project_id: string
+          project_id: string | null
           rate_role: string | null
           rate_source: string | null
           rated_amount_cents: number | null
           raw_seconds: number | null
           source: string
           started_at: string
+          studio_id: string | null
           task_id: string | null
           updated_at: string
           updated_by: string | null
@@ -17629,13 +17630,14 @@ export type Database = {
           invoice_id?: string | null
           notes?: string | null
           phase_key?: string | null
-          project_id: string
+          project_id?: string | null
           rate_role?: string | null
           rate_source?: string | null
           rated_amount_cents?: number | null
           raw_seconds?: number | null
           source?: string
           started_at?: string
+          studio_id?: string | null
           task_id?: string | null
           updated_at?: string
           updated_by?: string | null
@@ -17655,13 +17657,14 @@ export type Database = {
           invoice_id?: string | null
           notes?: string | null
           phase_key?: string | null
-          project_id?: string
+          project_id?: string | null
           rate_role?: string | null
           rate_source?: string | null
           rated_amount_cents?: number | null
           raw_seconds?: number | null
           source?: string
           started_at?: string
+          studio_id?: string | null
           task_id?: string | null
           updated_at?: string
           updated_by?: string | null
@@ -17701,6 +17704,27 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_time_entries_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "admin_studio_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_time_entries_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_time_entries_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "v_studios"
             referencedColumns: ["id"]
           },
           {
