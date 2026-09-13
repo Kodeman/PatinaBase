@@ -432,7 +432,7 @@ export function DirectoryView({
       <ScopeLens scope={scope} onScope={onScopeChange} />
 
       {chip === "makers" && (
-        <p className="mb-4 flex items-baseline gap-x-3 border-b border-[var(--hairline)] pb-2">
+        <p className="mb-4 flex items-baseline gap-x-3 border-b border-[var(--hairline-strong)] pb-2">
           {(
             [
               ["roster", "your roster"],
@@ -459,7 +459,7 @@ export function DirectoryView({
       {duplicates.length > 0 && !marketplace && (
         <div
           data-duplicate-band
-          className="mb-4 border-y border-[var(--hairline)] py-3"
+          className="mb-4 border-y border-[var(--hairline-strong)] py-3"
         >
           {duplicates.map(([a, b]) => (
             <p
@@ -499,7 +499,7 @@ export function DirectoryView({
       ) : (
         <ul
           data-directory-list
-          className="m-0 list-none border-t border-[var(--hairline)] p-0"
+          className="m-0 list-none border-t border-[var(--hairline-strong)] p-0"
         >
           {narrowed.map((row) =>
             directoryEntryKind(row) === "firm" ? (

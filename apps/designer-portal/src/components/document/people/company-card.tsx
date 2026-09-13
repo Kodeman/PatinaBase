@@ -38,7 +38,10 @@ import {
   type PeopleDirectorySeat,
   type StudioContact,
 } from "@patina/supabase";
-import { seatIsClosed } from "@/lib/document/people-derivation";
+import {
+  companyKindShortLabel,
+  seatIsClosed,
+} from "@/lib/document/people-derivation";
 import {
   contactRouteTarget,
   contactRuleClause,
@@ -121,8 +124,18 @@ export function companyIdentityLine(
   const parts: string[] = [];
   const kind = card.company_kind ?? card.contact_kind;
   const trade = card.trades?.[0] ?? card.specialties?.[0] ?? null;
+  // The trade branch keeps the kind in the studio's running-prose case:
+  // SPEC §5.3 #1 fixes this card's literal as "Electrical sub · 1 person · 2
+  // projects · warranty through 21 Nov 2026", and `companyKindShortLabel`
+  // would print "Electrical Subcontractor" there.
   if (trade && kind) parts.push(`${getFieldTradeLabel(trade)} ${kind}`);
-  else if (kind) parts.push(kind);
+  // CR6-2: the STUDIO's word, never the column's. Eleven of the twenty-one
+  // seeded firms carry no trade and fell here, so the card printed `gc`,
+  // `authority`, `lender`, `photography`, `stager`, `maker`, `supplier`,
+  // `architect`, `sub` — while the Directory firm row that opens the card
+  // already read `companyKindShortLabel` and printed "GC". One firm, two
+  // words, two clicks apart.
+  else if (kind) parts.push(companyKindShortLabel(kind));
   parts.push(`${counts.crew} ${counts.crew === 1 ? "person" : "people"}`);
   if (counts.jobs != null) {
     parts.push(`${counts.jobs} ${counts.jobs === 1 ? "project" : "projects"}`);
@@ -181,7 +194,7 @@ function CrewJobs({
       {seats.map((seat: PeopleDirectorySeat) => (
         <li
           key={seat.seat_id}
-          className="border-t border-[var(--hairline)] py-2"
+          className="border-t border-[var(--hairline-strong)] py-2"
         >
           <p className="t-body-sm text-[var(--ink-subtle)]">{personName}</p>
           <SeatLine seat={seat} onOpen={() => onOpenPerson(personId)} />
@@ -587,7 +600,7 @@ export function CompanyCard({
               return (
                 <li
                   key={a.id}
-                  className="border-t border-[var(--hairline)] py-3"
+                  className="border-t border-[var(--hairline-strong)] py-3"
                 >
                   <p className="t-body-sm text-[var(--ink)]">
                     {/* R-W: the NAME is the control; the designations are plain

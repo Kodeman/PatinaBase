@@ -236,7 +236,10 @@ describe('SiteAccessCard — the six regions', () => {
     render(<SiteAccessCard {...props} />);
     // Three regions carry an Edit; the way in is the first.
     fireEvent.click(screen.getAllByRole('button', { name: /^Edit$/ })[0]);
-    const field = screen.getByLabelText('The way in');
+    // CR6-3: the control is labelled for the COLUMN it writes — a lockbox
+    // version — not for the region it sits in; the region head stays "The
+    // way in" (SPEC §5.6 #3).
+    const field = screen.getByLabelText('Lockbox version');
     fireEvent.change(field, { target: { value: 'Lockbox, version 4' } });
     fireEvent.click(screen.getByRole('button', { name: /^Save$/ }));
     expect(updateMutate).toHaveBeenCalledWith({

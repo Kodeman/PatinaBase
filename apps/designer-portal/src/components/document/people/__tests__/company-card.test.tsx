@@ -10,7 +10,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { CompanyCard } from "../company-card";
+import { CompanyCard, companyIdentityLine } from "../company-card";
 
 const cardData: { current: Record<string, unknown> | null } = { current: null };
 /** CR3-8 — what the verdict band actually writes. */
@@ -187,6 +187,29 @@ describe("the six regions", () => {
         "Electrical sub · 1 person · 2 projects · warranty through 21 November 2026",
       ),
     ).toBeInTheDocument();
+  });
+
+  /**
+   * CR6-2 — eleven of the twenty-one seeded firms carry no trade, so they fell
+   * through to the branch that pushed the COLUMN: Marrow & Sons headed its
+   * card "gc · 3 people · 2 projects" while the Directory firm row that opens
+   * it read "GC". One firm, two words, two clicks apart.
+   */
+  it("prints the studio's word for a firm that carries no trade (CR6-2)", () => {
+    const line = (kind: string) =>
+      companyIdentityLine(
+        { company_kind: kind, contact_kind: kind, trades: [] } as never,
+        { crew: 3, jobs: 2 },
+      );
+    expect(line("gc")).toBe("GC · 3 people · 2 projects");
+    expect(line("authority")).toBe("Authority · 3 people · 2 projects");
+    expect(line("lender")).toBe("Lender · 3 people · 2 projects");
+    expect(line("photography")).toBe("Photography · 3 people · 2 projects");
+    expect(line("maker")).toBe("Maker · 3 people · 2 projects");
+    expect(line("supplier")).toBe("Supplier · 3 people · 2 projects");
+    expect(line("stager")).toBe("Stager · 3 people · 2 projects");
+    expect(line("architect")).toBe("Architect · 3 people · 2 projects");
+    expect(line("sub")).toBe("Subcontractor · 3 people · 2 projects");
   });
 
   it("a firm has neither a consent word nor a reach word", () => {

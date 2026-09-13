@@ -120,7 +120,7 @@ export function PersonRow({
     <li
       data-person-row={person.person_id}
       data-highlighted={highlighted ? "true" : undefined}
-      className={`flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-[var(--hairline)] px-4 py-3 ${
+      className={`flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-[var(--hairline-strong)] px-4 py-3 ${
         highlighted ? "bg-[var(--rail)]" : ""
       }`}
     >
@@ -217,7 +217,7 @@ export function PersonRow({
       <ul
         id={seatsPanelId}
         hidden={!seatsOpen}
-        className="m-0 w-full list-none border-t border-[var(--hairline)] p-0 pl-[50px]"
+        className="m-0 w-full list-none border-t border-[var(--hairline-strong)] p-0 pl-[50px]"
       >
         {(seats ?? []).map((seat) => (
           <li key={seat.seat_id}>

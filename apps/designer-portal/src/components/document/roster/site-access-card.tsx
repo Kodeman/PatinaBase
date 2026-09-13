@@ -505,11 +505,17 @@ export function SiteAccessCard({
             <section>
               <h3 className={REGION_HEAD}>The way in</h3>
               <div className="mt-1">
+                {/* CR6-3 / PR-r: the CONTROL names the version, never the
+                    region. A box carrying the region's own name, "The way in",
+                    sitting directly above "The code is held off Patina", reads
+                    as an invitation to type the code — and whatever is typed
+                    prints verbatim as the first half of that very sentence.
+                    The column behind it is a version; the label says so. */}
                 <EditableLine
-                  label="The way in"
+                  label="Lockbox version"
                   fieldId="site-access-way-in"
                   value={card.lockbox_version ?? ''}
-                  empty="No lockbox on file."
+                  empty="No lockbox version on file."
                   saving={updateCard.isPending}
                   onSave={(next) =>
                     save({ projectId, lockboxVersion: next }, 'way_in')

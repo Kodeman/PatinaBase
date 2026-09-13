@@ -268,6 +268,26 @@ describe('ContactRuleLine · the E7 sentence', () => {
     expect(container.textContent).toContain('Write Rosa Delgado instead.');
   });
 
+  /**
+   * QA-R6-2 — every test above hands the routed line an already-formatted
+   * number, which is why the raw shape survived five rounds. The channel this
+   * prop is read from (`studio_contact_channels.value`) commonly stores E.164,
+   * and Frank Bauer's Directory row printed "+16125550114" while the same
+   * number read "(612) 555-0114" on the Channels row two clicks away.
+   */
+  it('prints a raw E.164 office phone in the house shape (QA-R6-2)', () => {
+    render(
+      <ContactRuleLine
+        summary="No direct contact, at his request."
+        blocked
+        routeTo={{ name: 'Rosa Delgado', officePhone: '+16125550114' }}
+      />,
+    );
+    const phone = screen.getByText('(612) 555-0114');
+    expect(phone).toHaveAttribute('href', 'tel:+16125550114');
+    expect(document.body.textContent).not.toContain('+16125550114');
+  });
+
   it('still prints the route when the rule itself has no summary', () => {
     render(<ContactRuleLine summary={null} routeTo={{ name: 'Rosa Delgado' }} />);
     expect(screen.getByText(/Write Rosa Delgado instead\./)).toBeInTheDocument();
