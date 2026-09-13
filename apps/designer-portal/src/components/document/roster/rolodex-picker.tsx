@@ -449,8 +449,10 @@ export function RolodexPicker({
         )}
       </div>
 
+      {/* CR11-10 / CR11-61: a refusal is an alert, not a polite live region —
+          the idiom `add-person-sheet.tsx` already uses in the same flow. */}
       {error && (
-        <p role="status" className="mt-2 text-[0.72rem] text-[var(--color-terracotta-ink)]">
+        <p role="alert" className="mt-2 text-[0.72rem] text-[var(--color-terracotta-ink)]">
           {error}
         </p>
       )}

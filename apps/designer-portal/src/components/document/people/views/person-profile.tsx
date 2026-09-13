@@ -52,7 +52,10 @@ import {
   getPartyKindLabel,
   partyKindOwesPaper,
 } from "@patina/types";
-import { directoryContactKind } from "@/lib/document/people-derivation";
+import {
+  directoryContactKind,
+  isClientSideKind,
+} from "@/lib/document/people-derivation";
 import {
   contactRouteTarget,
   contactRuleForbidsSms,
@@ -66,7 +69,12 @@ import { MakerProfile } from "../profile/maker-profile";
 import { Avatar } from "../person-bits";
 import { StateWord, PlainFact } from "../state-word";
 import { SeatLine, formatSeatDate, seatWindowText } from "../seat-line";
-import { ReachAccess, NO_SEAT_SENTENCE } from "../reach-access";
+import {
+  ReachAccess,
+  NO_SEAT_SENTENCE,
+  MINT_CLIENT_SIDE_SENTENCE,
+  MINT_WITHOUT_SEAT_SENTENCE,
+} from "../reach-access";
 import {
   ComplianceTable,
   NO_PAPER_OWED_SENTENCE,
@@ -254,6 +262,22 @@ export function PersonProfile({
   );
 
   /**
+   * CR11-3: SPEC §5.2 #10's History sentence counts PROJECTS. `seat_count` is
+   * `identity_seat_count()` — the seats `people_directory_seats` nests (R-BG)
+   * — so a person holding two seats on one job read "Worked 2 of the studio's
+   * projects." The seats are already in hand; count the jobs they name.
+   */
+  const projectCount = useMemo(
+    () =>
+      new Set(
+        (seats ?? [])
+          .map((s) => s.project_id)
+          .filter((id): id is string => !!id),
+      ).size,
+    [seats],
+  );
+
+  /**
    * CR-2: the subjects `v_access_grants` keys on — this identity's SEATS
    * (a field link's subject is the engagement) and their LOGIN (an account's
    * subject is the profile). Never the rolodex card id.
@@ -321,6 +345,18 @@ export function PersonProfile({
   // CR10-1: the seat the SMS thread hangs off — a field seat or nothing.
   const textableSeat =
     liveSeats.find((seat) => isFieldRosterRole(seat.party_kind)) ?? null;
+  /**
+   * QA-R11-1 — A FIELD LINK IS MINTED ON A FIELD SEAT OR NOT AT ALL.
+   *
+   * The card handed `ReachAccess` its first live seat of ANY kind, so "Mint
+   * access" on Adaeze Okonkwo — `party_kind` client — minted a field-crew
+   * grant whose declared scope (`ACCESS_GRANT_TIER_OPENS.field_link`) is "the
+   * Call Sheet and the site access card", the card PR-w rules studio-only and
+   * never client-facing. The same field-seat test the SMS thread already uses
+   * governs the door.
+   */
+  const mintSeat = textableSeat;
+  const clientSide = isClientSideKind(directoryContactKind(person));
   // CR3-9: consent is necessary, not sufficient — the rule outranks it (C7).
   // QA-R9-1: a HARD BLOCK holds the rail too — R-BL's routed rule sends the
   // studio to another person, which a live composer on this one contradicts.
@@ -419,8 +455,15 @@ export function PersonProfile({
           seatProjectName={firstSeat?.project_name ?? null}
           seatWindowEnd={firstSeat?.on_site_to ?? null}
           seatWindowStart={firstSeat?.on_site_from ?? null}
+          mintSeatId={mintSeat?.seat_id ?? null}
+          mintProjectId={mintSeat?.project_id ?? null}
+          mintProjectName={mintSeat?.project_name ?? null}
+          mintWindowEnd={mintSeat?.on_site_to ?? null}
+          mintHeldSentence={
+            clientSide ? MINT_CLIENT_SIDE_SENTENCE : MINT_WITHOUT_SEAT_SENTENCE
+          }
           warrantyEnd={
-            firstSeat?.warranty_until ?? card?.warranty_until ?? null
+            mintSeat?.warranty_until ?? card?.warranty_until ?? null
           }
           onAnnounce={announce}
           now={now}
@@ -571,8 +614,8 @@ export function PersonProfile({
       <section className={REGION}>
         <h3 className={REGION_HEAD}>History</h3>
         <p className="t-body-sm text-[var(--ink)]">
-          {`Worked ${person.seat_count ?? 0} of the studio's ${
-            (person.seat_count ?? 0) === 1 ? "projects" : "projects"
+          {`Worked ${projectCount} of the studio's ${
+            projectCount === 1 ? "project" : "projects"
           }.`}
           {formatSeatDate(person.last_touch_at?.slice(0, 10))
             ? ` Last touch ${formatSeatDate(person.last_touch_at?.slice(0, 10))}.`

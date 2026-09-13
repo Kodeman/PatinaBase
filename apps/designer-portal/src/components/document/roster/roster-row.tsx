@@ -109,6 +109,7 @@ export function RosterRow({
   expanded,
   onToggle,
   onOpenSeat,
+  onAnnounce,
   authority = [],
   consentOrg,
   projectName,
@@ -121,6 +122,8 @@ export function RosterRow({
   expanded: boolean;
   onToggle: () => void;
   onOpenSeat?: (row: CallSheetRow) => void;
+  /** CR11-10: the surface's one announcer. This row's note is paper. */
+  onAnnounce?: (message: string) => void;
   authority?: ProjectPartyAuthority[];
   /** The studio whose consent record this row's number is read against. */
   consentOrg?: string | null;
@@ -168,7 +171,16 @@ export function RosterRow({
   const [body, setBody] = useState('');
   const [closing, setClosing] = useState(false);
   const [reason, setReason] = useState('');
-  const [note, setNote] = useState<string | null>(null);
+  const [noteText, setNoteText] = useState<string | null>(null);
+  /**
+   * CR11-10: the note prints as paper and speaks through the surface's one
+   * announcer, so a sheet of thirty rows cannot hold thirty live regions.
+   */
+  const note = noteText;
+  const setNote = (next: string | null) => {
+    setNoteText(next);
+    if (next) onAnnounce?.(next);
+  };
 
   const updateParty = useUpdateProjectParty();
   const closeSeat = useCloseProjectPartySeat();
@@ -665,7 +677,9 @@ export function RosterRow({
                     }
                     held={!body.trim()}
                     disabled={!body.trim() || sendSms.isPending}
-                    aria-describedby={`${panelId}-send-held`}
+                    aria-describedby={
+                      !body.trim() ? `${panelId}-send-held` : undefined
+                    }
                     loading={sendSms.isPending}
                     loadingLabel="Sending…"
                   >
@@ -690,7 +704,7 @@ export function RosterRow({
 
             {note && (
               <p
-                role="status"
+                data-roster-row-note
                 className="mt-2 break-all border-l-2 border-[var(--color-sage)] bg-[rgba(133,148,124,0.07)] px-3 py-2 text-[0.7rem] text-[var(--color-charcoal)]"
               >
                 {note}

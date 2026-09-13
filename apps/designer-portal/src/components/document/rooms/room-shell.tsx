@@ -188,10 +188,11 @@ export function RoomShell({
       </div>
 
       {/* The poetic put-down on leaving (reduced-motion → immediate navigation). */}
+      {/* CR11-10: the veil is paper. It was a second live region on every Room
+          that carries its own announcer, and the navigation that follows it is
+          the announcement. */}
       {leaving && (
         <div
-          role="status"
-          aria-live="polite"
           className="fixed inset-0 z-[60] flex items-center justify-center bg-[rgba(28,26,24,0.4)] motion-safe:animate-[doc-fade_200ms_ease-out]"
         >
           <span className="font-mono text-[12px] uppercase tracking-[0.14em] text-[rgba(250,247,242,0.7)]">

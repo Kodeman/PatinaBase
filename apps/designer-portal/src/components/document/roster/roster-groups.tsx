@@ -50,12 +50,15 @@ export function RosterGroups({
   consentOrg,
   projectName,
   onOpenSeat,
+  onAnnounce,
 }: {
   projection: CallSheetProjection;
   authorityBySeat?: Record<string, ProjectPartyAuthority[]>;
   consentOrg?: string | null;
   projectName?: string | null;
   onOpenSeat?: (row: CallSheetRow) => void;
+  /** CR11-10: the surface's one announcer, for a row's send note. */
+  onAnnounce?: (message: string) => void;
 }) {
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
 
@@ -150,6 +153,7 @@ export function RosterGroups({
                     setExpandedKey((current) => (current === row.key ? null : row.key))
                   }
                   onOpenSeat={onOpenSeat}
+                  onAnnounce={onAnnounce}
                   authority={row.seatId ? authorityBySeat[row.seatId] : undefined}
                   consentOrg={consentOrg}
                   projectName={projectName}

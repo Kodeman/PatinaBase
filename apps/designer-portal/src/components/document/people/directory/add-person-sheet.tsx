@@ -454,6 +454,23 @@ export function AddPersonSheet({
   });
 
   /**
+   * CR5-1 — THE STUDIO THE SEAT'S PROJECT RECORDS, never the one holding the
+   * book. `organizationId` above answers "whose rolodex am I reading" and is
+   * the right answer to that question; it is the WRONG answer to "where may
+   * this seat's card live". `assert_project_party_cards()` (00624) checks a
+   * seat's `studio_contact_id` against `project_recorded_studio(project_id)`,
+   * so a mint into the book's org on a job that records another studio — or
+   * none, which five of the eight local projects do — inserts a
+   * `studio_contacts` row and then fails the link, leaving a card with nothing
+   * pointing at it and a retry minting another. `useProjectRecordedStudio` is
+   * that guard's own resolver; NULL means there is no rolodex this seat's card
+   * may live in, so none is minted at all (party-profile-sheet.tsx:257-260
+   * reads it the same way for the same reason).
+   */
+  const { data: recordedStudioId } = useProjectRecordedStudio(
+    open && projectId ? projectId : null,
+  );
+  /**
    * CR-12 — THE SCOPE AND THE FIGURE ARE THE STUDIO'S TO RECORD.
    *
    * The scope used to be hard-coded (`household ? 'change_order' :
@@ -461,12 +478,21 @@ export function AddPersonSheet({
    * §5.4 #5's "Signs money to $2,500." had a renderer and no writer, and PR-n's
    * client-side gate on the admin-only scopes was vacuously true — the DB
    * policy was the only half that existed.
+   *
+   * CR11-11: the standing this band prints is standing in the studio the JOB
+   * records, not the one holding the book. The four
+   * `project_party_authority_studio_*` policies gate on
+   * `project_party_recorded_studio()`, so an admin of the book's studio who is
+   * a plain member of the job's studio was offered a live money scope and met
+   * a refusal at the write. With no recorded studio there is no standing to
+   * read, and the band closes — the same fail-closed answer the DB gives.
    */
   const isOrgAdmin = useMemo(() => {
-    const role = (orgs ?? []).find((o) => o.id === organizationId)?.membership
+    if (!recordedStudioId) return false;
+    const role = (orgs ?? []).find((o) => o.id === recordedStudioId)?.membership
       ?.role;
     return role === "owner" || role === "admin";
-  }, [orgs, organizationId]);
+  }, [orgs, recordedStudioId]);
   const defaultAuthorityScope: AuthorityScope =
     kind === "household" ? "change_order" : "selections";
   const [authorityScope, setAuthorityScope] = useState<AuthorityScope>(
@@ -485,23 +511,6 @@ export function AddPersonSheet({
       setAuthorityScope(defaultAuthorityScope);
     }
   }, [isOrgAdmin, authorityScope, defaultAuthorityScope]);
-  /**
-   * CR5-1 — THE STUDIO THE SEAT'S PROJECT RECORDS, never the one holding the
-   * book. `organizationId` above answers "whose rolodex am I reading" and is
-   * the right answer to that question; it is the WRONG answer to "where may
-   * this seat's card live". `assert_project_party_cards()` (00624) checks a
-   * seat's `studio_contact_id` against `project_recorded_studio(project_id)`,
-   * so a mint into the book's org on a job that records another studio — or
-   * none, which five of the eight local projects do — inserts a
-   * `studio_contacts` row and then fails the link, leaving a card with nothing
-   * pointing at it and a retry minting another. `useProjectRecordedStudio` is
-   * that guard's own resolver; NULL means there is no rolodex this seat's card
-   * may live in, so none is minted at all (party-profile-sheet.tsx:257-260
-   * reads it the same way for the same reason).
-   */
-  const { data: recordedStudioId } = useProjectRecordedStudio(
-    open && projectId ? projectId : null,
-  );
   const { data: projectGrants } = useProjectAuthority(
     open && projectId ? projectId : null,
   );

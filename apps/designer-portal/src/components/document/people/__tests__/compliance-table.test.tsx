@@ -11,6 +11,9 @@ import {
   documentPaperState,
   documentTypeLabel,
   paperHeldClause,
+  chaseTargetDocument,
+  chaseDocumentPhrase,
+  CHASE_ANY_PAPER_PHRASE,
 } from "../compliance-table";
 import {
   RecordDocumentSheet,
@@ -176,6 +179,55 @@ describe("the held clause", () => {
     expect(paperHeldClause([doc({ blocks: ["payment"] })], TODAY)).toBe(
       "Payment is held until a current certificate is on file.",
     );
+  });
+});
+
+/**
+ * CR11-5 — the chase used to send `docs[0]` and a label that was null exactly
+ * when a document existed, so every drafted note read "Chase <firm> for a
+ * current certificate" beside a table row naming the paper that had lapsed.
+ */
+describe("the paper a chase names", () => {
+  const lapsedCoi = doc({ id: "doc-coi", expires_on: "2026-03-31" });
+  const liveLicence = doc({
+    id: "doc-licence",
+    doc_type: "w9",
+    expires_on: "2027-12-31",
+  });
+
+  it("picks the lapsed paper, not the one that happens to sort first", () => {
+    expect(chaseTargetDocument([liveLicence, lapsedCoi], TODAY)?.id).toBe(
+      "doc-coi",
+    );
+  });
+
+  it("falls back to the paper lapsing soonest when nothing has lapsed", () => {
+    const later = doc({ id: "doc-later", expires_on: "2028-01-01" });
+    expect(chaseTargetDocument([later, liveLicence], TODAY)?.id).toBe(
+      "doc-licence",
+    );
+  });
+
+  it("names the paper, keeping an acronym's case and lowering a plain word", () => {
+    expect(chaseDocumentPhrase(lapsedCoi)).toBe(
+      "a current COI, general liability",
+    );
+    expect(chaseDocumentPhrase(liveLicence)).toBe("a current W-9");
+    expect(
+      chaseDocumentPhrase(
+        doc({ doc_type: "other_named", doc_label: "Bond rider" }),
+      ),
+    ).toBe("a current bond rider");
+    expect(
+      chaseDocumentPhrase(
+        doc({ doc_type: "other_named", doc_label: "MN electrical licence" }),
+      ),
+    ).toBe("a current MN electrical licence");
+  });
+
+  it("keeps the old literal only when the firm holds no paper at all", () => {
+    expect(chaseTargetDocument([], TODAY)).toBeNull();
+    expect(CHASE_ANY_PAPER_PHRASE).toBe("a current certificate");
   });
 });
 

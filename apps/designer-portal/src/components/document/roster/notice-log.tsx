@@ -136,7 +136,7 @@ export function NoticeLog({
                 }
                 held={picked.length === 0}
                 disabled={picked.length === 0 || logTold.isPending}
-                aria-describedby={heldId}
+                aria-describedby={picked.length === 0 ? heldId : undefined}
                 loading={logTold.isPending}
                 loadingLabel="Writing…"
               >

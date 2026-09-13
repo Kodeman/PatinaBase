@@ -37,6 +37,8 @@ export function ProjectTeamRoster({
   const { data: project, isLoading: projectLoading } = projectQuery;
   const [pickerMode, setPickerMode] = useState<null | 'picker' | 'add'>(null);
   const [added, setAdded] = useState<string | null>(null);
+  /** CR11-10: this surface's one live region (SPEC §7 #3). */
+  const [announcement, setAnnouncement] = useState('');
 
   const resolvedClientName = clientName ?? project?.client?.full_name ?? null;
   const resolvedClientProfileId = clientProfileId ?? project?.client?.id ?? null;
@@ -91,11 +93,22 @@ export function ProjectTeamRoster({
         </DocumentActionGroup>
       )}
 
+      {/* CR11-10: paper. The announcer below is this surface's one live
+          region, and it speaks for this band and for every row's note. */}
       {added && (
-        <p role="status" className="mt-2 text-[11px] text-[var(--color-sage)]">
+        <p data-project-roster-added className="mt-2 text-[11px] text-[var(--color-sage)]">
           {added} added to the project roster.
         </p>
       )}
+
+      <p
+        role="status"
+        aria-live="polite"
+        data-project-roster-announcer
+        className="sr-only"
+      >
+        {announcement}
+      </p>
       {isLoading && (
         <p className="py-4 text-[11px] text-[var(--text-muted)]">Reading the roster…</p>
       )}
@@ -124,6 +137,7 @@ export function ProjectTeamRoster({
             consentOrg={consentOrg}
             projectName={project?.name ?? null}
             onOpenSeat={onOpenSeat}
+            onAnnounce={setAnnouncement}
           />
         </div>
       )}
@@ -134,7 +148,10 @@ export function ProjectTeamRoster({
         projectId={projectId}
         scopeKinds={BUILD_TEAM_KINDS}
         startInAdd={pickerMode === 'add'}
-        onAdded={setAdded}
+        onAdded={(name) => {
+          setAdded(name);
+          setAnnouncement(`${name} added to the project roster.`);
+        }}
       />
     </section>
   );

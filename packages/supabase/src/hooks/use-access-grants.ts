@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
+import { partySmsKeys } from './use-party-sms';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // E9 — EVERY DOOR PATINA OPENS, IN ONE SHAPE
@@ -304,6 +305,10 @@ export function useRevokeAccessGrant() {
       void queryClient.invalidateQueries({ queryKey: ['people-directory'] });
       void queryClient.invalidateQueries({ queryKey: ['people-directory-seats'] });
       void queryClient.invalidateQueries({ queryKey: ['project-roster'] });
+      // CR11-8: the person card's Revoke and the party sheet's Revoke close the
+      // same token. `useRevokeFieldLink` tells the sheet's own field-link list;
+      // this route must too, or the sheet keeps listing a door that is shut.
+      void queryClient.invalidateQueries({ queryKey: partySmsKeys.all });
     },
   });
 }

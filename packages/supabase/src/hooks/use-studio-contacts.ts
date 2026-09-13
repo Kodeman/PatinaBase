@@ -275,7 +275,11 @@ export function useAddStudioContact() {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: studioContactKeys.all });
-      void queryClient.invalidateQueries({ queryKey: ['people-directory'] });
+      void queryClient.invalidateQueries({ queryKey: peopleKeys.all });
+      // CR11-7: `people_directory_seats` carries the card's own name, firm,
+      // phone, consent, reach, paper and rule summary, so a card edit that
+      // leaves it alone leaves every seat line printing the old fact.
+      void queryClient.invalidateQueries({ queryKey: peopleSeatKeys.all });
     },
   });
 }
@@ -350,7 +354,11 @@ export function useUpdateStudioContact() {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: studioContactKeys.all });
-      void queryClient.invalidateQueries({ queryKey: ['people-directory'] });
+      void queryClient.invalidateQueries({ queryKey: peopleKeys.all });
+      // CR11-7: `people_directory_seats` carries the card's own name, firm,
+      // phone, consent, reach, paper and rule summary, so a card edit that
+      // leaves it alone leaves every seat line printing the old fact.
+      void queryClient.invalidateQueries({ queryKey: peopleSeatKeys.all });
     },
   });
 }
@@ -377,7 +385,11 @@ export function useArchiveStudioContact() {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: studioContactKeys.all });
-      void queryClient.invalidateQueries({ queryKey: ['people-directory'] });
+      void queryClient.invalidateQueries({ queryKey: peopleKeys.all });
+      // CR11-7: `people_directory_seats` carries the card's own name, firm,
+      // phone, consent, reach, paper and rule summary, so a card edit that
+      // leaves it alone leaves every seat line printing the old fact.
+      void queryClient.invalidateQueries({ queryKey: peopleSeatKeys.all });
     },
   });
 }
@@ -403,7 +415,11 @@ export function useRestoreStudioContact() {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: studioContactKeys.all });
-      void queryClient.invalidateQueries({ queryKey: ['people-directory'] });
+      void queryClient.invalidateQueries({ queryKey: peopleKeys.all });
+      // CR11-7: `people_directory_seats` carries the card's own name, firm,
+      // phone, consent, reach, paper and rule summary, so a card edit that
+      // leaves it alone leaves every seat line printing the old fact.
+      void queryClient.invalidateQueries({ queryKey: peopleSeatKeys.all });
     },
   });
 }
@@ -535,7 +551,9 @@ export function usePromoteToStudioContact() {
       void queryClient.invalidateQueries({
         queryKey: ['project-parties', variables.party.project_id],
       });
-      void queryClient.invalidateQueries({ queryKey: ['people-directory'] });
+      void queryClient.invalidateQueries({ queryKey: peopleKeys.all });
+      // CR11-7: linking a seat to a card changes the seat line's own identity.
+      void queryClient.invalidateQueries({ queryKey: peopleSeatKeys.all });
     },
   });
 }

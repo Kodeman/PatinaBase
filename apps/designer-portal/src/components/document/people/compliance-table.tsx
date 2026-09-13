@@ -81,6 +81,53 @@ export function paperHeldClause(
   return `${capitalise(joinWords([...held]))} ${held.size === 1 ? "is" : "are"} held until a current certificate is on file.`;
 }
 
+/** The phrase when the firm holds no paper at all to name. */
+export const CHASE_ANY_PAPER_PHRASE = "a current certificate";
+
+/**
+ * CR11-5 — THE PAPER THE CHASE IS ABOUT.
+ *
+ * The chase act used to send `docs[0]` (soonest-expiry-first) as its id and
+ * the literal "a current certificate" as its label — the label being null
+ * exactly when a document existed — so every drafted note read "Chase <firm>
+ * for a current certificate" even when the studio pressed it beside a row
+ * reading "MN electrical contractor licence · Lapsed". This picks the paper
+ * that is actually holding something up: the lapsed one that lapsed first,
+ * else the one lapsing soonest.
+ */
+export function chaseTargetDocument(
+  documents: readonly StudioComplianceDocument[],
+  today: Date,
+): StudioComplianceDocument | null {
+  const byExpiry = (
+    a: StudioComplianceDocument,
+    b: StudioComplianceDocument,
+  ) => (a.expires_on ?? "9999-12-31").localeCompare(b.expires_on ?? "9999-12-31");
+  const lapsed = documents
+    .filter((doc) => documentPaperState(doc, today) === "lapsed")
+    .sort(byExpiry);
+  if (lapsed.length > 0) return lapsed[0] ?? null;
+  const dated = documents.filter((doc) => doc.expires_on).sort(byExpiry);
+  return dated[0] ?? documents[0] ?? null;
+}
+
+/**
+ * The paper's own name, inside "Chase <firm> for …". An acronym keeps its case
+ * ("a current COI, general liability", "a current W-9"); a plain word does not
+ * ("a current licence").
+ */
+export function chaseDocumentPhrase(doc: StudioComplianceDocument): string {
+  const label = documentTypeLabel(doc).trim();
+  if (!label) return CHASE_ANY_PAPER_PHRASE;
+  const firstWord = label.split(/\s+/)[0] ?? "";
+  const letters = firstWord.replace(/[^A-Za-z]/g, "");
+  const acronym =
+    /\d/.test(firstWord) ||
+    (letters.length >= 2 && letters === letters.toUpperCase());
+  const named = acronym ? label : label.charAt(0).toLowerCase() + label.slice(1);
+  return `a current ${named}`;
+}
+
 const TH =
   "font-mono text-[11px] font-medium uppercase tracking-[0.08em] text-[var(--ink-subtle)] text-left pr-3 pb-2";
 const TD = "t-body-sm border-t border-[var(--hairline-strong)] py-3 pr-3 align-top";

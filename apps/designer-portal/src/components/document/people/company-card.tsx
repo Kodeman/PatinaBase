@@ -39,6 +39,7 @@ import {
   type StudioContact,
 } from "@patina/supabase";
 import {
+  companyKindProseWord,
   companyKindShortLabel,
   seatIsClosed,
 } from "@/lib/document/people-derivation";
@@ -59,6 +60,9 @@ import {
   ComplianceTable,
   NO_PAPER_OWED_SENTENCE,
   paperHeldClause,
+  chaseDocumentPhrase,
+  chaseTargetDocument,
+  CHASE_ANY_PAPER_PHRASE,
 } from "./compliance-table";
 import { RecordDocumentSheet } from "./record-document-sheet";
 import {
@@ -135,18 +139,25 @@ export function companyIdentityLine(
   const parts: string[] = [];
   const kind = card.company_kind ?? card.contact_kind;
   const trade = card.trades?.[0] ?? card.specialties?.[0] ?? null;
-  // The trade branch keeps the kind in the studio's running-prose case:
-  // SPEC §5.3 #1 fixes this card's literal as "Electrical sub · 1 person · 2
-  // projects · warranty through 21 Nov 2026", and `companyKindShortLabel`
-  // would print "Electrical Subcontractor" there.
-  if (trade && kind) parts.push(`${getFieldTradeLabel(trade)} ${kind}`);
-  // CR6-2: the STUDIO's word, never the column's. Eleven of the twenty-one
-  // seeded firms carry no trade and fell here, so the card printed `gc`,
-  // `authority`, `lender`, `photography`, `stager`, `maker`, `supplier`,
-  // `architect`, `sub` — while the Directory firm row that opens the card
-  // already read `companyKindShortLabel` and printed "GC". One firm, two
-  // words, two clicks apart.
-  else if (kind) parts.push(companyKindShortLabel(kind));
+  // CR11-4: the trade branch keeps the kind in the studio's RUNNING-PROSE
+  // case — SPEC §5.3 #1 fixes this card's literal as "Electrical sub · 1
+  // person · 2 projects · warranty through 21 Nov 2026", where the column-head
+  // word would read "Electrical Subcontractor". It used to concatenate the RAW
+  // column token instead, so a firm carrying both a trade and a kind printed
+  // "Carpentry gc" and "Tile & stone vendor" on its own face while the
+  // Directory firm row two clicks away printed "GC".
+  const prose = companyKindProseWord(kind);
+  if (trade && prose) parts.push(`${getFieldTradeLabel(trade)} ${prose}`);
+  else {
+    // CR6-2: the STUDIO's word, never the column's. Eleven of the twenty-one
+    // seeded firms carry no trade and fall here, so the card printed `gc`,
+    // `authority`, `lender`, `photography`, `stager`, `maker`, `supplier`,
+    // `architect`, `sub` — while the Directory firm row that opens the card
+    // already read `companyKindShortLabel` and printed "GC". One firm, two
+    // words, two clicks apart.
+    if (trade) parts.push(getFieldTradeLabel(trade));
+    if (kind) parts.push(companyKindShortLabel(kind));
+  }
   parts.push(`${counts.crew} ${counts.crew === 1 ? "person" : "people"}`);
   if (counts.jobs != null) {
     parts.push(`${counts.jobs} ${counts.jobs === 1 ? "project" : "projects"}`);
@@ -490,6 +501,18 @@ export function CompanyCard({
   const owesPaper = partyKindOwesPaper(card.company_kind ?? card.contact_kind);
   const docs = documents ?? [];
   const heldClause = paperHeldClause(docs, today);
+  // CR11-5: the one document the chase act names and keys its idempotency on.
+  const chaseDoc = chaseTargetDocument(docs, today);
+  /**
+   * CR11-12: the Jobs region's sentence is owed whenever no seat is listed,
+   * not whenever no crew member is. `CrewJobs` renders nothing for a person
+   * with no seat, so a firm with affiliations and no live seats printed the
+   * heading, an empty list and the money-book line — a region stating nothing
+   * (C32 / R-V).
+   */
+  const crewHoldsASeat = crew.some(
+    (a) => (seatsByPerson.get(a.person_id) ?? []).length > 0,
+  );
   const chaseSentence = chaseConsequenceSentence(name);
 
   /**
@@ -813,8 +836,13 @@ export function CompanyCard({
                       organizationId: card.organization_id,
                       companyId: card.id,
                       companyName: name,
-                      documentId: docs[0]?.id ?? null,
-                      documentLabel: docs[0] ? null : "a current certificate",
+                      // CR11-5: name the paper that lapsed, not the one that
+                      // happens to expire soonest, and never the blank label
+                      // that made every draft read "a current certificate".
+                      documentId: chaseDoc?.id ?? null,
+                      documentLabel: chaseDoc
+                        ? chaseDocumentPhrase(chaseDoc)
+                        : CHASE_ANY_PAPER_PHRASE,
                       paperworkContactPersonId:
                         card.paperwork_contact_person_id,
                     },
@@ -954,7 +982,7 @@ export function CompanyCard({
       {/* R5 — Jobs, with the money book read-only beside them */}
       <section className={REGION}>
         <h3 className={REGION_HEAD}>Jobs</h3>
-        {crew.length === 0 ? (
+        {!crewHoldsASeat ? (
           <p className="t-body-sm text-[var(--ink-subtle)]">
             {NO_JOBS_SENTENCE}
           </p>

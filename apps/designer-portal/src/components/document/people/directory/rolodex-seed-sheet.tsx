@@ -203,9 +203,10 @@ export function RolodexSeedSheet({
       </p>
 
       {/* The quiet confirmation band — R51's settled grammar, inline, no toast (R83). */}
+      {/* CR11-10: paper, not a live region. */}
       {notice && (
         <p
-          role="status"
+          data-rolodex-seed-notice
           className="mb-4 border-l-2 border-[var(--color-sage)] bg-[rgba(133,148,124,0.07)] py-2 pl-3 pr-2 font-mono text-[11px] uppercase tracking-[0.07em] text-[#6f8268]"
         >
           {notice}
