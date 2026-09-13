@@ -759,6 +759,40 @@ ON CONFLICT (id) DO UPDATE
       off_job_reason = EXCLUDED.off_job_reason;
 
 -- ═══════════════════════════════════════════════════════════════════════════
+-- QA-R5-2 — RE-ANCHOR OKONKWO'S ENGAGEMENT DATES ON TODAY.
+--
+-- The literals above are the fixture's own story, told against direction
+-- §3.4's frozen specimen date of 2026-10-20: Tom, Erin, Luis, Ngozi and Carol
+-- start eight days before it, Dana and Joe the day before, Pete three weeks
+-- after, and so on. The Call Sheet bands on the REAL wall clock
+-- (`rosterBandFor`: `on_site_from > today` is Later, everything else is this
+-- week), so on any date that is not 2026-10-20 the story inverts: reviewed on
+-- 2026-09-13 the whole actual on-site crew — Tom Marrow, Erin Sato, Luis
+-- Ochoa, Ngozi Eze, Dana Kowalski, Joe Wozniak, Carol Nyström — sat in
+-- "Later" while three dateless rows (Sam Rowe, Claire Bissett, Ray Thao) held
+-- "This week", and all four vitals counts (which close over studio side +
+-- client side + this week) read against that wrong population.
+--
+-- So the dates are kept readable above and SHIFTED here by the distance
+-- between the specimen date and today. Every interval between two seats is
+-- preserved exactly — this is the same fixture, told on whatever day it is
+-- read — and it is idempotent: the INSERT's ON CONFLICT clause restores the
+-- literals before this UPDATE re-shifts them, so replaying the seed lands on
+-- the same answer as seeding it fresh.
+--
+-- Scope: this ONE project. The Lindqvist file below is deliberately a CLOSED
+-- 2025 job whose whole point is that its windows are behind us, and the
+-- compliance paper's own expiry dates (Northgate's lapsed COI) are facts about
+-- documents, not about an engagement.
+-- ═══════════════════════════════════════════════════════════════════════════
+UPDATE public.project_parties
+   SET on_site_from = on_site_from + (CURRENT_DATE - DATE '2026-10-20'),
+       on_site_to   = on_site_to   + (CURRENT_DATE - DATE '2026-10-20'),
+       off_job_at   = off_job_at   + (CURRENT_DATE - DATE '2026-10-20')
+ WHERE project_id = 'd0e00000-0000-0000-0000-00000000000a'
+   AND (on_site_from IS NOT NULL OR on_site_to IS NOT NULL OR off_job_at IS NOT NULL);
+
+-- ═══════════════════════════════════════════════════════════════════════════
 -- The closed Lindqvist kitchen (fixture §4). Warranty ran to 2026-11-21, so
 -- every seat is `warranty` — 00624's backfill only touches rows it finds at
 -- the column default, and a seed states its own stages.

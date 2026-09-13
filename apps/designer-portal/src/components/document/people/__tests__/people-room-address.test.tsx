@@ -48,6 +48,9 @@ jest.mock("@patina/supabase", () => ({
     isLoading: false,
   }),
   useOrganizations: () => ({ data: [{ id: "org-1", type: "design_studio" }] }),
+  // CR-1: the promote band resolves the studio from the SEAT's project
+  // (project_recorded_studio), never from the membership list.
+  useProjectRecordedStudio: () => ({ data: "org-1" }),
   isFieldRosterRole: (role: string | null | undefined) =>
     !!role && ["gc", "sub", "installer", "receiver"].includes(role),
 }));

@@ -31,7 +31,7 @@ import {
   useCreateFieldLink,
   useRevokeFieldLink,
   useFieldMediaUrl,
-  useOrganizations,
+  useProjectRecordedStudio,
   useProjectParties,
   useRecordPartySmsConsent,
   useUpdateProjectParty,
@@ -228,14 +228,36 @@ export function PartyProfileSheet({
   // `call-sheet` flag that used to gate both queries is retired (rulings §6);
   // the `open` gate below stays, because the sheet is mounted while closed and
   // an ungated query would fire on every mount.
-  const { data: orgs } = useOrganizations({ enabled: true });
-  const organizationId = useMemo(
-    () => orgs?.find((o) => o.type === 'design_studio')?.id ?? orgs?.[0]?.id ?? null,
-    [orgs],
-  );
   // CR3-1: the seat names its own job. `person.project_id` is null for every
   // carded seat, so the promote band's row lookup never resolved either.
   const seatProjectId = seat?.project_id ?? person?.project_id ?? null;
+  /**
+   * CR-1 — THE STUDIO COMES OFF THE JOB, NEVER OFF A MEMBERSHIP GUESS.
+   *
+   * This was the last `orgs.find(o => o.type === 'design_studio')?.id ??
+   * orgs?.[0]?.id` in the room — the QA-R2-1 / QA-R3-1 defect the r3 sweep
+   * fixed everywhere else — and the ONE place the guess drove a WRITE:
+   * `usePromoteToStudioContact` INSERTs a `studio_contacts` row at this id and
+   * then UPDATEs `project_parties.studio_contact_id` to point at it.
+   * `useOrganizations` has no ORDER BY, so for a designer who belongs to two
+   * design studios (designer@patina.dev belongs to "Leah Hartwell" and "Local
+   * Dev Studio") PostgREST's heap order decided which rolodex the card landed
+   * in. When it named the studio the job does not record,
+   * `assert_project_party_cards` (00624:646-678) raised
+   * `party_studio_contact_other_studio` on the link — and because the two
+   * PostgREST calls are not one transaction, the card stayed behind. Pressing
+   * again minted a second stray.
+   *
+   * `project_recorded_studio()` is the resolver that guard checks against, so
+   * reading it here is what makes the refusal unreachable: the card is only
+   * ever inserted into the rolodex the link will accept. A job that records no
+   * studio resolves NULL, `showPromoteBand` is false, and the act is not
+   * offered at all rather than minting an orphan the guard will refuse.
+   */
+  const { data: recordedStudioId } = useProjectRecordedStudio(
+    open ? seatProjectId : null,
+  );
+  const organizationId = recordedStudioId ?? null;
   const { data: projectParties } = useProjectParties(
     open ? seatProjectId : null,
   );

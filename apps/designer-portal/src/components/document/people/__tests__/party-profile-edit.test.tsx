@@ -67,6 +67,9 @@ jest.mock('@patina/supabase', () => ({
   useRevokeFieldLink: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useFieldMediaUrl: () => ({ data: null }),
   useOrganizations: () => ({ data: [] }),
+  // CR-1: the promote band resolves the studio from the SEAT's project
+  // (project_recorded_studio), never from the membership list.
+  useProjectRecordedStudio: () => ({ data: 'org-1' }),
   useProjectParties: () => ({ data: [] }),
   useRecordPartySmsConsent: () => ({ mutate: jest.fn(), isPending: false }),
   useUpdateProjectParty: () => ({

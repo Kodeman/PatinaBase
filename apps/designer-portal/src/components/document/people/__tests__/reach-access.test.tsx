@@ -130,6 +130,20 @@ describe("the three sections", () => {
     expect(screen.getByText(NO_RULE_SENTENCE)).toBeInTheDocument();
     expect(screen.getByText(NO_GRANT_SENTENCE)).toBeInTheDocument();
   });
+
+  // QA-R4-3 — direction §5.1: "Company variant: … Contact rule is replaced by
+  // three designations". The firm card printed the heading, the fallback and a
+  // LIVE "Edit the rule" whose save wrote a `subject_type = 'company'` row no
+  // reader in this build ever queries.
+  it("gives a COMPANY card no contact rule region at all", () => {
+    renderReach({ cardKind: "company", personName: "Northgate Electric" });
+    const heads = screen.getAllByRole("heading").map((h) => h.textContent);
+    expect(heads).toEqual(["Channels", "Access grants"]);
+    expect(screen.queryByText(NO_RULE_SENTENCE)).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Edit the rule/ }),
+    ).not.toBeInTheDocument();
+  });
 });
 
 describe("a channel row", () => {

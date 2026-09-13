@@ -2125,3 +2125,37 @@ export function useLogSiteAccessTold() {
     },
   });
 }
+
+/**
+ * CR-1 — THE STUDIO A PROJECT'S RECORD NAMES (`project_recorded_studio()`,
+ * 00624:335-343 — `projects.studio_id`, no fallback, no caller-relative leg).
+ *
+ * This is the resolver `assert_project_party_cards()` checks a seat's
+ * `studio_contact_id` against, so it is the only correct answer to "which
+ * rolodex may this seat's card live in". Guessing it off the caller's
+ * membership list — `orgs.find(o => o.type === 'design_studio')` over an
+ * unordered PostgREST read — put a brand-new `studio_contacts` row in the
+ * WRONG studio for a designer who belongs to two, and the link that followed
+ * raised `party_studio_contact_other_studio` without rolling the card back
+ * (two PostgREST calls, one transaction between them: none).
+ *
+ * NULL means the job records no studio. There is no card to mint there at all:
+ * the same guard raises `party_card_project_has_no_studio` before a stamp
+ * lands, so the caller offers no promote act rather than minting an orphan.
+ */
+export function useProjectRecordedStudio(projectId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['project-recorded-studio', projectId ?? null],
+    enabled: Boolean(projectId),
+    queryFn: async (): Promise<string | null> => {
+      if (!projectId) return null;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase.rpc('project_recorded_studio', {
+        p_project_id: projectId,
+      });
+      if (error) throw error;
+      return (data as string | null) ?? null;
+    },
+  });
+}
