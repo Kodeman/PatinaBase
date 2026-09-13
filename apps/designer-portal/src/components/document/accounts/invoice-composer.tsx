@@ -16,9 +16,14 @@
  *                        project (the intersection when the composer asks).
  *
  * Time claim: after the draft lands, the selected entries are stamped with
- * invoice_id (00177 guard locks them). A claim conflict compensates by
- * deleting the just-created draft — no orphaned time line survives (old
- * composer page 1:1). Failures render inline (R83); no toasts.
+ * invoice_id by claim_time_entries (00595; the 00177 guard then locks them).
+ * That RPC gets its own transaction, so a PARTIAL claim has already stamped
+ * some rows when the hook throws — the compensation is to delete the
+ * just-created draft, which releases them through fk_time_entries_invoice's
+ * ON DELETE SET NULL. If that delete ALSO fails the hours stay attached to an
+ * abandoned draft and drop out of project_unbilled_time, so the inline error
+ * names the draft id and says to void it. Failures render inline (R83); no
+ * toasts.
  *
  * R136 — the STUDIO invoice, an invoice with no house (ruling S1). Behind the
  * `studio-invoice` flag the first section is "for" rather than "the document",
@@ -41,12 +46,10 @@ import {
   useProjectInvoices,
   useProjectPaymentMilestones,
   useProjects,
-} from '@patina/supabase';
-import { computeInvoiceTotals, formatCurrency } from '@patina/shared';
-import {
   useClaimTimeEntries,
   useUnbilledTime,
-} from '@/hooks/use-time-tracking';
+} from '@patina/supabase';
+import { computeInvoiceTotals, formatCurrency } from '@patina/shared';
 import { formatHoursLabel } from '@/lib/time-billing';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { ClientPicker } from '@/components/portal/client-picker';
@@ -398,13 +401,24 @@ export function InvoiceComposer({
           entryIds,
         });
       } catch (e) {
+        // claim_time_entries commits in its own transaction (PostgREST), so a
+        // partial claim has ALREADY stamped invoice_id on the rows it matched.
+        // Deleting the draft releases them through fk_time_entries_invoice's
+        // ON DELETE SET NULL. If that delete also fails the hours stay attached
+        // to an abandoned draft and vanish from project_unbilled_time — say so,
+        // with the id, instead of swallowing it.
+        let stranded = false;
         try {
           await deleteDraft.mutateAsync({ invoiceId: invoice.id, projectId });
         } catch {
-          /* the draft survives with an unclaimed time line — voidable */
+          stranded = true;
         }
+        const reason =
+          e instanceof Error ? e.message : 'Could not attach the time entries';
         setError(
-          e instanceof Error ? e.message : 'Could not attach the time entries',
+          stranded
+            ? `${reason} The draft ${invoice.id} still holds those hours — void it to release them.`
+            : reason,
         );
         return;
       }

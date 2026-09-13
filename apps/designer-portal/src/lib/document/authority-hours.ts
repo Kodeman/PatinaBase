@@ -1,9 +1,18 @@
 import type { ProjectBillingAuthority } from "./commercial-documents";
 
-export type TimeBillingState =
-  | "authorized"
-  | "pending_authorization"
-  | "nonbillable";
+// The billing-state primitives live beside the write hooks in @patina/supabase
+// (one definition); this module re-exports them so its document-side callers
+// keep their import.
+export {
+  isInvoiceEligibleTimeEntry,
+  type TimeBillingState,
+  type InvoiceEligibleTimeEntry,
+} from "@patina/supabase";
+import type {
+  TimeBillingState,
+  TimeRateRole,
+  TimeRateSource,
+} from "@patina/supabase";
 
 /**
  * Automatic document time is billable only after the server says an executed
@@ -35,24 +44,67 @@ export function automaticTimeBillingIntent(
   return { billable: true, reason: "active" };
 }
 
-export interface InvoiceEligibleTimeEntry {
+interface BillingStateEntry {
   billable?: boolean | null;
   invoice_id?: string | null;
   billing_state?: TimeBillingState | null;
 }
 
-/**
- * The server-authored billing state is decisive. A null state remains eligible
- * for pre-authority legacy entries so existing projects keep invoicing.
- */
-export function isInvoiceEligibleTimeEntry(
-  entry: InvoiceEligibleTimeEntry,
-): boolean {
-  if (entry.billable !== true || entry.invoice_id) return false;
-  return entry.billing_state == null || entry.billing_state === "authorized";
+interface RateEntry {
+  authority_rate_id?: string | null;
+  hourly_rate_cents?: number | null;
+  /** 00600 — which leg of the resolver priced the hour. */
+  rate_source?: TimeRateSource | null;
+  /** 00600 (HT-41) — the roster role the member picked. */
+  rate_role?: TimeRateRole | null;
+  billable?: boolean | null;
+  billing_state?: TimeBillingState | null;
 }
 
-export function timeBillingStateLabel(entry: InvoiceEligibleTimeEntry): string {
+/**
+ * What an hour is worth, and where that answer came from. Discriminated because
+ * a blank used to answer three different questions at once (HT-26): a
+ * legitimately non-billable hour, an hour the resolver could not price, and a
+ * legacy row whose provenance nobody recorded. Every arm carries a label, so
+ * the ledger never prints an empty cell.
+ */
+export type TimeRateProvenance =
+  | {
+      kind: "rated";
+      label: string;
+      hourlyRateCents: number;
+      version: number | null;
+      rateSource: TimeRateSource | null;
+      rateRole: TimeRateRole | null;
+    }
+  | { kind: "nonbillable"; label: string; rateRole: TimeRateRole | null }
+  /** rate_source = 'none': the resolver found no card. HT-26's "rate pending". */
+  | { kind: "pending"; label: string; rateRole: TimeRateRole | null }
+  /** Written before 00600 — unknown provenance, which is not the same as none. */
+  | { kind: "unrecorded"; label: string; rateRole: TimeRateRole | null };
+
+const RATE_SOURCE_LABEL: Record<TimeRateSource, string> = {
+  authority: "Agreement rate",
+  studio_member: "Studio rate",
+  profile_default: "Profile rate",
+  none: "rate pending",
+};
+
+const RATE_ROLE_LABEL: Record<TimeRateRole, string> = {
+  lead_designer: "lead designer",
+  support_designer: "support designer",
+  bookkeeper: "bookkeeper",
+  vendor: "vendor",
+};
+
+/** HT-41 — the role the member picked, as a person would say it. */
+export function timeRateRoleLabel(
+  role: TimeRateRole | null | undefined,
+): string | null {
+  return role ? RATE_ROLE_LABEL[role] : null;
+}
+
+export function timeBillingStateLabel(entry: BillingStateEntry): string {
   if (entry.invoice_id) return "Billed";
   if (entry.billable !== true || entry.billing_state === "nonbillable") {
     return "Non-bill";
@@ -62,27 +114,39 @@ export function timeBillingStateLabel(entry: InvoiceEligibleTimeEntry): string {
   return "Unbilled";
 }
 
-interface RateEntry {
-  authority_rate_id?: string | null;
-  hourly_rate_cents?: number | null;
-}
-
 /** Studio-only display provenance. IDs stay at the matching boundary. */
 export function timeRateProvenance(
   entry: RateEntry,
   authority: ProjectBillingAuthority | null | undefined,
-): { role: string; hourlyRateCents: number; version: number | null } | null {
+): TimeRateProvenance {
+  const rateRole = entry.rate_role ?? null;
   const rate = authority?.rates.find(
     (candidate) => candidate.id === entry.authority_rate_id,
   );
   const hourlyRateCents =
     entry.hourly_rate_cents ?? rate?.hourlyRateCents ?? null;
-  if (hourlyRateCents == null || hourlyRateCents <= 0) return null;
-  return {
-    role:
-      rate?.roleName ||
-      (entry.authority_rate_id ? "Agreement rate" : "Legacy rate"),
-    hourlyRateCents,
-    version: rate?.version ?? null,
-  };
+
+  if (entry.billable === false || entry.billing_state === "nonbillable") {
+    return { kind: "nonbillable", label: "not billable", rateRole };
+  }
+  if (hourlyRateCents != null && hourlyRateCents > 0) {
+    return {
+      kind: "rated",
+      label:
+        rate?.roleName ||
+        (entry.rate_source
+          ? RATE_SOURCE_LABEL[entry.rate_source]
+          : entry.authority_rate_id
+            ? "Agreement rate"
+            : "Legacy rate"),
+      hourlyRateCents,
+      version: rate?.version ?? null,
+      rateSource: entry.rate_source ?? null,
+      rateRole,
+    };
+  }
+  if (entry.rate_source === "none") {
+    return { kind: "pending", label: "rate pending", rateRole };
+  }
+  return { kind: "unrecorded", label: "rate not recorded", rateRole };
 }

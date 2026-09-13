@@ -29,6 +29,7 @@
 
 import { useRouter } from 'next/navigation';
 import { PenTool, type LucideIcon } from 'lucide-react';
+import { useRunningTimer, useStudioUnbilledTime } from '@patina/supabase';
 import {
   STUDIO_ROOMS,
   STUDIO_LEDGERS,
@@ -45,6 +46,8 @@ import { openPost } from '@/components/document/overlays/post-sheet';
 import { openInvoiceComposer } from '@/components/document/accounts/invoice-overlays';
 import { openDraftProposalPicker } from '@/components/document/rooms/drafting/draft-proposal-opener';
 import { openDraftingRoom } from '@/lib/document/open-drafting-room';
+import { fmtDay } from '@/lib/document/format';
+import { useViewerStudio } from '@/hooks/use-viewer-studio';
 
 type RowVariant = 'room' | 'ledger' | 'verb';
 
@@ -66,6 +69,110 @@ const LEDGER_SUBLABEL: Record<string, string> = {
   'the-post': 'mail and messages',
 };
 
+/**
+ * HT-29 — the Desk's "time in hand" line is act-bearing or absent. Never a bare
+ * total: R95 keeps counts and metrics off this index, and HT-30 refuses a total
+ * standing apart from the rows that produced it. So this is one of two acts, or
+ * nothing at all — unbilled hours to bill, or a timer still running from a day
+ * that has ended.
+ */
+function HoursInHandAct() {
+  const runningTimer = useRunningTimer();
+  const {
+    data: unbilled,
+    isPending: unbilledPending,
+    isError: unbilledFailed,
+  } = useStudioUnbilledTime();
+  // Drawing an invoice is the studio's act, not a member's: after 00606 a plain
+  // member reads her OWN unbilled rows, so the Desk offered her the composer on
+  // its one act-bearing line. Her timer line below is still hers.
+  const { isOwnerOrAdmin, isSettled: standingKnown } = useViewerStudio();
+
+  const timer = runningTimer.data;
+  const startedDay = timer ? new Date(timer.started_at).toDateString() : null;
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const startedToday = startedDay === today.toDateString();
+  // A timer opened three days ago read "from yesterday" — a small lie about the
+  // studio's own clock, on the Desk's one act-bearing line.
+  const whenStarted =
+    startedDay === yesterday.toDateString()
+      ? 'yesterday'
+      : timer
+        ? fmtDay(timer.started_at)
+        : '';
+
+  if (timer && !startedToday) {
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          openLedger('hours');
+          documentEvents.wayfinding.contentsActed({
+            key: 'hours',
+            kind: 'ledger',
+          });
+        }}
+        className="doc-type-meta pl-[22px] text-left text-[var(--color-clay-ink)] underline decoration-dotted underline-offset-4"
+      >
+        a timer is still running from {whenStarted} →
+      </button>
+    );
+  }
+
+  if (!standingKnown || !isOwnerOrAdmin) return null;
+
+  // A money read that did not answer is not "nothing to bill". A terracotta
+  // sentence is wrong on an index of labels and doorways (R95), so the failure
+  // reads as the neutral door: the sheet stays reachable and says the rest.
+  if (unbilledFailed) {
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          openLedger('hours');
+          documentEvents.wayfinding.contentsActed({
+            key: 'hours',
+            kind: 'ledger',
+          });
+        }}
+        className="doc-type-meta pl-[22px] text-left text-[var(--color-clay-ink)] underline decoration-dotted underline-offset-4"
+      >
+        hours →
+      </button>
+    );
+  }
+
+  if (unbilledPending || (unbilled?.length ?? 0) === 0) return null;
+
+  const projects = [
+    ...new Set((unbilled ?? []).map((row) => row.project_id)),
+  ];
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        if (projects.length === 1) {
+          openInvoiceComposer({
+            projectId: projects[0],
+            initialTimeEntryIds: (unbilled ?? []).map((row) => row.id),
+          });
+        } else {
+          openLedger('hours');
+        }
+        documentEvents.wayfinding.contentsActed({
+          key: 'hours',
+          kind: 'ledger',
+        });
+      }}
+      className="doc-type-meta pl-[22px] text-left text-[var(--color-clay-ink)] underline decoration-dotted underline-offset-4"
+    >
+      hours to bill →
+    </button>
+  );
+}
+
 /** The small DM-mono heading over each column of the contents. */
 function ColumnHead({ children }: { children: React.ReactNode }) {
   return (
@@ -85,6 +192,7 @@ function ContentsRow({
   variant,
   prominent,
   onOpen,
+  act,
 }: {
   icon: LucideIcon;
   label: string;
@@ -93,6 +201,9 @@ function ContentsRow({
   variant: RowVariant;
   prominent: boolean;
   onOpen: () => void;
+  /** HT-29 — one act beneath the line, where there is something to act on.
+   *  Sits outside the doorway button: a button inside a button is not markup. */
+  act?: React.ReactNode;
 }) {
   const labelSize = prominent ? 'text-[19px]' : 'text-[17px]';
   // Sub-label indents to sit under the label, past the icon (and, for verbs,
@@ -153,6 +264,7 @@ function ContentsRow({
           </span>
         )}
       </button>
+      {act}
     </li>
   );
 }
@@ -256,6 +368,7 @@ export function DeskContents({ prominent = false }: { prominent?: boolean }) {
                 variant="ledger"
                 prominent={prominent}
                 onOpen={openLedgerRow(ledger.key)}
+                act={ledger.key === 'hours' ? <HoursInHandAct /> : undefined}
               />
             ))}
           </ul>

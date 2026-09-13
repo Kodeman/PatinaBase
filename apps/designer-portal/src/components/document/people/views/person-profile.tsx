@@ -49,6 +49,7 @@ import {
   type PartyRole,
 } from '@patina/supabase';
 import { usePersonDocuments } from '@/hooks/use-person-documents';
+import { useViewerStudio } from '@/hooks/use-viewer-studio';
 import {
   deriveIssuanceState,
   deriveRelationshipJourney,
@@ -72,6 +73,7 @@ import {
 } from '../profile/profile-cards';
 import { AddPersonSheet } from '../directory/add-person-sheet';
 import { HouseholdSheet } from '../../overlays/household-sheet';
+import { openHoursForMember } from '@/lib/document/open-hours-scope';
 
 /** F3 — the id of the `studio_contacts` row backing this profile, when there
  *  is one: the pure rolodex branch's own id (role 'contact' — TeamProfile's
@@ -777,6 +779,7 @@ function buildNetworkTrack(
 
 function TeamProfile({
   personId,
+  profileId,
   role,
   name,
   email,
@@ -788,6 +791,9 @@ function TeamProfile({
   notify,
 }: {
   personId: string;
+  /** Their user id — HT-8's member scope is keyed on it, and a teammate who has
+   *  not signed in yet has logged no hours to read. */
+  profileId: string | null;
   role: PartyRole;
   name: string;
   email: string | null;
@@ -799,6 +805,14 @@ function TeamProfile({
   notify: (m: string) => void;
 }) {
   const router = useRouter();
+  // HT-8 — the Hours sheet's member scope is part of the scope lens, and the
+  // lens is the admin's instrument: the sheet renders no lens, no rollup and no
+  // own rows for a plain member, so her only way out of the scope this door
+  // opens is to close the sheet. The door carries the same gate as the lens.
+  // One ordered answer, shared with the sheet itself: the duplicate copy of
+  // this derivation drifted from the lens it was supposed to mirror, and both
+  // read the first row of an unordered membership list.
+  const { isOwnerOrAdmin: viewerIsOwnerOrAdmin } = useViewerStudio();
   const studioRole = humanizeTeamRole(
     statusRaw ?? (meta['role'] as string) ?? null,
   );
@@ -815,6 +829,15 @@ function TeamProfile({
         phone={phone}
         actions={
           <>
+            {/* HT-8 — the one door into the Hours sheet's member scope. There is
+                no staff picker inside a money ledger; you come here first. */}
+            {profileId && viewerIsOwnerOrAdmin && (
+              <ActionButton
+                actionKey="open-person-hours"
+                label="Hours"
+                onClick={() => openHoursForMember(profileId, name)}
+              />
+            )}
             <ActionButton
               actionKey="adjust-person-visibility"
               label="Adjust visibility"
@@ -952,5 +975,11 @@ export function PersonProfile({
     return <NetworkProfile {...common} projectId={person.project_id} />;
   }
 
-  return <TeamProfile {...common} projectId={person.project_id} />;
+  return (
+    <TeamProfile
+      {...common}
+      profileId={person.profile_id}
+      projectId={person.project_id}
+    />
+  );
 }

@@ -27,8 +27,9 @@ import {
   useState,
 } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { createBrowserClient } from '@patina/supabase';
+import { useToast } from '@/components/portal/toast-provider';
 import {
+  createBrowserClient,
   useCreateTimeEntry,
   useDiscardTimer,
   useDeleteTimeEntry,
@@ -37,7 +38,7 @@ import {
   useStopTimer,
   useUpdateTimeEntry,
   type RunningTimer,
-} from '@/hooks/use-time-tracking';
+} from '@patina/supabase';
 import {
   closeOutTimer,
   idleSecondsFromPings,
@@ -131,8 +132,9 @@ export function useDocumentTime(): DocumentTimeValue {
 
 export function DocumentTimeProvider({ children }: { children: React.ReactNode }) {
   const qc = useQueryClient();
+  const { toast } = useToast();
   const { data: runningTimer } = useRunningTimer();
-  const startTimer = useStartTimer();
+  const startTimer = useStartTimer({ toast });
   const stopTimer = useStopTimer();
   const discardTimer = useDiscardTimer();
   const createEntry = useCreateTimeEntry();
