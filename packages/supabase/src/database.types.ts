@@ -2498,6 +2498,102 @@ export type Database = {
           },
         ]
       }
+      client_households: {
+        Row: {
+          co_threshold_cents: number | null
+          created_at: string
+          created_by: string | null
+          designer_id: string
+          display_name: string
+          id: string
+          member_person_ids: string[]
+          organization_id: string
+          primary_member_person_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          co_threshold_cents?: number | null
+          created_at?: string
+          created_by?: string | null
+          designer_id: string
+          display_name: string
+          id?: string
+          member_person_ids?: string[]
+          organization_id: string
+          primary_member_person_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          co_threshold_cents?: number | null
+          created_at?: string
+          created_by?: string | null
+          designer_id?: string
+          display_name?: string
+          id?: string
+          member_person_ids?: string[]
+          organization_id?: string
+          primary_member_person_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_households_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_households_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_households_designer_id_fkey"
+            columns: ["designer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_households_designer_id_fkey"
+            columns: ["designer_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_households_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "admin_studio_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_households_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_households_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "v_studios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_households_primary_member_person_id_fkey"
+            columns: ["primary_member_person_id"]
+            isOneToOne: false
+            referencedRelation: "studio_contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_invitations: {
         Row: {
           accepted_at: string | null
@@ -4826,6 +4922,7 @@ export type Database = {
           created_at: string
           designer_id: string
           first_project_at: string | null
+          household_id: string | null
           id: string
           inspiration_quote: string | null
           last_contacted_at: string | null
@@ -4856,6 +4953,7 @@ export type Database = {
           created_at?: string
           designer_id: string
           first_project_at?: string | null
+          household_id?: string | null
           id?: string
           inspiration_quote?: string | null
           last_contacted_at?: string | null
@@ -4886,6 +4984,7 @@ export type Database = {
           created_at?: string
           designer_id?: string
           first_project_at?: string | null
+          household_id?: string | null
           id?: string
           inspiration_quote?: string | null
           last_contacted_at?: string | null
@@ -4934,6 +5033,13 @@ export type Database = {
             columns: ["designer_id"]
             isOneToOne: false
             referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "designer_clients_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "client_households"
             referencedColumns: ["id"]
           },
           {
@@ -16179,6 +16285,11 @@ export type Database = {
       }
       project_parties: {
         Row: {
+          bid_amount_cents: number | null
+          bid_due_at: string | null
+          bid_outcome: string | null
+          bid_quoted_by_person_id: string | null
+          bid_valid_until: string | null
           company_id: string | null
           company_name: string | null
           contracted_through: string | null
@@ -16215,6 +16326,11 @@ export type Database = {
           warranty_until: string | null
         }
         Insert: {
+          bid_amount_cents?: number | null
+          bid_due_at?: string | null
+          bid_outcome?: string | null
+          bid_quoted_by_person_id?: string | null
+          bid_valid_until?: string | null
           company_id?: string | null
           company_name?: string | null
           contracted_through?: string | null
@@ -16251,6 +16367,11 @@ export type Database = {
           warranty_until?: string | null
         }
         Update: {
+          bid_amount_cents?: number | null
+          bid_due_at?: string | null
+          bid_outcome?: string | null
+          bid_quoted_by_person_id?: string | null
+          bid_valid_until?: string | null
           company_id?: string | null
           company_name?: string | null
           contracted_through?: string | null
@@ -16287,6 +16408,13 @@ export type Database = {
           warranty_until?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "project_parties_bid_quoted_by_person_id_fkey"
+            columns: ["bid_quoted_by_person_id"]
+            isOneToOne: false
+            referencedRelation: "studio_contacts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "project_parties_company_id_fkey"
             columns: ["company_id"]
@@ -24898,6 +25026,59 @@ export type Database = {
           },
         ]
       }
+      studio_compliance_notices: {
+        Row: {
+          document_id: string
+          id: string
+          noticed_at: string
+          organization_id: string
+          state: string
+        }
+        Insert: {
+          document_id: string
+          id?: string
+          noticed_at?: string
+          organization_id: string
+          state: string
+        }
+        Update: {
+          document_id?: string
+          id?: string
+          noticed_at?: string
+          organization_id?: string
+          state?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "studio_compliance_notices_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "studio_compliance_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_compliance_notices_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "admin_studio_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_compliance_notices_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_compliance_notices_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "v_studios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       studio_contact_channels: {
         Row: {
           channel_kind: string
@@ -24968,6 +25149,86 @@ export type Database = {
           {
             foreignKeyName: "studio_contact_channels_owner_id_fkey"
             columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "studio_contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      studio_contact_merges: {
+        Row: {
+          id: string
+          matched_on: string
+          merged_at: string
+          merged_by: string | null
+          merged_id: string
+          organization_id: string
+          survivor_id: string
+        }
+        Insert: {
+          id?: string
+          matched_on: string
+          merged_at?: string
+          merged_by?: string | null
+          merged_id: string
+          organization_id: string
+          survivor_id: string
+        }
+        Update: {
+          id?: string
+          matched_on?: string
+          merged_at?: string
+          merged_by?: string | null
+          merged_id?: string
+          organization_id?: string
+          survivor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "studio_contact_merges_merged_by_fkey"
+            columns: ["merged_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_contact_merges_merged_by_fkey"
+            columns: ["merged_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_contact_merges_merged_id_fkey"
+            columns: ["merged_id"]
+            isOneToOne: false
+            referencedRelation: "studio_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_contact_merges_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "admin_studio_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_contact_merges_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_contact_merges_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "v_studios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_contact_merges_survivor_id_fkey"
+            columns: ["survivor_id"]
             isOneToOne: false
             referencedRelation: "studio_contacts"
             referencedColumns: ["id"]
@@ -25060,6 +25321,7 @@ export type Database = {
           id: string
           is_sole_proprietor: boolean
           legal_name: string | null
+          merged_into: string | null
           notes: string | null
           organization_id: string
           paperwork_contact_person_id: string | null
@@ -25095,6 +25357,7 @@ export type Database = {
           id?: string
           is_sole_proprietor?: boolean
           legal_name?: string | null
+          merged_into?: string | null
           notes?: string | null
           organization_id: string
           paperwork_contact_person_id?: string | null
@@ -25130,6 +25393,7 @@ export type Database = {
           id?: string
           is_sole_proprietor?: boolean
           legal_name?: string | null
+          merged_into?: string | null
           notes?: string | null
           organization_id?: string
           paperwork_contact_person_id?: string | null
@@ -25170,6 +25434,13 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_contacts_merged_into_fkey"
+            columns: ["merged_into"]
+            isOneToOne: false
+            referencedRelation: "studio_contacts"
             referencedColumns: ["id"]
           },
           {
@@ -31944,6 +32215,15 @@ export type Database = {
         Args: { p_proposal_id: string; p_start_date?: string }
         Returns: string
       }
+      add_household_member: {
+        Args: {
+          p_household_id: string
+          p_person_id: string
+          p_project_id?: string
+          p_role: string
+        }
+        Returns: string
+      }
       admin_add_studio_member: {
         Args: {
           p_actor: string
@@ -32447,6 +32727,10 @@ export type Database = {
       archive_project_selection: {
         Args: { p_ffe_item_id: string; p_reason: string }
         Returns: Json
+      }
+      archive_studio_contact: {
+        Args: { p_contact_id: string }
+        Returns: string
       }
       assert_client_decision_reference_integrity: {
         Args: {
@@ -32990,6 +33274,10 @@ export type Database = {
           p_provider_id?: string
         }
         Returns: Json
+      }
+      compliance_document_state: {
+        Args: { p_document_id: string }
+        Returns: string
       }
       compliance_state: { Args: { p_holder_id: string }; Returns: string }
       compose_agreement_consent: {
@@ -35181,6 +35469,10 @@ export type Database = {
         Args: { p_kind: string; p_scan_id: string; p_sha: string }
         Returns: undefined
       }
+      merge_studio_contacts: {
+        Args: { p_matched_on: string; p_merged: string; p_survivor: string }
+        Returns: string
+      }
       migrate_legacy_ffe_notes: { Args: never; Returns: number }
       mint_trade_agreement_token: {
         Args: { p_agreement_id: string }
@@ -36277,6 +36569,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      resolve_merged_contact: {
+        Args: { p_contact_id: string }
+        Returns: string
+      }
       resolve_plan_transmittal: { Args: { p_token: string }; Returns: Json }
       resolve_spec_book_share: { Args: { p_token: string }; Returns: Json }
       resolve_studio_identity: {
@@ -36303,6 +36599,10 @@ export type Database = {
           p_payload: Json
         }
         Returns: Json
+      }
+      restore_studio_contact: {
+        Args: { p_contact_id: string }
+        Returns: string
       }
       retire_designer_taste: {
         Args: { p_designer_id: string }
@@ -37484,6 +37784,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      sweep_compliance_expiries: { Args: never; Returns: Json }
       sweep_decision_first_notices: {
         Args: { p_limit?: number }
         Returns: number

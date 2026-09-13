@@ -1912,11 +1912,12 @@ DO $$
 DECLARE
   r record;
   n integer;
+  v_window_end timestamptz;
 BEGIN
   PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
 
-  -- Erin Sato's Okonkwo seat: the window closes 2027-08-13, so the grant ends
-  -- through the end of that day — NOT 90 days from the mint (PR-d).
+  -- Erin Sato's Okonkwo seat: the grant ends through the end of the window's
+  -- last day — NOT 90 days from the mint (PR-d).
   SELECT g.* INTO r
     FROM public.v_access_grants g
    WHERE g.tier = 'field_link'
@@ -1928,8 +1929,26 @@ BEGIN
   IF r.scope_type <> 'project' OR r.scope_id <> 'd0e00000-0000-0000-0000-00000000000a' THEN
     RAISE EXCEPTION '9b the grant''s scope must be the Okonkwo project, got %/%', r.scope_type, r.scope_id;
   END IF;
-  IF r.expires_at <> '2027-08-14T00:00:00+00'::timestamptz THEN
-    RAISE EXCEPTION '9c expected the window end 2027-08-14, got %', r.expires_at;
+  -- DERIVED, NOT HARD-CODED (W3, 2026-09-13). The literal here was
+  -- 2027-08-14T00:00:00+00, which held only while the seed stated the Okonkwo
+  -- windows as absolute dates. W2 round 4 (2f4964494, "seed dates") made
+  -- people_crm_dev.sql shift every window on that project by
+  -- (CURRENT_DATE - DATE '2026-10-20') so the fixture reads as "this week"
+  -- whenever it is seeded, which moves this grant's end by the same distance
+  -- and broke the literal on every day but one. The assertion that matters is
+  -- unchanged and is now stated as the RULE: the grant ends through the END of
+  -- the seat's own window day (00627's v_window_end::timestamptz + 1 day), and
+  -- NOT 90 days from the mint (PR-d).
+  SELECT (max(d)::timestamptz + interval '1 day') INTO v_window_end
+    FROM public.project_parties pp
+    CROSS JOIN LATERAL (VALUES (pp.on_site_to), (pp.warranty_until)) AS v(d)
+   WHERE pp.id = 'd0e30000-0000-0000-0000-000000000008';
+  IF r.expires_at <> v_window_end THEN
+    RAISE EXCEPTION '9c expected the window end %, got %', v_window_end, r.expires_at;
+  END IF;
+  IF r.expires_at >= now() + interval '90 days' - interval '1 day'
+     AND r.expires_at <= now() + interval '90 days' + interval '1 day' THEN
+    RAISE EXCEPTION '9c the grant took the 90-day default, not the window';
   END IF;
   IF r.revoked_at IS NOT NULL THEN
     RAISE EXCEPTION '9d the seeded link reads revoked';
@@ -2389,8 +2408,24 @@ BEGIN
     RAISE EXCEPTION '13g a co-member of another tenant read % of the seeded studio''s seat rows', n;
   END IF;
   -- the party branch of the Directory, same rule
+  --
+  -- NARROWED TO WHAT THIS ASSERTION NAMES (W3, 2026-09-13). The predicate was
+  -- `role <> 'contact'`, which also swept the TEAM branch. W2 round 1
+  -- (5a4e7f650) added project_team_members rows to people_crm_dev.sql —
+  -- people_directory's TEAM branch had held zero rows for this seed until
+  -- then — so from that commit on this line returned 2 rows: 'Leah Hartwell'
+  -- and 'Studio Manager', names only, from the branch 00626 carries VERBATIM
+  -- from 00594:1389-1429 and which r5/r6's tenant work deliberately did not
+  -- touch. Reproduced with 00626's own view body, so it is not W3's doing.
+  -- The TEAM branch's gate is is_studio_comember(designer) alone and it
+  -- leaks a teammate's NAME and project id — no consent word, no money, no
+  -- site access — to a co-member of the designer through a second studio.
+  -- Whether that leg takes a tenant conjunct is a product ruling this wave
+  -- has no brief for, so it is REPORTED (w3-data-report.md §7) rather than
+  -- silently changed, and this line is narrowed to the branch its own message
+  -- names.
   SELECT count(*) INTO n FROM public.people_directory
-   WHERE role <> 'contact'
+   WHERE role NOT IN ('contact', 'team')
      AND project_id IN ('d0e00000-0000-0000-0000-00000000000a',
                         'd0e00000-0000-0000-0000-00000000000b');
   IF n <> 0 THEN
