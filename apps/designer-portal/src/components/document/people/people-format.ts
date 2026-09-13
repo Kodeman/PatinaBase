@@ -11,22 +11,24 @@
  */
 
 const MONTHS_LONG = [
-  'January',
-  'February',
-  'March',
-  'April',
-  'May',
-  'June',
-  'July',
-  'August',
-  'September',
-  'October',
-  'November',
-  'December',
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
 ];
 
 /** `2027-08-13` → `13 August 2027`. */
-export function formatLongDate(value: string | null | undefined): string | null {
+export function formatLongDate(
+  value: string | null | undefined,
+): string | null {
   if (!value) return null;
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
   if (!match) return null;
@@ -37,12 +39,14 @@ export function formatLongDate(value: string | null | undefined): string | null 
 }
 
 /** Dollars from integer cents, whole where whole: `250000` → `$2,500`. */
-export function formatMoneyFromCents(cents: number | null | undefined): string | null {
+export function formatMoneyFromCents(
+  cents: number | null | undefined,
+): string | null {
   if (cents == null || !Number.isFinite(cents)) return null;
   const dollars = cents / 100;
-  return dollars.toLocaleString('en-US', {
-    style: 'currency',
-    currency: 'USD',
+  return dollars.toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
     minimumFractionDigits: dollars % 1 === 0 ? 0 : 2,
     maximumFractionDigits: 2,
   });
@@ -52,9 +56,9 @@ export function formatMoneyFromCents(cents: number | null | undefined): string |
  *  voice, used wherever a document says what it holds up. */
 export function joinWords(words: readonly string[]): string {
   const list = words.filter(Boolean);
-  if (list.length === 0) return '';
+  if (list.length === 0) return "";
   if (list.length === 1) return list[0];
-  return `${list.slice(0, -1).join(', ')} and ${list[list.length - 1]}`;
+  return `${list.slice(0, -1).join(", ")} and ${list[list.length - 1]}`;
 }
 
 /** Sentence-case the first letter of a list that opens a sentence. */

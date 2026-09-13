@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * THE DIRECTORY — one list of two entry types (direction §1 line 2, PR-g).
@@ -25,20 +25,20 @@
  * did.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from "react";
 import {
   usePeopleDirectory,
   useStudioContacts,
   type PartyRole,
   type PeopleDirectorySeat,
-} from '@patina/supabase';
-import { ALL_FIELD_TRADES, getFieldTradeLabel } from '@patina/types';
-import type { ContactScope } from '@patina/types';
+} from "@patina/supabase";
+import { ALL_FIELD_TRADES, getFieldTradeLabel } from "@patina/types";
+import type { ContactScope } from "@patina/types";
 import {
   DIRECTORY_CHIPS,
   DIRECTORY_CHIP_LABELS,
   type DirectoryChip,
-} from '@/lib/document/directory-roles';
+} from "@/lib/document/directory-roles";
 import {
   DIRECTORY_DUPLICATE_SENTENCE,
   DIRECTORY_EMPTY_SENTENCE,
@@ -52,23 +52,23 @@ import {
   entryPaperWord,
   firmIdentityLine,
   type DirectoryPerson,
-} from '@/lib/document/people-derivation';
-import { peopleEvents } from '@/lib/analytics/people-events';
-import { EmptyTeach } from '../view-shell';
-import { PersonRow } from '../directory/person-row';
-import { CompanyRow } from '../directory/company-row';
-import { ScopeLens } from '../directory/scope-lens';
-import { MakersMarketplace } from '../directory/makers-marketplace';
-import type { ContactRouteTarget } from '../contact-rule-line';
-import type { PeopleViewProps } from '../types';
+} from "@/lib/document/people-derivation";
+import { peopleEvents } from "@/lib/analytics/people-events";
+import { EmptyTeach } from "../view-shell";
+import { PersonRow } from "../directory/person-row";
+import { CompanyRow } from "../directory/company-row";
+import { ScopeLens } from "../directory/scope-lens";
+import { MakersMarketplace } from "../directory/makers-marketplace";
+import type { ContactRouteTarget } from "../contact-rule-line";
+import type { PeopleViewProps } from "../types";
 
 /** The ELEVEN legacy `?role=` values, kept so `directory-roles.ts` can pin the
  *  frozen link vocabulary without importing the six chips' own type. */
-export type DirectoryRole = PartyRole | 'all' | 'field' | 'company';
+export type DirectoryRole = PartyRole | "all" | "field" | "company";
 
 /** The Makers filter reads two ways (R78): the admitted roster, or the whole
  *  marketplace (discovery + save-as-admission). A lens, never a route. */
-export type MakerLens = 'roster' | 'marketplace';
+export type MakerLens = "roster" | "marketplace";
 
 /** Bands run in the order the studio acts on them; a firm sits with its crew. */
 const BAND_ORDER: Record<DirectoryChip, number> = {
@@ -82,14 +82,14 @@ const BAND_ORDER: Record<DirectoryChip, number> = {
 
 /** The trades the second line offers, in the order SPEC §5.1 #3 prints them. */
 const TRADE_LINE: readonly string[] = [
-  'electrical',
-  'plumbing',
-  'cabinetry',
-  'drywall',
-  'paint',
-  'hvac',
-  'carpentry_framing',
-  'radon_mitigation',
+  "electrical",
+  "plumbing",
+  "cabinetry",
+  "drywall",
+  "paint",
+  "hvac",
+  "carpentry_framing",
+  "radon_mitigation",
 ];
 
 export function DirectoryView({
@@ -128,8 +128,8 @@ export function DirectoryView({
   onOpenSeat?: (seat: PeopleDirectorySeat) => void;
 }) {
   const { data, isLoading } = usePeopleDirectory({
-    role: 'all',
-    scope: scope === 'mine' ? 'mine' : undefined,
+    role: "all",
+    scope: scope === "mine" ? "mine" : undefined,
   });
   // The rolodex itself, for the two facts `people_directory` does not carry:
   // a firm's signer (its payee marker) and a person's own email/office phone
@@ -144,7 +144,7 @@ export function DirectoryView({
   const firmBands = useMemo(() => {
     const bands = new Map<string, DirectoryChip>();
     for (const row of rows) {
-      if (directoryEntryKind(row) === 'firm') continue;
+      if (directoryEntryKind(row) === "firm") continue;
       const firmId = directoryFirmOf(row).id;
       if (!firmId || bands.has(firmId)) continue;
       bands.set(firmId, directoryBandOf(row));
@@ -156,7 +156,7 @@ export function DirectoryView({
   const firmCounts = useMemo(() => {
     const counts = new Map<string, { crew: number; jobs: Set<string> }>();
     for (const row of rows) {
-      if (directoryEntryKind(row) === 'firm') continue;
+      if (directoryEntryKind(row) === "firm") continue;
       const firmId = directoryFirmOf(row).id;
       if (!firmId) continue;
       const bucket = counts.get(firmId) ?? { crew: 0, jobs: new Set<string>() };
@@ -171,11 +171,12 @@ export function DirectoryView({
   const payeeMarkers = useMemo(() => {
     const names = new Map<string, string>();
     for (const c of contacts ?? []) {
-      if (c.entity_kind === 'person' && c.full_name) names.set(c.id, c.full_name);
+      if (c.entity_kind === "person" && c.full_name)
+        names.set(c.id, c.full_name);
     }
     const markers = new Map<string, string>();
     for (const c of contacts ?? []) {
-      if (c.entity_kind !== 'company' || !c.signer_person_id) continue;
+      if (c.entity_kind !== "company" || !c.signer_person_id) continue;
       const signer = names.get(c.signer_person_id);
       if (signer) markers.set(c.id, `Signs: ${signer}`);
     }
@@ -186,7 +187,7 @@ export function DirectoryView({
   const routeTargets = useMemo(() => {
     const targets = new Map<string, ContactRouteTarget>();
     for (const c of contacts ?? []) {
-      if (c.entity_kind !== 'person' || !c.full_name) continue;
+      if (c.entity_kind !== "person" || !c.full_name) continue;
       targets.set(c.full_name.toLowerCase(), {
         name: c.full_name,
         email: c.email,
@@ -198,19 +199,21 @@ export function DirectoryView({
 
   const narrowed = useMemo(() => {
     const admitted = rows.filter((row) => {
-      if (!directoryChipAdmits(chip, row, firmBands.get(row.person_id) ?? null)) {
+      if (
+        !directoryChipAdmits(chip, row, firmBands.get(row.person_id) ?? null)
+      ) {
         return false;
       }
       if (!directoryEntryMatches(row, search)) return false;
-      if (trade !== 'all' && directoryTradeOf(row) !== trade) return false;
+      if (trade !== "all" && directoryTradeOf(row) !== trade) return false;
       return true;
     });
     return admitted.sort((a, b) => {
       const bandA = BAND_ORDER[directoryBandOf(a)];
       const bandB = BAND_ORDER[directoryBandOf(b)];
       if (bandA !== bandB) return bandA - bandB;
-      const kindA = directoryEntryKind(a) === 'firm' ? 1 : 0;
-      const kindB = directoryEntryKind(b) === 'firm' ? 1 : 0;
+      const kindA = directoryEntryKind(a) === "firm" ? 1 : 0;
+      const kindB = directoryEntryKind(b) === "firm" ? 1 : 0;
       if (kindA !== kindB) return kindA - kindB;
       return a.display_name.localeCompare(b.display_name);
     });
@@ -220,12 +223,12 @@ export function DirectoryView({
 
   // A trade narrowing that no longer has a chip to sit under is a narrowing
   // the studio cannot see or lift.
-  const showsTradeLine = chip === 'crew' || chip === 'makers';
+  const showsTradeLine = chip === "crew" || chip === "makers";
   useEffect(() => {
-    if (!showsTradeLine && trade !== 'all') onTradeChange('all');
+    if (!showsTradeLine && trade !== "all") onTradeChange("all");
   }, [showsTradeLine, trade, onTradeChange]);
 
-  const marketplace = chip === 'makers' && makerLens === 'marketplace';
+  const marketplace = chip === "makers" && makerLens === "marketplace";
 
   return (
     <>
@@ -257,8 +260,8 @@ export function DirectoryView({
               }}
               className={`min-h-11 rounded-[3px] border px-3 py-1.5 font-mono text-[11px] font-medium uppercase tracking-[0.06em] ${
                 on
-                  ? 'border-[var(--ink-faint)] bg-[var(--rail)] text-[var(--ink)]'
-                  : 'border-[var(--hairline-strong)] bg-[var(--paper)] text-[var(--ink-subtle)]'
+                  ? "border-[var(--ink-faint)] bg-[var(--rail)] text-[var(--ink)]"
+                  : "border-[var(--hairline-strong)] bg-[var(--paper)] text-[var(--ink-subtle)]"
               }`}
             >
               {DIRECTORY_CHIP_LABELS[key]}
@@ -284,12 +287,12 @@ export function DirectoryView({
                 aria-pressed={on}
                 data-directory-trade={t}
                 onClick={() => {
-                  const next = on ? 'all' : t;
+                  const next = on ? "all" : t;
                   onTradeChange(next);
                   peopleEvents.directoryChip({ chip, scope, trade: next });
                 }}
                 className={`min-h-11 font-mono text-[11px] lowercase tracking-[0.06em] ${
-                  on ? 'text-[var(--ink)]' : 'text-[var(--ink-subtle)]'
+                  on ? "text-[var(--ink)]" : "text-[var(--ink-subtle)]"
                 }`}
               >
                 {getFieldTradeLabel(t).toLowerCase()}
@@ -301,21 +304,23 @@ export function DirectoryView({
 
       <ScopeLens scope={scope} onScope={onScopeChange} />
 
-      {chip === 'makers' && (
+      {chip === "makers" && (
         <p className="mb-4 flex items-baseline gap-x-3 border-b border-[var(--hairline)] pb-2">
           {(
             [
-              ['roster', 'your roster'],
-              ['marketplace', 'the marketplace'],
+              ["roster", "your roster"],
+              ["marketplace", "the marketplace"],
             ] as Array<[MakerLens, string]>
           ).map(([key, label]) => (
             <button
               key={key}
               type="button"
               onClick={() => onMakerLens(key)}
-              aria-current={makerLens === key ? 'true' : undefined}
+              aria-current={makerLens === key ? "true" : undefined}
               className={`min-h-11 font-mono text-[11px] uppercase tracking-[0.1em] ${
-                makerLens === key ? 'text-[var(--ink)]' : 'text-[var(--ink-subtle)]'
+                makerLens === key
+                  ? "text-[var(--ink)]"
+                  : "text-[var(--ink-subtle)]"
               }`}
             >
               {label}
@@ -325,10 +330,16 @@ export function DirectoryView({
       )}
 
       {duplicates.length > 0 && !marketplace && (
-        <div data-duplicate-band className="mb-4 border-y border-[var(--hairline)] py-3">
+        <div
+          data-duplicate-band
+          className="mb-4 border-y border-[var(--hairline)] py-3"
+        >
           {duplicates.map(([a, b]) => (
-            <p key={`${a.person_id}:${b.person_id}`} className="t-body-sm text-[var(--ink)]">
-              {DIRECTORY_DUPLICATE_SENTENCE}{' '}
+            <p
+              key={`${a.person_id}:${b.person_id}`}
+              className="t-body-sm text-[var(--ink)]"
+            >
+              {DIRECTORY_DUPLICATE_SENTENCE}{" "}
               <button
                 type="button"
                 data-open-person={a.person_id}
@@ -336,7 +347,7 @@ export function DirectoryView({
                 className="min-h-11 underline decoration-[var(--color-clay)] underline-offset-[3px]"
               >
                 {a.display_name}
-              </button>{' '}
+              </button>{" "}
               <button
                 type="button"
                 data-open-person={b.person_id}
@@ -351,7 +362,7 @@ export function DirectoryView({
       )}
 
       {marketplace ? (
-        <MakersMarketplace onOpenMaker={(id) => openPerson(id, 'maker')} />
+        <MakersMarketplace onOpenMaker={(id) => openPerson(id, "maker")} />
       ) : isLoading ? (
         <p className="t-body-sm px-1 py-6 text-[var(--ink-subtle)]">
           Reading the roster…
@@ -364,12 +375,12 @@ export function DirectoryView({
           className="m-0 list-none border-t border-[var(--hairline)] p-0"
         >
           {narrowed.map((row) =>
-            directoryEntryKind(row) === 'firm' ? (
+            directoryEntryKind(row) === "firm" ? (
               <CompanyRow
                 key={`firm:${row.person_id}`}
                 firmId={row.person_id}
                 name={row.display_name}
-                kind={String(row.meta?.['contact_kind'] ?? 'company')}
+                kind={String(row.meta?.["contact_kind"] ?? "company")}
                 line={firmIdentityLine(row, {
                   crew: firmCounts.get(row.person_id)?.crew ?? 0,
                   jobs: firmCounts.get(row.person_id)?.jobs.size ?? 0,

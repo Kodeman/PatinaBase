@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * THE PAPER A FIRM HOLDS (E10, SPEC §5.3 #3).
@@ -22,12 +22,12 @@ import {
   COMPLIANCE_DOC_TYPE_LABELS,
   type ComplianceBlock,
   type StudioComplianceDocument,
-} from '@patina/supabase';
-import { StateWord } from './state-word';
-import { formatSeatDate } from './seat-line';
-import { capitalise, joinWords } from './people-format';
+} from "@patina/supabase";
+import { StateWord } from "./state-word";
+import { formatSeatDate } from "./seat-line";
+import { capitalise, joinWords } from "./people-format";
 
-export const NO_PAPER_OWED_SENTENCE = 'No paper is held for this firm.';
+export const NO_PAPER_OWED_SENTENCE = "No paper is held for this firm.";
 
 /** The blocks one document holds, in the studio's words. */
 export function documentBlockWords(doc: StudioComplianceDocument): string[] {
@@ -38,7 +38,7 @@ export function documentBlockWords(doc: StudioComplianceDocument): string[] {
 
 /** A document's own word: what it is, and what it holds up. */
 export function documentTypeLabel(doc: StudioComplianceDocument): string {
-  if (doc.doc_type === 'other_named') return doc.doc_label ?? 'Other';
+  if (doc.doc_type === "other_named") return doc.doc_label ?? "Other";
   return (
     COMPLIANCE_DOC_TYPE_LABELS[
       doc.doc_type as keyof typeof COMPLIANCE_DOC_TYPE_LABELS
@@ -51,16 +51,14 @@ export function documentTypeLabel(doc: StudioComplianceDocument): string {
 export function documentPaperState(
   doc: StudioComplianceDocument,
   today: Date,
-): 'current' | 'lapses_soon' | 'lapsed' | 'not_on_file' {
-  if (!doc.expires_on) return 'current';
+): "current" | "lapses_soon" | "lapsed" | "not_on_file" {
+  if (!doc.expires_on) return "current";
   const expires = Date.parse(`${doc.expires_on}T00:00:00Z`);
-  const now = Date.parse(
-    `${today.toISOString().slice(0, 10)}T00:00:00Z`,
-  );
-  if (!Number.isFinite(expires)) return 'current';
-  if (expires < now) return 'lapsed';
-  if (expires - now <= 30 * 24 * 60 * 60 * 1000) return 'lapses_soon';
-  return 'current';
+  const now = Date.parse(`${today.toISOString().slice(0, 10)}T00:00:00Z`);
+  if (!Number.isFinite(expires)) return "current";
+  if (expires < now) return "lapsed";
+  if (expires - now <= 30 * 24 * 60 * 60 * 1000) return "lapses_soon";
+  return "current";
 }
 
 /**
@@ -76,16 +74,16 @@ export function paperHeldClause(
   const held = new Set<string>();
   for (const doc of documents) {
     const state = documentPaperState(doc, today);
-    if (state !== 'lapsed') continue;
+    if (state !== "lapsed") continue;
     for (const word of documentBlockWords(doc)) held.add(word);
   }
   if (held.size === 0) return null;
-  return `${capitalise(joinWords([...held]))} ${held.size === 1 ? 'is' : 'are'} held until a current certificate is on file.`;
+  return `${capitalise(joinWords([...held]))} ${held.size === 1 ? "is" : "are"} held until a current certificate is on file.`;
 }
 
 const TH =
-  'font-mono text-[11px] font-medium uppercase tracking-[0.08em] text-[var(--ink-subtle)] text-left pr-3 pb-2';
-const TD = 't-body-sm border-t border-[var(--hairline)] py-3 pr-3 align-top';
+  "font-mono text-[11px] font-medium uppercase tracking-[0.08em] text-[var(--ink-subtle)] text-left pr-3 pb-2";
+const TD = "t-body-sm border-t border-[var(--hairline)] py-3 pr-3 align-top";
 
 export function ComplianceTable({
   documents,
@@ -99,7 +97,10 @@ export function ComplianceTable({
   return (
     <>
       {/* 1200 band: the ledger table. */}
-      <table data-compliance-table className="hidden w-full border-collapse sm:table">
+      <table
+        data-compliance-table
+        className="hidden w-full border-collapse sm:table"
+      >
         <thead>
           <tr>
             <th className={TH}>Type</th>
@@ -115,19 +116,24 @@ export function ComplianceTable({
           {documents.map((doc) => (
             <tr key={doc.id} data-compliance-row={doc.id}>
               <td className={TD}>{documentTypeLabel(doc)}</td>
-              <td className={TD}>{doc.number ?? '—'}</td>
-              <td className={TD}>{doc.issuer ?? '—'}</td>
+              <td className={TD}>{doc.number ?? "—"}</td>
+              <td className={TD}>{doc.issuer ?? "—"}</td>
               <td className={TD}>
                 {formatSeatDate(doc.expires_on) ??
                   (formatSeatDate(doc.issued_on)
                     ? `on file ${formatSeatDate(doc.issued_on)}`
-                    : '—')}
+                    : "—")}
               </td>
               <td className={TD}>
-                <StateWord family="paper" value={documentPaperState(doc, today)} />
+                <StateWord
+                  family="paper"
+                  value={documentPaperState(doc, today)}
+                />
               </td>
-              <td className={TD}>{doc.held_by === 'gc' ? 'GC' : 'studio'}</td>
-              <td className={TD}>{joinWords(documentBlockWords(doc)) || '—'}</td>
+              <td className={TD}>{doc.held_by === "gc" ? "GC" : "studio"}</td>
+              <td className={TD}>
+                {joinWords(documentBlockWords(doc)) || "—"}
+              </td>
             </tr>
           ))}
         </tbody>
@@ -153,13 +159,16 @@ export function ComplianceTable({
                   (formatSeatDate(doc.issued_on)
                     ? `on file ${formatSeatDate(doc.issued_on)}`
                     : null),
-                doc.held_by === 'gc' ? 'held by the GC' : 'held by the studio',
+                doc.held_by === "gc" ? "held by the GC" : "held by the studio",
               ]
                 .filter(Boolean)
-                .join(' · ')}
+                .join(" · ")}
             </p>
             <p className="mt-1">
-              <StateWord family="paper" value={documentPaperState(doc, today)} />
+              <StateWord
+                family="paper"
+                value={documentPaperState(doc, today)}
+              />
             </p>
             {documentBlockWords(doc).length > 0 && (
               <p className="t-body-sm mt-1 text-[var(--ink-subtle)]">

@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Shared People Room chrome: the seven stable views, their relationship-index
@@ -7,8 +7,8 @@
  * active state. No shadows, lifts, menu/listbox ARIA, or dashboard furniture.
  */
 
-import { useEffect, useRef, useState, type ReactNode } from 'react';
-import type { PeopleView } from './types';
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import type { PeopleView } from "./types";
 
 export interface PeopleViewOption {
   key: PeopleView;
@@ -16,7 +16,7 @@ export interface PeopleViewOption {
 }
 
 export interface PeopleViewGroup {
-  key: 'directory' | 'relationships' | 'practice';
+  key: "directory" | "relationships" | "practice";
   name: string;
   views: readonly PeopleViewOption[];
 }
@@ -24,26 +24,26 @@ export interface PeopleViewGroup {
 /** The seven existing views, regrouped without changing a key or destination. */
 export const PEOPLE_VIEW_GROUPS: readonly PeopleViewGroup[] = [
   {
-    key: 'directory',
-    name: 'Directory',
-    views: [{ key: 'directory', name: 'Directory' }],
+    key: "directory",
+    name: "Directory",
+    views: [{ key: "directory", name: "Directory" }],
   },
   {
-    key: 'relationships',
-    name: 'Relationships',
+    key: "relationships",
+    name: "Relationships",
     views: [
-      { key: 'threads', name: 'Threads' },
-      { key: 'nurture', name: 'Nurture' },
-      { key: 'reviews', name: 'Reviews' },
+      { key: "threads", name: "Threads" },
+      { key: "nurture", name: "Nurture" },
+      { key: "reviews", name: "Reviews" },
     ],
   },
   {
-    key: 'practice',
-    name: 'Practice',
+    key: "practice",
+    name: "Practice",
     views: [
-      { key: 'portfolio', name: 'Portfolio' },
-      { key: 'outreach', name: 'Outreach' },
-      { key: 'your-eye', name: 'Your Eye' },
+      { key: "portfolio", name: "Portfolio" },
+      { key: "outreach", name: "Outreach" },
+      { key: "your-eye", name: "Your Eye" },
     ],
   },
 ];
@@ -121,17 +121,17 @@ function ViewGroups({
                 <button
                   type="button"
                   data-people-view-option={option.key}
-                  aria-current={active ? 'page' : undefined}
+                  aria-current={active ? "page" : undefined}
                   onClick={() => onSelect(option.key)}
                   className={`doc-type-control relative flex min-h-11 w-full items-center gap-3 border-l-2 py-2 pl-5 pr-2 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none ${
                     active
-                      ? 'border-[var(--color-clay)] font-semibold text-[var(--text-primary)]'
-                      : 'border-transparent text-[var(--color-quiet-ink)] hover:text-[var(--text-primary)]'
+                      ? "border-[var(--color-clay)] font-semibold text-[var(--text-primary)]"
+                      : "border-transparent text-[var(--color-quiet-ink)] hover:text-[var(--text-primary)]"
                   }`}
                 >
                   <span className="min-w-0 flex-1">{option.name}</span>
-                  {option.key === 'directory' &&
-                    typeof directoryCount === 'number' && (
+                  {option.key === "directory" &&
+                    typeof directoryCount === "number" && (
                       <span className="doc-type-meta shrink-0 tabular-nums">
                         {directoryCount}
                       </span>
@@ -161,14 +161,14 @@ function EngineNudge({
       className="group mt-5 flex min-h-11 w-full flex-col justify-center border-t border-[var(--border-subtle)] pt-3 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
     >
       <span className="doc-type-meta font-semibold uppercase tracking-[0.1em]">
-        The Engine · {nudge.count}{' '}
-        {nudge.count === 1 ? 'person drifting' : 'people drifting'}
+        The Engine · {nudge.count}{" "}
+        {nudge.count === 1 ? "person drifting" : "people drifting"}
       </span>
       <span className="doc-type-body mt-1 text-[var(--color-quiet-ink)]">
         <span className="font-heading italic text-[var(--text-primary)]">
           {nudge.name}
-        </span>{' '}
-        is the strongest dormant tie · {nudge.since}.{' '}
+        </span>{" "}
+        is the strongest dormant tie · {nudge.since}.{" "}
         <span
           aria-hidden
           className="text-[var(--color-quiet-ink)] transition-colors group-hover:text-[var(--color-clay-ink)] motion-reduce:transition-none"
@@ -194,7 +194,7 @@ export function PeopleDesktopRail({
   return (
     <aside
       data-people-desktop-rail
-      data-people-active-view={activeView ?? 'profile'}
+      data-people-active-view={activeView ?? "profile"}
       className="hidden w-[220px] shrink-0 border-r border-[var(--doc-ink-border)]/40 px-4 py-6 min-[1180px]:block"
     >
       <p className="doc-type-meta mb-6 uppercase tracking-[0.1em]">
@@ -209,7 +209,7 @@ export function PeopleDesktopRail({
         />
       </nav>
       {nudge && (
-        <EngineNudge nudge={nudge} onOpen={() => onSelect('nurture')} />
+        <EngineNudge nudge={nudge} onOpen={() => onSelect("nurture")} />
       )}
     </aside>
   );
@@ -231,8 +231,8 @@ export function PeopleCompactSelector({
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const panelId = 'people-view-selector-panel';
-  const currentLabel = profileOpen ? 'Person profile' : viewName(currentView);
+  const panelId = "people-view-selector-panel";
+  const currentLabel = profileOpen ? "Person profile" : viewName(currentView);
 
   useEffect(() => {
     if (!open) return;
@@ -244,28 +244,28 @@ export function PeopleCompactSelector({
       }
     };
     const onEscape = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
+      if (event.key !== "Escape") return;
       event.preventDefault();
       event.stopImmediatePropagation();
       setOpen(false);
       triggerRef.current?.focus();
     };
 
-    document.addEventListener('pointerdown', onOutsidePointer, true);
-    window.addEventListener('keydown', onEscape, true);
+    document.addEventListener("pointerdown", onOutsidePointer, true);
+    window.addEventListener("keydown", onEscape, true);
     return () => {
-      document.removeEventListener('pointerdown', onOutsidePointer, true);
-      window.removeEventListener('keydown', onEscape, true);
+      document.removeEventListener("pointerdown", onOutsidePointer, true);
+      window.removeEventListener("keydown", onEscape, true);
     };
   }, [open]);
 
   useEffect(() => {
-    const desktop = window.matchMedia('(min-width: 1180px)');
+    const desktop = window.matchMedia("(min-width: 1180px)");
     const closeAtDesktop = (event: MediaQueryListEvent) => {
       if (event.matches) setOpen(false);
     };
-    desktop.addEventListener('change', closeAtDesktop);
-    return () => desktop.removeEventListener('change', closeAtDesktop);
+    desktop.addEventListener("change", closeAtDesktop);
+    return () => desktop.removeEventListener("change", closeAtDesktop);
   }, []);
 
   const selectView = (next: PeopleView) => {
@@ -278,7 +278,7 @@ export function PeopleCompactSelector({
     <div
       ref={rootRef}
       data-people-compact-selector
-      data-people-current-view={profileOpen ? 'profile' : currentView}
+      data-people-current-view={profileOpen ? "profile" : currentView}
       className="mx-auto w-full max-w-[1296px] px-4 pt-4 sm:px-6 min-[1180px]:hidden"
     >
       <button
@@ -300,8 +300,8 @@ export function PeopleCompactSelector({
           </span>
         </span>
         <span className="doc-type-meta shrink-0 uppercase tracking-[0.08em]">
-          {open ? 'Close' : 'Change'}{' '}
-          <span aria-hidden>{open ? '↑' : '↓'}</span>
+          {open ? "Close" : "Change"}{" "}
+          <span aria-hidden>{open ? "↑" : "↓"}</span>
         </span>
       </button>
 
@@ -321,7 +321,7 @@ export function PeopleCompactSelector({
       </nav>
 
       {nudge && (
-        <EngineNudge nudge={nudge} onOpen={() => selectView('nurture')} />
+        <EngineNudge nudge={nudge} onOpen={() => selectView("nurture")} />
       )}
     </div>
   );
@@ -366,7 +366,7 @@ export function EmptyTeach({
       – {children}
       {action && (
         <>
-          {' '}
+          {" "}
           <button
             type="button"
             onClick={action.onClick}

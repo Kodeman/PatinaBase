@@ -9,57 +9,65 @@
  * And the head COUNTS CARDS: `people-room.tsx:383` counted rows, which v4's
  * one-row-per-identity rebuild is what makes honest.
  */
-import { render, screen, waitFor } from '@testing-library/react';
-import { PeopleRoom } from '../people-room';
+import { render, screen, waitFor } from "@testing-library/react";
+import { PeopleRoom } from "../people-room";
 
 const mockReplace = jest.fn();
-jest.mock('next/navigation', () => ({
+jest.mock("next/navigation", () => ({
   useRouter: () => ({ push: jest.fn(), replace: mockReplace }),
 }));
 
 const ROWS = [
   {
-    person_id: 'card-dana',
-    role: 'contact',
-    display_name: 'Dana Kowalski',
+    person_id: "card-dana",
+    role: "contact",
+    display_name: "Dana Kowalski",
     email: null,
     phone: null,
     last_touch_at: null,
-    scope: 'studio',
-    meta: { entity_kind: 'person', contact_kind: 'sub' },
+    scope: "studio",
+    meta: { entity_kind: "person", contact_kind: "sub" },
     seat_count: 1,
   },
   {
-    person_id: 'firm-northgate',
-    role: 'contact',
-    display_name: 'Northgate Electric',
+    person_id: "firm-northgate",
+    role: "contact",
+    display_name: "Northgate Electric",
     email: null,
     phone: null,
     last_touch_at: null,
-    scope: 'studio',
-    meta: { entity_kind: 'company', contact_kind: 'sub' },
+    scope: "studio",
+    meta: { entity_kind: "company", contact_kind: "sub" },
     seat_count: 0,
   },
 ];
 
-jest.mock('@patina/supabase', () => ({
+jest.mock("@patina/supabase", () => ({
   usePeopleDirectory: (filters?: { scope?: string }) => ({
-    data: filters?.scope === 'mine' ? [] : ROWS,
+    data: filters?.scope === "mine" ? [] : ROWS,
     isLoading: false,
   }),
-  useOrganizations: () => ({ data: [{ id: 'org-1', type: 'design_studio' }] }),
+  useOrganizations: () => ({ data: [{ id: "org-1", type: "design_studio" }] }),
   isFieldRosterRole: (role: string | null | undefined) =>
-    !!role && ['gc', 'sub', 'installer', 'receiver'].includes(role),
+    !!role && ["gc", "sub", "installer", "receiver"].includes(role),
 }));
 
-jest.mock('@/lib/help-system/use-document-surface', () => ({
+jest.mock("@/lib/help-system/use-document-surface", () => ({
   useDocumentSurface: jest.fn(),
 }));
-jest.mock('../../mobile/mobile-shell', () => ({
+jest.mock("../../mobile/mobile-shell", () => ({
   useMobilePrimaryAction: jest.fn(),
 }));
-jest.mock('../../rooms/room-shell', () => ({
-  RoomShell: ({ title, count, children }: { title: string; count?: string; children: React.ReactNode }) => (
+jest.mock("../../rooms/room-shell", () => ({
+  RoomShell: ({
+    title,
+    count,
+    children,
+  }: {
+    title: string;
+    count?: string;
+    children: React.ReactNode;
+  }) => (
     <div>
       <h1>{title}</h1>
       {count && <p data-testid="room-count">{count}</p>}
@@ -67,81 +75,97 @@ jest.mock('../../rooms/room-shell', () => ({
     </div>
   ),
 }));
-jest.mock('../views/directory-view', () => ({
+jest.mock("../views/directory-view", () => ({
   DirectoryView: (props: { chip: string; trade: string }) => (
-    <div data-testid="directory-view" data-chip={props.chip} data-trade={props.trade} />
+    <div
+      data-testid="directory-view"
+      data-chip={props.chip}
+      data-trade={props.trade}
+    />
   ),
 }));
-jest.mock('../views/person-profile', () => ({
+jest.mock("../views/person-profile", () => ({
   PersonProfile: (props: { personId: string }) => (
     <div data-testid="person-card" data-person={props.personId} />
   ),
 }));
-jest.mock('../company-card', () => ({
+jest.mock("../company-card", () => ({
   CompanyCard: (props: { firmId: string }) => (
     <div data-testid="company-card" data-firm={props.firmId} />
   ),
 }));
-jest.mock('../party-profile-sheet', () => ({ PartyProfileSheet: () => null }));
-jest.mock('../views/threads-view', () => ({ ThreadsView: () => null }));
-jest.mock('../views/nurture-view', () => ({ NurtureView: () => null }));
-jest.mock('../views/reviews-view', () => ({ ReviewsView: () => null }));
-jest.mock('../views/portfolio-view', () => ({ PortfolioView: () => null }));
-jest.mock('../views/outreach-view', () => ({ OutreachView: () => null }));
-jest.mock('../profile/your-eye', () => ({ YourEyePanel: () => null }));
-jest.mock('../directory/ask-bar', () => ({
+jest.mock("../party-profile-sheet", () => ({ PartyProfileSheet: () => null }));
+jest.mock("../views/threads-view", () => ({ ThreadsView: () => null }));
+jest.mock("../views/nurture-view", () => ({ NurtureView: () => null }));
+jest.mock("../views/reviews-view", () => ({ ReviewsView: () => null }));
+jest.mock("../views/portfolio-view", () => ({ PortfolioView: () => null }));
+jest.mock("../views/outreach-view", () => ({ OutreachView: () => null }));
+jest.mock("../profile/your-eye", () => ({ YourEyePanel: () => null }));
+jest.mock("../directory/ask-bar", () => ({
   AskBar: () => null,
   routePeopleAsk: jest.fn(() => null),
 }));
-jest.mock('../directory/add-person-sheet', () => ({ AddPersonSheet: () => null }));
+jest.mock("../directory/add-person-sheet", () => ({
+  AddPersonSheet: () => null,
+}));
 
 function goTo(search: string) {
-  window.history.replaceState({}, '', `/people${search}`);
+  window.history.replaceState({}, "", `/people${search}`);
 }
 
 beforeEach(() => {
   mockReplace.mockClear();
-  goTo('');
+  goTo("");
 });
 
-describe('the head', () => {
-  it('counts cards, and names both nouns', () => {
+describe("the head", () => {
+  it("counts cards, and names both nouns", () => {
     render(<PeopleRoom />);
-    expect(screen.getByTestId('room-count')).toHaveTextContent('1 person · 1 firm');
+    expect(screen.getByTestId("room-count")).toHaveTextContent(
+      "1 person · 1 firm",
+    );
   });
 });
 
-describe('the address', () => {
-  it('PR-j — a legacy ?role= forwards to its chip and is NOT stripped', async () => {
-    goTo('?role=sub');
+describe("the address", () => {
+  it("PR-j — a legacy ?role= forwards to its chip and is NOT stripped", async () => {
+    goTo("?role=sub");
     render(<PeopleRoom />);
-    expect(screen.getByTestId('directory-view')).toHaveAttribute('data-chip', 'crew');
+    expect(screen.getByTestId("directory-view")).toHaveAttribute(
+      "data-chip",
+      "crew",
+    );
     await waitFor(() =>
-      expect(mockReplace).toHaveBeenCalledWith('/people?role=crew', { scroll: false }),
+      expect(mockReplace).toHaveBeenCalledWith("/people?role=crew", {
+        scroll: false,
+      }),
     );
   });
 
-  it('keeps ?trade in the address', () => {
-    goTo('?role=crew&trade=electrical');
+  it("keeps ?trade in the address", () => {
+    goTo("?role=crew&trade=electrical");
     render(<PeopleRoom />);
-    expect(screen.getByTestId('directory-view')).toHaveAttribute(
-      'data-trade',
-      'electrical',
+    expect(screen.getByTestId("directory-view")).toHaveAttribute(
+      "data-trade",
+      "electrical",
     );
   });
 
-  it('?person= opens the person card by its rolodex id', () => {
-    goTo('?person=card-dana');
+  it("?person= opens the person card by its rolodex id", () => {
+    goTo("?person=card-dana");
     render(<PeopleRoom />);
-    expect(screen.getByTestId('person-card')).toHaveAttribute('data-person', 'card-dana');
+    expect(screen.getByTestId("person-card")).toHaveAttribute(
+      "data-person",
+      "card-dana",
+    );
   });
 
-  it('?firm= opens the company card by its rolodex id', () => {
-    goTo('?firm=firm-northgate');
+  it("?firm= opens the company card by its rolodex id", () => {
+    goTo("?firm=firm-northgate");
     render(<PeopleRoom />);
-    expect(screen.getByTestId('company-card')).toHaveAttribute(
-      'data-firm',
-      'firm-northgate',
+    expect(screen.getByTestId("company-card")).toHaveAttribute(
+      "data-firm",
+      "firm-northgate",
     );
   });
 });

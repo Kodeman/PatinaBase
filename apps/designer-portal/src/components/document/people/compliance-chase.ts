@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * CHASE THE RENEWAL — a draft, never a send.
@@ -15,11 +15,11 @@
  * second portal caller — flagged for the orchestrator.
  */
 
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { createBrowserClient } from '@patina/supabase';
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { createBrowserClient } from "@patina/supabase";
 
 /** The queue's own word for this work. */
-export const COMPLIANCE_CHASE_TASK_TYPE = 'compliance_chase';
+export const COMPLIANCE_CHASE_TASK_TYPE = "compliance_chase";
 
 /** What the act promises on the face, and what it actually does. */
 export function chaseConsequenceSentence(firmName: string): string {
@@ -43,14 +43,14 @@ export function useChaseTheRenewal() {
   return useMutation({
     mutationFn: async (input: ChaseRenewalInput) => {
       const supabase = createBrowserClient();
-      const { data, error } = await supabase.rpc('enqueue_agent_task', {
+      const { data, error } = await supabase.rpc("enqueue_agent_task", {
         p_task_type: COMPLIANCE_CHASE_TASK_TYPE,
-        p_entity_type: 'studio_contact',
+        p_entity_type: "studio_contact",
         p_entity_id: input.companyId,
         // A draft, and only a draft. The queue's review gate is the send gate.
-        p_status: 'awaiting_review',
-        p_source: 'people_room',
-        p_summary: `Chase ${input.companyName} for ${input.documentLabel ?? 'a current certificate'}`,
+        p_status: "awaiting_review",
+        p_source: "people_room",
+        p_summary: `Chase ${input.companyName} for ${input.documentLabel ?? "a current certificate"}`,
         p_payload: {
           organization_id: input.organizationId,
           company_id: input.companyId,
@@ -60,14 +60,14 @@ export function useChaseTheRenewal() {
           paperwork_contact_person_id: input.paperworkContactPersonId ?? null,
         },
         // One standing chase per firm per paper: pressing twice files one note.
-        p_idempotency_key: `compliance_chase:${input.companyId}:${input.documentId ?? 'any'}`,
-        p_on_conflict: 'ignore',
+        p_idempotency_key: `compliance_chase:${input.companyId}:${input.documentId ?? "any"}`,
+        p_on_conflict: "ignore",
       });
       if (error) throw error;
       return data as unknown;
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['agent-tasks'] });
+      void queryClient.invalidateQueries({ queryKey: ["agent-tasks"] });
     },
   });
 }
