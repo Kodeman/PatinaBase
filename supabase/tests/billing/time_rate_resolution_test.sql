@@ -2545,8 +2545,24 @@ BEGIN
     'setting the rate a studio''s client is billed; got ' || COALESCE(v_source, 'NULL') || ' / '
     || COALESCE(v_rate::text, 'NULL');
 
-  -- (x4) And the ambiguity is the ONLY thing the seat did: withdraw it (as the puppet
-  -- account, through the shipped policy) and the employing studio answers again.
+  -- (x4) REWRITTEN FOR HT-3-g (RULED BY KODY 2026-09-12). Through round 11 this leg
+  -- asserted that withdrawing the puppet seat made the employing studio answer
+  -- again — i.e. that the denial-of-service was REVERSIBLE BY ITSELF. That was a
+  -- property of the read-time derivation, and HT-3-g(1) deletes it: the pricing
+  -- studio is projects.studio_id, the column was left NULL at INSERT while her tier
+  -- was ambiguous, and nothing about a later seat change re-derives it. So the
+  -- outcome moves, in both directions at once, and BOTH halves are asserted:
+  --   · x4 — the DoS is now STICKY at the read. Her next hour on that project still
+  --     prices 'none', seat withdrawn or not. That is the cost HT-3-g accepts: a
+  --     project whose column is NULL prices 'rate pending' until a human acts.
+  --   · x5 — and the human act is available to the party that was wronged, which is
+  --     the whole of the trade. The EMPLOYING studio's own owner stamps the project
+  --     under HT-3-g(3) — his studio EMPLOYS her (active, non-guest, role <>
+  --     'owner') and he is its owner — and her next hour prices his 15000. The
+  --     puppet account cannot do the same: its workspace holds her as a plain
+  --     `member`, so it looks like an employer too, which is HT-3-f(4)'s recorded
+  --     residual and is measured in its own case (z) of
+  --     supabase/tests/rls/time_entry_studio_stamp_test.sql rather than re-raced here.
   PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000006002');
   UPDATE public.organization_members SET status = 'removed'
    WHERE id = 'b1100000-0000-4000-8000-0000000060c2';
@@ -2564,13 +2580,64 @@ BEGIN
 
   SELECT hourly_rate_cents, rate_source INTO v_rate, v_source
   FROM public.project_time_entries WHERE id = 'b1100000-0000-4000-8000-0000000060b3';
-  ASSERT v_rate = 15000 AND v_source = 'studio_member',
-    'FAIL x4 (HT-3-b): with the puppet seat no longer ACTIVE she has one employer again and the '
-    'employing studio prices the hour (15000). If this fails, the ambiguity is sticky and the '
-    'denial-of-service is permanent rather than reversible; got ' || COALESCE(v_rate::text, 'NULL')
-    || ' / ' || COALESCE(v_source, 'NULL');
+  ASSERT v_source = 'none' AND v_rate IS NULL,
+    'FAIL x4 (HT-3-g(1)): withdrawing the puppet seat must change NOTHING about an hour on a '
+    'project whose studio_id column was left NULL. Under HT-3-g there is no read-time '
+    'derivation to re-run, so the answer stays ''rate pending'' until somebody stamps the '
+    'column — and an answer that MOVED here would mean the derivation is back and with it '
+    'every seat-shaped lever rounds 4-11 measured (W2-R9-01 probe C, W2-R11-01 form G); got '
+    || COALESCE(v_rate::text, 'NULL') || ' / ' || COALESCE(v_source, 'NULL');
+  ASSERT (SELECT studio_id FROM public.projects
+           WHERE id = 'b1100000-0000-4000-8000-0000000060e3') IS NULL,
+    'FAIL x4b (HT-3-g(1)): and the column itself is untouched by the seat change — a seat is '
+    'not a writer of projects.studio_id';
 
-  RAISE NOTICE 'time_rate_resolution: case (x) passed.';
+  -- (x5) The repair, in the wronged party's own hand (HT-3-g(3)).
+  -- 00563's fail-closed check (00563:352-362) asks the LEAD DESIGNER for the
+  -- designer DOMAIN role, and this fixture never granted one because nothing in it
+  -- used to write projects.studio_id AFTER insert. The stamp does, so she is given
+  -- the grant the product gives her. It is not a pricing key and moves nothing
+  -- above: her seats, her rates and the three projects' columns are already settled.
+  INSERT INTO public.user_roles (user_id, role_id)
+  SELECT 'b1100000-0000-4000-8000-000000006001', id FROM public.roles
+   WHERE name = 'studio_designer'
+  ON CONFLICT DO NOTHING;
+
+  PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000006003');
+  PERFORM public.stamp_project_pricing_studio(
+    'b1100000-0000-4000-8000-0000000060e3', 'b1100000-0000-4000-8000-0000000060a1');
+  PERFORM pg_temp.reset_role();
+  ASSERT (SELECT studio_id FROM public.projects
+           WHERE id = 'b1100000-0000-4000-8000-0000000060e3')
+         = 'b1100000-0000-4000-8000-0000000060a1',
+    'FAIL x5a (HT-3-g(3)): the EMPLOYING studio''s owner may stamp a project of its own '
+    'designer — his studio employs her (active, non-guest, role <> ''owner'') and he is its '
+    'owner, which is the whole of HT-3-g(3)''s standing, and it already holds the 15000 row he '
+    'wrote for her (HT-3-e(1)''s arm''s-length leg); got '
+    || COALESCE((SELECT studio_id FROM public.projects
+                  WHERE id = 'b1100000-0000-4000-8000-0000000060e3')::text, 'NULL');
+
+  PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000006001');
+  INSERT INTO public.project_time_entries
+    (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('b1100000-0000-4000-8000-0000000060b4', 'b1100000-0000-4000-8000-0000000060e3',
+          'b1100000-0000-4000-8000-000000006001', NOW() - INTERVAL '30 minutes', 120, true, 'manual_entry');
+  PERFORM pg_temp.reset_role();
+
+  SELECT hourly_rate_cents, rate_source, rated_amount_cents INTO v_rate, v_source, v_amount
+  FROM public.project_time_entries WHERE id = 'b1100000-0000-4000-8000-0000000060b4';
+  ASSERT v_rate = 15000 AND v_source = 'studio_member' AND v_amount = 30000,
+    'FAIL x5 (HT-3-g): after the stamp the employing studio prices her hour (15000 / 30000) — '
+    'so a third party''s consent-free seat buys a PAUSE that the real employer can end with one '
+    'statement, never a number the third party set; got ' || COALESCE(v_rate::text, 'NULL')
+    || ' / ' || COALESCE(v_source, 'NULL') || ' / ' || COALESCE(v_amount::text, 'NULL');
+  ASSERT (SELECT hourly_rate_cents IS NULL AND rate_source = 'none'
+            FROM public.project_time_entries
+           WHERE id = 'b1100000-0000-4000-8000-0000000060b3'),
+    'FAIL x5b (P-4): and the hour logged BEFORE the stamp keeps its ''none'' — the stamp writes '
+    'projects.studio_id and re-rates nothing';
+
+  RAISE NOTICE 'time_rate_resolution: case (x) passed — HT-3-g: the DoS is sticky at the read and the employer''s stamp is what ends it.';
 END
 $$;
 
@@ -2992,10 +3059,23 @@ BEGIN
     'anything; got ' || COALESCE(v_rate::text, 'NULL') || ' / ' || COALESCE(v_source, 'NULL')
     || ' / ' || COALESCE(v_amount::text, 'NULL');
 
-  -- ── (aa7) the LEGACY shape: studio_id IS NULL, so step 2 itself answers ────
-  -- On Strata the pre-00563 population carries NULL here, and the stamp never runs
-  -- for it (00602 is BEFORE INSERT only — P-4). Step 2 must reach the same studio the
-  -- stamp would have.
+  -- ── (aa7) the LEGACY shape, REWRITTEN FOR HT-3-g ──────────────────────────
+  -- On Strata the pre-00563 population carries NULL here, and 00602's trigger never
+  -- runs for it (BEFORE INSERT only — P-4). Through round 11 this leg asserted that
+  -- step 2 reached the same studio the stamp would have; HT-3-g(1) DELETES step 2,
+  -- so the legacy project prices 'none' for EVERYONE until the column is written.
+  -- Both halves are asserted, because the trade is the whole point:
+  --   · aa7 / aa7b — the hire's hour AND her assistant's hour on the legacy project
+  --     both price 'none' (HT-26's "rate pending"), where step 2 answered 20000 and
+  --     12000. No self-set 99900 appears in either direction: that is what the
+  --     derivation's deletion buys, measured against the same fixture that measured
+  --     arm A and arm B.
+  --   · aa7c/aa7d — Leah, S's OWNER, stamps the legacy project under HT-3-g(3) (S
+  --     employs her hire, Leah owns S, and S holds the 20000 row Leah wrote), and the
+  --     NEXT hours price 20000 / 12000. The already-logged hours keep their 'none'
+  --     (P-4). At ship, migration 00620 does this for the whole legacy population in
+  --     one statement: here it is the human act, because this fixture is created
+  --     after 00620 has already run.
   INSERT INTO public.projects (id, name, designer_id, created_by)
   VALUES ('b1100000-0000-4000-8000-0000000090e3', 'R8aa Legacy House',
           'b1100000-0000-4000-8000-000000009002', 'b1100000-0000-4000-8000-000000009002');
@@ -3021,17 +3101,68 @@ BEGIN
 
   SELECT hourly_rate_cents, rate_source INTO v_rate, v_source
   FROM public.project_time_entries WHERE id = 'b1100000-0000-4000-8000-0000000090b4';
-  ASSERT v_rate = 20000 AND v_source = 'studio_member',
-    'FAIL aa7 (HT-3-b step 2): on a legacy NULL-studio project the hire''s own hour must still be '
-    'priced by S, her one employer — 99900 here is arm A through the step-2 door instead of the '
-    'stamp; got ' || COALESCE(v_rate::text, 'NULL') || ' / ' || COALESCE(v_source, 'NULL');
+  ASSERT v_rate IS NULL AND v_source = 'none',
+    'FAIL aa7 (HT-3-g(1)): on a legacy NULL-studio project the hire''s own hour prices ''none'' — '
+    'there is no step 2 left to reach her employer, and above all none to reach the 99900 she set '
+    'about herself in her own workspace (arm A). A NUMBER here means a derivation is back; got '
+    || COALESCE(v_rate::text, 'NULL') || ' / ' || COALESCE(v_source, 'NULL');
 
   SELECT hourly_rate_cents, rate_source INTO v_rate, v_source
   FROM public.project_time_entries WHERE id = 'b1100000-0000-4000-8000-0000000090b5';
+  ASSERT v_rate IS NULL AND v_source = 'none',
+    'FAIL aa7b (HT-3-g(1)): and the assistant''s hour on the same legacy project prices ''none'' '
+    'too — the cost HT-3-g accepts, and the reason 00620 stamps the legacy population at ship; got '
+    || COALESCE(v_rate::text, 'NULL') || ' / ' || COALESCE(v_source, 'NULL');
+
+  -- aa7c — the repair, by S's OWNER, under HT-3-g(3).
+  PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000009001');
+  PERFORM public.stamp_project_pricing_studio(
+    'b1100000-0000-4000-8000-0000000090e3', 'b1100000-0000-4000-8000-0000000090a1');
+  PERFORM pg_temp.reset_role();
+  ASSERT (SELECT studio_id FROM public.projects
+           WHERE id = 'b1100000-0000-4000-8000-0000000090e3')
+         = 'b1100000-0000-4000-8000-0000000090a1',
+    'FAIL aa7c (HT-3-g(3)): S''s owner may stamp her own studio onto a legacy project of her '
+    'hire''s — S EMPLOYS the hire (active `admin` seat, role <> ''owner''), Leah owns S, and S '
+    'holds the 20000 row Leah wrote for her (HT-3-e(1)); got '
+    || COALESCE((SELECT studio_id FROM public.projects
+                  WHERE id = 'b1100000-0000-4000-8000-0000000090e3')::text, 'NULL');
+
+  PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000009002');
+  INSERT INTO public.project_time_entries
+    (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('b1100000-0000-4000-8000-0000000090ba', 'b1100000-0000-4000-8000-0000000090e3',
+          'b1100000-0000-4000-8000-000000009002', NOW() - INTERVAL '1 hour', 120, true, 'manual_entry');
+  PERFORM pg_temp.reset_role();
+  PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000009003');
+  INSERT INTO public.project_time_entries
+    (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('b1100000-0000-4000-8000-0000000090bb', 'b1100000-0000-4000-8000-0000000090e3',
+          'b1100000-0000-4000-8000-000000009003', NOW() - INTERVAL '1 hour', 120, true, 'manual_entry');
+  PERFORM pg_temp.reset_role();
+
+  SELECT hourly_rate_cents, rate_source, rated_amount_cents INTO v_rate, v_source, v_amount
+  FROM public.project_time_entries WHERE id = 'b1100000-0000-4000-8000-0000000090ba';
+  ASSERT v_rate = 20000 AND v_source = 'studio_member' AND v_amount = 40000,
+    'FAIL aa7d (HT-3-g): after the stamp the hire''s hour on the legacy project prices at the '
+    '20000 LEAH wrote for her (40000 for 120 min) — never at her own 99900, because an '
+    'employer-tier seat is role <> ''owner'' and HT-3-e(2) ignores a self-authored row outside '
+    'ownership; got ' || COALESCE(v_rate::text, 'NULL') || ' / ' || COALESCE(v_source, 'NULL')
+    || ' / ' || COALESCE(v_amount::text, 'NULL');
+
+  SELECT hourly_rate_cents, rate_source INTO v_rate, v_source
+  FROM public.project_time_entries WHERE id = 'b1100000-0000-4000-8000-0000000090bb';
   ASSERT v_rate = 12000 AND v_source = 'studio_member',
-    'FAIL aa7b (HT-3-b step 2): and the assistant''s hour on the same legacy project must carry '
-    'his own 12000 from S; got ' || COALESCE(v_rate::text, 'NULL') || ' / '
-    || COALESCE(v_source, 'NULL');
+    'FAIL aa7e (HT-3-g): and the assistant''s next hour carries his own 12000 from S — arm B '
+    'closed by the stamp rather than by a derivation; got ' || COALESCE(v_rate::text, 'NULL')
+    || ' / ' || COALESCE(v_source, 'NULL');
+
+  ASSERT (SELECT count(*) FROM public.project_time_entries
+           WHERE id IN ('b1100000-0000-4000-8000-0000000090b4',
+                        'b1100000-0000-4000-8000-0000000090b5')
+             AND rate_source = 'none' AND hourly_rate_cents IS NULL) = 2,
+    'FAIL aa7f (P-4): the two hours logged BEFORE the stamp keep their ''none'' — the stamp '
+    'writes projects.studio_id and re-rates nothing';
 
   -- ── (aa8) two employer seats: ambiguous tier, NULL stamp, 'none' ───────────
   -- X's owner seats the hire there. Nothing about this needs her consent (`Org owners
@@ -3868,10 +3999,16 @@ BEGIN
     'lock. Arm (c) makes this 20000 / 40000; got ' || COALESCE(v_vrate::text, 'NULL') || ' / '
     || COALESCE(v_vamt::text, 'NULL');
 
-  -- ── SURFACE 2: a LEGACY project (studio_id genuinely NULL) — step 2 itself ──
-  -- No project creation is needed for this surface on Strata: every legacy
-  -- studio_id IS NULL project of a principal with no employer seat is live today,
-  -- and 00599 step 2 answers for it without any stamp being involved.
+  -- ── SURFACE 2: a LEGACY project (studio_id genuinely NULL) — DISSOLVED ─────
+  -- Through round 11 this surface was the worse half of W1-R11-01: no project
+  -- creation was needed on Strata at all, because 00599 step 2 answered for every
+  -- legacy studio_id IS NULL project and the consent-free seat moved that answer.
+  -- HT-3-g(1) (RULED BY KODY 2026-09-12) DELETES step 2, so this surface is gone:
+  -- the legacy project prices 'none' for everyone, and the seat the stranger wrote
+  -- cannot move it, because nothing reads a seat when an hour is priced. The
+  -- exploit survives ONLY on the CREATION surface above (ad7), where the tier rule
+  -- legitimately still runs once — which is why HT-3-b arm (c)'s consent door is
+  -- still OWED, and why it is owed for creation rather than for pricing.
   INSERT INTO public.projects (id, name, designer_id, created_by)
   VALUES ('b1100000-0000-4000-8000-00000000fe02', 'R11af Legacy House',
           'b1100000-0000-4000-8000-00000000f001', 'b1100000-0000-4000-8000-00000000f001');
@@ -3892,23 +4029,35 @@ BEGIN
   SELECT hourly_rate_cents, rate_source, rated_amount_cents, billing_state
     INTO v_rate, v_source, v_amount, v_state
   FROM public.project_time_entries WHERE id = 'b1100000-0000-4000-8000-00000000fb02';
-  ASSERT v_rate = 99900 AND v_source = 'studio_member' AND v_amount = 199800
-         AND v_state = 'authorized',
-    'FAIL ad8 (PINS TODAY — W1-R11-01, HT-3-b arm (c) OWED): the same number reaches the same '
-    'member through 00599 step 2 on a LEGACY NULL-studio project, with no stamp involved at all — '
-    'which is why this surface needs no project creation on Strata. Arm (c) makes this '
-    '20000 / studio_member / 40000; got ' || COALESCE(v_rate::text, 'NULL') || ' / '
-    || COALESCE(v_source, 'NULL') || ' / ' || COALESCE(v_amount::text, 'NULL') || ' / '
-    || COALESCE(v_state, 'NULL');
+  ASSERT v_rate IS NULL AND v_source = 'none',
+    'FAIL ad8 (HT-3-g(1) — W1-R11-01''s LEGACY surface DISSOLVED): a legacy NULL-studio project '
+    'prices ''none'' whatever seat a stranger wrote, because no body that prices an hour reads a '
+    'seat any more. A 99900 here means step 2 is back, and with it the whole of W1-R11-01''s '
+    'cheaper surface — the one that needed no project creation at all; got '
+    || COALESCE(v_rate::text, 'NULL') || ' / ' || COALESCE(v_source, 'NULL') || ' / '
+    || COALESCE(v_amount::text, 'NULL') || ' / ' || COALESCE(v_state, 'NULL');
 
   SELECT resolved_rate_cents, amount_cents INTO v_vrate, v_vamt
   FROM public.project_unbilled_time WHERE id = 'b1100000-0000-4000-8000-00000000fb02';
-  ASSERT v_vrate = 99900 AND v_vamt = 199800,
-    'FAIL ad9 (PINS TODAY — HT-3-b arm (c) OWED): and the legacy surface reaches the composer at '
-    '99900 / $1,998.00 too. Arm (c) makes this 20000 / 40000; got '
+  ASSERT COALESCE(v_vrate, 0) = 0,
+    'FAIL ad9 (HT-3-g(1)): and nothing reaches the invoice composer from the legacy surface — '
+    '''none'' is HT-26''s "rate pending", which W2''s composer is what keeps off an invoice; got '
     || COALESCE(v_vrate::text, 'NULL') || ' / ' || COALESCE(v_vamt::text, 'NULL');
 
-  RAISE NOTICE 'time_rate_resolution: case (ad-ii) passed — W1-R11-01 pinned on both surfaces with its control, HT-3-b arm (c) OWED.';
+  -- ad10 — and the stranger cannot repair it either, which is the point of
+  -- HT-3-g(3): his workspace DOES employ her (she holds the member seat he wrote),
+  -- so he satisfies the tier — and he is refused on the arm's-length rate only if he
+  -- has not authored one. He HAS (ad2), so his stamp SUCCEEDS, and that is
+  -- HT-3-f(4)'s recorded residual, measured in its own case (z) of
+  -- supabase/tests/rls/time_entry_studio_stamp_test.sql. What is asserted here is the
+  -- narrower, load-bearing half: until SOMEBODY stamps, the legacy project is
+  -- ''none'' for everyone, including for him.
+  ASSERT (SELECT studio_id FROM public.projects
+           WHERE id = 'b1100000-0000-4000-8000-00000000fe02') IS NULL,
+    'FAIL ad10 (HT-3-g(1)): the legacy project''s column is still NULL — an hour''s pricing is '
+    'not a writer of it, and no seat or rate write moves it';
+
+  RAISE NOTICE 'time_rate_resolution: case (ad-ii) passed — HT-3-g dissolves W1-R11-01''s legacy surface; the creation surface (ad7) stands and HT-3-b arm (c) is still OWED.';
 END
 $$;
 
@@ -4827,12 +4976,13 @@ BEGIN
 END
 $$;
 
--- ─── (ai) HT-3-f(2) (RULED 2026-09-12, migration 00615): a project SOMEBODY ELSE
---         opened is never priced by a studio the designer owns ─────────────────
--- W2-R9-01's MAJOR, as a case, in both the shapes round 9 measured. HT-3-b's
--- derivation is RECOMPUTED on every hour for a project whose studio_id is NULL, so
--- the designer could EMPTY her own employer tier with ONE ordinary statement and
--- the OWNED tier opened underneath her former employer's legacy project:
+-- ─── (ai) HT-3-g (RULED BY KODY 2026-09-12): A STAMPED COLUMN IS NOT RECOMPUTED,
+--         AND AN UNSTAMPED ONE IS 'none' FOR EVERYONE ───────────────────────────
+-- W2-R9-01's MAJOR, as a case, in both the shapes round 9 measured — REWRITTEN for
+-- HT-3-g, which closes them structurally rather than conditionally. Round 9's
+-- closure (HT-3-f(2), the owned tier only for a self-created project) is DISSOLVED
+-- and deleted; what replaces it is that there is no derivation to recompute at all.
+-- The two probes stay, because they are the fixtures:
 --   probe C  — `DELETE` on her own organization_members row, the shipped
 --              `Members can leave` policy (`user_id = auth.uid() AND role <>
 --              'owner'`);
@@ -4843,13 +4993,19 @@ $$;
 -- 99900 / studio_member / 199800 where the employer's own card priced it 26000, the
 -- employer's owner then read NONE of the project's hours, and there was no
 -- statement that could pin the column before or after.
--- HT-3-f(2) closes both: the owned tier is reached only where
--- `projects.created_by = projects.designer_id`. These projects were opened by the
--- EMPLOYER's owner, so after she leaves the answer is 'none' (HT-26's "rate
--- pending") — never her workspace, and never her number.
--- Both legs carry her own 99900 in a workspace she OWNS, so HT-3-e(2)'s owner
--- exemption would price it if the tier were reached at all: a 'none' here is
--- HT-3-f(2) and nothing else.
+-- Under HT-3-g the case measures a different and stronger shape, in this order:
+--   · ai0/ai1 — the legacy project prices 'none' from the START, for her and for
+--     everyone. That is HT-3-g(1)'s cost, and it is also why 00620 exists.
+--   · ai2/ai3 — the EMPLOYER'S OWNER stamps it (HT-3-g(3)) and her hour prices the
+--     employer's own 26000.
+--   · ai4 — PROBE C, after the stamp: she deletes her own seat and her next hour
+--     still prices 26000. The column is not recomputed, so the manoeuvre that was
+--     W2-R9-01 now changes NOTHING, whoever opened the project. Round 9's closure
+--     keyed on `created_by`; this one does not need to know.
+--   · ai6 — PROBE D2, the same on the second project through `status = 'removed'`.
+-- Both designers carry their own 99900 in a workspace each OWNS, so HT-3-e(2)'s
+-- owner exemption would price it the moment an owned tier were reached: a number
+-- that is never 99900 here is HT-3-g and nothing else.
 INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, instance_id, aud, role)
 VALUES
   ('b1400000-0000-4000-8000-000000000001', 'htf-employer-owner@test.invalid', '', NOW(), NOW(), NOW(),
@@ -4898,6 +5054,17 @@ VALUES
   ('b1400000-0000-4000-8000-0000000000c5', 'b1400000-0000-4000-8000-000000000003',
    'b1400000-0000-4000-8000-0000000000a3', 'owner',  'active', NOW());
 
+-- 00563's fail-closed check asks the LEAD DESIGNER for the designer DOMAIN role,
+-- and the stamp (ai2/ai6) writes projects.studio_id after INSERT, so both leads get
+-- the grant the product gives them. It is not a pricing key: the projects above were
+-- already inserted with the column NULL.
+INSERT INTO public.user_roles (user_id, role_id)
+SELECT 'b1400000-0000-4000-8000-000000000002', id FROM public.roles WHERE name = 'studio_designer'
+ON CONFLICT DO NOTHING;
+INSERT INTO public.user_roles (user_id, role_id)
+SELECT 'b1400000-0000-4000-8000-000000000003', id FROM public.roles WHERE name = 'studio_designer'
+ON CONFLICT DO NOTHING;
+
 INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
 VALUES
   -- the employer's honest, arm's-length number for each of them
@@ -4921,15 +5088,17 @@ DECLARE
   v_pricing uuid;
   v_rows    integer;
 BEGIN
-  -- ── ai0: the honest baseline. The employer prices both hours.
+  -- ── ai0: the legacy shape, and what HT-3-g(1) answers for it.
   ASSERT (SELECT studio_id IS NULL FROM public.projects
            WHERE id = 'b1400000-0000-4000-8000-0000000000e1'),
     'FAIL ai0 (precondition): the project must still be a LEGACY NULL-studio row — '
-    'this whole case is about a column HT-3-b re-derives on every hour';
+    'this whole case is about what a NULL column answers and about who may fill it';
   SELECT public.project_pricing_studio_id('b1400000-0000-4000-8000-0000000000e1') INTO v_pricing;
-  ASSERT v_pricing = 'b1400000-0000-4000-8000-0000000000a1',
-    'FAIL ai0b (precondition, HT-3-b): her ONE employer seat must be the answer '
-    'while she holds it; got ' || COALESCE(v_pricing::text, 'NULL');
+  ASSERT v_pricing IS NULL,
+    'FAIL ai0b (HT-3-g(1)): the callable answer for an unstamped project is NOTHING — '
+    'not her employer, not her workspace. Through round 11 it derived HT-3-b''s tiers '
+    'here, and that derivation is what every seat-shaped manoeuvre of rounds 4-11 '
+    'moved; got ' || COALESCE(v_pricing::text, 'NULL');
 
   PERFORM pg_temp.assume_user('b1400000-0000-4000-8000-000000000002');
   INSERT INTO public.project_time_entries
@@ -4939,12 +5108,43 @@ BEGIN
   PERFORM pg_temp.reset_role();
   SELECT hourly_rate_cents, rate_source, rated_amount_cents INTO v_rate, v_source, v_amount
   FROM public.project_time_entries WHERE id = 'b1400000-0000-4000-8000-0000000000b1';
+  ASSERT v_rate IS NULL AND v_source = 'none' AND v_amount IS NULL,
+    'FAIL ai1 (HT-3-g(1), THE COST): while the column is NULL her hour prices ''rate '
+    'pending'' even though she holds an ACTIVE seat at the one studio that employs '
+    'her and that studio has priced her 26000. This is the cost the ruling accepts, '
+    'and it is why migration 00620 stamps the legacy population at ship; got '
+    || COALESCE(v_rate::text, 'NULL') || ' / ' || COALESCE(v_source, 'NULL') || ' / '
+    || COALESCE(v_amount::text, 'NULL');
+
+  -- ── ai2: the repair, and the only party HT-3-g(3) admits — the employer's OWNER.
+  PERFORM pg_temp.assume_user('b1400000-0000-4000-8000-000000000001');
+  PERFORM public.stamp_project_pricing_studio(
+    'b1400000-0000-4000-8000-0000000000e1', 'b1400000-0000-4000-8000-0000000000a1');
+  PERFORM pg_temp.reset_role();
+  SELECT public.project_pricing_studio_id('b1400000-0000-4000-8000-0000000000e1') INTO v_pricing;
+  ASSERT v_pricing = 'b1400000-0000-4000-8000-0000000000a1',
+    'FAIL ai2 (HT-3-g(3)): the employer''s owner may name his own studio on a legacy '
+    'project of his designer''s — his studio EMPLOYS her, he owns it, and it holds '
+    'the 26000 row he wrote for her; got ' || COALESCE(v_pricing::text, 'NULL');
+
+  -- ── ai3: and the hour prices the employer's own number.
+  PERFORM pg_temp.assume_user('b1400000-0000-4000-8000-000000000002');
+  INSERT INTO public.project_time_entries
+    (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('b1400000-0000-4000-8000-0000000000b2', 'b1400000-0000-4000-8000-0000000000e1',
+          'b1400000-0000-4000-8000-000000000002', NOW() - INTERVAL '2 hours', 120, true, 'manual_entry');
+  PERFORM pg_temp.reset_role();
+  SELECT hourly_rate_cents, rate_source, rated_amount_cents INTO v_rate, v_source, v_amount
+  FROM public.project_time_entries WHERE id = 'b1400000-0000-4000-8000-0000000000b2';
   ASSERT v_rate = 26000 AND v_source = 'studio_member' AND v_amount = 52000,
-    'FAIL ai1 (baseline): the employer''s own number prices her hour while she holds '
-    'the seat; got ' || COALESCE(v_rate::text, 'NULL') || ' / '
+    'FAIL ai3 (HT-3-g): after the stamp the employer''s own 26000 prices her hour '
+    '(52000 for 120 min); got ' || COALESCE(v_rate::text, 'NULL') || ' / '
     || COALESCE(v_source, 'NULL') || ' / ' || COALESCE(v_amount::text, 'NULL');
 
-  -- ── ai2: PROBE C. One statement, hers, through RLS: she leaves her employer.
+  -- ── ai4: PROBE C, after the stamp. One statement, hers, through RLS: she leaves
+  --    her employer — and NOTHING MOVES. This is W2-R9-01's whole manoeuvre, on a
+  --    project the employer opened AND (by HT-3-g) on one she could have opened
+  --    herself: the closure no longer asks who opened it.
   PERFORM pg_temp.assume_user('b1400000-0000-4000-8000-000000000002');
   WITH gone AS (
     DELETE FROM public.organization_members
@@ -4954,49 +5154,53 @@ BEGIN
   ) SELECT count(*) INTO v_rows FROM gone;
   PERFORM pg_temp.reset_role();
   ASSERT v_rows = 1,
-    'FAIL ai2 (precondition): `Members can leave` must still admit a plain member '
+    'FAIL ai4a (precondition): `Members can leave` must still admit a plain member '
     'deleting her OWN seat — if this is 0 the policy changed and the rest of this '
     'case measures nothing (it is a People-room policy, not a pricing one, and '
-    'HT-3-f answers the pricing question rather than bounding it); rows = ' || v_rows;
+    'HT-3-g answers the pricing question rather than bounding it); rows = ' || v_rows;
 
-  -- ── ai3: THE CLOSURE. Her employer tier is empty, and the owned tier does NOT
-  --    open, because the EMPLOYER's owner opened this project.
   SELECT public.project_pricing_studio_id('b1400000-0000-4000-8000-0000000000e1') INTO v_pricing;
+  ASSERT v_pricing = 'b1400000-0000-4000-8000-0000000000a1',
+    'FAIL ai4b (HT-3-g(1)): the stamped column is NOT recomputed when she empties her '
+    'own employer tier. A NULL or a different studio here is the recomputation back, '
+    'and with it W2-R9-01; got ' || COALESCE(v_pricing::text, 'NULL');
+
   PERFORM pg_temp.assume_user('b1400000-0000-4000-8000-000000000002');
   INSERT INTO public.project_time_entries
     (id, project_id, user_id, started_at, duration_minutes, billable, source)
-  VALUES ('b1400000-0000-4000-8000-0000000000b2', 'b1400000-0000-4000-8000-0000000000e1',
+  VALUES ('b1400000-0000-4000-8000-0000000000b9', 'b1400000-0000-4000-8000-0000000000e1',
           'b1400000-0000-4000-8000-000000000002', NOW() - INTERVAL '1 hour', 120, true, 'manual_entry');
   PERFORM pg_temp.reset_role();
   SELECT hourly_rate_cents, rate_source, rated_amount_cents INTO v_rate, v_source, v_amount
-  FROM public.project_time_entries WHERE id = 'b1400000-0000-4000-8000-0000000000b2';
-  ASSERT v_pricing IS NULL,
-    'FAIL ai3 (HT-3-f(2), THE RULING): with her employer tier empty, the callable '
-    'derivation must answer NOTHING for a project somebody ELSE opened — not her '
-    'workspace. Got ' || COALESCE(v_pricing::text, 'NULL');
-  ASSERT v_rate IS NULL AND v_source = 'none' AND v_amount IS NULL,
-    'FAIL ai3b (HT-3-f(2), THE RULING — probe C): she left her employer with ONE '
-    'ordinary statement and her next hour on her FORMER EMPLOYER''S legacy project '
-    'must be HT-26''s ''rate pending'', not the 99900 she wrote for herself in the '
-    'workspace she owns. Measured before this rule: 99900 / studio_member / 199800 '
-    'against the employer''s own 26000, with the employer''s owner reading none of '
-    'the project''s hours and no statement able to repair it (W2-R9-01). The repair '
-    'is HT-3-f(1)''s pin BEFORE the fact, or HT-3-a''s stamp after it; got '
+  FROM public.project_time_entries WHERE id = 'b1400000-0000-4000-8000-0000000000b9';
+  ASSERT v_rate = 26000 AND v_source = 'studio_member' AND v_amount = 52000,
+    'FAIL ai4 (HT-3-g, PROBE C CLOSED): she left her employer with ONE ordinary '
+    'statement and her next hour on that employer''s project STILL prices the '
+    'employer''s 26000. Measured before HT-3-g: 99900 / studio_member / 199800, the '
+    'number she wrote for herself, with the employer''s owner reading none of the '
+    'project''s hours and no statement able to repair it (W2-R9-01); got '
     || COALESCE(v_rate::text, 'NULL') || ' / ' || COALESCE(v_source, 'NULL') || ' / '
     || COALESCE(v_amount::text, 'NULL');
   ASSERT v_rate IS DISTINCT FROM 99900,
-    'FAIL ai3c: and whatever else changes, the one number this must never be is the '
+    'FAIL ai4c: and whatever else changes, the one number this must never be is the '
     'one she wrote for herself';
 
-  -- ── ai4: the earlier hour does not move. Written rows keep their price (P-4).
-  SELECT hourly_rate_cents INTO v_rate
+  -- ── ai5: the earlier hours do not move. Written rows keep their price (P-4).
+  SELECT hourly_rate_cents, rate_source INTO v_rate, v_source
   FROM public.project_time_entries WHERE id = 'b1400000-0000-4000-8000-0000000000b1';
-  ASSERT v_rate = 26000,
-    'FAIL ai4: an hour already written keeps the number it was priced at — there is '
-    'no backfill in either direction (P-4); got ' || COALESCE(v_rate::text, 'NULL');
+  ASSERT v_rate IS NULL AND v_source = 'none',
+    'FAIL ai5 (P-4): the hour logged before the stamp keeps its ''none'' — the stamp '
+    'writes projects.studio_id and re-rates nothing in either direction; got '
+    || COALESCE(v_rate::text, 'NULL') || ' / ' || COALESCE(v_source, 'NULL');
 
-  -- ── ai5: PROBE D2. The same taking without deleting anything: an `admin` sets
-  --    her OWN seat to 'removed' under `Org admins can update members`.
+  -- ── ai6: PROBE D2. The same taking without deleting anything: an `admin` sets
+  --    her OWN seat to 'removed' under `Org admins can update members`. Stamped
+  --    first, so the measurement is the same one: the column does not move.
+  PERFORM pg_temp.assume_user('b1400000-0000-4000-8000-000000000001');
+  PERFORM public.stamp_project_pricing_studio(
+    'b1400000-0000-4000-8000-0000000000e2', 'b1400000-0000-4000-8000-0000000000a1');
+  PERFORM pg_temp.reset_role();
+
   PERFORM pg_temp.assume_user('b1400000-0000-4000-8000-000000000003');
   INSERT INTO public.project_time_entries
     (id, project_id, user_id, started_at, duration_minutes, billable, source)
@@ -5018,37 +5222,41 @@ BEGIN
   SELECT hourly_rate_cents INTO v_rate
   FROM public.project_time_entries WHERE id = 'b1400000-0000-4000-8000-0000000000b3';
   ASSERT v_rate = 26000,
-    'FAIL ai5 (baseline, probe D2): the employer prices her hour while her seat is '
-    'active; got ' || COALESCE(v_rate::text, 'NULL');
+    'FAIL ai6 (baseline, probe D2): with the project stamped the employer prices her '
+    'hour; got ' || COALESCE(v_rate::text, 'NULL');
   ASSERT v_rows = 1,
-    'FAIL ai5b (precondition): an `admin` must still be able to set her own seat to '
+    'FAIL ai6b (precondition): an `admin` must still be able to set her own seat to '
     '''removed'' — probe D2 needs no DELETE at all, which is why bounding the '
     'DELETE was never the closure; rows = ' || v_rows;
   SELECT hourly_rate_cents, rate_source, rated_amount_cents INTO v_rate, v_source, v_amount
   FROM public.project_time_entries WHERE id = 'b1400000-0000-4000-8000-0000000000b4';
-  ASSERT v_rate IS NULL AND v_source = 'none' AND v_amount IS NULL,
-    'FAIL ai5c (HT-3-f(2), probe D2): a withdrawn seat empties the employer tier '
-    'exactly as a deleted one does, and the answer must be the same ''rate '
-    'pending'' — a closure that only saw the DELETE would leave this arm open; got '
-    || COALESCE(v_rate::text, 'NULL') || ' / ' || COALESCE(v_source, 'NULL') || ' / '
-    || COALESCE(v_amount::text, 'NULL');
+  ASSERT v_rate = 26000 AND v_source = 'studio_member' AND v_amount = 52000,
+    'FAIL ai6c (HT-3-g, PROBE D2 CLOSED): a withdrawn seat moves a stamped column '
+    'exactly as little as a deleted one does — 26000, not the 99900 she wrote for '
+    'herself; got ' || COALESCE(v_rate::text, 'NULL') || ' / '
+    || COALESCE(v_source, 'NULL') || ' / ' || COALESCE(v_amount::text, 'NULL');
 
-  RAISE NOTICE 'time_rate_resolution: case (ai) passed — HT-3-f(2): a project somebody else opened is never priced by a studio she owns, on both of round 9''s seat-emptying paths.';
+  RAISE NOTICE 'time_rate_resolution: case (ai) passed — HT-3-g: an unstamped project is ''none'' for everyone, and a stamped one is not recomputed by either of round 9''s seat-emptying paths.';
 END
 $$;
 
--- ─── (aj) HT-3-f(3), THE RECORDED RESIDUAL — asserted as PASSING ──────────────
--- HT-3-f(2) keys on `projects.created_by = projects.designer_id`, so it does NOT
--- reach a legacy project the designer OPENED HERSELF while employed. She deletes
--- her own seat and that project prices from her own workspace, at her own number.
--- RULED by the orchestrator 2026-09-12 as a residual on HT-3-e(3)'s footing:
--- VISIBLE rather than impossible — the pricing studio is a column of
--- time_entry_ledger and the owner's project lens shows it (lane B, W2 UI) — with
--- HT-3-f(1)'s PIN as the employer's remedy before the fact (case (e) of
--- supabase/tests/rls/time_entry_studio_stamp_test.sql measures the pin, and case
--- (w) measures it holding THROUGH this exact manoeuvre).
--- This case exists so the next ruling MOVES A TEST rather than discovering a
--- surprise. Nothing in the tree measured it in either direction before round 9.
+-- ─── (aj) HT-3-f(3) UNDER HT-3-g: the residual SPLITS, and both halves are here ─
+-- HT-3-f(3) recorded this residual: a legacy project the designer CREATED HERSELF
+-- while employed is priced by her own workspace once she leaves, because HT-3-f(2)
+-- keyed on created_by and created_by is hers. Under HT-3-g the residual splits in
+-- two, and this case measures BOTH — which also corrects a mislabel round 9 left
+-- here, because the project below is inserted AFTER her seat is gone and so was
+-- never priced by a read-time derivation at all:
+--   · aj1/aj2 — a project she opens AFTER leaving names her own workspace AT
+--     CREATION. That is 00563's one-candidate discovery plus HT-3-c arm (a), it is
+--     HT-3-g's own sentence ("she still names her own workspace on a project she is
+--     creating"), and her own number prices it because HT-3-e(2)'s exemption is
+--     OWNERSHIP. Unchanged by HT-3-g, and asserted as PASSING.
+--   · aj3/aj4 — the residual AS RULED is DISSOLVED. A genuinely legacy project of
+--     hers, column NULL, prices 'none' after she leaves and for ever after, because
+--     HT-3-g(1) deletes the recomputation the residual rode on. Leaving a seat no
+--     longer changes anything a column already says, and an unstamped project says
+--     nothing.
 INSERT INTO public.projects (id, name, designer_id, created_by, studio_id)
 VALUES ('b1400000-0000-4000-8000-0000000000e3', 'HTF Her Own House',
         'b1400000-0000-4000-8000-000000000002', 'b1400000-0000-4000-8000-000000000002', NULL);
@@ -5060,9 +5268,11 @@ DECLARE
   v_amount  integer;
   v_pricing uuid;
 BEGIN
-  -- Her employer seat is already gone (case (ai) ai2 deleted it), and this project
-  -- carries her own id in created_by — so HT-3-f(2)'s test is satisfied and the
-  -- owned tier opens.
+  -- Her employer seat is already gone (case (ai) ai4 deleted it), so at this
+  -- project's INSERT she has exactly ONE candidate studio — the workspace she owns —
+  -- and 00563's own discovery writes it into the column before 00602's trigger is
+  -- even reached. The answer below therefore comes from HT-3-a step 1, the column,
+  -- not from any derivation.
   SELECT public.project_pricing_studio_id('b1400000-0000-4000-8000-0000000000e3') INTO v_pricing;
   PERFORM pg_temp.assume_user('b1400000-0000-4000-8000-000000000002');
   INSERT INTO public.project_time_entries
@@ -5074,13 +5284,12 @@ BEGIN
   FROM public.project_time_entries WHERE id = 'b1400000-0000-4000-8000-0000000000b5';
 
   ASSERT v_pricing = 'b1400000-0000-4000-8000-0000000000a2',
-    'FAIL aj1 (HT-3-f(3), THE RECORDED RESIDUAL — asserted as PASSING): a legacy '
-    'project the designer CREATED HERSELF while employed is priced by her own '
-    'workspace once she leaves, because HT-3-f(2) keys on created_by and created_by '
-    'is hers. If this has become NULL, HT-3-f(2) has been widened past what was '
-    'ruled — which may be right, but it is a RULING (the honest sole proprietor of '
-    'HT-3-a arm (a) and HT-3-c creates her own projects too, so the same widening '
-    'unprices her), and this assert moves with it; got '
+    'FAIL aj1 (HT-3-c arm (a) + HT-3-g, asserted as PASSING): a project she opens '
+    'after leaving her employer names the one studio she belongs to AT CREATION — '
+    '00563''s discovery writes the column, and HT-3-g leaves creation-time naming '
+    'exactly as it was ("she still names her own workspace on a project she is '
+    'creating"). A NULL here would mean creation stopped naming a studio at all, '
+    'which is a different and much larger change; got '
     || COALESCE(v_pricing::text, 'NULL');
   ASSERT v_rate = 99900 AND v_source = 'studio_member' AND v_amount = 199800,
     'FAIL aj2 (HT-3-f(3), THE RECORDED RESIDUAL — asserted as PASSING): and the '
@@ -5092,12 +5301,148 @@ BEGIN
     || COALESCE(v_rate::text, 'NULL') || ' / ' || COALESCE(v_source, 'NULL') || ' / '
     || COALESCE(v_amount::text, 'NULL');
 
-  RAISE NOTICE 'time_rate_resolution: case (aj) recorded — HT-3-f(3): a legacy project she created herself prices from her own workspace after she leaves (ruled residual, visible not prevented).';
+  RAISE NOTICE 'time_rate_resolution: case (aj) passed — HT-3-c arm (a) holds at CREATION (aj1/aj2).';
 END
 $$;
 
--- ─── (ak) HT-3-f(2)'s COST TO AN HONEST STUDIO (W2-R10-03, recorded as a cost note
---         2026-09-12), and the repair the ruling names ──────────────────────────
+-- ─── (aj-ii) HT-3-f(3) AS RULED, now DISSOLVED ────────────────────────────────
+-- The residual's exact shape, in its own fixture because it needs one thing (aj)'s
+-- designer can no longer supply: a column that is GENUINELY NULL. She creates her
+-- own project WHILE EMPLOYED — so at the moment the column is cleared she holds TWO
+-- candidate studios (her employer and the workspace she owns) and 00563's
+-- one-candidate discovery leaves it alone — and only THEN does she leave. Through
+-- round 11 her next hour there priced at the 99900 she wrote for herself, which is
+-- what HT-3-f(3) recorded as a ruled residual (visible, not prevented). Under
+-- HT-3-g(1) there is no tier read at an hour's pricing, so the answer is 'none'
+-- and stays 'none': the residual is DISSOLVED, at the cost of a project that prices
+-- nothing until somebody stamps it (at ship, 00620 — and her tier then answers her
+-- own studio, because by then she holds exactly one seat).
+INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, instance_id, aud, role)
+VALUES
+  ('b1450000-0000-4000-8000-000000000001', 'htf3-owner@test.invalid', '', NOW(), NOW(), NOW(),
+   '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('b1450000-0000-4000-8000-000000000002', 'htf3-leaver@test.invalid', '', NOW(), NOW(), NOW(),
+   '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+UPDATE public.profiles SET full_name = 'HTF3 Owner'  WHERE id = 'b1450000-0000-4000-8000-000000000001';
+UPDATE public.profiles SET full_name = 'HTF3 Leaver' WHERE id = 'b1450000-0000-4000-8000-000000000002';
+
+INSERT INTO public.organizations (id, type, name, slug, status)
+VALUES
+  ('b1450000-0000-4000-8000-0000000000a1', 'design_studio', 'HTF3 Employer', 'htf3-employer-test', 'active'),
+  ('b1450000-0000-4000-8000-0000000000a2', 'design_studio', 'HTF3 Leaver WS', 'htf3-leaver-ws-test', 'active');
+
+INSERT INTO public.organization_members (id, user_id, organization_id, role, status, joined_at)
+VALUES
+  ('b1450000-0000-4000-8000-0000000000c1', 'b1450000-0000-4000-8000-000000000001',
+   'b1450000-0000-4000-8000-0000000000a1', 'owner',  'active', NOW()),
+  ('b1450000-0000-4000-8000-0000000000c2', 'b1450000-0000-4000-8000-000000000002',
+   'b1450000-0000-4000-8000-0000000000a1', 'member', 'active', NOW()),
+  ('b1450000-0000-4000-8000-0000000000c3', 'b1450000-0000-4000-8000-000000000002',
+   'b1450000-0000-4000-8000-0000000000a2', 'owner',  'active', NOW());
+
+INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
+VALUES
+  ('b1450000-0000-4000-8000-0000000000a1', 'b1450000-0000-4000-8000-000000000002', 26000,
+   (NOW() AT TIME ZONE 'UTC')::date - 30, 'b1450000-0000-4000-8000-000000000001'),
+  ('b1450000-0000-4000-8000-0000000000a2', 'b1450000-0000-4000-8000-000000000002', 99900,
+   (NOW() AT TIME ZONE 'UTC')::date - 30, 'b1450000-0000-4000-8000-000000000002');
+
+-- SHE creates it, while employed. 00602 stamps her one employer; the UPDATE then
+-- clears the column, and 00563's discovery leaves it NULL because she holds two
+-- candidates at that moment. That is the only way this shape arises.
+INSERT INTO public.projects (id, name, designer_id, created_by)
+VALUES ('b1450000-0000-4000-8000-0000000000e1', 'HTF3 Her Own Legacy House',
+        'b1450000-0000-4000-8000-000000000002', 'b1450000-0000-4000-8000-000000000002');
+UPDATE public.projects SET studio_id = NULL
+ WHERE id = 'b1450000-0000-4000-8000-0000000000e1';
+
+DO $$
+DECLARE
+  v_rate    integer;
+  v_source  text;
+  v_amount  integer;
+  v_pricing uuid;
+  v_rows    integer;
+  v_tier    text;
+  v_got     uuid;
+BEGIN
+  ASSERT (SELECT created_by IS NOT DISTINCT FROM designer_id AND studio_id IS NULL
+          FROM public.projects WHERE id = 'b1450000-0000-4000-8000-0000000000e1'),
+    'FAIL aj3a (precondition): a LEGACY NULL-studio project she created HERSELF — '
+    'created_by = designer_id is the exact fact HT-3-f(2) keyed on and HT-3-f(3) '
+    'recorded as out of its reach';
+
+  -- She leaves, the way the residual says: one ordinary statement, hers.
+  PERFORM pg_temp.assume_user('b1450000-0000-4000-8000-000000000002');
+  WITH gone AS (
+    DELETE FROM public.organization_members
+     WHERE user_id = 'b1450000-0000-4000-8000-000000000002'
+       AND organization_id = 'b1450000-0000-4000-8000-0000000000a1'
+    RETURNING 1
+  ) SELECT count(*) INTO v_rows FROM gone;
+  PERFORM pg_temp.reset_role();
+  ASSERT v_rows = 1, 'FAIL aj3b (precondition): `Members can leave` must admit her own DELETE';
+
+  SELECT public.project_pricing_studio_id('b1450000-0000-4000-8000-0000000000e1') INTO v_pricing;
+  ASSERT v_pricing IS NULL,
+    'FAIL aj3 (HT-3-f(3) DISSOLVED by HT-3-g(1)): with her employer tier emptied and '
+    'created_by her own, the residual as RULED said her workspace priced this '
+    'project. There is no tier read left at pricing time, so the answer is NOTHING; '
+    'got ' || COALESCE(v_pricing::text, 'NULL');
+
+  PERFORM pg_temp.assume_user('b1450000-0000-4000-8000-000000000002');
+  INSERT INTO public.project_time_entries
+    (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('b1450000-0000-4000-8000-0000000000b1', 'b1450000-0000-4000-8000-0000000000e1',
+          'b1450000-0000-4000-8000-000000000002', NOW() - INTERVAL '1 hour', 120, true, 'manual_entry');
+  PERFORM pg_temp.reset_role();
+  SELECT hourly_rate_cents, rate_source, rated_amount_cents INTO v_rate, v_source, v_amount
+  FROM public.project_time_entries WHERE id = 'b1450000-0000-4000-8000-0000000000b1';
+  ASSERT v_rate IS NULL AND v_source = 'none' AND v_amount IS NULL,
+    'FAIL aj4 (HT-3-f(3) DISSOLVED): and her hour prices ''rate pending'', not the '
+    '99900 she wrote for herself in the workspace she owns — which was the whole '
+    'content of the residual (measured through round 11 as 99900 / studio_member / '
+    '199800). A 99900 here is the residual back, and with it the recomputation; got '
+    || COALESCE(v_rate::text, 'NULL') || ' / ' || COALESCE(v_source, 'NULL') || ' / '
+    || COALESCE(v_amount::text, 'NULL');
+
+  -- aj5: and she cannot name her own workspace on it either (HT-3-g(3)), which is
+  -- the other half of why the residual is gone rather than merely postponed.
+  PERFORM pg_temp.assume_user('b1450000-0000-4000-8000-000000000002');
+  v_source := NULL;
+  BEGIN
+    SELECT public.stamp_project_pricing_studio(
+      'b1450000-0000-4000-8000-0000000000e1', 'b1450000-0000-4000-8000-0000000000a2') INTO v_got;
+  EXCEPTION WHEN OTHERS THEN v_source := SQLSTATE;
+  END;
+  PERFORM pg_temp.reset_role();
+  ASSERT v_source = '42501',
+    'FAIL aj5 (HT-3-g(3)): she may not name the workspace she OWNS on this project '
+    'either — that act IS W2-R11-01 form G, two ordinary statements (leave, then '
+    'stamp) which through round 11 froze her own 99900 onto her former employer''s '
+    'project for ever; got SQLSTATE ' || COALESCE(v_source, 'NO RAISE');
+
+  -- aj6: what the tier rule answers for her now — her own studio, from the OWNED
+  -- tier, because she holds exactly one seat. That is what 00620 writes at ship for
+  -- the legacy population, and the reason HT-3-g's cost is 'none until a stamp'
+  -- rather than 'none for ever'.
+  SELECT answer.studio_id, answer.tier INTO v_got, v_tier
+  FROM public.designer_tier_pricing_studio('b1450000-0000-4000-8000-000000000002') AS answer;
+  ASSERT v_got = 'b1450000-0000-4000-8000-0000000000a2' AND v_tier = 'owned',
+    'FAIL aj6 (HT-3-g(2)): the tier rule 00620 applies answers her own workspace from '
+    'the OWNED tier. Recorded rather than celebrated: run at ship, 00620 hands this '
+    'project to the studio she owns and her own 99900 then prices it — the residual''s '
+    'OUTCOME survives for a project that existed before the ship, and what dissolves '
+    'is her ability to reach it by LEAVING A SEAT afterwards. For a project created '
+    'after the ship, 00602''s stamp answers while she is still employed; got '
+    || COALESCE(v_got::text, 'NULL') || ' / ' || COALESCE(v_tier, 'NULL');
+
+  RAISE NOTICE 'time_rate_resolution: case (aj-ii) passed — HT-3-f(3) DISSOLVED: leaving a seat moves nothing, and she cannot stamp her own workspace.';
+END
+$$;
+
+-- ─── (ak) HT-3-g's COST TO AN HONEST STUDIO (W2-R10-03's shape, re-measured), and
+--         the repair — WHICH IS NOW 00620 AND NOT HER ─────────────────────────────
 -- No attacker, no manoeuvre, no seat change: a studio PRINCIPAL — she owns her
 -- studio and holds no employer seat anywhere — leads a legacy `studio_id IS NULL`
 -- project that her own ASSISTANT opened for her. `created_by` is therefore not hers,
@@ -5204,7 +5549,10 @@ BEGIN
     'stopped. Fails CLOSED, which is §0.13''s own rule — recorded so the next hand '
     'knows the silence is by construction; rows = ' || v_rows;
 
-  -- ── ak4: the admin cannot repair it either — the owned tier''s sibling leg.
+  -- ── ak4: the admin cannot repair it — under HT-3-g(3) because the studio does
+  --    not EMPLOY her principal (the principal's only seat there is an owner seat),
+  --    which is the same refusal the owned-tier sibling leg used to give for a
+  --    different reason.
   PERFORM pg_temp.assume_user('b1500000-0000-4000-8000-000000000002');
   v_state := NULL;
   BEGIN
@@ -5221,24 +5569,69 @@ BEGIN
     'outsider and it catches her colleague too; got SQLSTATE '
     || COALESCE(v_state, 'NO RAISE (returned ' || COALESCE(v_got::text, 'NULL') || ')');
 
-  -- ── ak5: THE REPAIR THE RULING NAMES. She stamps her own studio herself — the
-  --    sibling leg is skipped where the caller IS the designer, and bound (c) is
-  --    silent because the derivation answers nothing (so HT-3-f(1)'s amended
-  --    employer-tier bound on the CONFIRM does not reach this act either).
+  -- ── ak5: AND NEITHER MAY SHE. HT-3-g(3) (RULED BY KODY 2026-09-12) removed the
+  --    owned-tier arm outright — "designers never stamp" — so the repair that
+  --    HT-3-f(2)'s cost note named (ak5 through round 11: her own stamp SUCCEEDING)
+  --    is now REFUSED. That is deliberate and it is the trade the ruling makes: the
+  --    same act in her hand was W2-R11-01 form A, one statement that froze her own
+  --    99900 onto a legacy project she did not author, against a control twin an
+  --    honest later employer priced 26000.
   PERFORM pg_temp.assume_user('b1500000-0000-4000-8000-000000000001');
   v_state := NULL;
+  v_got := NULL;
   BEGIN
     SELECT public.stamp_project_pricing_studio(
       'b1500000-0000-4000-8000-0000000000e1', 'b1500000-0000-4000-8000-0000000000a1') INTO v_got;
   EXCEPTION WHEN OTHERS THEN v_state := SQLSTATE;
   END;
   PERFORM pg_temp.reset_role();
-  ASSERT v_state IS NULL AND v_got = 'b1500000-0000-4000-8000-0000000000a1',
-    'FAIL ak5 (HT-3-f(2)''s ruled repair, and HT-3-a''s): the principal herself names '
-    'her own studio on her own legacy project. If this is refused, HT-3-f(2) has no '
-    'repair at all for this population and the cost note becomes a contradiction of '
-    'HT-3-a. Got SQLSTATE ' || COALESCE(v_state, 'none') || ' / returned '
+  ASSERT v_state = '42501' AND v_got IS NULL,
+    'FAIL ak5 (HT-3-g(3)): the principal may NOT name her own studio on her own '
+    'legacy project — a studio she OWNS is nameable by nobody. If this SUCCEEDS, the '
+    'owned-tier arm is back and with it W2-R11-01 form A (one statement, no seat '
+    'change of any kind, her own number frozen on the project for ever); got '
+    'SQLSTATE ' || COALESCE(v_state, 'NO RAISE') || ' / returned '
     || COALESCE(v_got::text, 'NULL');
+  ASSERT (SELECT studio_id IS NULL FROM public.projects
+           WHERE id = 'b1500000-0000-4000-8000-0000000000e1'),
+    'FAIL ak5b (HT-3-g(3)): and the column is untouched by the refused call';
+
+  -- ── ak5c: SO WHAT REPAIRS IT IS 00620, and this is the honest principal HT-3-g(2)
+  --    exists for. The shared tier rule — the one body 00602's INSERT stamp and
+  --    00620 both call — answers her OWN studio for her, because her employer tier
+  --    is empty and she owns exactly one. HT-3-f(2) is deliberately NOT applied
+  --    there: under it this row would be left NULL for ever, with no act available
+  --    to anybody. Measured here by asking the same body the migration asks, and
+  --    then by applying it exactly as the migration does (as the migration role).
+  SELECT answer.studio_id, answer.tier INTO v_got, v_source
+  FROM public.designer_tier_pricing_studio('b1500000-0000-4000-8000-000000000001') AS answer;
+  ASSERT v_got = 'b1500000-0000-4000-8000-0000000000a1' AND v_source = 'owned',
+    'FAIL ak5c (HT-3-g(2)): the tier rule 00620 applies must answer the principal''s '
+    'OWN studio from the OWNED tier — she holds no employer seat and owns exactly '
+    'one active design studio. A NULL here means HT-3-f(2) was carried into the '
+    'shared body, which leaves her legacy book at ''none'' for ever (W2-R10-03); got '
+    || COALESCE(v_got::text, 'NULL') || ' / ' || COALESCE(v_source, 'NULL');
+
+  WITH tiered AS (
+    SELECT project.id AS project_id, answer.studio_id
+    FROM public.projects AS project
+    CROSS JOIN LATERAL public.designer_tier_pricing_studio(project.designer_id) AS answer
+    WHERE project.studio_id IS NULL
+      AND project.designer_id IS NOT NULL
+      AND project.id = 'b1500000-0000-4000-8000-0000000000e1'
+  )
+  UPDATE public.projects AS project
+     SET studio_id = tiered.studio_id
+    FROM tiered
+   WHERE project.id = tiered.project_id
+     AND tiered.studio_id IS NOT NULL
+     AND project.studio_id IS NULL;
+  ASSERT (SELECT studio_id FROM public.projects
+           WHERE id = 'b1500000-0000-4000-8000-0000000000e1')
+         = 'b1500000-0000-4000-8000-0000000000a1',
+    'FAIL ak5d (HT-3-g(2)): 00620''s own statement, run here on this fixture, writes '
+    'her studio onto her legacy project — and 00563''s guard admits it because the '
+    'statement arrives as the migration role';
 
   -- ── ak6: and the money comes back at her studio's own number.
   PERFORM pg_temp.assume_user('b1500000-0000-4000-8000-000000000001');
@@ -5250,7 +5643,7 @@ BEGIN
   SELECT hourly_rate_cents, rate_source, rated_amount_cents INTO v_rate, v_source, v_amount
   FROM public.project_time_entries WHERE id = 'b1500000-0000-4000-8000-0000000000b2';
   ASSERT v_rate = 31000 AND v_source = 'studio_member' AND v_amount = 62000,
-    'FAIL ak6 (the repair, end to end): after the stamp HT-3-a step 1 answers from '
+    'FAIL ak6 (the repair, end to end — 00620''s): after the stamp HT-3-a step 1 answers from '
     'the column and her studio''s card prices the hour — 31000 / 62000. The earlier '
     'hour keeps its ''none'' (P-4, no backfill), which is the cost lane B must '
     'explain rather than repair. Got ' || COALESCE(v_rate::text, 'NULL') || ' / '
@@ -5260,7 +5653,7 @@ BEGIN
     'FAIL ak6b (P-4): and the hour written before the repair keeps the price it was '
     'written at — there is no backfill in either direction';
 
-  RAISE NOTICE 'time_rate_resolution: case (ak) passed — HT-3-f(2) cost note (W2-R10-03): a principal whose assistant opened her legacy project prices ''none'' until she stamps her own studio.';
+  RAISE NOTICE 'time_rate_resolution: case (ak) passed — HT-3-g: the principal''s own stamp is REFUSED, and 00620''s tier rule is what hands her her own studio.';
 END
 $$;
 

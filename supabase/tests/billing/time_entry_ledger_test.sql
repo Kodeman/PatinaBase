@@ -240,22 +240,29 @@ BEGIN
     || COALESCE(v_studio::text, 'NULL') || ', the rate lives in '
     || COALESCE(v_rate_studio::text, 'NULL');
 
-  -- b2 — step 2, employer tier, on a legacy NULL-studio project.
+  -- b2 — REWRITTEN FOR HT-3-g (RULED BY KODY 2026-09-12). This leg used to assert
+  -- that on a legacy NULL-studio project step 2's employer tier priced the hour and
+  -- the ledger named the same studio. HT-3-g(1) deletes step 2 from both bodies: an
+  -- unstamped project prices 'none' and the ledger's studio_id is NULL. The
+  -- EQUIVALENCE this case exists for is what still matters, and it is now easier to
+  -- state — the resolver and project_pricing_studio_id must AGREE that there is no
+  -- studio, so an unpriced hour cannot land in some studio's rollup.
   ASSERT (SELECT studio_id IS NULL FROM public.projects
            WHERE id = 'c6040000-0000-4000-8000-0000000000e2'),
     'FAIL b2a (precondition): the employee designer''s project must carry a NULL '
-    'studio_id, or step 2 never runs';
+    'studio_id — it is the unstamped shape this leg is about';
   SELECT studio_id INTO v_studio FROM public.time_entry_ledger
    WHERE id = 'c6040000-0000-4000-8000-0000000000b2';
   SELECT hourly_rate_cents, rate_source INTO v_rate, v_source
   FROM public.project_time_entries WHERE id = 'c6040000-0000-4000-8000-0000000000b2';
-  ASSERT v_rate = 20000 AND v_source = 'studio_member',
-    'FAIL b2b (HT-3-b employer tier): the one employer of the project''s DESIGNER '
-    'prices the hour; got ' || COALESCE(v_rate::text, 'NULL') || ' / '
-    || COALESCE(v_source, 'NULL');
-  ASSERT v_studio = 'c6040000-0000-4000-8000-0000000000a1',
-    'FAIL b2c: on a NULL-studio project the ledger must name the same employer '
-    'studio the resolver priced from; got ' || COALESCE(v_studio::text, 'NULL');
+  ASSERT v_rate IS NULL AND v_source = 'none',
+    'FAIL b2b (HT-3-g(1)): an unstamped project prices ''none'' — there is no '
+    'read-time employer tier left, in the resolver or anywhere else; got '
+    || COALESCE(v_rate::text, 'NULL') || ' / ' || COALESCE(v_source, 'NULL');
+  ASSERT v_studio IS NULL,
+    'FAIL b2c (the three-bodies pin): and the ledger must say NULL too, because a '
+    'studio_id here would put an unpriced hour into that studio''s rollup; got '
+    || COALESCE(v_studio::text, 'NULL');
 
   -- b3 — ambiguity agrees on nothing, in both bodies.
   SELECT studio_id INTO v_studio FROM public.time_entry_ledger
@@ -276,12 +283,13 @@ BEGIN
   ASSERT v_helper = 'c6040000-0000-4000-8000-0000000000a1',
     'FAIL b4a: step 1 must return the named studio; got ' || COALESCE(v_helper::text, 'NULL');
   SELECT public.project_pricing_studio_id('c6040000-0000-4000-8000-0000000000e2') INTO v_helper;
-  ASSERT v_helper = 'c6040000-0000-4000-8000-0000000000a1',
-    'FAIL b4b: step 2''s employer tier must return the one employer; got '
-    || COALESCE(v_helper::text, 'NULL');
+  ASSERT v_helper IS NULL,
+    'FAIL b4b (HT-3-g(1)): an UNSTAMPED project returns NULL — the callable form is '
+    'projects.studio_id and nothing else, so it cannot disagree with the resolver '
+    'about which studio prices the work; got ' || COALESCE(v_helper::text, 'NULL');
   SELECT public.project_pricing_studio_id('c6040000-0000-4000-8000-0000000000e3') INTO v_helper;
   ASSERT v_helper IS NULL,
-    'FAIL b4c: an ambiguous employer tier must return NULL; got '
+    'FAIL b4c: and so does the ambiguous-tier project, for the same one reason; got '
     || COALESCE(v_helper::text, 'NULL');
   SELECT public.project_pricing_studio_id(NULL) INTO v_helper;
   ASSERT v_helper IS NULL, 'FAIL b4d: a NULL project must return NULL, not raise';
