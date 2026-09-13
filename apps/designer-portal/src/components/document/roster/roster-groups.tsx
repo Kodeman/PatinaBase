@@ -78,6 +78,21 @@ export function RosterGroups({
     }
     return index;
   }, [contacts]);
+  /**
+   * CR8-5 — the CARD kind behind each row's identity, read off the rolodex
+   * already in hand. `people_directory_seats.person_id` IS the card's id for a
+   * stamped seat (00626's identity key takes `studio_contact_id` first), so
+   * the row's own `personId` is the join. A row with no card resolved falls
+   * back to its seat's `party_kind` in the row itself.
+   */
+  const cardKindById = useMemo(() => {
+    const index = new Map<string, string>();
+    for (const c of contacts ?? []) {
+      if (c.contact_kind) index.set(c.id, c.contact_kind);
+    }
+    return index;
+  }, [contacts]);
+
   const routedPersonIds = useMemo(() => {
     const ids = new Set<string>();
     for (const rule of rules ?? []) {
@@ -144,6 +159,11 @@ export function RosterGroups({
                     peopleById,
                     channelsByOwner,
                   )}
+                  contactKind={
+                    row.personId
+                      ? (cardKindById.get(row.personId) ?? null)
+                      : null
+                  }
                 />
               ))}
             </ul>

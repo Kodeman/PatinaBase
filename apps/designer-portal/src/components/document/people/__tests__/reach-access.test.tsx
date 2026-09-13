@@ -517,7 +517,11 @@ describe("a grant row", () => {
         scope_id: "proj-okonkwo",
         granted_by: null,
         granted_at: "2026-10-12T00:00:00Z",
-        expires_at: "2027-08-13T00:00:00Z",
+        // QA-R8-1: what `create_field_link` actually stores for R-D's window
+        // (13 Aug 2027) — the window's last day PLUS one, an EXCLUSIVE
+        // boundary "through the end of that day" (00627:578-585). The row
+        // prints the last day the door is open, so it must read 13 August.
+        expires_at: "2027-08-14T00:00:00Z",
         last_used_at: "2026-10-17T00:00:00Z",
         revoked_at: null,
         revoke_reason: null,
@@ -638,6 +642,30 @@ describe("the pure parts", () => {
     );
     expect(grantEndsSentence("2027-08-13T00:00:00Z", NOW)).not.toContain(
       "days left",
+    );
+  });
+
+  /**
+   * QA-R8-1 — the field link's stored expiry is an EXCLUSIVE boundary, so the
+   * row names the last day the door is open. Dana Kowalski's Okonkwo seat runs
+   * to 24 May 2027; `create_field_link` stores 25 May 00:00, and the card's
+   * Seats region and Mint sentence both say 24 May.
+   */
+  it("the field link's end date is the seat's own last day, not the day after", () => {
+    expect(grantEndsSentence("2027-05-25T00:00:00Z", NOW, "field_link")).toBe(
+      "Ends with the job, 24 May 2027. Renews when they use it.",
+    );
+    // The ninety-day fallback and a caller-supplied end-of-day both stay on
+    // their own day — one rule, all three branches of the RPC.
+    expect(
+      grantEndsSentence("2027-05-24T23:59:59Z", NOW, "field_link"),
+    ).toContain("24 May 2027");
+    expect(
+      grantEndsSentence("2027-05-24T14:33:21Z", NOW, "field_link"),
+    ).toContain("24 May 2027");
+    // A tier that stores a plain instant is untouched.
+    expect(grantEndsSentence("2027-05-25T00:00:00Z", NOW, "doc_share")).toBe(
+      "Ends 25 May 2027.",
     );
   });
 

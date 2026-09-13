@@ -20,6 +20,7 @@ import {
   directoryHeadLine,
   directoryIdentityRows,
   directorySeatTradeIndex,
+  directoryTradeAdmits,
   directoryTradeLabel,
   entryOwesPaperWord,
   entryPaperWord,
@@ -352,6 +353,39 @@ describe("QA-R7-2 — two vocabularies, no schema words", () => {
   });
 });
 
+describe("CR8-3 — the trade chip narrows on the trade the row prints", () => {
+  const dana = row({
+    person_id: "card-dana",
+    // 00626's contacts branch emits no `trade` key for a carded crew member.
+    meta: {
+      entity_kind: "person",
+      contact_kind: "sub",
+      company_name: "Northgate Electric",
+      company_id: "firm-northgate",
+    },
+  });
+
+  it("admits a carded crew member on their SEAT's trade", () => {
+    expect(directoryTradeAdmits(dana, "electrical", "electrical")).toBe(true);
+    expect(directoryTradeAdmits(dana, "drywall", "electrical")).toBe(false);
+    // Without the seat index the chip narrowed to nothing — the defect.
+    expect(directoryTradeAdmits(dana, "electrical", null)).toBe(false);
+  });
+
+  it("lets the card's own value outrank the seat, as the line does", () => {
+    const claire = row({
+      person_id: "card-claire",
+      meta: { entity_kind: "person", specialties: ["tile_stone"] },
+    });
+    expect(directoryTradeAdmits(claire, "tile_stone", "drywall")).toBe(true);
+    expect(directoryTradeAdmits(claire, "drywall", "drywall")).toBe(false);
+  });
+
+  it("admits everything under 'all'", () => {
+    expect(directoryTradeAdmits(dana, "all", null)).toBe(true);
+  });
+});
+
 describe("QA-R7-3 — a legacy designer_clients row is not a person card", () => {
   const household = row({
     person_id: "d0e80000-0000-0000-0000-000000000001",
@@ -378,6 +412,51 @@ describe("QA-R7-3 — a legacy designer_clients row is not a person card", () =>
 
   it("keeps it out of the duplicate-phone scan", () => {
     expect(directoryDuplicatePairs([household, adaeze])).toHaveLength(0);
+  });
+
+  /**
+   * CR8-2 — the exclusion is a DUPLICATE rule, not a branch rule. A client the
+   * studio holds no card for is the only record it has of that client, and
+   * SPEC §3's head derivation counts Karin Lindqvist among the 29.
+   */
+  it("keeps a client record the studio holds no card for", () => {
+    const karin = row({
+      person_id: "dc-karin",
+      role: "client",
+      display_name: "Karin Lindqvist",
+      phone: "(612) 555-0190",
+      seat_count: 0,
+      consent_status: null,
+      paper_state: null,
+      meta: {},
+    });
+    const rows = directoryIdentityRows([household, adaeze, karin]);
+    expect(rows.map((r) => r.display_name)).toEqual([
+      "Adaeze Okonkwo",
+      "Karin Lindqvist",
+    ]);
+    expect(directoryEntryCounts(rows)).toEqual({ people: 2, firms: 0 });
+  });
+
+  it("drops a client record whose LOGIN already holds a card", () => {
+    const carded = row({
+      person_id: "card-ben",
+      display_name: "Ben Ostrom",
+      phone: null,
+      profile_id: "profile-ben",
+      meta: { entity_kind: "person", contact_kind: "client" },
+    });
+    const legacy = row({
+      person_id: "dc-ben",
+      role: "client",
+      display_name: "Ben Ostrom",
+      phone: null,
+      profile_id: "profile-ben",
+      meta: {},
+    });
+    expect(
+      directoryIdentityRows([legacy, carded]).map((r) => r.person_id),
+    ).toEqual(["card-ben"]);
   });
 
   it("still pairs the two real cards that share a number", () => {

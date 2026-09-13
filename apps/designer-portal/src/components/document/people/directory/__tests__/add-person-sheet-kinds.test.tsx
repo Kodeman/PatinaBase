@@ -21,12 +21,15 @@ const addChannel = jest.fn();
 const setRule = jest.fn();
 const setAuthority = jest.fn();
 const setAffiliation = jest.fn();
+/** CR8-4 — the company card the sheet files for a firm typed by hand. */
+const addFirmCard = jest.fn(async () => ({ id: "firm-minted" }));
 /** CR5-1 — what `project_recorded_studio()` answers for the picked project. */
 const recordedStudio = { current: "org-1" as string | null };
 
 jest.mock("@patina/supabase", () => ({
   useAddClient: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useAddProjectParty: () => ({ mutateAsync: addParty, isPending: false }),
+  useAddStudioContact: () => ({ mutateAsync: addFirmCard, isPending: false }),
   useAddStudioContactChannel: () => ({
     mutateAsync: addChannel,
     isPending: false,
@@ -144,6 +147,7 @@ beforeEach(() => {
   setRule.mockReset().mockResolvedValue({});
   setAuthority.mockReset().mockResolvedValue({});
   setAffiliation.mockReset().mockResolvedValue({});
+  addFirmCard.mockReset().mockResolvedValue({ id: "firm-minted" });
   onAdded.mockReset();
   recordedStudio.current = "org-1";
 });
@@ -245,7 +249,14 @@ describe("a sub", () => {
     });
   });
 
-  it("a firm typed by hand has no card yet, so no id is sent", async () => {
+  /**
+   * CR8-4 — a firm typed by hand is FILED, not snapshotted. It used to write
+   * the name as a string with `company_id` NULL and no affiliation, so the
+   * firm got no Directory row, no company card and no way ever to record its
+   * COI, W-9, payee or chase — the compliance spine the company card is the
+   * only writer of.
+   */
+  it("files a company card for a firm typed by hand, and ties the person to it", async () => {
     fireEvent.change(screen.getByLabelText("Project"), {
       target: { value: PROJECT },
     });
@@ -264,6 +275,67 @@ describe("a sub", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add to the roster" }));
 
     await waitFor(() => expect(addParty).toHaveBeenCalled());
+    // CR5-1's rule governs the firm card too: the studio the JOB records.
+    expect(addFirmCard).toHaveBeenCalledWith({
+      organizationId: "org-1",
+      entityKind: "company",
+      contactKind: "sub",
+      companyName: "Rusk Mechanical",
+    });
+    expect(addParty).toHaveBeenCalledWith(
+      expect.objectContaining({
+        companyId: "firm-minted",
+        companyName: "Rusk Mechanical",
+      }),
+    );
+    await waitFor(() =>
+      expect(setAffiliation).toHaveBeenCalledWith({
+        personId: "card-new",
+        companyId: "firm-minted",
+      }),
+    );
+  });
+
+  it("matches a firm the book already holds rather than filing it twice", async () => {
+    fireEvent.change(screen.getByLabelText("Project"), {
+      target: { value: PROJECT },
+    });
+    fireEvent.change(screen.getByLabelText("Full name"), {
+      target: { value: "Pete Rusk" },
+    });
+    fireEvent.change(screen.getByLabelText("Trade"), {
+      target: { value: "electrical" },
+    });
+    fireEvent.change(screen.getByLabelText("New company name"), {
+      target: { value: "  cedar & iron framing " },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add to the roster" }));
+
+    await waitFor(() => expect(addParty).toHaveBeenCalled());
+    expect(addFirmCard).not.toHaveBeenCalled();
+    expect(addParty).toHaveBeenCalledWith(
+      expect.objectContaining({ companyId: "firm-cedar" }),
+    );
+  });
+
+  it("files no firm card where the job records no studio", async () => {
+    recordedStudio.current = null;
+    fireEvent.change(screen.getByLabelText("Project"), {
+      target: { value: PROJECT },
+    });
+    fireEvent.change(screen.getByLabelText("Full name"), {
+      target: { value: "Pete Rusk" },
+    });
+    fireEvent.change(screen.getByLabelText("Trade"), {
+      target: { value: "electrical" },
+    });
+    fireEvent.change(screen.getByLabelText("New company name"), {
+      target: { value: "Rusk Mechanical" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add to the roster" }));
+
+    await waitFor(() => expect(addParty).toHaveBeenCalled());
+    expect(addFirmCard).not.toHaveBeenCalled();
     expect(addParty).toHaveBeenCalledWith(
       expect.objectContaining({
         companyId: null,
