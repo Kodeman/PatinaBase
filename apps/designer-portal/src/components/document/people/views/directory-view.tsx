@@ -372,9 +372,11 @@ export function DirectoryView({
 
   return (
     <>
+      {/* CR11-10: paper, not a live region. The Room's one announcer
+          (people-room.tsx) already says this line. */}
       {notice && (
         <p
-          role="status"
+          data-directory-notice
           className="t-body-sm mb-4 border-l-2 border-[var(--sage)] bg-[var(--rail)] py-2 pl-3 text-[var(--ink)]"
         >
           {notice}

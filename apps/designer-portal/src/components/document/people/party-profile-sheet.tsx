@@ -488,7 +488,13 @@ export function PartyProfileSheet({
     if (!partyId) return;
     setLinkError(null);
     try {
-      const { token } = await createLink.mutateAsync({ partyId });
+      // CR11-9: the roster reads by project, so the mint must name it — the
+      // revoke below already does. Without it `['project-roster', projectId]`
+      // is never invalidated and the Call Sheet keeps reading "On paper".
+      const { token } = await createLink.mutateAsync({
+        partyId,
+        projectId: seatProjectId ?? undefined,
+      });
       const url = fieldLinkUrl(token);
       setMintedUrl(url);
       try {

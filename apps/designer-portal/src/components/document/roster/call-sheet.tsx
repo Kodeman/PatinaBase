@@ -91,6 +91,16 @@ export function CallSheet({
   // §3.5's sheet at all.
   const [addOpen, setAddOpen] = useState(false);
   const [added, setAdded] = useState<string | null>(null);
+  /**
+   * CR11-10 — THE CALL SHEET'S ONE ANNOUNCER.
+   *
+   * SPEC §7 #3 asks for exactly one live region per screen. The confirmation
+   * band, every roster row's own send note and the picker's refusal were three.
+   * The band and the note are paper now; this standing sr-only line — always
+   * mounted, so a change to its text is announced — says all of them, and the
+   * refusal stays a `role="alert"` in the picker.
+   */
+  const [announcement, setAnnouncement] = useState("");
 
   const { projection, authorityBySeat, isLoading } = useCallSheetRoster(projectId, {
     client: { name: clientName, profileId: clientProfileId ?? null, projectId },
@@ -203,12 +213,21 @@ export function CallSheet({
 
           {added && (
             <p
-              role="status"
+              data-call-sheet-added
               className="call-sheet-no-print mt-4 border-l-2 border-[var(--color-sage)] bg-[rgba(133,148,124,0.07)] px-3 py-2.5 text-[0.74rem] text-[#6f8268]"
             >
               {added}
             </p>
           )}
+
+          <p
+            role="status"
+            aria-live="polite"
+            data-call-sheet-announcer
+            className="sr-only"
+          >
+            {announcement}
+          </p>
 
           {isLoading && (
             <p className="py-8 text-center text-[0.74rem] text-[var(--color-aged-oak)]">
@@ -239,6 +258,7 @@ export function CallSheet({
                 consentOrg={consentOrg}
                 projectName={projectTitle}
                 onOpenSeat={onOpenSeat}
+                onAnnounce={setAnnouncement}
               />
             </div>
           )}
@@ -261,7 +281,10 @@ export function CallSheet({
         onClose={() => setPickerOpen(false)}
         projectId={projectId}
         startInAdd={pickerStartsInAdd}
-        onAdded={(name) => setAdded(`${name} is on the call sheet.`)}
+        onAdded={(name) => {
+          setAdded(`${name} is on the call sheet.`);
+          setAnnouncement(`${name} is on the call sheet.`);
+        }}
       />
 
       {/* QA-2 — the Add/Edit sheet itself, opened on this job. */}
@@ -272,6 +295,7 @@ export function CallSheet({
         initialProjectId={projectId}
         onAdded={(message) => {
           setAdded(message);
+          setAnnouncement(message);
           setAddOpen(false);
         }}
       />

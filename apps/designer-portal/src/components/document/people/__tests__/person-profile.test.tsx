@@ -314,6 +314,38 @@ describe("the seats beneath the human", () => {
   });
 });
 
+/**
+ * CR11-3 — `seat_count` is `identity_seat_count()` (R-BG), the seats
+ * `people_directory_seats` NESTS. Printed as a project count, a person holding
+ * two seats on one job read "Worked 2 of the studio's projects."
+ */
+describe("the History sentence counts projects, not seats", () => {
+  it("two seats on one job are one project", () => {
+    personData.current = person({ seat_count: 2 });
+    seatData.current = [seat(), seat({ seat_id: "seat-1b" })];
+    renderCard();
+    expect(
+      screen.getByText(/Worked 1 of the studio's project\./),
+    ).toBeInTheDocument();
+  });
+
+  it("two seats on two jobs are two projects", () => {
+    personData.current = person({ seat_count: 2 });
+    seatData.current = [
+      seat(),
+      seat({
+        seat_id: "seat-2",
+        project_id: "proj-lindqvist",
+        project_name: "Lindqvist kitchen",
+      }),
+    ];
+    renderCard();
+    expect(
+      screen.getByText(/Worked 2 of the studio's projects\./),
+    ).toBeInTheDocument();
+  });
+});
+
 describe("Send a text", () => {
   it("is held, with the reason beside it, when the studio holds no consent", () => {
     personData.current = person({ consent_status: "opted_out" });

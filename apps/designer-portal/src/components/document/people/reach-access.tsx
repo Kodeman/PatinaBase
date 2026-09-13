@@ -81,6 +81,19 @@ export const NO_RULE_SENTENCE = "No contact rule on file.";
 export const NO_SEAT_SENTENCE = "No open seat on this project.";
 export const MINT_WITHOUT_SEAT_SENTENCE =
   "A field link ends with a job, so this person needs a seat on one first.";
+/**
+ * QA-R11-1 — A FIELD LINK IS A FIELD DOOR.
+ *
+ * `ACCESS_GRANT_TIER_OPENS.field_link` is "the Call Sheet and the site access
+ * card", and PR-w rules the site access card studio-only, never client-facing.
+ * The card's one mint control was wired unconditionally to
+ * `useCreateFieldLink()`, so pressing it on a client's card minted a
+ * field-crew-scoped grant and printed a raw field-link URL. Minting is held
+ * for anyone holding no field seat, and the sentence names the door that IS
+ * theirs rather than the one that is not.
+ */
+export const MINT_CLIENT_SIDE_SENTENCE =
+  "A field link opens the Call Sheet and the site access card, which are the studio's and the crew's. A client's own door is their project pages — write to them from their row in the Directory.";
 
 const PHONE_KINDS: ReadonlySet<string> = new Set([
   "mobile",
@@ -540,6 +553,18 @@ export interface ReachAccessProps {
   seatId?: string | null;
   seatProjectId?: string | null;
   seatProjectName?: string | null;
+  /**
+   * QA-R11-1: the FIELD seat a field link may be minted on, and the job it
+   * names. Separate from `seatId` above, which is the identity's first live
+   * seat of any kind and is what the consent band reads its job from. Null
+   * means no field seat, so no field link.
+   */
+  mintSeatId?: string | null;
+  mintProjectId?: string | null;
+  mintProjectName?: string | null;
+  mintWindowEnd?: string | null;
+  /** What the held mint act says when there is no field seat to mint on. */
+  mintHeldSentence?: string | null;
   /** PR-d / PR-l: the window the door closes with, and the second option. */
   seatWindowEnd?: string | null;
   /** CR-9: when the seat opened — the date a carried-forward consent landed. */
@@ -593,6 +618,11 @@ export function ReachAccess({
   seatProjectName,
   seatWindowEnd,
   seatWindowStart,
+  mintSeatId = null,
+  mintProjectId = null,
+  mintProjectName = null,
+  mintWindowEnd = null,
+  mintHeldSentence = null,
   warrantyEnd,
   routeCandidates,
   routeTo,
@@ -724,18 +754,20 @@ export function ReachAccess({
   }, [editingRule, rule]);
 
   // CR3-6: the date the RPC will land on, not a date the room would like.
-  const expiresAt = grantWindowEnd(seatWindowEnd, warrantyEnd, now);
+  // QA-R11-1: the window is the FIELD seat's, because that is the seat the
+  // token hangs off.
+  const expiresAt = grantWindowEnd(mintWindowEnd, warrantyEnd, now);
 
   const mint = () => {
     setMintError(null);
-    if (!seatId) {
-      setMintError(MINT_WITHOUT_SEAT_SENTENCE);
+    if (!mintSeatId) {
+      setMintError(mintHeldSentence ?? MINT_WITHOUT_SEAT_SENTENCE);
       return;
     }
     createLink.mutate(
       {
-        partyId: seatId,
-        projectId: seatProjectId ?? undefined,
+        partyId: mintSeatId,
+        projectId: mintProjectId ?? undefined,
         expiresAt: expiresAt
           ? `${expiresAt.slice(0, 10)}T23:59:59Z`
           : undefined,
@@ -1055,13 +1087,13 @@ export function ReachAccess({
           id={mintReasonId}
           className="t-body-sm mt-3 max-w-[56ch] text-[var(--ink-subtle)]"
         >
-          {!seatId
-            ? MINT_WITHOUT_SEAT_SENTENCE
+          {!mintSeatId
+            ? (mintHeldSentence ?? MINT_WITHOUT_SEAT_SENTENCE)
             : expiresAt
               ? mintConsequenceSentence(
                   personName,
                   expiresAt,
-                  seatProjectName,
+                  mintProjectName,
                 )
               : MINT_FALLBACK_SENTENCE}
         </p>
@@ -1070,7 +1102,7 @@ export function ReachAccess({
           already names the warranty date — because that is the date the token
           carries. Saying it is the reason this band is a statement and not a
           choice. */}
-      {isPerson && seatId && expiresAt && expiresAt === warrantyEnd?.slice(0, 10) && (
+      {isPerson && mintSeatId && expiresAt && expiresAt === warrantyEnd?.slice(0, 10) && (
         <p id={mintBandId} className="t-body-sm mt-1 text-[var(--ink-subtle)]">
           This seat runs out a warranty, so the door ends with the warranty.
         </p>
@@ -1081,8 +1113,8 @@ export function ReachAccess({
           surfaceKey="people"
           regionKey="access-grants"
           variant="secondary"
-          held={!seatId}
-          disabled={!seatId}
+          held={!mintSeatId}
+          disabled={!mintSeatId}
           aria-describedby={mintReasonId}
           loading={createLink.isPending}
           loadingLabel="Opening…"

@@ -212,6 +212,27 @@ describe("the six regions", () => {
     expect(line("sub")).toBe("Subcontractor · 3 people · 2 projects");
   });
 
+  /**
+   * CR11-4 — the trade branch used to concatenate the RAW `company_kind`
+   * token, so a firm carrying both a trade and a kind printed "Carpentry gc"
+   * on its own face while the Directory firm row two clicks away printed "GC".
+   * The running-prose map is the second register of the same vocabulary: it
+   * keeps SPEC §5.3 #1's "Electrical sub" and puts no token on a face.
+   */
+  it("prints the running-prose kind after a trade, never the column token (CR11-4)", () => {
+    const line = (kind: string, trade: string) =>
+      companyIdentityLine(
+        { company_kind: kind, contact_kind: kind, trades: [trade] } as never,
+        { crew: 1, jobs: 2 },
+      );
+    expect(line("sub", "electrical")).toBe("Electrical sub · 1 person · 2 projects");
+    expect(line("gc", "carpentry_framing")).toMatch(/ GC · 1 person/);
+    expect(line("gc", "carpentry_framing")).not.toMatch(/ gc /);
+    expect(line("vendor", "tile")).toMatch(/ vendor · 1 person/);
+    // A kind with no prose word prints as its own part, never glued to a trade.
+    expect(line("other", "tile")).toMatch(/ · Other · 1 person/);
+  });
+
   it("a firm has neither a consent word nor a reach word", () => {
     const { container } = render(
       <CompanyCard

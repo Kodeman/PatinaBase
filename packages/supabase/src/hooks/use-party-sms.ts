@@ -31,6 +31,8 @@ export interface PartySmsMessage {
 }
 
 export const partySmsKeys = {
+  /** Every field-link list, for a revoke that does not know the seat. */
+  all: ['field-links'] as const,
   thread: (partyId: string | null | undefined) => ['party-sms', partyId ?? 'none'] as const,
   links: (partyId: string | null | undefined) => ['field-links', partyId ?? 'none'] as const,
 };

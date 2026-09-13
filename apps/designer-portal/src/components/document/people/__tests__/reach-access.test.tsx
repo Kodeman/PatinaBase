@@ -11,6 +11,7 @@ import {
   heldChannelReason,
   isPhoneChannel,
   mintConsequenceSentence,
+  MINT_CLIENT_SIDE_SENTENCE,
   NO_RULE_SENTENCE,
   REACH_EMPTY_SENTENCE,
 } from "../reach-access";
@@ -108,21 +109,41 @@ jest.mock("@/lib/analytics/people-events", () => ({
 
 const NOW = new Date("2026-10-20T00:00:00Z");
 
+/** The mint prop when a case names one, else the seat prop it mirrors. */
+function pick(
+  props: Record<string, unknown>,
+  mintKey: string,
+  seatKey: string,
+): string | null {
+  const key = mintKey in props ? mintKey : seatKey;
+  return (props[key] ?? null) as string | null;
+}
+
 function renderReach(over: Record<string, unknown> = {}) {
+  // QA-R11-1: a field link is minted on a FIELD seat, which the card resolves
+  // separately from the identity's first live seat. Dana Kowalski is a sub, so
+  // the two are the same seat here unless a case overrides the mint props.
+  const props: Record<string, unknown> = {
+    seatId: "seat-1",
+    seatProjectId: "proj-okonkwo",
+    seatProjectName: "Okonkwo residence",
+    seatWindowEnd: "2027-08-13",
+    warrantyEnd: null,
+    ...over,
+  };
   render(
     <ReachAccess
       cardId="card-dana"
       cardKind="person"
       organizationId="org-1"
       personName="Dana Kowalski"
-      seatId="seat-1"
-      seatProjectId="proj-okonkwo"
-      seatProjectName="Okonkwo residence"
-      seatWindowEnd="2027-08-13"
-      warrantyEnd={null}
+      {...(props as never)}
+      mintSeatId={pick(props, "mintSeatId", "seatId")}
+      mintProjectId={pick(props, "mintProjectId", "seatProjectId")}
+      mintProjectName={pick(props, "mintProjectName", "seatProjectName")}
+      mintWindowEnd={pick(props, "mintWindowEnd", "seatWindowEnd")}
       onAnnounce={jest.fn()}
       now={NOW}
-      {...over}
     />,
   );
 }
@@ -453,6 +474,27 @@ describe("minting a door", () => {
     const act = screen.getByRole("button", { name: "Mint access" });
     expect(act).not.toBeDisabled();
     expect(act).toHaveAttribute("aria-disabled", "true");
+  });
+
+  /**
+   * QA-R11-1 — the one mint control used to be wired unconditionally to
+   * `useCreateFieldLink()`, so pressing it on a CLIENT's card minted a
+   * field-crew grant whose declared scope is the Call Sheet and the site
+   * access card — the card PR-w rules studio-only and never client-facing.
+   */
+  it("QA-R11-1 — a client-side card holds the act and never mints a field link", () => {
+    renderReach({
+      mintSeatId: null,
+      mintHeldSentence: MINT_CLIENT_SIDE_SENTENCE,
+    });
+    const act = screen.getByRole("button", { name: "Mint access" });
+    expect(act).toHaveAttribute("aria-disabled", "true");
+    const reason = document.getElementById(
+      act.getAttribute("aria-describedby") as string,
+    );
+    expect(reason).toHaveTextContent(MINT_CLIENT_SIDE_SENTENCE);
+    fireEvent.click(act);
+    expect(mintLink).not.toHaveBeenCalled();
   });
 
   /**

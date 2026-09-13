@@ -134,6 +134,17 @@ export function PeopleRoom() {
   // nudge; `all` above is untouched so the count/deep-link uses keep the
   // wide read they actually need.
   const { data: mine } = usePeopleDirectory({ role: "all", scope: "mine" });
+  /**
+   * CR11-2: the number beside "Directory" counts the same book the head above
+   * it counts. `all` is the RAW view — company-only seats and legacy client
+   * rows carded elsewhere are rows there and not identities, so the bare
+   * `all.length` printed a second, larger count of one book one screen away
+   * from `directoryHeadLine(directoryEntryCounts(directoryIdentityRows(all)))`.
+   */
+  const directoryIdentityCount = useMemo(
+    () => (all ? directoryIdentityRows(all).length : undefined),
+    [all],
+  );
   const now = useMemo(() => new Date(), []);
 
   // Call Sheet Wave 2 — the active studio, for the Companies chip / rolodex
@@ -317,8 +328,21 @@ export function PeopleRoom() {
     };
   }, [mine, now]);
 
+  /**
+   * CR11-10 — THE ROOM'S ONE ANNOUNCER.
+   *
+   * Direction §5.5 names one destination and SPEC §7 #3 asks for exactly one
+   * live region per screen. The toast used to BE the live region, so the
+   * Directory's own inline notice (R83's no-toast confirmation band) was a
+   * second one that could go live on the same screen after an add. The
+   * announcer is now a standing sr-only line — always mounted, so a change to
+   * its text is announced, which a live region that mounts with its message
+   * cannot reliably be — and every visible band beneath it is plain paper.
+   */
+  const [announcement, setAnnouncement] = useState("");
   const notify = (message: string) => {
     setToast(message);
+    setAnnouncement(message);
     window.setTimeout(() => setToast((t) => (t === message ? null : t)), 3600);
   };
 
@@ -537,7 +561,7 @@ export function PeopleRoom() {
       <PeopleCompactSelector
         currentView={view}
         profileOpen={!!openPerson || !!openFirm}
-        directoryCount={all?.length}
+        directoryCount={directoryIdentityCount}
         nudge={nudge}
         onSelect={nav.goView}
       />
@@ -554,7 +578,7 @@ export function PeopleRoom() {
       >
         <PeopleDesktopRail
           activeView={openPerson || openFirm ? null : view}
-          directoryCount={all?.length}
+          directoryCount={directoryIdentityCount}
           nudge={nudge}
           onSelect={nav.goView}
         />
@@ -580,6 +604,9 @@ export function PeopleRoom() {
           // above the roster (R83: no toast; R51's quiet grammar).
           filterDirectory(landOn);
           setNotice(message);
+          // R83 keeps the confirmation INLINE and off the toast; the Room's
+          // one announcer still says it (CR11-10).
+          setAnnouncement(message);
         }}
         // R21 dissolve — /portal/pipeline is gone; open leads are Desk folders.
         onGoToLeads={() => router.push("/desk")}
@@ -594,16 +621,25 @@ export function PeopleRoom() {
         onClose={() => setOpenParty(null)}
       />
 
+      {/* CR11-10: the visible toast is paper, not a live region — the standing
+          announcer below speaks for it. */}
       {toast && (
         <div
-          role="status"
-          aria-live="polite"
           data-people-status
           className="fixed bottom-[var(--doc-shell-floating-bottom)] left-1/2 z-[65] w-[min(38rem,calc(100vw-2rem))] -translate-x-1/2 rounded-[4px] border border-[rgba(250,247,242,0.18)] bg-[var(--color-charcoal)] px-4 py-3 font-body text-[14px] leading-relaxed text-[var(--color-off-white)] motion-safe:animate-[doc-fade_200ms_ease-out]"
         >
           {toast}
         </div>
       )}
+
+      <p
+        role="status"
+        aria-live="polite"
+        data-people-announcer
+        className="sr-only"
+      >
+        {announcement}
+      </p>
     </RoomShell>
   );
 }

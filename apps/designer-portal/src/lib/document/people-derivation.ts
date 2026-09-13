@@ -1121,6 +1121,43 @@ export function companyKindShortLabel(kind: string | null | undefined): string {
 }
 
 /**
+ * CR11-4 — THE RUNNING-PROSE KIND WORD, keyed separately from the column-head
+ * map above.
+ *
+ * `companyKindShortLabel` is the word a firm ROW prints on its own, sentence
+ * case: "GC", "Subcontractor", "Vendor". The company card's header puts the
+ * kind AFTER a trade — SPEC §5.3 #1 fixes that literal as "Electrical sub" —
+ * where a capitalised column head reads wrong ("Electrical Subcontractor") and
+ * the raw column token reads worse ("Carpentry gc", "Tile & stone vendor").
+ * This map is that second register, and every company_kind 00592's CHECK
+ * admits has an entry except `other`, which has no prose word at all: a kind
+ * with no entry prints nothing rather than a token.
+ */
+const COMPANY_KIND_PROSE_WORDS: Record<string, string> = {
+  gc: "GC",
+  sub: "sub",
+  architect: "architect",
+  engineer: "engineer",
+  lender: "lender",
+  authority: "authority",
+  inspector: "inspector",
+  showroom: "showroom",
+  vendor: "vendor",
+  workroom: "workroom",
+  supplier: "supplier",
+  stager: "stager",
+  photography: "photography",
+  maker: "maker",
+};
+
+export function companyKindProseWord(
+  kind: string | null | undefined,
+): string | null {
+  if (!kind) return null;
+  return COMPANY_KIND_PROSE_WORDS[kind] ?? null;
+}
+
+/**
  * A CARD's kind, in words. `contact_kind` carries the CARD vocabulary, which is
  * the party vocabulary PLUS the studio's own kinds (`studio`, `showroom`,
  * `workroom`, `authority`, `photography`, `maker`…). CR-15: putting it through
@@ -1135,6 +1172,15 @@ export function contactCardKindLabel(kind: string | null | undefined): string {
 }
 
 const CLIENT_KINDS = new Set(["client", "lead", "client_rep"]);
+
+/**
+ * QA-R11-1: the client side of a job, as the Directory's own chip test already
+ * reads it. A field link opens the Call Sheet and the site access card, which
+ * PR-w rules studio-only — so a client-side card is never a subject for one.
+ */
+export function isClientSideKind(kind: string | null | undefined): boolean {
+  return !!kind && CLIENT_KINDS.has(kind);
+}
 const CREW_KINDS = new Set([
   "gc",
   "sub",

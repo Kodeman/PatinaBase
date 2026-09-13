@@ -117,9 +117,10 @@ export default function JudgmentsPage() {
           <LoadingStrata />
         ) : (
           <>
-            {/* The Room's band already names the surface (RoomShell title), so
-                the page opens on the question rather than repeating the name. */}
-            <h1 className="sr-only">Side by side</h1>
+            {/* CR11-1: the Room's band now RENDERS its title as the page's
+                <h1>, so this sr-only heading — which existed only because the
+                band's title was a <span> — is a second one. The page opens on
+                the question instead. */}
             <p className="mb-8 max-w-[560px] font-heading text-[1.05rem] italic leading-relaxed text-[var(--color-mocha)]">
               Which is more you? Go on instinct — the Engine learns your eye
               from every pair.
