@@ -127,29 +127,19 @@ enum CaptureDeepLink {
              .q1QRScan, .q2QRApprove,
              .f1ScanSetup, .f1Context, .f2SiteScan, .f3ScanReview, .f4ScanUpload:
             routeWorkScreen(id, coordinator: coordinator)
+        case .pr1Roster, .pr2Person, .pr3SiteAccess:
+            routePeopleScreen(id, coordinator: coordinator)
         case .sr01SiteHub, .sr02Composer, .sr03ItemConfig, .sr04AssignSend,
              .sr05Tracker, .sr06ReviewInbox, .sr07MeasureReview, .sr08PhotoReview,
              .sr09Approval, .sr10BinderRooms, .sr11BinderDetail, .sr12BinderHistory,
              .sr13GuestLanding, .sr14GuestChecklist, .sr15GuestMeasure,
              .sr16GuestPhoto, .sr17GuestQueue, .sr18GuestReceipt,
              .sr19GuestDone, .sr20GuestReturned:
-            coordinator.navigate(to: .site(
-                screen: id,
-                projectID: SiteRequestFixtures.projectID,
-                requestID: SiteRequestFixtures.requestID))
-        case .o1Welcome, .o2Connect, .o3CameraPriming, .o4Ready:
-            coordinator.onboardingStep = onboardingStep(for: id)
-        }
-    }
-
-    /// Flow 0 is phase-based rather than routed, so its four ids map to a step
-    /// index instead of a destination.
-    private static func onboardingStep(for id: CaptureScreenID) -> Int {
-        switch id {
-        case .o1Welcome:       return 0
-        case .o2Connect:       return 1
-        case .o3CameraPriming: return 2
-        default:               return 3
+            routeSiteRequestScreen(id, coordinator: coordinator)
+        case .o1Welcome:       coordinator.onboardingStep = 0
+        case .o2Connect:       coordinator.onboardingStep = 1
+        case .o3CameraPriming: coordinator.onboardingStep = 2
+        case .o4Ready:         coordinator.onboardingStep = 3
         }
     }
 
@@ -198,6 +188,31 @@ enum CaptureDeepLink {
             identity: CaptureSessionIdentity(userID: session.userID,
                                              workspaceID: session.workspaceID)
         ).context?.visitID ?? UUID()
+    }
+
+    /// W5's three People-room screens, all on one route: the screen id inside
+    /// picks the face, so the harness drives PR1/PR2/PR3 through one case.
+    @MainActor
+    private static func routePeopleScreen(
+        _ id: CaptureScreenID,
+        coordinator: CaptureCoordinator
+    ) {
+        coordinator.navigate(to: .people(
+            screen: id,
+            projectID: PeopleRoomFixtures.projectID,
+            personID: PeopleRoomFixtures.personID))
+    }
+
+    /// The twenty Site Request screens, likewise on one route.
+    @MainActor
+    private static func routeSiteRequestScreen(
+        _ id: CaptureScreenID,
+        coordinator: CaptureCoordinator
+    ) {
+        coordinator.navigate(to: .site(
+            screen: id,
+            projectID: SiteRequestFixtures.projectID,
+            requestID: SiteRequestFixtures.requestID))
     }
 
     /// Phase 2 designer/pro harness routes. Detail screens resolve the stable
@@ -260,7 +275,8 @@ enum CaptureDeepLink {
              // H1 is reached from the Work realm's Browse grid and from the
              // companion; a sweep that opened it over the viewfinder would
              // photograph it in a place it never appears.
-             .h1LogTime:
+             .h1LogTime,
+             .pr1Roster, .pr2Person, .pr3SiteAccess:
             .work
         default:
             .camera

@@ -126,6 +126,26 @@ struct ProjectDetailScreen: View {
                 .background(CaptureColor.paper3)
                 .overlay(Rectangle().stroke(CaptureColor.line))
                 .accessibilityIdentifier("project.openSite")
+                Button {
+                    coordinator.navigate(to: .people(
+                        screen: .pr1Roster,
+                        projectID: detail.project.id,
+                        personID: nil))
+                } label: {
+                    HStack {
+                        Image(systemName: "person.2")
+                        Text("Everyone on this job")
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                    }
+                }
+                .font(CaptureType.bodyEmph)
+                .foregroundStyle(CaptureColor.verdigrisInk)
+                .padding(16)
+                .frame(minHeight: 44)
+                .background(CaptureColor.paper3)
+                .overlay(Rectangle().stroke(CaptureColor.line))
+                .accessibilityIdentifier("project.openRoster")
                 if !detail.phases.isEmpty { phasesSection(detail.phases) }
                 if !detail.milestones.isEmpty { milestonesSection(detail.milestones) }
                 if !detail.ffeItems.isEmpty { ffeSection(detail.ffeItems) }

@@ -47,6 +47,10 @@ public final class AppContainer {
     public let featureFlags: CaptureFeatureFlags
     /// The offline project + room cache the door and the suggestion lane share.
     public let projectCache: CaptureProjectCache
+    /// W5's People room seam, scoped to one project, and the on-disk cache that
+    /// keeps its two objects readable with no signal.
+    public let peopleRoom: any PeopleRoomService
+    public let peopleRoomCache = PeopleRoomCache()
     public let companion = FieldCompanionController(
         initialPresentation: .hidden(reason: .cameraActive),
         defaultHint: "Next steps"
@@ -166,7 +170,7 @@ public final class AppContainer {
             self.messaging = work.messaging; self.receiving = work.receiving
             self.portalAuth = work.portalAuth; self.siteScan = work.siteScan
             self.siteRequests = work.siteRequests; self.guestSiteRequests = work.siteRequests
-            self.siteRequestOutboxDrainer = work.drainer
+            self.siteRequestOutboxDrainer = work.drainer; self.peopleRoom = work.peopleRoom
 
             let cache = CaptureProjectCache(store: store, projects: work.projects); self.projectCache = cache
             let lanes = Self.makeWriteLanes(
@@ -211,6 +215,7 @@ public final class AppContainer {
             self.guestSiteRequests = siteRequests
             self.siteRequestOutboxDrainer = SiteRequestOutboxDrainer(store: store, remote: siteRequests)
             self.projectCache = CaptureProjectCache(store: store, projects: projects)
+            self.peopleRoom = MockPeopleRoomService()
         }
 
         // The ladder runs before analytics exists, so it reports rather than
@@ -252,6 +257,7 @@ public final class AppContainer {
         /// The concrete conforms to both the designer and guest protocol, so one
         /// `SupabaseSiteRequestService` construction serves both properties.
         let siteRequests: SupabaseSiteRequestService
+        let peopleRoom: any PeopleRoomService
         let drainer: SiteRequestOutboxDrainer
     }
 
@@ -270,6 +276,7 @@ public final class AppContainer {
             portalAuth: QRApproveServiceFactory.make(deps: deps),
             siteScan: SiteScanServiceFactory.make(deps: deps),
             siteRequests: siteRequests,
+            peopleRoom: PeopleRoomServiceFactory.make(deps: deps),
             drainer: SiteRequestOutboxDrainer(store: deps.store, remote: siteRequests))
     }
 
