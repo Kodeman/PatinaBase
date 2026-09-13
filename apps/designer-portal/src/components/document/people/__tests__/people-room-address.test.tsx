@@ -13,6 +13,8 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { PeopleRoom } from "../people-room";
 
 const mockReplace = jest.fn();
+/** CR9-1 — the seat the stubbed person card hands back to the Room. */
+const seatToOpen: { current: Record<string, unknown> } = { current: {} };
 jest.mock("next/navigation", () => ({
   useRouter: () => ({ push: jest.fn(), replace: mockReplace }),
 }));
@@ -88,8 +90,15 @@ jest.mock("../views/directory-view", () => ({
   ),
 }));
 jest.mock("../views/person-profile", () => ({
-  PersonProfile: (props: { personId: string }) => (
-    <div data-testid="person-card" data-person={props.personId} />
+  PersonProfile: (props: {
+    personId: string;
+    onOpenSeat?: (seat: unknown) => void;
+  }) => (
+    <div data-testid="person-card" data-person={props.personId}>
+      <button type="button" onClick={() => props.onOpenSeat?.(seatToOpen.current)}>
+        open the seat
+      </button>
+    </div>
   ),
 }));
 jest.mock("../company-card", () => ({
@@ -97,7 +106,12 @@ jest.mock("../company-card", () => ({
     <div data-testid="company-card" data-firm={props.firmId} />
   ),
 }));
-jest.mock("../party-profile-sheet", () => ({ PartyProfileSheet: () => null }));
+jest.mock("../party-profile-sheet", () => ({
+  PartyProfileSheet: (props: { open: boolean; partyId: string | null; role: string }) =>
+    props.open ? (
+      <div data-testid="party-sheet" data-party={props.partyId} data-role={props.role} />
+    ) : null,
+}));
 jest.mock("../views/threads-view", () => ({ ThreadsView: () => null }));
 jest.mock("../views/nurture-view", () => ({ NurtureView: () => null }));
 jest.mock("../views/reviews-view", () => ({ ReviewsView: () => null }));
@@ -118,6 +132,7 @@ function goTo(search: string) {
 
 beforeEach(() => {
   mockReplace.mockClear();
+  seatToOpen.current = {};
   goTo("");
 });
 
@@ -187,5 +202,47 @@ describe("the address", () => {
     );
     fireEvent.click(within(rail!).getByRole("button", { name: /Threads/ }));
     expect(screen.queryByTestId("company-card")).toBeNull();
+  });
+});
+
+/**
+ * CR9-1 — A SEAT LINE NEVER FABRICATES A KIND.
+ *
+ * Every non-field seat was coerced to `'sub'` before opening the field party
+ * sheet, which prints the role it is handed as its eyebrow ("Field crew ·
+ * Subcontractor") and as its Kind row. A household member, a city inspector, a
+ * client and a maker's rep each opened a sheet stating a kind the record does
+ * not hold — two wrong facts over the person's real name, with a field-link
+ * band and an SMS composer beneath them.
+ */
+describe("the seat line's destination", () => {
+  it("opens the field sheet, under its OWN kind, for a field seat", () => {
+    goTo("?person=card-dana");
+    render(<PeopleRoom />);
+    seatToOpen.current = {
+      seat_id: "seat-1",
+      person_id: "card-dana",
+      party_kind: "installer",
+    };
+    fireEvent.click(screen.getByRole("button", { name: "open the seat" }));
+    const sheet = screen.getByTestId("party-sheet");
+    expect(sheet).toHaveAttribute("data-party", "seat-1");
+    expect(sheet).toHaveAttribute("data-role", "installer");
+  });
+
+  it("sends a household member's seat to their CARD, never to a field sheet", () => {
+    goTo("?person=card-dana");
+    render(<PeopleRoom />);
+    seatToOpen.current = {
+      seat_id: "seat-2",
+      person_id: "card-dana",
+      party_kind: "client_rep",
+    };
+    fireEvent.click(screen.getByRole("button", { name: "open the seat" }));
+    expect(screen.queryByTestId("party-sheet")).toBeNull();
+    expect(screen.getByTestId("person-card")).toHaveAttribute(
+      "data-person",
+      "card-dana",
+    );
   });
 });

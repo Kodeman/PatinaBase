@@ -61,6 +61,7 @@ import {
   contactRuleForbidsSms,
   contactRuleIsDoNotContact,
   contactRuleIsHardBlock,
+  contactRuleTextHeldClause,
 } from '@/lib/document/contact-rule';
 import { peopleEvents } from '@/lib/analytics/people-events';
 import { Avatar } from '../people/person-bits';
@@ -244,12 +245,17 @@ export function RosterRow({
    * texted; the act was live for exactly that pair until now, and there is no
    * server backstop behind it on the rule.
    */
-  const ruleForbidsText = contactRuleForbidsSms(rule);
+  // QA-R9-1 — and the sentence beside the held act names the rule the studio
+  // actually wrote: a do-not-contact block reads as one and carries its route,
+  // where one literal used to call every such rule "never text".
+  const ruleHoldsText = contactRuleForbidsSms(rule) || ruleBlocks;
+  const ruleHeldClause = contactRuleTextHeldClause(rule, routeTo?.name ?? null);
   const canText =
-    isSeat && row.consent === 'granted' && !!row.phone && !ruleForbidsText;
-  const textHeldSentence = ruleForbidsText
-    ? `The studio’s rule for ${row.name} says never text. Change the rule on their card first.`
-    : 'Texting opens once they have said yes on the record and a number is on file.';
+    isSeat && row.consent === 'granted' && !!row.phone && !ruleHoldsText;
+  const textHeldSentence =
+    ruleHoldsText && ruleHeldClause
+      ? `The studio’s rule for ${row.name} ${ruleHeldClause}. Change the rule on their card first.`
+      : 'Texting opens once they have said yes on the record and a number is on file.';
   const showFieldActs = isSeat && isFieldPartyKind(row.partyKind ?? '');
   const windowClause = rosterWindowClause(row, band);
 

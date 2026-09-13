@@ -15,6 +15,8 @@ const useProjectRoster = jest.fn();
 const usePeopleSeats = jest.fn();
 const useProjectV2 = jest.fn();
 const mockRolodexPicker = jest.fn(() => null);
+/** CR9-4 — the three reads `useCallSheetRoster` composes each answer a retry. */
+const mockRefetchAuthority = jest.fn();
 
 // QA-2: the head now mounts the Add sheet itself. This spec is about the rows
 // beneath it, so the sheet is stubbed the way the picker and the access card
@@ -69,7 +71,7 @@ jest.mock('@patina/supabase', () => {
 });
 
 jest.mock('../use-project-authority', () => ({
-  useProjectAuthority: () => ({ data: {} }),
+  useProjectAuthority: () => ({ data: {}, refetch: mockRefetchAuthority }),
 }));
 
 jest.mock('../rolodex-picker', () => ({
@@ -230,10 +232,27 @@ describe('Project roster surfaces', () => {
     );
   });
 
+  /**
+   * CR9-4 — "Try again" retries the read the sentence names. `isError` is
+   * raised by the ROSTER read; an act that refetched only the project query
+   * left the band standing with nothing able to clear it.
+   */
   it('distinguishes a roster it could not read from an empty one', () => {
     const retryProject = jest.fn();
-    useProjectRoster.mockReturnValue({ data: undefined, isLoading: false, isError: true });
-    usePeopleSeats.mockReturnValue({ data: undefined, isLoading: false, isError: true });
+    const retryRoster = jest.fn();
+    const retrySeats = jest.fn();
+    useProjectRoster.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      refetch: retryRoster,
+    });
+    usePeopleSeats.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      refetch: retrySeats,
+    });
     useProjectV2.mockReturnValue({
       data: undefined,
       isLoading: false,
@@ -245,6 +264,8 @@ describe('Project roster surfaces', () => {
     expect(view.getByRole('alert')).toHaveTextContent('could not be read');
     expect(view.queryByText('Build the project team')).not.toBeInTheDocument();
     fireEvent.click(view.getByRole('button', { name: 'Try again' }));
+    expect(retryRoster).toHaveBeenCalledTimes(1);
+    expect(retrySeats).toHaveBeenCalledTimes(1);
     expect(retryProject).toHaveBeenCalledTimes(1);
   });
 

@@ -1,0 +1,56 @@
+[
+  {
+    "text": "Account",
+    "tag": "SPAN",
+    "class": "font-mono text-[11px] font-medium uppercase tracking-[0.06em] ",
+    "background": "rgba(0, 0, 0, 0)",
+    "border": "oklch(0.8606 0.0321 84.5881)",
+    "borderWidth": "0px",
+    "color": "rgb(95, 107, 87)"
+  },
+  {
+    "text": "Account",
+    "tag": "SPAN",
+    "class": "inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-[3px] border px-[6px] py-[4px] text-center font-mono text-[11px] font-medium uppercase tracking-[0.06em] w-[108px]",
+    "background": "rgba(0, 0, 0, 0)",
+    "border": "rgb(168, 181, 160)",
+    "borderWidth": "1px",
+    "color": "rgb(95, 107, 87)"
+  },
+  {
+    "text": "Account",
+    "tag": "SPAN",
+    "class": "font-mono text-[11px] font-medium uppercase tracking-[0.06em] ",
+    "background": "rgba(0, 0, 0, 0)",
+    "border": "oklch(0.8606 0.0321 84.5881)",
+    "borderWidth": "0px",
+    "color": "rgb(95, 107, 87)"
+  },
+  {
+    "text": "Account",
+    "tag": "SPAN",
+    "class": "inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-[3px] border px-[6px] py-[4px] text-center font-mono text-[11px] font-medium uppercase tracking-[0.06em] w-[108px]",
+    "background": "rgba(0, 0, 0, 0)",
+    "border": "rgb(168, 181, 160)",
+    "borderWidth": "1px",
+    "color": "rgb(95, 107, 87)"
+  },
+  {
+    "text": "Account",
+    "tag": "SPAN",
+    "class": "font-mono text-[11px] font-medium uppercase tracking-[0.06em] ",
+    "background": "rgba(0, 0, 0, 0)",
+    "border": "oklch(0.8606 0.0321 84.5881)",
+    "borderWidth": "0px",
+    "color": "rgb(95, 107, 87)"
+  },
+  {
+    "text": "Account",
+    "tag": "SPAN",
+    "class": "inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-[3px] border px-[6px] py-[4px] text-center font-mono text-[11px] font-medium uppercase tracking-[0.06em] w-[108px]",
+    "background": "rgba(0, 0, 0, 0)",
+    "border": "rgb(168, 181, 160)",
+    "borderWidth": "1px",
+    "color": "rgb(95, 107, 87)"
+  }
+]

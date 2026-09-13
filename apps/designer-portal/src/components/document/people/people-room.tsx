@@ -394,13 +394,36 @@ export function PeopleRoom() {
     }
   };
 
+  /**
+   * CR9-1 — A SEAT LINE NEVER FABRICATES A KIND.
+   *
+   * This coerced every non-field seat to `'sub'` before opening
+   * `PartyProfileSheet`, which prints the role it is handed twice — the eyebrow
+   * "Field crew · Subcontractor" and the Kind row — so a household member
+   * (`client_rep`), a city inspector (`other`), a client or a maker's rep all
+   * opened a sheet stating a kind the record does not hold, over their real
+   * name, with a field-link band and an SMS composer beneath it. Two clicks
+   * from the Directory, through both doors R-AA opened (the person card's seat
+   * line and the Directory row's seat disclosure).
+   *
+   * Only the four field-roster kinds have a field sheet to open. Every other
+   * seat goes where R-AA already sends a seat line — the PERSON'S CARD, the
+   * room's unit, which carries the seat and its facts beneath the human.
+   */
   const openSeat = (seat: PeopleDirectorySeat) => {
-    setOpenParty({
-      id: seat.seat_id,
-      role: (isFieldRosterRole(seat.party_kind)
-        ? seat.party_kind
-        : "sub") as PartyRole,
-    });
+    if (isFieldRosterRole(seat.party_kind)) {
+      setOpenParty({ id: seat.seat_id, role: seat.party_kind });
+      return;
+    }
+    const personId = seat.person_id;
+    if (!personId) return;
+    // The identity's OWN directory role, read the way the deep-link handler
+    // reads it. `usePerson` filters on it, so a guessed role returns no row.
+    const resolved =
+      all?.find((p) => p.person_id === personId)?.role ?? "contact";
+    setOpenFirm(null);
+    setOpenParty(null);
+    setOpenPerson({ id: personId, role: resolved });
   };
 
   const body = openFirm ? (

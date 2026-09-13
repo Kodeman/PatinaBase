@@ -45,6 +45,7 @@ export function ProjectTeamRoster({
     authorityBySeat,
     isLoading: rosterLoading,
     isError: rosterError,
+    refetch: refetchRoster,
   } = useCallSheetRoster(projectId, {
     client: { name: resolvedClientName, profileId: resolvedClientProfileId, projectId },
   });
@@ -106,7 +107,10 @@ export function ProjectTeamRoster({
           <DocumentAction
             actionKey="retry-project-roster"
             variant="secondary"
-            onClick={() => void projectQuery.refetch()}
+            // CR9-4: the roster read is the one the sentence names, and it is
+            // the one `rosterError` comes from — retrying only the project
+            // query left that band standing with nothing to clear it.
+            onClick={() => void Promise.all([refetchRoster(), projectQuery.refetch()])}
           >
             Try again
           </DocumentAction>

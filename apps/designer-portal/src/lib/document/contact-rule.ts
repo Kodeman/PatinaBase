@@ -130,6 +130,43 @@ export function contactRuleForbidsSms(
 }
 
 /**
+ * QA-R9-1 — THE HELD SENTENCE NAMES THE RULE IT IS HOLDING ON.
+ *
+ * Both text composers printed ONE literal — "says never text" — for every rule
+ * carrying `sms` among its forbidden channels, including F-15 Frank Bauer's:
+ * "Do not contact directly. Write Rosa Delgado instead." Every direct channel
+ * is shut on that rule and the contact is routed, so "never text" told a reader
+ * the one thing the rule does NOT single out, invited the email and the call it
+ * forbids, and dropped the routing instruction — the only door left open —
+ * entirely. The card said one thing three inches above and another here.
+ *
+ * So the clause is derived HERE, off the same two facts R-BL keys its hard
+ * block on (`contactRuleIsDoNotContact` and the route), and the caller supplies
+ * only the subject and its own tail ("Change the rule above…" on the card,
+ * "Change the rule on their card first." on the roster row).
+ *
+ * `routeName` is the resolved routed person (`contactRouteTarget().name`), not
+ * the raw `route_to_person_id`: R-L/C22 — a routing instruction naming nobody
+ * the reader can find sends them nowhere, so an unresolved route prints as a
+ * block with no name rather than as a dangling id.
+ */
+export function contactRuleTextHeldClause(
+  rule: StudioContactRule | null | undefined,
+  routeName?: string | null,
+): string | null {
+  if (!rule) return null;
+  const routed = routeName?.trim() || null;
+  if (contactRuleIsDoNotContact(rule)) {
+    return routed
+      ? `says do not contact directly. Write ${routed} instead`
+      : "says do not contact directly";
+  }
+  if (routed) return `routes contact through ${routed}`;
+  if (contactRuleForbidsSms(rule)) return "says never text";
+  return null;
+}
+
+/**
  * The four channels a studio actually reaches a PERSON on. `dispatch`,
  * `after_hours` and `ap_email` are a FIRM's lines and `portal_311` is a
  * municipal scheduling portal, so a rule bars nothing left by naming them — and

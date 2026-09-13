@@ -113,6 +113,17 @@ export function firmHistorySentence(facts: {
   }
   return parts.length ? parts.join(" ") : null;
 }
+/**
+ * E11's one sanctioned read, as a SENTENCE and not an act (CR9-3, settled
+ * 2026-09-13 by amending SPEC §5.3 #7).
+ *
+ * SPEC's specimen row and direction §3.3 R5 name an inline act, "Open the money
+ * book". There is no money book in this build — no route, no surface, and R-B
+ * already put the money papers in a later room — and `project_parties` carries
+ * no draw or waiver column, so neither the door nor SPEC's "Draw 1" can be told
+ * truthfully here. The card states what it holds; the inline door is W3
+ * money-book work. Do not wire this to a placeholder route.
+ */
 export const MONEY_BOOK_LINE =
   "Waiver ledger and draw state, in the money book.";
 
