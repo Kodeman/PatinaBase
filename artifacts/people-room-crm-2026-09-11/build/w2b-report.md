@@ -196,3 +196,16 @@ Playwright was **not** run: no dev server was started, and the QA reviewer owns 
     opens the person card. An uncarded seat still arrives under its own party kind and opens the
     person card too — its identity row exists — but its Channels, Contact rule and Paper regions
     read empty until the seat is promoted, and the card says so in words rather than hiding them.
+
+---
+
+## 7. Two facts about the shared worktree
+
+1. **`party-profile-sheet.tsx` is in W2c's commit, not this wave's.** W2b's four held-act edits were
+   in the working tree when `50b81d33c` (the Call Sheet wave) was committed, and were swept into it.
+   The content is this wave's and is complete — `field-link-consequence`, `field-text-reason` and
+   `field-invite-reason` all resolve, and `party-profile-invite-to-texts.test.tsx` (in W2b's commit)
+   pins the held act. A reviewer looking for the change in `5c316b1bf` will not find it there.
+2. **This wave's commits are `5c316b1bf` (the build) and `33d5b04c6` (prettier over its own files).**
+   The formatting pass was restricted to W2b's own files: a first run reformatted W2a's primitives
+   and W2c's specs as well, and every one of those was reverted to HEAD before committing.
