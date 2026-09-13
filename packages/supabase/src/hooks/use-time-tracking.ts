@@ -46,6 +46,16 @@ const timeKeys = {
   studioRollup: (params: unknown) => ['time', 'studio-rollup', params] as const,
   projectHoursTotal: (projectId: string | null) =>
     ['time', 'project-total', projectId] as const,
+  // Three reads the document surface owned as inline literals before they
+  // became hooks. The keys move here UNCHANGED: `useStampProjectPricingStudio`
+  // invalidates ['document-hours-project-studio', projectId] by name, and the
+  // Hours sheet's own week read sits beside it on ['document-hours-week'].
+  // Renaming either would silently stop a resolved repair from refreshing the
+  // line it repaired.
+  projectPricingStudio: (projectId: string | null) =>
+    ['document-hours-project-studio', projectId] as const,
+  entryNote: (entryId: string) => ['document-hours-entry-note', entryId] as const,
+  studioUnbilled: () => ['desk-contents-unbilled-time'] as const,
 };
 
 // ── Billing state (the server's verdict on an hour) ──
@@ -191,6 +201,12 @@ function invalidateProjectTime(queryClient: QueryClient, projectId: string) {
   queryClient.invalidateQueries({ queryKey: timeKeys.unbilledTime(projectId) });
   queryClient.invalidateQueries({ queryKey: timeKeys.keyMetrics(projectId) });
   queryClient.invalidateQueries({ queryKey: timeKeys.all });
+  // The Desk's one act-bearing line reads its own cross-project key, which sits
+  // outside `timeKeys.all` because it predates the module's 'time' family. With
+  // a five-minute staleTime and no refetch on focus, a billed-out studio kept
+  // being offered "hours to bill →" and the click handed the composer entry ids
+  // an invoice already claimed.
+  queryClient.invalidateQueries({ queryKey: timeKeys.studioUnbilled() });
 }
 
 // ── Queries ──
@@ -233,6 +249,40 @@ export function useUnbilledTime(projectId: string | null) {
       };
     },
     enabled: !!projectId,
+  });
+}
+
+/** A row of project_unbilled_time as the Desk's one act-bearing line reads it. */
+export interface StudioUnbilledTimeRow {
+  id: string;
+  project_id: string;
+  billing_state?: TimeBillingState | null;
+}
+
+/**
+ * HT-29 — every unbilled, invoice-eligible hour this caller can read, across
+ * every document, with no project filter: RLS is the scope and this hook names
+ * none. Three columns only, because the Desk's line is an act or nothing (R95
+ * keeps counts and metrics off that index) — never a money total, and never
+ * `notes` (HT-36).
+ */
+export function useStudioUnbilledTime() {
+  return useQuery({
+    queryKey: timeKeys.studioUnbilled(),
+    queryFn: async (): Promise<StudioUnbilledTimeRow[]> => {
+      const supabase = getSupabase();
+      const { data, error } = await supabase
+        .from('project_unbilled_time')
+        .select('id, project_id, billing_state');
+      if (error) throw error;
+      return ((data ?? []) as StudioUnbilledTimeRow[]).filter((row) =>
+        isInvoiceEligibleTimeEntry({
+          billable: true,
+          invoice_id: null,
+          billing_state: row.billing_state,
+        }),
+      );
+    },
   });
 }
 
@@ -762,6 +812,10 @@ export function useTimeEntryLedger(params: TimeEntryLedgerParams = {}) {
 
   return useQuery({
     queryKey: timeKeys.ledger(params),
+    // With no filter at all this selects the whole fact view for the window —
+    // every row RLS lets the caller read. A scope always names at least one of
+    // the three; nothing else may ask.
+    enabled: Boolean(studioId || userId || projectId),
     queryFn: async (): Promise<TimeEntryLedgerRow[]> => {
       const supabase = getSupabase();
       let query = supabase
@@ -865,6 +919,105 @@ export function useProjectHoursTotal(projectId: string | null) {
       if (error) throw error;
       const row = (Array.isArray(data) ? data[0] : data) as ProjectHoursTotal | undefined;
       return row ?? { minutes: 0, billable_minutes: 0, amount_cents: 0 };
+    },
+  });
+}
+
+/**
+ * The studio that PRICES a document's hours (`projects.studio_id`, HT-3-a/b) —
+ * read off the DOCUMENT, never off one person's entries. The Hours sheet's week
+ * read is `.eq('user_id', …)`, so HT-9's own case (an owner reading a house she
+ * has logged nothing on) would find nothing and print "no studio yet" over a
+ * document that names one, under a stamp door the server then refuses.
+ *
+ * `null` = the document names no studio (HT-3-g's repair applies). The caller
+ * must keep `undefined` (not answered yet) distinct from that: they are not the
+ * same fact and only one of them may print a sentence.
+ */
+export function useProjectPricingStudio(projectId: string | null) {
+  return useQuery({
+    queryKey: timeKeys.projectPricingStudio(projectId),
+    enabled: projectId != null,
+    queryFn: async (): Promise<string | null> => {
+      const supabase = getSupabase();
+      const { data, error } = await supabase
+        .from('projects')
+        .select('studio_id')
+        .eq('id', projectId)
+        .maybeSingle();
+      if (error) throw error;
+      return (data?.studio_id as string | null) ?? null;
+    },
+  });
+}
+
+/**
+ * HT-36 — one entry's free text, from the table, by an explicit act, one entry
+ * at a time. `notes` is never a column of the rollup (00607) or of the fact
+ * view (00604), so this is the only way a note is ever read; a refusal from RLS
+ * is the answer, and the caller prints it as one.
+ */
+export function useTimeEntryNote(entryId: string) {
+  return useQuery({
+    queryKey: timeKeys.entryNote(entryId),
+    queryFn: async (): Promise<string | null> => {
+      const supabase = getSupabase();
+      const { data, error } = await supabase
+        .from('project_time_entries')
+        .select('notes')
+        .eq('id', entryId)
+        .maybeSingle();
+      if (error) throw error;
+      return (data?.notes as string | null) ?? null;
+    },
+  });
+}
+
+/**
+ * HT-3-g's repair act (`stamp_project_pricing_studio`, 00606): names the studio
+ * that prices a legacy project's hours, where `projects.studio_id` is NULL and
+ * every hour on it therefore resolves `rate_source = 'none'` ("rate pending").
+ *
+ * The server admits only an owner or admin of the studio being named, and only
+ * where that studio employs the project's designer; a stamped column is final.
+ * So this hook sends the act and surfaces the refusal — it never pre-judges
+ * standing, and the caller prints the server's words.
+ */
+export function useStampProjectPricingStudio() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      projectId,
+      studioId,
+    }: {
+      projectId: string;
+      studioId: string;
+    }): Promise<string | null> => {
+      const supabase = getSupabase();
+      const { data, error } = await supabase.rpc('stamp_project_pricing_studio', {
+        p_project_id: projectId,
+        p_studio_id: studioId,
+      });
+      if (error) throw error;
+      return (data as string | null) ?? null;
+    },
+    onSuccess: (_studioId, { projectId }) => {
+      // The pricing studio is a column every hours read resolves through, and
+      // it prices only hours logged AFTER the stamp (P-4 — no backfill).
+      invalidateProjectTime(queryClient, projectId);
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      queryClient.invalidateQueries({ queryKey: ['document-hours-week'] });
+      // The Hours sheet reads the stamped column off the DOCUMENT, on its own
+      // key — not off the week's entries. Left out, a SUCCESSFUL repair kept
+      // printing "no studio yet" under a door the server then refused as
+      // already-named, so the repair visibly failed to repair.
+      queryClient.invalidateQueries({
+        queryKey: ['document-hours-project-studio', projectId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['document-hours-pending-authorization'],
+      });
     },
   });
 }

@@ -2140,6 +2140,7 @@ export {
   filterProjectUnbilledEntries,
   fetchTimeSummary,
   useUnbilledTime,
+  useStudioUnbilledTime,
   useCreateTimeEntry,
   useUpdateTimeEntry,
   useDeleteTimeEntry,
@@ -2151,6 +2152,9 @@ export {
   useTimeEntryLedger,
   useStudioHoursRollup,
   useProjectHoursTotal,
+  useProjectPricingStudio,
+  useTimeEntryNote,
+  useStampProjectPricingStudio,
   useUpdatePhaseEstimates,
 } from "./use-time-tracking";
 export type {
@@ -2163,6 +2167,7 @@ export type {
   TimeEntryFilters,
   UnbilledTimeRow,
   UnbilledTimeSummary,
+  StudioUnbilledTimeRow,
   TimePhaseSummary,
   ProjectTimeSummary,
   CreateTimeEntryInput,

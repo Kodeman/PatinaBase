@@ -35,6 +35,8 @@ const RECENT_DOCS_MAX = 5;
 // "seen" shape as the rest of this file's session-scoped dedup.
 const nudgeFiredSeen = new Set<string>();
 const freshTimesRequestedSeen = new Set<string>();
+// HT-26's rate alarm is a per-entry fact, not a per-render one (see `time`).
+const rateUnresolvedSeen = new Set<string>();
 
 /** One entry in the recent-documents-in-hand MRU (command bar). */
 export interface RecentDocumentInHand {
@@ -156,6 +158,108 @@ const wayfinding = {
   walkthroughStarted: (props: {
     source: "first_signin" | "command_bar" | "margin_note";
   }) => track("document_walkthrough_started", props),
+};
+
+/**
+ * The hour-tracking event set (HT-27) — the canonical names, so every surface
+ * that captures or reviews an hour reports under one vocabulary and the
+ * widget/intent decision rests on data rather than taste. This module is the
+ * sole writer of those names; iOS (`posthog-ios`) and the edge mirror this list.
+ *
+ * CANONICAL NAMES
+ *   time_entry_logged      — an hour landed, from any surface
+ *   time_timer_started     — a running timer opened (desk only; HT-7)
+ *   time_timer_stopped     — it closed, with what the bound saw (HT-17)
+ *   time_entry_adjusted    — an existing entry was edited
+ *   time_entry_deleted     — an unbilled entry was removed
+ *   time_scope_viewed      — one of the four scopes was read (HT-8)
+ *   time_rate_unresolved   — an hour rendered or returned with no rate (HT-26)
+ *   time_export_taken      — hours left Patina as a file (HT-20)
+ *   time_autostart_disclosed / time_autostart_opted_out — HT-35's disclosure
+ *     band and its per-member opt-out. Owed with that ruling's surfaces; no
+ *     emitter is defined here yet because nothing can fire one honestly.
+ *     HT-35 is EXPLICITLY DESCOPED from W2, not done: the opt-out is a
+ *     per-member, cross-device, default-on preference and there is no column
+ *     for one (`user_settings` has none, `profiles` has none, and
+ *     `profiles.help_state` is the help-system's own cache), while plan §3
+ *     reserves HT-35 no migration number and this program's range is spent. It
+ *     returns as one stage — band, opt-out and these two emitters together —
+ *     once Kody rules where the preference lives and releases a number.
+ *     SCOPED by the orchestrator (2026-09-13) to STAGE 4 of this program, with
+ *     W7: it is no longer owed by W2, and this module stays its home.
+ *
+ * Nothing here carries `notes`: free text is the studio's, not telemetry
+ * (HT-36).
+ */
+const time = {
+  /** An hour landed. `latency_ms` is the capture act → written round trip. */
+  entryLogged: (props: {
+    surface: string;
+    source: string;
+    activity: string | null;
+    billable: boolean;
+    rate_source: string | null;
+    rate_role: string | null;
+    duration_minutes: number;
+    latency_ms: number | null;
+  }) => track("time_entry_logged", props),
+
+  /** A running timer opened. One slot per user, and it stays with the desk. */
+  timerStarted: (props: { surface: string; source: string; billable: boolean }) =>
+    track("time_timer_started", props),
+
+  /** It closed. `idle_ratio` is cumulative idle ÷ raw elapsed — the R64
+   *  instrument HT-17 asks for, reported and never acted on here. */
+  timerStopped: (props: {
+    surface: string;
+    duration_minutes: number;
+    adjusted: boolean;
+    idle_minutes: number | null;
+    idle_ratio: number | null;
+  }) => track("time_timer_stopped", props),
+
+  /** An entry was edited. `by_admin` = someone other than its author. */
+  entryAdjusted: (props: { field: string; by_admin: boolean }) =>
+    track("time_entry_adjusted", props),
+
+  /** An unbilled entry was removed (an invoiced one cannot be). */
+  entryDeleted: (props: { by_admin: boolean }) =>
+    track("time_entry_deleted", props),
+
+  /** One of the four scopes was read, and how its buckets were grouped. */
+  scopeViewed: (props: { scope: string; group_by: string | null }) =>
+    track("time_scope_viewed", props),
+
+  /** HT-26's alarm: an hour carries no rate. Once per entry per session —
+   *  a ledger re-render must not inflate the count it is the instrument for,
+   *  and neither does one hour seen twice, in the viewer's own week and again
+   *  in a scoped list.
+   *
+   *  `project_kind` is the ORIGIN commercial document's kind
+   *  ('design_services' | 'design_build' | …), or 'non_services' where the
+   *  project has no origin document — which is exactly what
+   *  `_is_design_services_project` (00578:2584) tests. There is no
+   *  `projects.kind` column to read. It is `null` from the SCOPED rows and
+   *  only from those: `time_entry_ledger` (00604) carries no kind, and a
+   *  per-row query to invent one would cost more than the segment is worth.
+   *  Read a null as "not said", never as "not services". */
+  rateUnresolved: (props: {
+    entry_id: string;
+    project_id: string;
+    project_kind: string | null;
+    rate_source: string;
+  }) => {
+    if (rateUnresolvedSeen.has(props.entry_id)) return;
+    rateUnresolvedSeen.add(props.entry_id);
+    track("time_rate_unresolved", props);
+  },
+
+  /** Hours left Patina as a file. */
+  exportTaken: (props: {
+    scope: string;
+    row_count: number;
+    period: string | null;
+  }) => track("time_export_taken", props),
 };
 
 /**
@@ -407,4 +511,5 @@ export const documentEvents = {
 
   commandBar,
   wayfinding,
+  time,
 };

@@ -33,6 +33,9 @@ jest.mock("@/hooks/use-feature-flag", () => ({
 // `@patina/supabase`'s hooks, so they are stubbed in that factory rather than
 // in an app-local one.
 jest.mock("@patina/supabase", () => ({
+  // HT-3's Studio rates section reads the dated rows and writes on blur.
+  useStudioMemberRates: () => ({ data: [] }),
+  useSetStudioMemberRate: () => ({ mutate: jest.fn(), isPending: false }),
   useStudioAgreementDefaults: () => ({ data: agreementDefaultsRow }),
   useUpdateStudioAgreementDefaults: () => ({
     mutate: mockUpdateAgreementDefaults,
