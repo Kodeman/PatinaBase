@@ -147,6 +147,8 @@ describe('RosterRow — unfolded actions', () => {
     );
     expect(screen.getByText('(513) 555-0148')).toBeInTheDocument();
     expect(screen.getByText('rosa@martineztile.co')).toBeInTheDocument();
+    // ONE consent word, in the unfold. SPEC §6.1 keeps consent off the
+    // collapsed Call Sheet row, where a bare colour dot used to stand.
     expect(screen.getByText('Texting')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Text' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Copy field link' })).toBeInTheDocument();

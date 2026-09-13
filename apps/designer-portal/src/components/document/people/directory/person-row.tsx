@@ -22,19 +22,21 @@
 
 import { useMemo } from 'react';
 import { isFieldRosterRole, type PeopleDirectoryRow } from '@patina/supabase';
-import {
-  deriveRelationshipLine,
-  deriveStatusDot,
-} from '@/lib/document/people-derivation';
-import { Avatar, ConsentChip, RoleBadge, StatusDot } from '../person-bits';
+import { deriveRelationshipLine } from '@/lib/document/people-derivation';
+import { Avatar, ConsentChip, RoleBadge } from '../person-bits';
 
-/** The ROLODEX marker (slide 8's `.rolomark`, slide 10's "state B") — a
- *  clay-bordered pill saying the studio keeps this person, not just this job.
- *  Mirrors the deck exactly: mono, uppercase, pill radius, clay border. */
+/** The ROLODEX marker (slide 8's `.rolomark`) — a clay-bordered word saying
+ *  the studio keeps this person, not just this job.
+ *
+ *  Redrawn at the SHARED 3px BOX (direction §4, house sheet §A: radius 2px or
+ *  3px only, plus 50% for the person circle and 8px for the company square).
+ *  The `rounded-[16px]` pill it shipped as was the room's only fully rounded
+ *  control, and SPEC §8 #5 forbids one outright. */
 function RolodexMarker() {
   return (
     <span
-      className="inline-flex shrink-0 items-center rounded-[16px] border border-[var(--color-clay)] px-2 py-[1px] font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--color-mocha)]"
+      data-rolodex-marker
+      className="inline-flex shrink-0 items-center rounded-[3px] border border-[var(--color-clay)] px-2 py-[1px] font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--color-mocha)]"
     >
       Rolodex
     </span>
@@ -61,7 +63,6 @@ export function PersonRow({
   rolodexMarker?: boolean;
 }) {
   const line = useMemo(() => deriveRelationshipLine(person, now), [person, now]);
-  const dot = useMemo(() => deriveStatusDot(person, now), [person, now]);
 
   return (
     <button
@@ -92,8 +93,11 @@ export function PersonRow({
         </span>
       </span>
       {rolodexMarker && <RolodexMarker />}
-      {isFieldRosterRole(person.role) && <ConsentChip status={person.status_raw} />}
-      <StatusDot status={dot} />
+      {/* R-BE: the consent word comes off the view's own `consent_status`
+          column — NEVER `status_raw`, which on a v4 card row carries the
+          rolodex ARCHIVE state and reads `active` for someone the studio's
+          record says `opted_out`. A NULL prints nothing. */}
+      {isFieldRosterRole(person.role) && <ConsentChip status={person.consent_status} />}
       <span aria-hidden className="shrink-0 text-[0.8rem] text-[var(--color-aged-oak)]">
         ›
       </span>

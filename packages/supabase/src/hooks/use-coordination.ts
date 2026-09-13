@@ -6,7 +6,8 @@ import type { RealtimeChannel } from '@supabase/supabase-js';
 import { createBrowserClient } from '../client';
 import type { ProductConfigurationSelection, PartyKind as SharedPartyKind } from '@patina/types';
 import type { ClientDecisionOption, DecisionType } from './use-decisions';
-import { peopleKeys } from './use-people';
+import { peopleKeys, peopleSeatKeys, usePeopleSeats } from './use-people';
+import { asWrittenConsentError } from './use-consent';
 import { invalidateProjectWorkflow } from './use-project-workflow';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -62,7 +63,17 @@ export interface ProjectParty {
   phone_e164: string | null;
   /** The party's trade — free TEXT, vocab in @patina/types field-config (00281). */
   trade: string | null;
-  /** TCPA consent state (00281): not_asked | pending | granted | opted_out. */
+  /**
+   * ⚠ FROZEN LEGACY (R-AS / R-AY, 00594's `refuse_legacy_consent_write_trg`).
+   * These eight columns are READ BY NOTHING but the one-time backfill and
+   * WRITTEN BY NOTHING at all: a BEFORE UPDATE trigger raises
+   * `consent_legacy_column_frozen` on a change. Every seat any live path
+   * produces sits at the `not_asked` default whatever the studio's record
+   * says. The consent word comes from `studio_channel_consent` — read it
+   * through `useChannelConsent`, or off the two directory views'
+   * `consent_status` column. They stay on this interface because the columns
+   * still exist and `select('*')` still returns them.
+   */
   sms_consent_status: 'not_asked' | 'pending' | 'granted' | 'opted_out';
   sms_consented_at: string | null;
   sms_opt_out_at: string | null;
@@ -391,9 +402,10 @@ export interface AddProjectPartyInput {
   trade?: string | null;
   phone?: string | null;
   email?: string | null;
-  /** Whether to text this party updates. true → sms_consent_status 'pending',
-   *  which fires the opt-in invite server-side (Track B DB trigger); false →
-   *  'not_asked'. The UI only writes the row; it never sends the invite. */
+  /** Whether to text this party updates. true records the invite on the
+   *  studio's consent record (`record_channel_invite`) before the seat is
+   *  written; false records nothing. The seat itself carries no consent
+   *  column any more (R-AS). */
   textUpdates?: boolean;
   smsConsentSource?: 'verbal' | 'written' | 'web_form' | 'other';
   smsConsentEvidence?: string;
@@ -413,9 +425,7 @@ export interface AddProjectPartyInput {
 
 /**
  * Add a field party (gc / sub / installer / receiver) to a project. Inserts a
- * project_parties row; the 00281 trigger normalizes phone_e164, and — per the
- * Track B contract — a row written with a phone + sms_consent_status='pending'
- * fires the opt-in SMS invite server-side. The UI never sends the invite.
+ * project_parties row; the 00281 trigger normalizes phone_e164.
  *
  * When the designer ticks "text updates" the invite is ALSO recorded on the
  * studio's own consent record (`record_channel_invite`, 00594) before the row
@@ -497,11 +507,19 @@ export function useAddProjectParty() {
           trade: input.trade?.trim() || null,
           phone: input.phone?.trim() || null,
           email: input.email?.trim() || null,
-          sms_consent_status: wantsText ? 'pending' : 'not_asked',
-          sms_consent_source: wantsText ? consentSource : null,
-          sms_consent_evidence: wantsText ? consentEvidence : null,
-          sms_consent_recorded_at: wantsText ? new Date().toISOString() : null,
-          sms_consent_disclosure_version: wantsText ? 'field-sms-v1' : null,
+          // R-AS: the eight `sms_consent_*` columns are FROZEN LEGACY and this
+          // INSERT no longer writes one. The consent fact lives on
+          // `studio_channel_consent` alone, recorded above, and both directory
+          // views and every send gate read it there.
+          //
+          // ⚠ ONE SHIPPED BEHAVIOUR MOVES WITH THEM. `fc_optin_invite_dispatch`
+          // (00284's trigger on `project_parties`, body at 00432:27-68) fires
+          // the double-opt-in SMS off a row landing at `sms_consent_status =
+          // 'pending'` WITH the four evidence columns. A seat born at the
+          // column default `not_asked` satisfies neither test, so the opt-in
+          // invite is not dispatched from here any more. The record-side
+          // dispatch trigger that replaces it is owed — see w2a-report.md §
+          // "Not done".
           studio_contact_id: input.studioContactId ?? null,
           show_to_client: input.showToClient ?? false,
         })
@@ -534,75 +552,17 @@ export interface UpdateProjectPartyInput {
   patch: Partial<UpdateProjectPartyPatch>;
 }
 
-/** The five evidence columns `fc_dispatch_optin_invite` (00432) reads, plus
- *  `sms_consent_status`, plus the two attestation timestamps
- *  (`sms_consented_at` / `sms_opt_out_at`, F3-R2-02) — the full eight-column
- *  bundle every write (and every not_asked revert) sets together, so a
- *  reverted row's timestamps always agree with its status. Shared by
- *  `useUpdateProjectParty`'s phone-change revert below and
- *  `useRecordPartySmsConsent`'s own revert further down this file. */
-const NOT_ASKED_CONSENT_COLUMNS = {
-  sms_consent_status: 'not_asked' as const,
-  sms_consent_source: null,
-  sms_consent_evidence: null,
-  sms_consent_recorded_at: null,
-  sms_consent_recorded_by: null,
-  sms_consent_disclosure_version: null,
-  sms_consented_at: null,
-  sms_opt_out_at: null,
-};
-
-/** What 00594's freeze (R-AS) raises when a shipped writer still reaches for
- *  `project_parties.sms_consent_*`. The two writers below are exactly that —
- *  W2 replaces them with `record_channel_consent()` / `record_channel_reconsent()`
- *  — and until it does, the raw Postgres string was rendered verbatim into the
- *  party sheet's own error slot. It fails CLOSED (nothing is written, nothing
- *  is sent); what it must not do is say so in Postgres. */
-const CONSENT_LEGACY_FROZEN = 'consent_legacy_column_frozen';
-const CONSENT_FROZEN_SENTENCE =
-  "Texting consent has moved to the studio's own record, and this screen hasn't caught up yet. Nothing was changed.";
-
-/** What a phone edit on an `opted_out` seat is refused with (close-review r3
- *  MAJOR-4). The seat's refusal cannot travel — see `useUpdateProjectParty`. */
+/** What a phone edit on a REFUSED number is refused with (close-review r3
+ *  MAJOR-4, repointed at the record in r14 BLOCKING-1). The refusal belongs to
+ *  the number on file and cannot travel to a corrected one. */
 const OPTED_OUT_PHONE_EDIT_SENTENCE =
   'This person replied STOP, and that refusal is attached to the number on file. ' +
   'Changing it would carry the refusal onto a number that never refused. ' +
   'Add them again with the corrected number instead.';
 
-/** Re-throws 00594's freeze as a written sentence. Any other error passes
- *  through untouched. */
-function asWrittenConsentError(error: unknown): unknown {
-  const message = (error as { message?: unknown } | null)?.message;
-  if (typeof message === 'string' && message.includes(CONSENT_LEGACY_FROZEN)) {
-    return new Error(CONSENT_FROZEN_SENTENCE);
-  }
-  return error;
-}
-
-/** `record_channel_consent()` (00594) refuses in four named ways. Each is a
- *  fact the designer can act on, so each gets its own sentence rather than the
- *  raw Postgres string. Anything else passes through. */
-function asWrittenConsentRpcError(error: unknown): unknown {
-  const message = (error as { message?: unknown } | null)?.message;
-  if (typeof message !== 'string') return error;
-  if (message.includes('channel_opted_out')) {
-    return new Error(
-      'This number already opted out of Patina texts. Only they can rejoin by replying START.',
-    );
-  }
-  if (message.includes('invalid_channel_value')) {
-    return new Error("That phone can't receive texts — fix the number first.");
-  }
-  if (message.includes('not_a_studio_member')) {
-    return new Error('Only an active member of this studio can record texting consent.');
-  }
-  if (message.includes('consent_evidence_required')) {
-    return new Error(
-      'Record how and where this person gave prior consent before sending a text.',
-    );
-  }
-  return error;
-}
+/** The consent RPCs' named refusals, rendered as sentences. One home, in
+ *  `use-consent.ts`, so the party sheet and the roster never drift apart. */
+const asWrittenConsentRpcError = asWrittenConsentError;
 
 /** Mirrors the DB's `normalize_phone_e164` (00281) so a client-side "did the
  *  phone actually change" comparison agrees with what the trigger will
@@ -626,36 +586,22 @@ export function normalizePartyPhoneForCompare(phone: string | null | undefined):
  * studio_contact_id change or a display-name edit can move where this row
  * surfaces there.
  *
- * F3-R1-02 / F3-R1-12 / F3-R2-01 — a GENUINE phone change (normalized E.164,
- * not the raw string — F3-R2-03 already covers the raw-string false
- * positive one level up, but this hook re-checks so it never trusts the
- * caller) reverts SMS consent, but never lifts `opted_out`: that status is
- * the only stored record of a recipient's STOP, and flipping it to
- * `not_asked` would both erase that record and re-open the invite path for
- * a number that opted out. So:
- *  · `pending` / `granted` revert to `not_asked` — unless the number being
- *    moved TO already carries its own `opted_out` sibling row, in which
- *    case this row is set to `opted_out` too rather than wrongly reopening
- *    an already-opted-out number, and INHERITS that sibling's
- *    `sms_opt_out_at` rather than stamping the edit's own clock over an
- *    opt-out that happened elsewhere, earlier, to someone else's row.
- *  · A NUMBER THE STUDIO'S RECORD REFUSED cannot move at all (close-review r3
- *    MAJOR-4; repointed at the record, r14 BLOCKING-1). The refusal belongs to
- *    the number on file and cannot travel to a corrected one, and since R-AY
- *    the only thing that knows a number refused is
- *    `studio_channel_consent` — the seat's own `sms_consent_status` is frozen
- *    at `not_asked`. So the verdict is read through
- *    `project_consent_org()` + `channel_consent_status()`, the same pair
- *    00594's freeze asks, with the frozen column kept only as a second leg;
- *    the branch below says why, in a sentence.
- *  · `not_asked` has nothing to revert.
- * `opted_out` refusing means that row stays permanently un-inviteable through
- * this hook AND keeps the number its refusal belongs to — a deliberate
- * compliance-first tradeoff; un-stranding it needs its own (per-number)
- * opt-out ledger, which is what `studio_channel_consent` (00594) now is, and
- * W2 retiring PR-x's seat check is where the strand ends.
- * `useRecordPartySmsConsent`'s sibling check cannot help there: its UPDATE is
- * guarded on not_asked, so a stranded opted_out row never reaches it.
+ * R-AS — THIS HOOK WRITES NO CONSENT COLUMN. The eight
+ * `project_parties.sms_consent_*` columns are frozen legacy; a BEFORE UPDATE
+ * trigger refuses a change to any of them, and `studio_channel_consent` is the
+ * only ledger. So the consent revert this hook used to perform on a phone
+ * change — `pending`/`granted` back to `not_asked`, or across to `opted_out`
+ * when a sibling row on the new number had refused — is GONE. A seat carries
+ * no consent fact to revert; the record is keyed on the NUMBER, so moving the
+ * seat's number simply moves which record the seat reads.
+ *
+ * ONE RULE SURVIVES, and it is a READ, not a write: a number the studio's
+ * RECORD refused cannot move (close-review r3 MAJOR-4; repointed at the record
+ * in r14 BLOCKING-1). The refusal belongs to the number on file and must not
+ * travel to a corrected one, so the verdict is read through
+ * `project_consent_org()` + `channel_consent_status()` — the same pair 00594's
+ * freeze asks — and a genuine change off a refused number is refused here, in
+ * a sentence.
  */
 export function useUpdateProjectParty() {
   const queryClient = useQueryClient();
@@ -677,30 +623,21 @@ export function useUpdateProjectParty() {
 
         const { data: currentRow, error: currentRowError } = await supabase
           .from('project_parties')
-          .select('sms_consent_status, phone_e164, project_id')
+          .select('phone_e164, project_id')
           .eq('id', id)
           .maybeSingle();
         if (currentRowError) throw currentRowError;
-        const currentStatus = currentRow?.sms_consent_status as
-          | ProjectParty['sms_consent_status']
-          | undefined;
         const currentE164 = (currentRow?.phone_e164 as string | null) ?? null;
         const nextE164 = normalizePartyPhoneForCompare(nextPhone);
         const phoneGenuinelyChanged = nextE164 !== currentE164;
 
         // A REFUSED NUMBER CANNOT MOVE, AND THE RECORD IS WHAT KNOWS IT
-        // REFUSED (W1b final review r14 BLOCKING-1). The guard below used to
-        // read `currentStatus === 'opted_out'` alone — the seat's own
-        // sms_consent_status, which R-AY/R-AS froze at its `not_asked`
-        // default for every seat any live write path produces once the mirror
-        // was retired. So the refusal this hook exists to show was
-        // unreachable, and an uncarded person's opt-out (their Directory row
-        // is keyed on the phone number itself) was losable by an ordinary
-        // phone correction with no warning anywhere. The record is asked
-        // first, exactly as 00594's freeze now asks it — same two functions,
-        // same order — so the portal refuses what the database would refuse
-        // instead of handing the designer a raw trigger error; the frozen
-        // column stays as a second leg for pre-R-AY rows.
+        // REFUSED (W1b final review r14 BLOCKING-1). R-AS removed the second
+        // leg this guard used to carry — `currentStatus === 'opted_out'` off
+        // the seat — because the seat's own column is frozen at its
+        // `not_asked` default for every row any live write path produces, so
+        // the leg could only ever answer for pre-freeze rows the backfill
+        // already folded into the record. One reader, one answer.
         let recordRefusedOldNumber = false;
         if (phoneGenuinelyChanged && currentE164) {
           const { data: consentOrg, error: orgError } = await supabase.rpc('project_consent_org', {
@@ -722,86 +659,9 @@ export function useUpdateProjectParty() {
         }
         if (recordRefusedOldNumber) throw new Error(OPTED_OUT_PHONE_EDIT_SENTENCE);
 
-        if (phoneGenuinelyChanged && (currentStatus === 'pending' || currentStatus === 'granted')) {
-          let revertsToOptedOut = false;
-          // The sibling's own opt-out moment, inherited below. Most recent
-          // first, so a number with several opted_out rows carries the latest
-          // word on it.
-          let siblingOptOutAt: string | null = null;
-          if (nextE164) {
-            // No self-exclusion, for the reason useRecordPartySmsConsent's
-            // probe carries none: this row cannot be its own sibling. The
-            // probe is keyed on nextE164 while the row still holds
-            // currentE164, and the two differ by the phoneGenuinelyChanged
-            // guard above. If a concurrent write DID move this row onto the
-            // new number and a STOP landed on it, matching itself is the
-            // right answer anyway — the opt-out is kept and its own date
-            // inherited, where an exclusion would have reset a live STOP to
-            // not_asked (review R3-06).
-            const { data: optedOutOnNewNumber, error: siblingError } = await supabase
-              .from('project_parties')
-              .select('id, sms_opt_out_at')
-              .eq('phone_e164', nextE164)
-              .eq('sms_consent_status', 'opted_out')
-              .order('sms_opt_out_at', { ascending: false, nullsFirst: false })
-              .limit(1);
-            if (siblingError) throw siblingError;
-            const sibling = optedOutOnNewNumber?.[0] as
-              | { sms_opt_out_at?: string | null }
-              | undefined;
-            revertsToOptedOut = !!sibling;
-            siblingOptOutAt = sibling?.sms_opt_out_at ?? null;
-          }
-          Object.assign(
-            dbPatch,
-            revertsToOptedOut
-              ? {
-                  ...NOT_ASKED_CONSENT_COLUMNS,
-                  sms_consent_status: 'opted_out' as const,
-                  // The STOP happened on the SIBLING row, at the sibling's
-                  // moment — nobody replied STOP on this row, and nothing
-                  // happened to it at all except a designer correcting a
-                  // number. So the date is inherited, never stamped now():
-                  // a fabricated opt-out time is what a TCPA audit would read
-                  // back as this recipient's own reply. A sibling with no
-                  // date leaves this row with none — "opted out, date
-                  // unknown" is the truth, and the sibling holds whatever
-                  // record there is. The evidence columns null with the
-                  // bundle above because they describe consent collected for
-                  // the OLD number and cannot travel with a phone change.
-                  sms_opt_out_at: siblingOptOutAt,
-                }
-              : NOT_ASKED_CONSENT_COLUMNS,
-          );
-        }
-        // AN `opted_out` SEAT'S NUMBER CANNOT MOVE (close-review r3 MAJOR-4).
-        // Leaving the consent columns alone used to mean the UPDATE named only
-        // phone/phone_e164, so 00594's `BEFORE UPDATE OF` freeze never fired
-        // and the edit landed — carrying the refusal onto the corrected number,
-        // where `orgHasOptedOutParty` (_shared/sms.ts) and both write doors'
-        // seat gates read it. The room then printed `not_asked` (or, where the
-        // corrected number already held a real grant, `granted`) off a record
-        // that knows nothing about the transplanted seat, while every send came
-        // back opted_out and all three write doors refused: G-3's sentence
-        // restored inside the record built to end it, reachable by fixing a
-        // digit. Pre-freeze the seat itself printed "Opted out", which was the
-        // visible clue and the thing `revertsToOptedOut` could act on.
-        //
-        // So this refuses, symmetrically with the freeze: a genuine phone
-        // change on a `pending`/`granted` seat restates the consent columns and
-        // the freeze refuses it, and a genuine phone change on an `opted_out`
-        // seat is refused here. A cosmetic reformat of the same digits is not a
-        // change and still lands. The durable fix is W2 retiring PR-x's seat
-        // check (rulings PR-x, "then retire it in a named follow-up"), after
-        // which the refusal lives in one place and the seat's number is inert.
-        // The second leg: a row written before R-AY whose frozen column still
-        // carries the refusal and whose record 00622's backfill could not
-        // fold. Never the only leg any more (r14 BLOCKING-1).
-        if (phoneGenuinelyChanged && currentStatus === 'opted_out') {
-          throw new Error(OPTED_OUT_PHONE_EDIT_SENTENCE);
-        }
-        // currentStatus 'not_asked' (or the row vanished from under us):
-        // consent columns are never rewritten by a phone edit.
+        // Nothing else happens to consent on a phone edit. The record is keyed
+        // on the number; moving the seat's number moves which record the seat
+        // reads, and no seat column is touched (R-AS).
       }
       if (patch.email !== undefined) dbPatch.email = patch.email?.trim() || null;
       if (patch.showToClient !== undefined) dbPatch.show_to_client = patch.showToClient;
@@ -813,11 +673,11 @@ export function useUpdateProjectParty() {
         .eq('id', id)
         .select()
         .single();
-      // A phone edit on a seat currently `pending` or `granted` restates the
-      // consent columns, and 00594's freeze refuses them. W2 replaces this
-      // branch with record_channel_consent(); until then the refusal is real
-      // and the edit does not land — so it says so in words (close-review r1
-      // MAJOR-3 / F3).
+      // Nothing here names a frozen column any more (R-AS), so the freeze
+      // cannot fire. The translation stays because 00594's OTHER trigger,
+      // `consent_opted_out_phone_frozen` (R-AX), still guards the two phone
+      // columns in the database — and a raw Postgres string is rendered
+      // verbatim into the party sheet's error slot.
       if (error) throw asWrittenConsentError(error);
       return data as ProjectParty;
     },
@@ -825,50 +685,39 @@ export function useUpdateProjectParty() {
       void queryClient.invalidateQueries({ queryKey: ['project-parties', input.projectId] });
       void queryClient.invalidateQueries({ queryKey: ['project-roster', input.projectId] });
       void queryClient.invalidateQueries({ queryKey: peopleKeys.all });
+      void queryClient.invalidateQueries({ queryKey: peopleSeatKeys.all });
     },
   });
 }
 
 export interface RecordPartySmsConsentInput {
   partyId: string;
-  /** The party's current phone — required client-side (mirrors
-   *  useAddProjectParty's `wantsText` guard): consent for texts is
-   *  meaningless without a number to text. Also pinned into the UPDATE's
-   *  WHERE clause (F4) so a phone edit racing this submit can't re-target
-   *  the attestation onto a number the designer never actually saw consent
-   *  for. */
+  projectId: string;
+  /** The party's current phone. Consent for texts is meaningless without a
+   *  number to text, and the record is KEYED on the number — so the value the
+   *  designer saw is what is recorded against. */
   phone: string | null | undefined;
   smsConsentSource: 'verbal' | 'written' | 'web_form' | 'other';
   smsConsentEvidence: string;
 }
 
 /**
- * Invite an EXISTING party to texts — the only writer of consent columns
- * outside `useAddProjectParty`'s create path. Flips `not_asked` → `pending`
- * with the same six-column evidence bundle `fc_dispatch_optin_invite` (00432)
- * requires to treat the UPDATE as a fresh invite-eligible transition: source,
- * evidence, recorded_at, recorded_by, disclosure_version, plus the status
- * flip itself. `sms_consent_recorded_by`'s `DEFAULT auth.uid()` (00432) is
- * INSERT-only, so an UPDATE must stamp the attester explicitly or the audit
- * trail silently loses who recorded consent.
+ * Invite an EXISTING seat's number to texts.
  *
- * Three guards run before/around the write:
- *  · a phone-global opt-out check (F3) — a STOP opts out every row sharing a
- *    phone_e164 (00432's sendPartySms contract), so a sibling row still
- *    sitting at not_asked on the same number must never be invited;
- *  · `.eq('sms_consent_status', 'not_asked')` + `.eq('phone', input.phone)`
- *    (F4) make the only legal transition — and the exact phone the designer
- *    saw — explicit server-side; a zero-row match (guard column or phone
- *    moved under us) surfaces as a friendly race message, not a raw
- *    PostgREST error;
- *  · a post-write phone_e164 check (F2) — the trigger gates dispatch on the
- *    normalized `phone_e164`, not the raw `phone` column, so a row whose
- *    number fails to normalize is reverted straight back to `not_asked`
- *    (never left stranded at `pending` with no invite and no way back).
+ * R-AS — THIS WRITES NO SEAT COLUMN. The old body flipped the seat's eight
+ * frozen `sms_consent_*` columns and carried three seat-shaped guards (a
+ * phone-global sibling probe, a `not_asked` transition pin, a revert when
+ * `phone_e164` failed to normalize). Every one of those questions now has a
+ * better home: the record's own gates. `record_channel_invite` is studio-member
+ * gated BEFORE its read, normalizes through `normalize_channel_value()` — so an
+ * un-textable number is refused there rather than reverted after the fact — and
+ * leaves a STANDING GRANT exactly as it is rather than demoting a repeat sub's
+ * evidenced consent back to `pending` (close-review r2 MAJOR-1).
  *
- * `granted` never routes here (TCPA: consent, once given, isn't re-recorded)
- * and `opted_out` is never designer-flippable — only the recipient's own
- * STOP/START reply changes that state. This hook cannot express either.
+ * `granted` never routes here (TCPA: consent, once given, is not re-recorded)
+ * and a refusal is never designer-flippable — `record_channel_reconsent`
+ * (`useRecordChannelReconsent`) is the studio's own way back, and an inbound
+ * START is the recipient's.
  */
 export function useRecordPartySmsConsent() {
   const queryClient = useQueryClient();
@@ -878,9 +727,7 @@ export function useRecordPartySmsConsent() {
       const supabase = getSupabase() as any;
       const phone = input.phone?.trim();
       if (!phone) {
-        throw new Error(
-          'Texting updates needs a phone number — add one first.',
-        );
+        throw new Error('Texting updates needs a phone number — add one first.');
       }
       const consentEvidence = input.smsConsentEvidence?.trim() || null;
       if (!input.smsConsentSource || !consentEvidence) {
@@ -889,96 +736,80 @@ export function useRecordPartySmsConsent() {
         );
       }
 
-      // F3 — a STOP reply opts out every row on that phone_e164; a sibling
-      // row still at not_asked must not silently re-invite a number that
-      // already opted out on another party/project row.
-      //
-      // No self-exclusion here. This row cannot be its own sibling: the
-      // UPDATE below is guarded on `sms_consent_status = 'not_asked'`, and a
-      // row at not_asked is by definition not one of the opted_out rows this
-      // probe looks for. An exclusion would only change which message a
-      // genuinely stranded row gets, never un-strand it.
-      const { data: selfRow, error: selfError } = await supabase
-        .from('project_parties')
-        .select('phone_e164')
-        .eq('id', input.partyId)
-        .maybeSingle();
-      if (selfError) throw selfError;
-      const phoneE164 = selfRow?.phone_e164 ?? null;
-      if (phoneE164) {
-        const { data: optedOutSiblings, error: siblingError } = await supabase
-          .from('project_parties')
-          .select('id')
-          .eq('phone_e164', phoneE164)
-          .eq('sms_consent_status', 'opted_out')
-          .limit(1);
-        if (siblingError) throw siblingError;
-        if (optedOutSiblings && optedOutSiblings.length > 0) {
-          throw new Error(
-            'This number already opted out of Patina texts. Only they can rejoin by replying START.',
-          );
-        }
-      }
-
-      // F1 — sms_consent_recorded_by's DEFAULT auth.uid() only fires on
-      // INSERT; stamp the attester explicitly on this UPDATE.
-      const { data: userData, error: userError } = await supabase.auth.getUser();
-      if (userError) throw userError;
-      const recordedBy = userData?.user?.id ?? null;
-
-      const { data, error } = await supabase
-        .from('project_parties')
-        .update({
-          sms_consent_status: 'pending',
-          sms_consent_source: input.smsConsentSource,
-          sms_consent_evidence: consentEvidence,
-          sms_consent_recorded_at: new Date().toISOString(),
-          sms_consent_recorded_by: recordedBy,
-          sms_consent_disclosure_version: 'field-sms-v1',
-        })
-        .eq('id', input.partyId)
-        .eq('phone', phone)
-        .eq('sms_consent_status', 'not_asked')
-        .select()
-        .single();
-      if (error) {
-        // F6 — zero rows matched (the guard column or the phone moved under
-        // us between render and submit): a friendly race message, not the
-        // raw PostgREST "no rows" error.
-        if (error.code === 'PGRST116') {
-          throw new Error(
-            "This person's texting status just changed — refresh to see it.",
-          );
-        }
-        // 00594's freeze (R-AS) refuses this whole write; the sheet renders
-        // the thrown message verbatim, so it must not be the Postgres string.
-        // W2 replaces this hook with record_channel_consent() (close-review r1
-        // MAJOR-3 / F2).
-        throw asWrittenConsentError(error);
-      }
-
-      // F2 — the trigger gates dispatch on phone_e164 (NULL for unparseable
-      // input), not the raw `phone` column just pinned above. A row that
-      // flipped to pending with no valid E.164 gets no invite and no way
-      // back without this revert.
-      if (!data.phone_e164) {
-        const { error: revertError } = await supabase
-          .from('project_parties')
-          .update(NOT_ASKED_CONSENT_COLUMNS)
-          .eq('id', input.partyId);
-        if (revertError) throw asWrittenConsentError(revertError);
+      const { data: consentOrg, error: orgError } = await supabase.rpc(
+        'project_consent_org',
+        { p_project_id: input.projectId },
+      );
+      if (orgError) throw orgError;
+      if (!consentOrg) {
         throw new Error(
-          "That phone can't receive texts — fix the number first.",
+          "This project isn't attached to a studio yet, so there's nowhere to record texting consent.",
         );
       }
 
+      const { data, error } = await supabase.rpc('record_channel_invite', {
+        p_organization_id: consentOrg,
+        p_channel_kind: 'sms',
+        p_channel_value: phone,
+        p_source: input.smsConsentSource,
+        p_evidence: consentEvidence,
+        p_disclosure_version: 'field-sms-v1',
+        p_origin_project_id: input.projectId,
+      });
+      if (error) throw asWrittenConsentRpcError(error);
+      return data as unknown;
+    },
+    onSuccess: (_data, input) => {
+      void queryClient.invalidateQueries({ queryKey: ['project-parties', input.projectId] });
+      void queryClient.invalidateQueries({ queryKey: ['project-roster', input.projectId] });
+      void queryClient.invalidateQueries({ queryKey: peopleKeys.all });
+      void queryClient.invalidateQueries({ queryKey: peopleSeatKeys.all });
+      void queryClient.invalidateQueries({ queryKey: ['channel-consent'] });
+    },
+  });
+}
+
+
+export interface CloseProjectPartySeatInput {
+  id: string;
+  projectId: string;
+  /** Why the seat closed, in the studio's own words. "The slab program went to
+   *  Stonehaven Tile Gallery." Kept with the seat for ever. */
+  reason?: string | null;
+  /** The day it closed. Defaults to today. */
+  offJobAt?: string | null;
+}
+
+/**
+ * CLOSE THIS SEAT — the act that replaces Remove (CRM-13, direction §1 line 8).
+ * A dated `off_job_at` with a reason, and the seat stays on the book: the
+ * consent, the bid history, the waivers and the lineage all survive, and the
+ * Call Sheet's Done band is where the row goes.
+ */
+export function useCloseProjectPartySeat() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: CloseProjectPartySeatInput) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase
+        .from('project_parties')
+        .update({
+          stage: 'off_job',
+          off_job_at: input.offJobAt ?? new Date().toISOString().slice(0, 10),
+          off_job_reason: input.reason?.trim() || null,
+        })
+        .eq('id', input.id)
+        .select()
+        .single();
+      if (error) throw error;
       return data as ProjectParty;
     },
-    onSuccess: (data) => {
-      void queryClient.invalidateQueries({ queryKey: ['project-parties', data.project_id] });
-      void queryClient.invalidateQueries({ queryKey: ['project-roster', data.project_id] });
-      // The party's row in the People Room roster (people_directory, 00281).
+    onSuccess: (_data, input) => {
+      void queryClient.invalidateQueries({ queryKey: ['project-parties', input.projectId] });
+      void queryClient.invalidateQueries({ queryKey: ['project-roster', input.projectId] });
       void queryClient.invalidateQueries({ queryKey: peopleKeys.all });
+      void queryClient.invalidateQueries({ queryKey: peopleSeatKeys.all });
     },
   });
 }
@@ -988,20 +819,105 @@ export interface RemoveProjectPartyInput {
   projectId: string;
 }
 
+/** Why a seat may not be hard-deleted. Each is a fact the delete would destroy. */
+export type SeatDeleteRefusal = 'consent' | 'bid' | 'waiver' | 'unknown';
+
+export const SEAT_DELETE_REFUSAL_SENTENCES: Record<SeatDeleteRefusal, string> = {
+  consent:
+    'This number has a texting record behind it. Close the seat instead — the record stays either way, and the seat is how you can still see it.',
+  bid: 'This seat carries a bid. Close it instead, so the bid history stays on the job.',
+  waiver:
+    'This seat carries paperwork the studio holds. Close it instead, so the paper keeps its place.',
+  unknown: 'Close this seat instead of removing it.',
+};
+
 /**
- * Remove a party from a project's roster. A real DELETE (00212's
- * `project_parties_designer_all` policy is `FOR ALL` — the project's designer
- * can delete their own project's rows; the table also carries a DELETE grant
- * to `authenticated`). Any coordination item still pointing `court_party_id`
- * at this row degrades gracefully — the FK is `ON DELETE SET NULL` (00213) —
- * so a removed party never leaves a dangling reference.
+ * THE MISTAKEN-ADD PREDICATE. A hard DELETE survives for exactly one case: a
+ * seat added by mistake, minutes ago, that carries nothing. `useRemoveProjectParty`
+ * calls this first and refuses when any of the three facts exists.
+ *
+ * Pure and exported so the surface can disable — or rather, explain — the act
+ * before the designer presses it.
+ */
+export function seatDeleteRefusal(facts: {
+  hasConsentRecord: boolean;
+  hasBid: boolean;
+  hasComplianceDocument: boolean;
+}): SeatDeleteRefusal | null {
+  if (facts.hasConsentRecord) return 'consent';
+  if (facts.hasBid) return 'bid';
+  if (facts.hasComplianceDocument) return 'waiver';
+  return null;
+}
+
+/**
+ * Remove a party from a project's roster — a real DELETE, and the LAST resort.
+ * Direction §1 line 8 retires Remove in favour of Close this seat; this path
+ * survives only for a mistaken add, and refuses the moment the seat carries a
+ * consent record, a bid or a document the studio holds.
+ *
+ * The bid check reads `stage`, because the bid COLUMNS (`bid_due_at`,
+ * `bid_outcome`, …) are P2 and do not exist yet: a seat sitting in one of the
+ * bid stages is a seat the studio asked for a price, whatever columns the row
+ * has. Named here so the check widens with the columns rather than silently
+ * staying narrow.
  */
 export function useRemoveProjectParty() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id }: RemoveProjectPartyInput) => {
+    mutationFn: async ({ id, projectId }: RemoveProjectPartyInput) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
+
+      const { data: seat, error: seatError } = await supabase
+        .from('project_parties')
+        .select('phone_e164, stage, studio_contact_id, project_id')
+        .eq('id', id)
+        .maybeSingle();
+      if (seatError) throw seatError;
+
+      let hasConsentRecord = false;
+      const phoneE164 = (seat?.phone_e164 as string | null) ?? null;
+      if (phoneE164) {
+        const { data: consentOrg, error: orgError } = await supabase.rpc(
+          'project_consent_org',
+          { p_project_id: (seat?.project_id as string | null) ?? projectId },
+        );
+        if (orgError) throw orgError;
+        if (consentOrg) {
+          const { data: verdict, error: verdictError } = await supabase.rpc(
+            'channel_consent_status',
+            {
+              p_organization_id: consentOrg,
+              p_channel_kind: 'sms',
+              p_channel_value: phoneE164,
+            },
+          );
+          if (verdictError) throw verdictError;
+          // `not_asked` and no record both mean the studio has never said
+          // anything about this number; anything else is a fact.
+          hasConsentRecord = !!verdict && verdict !== 'not_asked';
+        }
+      }
+
+      const bidStages = ['prospect', 'invited', 'bidding', 'declined', 'no_response'];
+      const hasBid = bidStages.includes((seat?.stage as string | null) ?? '');
+
+      let hasComplianceDocument = false;
+      const cardId = (seat?.studio_contact_id as string | null) ?? null;
+      if (cardId) {
+        const { data: docs, error: docsError } = await supabase
+          .from('studio_compliance_documents')
+          .select('id')
+          .eq('holder_id', cardId)
+          .limit(1);
+        if (docsError) throw docsError;
+        hasComplianceDocument = (docs ?? []).length > 0;
+      }
+
+      const refusal = seatDeleteRefusal({ hasConsentRecord, hasBid, hasComplianceDocument });
+      if (refusal) throw new Error(SEAT_DELETE_REFUSAL_SENTENCES[refusal]);
+
       const { error } = await supabase.from('project_parties').delete().eq('id', id);
       if (error) throw error;
       return { id };
@@ -1010,9 +926,11 @@ export function useRemoveProjectParty() {
       void queryClient.invalidateQueries({ queryKey: ['project-parties', input.projectId] });
       void queryClient.invalidateQueries({ queryKey: ['project-roster', input.projectId] });
       void queryClient.invalidateQueries({ queryKey: peopleKeys.all });
+      void queryClient.invalidateQueries({ queryKey: peopleSeatKeys.all });
     },
   });
 }
+
 
 /** A `v_project_roster` (00419) row — the party branch (project_parties) UNION
  *  ALL the team branch (project_team_members), one shape for the Call Sheet.
@@ -1034,6 +952,10 @@ export interface ProjectRosterRow {
   profile_id: string | null;
   show_to_client: boolean | null;
   has_active_field_link: boolean | null;
+  /** `v_project_roster`'s consent column, repointed by 00594 to the RECORD's
+   *  verdict through `channel_consent_status(project_consent_org(...))`. It is
+   *  NOT the seat's frozen column. NULL means the caller could not read the
+   *  record that decides the word, which prints as nothing (R-BB). */
   sms_consent_status: string | null;
   updated_at: string | null;
 }
@@ -1670,6 +1592,450 @@ export function useDeleteCoordinationItem(projectId: string | null | undefined) 
     },
     onSuccess: (input) => {
       invalidateCoordination(queryClient, projectId ?? null, input.designerClientId ?? null);
+    },
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// THE CALL SHEET, REGROUPED BY WINDOW (direction §3.4, ux-1-ia §5)
+//
+// "Build & supply" is replaced by four bands: this week, later, bidding, done.
+// The grouping is a PURE function over the seat's `stage` and its window, so
+// the rule can be read, tested and reasoned about without a database.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** The four crew bands the Call Sheet prints, in the order it prints them.
+ *  (Studio side and Client side are their own bands, from other tables.) */
+export type RosterBand = 'this_week' | 'later' | 'bidding' | 'done';
+
+export const ROSTER_BANDS: readonly RosterBand[] = [
+  'this_week',
+  'later',
+  'bidding',
+  'done',
+] as const;
+
+export const ROSTER_BAND_LABELS: Record<RosterBand, string> = {
+  this_week: 'On the job · this week',
+  later: 'On the job · later',
+  bidding: 'Bidding',
+  done: 'Done',
+};
+
+/** Stages that put a seat in Bidding whatever its window says: the studio asked
+ *  for a price and this seat is the answer, or the absence of one. `prospect`
+ *  rides here because it is pre-award and belongs to no crew band. */
+const BIDDING_STAGES: readonly string[] = [
+  'prospect',
+  'invited',
+  'bidding',
+  'declined',
+  'no_response',
+];
+
+/** Stages that put a seat in Done whatever its window says. */
+const DONE_STAGES: readonly string[] = ['closeout', 'warranty', 'off_job', 'retired'];
+
+/** Stages that are crew: they band by window. */
+const CREW_STAGES: readonly string[] = ['awarded', 'mobilized', 'active'];
+
+/** The shape the grouping needs. Both `people_directory_seats` rows and raw
+ *  `project_parties` rows satisfy it. */
+export interface RosterWindowSeat {
+  stage: string | null;
+  on_site_from: string | null;
+  on_site_to: string | null;
+}
+
+/** `YYYY-MM-DD` for a Date, in the caller's own calendar day. Dates on a seat
+ *  are DATE columns, not timestamps, so the comparison is a string one and
+ *  never crosses a timezone. */
+export function rosterDateKey(on: Date): string {
+  const y = on.getFullYear();
+  const m = String(on.getMonth() + 1).padStart(2, '0');
+  const d = String(on.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+/**
+ * Which band one seat belongs in (ux-1-ia §5, direction §3.4).
+ *
+ *  · a bid stage or a done stage decides outright — a bidder with a projected
+ *    window is still a bidder, and a warranty seat's window closed months ago;
+ *  · otherwise the WINDOW decides: a window that opens in the future is Later,
+ *    and everything else — a window covering today, a window that has closed
+ *    on a seat still marked crew, or no window at all — is this week.
+ *
+ * `today` is injected rather than read from the clock, so the rule is testable
+ * and the whole Call Sheet bands against ONE moment.
+ */
+export function rosterBandFor(seat: RosterWindowSeat, today: string): RosterBand {
+  const stage = seat.stage ?? '';
+  if (DONE_STAGES.includes(stage)) return 'done';
+  if (BIDDING_STAGES.includes(stage)) return 'bidding';
+  // An unknown stage is treated as crew rather than dropped: a seat the room
+  // cannot band is a seat the studio cannot see.
+  if (!CREW_STAGES.includes(stage) && stage !== '') {
+    // fall through to the window rule — a stage this vocabulary does not know
+    // is still a seat on a job.
+  }
+  if (seat.on_site_from && seat.on_site_from > today) return 'later';
+  return 'this_week';
+}
+
+/** Every seat, banded, with empty bands kept so the Call Sheet's headings do
+ *  not move about as a job turns over. */
+export function groupRosterByWindow<T extends RosterWindowSeat>(
+  seats: readonly T[],
+  today: string,
+): Record<RosterBand, T[]> {
+  const grouped: Record<RosterBand, T[]> = {
+    this_week: [],
+    later: [],
+    bidding: [],
+    done: [],
+  };
+  for (const seat of seats) grouped[rosterBandFor(seat, today)].push(seat);
+  return grouped;
+}
+
+/** The Call Sheet's roster, banded. Reads `people_directory_seats`, so every
+ *  row carries the identity's reach, consent and paper words beside the seat's
+ *  own stage and window. */
+export function useProjectRosterByWindow(
+  projectId: string | null | undefined,
+  today: string = rosterDateKey(new Date()),
+) {
+  const seats = usePeopleSeats({ projectId });
+  const bands = seats.data ? groupRosterByWindow(seats.data, today) : undefined;
+  return { ...seats, bands };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// E12 · AUTHORITY ON THE SEAT — `project_party_authority` (00624)
+//
+// Who signs, up to what number, who only prepares. PR-n lives in the RLS
+// policy, not here: `money` and `draw_certify` are owner/admin only, and a
+// plain member's write is refused by Postgres. The hook surfaces that refusal
+// as a sentence rather than a policy error.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** `project_party_authority.scope` (00624's CHECK). */
+export type AuthorityScope =
+  | 'money'
+  | 'change_order'
+  | 'selections'
+  | 'schedule'
+  | 'site_access'
+  | 'key'
+  | 'draw_certify';
+
+export const ALL_AUTHORITY_SCOPES: readonly AuthorityScope[] = [
+  'money',
+  'change_order',
+  'selections',
+  'schedule',
+  'site_access',
+  'key',
+  'draw_certify',
+] as const;
+
+/** The scopes PR-n reserves to an owner or admin of the studio. */
+export const ADMIN_ONLY_AUTHORITY_SCOPES: readonly AuthorityScope[] = [
+  'money',
+  'draw_certify',
+] as const;
+
+export function isAdminOnlyAuthorityScope(scope: string | null | undefined): boolean {
+  return !!scope && (ADMIN_ONLY_AUTHORITY_SCOPES as readonly string[]).includes(scope);
+}
+
+/** Authority is never a state word — it prints as plain, uncoloured text
+ *  (direction §3.8). These are the phrases, one per scope. */
+export const AUTHORITY_SCOPE_LABELS: Record<AuthorityScope, string> = {
+  money: 'Signs money',
+  change_order: 'Approves change orders',
+  selections: 'Selections',
+  schedule: 'Sets the schedule',
+  site_access: 'Controls site access',
+  key: 'Holds a key',
+  draw_certify: 'Certifies draws',
+};
+
+export interface ProjectPartyAuthority {
+  id: string;
+  engagement_id: string;
+  scope: AuthorityScope | string;
+  /** Integer CENTS. The $2,500 line is 250000. */
+  threshold_cents: number | null;
+  /** F-03/F-08's fact: they draft it, somebody else signs it. */
+  prepares_only: boolean;
+  /** Seats on this SAME project a decision is copied to; a BEFORE trigger
+   *  refuses an id off the project (`authority_copy_to_off_project`). */
+  copy_to: string[];
+  source_clause: string | null;
+  granted_by: string | null;
+  effective_from: string;
+  effective_to: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SetPartyAuthorityInput {
+  engagementId: string;
+  projectId: string;
+  scope: AuthorityScope;
+  thresholdCents?: number | null;
+  preparesOnly?: boolean;
+  copyTo?: string[];
+  sourceClause?: string | null;
+  effectiveFrom?: string | null;
+  effectiveTo?: string | null;
+}
+
+export const partyAuthorityKeys = {
+  all: ['project-party-authority'] as const,
+  list: (engagementId: string | null | undefined) =>
+    ['project-party-authority', engagementId ?? null] as const,
+};
+
+/** One seat's grants. */
+export function usePartyAuthority(engagementId: string | null | undefined) {
+  return useQuery({
+    queryKey: partyAuthorityKeys.list(engagementId),
+    enabled: !!engagementId,
+    queryFn: async (): Promise<ProjectPartyAuthority[]> => {
+      if (!engagementId) return [];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase
+        .from('project_party_authority')
+        .select('*')
+        .eq('engagement_id', engagementId);
+      if (error) throw error;
+      return (data ?? []) as ProjectPartyAuthority[];
+    },
+  });
+}
+
+const AUTHORITY_ADMIN_ONLY_SENTENCE =
+  'Money and draw certification are the principal’s to grant. Ask an owner or an admin of the studio to record this one.';
+
+/** Record or restate one grant. One row per (seat, scope). */
+export function useSetPartyAuthority() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: SetPartyAuthorityInput): Promise<ProjectPartyAuthority> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase
+        .from('project_party_authority')
+        .upsert(
+          {
+            engagement_id: input.engagementId,
+            scope: input.scope,
+            threshold_cents: input.thresholdCents ?? null,
+            prepares_only: input.preparesOnly ?? false,
+            copy_to: input.copyTo ?? [],
+            source_clause: input.sourceClause?.trim() || null,
+            effective_from:
+              input.effectiveFrom ?? new Date().toISOString().slice(0, 10),
+            effective_to: input.effectiveTo ?? null,
+          },
+          { onConflict: 'engagement_id,scope' },
+        )
+        .select('*')
+        .single();
+      if (error) {
+        // PR-n's gate is in the INSERT/UPDATE policies, so a plain member's
+        // write on a money scope comes back as an RLS refusal (zero rows, or
+        // 42501). Neither string belongs on a designer's screen.
+        if (isAdminOnlyAuthorityScope(input.scope)) {
+          throw new Error(AUTHORITY_ADMIN_ONLY_SENTENCE);
+        }
+        throw error;
+      }
+      return data as ProjectPartyAuthority;
+    },
+    onSuccess: (_data, input) => {
+      void queryClient.invalidateQueries({
+        queryKey: partyAuthorityKeys.list(input.engagementId),
+      });
+      void queryClient.invalidateQueries({ queryKey: ['project-parties', input.projectId] });
+      void queryClient.invalidateQueries({ queryKey: ['project-roster', input.projectId] });
+      void queryClient.invalidateQueries({ queryKey: peopleSeatKeys.all });
+    },
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// E15 · THE SITE ACCESS CARD — `project_site_access_cards` (00625)
+//
+// PR-r IS THE SHAPE: there is NO gate-code column and there is not meant to be
+// one. Patina stores the lockbox VERSION, the key holder, the hours and who was
+// told, and prints that the code is held off Patina.
+//
+// PR-w IS THE RLS: four studio policies, no client leg, no `show_to_client`.
+// One card per project, so a single toggle would expose the whole card.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** One line on the card's "who to call first" list. */
+export interface SiteAccessEmergencyLine {
+  name: string;
+  role?: string | null;
+  phone?: string | null;
+}
+
+export interface ProjectSiteAccessCard {
+  id: string;
+  project_id: string;
+  /** The VERSION, never the code. "Lockbox, version 3." */
+  lockbox_version: string | null;
+  alarm_ref: string | null;
+  /** A seat on THIS project; a BEFORE trigger refuses anything else. */
+  key_holder_engagement_id: string | null;
+  site_hours: string | null;
+  site_notes: string | null;
+  emergency_lines: SiteAccessEmergencyLine[];
+  receiver_instructions: string | null;
+  changed_at: string | null;
+  changed_by: string | null;
+  /** The seats told about the last change. */
+  told_refs: string[];
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UpdateSiteAccessCardInput {
+  projectId: string;
+  lockboxVersion?: string | null;
+  alarmRef?: string | null;
+  keyHolderEngagementId?: string | null;
+  siteHours?: string | null;
+  siteNotes?: string | null;
+  emergencyLines?: SiteAccessEmergencyLine[];
+  receiverInstructions?: string | null;
+}
+
+export const siteAccessKeys = {
+  all: ['project-site-access'] as const,
+  detail: (projectId: string | null | undefined) =>
+    ['project-site-access', projectId ?? null] as const,
+};
+
+/** The card, or `null` when the project has none yet. NULL is the empty state,
+ *  not an error: most projects have no card until somebody writes one. */
+export function useSiteAccessCard(projectId: string | null | undefined) {
+  return useQuery({
+    queryKey: siteAccessKeys.detail(projectId),
+    enabled: !!projectId,
+    queryFn: async (): Promise<ProjectSiteAccessCard | null> => {
+      if (!projectId) return null;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase
+        .from('project_site_access_cards')
+        .select('*')
+        .eq('project_id', projectId)
+        .maybeSingle();
+      if (error) throw error;
+      return (data as ProjectSiteAccessCard | null) ?? null;
+    },
+  });
+}
+
+/**
+ * Write the card. Creates it on first write; one row per project.
+ *
+ * `changed_at` / `changed_by` are stamped on every write, because "Lockbox
+ * changed 16 Oct 2026 by Priya Natarajan" is the fact the crew reads, and
+ * `told_refs` is deliberately CLEARED by a change: telling people about the
+ * OLD lockbox is not telling them about this one.
+ */
+export function useUpdateSiteAccessCard() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (
+      input: UpdateSiteAccessCardInput,
+    ): Promise<ProjectSiteAccessCard> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      if (userError) throw userError;
+
+      const row: Record<string, unknown> = {
+        project_id: input.projectId,
+        changed_at: new Date().toISOString(),
+        changed_by: userData?.user?.id ?? null,
+        told_refs: [],
+      };
+      if (input.lockboxVersion !== undefined)
+        row.lockbox_version = input.lockboxVersion?.trim() || null;
+      if (input.alarmRef !== undefined) row.alarm_ref = input.alarmRef?.trim() || null;
+      if (input.keyHolderEngagementId !== undefined)
+        row.key_holder_engagement_id = input.keyHolderEngagementId;
+      if (input.siteHours !== undefined) row.site_hours = input.siteHours?.trim() || null;
+      if (input.siteNotes !== undefined) row.site_notes = input.siteNotes?.trim() || null;
+      if (input.emergencyLines !== undefined) row.emergency_lines = input.emergencyLines;
+      if (input.receiverInstructions !== undefined)
+        row.receiver_instructions = input.receiverInstructions?.trim() || null;
+
+      const { data, error } = await supabase
+        .from('project_site_access_cards')
+        .upsert(row, { onConflict: 'project_id' })
+        .select('*')
+        .single();
+      if (error) throw error;
+      return data as ProjectSiteAccessCard;
+    },
+    onSuccess: (_data, input) => {
+      void queryClient.invalidateQueries({
+        queryKey: siteAccessKeys.detail(input.projectId),
+      });
+    },
+  });
+}
+
+/**
+ * "Log who was told" — appends seats to `told_refs` without disturbing the
+ * change itself. Appends rather than replaces, and de-duplicates, so telling a
+ * second group later does not erase the first.
+ */
+export function useLogSiteAccessTold() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      projectId: string;
+      seatIds: string[];
+    }): Promise<ProjectSiteAccessCard> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data: card, error: cardError } = await supabase
+        .from('project_site_access_cards')
+        .select('id, told_refs')
+        .eq('project_id', input.projectId)
+        .maybeSingle();
+      if (cardError) throw cardError;
+      if (!card) {
+        throw new Error('There is no site access card on this job yet.');
+      }
+      const existing = ((card.told_refs as string[] | null) ?? []).filter(Boolean);
+      const next = Array.from(new Set([...existing, ...input.seatIds]));
+
+      const { data, error } = await supabase
+        .from('project_site_access_cards')
+        .update({ told_refs: next })
+        .eq('id', card.id)
+        .select('*')
+        .single();
+      if (error) throw error;
+      return data as ProjectSiteAccessCard;
+    },
+    onSuccess: (_data, input) => {
+      void queryClient.invalidateQueries({
+        queryKey: siteAccessKeys.detail(input.projectId),
+      });
     },
   });
 }

@@ -24,6 +24,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   usePerson,
+  usePersonSeat,
   usePartySmsThread,
   useSendPartySms,
   useActiveFieldLink,
@@ -192,6 +193,14 @@ export function PartyProfileSheet({
   onClose: () => void;
 }) {
   const { data: person, refetch: refetchPerson } = usePerson(partyId, role);
+  // R-BE — THE SEAT READER. `partyId` is a `project_parties.id`, and
+  // `people_directory` v4 keys a carded human on their ROLODEX CARD, so
+  // `usePerson(<seat id>)` finds nothing for a carded seat. `usePersonSeat`
+  // resolves the seat through `people_directory_seats` and joins its identity
+  // on `person_id`; the consent WORD comes off that identity's own
+  // `consent_status` column and off nothing else.
+  const { data: seatResolution } = usePersonSeat(partyId);
+  const seatIdentity = seatResolution?.identity ?? null;
   const { data: thread } = usePartySmsThread(open ? partyId : null);
   const { data: activeLink } = useActiveFieldLink(open ? partyId : null);
   const createLink = useCreateFieldLink();
@@ -256,9 +265,12 @@ export function PartyProfileSheet({
   }, [partyId]);
 
   const meta = (person?.meta ?? {}) as Record<string, unknown>;
-  const consent = (person?.status_raw ??
-    (meta.sms_consent_status as string) ??
-    'not_asked') as string;
+  // R-BE — NEVER `status_raw`. On a v4 card row that column carries the
+  // rolodex ARCHIVE state and reads `active` for someone the studio's record
+  // says `opted_out`; the old fallback chain then printed "Not asked" over a
+  // dated refusal the same screen's seat line reads correctly. NULL here means
+  // the identity could not be resolved, and the chip below renders nothing.
+  const consent = seatResolution?.identity?.consent_status ?? null;
   const granted = consent === 'granted';
   const trade = getFieldTradeLabel(meta.trade as string | undefined);
   const company = (meta.company_name as string | undefined) ?? null;
@@ -475,6 +487,10 @@ export function PartyProfileSheet({
     recordConsent.mutate(
       {
         partyId,
+        // The record is the studio's, resolved from the project — so the hook
+        // needs the job, not just the seat (R-AS). The seat's own project is
+        // the one the consent was collected on.
+        projectId: linkedParty?.project_id ?? person?.project_id ?? '',
         phone,
         smsConsentSource: inviteSource,
         smsConsentEvidence: inviteEvidence.trim(),
@@ -509,7 +525,9 @@ export function PartyProfileSheet({
             identity on person_id, and take the word from consent_status. Until
             then the sheet says nothing rather than the affirmative-adjacent
             word. */}
-        {person ? <ConsentChip status={consent} /> : null}
+        {/* No identity, no consent chip (R-BE). An absent record is its own
+            fact and must not print as a word. */}
+        {seatIdentity ? <ConsentChip status={consent} /> : null}
       </div>
 
       {/* Promote band (Call Sheet Wave 2, slide 10) — only when this party

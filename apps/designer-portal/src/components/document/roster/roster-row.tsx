@@ -118,7 +118,7 @@ export function RosterRow({
   const copyLink = async () => {
     setNote(null);
     try {
-      const { token } = await createLink.mutateAsync({ partyId });
+      const { token } = await createLink.mutateAsync({ partyId, projectId });
       const url = fieldLinkUrl(token);
       await navigator.clipboard?.writeText(url);
       setNote(`Field link copied — shown once. ${url}`);
@@ -142,7 +142,11 @@ export function RosterRow({
               <span className="truncate text-[0.88rem] text-[var(--color-charcoal)]">
                 {name}
               </span>
-              {isParty && <ConsentChip status={consent} dotOnly />}
+              {/* NO consent word on the COLLAPSED row (SPEC §6.1): the Call
+                  Sheet's row carries two words — reach and stage — and consent
+                  and paper move into the unfold. What stood here was a bare
+                  `dotOnly` colour dot, which SPEC §5.1 #16 and §7 #9 both
+                  forbid, and which sat INSIDE the toggle's accessible name. */}
             </span>
             <span className={`mt-[0.1rem] flex items-baseline gap-1.5 ${META}`}>
               {isClient ? (

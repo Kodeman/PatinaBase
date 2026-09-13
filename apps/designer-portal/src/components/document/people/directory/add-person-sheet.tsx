@@ -147,6 +147,12 @@ const KIND_NOUN: Record<PartyKind, string> = {
   architect: 'architect',
   photographer: 'photographer',
   stager: 'stager',
+  // PR-f's four. `other_named` reads "other" like `other` does: the studio
+  // types the actual word beside it (`partyKindRequiresLabel`).
+  inspector: 'inspector',
+  lender: 'lender',
+  engineer: 'engineer',
+  other_named: 'other',
 };
 
 export function AddPersonSheet({

@@ -456,6 +456,41 @@ export type {
   RemoveProjectPartyInput,
   RecordPartySmsConsentInput,
   ProjectRosterRow,
+  // People room CRM (W2a)
+  CloseProjectPartySeatInput,
+  SeatDeleteRefusal,
+  RosterBand,
+  RosterWindowSeat,
+  AuthorityScope,
+  ProjectPartyAuthority,
+  SetPartyAuthorityInput,
+  SiteAccessEmergencyLine,
+  ProjectSiteAccessCard,
+  UpdateSiteAccessCardInput,
+} from "./use-coordination";
+// People room CRM (W2a) — the seat's close act, the window bands, authority on
+// the seat, and the site access card.
+export {
+  useCloseProjectPartySeat,
+  seatDeleteRefusal,
+  SEAT_DELETE_REFUSAL_SENTENCES,
+  ROSTER_BANDS,
+  ROSTER_BAND_LABELS,
+  rosterBandFor,
+  rosterDateKey,
+  groupRosterByWindow,
+  useProjectRosterByWindow,
+  ALL_AUTHORITY_SCOPES,
+  ADMIN_ONLY_AUTHORITY_SCOPES,
+  AUTHORITY_SCOPE_LABELS,
+  isAdminOnlyAuthorityScope,
+  usePartyAuthority,
+  useSetPartyAuthority,
+  partyAuthorityKeys,
+  useSiteAccessCard,
+  useUpdateSiteAccessCard,
+  useLogSiteAccessTold,
+  siteAccessKeys,
 } from "./use-coordination";
 // Field Coordination (Wave 5) — SMS triage, cross-project field rollup, and the
 // per-party thread / composer / field-link data layer.
@@ -481,19 +516,72 @@ export {
   fieldLinkUrl,
   partySmsKeys,
 } from "./use-party-sms";
-export type { PartySmsMessage, FieldLinkToken } from "./use-party-sms";
+export type {
+  PartySmsMessage,
+  FieldLinkToken,
+  CreateFieldLinkInput,
+} from "./use-party-sms";
 export {
   usePeopleDirectory,
   usePerson,
+  usePeopleSeats,
+  usePersonSeat,
   peopleKeys,
+  peopleSeatKeys,
   FIELD_ROSTER_ROLES,
   isFieldRosterRole,
 } from "./use-people";
 export type {
   PartyRole,
   PeopleDirectoryRow,
+  PeopleDirectorySeat,
   PeopleFilters,
+  PeopleSeatFilters,
+  PersonSeatResolution,
 } from "./use-people";
+// People room CRM (W2a) — consent lives on the RECORD, never on a seat.
+export {
+  useChannelConsent,
+  useRecordChannelConsent,
+  useRecordChannelInvite,
+  useRecordChannelReconsent,
+  useProjectConsentOrg,
+  asWrittenConsentError,
+  consentKeys,
+  CONSENT_LEGACY_FROZEN,
+  CONSENT_FROZEN_SENTENCE,
+} from "./use-consent";
+export type {
+  ConsentChannelKind,
+  ConsentStatus,
+  ConsentSource,
+  ChannelConsentRecord,
+  ChannelConsentResolution,
+  RecordChannelConsentInput,
+  RecordChannelInviteInput,
+  RecordChannelReconsentInput,
+} from "./use-consent";
+// People room CRM (W2a) — E9, every door Patina opens, in one shape.
+export {
+  useAccessGrants,
+  useRevokeAccessGrant,
+  accessGrantKeys,
+  accessGrantRevokeRoute,
+  accessGrantNaturalKey,
+  isAccessGrantRevokable,
+  ALL_ACCESS_GRANT_TIERS,
+  ACCESS_GRANT_TIER_LABELS,
+  ACCESS_GRANT_TIER_OPENS,
+  ACCESS_GRANT_REVOKE_ROUTES,
+  ACCESS_GRANT_NOT_REVOKABLE_SENTENCE,
+} from "./use-access-grants";
+export type {
+  AccessGrant,
+  AccessGrantTier,
+  AccessGrantFilters,
+  AccessGrantRevokeRoute,
+  RevokeAccessGrantInput,
+} from "./use-access-grants";
 export {
   // Client Reviews
   useClientReviews,
@@ -2022,6 +2110,64 @@ export type {
   StudioContactFilters,
   StudioContactHistory,
   PromoteToStudioContactInput,
+  StudioCompanyCardFields,
+  StudioPersonCardFields,
+  UpdateStudioContactCardPatch,
+} from "./use-studio-contacts";
+// People room CRM (W2a) — typed channels (E6), the contact rule (E7),
+// affiliations (E4) and compliance documents (E10), all on the rolodex card.
+export {
+  useStudioContactChannels,
+  useAddStudioContactChannel,
+  useUpdateStudioContactChannel,
+  useSetStudioContactChannelStatus,
+  studioChannelKeys,
+  isContactChannelHeld,
+  ALL_CONTACT_CHANNEL_KINDS,
+  CONTACT_CHANNEL_KIND_LABELS,
+  PERSON_CHANNEL_KINDS,
+  COMPANY_CHANNEL_KINDS,
+  ALL_CONTACT_CHANNEL_STATUSES,
+  useContactRule,
+  useSetContactRule,
+  useClearContactRule,
+  contactRuleKeys,
+  ALL_CONTACT_RULE_CHANNELS,
+  useAffiliations,
+  useSetAffiliation,
+  useCloseAffiliation,
+  affiliationKeys,
+  useComplianceDocuments,
+  useComplianceState,
+  useRecordComplianceDocument,
+  useConfirmComplianceDocument,
+  complianceKeys,
+  complianceDocRequiresExpiry,
+  ALL_COMPLIANCE_DOC_TYPES,
+  COMPLIANCE_DOC_TYPE_LABELS,
+  DATED_COMPLIANCE_DOC_TYPES,
+  ALL_COMPLIANCE_BLOCKS,
+  COMPLIANCE_BLOCK_LABELS,
+} from "./use-studio-contacts";
+export type {
+  ContactChannelKind,
+  ContactChannelStatus,
+  StudioContactChannel,
+  AddStudioContactChannelInput,
+  UpdateStudioContactChannelInput,
+  SetStudioContactChannelStatusInput,
+  ContactRuleSubjectType,
+  ContactRuleChannel,
+  StudioContactRule,
+  SetStudioContactRuleInput,
+  StudioPersonAffiliation,
+  AffiliationFilters,
+  SetAffiliationInput,
+  ComplianceDocType,
+  ComplianceBlock,
+  StudioComplianceDocument,
+  ComplianceDocumentFilters,
+  RecordComplianceDocumentInput,
 } from "./use-studio-contacts";
 
 // The Plan Room (00429) — sheets, prints, batches, issues, transmittals: the

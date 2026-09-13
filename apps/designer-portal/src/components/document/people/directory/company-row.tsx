@@ -20,8 +20,8 @@
  * render gracefully with any subset of them present or absent.
  */
 
-import { Avatar, StatusDot, companyKindBadgeStyle } from '../person-bits';
-import type { PartyStatus } from '@/lib/document/people-derivation';
+import { Avatar, companyKindBadgeStyle } from '../person-bits';
+import { StateWord } from '../state-word';
 
 /**
  * A company's OWN kind vocabulary (studio_contacts.contact_kind on an
@@ -58,9 +58,16 @@ export interface CompanyRowProps {
   companyPeopleCount?: number | null;
   projectsCount?: number | null;
   lastProjectName?: string | null;
-  /** No real signal exists yet (see module doc) — omitted unless a caller
-   *  has one. */
-  statusDot?: PartyStatus;
+  /**
+   * The firm's paper word (`compliance_state` / `paper_state`). R-G: a company
+   * row carries two word columns — paper and the payee marker — and no reach
+   * or consent word, because a firm has neither.
+   *
+   * R-A / C13: a firm whose only people are inspectors or lenders never owed
+   * the studio paper, so the CALLER passes `null` and the row prints no paper
+   * word at all. Never "Not on file", never blocked.
+   */
+  paperState?: string | null;
   onOpen?: () => void;
 }
 
@@ -70,7 +77,7 @@ export function CompanyRow({
   companyPeopleCount,
   projectsCount,
   lastProjectName,
-  statusDot,
+  paperState,
   onOpen,
 }: CompanyRowProps) {
   const bits: string[] = [];
@@ -93,7 +100,7 @@ export function CompanyRow({
             {name}
           </span>
           <span
-            className="rounded-[3px] border-[1.5px] px-2 py-[2px] font-mono text-[0.44rem] font-semibold uppercase tracking-[0.06em]"
+            className="t-meta shrink-0 rounded-[3px] border px-2 py-[2px] font-medium uppercase"
             style={{ color: kindColor, borderColor: kindBorder }}
           >
             {companyKindLabel(kind)}
@@ -103,8 +110,10 @@ export function CompanyRow({
           {line}
         </span>
       </span>
-      {/* NO consent dot — a firm cannot consent to a text message (slide 9). */}
-      {statusDot && <StatusDot status={statusDot} />}
+      {/* NO consent or reach word — a firm has neither (SPEC §5.3 #9). The
+          paper word is the firm's own state, and `StateWord` prints nothing
+          for a null (R-A's lender/inspector exemption arrives as a null). */}
+      <StateWord family="paper" value={paperState} />
       <span aria-hidden className="shrink-0 text-[0.8rem] text-[var(--color-aged-oak)]">
         ›
       </span>

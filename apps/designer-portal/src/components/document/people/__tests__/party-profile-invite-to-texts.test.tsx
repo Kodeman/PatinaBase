@@ -24,6 +24,17 @@ const personData: { current: Record<string, unknown> | null } = { current: null 
 
 jest.mock('@patina/supabase', () => ({
   usePerson: () => ({ data: personData.current }),
+  // R-BE — the sheet resolves the SEAT through people_directory_seats and takes
+  // the consent word off the identity's own `consent_status` column. The
+  // fixture's person doubles as the identity here.
+  usePersonSeat: () => ({
+    data: personData.current
+      ? {
+          seat: { seat_id: 'party-1', project_id: personData.current.project_id },
+          identity: personData.current,
+        }
+      : { seat: null, identity: null },
+  }),
   usePartySmsThread: () => ({ data: [] }),
   useSendPartySms: () => ({
     mutate: jest.fn(),
@@ -60,7 +71,15 @@ function person(over: Partial<Record<string, unknown>> = {}) {
     profile_id: null,
     project_id: 'project-1',
     designer_id: null,
-    status_raw: 'not_asked',
+    // R-AS/R-BE: `status_raw` is the ARCHIVE state on a v4 row, never the
+    // consent word. The sheet reads `consent_status`, which is the studio's
+    // own record through `channel_consent_status()`.
+    status_raw: 'active',
+    consent_status: 'not_asked',
+    reach_state: 'on_paper',
+    paper_state: null,
+    contact_rule_summary: null,
+    seat_count: 1,
     last_touch_at: null,
     meta: { phone_e164: '+15551234567' },
     scope: 'mine',
@@ -78,7 +97,7 @@ const ROLE: PartyRole = 'sub';
 
 describe('PartyProfileSheet — opted_out is a locked state, never a designer-flippable control', () => {
   it('renders the STOP/START explanation with no checkbox and no invite action', () => {
-    personData.current = person({ status_raw: 'opted_out' });
+    personData.current = person({ consent_status: 'opted_out' });
     render(
       <PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />,
     );
@@ -95,7 +114,7 @@ describe('PartyProfileSheet — opted_out is a locked state, never a designer-fl
 
 describe('PartyProfileSheet — pending renders as "invite sent", no resend control', () => {
   it('shows the waiting copy with no button to re-send', () => {
-    personData.current = person({ status_raw: 'pending' });
+    personData.current = person({ consent_status: 'pending' });
     render(
       <PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />,
     );
@@ -112,7 +131,7 @@ describe('PartyProfileSheet — pending renders as "invite sent", no resend cont
 
 describe('PartyProfileSheet — the invite control is hidden without a phone on file', () => {
   it('shows a phone-needed hint instead of the checkbox/consent form', () => {
-    personData.current = person({ status_raw: 'not_asked', phone: null, meta: {} });
+    personData.current = person({ consent_status: 'not_asked', phone: null, meta: {} });
     render(
       <PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />,
     );
@@ -127,7 +146,7 @@ describe('PartyProfileSheet — the invite control is hidden without a phone on 
 
 describe('PartyProfileSheet — not_asked with a phone shows the invite-to-texts flow', () => {
   it('the submit control starts disabled with a title/aria-label explaining why (F7)', () => {
-    personData.current = person({ status_raw: 'not_asked' });
+    personData.current = person({ consent_status: 'not_asked' });
     render(
       <PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />,
     );
@@ -140,7 +159,7 @@ describe('PartyProfileSheet — not_asked with a phone shows the invite-to-texts
   });
 
   it('requires a consent method and non-blank evidence before it will submit, and the error is announced (role=alert, F7)', () => {
-    personData.current = person({ status_raw: 'not_asked' });
+    personData.current = person({ consent_status: 'not_asked' });
     render(
       <PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />,
     );
@@ -157,7 +176,7 @@ describe('PartyProfileSheet — not_asked with a phone shows the invite-to-texts
   });
 
   it('both form fields carry a real associated label (F7)', () => {
-    personData.current = person({ status_raw: 'not_asked' });
+    personData.current = person({ consent_status: 'not_asked' });
     render(
       <PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />,
     );
@@ -169,7 +188,7 @@ describe('PartyProfileSheet — not_asked with a phone shows the invite-to-texts
   });
 
   it('fires the hook with the exact four-field consent bundle once the guard is satisfied — no dead projectId (F8)', () => {
-    personData.current = person({ status_raw: 'not_asked' });
+    personData.current = person({ consent_status: 'not_asked' });
     render(
       <PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />,
     );
@@ -187,6 +206,9 @@ describe('PartyProfileSheet — not_asked with a phone shows the invite-to-texts
     const [input] = recordConsentMutate.mock.calls[0];
     expect(input).toEqual({
       partyId: 'party-1',
+      // R-AS: the consent record is the STUDIO's, resolved from the project, so
+      // the hook needs the job as well as the seat.
+      projectId: 'project-1',
       phone: '5551234567',
       smsConsentSource: 'verbal',
       smsConsentEvidence: 'Told me at the site kickoff on Aug 8',
@@ -196,7 +218,7 @@ describe('PartyProfileSheet — not_asked with a phone shows the invite-to-texts
 
 describe('PartyProfileSheet — granted keeps the existing texting composer', () => {
   it('renders the send-a-text composer, not the invite flow', () => {
-    personData.current = person({ status_raw: 'granted' });
+    personData.current = person({ consent_status: 'granted' });
     render(
       <PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />,
     );

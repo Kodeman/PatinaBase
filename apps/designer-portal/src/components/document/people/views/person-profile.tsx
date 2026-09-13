@@ -263,6 +263,16 @@ function ClientProfile({
         // to hand it (this profile is opened from a specific person, not a
         // directory row carrying 00420's scope column).
         scope: 'mine',
+        // v4's five appended columns. A SYNTHETIC row carries none of the
+        // facts they name — this journey input is assembled from props, not
+        // read from the view — so every one is null rather than guessed:
+        // `reach_state` and `paper_state` are the view's own reductions, and
+        // a fabricated `not_asked` is the fail-open consent word R-BB removed.
+        reach_state: null,
+        consent_status: null,
+        paper_state: null,
+        contact_rule_summary: null,
+        seat_count: 0,
       },
       // Guard on profileId: useProposals(undefined) returns ALL the designer's
       // proposals (RLS is designer-scoped, not client-scoped). A profileless
@@ -384,6 +394,16 @@ function ClientProfile({
       // and, for a proposal-stage client, meta's issuance evidence) — 'mine'
       // satisfies the frozen PeopleDirectoryRow shape.
       scope: 'mine',
+      // v4's five appended columns. A SYNTHETIC row carries none of the
+      // facts they name — this journey input is assembled from props, not
+      // read from the view — so every one is null rather than guessed:
+      // `reach_state` and `paper_state` are the view's own reductions, and
+      // a fabricated `not_asked` is the fail-open consent word R-BB removed.
+      reach_state: null,
+      consent_status: null,
+      paper_state: null,
+      contact_rule_summary: null,
+      seat_count: 0,
     },
     now,
   );
@@ -403,6 +423,16 @@ function ClientProfile({
       // Unused by deriveStatusDot (switches on role/status_raw/meta/dormancy
       // only) — 'mine' satisfies the frozen PeopleDirectoryRow shape.
       scope: 'mine',
+      // v4's five appended columns. A SYNTHETIC row carries none of the
+      // facts they name — this journey input is assembled from props, not
+      // read from the view — so every one is null rather than guessed:
+      // `reach_state` and `paper_state` are the view's own reductions, and
+      // a fabricated `not_asked` is the fail-open consent word R-BB removed.
+      reach_state: null,
+      consent_status: null,
+      paper_state: null,
+      contact_rule_summary: null,
+      seat_count: 0,
     },
     now,
   );
@@ -634,6 +664,16 @@ function NetworkProfile({
         // Unused by deriveRelationshipJourney's body — see the ClientProfile
         // comment above; same frozen-contract satisfaction, not a real signal.
         scope: 'mine',
+        // v4's five appended columns. A SYNTHETIC row carries none of the
+        // facts they name — this journey input is assembled from props, not
+        // read from the view — so every one is null rather than guessed:
+        // `reach_state` and `paper_state` are the view's own reductions, and
+        // a fabricated `not_asked` is the fail-open consent word R-BB removed.
+        reach_state: null,
+        consent_status: null,
+        paper_state: null,
+        contact_rule_summary: null,
+        seat_count: 0,
       },
       projects:
         projectId && projectName
