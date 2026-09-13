@@ -1659,7 +1659,7 @@ function EntryRow({
             type="button"
             aria-label={`Review billing authority for ${e.project?.name ?? 'this document'}`}
             onClick={() => onOpenAuthority(e.project_id as string)}
-            className="whitespace-nowrap rounded-[3px] border border-[var(--color-pearl)] px-1.5 py-[2px] t-head text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]"
+            className="min-h-11 inline-flex items-center whitespace-nowrap rounded-[3px] border border-[var(--color-pearl)] px-1.5 t-head text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]"
           >
             {billingLabel} →
           </button>
@@ -1751,7 +1751,7 @@ function EntryRow({
           ) : (
             <Link
               href="/desk?account=studio"
-              className="t-head text-[var(--color-clay-ink)] underline decoration-dotted underline-offset-4 hover:text-[var(--color-charcoal)]"
+              className="min-h-11 inline-flex items-center t-head text-[var(--color-clay-ink)] underline decoration-dotted underline-offset-4 hover:text-[var(--color-charcoal)]"
             >
               Set the studio rate →
             </Link>

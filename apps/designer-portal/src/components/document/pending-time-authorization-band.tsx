@@ -67,7 +67,7 @@ export function PendingTimeAuthorizationBand({
         <p className="mt-1.5">
           <Link
             href="/desk?account=studio"
-            className="t-head text-[var(--color-clay-ink)] underline decoration-dotted underline-offset-4 hover:text-[var(--color-charcoal)]"
+            className="min-h-11 inline-flex items-center t-head text-[var(--color-clay-ink)] underline decoration-dotted underline-offset-4 hover:text-[var(--color-charcoal)]"
           >
             Studio rates →
           </Link>

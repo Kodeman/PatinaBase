@@ -152,13 +152,19 @@ const LEDGER_ROW = {
   updated_at: '2026-09-09T15:00:00.000Z',
 };
 
+/** Overrides `WEEK_ENTRY` for a single case (M7-01's rate-pending doorways
+ *  need a row that `WEEK_ENTRY`'s default shape does not carry). `null` keeps
+ *  the default. */
+let weekEntryOverride: Record<string, unknown> | null = null;
+
 /** A chainable PostgREST stub — the sheet's own week read and its note read. */
 function makeClient() {
   return {
     auth: { getUser: async () => ({ data: { user: { id: 'me' } } }) },
     from: (table: string) => {
       const rowsFor = () => {
-        if (table === 'project_time_entries') return [WEEK_ENTRY];
+        if (table === 'project_time_entries')
+          return [weekEntryOverride ?? WEEK_ENTRY];
         if (table === 'projects')
           return [{ id: 'project-1', name: 'Okonkwo', status: 'active' }];
         if (table === 'project_unbilled_time') return unbilledViewRows;
@@ -310,6 +316,7 @@ beforeEach(() => {
   orgsState = 'ready';
   ledgerRows = null;
   unbilledViewRows = [];
+  weekEntryOverride = null;
   noteState = 'ready';
   mockScopeViewedCalls.length = 0;
   mockRateUnresolvedCalls.length = 0;
@@ -938,6 +945,42 @@ describe('the sheet’s un-scoped remainder (M5-02)', () => {
       screen.getByRole('button', { name: 'Export week → Accounts' }),
     ).toBeInTheDocument();
     expect(screen.getByLabelText('Minutes')).toBeInTheDocument();
+  });
+});
+
+describe('the 44px act grammar on the wave’s three new doors (M7-01)', () => {
+  it('gives the pending-authorization doorway, the studio-rate door and the band’s door a 44px target', async () => {
+    // Round-6 turned a static chip into a button and added two Links, none of
+    // which carried the lens words' `min-h-11 inline-flex items-center`
+    // grammar (house sheet §A5). A row with no rate on record and a pending
+    // billing state exercises the first two doors at once; the pending band
+    // (un-scoped, `showStudioRateDoor={viewerIsOwnerOrAdmin}`) carries the third.
+    weekEntryOverride = {
+      ...WEEK_ENTRY,
+      billing_state: 'pending_authorization',
+      hourly_rate_cents: null,
+      rate_source: 'none',
+    };
+    renderLedger();
+
+    const doorway = await screen.findByRole('button', {
+      name: /Review billing authority for Okonkwo/,
+    });
+    expect(doorway.className).toMatch(/\bmin-h-11\b/);
+    expect(doorway.className).toMatch(/\binline-flex\b/);
+    expect(doorway.className).toMatch(/\bitems-center\b/);
+
+    const setStudioRate = await screen.findByRole('link', {
+      name: 'Set the studio rate →',
+    });
+    expect(setStudioRate.className).toMatch(/\bmin-h-11\b/);
+    expect(setStudioRate.className).toMatch(/\binline-flex\b/);
+    expect(setStudioRate.className).toMatch(/\bitems-center\b/);
+
+    const bandDoor = await screen.findByRole('link', { name: 'Studio rates →' });
+    expect(bandDoor.className).toMatch(/\bmin-h-11\b/);
+    expect(bandDoor.className).toMatch(/\binline-flex\b/);
+    expect(bandDoor.className).toMatch(/\bitems-center\b/);
   });
 });
 
