@@ -271,7 +271,6 @@ export function CommandBar() {
   // D1 registry precedent (drafting-room-here): document-scoped surfaces only
   // ever appear as a "This surface" row, gated on both a project in hand and
   // the surface's own flag — never in the unfiltered doorway lists.
-  const { value: callSheetOn } = useFeatureFlag('call-sheet');
   // "Leave a note" is the Tester Notes doorway; without the flag the widget is
   // not mounted and the row would dispatch its open event into nothing.
   const { value: testerNotesOn } = useFeatureFlag('tester-notes');
@@ -752,9 +751,9 @@ export function CommandBar() {
         .find((r): r is DocumentStateRow => Boolean(r?.project_id)) ??
       liveRows.find((r) => Boolean(r.project_id)) ??
       null;
-    const documentSurfaces = DOCUMENT_SCOPED_SURFACES.filter(
-      (surface) => surface.key !== 'call-sheet' || callSheetOn,
-    );
+    // The `call-sheet` flag is retired (rulings §6) — every document-scoped
+    // surface, the Call Sheet included, is live for every studio.
+    const documentSurfaces = DOCUMENT_SCOPED_SURFACES;
 
     // D4' — the creation front door, pre-addressed with the same current/
     // most-recent project every other document-scoped surface pairs to
@@ -984,7 +983,6 @@ export function CommandBar() {
     pathname,
     user?.email,
     signOut,
-    callSheetOn,
     testerNotesOn,
   ]);
 

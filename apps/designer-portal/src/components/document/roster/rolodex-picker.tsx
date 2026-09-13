@@ -14,7 +14,12 @@
  * (`scopeKinds`) — "you asked for a sub on the tile line, so the sheet arrives
  * already narrowed".
  *
- * Flag-gated on `call-sheet` at this consumer.
+ * NO FLAG. `call-sheet` is retired (rulings §6): the picker is live for every
+ * studio.
+ *
+ * At the pick, every mini row carries what travels (SPEC §5.7 #4): the reach,
+ * consent and paper words, the contact rule as a sentence, and ONE history
+ * line — repeat count and dates only, never a verdict (PR-i).
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -24,12 +29,13 @@ import {
   useAddStudioContact,
   useOrganizations,
   useProjectRoster,
+  usePeopleDirectory,
   useStudioContactHistory,
   useStudioContacts,
+  type PeopleDirectoryRow,
   type StudioContact,
 } from '@patina/supabase';
 import { getPartyKindLabel, type PartyKind } from '@patina/types';
-import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { rosterHasIdentity } from '@/lib/document/roster-derivation';
 import { DocSheet } from '../overlays/doc-sheet';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
@@ -82,13 +88,24 @@ function contactName(c: StudioContact): string {
   );
 }
 
-/** "3 projects · last: Ellsworth" / "Never on a job yet" (slide 13). */
-function historyLine(
-  history: { projectCount: number; lastProjectName: string | null } | undefined,
+/**
+ * ONE HISTORY LINE (PR-i) — repeat count, the job, the year. Never a verdict:
+ * "worked out well" is the studio's judgement and belongs on the card, not at
+ * the moment of the pick.
+ *
+ * "Worked 1 prior project, Lindqvist kitchen, 2025." / "Never on a job yet."
+ */
+export function pickerHistoryLine(
+  history:
+    | { projectCount: number; lastProjectName: string | null; lastAt?: string | null }
+    | undefined,
 ): string {
   if (!history || history.projectCount === 0) return 'Never on a job yet';
-  const count = `${history.projectCount} ${history.projectCount === 1 ? 'project' : 'projects'}`;
-  return history.lastProjectName ? `${count} · last: ${history.lastProjectName}` : count;
+  const count = `Worked ${history.projectCount} prior ${
+    history.projectCount === 1 ? 'project' : 'projects'
+  }`;
+  const year = (history.lastAt ?? '').slice(0, 4);
+  return [count, history.lastProjectName, year].filter(Boolean).join(', ') + '.';
 }
 
 export function RolodexPicker({
@@ -108,7 +125,6 @@ export function RolodexPicker({
   startInAdd?: boolean;
   onAdded?: (name: string) => void;
 }) {
-  const { value: callSheetOn } = useFeatureFlag('call-sheet');
   const kinds = scopeKinds && scopeKinds.length > 0 ? scopeKinds : DEFAULT_SCOPE_KINDS;
 
   const [search, setSearch] = useState('');
@@ -137,16 +153,27 @@ export function RolodexPicker({
     return () => window.clearTimeout(id);
   }, [open, startInAdd]);
 
-  const { data: orgs } = useOrganizations({ enabled: open && callSheetOn });
+  const { data: orgs } = useOrganizations({ enabled: open });
   const organizationId = useMemo(
     () => orgs?.find((o) => o.type === 'design_studio')?.id ?? orgs?.[0]?.id ?? null,
     [orgs],
   );
 
-  const { data: contacts } = useStudioContacts(
-    open && callSheetOn ? organizationId : null,
-    { kind, search },
-  );
+  const { data: contacts } = useStudioContacts(open ? organizationId : null, {
+    kind,
+    search,
+  });
+
+  // The three words and the rule come from the directory, which already
+  // reduces them per identity — a carded human is keyed on their rolodex card,
+  // so `person_id` IS `studio_contacts.id` here (v4). One read for the page of
+  // hits, never one per row.
+  const { data: directory } = usePeopleDirectory();
+  const wordsByCard = useMemo(() => {
+    const map = new Map<string, PeopleDirectoryRow>();
+    for (const row of directory ?? []) if (row.person_id) map.set(row.person_id, row);
+    return map;
+  }, [directory]);
 
   const hits = useMemo(() => {
     let rows = contacts ?? [];
@@ -158,7 +185,7 @@ export function RolodexPicker({
 
   const { data: history } = useStudioContactHistory(hits.map((c) => c.id));
   const { data: rosterRows, refetch: refetchRoster } = useProjectRoster(
-    open && callSheetOn ? projectId : null,
+    open ? projectId : null,
   );
 
   const companyNames = useMemo(
@@ -277,8 +304,6 @@ export function RolodexPicker({
     }
   };
 
-  if (!callSheetOn) return null;
-
   return (
     <DocSheet open={open} onClose={onClose} title="From the rolodex" icon={UserPlus}>
       <input
@@ -331,20 +356,29 @@ export function RolodexPicker({
 
       {hits.length > 0 && (
         <ul className="mt-3 flex flex-col">
-          {hits.map((c) => (
-            <li key={c.id}>
-              <PartyMiniRow
-                name={contactName(c)}
-                kind={c.contact_kind}
-                entity={c.entity_kind}
-                trade={c.specialties?.[0] ?? null}
-                reach={c.profile_id ? 'account' : 'on_paper'}
-                subline={historyLine(history?.[c.id])}
-                onSelect={() => void addFromRolodex(c)}
-                disabled={addParty.isPending}
-              />
-            </li>
-          ))}
+          {hits.map((c) => {
+            const words = wordsByCard.get(c.id);
+            return (
+              <li key={c.id}>
+                <PartyMiniRow
+                  name={contactName(c)}
+                  kind={c.contact_kind}
+                  entity={c.entity_kind}
+                  trade={c.specialties?.[0] ?? null}
+                  reach={
+                    (words?.reach_state as 'account' | 'field_link' | 'on_paper' | null) ??
+                    (c.profile_id ? 'account' : 'on_paper')
+                  }
+                  consent={words?.consent_status ?? null}
+                  paper={words?.paper_state ?? null}
+                  rule={words?.contact_rule_summary ?? null}
+                  subline={pickerHistoryLine(history?.[c.id])}
+                  onSelect={() => void addFromRolodex(c)}
+                  disabled={addParty.isPending}
+                />
+              </li>
+            );
+          })}
         </ul>
       )}
 

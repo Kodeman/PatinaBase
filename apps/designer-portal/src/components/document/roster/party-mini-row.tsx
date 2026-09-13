@@ -14,6 +14,10 @@
  *
  * Deliberately dumb: every field is a prop. It never reads a hook, never knows
  * about project_parties vs studio_contacts, and therefore serves both.
+ *
+ * At the PICK it carries the words the travel list is about (SPEC §5.7 #4):
+ * reach, consent and paper, plus the contact rule as a sentence and one history
+ * line. PR-i: repeat count and dates only — NEVER a verdict at the pick.
  */
 
 import {
@@ -24,6 +28,7 @@ import {
 } from '@patina/types';
 import { Avatar } from '../people/person-bits';
 import { companyKindLabel } from '../people/directory/company-row';
+import { StateWord } from '../people/state-word';
 import { ReachChip } from './reach-chip';
 
 /**
@@ -64,6 +69,12 @@ export interface PartyMiniRowProps {
   /** FieldTrade for most kinds, VendorSpecialty for a vendor. */
   trade?: string | null;
   reach?: ReachState | null;
+  /** The studio's consent record for this identity, as a word. */
+  consent?: string | null;
+  /** The worst paper the identity or its firm holds, as a word. */
+  paper?: string | null;
+  /** The contact rule, as a sentence beside the words (PR-e). */
+  rule?: string | null;
   /** The quiet second line under the meta — the picker's history line. */
   subline?: React.ReactNode;
   /** Renders the radio ring and radio semantics. */
@@ -81,6 +92,9 @@ export function PartyMiniRow({
   entity = 'person',
   trade,
   reach,
+  consent,
+  paper,
+  rule,
   subline,
   selectable = false,
   selected = false,
@@ -124,12 +138,32 @@ export function PartyMiniRow({
           </span>
         )}
         {subline && (
-          <span className="mt-[0.1rem] block truncate text-[0.68rem] text-[var(--color-quiet-ink)]">
+          <span className="mt-[0.1rem] block text-[0.68rem] text-[var(--color-quiet-ink)]">
             {subline}
+          </span>
+        )}
+        {/* The rule prints as a SENTENCE beside the words (PR-e), and as a
+            span rather than ContactRuleLine's paragraph: a selectable mini row
+            is a <button>, which takes phrasing content only. */}
+        {rule && (
+          <span
+            data-contact-rule
+            data-contact-rule-blocked={
+              /never|do not|don’t|don't/i.test(rule) ? 'true' : undefined
+            }
+            className={`mt-[0.15rem] block text-[0.7rem] text-[var(--color-charcoal)] ${
+              /never|do not|don’t|don't/i.test(rule)
+                ? 'border-l-2 border-[var(--color-terracotta-ink)] py-[3px] pl-[8px]'
+                : ''
+            }`}
+          >
+            {rule}
           </span>
         )}
       </span>
       {reach && <ReachChip state={reach} />}
+      {consent && <StateWord family="consent" value={consent} />}
+      {paper && <StateWord family="paper" value={paper} />}
       {trailing}
     </>
   );

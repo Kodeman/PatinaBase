@@ -18,12 +18,27 @@ jest.mock('@patina/supabase', () => ({
   useStudioContacts: (...args: unknown[]) => useStudioContacts(...args),
   useProjectRoster: (...args: unknown[]) => useProjectRoster(...args),
   useStudioContactHistory: () => ({
-    data: { 'contact-1': { projectCount: 3, lastProjectName: 'Ellsworth', lastAt: null } },
+    data: {
+      'contact-1': {
+        projectCount: 3,
+        lastProjectName: 'Ellsworth',
+        lastAt: '2025-11-21T17:00:00Z',
+      },
+    },
   }),
-}));
-
-jest.mock('@/hooks/use-feature-flag', () => ({
-  useFeatureFlag: () => ({ value: true, isLoading: false }),
+  // The three words at the pick come from the directory, keyed on the rolodex
+  // card (v4). One read for the page of hits.
+  usePeopleDirectory: () => ({
+    data: [
+      {
+        person_id: 'contact-1',
+        reach_state: 'on_paper',
+        consent_status: 'opted_out',
+        paper_state: 'lapsed',
+        contact_rule_summary: 'Email only. No cell for work.',
+      },
+    ],
+  }),
 }));
 
 const ROSA: StudioContact = {
@@ -85,9 +100,20 @@ describe('RolodexPicker — pre-scoped kinds', () => {
 });
 
 describe('RolodexPicker — the hits and their history', () => {
-  it('renders the history line, which is the whole value of the rolodex', () => {
+  it('renders one history line — repeat count and dates, never a verdict (PR-i)', () => {
     render(<RolodexPicker {...props} />);
-    expect(screen.getByText('3 projects · last: Ellsworth')).toBeInTheDocument();
+    expect(
+      screen.getByText('Worked 3 prior projects, Ellsworth, 2025.'),
+    ).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/worked out|recommend|avoid/i);
+  });
+
+  it('carries the words that travel, and the rule as a sentence (SPEC §5.7 #4)', () => {
+    render(<RolodexPicker {...props} />);
+    expect(screen.getByText('On paper')).toBeInTheDocument();
+    expect(screen.getByText('Opted out')).toBeInTheDocument();
+    expect(screen.getByText('Lapsed')).toBeInTheDocument();
+    expect(screen.getByText('Email only. No cell for work.')).toBeInTheDocument();
   });
 
   it('a single click adds the contact as a party carrying its rolodex id', async () => {

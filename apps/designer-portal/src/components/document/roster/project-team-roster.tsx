@@ -1,13 +1,13 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { useProjectRoster, useProjectV2, type ProjectRosterRow } from '@patina/supabase';
+import { useState } from 'react';
+import { useProjectConsentOrg, useProjectV2 } from '@patina/supabase';
 import type { PartyKind } from '@patina/types';
-import { useFeatureFlag } from '@/hooks/use-feature-flag';
-import { projectRosterProjection } from '@/lib/document/roster-derivation';
+import type { CallSheetRow } from '@/lib/document/roster-derivation';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
 import { RolodexPicker } from './rolodex-picker';
 import { RosterGroups } from './roster-groups';
+import { useCallSheetRoster } from './use-call-sheet-roster';
 import { GuidedEmptyState } from '../guided-empty-state';
 
 const BUILD_TEAM_KINDS: PartyKind[] = [
@@ -26,36 +26,31 @@ export function ProjectTeamRoster({
   projectId,
   clientName,
   clientProfileId,
-  onOpenProfile,
+  onOpenSeat,
 }: {
   projectId: string;
   clientName?: string | null;
   clientProfileId?: string | null;
-  onOpenProfile?: (row: ProjectRosterRow) => void;
+  onOpenSeat?: (row: CallSheetRow) => void;
 }) {
-  const { value: callSheetOn } = useFeatureFlag('call-sheet');
-  const rosterQuery = useProjectRoster(projectId);
   const projectQuery = useProjectV2(projectId);
-  const { data: rows, isLoading: rosterLoading } = rosterQuery;
   const { data: project, isLoading: projectLoading } = projectQuery;
   const [pickerMode, setPickerMode] = useState<null | 'picker' | 'add'>(null);
   const [added, setAdded] = useState<string | null>(null);
 
   const resolvedClientName = clientName ?? project?.client?.full_name ?? null;
   const resolvedClientProfileId = clientProfileId ?? project?.client?.id ?? null;
-  const projection = useMemo(
-    () =>
-      projectRosterProjection(rows ?? [], {
-        name: resolvedClientName,
-        profileId: resolvedClientProfileId,
-        projectId,
-      }),
-    [rows, resolvedClientName, resolvedClientProfileId, projectId],
-  );
+  const {
+    projection,
+    authorityBySeat,
+    isLoading: rosterLoading,
+    isError: rosterError,
+  } = useCallSheetRoster(projectId, {
+    client: { name: resolvedClientName, profileId: resolvedClientProfileId, projectId },
+  });
+  const { data: consentOrg } = useProjectConsentOrg(projectId);
   const isLoading = rosterLoading || (clientName === undefined && projectLoading);
-  const isError = rosterQuery.isError || (clientName === undefined && projectQuery.isError);
-
-  if (!callSheetOn) return null;
+  const isError = rosterError || (clientName === undefined && projectQuery.isError);
 
   return (
     <section aria-label="Project team roster" data-project-team-roster>
@@ -111,7 +106,7 @@ export function ProjectTeamRoster({
           <DocumentAction
             actionKey="retry-project-roster"
             variant="secondary"
-            onClick={() => void Promise.all([rosterQuery.refetch(), projectQuery.refetch()])}
+            onClick={() => void projectQuery.refetch()}
           >
             Try again
           </DocumentAction>
@@ -119,7 +114,13 @@ export function ProjectTeamRoster({
       )}
       {!isLoading && !isError && projection.rows.length > 0 && (
         <div className="mt-4">
-          <RosterGroups groups={projection.groups} onOpenProfile={onOpenProfile} />
+          <RosterGroups
+            projection={projection}
+            authorityBySeat={authorityBySeat}
+            consentOrg={consentOrg}
+            projectName={project?.name ?? null}
+            onOpenSeat={onOpenSeat}
+          />
         </div>
       )}
 

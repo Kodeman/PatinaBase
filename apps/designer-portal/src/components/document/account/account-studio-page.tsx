@@ -193,7 +193,6 @@ export function AccountStudioPage() {
   // flag; flag-off keeps the checklist in its exact Wave-1 shape (SKIP
   // disabled, "coming with the rolodex" — studio-setup-checklist.tsx's
   // default when onSkipSeed/onOpenSeedReview are omitted).
-  const { value: callSheetOn } = useFeatureFlag('call-sheet');
   // "The Agreement, Composed" W1 (P3). Fail-closed: the defaults card, and the
   // read behind it, exist only for a studio the flag has reached.
   const { value: agreementPartsOn } = useFeatureFlag('agreement-parts');
@@ -229,7 +228,7 @@ export function AccountStudioPage() {
 
   const { data: members } = useOrganizationMembers(studio?.id ?? '');
   const { data: projects } = useProjects();
-  const { data: contacts } = useStudioContacts(callSheetOn ? (studio?.id ?? null) : null);
+  const { data: contacts } = useStudioContacts(studio?.id ?? null);
   const { data: billingSettings } = useStudioBillingSettings(studio?.id);
   const { data: agreementDefaults } = useStudioAgreementDefaults(
     agreementPartsOn ? studio?.id : null,
@@ -360,8 +359,8 @@ export function AccountStudioPage() {
   const hiresWithFirstDocument = otherActiveMembers.filter(
     (m) => m.first_document_opened_at != null,
   ).length;
-  const contactsCount = callSheetOn ? (contacts?.length ?? 0) : 0;
-  const seedSkipped = callSheetOn ? !!studio?.rolodex_seed_skipped_at : false;
+  const contactsCount = contacts?.length ?? 0;
+  const seedSkipped = !!studio?.rolodex_seed_skipped_at;
 
   const handleSkipSeed = () => {
     if (!studio || updateOrg.isPending) return;
@@ -716,21 +715,19 @@ export function AccountStudioPage() {
         seedSkipped={seedSkipped}
         hiresWithFirstDocument={hiresWithFirstDocument}
         onInvite={() => setInviteOpen(true)}
-        onSkipSeed={callSheetOn && canManage ? handleSkipSeed : undefined}
+        onSkipSeed={canManage ? handleSkipSeed : undefined}
         skipSeedPending={updateOrg.isPending}
-        onOpenSeedReview={callSheetOn ? () => setSeedReviewOpen(true) : undefined}
+        onOpenSeedReview={() => setSeedReviewOpen(true)}
         skipSeedError={skipSeedError}
         className="mb-6 border-b border-[var(--color-pearl)] pb-5"
       />
 
-      {/* Call Sheet Wave 2 — row 4's rolodex review. */}
-      {callSheetOn && (
-        <RolodexSeedSheet
-          open={seedReviewOpen}
-          onClose={() => setSeedReviewOpen(false)}
-          organizationId={studio.id}
-        />
-      )}
+      {/* Row 4's rolodex review. */}
+      <RolodexSeedSheet
+        open={seedReviewOpen}
+        onClose={() => setSeedReviewOpen(false)}
+        organizationId={studio.id}
+      />
 
       {/* Identity */}
       <div className="mb-6">
