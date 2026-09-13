@@ -549,6 +549,36 @@ the view is `security_invoker`, so anon reads nothing through RLS. `people_direc
 - 00621's two dispatch gates keep a seat leg (flagged for Kody in W1a §8).
 - The unattributable-**send** fail-open still needs a POLICY ruling.
 
+**Ruled, and owed to the deploy brief (R-BI, w1b final review r13 MAJOR-1):**
+
+- **The `projects.studio_id IS NULL` population keeps the duplicate identity until W3's backfill.**
+  00626 §1b's auto-link resolves `project_recorded_studio()`, which is NULL there, so nothing is stamped and
+  one ordinary inline add of a carded human's own number (`useAddProjectParty`,
+  `use-coordination.ts:500-512`) puts that human on the Directory feed twice: walked on Aspen Loft Refresh,
+  62 rows to 63, `Pete Rusk · opted_out · seat_count 2` beside `Pete Rusk · not_asked · not_on_file` on the
+  same `+16125550112` the studio doing the work has recorded `opted_out`. The second word is
+  `project_consent_org()`'s own pre-existing posture on this population (R-AK; 00624's banner under R-BD
+  keeps that resolver for the consent LEDGER, because a record's studio must read the same for every
+  caller), not something this wave introduced. **The fix was refused on purpose:** letting the resolver fall
+  back to `project_tenant_org()` would put a caller-relative studio inside the durable identity key, which
+  is the door r11 MAJOR-3 walked and closed (a member of the designer's *second* studio filing a card in
+  their own rolodex and landing it as `studio_contact_id` on the working studio's job). No send hazard —
+  `_shared/sms.ts:725-731` refuses on `channelConsentVerdict() === "refuse"` before the `sms_optin_invite`
+  carve-out. The sentence is in `00626`'s § beside `rolodex_card_for_party_phone()` and in that function's
+  COMMENT; block 23c–23e of the W1b suite pins the residue and asserts the duplicate never reads `granted`.
+- **A third preflight count, beside R-BD's** (R-BI) (the SELECT is in 00624's preflight block, with the stamped-seat
+  one):
+
+  ```sql
+  SELECT count(*) FROM projects pj
+   WHERE pj.studio_id IS NULL
+     AND EXISTS (SELECT 1 FROM project_parties pp WHERE pp.project_id = pj.id);
+  ```
+
+  Locally 0 on a clean reset — the five studio-less projects carry no seats, and the r13 walk had to add
+  one. It sizes the population the duplicate is ruled to keep, and it is the same population R-BD's W3
+  backfill has to reach.
+
 **Owed by this wave:**
 
 - **The Directory UI has to move with the view.** `directory-view.tsx`'s chips map `role` to bands and every

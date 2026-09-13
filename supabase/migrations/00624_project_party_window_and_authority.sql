@@ -737,6 +737,24 @@ COMMENT ON FUNCTION public.assert_project_party_cards() IS
 -- stamped seats name a card in their own project's studio. It is NOT run
 -- here, because a migration that repaired those rows would be choosing a
 -- studio for a seated human on evidence the record does not carry.
+--
+-- AND A THIRD COUNT, BESIDE R-BD's — R-BI (w1b final review r13 MAJOR-1). 00626 §1b's
+-- auto-link resolves project_recorded_studio(), so on a studio-less project
+-- nothing is stamped and one ordinary inline add of a carded human's own
+-- number puts that human on the Directory feed TWICE — ruled as kept until
+-- R-BD's W3 backfill, in 00626's own § beside the resolver. What sizes it is
+-- not the count of studio-less projects but the count of studio-less projects
+-- THAT CARRY SEATS, because a studio-less project with no seat can hold no
+-- duplicate:
+--
+--   SELECT count(*) FROM projects pj
+--    WHERE pj.studio_id IS NULL
+--      AND EXISTS (SELECT 1 FROM project_parties pp WHERE pp.project_id = pj.id);
+--
+-- Locally it is 0 on a clean reset (the five studio-less projects carry no
+-- seats; the r13 walk had to add one). Run it on Strata before the chain: it
+-- is the population the duplicate identity is ruled to keep, and the same
+-- population R-BD's backfill has to reach.
 DROP TRIGGER IF EXISTS assert_project_party_cards_trg ON public.project_parties;
 CREATE TRIGGER assert_project_party_cards_trg
   BEFORE INSERT OR UPDATE OF company_id, warranty_contact_person_id,
