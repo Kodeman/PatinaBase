@@ -115,6 +115,54 @@ describe('buildComposerLines', () => {
     });
     expect(lines[0].description).toContain('2h');
     expect(lines[0].description).toContain('2 entries');
+    // No dated sub-table content when nothing carries a started_at.
+    expect(lines[0].metadata).not.toHaveProperty('attribution');
+  });
+
+  it('HT-21 — one composer row per person when entries carry distinct authors', () => {
+    const lines = buildComposerLines({
+      milestones: [],
+      ffeItems: [],
+      timeEntries: [
+        {
+          id: 't1',
+          duration_minutes: 60,
+          amount_cents: 14_500,
+          user_id: 'u1',
+          member_name: 'Maria Alvarez',
+          started_at: '2026-09-03T14:00:00Z',
+          resolved_rate_cents: 14_500,
+        },
+        {
+          id: 't2',
+          duration_minutes: 30,
+          amount_cents: 7_500,
+          user_id: 'u2',
+          member_name: 'Leah Brooks',
+          started_at: '2026-09-04T09:00:00Z',
+          resolved_rate_cents: 15_000,
+        },
+      ],
+      adhoc: [],
+    });
+    const timeLines = lines.filter((l) => l.kind === 'time');
+    expect(timeLines).toHaveLength(2);
+    // Alphabetical: Leah before Maria.
+    expect(timeLines[0].description).toBe('Leah Brooks — 30m (1 entry)');
+    expect(timeLines[0].unitAmountCents).toBe(7_500);
+    expect(timeLines[1].description).toBe('Maria Alvarez — 1h (1 entry)');
+    expect(timeLines[1].unitAmountCents).toBe(14_500);
+    // sortOrder is sequential across the whole line set.
+    expect(lines.map((l) => l.sortOrder)).toEqual([0, 1]);
+
+    // HT-21 — the dated sub-table rides metadata.attribution as JSON, and
+    // carries no member name (LEAH-15/REP-15: no staffing detail).
+    const payload = JSON.parse(timeLines[0].metadata!.attribution as string);
+    expect(payload).toEqual({
+      kind: 'patina_time_subtable',
+      rows: [{ date: '2026-09-04', minutes: 30, rateCents: 15_000 }],
+    });
+    expect(JSON.stringify(payload)).not.toMatch(/Leah|Brooks/);
   });
 
   it('no time entries → no time line at all', () => {

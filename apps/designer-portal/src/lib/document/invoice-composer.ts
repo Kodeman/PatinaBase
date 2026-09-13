@@ -5,15 +5,47 @@
  *
  *  - milestones → one kind='milestone' line each (qty 1, unit = amount)
  *  - FF&E items → one kind='ffe' line each (00187 coverage bridge; qty × unit)
- *  - time entries → ONE kind='time' line (qty 1, unit = Σ view-resolved
- *    amounts; hours + provenance in metadata — see lib/time-billing.ts)
+ *  - time entries → one kind='time' line PER PERSON (HT-21, W5; qty 1, unit =
+ *    that person's Σ view-resolved amounts; hours + provenance in metadata —
+ *    see lib/time-billing.ts)
  *  - ad-hoc rows → kind='adhoc' lines (blank/zero rows dropped)
  *
  * Ordering: milestone → ffe → time → adhoc, sort_order stamped sequentially.
+ *
+ * HT-21's dated sub-table rides `metadata.attribution` — the SAME field
+ * `resolve_invoice_link` (00588) already reads for a furnishings line's maker
+ * name (`li.metadata->>'attribution'`) and the client sheet already renders
+ * under the line's description (`invoice-sheet.tsx`'s existing per-line
+ * sub-slot). No migration: a time line's attribution is a JSON-encoded
+ * `TimeAttributionPayload` (below) instead of a plain vendor-name string;
+ * `invoice-sheet.tsx` tries to parse it and falls back to plain text for
+ * every other line kind, so the shared field grows one more shape rather
+ * than a second sub-slot. It carries date/minutes/rate rows ONLY — never a
+ * name (LEAH-15, REP-15: the homeowner gets no staffing detail).
  */
 
 import type { DraftLineInput } from '@patina/supabase';
-import { buildTimeLineDraft, type TimeLineEntryInput } from '@/lib/time-billing';
+import {
+  buildTimeLineDraft,
+  groupEntriesByPerson,
+  type TimeLineDateRow,
+  type TimeLineEntryInput,
+} from '@/lib/time-billing';
+
+/** Discriminates a time line's JSON `metadata.attribution` from the plain
+ *  vendor-name strings furnishings lines already store there (00588). */
+export const TIME_ATTRIBUTION_KIND = 'patina_time_subtable' as const;
+
+export interface TimeAttributionPayload {
+  kind: typeof TIME_ATTRIBUTION_KIND;
+  rows: TimeLineDateRow[];
+}
+
+function timeAttribution(dateRows: TimeLineDateRow[]): string | undefined {
+  if (dateRows.length === 0) return undefined;
+  const payload: TimeAttributionPayload = { kind: TIME_ATTRIBUTION_KIND, rows: dateRows };
+  return JSON.stringify(payload);
+}
 
 // ── Inputs ──────────────────────────────────────────────────────────────────
 
@@ -147,22 +179,30 @@ export function buildComposerLines(selection: ComposerSelection): DraftLineInput
     sortOrder: milestoneLines.length + i,
   }));
 
-  const timeDraft = buildTimeLineDraft(selection.timeEntries);
-  const timeLines: DraftLineInput[] = timeDraft
-    ? [
-        {
-          kind: 'time' as const,
-          description: timeDraft.description,
-          quantity: 1,
-          unitAmountCents: timeDraft.amountCents,
-          sortOrder: milestoneLines.length + ffeLines.length,
-          metadata: {
-            time_entry_ids: timeDraft.entryIds,
-            total_minutes: timeDraft.totalMinutes,
-          },
+  // HT-21 — one composer row per person: entries with no shared author land
+  // in one unnamed group (groupEntriesByPerson), preserving the pre-HT-21
+  // single-line behavior for every existing caller that never carried
+  // author info.
+  const personGroups = groupEntriesByPerson(selection.timeEntries);
+  const timeLines: DraftLineInput[] = personGroups.flatMap((group, i) => {
+    const draft = buildTimeLineDraft(group.entries);
+    if (!draft) return [];
+    const attribution = timeAttribution(draft.dateRows);
+    return [
+      {
+        kind: 'time' as const,
+        description: draft.description,
+        quantity: 1,
+        unitAmountCents: draft.amountCents,
+        sortOrder: milestoneLines.length + ffeLines.length + i,
+        metadata: {
+          time_entry_ids: draft.entryIds,
+          total_minutes: draft.totalMinutes,
+          ...(attribution !== undefined ? { attribution } : {}),
         },
-      ]
-    : [];
+      },
+    ];
+  });
 
   const adhocLines: DraftLineInput[] = selection.adhoc
     .filter((l) => l.description.trim() && dollarsToCents(l.unitDollars) > 0)

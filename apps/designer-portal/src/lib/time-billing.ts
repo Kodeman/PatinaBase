@@ -1,5 +1,6 @@
 /**
- * Pure helpers for time-entry billing (Wave 4, 00177/00178).
+ * Pure helpers for time-entry billing (Wave 4, 00177/00178; W5 HT-21 names the
+ * person and adds a client-facing dated sub-table).
  *
  * Line-item semantics for kind='time': ONE line per invoice draft with
  * quantity = 1 and unit_amount_cents = amount_cents = the SUM of the selected
@@ -8,6 +9,15 @@
  * keeps qty × unit math exact everywhere (computeInvoiceTotals, the
  * issue_invoice RPC, detail/print/client renderers) — a weighted hourly rate
  * would re-round and drift from the per-entry amounts the view computed.
+ *
+ * HT-21 (W5): a caller that pre-groups entries by author and passes
+ * `member_name` gets that name in the description instead of the generic
+ * "Design services" phrasing — `invoice-composer.ts`'s `buildComposerLines`
+ * is that caller, via `groupEntriesByPerson` below, producing one composer
+ * row per person. `buildTimeLineDraft` also collects a `dateRows` table
+ * (date · minutes · rate, no name) for the client folio's dated sub-table —
+ * see `invoice-composer.ts` for how that rides the existing
+ * `metadata.attribution` field with no DB change.
  */
 
 // ── Duration formatting ──
@@ -28,29 +38,117 @@ export interface TimeLineEntryInput {
   id: string;
   duration_minutes: number;
   amount_cents: number;
+  /** The entry's author (HT-21 grouping key). Optional — a caller that omits
+   *  it (or mixes several) gets the pre-HT-21 generic phrasing. */
+  user_id?: string | null;
+  /** The author's display name (HT-21). Named only when every entry in this
+   *  call agrees on one — a mixed-author call falls back silently rather than
+   *  printing a wrong name. */
+  member_name?: string | null;
+  /** ISO timestamp, for the dated sub-table row (HT-21). An entry missing it
+   *  contributes to the totals but not to `dateRows`. */
+  started_at?: string | null;
+  /** The per-hour rate that priced this entry, for the sub-table's rate
+   *  column. Distinct from `amount_cents` (which may include partial-hour
+   *  rounding) so the printed rate matches what the ledger shows. */
+  resolved_rate_cents?: number | null;
+}
+
+/** One dated row for the client folio's sub-table (HT-21). Carries no name —
+ *  "the homeowner gets no staffing detail" (LEAH-15, REP-15). */
+export interface TimeLineDateRow {
+  /** ISO date (YYYY-MM-DD). */
+  date: string;
+  minutes: number;
+  rateCents: number;
 }
 
 export interface TimeLineDraft {
-  /** e.g. "Design services — 4h 30m (3 entries)" */
+  /** e.g. "Design services — 4h 30m (3 entries)", or, named (HT-21),
+   *  "Maria Alvarez — 4h 30m (3 entries)". */
   description: string;
   /** Sum of the entries' view-resolved amount_cents. */
   amountCents: number;
   totalMinutes: number;
   entryIds: string[];
+  /** Date · minutes · rate, oldest first, for the client's dated sub-table
+   *  (HT-21). Empty when no input entry carried `started_at`. */
+  dateRows: TimeLineDateRow[];
 }
 
-/** Build the single kind='time' invoice line from selected unbilled entries. */
+/** Build one kind='time' invoice line from a group of selected unbilled
+ *  entries. Callers that pre-group by person (see `groupEntriesByPerson`)
+ *  get a named row (HT-21); an ungrouped, mixed-author call keeps the
+ *  pre-HT-21 generic phrasing rather than naming the wrong person. */
 export function buildTimeLineDraft(entries: TimeLineEntryInput[]): TimeLineDraft | null {
   if (entries.length === 0) return null;
   const totalMinutes = entries.reduce((sum, e) => sum + (e.duration_minutes || 0), 0);
   const amountCents = entries.reduce((sum, e) => sum + (e.amount_cents || 0), 0);
   const noun = entries.length === 1 ? 'entry' : 'entries';
+
+  const names = new Set(
+    entries
+      .map((e) => e.member_name)
+      .filter((n): n is string => typeof n === 'string' && n.trim().length > 0),
+  );
+  const personName = names.size === 1 ? [...names][0] : null;
+  const label = personName ?? 'Design services';
+
+  const dateRows: TimeLineDateRow[] = entries
+    .filter((e): e is TimeLineEntryInput & { started_at: string } => Boolean(e.started_at))
+    .map((e) => ({
+      date: e.started_at.slice(0, 10),
+      minutes: e.duration_minutes || 0,
+      rateCents: e.resolved_rate_cents ?? 0,
+    }))
+    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+
   return {
-    description: `Design services — ${formatHoursLabel(totalMinutes)} (${entries.length} ${noun})`,
+    description: `${label} — ${formatHoursLabel(totalMinutes)} (${entries.length} ${noun})`,
     amountCents,
     totalMinutes,
     entryIds: entries.map((e) => e.id),
+    dateRows,
   };
+}
+
+interface PersonGroupable {
+  user_id?: string | null;
+  member_name?: string | null;
+}
+
+export interface PersonGroup<T> {
+  userId: string | null;
+  memberName: string | null;
+  entries: T[];
+}
+
+/**
+ * Group entries by author (HT-21) — the composer's "one row per person"
+ * instead of one row for everyone. Entries with no `user_id` land in one
+ * shared unnamed group (matching the pre-HT-21 behavior for callers that
+ * never carried author info). Named groups sort alphabetically; the unnamed
+ * group, if any, sorts last.
+ */
+export function groupEntriesByPerson<T extends PersonGroupable>(
+  entries: T[],
+): PersonGroup<T>[] {
+  const groups = new Map<string, PersonGroup<T>>();
+  for (const entry of entries) {
+    const key = entry.user_id ?? '';
+    let group = groups.get(key);
+    if (!group) {
+      group = { userId: entry.user_id ?? null, memberName: entry.member_name ?? null, entries: [] };
+      groups.set(key, group);
+    }
+    group.entries.push(entry);
+  }
+  return [...groups.values()].sort((a, b) => {
+    if (a.memberName && b.memberName) return a.memberName.localeCompare(b.memberName);
+    if (a.memberName) return -1;
+    if (b.memberName) return 1;
+    return 0;
+  });
 }
 
 // ── Week grouping (time tables + composer picker) ──

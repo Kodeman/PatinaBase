@@ -29,7 +29,7 @@ export interface InvoiceComposerContext {
   mode?: 'studio';
   /** R76 — the ?ffeItemIds= descendant: these FF&E items arrive ticked. */
   initialFfeItemIds?: string[];
-  /** R75 — Export week / bill-it: these unbilled entries arrive ticked
+  /** R75 — Bill week / bill-it: these unbilled entries arrive ticked
    *  (intersected per project when the composer has to ask which project). */
   initialTimeEntryIds?: string[];
 }

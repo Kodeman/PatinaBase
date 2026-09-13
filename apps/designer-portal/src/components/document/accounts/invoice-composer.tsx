@@ -12,7 +12,7 @@
  * Prefill contracts (the one-act openers):
  *   initialFfeItemIds  — R76 "Bill →" (the ?ffeItemIds= descendant): arrive
  *                        ticked; covered/unpriced ones fall out with a notice.
- *   initialTimeEntryIds — R75 Export week / bill-it: arrive ticked, per
+ *   initialTimeEntryIds — R75 Bill week / bill-it: arrive ticked, per
  *                        project (the intersection when the composer asks).
  *
  * Time claim: after the draft lands, the selected entries are stamped with
@@ -43,6 +43,7 @@ import {
   useFfeInvoiceCoverage,
   useOrganizations,
   useProjectFFEItems,
+  useProjectRoster,
   useProjectInvoices,
   useProjectPaymentMilestones,
   useProjects,
@@ -127,6 +128,10 @@ export function InvoiceComposer({
   const { data: unbilledTime, isLoading: timeLoading } = useUnbilledTime(
     projectId || null,
   );
+  // HT-21 (W5) — names the composer's time rows: project_unbilled_time
+  // deliberately carries no author name (00596's dropped profiles join), so
+  // the roster (already-read, project-scoped, RLS-clean) supplies it.
+  const { data: roster } = useProjectRoster(projectId || null);
   const { data: ffeItems, isLoading: ffeLoading } =
     useProjectFFEItems(projectId);
   const { data: coverage, isLoading: coverageLoading } = useFfeInvoiceCoverage(
@@ -207,9 +212,26 @@ export function InvoiceComposer({
     [ffeItems, coverage, ffeSettled],
   );
 
+  // HT-21 — the roster's `profile_id` is the entry's `user_id`; a member the
+  // roster doesn't carry (e.g. the project's own designer, who logs time but
+  // is not a `project_team_members` row) is left unnamed, matching the
+  // pre-HT-21 generic phrasing rather than guessing.
+  const memberNames = useMemo(
+    () =>
+      new Map(
+        (roster ?? [])
+          .filter((r): r is typeof r & { profile_id: string } => !!r.profile_id)
+          .map((r) => [r.profile_id, r.display_name ?? null] as const),
+      ),
+    [roster],
+  );
   const unbilledEntries = useMemo(
-    () => unbilledTime?.entries ?? [],
-    [unbilledTime],
+    () =>
+      (unbilledTime?.entries ?? []).map((entry) => ({
+        ...entry,
+        member_name: memberNames.get(entry.user_id) ?? null,
+      })),
+    [unbilledTime, memberNames],
   );
 
   // ── Prefill seeding — once per project, after the section queries settle ──
@@ -616,6 +638,14 @@ export function InvoiceComposer({
                           }
                         />
                         <span className="min-w-0 flex-1 truncate text-[11.5px] text-[var(--color-charcoal)]">
+                          {/* HT-21 — the composer names the person on every
+                              row; unnamed only where the roster carries none
+                              (the project's own designer, e.g.). */}
+                          {entry.member_name && (
+                            <span className="mr-1.5 text-[var(--color-clay-ink)]">
+                              {entry.member_name} ·
+                            </span>
+                          )}
                           {fmtDay(entry.started_at)}
                           {entry.notes && (
                             <span className="ml-1.5 text-[var(--text-muted)]">
@@ -633,8 +663,8 @@ export function InvoiceComposer({
                       </label>
                     ))}
                     <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-                      ticked entries bill as one line and lock to the draft ·
-                      voiding releases them
+                      ticked entries bill as one line per person and lock to
+                      the draft · voiding releases them
                     </p>
                   </>
                 ) : (

@@ -3,6 +3,7 @@ import {
   minutesToHours,
   buildTimeLineDraft,
   groupEntriesByWeek,
+  groupEntriesByPerson,
   studioPeriodStartISO,
 } from '../time-billing';
 
@@ -46,6 +47,46 @@ describe('buildTimeLineDraft', () => {
     expect(draft!.description).toBe('Design services — 2h (2 entries)');
   });
 
+  it('carries no dateRows when no entry has a started_at (pre-HT-21 callers)', () => {
+    const draft = buildTimeLineDraft([{ id: 'a', duration_minutes: 90, amount_cents: 30_000 }]);
+    expect(draft!.dateRows).toEqual([]);
+  });
+
+  it('HT-21 — names the row when every entry agrees on one member_name', () => {
+    const draft = buildTimeLineDraft([
+      {
+        id: 'a',
+        duration_minutes: 60,
+        amount_cents: 14_500,
+        member_name: 'Maria Alvarez',
+        started_at: '2026-09-03T14:00:00Z',
+        resolved_rate_cents: 14_500,
+      },
+      {
+        id: 'b',
+        duration_minutes: 30,
+        amount_cents: 7_250,
+        member_name: 'Maria Alvarez',
+        started_at: '2026-09-05T09:00:00Z',
+        resolved_rate_cents: 14_500,
+      },
+    ]);
+    expect(draft!.description).toBe('Maria Alvarez — 1h 30m (2 entries)');
+    // Dated sub-table: date · minutes · rate, oldest first, no name.
+    expect(draft!.dateRows).toEqual([
+      { date: '2026-09-03', minutes: 60, rateCents: 14_500 },
+      { date: '2026-09-05', minutes: 30, rateCents: 14_500 },
+    ]);
+  });
+
+  it('HT-21 — a mixed-author group keeps the generic phrasing rather than naming one of them', () => {
+    const draft = buildTimeLineDraft([
+      { id: 'a', duration_minutes: 60, amount_cents: 10_000, member_name: 'Maria Alvarez' },
+      { id: 'b', duration_minutes: 60, amount_cents: 10_000, member_name: 'Leah Brooks' },
+    ]);
+    expect(draft!.description).toBe('Design services — 2h (2 entries)');
+  });
+
   it('uses singular phrasing for one entry', () => {
     const draft = buildTimeLineDraft([{ id: 'a', duration_minutes: 90, amount_cents: 30_000 }]);
     expect(draft!.description).toBe('Design services — 1h 30m (1 entry)');
@@ -78,6 +119,39 @@ describe('groupEntriesByWeek', () => {
     ]);
     expect(groups).toHaveLength(1);
     expect(groups[0].weekStart).toBe('2026-06-01');
+  });
+});
+
+describe('groupEntriesByPerson', () => {
+  it('HT-21 — one group per author, named groups sorted alphabetically', () => {
+    const groups = groupEntriesByPerson([
+      { id: 'a', user_id: 'u2', member_name: 'Maria Alvarez' },
+      { id: 'b', user_id: 'u1', member_name: 'Leah Brooks' },
+      { id: 'c', user_id: 'u2', member_name: 'Maria Alvarez' },
+    ]);
+    expect(groups).toHaveLength(2);
+    expect(groups[0]).toMatchObject({ userId: 'u1', memberName: 'Leah Brooks' });
+    expect(groups[0].entries.map((e) => e.id)).toEqual(['b']);
+    expect(groups[1]).toMatchObject({ userId: 'u2', memberName: 'Maria Alvarez' });
+    expect(groups[1].entries.map((e) => e.id)).toEqual(['a', 'c']);
+  });
+
+  it('entries with no user_id land in one shared unnamed group (pre-HT-21 callers)', () => {
+    const groups = groupEntriesByPerson([
+      { id: 'a', duration_minutes: 60, amount_cents: 100 },
+      { id: 'b', duration_minutes: 30, amount_cents: 50 },
+    ]);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].memberName).toBeNull();
+    expect(groups[0].entries).toHaveLength(2);
+  });
+
+  it('the unnamed group sorts after every named group', () => {
+    const groups = groupEntriesByPerson([
+      { id: 'a' },
+      { id: 'b', user_id: 'u1', member_name: 'Leah Brooks' },
+    ]);
+    expect(groups.map((g) => g.memberName)).toEqual(['Leah Brooks', null]);
   });
 });
 

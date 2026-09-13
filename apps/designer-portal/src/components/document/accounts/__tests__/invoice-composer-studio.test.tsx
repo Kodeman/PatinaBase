@@ -37,6 +37,9 @@ jest.mock('@patina/supabase', () => ({
   }),
   useClaimTimeEntries: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useUnbilledTime: () => ({ data: { entries: [] }, isLoading: false }),
+  // HT-21 (W5) — names the composer's time rows; unused by this suite's
+  // studio-mode/empty-selection scenarios but called unconditionally.
+  useProjectRoster: () => ({ data: [] }),
 }));
 
 jest.mock('@/hooks/use-feature-flag', () => ({
