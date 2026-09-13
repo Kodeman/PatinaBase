@@ -225,4 +225,77 @@ struct VisitReviewTests {
         #expect(VisitReviewComposer.closeOwnerUserID(
             runsRealServices: false, userID: "anonymous", workspaceID: nil) == nil)
     }
+
+    // MARK: HT-16 — the active duration, and the stepper that corrects it
+    //
+    // These are ADDITIVE. Every assertion above about `elapsedMinutes` is
+    // untouched: the wall clock is still the wall clock, and still what the
+    // visit spanned. What changed is what the close OFFERS.
+
+    /// The defect, in one test. A visit resumes live for hours (D10 was cited as
+    /// honoured while Field breached it), so a forgotten "End visit" used to
+    /// propose the whole wall clock with one confirm tap. The active duration is
+    /// visit start → the LAST capture.
+    @Test func aVisitLeftOpenForHoursOffersTheTimeSheWasWorking() {
+        let summary = VisitReviewComposer.summarize(
+            rows: [
+                row("e1111111-1111-4111-8111-111111111111", photo: true, offset: 60),
+                row("e2222222-2222-4222-8222-222222222222", photo: true, offset: 20 * 60)
+            ],
+            startedAt: start, now: start.addingTimeInterval(3 * 3_600))
+
+        #expect(summary.elapsedMinutes == 180)
+        #expect(summary.activeMinutes == 20)
+    }
+
+    /// With no captures there is nothing to bound the visit by, so the offer IS
+    /// the wall clock and the stepper is the whole of the correction. Saying
+    /// otherwise would be inventing a number.
+    @Test func aVisitWithNoCapturesOffersTheWallClock() {
+        let summary = VisitReviewComposer.summarize(
+            rows: [], startedAt: start, now: start.addingTimeInterval(45 * 60))
+        #expect(summary.activeMinutes == summary.elapsedMinutes)
+        #expect(summary.activeMinutes == 45)
+    }
+
+    /// A capture timestamped before the visit opened — a clock change, a
+    /// restored context — cannot drive the offer below the CHECK's floor.
+    @Test func aCaptureBeforeTheVisitStartedStillOffersAMinute() {
+        let summary = VisitReviewComposer.summarize(
+            rows: [row("e3333333-3333-4333-8333-333333333333", photo: true, offset: -600)],
+            startedAt: start, now: start.addingTimeInterval(30 * 60))
+        #expect(summary.activeMinutes == 1)
+    }
+
+    /// And one timestamped after "now" cannot invent time the visit did not
+    /// span.
+    @Test func aCaptureAfterNowCannotStretchTheOfferPastTheWallClock() {
+        let summary = VisitReviewComposer.summarize(
+            rows: [row("e4444444-4444-4444-8444-444444444444", photo: true, offset: 9 * 3_600)],
+            startedAt: start, now: start.addingTimeInterval(30 * 60))
+        #expect(summary.activeMinutes == summary.elapsedMinutes)
+        #expect(summary.activeMinutes == 30)
+    }
+
+    @Test func theStepperMovesInQuarterHours() {
+        #expect(VisitReviewComposer.stepMinutes == 15)
+        #expect(VisitReviewComposer.steppedMinutes(20, by: 15, elapsedMinutes: 180) == 35)
+        #expect(VisitReviewComposer.steppedMinutes(35, by: -15, elapsedMinutes: 180) == 20)
+    }
+
+    /// The bound: down to the CHECK's own floor, and never past the wall clock.
+    /// A close may CORRECT what the clock said; it may not exceed it.
+    @Test func theStepperIsBoundedByTheFloorAndTheWallClock() {
+        #expect(VisitReviewComposer.steppedMinutes(5, by: -15, elapsedMinutes: 180) == 1)
+        #expect(VisitReviewComposer.steppedMinutes(175, by: 15, elapsedMinutes: 180) == 180)
+        #expect(VisitReviewComposer.steppedMinutes(180, by: 15, elapsedMinutes: 180) == 180)
+        // A one-minute visit cannot be stepped up into ten.
+        #expect(VisitReviewComposer.steppedMinutes(1, by: 15, elapsedMinutes: 1) == 1)
+    }
+
+    /// Whatever the stepper lands on, the offer's words spell it the same way.
+    @Test func theOfferSpellsWhateverTheStepperLandsOn() {
+        #expect(VisitReviewComposer.timeOffer(minutes: 20) == "Log 20m as a site visit")
+        #expect(VisitReviewComposer.timeOffer(minutes: 90) == "Log 1h 30m as a site visit")
+    }
 }

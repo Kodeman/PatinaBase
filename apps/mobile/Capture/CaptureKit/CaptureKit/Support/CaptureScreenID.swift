@@ -82,6 +82,8 @@ public enum CaptureScreenID: String, CaseIterable, Sendable {
     case v0Visit              = "screen.V0.visit"
     case c6Voice              = "screen.C6.voice"
     case v4VisitReview        = "screen.V4.visit-review"
+    // Flow 18 — hours. An hour that is not a visit (HT-18).
+    case h1LogTime            = "screen.H1.log-time"
     // Flow 16 — project-scoped Site Request loop (P1)
     case sr01SiteHub          = "screen.SR01.site-hub"
     case sr02Composer         = "screen.SR02.composer"

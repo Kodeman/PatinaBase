@@ -46,7 +46,19 @@ public struct VisitReviewSummary: Equatable, Sendable {
     public let noteCount: Int
     public let unplacedCount: Int
     public let rooms: [String]
+    /// Wall clock: visit start → now. KEPT, unchanged, and still what the visit
+    /// actually spanned.
     public let elapsedMinutes: Int
+    /// HT-16 — visit start → the LAST capture, which is the last moment this
+    /// visit is known to have been worked. A visit left open in a truck for
+    /// three hours proposes the twenty minutes she was in the house, not the
+    /// three hours; D10 binds every surface that proposes a duration, not only
+    /// the desk, and Field was breaching it with one confirm tap (CR-2, MOB-2,
+    /// LEAH-2, FS-28).
+    ///
+    /// With no captures there is nothing to bound it by, so this IS
+    /// `elapsedMinutes` — the stepper is then the whole of the correction.
+    public let activeMinutes: Int
 }
 
 public enum VisitReviewComposer {
@@ -74,12 +86,25 @@ public enum VisitReviewComposer {
         // still cost her a trip, so the floor is one minute, never zero.
         let elapsed = max(1, Int((now.timeIntervalSince(startedAt) / 60).rounded()))
 
+        // `ordered` is already sorted ascending, so the last row is the last
+        // capture. A capture made BEFORE the visit opened (a clock change, a
+        // restored context) cannot shorten the visit below one minute, and
+        // cannot stretch it past the wall clock either — hence the clamp.
+        let active: Int
+        if let lastCapture = ordered.last?.createdAt {
+            let worked = Int((lastCapture.timeIntervalSince(startedAt) / 60).rounded())
+            active = min(elapsed, max(1, worked))
+        } else {
+            active = elapsed
+        }
+
         return VisitReviewSummary(
             photoCount: photos,
             noteCount: notes,
             unplacedCount: ordered.filter { !$0.isPlaced }.count,
             rooms: rooms,
-            elapsedMinutes: elapsed)
+            elapsedMinutes: elapsed,
+            activeMinutes: active)
     }
 
     /// Honest and non-blocking: Done always works, and says what is waiting.
@@ -107,6 +132,21 @@ public enum VisitReviewComposer {
         }
         return "Log \(span) as a site visit"
     }
+
+    /// HT-16's stepper, as a value. The floor is the CHECK's own
+    /// (duration_minutes > 0); the ceiling is the visit's wall clock, because a
+    /// close may correct DOWN from what the clock says and may never invent
+    /// time the visit did not span. `elapsedMinutes` is therefore both the
+    /// bound and the only value that needs no defence.
+    public static func steppedMinutes(_ minutes: Int, by delta: Int,
+                                      elapsedMinutes: Int) -> Int {
+        let ceiling = max(1, elapsedMinutes)
+        return min(ceiling, max(1, minutes + delta))
+    }
+
+    /// The step a thumb takes. A quarter hour is what a studio bills in and
+    /// what keeps a correction to taps.
+    public static let stepMinutes = 15
 
     /// Whether the Hours offer is still tappable, given the standing close
     /// record's state (nil = no record).

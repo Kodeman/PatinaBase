@@ -75,6 +75,29 @@ public enum WorkFixtures {
                      phaseLabel: "On hold", updatedAt: iso("2026-05-29T14:40:00Z"))
     ]
 
+    /// W6 — "My hours this week". Dated relative to now so the week window
+    /// always contains them; a fixed date would empty the list every Monday.
+    public static var hours: [FieldHourRow] {
+        let now = Date()
+        return [
+            FieldHourRow(id: UUID(uuidString: "f1000000-0000-4000-8000-000000000001")!,
+                         startedAt: now.addingTimeInterval(-3 * 3_600),
+                         projectName: "Ashford Residence — Living + Dining",
+                         minutes: 45, activity: .travel, billable: true,
+                         billingState: "authorized", rateSource: "authority"),
+            FieldHourRow(id: UUID(uuidString: "f1000000-0000-4000-8000-000000000002")!,
+                         startedAt: now.addingTimeInterval(-5 * 3_600),
+                         projectName: "Ashford Residence — Living + Dining",
+                         minutes: 90, activity: .siteVisit, billable: true,
+                         billingState: "pending_authorization", rateSource: "none"),
+            FieldHourRow(id: UUID(uuidString: "f1000000-0000-4000-8000-000000000003")!,
+                         startedAt: now.addingTimeInterval(-26 * 3_600),
+                         projectName: "Whitfield Loft",
+                         minutes: 30, activity: nil, billable: false,
+                         billingState: "authorized", rateSource: "studio_member")
+        ]
+    }
+
     public static let projectDetail = FieldProjectDetail(
         project: projects[0],
         phases: [
@@ -194,6 +217,27 @@ public struct MockProjectsService: ProjectsService {
         return WorkFixtures.projects
     }
     public func projectDetail(id: String) async throws -> FieldProjectDetail { WorkFixtures.projectDetail }
+}
+
+// MARK: - Hours (read-only, own scope)
+
+/// W6. Three hours across two days, one of them a drive — enough for the Work
+/// screen's "My hours this week" list to render on the Simulator without a
+/// backend, and enough for the role chip to have both of its states
+/// (`WorkFixtures.projectID` holds two roster roles; every other project holds
+/// one, which is the case that must NOT raise a chip).
+public struct MockFieldHoursService: FieldHoursService {
+    public init() {}
+
+    public func myHours(since: Date) async throws -> [FieldHourRow] {
+        WorkFixtures.hours.filter { $0.startedAt >= since }
+    }
+
+    public func myRateRoles(projectID: String) async throws -> [FieldRateRole] {
+        projectID == WorkFixtures.projectID
+            ? [.leadDesigner, .vendor]
+            : [.supportDesigner]
+    }
 }
 
 // MARK: - Leads

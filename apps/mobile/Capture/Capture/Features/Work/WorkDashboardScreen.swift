@@ -17,8 +17,11 @@ struct WorkDashboardScreen: View {
     /// — the five §14 numbers are read from the store, not from the model's
     /// display projections.
     private let store: CaptureStore
+    /// W6 — the read half of Field's hours, own scope only (MOB-8).
+    private let hours: any FieldHoursService
 
     @State private var model: WorkDashboardModel
+    @State private var myHours: [FieldHourRow] = []
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -28,6 +31,7 @@ struct WorkDashboardScreen: View {
         self.coordinator = coordinator
         companion = container.companion
         store = container.store
+        hours = container.hours
         _model = State(wrappedValue: WorkDashboardModel(container: container))
     }
 
@@ -97,10 +101,17 @@ struct WorkDashboardScreen: View {
                     accent: CaptureColor.verdigrisInk
                 )
                 browseSection
+                myHoursSection
             }
             .padding(.horizontal, 20)
             .padding(.top, 12)
-            .padding(.bottom, 40)
+            // The companion strip floats over this screen and `RootView`'s
+            // `.safeAreaInset` does not reach inside the realm's own
+            // `NavigationStack` scroll view, so the inset is spent here. 40pt
+            // cleared the Browse tiles it used to end on; "My hours this week"
+            // ends on a line a reader has to READ, and at max scroll the
+            // bubble (64pt + 8pt padding) and its hint capsule sat across it.
+            .padding(.bottom, 112)
         }
         .background(CaptureColor.paper)
         .navigationTitle("Today")
@@ -108,6 +119,7 @@ struct WorkDashboardScreen: View {
         .refreshable {
             analytics.event("work.refresh")
             await model.loadAll()
+            await loadMyHours()
         }
         .task {
             analytics.screen(CaptureScreenID.w1Work.rawValue)
@@ -117,6 +129,7 @@ struct WorkDashboardScreen: View {
             visitEndEmitter.reapExpired()
             model.refreshVisit()
             await model.loadAll()
+            await loadMyHours()
             updateCompanionHint()
         }
         .onChange(of: contentRevision) {
@@ -127,6 +140,14 @@ struct WorkDashboardScreen: View {
             value: contentRevision
         )
         .accessibilityIdentifier(CaptureScreenID.w1Work.rawValue)
+    }
+
+    /// A failure is an ABSENT section, never an error band: her hours are a
+    /// look back, not the work in front of her, and a red row about a read that
+    /// did not land would be the loudest thing on the screen.
+    private func loadMyHours() async {
+        let weekStart = FieldHoursWeek.start(containing: Date())
+        myHours = (try? await hours.myHours(since: weekStart)) ?? []
     }
 
     private var visitEndEmitter: FieldVisitEndEmitter {
@@ -388,9 +409,95 @@ struct WorkDashboardScreen: View {
                     accessory: .none,
                     route: .siteScanSetup
                 )
+                // HT-18 — the seventh tile, and the only one that opens a sheet
+                // rather than pushing a screen: logging a drive interrupts
+                // whatever she was doing and has to hand her back to it.
+                browseAct(
+                    title: "Hours",
+                    subtitle: "Log an hour",
+                    symbol: "clock"
+                ) {
+                    coordinator.present(.logTime)
+                }
             }
         }
         .accessibilityIdentifier("work.section.browse")
+    }
+
+    // MARK: - My hours this week
+
+    /// Read-only, OWN SCOPE ONLY (MOB-8). The desk's scope lens (W2) answers
+    /// project · member · studio for an owner sitting down; this is a
+    /// camera-first screen handed to trades, and the studio's dollars have no
+    /// business on it. HT-30: the week's total sits ABOVE the rows that produced
+    /// it, and there is no total at all when there are no rows.
+    @ViewBuilder
+    private var myHoursSection: some View {
+        if !myHours.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                WorkSectionHeading(
+                    title: "My hours this week",
+                    count: nil,
+                    accent: CaptureColor.inkSoft
+                )
+                if let total = FieldHoursWeek.totalLabel(myHours) {
+                    Text(total)
+                        .font(CaptureType.title)
+                        .foregroundStyle(CaptureColor.ink)
+                }
+                VStack(spacing: 0) {
+                    ForEach(Array(FieldHoursWeek.ordered(myHours).enumerated()),
+                            id: \.element.id) { index, row in
+                        if index > 0 {
+                            Rectangle()
+                                .fill(CaptureColor.line)
+                                .frame(height: 1)
+                        }
+                        myHoursRow(row)
+                    }
+                }
+                .routeCard()
+            }
+            .accessibilityIdentifier("work.section.my-hours")
+        }
+    }
+
+    private func myHoursRow(_ row: FieldHourRow) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text(FieldHoursWeek.dayLabel(row.startedAt))
+                .font(CaptureType.monoSmall)
+                .foregroundStyle(CaptureColor.inkSoft)
+                .frame(width: 38, alignment: .leading)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(row.projectName ?? "No project")
+                    .font(CaptureType.footnote)
+                    .foregroundStyle(CaptureColor.ink)
+                    .lineLimit(1)
+                Text("\(FieldHoursWeek.activityLabel(row)) · \(FieldHoursWeek.worthLabel(row))")
+                    .font(CaptureType.monoSmall)
+                    .foregroundStyle(CaptureColor.inkSoft)
+            }
+            Spacer(minLength: 8)
+            Text(FieldLogTimeDraft.durationLabel(minutes: row.minutes))
+                .font(CaptureType.footnote)
+                .foregroundStyle(CaptureColor.ink)
+        }
+        .padding(.vertical, 12)
+    }
+
+    /// A tile that takes an act rather than a destination. `browseTile` keys its
+    /// analytics off a route; this one has none to key off.
+    private func browseAct(title: String, subtitle: String, symbol: String,
+                           action: @escaping () -> Void) -> some View {
+        WorkBrowseTile(
+            title: title,
+            subtitle: subtitle,
+            symbol: symbol,
+            accessory: .none
+        ) {
+            analytics.event("work.open_browse", ["section": title.lowercased()])
+            action()
+        }
     }
 
     private func browseTile(
