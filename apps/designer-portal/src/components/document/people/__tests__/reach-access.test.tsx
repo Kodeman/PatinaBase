@@ -14,7 +14,10 @@ import {
   NO_RULE_SENTENCE,
   REACH_EMPTY_SENTENCE,
 } from "../reach-access";
-import { consentSentence } from "../consent-sentence";
+import {
+  consentSentence,
+  consentSentenceForRecord,
+} from "../consent-sentence";
 import { grantEndsSentence, NO_GRANT_SENTENCE } from "../access-grant-list";
 
 const channelsData: { current: unknown[] } = { current: [] };
@@ -23,6 +26,8 @@ const ruleData: { current: Record<string, unknown> | null } = { current: null };
 const consentData: { current: Record<string, unknown> | null } = {
   current: null,
 };
+/** CR-8: the studio roster `set_by` is resolved against. */
+const studioMembers: { current: unknown[] } = { current: [] };
 const recordConsent = jest.fn();
 const recordReconsent = jest.fn();
 const mintLink = jest.fn();
@@ -34,6 +39,8 @@ const setChannelStatus = jest.fn();
 jest.mock("@patina/supabase", () => ({
   useStudioContactChannels: () => ({ data: channelsData.current }),
   useContactRule: () => ({ data: ruleData.current }),
+  // CR-8: the rule's provenance needs the studio's roster to name its setter.
+  useOrganizationMembers: () => ({ data: studioMembers.current }),
   useAccessGrants: () => ({ data: grantsData.current }),
   useChannelConsent: () => ({ data: consentData.current }),
   useRecordChannelConsent: () => ({ mutate: recordConsent, isPending: false }),
@@ -60,6 +67,12 @@ jest.mock("@patina/supabase", () => ({
   CONTACT_CHANNEL_KIND_LABELS: { mobile: "Mobile", email: "Email" },
   isContactChannelHeld: (s: string) => !!s && s !== "active",
   fieldLinkUrl: (token: string) => `https://patina.cloud/field/${token}`,
+}));
+
+/** CR-9: the channel row resolves a consent record's ORIGIN job by name. */
+const projectsData: { current: unknown[] } = { current: [] };
+jest.mock("@/hooks/use-projects", () => ({
+  useProjects: () => ({ data: projectsData.current }),
 }));
 
 jest.mock("@/lib/analytics/people-events", () => ({
@@ -96,6 +109,8 @@ beforeEach(() => {
   grantsData.current = [];
   ruleData.current = null;
   consentData.current = null;
+  studioMembers.current = [];
+  projectsData.current = [];
   recordConsent.mockClear();
   mintLink.mockClear();
   addChannel.mockClear();
@@ -174,6 +189,53 @@ describe("a channel row", () => {
         "Written consent, 2 May 2025, on the Lindqvist kitchen.",
       ),
     ).toBeInTheDocument();
+  });
+
+  /**
+   * CR-9 — SPEC §5.2 #4 IS TWO SENTENCES. The first names the job the consent
+   * came FROM (`origin_project_id`), the second where it landed; the card used
+   * to print only the first, and named the SEAT's job in it rather than the
+   * record's own.
+   */
+  it("R-Q + CR-9 — the origin job in the first sentence, the carry-forward in the second", () => {
+    consentData.current = {
+      verdict: "granted",
+      record: {
+        status: "granted",
+        source: "written",
+        consented_at: "2025-05-02",
+        opt_out_at: null,
+        opt_out_source: null,
+        origin_project_id: "proj-lindqvist",
+      },
+    };
+    projectsData.current = [
+      { id: "proj-lindqvist", name: "Lindqvist kitchen" },
+      { id: "proj-okonkwo", name: "Okonkwo residence" },
+    ];
+    renderReach({ seatWindowStart: "2026-10-12" });
+    expect(
+      screen.getByText(
+        "Written consent, 2 May 2025, on the Lindqvist kitchen. Carried forward to the Okonkwo residence, 12 Oct 2026.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("CR-9 — a consent recorded on the job in hand has been carried nowhere", () => {
+    consentData.current = {
+      verdict: "granted",
+      record: {
+        status: "granted",
+        source: "written",
+        consented_at: "2026-10-12",
+        opt_out_at: null,
+        opt_out_source: null,
+        origin_project_id: "proj-okonkwo",
+      },
+    };
+    projectsData.current = [{ id: "proj-okonkwo", name: "Okonkwo residence" }];
+    renderReach({ seatWindowStart: "2026-10-12" });
+    expect(screen.queryByText(/Carried forward/)).not.toBeInTheDocument();
   });
 
   it("prints NO consent word where the studio holds no record (R-BB)", () => {
@@ -270,6 +332,48 @@ describe("a channel row", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(
       "Record how and where they agreed before this goes on the books.",
     );
+  });
+});
+
+/** CR-8 — SPEC §5.2 #5: the rule says who set it, not only when. */
+describe("the rule's provenance", () => {
+  it("names the setter off the studio's own roster", () => {
+    ruleData.current = {
+      id: "rule-dana",
+      channels_allowed: [],
+      channels_forbidden: ["email"],
+      route_to_person_id: null,
+      reason: "Never email. Text only. The email on file bounces.",
+      set_at: "2026-09-13T00:00:00Z",
+      set_by: "user-priya",
+    };
+    studioMembers.current = [
+      { user_id: "user-priya", profiles: { full_name: "Priya Natarajan" } },
+    ];
+    renderReach();
+    expect(
+      screen.getByText(
+        "Never email. Text only. The email on file bounces. Set by Priya Natarajan, 13 Sep 2026.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("with no name to give, the date still stands alone", () => {
+    ruleData.current = {
+      id: "rule-dana",
+      channels_allowed: [],
+      channels_forbidden: ["email"],
+      route_to_person_id: null,
+      reason: "Never email. Text only. The email on file bounces.",
+      set_at: "2026-09-13T00:00:00Z",
+      set_by: "user-gone",
+    };
+    renderReach();
+    expect(
+      screen.getByText(
+        "Never email. Text only. The email on file bounces. Set 13 Sep 2026.",
+      ),
+    ).toBeInTheDocument();
   });
 });
 
@@ -442,6 +546,30 @@ describe("the pure parts", () => {
 
   it("a record with no date prints no sentence at all", () => {
     expect(consentSentence({ status: "granted", source: "verbal" })).toBeNull();
+  });
+
+  /**
+   * CR-2 — THE WORD AND THE CLAUSE ON ONE LINE MUST AGREE.
+   * `channel_consent_status()` folds `refusal_unanswered` into `opted_out`
+   * whatever `status` says, and 00594 mints `granted` rows carrying that flag
+   * on purpose. Reading `record.status` printed "Written consent, 2 May 2025"
+   * beside a terracotta `Opted out`.
+   */
+  it("the VERDICT decides which half of the record the sentence reads", () => {
+    const record = {
+      status: "granted",
+      refusal_unanswered: true,
+      source: "written",
+      consented_at: "2025-05-02",
+      opt_out_source: "inbound_sms",
+      opt_out_at: "2025-12-03",
+    } as never;
+    expect(
+      consentSentenceForRecord({ verdict: "opted_out", record }, "Lindqvist kitchen"),
+    ).toBe("Opted out by text, 3 Dec 2025, on the Lindqvist kitchen.");
+    expect(
+      consentSentenceForRecord({ verdict: "granted", record }, "Lindqvist kitchen"),
+    ).toBe("Written consent, 2 May 2025, on the Lindqvist kitchen.");
   });
 
   it("the mint sentence never promises a window it does not have", () => {

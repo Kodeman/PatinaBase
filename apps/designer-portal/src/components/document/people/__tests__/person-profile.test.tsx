@@ -54,6 +54,7 @@ jest.mock("@patina/supabase", () => ({
   // about, so each is answered with the "nothing on file" shape.
   useStudioContactChannels: () => ({ data: [] }),
   useContactRule: () => ({ data: null }),
+  useOrganizationMembers: () => ({ data: [] }),
   useAccessGrants: () => ({ data: [] }),
   useChannelConsent: () => ({ data: null }),
   useRecordChannelConsent: () => ({ mutate: jest.fn(), isPending: false }),

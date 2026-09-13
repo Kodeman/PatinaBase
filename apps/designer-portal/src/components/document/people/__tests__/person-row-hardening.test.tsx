@@ -170,7 +170,7 @@ describe("the rule clause", () => {
     ).toBeInTheDocument();
   });
 
-  it("a rule that forbids text takes the leading rule and KEEPS the phone (CR-16)", () => {
+  it("a rule that forbids text takes NO leading rule and KEEPS the phone (R-BL)", () => {
     const { container } = render(
       <ul>
         <PersonRow
@@ -184,13 +184,14 @@ describe("the rule clause", () => {
         />
       </ul>,
     );
-    // SPEC §5.1 #11 names exactly this row — Ray Thao's — as carrying the
-    // leading rule, and SPEC §3's fixture marks it `block: true`.
+    // R-BL (Fable, 2026-09-13): closing ONE direct channel while another stays
+    // open is a plain clause, not a hard block. Only do-not-contact or a route
+    // to another person earns the 2px terracotta leading rule.
     expect(
       container.querySelector('[data-contact-rule-blocked="true"]'),
-    ).toBeInTheDocument();
-    // But it is not "do not contact": the phone the clause tells the studio to
-    // use is still a live target (§5.4).
+    ).not.toBeInTheDocument();
+    // And it is nothing like "do not contact": the phone the clause tells the
+    // studio to use is still a live target (§5.4).
     expect(
       screen.getByRole("link", { name: /Call Dana Kowalski/ }),
     ).toBeInTheDocument();

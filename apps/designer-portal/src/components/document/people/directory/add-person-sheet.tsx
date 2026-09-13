@@ -45,6 +45,7 @@ import {
   useFindOrCreateVendor,
   usePromoteToStudioContact,
   useSaveVendor,
+  useSetAffiliation,
   useSetContactRule,
   useSetPartyAuthority,
   useStudioContacts,
@@ -156,6 +157,18 @@ function writeErrorMessage(err: unknown, fallback: string): string {
   const haystack = `${typeof code === "string" ? code : ""} ${raw}`;
   if (/row-level security|permission denied|42501|PGRST116/i.test(haystack)) {
     return "This studio's book is not yours to write. Ask an owner or admin.";
+  }
+  // CR-3 — 00624's `party_card_guard_trg` refusals, said in words. They are
+  // raised as bare tokens, which the schema-word guard below does not catch,
+  // so without these three the token itself reached the face.
+  if (/party_card_project_has_no_studio/i.test(haystack)) {
+    return "This project isn't attached to a studio yet, so a firm from the studio's book can't be put on its seats. Give the project a studio first.";
+  }
+  if (/party_company_other_studio/i.test(haystack)) {
+    return "That firm belongs to another studio's book, so it can't be named on this job.";
+  }
+  if (/party_company_not_a_company/i.test(haystack)) {
+    return "A person doesn't hold the subcontract — name the firm's own card here.";
   }
   // Never a schema word on a face: a constraint or index name, a relation, a
   // column. Those sentences are for the log, not the studio.
@@ -295,6 +308,7 @@ export function AddPersonSheet({
   const addChannel = useAddStudioContactChannel();
   const contactRuleWrite = useSetContactRule();
   const setAuthority = useSetPartyAuthority();
+  const setAffiliation = useSetAffiliation();
   const { data: orgs } = useOrganizations();
   // QA-R3-1: the caller's answer wins. The fallback is the membership list
   // SORTED by id — never `.find()` over an unordered read, which is the defect
@@ -393,12 +407,14 @@ export function AddPersonSheet({
     mobileWritten: boolean;
     emailWritten: boolean;
     ruleWritten: boolean;
+    affiliationWritten: boolean;
   }>({
     party: null,
     cardId: null,
     mobileWritten: false,
     emailWritten: false,
     ruleWritten: false,
+    affiliationWritten: false,
   });
 
   /**
@@ -519,6 +535,7 @@ export function AddPersonSheet({
       mobileWritten: false,
       emailWritten: false,
       ruleWritten: false,
+      affiliationWritten: false,
     };
     setError(null);
   };
@@ -654,6 +671,12 @@ export function AddPersonSheet({
           partyKind,
           displayName: trimmedName,
           companyName: firmName,
+          // CR-3: the picked card's ID, not only its name. The select stored
+          // `firmId` and then threw it away — so a person added through the
+          // front door had no firm IDENTITY, and `directoryFirmOf` (which
+          // reads `meta.company_id`) returned null for every one of them.
+          // A firm typed by hand has no card yet and stays a snapshot string.
+          companyId: matchedFirm?.id ?? null,
           // A named other carries its written label where the seat has room
           // for it; a trade kind carries its trade (see SEAT_PARTY_KIND's
           // note).
@@ -728,6 +751,19 @@ export function AddPersonSheet({
             merge: true,
           });
           chain.ruleWritten = true;
+        }
+        // CR-3: the same fact on the ROLODEX side. The seat's `company_id`
+        // ties this JOB to the firm; the affiliation ties the PERSON to it,
+        // and that is what the company card's Crew & designations, the firm
+        // row's "N on the crew" and the person card's firm line all read.
+        // Designations (signer, paperwork, licence) are the company card's to
+        // set — this only records that they work there.
+        if (matchedFirm && !chain.affiliationWritten) {
+          await setAffiliation.mutateAsync({
+            personId: cardId,
+            companyId: matchedFirm.id,
+          });
+          chain.affiliationWritten = true;
         }
       }
       if (authorityPhrase.trim() || authorityThreshold.trim()) {

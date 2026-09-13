@@ -393,3 +393,271 @@ on the face, both named and documented in `people-derivation.ts`.
 * **No migration.** QA‑R2‑9 names `party_identity_key()` as a possible site; it
   is fixed at the display layer, which is the half the finding's own fix
   sentence asks for and carries no schema risk on a shared local DB.
+
+---
+
+# Round-2 re-dispatch — CR‑1 … CR‑10 (2026‑09‑13)
+
+A second pass over the same round-2 brief, re-issued with the code review's
+CR‑1..CR‑10 attached. Worktree
+`/Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build`, branch
+`build/people-room-crm-2026-09-11`, HEAD `9b5038e1d` at the start. No prod, no
+migration, no server started.
+
+## Gates run at the end of this pass
+
+| Gate | Result |
+|---|---|
+| `pnpm --filter @patina/designer-portal type-check` | exit 0 |
+| `pnpm --filter @patina/supabase type-check` | exit 0 |
+| `npx jest src/components/document/people src/lib/document src/components/document/roster` | **141 suites, 2702 tests, all passing** |
+| `npx vitest run src/hooks/__tests__` (packages/supabase) | **90 files, 1175 passing, 12 skipped** |
+| `pnpm --filter @patina/admin-portal build` | exit 0 (full route manifest) |
+
+## QA‑R2‑1 … QA‑R2‑7, QA‑R2‑9 — verified already fixed at HEAD, not re-fixed
+
+CONTEXT‑1 is right: `5633230b0` landed these before this pass began. Re-read at
+HEAD rather than taken on trust:
+
+* **QA‑R2‑1** — `people-room.tsx:159-162` resolves `organizationId` as
+  `directoryRolodexOrgId(all ?? []) ?? memberOrgId`, and `memberOrgId` itself
+  sorts by id before `.find()`. No unordered `.find()` over two `design_studio`
+  memberships survives.
+* **QA‑R2‑2** — `views/directory-view.tsx:192-213`: `firmCounts` buckets crew off
+  the rows in hand and open jobs off `usePeopleSeats({ all: true })`
+  (`seat.company_id` / `seat.project_id`, skipping `seatIsDone`). The v4 view's
+  hard-coded `project_id NULL` is no longer read for the count.
+* **QA‑R2‑3** — `views/person-profile.tsx:191/196/342-343` computes `routeTo` and
+  `routeCandidates` and passes both into `<ReachAccess>`.
+* **QA‑R2‑4** — `reach-access.tsx:612-620` builds `ruleSummary` from the shared
+  `contactRuleClause()` and reads `contactRuleIsHardBlock()`; the parallel
+  mechanical-list composer is gone.
+* **QA‑R2‑5** — `directory/add-person-sheet.tsx:1432-1451`: the checkbox's own
+  `<label>` is the short sentence and the marketing paragraph is
+  `aria-describedby` outside it. The accessible name no longer contains
+  "project".
+* **QA‑R2‑6** — `e2e/people/call-sheet.spec.ts`'s `openTheCallSheet()` now gates
+  on `[data-roster-band]` (rendered at `roster-groups.tsx:108`) with a 30s budget
+  instead of each band assertion racing the roster fetch on a 5s default.
+* **QA‑R2‑7** — `views/person-profile.tsx:225-234, 286-288`: the sole-proprietor
+  Paper region folds `documents` with the firm's `useComplianceDocuments({
+  holderId: firmId })` worst-first, per R‑BA.
+* **QA‑R2‑9** — `lib/document/people-derivation.ts:737, 827` — "A COMPANY-ONLY
+  ENGAGEMENT IS NOT A PERSON (QA‑R2‑9)", fixed at the display layer.
+
+Nothing was re-edited for these eight.
+
+## CR‑1 — BLOCKING. The branch was red, and R‑BL was uncommitted.
+
+**Confirmed both halves before touching anything.** With the working-tree
+`contact-rule.ts`, `npx jest …/person-row-hardening.test.tsx` reported
+`Tests: 1 failed, 13 passed` — `● the rule clause › a rule that forbids text
+takes the leading rule and KEEPS the phone (CR-16)`, at
+`person-row-hardening.test.tsx:191`,
+`container.querySelector('[data-contact-rule-blocked="true"]')` → `null`.
+
+**Changed.** The R‑BL predicate is kept
+(`contactRuleIsHardBlock = contactRuleIsDoNotContact(rule) ||
+Boolean(rule?.route_to_person_id)`, `contact-rule.ts:105-112`) and the pin was
+rewritten to R‑BL's wording rather than the predicate bent back to the pin:
+`person-row-hardening.test.tsx` now asserts a `forbidden={sms}` /
+`allowed={email,mobile}` row renders **no** `[data-contact-rule-blocked="true"]`
+and **keeps** its `TelLink` and the studio's own sentence. The two neighbouring
+pins are untouched: a rule leaving no channel open still takes the rule, and a
+do-not-contact rule still takes the phone off the row.
+
+**Evidence.** `npx jest src/components/document/people src/lib/document` →
+`Test Suites: 141 passed · Tests: 2702 passed`, exit 0.
+
+## CR‑2 — the consent WORD and the consent CLAUSE could contradict on one line.
+
+**Changed.** `consent-sentence.ts:66-98` — `consentSentenceForRecord` no longer
+takes a raw record. It takes a resolution
+(`Pick<ChannelConsentResolution, "verdict" | "record">`) and passes
+`resolved.verdict` as the status, never `record.status`. The reason is written
+into the docblock: `channel_consent_status()` folds `refusal_unanswered` into
+`opted_out` whatever `status` says (00594:1062‑1063), and 00594:655‑666 records
+that `granted` rows carrying that flag are minted on purpose.
+
+Both call sites moved with it:
+
+* `reach-access.tsx:191` → `consentSentenceForRecord(consent, …)` — `consent` is
+  the `ChannelConsentResolution` off `useChannelConsent`, the same object
+  `StateWord value={consent?.verdict}` renders the word from three lines above.
+* `views/directory-view.tsx:301-318` → the clause map now pairs each record with
+  the identity's own `people_directory.consent_status`
+  (`verdicts = new Map(rows.map(r => [r.person_id, r.consent_status]))`), which
+  is where the printed word comes from. `rows` joined the memo's deps.
+
+`roster-row.tsx:207` was already correct and is unchanged.
+
+**Pin.** `reach-access.test.tsx` — "the VERDICT decides which half of the record
+the sentence reads": one record (`status: granted`, `refusal_unanswered: true`,
+both date pairs populated) reads "Opted out by text, 3 Dec 2025, on the
+Lindqvist kitchen." under verdict `opted_out` and "Written consent, 2 May 2025,
+…" under `granted`.
+
+## CR‑3 — no surface in the room could attach a person or a seat to a FIRM card.
+
+**Changed, in four places.**
+
+1. `use-coordination.ts:415-432` — `AddProjectPartyInput` gains `companyId`, and
+   the insert at `:535` sends `company_id`. The docblock names why the snapshot
+   string answered nothing: `directoryFirmOf` reads `meta.company_id`.
+2. `use-coordination.ts:558-563, :636` — `UpdateProjectPartyPatch` gains
+   `companyId`; `useUpdateProjectParty` writes `company_id` when it is supplied
+   and leaves it standing when it is not.
+3. `directory/add-person-sheet.tsx:656-663` — the Add sheet sends
+   `companyId: matchedFirm?.id ?? null` alongside the name. A firm typed by hand
+   has no card, so it stays a snapshot string and sends `null`.
+4. `directory/add-person-sheet.tsx:711-725` — the rolodex half. The
+   already-built `useSetAffiliation` is called inside the same chain once the
+   card exists, recorded on `chainRef.current.affiliationWritten` like the other
+   four steps, so a retry after a mid-chain failure does not write it twice.
+   Designations (signer / paperwork / licence) are deliberately NOT set here —
+   they are the company card's to set; this records only that they work there.
+
+**00624's refusals now speak.** `writeErrorMessage` (`:155-167`) translates
+`party_card_project_has_no_studio`, `party_company_other_studio` and
+`party_company_not_a_company` into sentences. The last two are newly reachable
+*because* of this change, and the existing schema-word guard does not match a
+bare token, so without them the token itself would have reached a face
+(SPEC §8 #3).
+
+**Pins.** `add-person-sheet-kinds.test.tsx` — "ties the seat and the person to
+the firm card that was picked" asserts `addParty` receives
+`{companyId: "firm-cedar", companyName: "Cedar & Iron Framing"}` and
+`setAffiliation` receives `{personId: "card-new", companyId: "firm-cedar"}`;
+"a firm typed by hand has no card yet, so no id is sent" asserts
+`companyId: null` and `setAffiliation` never called.
+
+## CR‑4 — every site-access edit restamped "the way in changed" and erased who was told.
+
+**Changed.** `use-coordination.ts:2010-2030` — `useUpdateSiteAccessCard` computes
+`wayInChanged = lockboxVersion|alarmRef|keyHolderEngagementId !== undefined`
+BEFORE building the row, and only then puts `changed_at`, `changed_by` and
+`told_refs: []` on it. The upsert's UPDATE leg sets only the columns the payload
+carries, so a write that omits the three leaves the standing stamp and the
+standing `told_refs` exactly as they were.
+
+The docblock names the seven acts the card routes through this door and the
+false sentence the old behaviour produced at `site-access-card.tsx:646-651`.
+
+**Pins.** New file
+`packages/supabase/src/hooks/__tests__/use-site-access-and-reach-fanout.test.ts`:
+a lockbox change stamps and clears; the alarm and the key holder do too; an
+emergency line, the hours, the notes and receiving instructions each send
+**no** `told_refs`, `changed_at` or `changed_by`; and "Start the card" sends
+`{project_id}` alone — it claims nothing about a lockbox nobody has written.
+
+## CR‑5 — a revoked field link left the reach word claiming a door that was shut.
+
+**Changed.** `use-party-sms.ts:180-215` — `useRevokeFieldLink` takes an optional
+`projectId` and its `onSuccess` mirrors `useCreateFieldLink`'s fan-out:
+`partySmsKeys.links(partyId)`, `['access-grants']`, `['people-directory']`,
+`['people-directory-seats']` and `['project-roster', projectId]`.
+`party-profile-sheet.tsx:490-497` passes `projectId: seatProjectId`.
+
+**Pin.** `use-site-access-and-reach-fanout.test.ts` — "a revoke moves every read
+model the mint moves".
+
+## CR‑6 — `useAddProjectParty` wrote to the consent ledger and never invalidated it.
+
+**Changed.** `use-coordination.ts:552-560` — `onSuccess` now also invalidates
+`consentKeys.all` (imported from `./use-consent` at `:10`), beside the four keys
+it already moved. The comment names the sibling doors that already do it
+(`useRecordPartySmsConsent`, and every hook in `use-consent.ts` through
+`invalidateConsentFanout`).
+
+**Pin.** `use-site-access-and-reach-fanout.test.ts` — "invalidates the consent
+root beside the roster keys" (`['channel-consent']`).
+
+## CR‑7 — the Text act's held reason was `sr-only`.
+
+**Changed.** `roster-row.tsx:556-570` — the reason renders as
+`mt-1 text-[0.7rem] text-[var(--color-aged-oak)]`, the same treatment the Send
+act's own reason gets fourteen lines below. `aria-describedby` still points at
+it, so nothing changes for a screen reader; a sighted designer now sees the
+sentence SPEC §5.4's string list always named as a face string.
+
+**Pin.** `roster-row.test.tsx` — "the Text act prints its held reason where a
+sighted reader can see it": `aria-disabled="true"`, the described element holds
+the sentence verbatim, and it does not carry `sr-only`.
+
+## CR‑8 — rule provenance was on no face, and would have been wrong if it were.
+
+**Changed, both halves.**
+
+* `use-studio-contacts.ts:988-1005, :1045` — `useSetContactRule` reads
+  `supabase.auth.getUser()` and sends `set_by` on the upsert. `set_by`'s
+  `DEFAULT auth.uid()` fires on the INSERT leg alone, so on
+  `ON CONFLICT DO UPDATE` the row kept the ORIGINAL setter while `set_at` moved
+  to today.
+* `reach-access.tsx:564-566, 612-630` — the Contact rule region resolves
+  `rule.set_by` against `useOrganizationMembers(organizationId)` and prints
+  "… Set by Priya Natarajan, 13 Sep 2026." With no name to give it falls back to
+  the standing "Set 13 Sep 2026." rather than inventing one. The date keeps
+  `formatSeatDate`'s house form, which is what every other date on these faces
+  uses.
+
+**Pins.** `reach-access.test.tsx` — "names the setter off the studio's own
+roster" and "with no name to give, the date still stands alone".
+`use-studio-contact-rules-and-channels.test.ts` gained an `auth.getUser` stub on
+its client mock (the hook now asks who is signed in).
+
+## CR‑9 — SPEC §5.2 #4's carried-forward sentence was written and never called.
+
+**Changed.** `reach-access.tsx:196-236` — `ChannelRow` resolves the consent
+record's OWN `origin_project_id` to a name (`useProjects`, the same read
+`directory-view.tsx` uses for the identical job) and:
+
+* passes that name as the first sentence's project — the row used to pass the
+  SEAT's project name, so Dana's consent claimed it was given on a job she
+  joined eighteen months later;
+* appends `carriedForwardSentence(seatProjectName, seatWindowStart)` when the
+  record's origin project differs from the seat's, and nothing when they match —
+  a consent recorded on the job in hand has been carried nowhere.
+
+`seatWindowStart` is a new prop, threaded from
+`views/person-profile.tsx:349` (`firstSeat?.on_site_from`). The company card
+mounts `cardKind="company"`, whose `showConsent` is false, so it is unaffected.
+
+**Pins.** `reach-access.test.tsx` — "R‑Q + CR‑9 — the origin job in the first
+sentence, the carry-forward in the second" produces SPEC §5.2 #4's line
+end-to-end; "a consent recorded on the job in hand has been carried nowhere"
+asserts the second sentence is absent.
+
+## CR‑10 — the company card's History region dropped SPEC §5.3 #8's facts.
+
+**Changed.** `company-card.tsx:73-113` adds `firmHistorySentence()` (exported,
+pure) and `:307-338` derives its three facts from `seatsByPerson` — the very
+seats the Jobs region directly above already reads. A firm's first day on a job
+is the earliest of its crew's `on_site_from`; the project count is the distinct
+`project_id` count. `:895-899` prints the sentence above the verdict line, which
+is unchanged.
+
+The count is spelled ("Two projects.") because SPEC §5.3 #8 spells it — a figure
+belongs to money and to dates.
+
+**Pin.** `company-card.test.tsx` — "prints the first job, its year and the
+project count (SPEC §5.3 #8)": two seats (Lindqvist 2025‑04‑14, Okonkwo
+2026‑10‑12) render `[data-firm-history]` as "First job 2025, the Lindqvist
+kitchen. Two projects." with "No verdict recorded." still beside it.
+
+## What was NOT changed this pass, and why
+
+* **QA‑R4‑1 / QA‑R4‑2 / QA‑R4‑3** (CONTEXT‑1's round-4 findings) — not in the
+  briefed list. QA‑R4‑1 in particular (`useAddStudioContactChannel`'s
+  duplicate-key recovery query in `use-studio-contacts.ts`) is a different root
+  cause from anything above and is untouched.
+* **`useCreateFieldLink`'s own call site** (`party-profile-sheet.tsx:469`) still
+  omits `projectId`, so a MINT does not invalidate `['project-roster', …]`
+  either. Same shape as CR‑5, but CR‑5 names the mint as the correct model and
+  only the revoke as the defect; flagged, not fixed.
+* **`usePromoteToStudioContact`** still inserts `company_name` text and no
+  `studio_contacts.company_id`. CR‑3's fix sentence names the two input types,
+  the Add sheet's send and `useSetAffiliation`; `studio_contacts.company_id` is
+  a DERIVED legacy pointer a trigger keeps in step off the affiliation (R‑AI),
+  which this pass now writes.
+* **No migration, no seed edit, no server.** The local DB carries other
+  sessions' work.

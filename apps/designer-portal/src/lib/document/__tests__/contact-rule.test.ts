@@ -110,13 +110,19 @@ describe("CR-6 — the studio's own sentence is the clause", () => {
 });
 
 /**
- * CR3-7 — the block is the rule that CLOSES THE TEXT RAIL, or leaves no direct
- * channel open at all.
+ * CR3-7 — R-BL (Fable, 2026-09-13) settles the block: a rule is a HARD BLOCK
+ * only when it forbids EVERY direct channel (do-not-contact) or ROUTES
+ * contact to another person (`route_to_person_id` set). A rule that forbids
+ * one direct channel while another stays open is a plain clause with no
+ * leading rule.
  *
  * r2's "any forbidden channel" painted the 2px leading rule on F-11 Dana
  * Kowalski — `forbidden={email}`, the canonical specimen row — which SPEC §5.1
- * #8 describes with NO leading rule while #10 and #11 name one explicitly for
- * Frank Bauer and Ray Thao.
+ * #8 describes with NO leading rule. A later "closes the text rail" reading
+ * painted the rule on F-27 Ray Thao instead, whose row forbids only text
+ * while email and phone stay open — also wrong. R-BL fixes both: Frank Bauer
+ * (do not contact, routed to Rosa) is a hard block; Ray Thao (never text;
+ * email/phone open) and Dana Kowalski (text only; the email is dead) are not.
  *
  * It does not reproduce SPEC §3's fixture exactly, and no formula can: F-26
  * Carol Nyström (`block: true`) and F-10 Sam Rowe (`block: false`) carry
@@ -124,13 +130,13 @@ describe("CR-6 — the studio's own sentence is the clause", () => {
  * orchestrator ruling still owed — the fact belongs on the rule row, or the
  * fixture moves.
  */
-describe("CR3-7 — a hard block closes the text rail (SPEC §5.1 #8/#10/#11)", () => {
-  it("Frank Bauer is a hard block", () => {
+describe("CR3-7 — a hard block is do-not-contact or a route (R-BL)", () => {
+  it("Frank Bauer is a hard block (do not contact, routed to Rosa)", () => {
     expect(contactRuleIsHardBlock(FRANK_RULE)).toBe(true);
   });
 
-  it("Ray Thao wears the leading rule too — SPEC §5.1 #11 names his row", () => {
-    expect(contactRuleIsHardBlock(RAY_RULE)).toBe(true);
+  it("Ray Thao is NOT a hard block — never text, but email and phone stay open (R-BL)", () => {
+    expect(contactRuleIsHardBlock(RAY_RULE)).toBe(false);
   });
 
   // SPEC §5.1 #8: her row prints the clause and NO leading rule. This is the
@@ -164,6 +170,16 @@ describe("CR3-7 — a hard block closes the text rail (SPEC §5.1 #8/#10/#11)", 
 
   it("a rule forbidding nothing is never a block", () => {
     expect(contactRuleIsHardBlock(rule({ channels_allowed: ["email"] }))).toBe(false);
+  });
+
+  // R-BL: a route is a hard block on its own, even where the rule forbids
+  // nothing outright — routing sends the reader to another person entirely.
+  it("a rule that routes to another person is a hard block even with channels left open", () => {
+    expect(
+      contactRuleIsHardBlock(
+        rule({ channels_forbidden: [], route_to_person_id: ROSA }),
+      ),
+    ).toBe(true);
   });
 
   it("no rule at all is never a block", () => {

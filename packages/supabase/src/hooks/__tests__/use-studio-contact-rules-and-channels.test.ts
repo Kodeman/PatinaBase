@@ -52,8 +52,18 @@ function makeBuilder(table: string): MockBuilder {
 
 const from = vi.fn((table: string) => makeBuilder(table));
 
+/** CR-8: the rule write sends `set_by` itself, so it asks who is signed in —
+ *  `set_by`'s DEFAULT auth.uid() fires on the INSERT leg alone, and the row
+ *  kept its ORIGINAL setter while `set_at` moved to today. */
+const SIGNED_IN_USER = 'user-priya';
+const auth = {
+  getUser: vi.fn(() =>
+    Promise.resolve({ data: { user: { id: SIGNED_IN_USER } }, error: null }),
+  ),
+};
+
 vi.mock('@supabase/ssr', () => ({
-  createBrowserClient: () => ({ from }),
+  createBrowserClient: () => ({ from, auth }),
 }));
 
 vi.mock('@tanstack/react-query', () => ({

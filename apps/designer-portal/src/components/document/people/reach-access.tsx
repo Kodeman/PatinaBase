@@ -36,6 +36,7 @@ import {
   useChannelConsent,
   useContactRule,
   useCreateFieldLink,
+  useOrganizationMembers,
   useRecordChannelConsent,
   useRecordChannelReconsent,
   useSetContactRule,
@@ -49,6 +50,7 @@ import {
   type StudioContactChannel,
 } from "@patina/supabase";
 import { peopleEvents } from "@/lib/analytics/people-events";
+import { useProjects } from "@/hooks/use-projects";
 import {
   contactRuleClause,
   contactRuleIsDoNotContact,
@@ -59,7 +61,10 @@ import { StateWord } from "./state-word";
 import { TelLink } from "./tel-link";
 import { ContactRuleLine, type ContactRouteTarget } from "./contact-rule-line";
 import { AccessGrantList } from "./access-grant-list";
-import { consentSentenceForRecord } from "./consent-sentence";
+import {
+  carriedForwardSentence,
+  consentSentenceForRecord,
+} from "./consent-sentence";
 import { formatLongDate } from "./people-format";
 import { formatSeatDate } from "./seat-line";
 
@@ -140,13 +145,18 @@ function ChannelRow({
   organizationId,
   projectName,
   originProjectId,
+  seatWindowStart,
   showConsent,
   onAnnounce,
 }: {
   channel: StudioContactChannel;
   organizationId: string | null;
+  /** The job this person holds a seat on NOW — where a consent is carried TO. */
   projectName: string | null;
+  /** …and its id: the seat's project, which a fresh consent is recorded against. */
   originProjectId: string | null;
+  /** When that seat started — the date CR-9's carried-forward sentence names. */
+  seatWindowStart: string | null;
   /**
    * SPEC §5.3 #9: A FIRM HAS NEITHER CONSENT NOR REACH. A company cannot agree
    * to a text message, so the company variant of this region prints the firm's
@@ -188,7 +198,42 @@ function ChannelRow({
   const bandId = useId();
   const statusBandId = useId();
   const held = isContactChannelHeld(channel.status);
-  const sentence = consentSentenceForRecord(consent?.record, projectName);
+
+  /**
+   * CR-9 — SPEC §5.2 #4 IS TWO SENTENCES, and only the first was ever written
+   * to a face: "Written consent, 2 May 2025, on the Lindqvist kitchen. Carried
+   * forward to the Okonkwo residence, 12 October 2026."
+   *
+   * The first names the job the consent CAME FROM — `origin_project_id` on the
+   * record, not the seat this card happens to be reading (the card passed the
+   * seat's own name, which made Dana's consent claim it was given on a job she
+   * joined eighteen months later). The second names where it landed, and prints
+   * only when those two jobs differ: a consent recorded on the job in hand has
+   * been carried nowhere.
+   */
+  const { data: projectsForOrigin } = useProjects();
+  const originProjectName = useMemo(() => {
+    const id = consent?.record?.origin_project_id;
+    if (!id) return null;
+    const found = (
+      (projectsForOrigin ?? []) as Array<{ id: string; name?: string | null }>
+    ).find((p) => p.id === id);
+    return found?.name ?? null;
+  }, [consent?.record?.origin_project_id, projectsForOrigin]);
+
+  // A record that NAMES an origin job reads that job or none — falling back to
+  // the seat's job would print a fabricated origin while the projects read is
+  // still in flight. A record naming none keeps the room's standing behaviour.
+  const sentence = consentSentenceForRecord(
+    consent,
+    consent?.record?.origin_project_id ? originProjectName : projectName,
+  );
+  const carriedForward =
+    consent?.record?.origin_project_id &&
+    originProjectId &&
+    consent.record.origin_project_id !== originProjectId
+      ? carriedForwardSentence(projectName, seatWindowStart)
+      : null;
 
   const saveStatus = () => {
     setStatusError(null);
@@ -373,6 +418,7 @@ function ChannelRow({
           className="t-body-sm mt-1 text-[var(--ink-subtle)]"
         >
           {sentence}
+          {carriedForward ? ` ${carriedForward}` : ""}
         </p>
       )}
       {showConsent && (
@@ -466,6 +512,8 @@ export interface ReachAccessProps {
   seatProjectName?: string | null;
   /** PR-d / PR-l: the window the door closes with, and the second option. */
   seatWindowEnd?: string | null;
+  /** CR-9: when the seat opened — the date a carried-forward consent landed. */
+  seatWindowStart?: string | null;
   warrantyEnd?: string | null;
   /** Who the rule may route to — the studio's other cards, by name. */
   routeCandidates?: ReadonlyArray<{ id: string; name: string }>;
@@ -547,6 +595,7 @@ export function ReachAccess({
   seatProjectId,
   seatProjectName,
   seatWindowEnd,
+  seatWindowStart,
   warrantyEnd,
   routeCandidates,
   routeTo,
@@ -558,6 +607,10 @@ export function ReachAccess({
   const isPerson = cardKind === "person";
   const { data: channels } = useStudioContactChannels(cardId);
   const { data: rule } = useContactRule(cardKind, cardId);
+  // CR-8: SPEC §5.2 #5 asks the rule for its PROVENANCE — who set it, and when.
+  // `studio_contact_rules.set_by` is a profile id; the studio's own roster is
+  // the only thing that can turn it into a name.
+  const { data: studioMembers } = useOrganizationMembers(organizationId ?? "");
   const grantSubjects = useMemo(
     () => [...new Set((grantSubjectIds ?? []).filter(Boolean))],
     [grantSubjectIds],
@@ -612,11 +665,20 @@ export function ReachAccess({
   const ruleSummary = useMemo(() => {
     const clause = contactRuleClause(rule);
     if (!clause) return null;
-    // The card is the rule's home (direction §3.2 R3), so it alone stamps when
-    // the rule was set.
+    // The card is the rule's home (direction §3.2 R3), so it alone stamps who
+    // set the rule and when (CR-8, SPEC §5.2 #5). The name is the studio's own
+    // roster read back; with no name to give, the date still stands alone
+    // rather than inventing one.
     const setOn = formatSeatDate(rule?.set_at?.slice(0, 10));
-    return setOn ? `${clause} Set ${setOn}.` : clause;
-  }, [rule]);
+    if (!setOn) return clause;
+    const setter = rule?.set_by
+      ? ((studioMembers ?? []).find((m) => m.user_id === rule.set_by)?.profiles
+          ?.full_name ?? null)
+      : null;
+    return setter
+      ? `${clause} Set by ${setter}, ${setOn}.`
+      : `${clause} Set ${setOn}.`;
+  }, [rule, studioMembers]);
   const ruleBlocks = contactRuleIsHardBlock(rule);
   const doNotContact = contactRuleIsDoNotContact(rule);
 
@@ -780,6 +842,7 @@ export function ReachAccess({
               organizationId={organizationId}
               projectName={seatProjectName ?? null}
               originProjectId={seatProjectId ?? null}
+              seatWindowStart={seatWindowStart ?? null}
               showConsent={isPerson}
               onAnnounce={onAnnounce}
             />

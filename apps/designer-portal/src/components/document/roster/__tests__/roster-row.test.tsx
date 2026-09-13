@@ -255,6 +255,24 @@ describe('RosterRow — unfolded', () => {
     );
   });
 
+  /**
+   * CR-7 — direction §5.5 and SPEC §7 #4 ask a gated act for a VISIBLE
+   * consequence sentence beside it. This one was `sr-only`, so a sighted
+   * designer saw a dead Text button with nothing beside it.
+   */
+  it('the Text act prints its held reason where a sighted reader can see it', () => {
+    const { container } = open({ consent: 'not_asked' });
+    const text = screen.getByRole('button', { name: /^Text$/ });
+    expect(text).toHaveAttribute('aria-disabled', 'true');
+    const describedBy = text.getAttribute('aria-describedby');
+    const reason = document.getElementById(describedBy as string);
+    expect(reason).toHaveTextContent(
+      'Texting opens once they have said yes on the record and a number is on file.',
+    );
+    expect(reason).not.toHaveClass('sr-only');
+    expect(container.querySelector('.sr-only')).not.toBe(reason);
+  });
+
   it('offers the four acts, and never the word Remove', () => {
     const { container } = open();
     expect(screen.getByRole('button', { name: /^Text$/ })).toBeInTheDocument();

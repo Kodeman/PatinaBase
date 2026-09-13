@@ -20,6 +20,7 @@ const promote = jest.fn();
 const addChannel = jest.fn();
 const setRule = jest.fn();
 const setAuthority = jest.fn();
+const setAffiliation = jest.fn();
 
 jest.mock("@patina/supabase", () => ({
   useAddClient: () => ({ mutateAsync: jest.fn(), isPending: false }),
@@ -32,6 +33,8 @@ jest.mock("@patina/supabase", () => ({
   usePromoteToStudioContact: () => ({ mutateAsync: promote, isPending: false }),
   useSaveVendor: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useSetContactRule: () => ({ mutateAsync: setRule, isPending: false }),
+  // CR-3: the front door now records the person-to-firm tie too.
+  useSetAffiliation: () => ({ mutateAsync: setAffiliation, isPending: false }),
   useSetPartyAuthority: () => ({ mutateAsync: setAuthority, isPending: false }),
   useStudioContacts: () => ({
     data: [
@@ -122,6 +125,7 @@ beforeEach(() => {
   addChannel.mockReset().mockResolvedValue({});
   setRule.mockReset().mockResolvedValue({});
   setAuthority.mockReset().mockResolvedValue({});
+  setAffiliation.mockReset().mockResolvedValue({});
 });
 
 describe("the kind switch", () => {
@@ -180,6 +184,73 @@ describe("a sub", () => {
       target: { value: "firm-cedar" },
     });
     expect(screen.queryByLabelText("New company name")).not.toBeInTheDocument();
+  });
+
+  /**
+   * CR-3 — THE PICKED CARD'S ID, NOT ONLY ITS NAME. The firm select stored
+   * `firmId` and used it only to fill the free-text company box, so a person
+   * added through the front door had NO firm identity: `directoryFirmOf` reads
+   * `meta.company_id`, and `project_parties.company_id` was unwritable from the
+   * portal. The rolodex half — `useSetAffiliation` — had zero call sites
+   * anywhere in apps/.
+   */
+  it("ties the seat and the person to the firm card that was picked", async () => {
+    fireEvent.change(screen.getByLabelText("Project"), {
+      target: { value: PROJECT },
+    });
+    fireEvent.change(screen.getByLabelText("Full name"), {
+      target: { value: "Pete Rusk" },
+    });
+    fireEvent.change(screen.getByLabelText("Trade"), {
+      target: { value: "electrical" },
+    });
+    fireEvent.change(screen.getByLabelText("Company"), {
+      target: { value: "firm-cedar" },
+    });
+    fireEvent.change(screen.getByLabelText("Mobile"), {
+      target: { value: "(612) 555-0117" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add to the roster" }));
+
+    await waitFor(() => expect(setAffiliation).toHaveBeenCalled());
+    expect(addParty).toHaveBeenCalledWith(
+      expect.objectContaining({
+        companyId: "firm-cedar",
+        companyName: "Cedar & Iron Framing",
+      }),
+    );
+    expect(setAffiliation).toHaveBeenCalledWith({
+      personId: "card-new",
+      companyId: "firm-cedar",
+    });
+  });
+
+  it("a firm typed by hand has no card yet, so no id is sent", async () => {
+    fireEvent.change(screen.getByLabelText("Project"), {
+      target: { value: PROJECT },
+    });
+    fireEvent.change(screen.getByLabelText("Full name"), {
+      target: { value: "Pete Rusk" },
+    });
+    fireEvent.change(screen.getByLabelText("Trade"), {
+      target: { value: "electrical" },
+    });
+    fireEvent.change(screen.getByLabelText("New company name"), {
+      target: { value: "Rusk Mechanical" },
+    });
+    fireEvent.change(screen.getByLabelText("Mobile"), {
+      target: { value: "(612) 555-0117" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add to the roster" }));
+
+    await waitFor(() => expect(addParty).toHaveBeenCalled());
+    expect(addParty).toHaveBeenCalledWith(
+      expect.objectContaining({
+        companyId: null,
+        companyName: "Rusk Mechanical",
+      }),
+    );
+    expect(setAffiliation).not.toHaveBeenCalled();
   });
 
   it("writes the seat, mints the card, files the channels and the rule", async () => {

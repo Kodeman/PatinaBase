@@ -346,6 +346,7 @@ export function PersonProfile({
           seatProjectId={firstSeat?.project_id ?? null}
           seatProjectName={firstSeat?.project_name ?? null}
           seatWindowEnd={firstSeat?.on_site_to ?? null}
+          seatWindowStart={firstSeat?.on_site_from ?? null}
           warrantyEnd={
             firstSeat?.warranty_until ?? card?.warranty_until ?? null
           }

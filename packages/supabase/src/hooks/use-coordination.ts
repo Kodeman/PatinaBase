@@ -7,7 +7,7 @@ import { createBrowserClient } from '../client';
 import type { ProductConfigurationSelection, PartyKind as SharedPartyKind } from '@patina/types';
 import type { ClientDecisionOption, DecisionType } from './use-decisions';
 import { peopleKeys, peopleSeatKeys, usePeopleSeats } from './use-people';
-import { asWrittenConsentError } from './use-consent';
+import { asWrittenConsentError, consentKeys } from './use-consent';
 import { invalidateProjectWorkflow } from './use-project-workflow';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -418,6 +418,17 @@ export interface AddProjectPartyInput {
    *  rolodex already holds comes back linked rather than as a second
    *  Directory identity. */
   studioContactId?: string | null;
+  /**
+   * CR-3 — THE FIRM THE SEAT BELONGS TO, as a real card (`project_parties
+   * .company_id`, 00624:404). `companyName` is a snapshot STRING and answers
+   * nothing: `directoryFirmOf` reads `meta.company_id`, so a seat carrying
+   * only the text had no firm identity at all — the Directory's firm banding,
+   * "N on the crew", the company card's Crew & designations and R-BJ's seat
+   * paper word were all fed by data only the seed could produce. Must name a
+   * COMPANY card in the project's own studio rolodex; 00624's
+   * `party_card_guard_trg` refuses anything else.
+   */
+  companyId?: string | null;
   /** Call Sheet (00419, R4/U2): per-row client-portal visibility opt-in.
    *  Defaults false — nothing shows on the client roster unless chosen. */
   showToClient?: boolean;
@@ -521,6 +532,7 @@ export function useAddProjectParty() {
           // dispatch trigger that replaces it is owed — see w2a-report.md §
           // "Not done".
           studio_contact_id: input.studioContactId ?? null,
+          company_id: input.companyId ?? null,
           show_to_client: input.showToClient ?? false,
         })
         .select()
@@ -538,6 +550,14 @@ export function useAddProjectParty() {
       // rolodex picker (the Call Sheet's own add door) never appears.
       void queryClient.invalidateQueries({ queryKey: ['project-roster', data.project_id] });
       void queryClient.invalidateQueries({ queryKey: peopleSeatKeys.all });
+      // CR-6: this hook calls `record_channel_invite`, so it MOVES THE CONSENT
+      // LEDGER — and the Directory is mounted when the Add sheet is used. Its
+      // clause (`useChannelConsentRecords`, keyed under `consentKeys.all`) and
+      // the person card's per-channel verdict (`useChannelConsent`) both went
+      // stale while the word beside them flipped to `Invited`. Every other door
+      // through the same RPC already invalidates this root —
+      // `useRecordPartySmsConsent` below, and all of use-consent.ts.
+      void queryClient.invalidateQueries({ queryKey: consentKeys.all });
     },
   });
 }
@@ -545,6 +565,9 @@ export function useAddProjectParty() {
 export interface UpdateProjectPartyPatch {
   displayName?: string;
   companyName?: string | null;
+  /** CR-3: the firm card behind the snapshot name (`project_parties
+   *  .company_id`, 00624:404). `null` clears the tie; omitted leaves it. */
+  companyId?: string | null;
   trade?: string | null;
   phone?: string | null;
   email?: string | null;
@@ -618,6 +641,7 @@ export function useUpdateProjectParty() {
       const dbPatch: Record<string, unknown> = {};
       if (patch.displayName !== undefined) dbPatch.display_name = patch.displayName;
       if (patch.companyName !== undefined) dbPatch.company_name = patch.companyName?.trim() || null;
+      if (patch.companyId !== undefined) dbPatch.company_id = patch.companyId || null;
       if (patch.trade !== undefined) dbPatch.trade = patch.trade?.trim() || null;
       if (patch.phone !== undefined) {
         const nextPhone = patch.phone?.trim() || null;
@@ -1991,10 +2015,24 @@ export function useSiteAccessCard(projectId: string | null | undefined) {
 /**
  * Write the card. Creates it on first write; one row per project.
  *
- * `changed_at` / `changed_by` are stamped on every write, because "Lockbox
- * changed 16 Oct 2026 by Priya Natarajan" is the fact the crew reads, and
- * `told_refs` is deliberately CLEARED by a change: telling people about the
- * OLD lockbox is not telling them about this one.
+ * `changed_at` / `changed_by` stamp THE WAY IN, and `told_refs` is cleared
+ * with them: telling people about the OLD lockbox is not telling them about
+ * this one.
+ *
+ * CR-4 — AND ONLY THE WAY IN. The stamp used to go on every write, before the
+ * hook looked at which field the caller passed, and the card routes seven acts
+ * through this one door (Start the card, Add someone to call, Take <name> off
+ * the list, the key-holder picker, and three EditableLines). So logging who was
+ * told and then adding a gas company's phone number restamped "The way in
+ * changed 13 Sep 2026, by <me>." — a false claim about the lockbox — and
+ * destroyed the notice that had just been deliberately recorded, with no undo.
+ * R-U's Call Sheet fold printed the same wrong date. The way in is the lockbox,
+ * the alarm and the key holder; hours, notes, emergency lines and receiving
+ * instructions are not it.
+ *
+ * The upsert's UPDATE leg only sets the columns this payload carries, so a
+ * write that leaves the three stamp columns out leaves the standing stamp and
+ * the standing `told_refs` exactly as they are.
  */
 export function useUpdateSiteAccessCard() {
   const queryClient = useQueryClient();
@@ -2007,12 +2045,17 @@ export function useUpdateSiteAccessCard() {
       const { data: userData, error: userError } = await supabase.auth.getUser();
       if (userError) throw userError;
 
-      const row: Record<string, unknown> = {
-        project_id: input.projectId,
-        changed_at: new Date().toISOString(),
-        changed_by: userData?.user?.id ?? null,
-        told_refs: [],
-      };
+      const wayInChanged =
+        input.lockboxVersion !== undefined ||
+        input.alarmRef !== undefined ||
+        input.keyHolderEngagementId !== undefined;
+
+      const row: Record<string, unknown> = { project_id: input.projectId };
+      if (wayInChanged) {
+        row.changed_at = new Date().toISOString();
+        row.changed_by = userData?.user?.id ?? null;
+        row.told_refs = [];
+      }
       if (input.lockboxVersion !== undefined)
         row.lockbox_version = input.lockboxVersion?.trim() || null;
       if (input.alarmRef !== undefined) row.alarm_ref = input.alarmRef?.trim() || null;

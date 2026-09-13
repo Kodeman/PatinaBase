@@ -18,6 +18,9 @@ const updateCardMutate = jest.fn();
 const docsData: { current: unknown[] } = { current: [] };
 const chaseMutate = jest.fn();
 
+/** CR-10: the History region's first job and project count read these. */
+const seatsData: { current: unknown[] } = { current: [] };
+
 jest.mock("@patina/supabase", () => ({
   useStudioContact: () => ({ data: cardData.current }),
   useStudioContacts: () => ({
@@ -44,7 +47,7 @@ jest.mock("@patina/supabase", () => ({
   useComplianceState: () => ({
     data: docsData.current.length === 0 ? "not_on_file" : "lapsed",
   }),
-  usePeopleSeats: () => ({ data: [] }),
+  usePeopleSeats: () => ({ data: seatsData.current }),
   useUpdateStudioContact: () => ({
     mutateAsync: updateCardMutate,
     isPending: false,
@@ -59,6 +62,7 @@ jest.mock("@patina/supabase", () => ({
   // CR-8: the company variant of Reach & access is mounted on this card now.
   useStudioContactChannels: () => ({ data: [] }),
   useContactRule: () => ({ data: null }),
+  useOrganizationMembers: () => ({ data: [] }),
   useAccessGrants: () => ({ data: [] }),
   useChannelConsent: () => ({ data: null }),
   useRecordChannelConsent: () => ({ mutate: jest.fn(), isPending: false }),
@@ -129,6 +133,7 @@ function renderCard(over: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   chaseMutate.mockClear();
+  seatsData.current = [];
   docsData.current = [
     {
       id: "doc-1",
@@ -293,6 +298,42 @@ describe("the payee region", () => {
 describe("the history region", () => {
   beforeEach(() => {
     updateCardMutate.mockReset().mockResolvedValue({});
+  });
+
+  /**
+   * CR-10 — SPEC §5.3 #8 and direction §3.3 R6 name THREE facts here: the
+   * first job, its year, and how many projects the firm has held. The region
+   * printed the verdict alone, though the Jobs region directly above already
+   * holds the seats that answer them.
+   */
+  it("prints the first job, its year and the project count (SPEC §5.3 #8)", () => {
+    seatsData.current = [
+      {
+        seat_id: "seat-lind",
+        person_id: "card-dana",
+        studio_contact_id: "card-dana",
+        company_id: "firm-northgate",
+        project_id: "proj-lindqvist",
+        project_name: "Lindqvist kitchen",
+        stage: "active",
+        on_site_from: "2025-04-14",
+      },
+      {
+        seat_id: "seat-ok",
+        person_id: "card-dana",
+        studio_contact_id: "card-dana",
+        company_id: "firm-northgate",
+        project_id: "proj-okonkwo",
+        project_name: "Okonkwo residence",
+        stage: "active",
+        on_site_from: "2026-10-12",
+      },
+    ];
+    renderCard();
+    expect(document.querySelector("[data-firm-history]")).toHaveTextContent(
+      "First job 2025, the Lindqvist kitchen. Two projects.",
+    );
+    expect(screen.getByText("No verdict recorded.")).toBeInTheDocument();
   });
 
   it("says no verdict is recorded, and offers to record one", () => {
