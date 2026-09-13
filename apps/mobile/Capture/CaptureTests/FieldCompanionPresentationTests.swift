@@ -261,4 +261,25 @@ struct FieldCompanionPresentationTests {
         #expect(hint?.action.id == FieldCompanionActionID.endVisit.rawValue)
         #expect(hint?.action.role == .secondary)
     }
+
+    /// HT-18 / MOB-11. The COLLAPSED strip carries exactly one action and that
+    /// slot belongs to the visit spine — Invariant V. `time.log` is an
+    /// EXPANDED-state action, so the hint must never hand it back whatever the
+    /// band is showing.
+    @Test func loggingAnHourNeverTakesTheCollapsedStripsOneSlot() {
+        #expect(FieldCompanionActionID.logTime.rawValue == "time.log")
+
+        let bands: [FieldTodayBand] = [
+            FieldTodayBand(visit: .none, unplacedCount: 0, queuedCount: 0, isOffline: false),
+            FieldTodayBand(visit: .open(label: "Maple St", startedAt: .now,
+                                        captures: 1, notes: 0, scans: 0),
+                           unplacedCount: 0, queuedCount: 0, isOffline: false),
+            FieldTodayBand(visit: .stale(label: "Maple St", startedAt: .now),
+                           unplacedCount: 0, queuedCount: 0, isOffline: false)
+        ]
+        for band in bands {
+            #expect(FieldTodayBand.companionHint(for: band)?.action.id
+                    != FieldCompanionActionID.logTime.rawValue)
+        }
+    }
 }

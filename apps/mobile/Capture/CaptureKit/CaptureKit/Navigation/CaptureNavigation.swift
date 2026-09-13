@@ -67,6 +67,12 @@ public enum CaptureSheet: Hashable, Identifiable, Sendable {
     // ── Field Companion — the visit spine ──
     case visit                              // V0 — the door (wave 3 builds it)
 
+    // ── Hours — an hour that is not a visit ──
+    // Foundation-owner edit for this enum: the hour-tracking W6 lane. A SHEET
+    // rather than a route, because logging a drive is an interruption of
+    // whatever she was doing and must return her to it (HT-18).
+    case logTime                            // H1 — LogTimeSheet
+
     // ── Phase 2 — designer/pro flows (presented) ──
     case receivingInspection(poID: String)  // G2 → G3 as internal steps
     case qrApprove(payload: String)         // Q2 — approve/reject portal login
@@ -87,6 +93,7 @@ public enum CaptureSheet: Hashable, Identifiable, Sendable {
         case .photoImport: return "photo-import"
         case .cullDeck: return "cull-deck"
         case .visit: return "visit"
+        case .logTime: return "log-time"
         case .receivingInspection(let poID): return "receiving-inspection-\(poID)"
         case .qrApprove(let payload): return "qr-approve-\(payload)"
         }

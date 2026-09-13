@@ -94,6 +94,9 @@ enum CaptureDeepLink {
         // V0 is a SHEET, not a route: without this the sweep would file a PNG
         // of C1 under `screen.V0.visit`.
         case .v0Visit:          coordinator.present(.visit)
+        // H1 is a SHEET too, for the same reason: without this the sweep would
+        // file a PNG of whatever the realm was showing under `screen.H1.log-time`.
+        case .h1LogTime:        coordinator.present(.logTime)
         case .c5SpecimenSheet:  withSample { coordinator.present(.specimenSheet($0)) }
         case .n1TagOCR:         withSample { coordinator.present(.ocr($0)) }
         case .n2Scan:           withSample { coordinator.present(.code($0)) }
@@ -134,10 +137,19 @@ enum CaptureDeepLink {
                 screen: id,
                 projectID: SiteRequestFixtures.projectID,
                 requestID: SiteRequestFixtures.requestID))
-        case .o1Welcome:       coordinator.onboardingStep = 0
-        case .o2Connect:       coordinator.onboardingStep = 1
-        case .o3CameraPriming: coordinator.onboardingStep = 2
-        case .o4Ready:         coordinator.onboardingStep = 3
+        case .o1Welcome, .o2Connect, .o3CameraPriming, .o4Ready:
+            coordinator.onboardingStep = onboardingStep(for: id)
+        }
+    }
+
+    /// Flow 0 is phase-based rather than routed, so its four ids map to a step
+    /// index instead of a destination.
+    private static func onboardingStep(for id: CaptureScreenID) -> Int {
+        switch id {
+        case .o1Welcome:       return 0
+        case .o2Connect:       return 1
+        case .o3CameraPriming: return 2
+        default:               return 3
         }
     }
 
@@ -244,7 +256,11 @@ enum CaptureDeepLink {
              .sr09Approval, .sr10BinderRooms, .sr11BinderDetail, .sr12BinderHistory,
              .sr13GuestLanding, .sr14GuestChecklist, .sr15GuestMeasure,
              .sr16GuestPhoto, .sr17GuestQueue, .sr18GuestReceipt,
-             .sr19GuestDone, .sr20GuestReturned:
+             .sr19GuestDone, .sr20GuestReturned,
+             // H1 is reached from the Work realm's Browse grid and from the
+             // companion; a sweep that opened it over the viewfinder would
+             // photograph it in a place it never appears.
+             .h1LogTime:
             .work
         default:
             .camera

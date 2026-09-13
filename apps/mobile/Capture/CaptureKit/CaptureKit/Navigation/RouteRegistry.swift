@@ -82,6 +82,7 @@ public extension CaptureSheet {
         case .photoImport: return "photoImport"
         case .cullDeck: return "cullDeck"
         case .visit: return "visit"
+        case .logTime: return "logTime"
         case .receivingInspection: return "receivingInspection"
         case .qrApprove: return "qrApprove"
         }

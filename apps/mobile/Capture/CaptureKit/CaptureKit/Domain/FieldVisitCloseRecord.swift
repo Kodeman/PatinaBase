@@ -31,6 +31,13 @@ public final class FieldVisitCloseRecord {
     /// that index. The declaration default is here for SwiftData's synthesis
     /// only; every real record takes the composer's floored value.
     public var durationMinutes: Int = 1
+    /// HT-11 + HT-16: the close OFFER now carries a billable toggle, so the
+    /// answer is stated rather than inferred. `log_time` (00608) RAISES on a
+    /// NULL billable; a Field row that did not say is a caught bug, not a
+    /// default. Additive with a declaration default, which is what keeps the
+    /// SwiftData open a lightweight migration rather than a store reset —
+    /// CaptureStoreMigrationTests is the assertion that it stayed one.
+    public var billable: Bool = true
     public var stateRaw: String = FieldWriteState.pending.rawValue
     public var lastError: String?
     public var retryCount: Int = 0
@@ -38,7 +45,7 @@ public final class FieldVisitCloseRecord {
 
     public init(visitID: UUID, timeEntryID: UUID, projectID: String,
                 ownerUserID: String, startedAt: Date, endedAt: Date,
-                durationMinutes: Int) {
+                durationMinutes: Int, billable: Bool = true) {
         self.visitID = visitID
         self.timeEntryID = timeEntryID
         self.projectID = projectID
@@ -48,6 +55,7 @@ public final class FieldVisitCloseRecord {
         // A zero would fail the CHECK on every attempt for good; the floor is
         // the same one VisitReviewComposer applies.
         self.durationMinutes = max(1, durationMinutes)
+        self.billable = billable
         self.stateRaw = FieldWriteState.pending.rawValue
         self.retryCount = 0
     }
@@ -128,15 +136,29 @@ public enum VisitCloseDrainTrigger: Equatable, Sendable {
 public struct TimeEntryWriteRequest: Encodable, Equatable, Sendable {
     public let id: UUID
     public let projectID: UUID
+    /// Deliberately NOT on the wire. `log_time` takes the author from
+    /// `auth.uid()` — a client-named user id would be a claim the server has no
+    /// reason to trust. It is carried because the DRAINER needs it: a record
+    /// whose owner id will not parse is a row no retry can satisfy, and that is
+    /// the guard, not a wire field.
     public let userID: UUID
     public let startedAt: Date
     public let durationMinutes: Int
-    /// Always "field_visit" — the source 00545 admits.
+    /// 'field_visit' (the close offer) or 'field_manual' (LogTimeSheet).
+    /// 00595 bought both.
     public let source: String
-    /// Always "site_visit".
-    public let activity: String
-    /// The visit's label and rooms, so the Visits block and the Hours entry
-    /// read as one event: "Maple St · Living, Dining".
+    /// 00616 admits design · sourcing · client · site_visit · admin · travel.
+    /// nil is "activity not set" and stays honest (HT-24) rather than becoming
+    /// a silent 'design'.
+    public let activity: String?
+    /// HT-11 — stated at every capture surface, with NO default here. `log_time`
+    /// raises on a NULL, so a surface that does not say is a caught bug.
+    public let billable: Bool
+    /// HT-41 — the roster role the member picked when she holds more than one.
+    /// nil leaves the role to the server, which is every single-role member.
+    public let rateRole: String?
+    /// On the close path, the visit's label and rooms so the Visits block and
+    /// the Hours entry read as one event: "Maple St · Living, Dining".
     public let notes: String?
 
     public init(
@@ -145,8 +167,10 @@ public struct TimeEntryWriteRequest: Encodable, Equatable, Sendable {
         userID: UUID,
         startedAt: Date,
         durationMinutes: Int,
-        source: String = "field_visit",
-        activity: String = "site_visit",
+        source: String = FieldTimeSource.fieldVisit,
+        activity: String? = "site_visit",
+        billable: Bool,
+        rateRole: String? = nil,
         notes: String?
     ) {
         self.id = id
@@ -154,24 +178,38 @@ public struct TimeEntryWriteRequest: Encodable, Equatable, Sendable {
         self.userID = userID
         self.startedAt = startedAt
         // Floored here as well as on the record. This initialiser is `public`
-        // and only its one caller happens to pass an already-floored value; a
-        // zero reaching the wire fails CHECK (duration_minutes > 0) on every
+        // and only its callers happen to pass an already-floored value; a zero
+        // on the wire trips log_time's own positive-duration guard on every
         // attempt, and a nil-shaped duration is not expressible at all.
         self.durationMinutes = max(1, durationMinutes)
         self.source = source
         self.activity = activity
+        self.billable = billable
+        self.rateRole = rateRole
         self.notes = notes
     }
 
+    /// The `log_time(…)` argument names (00608), not column names. The write
+    /// stopped being a PostgREST table insert in W6: a replayed drain needs
+    /// ON CONFLICT (id) DO NOTHING and a read-back of the row it already wrote,
+    /// which a plain insert cannot express — it either duplicates the hour or
+    /// 23505s and reads as a failure.
+    ///
+    /// `userID` is absent by design (see its declaration). The arguments
+    /// 00608 defaults and this phone never sends — p_phase_key, p_task_id,
+    /// p_studio_id — are absent for the same reason: PostgREST fills a missing
+    /// argument from the function's own default, and naming them as nulls here
+    /// would only be a second place to get them wrong.
     enum CodingKeys: String, CodingKey {
-        case id
-        case source
-        case activity
-        case notes
-        case projectID = "project_id"
-        case userID = "user_id"
-        case startedAt = "started_at"
-        case durationMinutes = "duration_minutes"
+        case id = "p_entry_id"
+        case projectID = "p_project_id"
+        case startedAt = "p_started_at"
+        case durationMinutes = "p_duration_minutes"
+        case activity = "p_activity"
+        case billable = "p_billable"
+        case notes = "p_notes"
+        case source = "p_source"
+        case rateRole = "p_rate_role"
     }
 }
 
