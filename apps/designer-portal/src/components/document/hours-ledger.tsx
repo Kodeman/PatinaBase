@@ -549,15 +549,26 @@ export function HoursLedger({
             )}
           </h2>
           <p className="mt-0.5 font-mono text-[11px] uppercase tracking-[0.07em] text-[var(--color-aged-oak)]">
-            {weekOffset === 0 && (
-              <>Today · {fmtMinutes(todayMin)} &nbsp;·&nbsp; </>
+            {/* M6-01 — todayMin/weekMin are reduced from the week read, which
+                is `.eq('user_id', me)`. Standing outside every scope guard they
+                printed the VIEWER's own week two lines above a caption and a
+                total naming someone else — and, in the project scope, 'Week · 0
+                min' above the document's own hours. They belong to the one
+                scope whose week they are. */}
+            {scope === 'mine' && (
+              <>
+                {weekOffset === 0 && (
+                  <>Today · {fmtMinutes(todayMin)} &nbsp;·&nbsp; </>
+                )}
+                Week · {fmtMinutes(weekMin)}
+              </>
             )}
-            Week · {fmtMinutes(weekMin)}
-            {/* R77 — week paging: walk the history, quietly. */}
+            {/* R77 — week paging: walk the history, quietly. It governs the
+                window in every scope, so it is not gated with the figures. */}
             <button
               type="button"
               onClick={() => setWeekOffset((o) => o + 1)}
-              className="ml-3 text-[var(--color-clay-ink)] hover:opacity-80"
+              className={`${scope === 'mine' ? 'ml-3' : ''} text-[var(--color-clay-ink)] hover:opacity-80`}
             >
               ‹ earlier
             </button>

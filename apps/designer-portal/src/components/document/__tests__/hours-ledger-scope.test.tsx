@@ -816,6 +816,14 @@ describe('the Hours scope lens', () => {
 // ── Round-5: what the scopes inherited, and what they must not ──────────────
 
 describe('the sheet’s un-scoped remainder (M5-02)', () => {
+  /** The week line — its figures are fragmented across text nodes, and the
+   *  paging button is the one thing on it that survives every scope. */
+  const weekLine = () => {
+    const line = screen.getByText('‹ earlier').closest('p');
+    if (!line) throw new Error('the week line is gone');
+    return line;
+  };
+
   const UNBILLED_ROW = {
     id: 'unbilled-1',
     project_id: 'project-1',
@@ -889,6 +897,31 @@ describe('the sheet’s un-scoped remainder (M5-02)', () => {
     expect(
       screen.queryByRole('button', { name: 'Bill it' }),
     ).not.toBeInTheDocument();
+  });
+
+  it('keeps the viewer’s own Today and Week figures out of a scope captioned with someone else’s name (M6-01)', async () => {
+    // The fifth of the sheet’s un-scoped figures. `todayMin`/`weekMin` are
+    // reduced from the week read, which is `.eq('user_id', me)`, so under the
+    // member caption the VIEWER’s own week stood two lines above a total
+    // naming Maria. The ‹ earlier paging stays — it governs the window in
+    // every scope.
+    hoursMemberScopePending.userId = 'maria';
+    hoursMemberScopePending.name = 'Maria Obi';
+    renderLedger();
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Maria Obi' })).toHaveAttribute(
+        'aria-current',
+        'true',
+      ),
+    );
+    expect(weekLine().textContent).not.toMatch(/Week ·/);
+    expect(weekLine().textContent).not.toMatch(/Today ·/);
+
+    fireEvent.click(screen.getByRole('button', { name: 'mine' }));
+
+    await waitFor(() => expect(weekLine().textContent).toMatch(/Week ·/));
+    expect(weekLine().textContent).toMatch(/Today ·/);
   });
 
   it('leaves a plain member her own week’s export, band, balance and add row', async () => {
