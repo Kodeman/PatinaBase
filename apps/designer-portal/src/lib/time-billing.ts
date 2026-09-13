@@ -1,6 +1,6 @@
 /**
- * Pure helpers for time-entry billing (Wave 4, 00177/00178; W5 HT-21 names the
- * person and adds a client-facing dated sub-table).
+ * Pure helpers for time-entry billing (Wave 4, 00177/00178; W5 HT-21 adds a
+ * client-facing dated sub-table).
  *
  * Line-item semantics for kind='time': ONE line per invoice draft with
  * quantity = 1 and unit_amount_cents = amount_cents = the SUM of the selected
@@ -10,13 +10,21 @@
  * issue_invoice RPC, detail/print/client renderers) — a weighted hourly rate
  * would re-round and drift from the per-entry amounts the view computed.
  *
- * HT-21 (W5): a caller that pre-groups entries by author and passes
- * `member_name` gets that name in the description instead of the generic
- * "Design services" phrasing — `invoice-composer.ts`'s `buildComposerLines`
- * is that caller, via `groupEntriesByPerson` below, producing one composer
- * row per person. `buildTimeLineDraft` also collects a `dateRows` table
- * (date · minutes · rate, no name) for the client folio's dated sub-table —
- * see `invoice-composer.ts` for how that rides the existing
+ * HT-21 (W5, corrected in fix round 1 — findings B1/B2): the persisted
+ * `description` is ALWAYS the generic "Design services" phrasing, and
+ * `invoice-composer.ts`'s `buildComposerLines` emits exactly ONE kind='time'
+ * line for the whole selection, never one per person — the client's folio
+ * (`invoice_line_items.description`) is read verbatim by `resolve_invoice_link`
+ * (00588) and rendered verbatim by the pay-link sheet and the printed/PDF
+ * copy, so a name written there reaches the homeowner regardless of what any
+ * sanitiser does to the separate `attribution` field (LEAH-15, REP-15;
+ * plan-v2 §6: "No staffing detail reaches the homeowner"). Per-person naming
+ * stays exactly where it already worked, designer-side only: the composer's
+ * own entry picker (`invoice-composer.tsx`), which reads each entry's
+ * `member_name` directly before these entries are ever merged into a line.
+ * `buildTimeLineDraft` also collects a `dateRows` table (date · minutes ·
+ * rate, no name) for the client folio's dated sub-table — see
+ * `invoice-composer.ts` for how that rides the existing
  * `metadata.attribution` field with no DB change.
  */
 
@@ -38,12 +46,16 @@ export interface TimeLineEntryInput {
   id: string;
   duration_minutes: number;
   amount_cents: number;
-  /** The entry's author (HT-21 grouping key). Optional — a caller that omits
-   *  it (or mixes several) gets the pre-HT-21 generic phrasing. */
+  /** The entry's author. Kept for callers that still group by person
+   *  (`groupEntriesByPerson`) for their OWN designer-side rendering (e.g. the
+   *  composer's entry picker) — `buildTimeLineDraft` itself no longer uses
+   *  this to name the persisted line (fix round 1, findings B1/B2). */
   user_id?: string | null;
-  /** The author's display name (HT-21). Named only when every entry in this
-   *  call agrees on one — a mixed-author call falls back silently rather than
-   *  printing a wrong name. */
+  /** The author's display name. Never reaches `buildTimeLineDraft`'s
+   *  `description` (fix round 1) — that field is the invoice's own
+   *  persisted `description`, which the client folio and the printed copy
+   *  render verbatim. Kept on this input type for designer-side callers that
+   *  render a name from the raw entry directly, before grouping/merging. */
   member_name?: string | null;
   /** ISO timestamp, for the dated sub-table row (HT-21). An entry missing it
    *  contributes to the totals but not to `dateRows`. */
@@ -64,8 +76,10 @@ export interface TimeLineDateRow {
 }
 
 export interface TimeLineDraft {
-  /** e.g. "Design services — 4h 30m (3 entries)", or, named (HT-21),
-   *  "Maria Alvarez — 4h 30m (3 entries)". */
+  /** Always the generic phrasing, e.g. "Design services — 4h 30m
+   *  (3 entries)" — never a person's name (fix round 1, findings B1/B2):
+   *  this is the persisted `invoice_line_items.description`, read verbatim
+   *  by the client's pay-link sheet and the printed/PDF copy. */
   description: string;
   /** Sum of the entries' view-resolved amount_cents. */
   amountCents: number;
@@ -77,9 +91,12 @@ export interface TimeLineDraft {
 }
 
 /** Build one kind='time' invoice line from a group of selected unbilled
- *  entries. Callers that pre-group by person (see `groupEntriesByPerson`)
- *  get a named row (HT-21); an ungrouped, mixed-author call keeps the
- *  pre-HT-21 generic phrasing rather than naming the wrong person. */
+ *  entries — always ONE line, always the generic "Design services"
+ *  phrasing, regardless of how many distinct authors the entries carry
+ *  (fix round 1, findings B1/B2). Naming who did the work stays a
+ *  designer-side-only concern, handled by the composer's own entry picker
+ *  reading `member_name` off each entry directly — never by this function's
+ *  output, which is what the client and the printed copy see. */
 export function buildTimeLineDraft(
   entries: TimeLineEntryInput[],
 ): TimeLineDraft | null {
@@ -93,14 +110,7 @@ export function buildTimeLineDraft(
     0,
   );
   const noun = entries.length === 1 ? "entry" : "entries";
-
-  const names = new Set(
-    entries
-      .map((e) => e.member_name)
-      .filter((n): n is string => typeof n === "string" && n.trim().length > 0),
-  );
-  const personName = names.size === 1 ? [...names][0] : null;
-  const label = personName ?? "Design services";
+  const label = "Design services";
 
   const dateRows: TimeLineDateRow[] = entries
     .filter((e): e is TimeLineEntryInput & { started_at: string } =>
@@ -134,10 +144,12 @@ export interface PersonGroup<T> {
 }
 
 /**
- * Group entries by author (HT-21) — the composer's "one row per person"
- * instead of one row for everyone. Entries with no `user_id` land in one
- * shared unnamed group (matching the pre-HT-21 behavior for callers that
- * never carried author info). Named groups sort alphabetically; the unnamed
+ * Group entries by author (HT-21). No longer called by the invoice composer
+ * (fix round 1, finding B2 — the composer now merges every selected entry
+ * into ONE line via `buildTimeLineDraft`), kept as a pure utility for
+ * designer-side, non-invoice groupings that still want a per-person split.
+ * Entries with no `user_id` land in one shared unnamed group. Named groups
+ * sort alphabetically; the unnamed
  * group, if any, sorts last.
  */
 export function groupEntriesByPerson<T extends PersonGroupable>(

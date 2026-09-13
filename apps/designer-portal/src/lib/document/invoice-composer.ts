@@ -5,9 +5,17 @@
  *
  *  - milestones → one kind='milestone' line each (qty 1, unit = amount)
  *  - FF&E items → one kind='ffe' line each (00187 coverage bridge; qty × unit)
- *  - time entries → one kind='time' line PER PERSON (HT-21, W5; qty 1, unit =
- *    that person's Σ view-resolved amounts; hours + provenance in metadata —
- *    see lib/time-billing.ts)
+ *  - time entries → ONE kind='time' line for the whole selection (HT-21, W5;
+ *    corrected in fix round 1, findings B1/B2 — NOT one per person: qty 1,
+ *    unit = the Σ of every selected entry's view-resolved amount, merged
+ *    across every author; hours + provenance in metadata — see
+ *    lib/time-billing.ts). Naming who did the work is designer-side only —
+ *    the composer's own entry picker already shows each entry's
+ *    `member_name` before the entries are merged here; the merged line's
+ *    `description` is always the generic phrasing, because it is read
+ *    verbatim by `resolve_invoice_link` (00588) and rendered verbatim on the
+ *    client's pay-link sheet and the printed/PDF copy (LEAH-15, REP-15: the
+ *    homeowner gets no staffing detail).
  *  - ad-hoc rows → kind='adhoc' lines (blank/zero rows dropped)
  *
  * Ordering: milestone → ffe → time → adhoc, sort_order stamped sequentially.
@@ -27,7 +35,6 @@
 import type { DraftLineInput } from "@patina/supabase";
 import {
   buildTimeLineDraft,
-  groupEntriesByPerson,
   type TimeLineDateRow,
   type TimeLineEntryInput,
 } from "@/lib/time-billing";
@@ -193,30 +200,33 @@ export function buildComposerLines(
     sortOrder: milestoneLines.length + i,
   }));
 
-  // HT-21 — one composer row per person: entries with no shared author land
-  // in one unnamed group (groupEntriesByPerson), preserving the pre-HT-21
-  // single-line behavior for every existing caller that never carried
-  // author info.
-  const personGroups = groupEntriesByPerson(selection.timeEntries);
-  const timeLines: DraftLineInput[] = personGroups.flatMap((group, i) => {
-    const draft = buildTimeLineDraft(group.entries);
-    if (!draft) return [];
-    const attribution = timeAttribution(draft.dateRows);
-    return [
-      {
-        kind: "time" as const,
-        description: draft.description,
-        quantity: 1,
-        unitAmountCents: draft.amountCents,
-        sortOrder: milestoneLines.length + ffeLines.length + i,
-        metadata: {
-          time_entry_ids: draft.entryIds,
-          total_minutes: draft.totalMinutes,
-          ...(attribution !== undefined ? { attribution } : {}),
-        },
-      },
-    ];
-  });
+  // HT-21, corrected fix round 1 (findings B1/B2) — every selected entry
+  // merges into ONE kind='time' line, regardless of how many distinct
+  // authors it spans: the client's folio keeps one priced time line with a
+  // dated sub-table, never staffing detail (plan-v2 §6, LEAH-15/REP-15).
+  // Per-person naming stays where it already worked — the composer's own
+  // entry picker, reading `member_name` off each entry before this function
+  // ever runs.
+  const timeDraft = buildTimeLineDraft(selection.timeEntries);
+  const timeLines: DraftLineInput[] = timeDraft
+    ? (() => {
+        const attribution = timeAttribution(timeDraft.dateRows);
+        return [
+          {
+            kind: "time" as const,
+            description: timeDraft.description,
+            quantity: 1,
+            unitAmountCents: timeDraft.amountCents,
+            sortOrder: milestoneLines.length + ffeLines.length,
+            metadata: {
+              time_entry_ids: timeDraft.entryIds,
+              total_minutes: timeDraft.totalMinutes,
+              ...(attribution !== undefined ? { attribution } : {}),
+            },
+          },
+        ];
+      })()
+    : [];
 
   const adhocLines: DraftLineInput[] = selection.adhoc
     .filter((l) => l.description.trim() && dollarsToCents(l.unitDollars) > 0)

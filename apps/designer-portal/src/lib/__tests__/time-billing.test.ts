@@ -54,7 +54,7 @@ describe("buildTimeLineDraft", () => {
     expect(draft!.dateRows).toEqual([]);
   });
 
-  it("HT-21 — names the row when every entry agrees on one member_name", () => {
+  it("fix round 1 (finding B1) — description stays generic even when every entry agrees on one member_name; the dated sub-table is unaffected", () => {
     const draft = buildTimeLineDraft([
       {
         id: "a",
@@ -73,7 +73,8 @@ describe("buildTimeLineDraft", () => {
         resolved_rate_cents: 14_500,
       },
     ]);
-    expect(draft!.description).toBe("Maria Alvarez — 1h 30m (2 entries)");
+    expect(draft!.description).toBe("Design services — 1h 30m (2 entries)");
+    expect(draft!.description).not.toMatch(/Maria|Alvarez/);
     // Dated sub-table: date · minutes · rate, oldest first, no name.
     expect(draft!.dateRows).toEqual([
       { date: "2026-09-03", minutes: 60, rateCents: 14_500 },
@@ -81,7 +82,7 @@ describe("buildTimeLineDraft", () => {
     ]);
   });
 
-  it("HT-21 — a mixed-author group keeps the generic phrasing rather than naming one of them", () => {
+  it("HT-21 — a mixed-author group also keeps the generic phrasing", () => {
     const draft = buildTimeLineDraft([
       {
         id: "a",

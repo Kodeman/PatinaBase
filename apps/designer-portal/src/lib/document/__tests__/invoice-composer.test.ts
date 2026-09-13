@@ -124,7 +124,7 @@ describe("buildComposerLines", () => {
     expect(lines[0].metadata).not.toHaveProperty("attribution");
   });
 
-  it("HT-21 — one composer row per person when entries carry distinct authors", () => {
+  it("fix round 1 (finding B2) — entries from distinct authors still merge into ONE time line, never one per person", () => {
     const lines = buildComposerLines({
       milestones: [],
       ffeItems: [],
@@ -151,23 +151,31 @@ describe("buildComposerLines", () => {
       adhoc: [],
     });
     const timeLines = lines.filter((l) => l.kind === "time");
-    expect(timeLines).toHaveLength(2);
-    // Alphabetical: Leah before Maria.
-    expect(timeLines[0].description).toBe("Leah Brooks — 30m (1 entry)");
-    expect(timeLines[0].unitAmountCents).toBe(7_500);
-    expect(timeLines[1].description).toBe("Maria Alvarez — 1h (1 entry)");
-    expect(timeLines[1].unitAmountCents).toBe(14_500);
+    expect(timeLines).toHaveLength(1);
+    expect(timeLines[0].description).toBe(
+      "Design services — 1h 30m (2 entries)",
+    );
+    expect(timeLines[0].description).not.toMatch(/Leah|Brooks|Maria|Alvarez/);
+    expect(timeLines[0].unitAmountCents).toBe(22_000);
+    expect(timeLines[0].metadata).toMatchObject({
+      time_entry_ids: ["t1", "t2"],
+      total_minutes: 90,
+    });
     // sortOrder is sequential across the whole line set.
-    expect(lines.map((l) => l.sortOrder)).toEqual([0, 1]);
+    expect(lines.map((l) => l.sortOrder)).toEqual([0]);
 
-    // HT-21 — the dated sub-table rides metadata.attribution as JSON, and
-    // carries no member name (LEAH-15/REP-15: no staffing detail).
+    // HT-21 — the dated sub-table rides metadata.attribution as JSON,
+    // merged and date-ordered across both authors, and carries no member
+    // name anywhere (LEAH-15/REP-15: no staffing detail reaches the client).
     const payload = JSON.parse(timeLines[0].metadata!.attribution as string);
     expect(payload).toEqual({
       kind: "patina_time_subtable",
-      rows: [{ date: "2026-09-04", minutes: 30, rateCents: 15_000 }],
+      rows: [
+        { date: "2026-09-03", minutes: 60, rateCents: 14_500 },
+        { date: "2026-09-04", minutes: 30, rateCents: 15_000 },
+      ],
     });
-    expect(JSON.stringify(payload)).not.toMatch(/Leah|Brooks/);
+    expect(JSON.stringify(payload)).not.toMatch(/Leah|Brooks|Maria|Alvarez/);
   });
 
   it("no time entries → no time line at all", () => {
