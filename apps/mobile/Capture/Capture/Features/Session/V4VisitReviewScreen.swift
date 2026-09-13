@@ -55,6 +55,14 @@ struct V4VisitReviewScreen: View {
     /// a send, and saying "Logged." before the row exists is the §3.3 failure.
     @State private var closeState: FieldWriteState?
     @State private var projectID: String?
+    /// HT-16 — what the close will actually log, seeded from the ACTIVE duration
+    /// (visit start → last capture) rather than the wall clock. nil until the
+    /// rows have been read once; `refreshRows` must never re-seed it, or a
+    /// placement landing while she reads would silently undo her correction.
+    @State private var offeredMinutes: Int?
+    /// HT-11 — the close states it. `log_time` (00608) raises on a missing
+    /// billable, and a site visit is the client's hour until she says otherwise.
+    @State private var billable = true
     private let sessionContext = CaptureSessionContextStore.shared
 
     var body: some View {
@@ -308,11 +316,60 @@ struct V4VisitReviewScreen: View {
     @ViewBuilder
     private var timeOffer: some View {
         if let projectID, !projectID.isEmpty, let ownerUserID {
-            RouteActionButton(offerLabel, systemImage: "clock", kind: .secondary) {
-                logTheHours(projectID: projectID, ownerUserID: ownerUserID)
+            VStack(spacing: 10) {
+                // HT-16 — D10 binds every surface that proposes a duration, not
+                // only the desk. Field was breaching it with one confirm tap: a
+                // visit resumes live for hours, so a forgotten "End visit" used
+                // to bill the whole wall clock (CR-2, MOB-2, LEAH-2, FS-28).
+                if VisitReviewComposer.timeOfferEnabled(closeState: closeState) {
+                    durationStepper
+                    Toggle("Billable", isOn: $billable)
+                        .font(CaptureType.footnote)
+                        .foregroundStyle(CaptureColor.ink)
+                        .tint(CaptureColor.verdigris)
+                        .frame(minHeight: 44)
+                }
+                RouteActionButton(offerLabel, systemImage: "clock", kind: .secondary) {
+                    logTheHours(projectID: projectID, ownerUserID: ownerUserID)
+                }
+                .disabled(!VisitReviewComposer.timeOfferEnabled(closeState: closeState))
             }
-            .disabled(!VisitReviewComposer.timeOfferEnabled(closeState: closeState))
         }
+    }
+
+    private var durationStepper: some View {
+        HStack(spacing: 16) {
+            stepButton(systemImage: "minus", label: "Fifteen minutes less") {
+                offeredMinutes = VisitReviewComposer.steppedMinutes(
+                    offeredMinutes ?? summary.activeMinutes,
+                    by: -VisitReviewComposer.stepMinutes,
+                    elapsedMinutes: summary.elapsedMinutes)
+            }
+            Text(VisitReviewComposer.timeOffer(minutes: offeredMinutes ?? summary.activeMinutes))
+                .font(CaptureType.footnote)
+                .foregroundStyle(CaptureColor.inkSoft)
+                .frame(maxWidth: .infinity)
+            stepButton(systemImage: "plus", label: "Fifteen minutes more") {
+                offeredMinutes = VisitReviewComposer.steppedMinutes(
+                    offeredMinutes ?? summary.activeMinutes,
+                    by: VisitReviewComposer.stepMinutes,
+                    elapsedMinutes: summary.elapsedMinutes)
+            }
+        }
+    }
+
+    private func stepButton(systemImage: String, label: String,
+                            action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(CaptureType.footnote)
+                .foregroundStyle(CaptureColor.ink)
+                .frame(width: 44, height: 44)
+                .background(Circle().fill(CaptureColor.paper))
+                .overlay(Circle().stroke(CaptureColor.line, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
     }
 
     /// What is true right now. A record that exists but has not landed is being
@@ -321,7 +378,7 @@ struct V4VisitReviewScreen: View {
     private var offerLabel: String {
         switch closeState {
         case .none:                     return VisitReviewComposer.timeOffer(
-                                                   minutes: summary.elapsedMinutes)
+                                                   minutes: offeredMinutes ?? summary.activeMinutes)
         case .written:                  return "Logged."
         case .refused, .unwritable:     return "These hours didn't log."
         case .pending, .writing, .failed: return "Logging these hours."
@@ -364,7 +421,8 @@ struct V4VisitReviewScreen: View {
             ownerUserID: ownerUserID.uuidString,
             startedAt: startedAt,
             endedAt: closedAt,
-            durationMinutes: summary.elapsedMinutes))
+            durationMinutes: offeredMinutes ?? summary.activeMinutes,
+            billable: billable))
         try? store.save()
         closeState = standingClose()?.state
         resumeCloseOutbox()
@@ -418,6 +476,10 @@ struct V4VisitReviewScreen: View {
         // the button says what the standing record actually is.
         closeState = standingClose()?.state
         refreshRows()
+        // Seeded ONCE, after the rows exist. `refreshRows` alone runs again on
+        // every store save, and re-seeding there would undo her correction the
+        // moment a placement landed.
+        if offeredMinutes == nil { offeredMinutes = summary.activeMinutes }
     }
 
     /// Everything derived from the visit's captures. Separate from `load` so a
