@@ -75,6 +75,10 @@ export function LogTimeSheet({
   const [date, setDate] = useState(() => isoDateValue(new Date()));
   const [activity, setActivity] = useState('');
   const [billable, setBillable] = useState(false);
+  // HT-11 — billable is STATED. `statedFor` records the document she said it
+  // about, so a late authority read cannot overrule her (W3-R4-M1) and a
+  // different document asks the question again.
+  const [statedFor, setStatedFor] = useState<string | null>(null);
   const [rateRole, setRateRole] = useState<TimeRateRole | null>(null);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
@@ -90,14 +94,26 @@ export function LogTimeSheet({
 
   // The pill is SEEDED, not decided: the resolved answer lands the moment the
   // authority read settles for the document just picked, and a hand that has
-  // already touched the pill for that document keeps its own answer.
+  // already touched the pill for that document keeps its own answer — INCLUDING
+  // a hand that touched it while the read was still in flight, which the
+  // `seededFor` guard alone could not protect because it is only written when
+  // the read settles (W3-R4-M1).
+  const billableStated = Boolean(projectId) && statedFor === projectId;
+  const stateBillable = (next: boolean) => {
+    setStatedFor(projectId);
+    setBillable(next);
+  };
+  useEffect(() => {
+    setStatedFor(null);
+  }, [projectId]);
   const seededFor = useRef<string | null>(null);
   useEffect(() => {
     if (!projectId || !intent.isSettled) return;
+    if (billableStated) return;
     if (seededFor.current === projectId) return;
     seededFor.current = projectId;
     setBillable(intent.billable);
-  }, [projectId, intent.isSettled, intent.billable]);
+  }, [projectId, intent.isSettled, intent.billable, billableStated]);
 
   // The document follows what is in hand — on open, and if the hand changes
   // while the form stands. Held in its own effect so a change of hand never
@@ -114,6 +130,7 @@ export function LogTimeSheet({
     setActivity('');
     setRateRole(null);
     setDate(isoDateValue(new Date()));
+    setStatedFor(null);
     seededFor.current = null;
     const t = requestAnimationFrame(() => firstFieldRef.current?.focus());
     return () => cancelAnimationFrame(t);
@@ -134,8 +151,14 @@ export function LogTimeSheet({
   const parsed = parseInt(minutes, 10);
   // A cleared date field is not "today" — it is an unanswered question, and
   // the act waits for it (W3-R3-M2).
+  // …and neither is an unanswered authority: until the read settles the pill
+  // shows the fail-closed default, not a resolved answer, and logging in that
+  // window writes `billable = false` whatever the agreement says (W3-R4-M1).
+  // Her own statement is an answer too — that is what keeps a failed read from
+  // stranding the form with nothing she can do.
   const valid =
     Boolean(projectId) &&
+    (intent.isSettled || billableStated) &&
     isDayValue(date) &&
     Number.isFinite(parsed) &&
     parsed >= 1;
@@ -287,8 +310,10 @@ export function LogTimeSheet({
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <BillablePill
                 value={billable}
-                onChange={setBillable}
-                reason={intent.isSettled ? intent.sentence : null}
+                onChange={stateBillable}
+                reason={
+                  intent.isSettled || intent.unreadable ? intent.sentence : null
+                }
                 surfaceKey={SURFACE_KEY}
                 regionKey={REGION_KEY}
               />

@@ -40,8 +40,14 @@ jest.mock('@patina/supabase', () => ({
   useCreateTimeEntry: () => ({ mutateAsync: mockCreate, isPending: false }),
 }));
 
+/** The authority read, as an answer the test can leave in flight or fail. */
+let mockAuthority: {
+  data: unknown;
+  isLoading: boolean;
+  isError: boolean;
+} = { data: null, isLoading: false, isError: false };
 jest.mock('@/hooks/use-commercial-documents', () => ({
-  useProjectBillingAuthority: () => ({ data: null, isLoading: false }),
+  useProjectBillingAuthority: () => mockAuthority,
 }));
 
 jest.mock('@/hooks/use-desk-engagements', () => ({
@@ -116,6 +122,7 @@ beforeEach(() => {
   });
   mockEntryLogged.mockClear();
   mockPathname.mockReturnValue('/desk');
+  mockAuthority = { data: null, isLoading: false, isError: false };
   window.localStorage.clear();
 });
 
@@ -248,6 +255,95 @@ describe('⌘K · Log time', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Log it' }));
     await waitFor(() => expect(screen.getByLabelText('Date')).toHaveValue(''));
     expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('waits for the authority read, and keeps the answer she states meanwhile (HT-11)', async () => {
+    // Measured before the fix: with minutes already typed, picking a document
+    // left `Log it` live while the read was still in flight, so the hour was
+    // written `billable = false` whatever the agreement said — under a pill
+    // that looked settled because the reason is suppressed until it is. And a
+    // tap in that window was thrown away, because the seed effect only claims
+    // its slot once the read lands.
+    mockAuthority = { data: null, isLoading: true, isError: false };
+    render(<Tree />);
+    act(() => openPalette());
+    fireEvent.click(screen.getByRole('option', { name: /Log time/ }));
+
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Minutes' }), {
+      target: { value: '45' },
+    });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Document' }), {
+      target: { value: 'proj-stranger' },
+    });
+
+    expect(
+      screen.queryByText('non-billable \u00b7 no agreement'),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Log it' })).toBeDisabled();
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /Non-billable \u2014 press to make billable/,
+      }),
+    );
+    expect(
+      screen.getByRole('button', {
+        name: /^Billable \u2014 press to make non-billable/,
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Log it' })).toBeEnabled();
+
+    // The read lands, and says non-billable. It does not get to overrule her.
+    mockAuthority = { data: null, isLoading: false, isError: false };
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Minutes' }), {
+      target: { value: '46' },
+    });
+    await waitFor(() =>
+      expect(
+        screen.getByText('non-billable \u00b7 no agreement'),
+      ).toBeInTheDocument(),
+    );
+    expect(
+      screen.getByRole('button', {
+        name: /^Billable \u2014 press to make non-billable/,
+      }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Log it' }));
+    await waitFor(() => expect(mockCreate).toHaveBeenCalled());
+    expect(mockCreate.mock.calls[0][0]).toMatchObject({ billable: true });
+  });
+
+  it('does not report a failed authority read as "no agreement" (W3-R4-m17)', () => {
+    // A read that failed has learned nothing about the document; printing
+    // "no agreement" states a fact the browser never obtained.
+    mockAuthority = { data: null, isLoading: false, isError: true };
+    render(<Tree />);
+    act(() => openPalette());
+    fireEvent.click(screen.getByRole('option', { name: /Log time/ }));
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Document' }), {
+      target: { value: 'proj-stranger' },
+    });
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Minutes' }), {
+      target: { value: '45' },
+    });
+
+    expect(
+      screen.queryByText('non-billable \u00b7 no agreement'),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText('agreement not read \u00b7 state it yourself'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Log it' })).toBeDisabled();
+
+    // Her own statement is the way through: a failed read strands nothing.
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /Non-billable \u2014 press to make billable/,
+      }),
+    );
+    expect(screen.getByRole('button', { name: 'Log it' })).toBeEnabled();
   });
 
   it('marks a date more than 30 days back as backdated, and today as nothing (HT-13)', () => {

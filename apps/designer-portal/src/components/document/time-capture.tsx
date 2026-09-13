@@ -35,26 +35,40 @@ import { fmtUsd } from '@/lib/document/format';
 import { DocumentAction } from './document-action';
 
 /**
+ * What a failed authority read says. NOT "no agreement" — that is a fact about
+ * the document, and a read that never answered has learned no facts (W3-R4-m17).
+ */
+export const BILLABLE_INTENT_UNREADABLE = 'agreement not read · state it yourself';
+
+/**
  * The server's fail-closed answer for one document, as a pill can seed itself
- * from it. `isSettled` false means the authority read has not answered — the
- * pill must not print a reason it does not yet have.
+ * from it. `isSettled` false means the authority read has not answered — it is
+ * still in flight, or it failed — so the pill must not print a reason it does
+ * not have and the act must not write an answer that does not exist yet.
  */
 export function useBillableIntent(projectId: string | null): {
   billable: boolean;
   reason: BillableIntentReason;
   sentence: string;
   isSettled: boolean;
+  /** The read failed. Not an answer, and not "no agreement" either. */
+  unreadable: boolean;
 } {
   const authority = useProjectBillingAuthority(projectId ?? '', Boolean(projectId));
   return useMemo(() => {
     const intent = automaticTimeBillingIntent(authority.data);
+    const unreadable = Boolean(projectId) && Boolean(authority.isError);
     return {
       billable: intent.billable,
       reason: intent.reason,
-      sentence: billableIntentSentence(intent.reason),
-      isSettled: Boolean(projectId) && !authority.isLoading,
+      sentence: unreadable
+        ? BILLABLE_INTENT_UNREADABLE
+        : billableIntentSentence(intent.reason),
+      isSettled:
+        Boolean(projectId) && !authority.isLoading && !authority.isError,
+      unreadable,
     };
-  }, [authority.data, authority.isLoading, projectId]);
+  }, [authority.data, authority.isError, authority.isLoading, projectId]);
 }
 
 /**

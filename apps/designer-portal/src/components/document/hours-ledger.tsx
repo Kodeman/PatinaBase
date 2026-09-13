@@ -374,6 +374,8 @@ export function HoursLedger({
   // HT-11 — stated, and seeded from the resolved answer for the document
   // picked. Never `?? true`.
   const [addBillable, setAddBillable] = useState(false);
+  // The document she last stated billable about (HT-11 · W3-R4-M1).
+  const [addStatedFor, setAddStatedFor] = useState<string | null>(null);
   const [addRateRole, setAddRateRole] = useState<TimeRateRole | null>(null);
   const [addBusy, setAddBusy] = useState(false);
   /** R83 — the ledger's quiet inline note (add/delete failures, never a toast). */
@@ -415,19 +417,38 @@ export function HoursLedger({
   }, [weekOffset, weekStart]);
 
   const addIntent = useBillableIntent(addProject || null);
+  // HT-11 — billable is STATED. A hand that touches the pill keeps its answer
+  // even if the authority read for that document settles a second later; the
+  // `addSeededFor` guard alone could not protect it, because it is only written
+  // when the read settles (W3-R4-M1).
+  const addBillableStated =
+    Boolean(addProject) && addStatedFor === addProject;
+  const stateAddBillable = (next: boolean) => {
+    setAddStatedFor(addProject);
+    setAddBillable(next);
+  };
+  useEffect(() => {
+    setAddStatedFor(null);
+  }, [addProject]);
   const addSeededFor = useRef<string | null>(null);
   useEffect(() => {
     if (!addProject || !addIntent.isSettled) return;
+    if (addBillableStated) return;
     if (addSeededFor.current === addProject) return;
     addSeededFor.current = addProject;
     setAddBillable(addIntent.billable);
-  }, [addProject, addIntent.isSettled, addIntent.billable]);
+  }, [addProject, addIntent.isSettled, addIntent.billable, addBillableStated]);
 
   const parsedAdd = parseInt(addMinutes, 10);
   // A cleared date field is not "today" — it is an unanswered question, and
   // the act waits for it (W3-R3-M2).
+  // …and neither is an unanswered authority: an hour added before the read
+  // settles is written `billable = false` whatever the agreement says, under a
+  // pill that reads like a settled answer (W3-R4-M1). Her own statement counts
+  // as an answer, so a failed read does not strand the row.
   const addValid =
     addProject &&
+    (addIntent.isSettled || addBillableStated) &&
     isDayValue(addDate) &&
     Number.isFinite(parsedAdd) &&
     parsedAdd >= 1;
@@ -1082,8 +1103,12 @@ export function HoursLedger({
       <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
         <BillablePill
           value={addBillable}
-          onChange={setAddBillable}
-          reason={addIntent.isSettled ? addIntent.sentence : null}
+          onChange={stateAddBillable}
+          reason={
+            addIntent.isSettled || addIntent.unreadable
+              ? addIntent.sentence
+              : null
+          }
           disabled={addBusy}
           surfaceKey="hours"
           regionKey="batch-entry"

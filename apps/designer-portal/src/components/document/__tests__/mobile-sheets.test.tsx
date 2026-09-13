@@ -48,8 +48,14 @@ let mockCaptureProjects: Array<{ id: string; name: string; status: string }> = [
 ];
 let mockMyRateRoles: string[] = ['lead_designer'];
 
+/** The authority read, as an answer the test can leave in flight. */
+let mockAuthority: {
+  data: unknown;
+  isLoading: boolean;
+  isError: boolean;
+} = { data: null, isLoading: false, isError: false };
 jest.mock('@/hooks/use-commercial-documents', () => ({
-  useProjectBillingAuthority: () => ({ data: null, isLoading: false }),
+  useProjectBillingAuthority: () => mockAuthority,
   commercialDocumentKeys: { authority: (id: string) => ['project-authority', id] },
   fetchProjectBillingAuthority: jest.fn().mockResolvedValue(null),
 }));
@@ -239,6 +245,7 @@ describe('the mobile timer sheet with nothing held (HT-14)', () => {
       rate_role: null,
     });
     mockHeldProjectId = null;
+    mockAuthority = { data: null, isLoading: false, isError: false };
     window.matchMedia = jest.fn().mockImplementation((query: string) => ({
       matches: true,
       media: query,
@@ -282,6 +289,48 @@ describe('the mobile timer sheet with nothing held (HT-14)', () => {
     await waitFor(() =>
       expect(screen.queryByLabelText('Minutes')).not.toBeInTheDocument(),
     );
+  });
+
+  it('waits for the authority read, and keeps the answer the thumb states meanwhile (HT-11)', async () => {
+    // The phone shared the defect: `Add entry` was live before the read
+    // answered, so the hour went in `billable = false` whatever the agreement
+    // said, and a tap on the pill in that window was overwritten on landing.
+    mockAuthority = { data: null, isLoading: true, isError: false };
+    mountTimer();
+
+    fireEvent.change(screen.getByLabelText('Minutes'), { target: { value: '20' } });
+    fireEvent.change(screen.getByLabelText('Document'), {
+      target: { value: 'project-2' },
+    });
+
+    expect(
+      screen.queryByText('non-billable \u00b7 no agreement'),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add entry' })).toBeDisabled();
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /Non-billable \u2014 press to make billable/,
+      }),
+    );
+    expect(screen.getByRole('button', { name: 'Add entry' })).toBeEnabled();
+
+    mockAuthority = { data: null, isLoading: false, isError: false };
+    fireEvent.change(screen.getByLabelText('Minutes'), { target: { value: '21' } });
+    await waitFor(() =>
+      expect(
+        screen.getByText('non-billable \u00b7 no agreement'),
+      ).toBeInTheDocument(),
+    );
+    expect(
+      screen.getByRole('button', {
+        name: /^Billable \u2014 press to make non-billable/,
+      }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add entry' }));
+    await waitFor(() => expect(mockManualLog).toHaveBeenCalledTimes(1));
+    expect(mockManualLog.mock.calls[0][0]).toMatchObject({ billable: true });
   });
 
   it('says why rather than clearing when the write is refused', async () => {

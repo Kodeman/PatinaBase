@@ -1159,6 +1159,8 @@ function MobileTimerSheet() {
   // itself, and wrote nothing at all.
   const [pickedProject, setPickedProject] = useState('');
   const [billable, setBillable] = useState(false);
+  // The document she last stated billable about (HT-11 · W3-R4-M1).
+  const [statedFor, setStatedFor] = useState<string | null>(null);
   const [rateRole, setRateRole] = useState<TimeRateRole | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -1166,17 +1168,38 @@ function MobileTimerSheet() {
 
   const targetProjectId = heldProjectId ?? (pickedProject || null);
   const intent = useBillableIntent(targetProjectId);
+  // HT-11 — billable is STATED. A thumb that touches the pill keeps its answer
+  // even when the authority read settles a second later; `seededFor` alone
+  // could not protect it, because it is only written once the read settles
+  // (W3-R4-M1).
+  const billableStated =
+    Boolean(targetProjectId) && statedFor === targetProjectId;
+  const stateBillable = (next: boolean) => {
+    setStatedFor(targetProjectId);
+    setBillable(next);
+  };
+  useEffect(() => {
+    setStatedFor(null);
+  }, [targetProjectId]);
   const seededFor = useRef<string | null>(null);
   useEffect(() => {
     if (!targetProjectId || !intent.isSettled) return;
+    if (billableStated) return;
     if (seededFor.current === targetProjectId) return;
     seededFor.current = targetProjectId;
     setBillable(intent.billable);
-  }, [targetProjectId, intent.isSettled, intent.billable]);
+  }, [targetProjectId, intent.isSettled, intent.billable, billableStated]);
 
   const parsed = parseInt(minutes, 10);
+  // The act waits for the answer it is about to write: before the authority
+  // read settles the pill shows the fail-closed default, and an hour added in
+  // that window is `billable = false` whatever the agreement says (W3-R4-M1).
+  // Her own statement is an answer too, so a failed read strands nothing.
   const valid =
-    Boolean(targetProjectId) && Number.isFinite(parsed) && parsed >= 1;
+    Boolean(targetProjectId) &&
+    (intent.isSettled || billableStated) &&
+    Number.isFinite(parsed) &&
+    parsed >= 1;
 
   return (
     <div data-mobile-timer-sheet-content>
@@ -1268,8 +1291,10 @@ function MobileTimerSheet() {
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <BillablePill
               value={billable}
-              onChange={setBillable}
-              reason={intent.isSettled ? intent.sentence : null}
+              onChange={stateBillable}
+              reason={
+                intent.isSettled || intent.unreadable ? intent.sentence : null
+              }
               disabled={busy}
               surfaceKey="mobile-timer"
               regionKey="manual-time-entry"

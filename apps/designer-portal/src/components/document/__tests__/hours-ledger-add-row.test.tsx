@@ -95,8 +95,14 @@ jest.mock('@patina/supabase', () => ({
   useProjectHoursTotal: () => ({ data: undefined, isPending: false, isError: false }),
 }));
 
+/** The authority read, as an answer the test can leave in flight. */
+let mockAuthority: {
+  data: unknown;
+  isLoading: boolean;
+  isError: boolean;
+} = { data: null, isLoading: false, isError: false };
 jest.mock('@/hooks/use-commercial-documents', () => ({
-  useProjectBillingAuthority: () => ({ data: null, isLoading: false }),
+  useProjectBillingAuthority: () => mockAuthority,
 }));
 
 jest.mock('../command-bar', () => ({ openLedger: jest.fn() }));
@@ -134,6 +140,7 @@ beforeEach(() => {
   weekRows = [];
   hoursMemberScopePending.userId = null;
   hoursMemberScopePending.name = null;
+  mockAuthority = { data: null, isLoading: false, isError: false };
 });
 
 describe('the Hours add row', () => {
@@ -237,6 +244,57 @@ describe('the Hours add row', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Add' }));
     await waitFor(() => expect(screen.getByLabelText('Date')).toHaveValue(''));
     expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('waits for the authority read, and keeps the answer she states meanwhile (HT-11)', async () => {
+    // Before the fix the Add act was live the instant a document was picked,
+    // and an hour added in that window went in `billable = false` whatever the
+    // agreement said; a tap on the pill in the same window was overwritten
+    // when the read landed.
+    mockAuthority = { data: null, isLoading: true, isError: false };
+    renderLedger();
+    await waitFor(() =>
+      expect(
+        screen.getByLabelText('Project').querySelectorAll('option'),
+      ).toHaveLength(2),
+    );
+    fireEvent.change(screen.getByLabelText('Minutes'), {
+      target: { value: '30' },
+    });
+    fireEvent.change(screen.getByLabelText('Project'), {
+      target: { value: 'project-1' },
+    });
+
+    expect(
+      screen.queryByText('non-billable \u00b7 no agreement'),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled();
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /Non-billable \u2014 press to make billable/,
+      }),
+    );
+    expect(screen.getByRole('button', { name: 'Add' })).toBeEnabled();
+
+    mockAuthority = { data: null, isLoading: false, isError: false };
+    fireEvent.change(screen.getByLabelText('Minutes'), {
+      target: { value: '31' },
+    });
+    await waitFor(() =>
+      expect(
+        screen.getByText('non-billable \u00b7 no agreement'),
+      ).toBeInTheDocument(),
+    );
+    expect(
+      screen.getByRole('button', {
+        name: /^Billable \u2014 press to make non-billable/,
+      }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    await waitFor(() => expect(mockCreate).toHaveBeenCalled());
+    expect(mockCreate.mock.calls[0][0]).toMatchObject({ billable: true });
   });
 
   it('marks the add row backdated past 30 days and not at 29 (HT-13)', () => {
