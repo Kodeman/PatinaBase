@@ -10,6 +10,7 @@ import {
   channelRowParts,
   heldChannelReason,
   isPhoneChannel,
+  channelConsentAxis,
   mintConsequenceSentence,
   MINT_CLIENT_SIDE_SENTENCE,
   NO_RULE_SENTENCE,
@@ -88,7 +89,12 @@ jest.mock("@patina/supabase", () => ({
     project_review: "one review edition",
     agreement_link: "one trade agreement",
   },
-  CONTACT_CHANNEL_KIND_LABELS: { mobile: "Mobile", email: "Email" },
+  CONTACT_CHANNEL_KIND_LABELS: {
+    mobile: "Mobile",
+    email: "Email",
+    office: "Office",
+    portal_311: "311 portal",
+  },
   isContactChannelHeld: (s: string) => !!s && s !== "active",
   fieldLinkUrl: (token: string) => `https://patina.cloud/field/${token}`,
 }));
@@ -405,6 +411,114 @@ describe("a channel row", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(
       "Record how and where they agreed before this goes on the books.",
     );
+  });
+});
+
+/**
+ * CR12-1 — THE CONSENT AXIS. A person card renders every channel the card
+ * holds, and the consent word, the consent sentence and "Record consent" used
+ * to print on all of them: an office landline was offered an SMS grant, and a
+ * `portal_311` scheduling handle was offered an EMAIL one. Ray Thao carries
+ * both, on a card whose rule clause reads "Never text. Office phone or the 311
+ * portal only.", and his office line is the same number
+ * `identity_consent_status` reduces the Directory word over (00626).
+ */
+describe("the consent axis", () => {
+  const rayOffice = {
+    id: "ch-ray-office",
+    owner_type: "person",
+    owner_id: "card-ray",
+    channel_kind: "office",
+    value: "+16125550127",
+    preferred: false,
+    verified: false,
+    verified_at: null,
+    status: "active",
+    status_at: null,
+    sms_capable: false,
+  };
+  const ray311 = {
+    ...rayOffice,
+    id: "ch-ray-311",
+    channel_kind: "portal_311",
+    value: "minneapolis-311",
+  };
+
+  function renderRay() {
+    channelsData.current = [rayOffice, ray311];
+    consentData.current = { verdict: "granted", record: null };
+    renderReach({ personName: "Ray Thao", cardId: "card-ray" });
+  }
+
+  it("offers Ray Thao's office line no consent word, no sentence and no act", () => {
+    renderRay();
+    const row = document.querySelector(
+      '[data-reach-channel="ch-ray-office"]',
+    ) as HTMLElement;
+    expect(row).toBeInTheDocument();
+    expect(row.querySelector('[data-state-family="consent"]')).toBeNull();
+    expect(row.querySelector("[data-consent-sentence]")).toBeNull();
+    expect(
+      within(row).queryByRole("button", { name: /Record consent/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("offers Ray Thao's 311 portal handle no consent word, no sentence and no act", () => {
+    renderRay();
+    const row = document.querySelector(
+      '[data-reach-channel="ch-ray-311"]',
+    ) as HTMLElement;
+    expect(row).toBeInTheDocument();
+    expect(row.querySelector('[data-state-family="consent"]')).toBeNull();
+    expect(row.querySelector("[data-consent-sentence]")).toBeNull();
+    expect(
+      within(row).queryByRole("button", { name: /Record consent/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps both lines on the card — a line nobody can consent to is still a way to reach him", () => {
+    renderRay();
+    expect(screen.getByText(/^Office/)).toBeInTheDocument();
+    expect(screen.getByText(/^311 portal/)).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "(612) 555-0127" }),
+    ).toHaveAttribute("href", "tel:+16125550127");
+  });
+
+  it("still offers the act on a line that takes a text", () => {
+    channelsData.current = [
+      { ...rayOffice, id: "ch-mobile", channel_kind: "mobile", sms_capable: true },
+    ];
+    renderReach();
+    expect(
+      screen.getByRole("button", { name: "Record consent" }),
+    ).toBeInTheDocument();
+  });
+
+  it("reads the axis off sms_capable and the email kinds, never off the phone kind alone", () => {
+    expect(channelConsentAxis({ channel_kind: "mobile", sms_capable: true })).toBe(
+      "sms",
+    );
+    // 00593 leaves sms_capable false with no SMS-rail evidence, and calls the
+    // kind a placeholder ("line type unconfirmed"), so this is not a text line.
+    expect(
+      channelConsentAxis({ channel_kind: "mobile", sms_capable: false }),
+    ).toBeNull();
+    expect(
+      channelConsentAxis({ channel_kind: "office", sms_capable: false }),
+    ).toBeNull();
+    expect(
+      channelConsentAxis({ channel_kind: "after_hours", sms_capable: false }),
+    ).toBeNull();
+    expect(
+      channelConsentAxis({ channel_kind: "portal_311", sms_capable: false }),
+    ).toBeNull();
+    expect(channelConsentAxis({ channel_kind: "email", sms_capable: false })).toBe(
+      "email",
+    );
+    expect(
+      channelConsentAxis({ channel_kind: "ap_email", sms_capable: false }),
+    ).toBe("email");
   });
 });
 
@@ -848,6 +962,8 @@ describe("CR7-3 — the acts name the job they land on", () => {
         value: "+16125550111",
         status: "active",
         is_preferred: true,
+        // CR12-1: the consent band is offered on a line that takes a text.
+        sms_capable: true,
       },
     ];
     renderReach();
