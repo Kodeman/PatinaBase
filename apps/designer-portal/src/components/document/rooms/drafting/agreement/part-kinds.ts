@@ -417,10 +417,47 @@ export function readItems(payload: Record<string, unknown>): PartListItem[] {
   });
 }
 
+/**
+ * HT-4 (RULED 2026-09-11) — a rate-card row binds to the roster role enum, and
+ * the four values are the billable subset of `project_team_members.role`
+ * (`00084:164-165`). `'client'` is a roster role and is deliberately not one of
+ * them: a signed rate card may not price the homeowner's own hours.
+ *
+ * The label is what the client reads on the agreement; the value is what
+ * `resolve_time_rate_cents` and `classify_project_time_entry_authority` match
+ * on. They are stored separately so a studio may rename the one without moving
+ * the other — the shipped default label "Principal designer" could never
+ * normalize-match `lead_designer`, which stranded every hour a default two-role
+ * card should have priced.
+ */
+export const ROSTER_RATE_ROLES = [
+  { value: "lead_designer", label: "Lead designer" },
+  { value: "support_designer", label: "Support designer" },
+  { value: "bookkeeper", label: "Bookkeeper" },
+  { value: "vendor", label: "Vendor" },
+] as const;
+
+export type RosterRateRole = (typeof ROSTER_RATE_ROLES)[number]["value"];
+
+export function rosterRoleLabel(value: RosterRateRole): string {
+  return (
+    ROSTER_RATE_ROLES.find((role) => role.value === value)?.label ?? value
+  );
+}
+
+function readRosterRole(value: unknown): RosterRateRole | undefined {
+  return ROSTER_RATE_ROLES.some((role) => role.value === value)
+    ? (value as RosterRateRole)
+    : undefined;
+}
+
 export interface PartRole {
   roleName: string;
   hourlyRateCents: number;
   sortOrder: number;
+  /** HT-4 — the roster role this rate prices. Absent on a card written before
+   *  the binding existed; the server still prices those by their label. */
+  rosterRole?: RosterRateRole;
   /** B-9 — the date this rate started applying, read back so the editor hands
    *  it to the save unchanged. The projection falls to now() when it is
    *  absent, and `classify_project_time_entry_authority` filters authority
@@ -441,6 +478,9 @@ export function readRoles(payload: Record<string, unknown>): PartRole[] {
         sortOrder: Number.isFinite(Number(role.sortOrder))
           ? Number(role.sortOrder)
           : index,
+        ...(readRosterRole(role.rosterRole)
+          ? { rosterRole: readRosterRole(role.rosterRole) }
+          : {}),
         ...(typeof role.effectiveAt === "string" && role.effectiveAt
           ? { effectiveAt: role.effectiveAt }
           : {}),

@@ -28,6 +28,7 @@ import {
   readCents,
   readItems,
   readRoles,
+  ROSTER_RATE_ROLES,
   toCents,
   toCentsOrNull,
 } from "./part-kinds";
@@ -407,29 +408,67 @@ function ListEditor({ payload, onChange, readOnly }: EditorProps) {
   );
 }
 
+/**
+ * HT-4 — the rate card binds to the roster role enum, and the picker is where
+ * the binding is made. The free-text label is gone: a card that says
+ * "Principal designer" can never normalize-match `lead_designer`, and that one
+ * sentence is why a default two-role card stranded every hour it priced.
+ *
+ * A row written before the binding existed keeps its label, shown as the
+ * unchosen state, and the studio converts it by picking. One rate per role, so
+ * a role already on the card is not offered twice and the act is spent once all
+ * four are named — two cards for one role is the same stranding by a second
+ * door, and `upsert_agreement_parts` refuses it anyway.
+ */
 function RateCardEditor({ payload, onChange, readOnly }: EditorProps) {
   const roles = readRoles(payload);
   const write = (next: typeof roles) => onChange({ ...payload, roles: next });
+  const taken = new Set(
+    roles.flatMap((role) => (role.rosterRole ? [role.rosterRole] : [])),
+  );
+  const nextFree = ROSTER_RATE_ROLES.find((role) => !taken.has(role.value));
 
   return (
     <div className="space-y-2">
       {roles.map((role, index) => (
         <div key={index} className="grid grid-cols-[minmax(0,1fr)_140px] gap-3">
-          <Input
+          <Select
             aria-label={`Role ${index + 1}`}
             disabled={readOnly}
-            value={role.roleName}
-            onChange={(event) =>
+            value={role.rosterRole ?? ""}
+            onChange={(event) => {
+              const picked = ROSTER_RATE_ROLES.find(
+                (option) => option.value === event.target.value,
+              );
+              if (!picked) return;
               write(
                 roles.map((row, rowIndex) =>
                   rowIndex === index
-                    ? { ...row, roleName: event.target.value }
+                    ? {
+                        ...row,
+                        rosterRole: picked.value,
+                        roleName: picked.label,
+                      }
                     : row,
                 ),
-              )
-            }
-            placeholder="Principal designer"
-          />
+              );
+            }}
+          >
+            <option value="" disabled>
+              {role.roleName.trim() || "Choose a role"}
+            </option>
+            {ROSTER_RATE_ROLES.map((option) => (
+              <option
+                key={option.value}
+                value={option.value}
+                disabled={
+                  taken.has(option.value) && role.rosterRole !== option.value
+                }
+              >
+                {option.label}
+              </option>
+            ))}
+          </Select>
           <Input
             aria-label={`${role.roleName || `Role ${index + 1}`} hourly rate`}
             inputMode="decimal"
@@ -451,13 +490,19 @@ function RateCardEditor({ payload, onChange, readOnly }: EditorProps) {
       <Button
         variant="ghost"
         size="sm"
-        disabled={readOnly}
-        onClick={() =>
+        disabled={readOnly || !nextFree}
+        onClick={() => {
+          if (!nextFree) return;
           write([
             ...roles,
-            { roleName: "", hourlyRateCents: 0, sortOrder: roles.length },
-          ])
-        }
+            {
+              roleName: nextFree.label,
+              rosterRole: nextFree.value,
+              hourlyRateCents: 0,
+              sortOrder: roles.length,
+            },
+          ]);
+        }}
       >
         + Add a role
       </Button>
