@@ -55,7 +55,6 @@ import {
   isInvoiceEligibleTimeEntry,
   timeBillingStateLabel,
   timeRateProvenance,
-  timeRateRoleLabel,
 } from '@/lib/document/authority-hours';
 import { documentEvents } from '@/lib/analytics/document-events';
 import { hoursMemberScopePending } from '@/lib/document/open-hours-scope';
@@ -416,11 +415,31 @@ export function HoursLedger({
     () => new Map((orgs ?? []).map((org) => [org.id, org.name as string])),
     [orgs],
   );
-  const lensPricingStudioId = useMemo(() => {
-    if (!lensProjectId) return null;
-    const row = (entries ?? []).find((e) => e.project_id === lensProjectId);
-    return (row?.project?.studio_id as string | null) ?? null;
-  }, [entries, lensProjectId]);
+  // Read off the DOCUMENT, never off the week's entries: the week read above is
+  // `.eq('user_id', me)`, so in the project scope — HT-9's whole case, an owner
+  // reading a house she has logged nothing on — an entry-derived answer is
+  // silently absent, and absence here printed "no studio yet" over a document
+  // that names one, under a stamp door the server then refused.
+  const lensPricingStudio = useQuery({
+    queryKey: ['document-hours-project-studio', lensProjectId],
+    enabled: lensProjectId != null,
+    queryFn: async () => {
+      const { data, error } = await getSupabase()
+        .from('projects')
+        .select('studio_id')
+        .eq('id', lensProjectId)
+        .maybeSingle();
+      if (error) throw error;
+      return (data?.studio_id as string | null) ?? null;
+    },
+  });
+  /** `null` = this document names no studio. `undefined` = not known yet, which
+   *  is not the same fact and must print neither a sentence nor a repair. */
+  const lensPricingStudioId: string | null | undefined = lensProjectId
+    ? lensPricingStudio.isSuccess
+      ? (lensPricingStudio.data ?? null)
+      : undefined
+    : null;
 
   // HT-8 — the lens is the admin's instrument; a plain member never sees it.
   // The two scoped words appear only with something in hand: the member scope's
@@ -433,6 +452,17 @@ export function HoursLedger({
     words.push(['studio', 'the studio']);
     return words;
   }, [memberScope, lensProjectId]);
+
+  // HT-8 — the lens is the admin's instrument, so a viewer who has none can
+  // never be left standing in a scope she has no word to leave. Her sheet is her
+  // own hours (front matter, her rows, R77's inline edit and delete), scoped to
+  // the document in hand, with HT-10-a's document total above them. Deferred to
+  // an effect because the role arrives with `useOrganizations`, after mount.
+  useEffect(() => {
+    if (!orgs || viewerIsOwnerOrAdmin) return;
+    setScope('mine');
+    setShowEntries(false);
+  }, [orgs, viewerIsOwnerOrAdmin]);
 
   useEffect(() => {
     documentEvents.time.scopeViewed({
@@ -458,7 +488,17 @@ export function HoursLedger({
                 · {lensName}
                 <button
                   type="button"
-                  onClick={() => setLensProjectId(null)}
+                  onClick={() => {
+                    // Dropping the document drops the scope that was about it:
+                    // "this document" loses its word when the lens clears, and a
+                    // project scope with no project asked the rollup for the
+                    // WHOLE studio under the caption "this document".
+                    setLensProjectId(null);
+                    setScope((current) =>
+                      current === 'project' ? 'mine' : current,
+                    );
+                    setShowEntries(false);
+                  }}
                   className="ml-1.5 text-[var(--color-clay-ink)] hover:opacity-80"
                 >
                   all documents ×
@@ -587,37 +627,72 @@ export function HoursLedger({
 
       {/* HT-3-e(3) — which studio prices this document's hours, said out loud.
           An unnamed one is why every hour here reads "rate pending". */}
-      {scope === 'project' && lensProjectId && (
-        <PricingStudioLine
-          projectId={lensProjectId}
-          pricingStudioId={lensPricingStudioId}
-          studioName={
-            lensPricingStudioId ? (studioNames.get(lensPricingStudioId) ?? null) : null
-          }
-          viewerStudioId={viewerStudio?.id ?? null}
-          viewerIsOwnerOrAdmin={viewerIsOwnerOrAdmin}
-        />
+      {scope === 'project' &&
+        lensProjectId &&
+        lensPricingStudioId !== undefined && (
+          <PricingStudioLine
+            projectId={lensProjectId}
+            pricingStudioId={lensPricingStudioId}
+            studioName={
+              lensPricingStudioId
+                ? (studioNames.get(lensPricingStudioId) ?? null)
+                : null
+            }
+            viewerStudioId={viewerStudio?.id ?? null}
+            viewerIsOwnerOrAdmin={viewerIsOwnerOrAdmin}
+          />
+        )}
+
+      {/* HT-10-a — a viewer with no lens reads her own rows only (00606), so the
+          one DEFINER function is where the house's hours add up for her. Above
+          the rows, per HT-30. An owner has the lens and the rollup instead. */}
+      {lensProjectId && orgs && !viewerIsOwnerOrAdmin && (
+        <MemberProjectTotal projectId={lensProjectId} />
       )}
 
       {/* HT-30 — the totals are the front matter of the rows that produced
-          them, and the rows are one act away (HT-36: aggregate by default). */}
-      {scope !== 'mine' &&
-        (viewerIsOwnerOrAdmin && viewerStudio ? (
+          them, and the rows are one act away (HT-36: aggregate by default).
+          The rollup is keyed on the studio whose hours it sums: the viewer's own
+          for the member and studio scopes, and — because 00607 filters on the
+          entry's pricing studio — the studio that PRICES the document for the
+          project scope. Keyed on the viewer's instead, a document another studio
+          prices returned zero rows above entries the fact view does read. */}
+      {scope !== 'mine' && viewerIsOwnerOrAdmin && viewerStudio && (
+        scope === 'project' ? (
+          lensProjectId && lensPricingStudioId ? (
+            <ScopeRollup
+              scope={scope}
+              studioId={lensPricingStudioId}
+              memberId={null}
+              memberName={memberScope?.name ?? null}
+              projectId={lensProjectId}
+              groupBy={groupBy}
+              onGroupBy={setGroupBy}
+              from={fromDate}
+              to={toDate}
+              weekLabel={weekLabel}
+            />
+          ) : lensProjectId && lensPricingStudioId === null ? (
+            <p className="mb-4 py-2 text-[12px] italic text-[var(--color-aged-oak)]">
+              No studio prices this document yet, so its hours do not add up to a
+              studio&rsquo;s week. Name one above and they gain a rate.
+            </p>
+          ) : null
+        ) : (
           <ScopeRollup
             scope={scope}
             studioId={viewerStudio.id}
             memberId={scope === 'member' ? (memberScope?.id ?? null) : null}
             memberName={memberScope?.name ?? null}
-            projectId={scope === 'project' ? lensProjectId : null}
+            projectId={null}
             groupBy={groupBy}
             onGroupBy={setGroupBy}
             from={fromDate}
             to={toDate}
             weekLabel={weekLabel}
           />
-        ) : scope === 'project' && lensProjectId ? (
-          <MemberProjectTotal projectId={lensProjectId} />
-        ) : null)}
+        )
+      )}
 
       {scope !== 'mine' && (
         <div className="mb-4">
@@ -1154,7 +1229,6 @@ function ScopeEntryRow({
     },
     null,
   );
-  const roleLabel = timeRateRoleLabel(row.rate_role ?? null);
 
   return (
     <li className="border-b border-[var(--color-pearl)] px-1 py-2">
@@ -1171,7 +1245,6 @@ function ScopeEntryRow({
               provenance.kind === 'rated'
                 ? `${provenance.label} · ${fmtUsd(provenance.hourlyRateCents)}/hr`
                 : provenance.label,
-              roleLabel,
               row.amount_cents > 0 ? fmtUsd(row.amount_cents) : null,
               row.studio_id
                 ? `priced by ${studioNames.get(row.studio_id) ?? 'another studio'}`
@@ -1268,7 +1341,6 @@ function EntryRow({
   const billed = Boolean(e.invoice_id);
   const authority = useProjectBillingAuthority(e.project_id);
   const provenance = timeRateProvenance(e, authority.data);
-  const roleLabel = timeRateRoleLabel(provenance.rateRole);
   const billingLabel = timeBillingStateLabel(e);
   const amountCents = e.rated_amount_cents ?? unbilled?.amount_cents ?? 0;
   const pricingStudioId = (e.project?.studio_id as string | null) ?? null;
@@ -1331,8 +1403,6 @@ function EntryRow({
               provenance.kind === 'rated'
                 ? `${provenance.label} · ${fmtUsd(provenance.hourlyRateCents)}/hr${provenance.version ? ` · v${provenance.version}` : ''}`
                 : provenance.label,
-              // HT-41 — the role the member picked, where they hold more than one.
-              roleLabel,
               // New rows use the server-rated snapshot; legacy rows retain
               // the project_unbilled_time amount alias.
               amountCents > 0

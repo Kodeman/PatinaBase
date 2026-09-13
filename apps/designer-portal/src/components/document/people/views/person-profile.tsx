@@ -43,6 +43,7 @@ import {
   usePerson,
   useProposals,
   useStartDirectThread,
+  useOrganizations,
   useStudioContact,
   useThreads,
   type ClientDecision,
@@ -804,6 +805,18 @@ function TeamProfile({
   notify: (m: string) => void;
 }) {
   const router = useRouter();
+  // HT-8 — the Hours sheet's member scope is part of the scope lens, and the
+  // lens is the admin's instrument: the sheet renders no lens, no rollup and no
+  // own rows for a plain member, so her only way out of the scope this door
+  // opens is to close the sheet. The door carries the same gate as the lens.
+  const { data: viewerOrgs } = useOrganizations();
+  const viewerStudio =
+    viewerOrgs?.find((org) => org.type === 'design_studio') ??
+    viewerOrgs?.[0] ??
+    null;
+  const viewerIsOwnerOrAdmin =
+    viewerStudio?.membership?.role === 'owner' ||
+    viewerStudio?.membership?.role === 'admin';
   const studioRole = humanizeTeamRole(
     statusRaw ?? (meta['role'] as string) ?? null,
   );
@@ -822,7 +835,7 @@ function TeamProfile({
           <>
             {/* HT-8 — the one door into the Hours sheet's member scope. There is
                 no staff picker inside a money ledger; you come here first. */}
-            {profileId && (
+            {profileId && viewerIsOwnerOrAdmin && (
               <ActionButton
                 actionKey="open-person-hours"
                 label="Hours"

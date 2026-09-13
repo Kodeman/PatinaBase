@@ -7,6 +7,14 @@
  * `.eq('user_id')` AND is gone); a total is the front matter of the rows that
  * produced it; internal time stands in its own group; and free-text notes come
  * only from an explicit act, never from the aggregate.
+ *
+ * Round-1 fixes pinned here too: the pricing studio is read off the DOCUMENT
+ * (not off the holder's own week, which is `.eq('user_id')`-filtered, so the
+ * lookup found nothing and the sheet printed "no studio yet" over a document
+ * that names one); the rollup is keyed on the studio that PRICES the document
+ * rather than on the viewer's own; dropping the document drops the scope that
+ * was about it; and a viewer with no lens keeps her own rows, her inline edit
+ * and her delete rather than landing in a scope she cannot leave.
  */
 
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -16,6 +24,8 @@ import { hoursMemberScopePending } from '@/lib/document/open-hours-scope';
 
 type Role = 'owner' | 'admin' | 'member';
 let viewerRole: Role = 'owner';
+/** `projects.studio_id` for project-1 — the studio that PRICES the document. */
+let projectStudioId: string | null = 'studio-1';
 
 const ledgerCalls: Array<Record<string, unknown>> = [];
 const rollupCalls: Array<Record<string, unknown>> = [];
@@ -83,10 +93,10 @@ function makeClient() {
       const builder: Record<string, unknown> = {
         then: (resolve: (value: unknown) => unknown) =>
           Promise.resolve({ data: rowsFor(), error: null }).then(resolve),
-        maybeSingle: async () => ({
-          data: { notes: 'sketching the stair' },
-          error: null,
-        }),
+        maybeSingle: async () =>
+          table === 'projects'
+            ? { data: { studio_id: projectStudioId }, error: null }
+            : { data: { notes: 'sketching the stair' }, error: null },
       };
       for (const method of [
         'select',
@@ -186,6 +196,7 @@ const renderLedger = (projectId?: string) =>
 
 beforeEach(() => {
   viewerRole = 'owner';
+  projectStudioId = 'studio-1';
   ledgerCalls.length = 0;
   rollupCalls.length = 0;
   projectTotalCalls.length = 0;
@@ -226,9 +237,15 @@ describe('the Hours scope lens', () => {
     expect(Object.keys(projectRead ?? {})).toContain('userId');
   });
 
-  it('puts the total above the rows that produced it (HT-30)', () => {
+  it('puts the total above the rows that produced it (HT-30)', async () => {
     const { container } = renderLedger('project-1');
 
+    // The project scope's rollup waits for the document's pricing studio — it is
+    // keyed on that studio, not on the viewer's — so the total arrives a tick
+    // after first paint rather than on a studio that may not price this house.
+    await waitFor(() =>
+      expect(rollupCalls.at(-1)).toMatchObject({ studioId: 'studio-1' }),
+    );
     fireEvent.click(screen.getByRole('button', { name: 'The entries' }));
 
     const text = container.textContent ?? '';
@@ -237,6 +254,75 @@ describe('the Hours scope lens', () => {
     // follow it.
     expect(text.indexOf('3h 00m')).toBeGreaterThan(-1);
     expect(text.indexOf('3h 00m')).toBeLessThan(text.indexOf('Maria Obi'));
+  });
+
+  it('reads the pricing studio off the document, not off the holder’s own week', async () => {
+    // The week read is `.eq('user_id', me)`; an owner reading a house she has
+    // logged nothing on finds no entry of her own there. The fact must come from
+    // `projects.studio_id`, or the sheet prints "no studio yet" over a document
+    // that names one — under a stamp door 00606 then refuses.
+    renderLedger('project-1');
+
+    await waitFor(() =>
+      expect(screen.getByText('Leah Mbeki Studio')).toBeInTheDocument(),
+    );
+    expect(
+      screen.queryByText(/no studio yet/),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /Name your studio/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('keys the project rollup on the studio that prices the document', async () => {
+    // 00607 filters on the entry's pricing studio. Keyed on the viewer's studio
+    // instead, a document another studio prices returned zero rows ABOVE entries
+    // the fact view does read — a total and its rows contradicting each other.
+    projectStudioId = 'studio-2';
+    renderLedger('project-1');
+
+    await waitFor(() =>
+      expect(rollupCalls.at(-1)).toMatchObject({
+        studioId: 'studio-2',
+        projectId: 'project-1',
+      }),
+    );
+  });
+
+  it('says why a document with no pricing studio has no studio total', async () => {
+    projectStudioId = null;
+    renderLedger('project-1');
+
+    await waitFor(() =>
+      expect(
+        screen.getByText(/No studio prices this document yet/),
+      ).toBeInTheDocument(),
+    );
+    // No zero dressed as a total, and no rollup call on the viewer's studio.
+    expect(screen.queryByText('Nothing logged in this window.')).not.toBeInTheDocument();
+    expect(rollupCalls).toHaveLength(0);
+  });
+
+  it('drops the project scope when the document is dropped', async () => {
+    renderLedger('project-1');
+    await waitFor(() =>
+      expect(rollupCalls.at(-1)).toMatchObject({ projectId: 'project-1' }),
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'all documents ×' }));
+
+    // The scope that was ABOUT the document cannot outlive it: the caption and
+    // the lens word both go, and the rollup is never asked for the whole studio
+    // under the caption "this document".
+    expect(
+      screen.queryByRole('button', { name: 'this document' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'mine' }),
+    ).toHaveAttribute('aria-current', 'true');
+    for (const call of rollupCalls) {
+      expect(call).not.toMatchObject({ projectId: null, studioId: 'studio-1' });
+    }
   });
 
   it('stands internal time in its own group in the studio scope', () => {
@@ -285,5 +371,50 @@ describe('the Hours scope lens', () => {
 
     expect(projectTotalCalls).toContain('project-1');
     expect(rollupCalls).toHaveLength(0);
+  });
+
+  it('leaves a viewer with no lens on her own hours, edit and delete (R77)', async () => {
+    // With a document in hand the sheet used to open on the project scope, which
+    // renders no per-day rows — so a member with no lens lost R77's inline
+    // adjust and its delete-with-confirm and could not get back to them.
+    viewerRole = 'member';
+    renderLedger('project-1');
+
+    expect(
+      screen.queryByRole('group', { name: 'Hours scope' }),
+    ).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByLabelText('Duration (minutes)')).toBeInTheDocument(),
+    );
+    expect(
+      screen.getByRole('button', { name: 'Delete entry' }),
+    ).toBeInTheDocument();
+    // Still scoped to the document she arrived with, and still HT-10-a's total.
+    expect(
+      screen.getByRole('button', { name: 'all documents ×' }),
+    ).toBeInTheDocument();
+    expect(projectTotalCalls).toContain('project-1');
+  });
+
+  it('prints no roster-role chip on a single-role member’s rows (HT-41)', async () => {
+    // HT-41 shows the role ONLY where the member holds more than one live roster
+    // role on that project, and the count is W3's to fetch. Until then the
+    // segment is absent rather than stamped on every row as permanent noise.
+    renderLedger('project-1');
+
+    // Her own rows (WEEK_ENTRY carries rate_role 'lead_designer').
+    fireEvent.click(screen.getByRole('button', { name: 'mine' }));
+    await waitFor(() =>
+      expect(screen.getByLabelText('Duration (minutes)')).toBeInTheDocument(),
+    );
+    expect(screen.queryByText(/lead designer/)).not.toBeInTheDocument();
+
+    // And the scope entries behind an aggregate (LEDGER_ROW: 'support_designer').
+    fireEvent.click(screen.getByRole('button', { name: 'this document' }));
+    fireEvent.click(screen.getByRole('button', { name: 'The entries' }));
+    await waitFor(() =>
+      expect(screen.getAllByText('Maria Obi').length).toBeGreaterThan(0),
+    );
+    expect(screen.queryByText(/support designer/)).not.toBeInTheDocument();
   });
 });

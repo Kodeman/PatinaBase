@@ -1625,6 +1625,13 @@ export function AccountStudioPage() {
                       userId={m.user_id}
                       memberLabel={label}
                       rates={memberRates ?? []}
+                      /* HT-3-e(2) (00615) — an admin's rate for HERSELF prices
+                         nothing: the resolver skips a self-authored row unless
+                         that person is the studio's owner. Offering the field
+                         here would take the keystroke and change no money. */
+                      selfAuthoredInert={
+                        m.user_id === user?.id && myRole !== 'owner'
+                      }
                     />
                   </li>
                 );

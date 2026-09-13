@@ -11,6 +11,12 @@
  *
  * Extracted so the Account · Studio page grows by a mount rather than by the
  * field, the history and the error line three times over.
+ *
+ * HT-3-e(2) (00615) — a row whose `created_by` IS its own `user_id` prices an
+ * hour ONLY where that person is the studio's owner. So for an admin reading her
+ * OWN row this field would save, show its dated row, and change nothing about
+ * what her hours are worth. `selfAuthoredInert` says that out loud instead of
+ * taking the keystroke: the history still reads, the field is gone.
  */
 
 import { useState } from 'react';
@@ -49,12 +55,16 @@ export function StudioRateRows({
   userId,
   memberLabel,
   rates,
+  selfAuthoredInert = false,
 }: {
   studioId: string;
   userId: string;
   memberLabel: string;
   /** Every row this caller may read for this member, newest first. */
   rates: StudioMemberRate[];
+  /** HT-3-e(2) — this is the acting user's own row and she is not the studio's
+   *  owner, so anything she writes here would not price her hours. */
+  selfAuthoredInert?: boolean;
 }) {
   const setRate = useSetStudioMemberRate();
   const history = rates
@@ -81,6 +91,35 @@ export function StudioRateRows({
       },
     );
   };
+
+  if (selfAuthoredInert) {
+    return (
+      <div className="flex flex-col gap-1">
+        <p className="max-w-[38ch] text-right text-[11px] leading-relaxed text-[var(--color-aged-oak)]">
+          {open === undefined
+            ? 'No rate yet.'
+            : // `created_by` NULL is a deleted author, not self-authorship
+              // (00615) — such a row prices, so it is not called out here.
+              open.created_by === userId
+              ? `$${dollars(open.hourly_rate_cents)}/hr, written by you — which is why your hours still read “rate pending”.`
+              : `$${dollars(open.hourly_rate_cents)}/hr, written for you by the studio.`}{' '}
+          A rate you write for yourself does not price your own hours; the
+          studio&rsquo;s owner, or another admin, has to write it.
+        </p>
+        {history.length > 0 && (
+          <ul>
+            {history.map((row) => (
+              <li key={row.id} className={META}>
+                ${dollars(row.hourly_rate_cents)} · from{' '}
+                {fmtDate(row.effective_from)}
+                {row.effective_to ? ` to ${fmtDate(row.effective_to)}` : ''}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-1">

@@ -24,6 +24,9 @@ jest.mock('next/navigation', () => ({
 let mockPersonData: Record<string, unknown> | null = null;
 let mockStudioContact: StudioContact | null = null;
 
+/** The acting viewer's seat in her own studio — HT-8 gates the Hours door on it. */
+let viewerStudioRole: 'owner' | 'admin' | 'member' = 'owner';
+
 jest.mock('@patina/supabase', () => ({
   usePerson: () => ({ data: mockPersonData, isLoading: false }),
   useClient: () => ({ data: null }),
@@ -46,6 +49,18 @@ jest.mock('@patina/supabase', () => ({
   useFindOrCreateVendor: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useSaveVendor: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useStudioIdentity: () => ({ data: null, isLoading: false }),
+  // HT-8 — the TeamProfile's "Hours" door carries the scope lens's own
+  // owner/admin gate, so the branch reads the viewer's studio membership.
+  useOrganizations: () => ({
+    data: [
+      {
+        id: 'studio-1',
+        name: 'Leah Mbeki Studio',
+        type: 'design_studio',
+        membership: { role: viewerStudioRole, status: 'active' },
+      },
+    ],
+  }),
 }));
 
 jest.mock('@/hooks/use-person-documents', () => ({
@@ -410,5 +425,48 @@ describe('PersonProfile — rolodex "Edit" on a studio-contact-backed profile (F
     expect(notify).toHaveBeenCalledWith(
       expect.stringContaining('reopen it to try again'),
     );
+  });
+});
+
+describe('PersonProfile — the Hours door on a teammate (HT-8)', () => {
+  const renderTeammate = () => {
+    mockPersonData = basePerson({
+      person_id: 'party-team-1',
+      role: 'team',
+      display_name: 'Maria Obi',
+      profile_id: 'maria',
+      status_raw: 'lead_designer',
+      meta: { role: 'lead_designer' },
+    });
+    mockStudioContact = null;
+    return renderWithClient(
+      <PersonProfile
+        personId="party-team-1"
+        role="team"
+        onBack={jest.fn()}
+        openThread={jest.fn()}
+        openPerson={jest.fn()}
+        goView={jest.fn()}
+        notify={jest.fn()}
+      />,
+    );
+  };
+
+  it('opens for an owner — the one door into the member scope', () => {
+    viewerStudioRole = 'owner';
+    renderTeammate();
+    expect(screen.getByRole('button', { name: 'Hours' })).toBeInTheDocument();
+  });
+
+  it('is absent for a plain member, who has no lens to leave that scope by', () => {
+    // The Hours sheet renders no lens, no rollup and no own rows in the member
+    // scope for a viewer without the admin's instrument, so an ungated door led
+    // her somewhere she could only leave by closing the sheet.
+    viewerStudioRole = 'member';
+    renderTeammate();
+    expect(
+      screen.queryByRole('button', { name: 'Hours' }),
+    ).not.toBeInTheDocument();
+    viewerStudioRole = 'owner';
   });
 });

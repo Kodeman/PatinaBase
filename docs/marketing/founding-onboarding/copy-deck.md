@@ -15,6 +15,14 @@ each with exactly one primary CTA.
 - `{{action_link}}` = the recipient's single-use magic sign-in link (invite track).
 - `{{app_url}}` = the designer portal base (e.g. `https://app.patina.cloud`).
   Deep links are written as `{{app_url}}/path`.
+- `?sheet=<book>` (E7's Hours, E8's Accounts) opens that book on the Desk. The
+  doorway's own param is `book`; `sheet` is an **accepted alias** of it
+  (`components/document/desk-doorway.tsx` — `DOORWAY_KEYS` and the `book` read),
+  added because these links were already in sent mail and an unknown param is
+  ignored in silence, which landed the recipient on a bare Desk. Both spellings
+  work; do not "correct" the ones above without reseeding the email templates
+  (`packages/email/src/templates/onboarding-hours.tsx` and the seeded copies in
+  `supabase/migrations/00293`, `00310`, `00404`) in the same change.
 - `{{personal_observation}}` on T0 is **required** — no send without it.
 - `{{firsts_summary}}` on E10 is a rendered sentence built from the recipient's
   engagement events (e.g. "You captured your first lead on the 12th; the
