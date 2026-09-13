@@ -14,7 +14,8 @@
  *    the doorway; before it, the live founding-cohort CTA landed on a bare Desk
  *    because an unknown param is ignored in silence.
  *  · The lens survives to 390 — it wraps rather than clipping or scrolling the
- *    page sideways — and each word keeps its 44px hit at every width.
+ *    page sideways — and each word keeps its 44px hit at every width, and the
+ *    add row's Date field and Add act stand inside the viewport there too.
  *  · W3: the ⌘K "Log time" verb is reachable with NOTHING in hand, and the
  *    form it opens carries the date field and the billable control. Nothing
  *    here SUBMITS one — the file's no-seed, no-write posture holds, and the
@@ -98,6 +99,22 @@ for (const { label, width, height } of WIDTHS) {
       const box = await word.boundingBox();
       expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
     }
+
+    // W3 — the add row's own fields stand ON the sheet at every width. At 390
+    // the five tracks laid out at their intrinsic widths: Date began at x=383
+    // in a 390px viewport and Add ended at x=683, with no sideways scroll to
+    // reach either, so HT-13's date control was unreachable on a phone.
+    const dateField = sheet.getByLabel('Date');
+    await dateField.scrollIntoViewIfNeeded();
+    await expect(dateField).toBeInViewport();
+    const dateBox = await dateField.boundingBox();
+    expect(dateBox?.width ?? 0).toBeGreaterThan(40);
+    expect(dateBox?.x ?? -1).toBeGreaterThanOrEqual(0);
+    expect((dateBox?.x ?? 0) + (dateBox?.width ?? 0)).toBeLessThanOrEqual(width);
+
+    const addAct = sheet.getByRole('button', { name: 'Add' });
+    const addBox = await addAct.boundingBox();
+    expect((addBox?.x ?? 0) + (addBox?.width ?? 0)).toBeLessThanOrEqual(width);
 
     // The sheet never scrolls the page sideways — the lens wraps instead.
     const overflow = await page.evaluate(

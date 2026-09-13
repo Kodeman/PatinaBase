@@ -41,6 +41,7 @@ import { DocumentAction } from './document-action';
 import {
   BillablePill,
   RateRoleChip,
+  isDayValue,
   isoDateValue,
   startedAtFromDateValue,
   useBillableIntent,
@@ -131,7 +132,13 @@ export function LogTimeSheet({
   }, [open, onClose]);
 
   const parsed = parseInt(minutes, 10);
-  const valid = Boolean(projectId) && Number.isFinite(parsed) && parsed >= 1;
+  // A cleared date field is not "today" — it is an unanswered question, and
+  // the act waits for it (W3-R3-M2).
+  const valid =
+    Boolean(projectId) &&
+    isDayValue(date) &&
+    Number.isFinite(parsed) &&
+    parsed >= 1;
   const backdated =
     Date.now() - new Date(startedAtFromDateValue(date)).getTime() >
     BACKDATE_MARK_DAYS * 86_400_000;

@@ -240,6 +240,19 @@ export function isoDateValue(d: Date): string {
 }
 
 /**
+ * Is this a day the member actually named? A cleared `<input type="date">`
+ * reads `''`, and `startedAtFromDateValue('')` falls back to NOW — so without
+ * this guard an emptied field files the hour under today while the field on
+ * screen is blank and nothing is said. Every capture surface that carries a
+ * date gates its act on this, so the act simply stands unavailable instead
+ * (W3-R3-M2).
+ */
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+export function isDayValue(value: string): boolean {
+  return ISO_DAY.test(value);
+}
+
+/**
  * A `yyyy-mm-dd` from a date field, as the instant to store. The clock is kept
  * from `now` so an hour logged for today still lands at the hour it was
  * logged; a backdated one lands at the same time of day on the day named.

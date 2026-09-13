@@ -213,6 +213,32 @@ describe('the Hours add row', () => {
     expect(mockCreate.mock.calls[0][0].activity).toBeNull();
   });
 
+  it('will not add an hour while the date field is empty (HT-13)', async () => {
+    // A cleared `<input type="date">` reads '' and the writer's fallback is
+    // NOW, so before this the Add act stayed live and the hour was filed under
+    // today with the field on screen blank. The act simply waits instead.
+    renderLedger();
+    await waitFor(() =>
+      expect(
+        screen.getByLabelText('Project').querySelectorAll('option'),
+      ).toHaveLength(2),
+    );
+    fireEvent.change(screen.getByLabelText('Project'), {
+      target: { value: 'project-1' },
+    });
+    fireEvent.change(screen.getByLabelText('Minutes'), {
+      target: { value: '30' },
+    });
+    expect(screen.getByRole('button', { name: 'Add' })).toBeEnabled();
+
+    fireEvent.change(screen.getByLabelText('Date'), { target: { value: '' } });
+
+    expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    await waitFor(() => expect(screen.getByLabelText('Date')).toHaveValue(''));
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
   it('marks the add row backdated past 30 days and not at 29 (HT-13)', () => {
     renderLedger();
 

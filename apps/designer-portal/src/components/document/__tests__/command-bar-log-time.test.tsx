@@ -226,6 +226,30 @@ describe('⌘K · Log time', () => {
     expect(mockCreate.mock.calls[0][0].activity).toBeNull();
   });
 
+  it('will not log an hour while the date field is empty (HT-13)', async () => {
+    // Clearing the field used to leave `Log it` live, and the hour then landed
+    // on TODAY — the same silent mis-date this door was built to close, one
+    // backspace away.
+    render(<Tree />);
+    act(() => openPalette());
+    fireEvent.click(screen.getByRole('option', { name: /Log time/ }));
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Document' }), {
+      target: { value: 'proj-stranger' },
+    });
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Minutes' }), {
+      target: { value: '45' },
+    });
+    expect(screen.getByRole('button', { name: 'Log it' })).toBeEnabled();
+
+    fireEvent.change(screen.getByLabelText('Date'), { target: { value: '' } });
+
+    expect(screen.getByRole('button', { name: 'Log it' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Log it' }));
+    await waitFor(() => expect(screen.getByLabelText('Date')).toHaveValue(''));
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
   it('marks a date more than 30 days back as backdated, and today as nothing (HT-13)', () => {
     render(<Tree />);
     act(() => openPalette());

@@ -66,6 +66,7 @@ import {
   RateRoleChip,
   RateRoleMark,
   isBackdatedEntry,
+  isDayValue,
   isoDateValue,
   startedAtFromDateValue,
   useBillableIntent,
@@ -103,6 +104,14 @@ const GROUP_BY: ReadonlyArray<[TimeHoursGroupBy, string]> = [
   ['iso_week', 'by week'],
   ['activity', 'by activity'],
 ];
+
+/**
+ * The four fields of the batch-add row, on the house sheet's own type step
+ * (§A: no inline font-size utility) and at its 44px floor, with `min-w-0` so a
+ * grid track may shrink under them (W3-R3-M1 / W3-R3-m6).
+ */
+const ADD_FIELD_CLASS =
+  'min-h-11 w-full min-w-0 rounded-[4px] border border-[var(--color-pearl)] bg-white px-2 py-1.5 t-meta text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none';
 
 /** Local calendar date, not a UTC shift of it — the rollup takes dates. */
 const isoDate = (d: Date) =>
@@ -415,7 +424,13 @@ export function HoursLedger({
   }, [addProject, addIntent.isSettled, addIntent.billable]);
 
   const parsedAdd = parseInt(addMinutes, 10);
-  const addValid = addProject && Number.isFinite(parsedAdd) && parsedAdd >= 1;
+  // A cleared date field is not "today" — it is an unanswered question, and
+  // the act waits for it (W3-R3-M2).
+  const addValid =
+    addProject &&
+    isDayValue(addDate) &&
+    Number.isFinite(parsedAdd) &&
+    parsedAdd >= 1;
 
   const batchAdd = async () => {
     if (!addValid || addBusy) return;
@@ -989,10 +1004,16 @@ export function HoursLedger({
           on someone else's behalf is a deliberate act, not a shared form. */}
       {scope === 'mine' && (
       <div className="mt-4">
-      <div className="grid grid-cols-[1.2fr_0.7fr_0.9fr_1fr_auto] items-center gap-2">
+      {/* Five tracks on a sheet 289px wide laid out at their intrinsic widths and
+          walked off the edge: measured at 390, Date started at x=383 and Add
+          ended at x=683, with no sideways scroll to reach either. Two columns
+          until there is room for five, and every field `min-w-0` so a track can
+          actually shrink — WebKit collapsed the date track to 0px otherwise
+          (W3-R3-M1). */}
+      <div className="grid grid-cols-2 items-center gap-2 min-[700px]:grid-cols-[1.2fr_0.7fr_0.9fr_1fr_auto]">
         <select
           aria-label="Project"
-          className="rounded-[4px] border border-[var(--color-pearl)] bg-white px-2 py-1.5 text-[11px] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none [&_option]:bg-[var(--doc-paper)]"
+          className={`${ADD_FIELD_CLASS} [&_option]:bg-[var(--doc-paper)]`}
           value={addProject}
           onChange={(e) => setAddProject(e.target.value)}
         >
@@ -1010,7 +1031,7 @@ export function HoursLedger({
           min={1}
           placeholder="Minutes"
           aria-label="Minutes"
-          className="rounded-[4px] border border-[var(--color-pearl)] bg-white px-2 py-1.5 text-[11px] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none"
+          className={ADD_FIELD_CLASS}
           value={addMinutes}
           onChange={(e) => setAddMinutes(e.target.value)}
         />
@@ -1019,13 +1040,13 @@ export function HoursLedger({
         <input
           type="date"
           aria-label="Date"
-          className="rounded-[4px] border border-[var(--color-pearl)] bg-white px-2 py-1.5 text-[11px] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none"
+          className={ADD_FIELD_CLASS}
           value={addDate}
           onChange={(e) => setAddDate(e.target.value)}
         />
         <select
           aria-label="Activity"
-          className="rounded-[4px] border border-[var(--color-pearl)] bg-white px-2 py-1.5 text-[11px] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none [&_option]:bg-[var(--doc-paper)]"
+          className={`${ADD_FIELD_CLASS} [&_option]:bg-[var(--doc-paper)]`}
           value={addActivity}
           onChange={(e) => setAddActivity(e.target.value)}
         >
@@ -1042,6 +1063,7 @@ export function HoursLedger({
           surfaceKey="hours"
           regionKey="batch-entry"
           variant="primary"
+          className="col-span-2 min-[700px]:col-span-1"
           disabled={!addValid || addBusy}
           loading={addBusy}
           loadingLabel="Adding…"
