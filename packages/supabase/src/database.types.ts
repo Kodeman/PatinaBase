@@ -34533,6 +34533,14 @@ export type Database = {
         Args: { p_project_id: string }
         Returns: string
       }
+      project_roster_books_elsewhere: {
+        Args: {
+          p_designer_id: string
+          p_project_id: string
+          p_studio_id: string
+        }
+        Returns: boolean
+      }
       promote_batch_to_studio: { Args: { p_items: Json }; Returns: string[] }
       promote_board_reference_to_selection: {
         Args: { p_board_item_id: string; p_request: Json }
