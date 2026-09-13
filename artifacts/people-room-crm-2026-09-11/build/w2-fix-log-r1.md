@@ -366,3 +366,92 @@ updated pins in `call-sheet-derivation.test.ts`, `people-directory-derivation.te
   `project_party_authority` would contradict 00624's own shape.
 - **QA-9 through QA-15 and CR-27 through CR-47** were outside this round's
   instruction and are untouched.
+
+---
+
+# Re-verification pass — 2026-09-13
+
+The 26 findings above were fixed in `5a4e7f650 fix(people-room): W2 round-1
+review — 26 findings`. This pass re-probed every one against the CURRENT tree
+(HEAD `b8cb49339` plus the working tree) rather than trusting the log. No new
+code was written: every finding was already closed, and the one red gate below
+is another session's in-flight edit, not a regression in these 26.
+
+## Gates, this pass
+
+```
+pnpm --filter @patina/designer-portal type-check   EXIT=0
+pnpm --filter @patina/supabase type-check          EXIT=0
+pnpm --filter @patina/admin-portal build           EXIT=0   (strictest)
+vitest run packages/supabase/src/hooks/__tests__   EXIT=0
+    → Test Files 89 passed · Tests 1169 passed | 12 skipped
+jest src/components/document/{people,roster,rooms} src/lib/document
+    → Test Suites 1 FAILED, 206 passed · Tests 1 failed, 3466 passed
+      the one failure is NOT one of these 26 — see "Collision" below
+```
+
+## Per-finding re-probe
+
+| # | Where it now stands | Evidence read this pass |
+|---|---|---|
+| QA-1 / CR-3 | Closed | `app/api/people/chase-renewal/route.ts` exists (3.9k); `compliance-chase.ts:47` POSTs to it. No `supabase.rpc('enqueue_agent_task')` anywhere in the portal. |
+| QA-2 / CR-7 | Closed | `field-config.ts:296-306` `PARTY_KINDS_OWING_NO_PAPER = [inspector, lender, authority]`. Dist rebuilt: `node -e` on `packages/types/dist` → `authority→false lender→false inspector→false sub→true null→true`. Seed row confirmed `City of Minneapolis, CPED Inspections \| company \| authority \| authority`. |
+| QA-3 | Closed | `person-row.tsx:190-195` — `{unreachable ? null : <TelLink …>}`, `unreachable = contactRuleIsDoNotContact(rule)`. Frank Bauer's seed rule has `channels_allowed = {}`, so he is unreachable and his number comes off the row. |
+| QA-4 / CR-14 / CR-15 | Closed | `contact-rule-line.tsx:91-112` renders email AND `TelLink`, no longer an else-if. `directory-view.tsx:247/258/521` and `roster-groups.tsx:65/88/142` both read `useContactRules` + `useStudioContactChannelsFor` and pass a real `routeTo` via `contactRouteTarget()`. Seed: Frank's rule carries `route_to_person_id` (`routes = t`). |
+| QA-5 / CR-5 | Closed | `lib/document/contact-rule.ts:54-60` maps `after_hours → "after hours"`, `ap_email → "AP email"`, `portal_311 → "the 311 portal"`. No face reads `contact_rule_summary` except as the not-yet-loaded fallback (`person-row.tsx:91`, `roster-row.tsx:135`). |
+| QA-6 | Closed, both halves | `roster-groups.tsx:43-44` carries the stated-absence sentences for the two STRUCTURAL bands. Seed `people_crm_dev.sql:939` inserts `project_team_members`; live DB now reads `d0e00000-…-00000000000a \| 2`. |
+| QA-8 | Closed | `room-shell.tsx:148` is `<h1 …>`; the comment at `:143` records the old plain `<span>`. |
+| CR-1 | Closed | `use-coordination.ts` — no `onConflict: 'engagement_id,scope'` remains; `useSetPartyAuthority` selects the open row (`.is('effective_to', null).maybeSingle()`) then updates by id or inserts. |
+| CR-2 | Closed | `use-studio-contacts.ts` `useSetAffiliation` — `.is('to_date', null).maybeSingle()` then update/insert. The one surviving `onConflict` in that file (`:1034`, `subject_type,subject_id`) arbitrates a NON-partial index — verified live: `CREATE UNIQUE INDEX idx_studio_contact_rules_subject … (subject_type, subject_id)` with no `WHERE`. |
+| CR-4 | Closed | `add-person-sheet.tsx:765` "… added to <project>. The consent is recorded; nothing has been sent yet."; `:1506` "… is recorded as consenting on this evidence." No "on its way" / "reply YES" on the party path. |
+| CR-6 | Closed | `contact-rule.ts:173-175` prints `rule.reason` as the clause when the studio typed one. Seed reasons read back verbatim: Frank "No direct contact, at his request. Write Rosa Delgado; …", Dana "Text only. The email on file bounces." |
+| CR-8 | Closed | `use-coordination.ts:1906` invalidates `partyAuthorityKeys.all` (the root); the false comment in `use-project-authority.ts:14-15` is corrected. |
+| CR-9 | Closed | `roster-derivation.ts` `callSheetVitals` counts all four over `studioSide + clientSide + this_week` only. |
+| CR-10 | Closed | `site-access-card.tsx:517` — `wayInSentence(card.lockbox_version, gate ?? keyHolder?.name)`, gate controller first. |
+| CR-11 | Closed | `site-access-card.tsx:203` `saveError` state, `:297-303` a `role="alert" data-site-access-error` slot. The surviving `.catch(() => undefined)` at `:380` is a floating-promise guard on a `save()` that has already set the alert and rethrown. |
+| CR-12 | Closed | `use-access-grants.ts` revoke now invalidates `people-directory`, `people-directory-seats` and `project-roster` beside `accessGrantKeys.all`. |
+| CR-13 | Closed | `person-row.tsx:135-140` renders `[data-consent-clause]` under the identity line. |
+| CR-16 | Closed | `add-person-sheet.tsx:1323/1338` sourced branch + "Confirm from the agreement"; `:1344/1355` unsourced branch + "Record the authority". |
+| CR-17 | Closed | `directory-view.tsx:328` sorts on `firmBands.get(row.person_id) ?? directoryBandOf(row)`. |
+| CR-18 | Closed | `useAddProjectParty.onSuccess` invalidates `['project-roster', data.project_id]` and `peopleSeatKeys.all` alongside the original two. |
+| CR-19 | Closed | `authorityWriteError()` returns the PR-n sentence only on `42501` / `PGRST116`; everything else rethrows as itself. |
+| CR-20 | Closed | `add-person-sheet.tsx:390/516/650` — `chainRef` records what landed; a retry resumes instead of restarting. |
+| CR-21 | Closed | `add-person-sheet.tsx:718` — `channelsForbidden: []`. Nothing is inferred from an empty Email box. |
+| CR-22 | Closed | One predicate, `contactRuleIsHardBlock` in `lib/document/contact-rule.ts`, reading the rule ROW. `grep -rn "never|do not" src/components/document/` returns nothing — both regexes are gone from the render path. |
+| CR-23 | Closed | `use-coordination.ts:1824` and `use-project-authority.ts:53` both `.or('effective_to.is.null,effective_to.gte.<today>')`. |
+| CR-24 | Closed | `roster-row.tsx:293/296` — full `authorityPhrase` at `sm:` and up, `[data-authority-no-figure]` below it. A CSS branch, not a JS width branch. |
+| CR-25 | Closed | `reach-access.tsx:40/174/389` — `useRecordChannelReconsent` is wired; the act reads "Record a fresh consent". |
+| CR-26 | Closed | `notice-log.tsx:137-139` and `roster-row.tsx:591-592` both pass `held` + `aria-describedby` with a visible consequence sentence; the `isPending` halves keep the native attribute, as the finding asked. |
+
+## Collision — the one red gate, and why it is not mine to close
+
+`person-row-hardening.test.tsx` → "a rule that forbids text takes the leading
+rule and KEEPS the phone (CR-16)" fails at
+`expect(container.querySelector('[data-contact-rule-blocked="true"]')).toBeInTheDocument()`.
+
+Cause: an UNCOMMITTED working-tree edit from a concurrent round-3 session
+(`git diff` on `apps/designer-portal/src/lib/document/contact-rule.ts` plus a
+new `R-BL` row in `rulings.md`, dated 2026-09-13) changes the predicate from
+
+```ts
+return contactRuleForbidsSms(rule) || contactRuleIsDoNotContact(rule);
+```
+
+to
+
+```ts
+return contactRuleIsDoNotContact(rule) || Boolean(rule?.route_to_person_id);
+```
+
+R-BL rules that forbidding ONE channel while another direct channel stays open
+is no longer a hard block, so a `channels_forbidden: ['sms']` /
+`channels_allowed: ['email','mobile']` row correctly stops painting the
+terracotta rule. That session updated its own
+`lib/document/__tests__/contact-rule.test.ts` and left this sibling pin — which
+is unmodified against HEAD — asserting the superseded r2 semantics.
+
+Not touched, on two grounds: it is outside the 26 findings this pass was scoped
+to, and `contact-rule.ts` is actively being edited by another session right now.
+The pin needs R-BL's wording applied by whoever lands R-BL.
+
+Everything else in the tree is green.
