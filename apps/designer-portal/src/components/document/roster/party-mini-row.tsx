@@ -176,14 +176,24 @@ export function PartyMiniRow({
         shape={entity === 'company' ? 'square' : 'circle'}
         size={30}
       />
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-[0.84rem] text-[var(--color-charcoal)]">
+      {/* QA r3 finding 2 — THE NAME KEEPS ITS OWN ROOM AT 390.
+          `min-w-0 flex-1` beside up to three word chips on one nowrap line let
+          flexbox take the name's box to ZERO width at 390 (measured:
+          getBoundingClientRect w:0), and `truncate` on a zero-width box paints
+          nothing at all — not even an ellipsis. The text stayed in the DOM, so
+          a reader still announced it and a screenshot showed a nameless row:
+          who you are picking was unreadable on a phone. SPEC §6.2's row rule
+          is name on its own line with the words beneath, so the floor is
+          stated here (`min-w-[8rem]`) and the container wraps the chips onto
+          the next line; at 1440 (`sm:`) nothing moves. */}
+      <span className="min-w-[8rem] flex-1 sm:min-w-0">
+        <span className="block break-words text-[0.84rem] text-[var(--color-charcoal)] sm:truncate">
           {name}
         </span>
         {meta && (
           <span
             data-party-mini-meta
-            className="mt-[0.1rem] block truncate font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
+            className="mt-[0.1rem] block break-words font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)] sm:truncate"
           >
             {meta}
           </span>
@@ -219,8 +229,11 @@ export function PartyMiniRow({
     </>
   );
 
+  // `flex-wrap` is the other half of finding 2: with the name's floor stated,
+  // the reach / consent / paper words leave the first line rather than
+  // squeezing it away. `sm:flex-nowrap` keeps the 1440 row exactly as shipped.
   const shared =
-    'flex w-full items-center gap-2.5 rounded-[8px] border border-transparent px-2 py-2 text-left';
+    'flex w-full flex-wrap items-center gap-2.5 rounded-[8px] border border-transparent px-2 py-2 text-left sm:flex-nowrap';
 
   if (!onSelect) {
     return <div className={shared}>{body}</div>;

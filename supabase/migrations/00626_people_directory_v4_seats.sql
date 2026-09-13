@@ -1096,6 +1096,32 @@ AS $$
     SELECT NULLIF(btrim(COALESCE(p_card_phone_e164, '')), '') AS v
      WHERE public.is_active_studio_member(p_organization_id)
     UNION
+    -- The card's TYPED lines (00593), beside its own column (00629 r3
+    -- W3-R3-4). The card column carries one number; a card carries as many as
+    -- the studio typed, and a merge now mints the absorbed card's own number
+    -- as a channel row on the survivor. Reduce over one of those and the
+    -- word goes MORE PERMISSIVE — a human whose duplicate card carried a
+    -- recorded `opted_out` printed `Not asked` the moment the two cards
+    -- became one, which is this function's own fail-open posture inverted.
+    -- The identity key IS the card id for every carded row (party_identity_key
+    -- COALESCEs studio_contact_id first), so the cast is the whole join; the
+    -- four VOICE kinds only — an email address is not a number, and portal_311
+    -- is a web desk. Same studio on both sides, stated on the owning card.
+    SELECT NULLIF(btrim(COALESCE(ch.value, '')), '')
+      FROM public.studio_contact_channels ch
+      JOIN public.studio_contacts sc ON sc.id = ch.owner_id
+     WHERE public.is_active_studio_member(p_organization_id)
+       AND p_identity_key IS NOT NULL
+       -- CASE, not a bare cast behind a regex predicate: the key is a party id
+       -- or a phone or an email on an uncarded row, and only CASE guarantees
+       -- the cast is not attempted on those.
+       AND ch.owner_id = (CASE
+             WHEN p_identity_key ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+             THEN p_identity_key::uuid
+           END)
+       AND sc.organization_id = p_organization_id
+       AND ch.channel_kind IN ('mobile', 'office', 'dispatch', 'after_hours')
+    UNION
     SELECT NULLIF(btrim(COALESCE(pp.phone_e164, '')), '')
       FROM public.project_parties pp
       JOIN public.projects pj ON pj.id = pp.project_id
@@ -1149,9 +1175,16 @@ GRANT EXECUTE ON FUNCTION public.identity_phone_numbers(uuid, text, text)
   TO authenticated, service_role;
 
 COMMENT ON FUNCTION public.identity_phone_numbers(uuid, text, text) IS
-  'Every SMS number one identity carries: the card''s phone_e164 plus the '
+  'Every SMS number one identity carries: the card''s phone_e164, the card''s '
+  'own TYPED voice lines (studio_contact_channels, kinds mobile / office / '
+  'dispatch / after_hours — the identity key IS the card id for a carded row), '
+  'plus the '
   'phone_e164 of every project_parties seat whose party_identity_key() is this '
-  'key. SECURITY DEFINER, GATED on is_active_studio_member(p_organization_id) '
+  'key. The channels leg is 00629 r3 W3-R3-4: a merge mints the absorbed '
+  'card''s own number as a channel row on the survivor, and without this leg '
+  'the reduction saw one number where the identity carried two and printed '
+  '`Not asked` over the studio''s own recorded `opted_out`. '
+  'SECURITY DEFINER, GATED on is_active_studio_member(p_organization_id) '
   '— a non-member gets nothing. Definer because the set feeds a WORST-FIRST '
   'consent reduction, where a seat the caller cannot see used to drop out and '
   'make the printed word MORE PERMISSIVE: an ordinary '

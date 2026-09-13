@@ -106,13 +106,18 @@ describe("mergeConsequenceSentence", () => {
     expect(sentence).toContain(
       "Consent stays with the number, not with the card",
     );
-    // M2R-2: paper does NOT travel. 00629 §5 moves an absorbed document only
-    // where the survivor already holds a qualifying successor, so the sheet may
-    // not promise the count above it moves.
-    expect(sentence).toContain("Chidi Okonkwo’s paper stays on Chidi Okonkwo’s card");
+    // r3 W3-R3-1: the paper MOVES. Leaving the remainder on the absorbed card
+    // stranded it where no surface can open it, so the sheet says what the RPC
+    // now does — and W3-R3-4's channel mint is stated beside it.
+    expect(sentence).toContain(
+      "Chidi Okonkwo’s own number and address travel with them",
+    );
+    expect(sentence).toContain("Chidi Okonkwo’s paper moves onto Adaeze Okonkwo too");
     expect(sentence).toContain("the older one is marked superseded");
-    expect(sentence).not.toContain("contact rule, paper and firm designations move");
-    expect(sentence).toContain("both ways of reaching this person still work");
+    // MAJOR-4: the closing clause is about the ID, which is what the merge
+    // record actually guarantees — never a promise about two numbers.
+    expect(sentence).toContain("an old link still opens this person");
+    expect(sentence).not.toContain("both ways of reaching this person still work");
   });
 });
 

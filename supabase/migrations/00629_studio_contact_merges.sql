@@ -29,7 +29,11 @@
 -- number through a merge with no write at all (crm-model §4: "Consent per
 -- channel value is untouched"; R-AY: the record is the only gate). This RPC
 -- therefore touches no consent table and no frozen project_parties column, and
--- the union of channels below cannot change a single verdict.
+-- the union of channels below cannot change a single verdict. It can change
+-- the WORD the survivor's row prints, and must: the reduction is worst-first
+-- over every number the identity carries, so carrying the absorbed card's own
+-- number across is what makes a recorded refusal keep showing after the merge
+-- (r3 W3-R3-4).
 --
 -- ── THE ONE MERGE THE MODEL FORBIDS ───────────────────────────────────────
 -- crm-model §4: "Never merge a firm card into a person card, EXCEPT when the
@@ -276,8 +280,10 @@ ALTER TABLE public.studio_contact_merges
 
 COMMENT ON TABLE public.studio_contact_merges IS
   'APPEND-ONLY lineage: one row per merge of two rolodex cards (direction §7, '
-  'P2). No UPDATE and no DELETE policy and no UPDATE/DELETE grant — a merge '
-  'that happened is a fact, and PR-o''s "both ids stay resolvable" is this '
+  'P2). SELECT is the only member policy and the only member grant — no '
+  'INSERT, no UPDATE, no DELETE: merge_studio_contacts() writes the row and a '
+  'merge that happened is a fact nobody may forge or take back (r3 '
+  'W3-R3-5). PR-o''s "both ids stay resolvable" is this '
   'table plus studio_contacts.merged_into. A LATER merge of the survivor '
   'writes its own row; the earlier row is never rewritten, and '
   'resolve_merged_contact() walks the chain (00629).';
@@ -305,23 +311,21 @@ CREATE POLICY studio_contact_merges_member_select
   TO authenticated
   USING (public.is_active_studio_member(organization_id));
 
--- INSERT is here for completeness of the member's own act through PostgREST;
--- merge_studio_contacts() is SECURITY DEFINER and does not depend on it. There
--- is deliberately NO UPDATE and NO DELETE policy.
+-- NO member INSERT, and no INSERT grant (migrations review r3 W3-R3-5). The
+-- policy that used to stand here checked only that both ids were cards in the
+-- caller's own studio — never that studio_contacts.merged_into agreed — so a
+-- plain member could POST /rest/v1/studio_contact_merges and write lineage for
+-- a merge that never happened, over a card the Directory still emits its own
+-- row for, with no UPDATE or DELETE policy to take it back. B2-1 shut the
+-- pointer against every writer but the RPC; this shuts the other half of
+-- PR-o's record. merge_studio_contacts() is SECURITY DEFINER and writes the
+-- row itself, so it needs neither the policy nor the grant. There is
+-- deliberately NO INSERT, NO UPDATE and NO DELETE policy: SELECT is the whole
+-- of what a member may do with the lineage.
 DROP POLICY IF EXISTS studio_contact_merges_member_insert ON public.studio_contact_merges;
-CREATE POLICY studio_contact_merges_member_insert
-  ON public.studio_contact_merges FOR INSERT
-  TO authenticated
-  WITH CHECK (
-    public.is_active_studio_member(organization_id)
-    AND EXISTS (SELECT 1 FROM public.studio_contacts sc
-                 WHERE sc.id = survivor_id AND sc.organization_id = organization_id)
-    AND EXISTS (SELECT 1 FROM public.studio_contacts sc
-                 WHERE sc.id = merged_id   AND sc.organization_id = organization_id)
-  );
 
 REVOKE ALL ON TABLE public.studio_contact_merges FROM PUBLIC, anon, authenticated;
-GRANT SELECT, INSERT ON TABLE public.studio_contact_merges TO authenticated;
+GRANT SELECT ON TABLE public.studio_contact_merges TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.studio_contact_merges TO service_role;
 
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -458,10 +462,24 @@ CREATE TRIGGER assert_party_card_not_merged_trg
 -- that number was left UNCARDED — a second identity on people_directory's
 -- party branch, the exact over-count the merge exists to remove.
 --
--- Grafted from 00626:413-436 with ONE predicate added. Nothing else moves:
--- same signature, same STABLE/SECURITY DEFINER/search_path, same grants (kept
--- off `authenticated`), same project_recorded_studio() resolver, same
--- (array_agg)[1] idiom, no consent read or written (R-AY).
+-- RESOLVED FORWARD, NOT EXCLUDED (migrations review r3 W3-R3-3). Excluding a
+-- merged card closes the shared-phone case and opens a worse one for
+-- crm-model §4's OTHER rules: rules 3 and 4 (email match; company plus name)
+-- merge cards carrying DIFFERENT numbers, so the absorbed card was the only
+-- card carrying its own — exclude it and that number resolves to NOTHING, the
+-- next ordinary "Add to the roster" write on it lands UNCARDED, and
+-- people_directory emits a SECOND identity row for the human the merge had
+-- just made one. So the resolver maps every candidate through
+-- resolve_merged_contact() and asks its "exactly one" question of the HEADS:
+-- a number naming one identity — a live card, or a card merged into one, or
+-- both — answers the survivor; a number naming two LIVE identities is still
+-- the duplicate band's ambiguity and still answers NULL. §4's seat guard stays
+-- satisfiable by construction, because the answer is always a live card.
+--
+-- Grafted from 00626:413-436: same signature, same STABLE/SECURITY
+-- DEFINER/search_path, same grants (kept off `authenticated`), same
+-- project_recorded_studio() resolver, same (array_agg)[1] idiom, no consent
+-- read or written (R-AY).
 CREATE OR REPLACE FUNCTION public.rolodex_card_for_party_phone(
   p_project_id uuid,
   p_phone_e164 text
@@ -472,7 +490,9 @@ STABLE
 SECURITY DEFINER
 SET search_path TO 'public'
 AS $$
-  WITH m AS (
+  WITH c AS (
+    -- Every card carrying the number, MERGED ONES INCLUDED: a merged card is
+    -- not an answer, but it is evidence about whose number this is.
     SELECT sc.id
       FROM public.studio_contacts sc
      WHERE p_project_id IS NOT NULL
@@ -481,16 +501,26 @@ AS $$
        AND sc.entity_kind = 'person'
        AND sc.phone_e164 = p_phone_e164
        AND sc.organization_id = public.project_recorded_studio(p_project_id)
-       -- 00629: a card that was merged away is not a card a seat may be
-       -- stamped with (§4), so it is not a card this resolver may answer.
-       -- It also stops counting toward the "exactly one card" test, which is
-       -- what makes the survivor answerable after a shared-phone merge.
-       AND sc.merged_into IS NULL
-     ORDER BY sc.id
+  ),
+  m AS (
+    -- The identities those cards resolve to today, deduplicated: two cards one
+    -- merge apart are ONE identity and must not read as two.
+    SELECT DISTINCT public.resolve_merged_contact(c.id) AS id FROM c
+  ),
+  live AS (
+    -- 00629 §4: a seat may only be stamped with a LIVE person card, so the
+    -- head is re-read and held to the same three facts the candidates were.
+    SELECT h.id
+      FROM m h
+      JOIN public.studio_contacts sc ON sc.id = h.id
+     WHERE sc.merged_into IS NULL
+       AND sc.entity_kind = 'person'
+       AND sc.organization_id = public.project_recorded_studio(p_project_id)
+     ORDER BY h.id
      LIMIT 2
   )
   -- (array_agg)[1] rather than min(): there is no min(uuid) in Postgres.
-  SELECT (array_agg(id))[1] FROM m HAVING count(*) = 1;
+  SELECT (array_agg(id))[1] FROM live HAVING count(*) = 1;
 $$;
 
 REVOKE ALL ON FUNCTION public.rolodex_card_for_party_phone(uuid, text)
@@ -503,11 +533,15 @@ COMMENT ON FUNCTION public.rolodex_card_for_party_phone(uuid, text) IS
   'studio a project RECORDS (project_recorded_studio(), never the '
   'caller-relative resolver — the link is a fact about the record, not about '
   'the writer) whose phone_e164 is exactly this number. A card carrying '
-  'merged_into is excluded (00629): §4 refuses a seat stamped with one, so '
-  'answering it would make the ordinary roster write unsatisfiable, and '
-  'excluding it is also what lets a SHARED-PHONE merge resolve to the '
-  'survivor instead of staying ambiguous forever. NULL when there is none, '
-  'when two LIVE cards share the number (PR-o/R-Y''s duplicate band is a '
+  'merged_into is RESOLVED FORWARD through resolve_merged_contact() rather '
+  'than excluded (00629, r3 W3-R3-3): §4 refuses a seat stamped with a merged '
+  'card, so the answer must be a live one, but dropping the card from the '
+  'count made a number that only the ABSORBED card carried — crm-model §4 '
+  'rules 3 and 4 merge cards with different numbers — resolve to nothing, and '
+  'the next seat on it landed uncarded as a SECOND identity for the human the '
+  'merge had just made one. Two cards one merge apart are one identity here. '
+  'NULL when there is none, '
+  'when two LIVE identities share the number (PR-o/R-Y''s duplicate band is a '
   'card-to-card merge the studio rules on, not something a trigger decides) '
   'or when the project records no studio — and that last population therefore '
   'keeps the duplicate identity until R-BD''s W3 backfill names a studio, a '
@@ -906,6 +940,49 @@ BEGIN
          owner_type = v_survivor.entity_kind
    WHERE owner_id = p_merged;
 
+  -- ── and the absorbed card's OWN number and address, which are not rows ───
+  -- crm-model §4's "Channels union" over the LEGACY COLUMNS too (migrations
+  -- review r3 W3-R3-4). studio_contacts.phone_e164 / email are where a card
+  -- created after 00593 keeps its number — 00593's channel fill is a one-time
+  -- backfill, not a trigger, and the Add-a-person sheet writes the scalars
+  -- alone — and they are what identity_phone_numbers() reads as its card leg,
+  -- what rolodex_card_for_party_phone() matches on and what
+  -- link_rolodex_card_to_parties() fires on. Unmoved, the absorbed number left
+  -- the room at the merge: the survivor's identity reduced its consent word
+  -- over its OWN number only, so a human whose duplicate card carried a
+  -- recorded `opted_out` printed `Not asked` on the Directory row (R-G), on
+  -- the collapsed roster row (R-T) and on the bring-forward mini row (SPEC
+  -- §5.7 #4b — Pete Rusk's case exactly), while the merge sheet had just said
+  -- "nobody's yes or no changes". No consent is read or written here (R-AY):
+  -- a channel row is an address, and channel_consent_status() still answers
+  -- from studio_channel_consent per number.
+  --
+  -- The kind follows the SURVIVOR's own entity_kind, as 00593's backfill does
+  -- and as assert_channel_owner_kind() requires; sms_capable takes 00593 leg
+  -- (a)'s evidence test rather than a literal, so a number nobody has texted
+  -- arrives unconfirmed and W1b's Reach editor asks the studio.
+  INSERT INTO public.studio_contact_channels
+    (owner_type, owner_id, channel_kind, value, sms_capable, label)
+  SELECT v_survivor.entity_kind,
+         p_survivor,
+         CASE WHEN v_survivor.entity_kind = 'person' THEN 'mobile' ELSE 'office' END,
+         s.v,
+         v_survivor.entity_kind = 'person'
+           AND public.channel_value_was_on_sms_rail(
+                 public.normalize_channel_value('mobile', s.v)),
+         'From the merged card (00629 merge)'
+    FROM (SELECT NULLIF(btrim(COALESCE(v_merged.phone_e164, v_merged.phone, '')), '') AS v) s
+   WHERE s.v IS NOT NULL
+  ON CONFLICT (owner_id, channel_kind, value) DO NOTHING;
+
+  INSERT INTO public.studio_contact_channels
+    (owner_type, owner_id, channel_kind, value, label)
+  SELECT v_survivor.entity_kind, p_survivor, 'email', s.v,
+         'From the merged card (00629 merge)'
+    FROM (SELECT NULLIF(btrim(COALESCE(v_merged.email, '')), '') AS v) s
+   WHERE s.v IS NOT NULL
+  ON CONFLICT (owner_id, channel_kind, value) DO NOTHING;
+
   -- ── affiliations ────────────────────────────────────────────────────────
   IF v_cross THEN
     -- The firm IS the person now. An affiliation of a person at themselves is
@@ -962,28 +1039,42 @@ BEGIN
   END IF;
 
   -- ── compliance documents ────────────────────────────────────────────────
-  -- crm-model §4, "Company acquired or renamed", in terms: "documents of the
-  -- absorbed firm KEEP THEIR ORIGINAL HOLDER ID and are marked superseded,
-  -- never deleted."
+  -- EVERY ABSORBED DOCUMENT MOVES ONTO THE SURVIVOR, and compliance_state()'s
+  -- worst-first reckoning settles the word (migrations review r3 W3-R3-1).
   --
-  -- The file used to move every one of them onto the survivor with
-  -- superseded_by left NULL, and compliance_state() reduces WORST-FIRST over a
-  -- holder — so a merge manufactured a block the survivor never earned: a firm
-  -- whose own COI runs another ten months read `lapsed` the instant a card
-  -- carrying an old certificate was folded into it, on the Directory row, on
-  -- the roster row's terracotta held clause (PR-h, R-S, SPEC §5.4 #7) and on
-  -- the company card, and 00630's nightly sweep then wrote "…'s paper has
-  -- lapsed" to every owner and admin (migrations review r1 B-1, reproduced
-  -- locally).
+  -- The history, because the rule swung twice. The file first moved every
+  -- document with superseded_by left NULL, and compliance_state() reduces
+  -- WORST-FIRST over a holder — so a merge manufactured a block the survivor
+  -- never earned: a firm whose own COI runs another ten months read `lapsed`
+  -- the instant a card carrying an old certificate was folded into it (r1
+  -- B-1). The answer then taken was to move the absorbed paper only where the
+  -- survivor already held the SAME paper in force — crm-model §4's
+  -- ACQUISITION rule ("documents of the absorbed firm keep their original
+  -- holder id"), which is the right rule for two firms becoming one.
   --
-  -- So the absorbed paper moves in exactly ONE case: the survivor already
-  -- holds the SAME paper, still in force, covering at least as long — i.e. the
-  -- absorbed row has a legitimate SUCCESSOR. Then the two are one lineage and
-  -- superseded_by says so. assert_compliance_holder() requires a successor to
-  -- be held for the SAME CARD, which is why the holder moves in that case and
-  -- only in that case; every other absorbed document stays where crm-model
-  -- puts it, on the absorbed card, whole and readable through
-  -- resolve_merged_contact(), counting against nobody.
+  -- It is the wrong rule for the merge this room actually offers. Direction
+  -- §3.1's duplicate band — "These two cards share a phone. Compare them?",
+  -- crm-model §4 rules 2, 3 and 4 — folds ONE firm carded twice, and PR-o
+  -- makes which card survives the studio's free choice. Leaving the remainder
+  -- behind therefore hid the firm's own paper on a card no surface can reach:
+  -- the absorbed card emits no Directory row (§6), the three pickers filter
+  -- merged_into and 00630's sweep skips it. Measured: a survivor holding a
+  -- LAPSED certificate and an absorbed duplicate holding the CURRENT renewal
+  -- read `lapsed` after the merge and earned a nightly "…'s paper has lapsed"
+  -- notice to every owner and admin, while the renewal that answers it sat on
+  -- a card the room cannot open; a survivor holding nothing read `not_on_file`
+  -- and printed R-K's "Not on file" with the act "Record a document" over
+  -- paper the studio had already recorded. The word even depended on which
+  -- card the studio picked as survivor.
+  --
+  -- So: the absorbed head keeps its supersede edge where the survivor already
+  -- holds a legitimate successor (that lineage is real and superseded_by says
+  -- so), and EVERY OTHER absorbed document simply arrives, whole, on the
+  -- survivor. r1 B-1's complaint is answered by the studio's own act of
+  -- declaring these two cards one firm — a lapse the studio recorded is a
+  -- lapse the studio holds — rather than by hiding a lapse and a renewal at
+  -- once. Two genuinely different firms are not this act; they are crm-model
+  -- §4's acquisition, which the room does not offer.
   --
   -- The predicate below is assert_compliance_holder()'s own supersede gate,
   -- stated as a join so a document the trigger would refuse is never offered
@@ -991,17 +1082,19 @@ BEGIN
   -- force, successor dated when the row is dated and expiring no earlier, and
   -- the successor carrying at least the row's gates (blocks <@).
   --
-  -- THREE STATEMENTS, IN THIS ORDER (r2 B2-2). The block used to move the head
-  -- and write its superseded_by in ONE statement, and then walk the rows
-  -- behind it — so the second statement asked assert_compliance_holder() to
-  -- re-validate a supersede edge whose successor the FIRST statement had just
-  -- retired, and every merge of a card carrying a renewal aborted. The head
-  -- now moves carrying nothing (a row with a NULL superseded_by is asked no
-  -- successor question at all), the lineage behind it follows while its own
-  -- successor is already on the survivor, and the edge onto the survivor's
-  -- certificate is written LAST, when every row it concerns is in place. §4c
-  -- is the other half: the two time-varying legs no longer re-judge an
-  -- unchanged edge.
+  -- THREE STATEMENTS, IN THIS ORDER (r2 B2-2, widened in r3). The block used
+  -- to move the head and write its superseded_by in ONE statement, and then
+  -- walk the rows behind it — so the second statement asked
+  -- assert_compliance_holder() to re-validate a supersede edge whose successor
+  -- the FIRST statement had just retired, and every merge of a card carrying a
+  -- renewal aborted. The order is also what lets the move be UNCONDITIONAL
+  -- without tripping the trigger's holder leg (a successor must be held for
+  -- the same card): EVERY head moves first, carrying nothing (a row with a
+  -- NULL superseded_by is asked no successor question at all), the lineage
+  -- behind each one follows while its own successor is already on the
+  -- survivor, and the supersede edge onto the survivor's own certificate is
+  -- written LAST, when every row it concerns is in place. §4c is the other
+  -- half: the two time-varying legs no longer re-judge an unchanged edge.
   IF NOT v_cross THEN
     -- The heads that qualify, and the successor each one earns. Captured ONCE,
     -- into two aligned arrays, because the predicate is `d.holder_id =
@@ -1028,44 +1121,48 @@ BEGIN
          ORDER BY d.id, s.expires_on DESC NULLS LAST, s.id
       ) q;
 
-    IF v_heads IS NOT NULL THEN
-      -- 1. the heads move, carrying the edge they already had (none).
+    -- 1. EVERY absorbed head moves, carrying the edge it already had (none) —
+    --    the qualifying ones of v_heads and the remainder alike (r3 W3-R3-1).
+    UPDATE public.studio_compliance_documents d
+       SET holder_id   = p_survivor,
+           holder_type = v_survivor.entity_kind
+     WHERE d.holder_id = p_merged
+       AND d.superseded_by IS NULL;
+
+    -- 2. the retired rows BEHIND each moved head follow it, outermost first,
+    --    so each one's own successor is already on the survivor when
+    --    assert_compliance_holder() reads it. Depth-capped like every other
+    --    walk in this file; a chain deeper than sixteen renewals is not a
+    --    chain.
+    FOR i IN 1..16 LOOP
       UPDATE public.studio_compliance_documents d
          SET holder_id   = p_survivor,
              holder_type = v_survivor.entity_kind
-       WHERE d.id = ANY (v_heads);
+       WHERE d.holder_id = p_merged
+         AND d.superseded_by IS NOT NULL
+         AND EXISTS (SELECT 1 FROM public.studio_compliance_documents s
+                      WHERE s.id = d.superseded_by
+                        AND s.holder_id = p_survivor);
+      EXIT WHEN NOT FOUND;
+    END LOOP;
 
-      -- 2. the retired rows BEHIND each moved head follow it, outermost first,
-      --    so each one's own successor is already on the survivor when
-      --    assert_compliance_holder() reads it. Depth-capped like every other
-      --    walk in this file; a chain deeper than sixteen renewals is not a
-      --    chain.
-      FOR i IN 1..16 LOOP
-        UPDATE public.studio_compliance_documents d
-           SET holder_id   = p_survivor,
-               holder_type = v_survivor.entity_kind
-         WHERE d.holder_id = p_merged
-           AND d.superseded_by IS NOT NULL
-           AND EXISTS (SELECT 1 FROM public.studio_compliance_documents s
-                        WHERE s.id = d.superseded_by
-                          AND s.holder_id = p_survivor);
-        EXIT WHEN NOT FOUND;
-      END LOOP;
-
-      -- 3. and only now the new edge: the absorbed head says WHY it no longer
-      --    counts, against a certificate held for the same card.
+    -- 3. and only now the new edge: an absorbed head that HAS a legitimate
+    --    successor on the survivor says WHY it no longer counts. The heads
+    --    with no such successor keep a NULL edge and count for themselves,
+    --    which is the whole of the r3 fix.
+    IF v_heads IS NOT NULL THEN
       UPDATE public.studio_compliance_documents d
          SET superseded_by = v_succs[array_position(v_heads, d.id)]
        WHERE d.id = ANY (v_heads);
     END IF;
   ELSE
-    -- The sole-proprietor exception is NOT an acquisition. crm-model §4 keeps
-    -- the absorbed firm's paper off the survivor because two firms are two
-    -- firms; here the firm IS the person, declared so by is_sole_proprietor,
-    -- and R-BA already reduces one paper word over the person AND their firm.
-    -- Leaving the certificates on the folded firm card would read `Not on
-    -- file` over a sole proprietor who is insured. holder_type is rewritten
-    -- because assert_compliance_holder() holds it to the card's entity_kind.
+    -- The sole-proprietor fold has no supersede pass at all: the firm IS the
+    -- person, declared so by is_sole_proprietor, R-BA already reduces one
+    -- paper word over the person AND their firm, and leaving the certificates
+    -- on the folded firm card would read `Not on file` over a sole proprietor
+    -- who is insured. One blanket move, in one statement, because holder_type
+    -- changes with it and assert_compliance_holder() holds holder_type to the
+    -- card's entity_kind.
     UPDATE public.studio_compliance_documents
        SET holder_id   = p_survivor,
            holder_type = v_survivor.entity_kind
@@ -1193,17 +1290,22 @@ COMMENT ON FUNCTION public.merge_studio_contacts(uuid, uuid, text) IS
   'is_active_studio_member() of the cards'' shared studio — SECURITY DEFINER '
   'bypasses the table''s RLS, so the member test is stated in the body. '
   'Repoints, in order: typed channels (union, exact duplicates by '
-  'channel_kind + value dropped), affiliations, contact rules (the '
+  'channel_kind + value dropped, PLUS the absorbed card''s own phone_e164 and '
+  'email minted as channel rows on the survivor so the legacy columns join '
+  'the union too — r3 W3-R3-4), affiliations, contact rules (the '
   'survivor''s wins; the merged card keeps its own as history unless the '
   'survivor has none), the route_to pointer, the three designations other '
   'cards hold, every seat''s studio_contact_id / company_id / '
   'warranty_contact_person_id / bid_quoted_by_person_id (00631), and the '
   'household''s member array and primary pointer (00632). COMPLIANCE PAPER '
-  'DOES NOT MOVE: crm-model §4 keeps the absorbed firm''s documents on the '
-  'absorbed card, superseded where the survivor already holds the same paper '
-  'in force, so a merge can never manufacture a lapse the survivor never '
-  'earned — except in the sole-proprietor fold, where the firm IS the person '
-  'and the paper is theirs. CONSENT IS UNTOUCHED: '
+  'MOVES, WHOLE: every absorbed document arrives on the survivor and '
+  'compliance_state()''s worst-first reckoning settles the word, with the '
+  'supersede edge written where the survivor already holds the same paper in '
+  'force. Leaving the remainder behind stranded it on a card no surface can '
+  'reach — no Directory row, no picker, no sweep — so a merge hid a lapse AND '
+  'the renewal that answers it, and the word depended on which card the '
+  'studio picked as survivor, which PR-o says is free (r3 W3-R3-1). '
+  'CONSENT IS UNTOUCHED: '
   'studio_channel_consent is keyed on (organization_id, channel_kind, '
   'channel_value) and never on a card, so a number''s verdict follows the '
   'number with no write (crm-model §4, R-AY). Refuses a firm into a person '

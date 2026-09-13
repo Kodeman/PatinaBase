@@ -74,20 +74,23 @@ export function preferredSurvivorId(
  * What the studio is told before it presses. Names the card that folds, the
  * card that stays, what travels with it, and the two facts that do not move.
  *
- * M2R-2 — PAPER DOES NOT TRAVEL. The sentence used to promise that the merged
- * card's "paper" moved onto the survivor, and round 1's B-1 fix made that
- * false in the ordinary case: `merge_studio_contacts()` (00629 §5) moves an
- * absorbed document ONLY where the survivor already holds a qualifying
- * successor — same doc_type, head of its own chain, in force, expiring no
- * earlier, carrying at least the absorbed row's gates — because
- * `compliance_state()` reduces worst-first over a holder, so moving a lapse
- * would manufacture a block the survivor never earned. On a duplicate-person
- * merge, where the survivor holds no matching certificate, NO paper moves at
- * all. crm-model §4 is the wording: the absorbed card's documents keep their
- * original holder and are superseded, never deleted. The sheet prints the
- * absorbed card's document COUNT two lines above this sentence, so a promise
- * that the count moves is contradicted by the survivor's own count not
- * changing.
+ * THE PAPER MOVES (r3 W3-R3-1). M2R-2 wrote this sentence around round 1's
+ * B-1 rule, where an absorbed document moved only if the survivor already held
+ * a qualifying successor — and the migration review then measured what that
+ * left behind: on a duplicate-card merge, which is the only merge this room
+ * offers, the firm's own lapse and the firm's own renewal both ended up on a
+ * card no surface can open. 00629 now moves every absorbed document onto the
+ * survivor and lets `compliance_state()`'s worst-first reckoning settle the
+ * word, writing the supersede edge where a real successor exists. The sheet
+ * prints the absorbed card's document COUNT two lines above, so it says so.
+ *
+ * MAJOR-4 — AND THE LAST CLAUSE SAYS WHAT IS TRUE. "Both ways of reaching this
+ * person still work" was a promise about NUMBERS that the RPC did not keep:
+ * for any card written after 00593 the scalar `phone_e164` / `email` are the
+ * only place a number lives, and the merge unioned the typed channel table
+ * alone. 00629 now mints those two scalars as channel rows on the survivor
+ * (r3 W3-R3-4), which this sentence states outright; the closing clause is
+ * about the ID, which is the thing the merge record actually guarantees.
  */
 export function mergeConsequenceSentence(
   survivorName: string,
@@ -95,10 +98,11 @@ export function mergeConsequenceSentence(
 ): string {
   return (
     `${mergedName}’s seats, channels, contact rule and firm designations move onto ` +
-    `${survivorName}. Consent stays with the number, not with the card, so nobody’s yes or no changes. ` +
-    `${mergedName}’s paper stays on ${mergedName}’s card and is still readable there; where ` +
+    `${survivorName}, and ${mergedName}’s own number and address travel with them. ` +
+    `Consent stays with the number, not with the card, so nobody’s yes or no changes. ` +
+    `${mergedName}’s paper moves onto ${survivorName} too; where ` +
     `${survivorName} already holds the same paper, still in force, the older one is marked superseded. ` +
-    `${mergedName}’s card is kept as a record of the merge, and both ways of reaching this person still work.`
+    `${mergedName}’s card is kept as a record of the merge, so an old link still opens this person.`
   );
 }
 
