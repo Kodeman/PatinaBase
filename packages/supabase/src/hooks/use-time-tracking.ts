@@ -391,14 +391,15 @@ export async function fetchTimeSummary(
 /**
  * The capture surfaces this package can write from. W0's `00595` bought the
  * whole DB vocabulary at once; the union widens one wave at a time as each
- * surface lands — `command_bar` is W3's ⌘K verb. (W4 adds `internal`, W6 adds
- * `field_manual`.)
+ * surface lands — `command_bar` is W3's ⌘K verb, `field_manual` is W6's
+ * Patina Field sheet. (W4 adds `internal`.)
  */
 export type TimeEntrySource =
   | 'timer_auto'
   | 'timer_manual'
   | 'manual_entry'
-  | 'command_bar';
+  | 'command_bar'
+  | 'field_manual';
 
 /** A uuid the CALLER mints, so `log_time`'s ON CONFLICT can recognise a replay. */
 function mintEntryId(): string {

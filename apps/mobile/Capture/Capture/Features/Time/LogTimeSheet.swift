@@ -429,7 +429,15 @@ struct LogTimeSheet: View {
 }
 
 /// The chip row. Kept local for the same reason V0's is: the design system has
-/// no flow layout, and this wave is not the place to add one.
+/// no flow layout.
+///
+/// ⚠ It WRAPS; it does not scroll sideways. Measured at 390pt on the live AX
+/// tree, the horizontal `ScrollView` this replaces showed Drive/Site visit/
+/// Sourcing/Client, clipped Design at x 338 and put Admin past the right edge
+/// entirely — reachable only by a swipe whose sole affordance was the half-cut
+/// capsule. "A sourcing run or admin time" is this wave's own goal sentence, so
+/// the invisible value was a first-class one, and the worker who cannot see it
+/// files admin time under Client.
 private struct LogTimeChips: View {
     struct Chip: Identifiable, Equatable {
         let id: String
@@ -441,28 +449,93 @@ private struct LogTimeChips: View {
     let onTap: (String) -> Void
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(chips) { chip in
-                    Button { onTap(chip.id) } label: {
-                        Text(chip.title)
-                            .font(CaptureType.footnote)
-                            .foregroundStyle(chip.isOn ? CaptureColor.paper3 : CaptureColor.ink)
-                            .padding(.horizontal, 14)
-                            // Before the background, so the capsule itself grows
-                            // to the target rather than a frame around it.
-                            .frame(minHeight: 44)
-                            .background(chip.isOn ? CaptureColor.verdigris : CaptureColor.paper,
-                                        in: Capsule())
-                            .overlay(Capsule().stroke(CaptureColor.line,
-                                                      lineWidth: chip.isOn ? 0 : 1))
-                            .contentShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityAddTraits(chip.isOn ? .isSelected : [])
+        LogTimeChipFlow(spacing: 8) {
+            ForEach(chips) { chip in
+                Button { onTap(chip.id) } label: {
+                    Text(chip.title)
+                        .font(CaptureType.footnote)
+                        .foregroundStyle(chip.isOn ? CaptureColor.paper3 : CaptureColor.ink)
+                        .padding(.horizontal, 14)
+                        // Before the background, so the capsule itself grows
+                        // to the target rather than a frame around it.
+                        .frame(minHeight: 44)
+                        .background(chip.isOn ? CaptureColor.verdigris : CaptureColor.paper,
+                                    in: Capsule())
+                        .overlay(Capsule().stroke(CaptureColor.line,
+                                                  lineWidth: chip.isOn ? 0 : 1))
+                        .contentShape(Capsule())
                 }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(chip.isOn ? .isSelected : [])
             }
         }
+    }
+}
+
+/// A wrapping row: chips are laid left to right and pushed to the next line
+/// when the next one would cross the proposed width. Local to this file for the
+/// same reason the chip itself is — one surface needs it, and a shared flow
+/// layout is a design-system decision, not this wave's.
+private struct LogTimeChipFlow: Layout {
+    let spacing: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize,
+                      subviews: Subviews,
+                      cache: inout ()) -> CGSize {
+        let maxWidth = proposal.width ?? .infinity
+        let rows = rows(for: subviews, maxWidth: maxWidth)
+        let height = rows.reduce(0) { $0 + $1.height }
+            + spacing * CGFloat(max(rows.count - 1, 0))
+        let width = rows.map(\.width).max() ?? 0
+        return CGSize(width: maxWidth.isFinite ? min(width, maxWidth) : width,
+                      height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect,
+                       proposal: ProposedViewSize,
+                       subviews: Subviews,
+                       cache: inout ()) {
+        var y = bounds.minY
+        for row in rows(for: subviews, maxWidth: bounds.width) {
+            var x = bounds.minX
+            for index in row.indices {
+                let size = subviews[index].sizeThatFits(.unspecified)
+                subviews[index].place(
+                    at: CGPoint(x: x, y: y + (row.height - size.height) / 2),
+                    proposal: ProposedViewSize(size))
+                x += size.width + spacing
+            }
+            y += row.height + spacing
+        }
+    }
+
+    private struct Row {
+        var indices: [Int] = []
+        var width: CGFloat = 0
+        var height: CGFloat = 0
+    }
+
+    /// A chip never shrinks to fit: a row that cannot hold even one chip still
+    /// keeps it, so a very long label overflows rather than disappearing.
+    private func rows(for subviews: Subviews, maxWidth: CGFloat) -> [Row] {
+        var rows: [Row] = []
+        var row = Row()
+        for index in subviews.indices {
+            let size = subviews[index].sizeThatFits(.unspecified)
+            let widthWithChip = row.indices.isEmpty
+                ? size.width
+                : row.width + spacing + size.width
+            if !row.indices.isEmpty && widthWithChip > maxWidth {
+                rows.append(row)
+                row = Row(indices: [index], width: size.width, height: size.height)
+            } else {
+                row.indices.append(index)
+                row.width = widthWithChip
+                row.height = max(row.height, size.height)
+            }
+        }
+        if !row.indices.isEmpty { rows.append(row) }
+        return rows
     }
 }
 
