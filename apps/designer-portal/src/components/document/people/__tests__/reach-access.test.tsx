@@ -37,6 +37,8 @@ const mintLink = jest.fn();
 // and the per-row held status (§5.1). Both had ZERO call sites before this.
 const addChannel = jest.fn();
 const setChannelStatus = jest.fn();
+// CR13-1 — the line-type act, the one writer `sms_capable` never had.
+const updateChannel = jest.fn();
 
 jest.mock("@patina/supabase", () => ({
   useStudioContactChannels: () => ({ data: channelsData.current }),
@@ -52,6 +54,10 @@ jest.mock("@patina/supabase", () => ({
   useAddStudioContactChannel: () => ({ mutate: addChannel, isPending: false }),
   useSetStudioContactChannelStatus: () => ({
     mutate: setChannelStatus,
+    isPending: false,
+  }),
+  useUpdateStudioContactChannel: () => ({
+    mutate: updateChannel,
     isPending: false,
   }),
   ALL_CONTACT_CHANNEL_STATUSES: ["active", "bounced", "unsubscribed", "dead"],
@@ -483,6 +489,86 @@ describe("the consent axis", () => {
     expect(
       screen.getByRole("link", { name: "(612) 555-0127" }),
     ).toHaveAttribute("href", "tel:+16125550127");
+  });
+
+  /**
+   * CR13-1 / CR13-2 — the nine seeded mobiles 00593 left `sms_capable = false`
+   * on. The record the other four faces already print is printed here too, and
+   * the studio has a door back to the recording band — PR-m's included.
+   */
+  const tomMobile = {
+    id: "ch-tom-mobile",
+    owner_type: "person",
+    owner_id: "card-tom",
+    channel_kind: "mobile",
+    value: "+16125550107",
+    preferred: false,
+    verified: false,
+    verified_at: null,
+    status: "active",
+    status_at: null,
+    sms_capable: false,
+  };
+
+  it("prints the record on an unconfirmed mobile — the word and the R-Q sentence (CR13-2)", () => {
+    channelsData.current = [tomMobile];
+    consentData.current = {
+      verdict: "opted_out",
+      record: {
+        source: null,
+        opt_out_source: "inbound_sms",
+        consented_at: null,
+        opt_out_at: "2025-12-03",
+        origin_project_id: null,
+      },
+    };
+    renderReach({ personName: "Tom Marrow", cardId: "card-tom" });
+    const row = document.querySelector(
+      '[data-reach-channel="ch-tom-mobile"]',
+    ) as HTMLElement;
+    expect(row.querySelector('[data-state-family="consent"]')).not.toBeNull();
+    expect(row.querySelector("[data-consent-sentence]")).toHaveTextContent(
+      "Opted out by text, 3 Dec 2025, on the Okonkwo residence.",
+    );
+  });
+
+  it("offers the line-type act on an unconfirmed mobile, and writes sms_capable (CR13-1)", () => {
+    channelsData.current = [tomMobile];
+    consentData.current = { verdict: null, record: null };
+    renderReach({ personName: "Tom Marrow", cardId: "card-tom" });
+    const row = document.querySelector(
+      '[data-reach-channel="ch-tom-mobile"]',
+    ) as HTMLElement;
+    // PR-m's door is shut until the line is known to take texts …
+    expect(
+      within(row).queryByRole("button", { name: /Record consent/ }),
+    ).not.toBeInTheDocument();
+    // … and this is the way to open it.
+    fireEvent.click(
+      within(row).getByRole("button", { name: "This line takes texts" }),
+    );
+    expect(updateChannel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "ch-tom-mobile",
+        ownerId: "card-tom",
+        smsCapable: true,
+      }),
+      expect.anything(),
+    );
+  });
+
+  it("offers no line-type act once the line is known to take texts (CR13-1)", () => {
+    channelsData.current = [{ ...tomMobile, sms_capable: true }];
+    consentData.current = { verdict: null, record: null };
+    renderReach({ personName: "Tom Marrow", cardId: "card-tom" });
+    expect(
+      screen.queryByRole("button", { name: "This line takes texts" }),
+    ).not.toBeInTheDocument();
+    // PR-m's checkbox is reachable again.
+    fireEvent.click(screen.getByRole("button", { name: "Record consent" }));
+    expect(
+      screen.getByLabelText("They told the studio to stop"),
+    ).toBeInTheDocument();
   });
 
   it("still offers the act on a line that takes a text", () => {

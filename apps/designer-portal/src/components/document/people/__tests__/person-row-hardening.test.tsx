@@ -318,7 +318,7 @@ describe("the seats disclosure", () => {
     renderRow({}, { onOpenSeat });
     fireEvent.click(screen.getByRole("button", { name: "1 seat" }));
     const seat = screen.getByRole("button", {
-      name: /Okonkwo residence · Subcontractor · Electrical/,
+      name: /Okonkwo residence · sub · electrical/,
     });
     expect(seat).toHaveTextContent("On the job");
     expect(seat).toHaveTextContent("12 Oct 2026 to 13 Aug 2027");

@@ -10,8 +10,11 @@ import type { CallSheetProjection, CallSheetRow } from '@/lib/document/roster-de
 const updateMutate = jest.fn();
 const logToldMutate = jest.fn();
 let card: unknown = null;
+let projectRow: unknown = null;
 
 jest.mock('@patina/supabase', () => ({
+  // QA-R13-2: the card reads the project's own street address.
+  useProject: () => ({ data: projectRow }),
   useContactRules: () => ({ data: [] }),
   useStudioContactChannelsFor: () => ({ data: [] }),
   useStudioContacts: () => ({ data: [] }),
@@ -156,6 +159,28 @@ describe('SiteAccessCard — the six regions', () => {
     expect(
       screen.getByText('Studio only. This card never reaches a client page.'),
     ).toBeInTheDocument();
+  });
+
+  /**
+   * QA-R13-2 — no live caller ever passed `projectAddress`, so the head named
+   * the job and never the house. The card reads `projects.site_address`
+   * itself; SPEC §5.6 #1's string comes off the record, not off a prop nobody
+   * fills.
+   */
+  it('reads the street address off the project when no caller passes one', () => {
+    projectRow = { site_address: '4412 Fremont Ave S, Minneapolis MN 55409' };
+    render(<SiteAccessCard {...props} projectAddress={undefined} />);
+    expect(
+      screen.getByText('4412 Fremont Ave S, Minneapolis MN 55409'),
+    ).toBeInTheDocument();
+  });
+
+  it('prints no address line when the project holds none', () => {
+    projectRow = { site_address: null };
+    const { container } = render(
+      <SiteAccessCard {...props} projectAddress={undefined} />,
+    );
+    expect(container.querySelector('[data-site-address]')).toBeNull();
   });
 
   it('makes every who-to-call line one tel: target, in stored order (R-X)', () => {

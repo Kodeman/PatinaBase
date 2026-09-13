@@ -342,8 +342,9 @@ describe('SeatLine · project · kind · trade · stage · window', () => {
   it('prints the seat as one line, with the stage word and the window', () => {
     render(<SeatLine seat={seat()} onOpen={() => {}} />);
     expect(screen.getByText(/Okonkwo residence/)).toBeInTheDocument();
-    expect(screen.getByText(/Subcontractor/)).toBeInTheDocument();
-    expect(screen.getByText(/Electrical/)).toBeInTheDocument();
+    // CR13-3 / SPEC §5.1 #8 — the seat line's own vocabulary.
+    expect(screen.getByText(/sub/)).toBeInTheDocument();
+    expect(screen.getByText(/electrical/)).toBeInTheDocument();
     expect(screen.getByText('On the job')).toBeInTheDocument();
     expect(screen.getByText('12 Oct 2026 to 13 Aug 2027')).toBeInTheDocument();
   });
@@ -391,13 +392,29 @@ describe('SeatLine · project · kind · trade · stage · window', () => {
     expect(formatSeatDate('not-a-date')).toBeNull();
   });
 
+  /**
+   * CR13-3 — the Add sheet's door says "a household member" and writes a
+   * `client_rep` seat. Every line that seat printed said "Client Rep", so the
+   * face contradicted its own door (C5).
+   */
+  it("calls a household member what the door that wrote it calls them", () => {
+    expect(seatLineParts(seat({ party_kind: 'client_rep', trade: null }))).toEqual([
+      'Okonkwo residence',
+      'household member',
+    ]);
+    expect(seatLineParts(seat({ party_kind: 'gc', trade: null }))).toEqual([
+      'Okonkwo residence',
+      'GC',
+    ]);
+  });
+
   it('drops a part it does not have rather than printing an empty slot', () => {
     expect(seatLineParts(seat({ trade: null }))).toEqual([
       'Okonkwo residence',
-      'Subcontractor',
+      'sub',
     ]);
     expect(seatLineParts(seat({ project_name: null, trade: null }))).toEqual([
-      'Subcontractor',
+      'sub',
     ]);
   });
 });

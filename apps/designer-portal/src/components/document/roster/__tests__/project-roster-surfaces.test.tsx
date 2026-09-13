@@ -25,6 +25,12 @@ jest.mock('../../people/directory/add-person-sheet', () => ({
   AddPersonSheet: () => null,
 }));
 
+/** QA-R13-1: the row resolves the job a consent record NAMES, so the sheet's
+ *  own project name is never substituted into R-Q's sentence. */
+jest.mock('@/hooks/use-projects', () => ({
+  useProjects: () => ({ data: [] }),
+}));
+
 jest.mock('@patina/supabase', () => {
   const BID = ['prospect', 'invited', 'bidding', 'declined', 'no_response'];
   const DONE = ['closeout', 'warranty', 'off_job', 'retired'];

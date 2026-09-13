@@ -27,6 +27,8 @@ import {
   complianceKeys,
   isContactChannelHeld,
   complianceDocRequiresExpiry,
+  retainedComplianceDocuments,
+  type StudioComplianceDocument,
 } from '../use-studio-contacts';
 import {
   partyAuthorityKeys,
@@ -342,5 +344,90 @@ describe('the small typed rules', () => {
     expect(complianceDocRequiresExpiry('w9')).toBe(false);
     expect(complianceDocRequiresExpiry('lien_waiver_conditional')).toBe(false);
     expect(complianceDocRequiresExpiry('other_named')).toBe(false);
+  });
+});
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CR13-4 — the retirement rule the BROWSER's list is built with, which is the
+// rule `compliance_state()` (00623 / R-BF) already uses. A flat
+// `superseded_by IS NULL` filter disagreed with it in both directions, so the
+// company card's table and the Directory firm row that opened it printed two
+// different words for the same paper.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function paper(over: Partial<StudioComplianceDocument>): StudioComplianceDocument {
+  return {
+    id: 'doc',
+    organization_id: 'org-1',
+    holder_type: 'company',
+    holder_id: 'firm-1',
+    doc_type: 'coi_gl',
+    doc_label: null,
+    number: null,
+    issuer: null,
+    issued_on: null,
+    expires_on: null,
+    file_path: null,
+    verified_by: null,
+    verified_at: null,
+    held_by: 'studio',
+    blocks: ['site_access'],
+    superseded_by: null,
+    source: 'studio',
+    inbound: false,
+    created_by: null,
+    created_at: '',
+    updated_at: '',
+    ...over,
+  } as StudioComplianceDocument;
+}
+
+describe('which paper is still in the reckoning (CR13-4 / R-BF)', () => {
+  const TODAY = '2026-10-17';
+
+  it('retires a row whose successor is in force and carries its gates', () => {
+    const rows = [
+      paper({ id: 'a', expires_on: '2026-03-31', superseded_by: 'b' }),
+      paper({ id: 'b', expires_on: '2027-03-31' }),
+    ];
+    expect(retainedComplianceDocuments(rows, TODAY).map((d) => d.id)).toEqual(['b']);
+  });
+
+  it('walks the chain transitively — A retired by B retired by C', () => {
+    const rows = [
+      paper({ id: 'a', expires_on: '2025-03-31', superseded_by: 'b' }),
+      paper({ id: 'b', expires_on: '2026-03-31', superseded_by: 'c' }),
+      paper({ id: 'c', expires_on: '2027-03-31' }),
+    ];
+    // B's own certificate has expired; one hop would put A back on the books
+    // over an in-force C, from the calendar alone.
+    expect(retainedComplianceDocuments(rows, TODAY).map((d) => d.id)).toEqual(['c']);
+  });
+
+  it('keeps a row whose successor has lapsed with nothing in force behind it', () => {
+    const rows = [
+      paper({ id: 'a', expires_on: '2025-03-31', superseded_by: 'b' }),
+      paper({ id: 'b', expires_on: '2026-03-31' }),
+    ];
+    expect(retainedComplianceDocuments(rows, TODAY).map((d) => d.id)).toEqual(['a', 'b']);
+  });
+
+  it('keeps a row whose successor dropped its gates', () => {
+    const rows = [
+      paper({ id: 'a', expires_on: '2026-03-31', superseded_by: 'b', blocks: ['site_access'] }),
+      paper({ id: 'b', expires_on: '2027-03-31', blocks: [] }),
+    ];
+    expect(retainedComplianceDocuments(rows, TODAY).map((d) => d.id)).toEqual(['a', 'b']);
+  });
+
+  it('keeps a row whose successor the caller cannot see, and never loops', () => {
+    const unreadable = [paper({ id: 'a', superseded_by: 'gone' })];
+    expect(retainedComplianceDocuments(unreadable, TODAY).map((d) => d.id)).toEqual(['a']);
+    const cycle = [
+      paper({ id: 'a', superseded_by: 'b', expires_on: '2026-03-31' }),
+      paper({ id: 'b', superseded_by: 'a', expires_on: '2026-03-31' }),
+    ];
+    expect(retainedComplianceDocuments(cycle, TODAY).map((d) => d.id)).toEqual(['a', 'b']);
   });
 });

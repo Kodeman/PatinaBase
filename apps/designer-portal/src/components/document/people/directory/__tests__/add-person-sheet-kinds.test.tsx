@@ -608,6 +608,30 @@ describe("a household member (PR-c / C5)", () => {
       ),
     );
   });
+  /**
+   * CR13-7 — the door says "a household member"; the intro and the refusal
+   * used to say "client rep", off the `PartyKind` the door writes. One door,
+   * the studio's words (C5).
+   */
+  it("says the same noun in its intro and its refusal as on its door", async () => {
+    openSheet();
+    fireEvent.click(screen.getByRole("button", { name: "a household member" }));
+    expect(document.body.textContent).toContain("Add a household member to a project");
+    expect(document.body.textContent).not.toContain("client rep");
+    fireEvent.change(screen.getByLabelText("Project"), {
+      target: { value: PROJECT },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add to the roster" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "A household member needs a name.",
+    );
+  });
+
+  it("takes the article its own noun takes", async () => {
+    openSheet();
+    fireEvent.click(screen.getByRole("button", { name: "an installer" }));
+    expect(document.body.textContent).toContain("Add an installer to a project");
+  });
 });
 
 describe("someone else (PR-f)", () => {

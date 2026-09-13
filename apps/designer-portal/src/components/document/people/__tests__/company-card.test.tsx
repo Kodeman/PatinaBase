@@ -337,6 +337,18 @@ describe("the payee region", () => {
     expect(screen.getByText("Retainage 10%")).toBeInTheDocument();
     expect(screen.getByText("Signs: Dana Kowalski")).toBeInTheDocument();
   });
+
+  /**
+   * CR13-6 — `remit_to` is NULL on most seeded firms, and the line used to
+   * fall back to the firm's own name: a payee asserted from nothing, on the
+   * region a bookkeeper reads before cutting a cheque.
+   */
+  it("says so when no payee has been written, rather than naming the firm", () => {
+    (cardData.current as Record<string, unknown>).remit_to = null;
+    renderCard();
+    expect(screen.getByText("No remit-to on file.")).toBeInTheDocument();
+    expect(screen.queryByText("Remit to Northgate Electric")).toBeNull();
+  });
 });
 
 describe("the history region", () => {

@@ -16,6 +16,9 @@ const personData: { current: PeopleDirectoryRow | null } = { current: null };
 const seatData: { current: PeopleDirectorySeat[] } = { current: [] };
 const cardData: { current: Record<string, unknown> | null } = { current: null };
 const authorityData: { current: unknown[] } = { current: [] };
+/** CR13-8 — R-AO allows two OPEN affiliations at once; the card must pair one
+ *  firm's name with that firm's own role and year. */
+const affiliationData: { current: Record<string, unknown>[] } = { current: [] };
 /** CR3-9 — the rule row governing this person, which the composers must read. */
 const rulesData: { current: unknown[] } = { current: [] };
 /** QA-R9-1 — the studio's other cards, so a routed rule can name its door. */
@@ -33,20 +36,7 @@ jest.mock("@patina/supabase", () => ({
     ["gc", "sub", "installer", "receiver"].includes(role ?? ""),
   usePerson: () => ({ data: personData.current, isLoading: false }),
   useStudioContact: () => ({ data: cardData.current }),
-  useAffiliations: () => ({
-    data: [
-      {
-        id: "aff-1",
-        person_id: "card-dana",
-        company_id: "firm-northgate",
-        role_at_firm: "owner-operator",
-        from_date: "2025-03-01",
-        is_paperwork_contact: true,
-        is_signer: true,
-        holds_trade_license: true,
-      },
-    ],
-  }),
+  useAffiliations: () => ({ data: affiliationData.current }),
   usePeopleSeats: () => ({ data: seatData.current }),
   useComplianceDocuments: () => ({ data: [] }),
   useComplianceState: () => ({ data: "lapsed" }),
@@ -130,6 +120,9 @@ function person(over: Partial<PeopleDirectoryRow> = {}): PeopleDirectoryRow {
       entity_kind: "person",
       contact_kind: "sub",
       company_name: "Northgate Electric",
+      // As `people_directory` builds it — the pointer the card's firm facts
+      // (paper, and CR13-8's affiliation) are read against.
+      company_id: "firm-northgate",
     },
     scope: "studio",
     reach_state: "field_link",
@@ -198,6 +191,18 @@ function renderCard(props: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   personData.current = person();
+  affiliationData.current = [
+    {
+      id: "aff-1",
+      person_id: "card-dana",
+      company_id: "firm-northgate",
+      role_at_firm: "owner-operator",
+      from_date: "2025-03-01",
+      is_paperwork_contact: true,
+      is_signer: true,
+      holds_trade_license: true,
+    },
+  ];
   rulesData.current = [];
   rolodexData.current = [];
   seatData.current = [seat()];
@@ -241,13 +246,39 @@ describe("the regions", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("Sole proprietor")).toBeInTheDocument();
   });
+
+  /**
+   * CR13-8 — a person may hold two OPEN affiliations (R-AO). The card names
+   * ONE firm, and the role and the year beside that name must be that firm's.
+   */
+  it("pairs the firm it names with that firm's own role and year", () => {
+    affiliationData.current = [
+      {
+        id: "aff-2",
+        person_id: "card-dana",
+        company_id: "firm-marrow",
+        role_at_firm: "office manager",
+        from_date: "2019-01-01",
+        is_paperwork_contact: false,
+        is_signer: false,
+        holds_trade_license: false,
+      },
+      ...affiliationData.current,
+    ];
+    renderCard();
+    expect(
+      screen.getByText("Northgate Electric · owner-operator, since 2025"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/office manager/)).toBeNull();
+  });
 });
 
 describe("the seats beneath the human", () => {
   it("prints the seat, its stage word and its window", () => {
     renderCard();
     const line = screen.getByRole("button", {
-      name: /Okonkwo residence · Subcontractor · Electrical/,
+      // CR13-3: the seat line speaks the studio's words, not the column heads.
+      name: /Okonkwo residence · sub · electrical/,
     });
     expect(line).toHaveTextContent("On the job");
     expect(line).toHaveTextContent("12 Oct 2026 to 13 Aug 2027");
@@ -309,7 +340,7 @@ describe("the seats beneath the human", () => {
     expect(past).toHaveTextContent("Warranty through 21 Nov 2026");
     // The live list still holds only the open seat.
     expect(
-      screen.getByRole("button", { name: /Okonkwo residence · Subcontractor/ }),
+      screen.getByRole("button", { name: /Okonkwo residence · sub/ }),
     ).toBeInTheDocument();
   });
 });
