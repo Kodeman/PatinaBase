@@ -79,6 +79,16 @@ export interface LogOffer {
   /** D10 idle annotation: quiet seconds inside the entry — annotation only,
    *  NEVER subtracted from the logged number. 0 when nothing was idle. */
   idleSeconds: number;
+  /** HT-11 — the billable answer ALREADY on the written row, so the strip's
+   *  pill is seeded from what the server stored rather than from a default.
+   *  W3: the strip is a capture surface and carries the control like the rest. */
+  billable: boolean;
+  /** HT-26 — what the server priced the hour at, read off the stopped row.
+   *  Null/0 is a fact ("rate pending"), not a blank. */
+  hourlyRateCents: number | null;
+  rateSource: string | null;
+  rateRole: string | null;
+  ratedAmountCents: number | null;
 }
 
 /** D10: a visible note when the logged number left the raw truth behind. */

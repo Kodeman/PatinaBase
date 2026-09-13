@@ -193,8 +193,14 @@ function makeClient() {
   };
 }
 
+/** HT-41 — one live seat by default; a case that needs two sets this. */
+let myRateRoles: string[] = ['lead_designer'];
+
 jest.mock('@patina/supabase', () => ({
   createBrowserClient: () => makeClient(),
+  // W3 (HT-41) — the add row's role chip and the rows' role mark both ask how
+  // many live seats the viewer holds on the document. One seat = no control.
+  useMyRateRoles: () => ({ data: myRateRoles }),
   isInvoiceEligibleTimeEntry: () => true,
   filterProjectUnbilledEntries: () => [],
   useCreateTimeEntry: () => ({ mutateAsync: jest.fn(), isPending: false }),
@@ -286,7 +292,7 @@ jest.mock('@patina/supabase', () => ({
 }));
 
 jest.mock('@/hooks/use-commercial-documents', () => ({
-  useProjectBillingAuthority: () => ({ data: null }),
+  useProjectBillingAuthority: () => ({ data: null, isLoading: false }),
 }));
 
 jest.mock('../command-bar', () => ({ openLedger: jest.fn() }));

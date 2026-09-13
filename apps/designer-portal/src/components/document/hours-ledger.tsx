@@ -22,7 +22,7 @@
  * live there; one act, review before draft). Failures render inline (R83).
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -61,6 +61,18 @@ import {
 } from '@/lib/document/authority-hours';
 import { documentEvents } from '@/lib/analytics/document-events';
 import {
+  BACKDATE_MARK_DAYS,
+  BillablePill,
+  RateRoleChip,
+  RateRoleMark,
+  isBackdatedEntry,
+  isDayValue,
+  isoDateValue,
+  startedAtFromDateValue,
+  useBillableIntent,
+} from './time-capture';
+import type { TimeRateRole } from '@patina/supabase';
+import {
   HOURS_MEMBER_SCOPE_EVENT,
   hoursMemberScopePending,
   type HoursMemberScopeDetail,
@@ -92,6 +104,14 @@ const GROUP_BY: ReadonlyArray<[TimeHoursGroupBy, string]> = [
   ['iso_week', 'by week'],
   ['activity', 'by activity'],
 ];
+
+/**
+ * The four fields of the batch-add row, on the house sheet's own type step
+ * (§A: no inline font-size utility) and at its 44px floor, with `min-w-0` so a
+ * grid track may shrink under them (W3-R3-M1 / W3-R3-m6).
+ */
+const ADD_FIELD_CLASS =
+  'min-h-11 w-full min-w-0 rounded-[4px] border border-[var(--color-pearl)] bg-white px-2 py-1.5 t-meta text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none';
 
 /** Local calendar date, not a UTC shift of it — the rollup takes dates. */
 const isoDate = (d: Date) =>
@@ -344,7 +364,19 @@ export function HoursLedger({
 
   const [addProject, setAddProject] = useState(initialContext?.projectId ?? '');
   const [addMinutes, setAddMinutes] = useState('');
-  const [addActivity, setAddActivity] = useState('design');
+  // HT-24 — recorded, never defaulted. An hour typed here used to be filed as
+  // design work nobody claimed; unset is a real answer and prints honestly.
+  const [addActivity, setAddActivity] = useState('');
+  // HT-13 — the add row dates its entry. Without this it sent no `started_at`
+  // at all, so paging back a week and typing an hour silently mis-dated it
+  // into TODAY, with no warning and no way to correct it afterwards.
+  const [addDate, setAddDate] = useState(() => isoDateValue(new Date()));
+  // HT-11 — stated, and seeded from the resolved answer for the document
+  // picked. Never `?? true`.
+  const [addBillable, setAddBillable] = useState(false);
+  // The document she last stated billable about (HT-11 · W3-R4-M1).
+  const [addStatedFor, setAddStatedFor] = useState<string | null>(null);
+  const [addRateRole, setAddRateRole] = useState<TimeRateRole | null>(null);
   const [addBusy, setAddBusy] = useState(false);
   /** R83 — the ledger's quiet inline note (add/delete failures, never a toast). */
   const [note, setNote] = useState<string | null>(null);
@@ -378,8 +410,48 @@ export function HoursLedger({
     [weekUnbilled],
   );
 
+  // HT-13 — the date follows the PAGE, not the clock. Standing on last week and
+  // typing an hour means last week; the current week means today.
+  useEffect(() => {
+    setAddDate(isoDateValue(weekOffset === 0 ? new Date() : weekStart));
+  }, [weekOffset, weekStart]);
+
+  const addIntent = useBillableIntent(addProject || null);
+  // HT-11 — billable is STATED. A hand that touches the pill keeps its answer
+  // even if the authority read for that document settles a second later; the
+  // `addSeededFor` guard alone could not protect it, because it is only written
+  // when the read settles (W3-R4-M1).
+  const addBillableStated =
+    Boolean(addProject) && addStatedFor === addProject;
+  const stateAddBillable = (next: boolean) => {
+    setAddStatedFor(addProject);
+    setAddBillable(next);
+  };
+  useEffect(() => {
+    setAddStatedFor(null);
+  }, [addProject]);
+  const addSeededFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!addProject || !addIntent.isSettled) return;
+    if (addBillableStated) return;
+    if (addSeededFor.current === addProject) return;
+    addSeededFor.current = addProject;
+    setAddBillable(addIntent.billable);
+  }, [addProject, addIntent.isSettled, addIntent.billable, addBillableStated]);
+
   const parsedAdd = parseInt(addMinutes, 10);
-  const addValid = addProject && Number.isFinite(parsedAdd) && parsedAdd >= 1;
+  // A cleared date field is not "today" — it is an unanswered question, and
+  // the act waits for it (W3-R3-M2).
+  // …and neither is an unanswered authority: an hour added before the read
+  // settles is written `billable = false` whatever the agreement says, under a
+  // pill that reads like a settled answer (W3-R4-M1). Her own statement counts
+  // as an answer, so a failed read does not strand the row.
+  const addValid =
+    addProject &&
+    (addIntent.isSettled || addBillableStated) &&
+    isDayValue(addDate) &&
+    Number.isFinite(parsedAdd) &&
+    parsedAdd >= 1;
 
   const batchAdd = async () => {
     if (!addValid || addBusy) return;
@@ -390,7 +462,10 @@ export function HoursLedger({
       const written = await createEntry.mutateAsync({
         projectId: addProject,
         durationMinutes: parsedAdd,
-        activity: addActivity,
+        startedAt: startedAtFromDateValue(addDate),
+        activity: addActivity || null,
+        billable: addBillable,
+        rateRole: addRateRole,
         source: 'manual_entry',
       });
       // HT-27 — the capture instrument, read off what the server actually
@@ -398,7 +473,7 @@ export function HoursLedger({
       documentEvents.time.entryLogged({
         surface: 'hours_ledger',
         source: 'manual_entry',
-        activity: addActivity,
+        activity: written.activity ?? null,
         billable: written.billable,
         rate_source: written.rate_source ?? null,
         rate_role: written.rate_role ?? null,
@@ -949,10 +1024,17 @@ export function HoursLedger({
           as a capture row for her hours and wrote them to him; entering an hour
           on someone else's behalf is a deliberate act, not a shared form. */}
       {scope === 'mine' && (
-      <div className="mt-4 grid grid-cols-[1.2fr_0.7fr_1fr_auto] items-center gap-2">
+      <div className="mt-4">
+      {/* Five tracks on a sheet 289px wide laid out at their intrinsic widths and
+          walked off the edge: measured at 390, Date started at x=383 and Add
+          ended at x=683, with no sideways scroll to reach either. Two columns
+          until there is room for five, and every field `min-w-0` so a track can
+          actually shrink — WebKit collapsed the date track to 0px otherwise
+          (W3-R3-M1). */}
+      <div className="grid grid-cols-2 items-center gap-2 min-[700px]:grid-cols-[1.2fr_0.7fr_0.9fr_1fr_auto]">
         <select
           aria-label="Project"
-          className="rounded-[4px] border border-[var(--color-pearl)] bg-white px-2 py-1.5 text-[11px] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none [&_option]:bg-[var(--doc-paper)]"
+          className={`${ADD_FIELD_CLASS} [&_option]:bg-[var(--doc-paper)]`}
           value={addProject}
           onChange={(e) => setAddProject(e.target.value)}
         >
@@ -970,16 +1052,27 @@ export function HoursLedger({
           min={1}
           placeholder="Minutes"
           aria-label="Minutes"
-          className="rounded-[4px] border border-[var(--color-pearl)] bg-white px-2 py-1.5 text-[11px] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none"
+          className={ADD_FIELD_CLASS}
           value={addMinutes}
           onChange={(e) => setAddMinutes(e.target.value)}
         />
+        {/* HT-13 — the day the hour was worked. Any date; the entry lands on
+            `started_at`, not on `created_at`. */}
+        <input
+          type="date"
+          aria-label="Date"
+          className={ADD_FIELD_CLASS}
+          value={addDate}
+          onChange={(e) => setAddDate(e.target.value)}
+        />
         <select
           aria-label="Activity"
-          className="rounded-[4px] border border-[var(--color-pearl)] bg-white px-2 py-1.5 text-[11px] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none [&_option]:bg-[var(--doc-paper)]"
+          className={`${ADD_FIELD_CLASS} [&_option]:bg-[var(--doc-paper)]`}
           value={addActivity}
           onChange={(e) => setAddActivity(e.target.value)}
         >
+          {/* HT-24 — the honest first answer, not a silent 'design'. */}
+          <option value="">activity not set</option>
           {ACTIVITIES.map((a) => (
             <option key={a.key} value={a.key}>
               {a.label}
@@ -991,6 +1084,7 @@ export function HoursLedger({
           surfaceKey="hours"
           regionKey="batch-entry"
           variant="primary"
+          className="col-span-2 min-[700px]:col-span-1"
           disabled={!addValid || addBusy}
           loading={addBusy}
           loadingLabel="Adding…"
@@ -998,6 +1092,38 @@ export function HoursLedger({
         >
           Add
         </DocumentAction>
+      </div>
+      {/* HT-11/HT-12/HT-41 — the same controls every other capture surface
+          carries, seeded from the resolved answer for the document picked.
+          plan-v2 §4's "rate readout" is served HERE by HT-12's reason sentence
+          and by nothing else: the resolved rate is not knowable before the row
+          is written (`resolve_time_rate_cents` is REVOKEd from `authenticated`,
+          00599, W1-R7-04), so a figure re-derived in the browser would be a
+          false fact. The written rows carry the real readout. */}
+      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+        <BillablePill
+          value={addBillable}
+          onChange={stateAddBillable}
+          reason={
+            addIntent.isSettled || addIntent.unreadable
+              ? addIntent.sentence
+              : null
+          }
+          disabled={addBusy}
+          surfaceKey="hours"
+          regionKey="batch-entry"
+        />
+        <RateRoleChip
+          projectId={addProject || null}
+          value={addRateRole}
+          onChange={setAddRateRole}
+          disabled={addBusy}
+        />
+        {Date.now() - new Date(startedAtFromDateValue(addDate)).getTime() >
+          BACKDATE_MARK_DAYS * 86_400_000 && (
+          <span className="t-head text-[var(--color-aged-oak)]">backdated</span>
+        )}
+      </div>
       </div>
       )}
     </div>
@@ -1446,6 +1572,9 @@ function ScopeEntryRow({
               row.studio_id
                 ? `priced by ${studioNames.get(row.studio_id) ?? 'another studio'}`
                 : 'no pricing studio',
+              // HT-13 — the same derived word the viewer's own rows carry. The
+              // fact view keeps both timestamps, so no second read is needed.
+              isBackdatedEntry(row) ? 'backdated' : null,
             ]
               .filter(Boolean)
               .join(' · ')}
@@ -1622,10 +1751,29 @@ function EntryRow({
               amountCents > 0
                 ? fmtUsd(amountCents)
                 : null,
+              // HT-13 — an hour remembered a month late says so, in the row's
+              // own ink. A derived word, no column, no colour (HT-40).
+              isBackdatedEntry(e) ? 'backdated' : null,
             ]
               .filter(Boolean)
               .join(' · ')}
           </p>
+          {/* HT-11/HT-41 — billable is stated on the row that carries it, and
+              (only for a member holding more than one seat) which role priced
+              it. A billed entry is history: the pill is held. */}
+          <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+            <BillablePill
+              value={e.billable === true}
+              onChange={(next) => onCommit(e, { billable: next })}
+              disabled={billed}
+              surfaceKey="hours"
+              regionKey="time-entry-actions"
+            />
+            <RateRoleMark
+              projectId={e.project_id as string}
+              role={(e.rate_role as TimeRateRole | null) ?? null}
+            />
+          </span>
         </div>
         <select
           aria-label="Activity"

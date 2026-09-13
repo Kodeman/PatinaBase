@@ -14,7 +14,13 @@
  *    the doorway; before it, the live founding-cohort CTA landed on a bare Desk
  *    because an unknown param is ignored in silence.
  *  · The lens survives to 390 — it wraps rather than clipping or scrolling the
- *    page sideways — and each word keeps its 44px hit at every width.
+ *    page sideways — and each word keeps its 44px hit at every width, and the
+ *    add row's Date field and Add act stand inside the viewport there too.
+ *  · W3: the ⌘K "Log time" verb is reachable with NOTHING in hand, and the
+ *    form it opens carries the date field and the billable control. Nothing
+ *    here SUBMITS one — the file's no-seed, no-write posture holds, and the
+ *    write path is pinned by the jest specs and by
+ *    supabase/tests/billing/time_log_rpc_test.sql.
  */
 import type { Page } from '@playwright/test';
 import { test, expect } from '../fixtures/auth';
@@ -94,6 +100,22 @@ for (const { label, width, height } of WIDTHS) {
       expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
     }
 
+    // W3 — the add row's own fields stand ON the sheet at every width. At 390
+    // the five tracks laid out at their intrinsic widths: Date began at x=383
+    // in a 390px viewport and Add ended at x=683, with no sideways scroll to
+    // reach either, so HT-13's date control was unreachable on a phone.
+    const dateField = sheet.getByLabel('Date');
+    await dateField.scrollIntoViewIfNeeded();
+    await expect(dateField).toBeInViewport();
+    const dateBox = await dateField.boundingBox();
+    expect(dateBox?.width ?? 0).toBeGreaterThan(40);
+    expect(dateBox?.x ?? -1).toBeGreaterThanOrEqual(0);
+    expect((dateBox?.x ?? 0) + (dateBox?.width ?? 0)).toBeLessThanOrEqual(width);
+
+    const addAct = sheet.getByRole('button', { name: 'Add' });
+    const addBox = await addAct.boundingBox();
+    expect((addBox?.x ?? 0) + (addBox?.width ?? 0)).toBeLessThanOrEqual(width);
+
     // The sheet never scrolls the page sideways — the lens wraps instead.
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - window.innerWidth,
@@ -125,4 +147,57 @@ test('the studio scope answers with a total above its buckets', async ({
   );
   // The entries are one act away, never the default reading.
   await expect(sheet.getByRole('button', { name: 'The entries' })).toBeVisible();
+});
+
+test('the ⌘K "Log time" verb opens a dated form with nothing in hand (W3)', async ({
+  authenticatedPage: page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto('/desk', { waitUntil: 'domcontentloaded' });
+  await declineDeskWalkthrough(page);
+
+  await page.keyboard.press('Meta+k');
+  const palette = page.getByRole('dialog', { name: 'Command bar' });
+  await expect(palette).toBeVisible({ timeout: COLD });
+
+  // "This surface" is where an in-hand-gated verb would live; with nothing
+  // open it is absent, and Log time is still offered under Begin.
+  await expect(
+    palette.getByRole('group', { name: 'This surface' }),
+  ).toHaveCount(0);
+  const verb = palette
+    .getByRole('group', { name: 'Begin' })
+    .getByRole('option', { name: /Log time/ });
+  await expect(verb).toBeVisible();
+  await verb.click();
+
+  const form = page.getByRole('dialog', { name: 'Log time' });
+  await expect(form).toBeVisible({ timeout: COLD });
+  // HT-13's date field, HT-11's control, HT-24's honest activity default.
+  await expect(form.getByLabel('Date')).toBeVisible();
+  await expect(
+    form.getByRole('button', { name: /billable/i }),
+  ).toBeVisible();
+  await expect(form.getByRole('combobox', { name: 'Activity' })).toHaveValue('');
+
+  // Nothing is written: close it again.
+  await page.keyboard.press('Escape');
+  await expect(form).toHaveCount(0);
+});
+
+test('the bare t key opens the same form (W3)', async ({
+  authenticatedPage: page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto('/desk', { waitUntil: 'domcontentloaded' });
+  await declineDeskWalkthrough(page);
+
+  // Focus must be on the page body, not in a field — the binding's own guard.
+  await page.locator('body').click({ position: { x: 5, y: 5 } });
+  await page.keyboard.press('t');
+
+  await expect(page.getByRole('dialog', { name: 'Log time' })).toBeVisible({
+    timeout: COLD,
+  });
+  await page.keyboard.press('Escape');
 });

@@ -11,6 +11,7 @@
  */
 import { fireEvent, render, screen } from '@testing-library/react';
 import { DeskContents } from '../desk-contents';
+import { STUDIO_VERBS } from '@/lib/document/registry';
 
 /** The unbilled read's state — the Desk's one act-bearing line reads it. */
 type UnbilledState = 'empty' | 'rows' | 'pending' | 'error';
@@ -56,8 +57,9 @@ beforeEach(() => {
 const renderContents = (props: { prominent?: boolean } = {}) =>
   render(<DeskContents {...props} />);
 
+const mockPush = jest.fn();
 jest.mock('next/navigation', () => ({
-  useRouter: () => ({ push: jest.fn() }),
+  useRouter: () => ({ push: mockPush }),
 }));
 
 jest.mock('@/lib/analytics/document-events', () => ({
@@ -84,6 +86,10 @@ jest.mock('@/components/document/rooms/drafting/draft-proposal-opener', () => ({
   openDraftProposalPicker: jest.fn(),
 }));
 
+jest.mock('@/components/document/log-time-sheet', () => ({
+  openLogTime: jest.fn(),
+}));
+
 describe('DeskContents — Begin column', () => {
   it('does not render Capture a lead, but keeps every other verb', () => {
     renderContents();
@@ -101,6 +107,51 @@ describe('DeskContents — Begin column', () => {
     expect(
       screen.getByRole('button', { name: /Add a maker/ }),
     ).toBeInTheDocument();
+  });
+
+  /**
+   * The Begin column renders STUDIO_VERBS wholesale and dispatches through
+   * `verbHandlers`, so a verb added to the registry for ⌘K stands on the Desk
+   * with or without a handler. `log-time` shipped without one: the row
+   * rendered, the click fired a wayfinding event, and nothing opened. Naming
+   * each verb one at a time would not have caught it — the next verb added
+   * would repeat it. This case reads the registry itself.
+   */
+  it('every verb the registry renders here actually dispatches', () => {
+    const openers = [
+      mockPush,
+      (jest.requireMock('@/components/document/command-bar') as {
+        openCaptureLead: jest.Mock;
+        openOpenProject: jest.Mock;
+      }).openCaptureLead,
+      (jest.requireMock('@/components/document/command-bar') as {
+        openOpenProject: jest.Mock;
+      }).openOpenProject,
+      (jest.requireMock(
+        '@/components/document/rooms/drafting/draft-proposal-opener',
+      ) as { openDraftProposalPicker: jest.Mock }).openDraftProposalPicker,
+      (jest.requireMock('@/components/document/accounts/invoice-overlays') as {
+        openInvoiceComposer: jest.Mock;
+      }).openInvoiceComposer,
+      (jest.requireMock('@/components/document/log-time-sheet') as {
+        openLogTime: jest.Mock;
+      }).openLogTime,
+    ];
+
+    renderContents();
+
+    const rendered = STUDIO_VERBS.filter((v) => v.key !== 'capture-lead');
+    expect(rendered.length).toBeGreaterThan(0);
+
+    for (const verb of rendered) {
+      for (const fn of openers) fn.mockClear();
+      const row = screen.getByRole('button', {
+        name: new RegExp(verb.label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
+      });
+      fireEvent.click(row);
+      const fired = openers.reduce((n, fn) => n + fn.mock.calls.length, 0);
+      expect([verb.key, fired]).toEqual([verb.key, 1]);
+    }
   });
 
   it('F08 — the Desk\'s own invoice door names its scope', () => {

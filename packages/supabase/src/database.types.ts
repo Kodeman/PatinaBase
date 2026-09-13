@@ -34193,6 +34193,55 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      log_time: {
+        Args: {
+          p_activity?: string
+          p_billable?: boolean
+          p_duration_minutes: number
+          p_entry_id: string
+          p_notes?: string
+          p_phase_key?: string
+          p_project_id: string
+          p_rate_role?: string
+          p_source?: string
+          p_started_at: string
+          p_studio_id?: string
+          p_task_id?: string
+        }
+        Returns: {
+          activity: string | null
+          authority_rate_id: string | null
+          billable: boolean
+          billing_authority_id: string | null
+          billing_state: string
+          created_at: string
+          duration_minutes: number | null
+          hourly_rate_cents: number | null
+          id: string
+          idle_seconds: number | null
+          invoice_id: string | null
+          notes: string | null
+          phase_key: string | null
+          project_id: string | null
+          rate_role: string | null
+          rate_source: string | null
+          rated_amount_cents: number | null
+          raw_seconds: number | null
+          source: string
+          started_at: string
+          studio_id: string | null
+          task_id: string | null
+          updated_at: string
+          updated_by: string | null
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "project_time_entries"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       mark_capture_upload_complete: {
         Args: { p_capture_id: string }
         Returns: undefined
@@ -36354,6 +36403,19 @@ export type Database = {
         Returns: string
       }
       start_purchase_order_change: { Args: { p_request: Json }; Returns: Json }
+      start_timer: {
+        Args: {
+          p_billable?: boolean
+          p_phase_key?: string
+          p_project_id: string
+          p_source?: string
+          p_task_id?: string
+        }
+        Returns: {
+          started: Database["public"]["Tables"]["project_time_entries"]["Row"]
+          stopped: Database["public"]["Tables"]["project_time_entries"]["Row"]
+        }[]
+      }
       stripe_balance_tx_ingest: {
         Args: { p_cursor: string; p_txns: Json }
         Returns: Json

@@ -27,7 +27,6 @@ import {
   useState,
 } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useToast } from '@/components/portal/toast-provider';
 import {
   createBrowserClient,
   useCreateTimeEntry,
@@ -37,7 +36,9 @@ import {
   useStartTimer,
   useStopTimer,
   useUpdateTimeEntry,
+  type ProjectTimeEntry,
   type RunningTimer,
+  type TimeRateRole,
 } from '@patina/supabase';
 import {
   closeOutTimer,
@@ -55,6 +56,7 @@ import {
   fetchProjectBillingAuthority,
 } from '@/hooks/use-commercial-documents';
 import { automaticTimeBillingIntent } from '@/lib/document/authority-hours';
+import { documentEvents } from '@/lib/analytics/document-events';
 import { queryKeys } from '@/lib/react-query';
 
 // R64 — grace added past the last activity ping when bounding an abandoned
@@ -96,9 +98,33 @@ interface DocumentTimeValue {
   release: () => void;
   pause: () => void;
   resume: () => void;
-  manualLog: (minutes: number, activity: string) => Promise<void>;
-  logOffer: (minutes: number, activity: string | null) => Promise<void>;
+  /**
+   * HT-14 — a typed entry that does NOT require a document in hand. The
+   * project is named by the caller (the phone's sheet picks one when nothing
+   * is held); `billable` is stated, never defaulted (HT-11). Returns the row
+   * the server wrote so the caller can report the server's answer, not the
+   * form's.
+   */
+  manualLog: (input: ManualLogInput) => Promise<ProjectTimeEntry>;
+  logOffer: (
+    minutes: number,
+    activity: string | null,
+    billable: boolean,
+  ) => Promise<void>;
   discardOffer: () => Promise<void>;
+}
+
+export interface ManualLogInput {
+  projectId: string;
+  minutes: number;
+  activity: string | null;
+  /** HT-11 — stated by the surface, seeded from the resolved answer. */
+  billable: boolean;
+  /** HT-13 — any date. Omitted = now. */
+  startedAt?: string;
+  phaseKey?: string | null;
+  /** HT-41 — only where the member holds more than one live roster role. */
+  rateRole?: TimeRateRole | null;
 }
 
 /**
@@ -132,9 +158,8 @@ export function useDocumentTime(): DocumentTimeValue {
 
 export function DocumentTimeProvider({ children }: { children: React.ReactNode }) {
   const qc = useQueryClient();
-  const { toast } = useToast();
   const { data: runningTimer } = useRunningTimer();
-  const startTimer = useStartTimer({ toast });
+  const startTimer = useStartTimer();
   const stopTimer = useStopTimer();
   const discardTimer = useDiscardTimer();
   const createEntry = useCreateTimeEntry();
@@ -282,11 +307,20 @@ export function DocumentTimeProvider({ children }: { children: React.ReactNode }
         ? undefined
         : (opts.phaseKey ?? timer.project?.current_phase ?? null);
 
-      await api.current.stopTimer.mutateAsync({
+      // HT-24 — `activity` is RECORDED, never required: the close-out says
+      // "not set" out loud instead of leaving the column to mean two things.
+      // HT-11 — `billable` is restated from the row the timer opened with, so
+      // the stop payload carries both facts explicitly rather than one of them
+      // implicitly. It is NOT re-resolved here: an authority read that hiccups
+      // at stop would fail closed and silently un-bill an hour that started
+      // billable. Neither is a required field (§0.22 — the zero-tap path).
+      const stored = await api.current.stopTimer.mutateAsync({
         entryId: timer.id,
         durationMinutesOverride: proposedMinutes,
         rawSeconds: Math.round(elapsed),
         idleSeconds,
+        activity: null,
+        billable: timer.billable,
         ...(autoPhase !== undefined ? { phaseKey: autoPhase } : {}),
       });
       // useStopTimer's own onSuccess fires invalidateQueries without
@@ -300,6 +334,19 @@ export function DocumentTimeProvider({ children }: { children: React.ReactNode }
       await qc.invalidateQueries({ queryKey: queryKeys.time.runningTimer() });
       invalidateTimeSurfaces();
 
+      // HT-17 — INSTRUMENT ONLY. `idle_ratio` is CUMULATIVE idle over raw
+      // elapsed, which is the hole R64 has: the bound fires on the single
+      // longest gap (`longestGap`), so a day of many short gaps summing to
+      // hours proposes the full raw elapsed. The 30-minute number is NOT
+      // touched here; it is watched, exactly as the ruling says.
+      documentEvents.time.timerStopped({
+        surface: 'document',
+        duration_minutes: proposedMinutes,
+        adjusted: proposedMinutes * 60 !== Math.round(elapsed),
+        idle_minutes: Math.round(idleSeconds / 60),
+        idle_ratio: elapsed > 0 ? Math.round((idleSeconds / elapsed) * 100) / 100 : null,
+      });
+
       if (opts.offerStrip) {
         setOffer({
           entryId: timer.id,
@@ -310,11 +357,45 @@ export function DocumentTimeProvider({ children }: { children: React.ReactNode }
           phaseKey: timer.phase_key ?? autoPhase ?? null,
           source,
           idleSeconds,
+          // The strip prints the SERVER's answers, not the browser's: the row
+          // has been through the classifier by the time this resolves.
+          billable: stored.billable,
+          hourlyRateCents: stored.hourly_rate_cents ?? null,
+          rateSource: stored.rate_source ?? null,
+          rateRole: stored.rate_role ?? null,
+          ratedAmountCents: stored.rated_amount_cents ?? null,
         });
       }
     },
     [invalidateTimeSurfaces, qc],
   );
+
+  /**
+   * 00608 — `start_timer` stops any incumbent the portal did not already close
+   * out (another tab opened one in the gap) and hands the row back. That hour
+   * still gets its strip: the entry is written and would otherwise stand at
+   * whatever wall-clock duration the server computed, with nobody told.
+   *
+   * No ping data exists for a row this session never watched, so idle is 0 and
+   * the suggestion is the stored duration — the truth the server saw.
+   */
+  const offerFromServerStop = useCallback((row: ProjectTimeEntry) => {
+    setOffer({
+      entryId: row.id,
+      projectId: row.project_id,
+      projectName: 'that document',
+      rawSeconds: row.duration_minutes * 60,
+      suggestedMinutes: Math.max(1, row.duration_minutes),
+      phaseKey: row.phase_key ?? null,
+      source: ((row as { source?: string }).source ?? 'timer_auto') as TimeSource,
+      idleSeconds: 0,
+      billable: row.billable,
+      hourlyRateCents: row.hourly_rate_cents ?? null,
+      rateSource: row.rate_source ?? null,
+      rateRole: row.rate_role ?? null,
+      ratedAmountCents: row.rated_amount_cents ?? null,
+    });
+  }, []);
 
   /** Pick up a document: chain out whatever runs, then start (D11,
    *  ratified R19 — auto-start is no longer provisional). */
@@ -332,15 +413,26 @@ export function DocumentTimeProvider({ children }: { children: React.ReactNode }
         if (pausedRef.current === doc.projectId) return;
         const billable = await automaticBillableIntent(doc.projectId);
         if (heldRef.current?.projectId !== doc.projectId) return;
-        await api.current.startTimer
+        const taken = await api.current.startTimer
           .mutateAsync({
             projectId: doc.projectId,
             phaseKey: doc.phaseKey,
             source: 'timer_auto',
             billable,
-            quiet: true,
           })
-          .catch(() => {});
+          .catch(() => null);
+        // A row this session never saw — another tab's — that the RPC had to
+        // stop to take the slot. It is written; raise its strip (R20).
+        if (taken?.stopped && taken.stopped.id !== timer?.id) {
+          offerFromServerStop(taken.stopped);
+        }
+        if (taken?.started) {
+          documentEvents.time.timerStarted({
+            surface: 'document',
+            source: 'timer_auto',
+            billable,
+          });
+        }
         // Same gap as closeOut's stopTimer above: useStartTimer's onSuccess
         // doesn't await its own invalidateQueries either, so without this
         // the cache can still read the PREVIOUS document's (or no) timer
@@ -348,7 +440,7 @@ export function DocumentTimeProvider({ children }: { children: React.ReactNode }
         await qc.invalidateQueries({ queryKey: queryKeys.time.runningTimer() });
       });
     },
-    [enqueue, fetchRunning, closeOut, automaticBillableIntent, qc],
+    [enqueue, fetchRunning, closeOut, automaticBillableIntent, offerFromServerStop, qc],
   );
 
   /** Put down: close out the held document's timer through the strip. */
@@ -395,44 +487,65 @@ export function DocumentTimeProvider({ children }: { children: React.ReactNode }
       if (timer) return;
       const billable = await automaticBillableIntent(doc.projectId);
       if (heldRef.current?.projectId !== doc.projectId) return;
-      await api.current.startTimer
+      const taken = await api.current.startTimer
         .mutateAsync({
           projectId: doc.projectId,
           phaseKey: doc.phaseKey,
           source: 'timer_auto',
           billable,
-          quiet: true,
         })
-        .catch(() => {});
+        .catch(() => null);
+      if (taken?.stopped) offerFromServerStop(taken.stopped);
+      if (taken?.started) {
+        documentEvents.time.timerStarted({
+          surface: 'document',
+          source: 'timer_auto',
+          billable,
+        });
+      }
       await qc.invalidateQueries({ queryKey: queryKeys.time.runningTimer() });
     });
-  }, [enqueue, fetchRunning, automaticBillableIntent, qc]);
+  }, [enqueue, fetchRunning, automaticBillableIntent, offerFromServerStop, qc]);
 
-  /** "+ Log" — a typed entry against the held document (source manual_entry). */
+  /**
+   * "+ Log" — a typed entry. HT-14: it no longer early-returns when nothing is
+   * held. That early return is the whole bug the phone had — the sheet took
+   * minutes, an activity and a tap, cleared itself, and wrote NOTHING. The
+   * project is named by the caller now; the held document only supplies the
+   * phase when it happens to be the same one.
+   */
   const manualLog = useCallback(
-    async (minutes: number, activity: string) => {
+    async (input: ManualLogInput) => {
+      if (!input.projectId) throw new Error('Pick a document for this hour.');
+      if (!(input.minutes >= 1)) throw new Error('An hour needs a length.');
       const doc = heldRef.current;
-      if (!doc || minutes < 1) return;
-      await api.current.createEntry.mutateAsync({
-        projectId: doc.projectId,
-        durationMinutes: Math.round(minutes),
-        phaseKey: doc.phaseKey,
-        activity,
+      const written = await api.current.createEntry.mutateAsync({
+        projectId: input.projectId,
+        durationMinutes: Math.round(input.minutes),
+        startedAt: input.startedAt,
+        phaseKey:
+          input.phaseKey ??
+          (doc?.projectId === input.projectId ? doc.phaseKey : null),
+        activity: input.activity,
+        billable: input.billable,
+        rateRole: input.rateRole ?? null,
         source: 'manual_entry',
       });
       invalidateTimeSurfaces();
+      return written;
     },
     [invalidateTimeSurfaces],
   );
 
-  /** Strip "Log": persist the (possibly adjusted) duration + activity. */
+  /** Strip "Log": persist the (possibly adjusted) duration, activity and the
+   *  billable answer the pill carries (HT-11). */
   const logOffer = useCallback(
-    async (minutes: number, activity: string | null) => {
+    async (minutes: number, activity: string | null, billable: boolean) => {
       if (!offer || minutes < 1) return;
       await api.current.updateEntry.mutateAsync({
         id: offer.entryId,
         projectId: offer.projectId,
-        updates: { duration_minutes: Math.round(minutes), activity },
+        updates: { duration_minutes: Math.round(minutes), activity, billable },
       });
       invalidateTimeSurfaces();
       setOffer(null);

@@ -23,17 +23,36 @@ import {
 } from '@/lib/document/time-derivation';
 import { documentEvents } from '@/lib/analytics/document-events';
 import { DocumentAction } from './document-action';
+import { BillablePill, RateReadout, RateRoleMark } from './time-capture';
+import type { TimeRateRole, TimeRateSource } from '@patina/supabase';
+
+const SURFACE_KEY = 'time';
+const REGION_KEY = 'log-offer';
+
+// W3-R5-M1 — the strip is `bg-charcoal` below `min-[1180px]` (390 AND 1024);
+// every control that shipped in it before W3 carries this same override for
+// exactly that reason (`Log`, `Discard`, the minutes input, the activity
+// select). The billable pill and rate readout inherited the paper-dark
+// palette instead and measured 2.14:1 / 3.23:1 against the strip.
+const STRIP_LIGHT_INK = 'max-[1179px]:!text-[rgba(250,247,242,0.72)]';
 
 export function LogStrip() {
   const { offer, offerOwnsEdge, logOffer, discardOffer } = useDocumentTime();
   const [minutes, setMinutes] = useState('');
-  const [activity, setActivity] = useState('design');
+  // HT-24 — the activity starts UNSET. The old default silently attributed
+  // every timer-caught hour to 'design' the moment the strip was touched, so
+  // "what the work was" was never empty and never true either.
+  const [activity, setActivity] = useState('');
+  const [billable, setBillable] = useState(false);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (!offer) return;
     setMinutes(String(offer.suggestedMinutes));
-    setActivity('design');
+    setActivity('');
+    // HT-11 — seeded from the answer the SERVER stored on the row, not from a
+    // default. The pill can change it; nothing guesses it.
+    setBillable(offer.billable);
   }, [offer]);
 
   useEffect(() => {
@@ -65,7 +84,7 @@ export function LogStrip() {
     if (!valid || busy) return;
     setBusy(true);
     try {
-      await logOffer(parsed, activity);
+      await logOffer(parsed, activity || null, billable);
       // R21 week-one watch: strip engagement (logged, adjusted?, idle?).
       documentEvents.logStripActed({
         action: 'log',
@@ -121,6 +140,8 @@ export function LogStrip() {
             value={activity}
             onChange={(e) => setActivity(e.target.value)}
           >
+            {/* HT-24 — honest, and never required. */}
+            <option value="">activity not set</option>
             {ACTIVITIES.map((a) => (
               <option key={a.key} value={a.key}>
                 {a.label}
@@ -158,6 +179,34 @@ export function LogStrip() {
           >
             Discard
           </DocumentAction>
+        </div>
+
+        {/* HT-11/HT-12/HT-26 — the billable answer, what priced the hour, and
+            (only for a member who holds more than one) which of her roles did.
+            All three arrive already answered: the zero-tap path stays zero. */}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <BillablePill
+            value={billable}
+            onChange={setBillable}
+            disabled={busy}
+            surfaceKey={SURFACE_KEY}
+            regionKey={REGION_KEY}
+            className={STRIP_LIGHT_INK}
+          />
+          <RateReadout
+            entry={{
+              hourly_rate_cents: offer.hourlyRateCents,
+              rate_source: offer.rateSource as TimeRateSource | null,
+              rate_role: offer.rateRole as TimeRateRole | null,
+              billable,
+              rated_amount_cents: offer.ratedAmountCents,
+            }}
+            className={STRIP_LIGHT_INK}
+          />
+          <RateRoleMark
+            projectId={offer.projectId}
+            role={(offer.rateRole as TimeRateRole | null) ?? null}
+          />
         </div>
 
         {adjusted && (

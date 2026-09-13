@@ -44,6 +44,29 @@ export function automaticTimeBillingIntent(
   return { billable: true, reason: "active" };
 }
 
+export type BillableIntentReason = ReturnType<
+  typeof automaticTimeBillingIntent
+>["reason"];
+
+const BILLABLE_INTENT_SENTENCE: Record<BillableIntentReason, string> = {
+  active: "billable · agreement active",
+  no_authority: "non-billable · no agreement",
+  retainer_pending: "non-billable · retainer unpaid",
+  inactive: "non-billable · agreement not active",
+};
+
+/**
+ * HT-12 — the resolved billable answer as a SENTENCE, so the pill at every
+ * capture surface says why and not only which way it points. "Non-bill" with no
+ * reason was the whole complaint: a legitimately non-billable hour and an hour
+ * on a project with no signed authority looked identical.
+ */
+export function billableIntentSentence(
+  reason: BillableIntentReason,
+): string {
+  return BILLABLE_INTENT_SENTENCE[reason];
+}
+
 interface BillingStateEntry {
   billable?: boolean | null;
   invoice_id?: string | null;
