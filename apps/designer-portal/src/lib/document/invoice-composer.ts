@@ -24,17 +24,17 @@
  * name (LEAH-15, REP-15: the homeowner gets no staffing detail).
  */
 
-import type { DraftLineInput } from '@patina/supabase';
+import type { DraftLineInput } from "@patina/supabase";
 import {
   buildTimeLineDraft,
   groupEntriesByPerson,
   type TimeLineDateRow,
   type TimeLineEntryInput,
-} from '@/lib/time-billing';
+} from "@/lib/time-billing";
 
 /** Discriminates a time line's JSON `metadata.attribution` from the plain
  *  vendor-name strings furnishings lines already store there (00588). */
-export const TIME_ATTRIBUTION_KIND = 'patina_time_subtable' as const;
+export const TIME_ATTRIBUTION_KIND = "patina_time_subtable" as const;
 
 export interface TimeAttributionPayload {
   kind: typeof TIME_ATTRIBUTION_KIND;
@@ -43,7 +43,10 @@ export interface TimeAttributionPayload {
 
 function timeAttribution(dateRows: TimeLineDateRow[]): string | undefined {
   if (dateRows.length === 0) return undefined;
-  const payload: TimeAttributionPayload = { kind: TIME_ATTRIBUTION_KIND, rows: dateRows };
+  const payload: TimeAttributionPayload = {
+    kind: TIME_ATTRIBUTION_KIND,
+    rows: dateRows,
+  };
   return JSON.stringify(payload);
 }
 
@@ -71,13 +74,17 @@ export interface ComposerAdhocRow {
   unitDollars: string;
 }
 
-export const EMPTY_ADHOC: ComposerAdhocRow = { description: '', quantity: '1', unitDollars: '' };
+export const EMPTY_ADHOC: ComposerAdhocRow = {
+  description: "",
+  quantity: "1",
+  unitDollars: "",
+};
 
 // ── Small money parsing ─────────────────────────────────────────────────────
 
 /** "1,234.56" → 123456; garbage → 0. */
 export function dollarsToCents(value: string): number {
-  const parsed = parseFloat(value.replace(/[^0-9.\-]/g, ''));
+  const parsed = parseFloat(value.replace(/[^0-9.\-]/g, ""));
   return Number.isNaN(parsed) ? 0 : Math.round(parsed * 100);
 }
 
@@ -98,13 +105,15 @@ export function unbilledMilestones<M extends ComposerMilestone>(
 ): M[] {
   const billed = new Set<string>();
   for (const invoice of projectInvoices) {
-    if (invoice.status === 'void') continue;
+    if (invoice.status === "void") continue;
     for (const line of invoice.line_items ?? []) {
       if (line.milestone_id) billed.add(line.milestone_id);
     }
   }
   return milestones.filter(
-    (m) => (m.status === 'pending' || m.status === 'outstanding') && !billed.has(m.id),
+    (m) =>
+      (m.status === "pending" || m.status === "outstanding") &&
+      !billed.has(m.id),
   );
 }
 
@@ -112,7 +121,7 @@ export function unbilledMilestones<M extends ComposerMilestone>(
 
 /** Minimal coverage shape (mirrors FfeItemCoverage without the import cycle). */
 interface CoverageLike {
-  coverage: 'uninvoiced' | 'invoiced' | 'paid';
+  coverage: "uninvoiced" | "invoiced" | "paid";
 }
 
 export interface FfePartition<T extends ComposerFfeItem> {
@@ -138,8 +147,11 @@ export function partitionFfeBillable<T extends ComposerFfeItem>(
   const unpriced: T[] = [];
   for (const item of items) {
     const cov = coverage?.[item.id];
-    if (cov && cov.coverage !== 'uninvoiced') covered.push(item);
-    else if (item.unit_price_cents === null || item.unit_price_cents === undefined)
+    if (cov && cov.coverage !== "uninvoiced") covered.push(item);
+    else if (
+      item.unit_price_cents === null ||
+      item.unit_price_cents === undefined
+    )
       unpriced.push(item);
     else billable.push(item);
   }
@@ -160,9 +172,11 @@ export interface ComposerSelection {
  * useCreateDraftInvoice, kinds explicit, sort_order sequential in the
  * milestone → ffe → time → adhoc order the folio renders.
  */
-export function buildComposerLines(selection: ComposerSelection): DraftLineInput[] {
+export function buildComposerLines(
+  selection: ComposerSelection,
+): DraftLineInput[] {
   const milestoneLines: DraftLineInput[] = selection.milestones.map((m, i) => ({
-    kind: 'milestone' as const,
+    kind: "milestone" as const,
     milestoneId: m.id,
     description: m.label,
     quantity: 1,
@@ -171,7 +185,7 @@ export function buildComposerLines(selection: ComposerSelection): DraftLineInput
   }));
 
   const ffeLines: DraftLineInput[] = selection.ffeItems.map((it, i) => ({
-    kind: 'ffe' as const,
+    kind: "ffe" as const,
     ffeItemId: it.id,
     description: it.room?.name ? `${it.name} — ${it.room.name}` : it.name,
     quantity: it.quantity ?? 1,
@@ -190,7 +204,7 @@ export function buildComposerLines(selection: ComposerSelection): DraftLineInput
     const attribution = timeAttribution(draft.dateRows);
     return [
       {
-        kind: 'time' as const,
+        kind: "time" as const,
         description: draft.description,
         quantity: 1,
         unitAmountCents: draft.amountCents,
@@ -207,7 +221,7 @@ export function buildComposerLines(selection: ComposerSelection): DraftLineInput
   const adhocLines: DraftLineInput[] = selection.adhoc
     .filter((l) => l.description.trim() && dollarsToCents(l.unitDollars) > 0)
     .map((l, i) => ({
-      kind: 'adhoc' as const,
+      kind: "adhoc" as const,
       description: l.description.trim(),
       quantity: parseFloat(l.quantity) > 0 ? parseFloat(l.quantity) : 1,
       unitAmountCents: dollarsToCents(l.unitDollars),
@@ -221,7 +235,7 @@ export function buildComposerLines(selection: ComposerSelection): DraftLineInput
 
 /** The value the composer's "for" select carries for the houseless choice.
  *  Never a project id, so it can never collide with one. */
-export const STUDIO_TARGET = '__studio__';
+export const STUDIO_TARGET = "__studio__";
 
 /** The org rows the composer needs to answer ruling S8. */
 export interface ComposerStudio {
@@ -251,10 +265,10 @@ export function activeDesignStudios<T extends ComposerStudio>(orgs: T[]): T[] {
   return orgs
     .filter(
       (o) =>
-        o.type === 'design_studio' &&
-        o.status === 'active' &&
-        o.membership?.role !== 'guest' &&
-        (o.membership?.status ?? 'active') === 'active',
+        o.type === "design_studio" &&
+        o.status === "active" &&
+        o.membership?.role !== "guest" &&
+        (o.membership?.status ?? "active") === "active",
     )
     .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
 }

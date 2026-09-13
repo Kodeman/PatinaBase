@@ -24,8 +24,8 @@
 
 /** 270 → "4h 30m" — re-exported from @patina/shared so the invoice renderers
  * (designer + client portals) and this module share one implementation. */
-export { formatMinutesAsHours as formatHoursLabel } from '@patina/shared';
-import { formatMinutesAsHours as formatHoursLabel } from '@patina/shared';
+export { formatMinutesAsHours as formatHoursLabel } from "@patina/shared";
+import { formatMinutesAsHours as formatHoursLabel } from "@patina/shared";
 
 /** Minutes → decimal hours rounded to 0.1 (for metric blocks). */
 export function minutesToHours(minutes: number): number {
@@ -80,22 +80,32 @@ export interface TimeLineDraft {
  *  entries. Callers that pre-group by person (see `groupEntriesByPerson`)
  *  get a named row (HT-21); an ungrouped, mixed-author call keeps the
  *  pre-HT-21 generic phrasing rather than naming the wrong person. */
-export function buildTimeLineDraft(entries: TimeLineEntryInput[]): TimeLineDraft | null {
+export function buildTimeLineDraft(
+  entries: TimeLineEntryInput[],
+): TimeLineDraft | null {
   if (entries.length === 0) return null;
-  const totalMinutes = entries.reduce((sum, e) => sum + (e.duration_minutes || 0), 0);
-  const amountCents = entries.reduce((sum, e) => sum + (e.amount_cents || 0), 0);
-  const noun = entries.length === 1 ? 'entry' : 'entries';
+  const totalMinutes = entries.reduce(
+    (sum, e) => sum + (e.duration_minutes || 0),
+    0,
+  );
+  const amountCents = entries.reduce(
+    (sum, e) => sum + (e.amount_cents || 0),
+    0,
+  );
+  const noun = entries.length === 1 ? "entry" : "entries";
 
   const names = new Set(
     entries
       .map((e) => e.member_name)
-      .filter((n): n is string => typeof n === 'string' && n.trim().length > 0),
+      .filter((n): n is string => typeof n === "string" && n.trim().length > 0),
   );
   const personName = names.size === 1 ? [...names][0] : null;
-  const label = personName ?? 'Design services';
+  const label = personName ?? "Design services";
 
   const dateRows: TimeLineDateRow[] = entries
-    .filter((e): e is TimeLineEntryInput & { started_at: string } => Boolean(e.started_at))
+    .filter((e): e is TimeLineEntryInput & { started_at: string } =>
+      Boolean(e.started_at),
+    )
     .map((e) => ({
       date: e.started_at.slice(0, 10),
       minutes: e.duration_minutes || 0,
@@ -135,16 +145,21 @@ export function groupEntriesByPerson<T extends PersonGroupable>(
 ): PersonGroup<T>[] {
   const groups = new Map<string, PersonGroup<T>>();
   for (const entry of entries) {
-    const key = entry.user_id ?? '';
+    const key = entry.user_id ?? "";
     let group = groups.get(key);
     if (!group) {
-      group = { userId: entry.user_id ?? null, memberName: entry.member_name ?? null, entries: [] };
+      group = {
+        userId: entry.user_id ?? null,
+        memberName: entry.member_name ?? null,
+        entries: [],
+      };
       groups.set(key, group);
     }
     group.entries.push(entry);
   }
   return [...groups.values()].sort((a, b) => {
-    if (a.memberName && b.memberName) return a.memberName.localeCompare(b.memberName);
+    if (a.memberName && b.memberName)
+      return a.memberName.localeCompare(b.memberName);
     if (a.memberName) return -1;
     if (b.memberName) return 1;
     return 0;
@@ -181,8 +196,8 @@ function weekStartOf(iso: string): Date {
 
 function isoDate(d: Date): string {
   const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
 }
 
@@ -190,7 +205,9 @@ function isoDate(d: Date): string {
  * Group entries by local week (Monday start), newest week first. Entries keep
  * their input order within a group (callers pass newest-first lists).
  */
-export function groupEntriesByWeek<T extends WeekGroupable>(entries: T[]): WeekGroup<T>[] {
+export function groupEntriesByWeek<T extends WeekGroupable>(
+  entries: T[],
+): WeekGroup<T>[] {
   const groups = new Map<string, WeekGroup<T>>();
   for (const entry of entries) {
     const monday = weekStartOf(entry.started_at);
@@ -199,7 +216,7 @@ export function groupEntriesByWeek<T extends WeekGroupable>(entries: T[]): WeekG
     if (!group) {
       group = {
         weekStart: key,
-        label: `Week of ${monday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`,
+        label: `Week of ${monday.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`,
         entries: [],
         totalMinutes: 0,
         amountCents: 0,
@@ -210,18 +227,20 @@ export function groupEntriesByWeek<T extends WeekGroupable>(entries: T[]): WeekG
     group.totalMinutes += entry.duration_minutes || 0;
     group.amountCents += entry.amount_cents || 0;
   }
-  return [...groups.values()].sort((a, b) => (a.weekStart < b.weekStart ? 1 : -1));
+  return [...groups.values()].sort((a, b) =>
+    a.weekStart < b.weekStart ? 1 : -1,
+  );
 }
 
 // ── Studio report period windows ──
 
 /** One implementation, in @patina/supabase beside the hook that reads it. */
-export { studioPeriodStartISO, type StudioPeriod } from '@patina/supabase';
-import type { StudioPeriod } from '@patina/supabase';
+export { studioPeriodStartISO, type StudioPeriod } from "@patina/supabase";
+import type { StudioPeriod } from "@patina/supabase";
 
 export const STUDIO_PERIODS: Array<{ key: StudioPeriod; label: string }> = [
-  { key: 'week', label: 'This Week' },
-  { key: 'month', label: 'Month' },
-  { key: 'quarter', label: 'Quarter' },
-  { key: 'year', label: 'Year' },
+  { key: "week", label: "This Week" },
+  { key: "month", label: "Month" },
+  { key: "quarter", label: "Quarter" },
+  { key: "year", label: "Year" },
 ];
