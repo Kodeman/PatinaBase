@@ -46,12 +46,23 @@ export interface ExpiryNoticeClauseInput {
 }
 
 /**
- * "Northgate Electric’s insurance lapses in 30 days, on 6 October 2026."
+ * "Northgate Electric’s insurance lapses on 6 October 2026."
  * "Northgate Electric’s insurance lapsed 31 March 2026."
  *
- * The "lapses in 30 days" half is direction §3.8's own paper word, spelled out
- * — the studio reads the same phrase on the row's word column and in the
- * sentence beneath it.
+ * M2R-1 — THE SENTENCE SAYS WHAT THE RECORD SAYS, AND NOTHING IT DOES NOT.
+ *
+ * This clause used to read "lapses in 30 days, on 6 October 2026", taking
+ * direction §3.8's paper WORD ("Lapses in 30 days") and spelling it out beside
+ * a real date. But `lapses_soon` is a 30-day WINDOW, not a 30-day distance —
+ * `compliance-table.tsx` sets it for `expires - now <= 30 days`, and 00630
+ * writes the notice once, on the night the paper enters the window — so the
+ * two halves of one sentence disagreed for the whole window. Measured on the
+ * shipped fixture: Lakeshore Painting Co.'s coi_gl expires 2026-10-06, 23 days
+ * out, and the face read "lapses in 30 days, on 6 October 2026." An interval
+ * beside a date is arithmetic, and arithmetic on a face has to be right; the
+ * date alone is the fact the record holds. The state WORD stays a word
+ * (`packages/types/src/studio-config.ts`) — a label may name a window, a
+ * sentence carrying a date may not.
  */
 export function expiryNoticeClause(input: ExpiryNoticeClauseInput): string {
   const owner = (input.holderName ?? "").trim();
@@ -63,8 +74,8 @@ export function expiryNoticeClause(input: ExpiryNoticeClauseInput): string {
       : `${possessive}${input.paperNoun} has lapsed.`;
   }
   return when
-    ? `${possessive}${input.paperNoun} lapses in 30 days, on ${when}.`
-    : `${possessive}${input.paperNoun} lapses in 30 days.`;
+    ? `${possessive}${input.paperNoun} lapses on ${when}.`
+    : `${possessive}${input.paperNoun} lapses soon.`;
 }
 
 /**

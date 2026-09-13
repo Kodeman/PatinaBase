@@ -102,10 +102,16 @@ describe("mergeConsequenceSentence", () => {
       "Adaeze Okonkwo",
       "Chidi Okonkwo",
     );
-    expect(sentence).toContain("seats, channels, contact rule, paper");
+    expect(sentence).toContain("seats, channels, contact rule and firm designations");
     expect(sentence).toContain(
       "Consent stays with the number, not with the card",
     );
+    // M2R-2: paper does NOT travel. 00629 §5 moves an absorbed document only
+    // where the survivor already holds a qualifying successor, so the sheet may
+    // not promise the count above it moves.
+    expect(sentence).toContain("Chidi Okonkwo’s paper stays on Chidi Okonkwo’s card");
+    expect(sentence).toContain("the older one is marked superseded");
+    expect(sentence).not.toContain("contact rule, paper and firm designations move");
     expect(sentence).toContain("both ways of reaching this person still work");
   });
 });

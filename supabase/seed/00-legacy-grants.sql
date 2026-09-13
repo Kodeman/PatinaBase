@@ -16394,6 +16394,12 @@ END $g$;
 
 -- 00629_studio_contact_merges.sql
 DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.assert_merged_into_write() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00629_studio_contact_merges.sql
+DO $g$ BEGIN
   REVOKE ALL ON TABLE public.studio_contact_merges FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;

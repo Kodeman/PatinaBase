@@ -242,6 +242,19 @@ BEGIN
        WHERE d.expires_on IS NOT NULL
          AND cardinality(d.blocks) > 0
          AND d.expires_on <= CURRENT_DATE + 30
+         -- A CARD THE ROOM HAS FOLDED AWAY ANNOUNCES NOTHING (migrations
+         -- review r2 B2-4, reproduced locally). merge_studio_contacts() leaves
+         -- an absorbed document on the absorbed card wherever the survivor
+         -- holds no successor to retire it (00629 §5, crm-model §4) —
+         -- correctly — and compliance_document_state() still reads that row
+         -- `lapsed`. Without this leg the sweep wrote "Absorbed Firm B's paper
+         -- has lapsed" to every owner and admin, with a deep link to a card
+         -- people_directory emits no row for and company-card.tsx renders as
+         -- though it were live, over a lapse that blocks nothing. The same
+         -- `merged_into IS NULL` leg the Directory (00629 §6) and the auto-link
+         -- resolver (§4b) already take: the survivor's own row is the whole
+         -- human, and its paper is what the studio is told about.
+         AND sc.merged_into IS NULL
        ORDER BY d.expires_on, d.id
     LOOP
       v_scanned := v_scanned + 1;

@@ -76,6 +76,173 @@ CREATE INDEX IF NOT EXISTS idx_studio_contacts_merged_into
   WHERE merged_into IS NOT NULL;
 
 -- ═══════════════════════════════════════════════════════════════════════════
+-- 1b. merged_into IS NOT AN ORDINARY COLUMN — the write guard
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Migrations review r2 BLOCKING B2-1, reproduced locally as a plain `member`
+-- of the studio.
+--
+-- 00417's member UPDATE policy on studio_contacts is COLUMN-BLIND except for
+-- archived_at (it splits that one out on both sides, :238-255), so a column
+-- added later is reachable from PostgREST by any active member with one PATCH.
+-- One PATCH of merged_into did all of this at once:
+--
+--   * the card left people_directory (§6's `merged_into IS NULL` leg) while
+--     its seats kept the dead id — the exact orphaning §4's banner says must
+--     never occur, and the r3 MAJOR-1 defect the v4 rebuild closed;
+--   * a PERSON was folded into a FIRM, the one merge crm-model §4 forbids;
+--   * merge_survivor_already_merged was skipped, so chains and cycles became
+--     hand-buildable and resolve_merged_contact()'s depth cap became the only
+--     thing between the room and a loop;
+--   * nothing was repointed — no channel, affiliation, document, designation,
+--     seat, bid pointer or household — and no studio_contact_merges row was
+--     written, so PR-o's append-only lineage read "no merge happened";
+--   * the pointer could name a card in ANOTHER studio, after which §4's guard
+--     refused every seat write on the card and echoed the foreign id back in
+--     its HINT;
+--   * and merge_studio_contacts() then refused to repair any of it
+--     (merge_already_merged / merge_survivor_already_merged), so the room's
+--     own act could not undo the room's own damage.
+--
+-- TWO LEGS, because 00417 has two UPDATE policies and only one of them is the
+-- member's. The policy split below states the rule the way 00417 states it for
+-- archived_at — a member may neither set it nor edit a card that carries it —
+-- and the trigger states it for EVERY signed-in caller, owners and admins
+-- included, because 00417's admin leg (:256-262) carries no column predicate
+-- at all and a policy cannot compare OLD to NEW.
+--
+-- THE DOOR is the 00594 refuse_legacy_consent_write() idiom: one
+-- transaction-local GUC, set by merge_studio_contacts() around its own two
+-- statements and cleared immediately after, so the SECURITY DEFINER RPC stays
+-- the only writer without having to guess at auth.uid() (which a DEFINER
+-- function still reports as the caller's).
+CREATE OR REPLACE FUNCTION public.assert_merged_into_write()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+DECLARE
+  v_surv public.studio_contacts%ROWTYPE;
+BEGIN
+  -- BEFORE INSERT fires on every card the room mints, and the column is null on
+  -- all of them; BEFORE UPDATE OF fires whenever a column is NAMED in the SET
+  -- list, whether or not its value moves, and the shipped portal writes whole
+  -- rows. Only a real change is judged (the 00594 shape).
+  IF TG_OP = 'INSERT' THEN
+    IF NEW.merged_into IS NULL THEN
+      RETURN NEW;
+    END IF;
+  ELSIF NEW.merged_into IS NOT DISTINCT FROM OLD.merged_into THEN
+    RETURN NEW;
+  END IF;
+
+  -- The FK is ON DELETE SET NULL (§1). When the SURVIVOR is deleted the
+  -- referential action clears this pointer, and the parent row is already gone
+  -- by the time this trigger sees it — that is the FK doing what §1 declares,
+  -- not a caller un-merging a card, and refusing it would make a survivor
+  -- undeletable.
+  IF TG_OP = 'UPDATE'
+     AND NEW.merged_into IS NULL
+     AND OLD.merged_into IS NOT NULL
+     AND NOT EXISTS (SELECT 1 FROM public.studio_contacts sc
+                      WHERE sc.id = OLD.merged_into) THEN
+    RETURN NEW;
+  END IF;
+
+  IF COALESCE(current_setting('app.contact_merge_in_progress', true), '') <> 'on' THEN
+    RAISE EXCEPTION 'studio_contact_merge_pointer_forbidden'
+      USING HINT = 'merged_into is written by merge_studio_contacts() and by '
+                   'nothing else (PR-o). Merging two cards repoints their '
+                   'channels, affiliations, paper, designations, seats, bid '
+                   'pointers and household and writes the lineage row; '
+                   'setting the pointer by hand does none of that and folds '
+                   'the card''s seats out of the room.';
+  END IF;
+
+  -- BESIDE the door, not behind it: the two structural facts the RPC's own
+  -- gates state, restated where no writer — the RPC, a repair, service_role —
+  -- can get past them.
+  IF NEW.merged_into IS NOT NULL THEN
+    SELECT * INTO v_surv FROM public.studio_contacts WHERE id = NEW.merged_into;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'studio_contact_merge_survivor_not_found'
+        USING HINT = 'merged_into must name a rolodex card that exists.';
+    END IF;
+    IF v_surv.organization_id IS DISTINCT FROM NEW.organization_id THEN
+      RAISE EXCEPTION 'studio_contact_merge_other_studio'
+        USING HINT = 'Two cards merge only inside one studio''s rolodex '
+                     '(PD-1). A pointer across tenants makes every later seat '
+                     'write on this card unsatisfiable.';
+    END IF;
+    IF v_surv.entity_kind IS DISTINCT FROM NEW.entity_kind
+       AND NOT (NEW.entity_kind = 'company'
+                AND v_surv.entity_kind = 'person'
+                AND COALESCE(v_surv.is_sole_proprietor, false)) THEN
+      RAISE EXCEPTION 'studio_contact_merge_kind_mismatch'
+        USING HINT = 'A firm card merges into a person card only when that '
+                     'person is declared a sole proprietor, and a person '
+                     'never merges into a firm (crm-model §4).';
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.assert_merged_into_write()
+  FROM PUBLIC, anon, authenticated;
+
+COMMENT ON FUNCTION public.assert_merged_into_write() IS
+  'BEFORE INSERT/UPDATE OF merged_into on studio_contacts: the pointer is '
+  'merge_studio_contacts()''s to write and nobody else''s (00629, migrations '
+  'review r2 B2-1). A change from any other caller — owner and admin '
+  'included, since 00417''s admin UPDATE leg carries no column predicate — '
+  'raises studio_contact_merge_pointer_forbidden. The RPC opens the door with '
+  'SET LOCAL app.contact_merge_in_progress = ''on'' around its own two '
+  'statements, the 00594 refuse_legacy_consent_write() idiom. Two structural '
+  'rules hold for EVERY writer: the survivor is a card in the SAME studio, '
+  'and the kind pair is legal (crm-model §4''s sole-proprietor fold is the '
+  'one cross-kind case). Clearing the pointer is allowed only where the '
+  'survivor no longer exists, which is the FK''s own ON DELETE SET NULL.';
+
+DROP TRIGGER IF EXISTS assert_merged_into_write_trg ON public.studio_contacts;
+CREATE TRIGGER assert_merged_into_write_trg
+  BEFORE INSERT OR UPDATE OF merged_into
+  ON public.studio_contacts
+  FOR EACH ROW EXECUTE FUNCTION public.assert_merged_into_write();
+
+-- ── the policy split, 00417's archived_at shape ───────────────────────────
+-- Grafted from 00417:224-255 with ONE predicate added to each of the three
+-- clauses. Nothing else moves: same names, same roles, same helpers, same
+-- archived_at legs. The admin UPDATE leg (00417:256-262) is deliberately NOT
+-- re-issued — it is the archive flip, and the trigger above is what holds it
+-- to archived_at.
+DROP POLICY IF EXISTS studio_contacts_member_insert ON public.studio_contacts;
+CREATE POLICY studio_contacts_member_insert
+  ON public.studio_contacts FOR INSERT
+  TO authenticated
+  WITH CHECK (
+    public.is_active_studio_member(organization_id)
+    AND archived_at IS NULL
+    AND merged_into IS NULL
+  );
+
+DROP POLICY IF EXISTS studio_contacts_member_update ON public.studio_contacts;
+CREATE POLICY studio_contacts_member_update
+  ON public.studio_contacts FOR UPDATE
+  TO authenticated
+  USING (
+    public.is_active_studio_member(organization_id)
+    AND archived_at IS NULL
+    AND merged_into IS NULL
+  )
+  WITH CHECK (
+    public.is_active_studio_member(organization_id)
+    AND archived_at IS NULL
+    AND merged_into IS NULL
+  );
+
+-- ═══════════════════════════════════════════════════════════════════════════
 -- 2. studio_contact_merges — append-only, one row per merge
 -- ═══════════════════════════════════════════════════════════════════════════
 CREATE TABLE IF NOT EXISTS public.studio_contact_merges (
@@ -401,6 +568,235 @@ COMMENT ON FUNCTION public.link_rolodex_card_to_parties() IS
   'leg 00629).';
 
 -- ═══════════════════════════════════════════════════════════════════════════
+-- 4c. A SUPERSEDE EDGE IS JUDGED WHEN IT IS WRITTEN, NOT WHENEVER THE ROW MOVES
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Migrations review r2 MAJOR B2-2, reproduced locally (rolled back).
+--
+-- assert_compliance_holder() (00623) re-validates the WHOLE successor contract
+-- on every `UPDATE OF holder_id`, and two of its seven legs are time-varying:
+--
+--   compliance_successor_already_superseded  the successor is itself retired
+--                                            the moment the NEXT renewal lands;
+--   compliance_successor_already_lapsed      the successor lapses by the
+--                                            calendar, with nobody writing
+--                                            anything at all.
+--
+-- So the ordinary firm merge — an absorbed card that has renewed its COI once,
+-- a survivor holding a current one — aborted outright: §5's compliance block
+-- moves the absorbed head, then walks the retired rows behind it, and the
+-- second statement re-judged an edge written years ago against today. Measured:
+-- ERROR compliance_successor_already_superseded, raised from
+-- assert_compliance_holder() line 112, the whole transaction lost, and no path
+-- in the room past it — Leah's "Compare & merge" on that pair failed every
+-- time with a schema error naming nothing she did. Reordering §5's two
+-- statements (below) fixes the head-of-chain half and leaves the other:
+-- measured, a LAPSED absorbed head with a retired predecessor then answered
+-- compliance_successor_already_lapsed instead, which is the commoner shape
+-- still (a firm card is folded away precisely because its paper stopped).
+--
+-- The two legs guard an ACT: pointing a paper at its renewal. Re-running them
+-- over an unchanged edge adds nothing, because R-BF already re-reckons both
+-- facts at READ time — compliance_state()'s transitive walk drops a row from
+-- the count only while a reachable successor is still IN FORCE and still
+-- carries its gates, so a chain whose head has since lapsed is already counted
+-- against the card whatever the trigger said when the edge was written. The
+-- five STRUCTURAL legs — holder exists, holder kind, holder studio, successor
+-- held for the SAME CARD, same doc_type, dates, gates — still run on every
+-- write, so the r1 MAJOR-4 / r2 MAJOR-1 / r3 MAJOR-1 laundering doors stay
+-- shut: each of those is written by CHANGING superseded_by, which is exactly
+-- what v_retiring names.
+--
+-- Grafted from 00623:293-471 verbatim — same signature, same SECURITY DEFINER
+-- and search_path, same seven legs in the same order, every HINT byte for byte
+-- — plus one boolean and two IF conditions. The trigger itself (00623) is not
+-- re-issued: it already fires on the same seven columns.
+CREATE OR REPLACE FUNCTION public.assert_compliance_holder()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+DECLARE
+  v_kind         text;
+  v_org          uuid;
+  -- Is this write the ACT of retiring a paper, or a row being carried
+  -- somewhere with the edge it already had? (00629, r2 B2-2.)
+  v_retiring     boolean;
+  v_succ_type       text;
+  v_succ_expires    date;
+  v_succ_superseded uuid;
+  v_succ_blocks     text[];
+BEGIN
+  v_retiring := (TG_OP = 'INSERT')
+                OR (NEW.superseded_by IS DISTINCT FROM OLD.superseded_by);
+
+  SELECT sc.entity_kind, sc.organization_id INTO v_kind, v_org
+    FROM public.studio_contacts sc WHERE sc.id = NEW.holder_id;
+
+  IF v_kind IS NULL THEN
+    RAISE EXCEPTION 'compliance_holder_not_found'
+      USING HINT = 'studio_compliance_documents.holder_id must name a rolodex '
+                   'card that exists.';
+  END IF;
+  IF v_kind IS DISTINCT FROM NEW.holder_type THEN
+    RAISE EXCEPTION 'compliance_holder_kind_mismatch'
+      USING HINT = 'holder_type must equal the card''s own entity_kind. A COI '
+                   'is the firm''s paper and a master licence is the '
+                   'person''s; the row may not disagree with the card.';
+  END IF;
+  IF v_org IS DISTINCT FROM NEW.organization_id THEN
+    RAISE EXCEPTION 'compliance_holder_other_studio'
+      USING HINT = 'holder_id must name a card in the SAME studio as '
+                   'organization_id. PR-u: each studio verifies its own paper.';
+  END IF;
+
+  IF NEW.superseded_by IS NOT NULL THEN
+    SELECT d.doc_type, d.expires_on, d.superseded_by, d.blocks
+      INTO v_succ_type, v_succ_expires, v_succ_superseded, v_succ_blocks
+      FROM public.studio_compliance_documents d
+      WHERE d.id = NEW.superseded_by
+        AND d.organization_id = NEW.organization_id
+        AND d.holder_id = NEW.holder_id;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'compliance_successor_other_holder'
+        USING HINT = 'superseded_by must name another document held for the '
+                     'SAME card in the SAME studio. A renewal supersedes its '
+                     'own predecessor, not somebody else''s paper.';
+    END IF;
+
+    -- Card and studio were the whole guard, and they cannot tell a renewal
+    -- from a laundering: one UPDATE through PostgREST by a plain studio
+    -- member pointed a lapsed COI at the firm's undated W-9 and the paper
+    -- word flipped from lapsed to current while the lapsed COI was still on
+    -- file (w1b final review r1 MAJOR-4). compliance_state() excludes every
+    -- superseded row, so the successor must be the SAME paper, covering at
+    -- least as long as the row it retires.
+    IF v_succ_type IS DISTINCT FROM NEW.doc_type THEN
+      RAISE EXCEPTION 'compliance_successor_wrong_type'
+        USING HINT = 'A renewal is the same paper: superseded_by must name a '
+                     'document of the same doc_type. A W-9 does not renew a '
+                     'COI, and pointing one at the other would hide a lapse.';
+    END IF;
+    IF v_succ_expires IS NOT NULL
+       AND NEW.expires_on IS NOT NULL
+       AND v_succ_expires < NEW.expires_on THEN
+      RAISE EXCEPTION 'compliance_successor_not_later'
+        USING HINT = 'A renewal covers at least as long as the paper it '
+                     'retires: superseded_by must name a document whose '
+                     'expires_on is not earlier than this row''s. An undated '
+                     'successor qualifies only for an undated row — see '
+                     'compliance_successor_undated, which keys on the paper''s '
+                     'own date rather than on its type.';
+    END IF;
+
+    -- w1b final review r2 MAJOR-1, door (a), re-keyed in r4 (MAJOR-1): the
+    -- exemption above was the second half of the undated-COI door. The CHECK
+    -- (studio_compliance_documents_dated_expiry_check) makes an undated
+    -- certificate unrecordable, and this says the same thing where the CHECK
+    -- cannot see: over a row that predates the constraint, an undated
+    -- successor of a dated paper is refused rather than silently retiring a
+    -- lapse the card still holds.
+    --
+    -- r4 MAJOR-1: this leg, and the in-force leg below, both enumerated the
+    -- five DATED doc_types — so for w9, lien_waiver_conditional,
+    -- lien_waiver_unconditional and other_named the whole door stayed open,
+    -- and it was walked: an expired lien_waiver_conditional gating
+    -- {draw,payment} went from `lapsed` to `current` in two ordinary member
+    -- writes with the expired certificate still on file. The rule does not
+    -- belong to a type list, it belongs to the PAPER: only a DATED row can
+    -- lapse, and a dated row may only be retired by a dated one. One rule
+    -- covers all nine types and needs no vocabulary kept in step. (An undated
+    -- row can never read `lapsed` — compliance_state() counts only
+    -- expires_on IS NOT NULL — so retiring one with another undated paper
+    -- hides nothing and stays legitimate.)
+    IF NEW.expires_on IS NOT NULL AND v_succ_expires IS NULL THEN
+      RAISE EXCEPTION 'compliance_successor_undated'
+        USING HINT = 'A DATED paper may only be retired by a dated one: this '
+                     'row carries an expires_on, so its renewal must carry '
+                     'its own. An undated successor is held and can never '
+                     'lapse, so it would read `current` forever while the '
+                     'lapse it retired is still on file — whatever the '
+                     'doc_type. An undated paper may still be retired by '
+                     'another undated one.';
+    END IF;
+
+    -- w1b final review r2 MAJOR-1, door (b): the two-row supersede CYCLE.
+    -- The CHECK could only see self-reference (superseded_by <> id), so
+    -- A -> B and then B -> A passed both legs above whenever the two rows
+    -- shared a doc_type and a date — and compliance_state() excludes EVERY
+    -- superseded row, so the card fell back to whatever gateless paper it
+    -- holds and printed `current` (every real firm in the fixture holds a
+    -- W-9), or `not_on_file` on a card holding nothing else. Requiring the
+    -- successor to be the HEAD of its own chain makes a cycle of any length
+    -- unreachable in any number of statements: the edge that would close one
+    -- must always point at a row that is already superseded. It costs nothing
+    -- — the row was already being read.
+    IF v_retiring AND v_succ_superseded IS NOT NULL THEN
+      RAISE EXCEPTION 'compliance_successor_already_superseded'
+        USING HINT = 'superseded_by must name the paper that is STILL in '
+                     'force — a document whose own superseded_by is null. '
+                     'Pointing at an already-retired row is how a supersede '
+                     'closes a loop and takes every one of a card''s dated '
+                     'papers out of the reckoning at once.';
+    END IF;
+
+    -- w1b final review r3 MAJOR-1, the THIRD door to r1 MAJOR-4's and r2
+    -- MAJOR-1's consequence. Both legs below were reachable with two ordinary
+    -- member writes on the seeded Okonkwo fixture, with `blocks` never typed:
+    -- record a coi_gl dated CURRENT_DATE - 5 (the column default leaves blocks
+    -- '{}'), then point Northgate Electric's 2026-03-31 lapse at it. Every
+    -- guard above passes — same doc_type, a date not earlier, a date present,
+    -- a successor at the head of its chain — and compliance_state() excludes
+    -- every superseded row and counts only cardinality(blocks) > 0, so
+    -- Northgate Electric, Dana Kowalski's identity row and BOTH her seat lines
+    -- flipped from lapsed to current over a record holding no in-force
+    -- general-liability certificate at all.
+    --
+    -- The two missing invariants, measured apart: with the gates carried
+    -- forward the word stays honest even when the successor is itself expired
+    -- (the successor's own lapse then holds the card), and an honest
+    -- future-dated renewal with blocks left at the default silently drops
+    -- {site_access,draw} — the same hole one renewal later. So a successor
+    -- must be IN FORCE, and must carry at least the gates of the row it
+    -- retires.
+    --
+    -- Both are checked LAST, after the head-of-chain leg, so a loop-closing
+    -- edge that is also expired still answers
+    -- compliance_successor_already_superseded — the cycle is the worse fact
+    -- and the error a reader should see.
+    --
+    -- r4 MAJOR-1: keyed on the successor's own DATE rather than on the same
+    -- five-type list, for the reason stated at the undated leg above — a
+    -- lapsed lien waiver, W-9 or named card is exactly as expired as a lapsed
+    -- certificate, and its retirement was unguarded. The in-force test now
+    -- applies whenever the successor carries a date at all.
+    IF v_retiring AND v_succ_expires IS NOT NULL AND v_succ_expires < CURRENT_DATE THEN
+      RAISE EXCEPTION 'compliance_successor_already_lapsed'
+        USING HINT = 'A renewal must still be in force: superseded_by may not '
+                     'name a paper whose own expires_on has already passed, '
+                     'whatever the doc_type. Retiring a lapse with an equally '
+                     'lapsed successor takes the first lapse out of the '
+                     'reckoning and, when the successor carries no gate of '
+                     'its own, prints `current` over a firm with no cover.';
+    END IF;
+
+    IF NOT (NEW.blocks <@ v_succ_blocks) THEN
+      RAISE EXCEPTION 'compliance_successor_drops_a_gate'
+        USING HINT = 'A renewal carries at least the gates of the paper it '
+                     'retires: superseded_by must name a document whose '
+                     'blocks[] contains every gate this row holds. blocks '
+                     'defaults to empty, so a renewal recorded without its '
+                     'gates would retire a gating lapse with a gateless row '
+                     'and read `current` forever — record the gates on the '
+                     'renewal, or do not retire the lapse.';
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
 -- 5. merge_studio_contacts — one transaction, one act
 -- ═══════════════════════════════════════════════════════════════════════════
 CREATE OR REPLACE FUNCTION public.merge_studio_contacts(
@@ -420,6 +816,10 @@ DECLARE
   v_second   uuid;
   v_cross    boolean := false;
   v_merge_id uuid;
+  -- The absorbed heads that earn a successor, and the successor each earns,
+  -- captured before the first statement makes the predicate false (r2 B2-2).
+  v_heads    uuid[];
+  v_succs    uuid[];
 BEGIN
   IF p_survivor IS NULL OR p_merged IS NULL THEN
     RAISE EXCEPTION 'merge_contact_not_found'
@@ -590,47 +990,74 @@ BEGIN
   -- one: same doc_type, successor at the head of its own chain, successor in
   -- force, successor dated when the row is dated and expiring no earlier, and
   -- the successor carrying at least the row's gates (blocks <@).
+  --
+  -- THREE STATEMENTS, IN THIS ORDER (r2 B2-2). The block used to move the head
+  -- and write its superseded_by in ONE statement, and then walk the rows
+  -- behind it — so the second statement asked assert_compliance_holder() to
+  -- re-validate a supersede edge whose successor the FIRST statement had just
+  -- retired, and every merge of a card carrying a renewal aborted. The head
+  -- now moves carrying nothing (a row with a NULL superseded_by is asked no
+  -- successor question at all), the lineage behind it follows while its own
+  -- successor is already on the survivor, and the edge onto the survivor's
+  -- certificate is written LAST, when every row it concerns is in place. §4c
+  -- is the other half: the two time-varying legs no longer re-judge an
+  -- unchanged edge.
   IF NOT v_cross THEN
-    WITH successor AS (
-      SELECT DISTINCT ON (d.id)
-             d.id  AS doc_id,
-             s.id  AS successor_id
-        FROM public.studio_compliance_documents d
-        JOIN public.studio_compliance_documents s
-          ON s.holder_id       = p_survivor
-         AND s.organization_id = d.organization_id
-         AND s.doc_type        = d.doc_type
-         AND s.superseded_by IS NULL
-         AND (s.expires_on IS NULL OR s.expires_on >= CURRENT_DATE)
-         AND (d.expires_on IS NULL
-              OR (s.expires_on IS NOT NULL AND s.expires_on >= d.expires_on))
-         AND d.blocks <@ s.blocks
-       WHERE d.holder_id = p_merged
-         AND d.superseded_by IS NULL
-       ORDER BY d.id, s.expires_on DESC NULLS LAST, s.id
-    )
-    UPDATE public.studio_compliance_documents d
-       SET holder_id     = p_survivor,
-           holder_type   = v_survivor.entity_kind,
-           superseded_by = su.successor_id
-      FROM successor su
-     WHERE d.id = su.doc_id;
+    -- The heads that qualify, and the successor each one earns. Captured ONCE,
+    -- into two aligned arrays, because the predicate is `d.holder_id =
+    -- p_merged` and the first statement below makes it false.
+    SELECT array_agg(q.doc_id ORDER BY q.doc_id),
+           array_agg(q.successor_id ORDER BY q.doc_id)
+      INTO v_heads, v_succs
+      FROM (
+        SELECT DISTINCT ON (d.id)
+               d.id  AS doc_id,
+               s.id  AS successor_id
+          FROM public.studio_compliance_documents d
+          JOIN public.studio_compliance_documents s
+            ON s.holder_id       = p_survivor
+           AND s.organization_id = d.organization_id
+           AND s.doc_type        = d.doc_type
+           AND s.superseded_by IS NULL
+           AND (s.expires_on IS NULL OR s.expires_on >= CURRENT_DATE)
+           AND (d.expires_on IS NULL
+                OR (s.expires_on IS NOT NULL AND s.expires_on >= d.expires_on))
+           AND d.blocks <@ s.blocks
+         WHERE d.holder_id = p_merged
+           AND d.superseded_by IS NULL
+         ORDER BY d.id, s.expires_on DESC NULLS LAST, s.id
+      ) q;
 
-    -- The retired rows BEHIND a head that just moved follow it, outermost
-    -- first, so each one's own successor is already on the survivor when
-    -- assert_compliance_holder() reads it. Depth-capped like every other walk
-    -- in this file; a chain deeper than sixteen renewals is not a chain.
-    FOR i IN 1..16 LOOP
+    IF v_heads IS NOT NULL THEN
+      -- 1. the heads move, carrying the edge they already had (none).
       UPDATE public.studio_compliance_documents d
          SET holder_id   = p_survivor,
              holder_type = v_survivor.entity_kind
-       WHERE d.holder_id = p_merged
-         AND d.superseded_by IS NOT NULL
-         AND EXISTS (SELECT 1 FROM public.studio_compliance_documents s
-                      WHERE s.id = d.superseded_by
-                        AND s.holder_id = p_survivor);
-      EXIT WHEN NOT FOUND;
-    END LOOP;
+       WHERE d.id = ANY (v_heads);
+
+      -- 2. the retired rows BEHIND each moved head follow it, outermost first,
+      --    so each one's own successor is already on the survivor when
+      --    assert_compliance_holder() reads it. Depth-capped like every other
+      --    walk in this file; a chain deeper than sixteen renewals is not a
+      --    chain.
+      FOR i IN 1..16 LOOP
+        UPDATE public.studio_compliance_documents d
+           SET holder_id   = p_survivor,
+               holder_type = v_survivor.entity_kind
+         WHERE d.holder_id = p_merged
+           AND d.superseded_by IS NOT NULL
+           AND EXISTS (SELECT 1 FROM public.studio_compliance_documents s
+                        WHERE s.id = d.superseded_by
+                          AND s.holder_id = p_survivor);
+        EXIT WHEN NOT FOUND;
+      END LOOP;
+
+      -- 3. and only now the new edge: the absorbed head says WHY it no longer
+      --    counts, against a certificate held for the same card.
+      UPDATE public.studio_compliance_documents d
+         SET superseded_by = v_succs[array_position(v_heads, d.id)]
+       WHERE d.id = ANY (v_heads);
+    END IF;
   ELSE
     -- The sole-proprietor exception is NOT an acquisition. crm-model §4 keeps
     -- the absorbed firm's paper off the survivor because two firms are two
@@ -729,10 +1156,20 @@ BEGIN
   END IF;
 
   -- ── the pointer, and the chain flattened ────────────────────────────────
+  -- §1b's door, opened for exactly these two statements and shut again. The
+  -- guard refuses merged_into to every other caller, owners and admins
+  -- included, so this RPC is the column's only writer (r2 B2-1). Transaction-
+  -- local (set_config's third argument), and cleared rather than left for the
+  -- rest of the transaction: a SET clause on the function saves and restores
+  -- only search_path.
+  PERFORM set_config('app.contact_merge_in_progress', 'on', true);
+
   UPDATE public.studio_contacts SET merged_into = p_survivor WHERE id = p_merged;
   UPDATE public.studio_contacts
      SET merged_into = p_survivor
    WHERE merged_into = p_merged AND id <> p_survivor;
+
+  PERFORM set_config('app.contact_merge_in_progress', 'off', true);
 
   -- ── the record ──────────────────────────────────────────────────────────
   INSERT INTO public.studio_contact_merges

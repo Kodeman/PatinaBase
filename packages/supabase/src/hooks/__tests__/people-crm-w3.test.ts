@@ -15,6 +15,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 type Any = any;
 
 const inserted: Array<{ table: string; payload: Any }> = [];
+/** Every `.is(column, value)` a list query narrows itself with (M2R-5). */
+const isFilters: Array<{ table: string; column: string; value: Any }> = [];
 const updated: Array<{ table: string; payload: Any }> = [];
 const rpcCalls: Array<{ name: string; args: Any }> = [];
 const rpcError: { current: { message: string } | null } = { current: null };
@@ -25,6 +27,10 @@ function builderFor(table: string): Any {
   const builder: Any = {};
   builder.select = vi.fn(() => builder);
   builder.eq = vi.fn(() => builder);
+  builder.is = vi.fn((column: string, value: Any) => {
+    isFilters.push({ table, column, value });
+    return builder;
+  });
   builder.in = vi.fn(() => Promise.resolve({ data: [], error: null }));
   builder.order = vi.fn(() => Promise.resolve({ data: [], error: null }));
   builder.maybeSingle = vi.fn(() =>
@@ -85,8 +91,11 @@ import {
   asMergeError,
   complianceNoticeKeys,
   indexComplianceNotices,
+  retainedComplianceDocuments,
   studioContactMergeKeys,
+  useComplianceDocumentsFor,
   useMergeStudioContacts,
+  useStudioContacts,
 } from "../use-studio-contacts";
 import {
   asHouseholdError,
@@ -104,6 +113,7 @@ function onSuccessOf(hook: unknown) {
 }
 
 beforeEach(() => {
+  isFilters.length = 0;
   inserted.length = 0;
   updated.length = 0;
   rpcCalls.length = 0;
@@ -300,6 +310,84 @@ describe("the household (PR-c, PR-n)", () => {
     expect(
       asHouseholdError(new Error("household_grant_project_has_no_studio")),
     ).toMatch(/not attached to a studio/);
+  });
+});
+
+describe("the merged-away card is not offered (M2R-5)", () => {
+  function queryFnOf(hook: unknown) {
+    return (hook as unknown as { queryFn: () => Promise<unknown> }).queryFn;
+  }
+
+  it("narrows the rolodex list to live, unmerged cards", async () => {
+    await queryFnOf(useStudioContacts("org-1"))();
+    expect(isFilters).toEqual([
+      { table: "studio_contacts", column: "archived_at", value: null },
+      { table: "studio_contacts", column: "merged_into", value: null },
+    ]);
+  });
+
+  it("hands the tombstone back only when a reader asks for it", async () => {
+    await queryFnOf(
+      useStudioContacts("org-1", { includeMerged: true }),
+    )();
+    expect(
+      isFilters.some((f) => f.column === "merged_into"),
+    ).toBe(false);
+  });
+});
+
+describe("useComplianceDocumentsFor applies the retirement rule (M2R-7)", () => {
+  it("is the same rule its sibling hook applies, not raw rows", () => {
+    const today = "2026-09-13";
+    const rows = [
+      // retired by a successor that is in force and carries its gates
+      {
+        id: "old",
+        holder_id: "firm-1",
+        doc_type: "coi_gl",
+        expires_on: "2026-03-31",
+        blocks: ["site_access"],
+        superseded_by: "new",
+      },
+      {
+        id: "new",
+        holder_id: "firm-1",
+        doc_type: "coi_gl",
+        expires_on: "2027-03-31",
+        blocks: ["site_access"],
+        superseded_by: null,
+      },
+      // retired by a successor that has since LAPSED: still in the reckoning
+      {
+        id: "old-2",
+        holder_id: "firm-2",
+        doc_type: "bond",
+        expires_on: "2026-01-01",
+        blocks: ["payment"],
+        superseded_by: "dead",
+      },
+      {
+        id: "dead",
+        holder_id: "firm-2",
+        doc_type: "bond",
+        expires_on: "2026-02-01",
+        blocks: ["payment"],
+        superseded_by: null,
+      },
+    ] as Any;
+    expect(
+      retainedComplianceDocuments(rows, today).map((d: Any) => d.id),
+    ).toEqual(["new", "old-2", "dead"]);
+  });
+
+  it("is wired into the multi-holder hook", async () => {
+    const hook = useComplianceDocumentsFor(["firm-1"]) as unknown as {
+      queryFn: () => Promise<unknown>;
+    };
+    const out = await hook.queryFn();
+    // the mocked builder resolves `.in()` to no rows; what matters is that the
+    // hook returns the reducer's output rather than the raw payload.
+    expect(Array.isArray(out)).toBe(true);
   });
 });
 

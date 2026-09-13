@@ -119,7 +119,11 @@ describe("householdMemberConsequence", () => {
         250000,
       ),
     ).toBe(
-      "Chidi Okonkwo joins the household and takes a seat on the Okonkwo residence. They may sign change orders over $2,500. Nothing is sent to them.",
+      // B2R-1: add_household_member() writes one grant, scope `money`, and the
+      // figure is a CAP — "Signs money to $2,500" everywhere else in the
+      // portal. The sentence used to promise change-order authority over the
+      // figure: the wrong scope, and the limit inverted.
+      "Chidi Okonkwo joins the household and takes a seat on the Okonkwo residence. They may sign money to $2,500. Nothing is sent to them.",
     );
     expect(
       householdMemberConsequence(
