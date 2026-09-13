@@ -115,7 +115,12 @@ describe("the six chips", () => {
 });
 
 describe("R-A — who owes the studio paper", () => {
-  it.each(["lender", "inspector"])("%s prints no paper word at all", (kind) => {
+  // CR-7 / QA-2 / C18: `authority` is in this list because the seed's own
+  // demonstration row — "City of Minneapolis, CPED Inspections",
+  // `company_kind = contact_kind = 'authority'` — printed "NOT ON FILE"
+  // while Great Northern Bank (`lender`) correctly printed nothing. The city
+  // never filed insurance with a design studio.
+  it.each(["lender", "inspector", "authority"])("%s prints no paper word at all", (kind) => {
     const entry = row({
       meta: { contact_kind: kind },
       paper_state: "not_on_file",

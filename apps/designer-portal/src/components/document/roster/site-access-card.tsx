@@ -99,7 +99,9 @@ function EditableLine({
   label: string;
   value: string;
   empty: string;
-  onSave: (next: string) => void;
+  /** Resolves when the write lands; REJECTS when it does not, and the editor
+   *  stays open on the rejection (CR-11). */
+  onSave: (next: string) => Promise<void>;
   fieldId: string;
   saving: boolean;
 }) {
@@ -129,8 +131,12 @@ function EditableLine({
               actionKey="save-site-access-line"
               variant="primary"
               onClick={() => {
-                onSave(draft);
-                setEditing(false);
+                void onSave(draft).then(
+                  () => setEditing(false),
+                  // The error prints in the card's own slot; the editor stays
+                  // open with what the studio typed still in it.
+                  () => undefined,
+                );
               }}
               loading={saving}
               loadingLabel="Writing…"
@@ -191,6 +197,7 @@ export function SiteAccessCard({
 }) {
   const { data: card, isLoading } = useSiteAccessCard(open ? projectId : null);
   const updateCard = useUpdateSiteAccessCard();
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const rows = projection.rows;
   const keyHolder = keyHolderRow(rows, card?.key_holder_engagement_id);
@@ -206,14 +213,29 @@ export function SiteAccessCard({
     (line) => !!line?.name,
   );
 
-  const save = (
+  // CR-11: an RLS refusal, the `key_holder_engagement_id` BEFORE trigger
+  // (00625:185-207) or a dropped connection used to leave the card looking
+  // saved with the OLD value in it and no message anywhere — on the one
+  // surface whose value is "who to call and who was told". The promise is
+  // returned so the editor can stay open until it resolves, and a failure
+  // lands in a real error slot.
+  const save = async (
     patch: Parameters<typeof updateCard.mutateAsync>[0],
     region: string,
-  ) =>
-    void updateCard
-      .mutateAsync(patch)
-      .then(() => peopleEvents.siteAccessChanged({ region }))
-      .catch(() => undefined);
+  ) => {
+    setSaveError(null);
+    try {
+      await updateCard.mutateAsync(patch);
+      peopleEvents.siteAccessChanged({ region });
+    } catch (e) {
+      setSaveError(
+        e instanceof Error
+          ? e.message
+          : 'That did not save. The card still reads what it did before.',
+      );
+      throw e;
+    }
+  };
 
   return (
     <DocSheet open={open} onClose={onClose} title="Site access" icon={KeyRound}>
@@ -227,6 +249,19 @@ export function SiteAccessCard({
         <p className="mt-1 text-[0.74rem] text-[var(--color-aged-oak)]">
           Studio only. This card never reaches a client page.
         </p>
+
+        {/* CR-11 — the card had no error slot at all. A silent write loss on
+            the one surface that answers "who do I call" is the worst failure
+            available to it. */}
+        {saveError && (
+          <p
+            role="alert"
+            data-site-access-error
+            className="mt-2 border-l-2 border-[var(--color-terracotta-ink)] bg-[rgba(196,131,111,0.07)] px-3 py-2 text-[0.74rem] text-[var(--color-charcoal)]"
+          >
+            {saveError}
+          </p>
+        )}
 
         {isLoading && (
           <p className="py-8 text-center text-[0.74rem] text-[var(--color-aged-oak)]">
@@ -248,9 +283,11 @@ export function SiteAccessCard({
               <DocumentAction
                 actionKey="start-site-access-card"
                 variant="primary"
-                onClick={() =>
-                  save({ projectId, lockboxVersion: null }, 'way_in')
-                }
+                onClick={() => {
+                  void save({ projectId, lockboxVersion: null }, 'way_in').catch(
+                    () => undefined,
+                  );
+                }}
                 loading={updateCard.isPending}
                 loadingLabel="Writing…"
               >
@@ -306,7 +343,12 @@ export function SiteAccessCard({
                 />
               </div>
               <p className={`mt-1 ${LINE}`} data-way-in>
-                {wayInSentence(card.lockbox_version, keyHolder?.name ?? gate)}
+                {/* CR-10: the GATE CONTROLLER first. SPEC §5.6 #3 and
+                    direction §3.7 both fix the line as "…ask Luis Ochoa" —
+                    the superintendent who controls the gate, not Ngozi Eze
+                    who holds the key. PR-r's whole value is naming the right
+                    person to ask. */}
+                {wayInSentence(card.lockbox_version, gate ?? keyHolder?.name)}
               </p>
               {gate && <p className={`mt-1 ${LINE}`}>{gate} controls the gate.</p>}
             </section>

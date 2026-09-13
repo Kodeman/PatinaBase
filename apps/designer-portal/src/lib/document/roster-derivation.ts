@@ -829,23 +829,35 @@ export interface CallSheetVitals {
 }
 
 /**
- * The four counts. The first one counts the WINDOW — who is on site this week
- * — not everyone the sheet has ever listed, which is the number direction §3.4
- * asks the line to carry. Everyone printed counts toward the other three;
- * "reachable by text" is a standing grant on the studio's own record, never an
- * invite.
+ * The four counts, ALL FOUR over the same population (SPEC §5.4 #3 / R-F).
+ *
+ * CR-9: only the first number was scoped. The other three counted
+ * `projection.rows` — which is every band flattened, `later`, `bidding` and
+ * `done` included — so a line reading "12 on the job this week · … · 2 on
+ * paper" quietly counted the whole book for the last three and the fixture's
+ * "2 on paper" printed as a dozen. A vitals line whose numbers close over
+ * different populations is four facts pretending to be one.
+ *
+ * The population is the sheet's own present tense: the studio side, the client
+ * side, and who is on the job THIS WEEK. "Reachable by text" is a standing
+ * grant on the studio's own record, never an invite.
  */
 export function callSheetVitals(projection: CallSheetProjection): CallSheetVitals {
   let textable = 0;
   let withAccounts = 0;
   let onPaper = 0;
-  for (const row of projection.rows) {
+  const counted = [
+    ...projection.bands.studioSide,
+    ...projection.bands.clientSide,
+    ...projection.bands.this_week,
+  ];
+  for (const row of counted) {
     if (row.consent === 'granted') textable += 1;
     if (row.reach === 'account') withAccounts += 1;
     if (row.reach === 'on_paper') onPaper += 1;
   }
   return {
-    onTheJobThisWeek: projection.bands.this_week.length,
+    onTheJobThisWeek: counted.length,
     textable,
     withAccounts,
     onPaper,
@@ -923,8 +935,11 @@ export function siteAccessSummaryLine(facts: {
 
 /**
  * PR-r — the way in, in words, with NO code. "Lockbox, version 3. The code is
- * held off Patina; ask Luis Ochoa." The second sentence names the key holder,
- * or nobody, and never a field where a code could be typed.
+ * held off Patina; ask Luis Ochoa." The second sentence names the person to
+ * ASK — the GATE CONTROLLER (SPEC §5.6 #3, direction §3.7) — or nobody, and
+ * never a field where a code could be typed. The key holder is a different
+ * fact with its own region; asking them for a code they do not control sends
+ * the reader to the wrong person (CR-10).
  */
 export function wayInSentence(
   lockboxVersion: string | null | undefined,

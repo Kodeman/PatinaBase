@@ -216,7 +216,7 @@ describe('ContactRuleLine · the E7 sentence', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it("appends the routed sentence and the routed person's email (R-L)", () => {
+  it("appends the routed sentence and BOTH of the routed person's channels (R-L, CR-14)", () => {
     render(
       <ContactRuleLine
         summary="Do not contact directly."
@@ -231,9 +231,12 @@ describe('ContactRuleLine · the E7 sentence', () => {
     expect(screen.getByText(/Write Rosa Delgado instead\./)).toBeInTheDocument();
     const mail = screen.getByText('rosa@twincitiesdrywall.com');
     expect(mail).toHaveAttribute('href', 'mailto:rosa@twincitiesdrywall.com');
-    // Email if present, THEN the office phone — never both, so the reader is
-    // shown one way to reach her rather than a choice.
-    expect(screen.queryByText('(612) 555-0116')).not.toBeInTheDocument();
+    // SPEC §5.1 #10 and §5.4 #12 both ask for her email AND her office phone
+    // as a tel: link. An either/or hid the phone on every face (CR-14).
+    expect(screen.getByText('(612) 555-0116')).toHaveAttribute(
+      'href',
+      'tel:+16125550116',
+    );
   });
 
   it('falls back to the office phone as a tel: link when there is no email', () => {

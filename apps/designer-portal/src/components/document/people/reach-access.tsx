@@ -33,6 +33,7 @@ import {
   useContactRule,
   useCreateFieldLink,
   useRecordChannelConsent,
+  useRecordChannelReconsent,
   useSetContactRule,
   useStudioContactChannels,
   fieldLinkUrl,
@@ -129,6 +130,14 @@ function ChannelRow({
     channel.value,
   );
   const record = useRecordChannelConsent();
+  // CR-25: the way back from a refusal is "a fresh recorded consent with
+  // source and evidence, OR an inbound START" (direction §5.2). PR-m exists so
+  // a studio that heard a verbal stop can write it down — and, symmetrically,
+  // write down the verbal restart. `record_channel_consent` REFUSES a grant
+  // over a standing opt-out, and the room rendered that refusal as "Only they
+  // can rejoin by replying START", which hands the studio's own door to the
+  // recipient. `record_channel_reconsent` is that door.
+  const reconsent = useRecordChannelReconsent();
   const [recording, setRecording] = useState(false);
   const [source, setSource] = useState<ConsentSource | "">("");
   const [evidence, setEvidence] = useState("");
@@ -153,18 +162,8 @@ function ChannelRow({
       return;
     }
     const status = optOut ? "opted_out" : "granted";
-    record.mutate(
-      {
-        organizationId,
-        channelKind: consentKind,
-        channelValue: channel.value,
-        status,
-        source,
-        evidence: evidence.trim(),
-        disclosureVersion: "field-sms-v1",
-        originProjectId,
-      },
-      {
+    const refused = consent?.verdict === "opted_out";
+    const handlers = {
         onSuccess: () => {
           setRecording(false);
           setSource("");
@@ -183,11 +182,43 @@ function ChannelRow({
               : `${channel.value} is on the books.`,
           );
         },
-        onError: (e) =>
+        onError: (e: unknown) =>
           setError(
             e instanceof Error ? e.message : "Could not record that just now.",
           ),
+    };
+
+    // A grant over a standing refusal is a RECONSENT, not a consent: a
+    // different RPC, which keeps the prior refusal as history rather than
+    // erasing it.
+    if (refused && !optOut) {
+      reconsent.mutate(
+        {
+          organizationId,
+          channelKind: consentKind,
+          channelValue: channel.value,
+          source,
+          evidence: evidence.trim(),
+          disclosureVersion: "field-sms-v1",
+          originProjectId,
+        },
+        handlers,
+      );
+      return;
+    }
+
+    record.mutate(
+      {
+        organizationId,
+        channelKind: consentKind,
+        channelValue: channel.value,
+        status,
+        source,
+        evidence: evidence.trim(),
+        disclosureVersion: "field-sms-v1",
+        originProjectId,
       },
+      handlers,
     );
   };
 
@@ -237,8 +268,16 @@ function ChannelRow({
         aria-controls={bandId}
         onClick={() => setRecording((open) => !open)}
       >
-        Record consent
+        {consent?.verdict === "opted_out"
+          ? "Record a fresh consent"
+          : "Record consent"}
       </DocumentAction>
+      {consent?.verdict === "opted_out" && (
+        <p className="t-body-sm mt-1 text-[var(--ink-subtle)]">
+          They can rejoin by replying START — or the studio can record a fresh
+          consent here, with where and when they said so.
+        </p>
+      )}
       <div id={bandId} hidden={!recording} className="mt-2">
         <label className={FIELD_LABEL} htmlFor={`${bandId}-source`}>
           How consent was given

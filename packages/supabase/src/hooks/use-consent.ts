@@ -225,6 +225,42 @@ export function useChannelConsent(
   });
 }
 
+/**
+ * EVERY consent record the studio holds on one channel kind, in one query.
+ *
+ * CR-13: SPEC §5.1 #9 asks the Directory row for the WORD and the CLAUSE —
+ * "Opted out by text, 3 December 2025, on the Lindqvist kitchen." The word
+ * comes off `people_directory.consent_status`; the clause needs the dates, the
+ * source and the origin project, which live on the record. Forty rows cannot
+ * each ask `useChannelConsent` for their own.
+ *
+ * ⚠ THE VERDICT IS STILL THE FUNCTION'S. `channel_consent_status()` folds
+ * `refusal_unanswered` into `opted_out`, and this read returns rows, not
+ * verdicts — so use it for the DATES BEHIND a word the view already printed,
+ * never to derive the word itself.
+ */
+export function useChannelConsentRecords(
+  organizationId: string | null | undefined,
+  channelKind: ConsentChannelKind,
+) {
+  return useQuery({
+    queryKey: [...consentKeys.all, 'list', organizationId ?? null, channelKind] as const,
+    enabled: Boolean(organizationId),
+    queryFn: async (): Promise<ChannelConsentRecord[]> => {
+      if (!organizationId) return [];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase
+        .from('studio_channel_consent')
+        .select('*')
+        .eq('organization_id', organizationId)
+        .eq('channel_kind', channelKind);
+      if (error) throw error;
+      return (data ?? []) as ChannelConsentRecord[];
+    },
+  });
+}
+
 /** Every key a consent write can move. The word prints on the Directory row,
  *  the seat line, the roster and the party sheet, so all four read models go. */
 function invalidateConsentFanout(
@@ -232,13 +268,9 @@ function invalidateConsentFanout(
   input: { organizationId: string; channelKind: ConsentChannelKind; channelValue: string },
   projectId?: string | null,
 ) {
-  void queryClient.invalidateQueries({
-    queryKey: consentKeys.record(
-      input.organizationId,
-      input.channelKind,
-      input.channelValue,
-    ),
-  });
+  // The ROOT: `useChannelConsentRecords`' list key is a sibling of the record
+  // key, not a descendant, and the Directory row's clause reads the list.
+  void queryClient.invalidateQueries({ queryKey: consentKeys.all });
   void queryClient.invalidateQueries({ queryKey: peopleKeys.all });
   void queryClient.invalidateQueries({ queryKey: peopleSeatKeys.all });
   if (projectId) {

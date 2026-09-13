@@ -139,11 +139,15 @@ export function RoomShell({
           </span>
         </button>
 
+        {/* The Room's name is the page's ONE heading (QA-8). It rendered as a
+            plain <span>, so a heading query returned nothing on every Room
+            and a screen-reader user had nothing to navigate to. The type is
+            unchanged — the element is what was wrong, not the treatment. */}
         <div className="flex items-center justify-self-center gap-2.5">
           <StrataMark state="active" size="sm" />
-          <span className="font-mono text-[12px] font-semibold uppercase tracking-[0.2em] text-[var(--color-aged-oak)]">
+          <h1 className="m-0 font-mono text-[12px] font-semibold uppercase tracking-[0.2em] text-[var(--color-aged-oak)]">
             {title}
-          </span>
+          </h1>
           {count && (
             <span className="hidden font-mono text-[12px] tracking-[0.04em] text-[var(--color-aged-oak)] opacity-70 sm:inline">
               · {count}

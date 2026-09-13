@@ -138,16 +138,71 @@ describe("the word columns", () => {
   });
 });
 
+/** A rule ROW, which is what the faces now read (CR-5 / CR-6 / CR-22). */
+function rule(over: Record<string, unknown> = {}) {
+  return {
+    id: "rule-1",
+    subject_type: "person",
+    subject_id: "card-dana",
+    channels_allowed: [],
+    channels_forbidden: ["sms", "email", "mobile", "office"],
+    route_to_person_id: null,
+    contact_hours: null,
+    escalation_by_class: {},
+    reason: null,
+    set_by: null,
+    set_at: "2026-01-01T00:00:00Z",
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
+    ...over,
+  } as never;
+}
+
 describe("the rule clause", () => {
-  it("a forbidding rule takes the leading rule", () => {
+  it("a rule that leaves NO channel open takes the leading rule", () => {
     const { container } = render(
       <ul>
-        <PersonRow person={person()} onOpen={jest.fn()} />
+        <PersonRow person={person()} onOpen={jest.fn()} rule={rule()} />
       </ul>,
     );
     expect(
       container.querySelector('[data-contact-rule-blocked="true"]'),
     ).toBeInTheDocument();
+  });
+
+  it("a rule that forbids text but names email is PROSE, not a block (CR-22)", () => {
+    const { container } = render(
+      <ul>
+        <PersonRow
+          person={person()}
+          onOpen={jest.fn()}
+          rule={rule({
+            channels_forbidden: ["sms"],
+            channels_allowed: ["email", "mobile"],
+            reason: "Email only. Phone for emergencies. Never texted.",
+          })}
+        />
+      </ul>,
+    );
+    expect(
+      container.querySelector('[data-contact-rule-blocked="true"]'),
+    ).not.toBeInTheDocument();
+    // The studio's own sentence prints, not the mechanical clause list (CR-6),
+    // and no schema word reaches the face (CR-5).
+    expect(
+      screen.getByText(/Email only\. Phone for emergencies\. Never texted\./),
+    ).toBeInTheDocument();
+  });
+
+  it("a hard block takes the person's own phone off the row (QA-3)", () => {
+    render(
+      <ul>
+        <PersonRow person={person()} onOpen={jest.fn()} rule={rule()} />
+      </ul>,
+    );
+    expect(
+      screen.queryByRole("link", { name: /Call Dana Kowalski/ }),
+    ).not.toBeInTheDocument();
   });
 
   it("R-L — a routed clause prints the routed person and a way to reach them", () => {

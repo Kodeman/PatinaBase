@@ -10,7 +10,7 @@
  * lockbox is not telling them about this one.
  */
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useLogSiteAccessTold } from '@patina/supabase';
 import { peopleEvents } from '@/lib/analytics/people-events';
 import { DocumentAction, DocumentActionRow } from '../document-action';
@@ -35,6 +35,7 @@ export function NoticeLog({
 }) {
   const [open, setOpen] = useState(false);
   const [picked, setPicked] = useState<string[]>([]);
+  const heldId = useId();
   const [note, setNote] = useState<string | null>(null);
   const logTold = useLogSiteAccessTold();
 
@@ -133,7 +134,9 @@ export function NoticeLog({
                       ),
                     )
                 }
+                held={picked.length === 0}
                 disabled={picked.length === 0 || logTold.isPending}
+                aria-describedby={heldId}
                 loading={logTold.isPending}
                 loadingLabel="Writing…"
               >
@@ -147,6 +150,14 @@ export function NoticeLog({
                 Not now
               </DocumentAction>
             </DocumentActionRow>
+            {/* Direction §5.5: a gated act is `aria-disabled` with a VISIBLE
+                consequence sentence — never `disabled` (CR-26). */}
+            {picked.length === 0 && (
+              <p id={heldId} className="mt-1 text-[0.7rem] text-[var(--color-aged-oak)]">
+                Pick who was told first — a notice with no names on it records
+                nothing.
+              </p>
+            )}
           </div>
         )}
       </div>

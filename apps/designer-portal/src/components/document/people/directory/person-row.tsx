@@ -26,14 +26,21 @@
  */
 
 import { useId, useState } from "react";
-import { usePeopleSeats, type PeopleDirectorySeat } from "@patina/supabase";
 import {
-  contactRuleBlocks,
+  usePeopleSeats,
+  type PeopleDirectorySeat,
+  type StudioContactRule,
+} from "@patina/supabase";
+import {
   entryPaperWord,
   personIdentityLine,
   splitRoutedClause,
   type DirectoryPerson,
 } from "@/lib/document/people-derivation";
+import {
+  contactRuleClause,
+  contactRuleIsHardBlock,
+} from "@/lib/document/contact-rule";
 import { Avatar } from "../person-bits";
 import { StateWord } from "../state-word";
 import { TelLink } from "../tel-link";
@@ -50,6 +57,9 @@ export function PersonRow({
   person,
   onOpen,
   onOpenSeat,
+  rule,
+  routeTo: routeTarget,
+  consentClause,
   routeTargets,
   highlighted = false,
 }: {
@@ -57,7 +67,17 @@ export function PersonRow({
   onOpen: () => void;
   /** A seat line is a door to the same card (R-AA) — never an inert button. */
   onOpenSeat?: (seat: PeopleDirectorySeat) => void;
-  /** How to reach a person the rule routes to, by name (R-L). */
+  /**
+   * The rule ROW, not the rendered summary (CR-5 / CR-6 / CR-22). The clause,
+   * the hard block and the route all come off the columns; the prose summary
+   * below is only the fallback for a row whose rule has not loaded.
+   */
+  rule?: StudioContactRule | null;
+  /** How to reach the person the rule routes to (R-L). */
+  routeTo?: ContactRouteTarget | null;
+  /** SPEC §5.1 #9 — the word AND the clause behind it (CR-13). */
+  consentClause?: string | null;
+  /** Legacy name-keyed lookup, kept for the summary fallback path. */
   routeTargets?: ReadonlyMap<string, ContactRouteTarget>;
   highlighted?: boolean;
 }) {
@@ -68,10 +88,18 @@ export function PersonRow({
   });
 
   const { rest, routedName } = splitRoutedClause(person.contact_rule_summary);
-  const routeTo = routedName
-    ? (routeTargets?.get(routedName.toLowerCase()) ?? { name: routedName })
-    : null;
-  const blocked = contactRuleBlocks(person.contact_rule_summary);
+  const clause = rule ? contactRuleClause(rule) : rest;
+  const routeTo =
+    routeTarget ??
+    (routedName
+      ? (routeTargets?.get(routedName.toLowerCase()) ?? { name: routedName })
+      : null);
+  // CR-22: ONE predicate, reading `channels_forbidden`. The old regex over the
+  // rendered prose fired on any "Never…"/"Do not…" clause, so Sam Rowe, Carol
+  // Nyström, Ingrid Halvorsen and Ray Thao — all of whom have a channel wide
+  // open — wore the terracotta hard-block rule. A row whose rule has not
+  // loaded prints the clause without the rule rather than guessing.
+  const blocked = contactRuleIsHardBlock(rule);
   const paper = entryPaperWord(person);
   const seatCount = person.seat_count ?? 0;
 
@@ -97,7 +125,17 @@ export function PersonRow({
         <p className="t-meta text-[var(--ink-subtle)]">
           {personIdentityLine(person)}
         </p>
-        <ContactRuleLine summary={rest} blocked={blocked} routeTo={routeTo} />
+        <ContactRuleLine summary={clause} blocked={blocked} routeTo={routeTo} />
+
+        {/* SPEC §5.1 #9 — the consent WORD prints in its own column; the
+            clause behind it ("Opted out by text, 3 December 2025, on the
+            Lindqvist kitchen.") belongs here, under the identity, where a
+            studio reading the ledger can see WHY the word says what it says. */}
+        {consentClause ? (
+          <p data-consent-clause className="t-body-sm mt-1 text-[var(--ink-subtle)]">
+            {consentClause}
+          </p>
+        ) : null}
 
         {/* 390 — line 2: reach · consent · paper, plain, on EVERY row (R-M). */}
         <p
@@ -137,8 +175,16 @@ export function PersonRow({
         ) : null}
       </div>
 
-      {/* Its own control, 8px clear of the row's own (SPEC §5.1 #15). */}
-      <TelLink phone={person.phone} personName={person.display_name} />
+      {/* Its own control, 8px clear of the row's own (SPEC §5.1 #15).
+
+          A HARD BLOCK TAKES THE NUMBER OFF THE ROW (SPEC §5.1 #10, §5.4).
+          Frank Bauer is "do not contact, write Rosa instead" and his own
+          mobile still printed here as a live `tel:` link — one tap away from
+          the call the rule forbids. Channels are HIDDEN, never deleted: the
+          number is still on his card, behind the rule that governs it. */}
+      {blocked ? null : (
+        <TelLink phone={person.phone} personName={person.display_name} />
+      )}
 
       {seatCount > 0 && (
         <button

@@ -532,6 +532,12 @@ export function useAddProjectParty() {
       void queryClient.invalidateQueries({ queryKey: ['project-parties', data.project_id] });
       // The party joins the People Room roster (people_directory, 00281).
       void queryClient.invalidateQueries({ queryKey: peopleKeys.all });
+      // CR-18: the Call Sheet reads `['project-roster', projectId]` and the
+      // seat views read `peopleSeatKeys`. Every other seat mutation in this
+      // file invalidates both; the add path must too, or a seat added from the
+      // rolodex picker (the Call Sheet's own add door) never appears.
+      void queryClient.invalidateQueries({ queryKey: ['project-roster', data.project_id] });
+      void queryClient.invalidateQueries({ queryKey: peopleSeatKeys.all });
     },
   });
 }
@@ -1811,7 +1817,11 @@ export function usePartyAuthority(engagementId: string | null | undefined) {
       const { data, error } = await supabase
         .from('project_party_authority')
         .select('*')
-        .eq('engagement_id', engagementId);
+        .eq('engagement_id', engagementId)
+        // CR-23: a delegation ENDS as a row, not as an edit (00624's own note
+        // on `effective_to`, and the partial unique index keyed on
+        // `effective_to IS NULL`). A closed grant must stop printing.
+        .or(`effective_to.is.null,effective_to.gte.${new Date().toISOString().slice(0, 10)}`);
       if (error) throw error;
       return (data ?? []) as ProjectPartyAuthority[];
     },
@@ -1821,6 +1831,26 @@ export function usePartyAuthority(engagementId: string | null | undefined) {
 const AUTHORITY_ADMIN_ONLY_SENTENCE =
   'Money and draw certification are the principal’s to grant. Ask an owner or an admin of the studio to record this one.';
 
+/**
+ * CR-19: PR-n's sentence belongs to an RLS REFUSAL and nothing else. A 42P10,
+ * a trigger raise or a dropped connection told an owner to "ask an owner",
+ * which is both false and unactionable. An RLS refusal has a recognisable
+ * shape: 42501 from the policy itself, or PGRST116 when the WITH CHECK leg
+ * returns no row to `.single()`.
+ */
+function authorityWriteError(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  error: any,
+  scope: string,
+): Error {
+  const code = String(error?.code ?? '');
+  const refused = code === '42501' || code === 'PGRST116';
+  if (refused && isAdminOnlyAuthorityScope(scope)) {
+    return new Error(AUTHORITY_ADMIN_ONLY_SENTENCE);
+  }
+  return error instanceof Error ? error : new Error(String(error?.message ?? error));
+}
+
 /** Record or restate one grant. One row per (seat, scope). */
 export function useSetPartyAuthority() {
   const queryClient = useQueryClient();
@@ -1828,39 +1858,52 @@ export function useSetPartyAuthority() {
     mutationFn: async (input: SetPartyAuthorityInput): Promise<ProjectPartyAuthority> => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
-      const { data, error } = await supabase
+
+      // CR-1: the ONLY unique index on this table is PARTIAL
+      // (`00624:901-903`, `WHERE effective_to IS NULL`). Postgres can only use
+      // a partial index as an ON CONFLICT arbiter when the statement repeats
+      // the index predicate, and PostgREST emits none — so an `.upsert()` with
+      // `onConflict: 'engagement_id,scope'` raises 42P10 on every call. Check
+      // then write, the pattern `use-leads.ts:481` already documents for this
+      // exact trap.
+      const row = {
+        engagement_id: input.engagementId,
+        scope: input.scope,
+        threshold_cents: input.thresholdCents ?? null,
+        prepares_only: input.preparesOnly ?? false,
+        copy_to: input.copyTo ?? [],
+        source_clause: input.sourceClause?.trim() || null,
+        effective_from: input.effectiveFrom ?? new Date().toISOString().slice(0, 10),
+        effective_to: input.effectiveTo ?? null,
+      };
+
+      const { data: standing, error: readError } = await supabase
         .from('project_party_authority')
-        .upsert(
-          {
-            engagement_id: input.engagementId,
-            scope: input.scope,
-            threshold_cents: input.thresholdCents ?? null,
-            prepares_only: input.preparesOnly ?? false,
-            copy_to: input.copyTo ?? [],
-            source_clause: input.sourceClause?.trim() || null,
-            effective_from:
-              input.effectiveFrom ?? new Date().toISOString().slice(0, 10),
-            effective_to: input.effectiveTo ?? null,
-          },
-          { onConflict: 'engagement_id,scope' },
-        )
-        .select('*')
-        .single();
-      if (error) {
-        // PR-n's gate is in the INSERT/UPDATE policies, so a plain member's
-        // write on a money scope comes back as an RLS refusal (zero rows, or
-        // 42501). Neither string belongs on a designer's screen.
-        if (isAdminOnlyAuthorityScope(input.scope)) {
-          throw new Error(AUTHORITY_ADMIN_ONLY_SENTENCE);
-        }
-        throw error;
-      }
-      return data as ProjectPartyAuthority;
+        .select('id')
+        .eq('engagement_id', input.engagementId)
+        .eq('scope', input.scope)
+        .is('effective_to', null)
+        .maybeSingle();
+      if (readError) throw authorityWriteError(readError, input.scope);
+
+      const written = standing?.id
+        ? await supabase
+            .from('project_party_authority')
+            .update(row)
+            .eq('id', standing.id)
+            .select('*')
+            .single()
+        : await supabase.from('project_party_authority').insert(row).select('*').single();
+
+      if (written.error) throw authorityWriteError(written.error, input.scope);
+      return written.data as ProjectPartyAuthority;
     },
     onSuccess: (_data, input) => {
-      void queryClient.invalidateQueries({
-        queryKey: partyAuthorityKeys.list(input.engagementId),
-      });
+      // CR-8: `partyAuthorityKeys.list(engagementId)` is
+      // `['project-party-authority', <engagementId>]`, which is NOT a prefix of
+      // the project-wide key `['project-party-authority', 'project', <id>]`.
+      // Invalidating the root reaches both.
+      void queryClient.invalidateQueries({ queryKey: partyAuthorityKeys.all });
       void queryClient.invalidateQueries({ queryKey: ['project-parties', input.projectId] });
       void queryClient.invalidateQueries({ queryKey: ['project-roster', input.projectId] });
       void queryClient.invalidateQueries({ queryKey: peopleSeatKeys.all });

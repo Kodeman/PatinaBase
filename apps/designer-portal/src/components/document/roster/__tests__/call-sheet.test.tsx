@@ -57,6 +57,11 @@ jest.mock('@patina/supabase', () => {
     AUTHORITY_SCOPE_LABELS: { money: 'Signs money', selections: 'Selections' },
     COMPLIANCE_DOC_TYPE_LABELS: {},
     SEAT_DELETE_REFUSAL_SENTENCES: { consent: '', bid: '', waiver: '', unknown: '' },
+    // W2 r1: the sheet reads the rule ROWS and the routed people's channels,
+    // so one predicate and one clause serve every face (CR-5/6/14/15/22).
+    useContactRules: () => ({ data: [] }),
+    useStudioContactChannelsFor: () => ({ data: [] }),
+    useStudioContacts: () => ({ data: [] }),
     seatDeleteRefusal: () => null,
   };
 });
@@ -213,8 +218,10 @@ describe('CallSheet — the head', () => {
 
   it('counts the window first (SPEC §5.4 #3)', () => {
     render(<CallSheet {...props} />);
+    // CR-9: all four numbers close over ONE population — studio side, client
+    // side, on the job this week. The last three used to count every band.
     expect(document.querySelector('[data-call-sheet-vitals]')).toHaveTextContent(
-      '1 on the job this week · 2 reachable by text · 2 with accounts · 3 on paper',
+      '3 on the job this week · 2 reachable by text · 2 with accounts · 0 on paper',
     );
   });
 

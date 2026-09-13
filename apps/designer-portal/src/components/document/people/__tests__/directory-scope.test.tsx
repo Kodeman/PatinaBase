@@ -21,7 +21,14 @@ jest.mock("@patina/supabase", () => ({
   useStudioContacts: (...args: unknown[]) =>
     mockUseStudioContacts(...(args as [])),
   usePeopleSeats: () => ({ data: [] }),
+  // W2 r1 fixes: the Directory now reads the rule ROWS, the routed people's
+  // channels and the consent records behind the word (CR-5/6/13/14/22).
+  useContactRules: () => ({ data: [] }),
+  useStudioContactChannelsFor: () => ({ data: [] }),
+  useChannelConsentRecords: () => ({ data: [] }),
 }));
+
+jest.mock("@/hooks/use-projects", () => ({ useProjects: () => ({ data: [] }) }));
 
 jest.mock("../directory/makers-marketplace", () => ({
   MakersMarketplace: () => <div data-testid="marketplace" />,

@@ -40,6 +40,7 @@ import {
   COMPLIANCE_DOC_TYPE_LABELS,
   SEAT_DELETE_REFUSAL_SENTENCES,
   type ProjectPartyAuthority,
+  type StudioContactRule,
 } from '@patina/supabase';
 import { isFieldPartyKind } from '@patina/types';
 import {
@@ -51,10 +52,17 @@ import {
   type CallSheetBand,
   type CallSheetRow,
 } from '@/lib/document/roster-derivation';
+import {
+  contactRuleClause,
+  contactRuleIsHardBlock,
+} from '@/lib/document/contact-rule';
 import { peopleEvents } from '@/lib/analytics/people-events';
 import { Avatar } from '../people/person-bits';
 import { consentSentence } from '../people/consent-sentence';
-import { ContactRuleLine } from '../people/contact-rule-line';
+import {
+  ContactRuleLine,
+  type ContactRouteTarget,
+} from '../people/contact-rule-line';
 import { PlainFact, StateWord } from '../people/state-word';
 import { TelLink } from '../people/tel-link';
 import { DocumentAction, DocumentActionRow } from '../document-action';
@@ -97,6 +105,8 @@ export function RosterRow({
   authority = [],
   consentOrg,
   projectName,
+  rule,
+  routeTo,
 }: {
   row: CallSheetRow;
   band: CallSheetBand;
@@ -108,8 +118,24 @@ export function RosterRow({
   consentOrg?: string | null;
   /** The job this sheet is, for R-Q's "on the <project>" clause. */
   projectName?: string | null;
+  /**
+   * The rule ROW governing this seat — the engagement's own, else the
+   * person's card rule. CR-5 / CR-6 / CR-22: the clause, the hard block and
+   * the route all come off the columns, not off a regex over prose.
+   */
+  rule?: StudioContactRule | null;
+  /** How to reach the person the rule routes to (R-L / CR-15). */
+  routeTo?: ContactRouteTarget | null;
 }) {
   const isSeat = row.source === 'seat';
+  // One predicate, one clause, wherever a rule is shown (R-S). The prose
+  // summary is the fallback for a row whose rule row has not loaded.
+  const ruleClause = rule ? contactRuleClause(rule) : row.ruleSummary;
+  // CR-22: the SAME predicate the Directory row uses, over the same column.
+  // Two regexes over prose that already differed guaranteed they would drift,
+  // and both fired on ANY forbidden channel — direction §5.4 reserves the
+  // terracotta rule for a block that leaves no channel open.
+  const ruleBlocks = contactRuleIsHardBlock(rule);
   const seatId = row.seatId ?? '';
   const projectId = row.projectId ?? '';
 
@@ -159,12 +185,19 @@ export function RosterRow({
       })
     : '';
 
-  const phrase = authorityPhrase(
-    authority.map((grant) => ({
-      scope: grant.scope,
-      threshold_cents: grant.threshold_cents,
-      prepares_only: grant.prepares_only,
-    })),
+  // PR-t (STAND): the yes-or-no everywhere, the FIGURE only on the desk. "A
+  // phone in a hallway is read over a shoulder", and "$2,500" read over a
+  // shoulder is the client's money on a stranger's screen. The Call Sheet
+  // renders one DocSheet at every width, so both phrases are rendered and CSS
+  // chooses (CR-24) — a JS width branch would hydrate wrong on the first paint.
+  const grantFacts = authority.map((grant) => ({
+    scope: grant.scope,
+    threshold_cents: grant.threshold_cents,
+    prepares_only: grant.prepares_only,
+  }));
+  const phrase = authorityPhrase(grantFacts, AUTHORITY_SCOPE_LABELS);
+  const phraseWithoutFigure = authorityPhrase(
+    grantFacts.map((grant) => ({ ...grant, threshold_cents: null })),
     AUTHORITY_SCOPE_LABELS,
   );
 
@@ -243,7 +276,12 @@ export function RosterRow({
             </span>
             {phrase && (
               <span className="mt-[0.15rem] block">
-                <PlainFact>{phrase}</PlainFact>
+                <span className="hidden sm:inline">
+                  <PlainFact>{phrase}</PlainFact>
+                </span>
+                <span data-authority-no-figure className="sm:hidden">
+                  <PlainFact>{phraseWithoutFigure}</PlainFact>
+                </span>
               </span>
             )}
           </span>
@@ -265,19 +303,25 @@ export function RosterRow({
         )}
       </div>
 
-      {/* The phone is the row's SIBLING target, never inside its button. */}
-      {row.phone && (
+      {/* The phone is the row's SIBLING target, never inside its button.
+          A hard block takes the number off the row (SPEC §5.1 #10, §5.4) — the
+          superintendent standing on site must not have the forbidden call one
+          tap away. Channels are hidden, never deleted. */}
+      {row.phone && !ruleBlocks && (
         <div className="-mt-1 pb-1 pl-[46px]">
           <TelLink phone={row.phone} personName={row.name} />
         </div>
       )}
 
-      {/* R-S — a rule clause prints wherever a rule is shown, folded or not. */}
-      {row.ruleSummary && (
+      {/* R-S — a rule clause prints wherever a rule is shown, folded or not,
+          in the SAME wording, from the SAME predicate, with the SAME routed
+          channels the Directory row carries (CR-15 / CR-22). */}
+      {ruleClause && (
         <div className="pb-1.5 pl-[46px]">
           <ContactRuleLine
-            summary={row.ruleSummary}
-            blocked={/never|do not|don’t|don't/i.test(row.ruleSummary)}
+            summary={ruleClause}
+            blocked={ruleBlocks}
+            routeTo={routeTo ?? null}
           />
         </div>
       )}
@@ -535,13 +579,28 @@ export function RosterRow({
                           setNote(e instanceof Error ? e.message : 'Send failed.'),
                         )
                     }
+                    held={!body.trim()}
                     disabled={!body.trim() || sendSms.isPending}
+                    aria-describedby={`${panelId}-send-held`}
                     loading={sendSms.isPending}
                     loadingLabel="Sending…"
                   >
                     Send
                   </DocumentAction>
                 </DocumentActionRow>
+                {/* Direction §5.5: a gated act is `aria-disabled` with a
+                    VISIBLE consequence sentence beside it — never `disabled`.
+                    The party sheet's identical Send act already reads this
+                    way; this one was a regression against the sheet beside
+                    it (CR-26). */}
+                {!body.trim() && (
+                  <p
+                    id={`${panelId}-send-held`}
+                    className="mt-1 text-[0.7rem] text-[var(--color-aged-oak)]"
+                  >
+                    Write the message first — a text with no words is not a text.
+                  </p>
+                )}
               </div>
             )}
 

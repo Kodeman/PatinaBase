@@ -283,6 +283,15 @@ export function useRevokeAccessGrant() {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: accessGrantKeys.all });
+      // CR-12: `people_directory.reach_state` is "account, else a LIVE
+      // unexpired field link on one of this identity's seats, else on paper".
+      // Closing a door therefore changes the reach word on the Directory row,
+      // the seat line and every roster row. `useCreateFieldLink` already
+      // invalidates all three when a door OPENS; the revoke must mirror it, or
+      // the word goes on claiming a door that is shut.
+      void queryClient.invalidateQueries({ queryKey: ['people-directory'] });
+      void queryClient.invalidateQueries({ queryKey: ['people-directory-seats'] });
+      void queryClient.invalidateQueries({ queryKey: ['project-roster'] });
     },
   });
 }

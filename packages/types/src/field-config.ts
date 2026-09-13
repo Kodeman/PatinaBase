@@ -280,14 +280,29 @@ export function isInspectorSubtype(value: unknown): value is InspectorSubtype {
 }
 
 /**
- * R-A / C13 / C24: a lender or an inspector never owed the studio compliance
- * paper, so no surface prints a paper word for one — not on the firm row, not
- * on the person row, not on the company card. The view reports the FACT
- * (`not_on_file`); this predicate is the display rule that decides whether the
- * fact is owed, kept in the app on purpose (W1b §4).
+ * R-A / C13 / C24: a lender, an inspector or an authority never owed the studio
+ * compliance paper, so no surface prints a paper word for one — not on the firm
+ * row, not on the person row, not on the company card. The view reports the
+ * FACT (`not_on_file`); this predicate is the display rule that decides whether
+ * the fact is owed, kept in the app on purpose (W1b §4).
+ *
+ * The list is a VOCABULARY, not two literals. `studio_contacts.company_kind`
+ * and `contact_kind` carry a wider set than `PartyKind` does, and the seeded
+ * AHJ — "City of Minneapolis, CPED Inspections", `company_kind = 'authority'`
+ * — is C18's own demonstration row: it printed "NOT ON FILE" and offered
+ * "Record a document" / "Chase the renewal" because 'authority' was not one of
+ * the two strings the predicate checked.
  */
+export const PARTY_KINDS_OWING_NO_PAPER: readonly string[] = [
+  'inspector',
+  'lender',
+  // The city, the county, a building department: an authority inspects and
+  // permits. It never files insurance with a design studio.
+  'authority',
+] as const;
+
 export function partyKindOwesPaper(kind: string | null | undefined): boolean {
-  return kind !== 'inspector' && kind !== 'lender';
+  return !kind || !PARTY_KINDS_OWING_NO_PAPER.includes(kind);
 }
 
 // ============================================================================

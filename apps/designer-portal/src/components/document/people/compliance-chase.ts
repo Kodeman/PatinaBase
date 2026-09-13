@@ -3,20 +3,21 @@
 /**
  * CHASE THE RENEWAL — a draft, never a send.
  *
- * "Chase the renewal" writes one row onto the agent queue through
- * `enqueue_agent_task` and stops there: the task lands `awaiting_review`, and a
- * person presses send. No automated external sends is a standing rule, and the
- * act's own consequence sentence on the company card says exactly that.
+ * "Chase the renewal" writes one row onto the agent queue and stops there: the
+ * task lands `awaiting_review`, and a person presses send. No automated
+ * external sends is a standing rule, and the act's own consequence sentence on
+ * the company card says exactly that.
  *
- * ⚠ THE SMALLEST POSSIBLE ADDITION, UNDER THIS SURFACE. W2a owns
- * `packages/supabase/src/hooks`, and no chase hook is among its exports, so
- * this mutation lives here rather than being written into a package this wave
- * does not own. It belongs in `@patina/supabase` the moment the queue grows a
- * second portal caller — flagged for the orchestrator.
+ * ⚠ THE QUEUE IS WRITTEN SERVER-SIDE (CR-3 / QA-1). `enqueue_agent_task` is
+ * granted to `postgres`, `service_role` and `agent_writer` only — never to
+ * `authenticated` — so this used to call it from `createBrowserClient()` and
+ * fail on every press with `permission denied for function enqueue_agent_task`.
+ * The act now posts to `/api/people/chase-renewal`, which proves studio
+ * membership through the caller's OWN RLS and then enqueues with the service
+ * role. A browser client is not an agent.
  */
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { createBrowserClient } from "@patina/supabase";
 
 /** The queue's own word for this work. */
 export const COMPLIANCE_CHASE_TASK_TYPE = "compliance_chase";
@@ -42,29 +43,23 @@ export function useChaseTheRenewal() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (input: ChaseRenewalInput) => {
-      const supabase = createBrowserClient();
-      const { data, error } = await supabase.rpc("enqueue_agent_task", {
-        p_task_type: COMPLIANCE_CHASE_TASK_TYPE,
-        p_entity_type: "studio_contact",
-        p_entity_id: input.companyId,
-        // A draft, and only a draft. The queue's review gate is the send gate.
-        p_status: "awaiting_review",
-        p_source: "people_room",
-        p_summary: `Chase ${input.companyName} for ${input.documentLabel ?? "a current certificate"}`,
-        p_payload: {
-          organization_id: input.organizationId,
-          company_id: input.companyId,
-          company_name: input.companyName,
-          document_id: input.documentId ?? null,
-          document_label: input.documentLabel ?? null,
-          paperwork_contact_person_id: input.paperworkContactPersonId ?? null,
-        },
-        // One standing chase per firm per paper: pressing twice files one note.
-        p_idempotency_key: `compliance_chase:${input.companyId}:${input.documentId ?? "any"}`,
-        p_on_conflict: "ignore",
+      const response = await fetch("/api/people/chase-renewal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          companyId: input.companyId,
+          documentId: input.documentId ?? null,
+          documentLabel: input.documentLabel ?? null,
+          paperworkContactPersonId: input.paperworkContactPersonId ?? null,
+        }),
       });
-      if (error) throw error;
-      return data as unknown;
+      if (!response.ok) {
+        const detail = (await response.json().catch(() => null)) as {
+          error?: string;
+        } | null;
+        throw new Error(detail?.error ?? "Could not draft that note just now.");
+      }
+      return (await response.json()) as { taskId: string | null };
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["agent-tasks"] });

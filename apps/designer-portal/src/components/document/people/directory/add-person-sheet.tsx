@@ -36,7 +36,7 @@
  * intentionally still edits a vendor-backed card's copy.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useAddClient,
@@ -53,6 +53,7 @@ import {
   peopleKeys,
   peopleSeatKeys,
   type PartyKind,
+  type ProjectParty,
   type StudioContact,
 } from "@patina/supabase";
 import { ALL_FIELD_TRADES, FIELD_TRADE_LABELS } from "@patina/types";
@@ -61,6 +62,7 @@ import type { DirectoryChip } from "@/lib/document/directory-roles";
 import { useProjects } from "@/hooks/use-projects";
 import { useAuth } from "@/hooks/use-auth";
 import { useFeatureFlag } from "@/hooks/use-feature-flag";
+import { useProjectAuthority } from "../../roster/use-project-authority";
 import { clientEvents } from "@/lib/analytics/events";
 import { DocumentAction, DocumentActionGroup } from "../../document-action";
 import { RoomSheet } from "../../rooms/room-sheet";
@@ -310,6 +312,49 @@ export function AddPersonSheet({
   const [otherLabel, setOtherLabel] = useState("");
   const [contactRule, setContactRuleText] = useState("");
   const [authorityPhrase, setAuthorityPhrase] = useState("");
+  // R-J / C20 — the Authority field opens from one of two acts, never sits
+  // there looking pre-filled (SPEC §5.5 #16).
+  const [authorityOpen, setAuthorityOpen] = useState(false);
+  const authorityFieldId = useId();
+  /**
+   * CR-20 — WHAT THE CHAIN HAS ALREADY WRITTEN.
+   *
+   * `submitParty` chains five awaited mutations. A failure at step four used
+   * to leave steps one to three committed, the sheet open, and a second press
+   * of "Add to the roster" writing a SECOND seat. The chain now RESUMES from
+   * here instead of restarting: every step records itself, and a retry redoes
+   * only what is still owed. Cleared by `reset()` — a fresh add is a fresh
+   * chain.
+   */
+  const chainRef = useRef<{
+    party: ProjectParty | null;
+    cardId: string | null;
+    mobileWritten: boolean;
+    emailWritten: boolean;
+    ruleWritten: boolean;
+  }>({
+    party: null,
+    cardId: null,
+    mobileWritten: false,
+    emailWritten: false,
+    ruleWritten: false,
+  });
+
+  // The scope this add would write, and whether the project's agreement
+  // already names one (R-J's first branch).
+  const authorityScope = kind === "household" ? "change_order" : "selections";
+  const { data: projectGrants } = useProjectAuthority(
+    open && projectId ? projectId : null,
+  );
+  const agreementClause = useMemo(() => {
+    for (const grants of Object.values(projectGrants ?? {})) {
+      for (const grant of grants) {
+        const clause = grant.scope === authorityScope ? grant.source_clause : null;
+        if (clause?.trim()) return clause.trim();
+      }
+    }
+    return null;
+  }, [projectGrants, authorityScope]);
 
   // F3 — edit mode prefill. Keyed on the card's own id (not the object
   // reference): a background refetch of the same card while the sheet is
@@ -375,6 +420,14 @@ export function AddPersonSheet({
     setOtherLabel("");
     setContactRuleText("");
     setAuthorityPhrase("");
+    setAuthorityOpen(false);
+    chainRef.current = {
+      party: null,
+      cardId: null,
+      mobileWritten: false,
+      emailWritten: false,
+      ruleWritten: false,
+    };
     setError(null);
   };
 
@@ -506,37 +559,46 @@ export function AddPersonSheet({
     const matchedFirm = firms.find((f) => f.id === firmId) ?? null;
     const firmName = matchedFirm?.company_name ?? company;
     try {
-      const party = await addParty.mutateAsync({
-        projectId,
-        partyKind,
-        displayName: trimmedName,
-        companyName: firmName,
-        // A named other carries its written label where the seat has room for
-        // it; a trade kind carries its trade (see SEAT_PARTY_KIND's note).
-        trade:
-          kind === "other_named"
-            ? otherLabel.trim()
-            : showsTrade(kind)
-              ? trade
-              : null,
-        phone,
-        email: partyEmail,
-        textUpdates,
-        smsConsentSource: consentSource || undefined,
-        smsConsentEvidence: consentEvidence,
-      });
+      // CR-20: RESUME, never restart. A press that failed at step four must
+      // not write a second seat on the retry.
+      const chain = chainRef.current;
+      if (!chain.party) {
+        const party = await addParty.mutateAsync({
+          projectId,
+          partyKind,
+          displayName: trimmedName,
+          companyName: firmName,
+          // A named other carries its written label where the seat has room
+          // for it; a trade kind carries its trade (see SEAT_PARTY_KIND's
+          // note).
+          trade:
+            kind === "other_named"
+              ? otherLabel.trim()
+              : showsTrade(kind)
+                ? trade
+                : null,
+          phone,
+          email: partyEmail,
+          textUpdates,
+          smsConsentSource: consentSource || undefined,
+          smsConsentEvidence: consentEvidence,
+        });
+        chain.party = party;
+        chain.cardId = party.studio_contact_id ?? null;
+      }
+      const party = chain.party;
 
       // The rule and the typed channels belong to the PERSON, not the seat, so
       // a card is minted when either is written and none was auto-linked.
-      let cardId = party.studio_contact_id ?? null;
       const wantsCard =
         !!contactRule.trim() || !!phone.trim() || !!partyEmail.trim();
-      if (!cardId && wantsCard && organizationId) {
+      if (!chain.cardId && wantsCard && organizationId) {
         const card = await promoteToCard.mutateAsync({ organizationId, party });
-        cardId = (card as { id?: string } | null)?.id ?? null;
+        chain.cardId = (card as { id?: string } | null)?.id ?? null;
       }
+      const cardId = chain.cardId;
       if (cardId) {
-        if (phone.trim()) {
+        if (phone.trim() && !chain.mobileWritten) {
           await addChannel.mutateAsync({
             ownerType: "person",
             ownerId: cardId,
@@ -545,31 +607,39 @@ export function AddPersonSheet({
             smsCapable: true,
             preferred: true,
           });
+          chain.mobileWritten = true;
         }
-        if (partyEmail.trim()) {
+        if (partyEmail.trim() && !chain.emailWritten) {
           await addChannel.mutateAsync({
             ownerType: "person",
             ownerId: cardId,
             channelKind: "email",
             value: partyEmail.trim(),
           });
+          chain.emailWritten = true;
         }
-        if (contactRule.trim()) {
+        if (contactRule.trim() && !chain.ruleWritten) {
           await contactRuleWrite.mutateAsync({
             subjectType: "person",
             subjectId: cardId,
-            // The typed sentence is the studio's own reason; the forbidding
-            // clauses are written from the channels actually left empty.
-            channelsForbidden: partyEmail.trim() ? [] : ["email"],
+            // CR-21: NOTHING IS INFERRED. The forbidden list used to be read
+            // off whether the Email box happened to be blank, so "Email only.
+            // No cell for work." typed beside an empty Email box wrote a rule
+            // FORBIDDING email — the opposite of what the studio said, and
+            // what every send gate would then read. The studio's sentence is
+            // recorded as the reason; which channel is barred is written on
+            // the person card, where there are controls that say so.
+            channelsForbidden: [],
             reason: contactRule.trim(),
           });
+          chain.ruleWritten = true;
         }
       }
       if (authorityPhrase.trim()) {
         await setAuthority.mutateAsync({
           engagementId: party.id,
           projectId,
-          scope: kind === "household" ? "change_order" : "selections",
+          scope: authorityScope,
           sourceClause: authorityPhrase.trim(),
         });
       }
@@ -578,9 +648,12 @@ export function AddPersonSheet({
 
       const proj =
         projects.find((p) => p.id === projectId)?.name ?? "the project";
+      // CR-4: R-AS took both halves off the seat INSERT, so
+      // `fc_optin_invite_dispatch` no longer fires and NOTHING is sent. The
+      // sheet says what actually happened; the record-side dispatch is W3's.
       const message =
         textUpdates && phone.trim()
-          ? `${trimmedName} added to ${proj} — a text confirmation is on its way.`
+          ? `${trimmedName} added to ${proj}. The consent is recorded; nothing has been sent yet.`
           : `${trimmedName} added to ${proj}.`;
       onAdded?.(message, kind === "household" ? "clients" : "crew");
       reset();
@@ -1137,22 +1210,61 @@ export function AddPersonSheet({
             email.&rdquo;
           </p>
 
-          {/* R-J — two branches, two exact wordings. Nothing defaults from an
-              agreement on a fresh add, and the sheet says so rather than
-              leaving the field looking pre-filled. */}
-          <label className={FIELD_LABEL} htmlFor="add-party-authority">
-            Authority
-          </label>
-          <input
-            id="add-party-authority"
-            type="text"
-            value={authorityPhrase}
-            onChange={(e) => setAuthorityPhrase(e.target.value)}
-            className={`${FIELD_INPUT} mb-1`}
-          />
-          <p className="mb-4 text-[0.66rem] leading-relaxed text-[var(--color-aged-oak)]">
-            Nothing defaulted from the agreement.
-          </p>
+          {/* R-J / C20 / SPEC §5.5 #16 — TWO branches, two exact wordings,
+              each with its own act. The field never sits there looking
+              pre-filled: it opens from the act, prefilled from the agreement
+              where the agreement says something, and empty where it does not. */}
+          {agreementClause ? (
+            <>
+              <p className="text-[0.66rem] leading-relaxed text-[var(--color-aged-oak)]">
+                Defaulted from the agreement. Confirm it, or write a different
+                one.
+              </p>
+              <DocumentAction
+                actionKey="confirm-authority-from-agreement"
+                surfaceKey="people"
+                regionKey="add-person-sheet"
+                variant="tertiary"
+                aria-expanded={authorityOpen}
+                aria-controls={authorityFieldId}
+                onClick={() => {
+                  setAuthorityPhrase((current) => current || agreementClause);
+                  setAuthorityOpen(true);
+                }}
+              >
+                Confirm from the agreement
+              </DocumentAction>
+            </>
+          ) : (
+            <>
+              <p className="text-[0.66rem] leading-relaxed text-[var(--color-aged-oak)]">
+                Nothing defaulted from the agreement.
+              </p>
+              <DocumentAction
+                actionKey="record-the-authority"
+                surfaceKey="people"
+                regionKey="add-person-sheet"
+                variant="tertiary"
+                aria-expanded={authorityOpen}
+                aria-controls={authorityFieldId}
+                onClick={() => setAuthorityOpen(true)}
+              >
+                Record the authority
+              </DocumentAction>
+            </>
+          )}
+          <div id={authorityFieldId} hidden={!authorityOpen} className="mb-4">
+            <label className={FIELD_LABEL} htmlFor="add-party-authority">
+              Authority
+            </label>
+            <input
+              id="add-party-authority"
+              type="text"
+              value={authorityPhrase}
+              onChange={(e) => setAuthorityPhrase(e.target.value)}
+              className={`${FIELD_INPUT} mt-1`}
+            />
+          </div>
 
           <label className="mt-4 flex cursor-pointer items-start gap-2.5 text-[0.74rem] text-[var(--color-mocha)]">
             <input
@@ -1215,9 +1327,14 @@ export function AddPersonSheet({
                 stores this note, time, disclosure version, and the person
                 recording it.
               </p>
+              {/* CR-4: R-AS took both halves off the seat INSERT, so the
+                  double opt-in is NOT dispatched from here. Telling the studio
+                  to wait for a YES to a message Patina never sent is a
+                  consent-adjacent falsehood. Say what is true today; W3's
+                  record-side dispatch changes this sentence back. */}
               <p className="mt-2 text-[0.7rem] leading-relaxed text-[var(--color-mocha)]">
-                {partyName.trim() || "They"} is invited, not consenting, until
-                they reply YES.
+                {partyName.trim() || "They"} is recorded as consenting on this
+                evidence. Patina has not sent them anything yet.
               </p>
             </div>
           )}
