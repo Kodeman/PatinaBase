@@ -406,13 +406,24 @@ export function PeopleRoom() {
    * from the Directory, through both doors R-AA opened (the person card's seat
    * line and the Directory row's seat disclosure).
    *
-   * Only the four field-roster kinds have a field sheet to open. Every other
-   * seat goes where R-AA already sends a seat line — the PERSON'S CARD, the
-   * room's unit, which carries the seat and its facts beneath the human.
+   * Only the four field-roster kinds have a field sheet to open.
+   *
+   * CR10-1 — AND EVERY OTHER SEAT WALKS TO THE JOB. Sending them to the person
+   * card was motionless on the one surface that matters: the card's own seat
+   * lines call this, so a client, a client_rep, an inspector, a vendor or an
+   * architect seat re-opened the card the reader was already on and nothing
+   * moved. R-AB sanctions inert acts in the SPECIMENS, never in the shipped
+   * room. Direction §2.1 names the seat line's destination — `/doc/<project>
+   * ?sheet=call`, the Call Sheet, which every kind of seat has. A seat the view
+   * hands us with no project cannot be walked to, and opens the card instead.
    */
   const openSeat = (seat: PeopleDirectorySeat) => {
     if (isFieldRosterRole(seat.party_kind)) {
       setOpenParty({ id: seat.seat_id, role: seat.party_kind });
+      return;
+    }
+    if (seat.project_id) {
+      router.push(`/doc/${encodeURIComponent(seat.project_id)}?sheet=call`);
       return;
     }
     const personId = seat.person_id;

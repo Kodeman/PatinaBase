@@ -12,7 +12,11 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import type { PeopleDirectoryRow } from "@patina/supabase";
 import { PersonRow } from "../directory/person-row";
 
-const mockUsePeopleSeats = jest.fn(() => ({ data: [] as unknown[] }));
+// CR10-2 — the row reads the query's own state, not only its data, so the mock
+// has to be able to answer "still reading" as well as "read, and empty".
+const mockUsePeopleSeats = jest.fn(
+  (): { data?: unknown[]; isFetching?: boolean } => ({ data: [] }),
+);
 
 jest.mock("@patina/supabase", () => ({
   usePeopleSeats: (...args: unknown[]) => mockUsePeopleSeats(...(args as [])),
@@ -320,5 +324,32 @@ describe("the seats disclosure", () => {
     expect(seat).toHaveTextContent("12 Oct 2026 to 13 Aug 2027");
     fireEvent.click(seat);
     expect(onOpenSeat).toHaveBeenCalled();
+  });
+
+  /**
+   * CR10-2 — THE COUNT AND THE SENTENCE NEVER CONTRADICT EACH OTHER. The read
+   * is enabled only when the disclosure opens, so `data` is undefined for the
+   * whole first round-trip; an empty-length test printed "no seat" directly
+   * beneath a trigger reading "2 seats".
+   */
+  it("prints nothing under the trigger while the seats are still being read", () => {
+    mockUsePeopleSeats.mockReturnValue({ data: undefined, isFetching: true });
+    renderRow({ seat_count: 2 });
+    fireEvent.click(screen.getByRole("button", { name: "2 seats" }));
+    expect(screen.queryByText(/No open seat/)).not.toBeInTheDocument();
+  });
+
+  /**
+   * CR10-2 — and the Directory names no project, so it may not borrow R-V's
+   * project-scoped fallback from the person card.
+   */
+  it("says the Directory's own sentence when the read lands empty", () => {
+    mockUsePeopleSeats.mockReturnValue({ data: [], isFetching: false });
+    renderRow({ seat_count: 2 });
+    fireEvent.click(screen.getByRole("button", { name: "2 seats" }));
+    expect(screen.getByText("No open seat on any job.")).toBeInTheDocument();
+    expect(
+      screen.queryByText("No open seat on this project."),
+    ).not.toBeInTheDocument();
   });
 });

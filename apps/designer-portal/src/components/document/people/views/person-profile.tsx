@@ -33,6 +33,7 @@
 import { useMemo, useState } from "react";
 import {
   AUTHORITY_SCOPE_LABELS,
+  isFieldRosterRole,
   useAffiliations,
   useComplianceDocuments,
   useComplianceState,
@@ -86,6 +87,20 @@ export const SEND_TEXT_CONSEQUENCE =
   "This sends one text to the number on file. They can stop it at any time by replying STOP.";
 export const CANNOT_TEXT_SENTENCE =
   "The studio holds no standing consent for this number, so no text may go out.";
+/**
+ * CR10-1 — THE COMPOSER LIVES ON A FIELD SEAT, AND NOWHERE ELSE.
+ *
+ * The act opened the person's FIRST live seat whatever its kind, and only a
+ * field seat (gc, sub, installer, receiver) opens a sheet with a thread and a
+ * composer in it. On a client, a client_rep, an inspector, a vendor or an
+ * architect seat the press moved nothing — and it was held only by the seed's
+ * missing consent, so recording consent turned it into an enabled act, under
+ * "This sends one text to the number on file", that sent nothing. Held with
+ * its own sentence now, the way MINT_WITHOUT_SEAT_SENTENCE holds the field
+ * link for a person with no seat at all.
+ */
+export const NO_TEXT_SEAT_SENTENCE =
+  "A text goes out from a seat on a job’s field crew, and this person holds none.";
 /**
  * CR3-9 — a rule that bars the text rail outranks a recorded grant (C7).
  *
@@ -303,6 +318,9 @@ export function PersonProfile({
   ].filter(Boolean) as string[];
 
   const firstSeat = liveSeats[0] ?? null;
+  // CR10-1: the seat the SMS thread hangs off — a field seat or nothing.
+  const textableSeat =
+    liveSeats.find((seat) => isFieldRosterRole(seat.party_kind)) ?? null;
   // CR3-9: consent is necessary, not sufficient — the rule outranks it (C7).
   // QA-R9-1: a HARD BLOCK holds the rail too — R-BL's routed rule sends the
   // studio to another person, which a live composer on this one contradicts.
@@ -412,7 +430,9 @@ export function PersonProfile({
           className="t-body-sm mt-2 max-w-[56ch] text-[var(--ink-subtle)]"
         >
           {canText
-            ? SEND_TEXT_CONSEQUENCE
+            ? textableSeat
+              ? SEND_TEXT_CONSEQUENCE
+              : NO_TEXT_SEAT_SENTENCE
             : ruleHoldsText && ruleHeldClause
               ? ruleHeldTextSentence(ruleHeldClause)
               : CANNOT_TEXT_SENTENCE}
@@ -422,11 +442,11 @@ export function PersonProfile({
           surfaceKey="people"
           regionKey="reach-access"
           variant="secondary"
-          held={!canText || !firstSeat}
-          disabled={!canText || !firstSeat}
+          held={!canText || !textableSeat}
+          disabled={!canText || !textableSeat}
           aria-describedby={`person-text-consequence-${person.person_id}`}
           onClick={() => {
-            if (firstSeat && onOpenSeat) onOpenSeat(firstSeat);
+            if (textableSeat && onOpenSeat) onOpenSeat(textableSeat);
           }}
         >
           Send a text

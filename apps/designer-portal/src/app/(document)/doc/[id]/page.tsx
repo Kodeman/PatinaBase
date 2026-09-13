@@ -1229,6 +1229,14 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       setCallSheetMode('sheet');
       setCallSheetOpen(true);
     }
+    // CR10-1 — `?sheet=call` is the Call Sheet's ADDRESS (direction §2.1), the
+    // destination a People-room seat line walks to. Read on arrival the way
+    // `ffeItemId` above is, so the link opens the sheet rather than landing on
+    // the document beside it. The param stays in the bar: it is the address.
+    if (new URLSearchParams(window.location.search).get('sheet') === 'call') {
+      setCallSheetMode('sheet');
+      setCallSheetOpen(true);
+    }
     return () => window.removeEventListener('document:open-call-sheet', onOpenCallSheet);
   }, []);
 

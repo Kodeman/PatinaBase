@@ -93,13 +93,24 @@ export function isPhoneChannel(kind: string): boolean {
   return PHONE_KINDS.has(kind);
 }
 
-/** Why a channel is held, in words (direction §5.4). */
+/**
+ * Why a channel is held, in words (direction §5.4).
+ *
+ * CR10-3 — THE WORDS FOLLOW THE KIND, NOT ONLY THE STATUS. The status editor
+ * offers "It bounces" on every channel row, so a bouncing MOBILE printed
+ * "This address bounced back… Texts and calls still reach them." beside a
+ * phone number: it called a number an address, and then promised that texts
+ * still reach the very line it had just declared held.
+ */
 export function heldChannelReason(channel: StudioContactChannel): string {
   const when = formatLongDate(channel.status_at?.slice(0, 10));
   const dated = when ? `, ${when}` : "";
+  const phone = isPhoneChannel(String(channel.channel_kind));
   switch (channel.status) {
     case "bounced":
-      return `This address bounced back${dated}. Texts and calls still reach them.`;
+      return phone
+        ? `Texts to this number bounced back${dated}. Calls still reach them.`
+        : `This address bounced back${dated}. Texts and calls still reach them.`;
     case "unsubscribed":
       return `They unsubscribed${dated}. Calls still reach them.`;
     case "dead":
