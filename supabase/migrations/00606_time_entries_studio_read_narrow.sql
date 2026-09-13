@@ -180,6 +180,72 @@
 -- Cases (y), (z), (e), (w), (x), (al) and (am) of
 -- supabase/tests/rls/time_entry_studio_stamp_test.sql measure all of it.
 --
+-- ── ROUND 13 — HT-3-g AMENDED part (b): THE REMEDY ARM ──────────────────────
+-- (AMENDED BY THE ORCHESTRATOR 2026-09-12, resolving W2-R13-01. Flagged to Kody.)
+--
+--   *"(b) REMEDY ARM in stamp_project_pricing_studio: in addition to the
+--   employer-tier arm, a caller who IS the project's CURRENT designer
+--   (projects.designer_id = auth.uid()) AND is the OWNER of the named studio may
+--   stamp — and this arm may OVERWRITE a stamped column (bound (b) yields to it),
+--   so an employer recovers a taken project by reassign_project_lead to its owner
+--   followed by one stamp. Audit the overwrite with the old and new studio."*
+--
+-- WHY IT EXISTS. Round 13 measured that 00620's one-off stamp can still hand a
+-- designer her former employer's legacy project (forms S and H of W2-R13-01: she
+-- leaves her own seat, or as an admin removes the AUTHOR's seat and then her own),
+-- and through round 12 the column was then FINAL for everybody — bound (b) refused
+-- every caller and HT-3-g(3) gave the employer no arm at all. The amendment's answer
+-- is not another key at the stamp but a WAY BACK: one arm that may re-point an
+-- already-stamped project, held by the one pair of facts an employer can assemble
+-- without the taker's permission in the ordinary case — its own owner standing, and
+-- the lead of the project.
+--
+-- ROUND 13'S OWN MEASUREMENTS OF IT, reported rather than assumed, because both are
+-- larger than the sentence that authorises the arm:
+--
+--   (1) THE ARM RECOVERS THE MONEY, AND THE REASSIGN LEG IS NOT AVAILABLE TO THE
+--       EMPLOYER ALONE. `reassign_project_lead` (00399) is pinned to the project's
+--       CURRENT studio_id: it requires BOTH the outgoing and the incoming lead to
+--       hold an active non-guest seat in THAT organization, and the actor to be the
+--       current lead or an owner/admin of it. After a form-S/H taking that
+--       organization IS the taker's own workspace, so the employer's owner is
+--       refused the reassign (42501) and cannot reach this arm on her own. What the
+--       arm does buy, measured end to end: once the employer's owner IS the
+--       project's lead, her one stamp overwrites the workspace, writes its audit
+--       row, and the designer's NEXT hour prices from the employer's card again.
+--       Cases (k)/(l) of supabase/tests/billing/legacy_project_studio_stamp_test.sql
+--       measure the whole chain, refusal included.
+--
+--   (2) THE ARM IS WIDER THAN ITS PURPOSE, AND THE WIDTH IS A DOOR. Read as written
+--       it admits ANY designer who owns a studio to re-point ANY project she leads —
+--       including one an HONEST employer has already stamped — at the studio she
+--       owns, where HT-3-e(2)'s OWNER exemption prices her own number. That is
+--       W2-R11-01 form A restored with the power to overwrite, in ONE statement, on
+--       a project she did not create. HT-3-g(3)'s "DESIGNERS NEVER STAMP" is what
+--       forbade it; this amendment expressly admits it. It is NOT narrowed here on a
+--       guess — the ruling's wording is the ruling — and it is measured as a
+--       PASSING, loudly-labelled assertion (case (m) m5-m7) so the next hand meets
+--       it rather than finds it. If the orchestrator means the arm only as the
+--       employer's way back, the narrowing it needs is a fact about the project's
+--       book (the studio it was stamped to, or the roster 00620's key reads), not a
+--       fact about the caller, and it is one predicate at this call site. What the
+--       arm does NOT reach, because the amendment's subject is a project that already
+--       names a studio: a column that is still NULL, where HT-3-g(3)'s "DESIGNERS NEVER
+--       STAMP" is unamended and still closes W2-R11-01 forms A and G (measured as
+--       time_rate_resolution_test.sql cases (aj5) and (ak5)). That bound is the one
+--       judgment call this pass makes, and it is spelled at its own site below.
+--
+-- WHAT THE ARM DOES NOT RELAX. Bound (a) (owner or admin of the studio named) is
+-- satisfied by the owner seat this arm requires, so it is not bypassed. Bound (d)'s
+-- arm's-length rate IS bypassed by this arm and only by it, because it is
+-- unsatisfiable in the shape the arm exists for: the caller is the designer and the
+-- studio is her own, so every rate row for her there carries her own id. Bound (c)'s
+-- employer-seat tier is likewise bypassed by this arm and only by it — the employer's
+-- own owner holds `role = 'owner'`, which the employer tier excludes by definition.
+-- The ONE actor-vs-designer comparison this file now contains lives in this arm and
+-- nowhere else, and the postcondition below counts it (exactly one, equality only:
+-- round 3's INEQUALITY skip, the gap form A walked through, stays dead).
+--
 -- Lineage: policies, plus ONE new function (section 4 — NEW name, nothing
 -- redefined; `set_project_studio_id` is NOT touched), plus ONE new column
 -- (section 3b, W2-R9-02 — additive, nullable, written only by 00615's guard).
@@ -486,6 +552,11 @@ DECLARE
   -- HT-3-g(3): the ONE fact this act turns on besides the caller's standing — does
   -- the studio being named EMPLOY this project's designer?
   v_named_is_employer_seat boolean := false;
+  -- HT-3-g AMENDED (b), round 13: the REMEDY ARM's two facts, and nothing else in
+  -- this body compares the actor with the designer.
+  v_caller_is_designer  boolean := false;
+  v_caller_owns_named   boolean := false;
+  v_remedy              boolean := false;
   v_written     uuid;
 BEGIN
   IF v_actor IS NULL THEN
@@ -508,6 +579,44 @@ BEGIN
     RAISE EXCEPTION 'stamp_project_pricing_studio: this project cannot be stamped'
       USING ERRCODE = 'insufficient_privilege';
   END IF;
+
+  -- (a0) THE REMEDY ARM — HT-3-g AMENDED (b), round 13. Computed before every bound
+  --      it modifies, and read by exactly three of them: bound (b) (it may
+  --      OVERWRITE), bound (c) (the employer tier does not reach an owner seat) and
+  --      bound (d) (her own studio can hold no arm's-length rate for her). It
+  --      RELAXES nothing else, and bound (a) is satisfied by the owner seat it asks
+  --      for rather than skipped.
+  --      The equality below is the ONLY actor-vs-designer comparison in this body and
+  --      the postcondition counts it: gated on INEQUALITY it would be round 3's skip,
+  --      which made the arm's-length leg silent in the designer's own hand and is the
+  --      gap W2-R11-01 form A walked through.
+  v_caller_is_designer := (v_actor = v_designer_id);
+  v_caller_owns_named := EXISTS (
+    SELECT 1
+    FROM public.organization_members AS owner_seat
+    JOIN public.organizations AS named_studio
+      ON named_studio.id = owner_seat.organization_id
+    WHERE owner_seat.organization_id = p_studio_id
+      AND owner_seat.user_id = v_actor
+      AND owner_seat.status = 'active'
+      AND owner_seat.role = 'owner'
+      AND named_studio.type = 'design_studio'
+      AND named_studio.status = 'active'
+  );
+  --      ONE JUDGMENT CALL, REPORTED RATHER THAN ASSUMED — `v_existing IS NOT NULL`.
+  --      HT-3-g AMENDED (b) describes one situation and one only: "an employer recovers
+  --      a TAKEN project", and its mechanism is "this arm may OVERWRITE a stamped
+  --      column". Its subject is therefore a project that ALREADY names a studio. On a
+  --      project whose column is still NULL, HT-3-g(3)'s "DESIGNERS NEVER STAMP … no
+  --      owned-tier arm, no designer arm" is unamended and in force — and it is the
+  --      ruling that closed W2-R11-01 form A (ONE statement: she owns a workspace, holds
+  --      no employer seat, and names it on a legacy project her assistant opened) and
+  --      form G. Without this leg the arm repeals that closure as a side effect, and
+  --      `supabase/tests/billing/time_rate_resolution_test.sql` case (aj5) — the
+  --      recorded measurement of HT-3-f(3)'s dissolution — goes red. So the arm is
+  --      bounded to the shape the amendment names. If the orchestrator means the arm to
+  --      reach unstamped projects too, this is one conjunct and aj5 moves with it.
+  v_remedy := v_caller_is_designer AND v_caller_owns_named AND v_existing IS NOT NULL;
 
   -- (a) standing, HT-3-d and HT-3-g(3): an OWNER or ADMIN of the studio being
   --     named. Being the project's designer is NOT standing in itself (W2-R4-02) —
@@ -549,12 +658,20 @@ BEGIN
   --     purpose — a postcondition below reads this source and forbids it, because a
   --     body that consults the derivation at all is a body that can be re-given a
   --     confirm arm.)
+  --     ROUND 13, HT-3-g AMENDED (b): BOUND (b) YIELDS TO THE REMEDY ARM. Through
+  --     round 12 this refusal was absolute, and that is what left an employer no way
+  --     back from a form-S/H taking (W2-R13-01): 00620 wrote the taker's workspace
+  --     and every caller afterwards met 22023. The amendment's remedy arm may
+  --     re-point an already-stamped project; for every other caller a stamp is still
+  --     final (HT-3-c).
   IF v_existing IS NOT NULL THEN
     IF v_existing = p_studio_id THEN
       RETURN v_existing;
     END IF;
-    RAISE EXCEPTION 'stamp_project_pricing_studio: this project already names a studio'
-      USING ERRCODE = 'invalid_parameter_value';
+    IF NOT v_remedy THEN
+      RAISE EXCEPTION 'stamp_project_pricing_studio: this project already names a studio'
+        USING ERRCODE = 'invalid_parameter_value';
+    END IF;
   END IF;
 
   -- (c) HT-3-g(3) (RULED BY KODY 2026-09-12), the ONE tier: the studio named must
@@ -591,7 +708,11 @@ BEGIN
   --     and this program records that an owner-initiated UNPIN / re-derivation act is
   --     owed WITH that door. Case (z) measures it as a PASSING, loudly-labelled
   --     assertion.
-  IF NOT v_named_is_employer_seat THEN
+  --     ROUND 13, HT-3-g AMENDED (b): the REMEDY ARM passes this gate, and must, or
+  --     it could never be used — the employer's own OWNER holds `role = 'owner'`,
+  --     which the employer tier excludes by definition, so an arm reached only by the
+  --     project's lead-and-owner is unreachable behind an employer-seat test.
+  IF NOT (v_named_is_employer_seat OR v_remedy) THEN
     RAISE EXCEPTION 'stamp_project_pricing_studio: a studio prices this project''s '
                     'hours only from inside the tier that EMPLOYS its designer — an '
                     'active, non-guest seat with role <> ''owner''. A studio she '
@@ -602,7 +723,8 @@ BEGIN
   -- (d) THE SECOND HALF OF STANDING — HT-3-e(1)'s ARM'S-LENGTH RATE, now
   --     unconditional, there being only one tier. The studio named must already
   --     hold a `studio_member_rates` row for this designer that somebody OTHER than
-  --     she wrote. Round 3's `created_by` SIBLING leg, which was the OWNED tier's
+  --     she wrote. Round 3's `created_by` same-book leg ("a project she both leads
+  --     and created already names this studio"), which was the OWNED tier's
   --     half of this bound, is DELETED with the owned tier (HT-3-g(3)), and so is
   --     the inequality skip that made this leg silent in the designer's own hand —
   --     the gap W2-R11-01 form A walked through. (That comparison is described and
@@ -612,7 +734,7 @@ BEGIN
   --     with no rate for her prices her hour 'none' after the stamp too, so the
   --     stamp would buy it nothing. It is the fact a one-account designer cannot
   --     manufacture, every row in a workspace she controls carrying her own id.
-  --     Round 7 measured what the SIBLING leg cost in its place — 24 refusals out of
+  --     Round 7 measured what the same-book leg cost in its place — 24 refusals out of
   --     24, every column left NULL, HT-3-a's remedy reaching nobody on the ordinary
   --     hire (W2-R7-01), because a book that predates the column holds no project
   --     naming the studio at all.
@@ -627,7 +749,13 @@ BEGIN
   --     outsider, who writes her rate in his own org under his own id and so is
   --     arm's-length BY THIS TEST, which asks about the SUBJECT's authorship. Case
   --     (t) / case (z).
-  IF NOT EXISTS (
+  --     ROUND 13, HT-3-g AMENDED (b): the REMEDY ARM bypasses this leg, and only it.
+  --     The arm's caller IS the designer and OWNS the studio named, so every rate row
+  --     for her there carries her own id by construction — the leg is not a bar she
+  --     could clear by doing the honest thing first, it is unsatisfiable in the one
+  --     shape the arm exists for. HT-3-e(2)'s OWNER exemption is what then prices the
+  --     hour from that studio's card, exactly as it does for HT-3-c's sole proprietor.
+  IF NOT v_remedy AND NOT EXISTS (
        SELECT 1
        FROM public.studio_member_rates AS other_author
        WHERE other_author.studio_id = p_studio_id
@@ -658,10 +786,14 @@ BEGIN
   --     concurrent stamp the bounds above can pass and the column be filled
   --     before this statement, and returning p_studio_id would then report a
   --     studio the project does not name.
+  --     ROUND 13, HT-3-g AMENDED (b): the REMEDY ARM writes over a non-NULL column.
+  --     The `studio_id IS NULL` leg stays for every other caller, so the concurrency
+  --     argument above is unchanged for them; for the remedy arm the race it guards
+  --     against is the outcome the arm is for.
   UPDATE public.projects
      SET studio_id = p_studio_id
    WHERE id = p_project_id
-     AND studio_id IS NULL
+     AND (studio_id IS NULL OR v_remedy)
   RETURNING studio_id INTO v_written;
 
   IF v_written IS NULL THEN
@@ -677,16 +809,24 @@ BEGIN
   --     bound (b) makes it final. audit_logs has RLS with no INSERT policy
   --     (00021:261), and this function is already DEFINER, so the row lands the
   --     same way 00605's trigger's does (§0.18).
+  --     ROUND 13, HT-3-g AMENDED (b): AUDIT THE OVERWRITE, with the OLD and the NEW
+  --     studio and under its own action name. An overwrite is a different act from a
+  --     first stamp — it takes a project's hours OFF a studio that was reading them —
+  --     and a row that spelled the old studio NULL would say the opposite of what
+  --     happened.
   INSERT INTO public.audit_logs (
     user_id, organization_id, action, resource_type, resource_id,
     old_values, new_values
   ) VALUES (
     v_actor,
     v_written,
-    'project.pricing_studio_stamped',
+    CASE WHEN v_existing IS NULL
+      THEN 'project.pricing_studio_stamped'
+      ELSE 'project.pricing_studio_restamped'
+    END,
     'project',
     p_project_id,
-    jsonb_build_object('studio_id', NULL::uuid),
+    jsonb_build_object('studio_id', v_existing),
     jsonb_build_object('studio_id', v_written)
   );
 
@@ -750,8 +890,34 @@ COMMENT ON FUNCTION public.stamp_project_pricing_studio(uuid, uuid) IS
   'built here). Case (z) of time_entry_studio_stamp_test.sql measures it as a '
   'PASSING, loudly-labelled assertion; HT-3-e(3)''s second-account residual is the '
   'other one, and transfer_studio_ownership''s demotion is what puts that workspace '
-  'inside her own employer tier. Writes one audit_logs row '
-  '(project.pricing_studio_stamped, W2-R4-05) and returns the studio the UPDATE '
+  'inside her own employer tier. '
+  'HT-3-g AMENDED (b) (orchestrator 2026-09-12, round 13) ADDS ONE SECOND ARM — THE '
+  'REMEDY ARM, AND IT IS THE ONLY CALLER THAT MAY RE-POINT AN ALREADY-STAMPED '
+  'PROJECT: a caller who IS the project''s CURRENT designer AND holds an active '
+  'OWNER seat in the studio named may stamp, and may OVERWRITE. Bound (b) yields to '
+  'it; bounds (c) and (d) are bypassed BY IT AND ONLY BY IT, because an owner seat is '
+  'outside the employer tier by definition and her own studio can hold no '
+  'arm''s-length rate for her. It exists so an employer has a way BACK from a '
+  'W2-R13-01 form-S/H taking (reassign_project_lead to its own owner, then one '
+  'stamp). TWO MEASURED FACTS ABOUT IT, recorded rather than assumed: (1) the '
+  'reassign leg is NOT available to the employer acting alone — reassign_project_lead '
+  'is pinned to the project''s CURRENT studio_id and needs both leads seated THERE, '
+  'which after a taking is the taker''s own workspace (42501); what the arm buys, '
+  'measured, is that once the employer''s owner IS the lead her stamp overwrites and '
+  'the designer''s next hour prices from the employer''s card again. (2) the arm is '
+  'WIDER than its purpose: as written it admits any designer who owns a studio to '
+  're-point any project she LEADS that ALREADY names a studio — an honest employer''s '
+  'stamped project included — at the studio she owns, where HT-3-e(2)''s owner exemption '
+  'prices her own number. That is W2-R11-01 form A with the power to overwrite. It is '
+  'not narrowed here on a guess beyond the ONE bound the amendment''s own subject '
+  'implies: the arm requires the column to be ALREADY STAMPED, because on a NULL column '
+  'HT-3-g(3)''s "designers never stamp" is unamended and closes forms A and G (aj5, '
+  'ak5). Cases (k), (l) and (m) of '
+  'supabase/tests/billing/legacy_project_studio_stamp_test.sql measure both facts, '
+  'the second as a PASSING, loudly-labelled assertion. Writes one audit_logs row '
+  '(project.pricing_studio_stamped on a first stamp, '
+  'project.pricing_studio_restamped on an overwrite, carrying the OLD and the NEW '
+  'studio — W2-R4-05) and returns the studio the UPDATE '
   'actually wrote (W2-R4-06). SECURITY DEFINER so the write does not meet '
   'set_project_studio_id''s authenticated arm; that trigger''s owner-executed arm '
   'still re-validates the bound.';
@@ -887,7 +1053,7 @@ BEGIN
   --    hand from "restoring" any of the four as a widening.
   ASSERT (
     SELECT prosrc LIKE '%is_org_admin_or_owner(p_studio_id)%'
-       AND prosrc LIKE '%IF NOT v_named_is_employer_seat THEN%'
+       AND prosrc LIKE '%IF NOT (v_named_is_employer_seat OR v_remedy) THEN%'
        AND prosrc LIKE '%named_seat.role <> ''owner''%'
        AND prosrc LIKE '%other_author.created_by <> v_designer_id%'
     FROM pg_proc
@@ -897,12 +1063,18 @@ BEGIN
      'non-guest seat with role <> ''owner''), plus HT-3-e(1)''s arm''s-length rate '
      '(created_by <> user_id, or the author HT-3-e(4) displaced). Both conditions '
      'are properties of (the designer, p_studio_id), not of the actor';
+  -- W2-R13-05 / W2-R8-06: every leg of this gate is CASE-INSENSITIVE. Spelled
+  -- `prosrc NOT LIKE`, it passed on capitalisation alone — measured on the installed
+  -- body: `LIKE '%sibling%'` was false while `LIKE '%SIBLING%'` was true, so an
+  -- honest hand who lowercased a comment RED the migration and a hand who introduced
+  -- a `Sibling` identifier passed it. The body's own prose was reworded in the same
+  -- pass so the gate is not merely case-folded but actually silent on the word.
   ASSERT (
-    SELECT prosrc NOT LIKE '%designer_seat.role = ''owner''%'
-       AND prosrc NOT LIKE '%v_designer_has_employer_seat%'
-       AND prosrc NOT LIKE '%sibling%'
-       AND prosrc NOT LIKE '%project_pricing_studio_id%'
-       AND prosrc NOT LIKE '%v_derived%'
+    SELECT lower(prosrc) NOT LIKE '%designer_seat.role = ''owner''%'
+       AND lower(prosrc) NOT LIKE '%v_designer_has_employer_seat%'
+       AND lower(prosrc) NOT LIKE '%sibling%'
+       AND lower(prosrc) NOT LIKE '%project_pricing_studio_id%'
+       AND lower(prosrc) NOT LIKE '%v_derived%'
     FROM pg_proc
     WHERE oid = to_regprocedure('public.stamp_project_pricing_studio(uuid,uuid)')
   ), '00606: HT-3-g(3)''s four removals, each measured reachable before it. (1) NO '
@@ -917,10 +1089,10 @@ BEGIN
      'under HT-3-g(1), so bound (b) is the whole of it';
   ASSERT (
     SELECT position('this project already names a studio' in prosrc)
-             < position('IF NOT v_named_is_employer_seat THEN' in prosrc)
-       AND position('IF NOT v_named_is_employer_seat THEN' in prosrc)
+             < position('IF NOT (v_named_is_employer_seat OR v_remedy) THEN' in prosrc)
+       AND position('IF NOT (v_named_is_employer_seat OR v_remedy) THEN' in prosrc)
              < position('RETURNING studio_id INTO v_written' in prosrc)
-       AND position('IF NOT v_named_is_employer_seat THEN' in prosrc)
+       AND position('IF NOT (v_named_is_employer_seat OR v_remedy) THEN' in prosrc)
              < position('other_author.created_by <> v_designer_id' in prosrc)
     FROM pg_proc
     WHERE oid = to_regprocedure('public.stamp_project_pricing_studio(uuid,uuid)')
@@ -930,21 +1102,64 @@ BEGIN
      'says), BEFORE the arm''s-length-rate leg (a caller naming a studio that does '
      'not employ the designer must read the TIER refusal, not a refusal about a rate '
      'card that was never relevant), and BEFORE the write';
+  -- HT-3-g AMENDED (b), round 13. HT-3-g(3)'s "no designer arm" is AMENDED, not
+  -- dissolved: there is now EXACTLY ONE actor-vs-designer comparison in this body, it
+  -- is an EQUALITY, and it lives in the remedy arm beside an OWNER-seat test. The
+  -- COUNT is the gate — a second comparison anywhere is either round 5's (e2) (a
+  -- refusal gated on the actor BEING the designer, which W2-R6-01 measured refusing an
+  -- admin-designer of an HONEST employer whom HT-3-g(3) admits expressly) or round 3's
+  -- INEQUALITY skip (which made the arm's-length leg silent in the designer's own hand
+  -- and is the gap W2-R11-01 form A walked through in ONE statement). The inequality
+  -- spelling stays forbidden outright, in either direction.
   ASSERT (
-    SELECT prosrc NOT LIKE '%v_actor = v_designer_id%'
-       AND prosrc NOT LIKE '%v_designer_id = v_actor%'
-       AND prosrc NOT LIKE '%v_actor <> v_designer_id%'
-       AND prosrc NOT LIKE '%v_designer_id <> v_actor%'
+    SELECT (
+             SELECT count(*) FROM regexp_matches(
+               prosrc,
+               'v_actor\s*(=|<>)\s*v_designer_id|v_designer_id\s*(=|<>)\s*v_actor',
+               'gi')
+           ) = 1
+       AND lower(prosrc) LIKE '%v_caller_is_designer := (v_actor = v_designer_id)%'
+       AND lower(prosrc) NOT LIKE '%v_actor <> v_designer_id%'
+       AND lower(prosrc) NOT LIKE '%v_designer_id <> v_actor%'
     FROM pg_proc
     WHERE oid = to_regprocedure('public.stamp_project_pricing_studio(uuid,uuid)')
-  ), '00606: NO DESIGNER ARM (HT-3-g(3)). No bound here may compare the actor with '
-     'the project''s designer in EITHER direction. Gated on equality it is round '
-     '5''s (e2), which W2-R6-01 measured refusing an admin-designer of an HONEST '
-     'employer whom HT-3-g(3) admits expressly, while the employer''s own owner was '
-     'refused for want of a sibling — HT-3-a''s remedy reaching nobody. Gated on '
-     'INEQUALITY it is round 3''s skip, which made bound (a2) silent in the '
-     'designer''s own hand and is the gap W2-R11-01 form A walked through in ONE '
-     'statement';
+  ), '00606: ONE DESIGNER COMPARISON, IN THE REMEDY ARM AND NOWHERE ELSE (HT-3-g '
+     'AMENDED (b), round 13). The arm is the employer''s way back from a W2-R13-01 '
+     'form-S/H taking and it needs that equality; every OTHER use of the comparison is '
+     'a bound this program measured a money shape through';
+
+  -- HT-3-g AMENDED (b): the remedy arm's own shape, pinned by source, so a later hand
+  -- can neither delete it (leaving an employer no way back from a taking) nor widen it
+  -- from an OWNER seat to bound (a)'s owner-OR-ADMIN standing.
+  ASSERT (
+    SELECT prosrc LIKE '%v_remedy := v_caller_is_designer AND v_caller_owns_named%'
+       AND prosrc LIKE '%AND v_existing IS NOT NULL;%'
+       AND prosrc LIKE '%owner_seat.role = ''owner''%'
+       AND prosrc LIKE '%IF NOT v_remedy THEN%'
+       AND prosrc LIKE '%AND (studio_id IS NULL OR v_remedy)%'
+       AND prosrc LIKE '%IF NOT v_remedy AND NOT EXISTS (%'
+       AND prosrc LIKE '%project.pricing_studio_restamped%'
+       AND position('v_remedy := v_caller_is_designer AND v_caller_owns_named' in prosrc)
+             < position('this project already names a studio' in prosrc)
+       AND position('SELECT project.designer_id, project.studio_id' in prosrc)
+             < position('v_remedy := v_caller_is_designer AND v_caller_owns_named' in prosrc)
+    FROM pg_proc
+    WHERE oid = to_regprocedure('public.stamp_project_pricing_studio(uuid,uuid)')
+  ), '00606: HT-3-g AMENDED (b) — the REMEDY ARM is (the caller IS the project''s '
+     'current designer) AND (the caller holds an ACTIVE OWNER seat in the studio '
+     'named), computed BEFORE the finality bound it yields to, and it is the only '
+     'caller that may re-point a stamped project. It reaches exactly three bounds — '
+     '(b) the overwrite, (c) the employer tier (an owner seat is outside that tier by '
+     'definition, so the arm would be unreachable behind it) and (d) the arm''s-length '
+     'rate (unsatisfiable in her own studio) — and the overwrite writes its own '
+     'audit_logs action carrying the OLD studio. It is bounded to a column that is '
+     'ALREADY STAMPED (`v_existing IS NOT NULL`), because that is the only situation the '
+     'amendment names and because on a NULL column HT-3-g(3)''s "designers never stamp" '
+     'is unamended — dropping that conjunct repeals the closure of W2-R11-01 forms A and '
+     'G as a side effect (time_rate_resolution_test.sql case (aj5) is the measurement '
+     'that goes red). An is_org_admin_or_owner spelling '
+     'here instead of the owner seat would hand every ADMIN of any studio the power to '
+     're-point a project that studio had no part in';
   ASSERT (
     SELECT prosrc LIKE '%RETURNING studio_id INTO v_written%'
        AND prosrc LIKE '%RETURN v_written;%'
@@ -982,11 +1197,12 @@ BEGIN
       (SELECT prosrc FROM pg_proc
         WHERE oid = to_regprocedure('public.stamp_project_pricing_studio(uuid,uuid)')),
       'public\.organization_members', 'g')
-  ) = 1,
-    '00606: the stamp reads public.organization_members EXACTLY ONCE — HT-3-g(3)''s '
-    'single employer-seat question about the project''s designer. A second read is '
-    'either the tier branch this ruling deleted or a membership question nobody '
-    'ruled';
+  ) = 2,
+    '00606: the stamp reads public.organization_members EXACTLY TWICE — HT-3-g(3)''s '
+    'single employer-seat question about the project''s DESIGNER, and HT-3-g AMENDED '
+    '(b)''s single owner-seat question about the CALLER. A third read is either the '
+    'tier branch HT-3-g(3) deleted or a membership question nobody ruled. (It was ONE '
+    'through round 12; the remedy arm is the whole of the difference.)';
 
   -- set_project_studio_id is NOT redefined by this file (§0.4 / 00603's own rule).
   ASSERT (
