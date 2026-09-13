@@ -203,11 +203,12 @@ struct ProjectRosterScreen: View {
                     Spacer()
                     Image(systemName: "chevron.right")
                 }
+                .padding(16)
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
             }
             .font(CaptureType.bodyEmph)
             .foregroundStyle(CaptureColor.verdigrisInk)
-            .padding(16)
-            .frame(minHeight: 44)
             .background(CaptureColor.paper3)
             .overlay(Rectangle().stroke(CaptureColor.line))
             .accessibilityIdentifier("people.openSiteAccess")
@@ -258,11 +259,16 @@ struct ProjectRosterScreen: View {
                 .foregroundStyle(CaptureColor.ink)
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
-            Button("Copy the link") { UIPasteboard.general.string = receipt.mint.url }
-                .font(CaptureType.bodyEmph)
-                .foregroundStyle(CaptureColor.verdigris)
-                .frame(minHeight: 44)
-                .accessibilityIdentifier("people.mintedLink.\(receipt.id)")
+            Button {
+                UIPasteboard.general.string = receipt.mint.url
+            } label: {
+                Text("Copy the link")
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
+            }
+            .font(CaptureType.bodyEmph)
+            .foregroundStyle(CaptureColor.verdigris)
+            .accessibilityIdentifier("people.mintedLink.\(receipt.id)")
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -356,6 +362,7 @@ struct RosterRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 16)
         .contentShape(Rectangle())
+        .opacity(seat.personID == nil ? 0.5 : 1)
     }
 }
 

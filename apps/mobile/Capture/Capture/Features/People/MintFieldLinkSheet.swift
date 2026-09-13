@@ -141,23 +141,36 @@ struct MintFieldLinkSheet: View {
                     .overlay(Rectangle().stroke(CaptureColor.line))
                     .accessibilityIdentifier("people.mint.link")
                 HStack(spacing: 16) {
-                    Button("Copy the link") { UIPasteboard.general.string = mint.url }
-                        .font(CaptureType.bodyEmph)
-                        .foregroundStyle(CaptureColor.verdigris)
-                        .frame(minHeight: 44)
-                        .accessibilityIdentifier("people.mint.copy")
-                    ShareLink(item: mint.url) { Text("Share it") }
-                        .font(CaptureType.bodyEmph)
-                        .foregroundStyle(CaptureColor.verdigris)
-                        .frame(minHeight: 44)
+                    Button {
+                        UIPasteboard.general.string = mint.url
+                    } label: {
+                        Text("Copy the link")
+                            .frame(minHeight: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .font(CaptureType.bodyEmph)
+                    .foregroundStyle(CaptureColor.verdigris)
+                    .accessibilityIdentifier("people.mint.copy")
+                    ShareLink(item: mint.url) {
+                        Text("Share it")
+                            .frame(minHeight: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .font(CaptureType.bodyEmph)
+                    .foregroundStyle(CaptureColor.verdigris)
+                    .accessibilityIdentifier("people.mint.share")
                 }
-                Button("Done") {
+                Button {
                     onMinted()
                     dismiss()
+                } label: {
+                    Text("Done")
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
                 }
                 .font(CaptureType.bodyEmph)
                 .foregroundStyle(CaptureColor.verdigrisInk)
-                .frame(minHeight: 44)
+                .accessibilityIdentifier("people.mint.done")
             }
             .padding(20)
         }

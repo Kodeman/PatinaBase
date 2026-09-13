@@ -119,10 +119,12 @@ struct ProjectDetailScreen: View {
                         Spacer()
                         Image(systemName: "chevron.right")
                     }
+                    .padding(16)
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
                 }
                 .font(CaptureType.bodyEmph)
                 .foregroundStyle(CaptureColor.verdigrisInk)
-                .padding(16)
                 .background(CaptureColor.paper3)
                 .overlay(Rectangle().stroke(CaptureColor.line))
                 .accessibilityIdentifier("project.openSite")
@@ -138,11 +140,12 @@ struct ProjectDetailScreen: View {
                         Spacer()
                         Image(systemName: "chevron.right")
                     }
+                    .padding(16)
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
                 }
                 .font(CaptureType.bodyEmph)
                 .foregroundStyle(CaptureColor.verdigrisInk)
-                .padding(16)
-                .frame(minHeight: 44)
                 .background(CaptureColor.paper3)
                 .overlay(Rectangle().stroke(CaptureColor.line))
                 .accessibilityIdentifier("project.openRoster")
