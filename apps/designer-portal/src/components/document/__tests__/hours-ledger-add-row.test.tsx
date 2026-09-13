@@ -174,7 +174,8 @@ describe('the Hours add row', () => {
     await waitFor(() =>
       expect(
         screen.getByLabelText('Project').querySelectorAll('option'),
-      ).toHaveLength(2),
+        // "Document…" · "Studio time — no document" (HT-15) · the one project.
+      ).toHaveLength(3),
     );
     fireEvent.change(screen.getByLabelText('Project'), {
       target: { value: 'project-1' },
@@ -208,7 +209,8 @@ describe('the Hours add row', () => {
     await waitFor(() =>
       expect(
         screen.getByLabelText('Project').querySelectorAll('option'),
-      ).toHaveLength(2),
+        // "Document…" · "Studio time — no document" (HT-15) · the one project.
+      ).toHaveLength(3),
     );
     fireEvent.change(screen.getByLabelText('Project'), {
       target: { value: 'project-1' },
@@ -230,7 +232,8 @@ describe('the Hours add row', () => {
     await waitFor(() =>
       expect(
         screen.getByLabelText('Project').querySelectorAll('option'),
-      ).toHaveLength(2),
+        // "Document…" · "Studio time — no document" (HT-15) · the one project.
+      ).toHaveLength(3),
     );
     fireEvent.change(screen.getByLabelText('Project'), {
       target: { value: 'project-1' },
@@ -258,7 +261,8 @@ describe('the Hours add row', () => {
     await waitFor(() =>
       expect(
         screen.getByLabelText('Project').querySelectorAll('option'),
-      ).toHaveLength(2),
+        // "Document…" · "Studio time — no document" (HT-15) · the one project.
+      ).toHaveLength(3),
     );
     fireEvent.change(screen.getByLabelText('Minutes'), {
       target: { value: '30' },
@@ -353,7 +357,8 @@ describe('the Hours add row', () => {
     await waitFor(() =>
       expect(
         screen.getByLabelText('Project').querySelectorAll('option'),
-      ).toHaveLength(2),
+        // "Document…" · "Studio time — no document" (HT-15) · the one project.
+      ).toHaveLength(3),
     );
     fireEvent.change(screen.getByLabelText('Project'), {
       target: { value: 'project-1' },
@@ -382,5 +387,87 @@ describe('the Hours add row', () => {
     expect(
       screen.getByRole('combobox', { name: 'Which role priced this hour' }),
     ).toBeInTheDocument();
+  });
+
+  // ── W4 · HT-15 — the hour that belongs to no document ────────────────────
+  it('offers the studio door and writes it with no project, no rate and no billable (HT-15)', async () => {
+    renderLedger();
+    await waitFor(() =>
+      expect(
+        screen.getByLabelText('Project').querySelectorAll('option'),
+      ).toHaveLength(3),
+    );
+
+    fireEvent.change(screen.getByLabelText('Project'), {
+      target: { value: '__internal__' },
+    });
+    fireEvent.change(screen.getByLabelText('Minutes'), {
+      target: { value: '45' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+
+    await waitFor(() => expect(mockCreate).toHaveBeenCalledTimes(1));
+    expect(mockCreate.mock.calls[0][0]).toEqual(
+      expect.objectContaining({
+        projectId: null,
+        studioId: 'studio-1',
+        billable: false,
+        rateRole: null,
+        source: 'internal',
+      }),
+    );
+  });
+
+  it('says the answer rather than asking it \u2014 the billable pill is held for a studio hour (HT-15)', async () => {
+    renderLedger();
+    await waitFor(() =>
+      expect(
+        screen.getByLabelText('Project').querySelectorAll('option'),
+      ).toHaveLength(3),
+    );
+    fireEvent.change(screen.getByLabelText('Project'), {
+      target: { value: '__internal__' },
+    });
+
+    const pill = screen.getByRole('button', {
+      name: /Non-billable \u2014 press to make billable/,
+    });
+    expect(pill).toBeDisabled();
+    expect((pill.closest('div') as HTMLElement).textContent).toContain(
+      'studio time belongs to no client',
+    );
+  });
+
+  it('renders a logged studio hour in its own group, with no document and no rate (HT-15/REP-5)', async () => {
+    weekRows = [
+      {
+        id: 'entry-internal',
+        project_id: null,
+        project: null,
+        user_id: 'me',
+        started_at: new Date().toISOString(),
+        duration_minutes: 45,
+        billable: false,
+        billing_state: 'nonbillable',
+        hourly_rate_cents: null,
+        rated_amount_cents: null,
+        rate_source: 'none',
+        rate_role: null,
+        activity: 'admin',
+        source: 'internal',
+        invoice_id: null,
+        created_at: new Date().toISOString(),
+      },
+    ];
+    renderLedger();
+
+    await waitFor(() =>
+      expect(screen.getByText('\u2014 internal \u2014')).toBeInTheDocument(),
+    );
+    expect(screen.getByText('Studio time')).toBeInTheDocument();
+    expect(
+      screen.getByText(/no document \u00b7 non-billable/),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/rate pending/)).not.toBeInTheDocument();
   });
 });

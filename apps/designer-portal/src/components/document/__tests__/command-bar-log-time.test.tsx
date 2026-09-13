@@ -38,7 +38,14 @@ jest.mock('@patina/supabase', () => ({
   useTimeCaptureProjects: () => ({ data: captureProjects }),
   useMyRateRoles: () => ({ data: mockMyRateRoles }),
   useCreateTimeEntry: () => ({ mutateAsync: mockCreate, isPending: false }),
+  // HT-15 — the studio an internal hour belongs to, read through
+  // `useInternalTimeStudio`. `mockStudios` is what the member belongs to.
+  useOrganizations: () => ({ data: mockStudios, isError: false }),
 }));
+
+/** The viewer's studios. Empty by default, so the cases below measure the
+ *  document form exactly as W3 shipped it; the internal-door case seats her. */
+let mockStudios: Array<Record<string, unknown>> = [];
 
 /** The authority read, as an answer the test can leave in flight or fail. */
 let mockAuthority: {

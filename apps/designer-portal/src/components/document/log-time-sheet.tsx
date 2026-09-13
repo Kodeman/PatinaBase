@@ -12,6 +12,12 @@
  * Five interactions, end to end: ⌘K (or a bare `t`) → project · duration ·
  * date · activity → Enter.
  *
+ * W4 (HT-15) adds the one hour that belongs to no document: studio time. It is
+ * the same form with the document left unnamed — `project_id NULL`, the
+ * member's studio stamped beside it, non-billable by constraint — never a
+ * sentinel "Internal" project, which would pollute every list, roster, board and
+ * invoice path.
+ *
  * The document list is EVERY project this member can read, not only the ones
  * she is rostered to (HT-25 — 00597 seats her on first log). The date is hers
  * to set with no bound (HT-13); past 30 days the form says "backdated" in its
@@ -36,6 +42,7 @@ import {
 } from '@patina/supabase';
 import { ACTIVITIES } from '@/lib/document/time-derivation';
 import { useDocumentTime } from '@/hooks/document-time-provider';
+import { useInternalTimeStudio } from '@/hooks/use-viewer-studio';
 import { documentEvents } from '@/lib/analytics/document-events';
 import { DocumentAction } from './document-action';
 import {
@@ -50,6 +57,15 @@ import {
 
 const SURFACE_KEY = 'time';
 const REGION_KEY = 'log-time-verb';
+
+/**
+ * W4 (HT-15) — the internal door, as a value the document `<select>` can hold.
+ * Not a project id and never sent as one: it means "no document", which is what
+ * `log_time` writes as `project_id NULL` with the member's studio stamped
+ * beside it. A sentinel "Internal" PROJECT was the rejected alternative — it
+ * would pollute every project list, roster, board and invoice path.
+ */
+const INTERNAL = '__internal__';
 
 /** Open the "Log time" form from anywhere — ⌘K's verb and the bare `t` key. */
 export function openLogTime() {
@@ -70,6 +86,9 @@ export function LogTimeSheet({
   // house.
   const { heldProjectId } = useDocumentTime();
   const { data: projects } = useTimeCaptureProjects();
+  // HT-15 — the studio an internal hour belongs to. Absent for a member who
+  // belongs to no design studio, and then the option is not offered at all.
+  const { studio: internalStudio } = useInternalTimeStudio();
   const [projectId, setProjectId] = useState('');
   const [minutes, setMinutes] = useState('');
   const [date, setDate] = useState(() => isoDateValue(new Date()));
@@ -84,13 +103,20 @@ export function LogTimeSheet({
   const [note, setNote] = useState<string | null>(null);
   const firstFieldRef = useRef<HTMLSelectElement>(null);
 
-  const intent = useBillableIntent(projectId || null);
+  // HT-15 — an hour on nothing a client is billed for. The pill, the role chip
+  // and the authority read all belong to a project and are stood down here:
+  // 00610's CHECK refuses a billable project-less row, so the honest control is
+  // one that says the answer rather than one that asks for it.
+  const internal = projectId === INTERNAL;
+  const namedProjectId = internal ? '' : projectId;
+
+  const intent = useBillableIntent(namedProjectId || null);
   // HT-25 — the list is every document she can read, rostered or not, because
   // 00597 seats her on first log. Say so BEFORE she logs: a seat appears on
   // someone else's roster and the owner can remove it, so it is not a surprise
   // to spring afterwards.
-  const { data: myRoles } = useMyRateRoles(projectId || null);
-  const willBeSeated = Boolean(projectId) && myRoles?.length === 0;
+  const { data: myRoles } = useMyRateRoles(namedProjectId || null);
+  const willBeSeated = Boolean(namedProjectId) && myRoles?.length === 0;
 
   // The pill is SEEDED, not decided: the resolved answer lands the moment the
   // authority read settles for the document just picked, and a hand that has
@@ -98,7 +124,7 @@ export function LogTimeSheet({
   // a hand that touched it while the read was still in flight, which the
   // `seededFor` guard alone could not protect because it is only written when
   // the read settles (W3-R4-M1).
-  const billableStated = Boolean(projectId) && statedFor === projectId;
+  const billableStated = Boolean(namedProjectId) && statedFor === projectId;
   const stateBillable = (next: boolean) => {
     setStatedFor(projectId);
     setBillable(next);
@@ -108,12 +134,16 @@ export function LogTimeSheet({
   }, [projectId]);
   const seededFor = useRef<string | null>(null);
   useEffect(() => {
-    if (!projectId || !intent.isSettled) return;
+    if (!namedProjectId || !intent.isSettled) return;
     if (billableStated) return;
-    if (seededFor.current === projectId) return;
-    seededFor.current = projectId;
+    if (seededFor.current === namedProjectId) return;
+    seededFor.current = namedProjectId;
     setBillable(intent.billable);
-  }, [projectId, intent.isSettled, intent.billable, billableStated]);
+  }, [namedProjectId, intent.isSettled, intent.billable, billableStated]);
+  // An internal hour is non-billable by constraint, not by preference.
+  useEffect(() => {
+    if (internal) setBillable(false);
+  }, [internal]);
 
   // The document follows what is in hand — on open, and if the hand changes
   // while the form stands. Held in its own effect so a change of hand never
@@ -157,8 +187,9 @@ export function LogTimeSheet({
   // Her own statement is an answer too — that is what keeps a failed read from
   // stranding the form with nothing she can do.
   const valid =
-    Boolean(projectId) &&
-    (intent.isSettled || billableStated) &&
+    (internal
+      ? Boolean(internalStudio)
+      : Boolean(projectId) && (intent.isSettled || billableStated)) &&
     isDayValue(date) &&
     Number.isFinite(parsed) &&
     parsed >= 1;
@@ -173,18 +204,19 @@ export function LogTimeSheet({
     const startedMs = Date.now();
     try {
       const written = await createEntry.mutateAsync({
-        projectId,
+        projectId: internal ? null : projectId,
+        studioId: internal ? (internalStudio?.id ?? null) : null,
         durationMinutes: parsed,
         startedAt: startedAtFromDateValue(date),
         activity: activity || null,
-        billable,
-        rateRole,
-        source: 'command_bar',
+        billable: internal ? false : billable,
+        rateRole: internal ? null : rateRole,
+        source: internal ? 'internal' : 'command_bar',
       });
       // HT-27 — read off what the server actually stored, not what was asked.
       documentEvents.time.entryLogged({
         surface: 'command_bar',
-        source: 'command_bar',
+        source: internal ? 'internal' : 'command_bar',
         activity: written.activity ?? null,
         billable: written.billable,
         rate_source: written.rate_source ?? null,
@@ -244,6 +276,11 @@ export function LogTimeSheet({
                 onChange={(e) => setProjectId(e.target.value)}
               >
                 <option value="">Document…</option>
+                {/* HT-15 — the owner's own hours, and the studio's, without a
+                    client's house to misattribute them to. */}
+                {internalStudio && (
+                  <option value={INTERNAL}>Studio time — no document</option>
+                )}
                 {(projects ?? [])
                   .filter((p) => p.status === 'active')
                   .map((p) => (
@@ -252,6 +289,12 @@ export function LogTimeSheet({
                     </option>
                   ))}
               </select>
+              {internal && (
+                <span className="mt-1 block t-head text-[var(--color-aged-oak)]">
+                  Studio time — non-billable, and out of every document&apos;s
+                  hours
+                </span>
+              )}
               {willBeSeated && (
                 <span className="mt-1 block t-head text-[var(--color-aged-oak)]">
                   You are not on this roster — logging here seats you as a
@@ -309,10 +352,14 @@ export function LogTimeSheet({
 
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <BillablePill
-                value={billable}
+                value={internal ? false : billable}
                 onChange={stateBillable}
                 reason={
-                  intent.isSettled || intent.unreadable ? intent.sentence : null
+                  internal
+                    ? 'Non-billable — studio time belongs to no client'
+                    : intent.isSettled || intent.unreadable
+                      ? intent.sentence
+                      : null
                 }
                 // W3-R5-m4 — `stateBillable` records the answer against
                 // `projectId`, which is `''` with no document picked; the
@@ -320,12 +367,12 @@ export function LogTimeSheet({
                 // document IS picked, so a tap made before that point was
                 // silently thrown away. Disabling the pill until a document
                 // is named is honest about what her tap can actually do.
-                disabled={!projectId}
+                disabled={!projectId || internal}
                 surfaceKey={SURFACE_KEY}
                 regionKey={REGION_KEY}
               />
               <RateRoleChip
-                projectId={projectId || null}
+                projectId={namedProjectId || null}
                 value={rateRole}
                 onChange={setRateRole}
               />

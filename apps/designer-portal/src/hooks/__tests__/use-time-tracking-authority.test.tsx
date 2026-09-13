@@ -144,6 +144,9 @@ describe("authority-aware time writes", () => {
       "p_rate_role",
       "p_source",
       "p_started_at",
+      // W4 (HT-15) — the studio an internal hour belongs to. NULL here, because
+      // this hour names a project and takes its studio from that project.
+      "p_studio_id",
       "p_task_id",
     ]);
     expect(args).toEqual(

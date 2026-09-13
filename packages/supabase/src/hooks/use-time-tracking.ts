@@ -399,7 +399,10 @@ export type TimeEntrySource =
   | 'timer_manual'
   | 'manual_entry'
   | 'command_bar'
-  | 'field_manual';
+  | 'field_manual'
+  /** W4 (HT-15) — an hour the studio worked on nothing a client is billed for.
+   *  Always non-billable, always carries a `studioId` and never a project. */
+  | 'internal';
 
 /** A uuid the CALLER mints, so `log_time`'s ON CONFLICT can recognise a replay. */
 function mintEntryId(): string {
@@ -418,7 +421,18 @@ export interface CreateTimeEntryInput {
   /** 00608 — the id this write is made under. Omitted, the hook mints one; a
    *  surface that may retry (an offline drain) mints its own and keeps it. */
   entryId?: string;
-  projectId: string;
+  /**
+   * W4 (HT-15) — OPTIONAL. An hour with no project is internal studio time:
+   * `log_time` writes `project_id NULL` and 00613's classifier short-circuits
+   * it to `billing_state = 'nonbillable'`, `rate_source = 'none'`, no rate.
+   * `studioId` is then REQUIRED — 00610's CHECK refuses a row that is neither
+   * a project's nor a studio's, and 00611's guard refuses a studio the writer
+   * is not an active member of.
+   */
+  projectId?: string | null;
+  /** W4 (HT-15) — the studio an internal hour belongs to. Ignored by the server
+   *  for a project-bearing hour, which takes its studio from the project. */
+  studioId?: string | null;
   durationMinutes: number;
   startedAt?: string;
   phaseKey?: string | null;
@@ -429,6 +443,11 @@ export interface CreateTimeEntryInput {
    * carries the control, and `log_time` raises on a missing value rather than
    * guessing one. Seed it from the resolved answer
    * (`automaticTimeBillingIntent`), never from optimism.
+   *
+   * W4 (HT-15) — FORCED FALSE when no project is named. An internal hour is
+   * non-billable by constraint (00610), so a `true` here would be a refusal
+   * from two layers down rather than an answer; the hook sends the only value
+   * the server can accept and the surfaces say so on the pill.
    */
   billable: boolean;
   /** R4 (00198): activity attribution + entry provenance. Optional — old
@@ -458,29 +477,41 @@ export function useCreateTimeEntry(options?: { errorSurface?: 'inline' }) {
       // is ever sent: HT-1 makes them server-owned, and 00600's guard REJECTS a
       // supplied rate_source or rated_amount_cents outright. Pinned by
       // apps/designer-portal/src/hooks/__tests__/use-time-tracking-authority.test.tsx.
+      const projectId = input.projectId ?? null;
       const { data, error } = await supabase.rpc('log_time', {
         p_entry_id: input.entryId ?? mintEntryId(),
-        p_project_id: input.projectId,
+        p_project_id: projectId,
         p_started_at: input.startedAt ?? new Date().toISOString(),
         p_duration_minutes: input.durationMinutes,
         p_activity: input.activity ?? null,
-        p_billable: input.billable,
+        // W4 (HT-15) — an internal hour is non-billable by 00610's CHECK.
+        p_billable: projectId ? input.billable : false,
         p_notes: input.notes ?? null,
-        p_phase_key: input.phaseKey ?? null,
-        p_task_id: input.taskId ?? null,
+        p_phase_key: projectId ? (input.phaseKey ?? null) : null,
+        p_task_id: projectId ? (input.taskId ?? null) : null,
         p_source: input.source ?? 'manual_entry',
-        p_rate_role: input.rateRole ?? null,
+        // The role pick prices an hour against a project's rate card; an
+        // internal hour has neither, and 00613 nulls `rate_role` for it anyway.
+        p_rate_role: projectId ? (input.rateRole ?? null) : null,
+        p_studio_id: projectId ? null : (input.studioId ?? null),
       });
       if (error) throw error;
       return (Array.isArray(data) ? data[0] : data) as ProjectTimeEntry;
     },
-    onSuccess: (_, { projectId }) => invalidateProjectTime(queryClient, projectId),
+    // An internal hour belongs to no project cache. The studio-scoped reads it
+    // DOES belong to (`time_entry_ledger`, `studio_hours_rollup`) are keyed on
+    // their own params and refetched by their callers.
+    onSuccess: (_, { projectId }) => {
+      if (projectId) invalidateProjectTime(queryClient, projectId);
+    },
   });
 }
 
 export interface UpdateTimeEntryInput {
   id: string;
-  projectId: string;
+  /** W4 (HT-15) — null for an internal hour, which belongs to no project
+   *  cache. The row is addressed by `id`; this only drives invalidation. */
+  projectId: string | null;
   updates: Partial<{
     started_at: string;
     duration_minutes: number;
@@ -510,7 +541,9 @@ export function useUpdateTimeEntry(options?: { errorSurface?: 'inline' }) {
       if (error) throw error;
       return data as ProjectTimeEntry;
     },
-    onSuccess: (_, { projectId }) => invalidateProjectTime(queryClient, projectId),
+    onSuccess: (_, { projectId }) => {
+      if (projectId) invalidateProjectTime(queryClient, projectId);
+    },
   });
 }
 
@@ -521,12 +554,15 @@ export function useDeleteTimeEntry(options?: { errorSurface?: 'inline' }) {
     // R83 — see useCreateTimeEntry. (R77: the Hours ledger deletes unbilled
     // entries with an inline confirm; billed entries stay immutable.)
     meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
-    mutationFn: async ({ id }: { id: string; projectId: string }) => {
+    mutationFn: async ({ id }: { id: string; projectId: string | null }) => {
       const supabase = getSupabase();
       const { error } = await supabase.from('project_time_entries').delete().eq('id', id);
       if (error) throw error;
     },
-    onSuccess: (_, { projectId }) => invalidateProjectTime(queryClient, projectId),
+    // W4 (HT-15) — an internal hour has no project cache to invalidate.
+    onSuccess: (_, { projectId }) => {
+      if (projectId) invalidateProjectTime(queryClient, projectId);
+    },
   });
 }
 
