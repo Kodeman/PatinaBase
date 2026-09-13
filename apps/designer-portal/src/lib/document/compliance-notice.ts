@@ -15,8 +15,11 @@
  * the studio was told when it was not.
  */
 
-import type { ComplianceNotice, StudioComplianceDocument } from '@patina/supabase';
-import { heldClausePaperNoun, rosterLongDate } from './roster-derivation';
+import type {
+  ComplianceNotice,
+  StudioComplianceDocument,
+} from "@patina/supabase";
+import { heldClausePaperNoun, rosterLongDate } from "./roster-derivation";
 
 /**
  * ONE NOUN MAP, not a second one. `heldClausePaperNoun` (CR8-1) already turns
@@ -39,7 +42,7 @@ export interface ExpiryNoticeClauseInput {
   /** `studio_compliance_documents.expires_on`. */
   expiresOn: string | null | undefined;
   /** The notice's own state, which is what decides the tense. */
-  state: 'lapses_soon' | 'lapsed' | string;
+  state: "lapses_soon" | "lapsed" | string;
 }
 
 /**
@@ -51,10 +54,10 @@ export interface ExpiryNoticeClauseInput {
  * sentence beneath it.
  */
 export function expiryNoticeClause(input: ExpiryNoticeClauseInput): string {
-  const owner = (input.holderName ?? '').trim();
-  const possessive = owner ? `${owner}’s ` : 'The ';
+  const owner = (input.holderName ?? "").trim();
+  const possessive = owner ? `${owner}’s ` : "The ";
   const when = rosterLongDate(input.expiresOn);
-  if (input.state === 'lapsed') {
+  if (input.state === "lapsed") {
     return when
       ? `${possessive}${input.paperNoun} lapsed ${when}.`
       : `${possessive}${input.paperNoun} has lapsed.`;
@@ -85,15 +88,17 @@ export function noticedPaperClause(
     .filter((doc) => holders.has(doc.holder_id))
     .map((doc) => ({ doc, notice: notices.get(doc.id) }))
     .filter(
-      (pair): pair is { doc: StudioComplianceDocument; notice: ComplianceNotice } =>
+      (
+        pair,
+      ): pair is { doc: StudioComplianceDocument; notice: ComplianceNotice } =>
         !!pair.notice,
     );
   if (candidates.length === 0) return null;
   candidates.sort((a, b) => {
-    const rank = (state: string) => (state === 'lapsed' ? 0 : 1);
+    const rank = (state: string) => (state === "lapsed" ? 0 : 1);
     const byState = rank(a.notice.state) - rank(b.notice.state);
     if (byState !== 0) return byState;
-    return (a.doc.expires_on ?? '').localeCompare(b.doc.expires_on ?? '');
+    return (a.doc.expires_on ?? "").localeCompare(b.doc.expires_on ?? "");
   });
   const { doc, notice } = candidates[0];
   return expiryNoticeClause({
