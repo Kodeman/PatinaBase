@@ -154,9 +154,29 @@
 -- it. The roster key is the round-13 review's PREFERRED closure, and its virtue is
 -- that it asks about the PROJECT'S OWN BOOK rather than about anybody's standing: who
 -- else is on this project, and do they answer to a studio this designer does not own.
--- On the realistic legacy row — a studio's client work, with that studio's people on
--- the roster — it is the fact neither she nor the author can move without touching
--- somebody else's seat.
+--
+-- W2-R14-02 (MINOR, round 14, measured) — WHAT THE ROSTER KEY IS AND IS NOT. Round 13
+-- wrote here and in this file's COMMENTs that a roster "cannot go quiet without
+-- touching those people's seats one at a time". THAT IS FALSE, and it is false in
+-- exactly the way round 13 showed the author key to be false: the key asks a fact
+-- inside the manoeuvre's own hand. `project_team_members` carries the policy `Lead
+-- designers manage team members` (00177), which is `polcmd = '*'` — ALL commands — on
+-- `p.designer_id = auth.uid()`. So the project's OWN LEAD DESIGNER may soft-remove or
+-- DELETE every roster row on her project, and ONE statement does the whole roster:
+-- measured, `UPDATE project_team_members SET removed_at = NOW() WHERE project_id = P`
+-- by the lead turns this key FALSE with no seat touched anywhere, and 00620's statement
+-- then stamps the studio she owns.
+-- SO THE KEY NARROWS AND DOES NOT CLOSE, and it is KEPT for the population it does
+-- narrow: removed from both copies of the statement below the billing suite reds at
+-- `j1` with the taking reproduced (measured independently in round 14), so it is doing
+-- real work on the shape it fixtures. What it buys, stated honestly, is that the
+-- REALISTIC form-S row — a studio's client work with that studio's people on the
+-- roster — now costs TWO statements rather than one: clear the roster, then leave her
+-- own employer seat. Only the second is a seat act, and it is that second statement
+-- that keeps the whole manoeuvre a RESIDUAL under HT-3-g AMENDED (c) rather than a
+-- one-statement taking. The roster key is NOT a fact outside her hand; it is a second
+-- statement she must make, and it is counted in the NOTICE so the ship can see how
+-- many rows it left.
 --
 -- BOTH KEYS STAND, and the owned tier must pass BOTH. The author key is a ruling in
 -- force (HT-3-g AMENDED, round 12) and it reaches a row the roster key does not: a
@@ -186,6 +206,25 @@
 -- project's CURRENT studio_id and needs both the outgoing and the incoming lead seated
 -- THERE, which after a taking is the taker's own workspace. Cases (k) and (l) of
 -- supabase/tests/billing/legacy_project_studio_stamp_test.sql measure the whole chain.
+--   ROUND 14, HT-3-g(b) CORRECTED (orchestrator 2026-09-13, resolving W2-R14-01): the
+--   overwrite is now admitted only where the studio being REPLACED does NOT EMPLOY the
+--   project's designer. The remedy above survives, because after a form-S/H taking the
+--   replaced studio is the TAKER'S OWN WORKSPACE, which she owns rather than works for.
+--   It costs the recovery one more statement, and that statement is the recovering
+--   owner's own: the seat the taker must give her so reassign_project_lead will run is
+--   itself an employer-tier seat in that workspace, so she drops it (`Members can
+--   leave`) before she stamps. Cases (k) k4b-k5 and (l) measure the refusal and then
+--   the recovery, in that order.
+--
+-- W2-R14-05 (note, round 14, recorded rather than claimed) — BOTH KEYS ARE APPLIED BY
+-- THIS FILE AND BY NOTHING ELSE. `set_project_studio_id_owned` (00602/00603) writes the
+-- same tier rule at INSERT time with NEITHER key. It is harmless today and measured so:
+-- 00563's authenticated INSERT arm admits only `NEW.created_by = auth.uid()`, so the
+-- AUTHOR key is false by construction on that path, and a project has no roster at the
+-- instant it is inserted, so the ROSTER key is false too. It is recorded because the
+-- asymmetry is invisible in the code: a later path that inserts a project on somebody
+-- else's behalf, or that seeds a roster inside the same statement, would reach the owned
+-- tier with no key at all.
 --
 -- Lineage: nothing is redefined. This file adds TWO objects — the W2-R12-01 author
 -- predicate and the W2-R13-01 roster predicate below, each REVOKEd from every role so
@@ -270,11 +309,21 @@ REVOKE ALL ON FUNCTION public.project_author_books_elsewhere(uuid, uuid)
 -- — i.e. where the project's own working party answers to somebody else's book, so
 -- an OWNED-tier answer must not be written onto it.
 --
--- Asked of the PROJECT rather than of a person, which is the whole point: the
--- author key above is false on four of the five author standings and can be made
--- false by one statement where the author is a colleague she administers, whereas a
--- roster carrying another studio's people cannot go quiet without touching those
--- people's seats one at a time.
+-- Asked of the PROJECT rather than of a person: the author key above is false on four
+-- of the five author standings and can be made false by one statement where the author
+-- is a colleague she administers, whereas a roster is a fact about who is working on
+-- this project.
+--
+-- W2-R14-02: IT IS STILL A FACT THE LEAD DESIGNER CAN MOVE, and the round-13 claim that
+-- a roster "cannot go quiet without touching those people's seats one at a time" is
+-- FALSE. 00177's `Lead designers manage team members` is ALL commands on
+-- `p.designer_id = auth.uid()`, so ONE UPDATE or DELETE by the project's own lead
+-- clears the whole roster and turns this predicate false with no seat touched
+-- (measured). The key NARROWS the owned tier's population and does not close it; what
+-- it buys is that the realistic form-S row costs TWO statements instead of one, the
+-- second of which is a seat act — which is what keeps the manoeuvre a residual under
+-- HT-3-g AMENDED (c). It is kept because it is not vacuous: removed from 00620's
+-- statement the billing suite reds at j1 with the taking reproduced.
 --
 -- `removed_at IS NULL` is the roster, not every row ever written to it: a member
 -- taken off the project is not on it, and `is_project_team_member` (00484) reads the
@@ -340,11 +389,25 @@ COMMENT ON FUNCTION public.project_roster_books_elsewhere(uuid, uuid, uuid) IS
   'works on it. WHY IT WAS NEEDED: the author key alone is already false on four of '
   'the five standings a legacy project''s author can hold, and where the author is a '
   'colleague the designer administers she can make it false in ONE statement '
-  '(W2-R13-01 forms S and H). WHAT IT STILL DOES NOT REACH, recorded as residuals '
+  '(W2-R13-01 forms S and H). '
+  'W2-R14-02 (round 14, measured) — THIS KEY NARROWS AND DOES NOT CLOSE, and the '
+  'round-13 sentence that a roster "cannot go quiet without touching those people''s '
+  'seats one at a time" was FALSE: 00177''s `Lead designers manage team members` policy '
+  'is ALL commands on `projects.designer_id = auth.uid()`, so the project''s OWN LEAD '
+  'DESIGNER clears the whole roster in ONE UPDATE or DELETE and turns this predicate '
+  'false with no seat touched. What the key buys is that the realistic form-S row costs '
+  'TWO statements instead of one — clear the roster, then leave her own employer seat — '
+  'and only the second is a seat act, which is what keeps the manoeuvre a RESIDUAL '
+  'under HT-3-g AMENDED (c). It is KEPT because it is not vacuous: removed from 00620''s '
+  'statement the billing suite reds at j1 with the taking reproduced. '
+  'WHAT IT STILL DOES NOT REACH, recorded as residuals '
   'under HT-3-g AMENDED (c): a project whose roster carries nobody but her and whose '
   'author holds no live seat (form S), and the same where she removes the author''s own '
   'seat first (form H) — both keys read that seat. The remedy is the stamp''s REMEDY '
-  'ARM (HT-3-g AMENDED (b)). Used by migration 00620 and by nothing that prices an '
+  'ARM (HT-3-g AMENDED (b), as CORRECTED 2026-09-13: the overwrite is admitted only '
+  'where the studio being REPLACED does not EMPLOY the project''s designer, which after '
+  'a form-S/H taking is the taker''s own workspace and so leaves the recovery intact). '
+  'Used by migration 00620 and by nothing that prices an '
   'hour (HT-3-g(1)); EXECUTE held by no role.';
 
 -- Nobody calls this but the migration that defines it.
@@ -604,9 +667,21 @@ BEGIN
     '00620: and it must be SECURITY DEFINER — an INVOKER read of project_team_members '
     'or organization_members returns a partial set, which here answers false and '
     'stamps the row the key exists to leave alone';
-  ASSERT (SELECT prosrc LIKE '%roster.removed_at IS NULL%'
-             AND prosrc LIKE '%roster.user_id IS DISTINCT FROM p_designer_id%'
-             AND prosrc LIKE '%designer_owner_seat.role           = ''owner''%'
+  -- W2-R14-04 / W2-R8-06: asked of a WHITESPACE-NORMALISED source. Through round 13
+  -- the third leg carried ELEVEN literal spaces copied out of the predicate's own
+  -- alignment (`designer_owner_seat.role           = 'owner'`) — probed on the
+  -- installed body, the eleven-space form matched and the single-space form did not.
+  -- So a reformat, a rename or any formatter RED the whole migration while saying
+  -- nothing about the question the key asks, and a hand who kept the spacing while
+  -- changing the semantics passed. The same treatment round 13 gave 00606's five legs.
+  ASSERT (SELECT regexp_replace(prosrc, '\s+', ' ', 'g')
+                   LIKE '%roster.removed_at IS NULL%'
+             AND regexp_replace(prosrc, '\s+', ' ', 'g')
+                   LIKE '%roster.user_id IS DISTINCT FROM p_designer_id%'
+             AND regexp_replace(prosrc, '\s+', ' ', 'g')
+                   LIKE '%designer_owner_seat.role = ''owner''%'
+             AND regexp_replace(prosrc, '\s+', ' ', 'g')
+                   LIKE '%designer_owner_seat.user_id = p_designer_id%'
           FROM pg_proc
           WHERE oid = to_regprocedure('public.project_roster_books_elsewhere(uuid,uuid,uuid)')),
     '00620: and the roster key asks HT-3-g AMENDED (a)''s question exactly — the LIVE '
