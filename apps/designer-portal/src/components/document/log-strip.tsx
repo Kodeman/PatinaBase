@@ -29,6 +29,13 @@ import type { TimeRateRole, TimeRateSource } from '@patina/supabase';
 const SURFACE_KEY = 'time';
 const REGION_KEY = 'log-offer';
 
+// W3-R5-M1 — the strip is `bg-charcoal` below `min-[1180px]` (390 AND 1024);
+// every control that shipped in it before W3 carries this same override for
+// exactly that reason (`Log`, `Discard`, the minutes input, the activity
+// select). The billable pill and rate readout inherited the paper-dark
+// palette instead and measured 2.14:1 / 3.23:1 against the strip.
+const STRIP_LIGHT_INK = 'max-[1179px]:!text-[rgba(250,247,242,0.72)]';
+
 export function LogStrip() {
   const { offer, offerOwnsEdge, logOffer, discardOffer } = useDocumentTime();
   const [minutes, setMinutes] = useState('');
@@ -184,6 +191,7 @@ export function LogStrip() {
             disabled={busy}
             surfaceKey={SURFACE_KEY}
             regionKey={REGION_KEY}
+            className={STRIP_LIGHT_INK}
           />
           <RateReadout
             entry={{
@@ -193,6 +201,7 @@ export function LogStrip() {
               billable,
               rated_amount_cents: offer.ratedAmountCents,
             }}
+            className={STRIP_LIGHT_INK}
           />
           <RateRoleMark
             projectId={offer.projectId}

@@ -186,11 +186,11 @@ describe('LogStrip', () => {
     expect(screen.getByText(/\$180/)).toBeInTheDocument();
   });
 
-  it('drops the amount the moment the pill says the hour is not billable (HT-12/HT-26)', () => {
+  it('drops the amount the moment the pill says the hour is not billable, and says so once (HT-12/HT-26, W3-R5-m1)', () => {
     // The strip passes the LIVE pill state and the STORED amount, so the two
-    // disagree between the tap and the write. A money figure beside "not
-    // billable" is three facts wearing one face, which is what this surface
-    // exists to stop.
+    // disagree between the tap and the write. A money figure beside a
+    // non-billable hour is three facts wearing one face, which is what this
+    // surface exists to stop.
     mockOffer = offerFixture({
       billable: true,
       rateSource: 'studio_member',
@@ -202,8 +202,37 @@ describe('LogStrip', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Billable/ }));
 
-    expect(screen.getByText(/not billable/)).toBeInTheDocument();
+    // The pill itself is the ONE word for the non-billable state now
+    // ("Non-billable" — HT-11). The rate readout beside it prints nothing:
+    // it used to also print "not billable", the same fact twice, side by
+    // side (W3-R5-m1).
+    expect(
+      screen.getByRole('button', { name: /Non-billable/ }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/not billable/)).not.toBeInTheDocument();
     expect(screen.queryByText(/\$78/)).not.toBeInTheDocument();
+  });
+
+  it('keeps the billable pill and rate readout legible on the dark bar below 1180px (WCAG AA, W3-R5-M1)', () => {
+    // The strip is `bg-charcoal` at every width BELOW `min-[1180px]` — 390
+    // AND 1024 both. `max-[1179px]:!text-[rgba(250,247,242,0.72)]` is the
+    // exact override every pre-existing control in this strip already
+    // carries (Log, Discard, the minutes input); it is a static class, so
+    // asserting its presence covers both widths without a real layout pass.
+    mockOffer = offerFixture({
+      billable: true,
+      rateSource: 'none',
+      hourlyRateCents: null,
+    });
+    render(<LogStrip />);
+
+    const pill = screen.getByRole('button', { name: /Billable/ });
+    expect(pill).toHaveClass('max-[1179px]:!text-[rgba(250,247,242,0.72)]');
+
+    const readout = screen.getByText(/rate pending/);
+    expect(readout).toHaveClass(
+      'max-[1179px]:!text-[rgba(250,247,242,0.72)]',
+    );
   });
 
   it('names the role only for a member who holds more than one seat (HT-41)', () => {

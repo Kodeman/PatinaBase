@@ -83,6 +83,7 @@ export function BillablePill({
   disabled,
   surfaceKey,
   regionKey,
+  className,
 }: {
   value: boolean;
   onChange: (next: boolean) => void;
@@ -91,6 +92,13 @@ export function BillablePill({
   disabled?: boolean;
   surfaceKey: string;
   regionKey: string;
+  /**
+   * A light-ink override for a dark surface (W3-R5-M1 — the log-offer strip
+   * is `bg-charcoal` below `min-[1180px]`, and this control's default ink is
+   * paper-dark). Forwarded to both the act and the reason it prints beside
+   * itself; every other caller renders on paper and passes nothing.
+   */
+  className?: string;
 }) {
   return (
     <span className="inline-flex min-w-0 items-center gap-2">
@@ -103,11 +111,14 @@ export function BillablePill({
         aria-label={value ? 'Billable — press to make non-billable' : 'Non-billable — press to make billable'}
         disabled={disabled}
         onClick={() => onChange(!value)}
+        className={className}
       >
         {value ? 'Billable' : 'Non-billable'}
       </DocumentAction>
       {reason ? (
-        <span className="min-w-0 truncate t-head text-[var(--color-aged-oak)]">
+        <span
+          className={`min-w-0 truncate t-head text-[var(--color-aged-oak)] ${className ?? ''}`}
+        >
           {reason}
         </span>
       ) : null}
@@ -204,25 +215,26 @@ export function RateReadout({
   const provenance = timeRateProvenance(entry, null);
   const amount = entry.rated_amount_cents ?? 0;
 
+  // W3-R5-m1 — a non-billable hour is said ONCE. `BillablePill` is the
+  // control that says it (aria-pressed + the word itself); this readout is
+  // what the hour is WORTH, and a non-billable hour is worth nothing to
+  // print. Printing `provenance.label` ("not billable") here too put the
+  // same fact in two neighbouring phrasings on every surface that pairs the
+  // two controls — closed by silence here, not a second word.
+  if (provenance.kind === 'nonbillable') return null;
+
+  const parts = [
+    provenance.kind === 'rated'
+      ? `${provenance.label} · ${fmtUsd(provenance.hourlyRateCents)}/hr`
+      : provenance.label,
+    amount > 0 ? fmtUsd(amount) : null,
+  ].filter(Boolean);
+
+  if (parts.length === 0) return null;
+
   return (
     <span className={`t-head text-[var(--color-aged-oak)] ${className ?? ''}`}>
-      {[
-        provenance.kind === 'rated'
-          ? `${provenance.label} · ${fmtUsd(provenance.hourlyRateCents)}/hr`
-          : provenance.label,
-        // A money figure is never printed beside its own negation. The log
-        // strip passes the LIVE pill state as `billable` and the STORED
-        // `rated_amount_cents` as the amount, so one tap on the pill after a
-        // billable, priced hour used to render "not billable · $150.00" — the
-        // server zeroes the amount only once the row is written (00601:309).
-        provenance.kind === 'nonbillable'
-          ? null
-          : amount > 0
-            ? fmtUsd(amount)
-            : null,
-      ]
-        .filter(Boolean)
-        .join(' · ')}
+      {parts.join(' · ')}
     </span>
   );
 }

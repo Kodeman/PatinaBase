@@ -314,6 +314,13 @@ export function LogTimeSheet({
                 reason={
                   intent.isSettled || intent.unreadable ? intent.sentence : null
                 }
+                // W3-R5-m4 — `stateBillable` records the answer against
+                // `projectId`, which is `''` with no document picked; the
+                // `[projectId]` effect then clears `statedFor` the moment a
+                // document IS picked, so a tap made before that point was
+                // silently thrown away. Disabling the pill until a document
+                // is named is honest about what her tap can actually do.
+                disabled={!projectId}
                 surfaceKey={SURFACE_KEY}
                 regionKey={REGION_KEY}
               />
