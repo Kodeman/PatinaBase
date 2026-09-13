@@ -9,23 +9,23 @@
  * tested without a database and both widths print the same bytes.
  */
 
-import { rosterShortDate } from './roster-derivation';
+import { rosterShortDate } from "./roster-derivation";
 
 /** Small counts read as words on a face; past twelve, a numeral is honest. */
 const NUMBER_WORDS = [
-  'no',
-  'one',
-  'two',
-  'three',
-  'four',
-  'five',
-  'six',
-  'seven',
-  'eight',
-  'nine',
-  'ten',
-  'eleven',
-  'twelve',
+  "no",
+  "one",
+  "two",
+  "three",
+  "four",
+  "five",
+  "six",
+  "seven",
+  "eight",
+  "nine",
+  "ten",
+  "eleven",
+  "twelve",
 ];
 
 export function countInWords(n: number): string {
@@ -52,15 +52,17 @@ export function pickerHistoryLine(
       }
     | undefined,
 ): string {
-  if (!history || history.projectCount === 0) return 'Never on a job yet';
+  if (!history || history.projectCount === 0) return "Never on a job yet";
   const count = `Worked ${history.projectCount} prior ${
-    history.projectCount === 1 ? 'project' : 'projects'
+    history.projectCount === 1 ? "project" : "projects"
   }`;
   const closed = history.lastClosedYear;
   const year = closed
     ? `closed ${closed}`
-    : (history.lastAt ?? '').slice(0, 4) || null;
-  return [count, history.lastProjectName, year].filter(Boolean).join(', ') + '.';
+    : (history.lastAt ?? "").slice(0, 4) || null;
+  return (
+    [count, history.lastProjectName, year].filter(Boolean).join(", ") + "."
+  );
 }
 
 /**
@@ -75,7 +77,7 @@ export function bringForwardSelectionLine(
   offered: number,
   sharedJobName: string | null,
 ): string {
-  const where = sharedJobName ? ` from the ${sharedJobName}` : '';
+  const where = sharedJobName ? ` from the ${sharedJobName}` : "";
   return `${selected} of ${offered}${where} selected`;
 }
 
@@ -108,13 +110,13 @@ export function bringForwardConsequence(
   projectName: string | null | undefined,
   picked: readonly BringForwardRowFacts[],
 ): string {
-  const job = (projectName ?? '').trim();
+  const job = (projectName ?? "").trim();
   const n = picked.length;
-  const head = `Adds ${countInWords(n)} ${n === 1 ? 'seat' : 'seats'}${
-    job ? ` to the ${job}` : ''
+  const head = `Adds ${countInWords(n)} ${n === 1 ? "seat" : "seats"}${
+    job ? ` to the ${job}` : ""
   }.`;
   const refusals = picked
-    .filter((row) => row.consent === 'opted_out')
+    .filter((row) => row.consent === "opted_out")
     .map((row) => `${row.name} arrives opted out of texting.`);
   const papers = [
     ...new Set(
@@ -123,7 +125,7 @@ export function bringForwardConsequence(
         .filter((clause): clause is string => !!clause),
     ),
   ];
-  return [head, ...refusals, ...papers].join(' ');
+  return [head, ...refusals, ...papers].join(" ");
 }
 
 /**
@@ -139,9 +141,10 @@ export function carriedConsentNotice(record: {
 }): string | null {
   const when = rosterShortDate(record.optOutAt);
   if (!when) return null;
-  const how = record.optOutSource === 'inbound_stop' ? 'by text' : 'to the studio';
+  const how =
+    record.optOutSource === "inbound_stop" ? "by text" : "to the studio";
   const where = record.originProjectName
     ? `, on the ${record.originProjectName}`
-    : '';
+    : "";
   return `Opted out ${how}, ${when}${where}.`;
 }

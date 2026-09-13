@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * THE HOUSEHOLD, UNDER CLIENT SIDE (PR-c, CRM-19, 00632).
@@ -20,7 +20,7 @@
  * roster row's own authority phrase already branches that way.
  */
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState } from "react";
 import {
   HOUSEHOLD_MEMBER_ROLE_LABELS,
   useAddHouseholdMember,
@@ -30,15 +30,15 @@ import {
   useSetHouseholdThreshold,
   useStudioContacts,
   type HouseholdMemberRole,
-} from '@patina/supabase';
-import { formatMoneyFromCents } from '../people/people-format';
-import { peopleEvents } from '@/lib/analytics/people-events';
-import { DocumentAction, DocumentActionRow } from '../document-action';
+} from "@patina/supabase";
+import { formatMoneyFromCents } from "../people/people-format";
+import { peopleEvents } from "@/lib/analytics/people-events";
+import { DocumentAction, DocumentActionRow } from "../document-action";
 
 const META =
-  'font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]';
+  "font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]";
 const FIELD =
-  'min-h-11 w-full border-0 border-b border-[var(--color-pearl)] bg-transparent py-2 text-[0.8rem] text-[var(--color-charcoal)] outline-none focus:border-[var(--color-clay)]';
+  "min-h-11 w-full border-0 border-b border-[var(--color-pearl)] bg-transparent py-2 text-[0.8rem] text-[var(--color-charcoal)] outline-none focus:border-[var(--color-clay)]";
 
 /**
  * The one sentence the band prints about the figure. No figure on file is its
@@ -50,7 +50,7 @@ export function householdThresholdSentence(
   const money = formatMoneyFromCents(cents);
   return money
     ? `Change orders over ${money} need a signature from the household.`
-    : 'No change-order figure is on file for this household.';
+    : "No change-order figure is on file for this household.";
 }
 
 /** What the act will cost, said before it is pressed. */
@@ -60,13 +60,13 @@ export function householdMemberConsequence(
   projectName: string | null | undefined,
   thresholdCents: number | null | undefined,
 ): string {
-  const job = (projectName ?? '').trim();
-  const where = job ? ` on the ${job}` : '';
+  const job = (projectName ?? "").trim();
+  const where = job ? ` on the ${job}` : "";
   const money = formatMoneyFromCents(thresholdCents);
   const grant =
-    role === 'client_rep' && money
+    role === "client_rep" && money
       ? ` They may sign change orders over ${money}.`
-      : '';
+      : "";
   return `${name} joins the household and takes a seat${where}.${grant} Nothing is sent to them.`;
 }
 
@@ -90,7 +90,7 @@ export function HouseholdBand({
     const orgId = household?.organization_id ?? organizationId;
     if (!orgId) return false;
     const role = (orgs ?? []).find((o) => o.id === orgId)?.membership?.role;
-    return role === 'owner' || role === 'admin';
+    return role === "owner" || role === "admin";
   }, [orgs, household?.organization_id, organizationId]);
 
   const { data: contacts } = useStudioContacts(
@@ -109,7 +109,7 @@ export function HouseholdBand({
   const candidates = useMemo(
     () =>
       (contacts ?? [])
-        .filter((c) => c.entity_kind === 'person' && !!c.full_name)
+        .filter((c) => c.entity_kind === "person" && !!c.full_name)
         .map((c) => ({ id: c.id, name: c.full_name as string }))
         .sort((a, b) => {
           const ra = seated.has(a.id) ? 0 : 1;
@@ -121,10 +121,10 @@ export function HouseholdBand({
   );
 
   const [adding, setAdding] = useState(false);
-  const [personId, setPersonId] = useState('');
-  const [role, setRole] = useState<HouseholdMemberRole>('client_rep');
+  const [personId, setPersonId] = useState("");
+  const [role, setRole] = useState<HouseholdMemberRole>("client_rep");
   const [editingFigure, setEditingFigure] = useState(false);
-  const [figure, setFigure] = useState('');
+  const [figure, setFigure] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const addMember = useAddHouseholdMember();
@@ -132,7 +132,7 @@ export function HouseholdBand({
   const createHousehold = useCreateClientHousehold();
 
   const chosenName =
-    candidates.find((c) => c.id === personId)?.name ?? 'This person';
+    candidates.find((c) => c.id === personId)?.name ?? "This person";
 
   const openHousehold = async () => {
     // The client RECORD is optional — a no-login household has none (00632's
@@ -144,19 +144,21 @@ export function HouseholdBand({
       await createHousehold.mutateAsync({
         organizationId: orgId,
         designerId: resolved.designerId,
-        displayName: projectName ? `${projectName} household` : 'The household',
+        displayName: projectName ? `${projectName} household` : "The household",
         designerClientId: resolved.designerClientId ?? null,
       });
-      onAnnounce?.('The household is open.');
+      onAnnounce?.("The household is open.");
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not open the household.');
+      setError(
+        e instanceof Error ? e.message : "Could not open the household.",
+      );
     }
   };
 
   const saveFigure = async () => {
     if (!household) return;
     setError(null);
-    const digits = figure.replace(/[^0-9.]/g, '');
+    const digits = figure.replace(/[^0-9.]/g, "");
     const dollars = digits ? Number(digits) : NaN;
     try {
       await setThreshold.mutateAsync({
@@ -166,9 +168,9 @@ export function HouseholdBand({
           : null,
       });
       setEditingFigure(false);
-      onAnnounce?.('The change-order figure is on the record.');
+      onAnnounce?.("The change-order figure is on the record.");
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not write the figure.');
+      setError(e instanceof Error ? e.message : "Could not write the figure.");
     }
   };
 
@@ -188,11 +190,11 @@ export function HouseholdBand({
         seated: !!seatId,
       });
       setAdding(false);
-      setPersonId('');
+      setPersonId("");
       onAnnounce?.(`${chosenName} is on the client side.`);
     } catch (e) {
       setError(
-        e instanceof Error ? e.message : 'Could not add the household member.',
+        e instanceof Error ? e.message : "Could not add the household member.",
       );
     }
   };
@@ -215,7 +217,10 @@ export function HouseholdBand({
           </button>
         )}
         {error && (
-          <p role="alert" className="mt-1 text-[0.72rem] text-[var(--color-terracotta-ink)]">
+          <p
+            role="alert"
+            className="mt-1 text-[0.72rem] text-[var(--color-terracotta-ink)]"
+          >
             {error}
           </p>
         )}
@@ -274,25 +279,27 @@ export function HouseholdBand({
             type="button"
             data-edit-household-threshold
             aria-disabled={!isPrincipal}
-            aria-describedby={!isPrincipal ? 'household-figure-held' : undefined}
+            aria-describedby={
+              !isPrincipal ? "household-figure-held" : undefined
+            }
             onClick={() => {
               if (!isPrincipal) {
                 setError(
-                  'A change-order figure is the principal’s to set. Ask an owner or an admin of the studio.',
+                  "A change-order figure is the principal’s to set. Ask an owner or an admin of the studio.",
                 );
                 return;
               }
               setFigure(
                 household.co_threshold_cents != null
                   ? String(household.co_threshold_cents / 100)
-                  : '',
+                  : "",
               );
               setEditingFigure(true);
             }}
             className={`da-score-hover inline-flex min-h-11 items-center font-mono text-[11px] uppercase tracking-[0.1em] ${
               isPrincipal
-                ? 'text-[var(--color-aged-oak)] hover:text-[var(--color-mocha)]'
-                : 'text-[var(--color-aged-oak)]'
+                ? "text-[var(--color-aged-oak)] hover:text-[var(--color-mocha)]"
+                : "text-[var(--color-aged-oak)]"
             }`}
           >
             Set the figure
@@ -338,22 +345,28 @@ export function HouseholdBand({
           </select>
 
           <span className={`mt-3 mb-1 block ${META}`}>What they do here</span>
-          <div role="group" aria-label="What they do here" className="flex flex-wrap gap-x-4">
-            {(['client', 'client_rep'] as HouseholdMemberRole[]).map((value) => (
-              <button
-                key={value}
-                type="button"
-                aria-pressed={role === value}
-                onClick={() => setRole(value)}
-                className={`da-score-hover inline-flex min-h-11 items-center font-mono text-[11px] uppercase tracking-[0.1em] ${
-                  role === value
-                    ? 'da-score-on text-[var(--color-charcoal)]'
-                    : 'text-[var(--color-aged-oak)] hover:text-[var(--color-mocha)]'
-                }`}
-              >
-                {HOUSEHOLD_MEMBER_ROLE_LABELS[value]}
-              </button>
-            ))}
+          <div
+            role="group"
+            aria-label="What they do here"
+            className="flex flex-wrap gap-x-4"
+          >
+            {(["client", "client_rep"] as HouseholdMemberRole[]).map(
+              (value) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={role === value}
+                  onClick={() => setRole(value)}
+                  className={`da-score-hover inline-flex min-h-11 items-center font-mono text-[11px] uppercase tracking-[0.1em] ${
+                    role === value
+                      ? "da-score-on text-[var(--color-charcoal)]"
+                      : "text-[var(--color-aged-oak)] hover:text-[var(--color-mocha)]"
+                  }`}
+                >
+                  {HOUSEHOLD_MEMBER_ROLE_LABELS[value]}
+                </button>
+              ),
+            )}
           </div>
 
           <p
@@ -396,7 +409,10 @@ export function HouseholdBand({
       )}
 
       {error && (
-        <p role="alert" className="mt-1.5 text-[0.72rem] text-[var(--color-terracotta-ink)]">
+        <p
+          role="alert"
+          className="mt-1.5 text-[0.72rem] text-[var(--color-terracotta-ink)]"
+        >
           {error}
         </p>
       )}

@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * COMPARE & MERGE (direction §3.1's duplicate band, §8 P2, PR-o, crm-model §4).
@@ -18,8 +18,8 @@
  * it was recorded against (crm-model §4, R-AY).
  */
 
-import { useEffect, useMemo, useState } from 'react';
-import { GitMerge } from 'lucide-react';
+import { useEffect, useMemo, useState } from "react";
+import { GitMerge } from "lucide-react";
 import {
   ALL_MERGE_MATCHED_ON,
   MERGE_MATCHED_ON_LABELS,
@@ -31,25 +31,28 @@ import {
   useStudioContactChannelsFor,
   type MergeMatchedOn,
   type StudioContact,
-} from '@patina/supabase';
-import { getPartyKindLabel } from '@patina/types';
-import { contactRuleClause, indexContactRules } from '@/lib/document/contact-rule';
-import { formatLongDate } from './people-format';
-import { peopleEvents } from '@/lib/analytics/people-events';
-import { DocSheet } from '../overlays/doc-sheet';
-import { DocumentAction, DocumentActionRow } from '../document-action';
+} from "@patina/supabase";
+import { getPartyKindLabel } from "@patina/types";
+import {
+  contactRuleClause,
+  indexContactRules,
+} from "@/lib/document/contact-rule";
+import { formatLongDate } from "./people-format";
+import { peopleEvents } from "@/lib/analytics/people-events";
+import { DocSheet } from "../overlays/doc-sheet";
+import { DocumentAction, DocumentActionRow } from "../document-action";
 
 const LABEL =
-  'font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--ink-subtle)]';
+  "font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--ink-subtle)]";
 
 /** The name a card goes by, whichever kind it is. */
 export function mergeCardName(card: StudioContact | null | undefined): string {
-  if (!card) return 'This card';
+  if (!card) return "This card";
   return (
-    (card.entity_kind === 'company' ? card.company_name : card.full_name) ??
+    (card.entity_kind === "company" ? card.company_name : card.full_name) ??
     card.company_name ??
     card.full_name ??
-    'Unnamed'
+    "Unnamed"
   );
 }
 
@@ -58,8 +61,8 @@ export function mergeCardName(card: StudioContact | null | undefined): string {
  * carries; ties fall back to the id so the pick is stable across renders.
  */
 export function preferredSurvivorId(
-  a: Pick<StudioContact, 'id' | 'created_at'> | null | undefined,
-  b: Pick<StudioContact, 'id' | 'created_at'> | null | undefined,
+  a: Pick<StudioContact, "id" | "created_at"> | null | undefined,
+  b: Pick<StudioContact, "id" | "created_at"> | null | undefined,
 ): string | null {
   if (!a) return b?.id ?? null;
   if (!b) return a.id;
@@ -95,7 +98,7 @@ export function CompareMergeSheet({
   leftId,
   rightId,
   /** The evidence the Directory's own detection found (crm-model §4 rule 2). */
-  matchedOnDefault = 'phone',
+  matchedOnDefault = "phone",
   onMerged,
 }: {
   open: boolean;
@@ -148,48 +151,70 @@ export function CompareMergeSheet({
       : 0;
 
   const channelLine = (cardId: string | null, kinds: readonly string[]) => {
-    if (!cardId) return '—';
+    if (!cardId) return "—";
     const found = (channels ?? []).filter(
       (channel) =>
         channel.owner_id === cardId && kinds.includes(channel.channel_kind),
     );
-    if (found.length === 0) return '—';
-    return found.map((channel) => channel.value).join(', ');
+    if (found.length === 0) return "—";
+    return found.map((channel) => channel.value).join(", ");
   };
 
   const rows: FieldRow[] = useMemo(() => {
-    const fieldsOf = (card: StudioContact | null | undefined, id: string | null) => ({
+    const fieldsOf = (
+      card: StudioContact | null | undefined,
+      id: string | null,
+    ) => ({
       name: mergeCardName(card),
-      kind: card?.contact_kind ? getPartyKindLabel(card.contact_kind) || card.contact_kind : '—',
-      firm: card?.company_name ?? '—',
-      mobile: channelLine(id, ['mobile']) !== '—' ? channelLine(id, ['mobile']) : (card?.phone ?? '—'),
-      email: channelLine(id, ['email', 'ap_email']) !== '—'
-        ? channelLine(id, ['email', 'ap_email'])
-        : (card?.email ?? '—'),
-      rule: (id ? contactRuleClause(ruleIndex.get(id) ?? null) : null) ?? 'No contact rule on file.',
-      paper: id === leftId
-        ? String((leftPaper ?? []).length || 'None')
-        : String((rightPaper ?? []).length || 'None'),
+      kind: card?.contact_kind
+        ? getPartyKindLabel(card.contact_kind) || card.contact_kind
+        : "—",
+      firm: card?.company_name ?? "—",
+      mobile:
+        channelLine(id, ["mobile"]) !== "—"
+          ? channelLine(id, ["mobile"])
+          : (card?.phone ?? "—"),
+      email:
+        channelLine(id, ["email", "ap_email"]) !== "—"
+          ? channelLine(id, ["email", "ap_email"])
+          : (card?.email ?? "—"),
+      rule:
+        (id ? contactRuleClause(ruleIndex.get(id) ?? null) : null) ??
+        "No contact rule on file.",
+      paper:
+        id === leftId
+          ? String((leftPaper ?? []).length || "None")
+          : String((rightPaper ?? []).length || "None"),
       seats: String(seatCount(id)),
-      since: formatLongDate(card?.created_at ?? null) || '—',
+      since: formatLongDate(card?.created_at ?? null) || "—",
     });
     const a = fieldsOf(left, leftId);
     const b = fieldsOf(right, rightId);
     return [
-      { label: 'Name', a: a.name, b: b.name },
-      { label: 'What they are', a: a.kind, b: b.kind },
-      { label: 'Firm', a: a.firm, b: b.firm },
-      { label: 'Mobile', a: a.mobile, b: b.mobile },
-      { label: 'Email', a: a.email, b: b.email },
-      { label: 'Contact rule', a: a.rule, b: b.rule },
-      { label: 'Papers on file', a: a.paper, b: b.paper },
-      { label: 'Seats on jobs', a: a.seats, b: b.seats },
-      { label: 'In the book since', a: a.since, b: b.since },
+      { label: "Name", a: a.name, b: b.name },
+      { label: "What they are", a: a.kind, b: b.kind },
+      { label: "Firm", a: a.firm, b: b.firm },
+      { label: "Mobile", a: a.mobile, b: b.mobile },
+      { label: "Email", a: a.email, b: b.email },
+      { label: "Contact rule", a: a.rule, b: b.rule },
+      { label: "Papers on file", a: a.paper, b: b.paper },
+      { label: "Seats on jobs", a: a.seats, b: b.seats },
+      { label: "In the book since", a: a.since, b: b.since },
     ];
     // `channelLine` and `seatCount` close over the same four queries the deps
     // below name, so listing them separately would only re-run the same work.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [left, right, leftId, rightId, channels, ruleIndex, leftPaper, rightPaper, seats]);
+  }, [
+    left,
+    right,
+    leftId,
+    rightId,
+    channels,
+    ruleIndex,
+    leftPaper,
+    rightPaper,
+    seats,
+  ]);
 
   const survivor = survivorId === rightId ? right : left;
   const merged = survivorId === rightId ? left : right;
@@ -214,11 +239,16 @@ export function CompareMergeSheet({
       );
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'The merge did not go through.');
+      setError(
+        e instanceof Error ? e.message : "The merge did not go through.",
+      );
     }
   };
 
-  const columnHead = (card: StudioContact | null | undefined, id: string | null) => {
+  const columnHead = (
+    card: StudioContact | null | undefined,
+    id: string | null,
+  ) => {
     const chosen = !!id && survivorId === id;
     return (
       <button
@@ -228,15 +258,15 @@ export function CompareMergeSheet({
         onClick={() => id && setSurvivorId(id)}
         className={`min-h-11 w-full rounded-[3px] border px-3 py-2 text-left ${
           chosen
-            ? 'border-[var(--ink-faint)] bg-[var(--rail)] text-[var(--ink)]'
-            : 'border-[var(--hairline-strong)] bg-[var(--paper)] text-[var(--ink-subtle)]'
+            ? "border-[var(--ink-faint)] bg-[var(--rail)] text-[var(--ink)]"
+            : "border-[var(--hairline-strong)] bg-[var(--paper)] text-[var(--ink-subtle)]"
         }`}
       >
         <span className="block t-body-sm text-[var(--ink)]">
           {mergeCardName(card)}
         </span>
         <span className={`mt-0.5 block ${LABEL}`}>
-          {chosen ? 'Keeps the card' : 'Keep this one instead'}
+          {chosen ? "Keeps the card" : "Keep this one instead"}
         </span>
       </button>
     );
@@ -337,7 +367,10 @@ export function CompareMergeSheet({
         </DocumentActionRow>
 
         {error && (
-          <p role="alert" className="mt-2 text-[0.72rem] text-[var(--terracotta-ink)]">
+          <p
+            role="alert"
+            className="mt-2 text-[0.72rem] text-[var(--terracotta-ink)]"
+          >
             {error}
           </p>
         )}

@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * THE TRAVEL LIST (SPEC §5.7 #5, CRM-24, PR-b).
@@ -18,31 +18,31 @@
 
 /** What follows a person onto the new job (crm-model CRM-24). */
 export const TRAVELS: readonly string[] = [
-  'identity',
-  'typed channels',
-  'contact rule',
-  'consent by channel value',
-  'document expiries',
-  'one history line',
+  "identity",
+  "typed channels",
+  "contact rule",
+  "consent by channel value",
+  "document expiries",
+  "one history line",
 ];
 
 /** What is left on the job it came from — never carried, never inferred. */
 export const STAYS_BEHIND: readonly string[] = [
-  'prior pricing',
-  'prior project notes',
-  'show to client',
+  "prior pricing",
+  "prior project notes",
+  "show to client",
 ];
 
 const HEAD =
-  'font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--color-clay-ink)]';
-const ITEM = 'text-[0.74rem] leading-relaxed text-[var(--color-charcoal)]';
+  "font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--color-clay-ink)]";
+const ITEM = "text-[0.74rem] leading-relaxed text-[var(--color-charcoal)]";
 
 export function TravelListPane({ className }: { className?: string }) {
   return (
     <aside
       data-travel-list
       aria-label="What travels"
-      className={`border-l-2 border-[var(--color-pearl)] bg-white/40 px-3 py-3 ${className ?? ''}`}
+      className={`border-l-2 border-[var(--color-pearl)] bg-white/40 px-3 py-3 ${className ?? ""}`}
     >
       <p className={HEAD}>What travels</p>
       <ul data-travels className="mt-1.5 m-0 list-none p-0">

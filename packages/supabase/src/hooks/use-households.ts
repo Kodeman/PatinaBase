@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // THE HOUSEHOLD (E3, 00632) — People room CRM · W3/P2, PR-c
@@ -19,10 +19,10 @@
 // a seat with no authority. The room prints that refusal as a sentence.
 // ═══════════════════════════════════════════════════════════════════════════
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { createBrowserClient } from '../client';
-import { peopleKeys, peopleSeatKeys } from './use-people';
-import { partyAuthorityKeys } from './use-coordination';
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { createBrowserClient } from "../client";
+import { peopleKeys, peopleSeatKeys } from "./use-people";
+import { partyAuthorityKeys } from "./use-coordination";
 
 const getSupabase = () => createBrowserClient();
 
@@ -43,13 +43,14 @@ export interface ClientHousehold {
 }
 
 /** The two roles `add_household_member()` admits — both already party kinds. */
-export type HouseholdMemberRole = 'client' | 'client_rep';
+export type HouseholdMemberRole = "client" | "client_rep";
 
-export const HOUSEHOLD_MEMBER_ROLE_LABELS: Record<HouseholdMemberRole, string> = {
-  // The studio's words, never the schema's (SPEC §8 #3).
-  client: 'decides the work',
-  client_rep: 'signs for the household',
-};
+export const HOUSEHOLD_MEMBER_ROLE_LABELS: Record<HouseholdMemberRole, string> =
+  {
+    // The studio's words, never the schema's (SPEC §8 #3).
+    client: "decides the work",
+    client_rep: "signs for the household",
+  };
 
 export interface CreateClientHouseholdInput {
   organizationId: string;
@@ -77,38 +78,38 @@ export interface AddHouseholdMemberInput {
 }
 
 export const clientHouseholdKeys = {
-  all: ['client-households'] as const,
+  all: ["client-households"] as const,
   list: (organizationId: string | null | undefined) =>
-    ['client-households', organizationId ?? null] as const,
+    ["client-households", organizationId ?? null] as const,
   detail: (id: string | null | undefined) =>
-    ['client-households', 'detail', id ?? null] as const,
+    ["client-households", "detail", id ?? null] as const,
 };
 
 /** PR-n and 00632's own refusals, as sentences the studio can act on. */
 const HOUSEHOLD_REFUSAL_SENTENCES: Record<string, string> = {
   household_role_invalid:
-    'Say whether they decide the work or sign for the household.',
-  household_not_found: 'That household is not in this studio’s book.',
+    "Say whether they decide the work or sign for the household.",
+  household_not_found: "That household is not in this studio’s book.",
   household_member_not_a_live_person_card:
-    'A household member is a person already in the studio’s book.',
+    "A household member is a person already in the studio’s book.",
   household_primary_not_a_member:
-    'The person you write to first has to be one of the household.',
+    "The person you write to first has to be one of the household.",
   household_grant_forbidden:
-    'A change-order figure is the principal’s to set. Ask an owner or an admin of the studio to add this member.',
+    "A change-order figure is the principal’s to set. Ask an owner or an admin of the studio to add this member.",
   household_grant_project_has_no_studio:
-    'This job is not attached to a studio yet, so there is nothing to record the authority against.',
-  household_member_null: 'A household member needs a card behind the name.',
+    "This job is not attached to a studio yet, so there is nothing to record the authority against.",
+  household_member_null: "A household member needs a card behind the name.",
 };
 
 export function asHouseholdError(error: unknown): string {
   const message =
-    typeof error === 'object' && error !== null && 'message' in error
-      ? String((error as { message?: unknown }).message ?? '')
-      : String(error ?? '');
+    typeof error === "object" && error !== null && "message" in error
+      ? String((error as { message?: unknown }).message ?? "")
+      : String(error ?? "");
   for (const [code, sentence] of Object.entries(HOUSEHOLD_REFUSAL_SENTENCES)) {
     if (message.includes(code)) return sentence;
   }
-  return message || 'The household did not take that.';
+  return message || "The household did not take that.";
 }
 
 /** Every household this studio holds. */
@@ -120,10 +121,10 @@ export function useClientHouseholds(organizationId: string | null | undefined) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
       const { data, error } = await supabase
-        .from('client_households')
-        .select('*')
-        .eq('organization_id', organizationId)
-        .order('display_name', { ascending: true });
+        .from("client_households")
+        .select("*")
+        .eq("organization_id", organizationId)
+        .order("display_name", { ascending: true });
       if (error) throw error;
       return (data ?? []) as ClientHousehold[];
     },
@@ -139,9 +140,9 @@ export function useClientHousehold(id: string | null | undefined) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
       const { data, error } = await supabase
-        .from('client_households')
-        .select('*')
-        .eq('id', id)
+        .from("client_households")
+        .select("*")
+        .eq("id", id)
         .maybeSingle();
       if (error) throw error;
       return (data as ClientHousehold | null) ?? null;
@@ -168,7 +169,7 @@ export function useClientHousehold(id: string | null | undefined) {
  */
 export function useProjectHousehold(projectId: string | null | undefined) {
   return useQuery({
-    queryKey: ['client-households', 'project', projectId ?? null] as const,
+    queryKey: ["client-households", "project", projectId ?? null] as const,
     enabled: !!projectId,
     queryFn: async (): Promise<{
       household: ClientHousehold | null;
@@ -180,31 +181,32 @@ export function useProjectHousehold(projectId: string | null | undefined) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
       const { data: project, error: projectError } = await supabase
-        .from('projects')
-        .select('designer_id, client_profile_id')
-        .eq('id', projectId)
+        .from("projects")
+        .select("designer_id, client_profile_id")
+        .eq("id", projectId)
         .maybeSingle();
       if (projectError) throw projectError;
       const designerId = (project?.designer_id as string | null) ?? null;
-      const clientProfileId = (project?.client_profile_id as string | null) ?? null;
+      const clientProfileId =
+        (project?.client_profile_id as string | null) ?? null;
 
       let designerClientId: string | null = null;
       if (designerId && clientProfileId) {
         const { data: clientRow, error: clientError } = await supabase
-          .from('designer_clients')
-          .select('id')
-          .eq('designer_id', designerId)
-          .eq('client_id', clientProfileId)
+          .from("designer_clients")
+          .select("id")
+          .eq("designer_id", designerId)
+          .eq("client_id", clientProfileId)
           .maybeSingle();
         if (clientError) throw clientError;
         designerClientId = (clientRow?.id as string | null) ?? null;
       }
 
       const { data: seats, error: seatsError } = await supabase
-        .from('project_parties')
-        .select('studio_contact_id, party_kind')
-        .eq('project_id', projectId)
-        .in('party_kind', ['client', 'client_rep']);
+        .from("project_parties")
+        .select("studio_contact_id, party_kind")
+        .eq("project_id", projectId)
+        .in("party_kind", ["client", "client_rep"]);
       if (seatsError) throw seatsError;
       const memberCardIds = [
         ...new Set(
@@ -218,9 +220,9 @@ export function useProjectHousehold(projectId: string | null | undefined) {
       }
 
       const { data: households, error: householdError } = await supabase
-        .from('client_households')
-        .select('*')
-        .overlaps('member_person_ids', memberCardIds)
+        .from("client_households")
+        .select("*")
+        .overlaps("member_person_ids", memberCardIds)
         .limit(1);
       if (householdError) throw householdError;
       return {
@@ -250,22 +252,22 @@ export function useCreateClientHousehold() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
       const { data, error } = await supabase
-        .from('client_households')
+        .from("client_households")
         .insert({
           organization_id: input.organizationId,
           designer_id: input.designerId,
           display_name: input.displayName.trim(),
           co_threshold_cents: input.coThresholdCents ?? null,
         })
-        .select('*')
+        .select("*")
         .single();
       if (error) throw new Error(asHouseholdError(error));
       const household = data as ClientHousehold;
       if (input.designerClientId) {
         const { error: pointerError } = await supabase
-          .from('designer_clients')
+          .from("designer_clients")
           .update({ household_id: household.id })
-          .eq('id', input.designerClientId);
+          .eq("id", input.designerClientId);
         if (pointerError) throw new Error(asHouseholdError(pointerError));
       }
       return household;
@@ -296,10 +298,10 @@ export function useSetHouseholdThreshold() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
       const { data, error } = await supabase
-        .from('client_households')
+        .from("client_households")
         .update({ co_threshold_cents: input.coThresholdCents })
-        .eq('id', input.id)
-        .select('*')
+        .eq("id", input.id)
+        .select("*")
         .maybeSingle();
       if (error) throw new Error(asHouseholdError(error));
       if (!data) {
@@ -314,7 +316,9 @@ export function useSetHouseholdThreshold() {
       void queryClient.invalidateQueries({
         queryKey: clientHouseholdKeys.detail(household.id),
       });
-      void queryClient.invalidateQueries({ queryKey: ['client-households', 'project'] });
+      void queryClient.invalidateQueries({
+        queryKey: ["client-households", "project"],
+      });
     },
   });
 }
@@ -333,7 +337,7 @@ export function useAddHouseholdMember() {
     ): Promise<string | null> => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
-      const { data, error } = await supabase.rpc('add_household_member', {
+      const { data, error } = await supabase.rpc("add_household_member", {
         p_household_id: input.householdId,
         p_person_id: input.personId,
         p_role: input.role,
@@ -344,16 +348,18 @@ export function useAddHouseholdMember() {
     },
     onSuccess: (_seatId, input) => {
       void queryClient.invalidateQueries({ queryKey: clientHouseholdKeys.all });
-      void queryClient.invalidateQueries({ queryKey: ['client-households', 'project'] });
+      void queryClient.invalidateQueries({
+        queryKey: ["client-households", "project"],
+      });
       void queryClient.invalidateQueries({ queryKey: peopleKeys.all });
       void queryClient.invalidateQueries({ queryKey: peopleSeatKeys.all });
       void queryClient.invalidateQueries({ queryKey: partyAuthorityKeys.all });
       if (input.projectId) {
         void queryClient.invalidateQueries({
-          queryKey: ['project-parties', input.projectId],
+          queryKey: ["project-parties", input.projectId],
         });
         void queryClient.invalidateQueries({
-          queryKey: ['project-roster', input.projectId],
+          queryKey: ["project-roster", input.projectId],
         });
       }
     },
