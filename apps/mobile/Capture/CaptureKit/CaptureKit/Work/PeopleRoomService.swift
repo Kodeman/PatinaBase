@@ -416,6 +416,36 @@ public struct FieldLinkMint: Sendable, Codable, Hashable {
     }
 }
 
+/// A mint waiting to be made (queued when there is no signal). The roster
+/// retries it on the next load that reaches the studio, so a link asked for at
+/// a site with no bars is owed rather than lost (ux-4-field-mobile §6.4).
+public struct FieldLinkMintDraft: Identifiable, Sendable, Codable, Hashable {
+    public let id: String
+    public let request: FieldLinkMintRequest
+    public let askedAt: Date
+
+    public init(id: String = UUID().uuidString, request: FieldLinkMintRequest,
+                askedAt: Date = Date()) {
+        self.id = id
+        self.request = request
+        self.askedAt = askedAt
+    }
+}
+
+/// A queued mint that landed later: the name it was asked for, and the link.
+/// The roster prints it, because a link nobody sees is a link nobody handed on.
+public struct FieldLinkMintReceipt: Identifiable, Sendable, Codable, Hashable {
+    public let name: String
+    public let mint: FieldLinkMint
+
+    public var id: String { mint.seatID }
+
+    public init(name: String, mint: FieldLinkMint) {
+        self.name = name
+        self.mint = mint
+    }
+}
+
 // MARK: - The seam
 
 public protocol PeopleRoomService: Sendable {

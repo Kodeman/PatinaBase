@@ -6,13 +6,14 @@
 //  this: `CaptureProjectCache` is SwiftData and holds project names and room
 //  lanes, and `CaptureKit/Sync` is a write outbox for captures. So this is a
 //  small on-disk store of its own — one JSON file per project per object,
-//  owner-scoped, plus a queue for the one write the card offers.
+//  owner-scoped, plus a queue for each of the room's two writes.
 //
 //  What it promises:
 //   • the last good copy is returned instantly, with the stamp it was loaded at,
 //     so the screen prints "Last loaded …" in ink rather than spinning;
 //   • a notice written with no signal is queued and retried, never lost and
-//     never silently dropped;
+//     never silently dropped, and a mint asked for with no signal is queued the
+//     same way and its link printed when it lands (ux-4-field-mobile §6.4);
 //   • a corrupt or unreadable file reads as "nothing cached", never as a crash.
 
 import Foundation
@@ -123,6 +124,48 @@ public final class PeopleRoomCache {
             }
         }
         return written
+    }
+
+    // MARK: The mint queue
+
+    /// Every mint still owed, oldest first.
+    public func pendingMints(projectID: String,
+                             owner: CaptureOwnerIdentity?) -> [FieldLinkMintDraft] {
+        let queued = read([FieldLinkMintDraft].self,
+                          at: url(owner: owner, projectID: projectID, object: "mints"))
+        return (queued?.value ?? []).sorted { $0.askedAt < $1.askedAt }
+    }
+
+    public func queueMint(_ draft: FieldLinkMintDraft, owner: CaptureOwnerIdentity?) {
+        var drafts = pendingMints(projectID: draft.request.projectID, owner: owner)
+        drafts.removeAll { $0.id == draft.id }
+        drafts.append(draft)
+        write(drafts, at: url(owner: owner, projectID: draft.request.projectID, object: "mints"))
+    }
+
+    public func forgetMint(_ draft: FieldLinkMintDraft, owner: CaptureOwnerIdentity?) {
+        var drafts = pendingMints(projectID: draft.request.projectID, owner: owner)
+        drafts.removeAll { $0.id == draft.id }
+        write(drafts, at: url(owner: owner, projectID: draft.request.projectID, object: "mints"))
+    }
+
+    /// Retry every queued mint. Returns the links that came through, named, so
+    /// the roster can print them; the rest stay queued for the next time there
+    /// is signal.
+    @discardableResult
+    public func drainMints(projectID: String, owner: CaptureOwnerIdentity?,
+                           using service: any PeopleRoomService) async -> [FieldLinkMintReceipt] {
+        var minted: [FieldLinkMintReceipt] = []
+        for draft in pendingMints(projectID: projectID, owner: owner) {
+            do {
+                let mint = try await service.mintFieldLink(draft.request)
+                minted.append(FieldLinkMintReceipt(name: draft.request.fullName, mint: mint))
+                forgetMint(draft, owner: owner)
+            } catch {
+                break  // No signal, or the write refused: keep the order intact.
+            }
+        }
+        return minted
     }
 
     // MARK: Plumbing

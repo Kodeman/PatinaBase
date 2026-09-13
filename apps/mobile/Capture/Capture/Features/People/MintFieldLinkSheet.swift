@@ -17,6 +17,10 @@ struct MintFieldLinkSheet: View {
     let projectID: String
     let people: any PeopleRoomService
     let onMinted: () -> Void
+    /// No signal is not a failure: the mint is handed to the roster's queue and
+    /// retried on the next load that reaches the studio, and the link it makes
+    /// is printed there (ux-4-field-mobile §6.4).
+    let onQueued: (FieldLinkMintDraft) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var fullName = ""
@@ -169,8 +173,10 @@ struct MintFieldLinkSheet: View {
         do {
             minted = try await people.mintFieldLink(request)
         } catch {
-            errorMessage = "That did not land: \(error.localizedDescription). "
-                + "A link needs signal — try again when you have some."
+            onQueued(FieldLinkMintDraft(request: request))
+            errorMessage = "That did not land: \(error.localizedDescription) "
+                + "\(request.fullName) is queued — the link will be minted when the "
+                + "studio is reachable again, and it will be waiting on the call sheet."
         }
         isWorking = false
     }
@@ -188,6 +194,8 @@ import CaptureKitMocks
 
 #Preview("Mint a field link") {
     MintFieldLinkSheet(projectID: PeopleRoomFixtures.projectID,
-                       people: MockPeopleRoomService()) {}
+                       people: MockPeopleRoomService(),
+                       onMinted: {},
+                       onQueued: { _ in })
 }
 #endif

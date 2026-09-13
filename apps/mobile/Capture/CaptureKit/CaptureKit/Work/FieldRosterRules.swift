@@ -398,3 +398,54 @@ public enum FieldPeopleDates {
         }
     }
 }
+
+// MARK: - When a field link ends (PR-d)
+
+/// What a minted field link actually ends on, and the sentence that says so.
+///
+/// `create_field_link` (00627) decides the date server-side and its
+/// `RETURNS TABLE (id, token)` carries no expiry column, so the phone cannot
+/// read the answer back — it computes the same one from the same facts. The
+/// rule, mirrored from the migration: the seat's window end (the later of
+/// `on_site_to` and `warranty_until`) through the END of that day, while that
+/// day is still ahead; otherwise the ninety-day default a windowless or
+/// closed-window seat falls back to.
+///
+/// A seat minted from the phone carries no window at all — the sheet has no
+/// field for one — so the fallback is the branch this surface actually takes,
+/// and it prints a real date rather than a promise about a window that does
+/// not exist.
+public enum FieldLinkExpiry {
+    /// 00627's own fallback, in days.
+    public static let fallbackDays = 90
+
+    /// The date the link stops working, and the sentence the mint result prints.
+    public struct Window: Sendable, Hashable {
+        /// The instant the token stops working.
+        public let endsAt: Date
+        /// The last day it works, as the sentence prints it.
+        public let lastDay: Date
+        /// True when the job's own window dated it; false on the ninety-day
+        /// default.
+        public let isJobWindow: Bool
+        public let sentence: String
+    }
+
+    public static func resolve(windowEnd: Date?, now: Date = Date()) -> Window {
+        // `+ interval '1 day'` in the migration: through the end of that day.
+        if let windowEnd, windowEnd.addingTimeInterval(oneDay) > now {
+            return Window(endsAt: windowEnd.addingTimeInterval(oneDay),
+                          lastDay: windowEnd,
+                          isJobWindow: true,
+                          sentence: "Ends with the job, \(FieldPeopleDates.long(windowEnd)).")
+        }
+        let ends = now.addingTimeInterval(Double(fallbackDays) * oneDay)
+        return Window(endsAt: ends,
+                      lastDay: ends,
+                      isJobWindow: false,
+                      sentence: "The job carries no window yet, so it ends "
+                          + "\(FieldPeopleDates.long(ends)) — ninety days from today.")
+    }
+
+    private static let oneDay: TimeInterval = 24 * 60 * 60
+}

@@ -323,6 +323,32 @@ struct PeopleRoomCacheTests {
         #expect(cache.pendingNotices(projectID: "p-1", owner: owner).isEmpty)
     }
 
+    @Test func aMintAskedForWithNoSignalIsQueuedAndThenDrained() async {
+        let cache = freshCache()
+        let request = FieldLinkMintRequest(projectID: "p-1", fullName: "Marcus Reyes",
+                                           partyKind: "sub")
+        cache.queueMint(FieldLinkMintDraft(request: request), owner: owner)
+        #expect(cache.pendingMints(projectID: "p-1", owner: owner).count == 1)
+
+        let minted = await cache.drainMints(projectID: "p-1", owner: owner,
+                                            using: MockPeopleRoomService())
+        #expect(minted.count == 1)
+        #expect(minted.first?.name == "Marcus Reyes")
+        #expect(minted.first?.mint.url.contains("/field/") == true)
+        #expect(cache.pendingMints(projectID: "p-1", owner: owner).isEmpty)
+    }
+
+    @Test func aMintDrainThatCannotReachTheStudioLeavesTheQueueIntact() async {
+        let cache = freshCache()
+        let request = FieldLinkMintRequest(projectID: "p-1", fullName: "Marcus Reyes",
+                                           partyKind: "sub")
+        cache.queueMint(FieldLinkMintDraft(request: request), owner: owner)
+        let minted = await cache.drainMints(projectID: "p-1", owner: owner,
+                                            using: RefusingPeopleRoomService())
+        #expect(minted.isEmpty)
+        #expect(cache.pendingMints(projectID: "p-1", owner: owner).count == 1)
+    }
+
     @Test func aDrainThatCannotReachTheStudioLeavesTheQueueIntact() async {
         let cache = freshCache()
         cache.queue(FieldSiteNoticeDraft(projectID: "p-1", what: "Told Luis."), owner: owner)
@@ -365,11 +391,47 @@ private struct RefusingPeopleRoomService: PeopleRoomService {
 // MARK: - The mint (PR-s)
 
 struct MintFieldLinkTests {
+    /// A seat made from the mint sheet carries no window, so the sentence names
+    /// the ninety-day date `create_field_link` actually stamps (00627) rather
+    /// than describing a window that does not exist.
     @Test func aMintSaysWhenTheLinkEndsInWords() async throws {
         let mint = try await MockPeopleRoomService().mintFieldLink(
             FieldLinkMintRequest(projectID: PeopleRoomFixtures.projectID,
                                  fullName: "A framer's second", partyKind: "sub"))
-        #expect(mint.expirySentence.hasPrefix("Ends with the job,"))
+        #expect(mint.expirySentence.contains("ninety days from today"))
+        #expect(mint.expirySentence.contains(FieldPeopleDates.long(try #require(mint.expiresAt))))
+        #expect(!mint.expirySentence.contains("Ends when the job's window closes"))
         #expect(mint.url.contains("/field/"))
+    }
+}
+
+// MARK: - When a field link ends (PR-d, mirroring 00627)
+
+struct FieldLinkExpiryTests {
+    private let now = day("2026-10-20")
+
+    @Test func aLiveWindowDatesTheLinkAndSaysSo() {
+        let window = FieldLinkExpiry.resolve(windowEnd: day("2027-08-13"), now: now)
+        #expect(window.isJobWindow)
+        #expect(window.sentence == "Ends with the job, 13 August 2027.")
+        // The migration's `+ interval '1 day'`: through the END of that day.
+        #expect(window.endsAt == day("2027-08-13").addingTimeInterval(86_400))
+    }
+
+    @Test func noWindowFallsToTheNinetyDayDefaultWithARealDate() {
+        let window = FieldLinkExpiry.resolve(windowEnd: nil, now: now)
+        #expect(!window.isJobWindow)
+        #expect(window.endsAt == now.addingTimeInterval(90 * 86_400))
+        #expect(window.sentence.contains(FieldPeopleDates.long(window.endsAt)))
+        #expect(window.sentence.contains("ninety days from today"))
+    }
+
+    /// 00627: "a closed window is the same fact as no window" — neither may date
+    /// a token in the past, so both take the ninety-day branch.
+    @Test func aWindowThatHasAlreadyClosedIsTheSameFactAsNoWindow() {
+        let closed = FieldLinkExpiry.resolve(windowEnd: day("2026-09-01"), now: now)
+        #expect(!closed.isJobWindow)
+        #expect(closed.endsAt == now.addingTimeInterval(90 * 86_400))
+        #expect(closed.endsAt > now)
     }
 }
