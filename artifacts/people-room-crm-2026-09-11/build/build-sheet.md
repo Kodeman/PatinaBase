@@ -13,7 +13,7 @@ Bootstrap date: 2026-09-11
 | W2 | Room — the People Room surface (designer portal) | not started |
 | W3 | P2 — phase-two feature slice per ruling | not started |
 | W4 | P3 web — incl. trade upload door + Sanity help content | not started |
-| W5 | P3 iOS — Patina Field / client app work + TestFlight | not started |
+| W5 | P3 iOS — Patina Field / client app work + TestFlight | **DONE** — see `w5-ship-report.md` |
 | W6 | Integration + Chrome QA on a local prod build | not started |
 | W7 | Single deploy chain — starts with the email-deliverability checklist (`artifacts/people-room-crm-2026-09-11/build/email-deliverability-checklist.md`) | not started |
 
@@ -41,6 +41,22 @@ Bootstrap date: 2026-09-11
 | Dist-resolved packages built | `@patina/types`, `@patina/utils`, `@patina/api-routes`, `@patina/api-client`, `@patina/help-system` (+ transitive `@patina/design-system`) — turbo FULL TURBO / 7 cached, 7 total |
 | Portal env — designer-portal | **NOT COPIED** — blocked by hard write-permission deny on `.env*` paths (see Owed/Blocked below); main repo's active line already reads `http://127.0.0.1:54321` (local-safe) |
 | Portal env — client-portal | **NOT WRITTEN** — main repo's `.env.local` points at Strata prod (`https://bkvcixdmuyejfzcijpdg.supabase.co`); per instructions a local-pointing copy should be built from `.env.example` + local keys, but the write itself is blocked (see below) |
+
+## W5 state (closed out 2026-09-13)
+
+| Item | Value |
+|---|---|
+| Scope | `apps/mobile/Capture/**` only — the People room on Patina Field (PR1 roster · PR2 person · PR3 site access), the mint sheet, the offline cache |
+| Last W5 source commit | `b93e58297` (review round r7 fixes) |
+| Close-out commit | see `git log` for `feat(field): roster by window, site access card, mint a link on site; offline cache (P3 iOS)` |
+| Gate | `scripts/capture-gate.sh all` — **GREEN** (build · tests · lint · 3 copy sweeps), `GATE EXIT: 0`. Output: `build/w5-closeout/capture-gate-all.txt` |
+| Review rounds | r1–r8; r8 found no new blocking defect. Four carried-open items, all source-only or by-design (`w5-ship-report.md` §7) |
+| Highest claim for behaviour | **sim-verified** (iPhone 17 Simulator `C8850509-C7DC-43C5-9226-9446404EE98A`, mock mode). Shots: `build/w5-closeout/w5-sim-0*.png` |
+| Device pass | **NOT walked.** A phone is attached — Kody's Phone, iPhone 17 Pro Max, `00008150-00016C8A21DA401C` — and the app **built, signed and installed** on it, but both paired iPhones are **locked** (`SBMainWorkspace … Locked`) and WDA cannot be built (no Xcode development team), so no screen could be driven. `build/ios-w5-device/` is empty by fact, not by omission. |
+| The `tel:` dialer prompt | **unverified at any level.** The Simulator has no Phone app; the tap produced nothing. Compile-green only (`FieldRosterRules.swift:133`). Owed to Kody on an unlocked phone. |
+| TestFlight | **Build 5 (0.1) uploaded and VALID.** App `cloud.patina.field`, ASC app id `6805156812`, build id `23a23b88-5ac3-484a-bb94-e38f6e6e8ea2`. Not assigned to any tester group; export compliance not declared. |
+| Note | `Capture/README.md` § "App Store Connect app record — BLOCKED on Kody" is **STALE** — the record exists (`6805156812`) and builds 2–4 predate this wave. Left unedited (W2 is live in this worktree). |
+| Prod safety | No prod DB write, no Supabase call, no local DB reset, no pnpm build, nothing outside `apps/mobile/Capture/**` + this artifacts folder. |
 
 ## Owed / Blocked
 
