@@ -69,6 +69,8 @@ let noteState: ReadState = 'ready';
 let clientsData: Array<Record<string, unknown>> = [];
 let projectsOverride: Array<Record<string, unknown>> | null = null;
 let invoicesOverride: Array<Record<string, unknown>> | null = null;
+/** m4-r4 — whether the invoice-number lookup answers or fails. */
+let invoicesFail = false;
 
 /** Each money read's settle state — a figure must never precede an answer. */
 type ReadState = 'ready' | 'pending' | 'error';
@@ -182,7 +184,11 @@ function makeClient() {
       };
       const builder: Record<string, unknown> = {
         then: (resolve: (value: unknown) => unknown) =>
-          Promise.resolve({ data: rowsFor(), error: null }).then(resolve),
+          Promise.resolve(
+            table === 'invoices' && invoicesFail
+              ? { data: null, error: { message: 'invoice numbers refused' } }
+              : { data: rowsFor(), error: null },
+          ).then(resolve),
       };
       for (const method of [
         'select',
@@ -368,6 +374,7 @@ beforeEach(() => {
   clientsData = [];
   projectsOverride = null;
   invoicesOverride = null;
+  invoicesFail = false;
   mockBuildTimeExportCsv.mockClear();
   mockDownloadTimeExportCsv.mockClear();
 });
@@ -1059,8 +1066,38 @@ describe('what a chip and a failed note say (n3 · n1)', () => {
 });
 
 // ── m10-r3: the Export act had no component test of its own ────────────────
+//
+// m2-r4 — what this suite does and does NOT cover: `jest.mock('@patina/supabase')`
+// above replaces the whole package, so `useTimeCaptureProjects` never runs and
+// `MobileSheets` is never mounted here. The enrichment cases below would
+// therefore pass even with M1-r3's colliding cache key restored. The key itself
+// is pinned directly, off the QueryClient's own cache, by the first case.
 
 describe('the Export act (W5, m10-r3)', () => {
+  it('gives the client-bearing projects read its own cache key (M1-r3 · m2-r4)', async () => {
+    const client = makeQueryClient();
+    renderLedger('project-1', client);
+
+    await waitFor(() =>
+      expect(
+        client
+          .getQueryCache()
+          .find({
+            queryKey: ['document-hours-projects', 'with-client'],
+            exact: true,
+          }),
+      ).toBeDefined(),
+    );
+    // The bare key belongs to `useTimeCaptureProjects` (its select carries no
+    // `client_id`); this sheet must never share that cache entry, or whichever
+    // fetch resolves first fills it and the Client column exports empty.
+    expect(
+      client
+        .getQueryCache()
+        .find({ queryKey: ['document-hours-projects'], exact: true }),
+    ).toBeUndefined();
+  });
+
   it('renders only at studio scope, and is hidden at every other scope', async () => {
     renderLedger('project-1');
 
@@ -1135,5 +1172,18 @@ describe('the Export act (W5, m10-r3)', () => {
       'MOCK_CSV',
       expect.stringContaining('patina-hours-'),
     );
+  });
+
+  it('says so when the invoice-number lookup fails, rather than exporting blanks silently (m9-r3 · m4-r4)', async () => {
+    invoicesFail = true;
+    ledgerRows = [{ ...LEDGER_ROW, invoice_id: 'invoice-1' }];
+    renderLedger();
+
+    fireEvent.click(screen.getByRole('button', { name: 'the studio' }));
+    await screen.findByRole('button', { name: 'Export → CSV' });
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(/Invoice numbers could not be read/);
+    expect(alert).toHaveTextContent(/blank Invoice # for invoiced hours/);
   });
 });

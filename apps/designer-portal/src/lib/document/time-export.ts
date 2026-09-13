@@ -28,6 +28,8 @@
 
 import type { TimeEntryLedgerRow } from "@patina/supabase";
 
+import { timeRateProvenance } from "./authority-hours";
+
 export interface TimeExportRow extends TimeEntryLedgerRow {
   /** The project's client/household name — not a ledger column; see above. */
   client_name?: string | null;
@@ -70,9 +72,31 @@ function centsToDollars(cents: number | null | undefined): string {
 /** m6-r3 — a rate-pending hour (no rate card resolved yet) must never export
  *  a confident "0.00": that is a real ledger row whose Rate and Amount are
  *  simply not known yet, not a zero-cost hour. "pending" in both cells,
- *  matching the portal's own copy for the state (`time-capture.tsx`, HT-26). */
+ *  matching the portal's own copy for the state (`time-capture.tsx`, HT-26).
+ *
+ *  M1-r4 — "pending" is the RATE's state, not the authorization's. An earlier
+ *  round keyed this on `billing_state === "pending_authorization"`, which is a
+ *  fully PRICED state (00601: "it now carries the studio rate and stays
+ *  pending_authorization, so the row prints honestly") — so real, resolved
+ *  money left the file as the word "pending" and the Amount column stopped
+ *  summing to the ledger's total. The predicate is the portal's own canonical
+ *  one (`timeRateProvenance` → `kind: "pending"`, i.e. billable, nothing
+ *  priced it, and `rate_source === "none"`); a null `rate_source` is a
+ *  pre-00600 legacy row carrying a real snapshot and is NOT pending. */
 function isRatePending(row: TimeExportRow): boolean {
-  return row.billing_state === "pending_authorization";
+  // The fact view prints `resolved_rate_cents` (0 where nothing priced the
+  // hour), not the entry column — the same mapping `ScopeEntryRow` makes.
+  const provenance = timeRateProvenance(
+    {
+      hourly_rate_cents: row.resolved_rate_cents,
+      rate_source: row.rate_source ?? null,
+      rate_role: row.rate_role ?? null,
+      billable: row.billable,
+      billing_state: row.billing_state ?? null,
+    },
+    null,
+  );
+  return provenance.kind === "pending";
 }
 
 function csvRow(row: TimeExportRow): string {

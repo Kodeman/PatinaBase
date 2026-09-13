@@ -117,28 +117,36 @@ describe("buildTimeExportCsv", () => {
     expect(fields[13]).toBe("INV-0007"); // Invoice #
   });
 
-  it("the amount column sums to the ledger total", () => {
+  it("the amount column sums to the ledger total, a PRICED pending_authorization row included (M1-r4)", () => {
     const rows = [
       row({ id: "t1", amount_cents: 21_750 }),
       row({ id: "t2", amount_cents: 7_250, member_name: "Leah Brooks" }),
+      // M1-r4 — pending_authorization is a fully priced state (00601): the
+      // studio rate resolved, only the authorization is outstanding. Its
+      // money is real, it must parse, and skipping it here is exactly how a
+      // predicate keyed on the wrong column went green while the file's own
+      // total stopped tying to the sheet's.
       row({
         id: "t3",
-        amount_cents: 0,
         billing_state: "pending_authorization",
+        rate_source: "studio_member",
+        resolved_rate_cents: 15_000,
+        amount_cents: 30_000,
       }),
     ];
     const csv = buildTimeExportCsv(rows);
     const dataLines = csv.trimEnd().split("\r\n").slice(1);
-    const summed = dataLines.reduce((sum, line) => {
-      const amount = line.split(",")[10].replace(/"/g, "");
-      // m6-r3: a rate-pending row's Amount cell is the literal word
-      // "pending", not a parseable "0.00" — it contributes nothing to the
-      // total either way (its real amount_cents is 0), so skip it here.
-      if (amount === "pending") return sum;
-      return sum + Math.round(parseFloat(amount) * 100);
-    }, 0);
+    const amounts = dataLines.map((line) =>
+      line.split(",")[10].replace(/"/g, ""),
+    );
+    // Every cell parses — none of them is the word "pending".
+    expect(amounts).toEqual(["217.50", "72.50", "300.00"]);
+    const summed = amounts.reduce(
+      (sum, amount) => sum + Math.round(parseFloat(amount) * 100),
+      0,
+    );
     expect(summed).toBe(timeExportTotalCents(rows));
-    expect(summed).toBe(29_000);
+    expect(summed).toBe(59_000);
   });
 
   it("a rate-pending hour exports \"pending\" in Rate and Amount, never a confident \"0.00\" (m6-r3)", () => {
@@ -160,10 +168,28 @@ describe("buildTimeExportCsv", () => {
     expect(fields[11]).toBe("pending_authorization"); // Billing State unchanged
   });
 
+  it("a pre-00600 legacy row (rate_source null) exports its real snapshot, not \"pending\" (M1-r4)", () => {
+    // `rate_source == null` is unrecorded provenance, not "no card found" —
+    // the row carries a real rate snapshot and must print it.
+    const csv = buildTimeExportCsv([
+      row({
+        billing_state: "pending_authorization",
+        rate_source: null,
+        resolved_rate_cents: 14_500,
+        amount_cents: 21_750,
+      }),
+    ]);
+    const [, dataLine] = csv.trimEnd().split("\r\n");
+    const fields = dataLine.split(",").map((f) => f.replace(/^"|"$/g, ""));
+    expect(fields[7]).toBe("145.00"); // Rate
+    expect(fields[10]).toBe("217.50"); // Amount
+  });
+
   it("an authorized hour still exports a plain \"0.00\" when its resolved amount really is zero", () => {
-    // The pending guard is keyed on billing_state, not on the figure being
-    // zero — an authorized, fully-priced row that nets to nothing (e.g. a
-    // zero-duration correction) still prints the real number.
+    // The pending guard is keyed on the RATE's provenance (M1-r4), not on the
+    // figure being zero — a row the resolver priced (rate_source
+    // "studio_member") that nets to nothing (e.g. a zero-duration correction)
+    // still prints the real number.
     const csv = buildTimeExportCsv([
       row({
         billing_state: "authorized",
