@@ -430,7 +430,7 @@ export function PersonProfile({
             {liveSeats.map((seat) => (
               <li
                 key={seat.seat_id}
-                className="border-t border-[var(--hairline)] py-2"
+                className="border-t border-[var(--hairline-strong)] py-2"
               >
                 <SeatLine seat={seat} onOpen={(s) => onOpenSeat?.(s)} />
                 <SeatFacts seat={seat} />
@@ -452,7 +452,7 @@ export function PersonProfile({
             {pastSeats.map((seat) => (
               <li
                 key={seat.seat_id}
-                className="border-t border-[var(--hairline)] py-2"
+                className="border-t border-[var(--hairline-strong)] py-2"
               >
                 <p className="t-body-sm flex flex-wrap items-center gap-x-2 text-[var(--ink-subtle)]">
                   {/* CR-11: the studio's words, never the schema's. The live

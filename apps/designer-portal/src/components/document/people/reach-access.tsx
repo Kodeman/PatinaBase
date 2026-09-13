@@ -342,7 +342,7 @@ function ChannelRow({
     <li
       data-reach-channel={channel.id}
       data-reach-channel-held={held ? "true" : undefined}
-      className={`border-t border-[var(--hairline)] py-3 ${
+      className={`border-t border-[var(--hairline-strong)] py-3 ${
         held
           ? "border-l-2 border-l-[var(--terracotta-ink)] bg-[var(--rail)] pl-[11px]"
           : ""

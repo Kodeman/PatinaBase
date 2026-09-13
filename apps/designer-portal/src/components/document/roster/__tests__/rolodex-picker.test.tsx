@@ -42,6 +42,16 @@ jest.mock('@patina/supabase', () => ({
         paper_state: 'lapsed',
         contact_rule_summary: 'Never text. Do not use: mobile, after_hours.',
       },
+      // QA-R6-1: the view reports the FACT for a lender firm that has filed
+      // nothing — `not_on_file` — because the lender never owed the studio
+      // paper in the first place. Whether it PRINTS is the display rule.
+      {
+        person_id: 'bank-1',
+        reach_state: 'on_paper',
+        consent_status: 'not_asked',
+        paper_state: 'not_on_file',
+        contact_rule_summary: null,
+      },
     ],
   }),
   // CR-5: the RULE ROW is what the mini row's clause is composed from —
@@ -87,6 +97,20 @@ const ROSA: StudioContact = {
   archived_at: null,
   created_at: '2026-01-01T00:00:00.000Z',
   updated_at: '2026-01-01T00:00:00.000Z',
+};
+
+/** A lender firm — R-A/R-N's own population. It owes the studio no paper. */
+const BANK: StudioContact = {
+  ...ROSA,
+  id: 'bank-1',
+  entity_kind: 'company',
+  contact_kind: 'lender',
+  full_name: null,
+  company_name: 'Great Northern Bank',
+  email: null,
+  phone: null,
+  phone_e164: null,
+  specialties: [],
 };
 
 const props = {
@@ -142,6 +166,25 @@ describe('RolodexPicker — the hits and their history', () => {
     expect(screen.getByText('Opted out')).toBeInTheDocument();
     expect(screen.getByText('Lapsed')).toBeInTheDocument();
     expect(screen.getByText('Email only. No cell for work.')).toBeInTheDocument();
+  });
+
+  /**
+   * QA-R6-1 (BLOCKING) — SPEC §3.8 / §5.1 #18 and R-A / R-N: a lender, an
+   * inspector or an authority carries NO paper word at all, on any surface,
+   * and "Not on file" is the forbidden word above all — it names an
+   * obligation that was never the studio's to collect. The mini row was
+   * handed the view's raw `paper_state` and printed it unconditionally, so
+   * Great Northern Bank and City of Minneapolis, CPED Inspections both wore
+   * "Not on file" in this picker.
+   */
+  it('prints no paper word for a lender firm, on any surface (QA-R6-1)', () => {
+    useStudioContacts.mockReturnValue({ data: [BANK], isLoading: false });
+    render(<RolodexPicker {...props} />);
+    expect(screen.getByText('Great Northern Bank')).toBeInTheDocument();
+    expect(screen.queryByText('Not on file')).not.toBeInTheDocument();
+    expect(
+      document.querySelector('[data-state-family="paper"]'),
+    ).not.toBeInTheDocument();
   });
 
   it('a single click adds the contact as a party carrying its rolodex id', async () => {

@@ -83,7 +83,7 @@ export function paperHeldClause(
 
 const TH =
   "font-mono text-[11px] font-medium uppercase tracking-[0.08em] text-[var(--ink-subtle)] text-left pr-3 pb-2";
-const TD = "t-body-sm border-t border-[var(--hairline)] py-3 pr-3 align-top";
+const TD = "t-body-sm border-t border-[var(--hairline-strong)] py-3 pr-3 align-top";
 
 export function ComplianceTable({
   documents,
@@ -145,7 +145,7 @@ export function ComplianceTable({
         {documents.map((doc) => (
           <li
             key={doc.id}
-            className="border-t border-[var(--hairline)] py-3"
+            className="border-t border-[var(--hairline-strong)] py-3"
             data-compliance-row-390={doc.id}
           >
             <p className="t-body-sm font-medium text-[var(--ink)]">

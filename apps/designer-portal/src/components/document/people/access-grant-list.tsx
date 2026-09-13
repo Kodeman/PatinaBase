@@ -209,7 +209,7 @@ function GrantRow({
   return (
     <li
       data-access-grant={grant.grant_id}
-      className="border-t border-[var(--hairline)] py-3"
+      className="border-t border-[var(--hairline-strong)] py-3"
     >
       <p className="t-body-sm text-[var(--ink)]">
         {grantRowParts(grant).join(" · ")}

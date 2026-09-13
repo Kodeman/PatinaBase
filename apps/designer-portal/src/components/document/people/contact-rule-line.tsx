@@ -21,9 +21,14 @@
  * other on every face. NEVER a bare phone string — a routing instruction with
  * no channel attached sends the reader nowhere, and one with an unlinked
  * number makes a superintendent retype it standing on site.
+ *
+ * And never a RAW one either (QA-R6-2). `routeTo.officePhone` comes off
+ * `studio_contact_channels.value`, commonly stored as `+16125550114`, so the
+ * label goes through `telDisplay` exactly as the Channels row and the site
+ * access card do: one shape for a number on any face.
  */
 
-import { TelLink } from './tel-link';
+import { TelLink, telDisplay } from './tel-link';
 
 export interface ContactRouteTarget {
   name: string;
@@ -110,7 +115,11 @@ export function ContactRuleLine({
                 {/* Still its own 44px control (SPEC §5.1 #15): a routed phone
                     is a phone, and the rule that every number on screen is its
                     own generous target does not except this one. */}
-                <TelLink phone={routeTo.officePhone} personName={routeTo.name} />
+                <TelLink
+                  phone={routeTo.officePhone}
+                  label={telDisplay(routeTo.officePhone)}
+                  personName={routeTo.name}
+                />
               </>
             ) : null}
           </span>

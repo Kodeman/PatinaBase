@@ -24,6 +24,7 @@ import {
   getFieldTradeLabel,
   getPartyKindLabel,
   getVendorSpecialtyLabel,
+  partyKindOwesPaper,
   type ReachState,
 } from '@patina/types';
 import { Avatar } from '../people/person-bits';
@@ -71,7 +72,14 @@ export interface PartyMiniRowProps {
   reach?: ReachState | null;
   /** The studio's consent record for this identity, as a word. */
   consent?: string | null;
-  /** The worst paper the identity or its firm holds, as a word. */
+  /**
+   * The worst paper the identity or its firm holds, as a word. Printed only
+   * where the kind OWED paper: R-A / R-N / SPEC §3.8 — a lender, an inspector
+   * or an authority never filed anything with the studio, so no surface prints
+   * a paper word for one, and "Not on file" is the forbidden word above all.
+   * The row applies the rule itself rather than trusting each caller, because
+   * the value handed in is the view's raw `paper_state` fact.
+   */
   paper?: string | null;
   /** The contact rule, as a sentence beside the words (PR-e). Compose it with
    *  `contactRuleClause()` — this row renders what it is handed. */
@@ -170,7 +178,9 @@ export function PartyMiniRow({
       </span>
       {reach && <ReachChip state={reach} />}
       {consent && <StateWord family="consent" value={consent} />}
-      {paper && <StateWord family="paper" value={paper} />}
+      {paper && partyKindOwesPaper(kind) && (
+        <StateWord family="paper" value={paper} />
+      )}
       {trailing}
     </>
   );
