@@ -264,8 +264,19 @@ export function HoursLedger({
     isSettled: standingKnown,
   } = useViewerStudio();
 
+  // Fix round 3 (finding M1-r3): this key MUST NOT be the bare
+  // `["document-hours-projects"]` string — `useTimeCaptureProjects`
+  // (`packages/supabase/src/hooks/use-time-tracking.ts`) already owns that
+  // exact key for its own `select('id, name, status')` (no `client_id`), and
+  // TanStack keys the CACHE ENTRY, not the function: whichever observer's
+  // fetch resolves first fills the entry and BOTH observers read it.
+  // `MobileSheets` (which calls `useTimeCaptureProjects`) mounts
+  // unconditionally above the Hours sheet in `(document)/layout.tsx`, so the
+  // client-less variant reliably won the race and `client_id` came back
+  // `undefined` on every row — nondeterministic, and silent. A distinct
+  // suffix gives this read its own cache entry; nothing else needs to change.
   const { data: projects } = useQuery({
-    queryKey: ["document-hours-projects"],
+    queryKey: ["document-hours-projects", "with-client"],
     queryFn: async () => {
       const { data, error } = await getSupabase()
         .from("projects")
@@ -595,7 +606,10 @@ export function HoursLedger({
     ],
     [studioExport.data],
   );
-  const { data: studioExportInvoices } = useQuery({
+  const {
+    data: studioExportInvoices,
+    isError: studioExportInvoicesError,
+  } = useQuery({
     queryKey: ["document-hours-export-invoice-numbers", studioExportInvoiceIds],
     enabled: studioExportInvoiceIds.length > 0,
     queryFn: async () => {
@@ -854,6 +868,21 @@ export function HoursLedger({
           >
             Export → CSV
           </DocumentAction>
+          {/* Fix round 3 (finding m9-r3): the invoice-number lookup used to
+              fail silently — `studioExportInvoices` stayed `undefined` and
+              every Invoice # cell exported empty, indistinguishable from
+              "not invoiced" even though the separate Invoiced column says
+              Yes. Say so rather than let the file quietly contradict itself. */}
+          {studioExportInvoicesError && (
+            <p
+              role="alert"
+              className="mt-2 t-body-sm"
+              style={{ color: TERRACOTTA_INK }}
+            >
+              Invoice numbers could not be read — the exported file will show
+              a blank Invoice # for invoiced hours.
+            </p>
+          )}
         </div>
       )}
 

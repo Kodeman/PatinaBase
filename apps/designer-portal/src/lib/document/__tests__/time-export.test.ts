@@ -131,10 +131,50 @@ describe("buildTimeExportCsv", () => {
     const dataLines = csv.trimEnd().split("\r\n").slice(1);
     const summed = dataLines.reduce((sum, line) => {
       const amount = line.split(",")[10].replace(/"/g, "");
+      // m6-r3: a rate-pending row's Amount cell is the literal word
+      // "pending", not a parseable "0.00" — it contributes nothing to the
+      // total either way (its real amount_cents is 0), so skip it here.
+      if (amount === "pending") return sum;
       return sum + Math.round(parseFloat(amount) * 100);
     }, 0);
     expect(summed).toBe(timeExportTotalCents(rows));
     expect(summed).toBe(29_000);
+  });
+
+  it("a rate-pending hour exports \"pending\" in Rate and Amount, never a confident \"0.00\" (m6-r3)", () => {
+    // A billable hour with no rate card resolved yet is a real ledger row
+    // whose price is not KNOWN, not a zero-cost one — HT-26's own reason,
+    // carried into the file that leaves Patina.
+    const csv = buildTimeExportCsv([
+      row({
+        billing_state: "pending_authorization",
+        rate_source: "none",
+        resolved_rate_cents: 0,
+        amount_cents: 0,
+      }),
+    ]);
+    const [, dataLine] = csv.trimEnd().split("\r\n");
+    const fields = dataLine.split(",").map((f) => f.replace(/^"|"$/g, ""));
+    expect(fields[7]).toBe("pending"); // Rate
+    expect(fields[10]).toBe("pending"); // Amount
+    expect(fields[11]).toBe("pending_authorization"); // Billing State unchanged
+  });
+
+  it("an authorized hour still exports a plain \"0.00\" when its resolved amount really is zero", () => {
+    // The pending guard is keyed on billing_state, not on the figure being
+    // zero — an authorized, fully-priced row that nets to nothing (e.g. a
+    // zero-duration correction) still prints the real number.
+    const csv = buildTimeExportCsv([
+      row({
+        billing_state: "authorized",
+        resolved_rate_cents: 0,
+        amount_cents: 0,
+      }),
+    ]);
+    const [, dataLine] = csv.trimEnd().split("\r\n");
+    const fields = dataLine.split(",").map((f) => f.replace(/^"|"$/g, ""));
+    expect(fields[7]).toBe("0.00"); // Rate
+    expect(fields[10]).toBe("0.00"); // Amount
   });
 });
 

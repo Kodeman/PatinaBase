@@ -67,7 +67,16 @@ function centsToDollars(cents: number | null | undefined): string {
   return ((cents ?? 0) / 100).toFixed(2);
 }
 
+/** m6-r3 — a rate-pending hour (no rate card resolved yet) must never export
+ *  a confident "0.00": that is a real ledger row whose Rate and Amount are
+ *  simply not known yet, not a zero-cost hour. "pending" in both cells,
+ *  matching the portal's own copy for the state (`time-capture.tsx`, HT-26). */
+function isRatePending(row: TimeExportRow): boolean {
+  return row.billing_state === "pending_authorization";
+}
+
 function csvRow(row: TimeExportRow): string {
+  const ratePending = isRatePending(row);
   return [
     csvField(row.member_name ?? ""),
     csvField(row.day),
@@ -76,10 +85,10 @@ function csvRow(row: TimeExportRow): string {
     csvField(row.activity ?? ""),
     csvField(row.billable ? "Yes" : "No"),
     csvField(row.duration_minutes ?? 0),
-    csvField(centsToDollars(row.resolved_rate_cents)),
+    csvField(ratePending ? "pending" : centsToDollars(row.resolved_rate_cents)),
     csvField(row.rate_source ?? ""),
     csvField(row.rate_role ?? ""),
-    csvField(centsToDollars(row.amount_cents)),
+    csvField(ratePending ? "pending" : centsToDollars(row.amount_cents)),
     csvField(row.billing_state ?? ""),
     csvField(row.invoice_id ? "Yes" : "No"),
     csvField(row.invoice_number ?? ""),
@@ -122,14 +131,16 @@ export function timeExportFilename(
 export function downloadTimeExportCsv(csv: string, filename: string): void {
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
-  try {
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = filename;
-    document.body.appendChild(anchor);
-    anchor.click();
-    document.body.removeChild(anchor);
-  } finally {
-    URL.revokeObjectURL(url);
-  }
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  // m3-r3 — deferred, matching the other three in-repo download helpers
+  // (room-file-download.ts, export-board.ts, spec-pdf-client.ts): revoking
+  // synchronously in a `finally` right after `.click()` races the browser's
+  // own async hand-off to the save dialog/download manager on some
+  // browsers, which can starve the download of its blob.
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
