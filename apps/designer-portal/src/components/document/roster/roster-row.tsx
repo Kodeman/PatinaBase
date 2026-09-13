@@ -25,7 +25,7 @@
  * phone are two sibling targets, each at least 44px (SPEC §7 #6).
  */
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   fieldLinkUrl,
   seatDeleteRefusal,
@@ -64,6 +64,7 @@ import {
   contactRuleTextHeldClause,
 } from '@/lib/document/contact-rule';
 import { peopleEvents } from '@/lib/analytics/people-events';
+import { useProjects } from '@/hooks/use-projects';
 import { Avatar } from '../people/person-bits';
 import { consentSentence } from '../people/consent-sentence';
 import {
@@ -242,13 +243,37 @@ export function RosterRow({
     AUTHORITY_SCOPE_LABELS,
   );
 
+  /**
+   * QA-R13-1 — THE JOB THE RECORD NAMES, NOT THE JOB IN HAND (R-Q).
+   *
+   * One consent record read on two surfaces printed two different origin jobs:
+   * the Directory resolved `origin_project_id` and said "Opted out by text,
+   * 3 Dec 2025, on the Lindqvist kitchen."; this row substituted ITS OWN
+   * project's name and said "…on the Okonkwo residence." for the same row, the
+   * same date. A consent carried forward from an earlier job is exactly the
+   * population where inventing the place is wrong, and the person card
+   * (`reach-access.tsx`) already reads the record's own job. A record that
+   * names an origin reads THAT job or none — never the sheet's.
+   */
+  const { data: projectsForOrigin } = useProjects();
+  const originProjectName = useMemo(() => {
+    const id = consentRecord?.record?.origin_project_id;
+    if (!id) return null;
+    const found = (
+      (projectsForOrigin ?? []) as Array<{ id: string; name?: string | null }>
+    ).find((p) => p.id === id);
+    return found?.name ?? null;
+  }, [consentRecord?.record?.origin_project_id, projectsForOrigin]);
+
   const consentLine = consentSentence({
     status: consentRecord?.verdict ?? row.consent,
     source: consentRecord?.record?.source,
     consentedAt: consentRecord?.record?.consented_at,
     optOutSource: consentRecord?.record?.opt_out_source,
     optOutAt: consentRecord?.record?.opt_out_at,
-    projectName,
+    projectName: consentRecord?.record?.origin_project_id
+      ? originProjectName
+      : projectName,
   });
 
   /**

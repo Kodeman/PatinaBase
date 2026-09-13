@@ -46,12 +46,24 @@ export function documentTypeLabel(doc: StudioComplianceDocument): string {
   );
 }
 
-/** One paper's own state word, from its own dates. The firm's rolled-up word
- *  comes from `compliance_state()`; this is the row's. */
+/**
+ * One paper's own state word, from its own dates and its own gates. The firm's
+ * rolled-up word comes from `compliance_state()`; this is the row's, and
+ * CR13-4 makes the two agree.
+ *
+ * `compliance_state()` (00623) moves a document off `current` only when
+ * `cardinality(d.blocks) > 0` — its own comment: "a date with no gate changes
+ * nothing". The browser ignored `blocks` entirely, and six seeded documents
+ * carry none: the day one of them expired, its row would print terracotta
+ * `Lapsed` on the company card while the Directory firm row that opened that
+ * card printed `Current`. (Supersession, the other half of the divergence,
+ * lives where the browser's list is built — `retainedComplianceDocuments`.)
+ */
 export function documentPaperState(
   doc: StudioComplianceDocument,
   today: Date,
 ): "current" | "lapses_soon" | "lapsed" | "not_on_file" {
+  if ((doc.blocks ?? []).length === 0) return "current";
   if (!doc.expires_on) return "current";
   const expires = Date.parse(`${doc.expires_on}T00:00:00Z`);
   const now = Date.parse(`${today.toISOString().slice(0, 10)}T00:00:00Z`);

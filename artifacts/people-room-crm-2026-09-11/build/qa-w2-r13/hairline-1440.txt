@@ -1,0 +1,1 @@
+{"borderColor":"oklch(0.8606 0.0321 84.5881)","borderWidth":"0px","color":"rgb(101, 89, 78)"}

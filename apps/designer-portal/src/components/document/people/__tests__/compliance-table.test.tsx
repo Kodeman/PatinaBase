@@ -145,6 +145,27 @@ describe("the paper word on one document", () => {
     );
   });
 
+  /**
+   * CR13-4 — `compliance_state()` moves a document off `current` only when it
+   * carries a gate ("a date with no gate changes nothing", 00623). Six seeded
+   * documents carry none; the browser used to call them lapsed on their date
+   * while the firm row beside them read current.
+   */
+  it("a paper with no gate cannot lapse, whatever its date says", () => {
+    expect(
+      documentPaperState(
+        doc({ expires_on: "2026-03-31", blocks: [] }),
+        TODAY,
+      ),
+    ).toBe("current");
+    expect(
+      documentPaperState(
+        doc({ expires_on: "2026-11-01", blocks: [] }),
+        TODAY,
+      ),
+    ).toBe("current");
+  });
+
   it("a named other reads by its written label", () => {
     expect(
       documentTypeLabel(

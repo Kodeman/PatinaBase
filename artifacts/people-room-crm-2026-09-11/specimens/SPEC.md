@@ -578,7 +578,7 @@ Every string below must appear on the face, spelled exactly. Every state word li
 | 4 | Region "Key holder": "Ngozi Eze holds a key. Text only, (612) 555-0106." with consent word `Texting` |
 | 5 | Region "Hours": "Weekdays 07:00 to 17:00. No Saturday work before 09:00." |
 | 6 | Region "Receiving": "Ngozi Eze receives deliveries. Stage in the detached garage." |
-| 7 | Region "Who was told", newest first: "Lockbox changed to version 3. 16 October 2026, by Priya Natarajan. Told: Luis Ochoa, Ngozi Eze, Joe Wozniak, Dana Kowalski."; "Site hours set for the demo phase. 12 October 2026, by Priya Natarajan. Told: Tom Marrow, Erin Sato, Luis Ochoa." |
+| 7 | Region "Who was told": ONE entry — the last change and who heard it. "The way in changed 16 Oct 2026, by Leah Hartwell. Told: Luis Ochoa, Ngozi Eze, Joe Wozniak, Dana Kowalski, Adaeze Okonkwo." (AMENDED, QA-R13-3, 2026-09-13: the specimens print two entries, newest first, because the specimen is drawn against the log this card will one day keep. `project_site_access_cards` (00625) holds a SINGLE `changed_at` / `changed_by` / `told_refs` triple, not a log, so the shipped card can only ever print the last change — named as a known limitation in `build/w2c-report.md` §4 item 3 and owed to the wave that adds a change-log table for site-access notices. The acceptance criterion for the SHIPPED face is one entry; the two-entry specimen stands as the design target and is not a W2 defect.) |
 | 8 | One secondary act, "Log who was told", opening an inline band with a text field and a confirm, never a modal |
 | 9 | A line under the head: "Studio only. This card never reaches a client page." |
 

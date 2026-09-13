@@ -901,7 +901,7 @@ export function useRemoveProjectParty() {
 
       const { data: seat, error: seatError } = await supabase
         .from('project_parties')
-        .select('phone_e164, stage, studio_contact_id, project_id')
+        .select('phone_e164, stage, studio_contact_id, company_id, project_id')
         .eq('id', id)
         .maybeSingle();
       if (seatError) throw seatError;
@@ -933,16 +933,37 @@ export function useRemoveProjectParty() {
       const bidStages = ['prospect', 'invited', 'bidding', 'declined', 'no_response'];
       const hasBid = bidStages.includes((seat?.stage as string | null) ?? '');
 
+      /**
+       * CR13-5 — THE GUARD ASKS THE QUESTION THE FACE ASKS.
+       *
+       * The face refuses on `row.paper`, which is `identity_paper_state(card,
+       * COALESCE(seat.company_id, card.company_id))` (R-BA / R-BJ): the
+       * person's own paper AND their firm's. This asked only for the card's
+       * own, over a PostgREST read that returns `[]` — not an error — when RLS
+       * refuses it, so the last hard delete in the build read "no paper held"
+       * exactly where it could see least. Same formula as the face now, and a
+       * read that cannot answer is a refusal, not an absence.
+       */
       let hasComplianceDocument = false;
       const cardId = (seat?.studio_contact_id as string | null) ?? null;
       if (cardId) {
-        const { data: docs, error: docsError } = await supabase
-          .from('studio_compliance_documents')
-          .select('id')
-          .eq('holder_id', cardId)
-          .limit(1);
-        if (docsError) throw docsError;
-        hasComplianceDocument = (docs ?? []).length > 0;
+        let companyId = (seat?.company_id as string | null) ?? null;
+        if (!companyId) {
+          const { data: card, error: cardError } = await supabase
+            .from('studio_contacts')
+            .select('company_id')
+            .eq('id', cardId)
+            .maybeSingle();
+          if (cardError) throw cardError;
+          companyId = (card?.company_id as string | null) ?? null;
+        }
+        const { data: paper, error: paperError } = await supabase.rpc(
+          'identity_paper_state',
+          { p_card_id: cardId, p_company_id: companyId },
+        );
+        if (paperError) throw paperError;
+        hasComplianceDocument =
+          typeof paper === 'string' ? paper !== 'not_on_file' : true;
       }
 
       const refusal = seatDeleteRefusal({ hasConsentRecord, hasBid, hasComplianceDocument });

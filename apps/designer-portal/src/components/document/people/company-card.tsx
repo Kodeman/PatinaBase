@@ -878,8 +878,13 @@ export function CompanyCard({
       {/* R4 — Payee */}
       <section className={REGION}>
         <h3 className={REGION_HEAD}>Payee</h3>
+        {/* CR13-6 — a payee the studio never wrote is not a payee. `remit_to`
+            is NULL on most seeded firms, and falling back to the firm's own
+            name asserted a bookkeeping fact from nothing, on the one region
+            direction §1 line 5 makes this card the sole writer of. Every other
+            absent record in this build prints its own sentence (R-V / C32). */}
         <p className="t-body-sm text-[var(--ink)]">
-          Remit to {card.remit_to ?? name}
+          {card.remit_to ? `Remit to ${card.remit_to}` : "No remit-to on file."}
         </p>
         {card.tax_id_last4 && (
           <p className="t-body-sm text-[var(--ink)]">

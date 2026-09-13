@@ -75,6 +75,7 @@ import { telHref } from "../tel-link";
 import { clientEvents } from "@/lib/analytics/events";
 import { DocumentAction, DocumentActionGroup } from "../../document-action";
 import { RoomSheet } from "../../rooms/room-sheet";
+import { capitalise } from "../people-format";
 import {
   LetterLineField,
   checkboxHelper,
@@ -194,27 +195,29 @@ function KindChoice({
   );
 }
 
-const KIND_NOUN: Record<PartyKind, string> = {
-  gc: "general contractor",
-  sub: "subcontractor",
+/**
+ * CR13-7 — THE DOOR'S OWN NOUN (C5: one door, the studio's words).
+ *
+ * The kind switch offers "a household member"; the sheet's intro and its
+ * refusal read the noun off the `PartyKind` the door WRITES
+ * (`SEAT_PARTY_KIND.household = 'client_rep'` → "client rep"), so the same
+ * sheet called the same person two different things two lines apart. C5's
+ * letter was kept — the underscored string never reached a face — and its rule
+ * was not. The nouns below are keyed on the door, not on what it writes.
+ */
+const DOOR_NOUN: Record<SeatAddKind, string> = {
+  gc: "GC",
+  sub: "sub",
   installer: "installer",
   receiver: "receiver",
-  vendor: "vendor",
-  client_rep: "client rep",
-  other: "contact",
-  // Call Sheet (00419) widened PartyKind; this sheet only ever indexes the
-  // four field kinds, but the map must stay total.
-  client: "client",
-  architect: "architect",
-  photographer: "photographer",
-  stager: "stager",
-  // PR-f's four. `other_named` reads "other" like `other` does: the studio
-  // types the actual word beside it (`partyKindRequiresLabel`).
-  inspector: "inspector",
-  lender: "lender",
-  engineer: "engineer",
-  other_named: "other",
+  household: "household member",
+  other_named: "contact",
 };
+
+/** "a sub", "an installer" — the article the noun actually takes. */
+function withArticle(noun: string): string {
+  return `${/^[aeiou]/i.test(noun) ? "an" : "a"} ${noun}`;
+}
 
 export function AddPersonSheet({
   open,
@@ -698,7 +701,9 @@ export function AddPersonSheet({
       return;
     }
     if (!trimmedName) {
-      setError(`A ${KIND_NOUN[partyKind]} needs a name.`);
+      setError(
+        `${capitalise(withArticle(DOOR_NOUN[kind]))} needs a name.`,
+      );
       return;
     }
     // PR-f: an unnamed other is the row that goes dark.
@@ -1064,7 +1069,7 @@ export function AddPersonSheet({
       ? "Add a client to your directory. They appear on your roster at once; an optional invite gives them a Patina login."
       : kind === "maker"
         ? "Add a maker — a shop you order through. They join your roster and the Orders book can route POs to them."
-        : `Add a ${KIND_NOUN[SEAT_PARTY_KIND[kind as SeatAddKind]]} to a project. With a phone and a text opt-in, you can coordinate them over SMS — and they land on your People roster.`;
+        : `Add ${withArticle(DOOR_NOUN[kind as SeatAddKind])} to a project. With a phone and a text opt-in, you can coordinate them over SMS — and they land on your People roster.`;
 
   return (
     <RoomSheet

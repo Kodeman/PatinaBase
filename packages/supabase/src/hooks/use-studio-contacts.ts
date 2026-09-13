@@ -1166,7 +1166,17 @@ export const affiliationKeys = {
     ['studio-person-affiliations', filters ?? {}] as const,
 };
 
-/** A person's firms, or a firm's crew. */
+/**
+ * A person's firms, or a firm's crew.
+ *
+ * CR13-8 — ORDERED, because R-AO makes this N persons × N firms: a person may
+ * hold two OPEN affiliations at once (the Add sheet writes the second when an
+ * existing person is seated under a different firm) and the pointer trigger
+ * leaves siblings standing. An unordered read hands the caller whichever row
+ * PostgREST returned first, so the person card printed one firm's name beside
+ * another firm's role and start year — and could flip between renders. Newest
+ * first, ties broken by id, so the list a face reads is stable.
+ */
 export function useAffiliations(filters?: AffiliationFilters) {
   const enabled = Boolean(filters?.personId || filters?.companyId);
   return useQuery({
@@ -1179,6 +1189,9 @@ export function useAffiliations(filters?: AffiliationFilters) {
       if (filters?.personId) query = query.eq('person_id', filters.personId);
       if (filters?.companyId) query = query.eq('company_id', filters.companyId);
       if (!filters?.includeClosed) query = query.is('to_date', null);
+      query = query
+        .order('from_date', { ascending: false, nullsFirst: false })
+        .order('id', { ascending: true });
       const { data, error } = await query;
       if (error) throw error;
       return (data ?? []) as StudioPersonAffiliation[];
@@ -1420,6 +1433,56 @@ export const complianceKeys = {
     ['studio-compliance-documents', 'state', holderId ?? null] as const,
 };
 
+/**
+ * CR13-4 — THE RETIREMENT RULE `compliance_state()` USES, IN THE ONE PLACE THE
+ * BROWSER FILTERS.
+ *
+ * R-BF makes supersession TRANSITIVE with a depth cap, and a row leaves the
+ * reckoning only while a reachable successor is still IN FORCE and still
+ * carries at least the retired row's gates (00623: an honest supersede
+ * followed by two edits to the successor left a lapsed gating certificate on
+ * file while a one-hop reading said current). A flat
+ * `.is('superseded_by', null)` disagrees with that in both directions: it
+ * drops a row whose successor has since lapsed or lost its gates, and it keeps
+ * one retired two links down. The company card's table, its held clause and
+ * the chase target all read this list, and the firm row beside them reads the
+ * SQL — so the same paper printed two words.
+ *
+ * Exported so the rule can be read (and tested) on its own.
+ */
+export function retainedComplianceDocuments(
+  rows: readonly StudioComplianceDocument[],
+  today: string,
+): StudioComplianceDocument[] {
+  const byId = new Map(rows.map((doc) => [doc.id, doc]));
+  const inForce = (doc: StudioComplianceDocument) =>
+    !doc.expires_on || doc.expires_on >= today;
+  const carriesGates = (
+    root: StudioComplianceDocument,
+    successor: StudioComplianceDocument,
+  ) => (root.blocks ?? []).every((gate) => (successor.blocks ?? []).includes(gate));
+
+  const retired = (root: StudioComplianceDocument): boolean => {
+    const seen = new Set<string>([root.id]);
+    let next = root.superseded_by;
+    // The head-of-chain guard makes `superseded_by` acyclic; the cap matches
+    // the SQL's own (00623) and stops a chain written before that guard.
+    for (let depth = 0; next && depth < 64; depth += 1) {
+      if (seen.has(next)) break;
+      seen.add(next);
+      const successor = byId.get(next);
+      // A successor the caller cannot see is not a successor that retires
+      // anything: the row stays in the reckoning.
+      if (!successor) return false;
+      if (inForce(successor) && carriesGates(root, successor)) return true;
+      next = successor.superseded_by;
+    }
+    return false;
+  };
+
+  return rows.filter((doc) => !doc.superseded_by || !retired(doc));
+}
+
 /** The paper held against one card. */
 export function useComplianceDocuments(filters?: ComplianceDocumentFilters) {
   return useQuery({
@@ -1429,15 +1492,21 @@ export function useComplianceDocuments(filters?: ComplianceDocumentFilters) {
       if (!filters?.holderId) return [];
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
-      let query = supabase
+      const query = supabase
         .from('studio_compliance_documents')
         .select('*')
         .eq('holder_id', filters.holderId);
-      if (!filters.includeSuperseded) query = query.is('superseded_by', null);
-      if (filters.unverifiedOnly) query = query.is('verified_at', null);
-      const { data, error } = await query;
+      // The whole chain is read — a superseded row is what decides whether its
+      // predecessor is retired (see `retainedComplianceDocuments`) — and the
+      // retirement rule is applied here rather than in the WHERE clause.
+      const { data, error } = await (filters.unverifiedOnly
+        ? query.is('verified_at', null)
+        : query);
       if (error) throw error;
-      const rows = (data ?? []) as StudioComplianceDocument[];
+      const all = (data ?? []) as StudioComplianceDocument[];
+      const rows = filters.includeSuperseded
+        ? all
+        : retainedComplianceDocuments(all, new Date().toISOString().slice(0, 10));
       // Soonest expiry first, undated paper last: the studio reads what lapses
       // next, and an undated paper is HELD and cannot lapse (C21/R-K).
       return rows.sort((a, b) => {

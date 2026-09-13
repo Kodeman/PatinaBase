@@ -62,13 +62,61 @@ export function formatSeatDate(value: string | null | undefined): string | null 
   return `${Number(day)} ${monthName} ${year}`;
 }
 
+/**
+ * THE SEAT LINE'S OWN VOCABULARY (CR13-3, SPEC §5.1 #8, C5).
+ *
+ * `PARTY_KIND_LABELS` is the COLUMN-HEAD vocabulary — Title Case, one noun per
+ * column of a table. Spoken in a sentence under a person's name it reads as a
+ * form: "Okonkwo residence · Subcontractor · Electrical". SPEC fixes the
+ * studio's own words there — "… · sub · electrical · On the job · …" — and the
+ * identity line two rows above already lower-cases the same trade.
+ *
+ * The second half matters more than the case. The Add sheet's door says "a
+ * household member" and writes a `client_rep` seat; every line that seat then
+ * printed said "Client Rep", so the face contradicted its own door two clicks
+ * away. C5 is one door, the studio's words — on both sides of it.
+ *
+ * PARTY_KIND_LABELS stays exactly what it is: the column heads.
+ */
+const SEAT_KIND_WORDS: Record<string, string> = {
+  gc: 'GC',
+  sub: 'sub',
+  installer: 'installer',
+  receiver: 'receiver',
+  // PR-c / C5: the Add sheet's own noun for the same seat.
+  client_rep: 'household member',
+  client: 'client',
+  vendor: 'vendor',
+  architect: 'architect',
+  photographer: 'photographer',
+  stager: 'stager',
+  inspector: 'inspector',
+  lender: 'lender',
+  engineer: 'engineer',
+  // The studio types the actual word beside these two, and it rides in the
+  // seat's `trade` until the CHECK widens (add-person-sheet's SEAT_PARTY_KIND).
+  other: 'contact',
+  other_named: 'contact',
+};
+
+/** One seat's kind, in the studio's voice. */
+export function seatKindWord(kind: string | null | undefined): string {
+  if (!kind) return '';
+  return SEAT_KIND_WORDS[kind] ?? getPartyKindLabel(kind).toLowerCase();
+}
+
+/** One seat's trade, in the same case the identity line above it uses. */
+export function seatTradeWord(trade: string | null | undefined): string {
+  return getFieldTradeLabel(trade).toLowerCase();
+}
+
 /** The words of the seat, in order, for the line and for its accessible name. */
 export function seatLineParts(seat: PeopleDirectorySeat): string[] {
   const parts: string[] = [];
   if (seat.project_name) parts.push(seat.project_name);
-  const kind = getPartyKindLabel(seat.party_kind);
+  const kind = seatKindWord(seat.party_kind);
   if (kind) parts.push(kind);
-  const trade = getFieldTradeLabel(seat.trade);
+  const trade = seatTradeWord(seat.trade);
   if (trade) parts.push(trade);
   return parts;
 }

@@ -42,6 +42,7 @@ import {
   useSetContactRule,
   useSetStudioContactChannelStatus,
   useStudioContactChannels,
+  useUpdateStudioContactChannel,
   fieldLinkUrl,
   type ContactChannelKind,
   type ContactChannelStatus,
@@ -141,6 +142,31 @@ export function channelConsentAxis(
 }
 
 /**
+ * CR13-2 — THE AXIS A RECORD IS READ ON, WHICH IS NOT THE AXIS AN ACT IS
+ * OFFERED ON.
+ *
+ * `identity_consent_status` (00626) reduces over the identity's phone numbers
+ * and never consults `sms_capable`, so a record on a number whose channel row
+ * is `sms_capable = false` still drives the Directory row's word, the seat
+ * line, `v_project_roster.sms_consent_status`, the Call Sheet row, and this
+ * card's own "Send a text". Hiding it HERE — on the surface direction §1 line
+ * 4 makes the record's home — left the card silent about a fact four other
+ * faces were printing, with no door to change it.
+ *
+ * So the record is READ on the channel's kind (a phone is read against `sms`,
+ * an email address against `email`), and only the WRITE stays gated on
+ * `sms_capable` (CR12-1's rule: consent is offered on a line that can take the
+ * message). A portal handle is neither and still reads nothing.
+ */
+export function channelConsentReadAxis(
+  channel: Pick<StudioContactChannel, "channel_kind">,
+): "sms" | "email" | null {
+  const kind = String(channel.channel_kind);
+  if (isPhoneChannel(kind)) return "sms";
+  return EMAIL_CONSENT_KINDS.has(kind) ? "email" : null;
+}
+
+/**
  * Why a channel is held, in words (direction §5.4).
  *
  * CR10-3 — THE WORDS FOLLOW THE KIND, NOT ONLY THE STATUS. The status editor
@@ -231,15 +257,38 @@ function ChannelRow({
   onAnnounce: (message: string) => void;
 }) {
   const consentAxis = channelConsentAxis(channel);
-  // A row with no axis is still a row: it prints its kind, its value and its
-  // held reason. It simply carries no consent word, no consent sentence and no
-  // act that would write one.
-  const consentable = showConsent && consentAxis !== null;
+  const readAxis = channelConsentReadAxis(channel);
+  // A row with no READ axis is still a row: it prints its kind, its value and
+  // its held reason. It simply carries no consent word, no consent sentence
+  // and no act that would write one.
+  const readable = showConsent && readAxis !== null;
   const { data: consent } = useChannelConsent(
-    consentable ? organizationId : null,
-    consentAxis,
+    readable ? organizationId : null,
+    readAxis,
     channel.value,
   );
+  /**
+   * CR13-1 / CR13-2 — WHAT IS SHOWN AND WHAT IS OFFERED ARE TWO QUESTIONS.
+   *
+   * `consentable` used to gate both, off `sms_capable` alone, and 00593 leaves
+   * that column `false` on every backfilled card phone with no SMS-rail
+   * evidence — nine of the twenty seeded person mobiles, both homeowners and
+   * the studio's own principal among them. So the room offered no "Record
+   * consent", no "Record a fresh consent" and, worst, no manual opt-out: PR-m
+   * (STAND) says a verbal STOP the studio heard IS a studio act, and R-AY
+   * makes `studio_channel_consent` the only place that fact can live. There
+   * was also no way back — `sms_capable` had only INSERT-time writers.
+   *
+   * Now: the record is SHOWN wherever it exists, the recording band is offered
+   * on a line that takes the message, and a phone the studio knows takes texts
+   * can be said so on this row (00593's own "a wrong value is then a card the
+   * studio has to correct by hand").
+   */
+  const hasRecord = !!consent?.record;
+  const consentable = showConsent && consentAxis !== null;
+  const showConsentWord = readable && (consentable || hasRecord);
+  const unconfirmedSmsLine =
+    showConsent && isPhoneChannel(String(channel.channel_kind)) && !channel.sms_capable;
   const record = useRecordChannelConsent();
   // CR-25: the way back from a refusal is "a fresh recorded consent with
   // source and evidence, OR an inbound START" (direction §5.2). PR-m exists so
@@ -252,6 +301,10 @@ function ChannelRow({
   // CR3-4: the room can move a channel's status. Until this, `status` could
   // only ever be written by a migration.
   const setStatus = useSetStudioContactChannelStatus();
+  // CR13-1: …and the room can say a line takes texts. `sms_capable` had no
+  // caller anywhere in the build, so a `false` written by 00593's backfill
+  // stood for ever.
+  const confirmSms = useUpdateStudioContactChannel();
   const [recording, setRecording] = useState(false);
   const [source, setSource] = useState<ConsentSource | "">("");
   const [evidence, setEvidence] = useState("");
@@ -262,6 +315,9 @@ function ChannelRow({
     (channel.status as ContactChannelStatus) ?? "active",
   );
   const [statusError, setStatusError] = useState<string | null>(null);
+  // CR13-1: the line-type act sits outside the recording band, so its refusal
+  // needs a slot a sighted reader can see (the band's own is hidden).
+  const [smsError, setSmsError] = useState<string | null>(null);
   const bandId = useId();
   const statusBandId = useId();
   const held = isContactChannelHeld(channel.status);
@@ -423,7 +479,7 @@ function ChannelRow({
             {channel.value}
           </a>
         )}
-        {consentable && (
+        {showConsentWord && (
           <StateWord family="consent" value={consent?.verdict} />
         )}
       </p>
@@ -482,7 +538,7 @@ function ChannelRow({
           </p>
         )}
       </div>
-      {consentable && sentence && (
+      {readable && sentence && (
         <p
           data-consent-sentence
           className="t-body-sm mt-1 text-[var(--ink-subtle)]"
@@ -490,6 +546,58 @@ function ChannelRow({
           {sentence}
           {carriedForward ? ` ${carriedForward}` : ""}
         </p>
+      )}
+      {/* CR13-1 — the door back. 00593 could not tell a cell from a desk phone
+          on a backfilled card, so it left `sms_capable` false and said so: "a
+          wrong value is then a card the studio has to correct by hand". This
+          is that hand. Saying a line takes texts opens the whole recording
+          band on it — including PR-m's "They told the studio to stop". */}
+      {unconfirmedSmsLine && (
+        <>
+          <p className="t-body-sm mt-1 text-[var(--ink-subtle)]">
+            Patina has not been told this line takes texts, so nothing about
+            texting can be written down on it yet.
+          </p>
+          <DocumentAction
+            actionKey="confirm-channel-sms"
+            surfaceKey="people"
+            regionKey="reach-channels"
+            variant="tertiary"
+            loading={confirmSms.isPending}
+            loadingLabel="Writing…"
+            onClick={() =>
+              confirmSms.mutate(
+                {
+                  id: channel.id,
+                  ownerId: channel.owner_id,
+                  smsCapable: true,
+                },
+                {
+                  onSuccess: () => {
+                    setSmsError(null);
+                    onAnnounce(`${channel.value} takes texts.`);
+                  },
+                  onError: (e: unknown) =>
+                    setSmsError(
+                      e instanceof Error
+                        ? e.message
+                        : "Could not write that just now.",
+                    ),
+                },
+              )
+            }
+          >
+            This line takes texts
+          </DocumentAction>
+          {smsError && (
+            <p
+              role="alert"
+              className="t-body-sm mt-1 text-[var(--terracotta-ink)]"
+            >
+              {smsError}
+            </p>
+          )}
+        </>
       )}
       {consentable && (
         <DocumentAction
@@ -506,7 +614,7 @@ function ChannelRow({
             : "Record consent"}
         </DocumentAction>
       )}
-      {consentable && consent?.verdict === "opted_out" && (
+      {showConsentWord && consent?.verdict === "opted_out" && (
         <p className="t-body-sm mt-1 text-[var(--ink-subtle)]">
           They can rejoin by replying START — or the studio can record a fresh
           consent here, with where and when they said so.

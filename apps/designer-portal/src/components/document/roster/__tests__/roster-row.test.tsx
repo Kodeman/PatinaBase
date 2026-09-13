@@ -18,6 +18,13 @@ const createLinkMutate = jest.fn();
 const sendSmsMutate = jest.fn();
 let consentResolution: unknown = { verdict: null, record: null };
 let complianceDocs: unknown[] = [];
+let projectsData: unknown[] = [];
+
+/** QA-R13-1: the row resolves the job a consent record NAMES, so the sheet's
+ *  own project name is never substituted into R-Q's sentence. */
+jest.mock('@/hooks/use-projects', () => ({
+  useProjects: () => ({ data: projectsData }),
+}));
 
 jest.mock('@patina/supabase', () => ({
   useUpdateProjectParty: () => ({ mutateAsync: updateMutate, isPending: false }),
@@ -334,6 +341,55 @@ describe('RosterRow — unfolded', () => {
     expect(container.querySelector('[data-consent-sentence]')).toHaveTextContent(
       'Written consent, 2 May 2025, on the Okonkwo residence.',
     );
+  });
+
+  /**
+   * QA-R13-1 — ONE RECORD, ONE ORIGIN JOB, WHATEVER SURFACE READS IT.
+   *
+   * Pete Rusk's opt-out was recorded on the Lindqvist kitchen and carried
+   * forward. The Directory printed "…on the Lindqvist kitchen." off the
+   * record's own `origin_project_id`; this row printed "…on the Okonkwo
+   * residence." because it substituted the sheet's own project name into R-Q's
+   * template for every record it read.
+   */
+  it('names the job the RECORD names, not the sheet it is read on (QA-R13-1)', () => {
+    projectsData = [{ id: 'proj-lindqvist', name: 'Lindqvist kitchen' }];
+    consentResolution = {
+      verdict: 'opted_out',
+      record: {
+        status: 'opted_out',
+        source: null,
+        consented_at: null,
+        opt_out_source: 'inbound_sms',
+        opt_out_at: '2025-12-03',
+        origin_project_id: 'proj-lindqvist',
+      },
+    };
+    const { container } = open();
+    expect(container.querySelector('[data-consent-sentence]')).toHaveTextContent(
+      'Opted out by text, 3 Dec 2025, on the Lindqvist kitchen.',
+    );
+  });
+
+  /** …and a record whose origin job cannot be resolved names no job at all,
+   *  rather than claiming the one in hand. */
+  it('names no job when the record\u2019s origin cannot be resolved (QA-R13-1)', () => {
+    projectsData = [];
+    consentResolution = {
+      verdict: 'opted_out',
+      record: {
+        status: 'opted_out',
+        source: null,
+        consented_at: null,
+        opt_out_source: 'inbound_sms',
+        opt_out_at: '2025-12-03',
+        origin_project_id: 'proj-lindqvist',
+      },
+    };
+    const { container } = open();
+    const sentence = container.querySelector('[data-consent-sentence]');
+    expect(sentence).toHaveTextContent('Opted out by text, 3 Dec 2025.');
+    expect(sentence?.textContent).not.toContain('Okonkwo');
   });
 
   /**

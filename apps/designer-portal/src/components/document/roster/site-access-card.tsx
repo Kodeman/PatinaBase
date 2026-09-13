@@ -20,6 +20,7 @@
 import { useEffect, useState } from 'react';
 import { KeyRound } from 'lucide-react';
 import {
+  useProject,
   useSiteAccessCard,
   useUpdateSiteAccessCard,
   type ProjectPartyAuthority,
@@ -199,6 +200,21 @@ export function SiteAccessCard({
   onOpenSeat?: (row: CallSheetRow) => void;
 }) {
   const { data: card, isLoading } = useSiteAccessCard(open ? projectId : null);
+  /**
+   * QA-R13-2 — THE ADDRESS SPEC §5.6 #1 ASKS FOR, FROM THE PROJECT ITSELF.
+   *
+   * The head printed "Site access · Okonkwo residence" and stopped. The prop
+   * below has existed since round 6 and no live caller ever passed it, so the
+   * one card a trade opens on a phone to find the house never named the house
+   * — while `projects.site_address` held "4412 Fremont Ave S, Minneapolis MN
+   * 55409" all along. The card reads the fact itself; the prop stays as the
+   * caller's override.
+   */
+  const { data: project } = useProject(open ? projectId : '');
+  const address =
+    projectAddress ??
+    ((project as { site_address?: string | null } | undefined)?.site_address ??
+      null);
   const updateCard = useUpdateSiteAccessCard();
   const [saveError, setSaveError] = useState<string | null>(null);
   /**
@@ -284,8 +300,10 @@ export function SiteAccessCard({
         <p className="font-heading text-[1.05rem] italic leading-snug text-[var(--color-charcoal)]">
           Site access · {projectTitle}
         </p>
-        {projectAddress && (
-          <p className="mt-1 text-[0.8rem] text-[var(--color-aged-oak)]">{projectAddress}</p>
+        {address && (
+          <p data-site-address className="mt-1 text-[0.8rem] text-[var(--color-aged-oak)]">
+            {address}
+          </p>
         )}
         <p className="mt-1 text-[0.74rem] text-[var(--color-aged-oak)]">
           Studio only. This card never reaches a client page.

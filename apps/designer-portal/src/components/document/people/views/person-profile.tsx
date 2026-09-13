@@ -47,11 +47,7 @@ import {
   type AuthorityScope,
   type PeopleDirectorySeat,
 } from "@patina/supabase";
-import {
-  getFieldTradeLabel,
-  getPartyKindLabel,
-  partyKindOwesPaper,
-} from "@patina/types";
+import { partyKindOwesPaper } from "@patina/types";
 import {
   directoryContactKind,
   isClientSideKind,
@@ -68,7 +64,12 @@ import { DocumentAction } from "../../document-action";
 import { MakerProfile } from "../profile/maker-profile";
 import { Avatar } from "../person-bits";
 import { StateWord, PlainFact } from "../state-word";
-import { SeatLine, formatSeatDate, seatWindowText } from "../seat-line";
+import {
+  SeatLine,
+  formatSeatDate,
+  seatLineParts,
+  seatWindowText,
+} from "../seat-line";
 import {
   ReachAccess,
   NO_SEAT_SENTENCE,
@@ -326,7 +327,21 @@ export function PersonProfile({
     );
   }
 
-  const affiliation = affiliations?.[0] ?? null;
+  /**
+   * CR13-8 — ONE FIRM'S NAME BESIDE ITS OWN ROLE AND YEAR.
+   *
+   * The name comes off `people_directory`'s company pointer; the role and the
+   * start year used to come off `affiliations[0]` — an arbitrary open
+   * affiliation, from a query with no ORDER BY. R-AO makes two open
+   * affiliations a supported state (the Add sheet writes the second when an
+   * existing person is seated under a different firm), so SPEC §5.2 #1's
+   * "Northgate Electric · owner-operator, since 2025" could print one firm's
+   * name beside another firm's role. The card names ONE firm: it reads that
+   * firm's affiliation or none.
+   */
+  const affiliation = firmId
+    ? (affiliations ?? []).find((a) => a.company_id === firmId) ?? null
+    : (affiliations?.[0] ?? null);
   const firmName =
     (typeof person.meta?.["company_name"] === "string"
       ? (person.meta["company_name"] as string)
@@ -537,15 +552,7 @@ export function PersonProfile({
                       SeatLine beside this one already labels both axes; this
                       one printed `client_rep` raw — the one string C5 and SPEC
                       §8 #3 forbid by name. */}
-                  <span>
-                    {[
-                      seat.project_name,
-                      getPartyKindLabel(seat.party_kind),
-                      seat.trade ? getFieldTradeLabel(seat.trade) : null,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </span>
+                  <span>{seatLineParts(seat).join(" · ")}</span>
                   <StateWord family="stage" value={seat.stage} />
                   {formatSeatDate(seat.off_job_at) && (
                     <span>Closed {formatSeatDate(seat.off_job_at)}</span>

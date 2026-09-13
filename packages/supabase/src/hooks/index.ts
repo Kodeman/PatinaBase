@@ -2142,6 +2142,7 @@ export {
   useCloseAffiliation,
   affiliationKeys,
   useComplianceDocuments,
+  retainedComplianceDocuments,
   useComplianceState,
   useRecordComplianceDocument,
   useConfirmComplianceDocument,
