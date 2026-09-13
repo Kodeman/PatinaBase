@@ -663,8 +663,8 @@ export function InvoiceComposer({
                       </label>
                     ))}
                     <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-                      ticked entries bill as one line per person and lock to the
-                      draft · voiding releases them
+                      ticked entries bill as one line, dated beneath, and lock
+                      to the draft · voiding releases them
                     </p>
                   </>
                 ) : (
