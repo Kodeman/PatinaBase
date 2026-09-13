@@ -530,15 +530,12 @@ VALUES
    '2025-05-02T14:00:00Z','2025-01-v1','a0000000-0000-0000-0000-000000000004',
    '2025-12-03T21:00:00Z','inbound_sms','Replied STOP on the Lindqvist thread, 3 Dec 2025.',
    '2025-12-03T21:00:00Z',false,'d0e00000-0000-0000-0000-00000000000b')
+-- R-BK: replay must never lift a verdict or an opt-out, so status and every
+-- opt_out_*/refusal_unanswered column are excluded from DO UPDATE SET.
 ON CONFLICT (organization_id, channel_kind, channel_value) DO UPDATE
-  SET status = EXCLUDED.status,
-      consented_at = EXCLUDED.consented_at,
+  SET consented_at = EXCLUDED.consented_at,
       source = EXCLUDED.source,
       evidence = EXCLUDED.evidence,
-      opt_out_at = EXCLUDED.opt_out_at,
-      opt_out_source = EXCLUDED.opt_out_source,
-      opt_out_evidence = EXCLUDED.opt_out_evidence,
-      refusal_unanswered = EXCLUDED.refusal_unanswered,
       origin_project_id = EXCLUDED.origin_project_id;
 
 -- ═══════════════════════════════════════════════════════════════════════════

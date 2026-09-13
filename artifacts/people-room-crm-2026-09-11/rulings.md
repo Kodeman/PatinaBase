@@ -109,6 +109,7 @@ These were decided mid-build to keep the specimens moving. They stand unless Kod
 | R-BH | The dev seed mints a field link for every fixture seat whose reach reality is field link, including F-12 Pete Rusk (opted out of texts, not of the link); test block 12 asserts his reach_state (W1b r10 F2). (Fable, 2026-09-12) |
 | R-BI | Projects with studio_id IS NULL are a legacy population: a seat added there is NOT auto-linked to a rolodex card and may show as a second identity until W3's backfill stamps the studio; no further resolver fallback is added for it. 00626's banner and w1b-report §8 say so, and the deploy preflight records the count of studio-less projects carrying seats beside R-BD's count; ambiguous projects are listed for Kody (W1b r13 MAJOR-1). (Fable, 2026-09-12) |
 | R-BJ | people_directory_seats.paper_state uses the seat's own firm when it names one and the card's firm otherwise (identity_paper_state(studio_contact_id, COALESCE(seat.company_id, card.company_id))), so the seat line and the identity row read the same paper (W1b r13 MAJOR-2). (Fable, 2026-09-12) |
+| R-BK | The dev seed never overwrites a consent verdict or an opt-out on replay (DO UPDATE excludes status and opt_out_* columns) (W1b r16 m14). (Fable, 2026-09-12) |
 
 ## 4. Parked (side journeys under VISION)
 
