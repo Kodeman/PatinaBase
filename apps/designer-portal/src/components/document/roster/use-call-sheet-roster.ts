@@ -27,13 +27,14 @@ import {
   type ProjectPartyAuthority,
   type ProjectRosterRow,
 } from '@patina/supabase';
-import { getPartyKindLabel, getStaffRoleLabel } from '@patina/types';
+import { getStaffRoleLabel } from '@patina/types';
 import {
   callSheetProjection,
   type CallSheetProjection,
   type SyntheticClient,
 } from '@/lib/document/roster-derivation';
 import { rosterTradeLabel } from './party-mini-row';
+import { seatKindWord } from '../people/seat-line';
 import { useProjectAuthority } from './use-project-authority';
 
 /** The studio side's second line: the staff role, and the job title only when
@@ -86,8 +87,14 @@ export function useCallSheetRoster(
         today,
         bandFor: rosterBandFor,
         labels: {
-          kindLabel: (kind) => getPartyKindLabel(kind) || (kind ?? ''),
-          tradeLabel: rosterTradeLabel,
+          // CR14-1 / C5: the seat's own words, the same ones the Directory
+          // line, the person card and the Add sheet's door say — not the
+          // column heads. PARTY_KIND_LABELS stays on the picker chips and the
+          // party sheet's Kind row.
+          kindLabel: seatKindWord,
+          // `seatTradeWord` lower-cases a FIELD trade; a vendor seat's trade is
+          // a specialty, which only `rosterTradeLabel` reads.
+          tradeLabel: (kind, trade) => rosterTradeLabel(kind, trade).toLowerCase(),
           teamMeta,
         },
       }),

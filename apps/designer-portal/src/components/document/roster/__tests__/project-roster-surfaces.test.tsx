@@ -220,6 +220,31 @@ describe('Project roster surfaces', () => {
     expect(band?.textContent).not.toContain('General Contractor');
   });
 
+  /**
+   * CR14-1 / C5 — one seat vocabulary. The Add sheet's door writes a
+   * `client_rep` seat and calls him "a household member", and the Directory
+   * seat line and the person card say the same; the Call Sheet row said
+   * "Client Rep". The row now speaks the seat's own words on both surfaces.
+   */
+  it('prints the seat words, not the column heads (CR14-1)', () => {
+    const team = expectMatchingSurfaces(
+      [],
+      [
+        seat('rep', { party_kind: 'client_rep', display_name: 'Chidi Okonkwo' }),
+        seat('electric', { display_name: 'Dana Kowalski', trade: 'electrical' }),
+        seat('gc', { party_kind: 'gc', display_name: 'Erin Sato' }),
+      ],
+    );
+    const text = team.baseElement.textContent ?? '';
+    expect(text).toContain('household member');
+    expect(text).toContain('sub \u00b7 electrical');
+    expect(text).toContain('GC');
+    expect(text).not.toContain('Client Rep');
+    expect(text).not.toContain('Subcontractor');
+    expect(text).not.toContain('Electrical');
+    expect(text).not.toContain('General Contractor');
+  });
+
   it('opens the shared picker scoped to GC and direct trade roles', () => {
     useProjectRoster.mockReturnValue({ data: [], isLoading: false });
     usePeopleSeats.mockReturnValue({ data: [], isLoading: false });
