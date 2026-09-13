@@ -1,0 +1,62 @@
+Pager usage is off.
+BEGIN
+SET
+INSERT 0 1
+INSERT 0 1
+-- 00626 §1b auto-linked the seat to the card --
+                  id                  |          studio_contact_id           |  phone_e164  
+--------------------------------------+--------------------------------------+--------------
+ bbbb2222-0000-4000-8000-000000000001 | bbbb1111-0000-4000-8000-000000000001 | +16125556622
+(1 row)
+
+INSERT 0 1
+SET
+SET
+-- BEFORE: the Local Dev Studio room --
+  display_name   |  role   | consent_status | reach_state | seat_count 
+-----------------+---------+----------------+-------------+------------
+ P307 Fresh Card | contact | opted_out      | on_paper    |          1
+(1 row)
+
+  display_name   |   project_name   | consent_status 
+-----------------+------------------+----------------
+ P307 Fresh Card | Cedar Lane Study | opted_out
+(1 row)
+
+-- one PATCH /rest/v1/studio_contacts: organization_id -> the designer's OTHER studio --
+psql:probe307-r15-card-repoint.sql:33: NOTICE:  CARD MOVED TO THE SECOND STUDIO — no guard fired
+DO
+-- AFTER, as the WORKING studio's admin (studio_manager@patina.dev) --
+SET
+                       what                       |     n     
+--------------------------------------------------+-----------
+ localdev admin: directory rows for the card      | 0
+ localdev admin: seat rows still nesting under it | 1
+ localdev admin: can it read the card at all      | 0
+ localdev admin: seat consent word                | opted_out
+(4 rows)
+
+-- AFTER, as designer@patina.dev, a member of BOTH studios: the row and its own seat line --
+SET
+     line     |  display_name   |   word    | detail 
+--------------+-----------------+-----------+--------
+ identity row | P307 Fresh Card | not_asked | 1
+(1 row)
+
+         line         |  display_name   |   word    |      detail      
+----------------------+-----------------+-----------+------------------
+ seat line beneath it | P307 Fresh Card | opted_out | Cedar Lane Study
+(1 row)
+
+SET
+         what          |           organization_id            |  status   
+-----------------------+--------------------------------------+-----------
+ the record still says | b0000000-0000-0000-0000-000000000001 | opted_out
+(1 row)
+
+                               holder                               | count 
+--------------------------------------------------------------------+-------
+ seats stamped with this card (the holder the guard does not count) |     1
+(1 row)
+
+ROLLBACK

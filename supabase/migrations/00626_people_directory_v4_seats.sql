@@ -90,9 +90,11 @@
 --   · reach_state is direction §3.8's reach family, PD-12's order: a login is
 --     `account`, else a live unexpired field link on one of this identity's
 --     seats is `field_link`, else `on_paper`. The party branch asks that of
---     the IDENTITY (reach_state_for_identity, r2 MAJOR-3); the contacts
---     branch asks it of the card, which already matches every seat stamped
---     with that card. field_link_tokens has NOT been designer-only since
+--     the IDENTITY (reach_state_for_identity, r2 MAJOR-3), and so does the
+--     contacts branch, keyed on the card id — which IS that identity's key
+--     (party_identity_key()'s first leg). It used to ask reach_state_for() of
+--     the card, whose EXISTS matched every seat stamped with the card and no
+--     tenant at all (r15 MAJOR-2). field_link_tokens has NOT been designer-only since
 --     00584 (r14 p2): field_link_tokens_studio_rw (00584:982-992) is
 --     is_studio_comember(the project's designer_id), the same width as
 --     project_parties' own policy, so the promised degrade — a co-member
@@ -264,6 +266,17 @@
 --     the MATERIALIZED CTE `identity_seats` (§3), LEFT JOINed onto the two
 --     branches that carry a count. identity_seat_count() survives, carrying
 --     the IDENTICAL predicate (R-BG), for the single-identity question.
+--   · r15 MAJOR-2 — the CONTACTS branch asks reach_state_for_identity() on the
+--     card id, the key its consent word and its seat_count join already use.
+--     r14 MAJOR-1 gave that function R-BG's predicate; its sibling
+--     reach_state_for() kept a card leg with no projects join and no tenant
+--     leg at all, and the contacts branch is where every carded human lives
+--     (49 of the seeded studio's 62 rows). A seat stamped with another
+--     studio's card — a shape 00624's R-AP guard refuses on every write from
+--     this wave onward but cannot undo on rows already on the table, whose
+--     Strata count 00624:724-739's preflight still owes — printed field_link
+--     over seat_count 0 and no seat line at all: a door the room cannot open,
+--     suppressing the mint the studio needs. No reader passes p_card_id now.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -661,9 +674,18 @@ COMMENT ON FUNCTION public.reach_state_for(uuid, uuid, uuid) IS
   'a studio co-member reads every link this identity holds; only a caller '
   'sharing no active organization with the designer of record degrades to '
   'on_paper, and that caller reads no seat either (r14 p2 corrects this '
-  'comment''s earlier "designer-only RLS (00283)"). Asked of ONE card or ONE '
-  'seat; the identity-wide sibling is reach_state_for_identity(), which is the '
-  'one that carries the tenant predicate (00626).';
+  'comment''s earlier "designer-only RLS (00283)"). Asked of ONE seat; the '
+  'identity-wide sibling is reach_state_for_identity(), which is the one that '
+  'carries R-BG''s tenant predicate. NO READER PASSES p_card_id ANY MORE '
+  '(w1b final review r15 MAJOR-2): the Directory''s contacts branch did, and a '
+  'card leg with no tenant bound printed field_link over a cross-tenant stamp '
+  'the row could nest no seat for, so that branch now calls '
+  'reach_state_for_identity(sc.profile_id, sc.id::text) — the same key its '
+  'consent word and its seat_count join already use. The five live call sites '
+  'pass a profile id alone (client, lead, maker, team) or a party id '
+  '(people_directory_seats), and a seat''s own live link is this studio''s by '
+  'construction, because that view''s WHERE already bounds which seats it '
+  'emits (00626).';
 
 -- THE SEATS VIEW'S OWN GATE, not project_parties' RLS alone (w1b final review
 -- r10 MAJOR-2). This counted every seat the CALLER could read, whose whole
@@ -1831,7 +1853,24 @@ SELECT
     'archived_at',     sc.archived_at
   ),
   (CASE WHEN sc.created_by = (select auth.uid()) THEN 'mine' ELSE 'studio' END)::text,
-  public.reach_state_for(sc.profile_id, sc.id, NULL),
+  -- the IDENTITY's reach, bounded by the seats this row nests (w1b final
+  -- review r15 MAJOR-2). This was reach_state_for(sc.profile_id, sc.id, NULL),
+  -- whose EXISTS is a plain field_link_tokens JOIN project_parties on
+  -- pp.studio_contact_id alone — no projects join, no tenant leg, none of
+  -- R-BG's predicate — while r14 MAJOR-1 gave the identity sibling the seats
+  -- view's WHERE verbatim. The asymmetry mattered here more than anywhere: the
+  -- contacts branch is where every carded human now lives (49 of the seeded
+  -- studio's 62 rows, against the party branch's 1), and a seat stamped with a
+  -- card of ANOTHER studio — a shape 00624's R-AP guard refuses on every write
+  -- from this wave onward but cannot undo on rows already on the table
+  -- (00624:724-739's preflight, unmeasured on Strata) — printed `field_link`
+  -- over seat_count 0 and no seat line at all: the room offering a door it
+  -- cannot open and suppressing the mint the studio needs. A card's identity
+  -- key IS its id (party_identity_key()'s first leg), which is the same key
+  -- identity_consent_status() and the identity_seats join already use below,
+  -- so this deletes the asymmetry rather than writing R-BG's predicate a fifth
+  -- time.
+  public.reach_state_for_identity(sc.profile_id, sc.id::text),
   -- every number this identity carries, worst-first — the card's AND its
   -- seats' (r2 MAJOR-2). NULL only when there is no number anywhere.
   public.identity_consent_status(sc.organization_id, sc.id::text, sc.phone_e164),
@@ -1955,7 +1994,13 @@ COMMENT ON VIEW public.people_directory IS
   'usePeopleDirectory issues, unlimited — cost rows x seats and passed '
   'authenticated''s own statement_timeout=8s at 649 cards / 631 seats '
   '(MAJOR-2). The CTE, identity_seat_count() and people_directory_seats'' '
-  'WHERE are ONE predicate written three times (R-BG).';
+  'WHERE are ONE predicate written three times (R-BG). '
+  'w1b final review r15: the CONTACTS branch''s reach word comes from '
+  'reach_state_for_identity(sc.profile_id, sc.id::text), not from '
+  'reach_state_for(…, sc.id, NULL) — the card leg carried no tenant bound, so '
+  'a seat stamped with another studio''s card (a pre-00624 shape R-AP now '
+  'refuses on write) printed field_link over seat_count 0 and no seat line at '
+  'all, on the branch that carries every carded human (MAJOR-2).';
 
 GRANT SELECT ON public.people_directory TO authenticated;
 
