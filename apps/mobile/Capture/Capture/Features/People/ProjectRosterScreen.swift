@@ -10,7 +10,9 @@
 //  no trade-facing surface. Field's job is the job in front of the designer.
 //
 //  Offline: the last good copy renders immediately with a "Last loaded …" line;
-//  a refresh that cannot reach the studio leaves the copy standing and says so.
+//  a refresh that cannot reach the studio leaves the copy standing and says so,
+//  and a mint asked for with no signal is queued, retried on the next load that
+//  reaches the studio, and its link printed here when it lands.
 
 import SwiftUI
 import CaptureKit
@@ -32,6 +34,11 @@ final class ProjectRosterModel {
     var isLoading = false
     var errorMessage: String?
     var pendingNotices = 0
+    /// Mints owed because there was no signal when they were asked for.
+    var pendingMints = 0
+    /// Queued mints that landed on a later load — the roster prints each link,
+    /// because a link nobody sees is a link nobody handed on.
+    var mintedOffline: [FieldLinkMintReceipt] = []
     private var hasLoaded = false
 
     init(projectID: String, people: any PeopleRoomService, cache: PeopleRoomCache,
@@ -78,12 +85,28 @@ final class ProjectRosterModel {
             hasLoaded = true
             cache.saveRoster(fresh, owner: owner)
             await cache.drain(projectID: projectID, owner: owner, using: people)
+            await drainMints(owner: owner)
         } catch {
             errorMessage = error.localizedDescription
             showCachedCopy()
         }
         pendingNotices = cache.pendingNotices(projectID: projectID, owner: owner).count
+        pendingMints = cache.pendingMints(projectID: projectID, owner: owner).count
         isLoading = false
+    }
+
+    /// A mint asked for with no signal, kept and made good.
+    func queueMint(_ draft: FieldLinkMintDraft) {
+        let owner = session.ownerIdentity
+        cache.queueMint(draft, owner: owner)
+        pendingMints = cache.pendingMints(projectID: projectID, owner: owner).count
+    }
+
+    private func drainMints(owner: CaptureOwnerIdentity?) async {
+        let landed = await cache.drainMints(projectID: projectID, owner: owner, using: people)
+        guard !landed.isEmpty else { return }
+        let known = Set(mintedOffline.map(\.id))
+        mintedOffline += landed.filter { !known.contains($0.id) }
     }
 
     private func showCachedCopy() {
@@ -122,9 +145,9 @@ struct ProjectRosterScreen: View {
         .navigationBarTitleDisplayMode(.inline)
         .task { await model.appear() }
         .sheet(isPresented: $isMinting) {
-            MintFieldLinkSheet(projectID: model.projectID, people: people) {
-                Task { await model.load() }
-            }
+            MintFieldLinkSheet(projectID: model.projectID, people: people,
+                               onMinted: { Task { await model.load() } },
+                               onQueued: { model.queueMint($0) })
         }
         .accessibilityIdentifier(CaptureScreenID.pr1Roster.rawValue)
     }
@@ -143,6 +166,7 @@ struct ProjectRosterScreen: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 head(roster)
+                if !model.mintedOffline.isEmpty { mintedLinks }
                 ForEach(model.bands, id: \.band) { band in
                     PeopleSection(title: band.band.heading) {
                         ForEach(band.seats) { seat in
@@ -196,7 +220,52 @@ struct ProjectRosterScreen: View {
             if let cachedAt = model.cachedAt {
                 PeopleStaleLine(storedAt: cachedAt, pendingWrites: model.pendingNotices)
             }
+            if model.pendingMints > 0 {
+                Text(model.pendingMints == 1
+                     ? "1 link will be minted when you have signal."
+                     : "\(model.pendingMints) links will be minted when you have signal.")
+                    .font(CaptureType.footnote)
+                    .foregroundStyle(CaptureColor.goldenHour)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("people.pendingMints")
+            }
         }
+    }
+
+    /// What a queued mint turned into once there was signal. It stands on the
+    /// roster until the screen is left, so the link can still be copied.
+    private var mintedLinks: some View {
+        PeopleSection(title: "Links that came through") {
+            ForEach(model.mintedOffline) { receipt in
+                if receipt.id != model.mintedOffline.first?.id { PeopleDivider() }
+                mintedLink(receipt)
+            }
+        }
+    }
+
+    private func mintedLink(_ receipt: FieldLinkMintReceipt) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("\(receipt.name) is on the roster.")
+                .font(CaptureType.bodyEmph)
+                .foregroundStyle(CaptureColor.ink)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(receipt.mint.expirySentence)
+                .font(CaptureType.footnote)
+                .foregroundStyle(CaptureColor.ink2)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(receipt.mint.url)
+                .font(CaptureType.monoSmall)
+                .foregroundStyle(CaptureColor.ink)
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+            Button("Copy the link") { UIPasteboard.general.string = receipt.mint.url }
+                .font(CaptureType.bodyEmph)
+                .foregroundStyle(CaptureColor.verdigris)
+                .frame(minHeight: 44)
+                .accessibilityIdentifier("people.mintedLink.\(receipt.id)")
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var mintAct: some View {

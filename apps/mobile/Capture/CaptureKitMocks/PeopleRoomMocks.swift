@@ -316,16 +316,19 @@ public final class MockPeopleRoomService: PeopleRoomService, @unchecked Sendable
                         by: "Priya Natarajan", toldNames: draft.toldSeatIDs.map(Self.name))
     }
 
+    /// A seat made from the mint sheet carries NO window — the form has no field
+    /// for one and nothing on the seat defaults it — so the mock takes the same
+    /// branch the real service takes (`FieldLinkExpiry`, mirroring 00627's
+    /// ninety-day fallback) rather than borrowing a date off the fixture's own
+    /// windowed seats, which made the sim print a sentence real data never says.
     public func mintFieldLink(_ request: FieldLinkMintRequest) async throws -> FieldLinkMint {
-        let ends = PeopleRoomFixtures.seats
-            .compactMap(\.onSiteTo)
-            .max() ?? PeopleRoomFixtures.today
+        let window = FieldLinkExpiry.resolve(windowEnd: nil)
         return FieldLinkMint(
             seatID: "seat-\(UUID().uuidString.prefix(8))",
             personID: "card-\(UUID().uuidString.prefix(8))",
             url: "https://client.patina.cloud/field/e3a91c74f0b24d0e8a5f",
-            expiresAt: ends,
-            expirySentence: "Ends with the job, \(FieldPeopleDates.long(ends)).")
+            expiresAt: window.endsAt,
+            expirySentence: window.sentence)
     }
 
     private static func name(_ seatID: String) -> String {

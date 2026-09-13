@@ -25,12 +25,16 @@ private enum PeopleRoomError: LocalizedError {
     case unavailable
     case changed
     case noCard
+    case notOnThisJob
+    case noLink
 
     var errorDescription: String? {
         switch self {
-        case .unavailable: return "Choose a workspace before opening the roster."
-        case .changed:     return "Your account or workspace changed while this was loading."
-        case .noCard:      return "No site access card on this job yet."
+        case .unavailable:   return "Choose a workspace before opening the roster."
+        case .changed:       return "Your account or workspace changed while this was loading."
+        case .noCard:        return "No site access card on this job yet."
+        case .notOnThisJob:  return "That person is not on this job."
+        case .noLink:        return "The link did not come back, so nobody was added. Try again."
         }
     }
 }
@@ -77,8 +81,19 @@ struct SupabasePeopleRoomService: PeopleRoomService {
 
     // MARK: A person
 
+    /// `people_directory` is STUDIO-WIDE, so the identity row is never the gate:
+    /// the seats are. Field is the job in front of the designer
+    /// (ux-4-field-mobile §5, direction §8 P3), so a person opens only through a
+    /// seat on THIS project, and an id from another job answers "not on this
+    /// job" rather than a card.
     func person(projectID: String, personID: String) async throws -> FieldPersonCard {
         let owner = try await requireOwner()
+        let seatRows = try await fetchSeats(personID: personID)
+        guard seatRows.contains(where: { $0.projectID == projectID }) else {
+            throw PeopleRoomError.notOnThisJob
+        }
+        async let channels = fetchChannels(personID: personID)
+        async let authority = fetchAuthority(seatIDs: seatRows.map(\.seatID))
         let row: DirectoryRow = try await client
             .from("people_directory")
             .select("id, name, company_name, role, reach_state, consent_status, "
@@ -87,10 +102,6 @@ struct SupabasePeopleRoomService: PeopleRoomService {
             .single()
             .execute()
             .value
-        async let channels = fetchChannels(personID: personID)
-        async let seats = fetchSeats(personID: personID)
-        let seatRows = try await seats
-        async let authority = fetchAuthority(seatIDs: seatRows.map(\.seatID))
         let card = try await FieldPersonCard(
             personID: row.id,
             name: row.name ?? "Someone on this job",
@@ -151,7 +162,7 @@ struct SupabasePeopleRoomService: PeopleRoomService {
             .from("project_site_access_cards")
             .select("id, project_id, lockbox_version, site_hours, site_notes, "
                 + "emergency_lines, receiver_instructions, changed_at, "
-                + "key_holder_engagement_id")
+                + "changed_by, told_refs, key_holder_engagement_id")
             .eq("project_id", value: projectID)
             .limit(1)
             .execute()
@@ -159,9 +170,46 @@ struct SupabasePeopleRoomService: PeopleRoomService {
         guard let row = rows.first else { throw PeopleRoomError.noCard }
         let keyHolder = try await fetchKeyHolder(seatID: row.keyHolderEngagementID)
         let name = try await fetchProjectName(projectID: projectID)
+        let changedBy = await fetchProfileName(profileID: row.changedBy)
+        let told = await fetchToldNames(projectID: projectID, refs: row.toldRefs ?? [])
         try await confirm(owner)
         return row.card(projectName: name ?? keyHolder?.projectName ?? "This job",
-                        keyHolder: keyHolder)
+                        keyHolder: keyHolder,
+                        changedByName: changedBy,
+                        toldNames: told)
+    }
+
+    /// Who made the last change to the way in. A name the card could not resolve
+    /// prints as no name at all rather than an id or a failed load.
+    private func fetchProfileName(profileID: String?) async -> String? {
+        guard let profileID else { return nil }
+        let rows: [PeopleProfileNameRow]? = try? await client
+            .from("profiles")
+            .select("id, display_name, full_name")
+            .eq("id", value: profileID)
+            .limit(1)
+            .execute()
+            .value
+        return rows?.first?.name
+    }
+
+    /// `told_refs` carries person-card OR seat ids (00625), so both legs of this
+    /// project's own seats are matched. A ref this project does not hold is
+    /// dropped rather than resolved studio-wide — Field stays on the job.
+    private func fetchToldNames(projectID: String, refs: [String]) async -> [String] {
+        guard !refs.isEmpty else { return [] }
+        let rows: [SeatRow]? = try? await client
+            .from("people_directory_seats")
+            .select(Self.seatColumns)
+            .eq("project_id", value: projectID)
+            .execute()
+            .value
+        guard let rows else { return [] }
+        let wanted = Set(refs.map { $0.lowercased() })
+        return rows
+            .filter { wanted.contains($0.seatID.lowercased())
+                || ($0.personID.map { wanted.contains($0.lowercased()) } ?? false) }
+            .compactMap(\.displayName)
     }
 
     /// The card carries no address column of its own (00625); the job's name is
@@ -208,27 +256,49 @@ struct SupabasePeopleRoomService: PeopleRoomService {
     }
 
     /// PR-s: the card and the seat are made in the same moment, then the link.
+    ///
+    /// Three writes with no transaction between them, so each later failure
+    /// undoes the earlier ones: a half-made person — a card with no seat, or a
+    /// seat with no link — is worse on a roster than nothing at all, and there
+    /// is no screen anywhere in Field that could clean one up.
     func mintFieldLink(_ request: FieldLinkMintRequest) async throws -> FieldLinkMint {
         let owner = try await requireOwner()
-        let cardPayload = NewCardPayload(
+        let card = try await insertCard(request, owner: owner)
+        let seat: InsertedRow
+        do {
+            seat = try await insertSeat(request, cardID: card.id)
+        } catch {
+            await undo(cardID: card.id)
+            throw error
+        }
+        do {
+            let link: [FieldLinkRow] = try await client
+                .rpc("create_field_link", params: CreateFieldLinkParams(partyID: seat.id))
+                .execute()
+                .value
+            guard let token = link.first?.token else { throw PeopleRoomError.noLink }
+            return mint(seatID: seat.id, cardID: card.id, token: token,
+                        windowEnd: seat.windowEnd)
+        } catch {
+            await undo(seatID: seat.id)
+            await undo(cardID: card.id)
+            throw error
+        }
+    }
+
+    private func insertCard(_ request: FieldLinkMintRequest,
+                            owner: CaptureOwnerIdentity) async throws -> InsertedRow {
+        let payload = NewCardPayload(
             organizationID: owner.workspaceID, entityKind: "person",
             contactKind: request.partyKind, fullName: request.fullName,
             companyName: request.firmName, phone: request.phone)
-        let card: InsertedRow = try await client
+        return try await client
             .from("studio_contacts")
-            .insert(cardPayload)
+            .insert(payload)
             .select("id")
             .single()
             .execute()
             .value
-        let seat = try await insertSeat(request, cardID: card.id)
-        let link: [FieldLinkRow] = try await client
-            .rpc("create_field_link", params: CreateFieldLinkParams(partyID: seat.id))
-            .execute()
-            .value
-        guard let token = link.first?.token else { throw PeopleRoomError.noCard }
-        return mint(seatID: seat.id, cardID: card.id, token: token,
-                    endsAt: ProjectsWireDate.parse(seat.onSiteTo))
     }
 
     private func insertSeat(_ request: FieldLinkMintRequest,
@@ -241,22 +311,38 @@ struct SupabasePeopleRoomService: PeopleRoomService {
         return try await client
             .from("project_parties")
             .insert(payload)
-            .select("id, on_site_to")
+            .select("id, on_site_to, warranty_until")
             .single()
             .execute()
             .value
     }
 
+    /// Best effort, and deliberately so: the caller is already throwing the
+    /// failure that mattered, and a cleanup that cannot reach the studio must
+    /// not replace it with its own.
+    private func undo(cardID: String) async {
+        _ = try? await client.from("studio_contacts").delete().eq("id", value: cardID).execute()
+    }
+
+    private func undo(seatID: String) async {
+        _ = try? await client.from("project_parties").delete().eq("id", value: seatID).execute()
+    }
+
+    /// PR-d: the date the RPC actually stamped, computed the way the RPC
+    /// computes it (`FieldLinkExpiry`, mirroring 00627) — `create_field_link`
+    /// returns only `(id, token)`, so there is no expiry on the wire to read.
+    /// A seat made here carries no window, which is the ninety-day branch, and
+    /// the sentence now says that date instead of describing a window that does
+    /// not exist.
     private func mint(seatID: String, cardID: String,
-                      token: String, endsAt: Date?) -> FieldLinkMint {
+                      token: String, windowEnd: Date?) -> FieldLinkMint {
         let base = linkBaseURL.absoluteString.hasSuffix("/")
             ? String(linkBaseURL.absoluteString.dropLast())
             : linkBaseURL.absoluteString
-        let sentence = endsAt.map { "Ends with the job, \(FieldPeopleDates.long($0))." }
-            ?? "Ends when the job's window closes. It renews when they use it."
+        let window = FieldLinkExpiry.resolve(windowEnd: windowEnd)
         return FieldLinkMint(seatID: seatID, personID: cardID,
                              url: "\(base)/field/\(token)",
-                             expiresAt: endsAt, expirySentence: sentence)
+                             expiresAt: window.endsAt, expirySentence: window.sentence)
     }
 
     // MARK: Owner

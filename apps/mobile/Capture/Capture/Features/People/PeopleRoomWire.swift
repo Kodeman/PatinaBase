@@ -223,6 +223,10 @@ struct SiteAccessRow: Decodable {
     let emergencyLines: [EmergencyLineRow]?
     let receiverInstructions: String?
     let changedAt: String?
+    let changedBy: String?
+    /// E15's own change log: person-card or seat ids, resolved to names against
+    /// THIS project's seats (00625).
+    let toldRefs: [String]?
     let keyHolderEngagementID: String?
 
     enum CodingKeys: String, CodingKey {
@@ -234,13 +238,17 @@ struct SiteAccessRow: Decodable {
         case emergencyLines = "emergency_lines"
         case receiverInstructions = "receiver_instructions"
         case changedAt = "changed_at"
+        case changedBy = "changed_by"
+        case toldRefs = "told_refs"
         case keyHolderEngagementID = "key_holder_engagement_id"
     }
 
     /// Every free-text field passes through `FieldSiteAccessRules.withholding`
     /// on the way out: the schema holds no code, and a code typed into the notes
     /// at the desk does not reach a job site either.
-    func card(projectName: String, keyHolder: SeatRow?) -> FieldSiteAccessCard {
+    func card(projectName: String, keyHolder: SeatRow?,
+              changedByName: String? = nil,
+              toldNames: [String] = []) -> FieldSiteAccessCard {
         let ask = keyHolder?.displayName
         return FieldSiteAccessCard(
             projectID: projectID,
@@ -263,7 +271,18 @@ struct SiteAccessRow: Decodable {
             changedAt: ProjectsWireDate.parse(changedAt),
             hours: FieldSiteAccessRules.withholding(siteHours, askName: ask),
             receiving: FieldSiteAccessRules.withholding(receiverInstructions, askName: ask),
-            notices: [])
+            notices: notices(by: changedByName, toldNames: toldNames))
+    }
+
+    /// The card's OWN change log, which the row has carried since 00625:
+    /// `changed_at` / `changed_by` / `told_refs`. One entry, the most recent
+    /// change — a fuller multi-entry log is `record_notice`'s to add, and until
+    /// it lands this is the only history the way in has, so it is read rather
+    /// than left empty.
+    private func notices(by changedByName: String?, toldNames: [String]) -> [FieldSiteNotice] {
+        guard let when = ProjectsWireDate.parse(changedAt) else { return [] }
+        return [FieldSiteNotice(id: "card-\(id)", what: "The way in changed.",
+                                when: when, by: changedByName, toldNames: toldNames)]
     }
 
     private static func keyHolderLine(_ seat: SeatRow) -> String {
@@ -357,10 +376,18 @@ struct NewSeatPayload: Encodable {
 struct InsertedRow: Decodable {
     let id: String
     let onSiteTo: String?
+    let warrantyUntil: String?
 
     enum CodingKeys: String, CodingKey {
         case id
         case onSiteTo = "on_site_to"
+        case warrantyUntil = "warranty_until"
+    }
+
+    /// The window `create_field_link` dates a token from (00627): the later of
+    /// the two, NULLs ignored. A seat minted from the phone carries neither.
+    var windowEnd: Date? {
+        [onSiteTo, warrantyUntil].compactMap(ProjectsWireDate.parse).max()
     }
 }
 
@@ -375,6 +402,24 @@ struct CreateFieldLinkParams: Encodable {
 struct FieldLinkRow: Decodable {
     let id: String?
     let token: String
+}
+
+/// `changed_by` is a profile id; the portal's own convention is `display_name`
+/// first, then `full_name` (00016 backfilled one from the other).
+struct PeopleProfileNameRow: Decodable {
+    let id: String
+    let displayName: String?
+    let fullName: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case displayName = "display_name"
+        case fullName = "full_name"
+    }
+
+    var name: String? {
+        [displayName, fullName].compactMap { $0 }.first { !$0.isEmpty }
+    }
 }
 
 /// `PeopleProjectNameRow`, not `ProjectNameRow`: the Site Request service
