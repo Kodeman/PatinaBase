@@ -94,6 +94,7 @@ struct MintFieldLinkSheet: View {
                 .padding(12)
                 .frame(minHeight: 44)
                 .overlay(Rectangle().stroke(CaptureColor.line))
+                .accessibilityLabel(label.capitalized)
                 .accessibilityIdentifier(identifier)
         }
     }

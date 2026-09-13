@@ -278,6 +278,7 @@ struct SiteAccessScreen: View {
                     .font(CaptureType.body)
                     .frame(minHeight: 88)
                     .overlay(Rectangle().stroke(CaptureColor.line))
+                    .accessibilityLabel("What changed and who you told")
                     .accessibilityIdentifier("people.noticeDraft")
                 Button("Save this note") {
                     Task {
