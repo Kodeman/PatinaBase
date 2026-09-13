@@ -11,11 +11,6 @@ import type { ProjectRosterRow } from '@patina/supabase';
 import { KickoffBand, kickoffNoteKey } from '../kickoff-band';
 import { hasMarginNoteBeenSeen } from '../../margin-note';
 
-let mockFlagValue = true;
-jest.mock('@/hooks/use-feature-flag', () => ({
-  useFeatureFlag: () => ({ value: mockFlagValue, isLoading: false }),
-}));
-
 function row(over: Partial<ProjectRosterRow> = {}): ProjectRosterRow {
   return {
     roster_id: `r-${Math.random().toString(36).slice(2)}`,
@@ -40,8 +35,7 @@ function row(over: Partial<ProjectRosterRow> = {}): ProjectRosterRow {
 }
 
 beforeEach(() => {
-  mockFlagValue = true;
-  window.localStorage.clear();
+    window.localStorage.clear();
 });
 
 describe('KickoffBand — the two roster doorways', () => {
@@ -102,12 +96,5 @@ describe('KickoffBand — the two roster doorways', () => {
     expect(screen.queryByText(/Who else is on the job/)).not.toBeInTheDocument();
     expect(hasMarginNoteBeenSeen(kickoffNoteKey('proj-1'))).toBe(true);
     window.removeEventListener('document:open-call-sheet', opened);
-  });
-
-  it('renders nothing when the call-sheet flag is off', async () => {
-    mockFlagValue = false;
-    render(<KickoffBand projectId="proj-1" rows={[row({ kind: 'team', display_name: 'Leah' })]} />);
-    // The reveal effect still runs, but the flag gate returns null before it.
-    expect(screen.queryByText(/Who else is on the job/)).not.toBeInTheDocument();
   });
 });

@@ -1,40 +1,52 @@
 /**
- * The Document's Call Sheet mount (Wave 5) — the dead-chevron fix.
+ * The Document's Call Sheet mount — the chevron's destination.
  *
- * /doc/[id]/page.tsx mounted <CallSheet> with no `onOpenProfile`, so no roster
- * row could open PartyProfileSheet and the promote route from the sheet (Wave
- * 2's PromoteBand, which lives inside it) was orphaned. This spec holds the
- * wiring the page now delegates to: the chevron exists on party rows, it
- * carries the party's id and kind through, and the profile sheet opens over
- * the call sheet without closing it.
+ * The sheet forwards `onOpenSeat` rather than stacking a second overlay of its
+ * own; this component is the caller that mounts the person. What matters here
+ * is the wiring: the chevron exists on a seat the directory's party branch
+ * admits, it carries that seat's id and kind through, it opens nothing for a
+ * kind the branch excludes, and the call sheet stays open underneath (D1).
  *
- * PartyProfileSheet itself is stubbed — its own surface has its own specs, and
- * what matters here is the props it receives.
+ * PartyProfileSheet itself is stubbed — its own surface has its own specs.
  */
+
 import { fireEvent, render, screen } from '@testing-library/react';
-import type { ProjectRosterRow } from '@patina/supabase';
+import type { PeopleDirectorySeat } from '@patina/supabase';
 import { CallSheetMount } from '../call-sheet-mount';
 
-const useProjectRoster = jest.fn();
+const usePeopleSeats = jest.fn();
 
 jest.mock('@patina/supabase', () => ({
-  useProjectRoster: (...args: unknown[]) => useProjectRoster(...args),
+  useProjectRoster: () => ({ data: [], isLoading: false }),
+  usePeopleSeats: (...args: unknown[]) => usePeopleSeats(...args),
+  useProjectConsentOrg: () => ({ data: 'studio-1' }),
+  useSiteAccessCard: () => ({ data: null, isLoading: false }),
+  rosterBandFor: () => 'this_week',
+  rosterDateKey: () => '2026-10-20',
   useUpdateProjectParty: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useCloseProjectPartySeat: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useRemoveProjectParty: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useCreateFieldLink: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useSendPartySms: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useChannelConsent: () => ({ data: { verdict: null, record: null } }),
+  useComplianceDocuments: () => ({ data: [] }),
   fieldLinkUrl: (t: string) => t,
+  AUTHORITY_SCOPE_LABELS: {},
+  COMPLIANCE_DOC_TYPE_LABELS: {},
+  SEAT_DELETE_REFUSAL_SENTENCES: { consent: '', bid: '', waiver: '', unknown: '' },
+  seatDeleteRefusal: () => null,
 }));
 
-jest.mock('@/hooks/use-feature-flag', () => ({
-  useFeatureFlag: () => ({ value: true, isLoading: false }),
+jest.mock('../use-project-authority', () => ({
+  useProjectAuthority: () => ({ data: {} }),
 }));
 
 jest.mock('../rolodex-picker', () => ({ RolodexPicker: () => null }));
+jest.mock('../site-access-card', () => ({
+  SiteAccessCard: () => null,
+  useSiteAccessSummary: () => '',
+}));
 
-// The chevron's destination, stubbed to its props. Rendered only when open so
-// "is the profile up?" is a presence question, matching the real sheet's own
-// closed state (RoomSheet renders nothing while closed).
 const partyProfileProps = jest.fn();
 jest.mock('../../people/party-profile-sheet', () => ({
   PartyProfileSheet: (props: {
@@ -54,25 +66,38 @@ jest.mock('../../people/party-profile-sheet', () => ({
   },
 }));
 
-function row(over: Partial<ProjectRosterRow> = {}): ProjectRosterRow {
+function seat(over: Partial<PeopleDirectorySeat> = {}): PeopleDirectorySeat {
   return {
-    roster_id: 'party-1',
-    source: 'party',
+    identity_key: 'k',
+    person_id: 'card-rosa',
+    seat_id: 'seat-rosa',
     project_id: 'proj-1',
-    kind: 'sub',
+    project_name: 'Ellsworth Residence',
+    project_status: 'active',
+    designer_id: null,
+    party_kind: 'sub',
     display_name: 'Rosa Martínez',
-    company_name: null,
-    email: null,
-    phone: null,
     trade: 'tile',
-    job_title: null,
-    staff_role: null,
-    studio_contact_id: null,
-    profile_id: null,
+    stage: 'active',
+    on_site_from: null,
+    on_site_to: null,
+    site_access_mode: null,
+    contracted_through: null,
+    company_id: null,
+    company_name: null,
+    warranty_until: null,
+    warranty_contact_person_id: null,
+    off_job_at: null,
+    off_job_reason: null,
     show_to_client: false,
-    has_active_field_link: false,
-    sms_consent_status: 'not_asked',
+    studio_contact_id: null,
+    phone_e164: null,
+    consent_status: null,
+    reach_state: 'on_paper',
+    paper_state: null,
+    contact_rule_summary: null,
     updated_at: null,
+    scope: 'studio',
     ...over,
   };
 }
@@ -87,61 +112,52 @@ const props = {
 };
 
 beforeEach(() => {
-  useProjectRoster.mockReset();
-  useProjectRoster.mockReturnValue({ data: [row()], isLoading: false });
+  usePeopleSeats.mockReset().mockReturnValue({ data: [seat()], isLoading: false });
   partyProfileProps.mockClear();
   props.onClose.mockClear();
 });
 
 describe('CallSheetMount — the chevron is wired', () => {
-  it('renders a chevron for a party row on the page’s own mount', () => {
+  it('draws a chevron for a seat the directory admits', () => {
     render(<CallSheetMount {...props} />);
-    expect(
-      screen.getByRole('button', { name: /Open Rosa Martínez's profile/ }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open Rosa Martínez' })).toBeInTheDocument();
   });
 
-  it('opens the party profile with the party id and kind the row carries', () => {
+  it('opens the person with the seat id and the kind the row carries', () => {
     render(<CallSheetMount {...props} />);
-
     expect(screen.queryByTestId('party-profile')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /Open Rosa Martínez's profile/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open Rosa Martínez' }));
 
     const sheet = screen.getByTestId('party-profile');
-    expect(sheet).toHaveAttribute('data-party-id', 'party-1');
+    expect(sheet).toHaveAttribute('data-party-id', 'seat-rosa');
     expect(sheet).toHaveAttribute('data-role', 'sub');
     // The call sheet is still underneath — a sheet never unmounts what it
     // opened from (D1).
-    expect(screen.getByText('Everyone on Ellsworth Residence, and how to reach them.'))
-      .toBeInTheDocument();
+    expect(screen.getByText('Call sheet · Ellsworth Residence')).toBeInTheDocument();
   });
 
-  it('puts the profile away without closing the call sheet', () => {
+  it('puts the person away without closing the call sheet', () => {
     render(<CallSheetMount {...props} />);
-    fireEvent.click(screen.getByRole('button', { name: /Open Rosa Martínez's profile/ }));
-    expect(screen.getByTestId('party-profile')).toBeInTheDocument();
-
+    fireEvent.click(screen.getByRole('button', { name: 'Open Rosa Martínez' }));
     fireEvent.click(screen.getByRole('button', { name: 'Close the profile' }));
     expect(screen.queryByTestId('party-profile')).not.toBeInTheDocument();
     expect(props.onClose).not.toHaveBeenCalled();
   });
 
-  it('passes the document’s client identity down to the sheet', () => {
+  it('passes the document own client identity down to the sheet', () => {
     render(<CallSheetMount {...props} />);
-    expect(
-      screen.getByRole('button', { expanded: false, name: /Harold Ellsworth/ }),
-    ).toBeInTheDocument();
+    expect(screen.getByText('Harold Ellsworth')).toBeInTheDocument();
     expect(screen.getByText('The client')).toBeInTheDocument();
   });
 
-  it('opens no profile for a kind people_directory has no row for', () => {
-    useProjectRoster.mockReturnValue({
-      data: [row({ kind: 'vendor', display_name: 'Ochoa Lighting' })],
+  it('opens nothing for a kind the directory party branch excludes', () => {
+    usePeopleSeats.mockReturnValue({
+      data: [seat({ party_kind: 'vendor', display_name: 'Ochoa Lighting' })],
       isLoading: false,
     });
     render(<CallSheetMount {...props} />);
-    expect(screen.queryByRole('button', { name: /profile/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Open Ochoa Lighting' }));
     expect(screen.queryByTestId('party-profile')).not.toBeInTheDocument();
   });
 });

@@ -432,7 +432,6 @@ export function MobileSheets({
   const [noteDue, setNoteDue] = useState(todayYmd());
   const ladderValues = ladderValuesProp ?? activeDoc?.ladderValues ?? {};
   const router = useRouter();
-  const { value: callSheetOn } = useFeatureFlag('call-sheet');
   const projectId = activeDoc?.projectId ?? null;
   const proposalId = activeDoc?.proposalId ?? null;
   const { data: items } = useMarginItems(projectId, proposalId);
@@ -689,25 +688,23 @@ export function MobileSheets({
                   Boards
                 </button>
               </li>
-              {callSheetOn && (
-                <li>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      closeSheet();
-                      window.dispatchEvent(
-                        new CustomEvent('document:open-call-sheet', {
-                          detail: { mode: 'sheet' },
-                        }),
-                      );
-                    }}
-                    className="flex min-h-11 w-full items-center gap-[8px] py-1.5 text-left font-heading text-[14px] text-[var(--color-charcoal)]"
-                  >
-                    <Users size={14} strokeWidth={1.5} color="currentColor" aria-hidden="true" className="shrink-0" />
-                    Call sheet
-                  </button>
-                </li>
-              )}
+              <li>
+                <button
+                  type="button"
+                  onClick={() => {
+                    closeSheet();
+                    window.dispatchEvent(
+                      new CustomEvent('document:open-call-sheet', {
+                        detail: { mode: 'sheet' },
+                      }),
+                    );
+                  }}
+                  className="flex min-h-11 w-full items-center gap-[8px] py-1.5 text-left font-heading text-[14px] text-[var(--color-charcoal)]"
+                >
+                  <Users size={14} strokeWidth={1.5} color="currentColor" aria-hidden="true" className="shrink-0" />
+                  Call sheet
+                </button>
+              </li>
             </ul>
           </>
         )}

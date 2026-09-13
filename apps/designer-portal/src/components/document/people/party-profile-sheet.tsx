@@ -210,19 +210,17 @@ export function PartyProfileSheet({
 
   // Call Sheet Wave 2 — the promote band (slide 10). Gated on the flag AND on
   // finding this party's real project_parties row (the mutation needs the
-  // full row, not just the people_directory projection `person` is). Both
-  // queries below are flag-disabled rather than merely flag-unused — the
-  // sheet stays mounted while closed (see the `open` gate on
-  // useProjectParties), so an ungated query would fire on every mount
-  // regardless of whether the promote band can ever render, flag on or not.
-  const { value: callSheetOn } = useFeatureFlag('call-sheet');
-  const { data: orgs } = useOrganizations({ enabled: callSheetOn });
+  // full row, not just the people_directory projection `person` is). The
+  // `call-sheet` flag that used to gate both queries is retired (rulings §6);
+  // the `open` gate below stays, because the sheet is mounted while closed and
+  // an ungated query would fire on every mount.
+  const { data: orgs } = useOrganizations({ enabled: true });
   const organizationId = useMemo(
     () => orgs?.find((o) => o.type === 'design_studio')?.id ?? orgs?.[0]?.id ?? null,
     [orgs],
   );
   const { data: projectParties } = useProjectParties(
-    callSheetOn && open ? person?.project_id : null,
+    open ? person?.project_id : null,
   );
   const linkedParty = useMemo(
     () => projectParties?.find((p) => p.id === partyId) ?? null,
@@ -237,7 +235,6 @@ export function PartyProfileSheet({
     setJustPromotedPartyId(null);
   }, [partyId]);
   const showPromoteBand =
-    callSheetOn &&
     !!partyId &&
     !!organizationId &&
     !!linkedParty &&
@@ -634,7 +631,6 @@ export function PartyProfileSheet({
               actionKey="save-party-details"
               variant="primary"
               onClick={() => void saveParty()}
-              disabled={updateParty.isPending}
               loading={updateParty.isPending}
               loadingLabel="Saving…"
             >
@@ -703,7 +699,10 @@ export function PartyProfileSheet({
             </DocumentAction>
           )}
         </div>
-        <p className="mb-2 text-[0.72rem] leading-relaxed text-[var(--color-aged-oak)]">
+        <p
+          id="field-link-consequence"
+          className="mb-2 text-[0.72rem] leading-relaxed text-[var(--color-aged-oak)]"
+        >
           A no-login link to their tasks and punch list — big-thumb Done /
           Problem, no account needed.{' '}
           {activeLink
@@ -728,7 +727,9 @@ export function PartyProfileSheet({
           regionKey="field-link"
           variant="primary"
           onClick={() => void mint()}
-          disabled={createLink.isPending || !partyId}
+          held={!partyId}
+          disabled={!partyId}
+          aria-describedby="field-link-consequence"
           loading={createLink.isPending}
           loadingLabel="Minting…"
         >
@@ -772,10 +773,15 @@ export function PartyProfileSheet({
               rows={2}
               value={body}
               onChange={(e) => setBody(e.target.value)}
-              placeholder="Send a text…"
               aria-label="Send a text"
               className="w-full resize-none rounded-[7px] border border-[var(--color-pearl)] bg-white px-3 py-2 text-[0.82rem] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none"
             />
+            <p
+              id="field-text-reason"
+              className="mt-1 text-[0.7rem] leading-relaxed text-[var(--color-aged-oak)]"
+            >
+              Write the message first — a text with no words is not a text.
+            </p>
             <DocumentActionRow
               surfaceKey="people"
               regionKey="field-text-composer"
@@ -786,7 +792,9 @@ export function PartyProfileSheet({
                 actionKey="send-field-text"
                 variant="primary"
                 onClick={doSend}
-                disabled={!body.trim() || send.isPending}
+                held={!body.trim()}
+                disabled={!body.trim()}
+                aria-describedby="field-text-reason"
                 loading={send.isPending}
                 loadingLabel="Sending…"
               >
@@ -887,6 +895,16 @@ export function PartyProfileSheet({
               </p>
             )}
 
+            {/* §A5 "held" — the reason stands beside the act and is reachable
+                by keyboard, which a native `disabled` would have removed from
+                the tab order along with its own explanation. */}
+            <p
+              id="field-invite-reason"
+              className="mt-3 text-[0.7rem] leading-relaxed text-[var(--color-aged-oak)]"
+            >
+              Tick the consent box above first. Patina never texts somebody the
+              studio has not recorded consent for.
+            </p>
             <DocumentActionRow
               surfaceKey="people"
               regionKey="field-invite-to-texts"
@@ -897,19 +915,11 @@ export function PartyProfileSheet({
                 actionKey="invite-party-to-texts"
                 variant="primary"
                 onClick={doInvite}
-                disabled={!inviteConsent || recordConsent.isPending}
+                held={!inviteConsent}
+                disabled={!inviteConsent}
+                aria-describedby="field-invite-reason"
                 loading={recordConsent.isPending}
                 loadingLabel="Inviting…"
-                title={
-                  !inviteConsent
-                    ? 'Check the consent box above first'
-                    : undefined
-                }
-                aria-label={
-                  !inviteConsent
-                    ? 'Invite to texts — check the consent box above first'
-                    : undefined
-                }
               >
                 Invite to texts
               </DocumentAction>

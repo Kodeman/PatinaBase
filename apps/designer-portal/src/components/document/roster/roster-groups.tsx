@@ -1,51 +1,75 @@
 'use client';
 
+/**
+ * THE SHEET'S BANDS (direction §3.4, SPEC §5.4).
+ *
+ * Build & supply is retired. Six bands print, in one order: Studio side,
+ * Client side, then the window — on the job this week, on the job later,
+ * Bidding, Done. Bidding stands visually apart from the crew bands, because a
+ * price nobody has answered is not a body on the site.
+ *
+ * A band with nobody in it does not print: the sheet says what is true today.
+ */
+
 import { useState } from 'react';
-import type { ProjectRosterRow } from '@patina/supabase';
-import type { GroupedRoster, RosterGroup } from '@/lib/document/roster-derivation';
+import type { ProjectPartyAuthority } from '@patina/supabase';
+import {
+  CALL_SHEET_BANDS,
+  CALL_SHEET_BAND_LABELS,
+  type CallSheetBand,
+  type CallSheetProjection,
+  type CallSheetRow,
+} from '@/lib/document/roster-derivation';
 import { SectionEyebrow } from '../section-eyebrow';
 import { RosterRow } from './roster-row';
 
-const GROUP_LABEL: Record<RosterGroup, string> = {
-  studioSide: 'Studio side',
-  clientSide: 'Client side',
-  buildSupply: 'Build & supply',
-};
-
 export function RosterGroups({
-  groups,
-  onOpenProfile,
+  projection,
+  authorityBySeat = {},
+  consentOrg,
+  projectName,
+  onOpenSeat,
 }: {
-  groups: GroupedRoster;
-  onOpenProfile?: (row: ProjectRosterRow) => void;
+  projection: CallSheetProjection;
+  authorityBySeat?: Record<string, ProjectPartyAuthority[]>;
+  consentOrg?: string | null;
+  projectName?: string | null;
+  onOpenSeat?: (row: CallSheetRow) => void;
 }) {
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
 
   return (
     <div data-project-roster-groups>
-      {(['studioSide', 'clientSide', 'buildSupply'] as RosterGroup[]).map((group) => {
-        const rows = groups[group];
+      {CALL_SHEET_BANDS.map((band: CallSheetBand) => {
+        const rows = projection.bands[band];
         if (rows.length === 0) return null;
         return (
           <section
-            key={group}
-            data-roster-group={group}
-            className="mt-6 first:mt-0"
+            key={band}
+            data-roster-band={band}
+            className={
+              band === 'bidding'
+                ? 'mt-9 border-t border-[var(--color-pearl)] pt-7'
+                : 'mt-6 first:mt-0'
+            }
           >
-            <SectionEyebrow count={rows.length}>{GROUP_LABEL[group]}</SectionEyebrow>
+            <SectionEyebrow count={rows.length}>
+              {CALL_SHEET_BAND_LABELS[band]}
+            </SectionEyebrow>
             <ul className="border-t border-[var(--color-pearl)]">
               {rows.map((row) => (
                 <RosterRow
-                  key={row.roster_id ?? `${row.source}-${row.display_name}`}
+                  key={row.key}
                   row={row}
-                  group={group}
-                  expanded={expandedId === row.roster_id}
+                  band={band}
+                  expanded={expandedKey === row.key}
                   onToggle={() =>
-                    setExpandedId((current) =>
-                      current === row.roster_id ? null : row.roster_id,
-                    )
+                    setExpandedKey((current) => (current === row.key ? null : row.key))
                   }
-                  onOpenProfile={onOpenProfile}
+                  onOpenSeat={onOpenSeat}
+                  authority={row.seatId ? authorityBySeat[row.seatId] : undefined}
+                  consentOrg={consentOrg}
+                  projectName={projectName}
                 />
               ))}
             </ul>

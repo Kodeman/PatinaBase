@@ -1,241 +1,338 @@
+/**
+ * One Call Sheet row, against the Okonkwo fixture (SPEC §5.4).
+ *
+ * What this spec holds: the words a folded row prints, the clauses it prints in
+ * WORDS rather than as badges, the `tel:` sibling, the unfold's `aria-controls`
+ * pair, and the act that replaced Remove — Close this seat, two steps, with a
+ * reason, and a hard delete that is HELD the moment the seat carries anything.
+ */
+
 import { fireEvent, render, screen } from '@testing-library/react';
-import type { ProjectRosterRow } from '@patina/supabase';
 import { RosterRow } from '../roster-row';
+import type { CallSheetRow } from '@/lib/document/roster-derivation';
 
 const updateMutate = jest.fn();
+const closeMutate = jest.fn();
 const removeMutate = jest.fn();
 const createLinkMutate = jest.fn();
 const sendSmsMutate = jest.fn();
+let consentResolution: unknown = { verdict: null, record: null };
+let complianceDocs: unknown[] = [];
 
 jest.mock('@patina/supabase', () => ({
   useUpdateProjectParty: () => ({ mutateAsync: updateMutate, isPending: false }),
+  useCloseProjectPartySeat: () => ({ mutateAsync: closeMutate, isPending: false }),
   useRemoveProjectParty: () => ({ mutateAsync: removeMutate, isPending: false }),
   useCreateFieldLink: () => ({ mutateAsync: createLinkMutate, isPending: false }),
   useSendPartySms: () => ({ mutateAsync: sendSmsMutate, isPending: false }),
+  useChannelConsent: () => ({ data: consentResolution }),
+  useComplianceDocuments: () => ({ data: complianceDocs }),
   fieldLinkUrl: (token: string) => `https://client.patina.cloud/field/${token}`,
+  AUTHORITY_SCOPE_LABELS: {
+    money: 'Signs money',
+    change_order: 'Approves change orders',
+    selections: 'Selections',
+    site_access: 'Controls site access',
+    key: 'Holds a key',
+  },
+  COMPLIANCE_DOC_TYPE_LABELS: { coi_general_liability: 'insurance' },
+  SEAT_DELETE_REFUSAL_SENTENCES: {
+    consent:
+      'This number has a texting record behind it. Close the seat instead — the record stays either way, and the seat is how you can still see it.',
+    bid: 'This seat carries a bid. Close it instead, so the bid history stays on the job.',
+    waiver:
+      'This seat carries paperwork the studio holds. Close it instead, so the paper keeps its place.',
+    unknown: 'Close this seat instead of removing it.',
+  },
+  seatDeleteRefusal: (facts: {
+    hasConsentRecord: boolean;
+    hasBid: boolean;
+    hasComplianceDocument: boolean;
+  }) =>
+    facts.hasConsentRecord
+      ? 'consent'
+      : facts.hasBid
+        ? 'bid'
+        : facts.hasComplianceDocument
+          ? 'waiver'
+          : null,
 }));
 
-function row(over: Partial<ProjectRosterRow> = {}): ProjectRosterRow {
+function seatRow(over: Partial<CallSheetRow> = {}): CallSheetRow {
   return {
-    roster_id: 'party-1',
-    source: 'party',
-    project_id: 'proj-1',
-    kind: 'sub',
-    display_name: 'Rosa Martínez',
-    company_name: 'Martínez Tile Works',
-    email: 'rosa@martineztile.co',
-    phone: '(513) 555-0148',
-    trade: 'tile',
-    job_title: null,
-    staff_role: null,
-    studio_contact_id: null,
-    profile_id: null,
-    show_to_client: false,
-    has_active_field_link: true,
-    sms_consent_status: 'granted',
-    updated_at: null,
+    key: 'seat:seat-dana',
+    seatId: 'seat-dana',
+    personId: 'card-dana',
+    profileId: null,
+    source: 'seat',
+    name: 'Dana Kowalski',
+    partyKind: 'sub',
+    trade: 'electrical',
+    companyName: 'Northgate Electric',
+    companyId: 'northgate',
+    meta: 'Sub · electrical',
+    phone: '(612) 555-0111',
+    email: 'dana@northgateelectric.com',
+    phoneE164: '+16125550111',
+    reach: 'field_link',
+    stage: 'active',
+    consent: 'granted',
+    paper: 'lapsed',
+    ruleSummary: null,
+    onSiteFrom: '2026-10-12',
+    onSiteTo: '2027-08-13',
+    offJobAt: null,
+    offJobReason: null,
+    showToClient: false,
+    projectId: 'okonkwo',
     ...over,
   };
 }
 
+const ul = (node: React.ReactElement) => render(<ul>{node}</ul>);
+
 beforeEach(() => {
   updateMutate.mockReset().mockResolvedValue({});
+  closeMutate.mockReset().mockResolvedValue({});
   removeMutate.mockReset().mockResolvedValue({});
   createLinkMutate.mockReset().mockResolvedValue({ id: 'l-1', token: 'tok' });
   sendSmsMutate.mockReset().mockResolvedValue({});
+  consentResolution = { verdict: null, record: null };
+  complianceDocs = [];
 });
-
-const ul = (node: React.ReactElement) => render(<ul>{node}</ul>);
 
 describe('RosterRow — folded', () => {
-  it('carries the reach chip and unfolds on the row, not the chevron', () => {
-    const onToggle = jest.fn();
-    const onOpenProfile = jest.fn();
-    ul(
-      <RosterRow
-        row={row()}
-        group="buildSupply"
-        expanded={false}
-        onToggle={onToggle}
-        onOpenProfile={onOpenProfile}
-      />,
-    );
+  it('prints the name, the kind and trade, the firm and the window', () => {
+    ul(<RosterRow row={seatRow()} band="this_week" expanded={false} onToggle={jest.fn()} />);
+    expect(screen.getByText('Dana Kowalski')).toBeInTheDocument();
+    expect(screen.getByText('Sub · electrical')).toBeInTheDocument();
+    expect(screen.getByText(/Northgate Electric/)).toBeInTheDocument();
+    expect(screen.getByText('12 Oct 2026 to 13 Aug 2027')).toBeInTheDocument();
+  });
 
+  it('prints two words on the folded row — reach and stage', () => {
+    const { container } = ul(
+      <RosterRow row={seatRow()} band="this_week" expanded={false} onToggle={jest.fn()} />,
+    );
+    const words = Array.from(container.querySelectorAll('[data-state-word]')).map((el) =>
+      el.getAttribute('data-state-family'),
+    );
+    expect(words).toEqual(['reach', 'stage']);
     expect(screen.getByText('Field link')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { expanded: false }));
-    expect(onToggle).toHaveBeenCalledTimes(1);
-    expect(onOpenProfile).not.toHaveBeenCalled();
-
-    fireEvent.click(screen.getByRole('button', { name: /Open Rosa Martínez's profile/ }));
-    expect(onOpenProfile).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('On the job')).toBeInTheDocument();
   });
 
-  it('shows no chevron for a team row — there is no party profile to open', () => {
-    ul(
-      <RosterRow
-        row={row({ source: 'team', kind: 'team', roster_id: 'tm-1' })}
-        group="studioSide"
-        expanded={false}
-        onToggle={jest.fn()}
-        onOpenProfile={jest.fn()}
-      />,
+  it('makes the phone a sibling target, never a link inside the button', () => {
+    const { container } = ul(
+      <RosterRow row={seatRow()} band="this_week" expanded={false} onToggle={jest.fn()} />,
     );
-    expect(screen.queryByRole('button', { name: /profile/ })).not.toBeInTheDocument();
+    const tel = container.querySelector('a[data-tel-link]');
+    expect(tel).toHaveAttribute('href', 'tel:+16125550111');
+    expect(tel?.closest('button')).toBeNull();
   });
 
-  it('shows no chevron for a vendor — people_directory has no row to open', () => {
-    // 00420's party branch admits gc/sub/installer/receiver/architect/
-    // photographer/stager only; a vendor chevron would open an empty sheet.
-    ul(
+  it('prints the held clause in words with a terracotta leading rule (PR-h)', () => {
+    complianceDocs = [
+      {
+        id: 'doc-1',
+        doc_type: 'coi_general_liability',
+        doc_label: null,
+        expires_on: '2026-03-31',
+        blocks: ['site_access', 'payment', 'draw'],
+      },
+    ];
+    const { container } = ul(
+      <RosterRow row={seatRow()} band="this_week" expanded={false} onToggle={jest.fn()} />,
+    );
+    const clause = container.querySelector('[data-held-clause]');
+    expect(clause).toHaveTextContent(
+      'Site access held. Northgate Electric’s insurance lapsed 31 March 2026.',
+    );
+    expect(clause?.className).toContain('border-[var(--color-terracotta-ink)]');
+  });
+
+  it('prints an opted-out note on the COLLAPSED row (R-T)', () => {
+    consentResolution = {
+      verdict: 'opted_out',
+      record: {
+        status: 'opted_out',
+        opt_out_source: 'inbound_sms',
+        opt_out_at: '2025-12-03',
+        source: null,
+        consented_at: null,
+      },
+    };
+    const { container } = ul(
       <RosterRow
-        row={row({ kind: 'vendor', display_name: 'Ochoa Lighting' })}
-        group="buildSupply"
+        row={seatRow({ name: 'Pete Rusk', consent: 'opted_out', paper: null })}
+        band="later"
         expanded={false}
         onToggle={jest.fn()}
-        onOpenProfile={jest.fn()}
+        projectName="Lindqvist kitchen"
       />,
     );
-    expect(screen.queryByRole('button', { name: /profile/ })).not.toBeInTheDocument();
+    expect(container.querySelector('[data-opted-out-note]')).toHaveTextContent(
+      'Opted out by text, 3 Dec 2025, on the Lindqvist kitchen.',
+    );
+  });
+
+  it('prints the authority phrase as plain text, never a state word', () => {
+    const { container } = ul(
+      <RosterRow
+        row={seatRow({ name: 'Chidi Okonkwo', partyKind: 'client_rep', paper: null })}
+        band="clientSide"
+        expanded={false}
+        onToggle={jest.fn()}
+        authority={[
+          {
+            id: 'a1',
+            engagement_id: 'seat-dana',
+            scope: 'money',
+            threshold_cents: 250000,
+            prepares_only: false,
+            copy_to: [],
+            source_clause: null,
+            granted_by: null,
+            effective_from: '2026-08-01',
+            effective_to: null,
+            created_at: '',
+            updated_at: '',
+          },
+        ]}
+      />,
+    );
+    const phrase = screen.getByText('Signs money to $2,500.');
+    expect(phrase).toBeInTheDocument();
+    expect(phrase.getAttribute('data-state-word')).toBeNull();
+    expect(container.querySelectorAll('[data-state-family="stage"]')).toHaveLength(1);
+  });
+
+  it('pairs aria-expanded with aria-controls on the unfold (SPEC §7 #5)', () => {
+    ul(<RosterRow row={seatRow()} band="this_week" expanded={false} onToggle={jest.fn()} />);
+    const toggle = screen.getByRole('button', { name: /Dana Kowalski/ });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    const panelId = toggle.getAttribute('aria-controls');
+    expect(panelId).toBeTruthy();
+    expect(document.getElementById(panelId as string)).toBeInTheDocument();
   });
 });
 
-describe('RosterRow — the synthetic client row (Wave 5)', () => {
-  const clientRow = row({
-    roster_id: 'client:client-profile-1',
-    source: 'client-synthetic',
-    kind: 'client',
-    display_name: 'Harold Ellsworth',
-    company_name: null,
-    email: null,
-    phone: null,
-    trade: null,
-    profile_id: 'client-profile-1',
-    sms_consent_status: null,
-    has_active_field_link: false,
-  });
-
-  it('wears a quiet mono THE CLIENT pill instead of a kind label', () => {
+describe('RosterRow — unfolded', () => {
+  const open = (over: Partial<CallSheetRow> = {}) =>
     ul(
       <RosterRow
-        row={clientRow}
-        group="clientSide"
-        expanded={false}
+        row={seatRow(over)}
+        band="this_week"
+        expanded
         onToggle={jest.fn()}
-        onOpenProfile={jest.fn()}
+        projectName="Okonkwo residence"
       />,
     );
-    expect(screen.getByText('The client')).toBeInTheDocument();
-    expect(screen.queryByText('Client')).not.toBeInTheDocument();
-    expect(screen.getByText('Account')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /profile/ })).not.toBeInTheDocument();
-  });
 
-  it('carries no unfold actions — the client is not a party row', () => {
-    ul(<RosterRow row={clientRow} group="clientSide" expanded onToggle={jest.fn()} />);
-    expect(screen.queryByRole('button', { name: 'Show to client' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Text' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Copy field link' })).not.toBeInTheDocument();
-  });
-});
-
-describe('RosterRow — unfolded actions', () => {
-  it('shows phone, email, the full consent chip and the four words', () => {
-    ul(
-      <RosterRow row={row()} group="buildSupply" expanded onToggle={jest.fn()} />,
+  it('shows the phone, the email, and the consent and paper words', () => {
+    const { container } = open();
+    expect(screen.getByText('dana@northgateelectric.com')).toBeInTheDocument();
+    const families = Array.from(container.querySelectorAll('[data-state-word]')).map((el) =>
+      el.getAttribute('data-state-family'),
     );
-    expect(screen.getByText('(513) 555-0148')).toBeInTheDocument();
-    expect(screen.getByText('rosa@martineztile.co')).toBeInTheDocument();
-    // ONE consent word, in the unfold. SPEC §6.1 keeps consent off the
-    // collapsed Call Sheet row, where a bare colour dot used to stand.
-    expect(screen.getByText('Texting')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Text' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Copy field link' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Show to client' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Remove' })).toBeInTheDocument();
+    expect(families).toEqual(expect.arrayContaining(['consent', 'paper']));
   });
 
-  it('disables TEXT until consent is granted, and says why', () => {
+  it('prints the consent sentence with its source and date (R-Q)', () => {
+    consentResolution = {
+      verdict: 'granted',
+      record: {
+        status: 'granted',
+        source: 'written',
+        consented_at: '2025-05-02',
+        opt_out_source: null,
+        opt_out_at: null,
+      },
+    };
+    const { container } = open();
+    expect(container.querySelector('[data-consent-sentence]')).toHaveTextContent(
+      'Written consent, 2 May 2025, on the Okonkwo residence.',
+    );
+  });
+
+  it('offers the four acts, and never the word Remove', () => {
+    const { container } = open();
+    expect(screen.getByRole('button', { name: /^Text$/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Copy field link/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Show to client/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Close this seat/ })).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/\bRemove\b/);
+  });
+
+  it('closes a seat in two steps, with a reason, through closeSeat', () => {
+    open();
+    fireEvent.click(screen.getByRole('button', { name: /Close this seat/ }));
+    expect(closeMutate).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText('Why it closed'), {
+      target: { value: 'The slab program went to Stonehaven.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Close the seat/ }));
+    expect(closeMutate).toHaveBeenCalledWith({
+      id: 'seat-dana',
+      projectId: 'okonkwo',
+      reason: 'The slab program went to Stonehaven.',
+    });
+    expect(removeMutate).not.toHaveBeenCalled();
+  });
+
+  it('holds the hard delete while the seat carries a record, and says why', () => {
+    open();
+    fireEvent.click(screen.getByRole('button', { name: /Close this seat/ }));
+    const mistake = screen.getByRole('button', { name: /Added by mistake/ });
+    expect(mistake).toHaveAttribute('aria-disabled', 'true');
+    const describedBy = mistake.getAttribute('aria-describedby');
+    expect(document.getElementById(describedBy as string)).toHaveTextContent(
+      /texting record behind it/,
+    );
+    fireEvent.click(mistake);
+    expect(removeMutate).not.toHaveBeenCalled();
+  });
+
+  it('lets a mistaken add go when the seat carries nothing', () => {
     ul(
       <RosterRow
-        row={row({ sms_consent_status: 'not_asked' })}
-        group="buildSupply"
+        row={seatRow({ consent: 'not_asked', paper: 'not_on_file', stage: 'active' })}
+        band="this_week"
         expanded
         onToggle={jest.fn()}
       />,
     );
-    const text = screen.getByRole('button', { name: 'Text' });
-    expect(text).toBeDisabled();
-    expect(text).toHaveAttribute(
-      'title',
-      'Texting opens once they opt in and a number is on file.',
-    );
+    fireEvent.click(screen.getByRole('button', { name: /Close this seat/ }));
+    const mistake = screen.getByRole('button', { name: /Added by mistake/ });
+    expect(mistake).not.toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(mistake);
+    expect(removeMutate).toHaveBeenCalledWith({ id: 'seat-dana', projectId: 'okonkwo' });
   });
 
-  it('SHOW TO CLIENT writes showToClient for the party row', () => {
-    ul(
-      <RosterRow row={row()} group="buildSupply" expanded onToggle={jest.fn()} />,
-    );
-    const toggle = screen.getByRole('button', { name: 'Show to client' });
-    expect(toggle).toHaveAttribute('aria-pressed', 'false');
-    fireEvent.click(toggle);
-    expect(updateMutate).toHaveBeenCalledWith({
-      id: 'party-1',
-      projectId: 'proj-1',
-      patch: { showToClient: true },
+  it('mints a field link that ends with the job, not on a 90-day clock', async () => {
+    Object.assign(navigator, { clipboard: { writeText: jest.fn().mockResolvedValue(undefined) } });
+    open();
+    fireEvent.click(screen.getByRole('button', { name: /Copy field link/ }));
+    await screen.findByText(/Ends with the job, 13 August 2027/);
+    expect(createLinkMutate).toHaveBeenCalledWith({
+      partyId: 'seat-dana',
+      projectId: 'okonkwo',
+      expiresAt: '2027-08-13',
     });
   });
 
-  it('hides SHOW TO CLIENT (and REMOVE, and the SMS words) for a team row', () => {
+  it('holds Text until the record says yes', () => {
     ul(
       <RosterRow
-        row={row({
-          source: 'team',
-          kind: 'team',
-          roster_id: 'tm-1',
-          staff_role: 'senior_designer',
-          job_title: 'Lead designer',
-        })}
-        group="studioSide"
+        row={seatRow({ consent: 'not_asked' })}
+        band="this_week"
         expanded
         onToggle={jest.fn()}
       />,
     );
-    expect(screen.queryByRole('button', { name: 'Show to client' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Text' })).not.toBeInTheDocument();
-    // The studio-side second element is role + title when they differ.
-    expect(screen.getByText('Senior Designer · Lead designer')).toBeInTheDocument();
-  });
-});
-
-describe('RosterRow — REMOVE is an inline confirm, never window.confirm', () => {
-  it('swaps a confirm band into the row and only then removes', () => {
-    const confirmSpy = jest.spyOn(window, 'confirm');
-    ul(
-      <RosterRow row={row()} group="buildSupply" expanded onToggle={jest.fn()} />,
+    expect(screen.getByRole('button', { name: /^Text$/ })).toHaveAttribute(
+      'aria-disabled',
+      'true',
     );
-
-    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
-    expect(confirmSpy).not.toHaveBeenCalled();
-    expect(removeMutate).not.toHaveBeenCalled();
-    expect(
-      screen.getByText('– Take Rosa Martínez off the call sheet?'),
-    ).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
-    expect(removeMutate).toHaveBeenCalledWith({ id: 'party-1', projectId: 'proj-1' });
-    confirmSpy.mockRestore();
-  });
-
-  it('KEEP puts the band away without removing anyone', () => {
-    ul(
-      <RosterRow row={row()} group="buildSupply" expanded onToggle={jest.fn()} />,
-    );
-    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Keep' }));
-    expect(removeMutate).not.toHaveBeenCalled();
-    expect(screen.getByRole('button', { name: 'Show to client' })).toBeInTheDocument();
   });
 });

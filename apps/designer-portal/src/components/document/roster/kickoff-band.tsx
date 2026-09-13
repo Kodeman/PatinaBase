@@ -16,7 +16,8 @@
  * paint, then the band reveals after mount iff it hasn't been dismissed — so a
  * dismissed band never flashes.
  *
- * Flag-gated on `call-sheet` at this consumer.
+ * NO FLAG. `call-sheet` is retired (rulings §6): the band is live for every
+ * studio.
  *
  * FIX 2 (kickoff/instrument open modes) — the two doorways dispatch
  * `document:open-call-sheet` directly (the same event ⌘K and the letterhead
@@ -28,7 +29,6 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { ProjectRosterRow } from '@patina/supabase';
-import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { kickoffRetired } from '@/lib/document/roster-derivation';
 import { hasMarginNoteBeenSeen, markMarginNoteSeen } from '../margin-note';
 import { DocumentAction, DocumentActionRow } from '../document-action';
@@ -49,7 +49,6 @@ export function KickoffBand({
   projectId: string;
   rows: ProjectRosterRow[];
 }) {
-  const { value: callSheetOn } = useFeatureFlag('call-sheet');
   const noteKey = kickoffNoteKey(projectId);
   const [revealed, setRevealed] = useState(false);
   const [dismissed, setDismissed] = useState(false);
@@ -67,7 +66,7 @@ export function KickoffBand({
     setRevealed(true);
   }, [noteKey]);
 
-  if (!callSheetOn || !revealed || dismissed || kickoffRetired(rows)) return null;
+  if (!revealed || dismissed || kickoffRetired(rows)) return null;
 
   const grown =
     initialCount.current !== null && rows.length > initialCount.current;

@@ -214,7 +214,6 @@ export function ItemComposer({
   // list plus a way to the rolodex. Nothing else in the composer forks: the
   // state (`courtPartyId`), the auto-select-sole-match rule, and the submit
   // payload are the same in both modes by construction.
-  const { value: callSheetOn } = useFeatureFlag('call-sheet');
   const [pickerOpen, setPickerOpen] = useState(false);
   // A party added through the picker arrives asynchronously (the add invalidates
   // ['project-parties', projectId] and the host re-renders us with a longer
@@ -590,12 +589,11 @@ export function ItemComposer({
         })}
       </div>
 
-      {/* gc/vendor: name the concrete party (a project_parties row).
-          Flag OFF renders the shipped <select> unchanged; flag ON renders the
-          same rows as PartyMiniRow radios over the same `courtPartyId`. */}
+      {/* gc/vendor: name the concrete party (a project_parties row), as
+          PartyMiniRow radios over `courtPartyId`. The `call-sheet` flag is
+          retired (rulings §6); the <select> that stood behind it is gone. */}
       {(court === 'gc' || court === 'vendor') &&
-        courtParties.length > 0 &&
-        (callSheetOn ? (
+        courtParties.length > 0 && (
           <div className="mb-5">
             <label className={fieldLabelCls}>
               Which {court === 'gc' ? 'GC' : 'vendor'}
@@ -631,51 +629,26 @@ export function ItemComposer({
               Someone new
             </button>
           </div>
-        ) : (
-          <div className="mb-5">
-            <label className={fieldLabelCls}>
-              Which {court === 'gc' ? 'GC' : 'vendor'}
-            </label>
-            <select
-              value={courtPartyId ?? ''}
-              onChange={(e) => setCourtPartyId(e.target.value || null)}
-              className={inputCls}
-            >
-              <option value="">Unassigned</option>
-              {courtParties.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.display_name}
-                  {p.company_name ? ` · ${p.company_name}` : ''}
-                </option>
-              ))}
-            </select>
-          </div>
-        ))}
-      {(court === 'gc' || court === 'vendor') &&
-        courtParties.length === 0 &&
-        (callSheetOn ? (
-          <div className="mb-5">
-            <p className="mt-1 text-[0.66rem] italic text-[var(--color-aged-oak)]">
-              {emptyCourtCopy}
-            </p>
-            <button
-              type="button"
-              onClick={() => setPickerOpen(true)}
-              className={SCORED_WORD}
-            >
-              Someone new
-            </button>
-          </div>
-        ) : (
-          <p className="mb-5 mt-1 text-[0.66rem] italic text-[var(--color-aged-oak)]">
+        )}
+      {(court === 'gc' || court === 'vendor') && courtParties.length === 0 && (
+        <div className="mb-5">
+          <p className="mt-1 text-[0.66rem] italic text-[var(--color-aged-oak)]">
             {emptyCourtCopy}
           </p>
-        ))}
+          <button
+            type="button"
+            onClick={() => setPickerOpen(true)}
+            className={SCORED_WORD}
+          >
+            Someone new
+          </button>
+        </div>
+      )}
       {court !== 'gc' && court !== 'vendor' && <div className="mb-5" />}
 
       {/* The rolodex, pre-scoped to the court being filled. Mounted only while
           open so its queries stay off the composer's cold path. */}
-      {callSheetOn && pickerOpen && (court === 'gc' || court === 'vendor') && (
+      {pickerOpen && (court === 'gc' || court === 'vendor') && (
         <RolodexPicker
           open
           onClose={() => setPickerOpen(false)}

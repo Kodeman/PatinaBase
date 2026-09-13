@@ -1,129 +1,215 @@
 'use client';
 
 /**
- * One call-sheet row, and what is under it (slide 12).
+ * ONE CALL SHEET ROW, AND WHAT IS UNDER IT (direction §3.4, SPEC §5.4).
  *
- * Folded: a 34px avatar, the name with its consent DOT (the words wait for the
- * unfold), a mono second element that changes by group, the reach chip, and a
- * quiet chevron. Tapping the row — anywhere but the chevron — unfolds phone,
- * email, the full consent chip, and the four scored words. The chevron opens
- * the PartyProfileSheet that already exists (slide 11's mnote 5: "no new
- * detail screen is proposed"), via the `onOpenProfile` callback.
+ * Folded: a 34px avatar, the name, the kind and trade, the firm, the authority
+ * phrase where there is one, the held clause where a firm's paper blocks the
+ * work, an opted-out note where the studio may not text (R-T), then two words —
+ * reach and stage — a `tel:` link as the row's SIBLING, and the chevron that
+ * opens the person.
  *
- * Grammar: zero shadows, one primary per region, inline bands never toasts —
- * REMOVE swaps a confirm band into the row's own pixels rather than calling
- * window.confirm.
+ * Unfolded: phone and email, the consent sentence with its source and date
+ * (R-Q), and four acts — Text, Copy field link, Show to client, Close this
+ * seat. The unfold trigger carries `aria-expanded` AND `aria-controls` pointing
+ * at the panel's real id (SPEC §7 #5).
  *
- * Team rows are read-only here on purpose: SHOW TO CLIENT, REMOVE, TEXT and
- * COPY FIELD LINK all write `project_parties`, and a team row is a
- * `project_team_members` login. It has no party to write to. The synthetic
- * client row (Wave 5) is read-only for the same reason and one more: it isn't
- * a row at all, it's the project's `client_id` wearing a roster shape. It
- * carries a quiet mono THE CLIENT pill where a kind label would go.
+ * THE WORD "REMOVE" APPEARS NOWHERE (SPEC §5.4 #14). Closing a seat is
+ * `Close this seat`: a dated `off_job_at` with a reason, and the consent, the
+ * bid history and the paper all stay on the book. The hard delete survives for
+ * one case only — a seat added by mistake that carries nothing — and the
+ * predicate that decides it is `seatDeleteRefusal`, read before the act is
+ * offered, never after it is pressed.
+ *
+ * An `<a>` never nests inside a `<button>`: the row's open control and the
+ * phone are two sibling targets, each at least 44px (SPEC §7 #6).
  */
 
 import { useState } from 'react';
 import {
   fieldLinkUrl,
+  seatDeleteRefusal,
+  useChannelConsent,
+  useCloseProjectPartySeat,
+  useComplianceDocuments,
   useCreateFieldLink,
   useRemoveProjectParty,
   useSendPartySms,
   useUpdateProjectParty,
-  type ProjectRosterRow,
+  AUTHORITY_SCOPE_LABELS,
+  COMPLIANCE_DOC_TYPE_LABELS,
+  SEAT_DELETE_REFUSAL_SENTENCES,
+  type ProjectPartyAuthority,
 } from '@patina/supabase';
-import { getStaffRoleLabel, isFieldPartyKind } from '@patina/types';
+import { isFieldPartyKind } from '@patina/types';
 import {
-  isSyntheticClientRow,
-  reachState,
-  rosterProfileRole,
-  type RosterGroup,
+  authorityPhrase,
+  fieldLinkExpirySentence,
+  heldClause,
+  rosterShortDate,
+  seatWindowText,
+  type CallSheetBand,
+  type CallSheetRow,
 } from '@/lib/document/roster-derivation';
-import { Avatar, ConsentChip } from '../people/person-bits';
+import { peopleEvents } from '@/lib/analytics/people-events';
+import { Avatar } from '../people/person-bits';
+import { consentSentence } from '../people/consent-sentence';
+import { ContactRuleLine } from '../people/contact-rule-line';
+import { PlainFact, StateWord } from '../people/state-word';
+import { TelLink } from '../people/tel-link';
 import { DocumentAction, DocumentActionRow } from '../document-action';
-import { ReachChip } from './reach-chip';
-import { rosterMetaLine } from './party-mini-row';
 
 const META =
   'font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]';
 
-/** The mono second element — a different sentence per group (slide 11). */
-export function rosterSecondLine(row: ProjectRosterRow, group: RosterGroup): string {
-  if (group === 'studioSide') {
-    // Role and title are two different columns and often say the same thing
-    // ("Designer" / "Designer"); show the second only when it adds something.
-    const role = getStaffRoleLabel(row.staff_role);
-    const title = (row.job_title ?? '').trim();
-    return [role, title && title.toLowerCase() !== role.toLowerCase() ? title : '']
-      .filter(Boolean)
-      .join(' · ');
+/** The stages the studio asked a price on — a seat in one of them carries a bid
+ *  whatever columns the row has (the bid columns are P2). */
+const BID_STAGES: readonly string[] = [
+  'prospect',
+  'invited',
+  'bidding',
+  'declined',
+  'no_response',
+];
+
+/** The window clause a row prints beside its stage: the day the crew arrives on
+ *  a later seat, the day it closed on a done one. */
+export function rosterWindowClause(row: CallSheetRow, band: CallSheetBand): string {
+  if (band === 'done') {
+    const when = rosterShortDate(row.offJobAt);
+    const reason = (row.offJobReason ?? '').trim();
+    if (!when && !reason) return '';
+    return [when ? `Off the job ${when}.` : '', reason].filter(Boolean).join(' ');
   }
-  if (group === 'clientSide') {
-    // There is no "relation" column — the honest relation is the kind plus the
-    // household/company the row carries.
-    return rosterMetaLine(row.kind, null);
+  if (band === 'later') {
+    const from = rosterShortDate(row.onSiteFrom);
+    return from ? `From ${from}` : '';
   }
-  return rosterMetaLine(row.kind, row.trade);
+  return seatWindowText(row.onSiteFrom, row.onSiteTo);
 }
 
 export function RosterRow({
   row,
-  group,
+  band,
   expanded,
   onToggle,
-  onOpenProfile,
+  onOpenSeat,
+  authority = [],
+  consentOrg,
+  projectName,
 }: {
-  row: ProjectRosterRow;
-  group: RosterGroup;
+  row: CallSheetRow;
+  band: CallSheetBand;
   expanded: boolean;
   onToggle: () => void;
-  onOpenProfile?: (row: ProjectRosterRow) => void;
+  onOpenSeat?: (row: CallSheetRow) => void;
+  authority?: ProjectPartyAuthority[];
+  /** The studio whose consent record this row's number is read against. */
+  consentOrg?: string | null;
+  /** The job this sheet is, for R-Q's "on the <project>" clause. */
+  projectName?: string | null;
 }) {
-  const isParty = row.source === 'party';
-  // The project's own client (Wave 5) — a synthetic row, not a party row.
-  // Nothing writes to it: no SHOW TO CLIENT (they ARE the client), no REMOVE
-  // (you'd be removing the project's client from the project), no consent dot
-  // and no chevron. It states who they are and how they're reachable.
-  const isClient = isSyntheticClientRow(row);
-  // A chevron only where PartyProfileSheet has something to show — the
-  // people_directory party branch (00420) excludes vendor / client_rep /
-  // other, so those rows would open an empty sheet.
-  const canOpenProfile = !!rosterProfileRole(row);
-  const partyId = row.roster_id ?? '';
-  const projectId = row.project_id ?? '';
-  const name = row.display_name ?? row.company_name ?? 'Unnamed';
-  const reach = reachState(row);
-  // NULL is UNKNOWN, never the affirmative word (R-V). v_project_roster
-  // COALESCEs to 'not_asked' only for a caller who can read the record that
-  // decides it (00594, w1b final review r8 MAJOR-1); a `?? 'not_asked'` here
-  // would print the same fail-open word the view stopped printing — on a
-  // dated `opted_out` the caller's studio cannot see. ConsentChip renders the
-  // absence as "No record".
-  const consent = row.sms_consent_status;
-  // No Twilio-availability probe exists in the client (the rails are dormant
-  // until 10DLC clears), so "can text" is exactly what the party sheet already
-  // gates its composer on: a party row, an opted-in consent, and a number.
-  const canText = isParty && consent === 'granted' && !!row.phone;
-  const showTextWord = isParty && isFieldPartyKind(row.kind);
+  const isSeat = row.source === 'seat';
+  const seatId = row.seatId ?? '';
+  const projectId = row.projectId ?? '';
+
+  const [composing, setComposing] = useState(false);
+  const [body, setBody] = useState('');
+  const [closing, setClosing] = useState(false);
+  const [reason, setReason] = useState('');
+  const [note, setNote] = useState<string | null>(null);
 
   const updateParty = useUpdateProjectParty();
+  const closeSeat = useCloseProjectPartySeat();
   const removeParty = useRemoveProjectParty();
   const createLink = useCreateFieldLink();
   const sendSms = useSendPartySms();
 
-  const [composing, setComposing] = useState(false);
-  const [body, setBody] = useState('');
-  const [confirmRemove, setConfirmRemove] = useState(false);
-  const [note, setNote] = useState<string | null>(null);
+  // The consent SENTENCE needs the record behind the word: its source and its
+  // date. Read only where the sentence prints — the unfold, and a refusal,
+  // which R-T puts on the collapsed row as well.
+  const wantsRecord = isSeat && (expanded || row.consent === 'opted_out');
+  const { data: consentRecord } = useChannelConsent(
+    wantsRecord ? consentOrg : null,
+    'sms',
+    wantsRecord ? row.phoneE164 : null,
+  );
+
+  // The held clause needs the paper itself — which document lapsed, and when.
+  // Only a LAPSED firm is read; every other row costs no query.
+  const { data: heldPaper } = useComplianceDocuments(
+    row.paper === 'lapsed' && row.companyId ? { holderId: row.companyId } : undefined,
+  );
+  const blocking = (heldPaper ?? []).find(
+    (doc) =>
+      doc.blocks.length > 0 &&
+      !!doc.expires_on &&
+      doc.expires_on < new Date().toISOString().slice(0, 10),
+  );
+  const held = blocking
+    ? heldClause(row.companyName, {
+        docLabel:
+          COMPLIANCE_DOC_TYPE_LABELS[
+            blocking.doc_type as keyof typeof COMPLIANCE_DOC_TYPE_LABELS
+          ] ??
+          blocking.doc_label ??
+          blocking.doc_type,
+        expiresOn: blocking.expires_on,
+        blocks: blocking.blocks,
+      })
+    : '';
+
+  const phrase = authorityPhrase(
+    authority.map((grant) => ({
+      scope: grant.scope,
+      threshold_cents: grant.threshold_cents,
+      prepares_only: grant.prepares_only,
+    })),
+    AUTHORITY_SCOPE_LABELS,
+  );
+
+  const consentLine = consentSentence({
+    status: consentRecord?.verdict ?? row.consent,
+    source: consentRecord?.record?.source,
+    consentedAt: consentRecord?.record?.consented_at,
+    optOutSource: consentRecord?.record?.opt_out_source,
+    optOutAt: consentRecord?.record?.opt_out_at,
+    projectName,
+  });
+
+  const canText = isSeat && row.consent === 'granted' && !!row.phone;
+  const showFieldActs = isSeat && isFieldPartyKind(row.partyKind ?? '');
+  const windowClause = rosterWindowClause(row, band);
+
+  // THE MISTAKEN-ADD PREDICATE, read BEFORE the act is offered. A seat that
+  // carries a consent record, a bid or paper the studio holds can only be
+  // closed; the sentence beside the held act says which fact is in the way.
+  const refusal = seatDeleteRefusal({
+    hasConsentRecord: !!row.consent && row.consent !== 'not_asked',
+    hasBid: BID_STAGES.includes(row.stage ?? ''),
+    hasComplianceDocument: !!row.paper && row.paper !== 'not_on_file',
+  });
+
+  const panelId = `roster-row-${row.key.replace(/[^A-Za-z0-9_-]/g, '')}`;
+  const refusalId = `${panelId}-refusal`;
 
   const copyLink = async () => {
     setNote(null);
     try {
-      const { token } = await createLink.mutateAsync({ partyId, projectId });
+      const { token } = await createLink.mutateAsync({
+        partyId: seatId,
+        projectId,
+        expiresAt: row.onSiteTo ?? undefined,
+      });
       const url = fieldLinkUrl(token);
       await navigator.clipboard?.writeText(url);
-      setNote(`Field link copied — shown once. ${url}`);
+      peopleEvents.grantMinted({
+        tier: 'field_link',
+        expiry_source: row.onSiteTo ? 'engagement_window' : 'fallback_90_day',
+      });
+      setNote(`Field link copied — shown once. ${fieldLinkExpirySentence(row.onSiteTo)}`);
     } catch (e) {
-      setNote(e instanceof Error ? e.message : 'Could not mint a field link just now.');
+      setNote(e instanceof Error ? e.message : 'Could not open a field link just now.');
     }
   };
 
@@ -134,42 +220,44 @@ export function RosterRow({
           type="button"
           onClick={onToggle}
           aria-expanded={expanded}
+          aria-controls={panelId}
           className="flex min-h-11 min-w-0 flex-1 items-center gap-3 rounded-[8px] px-1 text-left transition-colors hover:bg-[rgba(196,165,123,0.05)]"
         >
-          <Avatar name={name} role={row.kind ?? 'other'} size={34} />
+          <Avatar name={row.name} role={row.partyKind ?? 'other'} size={34} />
           <span className="min-w-0 flex-1">
-            <span className="flex items-center gap-2">
-              <span className="truncate text-[0.88rem] text-[var(--color-charcoal)]">
-                {name}
+            <span className="block text-[0.88rem] text-[var(--color-charcoal)]">
+              {row.name}
+            </span>
+            <span className={`mt-[0.1rem] flex flex-wrap items-baseline gap-x-1.5 ${META}`}>
+              {row.meta && <span>{row.meta}</span>}
+              {row.companyName && (
+                <span className="normal-case tracking-normal text-[0.68rem] text-[var(--color-aged-oak)]">
+                  <span aria-hidden>■</span> {row.companyName}
+                </span>
+              )}
+              {windowClause && (
+                <span className="normal-case tracking-normal text-[0.68rem] text-[var(--color-aged-oak)]">
+                  {windowClause}
+                </span>
+              )}
+            </span>
+            {phrase && (
+              <span className="mt-[0.15rem] block">
+                <PlainFact>{phrase}</PlainFact>
               </span>
-              {/* NO consent word on the COLLAPSED row (SPEC §6.1): the Call
-                  Sheet's row carries two words — reach and stage — and consent
-                  and paper move into the unfold. What stood here was a bare
-                  `dotOnly` colour dot, which SPEC §5.1 #16 and §7 #9 both
-                  forbid, and which sat INSIDE the toggle's accessible name. */}
-            </span>
-            <span className={`mt-[0.1rem] flex items-baseline gap-1.5 ${META}`}>
-              {isClient ? (
-                <span className="inline-flex items-center rounded-[3px] border border-[var(--color-pearl)] px-1.5 py-[0.1rem] tracking-[0.12em] text-[var(--color-mocha)]">
-                  The client
-                </span>
-              ) : (
-                <span className="truncate">{rosterSecondLine(row, group)}</span>
-              )}
-              {row.company_name && (
-                <span className="truncate normal-case tracking-normal text-[0.68rem] text-[var(--color-aged-oak)]">
-                  <span aria-hidden>■</span> {row.company_name}
-                </span>
-              )}
-            </span>
+            )}
           </span>
         </button>
-        <ReachChip state={reach} />
-        {canOpenProfile && onOpenProfile && (
+        <StateWord family="reach" value={row.reach} />
+        <StateWord family="stage" value={row.stage} />
+        {onOpenSeat && row.personId && (
           <button
             type="button"
-            onClick={() => onOpenProfile(row)}
-            aria-label={`Open ${name}'s profile`}
+            onClick={() => {
+              peopleEvents.personCardOpened({ source: 'roster_row' });
+              onOpenSeat(row);
+            }}
+            aria-label={`Open ${row.name}`}
             className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center text-[0.8rem] text-[var(--color-aged-oak)] transition-colors hover:text-[var(--color-charcoal)]"
           >
             ›
@@ -177,176 +265,297 @@ export function RosterRow({
         )}
       </div>
 
-      {expanded && (
-        <div className="border-t border-[var(--color-pearl)] px-1 pb-3 pt-2.5">
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-1.5">
-            {row.phone && (
-              <span className="text-[0.78rem] text-[var(--color-charcoal)]">{row.phone}</span>
-            )}
-            {row.email && (
-              <span className="text-[0.78rem] text-[var(--color-charcoal)]">{row.email}</span>
-            )}
-            {!row.phone && !row.email && (
-              <span className="text-[0.74rem] text-[var(--color-aged-oak)]">
-                – No phone or email on file.
-              </span>
-            )}
-            {isParty && <ConsentChip status={consent} />}
-          </div>
-
-          {confirmRemove ? (
-            <div className="mt-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1.5 border-l-2 border-[var(--color-terracotta)] bg-[rgba(196,131,111,0.07)] px-3 py-2.5">
-              <p className="text-[0.74rem] text-[var(--color-charcoal)]">
-                – Take {name} off the call sheet?
-              </p>
-              <DocumentActionRow
-                surfaceKey="call-sheet"
-                regionKey="roster-row-remove-confirm"
-                aria-label="Confirm removal"
-              >
-                <DocumentAction
-                  actionKey="confirm-remove-party"
-                  variant="danger"
-                  onClick={() =>
-                    void removeParty
-                      .mutateAsync({ id: partyId, projectId })
-                      .catch((e: unknown) =>
-                        setNote(e instanceof Error ? e.message : 'Could not remove them.'),
-                      )
-                  }
-                  disabled={removeParty.isPending}
-                  loading={removeParty.isPending}
-                  loadingLabel="Removing…"
-                >
-                  Remove
-                </DocumentAction>
-                <DocumentAction
-                  actionKey="cancel-remove-party"
-                  variant="tertiary"
-                  onClick={() => setConfirmRemove(false)}
-                >
-                  Keep
-                </DocumentAction>
-              </DocumentActionRow>
-            </div>
-          ) : (
-            <DocumentActionRow
-              surfaceKey="call-sheet"
-              regionKey="roster-row"
-              className="mt-3"
-              aria-label={`Actions for ${name}`}
-            >
-              {showTextWord && (
-                <DocumentAction
-                  actionKey="text-party"
-                  variant="primary"
-                  onClick={() => setComposing((c) => !c)}
-                  disabled={!canText}
-                  title={
-                    canText
-                      ? undefined
-                      : 'Texting opens once they opt in and a number is on file.'
-                  }
-                >
-                  Text
-                </DocumentAction>
-              )}
-              {showTextWord && (
-                <DocumentAction
-                  actionKey="copy-field-link"
-                  variant="secondary"
-                  onClick={() => void copyLink()}
-                  disabled={createLink.isPending}
-                  loading={createLink.isPending}
-                  loadingLabel="Minting…"
-                >
-                  Copy field link
-                </DocumentAction>
-              )}
-              {isParty && (
-                <button
-                  type="button"
-                  onClick={() =>
-                    void updateParty.mutateAsync({
-                      id: partyId,
-                      projectId,
-                      patch: { showToClient: !row.show_to_client },
-                    })
-                  }
-                  aria-pressed={!!row.show_to_client}
-                  className={`da-score-hover inline-flex min-h-11 items-center font-mono text-[12px] uppercase tracking-[0.1em] transition-colors ${
-                    row.show_to_client
-                      ? 'da-score-on text-[var(--color-charcoal)]'
-                      : 'text-[var(--color-aged-oak)] hover:text-[var(--color-mocha)]'
-                  }`}
-                >
-                  Show to client
-                </button>
-              )}
-              {isParty && (
-                <DocumentAction
-                  actionKey="remove-party"
-                  variant="danger"
-                  onClick={() => setConfirmRemove(true)}
-                  className="ml-auto"
-                >
-                  Remove
-                </DocumentAction>
-              )}
-            </DocumentActionRow>
-          )}
-
-          {composing && canText && (
-            <div className="mt-2.5">
-              <textarea
-                rows={2}
-                value={body}
-                onChange={(e) => setBody(e.target.value)}
-                aria-label={`Send a text to ${name}`}
-                placeholder="Send a text…"
-                className="w-full resize-none rounded-[7px] border border-[var(--color-pearl)] bg-white px-3 py-2 text-[0.8rem] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none"
-              />
-              <DocumentActionRow
-                surfaceKey="call-sheet"
-                regionKey="roster-row-composer"
-                className="mt-1.5"
-                aria-label="Send a text"
-              >
-                <DocumentAction
-                  actionKey="send-roster-text"
-                  variant="primary"
-                  onClick={() =>
-                    void sendSms
-                      .mutateAsync({ partyId, body })
-                      .then(() => {
-                        setBody('');
-                        setComposing(false);
-                        setNote('Sent.');
-                      })
-                      .catch((e: unknown) =>
-                        setNote(e instanceof Error ? e.message : 'Send failed.'),
-                      )
-                  }
-                  disabled={!body.trim() || sendSms.isPending}
-                  loading={sendSms.isPending}
-                  loadingLabel="Sending…"
-                >
-                  Send
-                </DocumentAction>
-              </DocumentActionRow>
-            </div>
-          )}
-
-          {note && (
-            <p
-              role="status"
-              className="mt-2 break-all border-l-2 border-[var(--color-sage)] bg-[rgba(133,148,124,0.07)] px-3 py-2 text-[0.7rem] text-[var(--color-charcoal)]"
-            >
-              {note}
-            </p>
-          )}
+      {/* The phone is the row's SIBLING target, never inside its button. */}
+      {row.phone && (
+        <div className="-mt-1 pb-1 pl-[46px]">
+          <TelLink phone={row.phone} personName={row.name} />
         </div>
       )}
+
+      {/* R-S — a rule clause prints wherever a rule is shown, folded or not. */}
+      {row.ruleSummary && (
+        <div className="pb-1.5 pl-[46px]">
+          <ContactRuleLine
+            summary={row.ruleSummary}
+            blocked={/never|do not|don’t|don't/i.test(row.ruleSummary)}
+          />
+        </div>
+      )}
+
+      {/* PR-h — the held clause, in words, with a terracotta leading rule. */}
+      {held && (
+        <p
+          data-held-clause
+          className="mb-1.5 ml-[46px] border-l-2 border-[var(--color-terracotta-ink)] bg-[rgba(196,131,111,0.07)] px-3 py-2 text-[0.74rem] text-[var(--color-charcoal)]"
+        >
+          {held}
+        </p>
+      )}
+
+      {/* R-T — an opted-out note prints on the COLLAPSED row, not only inside
+          its unfold: a sub the studio may not text must be visible at a glance. */}
+      {!expanded && row.consent === 'opted_out' && (
+        <p
+          data-opted-out-note
+          className="mb-1.5 ml-[46px] text-[0.74rem] text-[var(--color-charcoal)]"
+        >
+          {consentLine || 'Opted out of texts.'}
+        </p>
+      )}
+
+      <div id={panelId} hidden={!expanded}>
+        {expanded && (
+          <div className="border-t border-[var(--color-pearl)] px-1 pb-3 pt-2.5">
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-1.5">
+              {row.phone && (
+                <span className="text-[0.78rem] text-[var(--color-charcoal)]">
+                  {row.phone}
+                </span>
+              )}
+              {row.email && (
+                <span className="text-[0.78rem] text-[var(--color-charcoal)]">
+                  {row.email}
+                </span>
+              )}
+              {!row.phone && !row.email && (
+                <span className="text-[0.74rem] text-[var(--color-aged-oak)]">
+                  – No phone or email on file.
+                </span>
+              )}
+              <StateWord family="consent" value={row.consent} />
+              <StateWord family="paper" value={row.paper} />
+            </div>
+
+            {consentLine && (
+              <p
+                data-consent-sentence
+                className="mt-1.5 text-[0.74rem] text-[var(--color-aged-oak)]"
+              >
+                {consentLine}
+              </p>
+            )}
+
+            {closing ? (
+              <div className="mt-3 border-l-2 border-[var(--color-terracotta-ink)] bg-[rgba(196,131,111,0.07)] px-3 py-2.5">
+                <p className="text-[0.74rem] text-[var(--color-charcoal)]">
+                  – Close {row.name}&rsquo;s seat? The seat stays on the job with the
+                  day it closed, and everything it carries stays with it.
+                </p>
+                <label
+                  className="mt-2 block font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]"
+                  htmlFor={`${panelId}-reason`}
+                >
+                  Why it closed
+                </label>
+                <input
+                  id={`${panelId}-reason`}
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  className="min-h-11 w-full border-0 border-b border-[var(--color-pearl)] bg-transparent py-2 text-[0.8rem] text-[var(--color-charcoal)] outline-none focus:border-[var(--color-clay)]"
+                />
+                <DocumentActionRow
+                  surfaceKey="call-sheet"
+                  regionKey="roster-row-close-confirm"
+                  className="mt-2"
+                  aria-label={`Close ${row.name}'s seat`}
+                >
+                  <DocumentAction
+                    actionKey="confirm-close-seat"
+                    variant="danger"
+                    onClick={() =>
+                      void closeSeat
+                        .mutateAsync({ id: seatId, projectId, reason })
+                        .then(() => {
+                          peopleEvents.seatClosed({
+                            from_stage: row.stage,
+                            with_reason: !!reason.trim(),
+                          });
+                          setClosing(false);
+                          setNote(`${row.name}'s seat is closed.`);
+                        })
+                        .catch((e: unknown) =>
+                          setNote(
+                            e instanceof Error ? e.message : 'Could not close the seat.',
+                          ),
+                        )
+                    }
+                    loading={closeSeat.isPending}
+                    loadingLabel="Closing…"
+                  >
+                    Close the seat
+                  </DocumentAction>
+                  <DocumentAction
+                    actionKey="cancel-close-seat"
+                    variant="tertiary"
+                    onClick={() => setClosing(false)}
+                  >
+                    Keep it open
+                  </DocumentAction>
+                  {/* The surviving hard delete: a seat added by mistake that
+                      carries nothing. Held, never hidden, so the reason is
+                      readable where the act would be. */}
+                  <DocumentAction
+                    actionKey="remove-mistaken-seat"
+                    variant="tertiary"
+                    className="ml-auto"
+                    disabled={!!refusal}
+                    held={!!refusal}
+                    aria-describedby={refusal ? refusalId : undefined}
+                    onHeldActivate={() =>
+                      setNote(refusal ? SEAT_DELETE_REFUSAL_SENTENCES[refusal] : null)
+                    }
+                    onClick={() =>
+                      void removeParty
+                        .mutateAsync({ id: seatId, projectId })
+                        .then(() => {
+                          peopleEvents.seatClosed({
+                            from_stage: row.stage,
+                            with_reason: false,
+                            hard_deleted: true,
+                          });
+                        })
+                        .catch((e: unknown) =>
+                          setNote(
+                            e instanceof Error ? e.message : 'Could not take it back.',
+                          ),
+                        )
+                    }
+                  >
+                    Added by mistake
+                  </DocumentAction>
+                </DocumentActionRow>
+                {refusal && (
+                  <p id={refusalId} className="mt-1.5 text-[0.72rem] text-[var(--color-aged-oak)]">
+                    {SEAT_DELETE_REFUSAL_SENTENCES[refusal]}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <DocumentActionRow
+                surfaceKey="call-sheet"
+                regionKey="roster-row"
+                className="mt-3"
+                aria-label={`Actions for ${row.name}`}
+              >
+                {showFieldActs && (
+                  <DocumentAction
+                    actionKey="text-party"
+                    variant="primary"
+                    onClick={() => setComposing((c) => !c)}
+                    disabled={!canText}
+                    held={!canText}
+                    aria-describedby={!canText ? `${panelId}-text-held` : undefined}
+                    onHeldActivate={() =>
+                      setNote(
+                        'Texting opens once they have said yes on the record and a number is on file.',
+                      )
+                    }
+                  >
+                    Text
+                  </DocumentAction>
+                )}
+                {showFieldActs && (
+                  <DocumentAction
+                    actionKey="copy-field-link"
+                    variant="secondary"
+                    onClick={() => void copyLink()}
+                    loading={createLink.isPending}
+                    loadingLabel="Opening…"
+                  >
+                    Copy field link
+                  </DocumentAction>
+                )}
+                {isSeat && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void updateParty.mutateAsync({
+                        id: seatId,
+                        projectId,
+                        patch: { showToClient: !row.showToClient },
+                      })
+                    }
+                    aria-pressed={!!row.showToClient}
+                    className={`da-score-hover inline-flex min-h-11 items-center font-mono text-[12px] uppercase tracking-[0.1em] transition-colors ${
+                      row.showToClient
+                        ? 'da-score-on text-[var(--color-charcoal)]'
+                        : 'text-[var(--color-aged-oak)] hover:text-[var(--color-mocha)]'
+                    }`}
+                  >
+                    Show to client
+                  </button>
+                )}
+                {isSeat && (
+                  <DocumentAction
+                    actionKey="close-seat"
+                    variant="danger"
+                    onClick={() => setClosing(true)}
+                    className="ml-auto"
+                  >
+                    Close this seat
+                  </DocumentAction>
+                )}
+              </DocumentActionRow>
+            )}
+
+            {!canText && showFieldActs && (
+              <p id={`${panelId}-text-held`} className="sr-only">
+                Texting opens once they have said yes on the record and a number is on
+                file.
+              </p>
+            )}
+
+            {composing && canText && (
+              <div className="mt-2.5">
+                <textarea
+                  rows={2}
+                  value={body}
+                  onChange={(e) => setBody(e.target.value)}
+                  aria-label={`Send a text to ${row.name}`}
+                  className="w-full resize-none rounded-[7px] border border-[var(--color-pearl)] bg-white px-3 py-2 text-[0.8rem] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none"
+                />
+                <DocumentActionRow
+                  surfaceKey="call-sheet"
+                  regionKey="roster-row-composer"
+                  className="mt-1.5"
+                  aria-label="Send a text"
+                >
+                  <DocumentAction
+                    actionKey="send-roster-text"
+                    variant="primary"
+                    onClick={() =>
+                      void sendSms
+                        .mutateAsync({ partyId: seatId, body })
+                        .then(() => {
+                          setBody('');
+                          setComposing(false);
+                          setNote('Sent.');
+                        })
+                        .catch((e: unknown) =>
+                          setNote(e instanceof Error ? e.message : 'Send failed.'),
+                        )
+                    }
+                    disabled={!body.trim() || sendSms.isPending}
+                    loading={sendSms.isPending}
+                    loadingLabel="Sending…"
+                  >
+                    Send
+                  </DocumentAction>
+                </DocumentActionRow>
+              </div>
+            )}
+
+            {note && (
+              <p
+                role="status"
+                className="mt-2 break-all border-l-2 border-[var(--color-sage)] bg-[rgba(133,148,124,0.07)] px-3 py-2 text-[0.7rem] text-[var(--color-charcoal)]"
+              >
+                {note}
+              </p>
+            )}
+          </div>
+        )}
+      </div>
     </li>
   );
 }
