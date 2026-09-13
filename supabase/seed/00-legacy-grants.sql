@@ -15786,6 +15786,30 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00608_log_time_and_start_timer.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.log_time(uuid,uuid,timestamptz,integer,text,boolean,text,text,uuid,text,text,uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00608_log_time_and_start_timer.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.log_time(uuid,uuid,timestamptz,integer,text,boolean,text,text,uuid,text,text,uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00608_log_time_and_start_timer.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.start_timer(uuid,text,boolean,text,uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00608_log_time_and_start_timer.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.start_timer(uuid,text,boolean,text,uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 00611_time_entry_studio_id_guard.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.guard_time_entry_studio_id() FROM PUBLIC, anon, authenticated, service_role;
