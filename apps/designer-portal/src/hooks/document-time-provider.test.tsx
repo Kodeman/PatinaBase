@@ -33,6 +33,8 @@ let runningTimerRow: {
   id: string;
   project_id: string;
   started_at: string;
+  /** W3 — the row's own billable answer, restated on the stop payload. */
+  billable: boolean;
   source?: string;
 } | null = null;
 
@@ -63,26 +65,47 @@ jest.mock('@patina/supabase', () => ({
   useStartTimer: () => ({ mutateAsync: startTimerMutateAsync }),
   useStopTimer: () => ({ mutateAsync: stopTimerMutateAsync }),
   useDiscardTimer: () => ({ mutateAsync: discardTimerMutateAsync }),
-  useCreateTimeEntry: () => ({ mutateAsync: jest.fn() }),
+  useCreateTimeEntry: () => ({ mutateAsync: createEntryMutateAsync }),
   useUpdateTimeEntry: () => ({ mutateAsync: jest.fn() }),
   useDeleteTimeEntry: () => ({ mutateAsync: jest.fn() }),
 }));
 
-const stopTimerMutateAsync = jest.fn(async (input: { entryId: string }) => {
+/** What the stop payload actually carried, per call — W3 asserts two fields
+ *  on it that the close-out used to leave implicit. */
+const stopPayloads: Array<Record<string, unknown>> = [];
+
+const stopTimerMutateAsync = jest.fn(async (input: Record<string, unknown>) => {
+  stopPayloads.push(input);
   events.push(`stopTimer:${runningTimerRow?.project_id}`);
   const stopped = runningTimerRow;
   runningTimerRow = null;
-  return { id: input.entryId, project_id: stopped?.project_id };
+  return {
+    id: input.entryId as string,
+    project_id: stopped?.project_id,
+    duration_minutes: 12,
+    billable: false,
+    hourly_rate_cents: null,
+    rate_source: 'none',
+    rate_role: null,
+    rated_amount_cents: null,
+  };
 });
+
+/** 00608 — start_timer is ONE call that returns BOTH rows. A row another tab
+ *  opened in the gap comes back as `stopped`; set this to simulate that. */
+let concurrentIncumbent: Record<string, unknown> | null = null;
 
 const startTimerMutateAsync = jest.fn(async (input: { projectId: string }) => {
   events.push(`startTimer:${input.projectId}`);
+  const stopped = concurrentIncumbent;
+  concurrentIncumbent = null;
   runningTimerRow = {
     id: `entry-${input.projectId}`,
     project_id: input.projectId,
     started_at: new Date().toISOString(),
+    billable: false,
   };
-  return runningTimerRow;
+  return { started: runningTimerRow, stopped };
 });
 
 const discardTimerMutateAsync = jest.fn(async (input: { entryId: string }) => {
@@ -97,7 +120,25 @@ jest.mock('@/hooks/use-commercial-documents', () => ({
 }));
 
 jest.mock('@/lib/document/authority-hours', () => ({
-  automaticTimeBillingIntent: () => ({ billable: false }),
+  automaticTimeBillingIntent: () => ({ billable: false, reason: 'no_authority' }),
+}));
+
+jest.mock('@/lib/analytics/document-events', () => ({
+  documentEvents: {
+    time: {
+      timerStarted: (...a: unknown[]) => timerStartedCalls.push(a[0] as object),
+      timerStopped: (...a: unknown[]) => timerStoppedCalls.push(a[0] as object),
+    },
+  },
+}));
+
+const timerStartedCalls: object[] = [];
+const timerStoppedCalls: object[] = [];
+const createEntryMutateAsync = jest.fn(async (input: Record<string, unknown>) => ({
+  id: 'typed-entry',
+  project_id: input.projectId,
+  duration_minutes: input.durationMinutes,
+  billable: input.billable,
 }));
 
 function isRunningTimerKey(key: unknown): boolean {
@@ -110,6 +151,11 @@ describe('DocumentTimeProvider — A3 queue hardening', () => {
   beforeEach(() => {
     events.length = 0;
     runningTimerRow = null;
+    concurrentIncumbent = null;
+    stopPayloads.length = 0;
+    timerStartedCalls.length = 0;
+    timerStoppedCalls.length = 0;
+    createEntryMutateAsync.mockClear();
     stopTimerMutateAsync.mockClear();
     startTimerMutateAsync.mockClear();
     discardTimerMutateAsync.mockClear();
@@ -248,6 +294,9 @@ describe('DocumentTimeProvider — who owns the thumb edge (D-B54)', () => {
   beforeEach(() => {
     events.length = 0;
     runningTimerRow = null;
+    concurrentIncumbent = null;
+    stopPayloads.length = 0;
+    createEntryMutateAsync.mockClear();
     stopTimerMutateAsync.mockClear();
     startTimerMutateAsync.mockClear();
     discardTimerMutateAsync.mockClear();
@@ -335,5 +384,158 @@ describe('DocumentTimeProvider — who owns the thumb edge (D-B54)', () => {
     expect(result.current.offer?.projectId).toBe('project-a');
     expect(result.current.heldProjectId).toBe('project-a');
     expect(result.current.offerOwnsEdge).toBe(true);
+  });
+});
+
+/**
+ * W3 — what the provider must still do once `start_timer` (00608) owns the
+ * slot, and the two things it did not do before: name the billable answer and
+ * the activity on the stop payload, and log a typed hour with NOTHING held.
+ */
+describe('DocumentTimeProvider — W3 capture', () => {
+  let qc: QueryClient;
+
+  beforeEach(() => {
+    events.length = 0;
+    runningTimerRow = null;
+    concurrentIncumbent = null;
+    stopPayloads.length = 0;
+    timerStartedCalls.length = 0;
+    timerStoppedCalls.length = 0;
+    createEntryMutateAsync.mockClear();
+    stopTimerMutateAsync.mockClear();
+    startTimerMutateAsync.mockClear();
+    qc = new QueryClient();
+  });
+
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={qc}>
+      <DocumentTimeProvider>{children}</DocumentTimeProvider>
+    </QueryClientProvider>
+  );
+
+  it('still raises the log-offer strip on a chain-out, carrying the stored rate (R20/§0.22)', async () => {
+    const { result } = renderHook(() => useDocumentTime(), { wrapper });
+
+    act(() => {
+      result.current.hold({ projectId: 'project-a', projectName: 'A', phaseKey: null });
+    });
+    await waitFor(() => expect(startTimerMutateAsync).toHaveBeenCalledTimes(1));
+
+    act(() => {
+      result.current.hold({ projectId: 'project-b', projectName: 'B', phaseKey: null });
+    });
+    await waitFor(() => expect(result.current.offer).not.toBeNull());
+
+    expect(result.current.offer?.projectId).toBe('project-a');
+    // The offer now carries the SERVER's answers, so the strip can print them.
+    expect(result.current.offer?.billable).toBe(false);
+    expect(result.current.offer?.rateSource).toBe('none');
+  });
+
+  it('carries activity and billable on the stop payload (HT-11/HT-24)', async () => {
+    const { result } = renderHook(() => useDocumentTime(), { wrapper });
+
+    act(() => {
+      result.current.hold({ projectId: 'project-a', projectName: 'A', phaseKey: null });
+    });
+    await waitFor(() => expect(startTimerMutateAsync).toHaveBeenCalledTimes(1));
+
+    act(() => {
+      result.current.release();
+    });
+    await waitFor(() => expect(stopTimerMutateAsync).toHaveBeenCalledTimes(1));
+
+    expect(stopPayloads[0]).toEqual(
+      expect.objectContaining({ activity: null, billable: false }),
+    );
+  });
+
+  it('raises a strip for a row another tab opened, which start_timer had to stop', async () => {
+    const { result } = renderHook(() => useDocumentTime(), { wrapper });
+
+    // Nothing running as far as THIS session can see; the RPC finds one.
+    concurrentIncumbent = {
+      id: 'other-tab-entry',
+      project_id: 'project-z',
+      duration_minutes: 7,
+      billable: true,
+      hourly_rate_cents: 12_000,
+      rate_source: 'studio_member',
+      rate_role: null,
+      rated_amount_cents: 1_400,
+    };
+
+    act(() => {
+      result.current.hold({ projectId: 'project-a', projectName: 'A', phaseKey: null });
+    });
+
+    await waitFor(() => expect(result.current.offer).not.toBeNull());
+    expect(result.current.offer?.entryId).toBe('other-tab-entry');
+    expect(result.current.offer?.projectId).toBe('project-z');
+    expect(result.current.offer?.suggestedMinutes).toBe(7);
+  });
+
+  it('logs a typed hour with NOTHING in hand (HT-14)', async () => {
+    const { result } = renderHook(() => useDocumentTime(), { wrapper });
+
+    let written: unknown;
+    await act(async () => {
+      written = await result.current.manualLog({
+        projectId: 'project-q',
+        minutes: 45,
+        activity: 'client',
+        billable: false,
+      });
+    });
+
+    expect(result.current.heldProjectId).toBeNull();
+    expect(createEntryMutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectId: 'project-q',
+        durationMinutes: 45,
+        activity: 'client',
+        billable: false,
+        source: 'manual_entry',
+      }),
+    );
+    expect(written).toEqual(expect.objectContaining({ id: 'typed-entry' }));
+  });
+
+  it('refuses a typed hour with no document rather than clearing as though it saved', async () => {
+    const { result } = renderHook(() => useDocumentTime(), { wrapper });
+
+    await expect(
+      result.current.manualLog({
+        projectId: '',
+        minutes: 45,
+        activity: null,
+        billable: false,
+      }),
+    ).rejects.toThrow(/document/i);
+    expect(createEntryMutateAsync).not.toHaveBeenCalled();
+  });
+
+  it('instruments the timer without touching R64\'s number (HT-17)', async () => {
+    const { result } = renderHook(() => useDocumentTime(), { wrapper });
+
+    act(() => {
+      result.current.hold({ projectId: 'project-a', projectName: 'A', phaseKey: null });
+    });
+    await waitFor(() => expect(timerStartedCalls).toHaveLength(1));
+
+    act(() => {
+      result.current.release();
+    });
+    await waitFor(() => expect(timerStoppedCalls).toHaveLength(1));
+
+    expect(timerStartedCalls[0]).toEqual(
+      expect.objectContaining({ surface: 'document', source: 'timer_auto', billable: false }),
+    );
+    // The cumulative-idle ratio is REPORTED. Nothing acts on it.
+    expect(timerStoppedCalls[0]).toEqual(
+      expect.objectContaining({ surface: 'document' }),
+    );
+    expect(timerStoppedCalls[0]).toHaveProperty('idle_ratio');
   });
 });

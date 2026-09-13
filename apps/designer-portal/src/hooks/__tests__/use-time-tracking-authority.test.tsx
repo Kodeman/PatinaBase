@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   filterProjectUnbilledEntries,
   useCreateTimeEntry,
+  useStartTimer,
   useStopTimer,
   type UnbilledTimeRow,
 } from "@patina/supabase";
@@ -91,28 +92,26 @@ describe("authority-aware time writes", () => {
 
   // HT-1 (migrations 00599-00601): the server owns the rate on every project
   // kind, and 00600's guard REJECTS a caller-supplied rate_source or
-  // rated_amount_cents on INSERT outright. The insert row builder sends none of
-  // them today; this pins that, so a future edit cannot quietly reintroduce one.
-  // rate_role (HT-41) IS the member's to send, and is asserted to pass through.
-  it("creates an entry without sending any rate, amount, billing state or provenance", async () => {
-    let inserted: Record<string, unknown> | null = null;
-    const from = jest.fn(() => ({
-      insert: (row: Record<string, unknown>) => {
-        inserted = row;
-        return {
-          select: () => ({
-            single: async () => ({
-              data: { id: "entry-2", project_id: "project-1", duration_minutes: 45 },
-              error: null,
-            }),
-          }),
-        };
-      },
-    }));
-    mockCreateBrowserClient.mockReturnValue({
-      from,
-      auth: { getUser: async () => ({ data: { user: { id: "user-1" } } }) },
+  // rated_amount_cents on INSERT outright. W3 (00608) moved the write onto the
+  // `log_time` RPC — a caller-minted id so a replay is idempotent — so what is
+  // pinned here is the RPC ARGUMENT LIST: none of the five server-owned names
+  // may appear on it, `p_billable` is stated (HT-11 — the `?? true` default is
+  // gone), and `p_rate_role` (HT-41) is the member's to send and passes through.
+  it("logs an entry through log_time without sending any rate, amount, billing state or provenance", async () => {
+    let args: Record<string, unknown> | null = null;
+    const rpc = jest.fn(async (_fn: string, params: Record<string, unknown>) => {
+      args = params;
+      return {
+        data: {
+          id: params.p_entry_id,
+          project_id: "project-1",
+          duration_minutes: 45,
+          billable: true,
+        },
+        error: null,
+      };
     });
+    mockCreateBrowserClient.mockReturnValue({ rpc });
 
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -127,27 +126,110 @@ describe("authority-aware time writes", () => {
         projectId: "project-1",
         durationMinutes: 45,
         startedAt: "2026-09-11T12:00:00.000Z",
-        source: "manual_entry",
+        billable: true,
+        source: "command_bar",
         rateRole: "support_designer",
       });
     });
 
-    expect(from).toHaveBeenCalledWith("project_time_entries");
-    expect(Object.keys(inserted ?? {}).sort()).toEqual([
-      "billable",
-      "duration_minutes",
-      "notes",
-      "phase_key",
-      "project_id",
-      "rate_role",
-      "source",
-      "started_at",
-      "task_id",
-      "user_id",
+    expect(rpc).toHaveBeenCalledWith("log_time", expect.any(Object));
+    expect(Object.keys(args ?? {}).sort()).toEqual([
+      "p_activity",
+      "p_billable",
+      "p_duration_minutes",
+      "p_entry_id",
+      "p_notes",
+      "p_phase_key",
+      "p_project_id",
+      "p_rate_role",
+      "p_source",
+      "p_started_at",
+      "p_task_id",
     ]);
-    expect(inserted).toEqual(
-      expect.objectContaining({ rate_role: "support_designer", user_id: "user-1" }),
+    expect(args).toEqual(
+      expect.objectContaining({
+        p_rate_role: "support_designer",
+        p_billable: true,
+        p_source: "command_bar",
+      }),
     );
+    // The caller mints the id, so a retry re-reads rather than re-writes.
+    expect(typeof (args as Record<string, unknown>).p_entry_id).toBe("string");
+  });
+
+  // 00608 — the replay contract, from the hook's side: the same id sent twice
+  // returns the row that already exists rather than a second hour.
+  it("honours a caller-minted id so a replayed log reads back the stored hour", async () => {
+    const stored = {
+      id: "11111111-2222-4333-8444-555555555555",
+      project_id: "project-1",
+      duration_minutes: 45,
+      billable: false,
+    };
+    const rpc = jest.fn(async () => ({ data: stored, error: null }));
+    mockCreateBrowserClient.mockReturnValue({ rpc });
+
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(() => useCreateTimeEntry(), { wrapper });
+
+    let first: unknown;
+    let second: unknown;
+    await act(async () => {
+      first = await result.current.mutateAsync({
+        entryId: stored.id,
+        projectId: "project-1",
+        durationMinutes: 45,
+        billable: false,
+      });
+      second = await result.current.mutateAsync({
+        entryId: stored.id,
+        projectId: "project-1",
+        durationMinutes: 999,
+        billable: false,
+      });
+    });
+
+    expect(first).toEqual(stored);
+    expect(second).toEqual(stored);
+    expect(rpc.mock.calls.every(([, p]) => (p as Record<string, unknown>).p_entry_id === stored.id)).toBe(true);
+  });
+
+  // 00608 — start_timer is one transaction: it stops the incumbent and hands
+  // BOTH rows back, so the caller can still raise the log-offer strip for the
+  // hour it chained out (R20). The 23505 branch this hook used to carry is gone.
+  it("starts a timer through start_timer and returns the row it chained out", async () => {
+    const started = { id: "running-2", project_id: "project-2", started_at: "x" };
+    const stopped = { id: "running-1", project_id: "project-1", duration_minutes: 12 };
+    const rpc = jest.fn(async () => ({ data: [{ started, stopped }], error: null }));
+    mockCreateBrowserClient.mockReturnValue({ rpc });
+
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(() => useStartTimer(), { wrapper });
+
+    let out: unknown;
+    await act(async () => {
+      out = await result.current.mutateAsync({
+        projectId: "project-2",
+        billable: false,
+        source: "timer_auto",
+      });
+    });
+
+    expect(rpc).toHaveBeenCalledWith(
+      "start_timer",
+      expect.objectContaining({ p_project_id: "project-2", p_billable: false }),
+    );
+    expect(out).toEqual({ started, stopped });
   });
 });
 

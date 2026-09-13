@@ -11,7 +11,7 @@
  * stop the lens had never been asked to promote.
  */
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MobileSheets } from '../mobile/mobile-sheets';
 import {
@@ -42,7 +42,23 @@ jest.mock('next/navigation', () => ({
 jest.mock('@/hooks/use-margin-notes', () => ({
   useCreateMarginNote: () => ({ mutate: jest.fn(), isPending: false }),
 }));
+let mockCaptureProjects: Array<{ id: string; name: string; status: string }> = [
+  { id: 'project-1', name: 'Whitfield House', status: 'active' },
+  { id: 'project-2', name: 'Ashford Heights', status: 'active' },
+];
+let mockMyRateRoles: string[] = ['lead_designer'];
+
+jest.mock('@/hooks/use-commercial-documents', () => ({
+  useProjectBillingAuthority: () => ({ data: null, isLoading: false }),
+  commercialDocumentKeys: { authority: (id: string) => ['project-authority', id] },
+  fetchProjectBillingAuthority: jest.fn().mockResolvedValue(null),
+}));
+
 jest.mock('@patina/supabase', () => ({
+  // W3 (HT-14) — the timer sheet's project picker when nothing is held, and
+  // HT-41's role chip. Both read through @patina/supabase.
+  useTimeCaptureProjects: () => ({ data: mockCaptureProjects }),
+  useMyRateRoles: () => ({ data: mockMyRateRoles }),
   useSendDecisionReminder: () => ({ mutate: jest.fn(), isPending: false }),
   useCoordinationItems: () => ({ data: [] }),
   useProjectContextualHandoffs: () => ({ data: [], isError: false }),
@@ -60,13 +76,19 @@ jest.mock('@/hooks/use-margin-items', () => ({
   useMarginItems: () => ({ data: [] }),
 }));
 
+const mockManualLog = jest.fn();
+let mockHeldProjectId: string | null = null;
 jest.mock('@/hooks/document-time-provider', () => ({
   useDocumentTime: () => ({
+    heldProjectId: mockHeldProjectId,
     inHandToday: 0,
     running: false,
     paused: false,
     elapsedSeconds: 0,
     offer: null,
+    pause: jest.fn(),
+    resume: jest.fn(),
+    manualLog: mockManualLog,
   }),
 }));
 
@@ -172,5 +194,117 @@ describe('the sections sheet · the region press (D-B18)', () => {
     expect(onJumpRegion).toHaveBeenCalledTimes(1);
     expect(mockRequestRegionUnfold).not.toHaveBeenCalled();
     expect(mockScrollToRegion).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * HT-14 — the phone's manual form with NOTHING in hand.
+ *
+ * The shipped behaviour was the worst available: the sheet is reachable
+ * ungated from the mobile bar, the form accepted minutes and an activity,
+ * `manualLog` early-returned on `!doc`, and the sheet CLEARED ITSELF as though
+ * it had saved. The hour was simply gone. Never a silent success.
+ */
+describe('the mobile timer sheet with nothing held (HT-14)', () => {
+  function OpenTimer() {
+    const { openTimer } = useMobileShell();
+    return (
+      <button type="button" onClick={openTimer}>
+        open timer
+      </button>
+    );
+  }
+
+  function mountTimer() {
+    const view = render(
+      <TestProviders>
+        <OpenTimer />
+        <MobileSheets />
+      </TestProviders>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'open timer' }));
+    fireEvent.click(screen.getByRole('button', { name: '+ Log manually' }));
+    return view;
+  }
+
+  beforeEach(() => {
+    mockManualLog.mockReset();
+    mockManualLog.mockResolvedValue({
+      id: 'typed',
+      project_id: 'project-2',
+      duration_minutes: 20,
+      billable: false,
+      activity: null,
+      rate_source: 'none',
+      rate_role: null,
+    });
+    mockHeldProjectId = null;
+    window.matchMedia = jest.fn().mockImplementation((query: string) => ({
+      matches: true,
+      media: query,
+      onchange: null,
+      addListener: jest.fn(),
+      removeListener: jest.fn(),
+      addEventListener: jest.fn(),
+      removeEventListener: jest.fn(),
+      dispatchEvent: jest.fn(),
+    })) as unknown as typeof window.matchMedia;
+  });
+
+  it('asks which document the hour belongs to, and refuses to save until told', () => {
+    mountTimer();
+
+    expect(screen.getByLabelText('Document')).toBeInTheDocument();
+    expect(screen.getByText('Nothing in hand')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Minutes'), { target: { value: '20' } });
+    expect(screen.getByRole('button', { name: 'Add entry' })).toBeDisabled();
+    expect(mockManualLog).not.toHaveBeenCalled();
+  });
+
+  it('logs against the picked document and only then clears', async () => {
+    mountTimer();
+
+    fireEvent.change(screen.getByLabelText('Document'), {
+      target: { value: 'project-2' },
+    });
+    fireEvent.change(screen.getByLabelText('Minutes'), { target: { value: '20' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add entry' }));
+
+    await waitFor(() => expect(mockManualLog).toHaveBeenCalledTimes(1));
+    expect(mockManualLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectId: 'project-2',
+        minutes: 20,
+        billable: false,
+      }),
+    );
+    await waitFor(() =>
+      expect(screen.queryByLabelText('Minutes')).not.toBeInTheDocument(),
+    );
+  });
+
+  it('says why rather than clearing when the write is refused', async () => {
+    mockManualLog.mockRejectedValue(new Error('permission denied'));
+    mountTimer();
+
+    fireEvent.change(screen.getByLabelText('Document'), {
+      target: { value: 'project-2' },
+    });
+    fireEvent.change(screen.getByLabelText('Minutes'), { target: { value: '20' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add entry' }));
+
+    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
+    expect(screen.getByRole('alert')).toHaveTextContent(/permission denied/);
+    // The form is STILL THERE with the hour in it — nothing was cleared.
+    expect(screen.getByLabelText('Minutes')).toHaveValue(20);
+  });
+
+  it('uses the held document without a picker when one IS in hand', () => {
+    mockHeldProjectId = 'proj-1';
+    mountTimer();
+
+    expect(screen.queryByLabelText('Document')).not.toBeInTheDocument();
+    expect(screen.getByText(/In hand/)).toBeInTheDocument();
   });
 });
