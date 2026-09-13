@@ -28,13 +28,8 @@
  */
 
 import { useRouter } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
 import { PenTool, type LucideIcon } from 'lucide-react';
-import {
-  createBrowserClient,
-  isInvoiceEligibleTimeEntry,
-  useRunningTimer,
-} from '@patina/supabase';
+import { useRunningTimer, useStudioUnbilledTime } from '@patina/supabase';
 import {
   STUDIO_ROOMS,
   STUDIO_LEDGERS,
@@ -82,23 +77,7 @@ const LEDGER_SUBLABEL: Record<string, string> = {
  */
 function HoursInHandAct() {
   const runningTimer = useRunningTimer();
-  const { data: unbilled } = useQuery({
-    queryKey: ['desk-contents-unbilled-time'],
-    queryFn: async () => {
-      const supabase = createBrowserClient() as any;
-      const { data, error } = await supabase
-        .from('project_unbilled_time')
-        .select('id, project_id, billing_state');
-      if (error) throw error;
-      return ((data ?? []) as any[]).filter((row) =>
-        isInvoiceEligibleTimeEntry({
-          billable: true,
-          invoice_id: null,
-          billing_state: row.billing_state,
-        }),
-      );
-    },
-  });
+  const { data: unbilled } = useStudioUnbilledTime();
 
   const timer = runningTimer.data;
   const startedDay = timer ? new Date(timer.started_at).toDateString() : null;
@@ -136,7 +115,7 @@ function HoursInHandAct() {
   if ((unbilled?.length ?? 0) === 0) return null;
 
   const projects = [
-    ...new Set((unbilled ?? []).map((row) => row.project_id as string)),
+    ...new Set((unbilled ?? []).map((row) => row.project_id)),
   ];
   return (
     <button
@@ -145,7 +124,7 @@ function HoursInHandAct() {
         if (projects.length === 1) {
           openInvoiceComposer({
             projectId: projects[0],
-            initialTimeEntryIds: (unbilled ?? []).map((row) => row.id as string),
+            initialTimeEntryIds: (unbilled ?? []).map((row) => row.id),
           });
         } else {
           openLedger('hours');

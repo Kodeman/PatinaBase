@@ -10,32 +10,19 @@
  * invoice door names its scope (`Draw an invoice · new`).
  */
 import { fireEvent, render, screen } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { DeskContents } from '../desk-contents';
 
 // HT-29 — the Hours line is act-bearing now (unbilled hours to bill, or a timer
-// still running from yesterday), so the index reads two facts and the suite
-// supplies a query client. Both reads answer empty here: the index under test
-// is the labels-and-doorways one, and the act's own states are the Hours
-// sheet's.
+// still running from yesterday), so the index reads two facts. Both are
+// `@patina/supabase` hooks and both answer empty here: the index under test is
+// the labels-and-doorways one, and the act's own states are the Hours sheet's.
 jest.mock('@patina/supabase', () => ({
-  createBrowserClient: () => ({
-    from: () => ({ select: async () => ({ data: [], error: null }) }),
-  }),
-  isInvoiceEligibleTimeEntry: () => true,
   useRunningTimer: () => ({ data: null }),
+  useStudioUnbilledTime: () => ({ data: [] }),
 }));
 
 const renderContents = (props: { prominent?: boolean } = {}) =>
-  render(
-    <QueryClientProvider
-      client={
-        new QueryClient({ defaultOptions: { queries: { retry: false } } })
-      }
-    >
-      <DeskContents {...props} />
-    </QueryClientProvider>,
-  );
+  render(<DeskContents {...props} />);
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: jest.fn() }),

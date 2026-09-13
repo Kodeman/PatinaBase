@@ -31,9 +31,11 @@ import {
   useCreateTimeEntry,
   useDeleteTimeEntry,
   useProjectHoursTotal,
+  useProjectPricingStudio,
   useStampProjectPricingStudio,
   useStudioHoursRollup,
   useTimeEntryLedger,
+  useTimeEntryNote,
   useUpdateTimeEntry,
   type TimeEntryLedgerRow,
   type TimeHoursGroupBy,
@@ -464,19 +466,7 @@ export function HoursLedger({
   // reading a house she has logged nothing on — an entry-derived answer is
   // silently absent, and absence here printed "no studio yet" over a document
   // that names one, under a stamp door the server then refused.
-  const lensPricingStudio = useQuery({
-    queryKey: ['document-hours-project-studio', lensProjectId],
-    enabled: lensProjectId != null,
-    queryFn: async () => {
-      const { data, error } = await getSupabase()
-        .from('projects')
-        .select('studio_id')
-        .eq('id', lensProjectId)
-        .maybeSingle();
-      if (error) throw error;
-      return (data?.studio_id as string | null) ?? null;
-    },
-  });
+  const lensPricingStudio = useProjectPricingStudio(lensProjectId);
   /** `null` = this document names no studio. `undefined` = not known yet, which
    *  is not the same fact and must print neither a sentence nor a repair. */
   const lensPricingStudioId: string | null | undefined = lensProjectId
@@ -1464,18 +1454,7 @@ function ScopeEntryRow({
 /** HT-36 — free text is read from the table, by an act, one entry at a time.
  *  It is never a column of the rollup or of the fact view. */
 function ScopeEntryNote({ entryId, id }: { entryId: string; id: string }) {
-  const note = useQuery({
-    queryKey: ['document-hours-entry-note', entryId],
-    queryFn: async () => {
-      const { data, error } = await getSupabase()
-        .from('project_time_entries')
-        .select('notes')
-        .eq('id', entryId)
-        .maybeSingle();
-      if (error) throw error;
-      return ((data?.notes as string | null) ?? null) as string | null;
-    },
-  });
+  const note = useTimeEntryNote(entryId);
 
   return (
     <p

@@ -29,7 +29,7 @@
  */
 
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { HoursLedger } from '../hours-ledger';
 import {
   hoursMemberScopePending,
@@ -92,6 +92,10 @@ jest.mock('@/lib/analytics/document-events', () => {
 });
 
 const ledgerCalls: Array<Record<string, unknown>> = [];
+/** Which document each pricing-studio read asked about, and which entry each
+ *  note act asked about — the reads are hooks now (round-4 M4-02). */
+const pricingStudioCalls: Array<string | null> = [];
+const entryNoteCalls: string[] = [];
 const rollupCalls: Array<Record<string, unknown>> = [];
 const projectTotalCalls: Array<string | null> = [];
 
@@ -157,10 +161,6 @@ function makeClient() {
       const builder: Record<string, unknown> = {
         then: (resolve: (value: unknown) => unknown) =>
           Promise.resolve({ data: rowsFor(), error: null }).then(resolve),
-        maybeSingle: async () =>
-          table === 'projects'
-            ? { data: { studio_id: projectStudioId }, error: null }
-            : { data: { notes: 'sketching the stair' }, error: null },
       };
       for (const method of [
         'select',
@@ -192,6 +192,26 @@ jest.mock('@patina/supabase', () => ({
     mutate: () => onStamp?.(),
     isPending: false,
   }),
+  // The document's pricing studio and an entry's note are hooks now, not
+  // inline PostgREST (round-4 M4-02). The stubs keep a REAL useQuery on the
+  // REAL key: the stamp test below proves its repair by invalidating
+  // ['document-hours-project-studio', id], and a hand-rolled object stub would
+  // answer that invalidation with nothing and quietly pass.
+  useProjectPricingStudio: (projectId: string | null) => {
+    pricingStudioCalls.push(projectId);
+    return useQuery({
+      queryKey: ['document-hours-project-studio', projectId],
+      enabled: projectId != null,
+      queryFn: async () => projectStudioId,
+    });
+  },
+  useTimeEntryNote: (entryId: string) => {
+    entryNoteCalls.push(entryId);
+    return useQuery({
+      queryKey: ['document-hours-entry-note', entryId],
+      queryFn: async () => 'sketching the stair',
+    });
+  },
   useOrganizations: () => ({
     isError: orgsState === 'error',
     data:
@@ -285,6 +305,8 @@ beforeEach(() => {
   projectStudioId = 'studio-1';
   ledgerCalls.length = 0;
   rollupCalls.length = 0;
+  pricingStudioCalls.length = 0;
+  entryNoteCalls.length = 0;
   projectTotalCalls.length = 0;
   rollupState = 'ready';
   ledgerState = 'ready';
