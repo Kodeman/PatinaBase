@@ -15822,6 +15822,12 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00613_classifier_internal_short_circuit.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.audit_time_entry_change() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 00615_self_authored_rate_requires_ownership.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.designer_tier_pricing_studio(uuid) FROM PUBLIC, anon, authenticated, service_role;

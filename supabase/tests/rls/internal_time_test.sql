@@ -38,6 +38,16 @@
 --       returns no id for it.
 --   (h) 00597's auto-roster seats NOBODY for an internal hour, and the hour does
 --       not appear on the project roster.
+--   (i) the HT-23 trace (00605, re-created by 00613 section (5)) is readable by
+--       the STUDIO and not only by the actor: the ADMIN adjusts the author's
+--       internal hour, and the OWNER — reading audit_logs through RLS — sees one
+--       row whose organization_id is the studio. W4-R1-01: 00605 filled it from
+--       project_pricing_studio_id(OLD.project_id), NULL for a NULL project
+--       (00604:100-102), and "Org admins can view org audit logs" (00021:426-435)
+--       has an explicit `organization_id IS NOT NULL` leg — so every owner/admin
+--       edit of an internal hour traced to a row only its actor could read. The
+--       shape is time_entry_admin_write_test.sql case (a)'s, for the project case
+--       (plan-v2 §12 risk 4).
 --
 -- How to run:
 --   psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 \
@@ -572,6 +582,86 @@ BEGIN
     || v_seats;
 
   RAISE NOTICE 'internal_time: case (h) passed — no phantom roster seat.';
+END
+$$;
+
+-- ─── (i) the HT-23 trace is readable by the studio, not only by the actor ───
+DO $$
+DECLARE
+  v_rows     integer;
+  v_duration integer;
+  v_updated  uuid;
+  v_seen     integer;
+  v_org      uuid;
+  v_action   text;
+  v_actor    uuid;
+  v_old      jsonb;
+  v_new      jsonb;
+BEGIN
+  -- The ADMIN adjusts the AUTHOR's internal hour (internal_time_owner_admin_update,
+  -- 00612). 45 → 30 minutes.
+  PERFORM pg_temp.assume_user('c6130000-0000-4000-8000-000000000002');
+  UPDATE project_time_entries
+     SET duration_minutes = 30
+   WHERE id = 'c6130000-0000-4000-8000-0000000000b1';
+  GET DIAGNOSTICS v_rows = ROW_COUNT;
+  PERFORM pg_temp.reset_role();
+
+  ASSERT v_rows = 1,
+    'FAIL i1 (HT-22 + 00612): the studio''s ADMIN must be able to adjust a '
+    'member''s internal hour — internal_time_owner_admin_update is the only '
+    'policy that reaches a project-less row she did not author; rows = ' || v_rows;
+
+  SELECT duration_minutes, updated_by INTO v_duration, v_updated
+  FROM project_time_entries WHERE id = 'c6130000-0000-4000-8000-0000000000b1';
+  ASSERT v_duration = 30,
+    'FAIL i2: the adjust must persist; duration = '
+    || COALESCE(v_duration::text, 'NULL');
+  ASSERT v_updated = 'c6130000-0000-4000-8000-000000000002',
+    'FAIL i3 (HT-23): updated_by must be the admin who made the edit — the row''s '
+    'own stamp was never the broken half; got '
+    || COALESCE(right(v_updated::text, 4), 'NULL');
+
+  -- THE OWNER, through RLS, reads the trace for that hour. This is the whole
+  -- point of W4-R1-01: audit_time_entry_change fills organization_id from
+  -- project_pricing_studio_id(OLD.project_id), which is NULL for a NULL project
+  -- (00604:100-102), and "Org admins can view org audit logs" (00021:426-435)
+  -- carries an explicit `organization_id IS NOT NULL` leg — so before 00613
+  -- section (5) this count was 0 and only the admin who made the edit could ever
+  -- see it ("Users can view their audit logs", 00021:422-423).
+  PERFORM pg_temp.assume_user('c6130000-0000-4000-8000-000000000001');
+  SELECT count(*) INTO v_seen FROM audit_logs
+   WHERE resource_type = 'project_time_entries'
+     AND resource_id = 'c6130000-0000-4000-8000-0000000000b1';
+  SELECT organization_id, action, user_id, old_values, new_values
+    INTO v_org, v_action, v_actor, v_old, v_new
+  FROM audit_logs
+   WHERE resource_type = 'project_time_entries'
+     AND resource_id = 'c6130000-0000-4000-8000-0000000000b1';
+  PERFORM pg_temp.reset_role();
+
+  ASSERT v_seen = 1,
+    'FAIL i4 (HT-23, W4-R1-01): the studio''s OWNER must read exactly ONE trace '
+    'for the edit her admin made. Zero means organization_id came back NULL and '
+    'the org read policy''s `organization_id IS NOT NULL` leg hid the row from '
+    'everyone but the actor — the ledger went dark precisely on the hours only '
+    'the owner can oversee; got ' || v_seen;
+  ASSERT v_org = 'c6130000-0000-4000-8000-0000000000a1',
+    'FAIL i5 (W4-R1-01): the trace must carry the hour''s OWN studio as its '
+    'organization_id; got ' || COALESCE(v_org::text, 'NULL');
+  ASSERT v_action = 'time_entry.updated',
+    'FAIL i6: the trace must name the operation; action = '
+    || COALESCE(v_action, 'NO ROW');
+  ASSERT v_actor = 'c6130000-0000-4000-8000-000000000002',
+    'FAIL i7: and the actor, who is the admin and not the author; got '
+    || COALESCE(right(v_actor::text, 4), 'NULL');
+  ASSERT (v_old->>'duration_minutes')::int = 45
+     AND (v_new->>'duration_minutes')::int = 30,
+    'FAIL i8: the trace must carry the value before AND after the edit; old = '
+    || COALESCE(v_old->>'duration_minutes', 'NULL') || ', new = '
+    || COALESCE(v_new->>'duration_minutes', 'NULL');
+
+  RAISE NOTICE 'internal_time: case (i) passed — the trace reaches the studio.';
 END
 $$;
 

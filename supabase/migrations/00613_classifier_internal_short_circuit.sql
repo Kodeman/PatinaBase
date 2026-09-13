@@ -20,7 +20,14 @@
 --     studio owner/admin may write a user_id that is not their own)
 -- P-4: no historical row is touched. There is no backfill in this file.
 --
--- THE DELTA — ONE SHORT-CIRCUIT, and three reads that had to learn about it.
+-- SECOND LINEAGES, all in this file and all grafted the same way: the ledger
+-- view public.time_entry_ledger 00604 → HERE (delta 3); the margin view
+-- public.margin_items 00543 → HERE (delta 4); and the HT-23 trace
+-- public.audit_time_entry_change 00605 → HERE (delta 5, W4-R1-01). Each is its
+-- named file's SOLE definition, re-measured this session, and this file is the
+-- only redefinition of any of them.
+--
+-- THE DELTA — ONE SHORT-CIRCUIT, and four reads that had to learn about it.
 --
 -- (1) THE CLASSIFIER. `project_id IS NULL` → nonbillable, no rate, amount 0,
 --     rate_source 'none', rate_role NULL, no authority — and RETURN. It is placed
@@ -97,6 +104,17 @@
 --     in the same order, so CREATE OR REPLACE stays column-compatible — and the
 --     added line is the only difference. The portal already key-filters
 --     (use-margin-items.ts), so this is hygiene, not a sweep.
+--
+-- (5) THE HT-23 TRACE (public.audit_time_entry_change, 00605:216-271, re-created
+--     here with ONE expression changed — the same CASE, for the same reason).
+--     Its organization_id was project_pricing_studio_id(OLD.project_id), NULL for
+--     a NULL project (00604:100-102); 00612's project-less write policies made
+--     that reachable, and audit_logs' org read policy (00021:426-435) carries an
+--     explicit `organization_id IS NOT NULL` leg — so every edit or delete of an
+--     internal hour filed a trace readable by its ACTOR alone, not by the
+--     studio's owner, not by a second admin, not by the author whose hour was
+--     changed. 00605's own comment states the intent that breaks. W4-R1-01;
+--     asserted per role in supabase/tests/rls/internal_time_test.sql case (i).
 --
 -- Adds GRANT/REVOKE → supabase/seed/00-legacy-grants.sql is regenerated
 -- (`python3 scripts/generate-legacy-grants.py`, plan-v2 §0.20).
@@ -948,6 +966,102 @@ comment on view public.margin_items is
 grant select on public.margin_items to authenticated;
 grant select on public.margin_items to service_role;
 
+-- ── (5) the HT-23 trace reckons with the project-less hour (W4-R1-01) ───────
+-- public.audit_time_entry_change, 00605:216-271 VERBATIM — the sole definition
+-- (`grep -rln "CREATE OR REPLACE FUNCTION public.audit_time_entry_change"
+-- supabase/migrations/*.sql` returns 00605 and nothing else) — with ONE
+-- expression changed: the same CASE section (3) above ships on the ledger view,
+-- for the same reason and in the same shape.
+--
+-- THE DEFECT, measured. 00605's v_org read
+-- project_pricing_studio_id(OLD.project_id), which returns NULL for a NULL
+-- project (00604:100-102). 00612's project-less write policies are what make
+-- that reachable: every owner/admin — and own-row — edit or delete of an
+-- internal hour filed its trace with organization_id = NULL. audit_logs' org
+-- read policy "Org admins can view org audit logs" (00021:426-435) carries an
+-- explicit `organization_id IS NOT NULL` leg, so such a trace is readable only
+-- through "Users can view their audit logs" (00021:422-423, user_id =
+-- auth.uid()) — by the ACTOR alone. Not the studio's owner, not a second admin,
+-- not the author whose hour was changed. 00605's own comment at :237-241 states
+-- the intent this breaks. Measured before the fix: an admin adjusts the author's
+-- 60-minute internal hour to 30 → one audit_logs row, action
+-- 'time_entry.updated', organization_id NULL, user_id = the admin; the owner
+-- reading that resource_id through RLS gets 0 rows. (updated_by / updated_at on
+-- the row itself stamp correctly either way; it is the audit_logs ledger that
+-- goes dark.)
+--
+-- 00605 is NOT edited — it is applied on no stack this program can reach and the
+-- lineage rule is redefine-forward (§0.4). THE TRIGGER IS NOT RE-CREATED:
+-- CREATE OR REPLACE FUNCTION leaves zzzz_audit_time_entry_change_trg
+-- (00605:273-276) bound to the same oid, and 00610's backfill block disables and
+-- re-enables it BY NAME (00610:108, :123) — so postcondition (h) asserts it is
+-- present AND enabled, not merely defined.
+CREATE OR REPLACE FUNCTION public.audit_time_entry_change()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_org     uuid;
+  v_action  text;
+  v_new     jsonb;
+BEGIN
+  -- NEW is UNASSIGNED in a plpgsql DELETE trigger — reading NEW.anything there
+  -- raises, so the two operations are separated rather than COALESCEd.
+  IF TG_OP = 'DELETE' THEN
+    v_action := 'time_entry.deleted';
+    v_new    := NULL;
+  ELSE
+    v_action := 'time_entry.updated';
+    v_new    := to_jsonb(NEW);
+  END IF;
+
+  -- The organization on the trace is the studio that PRICES the work (HT-3-a/b,
+  -- through 00604's one callable form), so an owner reading
+  -- "Org admins can view org audit logs" (00021:423) sees the edits to her own
+  -- studio's hours. NULL is permitted by the column and means no studio prices
+  -- this project yet ('rate pending').
+  -- 00613 delta (W4-R1-01): for an hour with NO project it is the hour's OWN
+  -- studio_id. A CASE, not a COALESCE — a project-bearing row's answer stays
+  -- byte-identical to 00605's, exactly as the ledger view's studio_id does.
+  v_org := CASE WHEN OLD.project_id IS NULL THEN OLD.studio_id
+                ELSE public.project_pricing_studio_id(OLD.project_id)
+           END;
+
+  INSERT INTO public.audit_logs (
+    user_id, organization_id, action, resource_type, resource_id,
+    old_values, new_values
+  ) VALUES (
+    auth.uid(),
+    v_org,
+    v_action,
+    'project_time_entries',
+    OLD.id,
+    to_jsonb(OLD),
+    v_new
+  );
+
+  RETURN NULL;  -- AFTER trigger; the return value is ignored
+END;
+$$;
+
+-- A trigger function needs no EXECUTE at fire time (Postgres checks the
+-- privilege at CREATE TRIGGER) — 00597's and 00603's precedent in this program.
+REVOKE ALL ON FUNCTION public.audit_time_entry_change()
+  FROM PUBLIC, anon, authenticated, service_role;
+
+COMMENT ON FUNCTION public.audit_time_entry_change() IS
+  'HT-23: writes ONE public.audit_logs row per UPDATE or DELETE of a time '
+  'entry, carrying old_values and (for an update) new_values, the actor, and the '
+  'studio that prices the work — or, for an hour with no project, the hour''s '
+  'own studio_id (HT-15, 00613: project_pricing_studio_id(NULL) is NULL and '
+  'audit_logs'' org read policy refuses a NULL organization_id, so an internal '
+  'hour''s trace would otherwise be readable by its actor alone). SECURITY '
+  'DEFINER because audit_logs has RLS enabled with no INSERT policy (00021:261, '
+  ':423, :426) — an INVOKER trigger would roll the edit back along with its own '
+  'trace (§0.18).';
+
 -- ── postconditions ─────────────────────────────────────────────────────────
 DO $postcondition$
 DECLARE
@@ -958,6 +1072,7 @@ DECLARE
   v_flat    text;
   v_invoker text;
   v_rollup  text;
+  v_audit   text;
 BEGIN
   -- (a) THE DELTA IS PRESENT, and above every read of NEW.project_id.
   ASSERT v_src ~ 'IF NEW\.project_id IS NULL THEN',
@@ -1100,6 +1215,33 @@ BEGIN
                       'Team can update their own time entries',
                       'Team can view their project time entries')
   ), '00613: the four 00484-registered "Team can …" policies must still exist (§0.17)';
+
+  -- (h) the HT-23 trace reckons with the project-less hour (W4-R1-01), and the
+  --     trigger that files it is present AND enabled — 00610's backfill block
+  --     disables it by name (00610:108) and re-enables it (:123), so "defined"
+  --     is not the same claim as "firing".
+  SELECT prosrc INTO v_audit FROM pg_proc
+   WHERE oid = to_regprocedure('public.audit_time_entry_change()');
+  ASSERT v_audit IS NOT NULL,
+    '00613: public.audit_time_entry_change() is missing — HT-23''s trace is gone';
+  ASSERT v_audit LIKE '%OLD.studio_id%',
+    '00613: the trace must read the hour''s OWN studio_id for a project-less row. '
+    'project_pricing_studio_id(NULL) is NULL (00604:100-102) and audit_logs'' org '
+    'read policy carries an explicit `organization_id IS NOT NULL` leg '
+    '(00021:426-435), so every owner/admin edit of an internal hour would file a '
+    'trace readable by its actor alone (W4-R1-01)';
+  ASSERT v_audit LIKE '%project_pricing_studio_id%',
+    '00613: and it must still read project_pricing_studio_id for a project hour — '
+    '00605''s stated intent, byte-identical through the CASE''s ELSE leg';
+  ASSERT EXISTS (
+    SELECT 1 FROM pg_trigger
+    WHERE tgrelid = 'public.project_time_entries'::regclass
+      AND NOT tgisinternal
+      AND tgname = 'zzzz_audit_time_entry_change_trg'
+      AND tgenabled = 'O'
+  ), '00613: zzzz_audit_time_entry_change_trg must be present and ENABLED (00605); '
+     'a trace that never fires is a worse HT-23 failure than one with a NULL '
+     'organization_id';
 
   RAISE NOTICE '00613 postconditions passed.';
 END
