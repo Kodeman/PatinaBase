@@ -145,17 +145,23 @@ describe('PartyProfileSheet — the invite control is hidden without a phone on 
 });
 
 describe('PartyProfileSheet — not_asked with a phone shows the invite-to-texts flow', () => {
-  it('the submit control starts disabled with a title/aria-label explaining why (F7)', () => {
+  // W2b — §A5 "held": the act is OFFERED and cannot be taken, so it keeps its
+  // place in the tab order and the reason stands beside it as visible words
+  // (`aria-describedby`). A native `disabled` took the control out of the tab
+  // order and took its own explanation — which lived in a `title` — with it.
+  it('the submit control is held, not disabled, and points at the visible reason', () => {
     personData.current = person({ consent_status: 'not_asked' });
     render(
       <PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />,
     );
 
-    const submit = screen.getByRole('button', {
-      name: /Invite to texts — check the consent box above first/,
-    });
-    expect(submit).toBeDisabled();
-    expect(submit).toHaveAttribute('title', 'Check the consent box above first');
+    const submit = screen.getByRole('button', { name: 'Invite to texts' });
+    expect(submit).not.toBeDisabled();
+    expect(submit).toHaveAttribute('aria-disabled', 'true');
+    expect(submit).toHaveAttribute('aria-describedby', 'field-invite-reason');
+    expect(document.getElementById('field-invite-reason')).toHaveTextContent(
+      'Tick the consent box above first.',
+    );
   });
 
   it('requires a consent method and non-blank evidence before it will submit, and the error is announced (role=alert, F7)', () => {

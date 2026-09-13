@@ -1,976 +1,147 @@
 'use client';
 
 /**
- * Person Profile (R51 / Track B) — the role-adaptive profile centred on the
- * derived Relationship Journey. One component, branching by role:
+ * THE PERSON CARD — the room's unit (direction §1 line 1).
  *
- *  · client      → Style DNA + the woven journey + Projects / Trust & history /
- *    Nurture / Private-note side cards; actions Message, Schedule a touchpoint,
- *    View as them (the client mirror).
- *  · maker       → MakerProfile (../profile/maker-profile, R78/PRC-02): products
- *    carried, reviews, request-a-quote, roster save/unsave, and the Orders-book
- *    cross-link. Renders even for a maker not yet on the roster (the
- *    marketplace lens walks in pre-admission), so it loads from the vendor
- *    book, not the directory view.
- *  · gc          → the (sparser) journey + Engagements / Track record cards +
- *    a cross-link to the coordination view — we link, never rebuild.
- *  · team        → the margin-visibility colophon: which documents the teammate
- *    sees, their studio role, no Style DNA / nurture.
+ * Four role-branched documents collapse into ONE card with silent regions:
+ * Identity, Reach & access, Seats on projects, Past seats, Paper, History. A
+ * region never vanishes because its record is empty — it prints its own
+ * sentence instead ("No contact rule on file.", "No grant on file.", "No open
+ * seat on this project.") so the studio can tell a missing record from a
+ * missing region (R-V / C32).
  *
- * The journey is a DERIVATION (deriveRelationshipJourney) over the person's
- * existing proposals, projects, decisions, threads, touchpoints, and reviews —
- * never a stored activity log (R51). Reuses Avatar/RoleBadge from person-bits.
- * Zero shadows (D4), strict focus (D1), typography-first.
+ * Every project seat is a LINE BENEATH THE HUMAN, carrying its own stage word,
+ * its window and its authority. Authority is never a state word: it prints as
+ * plain uncoloured text — "Signs money to $2,500", "Selections", "Prepares
+ * only" — because it is a fact, not a state (direction §3.8).
  *
- * F3 — edit affordances. A captured client (role 'client', never a bare
- * 'lead') gets "Edit details", opening the existing HouseholdSheet standalone
- * for its designer_client id. A profile actually backed by a live
- * `studio_contacts` card — the pure rolodex branch (role 'contact', where
- * person_id IS the studio_contacts id) or a network/team party folded into
- * the rolodex (`meta.studio_contact_id`) — gets "Edit" via
- * `RolodexEditAction`, which opens AddPersonSheet in its edit mode. Hidden
- * for an archived card; makers stay read-only (vendor-owned, R78).
+ * The one branch that survives: a MAKER opens the vendor's own book
+ * (`MakerProfile`, R78/PRC-02), which is the maker's record rather than the
+ * studio's card, and must open pre-admission from the marketplace lens where
+ * no directory row exists at all.
+ *
+ * The one affordance carried across from the four documents: HT-8's HOURS
+ * DOOR. There is no staff picker inside a money ledger, so a teammate's hours
+ * are reached from their card and from nowhere else; collapsing the four
+ * renderers would otherwise have closed the only entry point into a shipped
+ * surface. It rides in the card's head — the old `ProfileHead` actions slot —
+ * under the same gate it always carried: a linked auth profile, and a viewer
+ * who owns or administers the studio, because the Hours sheet renders no lens
+ * for a plain member and she could only leave that scope by closing the sheet.
  */
 
-import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useMemo, useState } from 'react';
 import {
-  useClient,
-  useClientDecisions,
-  useClientProjects,
-  useClientReviews,
-  useNurtureTouchpoints,
+  AUTHORITY_SCOPE_LABELS,
+  useAffiliations,
+  useComplianceDocuments,
+  useComplianceState,
+  usePartyAuthority,
+  usePeopleSeats,
   usePerson,
-  useProposals,
-  useStartDirectThread,
   useStudioContact,
-  useThreads,
-  type ClientDecision,
-  type PartyRole,
+  type AuthorityScope,
+  type PeopleDirectorySeat,
 } from '@patina/supabase';
-import { usePersonDocuments } from '@/hooks/use-person-documents';
-import { useViewerStudio } from '@/hooks/use-viewer-studio';
-import {
-  deriveIssuanceState,
-  deriveRelationshipJourney,
-  deriveStatusDot,
-  humanizeSince,
-  isNurtureDue,
-  roleLabel,
-  type JourneyInputs,
-} from '@/lib/document/people-derivation';
-import type { PersonProfileProps } from '../types';
-import { ActionButton, BackLink, ProfileHead } from '../profile/profile-shell';
+import { partyKindOwesPaper } from '@patina/types';
+import { directoryContactKind } from '@/lib/document/people-derivation';
+import { DocumentAction } from '../../document-action';
 import { MakerProfile } from '../profile/maker-profile';
-import { RelationshipJourney } from '../profile/relationship-journey';
-import { StyleDna } from '../profile/style-dna';
-import {
-  NoteCard,
-  NurtureCard,
-  ProjectsCard,
-  TrustCard,
-  type ProfileProjectRow,
-} from '../profile/profile-cards';
-import { AddPersonSheet } from '../directory/add-person-sheet';
-import { HouseholdSheet } from '../../overlays/household-sheet';
+import { Avatar } from '../person-bits';
+import { StateWord, PlainFact } from '../state-word';
+import { SeatLine, formatSeatDate, seatWindowText } from '../seat-line';
+import { ReachAccess, NO_SEAT_SENTENCE } from '../reach-access';
+import { ComplianceTable, NO_PAPER_OWED_SENTENCE, paperHeldClause } from '../compliance-table';
+import { RecordDocumentSheet } from '../record-document-sheet';
+import { formatMoneyFromCents } from '../people-format';
+import { useViewerStudio } from '@/hooks/use-viewer-studio';
 import { openHoursForMember } from '@/lib/document/open-hours-scope';
+import type { PersonProfileProps } from '../types';
 
-/** F3 — the id of the `studio_contacts` row backing this profile, when there
- *  is one: the pure rolodex branch's own id (role 'contact' — TeamProfile's
- *  catch-all branch below is what actually renders these; there is no
- *  separate 'contact' case in the role switch), or the lineage FK a
- *  network/team party carries once folded into the rolodex
- *  (`meta.studio_contact_id`, 00418/00419). Null for a party never promoted
- *  in. A 'team' row never carries `studio_contact_id` — the view's TEAM leg
- *  (00478 L298-320) only ever puts role/project_name/job_title/staff_role in
- *  its `meta`, so this still resolves to null for it, just not by a
- *  role==='team' special case. */
-function backingStudioContactId(
-  role: PartyRole,
-  personId: string,
-  meta: Record<string, unknown>,
-): string | null {
-  if (role === 'contact') return personId;
-  const id = meta['studio_contact_id'];
-  return typeof id === 'string' && id ? id : null;
+const REGION = 'border-t border-[var(--hairline-strong)] py-6';
+const REGION_HEAD = 't-head mb-3 text-[var(--ink-subtle)]';
+
+export const NO_AUTHORITY_SENTENCE = 'No authority on this job';
+export const NO_PAST_SEATS_SENTENCE = 'No closed seat on file.';
+export const SEND_TEXT_CONSEQUENCE =
+  'This sends one text to the number on file. They can stop it at any time by replying STOP.';
+export const CANNOT_TEXT_SENTENCE =
+  'The studio holds no standing consent for this number, so no text may go out.';
+
+/** A seat is done when its stage says so — nothing about the window decides it. */
+const DONE_STAGES = new Set(['off_job', 'retired', 'declined', 'no_response', 'warranty']);
+
+/** "Signs money to $2,500" / "Selections" / "Prepares only" — plain text. */
+export function authorityPhrase(grant: {
+  scope: string;
+  threshold_cents: number | null;
+  prepares_only: boolean;
+}): string {
+  if (grant.prepares_only) return 'Prepares only';
+  const label =
+    AUTHORITY_SCOPE_LABELS[grant.scope as AuthorityScope] ?? grant.scope;
+  const money = formatMoneyFromCents(grant.threshold_cents);
+  return money ? `${label} to ${money}` : label;
 }
 
-/** F3 — the rolodex "Edit" action: shown only once the backing card is known
- *  to be live (loaded, not archived). Opens AddPersonSheet in edit mode.
- *
- *  F3-R1-05 — `linked` distinguishes the pure rolodex branch (role
- *  'contact', where the profile head already shows this exact
- *  studio_contacts row) from a network/team PARTY row folded into the
- *  rolodex (gc/architect/photographer/stager/team): the head there keeps
- *  showing the `project_parties` row's own fields, so editing the linked
- *  card changes the shared card without changing what's on screen. The
- *  label and confirmation say so rather than implying the visible profile
- *  will update.
- *
- *  F3-R2-13 — a background refetch (or someone else archiving the card)
- *  must never unmount an open edit sheet out from under the designer: only
- *  the button is gated on the card being live; once `open` is true the
- *  sheet stays mounted through a render where the card just went stale, and
- *  the effect below closes it with an explanation on the next tick instead
- *  of the whole action vanishing silently. */
-function RolodexEditAction({
-  studioContactId,
-  linked,
-  notify,
-}: {
-  studioContactId: string | null;
-  linked: boolean;
-  notify: (m: string) => void;
-}) {
-  const { data: contact } = useStudioContact(studioContactId);
-  const [open, setOpen] = useState(false);
-  const canEdit = !!studioContactId && !!contact && !contact.archived_at;
-
-  useEffect(() => {
-    if (open && !canEdit) {
-      setOpen(false);
-      notify('That card changed while you were editing it — reopen it to try again.');
-    }
-  }, [open, canEdit, notify]);
-
-  if (!canEdit && !open) return null;
+/** The seat's own facts beneath its line, in the order SPEC §5.2 #7 prints. */
+function SeatFacts({ seat }: { seat: PeopleDirectorySeat }) {
+  const { data: authority } = usePartyAuthority(seat.seat_id);
+  const phrases = (authority ?? []).map(authorityPhrase);
+  const extras: string[] = [];
+  if (seat.site_access_mode === 'escorted') extras.push('Escorted on site');
+  if (seat.contracted_through) extras.push(`Contracted through ${seat.contracted_through}`);
+  if (seat.show_to_client === false) extras.push('Hidden from the client');
   return (
-    <>
-      {canEdit && (
-        <ActionButton
-          actionKey="edit-rolodex-card"
-          label={linked ? 'Edit rolodex card' : 'Edit'}
-          onClick={() => setOpen(true)}
-        />
+    <div className="pl-2">
+      <p className="t-body-sm">
+        <PlainFact>{phrases.length > 0 ? phrases.join(' · ') : NO_AUTHORITY_SENTENCE}</PlainFact>
+      </p>
+      {extras.length > 0 && (
+        <p className="t-body-sm text-[var(--ink-subtle)]">{extras.join(' · ')}</p>
       )}
-      {open && contact && (
-        <AddPersonSheet
-          open={open}
-          onClose={() => setOpen(false)}
-          contact={contact}
-          onSaved={(message) => {
-            notify(
-              linked
-                ? 'Their rolodex card is updated — this project’s roster keeps its own record.'
-                : message,
-            );
-            setOpen(false);
-          }}
-        />
-      )}
-    </>
+    </div>
   );
 }
-
-/** The winning option's label on a resolved selection decision, if any. */
-function chosenLabel(d: ClientDecision): string | null {
-  const opts = d.options ?? [];
-  const winner = opts.find((o) => o.selected);
-  return winner?.name ?? null;
-}
-
-// ─── CLIENT profile ─────────────────────────────────────────────────────────
-
-function ClientProfile({
-  personId,
-  profileId,
-  role,
-  name,
-  email,
-  phone,
-  statusRaw,
-  lastTouchAt,
-  meta,
-  onBack,
-  openThread,
-  notify,
-}: {
-  personId: string;
-  profileId: string | null;
-  role: PartyRole;
-  name: string;
-  email: string | null;
-  phone: string | null;
-  statusRaw: string | null;
-  lastTouchAt: string | null;
-  meta: Record<string, unknown>;
-  onBack: () => void;
-  openThread: (id: string) => void;
-  notify: (m: string) => void;
-}) {
-  const router = useRouter();
-  const now = useMemo(() => new Date(), []);
-
-  // Touchpoints and reviews are keyed on `designer_client_id`, so we scope the
-  // fetch server-side (P2). Only a real client has a `designer_clients.id` —
-  // `personId` for a lead is a lead id, so we gate on the role and skip the
-  // filter for leads (the hook then returns nothing, which is correct).
-  const designerClientId = role === 'client' ? personId : undefined;
-  // F3 — "Edit details" opens the household sheet standalone. A captured
-  // client only: a lead's personId is a leads.id, not a designer_clients.id,
-  // so the sheet would have nothing real to read or write.
-  const [editingHousehold, setEditingHousehold] = useState(false);
-
-  const { data: client } = useClient(personId);
-  const { data: projects } = useClientProjects(personId);
-  // The Projects card's document list (I63/T2): document_state rows for this
-  // person, resolved by profile for login clients OR through the
-  // designer_clients relationship for no-login households — see
-  // use-person-documents.ts for the two-shape contract.
-  const { data: documents } = usePersonDocuments(personId, profileId);
-  const { data: proposals } = useProposals(
-    profileId ? { clientId: profileId } : undefined,
-  );
-  const { data: decisions } = useClientDecisions(personId);
-  const { data: allThreads } = useThreads({ scope: 'inbox' });
-  const { data: touchpoints } = useNurtureTouchpoints(
-    designerClientId ? { designerClientId } : undefined,
-  );
-  const { data: reviews } = useClientReviews(
-    designerClientId ? { designerClientId } : undefined,
-  );
-  const startDirect = useStartDirectThread();
-
-  // Threads with this person as a participant (profile_id match). Threads have
-  // no `designer_client_id`, so this match stays client-side on profile_id.
-  const threads = useMemo(() => {
-    if (!profileId) return [];
-    return (allThreads ?? []).filter((t) =>
-      (t.participants ?? []).some((p) => p.profile_id === profileId),
-    );
-  }, [allThreads, profileId]);
-
-  const touchpointList = touchpoints ?? [];
-  const reviewList = reviews ?? [];
-
-  const journey = useMemo(() => {
-    const inputs: JourneyInputs = {
-      person: {
-        person_id: personId,
-        role,
-        display_name: name,
-        email,
-        phone,
-        profile_id: profileId,
-        project_id: null,
-        designer_id: null,
-        status_raw: statusRaw,
-        last_touch_at: lastTouchAt,
-        meta,
-        // Unused by deriveRelationshipJourney's body (only proposals/projects/
-        // decisions/threads/touchpoints/reviews are read) — 'mine' satisfies
-        // the frozen PeopleDirectoryRow contract without a real scope signal
-        // to hand it (this profile is opened from a specific person, not a
-        // directory row carrying 00420's scope column).
-        scope: 'mine',
-        // v4's five appended columns. A SYNTHETIC row carries none of the
-        // facts they name — this journey input is assembled from props, not
-        // read from the view — so every one is null rather than guessed:
-        // `reach_state` and `paper_state` are the view's own reductions, and
-        // a fabricated `not_asked` is the fail-open consent word R-BB removed.
-        reach_state: null,
-        consent_status: null,
-        paper_state: null,
-        contact_rule_summary: null,
-        seat_count: 0,
-      },
-      // Guard on profileId: useProposals(undefined) returns ALL the designer's
-      // proposals (RLS is designer-scoped, not client-scoped). A profileless
-      // lead/client must NOT inherit unrelated proposals into its journey.
-      proposals: !profileId
-        ? []
-        : (proposals ?? []).map((p) => {
-            // `signed_at` lives on the raw row (select('*')) but isn't on the typed
-            // Proposal shape; fall back to responded_at when the proposal is accepted.
-            const rawSigned =
-              (p as { signed_at?: string | null }).signed_at ?? null;
-            const signedAt =
-              rawSigned ?? (p.status === 'accepted' ? p.responded_at : null);
-            return {
-              id: p.id,
-              title: p.title,
-              status: p.status,
-              created_at: p.created_at,
-              sent_at: p.sent_at,
-              signed_at: signedAt,
-              total_cents:
-                typeof p.total_amount === 'number'
-                  ? Math.round(p.total_amount * 100)
-                  : null,
-            };
-          }),
-      projects: (projects ?? []).map((pj: Record<string, unknown>) => ({
-        id: pj['id'] as string,
-        name: (pj['name'] as string) ?? 'Project',
-        status: (pj['status'] as string) ?? null,
-        created_at: (pj['created_at'] as string) ?? null,
-        kickoff_date: (pj['kickoff_date'] as string) ?? null,
-        completed_at: (pj['completed_at'] as string) ?? null,
-      })),
-      decisions: (decisions ?? []).map((d) => ({
-        id: d.id,
-        title: d.title,
-        status: d.status,
-        created_at: d.created_at,
-        resolved_at: d.responded_at,
-        chosen_label: chosenLabel(d),
-      })),
-      threads: threads.map((t) => ({
-        id: t.id,
-        subject: t.title,
-        message_count: null,
-        last_message_at: t.last_message_at,
-      })),
-      touchpoints: touchpointList.map((t) => ({
-        id: t.id,
-        touchpoint_type: t.touchpoint_type,
-        status: t.status,
-        reason: t.reason,
-        suggested_date: t.suggested_date,
-        created_at: t.created_at,
-      })),
-      reviews: reviewList.map((r) => ({
-        id: r.id,
-        rating: r.rating,
-        review_text: r.review_text,
-        created_at: r.created_at,
-      })),
-    };
-    return deriveRelationshipJourney(inputs, now);
-  }, [
-    personId,
-    role,
-    name,
-    email,
-    phone,
-    profileId,
-    statusRaw,
-    lastTouchAt,
-    meta,
-    proposals,
-    projects,
-    decisions,
-    threads,
-    touchpointList,
-    reviewList,
-    now,
-  ]);
-
-  // Side-card rows: the Projects card lists this person's document_state
-  // rows (I63/T2 — "documents appear under Projects"), not the raw
-  // `projects` table alone, so a no-login household's Discovery/proposal
-  // document shows here even though it has no `projects` row yet. Each row
-  // opens `/doc/{engagement_id}` — the document resolver accepts any of a
-  // document's keys (project/proposal/lead/relationship id).
-  const projectRows: ProfileProjectRow[] = useMemo(
-    () =>
-      (documents ?? []).map((doc) => ({
-        id: doc.engagement_id,
-        name: doc.title,
-        state: doc.active_section,
-      })),
-    [documents],
-  );
-
-  const trust = useMemo(
-    () => buildClientTrust(client, reviewList.length),
-    [client, reviewList.length],
-  );
-
-  const due = isNurtureDue(
-    {
-      person_id: personId,
-      role,
-      display_name: name,
-      email,
-      phone,
-      profile_id: profileId,
-      project_id: null,
-      designer_id: null,
-      status_raw: statusRaw,
-      last_touch_at: lastTouchAt,
-      meta,
-      // Unused by isNurtureDue (switches on role/status_raw/last_touch_at
-      // and, for a proposal-stage client, meta's issuance evidence) — 'mine'
-      // satisfies the frozen PeopleDirectoryRow shape.
-      scope: 'mine',
-      // v4's five appended columns. A SYNTHETIC row carries none of the
-      // facts they name — this journey input is assembled from props, not
-      // read from the view — so every one is null rather than guessed:
-      // `reach_state` and `paper_state` are the view's own reductions, and
-      // a fabricated `not_asked` is the fail-open consent word R-BB removed.
-      reach_state: null,
-      consent_status: null,
-      paper_state: null,
-      contact_rule_summary: null,
-      seat_count: 0,
-    },
-    now,
-  );
-  const dot = deriveStatusDot(
-    {
-      person_id: personId,
-      role,
-      display_name: name,
-      email,
-      phone,
-      profile_id: profileId,
-      project_id: null,
-      designer_id: null,
-      status_raw: statusRaw,
-      last_touch_at: lastTouchAt,
-      meta,
-      // Unused by deriveStatusDot (switches on role/status_raw/meta/dormancy
-      // only) — 'mine' satisfies the frozen PeopleDirectoryRow shape.
-      scope: 'mine',
-      // v4's five appended columns. A SYNTHETIC row carries none of the
-      // facts they name — this journey input is assembled from props, not
-      // read from the view — so every one is null rather than guessed:
-      // `reach_state` and `paper_state` are the view's own reductions, and
-      // a fabricated `not_asked` is the fail-open consent word R-BB removed.
-      reach_state: null,
-      consent_status: null,
-      paper_state: null,
-      contact_rule_summary: null,
-      seat_count: 0,
-    },
-    now,
-  );
-  const nurtureText = nurtureLine(statusRaw, lastTouchAt, now, due, dot, meta);
-
-  const onMessage = () => {
-    if (!profileId) {
-      notify(
-        `${name} has no portal login yet — invite them to start a direct thread.`,
-      );
-      return;
-    }
-    const existing = threads[0];
-    if (existing) {
-      openThread(existing.id);
-      return;
-    }
-    startDirect.mutate(profileId, {
-      onSuccess: (threadId) => openThread(threadId),
-      onError: () =>
-        notify(`Couldn't open a thread with ${name} just now — try again.`),
-    });
-  };
-
-  const firstName = name.split(' ')[0] ?? name;
-
-  return (
-    <>
-      <BackLink onBack={onBack} />
-      <ProfileHead
-        name={name}
-        role={role}
-        email={email}
-        phone={phone}
-        actions={
-          <>
-            <ActionButton
-              actionKey="message-person"
-              label="Message"
-              tone="dark"
-              onClick={onMessage}
-            />
-            <ActionButton
-              actionKey="schedule-touchpoint"
-              label="Schedule a touchpoint"
-              onClick={() =>
-                notify(
-                  `Composing a touchpoint for ${firstName} — pick a template (check-in, holiday, milestone) and a send time. Nurture keeps the relationship warm.`,
-                )
-              }
-            />
-            <ActionButton
-              actionKey="preview-as-person"
-              label="View as them"
-              onClick={() =>
-                notify(
-                  `Opens the client mirror — what ${firstName} sees of this relationship.`,
-                )
-              }
-            />
-            {role === 'client' && (
-              <ActionButton
-                actionKey="edit-client-details"
-                label="Edit details"
-                onClick={() => setEditingHousehold(true)}
-              />
-            )}
-          </>
-        }
-      />
-
-      {/* F3-R1-14 — mounted only while actually editing: HouseholdSheet's own
-          `useDesignerClientForClientUser` + `useClient` ran on every profile
-          visit even closed, and its DocSheet already returns null the instant
-          `open` is false (no close animation to preserve), so nothing is lost
-          by not mounting it until there's something to edit. */}
-      {role === 'client' && editingHousehold && (
-        <HouseholdSheet
-          open={editingHousehold}
-          onClose={() => setEditingHousehold(false)}
-          engagementKind="relationship"
-          projectId={null}
-          proposalId={null}
-          clientProfileId={profileId}
-          designerClientId={personId}
-          clientName={name}
-          startEditing
-        />
-      )}
-
-      <div className="mt-[1.3rem] grid grid-cols-1 gap-7 lg:grid-cols-[1.4fr_1fr]">
-        <div>
-          <StyleDna
-            tags={client?.style_tags ?? (meta['style_tags'] as string[]) ?? []}
-            preferences={client?.style_preferences ?? null}
-            narrative={client?.inspiration_quote ?? null}
-          />
-          <RelationshipJourney
-            events={journey}
-            onFollow={(href) => router.push(href)}
-          />
-        </div>
-        <div>
-          <NurtureCard text={nurtureText} due={due} onReachOut={onMessage} />
-          <ProjectsCard
-            title="Projects"
-            projects={projectRows}
-            onOpenProject={(id) => router.push(`/doc/${id}`)}
-            emptyLine="No projects yet — they open here as you start work together."
-          />
-          <TrustCard title="Trust & history" items={trust} />
-          <NoteCard note={client?.notes ?? null} />
-        </div>
-      </div>
-    </>
-  );
-}
-
-/** Trust & history lines, drawn from the real client row + review count. */
-function buildClientTrust(
-  client: ReturnType<typeof useClient>['data'],
-  reviewCount: number,
-): string[] {
-  const out: string[] = [];
-  if (client) {
-    if (client.total_projects > 0)
-      out.push(
-        `${client.total_projects} ${client.total_projects === 1 ? 'project' : 'projects'} together`,
-      );
-    if (client.total_revenue > 0)
-      out.push(
-        `$${Math.round(client.total_revenue).toLocaleString('en-US')} in lifetime work`,
-      );
-    if (
-      typeof client.satisfaction_score === 'number' &&
-      client.satisfaction_score > 0
-    )
-      out.push(`Satisfaction ${client.satisfaction_score.toFixed(1)} / 5`);
-    if (client.source === 'referral') out.push('Came by referral');
-  }
-  if (reviewCount > 0)
-    out.push(
-      `${reviewCount} ${reviewCount === 1 ? 'review' : 'reviews'} collected`,
-    );
-  if (out.length === 0) out.push('First engagement — building trust');
-  return out;
-}
-
-/** The Nurture card's one line, honest to status + dormancy. */
-function nurtureLine(
-  statusRaw: string | null,
-  lastTouchAt: string | null,
-  now: Date,
-  due: boolean,
-  dot: string,
-  meta: Record<string, unknown>,
-): string {
-  if (statusRaw === 'proposal') {
-    // J7: share deriveIssuanceState's one ordering (paper → sent → draft)
-    // rather than reimplementing the check a third time.
-    switch (deriveIssuanceState({ meta })) {
-      case 'paper':
-        return 'Handed over on paper — waiting on the signed copy to record.';
-      case 'sent':
-        return 'Proposal out — a nudge or a call may be overdue.';
-      case 'draft':
-        return 'Still drafting — nothing has gone to them yet.';
-    }
-  }
-  if (statusRaw === 'lead')
-    return 'New relationship — open the conversation within a day.';
-  if (statusRaw === 'completed' || statusRaw === 'nurture') {
-    if (due)
-      return `${humanizeSince(lastTouchAt, now)} since last touch — the Engine recommends reconnecting now.`;
-    if (dot === 'warm')
-      return `Drifting a little — last touched ${humanizeSince(lastTouchAt, now)}. Worth a check-in soon.`;
-    return 'A completed relationship — keep it warm with the occasional note.';
-  }
-  return 'On an active project together — the relationship is live.';
-}
-
-// ─── MAKER / GC profile (network) ───────────────────────────────────────────
-
-function NetworkProfile({
-  personId,
-  role,
-  name,
-  email,
-  phone,
-  projectId,
-  statusRaw,
-  lastTouchAt,
-  meta,
-  onBack,
-  notify,
-}: {
-  personId: string;
-  role: PartyRole;
-  name: string;
-  email: string | null;
-  phone: string | null;
-  projectId: string | null;
-  statusRaw: string | null;
-  lastTouchAt: string | null;
-  meta: Record<string, unknown>;
-  onBack: () => void;
-  notify: (m: string) => void;
-}) {
-  const router = useRouter();
-  const now = useMemo(() => new Date(), []);
-
-  // A network party's journey is sparse: the project they're engaged on (when
-  // project-scoped, as GCs are) is the spine. No proposals / decisions / DNA.
-  const journey = useMemo(() => {
-    const projectName = (meta['project_name'] as string) ?? null;
-    const inputs: JourneyInputs = {
-      person: {
-        person_id: personId,
-        role,
-        display_name: name,
-        email,
-        phone,
-        profile_id: null,
-        project_id: projectId,
-        designer_id: null,
-        status_raw: statusRaw,
-        last_touch_at: lastTouchAt,
-        meta,
-        // Unused by deriveRelationshipJourney's body — see the ClientProfile
-        // comment above; same frozen-contract satisfaction, not a real signal.
-        scope: 'mine',
-        // v4's five appended columns. A SYNTHETIC row carries none of the
-        // facts they name — this journey input is assembled from props, not
-        // read from the view — so every one is null rather than guessed:
-        // `reach_state` and `paper_state` are the view's own reductions, and
-        // a fabricated `not_asked` is the fail-open consent word R-BB removed.
-        reach_state: null,
-        consent_status: null,
-        paper_state: null,
-        contact_rule_summary: null,
-        seat_count: 0,
-      },
-      projects:
-        projectId && projectName
-          ? [
-              {
-                id: projectId,
-                name: projectName,
-                status: 'active',
-                kickoff_date: lastTouchAt,
-              },
-            ]
-          : [],
-    };
-    return deriveRelationshipJourney(inputs, now);
-  }, [
-    personId,
-    role,
-    name,
-    email,
-    phone,
-    projectId,
-    statusRaw,
-    lastTouchAt,
-    meta,
-    now,
-  ]);
-
-  const track = buildNetworkTrack(role, meta);
-  const projectRows: ProfileProjectRow[] = projectId
-    ? [
-        {
-          id: projectId,
-          name: (meta['project_name'] as string) ?? 'Their engagement',
-          state: 'active',
-        },
-      ]
-    : [];
-
-  const isGc = role === 'gc';
-  const studioContactId = backingStudioContactId(role, personId, meta);
-
-  return (
-    <>
-      <BackLink onBack={onBack} />
-      <ProfileHead
-        name={name}
-        role={role}
-        email={email}
-        phone={phone}
-        actions={
-          <>
-            <ActionButton
-              actionKey="open-person-orders"
-              label="Open in Orders"
-              tone="dark"
-              onClick={() =>
-                notify(
-                  `Cross-links to the Orders book — ${name}'s terms, orders, and lead times live there.`,
-                )
-              }
-            />
-            {isGc && projectId && (
-              <ActionButton
-                actionKey="open-coordination"
-                label="Coordination"
-                onClick={() => router.push(`/doc/${projectId}`)}
-              />
-            )}
-            <RolodexEditAction
-              studioContactId={studioContactId}
-              linked={role !== 'contact'}
-              notify={notify}
-            />
-          </>
-        }
-      />
-
-      <div className="mt-[1.3rem] grid grid-cols-1 gap-7 lg:grid-cols-[1.4fr_1fr]">
-        <div>
-          <RelationshipJourney
-            events={journey}
-            onFollow={(href) => router.push(href)}
-            emptyLine={
-              isGc
-                ? 'On an active project together — the shared history fills in as work moves.'
-                : 'A maker in your network — orders and lead times live in the Orders book.'
-            }
-          />
-        </div>
-        <div>
-          <ProjectsCard
-            title="Engagements"
-            projects={projectRows}
-            onOpenProject={(id) => router.push(`/doc/${id}`)}
-            emptyLine={
-              isGc
-                ? 'No active project on file.'
-                : 'Their orders live in the Orders book — open it to see the full ledger.'
-            }
-          />
-          <TrustCard title="Track record" items={track} />
-        </div>
-      </div>
-    </>
-  );
-}
-
-/** Track-record lines for a maker / GC, from the directory meta. */
-function buildNetworkTrack(
-  role: PartyRole,
-  meta: Record<string, unknown>,
-): string[] {
-  const out: string[] = [];
-  if (role === 'maker') {
-    if (meta['founding_circle']) out.push('Founding Circle maker');
-    const cat = (meta['primary_category'] as string) ?? '';
-    if (cat) out.push(`Primary category — ${cat.replace(/_/g, ' ')}`);
-    const lead = meta['lead_times'] as Record<string, unknown> | null;
-    if (lead && typeof lead['standard'] === 'number')
-      out.push(`${lead['standard']}-day standard lead`);
-    if (meta['trade_terms']) out.push('Honors trade pricing');
-    const reviews = meta['review_count'];
-    const rating = meta['designer_rating_avg'];
-    if (
-      typeof reviews === 'number' &&
-      reviews > 0 &&
-      typeof rating === 'number'
-    )
-      out.push(
-        `${rating.toFixed(1)}★ across ${reviews} ${reviews === 1 ? 'review' : 'reviews'}`,
-      );
-    if (meta['made_in']) out.push(`Made in ${meta['made_in']}`);
-  } else if (role === 'gc') {
-    const company = (meta['company_name'] as string) ?? '';
-    if (company) out.push(company);
-    out.push('Tracked party on the project — appears in the ball-in-court.');
-  }
-  if (out.length === 0) out.push('Building a track record together.');
-  return out;
-}
-
-// ─── TEAM profile (the colophon) ────────────────────────────────────────────
-
-function TeamProfile({
-  personId,
-  profileId,
-  role,
-  name,
-  email,
-  phone,
-  projectId,
-  statusRaw,
-  meta,
-  onBack,
-  notify,
-}: {
-  personId: string;
-  /** Their user id — HT-8's member scope is keyed on it, and a teammate who has
-   *  not signed in yet has logged no hours to read. */
-  profileId: string | null;
-  role: PartyRole;
-  name: string;
-  email: string | null;
-  phone: string | null;
-  projectId: string | null;
-  statusRaw: string | null;
-  meta: Record<string, unknown>;
-  onBack: () => void;
-  notify: (m: string) => void;
-}) {
-  const router = useRouter();
-  // HT-8 — the Hours sheet's member scope is part of the scope lens, and the
-  // lens is the admin's instrument: the sheet renders no lens, no rollup and no
-  // own rows for a plain member, so her only way out of the scope this door
-  // opens is to close the sheet. The door carries the same gate as the lens.
-  // One ordered answer, shared with the sheet itself: the duplicate copy of
-  // this derivation drifted from the lens it was supposed to mirror, and both
-  // read the first row of an unordered membership list.
-  const { isOwnerOrAdmin: viewerIsOwnerOrAdmin } = useViewerStudio();
-  const studioRole = humanizeTeamRole(
-    statusRaw ?? (meta['role'] as string) ?? null,
-  );
-  const projectName = (meta['project_name'] as string) ?? null;
-  const studioContactId = backingStudioContactId(role, personId, meta);
-
-  return (
-    <>
-      <BackLink onBack={onBack} />
-      <ProfileHead
-        name={name}
-        role={role}
-        email={email}
-        phone={phone}
-        actions={
-          <>
-            {/* HT-8 — the one door into the Hours sheet's member scope. There is
-                no staff picker inside a money ledger; you come here first. */}
-            {profileId && viewerIsOwnerOrAdmin && (
-              <ActionButton
-                actionKey="open-person-hours"
-                label="Hours"
-                onClick={() => openHoursForMember(profileId, name)}
-              />
-            )}
-            <ActionButton
-              actionKey="adjust-person-visibility"
-              label="Adjust visibility"
-              onClick={() =>
-                notify(
-                  `Opens this teammate's document access — margin visibility is set per document in studio settings.`,
-                )
-              }
-            />
-            <RolodexEditAction
-              studioContactId={studioContactId}
-              linked={role !== 'contact'}
-              notify={notify}
-            />
-          </>
-        }
-      />
-
-      <div className="mt-[1.3rem] grid grid-cols-1 gap-7 lg:grid-cols-[1.4fr_1fr]">
-        <div>
-          <div className="mb-[0.7rem] font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
-            The colophon · margin visibility
-          </div>
-          <p className="text-[0.78rem] leading-relaxed text-[var(--color-charcoal)]">
-            {name.split(' ')[0]} is on your studio as{' '}
-            <b className="font-semibold">{studioRole}</b>. Studio teammates read
-            the document with margin visibility — they see the spine, the
-            margin, and the work, but cost and margin stay yours unless you
-            grant it.
-          </p>
-          <p className="mt-3 text-[0.72rem] italic leading-relaxed text-[var(--color-aged-oak)]">
-            Margin visibility is granted per document, in studio settings —
-            never global.
-          </p>
-        </div>
-        <div>
-          {projectId && projectName ? (
-            <ProjectsCard
-              title="On these documents"
-              projects={[{ id: projectId, name: projectName, state: 'active' }]}
-              onOpenProject={(id) => router.push(`/doc/${id}`)}
-              emptyLine="Not assigned to a document yet."
-            />
-          ) : (
-            <ProjectsCard
-              title="On these documents"
-              projects={[]}
-              onOpenProject={(id) => router.push(`/doc/${id}`)}
-              emptyLine="Not assigned to a document yet."
-            />
-          )}
-          <TrustCard
-            title="Studio role"
-            items={[
-              `${studioRole}`,
-              'Reads the document with margin visibility',
-            ]}
-          />
-        </div>
-      </div>
-    </>
-  );
-}
-
-function humanizeTeamRole(raw: string | null): string {
-  switch (raw) {
-    case 'lead_designer':
-      return 'lead designer';
-    case 'support_designer':
-      return 'support designer';
-    case 'bookkeeper':
-      return 'bookkeeper';
-    case 'previous_lead':
-      return 'previous lead';
-    default:
-      return raw?.replace(/_/g, ' ') ?? 'studio teammate';
-  }
-}
-
-// ─── the role switch ────────────────────────────────────────────────────────
 
 export function PersonProfile({
   personId,
   role,
   onBack,
-  openThread,
   notify,
-}: PersonProfileProps) {
+  organizationId,
+  onOpenSeat,
+}: PersonProfileProps & {
+  organizationId: string | null;
+  /** Opens the seat's own sheet, where the SMS thread and composer live. */
+  onOpenSeat?: (seat: PeopleDirectorySeat) => void;
+}) {
   const { data: person, isLoading } = usePerson(personId, role);
+  const { data: card } = useStudioContact(personId);
+  const { data: affiliations } = useAffiliations({ personId });
+  const { data: seats } = usePeopleSeats({ personId });
+  const { data: documents } = useComplianceDocuments({ holderId: personId });
+  const { data: ownPaperState } = useComplianceState(personId);
+  // HT-8 — the Hours door carries the scope lens's own owner/admin gate.
+  // One ordered answer, shared with the sheet itself: a viewer who answers
+  // for two studios must not be keyed on whichever membership row came back
+  // first.
+  const { isOwnerOrAdmin: viewerIsOwnerOrAdmin } = useViewerStudio();
+  const [recordOpen, setRecordOpen] = useState(false);
+  const [announcement, setAnnouncement] = useState<string | null>(null);
+  const now = useMemo(() => new Date(), []);
 
-  // Makers read from the vendor book itself (R78/PRC-02) — richer than the
-  // directory row, and it must open PRE-admission too (the marketplace lens
-  // walks into makers who aren't on the roster, so have no directory row).
+  const liveSeats = useMemo(
+    () => (seats ?? []).filter((s) => !DONE_STAGES.has(String(s.stage))),
+    [seats],
+  );
+  const pastSeats = useMemo(
+    () => (seats ?? []).filter((s) => DONE_STAGES.has(String(s.stage))),
+    [seats],
+  );
+
+  // Makers read from the vendor book itself (R78/PRC-02) — the maker's own
+  // record, not the studio's card, and it must open pre-admission.
   if (role === 'maker') {
     return <MakerProfile vendorId={personId} onBack={onBack} notify={notify} />;
   }
@@ -978,48 +149,257 @@ export function PersonProfile({
   if (isLoading || !person) {
     return (
       <>
-        <BackLink onBack={onBack} />
-        <p className="px-1 py-6 text-[0.76rem] text-[var(--color-aged-oak)]">
-          {isLoading
-            ? 'Reading the relationship…'
-            : `We couldn't find this ${roleLabel(role).toLowerCase()}.`}
+        <DocumentAction
+          actionKey="back-to-directory"
+          surfaceKey="people"
+          regionKey="person-card"
+          variant="tertiary"
+          onClick={onBack}
+        >
+          Back
+        </DocumentAction>
+        <p className="t-body-sm py-6 text-[var(--ink-subtle)]">
+          {isLoading ? 'Reading the card…' : 'This card is not on the studio book.'}
         </p>
       </>
     );
   }
 
-  const common = {
-    personId: person.person_id,
-    role: person.role,
-    name: person.display_name,
-    email: person.email,
-    phone: person.phone,
-    statusRaw: person.status_raw,
-    lastTouchAt: person.last_touch_at,
-    meta: person.meta ?? {},
-    onBack,
-    notify,
+  const affiliation = affiliations?.[0] ?? null;
+  const firmName =
+    (typeof person.meta?.['company_name'] === 'string'
+      ? (person.meta['company_name'] as string)
+      : null) ?? null;
+  const sinceYear = formatSeatDate(affiliation?.from_date)?.slice(-4) ?? null;
+  const identityBits = [
+    firmName,
+    affiliation?.role_at_firm
+      ? sinceYear
+        ? `${affiliation.role_at_firm}, since ${sinceYear}`
+        : affiliation.role_at_firm
+      : null,
+  ].filter(Boolean) as string[];
+
+  const firstSeat = liveSeats[0] ?? null;
+  const canText = person.consent_status === 'granted';
+  const soleProprietor = card?.is_sole_proprietor === true;
+  const owesPaper = partyKindOwesPaper(directoryContactKind(person));
+  const docs = documents ?? [];
+  const heldClause = paperHeldClause(docs, now);
+
+  const announce = (message: string) => {
+    setAnnouncement(message);
+    notify(message);
   };
 
-  if (person.role === 'client' || person.role === 'lead') {
-    return (
-      <ClientProfile
-        {...common}
-        profileId={person.profile_id}
-        openThread={openThread}
-      />
-    );
-  }
-
-  if (person.role === 'gc') {
-    return <NetworkProfile {...common} projectId={person.project_id} />;
-  }
-
   return (
-    <TeamProfile
-      {...common}
-      profileId={person.profile_id}
-      projectId={person.project_id}
-    />
+    <div data-person-card={person.person_id} className="mx-auto max-w-[720px]">
+      <DocumentAction
+        actionKey="back-to-directory"
+        surfaceKey="people"
+        regionKey="person-card"
+        variant="tertiary"
+        onClick={onBack}
+      >
+        Back
+      </DocumentAction>
+
+      {/* One live region for the whole card (SPEC §7 #3). */}
+      <p role="status" aria-live="polite" className="sr-only">
+        {announcement}
+      </p>
+
+      {/* R1 — Identity */}
+      <header className="flex items-center gap-4 pb-6">
+        <Avatar name={person.display_name} role={person.role} />
+        <div className="min-w-0">
+          <h2 className="t-d3 font-heading">{person.display_name}</h2>
+          {identityBits.length > 0 && (
+            <p className="t-meta mt-1 text-[var(--ink-subtle)]">
+              {identityBits.join(' · ')}
+            </p>
+          )}
+          {soleProprietor && (
+            <p className="t-meta mt-1 text-[var(--ink-subtle)]">Sole proprietor</p>
+          )}
+        </div>
+        {/* HT-8 — the one door into the Hours sheet's member scope, which is
+            studio-wide and so belongs to a studio member, never to a client
+            who merely holds a portal account. */}
+        {person.role === 'team' && person.profile_id && viewerIsOwnerOrAdmin && (
+          <div className="ml-auto shrink-0">
+            <DocumentAction
+              actionKey="open-person-hours"
+              surfaceKey="people"
+              regionKey="person-card"
+              variant="secondary"
+              onClick={() =>
+                openHoursForMember(
+                  person.profile_id as string,
+                  person.display_name,
+                )
+              }
+            >
+              Hours
+            </DocumentAction>
+          </div>
+        )}
+      </header>
+
+      {/* R2 — Reach & access: Channels, Contact rule, Access grants */}
+      <section className={REGION}>
+        <h3 className="t-head mb-4 text-[var(--ink-subtle)]">Reach &amp; access</h3>
+        <ReachAccess
+          cardId={person.person_id}
+          cardKind="person"
+          organizationId={
+            organizationId ??
+            (typeof person.meta?.['organization_id'] === 'string'
+              ? (person.meta['organization_id'] as string)
+              : null)
+          }
+          personName={person.display_name}
+          seatId={firstSeat?.seat_id ?? null}
+          seatProjectId={firstSeat?.project_id ?? null}
+          seatProjectName={firstSeat?.project_name ?? null}
+          seatWindowEnd={firstSeat?.on_site_to ?? null}
+          warrantyEnd={firstSeat?.warranty_until ?? card?.warranty_until ?? null}
+          onAnnounce={announce}
+          now={now}
+        />
+        <p
+          id={`person-text-consequence-${person.person_id}`}
+          className="t-body-sm mt-2 max-w-[56ch] text-[var(--ink-subtle)]"
+        >
+          {canText ? SEND_TEXT_CONSEQUENCE : CANNOT_TEXT_SENTENCE}
+        </p>
+        <DocumentAction
+          actionKey="send-a-text"
+          surfaceKey="people"
+          regionKey="reach-access"
+          variant="secondary"
+          held={!canText || !firstSeat}
+          disabled={!canText || !firstSeat}
+          aria-describedby={`person-text-consequence-${person.person_id}`}
+          onClick={() => {
+            if (firstSeat && onOpenSeat) onOpenSeat(firstSeat);
+          }}
+        >
+          Send a text
+        </DocumentAction>
+      </section>
+
+      {/* R4 — Seats on projects */}
+      <section className={REGION}>
+        <h3 className={REGION_HEAD}>Seats on projects</h3>
+        {liveSeats.length === 0 ? (
+          <p className="t-body-sm text-[var(--ink-subtle)]">{NO_SEAT_SENTENCE}</p>
+        ) : (
+          <ul className="m-0 list-none p-0">
+            {liveSeats.map((seat) => (
+              <li key={seat.seat_id} className="border-t border-[var(--hairline)] py-2">
+                <SeatLine
+                  seat={seat}
+                  onOpen={(s) => onOpenSeat?.(s)}
+                />
+                <SeatFacts seat={seat} />
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {/* R4b — Past seats, folded */}
+      <section className={REGION}>
+        <h3 className={REGION_HEAD}>Past seats</h3>
+        {pastSeats.length === 0 ? (
+          <p className="t-body-sm text-[var(--ink-subtle)]">{NO_PAST_SEATS_SENTENCE}</p>
+        ) : (
+          <ul className="m-0 list-none p-0">
+            {pastSeats.map((seat) => (
+              <li key={seat.seat_id} className="border-t border-[var(--hairline)] py-2">
+                <p className="t-body-sm flex flex-wrap items-center gap-x-2 text-[var(--ink-subtle)]">
+                  <span>
+                    {[seat.project_name, seat.party_kind, seat.trade]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </span>
+                  <StateWord family="stage" value={seat.stage} />
+                  {formatSeatDate(seat.off_job_at) && (
+                    <span>Closed {formatSeatDate(seat.off_job_at)}</span>
+                  )}
+                  {formatSeatDate(seat.warranty_until) && (
+                    <span>Warranty through {formatSeatDate(seat.warranty_until)}</span>
+                  )}
+                  {!seat.off_job_at && seatWindowText(seat.on_site_from, seat.on_site_to) && (
+                    <span>{seatWindowText(seat.on_site_from, seat.on_site_to)}</span>
+                  )}
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {/* R5 — Paper. A sole proprietor IS their own firm, so their own
+          documents are the firm's (direction §3.2 R5). */}
+      {soleProprietor && (
+        <section className={REGION} data-person-paper>
+          <h3 className={REGION_HEAD}>Paper</h3>
+          {!owesPaper ? (
+            <p className="t-body-sm text-[var(--ink-subtle)]">{NO_PAPER_OWED_SENTENCE}</p>
+          ) : (
+            <>
+              {docs.length > 0 ? (
+                <ComplianceTable documents={docs} today={now} />
+              ) : (
+                <p>
+                  <StateWord family="paper" value={ownPaperState ?? 'not_on_file'} />
+                </p>
+              )}
+              {heldClause && (
+                <p className="t-body-sm mt-3 border-l-2 border-[var(--terracotta-ink)] bg-[var(--rail)] py-[6px] pl-[11px] text-[var(--ink)]">
+                  {heldClause}
+                </p>
+              )}
+              <DocumentAction
+                actionKey="record-compliance-document"
+                surfaceKey="people"
+                regionKey="person-paper"
+                variant="secondary"
+                onClick={() => setRecordOpen(true)}
+              >
+                Record a document
+              </DocumentAction>
+            </>
+          )}
+        </section>
+      )}
+
+      {/* R6 — History */}
+      <section className={REGION}>
+        <h3 className={REGION_HEAD}>History</h3>
+        <p className="t-body-sm text-[var(--ink)]">
+          {`Worked ${person.seat_count ?? 0} of the studio's ${
+            (person.seat_count ?? 0) === 1 ? 'projects' : 'projects'
+          }.`}
+          {formatSeatDate(person.last_touch_at?.slice(0, 10))
+            ? ` Last touch ${formatSeatDate(person.last_touch_at?.slice(0, 10))}.`
+            : ''}
+        </p>
+      </section>
+
+      {organizationId && (
+        <RecordDocumentSheet
+          open={recordOpen}
+          onClose={() => setRecordOpen(false)}
+          organizationId={organizationId}
+          holderId={person.person_id}
+          holderName={person.display_name}
+          holderType="person"
+          onRecorded={announce}
+        />
+      )}
+    </div>
   );
 }

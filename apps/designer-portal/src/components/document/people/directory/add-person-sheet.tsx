@@ -41,22 +41,29 @@ import { useQueryClient } from '@tanstack/react-query';
 import {
   useAddClient,
   useAddProjectParty,
+  useAddStudioContactChannel,
   useFindOrCreateVendor,
+  usePromoteToStudioContact,
   useSaveVendor,
+  useSetContactRule,
+  useSetPartyAuthority,
+  useStudioContacts,
   useStudioIdentity,
   useUpdateStudioContact,
   peopleKeys,
+  peopleSeatKeys,
   type PartyKind,
   type StudioContact,
 } from '@patina/supabase';
 import { ALL_FIELD_TRADES, FIELD_TRADE_LABELS } from '@patina/types';
+import { useOrganizations } from '@patina/supabase';
+import type { DirectoryChip } from '@/lib/document/directory-roles';
 import { useProjects } from '@/hooks/use-projects';
 import { useAuth } from '@/hooks/use-auth';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { clientEvents } from '@/lib/analytics/events';
 import { DocumentAction, DocumentActionGroup } from '../../document-action';
 import { RoomSheet } from '../../rooms/room-sheet';
-import type { DirectoryRole } from '../views/directory-view';
 import {
   LetterLineField,
   checkboxHelper,
@@ -68,11 +75,18 @@ import {
 
 export type AddedPersonKind =
   | 'client'
+  // PR-c / C5 — one new door for the second half of a household. It writes a
+  // `client_rep` seat carrying the authority grant; the string `client_rep`
+  // never appears on a face.
+  | 'household'
   | 'maker'
   | 'gc'
   | 'sub'
   | 'installer'
-  | 'receiver';
+  | 'receiver'
+  // PR-f — somebody the eight words do not name. A written label is required,
+  // because an unnamed other is the row that goes dark.
+  | 'other_named';
 
 /** The four kinds this sheet writes as `project_parties` rows. Pinned as a
  *  literal union rather than `Extract<AddedPersonKind, PartyKind>`: the Call
@@ -82,9 +96,33 @@ export type AddedPersonKind =
  *  values — so does this. */
 type FieldAddKind = 'gc' | 'sub' | 'installer' | 'receiver';
 const FIELD_KINDS: FieldAddKind[] = ['gc', 'sub', 'installer', 'receiver'];
-const isFieldKind = (k: AddedPersonKind): k is FieldAddKind =>
-  (FIELD_KINDS as string[]).includes(k);
-/** Trade is a meaningful field only for the trade kinds (sub / installer). */
+/** Every kind this sheet writes as a SEAT on a project — the four field kinds
+ *  plus the household member and the named other. */
+type SeatAddKind = FieldAddKind | 'household' | 'other_named';
+const SEAT_KINDS: SeatAddKind[] = [...FIELD_KINDS, 'household', 'other_named'];
+const isSeatKind = (k: AddedPersonKind): k is SeatAddKind =>
+  (SEAT_KINDS as string[]).includes(k);
+
+/**
+ * The `party_kind` each seat door writes. A household member is a
+ * `client_rep`; a named other writes `other`, the widest kind
+ * `project_parties_party_kind_check` admits today — `other_named` is refused
+ * by Postgres until the CHECK widens (`PARTY_KINDS_ACCEPTED_BY_DB`), so the
+ * written label rides in `trade`, the seat's one free-text descriptor, and the
+ * roster line already prints it beside the kind.
+ */
+const SEAT_PARTY_KIND: Record<SeatAddKind, PartyKind> = {
+  gc: 'gc',
+  sub: 'sub',
+  installer: 'installer',
+  receiver: 'receiver',
+  household: 'client_rep',
+  other_named: 'other',
+};
+
+/** Trade is REQUIRED for the trade kinds (sub / installer), not optional: a
+ *  sub with no trade cannot be found by the trade line the Directory narrows
+ *  with. */
 const showsTrade = (k: AddedPersonKind) => k === 'sub' || k === 'installer';
 
 const UUID_RE =
@@ -97,11 +135,13 @@ const FIELD_INPUT =
 
 const KIND_CHOICES: Array<[AddedPersonKind, string]> = [
   ['client', 'a client'],
+  ['household', 'a household member'],
   ['maker', 'a maker'],
   ['gc', 'a GC'],
   ['sub', 'a sub'],
   ['installer', 'an installer'],
   ['receiver', 'a receiver'],
+  ['other_named', 'someone else'],
 ];
 
 /** The quiet kind choice — DM-mono page links, never tabs (R28 grammar). */
@@ -113,13 +153,17 @@ function KindChoice({
   onKind: (k: AddedPersonKind) => void;
 }) {
   return (
-    <p className="mb-5 flex flex-wrap items-baseline gap-x-3 gap-y-1.5 border-b border-[var(--color-pearl)] pb-2.5">
+    <div
+      role="group"
+      aria-label="What kind of person"
+      className="mb-5 flex flex-wrap items-baseline gap-x-3 gap-y-1.5 border-b border-[var(--color-pearl)] pb-2.5"
+    >
       {KIND_CHOICES.map(([k, label]) => (
         <button
           key={k}
           type="button"
           onClick={() => onKind(k)}
-          aria-current={kind === k ? 'true' : undefined}
+          aria-pressed={kind === k}
           className={`min-h-11 rounded-[3px] font-mono text-[11px] uppercase tracking-[0.1em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
             kind === k
               ? 'text-[var(--color-clay-ink)]'
@@ -129,7 +173,7 @@ function KindChoice({
           {label}
         </button>
       ))}
-    </p>
+    </div>
   );
 }
 
@@ -170,7 +214,7 @@ export function AddPersonSheet({
   initialKind?: AddedPersonKind;
   /** Fired with a confirmation line + the directory filter to land on, so the
    *  Room can surface the right roster with the line inline (no toast). */
-  onAdded?: (message: string, landOn: DirectoryRole) => void;
+  onAdded?: (message: string, landOn: DirectoryChip) => void;
   /** Walk out to lead intake (the pipeline) for a prospect rather than a client. */
   onGoToLeads?: () => void;
   /** F3 — when present, the sheet opens in EDIT mode for this existing
@@ -187,6 +231,26 @@ export function AddPersonSheet({
   const saveVendor = useSaveVendor({ errorSurface: 'inline' });
   const addParty = useAddProjectParty();
   const updateContact = useUpdateStudioContact();
+  // The chain a seat write pulls behind it: the rolodex CARD the rule and the
+  // channels hang on, and the authority grant the seat carries (Leah tasks 1
+  // and 2). A seat alone cannot hold a contact rule — the rule belongs to the
+  // person, so every add that types one mints the card too.
+  const promoteToCard = usePromoteToStudioContact();
+  const addChannel = useAddStudioContactChannel();
+  const contactRuleWrite = useSetContactRule();
+  const setAuthority = useSetPartyAuthority();
+  const { data: orgs } = useOrganizations();
+  const organizationId = useMemo(
+    () => orgs?.find((o) => o.type === 'design_studio')?.id ?? orgs?.[0]?.id ?? null,
+    [orgs],
+  );
+  const { data: rolodex } = useStudioContacts(organizationId, {
+    includeArchived: false,
+  });
+  const firms = useMemo(
+    () => (rolodex ?? []).filter((c) => c.entity_kind === 'company'),
+    [rolodex],
+  );
   const isEditMode = !!contact;
 
   const { data: projectsRaw } = useProjects();
@@ -234,6 +298,11 @@ export function AddPersonSheet({
 
   const [notes, setNotes] = useState('');
   const [error, setError] = useState<string | null>(null);
+  // SPEC §5.5 — the four fields the redesigned sheet adds.
+  const [firmId, setFirmId] = useState('');
+  const [otherLabel, setOtherLabel] = useState('');
+  const [contactRule, setContactRuleText] = useState('');
+  const [authorityPhrase, setAuthorityPhrase] = useState('');
 
   // F3 — edit mode prefill. Keyed on the card's own id (not the object
   // reference): a background refetch of the same card while the sheet is
@@ -293,6 +362,10 @@ export function AddPersonSheet({
     setConsentSource('');
     setConsentEvidence('');
     setNotes('');
+    setFirmId('');
+    setOtherLabel('');
+    setContactRuleText('');
+    setAuthorityPhrase('');
     setError(null);
   };
 
@@ -339,7 +412,7 @@ export function AddPersonSheet({
           : result.invited
             ? `${label} added — a magic-link invite is on its way.`
             : `${label} added to your roster.`;
-      onAdded?.(message, 'client');
+      onAdded?.(message, 'clients');
       clientEvents.create({ has_note: letterOn && invite && !!note.trim() });
       reset();
       onClose();
@@ -372,7 +445,7 @@ export function AddPersonSheet({
       const message = result.isNew
         ? `${result.vendor.name} added — a new maker on your roster.`
         : `${result.vendor.name} was already in the book — now on your roster.`;
-      onAdded?.(message, 'maker');
+      onAdded?.(message, 'makers');
       reset();
       onClose();
     } catch (e) {
@@ -385,15 +458,26 @@ export function AddPersonSheet({
   };
 
   const submitParty = async () => {
-    if (!isFieldKind(kind)) return;
+    if (!isSeatKind(kind)) return;
     setError(null);
     const trimmedName = partyName.trim();
+    const partyKind = SEAT_PARTY_KIND[kind];
     if (!projectId) {
-      setError('Field crew work a project — pick which one they’re on.');
+      setError('Field crew work a project — pick which one they\u2019re on.');
       return;
     }
     if (!trimmedName) {
-      setError(`A ${KIND_NOUN[kind]} needs a name.`);
+      setError(`A ${KIND_NOUN[partyKind]} needs a name.`);
+      return;
+    }
+    // PR-f: an unnamed other is the row that goes dark.
+    if (kind === 'other_named' && !otherLabel.trim()) {
+      setError('Say what they are to this job.');
+      return;
+    }
+    // A sub or an installer with no trade cannot be found by the trade line.
+    if (showsTrade(kind) && !trade) {
+      setError('A sub or an installer needs the trade they work in.');
       return;
     }
     if (textUpdates && !phone.trim()) {
@@ -408,20 +492,72 @@ export function AddPersonSheet({
       );
       return;
     }
+    const matchedFirm = firms.find((f) => f.id === firmId) ?? null;
+    const firmName = matchedFirm?.company_name ?? company;
     try {
-      await addParty.mutateAsync({
+      const party = await addParty.mutateAsync({
         projectId,
-        partyKind: kind,
+        partyKind,
         displayName: trimmedName,
-        companyName: company,
-        trade: showsTrade(kind) ? trade : null,
+        companyName: firmName,
+        // A named other carries its written label where the seat has room for
+        // it; a trade kind carries its trade (see SEAT_PARTY_KIND's note).
+        trade: kind === 'other_named' ? otherLabel.trim() : showsTrade(kind) ? trade : null,
         phone,
         email: partyEmail,
         textUpdates,
         smsConsentSource: consentSource || undefined,
         smsConsentEvidence: consentEvidence,
       });
+
+      // The rule and the typed channels belong to the PERSON, not the seat, so
+      // a card is minted when either is written and none was auto-linked.
+      let cardId = party.studio_contact_id ?? null;
+      const wantsCard = !!contactRule.trim() || !!phone.trim() || !!partyEmail.trim();
+      if (!cardId && wantsCard && organizationId) {
+        const card = await promoteToCard.mutateAsync({ organizationId, party });
+        cardId = (card as { id?: string } | null)?.id ?? null;
+      }
+      if (cardId) {
+        if (phone.trim()) {
+          await addChannel.mutateAsync({
+            ownerType: 'person',
+            ownerId: cardId,
+            channelKind: 'mobile',
+            value: phone.trim(),
+            smsCapable: true,
+            preferred: true,
+          });
+        }
+        if (partyEmail.trim()) {
+          await addChannel.mutateAsync({
+            ownerType: 'person',
+            ownerId: cardId,
+            channelKind: 'email',
+            value: partyEmail.trim(),
+          });
+        }
+        if (contactRule.trim()) {
+          await contactRuleWrite.mutateAsync({
+            subjectType: 'person',
+            subjectId: cardId,
+            // The typed sentence is the studio's own reason; the forbidding
+            // clauses are written from the channels actually left empty.
+            channelsForbidden: partyEmail.trim() ? [] : ['email'],
+            reason: contactRule.trim(),
+          });
+        }
+      }
+      if (authorityPhrase.trim()) {
+        await setAuthority.mutateAsync({
+          engagementId: party.id,
+          projectId,
+          scope: kind === 'household' ? 'change_order' : 'selections',
+          sourceClause: authorityPhrase.trim(),
+        });
+      }
       void queryClient.invalidateQueries({ queryKey: peopleKeys.all });
+      void queryClient.invalidateQueries({ queryKey: peopleSeatKeys.all });
 
       const proj =
         projects.find((p) => p.id === projectId)?.name ?? 'the project';
@@ -429,7 +565,7 @@ export function AddPersonSheet({
         textUpdates && phone.trim()
           ? `${trimmedName} added to ${proj} — a text confirmation is on its way.`
           : `${trimmedName} added to ${proj}.`;
-      onAdded?.(message, 'field');
+      onAdded?.(message, kind === 'household' ? 'clients' : 'crew');
       reset();
       onClose();
     } catch (e) {
@@ -533,11 +669,13 @@ export function AddPersonSheet({
     findOrCreateVendor.isPending ||
     saveVendor.isPending ||
     addParty.isPending ||
+    promoteToCard.isPending ||
+    contactRuleWrite.isPending ||
     updateContact.isPending;
 
   const submit = isEditMode
     ? submitEditContact
-    : isFieldKind(kind)
+    : isSeatKind(kind)
       ? submitParty
       : kind === 'client'
         ? submitClient
@@ -549,7 +687,7 @@ export function AddPersonSheet({
       ? 'Add a client to your directory. They appear on your roster at once; an optional invite gives them a Patina login.'
       : kind === 'maker'
         ? 'Add a maker — a shop you order through. They join your roster and the Orders book can route POs to them.'
-        : `Add a ${KIND_NOUN[kind as PartyKind]} to a project. With a phone and a text opt-in, you can coordinate them over SMS — and they land on your People roster.`;
+        : `Add a ${KIND_NOUN[SEAT_PARTY_KIND[kind as SeatAddKind]]} to a project. With a phone and a text opt-in, you can coordinate them over SMS — and they land on your People roster.`;
 
   return (
     <RoomSheet
@@ -600,9 +738,6 @@ export function AddPersonSheet({
                     ? setCompany(e.target.value)
                     : setPartyName(e.target.value)
                 }
-                placeholder={
-                  isCompanyContact ? 'e.g. Moretti Plumbing' : 'e.g. Sal Moretti'
-                }
                 className={`${FIELD_INPUT} mb-4`}
               />
             </>
@@ -618,7 +753,6 @@ export function AddPersonSheet({
                 type="text"
                 value={company}
                 onChange={(e) => setCompany(e.target.value)}
-                placeholder="e.g. Moretti Plumbing"
                 className={`${FIELD_INPUT} mb-4`}
               />
             </>
@@ -651,7 +785,6 @@ export function AddPersonSheet({
             id="edit-contact-notes"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            placeholder="Anything worth remembering…"
             rows={3}
             className={`${FIELD_INPUT} ${hasProfile ? '' : 'mb-4'} resize-none`}
           />
@@ -666,7 +799,6 @@ export function AddPersonSheet({
                 type="tel"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                placeholder="(555) 123-4567"
                 className={`${FIELD_INPUT} mb-4`}
               />
 
@@ -681,7 +813,6 @@ export function AddPersonSheet({
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') void submit();
                 }}
-                placeholder="sal@morettiplumbing.com"
                 className={FIELD_INPUT}
               />
             </>
@@ -697,7 +828,6 @@ export function AddPersonSheet({
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Sarah Whitfield"
             className={`${FIELD_INPUT} mb-4`}
           />
 
@@ -710,7 +840,6 @@ export function AddPersonSheet({
             onKeyDown={(e) => {
               if (e.key === 'Enter') void submit();
             }}
-            placeholder="sarah@whitfield.com"
             className={FIELD_INPUT}
           />
 
@@ -793,7 +922,6 @@ export function AddPersonSheet({
             type="text"
             value={makerName}
             onChange={(e) => setMakerName(e.target.value)}
-            placeholder="e.g. Dunes & Grain Workshop"
             className={`${FIELD_INPUT} mb-4`}
           />
 
@@ -804,7 +932,6 @@ export function AddPersonSheet({
             type="text"
             value={category}
             onChange={(e) => setCategory(e.target.value)}
-            placeholder="e.g. upholstery, casegoods, lighting"
             className={`${FIELD_INPUT} mb-4`}
           />
 
@@ -816,7 +943,6 @@ export function AddPersonSheet({
             type="email"
             value={ordersEmail}
             onChange={(e) => setOrdersEmail(e.target.value)}
-            placeholder="orders@dunesandgrain.com"
             className={`${FIELD_INPUT} mb-4`}
           />
 
@@ -830,18 +956,19 @@ export function AddPersonSheet({
             onKeyDown={(e) => {
               if (e.key === 'Enter') void submit();
             }}
-            placeholder="dunesandgrain.com"
             className={FIELD_INPUT}
           />
         </>
       ) : (
         <>
-          <label className={FIELD_LABEL}>Project</label>
+          <label className={FIELD_LABEL} htmlFor="add-party-project">
+            Project
+          </label>
           <select
+            id="add-party-project"
             value={projectId}
             onChange={(e) => setProjectId(e.target.value)}
             className={`${FIELD_INPUT} mb-4`}
-            aria-label="Project"
           >
             <option value="">Which project…</option>
             {projects.map((p) => (
@@ -856,36 +983,75 @@ export function AddPersonSheet({
             </p>
           )}
 
-          <label className={FIELD_LABEL}>Name</label>
+          <label className={FIELD_LABEL} htmlFor="add-party-name">
+            Full name
+          </label>
           <input
+            id="add-party-name"
             type="text"
             value={partyName}
             onChange={(e) => setPartyName(e.target.value)}
-            placeholder="e.g. Sal Moretti"
             className={`${FIELD_INPUT} mb-4`}
           />
 
-          <label className={FIELD_LABEL}>
-            Company <span className="opacity-60">(optional)</span>
+          {kind === 'other_named' && (
+            <>
+              <label className={FIELD_LABEL} htmlFor="add-party-label">
+                What they are to this job
+              </label>
+              <input
+                id="add-party-label"
+                type="text"
+                value={otherLabel}
+                onChange={(e) => setOtherLabel(e.target.value)}
+                className={`${FIELD_INPUT} mb-4`}
+              />
+            </>
+          )}
+
+          {/* Firm: match one the studio already keeps, or write a new name.
+              Two doors, one field group — a firm typed twice is a firm the
+              rolodex holds twice. */}
+          <label className={FIELD_LABEL} htmlFor="add-party-firm">
+            Company
           </label>
-          <input
-            type="text"
-            value={company}
-            onChange={(e) => setCompany(e.target.value)}
-            placeholder="e.g. Moretti Plumbing"
-            className={`${FIELD_INPUT} mb-4`}
-          />
+          <select
+            id="add-party-firm"
+            value={firmId}
+            onChange={(e) => {
+              setFirmId(e.target.value);
+              const match = firms.find((f) => f.id === e.target.value);
+              if (match) setCompany(match.company_name ?? '');
+            }}
+            className={`${FIELD_INPUT} mb-2`}
+          >
+            <option value="">A firm not on this list</option>
+            {firms.map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.company_name}
+              </option>
+            ))}
+          </select>
+          {!firmId && (
+            <input
+              type="text"
+              aria-label="New company name"
+              value={company}
+              onChange={(e) => setCompany(e.target.value)}
+              className={`${FIELD_INPUT} mb-4`}
+            />
+          )}
 
           {showsTrade(kind) && (
             <>
-              <label className={FIELD_LABEL}>
-                Trade <span className="opacity-60">(optional)</span>
+              <label className={FIELD_LABEL} htmlFor="add-party-trade">
+                Trade
               </label>
               <select
+                id="add-party-trade"
                 value={trade}
                 onChange={(e) => setTrade(e.target.value)}
                 className={`${FIELD_INPUT} mb-4`}
-                aria-label="Trade"
               >
                 <option value="">Which trade…</option>
                 {ALL_FIELD_TRADES.map((t) => (
@@ -897,30 +1063,63 @@ export function AddPersonSheet({
             </>
           )}
 
-          <label className={FIELD_LABEL}>
-            Phone <span className="opacity-60">(for text updates)</span>
+          {/* Typed channel rows — a line is a KIND and a value, never a bare
+              string, so the person card can print each one with its own
+              consent word. */}
+          <label className={FIELD_LABEL} htmlFor="add-party-mobile">
+            Mobile
           </label>
           <input
+            id="add-party-mobile"
             type="tel"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
-            placeholder="(555) 123-4567"
             className={`${FIELD_INPUT} mb-4`}
           />
 
-          <label className={FIELD_LABEL}>
-            Email <span className="opacity-60">(optional)</span>
+          <label className={FIELD_LABEL} htmlFor="add-party-email">
+            Email
           </label>
           <input
+            id="add-party-email"
             type="email"
             value={partyEmail}
             onChange={(e) => setPartyEmail(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') void submit();
-            }}
-            placeholder="sal@morettiplumbing.com"
-            className={FIELD_INPUT}
+            className={`${FIELD_INPUT} mb-4`}
           />
+
+          {/* The rule travels with the person, so it is written once here and
+              every add, send and edit afterwards honours it (Leah task 1). */}
+          <label className={FIELD_LABEL} htmlFor="add-party-rule">
+            How to reach them
+          </label>
+          <input
+            id="add-party-rule"
+            type="text"
+            value={contactRule}
+            onChange={(e) => setContactRuleText(e.target.value)}
+            className={`${FIELD_INPUT} mb-1`}
+          />
+          <p className="mb-4 text-[0.66rem] leading-relaxed text-[var(--color-aged-oak)]">
+            A sentence, not a setting. &ldquo;Text only. No working email.&rdquo;
+          </p>
+
+          {/* R-J — two branches, two exact wordings. Nothing defaults from an
+              agreement on a fresh add, and the sheet says so rather than
+              leaving the field looking pre-filled. */}
+          <label className={FIELD_LABEL} htmlFor="add-party-authority">
+            Authority
+          </label>
+          <input
+            id="add-party-authority"
+            type="text"
+            value={authorityPhrase}
+            onChange={(e) => setAuthorityPhrase(e.target.value)}
+            className={`${FIELD_INPUT} mb-1`}
+          />
+          <p className="mb-4 text-[0.66rem] leading-relaxed text-[var(--color-aged-oak)]">
+            Nothing defaulted from the agreement.
+          </p>
 
           <label className="mt-4 flex cursor-pointer items-start gap-2.5 text-[0.74rem] text-[var(--color-mocha)]">
             <input
@@ -940,8 +1139,11 @@ export function AddPersonSheet({
 
           {textUpdates && (
             <div className="mt-4 rounded border border-[var(--color-pearl)] bg-[var(--color-linen)]/45 p-3">
-              <label className={FIELD_LABEL}>How consent was given</label>
+              <label className={FIELD_LABEL} htmlFor="add-party-consent-source">
+                How consent was given
+              </label>
               <select
+                id="add-party-consent-source"
                 value={consentSource}
                 onChange={(e) =>
                   setConsentSource(
@@ -954,7 +1156,6 @@ export function AddPersonSheet({
                   )
                 }
                 className={`${FIELD_INPUT} mb-3`}
-                aria-label="SMS consent method"
               >
                 <option value="">Choose a method…</option>
                 <option value="verbal">Verbal agreement</option>
@@ -963,11 +1164,13 @@ export function AddPersonSheet({
                 <option value="other">Other documented consent</option>
               </select>
 
-              <label className={FIELD_LABEL}>Consent record</label>
+              <label className={FIELD_LABEL} htmlFor="add-party-consent-evidence">
+                Where and when they agreed
+              </label>
               <textarea
+                id="add-party-consent-evidence"
                 value={consentEvidence}
                 onChange={(e) => setConsentEvidence(e.target.value)}
-                placeholder="Where and when they agreed, e.g. signed site kickoff form on Aug 8"
                 rows={3}
                 className={`${FIELD_INPUT} resize-none`}
               />
@@ -975,8 +1178,23 @@ export function AddPersonSheet({
                 Keep the underlying form, message, or signed record. Patina stores
                 this note, time, disclosure version, and the person recording it.
               </p>
+              <p className="mt-2 text-[0.7rem] leading-relaxed text-[var(--color-mocha)]">
+                {partyName.trim() || 'They'} is invited, not consenting, until
+                they reply YES.
+              </p>
             </div>
           )}
+
+          <p
+            id="add-party-consequence"
+            className="mt-4 max-w-[56ch] text-[0.74rem] leading-relaxed text-[var(--color-aged-oak)]"
+          >
+            {`Adding ${partyName.trim() || 'them'} puts ${
+              partyName.trim() ? 'them' : 'them'
+            } on the ${
+              projects.find((p) => p.id === projectId)?.name ?? 'project'
+            } Call Sheet and opens a field link for their window. It never opens billing or the agreement.`}
+          </p>
         </>
       )}
 
@@ -999,7 +1217,8 @@ export function AddPersonSheet({
       >
         <DocumentAction
           actionKey={isEditMode ? 'save-person' : 'add-person'}
-          variant="primary"
+          variant={isEditMode || kind === 'client' || kind === 'maker' ? 'primary' : 'terminal'}
+          aria-describedby={isSeatKind(kind) ? 'add-party-consequence' : undefined}
           loading={pending}
           loadingLabel={isEditMode ? 'Saving…' : 'Adding…'}
           onClick={() => void submit()}
@@ -1008,7 +1227,7 @@ export function AddPersonSheet({
             ? 'Save'
             : kind === 'client' && letterOn && !letterLoading
               ? sendButtonLabel(invite)
-              : 'Add to roster'}
+              : 'Add to the roster'}
         </DocumentAction>
         <DocumentAction
           actionKey={isEditMode ? 'cancel-edit-person' : 'cancel-add-person'}

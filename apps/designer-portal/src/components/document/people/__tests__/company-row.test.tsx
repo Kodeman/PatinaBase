@@ -1,88 +1,69 @@
-import { render, screen } from '@testing-library/react';
+/**
+ * The Directory's FIRM row (W2b). Rewritten: the row it tested — a bordered
+ * white card with an optional status dot and a kind pill — is retired by PR-q's
+ * ledger row and R-G's two word columns.
+ */
+import { fireEvent, render, screen } from '@testing-library/react';
 import { CompanyRow, companyKindLabel } from '../directory/company-row';
 
-describe('CompanyRow — the square avatar (slide 9)', () => {
-  it('renders a rounded SQUARE avatar, never a circle', () => {
-    render(<CompanyRow name="Hale Brothers Builders" kind="gc" />);
-    const avatar = screen.getByText('HB');
-    expect(avatar).toHaveClass('rounded-[8px]');
-    expect(avatar).not.toHaveClass('rounded-full');
-  });
-});
-
-describe('CompanyRow — kind labels', () => {
-  it.each([
-    ['gc', 'GC firm'],
-    ['workroom', 'Workroom'],
-    ['showroom', 'Showroom'],
-    ['vendor', 'Vendor'],
-    ['supplier', 'Supplier'],
-  ])('labels contact_kind %s as %s', (kind, label) => {
-    render(<CompanyRow name="Some Co" kind={kind} />);
-    expect(screen.getByText(label)).toBeInTheDocument();
-  });
-
-  it('falls back to a prettified raw value for an unrecognized kind, never raw snake_case', () => {
-    render(<CompanyRow name="Some Co" kind="custom_kind" />);
-    expect(screen.getByText('Custom Kind')).toBeInTheDocument();
-    expect(screen.queryByText('custom_kind')).not.toBeInTheDocument();
-  });
-
-  it('companyKindLabel defaults to "Company" for a null/undefined kind', () => {
-    expect(companyKindLabel(null)).toBe('Company');
-    expect(companyKindLabel(undefined)).toBe('Company');
-  });
-});
-
-describe('CompanyRow — no consent dot', () => {
-  it('never renders the SMS-consent chip a person row wears', () => {
-    render(<CompanyRow name="Hale Brothers Builders" kind="gc" />);
-    // ConsentChip's four possible labels (person-row.tsx / field-config.ts) —
-    // a company card cannot consent to a text message (slide 9), so none of
-    // them are reachable from a company row.
-    for (const label of ['Not asked', 'Invited', 'Texting', 'Opted out']) {
-      expect(screen.queryByText(label)).not.toBeInTheDocument();
-    }
-  });
-});
-
-describe('CompanyRow — graceful with a partial or absent relationship history', () => {
-  it('renders an honest "not yet on a project" line when every count is absent', () => {
-    render(<CompanyRow name="Junie's Tile" kind="vendor" />);
-    expect(screen.getByText('Not yet on a project')).toBeInTheDocument();
-  });
-
-  it('renders whichever counts ARE present, in order', () => {
-    render(
+function renderRow(over: Partial<Parameters<typeof CompanyRow>[0]> = {}) {
+  const onOpen = jest.fn();
+  render(
+    <ul>
       <CompanyRow
-        name="Hale Brothers Builders"
-        kind="gc"
-        companyPeopleCount={3}
-        projectsCount={4}
-        lastProjectName="Ellsworth"
-      />,
-    );
+        firmId="firm-northgate"
+        name="Northgate Electric"
+        kind="sub"
+        line="Electrical sub · 1 on the crew · 2 open jobs"
+        paperState="lapsed"
+        payeeMarker="Signs: Dana Kowalski"
+        onOpen={onOpen}
+        {...over}
+      />
+    </ul>,
+  );
+  return { onOpen };
+}
+
+describe('CompanyRow', () => {
+  it('prints the firm, its line, its paper word and its payee marker', () => {
+    renderRow();
+    expect(screen.getByRole('button', { name: 'Northgate Electric' })).toBeInTheDocument();
     expect(
-      screen.getByText('3 people · 4 projects · last: Ellsworth'),
+      screen.getByText('Electrical sub · 1 on the crew · 2 open jobs'),
     ).toBeInTheDocument();
+    expect(screen.getByText('Lapsed')).toBeInTheDocument();
+    expect(screen.getByText('Signs: Dana Kowalski')).toBeInTheDocument();
   });
 
-  it('omits a zero people-count rather than claiming "0 people"', () => {
-    render(
-      <CompanyRow
-        name="Hale Brothers Builders"
-        kind="gc"
-        companyPeopleCount={0}
-        projectsCount={2}
-        lastProjectName="Marsh House"
-      />,
-    );
-    expect(screen.queryByText(/0 people/)).not.toBeInTheDocument();
-    expect(screen.getByText('2 projects · last: Marsh House')).toBeInTheDocument();
+  it('R-G — carries NO reach word and NO consent word; a firm has neither', () => {
+    renderRow();
+    expect(screen.queryByText('Field link')).not.toBeInTheDocument();
+    expect(screen.queryByText('Texting')).not.toBeInTheDocument();
+    expect(screen.queryByText('Not asked')).not.toBeInTheDocument();
   });
 
-  it('singularizes a count of exactly one', () => {
-    render(<CompanyRow name="Solo Studio" kind="vendor" companyPeopleCount={1} projectsCount={1} />);
-    expect(screen.getByText('1 person · 1 project')).toBeInTheDocument();
+  it('R-A — a firm that never owed paper prints no paper word and no marker', () => {
+    renderRow({ paperState: null, payeeMarker: null, name: 'Great Northern Bank' });
+    expect(screen.queryByText('Not on file')).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Signs:/)).not.toBeInTheDocument();
+  });
+
+  it('opens the firm by its own card id', () => {
+    const { onOpen } = renderRow();
+    fireEvent.click(screen.getByRole('button', { name: 'Northgate Electric' }));
+    expect(onOpen).toHaveBeenCalled();
+  });
+
+  it('the accessible name of the control is the firm name alone', () => {
+    renderRow();
+    const control = screen.getByRole('button', { name: 'Northgate Electric' });
+    expect(control).toHaveAttribute('data-open-firm', 'firm-northgate');
+  });
+
+  it('companyKindLabel falls back to "Company", and prettifies an unknown kind', () => {
+    expect(companyKindLabel(null)).toBe('Company');
+    expect(companyKindLabel('gc')).toBe('GC firm');
+    expect(companyKindLabel('tile_setter')).toBe('Tile Setter');
   });
 });

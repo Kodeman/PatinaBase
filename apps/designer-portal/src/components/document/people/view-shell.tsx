@@ -279,7 +279,7 @@ export function PeopleCompactSelector({
       ref={rootRef}
       data-people-compact-selector
       data-people-current-view={profileOpen ? 'profile' : currentView}
-      className="mx-auto w-full max-w-[1100px] px-4 pt-4 sm:px-6 min-[1180px]:hidden"
+      className="mx-auto w-full max-w-[1296px] px-4 pt-4 sm:px-6 min-[1180px]:hidden"
     >
       <button
         ref={triggerRef}

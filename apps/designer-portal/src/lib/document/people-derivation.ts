@@ -19,8 +19,14 @@
  */
 
 import type { PartyRole, PeopleDirectoryRow } from '@patina/supabase';
-import { getFieldTradeLabel, getPartyKindLabel, getVendorSpecialtyLabel } from '@patina/types';
+import {
+  getFieldTradeLabel,
+  getPartyKindLabel,
+  getVendorSpecialtyLabel,
+  partyKindOwesPaper,
+} from '@patina/types';
 import { MONTH_NAME_FORMAT } from './dates';
+import type { DirectoryChip } from './directory-roles';
 
 export type { PartyRole };
 
@@ -644,4 +650,263 @@ export { fmtMonth as formatJourneyDate };
 /** Stable chronological sort helper for journey events (oldest first). */
 export function sortJourney(events: JourneyEvent[]): JourneyEvent[] {
   return [...events].sort((a, b) => a.sortAt - b.sortAt);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// THE PEOPLE ROOM, REDESIGNED — "Everyone on the Job" (W2b)
+//
+// The room's unit is the person card, not the party row, and the Directory is
+// ONE LIST OF TWO ENTRY TYPES: people are circles, firms are 42px rounded
+// squares (PR-g, direction §1 line 2). `people_directory` v4 emits both from
+// its contacts branch, told apart by `meta.entity_kind`.
+//
+// Everything below is pure: rows in, facts out. No React, no I/O, `today`
+// injected. The row renders what these return and decides nothing itself.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** A circle or a square: the one visual difference a firm gets. */
+export type DirectoryEntryKind = 'person' | 'firm';
+
+/** A firm is a card whose `entity_kind` says so. Everything else is a human —
+ *  an uncarded seat included, since a seat is always somebody. */
+export function directoryEntryKind(p: DirectoryPerson): DirectoryEntryKind {
+  return p.meta?.['entity_kind'] === 'company' ? 'firm' : 'person';
+}
+
+/** The head counts CARDS, not rows (`people-room.tsx:383` counted rows, and v4
+ *  is what makes the count honest). "29 people · 22 firms". */
+export function directoryEntryCounts(rows: readonly DirectoryPerson[]): {
+  people: number;
+  firms: number;
+} {
+  let people = 0;
+  let firms = 0;
+  for (const row of rows) {
+    if (directoryEntryKind(row) === 'firm') firms += 1;
+    else people += 1;
+  }
+  return { people, firms };
+}
+
+/** "29 people · 22 firms" — one noun each, never pluralised wrongly. */
+export function directoryHeadLine(counts: { people: number; firms: number }): string {
+  const people = `${counts.people} ${counts.people === 1 ? 'person' : 'people'}`;
+  const firms = `${counts.firms} ${counts.firms === 1 ? 'firm' : 'firms'}`;
+  return `${people} · ${firms}`;
+}
+
+/** What this card IS to the studio. A contact row carries its own
+ *  `contact_kind`; an uncarded seat carries its party kind as the role. */
+export function directoryContactKind(p: DirectoryPerson): string | null {
+  const kind = p.meta?.['contact_kind'];
+  if (typeof kind === 'string' && kind) return kind;
+  return p.role === 'contact' ? null : p.role;
+}
+
+/** The trade or specialty this identity works in, if one is on file. */
+export function directoryTradeOf(p: DirectoryPerson): string | null {
+  const specialties = p.meta?.['specialties'];
+  if (Array.isArray(specialties) && typeof specialties[0] === 'string') {
+    return specialties[0];
+  }
+  const trade = p.meta?.['trade'];
+  return typeof trade === 'string' && trade ? trade : null;
+}
+
+/** The firm this identity works at, by name and by card id. */
+export function directoryFirmOf(p: DirectoryPerson): {
+  id: string | null;
+  name: string | null;
+} {
+  const id = p.meta?.['company_id'];
+  const name = p.meta?.['company_name'];
+  return {
+    id: typeof id === 'string' && id ? id : null,
+    name: typeof name === 'string' && name ? name : null,
+  };
+}
+
+const CLIENT_KINDS = new Set(['client', 'lead', 'client_rep']);
+const CREW_KINDS = new Set([
+  'gc',
+  'sub',
+  'installer',
+  'receiver',
+  'architect',
+  'engineer',
+  'inspector',
+  'lender',
+]);
+const MAKER_KINDS = new Set(['maker', 'vendor', 'workroom', 'showroom', 'supplier']);
+const STUDIO_KINDS = new Set(['team']);
+
+/**
+ * Which of the six chips an entry falls under (direction §3.1). A firm sorts
+ * into Firms AND into the band of the crew it carries, which is why the chip
+ * test is asked of the entry, not of a stored column.
+ */
+export function directoryBandOf(p: DirectoryPerson): DirectoryChip {
+  if (directoryEntryKind(p) === 'firm') return 'firms';
+  const kind = directoryContactKind(p) ?? '';
+  if (CLIENT_KINDS.has(kind)) return 'clients';
+  if (STUDIO_KINDS.has(kind)) return 'studio';
+  if (MAKER_KINDS.has(kind)) return 'makers';
+  if (CREW_KINDS.has(kind)) return 'crew';
+  if (p.meta?.['vendor_id']) return 'makers';
+  return 'crew';
+}
+
+/**
+ * PR-g: firms appear under Everyone as well as under Firms, sorted into the
+ * band of the crew they carry. A chip admits an entry when the entry's own
+ * band matches, and Everyone admits everything.
+ */
+export function directoryChipAdmits(
+  chip: DirectoryChip,
+  p: DirectoryPerson,
+  firmBand?: DirectoryChip | null,
+): boolean {
+  if (chip === 'everyone') return true;
+  const band = directoryBandOf(p);
+  if (chip === 'firms') return band === 'firms';
+  if (band === 'firms') return (firmBand ?? null) === chip;
+  return band === chip;
+}
+
+/** Digits only, for the phone-suffix match. */
+function digits(value: string | null | undefined): string {
+  return (value ?? '').replace(/\D/g, '');
+}
+
+/**
+ * The ask bar's match, over name, firm, phone DIGITS, trade and email
+ * (direction §3.1). Four digits is the floor — fewer matches half the book.
+ */
+export function directoryEntryMatches(p: DirectoryPerson, rawQuery: string): boolean {
+  const query = rawQuery.trim().toLowerCase();
+  if (!query) return true;
+  const firm = directoryFirmOf(p).name ?? '';
+  const trade = directoryTradeOf(p);
+  const haystack = [
+    p.display_name,
+    firm,
+    p.email ?? '',
+    trade ? getFieldTradeLabel(trade) : '',
+    trade ?? '',
+    getPartyKindLabel(directoryContactKind(p) ?? ''),
+  ]
+    .join(' ')
+    .toLowerCase();
+  if (haystack.includes(query)) return true;
+  const typed = digits(rawQuery);
+  return typed.length >= 4 && digits(p.phone).endsWith(typed);
+}
+
+/** "Northgate Electric · electrical" — the person row's second line. */
+export function personIdentityLine(p: DirectoryPerson): string {
+  const parts: string[] = [];
+  const firm = directoryFirmOf(p).name;
+  if (firm) parts.push(firm);
+  const trade = directoryTradeOf(p);
+  if (trade) parts.push(getFieldTradeLabel(trade).toLowerCase());
+  if (parts.length === 0) {
+    const kind = getPartyKindLabel(directoryContactKind(p) ?? '');
+    if (kind) parts.push(kind);
+  }
+  return parts.join(' · ');
+}
+
+/** "GC · 3 on the crew · 2 open jobs" — the firm row's second line. */
+export function firmIdentityLine(
+  p: DirectoryPerson,
+  counts: { crew: number; jobs: number },
+): string {
+  const parts: string[] = [];
+  const kind = directoryContactKind(p);
+  if (kind) parts.push(getPartyKindLabel(kind));
+  parts.push(`${counts.crew} on the crew`);
+  parts.push(`${counts.jobs} open ${counts.jobs === 1 ? 'job' : 'jobs'}`);
+  return parts.join(' · ');
+}
+
+/**
+ * R-A / C13 / C24: a lender or an inspector never owed the studio paper, so
+ * neither the person nor their firm prints a paper word at all. The view
+ * reports the fact; this is the display rule that decides whether it is owed.
+ */
+export function entryOwesPaperWord(p: DirectoryPerson): boolean {
+  return partyKindOwesPaper(directoryContactKind(p));
+}
+
+/**
+ * The paper word an entry actually prints — `null` where none is owed, so a
+ * firm that never had to file anything shows nothing rather than "Not on file".
+ */
+export function entryPaperWord(p: DirectoryPerson): string | null {
+  return entryOwesPaperWord(p) ? p.paper_state : null;
+}
+
+/**
+ * A rule that FORBIDS a channel takes the leading rule; a rule that merely
+ * prefers one is ordinary prose (C3). `contact_rule_summary` renders the
+ * clause order, so the block is read off the sentence it wrote.
+ */
+export function contactRuleBlocks(summary: string | null | undefined): boolean {
+  if (!summary) return false;
+  return /\b(never|do not|don't|no )/i.test(summary);
+}
+
+/** Two cards sharing a phone number — dedupe rule 1 (`crm-model.md` §4). */
+export function directoryDuplicatePairs(
+  rows: readonly DirectoryPerson[],
+): Array<[DirectoryPerson, DirectoryPerson]> {
+  const byPhone = new Map<string, DirectoryPerson[]>();
+  for (const row of rows) {
+    if (directoryEntryKind(row) === 'firm') continue;
+    const key = digits(row.phone);
+    if (key.length < 10) continue;
+    const bucket = byPhone.get(key);
+    if (bucket) bucket.push(row);
+    else byPhone.set(key, [row]);
+  }
+  const pairs: Array<[DirectoryPerson, DirectoryPerson]> = [];
+  for (const bucket of byPhone.values()) {
+    if (bucket.length < 2) continue;
+    const sorted = [...bucket].sort((a, b) =>
+      a.display_name.localeCompare(b.display_name),
+    );
+    pairs.push([sorted[0], sorted[1]]);
+  }
+  return pairs;
+}
+
+/** The duplicate band's sentence. It names the collision and nothing else —
+ *  the Compare & merge sheet is phase 2 (R-Y). */
+export const DIRECTORY_DUPLICATE_SENTENCE = 'These two cards share a phone.';
+
+/** The empty state, one sentence (house sheet §A10). */
+export const DIRECTORY_EMPTY_SENTENCE = 'Nobody under this narrowing yet.';
+
+/**
+ * `contact_rule_summary()` already writes the routed clause — "Write Rosa
+ * Delgado instead." — as part of its fixed clause order. R-L/C22 say the
+ * routed line must also carry a WAY TO REACH her: a routing instruction with
+ * no channel attached sends the reader nowhere.
+ *
+ * So the clause is lifted back out of the sentence and handed to
+ * `ContactRuleLine`, which owns the one channel-selection rule (email if
+ * present, then the office phone tel-linked). The rest of the summary prints
+ * unchanged, in the order the database wrote it.
+ */
+export function splitRoutedClause(summary: string | null | undefined): {
+  rest: string | null;
+  routedName: string | null;
+} {
+  if (!summary) return { rest: null, routedName: null };
+  const match = /\s*Write (.+?) instead\.\s*/.exec(summary);
+  if (!match) return { rest: summary, routedName: null };
+  const rest = (summary.slice(0, match.index) + ' ' + summary.slice(match.index + match[0].length))
+    .replace(/\s+/g, ' ')
+    .trim();
+  return { rest: rest || null, routedName: match[1] };
 }
