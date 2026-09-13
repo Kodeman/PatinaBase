@@ -1,0 +1,13 @@
+{
+  "directoryDisabled": 0,
+  "directoryOverflow": false,
+  "wordBorder": {
+    "borderWidth": "0px",
+    "borderColor": "oklch(0.8606 0.0321 84.5881)"
+  },
+  "telLinkCount": 29,
+  "statusDotCount": 0,
+  "liveRegionCount": 2,
+  "personDisabled": 0,
+  "companyDisabled": 0
+}
