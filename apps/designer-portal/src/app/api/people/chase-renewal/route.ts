@@ -5,6 +5,7 @@ import {
   badRequest,
   serverError,
 } from '@/lib/supabase-admin';
+import { COMPLIANCE_CHASE_TASK_TYPE } from '@/lib/document/compliance-chase-task';
 
 /**
  * POST /api/people/chase-renewal
@@ -28,8 +29,6 @@ import {
  * nothing and the route refuses. Only then does the service-role client
  * enqueue.
  */
-
-export const COMPLIANCE_CHASE_TASK_TYPE = 'compliance_chase';
 
 interface ChaseRequestBody {
   companyId?: string;

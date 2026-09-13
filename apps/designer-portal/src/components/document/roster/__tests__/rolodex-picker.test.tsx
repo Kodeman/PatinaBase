@@ -35,7 +35,29 @@ jest.mock('@patina/supabase', () => ({
         reach_state: 'on_paper',
         consent_status: 'opted_out',
         paper_state: 'lapsed',
-        contact_rule_summary: 'Email only. No cell for work.',
+        contact_rule_summary: 'Never text. Do not use: mobile, after_hours.',
+      },
+    ],
+  }),
+  // CR-5: the RULE ROW is what the mini row's clause is composed from —
+  // `contact_rule_summary` is the mechanical list in schema words and must not
+  // reach a face.
+  useContactRules: () => ({
+    data: [
+      {
+        id: 'rule-1',
+        subject_type: 'person',
+        subject_id: 'contact-1',
+        channels_allowed: ['email'],
+        channels_forbidden: ['sms', 'mobile'],
+        route_to_person_id: null,
+        contact_hours: null,
+        escalation_by_class: {},
+        reason: 'Email only. No cell for work.',
+        set_by: null,
+        set_at: '2026-01-01T00:00:00.000Z',
+        created_at: '2026-01-01T00:00:00.000Z',
+        updated_at: '2026-01-01T00:00:00.000Z',
       },
     ],
   }),

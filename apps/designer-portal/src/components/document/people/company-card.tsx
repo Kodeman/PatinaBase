@@ -23,23 +23,35 @@
  *    cannot be scanned by ear.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { partyKindOwesPaper, getFieldTradeLabel } from "@patina/types";
 import {
   useAffiliations,
   useComplianceDocuments,
   useComplianceState,
+  useContactRules,
   usePeopleSeats,
   useStudioContact,
   useStudioContacts,
+  useStudioContactChannelsFor,
   useUpdateStudioContact,
   type PeopleDirectorySeat,
   type StudioContact,
 } from "@patina/supabase";
+import { seatIsClosed } from "@/lib/document/people-derivation";
+import {
+  contactRouteTarget,
+  contactRuleClause,
+  contactRuleIsHardBlock,
+  indexChannelsByOwner,
+  indexContactRules,
+} from "@/lib/document/contact-rule";
 import { DocumentAction, DocumentActionRow } from "../document-action";
 import { Avatar } from "./person-bits";
 import { StateWord, PlainFact } from "./state-word";
 import { SeatLine } from "./seat-line";
+import { ContactRuleLine } from "./contact-rule-line";
+import { ReachAccess } from "./reach-access";
 import {
   ComplianceTable,
   NO_PAPER_OWED_SENTENCE,
@@ -111,24 +123,22 @@ export function crewDesignations(
   return words;
 }
 
-/** One crew member's seats, read where the hook may be called once per person. */
+/** One crew member's seats, handed down from the card's single seats read. */
 function CrewJobs({
+  seats,
   personId,
   personName,
   onOpenPerson,
 }: {
+  seats: readonly PeopleDirectorySeat[];
   personId: string;
   personName: string;
   onOpenPerson: (personId: string) => void;
 }) {
-  const { data: seats } = usePeopleSeats({ personId });
-  const live = (seats ?? []).filter(
-    (s) => s.stage !== "off_job" && s.stage !== "retired",
-  );
-  if (live.length === 0) return null;
+  if (seats.length === 0) return null;
   return (
     <>
-      {live.map((seat: PeopleDirectorySeat) => (
+      {seats.map((seat: PeopleDirectorySeat) => (
         <li
           key={seat.seat_id}
           className="border-t border-[var(--hairline)] py-2"
@@ -140,6 +150,19 @@ function CrewJobs({
     </>
   );
 }
+
+/** The three designations a firm's card names, and the label each wears. */
+const DESIGNATIONS = [
+  ["paperworkContactPersonId", "paperwork_contact_person_id", "Paperwork contact"],
+  ["signerPersonId", "signer_person_id", "Signer"],
+  ["siteContactPersonId", "site_contact_person_id", "Site contact"],
+] as const;
+
+type DesignationKey = (typeof DESIGNATIONS)[number][0];
+
+const FIELD_LABEL = "t-head mb-1 block text-[var(--ink-subtle)]";
+const FIELD_INPUT =
+  "w-full rounded-[2px] border border-[var(--hairline-strong)] border-b-[var(--ink-faint)] bg-[var(--paper-doc)] p-3 text-[16px] leading-[1.55] text-[var(--ink)]";
 
 export function CompanyCard({
   firmId,
@@ -160,12 +183,27 @@ export function CompanyCard({
   today?: Date;
 }) {
   const { data: card } = useStudioContact(firmId);
-  const { data: contacts } = useStudioContacts(organizationId, {
+  // QA-R2-1: the FIRM'S OWN organization scopes its crew's names. The room's
+  // ambient `organizationId` was a first match over an unordered membership
+  // read, and a designer in two design studios got the wrong one about half the
+  // time — so this card printed "Unnamed" for every crew member, "Signs: on
+  // file" for its payee and "Unnamed" over both job rows. A firm's people are
+  // by definition cards in the firm's own studio.
+  const cardOrgId = card?.organization_id ?? organizationId;
+  const { data: contacts } = useStudioContacts(cardOrgId, {
     includeArchived: false,
   });
   const { data: affiliations } = useAffiliations({ companyId: firmId });
   const { data: documents } = useComplianceDocuments({ holderId: firmId });
   const { data: paperState } = useComplianceState(firmId);
+  // CR-14: the head's project count, off the same seats view and the same
+  // "open job" test the Directory's firm row uses, so the two agree.
+  const { data: allSeats } = usePeopleSeats({ all: true });
+  // CR-9: the crew line carries the rule wherever a rule is shown (R-S / C29),
+  // and C7's own example is this card — "Frank Bauer is named as signer with no
+  // channel printed; the routed channel shown is Rosa Delgado's."
+  const { data: rules } = useContactRules();
+  const ruleIndex = useMemo(() => indexContactRules(rules), [rules]);
   const updateCard = useUpdateStudioContact();
   const chase = useChaseTheRenewal();
 
@@ -174,6 +212,22 @@ export function CompanyCard({
   const [verdict, setVerdict] = useState("");
   const [chased, setChased] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [announcement, setAnnouncement] = useState<string | null>(null);
+  // CR-8 — the two write bands direction §3.3 names and the card did not have.
+  const [designationsOpen, setDesignationsOpen] = useState(false);
+  const [payeeOpen, setPayeeOpen] = useState(false);
+  const [designations, setDesignations] = useState<
+    Record<DesignationKey, string>
+  >({
+    paperworkContactPersonId: "",
+    signerPersonId: "",
+    siteContactPersonId: "",
+  });
+  const [payee, setPayee] = useState({
+    remitTo: "",
+    taxIdLast4: "",
+    retainagePercent: "",
+  });
 
   const namesById = useMemo(() => {
     const map = new Map<string, string>();
@@ -183,6 +237,104 @@ export function CompanyCard({
     }
     return map;
   }, [contacts]);
+
+  const peopleById = useMemo(() => {
+    const index = new Map<
+      string,
+      { id: string; name: string; email: string | null; phone: string | null }
+    >();
+    for (const c of contacts ?? []) {
+      if (c.entity_kind !== "person" || !c.full_name) continue;
+      index.set(c.id, {
+        id: c.id,
+        name: c.full_name,
+        email: c.email,
+        phone: c.phone,
+      });
+    }
+    return index;
+  }, [contacts]);
+
+  const routedPersonIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const rule of rules ?? []) {
+      if (rule.route_to_person_id) ids.add(rule.route_to_person_id);
+    }
+    return [...ids];
+  }, [rules]);
+  const { data: routedChannels } = useStudioContactChannelsFor(routedPersonIds);
+  const channelsByOwner = useMemo(
+    () => indexChannelsByOwner(routedChannels),
+    [routedChannels],
+  );
+
+  /** The firm's seats that are still the studio's, grouped by who holds them.
+   *  A warranty seat counts: SPEC §5.3 #1 reads Northgate Electric's card as
+   *  "1 person · 2 projects · warranty through 21 Nov 2026", and the second of
+   *  those two projects IS the one under warranty. */
+  const seatsByPerson = useMemo(() => {
+    const map = new Map<string, PeopleDirectorySeat[]>();
+    for (const seat of allSeats ?? []) {
+      if (seat.company_id !== firmId) continue;
+      if (seatIsClosed(seat.stage)) continue;
+      const key = seat.person_id ?? seat.studio_contact_id;
+      if (!key) continue;
+      const bucket = map.get(key);
+      if (bucket) bucket.push(seat);
+      else map.set(key, [seat]);
+    }
+    return map;
+  }, [allSeats, firmId]);
+
+  /** The doors open onto this firm's crew — grants key on the ENGAGEMENT. */
+  const firmSeatIds = useMemo(
+    () => [...seatsByPerson.values()].flat().map((seat) => seat.seat_id),
+    [seatsByPerson],
+  );
+
+  /** SPEC §5.3 #1 — "Electrical sub · 1 person · 2 projects · warranty …". */
+  const openJobs = useMemo(() => {
+    const projects = new Set<string>();
+    for (const seats of seatsByPerson.values()) {
+      for (const seat of seats) {
+        if (seat.project_id) projects.add(seat.project_id);
+      }
+    }
+    return projects.size;
+  }, [seatsByPerson]);
+
+  // CR-33's sibling: a band that opens empty and saves over the record is the
+  // same defect CR-3 fixed on the contact rule. Both bands seed from the card.
+  const seededDesignationsRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!designationsOpen || !card) {
+      if (!designationsOpen) seededDesignationsRef.current = null;
+      return;
+    }
+    if (seededDesignationsRef.current === card.id) return;
+    seededDesignationsRef.current = card.id;
+    setDesignations({
+      paperworkContactPersonId: card.paperwork_contact_person_id ?? "",
+      signerPersonId: card.signer_person_id ?? "",
+      siteContactPersonId: card.site_contact_person_id ?? "",
+    });
+  }, [designationsOpen, card]);
+
+  const seededPayeeRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!payeeOpen || !card) {
+      if (!payeeOpen) seededPayeeRef.current = null;
+      return;
+    }
+    if (seededPayeeRef.current === card.id) return;
+    seededPayeeRef.current = card.id;
+    setPayee({
+      remitTo: card.remit_to ?? "",
+      taxIdLast4: card.tax_id_last4 ?? "",
+      retainagePercent:
+        card.retainage_bps == null ? "" : String(card.retainage_bps / 100),
+    });
+  }, [payeeOpen, card]);
 
   if (!card) {
     return (
@@ -211,6 +363,11 @@ export function CompanyCard({
   const heldClause = paperHeldClause(docs, today);
   const chaseSentence = chaseConsequenceSentence(name);
 
+  const announce = (message: string) => {
+    setAnnouncement(message);
+    onAnnounce(message);
+  };
+
   const recordVerdict = async () => {
     setError(null);
     try {
@@ -220,7 +377,62 @@ export function CompanyCard({
         card: { studioVerdict: verdict.trim() || null },
       });
       setVerdictOpen(false);
-      onAnnounce(`The studio's verdict on ${name} is recorded.`);
+      announce(`The studio's verdict on ${name} is recorded.`);
+    } catch (e) {
+      setError(
+        e instanceof Error ? e.message : "Could not record that just now.",
+      );
+    }
+  };
+
+  /**
+   * CR-8 — direction §1 line 5: "the company card becomes the ONLY place a
+   * compliance document, a payee identity, a signer or a paperwork contact is
+   * written". §3.3 R2 and R4 name both acts. `useUpdateStudioContact` already
+   * took every one of these fields; nothing called them.
+   */
+  const saveDesignations = async () => {
+    setError(null);
+    try {
+      await updateCard.mutateAsync({
+        id: card.id,
+        organizationId: card.organization_id,
+        card: {
+          paperworkContactPersonId:
+            designations.paperworkContactPersonId || null,
+          signerPersonId: designations.signerPersonId || null,
+          siteContactPersonId: designations.siteContactPersonId || null,
+        },
+      });
+      setDesignationsOpen(false);
+      announce(`The designations on ${name} are recorded.`);
+    } catch (e) {
+      setError(
+        e instanceof Error ? e.message : "Could not record that just now.",
+      );
+    }
+  };
+
+  const savePayee = async () => {
+    setError(null);
+    const typed = payee.retainagePercent.trim();
+    const percent = typed === "" ? null : Number(typed);
+    if (percent != null && (!Number.isFinite(percent) || percent < 0)) {
+      setError("Retainage is a percentage — 10 for ten percent.");
+      return;
+    }
+    try {
+      await updateCard.mutateAsync({
+        id: card.id,
+        organizationId: card.organization_id,
+        card: {
+          remitTo: payee.remitTo.trim() || null,
+          taxIdLast4: payee.taxIdLast4.trim() || null,
+          retainageBps: percent == null ? null : Math.round(percent * 100),
+        },
+      });
+      setPayeeOpen(false);
+      announce(`The payee on ${name} is recorded.`);
     } catch (e) {
       setError(
         e instanceof Error ? e.message : "Could not record that just now.",
@@ -240,6 +452,11 @@ export function CompanyCard({
         Back
       </DocumentAction>
 
+      {/* One live region for the whole card (SPEC §7 #3). */}
+      <p role="status" aria-live="polite" className="sr-only">
+        {announcement}
+      </p>
+
       {/* R1 — Identity */}
       <header className="flex items-center gap-4 pb-6">
         <Avatar
@@ -250,7 +467,10 @@ export function CompanyCard({
         <div className="min-w-0">
           <h2 className="t-d3 font-heading">{name}</h2>
           <p className="t-meta mt-1 text-[var(--ink-subtle)]">
-            {companyIdentityLine(card, { crew: crew.length, jobs: jobsCount })}
+            {companyIdentityLine(card, {
+              crew: crew.length,
+              jobs: jobsCount ?? openJobs,
+            })}
           </p>
         </div>
       </header>
@@ -267,6 +487,10 @@ export function CompanyCard({
             {crew.map((a) => {
               const personName = namesById.get(a.person_id) ?? "Unnamed";
               const words = crewDesignations(card, a);
+              // CR-9 / C7: the rule outranks the designation. Frank Bauer is
+              // named as signer here with no channel of his own printed, and
+              // the channel the line DOES carry is Rosa Delgado's.
+              const rule = ruleIndex.get(a.person_id) ?? null;
               return (
                 <li
                   key={a.id}
@@ -287,11 +511,114 @@ export function CompanyCard({
                       <span> · {words.join(" · ")}</span>
                     ) : null}
                   </p>
+                  <ContactRuleLine
+                    summary={contactRuleClause(rule)}
+                    blocked={contactRuleIsHardBlock(rule)}
+                    routeTo={contactRouteTarget(
+                      rule,
+                      peopleById,
+                      channelsByOwner,
+                    )}
+                  />
                 </li>
               );
             })}
           </ul>
         )}
+
+        {/* R2 act (direction §3.3) — the card is the ONLY writer of these
+            three designations, and until now it wrote none of them. */}
+        <DocumentAction
+          actionKey="set-firm-designations"
+          surfaceKey="people"
+          regionKey="company-crew"
+          variant="tertiary"
+          aria-expanded={designationsOpen}
+          aria-controls={`company-designations-${card.id}`}
+          onClick={() => setDesignationsOpen((open) => !open)}
+        >
+          Set paperwork contact, signer and site contact
+        </DocumentAction>
+        <div
+          id={`company-designations-${card.id}`}
+          hidden={!designationsOpen}
+          className="mt-2"
+        >
+          {crew.length === 0 ? (
+            <p className="t-body-sm text-[var(--ink-subtle)]">
+              {NO_CREW_SENTENCE}
+            </p>
+          ) : (
+            <>
+              {DESIGNATIONS.map(([key, , label]) => (
+                <div key={key} className="mb-3">
+                  <label
+                    className={FIELD_LABEL}
+                    htmlFor={`company-${key}-${card.id}`}
+                  >
+                    {label}
+                  </label>
+                  <select
+                    id={`company-${key}-${card.id}`}
+                    value={designations[key]}
+                    onChange={(e) =>
+                      setDesignations((current) => ({
+                        ...current,
+                        [key]: e.target.value,
+                      }))
+                    }
+                    className={FIELD_INPUT}
+                  >
+                    <option value="">Nobody named</option>
+                    {crew.map((a) => (
+                      <option key={a.person_id} value={a.person_id}>
+                        {namesById.get(a.person_id) ?? "Unnamed"}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ))}
+              <DocumentAction
+                actionKey="save-firm-designations"
+                surfaceKey="people"
+                regionKey="company-crew"
+                variant="secondary"
+                loading={updateCard.isPending}
+                loadingLabel="Recording…"
+                onClick={() => void saveDesignations()}
+              >
+                Save the designations
+              </DocumentAction>
+            </>
+          )}
+        </div>
+      </section>
+
+      {/* R2b — Reach & access, the COMPANY variant (direction §5.1). The firm's
+          own office / dispatch / AP lines, its contact rule, and the doors its
+          people hold. No consent word and no minted door: a company cannot
+          agree to a text message and no door is opened onto a firm
+          (SPEC §5.3 #9). */}
+      <section className={REGION}>
+        <h3 className={REGION_HEAD}>Reach &amp; access</h3>
+        <ReachAccess
+          cardId={card.id}
+          cardKind="company"
+          organizationId={cardOrgId}
+          personName={name}
+          routeCandidates={[...peopleById.values()].map((p) => ({
+            id: p.id,
+            name: p.name,
+          }))}
+          routeTo={contactRouteTarget(
+            ruleIndex.get(card.id),
+            peopleById,
+            channelsByOwner,
+          )}
+          grantSubjectIds={firmSeatIds}
+          onAnnounce={announce}
+          now={today}
+        />
       </section>
 
       {/* R3 — Paper. Always printed; R-P fixes the order inside it. */}
@@ -341,10 +668,9 @@ export function CompanyCard({
                 loadingLabel="Drafting…"
                 onClick={() => {
                   setError(null);
-                  if (!organizationId) return;
                   chase.mutate(
                     {
-                      organizationId,
+                      organizationId: card.organization_id,
                       companyId: card.id,
                       companyName: name,
                       documentId: docs[0]?.id ?? null,
@@ -355,7 +681,7 @@ export function CompanyCard({
                     {
                       onSuccess: () => {
                         setChased(true);
-                        onAnnounce(
+                        announce(
                           `A note to ${name} is waiting for your review.`,
                         );
                       },
@@ -404,6 +730,85 @@ export function CompanyCard({
             </PlainFact>
           </p>
         )}
+
+        {/* R4 act (direction §3.3) — the payee identity is written HERE and
+            nowhere else (CR-8). */}
+        <DocumentAction
+          actionKey="edit-firm-payee"
+          surfaceKey="people"
+          regionKey="company-payee"
+          variant="tertiary"
+          aria-expanded={payeeOpen}
+          aria-controls={`company-payee-${card.id}`}
+          onClick={() => setPayeeOpen((open) => !open)}
+        >
+          Edit payee
+        </DocumentAction>
+        <div
+          id={`company-payee-${card.id}`}
+          hidden={!payeeOpen}
+          className="mt-2"
+        >
+          <label className={FIELD_LABEL} htmlFor={`company-remit-${card.id}`}>
+            Remit to
+          </label>
+          <input
+            id={`company-remit-${card.id}`}
+            type="text"
+            value={payee.remitTo}
+            onChange={(e) =>
+              setPayee((current) => ({ ...current, remitTo: e.target.value }))
+            }
+            className={`${FIELD_INPUT} mb-3`}
+          />
+          <label className={FIELD_LABEL} htmlFor={`company-taxid-${card.id}`}>
+            Last four of the tax id
+          </label>
+          <input
+            id={`company-taxid-${card.id}`}
+            type="text"
+            inputMode="numeric"
+            maxLength={4}
+            value={payee.taxIdLast4}
+            onChange={(e) =>
+              setPayee((current) => ({
+                ...current,
+                taxIdLast4: e.target.value,
+              }))
+            }
+            className={`${FIELD_INPUT} mb-3`}
+          />
+          <label
+            className={FIELD_LABEL}
+            htmlFor={`company-retainage-${card.id}`}
+          >
+            Retainage, in percent
+          </label>
+          <input
+            id={`company-retainage-${card.id}`}
+            type="text"
+            inputMode="decimal"
+            value={payee.retainagePercent}
+            onChange={(e) =>
+              setPayee((current) => ({
+                ...current,
+                retainagePercent: e.target.value,
+              }))
+            }
+            className={`${FIELD_INPUT} mb-2`}
+          />
+          <DocumentAction
+            actionKey="save-firm-payee"
+            surfaceKey="people"
+            regionKey="company-payee"
+            variant="secondary"
+            loading={updateCard.isPending}
+            loadingLabel="Recording…"
+            onClick={() => void savePayee()}
+          >
+            Save the payee
+          </DocumentAction>
+        </div>
       </section>
 
       {/* R5 — Jobs, with the money book read-only beside them */}
@@ -418,6 +823,7 @@ export function CompanyCard({
             {crew.map((a) => (
               <CrewJobs
                 key={a.id}
+                seats={seatsByPerson.get(a.person_id) ?? []}
                 personId={a.person_id}
                 personName={namesById.get(a.person_id) ?? "Unnamed"}
                 onOpenPerson={onOpenPerson}
@@ -485,14 +891,14 @@ export function CompanyCard({
         </p>
       )}
 
-      {organizationId && (
+      {cardOrgId && (
         <RecordDocumentSheet
           open={recordOpen}
           onClose={() => setRecordOpen(false)}
-          organizationId={organizationId}
+          organizationId={cardOrgId}
           holderId={card.id}
           holderName={name}
-          onRecorded={(message) => onAnnounce(message)}
+          onRecorded={(message) => announce(message)}
         />
       )}
     </div>

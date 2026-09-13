@@ -73,8 +73,16 @@ export interface PartyMiniRowProps {
   consent?: string | null;
   /** The worst paper the identity or its firm holds, as a word. */
   paper?: string | null;
-  /** The contact rule, as a sentence beside the words (PR-e). */
+  /** The contact rule, as a sentence beside the words (PR-e). Compose it with
+   *  `contactRuleClause()` — this row renders what it is handed. */
   rule?: string | null;
+  /**
+   * CR-4: whether that rule is a hard block, decided by the caller with
+   * `contactRuleIsHardBlock()`. The row used to run its own regex over the
+   * rendered prose — the fourth answer to one question, and the same shape
+   * CR-22 deleted from the two row files.
+   */
+  ruleBlocked?: boolean;
   /** The quiet second line under the meta — the picker's history line. */
   subline?: React.ReactNode;
   /** Renders the radio ring and radio semantics. */
@@ -95,6 +103,7 @@ export function PartyMiniRow({
   consent,
   paper,
   rule,
+  ruleBlocked = false,
   subline,
   selectable = false,
   selected = false,
@@ -148,11 +157,9 @@ export function PartyMiniRow({
         {rule && (
           <span
             data-contact-rule
-            data-contact-rule-blocked={
-              /never|do not|don’t|don't/i.test(rule) ? 'true' : undefined
-            }
+            data-contact-rule-blocked={ruleBlocked ? 'true' : undefined}
             className={`mt-[0.15rem] block text-[0.7rem] text-[var(--color-charcoal)] ${
-              /never|do not|don’t|don't/i.test(rule)
+              ruleBlocked
                 ? 'border-l-2 border-[var(--color-terracotta-ink)] py-[3px] pl-[8px]'
                 : ''
             }`}

@@ -14,13 +14,16 @@ import type { PeopleViewProps } from "../types";
 
 const mockUsePeopleDirectory = jest.fn();
 const mockUseStudioContacts = jest.fn(() => ({ data: [], isLoading: false }));
+// QA-R2-2: a firm's open jobs come off the SEATS view now — v4 nulls
+// `project_id` on every carded human's directory row.
+const mockUsePeopleSeats = jest.fn(() => ({ data: [] as unknown[] }));
 
 jest.mock("@patina/supabase", () => ({
   usePeopleDirectory: (...args: unknown[]) =>
     mockUsePeopleDirectory(...(args as [])),
   useStudioContacts: (...args: unknown[]) =>
     mockUseStudioContacts(...(args as [])),
-  usePeopleSeats: () => ({ data: [] }),
+  usePeopleSeats: (...args: unknown[]) => mockUsePeopleSeats(...(args as [])),
   // W2 r1 fixes: the Directory now reads the rule ROWS, the routed people's
   // channels and the consent records behind the word (CR-5/6/13/14/22).
   useContactRules: () => ({ data: [] }),
@@ -102,6 +105,39 @@ const ADAEZE = row({
   paper_state: null,
 });
 
+/** The studio's OWN people. Their card kind is `studio` (CR-7), not `team`. */
+const STUDIO_PEOPLE = ["Leah Hartwell", "Priya Natarajan", "Dale Whitcomb"].map(
+  (name, i) =>
+    row({
+      person_id: `card-studio-${i}`,
+      display_name: name,
+      phone: null,
+      email: null,
+      meta: { entity_kind: "person", contact_kind: "studio" },
+      reach_state: "account",
+      consent_status: null,
+      paper_state: null,
+      seat_count: 0,
+    }),
+);
+
+/** A bid taken from a firm with nobody named — one entity, not two (QA-R2-9). */
+const COMPANY_ONLY_SEAT = row({
+  person_id: "seat-rivera",
+  role: "sub",
+  display_name: "Rivera Finishes",
+  phone: "(612) 555-0219",
+  email: null,
+  profile_id: null,
+  meta: {
+    company_name: "Rivera Finishes",
+    company_id: "firm-rivera",
+    studio_contact_id: null,
+    trade: "paint",
+  },
+  seat_count: 1,
+});
+
 function renderDirectory(
   rows: PeopleDirectoryRow[],
   over: Partial<Parameters<typeof DirectoryView>[0]> = {},
@@ -132,6 +168,8 @@ function renderDirectory(
 beforeEach(() => {
   mockUsePeopleDirectory.mockReset();
   mockUseStudioContacts.mockReturnValue({ data: [], isLoading: false });
+  mockUsePeopleSeats.mockReset();
+  mockUsePeopleSeats.mockReturnValue({ data: [] });
 });
 
 describe("the six chips", () => {
@@ -225,11 +263,75 @@ describe("one list, two entry types (PR-g)", () => {
     expect(onOpenFirm).toHaveBeenCalledWith("firm-northgate");
   });
 
-  it("a firm row counts the crew and the open jobs off the rows in hand", () => {
+  it("a firm row counts the crew off its rows and the open jobs off the seats", () => {
+    // QA-R2-2: `people_directory.project_id` is NULL for every carded human,
+    // so the count comes from `people_directory_seats`, which carries
+    // `company_id`.
+    mockUsePeopleSeats.mockReturnValue({
+      data: [
+        {
+          seat_id: "seat-1",
+          person_id: "card-dana",
+          project_id: "proj-okonkwo",
+          company_id: "firm-northgate",
+          stage: "awarded",
+        },
+        // A closed seat is not an open job.
+        {
+          seat_id: "seat-2",
+          person_id: "card-dana",
+          project_id: "proj-lindqvist",
+          company_id: "firm-northgate",
+          stage: "off_job",
+        },
+      ],
+    });
     renderDirectory([row(), FIRM]);
     expect(
       screen.getByText("Subcontractor · 1 on the crew · 1 open job"),
     ).toBeInTheDocument();
+  });
+});
+
+describe("the studio's own people (CR-7)", () => {
+  it("bands the three `studio` cards under the Studio chip, not under Crew", () => {
+    renderDirectory([...STUDIO_PEOPLE, row()], { chip: "studio" });
+    for (const name of ["Leah Hartwell", "Priya Natarajan", "Dale Whitcomb"]) {
+      expect(screen.getByRole("button", { name })).toBeInTheDocument();
+    }
+    expect(
+      screen.queryByRole("button", { name: "Dana Kowalski" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps them out of Crew", () => {
+    renderDirectory([...STUDIO_PEOPLE, row()], { chip: "crew" });
+    expect(
+      screen.queryByRole("button", { name: "Leah Hartwell" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Dana Kowalski" }),
+    ).toBeInTheDocument();
+  });
+
+  it("CR-15 — with no firm and no trade the line is a WORD, never `studio`", () => {
+    const { container } = renderDirectory(STUDIO_PEOPLE, { chip: "studio" });
+    const lines = [...container.querySelectorAll("[data-person-row] p.t-meta")];
+    expect(lines).toHaveLength(3);
+    // "Studio", never the raw card token. (The lens's own `studio` word below
+    // the chips is a control, not a row's identity line.)
+    for (const line of lines) expect(line.textContent).toBe("Studio");
+  });
+});
+
+describe("a company-only engagement is not a head (QA-R2-9)", () => {
+  it("never surfaces as a person-shaped row beside its own firm row", () => {
+    renderDirectory([COMPANY_ONLY_SEAT, FIRM]);
+    // The firm's row stands; the phantom person does not.
+    expect(
+      screen.getByRole("button", { name: "Northgate Electric" }),
+    ).toBeInTheDocument();
+    expect(document.querySelectorAll("[data-person-row]")).toHaveLength(0);
   });
 });
 

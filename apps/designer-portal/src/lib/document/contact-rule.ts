@@ -62,20 +62,52 @@ export function contactChannelWord(token: string): string {
 }
 
 /**
- * A HARD BLOCK — the one that earns the terracotta leading rule — is a rule
- * that leaves NO channel open (direction §5.4). A rule forbidding text while
- * naming email and office is a preference and prints as ordinary prose.
+ * TWO FACTS, NOT ONE (CR-4 / CR-16).
+ *
+ *  · A HARD BLOCK is a rule that FORBIDS A CHANNEL OUTRIGHT. It earns the 2px
+ *    terracotta leading rule, and nothing else. SPEC §5.1 #11 names Ray Thao's
+ *    row — `forbidden={sms}`, office and the 311 portal wide open — as carrying
+ *    that rule, and SPEC §3's fixture marks F-15, F-26 and F-27 `block: true`.
+ *    The narrower reading (a rule that leaves NO channel open) painted only
+ *    Frank Bauer and contradicted the visual contract.
+ *  · DO NOT CONTACT is the Channels-region STATE direction §5.4 describes:
+ *    "`channels_forbidden` covers every channel", so the region collapses to
+ *    one line and routes somewhere reachable. It also takes the person's own
+ *    number off every row (SPEC §5.1 #10) — which a mere preference must not.
+ *
+ * Both answers are computed HERE, from `channels_forbidden`, so the Directory
+ * row, the roster row, the person card, the company card's crew line and the
+ * picker's mini row all read the same two facts (R-S / C29).
  */
 export function contactRuleIsHardBlock(
   rule: StudioContactRule | null | undefined,
 ): boolean {
-  if (!rule) return false;
-  const forbidden = rule.channels_forbidden ?? [];
+  return (rule?.channels_forbidden ?? []).length > 0;
+}
+
+/**
+ * The four channels a studio actually reaches a PERSON on. `dispatch`,
+ * `after_hours` and `ap_email` are a FIRM's lines and `portal_311` is a
+ * municipal scheduling portal, so a rule bars nothing left by naming them — and
+ * requiring them would mean a rule saying "no text, no email, no mobile, no
+ * office" still read as reachable.
+ */
+const DIRECT_CONTACT_CHANNELS: readonly string[] = [
+  "sms",
+  "mobile",
+  "office",
+  "email",
+];
+
+/** Direction §5.4's "Do not contact" state: no direct channel left open. */
+export function contactRuleIsDoNotContact(
+  rule: StudioContactRule | null | undefined,
+): boolean {
+  const forbidden = rule?.channels_forbidden ?? [];
   if (forbidden.length === 0) return false;
-  const stillOpen = (rule.channels_allowed ?? []).filter(
-    (channel) => !forbidden.includes(channel),
+  return DIRECT_CONTACT_CHANNELS.every((channel) =>
+    forbidden.includes(channel),
   );
-  return stillOpen.length === 0;
 }
 
 /** Ends a clause with a stop, without doubling one the studio already typed. */

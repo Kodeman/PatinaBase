@@ -163,8 +163,10 @@ describe("the row lines", () => {
       display_name: "Marrow & Sons",
       meta: { entity_kind: "company", contact_kind: "gc" },
     });
+    // CR-6: a FIRM's kind is the company vocabulary, and SPEC §5.1 #13 fixes
+    // the word as "GC" — not the party map's "General Contractor".
     expect(firmIdentityLine(firm, { crew: 3, jobs: 2 })).toBe(
-      "General Contractor · 3 on the crew · 2 open jobs",
+      "GC · 3 on the crew · 2 open jobs",
     );
     expect(firmIdentityLine(firm, { crew: 1, jobs: 1 })).toContain(
       "1 open job",

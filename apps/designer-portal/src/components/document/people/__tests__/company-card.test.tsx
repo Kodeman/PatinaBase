@@ -42,6 +42,29 @@ jest.mock("@patina/supabase", () => ({
     mutateAsync: jest.fn(),
     isPending: false,
   }),
+  // CR-9: the crew line carries the rule and the routed channel.
+  useContactRules: () => ({ data: [] }),
+  useStudioContactChannelsFor: () => ({ data: [] }),
+  // CR-8: the company variant of Reach & access is mounted on this card now.
+  useStudioContactChannels: () => ({ data: [] }),
+  useContactRule: () => ({ data: null }),
+  useAccessGrants: () => ({ data: [] }),
+  useChannelConsent: () => ({ data: null }),
+  useRecordChannelConsent: () => ({ mutate: jest.fn(), isPending: false }),
+  useRecordChannelReconsent: () => ({ mutate: jest.fn(), isPending: false }),
+  useSetContactRule: () => ({ mutate: jest.fn(), isPending: false }),
+  useCreateFieldLink: () => ({ mutate: jest.fn(), isPending: false }),
+  useRevokeAccessGrant: () => ({ mutate: jest.fn(), isPending: false }),
+  isAccessGrantRevokable: () => false,
+  ACCESS_GRANT_NOT_REVOKABLE_SENTENCE:
+    "This door is closed somewhere else in Patina, not from here.",
+  ACCESS_GRANT_TIER_LABELS: { field_link: "Field link" },
+  ACCESS_GRANT_TIER_OPENS: {
+    field_link: "the Call Sheet and the site access card",
+  },
+  CONTACT_CHANNEL_KIND_LABELS: { office: "Office", ap_email: "AP email" },
+  isContactChannelHeld: (s: string) => !!s && s !== "active",
+  fieldLinkUrl: (token: string) => `https://patina.cloud/field/${token}`,
   COMPLIANCE_BLOCK_LABELS: {
     site_access: "site access",
     payment: "payment",

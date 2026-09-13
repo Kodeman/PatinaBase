@@ -44,9 +44,39 @@ jest.mock("@patina/supabase", () => ({
   }),
   useStudioIdentity: () => ({ data: { name: "Middle West Studio" } }),
   useUpdateStudioContact: () => ({ mutateAsync: jest.fn(), isPending: false }),
-  useOrganizations: () => ({ data: [{ id: "org-1", type: "design_studio" }] }),
+  useOrganizations: () => ({
+    data: [
+      {
+        id: "org-1",
+        type: "design_studio",
+        // CR-12: the money scopes are an owner's or an admin's to grant, and
+        // the sheet reads that off the caller's own membership.
+        membership: { role: "owner" },
+      },
+    ],
+  }),
   peopleKeys: { all: ["people-directory"] },
   peopleSeatKeys: { all: ["people-directory-seats"] },
+  ALL_AUTHORITY_SCOPES: [
+    "money",
+    "change_order",
+    "selections",
+    "schedule",
+    "site_access",
+    "key",
+    "draw_certify",
+  ],
+  AUTHORITY_SCOPE_LABELS: {
+    money: "Signs money",
+    change_order: "Approves change orders",
+    selections: "Selections",
+    schedule: "Sets the schedule",
+    site_access: "Controls site access",
+    key: "Holds a key",
+    draw_certify: "Certifies draws",
+  },
+  isAdminOnlyAuthorityScope: (scope: string) =>
+    scope === "money" || scope === "draw_certify",
 }));
 
 // R-J's first branch reads the project's standing grants; the sheet asks for

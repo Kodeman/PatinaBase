@@ -170,7 +170,7 @@ describe("the rule clause", () => {
     ).toBeInTheDocument();
   });
 
-  it("a rule that forbids text but names email is PROSE, not a block (CR-22)", () => {
+  it("a rule that forbids text takes the leading rule and KEEPS the phone (CR-16)", () => {
     const { container } = render(
       <ul>
         <PersonRow
@@ -184,9 +184,16 @@ describe("the rule clause", () => {
         />
       </ul>,
     );
+    // SPEC §5.1 #11 names exactly this row — Ray Thao's — as carrying the
+    // leading rule, and SPEC §3's fixture marks it `block: true`.
     expect(
       container.querySelector('[data-contact-rule-blocked="true"]'),
-    ).not.toBeInTheDocument();
+    ).toBeInTheDocument();
+    // But it is not "do not contact": the phone the clause tells the studio to
+    // use is still a live target (§5.4).
+    expect(
+      screen.getByRole("link", { name: /Call Dana Kowalski/ }),
+    ).toBeInTheDocument();
     // The studio's own sentence prints, not the mechanical clause list (CR-6),
     // and no schema word reaches the face (CR-5).
     expect(
@@ -194,7 +201,7 @@ describe("the rule clause", () => {
     ).toBeInTheDocument();
   });
 
-  it("a hard block takes the person's own phone off the row (QA-3)", () => {
+  it("a do-not-contact rule takes the person's own phone off the row (QA-3)", () => {
     render(
       <ul>
         <PersonRow person={person()} onOpen={jest.fn()} rule={rule()} />

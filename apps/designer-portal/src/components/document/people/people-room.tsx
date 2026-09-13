@@ -26,6 +26,8 @@ import {
   deriveNurtureQueue,
   directoryEntryCounts,
   directoryHeadLine,
+  directoryIdentityRows,
+  directoryRolodexOrgId,
   humanizeSince,
 } from "@/lib/document/people-derivation";
 import {
@@ -135,15 +137,28 @@ export function PeopleRoom() {
   const now = useMemo(() => new Date(), []);
 
   // Call Sheet Wave 2 — the active studio, for the Companies chip / rolodex
-  // marker (same "prefer design_studio, else first org" resolution as the
-  // Account sheet's studio page). Null while orgs are still loading.
+  // marker. Null while the reads are still in flight.
+  //
+  // QA-R2-1: `orgs.find(o => o.type === 'design_studio')` is a FIRST MATCH over
+  // an unordered membership read, and a designer may belong to two design
+  // studios (`designer@patina.dev` does). The room's rolodex, its payee markers
+  // and its crew names all live under ONE of them, so the guess came back wrong
+  // roughly half the time and the company card printed "Unnamed" for its crew.
+  // The directory rows carry each card's own `organization_id`, so the org that
+  // actually holds the book answers first; the membership list is the fallback,
+  // sorted so it never moves between renders.
   const { data: orgs } = useOrganizations();
+  const memberOrgId = useMemo(() => {
+    const sorted = [...(orgs ?? [])].sort((a, b) => a.id.localeCompare(b.id));
+    return (
+      sorted.find((o) => o.type === "design_studio")?.id ??
+      sorted[0]?.id ??
+      null
+    );
+  }, [orgs]);
   const organizationId = useMemo(
-    () =>
-      orgs?.find((o) => o.type === "design_studio")?.id ??
-      orgs?.[0]?.id ??
-      null,
-    [orgs],
+    () => directoryRolodexOrgId(all ?? []) ?? memberOrgId,
+    [all, memberOrgId],
   );
 
   // Deep-link entry (R78/R60/F4): /people?person=<id>&role=<role> opens
@@ -449,7 +464,13 @@ export function PeopleRoom() {
   return (
     <RoomShell
       title="The People Room"
-      count={all ? directoryHeadLine(directoryEntryCounts(all)) : undefined}
+      count={
+        all
+          ? // QA-R2-9: the head counts identities, and a company-only
+            // engagement with nobody named is the firm, already counted once.
+            directoryHeadLine(directoryEntryCounts(directoryIdentityRows(all)))
+          : undefined
+      }
       action={
         <DocumentActionGroup
           surfaceKey="people"

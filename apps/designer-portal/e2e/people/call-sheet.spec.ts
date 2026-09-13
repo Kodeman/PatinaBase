@@ -35,6 +35,14 @@ async function openTheCallSheet(page: import('@playwright/test').Page) {
   await expect(instrument).toBeVisible({ timeout: 30_000 });
   await instrument.click();
   await expect(page.getByText('Call sheet · Okonkwo residence')).toBeVisible();
+  // QA-R2-6: the sheet's heading is static markup, but every read behind it is
+  // `enabled: open` — the roster, the authority grants, the consent org and the
+  // site access card all START when the sheet opens. On a cold page that round
+  // trip outruns the default 5s expect budget, so the bands are gated on
+  // themselves here rather than each assertion racing the fetch.
+  await expect(page.locator('[data-roster-band]').first()).toBeVisible({
+    timeout: 30_000,
+  });
 }
 
 test('task 6 — the roster opens already banded by the window', async ({

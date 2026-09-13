@@ -733,6 +733,104 @@ export function directoryEntryKind(p: DirectoryPerson): DirectoryEntryKind {
   return p.meta?.["entity_kind"] === "company" ? "firm" : "person";
 }
 
+/**
+ * A COMPANY-ONLY ENGAGEMENT IS NOT A PERSON (QA-R2-9).
+ *
+ * `people_directory`'s field-parties branch mints an identity for every
+ * uncarded seat, keyed by `party_identity_key(card, login, phone, email, id)`.
+ * A bid taken from a firm with nobody named — Rivera Finishes: `display_name`
+ * and `company_name` both the firm, no card, no login — falls through that
+ * COALESCE chain to the party row's own id and surfaces as a person-shaped row
+ * BESIDE the firm's own row: the same entity twice, and one too many heads.
+ *
+ * Such a row belongs to the Call Sheet's Bidding / Done bands (which read the
+ * roster, not this view) and to the firm's own Directory row. Nowhere else.
+ */
+export function directoryEntryIsCompanyOnlySeat(p: DirectoryPerson): boolean {
+  if (directoryEntryKind(p) === "firm") return false;
+  if (p.role === "contact" || p.role === "team") return false;
+  if (p.profile_id) return false;
+  const meta = p.meta ?? {};
+  if (typeof meta["studio_contact_id"] === "string") return false;
+  const companyName = meta["company_name"];
+  if (typeof companyName !== "string" || !companyName.trim()) return false;
+  return (
+    companyName.trim().toLowerCase() === p.display_name.trim().toLowerCase()
+  );
+}
+
+/**
+ * WHICH STUDIO THE ROLODEX ACTUALLY SITS IN (QA-R2-1).
+ *
+ * The room used to resolve its `organizationId` as
+ * `orgs.find(o => o.type === 'design_studio')?.id` — a first match over an
+ * UNORDERED membership read. `designer@patina.dev` belongs to two
+ * `design_studio` organizations and every one of the 49 `studio_contacts` rows
+ * lives under one of them, so half the time the rolodex read came back empty
+ * and the company card printed "Unnamed" for its crew and "Signs: on file" for
+ * its payee.
+ *
+ * `people_directory`'s contacts branch carries each card's own
+ * `meta.organization_id`, so the answer is in the rows already in hand: the org
+ * that actually holds the cards, ties broken by id so the answer never moves
+ * between renders.
+ */
+export function directoryRolodexOrgId(
+  rows: readonly DirectoryPerson[],
+): string | null {
+  const tally = new Map<string, number>();
+  for (const row of rows) {
+    const org = row.meta?.["organization_id"];
+    if (typeof org !== "string" || !org) continue;
+    tally.set(org, (tally.get(org) ?? 0) + 1);
+  }
+  let best: string | null = null;
+  let bestCount = 0;
+  for (const [org, count] of [...tally.entries()].sort((a, b) =>
+    a[0].localeCompare(b[0]),
+  )) {
+    if (count > bestCount) {
+      best = org;
+      bestCount = count;
+    }
+  }
+  return best;
+}
+
+/**
+ * TWO QUESTIONS THE FACES ASK OF A STAGE, and the words they use for each.
+ *
+ *  · CLOSED FOR GOOD — the seat is history: they left, retired, declined, or
+ *    never answered. The company card's "1 person · 2 projects" (SPEC §5.3 #1)
+ *    and its Jobs region count everything that is NOT this, because Northgate
+ *    Electric's Lindqvist seat is running out its warranty and the spec counts
+ *    it as one of the firm's two projects.
+ *  · NOT AN OPEN JOB — closed for good, OR running out a warranty. The
+ *    Directory firm row's "N open jobs" and the person card's live/past split
+ *    ask this one: a warranty is a clock, not a crew on site.
+ */
+const CLOSED_SEAT_STAGES: ReadonlySet<string> = new Set([
+  "off_job",
+  "retired",
+  "declined",
+  "no_response",
+]);
+
+export function seatIsClosed(stage: string | null | undefined): boolean {
+  return CLOSED_SEAT_STAGES.has(String(stage));
+}
+
+export function seatIsDone(stage: string | null | undefined): boolean {
+  return seatIsClosed(stage) || String(stage) === "warranty";
+}
+
+/** The rows the Directory and its head actually stand for (QA-R2-9). */
+export function directoryIdentityRows(
+  rows: readonly DirectoryPerson[],
+): DirectoryPerson[] {
+  return rows.filter((row) => !directoryEntryIsCompanyOnlySeat(row));
+}
+
 /** The head counts CARDS, not rows (`people-room.tsx:383` counted rows, and v4
  *  is what makes the count honest). "29 people · 22 firms". */
 export function directoryEntryCounts(rows: readonly DirectoryPerson[]): {
@@ -789,6 +887,66 @@ export function directoryFirmOf(p: DirectoryPerson): {
   };
 }
 
+/**
+ * A COMPANY'S OWN KIND VOCABULARY (`studio_contacts.contact_kind` on an
+ * `entity_kind = 'company'` row) — deliberately DISTINCT from a person's
+ * PartyKind: a firm card names what KIND OF FIRM it is, not a role on a
+ * project. Free TEXT (00417, no CHECK), so an unrecognized value prettifies
+ * rather than printing raw snake_case.
+ *
+ * CR-6: it lives HERE, beside the derivations that need it, rather than inside
+ * `directory/company-row.tsx` — this module takes no React import, and the row
+ * component re-exports the function it used to own.
+ */
+const COMPANY_KIND_LABELS: Record<string, string> = {
+  gc: "GC firm",
+  workroom: "Workroom",
+  showroom: "Showroom",
+  vendor: "Vendor",
+  supplier: "Supplier",
+};
+
+/** Free TEXT never reaches a face as snake_case (SPEC §8 #3). */
+function prettifyKind(kind: string): string {
+  return kind.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+export function companyKindLabel(kind: string | null | undefined): string {
+  if (!kind) return "Company";
+  return COMPANY_KIND_LABELS[kind] ?? prettifyKind(kind);
+}
+
+/**
+ * The firm ROW's word (SPEC §5.1 #13 / §5.3 #1), which fixes `gc` as "GC" —
+ * not "GC firm" and certainly not the party map's "General Contractor". Every
+ * other kind falls through the company vocabulary, then the party vocabulary
+ * (so a `sub` firm still reads "Subcontractor"), then prettification.
+ */
+const COMPANY_KIND_SHORT_LABELS: Record<string, string> = { gc: "GC" };
+
+export function companyKindShortLabel(kind: string | null | undefined): string {
+  if (!kind) return "Company";
+  const short = COMPANY_KIND_SHORT_LABELS[kind] ?? COMPANY_KIND_LABELS[kind];
+  if (short) return short;
+  const party = getPartyKindLabel(kind);
+  if (party && party !== kind) return party;
+  return prettifyKind(kind);
+}
+
+/**
+ * A CARD's kind, in words. `contact_kind` carries the CARD vocabulary, which is
+ * the party vocabulary PLUS the studio's own kinds (`studio`, `showroom`,
+ * `workroom`, `authority`, `photography`, `maker`…). CR-15: putting it through
+ * `getPartyKindLabel` alone printed the raw token `studio` on Leah Hartwell's,
+ * Priya Natarajan's and Dale Whitcomb's Directory rows.
+ */
+export function contactCardKindLabel(kind: string | null | undefined): string {
+  if (!kind) return "";
+  const party = getPartyKindLabel(kind);
+  if (party && party !== kind) return party;
+  return COMPANY_KIND_LABELS[kind] ?? prettifyKind(kind);
+}
+
 const CLIENT_KINDS = new Set(["client", "lead", "client_rep"]);
 const CREW_KINDS = new Set([
   "gc",
@@ -807,7 +965,13 @@ const MAKER_KINDS = new Set([
   "showroom",
   "supplier",
 ]);
-const STUDIO_KINDS = new Set(["team"]);
+/**
+ * CR-7: the studio's OWN people carry `contact_kind = 'studio'` on their card
+ * (Leah Hartwell, Priya Natarajan, Dale Whitcomb in the seed); `'team'` is the
+ * `project_team_members` branch's role. Both belong under the Studio chip
+ * (SPEC §5.1 #2) — with only `'team'` here the three fell through to Crew.
+ */
+const STUDIO_KINDS = new Set(["studio", "team"]);
 
 /**
  * Which of the six chips an entry falls under (direction §3.1). A firm sorts
@@ -882,7 +1046,9 @@ export function personIdentityLine(p: DirectoryPerson): string {
   const trade = directoryTradeOf(p);
   if (trade) parts.push(getFieldTradeLabel(trade).toLowerCase());
   if (parts.length === 0) {
-    const kind = getPartyKindLabel(directoryContactKind(p) ?? "");
+    // CR-15: the CARD vocabulary, not the party map — a studio person with no
+    // firm and no specialty printed the raw token `studio` here.
+    const kind = contactCardKindLabel(directoryContactKind(p));
     if (kind) parts.push(kind);
   }
   return parts.join(" · ");
@@ -894,8 +1060,12 @@ export function firmIdentityLine(
   counts: { crew: number; jobs: number },
 ): string {
   const parts: string[] = [];
+  // CR-6: a FIRM's kind is the company vocabulary. `getPartyKindLabel` has no
+  // entry for showroom/workroom/authority/supplier/photography/maker, so seven
+  // of twenty-one firm rows printed a raw lowercase token — and it turned `gc`
+  // into "General Contractor" where the spec fixes the word as "GC".
   const kind = directoryContactKind(p);
-  if (kind) parts.push(getPartyKindLabel(kind));
+  if (kind) parts.push(companyKindShortLabel(kind));
   parts.push(`${counts.crew} on the crew`);
   parts.push(`${counts.jobs} open ${counts.jobs === 1 ? "job" : "jobs"}`);
   return parts.join(" · ");

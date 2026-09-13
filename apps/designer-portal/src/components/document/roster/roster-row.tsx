@@ -54,6 +54,7 @@ import {
 } from '@/lib/document/roster-derivation';
 import {
   contactRuleClause,
+  contactRuleIsDoNotContact,
   contactRuleIsHardBlock,
 } from '@/lib/document/contact-rule';
 import { peopleEvents } from '@/lib/analytics/people-events';
@@ -131,11 +132,12 @@ export function RosterRow({
   // One predicate, one clause, wherever a rule is shown (R-S). The prose
   // summary is the fallback for a row whose rule row has not loaded.
   const ruleClause = rule ? contactRuleClause(rule) : row.ruleSummary;
-  // CR-22: the SAME predicate the Directory row uses, over the same column.
-  // Two regexes over prose that already differed guaranteed they would drift,
-  // and both fired on ANY forbidden channel — direction §5.4 reserves the
-  // terracotta rule for a block that leaves no channel open.
+  // CR-4 / CR-16: the SAME pair of predicates the Directory row uses, over the
+  // same column. The leading rule prints for ANY forbidden channel (SPEC §5.1
+  // #11); only a rule that leaves no direct channel open takes the number off
+  // the row (§5.4).
   const ruleBlocks = contactRuleIsHardBlock(rule);
+  const ruleSilencesPhone = contactRuleIsDoNotContact(rule);
   const seatId = row.seatId ?? '';
   const projectId = row.projectId ?? '';
 
@@ -304,10 +306,10 @@ export function RosterRow({
       </div>
 
       {/* The phone is the row's SIBLING target, never inside its button.
-          A hard block takes the number off the row (SPEC §5.1 #10, §5.4) — the
-          superintendent standing on site must not have the forbidden call one
-          tap away. Channels are hidden, never deleted. */}
-      {row.phone && !ruleBlocks && (
+          A do-not-contact rule takes the number off the row (SPEC §5.1 #10,
+          §5.4) — the superintendent standing on site must not have the
+          forbidden call one tap away. Channels are hidden, never deleted. */}
+      {row.phone && !ruleSilencesPhone && (
         <div className="-mt-1 pb-1 pl-[46px]">
           <TelLink phone={row.phone} personName={row.name} />
         </div>

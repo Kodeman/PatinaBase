@@ -54,23 +54,50 @@ function tierOpens(tier: string): string | null {
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
+ * An ACCOUNT is not a link (CR-13). PR-d's "ends with the job, renews when they
+ * use it" is the FIELD LINK's clock and nobody else's: a studio membership or a
+ * client account carries no expiry and is ended by removing the account (SPEC
+ * §3's grants fixture, F-04 / F-16), and a document share or an invoice pay
+ * link simply expires on its date. Eleven tiers, three sentences.
+ */
+const ACCOUNT_TIERS: ReadonlySet<string> = new Set([
+  "studio_member",
+  "client_account",
+]);
+
+/** "13 days left." — printed only inside fourteen days, when the number is
+ *  the fact rather than the noise. */
+function daysLeftClause(expiresAt: string, now: Date): string {
+  const days = Math.ceil((Date.parse(expiresAt) - now.getTime()) / DAY_MS);
+  if (!Number.isFinite(days) || days < 0 || days > 14) return "";
+  if (days === 0) return " Ends today.";
+  if (days === 1) return " One day left.";
+  return ` ${days} days left.`;
+}
+
+/**
  * "Ends with the job, 13 August 2027. Renews when they use it." — the end date
- * in words. Inside fourteen days the row adds the count, because that is when
- * the number is the fact.
+ * in words, in the wording its own tier earns.
  */
 export function grantEndsSentence(
   expiresAt: string | null | undefined,
   now: Date,
+  tier?: string | null,
 ): string {
-  if (!expiresAt) return "Ends with the job. Renews when they use it.";
-  const long = formatLongDate(expiresAt.slice(0, 10));
-  if (!long) return "Ends with the job. Renews when they use it.";
-  const days = Math.ceil((Date.parse(expiresAt) - now.getTime()) / DAY_MS);
-  const close =
-    Number.isFinite(days) && days >= 0 && days <= 14
-      ? ` ${days === 0 ? "Ends today." : days === 1 ? "One day left." : `${days} days left.`}`
-      : "";
-  return `Ends with the job, ${long}. Renews when they use it.${close}`;
+  if (tier && ACCOUNT_TIERS.has(tier)) {
+    return "No end date. Revoked by removing the account.";
+  }
+  const long = expiresAt ? formatLongDate(expiresAt.slice(0, 10)) : null;
+  const fieldLink = !tier || tier === "field_link";
+  if (!long) {
+    return fieldLink
+      ? "Ends with the job. Renews when they use it."
+      : "No end date on file.";
+  }
+  const close = daysLeftClause(expiresAt as string, now);
+  return fieldLink
+    ? `Ends with the job, ${long}. Renews when they use it.${close}`
+    : `Ends ${long}.${close}`;
 }
 
 /** The row's own facts, in the order the studio reads them. */
@@ -140,7 +167,7 @@ function GrantRow({
         {grantRowParts(grant).join(" · ")}
       </p>
       <p className="t-body-sm mt-1 text-[var(--ink-subtle)]">
-        {grantEndsSentence(grant.expires_at, now)}
+        {grantEndsSentence(grant.expires_at, now, String(grant.tier))}
       </p>
       {revokable ? (
         <>

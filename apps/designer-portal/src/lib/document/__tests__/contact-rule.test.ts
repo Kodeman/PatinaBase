@@ -10,6 +10,7 @@ import {
   contactChannelWord,
   contactRouteTarget,
   contactRuleClause,
+  contactRuleIsDoNotContact,
   contactRuleIsHardBlock,
   indexChannelsByOwner,
   indexContactRules,
@@ -107,25 +108,46 @@ describe("CR-6 — the studio's own sentence is the clause", () => {
   });
 });
 
-describe("CR-22 — one predicate, and a hard block leaves no channel open", () => {
+describe("CR-16 — a hard block is any forbidden channel (SPEC §5.1 #11)", () => {
   it("Frank Bauer is a hard block", () => {
     expect(contactRuleIsHardBlock(FRANK_RULE)).toBe(true);
   });
 
-  it("Ray Thao is a preference, not a block", () => {
-    expect(contactRuleIsHardBlock(RAY_RULE)).toBe(false);
-  });
-
-  it("a rule that forbids text but names email and mobile is not a block", () => {
-    expect(
-      contactRuleIsHardBlock(
-        rule({ channels_forbidden: ["sms"], channels_allowed: ["email", "mobile"] }),
-      ),
-    ).toBe(false);
+  it("Ray Thao wears the leading rule too — SPEC §5.1 #11 names his row", () => {
+    expect(contactRuleIsHardBlock(RAY_RULE)).toBe(true);
   });
 
   it("a rule forbidding nothing is never a block", () => {
     expect(contactRuleIsHardBlock(rule({ channels_allowed: ["email"] }))).toBe(false);
+  });
+
+  it("no rule at all is never a block", () => {
+    expect(contactRuleIsHardBlock(null)).toBe(false);
+  });
+});
+
+describe("CR-4 — 'do not contact' is the separate, narrower state", () => {
+  it("Frank Bauer has no direct channel left open", () => {
+    expect(contactRuleIsDoNotContact(FRANK_RULE)).toBe(true);
+  });
+
+  it("Ray Thao keeps office and email, so he is reachable", () => {
+    expect(contactRuleIsDoNotContact(RAY_RULE)).toBe(false);
+  });
+
+  it("Dana Kowalski's text-only rule is a preference, not a wall", () => {
+    expect(
+      contactRuleIsDoNotContact(
+        rule({
+          channels_forbidden: ["email"],
+          reason: "Text only. The email on file bounces.",
+        }),
+      ),
+    ).toBe(false);
+  });
+
+  it("forbidding nothing is never do-not-contact", () => {
+    expect(contactRuleIsDoNotContact(rule())).toBe(false);
   });
 });
 
