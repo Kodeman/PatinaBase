@@ -103,11 +103,31 @@
 -- and dropping it would delete the only path by which a project that reached
 -- 'none' can ever name a studio again. Revert the policies; keep the act.
 --
+-- ── ROUND 9 (HT-3-f(1) and W2-R9-02) ───────────────────────────────────────
+-- Two changes inside section (4), both measured into existence:
+--   · bound (c) becomes a CONFIRM where the caller names the studio the
+--     derivation ALREADY returns (HT-3-f(1), RULED 2026-09-12). It was a flat
+--     refusal on the reasoning that "where HT-3-b answers, the owner already reads
+--     these hours" — reasoning that assumed the derivation's answer cannot change.
+--     It can: HT-3-b is recomputed on every hour for a NULL-studio project, so one
+--     ordinary `Members can leave` DELETE (or an `admin`'s own-row UPDATE to
+--     status = 'removed') emptied the designer's employer tier, the OWNED tier
+--     opened, and her former employer's legacy project priced at the number she
+--     wrote for herself — with no statement available to the employer, before or
+--     after (W2-R9-01, probes C and D2, 1/1 through RLS, ONE account). HT-3-f(2)
+--     closes the shape at the derivation (migration 00615); this is the PIN that
+--     gives the employer an act.
+--   · bound (a2)'s employer leg asks the rate row's AUTHORSHIP HISTORY rather than
+--     its current author (W2-R9-02), which needs the column declared at section
+--     (3b) below.
+--
 -- Lineage: policies, plus ONE new function (section 4 — NEW name, nothing
--- redefined; `set_project_studio_id` is NOT touched). No column.
--- P-4: no row is touched by this migration. The new function writes
--- `projects.studio_id` only when a caller asks it to, one project at a time, and
--- only where that column is still NULL — it is a repair act, not a backfill.
+-- redefined; `set_project_studio_id` is NOT touched), plus ONE new column
+-- (section 3b, W2-R9-02 — additive, nullable, written only by 00615's guard).
+-- P-4: no row is touched by this migration. The new column is NOT backfilled. The
+-- new function writes `projects.studio_id` only when a caller asks it to, one
+-- project at a time, and only where that column is still NULL — it is a repair
+-- act, not a backfill.
 --
 -- Adds GRANT/REVOKE → supabase/seed/00-legacy-grants.sql is regenerated
 -- (`python3 scripts/generate-legacy-grants.py`, plan-v2 §0.20).
@@ -146,6 +166,39 @@ CREATE POLICY time_entries_owner_admin_read ON public.project_time_entries
       public.project_pricing_studio_id(project_time_entries.project_id)
     )
   );
+
+-- ── (3b) W2-R9-02: the column this file's arm's-length leg reads ────────────
+-- studio_member_rates.original_created_by records the author HT-3-e(4) DISPLACED
+-- when somebody moved an open rate row's number. It is declared HERE, beside the
+-- leg that reads it, rather than in 00615 where the guard that WRITES it lives: a
+-- migration's body may not read a column a LATER migration adds, and
+-- `supabase migration up` stopping at this number must leave a callable function.
+--   Why the column exists. The employer arm at bound (a2) below asks the named
+-- studio for a studio_member_rates row for this designer "that somebody other than
+-- she wrote". HT-3-e(4) re-authors a row to whoever moves its number — correctly,
+-- it is what HT-3-e(2) prices on — so a studio whose card holds exactly ONE row for
+-- her (a studio that has priced a hire once: the common shape) LOST that standing
+-- the moment she rewrote the row in place, and the stamp was then refused to the
+-- studio's OWNER as well as to her. Measured, probe A A4/A5, round 9.
+-- Closed rows need nothing: they are frozen outright, which is why the leg reads
+-- open and closed rows alike and why this column is only ever needed for the open
+-- one. Nobody may name it — 00615's INSERT guard discards a supplied value and its
+-- UPDATE guard freezes it — so it is written only from OLD, only once, and only by
+-- the guard.
+-- P-4: no row is touched. Existing rows get NULL, and their `created_by` is still
+-- the author nobody has displaced; there is no backfill and none is possible.
+ALTER TABLE public.studio_member_rates
+  ADD COLUMN IF NOT EXISTS original_created_by uuid
+  REFERENCES public.profiles(id) ON DELETE SET NULL;
+
+COMMENT ON COLUMN public.studio_member_rates.original_created_by IS
+  'W2-R9-02 (migration 00606, written only by 00615''s '
+  'guard_studio_member_rate_history): the author HT-3-e(4) displaced when this open '
+  'row''s number was last moved, kept once (COALESCEd from OLD) so a chain of '
+  'rewrites cannot walk the first author off the row. NULL means no number of this '
+  'row has ever been moved, in which case created_by is still that author. It is '
+  'the employer''s durable arm''s-length standing at stamp_project_pricing_studio '
+  'and is frozen against every caller.';
 
 -- ── (4) the repair path the narrowing promises (W2-R2-02) ──────────────────
 -- HT-3-a's ruled remedy is one sentence: *"The owner fixes 'none' by stamping
@@ -366,6 +419,9 @@ DECLARE
   v_actor       uuid := auth.uid();
   v_designer_has_employer_seat boolean := false;
   v_named_is_employer_seat     boolean := false;
+  -- HT-3-f(1): the studio HT-3-b derives for this project right now. Read once, at
+  -- bound (c), where it is either the studio being CONFIRMED or the refusal.
+  v_derived     uuid;
   v_written     uuid;
 BEGIN
   IF v_actor IS NULL THEN
@@ -464,14 +520,30 @@ BEGIN
   --      consent door (seats land `invited`; only the named user activates her
   --      own seat), which makes `status = 'active'` mean consent everywhere this
   --      file reads it — and that is a ruling, not a bound invented here.
+  --      NARROWED IN ROUND 9 (W2-R9-02, measured): the leg asks the rate row's
+  --      AUTHORSHIP HISTORY, not its current author, and it reads the studio's
+  --      whole card for her — OPEN AND CLOSED rows alike. HT-3-e(4) re-authors a
+  --      row to whoever moves its number, so the current-author spelling let the
+  --      rate's own SUBJECT destroy her employer's standing with one in-place
+  --      rewrite and refuse the stamp to the studio's OWNER (probe A, A4/A5 —
+  --      recoverable in one owner statement, A6 → A11, but repeatable by her).
+  --      A closed row's authorship she cannot touch at all (the history guard
+  --      refuses every edit of a closed row outright); the OPEN row's displaced
+  --      author is kept in original_created_by, written only by that guard and only
+  --      from OLD. Either column naming somebody other than her is the studio's
+  --      standing, and she can erase neither.
   IF v_designer_has_employer_seat AND v_named_is_employer_seat THEN
     IF NOT EXISTS (
          SELECT 1
          FROM public.studio_member_rates AS other_author
          WHERE other_author.studio_id = p_studio_id
            AND other_author.user_id   = v_designer_id
-           AND other_author.created_by IS NOT NULL
-           AND other_author.created_by <> v_designer_id
+           AND (
+             (other_author.created_by IS NOT NULL
+              AND other_author.created_by <> v_designer_id)
+             OR (other_author.original_created_by IS NOT NULL
+                 AND other_author.original_created_by <> v_designer_id)
+           )
        ) THEN
       RAISE EXCEPTION 'stamp_project_pricing_studio: this studio holds no rate '
                       'for this project''s designer that somebody other than she '
@@ -508,11 +580,37 @@ BEGIN
       USING ERRCODE = 'invalid_parameter_value';
   END IF;
 
-  -- (c) only where the derivation is silent. Where HT-3-b answers, the owner
-  --     already reads these hours and this function must not re-price them.
-  IF public.project_pricing_studio_id(p_project_id) IS NOT NULL THEN
-    RAISE EXCEPTION 'stamp_project_pricing_studio: a studio already prices this '
-                    'project''s hours — there is nothing to repair'
+  -- (c) HT-3-f(1) (RULED by the orchestrator 2026-09-12, flagged to Kody): a
+  --     CONFIRM where the derivation already names p_studio_id, a refusal
+  --     everywhere else. Round 3 through round 8 this bound was a flat refusal —
+  --     *"only where the derivation is silent; where HT-3-b answers, the owner
+  --     already reads these hours and this function must not re-price them"* — and
+  --     round 9 measured what that reasoning assumed: that the derivation's answer
+  --     cannot CHANGE. It can. HT-3-b is recomputed on every hour for a project
+  --     whose studio_id is NULL, so the designer emptied her own employer tier with
+  --     ONE ordinary statement (the shipped `Members can leave` DELETE on her own
+  --     organization_members row, or an `admin`'s UPDATE of it to
+  --     status = 'removed'), the OWNED tier opened, and her next hour on her former
+  --     employer's legacy project came back 99900 / studio_member / 199800 where
+  --     that employer's own card had priced it 26000 — with the employer's owner
+  --     then reading NONE of the project's hours and no statement available to
+  --     repair it, before or after (W2-R9-01, probe C and probe D2, measured 1/1
+  --     through RLS as her, ONE account, no ownership transfer, no confederate).
+  --     The CONFIRM is the remedy BEFORE the fact: an owner or admin of the studio
+  --     the derivation ALREADY names may write that studio down, which costs nobody
+  --     anything (it names the studio that is already pricing the hours and already
+  --     reading them) and which makes the column final under bound (b) and HT-3-c,
+  --     so no later seat change can re-derive it.
+  --     NOTHING ELSE IS RELAXED. The confirm still passes bound (a)'s
+  --     owner-or-admin standing, bound (a2)'s arm's-length rate (employer tier) or
+  --     created_by sibling (owned tier), bound (d)'s seat test and bound (e)'s tier
+  --     test — all of which sit on either side of this one — and a caller naming a
+  --     DIFFERENT studio than the one pricing the work is refused exactly as before.
+  v_derived := public.project_pricing_studio_id(p_project_id);
+  IF v_derived IS NOT NULL AND v_derived IS DISTINCT FROM p_studio_id THEN
+    RAISE EXCEPTION 'stamp_project_pricing_studio: another studio already prices '
+                    'this project''s hours — name that studio to pin it, or there '
+                    'is nothing here to repair'
       USING ERRCODE = 'invalid_parameter_value';
   END IF;
 
@@ -744,9 +842,22 @@ COMMENT ON FUNCTION public.stamp_project_pricing_studio(uuid, uuid) IS
   'assertions, and case (t) records the one the employer arm does NOT bound: the '
   'W2-R3-01 outsider, who writes the victim''s rate row in her own org under her '
   'own id and so satisfies the arm''s-length test. Its closure is the already-owed '
-  'HT-3-b arm (c) consent door. Refuses a '
-  'stamped project (final, HT-3-c) and one whose '
-  'hours a studio already prices. Writes one audit_logs row '
+  'HT-3-b arm (c) consent door. THE ARM''S-LENGTH LEG ASKS THE RATE ROW''S '
+  'AUTHORSHIP HISTORY, not its current author (W2-R9-02): created_by OR the author '
+  'HT-3-e(4) displaced into original_created_by, over open and closed rows alike. '
+  'Keyed on the current author alone, the rate''s own SUBJECT destroyed her '
+  'employer''s standing with one in-place rewrite and the stamp was refused to the '
+  'studio''s OWNER as well as to her (measured, probe A A4/A5). Refuses a '
+  'stamped project (final, HT-3-c) and one whose hours ANOTHER studio already '
+  'prices — but under HT-3-f(1) (RULED 2026-09-12) naming the studio the derivation '
+  'ALREADY returns is a CONFIRM, not a refusal: an owner or admin of that studio '
+  'may write it down, after which the column is final and HT-3-b stops being '
+  'recomputed. That is the employer''s remedy for W2-R9-01, where a designer emptied '
+  'her own employer tier with one `Members can leave` DELETE and her former '
+  'employer''s legacy project began pricing at the number she wrote for herself, '
+  'with no statement available to pin it before or after (probe C / probe D2, '
+  'measured 1/1 with ONE account). Every other bound applies to a confirm '
+  'unchanged. Writes one audit_logs row '
   '(project.pricing_studio_stamped, W2-R4-05) and returns the studio the UPDATE '
   'actually wrote (W2-R4-06). SECURITY DEFINER so the write does not meet '
   'set_project_studio_id''s authenticated arm; that trigger''s owner-executed arm '
@@ -963,11 +1074,42 @@ BEGIN
      'UPDATE and DELETE, and after it the ledger, the composer and every future '
      'audit row''s organization_id follow the studio it wrote';
   ASSERT (
-    SELECT prosrc LIKE '%project_pricing_studio_id(p_project_id) IS NOT NULL%'
+    SELECT prosrc LIKE '%v_derived := public.project_pricing_studio_id(p_project_id)%'
+       AND prosrc LIKE '%v_derived IS NOT NULL AND v_derived IS DISTINCT FROM p_studio_id%'
     FROM pg_proc
     WHERE oid = to_regprocedure('public.stamp_project_pricing_studio(uuid,uuid)')
-  ), '00606: the stamp must refuse a project a studio already prices — that bound '
-     'is what keeps the act pointed at ''none'' rather than at a priced project. It '
+  ), '00606: HT-3-f(1) — bound (c) reads the derivation and refuses only where it '
+     'names ANOTHER studio. A flat `IS NOT NULL` refusal (rounds 3-8) assumed the '
+     'derivation''s answer cannot change; HT-3-b is recomputed on every hour for a '
+     'NULL-studio project, so one `Members can leave` DELETE moved it and the '
+     'employer had no statement that could pin it, before or after (W2-R9-01, probe '
+     'C, measured 1/1 with ONE account). A confirm where the caller names the studio '
+     'ALREADY pricing the work costs nobody anything and makes the column final '
+     'under bound (b). Dropping the p_studio_id comparison would turn this into a '
+     'licence to re-point a priced project, which is what the flat refusal was for';
+  ASSERT (
+    SELECT prosrc LIKE '%other_author.original_created_by <> v_designer_id%'
+    FROM pg_proc
+    WHERE oid = to_regprocedure('public.stamp_project_pricing_studio(uuid,uuid)')
+  ), '00606: W2-R9-02 — the employer arm asks the rate row''s AUTHORSHIP HISTORY '
+     '(created_by OR the author HT-3-e(4) displaced into original_created_by), over '
+     'open and closed rows alike. Keyed on the current author alone, the rate''s own '
+     'SUBJECT destroys her employer''s standing with one in-place rewrite and the '
+     'stamp is then refused to the studio''s OWNER too (probe A, A4/A5)';
+  ASSERT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'studio_member_rates'
+      AND column_name = 'original_created_by'
+  ), '00606: studio_member_rates.original_created_by must exist — it is declared in '
+     'this file because this file''s body reads it, and 00615''s guard is what '
+     'writes it';
+  ASSERT (
+    SELECT prosrc LIKE '%project_pricing_studio_id(p_project_id)%'
+    FROM pg_proc
+    WHERE oid = to_regprocedure('public.stamp_project_pricing_studio(uuid,uuid)')
+  ), '00606: the stamp must still consult the derivation at all — that bound '
+     'is what keeps the act pointed at ''none'', or at HT-3-f(1)''s confirm of the '
+     'studio already pricing the work, rather than at a DIFFERENT studio. It '
      'is NOT a claim that the act cannot move money: round 5 measured a designer '
      'MANUFACTURING ''none'' on a correctly-priced project (W2-R5-01) and a willing '
      'designer handing a confederate the sibling bound (a2) asked for (W2-R5-02). '

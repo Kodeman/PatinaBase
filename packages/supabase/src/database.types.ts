@@ -24621,6 +24621,7 @@ export type Database = {
           effective_to: string | null
           hourly_rate_cents: number
           id: string
+          original_created_by: string | null
           studio_id: string
           updated_at: string
           user_id: string
@@ -24632,6 +24633,7 @@ export type Database = {
           effective_to?: string | null
           hourly_rate_cents: number
           id?: string
+          original_created_by?: string | null
           studio_id: string
           updated_at?: string
           user_id: string
@@ -24643,6 +24645,7 @@ export type Database = {
           effective_to?: string | null
           hourly_rate_cents?: number
           id?: string
+          original_created_by?: string | null
           studio_id?: string
           updated_at?: string
           user_id?: string
@@ -24658,6 +24661,20 @@ export type Database = {
           {
             foreignKeyName: "studio_member_rates_created_by_fkey"
             columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_member_rates_original_created_by_fkey"
+            columns: ["original_created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_member_rates_original_created_by_fkey"
+            columns: ["original_created_by"]
             isOneToOne: false
             referencedRelation: "user_engagement_scores"
             referencedColumns: ["id"]
@@ -34384,6 +34401,10 @@ export type Database = {
       override_budget_checkpoint: {
         Args: { p_checkpoint_id: string; p_reason: string }
         Returns: Json
+      }
+      owned_tier_prices_project: {
+        Args: { p_created_by: string; p_designer_id: string }
+        Returns: boolean
       }
       persist_proposal_send_request: {
         Args: {

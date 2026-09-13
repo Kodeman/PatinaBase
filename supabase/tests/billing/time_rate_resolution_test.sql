@@ -297,6 +297,18 @@
 --     -f supabase/tests/billing/time_rate_resolution_test.sql
 --
 -- Transaction-wrapped + ROLLBACK — rerunnable, no side effects.
+--
+-- ── W2-R9-04: EVERY DATE IN THIS FILE IS UTC ───────────────────────────────
+-- `effective_from`/`effective_to` are plain dates and the resolver anchors a rate
+-- span in UTC (`(p_at AT TIME ZONE 'UTC')::date`, W1-R1-11), while the hours these
+-- cases log are `NOW() - INTERVAL '...'`. `CURRENT_DATE` answers in the SESSION
+-- time zone, and run-sql-tests.sh sets none — so in the hour after UTC midnight the
+-- two disagreed, a repair row dated "today" did not cover an hour logged "an hour
+-- ago", and the legs that prove HT-3-e(2)'s repair went RED on the clock rather
+-- than on a regression (measured on both sides of midnight, review round 9). Every
+-- date here is therefore `(NOW() AT TIME ZONE 'UTC')::date`, and a repair row that
+-- must cover a NOW()-anchored hour is dated `- 1` so it covers that hour whichever
+-- side of UTC midnight the run falls on.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 BEGIN;
@@ -434,8 +446,8 @@ BEGIN
   PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000000001');
   INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
   VALUES
-    ('b1100000-0000-4000-8000-0000000000a1', 'b1100000-0000-4000-8000-000000000002', 15000, CURRENT_DATE - 30, 'b1100000-0000-4000-8000-000000000001'),
-    ('b1100000-0000-4000-8000-0000000000a1', 'b1100000-0000-4000-8000-000000000003', 12000, CURRENT_DATE - 30, 'b1100000-0000-4000-8000-000000000001');
+    ('b1100000-0000-4000-8000-0000000000a1', 'b1100000-0000-4000-8000-000000000002', 15000, (NOW() AT TIME ZONE 'UTC')::date - 30, 'b1100000-0000-4000-8000-000000000001'),
+    ('b1100000-0000-4000-8000-0000000000a1', 'b1100000-0000-4000-8000-000000000003', 12000, (NOW() AT TIME ZONE 'UTC')::date - 30, 'b1100000-0000-4000-8000-000000000001');
   PERFORM pg_temp.reset_role();
   RAISE NOTICE 'time_rate_resolution: studio rates seeded by the owner.';
 END
@@ -1158,7 +1170,7 @@ BEGIN
   PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000000006');
   INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
   VALUES ('b1100000-0000-4000-8000-0000000000a2', 'b1100000-0000-4000-8000-000000000006',
-          22000, CURRENT_DATE - 10, 'b1100000-0000-4000-8000-000000000006');
+          22000, (NOW() AT TIME ZONE 'UTC')::date - 10, 'b1100000-0000-4000-8000-000000000006');
   PERFORM pg_temp.reset_role();
 
   ASSERT NOT EXISTS (SELECT 1 FROM public.studio_member_rates
@@ -1262,8 +1274,8 @@ BEGIN
     'FAIL o0 (precondition): the row must start as a W1-rated studio_member hour; got '
     || COALESCE(v_rate::text, 'NULL') || ' / ' || COALESCE(v_source, 'NULL');
 
-  -- Backdated 20 days BEFORE the studio rate's effective_from (CURRENT_DATE - 30
-  -- is the rate; this lands at CURRENT_DATE - 50), so the chain answers 'none'.
+  -- Backdated 20 days BEFORE the studio rate's effective_from ((NOW() AT TIME ZONE 'UTC')::date - 30
+  -- is the rate; this lands at (NOW() AT TIME ZONE 'UTC')::date - 50), so the chain answers 'none'.
   PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000000002');
   UPDATE public.project_time_entries
      SET started_at = NOW() - INTERVAL '50 days'
@@ -1364,7 +1376,7 @@ BEGIN
   -- it out of the studio's money by asking which project the hour is on.
   PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000000007');
   INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
-  VALUES (v_personal, 'b1100000-0000-4000-8000-000000000007', 99900, CURRENT_DATE - 30,
+  VALUES (v_personal, 'b1100000-0000-4000-8000-000000000007', 99900, (NOW() AT TIME ZONE 'UTC')::date - 30,
           'b1100000-0000-4000-8000-000000000007');
   PERFORM pg_temp.reset_role();
   ASSERT EXISTS (SELECT 1 FROM public.studio_member_rates
@@ -1376,7 +1388,7 @@ BEGIN
   PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000000001');
   INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
   VALUES ('b1100000-0000-4000-8000-0000000000a1', 'b1100000-0000-4000-8000-000000000007',
-          16000, CURRENT_DATE - 20, 'b1100000-0000-4000-8000-000000000001');
+          16000, (NOW() AT TIME ZONE 'UTC')::date - 20, 'b1100000-0000-4000-8000-000000000001');
   PERFORM pg_temp.reset_role();
 
   -- Two hours on the STUDIO's project, through every trigger.
@@ -1433,7 +1445,7 @@ $$;
 -- ─── (q) W1-R3-02: a pre-00600 snapshot survives an edit even when the chain answers ─
 -- Delta 5 used to fire only when the chain answered 'none', which honoured P-4
 -- exactly where it cost nothing. Here the author DOES hold a studio rate (15000,
--- from CURRENT_DATE - 30) and the row is genuinely legacy: a 17500 snapshot with
+-- from (NOW() AT TIME ZONE 'UTC')::date - 30) and the row is genuinely legacy: a 17500 snapshot with
 -- rate_source NULL. The only edit useUpdateTimeEntry offers that touches this — a
 -- duration correction — re-priced it to 15000 and erased the NULL that marks it as
 -- pre-00600. Invoiced rows were never at risk (guard_invoiced_time_entry refuses a
@@ -1588,7 +1600,7 @@ BEGIN
   -- She self-sets 99900 there, through the real policy. Still ALLOWED.
   PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000000008');
   INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
-  VALUES (v_personal, 'b1100000-0000-4000-8000-000000000008', 99900, CURRENT_DATE - 30,
+  VALUES (v_personal, 'b1100000-0000-4000-8000-000000000008', 99900, (NOW() AT TIME ZONE 'UTC')::date - 30,
           'b1100000-0000-4000-8000-000000000008');
   PERFORM pg_temp.reset_role();
 
@@ -1596,7 +1608,7 @@ BEGIN
   PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000000001');
   INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
   VALUES ('b1100000-0000-4000-8000-0000000000a1', 'b1100000-0000-4000-8000-000000000008',
-          15000, CURRENT_DATE - 20, 'b1100000-0000-4000-8000-000000000001');
+          15000, (NOW() AT TIME ZONE 'UTC')::date - 20, 'b1100000-0000-4000-8000-000000000001');
   PERFORM pg_temp.reset_role();
 
   -- Two hours on the STUDIO's project, through every trigger.
@@ -1694,7 +1706,7 @@ BEGIN
 
   PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-00000000000a');
   INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
-  VALUES (v_personal, 'b1100000-0000-4000-8000-00000000000a', 18000, CURRENT_DATE - 30,
+  VALUES (v_personal, 'b1100000-0000-4000-8000-00000000000a', 18000, (NOW() AT TIME ZONE 'UTC')::date - 30,
           'b1100000-0000-4000-8000-00000000000a');
 
   INSERT INTO public.project_time_entries
@@ -1746,7 +1758,7 @@ BEGIN
   PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000000001');
   INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
   VALUES ('b1100000-0000-4000-8000-0000000000a1', 'b1100000-0000-4000-8000-00000000000a',
-          13000, CURRENT_DATE - 5, 'b1100000-0000-4000-8000-000000000001');
+          13000, (NOW() AT TIME ZONE 'UTC')::date - 5, 'b1100000-0000-4000-8000-000000000001');
   PERFORM pg_temp.reset_role();
 
   PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-00000000000a');
@@ -1836,7 +1848,7 @@ BEGIN
   VALUES ('b1100000-0000-4000-8000-0000000050c2', 'b1100000-0000-4000-8000-000000005002',
           v_personal, 'member', 'active', NOW());
   INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
-  VALUES (v_personal, 'b1100000-0000-4000-8000-000000005001', 99900, CURRENT_DATE - 30,
+  VALUES (v_personal, 'b1100000-0000-4000-8000-000000005001', 99900, (NOW() AT TIME ZONE 'UTC')::date - 30,
           'b1100000-0000-4000-8000-000000005001');
   PERFORM pg_temp.reset_role();
 
@@ -1844,7 +1856,7 @@ BEGIN
   PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000000001');
   INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
   VALUES ('b1100000-0000-4000-8000-0000000000a1', 'b1100000-0000-4000-8000-000000005001',
-          15000, CURRENT_DATE - 20, 'b1100000-0000-4000-8000-000000000001');
+          15000, (NOW() AT TIME ZONE 'UTC')::date - 20, 'b1100000-0000-4000-8000-000000000001');
   PERFORM pg_temp.reset_role();
 
   -- MOVE 1: re-stamp her own row's authorship with the collaborator's id.
@@ -1875,14 +1887,14 @@ BEGIN
   PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000000001');
   BEGIN
     UPDATE public.studio_member_rates
-       SET effective_to = CURRENT_DATE - 1
+       SET effective_to = (NOW() AT TIME ZONE 'UTC')::date - 1
      WHERE studio_id = 'b1100000-0000-4000-8000-0000000000a1'
        AND user_id   = 'b1100000-0000-4000-8000-000000005001';
   EXCEPTION WHEN check_violation THEN v_to_raised := true;
   END;
   BEGIN
     UPDATE public.studio_member_rates
-       SET effective_from = CURRENT_DATE + 30
+       SET effective_from = (NOW() AT TIME ZONE 'UTC')::date + 30
      WHERE studio_id = 'b1100000-0000-4000-8000-0000000000a1'
        AND user_id   = 'b1100000-0000-4000-8000-000000005001';
   EXCEPTION WHEN check_violation THEN v_from_raised := true;
@@ -1976,7 +1988,7 @@ BEGIN
   -- The second account writes her 99900 there. Nothing is forged.
   PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000005004');
   INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
-  VALUES (v_personal, 'b1100000-0000-4000-8000-000000005003', 99900, CURRENT_DATE - 30,
+  VALUES (v_personal, 'b1100000-0000-4000-8000-000000005003', 99900, (NOW() AT TIME ZONE 'UTC')::date - 30,
           'b1100000-0000-4000-8000-000000005004');
   PERFORM pg_temp.reset_role();
 
@@ -1984,7 +1996,7 @@ BEGIN
   PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000000001');
   INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
   VALUES ('b1100000-0000-4000-8000-0000000000a1', 'b1100000-0000-4000-8000-000000005003',
-          15000, CURRENT_DATE - 20, 'b1100000-0000-4000-8000-000000000001');
+          15000, (NOW() AT TIME ZONE 'UTC')::date - 20, 'b1100000-0000-4000-8000-000000000001');
   PERFORM pg_temp.reset_role();
 
   SELECT created_by INTO v_author FROM public.studio_member_rates
@@ -2216,7 +2228,7 @@ BEGIN
   PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000005006');
   INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
   VALUES ('b1100000-0000-4000-8000-0000000050a3', 'b1100000-0000-4000-8000-000000005006', 22000,
-          CURRENT_DATE - 30, 'b1100000-0000-4000-8000-000000005006');
+          (NOW() AT TIME ZONE 'UTC')::date - 30, 'b1100000-0000-4000-8000-000000005006');
   PERFORM pg_temp.reset_role();
 
   INSERT INTO public.projects (id, name, designer_id, created_by)
@@ -2253,7 +2265,7 @@ BEGIN
   PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000005006');
   INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
   VALUES (v_personal, 'b1100000-0000-4000-8000-000000005006', 99900,
-          CURRENT_DATE - 30, 'b1100000-0000-4000-8000-000000005006');
+          (NOW() AT TIME ZONE 'UTC')::date - 30, 'b1100000-0000-4000-8000-000000005006');
   PERFORM pg_temp.reset_role();
 
   INSERT INTO public.projects (id, name, designer_id, created_by)
@@ -2435,7 +2447,7 @@ BEGIN
   PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000006003');
   INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
   VALUES ('b1100000-0000-4000-8000-0000000060a1', 'b1100000-0000-4000-8000-000000006001',
-          15000, CURRENT_DATE - 20, 'b1100000-0000-4000-8000-000000006003');
+          15000, (NOW() AT TIME ZONE 'UTC')::date - 20, 'b1100000-0000-4000-8000-000000006003');
   PERFORM pg_temp.reset_role();
 
   -- THE MOVES, all through RLS as the puppet account; nothing is forged.
@@ -2448,7 +2460,7 @@ BEGIN
           v_puppet, 'member', 'active', NOW() - INTERVAL '3 years', NOW() - INTERVAL '3 years');
 
   INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
-  VALUES (v_puppet, 'b1100000-0000-4000-8000-000000006001', 99900, CURRENT_DATE - 30,
+  VALUES (v_puppet, 'b1100000-0000-4000-8000-000000006001', 99900, (NOW() AT TIME ZONE 'UTC')::date - 30,
           'b1100000-0000-4000-8000-000000006002');
 
   BEGIN
@@ -2721,7 +2733,7 @@ BEGIN
   PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000000001');
   INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
   VALUES ('b1100000-0000-4000-8000-0000000080a4', 'b1100000-0000-4000-8000-000000000002',
-          21000, CURRENT_DATE - 10, 'b1100000-0000-4000-8000-000000000001');
+          21000, (NOW() AT TIME ZONE 'UTC')::date - 10, 'b1100000-0000-4000-8000-000000000001');
   PERFORM pg_temp.reset_role();
 
   PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000000002');
@@ -2876,9 +2888,9 @@ BEGIN
   PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000009001');
   INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
   VALUES
-    ('b1100000-0000-4000-8000-0000000090a1', 'b1100000-0000-4000-8000-000000009002', 20000, CURRENT_DATE - 20, 'b1100000-0000-4000-8000-000000009001'),
-    ('b1100000-0000-4000-8000-0000000090a1', 'b1100000-0000-4000-8000-000000009003', 12000, CURRENT_DATE - 20, 'b1100000-0000-4000-8000-000000009001'),
-    ('b1100000-0000-4000-8000-0000000090a1', 'b1100000-0000-4000-8000-000000009004', 20000, CURRENT_DATE - 20, 'b1100000-0000-4000-8000-000000009001');
+    ('b1100000-0000-4000-8000-0000000090a1', 'b1100000-0000-4000-8000-000000009002', 20000, (NOW() AT TIME ZONE 'UTC')::date - 20, 'b1100000-0000-4000-8000-000000009001'),
+    ('b1100000-0000-4000-8000-0000000090a1', 'b1100000-0000-4000-8000-000000009003', 12000, (NOW() AT TIME ZONE 'UTC')::date - 20, 'b1100000-0000-4000-8000-000000009001'),
+    ('b1100000-0000-4000-8000-0000000090a1', 'b1100000-0000-4000-8000-000000009004', 20000, (NOW() AT TIME ZONE 'UTC')::date - 20, 'b1100000-0000-4000-8000-000000009001');
   PERFORM pg_temp.reset_role();
 
   -- The hire prices HERSELF in her own workspace, where she is the owner and
@@ -2886,7 +2898,7 @@ BEGIN
   -- under HT-3-b it must now price nothing, because she has an employer.
   PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000009002');
   INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
-  VALUES (v_workspace, 'b1100000-0000-4000-8000-000000009002', 99900, CURRENT_DATE - 10, 'b1100000-0000-4000-8000-000000009002');
+  VALUES (v_workspace, 'b1100000-0000-4000-8000-000000009002', 99900, (NOW() AT TIME ZONE 'UTC')::date - 10, 'b1100000-0000-4000-8000-000000009002');
   PERFORM pg_temp.reset_role();
 
   -- The studio's two client projects, one led by each hire.
@@ -3070,7 +3082,7 @@ BEGIN
 
   PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000009005');
   INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
-  VALUES (v_solo, 'b1100000-0000-4000-8000-000000009005', 24000, CURRENT_DATE - 10, 'b1100000-0000-4000-8000-000000009005');
+  VALUES (v_solo, 'b1100000-0000-4000-8000-000000009005', 24000, (NOW() AT TIME ZONE 'UTC')::date - 10, 'b1100000-0000-4000-8000-000000009005');
   PERFORM pg_temp.reset_role();
 
   INSERT INTO public.projects (id, name, designer_id, created_by)
@@ -3176,7 +3188,7 @@ BEGIN
   PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-000000009101');
   INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
   VALUES ('b1100000-0000-4000-8000-0000000091a1', 'b1100000-0000-4000-8000-000000009102',
-          15000, CURRENT_DATE - 30, 'b1100000-0000-4000-8000-000000009101');
+          15000, (NOW() AT TIME ZONE 'UTC')::date - 30, 'b1100000-0000-4000-8000-000000009101');
   PERFORM pg_temp.reset_role();
 
   -- The snoop creates her own project, stamped with the studio she is a plain
@@ -3400,12 +3412,12 @@ BEGIN
   PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-00000000a001');
   INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
   VALUES ('b1100000-0000-4000-8000-00000000aa01', 'b1100000-0000-4000-8000-00000000a002',
-          20000, CURRENT_DATE - 20, 'b1100000-0000-4000-8000-00000000a001');
+          20000, (NOW() AT TIME ZONE 'UTC')::date - 20, 'b1100000-0000-4000-8000-00000000a001');
   PERFORM pg_temp.reset_role();
 
   PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-00000000a002');
   INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
-  VALUES (v_workspace, 'b1100000-0000-4000-8000-00000000a002', 99900, CURRENT_DATE - 10,
+  VALUES (v_workspace, 'b1100000-0000-4000-8000-00000000a002', 99900, (NOW() AT TIME ZONE 'UTC')::date - 10,
           'b1100000-0000-4000-8000-00000000a002');
   PERFORM pg_temp.reset_role();
 
@@ -3605,7 +3617,7 @@ BEGIN
   PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-00000000d001');
   INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
   VALUES ('b1100000-0000-4000-8000-00000000dd01', 'b1100000-0000-4000-8000-00000000d002',
-          12000, CURRENT_DATE - 20, 'b1100000-0000-4000-8000-00000000d001');
+          12000, (NOW() AT TIME ZONE 'UTC')::date - 20, 'b1100000-0000-4000-8000-00000000d001');
   PERFORM pg_temp.reset_role();
 
   -- THE MOVES, all through RLS as the stranger. Nothing is forged and nothing is
@@ -3616,7 +3628,7 @@ BEGIN
     ('b1100000-0000-4000-8000-00000000da03', 'b1100000-0000-4000-8000-00000000d001', v_stranger, 'member', 'active', NOW()),
     ('b1100000-0000-4000-8000-00000000da04', 'b1100000-0000-4000-8000-00000000d002', v_stranger, 'member', 'active', NOW());
   INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
-  VALUES (v_stranger, 'b1100000-0000-4000-8000-00000000d002', 99900, CURRENT_DATE - 10,
+  VALUES (v_stranger, 'b1100000-0000-4000-8000-00000000d002', 99900, (NOW() AT TIME ZONE 'UTC')::date - 10,
           'b1100000-0000-4000-8000-00000000d003');
   PERFORM pg_temp.reset_role();
 
@@ -3770,7 +3782,7 @@ BEGIN
   PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-00000000f001');
   INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
   VALUES ('b1100000-0000-4000-8000-00000000fa01', 'b1100000-0000-4000-8000-00000000f002',
-          20000, CURRENT_DATE - 20, 'b1100000-0000-4000-8000-00000000f001');
+          20000, (NOW() AT TIME ZONE 'UTC')::date - 20, 'b1100000-0000-4000-8000-00000000f001');
   PERFORM pg_temp.reset_role();
 
   -- ── THE CONTROL, before the manoeuvre, in this same fixture ───────────────
@@ -3804,7 +3816,7 @@ BEGIN
   VALUES ('b1100000-0000-4000-8000-00000000fc03', 'b1100000-0000-4000-8000-00000000f001',
           v_w, 'member', 'active', NOW());
   INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
-  VALUES (v_w, 'b1100000-0000-4000-8000-00000000f002', 99900, CURRENT_DATE - 10,
+  VALUES (v_w, 'b1100000-0000-4000-8000-00000000f002', 99900, (NOW() AT TIME ZONE 'UTC')::date - 10,
           'b1100000-0000-4000-8000-00000000f002');
   PERFORM pg_temp.reset_role();
 
@@ -3983,15 +3995,15 @@ BEGIN
   PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-00000000e001');
   INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
   VALUES
-    ('b1100000-0000-4000-8000-00000000ea01', 'b1100000-0000-4000-8000-00000000e002', 20000, CURRENT_DATE - 20, 'b1100000-0000-4000-8000-00000000e001'),
-    ('b1100000-0000-4000-8000-00000000ea01', 'b1100000-0000-4000-8000-00000000e003', 12000, CURRENT_DATE - 20, 'b1100000-0000-4000-8000-00000000e001');
+    ('b1100000-0000-4000-8000-00000000ea01', 'b1100000-0000-4000-8000-00000000e002', 20000, (NOW() AT TIME ZONE 'UTC')::date - 20, 'b1100000-0000-4000-8000-00000000e001'),
+    ('b1100000-0000-4000-8000-00000000ea01', 'b1100000-0000-4000-8000-00000000e003', 12000, (NOW() AT TIME ZONE 'UTC')::date - 20, 'b1100000-0000-4000-8000-00000000e001');
   PERFORM pg_temp.reset_role();
 
   -- The hire prices HERSELF in the workspace she owns. Still allowed (HT-3 in
   -- letter); under HT-3-b it must price nothing while she has an employer.
   PERFORM pg_temp.assume_user('b1100000-0000-4000-8000-00000000e002');
   INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
-  VALUES (v_w, 'b1100000-0000-4000-8000-00000000e002', 99900, CURRENT_DATE - 10, 'b1100000-0000-4000-8000-00000000e002');
+  VALUES (v_w, 'b1100000-0000-4000-8000-00000000e002', 99900, (NOW() AT TIME ZONE 'UTC')::date - 10, 'b1100000-0000-4000-8000-00000000e002');
   PERFORM pg_temp.reset_role();
 
   -- The proposal the client will sign. Authored as a draft and crossed into
@@ -4262,7 +4274,7 @@ BEGIN
   PERFORM pg_temp.assume_user('b1200000-0000-4000-8000-00000000a001');
   INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
   VALUES ('b1200000-0000-4000-8000-00000000aa01', 'b1200000-0000-4000-8000-00000000a003',
-          12000, CURRENT_DATE - 20, 'b1200000-0000-4000-8000-00000000a001');
+          12000, (NOW() AT TIME ZONE 'UTC')::date - 20, 'b1200000-0000-4000-8000-00000000a001');
   PERFORM pg_temp.reset_role();
 
   -- The subject prices HERSELF in the workspace she owns. Still allowed in letter
@@ -4270,7 +4282,7 @@ BEGIN
   -- employer, let alone while she has one and the tier is merely ambiguous.
   PERFORM pg_temp.assume_user('b1200000-0000-4000-8000-00000000a003');
   INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
-  VALUES (v_wm, 'b1200000-0000-4000-8000-00000000a003', 99900, CURRENT_DATE - 10,
+  VALUES (v_wm, 'b1200000-0000-4000-8000-00000000a003', 99900, (NOW() AT TIME ZONE 'UTC')::date - 10,
           'b1200000-0000-4000-8000-00000000a003');
   PERFORM pg_temp.reset_role();
 
@@ -4517,7 +4529,7 @@ BEGIN
   PERFORM pg_temp.assume_user('b1300000-0000-4000-8000-000000000001');
   INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
   VALUES ('b1300000-0000-4000-8000-0000000000a1', 'b1300000-0000-4000-8000-000000000002', 20000,
-          CURRENT_DATE - 30, 'b1300000-0000-4000-8000-000000000001');
+          (NOW() AT TIME ZONE 'UTC')::date - 30, 'b1300000-0000-4000-8000-000000000001');
   PERFORM pg_temp.reset_role();
 
   -- ── ag1: she writes her OWN number, 10 days ago. The write is ALLOWED (the
@@ -4526,7 +4538,7 @@ BEGIN
   PERFORM pg_temp.assume_user('b1300000-0000-4000-8000-000000000002');
   INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
   VALUES ('b1300000-0000-4000-8000-0000000000a1', 'b1300000-0000-4000-8000-000000000002', 99900,
-          CURRENT_DATE - 10, 'b1300000-0000-4000-8000-000000000002');
+          (NOW() AT TIME ZONE 'UTC')::date - 10, 'b1300000-0000-4000-8000-000000000002');
   INSERT INTO public.project_time_entries
     (id, project_id, user_id, started_at, duration_minutes, billable, source)
   VALUES ('b1300000-0000-4000-8000-0000000000b1', 'b1300000-0000-4000-8000-0000000000e1',
@@ -4578,7 +4590,7 @@ BEGIN
   PERFORM pg_temp.assume_user('b1300000-0000-4000-8000-000000000001');
   INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
   VALUES ('b1300000-0000-4000-8000-0000000000a1', 'b1300000-0000-4000-8000-000000000002', 21000,
-          CURRENT_DATE, 'b1300000-0000-4000-8000-000000000001');
+          (NOW() AT TIME ZONE 'UTC')::date - 1, 'b1300000-0000-4000-8000-000000000001');
   PERFORM pg_temp.reset_role();
   PERFORM pg_temp.assume_user('b1300000-0000-4000-8000-000000000002');
   INSERT INTO public.project_time_entries
@@ -4601,7 +4613,7 @@ BEGIN
   PERFORM pg_temp.assume_user('b1300000-0000-4000-8000-000000000001');
   INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
   VALUES ('b1300000-0000-4000-8000-0000000000a1', 'b1300000-0000-4000-8000-000000000001', 45000,
-          CURRENT_DATE - 30, 'b1300000-0000-4000-8000-000000000001');
+          (NOW() AT TIME ZONE 'UTC')::date - 30, 'b1300000-0000-4000-8000-000000000001');
   INSERT INTO public.project_time_entries
     (id, project_id, user_id, started_at, duration_minutes, billable, source)
   VALUES ('b1300000-0000-4000-8000-0000000000b4', 'b1300000-0000-4000-8000-0000000000e2',
@@ -4626,7 +4638,7 @@ BEGIN
   --    row with a deleted author looks after the fact.
   INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
   VALUES ('b1300000-0000-4000-8000-0000000000a1', 'b1300000-0000-4000-8000-000000000003', 19000,
-          CURRENT_DATE - 30, NULL);
+          (NOW() AT TIME ZONE 'UTC')::date - 30, NULL);
   PERFORM pg_temp.assume_user('b1300000-0000-4000-8000-000000000003');
   INSERT INTO public.project_time_entries
     (id, project_id, user_id, started_at, duration_minutes, billable, source)
@@ -4812,6 +4824,275 @@ BEGIN
     || ' / ' || COALESCE(v_source, 'NULL');
 
   RAISE NOTICE 'time_rate_resolution: case (ah) passed — W2-R8-01: a rewritten number is authored by whoever typed it, and the blur-save still prices.';
+END
+$$;
+
+-- ─── (ai) HT-3-f(2) (RULED 2026-09-12, migration 00615): a project SOMEBODY ELSE
+--         opened is never priced by a studio the designer owns ─────────────────
+-- W2-R9-01's MAJOR, as a case, in both the shapes round 9 measured. HT-3-b's
+-- derivation is RECOMPUTED on every hour for a project whose studio_id is NULL, so
+-- the designer could EMPTY her own employer tier with ONE ordinary statement and
+-- the OWNED tier opened underneath her former employer's legacy project:
+--   probe C  — `DELETE` on her own organization_members row, the shipped
+--              `Members can leave` policy (`user_id = auth.uid() AND role <>
+--              'owner'`);
+--   probe D2 — or, as an `admin`, `UPDATE … SET status = 'removed'` on that same
+--              row under `Org admins can update members`.
+-- Measured 1/1 through RLS as her, ONE account, no ownership transfer and no
+-- confederate: her next hour on the employer's project came back
+-- 99900 / studio_member / 199800 where the employer's own card priced it 26000, the
+-- employer's owner then read NONE of the project's hours, and there was no
+-- statement that could pin the column before or after.
+-- HT-3-f(2) closes both: the owned tier is reached only where
+-- `projects.created_by = projects.designer_id`. These projects were opened by the
+-- EMPLOYER's owner, so after she leaves the answer is 'none' (HT-26's "rate
+-- pending") — never her workspace, and never her number.
+-- Both legs carry her own 99900 in a workspace she OWNS, so HT-3-e(2)'s owner
+-- exemption would price it if the tier were reached at all: a 'none' here is
+-- HT-3-f(2) and nothing else.
+INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, instance_id, aud, role)
+VALUES
+  ('b1400000-0000-4000-8000-000000000001', 'htf-employer-owner@test.invalid', '', NOW(), NOW(), NOW(),
+   '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('b1400000-0000-4000-8000-000000000002', 'htf-leaver@test.invalid', '', NOW(), NOW(), NOW(),
+   '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('b1400000-0000-4000-8000-000000000003', 'htf-remover@test.invalid', '', NOW(), NOW(), NOW(),
+   '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+UPDATE public.profiles SET full_name = 'HTF Employer Owner' WHERE id = 'b1400000-0000-4000-8000-000000000001';
+UPDATE public.profiles SET full_name = 'HTF Leaver'         WHERE id = 'b1400000-0000-4000-8000-000000000002';
+UPDATE public.profiles SET full_name = 'HTF Remover'        WHERE id = 'b1400000-0000-4000-8000-000000000003';
+
+INSERT INTO public.organizations (id, type, name, slug, status)
+VALUES
+  ('b1400000-0000-4000-8000-0000000000a1', 'design_studio', 'HTF Employer',  'htf-employer-test',  'active'),
+  ('b1400000-0000-4000-8000-0000000000a2', 'design_studio', 'HTF Leaver WS', 'htf-leaver-ws-test', 'active'),
+  ('b1400000-0000-4000-8000-0000000000a3', 'design_studio', 'HTF Remover WS','htf-remover-ws-test','active');
+
+-- The projects are inserted BEFORE any seat exists for either designer, so 00563's
+-- postgres-fixture path and 00602/00603's stamp both find zero candidates and the
+-- column stays NULL. That is the only way the legacy shape arises (W1's 00602
+-- stamps the column the moment a tier answers), and it is the shape HT-3-a step 2
+-- is about. `created_by` is the EMPLOYER's OWNER on both: a project somebody else
+-- opened for her.
+INSERT INTO public.projects (id, name, designer_id, created_by, studio_id)
+VALUES
+  ('b1400000-0000-4000-8000-0000000000e1', 'HTF Employer House',
+   'b1400000-0000-4000-8000-000000000002', 'b1400000-0000-4000-8000-000000000001', NULL),
+  ('b1400000-0000-4000-8000-0000000000e2', 'HTF Employer Cottage',
+   'b1400000-0000-4000-8000-000000000003', 'b1400000-0000-4000-8000-000000000001', NULL);
+
+INSERT INTO public.organization_members (id, user_id, organization_id, role, status, joined_at)
+VALUES
+  ('b1400000-0000-4000-8000-0000000000c1', 'b1400000-0000-4000-8000-000000000001',
+   'b1400000-0000-4000-8000-0000000000a1', 'owner',  'active', NOW()),
+  -- probe C's designer: a plain `member`, which is all `Members can leave` needs.
+  ('b1400000-0000-4000-8000-0000000000c2', 'b1400000-0000-4000-8000-000000000002',
+   'b1400000-0000-4000-8000-0000000000a1', 'member', 'active', NOW()),
+  -- probe D2's designer: an `admin`, which is what `Org admins can update members`
+  -- needs to set her OWN row to 'removed' without deleting anything.
+  ('b1400000-0000-4000-8000-0000000000c3', 'b1400000-0000-4000-8000-000000000003',
+   'b1400000-0000-4000-8000-0000000000a1', 'admin',  'active', NOW()),
+  -- and each owns the one-person workspace 00295 provisions at a designer grant.
+  ('b1400000-0000-4000-8000-0000000000c4', 'b1400000-0000-4000-8000-000000000002',
+   'b1400000-0000-4000-8000-0000000000a2', 'owner',  'active', NOW()),
+  ('b1400000-0000-4000-8000-0000000000c5', 'b1400000-0000-4000-8000-000000000003',
+   'b1400000-0000-4000-8000-0000000000a3', 'owner',  'active', NOW());
+
+INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
+VALUES
+  -- the employer's honest, arm's-length number for each of them
+  ('b1400000-0000-4000-8000-0000000000a1', 'b1400000-0000-4000-8000-000000000002', 26000,
+   (NOW() AT TIME ZONE 'UTC')::date - 30, 'b1400000-0000-4000-8000-000000000001'),
+  ('b1400000-0000-4000-8000-0000000000a1', 'b1400000-0000-4000-8000-000000000003', 26000,
+   (NOW() AT TIME ZONE 'UTC')::date - 30, 'b1400000-0000-4000-8000-000000000001'),
+  -- and the number each wrote for herself in the workspace she OWNS. HT-3-e(2)'s
+  -- owner exemption prices it wherever the owned tier is reached, which is what
+  -- makes these legs a measurement of HT-3-f(2) alone.
+  ('b1400000-0000-4000-8000-0000000000a2', 'b1400000-0000-4000-8000-000000000002', 99900,
+   (NOW() AT TIME ZONE 'UTC')::date - 30, 'b1400000-0000-4000-8000-000000000002'),
+  ('b1400000-0000-4000-8000-0000000000a3', 'b1400000-0000-4000-8000-000000000003', 99900,
+   (NOW() AT TIME ZONE 'UTC')::date - 30, 'b1400000-0000-4000-8000-000000000003');
+
+DO $$
+DECLARE
+  v_rate    integer;
+  v_source  text;
+  v_amount  integer;
+  v_pricing uuid;
+  v_rows    integer;
+BEGIN
+  -- ── ai0: the honest baseline. The employer prices both hours.
+  ASSERT (SELECT studio_id IS NULL FROM public.projects
+           WHERE id = 'b1400000-0000-4000-8000-0000000000e1'),
+    'FAIL ai0 (precondition): the project must still be a LEGACY NULL-studio row — '
+    'this whole case is about a column HT-3-b re-derives on every hour';
+  SELECT public.project_pricing_studio_id('b1400000-0000-4000-8000-0000000000e1') INTO v_pricing;
+  ASSERT v_pricing = 'b1400000-0000-4000-8000-0000000000a1',
+    'FAIL ai0b (precondition, HT-3-b): her ONE employer seat must be the answer '
+    'while she holds it; got ' || COALESCE(v_pricing::text, 'NULL');
+
+  PERFORM pg_temp.assume_user('b1400000-0000-4000-8000-000000000002');
+  INSERT INTO public.project_time_entries
+    (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('b1400000-0000-4000-8000-0000000000b1', 'b1400000-0000-4000-8000-0000000000e1',
+          'b1400000-0000-4000-8000-000000000002', NOW() - INTERVAL '3 hours', 120, true, 'manual_entry');
+  PERFORM pg_temp.reset_role();
+  SELECT hourly_rate_cents, rate_source, rated_amount_cents INTO v_rate, v_source, v_amount
+  FROM public.project_time_entries WHERE id = 'b1400000-0000-4000-8000-0000000000b1';
+  ASSERT v_rate = 26000 AND v_source = 'studio_member' AND v_amount = 52000,
+    'FAIL ai1 (baseline): the employer''s own number prices her hour while she holds '
+    'the seat; got ' || COALESCE(v_rate::text, 'NULL') || ' / '
+    || COALESCE(v_source, 'NULL') || ' / ' || COALESCE(v_amount::text, 'NULL');
+
+  -- ── ai2: PROBE C. One statement, hers, through RLS: she leaves her employer.
+  PERFORM pg_temp.assume_user('b1400000-0000-4000-8000-000000000002');
+  WITH gone AS (
+    DELETE FROM public.organization_members
+     WHERE user_id = 'b1400000-0000-4000-8000-000000000002'
+       AND organization_id = 'b1400000-0000-4000-8000-0000000000a1'
+    RETURNING 1
+  ) SELECT count(*) INTO v_rows FROM gone;
+  PERFORM pg_temp.reset_role();
+  ASSERT v_rows = 1,
+    'FAIL ai2 (precondition): `Members can leave` must still admit a plain member '
+    'deleting her OWN seat — if this is 0 the policy changed and the rest of this '
+    'case measures nothing (it is a People-room policy, not a pricing one, and '
+    'HT-3-f answers the pricing question rather than bounding it); rows = ' || v_rows;
+
+  -- ── ai3: THE CLOSURE. Her employer tier is empty, and the owned tier does NOT
+  --    open, because the EMPLOYER's owner opened this project.
+  SELECT public.project_pricing_studio_id('b1400000-0000-4000-8000-0000000000e1') INTO v_pricing;
+  PERFORM pg_temp.assume_user('b1400000-0000-4000-8000-000000000002');
+  INSERT INTO public.project_time_entries
+    (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('b1400000-0000-4000-8000-0000000000b2', 'b1400000-0000-4000-8000-0000000000e1',
+          'b1400000-0000-4000-8000-000000000002', NOW() - INTERVAL '1 hour', 120, true, 'manual_entry');
+  PERFORM pg_temp.reset_role();
+  SELECT hourly_rate_cents, rate_source, rated_amount_cents INTO v_rate, v_source, v_amount
+  FROM public.project_time_entries WHERE id = 'b1400000-0000-4000-8000-0000000000b2';
+  ASSERT v_pricing IS NULL,
+    'FAIL ai3 (HT-3-f(2), THE RULING): with her employer tier empty, the callable '
+    'derivation must answer NOTHING for a project somebody ELSE opened — not her '
+    'workspace. Got ' || COALESCE(v_pricing::text, 'NULL');
+  ASSERT v_rate IS NULL AND v_source = 'none' AND v_amount IS NULL,
+    'FAIL ai3b (HT-3-f(2), THE RULING — probe C): she left her employer with ONE '
+    'ordinary statement and her next hour on her FORMER EMPLOYER''S legacy project '
+    'must be HT-26''s ''rate pending'', not the 99900 she wrote for herself in the '
+    'workspace she owns. Measured before this rule: 99900 / studio_member / 199800 '
+    'against the employer''s own 26000, with the employer''s owner reading none of '
+    'the project''s hours and no statement able to repair it (W2-R9-01). The repair '
+    'is HT-3-f(1)''s pin BEFORE the fact, or HT-3-a''s stamp after it; got '
+    || COALESCE(v_rate::text, 'NULL') || ' / ' || COALESCE(v_source, 'NULL') || ' / '
+    || COALESCE(v_amount::text, 'NULL');
+  ASSERT v_rate IS DISTINCT FROM 99900,
+    'FAIL ai3c: and whatever else changes, the one number this must never be is the '
+    'one she wrote for herself';
+
+  -- ── ai4: the earlier hour does not move. Written rows keep their price (P-4).
+  SELECT hourly_rate_cents INTO v_rate
+  FROM public.project_time_entries WHERE id = 'b1400000-0000-4000-8000-0000000000b1';
+  ASSERT v_rate = 26000,
+    'FAIL ai4: an hour already written keeps the number it was priced at — there is '
+    'no backfill in either direction (P-4); got ' || COALESCE(v_rate::text, 'NULL');
+
+  -- ── ai5: PROBE D2. The same taking without deleting anything: an `admin` sets
+  --    her OWN seat to 'removed' under `Org admins can update members`.
+  PERFORM pg_temp.assume_user('b1400000-0000-4000-8000-000000000003');
+  INSERT INTO public.project_time_entries
+    (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('b1400000-0000-4000-8000-0000000000b3', 'b1400000-0000-4000-8000-0000000000e2',
+          'b1400000-0000-4000-8000-000000000003', NOW() - INTERVAL '3 hours', 120, true, 'manual_entry');
+  WITH removed AS (
+    UPDATE public.organization_members
+       SET status = 'removed'
+     WHERE user_id = 'b1400000-0000-4000-8000-000000000003'
+       AND organization_id = 'b1400000-0000-4000-8000-0000000000a1'
+    RETURNING 1
+  ) SELECT count(*) INTO v_rows FROM removed;
+  INSERT INTO public.project_time_entries
+    (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('b1400000-0000-4000-8000-0000000000b4', 'b1400000-0000-4000-8000-0000000000e2',
+          'b1400000-0000-4000-8000-000000000003', NOW() - INTERVAL '1 hour', 120, true, 'manual_entry');
+  PERFORM pg_temp.reset_role();
+
+  SELECT hourly_rate_cents INTO v_rate
+  FROM public.project_time_entries WHERE id = 'b1400000-0000-4000-8000-0000000000b3';
+  ASSERT v_rate = 26000,
+    'FAIL ai5 (baseline, probe D2): the employer prices her hour while her seat is '
+    'active; got ' || COALESCE(v_rate::text, 'NULL');
+  ASSERT v_rows = 1,
+    'FAIL ai5b (precondition): an `admin` must still be able to set her own seat to '
+    '''removed'' — probe D2 needs no DELETE at all, which is why bounding the '
+    'DELETE was never the closure; rows = ' || v_rows;
+  SELECT hourly_rate_cents, rate_source, rated_amount_cents INTO v_rate, v_source, v_amount
+  FROM public.project_time_entries WHERE id = 'b1400000-0000-4000-8000-0000000000b4';
+  ASSERT v_rate IS NULL AND v_source = 'none' AND v_amount IS NULL,
+    'FAIL ai5c (HT-3-f(2), probe D2): a withdrawn seat empties the employer tier '
+    'exactly as a deleted one does, and the answer must be the same ''rate '
+    'pending'' — a closure that only saw the DELETE would leave this arm open; got '
+    || COALESCE(v_rate::text, 'NULL') || ' / ' || COALESCE(v_source, 'NULL') || ' / '
+    || COALESCE(v_amount::text, 'NULL');
+
+  RAISE NOTICE 'time_rate_resolution: case (ai) passed — HT-3-f(2): a project somebody else opened is never priced by a studio she owns, on both of round 9''s seat-emptying paths.';
+END
+$$;
+
+-- ─── (aj) HT-3-f(3), THE RECORDED RESIDUAL — asserted as PASSING ──────────────
+-- HT-3-f(2) keys on `projects.created_by = projects.designer_id`, so it does NOT
+-- reach a legacy project the designer OPENED HERSELF while employed. She deletes
+-- her own seat and that project prices from her own workspace, at her own number.
+-- RULED by the orchestrator 2026-09-12 as a residual on HT-3-e(3)'s footing:
+-- VISIBLE rather than impossible — the pricing studio is a column of
+-- time_entry_ledger and the owner's project lens shows it (lane B, W2 UI) — with
+-- HT-3-f(1)'s PIN as the employer's remedy before the fact (case (e) of
+-- supabase/tests/rls/time_entry_studio_stamp_test.sql measures the pin, and case
+-- (w) measures it holding THROUGH this exact manoeuvre).
+-- This case exists so the next ruling MOVES A TEST rather than discovering a
+-- surprise. Nothing in the tree measured it in either direction before round 9.
+INSERT INTO public.projects (id, name, designer_id, created_by, studio_id)
+VALUES ('b1400000-0000-4000-8000-0000000000e3', 'HTF Her Own House',
+        'b1400000-0000-4000-8000-000000000002', 'b1400000-0000-4000-8000-000000000002', NULL);
+
+DO $$
+DECLARE
+  v_rate    integer;
+  v_source  text;
+  v_amount  integer;
+  v_pricing uuid;
+BEGIN
+  -- Her employer seat is already gone (case (ai) ai2 deleted it), and this project
+  -- carries her own id in created_by — so HT-3-f(2)'s test is satisfied and the
+  -- owned tier opens.
+  SELECT public.project_pricing_studio_id('b1400000-0000-4000-8000-0000000000e3') INTO v_pricing;
+  PERFORM pg_temp.assume_user('b1400000-0000-4000-8000-000000000002');
+  INSERT INTO public.project_time_entries
+    (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('b1400000-0000-4000-8000-0000000000b5', 'b1400000-0000-4000-8000-0000000000e3',
+          'b1400000-0000-4000-8000-000000000002', NOW() - INTERVAL '1 hour', 120, true, 'manual_entry');
+  PERFORM pg_temp.reset_role();
+  SELECT hourly_rate_cents, rate_source, rated_amount_cents INTO v_rate, v_source, v_amount
+  FROM public.project_time_entries WHERE id = 'b1400000-0000-4000-8000-0000000000b5';
+
+  ASSERT v_pricing = 'b1400000-0000-4000-8000-0000000000a2',
+    'FAIL aj1 (HT-3-f(3), THE RECORDED RESIDUAL — asserted as PASSING): a legacy '
+    'project the designer CREATED HERSELF while employed is priced by her own '
+    'workspace once she leaves, because HT-3-f(2) keys on created_by and created_by '
+    'is hers. If this has become NULL, HT-3-f(2) has been widened past what was '
+    'ruled — which may be right, but it is a RULING (the honest sole proprietor of '
+    'HT-3-a arm (a) and HT-3-c creates her own projects too, so the same widening '
+    'unprices her), and this assert moves with it; got '
+    || COALESCE(v_pricing::text, 'NULL');
+  ASSERT v_rate = 99900 AND v_source = 'studio_member' AND v_amount = 199800,
+    'FAIL aj2 (HT-3-f(3), THE RECORDED RESIDUAL — asserted as PASSING): and the '
+    'number is the one she wrote for herself, because HT-3-e(2)''s exemption is '
+    'OWNERSHIP and she owns that workspace (HT-3-c''s sole proprietor needs that '
+    'exemption). Patina answers this with VISIBILITY, not a bound: the pricing '
+    'studio is a column of time_entry_ledger and the owner''s project lens shows '
+    'it. The employer''s remedy BEFORE the fact is HT-3-f(1)''s pin. Got '
+    || COALESCE(v_rate::text, 'NULL') || ' / ' || COALESCE(v_source, 'NULL') || ' / '
+    || COALESCE(v_amount::text, 'NULL');
+
+  RAISE NOTICE 'time_rate_resolution: case (aj) recorded — HT-3-f(3): a legacy project she created herself prices from her own workspace after she leaves (ruled residual, visible not prevented).';
 END
 $$;
 

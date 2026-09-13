@@ -15788,6 +15788,12 @@ END $g$;
 
 -- 00615_self_authored_rate_requires_ownership.sql
 DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.owned_tier_prices_project(uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00615_self_authored_rate_requires_ownership.sql
+DO $g$ BEGIN
   REVOKE EXECUTE ON FUNCTION public.resolve_time_rate_cents(uuid, uuid, timestamptz, text) FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
@@ -15795,6 +15801,30 @@ END $g$;
 -- 00615_self_authored_rate_requires_ownership.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.guard_studio_member_rate_history() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00615_self_authored_rate_requires_ownership.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_studio_member_rate_insert() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00615_self_authored_rate_requires_ownership.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.set_project_studio_id_owned() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00615_self_authored_rate_requires_ownership.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.project_pricing_studio_id(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00615_self_authored_rate_requires_ownership.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.project_pricing_studio_id(uuid) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 

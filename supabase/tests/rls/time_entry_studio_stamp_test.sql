@@ -188,6 +188,18 @@
 --     -f supabase/tests/rls/time_entry_studio_stamp_test.sql
 --
 -- Transaction-wrapped + ROLLBACK — rerunnable, no side effects.
+--
+-- ── W2-R9-04: EVERY DATE IN THIS FILE IS UTC ───────────────────────────────
+-- `effective_from`/`effective_to` are plain dates and the resolver anchors a rate
+-- span in UTC (`(p_at AT TIME ZONE 'UTC')::date`, W1-R1-11), while the hours these
+-- cases log are `NOW() - INTERVAL '...'`. `CURRENT_DATE` answers in the SESSION
+-- time zone, and run-sql-tests.sh sets none — so in the hour after UTC midnight the
+-- two disagreed, a repair row dated "today" did not cover an hour logged "an hour
+-- ago", and the legs that prove HT-3-e(2)'s repair went RED on the clock rather
+-- than on a regression (measured on both sides of midnight, review round 9). Every
+-- date here is therefore `(NOW() AT TIME ZONE 'UTC')::date`, and a repair row that
+-- must cover a NOW()-anchored hour is dated `- 1` so it covers that hour whichever
+-- side of UTC midnight the run falls on.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 BEGIN;
@@ -245,7 +257,7 @@ VALUES
 -- after the employer's admin performs the repair.
 INSERT INTO studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
 VALUES ('c6060000-0000-4000-8000-0000000000a1', 'c6060000-0000-4000-8000-000000000002', 25000,
-        CURRENT_DATE - 30, 'c6060000-0000-4000-8000-000000000001');
+        (NOW() AT TIME ZONE 'UTC')::date - 30, 'c6060000-0000-4000-8000-000000000001');
 
 INSERT INTO user_roles (user_id, role_id)
 SELECT 'c6060000-0000-4000-8000-000000000001', id FROM roles WHERE name = 'studio_owner';
@@ -329,7 +341,7 @@ VALUES ('c6060000-0000-4000-8000-0000000000e8', 'Stamp Priced Sibling',
 -- money rather than 'none'.
 INSERT INTO studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
 VALUES ('c6060000-0000-4000-8000-0000000000a1', 'c6060000-0000-4000-8000-000000000006', 24000,
-        CURRENT_DATE - 30, 'c6060000-0000-4000-8000-000000000001');
+        (NOW() AT TIME ZONE 'UTC')::date - 30, 'c6060000-0000-4000-8000-000000000001');
 
 -- ─── helpers ───────────────────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION pg_temp.assume_user(p_user_id UUID)
@@ -659,7 +671,7 @@ BEGIN
   -- THE THIRD STATEMENT: she prices somebody else's designer in her own org.
   INSERT INTO studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
   VALUES ('c6060000-0000-4000-8000-0000000000a3', 'c6060000-0000-4000-8000-000000000002', 88800,
-          CURRENT_DATE - 30, 'c6060000-0000-4000-8000-000000000004');
+          (NOW() AT TIME ZONE 'UTC')::date - 30, 'c6060000-0000-4000-8000-000000000004');
   GET DIAGNOSTICS v_wrote = ROW_COUNT;
 
   SELECT public.stamp_project_pricing_studio(
@@ -713,7 +725,25 @@ BEGIN
 END
 $$;
 
--- ─── (e) a project a studio already prices is not repairable ────────────────
+-- ─── (e) HT-3-f(1): a project a studio already prices is PINNED, not refused ──
+-- This case measured a REFUSAL through round 8 ("where HT-3-b already answers, the
+-- owner HAS her read and there is nothing to repair"). Round 9 measured what that
+-- reasoning assumed — that the derivation's answer cannot change — and it is false:
+-- HT-3-b is recomputed on every hour for a NULL-studio project, so ONE ordinary
+-- statement of the designer's (the shipped `Members can leave` DELETE on her own
+-- organization_members row, or an `admin`'s UPDATE of it to status = 'removed')
+-- emptied her employer tier, opened the OWNED tier, and moved her former employer's
+-- legacy project onto her own workspace at the number she wrote for herself —
+-- 99900 / studio_member / 199800 against the employer's own 26000 — with the
+-- employer's owner then reading NONE of the project's hours and NO statement
+-- available to repair it, before or after (W2-R9-01, probes C and D2, measured 1/1
+-- through RLS with ONE account, no ownership transfer, no confederate).
+-- HT-3-f(1) (RULED by the orchestrator 2026-09-12) is the PIN: naming the studio
+-- the derivation ALREADY returns is a CONFIRM. It costs nobody anything — that
+-- studio is already pricing these hours and already reading them — and afterwards
+-- bound (b) and HT-3-c make the column final, so no later seat change re-derives it.
+-- Nothing else is relaxed: bounds (a), (a2), (d) and (e) all sit on either side of
+-- bound (c) and every one of them applies to a confirm unchanged.
 DO $$
 DECLARE
   v_state   text;
@@ -731,9 +761,8 @@ BEGIN
     'FAIL e1 (precondition): its column must still be NULL';
 
   -- The actor is Stamp Studio's OWNER, with full HT-3-d standing: she owns the
-  -- studio she names and a1 already holds a project Stamp Priced leads and
-  -- created. So the 22023 below is bound (c) answering — "nothing to repair" —
-  -- and not a standing refusal wearing the same clothes.
+  -- studio she names and a1 is in the designer's employer tier. So what follows is
+  -- bound (c) answering, and not a standing refusal wearing the same clothes.
   PERFORM pg_temp.assume_user('c6060000-0000-4000-8000-000000000001');
   v_state := NULL;
   BEGIN
@@ -743,13 +772,51 @@ BEGIN
   END;
   PERFORM pg_temp.reset_role();
 
-  ASSERT v_state = '22023',
-    'FAIL e2: where HT-3-b already answers, the owner HAS her read and there is '
-    'nothing to repair — the stamp must refuse rather than become a way to move '
-    'the money onto another studio''s books; got '
-    || COALESCE(v_state, 'NO RAISE (returned ' || COALESCE(v_got::text, 'NULL') || ')');
+  ASSERT v_state IS NULL AND v_got = 'c6060000-0000-4000-8000-0000000000a1',
+    'FAIL e2 (HT-3-f(1), THE PIN): an owner of the studio HT-3-b ALREADY names may '
+    'write it down. A refusal here (the round 3-8 behaviour) leaves the employer '
+    'with no statement at all, and the column then follows her designer''s next seat '
+    'change — measured as a 99900 taking on the employer''s own legacy project '
+    '(W2-R9-01, probe C). Got SQLSTATE '
+    || COALESCE(v_state, 'none') || ' / returned ' || COALESCE(v_got::text, 'NULL');
+  ASSERT (SELECT studio_id = 'c6060000-0000-4000-8000-0000000000a1' FROM projects
+           WHERE id = 'c6060000-0000-4000-8000-0000000000e4'),
+    'FAIL e3 (HT-3-f(1)): and the COLUMN must now carry it — the whole point of the '
+    'pin is that the answer stops being recomputed. A confirm that returns the '
+    'studio without writing the column buys the employer nothing';
 
-  RAISE NOTICE 'stamp_project_pricing_studio: case (e) passed.';
+  -- The pin is final, by bound (b) and HT-3-c, and finality is what makes it worth
+  -- having: a retry of the same studio is a no-op, and ANOTHER studio is refused.
+  PERFORM pg_temp.assume_user('c6060000-0000-4000-8000-000000000001');
+  v_state := NULL;
+  BEGIN
+    SELECT public.stamp_project_pricing_studio(
+      'c6060000-0000-4000-8000-0000000000e4', 'c6060000-0000-4000-8000-0000000000a1') INTO v_got;
+  EXCEPTION WHEN OTHERS THEN v_state := SQLSTATE;
+  END;
+  ASSERT v_state IS NULL AND v_got = 'c6060000-0000-4000-8000-0000000000a1',
+    'FAIL e4: naming the studio the project already names stays a no-op (bound (b)), '
+    'so a double-click on the pin is safe; got SQLSTATE '
+    || COALESCE(v_state, 'none') || ' / returned ' || COALESCE(v_got::text, 'NULL');
+
+  v_state := NULL;
+  BEGIN
+    SELECT public.stamp_project_pricing_studio(
+      'c6060000-0000-4000-8000-0000000000e4', 'c6060000-0000-4000-8000-0000000000a2') INTO v_got;
+  EXCEPTION WHEN OTHERS THEN v_state := SQLSTATE;
+  END;
+  PERFORM pg_temp.reset_role();
+  ASSERT v_state IS NOT NULL
+     AND (SELECT studio_id = 'c6060000-0000-4000-8000-0000000000a1' FROM projects
+           WHERE id = 'c6060000-0000-4000-8000-0000000000e4'),
+    'FAIL e5 (bound (b), HT-3-c): once pinned the column is FINAL — a second call '
+    'naming a DIFFERENT studio must raise (bound (a) or bound (b), whichever speaks '
+    'first for this actor) and must leave the column exactly where the pin put it, '
+    'or HT-3-f(1) has turned the repair act into a way to re-point a project '
+    'somebody is already billing; got SQLSTATE ' || COALESCE(v_state, 'NO RAISE')
+    || ' / returned ' || COALESCE(v_got::text, 'NULL');
+
+  RAISE NOTICE 'stamp_project_pricing_studio: case (e) passed — HT-3-f(1) pins the derived studio and the pin is final.';
 END
 $$;
 
@@ -965,9 +1032,9 @@ VALUES
 INSERT INTO studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
 VALUES
   ('c6060000-0000-4000-8000-0000000000a1', 'c6060000-0000-4000-8000-000000000008', 20000,
-   CURRENT_DATE - 30, 'c6060000-0000-4000-8000-000000000001'),
+   (NOW() AT TIME ZONE 'UTC')::date - 30, 'c6060000-0000-4000-8000-000000000001'),
   ('c6060000-0000-4000-8000-0000000000a2', 'c6060000-0000-4000-8000-000000000008', 21000,
-   CURRENT_DATE - 30, 'c6060000-0000-4000-8000-000000000001');
+   (NOW() AT TIME ZONE 'UTC')::date - 30, 'c6060000-0000-4000-8000-000000000001');
 
 INSERT INTO projects (id, name, designer_id, created_by, studio_id)
 VALUES ('c6060000-0000-4000-8000-0000000000e7', 'Stamp Hire Legacy House',
@@ -1012,7 +1079,7 @@ BEGIN
   -- the whole finding: studio_member_rates_admin_insert asks only for
   -- is_org_admin_or_owner(studio_id), and 00295 made her the owner.
   INSERT INTO studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
-  VALUES (v_workspace, 'c6060000-0000-4000-8000-000000000008', 99900, CURRENT_DATE - 30,
+  VALUES (v_workspace, 'c6060000-0000-4000-8000-000000000008', 99900, (NOW() AT TIME ZONE 'UTC')::date - 30,
           'c6060000-0000-4000-8000-000000000008');
 
   INSERT INTO project_time_entries (id, project_id, user_id, started_at, duration_minutes, billable, source)
@@ -1159,7 +1226,7 @@ BEGIN
   -- the whole finding (studio_member_rates_admin_insert asks only
   -- is_org_admin_or_owner, and 00295 made her the owner).
   INSERT INTO studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
-  VALUES (v_workspace, 'c6060000-0000-4000-8000-00000000000a', 99900, CURRENT_DATE - 30,
+  VALUES (v_workspace, 'c6060000-0000-4000-8000-00000000000a', 99900, (NOW() AT TIME ZONE 'UTC')::date - 30,
           'c6060000-0000-4000-8000-00000000000a');
 
   -- THE MANOEUVRE, step 1 — seat a second account she controls as `admin`:
@@ -1290,7 +1357,7 @@ VALUES
 -- That studio prices her; her own workspace will price her 99900 below.
 INSERT INTO studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
 VALUES ('c6060000-0000-4000-8000-0000000000a5', 'c6060000-0000-4000-8000-00000000000c', 30000,
-        CURRENT_DATE - 30, 'c6060000-0000-4000-8000-00000000000d');
+        (NOW() AT TIME ZONE 'UTC')::date - 30, 'c6060000-0000-4000-8000-00000000000d');
 
 INSERT INTO projects (id, name, designer_id, created_by, studio_id)
 VALUES
@@ -1326,7 +1393,7 @@ BEGIN
   PERFORM pg_temp.assume_user('c6060000-0000-4000-8000-00000000000c');
 
   INSERT INTO studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
-  VALUES (v_workspace, 'c6060000-0000-4000-8000-00000000000c', 99900, CURRENT_DATE - 30,
+  VALUES (v_workspace, 'c6060000-0000-4000-8000-00000000000c', 99900, (NOW() AT TIME ZONE 'UTC')::date - 30,
           'c6060000-0000-4000-8000-00000000000c');
 
   INSERT INTO project_time_entries (id, project_id, user_id, started_at, duration_minutes, billable, source)
@@ -1438,9 +1505,9 @@ SELECT 'c6060000-0000-4000-8000-00000000000e', id FROM roles WHERE name = 'studi
 INSERT INTO studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
 VALUES
   ('c6060000-0000-4000-8000-0000000000a6', 'c6060000-0000-4000-8000-00000000000e', 22000,
-   CURRENT_DATE - 30, 'c6060000-0000-4000-8000-00000000000f'),
+   (NOW() AT TIME ZONE 'UTC')::date - 30, 'c6060000-0000-4000-8000-00000000000f'),
   ('c6060000-0000-4000-8000-0000000000a7', 'c6060000-0000-4000-8000-00000000000e', 23000,
-   CURRENT_DATE - 30, 'c6060000-0000-4000-8000-000000000010');
+   (NOW() AT TIME ZONE 'UTC')::date - 30, 'c6060000-0000-4000-8000-000000000010');
 
 INSERT INTO projects (id, name, designer_id, created_by, studio_id)
 VALUES
@@ -1596,7 +1663,7 @@ VALUES ('c6060000-0000-4000-8000-000000000011', 'c6060000-0000-4000-8000-0000000
 
 INSERT INTO studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
 VALUES ('c6060000-0000-4000-8000-0000000000a8', 'c6060000-0000-4000-8000-000000000011', 25000,
-        CURRENT_DATE - 30, 'c6060000-0000-4000-8000-000000000013');
+        (NOW() AT TIME ZONE 'UTC')::date - 30, 'c6060000-0000-4000-8000-000000000013');
 
 DO $$
 DECLARE
@@ -1662,7 +1729,7 @@ BEGIN
   -- She prices herself at the number she chooses: 'admin' satisfies
   -- studio_member_rates_admin_insert just as 'owner' did.
   INSERT INTO studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
-  VALUES (v_workspace, 'c6060000-0000-4000-8000-000000000011', 99900, CURRENT_DATE - 30,
+  VALUES (v_workspace, 'c6060000-0000-4000-8000-000000000011', 99900, (NOW() AT TIME ZONE 'UTC')::date - 30,
           'c6060000-0000-4000-8000-000000000011');
 
   -- And her own sibling project naming the workspace, which CLEARS the retained
@@ -1822,7 +1889,7 @@ BEGIN
   -- id, so the leg at the stamp is satisfied and HT-3-e(2) lets the row price.
   PERFORM pg_temp.assume_user('c6060000-0000-4000-8000-000000000012');
   INSERT INTO studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
-  VALUES (v_workspace, 'c6060000-0000-4000-8000-000000000011', 99900, CURRENT_DATE - 20,
+  VALUES (v_workspace, 'c6060000-0000-4000-8000-000000000011', 99900, (NOW() AT TIME ZONE 'UTC')::date - 20,
           'c6060000-0000-4000-8000-000000000012');
   SELECT public.stamp_project_pricing_studio(
     'c6060000-0000-4000-8000-0000000000f8', v_workspace) INTO v_got;
@@ -1937,7 +2004,7 @@ SELECT 'c6060000-0000-4000-8000-000000000014', id FROM roles WHERE name = 'studi
 
 INSERT INTO studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
 VALUES ('c6060000-0000-4000-8000-0000000000a9', 'c6060000-0000-4000-8000-000000000014', 25000,
-        CURRENT_DATE - 30, 'c6060000-0000-4000-8000-000000000015');
+        (NOW() AT TIME ZONE 'UTC')::date - 30, 'c6060000-0000-4000-8000-000000000015');
 
 DO $$
 DECLARE
@@ -1976,7 +2043,7 @@ BEGIN
   GET DIAGNOSTICS v_seated = ROW_COUNT;
   INSERT INTO studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
   VALUES ('c6060000-0000-4000-8000-0000000000aa', 'c6060000-0000-4000-8000-000000000014', 99900,
-          CURRENT_DATE - 30, 'c6060000-0000-4000-8000-000000000016');
+          (NOW() AT TIME ZONE 'UTC')::date - 30, 'c6060000-0000-4000-8000-000000000016');
   PERFORM pg_temp.reset_role();
 
   ASSERT v_seated = 1,
@@ -2140,7 +2207,7 @@ VALUES
 -- other number in this file.
 INSERT INTO studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
 VALUES ('c6060000-0000-4000-8000-0000000000ac', 'c6060000-0000-4000-8000-000000000031', 26000,
-        CURRENT_DATE - 30, 'c6060000-0000-4000-8000-000000000032');
+        (NOW() AT TIME ZONE 'UTC')::date - 30, 'c6060000-0000-4000-8000-000000000032');
 
 INSERT INTO user_roles (user_id, role_id)
 SELECT 'c6060000-0000-4000-8000-000000000031', id FROM roles WHERE name = 'studio_designer';
@@ -2284,11 +2351,11 @@ BEGIN
   PERFORM pg_temp.assume_user('c6060000-0000-4000-8000-000000000031');
   INSERT INTO studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
   VALUES ('c6060000-0000-4000-8000-0000000000ac', 'c6060000-0000-4000-8000-000000000031', 99900,
-          CURRENT_DATE - 10, 'c6060000-0000-4000-8000-000000000031');
+          (NOW() AT TIME ZONE 'UTC')::date - 10, 'c6060000-0000-4000-8000-000000000031');
   GET DIAGNOSTICS v_wrote = ROW_COUNT;
 
   -- (i) an hour TODAY, inside her own row's span: 'none'. Not her number, and not
-  --     the employer's either — her row closed the employer's at CURRENT_DATE - 11,
+  --     the employer's either — her row closed the employer's at (NOW() AT TIME ZONE 'UTC')::date - 11,
   --     so no qualifying row covers today and HT-3-e(2)'s third clause answers.
   --     THE WORST CASE OF THIS RULING IS AN UNPRICED HOUR ("rate pending", HT-26),
   --     which the studio repairs by writing a rate (s8d); it is never her number.
@@ -2346,7 +2413,7 @@ BEGIN
   --       closes hers, and the next hour prices from the studio again.
   INSERT INTO studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
   VALUES ('c6060000-0000-4000-8000-0000000000ac', 'c6060000-0000-4000-8000-000000000031', 27500,
-          CURRENT_DATE, 'c6060000-0000-4000-8000-000000000032');
+          (NOW() AT TIME ZONE 'UTC')::date - 1, 'c6060000-0000-4000-8000-000000000032');
   PERFORM pg_temp.reset_role();
 
   PERFORM pg_temp.assume_user('c6060000-0000-4000-8000-000000000031');
@@ -2529,7 +2596,7 @@ BEGIN
   PERFORM pg_temp.assume_user('c6060000-0000-4000-8000-000000000035');
   INSERT INTO studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
   VALUES ('c6060000-0000-4000-8000-00000000ae01', 'c6060000-0000-4000-8000-000000000034', 28000,
-          CURRENT_DATE - 30, 'c6060000-0000-4000-8000-000000000035');
+          (NOW() AT TIME ZONE 'UTC')::date - 30, 'c6060000-0000-4000-8000-000000000035');
   PERFORM pg_temp.reset_role();
 
   -- And now the studio's ADMIN performs HT-3-a's ruled repair.
@@ -2686,12 +2753,12 @@ BEGIN
   PERFORM pg_temp.assume_user('c6060000-0000-4000-8000-000000000039');
   INSERT INTO studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
   VALUES ('c6060000-0000-4000-8000-00000000ae03', 'c6060000-0000-4000-8000-000000000038', 27000,
-          CURRENT_DATE - 30, 'c6060000-0000-4000-8000-000000000039');
+          (NOW() AT TIME ZONE 'UTC')::date - 30, 'c6060000-0000-4000-8000-000000000039');
   PERFORM pg_temp.reset_role();
   PERFORM pg_temp.assume_user('c6060000-0000-4000-8000-00000000003b');
   INSERT INTO studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
   VALUES ('c6060000-0000-4000-8000-00000000ae04', 'c6060000-0000-4000-8000-000000000038', 31000,
-          CURRENT_DATE - 30, 'c6060000-0000-4000-8000-00000000003b');
+          (NOW() AT TIME ZONE 'UTC')::date - 30, 'c6060000-0000-4000-8000-00000000003b');
   PERFORM pg_temp.reset_role();
 
   -- And the book is repairable: owner, admin, and the OTHER employer, each naming
@@ -2774,6 +2841,326 @@ BEGIN
     'portal';
 
   RAISE NOTICE 'stamp_project_pricing_studio: case (j) passed.';
+END
+$$;
+
+-- ─── (w) HT-3-f(1): the PIN HOLDS through the manoeuvre that moved the money ───
+-- Case (e) measures that the confirm succeeds and is final. This measures what the
+-- employer BUYS with it, against the exact shape HT-3-f(2) does NOT reach —
+-- HT-3-f(3)'s recorded residual, a legacy project the designer opened herself while
+-- employed. Two identical projects, one pinned and one not; she then leaves her
+-- employer with the ONE statement `Members can leave` admits, and the pinned
+-- project keeps pricing at the employer's number while the unpinned one moves to
+-- her own workspace at her own. That difference IS the ruling's answer to
+-- W2-R9-01: a studio that can see its hours can keep them.
+INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, instance_id, aud, role)
+VALUES
+  ('c6090000-0000-4000-8000-000000000001', 'pin-employer-owner@test.invalid', '', NOW(), NOW(), NOW(),
+   '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('c6090000-0000-4000-8000-000000000002', 'pin-leaver@test.invalid', '', NOW(), NOW(), NOW(),
+   '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+UPDATE profiles SET full_name = 'Pin Employer Owner' WHERE id = 'c6090000-0000-4000-8000-000000000001';
+UPDATE profiles SET full_name = 'Pin Leaver'         WHERE id = 'c6090000-0000-4000-8000-000000000002';
+
+INSERT INTO organizations (id, type, name, slug, status)
+VALUES
+  ('c6090000-0000-4000-8000-0000000000a1', 'design_studio', 'Pin Employer', 'pin-employer-test', 'active'),
+  ('c6090000-0000-4000-8000-0000000000a2', 'design_studio', 'Pin Leaver WS','pin-leaver-ws-test','active');
+
+-- Both projects are inserted before any seat exists for her, so the column stays
+-- NULL (the legacy shape), and both carry HER OWN id in created_by — HT-3-f(3)'s
+-- residual, where HT-3-f(2) has nothing to say and only the pin does.
+INSERT INTO projects (id, name, designer_id, created_by, studio_id)
+VALUES
+  ('c6090000-0000-4000-8000-0000000000e1', 'Pin Kept House',
+   'c6090000-0000-4000-8000-000000000002', 'c6090000-0000-4000-8000-000000000002', NULL),
+  ('c6090000-0000-4000-8000-0000000000e2', 'Pin Unpinned House',
+   'c6090000-0000-4000-8000-000000000002', 'c6090000-0000-4000-8000-000000000002', NULL);
+
+INSERT INTO organization_members (id, user_id, organization_id, role, status, joined_at)
+VALUES
+  ('c6090000-0000-4000-8000-0000000000c1', 'c6090000-0000-4000-8000-000000000001',
+   'c6090000-0000-4000-8000-0000000000a1', 'owner',  'active', NOW()),
+  ('c6090000-0000-4000-8000-0000000000c2', 'c6090000-0000-4000-8000-000000000002',
+   'c6090000-0000-4000-8000-0000000000a1', 'member', 'active', NOW()),
+  ('c6090000-0000-4000-8000-0000000000c3', 'c6090000-0000-4000-8000-000000000002',
+   'c6090000-0000-4000-8000-0000000000a2', 'owner',  'active', NOW());
+
+-- Granted AFTER her seats exist, so 00295's fc_provision_studio_on_designer takes
+-- its early exit and a2 above is the only workspace she owns. The role itself is
+-- load-bearing for the stamp: set_project_studio_id's owner-executed arm refuses a
+-- studio_id UPDATE whose LEAD is not a designer (00563, `v_lead_has_designer_role`).
+INSERT INTO user_roles (user_id, role_id)
+SELECT 'c6090000-0000-4000-8000-000000000002', id FROM roles WHERE name = 'studio_designer';
+
+INSERT INTO studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
+VALUES
+  ('c6090000-0000-4000-8000-0000000000a1', 'c6090000-0000-4000-8000-000000000002', 26000,
+   (NOW() AT TIME ZONE 'UTC')::date - 30, 'c6090000-0000-4000-8000-000000000001'),
+  ('c6090000-0000-4000-8000-0000000000a2', 'c6090000-0000-4000-8000-000000000002', 99900,
+   (NOW() AT TIME ZONE 'UTC')::date - 30, 'c6090000-0000-4000-8000-000000000002');
+
+DO $$
+DECLARE
+  v_got   uuid;
+  v_state text;
+  v_rate  integer;
+  v_src   text;
+  v_rows  integer;
+BEGIN
+  -- ── w1: the employer's OWNER pins the project HT-3-b already names for it.
+  PERFORM pg_temp.assume_user('c6090000-0000-4000-8000-000000000001');
+  v_state := NULL;
+  BEGIN
+    SELECT public.stamp_project_pricing_studio(
+      'c6090000-0000-4000-8000-0000000000e1', 'c6090000-0000-4000-8000-0000000000a1') INTO v_got;
+  EXCEPTION WHEN OTHERS THEN v_state := SQLSTATE;
+  END;
+  PERFORM pg_temp.reset_role();
+  ASSERT v_state IS NULL AND v_got = 'c6090000-0000-4000-8000-0000000000a1',
+    'FAIL w1 (HT-3-f(1)): the pin is available to the studio the derivation already '
+    'names, on an ORDINARY shape — one employer seat, one arm''s-length rate, a '
+    'legacy NULL-studio project. Got SQLSTATE ' || COALESCE(v_state, 'none')
+    || ' / returned ' || COALESCE(v_got::text, 'NULL');
+
+  -- ── w2: she leaves her employer. ONE statement, hers, through RLS.
+  PERFORM pg_temp.assume_user('c6090000-0000-4000-8000-000000000002');
+  WITH gone AS (
+    DELETE FROM organization_members
+     WHERE user_id = 'c6090000-0000-4000-8000-000000000002'
+       AND organization_id = 'c6090000-0000-4000-8000-0000000000a1'
+    RETURNING 1
+  ) SELECT count(*) INTO v_rows FROM gone;
+
+  INSERT INTO project_time_entries (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('c6090000-0000-4000-8000-0000000000b1', 'c6090000-0000-4000-8000-0000000000e1',
+          'c6090000-0000-4000-8000-000000000002', NOW() - INTERVAL '1 hour', 120, true, 'manual_entry');
+  INSERT INTO project_time_entries (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('c6090000-0000-4000-8000-0000000000b2', 'c6090000-0000-4000-8000-0000000000e2',
+          'c6090000-0000-4000-8000-000000000002', NOW() - INTERVAL '1 hour', 120, true, 'manual_entry');
+  PERFORM pg_temp.reset_role();
+  ASSERT v_rows = 1,
+    'FAIL w2 (precondition): `Members can leave` must still admit her; rows = ' || v_rows;
+
+  -- ── w3: THE PINNED project keeps pricing at the employer's number.
+  SELECT hourly_rate_cents, rate_source INTO v_rate, v_src
+  FROM project_time_entries WHERE id = 'c6090000-0000-4000-8000-0000000000b1';
+  ASSERT v_rate = 26000 AND v_src = 'studio_member',
+    'FAIL w3 (HT-3-f(1), WHAT THE PIN BUYS): once the column carries the studio, '
+    'HT-3-b is not consulted again — so her seat change cannot move the project, the '
+    'money or the employer''s HT-10 read. This is the whole value of the confirm, '
+    'and on THIS shape (a project she created herself) it is the employer''s ONLY '
+    'remedy, because HT-3-f(2) keys on created_by and created_by is hers '
+    '(HT-3-f(3)). Got ' || COALESCE(v_rate::text, 'NULL') || ' / '
+    || COALESCE(v_src, 'NULL');
+
+  -- ── w4: the UNPINNED twin, the control — and HT-3-f(3) in one line.
+  SELECT hourly_rate_cents, rate_source INTO v_rate, v_src
+  FROM project_time_entries WHERE id = 'c6090000-0000-4000-8000-0000000000b2';
+  ASSERT v_rate = 99900 AND v_src = 'studio_member',
+    'FAIL w4 (HT-3-f(3), THE RESIDUAL — asserted as PASSING, and the control that '
+    'makes w3 a measurement rather than a tautology): the identical project the '
+    'employer did NOT pin moves to her own workspace at her own number. If this is '
+    'no longer 99900 then HT-3-f(2) has been widened past what was ruled — which '
+    'may be right, and is a RULING, because the honest sole proprietor of HT-3-a arm '
+    '(a) creates her own projects too. Got ' || COALESCE(v_rate::text, 'NULL')
+    || ' / ' || COALESCE(v_src, 'NULL');
+
+  -- ── w5: and the employer's read follows the column, not her seat.
+  PERFORM pg_temp.assume_user('c6090000-0000-4000-8000-000000000001');
+  SELECT count(*) INTO v_rows FROM project_time_entries
+   WHERE id IN ('c6090000-0000-4000-8000-0000000000b1', 'c6090000-0000-4000-8000-0000000000b2');
+  PERFORM pg_temp.reset_role();
+  ASSERT v_rows = 1,
+    'FAIL w5 (HT-10 + HT-3-f(1)): the employer''s owner must read the hour on the '
+    'PINNED project and not the one on the unpinned twin — 00606''s owner/admin read '
+    'keys on project_pricing_studio_id, so the pin is what keeps a departed hire''s '
+    'work visible to the studio that is billing it. Round 9 measured the owner '
+    'reading ZERO of 2. Got ' || v_rows;
+
+  RAISE NOTICE 'stamp_project_pricing_studio: case (w) passed — HT-3-f(1): the pin survives the seat deletion that moved the money, and the unpinned twin records HT-3-f(3).';
+END
+$$;
+
+-- ─── (x) W2-R9-02: a self-rewrite cannot deny the employer its repair ─────────
+-- HT-3-e(4) re-authors a rate row to whoever moves its number — which HT-3-e(2)
+-- needs, and which cost the EMPLOYER something round 9 measured: the employer arm
+-- at bound (a2) asks the named studio for a rate row for this designer "that
+-- somebody other than she wrote", so a studio whose card holds exactly ONE row for
+-- her lost that standing the moment she rewrote the row in place, and the stamp was
+-- then refused to the studio's OWNER as well as to her (probe A, A4/A5).
+-- The leg now asks the row's AUTHORSHIP HISTORY: created_by, or the author the
+-- re-authoring displaced into original_created_by. She can erase neither — a closed
+-- row is frozen outright, and the new column is written only by the guard, only
+-- from OLD, and is frozen against every caller.
+INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, instance_id, aud, role)
+VALUES
+  ('c6100000-0000-4000-8000-000000000001', 'hist-owner@test.invalid', '', NOW(), NOW(), NOW(),
+   '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('c6100000-0000-4000-8000-000000000002', 'hist-admin-designer@test.invalid', '', NOW(), NOW(), NOW(),
+   '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+UPDATE profiles SET full_name = 'Hist Owner'           WHERE id = 'c6100000-0000-4000-8000-000000000001';
+UPDATE profiles SET full_name = 'Hist Admin Designer'  WHERE id = 'c6100000-0000-4000-8000-000000000002';
+
+INSERT INTO organizations (id, type, name, slug, status)
+VALUES ('c6100000-0000-4000-8000-0000000000a1', 'design_studio', 'Hist Employer', 'hist-employer-test', 'active');
+
+INSERT INTO projects (id, name, designer_id, created_by, studio_id)
+VALUES ('c6100000-0000-4000-8000-0000000000e1', 'Hist Legacy House',
+        'c6100000-0000-4000-8000-000000000002', 'c6100000-0000-4000-8000-000000000001', NULL);
+
+INSERT INTO organization_members (id, user_id, organization_id, role, status, joined_at)
+VALUES
+  ('c6100000-0000-4000-8000-0000000000c1', 'c6100000-0000-4000-8000-000000000001',
+   'c6100000-0000-4000-8000-0000000000a1', 'owner', 'active', NOW()),
+  -- `admin`, because studio_member_rates_admin_update admits any owner or admin of
+  -- the studio — the rate's own SUBJECT included (W2-R7-07: the capability is W1's).
+  ('c6100000-0000-4000-8000-0000000000c2', 'c6100000-0000-4000-8000-000000000002',
+   'c6100000-0000-4000-8000-0000000000a1', 'admin', 'active', NOW());
+
+-- Granted after the seat, so 00295 provisions her nothing; and required by 00563's
+-- owner-executed arm, which refuses a studio_id UPDATE whose LEAD is not a designer.
+INSERT INTO user_roles (user_id, role_id)
+SELECT 'c6100000-0000-4000-8000-000000000002', id FROM roles WHERE name = 'studio_designer';
+
+-- EXACTLY ONE rate row for her, written by the studio's owner. That is the shape
+-- the finding is about: a studio that has priced a hire once.
+INSERT INTO studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
+VALUES ('c6100000-0000-4000-8000-0000000000a1', 'c6100000-0000-4000-8000-000000000002', 26000,
+        (NOW() AT TIME ZONE 'UTC')::date - 30, 'c6100000-0000-4000-8000-000000000001');
+
+DO $$
+DECLARE
+  v_author   uuid;
+  v_original uuid;
+  v_rows     integer;
+  v_state    text;
+  v_got      uuid;
+  v_rate     integer;
+BEGIN
+  -- ── x1: she rewrites the studio's only row IN PLACE, through RLS, as its admin.
+  PERFORM pg_temp.assume_user('c6100000-0000-4000-8000-000000000002');
+  WITH moved AS (
+    UPDATE studio_member_rates SET hourly_rate_cents = 99900
+     WHERE studio_id = 'c6100000-0000-4000-8000-0000000000a1'
+       AND user_id   = 'c6100000-0000-4000-8000-000000000002'
+       AND effective_to IS NULL
+    RETURNING 1
+  ) SELECT count(*) INTO v_rows FROM moved;
+  PERFORM pg_temp.reset_role();
+  SELECT created_by, original_created_by INTO v_author, v_original
+  FROM studio_member_rates
+   WHERE studio_id = 'c6100000-0000-4000-8000-0000000000a1'
+     AND user_id   = 'c6100000-0000-4000-8000-000000000002'
+     AND effective_to IS NULL;
+  ASSERT v_rows = 1,
+    'FAIL x1 (precondition, W2-R7-07): an admin must still be able to rewrite the '
+    'row — the capability is W1''s and HT-3-e answers it elsewhere; rows = ' || v_rows;
+  ASSERT v_author = 'c6100000-0000-4000-8000-000000000002',
+    'FAIL x1b (HT-3-e(4)): the number she moved must be authored by her; got '
+    || COALESCE(v_author::text, 'NULL');
+  ASSERT v_original = 'c6100000-0000-4000-8000-000000000001',
+    'FAIL x1c (W2-R9-02): and the author she DISPLACED must be kept — without it '
+    'the studio''s whole card for her reads as self-authored and its OWNER loses the '
+    'arm''s-length standing bound (a2) asks for; got '
+    || COALESCE(v_original::text, 'NULL');
+
+  -- ── x2: THE REPAIR THE FINDING DENIED. The employer's OWNER stamps. Measured
+  --    refused 42501 before this change, with the same message her own attempt got.
+  PERFORM pg_temp.assume_user('c6100000-0000-4000-8000-000000000001');
+  v_state := NULL;
+  BEGIN
+    SELECT public.stamp_project_pricing_studio(
+      'c6100000-0000-4000-8000-0000000000e1', 'c6100000-0000-4000-8000-0000000000a1') INTO v_got;
+  EXCEPTION WHEN OTHERS THEN v_state := SQLSTATE;
+  END;
+  PERFORM pg_temp.reset_role();
+  ASSERT v_state IS NULL AND v_got = 'c6100000-0000-4000-8000-0000000000a1',
+    'FAIL x2 (W2-R9-02): the employer''s OWNER must still be able to name his own '
+    'studio after its rate row was rewritten by the person it prices. Refused, a '
+    'member can deny her studio the repair act at will, with no message that '
+    'explains what happened (measured, probe A A4/A5). Got SQLSTATE '
+    || COALESCE(v_state, 'none') || ' / returned ' || COALESCE(v_got::text, 'NULL');
+
+  -- ── x3: she cannot erase the displaced author by hand — it is frozen.
+  PERFORM pg_temp.assume_user('c6100000-0000-4000-8000-000000000002');
+  v_state := NULL;
+  BEGIN
+    UPDATE studio_member_rates
+       SET original_created_by = 'c6100000-0000-4000-8000-000000000002'
+     WHERE studio_id = 'c6100000-0000-4000-8000-0000000000a1'
+       AND user_id   = 'c6100000-0000-4000-8000-000000000002'
+       AND effective_to IS NULL;
+  EXCEPTION WHEN OTHERS THEN v_state := SQLSTATE;
+  END;
+  PERFORM pg_temp.reset_role();
+  SELECT original_created_by INTO v_original FROM studio_member_rates
+   WHERE studio_id = 'c6100000-0000-4000-8000-0000000000a1'
+     AND user_id   = 'c6100000-0000-4000-8000-000000000002'
+     AND effective_to IS NULL;
+  ASSERT v_state IS NOT NULL AND v_original = 'c6100000-0000-4000-8000-000000000001',
+    'FAIL x3 (W2-R9-02): original_created_by is part of the row''s frozen identity — '
+    'authenticated holds UPDATE on this table, so a writable column here is a '
+    'standing a member writes for herself or erases at will; got SQLSTATE '
+    || COALESCE(v_state, 'NO RAISE') || ' / ' || COALESCE(v_original::text, 'NULL');
+
+  -- ── x4: nor by rewriting AGAIN. The displaced author is kept ONCE, from OLD.
+  PERFORM pg_temp.assume_user('c6100000-0000-4000-8000-000000000002');
+  UPDATE studio_member_rates SET hourly_rate_cents = 88800
+   WHERE studio_id = 'c6100000-0000-4000-8000-0000000000a1'
+     AND user_id   = 'c6100000-0000-4000-8000-000000000002'
+     AND effective_to IS NULL;
+  PERFORM pg_temp.reset_role();
+  SELECT created_by, original_created_by INTO v_author, v_original
+  FROM studio_member_rates
+   WHERE studio_id = 'c6100000-0000-4000-8000-0000000000a1'
+     AND user_id   = 'c6100000-0000-4000-8000-000000000002'
+     AND effective_to IS NULL;
+  ASSERT v_author = 'c6100000-0000-4000-8000-000000000002'
+     AND v_original = 'c6100000-0000-4000-8000-000000000001',
+    'FAIL x4 (W2-R9-02): a CHAIN of rewrites must not walk the first author off the '
+    'row — re-stamping original_created_by from OLD.created_by every time would hand '
+    'her the same denial in two statements instead of one. COALESCE(OLD.original, '
+    'OLD.created_by) is what makes it once. Got author '
+    || COALESCE(v_author::text, 'NULL') || ' / original '
+    || COALESCE(v_original::text, 'NULL');
+
+  -- ── x5: and she may not NAME it on a row of her own.
+  PERFORM pg_temp.assume_user('c6100000-0000-4000-8000-000000000002');
+  INSERT INTO studio_member_rates
+    (studio_id, user_id, hourly_rate_cents, effective_from, created_by, original_created_by)
+  VALUES ('c6100000-0000-4000-8000-0000000000a1', 'c6100000-0000-4000-8000-000000000002', 95000,
+          (NOW() AT TIME ZONE 'UTC')::date - 1, 'c6100000-0000-4000-8000-000000000002',
+          'c6100000-0000-4000-8000-000000000001');
+  PERFORM pg_temp.reset_role();
+  SELECT original_created_by INTO v_original FROM studio_member_rates
+   WHERE studio_id = 'c6100000-0000-4000-8000-0000000000a1'
+     AND user_id   = 'c6100000-0000-4000-8000-000000000002'
+     AND effective_to IS NULL;
+  ASSERT v_original IS NULL,
+    'FAIL x5 (W2-R9-02): a caller may not NAME the author she claims to have '
+    'displaced — studio_member_rates_admin_insert says nothing about this column, so '
+    'without the INSERT guard''s discard an owner or admin manufactures the '
+    'arm''s-length standing bound (a2) asks for. A new row has displaced nobody; got '
+    || COALESCE(v_original::text, 'NULL');
+
+  -- ── x6: and the hour still prices 'none', because HT-3-e(2) is untouched by all
+  --    of this: every row of her card is now one she wrote.
+  PERFORM pg_temp.assume_user('c6100000-0000-4000-8000-000000000002');
+  INSERT INTO project_time_entries (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('c6100000-0000-4000-8000-0000000000b1', 'c6100000-0000-4000-8000-0000000000e1',
+          'c6100000-0000-4000-8000-000000000002', NOW() - INTERVAL '1 hour', 120, true, 'manual_entry');
+  PERFORM pg_temp.reset_role();
+  SELECT hourly_rate_cents INTO v_rate FROM project_time_entries
+   WHERE id = 'c6100000-0000-4000-8000-0000000000b1';
+  ASSERT v_rate IS NULL,
+    'FAIL x6 (HT-3-e(2), unchanged by W2-R9-02): keeping the DISPLACED author is a '
+    'standing test at the STAMP, not a pricing one — the number that is there is '
+    'still hers, so the hour is still HT-26''s ''rate pending'' until the studio '
+    'writes a row of its own. If this prices, W2-R9-02 has leaked into the resolver '
+    'and round 8''s MAJOR is back; got ' || COALESCE(v_rate::text, 'NULL');
+
+  RAISE NOTICE 'stamp_project_pricing_studio: case (x) passed — W2-R9-02: the employer keeps its repair act through a self-rewrite, and the record of the displaced author is nobody''s to write.';
 END
 $$;
 
