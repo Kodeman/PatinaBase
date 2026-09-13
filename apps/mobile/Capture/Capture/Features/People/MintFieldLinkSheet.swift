@@ -76,12 +76,15 @@ struct MintFieldLinkSheet: View {
                         .foregroundStyle(CaptureColor.terracotta)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                Button("Add them and mint a link") { Task { await mint() } }
-                    .font(CaptureType.bodyEmph)
-                    .foregroundStyle(CaptureColor.verdigris)
-                    .frame(minHeight: 44)
-                    .disabled(fullName.trimmingCharacters(in: .whitespaces).isEmpty || isWorking)
-                    .accessibilityIdentifier("people.mint.submit")
+                Button { Task { await mint() } } label: {
+                    Text("Add them and mint a link")
+                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                        .contentShape(Rectangle())
+                }
+                .font(CaptureType.bodyEmph)
+                .foregroundStyle(CaptureColor.verdigris)
+                .disabled(fullName.trimmingCharacters(in: .whitespaces).isEmpty || isWorking)
+                .accessibilityIdentifier("people.mint.submit")
             }
             .padding(20)
         }

@@ -258,6 +258,37 @@ public enum PeopleRoomFixtures {
                 lines: ["Signs the subcontract, sub side."]))
     ]
 
+    /// Only four seats carry a hand-authored card above; the roster holds
+    /// seventeen. Rather than hand a caller an unrelated person's record, the
+    /// mock composes the remaining cards out of the seat itself, so every row
+    /// on PR1 opens the person whose name is on it. Every field here is the
+    /// seat's own value — nothing is invented, and nothing is borrowed from
+    /// another identity. `roleAtFirm` stays nil because a seat carries a trade,
+    /// not a job title (r4-14).
+    public static func cardFromSeat(personID: String) -> FieldPersonCard? {
+        guard let seat = seats.first(where: { $0.personID == personID }) else { return nil }
+        let channels: [FieldPersonChannel] = seat.phoneDisplay.map {
+            [FieldPersonChannel(id: "ch-\(personID)-m", kind: "Mobile", value: $0,
+                               isPhone: true, preferred: true,
+                               consentWord: seat.consentWord)]
+        } ?? []
+        let words = [seat.kindWord, seat.trade].compactMap { $0 }.joined(separator: " · ")
+        return FieldPersonCard(
+            personID: personID,
+            name: seat.displayName,
+            firmName: seat.firmName,
+            reachWord: seat.reachWord,
+            consentWord: seat.consentWord,
+            channels: channels,
+            contactRule: seat.contactRule,
+            contactRuleBlocks: seat.contactRuleBlocks,
+            routeToName: seat.routeToName,
+            seats: [FieldPersonSeatLine(id: seat.id, projectName: projectName,
+                                        words: words.isEmpty ? "on this job" : words,
+                                        stageWord: seat.stageWord)],
+            authorityWords: [])
+    }
+
     // MARK: The site access card
 
     public static let siteAccess = FieldSiteAccessCard(
@@ -292,6 +323,18 @@ public enum PeopleRoomFixtures {
 
 // MARK: - The mock seam
 
+/// What the mock refuses, in the words the screen prints.
+public enum MockPeopleRoomError: LocalizedError {
+    case notOnThisJob(String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .notOnThisJob(let personID):
+            return "No seat on this job carries \(personID). Nobody to open."
+        }
+    }
+}
+
 /// Renders every PR screen on the Simulator with no network. The two writes
 /// answer honestly: a notice comes back stamped now, and a mint returns a link
 /// that ends with the job (PR-d).
@@ -302,9 +345,17 @@ public final class MockPeopleRoomService: PeopleRoomService, @unchecked Sendable
         PeopleRoomFixtures.roster
     }
 
+    /// A personID with no seat on this job is refused the way the real service
+    /// refuses it (`PeopleRoomError.notOnThisJob`) rather than falling through
+    /// to some other person's card.
     public func person(projectID: String, personID: String) async throws -> FieldPersonCard {
-        PeopleRoomFixtures.people.first { $0.personID == personID }
-            ?? PeopleRoomFixtures.people[0]
+        if let authored = PeopleRoomFixtures.people.first(where: { $0.personID == personID }) {
+            return authored
+        }
+        guard let fromSeat = PeopleRoomFixtures.cardFromSeat(personID: personID) else {
+            throw MockPeopleRoomError.notOnThisJob(personID)
+        }
+        return fromSeat
     }
 
     public func siteAccess(projectID: String) async throws -> FieldSiteAccessCard {

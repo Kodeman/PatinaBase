@@ -275,11 +275,17 @@ struct ProjectRosterScreen: View {
                 .font(CaptureType.footnote)
                 .foregroundStyle(CaptureColor.inkSoft)
                 .fixedSize(horizontal: false, vertical: true)
-            Button("Add someone met on site") { isMinting = true }
-                .font(CaptureType.bodyEmph)
-                .foregroundStyle(CaptureColor.verdigris)
-                .frame(minHeight: 44)
-                .accessibilityIdentifier("people.mintLink")
+            Button { isMinting = true } label: {
+                // R-X: the 44pt target belongs to the LABEL — a frame hung on
+                // the Button itself grows the reported box without growing what
+                // hit-testing dispatches on (PeopleTelLine's pattern).
+                Text("Add someone met on site")
+                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    .contentShape(Rectangle())
+            }
+            .font(CaptureType.bodyEmph)
+            .foregroundStyle(CaptureColor.verdigris)
+            .accessibilityIdentifier("people.mintLink")
         }
         .padding(.horizontal, 4)
     }
