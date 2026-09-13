@@ -258,7 +258,12 @@ COMMENT ON FUNCTION public.owned_tier_prices_project(uuid, uuid) IS
   'under her former employer''s legacy project at the number she wrote for herself. '
   'Called by resolve_time_rate_cents, project_pricing_studio_id and '
   'set_project_studio_id_owned — one rule, one body. It does NOT reach HT-3-f(3)''s '
-  'recorded residual, a legacy project she created herself while employed.';
+  'recorded residual, a legacy project she created herself while employed. '
+  'THE TWO NULL LEGS ARE DEFENSIVE, NOT LIVE ARMS (W2-R10-08, measured): '
+  'projects.created_by is NOT NULL — an INSERT of NULL raises 23502 — so there is no '
+  'authorless-project path around this rule and no legacy row can reach ''none'' '
+  'through a NULL author. They exist because the INSERT stamp calls this before the '
+  'row exists, with NEW values it does not re-read.';
 
 -- A trigger and three DEFINER callers need no EXECUTE on it at fire time.
 REVOKE ALL ON FUNCTION public.owned_tier_prices_project(uuid, uuid)
@@ -1273,18 +1278,30 @@ BEGIN
   -- ── the callable form keeps every property 00604 pinned ───────────────────
   ASSERT v_callable LIKE '%designer_seat.role <> ''owner''%',
     '00615: the employer tier is still defined by role <> ''owner'' (HT-3-b)';
-  ASSERT position('v_employer_studios' in v_callable) < position('v_owned_studios' in v_callable),
-    '00615: the EMPLOYER tier is still read before the OWNED tier (HT-3-b) — '
+  -- W2-R10-04 (measured): spelled as the bare names this assert was VACUOUS — the
+  -- first occurrence of each is the DECLARE block ("v_employer_studios uuid[];
+  -- v_owned_studios uuid[];"), so it pinned declaration order and said nothing about
+  -- which tier the body consults. It pins the TIER READS, like the resolver's own
+  -- copy: the `into <array>` that consumes each SELECT. This text is lowercased, so
+  -- the literals are too.
+  ASSERT position('into v_employer_studios' in v_callable)
+           < position('into v_owned_studios' in v_callable)
+     AND position('into v_employer_studios' in v_callable) > 0,
+    '00615: the EMPLOYER tier is still READ before the OWNED tier (HT-3-b) — '
     'reading owned first restores W1-R8-01';
   ASSERT v_callable NOT LIKE '%order by%',
     '00615: HT-3-b is a count, not a contest — no ordering key in the callable form';
   ASSERT v_callable NOT LIKE '%studio_member_rates%',
     '00615: no rate-existence key in the callable form (W1-R11-01)';
+  -- Counted on the SCHEMA-QUALIFIED name (W2-R10-04's carried half of W2-R8-06):
+  -- spelled as the bare table name, a later hand who merely MENTIONS the table in a
+  -- comment inside this body reds the migration, because this text is source text
+  -- and includes its comments.
   SELECT count(*) INTO v_org_reads
-  FROM regexp_matches(v_callable, 'organization_members', 'g') AS hits;
+  FROM regexp_matches(v_callable, 'public\.organization_members', 'g') AS hits;
   ASSERT v_org_reads = 2,
-    '00615: the callable form still reads organization_members exactly twice — one '
-    'per HT-3-b tier. HT-3-f(2) is a column comparison, not a third membership '
+    '00615: the callable form still reads public.organization_members exactly twice '
+    '— one per HT-3-b tier. HT-3-f(2) is a column comparison, not a third membership '
     'question; got ' || v_org_reads;
   ASSERT (SELECT prosecdef FROM pg_proc
            WHERE oid = to_regprocedure('public.project_pricing_studio_id(uuid)')),
@@ -1307,8 +1324,11 @@ BEGIN
     '00615: the stamp must still read app.project_studio_id_named — without it a '
     'DERIVED studio cannot be told from one the caller NAMED, which is how HT-3-b '
     'went inert on the live path (W1-R11-02)';
-  ASSERT position('v_employer_studios' in v_stamp) < position('v_owned_studios' in v_stamp),
-    '00615: the stamp still reads the EMPLOYER tier before the OWNED tier (HT-3-b)';
+  -- W2-R10-04 again: the tier READS, not the two DECLAREs that share those names.
+  ASSERT position('into v_employer_studios' in v_stamp)
+           < position('into v_owned_studios' in v_stamp)
+     AND position('into v_employer_studios' in v_stamp) > 0,
+    '00615: the stamp still READS the EMPLOYER tier before the OWNED tier (HT-3-b)';
   ASSERT v_stamp NOT LIKE '%order by%'
      AND v_stamp NOT LIKE '%studio_member_rates%'
      AND v_stamp !~ '[a-z_]+\.created_at'

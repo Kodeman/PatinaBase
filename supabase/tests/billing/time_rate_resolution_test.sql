@@ -5096,6 +5096,174 @@ BEGIN
 END
 $$;
 
+-- ─── (ak) HT-3-f(2)'s COST TO AN HONEST STUDIO (W2-R10-03, recorded as a cost note
+--         2026-09-12), and the repair the ruling names ──────────────────────────
+-- No attacker, no manoeuvre, no seat change: a studio PRINCIPAL — she owns her
+-- studio and holds no employer seat anywhere — leads a legacy `studio_id IS NULL`
+-- project that her own ASSISTANT opened for her. `created_by` is therefore not hers,
+-- so HT-3-f(2) closes the owned tier and the project prices 'none' (HT-26's "rate
+-- pending") where before the rule her own studio priced it. Her studio's ADMIN reads
+-- none of those hours either, because 00606's owner/admin read keys on the studio
+-- that PRICES the work and that is now NULL — and the admin cannot repair it, because
+-- bound (a2)'s owned-tier sibling leg asks a studio it has no project of hers to
+-- satisfy. The ONE person who can repair it is the principal herself (the sibling leg
+-- is skipped where v_actor = v_designer_id), which is HT-3-f(2)'s own ruled sentence:
+-- "part (1)'s pin or HT-3-a's stamp is the repair". This case is why it is a COST and
+-- not a contradiction — and it exists because every other case in this file uses a
+-- hire WITH an employer seat or a project she created herself, so a later hand
+-- widening or narrowing HT-3-f(2) would not know this arm exists. Lane B owes the
+-- principal a sentence and her admin an explanation for an empty project lens.
+INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, instance_id, aud, role)
+VALUES
+  ('b1500000-0000-4000-8000-000000000001', 'htf-principal@test.invalid', '', NOW(), NOW(), NOW(),
+   '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('b1500000-0000-4000-8000-000000000002', 'htf-assistant@test.invalid', '', NOW(), NOW(), NOW(),
+   '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+UPDATE public.profiles SET full_name = 'HTF Principal' WHERE id = 'b1500000-0000-4000-8000-000000000001';
+UPDATE public.profiles SET full_name = 'HTF Assistant' WHERE id = 'b1500000-0000-4000-8000-000000000002';
+
+INSERT INTO public.organizations (id, type, name, slug, status)
+VALUES ('b1500000-0000-4000-8000-0000000000a1', 'design_studio', 'HTF Principal Studio',
+        'htf-principal-studio-test', 'active');
+
+-- Inserted before any seat exists, so the column stays NULL — the legacy shape. Her
+-- ASSISTANT is the author: the one fact that puts this project outside HT-3-f(2).
+INSERT INTO public.projects (id, name, designer_id, created_by, studio_id)
+VALUES ('b1500000-0000-4000-8000-0000000000e1', 'HTF Assistant-Opened House',
+        'b1500000-0000-4000-8000-000000000001', 'b1500000-0000-4000-8000-000000000002', NULL);
+
+INSERT INTO public.organization_members (id, user_id, organization_id, role, status, joined_at)
+VALUES
+  ('b1500000-0000-4000-8000-0000000000c1', 'b1500000-0000-4000-8000-000000000001',
+   'b1500000-0000-4000-8000-0000000000a1', 'owner', 'active', NOW()),
+  -- an `admin`, so ak4's refusal is measured on the colleague with the most standing
+  -- the studio has to offer short of its owner
+  ('b1500000-0000-4000-8000-0000000000c2', 'b1500000-0000-4000-8000-000000000002',
+   'b1500000-0000-4000-8000-0000000000a1', 'admin', 'active', NOW());
+
+-- Granted after the seat so 00295 provisions her nothing, and required by 00563's
+-- owner-executed arm (`v_lead_has_designer_role`) for ak5's stamp.
+INSERT INTO public.user_roles (user_id, role_id)
+SELECT 'b1500000-0000-4000-8000-000000000001', id FROM public.roles WHERE name = 'studio_designer';
+
+-- Her studio's card for her, written by her — she OWNS the studio, so HT-3-e(2)'s
+-- owner exemption prices it (HT-3-c's sole proprietor). That is what makes ak2's
+-- 'none' a measurement of HT-3-f(2) and of nothing else.
+INSERT INTO public.studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
+VALUES ('b1500000-0000-4000-8000-0000000000a1', 'b1500000-0000-4000-8000-000000000001', 31000,
+        (NOW() AT TIME ZONE 'UTC')::date - 30, 'b1500000-0000-4000-8000-000000000001');
+
+DO $$
+DECLARE
+  v_rate    integer;
+  v_source  text;
+  v_amount  integer;
+  v_pricing uuid;
+  v_rows    integer;
+  v_state   text;
+  v_got     uuid;
+BEGIN
+  -- ── ak0: the shape.
+  ASSERT (SELECT created_by IS DISTINCT FROM designer_id AND studio_id IS NULL
+          FROM public.projects WHERE id = 'b1500000-0000-4000-8000-0000000000e1'),
+    'FAIL ak0 (precondition): a legacy NULL-studio project whose author is NOT its '
+    'designer — that is the whole shape';
+
+  -- ── ak1 / ak2: THE COST. 'none', with no manoeuvre of any kind.
+  SELECT public.project_pricing_studio_id('b1500000-0000-4000-8000-0000000000e1') INTO v_pricing;
+  PERFORM pg_temp.assume_user('b1500000-0000-4000-8000-000000000001');
+  INSERT INTO public.project_time_entries
+    (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('b1500000-0000-4000-8000-0000000000b1', 'b1500000-0000-4000-8000-0000000000e1',
+          'b1500000-0000-4000-8000-000000000001', NOW() - INTERVAL '3 hours', 120, true, 'manual_entry');
+  PERFORM pg_temp.reset_role();
+  SELECT hourly_rate_cents, rate_source, rated_amount_cents INTO v_rate, v_source, v_amount
+  FROM public.project_time_entries WHERE id = 'b1500000-0000-4000-8000-0000000000b1';
+  ASSERT v_pricing IS NULL,
+    'FAIL ak1 (HT-3-f(2) COST NOTE, W2-R10-03): a principal''s legacy project that '
+    'somebody in her own studio opened for her derives NOTHING — the employer tier is '
+    'empty because her only seat is an owner seat, and the owned tier is closed '
+    'because created_by is not hers. Got ' || COALESCE(v_pricing::text, 'NULL');
+  ASSERT v_rate IS NULL AND v_source = 'none' AND v_amount IS NULL,
+    'FAIL ak2 (HT-3-f(2) COST NOTE, W2-R10-03): so her own hour on her own project is '
+    'HT-26''s ''rate pending'' where before the rule her own studio priced it 31000 / '
+    '62000. Recorded as a COST, not a contradiction, because the ruling names the '
+    'repair (ak5) — but it is silent in both directions, which is what lane B owes a '
+    'sentence for. Got ' || COALESCE(v_rate::text, 'NULL') || ' / '
+    || COALESCE(v_source, 'NULL') || ' / ' || COALESCE(v_amount::text, 'NULL');
+
+  -- ── ak3: and her own studio's ADMIN cannot even SEE the hours, because 00606's
+  --    owner/admin read keys on the studio that prices the work.
+  PERFORM pg_temp.assume_user('b1500000-0000-4000-8000-000000000002');
+  SELECT count(*) INTO v_rows FROM public.project_time_entries
+   WHERE id = 'b1500000-0000-4000-8000-0000000000b1';
+  PERFORM pg_temp.reset_role();
+  ASSERT v_rows = 0,
+    'FAIL ak3 (HT-3-f(2) COST NOTE): the read follows the pricing studio, so a NULL '
+    'derivation hides the hour from the one colleague who could notice the money has '
+    'stopped. Fails CLOSED, which is §0.13''s own rule — recorded so the next hand '
+    'knows the silence is by construction; rows = ' || v_rows;
+
+  -- ── ak4: the admin cannot repair it either — the owned tier''s sibling leg.
+  PERFORM pg_temp.assume_user('b1500000-0000-4000-8000-000000000002');
+  v_state := NULL;
+  BEGIN
+    SELECT public.stamp_project_pricing_studio(
+      'b1500000-0000-4000-8000-0000000000e1', 'b1500000-0000-4000-8000-0000000000a1') INTO v_got;
+  EXCEPTION WHEN OTHERS THEN v_state := SQLSTATE;
+  END;
+  PERFORM pg_temp.reset_role();
+  ASSERT v_state = '42501',
+    'FAIL ak4 (bound (a2), owned tier): a colleague — even an admin of the very '
+    'studio that should take the hours — is refused, because the owned-tier leg asks '
+    'for a project this designer both LEADS and CREATED in that studio and a '
+    'principal''s legacy book holds none. The leg is W2-R3-01''s bound against an '
+    'outsider and it catches her colleague too; got SQLSTATE '
+    || COALESCE(v_state, 'NO RAISE (returned ' || COALESCE(v_got::text, 'NULL') || ')');
+
+  -- ── ak5: THE REPAIR THE RULING NAMES. She stamps her own studio herself — the
+  --    sibling leg is skipped where the caller IS the designer, and bound (c) is
+  --    silent because the derivation answers nothing (so HT-3-f(1)'s amended
+  --    employer-tier bound on the CONFIRM does not reach this act either).
+  PERFORM pg_temp.assume_user('b1500000-0000-4000-8000-000000000001');
+  v_state := NULL;
+  BEGIN
+    SELECT public.stamp_project_pricing_studio(
+      'b1500000-0000-4000-8000-0000000000e1', 'b1500000-0000-4000-8000-0000000000a1') INTO v_got;
+  EXCEPTION WHEN OTHERS THEN v_state := SQLSTATE;
+  END;
+  PERFORM pg_temp.reset_role();
+  ASSERT v_state IS NULL AND v_got = 'b1500000-0000-4000-8000-0000000000a1',
+    'FAIL ak5 (HT-3-f(2)''s ruled repair, and HT-3-a''s): the principal herself names '
+    'her own studio on her own legacy project. If this is refused, HT-3-f(2) has no '
+    'repair at all for this population and the cost note becomes a contradiction of '
+    'HT-3-a. Got SQLSTATE ' || COALESCE(v_state, 'none') || ' / returned '
+    || COALESCE(v_got::text, 'NULL');
+
+  -- ── ak6: and the money comes back at her studio's own number.
+  PERFORM pg_temp.assume_user('b1500000-0000-4000-8000-000000000001');
+  INSERT INTO public.project_time_entries
+    (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('b1500000-0000-4000-8000-0000000000b2', 'b1500000-0000-4000-8000-0000000000e1',
+          'b1500000-0000-4000-8000-000000000001', NOW() - INTERVAL '1 hour', 120, true, 'manual_entry');
+  PERFORM pg_temp.reset_role();
+  SELECT hourly_rate_cents, rate_source, rated_amount_cents INTO v_rate, v_source, v_amount
+  FROM public.project_time_entries WHERE id = 'b1500000-0000-4000-8000-0000000000b2';
+  ASSERT v_rate = 31000 AND v_source = 'studio_member' AND v_amount = 62000,
+    'FAIL ak6 (the repair, end to end): after the stamp HT-3-a step 1 answers from '
+    'the column and her studio''s card prices the hour — 31000 / 62000. The earlier '
+    'hour keeps its ''none'' (P-4, no backfill), which is the cost lane B must '
+    'explain rather than repair. Got ' || COALESCE(v_rate::text, 'NULL') || ' / '
+    || COALESCE(v_source, 'NULL') || ' / ' || COALESCE(v_amount::text, 'NULL');
+  ASSERT (SELECT hourly_rate_cents IS NULL FROM public.project_time_entries
+           WHERE id = 'b1500000-0000-4000-8000-0000000000b1'),
+    'FAIL ak6b (P-4): and the hour written before the repair keeps the price it was '
+    'written at — there is no backfill in either direction';
+
+  RAISE NOTICE 'time_rate_resolution: case (ak) passed — HT-3-f(2) cost note (W2-R10-03): a principal whose assistant opened her legacy project prices ''none'' until she stamps her own studio.';
+END
+$$;
+
 DO $$ BEGIN RAISE NOTICE 'All time_rate_resolution assertions passed.'; END $$;
 
 ROLLBACK;

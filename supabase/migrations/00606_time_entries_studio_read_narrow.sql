@@ -121,6 +121,26 @@
 --     its current author (W2-R9-02), which needs the column declared at section
 --     (3b) below.
 --
+-- ── ROUND 10 (HT-3-f(1) AMENDED — W2-R10-01) ───────────────────────────────
+-- ONE change inside section (4): the CONFIRM is the EMPLOYER'S. It is available
+-- only where the studio named sits in the designer's EMPLOYER tier (active,
+-- non-guest seat, role <> 'owner') and the caller is an owner or admin of it; in
+-- the OWNED tier the pre-round-9 flat refusal returns, word for word. Round 9's
+-- confirm was written for W2-R9-01's employer and, read literally, also handed the
+-- DESIGNER a pin: with her employer tier empty she pinned the workspace 00295
+-- provisions for her onto her own legacy project in ONE statement, bound (b) made
+-- the column FINAL, and her hours there priced at her own 99900 for ever —
+-- including after an honest employer hired her and priced her 26000 (the control
+-- twin in the same fixture: 26000 / studio_member / 52000; the employer read 0 of
+-- the pinned project's hours against 1 of the twin's; nothing could undo it).
+-- HT-3-c's finality at CREATION is untouched — she still names her own workspace on
+-- a project she is creating; what she may not do is FREEZE a legacy project's
+-- derivation afterwards. RECORDED RESIDUAL HT-3-f(4) (W2-R10-02): the bound does
+-- not reach the consent-free outsider, whose seat in his own org IS an
+-- employer-tier seat; the owed closure is HT-3-b arm (c)'s consent door, and an
+-- owner-initiated UNPIN / re-derivation act is owed WITH it (ruling owed, not built
+-- here). Cases (y) and (z) of supabase/tests/rls/time_entry_studio_stamp_test.sql.
+--
 -- Lineage: policies, plus ONE new function (section 4 — NEW name, nothing
 -- redefined; `set_project_studio_id` is NOT touched), plus ONE new column
 -- (section 3b, W2-R9-02 — additive, nullable, written only by 00615's guard).
@@ -606,12 +626,55 @@ BEGIN
   --     created_by sibling (owned tier), bound (d)'s seat test and bound (e)'s tier
   --     test — all of which sit on either side of this one — and a caller naming a
   --     DIFFERENT studio than the one pricing the work is refused exactly as before.
+  --
+  --     HT-3-f(1) AMENDED by the orchestrator 2026-09-12 (W2 review round 10,
+  --     W2-R10-01, measured 1/1 through RLS with a control in the same fixture and
+  --     a negative control by installation): THE CONFIRM BELONGS TO THE EMPLOYER
+  --     AND ONLY TO THE EMPLOYER. It is available only where the studio named is in
+  --     the designer's EMPLOYER tier — she holds an active, non-guest seat there
+  --     with role <> 'owner' — and the caller is an owner or admin of it (bound (a),
+  --     above). In the OWNED tier the pre-round-9 FLAT REFUSAL returns, message and
+  --     all. Round 9's confirm was written for W2-R9-01's employer; read literally
+  --     it also handed the DESIGNER a pin of the workspace 00295 provisions for her:
+  --     with her employer tier empty, one statement of hers pinned her own workspace
+  --     onto her own legacy project, bound (b) made the column FINAL, and her hours
+  --     there priced at the 99900 she wrote for herself for ever — including after
+  --     an honest employer hired her and priced her 26000 (the control twin in the
+  --     same fixture came back 26000 / studio_member / 52000, the employer read 0 of
+  --     the pinned project's hours against 1 of the twin's, and no statement could
+  --     undo it). One account, no seat left or removed, no ownership transfer, no
+  --     confederate, no consent-free seat. HT-3-c's finality at CREATION is
+  --     untouched by this amendment — a designer still names her own workspace on a
+  --     project she is creating (00563's authenticated INSERT arm, 00603's stamp);
+  --     what she may not do is FREEZE a legacy project's derivation afterwards. The
+  --     refusal costs an honest sole proprietor nothing she has today: her project
+  --     already prices from her workspace without a pin (HT-3-f(3), case (aj)), and
+  --     where it reached 'none' HT-3-a's stamp is still hers — bound (c) only speaks
+  --     when the derivation ALREADY answers.
+  --     RECORDED RESIDUAL, HT-3-f(4) (W2-R10-02, measured): this does NOT bound the
+  --     consent-free outsider of HT-3-e residue (i). His seat in HIS org IS an
+  --     employer-tier seat, so after he authors her rate there and confirms his org,
+  --     her removal of the bogus seat no longer undoes anything — the pin is final.
+  --     Its closure stays the owed HT-3-b arm (c) consent door, and this program
+  --     records that an owner-initiated UNPIN / re-derivation act is owed WITH that
+  --     door (a ruling owed, not built here). Case (z) of
+  --     supabase/tests/rls/time_entry_studio_stamp_test.sql measures it as a
+  --     PASSING, loudly-labelled assertion.
   v_derived := public.project_pricing_studio_id(p_project_id);
-  IF v_derived IS NOT NULL AND v_derived IS DISTINCT FROM p_studio_id THEN
-    RAISE EXCEPTION 'stamp_project_pricing_studio: another studio already prices '
-                    'this project''s hours — name that studio to pin it, or there '
-                    'is nothing here to repair'
-      USING ERRCODE = 'invalid_parameter_value';
+  IF v_derived IS NOT NULL THEN
+    IF v_derived IS DISTINCT FROM p_studio_id THEN
+      RAISE EXCEPTION 'stamp_project_pricing_studio: another studio already prices '
+                      'this project''s hours — name that studio to pin it, or there '
+                      'is nothing here to repair'
+        USING ERRCODE = 'invalid_parameter_value';
+    END IF;
+    -- The confirm arm, HT-3-f(1) as amended: the EMPLOYER tier only. Outside it the
+    -- pre-round-9 sentence is the refusal, word for word.
+    IF NOT v_named_is_employer_seat THEN
+      RAISE EXCEPTION 'stamp_project_pricing_studio: a studio already prices this '
+                      'project''s hours — there is nothing to repair'
+        USING ERRCODE = 'invalid_parameter_value';
+    END IF;
   END IF;
 
   -- (d) 00563's own bound on this column, replicated rather than trusted: the
@@ -849,10 +912,24 @@ COMMENT ON FUNCTION public.stamp_project_pricing_studio(uuid, uuid) IS
   'employer''s standing with one in-place rewrite and the stamp was refused to the '
   'studio''s OWNER as well as to her (measured, probe A A4/A5). Refuses a '
   'stamped project (final, HT-3-c) and one whose hours ANOTHER studio already '
-  'prices — but under HT-3-f(1) (RULED 2026-09-12) naming the studio the derivation '
-  'ALREADY returns is a CONFIRM, not a refusal: an owner or admin of that studio '
-  'may write it down, after which the column is final and HT-3-b stops being '
-  'recomputed. That is the employer''s remedy for W2-R9-01, where a designer emptied '
+  'prices — but under HT-3-f(1) (RULED 2026-09-12, AMENDED 2026-09-12 after '
+  'W2-R10-01) naming the studio the derivation ALREADY returns is a CONFIRM, not a '
+  'refusal, WHERE THAT STUDIO IS IN THE DESIGNER''S EMPLOYER TIER: an owner or admin '
+  'of it may write it down, after which the column is final and HT-3-b stops being '
+  'recomputed. In the OWNED tier the pre-round-9 flat refusal stands, because read '
+  'without that bound the confirm let the DESIGNER pin the workspace 00295 provisions '
+  'for her onto her own legacy project in ONE statement while her employer tier was '
+  'empty, freezing her own 99900 onto it for ever — measured against a control twin '
+  'in the same fixture that an honest later employer priced 26000 / 52000, with that '
+  'employer reading 0 of the pinned project''s hours and no statement able to undo it '
+  '(W2-R10-01). HT-3-c''s finality at CREATION is unchanged; what the amendment '
+  'refuses is FREEZING a legacy project''s derivation afterwards. RECORDED RESIDUAL '
+  'HT-3-f(4) (W2-R10-02): the employer-tier bound does not reach the consent-free '
+  'outsider, whose seat in his own org IS an employer-tier seat — after he authors '
+  'her rate and confirms his org, her removal of the bogus seat undoes nothing. The '
+  'closure is the owed HT-3-b arm (c) consent door, and an owner-initiated '
+  'UNPIN / re-derivation act is owed WITH it (case (z)). '
+  'The confirm is the employer''s remedy for W2-R9-01, where a designer emptied '
   'her own employer tier with one `Members can leave` DELETE and her former '
   'employer''s legacy project began pricing at the number she wrote for herself, '
   'with no statement available to pin it before or after (probe C / probe D2, '
@@ -1075,10 +1152,10 @@ BEGIN
      'audit row''s organization_id follow the studio it wrote';
   ASSERT (
     SELECT prosrc LIKE '%v_derived := public.project_pricing_studio_id(p_project_id)%'
-       AND prosrc LIKE '%v_derived IS NOT NULL AND v_derived IS DISTINCT FROM p_studio_id%'
+       AND prosrc LIKE '%v_derived IS DISTINCT FROM p_studio_id%'
     FROM pg_proc
     WHERE oid = to_regprocedure('public.stamp_project_pricing_studio(uuid,uuid)')
-  ), '00606: HT-3-f(1) — bound (c) reads the derivation and refuses only where it '
+  ), '00606: HT-3-f(1) — bound (c) reads the derivation and refuses where it '
      'names ANOTHER studio. A flat `IS NOT NULL` refusal (rounds 3-8) assumed the '
      'derivation''s answer cannot change; HT-3-b is recomputed on every hour for a '
      'NULL-studio project, so one `Members can leave` DELETE moved it and the '
@@ -1087,6 +1164,32 @@ BEGIN
      'ALREADY pricing the work costs nobody anything and makes the column final '
      'under bound (b). Dropping the p_studio_id comparison would turn this into a '
      'licence to re-point a priced project, which is what the flat refusal was for';
+  -- HT-3-f(1) AS AMENDED (W2-R10-01): the confirm arm is the EMPLOYER tier's, and
+  -- the refusal it replaced still stands everywhere else. Two properties, both
+  -- pinned, and the ORDER pinned with a position() on the arm's own IF rather than
+  -- on a name that is also DECLAREd (W2-R10-04's lesson, applied here rather than
+  -- repeated): the employer-tier gate must sit AFTER the derivation is READ, because
+  -- a gate above the read is not bound (c) at all.
+  ASSERT (
+    SELECT prosrc LIKE '%IF NOT v_named_is_employer_seat THEN%'
+       AND position('v_derived := public.project_pricing_studio_id(p_project_id)' in prosrc)
+             < position('IF NOT v_named_is_employer_seat THEN' in prosrc)
+       AND position('IF NOT v_named_is_employer_seat THEN' in prosrc)
+             < position('(d) 00563''s own bound' in prosrc)
+    FROM pg_proc
+    WHERE oid = to_regprocedure('public.stamp_project_pricing_studio(uuid,uuid)')
+  ), '00606: HT-3-f(1) AS AMENDED (W2-R10-01, measured 1/1 with a control in the '
+     'same fixture) — the CONFIRM arm is available ONLY where the studio named sits '
+     'in the designer''s EMPLOYER tier (v_named_is_employer_seat, computed at bound '
+     '(a1)); in the OWNED tier the pre-round-9 flat refusal returns. Without this '
+     'gate the designer pins the workspace 00295 provisions for her onto her own '
+     'legacy project with ONE statement while her employer tier is empty, bound (b) '
+     'makes the column FINAL, and her hours there price at the number she wrote for '
+     'herself for ever — including after an honest employer hires her and prices her '
+     'arm''s-length (measured: 99900 / studio_member / 199800 against the control '
+     'twin''s 26000 / 52000, with the employer reading 0 of the pinned project''s '
+     'hours and no statement able to undo it). The gate must sit AFTER the '
+     'derivation is read and BEFORE bound (d), or it is not bound (c)''s arm';
   ASSERT (
     SELECT prosrc LIKE '%other_author.original_created_by <> v_designer_id%'
     FROM pg_proc

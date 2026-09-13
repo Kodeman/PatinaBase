@@ -3006,8 +3006,14 @@ INSERT INTO organizations (id, type, name, slug, status)
 VALUES ('c6100000-0000-4000-8000-0000000000a1', 'design_studio', 'Hist Employer', 'hist-employer-test', 'active');
 
 INSERT INTO projects (id, name, designer_id, created_by, studio_id)
-VALUES ('c6100000-0000-4000-8000-0000000000e1', 'Hist Legacy House',
-        'c6100000-0000-4000-8000-000000000002', 'c6100000-0000-4000-8000-000000000001', NULL);
+VALUES
+  ('c6100000-0000-4000-8000-0000000000e1', 'Hist Legacy House',
+   'c6100000-0000-4000-8000-000000000002', 'c6100000-0000-4000-8000-000000000001', NULL),
+  -- A SECOND legacy project of the same shape, for x7/x8 (W2-R10-07): x2 stamps the
+  -- first one and bound (b) then makes it final, so the capability W2-R9-02 restored
+  -- to HER as well as to her employer's owner needs an unstamped project to measure.
+  ('c6100000-0000-4000-8000-0000000000e2', 'Hist Legacy Cottage',
+   'c6100000-0000-4000-8000-000000000002', 'c6100000-0000-4000-8000-000000000001', NULL);
 
 INSERT INTO organization_members (id, user_id, organization_id, role, status, joined_at)
 VALUES
@@ -3160,7 +3166,395 @@ BEGIN
     'writes a row of its own. If this prices, W2-R9-02 has leaked into the resolver '
     'and round 8''s MAJOR is back; got ' || COALESCE(v_rate::text, 'NULL');
 
-  RAISE NOTICE 'stamp_project_pricing_studio: case (x) passed — W2-R9-02: the employer keeps its repair act through a self-rewrite, and the record of the displaced author is nobody''s to write.';
+  -- ── x7: W2-R10-07 — the capability W2-R9-02 restored to BOTH parties. Round 9
+  --    measured HER OWN stamp refused 42501 at probe A4 for exactly the reason the
+  --    owner's was (the card's only row read as self-authored); with the displaced
+  --    author kept, an `admin` of an HONEST employer — whom HT-3-d admits expressly,
+  --    and whose refusal W2-R6-01 rated a MAJOR — repairs her own legacy project
+  --    again. It is also HT-3-f(1) AS AMENDED in her hand, on the side of the line
+  --    that is hers: a1 is an EMPLOYER-tier studio, so the confirm is available to
+  --    her here, while case (y) measures her own WORKSPACE refused.
+  PERFORM pg_temp.assume_user('c6100000-0000-4000-8000-000000000002');
+  v_state := NULL;
+  BEGIN
+    SELECT public.stamp_project_pricing_studio(
+      'c6100000-0000-4000-8000-0000000000e2', 'c6100000-0000-4000-8000-0000000000a1') INTO v_got;
+  EXCEPTION WHEN OTHERS THEN v_state := SQLSTATE;
+  END;
+  PERFORM pg_temp.reset_role();
+  ASSERT v_state IS NULL AND v_got = 'c6100000-0000-4000-8000-0000000000a1',
+    'FAIL x7 (W2-R10-07 + HT-3-f(1) as amended): an `admin` of an honest employer '
+    'repairs her own legacy project by naming THAT EMPLOYER — HT-3-d admits her '
+    '(W2-R6-01 rated refusing her a MAJOR), the studio she names is in her own '
+    'EMPLOYER tier, and the displaced author is what gives the studio its '
+    'arm''s-length standing. If a later hand narrows the leg or the confirm, this is '
+    'the caller they also removed. Got SQLSTATE ' || COALESCE(v_state, 'none')
+    || ' / returned ' || COALESCE(v_got::text, 'NULL');
+
+  -- ── x8: and no money moves to her for it. The column is standing, not pricing.
+  PERFORM pg_temp.assume_user('c6100000-0000-4000-8000-000000000002');
+  INSERT INTO project_time_entries (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('c6100000-0000-4000-8000-0000000000b2', 'c6100000-0000-4000-8000-0000000000e2',
+          'c6100000-0000-4000-8000-000000000002', NOW() - INTERVAL '1 hour', 120, true, 'manual_entry');
+  PERFORM pg_temp.reset_role();
+  SELECT hourly_rate_cents INTO v_rate FROM project_time_entries
+   WHERE id = 'c6100000-0000-4000-8000-0000000000b2';
+  ASSERT v_rate IS NULL,
+    'FAIL x8 (W2-R10-07): her own repair must buy her NOTHING at the money — every '
+    'row of her card is one she wrote, so HT-3-e(2) still answers ''rate pending'' '
+    'until the studio writes a number of its own; got '
+    || COALESCE(v_rate::text, 'NULL');
+
+  RAISE NOTICE 'stamp_project_pricing_studio: case (x) passed — W2-R9-02: the employer keeps its repair act through a self-rewrite, the record of the displaced author is nobody''s to write, and the repair is restored to BOTH parties (W2-R10-07).';
+END
+$$;
+
+-- ─── (y) HT-3-f(1) AS AMENDED (W2-R10-01): the confirm is the EMPLOYER'S ────────
+-- Round 9 opened bound (c) as a CONFIRM for the studio the derivation already names.
+-- It was ruled for W2-R9-01's employer; read literally it also reached the DESIGNER,
+-- and round 10 measured what that bought her (W2-R10-01, 1/1 through RLS, with a
+-- control twin in the same fixture and a negative control by installation): with her
+-- employer tier empty, the derivation names the workspace 00295 provisions for her,
+-- so ONE statement of hers pinned it onto her own legacy project, bound (b) made the
+-- column FINAL, and her hours there priced at the 99900 she wrote for herself FOR
+-- EVER — including after an honest employer hired her and priced her 26000.
+-- The amendment (orchestrator, 2026-09-12) is one bound: the confirm arm is
+-- available only where the studio named sits in the designer's EMPLOYER tier, and
+-- in the OWNED tier the pre-round-9 flat refusal returns. This case measures it in
+-- HER hand, which nothing in the tree did in either direction — case (w) measures
+-- the pin in the EMPLOYER's hand on the same HT-3-f(3) shape and asserts the good
+-- outcome.
+-- What the refusal does NOT cost her is measured too (y2): a sole proprietor's own
+-- project already prices from her workspace with no pin at all (HT-3-f(3), case (aj)
+-- of the billing suite), so the amendment refuses the FREEZE and nothing else.
+INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, instance_id, aud, role)
+VALUES
+  ('c6110000-0000-4000-8000-000000000001', 'own-pin-designer@test.invalid', '', NOW(), NOW(), NOW(),
+   '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('c6110000-0000-4000-8000-000000000002', 'own-pin-employer@test.invalid', '', NOW(), NOW(), NOW(),
+   '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+UPDATE profiles SET full_name = 'Own Pin Designer' WHERE id = 'c6110000-0000-4000-8000-000000000001';
+UPDATE profiles SET full_name = 'Own Pin Employer' WHERE id = 'c6110000-0000-4000-8000-000000000002';
+
+INSERT INTO organizations (id, type, name, slug, status)
+VALUES
+  ('c6110000-0000-4000-8000-0000000000a1', 'design_studio', 'Own Pin WS',       'own-pin-ws-test',       'active'),
+  ('c6110000-0000-4000-8000-0000000000a2', 'design_studio', 'Own Pin Employer', 'own-pin-employer-test', 'active');
+
+-- Inserted before any seat exists, so the column stays NULL — the legacy shape. She
+-- created it herself, which is HT-3-f(3)'s residual and the shape HT-3-f(2) does not
+-- reach, so the derivation WILL name her workspace and bound (c) is what speaks.
+INSERT INTO projects (id, name, designer_id, created_by, studio_id)
+VALUES ('c6110000-0000-4000-8000-0000000000e1', 'Own Pin House',
+        'c6110000-0000-4000-8000-000000000001', 'c6110000-0000-4000-8000-000000000001', NULL);
+
+INSERT INTO organization_members (id, user_id, organization_id, role, status, joined_at)
+VALUES
+  ('c6110000-0000-4000-8000-0000000000c1', 'c6110000-0000-4000-8000-000000000001',
+   'c6110000-0000-4000-8000-0000000000a1', 'owner', 'active', NOW()),
+  ('c6110000-0000-4000-8000-0000000000c2', 'c6110000-0000-4000-8000-000000000002',
+   'c6110000-0000-4000-8000-0000000000a2', 'owner', 'active', NOW());
+
+-- Granted after the seat so 00295 provisions her nothing, and required by 00563's
+-- owner-executed arm (`v_lead_has_designer_role`).
+INSERT INTO user_roles (user_id, role_id)
+SELECT 'c6110000-0000-4000-8000-000000000001', id FROM roles WHERE name = 'studio_designer';
+
+INSERT INTO studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
+VALUES
+  -- the number she wrote for herself, in the workspace she OWNS (HT-3-e(2)'s owner
+  -- exemption prices it, which is what makes y3's 26000 a measurement)
+  ('c6110000-0000-4000-8000-0000000000a1', 'c6110000-0000-4000-8000-000000000001', 99900,
+   (NOW() AT TIME ZONE 'UTC')::date - 30, 'c6110000-0000-4000-8000-000000000001'),
+  -- and the honest employer's arm's-length number for her, written by its owner
+  ('c6110000-0000-4000-8000-0000000000a2', 'c6110000-0000-4000-8000-000000000001', 26000,
+   (NOW() AT TIME ZONE 'UTC')::date - 30, 'c6110000-0000-4000-8000-000000000002');
+
+DO $$
+DECLARE
+  v_pricing uuid;
+  v_state   text;
+  v_message text;
+  v_got     uuid;
+  v_rate    integer;
+  v_source  text;
+  v_rows    integer;
+BEGIN
+  -- ── y0: the shape. Her employer tier is empty, she created the project, so the
+  --    derivation names the workspace she owns and the column is still NULL.
+  SELECT public.project_pricing_studio_id('c6110000-0000-4000-8000-0000000000e1') INTO v_pricing;
+  ASSERT v_pricing = 'c6110000-0000-4000-8000-0000000000a1',
+    'FAIL y0 (precondition, HT-3-b + HT-3-f(3)): with no employer seat and a project '
+    'she created herself, the derivation must name the workspace she owns — '
+    'otherwise bound (c) is not what answers below; got '
+    || COALESCE(v_pricing::text, 'NULL');
+  ASSERT (SELECT studio_id IS NULL FROM projects
+           WHERE id = 'c6110000-0000-4000-8000-0000000000e1'),
+    'FAIL y1 (precondition): and the column must still be NULL';
+
+  -- ── y2: THE AMENDMENT. Her own confirm of her own workspace is REFUSED, and the
+  --    message is the pre-round-9 sentence, so it is bound (c)'s owned-tier arm
+  --    speaking and not a standing refusal wearing the same clothes.
+  PERFORM pg_temp.assume_user('c6110000-0000-4000-8000-000000000001');
+  v_state := NULL;
+  BEGIN
+    SELECT public.stamp_project_pricing_studio(
+      'c6110000-0000-4000-8000-0000000000e1', 'c6110000-0000-4000-8000-0000000000a1') INTO v_got;
+  EXCEPTION WHEN OTHERS THEN v_state := SQLSTATE; v_message := SQLERRM;
+  END;
+  PERFORM pg_temp.reset_role();
+  ASSERT v_state = '22023'
+     AND v_message LIKE '%there is nothing to repair%',
+    'FAIL y2 (HT-3-f(1) AS AMENDED, W2-R10-01): a designer may NOT confirm a studio '
+    'she OWNS onto her own legacy project. Admitted, one statement of hers freezes '
+    'the derivation at her own number: measured 99900 / studio_member / 199800 on the '
+    'pinned project against 26000 / 52000 on the control twin in the same fixture '
+    'once an honest employer priced her, with that employer reading 0 of the pinned '
+    'project''s hours and NO statement able to undo it (bound (b)). The confirm '
+    'belongs to the EMPLOYER tier — case (e) and case (w) measure it there, and x7 '
+    'measures it in the hand of a designer who is her employer''s own admin. Got '
+    'SQLSTATE ' || COALESCE(v_state, 'NO RAISE (returned '
+    || COALESCE(v_got::text, 'NULL') || ')') || ' / ' || COALESCE(v_message, 'none');
+  ASSERT (SELECT studio_id IS NULL FROM projects
+           WHERE id = 'c6110000-0000-4000-8000-0000000000e1'),
+    'FAIL y2b: the refused confirm must leave the column NULL — a column written '
+    'here is final (bound (b)) whatever the function returns';
+
+  -- ── y3: AND IT COSTS HER NOTHING SHE HAS TODAY. HT-3-a arm (a) / HT-3-c: a sole
+  --    proprietor's own project prices from her own workspace with no pin at all.
+  PERFORM pg_temp.assume_user('c6110000-0000-4000-8000-000000000001');
+  INSERT INTO project_time_entries (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('c6110000-0000-4000-8000-0000000000b1', 'c6110000-0000-4000-8000-0000000000e1',
+          'c6110000-0000-4000-8000-000000000001', NOW() - INTERVAL '3 hours', 120, true, 'manual_entry');
+  PERFORM pg_temp.reset_role();
+  SELECT hourly_rate_cents, rate_source INTO v_rate, v_source
+  FROM project_time_entries WHERE id = 'c6110000-0000-4000-8000-0000000000b1';
+  ASSERT v_rate = 99900 AND v_source = 'studio_member',
+    'FAIL y3 (the amendment refuses the FREEZE and nothing else): an honest sole '
+    'proprietor is still priced by her own workspace on her own project, because the '
+    'derivation answers it without a pin (HT-3-f(3), HT-3-e(2)''s owner exemption). '
+    'If this stops pricing, the amendment has cost HT-3-a arm (a) its whole '
+    'population and it is a RULING, not a tidy; got '
+    || COALESCE(v_rate::text, 'NULL') || ' / ' || COALESCE(v_source, 'NULL');
+
+  -- ── y4: WHAT THE REFUSAL BUYS. An honest employer hires her and prices her
+  --    arm's-length; the project was never frozen, so the employer tier — read
+  --    first (HT-3-b) — takes the project and the money.
+  PERFORM pg_temp.assume_user('c6110000-0000-4000-8000-000000000002');
+  INSERT INTO organization_members (user_id, organization_id, role, status, joined_at)
+  VALUES ('c6110000-0000-4000-8000-000000000001', 'c6110000-0000-4000-8000-0000000000a2',
+          'member', 'active', NOW());
+  PERFORM pg_temp.reset_role();
+
+  SELECT public.project_pricing_studio_id('c6110000-0000-4000-8000-0000000000e1') INTO v_pricing;
+  PERFORM pg_temp.assume_user('c6110000-0000-4000-8000-000000000001');
+  INSERT INTO project_time_entries (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('c6110000-0000-4000-8000-0000000000b2', 'c6110000-0000-4000-8000-0000000000e1',
+          'c6110000-0000-4000-8000-000000000001', NOW() - INTERVAL '1 hour', 120, true, 'manual_entry');
+  PERFORM pg_temp.reset_role();
+  SELECT hourly_rate_cents, rate_source, rated_amount_cents INTO v_rate, v_source, v_rows
+  FROM project_time_entries WHERE id = 'c6110000-0000-4000-8000-0000000000b2';
+  ASSERT v_pricing = 'c6110000-0000-4000-8000-0000000000a2',
+    'FAIL y4 (W2-R10-01, THE CONTROL): unpinned, the project follows HT-3-b — the '
+    'employer tier is read first, so the employer that hired her prices her work; '
+    'got ' || COALESCE(v_pricing::text, 'NULL');
+  ASSERT v_rate = 26000 AND v_source = 'studio_member' AND v_rows = 52000,
+    'FAIL y4b (W2-R10-01, THE MONEY THE PIN WOULD HAVE TAKEN): her hour prices at '
+    'the employer''s arm''s-length 26000, not at her own 99900. A pin taken before '
+    'she was hired would have frozen this at 199800 for ever, and the employer would '
+    'have read none of it; got ' || COALESCE(v_rate::text, 'NULL') || ' / '
+    || COALESCE(v_source, 'NULL') || ' / ' || COALESCE(v_rows::text, 'NULL');
+
+  -- ── y5: and the remedy HT-3-f(1) was RULED for is intact — her employer may pin.
+  PERFORM pg_temp.assume_user('c6110000-0000-4000-8000-000000000002');
+  v_state := NULL;
+  BEGIN
+    SELECT public.stamp_project_pricing_studio(
+      'c6110000-0000-4000-8000-0000000000e1', 'c6110000-0000-4000-8000-0000000000a2') INTO v_got;
+  EXCEPTION WHEN OTHERS THEN v_state := SQLSTATE; v_message := SQLERRM;
+  END;
+  PERFORM pg_temp.reset_role();
+  ASSERT v_state IS NULL AND v_got = 'c6110000-0000-4000-8000-0000000000a2',
+    'FAIL y5 (HT-3-f(1), UNAMENDED HALF): the amendment must take nothing from the '
+    'party the ruling was written for — the employer the derivation names may still '
+    'write it down, which is W2-R9-01''s whole remedy. Got SQLSTATE '
+    || COALESCE(v_state, 'none') || ' / returned ' || COALESCE(v_got::text, 'NULL')
+    || ' / ' || COALESCE(v_message, 'none');
+
+  RAISE NOTICE 'stamp_project_pricing_studio: case (y) passed — HT-3-f(1) as amended: the confirm is the employer''s, her own workspace is refused, and neither her ordinary pricing nor the employer''s remedy moves.';
+END
+$$;
+
+-- ─── (z) HT-3-f(4), THE RECORDED RESIDUAL — asserted as PASSING ────────────────
+-- W2-R10-02, measured: HT-3-f(1)'s employer-tier bound does NOT reach the
+-- consent-free outsider of HT-3-e residue (i) / W2-R8-02, because the seat he writes
+-- for her in HIS org IS an employer-tier seat. Before round 9 he could not reach
+-- bound (c) at all — his own seat made her employer tier answer and the flat refusal
+-- fired — so the CONFIRM is exactly the door that opens for him, and it changes the
+-- residue's cost: her removal of the bogus seat used to revert the derivation, and
+-- now it undoes nothing, because the column is final (bound (b), HT-3-c).
+-- RECORDED by the orchestrator 2026-09-12 as HT-3-f(4): the consent-free seat is
+-- owned by HT-3-b arm (c)'s consent door (the People-room program, not this one),
+-- and this program records that an owner-initiated UNPIN / re-derivation act is owed
+-- WITH that door — a ruling owed, not built here. Until both land this case asserts
+-- the taking SUCCEEDING, deliberately and loudly, so the next hand moves a test
+-- rather than discovering a surprise.
+-- IF THIS CASE FAILS, the consent door or the unpin landed: rewrite z4 to assert a
+-- refusal, or z5 to assert the derivation reverting.
+INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, instance_id, aud, role)
+VALUES
+  ('c6120000-0000-4000-8000-000000000001', 'unpin-outsider@test.invalid', '', NOW(), NOW(), NOW(),
+   '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('c6120000-0000-4000-8000-000000000002', 'unpin-victim@test.invalid', '', NOW(), NOW(), NOW(),
+   '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+UPDATE profiles SET full_name = 'Unpin Outsider' WHERE id = 'c6120000-0000-4000-8000-000000000001';
+UPDATE profiles SET full_name = 'Unpin Victim'   WHERE id = 'c6120000-0000-4000-8000-000000000002';
+
+INSERT INTO organizations (id, type, name, slug, status)
+VALUES
+  ('c6120000-0000-4000-8000-0000000000a1', 'design_studio', 'Unpin Outsider Org', 'unpin-outsider-test', 'active'),
+  ('c6120000-0000-4000-8000-0000000000a2', 'design_studio', 'Unpin Victim WS',    'unpin-victim-ws-test','active');
+
+INSERT INTO projects (id, name, designer_id, created_by, studio_id)
+VALUES ('c6120000-0000-4000-8000-0000000000e1', 'Unpin Victim House',
+        'c6120000-0000-4000-8000-000000000002', 'c6120000-0000-4000-8000-000000000002', NULL);
+
+INSERT INTO organization_members (id, user_id, organization_id, role, status, joined_at)
+VALUES
+  ('c6120000-0000-4000-8000-0000000000c1', 'c6120000-0000-4000-8000-000000000001',
+   'c6120000-0000-4000-8000-0000000000a1', 'owner', 'active', NOW()),
+  ('c6120000-0000-4000-8000-0000000000c2', 'c6120000-0000-4000-8000-000000000002',
+   'c6120000-0000-4000-8000-0000000000a2', 'owner', 'active', NOW());
+
+INSERT INTO user_roles (user_id, role_id)
+SELECT 'c6120000-0000-4000-8000-000000000002', id FROM roles WHERE name = 'studio_designer';
+
+INSERT INTO studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
+VALUES ('c6120000-0000-4000-8000-0000000000a2', 'c6120000-0000-4000-8000-000000000002', 28000,
+        (NOW() AT TIME ZONE 'UTC')::date - 30, 'c6120000-0000-4000-8000-000000000002');
+
+DO $$
+DECLARE
+  v_pricing uuid;
+  v_seated  integer;
+  v_wrote   integer;
+  v_rows    integer;
+  v_state   text;
+  v_got     uuid;
+  v_rate    integer;
+  v_source  text;
+BEGIN
+  -- ── z0: her own book, priced by her own workspace (HT-3-c's sole proprietor).
+  SELECT public.project_pricing_studio_id('c6120000-0000-4000-8000-0000000000e1') INTO v_pricing;
+  ASSERT v_pricing = 'c6120000-0000-4000-8000-0000000000a2',
+    'FAIL z0 (precondition): the victim''s own workspace must price her own legacy '
+    'project; got ' || COALESCE(v_pricing::text, 'NULL');
+  PERFORM pg_temp.assume_user('c6120000-0000-4000-8000-000000000002');
+  INSERT INTO project_time_entries (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('c6120000-0000-4000-8000-0000000000b1', 'c6120000-0000-4000-8000-0000000000e1',
+          'c6120000-0000-4000-8000-000000000002', NOW() - INTERVAL '3 hours', 120, true, 'manual_entry');
+  PERFORM pg_temp.reset_role();
+  SELECT hourly_rate_cents INTO v_rate FROM project_time_entries
+   WHERE id = 'c6120000-0000-4000-8000-0000000000b1';
+  ASSERT v_rate = 28000,
+    'FAIL z0b (precondition): at her own number, 28000; got '
+    || COALESCE(v_rate::text, 'NULL');
+
+  -- ── z1-z2: TWO statements of his. The consent-free seat (`Org owners can insert
+  --    members`, no consent gate — case (d)), then her rate in HIS org under HIS
+  --    own id, which is arm's-length BY THE TEST because the test asks about the
+  --    SUBJECT's authorship (HT-3-e(1), case (t)).
+  PERFORM pg_temp.assume_user('c6120000-0000-4000-8000-000000000001');
+  INSERT INTO organization_members (user_id, organization_id, role)
+  VALUES ('c6120000-0000-4000-8000-000000000002', 'c6120000-0000-4000-8000-0000000000a1', 'member');
+  GET DIAGNOSTICS v_seated = ROW_COUNT;
+  INSERT INTO studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from, created_by)
+  VALUES ('c6120000-0000-4000-8000-0000000000a1', 'c6120000-0000-4000-8000-000000000002', 99900,
+          (NOW() AT TIME ZONE 'UTC')::date - 30, 'c6120000-0000-4000-8000-000000000001');
+  GET DIAGNOSTICS v_wrote = ROW_COUNT;
+  PERFORM pg_temp.reset_role();
+  ASSERT v_seated = 1 AND v_wrote = 1,
+    'FAIL z1 (precondition, HT-3-e residue (i)): the consent-free seat and the rate '
+    'row must both still be writable — if either fails the consent door landed and '
+    'this case is measuring nothing; seated ' || v_seated || ' / wrote ' || v_wrote;
+
+  -- ── z3: his seat is an EMPLOYER-tier seat, so the derivation now names HIS org.
+  SELECT public.project_pricing_studio_id('c6120000-0000-4000-8000-0000000000e1') INTO v_pricing;
+  ASSERT v_pricing = 'c6120000-0000-4000-8000-0000000000a1',
+    'FAIL z3 (HT-3-b): one seat he wrote moves her EMPTY employer tier to exactly '
+    'one, and the employer tier is read first — which is why HT-3-f(1)''s '
+    'employer-tier bound does not reach him; got ' || COALESCE(v_pricing::text, 'NULL');
+
+  -- ── z4: THE RESIDUAL. His CONFIRM of the derivation he just created SUCCEEDS.
+  PERFORM pg_temp.assume_user('c6120000-0000-4000-8000-000000000001');
+  v_state := NULL;
+  BEGIN
+    SELECT public.stamp_project_pricing_studio(
+      'c6120000-0000-4000-8000-0000000000e1', 'c6120000-0000-4000-8000-0000000000a1') INTO v_got;
+  EXCEPTION WHEN OTHERS THEN v_state := SQLSTATE;
+  END;
+  PERFORM pg_temp.reset_role();
+  ASSERT v_state IS NULL AND v_got = 'c6120000-0000-4000-8000-0000000000a1',
+    'FAIL z4 (HT-3-f(4), THE RECORDED RESIDUAL — asserted as PASSING, NOT a '
+    'regression if it fails): the consent-free outsider''s seat is an EMPLOYER-tier '
+    'seat, so HT-3-f(1) as amended admits his confirm. Three authenticated '
+    'statements — seat, rate, confirm — and the project is his org''s permanently. '
+    'Ruled owned by HT-3-b arm (c)''s consent door (the People-room program), with an '
+    'owner-initiated UNPIN / re-derivation act OWED alongside it by this program. If '
+    'this now raises, one of the two landed: rewrite this leg. Got SQLSTATE '
+    || COALESCE(v_state, 'none') || ' / returned ' || COALESCE(v_got::text, 'NULL');
+
+  -- ── z5: AND THE TAKING IS NOW IRREVERSIBLE. Before round 9 her removal of the
+  --    bogus seat reverted the derivation; the pin makes the column final.
+  PERFORM pg_temp.assume_user('c6120000-0000-4000-8000-000000000002');
+  WITH gone AS (
+    DELETE FROM organization_members
+     WHERE user_id = 'c6120000-0000-4000-8000-000000000002'
+       AND organization_id = 'c6120000-0000-4000-8000-0000000000a1'
+    RETURNING 1
+  ) SELECT count(*) INTO v_rows FROM gone;
+  INSERT INTO project_time_entries (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('c6120000-0000-4000-8000-0000000000b2', 'c6120000-0000-4000-8000-0000000000e1',
+          'c6120000-0000-4000-8000-000000000002', NOW() - INTERVAL '1 hour', 120, true, 'manual_entry');
+  PERFORM pg_temp.reset_role();
+  ASSERT v_rows = 1,
+    'FAIL z5 (precondition): `Members can leave` must still admit her removing the '
+    'seat she never agreed to; rows = ' || v_rows;
+  SELECT public.project_pricing_studio_id('c6120000-0000-4000-8000-0000000000e1') INTO v_pricing;
+  ASSERT v_pricing = 'c6120000-0000-4000-8000-0000000000a1',
+    'FAIL z5b (HT-3-f(4), THE COST THE CONFIRM ADDED): with the bogus seat gone the '
+    'derivation is no longer consulted at all — the column is written and final. A '
+    'consent door closes the FUTURE; a pin already taken stays taken, which is why '
+    'residue (i)''s closure now needs a way BACK; got '
+    || COALESCE(v_pricing::text, 'NULL');
+  SELECT hourly_rate_cents, rate_source, rated_amount_cents INTO v_rate, v_source, v_rows
+  FROM project_time_entries WHERE id = 'c6120000-0000-4000-8000-0000000000b2';
+  ASSERT v_rate = 99900 AND v_source = 'studio_member' AND v_rows = 199800,
+    'FAIL z6 (HT-3-f(4) — the money): her next hour on her OWN legacy project prices '
+    'at HIS number rather than her own 28000. HT-3-e(2) does not reach it and is not '
+    'meant to: the row is not self-authored, it is written by somebody with no '
+    'relationship to the work (case (t) t5); got ' || COALESCE(v_rate::text, 'NULL')
+    || ' / ' || COALESCE(v_source, 'NULL') || ' / ' || COALESCE(v_rows::text, 'NULL');
+
+  -- ── z7: and she cannot repair it. There is no unpin; bound (b) is final.
+  PERFORM pg_temp.assume_user('c6120000-0000-4000-8000-000000000002');
+  v_state := NULL;
+  BEGIN
+    SELECT public.stamp_project_pricing_studio(
+      'c6120000-0000-4000-8000-0000000000e1', 'c6120000-0000-4000-8000-0000000000a2') INTO v_got;
+  EXCEPTION WHEN OTHERS THEN v_state := SQLSTATE;
+  END;
+  PERFORM pg_temp.reset_role();
+  ASSERT v_state IS NOT NULL
+     AND (SELECT studio_id = 'c6120000-0000-4000-8000-0000000000a1' FROM projects
+           WHERE id = 'c6120000-0000-4000-8000-0000000000e1'),
+    'FAIL z7 (HT-3-f(4) — the OWED act): naming her own workspace is refused (bound '
+    '(b): the project already names a studio) and the column does not move. This is '
+    'the sentence the owed ruling must change — an owner-initiated UNPIN or '
+    're-derivation, landing with HT-3-b arm (c)''s consent door. Got SQLSTATE '
+    || COALESCE(v_state, 'NO RAISE (returned ' || COALESCE(v_got::text, 'NULL') || ')');
+
+  RAISE NOTICE 'stamp_project_pricing_studio: case (z) recorded — HT-3-f(4): the consent-free outsider''s confirm succeeds and is now irreversible (owed: HT-3-b arm (c) consent door + an owner-initiated unpin).';
 END
 $$;
 
