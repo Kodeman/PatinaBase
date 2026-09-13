@@ -132,7 +132,14 @@ struct RootView: View {
     }
 
     @ViewBuilder private var companionSurface: some View {
-        if !usesFeatureOwnedCompanionSurface {
+        // Whether the strip is on screen is a function of the route, not of
+        // whoever wrote the Companion's state last. Two writers reach that
+        // state — this shell, and screens that set their own hint — and W1's
+        // `updateCompanionHint()` lands after an async `loadAll()`, i.e. after
+        // `.task(id:)` has already hidden the strip for a route pushed above
+        // W1. Re-sending `.hide` from the update phase does not reliably reach
+        // the rendered tree, so a hidden placement is enforced here instead.
+        if !usesFeatureOwnedCompanionSurface, !companionPlacementHidesStrip {
             FieldCompanionHearthView(
                 presentation: container.companion.presentation,
                 onOpen: expandCompanion,
@@ -141,6 +148,11 @@ struct RootView: View {
             )
             .padding(.vertical, 8)
         }
+    }
+
+    private var companionPlacementHidesStrip: Bool {
+        if case .hidden = companionPlacement { return true }
+        return false
     }
 
     private var usesFeatureOwnedCompanionSurface: Bool {
@@ -176,6 +188,11 @@ struct RootView: View {
         }
         switch route {
         case .qrScan:
+            return .hidden(.featureOwned)
+        case .people:
+            // ux-4-field-mobile.md §5 must-not #4: the People room is a studio
+            // surface and carries no engagement chrome, and the collapsed strip's
+            // hint is exactly that ("What needs you" / "2 items need you").
             return .hidden(.featureOwned)
         default:
             return .collapsed(realm, route)
