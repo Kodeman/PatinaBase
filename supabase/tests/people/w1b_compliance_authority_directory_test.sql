@@ -4179,5 +4179,138 @@ BEGIN
                'record keeps her own job''s door (r14 MAJOR-1): passed';
 END $$;
 
+-- ─── 25. r15 MAJOR-2: the CONTACTS branch's reach word stops at the tenant ─
+--
+-- r14 MAJOR-1 (block 24) gave reach_state_for_identity() the seats view's
+-- WHERE. Its sibling reach_state_for() kept a card leg whose only predicate is
+-- pp.studio_contact_id = p_card_id — no projects join, no tenant leg, no
+-- designer-of-record leg — and the CONTACTS branch, where every carded human
+-- now lives (49 of the seeded studio's 62 rows against the party branch's 1),
+-- called exactly that leg. So a seat stamped with ANOTHER studio's card — the
+-- pre-00624 shape R-AP refuses on write but cannot repair on rows already on
+-- the table (00624:724-739's preflight, unmeasured on Strata) — printed
+-- `field_link` over seat_count 0 and no seat line at all: R-AB's "Copy field
+-- link" act on a door this studio cannot open, and R-F's vitals not counting
+-- the mint it needs.
+DO $$
+DECLARE
+  designer UUID := 'a0000000-0000-0000-0000-000000000004';  -- owns studio A, and C below
+  admin_a  UUID := 'a0000000-0000-0000-0000-000000000003';  -- studio A only
+  studio_a UUID := 'b0000000-0000-0000-0000-000000000001';
+  studio_c UUID := 'f4000000-0000-4000-8000-00000000000c';
+  proj_a   UUID := 'd0e00000-0000-0000-0000-00000000000a';  -- Okonkwo residence
+  proj_c   UUID := 'f5000000-0000-4000-8000-00000000000c';
+  card     UUID := 'f7000000-0000-4000-8000-00000000000c';
+  seat_c   UUID := 'f6000000-0000-4000-8000-00000000000c';
+  seat_a   UUID := 'f6000000-0000-4000-8000-00000000000d';
+  word     TEXT;
+  n        INTEGER;
+BEGIN
+  -- A THIRD design studio of the same designer, with no other member — so the
+  -- reader below shares an active org with the job's designer of record (both
+  -- base tables' RLS is is_studio_comember(designer_id)) and belongs to no
+  -- part of that job's own studio.
+  INSERT INTO public.organizations (id, type, name, slug, status)
+  VALUES (studio_c, 'design_studio', 'W1B Third Studio', 'w1b-third-studio', 'active');
+  INSERT INTO public.organization_members (organization_id, user_id, role, status, joined_at)
+  VALUES (studio_c, designer, 'owner', 'active', now());
+  INSERT INTO public.projects (id, name, designer_id, studio_id, created_by, status)
+  VALUES (proj_c, 'W1B Studio C job', designer, studio_c, designer, 'active');
+
+  -- The card is in STUDIO A's rolodex, so studio A's Directory emits it on the
+  -- contacts branch.
+  INSERT INTO public.studio_contacts (id, organization_id, entity_kind, contact_kind,
+                                      full_name, company_name, created_by)
+  VALUES (card, studio_a, 'person', 'sub', 'W1B Shared Card', 'W1B Shared Card LLC',
+          designer);
+
+  -- The legacy shape, staged the way block 16g stages its own: no live write
+  -- path can mint a seat wearing another studio's card (R-AP), so the guard is
+  -- lifted for one INSERT as the table's owner and put straight back.
+  ALTER TABLE public.project_parties DISABLE TRIGGER assert_project_party_cards_trg;
+  INSERT INTO public.project_parties (id, project_id, party_kind, display_name,
+                                      studio_contact_id, created_by)
+  VALUES (seat_c, proj_c, 'sub', 'W1B Shared Card', card, designer);
+  ALTER TABLE public.project_parties ENABLE TRIGGER assert_project_party_cards_trg;
+
+  INSERT INTO public.field_link_tokens (party_id, project_id, token_hash, expires_at, status)
+  VALUES (seat_c, proj_c, encode(extensions.digest('w1b-25-token-c','sha256'),'hex'),
+          now() + interval '30 days', 'active');
+
+  PERFORM pg_temp.assume_user(admin_a);
+  IF public.is_active_studio_member(studio_c) THEN
+    RAISE EXCEPTION '25 setup: this caller must NOT be a member of studio C';
+  END IF;
+  IF NOT public.is_active_studio_member(studio_a) THEN
+    RAISE EXCEPTION '25 setup: this caller must be a member of studio A';
+  END IF;
+
+  -- (a) THE PREMISE, so the block cannot pass for the wrong reason: this
+  --     caller really does read both base rows raw, which is why the old
+  --     card leg found the foreign door at all.
+  SELECT count(*) INTO n FROM public.project_parties WHERE id = seat_c;
+  IF n <> 1 THEN
+    RAISE EXCEPTION '25a the foreign seat is not readable raw (%) — the word '
+                    'would read on_paper for the wrong reason', n;
+  END IF;
+  SELECT count(*) INTO n FROM public.field_link_tokens WHERE party_id = seat_c;
+  IF n <> 1 THEN
+    RAISE EXCEPTION '25a2 the foreign link is not readable raw (%) — same', n;
+  END IF;
+
+  -- (b) the seats view nests nothing under this card…
+  SELECT count(*) INTO n FROM public.people_directory_seats WHERE person_id = card;
+  IF n <> 0 THEN
+    RAISE EXCEPTION '25b studio C''s seat nests under studio A''s room (% rows)', n;
+  END IF;
+
+  -- (c) …and the word agrees with it.
+  SELECT reach_state, seat_count INTO word, n
+    FROM public.people_directory WHERE person_id = card;
+  IF word IS NULL THEN
+    RAISE EXCEPTION '25c the card''s own studio must still see its Directory row';
+  END IF;
+  IF word <> 'on_paper' OR n <> 0 THEN
+    RAISE EXCEPTION '25c the row reads % over seat_count % — a door minted on '
+                    'another studio''s job decided this studio''s word', word, n;
+  END IF;
+  IF public.reach_state_for_identity(NULL, card::text) <> 'on_paper' THEN
+    RAISE EXCEPTION '25c2 the function itself still crosses the tenant boundary';
+  END IF;
+  PERFORM pg_temp.reset_role();
+
+  -- (d) THE CONTROL, so the predicate refuses a foreign door and not every
+  --     door: the same card, a seat and a live link on studio A's OWN job.
+  INSERT INTO public.project_parties (id, project_id, party_kind, display_name,
+                                      studio_contact_id, created_by)
+  VALUES (seat_a, proj_a, 'sub', 'W1B Shared Card', card, designer);
+  INSERT INTO public.field_link_tokens (party_id, project_id, token_hash, expires_at, status)
+  VALUES (seat_a, proj_a, encode(extensions.digest('w1b-25-token-a','sha256'),'hex'),
+          now() + interval '30 days', 'active');
+  PERFORM pg_temp.assume_user(admin_a);
+  SELECT reach_state, seat_count INTO word, n
+    FROM public.people_directory WHERE person_id = card;
+  IF word <> 'field_link' OR n <> 1 THEN
+    RAISE EXCEPTION '25d studio A''s own live link must read field_link over '
+                    'one nested seat, got % / %', word, n;
+  END IF;
+  SELECT reach_state INTO word FROM public.people_directory_seats
+   WHERE seat_id = seat_a;
+  IF word <> 'field_link' THEN
+    RAISE EXCEPTION '25d2 the seat line must read field_link beside it, got %', word;
+  END IF;
+  PERFORM pg_temp.reset_role();
+
+  DELETE FROM public.field_link_tokens WHERE party_id IN (seat_c, seat_a);
+  DELETE FROM public.project_parties   WHERE id IN (seat_c, seat_a);
+  DELETE FROM public.studio_contacts   WHERE id = card;
+
+  RAISE NOTICE '25. the CONTACTS branch''s reach word reduces over the seats '
+               'the row nests — a live field link on a seat wearing this '
+               'studio''s card but sitting on another studio''s job no longer '
+               'prints field_link over seat_count 0 and no seat line, and the '
+               'studio''s own link still does (r15 MAJOR-2): passed';
+END $$;
+
 DO $$ BEGIN RAISE NOTICE 'All W1b assertions passed.'; END $$;
 ROLLBACK;

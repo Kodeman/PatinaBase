@@ -136,6 +136,14 @@
 --      frozen, and still dispatch nothing for an unasked number, a recorded
 --      refusal, or a non-field party. A pre-fold `granted` seat with no record
 --      still dispatches, because sendPartySms still honours one.
+--  47. w1b final review r15 MAJOR-1 (R-AR): a SEAT stamped with the card is
+--      the sixth holder. 00626 made project_parties.studio_contact_id the v4
+--      identity key and 00624's R-AP guard polices it from the seat side
+--      only, so one ordinary member UPDATE moved a stamped card into the
+--      member's other studio and left the working studio's seat nesting under
+--      a person_id it could open no Directory row for. The hint names the
+--      seats, a restatement still writes, and deleting the seat reopens the
+--      door.
 --
 -- How to run:
 --   psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
@@ -6466,6 +6474,113 @@ BEGIN
 END
 $$;
 
+
+-- ─── 47. r15 MAJOR-1: a SEAT stamped with the card holds it too ───────────
+--
+-- assert_studio_contact_identity_stable() counted five holders — channels,
+-- designations, rule routes, rule subjects, affiliations — and not
+-- project_parties.studio_contact_id, which 00626 made the v4 identity key.
+-- assert_project_party_cards() (00624, R-AP) polices that column from the SEAT
+-- side only (BEFORE INSERT OR UPDATE OF … ON project_parties), so nothing fired
+-- when the CARD moved out from under the stamp, and studio_contacts_member_update
+-- is is_active_studio_member(organization_id) in USING and WITH CHECK — one
+-- PATCH by a member of two studios. The working studio then lost the human's
+-- Directory row while its own seat still nested under that person_id.
+DO $$
+DECLARE
+  card   UUID := 'c0000000-0000-4000-8000-000000000074';
+  seat   UUID := 'e0000000-0000-4000-8000-000000000074';
+  raised TEXT;
+  hint   TEXT;
+  r      RECORD;
+BEGIN
+  INSERT INTO studio_contacts (id, organization_id, entity_kind, contact_kind,
+                               full_name, company_name, created_by)
+  VALUES (card, 'b0000000-0000-4000-8000-00000000000a', 'person', 'sub',
+          'Stamped Person', 'Stamped Person LLC',
+          'a0000000-0000-4000-8000-000000000001');
+
+  -- 47a. Nothing holds it yet, so the change goes through and comes back. As
+  --      in 29a/29f the KIND flip is the one exercised: studio_contacts' own
+  --      member RLS WITH CHECK refuses a move into a studio this member does
+  --      not belong to, which would prove nothing about this guard — and the
+  --      guard is a BEFORE trigger, so on the held card in 47b it is the one
+  --      that answers first.
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+  UPDATE studio_contacts SET entity_kind = 'company' WHERE id = card;
+  UPDATE studio_contacts SET entity_kind = 'person'  WHERE id = card;
+  PERFORM pg_temp.reset_role();
+
+  -- One seat on Alpha's own job, stamped with the card. phone stays NULL so
+  -- apply_party_rolodex_link_trg has nothing to re-derive and the stamp under
+  -- test is the only thing pointing at the card.
+  INSERT INTO project_parties (id, project_id, party_kind, display_name,
+                               studio_contact_id)
+  VALUES (seat, 'd0000000-0000-4000-8000-00000000000a', 'sub',
+          'Stamped Person', card);
+  SELECT * INTO r FROM project_parties WHERE id = seat;
+  ASSERT r.studio_contact_id = card,
+    'FAIL 47 setup: the seat must carry the stamp under test';
+
+  -- 47b. The studio move is refused — the half that stranded the seat.
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+  raised := NULL;
+  BEGIN
+    UPDATE studio_contacts SET organization_id = 'b0000000-0000-4000-8000-00000000000b'
+     WHERE id = card;
+  EXCEPTION WHEN OTHERS THEN
+    raised := SQLERRM;
+    GET STACKED DIAGNOSTICS hint = PG_EXCEPTION_HINT;
+  END;
+  ASSERT raised = 'studio_contact_identity_held',
+    'FAIL 47b: a card a seat is stamped with may not move studios, got '
+      || COALESCE(raised, '<no error>');
+  ASSERT hint LIKE '%1 seat(s) stamped with this card%',
+    'FAIL 47b2: the hint must name the seat that holds it, got '
+      || COALESCE(hint, '<null>');
+
+  -- 47c. …and so is the kind flip, on the same holder.
+  raised := NULL;
+  BEGIN
+    UPDATE studio_contacts SET entity_kind = 'company' WHERE id = card;
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM; END;
+  ASSERT raised = 'studio_contact_identity_held',
+    'FAIL 47c: a card a seat is stamped with may not change its kind, got '
+      || COALESCE(raised, '<no error>');
+
+  -- 47d. A RESTATEMENT is still not a change — the shipped hook writes
+  --      entity_kind on every card edit.
+  UPDATE studio_contacts
+     SET entity_kind = 'person',
+         organization_id = 'b0000000-0000-4000-8000-00000000000a',
+         full_name = 'Stamped Person, renamed'
+   WHERE id = card;
+  PERFORM pg_temp.reset_role();
+  SELECT * INTO r FROM studio_contacts WHERE id = card;
+  ASSERT r.full_name = 'Stamped Person, renamed',
+    'FAIL 47d: restating the same kind and studio must still write';
+  ASSERT r.organization_id = 'b0000000-0000-4000-8000-00000000000a',
+    'FAIL 47d2: …and nothing moved, got ' || COALESCE(r.organization_id::text, '<null>');
+
+  -- 47e. Close the seat and the card is free again — the same way out the
+  --      other five holders have.
+  DELETE FROM project_parties WHERE id = seat;
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000001');
+  UPDATE studio_contacts SET entity_kind = 'company' WHERE id = card;
+  PERFORM pg_temp.reset_role();
+  SELECT * INTO r FROM studio_contacts WHERE id = card;
+  ASSERT r.entity_kind = 'company',
+    'FAIL 47e: once the seat is gone the card must be free to change, got '
+      || COALESCE(r.entity_kind, '<null>');
+
+  DELETE FROM studio_contacts WHERE id = card;
+
+  RAISE NOTICE '47. a seat stamped with the card holds it: the card cannot be '
+               'moved to the member''s other studio or change its kind while a '
+               'seat still names it, the hint counts the seats, a restatement '
+               'still writes, and closing the seat reopens the door '
+               '(r15 MAJOR-1, R-AR): passed';
+END $$;
 
 DO $$ BEGIN
   RAISE NOTICE 'All W1a assertions passed.';

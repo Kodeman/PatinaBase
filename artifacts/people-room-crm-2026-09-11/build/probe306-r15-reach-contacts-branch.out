@@ -1,0 +1,33 @@
+Pager usage is off.
+BEGIN
+SET
+INSERT 0 1
+INSERT 0 1
+ALTER TABLE
+ALTER TABLE
+INSERT 0 1
+ALTER TABLE
+ALTER TABLE
+INSERT 0 1
+-- as studio_manager@patina.dev: ADMIN of Local Dev Studio, NOT a member of Leah Hartwell --
+SET
+SET
+ member_of_leah | member_of_localdev 
+----------------+--------------------
+ f              | t
+(1 row)
+
+            what             |     n      
+-----------------------------+------------
+ seats nested under the card | 0
+ foreign seat readable raw   | 1
+ foreign link readable raw   | 1
+ reach_state_for(card)       | field_link
+(4 rows)
+
+   display_name    |  role   | reach_state | seat_count 
+-------------------+---------+-------------+------------
+ P306 Shared Human | contact | field_link  |          0
+(1 row)
+
+ROLLBACK

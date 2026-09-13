@@ -49,6 +49,13 @@
 -- that missing BEFORE UPDATE trigger on studio_contacts — placed here, not in
 -- 00592, because it reads studio_contact_channels.
 --
+-- AMENDED IN PLACE (unapplied on Strata — the whole 00590–00594 block has only
+-- ever run locally; 00594 §3's banner says so). w1b final review r15 MAJOR-1:
+-- the holder list gains a SIXTH holder, project_parties.studio_contact_id —
+-- the stamp 00626 made the v4 identity key, whose own guard
+-- (assert_project_party_cards, 00624:646-678, R-AP) fires on the SEAT and not
+-- on the card, so the card could still be moved out from under it.
+--
 -- Adds GRANT/REVOKE → regenerate seed/00-legacy-grants.sql after this migration
 -- (python3 scripts/generate-legacy-grants.py).
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -568,6 +575,33 @@ BEGIN
     v_holders := v_holders || (v_n || ' affiliation(s) standing on it');
   END IF;
 
+  -- THE SIXTH HOLDER: a SEAT stamped with this card (w1b final review r15
+  -- MAJOR-1). 00626 made project_parties.studio_contact_id the v4 identity key
+  -- (party_identity_key()'s first COALESCE leg, 00626:288-294), so a stamped
+  -- seat is the strongest thing that can point at a card — and it was the one
+  -- holder this list did not count. assert_project_party_cards() (00624:646-678,
+  -- R-AP) polices the stamp from the SEAT side only: BEFORE INSERT OR UPDATE OF
+  -- … ON project_parties. Nothing fired when the CARD moved out from under it.
+  -- studio_contacts_member_update is is_active_studio_member(organization_id)
+  -- in USING and WITH CHECK, so ONE ordinary `PATCH /rest/v1/studio_contacts`
+  -- by a member of two studios — the designer who owns two, the shipped local
+  -- shape — moved a stamped card into the other studio and left the working
+  -- studio with a seat nesting under a person_id it can open no Directory row
+  -- for (r9 MAJOR-2's consequence, reached through the card side), while the
+  -- row that survived printed `not_asked` over the studio's own recorded
+  -- `opted_out`: identity_consent_status() is asked at sc.organization_id
+  -- (00626:1837), now the other studio, and identity_phone_numbers()' seat leg
+  -- requires pj.studio_id = p_organization_id (00626:1095), so the seat's
+  -- number dropped out of a worst-first reduction. Counted here for the same
+  -- reason as the rule SUBJECT above: one member-reachable UPDATE of the
+  -- REFERENCED card undoes the guard on the referencing row.
+  SELECT count(*) INTO v_n
+    FROM public.project_parties pp
+   WHERE pp.studio_contact_id = OLD.id;
+  IF v_n > 0 THEN
+    v_holders := v_holders || (v_n || ' seat(s) stamped with this card');
+  END IF;
+
   IF array_length(v_holders, 1) IS NOT NULL THEN
     RAISE EXCEPTION 'studio_contact_identity_held'
       USING HINT = 'This card cannot change its entity_kind or its studio '
@@ -575,9 +609,10 @@ BEGIN
                    || array_to_string(v_holders, ', ')
                    || '. Detach or move those first — a company card carrying '
                       'a person''s channels, a designation naming a firm, a '
-                      'route into another studio, or a contact rule filed under '
-                      'the other noun are states the three guards on those rows '
-                      'exist to refuse.';
+                      'route into another studio, a contact rule filed under '
+                      'the other noun, or a seat on a job whose stamp would '
+                      'then name a card in another studio are states the '
+                      'guards on those rows exist to refuse.';
   END IF;
 
   RETURN NEW;
@@ -590,8 +625,9 @@ REVOKE ALL ON FUNCTION public.assert_studio_contact_identity_stable()
 COMMENT ON FUNCTION public.assert_studio_contact_identity_stable() IS
   'BEFORE UPDATE OF entity_kind, organization_id on studio_contacts: refuses '
   'the change (studio_contact_identity_held) while any reach channel, '
-  'designation, contact-rule route, contact-rule SUBJECT or affiliation still '
-  'points at the card, with a HINT naming what holds it. The three guards this wave adds — '
+  'designation, contact-rule route, contact-rule SUBJECT, affiliation or '
+  'STAMPED SEAT still points at the card, with a HINT naming what holds it. '
+  'The three guards this wave adds — '
   'assert_channel_owner_kind, assert_studio_contact_designations, '
   'assert_studio_contact_rule_route — all fire on the REFERENCING row, so one '
   'ordinary UPDATE of the REFERENCED card undid all three at once: a company '
@@ -600,7 +636,13 @@ COMMENT ON FUNCTION public.assert_studio_contact_identity_stable() IS
   'alongside route_to_person_id (r9 R5-M1): flipping a rule SUBJECT''s '
   'entity_kind filed a forbidding rule under the other noun — unfindable to a '
   'reader that asks by the card''s own kind, and unrepairable, since '
-  'rule_subject_kind_mismatch then refuses every later write to that row. A '
+  'rule_subject_kind_mismatch then refuses every later write to that row. '
+  'project_parties.studio_contact_id is counted beside them (w1b final review '
+  'r15 MAJOR-1): 00626 made the stamp the v4 identity key and '
+  'assert_project_party_cards() (00624, R-AP) polices it from the SEAT side '
+  'only, so one member-reachable card move stranded the working studio''s own '
+  'seat under a person_id it could open no Directory row for, and printed '
+  'not_asked over its own recorded opted_out. A '
   'restatement of the same values passes through; only an actual change is '
   'refused (00593, r8 R8-M2, R-AR).';
 
