@@ -130,9 +130,14 @@ export function RosterRow({
   routeTo?: ContactRouteTarget | null;
 }) {
   const isSeat = row.source === 'seat';
-  // One predicate, one clause, wherever a rule is shown (R-S). The prose
-  // summary is the fallback for a row whose rule row has not loaded.
-  const ruleClause = rule ? contactRuleClause(rule) : row.ruleSummary;
+  // One predicate, one clause, wherever a rule is shown (R-S).
+  // CR3-2: and NEVER `contact_rule_summary` (`row.ruleSummary`) behind it —
+  // that column prints raw `channel_kind` tokens (`after_hours`, `ap_email`,
+  // `portal_311`, `dispatch`), which SPEC §8 #3 bars from any face, and it
+  // drops the studio's own typed reason. The rules are a separate query from
+  // the roster, so the fallback painted on every cold load. A row whose rule
+  // has not arrived prints no clause rather than a schema-worded one.
+  const ruleClause = contactRuleClause(rule);
   // CR-4 / CR-16: the SAME pair of predicates the Directory row uses, over the
   // same column. The leading rule prints for ANY forbidden channel (SPEC §5.1
   // #11); only a rule that leaves no direct channel open takes the number off

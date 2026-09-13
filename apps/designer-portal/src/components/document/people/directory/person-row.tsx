@@ -88,8 +88,16 @@ export function PersonRow({
     personId: seatsOpen ? person.person_id : null,
   });
 
-  const { rest, routedName } = splitRoutedClause(person.contact_rule_summary);
-  const clause = rule ? contactRuleClause(rule) : rest;
+  const { routedName } = splitRoutedClause(person.contact_rule_summary);
+  // CR3-2: THE SUMMARY IS NOT A FACE. `contact_rule_summary()` renders
+  // `channels_forbidden`/`channels_allowed` as raw `channel_kind` tokens —
+  // "Do not use: after_hours, ap_email, dispatch, …" — which SPEC §8 #3
+  // forbids on a face, and it drops the studio's own typed reason besides.
+  // `useContactRules()` is a separate query from `usePeopleDirectory()`, so
+  // that fallback painted on every cold load and permanently whenever the
+  // rules read failed. No clause until the rule row is in hand. The routed
+  // NAME below is a person, not a schema word, so it still stands in.
+  const clause = contactRuleClause(rule);
   const routeTo =
     routeTarget ??
     (routedName

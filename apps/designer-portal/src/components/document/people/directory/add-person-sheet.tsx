@@ -796,9 +796,12 @@ export function AddPersonSheet({
       // CR-4: R-AS took both halves off the seat INSERT, so
       // `fc_optin_invite_dispatch` no longer fires and NOTHING is sent. The
       // sheet says what actually happened; the record-side dispatch is W3's.
+      // CR3-1: what was written is an INVITE (`record_channel_invite` records
+      // `pending` unless a standing grant already stood), so the confirmation
+      // names the invite, not consent.
       const message =
         textUpdates && phone.trim()
-          ? `${trimmedName} added to ${proj}. The consent is recorded; nothing has been sent yet.`
+          ? `${trimmedName} added to ${proj}. The invite is recorded; nothing has been sent yet.`
           : `${trimmedName} added to ${proj}.`;
       onAdded?.(message, kind === "household" ? "clients" : "crew");
       reset();
@@ -1537,10 +1540,18 @@ export function AddPersonSheet({
                   double opt-in is NOT dispatched from here. Telling the studio
                   to wait for a YES to a message Patina never sent is a
                   consent-adjacent falsehood. Say what is true today; W3's
-                  record-side dispatch changes this sentence back. */}
+                  record-side dispatch changes this sentence back.
+
+                  CR3-1: and say the RECORD'S OWN WORD. This sheet's consent
+                  door is `record_channel_invite` (00594), which leaves a
+                  standing grant alone and otherwise writes `pending` — the
+                  word the Directory row, the seat line and the Call Sheet row
+                  beside it all print as `Invited`. Claiming consent here while
+                  three faces read Invited for the same number is a face/ledger
+                  contradiction on a consent surface. */}
               <p className="mt-2 text-[0.7rem] leading-relaxed text-[var(--color-mocha)]">
-                {partyName.trim() || "They"} is recorded as consenting on this
-                evidence. Patina has not sent them anything yet.
+                {partyName.trim() || "They"} is invited, not consenting. Patina
+                has not sent them anything yet.
               </p>
             </div>
           )}

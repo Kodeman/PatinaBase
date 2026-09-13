@@ -27,12 +27,17 @@ interface TableScript {
 
 const scripts: Record<string, TableScript> = {};
 const written: Record<string, unknown> = {};
+/** Every `.eq(column, value)` the last read on a table filtered on (QA-1). */
+const filtered: Record<string, Record<string, unknown>> = {};
 
 function makeBuilder(table: string): MockBuilder {
   const builder: MockBuilder = {};
   const script = scripts[table] ?? {};
   builder.select = vi.fn(() => builder);
-  builder.eq = vi.fn(() => builder);
+  builder.eq = vi.fn((column: string, value: unknown) => {
+    (filtered[table] ??= {})[column] = value;
+    return builder;
+  });
   builder.maybeSingle = vi.fn(() =>
     Promise.resolve(script.read ?? { data: null, error: null }),
   );
@@ -62,8 +67,30 @@ const auth = {
   ),
 };
 
+/**
+ * QA-1 — the DB's own key rule, mocked faithfully enough to catch the bug:
+ * `normalize_channel_value()` lower-cases an address and puts a number into
+ * E.164, and `normalize_studio_contact_channel_trg` stores THAT, which is the
+ * only shape the unique index ever holds.
+ */
+const rpc = vi.fn((fn: string, args: Record<string, unknown>) => {
+  if (fn !== 'normalize_channel_value') {
+    return Promise.resolve({ data: null, error: null });
+  }
+  const kind = String(args.p_channel_kind ?? '');
+  const raw = String(args.p_value ?? '').trim();
+  if (kind === 'email' || kind === 'ap_email') {
+    return Promise.resolve({ data: raw.toLowerCase(), error: null });
+  }
+  const digits = raw.replace(/\D/g, '');
+  return Promise.resolve({
+    data: digits.length === 10 ? `+1${digits}` : raw,
+    error: null,
+  });
+});
+
 vi.mock('@supabase/ssr', () => ({
-  createBrowserClient: () => ({ from, auth }),
+  createBrowserClient: () => ({ from, auth, rpc }),
 }));
 
 vi.mock('@tanstack/react-query', () => ({
@@ -104,7 +131,9 @@ const FRANKS_STANDING_RULE = {
 beforeEach(() => {
   for (const key of Object.keys(scripts)) delete scripts[key];
   for (const key of Object.keys(written)) delete written[key];
+  for (const key of Object.keys(filtered)) delete filtered[key];
   from.mockClear();
+  rpc.mockClear();
 });
 
 describe('CR3-2 — useSetContactRule merge mode', () => {
@@ -193,8 +222,9 @@ describe('CR3-3 — useAddStudioContactChannel on a repeat person', () => {
     const standing = {
       id: 'ch-frank-mobile',
       owner_id: 'card-frank',
+      // QA-1: the STORED shape. The trigger normalises before the index sees it.
+      value: '+16125550115',
       channel_kind: 'mobile',
-      value: '(612) 555-0115',
       status: 'bounced',
       preferred: true,
     };
@@ -219,6 +249,52 @@ describe('CR3-3 — useAddStudioContactChannel on a repeat person', () => {
 
     // A HELD channel is not a deleted one: nothing about the standing row moved.
     expect(result).toEqual(standing);
+    // QA-1: and the recovery read asked for the number the way the table holds
+    // it. Keyed on the typed string it matched nothing, re-threw 23505, and the
+    // Add sheet told the studio to try again — forever.
+    expect(rpc).toHaveBeenCalledWith('normalize_channel_value', {
+      p_channel_kind: 'mobile',
+      p_value: '(612) 555-0115',
+    });
+    expect(filtered.studio_contact_channels).toMatchObject({
+      owner_id: 'card-frank',
+      channel_kind: 'mobile',
+      value: '+16125550115',
+    });
+  });
+
+  it('keys the recovery read on the normalised address for an email too', async () => {
+    const standing = {
+      id: 'ch-frank-email',
+      owner_id: 'card-frank',
+      channel_kind: 'email',
+      value: 'frank.bauer@example.com',
+      status: 'active',
+      preferred: false,
+    };
+    scripts.studio_contact_channels = {
+      write: {
+        data: null,
+        error: {
+          code: '23505',
+          message:
+            'duplicate key value violates unique constraint "idx_studio_contact_channels_owner_kind_value"',
+        },
+      },
+      read: { data: standing, error: null },
+    };
+    const mutationFn = mutationFnOf(useAddStudioContactChannel());
+    const result = await mutationFn({
+      ownerType: 'person',
+      ownerId: 'card-frank',
+      channelKind: 'email',
+      value: 'Frank.Bauer@Example.COM',
+    });
+
+    expect(result).toEqual(standing);
+    expect(filtered.studio_contact_channels).toMatchObject({
+      value: 'frank.bauer@example.com',
+    });
   });
 
   it('still throws anything that is not a duplicate', async () => {

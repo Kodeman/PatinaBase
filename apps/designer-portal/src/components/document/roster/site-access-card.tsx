@@ -325,9 +325,14 @@ export function SiteAccessCard({
                 actionKey="start-site-access-card"
                 variant="primary"
                 onClick={() => {
-                  void save({ projectId, lockboxVersion: null }, 'way_in').catch(
-                    () => undefined,
-                  );
+                  // CR3-3: `{ projectId }` ALONE. `useUpdateSiteAccessCard`
+                  // reads `lockboxVersion !== undefined` as "the way in
+                  // changed", and `null` is not `undefined` — so starting a
+                  // blank card stamped `changed_at`/`changed_by` and blanked
+                  // `told_refs`, and the card then printed "The way in changed
+                  // <today>. Nobody has been told yet." directly under "No
+                  // lockbox on file." Starting a card claims nothing.
+                  void save({ projectId }, 'way_in').catch(() => undefined);
                 }}
                 loading={updateCard.isPending}
                 loadingLabel="Writing…"

@@ -254,6 +254,34 @@ describe('CallSheet — the bands', () => {
     expect(screen.getByText('Done')).toBeInTheDocument();
   });
 
+  /**
+   * QA-2 — the count used to sit as a bare sibling of the label inside the
+   * <h2>, so no element's text was ever exactly "Studio side": the heading's
+   * read "Studio side2" and its accessible name "Studio side 2". SPEC §5.4 #4
+   * and direction §3.4 name the band by the plain words, and an e2e locator
+   * for the heading could not find one. `getByText` would not have caught it
+   * (it reads a node's DIRECT text children only), so this walks textContent.
+   */
+  it('QA-2 — every band label is an element whose whole text is the label', () => {
+    render(<CallSheet {...props} />);
+    const labels: Record<string, string> = {
+      studioSide: 'Studio side',
+      clientSide: 'Client side',
+      this_week: 'On the job · this week',
+      later: 'On the job · later',
+      bidding: 'Bidding',
+      done: 'Done',
+    };
+    for (const [band, label] of Object.entries(labels)) {
+      const heading = document.querySelector(`[data-roster-band="${band}"] h2`);
+      expect(heading).not.toBeNull();
+      const own = Array.from(heading!.querySelectorAll('*')).filter(
+        (el) => (el.textContent ?? '').trim() === label,
+      );
+      expect(own).toHaveLength(1);
+    }
+  });
+
   it('never says Build & supply', () => {
     render(<CallSheet {...props} />);
     expect(document.body.textContent).not.toMatch(/Build & supply/i);

@@ -9,7 +9,7 @@
  * And the head COUNTS CARDS: `people-room.tsx:383` counted rows, which v4's
  * one-row-per-identity rebuild is what makes honest.
  */
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { PeopleRoom } from "../people-room";
 
 const mockReplace = jest.fn();
@@ -167,5 +167,22 @@ describe("the address", () => {
       "data-firm",
       "firm-northgate",
     );
+  });
+
+  /**
+   * CR3-4 — the body is chosen `openFirm ? <CompanyCard/> : openPerson ? … :
+   * view`, and `goView` cleared everything EXCEPT `openFirm`. So choosing a
+   * rail view with a firm card open left the card standing, the rail showing
+   * nothing active, and the card's own Back the only way out.
+   */
+  it("choosing a view puts the company card down", () => {
+    goTo("?firm=firm-northgate");
+    render(<PeopleRoom />);
+    expect(screen.getByTestId("company-card")).toBeInTheDocument();
+    const rail = document.querySelector<HTMLElement>(
+      "[data-people-desktop-rail]",
+    );
+    fireEvent.click(within(rail!).getByRole("button", { name: /Threads/ }));
+    expect(screen.queryByTestId("company-card")).toBeNull();
   });
 });

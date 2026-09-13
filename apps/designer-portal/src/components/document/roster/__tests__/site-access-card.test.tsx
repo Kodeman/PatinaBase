@@ -233,6 +233,22 @@ describe('SiteAccessCard — the six regions', () => {
       screen.getByText('– Nothing is written about the way in yet.'),
     ).toBeInTheDocument();
   });
+
+  /**
+   * CR3-3 — the hook's own pin asserted `{ projectId }` alone while the only
+   * caller sent `lockboxVersion: null`. `useUpdateSiteAccessCard` reads
+   * `lockboxVersion !== undefined` as "the way in changed", and `null` is not
+   * `undefined`, so starting a blank card stamped `changed_at`/`changed_by`
+   * and blanked `told_refs` — the card then printed "The way in changed
+   * <today> … Nobody has been told yet." under "No lockbox on file." This pin
+   * sits at the CALL SITE, where the fix was defeated.
+   */
+  it('starts a card without claiming the way in changed', () => {
+    card = null;
+    render(<SiteAccessCard {...props} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Start the card' }));
+    expect(updateMutate).toHaveBeenCalledWith({ projectId: 'okonkwo' });
+  });
 });
 
 describe('SiteAccessCard — who the card names', () => {

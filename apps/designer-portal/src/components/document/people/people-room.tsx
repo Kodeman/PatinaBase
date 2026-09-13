@@ -344,6 +344,11 @@ export function PeopleRoom() {
     },
     goView: (v) => {
       setOpenPerson(null);
+      // CR3-4: the firm card is chosen ahead of everything else in the body
+      // (`openFirm ? <CompanyCard/> : …`), so leaving it standing pinned the
+      // card on screen while the rail wrote `?view=threads&firm=<id>` behind
+      // it, with the card's own Back the only way out.
+      setOpenFirm(null);
       setPendingThreadId(null);
       setNotice(null);
       setHighlightPersonId(null);
