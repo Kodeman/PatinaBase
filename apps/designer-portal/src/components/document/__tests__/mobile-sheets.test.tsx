@@ -300,6 +300,25 @@ describe('the mobile timer sheet with nothing held (HT-14)', () => {
     expect(screen.getByLabelText('Minutes')).toHaveValue(20);
   });
 
+  it('leaves the activity unset unless it is chosen (HT-24)', async () => {
+    mountTimer();
+
+    // The phone used to open on 'design' with no empty option at all.
+    expect(screen.getByLabelText('Activity')).toHaveValue('');
+    expect(
+      screen.getByRole('option', { name: 'activity not set' }),
+    ).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Document'), {
+      target: { value: 'project-2' },
+    });
+    fireEvent.change(screen.getByLabelText('Minutes'), { target: { value: '20' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add entry' }));
+
+    await waitFor(() => expect(mockManualLog).toHaveBeenCalledTimes(1));
+    expect(mockManualLog.mock.calls[0][0].activity).toBeNull();
+  });
+
   it('uses the held document without a picker when one IS in hand', () => {
     mockHeldProjectId = 'proj-1';
     mountTimer();

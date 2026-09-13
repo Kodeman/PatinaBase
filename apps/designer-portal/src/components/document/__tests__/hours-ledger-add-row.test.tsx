@@ -186,6 +186,33 @@ describe('the Hours add row', () => {
     );
   });
 
+  it('leaves the activity unset unless it is chosen (HT-24)', async () => {
+    renderLedger();
+
+    // The row used to open on 'design', so every hour typed here was filed as
+    // design work the member never claimed.
+    expect(screen.getByLabelText('Activity')).toHaveValue('');
+    expect(
+      screen.getByRole('option', { name: 'activity not set' }),
+    ).toBeInTheDocument();
+
+    await waitFor(() =>
+      expect(
+        screen.getByLabelText('Project').querySelectorAll('option'),
+      ).toHaveLength(2),
+    );
+    fireEvent.change(screen.getByLabelText('Project'), {
+      target: { value: 'project-1' },
+    });
+    fireEvent.change(screen.getByLabelText('Minutes'), {
+      target: { value: '30' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+
+    await waitFor(() => expect(mockCreate).toHaveBeenCalledTimes(1));
+    expect(mockCreate.mock.calls[0][0].activity).toBeNull();
+  });
+
   it('marks the add row backdated past 30 days and not at 29 (HT-13)', () => {
     renderLedger();
 

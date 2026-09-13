@@ -1150,7 +1150,9 @@ function MobileTimerSheet() {
   } = useDocumentTime();
   const { data: projects } = useTimeCaptureProjects();
   const [minutes, setMinutes] = useState('');
-  const [activity, setActivity] = useState('design');
+  // HT-24 — recorded, never defaulted. The phone filed every typed hour as
+  // design work the member never claimed.
+  const [activity, setActivity] = useState('');
   // HT-14 — the project the hour goes to. With a document in hand it is that
   // document; with nothing held the sheet ASKS, because the alternative that
   // shipped was a form that accepted minutes, an activity and a tap, cleared
@@ -1255,6 +1257,8 @@ function MobileTimerSheet() {
             onChange={(e) => setActivity(e.target.value)}
             className="doc-type-control min-h-11 w-full rounded-[5px] border border-[var(--color-pearl)] bg-white px-2.5 py-2 text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-quiet-ink)]"
           >
+            {/* HT-24 — the honest first answer, not a silent 'design'. */}
+            <option value="">activity not set</option>
             {ACTIVITIES.map((a) => (
               <option key={a.key} value={a.key}>
                 {a.label}

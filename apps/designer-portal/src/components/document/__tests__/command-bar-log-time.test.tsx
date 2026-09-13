@@ -56,6 +56,13 @@ jest.mock('@/hooks/use-feature-flag', () => ({
   useFeatureFlag: () => ({ value: false }),
 }));
 
+/** The form reads the document in hand; `LogTimeOverlay` mounts inside the
+ *  provider in `(document)/layout.tsx`. */
+let mockHeldProjectId: string | null = null;
+jest.mock('@/hooks/document-time-provider', () => ({
+  useDocumentTime: () => ({ heldProjectId: mockHeldProjectId }),
+}));
+
 // Trap 2 (patina-testing) — the ESM leaf reached through the Post sheet.
 jest.mock('../overlays/post-sheet', () => ({ openPost: jest.fn() }));
 jest.mock('@/lib/help-system/open-help', () => ({ openHelp: jest.fn() }));
@@ -95,6 +102,7 @@ function openPalette() {
 }
 
 beforeEach(() => {
+  mockHeldProjectId = null;
   mockMyRateRoles = [];
   mockCreate.mockReset();
   mockCreate.mockResolvedValue({
@@ -236,6 +244,37 @@ describe('⌘K · Log time', () => {
       target: { value: recentIso },
     });
     expect(screen.queryByText('backdated')).not.toBeInTheDocument();
+  });
+
+  it('proposes the document in hand, so the ⌘K door asks what the Hours row asks', () => {
+    mockHeldProjectId = 'proj-rostered';
+    render(<Tree />);
+    act(() => openPalette());
+    fireEvent.click(screen.getByRole('option', { name: /Log time/ }));
+
+    expect(screen.getByRole('combobox', { name: 'Document' })).toHaveValue(
+      'proj-rostered',
+    );
+  });
+
+  it('does not carry the last document into the next opening', () => {
+    render(<Tree />);
+    act(() => openPalette());
+    fireEvent.click(screen.getByRole('option', { name: /Log time/ }));
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Document' }), {
+      target: { value: 'proj-stranger' },
+    });
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(
+      screen.queryByRole('dialog', { name: 'Log time' }),
+    ).not.toBeInTheDocument();
+
+    act(() => openPalette());
+    fireEvent.click(screen.getByRole('option', { name: /Log time/ }));
+    // Nothing is in hand this time, so the picker stands empty — not on
+    // whatever house was filed against a moment ago.
+    expect(screen.getByRole('combobox', { name: 'Document' })).toHaveValue('');
   });
 
   it('shows the role chip only for a member holding more than one seat (HT-41)', () => {

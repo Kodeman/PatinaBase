@@ -45,6 +45,7 @@ import {
 import { openPost } from '@/components/document/overlays/post-sheet';
 import { openInvoiceComposer } from '@/components/document/accounts/invoice-overlays';
 import { openDraftProposalPicker } from '@/components/document/rooms/drafting/draft-proposal-opener';
+import { openLogTime } from '@/components/document/log-time-sheet';
 import { openDraftingRoom } from '@/lib/document/open-drafting-room';
 import { fmtDay } from '@/lib/document/format';
 import { useViewerStudio } from '@/hooks/use-viewer-studio';
@@ -305,6 +306,10 @@ export function DeskContents({ prominent = false }: { prominent?: boolean }) {
     'open-project': openOpenProject,
     'draft-proposal': openDraftProposalPicker,
     'draw-invoice': () => openInvoiceComposer(),
+    // W3 — the Desk's Begin column renders STUDIO_VERBS wholesale, so a verb
+    // added to the registry for ⌘K stands here too. Without an entry the row
+    // renders and does nothing at all.
+    'log-time': () => openLogTime(),
     'add-maker': () => router.push('/people?add=maker'),
   };
 

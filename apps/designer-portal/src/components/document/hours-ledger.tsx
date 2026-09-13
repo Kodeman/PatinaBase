@@ -355,7 +355,9 @@ export function HoursLedger({
 
   const [addProject, setAddProject] = useState(initialContext?.projectId ?? '');
   const [addMinutes, setAddMinutes] = useState('');
-  const [addActivity, setAddActivity] = useState('design');
+  // HT-24 — recorded, never defaulted. An hour typed here used to be filed as
+  // design work nobody claimed; unset is a real answer and prints honestly.
+  const [addActivity, setAddActivity] = useState('');
   // HT-13 — the add row dates its entry. Without this it sent no `started_at`
   // at all, so paging back a week and typing an hour silently mis-dated it
   // into TODAY, with no warning and no way to correct it afterwards.
@@ -425,7 +427,7 @@ export function HoursLedger({
         projectId: addProject,
         durationMinutes: parsedAdd,
         startedAt: startedAtFromDateValue(addDate),
-        activity: addActivity,
+        activity: addActivity || null,
         billable: addBillable,
         rateRole: addRateRole,
         source: 'manual_entry',
@@ -435,7 +437,7 @@ export function HoursLedger({
       documentEvents.time.entryLogged({
         surface: 'hours_ledger',
         source: 'manual_entry',
-        activity: addActivity,
+        activity: written.activity ?? null,
         billable: written.billable,
         rate_source: written.rate_source ?? null,
         rate_role: written.rate_role ?? null,
@@ -1027,6 +1029,8 @@ export function HoursLedger({
           value={addActivity}
           onChange={(e) => setAddActivity(e.target.value)}
         >
+          {/* HT-24 — the honest first answer, not a silent 'design'. */}
+          <option value="">activity not set</option>
           {ACTIVITIES.map((a) => (
             <option key={a.key} value={a.key}>
               {a.label}

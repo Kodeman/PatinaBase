@@ -35,6 +35,7 @@ import {
   type TimeRateRole,
 } from '@patina/supabase';
 import { ACTIVITIES } from '@/lib/document/time-derivation';
+import { useDocumentTime } from '@/hooks/document-time-provider';
 import { documentEvents } from '@/lib/analytics/document-events';
 import { DocumentAction } from './document-action';
 import {
@@ -62,6 +63,11 @@ export function LogTimeSheet({
   onClose: () => void;
 }) {
   const createEntry = useCreateTimeEntry({ errorSurface: 'inline' });
+  // The document in hand is the one answer the form already has. Without it
+  // the ⌘K door asked a question the Hours add row never asks, and — worse —
+  // kept whatever was picked last time, so a reopened form proposed the wrong
+  // house.
+  const { heldProjectId } = useDocumentTime();
   const { data: projects } = useTimeCaptureProjects();
   const [projectId, setProjectId] = useState('');
   const [minutes, setMinutes] = useState('');
@@ -91,6 +97,14 @@ export function LogTimeSheet({
     seededFor.current = projectId;
     setBillable(intent.billable);
   }, [projectId, intent.isSettled, intent.billable]);
+
+  // The document follows what is in hand — on open, and if the hand changes
+  // while the form stands. Held in its own effect so a change of hand never
+  // wipes minutes already typed.
+  useEffect(() => {
+    if (!open) return;
+    setProjectId(heldProjectId ?? '');
+  }, [open, heldProjectId]);
 
   useEffect(() => {
     if (!open) return;
