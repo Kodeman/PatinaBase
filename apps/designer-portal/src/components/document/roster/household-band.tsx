@@ -53,6 +53,26 @@ export function householdThresholdSentence(
     : "No change-order figure is on file for this household.";
 }
 
+/**
+ * QA-1 — THE BAND MAY NOT CONTRADICT THE ROWS ABOVE IT.
+ *
+ * On the seeded Okonkwo residence the client rows print "Okonkwo household"
+ * and "Signs money to $2,500. Approves change orders to $2,500." off
+ * `project_party_authority`, a record that predates `client_households`
+ * entirely. The band, a few lines below, asserted "No household is on file for
+ * this client" — two simultaneously-rendered, directly contradictory facts
+ * about the same household on one screen, with no act between them.
+ *
+ * Both sentences say the same true thing: the authority is on the SEATS, and
+ * there is no household object holding it. The second wording says so out
+ * loud instead of denying what the reader can see.
+ */
+export function householdEmptySentence(clientSideHasAuthority: boolean): string {
+  return clientSideHasAuthority
+    ? "No household is on file for this client yet, so what each of them may sign is recorded seat by seat rather than in one place."
+    : "No household is on file for this client, so there is nowhere to record who else may sign.";
+}
+
 /** What the act will cost, said before it is pressed. */
 export function householdMemberConsequence(
   name: string,
@@ -146,6 +166,9 @@ export function HouseholdBand({
         designerId: resolved.designerId,
         displayName: projectName ? `${projectName} household` : "The household",
         designerClientId: resolved.designerClientId ?? null,
+        // The job's own client side, so the household the studio just opened
+        // is the household the band then finds (r1 BLOCKING-1).
+        memberPersonIds: resolved.memberCardIds ?? [],
       });
       onAnnounce?.("The household is open.");
     } catch (e) {
@@ -203,8 +226,7 @@ export function HouseholdBand({
     return (
       <div data-household-band className="mt-2 pl-[46px]">
         <p className="text-[0.74rem] text-[var(--color-aged-oak)]">
-          No household is on file for this client, so there is nowhere to record
-          who else may sign.
+          {householdEmptySentence(!!resolved?.clientSideHasAuthority)}
         </p>
         {resolved?.designerId && organizationId && (
           <button

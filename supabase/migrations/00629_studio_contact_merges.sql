@@ -268,6 +268,139 @@ CREATE TRIGGER assert_party_card_not_merged_trg
   FOR EACH ROW EXECUTE FUNCTION public.assert_party_card_not_merged();
 
 -- ═══════════════════════════════════════════════════════════════════════════
+-- 4b. THE AUTO-LINK RESOLVER LEARNS ABOUT MERGED CARDS
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 00626's rolodex_card_for_party_phone() answers "the ONE person card in this
+-- studio carrying this number". §4's trigger above then refuses a seat stamped
+-- with a merged card. Those two rules collide the moment a merge happens, and
+-- the collision lands on the room's commonest act (migrations review r1 B-2,
+-- reproduced locally):
+--
+--   apply_party_rolodex_link_trg fires first (BEFORE-row triggers run in
+--   trigger-name order, 'apply_' < 'assert_'), stamps the seat with a card the
+--   resolver still counts, and assert_party_card_not_merged_trg then rejects
+--   the row — on an ordinary "Add to the roster" write where the studio named
+--   no card at all, with a hint asking it to stamp a survivor the picker gives
+--   it no way to stamp. The seat could not be created.
+--
+-- The same filter closes the SHARED-PHONE MERGE, which is direction §3.1's
+-- canonical duplicate ("These two cards share a phone.", crm-model §4 rule 2)
+-- and was permanently ambiguous without it (r1 M-1): the merge moves
+-- studio_contact_channels but never either card's own phone_e164, so the
+-- HAVING count(*) = 1 test kept seeing two rows forever and every later seat on
+-- that number was left UNCARDED — a second identity on people_directory's
+-- party branch, the exact over-count the merge exists to remove.
+--
+-- Grafted from 00626:413-436 with ONE predicate added. Nothing else moves:
+-- same signature, same STABLE/SECURITY DEFINER/search_path, same grants (kept
+-- off `authenticated`), same project_recorded_studio() resolver, same
+-- (array_agg)[1] idiom, no consent read or written (R-AY).
+CREATE OR REPLACE FUNCTION public.rolodex_card_for_party_phone(
+  p_project_id uuid,
+  p_phone_e164 text
+)
+RETURNS uuid
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+  WITH m AS (
+    SELECT sc.id
+      FROM public.studio_contacts sc
+     WHERE p_project_id IS NOT NULL
+       AND p_phone_e164 IS NOT NULL
+       AND btrim(p_phone_e164) <> ''
+       AND sc.entity_kind = 'person'
+       AND sc.phone_e164 = p_phone_e164
+       AND sc.organization_id = public.project_recorded_studio(p_project_id)
+       -- 00629: a card that was merged away is not a card a seat may be
+       -- stamped with (§4), so it is not a card this resolver may answer.
+       -- It also stops counting toward the "exactly one card" test, which is
+       -- what makes the survivor answerable after a shared-phone merge.
+       AND sc.merged_into IS NULL
+     ORDER BY sc.id
+     LIMIT 2
+  )
+  -- (array_agg)[1] rather than min(): there is no min(uuid) in Postgres.
+  SELECT (array_agg(id))[1] FROM m HAVING count(*) = 1;
+$$;
+
+REVOKE ALL ON FUNCTION public.rolodex_card_for_party_phone(uuid, text)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.rolodex_card_for_party_phone(uuid, text)
+  TO service_role;
+
+COMMENT ON FUNCTION public.rolodex_card_for_party_phone(uuid, text) IS
+  'crm-model §4 rule 2''s auto-link, resolved: the ONE LIVE person card in the '
+  'studio a project RECORDS (project_recorded_studio(), never the '
+  'caller-relative resolver — the link is a fact about the record, not about '
+  'the writer) whose phone_e164 is exactly this number. A card carrying '
+  'merged_into is excluded (00629): §4 refuses a seat stamped with one, so '
+  'answering it would make the ordinary roster write unsatisfiable, and '
+  'excluding it is also what lets a SHARED-PHONE merge resolve to the '
+  'survivor instead of staying ambiguous forever. NULL when there is none, '
+  'when two LIVE cards share the number (PR-o/R-Y''s duplicate band is a '
+  'card-to-card merge the studio rules on, not something a trigger decides) '
+  'or when the project records no studio — and that last population therefore '
+  'keeps the duplicate identity until R-BD''s W3 backfill names a studio, a '
+  'RULING — R-BI (w1b final review r13 MAJOR-1). Reads and writes NO consent '
+  '(R-AY). Called only by link_party_to_rolodex_card() and '
+  'link_rolodex_card_to_parties(); not granted to authenticated (00626, '
+  'merged_into leg 00629).';
+
+-- The mirror, from the card's side. Grafted from 00626:522-548 with one guard
+-- added: a MERGED card may not claim seats. Without it, a cosmetic reformat of
+-- a merged card's phone stamped live seats with the dead id and then failed the
+-- card UPDATE on §4's trigger (r1 B-2, second half).
+CREATE OR REPLACE FUNCTION public.link_rolodex_card_to_parties()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public', 'pg_temp'
+AS $$
+BEGIN
+  IF NEW.entity_kind IS DISTINCT FROM 'person'
+     OR NEW.phone_e164 IS NULL
+     OR btrim(NEW.phone_e164) = ''
+     OR NEW.organization_id IS NULL
+     -- 00629: the survivor claims seats; a card merged away claims nothing.
+     OR NEW.merged_into IS NOT NULL THEN
+    RETURN NULL;
+  END IF;
+
+  UPDATE public.project_parties pp
+     SET studio_contact_id = NEW.id
+    FROM public.projects pj
+   WHERE pj.id = pp.project_id
+     AND pj.studio_id = NEW.organization_id
+     AND pp.studio_contact_id IS NULL
+     AND pp.phone_e164 = NEW.phone_e164
+     -- the same "exactly one LIVE card" test, so a number that now names two
+     -- live cards stamps nobody.
+     AND public.rolodex_card_for_party_phone(pp.project_id, pp.phone_e164) = NEW.id;
+
+  RETURN NULL;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.link_rolodex_card_to_parties()
+  FROM PUBLIC, anon, authenticated;
+
+COMMENT ON FUNCTION public.link_rolodex_card_to_parties() IS
+  'AFTER INSERT/UPDATE OF phone, phone_e164 on studio_contacts: the mirror of '
+  'link_party_to_rolodex_card(). A LIVE person card minted or renumbered '
+  'AFTER the seat claims the unstamped seats in its own studio that carry '
+  'exactly its number, so the "card written next week" sequence cannot leave '
+  'one human as two Directory identities (w1b final review r12 MAJOR-2). A '
+  'card carrying merged_into claims nothing (00629). It writes '
+  'studio_contact_id only — never a consent column (R-AY), never phone or '
+  'phone_e164, so R-AX''s freeze is untouched — and only on projects whose '
+  'projects.studio_id IS the card''s own organization, which is precisely '
+  'what assert_project_party_cards() will then accept (00626, merged_into '
+  'leg 00629).';
+
+-- ═══════════════════════════════════════════════════════════════════════════
 -- 5. merge_studio_contacts — one transaction, one act
 -- ═══════════════════════════════════════════════════════════════════════════
 CREATE OR REPLACE FUNCTION public.merge_studio_contacts(
@@ -429,10 +562,88 @@ BEGIN
   END IF;
 
   -- ── compliance documents ────────────────────────────────────────────────
-  UPDATE public.studio_compliance_documents
-     SET holder_id   = p_survivor,
-         holder_type = v_survivor.entity_kind
-   WHERE holder_id = p_merged;
+  -- crm-model §4, "Company acquired or renamed", in terms: "documents of the
+  -- absorbed firm KEEP THEIR ORIGINAL HOLDER ID and are marked superseded,
+  -- never deleted."
+  --
+  -- The file used to move every one of them onto the survivor with
+  -- superseded_by left NULL, and compliance_state() reduces WORST-FIRST over a
+  -- holder — so a merge manufactured a block the survivor never earned: a firm
+  -- whose own COI runs another ten months read `lapsed` the instant a card
+  -- carrying an old certificate was folded into it, on the Directory row, on
+  -- the roster row's terracotta held clause (PR-h, R-S, SPEC §5.4 #7) and on
+  -- the company card, and 00630's nightly sweep then wrote "…'s paper has
+  -- lapsed" to every owner and admin (migrations review r1 B-1, reproduced
+  -- locally).
+  --
+  -- So the absorbed paper moves in exactly ONE case: the survivor already
+  -- holds the SAME paper, still in force, covering at least as long — i.e. the
+  -- absorbed row has a legitimate SUCCESSOR. Then the two are one lineage and
+  -- superseded_by says so. assert_compliance_holder() requires a successor to
+  -- be held for the SAME CARD, which is why the holder moves in that case and
+  -- only in that case; every other absorbed document stays where crm-model
+  -- puts it, on the absorbed card, whole and readable through
+  -- resolve_merged_contact(), counting against nobody.
+  --
+  -- The predicate below is assert_compliance_holder()'s own supersede gate,
+  -- stated as a join so a document the trigger would refuse is never offered
+  -- one: same doc_type, successor at the head of its own chain, successor in
+  -- force, successor dated when the row is dated and expiring no earlier, and
+  -- the successor carrying at least the row's gates (blocks <@).
+  IF NOT v_cross THEN
+    WITH successor AS (
+      SELECT DISTINCT ON (d.id)
+             d.id  AS doc_id,
+             s.id  AS successor_id
+        FROM public.studio_compliance_documents d
+        JOIN public.studio_compliance_documents s
+          ON s.holder_id       = p_survivor
+         AND s.organization_id = d.organization_id
+         AND s.doc_type        = d.doc_type
+         AND s.superseded_by IS NULL
+         AND (s.expires_on IS NULL OR s.expires_on >= CURRENT_DATE)
+         AND (d.expires_on IS NULL
+              OR (s.expires_on IS NOT NULL AND s.expires_on >= d.expires_on))
+         AND d.blocks <@ s.blocks
+       WHERE d.holder_id = p_merged
+         AND d.superseded_by IS NULL
+       ORDER BY d.id, s.expires_on DESC NULLS LAST, s.id
+    )
+    UPDATE public.studio_compliance_documents d
+       SET holder_id     = p_survivor,
+           holder_type   = v_survivor.entity_kind,
+           superseded_by = su.successor_id
+      FROM successor su
+     WHERE d.id = su.doc_id;
+
+    -- The retired rows BEHIND a head that just moved follow it, outermost
+    -- first, so each one's own successor is already on the survivor when
+    -- assert_compliance_holder() reads it. Depth-capped like every other walk
+    -- in this file; a chain deeper than sixteen renewals is not a chain.
+    FOR i IN 1..16 LOOP
+      UPDATE public.studio_compliance_documents d
+         SET holder_id   = p_survivor,
+             holder_type = v_survivor.entity_kind
+       WHERE d.holder_id = p_merged
+         AND d.superseded_by IS NOT NULL
+         AND EXISTS (SELECT 1 FROM public.studio_compliance_documents s
+                      WHERE s.id = d.superseded_by
+                        AND s.holder_id = p_survivor);
+      EXIT WHEN NOT FOUND;
+    END LOOP;
+  ELSE
+    -- The sole-proprietor exception is NOT an acquisition. crm-model §4 keeps
+    -- the absorbed firm's paper off the survivor because two firms are two
+    -- firms; here the firm IS the person, declared so by is_sole_proprietor,
+    -- and R-BA already reduces one paper word over the person AND their firm.
+    -- Leaving the certificates on the folded firm card would read `Not on
+    -- file` over a sole proprietor who is insured. holder_type is rewritten
+    -- because assert_compliance_holder() holds it to the card's entity_kind.
+    UPDATE public.studio_compliance_documents
+       SET holder_id   = p_survivor,
+           holder_type = v_survivor.entity_kind
+     WHERE holder_id = p_merged;
+  END IF;
 
   -- ── the three designations other cards hold ─────────────────────────────
   -- Not in the brief's repoint list, and not optional: a firm card naming the
@@ -470,6 +681,53 @@ BEGIN
      WHERE warranty_contact_person_id = p_merged;
   END IF;
 
+  -- ── the seat's FOURTH card pointer, minted two files later ──────────────
+  -- 00631 gives a seat `bid_quoted_by_person_id` — the estimator who priced
+  -- the work — and assert_party_bid_quoted_by() refuses a merged card on it.
+  -- Unrepointed, a seat whose bid was priced by the duplicate kept the dead id
+  -- and the next ordinary save of that bid was refused
+  -- party_bid_quoted_by_merged_away, with no way out: the room's "Who priced
+  -- it" picker offers live person cards only (migrations review r1 M-2,
+  -- reproduced locally). Only a PERSON card may hold it, so a company survivor
+  -- can never be the target.
+  --
+  -- NAMING A LATER FILE'S COLUMN, deliberately: plpgsql resolves relations at
+  -- first EXECUTION, never at CREATE, and nothing calls this RPC between
+  -- 00629 and 00632 — not the seeds, not the suite, which both run after every
+  -- migration. The alternative is a second 250-line copy of this body in
+  -- 00632, and two bodies is how the repoint list went stale in the first
+  -- place.
+  IF v_survivor.entity_kind = 'person' THEN
+    UPDATE public.project_parties
+       SET bid_quoted_by_person_id = p_survivor
+     WHERE bid_quoted_by_person_id = p_merged;
+  END IF;
+
+  -- ── the household (00632) ───────────────────────────────────────────────
+  -- A household is an ARRAY of person cards plus a primary pointer, held by
+  -- assert_client_household_members() to live, unmerged cards. Unrepointed,
+  -- merging a member's duplicate bricked the row: every later write was
+  -- refused household_member_not_a_live_person_card, including the room's own
+  -- add_household_member(), and there is no RPC to remove a member, so the
+  -- only repair was hand-written SQL (r1 M-3, reproduced locally). PR-c's
+  -- motivating case — the Okonkwo spouses — is the shape most likely to carry
+  -- a duplicate card.
+  --
+  -- array_remove-then-append rather than array_replace, because BOTH ids may
+  -- already be members (one spouse invited twice, both seated): a plain
+  -- replace would leave the survivor twice in one household.
+  IF v_survivor.entity_kind = 'person' THEN
+    UPDATE public.client_households
+       SET member_person_ids =
+             array_remove(member_person_ids, p_merged)
+             || CASE WHEN p_survivor = ANY (array_remove(member_person_ids, p_merged))
+                     THEN '{}'::uuid[] ELSE ARRAY[p_survivor] END,
+           primary_member_person_id =
+             CASE WHEN primary_member_person_id = p_merged
+                  THEN p_survivor ELSE primary_member_person_id END
+     WHERE p_merged = ANY (member_person_ids);
+  END IF;
+
   -- ── the pointer, and the chain flattened ────────────────────────────────
   UPDATE public.studio_contacts SET merged_into = p_survivor WHERE id = p_merged;
   UPDATE public.studio_contacts
@@ -500,9 +758,15 @@ COMMENT ON FUNCTION public.merge_studio_contacts(uuid, uuid, text) IS
   'Repoints, in order: typed channels (union, exact duplicates by '
   'channel_kind + value dropped), affiliations, contact rules (the '
   'survivor''s wins; the merged card keeps its own as history unless the '
-  'survivor has none), the route_to pointer, compliance documents, the three '
-  'designations other cards hold, and every seat''s studio_contact_id / '
-  'company_id / warranty_contact_person_id. CONSENT IS UNTOUCHED: '
+  'survivor has none), the route_to pointer, the three designations other '
+  'cards hold, every seat''s studio_contact_id / company_id / '
+  'warranty_contact_person_id / bid_quoted_by_person_id (00631), and the '
+  'household''s member array and primary pointer (00632). COMPLIANCE PAPER '
+  'DOES NOT MOVE: crm-model §4 keeps the absorbed firm''s documents on the '
+  'absorbed card, superseded where the survivor already holds the same paper '
+  'in force, so a merge can never manufacture a lapse the survivor never '
+  'earned — except in the sole-proprietor fold, where the firm IS the person '
+  'and the paper is theirs. CONSENT IS UNTOUCHED: '
   'studio_channel_consent is keyed on (organization_id, channel_kind, '
   'channel_value) and never on a card, so a number''s verdict follows the '
   'number with no write (crm-model §4, R-AY). Refuses a firm into a person '
@@ -904,9 +1168,11 @@ LEFT JOIN identity_seats iseat ON iseat.identity_key = q.identity_key
 UNION ALL
 
 -- ── TEAM (studio collaborators on studio projects, one row per teammate) ───
--- Carried verbatim from 00594:1389-1429. Already one row per identity
--- (DISTINCT ON user_id). reach_state is `account` by construction — the
--- branch joins project_team_members, which is logins only (00084:160-172).
+-- Carried from 00594:1389-1429, plus the project_tenant_org() leg every other
+-- branch already carried (R-BD; migrations review r1 M-7 — see the WHERE
+-- below). Already one row per identity (DISTINCT ON user_id). reach_state is
+-- `account` by construction — the branch joins project_team_members, which is
+-- logins only (00084:160-172).
 SELECT
   t.id,
   'team',
@@ -950,6 +1216,17 @@ FROM (
   WHERE tm.removed_at IS NULL
     AND tm.user_id <> auth.uid()
     AND tm.role IN ('lead_designer', 'support_designer', 'bookkeeper', 'previous_lead')
+    -- 00629 (migrations review r1 M-7), R-BD: THE TENANT LEG, which this
+    -- branch alone never took. Gated on is_studio_comember(designer) only, a
+    -- co-member of the designer of record THROUGH A SECOND STUDIO read the
+    -- working studio's teammate names, their job_title / staff_role and the
+    -- project id — a cross-tenant read of names on the one branch W1b left
+    -- behind. Written exactly as every other branch writes it: the project's
+    -- own tenant org, or the caller standing on the project themselves.
+    AND ( public.is_active_studio_member(public.project_tenant_org(tm.project_id))
+       OR pj.designer_id      = (select auth.uid())
+       OR pj.lead_designer_id = (select auth.uid())
+       OR pj.created_by       = (select auth.uid()) )
     AND ( public.is_studio_comember(pj.designer_id)
        OR public.is_studio_comember(pj.lead_designer_id)
        OR public.is_studio_comember(pj.created_by) )

@@ -70,7 +70,8 @@ describe("bringForwardActLabel (SPEC §5.7 #6)", () => {
   it("counts in words", () => {
     expect(bringForwardActLabel(4)).toBe("Add four to the roster");
     expect(bringForwardActLabel(1)).toBe("Add one to the roster");
-    expect(bringForwardActLabel(0)).toBe("Add no to the roster");
+    // MAJOR-4: nothing ticked is an act, not a count.
+    expect(bringForwardActLabel(0)).toBe("Add to the roster");
   });
 
   it("falls back to a numeral past the words it has", () => {

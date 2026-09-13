@@ -10,6 +10,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import {
   HouseholdBand,
+  householdEmptySentence,
   householdMemberConsequence,
   householdThresholdSentence,
 } from "../household-band";
@@ -21,6 +22,7 @@ let household: Record<string, unknown> | null = null;
 let designerClientId: string | null = "client-1";
 let designerId: string | null = "designer-1";
 let memberRole = "member";
+let clientSideHasAuthority = false;
 
 jest.mock("@patina/supabase", () => ({
   HOUSEHOLD_MEMBER_ROLE_LABELS: {
@@ -33,6 +35,7 @@ jest.mock("@patina/supabase", () => ({
       designerClientId,
       designerId,
       memberCardIds: ["card-adaeze"],
+      clientSideHasAuthority,
     },
   }),
   useOrganizations: () => ({
@@ -71,6 +74,7 @@ const props = {
 };
 
 beforeEach(() => {
+    clientSideHasAuthority = false;
   addMemberMutate.mockReset().mockResolvedValue("seat-1");
   setThresholdMutate.mockReset().mockResolvedValue({ id: "house-1" });
   createHouseholdMutate.mockReset().mockResolvedValue({ id: "house-1" });
@@ -237,6 +241,44 @@ describe("HouseholdBand", () => {
     ).toBeInTheDocument();
   });
 
+  /**
+   * QA-1 — the band may not deny what the rows above it assert. On the seeded
+   * Okonkwo residence the client rows print "Okonkwo household" and "Signs
+   * money to $2,500" off `project_party_authority`, and the band's bare "No
+   * household is on file … nowhere to record who else may sign" stood on the
+   * same screen, unqualified, contradicting them.
+   */
+  it("does not deny an authority the client seats already carry (QA-1)", () => {
+    household = null;
+    clientSideHasAuthority = true;
+    render(<HouseholdBand {...props} />);
+    expect(
+      screen.getByText(
+        "No household is on file for this client yet, so what each of them may sign is recorded seat by seat rather than in one place.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        /there is nowhere to record who else may sign/,
+      ),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Open a household" }),
+    ).toBeInTheDocument();
+  });
+
+  /** r1 BLOCKING-1: the household is born holding the job's client side, or
+   *  the band can never find the row it just made. */
+  it("opens a household holding the job's own client-side cards", async () => {
+    household = null;
+    render(<HouseholdBand {...props} />);
+    fireEvent.click(screen.getByRole("button", { name: "Open a household" }));
+    await waitFor(() => expect(createHouseholdMutate).toHaveBeenCalled());
+    expect(createHouseholdMutate.mock.calls[0][0]).toMatchObject({
+      memberPersonIds: ["card-adaeze"],
+    });
+  });
+
   it("still offers the door for a no-login household (no client record)", () => {
     household = null;
     designerClientId = null;
@@ -253,5 +295,19 @@ describe("HouseholdBand", () => {
     expect(
       screen.queryByRole("button", { name: "Open a household" }),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe("householdEmptySentence (QA-1)", () => {
+  it("says there is nowhere to record it when nothing is recorded", () => {
+    expect(householdEmptySentence(false)).toBe(
+      "No household is on file for this client, so there is nowhere to record who else may sign.",
+    );
+  });
+
+  it("acknowledges an authority the seats already carry", () => {
+    expect(householdEmptySentence(true)).toBe(
+      "No household is on file for this client yet, so what each of them may sign is recorded seat by seat rather than in one place.",
+    );
   });
 });

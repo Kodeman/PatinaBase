@@ -81,9 +81,21 @@ export function bringForwardSelectionLine(
   return `${selected} of ${offered}${where} selected`;
 }
 
-/** SPEC §5.7 #6's terminal act label: "Add four to the roster". */
+/**
+ * SPEC §5.7 #6's terminal act label: "Add four to the roster".
+ *
+ * With nothing ticked it reads "Add to the roster" and not "Add no to the
+ * roster" — `countInWords(0)` is the word "no", which belongs in a count
+ * ("Adds no seats to the Okonkwo residence.") and not in an act. The act row
+ * renders as soon as there are hits and `picked` resets on every open, so the
+ * broken phrase was the sheet's OPENING state on every single use, and the
+ * state it returned to after "Put back" (code review r1 MAJOR-4). R-I forbids
+ * gating the act, so the wording is the whole fix.
+ */
 export function bringForwardActLabel(selected: number): string {
-  return `Add ${countInWords(selected)} to the roster`;
+  return selected === 0
+    ? "Add to the roster"
+    : `Add ${countInWords(selected)} to the roster`;
 }
 
 export interface BringForwardRowFacts {

@@ -27,16 +27,8 @@ jest.mock('@patina/supabase', () => ({
   // CR5-1: the stamp mints into the studio the JOB records, not the one
   // holding the book, so the picker reads that resolver.
   useProjectRecordedStudio: () => ({ data: recordedStudio.current }),
-  useStudioContactHistory: () => ({
-    data: {
-      'contact-1': {
-        projectCount: 3,
-        lastProjectName: 'Ellsworth',
-        lastAt: '2025-11-21T17:00:00Z',
-        lastClosedYear: '2025',
-      },
-    },
-  }),
+  useStudioContactHistory: (...args: unknown[]) =>
+    useStudioContactHistory(...args),
   // ── W3/P2: what travels, read once for the page ───────────────────────
   useBringForward: () => ({ mutateAsync: bringForwardMutate, isPending: false }),
   useChannelConsentRecords: () => ({ data: consentRecords }),
@@ -129,6 +121,23 @@ const BANK: StudioContact = {
   specialties: [],
 };
 
+/**
+ * QA-3 / MAJOR-6 — the hook now carries EVERY prior job, newest first, and the
+ * search reads all of them. MAJOR-5 — the OPEN job is excluded from the
+ * rollup, so the sheet can never name the job it is adding to.
+ */
+const DEFAULT_HISTORY: Record<string, unknown> = {
+  'contact-1': {
+    projectCount: 3,
+    lastProjectName: 'Ellsworth',
+    projectNames: ['Ellsworth', 'Lindqvist kitchen'],
+    lastAt: '2025-11-21T17:00:00Z',
+    lastClosedYear: '2025',
+  },
+};
+let contactHistory: Record<string, unknown> = { ...DEFAULT_HISTORY };
+const useStudioContactHistory = jest.fn(() => ({ data: contactHistory }));
+
 const props = {
   open: true,
   onClose: jest.fn(),
@@ -136,6 +145,8 @@ const props = {
 };
 
 beforeEach(() => {
+  contactHistory = { ...DEFAULT_HISTORY };
+  useStudioContactHistory.mockClear();
   recordedStudio.current = 'org-1';
   addPartyMutate.mockReset().mockResolvedValue({});
   addContactMutate.mockReset().mockResolvedValue({ id: 'new-contact' });
@@ -431,7 +442,7 @@ describe('RolodexPicker — bring forward', () => {
     useStudioContacts.mockReturnValue({ data: [ROSA, PETE], isLoading: false });
     render(<RolodexPicker {...props} />);
     expect(
-      screen.getByRole('button', { name: 'Add no to the roster' }),
+      screen.getByRole('button', { name: 'Add to the roster' }),
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole('checkbox', { name: /Rosa Martínez/ }));
     fireEvent.click(screen.getByRole('checkbox', { name: /Pete Rusk/ }));
@@ -449,7 +460,7 @@ describe('RolodexPicker — bring forward', () => {
     fireEvent.click(screen.getByRole('checkbox', { name: /Rosa Martínez/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Put back' }));
     expect(
-      screen.getByRole('button', { name: 'Add no to the roster' }),
+      screen.getByRole('button', { name: 'Add to the roster' }),
     ).toBeInTheDocument();
     expect(bringForwardMutate).not.toHaveBeenCalled();
   });
@@ -648,5 +659,75 @@ describe('RolodexPicker — searching a prior job', () => {
     for (const call of useStudioContacts.mock.calls) {
       expect(call[1]).not.toHaveProperty('search');
     }
+  });
+
+  /**
+   * QA-3 / MAJOR-6 — a repeat sub is the population bring forward exists for,
+   * and matching only the card's MOST RECENT job was exactly the population it
+   * could not find. Rosa worked the Lindqvist kitchen and has been seated
+   * since (`lastProjectName` is Ellsworth).
+   */
+  it('finds a card by ANY prior job, not only its latest one', () => {
+    useStudioContacts.mockReturnValue({
+      data: [ROSA, ELSEWHERE],
+      isLoading: false,
+    });
+    render(<RolodexPicker {...props} />);
+    fireEvent.change(screen.getByLabelText('Search the rolodex'), {
+      target: { value: 'Lindqvist' },
+    });
+    expect(screen.getByText('Rosa Martínez')).toBeInTheDocument();
+    expect(screen.queryByText('Nobody Relevant')).not.toBeInTheDocument();
+  });
+
+  /** MAJOR-5 — a PRIOR job is one that is not the job being added to. */
+  it('leaves the OPEN job out of the history rollup', () => {
+    render(<RolodexPicker {...props} />);
+    for (const call of useStudioContactHistory.mock.calls) {
+      expect(call[1]).toMatchObject({ excludeProjectId: 'proj-1' });
+    }
+  });
+
+  /**
+   * MAJOR-5 — a row with NO prior job is its own answer. Filtering those out
+   * before the uniqueness test let one carded person name the whole page:
+   * "4 of 5 from the Lindqvist kitchen selected" over four rows never on it.
+   */
+  it('names no shared job when some rows have never been on one', () => {
+    useStudioContacts.mockReturnValue({
+      data: [ROSA, ELSEWHERE],
+      isLoading: false,
+    });
+    render(<RolodexPicker {...props} />);
+    expect(document.querySelector('[data-pick-count]')?.textContent).toBe(
+      '0 of 2 selected',
+    );
+  });
+
+  /**
+   * MAJOR-2 — the count, the act label, the consequence sentence and the
+   * insert must name the same people. Ticking a row and then narrowing the
+   * search left "1 of 1 … selected" over "Add one to the roster" for somebody
+   * the studio could no longer see, and an insert that wrote nothing.
+   */
+  it('un-ticks a card the search has taken off the page', () => {
+    useStudioContacts.mockReturnValue({
+      data: [ROSA, ELSEWHERE],
+      isLoading: false,
+    });
+    render(<RolodexPicker {...props} />);
+    fireEvent.click(screen.getByRole('checkbox', { name: /Rosa Martínez/ }));
+    expect(
+      screen.getByRole('button', { name: 'Add one to the roster' }),
+    ).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Search the rolodex'), {
+      target: { value: 'Nobody' },
+    });
+    expect(
+      screen.getByRole('button', { name: 'Add to the roster' }),
+    ).toBeInTheDocument();
+    expect(document.querySelector('[data-pick-count]')?.textContent).toBe(
+      '0 of 1 selected',
+    );
   });
 });

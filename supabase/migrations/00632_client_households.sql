@@ -161,6 +161,62 @@ CREATE TRIGGER assert_client_household_members_trg
   ON public.client_households
   FOR EACH ROW EXECUTE FUNCTION public.assert_client_household_members();
 
+-- ── PR-n, over a CHANGE and not over a value ──────────────────────────────
+-- The UPDATE policy's WITH CHECK reads `co_threshold_cents IS NULL OR
+-- is_org_admin_or_owner(...)`, which gates CARRYING a figure, not CHANGING
+-- one — so a row leaving with NULL always satisfied it and a plain member
+-- could ERASE the household's money figure through PostgREST (migrations
+-- review r1 M-4, reproduced locally: raising it was correctly refused,
+-- `SET co_threshold_cents = NULL` succeeded). Erasing is a money change: the
+-- Call Sheet's household band flips to "No change-order figure is on file for
+-- this household." and add_household_member() stops writing the money
+-- authority row at all.
+--
+-- A WITH CHECK cannot see OLD, so the rule lives where OLD is visible. The
+-- policy's own leg stays as it is — two gates, the same ruling, and the
+-- trigger is the one that cannot be satisfied by writing NULL.
+--
+-- The internal-caller bypass is 00627:549's: a write with no signed-in caller
+-- (a migration, a job, service_role) was never gated by RLS on this table
+-- either, so the trigger does not invent a gate the policies do not have.
+CREATE OR REPLACE FUNCTION public.assert_household_threshold_principal()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+BEGIN
+  IF NEW.co_threshold_cents IS NOT DISTINCT FROM OLD.co_threshold_cents THEN
+    RETURN NEW;
+  END IF;
+  IF auth.uid() IS NULL THEN
+    RETURN NEW;
+  END IF;
+  IF NOT public.is_org_admin_or_owner(NEW.organization_id) THEN
+    RAISE EXCEPTION 'household_threshold_forbidden'
+      USING HINT = 'Only an owner or an admin of the studio may change — or '
+                   'take away — a household''s change-order figure (PR-n).';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.assert_household_threshold_principal()
+  FROM PUBLIC, anon, authenticated;
+
+COMMENT ON FUNCTION public.assert_household_threshold_principal() IS
+  'BEFORE UPDATE OF co_threshold_cents on client_households: PR-n read over a '
+  'CHANGE. The UPDATE policy''s WITH CHECK can only see the new row, so '
+  'erasing the figure satisfied it; this compares OLD to NEW and refuses any '
+  'member who is not an owner or an admin, in either direction. Writes with '
+  'no signed-in caller pass, exactly as they pass the table''s RLS (00632).';
+
+DROP TRIGGER IF EXISTS assert_household_threshold_principal_trg ON public.client_households;
+CREATE TRIGGER assert_household_threshold_principal_trg
+  BEFORE UPDATE OF co_threshold_cents
+  ON public.client_households
+  FOR EACH ROW EXECUTE FUNCTION public.assert_household_threshold_principal();
+
 -- ── RLS ────────────────────────────────────────────────────────────────────
 ALTER TABLE public.client_households ENABLE ROW LEVEL SECURITY;
 

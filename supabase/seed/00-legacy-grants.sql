@@ -16430,6 +16430,24 @@ END $g$;
 
 -- 00629_studio_contact_merges.sql
 DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.rolodex_card_for_party_phone(uuid, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00629_studio_contact_merges.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.rolodex_card_for_party_phone(uuid, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00629_studio_contact_merges.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.link_rolodex_card_to_parties() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00629_studio_contact_merges.sql
+DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.merge_studio_contacts(uuid, uuid, text) FROM PUBLIC, anon;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
@@ -16527,6 +16545,12 @@ END $g$;
 -- 00632_client_households.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.assert_client_household_members() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00632_client_households.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.assert_household_threshold_principal() FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 

@@ -499,6 +499,8 @@ export {
   SEAT_BID_OUTCOME_STAGE,
   SEAT_BID_OUTCOME_LABELS,
   SEAT_BID_OUTCOME_ACTS,
+  SEAT_BID_COLUMNS,
+  seatCarriesBid,
   isSeatBidOutcome,
   asBidError,
   partyBidKeys,

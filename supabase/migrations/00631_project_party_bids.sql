@@ -10,9 +10,10 @@
 --
 -- 00624 gave the seat a STAGE — prospect, invited, bidding, declined,
 -- no_response, awarded … — which says where a firm is in the ladder. It says
--- nothing about the bid itself: when the quote is due, what it came in at,
--- who at the firm quoted it, and how long the number holds. Those five facts
--- are this file.
+-- nothing about the bid itself: when the studio asked, when the quote is due,
+-- when it came back, what it came in at, who at the firm quoted it, how long
+-- the number holds, and the day the studio chose. Those eight facts are this
+-- file.
 --
 -- LINEAGE: 00281 (project_parties) → 00461/00462 (trade_rfq_requests,
 -- trade_scope_bids — the proposal-side RFQ rail this backfill reads) → 00624
@@ -22,18 +23,43 @@
 -- ── WHY DATE AND NOT TIMESTAMPTZ ──────────────────────────────────────────
 -- Every dated fact already on this seat is a `date`: on_site_from, on_site_to,
 -- off_job_at, warranty_until (00624). A bid is due on a day and holds until a
--- day; the Call Sheet prints "Due 5 October 2026" and never a clock. The two
+-- day; the Call Sheet prints "Due 5 October 2026" and never a clock. All five
 -- new dated columns therefore take `date`, keeping one type for the seat's
 -- calendar.
 -- ═══════════════════════════════════════════════════════════════════════════
 
+-- ── THE THREE DATED EVENTS, AND WHY THEY ARE COLUMNS ──────────────────────
+-- migrations review r1 M-6. `bid_outcome` is a single CURRENT word: it says
+-- where the bid stands today and can carry no dated event at all, let alone
+-- two on one row. But the acceptance strings this file exists to satisfy are
+-- dated events, plural, and they outlive each other:
+--
+--   SPEC §5.4 #9  "Rivera Finishes · paint · Asked 28 September 2026.
+--                  Due 5 October 2026."          (outcome: No response)
+--   R-R           "Quoted 2 October 2026. Selected 9 October 2026."
+--
+-- A row that was asked, then quoted, then selected prints all three, and
+-- `bid_outcome` = 'selected' can only ever say the last one. Direction §8's P2
+-- row is "bid fields and the Bidding band's DATES and outcomes", plural. So
+-- the three moments each take their own `date`, beside `bid_due_at` (when the
+-- answer was OWED, which is not when it came) and `bid_valid_until`.
+--
+-- NO CROSS-DATE CHECK between them, deliberately, where bid_valid_until >=
+-- bid_due_at has one: those two are a WINDOW the studio states in advance, and
+-- an inverted window is a typo. These three are a RECORD of what happened, and
+-- a studio entering them weeks later, out of order, from a paper file is
+-- ordinary. A constraint here would refuse an honest correction, and there is
+-- no wrong fact on a face behind it.
 ALTER TABLE public.project_parties
   ADD COLUMN IF NOT EXISTS bid_due_at             date,
   ADD COLUMN IF NOT EXISTS bid_outcome            text,
   ADD COLUMN IF NOT EXISTS bid_valid_until        date,
   ADD COLUMN IF NOT EXISTS bid_quoted_by_person_id uuid
     REFERENCES public.studio_contacts(id) ON DELETE SET NULL,
-  ADD COLUMN IF NOT EXISTS bid_amount_cents       integer;
+  ADD COLUMN IF NOT EXISTS bid_amount_cents       integer,
+  ADD COLUMN IF NOT EXISTS bid_asked_at           date,
+  ADD COLUMN IF NOT EXISTS bid_quoted_at          date,
+  ADD COLUMN IF NOT EXISTS bid_selected_at        date;
 
 -- Vocabulary as a named constraint so a rerun really does widen it (the
 -- 00592/00593/00623 idiom). A CHECK and not an enum: 00624 took the same
@@ -81,6 +107,19 @@ COMMENT ON COLUMN public.project_parties.bid_quoted_by_person_id IS
   'shape).';
 COMMENT ON COLUMN public.project_parties.bid_amount_cents IS
   'Integer cents. NULL while the firm has been asked and has not answered.';
+COMMENT ON COLUMN public.project_parties.bid_asked_at IS
+  'The day the studio ASKED for a price — SPEC §5.4 #9''s "Asked 28 September '
+  '2026", which bid_outcome cannot carry because it holds one CURRENT word. '
+  'Backfilled from trade_rfq_requests.sent_at.';
+COMMENT ON COLUMN public.project_parties.bid_quoted_at IS
+  'The day the number CAME BACK — R-R''s "Quoted 2 October 2026". Distinct '
+  'from bid_due_at, which is the day it was owed. Backfilled from '
+  'trade_rfq_requests.responded_at, else the noted_at of the firm''s own '
+  'quoted bid row.';
+COMMENT ON COLUMN public.project_parties.bid_selected_at IS
+  'The day the studio CHOSE this firm — R-R''s "Selected 9 October 2026". '
+  'Backfilled from trade_scope_bids.noted_at of a `selected` row, the only '
+  'record Patina holds of when a selection was made.';
 
 -- The Bidding band's read: the seats on one job that carry a bid at all.
 CREATE INDEX IF NOT EXISTS idx_project_parties_bid
@@ -183,6 +222,18 @@ CREATE TRIGGER assert_party_bid_quoted_by_trg
 --   bid_amount_cents   trade_scope_bids.amount_cents of the row that decided
 --                      the outcome. NULL on an 'asked' row by construction.
 --
+--   bid_asked_at       trade_rfq_requests.sent_at of the most recent request
+--                      per party, cast to a date. The day the RFQ went out IS
+--                      the day the studio asked; no inference (r1 M-6).
+--   bid_quoted_at      trade_rfq_requests.responded_at where the request came
+--                      back, else the noted_at of that party's earliest
+--                      trade_scope_bids row with status 'quoted'. Both are
+--                      records of a number arriving.
+--   bid_selected_at    trade_scope_bids.noted_at of a `selected` row — when
+--                      the selection was written down. NULL where no bid row
+--                      says `selected`, including an outcome inferred from the
+--                      RFQ rail alone, which knows nothing about choosing.
+--
 -- WHAT IS DELIBERATELY NOT BACKFILLED, AND WHY
 --
 --   bid_due_at              no source. trade_rfq_requests carries `timeline`,
@@ -217,10 +268,33 @@ WITH strongest_bid AS (
            b.noted_at DESC,
            b.id
 ),
+-- The SELECTION's own day, which the strongest-bid pick above cannot carry:
+-- that row may be a `quoted` one, and a party may hold both.
+selected_bid AS (
+  SELECT DISTINCT ON (b.party_id)
+    b.party_id,
+    b.noted_at
+  FROM public.trade_scope_bids b
+  WHERE b.status = 'selected'
+  ORDER BY b.party_id, b.noted_at DESC, b.id
+),
+-- The day a number first came back, where the RFQ rail did not record a
+-- responded_at of its own. EARLIEST, not latest: a second quote is a revision,
+-- and "Quoted" names the first answer.
+quoted_bid AS (
+  SELECT DISTINCT ON (b.party_id)
+    b.party_id,
+    b.noted_at
+  FROM public.trade_scope_bids b
+  WHERE b.status IN ('quoted', 'selected')
+  ORDER BY b.party_id, b.noted_at, b.id
+),
 latest_rfq AS (
   SELECT DISTINCT ON (r.party_id)
     r.party_id,
-    r.status
+    r.status,
+    r.sent_at,
+    r.responded_at
   FROM public.trade_rfq_requests r
   ORDER BY r.party_id, r.created_at DESC, r.id
 ),
@@ -235,13 +309,23 @@ mapped AS (
       WHEN lr.status = 'responded' THEN 'quoted'
       ELSE NULL
     END                              AS outcome,
-    sb.amount_cents                  AS amount_cents
+    sb.amount_cents                  AS amount_cents,
+    lr.sent_at::date                 AS asked_at,
+    COALESCE(lr.responded_at, qb.noted_at)::date AS quoted_at,
+    xb.noted_at::date                AS selected_at
   FROM strongest_bid sb
   FULL OUTER JOIN latest_rfq lr ON lr.party_id = sb.party_id
+  LEFT JOIN quoted_bid   qb ON qb.party_id = COALESCE(sb.party_id, lr.party_id)
+  LEFT JOIN selected_bid xb ON xb.party_id = COALESCE(sb.party_id, lr.party_id)
 )
 UPDATE public.project_parties pp
    SET bid_outcome      = m.outcome,
-       bid_amount_cents = COALESCE(pp.bid_amount_cents, m.amount_cents)
+       bid_amount_cents = COALESCE(pp.bid_amount_cents, m.amount_cents),
+       -- COALESCE on each, so a studio that already typed one keeps it. The
+       -- outcome guard below already means only untouched seats are reached.
+       bid_asked_at     = COALESCE(pp.bid_asked_at,    m.asked_at),
+       bid_quoted_at    = COALESCE(pp.bid_quoted_at,   m.quoted_at),
+       bid_selected_at  = COALESCE(pp.bid_selected_at, m.selected_at)
   FROM mapped m
  WHERE pp.id = m.party_id
    AND m.outcome IS NOT NULL
