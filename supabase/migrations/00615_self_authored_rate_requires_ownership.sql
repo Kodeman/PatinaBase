@@ -1,6 +1,8 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 -- 00615 — HT-3-e(2): the number she wrote for herself prices her hour only
 --         where she OWNS the studio that wrote it
+--         HT-3-g(1): and NOTHING THAT PRICES AN HOUR DERIVES A STUDIO — the
+--         pricing studio is projects.studio_id, or 'none'
 --
 -- Lineage (resolve_time_rate_cents): 00599 → 00615. The body below is 00599's
 -- verbatim, with ONE delta grafted into tier 2 and nothing else touched — the
@@ -18,7 +20,59 @@
 -- are already merged to `hour-tracking/integration`; W2's own band 00604–00607 is
 -- fully used. So the rule lands at 00615 — the number W5 had reserved and has not
 -- spent — and that reservation is recorded in this program's rulings.md and in
--- artifacts/hour-tracking-2026-09-11/build/W2-fix-r7.md. W5 mints from 00616.
+-- artifacts/hour-tracking-2026-09-11/build/W2-fix-r7.md. W5 mints NOTHING,
+-- 00616-00617 stay W6's (W2-R8-04), and HT-3-g(2)'s one-off legacy stamp spends
+-- 00620, the last number of this program's block (W7's unused reserve).
+--
+-- ── ROUND 11 — HT-3-g (RULED BY KODY 2026-09-12) ───────────────────────────
+-- NO READ-TIME DERIVATION. THE PRICING STUDIO IS A STAMPED COLUMN.
+--
+--   *"The resolver's studio step is: projects.studio_id when not NULL; otherwise
+--   rate_source = 'none' ("rate pending"). The HT-3-b tier rule (employer tier
+--   exactly one -> it; else owned tier exactly one -> it; else NULL) is used in
+--   exactly two places: 00602's INSERT stamp and the one-off ship migration
+--   00620. Designers never stamp: stamp_project_pricing_studio admits ONLY a
+--   caller who is owner/admin of the named studio AND the named studio is in the
+--   project designer's EMPLOYER tier."*
+--
+-- This ruling SUPERSEDES the read-time derivation parts of HT-3-a, HT-3-b,
+-- HT-3-d, HT-3-e and HT-3-f. What it changes in this file:
+--   · `resolve_time_rate_cents` loses HT-3-b's two-tier step 2 entirely. Where
+--     projects.studio_id is NULL the answer is 'none' for EVERYONE — the
+--     designer herself included — until somebody stamps the column.
+--   · `project_pricing_studio_id` becomes ONE COLUMN READ. Every caller of it
+--     (00604's ledger view, 00605's admin write policies and audit trigger,
+--     00606's owner/admin read, 00607's project_hours_total) therefore follows
+--     the stamped column and fails closed on NULL.
+--   · HT-3-f(2) (`owned_tier_prices_project`, the "she created it herself" gate
+--     on the owned tier) is DISSOLVED and its body is deleted from this file: it
+--     existed only to stop the read-time recomputation, and there is no longer a
+--     read-time derivation for it to gate. 00620's one-off stamp deliberately
+--     does NOT carry it — the honest principal whose assistant opened her legacy
+--     project is exactly the row the one-off stamp must hand her own studio.
+--   · the tier rule survives as ONE SHARED BODY,
+--     `public.designer_tier_pricing_studio(p_designer_id)`, defined first below
+--     and called from exactly two places — `set_project_studio_id_owned` (00602's
+--     INSERT stamp) and 00620's one-off legacy stamp. Neither prices an hour.
+--
+-- WHY, in one sentence per round that paid for it. A studio DERIVED when the hour
+-- is priced is recomputed on every hour, so every input to it is a lever the
+-- subject can pull between two hours on the same project: a seat she deletes
+-- under the shipped `Members can leave` policy (W2-R9-01 probe C), a seat an
+-- admin sets `status = 'removed'` (probe D2), a seat an outsider writes for her
+-- consent-free (W1-R11-01, W2-R3-01), a role she demotes by handing a workspace
+-- to a second account (W2-R5-01), a `joined_at` she backdates on the activation
+-- path (W1-R12-01), a rate row she rewrites in place (W2-R8-01). Eight review
+-- rounds closed one input each and the next one opened; two more closed the
+-- stamp's confirm arm and re-opened it at the stamp arm (W2-R10-01, W2-R11-01).
+-- The rule that closes all of them at once is that the pricing studio is a
+-- COLUMN, written once by a party who is not the subject, and read afterwards.
+--
+-- WHAT IT COSTS, stated rather than discovered: a project whose column is NULL
+-- and whose designer's employer tier is empty or ambiguous prices 'none' —
+-- HT-26's "rate pending" — for everyone, and the repair is a human act by an
+-- owner/admin of a studio that EMPLOYS the designer. That is a COST NOTE, not a
+-- defect: 'none' is where a human must act.
 --
 -- THE RULING (HT-3-e(2), ruled by the orchestrator 2026-09-12, flagged to Kody):
 --   *"In the W1 resolver, a `studio_member_rates` row whose `created_by` =
@@ -56,8 +110,10 @@
 -- a designer who runs a SECOND account, transfers ownership of her provisioned
 -- workspace to it and has THAT ACCOUNT author her rate there can still price her
 -- hours from that workspace once the account stamps a legacy project, because the
--- row is then arm's-length on `created_by` and the seat test at 00606 is satisfied
--- too. Patina makes that VISIBLE rather than impossible: the pricing studio is a
+-- row is then arm's-length on `created_by` and the bounds at 00606 are satisfied
+-- too. HT-3-g(3) does NOT reach it either: `transfer_studio_ownership`'s last
+-- statement demotes her to `admin` (00484:524-536), which puts that workspace
+-- inside her own EMPLOYER tier, and the account holding the title is its owner. Patina makes that VISIBLE rather than impossible: the pricing studio is a
 -- column of `time_entry_ledger` and the owner's project lens shows it (lane B).
 -- No further bound is added for it in this program. Cases (q) and (r) of
 -- `supabase/tests/rls/time_entry_studio_stamp_test.sql` measure it as passing,
@@ -76,12 +132,13 @@
 -- later hand does not "repair" this body back: 00599 asserts that
 -- `public.organization_members` appears EXACTLY twice in the resolver ("a third
 -- read is a membership question about somebody else"). After this migration it
--- appears THREE times — HT-3-b's two tiers, which are questions about the
--- PROJECT'S DESIGNER, plus one question about the SUBJECT BEING PRICED: does she
--- own the studio whose card names her? That third read is ruled, it is the whole
--- of HT-3-e(2), and the postcondition below pins it at three with the owner-seat
--- read named. 00599's assert is not edited (it is merged, and it passed against
--- the body 00599 installs); it is superseded, by number, here.
+-- appears ONCE, and it is not either of 00599's two: HT-3-b's two tiers are GONE
+-- from this body under HT-3-g(1), and the one read that remains is HT-3-e(2)'s
+-- single question about the SUBJECT BEING PRICED — does she own the studio whose
+-- card names her? The postcondition below pins it at ONE with the owner-seat read
+-- named, and pins the ABSENCE of any membership question about studio choice.
+-- 00599's assert is not edited (it is merged, and it passed against the body
+-- 00599 installs); it is superseded, by number, here.
 --
 -- ── SECOND SECTION, ADDED FOR W2 REVIEW ROUND 8 (W2-R8-01) ─────────────────
 -- HT-3-e(2) asks WHO AUTHORED THE ROW. Round 8 measured the other half of that
@@ -135,63 +192,40 @@
 -- table and `supabase/tests/billing/time_rate_resolution_test.sql` case (ah) end
 -- to end — the round-8 probe A shape, in both directions.
 --
--- ── THIRD SECTION, ADDED FOR W2 REVIEW ROUND 9 (W2-R9-01) ──────────────────
--- HT-3-f (RULED by the orchestrator 2026-09-12, flagged to Kody) answers the one
--- MAJOR of round 9: HT-3-b's derivation is RECOMPUTED on every hour for a legacy
--- project whose studio_id is NULL, so a designer could EMPTY her own employer tier
--- with one ordinary statement — the shipped `Members can leave` DELETE on her own
--- organization_members row, or an `admin`'s UPDATE of it to status = 'removed' —
--- and the OWNED tier then opened under her former employer's legacy project. Her
--- next hour there came back 99900 / studio_member / 199800 where the employer's own
--- card had priced it 26000, the employer's owner read NONE of the project's hours,
--- and no statement existed that could have pinned the column before or after
--- (bound (c) of 00606 REFUSED the employer's pre-emptive stamp by design, and
--- set_project_studio_id's authenticated arm admits TG_OP = 'INSERT' only).
--- Measured 1/1 through RLS as her, ONE account, no ownership transfer and no
--- confederate (review round 9, probe C; the status = 'removed' variant measured
--- identically as probe D2).
+-- ── THIRD SECTION, ROUNDS 9-11 (W2-R9-01 -> HT-3-f, then HT-3-g) ───────────
+-- ROUND 9 answered W2-R9-01 — HT-3-b's derivation was RECOMPUTED on every hour
+-- for a legacy project whose studio_id is NULL, so a designer emptied her own
+-- employer tier with one ordinary statement (the shipped `Members can leave`
+-- DELETE on her own organization_members row, or an `admin`'s UPDATE of it to
+-- status = 'removed'), the OWNED tier opened under her former employer's legacy
+-- project, and her next hour came back 99900 / studio_member / 199800 where that
+-- employer's own card had priced it 26000 — with the employer's owner reading NONE
+-- of the project's hours. Measured 1/1 through RLS as her, ONE account, no
+-- ownership transfer and no confederate (probe C; the status = 'removed' variant
+-- measured identically as probe D2).
+-- HT-3-f answered it in two parts: (1) a PIN, turning 00606's bound (c) into a
+-- confirm, and (2) HT-3-f(2), gating the OWNED tier on
+-- `projects.created_by = projects.designer_id` through a shared body
+-- `owned_tier_prices_project`. Round 10 amended (1) to the employer tier
+-- (W2-R10-01) and round 11 measured the same taking relocated to the STAMP arm,
+-- which the amendment did not gate (W2-R11-01, forms A and G).
 --
--- HT-3-f has two parts, and BOTH of them live here:
---   (1) THE PIN — in 00606, bound (c) becomes a CONFIRM rather than a refusal
---       where p_studio_id equals project_pricing_studio_id(p_project_id): an
---       owner/admin of the studio the derivation ALREADY names may write it down,
---       after which HT-3-c's "a stamp is final" holds and no later seat change can
---       re-derive it. Every other bound stays. That half is 00606's file, not this
---       one.
---   (2) THE OWNED TIER IS FOR SELF-CREATED PROJECTS ONLY — here, and in every
---       other body of the derivation: the OWNED tier is reached only where
---       `projects.created_by = projects.designer_id`. A project somebody ELSE
---       opened for the designer is never priced by a studio she owns; where the
---       employer tier is empty for such a project the answer is 'none' (HT-26's
---       "rate pending") and HT-3-f(1)'s pin or HT-3-a's stamp is the repair.
---       `created_by` is the one column in this shape she cannot author after the
---       fact: 00563 RAISES on any UPDATE that moves it, its authenticated-INSERT
---       arm admits only `NEW.created_by = auth.uid()` on a project she leads
---       herself, and reassign_project_lead never touches it.
--- THE RULE HAS ONE IMPLEMENTATION — `public.owned_tier_prices_project(created_by,
--- designer_id)`, defined first below and CALLED from each of the four bodies that
--- derive a pricing studio, so the four cannot drift:
---   · resolve_time_rate_cents      (this file, lineage 00599 → 00615)
---   · project_pricing_studio_id    (this file, lineage 00604 → 00615) — the
---     callable form 00606's bound (c) and its owner/admin read policy both ask
---   · set_project_studio_id_owned  (this file, lineage 00602 → 00603 → 00615) —
---     the INSERT stamp. 00602 and 00603 are ALREADY MERGED to
---     hour-tracking/integration, so neither file is edited; the trigger function is
---     redefined here from 00603's body (the grep winner) verbatim.
--- A predicate of (created_by, designer_id) rather than of a project id is the only
--- shape all four can share: the INSERT stamp runs BEFORE the row exists, so it has
--- NEW and no readable projects row to pass.
---
--- RESIDUAL, RULED AND RECORDED as HT-3-f(3) on HT-3-e(3)'s footing: a designer who
--- CREATED a legacy project herself while employed, then deletes her own seat (the
--- shipped `Members can leave`) or sets it removed, and then logs hours on that
--- project, prices from her own workspace. `created_by = designer_id` holds, so part
--- (2) does not reach it. It is made VISIBLE rather than impossible — the pricing
--- studio is a column of time_entry_ledger and the owner's project lens shows it
--- (lane B) — and HT-3-f(1)'s pin is the employer's remedy BEFORE the fact. Case
--- (ai) of supabase/tests/billing/time_rate_resolution_test.sql measures it as a
--- passing, loudly-labelled assertion naming HT-3-f(3).
---
+-- HT-3-g (RULED BY KODY 2026-09-12) closes the whole class at the source instead,
+-- and BOTH of HT-3-f's parts DISSOLVE with it:
+--   · part (1), the confirm arm, is DELETED from 00606. With no read-time
+--     derivation there is nothing to confirm: `project_pricing_studio_id` IS the
+--     column, so bound (b) ("a stamped project is final") is the whole of it.
+--   · part (2), HT-3-f(2), is DELETED from this file, body and all. It gated a
+--     derivation that no longer happens. It must NOT be carried into 00620's
+--     one-off stamp either: the honest principal of the HT-3-f(2) COST NOTE
+--     (W2-R10-03) — she owns her studio, holds no employer seat, and her own
+--     ASSISTANT opened her legacy project — is precisely the row the one-off stamp
+--     has to hand her own studio, and HT-3-f(2) would leave her at 'none' for ever.
+--   · HT-3-f(3), the recorded residual (a legacy project she created herself while
+--     employed, then left), dissolves too: leaving a seat no longer changes a
+--     stamped column, and an unstamped project prices 'none' for everyone.
+-- What REPLACES them is the shared tier body below, used at INSERT and at ship,
+-- plus the stamp's HT-3-g(3) employer-tier bound in 00606.
 -- ── FOURTH SECTION, W2-R9-02 ───────────────────────────────────────────────
 -- HT-3-e(4) (the second section above) re-authors a rate row to whoever moved its
 -- number — which is what HT-3-e(2) needs, and which round 9 measured costs the
@@ -222,51 +256,125 @@
 BEGIN;
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- HT-3-f(2) — THE ONE IMPLEMENTATION. Every body that derives a pricing studio
--- calls this and none of them spells the rule itself, so the four cannot drift
--- (the same anti-drift problem 00604's banner records for HT-3-b's own tiers,
--- answered here with a shared body rather than with four asserted equivalences).
--- It takes the two columns rather than a project id because the INSERT stamp runs
--- BEFORE the row exists and has only NEW.
--- IMMUTABLE: it reads nothing. A trigger function's caller needs no EXECUTE, and
--- the three other callers are SECURITY DEFINER owned by postgres, so no role holds
--- it (§0.16's idiom, the 00597/00602 precedent).
+-- HT-3-g(1) — THE HT-3-b TIER RULE, AS ONE SHARED BODY, USED IN EXACTLY TWO
+-- PLACES, NEITHER OF WHICH PRICES AN HOUR:
+--   · public.set_project_studio_id_owned() — 00602's INSERT stamp (below), and
+--   · migration 00620 — the one-off legacy stamp at ship.
+-- Returns (studio_id, tier), where tier is 'employer' | 'owned' | 'none'. The
+-- CALLER needs the tier, not only the studio: at INSERT a single EMPLOYER
+-- candidate overrides a studio 00563 merely DERIVED (W1-R11-02) while an OWNED
+-- candidate only ever fills a column that is still NULL, and 00620 stamps either.
+-- Collapsed to a bare uuid the two callers would have to re-derive the tier, which
+-- is the drift this shared body exists to prevent.
+--
+-- THE RULE, verbatim from HT-3-b as HT-3-g restates it: the candidates are the
+-- studios where the project's DESIGNER holds an ACTIVE, NON-GUEST
+-- organization_members row in an ACTIVE design_studio, in two tiers — the EMPLOYER
+-- tier (role <> 'owner') first, and only if she holds no employer seat at all the
+-- OWNED tier (role = 'owner'). EXACTLY ONE candidate in a tier answers; more than
+-- one is 'none'. There is no rate-existence, seat-date, org-age, member-count or
+-- created_by key and no ORDER BY anywhere in the choice, so the answer is
+-- independent of the member being priced (HT-3-a forbids the last one outright)
+-- and independent of who OPENED the project — HT-3-f(2) is dissolved by HT-3-g and
+-- deliberately NOT carried here, because the honest principal whose assistant
+-- opened her legacy project (HT-3-f(2) COST NOTE, W2-R10-03) is the row 00620 has
+-- to hand her own studio.
+--
+-- SECURITY DEFINER: an INVOKER read of organization_members returns a PARTIAL
+-- candidate set, which under "exactly one answers" turns an ambiguous tier into a
+-- confident wrong answer. No role holds EXECUTE — the INSERT stamp is a DEFINER
+-- trigger function owned by postgres and 00620 runs as the migration role, so both
+-- reach it as the owner (§0.16's idiom, the 00597/00602 precedent).
 -- ═══════════════════════════════════════════════════════════════════════════
-CREATE OR REPLACE FUNCTION public.owned_tier_prices_project(
-  p_created_by  uuid,
+CREATE OR REPLACE FUNCTION public.designer_tier_pricing_studio(
   p_designer_id uuid
 )
-RETURNS boolean
-LANGUAGE sql
-IMMUTABLE
+RETURNS TABLE (studio_id uuid, tier text)
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
-  SELECT p_created_by IS NOT NULL
-     AND p_designer_id IS NOT NULL
-     AND p_created_by = p_designer_id;
+DECLARE
+  -- Collected as arrays, never ordered and LIMIT 1'd: the rule is "exactly one
+  -- candidate answers; more than one is none", so the COUNT is the answer and
+  -- there is no ranking key to choose with.
+  v_employer_studios uuid[];
+  v_owned_studios    uuid[];
+BEGIN
+  IF p_designer_id IS NULL THEN
+    RETURN QUERY SELECT NULL::uuid, 'none'::text;
+    RETURN;
+  END IF;
+
+  -- EMPLOYER tier: the designer's active non-guest seats that are NOT owner seats.
+  SELECT array_agg(DISTINCT studio.id)
+    INTO v_employer_studios
+  FROM public.organizations AS studio
+  JOIN public.organization_members AS designer_seat
+    ON designer_seat.organization_id = studio.id
+   AND designer_seat.user_id = p_designer_id
+  WHERE studio.type = 'design_studio'
+    AND studio.status = 'active'
+    AND designer_seat.status = 'active'
+    AND designer_seat.role <> 'guest'
+    AND designer_seat.role <> 'owner';
+
+  IF COALESCE(array_length(v_employer_studios, 1), 0) = 1 THEN
+    RETURN QUERY SELECT v_employer_studios[1], 'employer'::text;
+    RETURN;
+  END IF;
+
+  IF COALESCE(array_length(v_employer_studios, 1), 0) > 1 THEN
+    -- An ambiguous employer tier is nothing, not a contest (HT-3-b).
+    RETURN QUERY SELECT NULL::uuid, 'none'::text;
+    RETURN;
+  END IF;
+
+  -- OWNED tier, reached only where she holds no employer seat anywhere.
+  SELECT array_agg(DISTINCT studio.id)
+    INTO v_owned_studios
+  FROM public.organizations AS studio
+  JOIN public.organization_members AS designer_seat
+    ON designer_seat.organization_id = studio.id
+   AND designer_seat.user_id = p_designer_id
+  WHERE studio.type = 'design_studio'
+    AND studio.status = 'active'
+    AND designer_seat.status = 'active'
+    AND designer_seat.role = 'owner';
+
+  IF COALESCE(array_length(v_owned_studios, 1), 0) = 1 THEN
+    RETURN QUERY SELECT v_owned_studios[1], 'owned'::text;
+    RETURN;
+  END IF;
+
+  RETURN QUERY SELECT NULL::uuid, 'none'::text;
+END;
 $$;
 
-COMMENT ON FUNCTION public.owned_tier_prices_project(uuid, uuid) IS
-  'HT-3-f(2) (RULED 2026-09-12, migration 00615): HT-3-b''s OWNED tier is reached '
-  'only for a project the designer CREATED herself — projects.created_by = '
-  'projects.designer_id. A project somebody else opened for her is never priced by '
-  'a studio she owns; where her employer tier is empty for such a project the '
-  'answer is ''none'' (HT-26''s "rate pending") and HT-3-f(1)''s pin or HT-3-a''s '
-  'stamp is the repair. Measured shape it closes (W2-R9-01, probe C, 1/1 through '
-  'RLS, ONE account): she deletes her own employer seat under the shipped `Members '
-  'can leave` policy, the employer tier empties, and the owned tier used to open '
-  'under her former employer''s legacy project at the number she wrote for herself. '
-  'Called by resolve_time_rate_cents, project_pricing_studio_id and '
-  'set_project_studio_id_owned — one rule, one body. It does NOT reach HT-3-f(3)''s '
-  'recorded residual, a legacy project she created herself while employed. '
-  'THE TWO NULL LEGS ARE DEFENSIVE, NOT LIVE ARMS (W2-R10-08, measured): '
-  'projects.created_by is NOT NULL — an INSERT of NULL raises 23502 — so there is no '
-  'authorless-project path around this rule and no legacy row can reach ''none'' '
-  'through a NULL author. They exist because the INSERT stamp calls this before the '
-  'row exists, with NEW values it does not re-read.';
+COMMENT ON FUNCTION public.designer_tier_pricing_studio(uuid) IS
+  'HT-3-b''s tier rule, as ONE shared body, under HT-3-g (RULED by Kody '
+  '2026-09-12): the studios where the project''s DESIGNER holds an active, '
+  'non-guest seat in an active design_studio, in two tiers — EMPLOYER '
+  '(role <> ''owner'') first, and only where she holds no employer seat at all the '
+  'OWNED tier (role = ''owner''). Exactly one candidate in a tier answers; more '
+  'than one is ''none''. Returns (studio_id, tier) with tier one of employer / '
+  'owned / none, because the INSERT stamp treats the two tiers differently '
+  '(W1-R11-02: a single employer candidate overrides a studio 00563 merely DERIVED; '
+  'an owned candidate only fills a NULL column). USED IN EXACTLY TWO PLACES, '
+  'neither of which prices an hour — set_project_studio_id_owned (00602''s INSERT '
+  'stamp) and migration 00620''s one-off legacy stamp. HT-3-g(1) forbids it '
+  'anywhere that prices an hour: a studio derived when the hour is priced is '
+  'recomputed on every hour, so every input to it is a lever the subject pulls '
+  'between two hours on the same project (W2-R9-01, W1-R11-01, W1-R12-01, '
+  'W2-R5-01, W2-R3-01, W2-R11-01). No rate-existence, seat-date, org-age, '
+  'member-count or created_by key, and no ORDER BY: HT-3-f(2) is DISSOLVED and is '
+  'deliberately not carried here, because the honest principal whose assistant '
+  'opened her legacy project is the row 00620 must hand her own studio '
+  '(HT-3-f(2) COST NOTE, W2-R10-03).';
 
--- A trigger and three DEFINER callers need no EXECUTE on it at fire time.
-REVOKE ALL ON FUNCTION public.owned_tier_prices_project(uuid, uuid)
+-- A DEFINER trigger function and a migration session reach this as the owner.
+REVOKE ALL ON FUNCTION public.designer_tier_pricing_studio(uuid)
   FROM PUBLIC, anon, authenticated, service_role;
 
 CREATE OR REPLACE FUNCTION public.resolve_time_rate_cents(
@@ -284,108 +392,52 @@ AS $$
 DECLARE
   v_designer_id    uuid;
   v_studio_id      uuid;
-  -- HT-3-f(2): who OPENED this project. Read in the same statement as the other
-  -- two columns, so the owned tier costs no extra read.
-  v_project_author uuid;
   v_role           text;
   v_normalized     text;
   v_authority_id   uuid;
   v_version        integer;
   v_match_count    integer := 0;
   v_cents          integer;
-  -- HT-3-b's two tiers are collected as arrays, not ordered and LIMIT 1'd: the rule
-  -- is "exactly one candidate prices; more than one is 'none'", so the COUNT is the
-  -- answer and there is no ordering key to choose with.
-  v_employer_studios uuid[];
-  v_owned_studios    uuid[];
 BEGIN
-  SELECT project.designer_id, project.studio_id, project.created_by
-    INTO v_designer_id, v_studio_id, v_project_author
+  SELECT project.designer_id, project.studio_id
+    INTO v_designer_id, v_studio_id
   FROM public.projects AS project
   WHERE project.id = p_project_id;
 
-  -- ── HT-3-a / HT-3-b / HT-3-c (all RULED 2026-09-12) ─────────────────────────
-  -- Step 1 is projects.studio_id, read above. 00317's anti-aiming guard
-  -- (00317:31-47, head 00563) BOUNDS that column to the studios the project's lead
-  -- designer actively belongs to; it does NOT choose among them, and its
-  -- authenticated-INSERT arm asks only for `membership.role <> 'guest'`. The claim
-  -- this comment used to carry — that the guard "is what makes the column
-  -- trustworthy as a pricing key" — is retracted (W1-R10-01, measured). HT-3-c arm
-  -- (a) rules what is left: a project whose designer NAMED its studio_id at creation
-  -- prices from that studio even when she owns it, because that is a sole proprietor
-  -- billing her own studio's client rather than a member gaming her employer's
-  -- books. W2's composer and the studio settings page are where a suspicious
-  -- studio_member_rates row is seen. (§0.13 still forbids this column as an RLS
-  -- POLICY key: a legacy NULL must not move visibility. Pricing is not visibility.)
+  -- ── HT-3-a / HT-3-c (RULED 2026-09-12) + HT-3-g(1) (RULED BY KODY 2026-09-12) ─
+  -- THE STUDIO STEP IS ONE COLUMN READ AND NOTHING ELSE. It is projects.studio_id,
+  -- read above; where that column is NULL this function falls through every tier
+  -- below it and answers 'none' — HT-26's "rate pending" — for EVERYONE, the
+  -- designer herself included. There is NO read-time derivation here, and under
+  -- HT-3-g(1) there is none in any other body that prices an hour.
   --
-  -- Step 2, here, is HT-3-b: the candidates are the studios where the PROJECT'S
-  -- DESIGNER holds an ACTIVE, NON-GUEST organization_members row, in two tiers —
-  -- the EMPLOYER tier (`role <> 'owner'`) first, and only if she has no employer at
-  -- all the OWNED tier (`role = 'owner'`). EXACTLY ONE candidate in a tier prices;
-  -- more than one is NULL, which step 3 reports as 'none' for the owner to repair by
-  -- naming the studio on the project. Nothing about the MEMBER BEING PRICED enters —
-  -- not her memberships, not her seat dates, not a rate's authorship, not an org's
-  -- created_at, not whether a studio holds a rate for her. (RETRACTED W1-R11-01 /
-  -- W1-R12-01, measured both times: this comment used to add "…so the worst a
-  -- member can do to the answer is push it to 'none'". False — see the banner. The
-  -- worst she can do HERE is push it to 'none'; a seat she writes can still make
-  -- the designer's EMPTY tier exactly one, and on the live activation path an
-  -- AMBIGUOUS tier is decided by 00563's bridge on dates she writes. Cases (ad-i),
-  -- (ad-ii) and (af) of supabase/tests/billing/time_rate_resolution_test.sql pin
-  -- all three as built.) Seven review rounds each deleted one
-  -- key that was a question about a studio SHE stands in (she can be seated; a
-  -- second account can seat her, author her rate, or hold a workspace she is a plain
-  -- member of; a seat's dates are written by whoever seats her), and round 11
-  -- deleted the last two — the rate-existence preference and the owner-seat date
-  -- tiebreak — by making ambiguity an answer instead of a contest (W1-R10-02
-  -- dissolves with them: there is no preference left to give a date span to).
+  -- WHAT WAS HERE, and why it is gone. Rounds 4-11 of two review lanes each closed
+  -- one input to a DERIVED studio and the next one opened, because a studio derived
+  -- when the hour is priced is recomputed on EVERY hour: a seat she deletes under
+  -- the shipped `Members can leave` policy (W2-R9-01, probe C), a seat an admin
+  -- sets `status = 'removed'` (probe D2), a seat an outsider writes for her
+  -- consent-free (W1-R11-01, W2-R3-01), a role she demotes by handing a workspace
+  -- to a second account (W2-R5-01), a `joined_at` she backdates on the activation
+  -- path (W1-R12-01), a rate row she rewrites in place (W2-R8-01), and finally the
+  -- stamp arm the round-10 amendment left ungated (W2-R11-01, forms A and G). The
+  -- answer is that the pricing studio is a COLUMN, stamped once by a party who is
+  -- not the subject, and read afterwards.
   --
-  -- Step 3 is the absence of both tiers: 'none', "rate pending" (HT-26), and the
-  -- composer — not the resolver — is where such a row is kept off an invoice.
-  IF v_studio_id IS NULL AND v_designer_id IS NOT NULL THEN
-    -- EMPLOYER tier: the designer's active non-guest seats that are NOT owner seats.
-    SELECT array_agg(DISTINCT studio.id)
-      INTO v_employer_studios
-    FROM public.organizations AS studio
-    JOIN public.organization_members AS designer_seat
-      ON designer_seat.organization_id = studio.id
-     AND designer_seat.user_id = v_designer_id
-    WHERE studio.type = 'design_studio'
-      AND studio.status = 'active'
-      AND designer_seat.status = 'active'
-      AND designer_seat.role <> 'guest'
-      AND designer_seat.role <> 'owner';
-
-    IF COALESCE(array_length(v_employer_studios, 1), 0) = 1 THEN
-      v_studio_id := v_employer_studios[1];
-    ELSIF COALESCE(array_length(v_employer_studios, 1), 0) = 0
-          -- HT-3-f(2) (RULED 2026-09-12): and only for a project the designer
-          -- OPENED HERSELF. A project somebody else opened for her is never priced
-          -- by a studio she owns — round 9 measured a designer emptying her own
-          -- employer tier with one `Members can leave` DELETE and taking her former
-          -- employer's legacy project at her own number (W2-R9-01, probe C). The
-          -- rule has ONE body, called here; it is never spelled out inline.
-          AND public.owned_tier_prices_project(v_project_author, v_designer_id)
-    THEN
-      -- OWNED tier, reached ONLY when she has no employer seat anywhere. An employer
-      -- tier of two or more falls through to NULL on purpose: choosing between them
-      -- is what every deleted key did.
-      SELECT array_agg(DISTINCT studio.id)
-        INTO v_owned_studios
-      FROM public.organizations AS studio
-      JOIN public.organization_members AS designer_seat
-        ON designer_seat.organization_id = studio.id
-       AND designer_seat.user_id = v_designer_id
-      WHERE studio.type = 'design_studio'
-        AND studio.status = 'active'
-        AND designer_seat.status = 'active'
-        AND designer_seat.role = 'owner';
-
-      IF COALESCE(array_length(v_owned_studios, 1), 0) = 1 THEN
-        v_studio_id := v_owned_studios[1];
-      END IF;
-    END IF;
-  END IF;
+  -- HT-3-c arm (a) is untouched and is now the whole of step 1: a project whose
+  -- designer NAMED its studio_id at creation prices from that studio even when she
+  -- owns it — a sole proprietor billing her own studio's client rather than a
+  -- member gaming her employer's books. (§0.13 still forbids this column as an RLS
+  -- POLICY key: a legacy NULL must not move visibility. Pricing is not visibility,
+  -- and a NULL here answers 'none', which is the safe direction.)
+  --
+  -- HT-3-b's tier rule still exists — as the ONE shared body defined at the top of
+  -- this migration, used in exactly two places, NEITHER of which prices an hour:
+  -- 00602's INSERT stamp and 00620's one-off legacy stamp at ship. (Its name is not
+  -- written in this body on purpose: a postcondition below reads this source and
+  -- forbids even a mention of it here, because a body that names the derivation is
+  -- a body a later hand can be tempted to let call it.) The repair for a NULL
+  -- column afterwards is a human act by an owner/admin of a studio that EMPLOYS the
+  -- project's designer (00606's stamp_project_pricing_studio, HT-3-g(3)).
 
   -- ── ASSERT 1 (W1-R1-01): a relationship to THIS project ──────────────────
   -- Without it, a GRANTed DEFINER function hands any authenticated stranger the
@@ -618,13 +670,19 @@ COMMENT ON FUNCTION public.resolve_time_rate_cents(uuid, uuid, timestamptz, text
   'not close HT-3-e(3)''s accepted residual: a cooperating second account that '
   'AUTHORS her rate makes the row arm''s-length, and Patina answers that with '
   'visibility (the pricing studio is a column of time_entry_ledger) rather than '
-  'another bound. HT-3-f(2) (RULED 2026-09-12, same migration): HT-3-b''s OWNED '
-  'tier is reached only where projects.created_by = projects.designer_id, through '
-  'the one shared body owned_tier_prices_project — a project somebody else opened '
-  'for her is never priced by a studio she owns, which is what stops a designer '
-  'emptying her own employer tier with one `Members can leave` DELETE and taking '
-  'her former employer''s legacy project at her own number (W2-R9-01). Its recorded '
-  'residual is HT-3-f(3): a legacy project she created HERSELF while employed.';
+  'another bound. HT-3-g(1) (RULED BY KODY 2026-09-12) is the studio step: '
+  'projects.studio_id when it is not NULL, otherwise ''none''. THERE IS NO '
+  'READ-TIME DERIVATION — HT-3-b''s two-tier step 2 is DELETED from this body, and '
+  'so is HT-3-f(2), which existed only to gate it. A studio derived when the hour '
+  'is priced is recomputed on every hour, so every input to it is a lever the '
+  'subject pulls between two hours on the same project (W2-R9-01, W1-R11-01, '
+  'W1-R12-01, W2-R5-01, W2-R3-01, W2-R11-01). Where the column is NULL the answer '
+  'is ''none'' for everyone, the designer included, until an owner/admin of a '
+  'studio that EMPLOYS the project''s designer stamps it (00606, HT-3-g(3)); the '
+  'legacy population is stamped once, at ship, by 00620. HT-3-b''s tier rule lives '
+  'on as designer_tier_pricing_studio, used at INSERT and at ship and nowhere that '
+  'prices an hour. HT-3-f(3) DISSOLVES with the derivation: leaving a seat no '
+  'longer changes a stamped column.';
 
 -- Restated rather than inherited: CREATE OR REPLACE keeps a function's ACL, so
 -- this is belt-and-braces on the one property five W1 rounds of asserts existed
@@ -666,14 +724,39 @@ BEGIN
     '00615: public.studio_member_rates is still read EXACTLY once, inside tier 2 — '
     'HT-3-e(2) is a clause in that one SELECT, not a second read (a second read is '
     'the preference key HT-3-b deleted, W1-R10-02)';
-  -- And the third organization_members read is this rule and nothing else.
-  ASSERT (SELECT count(*) FROM regexp_matches(v_src, 'public\.organization_members', 'g')) = 3,
-    '00615: the resolver reads organization_members EXACTLY THREE times — HT-3-b''s '
-    'employer tier and owned tier, both about the PROJECT''S DESIGNER, plus '
-    'HT-3-e(2)''s one question about the SUBJECT BEING PRICED (does she own the '
-    'studio whose card names her). 00599''s own assert pins it at two and is '
-    'SUPERSEDED by this migration, deliberately and by number; a FOURTH read is a '
-    'membership question nobody ruled';
+
+  -- ── HT-3-g(1), pinned by source: NO CALLABLE THAT PRICES AN HOUR MAY ASK A
+  --    MEMBERSHIP QUESTION ABOUT STUDIO CHOICE. The resolver reads
+  --    organization_members EXACTLY ONCE and that read is HT-3-e(2)'s question
+  --    about the SUBJECT BEING PRICED (does she own the studio whose card names
+  --    her). HT-3-b's two tiers are GONE from this body; the tier rule lives in
+  --    designer_tier_pricing_studio, which no hour-pricing body may call.
+  ASSERT (SELECT count(*) FROM regexp_matches(v_src, 'public\.organization_members', 'g')) = 1,
+    '00615: HT-3-g(1) — the resolver reads public.organization_members EXACTLY '
+    'ONCE, and that read is HT-3-e(2)''s owner-seat question about the subject '
+    'being priced. 00599''s own assert pins it at two (HT-3-b''s employer and owned '
+    'tiers) and is SUPERSEDED by this migration, deliberately and by number: a '
+    'SECOND read here is a studio-CHOICE question, which is the read-time '
+    'derivation HT-3-g(1) deletes';
+  ASSERT v_src !~ 'designer_seat'
+     AND v_src !~ 'v_employer_studios'
+     AND v_src !~ 'v_owned_studios'
+     AND v_src !~ 'designer_tier_pricing_studio',
+    '00615: HT-3-g(1) — the resolver may not derive a pricing studio at all: no '
+    'tier array, no designer seat read, and not even a call to the shared tier '
+    'body. Eight review rounds closed one input to a read-time derivation each and '
+    'the next one opened, because the answer is recomputed on every hour (W2-R9-01, '
+    'W1-R11-01, W1-R12-01, W2-R5-01, W2-R3-01, W2-R11-01). The pricing studio is a '
+    'stamped column';
+  ASSERT v_src !~ 'role <> ''owner''',
+    '00615: HT-3-g(1) — `role <> ''owner''` is the EMPLOYER-TIER marker and it may '
+    'not appear in a body that prices an hour. HT-3-e(2)''s own seat read asks '
+    'role = ''owner'' about the rate''s subject, which is a different question';
+  ASSERT v_src !~ 'project\.created_by',
+    '00615: HT-3-f(2) is DISSOLVED — the resolver reads no project authorship, '
+    'because there is no owned tier here to gate. Carried forward it would leave '
+    'the honest principal whose assistant opened her legacy project at ''none'' for '
+    'ever (HT-3-f(2) COST NOTE, W2-R10-03), which 00620 exists to repair';
 
   -- ── and 00599's properties, re-asserted on the grafted body ───────────────
   -- Every one of these was a finding once. A graft that dropped one would pass
@@ -704,39 +787,8 @@ BEGIN
   ASSERT v_src ~ 'AT TIME ZONE ''UTC''',
     '00615: the rate-boundary date anchor stays explicitly UTC (W1-R1-11)';
   ASSERT v_src ~ 'project\.studio_id',
-    '00615: HT-3-a step 1 — the project''s own column is still read first';
-  ASSERT v_src ~ 'designer_seat\.user_id = v_designer_id',
-    '00615: HT-3-b''s candidates are still the PROJECT DESIGNER''s seats';
-  ASSERT v_src ~ 'designer_seat\.role <> ''owner''[\s\S]*designer_seat\.role = ''owner''',
-    '00615: the EMPLOYER tier is still consulted BEFORE the OWNED tier (HT-3-b) — '
-    'reversed, the hire''s own workspace prices her employer''s client again '
-    '(W1-R8-01)';
-  ASSERT v_src ~ 'public\.owned_tier_prices_project\(v_project_author, v_designer_id\)',
-    '00615: HT-3-f(2) — the OWNED tier is reached only for a project the designer '
-    'CREATED herself, and the rule is CALLED, never spelled out here: four bodies '
-    'derive a pricing studio and a rule written inline in one of them drifts. '
-    'Without it one `Members can leave` DELETE empties her employer tier and her '
-    'former employer''s legacy project prices at the number she wrote for herself '
-    '(W2-R9-01, probe C, measured 1/1 through RLS with ONE account)';
-  -- Ordered by POSITION rather than by one regex: Postgres caps a bounded
-  -- repetition at 255, so a `[\s\S]{0,900}` bridge between the two tokens raises
-  -- 2201B at replay rather than asserting anything.
-  -- The positions are of the tier READS (`INTO …`), not of the declarations: both
-  -- arrays are declared at the top of the body, before either tier is reached.
-  ASSERT position('INTO v_employer_studios' in v_src)
-           < position('owned_tier_prices_project' in v_src)
-     AND position('owned_tier_prices_project' in v_src)
-           < position('INTO v_owned_studios' in v_src),
-    '00615: HT-3-f(2) gates the OWNED tier''s own branch — the employer tier is '
-    'still read first and unconditionally (HT-3-b), and the project-authorship test '
-    'is an ADDITIONAL condition on reaching the owned tier, never a filter on the '
-    'employer tier: applied there it would unprice every honest hire whose employer '
-    'opened her projects for her';
-  ASSERT v_src ~ 'project\.created_by',
-    '00615: HT-3-f(2) reads projects.created_by — the one column in this shape she '
-    'cannot author after the fact (00563 RAISES on any UPDATE that moves it, its '
-    'authenticated-INSERT arm admits only NEW.created_by = auth.uid() on a project '
-    'she leads, and reassign_project_lead never touches it)';
+    '00615: HT-3-a step 1 — the project''s own column is the WHOLE studio step '
+    'now (HT-3-g(1)), and it is still read';
   ASSERT (SELECT count(*) FROM regexp_matches(v_src, 'ORDER BY', 'g')) = 2,
     '00615: still exactly two ORDER BY clauses — tier 1''s authority pick and tier '
     '2''s rate span. HT-3-e(2) adds a WHERE clause, not an ordering: "the next '
@@ -748,8 +800,9 @@ BEGIN
     '00598:290-293 only lets an actor stamp with her own id';
   ASSERT v_src ~ '''none''::text',
     '00615: tier 3 still answers ''none'' (HT-26, "rate pending", never a blank) — '
-    'and it is now also the answer where every qualifying row is her own and she '
-    'owns nothing here';
+    'and under HT-3-g(1) it is the answer for EVERY project whose studio_id column '
+    'is NULL, as well as where every qualifying rate row is her own and she owns '
+    'nothing here';
 
   RAISE NOTICE '00615 postconditions passed.';
 END
@@ -1007,13 +1060,13 @@ REVOKE ALL ON FUNCTION public.guard_studio_member_rate_insert()
   FROM PUBLIC, anon, authenticated, service_role;
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- HT-3-f(2) at the INSERT stamp.
+-- HT-3-g(1) at the INSERT stamp — ONE of the rule's two remaining homes.
 -- Lineage (set_project_studio_id_owned): 00602 → 00603 → 00615. 00603:190-262's
--- body verbatim — it is the grep winner
+-- body — it is the grep winner
 -- (`CREATE OR REPLACE FUNCTION[^(]*set_project_studio_id_owned` over
 -- supabase/migrations/*.sql | sort | tail -1), and 00602's body is the one it
--- superseded — with ONE condition grafted onto the OWNED tier's branch and nothing
--- else touched. 00602 AND 00603 are both already merged to
+-- superseded — with HT-3-b's two inline tier reads REPLACED by the one shared
+-- body above and nothing else touched. 00602 AND 00603 are both already merged to
 -- hour-tracking/integration, so neither file is edited; this is the fix-forward.
 -- The trigger (zzz_set_project_studio_id_owned_trg) is NOT recreated: CREATE OR
 -- REPLACE keeps the binding, and the trigger's NAME is what orders it AFTER
@@ -1021,6 +1074,15 @@ REVOKE ALL ON FUNCTION public.guard_studio_member_rate_insert()
 -- This cannot introduce a NULL refusal: set_project_studio_id (head 00563) fires
 -- FIRST and its own check at 00563:352-362 has already either filled the column or
 -- raised, so declining the owned-tier stamp leaves whatever that rule decided.
+-- WHY THE TIER RULE SURVIVES HERE AND NOWHERE THAT PRICES AN HOUR (HT-3-g(1)):
+-- this runs ONCE, at INSERT, before any hour exists, and what it writes is the
+-- column every later reader follows. A derivation that runs once is a stamp; the
+-- same derivation run on every hour is the recomputation eight review rounds could
+-- not bound. HT-3-f(2)'s created_by gate is DISSOLVED and is not carried here
+-- either: on every live creation path the project's author IS its designer
+-- (00563's authenticated-INSERT arm admits only NEW.created_by = auth.uid() on a
+-- project she leads; every DEFINER creation path writes the designer's own id), so
+-- the gate was inert here and live only in the read-time derivation HT-3-g deletes.
 -- ═══════════════════════════════════════════════════════════════════════════
 CREATE OR REPLACE FUNCTION public.set_project_studio_id_owned()
 RETURNS trigger
@@ -1029,11 +1091,12 @@ SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
 DECLARE
-  -- HT-3-b's tiers are collected as arrays, not sorted and LIMIT 1'd: the rule is
-  -- "exactly one candidate is stamped; more than one leaves the column alone", so
-  -- the COUNT is the answer and there is no ranking key to choose with.
-  v_employer_studios uuid[];
-  v_owned_studios    uuid[];
+  -- HT-3-b's tier answer, from the ONE shared body (HT-3-g(1)). The TIER matters
+  -- here and not only the studio: a single EMPLOYER candidate may override a studio
+  -- 00563 merely DERIVED (W1-R11-02), while an OWNED candidate only ever fills a
+  -- column that is still NULL.
+  v_tier_studio uuid;
+  v_tier        text;
   -- FALSE only when aaa_project_studio_id_named_trg recorded '0' for THIS row,
   -- i.e. the caller left studio_id NULL and anything in it now was derived by
   -- set_project_studio_id. A missing flag reads as NAMED (see 00603's banner).
@@ -1049,53 +1112,23 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  -- EMPLOYER tier: the designer's active non-guest seats that are NOT owner seats.
-  SELECT array_agg(DISTINCT studio.id)
-    INTO v_employer_studios
-  FROM public.organizations AS studio
-  JOIN public.organization_members AS designer_seat
-    ON designer_seat.organization_id = studio.id
-   AND designer_seat.user_id = NEW.designer_id
-  WHERE studio.type = 'design_studio'
-    AND studio.status = 'active'
-    AND designer_seat.status = 'active'
-    AND designer_seat.role <> 'guest'
-    AND designer_seat.role <> 'owner';
+  SELECT tiered.studio_id, tiered.tier
+    INTO v_tier_studio, v_tier
+  FROM public.designer_tier_pricing_studio(NEW.designer_id) AS tiered;
 
-  IF COALESCE(array_length(v_employer_studios, 1), 0) = 1 THEN
+  IF v_tier = 'employer' THEN
     -- The one employer prices the work (HT-3-b). This is the only statement that
     -- may overwrite a studio 00563 DERIVED — and the row it overwrites is always
     -- one of the designer's own active non-guest studios either way, so 00317's
     -- anti-aiming invariant holds by construction.
-    NEW.studio_id := v_employer_studios[1];
-  ELSIF COALESCE(array_length(v_employer_studios, 1), 0) = 0
-        AND NEW.studio_id IS NULL
-        -- HT-3-f(2) (RULED 2026-09-12), THE ONLY DELTA 00615 ADDS TO THIS BODY:
-        -- the OWNED tier is for a project the designer OPENED HERSELF. One shared
-        -- body answers it for all four derivations (see this file's banner); the
-        -- rule is never spelled out inline.
-        AND public.owned_tier_prices_project(NEW.created_by, NEW.designer_id)
-  THEN
+    NEW.studio_id := v_tier_studio;
+  ELSIF v_tier = 'owned' AND NEW.studio_id IS NULL THEN
     -- OWNED tier, reached ONLY when she holds no employer seat anywhere AND no
-    -- rule filled the column. An employer tier of two or more leaves the column
-    -- exactly as it was on purpose: choosing between them is what every key
-    -- HT-3-b deleted used to do. Where 00563 already derived a value, that value
+    -- rule filled the column. Where 00563 already derived a value, that value
     -- stands — clearing it would either refuse the client's signature or smuggle
-    -- a NULL past 00563's fail-closed check (see 00603's open question).
-    SELECT array_agg(DISTINCT studio.id)
-      INTO v_owned_studios
-    FROM public.organizations AS studio
-    JOIN public.organization_members AS designer_seat
-      ON designer_seat.organization_id = studio.id
-     AND designer_seat.user_id = NEW.designer_id
-    WHERE studio.type = 'design_studio'
-      AND studio.status = 'active'
-      AND designer_seat.status = 'active'
-      AND designer_seat.role = 'owner';
-
-    IF COALESCE(array_length(v_owned_studios, 1), 0) = 1 THEN
-      NEW.studio_id := v_owned_studios[1];
-    END IF;
+    -- a NULL past 00563's fail-closed check (see 00603's open question). An
+    -- ambiguous tier answers 'none' and leaves the column exactly as it was.
+    NEW.studio_id := v_tier_studio;
   END IF;
 
   RETURN NEW;
@@ -1106,110 +1139,47 @@ REVOKE ALL ON FUNCTION public.set_project_studio_id_owned()
   FROM PUBLIC, anon, authenticated, service_role;
 
 COMMENT ON FUNCTION public.set_project_studio_id_owned() IS
-  'HT-3-a + HT-3-b + HT-3-c + HT-3-f(2): on INSERT, stamp the lead designer''s one '
-  'EMPLOYER studio (active, non-guest seat with role <> ''owner'' in an active '
-  'design_studio) or, if she has no employer seat at all AND no rule filled the '
-  'column AND she CREATED this project herself (HT-3-f(2), through the shared '
-  'owned_tier_prices_project body), her one OWNED studio. A studio the CALLER named '
-  'is left alone (HT-3-c arm (a), read from app.project_studio_id_named); a studio '
-  'set_project_studio_id DERIVED is overridden by a single employer candidate '
-  '(W1-R11-02) and otherwise left standing. More than one candidate in a tier never '
-  'chooses. No date, rate-existence or member-count key. Fires last, so every 00563 '
-  'refusal is reached first — which is also why HT-3-f(2) can decline here without '
-  'creating a NULL the product refuses. INSERT only — no existing row is ever '
-  'rewritten (P-4).';
+  'HT-3-a + HT-3-b + HT-3-c + HT-3-g(1): on INSERT, stamp the lead designer''s one '
+  'EMPLOYER studio or, if she has no employer seat at all AND no rule filled the '
+  'column, her one OWNED studio — both answered by the ONE shared body '
+  'designer_tier_pricing_studio, which under HT-3-g(1) is called from exactly two '
+  'places (here, and migration 00620''s one-off legacy stamp) and from nothing that '
+  'prices an hour. A studio the CALLER named is left alone (HT-3-c arm (a), read '
+  'from app.project_studio_id_named); a studio set_project_studio_id DERIVED is '
+  'overridden by a single employer candidate (W1-R11-02) and otherwise left '
+  'standing. More than one candidate in a tier never chooses. No date, '
+  'rate-existence, member-count or project-authorship key — HT-3-f(2) is DISSOLVED '
+  'under HT-3-g and was inert here in any case, because every creation path writes '
+  'the designer''s own id into projects.created_by. Fires last, so every 00563 '
+  'refusal is reached first. INSERT only — no existing row is ever rewritten (P-4); '
+  'the legacy population is stamped once, by 00620.';
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- HT-3-f(2) at the callable form — the body 00606's bound (c), HT-3-f(1)'s own
--- PIN and the owner/admin read policy all ask.
--- Lineage (project_pricing_studio_id): 00604 → 00615. 00604:84-158's body
--- verbatim, with ONE condition grafted onto the OWNED tier and nothing else
--- touched. The function keeps its ACL (CREATE OR REPLACE), restated below.
+-- HT-3-g(1) at the callable form — ONE COLUMN READ, and nothing else.
+-- Lineage (project_pricing_studio_id): 00604 → 00615. 00604:84-158's body derived
+-- HT-3-b's two tiers whenever the column was NULL; HT-3-g(1) deletes that, so the
+-- whole body is the column. Everything that asks this function therefore follows
+-- the STAMPED column and fails closed on NULL — 00604's ledger view, 00605's
+-- owner/admin write policies and its audit trigger's organization_id, 00606's
+-- owner/admin read, and 00607's project_hours_total. That is the ruled answer:
+-- until an owner/admin of a studio that EMPLOYS the project's designer stamps the
+-- column (00606, HT-3-g(3)), an unstamped project prices 'none' for everyone and
+-- is read by nobody through the pricing-studio key.
+-- SECURITY DEFINER is still required, for a new reason: as INVOKER this would
+-- return NULL wherever RLS on `projects` hides the row from the caller, and
+-- 00606's owner/admin read policy keys on the answer — so an owner would lose her
+-- own studio's hours depending on her own project visibility.
 -- ═══════════════════════════════════════════════════════════════════════════
 CREATE OR REPLACE FUNCTION public.project_pricing_studio_id(p_project_id uuid)
 RETURNS uuid
-LANGUAGE plpgsql
+LANGUAGE sql
 STABLE
 SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
-DECLARE
-  v_designer_id      uuid;
-  v_studio_id        uuid;
-  -- HT-3-f(2): who OPENED this project, read in the same statement as the rest.
-  v_project_author   uuid;
-  -- HT-3-b's tiers are collected as arrays, never ordered and LIMIT 1'd: the
-  -- rule is "exactly one candidate prices; more than one is nothing", so the
-  -- COUNT is the answer and there is no ranking key to choose with.
-  v_employer_studios uuid[];
-  v_owned_studios    uuid[];
-BEGIN
-  IF p_project_id IS NULL THEN
-    RETURN NULL;
-  END IF;
-
-  -- Step 1 (HT-3-a): the project's own column. 00603's flag trigger keeps a
-  -- studio the caller NAMED (HT-3-c arm (a)) and lets the employer tier override
-  -- one 00563 merely DERIVED, so by the time a row exists this column is the
-  -- ruled answer wherever it is not NULL. HT-3-f(1) adds a second writer of it —
-  -- the PIN — and this function is what the pin confirms.
-  SELECT project.designer_id, project.studio_id, project.created_by
-    INTO v_designer_id, v_studio_id, v_project_author
+  SELECT project.studio_id
   FROM public.projects AS project
   WHERE project.id = p_project_id;
-
-  IF v_studio_id IS NOT NULL OR v_designer_id IS NULL THEN
-    RETURN v_studio_id;
-  END IF;
-
-  -- Step 2 (HT-3-b), EMPLOYER tier: the project DESIGNER's active non-guest
-  -- seats that are not owner seats.
-  SELECT array_agg(DISTINCT studio.id)
-    INTO v_employer_studios
-  FROM public.organizations AS studio
-  JOIN public.organization_members AS designer_seat
-    ON designer_seat.organization_id = studio.id
-   AND designer_seat.user_id = v_designer_id
-  WHERE studio.type = 'design_studio'
-    AND studio.status = 'active'
-    AND designer_seat.status = 'active'
-    AND designer_seat.role <> 'guest'
-    AND designer_seat.role <> 'owner';
-
-  IF COALESCE(array_length(v_employer_studios, 1), 0) = 1 THEN
-    RETURN v_employer_studios[1];
-  END IF;
-
-  IF COALESCE(array_length(v_employer_studios, 1), 0) > 1 THEN
-    -- An ambiguous employer tier is nothing, not a contest (HT-3-b).
-    RETURN NULL;
-  END IF;
-
-  -- HT-3-f(2) (RULED 2026-09-12), THE ONLY DELTA 00615 ADDS TO THIS BODY: the
-  -- OWNED tier is for a project the designer OPENED HERSELF. Asked through the one
-  -- shared body, so this form and the resolver cannot drift.
-  IF NOT public.owned_tier_prices_project(v_project_author, v_designer_id) THEN
-    RETURN NULL;
-  END IF;
-
-  -- OWNED tier, reached only where she holds no employer seat anywhere.
-  SELECT array_agg(DISTINCT studio.id)
-    INTO v_owned_studios
-  FROM public.organizations AS studio
-  JOIN public.organization_members AS designer_seat
-    ON designer_seat.organization_id = studio.id
-   AND designer_seat.user_id = v_designer_id
-  WHERE studio.type = 'design_studio'
-    AND studio.status = 'active'
-    AND designer_seat.status = 'active'
-    AND designer_seat.role = 'owner';
-
-  IF COALESCE(array_length(v_owned_studios, 1), 0) = 1 THEN
-    RETURN v_owned_studios[1];
-  END IF;
-
-  RETURN NULL;
-END;
 $$;
 
 -- Restated rather than inherited (CREATE OR REPLACE keeps a function's ACL): the
@@ -1218,22 +1188,25 @@ REVOKE EXECUTE ON FUNCTION public.project_pricing_studio_id(uuid) FROM PUBLIC, a
 GRANT  EXECUTE ON FUNCTION public.project_pricing_studio_id(uuid) TO authenticated;
 
 COMMENT ON FUNCTION public.project_pricing_studio_id(uuid) IS
-  'HT-3-a + HT-3-b + HT-3-f(2), as a callable answer: the studio that prices this '
-  'project''s hours — projects.studio_id when not NULL, else the project '
-  'DESIGNER''s one EMPLOYER studio (active non-guest seat, role <> ''owner''), '
-  'else — only where she holds no employer seat at all AND she CREATED the project '
-  'herself (HT-3-f(2), through the shared owned_tier_prices_project body) — her one '
-  'OWNED studio, else NULL. Exactly one candidate in a tier prices; more than one is '
-  'NULL. No date, rate-existence, seat-date, org-age or member-count key, and '
-  'nothing about the member being priced. The rule''s other two bodies are '
-  'resolve_time_rate_cents and set_project_studio_id_owned, both redefined in 00615 '
-  'beside this one; all three call the same HT-3-f(2) body. Under HT-3-f(1) this '
-  'function is also what stamp_project_pricing_studio''s bound (c) CONFIRMS: where '
-  'the caller names the studio this function already returns, the stamp writes it '
-  'down and the column stops being recomputed. Never an RLS policy key '
-  '(plan-v2 §0.13).';
+  'HT-3-a + HT-3-g(1), as a callable answer: the studio that prices this project''s '
+  'hours IS projects.studio_id, and there is nothing else. 00604''s body derived '
+  'HT-3-b''s two tiers where the column was NULL; HT-3-g (RULED by Kody '
+  '2026-09-12) deletes every read-time derivation, because a studio derived when '
+  'the hour is priced is recomputed on every hour and every input to it is a lever '
+  'the subject pulls between two hours on the same project (W2-R9-01, W1-R11-01, '
+  'W1-R12-01, W2-R5-01, W2-R3-01, W2-R11-01). An unstamped project therefore '
+  'answers NULL: it prices ''none'' (HT-26''s "rate pending") and '
+  'is_org_admin_or_owner(NULL) is false, so the owner/admin read, the admin write '
+  'and project_hours_total''s owner leg all fail CLOSED until an owner/admin of a '
+  'studio that EMPLOYS the project''s designer stamps the column '
+  '(stamp_project_pricing_studio, HT-3-g(3)). The legacy population is stamped '
+  'once, at ship, by migration 00620. HT-3-b''s tier rule lives on as '
+  'designer_tier_pricing_studio, called only by 00602''s INSERT stamp and by 00620. '
+  'SECURITY DEFINER because an INVOKER read would answer NULL wherever RLS hides '
+  'the project row, and 00606''s read policy keys on the answer. Never an RLS '
+  'policy key on the raw column (plan-v2 §0.13).';
 
-DO $htffpostcondition$
+DO $ht3gpostcondition$
 DECLARE
   v_resolver text := lower(regexp_replace(
     pg_get_functiondef('public.resolve_time_rate_cents(uuid,uuid,timestamptz,text)'::regprocedure),
@@ -1244,70 +1217,55 @@ DECLARE
   v_stamp    text := lower(regexp_replace(
     pg_get_functiondef('public.set_project_studio_id_owned()'::regprocedure),
     '\s+', ' ', 'g'));
+  v_tier     text := lower(regexp_replace(
+    pg_get_functiondef('public.designer_tier_pricing_studio(uuid)'::regprocedure),
+    '\s+', ' ', 'g'));
   v_org_reads integer;
 BEGIN
   -- SPELLING HEURISTIC, not a proof of behaviour (W2-R8-06): these asserts read
-  -- function SOURCE TEXT, comments included. Cases (ai), (aj) of
-  -- supabase/tests/billing/time_rate_resolution_test.sql and (e), (w), (x) of
-  -- supabase/tests/rls/time_entry_studio_stamp_test.sql measure the behaviour.
+  -- function SOURCE TEXT, comments included. Cases (ai), (aj), (ak), (al), (am) of
+  -- supabase/tests/billing/time_rate_resolution_test.sql,
+  -- supabase/tests/billing/legacy_project_studio_stamp_test.sql and (e), (w), (x),
+  -- (y), (z) of supabase/tests/rls/time_entry_studio_stamp_test.sql measure the
+  -- behaviour.
 
-  -- ── HT-3-f(2) is ONE body, called from all three derivations ───────────────
-  ASSERT v_resolver LIKE '%owned_tier_prices_project%'
-     AND v_callable LIKE '%owned_tier_prices_project%'
-     AND v_stamp    LIKE '%owned_tier_prices_project%',
-    '00615: HT-3-f(2) must be CALLED by all three bodies that derive a pricing '
-    'studio — the resolver, the callable form 00606 asks, and the INSERT stamp. '
-    'Spelled inline in one of them it drifts from the other two, which is the '
-    'hazard 00604''s banner records about HT-3-b''s own tiers';
-  ASSERT (SELECT NOT prosecdef FROM pg_proc
-           WHERE oid = to_regprocedure('public.owned_tier_prices_project(uuid,uuid)')),
-    '00615: owned_tier_prices_project reads nothing, so it is SECURITY INVOKER — a '
-    'DEFINER here would be an escalation with no reason for it';
-  ASSERT NOT has_function_privilege('authenticated',
-    'public.owned_tier_prices_project(uuid,uuid)', 'EXECUTE')
-     AND NOT has_function_privilege('anon',
-    'public.owned_tier_prices_project(uuid,uuid)', 'EXECUTE'),
-    '00615: no role holds EXECUTE on owned_tier_prices_project — a trigger needs '
-    'none at fire time and its other two callers are DEFINER';
-  ASSERT (SELECT prosrc ~ 'p_created_by = p_designer_id' FROM pg_proc
-           WHERE oid = to_regprocedure('public.owned_tier_prices_project(uuid,uuid)')),
-    '00615: HT-3-f(2) IS the equality projects.created_by = projects.designer_id '
-    'and nothing else — no seat, no date, no rate and nothing about the member '
-    'being priced (HT-3-a forbids the last one outright)';
-
-  -- ── the callable form keeps every property 00604 pinned ───────────────────
-  ASSERT v_callable LIKE '%designer_seat.role <> ''owner''%',
-    '00615: the employer tier is still defined by role <> ''owner'' (HT-3-b)';
-  -- W2-R10-04 (measured): spelled as the bare names this assert was VACUOUS — the
-  -- first occurrence of each is the DECLARE block ("v_employer_studios uuid[];
-  -- v_owned_studios uuid[];"), so it pinned declaration order and said nothing about
-  -- which tier the body consults. It pins the TIER READS, like the resolver's own
-  -- copy: the `into <array>` that consumes each SELECT. This text is lowercased, so
-  -- the literals are too.
-  ASSERT position('into v_employer_studios' in v_callable)
-           < position('into v_owned_studios' in v_callable)
-     AND position('into v_employer_studios' in v_callable) > 0,
-    '00615: the EMPLOYER tier is still READ before the OWNED tier (HT-3-b) — '
-    'reading owned first restores W1-R8-01';
-  ASSERT v_callable NOT LIKE '%order by%',
-    '00615: HT-3-b is a count, not a contest — no ordering key in the callable form';
-  ASSERT v_callable NOT LIKE '%studio_member_rates%',
-    '00615: no rate-existence key in the callable form (W1-R11-01)';
-  -- Counted on the SCHEMA-QUALIFIED name (W2-R10-04's carried half of W2-R8-06):
-  -- spelled as the bare table name, a later hand who merely MENTIONS the table in a
-  -- comment inside this body reds the migration, because this text is source text
-  -- and includes its comments.
-  SELECT count(*) INTO v_org_reads
-  FROM regexp_matches(v_callable, 'public\.organization_members', 'g') AS hits;
-  ASSERT v_org_reads = 2,
-    '00615: the callable form still reads public.organization_members exactly twice '
-    '— one per HT-3-b tier. HT-3-f(2) is a column comparison, not a third membership '
-    'question; got ' || v_org_reads;
+  -- ── HT-3-g(1): NO BODY THAT PRICES AN HOUR DERIVES A STUDIO ───────────────
+  -- The two hour-pricing bodies are the resolver (which returns the number) and
+  -- the callable form (which every reader, writer and aggregate keys on). Neither
+  -- may ask a membership question about studio CHOICE, and neither may call the
+  -- shared tier body.
+  ASSERT v_resolver NOT LIKE '%designer_tier_pricing_studio%'
+     AND v_callable NOT LIKE '%designer_tier_pricing_studio%',
+    '00615: HT-3-g(1) — neither resolve_time_rate_cents nor '
+    'project_pricing_studio_id may CALL the tier rule. The rule is for a stamp that '
+    'runs once, not for an answer recomputed on every hour: rounds 4-11 of two '
+    'review lanes each closed one input to a read-time derivation and the next one '
+    'opened (W2-R9-01 probe C and D2, W1-R11-01, W1-R12-01, W2-R5-01, W2-R3-01, '
+    'W2-R10-01, W2-R11-01 forms A and G)';
+  ASSERT v_callable NOT LIKE '%organization_members%',
+    '00615: HT-3-g(1) — the callable form reads organization_members NOT AT ALL: '
+    'the studio that prices a project''s hours IS projects.studio_id. 00604''s body '
+    'derived HT-3-b''s two tiers here, and every caller of this function (the '
+    'ledger view, the admin write policies, the audit trigger''s organization_id, '
+    '00606''s owner/admin read, project_hours_total''s owner leg) inherited that '
+    'recomputation';
+  ASSERT v_callable NOT LIKE '%role <> ''owner''%'
+     AND v_callable NOT LIKE '%role = ''owner''%'
+     AND v_callable NOT LIKE '%order by%'
+     AND v_callable NOT LIKE '%studio_member_rates%'
+     AND v_callable NOT LIKE '%created_by%',
+    '00615: HT-3-g(1) — no tier marker, no ordering key, no rate-existence key and '
+    'no project-authorship key may appear in the callable form: it is one column '
+    'read. HT-3-f(2) is DISSOLVED with the derivation it gated';
+  ASSERT v_callable LIKE '%project.studio_id%',
+    '00615: and the one thing the callable form MUST read is projects.studio_id — '
+    'HT-3-a step 1, which HT-3-g makes the whole of it';
   ASSERT (SELECT prosecdef FROM pg_proc
            WHERE oid = to_regprocedure('public.project_pricing_studio_id(uuid)')),
-    '00615: project_pricing_studio_id stays SECURITY DEFINER — an INVOKER read of '
-    'organization_members returns a PARTIAL candidate set, which under HT-3-b turns '
-    'an ambiguous tier into a confident wrong answer';
+    '00615: project_pricing_studio_id stays SECURITY DEFINER — as INVOKER it would '
+    'answer NULL wherever RLS on projects hides the row, and 00606''s owner/admin '
+    'read policy keys on the answer, so an owner''s read of her own studio''s hours '
+    'would follow her own project visibility';
   ASSERT (SELECT proconfig::text LIKE '%search_path%' FROM pg_proc
            WHERE oid = to_regprocedure('public.project_pricing_studio_id(uuid)')),
     '00615: and keeps its pinned search_path (§0.16)';
@@ -1318,26 +1276,48 @@ BEGIN
   ASSERT NOT has_function_privilege('anon',
     'public.project_pricing_studio_id(uuid)', 'EXECUTE'),
     '00615: anon must not execute project_pricing_studio_id';
+  ASSERT to_regprocedure('public.owned_tier_prices_project(uuid,uuid)') IS NULL,
+    '00615: HT-3-f(2)''s body must NOT exist — it gated a read-time derivation that '
+    'HT-3-g deletes, and carried into 00620''s one-off stamp it would leave the '
+    'honest principal whose assistant opened her legacy project at ''none'' for ever '
+    '(HT-3-f(2) COST NOTE, W2-R10-03)';
 
-  -- ── the INSERT stamp keeps every property 00602/00603 pinned ──────────────
+  -- ── the tier rule: ONE body, TWO callers, neither pricing an hour ─────────
+  ASSERT v_stamp LIKE '%designer_tier_pricing_studio%',
+    '00615: HT-3-b''s tier rule must be CALLED by 00602''s INSERT stamp, never '
+    'spelled inline: two callers (this stamp and 00620''s one-off legacy stamp) '
+    'spelling it separately is the drift 00604''s banner records';
+  ASSERT v_stamp NOT LIKE '%organization_members%',
+    '00615: and the INSERT stamp reads organization_members through nothing but '
+    'that one call — a second, inline tier read is the drift the shared body exists '
+    'to prevent';
   ASSERT v_stamp LIKE '%app.project_studio_id_named%',
     '00615: the stamp must still read app.project_studio_id_named — without it a '
     'DERIVED studio cannot be told from one the caller NAMED, which is how HT-3-b '
     'went inert on the live path (W1-R11-02)';
-  -- W2-R10-04 again: the tier READS, not the two DECLAREs that share those names.
-  ASSERT position('into v_employer_studios' in v_stamp)
-           < position('into v_owned_studios' in v_stamp)
-     AND position('into v_employer_studios' in v_stamp) > 0,
-    '00615: the stamp still READS the EMPLOYER tier before the OWNED tier (HT-3-b)';
+  ASSERT v_stamp LIKE '%v_tier = ''employer''%'
+     AND v_stamp LIKE '%v_tier = ''owned''%'
+     AND position('v_tier = ''employer''' in v_stamp) < position('v_tier = ''owned''' in v_stamp),
+    '00615: the stamp still answers the EMPLOYER tier before the OWNED tier '
+    '(HT-3-b) and still treats them differently — an employer candidate overrides a '
+    'studio 00563 merely DERIVED (W1-R11-02), an owned candidate only fills a NULL '
+    'column (00603''s open question). Reversed or collapsed, the hire''s own '
+    'workspace prices her employer''s client again (W1-R8-01)';
+  ASSERT v_stamp LIKE '%new.studio_id is null%',
+    '00615: the owned arm still fills only a NULL column — clearing or re-pointing '
+    'a value 00563 derived either refuses the client''s signature or smuggles a NULL '
+    'past its fail-closed check (00603''s open question)';
   ASSERT v_stamp NOT LIKE '%order by%'
      AND v_stamp NOT LIKE '%studio_member_rates%'
      AND v_stamp !~ '[a-z_]+\.created_at'
-     AND v_stamp NOT LIKE '%joined_at%',
-    '00615: no ordering key, no rate-existence key and no seat or organization DATE '
-    'may influence the stamp (00602/00603''s own banned-token list — every such key '
-    'was measured manufacturable, W1-R4-01/R5-02/R6-01/R7-01, or date-blind, '
-    'W1-R10-02). HT-3-f(2) keys on projects.created_by, which 00563 RAISES on any '
-    'UPDATE of';
+     AND v_stamp NOT LIKE '%joined_at%'
+     AND v_stamp NOT LIKE '%created_by%',
+    '00615: no ordering key, no rate-existence key, no seat or organization DATE '
+    'and no project-authorship key may influence the stamp (00602/00603''s own '
+    'banned-token list — every such key was measured manufacturable, '
+    'W1-R4-01/R5-02/R6-01/R7-01, or date-blind, W1-R10-02). HT-3-f(2)''s created_by '
+    'gate is dissolved and was inert here anyway: every creation path writes the '
+    'designer''s own id';
   ASSERT NOT has_function_privilege('authenticated',
     'public.set_project_studio_id_owned()', 'EXECUTE')
      AND NOT has_function_privilege('anon',
@@ -1354,6 +1334,57 @@ BEGIN
     '00615: 00602/00603''s trigger binding survives CREATE OR REPLACE and still '
     'fires on INSERT only — the NAME is what orders it AFTER set_project_studio_id, '
     'and an UPDATE event would re-point existing projects (P-4)';
+
+  -- ── the shared tier body itself ──────────────────────────────────────────
+  ASSERT (SELECT prosecdef FROM pg_proc
+           WHERE oid = to_regprocedure('public.designer_tier_pricing_studio(uuid)')),
+    '00615: designer_tier_pricing_studio must be SECURITY DEFINER — an INVOKER read '
+    'of organization_members returns a PARTIAL candidate set, which under "exactly '
+    'one candidate answers" turns an ambiguous tier into a confident wrong answer';
+  ASSERT (SELECT proconfig::text LIKE '%search_path%' FROM pg_proc
+           WHERE oid = to_regprocedure('public.designer_tier_pricing_studio(uuid)')),
+    '00615: and it pins search_path (§0.16)';
+  ASSERT NOT has_function_privilege('authenticated',
+    'public.designer_tier_pricing_studio(uuid)', 'EXECUTE')
+     AND NOT has_function_privilege('anon',
+    'public.designer_tier_pricing_studio(uuid)', 'EXECUTE')
+     AND NOT has_function_privilege('service_role',
+    'public.designer_tier_pricing_studio(uuid)', 'EXECUTE'),
+    '00615: no role holds EXECUTE on the tier rule — the INSERT stamp is a DEFINER '
+    'trigger function owned by postgres and 00620 runs as the migration role, so '
+    'both reach it as the owner. A GRANT here would hand a caller the derivation '
+    'HT-3-g deletes';
+  ASSERT v_tier LIKE '%designer_seat.role <> ''owner''%'
+     AND v_tier LIKE '%designer_seat.role = ''owner''%'
+     AND position('designer_seat.role <> ''owner''' in v_tier)
+           < position('designer_seat.role = ''owner''' in v_tier),
+    '00615: the tier rule is still EMPLOYER (role <> ''owner'') before OWNED '
+    '(role = ''owner'') — reversed, the hire''s own workspace prices her employer''s '
+    'client again (W1-R8-01)';
+  ASSERT v_tier LIKE '%array_length(v_employer_studios, 1), 0) = 1%'
+     AND v_tier LIKE '%array_length(v_owned_studios, 1), 0) = 1%',
+    '00615: exactly ONE candidate in a tier answers — HT-3-b makes ambiguity an '
+    'answer instead of a contest, which is what keeps every manufacturable '
+    'tiebreak of rounds 4-7 out';
+  ASSERT v_tier NOT LIKE '%order by%'
+     AND v_tier NOT LIKE '%studio_member_rates%'
+     AND v_tier !~ '[a-z_]+\.created_at'
+     AND v_tier NOT LIKE '%joined_at%'
+     AND v_tier NOT LIKE '%created_by%'
+     AND v_tier NOT LIKE '%auth.uid%'
+     AND v_tier NOT LIKE '%p_user_id%',
+    '00615: the tier rule holds no ordering key, no rate-existence key, no seat or '
+    'organization DATE, no project-authorship key and nothing about the member being '
+    'priced or the caller (HT-3-a forbids the last outright). Every such key was '
+    'measured manufacturable with one signup or one consent-free INSERT '
+    '(W1-R4-01/R5-02/R6-01/R7-01/R10-02)';
+  SELECT count(*) INTO v_org_reads
+  FROM regexp_matches(v_tier, 'public\.organization_members', 'g') AS hits;
+  ASSERT v_org_reads = 2,
+    '00615: the tier rule reads public.organization_members exactly twice — one per '
+    'HT-3-b tier; got ' || v_org_reads;
+
+  -- ── the W2-R9-02 INSERT guard, unchanged by HT-3-g ────────────────────────
   ASSERT EXISTS (
     SELECT 1 FROM pg_trigger t
     JOIN pg_class c ON c.oid = t.tgrelid
@@ -1373,8 +1404,8 @@ BEGIN
     'the discard an owner/admin manufactures the arm''s-length standing 00606''s '
     'employer arm asks for';
 
-  RAISE NOTICE '00615 HT-3-f postconditions passed.';
+  RAISE NOTICE '00615 HT-3-g postconditions passed.';
 END
-$htffpostcondition$;
+$ht3gpostcondition$;
 
 COMMIT;

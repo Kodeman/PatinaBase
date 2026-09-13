@@ -32761,6 +32761,13 @@ export type Database = {
         }
         Returns: Json
       }
+      designer_tier_pricing_studio: {
+        Args: { p_designer_id: string }
+        Returns: {
+          studio_id: string
+          tier: string
+        }[]
+      }
       discard_agreement_parts: {
         Args: { p_proposal_id: string }
         Returns: Json
@@ -34401,10 +34408,6 @@ export type Database = {
       override_budget_checkpoint: {
         Args: { p_checkpoint_id: string; p_reason: string }
         Returns: Json
-      }
-      owned_tier_prices_project: {
-        Args: { p_created_by: string; p_designer_id: string }
-        Returns: boolean
       }
       persist_proposal_send_request: {
         Args: {

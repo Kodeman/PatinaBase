@@ -104,42 +104,81 @@
 -- 'none' can ever name a studio again. Revert the policies; keep the act.
 --
 -- ── ROUND 9 (HT-3-f(1) and W2-R9-02) ───────────────────────────────────────
--- Two changes inside section (4), both measured into existence:
---   · bound (c) becomes a CONFIRM where the caller names the studio the
---     derivation ALREADY returns (HT-3-f(1), RULED 2026-09-12). It was a flat
---     refusal on the reasoning that "where HT-3-b answers, the owner already reads
---     these hours" — reasoning that assumed the derivation's answer cannot change.
---     It can: HT-3-b is recomputed on every hour for a NULL-studio project, so one
---     ordinary `Members can leave` DELETE (or an `admin`'s own-row UPDATE to
---     status = 'removed') emptied the designer's employer tier, the OWNED tier
---     opened, and her former employer's legacy project priced at the number she
---     wrote for herself — with no statement available to the employer, before or
---     after (W2-R9-01, probes C and D2, 1/1 through RLS, ONE account). HT-3-f(2)
---     closes the shape at the derivation (migration 00615); this is the PIN that
---     gives the employer an act.
---   · bound (a2)'s employer leg asks the rate row's AUTHORSHIP HISTORY rather than
---     its current author (W2-R9-02), which needs the column declared at section
---     (3b) below.
+-- Two changes landed inside section (4): bound (c) became a CONFIRM where the
+-- caller named the studio the derivation ALREADY returned (HT-3-f(1)), and bound
+-- (a2)'s employer leg began asking the rate row's AUTHORSHIP HISTORY rather than
+-- its current author (W2-R9-02), which needs the column declared at section (3b).
+-- The second survives. The first is GONE — see the round-11 section below.
 --
 -- ── ROUND 10 (HT-3-f(1) AMENDED — W2-R10-01) ───────────────────────────────
--- ONE change inside section (4): the CONFIRM is the EMPLOYER'S. It is available
--- only where the studio named sits in the designer's EMPLOYER tier (active,
--- non-guest seat, role <> 'owner') and the caller is an owner or admin of it; in
--- the OWNED tier the pre-round-9 flat refusal returns, word for word. Round 9's
--- confirm was written for W2-R9-01's employer and, read literally, also handed the
--- DESIGNER a pin: with her employer tier empty she pinned the workspace 00295
--- provisions for her onto her own legacy project in ONE statement, bound (b) made
--- the column FINAL, and her hours there priced at her own 99900 for ever —
--- including after an honest employer hired her and priced her 26000 (the control
--- twin in the same fixture: 26000 / studio_member / 52000; the employer read 0 of
--- the pinned project's hours against 1 of the twin's; nothing could undo it).
--- HT-3-c's finality at CREATION is untouched — she still names her own workspace on
--- a project she is creating; what she may not do is FREEZE a legacy project's
--- derivation afterwards. RECORDED RESIDUAL HT-3-f(4) (W2-R10-02): the bound does
--- not reach the consent-free outsider, whose seat in his own org IS an
--- employer-tier seat; the owed closure is HT-3-b arm (c)'s consent door, and an
--- owner-initiated UNPIN / re-derivation act is owed WITH it (ruling owed, not built
--- here). Cases (y) and (z) of supabase/tests/rls/time_entry_studio_stamp_test.sql.
+-- The confirm was bounded to the EMPLOYER tier, because read literally round 9's
+-- confirm also handed the DESIGNER a pin: with her employer tier empty she pinned
+-- the workspace 00295 provisions for her onto her own legacy project in ONE
+-- statement, bound (b) made the column FINAL, and her hours there priced at her own
+-- 99900 for ever — including after an honest employer hired her and priced her
+-- 26000. Round 11 then measured the SAME taking on the arm the amendment did not
+-- gate (W2-R11-01): with the derivation silent for a legacy project she did not
+-- author (HT-3-f(2)), bound (c) never spoke at all and the plain STAMP arm wrote
+-- her own workspace in — form A in one statement with no seat change of any kind,
+-- form G in two on her former employer's own project.
+--
+-- ── ROUND 11 — HT-3-g (RULED BY KODY 2026-09-12) ────────────────────────────
+-- THE ACT IS THE EMPLOYER'S, AND THERE IS NOTHING LEFT TO DERIVE.
+--
+--   *"(1) NO READ-TIME DERIVATION. (3) DESIGNERS NEVER STAMP.
+--   stamp_project_pricing_studio admits ONLY a caller who is owner/admin of the
+--   named studio AND the named studio is in the project designer's EMPLOYER tier
+--   (she holds an active non-guest seat there with role <> 'owner'). No owned-tier
+--   arm, no sibling leg, no confirm arm, no designer arm. Bound (b) (a stamped
+--   column is final) stays."*
+--
+-- Three rounds of this function chased the same money shape around one structure —
+-- an act bounded by a TIER that is recomputed on every hour, in a function whose
+-- refusals all turned on a derivation the designer could silence. HT-3-g removes
+-- both halves of that:
+--   · the DERIVATION is gone (00615): project_pricing_studio_id IS
+--     projects.studio_id, so bound (c) had nothing left to read. Its confirm arm and
+--     its different-studio refusal are both subsumed by bound (b) — if the column is
+--     set, bound (b) answers; if it is NULL, there is nothing to confirm. Bound (c)
+--     is therefore DELETED, not re-bounded.
+--   · the OWNED TIER is gone from the act. A studio the designer OWNS is never
+--     nameable here, whoever calls: not by her (form A, W2-R11-01), not by a
+--     colleague, not by a second account she hands the title to. Bound (e)'s CASE
+--     and bound (d)'s seat test both collapse into ONE test — the named studio
+--     EMPLOYS the designer — which is strictly stronger than either.
+--   · the SIBLING LEG is gone with it (round 3's `created_by` leg was the owned
+--     tier's half of bound (a2)), and so is the DESIGNER ARM: bound (a2)'s
+--     `v_actor <> v_designer_id` skip — the gap form A walked through — is deleted,
+--     and this file's own postcondition already forbids any refusal gated on the
+--     caller BEING the designer.
+-- WHAT IS LEFT, and it is the whole of the act: an owner or admin of a studio that
+-- EMPLOYS this project's designer, naming that studio on a project whose column is
+-- still NULL, where that studio already holds a rate row for her that somebody
+-- other than she wrote. Measured consequences, stated rather than implied:
+--   · a designer can still stamp — but only the studio that EMPLOYS her, and only
+--     where she is its owner or admin (case (x) x7's shape, which W2-R6-01 rated a
+--     MAJOR for refusing). She gains nothing by it: HT-3-e(2) ignores the number she
+--     wrote for herself unless she OWNS that studio, and an employer-tier seat is
+--     role <> 'owner' by definition, so her own number can never be the one that
+--     prices there.
+--   · forms A and G of W2-R11-01 are both REFUSED, and so is every earlier
+--     owned-tier manoeuvre (W2-R4-01's confederate, W2-R5-01's demotion-then-stamp,
+--     case (q)'s transfer, HT-3-f(1)'s pin in her hand).
+--   · HT-3-f(4) is NOT closed and is not claimed to be: the consent-free outsider's
+--     seat in HIS org IS an employer-tier seat, he authors her rate there under his
+--     own id, and his stamp is admitted. Its closure is still HT-3-b arm (c)'s
+--     consent door, with an owner-initiated UNPIN owed beside it — a ruling owed,
+--     not built here. Case (z).
+--   · THE RETAINED LEG, reported rather than assumed: HT-3-g(3) names two
+--     conditions and four removals, and the arm's-length-rate leg (HT-3-e(1)) is in
+--     neither list, so it is KEPT — unconditionally now, there being only one tier.
+--     It narrows the act rather than widening it, and it costs an honest employer
+--     only what it already had to do: a studio that has not priced her gets nothing
+--     from the stamp, because her hour would price 'none' after it anyway. If the
+--     orchestrator reads HT-3-g(3)'s two conditions as exhaustive, the removal is
+--     one IF and case (u)'s first two legs move with it.
+-- Cases (y), (z), (e), (w), (x), (al) and (am) of
+-- supabase/tests/rls/time_entry_studio_stamp_test.sql measure all of it.
 --
 -- Lineage: policies, plus ONE new function (section 4 — NEW name, nothing
 -- redefined; `set_project_studio_id` is NOT touched), plus ONE new column
@@ -418,11 +457,18 @@ COMMENT ON COLUMN public.studio_member_rates.original_created_by IS
 --   made her belong). Case (r) measures that end to end. So `created_by` does not
 --   close the consent-door class — it narrows it to attackers acting alone.
 --
--- Either way the project must still be unstamped AND unpriced: where
--- project_pricing_studio_id already answers, the owner HAS her read and this
--- function would only be a way to move the money. A stamped project stays final
--- (HT-3-c, and 00603's case (z)). The act also writes ONE audit_logs row
--- (W2-R4-05) and returns the studio the UPDATE actually wrote (W2-R4-06).
+-- WHAT THE SHIPPED BODY ACTUALLY IS, after HT-3-g(3) — read this and not the
+-- archaeology above, which is kept because each paragraph records a measurement
+-- that is still true of the shape it describes: FOUR tests, in this order. (a) the
+-- caller is an owner or admin of the studio named. (a1)/(c) that studio EMPLOYS
+-- this project's designer — the ONE tier, which replaced bound (d)'s seat test and
+-- bound (e)'s CASE and is strictly stronger than both. (b) the project's column is
+-- still NULL, a stamped project being final (HT-3-c; and under HT-3-g this is also
+-- the whole of round 9's bound (c), there being no derivation left to confirm).
+-- (d) HT-3-e(1)'s arm's-length rate, now unconditional. Round 3's sibling leg,
+-- round 9's confirm arm, bound (e)'s owned branch and bound (a2)'s designer skip
+-- are all DELETED. The act still writes ONE audit_logs row (W2-R4-05) and returns
+-- the studio the UPDATE actually wrote (W2-R4-06).
 CREATE OR REPLACE FUNCTION public.stamp_project_pricing_studio(
   p_project_id uuid,
   p_studio_id  uuid
@@ -437,11 +483,9 @@ DECLARE
   v_designer_id uuid;
   v_existing    uuid;
   v_actor       uuid := auth.uid();
-  v_designer_has_employer_seat boolean := false;
-  v_named_is_employer_seat     boolean := false;
-  -- HT-3-f(1): the studio HT-3-b derives for this project right now. Read once, at
-  -- bound (c), where it is either the studio being CONFIRMED or the refusal.
-  v_derived     uuid;
+  -- HT-3-g(3): the ONE fact this act turns on besides the caller's standing — does
+  -- the studio being named EMPLOY this project's designer?
+  v_named_is_employer_seat boolean := false;
   v_written     uuid;
 BEGIN
   IF v_actor IS NULL THEN
@@ -465,32 +509,22 @@ BEGIN
       USING ERRCODE = 'insufficient_privilege';
   END IF;
 
-  -- (a) standing, HT-3-d: an OWNER or ADMIN of the studio being named. Being the
-  --     project's designer is NOT standing in itself (W2-R4-02) — where she is a
-  --     plain member of the studio that should take her hours, the repair is that
-  --     studio's to perform, which is HT-3-a's ruled sentence exactly.
+  -- (a) standing, HT-3-d and HT-3-g(3): an OWNER or ADMIN of the studio being
+  --     named. Being the project's designer is NOT standing in itself (W2-R4-02) —
+  --     where she is a plain member of the studio that should take her hours, the
+  --     repair is that studio's to perform, which is HT-3-a's ruled sentence
+  --     exactly.
   IF NOT public.is_org_admin_or_owner(p_studio_id) THEN
     RAISE EXCEPTION 'stamp_project_pricing_studio: only an owner or admin of the '
                     'studio being named may name it'
       USING ERRCODE = 'insufficient_privilege';
   END IF;
 
-  -- (a1) HT-3-b's two tiers, as they stand for THIS project's designer at call
-  --      time. Computed here rather than at bound (e) because HT-3-e(1) makes
-  --      bound (a2) branch on the same two facts.
-  v_designer_has_employer_seat := EXISTS (
-    SELECT 1
-    FROM public.organization_members AS employer_seat
-    JOIN public.organizations AS studio
-      ON studio.id = employer_seat.organization_id
-    WHERE employer_seat.user_id = v_designer_id
-      AND employer_seat.status = 'active'
-      AND employer_seat.role <> 'guest'
-      AND employer_seat.role <> 'owner'
-      AND studio.type = 'design_studio'
-      AND studio.status = 'active'
-  );
-
+  -- (a1) HT-3-g(3)'s other half, as a fact: the project's DESIGNER holds an
+  --      ACTIVE, NON-GUEST seat in the studio named with role <> 'owner', in an
+  --      active design_studio. This is the EMPLOYER tier of HT-3-b, asked of ONE
+  --      studio — a property of (this project's DESIGNER, p_studio_id) and never of
+  --      the actor.
   v_named_is_employer_seat := EXISTS (
     SELECT 1
     FROM public.organization_members AS named_seat
@@ -505,93 +539,16 @@ BEGIN
       AND studio.status = 'active'
   );
 
-  -- (a2) THE SECOND HALF OF STANDING, and HT-3-e(1) (RULED by the orchestrator
-  --      2026-09-12) splits it by tier. Round 3 had ONE leg for every caller who
-  --      is not the designer: the studio named must ALREADY hold a project this
-  --      designer both LEADS and CREATED. Round 7 measured what that cost on the
-  --      population this act exists for (W2-R7-01, MAJOR, 24 calls out of 24
-  --      refused): a designer whose whole book predates the column has NO project
-  --      carrying `studio_id = p_studio_id`, whoever created it, so her employer's
-  --      owner and admin were both refused while bound (a) refused her — HT-3-a's
-  --      ruled remedy reached NOBODY, and the only escape was for her to INSERT a
-  --      fresh project naming her employer so that her employer might then repair
-  --      the old one.
-  --
-  --      HT-3-e(1): in the EMPLOYER tier the leg is an ARM'S-LENGTH RATE instead —
-  --      the studio named must already hold a `studio_member_rates` row for this
-  --      designer that somebody OTHER than she wrote (`created_by <> user_id`).
-  --      It costs an honest employer nothing it would not already have done (a
-  --      studio with no rate for her prices her hour 'none' after the stamp, so
-  --      the stamp would buy it nothing), and it is the fact a one-account
-  --      designer cannot manufacture: the 00295 workspace she controls holds only
-  --      rows she authored.
-  --      The sibling leg STAYS for the OWNED tier — HT-3-c's sole proprietor,
-  --      where there is no second party to author anything and `created_by` is
-  --      again the half an outsider cannot forge.
-  --
-  --      REPORTED, NOT ASSUMED (W2-R7 fix log, flagged to the orchestrator): the
-  --      employer arm does NOT bound the W2-R3-01 outsider the sibling leg was
-  --      retained for. An attacker who owns any organization seats the victim
-  --      designer in it consent-free, writes her a rate row there under her own
-  --      id (`studio_member_rates_admin_insert` asks only
-  --      `is_org_admin_or_owner(studio_id) AND created_by = auth.uid()`), and that
-  --      row is arm's-length by this test. Case (t) measures it as a PASSING,
-  --      loudly-labelled assertion. Its closure is the already-owed HT-3-b arm (c)
-  --      consent door (seats land `invited`; only the named user activates her
-  --      own seat), which makes `status = 'active'` mean consent everywhere this
-  --      file reads it — and that is a ruling, not a bound invented here.
-  --      NARROWED IN ROUND 9 (W2-R9-02, measured): the leg asks the rate row's
-  --      AUTHORSHIP HISTORY, not its current author, and it reads the studio's
-  --      whole card for her — OPEN AND CLOSED rows alike. HT-3-e(4) re-authors a
-  --      row to whoever moves its number, so the current-author spelling let the
-  --      rate's own SUBJECT destroy her employer's standing with one in-place
-  --      rewrite and refuse the stamp to the studio's OWNER (probe A, A4/A5 —
-  --      recoverable in one owner statement, A6 → A11, but repeatable by her).
-  --      A closed row's authorship she cannot touch at all (the history guard
-  --      refuses every edit of a closed row outright); the OPEN row's displaced
-  --      author is kept in original_created_by, written only by that guard and only
-  --      from OLD. Either column naming somebody other than her is the studio's
-  --      standing, and she can erase neither.
-  IF v_designer_has_employer_seat AND v_named_is_employer_seat THEN
-    IF NOT EXISTS (
-         SELECT 1
-         FROM public.studio_member_rates AS other_author
-         WHERE other_author.studio_id = p_studio_id
-           AND other_author.user_id   = v_designer_id
-           AND (
-             (other_author.created_by IS NOT NULL
-              AND other_author.created_by <> v_designer_id)
-             OR (other_author.original_created_by IS NOT NULL
-                 AND other_author.original_created_by <> v_designer_id)
-           )
-       ) THEN
-      RAISE EXCEPTION 'stamp_project_pricing_studio: this studio holds no rate '
-                      'for this project''s designer that somebody other than she '
-                      'wrote, so naming it is not yours to do (HT-3-e)'
-        USING ERRCODE = 'insufficient_privilege';
-    END IF;
-  ELSIF NOT v_designer_has_employer_seat THEN
-    IF v_actor <> v_designer_id AND NOT EXISTS (
-         SELECT 1
-         FROM public.projects AS sibling
-         WHERE sibling.studio_id = p_studio_id
-           AND sibling.designer_id = v_designer_id
-           AND sibling.created_by = v_designer_id
-           AND sibling.id <> p_project_id
-       ) THEN
-      RAISE EXCEPTION 'stamp_project_pricing_studio: this studio holds no project '
-                      'that this project''s designer both leads and created, so '
-                      'naming it is not yours to do'
-        USING ERRCODE = 'insufficient_privilege';
-    END IF;
-  END IF;
-  -- The third case — she holds an employer seat and the studio named is one she
-  -- OWNS — asks for neither leg: that studio is not in her tier at all, and bound
-  -- (e) below is the refusal that should speak.
-
   -- (b) a stamped project is final (HT-3-c arm (a); 00603 case (z)). Naming the
   --     studio it already names is a no-op rather than an error, so a retry is
-  --     safe.
+  --     safe. Under HT-3-g this bound is also the WHOLE of what round 9's bound (c)
+  --     used to do: the callable form every reader keys on IS this very column now,
+  --     so "another studio already prices this project's hours" and "this project
+  --     already names a studio" are the same sentence, and there is no derivation
+  --     left to CONFIRM. (That function's NAME is not written in this body on
+  --     purpose — a postcondition below reads this source and forbids it, because a
+  --     body that consults the derivation at all is a body that can be re-given a
+  --     confirm arm.)
   IF v_existing IS NOT NULL THEN
     IF v_existing = p_studio_id THEN
       RETURN v_existing;
@@ -600,205 +557,102 @@ BEGIN
       USING ERRCODE = 'invalid_parameter_value';
   END IF;
 
-  -- (c) HT-3-f(1) (RULED by the orchestrator 2026-09-12, flagged to Kody): a
-  --     CONFIRM where the derivation already names p_studio_id, a refusal
-  --     everywhere else. Round 3 through round 8 this bound was a flat refusal —
-  --     *"only where the derivation is silent; where HT-3-b answers, the owner
-  --     already reads these hours and this function must not re-price them"* — and
-  --     round 9 measured what that reasoning assumed: that the derivation's answer
-  --     cannot CHANGE. It can. HT-3-b is recomputed on every hour for a project
-  --     whose studio_id is NULL, so the designer emptied her own employer tier with
-  --     ONE ordinary statement (the shipped `Members can leave` DELETE on her own
-  --     organization_members row, or an `admin`'s UPDATE of it to
-  --     status = 'removed'), the OWNED tier opened, and her next hour on her former
-  --     employer's legacy project came back 99900 / studio_member / 199800 where
-  --     that employer's own card had priced it 26000 — with the employer's owner
-  --     then reading NONE of the project's hours and no statement available to
-  --     repair it, before or after (W2-R9-01, probe C and probe D2, measured 1/1
-  --     through RLS as her, ONE account, no ownership transfer, no confederate).
-  --     The CONFIRM is the remedy BEFORE the fact: an owner or admin of the studio
-  --     the derivation ALREADY names may write that studio down, which costs nobody
-  --     anything (it names the studio that is already pricing the hours and already
-  --     reading them) and which makes the column final under bound (b) and HT-3-c,
-  --     so no later seat change can re-derive it.
-  --     NOTHING ELSE IS RELAXED. The confirm still passes bound (a)'s
-  --     owner-or-admin standing, bound (a2)'s arm's-length rate (employer tier) or
-  --     created_by sibling (owned tier), bound (d)'s seat test and bound (e)'s tier
-  --     test — all of which sit on either side of this one — and a caller naming a
-  --     DIFFERENT studio than the one pricing the work is refused exactly as before.
-  --
-  --     HT-3-f(1) AMENDED by the orchestrator 2026-09-12 (W2 review round 10,
-  --     W2-R10-01, measured 1/1 through RLS with a control in the same fixture and
-  --     a negative control by installation): THE CONFIRM BELONGS TO THE EMPLOYER
-  --     AND ONLY TO THE EMPLOYER. It is available only where the studio named is in
-  --     the designer's EMPLOYER tier — she holds an active, non-guest seat there
-  --     with role <> 'owner' — and the caller is an owner or admin of it (bound (a),
-  --     above). In the OWNED tier the pre-round-9 FLAT REFUSAL returns, message and
-  --     all. Round 9's confirm was written for W2-R9-01's employer; read literally
-  --     it also handed the DESIGNER a pin of the workspace 00295 provisions for her:
-  --     with her employer tier empty, one statement of hers pinned her own workspace
-  --     onto her own legacy project, bound (b) made the column FINAL, and her hours
-  --     there priced at the 99900 she wrote for herself for ever — including after
-  --     an honest employer hired her and priced her 26000 (the control twin in the
-  --     same fixture came back 26000 / studio_member / 52000, the employer read 0 of
-  --     the pinned project's hours against 1 of the twin's, and no statement could
-  --     undo it). One account, no seat left or removed, no ownership transfer, no
-  --     confederate, no consent-free seat. HT-3-c's finality at CREATION is
-  --     untouched by this amendment — a designer still names her own workspace on a
-  --     project she is creating (00563's authenticated INSERT arm, 00603's stamp);
-  --     what she may not do is FREEZE a legacy project's derivation afterwards. The
-  --     refusal costs an honest sole proprietor nothing she has today: her project
-  --     already prices from her workspace without a pin (HT-3-f(3), case (aj)), and
-  --     where it reached 'none' HT-3-a's stamp is still hers — bound (c) only speaks
-  --     when the derivation ALREADY answers.
-  --     RECORDED RESIDUAL, HT-3-f(4) (W2-R10-02, measured): this does NOT bound the
-  --     consent-free outsider of HT-3-e residue (i). His seat in HIS org IS an
-  --     employer-tier seat, so after he authors her rate there and confirms his org,
-  --     her removal of the bogus seat no longer undoes anything — the pin is final.
-  --     Its closure stays the owed HT-3-b arm (c) consent door, and this program
-  --     records that an owner-initiated UNPIN / re-derivation act is owed WITH that
-  --     door (a ruling owed, not built here). Case (z) of
-  --     supabase/tests/rls/time_entry_studio_stamp_test.sql measures it as a
-  --     PASSING, loudly-labelled assertion.
-  v_derived := public.project_pricing_studio_id(p_project_id);
-  IF v_derived IS NOT NULL THEN
-    IF v_derived IS DISTINCT FROM p_studio_id THEN
-      RAISE EXCEPTION 'stamp_project_pricing_studio: another studio already prices '
-                      'this project''s hours — name that studio to pin it, or there '
-                      'is nothing here to repair'
-        USING ERRCODE = 'invalid_parameter_value';
-    END IF;
-    -- The confirm arm, HT-3-f(1) as amended: the EMPLOYER tier only. Outside it the
-    -- pre-round-9 sentence is the refusal, word for word.
-    IF NOT v_named_is_employer_seat THEN
-      RAISE EXCEPTION 'stamp_project_pricing_studio: a studio already prices this '
-                      'project''s hours — there is nothing to repair'
-        USING ERRCODE = 'invalid_parameter_value';
-    END IF;
-  END IF;
-
-  -- (d) 00563's own bound on this column, replicated rather than trusted: the
-  --     project's DESIGNER holds an active, non-guest seat in an active design
-  --     studio. The trigger checks it again as the write goes through.
-  IF NOT EXISTS (
-    SELECT 1
-    FROM public.organization_members AS designer_seat
-    JOIN public.organizations AS studio
-      ON studio.id = designer_seat.organization_id
-    WHERE designer_seat.organization_id = p_studio_id
-      AND designer_seat.user_id = v_designer_id
-      AND designer_seat.status = 'active'
-      AND designer_seat.role <> 'guest'
-      AND studio.type = 'design_studio'
-      AND studio.status = 'active'
-  ) THEN
-    RAISE EXCEPTION 'stamp_project_pricing_studio: this project''s designer holds '
-                    'no active, non-guest seat in that studio'
-      USING ERRCODE = 'insufficient_privilege';
-  END IF;
-
-  -- (e) HT-3-d's TIER BOUND, applied to EVERY caller (round 4, W2-R4-01): the
-  --     studio named must be one HT-3-b's own tiers would have considered for
-  --     this project's DESIGNER — an EMPLOYER studio while she holds any employer
-  --     seat, and a studio she OWNS only where she holds none. The tiers are
-  --     00604's and 00603's, verbatim: employer = active, non-guest seat with
-  --     role <> 'owner' in an active design_studio; owned = role = 'owner'.
-  --     Round 3 gated this bound on the ACTOR being the designer (the literal
-  --     comparison is spelled out in this file's banner, not here, because a
-  --     postcondition reads this source and forbids the shape), which made it a
-  --     property of the actor — and the designer can author the actor (W2-R4-01,
-  --     measured
-  --     end to end: a confederate seated `admin` in the workspace 00295 provisions
-  --     for her stamped it, and her next hour priced at the 99900 she had written
-  --     for herself). It is strictly stronger than bound (d) above, which stays
-  --     because it is 00563's own bound restated and its message is the one a
-  --     caller naming a stranger's studio should read.
-  -- v_designer_has_employer_seat is computed at bound (a1) above, because
-  -- HT-3-e(1) made bound (a2) branch on it too. The CASE below is still the whole
-  -- of the tier test and still a property of (the designer, p_studio_id).
-  IF NOT EXISTS (
-    SELECT 1
-    FROM public.organization_members AS designer_seat
-    JOIN public.organizations AS studio
-      ON studio.id = designer_seat.organization_id
-    WHERE designer_seat.organization_id = p_studio_id
-      AND designer_seat.user_id = v_designer_id
-      AND designer_seat.status = 'active'
-      AND designer_seat.role <> 'guest'
-      AND studio.type = 'design_studio'
-      AND studio.status = 'active'
-      AND CASE
-            WHEN v_designer_has_employer_seat
-              THEN designer_seat.role <> 'owner'
-            ELSE designer_seat.role = 'owner'
-          END
-  ) THEN
+  -- (c) HT-3-g(3) (RULED BY KODY 2026-09-12), the ONE tier: the studio named must
+  --     EMPLOY this project's designer. THERE IS NO OWNED-TIER ARM. A studio she
+  --     OWNS is not nameable here by anybody — not by her, not by a colleague, not
+  --     by an account she hands the title to.
+  --     This single test REPLACES three that stood here through round 10, and it is
+  --     strictly stronger than two of them: bound (d) (00563's own "active,
+  --     non-guest seat in that studio") and bound (e) (HT-3-d's CASE, employer while
+  --     she held any employer seat, else owned) are both implied by an employer
+  --     seat, and bound (c)'s derivation read is gone with the derivation itself.
+  --     WHAT IT CLOSES, measured, each in ONE statement before it existed:
+  --       · W2-R11-01 form A — she owns workspace W, holds no employer seat, and
+  --         names W on a legacy project her assistant opened. Bound (b) made the
+  --         column final and her hours there priced at her own 99900 for ever,
+  --         against a control twin an honest later employer priced 26000 / 52000.
+  --       · form G — she deletes her own employer seat (`Members can leave`) and
+  --         names W on her FORMER employer's own legacy project. Two statements.
+  --       · W2-R4-01's confederate seated `admin` in W, W2-R5-01's
+  --         demotion-then-stamp, case (q)'s ownership transfer, and HT-3-f(1)'s pin
+  --         in her own hand (W2-R10-01) — all of them name a studio she owns or
+  --         controls, and all of them are refused here now.
+  --     WHAT IT COSTS, stated rather than discovered: HT-3-a's ruled remedy is no
+  --     longer available to a sole proprietor or a principal on a legacy project of
+  --     her own — her project prices 'none' until she has an employer, which is a
+  --     human cost where a human must act, not a taking. 00620 stamps the legacy
+  --     population ONCE at ship under HT-3-b's tier rule, which hands her own studio
+  --     to exactly that project; what she cannot do is re-point it afterwards.
+  --     WHAT IT DOES NOT CLOSE, and is not claimed to (HT-3-f(4), W2-R10-02): the
+  --     consent-free outsider's seat in HIS OWN org IS an employer-tier seat, so he
+  --     seats her (`Org owners can insert members`, no consent gate), authors her
+  --     rate there under his own id, names his org, and her later removal of the
+  --     bogus seat undoes nothing. Its closure stays HT-3-b arm (c)'s consent door,
+  --     and this program records that an owner-initiated UNPIN / re-derivation act is
+  --     owed WITH that door. Case (z) measures it as a PASSING, loudly-labelled
+  --     assertion.
+  IF NOT v_named_is_employer_seat THEN
     RAISE EXCEPTION 'stamp_project_pricing_studio: a studio prices this project''s '
-                    'hours only from inside its designer''s own tier — one that '
-                    'EMPLOYS her while she holds any employer seat, and one she '
-                    'OWNS only where she holds none (HT-3-d)'
+                    'hours only from inside the tier that EMPLOYS its designer — an '
+                    'active, non-guest seat with role <> ''owner''. A studio she '
+                    'OWNS is nobody''s to name here (HT-3-g)'
       USING ERRCODE = 'insufficient_privilege';
   END IF;
 
-  -- (e2) WAS HERE, AND IS REVERSED (round 6, W2-R6-01 — MAJOR, measured 1/1 on a
-  --      fresh fixture through RLS). Round 5 added a third refusal: while the
-  --      project's designer holds any employer seat, SHE may not name a studio she
-  --      herself administers. HT-3-d authorises two bounds and says of them "There
-  --      is no other arm", so (e2) was a code-only narrowing — and it was measured
-  --      to cost the ruling's own remedy while buying nothing:
-  --
-  --      WHAT IT COST (probe P1, ordinary shapes only — no confederate, no
-  --      demotion, no consent-free seat): the designer is an `admin` of employer
-  --      one and a plain `member` of employer two, so HT-3-b's employer tier is
-  --      AMBIGUOUS and the project is honestly 'none' — the exact population this
-  --      section exists for. Employer one holds no project she created. Her own
-  --      stamp was refused by (e2); employer one's OWNER was refused by (a2) for
-  --      want of a sibling; the column stayed NULL and NOBODY could repair it. The
-  --      only escape measured was for her to INSERT a fresh project naming employer
-  --      one so that her employer might then fix her other one, which is not a
-  --      sentence the product can say. An `admin` seat at an honest employer is
-  --      inside the employer tier and its holder is an owner-or-admin of the studio
-  --      named, so HT-3-d admits her expressly; (e2) refused her.
-  --
-  --      WHAT IT BOUGHT: nothing structural. The manoeuvre it was written for needs
-  --      a SECOND ACCOUNT by construction — transfer_studio_ownership refuses
-  --      p_new_owner = auth.uid() and requires an already-active member, so she
-  --      cannot leave the OWNED tier alone — and with that account in hand the
-  --      account she hands the title to simply makes the call (case (q) q8, and
-  --      re-measured independently in review round 6 as P2-8). (e2) therefore moved
-  --      the manoeuvre by one statement and one session, not by one accomplice.
-  --      Round 6 also measured two things that show why no bound available HERE can
-  --      close it: the stamp is reachable with NO rate card in the studio at all
-  --      (the confederate stamped a workspace holding zero studio_member_rates rows
-  --      for her, and she wrote her 99900 AFTERWARDS — her hour came back
-  --      99900 / studio_member / 199800), which makes candidate (ii)'s
-  --      rate-authorship test vacuous at this call site; and the whole shape works
-  --      in an organization she has never owned and never will — an accomplice
-  --      seats her `admin` in HIS org (consent-free), SHE writes her own 99900 there
-  --      ('admin' satisfies studio_member_rates_admin_insert), he stamps, and her
-  --      next hour prices 99900 / 199800 on a project an honest employer was
-  --      pricing at 25000. So "her own workspace" is not the shape; "a studio where
-  --      a cooperating pair can set her number" is, and neither ownership history,
-  --      nor organizations.created_by, nor the tier's role test can see it.
-  --
-  --      WHAT IS THEREFORE STILL OPEN, and it is a ruling, not a bound: the only
-  --      durable closure measured is at the RATE, not at the studio — a
-  --      studio_member_rates row whose created_by is its own user_id prices an hour
-  --      only where that person is the named studio's OWNER (which leaves HT-3-a
-  --      arm (a)'s and HT-3-c's sole proprietor untouched, and leaves a pair where
-  --      the ACCOMPLICE writes the number — case (r), the already-owed HT-3-b arm
-  --      (c) class). That is a W1 resolver rule and it is not guessed here. Cases
-  --      (q) and (r) pin both open shapes as PASSING, loudly-labelled assertions.
-  --      If the orchestrator prefers to RATIFY (e2) instead — amending HT-3-d to
-  --      record a third refusal, and accepting that an admin-designer's
-  --      ambiguous-tier project is repairable only through a colleague plus a
-  --      sibling project — the restore is one IF, described here in prose because a
-  --      postcondition below reads this function's own source and forbids the shape:
-  --      a refusal raised when the ACTOR IS the designer, she holds an employer
-  --      seat, and an active organization_members row gives her 'owner' or 'admin'
-  --      in p_studio_id. Case (s) of time_entry_studio_stamp_test.sql, which
-  --      measures the honest shape end to end, moves with it, and so does the
-  --      postcondition that pins "There is no other arm".
+  -- (d) THE SECOND HALF OF STANDING — HT-3-e(1)'s ARM'S-LENGTH RATE, now
+  --     unconditional, there being only one tier. The studio named must already
+  --     hold a `studio_member_rates` row for this designer that somebody OTHER than
+  --     she wrote. Round 3's `created_by` SIBLING leg, which was the OWNED tier's
+  --     half of this bound, is DELETED with the owned tier (HT-3-g(3)), and so is
+  --     the inequality skip that made this leg silent in the designer's own hand —
+  --     the gap W2-R11-01 form A walked through. (That comparison is described and
+  --     not spelled, because a postcondition below forbids its text in EITHER
+  --     direction.)
+  --     It costs an honest employer nothing it would not already have done: a studio
+  --     with no rate for her prices her hour 'none' after the stamp too, so the
+  --     stamp would buy it nothing. It is the fact a one-account designer cannot
+  --     manufacture, every row in a workspace she controls carrying her own id.
+  --     Round 7 measured what the SIBLING leg cost in its place — 24 refusals out of
+  --     24, every column left NULL, HT-3-a's remedy reaching nobody on the ordinary
+  --     hire (W2-R7-01), because a book that predates the column holds no project
+  --     naming the studio at all.
+  --     W2-R9-02: the leg asks the row's AUTHORSHIP HISTORY, not its current author,
+  --     over OPEN AND CLOSED rows alike. HT-3-e(4) re-authors a row to whoever moves
+  --     its number, so the current-author spelling let the rate's own SUBJECT destroy
+  --     her employer's standing with one in-place rewrite and refuse the stamp to the
+  --     studio's OWNER (probe A, A4/A5). A closed row's authorship she cannot touch
+  --     at all; the OPEN row's displaced author is kept in original_created_by,
+  --     written only by that guard and only from OLD.
+  --     REPORTED, NOT ASSUMED: this leg does not bound the W2-R3-01 / HT-3-f(4)
+  --     outsider, who writes her rate in his own org under his own id and so is
+  --     arm's-length BY THIS TEST, which asks about the SUBJECT's authorship. Case
+  --     (t) / case (z).
+  IF NOT EXISTS (
+       SELECT 1
+       FROM public.studio_member_rates AS other_author
+       WHERE other_author.studio_id = p_studio_id
+         AND other_author.user_id   = v_designer_id
+         AND (
+           (other_author.created_by IS NOT NULL
+            AND other_author.created_by <> v_designer_id)
+           OR (other_author.original_created_by IS NOT NULL
+               AND other_author.original_created_by <> v_designer_id)
+         )
+     ) THEN
+    RAISE EXCEPTION 'stamp_project_pricing_studio: this studio holds no rate '
+                    'for this project''s designer that somebody other than she '
+                    'wrote, so naming it is not yours to do (HT-3-e)'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  -- (e) WAS HERE AND IS RETIRED BY HT-3-g(3). It was HT-3-d's tier CASE — employer
+  --     while she held any employer seat, else a studio she OWNS — and the owned
+  --     branch of it is the door rounds 4, 5, 9, 10 and 11 each measured a taking
+  --     through. Bound (c) above is the whole of the tier now, and it is a property
+  --     of (the designer, p_studio_id) applied to EVERY caller. Round 5's (e2) (a
+  --     refusal gated on the ACTOR being the designer) stays reversed: HT-3-g(3)
+  --     admits an admin-designer of an HONEST employer expressly, W2-R6-01 measured
+  --     1/1 what refusing her cost, and a postcondition below forbids the shape.
 
   -- (f) the write. The row count is READ rather than assumed (W2-R4-06): under a
   --     concurrent stamp the bounds above can pass and the column be filled
@@ -844,97 +698,59 @@ REVOKE EXECUTE ON FUNCTION public.stamp_project_pricing_studio(uuid, uuid) FROM 
 GRANT  EXECUTE ON FUNCTION public.stamp_project_pricing_studio(uuid, uuid) TO authenticated;
 
 COMMENT ON FUNCTION public.stamp_project_pricing_studio(uuid, uuid) IS
-  'HT-3-a''s ruled remedy, as an act: name the studio that prices an unstamped, '
-  'unpriced project, so the owner/admin read 00606 grants becomes reachable on a '
-  'legacy NULL-studio or ambiguous-tier project (W2 review round 2, finding '
-  'W2-R2-02 — before this function no authenticated caller could write '
-  'projects.studio_id at all, because set_project_studio_id''s authenticated arm '
-  'raises unless TG_OP = ''INSERT''). HT-3-d (RULED 2026-09-12) is its whole '
-  'standing, in ONE arm: the studio named must lie inside the project '
-  'DESIGNER''s own HT-3-b tier at call time — a studio that EMPLOYS her (active, '
-  'non-guest seat, role <> ''owner'') while she holds any employer seat, and one '
-  'she OWNS only where she holds none — and the caller must be an OWNER or ADMIN '
-  'of that studio. The tier bound is a property of (the designer, p_studio_id) '
-  'and applies to EVERY caller, which is what round 4 corrected: gated on the '
-  'actor it refused the designer and admitted an account she seats as admin in '
-  'the workspace 00295 provisions for her (W2-R4-01, measured — the confederate''s '
-  'stamp succeeded and her next hour priced at the 99900 she wrote for herself). '
-  'Being the project''s designer is not standing in itself: a designer seated a '
-  'plain member in two employer studios cannot choose which one takes the hours '
-  'and the money (W2-R4-02). THE SECOND HALF OF STANDING IS SPLIT BY TIER '
-  '(HT-3-e(1), RULED 2026-09-12): in the EMPLOYER tier the studio named must '
-  'already hold a studio_member_rates row for this designer written by somebody '
-  'OTHER than her (created_by <> user_id) — round 3''s "a project she leads and '
-  'created" refused the entire legacy population instead, measured 24 calls out '
-  'of 24 with every column left NULL (W2-R7-01), because a book that predates the '
-  'column holds no project naming the studio at all; in the OWNED tier (HT-3-c''s '
-  'sole proprietor) the sibling leg stays, created_by being the half an outsider '
-  'cannot forge (W2-R3-01). NEITHER leg bounds a designer who COOPERATES with a '
-  'second party: she authors the sibling herself (W2-R5-02), and a cooperating '
-  'account authors her rate (HT-3-e(3)''s accepted residual). THE TWO BOUNDS ABOVE ARE ALL OF IT — HT-3-d says "There '
-  'is no other arm", and round 5''s third refusal (bound (e2): while her designer '
-  'holds any employer seat, SHE may not name a studio she herself administers) was '
-  'REVERSED in round 6 as W2-R6-01, measured 1/1: it refused a designer who is an '
-  'ADMIN of an HONEST employer — whom HT-3-d admits — while bound (a2) refused that '
-  'employer''s own owner for want of a sibling, leaving HT-3-a''s ruled remedy '
-  'available to NOBODY on an ordinary ambiguous-tier shape. Round 6 also wrote '
-  'here that (e2) "bought nothing"; round 7 measured that FALSE (W2-R7-03, probe '
-  'P8) — an `admin` of an HONEST employer satisfies '
-  'studio_member_rates_admin_insert, so with ONE account and no manoeuvre she '
-  'wrote her own 99900 into that employer''s card, stamped it, and her hour came '
-  'back 99900 / 199800 where the owner had written 26000. (e2) bought nothing '
-  'against the ownership-transfer manoeuvre it was written for, which needs a '
-  'second account by construction and which that account performs instead (case '
-  '(q)); the refusal it DID buy belongs at the rate, because the same number is '
-  'reachable on NEW work with no stamp at all. HT-3-e(2) (RULED 2026-09-12, '
-  'migration 00615) is that rule: a studio_member_rates row whose created_by is '
-  'its own user_id prices an hour ONLY where that person is the named studio''s '
-  'OWNER. THIS ACT CAN STILL MOVE MONEY for a designer '
-  'with one cooperating account, and the tier cannot see it: the tier is a ROLE '
-  'test she can write (transfer_studio_ownership demotes auth.uid(), '
-  '00484:524-536, so her 00295 workspace enters her own employer tier), a '
-  'rate-authorship test at this call site is vacuous (measured: the stamp succeeds '
-  'with zero studio_member_rates rows and the number is written afterwards), and '
-  'the same taking needs no studio of hers at all (measured: an accomplice seats '
-  'her `admin` in HIS org, SHE writes her own 99900 there, he stamps) — and after '
-  'HT-3-e(1) and HT-3-e(2) both of those need the cooperating account to AUTHOR '
-  'the rate row, which is HT-3-e(3)''s accepted residual: Patina makes it visible '
-  '(the pricing studio is a column of time_entry_ledger, shown in the owner''s '
-  'project lens) rather than impossible. Cases (q), (r) and (t) of '
-  'time_entry_studio_stamp_test.sql pin every open shape as passing '
-  'assertions, and case (t) records the one the employer arm does NOT bound: the '
-  'W2-R3-01 outsider, who writes the victim''s rate row in her own org under her '
-  'own id and so satisfies the arm''s-length test. Its closure is the already-owed '
-  'HT-3-b arm (c) consent door. THE ARM''S-LENGTH LEG ASKS THE RATE ROW''S '
-  'AUTHORSHIP HISTORY, not its current author (W2-R9-02): created_by OR the author '
-  'HT-3-e(4) displaced into original_created_by, over open and closed rows alike. '
-  'Keyed on the current author alone, the rate''s own SUBJECT destroyed her '
-  'employer''s standing with one in-place rewrite and the stamp was refused to the '
-  'studio''s OWNER as well as to her (measured, probe A A4/A5). Refuses a '
-  'stamped project (final, HT-3-c) and one whose hours ANOTHER studio already '
-  'prices — but under HT-3-f(1) (RULED 2026-09-12, AMENDED 2026-09-12 after '
-  'W2-R10-01) naming the studio the derivation ALREADY returns is a CONFIRM, not a '
-  'refusal, WHERE THAT STUDIO IS IN THE DESIGNER''S EMPLOYER TIER: an owner or admin '
-  'of it may write it down, after which the column is final and HT-3-b stops being '
-  'recomputed. In the OWNED tier the pre-round-9 flat refusal stands, because read '
-  'without that bound the confirm let the DESIGNER pin the workspace 00295 provisions '
-  'for her onto her own legacy project in ONE statement while her employer tier was '
-  'empty, freezing her own 99900 onto it for ever — measured against a control twin '
-  'in the same fixture that an honest later employer priced 26000 / 52000, with that '
-  'employer reading 0 of the pinned project''s hours and no statement able to undo it '
-  '(W2-R10-01). HT-3-c''s finality at CREATION is unchanged; what the amendment '
-  'refuses is FREEZING a legacy project''s derivation afterwards. RECORDED RESIDUAL '
-  'HT-3-f(4) (W2-R10-02): the employer-tier bound does not reach the consent-free '
-  'outsider, whose seat in his own org IS an employer-tier seat — after he authors '
-  'her rate and confirms his org, her removal of the bogus seat undoes nothing. The '
-  'closure is the owed HT-3-b arm (c) consent door, and an owner-initiated '
-  'UNPIN / re-derivation act is owed WITH it (case (z)). '
-  'The confirm is the employer''s remedy for W2-R9-01, where a designer emptied '
-  'her own employer tier with one `Members can leave` DELETE and her former '
-  'employer''s legacy project began pricing at the number she wrote for herself, '
-  'with no statement available to pin it before or after (probe C / probe D2, '
-  'measured 1/1 with ONE account). Every other bound applies to a confirm '
-  'unchanged. Writes one audit_logs row '
+  'HT-3-a''s ruled remedy, as an act: name the studio that prices an unstamped '
+  'project, so the owner/admin read 00606 grants becomes reachable on a legacy '
+  'NULL-studio project (W2 review round 2, finding W2-R2-02 — before this function '
+  'no authenticated caller could write projects.studio_id at all, because '
+  'set_project_studio_id''s authenticated arm raises unless TG_OP = ''INSERT''). '
+  'HT-3-g(3) (RULED BY KODY 2026-09-12) IS ITS WHOLE STANDING, AND IT IS ONE ARM: '
+  'the caller must be an OWNER or ADMIN of the studio named, AND that studio must '
+  'EMPLOY this project''s designer — she holds an active, non-guest '
+  'organization_members row there with role <> ''owner'', in an active '
+  'design_studio. THERE IS NO OWNED-TIER ARM, NO SIBLING LEG, NO CONFIRM ARM AND NO '
+  'DESIGNER ARM. A studio the designer OWNS is nameable here by nobody — not by '
+  'her, not by a colleague, not by an account she hands the title to. Both '
+  'conditions are properties of (this project''s DESIGNER, p_studio_id) and of the '
+  'caller''s standing, never of the actor''s identity, and they apply to EVERY '
+  'caller. WHAT THAT CLOSES, each measured 1/1 through RLS before it: W2-R11-01 '
+  'form A (she owns a workspace, holds no employer seat, and named it on a legacy '
+  'project her assistant opened — ONE statement, no seat change of any kind, after '
+  'which bound (b) made the column final and her hours priced at her own 99900 for '
+  'ever against a control twin an honest later employer priced 26000 / 52000); form '
+  'G (the same, on her FORMER employer''s own legacy project, in two statements, '
+  'after the shipped `Members can leave` DELETE); W2-R4-01''s confederate seated '
+  '`admin` in the workspace 00295 provisions for her; W2-R5-01''s '
+  'demotion-then-stamp; case (q)''s ownership transfer; and HT-3-f(1)''s pin in her '
+  'own hand (W2-R10-01). WHAT IT COSTS, stated not discovered: a sole proprietor or '
+  'a principal cannot name her own studio on a legacy project of her own — that '
+  'project prices ''none'' (HT-26''s "rate pending") until she has an employer. '
+  'Migration 00620 stamps the legacy population ONCE at ship under HT-3-b''s tier '
+  'rule, which hands her own studio to exactly that project; what she may not do is '
+  're-point it afterwards. THE SECOND HALF OF STANDING is HT-3-e(1)''s ARM''S-LENGTH '
+  'RATE, now unconditional: the studio named must already hold a studio_member_rates '
+  'row for this designer written by somebody OTHER than her. Round 3''s "a project '
+  'she leads and created" sibling leg refused the entire legacy population instead, '
+  'measured 24 calls of 24 with every column left NULL (W2-R7-01), and it is deleted '
+  'with the owned tier it belonged to. The leg asks the row''s AUTHORSHIP HISTORY, '
+  'not its current author (W2-R9-02): created_by OR the author HT-3-e(4) displaced '
+  'into original_created_by, over open and closed rows alike — keyed on the current '
+  'author alone, the rate''s own SUBJECT destroyed her employer''s standing with one '
+  'in-place rewrite and the stamp was then refused to the studio''s OWNER too '
+  '(probe A, A4/A5). Refuses a stamped project outright (bound (b); HT-3-c''s "a '
+  'stamp is final"), which under HT-3-g is also the whole of what round 9''s bound '
+  '(c) did: project_pricing_studio_id IS projects.studio_id now, so there is no '
+  'derivation left to CONFIRM and no second studio to refuse. RECORDED RESIDUAL '
+  'HT-3-f(4) (W2-R10-02), NOT CLOSED AND NOT CLAIMED TO BE: the consent-free '
+  'outsider''s seat in HIS OWN org IS an employer-tier seat, so he seats the victim '
+  'designer (`Org owners can insert members`, no consent gate), authors her rate '
+  'there under his own id — arm''s-length BY THIS TEST, which asks about the '
+  'SUBJECT''s authorship — names his org, and her later removal of the bogus seat '
+  'undoes nothing. Its closure is HT-3-b arm (c)''s consent door, and an '
+  'owner-initiated UNPIN / re-derivation act is owed WITH it (a ruling owed, not '
+  'built here). Case (z) of time_entry_studio_stamp_test.sql measures it as a '
+  'PASSING, loudly-labelled assertion; HT-3-e(3)''s second-account residual is the '
+  'other one, and transfer_studio_ownership''s demotion is what puts that workspace '
+  'inside her own employer tier. Writes one audit_logs row '
   '(project.pricing_studio_stamped, W2-R4-05) and returns the studio the UPDATE '
   'actually wrote (W2-R4-06). SECURITY DEFINER so the write does not meet '
   'set_project_studio_id''s authenticated arm; that trigger''s owner-executed arm '
@@ -1065,75 +881,70 @@ BEGIN
     'public.stamp_project_pricing_studio(uuid,uuid)', 'EXECUTE'),
     '00606: authenticated must execute stamp_project_pricing_studio';
 
-  -- The standing test is the one an attacker cannot author, and HT-3-d's tier
-  -- bound is the one the designer cannot route around by authoring a caller. Both
-  -- are pinned by source, because both were MEASURED reachable before they
-  -- existed.
+  -- ── HT-3-g(3), pinned by source. Three rounds measured a money shape through
+  --    the OWNED tier of this act; the ruling removes the tier, the confirm arm, the
+  --    sibling leg and the designer arm, and these asserts are what keeps a later
+  --    hand from "restoring" any of the four as a widening.
   ASSERT (
     SELECT prosrc LIKE '%is_org_admin_or_owner(p_studio_id)%'
-       AND prosrc LIKE '%sibling.created_by = v_designer_id%'
+       AND prosrc LIKE '%IF NOT v_named_is_employer_seat THEN%'
+       AND prosrc LIKE '%named_seat.role <> ''owner''%'
        AND prosrc LIKE '%other_author.created_by <> v_designer_id%'
     FROM pg_proc
     WHERE oid = to_regprocedure('public.stamp_project_pricing_studio(uuid,uuid)')
-  ), '00606: the stamp''s standing is an OWNER or ADMIN of the studio being named '
-     '(HT-3-d), plus a second half that HT-3-e(1) splits by tier — in the EMPLOYER '
-     'tier a studio_member_rates row for this designer that somebody OTHER than she '
-     'wrote (created_by <> user_id; round 3''s sibling leg refused the whole legacy '
-     'population instead, 24 calls of 24, W2-R7-01), and in the OWNED tier a studio '
-     'that ALREADY holds a project she both leads and created (W2-R3-01, measured): '
-     'reassign_project_lead is SECURITY DEFINER and GRANTed to authenticated, so '
-     'an outsider who seats a victim project''s designer in her own org can put '
-     'that designer in the lead of her OWN project and manufacture "a project led '
-     'by that designer" in three authenticated statements. created_by is the half '
-     'she cannot forge — 00563 raises on any UPDATE that moves it and '
-     'reassign_project_lead never touches it';
+  ), '00606: HT-3-g(3) — the stamp''s standing is an OWNER or ADMIN of the studio '
+     'being named AND that studio EMPLOYING this project''s designer (an active, '
+     'non-guest seat with role <> ''owner''), plus HT-3-e(1)''s arm''s-length rate '
+     '(created_by <> user_id, or the author HT-3-e(4) displaced). Both conditions '
+     'are properties of (the designer, p_studio_id), not of the actor';
   ASSERT (
-    SELECT prosrc LIKE '%v_designer_has_employer_seat%'
-       AND prosrc LIKE '%THEN designer_seat.role <> ''owner''%'
-       AND prosrc LIKE '%ELSE designer_seat.role = ''owner''%'
-       AND prosrc NOT LIKE '%WHEN v_actor%'
-       AND prosrc NOT LIKE '%WHEN v_designer_id = v_actor%'
+    SELECT prosrc NOT LIKE '%designer_seat.role = ''owner''%'
+       AND prosrc NOT LIKE '%v_designer_has_employer_seat%'
+       AND prosrc NOT LIKE '%sibling%'
+       AND prosrc NOT LIKE '%project_pricing_studio_id%'
+       AND prosrc NOT LIKE '%v_derived%'
     FROM pg_proc
     WHERE oid = to_regprocedure('public.stamp_project_pricing_studio(uuid,uuid)')
-  ), '00606: HT-3-d — the studio named must sit in the PROJECT DESIGNER''s own '
-     'tier (employer seat, role <> ''owner'', while she holds any; a studio she '
-     'OWNS only where she holds none), and BOUND (e) itself must be a property of '
-     '(the designer, p_studio_id) applied to EVERY caller — its CASE may not '
-     'branch on the actor. Gated on the actor it is reachable by an account the '
-     'designer seats herself: measured in round 4 (W2-R4-01) — a confederate '
-     'seated `admin` in the workspace 00295 provisions for her stamped it, her '
-     'next hour came back 99900 / studio_member at the rate she wrote for '
-     'herself, and no employer could see the project, the hour or the rate. This '
-     'assert speaks ONLY for bound (e); the next one owns the question of whether '
-     'any other refusal is gated on the actor (W2-R6-04 — the earlier spelling of '
-     'this assert matched one operand order of one IF and so read as a promise '
-     'the whole function could not keep)';
-
-  -- HT-3-d's "There is no other arm", pinned by source (round 6, W2-R6-01). Two
-  -- bounds are authorised — the tier, and owner-or-admin of the studio named —
-  -- plus bound (a2)'s retained `created_by` leg, which is conditioned on the
-  -- caller NOT being the designer (an INEQUALITY, and reported to the orchestrator
-  -- rather than assumed). A refusal conditioned on the caller BEING the designer
-  -- is a third arm, and round 5's (e2) was one: it refused a designer who is an
-  -- ADMIN of an honest employer — whom HT-3-d admits expressly — while bound (a2)
-  -- refused that employer's own owner for want of a sibling, so HT-3-a's ruled
-  -- remedy reached NOBODY on an ordinary ambiguous-tier project (measured 1/1,
-  -- probe P1). If HT-3-d is ever amended to ratify a third refusal, this assert
-  -- and case (s) move with it.
+  ), '00606: HT-3-g(3)''s four removals, each measured reachable before it. (1) NO '
+     'OWNED-TIER ARM — `designer_seat.role = ''owner''` was bound (e)''s ELSE branch, '
+     'and it is the door W2-R4-01''s confederate, W2-R5-01''s demotion, case (q)''s '
+     'transfer, W2-R10-01''s pin and W2-R11-01''s forms A and G all walked through. '
+     '(2) NO TIER BRANCH — v_designer_has_employer_seat decided WHICH tier applied; '
+     'there is one tier now. (3) NO SIBLING LEG — round 3''s `created_by` sibling was '
+     'the owned tier''s half of standing and went with it (it also refused the whole '
+     'legacy population it was meant to serve, 24 of 24, W2-R7-01). (4) NO CONFIRM '
+     'ARM and no derivation read — project_pricing_studio_id IS projects.studio_id '
+     'under HT-3-g(1), so bound (b) is the whole of it';
+  ASSERT (
+    SELECT position('this project already names a studio' in prosrc)
+             < position('IF NOT v_named_is_employer_seat THEN' in prosrc)
+       AND position('IF NOT v_named_is_employer_seat THEN' in prosrc)
+             < position('RETURNING studio_id INTO v_written' in prosrc)
+       AND position('IF NOT v_named_is_employer_seat THEN' in prosrc)
+             < position('other_author.created_by <> v_designer_id' in prosrc)
+    FROM pg_proc
+    WHERE oid = to_regprocedure('public.stamp_project_pricing_studio(uuid,uuid)')
+  ), '00606: and the employer-tier gate''s POSITION, so it cannot be satisfied '
+     'vacuously or reached after the fact: AFTER bound (b) (an already-stamped '
+     'project answers 22023 "this project already names a studio" whatever the tier '
+     'says), BEFORE the arm''s-length-rate leg (a caller naming a studio that does '
+     'not employ the designer must read the TIER refusal, not a refusal about a rate '
+     'card that was never relevant), and BEFORE the write';
   ASSERT (
     SELECT prosrc NOT LIKE '%v_actor = v_designer_id%'
        AND prosrc NOT LIKE '%v_designer_id = v_actor%'
+       AND prosrc NOT LIKE '%v_actor <> v_designer_id%'
+       AND prosrc NOT LIKE '%v_designer_id <> v_actor%'
     FROM pg_proc
     WHERE oid = to_regprocedure('public.stamp_project_pricing_studio(uuid,uuid)')
-  ), '00606: HT-3-d authorises the tier bound and the owner-or-admin standing and '
-     'says "There is no other arm". No refusal here may be gated on the caller '
-     'BEING the project''s designer: round 5''s bound (e2) was, and W2-R6-01 '
-     'measured what it cost (an honest admin-designer refused by (e2), her '
-     'employer''s owner refused by (a2), the column NULL and no act available to '
-     'anybody) against what it bought (nothing — the manoeuvre needs a second '
-     'account by construction and that account makes the call instead, case (q) '
-     'q8). Bound (a2)''s `v_actor <> v_designer_id` inequality is NOT such a gate '
-     'and is deliberately untouched';
+  ), '00606: NO DESIGNER ARM (HT-3-g(3)). No bound here may compare the actor with '
+     'the project''s designer in EITHER direction. Gated on equality it is round '
+     '5''s (e2), which W2-R6-01 measured refusing an admin-designer of an HONEST '
+     'employer whom HT-3-g(3) admits expressly, while the employer''s own owner was '
+     'refused for want of a sibling — HT-3-a''s remedy reaching nobody. Gated on '
+     'INEQUALITY it is round 3''s skip, which made bound (a2) silent in the '
+     'designer''s own hand and is the gap W2-R11-01 form A walked through in ONE '
+     'statement';
   ASSERT (
     SELECT prosrc LIKE '%RETURNING studio_id INTO v_written%'
        AND prosrc LIKE '%RETURN v_written;%'
@@ -1151,46 +962,6 @@ BEGIN
      'UPDATE and DELETE, and after it the ledger, the composer and every future '
      'audit row''s organization_id follow the studio it wrote';
   ASSERT (
-    SELECT prosrc LIKE '%v_derived := public.project_pricing_studio_id(p_project_id)%'
-       AND prosrc LIKE '%v_derived IS DISTINCT FROM p_studio_id%'
-    FROM pg_proc
-    WHERE oid = to_regprocedure('public.stamp_project_pricing_studio(uuid,uuid)')
-  ), '00606: HT-3-f(1) — bound (c) reads the derivation and refuses where it '
-     'names ANOTHER studio. A flat `IS NOT NULL` refusal (rounds 3-8) assumed the '
-     'derivation''s answer cannot change; HT-3-b is recomputed on every hour for a '
-     'NULL-studio project, so one `Members can leave` DELETE moved it and the '
-     'employer had no statement that could pin it, before or after (W2-R9-01, probe '
-     'C, measured 1/1 with ONE account). A confirm where the caller names the studio '
-     'ALREADY pricing the work costs nobody anything and makes the column final '
-     'under bound (b). Dropping the p_studio_id comparison would turn this into a '
-     'licence to re-point a priced project, which is what the flat refusal was for';
-  -- HT-3-f(1) AS AMENDED (W2-R10-01): the confirm arm is the EMPLOYER tier's, and
-  -- the refusal it replaced still stands everywhere else. Two properties, both
-  -- pinned, and the ORDER pinned with a position() on the arm's own IF rather than
-  -- on a name that is also DECLAREd (W2-R10-04's lesson, applied here rather than
-  -- repeated): the employer-tier gate must sit AFTER the derivation is READ, because
-  -- a gate above the read is not bound (c) at all.
-  ASSERT (
-    SELECT prosrc LIKE '%IF NOT v_named_is_employer_seat THEN%'
-       AND position('v_derived := public.project_pricing_studio_id(p_project_id)' in prosrc)
-             < position('IF NOT v_named_is_employer_seat THEN' in prosrc)
-       AND position('IF NOT v_named_is_employer_seat THEN' in prosrc)
-             < position('(d) 00563''s own bound' in prosrc)
-    FROM pg_proc
-    WHERE oid = to_regprocedure('public.stamp_project_pricing_studio(uuid,uuid)')
-  ), '00606: HT-3-f(1) AS AMENDED (W2-R10-01, measured 1/1 with a control in the '
-     'same fixture) — the CONFIRM arm is available ONLY where the studio named sits '
-     'in the designer''s EMPLOYER tier (v_named_is_employer_seat, computed at bound '
-     '(a1)); in the OWNED tier the pre-round-9 flat refusal returns. Without this '
-     'gate the designer pins the workspace 00295 provisions for her onto her own '
-     'legacy project with ONE statement while her employer tier is empty, bound (b) '
-     'makes the column FINAL, and her hours there price at the number she wrote for '
-     'herself for ever — including after an honest employer hires her and prices her '
-     'arm''s-length (measured: 99900 / studio_member / 199800 against the control '
-     'twin''s 26000 / 52000, with the employer reading 0 of the pinned project''s '
-     'hours and no statement able to undo it). The gate must sit AFTER the '
-     'derivation is read and BEFORE bound (d), or it is not bound (c)''s arm';
-  ASSERT (
     SELECT prosrc LIKE '%other_author.original_created_by <> v_designer_id%'
     FROM pg_proc
     WHERE oid = to_regprocedure('public.stamp_project_pricing_studio(uuid,uuid)')
@@ -1207,39 +978,15 @@ BEGIN
      'this file because this file''s body reads it, and 00615''s guard is what '
      'writes it';
   ASSERT (
-    SELECT prosrc LIKE '%project_pricing_studio_id(p_project_id)%'
-    FROM pg_proc
-    WHERE oid = to_regprocedure('public.stamp_project_pricing_studio(uuid,uuid)')
-  ), '00606: the stamp must still consult the derivation at all — that bound '
-     'is what keeps the act pointed at ''none'', or at HT-3-f(1)''s confirm of the '
-     'studio already pricing the work, rather than at a DIFFERENT studio. It '
-     'is NOT a claim that the act cannot move money: round 5 measured a designer '
-     'MANUFACTURING ''none'' on a correctly-priced project (W2-R5-01) and a willing '
-     'designer handing a confederate the sibling bound (a2) asked for (W2-R5-02). '
-     'Round 6''s sentence here — "bound (e2) closes the sole-actor form" — is dead '
-     'text: (e2) was reversed in round 6, and what closes the sole-actor form is '
-     'HT-3-e(1)''s arm''s-length-rate leg together with HT-3-e(2) at the resolver '
-     '(migration 00615). Cases (q), (r) and (t) of '
-     'time_entry_studio_stamp_test.sql pin what is still open — HT-3-e(3)''s '
-     'accepted residual (a cooperating account authors her rate) and the W2-R3-01 '
-     'outsider, whose closure is the owed HT-3-b arm (c) consent door';
-
-  -- HT-3-e(1)'s tier split, pinned by source: the arm's-length-rate leg must be
-  -- reached through the EMPLOYER-tier branch and the sibling leg through the
-  -- OWNED-tier branch. Collapsed back into one unconditional leg, either the
-  -- legacy population is unrepairable again (W2-R7-01, measured 24/24) or
-  -- HT-3-c's sole proprietor loses the only repair she has.
-  ASSERT (
-    SELECT prosrc LIKE '%IF v_designer_has_employer_seat AND v_named_is_employer_seat THEN%'
-       AND prosrc LIKE '%ELSIF NOT v_designer_has_employer_seat THEN%'
-    FROM pg_proc
-    WHERE oid = to_regprocedure('public.stamp_project_pricing_studio(uuid,uuid)')
-  ), '00606: HT-3-e(1) splits the second half of standing BY TIER — the '
-     'arm''s-length rate in the employer tier, round 3''s created_by sibling in the '
-     'owned tier. One unconditional leg cannot serve both: the sibling asks a '
-     'legacy employer for a project that cannot exist yet (W2-R7-01, 24 refusals '
-     'of 24 with every column left NULL), and the rate asks HT-3-c''s sole '
-     'proprietor for a second party she does not have';
+    SELECT count(*) FROM regexp_matches(
+      (SELECT prosrc FROM pg_proc
+        WHERE oid = to_regprocedure('public.stamp_project_pricing_studio(uuid,uuid)')),
+      'public\.organization_members', 'g')
+  ) = 1,
+    '00606: the stamp reads public.organization_members EXACTLY ONCE — HT-3-g(3)''s '
+    'single employer-seat question about the project''s designer. A second read is '
+    'either the tier branch this ruling deleted or a membership question nobody '
+    'ruled';
 
   -- set_project_studio_id is NOT redefined by this file (§0.4 / 00603's own rule).
   ASSERT (
