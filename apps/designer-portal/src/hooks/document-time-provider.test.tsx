@@ -18,7 +18,7 @@
  * report-back for why (no live browser/Supabase session available to this
  * lane) and what remains unconfirmed.
  */
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { DocumentTimeProvider, useDocumentTime } from './document-time-provider';
@@ -68,7 +68,26 @@ jest.mock('@patina/supabase', () => ({
   useCreateTimeEntry: () => ({ mutateAsync: createEntryMutateAsync }),
   useUpdateTimeEntry: () => ({ mutateAsync: jest.fn() }),
   useDeleteTimeEntry: () => ({ mutateAsync: jest.fn() }),
+  // HT-35 — the provider now asks whether this member declined the automatic
+  // timer before it opens one.
+  timeAutostartKeys: { preference: ['time-autostart-preference'] },
+  fetchTimeAutostartPreference: async () => autostartPreference,
+  useTimeAutostartPreference: () => ({
+    preference: autostartPreference,
+    optedOut: autostartPreference.optedOut,
+    disclosedAt: autostartPreference.disclosedAt,
+    isSettled: true,
+  }),
+  useMarkTimeAutostartDisclosed: () => ({ mutate: markDisclosedMutate }),
 }));
+
+/** HT-35 — default on and already disclosed, so every case that is not about
+ *  the ruling keeps measuring the shipped spine (R19/D11). */
+let autostartPreference: { optedOut: boolean; disclosedAt: string | null } = {
+  optedOut: false,
+  disclosedAt: '2026-01-01T00:00:00.000Z',
+};
+const markDisclosedMutate = jest.fn();
 
 /** What the stop payload actually carried, per call — W3 asserts two fields
  *  on it that the close-out used to leave implicit. */
@@ -128,12 +147,15 @@ jest.mock('@/lib/analytics/document-events', () => ({
     time: {
       timerStarted: (...a: unknown[]) => timerStartedCalls.push(a[0] as object),
       timerStopped: (...a: unknown[]) => timerStoppedCalls.push(a[0] as object),
+      autostartDisclosed: (...a: unknown[]) =>
+        autostartDisclosedCalls.push(a[0] as object),
     },
   },
 }));
 
 const timerStartedCalls: object[] = [];
 const timerStoppedCalls: object[] = [];
+const autostartDisclosedCalls: object[] = [];
 const createEntryMutateAsync = jest.fn(async (input: Record<string, unknown>) => ({
   id: 'typed-entry',
   project_id: input.projectId,
@@ -156,6 +178,12 @@ describe('DocumentTimeProvider — A3 queue hardening', () => {
     timerStartedCalls.length = 0;
     timerStoppedCalls.length = 0;
     createEntryMutateAsync.mockClear();
+    markDisclosedMutate.mockClear();
+    autostartDisclosedCalls.length = 0;
+    autostartPreference = {
+      optedOut: false,
+      disclosedAt: '2026-01-01T00:00:00.000Z',
+    };
     stopTimerMutateAsync.mockClear();
     startTimerMutateAsync.mockClear();
     discardTimerMutateAsync.mockClear();
@@ -297,6 +325,12 @@ describe('DocumentTimeProvider — who owns the thumb edge (D-B54)', () => {
     concurrentIncumbent = null;
     stopPayloads.length = 0;
     createEntryMutateAsync.mockClear();
+    markDisclosedMutate.mockClear();
+    autostartDisclosedCalls.length = 0;
+    autostartPreference = {
+      optedOut: false,
+      disclosedAt: '2026-01-01T00:00:00.000Z',
+    };
     stopTimerMutateAsync.mockClear();
     startTimerMutateAsync.mockClear();
     discardTimerMutateAsync.mockClear();
@@ -403,6 +437,12 @@ describe('DocumentTimeProvider — W3 capture', () => {
     timerStartedCalls.length = 0;
     timerStoppedCalls.length = 0;
     createEntryMutateAsync.mockClear();
+    markDisclosedMutate.mockClear();
+    autostartDisclosedCalls.length = 0;
+    autostartPreference = {
+      optedOut: false,
+      disclosedAt: '2026-01-01T00:00:00.000Z',
+    };
     stopTimerMutateAsync.mockClear();
     startTimerMutateAsync.mockClear();
     qc = new QueryClient();
@@ -537,5 +577,119 @@ describe('DocumentTimeProvider — W3 capture', () => {
       expect.objectContaining({ surface: 'document' }),
     );
     expect(timerStoppedCalls[0]).toHaveProperty('idle_ratio');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// HT-35 — the automatic timer is disclosed once, and a member may decline it.
+// "Off" is never "no timer": the same clock, waiting for her hand.
+// ═══════════════════════════════════════════════════════════════════════════
+describe('DocumentTimeProvider — HT-35, the clock she was told about', () => {
+  let qc: QueryClient;
+
+  beforeEach(() => {
+    events.length = 0;
+    runningTimerRow = null;
+    concurrentIncumbent = null;
+    startTimerMutateAsync.mockClear();
+    stopTimerMutateAsync.mockClear();
+    markDisclosedMutate.mockClear();
+    autostartDisclosedCalls.length = 0;
+    autostartPreference = {
+      optedOut: false,
+      disclosedAt: '2026-01-01T00:00:00.000Z',
+    };
+    qc = new QueryClient();
+  });
+
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={qc}>
+      <DocumentTimeProvider>{children}</DocumentTimeProvider>
+    </QueryClientProvider>
+  );
+
+  it('starts the clock for a member who never touched the setting', async () => {
+    const { result } = renderHook(() => useDocumentTime(), { wrapper });
+    act(() => {
+      result.current.hold({ projectId: 'project-a', projectName: 'A', phaseKey: null });
+    });
+    await waitFor(() => expect(startTimerMutateAsync).toHaveBeenCalledTimes(1));
+    expect(result.current.autostartOptedOut).toBe(false);
+  });
+
+  it('opens NO timer for a member who declined it', async () => {
+    autostartPreference = { optedOut: true, disclosedAt: '2026-01-01T00:00:00.000Z' };
+    const { result } = renderHook(() => useDocumentTime(), { wrapper });
+    act(() => {
+      result.current.hold({ projectId: 'project-a', projectName: 'A', phaseKey: null });
+    });
+    await waitFor(() => expect(result.current.autostartOptedOut).toBe(true));
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(startTimerMutateAsync).not.toHaveBeenCalled();
+  });
+
+  it('leaves her the same clock under her own thumb — never "no timer"', async () => {
+    autostartPreference = { optedOut: true, disclosedAt: '2026-01-01T00:00:00.000Z' };
+    const { result } = renderHook(() => useDocumentTime(), { wrapper });
+    act(() => {
+      result.current.hold({ projectId: 'project-a', projectName: 'A', phaseKey: null });
+    });
+    await waitFor(() => expect(result.current.autostartOptedOut).toBe(true));
+
+    act(() => {
+      result.current.startManually();
+    });
+    await waitFor(() => expect(startTimerMutateAsync).toHaveBeenCalledTimes(1));
+    // timer_manual, not timer_auto: a clock she started by hand must not be
+    // discarded under a minute by R4's sub-60s rule.
+    expect(startTimerMutateAsync.mock.calls[0][0]).toEqual(
+      expect.objectContaining({ projectId: 'project-a', source: 'timer_manual' }),
+    );
+  });
+
+  it('and the one-tap start is offered on the page while she holds a document', async () => {
+    autostartPreference = { optedOut: true, disclosedAt: '2026-01-01T00:00:00.000Z' };
+    const { result } = renderHook(() => useDocumentTime(), { wrapper });
+    act(() => {
+      result.current.hold({ projectId: 'project-a', projectName: 'A', phaseKey: null });
+    });
+    await waitFor(() =>
+      expect(screen.getByText('Start the clock')).toBeInTheDocument(),
+    );
+  });
+
+  it('discloses the automatic timer once, stamping it as it renders', async () => {
+    autostartPreference = { optedOut: false, disclosedAt: null };
+    const { result } = renderHook(() => useDocumentTime(), { wrapper });
+    act(() => {
+      result.current.hold({ projectId: 'project-a', projectName: 'A', phaseKey: null });
+    });
+    await waitFor(() =>
+      expect(screen.getByText(/Patina keeps the time for you/)).toBeInTheDocument(),
+    );
+    expect(markDisclosedMutate).toHaveBeenCalledTimes(1);
+    expect(autostartDisclosedCalls).toEqual([{ surface: 'document' }]);
+  });
+
+  it('and never again once the stamp is on her profile', async () => {
+    const { result } = renderHook(() => useDocumentTime(), { wrapper });
+    act(() => {
+      result.current.hold({ projectId: 'project-a', projectName: 'A', phaseKey: null });
+    });
+    await waitFor(() => expect(startTimerMutateAsync).toHaveBeenCalledTimes(1));
+    expect(
+      screen.queryByText(/Patina keeps the time for you/),
+    ).not.toBeInTheDocument();
+    expect(markDisclosedMutate).not.toHaveBeenCalled();
+  });
+
+  it('says nothing at all on the Desk, where no document is held', async () => {
+    autostartPreference = { optedOut: false, disclosedAt: null };
+    renderHook(() => useDocumentTime(), { wrapper });
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(
+      screen.queryByText(/Patina keeps the time for you/),
+    ).not.toBeInTheDocument();
+    expect(markDisclosedMutate).not.toHaveBeenCalled();
   });
 });

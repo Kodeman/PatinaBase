@@ -70,6 +70,10 @@ const nudgeFiredSeen = new Set<string>();
 const freshTimesRequestedSeen = new Set<string>();
 // HT-26's rate alarm is a per-entry fact, not a per-render one (see `time`).
 const rateUnresolvedSeen = new Set<string>();
+// HT-35's disclosure is one sentence per member; the column (00618) is the
+// durable half and this is the per-session half, so a spine that re-mounts
+// between two documents does not report the sentence twice.
+let autostartDisclosedSeen = false;
 
 /** One entry in the recent-documents-in-hand MRU (command bar). */
 export interface RecentDocumentInHand {
@@ -209,17 +213,12 @@ const wayfinding = {
  *   time_rate_unresolved   — an hour rendered or returned with no rate (HT-26)
  *   time_export_taken      — hours left Patina as a file (HT-20)
  *   time_autostart_disclosed / time_autostart_opted_out — HT-35's disclosure
- *     band and its per-member opt-out. Owed with that ruling's surfaces; no
- *     emitter is defined here yet because nothing can fire one honestly.
- *     HT-35 is EXPLICITLY DESCOPED from W2, not done: the opt-out is a
- *     per-member, cross-device, default-on preference and there is no column
- *     for one (`user_settings` has none, `profiles` has none, and
- *     `profiles.help_state` is the help-system's own cache), while plan §3
- *     reserves HT-35 no migration number and this program's range is spent. It
- *     returns as one stage — band, opt-out and these two emitters together —
- *     once Kody rules where the preference lives and releases a number.
- *     SCOPED by the orchestrator (2026-09-13) to STAGE 4 of this program, with
- *     W7: it is no longer owed by W2, and this module stays its home.
+ *     band and its per-member opt-out. BUILT in W7 (stage 4), where the
+ *     orchestrator scoped them after W2 descoped HT-35 for want of a column.
+ *     The preference lives on `profiles.time_autostart_opt_out` and the stamp
+ *     on `profiles.time_autostart_disclosed_at` (00618) — per member and
+ *     cross-device, never `localStorage`, which is the machine's answer and not
+ *     hers.
  *
  * Nothing here carries `notes`: free text is the studio's, not telemetry
  * (HT-36).
@@ -293,6 +292,22 @@ const time = {
     row_count: number;
     period: string | null;
   }) => track("time_export_taken", props),
+
+  /** HT-35 — the one-time auto-start sentence was shown. Fires when the band
+   *  RENDERS, which is also when the stamp is written, so the count and the
+   *  column answer the same question. Guarded per session as well as per
+   *  member: a re-render of the spine is not a second disclosure. */
+  autostartDisclosed: (props: { surface: string }) => {
+    if (autostartDisclosedSeen) return;
+    autostartDisclosedSeen = true;
+    track("time_autostart_disclosed", props);
+  },
+
+  /** HT-35 — a member changed her mind about the automatic timer.
+   *  `opted_out` carries the DIRECTION, so the event is as honest when she
+   *  turns it back on as when she turns it off. */
+  autostartOptedOut: (props: { opted_out: boolean }) =>
+    track("time_autostart_opted_out", props),
 };
 
 /**
