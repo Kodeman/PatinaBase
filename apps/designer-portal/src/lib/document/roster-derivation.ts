@@ -512,6 +512,10 @@ export interface CallSheetRow {
   ruleSummary: string | null;
   onSiteFrom: string | null;
   onSiteTo: string | null;
+  /** CR-2 — `project_parties.warranty_until`. The field-link RPC dates a token
+   *  from `max(on_site_to, warranty_until)`, so a row that cannot see the
+   *  warranty cannot state the date the door will carry. */
+  warrantyUntil: string | null;
   offJobAt: string | null;
   offJobReason: string | null;
   showToClient: boolean | null;
@@ -635,6 +639,7 @@ export function callSheetRowFromSeat(
     ruleSummary: seat.contact_rule_summary,
     onSiteFrom: seat.on_site_from,
     onSiteTo: seat.on_site_to,
+    warrantyUntil: seat.warranty_until,
     offJobAt: seat.off_job_at,
     offJobReason: seat.off_job_reason,
     showToClient: seat.show_to_client,
@@ -670,6 +675,7 @@ export function callSheetRowFromTeam(
     ruleSummary: null,
     onSiteFrom: null,
     onSiteTo: null,
+    warrantyUntil: null,
     offJobAt: null,
     offJobReason: null,
     showToClient: null,
@@ -701,6 +707,7 @@ export function callSheetRowFromClient(row: ProjectRosterRow): CallSheetRow {
     ruleSummary: null,
     onSiteFrom: null,
     onSiteTo: null,
+    warrantyUntil: null,
     offJobAt: null,
     offJobReason: null,
     showToClient: null,
@@ -913,6 +920,54 @@ export function fieldLinkExpirySentence(to: string | null | undefined): string {
     ? `Ends with the job, ${when}. Renews when they use it.`
     : 'Ends with the job. Renews when they use it.';
 }
+
+/**
+ * CR-2 — ONE DERIVATION FOR BOTH MINT DOORS. This pair lived beside the person
+ * card's Mint access act (`reach-access.tsx`) and the Call Sheet's "Copy field
+ * link" never reached it: the row named `row.onSiteTo` alone, so a seat whose
+ * warranty outlived its window printed a date thirteen months in the past
+ * under a live door, and recorded `expiry_source: 'engagement_window'` for a
+ * token the RPC had already dated from the warranty. Both doors now read the
+ * same two functions, from here.
+ *
+ * CR3-6 — THE DATE THE DOOR WILL ACTUALLY CARRY.
+ *
+ * `create_field_link(uuid, timestamptz)` (00627) does NOT take the caller's
+ * date when the seat has a live window. It computes
+ * `max(on_site_to, warranty_until)` and takes that whenever it is still ahead,
+ * falling through to `p_expires_at` only when there is no live window at all,
+ * and to ninety days when there is neither. PR-l's two radios therefore chose
+ * nothing: on a seat whose warranty outlives its window, "Ends with the job"
+ * still minted to the warranty end, the consequence sentence above the act
+ * named a date the token did not carry, and `peopleEvents.grantMinted` recorded
+ * a choice that never reached the database.
+ *
+ * So the room states the one date the RPC will use rather than offering a
+ * choice it cannot honour. Restoring the choice is a W3 migration — let
+ * `p_expires_at` outrank the window when it is supplied — not a second guess
+ * on this side of the wire.
+ */
+export function grantWindowEnd(
+  seatWindowEnd: string | null | undefined,
+  warrantyEnd: string | null | undefined,
+  now: Date,
+): string | null {
+  const days = [seatWindowEnd, warrantyEnd]
+    .map((value) => value?.slice(0, 10))
+    .filter((value): value is string => !!value);
+  if (days.length === 0) return null;
+  const latest = days.sort()[days.length - 1];
+  // The RPC reads a window through the END of its last day, and a window that
+  // has already closed is the same fact as no window at all.
+  const closesAt = new Date(`${latest}T00:00:00Z`);
+  closesAt.setUTCDate(closesAt.getUTCDate() + 1);
+  return closesAt.getTime() > now.getTime() ? latest : null;
+}
+
+/** What the act says when the RPC will fall through to its ninety-day term. */
+export const MINT_FALLBACK_SENTENCE =
+  "This seat carries no window, so the door runs ninety days from today and " +
+  "renews when they use it. It never opens billing or the agreement.";
 
 /**
  * R-U — the site access line under the Call Sheet heading: "Key held by Ngozi

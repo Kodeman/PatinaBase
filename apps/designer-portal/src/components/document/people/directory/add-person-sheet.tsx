@@ -68,6 +68,7 @@ import { useProjects } from "@/hooks/use-projects";
 import { useAuth } from "@/hooks/use-auth";
 import { useFeatureFlag } from "@/hooks/use-feature-flag";
 import { useProjectAuthority } from "../../roster/use-project-authority";
+import { telHref } from "../tel-link";
 import { clientEvents } from "@/lib/analytics/events";
 import { DocumentAction, DocumentActionGroup } from "../../document-action";
 import { RoomSheet } from "../../rooms/room-sheet";
@@ -94,6 +95,12 @@ export type AddedPersonKind =
   // PR-f — somebody the eight words do not name. A written label is required,
   // because an unnamed other is the row that goes dark.
   | "other_named";
+
+/** Two written names for the same human, as a studio would read them — case
+ *  and surrounding space are not a different person. */
+function sameWrittenName(a: string | null | undefined, b: string | null | undefined): boolean {
+  return (a ?? "").trim().toLowerCase() === (b ?? "").trim().toLowerCase();
+}
 
 /** The four kinds this sheet writes as `project_parties` rows. Pinned as a
  *  literal union rather than `Extract<AddedPersonKind, PartyKind>`: the Call
@@ -380,6 +387,47 @@ export function AddPersonSheet({
   >("");
   const [consentEvidence, setConsentEvidence] = useState("");
 
+  /**
+   * QA-R5-1 — WHOSE CARD DID THAT FACT JUST LAND ON?
+   *
+   * 00626's `apply_party_rolodex_link_trg` stamps a new seat with the ONE
+   * person card in the project's studio whose `phone_e164` matches the typed
+   * number (`rolodex_card_for_party_phone`, exactly one match or none). That
+   * is correct and is how Leah's own task 1 works when a studio re-adds
+   * somebody it has worked with before.
+   *
+   * What was wrong is that the sheet wrote identically, and announced
+   * identically, whether the name on screen was the matched card's name or
+   * somebody else's. Typing an unrelated name against a standing number
+   * overwrote THAT person's contact rule and channel — the rows every send
+   * gate and every other surface read — under a success line naming the person
+   * typed. A mistyped digit, or a genuine shared line (a household, an office
+   * number), was unrecoverable short of opening the other card by hand.
+   *
+   * So the sheet names the match. `telHref` is the same normalization the
+   * database's `normalize_phone_e164` performs, and the "exactly one" test is
+   * the trigger's own `HAVING count(*) = 1` — two cards sharing a number are a
+   * card-to-card merge the studio rules on, and no seat is auto-linked at all.
+   */
+  const typedPhoneE164 = useMemo(() => {
+    const href = telHref(phone);
+    return href ? href.replace(/^tel:/, "") : null;
+  }, [phone]);
+  const phoneMatchedCard = useMemo(() => {
+    if (!typedPhoneE164) return null;
+    const matches = (rolodex ?? []).filter(
+      (c) => c.entity_kind === "person" && c.phone_e164 === typedPhoneE164,
+    );
+    return matches.length === 1 ? matches[0] : null;
+  }, [rolodex, typedPhoneE164]);
+  /** The matched card's name when it is NOT the name on screen — the only case
+   *  the studio cannot already see for itself. */
+  const phoneCollisionName = useMemo(() => {
+    const matchedName = phoneMatchedCard?.full_name?.trim();
+    if (!matchedName) return null;
+    return sameWrittenName(matchedName, partyName) ? null : matchedName;
+  }, [phoneMatchedCard, partyName]);
+
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
   // SPEC §5.5 — the four fields the redesigned sheet adds.
@@ -404,6 +452,9 @@ export function AddPersonSheet({
   const chainRef = useRef<{
     party: ProjectParty | null;
     cardId: string | null;
+    /** QA-R5-1 — the card 00626's trigger stamped on the seat, as distinct
+     *  from `cardId`, which may instead be a card this sheet minted. */
+    autoLinkedCardId: string | null;
     mobileWritten: boolean;
     emailWritten: boolean;
     ruleWritten: boolean;
@@ -411,6 +462,7 @@ export function AddPersonSheet({
   }>({
     party: null,
     cardId: null,
+    autoLinkedCardId: null,
     mobileWritten: false,
     emailWritten: false,
     ruleWritten: false,
@@ -532,6 +584,7 @@ export function AddPersonSheet({
     chainRef.current = {
       party: null,
       cardId: null,
+      autoLinkedCardId: null,
       mobileWritten: false,
       emailWritten: false,
       ruleWritten: false,
@@ -694,8 +747,13 @@ export function AddPersonSheet({
         });
         chain.party = party;
         chain.cardId = party.studio_contact_id ?? null;
+        // QA-R5-1: the stamp the DB trigger wrote, kept apart from a card this
+        // sheet mints itself two steps down — only the first is somebody
+        // else's identity.
+        chain.autoLinkedCardId = party.studio_contact_id ?? null;
       }
       const party = chain.party;
+      const autoLinkedCardId = chain.autoLinkedCardId;
 
       // The rule and the typed channels belong to the PERSON, not the seat, so
       // a card is minted when either is written and none was auto-linked.
@@ -799,10 +857,31 @@ export function AddPersonSheet({
       // CR3-1: what was written is an INVITE (`record_channel_invite` records
       // `pending` unless a standing grant already stood), so the confirmation
       // names the invite, not consent.
+      // QA-R5-1 — SAY WHOSE CARD IT LANDED ON. `party.studio_contact_id` is
+      // stamped by 00626's BEFORE-INSERT auto-link, so a non-null value the
+      // sheet did not mint itself means the seat and everything written under
+      // it attached to a card that already stood. Where that card's name is
+      // not the name typed, the confirmation names it — otherwise the studio
+      // reads a success line for one person over a rule that moved on another.
+      // Resolved against the rolodex read the sheet already holds; where the
+      // card cannot be named (a project recording a studio this sheet does not
+      // list), the sentence still says the fact rather than nothing.
+      const landedOnCardId = autoLinkedCardId;
+      const landedOnCard = landedOnCardId
+        ? ((rolodex ?? []).find((c) => c.id === landedOnCardId) ?? null)
+        : null;
+      const landedOnName = landedOnCard?.full_name?.trim() || null;
+      const landedElsewhere =
+        !!landedOnCardId && !sameWrittenName(landedOnName, trimmedName);
+      const landedClause = !landedElsewhere
+        ? ""
+        : landedOnName
+          ? ` That number is already on file for ${landedOnName}, so this seat and what you wrote sit on ${landedOnName}’s card.`
+          : " That number was already on file, so this seat and what you wrote sit on the card that holds it.";
       const message =
         textUpdates && phone.trim()
-          ? `${trimmedName} added to ${proj}. The invite is recorded; nothing has been sent yet.`
-          : `${trimmedName} added to ${proj}.`;
+          ? `${trimmedName} added to ${proj}.${landedClause} The invite is recorded; nothing has been sent yet.`
+          : `${trimmedName} added to ${proj}.${landedClause}`;
       onAdded?.(message, kind === "household" ? "clients" : "crew");
       reset();
       onClose();
@@ -1321,8 +1400,23 @@ export function AddPersonSheet({
             type="tel"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
-            className={`${FIELD_INPUT} mb-4`}
+            className={`${FIELD_INPUT} ${phoneCollisionName ? "mb-1" : "mb-4"}`}
+            aria-describedby={
+              phoneCollisionName ? "add-party-phone-on-file" : undefined
+            }
           />
+          {/* QA-R5-1 — said BEFORE the write, while the number can still be
+              corrected. Not an error and not a refusal: a shared office line
+              and a household number are both real, and the studio is the one
+              who knows which this is. */}
+          {phoneCollisionName && (
+            <p
+              id="add-party-phone-on-file"
+              className="mb-4 max-w-[56ch] text-[0.7rem] leading-relaxed text-[var(--color-mocha)]"
+            >
+              {`This number is already on file for ${phoneCollisionName}. The rule and the channel you write here land on ${phoneCollisionName}’s card, and this seat is theirs — not a new person’s.`}
+            </p>
+          )}
 
           <label className={FIELD_LABEL} htmlFor="add-party-email">
             Email
@@ -1594,7 +1688,11 @@ export function AddPersonSheet({
               : "terminal"
           }
           aria-describedby={
-            isSeatKind(kind) ? "add-party-consequence" : undefined
+            isSeatKind(kind)
+              ? phoneCollisionName
+                ? "add-party-phone-on-file add-party-consequence"
+                : "add-party-consequence"
+              : undefined
           }
           loading={pending}
           loadingLabel={isEditMode ? "Saving…" : "Adding…"}

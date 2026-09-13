@@ -44,10 +44,13 @@ import {
 } from '@patina/supabase';
 import { isFieldPartyKind } from '@patina/types';
 import {
+  MINT_FALLBACK_SENTENCE,
   authorityPhrase,
   fieldLinkExpirySentence,
+  grantWindowEnd,
   heldClause,
   rosterShortDate,
+  seatProfileRole,
   seatWindowText,
   type CallSheetBand,
   type CallSheetRow,
@@ -245,21 +248,40 @@ export function RosterRow({
   const panelId = `roster-row-${row.key.replace(/[^A-Za-z0-9_-]/g, '')}`;
   const refusalId = `${panelId}-refusal`;
 
+  /**
+   * CR-2 — THE DATE THE TOKEN WILL ACTUALLY CARRY, on this door too.
+   *
+   * `create_field_link` (00627:565,577-584) ignores `p_expires_at` whenever the
+   * seat has a live window and dates the token from
+   * `max(on_site_to, warranty_until) + 1 day`, falling to ninety days when that
+   * day is already past. Naming `row.onSiteTo` alone printed "Ends with the
+   * job, 15 October 2025" under a token good to 22 November 2026 — thirteen
+   * months in the past, under a live door — and recorded
+   * `expiry_source: 'engagement_window'` for a closed window the RPC had
+   * already replaced with its ninety-day term. CR3-6's fix reached only the
+   * person card; `grantWindowEnd` is now the one derivation both doors read.
+   */
+  const grantEnd = grantWindowEnd(row.onSiteTo, row.warrantyUntil, new Date());
+
   const copyLink = async () => {
     setNote(null);
     try {
       const { token } = await createLink.mutateAsync({
         partyId: seatId,
         projectId,
-        expiresAt: row.onSiteTo ?? undefined,
+        expiresAt: grantEnd ? `${grantEnd}T23:59:59Z` : undefined,
       });
       const url = fieldLinkUrl(token);
       await navigator.clipboard?.writeText(url);
       peopleEvents.grantMinted({
         tier: 'field_link',
-        expiry_source: row.onSiteTo ? 'engagement_window' : 'fallback_90_day',
+        expiry_source: grantEnd ? 'engagement_window' : 'fallback_90_day',
       });
-      setNote(`Field link copied — shown once. ${fieldLinkExpirySentence(row.onSiteTo)}`);
+      setNote(
+        `Field link copied — shown once. ${
+          grantEnd ? fieldLinkExpirySentence(grantEnd) : MINT_FALLBACK_SENTENCE
+        }`,
+      );
     } catch (e) {
       setNote(e instanceof Error ? e.message : 'Could not open a field link just now.');
     }
@@ -307,7 +329,18 @@ export function RosterRow({
         </button>
         <StateWord family="reach" value={row.reach} />
         <StateWord family="stage" value={row.stage} />
-        {onOpenSeat && row.personId && (
+        {/* CR-3 — NO INERT BUTTONS (R-AA). `row.personId` is set for every
+            CARDED seat of every kind, but the sheet the chevron opens
+            (`call-sheet-mount.tsx`) refuses silently for any kind
+            `seatProfileRole` excludes — client, client_rep, other and vendor,
+            six carded seats on the Okonkwo seed alone, two of them the rows
+            SPEC §5.4 #5 names on the Client side band. Each rendered a
+            focusable control announced "Open Adaeze Okonkwo" that did nothing,
+            and fired `personCardOpened` before the refusal, so the taxonomy
+            recorded card opens that never happened. The chevron is printed
+            only where there is a door, which is also what moves the analytics
+            inside the branch that opens one. */}
+        {onOpenSeat && row.personId && row.seatId && seatProfileRole(row.partyKind) && (
           <button
             type="button"
             onClick={() => {

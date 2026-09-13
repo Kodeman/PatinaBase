@@ -55,6 +55,9 @@ jest.mock('@patina/supabase', () => ({
   usePeopleDirectory: (...args: unknown[]) =>
     mockUsePeopleDirectory(...(args as [{ role?: string; scope?: string }?])),
   useOrganizations: () => ({ data: [] }),
+  // CR-1: the promote band resolves the studio from the SEAT's project
+  // (project_recorded_studio), never from the membership list.
+  useProjectRecordedStudio: () => ({ data: 'org-1' }),
   isFieldRosterRole: (role: string | null | undefined) =>
     !!role && ['gc', 'sub', 'installer', 'receiver'].includes(role),
 }));

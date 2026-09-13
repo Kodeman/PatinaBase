@@ -43,6 +43,15 @@ jest.mock("@patina/supabase", () => ({
         entity_kind: "company",
         company_name: "Cedar & Iron Framing",
       },
+      // QA-R5-1: a standing person card, so the sheet can tell the studio
+      // whose card a typed number already belongs to.
+      {
+        id: "card-dana",
+        entity_kind: "person",
+        full_name: "Dana Kowalski",
+        phone: "(612) 555-0111",
+        phone_e164: "+16125550111",
+      },
     ],
   }),
   useStudioIdentity: () => ({ data: { name: "Middle West Studio" } }),
@@ -111,8 +120,11 @@ jest.mock("@tanstack/react-query", () => ({
 
 const PROJECT = "11111111-1111-4111-8111-111111111111";
 
+/** The Room's own confirmation channel — what the studio is actually told. */
+const onAdded = jest.fn();
+
 function openSheet() {
-  render(<AddPersonSheet open onClose={jest.fn()} onAdded={jest.fn()} />);
+  render(<AddPersonSheet open onClose={jest.fn()} onAdded={onAdded} />);
 }
 
 beforeEach(() => {
@@ -126,6 +138,7 @@ beforeEach(() => {
   setRule.mockReset().mockResolvedValue({});
   setAuthority.mockReset().mockResolvedValue({});
   setAffiliation.mockReset().mockResolvedValue({});
+  onAdded.mockReset();
 });
 
 describe("the kind switch", () => {
@@ -312,6 +325,103 @@ describe("a sub", () => {
     expect(sentence).toHaveTextContent("Okonkwo residence Call Sheet");
     expect(sentence).toHaveTextContent(
       "It never opens billing or the agreement.",
+    );
+  });
+
+  /**
+   * QA-R5-1 — 00626's `apply_party_rolodex_link_trg` attaches a new seat to
+   * the ONE standing person card in the studio carrying the typed number. The
+   * sheet used to write and announce identically whether that card's name was
+   * the name on screen or somebody else's, so an unrelated name typed against
+   * a standing number silently overwrote THAT person's contact rule and
+   * channel under a success line naming the person typed.
+   */
+  it("names whose card a typed number is already on, before the write", () => {
+    fireEvent.change(screen.getByLabelText("Project"), {
+      target: { value: PROJECT },
+    });
+    fireEvent.change(screen.getByLabelText("Full name"), {
+      target: { value: "QA Collide Person" },
+    });
+    fireEvent.change(screen.getByLabelText("Mobile"), {
+      target: { value: "(612) 555-0111" },
+    });
+    const line = document.getElementById("add-party-phone-on-file") as HTMLElement;
+    expect(line).toHaveTextContent(
+      "This number is already on file for Dana Kowalski.",
+    );
+    expect(line).toHaveTextContent("land on Dana Kowalski’s card");
+    // The act is described by it, so the fact reaches the ear at the act too.
+    expect(
+      screen.getByRole("button", { name: "Add to the roster" }),
+    ).toHaveAttribute(
+      "aria-describedby",
+      "add-party-phone-on-file add-party-consequence",
+    );
+  });
+
+  it("says nothing when the number and the name are the same person", () => {
+    fireEvent.change(screen.getByLabelText("Project"), {
+      target: { value: PROJECT },
+    });
+    fireEvent.change(screen.getByLabelText("Full name"), {
+      target: { value: "dana kowalski" },
+    });
+    fireEvent.change(screen.getByLabelText("Mobile"), {
+      target: { value: "(612) 555-0111" },
+    });
+    expect(document.getElementById("add-party-phone-on-file")).toBeNull();
+  });
+
+  it("names the card the seat landed on in the confirmation", async () => {
+    // The stamp 00626's BEFORE-INSERT auto-link wrote: a card that already
+    // stood, not one this sheet minted.
+    addParty.mockResolvedValue({
+      id: "seat-new",
+      project_id: PROJECT,
+      studio_contact_id: "card-dana",
+    });
+    fireEvent.change(screen.getByLabelText("Project"), {
+      target: { value: PROJECT },
+    });
+    fireEvent.change(screen.getByLabelText("Full name"), {
+      target: { value: "QA Collide Person" },
+    });
+    fireEvent.change(screen.getByLabelText("Trade"), {
+      target: { value: "electrical" },
+    });
+    fireEvent.change(screen.getByLabelText("Mobile"), {
+      target: { value: "(612) 555-0111" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add to the roster" }));
+    await waitFor(() => expect(onAdded).toHaveBeenCalled());
+    expect(onAdded.mock.calls[0][0]).toBe(
+      "QA Collide Person added to Okonkwo residence. That number is already on file for Dana Kowalski, so this seat and what you wrote sit on Dana Kowalski’s card.",
+    );
+  });
+
+  it("adds no such clause when the card is the person typed", async () => {
+    addParty.mockResolvedValue({
+      id: "seat-new",
+      project_id: PROJECT,
+      studio_contact_id: "card-dana",
+    });
+    fireEvent.change(screen.getByLabelText("Project"), {
+      target: { value: PROJECT },
+    });
+    fireEvent.change(screen.getByLabelText("Full name"), {
+      target: { value: "Dana Kowalski" },
+    });
+    fireEvent.change(screen.getByLabelText("Trade"), {
+      target: { value: "electrical" },
+    });
+    fireEvent.change(screen.getByLabelText("Mobile"), {
+      target: { value: "(612) 555-0111" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add to the roster" }));
+    await waitFor(() => expect(onAdded).toHaveBeenCalled());
+    expect(onAdded.mock.calls[0][0]).toBe(
+      "Dana Kowalski added to Okonkwo residence.",
     );
   });
 

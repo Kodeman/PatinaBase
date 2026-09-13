@@ -480,6 +480,7 @@ export {
   rosterDateKey,
   groupRosterByWindow,
   useProjectRosterByWindow,
+  useProjectRecordedStudio,
   ALL_AUTHORITY_SCOPES,
   ADMIN_ONLY_AUTHORITY_SCOPES,
   AUTHORITY_SCOPE_LABELS,

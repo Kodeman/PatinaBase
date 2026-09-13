@@ -43,6 +43,7 @@ function row(over: Partial<CallSheetRow>): CallSheetRow {
     ruleSummary: null,
     onSiteFrom: null,
     onSiteTo: null,
+    warrantyUntil: null,
     offJobAt: null,
     offJobReason: null,
     showToClient: null,

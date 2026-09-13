@@ -1,0 +1,17 @@
+[
+  {
+    "tag": "LABEL",
+    "id": "",
+    "text": "Project"
+  },
+  {
+    "tag": "SELECT",
+    "id": "add-party-project",
+    "text": "Which project…Okonkwo residenceChen ResidenceOlsen Lake HouseCedar Lane StudyBirch HollowMarrow & Vale ResidenceAspen Loft RefreshLindqvist kitchen"
+  },
+  {
+    "tag": "LABEL",
+    "id": "",
+    "text": "They gave prior express consent for text updatesOptional and never preselected. They agreed to Patina project texts (~1/day, rates may apply, reply STOP to quit)."
+  }
+]

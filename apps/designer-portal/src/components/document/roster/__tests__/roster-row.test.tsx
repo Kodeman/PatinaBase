@@ -81,6 +81,7 @@ function seatRow(over: Partial<CallSheetRow> = {}): CallSheetRow {
     ruleSummary: null,
     onSiteFrom: '2026-10-12',
     onSiteTo: '2027-08-13',
+    warrantyUntil: null,
     offJobAt: null,
     offJobReason: null,
     showToClient: false,
@@ -356,10 +357,57 @@ describe('RosterRow — unfolded', () => {
     open();
     fireEvent.click(screen.getByRole('button', { name: /Copy field link/ }));
     await screen.findByText(/Ends with the job, 13 August 2027/);
+    // CR-2: through the END of the last day, the same instant the person
+    // card's Mint access sends — a bare date is midnight, which on the last
+    // day is already behind `now()` and drops the RPC to its ninety-day term.
     expect(createLinkMutate).toHaveBeenCalledWith({
       partyId: 'seat-dana',
       projectId: 'okonkwo',
-      expiresAt: '2027-08-13',
+      expiresAt: '2027-08-13T23:59:59Z',
+    });
+  });
+
+  // CR-2 — the warranty outlives the window, and the RPC dates the token from
+  // `max(on_site_to, warranty_until)`. The row used to name `on_site_to`
+  // alone: "Ends with the job, 15 October 2025" under a token live to
+  // November 2026.
+  it('states the WARRANTY date when the warranty outlives the window', async () => {
+    Object.assign(navigator, { clipboard: { writeText: jest.fn().mockResolvedValue(undefined) } });
+    ul(
+      <RosterRow
+        row={seatRow({ onSiteTo: '2025-10-15', warrantyUntil: '2026-11-21' })}
+        band="this_week"
+        expanded
+        onToggle={jest.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Copy field link/ }));
+    await screen.findByText(/Ends with the job, 21 November 2026/);
+    expect(createLinkMutate).toHaveBeenCalledWith({
+      partyId: 'seat-dana',
+      projectId: 'okonkwo',
+      expiresAt: '2026-11-21T23:59:59Z',
+    });
+  });
+
+  // CR-2 — both dates behind us: the RPC falls to its ninety-day term, so the
+  // row says that rather than naming a closed window as if it were the door.
+  it('says ninety days when the window and the warranty have both closed', async () => {
+    Object.assign(navigator, { clipboard: { writeText: jest.fn().mockResolvedValue(undefined) } });
+    ul(
+      <RosterRow
+        row={seatRow({ onSiteFrom: '2025-05-05', onSiteTo: '2025-10-15', warrantyUntil: null })}
+        band="this_week"
+        expanded
+        onToggle={jest.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Copy field link/ }));
+    await screen.findByText(/ninety days from today/);
+    expect(createLinkMutate).toHaveBeenCalledWith({
+      partyId: 'seat-dana',
+      projectId: 'okonkwo',
+      expiresAt: undefined,
     });
   });
 

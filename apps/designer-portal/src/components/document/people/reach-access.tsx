@@ -56,6 +56,13 @@ import {
   contactRuleIsDoNotContact,
   contactRuleIsHardBlock,
 } from "@/lib/document/contact-rule";
+// CR-2: the mint window and its ninety-day sentence are shared with the Call
+// Sheet's own "Copy field link", so both doors state the one date the RPC
+// will land on.
+import {
+  MINT_FALLBACK_SENTENCE,
+  grantWindowEnd,
+} from "@/lib/document/roster-derivation";
 import { DocumentAction } from "../document-action";
 import { StateWord } from "./state-word";
 import { TelLink } from "./tel-link";
@@ -547,46 +554,6 @@ export function mintConsequenceSentence(
   return `This opens the Call Sheet and the site access card to ${name} ${until}. It never opens billing or the agreement.`;
 }
 
-/**
- * CR3-6 — THE DATE THE DOOR WILL ACTUALLY CARRY.
- *
- * `create_field_link(uuid, timestamptz)` (00627) does NOT take the caller's
- * date when the seat has a live window. It computes
- * `max(on_site_to, warranty_until)` and takes that whenever it is still ahead,
- * falling through to `p_expires_at` only when there is no live window at all,
- * and to ninety days when there is neither. PR-l's two radios therefore chose
- * nothing: on a seat whose warranty outlives its window, "Ends with the job"
- * still minted to the warranty end, the consequence sentence above the act
- * named a date the token did not carry, and `peopleEvents.grantMinted` recorded
- * a choice that never reached the database.
- *
- * So the room states the one date the RPC will use rather than offering a
- * choice it cannot honour. Restoring the choice is a W3 migration — let
- * `p_expires_at` outrank the window when it is supplied — not a second guess
- * on this side of the wire.
- */
-export function grantWindowEnd(
-  seatWindowEnd: string | null | undefined,
-  warrantyEnd: string | null | undefined,
-  now: Date,
-): string | null {
-  const days = [seatWindowEnd, warrantyEnd]
-    .map((value) => value?.slice(0, 10))
-    .filter((value): value is string => !!value);
-  if (days.length === 0) return null;
-  const latest = days.sort()[days.length - 1];
-  // The RPC reads a window through the END of its last day, and a window that
-  // has already closed is the same fact as no window at all.
-  const closesAt = new Date(`${latest}T00:00:00Z`);
-  closesAt.setUTCDate(closesAt.getUTCDate() + 1);
-  return closesAt.getTime() > now.getTime() ? latest : null;
-}
-
-/** What the act says when the RPC will fall through to its ninety-day term. */
-export const MINT_FALLBACK_SENTENCE =
-  "This seat carries no window, so the door runs ninety days from today and " +
-  "renews when they use it. It never opens billing or the agreement.";
-
 export function ReachAccess({
   cardId,
   cardKind,
@@ -926,92 +893,107 @@ export function ReachAccess({
         </>
       )}
 
-      <h3 className="t-head mb-3 mt-6 text-[var(--ink-subtle)]">
-        Contact rule
-      </h3>
-      {ruleSummary ? (
-        <ContactRuleLine
-          summary={ruleSummary}
-          blocked={ruleBlocks}
-          routeTo={rule?.route_to_person_id ? (routeTo ?? null) : null}
-        />
-      ) : (
-        <p className="t-body-sm text-[var(--ink-subtle)]">{NO_RULE_SENTENCE}</p>
-      )}
-      <DocumentAction
-        actionKey="edit-contact-rule"
-        surfaceKey="people"
-        regionKey="contact-rule"
-        variant="tertiary"
-        aria-expanded={editingRule}
-        aria-controls={ruleBandId}
-        onClick={() => setEditingRule((open) => !open)}
-      >
-        Edit the rule
-      </DocumentAction>
-      <div id={ruleBandId} hidden={!editingRule} className="mt-2">
-        <label className="t-body-sm flex min-h-11 items-center gap-2 text-[var(--ink)]">
-          <input
-            type="checkbox"
-            checked={forbidSms}
-            onChange={(e) => setForbidSms(e.target.checked)}
-          />
-          Never text them
-        </label>
-        <label className="t-body-sm flex min-h-11 items-center gap-2 text-[var(--ink)]">
-          <input
-            type="checkbox"
-            checked={forbidEmail}
-            onChange={(e) => setForbidEmail(e.target.checked)}
-          />
-          Never email them
-        </label>
-        <label className={FIELD_LABEL} htmlFor={`${ruleBandId}-route`}>
-          Write someone else instead
-        </label>
-        <select
-          id={`${ruleBandId}-route`}
-          value={routeId}
-          onChange={(e) => setRouteId(e.target.value)}
-          className={`${FIELD_INPUT} mb-3`}
-        >
-          <option value="">Nobody — reach them directly</option>
-          {(routeCandidates ?? []).map((candidate) => (
-            <option key={candidate.id} value={candidate.id}>
-              {candidate.name}
-            </option>
-          ))}
-        </select>
-        <label className={FIELD_LABEL} htmlFor={`${ruleBandId}-reason`}>
-          Why
-        </label>
-        <input
-          id={`${ruleBandId}-reason`}
-          type="text"
-          value={ruleReason}
-          onChange={(e) => setRuleReason(e.target.value)}
-          className={`${FIELD_INPUT} mb-2`}
-        />
-        <DocumentAction
-          actionKey="save-contact-rule"
-          surfaceKey="people"
-          regionKey="contact-rule"
-          variant="secondary"
-          loading={setRule.isPending}
-          loadingLabel="Saving…"
-          onClick={saveRule}
-        >
-          Save the rule
-        </DocumentAction>
-        {ruleError && (
-          <p
-            role="alert"
-            className="t-body-sm mt-1 text-[var(--terracotta-ink)]"
+      {/* QA-R4-3 — A FIRM HAS NO CONTACT RULE. Direction §5.1: "Company
+          variant: … Contact rule is replaced by three designations", and SPEC
+          §5.3 names six company regions with no Contact rule among them.
+          Ungated, every company card printed the heading, the
+          NO_RULE_SENTENCE fallback and a LIVE "Edit the rule" disclosure whose
+          save wrote `studio_contact_rules` keyed `subject_type = 'company'` —
+          a row no reader in this build (Directory row, roster row, person
+          card, send gate) ever queries, every one of them keying rule lookups
+          by PERSON id. The act succeeded silently and had zero effect
+          anywhere. `isPerson` is the same gate the mint band below already
+          uses. */}
+      {isPerson && (
+        <>
+          <h3 className="t-head mb-3 mt-6 text-[var(--ink-subtle)]">
+            Contact rule
+          </h3>
+          {ruleSummary ? (
+            <ContactRuleLine
+              summary={ruleSummary}
+              blocked={ruleBlocks}
+              routeTo={rule?.route_to_person_id ? (routeTo ?? null) : null}
+            />
+          ) : (
+            <p className="t-body-sm text-[var(--ink-subtle)]">{NO_RULE_SENTENCE}</p>
+          )}
+          <DocumentAction
+            actionKey="edit-contact-rule"
+            surfaceKey="people"
+            regionKey="contact-rule"
+            variant="tertiary"
+            aria-expanded={editingRule}
+            aria-controls={ruleBandId}
+            onClick={() => setEditingRule((open) => !open)}
           >
-            {ruleError}
-          </p>
-        )}
-      </div>
+            Edit the rule
+          </DocumentAction>
+          <div id={ruleBandId} hidden={!editingRule} className="mt-2">
+            <label className="t-body-sm flex min-h-11 items-center gap-2 text-[var(--ink)]">
+              <input
+                type="checkbox"
+                checked={forbidSms}
+                onChange={(e) => setForbidSms(e.target.checked)}
+              />
+              Never text them
+            </label>
+            <label className="t-body-sm flex min-h-11 items-center gap-2 text-[var(--ink)]">
+              <input
+                type="checkbox"
+                checked={forbidEmail}
+                onChange={(e) => setForbidEmail(e.target.checked)}
+              />
+              Never email them
+            </label>
+            <label className={FIELD_LABEL} htmlFor={`${ruleBandId}-route`}>
+              Write someone else instead
+            </label>
+            <select
+              id={`${ruleBandId}-route`}
+              value={routeId}
+              onChange={(e) => setRouteId(e.target.value)}
+              className={`${FIELD_INPUT} mb-3`}
+            >
+              <option value="">Nobody — reach them directly</option>
+              {(routeCandidates ?? []).map((candidate) => (
+                <option key={candidate.id} value={candidate.id}>
+                  {candidate.name}
+                </option>
+              ))}
+            </select>
+            <label className={FIELD_LABEL} htmlFor={`${ruleBandId}-reason`}>
+              Why
+            </label>
+            <input
+              id={`${ruleBandId}-reason`}
+              type="text"
+              value={ruleReason}
+              onChange={(e) => setRuleReason(e.target.value)}
+              className={`${FIELD_INPUT} mb-2`}
+            />
+            <DocumentAction
+              actionKey="save-contact-rule"
+              surfaceKey="people"
+              regionKey="contact-rule"
+              variant="secondary"
+              loading={setRule.isPending}
+              loadingLabel="Saving…"
+              onClick={saveRule}
+            >
+              Save the rule
+            </DocumentAction>
+            {ruleError && (
+              <p
+                role="alert"
+                className="t-body-sm mt-1 text-[var(--terracotta-ink)]"
+              >
+                {ruleError}
+              </p>
+            )}
+          </div>
+        </>
+      )}
 
       <h3 className="t-head mb-3 mt-6 text-[var(--ink-subtle)]">
         Access grants

@@ -156,13 +156,21 @@ describe('CallSheetMount — the chevron is wired', () => {
     expect(screen.getByText('The client')).toBeInTheDocument();
   });
 
-  it('opens nothing for a kind the directory party branch excludes', () => {
+  // CR-3 — R-AA, "no inert buttons". The chevron used to render for every
+  // CARDED seat of every kind and `openSeat` refused silently for the kinds
+  // `seatProfileRole` excludes (client, client_rep, other, vendor) — a
+  // focusable control announced "Open Ochoa Lighting" that did nothing, and
+  // `personCardOpened` fired before the refusal. Where there is no door, there
+  // is now no chevron.
+  it('prints no chevron at all for a kind the directory party branch excludes', () => {
     usePeopleSeats.mockReturnValue({
       data: [seat({ party_kind: 'vendor', display_name: 'Ochoa Lighting' })],
       isLoading: false,
     });
     render(<CallSheetMount {...props} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Open Ochoa Lighting' }));
+    expect(
+      screen.queryByRole('button', { name: 'Open Ochoa Lighting' }),
+    ).not.toBeInTheDocument();
     expect(screen.queryByTestId('party-profile')).not.toBeInTheDocument();
   });
 });
