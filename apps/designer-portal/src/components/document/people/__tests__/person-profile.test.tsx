@@ -25,6 +25,13 @@ const rulesData: { current: unknown[] } = { current: [] };
 const rolodexData: { current: unknown[] } = { current: [] };
 
 jest.mock("@patina/supabase", () => ({
+  // W3/P2 — the archive door and the seat's own close act.
+  useOrganizations: () => ({ data: [] }),
+  useArchiveStudioContact: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useRestoreStudioContact: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useCloseProjectPartySeat: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  STUDIO_CONTACT_ARCHIVE_STANDING_SENTENCE:
+    "Only an owner or an admin of the studio may put a card away, or bring one back.",
   AUTHORITY_SCOPE_LABELS: {
     money: "Signs money",
     change_order: "Approves change orders",

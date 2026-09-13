@@ -91,6 +91,17 @@ export interface ProjectParty {
   /** Call Sheet (00419, R4/U2): per-row designer opt-in for client portal
    *  visibility. Default false — nothing shows unless chosen. */
   show_to_client: boolean;
+  // ── 00631's bid columns (direction §3.4, R-R) ─────────────────────────────
+  /** The day the answer was owed. A DATE: the sheet prints "Due 5 October
+   *  2026", never a clock. */
+  bid_due_at: string | null;
+  bid_outcome: SeatBidOutcome | null;
+  /** How long the number holds. */
+  bid_valid_until: string | null;
+  /** The estimator AT THE FIRM who priced it — a person card in the studio the
+   *  job records (00631's `assert_party_bid_quoted_by`). */
+  bid_quoted_by_person_id: string | null;
+  bid_amount_cents: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -2177,6 +2188,322 @@ export function useProjectRecordedStudio(projectId: string | null | undefined) {
       });
       if (error) throw error;
       return (data as string | null) ?? null;
+    },
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// THE BIDDING BAND (00631, direction §3.4, R-R) — People room CRM · W3/P2
+//
+// A price nobody has answered is not a body on the site. The Bidding band's
+// rows carry four editable facts — when the answer was owed, how it came back,
+// how long the number holds, and who at the firm priced it — and the outcome
+// is written as a STAGE WORD, so a losing bidder never reads as crew.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** 00631's `project_parties_bid_outcome_check` vocabulary. */
+export type SeatBidOutcome =
+  | 'asked'
+  | 'quoted'
+  | 'selected'
+  | 'declined'
+  | 'no_response'
+  | 'withdrawn';
+
+export const ALL_SEAT_BID_OUTCOMES: readonly SeatBidOutcome[] = [
+  'asked',
+  'quoted',
+  'selected',
+  'declined',
+  'no_response',
+  'withdrawn',
+];
+
+/**
+ * The outcome as the STAGE it puts the seat in (direction §3.8's nine words,
+ * through `seatStageWordFor`). `rosterBandFor` then keeps a losing bidder out
+ * of every crew band: `declined` and `no_response` stay in Bidding, `off_job`
+ * goes to Done, and only `awarded` bands by window.
+ */
+export const SEAT_BID_OUTCOME_STAGE: Record<SeatBidOutcome, string> = {
+  asked: 'invited',
+  quoted: 'bidding',
+  selected: 'awarded',
+  declined: 'declined',
+  no_response: 'no_response',
+  withdrawn: 'off_job',
+};
+
+/** What the studio reads on the row — direction §3.8's own words. */
+export const SEAT_BID_OUTCOME_LABELS: Record<SeatBidOutcome, string> = {
+  asked: 'Bidding',
+  quoted: 'Bidding',
+  selected: 'Awarded',
+  declined: 'Declined',
+  no_response: 'No response',
+  withdrawn: 'Off the job',
+};
+
+/** The act word beside each outcome in the picker — what the studio DID. */
+export const SEAT_BID_OUTCOME_ACTS: Record<SeatBidOutcome, string> = {
+  asked: 'Asked for a price',
+  quoted: 'They quoted',
+  selected: 'Selected',
+  declined: 'They declined',
+  no_response: 'No response',
+  withdrawn: 'They withdrew',
+};
+
+export function isSeatBidOutcome(value: unknown): value is SeatBidOutcome {
+  return (ALL_SEAT_BID_OUTCOMES as readonly unknown[]).includes(value);
+}
+
+/** The bid facts one seat carries, as the Bidding band edits them. */
+export interface SeatBid {
+  seatId: string;
+  bidDueAt: string | null;
+  bidOutcome: SeatBidOutcome | null;
+  bidValidUntil: string | null;
+  bidQuotedByPersonId: string | null;
+  bidAmountCents: number | null;
+}
+
+export interface SetPartyBidInput {
+  id: string;
+  projectId: string;
+  patch: Partial<Omit<SeatBid, 'seatId'>>;
+}
+
+export const partyBidKeys = {
+  all: ['project-party-bids'] as const,
+  list: (projectId: string | null | undefined) =>
+    ['project-party-bids', projectId ?? null] as const,
+};
+
+/** 00631's own refusals, as sentences. */
+const BID_REFUSAL_SENTENCES: Record<string, string> = {
+  project_parties_bid_valid_until_check:
+    'A number cannot stop holding before the day it was owed.',
+  party_bid_quoted_by_project_has_no_studio:
+    'This job is not attached to a studio yet, so there is no book to name an estimator from.',
+  party_bid_quoted_by_other_studio:
+    'That person is in another studio’s book.',
+  party_bid_quoted_by_not_a_person:
+    'A firm cannot price a job. Name the person at the firm who did.',
+  party_bid_quoted_by_merged_away:
+    'That card has been folded into another one. Name the card that survived.',
+  project_parties_bid_outcome_check: 'That is not one of the outcomes on file.',
+};
+
+export function asBidError(error: unknown): string {
+  const message =
+    typeof error === 'object' && error !== null && 'message' in error
+      ? String((error as { message?: unknown }).message ?? '')
+      : String(error ?? '');
+  for (const [code, sentence] of Object.entries(BID_REFUSAL_SENTENCES)) {
+    if (message.includes(code)) return sentence;
+  }
+  return message || 'The bid did not take that.';
+}
+
+/**
+ * The bid columns for one project's seats, keyed by seat id.
+ *
+ * `people_directory_seats` (00626) predates 00631 and carries none of them, so
+ * the Bidding band reads them here rather than inventing dates the view cannot
+ * answer for.
+ */
+export function useProjectPartyBids(projectId: string | null | undefined) {
+  return useQuery({
+    queryKey: partyBidKeys.list(projectId),
+    enabled: !!projectId,
+    queryFn: async (): Promise<Record<string, SeatBid>> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase
+        .from('project_parties')
+        .select(
+          'id, bid_due_at, bid_outcome, bid_valid_until, bid_quoted_by_person_id, bid_amount_cents',
+        )
+        .eq('project_id', projectId);
+      if (error) throw error;
+      const index: Record<string, SeatBid> = {};
+      for (const row of (data ?? []) as Array<Record<string, unknown>>) {
+        index[String(row.id)] = {
+          seatId: String(row.id),
+          bidDueAt: (row.bid_due_at as string | null) ?? null,
+          bidOutcome: isSeatBidOutcome(row.bid_outcome)
+            ? row.bid_outcome
+            : null,
+          bidValidUntil: (row.bid_valid_until as string | null) ?? null,
+          bidQuotedByPersonId:
+            (row.bid_quoted_by_person_id as string | null) ?? null,
+          bidAmountCents: (row.bid_amount_cents as number | null) ?? null,
+        };
+      }
+      return index;
+    },
+  });
+}
+
+/**
+ * Write a seat's bid facts, and move its stage with the outcome.
+ *
+ * The outcome IS the stage word (SEAT_BID_OUTCOME_STAGE): writing "they
+ * declined" without moving the stage would leave a losing bidder sitting in a
+ * crew band, which is the one thing §3.4 asks the Bidding band to prevent.
+ */
+export function useSetPartyBid() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, patch }: SetPartyBidInput): Promise<ProjectParty> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const dbPatch: Record<string, unknown> = {};
+      if (patch.bidDueAt !== undefined) dbPatch.bid_due_at = patch.bidDueAt || null;
+      if (patch.bidValidUntil !== undefined)
+        dbPatch.bid_valid_until = patch.bidValidUntil || null;
+      if (patch.bidQuotedByPersonId !== undefined)
+        dbPatch.bid_quoted_by_person_id = patch.bidQuotedByPersonId || null;
+      if (patch.bidAmountCents !== undefined)
+        dbPatch.bid_amount_cents = patch.bidAmountCents ?? null;
+      if (patch.bidOutcome !== undefined) {
+        dbPatch.bid_outcome = patch.bidOutcome ?? null;
+        if (patch.bidOutcome) {
+          dbPatch.stage = SEAT_BID_OUTCOME_STAGE[patch.bidOutcome];
+          // "They withdrew" is a seat leaving the job, and every other door
+          // that closes a seat dates it. A Done row with no date reads as a
+          // row somebody forgot.
+          if (patch.bidOutcome === 'withdrawn') {
+            dbPatch.off_job_at = new Date().toISOString().slice(0, 10);
+          }
+        }
+      }
+      const { data, error } = await supabase
+        .from('project_parties')
+        .update(dbPatch)
+        .eq('id', id)
+        .select('*')
+        .single();
+      if (error) throw new Error(asBidError(error));
+      return data as ProjectParty;
+    },
+    onSuccess: (_data, input) => {
+      void queryClient.invalidateQueries({ queryKey: partyBidKeys.list(input.projectId) });
+      void queryClient.invalidateQueries({ queryKey: ['project-parties', input.projectId] });
+      void queryClient.invalidateQueries({ queryKey: ['project-roster', input.projectId] });
+      void queryClient.invalidateQueries({ queryKey: peopleKeys.all });
+      void queryClient.invalidateQueries({ queryKey: peopleSeatKeys.all });
+    },
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// BRING FORWARD (SPEC §5.7, CRM-24, PR-b) — People room CRM · W3/P2
+//
+// Several people from a closed job onto a live one, in ONE confirm.
+//
+// WHAT IS WRITTEN ON THE SEAT, and what is not. PR-b's hybrid: the NAME AT THE
+// TIME and the TRADE ON THE JOB are snapshots and are written here. Typed
+// channels, the contact rule, consent and document expiries are NOT copied —
+// they are read live off the card through `studio_contact_id`, which is why
+// every pick must carry one. The phone and the email are written because they
+// are the channel VALUES the studio's consent record is keyed on
+// (`people_directory_seats.consent_status` reads `pp.phone_e164`), not because
+// the seat holds an opinion about them: the verdict itself still lives in
+// `studio_channel_consent` and travels with the number (R-AY).
+//
+// NEVER carried: prior pricing, prior project notes, prior `show_to_client`.
+// The insert names none of those columns, so `show_to_client` is born at its
+// own `false` default (PD-11's opt-in) and no bid column is written at all.
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface BringForwardPick {
+  /** The rolodex card the seat is stamped with. Required: the live read of
+   *  channels, rule, consent and paper hangs off it. */
+  studioContactId: string;
+  partyKind: PartyKind;
+  /** Name at time (PR-b snapshot). */
+  displayName: string;
+  /** Trade on the job (PR-b snapshot). */
+  trade?: string | null;
+  /** The firm card, so the seat's paper word reads the same firm (R-BJ). */
+  companyId?: string | null;
+  /** Firm name at time. */
+  companyName?: string | null;
+  /** The number the consent record is keyed on — not a copy of the verdict. */
+  phone?: string | null;
+  email?: string | null;
+}
+
+export interface BringForwardInput {
+  projectId: string;
+  picks: readonly BringForwardPick[];
+}
+
+export interface BringForwardResult {
+  added: Array<{ studioContactId: string; seatId: string; name: string }>;
+  /** A pick the database refused, with the refusal in words. The rest still
+   *  landed: one bad card must not cost the studio the other three. */
+  refused: Array<{ studioContactId: string; name: string; reason: string }>;
+}
+
+/**
+ * SPEC §5.7's terminal act, "Add N to the roster".
+ *
+ * One seat per pick, inserted in order. Consent is never written: the record
+ * is the studio's and is keyed on the number, so Pete Rusk's seat is born
+ * reading "Opted out by text, 3 Dec 2025, on the Lindqvist kitchen." with no
+ * write at all (direction §5.2's Birth rule, F-12).
+ */
+export function useBringForward() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: BringForwardInput): Promise<BringForwardResult> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const result: BringForwardResult = { added: [], refused: [] };
+      for (const pick of input.picks) {
+        const { data, error } = await supabase
+          .from('project_parties')
+          .insert({
+            project_id: input.projectId,
+            party_kind: pick.partyKind,
+            display_name: pick.displayName,
+            company_name: pick.companyName?.trim() || null,
+            company_id: pick.companyId || null,
+            trade: pick.trade?.trim() || null,
+            phone: pick.phone?.trim() || null,
+            email: pick.email?.trim() || null,
+            studio_contact_id: pick.studioContactId,
+          })
+          .select('id')
+          .single();
+        if (error) {
+          result.refused.push({
+            studioContactId: pick.studioContactId,
+            name: pick.displayName,
+            reason:
+              typeof error === 'object' && error !== null && 'message' in error
+                ? String((error as { message?: unknown }).message ?? '')
+                : String(error),
+          });
+          continue;
+        }
+        result.added.push({
+          studioContactId: pick.studioContactId,
+          seatId: String((data as { id: string }).id),
+          name: pick.displayName,
+        });
+      }
+      return result;
+    },
+    onSuccess: (_result, input) => {
+      void queryClient.invalidateQueries({ queryKey: ['project-parties', input.projectId] });
+      void queryClient.invalidateQueries({ queryKey: ['project-roster', input.projectId] });
+      void queryClient.invalidateQueries({ queryKey: partyBidKeys.list(input.projectId) });
+      void queryClient.invalidateQueries({ queryKey: peopleKeys.all });
+      void queryClient.invalidateQueries({ queryKey: peopleSeatKeys.all });
     },
   });
 }

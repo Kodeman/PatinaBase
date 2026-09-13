@@ -19,6 +19,7 @@
 import { useMemo, useState } from 'react';
 import {
   useContactRules,
+  useProjectPartyBids,
   useStudioContactChannelsFor,
   useStudioContacts,
   type ProjectPartyAuthority,
@@ -36,6 +37,7 @@ import {
   indexContactRules,
 } from '@/lib/document/contact-rule';
 import { SectionEyebrow } from '../section-eyebrow';
+import { HouseholdBand } from './household-band';
 import { RosterRow } from './roster-row';
 
 /** The two bands that print even when empty, and what they say instead. */
@@ -48,6 +50,7 @@ export function RosterGroups({
   projection,
   authorityBySeat = {},
   consentOrg,
+  projectId,
   projectName,
   onOpenSeat,
   onAnnounce,
@@ -55,6 +58,8 @@ export function RosterGroups({
   projection: CallSheetProjection;
   authorityBySeat?: Record<string, ProjectPartyAuthority[]>;
   consentOrg?: string | null;
+  /** The job, for the one read of 00631's bid columns. */
+  projectId?: string | null;
   projectName?: string | null;
   onOpenSeat?: (row: CallSheetRow) => void;
   /** CR11-10: the surface's one announcer, for a row's send note. */
@@ -107,6 +112,20 @@ export function RosterGroups({
   const channelsByOwner = useMemo(
     () => indexChannelsByOwner(routedChannels),
     [routedChannels],
+  );
+
+  // 00631's bid columns, read ONCE for the whole sheet. `people_directory_seats`
+  // predates them, so the Bidding band's dates cannot come off the projection.
+  const { data: bids } = useProjectPartyBids(projectId ?? null);
+
+  /** The person cards a bid may name as the estimator (00631's guard). */
+  const bidPeople = useMemo(
+    () =>
+      (contacts ?? [])
+        .filter((c) => c.entity_kind === 'person' && !!c.full_name)
+        .map((c) => ({ id: c.id, name: c.full_name as string }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [contacts],
   );
 
   const ruleFor = (row: CallSheetRow) =>
@@ -168,10 +187,23 @@ export function RosterGroups({
                       ? (cardKindById.get(row.personId) ?? null)
                       : null
                   }
+                  bid={row.seatId ? (bids?.[row.seatId] ?? null) : null}
+                  bidPeople={bidPeople}
                 />
               ))}
             </ul>
             ) : null}
+            {/* PR-c — the household sits under the humans it is about: the
+                figure they share, and the door that puts the other member of
+                it on this job. */}
+            {band === 'clientSide' && projectId && (
+              <HouseholdBand
+                projectId={projectId}
+                projectName={projectName}
+                organizationId={consentOrg ?? null}
+                onAnnounce={onAnnounce}
+              />
+            )}
           </section>
         );
       })}

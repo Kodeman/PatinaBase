@@ -493,6 +493,46 @@ export {
   useLogSiteAccessTold,
   siteAccessKeys,
 } from "./use-coordination";
+// People room CRM (W3/P2) — the Bidding band's facts, and Bring forward.
+export {
+  ALL_SEAT_BID_OUTCOMES,
+  SEAT_BID_OUTCOME_STAGE,
+  SEAT_BID_OUTCOME_LABELS,
+  SEAT_BID_OUTCOME_ACTS,
+  isSeatBidOutcome,
+  asBidError,
+  partyBidKeys,
+  useProjectPartyBids,
+  useSetPartyBid,
+  useBringForward,
+} from "./use-coordination";
+export type {
+  SeatBidOutcome,
+  SeatBid,
+  SetPartyBidInput,
+  BringForwardPick,
+  BringForwardInput,
+  BringForwardResult,
+} from "./use-coordination";
+// People room CRM (W3/P2) — the household (E3, 00632, PR-c).
+export {
+  clientHouseholdKeys,
+  useClientHouseholds,
+  useClientHousehold,
+  useProjectHousehold,
+  useCreateClientHousehold,
+  useSetHouseholdThreshold,
+  useAddHouseholdMember,
+  asHouseholdError,
+  HOUSEHOLD_MEMBER_ROLE_LABELS,
+} from "./use-households";
+export type {
+  ClientHousehold,
+  HouseholdMemberRole,
+  CreateClientHouseholdInput,
+  SetHouseholdThresholdInput,
+  AddHouseholdMemberInput,
+} from "./use-households";
 // Field Coordination (Wave 5) — SMS triage, cross-project field rollup, and the
 // per-party thread / composer / field-link data layer.
 export {
@@ -2142,6 +2182,7 @@ export {
   useCloseAffiliation,
   affiliationKeys,
   useComplianceDocuments,
+  useComplianceDocumentsFor,
   retainedComplianceDocuments,
   useComplianceState,
   useRecordComplianceDocument,
@@ -2153,6 +2194,27 @@ export {
   DATED_COMPLIANCE_DOC_TYPES,
   ALL_COMPLIANCE_BLOCKS,
   COMPLIANCE_BLOCK_LABELS,
+} from "./use-studio-contacts";
+// People room CRM (W3/P2) — the merge record (00629, PR-o), the archive door,
+// and the nightly expiry notice (00630).
+export {
+  ALL_MERGE_MATCHED_ON,
+  MERGE_MATCHED_ON_LABELS,
+  STUDIO_CONTACT_ARCHIVE_STANDING_SENTENCE,
+  asArchiveError,
+  asMergeError,
+  studioContactMergeKeys,
+  useStudioContactMerges,
+  useMergeStudioContacts,
+  complianceNoticeKeys,
+  useComplianceNotices,
+  indexComplianceNotices,
+} from "./use-studio-contacts";
+export type {
+  MergeMatchedOn,
+  StudioContactMerge,
+  MergeStudioContactsInput,
+  ComplianceNotice,
 } from "./use-studio-contacts";
 export type {
   ContactChannelKind,

@@ -20,13 +20,29 @@
  * At the pick, every mini row carries what travels (SPEC §5.7 #4): the reach,
  * consent and paper words, the contact rule as a sentence, and ONE history
  * line — repeat count and dates only, never a verdict (PR-i).
+ *
+ * W3/P2 — BRING FORWARD (SPEC §5.7, CRM-24). The rows are MULTI-SELECT and one
+ * confirm seats all of them; a pane names what travels and what stays behind,
+ * so the studio is told that consent, the contact rule and document expiries
+ * follow the person while prior pricing, prior project notes and show-to-client
+ * do not. Leah's fifth task — four people onto Okonkwo — is search, tick four,
+ * one act.
+ *
+ * A single row still adds on its own: tapping a row's name adds that one person
+ * the way it always did, and the tick box beside it is the door to the batch.
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { UserPlus } from 'lucide-react';
 import {
+  COMPLIANCE_DOC_TYPE_LABELS,
+  indexComplianceNotices,
   useAddProjectParty,
   useAddStudioContact,
+  useBringForward,
+  useChannelConsentRecords,
+  useComplianceDocumentsFor,
+  useComplianceNotices,
   useContactRules,
   useOrganizations,
   useProjectRecordedStudio,
@@ -34,11 +50,22 @@ import {
   usePeopleDirectory,
   useStudioContactHistory,
   useStudioContacts,
+  type BringForwardPick,
   type PeopleDirectoryRow,
   type StudioContact,
 } from '@patina/supabase';
 import { getPartyKindLabel, type PartyKind } from '@patina/types';
 import { rosterHasIdentity } from '@/lib/document/roster-derivation';
+import {
+  bringForwardActLabel,
+  bringForwardConsequence,
+  bringForwardSelectionLine,
+  carriedConsentNotice,
+  pickerHistoryLine,
+  type BringForwardRowFacts,
+} from '@/lib/document/bring-forward';
+import { noticedPaperClause } from '@/lib/document/compliance-notice';
+import { peopleEvents } from '@/lib/analytics/people-events';
 import { directoryRolodexOrgId } from '@/lib/document/people-derivation';
 import { writeErrorMessage } from '@/lib/document/write-error';
 import {
@@ -50,9 +77,18 @@ import { DocSheet } from '../overlays/doc-sheet';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
 import { TradeChipRow } from '../people/directory/trade-chip-row';
 import { PartyMiniRow } from './party-mini-row';
+import { TravelListPane } from './travel-list-pane';
 
-/** How many hits get a history line — one grouped query covers exactly these. */
+/** How many hits the list prints. */
 const HISTORY_PAGE = 40;
+
+/**
+ * How many cards' histories one grouped query covers. Wider than the printed
+ * page because the SEARCH reads the history line too (SPEC §5.7 #3 searches a
+ * prior job), and a card whose history has not been read cannot be found by
+ * the job it worked.
+ */
+const HISTORY_SCAN = 200;
 
 /**
  * The picker's default kind vocabulary. Every PartyKind the party CHECK admits
@@ -98,29 +134,20 @@ function contactName(c: StudioContact): string {
 }
 
 /**
- * ONE HISTORY LINE (PR-i) — repeat count, the job, the year. Never a verdict:
- * "worked out well" is the studio's judgement and belongs on the card, not at
- * the moment of the pick.
+ * ONE HISTORY LINE (PR-i) — repeat count, the job, the year it CLOSED. Never a
+ * verdict: "worked out well" is the studio's judgement and belongs on the card,
+ * not at the moment of the pick.
  *
- * "Worked 1 prior project, Lindqvist kitchen, 2025." / "Never on a job yet."
+ * The composer moved to `lib/document/bring-forward.ts` with the picker's other
+ * sentences; re-exported here because the surface's own tests name it.
  */
-export function pickerHistoryLine(
-  history:
-    | { projectCount: number; lastProjectName: string | null; lastAt?: string | null }
-    | undefined,
-): string {
-  if (!history || history.projectCount === 0) return 'Never on a job yet';
-  const count = `Worked ${history.projectCount} prior ${
-    history.projectCount === 1 ? 'project' : 'projects'
-  }`;
-  const year = (history.lastAt ?? '').slice(0, 4);
-  return [count, history.lastProjectName, year].filter(Boolean).join(', ') + '.';
-}
+export { pickerHistoryLine };
 
 export function RolodexPicker({
   open,
   onClose,
   projectId,
+  projectName,
   scopeKinds,
   startInAdd = false,
   onAdded,
@@ -128,6 +155,8 @@ export function RolodexPicker({
   open: boolean;
   onClose: () => void;
   projectId: string;
+  /** The job the seats land on, for SPEC §5.7 #7's consequence sentence. */
+  projectName?: string | null;
   /** Pre-scoped kind chips — the sheet arrives already narrowed. */
   scopeKinds?: PartyKind[];
   /** Open straight into the inline-add form (the call sheet's NEW PERSON). */
@@ -141,6 +170,8 @@ export function RolodexPicker({
   const [trade, setTrade] = useState('all');
   const [adding, setAdding] = useState(startInAdd);
   const [error, setError] = useState<string | null>(null);
+  /** SPEC §5.7 — the rows ticked for one confirm, by rolodex card id. */
+  const [picked, setPicked] = useState<string[]>([]);
   const searchRef = useRef<HTMLInputElement>(null);
 
   // Form state (inline add)
@@ -158,6 +189,7 @@ export function RolodexPicker({
     if (!open) return;
     setAdding(startInAdd);
     setError(null);
+    setPicked([]);
     const id = window.setTimeout(() => searchRef.current?.focus(), 0);
     return () => window.clearTimeout(id);
   }, [open, startInAdd]);
@@ -199,9 +231,15 @@ export function RolodexPicker({
   );
   const canStamp = !!recordedStudioId;
 
+  /**
+   * THE BOOK, UNFILTERED BY NAME — because SPEC §5.7 #3 searches a prior JOB
+   * ("Lindqvist"), not a person, and a job name lives on nobody's card. The
+   * kind chip still narrows server-side; the search runs in memory over the
+   * name, the firm, the email AND the prior job the history line already
+   * names. No new cost: the picker's own opening state is this same read.
+   */
   const { data: contacts } = useStudioContacts(open ? organizationId : null, {
     kind,
-    search,
   });
   const wordsByCard = useMemo(() => {
     const map = new Map<string, PeopleDirectoryRow>();
@@ -217,15 +255,33 @@ export function RolodexPicker({
   const { data: contactRules } = useContactRules();
   const ruleIndex = useMemo(() => indexContactRules(contactRules), [contactRules]);
 
-  const hits = useMemo(() => {
+  /** The cards whose history the search may read. Capped, like the page. */
+  const scanned = useMemo(() => {
     let rows = contacts ?? [];
     if (trade !== 'all') {
       rows = rows.filter((c) => (c.specialties ?? []).includes(trade));
     }
-    return rows.slice(0, HISTORY_PAGE);
+    return rows.slice(0, HISTORY_SCAN);
   }, [contacts, trade]);
 
-  const { data: history } = useStudioContactHistory(hits.map((c) => c.id));
+  const { data: history } = useStudioContactHistory(scanned.map((c) => c.id));
+
+  const hits = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    if (!needle) return scanned.slice(0, HISTORY_PAGE);
+    return scanned
+      .filter((c) =>
+        [
+          c.full_name,
+          c.company_name,
+          c.email,
+          history?.[c.id]?.lastProjectName,
+        ]
+          .filter((field): field is string => !!field)
+          .some((field) => field.toLowerCase().includes(needle)),
+      )
+      .slice(0, HISTORY_PAGE);
+  }, [scanned, search, history]);
   const { data: rosterRows, refetch: refetchRoster } = useProjectRoster(
     open ? projectId : null,
   );
@@ -242,12 +298,82 @@ export function RolodexPicker({
     [contacts],
   );
 
+  // ── WHAT TRAVELS, read once for the page (SPEC §5.7 #5, PR-b) ───────────
+  // Consent by channel value and document expiries are read LIVE off the card,
+  // never copied onto the seat: that is the whole hybrid PR-b rules for.
+  const { data: consentRecords } = useChannelConsentRecords(
+    open ? organizationId : null,
+    'sms',
+  );
+  const consentByValue = useMemo(
+    () => new Map((consentRecords ?? []).map((r) => [r.channel_value, r])),
+    [consentRecords],
+  );
+  const firmIds = useMemo(
+    () =>
+      [
+        ...new Set(
+          hits.map((c) => c.company_id).filter((id): id is string => !!id),
+        ),
+      ],
+    [hits],
+  );
+  const { data: firmPaper } = useComplianceDocumentsFor(open ? firmIds : []);
+  const { data: notices } = useComplianceNotices(open ? organizationId : null);
+  const noticeIndex = useMemo(() => indexComplianceNotices(notices), [notices]);
+
+  /** The prior job every hit shares, or null where the page is mixed. */
+  const sharedJobName = useMemo(() => {
+    const names = new Set(
+      hits
+        .map((c) => history?.[c.id]?.lastProjectName)
+        .filter((name): name is string => !!name),
+    );
+    return names.size === 1 && hits.length > 0 ? [...names][0] : null;
+  }, [hits, history]);
+
+  const cardById = useMemo(
+    () => new Map(hits.map((c) => [c.id, c] as const)),
+    [hits],
+  );
+
+  const paperClauseFor = (contact: StudioContact) =>
+    noticedPaperClause(
+      [contact.company_id, contact.id],
+      contact.company_name ?? contactName(contact),
+      firmPaper,
+      noticeIndex,
+      COMPLIANCE_DOC_TYPE_LABELS,
+    );
+
+  const pickedFacts: BringForwardRowFacts[] = useMemo(
+    () =>
+      picked
+        .map((id) => cardById.get(id))
+        .filter((c): c is StudioContact => !!c)
+        .map((c) => ({
+          name: contactName(c),
+          consent: wordsByCard.get(c.id)?.consent_status ?? null,
+          firmName: c.company_name ?? null,
+          paperClause: noticedPaperClause(
+            [c.company_id, c.id],
+            c.company_name ?? contactName(c),
+            firmPaper,
+            noticeIndex,
+            COMPLIANCE_DOC_TYPE_LABELS,
+          ),
+        })),
+    [picked, cardById, wordsByCard, firmPaper, noticeIndex],
+  );
+
   const addParty = useAddProjectParty();
   const addContact = useAddStudioContact();
+  const bringForward = useBringForward();
 
   const finish = (name: string) => {
     onAdded?.(name);
     setSearch('');
+    setPicked([]);
     setAdding(false);
     setForm({ name: '', company: '', kind: kinds[0] as string, trade: 'all', phone: '', email: '' });
     setStamp(true);
@@ -285,6 +411,74 @@ export function RolodexPicker({
     } catch (e) {
       // CR5-1: a PostgREST rejection is a plain object, so `e instanceof Error`
       // turned every 00624 card-guard refusal into a shrug.
+      setError(writeErrorMessage(e, 'Could not add them to the call sheet.'));
+    }
+  };
+
+  /**
+   * SPEC §5.7 #6's terminal act. One confirm, N seats.
+   *
+   * Nothing about consent is written: `studio_channel_consent` is keyed on the
+   * number, so Pete Rusk's seat is born reading his refusal (direction §5.2's
+   * Birth rule). Nothing about prior pricing or prior notes is written either —
+   * `useBringForward`'s insert names none of those columns.
+   */
+  const addPicked = async () => {
+    if (picked.length === 0) return;
+    setError(null);
+    const rows = picked
+      .map((id) => cardById.get(id))
+      .filter((c): c is StudioContact => !!c);
+    const already = rows.filter((c) =>
+      rosterHasIdentity(rosterRows ?? [], {
+        display_name: contactName(c),
+        email: c.email,
+        phone: c.phone,
+        profile_id: c.profile_id,
+        studio_contact_id: c.id,
+      }),
+    );
+    if (already.length > 0) {
+      setError(
+        `${already.map((c) => contactName(c)).join(', ')} ${
+          already.length === 1 ? 'is' : 'are'
+        } already on the call sheet.`,
+      );
+      return;
+    }
+    const picks: BringForwardPick[] = rows.map((c) => ({
+      studioContactId: c.id,
+      partyKind: toPartyKind(c.contact_kind),
+      displayName: contactName(c),
+      trade: c.specialties?.[0] ?? null,
+      companyId: c.company_id,
+      companyName: c.company_name,
+      phone: c.phone,
+      email: c.email,
+    }));
+    try {
+      const result = await bringForward.mutateAsync({ projectId, picks });
+      peopleEvents.bringForwardPicked({
+        picked_count: result.added.length,
+        offered_count: hits.length,
+        carried_opt_out: pickedFacts.some((row) => row.consent === 'opted_out'),
+      });
+      void refetchRoster();
+      if (result.refused.length > 0) {
+        setError(
+          `${result.refused
+            .map((row) => row.name)
+            .join(', ')} did not go on: ${result.refused[0].reason}`,
+        );
+        setPicked(result.refused.map((row) => row.studioContactId));
+        return;
+      }
+      finish(
+        result.added.length === 1
+          ? result.added[0].name
+          : `${result.added.length} people`,
+      );
+    } catch (e) {
       setError(writeErrorMessage(e, 'Could not add them to the call sheet.'));
     }
   };
@@ -399,33 +593,141 @@ export function RolodexPicker({
       )}
 
       {hits.length > 0 && (
-        <ul className="mt-3 flex flex-col">
-          {hits.map((c) => {
-            const words = wordsByCard.get(c.id);
-            const rule = ruleIndex.get(c.id) ?? null;
-            return (
-              <li key={c.id}>
-                <PartyMiniRow
-                  name={contactName(c)}
-                  kind={c.contact_kind}
-                  entity={c.entity_kind}
-                  trade={c.specialties?.[0] ?? null}
-                  reach={
-                    (words?.reach_state as 'account' | 'field_link' | 'on_paper' | null) ??
-                    (c.profile_id ? 'account' : 'on_paper')
-                  }
-                  consent={words?.consent_status ?? null}
-                  paper={words?.paper_state ?? null}
-                  rule={contactRuleClause(rule)}
-                  ruleBlocked={contactRuleIsHardBlock(rule)}
-                  subline={pickerHistoryLine(history?.[c.id])}
-                  onSelect={() => void addFromRolodex(c)}
-                  disabled={addParty.isPending}
-                />
-              </li>
-            );
-          })}
-        </ul>
+        <>
+          <p
+            data-pick-count
+            className="mt-3 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]"
+          >
+            {bringForwardSelectionLine(picked.length, hits.length, sharedJobName)}
+          </p>
+
+          {/* 1440: the pane beside the list. 390: the pane after it
+              (SPEC §5.7 #9). One order in the DOM, `flex-wrap` deciding. */}
+          <div className="mt-2 flex flex-wrap items-start gap-4">
+            <ul className="m-0 min-w-[18rem] flex-1 list-none p-0">
+              {hits.map((c) => {
+                const words = wordsByCard.get(c.id);
+                const rule = ruleIndex.get(c.id) ?? null;
+                const chosen = picked.includes(c.id);
+                const record = c.phone_e164
+                  ? consentByValue.get(c.phone_e164)
+                  : undefined;
+                // The refusal the pick CARRIES (direction §5.2's Birth rule):
+                // a seat on this number is born reading it, so the studio
+                // reads it before the seat exists.
+                const carried =
+                  words?.consent_status === 'opted_out'
+                    ? carriedConsentNotice({
+                        optOutSource: record?.opt_out_source,
+                        optOutAt: record?.opt_out_at,
+                        originProjectName: null,
+                      })
+                    : null;
+                const paperClause = paperClauseFor(c);
+                return (
+                  <li key={c.id} className="flex items-center gap-1">
+                    <PartyMiniRow
+                      name={contactName(c)}
+                      kind={c.contact_kind}
+                      entity={c.entity_kind}
+                      trade={c.specialties?.[0] ?? null}
+                      reach={
+                        (words?.reach_state as
+                          | 'account'
+                          | 'field_link'
+                          | 'on_paper'
+                          | null) ??
+                        (c.profile_id ? 'account' : 'on_paper')
+                      }
+                      consent={words?.consent_status ?? null}
+                      paper={words?.paper_state ?? null}
+                      rule={contactRuleClause(rule)}
+                      ruleBlocked={contactRuleIsHardBlock(rule)}
+                      subline={
+                        <>
+                          <span className="block">
+                            {pickerHistoryLine(history?.[c.id])}
+                          </span>
+                          {carried && (
+                            <span data-carried-consent className="block">
+                              {carried}
+                            </span>
+                          )}
+                          {paperClause && (
+                            <span data-expiry-notice className="block">
+                              {paperClause}
+                            </span>
+                          )}
+                        </>
+                      }
+                      selectable
+                      multi
+                      selected={chosen}
+                      onSelect={() =>
+                        setPicked((current) =>
+                          current.includes(c.id)
+                            ? current.filter((id) => id !== c.id)
+                            : [...current, c.id],
+                        )
+                      }
+                      disabled={addParty.isPending || bringForward.isPending}
+                    />
+                    {/* The single add stays one press, and stays a SIBLING of
+                        the row: an interactive control inside a <button> is
+                        unreachable by keyboard and unannounced by a reader
+                        (C11's own rule, applied to the picker). */}
+                    <button
+                      type="button"
+                      data-add-one={c.id}
+                      aria-label={`Add ${contactName(c)} on their own`}
+                      onClick={() => void addFromRolodex(c)}
+                      disabled={addParty.isPending || bringForward.isPending}
+                      className="da-score-hover inline-flex min-h-11 shrink-0 items-center px-1 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)] hover:text-[var(--color-mocha)] disabled:opacity-50"
+                    >
+                      Add
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+
+            <TravelListPane className="min-w-[13rem] flex-1 basis-[13rem]" />
+          </div>
+
+          {/* R-I / C19 — the ACT ROW first, the consequence sentence directly
+              beneath it, at both widths. Both acts are live; nothing here is
+              gated. */}
+          <DocumentActionGroup
+            surfaceKey="call-sheet"
+            regionKey="rolodex-bring-forward"
+            className="mt-4"
+            aria-label="Bring forward"
+          >
+            <DocumentAction
+              actionKey="bring-forward-add"
+              variant="primary"
+              onClick={() => void addPicked()}
+              loading={bringForward.isPending}
+              loadingLabel="Adding…"
+            >
+              {bringForwardActLabel(picked.length)}
+            </DocumentAction>
+            <DocumentAction
+              actionKey="bring-forward-put-back"
+              variant="tertiary"
+              onClick={() => setPicked([])}
+            >
+              Put back
+            </DocumentAction>
+          </DocumentActionGroup>
+
+          <p
+            data-bring-forward-consequence
+            className="mt-1.5 text-[0.74rem] leading-relaxed text-[var(--color-aged-oak)]"
+          >
+            {bringForwardConsequence(projectName, pickedFacts)}
+          </p>
+        </>
       )}
 
       {/* The way out sits under the hits from the first frame (mnote 3) — but

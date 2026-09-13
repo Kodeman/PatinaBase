@@ -9,6 +9,11 @@ const recordedStudio = { current: 'org-1' as string | null };
 const useStudioContacts = jest.fn();
 const useProjectRoster = jest.fn();
 const refetchRoster = jest.fn();
+/** W3/P2 — the batch act behind "Add N to the roster". */
+const bringForwardMutate = jest.fn();
+let consentRecords: unknown[] = [];
+let firmDocuments: unknown[] = [];
+let expiryNotices: unknown[] = [];
 
 jest.mock('@patina/supabase', () => ({
   useAddProjectParty: () => ({ mutateAsync: addPartyMutate, isPending: false }),
@@ -28,9 +33,20 @@ jest.mock('@patina/supabase', () => ({
         projectCount: 3,
         lastProjectName: 'Ellsworth',
         lastAt: '2025-11-21T17:00:00Z',
+        lastClosedYear: '2025',
       },
     },
   }),
+  // ── W3/P2: what travels, read once for the page ───────────────────────
+  useBringForward: () => ({ mutateAsync: bringForwardMutate, isPending: false }),
+  useChannelConsentRecords: () => ({ data: consentRecords }),
+  useComplianceDocumentsFor: () => ({ data: firmDocuments }),
+  useComplianceNotices: () => ({ data: expiryNotices }),
+  indexComplianceNotices: (rows: Array<{ document_id: string }> | undefined) =>
+    new Map((rows ?? []).map((row) => [row.document_id, row])),
+  COMPLIANCE_DOC_TYPE_LABELS: {
+    coi_gl: 'COI, general liability',
+  },
   // The three words at the pick come from the directory, keyed on the rolodex
   // card (v4). One read for the page of hits.
   usePeopleDirectory: () => ({
@@ -127,6 +143,10 @@ beforeEach(() => {
   useStudioContacts.mockReset();
   useStudioContacts.mockReturnValue({ data: [ROSA], isLoading: false });
   refetchRoster.mockReset();
+  bringForwardMutate.mockReset().mockResolvedValue({ added: [], refused: [] });
+  consentRecords = [];
+  firmDocuments = [];
+  expiryNotices = [];
   useProjectRoster.mockReset();
   useProjectRoster.mockReturnValue({ data: [], refetch: refetchRoster });
 });
@@ -155,7 +175,7 @@ describe('RolodexPicker — the hits and their history', () => {
   it('renders one history line — repeat count and dates, never a verdict (PR-i)', () => {
     render(<RolodexPicker {...props} />);
     expect(
-      screen.getByText('Worked 3 prior projects, Ellsworth, 2025.'),
+      screen.getByText('Worked 3 prior projects, Ellsworth, closed 2025.'),
     ).toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/worked out|recommend|avoid/i);
   });
@@ -189,7 +209,9 @@ describe('RolodexPicker — the hits and their history', () => {
 
   it('a single click adds the contact as a party carrying its rolodex id', async () => {
     render(<RolodexPicker {...props} />);
-    fireEvent.click(screen.getByRole('button', { name: /Rosa Martínez/ }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Add Rosa Martínez on their own' }),
+    );
     await waitFor(() => expect(addPartyMutate).toHaveBeenCalled());
     expect(addPartyMutate).toHaveBeenCalledWith({
       projectId: 'proj-1',
@@ -231,7 +253,9 @@ describe('RolodexPicker — the hits and their history', () => {
       refetch: refetchRoster,
     });
     render(<RolodexPicker {...props} />);
-    fireEvent.click(screen.getByRole('button', { name: /Rosa Martínez/ }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Add Rosa Martínez on their own' }),
+    );
 
     expect(
       await screen.findByText('Rosa Martínez is already on the call sheet.'),
@@ -362,5 +386,267 @@ describe('RolodexPicker — the stamp', () => {
     expect(screen.getByText('A name, at least.')).toBeInTheDocument();
     expect(addPartyMutate).not.toHaveBeenCalled();
     expect(addContactMutate).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * BRING FORWARD (SPEC §5.7, CRM-24, Leah task 5).
+ *
+ * The travel list, the multi-select, one confirm, and the consequence sentence
+ * that says who arrives carrying a refusal.
+ */
+describe('RolodexPicker — bring forward', () => {
+  const PETE: StudioContact = {
+    ...ROSA,
+    id: 'contact-2',
+    full_name: 'Pete Rusk',
+    company_name: 'Rusk Mechanical',
+    company_id: 'firm-rusk',
+    email: 'pete@ruskmechanical.co',
+    phone: '(612) 555-0112',
+    phone_e164: '+16125550112',
+    specialties: ['plumbing'],
+  };
+
+  it('names what travels and what stays behind (SPEC §5.7 #5)', () => {
+    render(<RolodexPicker {...props} />);
+    expect(screen.getByText('What travels')).toBeInTheDocument();
+    expect(screen.getByText('consent by channel value')).toBeInTheDocument();
+    expect(screen.getByText('What stays behind')).toBeInTheDocument();
+    expect(screen.getByText('prior pricing')).toBeInTheDocument();
+  });
+
+  it('counts the pick, and names the prior job every hit shares', () => {
+    render(<RolodexPicker {...props} />);
+    expect(
+      document.querySelector('[data-pick-count]')?.textContent,
+    ).toBe('0 of 1 from the Ellsworth selected');
+    fireEvent.click(screen.getByRole('checkbox', { name: /Rosa Martínez/ }));
+    expect(
+      document.querySelector('[data-pick-count]')?.textContent,
+    ).toBe('1 of 1 from the Ellsworth selected');
+  });
+
+  it('ticks and un-ticks, and the act counts in words', () => {
+    useStudioContacts.mockReturnValue({ data: [ROSA, PETE], isLoading: false });
+    render(<RolodexPicker {...props} />);
+    expect(
+      screen.getByRole('button', { name: 'Add no to the roster' }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('checkbox', { name: /Rosa Martínez/ }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /Pete Rusk/ }));
+    expect(
+      screen.getByRole('button', { name: 'Add two to the roster' }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('checkbox', { name: /Pete Rusk/ }));
+    expect(
+      screen.getByRole('button', { name: 'Add one to the roster' }),
+    ).toBeInTheDocument();
+  });
+
+  it('Put back clears the pick without writing anything', () => {
+    render(<RolodexPicker {...props} />);
+    fireEvent.click(screen.getByRole('checkbox', { name: /Rosa Martínez/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Put back' }));
+    expect(
+      screen.getByRole('button', { name: 'Add no to the roster' }),
+    ).toBeInTheDocument();
+    expect(bringForwardMutate).not.toHaveBeenCalled();
+  });
+
+  it('says who arrives opted out, in the consequence sentence (SPEC §5.7 #7)', () => {
+    render(<RolodexPicker {...props} projectName="Okonkwo residence" />);
+    fireEvent.click(screen.getByRole('checkbox', { name: /Rosa Martínez/ }));
+    expect(
+      document.querySelector('[data-bring-forward-consequence]')?.textContent,
+    ).toBe(
+      'Adds one seat to the Okonkwo residence. Rosa Martínez arrives opted out of texting.',
+    );
+  });
+
+  it('carries the refusal onto the row itself (direction §5.2 Birth rule)', () => {
+    consentRecords = [
+      {
+        channel_value: '+15135550148',
+        opt_out_source: 'inbound_stop',
+        opt_out_at: '2025-12-03',
+      },
+    ];
+    render(<RolodexPicker {...props} />);
+    expect(
+      document.querySelector('[data-carried-consent]')?.textContent,
+    ).toBe('Opted out by text, 3 Dec 2025.');
+  });
+
+  it('prints the sweep’s expiry sentence on the mini row (00630)', () => {
+    useStudioContacts.mockReturnValue({
+      data: [{ ...ROSA, company_id: 'firm-tile' }],
+      isLoading: false,
+    });
+    firmDocuments = [
+      {
+        id: 'doc-1',
+        holder_id: 'firm-tile',
+        doc_type: 'coi_gl',
+        doc_label: null,
+        expires_on: '2026-10-06',
+        blocks: ['site_access'],
+        superseded_by: null,
+      },
+    ];
+    expiryNotices = [
+      { id: 'n-1', document_id: 'doc-1', state: 'lapses_soon', noticed_at: '2026-09-13' },
+    ];
+    render(<RolodexPicker {...props} />);
+    expect(
+      document.querySelector('[data-expiry-notice]')?.textContent,
+    ).toBe('Martínez Tile Works’s insurance lapses in 30 days, on 6 October 2026.');
+  });
+
+  it('seats every ticked row in ONE confirm, carrying the card', async () => {
+    useStudioContacts.mockReturnValue({ data: [ROSA, PETE], isLoading: false });
+    bringForwardMutate.mockResolvedValue({
+      added: [
+        { studioContactId: 'contact-1', seatId: 's1', name: 'Rosa Martínez' },
+        { studioContactId: 'contact-2', seatId: 's2', name: 'Pete Rusk' },
+      ],
+      refused: [],
+    });
+    render(<RolodexPicker {...props} />);
+    fireEvent.click(screen.getByRole('checkbox', { name: /Rosa Martínez/ }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /Pete Rusk/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add two to the roster' }));
+    await waitFor(() => expect(bringForwardMutate).toHaveBeenCalled());
+    const call = bringForwardMutate.mock.calls[0][0];
+    expect(call.projectId).toBe('proj-1');
+    expect(call.picks).toEqual([
+      {
+        studioContactId: 'contact-1',
+        partyKind: 'sub',
+        displayName: 'Rosa Martínez',
+        trade: 'tile',
+        companyId: null,
+        companyName: 'Martínez Tile Works',
+        phone: '(513) 555-0148',
+        email: 'rosa@martineztile.co',
+      },
+      {
+        studioContactId: 'contact-2',
+        partyKind: 'sub',
+        displayName: 'Pete Rusk',
+        trade: 'plumbing',
+        companyId: 'firm-rusk',
+        companyName: 'Rusk Mechanical',
+        phone: '(612) 555-0112',
+        email: 'pete@ruskmechanical.co',
+      },
+    ]);
+    await waitFor(() => expect(props.onClose).toHaveBeenCalled());
+  });
+
+  it('refuses the whole pick when somebody is already on the sheet', async () => {
+    useProjectRoster.mockReturnValue({
+      data: [
+        {
+          roster_id: 'party-1',
+          source: 'party',
+          project_id: 'proj-1',
+          kind: 'sub',
+          display_name: 'Rosa Martínez',
+          company_name: 'Martínez Tile Works',
+          email: 'rosa@martineztile.co',
+          phone: '(513) 555-0148',
+          trade: 'tile',
+          job_title: null,
+          staff_role: null,
+          studio_contact_id: 'contact-1',
+          profile_id: null,
+          show_to_client: false,
+          has_active_field_link: false,
+          sms_consent_status: 'not_asked',
+          updated_at: null,
+        } satisfies ProjectRosterRow,
+      ],
+      refetch: refetchRoster,
+    });
+    render(<RolodexPicker {...props} />);
+    fireEvent.click(screen.getByRole('checkbox', { name: /Rosa Martínez/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add one to the roster' }));
+    expect(
+      await screen.findByText('Rosa Martínez is already on the call sheet.'),
+    ).toBeInTheDocument();
+    expect(bringForwardMutate).not.toHaveBeenCalled();
+  });
+
+  it('keeps the refused rows ticked and says which did not go on', async () => {
+    bringForwardMutate.mockResolvedValue({
+      added: [],
+      refused: [
+        {
+          studioContactId: 'contact-1',
+          name: 'Rosa Martínez',
+          reason: 'party_card_merged_away',
+        },
+      ],
+    });
+    render(<RolodexPicker {...props} />);
+    fireEvent.click(screen.getByRole('checkbox', { name: /Rosa Martínez/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add one to the roster' }));
+    expect(
+      await screen.findByText(/Rosa Martínez did not go on/),
+    ).toBeInTheDocument();
+    expect(props.onClose).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * SPEC §5.7 #3 — the search field's own value is "Lindqvist", a prior JOB. A
+ * job name lives on nobody's card, so the search reads the history line the
+ * row already prints.
+ */
+describe('RolodexPicker — searching a prior job', () => {
+  const ELSEWHERE: StudioContact = {
+    ...ROSA,
+    id: 'contact-3',
+    full_name: 'Nobody Relevant',
+    company_name: 'Another Firm',
+    email: 'nobody@another.example',
+  };
+
+  it('finds the crew of the job the studio typed', () => {
+    useStudioContacts.mockReturnValue({
+      data: [ROSA, ELSEWHERE],
+      isLoading: false,
+    });
+    render(<RolodexPicker {...props} />);
+    fireEvent.change(screen.getByLabelText('Search the rolodex'), {
+      target: { value: 'Ellsworth' },
+    });
+    expect(screen.getByText('Rosa Martínez')).toBeInTheDocument();
+    expect(screen.queryByText('Nobody Relevant')).not.toBeInTheDocument();
+  });
+
+  it('still finds a person by their own name and their firm', () => {
+    useStudioContacts.mockReturnValue({
+      data: [ROSA, ELSEWHERE],
+      isLoading: false,
+    });
+    render(<RolodexPicker {...props} />);
+    const field = screen.getByLabelText('Search the rolodex');
+    fireEvent.change(field, { target: { value: 'Martínez Tile' } });
+    expect(screen.getByText('Rosa Martínez')).toBeInTheDocument();
+    fireEvent.change(field, { target: { value: 'Nobody' } });
+    expect(screen.getByText('Nobody Relevant')).toBeInTheDocument();
+    expect(screen.queryByText('Rosa Martínez')).not.toBeInTheDocument();
+  });
+
+  it('asks the rolodex for the kind only — the name search is the room’s', () => {
+    render(<RolodexPicker {...props} />);
+    fireEvent.change(screen.getByLabelText('Search the rolodex'), {
+      target: { value: 'Lindqvist' },
+    });
+    for (const call of useStudioContacts.mock.calls) {
+      expect(call[1]).not.toHaveProperty('search');
+    }
   });
 });

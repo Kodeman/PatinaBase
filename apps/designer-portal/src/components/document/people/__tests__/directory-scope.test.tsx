@@ -19,6 +19,18 @@ const mockUseStudioContacts = jest.fn(() => ({ data: [], isLoading: false }));
 const mockUsePeopleSeats = jest.fn(() => ({ data: [] as unknown[] }));
 
 jest.mock("@patina/supabase", () => ({
+  // W3/P2 — the Compare & merge sheet the duplicate band now opens.
+  useStudioContact: () => ({ data: null }),
+  useMergeStudioContacts: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useComplianceDocuments: () => ({ data: [] }),
+  ALL_MERGE_MATCHED_ON: ["profile", "phone", "email", "company_name", "manual"],
+  MERGE_MATCHED_ON_LABELS: {
+    profile: "They sign in with the same account",
+    phone: "They share a phone number",
+    email: "They share an email address",
+    company_name: "Same firm, same name",
+    manual: "The studio says so",
+  },
   usePeopleDirectory: (...args: unknown[]) =>
     mockUsePeopleDirectory(...(args as [])),
   useStudioContacts: (...args: unknown[]) =>
@@ -369,7 +381,13 @@ describe("narrowing", () => {
 });
 
 describe("the duplicate band", () => {
-  it("names the two cards and opens each, and carries no merge act (R-Y)", () => {
+  /**
+   * R-Y held the merge act back while the sheet did not exist. W3/P2 built it
+   * (direction §8), so the band now names the two cards AND offers the act —
+   * the band's first job is still naming the collision, so Compare is the
+   * secondary word after the two names.
+   */
+  it("names the two cards, opens each, and offers Compare these two (W3/P2)", () => {
     const chidi = row({
       person_id: "card-chidi",
       display_name: "Chidi Okonkwo",
@@ -385,7 +403,9 @@ describe("the duplicate band", () => {
     expect(
       within(band).getByRole("button", { name: "Chidi Okonkwo" }),
     ).toBeInTheDocument();
-    expect(screen.queryByText(/Compare/)).not.toBeInTheDocument();
+    expect(
+      within(band).getByRole("button", { name: "Compare these two" }),
+    ).toBeInTheDocument();
     fireEvent.click(
       within(band).getByRole("button", { name: "Chidi Okonkwo" }),
     );

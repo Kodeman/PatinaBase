@@ -93,8 +93,15 @@ export interface PartyMiniRowProps {
   ruleBlocked?: boolean;
   /** The quiet second line under the meta — the picker's history line. */
   subline?: React.ReactNode;
-  /** Renders the radio ring and radio semantics. */
+  /** Renders the pick control and its semantics. */
   selectable?: boolean;
+  /**
+   * SPEC §5.7 #4 — the travel-list pick takes SEVERAL rows before one confirm,
+   * so the control is a checkbox, not a radio: a square mark with no tick
+   * glyph (§8 #5). `selectable` alone stays the single-pick radio the
+   * coordination composer's court select uses.
+   */
+  multi?: boolean;
   selected?: boolean;
   onSelect?: () => void;
   disabled?: boolean;
@@ -114,6 +121,7 @@ export function PartyMiniRow({
   ruleBlocked = false,
   subline,
   selectable = false,
+  multi = false,
   selected = false,
   onSelect,
   disabled = false,
@@ -126,14 +134,17 @@ export function PartyMiniRow({
       {selectable && (
         <span
           aria-hidden
-          className="inline-flex h-[14px] w-[14px] shrink-0 items-center justify-center rounded-full border"
+          data-pick-mark={multi ? 'checkbox' : 'radio'}
+          className={`inline-flex h-[14px] w-[14px] shrink-0 items-center justify-center border ${
+            multi ? 'rounded-[2px]' : 'rounded-full'
+          }`}
           style={{
             borderColor: selected ? 'var(--color-clay)' : 'var(--color-pearl)',
           }}
         >
           {selected && (
             <span
-              className="block h-[7px] w-[7px] rounded-full"
+              className={`block h-[7px] w-[7px] ${multi ? 'rounded-[1px]' : 'rounded-full'}`}
               style={{ background: 'var(--color-clay)' }}
             />
           )}
@@ -195,7 +206,7 @@ export function PartyMiniRow({
   return (
     <button
       type="button"
-      role={selectable ? 'radio' : undefined}
+      role={selectable ? (multi ? 'checkbox' : 'radio') : undefined}
       aria-checked={selectable ? selected : undefined}
       disabled={disabled}
       onClick={onSelect}

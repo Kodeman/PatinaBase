@@ -7,7 +7,7 @@
  * reason, and a hard delete that is HELD the moment the seat carries anything.
  */
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { RosterRow } from '../roster-row';
 import type { CallSheetRow } from '@/lib/document/roster-derivation';
 
@@ -18,6 +18,8 @@ const createLinkMutate = jest.fn();
 const sendSmsMutate = jest.fn();
 let consentResolution: unknown = { verdict: null, record: null };
 let complianceDocs: unknown[] = [];
+let complianceNotices: unknown[] = [];
+const setBidMutate = jest.fn();
 let projectsData: unknown[] = [];
 
 /** QA-R13-1: the row resolves the job a consent record NAMES, so the sheet's
@@ -34,6 +36,27 @@ jest.mock('@patina/supabase', () => ({
   useSendPartySms: () => ({ mutateAsync: sendSmsMutate, isPending: false }),
   useChannelConsent: () => ({ data: consentResolution }),
   useComplianceDocuments: () => ({ data: complianceDocs }),
+  // W3/P2 — the Bidding band's facts and the nightly expiry notice.
+  useSetPartyBid: () => ({ mutateAsync: setBidMutate, isPending: false }),
+  useComplianceNotices: () => ({ data: complianceNotices }),
+  indexComplianceNotices: (rows: Array<{ document_id: string }> | undefined) =>
+    new Map((rows ?? []).map((row) => [row.document_id, row])),
+  ALL_SEAT_BID_OUTCOMES: [
+    'asked',
+    'quoted',
+    'selected',
+    'declined',
+    'no_response',
+    'withdrawn',
+  ],
+  SEAT_BID_OUTCOME_ACTS: {
+    asked: 'Asked for a price',
+    quoted: 'They quoted',
+    selected: 'Selected',
+    declined: 'They declined',
+    no_response: 'No response',
+    withdrawn: 'They withdrew',
+  },
   fieldLinkUrl: (token: string) => `https://client.patina.cloud/field/${token}`,
   AUTHORITY_SCOPE_LABELS: {
     money: 'Signs money',
@@ -651,5 +674,240 @@ describe('RosterRow — unfolded', () => {
     expect(
       screen.getByRole('button', { name: /^Text$/ }),
     ).not.toHaveAttribute('aria-disabled');
+  });
+});
+
+/**
+ * THE BIDDING BAND (direction §3.4, R-R, 00631).
+ *
+ * A price nobody has answered is not a body on the site: the outcome is a
+ * STAGE word, and recording a losing answer moves the seat out of every crew
+ * band. The dates print at both widths, folded or not (C28).
+ */
+describe('RosterRow — the Bidding band', () => {
+  const bidSeat = () =>
+    seatRow({
+      key: 'seat:seat-rivera',
+      seatId: 'seat-rivera',
+      name: 'Rivera Finishes',
+      partyKind: 'sub',
+      trade: 'paint',
+      stage: 'no_response',
+      meta: 'Sub · paint',
+    });
+
+  const BID = {
+    seatId: 'seat-rivera',
+    bidDueAt: '2026-10-05',
+    bidOutcome: null,
+    bidValidUntil: '2026-11-04',
+    bidQuotedByPersonId: 'card-tom',
+    bidAmountCents: null,
+  };
+
+  const PEOPLE = [{ id: 'card-tom', name: 'Tom Marrow' }];
+
+  it('prints the bid note on the COLLAPSED row (R-R / C28)', () => {
+    render(
+      <RosterRow
+        row={bidSeat()}
+        band="bidding"
+        expanded={false}
+        onToggle={jest.fn()}
+        bid={BID}
+        bidPeople={PEOPLE}
+      />,
+    );
+    expect(document.querySelector('[data-bid-note]')?.textContent).toBe(
+      'Due 5 October 2026. Holds until 4 November 2026. Priced by Tom Marrow.',
+    );
+  });
+
+  it('prints nothing where 00631 refused to guess a date', () => {
+    render(
+      <RosterRow
+        row={bidSeat()}
+        band="bidding"
+        expanded={false}
+        onToggle={jest.fn()}
+        bid={{ ...BID, bidDueAt: null, bidValidUntil: null, bidQuotedByPersonId: null }}
+        bidPeople={PEOPLE}
+      />,
+    );
+    expect(document.querySelector('[data-bid-note]')).not.toBeInTheDocument();
+  });
+
+  it('offers the editor only inside the Bidding band', () => {
+    const { rerender } = render(
+      <RosterRow
+        row={bidSeat()}
+        band="this_week"
+        expanded
+        onToggle={jest.fn()}
+        bid={BID}
+        bidPeople={PEOPLE}
+      />,
+    );
+    expect(document.querySelector('[data-bid-editor]')).not.toBeInTheDocument();
+    rerender(
+      <RosterRow
+        row={bidSeat()}
+        band="bidding"
+        expanded
+        onToggle={jest.fn()}
+        bid={BID}
+        bidPeople={PEOPLE}
+      />,
+    );
+    expect(document.querySelector('[data-bid-editor]')).toBeInTheDocument();
+  });
+
+  it('writes the four facts, and moves the stage with the outcome', async () => {
+    render(
+      <RosterRow
+        row={bidSeat()}
+        band="bidding"
+        expanded
+        onToggle={jest.fn()}
+        bid={BID}
+        bidPeople={PEOPLE}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Write the bid' }));
+    fireEvent.change(screen.getByLabelText('How it came back'), {
+      target: { value: 'declined' },
+    });
+    fireEvent.change(screen.getByLabelText('The answer was owed'), {
+      target: { value: '2026-10-05' },
+    });
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'Write the bid' })[0],
+    );
+    await waitFor(() => expect(setBidMutate).toHaveBeenCalled());
+    expect(setBidMutate).toHaveBeenCalledWith({
+      id: 'seat-rivera',
+      projectId: 'okonkwo',
+      patch: {
+        bidDueAt: '2026-10-05',
+        bidOutcome: 'declined',
+        bidValidUntil: '2026-11-04',
+        bidQuotedByPersonId: 'card-tom',
+      },
+    });
+  });
+
+  it('offers the outcomes as acts, never as schema words', () => {
+    render(
+      <RosterRow
+        row={bidSeat()}
+        band="bidding"
+        expanded
+        onToggle={jest.fn()}
+        bid={BID}
+        bidPeople={PEOPLE}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Write the bid' }));
+    const options = Array.from(
+      (screen.getByLabelText('How it came back') as HTMLSelectElement).options,
+    ).map((o) => o.textContent);
+    expect(options).toEqual([
+      'Nothing recorded yet',
+      'Asked for a price',
+      'They quoted',
+      'Selected',
+      'They declined',
+      'No response',
+      'They withdrew',
+    ]);
+    expect(document.body.textContent).not.toMatch(/no_response|off_job|bid_outcome/);
+  });
+
+  it('says a losing bidder never reads as crew, before the press', () => {
+    render(
+      <RosterRow
+        row={bidSeat()}
+        band="bidding"
+        expanded
+        onToggle={jest.fn()}
+        bid={BID}
+        bidPeople={PEOPLE}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Write the bid' }));
+    fireEvent.change(screen.getByLabelText('How it came back'), {
+      target: { value: 'declined' },
+    });
+    expect(
+      screen.getByText(/A bidder who did not win never reads as crew\./),
+    ).toBeInTheDocument();
+  });
+
+  it('names only PEOPLE as the estimator (00631’s guard)', () => {
+    render(
+      <RosterRow
+        row={bidSeat()}
+        band="bidding"
+        expanded
+        onToggle={jest.fn()}
+        bid={BID}
+        bidPeople={PEOPLE}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Write the bid' }));
+    const options = Array.from(
+      (screen.getByLabelText('Who priced it') as HTMLSelectElement).options,
+    ).map((o) => o.textContent);
+    expect(options).toEqual(['Nobody named', 'Tom Marrow']);
+  });
+});
+
+/**
+ * THE EXPIRY NOTICE (00630) — the sweep's own sentence, before the paper
+ * actually lapses. No leading rule: nothing is held yet.
+ */
+describe('RosterRow — the expiry notice', () => {
+  const soonSeat = () => seatRow({ paper: 'lapses_soon' });
+
+  it('prints the notice where the sweep wrote one', () => {
+    complianceNotices = [
+      { id: 'n-1', document_id: 'doc-1', state: 'lapses_soon', noticed_at: '2026-09-13' },
+    ];
+    complianceDocs = [
+      {
+        id: 'doc-1',
+        holder_id: 'northgate',
+        doc_type: 'coi_gl',
+        doc_label: null,
+        expires_on: '2026-10-06',
+        blocks: ['site_access'],
+        superseded_by: null,
+      },
+    ];
+    render(
+      <RosterRow row={soonSeat()} band="this_week" expanded={false} onToggle={jest.fn()} />,
+    );
+    expect(document.querySelector('[data-expiry-notice]')?.textContent).toBe(
+      'Northgate Electric’s insurance lapses in 30 days, on 6 October 2026.',
+    );
+  });
+
+  it('says nothing where the sweep has not spoken', () => {
+    complianceNotices = [];
+    complianceDocs = [
+      {
+        id: 'doc-1',
+        holder_id: 'northgate',
+        doc_type: 'coi_gl',
+        doc_label: null,
+        expires_on: '2026-10-06',
+        blocks: ['site_access'],
+        superseded_by: null,
+      },
+    ];
+    render(
+      <RosterRow row={soonSeat()} band="this_week" expanded={false} onToggle={jest.fn()} />,
+    );
+    expect(document.querySelector('[data-expiry-notice]')).not.toBeInTheDocument();
   });
 });
