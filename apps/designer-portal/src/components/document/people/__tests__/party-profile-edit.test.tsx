@@ -16,6 +16,17 @@ const personRefetch = jest.fn();
 
 jest.mock('@patina/supabase', () => ({
   usePerson: () => ({ data: personData.current, refetch: personRefetch }),
+  // R-BE — the sheet resolves the SEAT through people_directory_seats and takes
+  // the consent word off the identity's own `consent_status` column. The
+  // fixture's person doubles as the identity here.
+  usePersonSeat: () => ({
+    data: personData.current
+      ? {
+          seat: { seat_id: 'party-1', project_id: personData.current.project_id },
+          identity: personData.current,
+        }
+      : { seat: null, identity: null },
+  }),
   usePartySmsThread: () => ({ data: [] }),
   useSendPartySms: () => ({
     mutate: jest.fn(),
@@ -58,7 +69,15 @@ function person(over: Partial<Record<string, unknown>> = {}) {
     profile_id: null,
     project_id: 'project-1',
     designer_id: null,
-    status_raw: 'not_asked',
+    // R-AS/R-BE: `status_raw` is the ARCHIVE state on a v4 row, never the
+    // consent word. The sheet reads `consent_status`, which is the studio's
+    // own record through `channel_consent_status()`.
+    status_raw: 'active',
+    consent_status: 'not_asked',
+    reach_state: 'on_paper',
+    paper_state: null,
+    contact_rule_summary: null,
+    seat_count: 1,
     last_touch_at: null,
     meta: {
       company_name: 'Moretti Plumbing',
@@ -159,7 +178,7 @@ describe('PartyProfileSheet — edit', () => {
   // edited on a granted/pending party, never for an untouched field or a
   // not_asked/opted_out one.
   it('warns inline only when editing the phone would clear a granted consent', () => {
-    personData.current = person({ status_raw: 'granted' });
+    personData.current = person({ consent_status: 'granted' });
     render(<PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
 
