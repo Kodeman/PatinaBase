@@ -241,8 +241,11 @@ describe('callSheetProjection — six bands', () => {
     expect(dana.paper).toBe('lapsed');
   });
 
-  it('prepends the document own client when no seat claims them', () => {
-    const withClient = callSheetProjection(ROSTER, SEATS, {
+  it('prepends the document own client when the job lists nobody', () => {
+    const noHousehold = SEATS.filter(
+      (s) => s.party_kind !== 'client' && s.party_kind !== 'client_rep',
+    );
+    const withClient = callSheetProjection(ROSTER, noHousehold, {
       client: { name: 'Karin Lindqvist', profileId: 'profile-karin', projectId: 'okonkwo' },
       today: TODAY,
       labels,
@@ -250,6 +253,27 @@ describe('callSheetProjection — six bands', () => {
     });
     expect(withClient.bands.clientSide[0].name).toBe('Karin Lindqvist');
     expect(withClient.bands.clientSide[0].source).toBe('client');
+  });
+
+  /**
+   * QA-3 (w2 r5) — direction §4: the synthetic client row is REPLACED by real
+   * household seats. The claim test matched the document's `client_name`
+   * against a seat's name, and a document whose client_name is a household
+   * label ("Client") matches neither Adaeze nor Chidi — so the Okonkwo sheet
+   * printed a third, nameless "Client · THE CLIENT" row above the two real
+   * seats and counted three people on a side where two stand.
+   */
+  it('drops the document client row where real household seats stand', () => {
+    const withClient = callSheetProjection(ROSTER, SEATS, {
+      client: { name: 'Client', profileId: null, projectId: 'okonkwo' },
+      today: TODAY,
+      labels,
+      bandFor,
+    });
+    expect(withClient.bands.clientSide.map((r) => r.name)).toEqual([
+      'Adaeze Okonkwo',
+      'Chidi Okonkwo',
+    ]);
   });
 
   it('never prints the same client twice', () => {

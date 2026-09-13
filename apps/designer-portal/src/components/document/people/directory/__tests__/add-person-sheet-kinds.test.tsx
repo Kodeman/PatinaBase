@@ -21,6 +21,8 @@ const addChannel = jest.fn();
 const setRule = jest.fn();
 const setAuthority = jest.fn();
 const setAffiliation = jest.fn();
+/** CR5-1 — what `project_recorded_studio()` answers for the picked project. */
+const recordedStudio = { current: "org-1" as string | null };
 
 jest.mock("@patina/supabase", () => ({
   useAddClient: () => ({ mutateAsync: jest.fn(), isPending: false }),
@@ -31,6 +33,10 @@ jest.mock("@patina/supabase", () => ({
   }),
   useFindOrCreateVendor: () => ({ mutateAsync: jest.fn(), isPending: false }),
   usePromoteToStudioContact: () => ({ mutateAsync: promote, isPending: false }),
+  // CR5-1: the card is minted into the studio the seat's PROJECT records —
+  // the resolver `assert_project_party_cards()` checks against — never the one
+  // holding the book. `recordedStudio` lets a case say the job records none.
+  useProjectRecordedStudio: () => ({ data: recordedStudio.current }),
   useSaveVendor: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useSetContactRule: () => ({ mutateAsync: setRule, isPending: false }),
   // CR-3: the front door now records the person-to-firm tie too.
@@ -139,6 +145,7 @@ beforeEach(() => {
   setAuthority.mockReset().mockResolvedValue({});
   setAffiliation.mockReset().mockResolvedValue({});
   onAdded.mockReset();
+  recordedStudio.current = "org-1";
 });
 
 describe("the kind switch", () => {
@@ -309,6 +316,37 @@ describe("a sub", () => {
         // rule FORBIDDING email — which is what every send gate then read.
         channelsForbidden: [],
       }),
+    );
+  });
+
+  /**
+   * CR5-1 (w2 r5) — the mint used the studio holding the BOOK while
+   * `assert_project_party_cards()` checks the seat's card against the studio
+   * the JOB records. Where the job records none, the card INSERT landed and
+   * the stamp then raised `party_card_project_has_no_studio`, so a card sat in
+   * the rolodex with nothing pointing at it and every retry minted another.
+   */
+  it("mints no card where the job records no studio, and says what was not kept", async () => {
+    recordedStudio.current = null;
+    fireEvent.change(screen.getByLabelText("Project"), {
+      target: { value: PROJECT },
+    });
+    fireEvent.change(screen.getByLabelText("Full name"), {
+      target: { value: "Hector Salas" },
+    });
+    fireEvent.change(screen.getByLabelText("Trade"), {
+      target: { value: "electrical" },
+    });
+    fireEvent.change(screen.getByLabelText("Mobile"), {
+      target: { value: "(612) 555-0119" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add to the roster" }));
+
+    await waitFor(() => expect(onAdded).toHaveBeenCalled());
+    expect(promote).not.toHaveBeenCalled();
+    expect(addChannel).not.toHaveBeenCalled();
+    expect(onAdded.mock.calls[0][0]).toBe(
+      "Hector Salas added to Okonkwo residence. This job isn’t attached to a studio yet, so the number and the note ride on the seat, not on a card in the book.",
     );
   });
 

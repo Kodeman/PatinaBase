@@ -16,10 +16,22 @@ import { CallSheetMount } from '../call-sheet-mount';
 
 const usePeopleSeats = jest.fn();
 
+// QA-2: the head now mounts the Add sheet itself. This spec is about the rows
+// beneath it, so the sheet is stubbed the way the picker and the access card
+// already are.
+jest.mock('../../people/directory/add-person-sheet', () => ({
+  AddPersonSheet: () => null,
+}));
+
 jest.mock('@patina/supabase', () => ({
   useProjectRoster: () => ({ data: [], isLoading: false }),
   usePeopleSeats: (...args: unknown[]) => usePeopleSeats(...args),
   useProjectConsentOrg: () => ({ data: 'studio-1' }),
+  // QA-2: the head mounts the Add sheet, which asks which studio holds
+  // the book (the directory fold, the membership list behind it).
+  useOrganizations: () => ({ data: [{ id: 'studio-1', type: 'design_studio' }] }),
+  usePeopleDirectory: () => ({ data: [] }),
+  useProjectRecordedStudio: () => ({ data: 'studio-1' }),
   useSiteAccessCard: () => ({ data: null, isLoading: false }),
   rosterBandFor: () => 'this_week',
   rosterDateKey: () => '2026-10-20',

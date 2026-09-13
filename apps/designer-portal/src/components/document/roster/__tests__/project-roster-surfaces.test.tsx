@@ -16,6 +16,13 @@ const usePeopleSeats = jest.fn();
 const useProjectV2 = jest.fn();
 const mockRolodexPicker = jest.fn(() => null);
 
+// QA-2: the head now mounts the Add sheet itself. This spec is about the rows
+// beneath it, so the sheet is stubbed the way the picker and the access card
+// already are.
+jest.mock('../../people/directory/add-person-sheet', () => ({
+  AddPersonSheet: () => null,
+}));
+
 jest.mock('@patina/supabase', () => {
   const BID = ['prospect', 'invited', 'bidding', 'declined', 'no_response'];
   const DONE = ['closeout', 'warranty', 'off_job', 'retired'];
@@ -24,6 +31,11 @@ jest.mock('@patina/supabase', () => {
     usePeopleSeats: (...args: unknown[]) => usePeopleSeats(...args),
     useProjectV2: (...args: unknown[]) => useProjectV2(...args),
     useProjectConsentOrg: () => ({ data: 'studio-1' }),
+    // QA-2: the head mounts the Add sheet, which asks which studio holds
+    // the book (the directory fold, the membership list behind it).
+    useOrganizations: () => ({ data: [{ id: 'studio-1', type: 'design_studio' }] }),
+    usePeopleDirectory: () => ({ data: [] }),
+    useProjectRecordedStudio: () => ({ data: 'studio-1' }),
     useSiteAccessCard: () => ({ data: null, isLoading: false }),
     rosterBandFor: (
       seat: { stage: string | null; on_site_from: string | null },

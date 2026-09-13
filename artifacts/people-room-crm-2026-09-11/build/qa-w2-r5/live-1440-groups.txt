@@ -1,0 +1,13 @@
+GROUP label="People actions": +
+ADD PERSON
+---
+GROUP label="Narrow the book": EVERYONE
+CLIENTS
+CREW
+MAKERS
+STUDIO
+FIRMS
+---
+GROUP label="Scope": MINE
+STUDIO
+---

@@ -65,7 +65,7 @@ import {
 } from "@/lib/document/roster-derivation";
 import { DocumentAction } from "../document-action";
 import { StateWord } from "./state-word";
-import { TelLink } from "./tel-link";
+import { TelLink, telDisplay } from "./tel-link";
 import { ContactRuleLine, type ContactRouteTarget } from "./contact-rule-line";
 import { AccessGrantList } from "./access-grant-list";
 import {
@@ -351,7 +351,9 @@ function ChannelRow({
       <p className="t-body-sm flex flex-wrap items-center gap-x-2 text-[var(--ink)]">
         <span>{channelRowParts(channel).join(" · ")}</span>
         {isPhoneChannel(String(channel.channel_kind)) ? (
-          <TelLink phone={channel.value} />
+          // QA-4: one shape for a number on a face — the Directory row and
+          // this row print the same person's number the same way.
+          <TelLink phone={channel.value} label={telDisplay(channel.value)} />
         ) : (
           <a
             href={`mailto:${channel.value}`}
@@ -998,7 +1000,12 @@ export function ReachAccess({
       <h3 className="t-head mb-3 mt-6 text-[var(--ink-subtle)]">
         Access grants
       </h3>
-      <AccessGrantList grants={grants} now={now} onAnnounce={onAnnounce} />
+      <AccessGrantList
+        grants={grants}
+        now={now}
+        onAnnounce={onAnnounce}
+        subjectName={personName}
+      />
       {/* SPEC §5.3 #9: no door is minted onto a FIRM. The company variant reads
           the doors its people hold and offers none of its own. */}
       {isPerson && (

@@ -29,6 +29,7 @@ import {
   useAddStudioContact,
   useContactRules,
   useOrganizations,
+  useProjectRecordedStudio,
   useProjectRoster,
   usePeopleDirectory,
   useStudioContactHistory,
@@ -39,6 +40,7 @@ import {
 import { getPartyKindLabel, type PartyKind } from '@patina/types';
 import { rosterHasIdentity } from '@/lib/document/roster-derivation';
 import { directoryRolodexOrgId } from '@/lib/document/people-derivation';
+import { writeErrorMessage } from '@/lib/document/write-error';
 import {
   contactRuleClause,
   contactRuleIsHardBlock,
@@ -183,6 +185,20 @@ export function RolodexPicker({
     return directoryRolodexOrgId(directory ?? []) ?? memberOrgId;
   }, [orgs, directory]);
 
+  /**
+   * CR5-1 — WHICH BOOK MAY HOLD THIS SEAT'S CARD, which is a different question
+   * from which book this sheet SEARCHES. `organizationId` above answers the
+   * search; `assert_project_party_cards()` (00624) checks a seat's
+   * `studio_contact_id` against `project_recorded_studio(project_id)`, so the
+   * stamp below mints into the studio the JOB records. NULL means the job
+   * records none: there is no rolodex the card may live in, the stamp is not
+   * offered, and the person still goes on the call sheet.
+   */
+  const { data: recordedStudioId } = useProjectRecordedStudio(
+    open ? projectId : null,
+  );
+  const canStamp = !!recordedStudioId;
+
   const { data: contacts } = useStudioContacts(open ? organizationId : null, {
     kind,
     search,
@@ -267,7 +283,9 @@ export function RolodexPicker({
       void refetchRoster();
       finish(name);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not add them to the call sheet.');
+      // CR5-1: a PostgREST rejection is a plain object, so `e instanceof Error`
+      // turned every 00624 card-guard refusal into a shrug.
+      setError(writeErrorMessage(e, 'Could not add them to the call sheet.'));
     }
   };
 
@@ -294,10 +312,10 @@ export function RolodexPicker({
     // A rolodex hiccup must never cost the designer the add they came for —
     // the party still goes on the job, unlinked, and the error is stated.
     let studioContactId: string | null = null;
-    if (stamp && organizationId) {
+    if (stamp && recordedStudioId) {
       try {
         const contact = await addContact.mutateAsync({
-          organizationId,
+          organizationId: recordedStudioId,
           entityKind: 'person',
           contactKind: form.kind,
           fullName: name,
@@ -326,7 +344,7 @@ export function RolodexPicker({
       void refetchRoster();
       finish(name);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not add them to the call sheet.');
+      setError(writeErrorMessage(e, 'Could not add them to the call sheet.'));
     }
   };
 
@@ -521,7 +539,18 @@ export function RolodexPicker({
             />
           </div>
 
+          {/* CR5-1 — a job that records no studio has no book for the card to
+              land in, and the guard refuses the stamp. Say so instead of
+              offering an act that mints a card nothing can point at. */}
+          {!canStamp && (
+            <p className="mt-5 text-[0.72rem] text-[var(--color-aged-oak)]">
+              This job isn’t attached to a studio yet, so nobody can be saved to
+              the book from here. They still go on the call sheet.
+            </p>
+          )}
+
           {/* The stamp — square, 2px radius, sage fill, a check. Never a switch. */}
+          {canStamp && (
           <button
             type="button"
             role="checkbox"
@@ -549,6 +578,7 @@ export function RolodexPicker({
               </span>
             </span>
           </button>
+          )}
 
           <DocumentActionGroup
             surfaceKey="call-sheet"

@@ -19,7 +19,7 @@ import { render, screen } from '@testing-library/react';
 import { StateWord, PlainFact } from '../state-word';
 import { ContactRuleLine, routedSentence } from '../contact-rule-line';
 import { SeatLine, seatWindowText, formatSeatDate, seatLineParts } from '../seat-line';
-import { TelLink, telHref } from '../tel-link';
+import { TelLink, telDisplay, telHref } from '../tel-link';
 import { STATE_WORD_PIGMENTS, resolveStateWord } from '@patina/types';
 import type { PeopleDirectorySeat } from '@patina/supabase';
 
@@ -385,6 +385,27 @@ describe('SeatLine · project · kind · trade · stage · window', () => {
 // ═══════════════════════════════════════════════════════════════════════════
 // TelLink
 // ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * QA-4 (w2 r5) — the same person printed "(612) 555-0111" on a Directory row
+ * and "+16125550111" in the Channels list two clicks away, because one path
+ * reads `project_parties.phone` and the other `studio_contact_channels.value`.
+ * `telDisplay` is the display rule the raw-storing surfaces pass through.
+ */
+describe('telDisplay · one shape for a number on a face', () => {
+  it('shapes an E.164 number the way the Directory row prints it', () => {
+    expect(telDisplay('+16125550111')).toBe('(612) 555-0111');
+    expect(telDisplay('6125550111')).toBe('(612) 555-0111');
+    expect(telDisplay('612.555.0111')).toBe('(612) 555-0111');
+  });
+
+  it('leaves a number it cannot read alone', () => {
+    expect(telDisplay('+442079460958')).toBe('+442079460958');
+    expect(telDisplay('+16125550111 x12')).toBe('+16125550111 x12');
+    expect(telDisplay('ask the office')).toBe('ask the office');
+    expect(telDisplay(null)).toBe('');
+  });
+});
 
 describe('TelLink · every phone, at every width', () => {
   it('dials a ten-digit number as +1', () => {

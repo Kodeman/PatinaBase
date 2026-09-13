@@ -170,6 +170,24 @@ describe('SiteAccessCard — the six regions', () => {
     ]);
   });
 
+  /**
+   * QA-4 (w2 r5) — `emergency_lines[].phone` is commonly stored in E.164, and
+   * the card printed it raw beside Directory rows that print "(612) 555-0111"
+   * for the same person. The stored value still dials.
+   */
+  it('prints a stored E.164 line in the house shape', () => {
+    card = {
+      ...(card as Record<string, unknown>),
+      emergency_lines: [
+        { label: 'Superintendent', name: 'Luis Ochoa', phone: '+16125550109' },
+      ],
+    };
+    render(<SiteAccessCard {...props} />);
+    const call = document.querySelector('a[data-tel-link]');
+    expect(call).toHaveTextContent('Luis Ochoa, Superintendent, (612) 555-0109');
+    expect(call).toHaveAttribute('href', 'tel:+16125550109');
+  });
+
   it('prints the way in with no code and names who to ask (PR-r)', () => {
     render(<SiteAccessCard {...props} />);
     // CR-10 / SPEC §5.6 #3: the person to ASK is the GATE CONTROLLER — Luis

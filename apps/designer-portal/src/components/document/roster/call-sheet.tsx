@@ -24,13 +24,19 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Users } from 'lucide-react';
-import { useProjectConsentOrg } from '@patina/supabase';
+import {
+  useOrganizations,
+  usePeopleDirectory,
+  useProjectConsentOrg,
+} from '@patina/supabase';
 import {
   callSheetVitalsLine,
   type CallSheetRow,
 } from '@/lib/document/roster-derivation';
+import { directoryRolodexOrgId } from '@/lib/document/people-derivation';
 import { DocSheet } from '../overlays/doc-sheet';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
+import { AddPersonSheet } from '../people/directory/add-person-sheet';
 import { RolodexPicker } from './rolodex-picker';
 import { RosterGroups } from './roster-groups';
 import { SiteAccessCard, useSiteAccessSummary } from './site-access-card';
@@ -79,6 +85,11 @@ export function CallSheet({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerStartsInAdd, setPickerStartsInAdd] = useState(false);
   const [accessOpen, setAccessOpen] = useState(false);
+  // QA-2 — "New person" is the ADD sheet (kind switch, contact rule, consent,
+  // authority), a different sheet from "From the rolodex". It used to open the
+  // picker's inline form, so the Call Sheet had no way to reach direction
+  // §3.5's sheet at all.
+  const [addOpen, setAddOpen] = useState(false);
   const [added, setAdded] = useState<string | null>(null);
 
   const { projection, authorityBySeat, isLoading } = useCallSheetRoster(projectId, {
@@ -86,6 +97,19 @@ export function CallSheet({
     enabled: open,
   });
   const { data: consentOrg } = useProjectConsentOrg(open ? projectId : null);
+  // The studio that holds the BOOK, for the Add sheet's firm list and its
+  // membership-role read — the same fold the Room and the picker use, never
+  // `orgs.find(o => o.type === 'design_studio')` over an unordered read. Which
+  // studio may hold a new CARD is a different question, and the Add sheet asks
+  // the project's own record for it (CR5-1).
+  const { data: orgs } = useOrganizations();
+  const { data: directory } = usePeopleDirectory();
+  const bookOrgId = useMemo(() => {
+    const sorted = [...(orgs ?? [])].sort((a, b) => a.id.localeCompare(b.id));
+    const memberOrgId =
+      sorted.find((o) => o.type === 'design_studio')?.id ?? sorted[0]?.id ?? null;
+    return directoryRolodexOrgId(directory ?? []) ?? memberOrgId;
+  }, [orgs, directory]);
   const accessLine = useSiteAccessSummary(
     open ? projectId : null,
     projection.rows,
@@ -161,7 +185,10 @@ export function CallSheet({
             <DocumentAction
               actionKey="add-new-person"
               variant="secondary"
-              onClick={() => openPicker(true)}
+              onClick={() => {
+                setAdded(null);
+                setAddOpen(true);
+              }}
             >
               New person
             </DocumentAction>
@@ -235,6 +262,18 @@ export function CallSheet({
         projectId={projectId}
         startInAdd={pickerStartsInAdd}
         onAdded={(name) => setAdded(`${name} is on the call sheet.`)}
+      />
+
+      {/* QA-2 — the Add/Edit sheet itself, opened on this job. */}
+      <AddPersonSheet
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        organizationId={bookOrgId}
+        initialProjectId={projectId}
+        onAdded={(message) => {
+          setAdded(message);
+          setAddOpen(false);
+        }}
       />
     </>
   );

@@ -4312,5 +4312,61 @@ BEGIN
                'studio''s own link still does (r15 MAJOR-2): passed';
 END $$;
 
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 26. QA-1 (w2 r5): the identity row carries the FIRM'S OWN NAME
+--
+-- `meta.company_name` was `studio_contacts.company_name` on the person's own
+-- row — 00417's typed-by-hand snapshot, which nothing since the affiliation
+-- table populates — so `personIdentityLine()` had a firm id it could not turn
+-- into a word and every crew row printed a bare kind word instead of
+-- "Northgate Electric · electrical". The contacts branch now joins the firm
+-- card the affiliation pointer names.
+-- ═══════════════════════════════════════════════════════════════════════════
+DO $$
+DECLARE
+  firm_name text;
+  firm_id   text;
+  n         integer;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+
+  SELECT meta->>'company_name', meta->>'company_id'
+    INTO firm_name, firm_id
+    FROM public.people_directory WHERE display_name = 'Dana Kowalski';
+  IF firm_id <> 'd0e20000-0000-0000-0000-000000000003' THEN
+    RAISE EXCEPTION '26a her firm pointer must be Northgate Electric, got %', firm_id;
+  END IF;
+  IF firm_name IS DISTINCT FROM 'Northgate Electric' THEN
+    RAISE EXCEPTION '26b her identity line must be able to say the firm''s name, got %',
+                    COALESCE(firm_name, '<null>');
+  END IF;
+
+  -- A firm's OWN row keeps its own name: company_id is NULL there, so the new
+  -- join misses and nothing about the company branch moved.
+  SELECT meta->>'company_name' INTO firm_name
+    FROM public.people_directory
+   WHERE person_id = 'd0e20000-0000-0000-0000-000000000003';
+  IF firm_name IS DISTINCT FROM 'Northgate Electric' THEN
+    RAISE EXCEPTION '26c the firm''s own row must still name itself, got %',
+                    COALESCE(firm_name, '<null>');
+  END IF;
+
+  -- and no CARDED identity carries a firm id it cannot name. The party branch
+  -- is deliberately not in this count: an uncarded seat's `company_name` is the
+  -- seat's own free text (`project_parties.company_name`), which is the seat's
+  -- fact and not the card's, and QA-1 is the contacts branch's defect.
+  SELECT count(*) INTO n FROM public.people_directory
+   WHERE role = 'contact'
+     AND meta->>'company_id' IS NOT NULL
+     AND meta->>'company_name' IS NULL;
+  IF n <> 0 THEN
+    RAISE EXCEPTION '26d % carded identity rows carry a firm id with no name', n;
+  END IF;
+
+  PERFORM pg_temp.reset_role();
+  RAISE NOTICE '26. the identity row resolves its firm pointer to the firm''s '
+               'own name, and a firm still names itself (QA-1): passed';
+END $$;
+
 DO $$ BEGIN RAISE NOTICE 'All W1b assertions passed.'; END $$;
 ROLLBACK;

@@ -36,7 +36,7 @@ import { peopleEvents } from '@/lib/analytics/people-events';
 import { DocSheet } from '../overlays/doc-sheet';
 import { DocumentAction, DocumentActionRow } from '../document-action';
 import { StateWord } from '../people/state-word';
-import { TelLink } from '../people/tel-link';
+import { TelLink, telDisplay } from '../people/tel-link';
 import { NoticeLog } from './notice-log';
 
 const REGION_HEAD =
@@ -355,7 +355,10 @@ export function SiteAccessCard({
                 )}
                 {lines.map((line, index) => {
                   const role = (line.role ?? line.label ?? '').trim();
-                  const text = [line.name, role, line.phone].filter(Boolean).join(', ');
+                  // QA-4: the stored value dials; the printed one reads.
+                  const text = [line.name, role, telDisplay(line.phone)]
+                    .filter(Boolean)
+                    .join(', ');
                   return (
                     <li key={`${line.name}-${index}`}>
                       {line.phone ? (
@@ -541,7 +544,11 @@ export function SiteAccessCard({
                   holds a key.{' '}
                   <StateWord family="consent" value={keyHolder.consent} plain />{' '}
                   {keyHolder.phone && (
-                    <TelLink phone={keyHolder.phone} personName={keyHolder.name} />
+                    <TelLink
+                      phone={keyHolder.phone}
+                      label={telDisplay(keyHolder.phone)}
+                      personName={keyHolder.name}
+                    />
                   )}
                 </p>
               ) : (
