@@ -348,6 +348,43 @@ CREATE INDEX IF NOT EXISTS idx_project_parties_identity_key
 -- so this never collides with r11 MAJOR-3's party_card_project_has_no_studio
 -- refusal.
 --
+-- AND THAT POPULATION THEREFORE KEEPS THE DUPLICATE IDENTITY UNTIL W3'S
+-- BACKFILL — R-BI, ruled, not overlooked (w1b final review r13 MAJOR-1). Where
+-- projects.studio_id IS NULL, project_recorded_studio() is NULL, nothing is
+-- stamped, and one ordinary inline add of a carded human's own number puts
+-- that human on the feed twice: walked on Aspen Loft Refresh, 62 Directory
+-- rows to 63, one row reading "Pete Rusk · opted_out · seat_count 2" beside a
+-- second reading "Pete Rusk · not_asked · not_on_file" on the SAME
+-- +16125550112 that the studio doing the work has recorded opted_out. The
+-- second word is project_consent_org()'s own pre-existing posture on this
+-- population (R-AK, and 00624's banner under R-BD says the consent LEDGER
+-- keeps that resolver because a record's studio must read the same for every
+-- caller): the guessed studio holds no record, channel_consent_status()
+-- returns NULL and the COALESCE prints the dormant word. usePerson(seat,
+-- kind) resolves only the duplicate, so the party sheet for that seat is the
+-- one printing "Not asked" — a reader disagreeing with the record, on a
+-- population where no gate in this wave admits both studios.
+--
+-- THE FIX NOT TAKEN, and why. Letting this resolver fall back to
+-- project_tenant_org() for the link, and teaching assert_project_party_cards()
+-- to accept a card in that same resolver on exactly that population, would
+-- close it — and would put a CALLER-RELATIVE studio inside the identity key,
+-- which is the one thing r11 MAJOR-3 walked and closed: a plain member of the
+-- designer of record's SECOND design studio filed a card in their own rolodex
+-- and landed it as studio_contact_id on the working studio's job, leaving that
+-- studio reading a seat whose person_id it can open no Directory row for. The
+-- stamp is durable record state; a durable fact may not be decided by whoever
+-- happened to type the row. So the studio-less population keeps the duplicate
+-- identity — no send hazard (the send gate refuses on
+-- channelConsentVerdict() === "refuse" before the sms_optin_invite carve-out,
+-- _shared/sms.ts:725-731, so no path here reaches an opted_out number) —
+-- until R-BD's W3 backfill writes projects.studio_id, after which both the
+-- trigger and link_rolodex_card_to_parties() stamp these seats on the ordinary
+-- path. Locally it is 5 of 8 projects, all ambiguous under R-BD (their
+-- designer owns two design studios), and the Strata count of studio-less
+-- projects THAT CARRY SEATS is owed with R-BD's count before this chain runs —
+-- the SELECT is in 00624's preflight block.
+--
 -- NO CONSENT IS READ OR WRITTEN HERE (R-AY): the number is an identity fact.
 -- The seat's consent word still comes from studio_channel_consent alone.
 CREATE INDEX IF NOT EXISTS idx_studio_contacts_org_phone_e164
@@ -396,8 +433,12 @@ COMMENT ON FUNCTION public.rolodex_card_for_party_phone(uuid, text) IS
   'the writer) whose phone_e164 is exactly this number. NULL when there is '
   'none, when two cards share the number (PR-o/R-Y''s duplicate band is a '
   'card-to-card merge the studio rules on, not something a trigger decides) '
-  'or when the project records no studio. Reads and writes NO consent '
-  '(R-AY). Called only by link_party_to_rolodex_card() and '
+  'or when the project records no studio — and that last population therefore '
+  'keeps the duplicate identity until R-BD''s W3 backfill names a studio, a '
+  'RULING — R-BI (the § above carries the walk and the reason a caller-relative '
+  'fallback is refused: it would put the writer''s own studio inside the '
+  'identity key, r11 MAJOR-3) (w1b final review r13 MAJOR-1). Reads and '
+  'writes NO consent (R-AY). Called only by link_party_to_rolodex_card() and '
   'link_rolodex_card_to_parties(); not granted to authenticated (00626).';
 
 CREATE OR REPLACE FUNCTION public.link_party_to_rolodex_card()
@@ -1957,7 +1998,32 @@ SELECT
   -- the stamped card's OWN paper AND the seat's firm, worst-first (r4
   -- MAJOR-2): it was COALESCE(company_id, studio_contact_id), so a person-held
   -- lapse never reached a seat line for anyone who carries a firm.
-  public.identity_paper_state(pp.studio_contact_id, pp.company_id) AS paper_state,
+  --
+  -- THE FIRM IS THE SEAT'S WHEN THE SEAT NAMES ONE, ELSE THE CARD'S — R-BJ
+  -- (w1b final review r13 MAJOR-2). This column read pp.company_id alone while the
+  -- Directory row above it reads sc.company_id, and the shipped inline add
+  -- (useAddProjectParty, use-coordination.ts:500-512) writes company_name as
+  -- free TEXT and never company_id — no portal writer sets the column 00624
+  -- added. §1b now stamps exactly that seat with the person's card, so every
+  -- auto-linked seat has a card and no firm, and the two readers of one wave
+  -- gave the paper word two answers on one screen: Dana Kowalski's identity row
+  -- printed `lapsed` off Northgate Electric's COI expired 2026-03-31 (the
+  -- fixture's F-11, the fact 00623 exists for, gating site_access and draw)
+  -- while the seat line beneath it printed `not_on_file`. PR-h is "Both, one
+  -- source" and direction §2.2 names the roster row's held clause as a reader
+  -- of E10; r10 MAJOR-2 graded exactly this shape, two columns of one wave
+  -- disagreeing. COALESCE and not the card outright, because crm-model §5's
+  -- "open engagements keep the old company_id" makes the seat's own firm the
+  -- truer answer whenever the seat names one. identity_paper_state() already
+  -- de-duplicates when the two ids match (§ above), so a sole proprietor whose
+  -- card IS the firm is counted once. The LEFT JOIN is on the primary key, so
+  -- it cannot multiply a row or move first_value()'s winner, and sc obeys the
+  -- caller's own studio_contacts RLS: a caller who cannot read the card falls
+  -- back to pp.company_id, which is exactly today's answer — the join can only
+  -- ADD a firm's word to the worst-first reduction, never remove one.
+  public.identity_paper_state(
+    pp.studio_contact_id,
+    COALESCE(pp.company_id, sc.company_id))                      AS paper_state,
   public.contact_rule_summary('engagement', pp.id)               AS contact_rule_summary,
   pp.updated_at                                                  AS updated_at,
   (CASE
@@ -1968,6 +2034,10 @@ SELECT
    END)::text                                                    AS scope
 FROM public.project_parties pp
 JOIN public.projects pj ON pj.id = pp.project_id
+-- The stamped card, for its firm alone (r13 MAJOR-2; see paper_state above).
+-- Primary-key join, LEFT so an unstamped seat is unchanged, and no column of
+-- sc but company_id is read — the seat's own facts stay the seat's.
+LEFT JOIN public.studio_contacts sc ON sc.id = pp.studio_contact_id
 -- TENANT FIRST, then the designer (w1b final review r5 MAJOR-1/MAJOR-3).
 -- is_studio_comember(designer) is true whenever the caller shares ANY active
 -- organization with the designer of record, so an outside designer who also
@@ -2013,10 +2083,14 @@ COMMENT ON VIEW public.people_directory_seats IS
   'is this human seated" is a different question from "who is in the six '
   'chips" and PR-c''s client_rep seat must appear under the household '
   'member''s card. consent_status is the RECORD''s verdict (R-AY); paper_state '
-  'is identity_paper_state(stamped card, firm) — the person''s own paper AND '
-  'the seat''s firm, worst-first, since r4 MAJOR-2 found a person-held lapse '
-  'invisible behind COALESCE for everyone who carries a firm; both degrade to '
-  'the caller''s '
+  'is identity_paper_state(stamped card, COALESCE(seat''s firm, card''s firm)) '
+  '— the person''s own paper AND their firm, worst-first, since r4 MAJOR-2 '
+  'found a person-held lapse invisible behind COALESCE for everyone who '
+  'carries a firm; the card''s firm is the fallback because no portal writer '
+  'sets project_parties.company_id yet, so every seat the §1b auto-link stamps '
+  'has a card and no firm and this column read `not_on_file` under a Directory '
+  'row reading `lapsed` off the same record (R-BJ, w1b final review r13 '
+  'MAJOR-2, PR-h "both, one source"); both degrade to the caller''s '
   'own RLS. Stage, the window, the access mode and the warranty are the seat''s '
   'own facts (00624) and PR-p says they print HERE, never as a person-level '
   'column. TENANT-SCOPED: is_active_studio_member(project_tenant_org('

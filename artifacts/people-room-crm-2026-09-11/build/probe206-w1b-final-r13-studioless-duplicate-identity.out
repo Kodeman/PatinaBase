@@ -1,0 +1,46 @@
+BEGIN
+SET
+SET
+--- 1. the record for Pete Rusk's number, at the studio doing the work ---
+           organization_id            | channel_value |  status   
+--------------------------------------+---------------+-----------
+ b0000000-0000-0000-0000-000000000001 | +16125550112  | opted_out
+(1 row)
+
+--- 2. BEFORE: one row, one human ---
+ directory_rows 
+----------------
+             62
+(1 row)
+
+              person_id               |  role   | display_name | seat_count | consent_status | paper_state 
+--------------------------------------+---------+--------------+------------+----------------+-------------
+ d0e10000-0000-0000-0000-000000000012 | contact | Pete Rusk    |          2 | opted_out      | current
+(1 row)
+
+--- 3. the shipped inline add, on Aspen Loft Refresh (projects.studio_id IS NULL) ---
+INSERT 0 1
+                  id                  | studio_contact_id |  phone_e164  
+--------------------------------------+-------------------+--------------
+ 583019b8-3cf6-4ea4-bee8-4dffededf5e0 |                   | +16125550112
+(1 row)
+
+--- 4. AFTER: two rows for one human, two different consent words ---
+              person_id               |  role   | display_name | seat_count | consent_status | paper_state |              project_id              
+--------------------------------------+---------+--------------+------------+----------------+-------------+--------------------------------------
+ d0e10000-0000-0000-0000-000000000012 | contact | Pete Rusk    |          2 | opted_out      | current     | 
+ 583019b8-3cf6-4ea4-bee8-4dffededf5e0 | sub     | Pete Rusk    |          1 | not_asked      | not_on_file | b0000000-0000-0000-0000-0000000000d1
+(2 rows)
+
+ directory_rows 
+----------------
+             63
+(1 row)
+
+--- 5. why: the guessed studio holds no record for that number ---
+ recorded |               guessed                | word_at_guessed | word_at_working_studio 
+----------+--------------------------------------+-----------------+------------------------
+          | 8805f0ab-963e-4c75-95c3-578a276af503 |                 | opted_out
+(1 row)
+
+ROLLBACK

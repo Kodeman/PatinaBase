@@ -3963,5 +3963,104 @@ BEGIN
   RAISE NOTICE '22. the auto-link keeps one human one identity IN THE RECORD: the shipped inline add on a carded human''s own number comes out stamped, so people_directory holds the same % rows and Dana''s one row claims 3 seats and nests 3 (it was 62 -> 63, one row claiming 2 and one claiming 1); a card minted AFTER the seat claims it; and none of an ambiguous number, a firm''s main line or a studio-less job stamps anything (r12 MAJOR-2): passed', before_rows;
 END $$;
 
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 23. The auto-linked seat's PAPER WORD is the identity's, and the studio-less
+--     population's ruled residue (w1b final review r13 MAJOR-2 / MAJOR-1)
+-- ═══════════════════════════════════════════════════════════════════════════
+DO $$
+DECLARE
+  d uuid; card uuid; firm uuid; paperless uuid; ph text;
+  seat uuid; row_word text; seat_word text; n int; k int;
+BEGIN
+  SELECT id INTO d FROM public.profiles WHERE email='designer@patina.dev';
+  SELECT sc.id, sc.company_id, sc.phone_e164 INTO card, firm, ph
+    FROM public.studio_contacts sc
+   WHERE sc.organization_id = 'b0000000-0000-0000-0000-000000000001'
+     AND sc.full_name = 'Dana Kowalski';
+
+  -- the fixture fact this block turns on: F-11, Northgate Electric's general
+  -- liability certificate expired 2026-03-31 gating site_access and draw, on a
+  -- sub who holds no personal paper of her own
+  IF public.identity_paper_state(card, firm) <> 'lapsed'
+     OR public.compliance_state(card) <> 'not_on_file' THEN
+    RAISE EXCEPTION '23 precondition: Dana reads % as an identity and % on her own card',
+      public.identity_paper_state(card, firm), public.compliance_state(card);
+  END IF;
+
+  -- (a) the shipped inline add — useAddProjectParty writes company_name as
+  -- free TEXT and never company_id — comes back stamped with her card by §1b,
+  -- and its seat line must print the word her Directory row prints. It read
+  -- `not_on_file` under a row reading `lapsed` (r13 MAJOR-2).
+  INSERT INTO public.project_parties
+    (project_id, party_kind, display_name, company_name, trade, phone_e164)
+  VALUES ('d0e00000-0000-0000-0000-00000000000a','sub','Dana Kowalski',
+          'Northgate Electric','electrical', ph)
+  RETURNING id INTO seat;
+
+  PERFORM pg_temp.assume_user(d);
+  SELECT paper_state INTO row_word FROM public.people_directory WHERE person_id = card;
+  SELECT paper_state INTO seat_word FROM public.people_directory_seats WHERE seat_id = seat;
+  IF row_word <> 'lapsed' OR seat_word IS DISTINCT FROM row_word THEN
+    RAISE EXCEPTION '23a the Directory row reads % and its own new seat line reads %',
+      row_word, seat_word;
+  END IF;
+  PERFORM pg_temp.reset_role();
+
+  -- (b) and the COALESCE is the seat's firm FIRST: a seat that names its own
+  -- company keeps its own firm's word (crm-model §5, "open engagements keep
+  -- the old company_id"), never the card's.
+  INSERT INTO public.studio_contacts
+    (organization_id, entity_kind, contact_kind, company_name, created_by)
+  VALUES ('b0000000-0000-0000-0000-000000000001','company','trade',
+          'R13 Paperless Firm', d)
+  RETURNING id INTO paperless;
+  UPDATE public.project_parties SET company_id = paperless WHERE id = seat;
+
+  PERFORM pg_temp.assume_user(d);
+  SELECT paper_state INTO seat_word FROM public.people_directory_seats WHERE seat_id = seat;
+  SELECT paper_state INTO row_word  FROM public.people_directory WHERE person_id = card;
+  IF seat_word <> 'not_on_file' OR row_word <> 'lapsed' THEN
+    RAISE EXCEPTION '23b a seat naming its own paperless firm reads % while the row reads %',
+      seat_word, row_word;
+  END IF;
+  PERFORM pg_temp.reset_role();
+  DELETE FROM public.project_parties WHERE id = seat;
+
+  -- (c) the RULED residue, recorded as a test so a future change has to face
+  -- it: on a project that records no studio the auto-link resolves no card
+  -- (project_recorded_studio() is NULL, and a caller-relative fallback would
+  -- put the writer's own studio inside the identity key — r11 MAJOR-3), so one
+  -- inline add of a carded human's own number is a SECOND Directory identity
+  -- until R-BD's W3 backfill names a studio. What may NEVER happen is the
+  -- affirmative word: the duplicate row prints the dormant `not_asked` of a
+  -- studio holding no record, never `granted`, and the send gate refuses on
+  -- the verdict before the invite carve-out (r13 MAJOR-1).
+  INSERT INTO public.project_parties
+    (project_id, party_kind, display_name, company_name, trade, phone_e164)
+  VALUES ('b0000000-0000-0000-0000-0000000000d1','sub','Pete Rusk',
+          'Rusk Mechanical','plumbing','+16125550112')
+  RETURNING id INTO seat;
+  IF (SELECT studio_contact_id FROM public.project_parties WHERE id = seat) IS NOT NULL THEN
+    RAISE EXCEPTION '23c a seat on a studio-less job was stamped after all';
+  END IF;
+
+  PERFORM pg_temp.assume_user(d);
+  SELECT count(*) INTO n FROM public.people_directory WHERE display_name = 'Pete Rusk';
+  SELECT count(*) INTO k FROM public.people_directory
+   WHERE display_name = 'Pete Rusk' AND consent_status = 'granted';
+  IF n <> 2 OR k <> 0 THEN
+    RAISE EXCEPTION '23d Pete Rusk holds % Directory rows, % of them reading granted', n, k;
+  END IF;
+  IF (SELECT consent_status FROM public.people_directory WHERE person_id = card) IS NOT NULL
+     AND (SELECT consent_status FROM public.people_directory
+           WHERE display_name = 'Pete Rusk' AND person_id = seat) = 'granted' THEN
+    RAISE EXCEPTION '23e the studio-less duplicate printed the affirmative word';
+  END IF;
+  PERFORM pg_temp.reset_role();
+  DELETE FROM public.project_parties WHERE id = seat;
+
+  RAISE NOTICE '23. the auto-linked seat prints the identity''s paper word — lapsed under a row reading lapsed, where it read not_on_file (r13 MAJOR-2) — a seat naming its own firm still keeps that firm''s word, and the studio-less population''s second identity is the RULED residue of r13 MAJOR-1: two rows until R-BD''s W3 backfill, and never the affirmative consent word: passed';
+END $$;
+
 DO $$ BEGIN RAISE NOTICE 'All W1b assertions passed.'; END $$;
 ROLLBACK;

@@ -1,0 +1,56 @@
+BEGIN
+--- 1. the deploy brief's two counts, run locally ---
+ studioless_projects 
+---------------------
+                   5
+(1 row)
+
+ studioless_projects_carrying_seats 
+------------------------------------
+                                  0
+(1 row)
+
+ stamped_seats_off_their_project_studio 
+----------------------------------------
+                                      0
+(1 row)
+
+SET
+SET
+--- 2. BEFORE ---
+ directory_rows 
+----------------
+             62
+(1 row)
+
+              person_id               |  role   | display_name | seat_count | consent_status | paper_state 
+--------------------------------------+---------+--------------+------------+----------------+-------------
+ d0e10000-0000-0000-0000-000000000012 | contact | Pete Rusk    |          2 | opted_out      | current
+(1 row)
+
+--- 3. the shipped inline add on Aspen Loft Refresh (projects.studio_id IS NULL) ---
+INSERT 0 1
+--- 4. AFTER: the RULED residue — two rows, and never the affirmative word ---
+              person_id               |  role   | display_name | seat_count | consent_status | paper_state |              project_id              
+--------------------------------------+---------+--------------+------------+----------------+-------------+--------------------------------------
+ d0e10000-0000-0000-0000-000000000012 | contact | Pete Rusk    |          2 | opted_out      | current     | 
+ 261926d5-f47c-4bb0-b1f8-1887619beee2 | sub     | Pete Rusk    |          1 | not_asked      | not_on_file | b0000000-0000-0000-0000-0000000000d1
+(2 rows)
+
+ directory_rows 
+----------------
+             63
+(1 row)
+
+ pete_rows_reading_granted 
+---------------------------
+                         0
+(1 row)
+
+--- 5. the record the send gate asks, at the studio doing the work ---
+ word_at_working_studio | word_at_guessed_studio 
+------------------------+------------------------
+ opted_out              | 
+(1 row)
+
+ROLLBACK
