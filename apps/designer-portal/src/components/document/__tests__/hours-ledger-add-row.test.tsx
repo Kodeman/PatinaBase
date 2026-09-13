@@ -93,6 +93,8 @@ jest.mock('@patina/supabase', () => ({
   useStudioHoursRollup: () => ({ data: [], isPending: false, isError: false }),
   useTimeEntryLedger: () => ({ data: [], isPending: false, isError: false }),
   useProjectHoursTotal: () => ({ data: undefined, isPending: false, isError: false }),
+  // W5 (HT-20) — the studio-scope CSV export's Client column.
+  useClients: () => ({ data: [] }),
 }));
 
 /** The authority read, as an answer the test can leave in flight. */

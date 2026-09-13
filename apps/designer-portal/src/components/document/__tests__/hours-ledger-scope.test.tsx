@@ -277,6 +277,9 @@ jest.mock('@patina/supabase', () => ({
       error: ledgerState === 'error' ? new Error('permission denied') : null,
     };
   },
+  // W5 (HT-20) — the studio-scope CSV export's Client column; no case in
+  // this suite exercises an actual client name.
+  useClients: () => ({ data: [] }),
   useProjectHoursTotal: (projectId: string | null) => {
     projectTotalCalls.push(projectId);
     return {
@@ -864,7 +867,7 @@ describe('the sheet’s un-scoped remainder (M5-02)', () => {
       ),
     );
     expect(
-      screen.queryByRole('button', { name: 'Export week → Accounts' }),
+      screen.queryByRole('button', { name: 'Bill week → Accounts' }),
     ).not.toBeInTheDocument();
     expect(
       screen.queryByText(/pending billing authority/),
@@ -885,7 +888,7 @@ describe('the sheet’s un-scoped remainder (M5-02)', () => {
     // hand they are.
     await waitFor(() =>
       expect(
-        screen.getByRole('button', { name: 'Export week → Accounts' }),
+        screen.getByRole('button', { name: 'Bill week → Accounts' }),
       ).toBeInTheDocument(),
     );
     expect(screen.getByText(/pending billing authority/)).toBeInTheDocument();
@@ -948,7 +951,7 @@ describe('the sheet’s un-scoped remainder (M5-02)', () => {
       expect(screen.getByText('unbilled · all time')).toBeInTheDocument(),
     );
     expect(
-      screen.getByRole('button', { name: 'Export week → Accounts' }),
+      screen.getByRole('button', { name: 'Bill week → Accounts' }),
     ).toBeInTheDocument();
     expect(screen.getByLabelText('Minutes')).toBeInTheDocument();
   });

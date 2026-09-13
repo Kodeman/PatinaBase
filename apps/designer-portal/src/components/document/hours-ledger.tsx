@@ -17,9 +17,12 @@
  *    drawer passes its sheet context through).
  *  - DELETE WITH CONFIRM on unbilled entries; billed entries stay immutable.
  *
- * R75: "Export week → Accounts" opens the composer with the shown week's
- * unbilled entries pre-ticked (per-entry include/exclude + resolved rates
- * live there; one act, review before draft). Failures render inline (R83).
+ * R75: "Bill week → Accounts" (renamed from "Export week → Accounts" in W5,
+ * HT-20/HT-21 — the composer hand-off produces an invoice draft, not a file,
+ * so "Export" is reserved for the CSV act beside the studio scope below)
+ * opens the composer with the shown week's unbilled entries pre-ticked
+ * (per-entry include/exclude + resolved rates live there; one act, review
+ * before draft). Failures render inline (R83).
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -28,6 +31,7 @@ import { useQuery } from '@tanstack/react-query';
 import {
   createBrowserClient,
   filterProjectUnbilledEntries,
+  useClients,
   useCreateTimeEntry,
   useDeleteTimeEntry,
   useProjectHoursTotal,
@@ -40,6 +44,12 @@ import {
   type TimeEntryLedgerRow,
   type TimeHoursGroupBy,
 } from '@patina/supabase';
+import {
+  buildTimeExportCsv,
+  downloadTimeExportCsv,
+  timeExportFilename,
+  type TimeExportRow,
+} from '@/lib/document/time-export';
 import { ACTIVITIES, fmtMinutes } from '@/lib/document/time-derivation';
 import { fmtDay, fmtUsd } from '@/lib/document/format';
 import { LedgerFrontMatter } from './ledger-front-matter';
@@ -256,12 +266,31 @@ export function HoursLedger({
     queryFn: async () => {
       const { data, error } = await getSupabase()
         .from('projects')
-        .select('id, name, status')
+        // client_id: the CSV export's Client column (W5) reads it against
+        // useClients() below — project_unbilled_time/time_entry_ledger carry
+        // no client name of their own.
+        .select('id, name, status, client_id')
         .order('name');
       if (error) throw error;
       return (data ?? []) as AnyRecord[];
     },
   });
+
+  // W5 (HT-20) — the CSV export's Client column. Reused, not re-fetched:
+  // useClients() already reads every designer_clients row RLS lets the
+  // caller see.
+  const { data: designerClients } = useClients();
+  const clientNameByProjectId = useMemo(() => {
+    const clientNames = new Map(
+      (designerClients ?? []).map((c) => [c.id, c.client?.full_name ?? c.client_name ?? null] as const),
+    );
+    return new Map(
+      (projects ?? []).map((p) => [
+        p.id as string,
+        p.client_id ? (clientNames.get(p.client_id as string) ?? null) : null,
+      ]),
+    );
+  }, [projects, designerClients]);
 
   // R23: open section-task estimates give Hours its "of N est." readout.
   const { data: openEstimateMinutes } = useQuery({
@@ -529,6 +558,54 @@ export function HoursLedger({
   const fromDate = isoDate(weekStart);
   const toDate = isoDate(new Date(weekEnd.getTime() - 86_400_000));
 
+  // W5 (HT-20) — the studio scope's CSV export. Same fact view, same window
+  // as "the entries" toggle beneath the rollup (ScopeEntries) — a second read
+  // rather than a lift, since the toggle's rows are not always mounted.
+  const studioExport = useTimeEntryLedger({
+    studioId: scope === 'studio' ? (viewerStudio?.id ?? null) : null,
+    from: fromDate,
+    to: toDate,
+    includeRunning: false,
+  });
+  const studioExportInvoiceIds = useMemo(
+    () => [...new Set((studioExport.data ?? []).map((r) => r.invoice_id).filter((id): id is string => !!id))],
+    [studioExport.data],
+  );
+  const { data: studioExportInvoices } = useQuery({
+    queryKey: ['document-hours-export-invoice-numbers', studioExportInvoiceIds],
+    enabled: studioExportInvoiceIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await getSupabase()
+        .from('invoices')
+        .select('id, invoice_number')
+        .in('id', studioExportInvoiceIds);
+      if (error) throw error;
+      return (data ?? []) as Array<{ id: string; invoice_number: string | null }>;
+    },
+  });
+  const invoiceNumberById = useMemo(
+    () => new Map((studioExportInvoices ?? []).map((i) => [i.id, i.invoice_number])),
+    [studioExportInvoices],
+  );
+  const studioExportRows: TimeExportRow[] = useMemo(
+    () =>
+      (studioExport.data ?? []).map((r) => ({
+        ...r,
+        client_name: r.project_id ? (clientNameByProjectId.get(r.project_id) ?? null) : null,
+        invoice_number: r.invoice_id ? (invoiceNumberById.get(r.invoice_id) ?? null) : null,
+      })),
+    [studioExport.data, clientNameByProjectId, invoiceNumberById],
+  );
+  const exportCsv = () => {
+    const csv = buildTimeExportCsv(studioExportRows);
+    downloadTimeExportCsv(csv, timeExportFilename('studio', fromDate));
+    documentEvents.time.exportTaken({
+      scope: 'studio',
+      row_count: studioExportRows.length,
+      period: `${fromDate}..${toDate}`,
+    });
+  };
+
   // The studios the viewer can name, for the pricing-studio fact on a row
   // (HT-3-e(3) — Patina makes the pricing studio visible rather than impossible
   // to move).
@@ -684,7 +761,7 @@ export function HoursLedger({
           }
           className="whitespace-nowrap rounded-[3px] border border-[rgba(196,165,123,0.4)] px-2.5 py-1 font-mono text-[11px] font-semibold uppercase tracking-[0.07em] text-[var(--color-clay-ink)] transition-colors hover:bg-[var(--color-clay)] hover:text-white disabled:border-[var(--color-pearl)] disabled:text-[var(--color-aged-oak)] disabled:hover:bg-transparent"
         >
-          Export week → Accounts
+          Bill week → Accounts
         </button>
         )}
       </div>
@@ -719,6 +796,29 @@ export function HoursLedger({
             );
           })}
         </p>
+      )}
+
+      {/* W5 (HT-20) — the Export act, beside the studio scope. "Export" now
+          means a file: the invoice hand-off act below is named "Bill week →
+          Accounts" precisely so the two are never confused (plan-v2 §6). */}
+      {scope === 'studio' && (
+        <div className="-mt-2 mb-4">
+          <DocumentAction
+            actionKey="export-time-csv"
+            surfaceKey="hours"
+            regionKey="scope-readout"
+            variant="tertiary"
+            disabled={studioExportRows.length === 0}
+            title={
+              studioExportRows.length === 0
+                ? 'Nothing to export this window'
+                : 'Download every entry in this window as a CSV'
+            }
+            onClick={exportCsv}
+          >
+            Export → CSV
+          </DocumentAction>
+        </div>
       )}
 
       {/* Until the membership read answers, this sheet does not know whose hours
