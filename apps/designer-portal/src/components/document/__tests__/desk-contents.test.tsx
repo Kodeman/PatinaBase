@@ -10,7 +10,32 @@
  * invoice door names its scope (`Draw an invoice · new`).
  */
 import { fireEvent, render, screen } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { DeskContents } from '../desk-contents';
+
+// HT-29 — the Hours line is act-bearing now (unbilled hours to bill, or a timer
+// still running from yesterday), so the index reads two facts and the suite
+// supplies a query client. Both reads answer empty here: the index under test
+// is the labels-and-doorways one, and the act's own states are the Hours
+// sheet's.
+jest.mock('@patina/supabase', () => ({
+  createBrowserClient: () => ({
+    from: () => ({ select: async () => ({ data: [], error: null }) }),
+  }),
+  isInvoiceEligibleTimeEntry: () => true,
+  useRunningTimer: () => ({ data: null }),
+}));
+
+const renderContents = (props: { prominent?: boolean } = {}) =>
+  render(
+    <QueryClientProvider
+      client={
+        new QueryClient({ defaultOptions: { queries: { retry: false } } })
+      }
+    >
+      <DeskContents {...props} />
+    </QueryClientProvider>,
+  );
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: jest.fn() }),
@@ -42,7 +67,7 @@ jest.mock('@/components/document/rooms/drafting/draft-proposal-opener', () => ({
 
 describe('DeskContents — Begin column', () => {
   it('does not render Capture a lead, but keeps every other verb', () => {
-    render(<DeskContents />);
+    renderContents();
 
     expect(
       screen.queryByRole('button', { name: /^Capture a lead/ }),
@@ -60,7 +85,7 @@ describe('DeskContents — Begin column', () => {
   });
 
   it('F08 — the Desk\'s own invoice door names its scope', () => {
-    render(<DeskContents />);
+    renderContents();
 
     expect(
       screen.getByRole('button', { name: /Draw an invoice · new/ }),
@@ -75,7 +100,7 @@ describe('DeskContents — Begin column', () => {
       '@/components/document/rooms/drafting/draft-proposal-opener',
     ) as { openDraftProposalPicker: jest.Mock };
 
-    render(<DeskContents />);
+    renderContents();
 
     const row = screen.getByRole('button', {
       name: /Open the Contract Room/,
@@ -91,7 +116,7 @@ describe('DeskContents — Begin column', () => {
 
 describe('DeskContents — F38 static sub-labels', () => {
   it('every Rooms row carries a sub-label, and reads The Scans', () => {
-    render(<DeskContents />);
+    renderContents();
 
     expect(
       screen.getByRole('button', { name: /Library.*pieces and makers/s }),
@@ -108,7 +133,7 @@ describe('DeskContents — F38 static sub-labels', () => {
   });
 
   it('every Ledgers row carries a sub-label', () => {
-    render(<DeskContents />);
+    renderContents();
 
     expect(
       screen.getByRole('button', { name: /Orders.*POs, receiving, claims/s }),
@@ -127,7 +152,7 @@ describe('DeskContents — F38 static sub-labels', () => {
   });
 
   it('the Begin verbs carry their registry sub-labels', () => {
-    render(<DeskContents />);
+    renderContents();
 
     expect(
       screen.getByRole('button', { name: /Open a project.*no proposal needed/is }),

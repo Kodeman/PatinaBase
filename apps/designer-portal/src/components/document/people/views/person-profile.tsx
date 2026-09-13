@@ -72,6 +72,7 @@ import {
 } from '../profile/profile-cards';
 import { AddPersonSheet } from '../directory/add-person-sheet';
 import { HouseholdSheet } from '../../overlays/household-sheet';
+import { openHoursForMember } from '@/lib/document/open-hours-scope';
 
 /** F3 — the id of the `studio_contacts` row backing this profile, when there
  *  is one: the pure rolodex branch's own id (role 'contact' — TeamProfile's
@@ -777,6 +778,7 @@ function buildNetworkTrack(
 
 function TeamProfile({
   personId,
+  profileId,
   role,
   name,
   email,
@@ -788,6 +790,9 @@ function TeamProfile({
   notify,
 }: {
   personId: string;
+  /** Their user id — HT-8's member scope is keyed on it, and a teammate who has
+   *  not signed in yet has logged no hours to read. */
+  profileId: string | null;
   role: PartyRole;
   name: string;
   email: string | null;
@@ -815,6 +820,15 @@ function TeamProfile({
         phone={phone}
         actions={
           <>
+            {/* HT-8 — the one door into the Hours sheet's member scope. There is
+                no staff picker inside a money ledger; you come here first. */}
+            {profileId && (
+              <ActionButton
+                actionKey="open-person-hours"
+                label="Hours"
+                onClick={() => openHoursForMember(profileId, name)}
+              />
+            )}
             <ActionButton
               actionKey="adjust-person-visibility"
               label="Adjust visibility"
@@ -952,5 +966,11 @@ export function PersonProfile({
     return <NetworkProfile {...common} projectId={person.project_id} />;
   }
 
-  return <TeamProfile {...common} projectId={person.project_id} />;
+  return (
+    <TeamProfile
+      {...common}
+      profileId={person.profile_id}
+      projectId={person.project_id}
+    />
+  );
 }

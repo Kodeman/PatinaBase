@@ -28,7 +28,13 @@
  */
 
 import { useRouter } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
 import { PenTool, type LucideIcon } from 'lucide-react';
+import {
+  createBrowserClient,
+  isInvoiceEligibleTimeEntry,
+  useRunningTimer,
+} from '@patina/supabase';
 import {
   STUDIO_ROOMS,
   STUDIO_LEDGERS,
@@ -66,6 +72,87 @@ const LEDGER_SUBLABEL: Record<string, string> = {
   'the-post': 'mail and messages',
 };
 
+/**
+ * HT-29 — the Desk's "time in hand" line is act-bearing or absent. Never a bare
+ * total: R95 keeps counts and metrics off this index, and HT-30 refuses a total
+ * standing apart from the rows that produced it. So this is one of two acts, or
+ * nothing at all — unbilled hours to bill, or a timer still running from a day
+ * that has ended.
+ */
+function HoursInHandAct() {
+  const runningTimer = useRunningTimer();
+  const { data: unbilled } = useQuery({
+    queryKey: ['desk-contents-unbilled-time'],
+    queryFn: async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = createBrowserClient() as any;
+      const { data, error } = await supabase
+        .from('project_unbilled_time')
+        .select('id, project_id, billing_state');
+      if (error) throw error;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return ((data ?? []) as any[]).filter((row) =>
+        isInvoiceEligibleTimeEntry({
+          billable: true,
+          invoice_id: null,
+          billing_state: row.billing_state,
+        }),
+      );
+    },
+  });
+
+  const timer = runningTimer.data;
+  const startedToday =
+    timer != null &&
+    new Date(timer.started_at).toDateString() === new Date().toDateString();
+
+  if (timer && !startedToday) {
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          openLedger('hours');
+          documentEvents.wayfinding.contentsActed({
+            key: 'hours',
+            kind: 'ledger',
+          });
+        }}
+        className="doc-type-meta pl-[22px] text-left text-[var(--color-clay-ink)] underline decoration-dotted underline-offset-4"
+      >
+        a timer is still running from yesterday →
+      </button>
+    );
+  }
+
+  if ((unbilled?.length ?? 0) === 0) return null;
+
+  const projects = [
+    ...new Set((unbilled ?? []).map((row) => row.project_id as string)),
+  ];
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        if (projects.length === 1) {
+          openInvoiceComposer({
+            projectId: projects[0],
+            initialTimeEntryIds: (unbilled ?? []).map((row) => row.id as string),
+          });
+        } else {
+          openLedger('hours');
+        }
+        documentEvents.wayfinding.contentsActed({
+          key: 'hours',
+          kind: 'ledger',
+        });
+      }}
+      className="doc-type-meta pl-[22px] text-left text-[var(--color-clay-ink)] underline decoration-dotted underline-offset-4"
+    >
+      hours to bill →
+    </button>
+  );
+}
+
 /** The small DM-mono heading over each column of the contents. */
 function ColumnHead({ children }: { children: React.ReactNode }) {
   return (
@@ -85,6 +172,7 @@ function ContentsRow({
   variant,
   prominent,
   onOpen,
+  act,
 }: {
   icon: LucideIcon;
   label: string;
@@ -93,6 +181,9 @@ function ContentsRow({
   variant: RowVariant;
   prominent: boolean;
   onOpen: () => void;
+  /** HT-29 — one act beneath the line, where there is something to act on.
+   *  Sits outside the doorway button: a button inside a button is not markup. */
+  act?: React.ReactNode;
 }) {
   const labelSize = prominent ? 'text-[19px]' : 'text-[17px]';
   // Sub-label indents to sit under the label, past the icon (and, for verbs,
@@ -153,6 +244,7 @@ function ContentsRow({
           </span>
         )}
       </button>
+      {act}
     </li>
   );
 }
@@ -256,6 +348,7 @@ export function DeskContents({ prominent = false }: { prominent?: boolean }) {
                 variant="ledger"
                 prominent={prominent}
                 onOpen={openLedgerRow(ledger.key)}
+                act={ledger.key === 'hours' ? <HoursInHandAct /> : undefined}
               />
             ))}
           </ul>
