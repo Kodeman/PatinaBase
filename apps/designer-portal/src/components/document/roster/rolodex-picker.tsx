@@ -53,6 +53,7 @@ import {
   useStudioContacts,
   type BringForwardPick,
   type PeopleDirectoryRow,
+  type StudioComplianceDocument,
   type StudioContact,
 } from '@patina/supabase';
 import { getPartyKindLabel, type PartyKind } from '@patina/types';
@@ -402,16 +403,34 @@ export function RolodexPicker({
       ),
     [projectsForOrigin],
   );
-  const firmIds = useMemo(
+  /**
+   * BOTH HOLDER CLASSES, because a paper word reduces over both (r10 MAJOR-2).
+   *
+   * This read was `hits.map(c => c.company_id)` alone, so the document list
+   * handed to `noticedPaperClause` could only ever hold FIRM-held rows —
+   * `noticedPaperClause` filters by `holders.has(doc.holder_id)`, so a 00623
+   * `holder_type = 'person'` document was never even a candidate, however many
+   * holder ids the call site named. Two consequences: a mini row's paper WORD
+   * comes from `people_directory`, which per R-BA reduces worst-first over the
+   * person's OWN documents and their firm's, so a row could read `Lapsed` with
+   * no sentence beside it; and SPEC §5.7 #7's consequence sentence omitted a
+   * sole proprietor's own lapsed licence, over a travel list that promises
+   * "document expiries" travel.
+   */
+  const paperHolderIds = useMemo(
     () =>
       [
         ...new Set(
-          hits.map((c) => c.company_id).filter((id): id is string => !!id),
+          hits
+            .flatMap((c) => [c.company_id, c.id])
+            .filter((id): id is string => !!id),
         ),
       ],
     [hits],
   );
-  const { data: firmPaper } = useComplianceDocumentsFor(open ? firmIds : []);
+  const { data: firmPaper } = useComplianceDocumentsFor(
+    open ? paperHolderIds : [],
+  );
   const { data: notices } = useComplianceNotices(open ? organizationId : null);
   const noticeIndex = useMemo(() => indexComplianceNotices(notices), [notices]);
 
@@ -521,10 +540,25 @@ export function RolodexPicker({
   const tradeFor = (contact: StudioContact): string | null =>
     tradesOfCard(contact, firmCardById)[0] ?? null;
 
+  /**
+   * THE NAME COMES OFF THE DOCUMENT, not off the row (r10 MAJOR-2).
+   *
+   * `firmNameFor(contact) ?? contactName(contact)` is right for a firm-held
+   * certificate and wrong for a licence the PERSON holds — it would announce
+   * the person's own paper under their firm's name, which is r9 B-1 in
+   * reverse. This is the branch 00630:368-375 already makes for the
+   * notification.
+   */
+  const paperHolderNameFor =
+    (contact: StudioContact) => (doc: StudioComplianceDocument) =>
+      doc.holder_id === contact.id
+        ? contactName(contact)
+        : (firmNameFor(contact) ?? contactName(contact));
+
   const paperClauseFor = (contact: StudioContact) =>
     noticedPaperClause(
       [contact.company_id, contact.id],
-      firmNameFor(contact) ?? contactName(contact),
+      paperHolderNameFor(contact),
       firmPaper,
       noticeIndex,
       COMPLIANCE_DOC_TYPE_LABELS,
@@ -547,7 +581,10 @@ export function RolodexPicker({
             firmName: firm,
             paperClause: noticedPaperClause(
               [c.company_id, c.id],
-              firm ?? contactName(c),
+              // The person for their own paper, the firm for the firm's
+              // (r10 MAJOR-2).
+              (doc: StudioComplianceDocument) =>
+                doc.holder_id === c.id ? contactName(c) : (firm ?? contactName(c)),
               firmPaper,
               noticeIndex,
               COMPLIANCE_DOC_TYPE_LABELS,

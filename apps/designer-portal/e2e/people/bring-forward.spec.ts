@@ -134,6 +134,18 @@ test("task 5 — search the prior job, tick four, one confirm", async ({
     .poll(async () => rows.count(), { timeout: 15_000 })
     .toBeGreaterThanOrEqual(4);
 
+  /**
+   * R-BP (r10 F1) — THE POOL IS WHATEVER THE BOOK HOLDS FOR THAT JOB: SIX.
+   *
+   * The suite asserted five, off SPEC §5.7's original contract, which predates
+   * the seed's F-28 — Erin Sato's second seat on the Lindqvist job, added to
+   * exercise `people_directory_seats`. She genuinely shares that history, so
+   * she is listed and not selected; no exclusion rule is invented to hide her.
+   */
+  await expect(
+    page.getByRole("checkbox", { name: /Erin Sato/ }),
+  ).not.toBeChecked();
+
   // The history line carries the repeat count and the year the job CLOSED,
   // and never a verdict (PR-i).
   await expect(
@@ -157,7 +169,7 @@ test("task 5 — search the prior job, tick four, one confirm", async ({
   }
 
   await expect(page.locator("[data-pick-count]")).toContainText(
-    "4 of 5 from the Lindqvist kitchen selected",
+    "4 of 6 from the Lindqvist kitchen selected",
   );
 
   // SPEC §5.7 #7 — the consequence sentence, directly under the act row.

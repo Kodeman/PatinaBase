@@ -56,8 +56,9 @@ describe("pickerHistoryLine (PR-i)", () => {
 
 describe("bringForwardSelectionLine (SPEC §5.7 #3)", () => {
   it("names the prior job when every row on offer came from it", () => {
-    expect(bringForwardSelectionLine(4, 5, "Lindqvist kitchen")).toBe(
-      "4 of 5 from the Lindqvist kitchen selected",
+    // R-BP: six is the shipped seed's real pool for that job.
+    expect(bringForwardSelectionLine(4, 6, "Lindqvist kitchen")).toBe(
+      "4 of 6 from the Lindqvist kitchen selected",
     );
   });
 

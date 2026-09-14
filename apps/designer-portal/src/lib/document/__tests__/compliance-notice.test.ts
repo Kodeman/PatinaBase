@@ -169,6 +169,42 @@ describe("noticedPaperClause", () => {
     expect(clause).toBe("Dana Kowalski’s licence lapses on 6 October 2026.");
   });
 
+  /**
+   * r10 MAJOR-2 — a caller asking about BOTH holders at once cannot name them
+   * with one string, and naming the firm for a licence the person holds is
+   * r9 B-1 on a face. 00630:368-375 makes the same branch for the
+   * notification.
+   */
+  it("names the holder the paper actually belongs to", () => {
+    const holderName = (d: StudioComplianceDocument) =>
+      d.holder_id === "card-dana" ? "Dana Kowalski" : "Northgate Electric";
+    const own = noticedPaperClause(
+      ["firm-northgate", "card-dana"],
+      holderName,
+      [
+        doc({
+          id: "doc-3",
+          holder_type: "person",
+          holder_id: "card-dana",
+          doc_type: "license",
+          expires_on: "2026-03-31",
+        }),
+      ],
+      new Map([["doc-3", notice("doc-3", "lapsed")]]),
+      LABELS,
+    );
+    expect(own).toBe("Dana Kowalski’s licence lapsed 31 March 2026.");
+
+    const firm = noticedPaperClause(
+      ["firm-northgate", "card-dana"],
+      holderName,
+      [doc()],
+      new Map([["doc-1", notice("doc-1", "lapses_soon")]]),
+      LABELS,
+    );
+    expect(firm).toBe("Northgate Electric’s insurance lapses on 6 October 2026.");
+  });
+
   it("answers nothing where there is no holder to ask about", () => {
     expect(
       noticedPaperClause(

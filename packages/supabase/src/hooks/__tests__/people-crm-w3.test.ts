@@ -354,9 +354,29 @@ describe("the Bidding band writes a stage with its outcome", () => {
     expect(asBidError(new Error("party_bid_quoted_by_not_a_person"))).toMatch(
       /A firm cannot price a job/,
     );
+    // r10 MAJOR-1: the date-order constraint's REAL name (00631:86-88), the
+    // one a bid whose number stops holding before it was owed actually
+    // raises.
+    expect(
+      asBidError(
+        new Error(
+          'new row for relation "project_parties" violates check constraint "project_parties_bid_window_check"',
+        ),
+      ),
+    ).toMatch(/before the day it was owed/);
+  });
+
+  /**
+   * r10 MAJOR-1 — the map was keyed on
+   * `project_parties_bid_valid_until_check`, which no constraint bears, so the
+   * sentence was dead and the suite was green on it. This is the guard that
+   * catches the next rename: the dead token must fall through to the raw
+   * message rather than resolve.
+   */
+  it("does not answer to the constraint name that never existed", () => {
     expect(
       asBidError(new Error("project_parties_bid_valid_until_check")),
-    ).toMatch(/before the day it was owed/);
+    ).not.toMatch(/before the day it was owed/);
   });
 });
 

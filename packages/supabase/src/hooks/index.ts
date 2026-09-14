@@ -529,9 +529,11 @@ export {
   useAddHouseholdMember,
   asHouseholdError,
   HOUSEHOLD_MEMBER_ROLE_LABELS,
+  HOUSEHOLD_GRANT_SOURCE_CLAUSE,
 } from "./use-households";
 export type {
   ClientHousehold,
+  ClientSideMoneyGrant,
   HouseholdMemberRole,
   CreateClientHouseholdInput,
   SetHouseholdThresholdInput,

@@ -59,7 +59,15 @@ jest.mock('@patina/supabase', () => ({
   // ── W3/P2: what travels, read once for the page ───────────────────────
   useBringForward: () => ({ mutateAsync: bringForwardMutate, isPending: false }),
   useChannelConsentRecords: () => ({ data: consentRecords }),
-  useComplianceDocumentsFor: () => ({ data: firmDocuments }),
+  // r10 MAJOR-2: the real hook is `.in('holder_id', ids)`, so the mock answers
+  // only for the holders the picker actually ASKS about — otherwise a call
+  // site that never names the person's own card still reads their paper here
+  // and the suite cannot see the defect.
+  useComplianceDocumentsFor: (ids: string[]) => ({
+    data: (firmDocuments as Array<{ holder_id: string }>).filter((d) =>
+      (ids ?? []).includes(d.holder_id),
+    ),
+  }),
   useComplianceNotices: () => ({ data: expiryNotices }),
   indexComplianceNotices: (rows: Array<{ document_id: string }> | undefined) =>
     new Map((rows ?? []).map((row) => [row.document_id, row])),
@@ -546,6 +554,48 @@ describe('RolodexPicker — bring forward', () => {
     expect(
       document.querySelector('[data-expiry-notice]')?.textContent,
     ).toBe('Martínez Tile Works’s insurance lapses on 6 October 2026.');
+  });
+
+  /**
+   * r10 MAJOR-2 — A PAPER THE PERSON HOLDS REACHES THE MINI ROW, UNDER THEIR
+   * OWN NAME.
+   *
+   * The document read was `hits.map(c => c.company_id)` alone, so a 00623
+   * `holder_type = 'person'` row was never a candidate — `noticedPaperClause`
+   * filters by `holders.has(doc.holder_id)` — and a mini row could print the
+   * paper WORD `Lapsed` (which per R-BA reduces over the person's own
+   * documents too) with no sentence beside it. Naming it off the row rather
+   * than off the document would then have announced it as the FIRM's, which
+   * is r9 B-1 in reverse.
+   */
+  it('prints a person-held expiry under the person’s own name (r10 MAJOR-2)', () => {
+    useStudioContacts.mockReturnValue({
+      data: [{ ...ROSA, company_id: 'firm-tile' }],
+      isLoading: false,
+    });
+    firmDocuments = [
+      {
+        id: 'doc-own',
+        holder_id: 'contact-1',
+        doc_type: 'license',
+        doc_label: null,
+        expires_on: '2026-03-31',
+        blocks: ['site_access'],
+        superseded_by: null,
+      },
+    ];
+    expiryNotices = [
+      { id: 'n-own', document_id: 'doc-own', state: 'lapsed', noticed_at: '2026-09-13' },
+    ];
+    render(<RolodexPicker {...props} projectName="Okonkwo residence" />);
+    expect(
+      document.querySelector('[data-expiry-notice]')?.textContent,
+    ).toBe('Rosa Martínez’s licence lapsed 31 March 2026.');
+
+    fireEvent.click(screen.getByRole('checkbox', { name: /Rosa Martínez/ }));
+    expect(
+      document.querySelector('[data-bring-forward-consequence]')?.textContent,
+    ).toContain('Rosa Martínez’s licence lapsed 31 March 2026.');
   });
 
   /**
