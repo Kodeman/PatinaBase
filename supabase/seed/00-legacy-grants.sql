@@ -15912,6 +15912,18 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00618_authority_rate_role_binding.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.materialize_standard_parts(uuid) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00618_authority_rate_role_binding.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.materialize_standard_parts(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 00620_legacy_project_studio_stamp.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.project_author_books_elsewhere(uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;

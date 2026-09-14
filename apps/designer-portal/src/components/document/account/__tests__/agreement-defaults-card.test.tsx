@@ -6,7 +6,12 @@ let memberRole = "owner";
 let agreementDefaultsRow: any = {
   studioId: "studio-1",
   rateCard: [
-    { roleName: "Principal designer", hourlyRateCents: 22_500, sortOrder: 0 },
+    {
+      roleName: "Principal designer",
+      hourlyRateCents: 22_500,
+      sortOrder: 0,
+      rosterRole: "lead_designer",
+    },
   ],
   depositPercent: 50,
   cadence: "monthly",
@@ -130,7 +135,12 @@ beforeEach(() => {
   agreementDefaultsRow = {
     studioId: "studio-1",
     rateCard: [
-      { roleName: "Principal designer", hourlyRateCents: 22_500, sortOrder: 0 },
+      {
+        roleName: "Principal designer",
+        hourlyRateCents: 22_500,
+        sortOrder: 0,
+        rosterRole: "lead_designer",
+      },
     ],
     depositPercent: 50,
     cadence: "monthly",
@@ -144,9 +154,9 @@ describe("Account · Studio · Agreement defaults", () => {
   it("seeds every field from the studio's saved row", () => {
     render(<AccountStudioPage />);
     expect(screen.getByText("Agreement defaults")).toBeInTheDocument();
-    expect(screen.getByLabelText("Default role 1")).toHaveValue(
-      "Principal designer",
-    );
+    // HT-4 — the role is PICKED, not typed. The label the studio wrote stays
+    // beside the binding; the control's value is the binding.
+    expect(screen.getByLabelText("Default role 1")).toHaveValue("lead_designer");
     expect(screen.getByLabelText("Default role 1 hourly rate")).toHaveValue(
       "225",
     );
@@ -214,11 +224,11 @@ describe("Account · Studio · Agreement defaults", () => {
     expect(saveButton()).toBeDisabled();
   });
 
-  it("saves trimmed, renumbered values and drops blank roles", async () => {
+  it("saves renumbered values and carries each binding (HT-4)", async () => {
     render(<AccountStudioPage />);
     fireEvent.click(screen.getByRole("button", { name: "+ Add a role" }));
     fireEvent.change(screen.getByLabelText("Default role 2"), {
-      target: { value: "  Junior designer  " },
+      target: { value: "bookkeeper" },
     });
     fireEvent.change(screen.getByLabelText("Default role 2 hourly rate"), {
       target: { value: "110" },
@@ -238,8 +248,14 @@ describe("Account · Studio · Agreement defaults", () => {
           roleName: "Principal designer",
           hourlyRateCents: 22_500,
           sortOrder: 0,
+          rosterRole: "lead_designer",
         },
-        { roleName: "Junior designer", hourlyRateCents: 11_000, sortOrder: 1 },
+        {
+          roleName: "Bookkeeper",
+          hourlyRateCents: 11_000,
+          sortOrder: 1,
+          rosterRole: "bookkeeper",
+        },
       ],
       depositPercent: 50,
       cadence: "monthly",
@@ -279,6 +295,63 @@ describe("Account · Studio · Agreement defaults", () => {
     ).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Default role 1")).not.toBeInTheDocument();
     expect(screen.getByText(/Principal designer/)).toBeInTheDocument();
+  });
+
+  // ── HT-4, the studio half. `materialize_standard_parts` seeds a new
+  // agreement's rate card from THIS array, so a label written here with no
+  // binding beside it is the stranding defect at its origin: every agreement
+  // the studio starts inherits it.
+  it("offers exactly the four roster roles, and never the client", () => {
+    render(<AccountStudioPage />);
+    const options = Array.from(
+      (screen.getByLabelText("Default role 1") as HTMLSelectElement).options,
+    ).map((option) => option.value);
+    expect(options).toEqual([
+      "",
+      "lead_designer",
+      "support_designer",
+      "bookkeeper",
+      "vendor",
+    ]);
+    expect(options).not.toContain("client");
+  });
+
+  it("shows a legacy label as the unchosen state until somebody picks", () => {
+    agreementDefaultsRow = {
+      ...agreementDefaultsRow,
+      rateCard: [
+        { roleName: "Principal designer", hourlyRateCents: 22_500, sortOrder: 0 },
+      ],
+    };
+    render(<AccountStudioPage />);
+    const picker = screen.getByLabelText("Default role 1") as HTMLSelectElement;
+    expect(picker).toHaveValue("");
+    expect(picker.options[0].text).toBe("Principal designer");
+
+    fireEvent.change(picker, { target: { value: "lead_designer" } });
+    expect(picker).toHaveValue("lead_designer");
+    expect(saveButton()).toBeEnabled();
+  });
+
+  it("does not offer the same role twice, and spends the act at four", () => {
+    render(<AccountStudioPage />);
+    const taken = () =>
+      Array.from(
+        (screen.getByLabelText("Default role 1") as HTMLSelectElement).options,
+      ).find((option) => option.value === "lead_designer");
+    expect(taken()?.disabled).toBe(false);
+
+    fireEvent.click(screen.getByRole("button", { name: "+ Add a role" }));
+    expect(
+      Array.from(
+        (screen.getByLabelText("Default role 2") as HTMLSelectElement).options,
+      ).find((option) => option.value === "lead_designer")?.disabled,
+    ).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "+ Add a role" }));
+    fireEvent.click(screen.getByRole("button", { name: "+ Add a role" }));
+    expect(screen.getByRole("button", { name: "+ Add a role" })).toBeDisabled();
+    expect(screen.getByLabelText("Default role 4")).toHaveValue("vendor");
   });
 
   it("is not on the page at all with the flag off", () => {

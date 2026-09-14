@@ -17,6 +17,7 @@ import {
   type AgreementPart,
   type AgreementPartKind,
   type AgreementScheduleVariant,
+  type RosterRateRole,
 } from "@patina/types";
 
 /** The seven schedule variants Wave 1 can author. The other eight are in the
@@ -430,14 +431,17 @@ export function readItems(payload: Record<string, unknown>): PartListItem[] {
  * normalize-match `lead_designer`, which stranded every hour a default two-role
  * card should have priced.
  */
-export const ROSTER_RATE_ROLES = [
+export const ROSTER_RATE_ROLES: readonly {
+  value: RosterRateRole;
+  label: string;
+}[] = [
   { value: "lead_designer", label: "Lead designer" },
   { value: "support_designer", label: "Support designer" },
   { value: "bookkeeper", label: "Bookkeeper" },
   { value: "vendor", label: "Vendor" },
 ] as const;
 
-export type RosterRateRole = (typeof ROSTER_RATE_ROLES)[number]["value"];
+export type { RosterRateRole };
 
 export function rosterRoleLabel(value: RosterRateRole): string {
   return (

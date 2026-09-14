@@ -108,6 +108,25 @@ export function duplicateMoneyBlocker(label: string): string {
  *  with it and the readiness panel prints it. */
 export const BLANK_ROLE_BLOCKER = "Every role on the rate card needs a name.";
 
+/**
+ * HT-4 — a rate that names no roster role prices nobody.
+ *
+ * `resolve_time_rate_cents` and `classify_project_time_entry_authority` (00618)
+ * ask `roster_role` first and fall to the legacy label only for a card written
+ * before the binding existed. That fallback is a normalize-match, so a card
+ * carrying two labels neither of which matches — the shipped default
+ * "Principal designer" beside "Associate" — prices every hour on the project at
+ * `rate_source='none'`, `pending_authorization`, NULL `authority_rate_id`, for
+ * ever: 00577's promotion loop will not promote a row with no rate to promote.
+ *
+ * The room asks for the binding BEFORE the document is sent, because after
+ * countersign the rate rows are the immutable snapshot of a signed contract and
+ * the binding can no longer be made. Save is unaffected — a draft is allowed to
+ * be unfinished — and a card that carries no roles at all asks nothing.
+ */
+export const UNBOUND_ROLE_BLOCKER =
+  "Every rate on the card names the roster role it prices.";
+
 /** R33 — a fee the homeowner never sees never reaches the money row. */
 export const HIDDEN_FEE_BLOCKER =
   "This fee is hidden from your client, so it cannot bill.";
@@ -279,6 +298,12 @@ export function assessAgreementReadiness({
       // blank one is a save the server will not take.
       if (roles.some((role) => role.roleName.trim().length === 0)) {
         add(part.id, BLANK_ROLE_BLOCKER);
+      }
+      // HT-4 — and every rate binds to a roster role, or the hours it was
+      // written to price strand at `rate_source='none'` the moment the
+      // agreement is countersigned.
+      if (roles.length > 0 && roles.some((role) => !role.rosterRole)) {
+        add(part.id, UNBOUND_ROLE_BLOCKER);
       }
     }
 

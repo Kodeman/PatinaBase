@@ -75,8 +75,15 @@ const exclusions = () =>
     payload: { items: [{ id: "b", text: "Construction labor" }] },
   });
 const roleRates = (
+  // HT-4 — the standard card is BOUND. An unbound rate prices nobody once the
+  // agreement is countersigned, so readiness holds the send until it is bound.
   roles = [
-    { roleName: "Principal designer", hourlyRateCents: 22_500, sortOrder: 0 },
+    {
+      roleName: "Principal designer",
+      hourlyRateCents: 22_500,
+      sortOrder: 0,
+      rosterRole: "lead_designer",
+    },
   ],
 ) =>
   part({
@@ -385,6 +392,69 @@ describe("assessAgreementReadiness — the conditional facet rules", () => {
     expect(messages(parts)).not.toContain(
       "Every role on the rate card needs a name.",
     );
+  });
+
+  // HT-4 — the defect this program was built to close, asked at the door the
+  // designer can still do something about it at. After countersign the rate
+  // rows are the immutable snapshot of a signed contract.
+  it("HT-4: blocks a rate row that names no roster role", () => {
+    const parts = [
+      ...nine().filter((p) => p.partKey !== "patina.role_rates"),
+      roleRates([
+        {
+          roleName: "Principal designer",
+          hourlyRateCents: 26_000,
+          sortOrder: 0,
+        },
+        { roleName: "Associate", hourlyRateCents: 11_000, sortOrder: 1 },
+      ]),
+    ];
+    expect(messages(parts)).toContain(
+      "Every rate on the card names the roster role it prices.",
+    );
+    expect(assess(parts).ready).toBe(false);
+  });
+
+  it("HT-4: blocks a card where only ONE of two rates is bound", () => {
+    const parts = [
+      ...nine().filter((p) => p.partKey !== "patina.role_rates"),
+      roleRates([
+        {
+          roleName: "Principal designer",
+          hourlyRateCents: 26_000,
+          sortOrder: 0,
+          rosterRole: "lead_designer",
+        },
+        { roleName: "Associate", hourlyRateCents: 11_000, sortOrder: 1 },
+      ]),
+    ];
+    expect(messages(parts)).toContain(
+      "Every rate on the card names the roster role it prices.",
+    );
+  });
+
+  it("HT-4: says nothing when every rate is bound", () => {
+    const parts = [
+      ...nine().filter((p) => p.partKey !== "patina.role_rates"),
+      roleRates([
+        {
+          roleName: "Principal designer",
+          hourlyRateCents: 26_000,
+          sortOrder: 0,
+          rosterRole: "lead_designer",
+        },
+        {
+          roleName: "Associate",
+          hourlyRateCents: 11_000,
+          sortOrder: 1,
+          rosterRole: "support_designer",
+        },
+      ]),
+    ];
+    expect(messages(parts)).not.toContain(
+      "Every rate on the card names the roster role it prices.",
+    );
+    expect(assess(parts).ready).toBe(true);
   });
 
   it("R-8: blocks a negative retainer", () => {

@@ -21,6 +21,7 @@
 --   resolve_time_rate_cents ................. 00599 → 00615:380 → 00618
 --   classify_project_time_entry_authority ... 00412 → 00575 → 00578 → 00601
 --                                             → 00613:126 → 00618
+--   materialize_standard_parts .............. 00575:3073 → 00618
 -- Each body below is its head's body VERBATIM (extracted by line range, not
 -- retyped) with exactly the delta named in its own banner comment grafted in.
 --
@@ -44,6 +45,17 @@
 -- grafted bodies, so a roster_role-NULL snapshot prices exactly as it did
 -- yesterday. Signed paper is not renormalised to tidy a column. A postcondition
 -- asserts no snapshot row was written.
+--
+-- WHY materialize_standard_parts IS HERE. The picker binds the card the
+-- designer composes; `materialize_standard_parts` (00575:3073) is what LAYS
+-- THAT CARD DOWN, from `studio_agreement_defaults.rate_card` — the studio's own
+-- default, written on the Account page. Left alone it seeded every new
+-- agreement from free-text labels, so the default path a studio actually
+-- configures went on stranding hours through a door the composer never opened:
+-- two labels, neither normalize-matching, signed, countersigned, and every hour
+-- on the project priced 'none' for ever. The seed now carries the binding from
+-- both its sources, the studio's default card is normalised the way the
+-- proposal rates are, and the Account page writes the enum instead of free text.
 --
 -- P-4 (no backfill) is not engaged: no project_time_entries row is re-priced,
 -- re-rated or touched by this file.
@@ -157,6 +169,88 @@ BEGIN
     ENABLE TRIGGER guard_proposal_service_rates_projection;
 
   RAISE NOTICE '00618: % proposal_service_rates row(s) normalized onto the roster enum; the rest keep their labels.', v_stamped;
+END
+$$;
+
+-- ── (2a) the same normalisation, on the card a studio actually configures ──
+-- `studio_agreement_defaults.rate_card` is a jsonb array of
+-- {roleName, hourlyRateCents, sortOrder}, written by the Account page and read
+-- by materialize_standard_parts below. It is the SOURCE of the shipped default
+-- card, so a label here that never normalize-matches is the stranding defect at
+-- its origin: every agreement the studio starts inherits it.
+--
+-- Same rule as above, and for the same reason: stamp only where the answer is
+-- unambiguous inside its own card. A card naming "Lead designer" twice, or
+-- "Lead designer" beside "lead_designer", is left entirely alone — both entries
+-- keep their labels, the room shows them as the unchosen state, and readiness
+-- holds the send until an owner picks. No money moves: this table prices
+-- nothing, it seeds.
+DO $$
+DECLARE
+  v_cards integer;
+BEGIN
+  -- A migration is not a studio editing its defaults: `updated_at` (and the
+  -- `updated_by` beside it) answer "who last changed this, and when", and
+  -- stamping today's date on every studio would make that answer a lie.
+  ALTER TABLE public.studio_agreement_defaults
+    DISABLE TRIGGER set_studio_agreement_defaults_updated_at;
+
+  WITH entry AS (
+    SELECT d.studio_id,
+           e.ord,
+           e.value,
+           CASE WHEN jsonb_typeof(e.value) <> 'object' THEN NULL
+             ELSE CASE regexp_replace(
+                    replace(lower(btrim(COALESCE(e.value->>'roleName', ''))), '_', ' '),
+                    '\s+', ' ', 'g')
+               WHEN 'lead designer'    THEN 'lead_designer'
+               WHEN 'support designer' THEN 'support_designer'
+               WHEN 'bookkeeper'       THEN 'bookkeeper'
+               WHEN 'vendor'           THEN 'vendor'
+             END
+           END AS roster_role
+    FROM public.studio_agreement_defaults AS d
+    CROSS JOIN LATERAL jsonb_array_elements(d.rate_card)
+      WITH ORDINALITY AS e(value, ord)
+  ),
+  stampable AS (
+    SELECT studio_id, ord, value, roster_role
+    FROM entry
+    WHERE roster_role IS NOT NULL
+      AND value->>'rosterRole' IS NULL
+      AND NOT EXISTS (
+        SELECT 1 FROM entry AS peer
+        WHERE peer.studio_id   = entry.studio_id
+          AND peer.roster_role = entry.roster_role
+          AND peer.ord        <> entry.ord
+      )
+  ),
+  rebuilt AS (
+    SELECT entry.studio_id,
+           jsonb_agg(
+             CASE WHEN stampable.ord IS NULL THEN entry.value
+                  ELSE entry.value || jsonb_build_object('rosterRole', stampable.roster_role)
+             END
+             ORDER BY entry.ord
+           ) AS rate_card
+    FROM entry
+    LEFT JOIN stampable
+      ON stampable.studio_id = entry.studio_id AND stampable.ord = entry.ord
+    WHERE EXISTS (
+      SELECT 1 FROM stampable AS any_row WHERE any_row.studio_id = entry.studio_id
+    )
+    GROUP BY entry.studio_id
+  )
+  UPDATE public.studio_agreement_defaults AS d
+     SET rate_card = rebuilt.rate_card
+    FROM rebuilt
+   WHERE d.studio_id = rebuilt.studio_id;
+  GET DIAGNOSTICS v_cards = ROW_COUNT;
+
+  ALTER TABLE public.studio_agreement_defaults
+    ENABLE TRIGGER set_studio_agreement_defaults_updated_at;
+
+  RAISE NOTICE '00618: % studio default rate card(s) normalized onto the roster enum; the rest keep their labels.', v_cards;
 END
 $$;
 
@@ -1741,6 +1835,299 @@ $$;
 REVOKE ALL ON FUNCTION public.classify_project_time_entry_authority()
   FROM PUBLIC, anon, authenticated, service_role;
 
+-- ═══════════════════════════════════════════════════════════════════════════
+-- (6) materialize_standard_parts — the seed carries the binding
+--
+-- Head: 00575:3073 (sole definition — no later migration redefines it).
+-- Body VERBATIM by line range; two deltas, both named inline:
+--   delta 1 — the proposal's own rates project `rosterRole` into the part, so
+--             opening the room and saving does not un-bind a bound card;
+--   delta 2 — the studio-default arm is projected key by key, carrying
+--             `rosterRole` and admitting only the four values.
+-- Everything else — the idempotent early return, the read-only studio
+-- resolution, R3-5's deposit, R28's retainer, B-7's 'legacy' widen, B-9's
+-- effectiveAt — is 00575's, untouched.
+-- ═══════════════════════════════════════════════════════════════════════════
+CREATE OR REPLACE FUNCTION public.materialize_standard_parts(p_proposal_id uuid)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_proposal public.proposals%ROWTYPE;
+  v_terms public.proposal_service_terms%ROWTYPE;
+  v_defaults public.studio_agreement_defaults%ROWTYPE;
+  v_studio_id uuid;
+  v_existing integer;
+  v_deliverables jsonb;
+  v_exclusions jsonb;
+  v_rate_card jsonb;
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'materializing the standard parts requires an authenticated author'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  SELECT * INTO v_proposal FROM public.proposals
+  WHERE id = p_proposal_id FOR UPDATE;
+  IF NOT FOUND OR v_proposal.status <> 'draft'
+     OR NOT public._can_author_proposal(v_proposal.designer_id)
+  THEN
+    RAISE EXCEPTION 'draft proposal % not found or access denied', p_proposal_id
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF v_proposal.document_kind NOT IN ('legacy', 'design_services', 'service_addendum') THEN
+    RAISE EXCEPTION 'proposal % is not a design-services draft', p_proposal_id
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  -- Idempotent: two tabs opening the room do not double-seed.
+  SELECT count(*) INTO v_existing FROM public.proposal_agreement_parts
+  WHERE proposal_id = p_proposal_id;
+  IF v_existing > 0 THEN
+    RETURN jsonb_build_object(
+      'proposalId', p_proposal_id,
+      'materialized', false,
+      'partCount', v_existing,
+      'parts', COALESCE((
+        SELECT jsonb_agg(to_jsonb(ap) ORDER BY ap.position, ap.id)
+        FROM public.proposal_agreement_parts ap WHERE ap.proposal_id = p_proposal_id
+      ), '[]'::jsonb)
+    );
+  END IF;
+
+  SELECT * INTO v_terms FROM public.proposal_service_terms
+  WHERE proposal_id = p_proposal_id;
+
+  -- Read-only studio resolution. The project's studio when the document is
+  -- bound; otherwise the lead designer's own studio in set_project_studio_id's
+  -- order (00563:266-277), minus the sibling-project leg, which needs a client
+  -- this read does not have. A missing defaults row is not an error.
+  SELECT pr.studio_id INTO v_studio_id
+  FROM public.projects pr WHERE pr.id = v_proposal.project_id;
+  IF v_studio_id IS NULL THEN
+    SELECT membership.organization_id INTO v_studio_id
+    FROM public.organization_members AS membership
+    JOIN public.organizations AS studio
+      ON studio.id = membership.organization_id
+    WHERE membership.user_id = v_proposal.designer_id
+      AND membership.status = 'active'
+      AND membership.role <> 'guest'
+      AND studio.type = 'design_studio'
+      AND studio.status = 'active'
+    ORDER BY
+      (membership.role = 'owner') DESC,
+      membership.joined_at NULLS LAST,
+      membership.created_at,
+      membership.organization_id
+    LIMIT 1;
+  END IF;
+  IF v_studio_id IS NOT NULL THEN
+    SELECT * INTO v_defaults FROM public.studio_agreement_defaults
+    WHERE studio_id = v_studio_id;
+  END IF;
+
+  v_deliverables := COALESCE((
+    SELECT jsonb_agg(jsonb_build_object(
+      'id', extensions.gen_random_uuid()::text, 'text', d.value #>> '{}'
+    ) ORDER BY d.ord)
+    FROM jsonb_array_elements(COALESCE(v_terms.deliverables, '[]'::jsonb))
+      WITH ORDINALITY AS d(value, ord)
+  ), '[]'::jsonb);
+  IF jsonb_array_length(v_deliverables) = 0 THEN
+    v_deliverables := (
+      SELECT jsonb_agg(jsonb_build_object(
+        'id', extensions.gen_random_uuid()::text, 'text', d.value
+      ) ORDER BY d.ord)
+      FROM unnest(ARRAY[
+        'Concept presentation', 'Design documentation', 'Selection schedules'
+      ]) WITH ORDINALITY AS d(value, ord)
+    );
+  END IF;
+
+  v_exclusions := COALESCE((
+    SELECT jsonb_agg(jsonb_build_object(
+      'id', extensions.gen_random_uuid()::text, 'text', x.value #>> '{}'
+    ) ORDER BY x.ord)
+    FROM jsonb_array_elements(COALESCE(v_terms.exclusions, '[]'::jsonb))
+      WITH ORDINALITY AS x(value, ord)
+  ), '[]'::jsonb);
+  IF jsonb_array_length(v_exclusions) = 0 THEN
+    v_exclusions := COALESCE((
+      SELECT jsonb_agg(jsonb_build_object(
+        'id', extensions.gen_random_uuid()::text, 'text', x.value #>> '{}'
+      ) ORDER BY x.ord)
+      FROM jsonb_array_elements(COALESCE(v_defaults.default_exclusions, '[]'::jsonb))
+        WITH ORDINALITY AS x(value, ord)
+    ), '[]'::jsonb);
+  END IF;
+  IF jsonb_array_length(v_exclusions) = 0 THEN
+    v_exclusions := (
+      SELECT jsonb_agg(jsonb_build_object(
+        'id', extensions.gen_random_uuid()::text, 'text', x.value
+      ) ORDER BY x.ord)
+      FROM unnest(ARRAY[
+        'Construction labor', 'Furnishings, freight, tax, and installation'
+      ]) WITH ORDINALITY AS x(value, ord)
+    );
+  END IF;
+
+  -- (B-9) The date each rate took effect is seeded with it, so opening the
+  -- Contract Room and saving does not re-stamp a back-dated rate to today.
+  -- (HT-4, 00618 delta 1) The binding rides with the label. Without it the
+  -- composer re-opens a bound card as unbound, the designer picks again, and
+  -- the save DELETE-then-INSERTs the row with roster_role NULL — the binding
+  -- is lost on the round trip through the room it was made in.
+  v_rate_card := COALESCE((
+    SELECT jsonb_agg(jsonb_build_object(
+      'roleName', r.role_name,
+      'hourlyRateCents', r.hourly_rate_cents,
+      'sortOrder', r.sort_order,
+      'rosterRole', r.roster_role,
+      'effectiveAt', r.effective_at
+    ) ORDER BY r.sort_order, r.role_name)
+    FROM public.proposal_service_rates r
+    WHERE r.proposal_id = p_proposal_id
+      AND r.version = COALESCE(v_terms.current_rate_version, 1)
+  ), '[]'::jsonb);
+  -- (HT-4, 00618 delta 2) And so does the STUDIO's default card, which is the
+  -- card a studio actually configures: this arm is what seeds a brand-new
+  -- agreement, and a seed that dropped the binding would hand every new
+  -- document the stranding defect back. Projected key by key rather than
+  -- passed through whole, so a value outside the four (or a label with no
+  -- binding beside it) reaches the part as the unchosen state instead of as a
+  -- card `upsert_agreement_parts` will refuse to save.
+  IF jsonb_array_length(v_rate_card) = 0 THEN
+    v_rate_card := COALESCE((
+      SELECT jsonb_agg(jsonb_build_object(
+        'roleName', COALESCE(d.value->>'roleName', ''),
+        'hourlyRateCents',
+          CASE WHEN d.value->>'hourlyRateCents' ~ '^[0-9]+(\.[0-9]+)?$'
+            THEN round((d.value->>'hourlyRateCents')::numeric)
+            ELSE 0 END,
+        'sortOrder',
+          CASE WHEN d.value->>'sortOrder' ~ '^[0-9]+$'
+            THEN (d.value->>'sortOrder')::integer
+            ELSE (d.ord - 1)::integer END,
+        'rosterRole',
+          CASE WHEN d.value->>'rosterRole' IN
+                 ('lead_designer', 'support_designer', 'bookkeeper', 'vendor')
+            THEN d.value->>'rosterRole' END
+      ) ORDER BY
+        CASE WHEN d.value->>'sortOrder' ~ '^[0-9]+$'
+          THEN (d.value->>'sortOrder')::integer
+          ELSE (d.ord - 1)::integer END,
+        d.ord)
+      FROM jsonb_array_elements(COALESCE(v_defaults.rate_card, '[]'::jsonb))
+        WITH ORDINALITY AS d(value, ord)
+      WHERE jsonb_typeof(d.value) = 'object'
+        AND COALESCE(d.value->>'roleName', '') <> ''
+    ), '[]'::jsonb);
+  END IF;
+
+  -- (B-7) The same widen upsert_agreement_parts performs at its own door.
+  -- Seeding is the act that makes a document composed, and the client's
+  -- bundle takes the RETIRED early-return for document_kind 'legacy' — so
+  -- nine parts would be hashed into the fingerprint she signs against and
+  -- invisible on the page she reads. commercial_state is deliberately NOT
+  -- touched here: seeding lays out what already exists, and the first real
+  -- save through upsert_agreement_parts is what authors.
+  UPDATE public.proposals
+  SET document_kind = 'design_services', updated_at = now()
+  WHERE id = p_proposal_id AND document_kind = 'legacy';
+
+  INSERT INTO public.proposal_agreement_parts (
+    proposal_id, position, kind, variant, part_key, title, payload,
+    required, client_visible
+  ) VALUES
+    (p_proposal_id, 1, 'clause', NULL, 'patina.services', 'Services',
+     jsonb_build_object('body', COALESCE(NULLIF(v_terms.scope, ''),
+       'Interior design services, including concept development, design documentation, and selections.')),
+     true, true),
+    (p_proposal_id, 2, 'list', NULL, 'patina.deliverables', 'Deliverables',
+     jsonb_build_object('items', v_deliverables), false, true),
+    (p_proposal_id, 3, 'list', NULL, 'patina.exclusions', 'Exclusions',
+     jsonb_build_object('items', v_exclusions), false, true),
+    (p_proposal_id, 4, 'schedule', 'rate_card', 'patina.role_rates', 'Role rates',
+     jsonb_build_object('roles', v_rate_card), false, true),
+    (p_proposal_id, 5, 'schedule', 'ceiling', 'patina.ceiling', 'Ceiling',
+     jsonb_build_object('cents', v_terms.billing_ceiling_cents), false, true),
+    -- (R3-5) The deposit is seeded ONLY from a percent somebody set — this
+    -- document's own, or the studio's default. The 50 the furnishings
+    -- authorization falls back to is a house constant, not a term of this
+    -- agreement: seeded here it printed "50% deposit" on the page the
+    -- homeowner signs, three paragraphs above the sentence saying furnishings
+    -- require a separate named authorization. Unset stays unset, and the
+    -- client's copy prints no deposit term at all.
+    (p_proposal_id, 6, 'schedule', 'procurement', 'patina.deposit', 'Furnishings deposit',
+     jsonb_build_object('depositPercent',
+       COALESCE(v_terms.furnishings_deposit_percent, v_defaults.deposit_percent)),
+     false, true),
+    -- (R28) Nothing the designer did not type prints as a MONEY term. A
+    -- retainer is an amount, and an amount nobody wrote is unwritten: the old
+    -- COALESCE(..., 0) invented a figure for a draft with no terms row. Unset
+    -- stays unset; the room's readiness panel asks for it, and the projection
+    -- still falls to 0 when it writes the money row, exactly as before.
+    -- (A billing cadence is not an amount — see the amendment below it.)
+    (p_proposal_id, 7, 'schedule', 'retainer', 'patina.retainer', 'Retainer',
+     jsonb_build_object(
+       'cents', v_terms.retainer_amount_cents,
+       'creditRule', COALESCE(v_defaults.retainer_credit_rule, 'credited'),
+       'activationPolicy', COALESCE(v_terms.retainer_activation_policy, 'immediate')),
+     false, true),
+    -- (R28 amended — re-gate 2, F1, rulings-2026-09-06.md.) billing_cadence is
+    -- NOT NULL DEFAULT 'monthly', so on any document that HAS a terms row this
+    -- part is seeded 'monthly' whatever the COALESCE says. Ruled deliberate: a
+    -- cadence saved from the seven-facet room counts as chosen — the room shows
+    -- the select with Monthly preselected and the designer saves it, exactly as
+    -- today's shipped agreement does, and the composed room shows the cadence
+    -- part the same way.
+    --
+    -- The last COALESCE arm is the FRESH DRAFT, which the amendment did not
+    -- have in view: a document with no terms row at all seeded {"cadence":
+    -- null} while the composed room's select showed Monthly preselected, so
+    -- readiness demanded a cadence the designer could see was already chosen —
+    -- and re-picking the selected option fires no change event, so there was no
+    -- act that cleared it. The seven-facet room writes 'monthly' onto exactly
+    -- this draft (emptyTerms), so 'monthly' is what the part carries here too.
+    -- The part says what the editor shows, on every road in.
+    (p_proposal_id, 8, 'schedule', 'cadence', 'patina.cadence', 'Billing cadence',
+     jsonb_build_object('cadence',
+       COALESCE(v_terms.billing_cadence, v_defaults.cadence, 'monthly')),
+     false, true),
+    (p_proposal_id, 9, 'clause', NULL, 'patina.terms', 'Terms',
+     jsonb_build_object('body', COALESCE(v_terms.terms, '')), true, true);
+
+  -- R4's floor is deliberately NOT asked here. Seeding is not composing: this
+  -- reads a state that already exists — a terms row a co-member may have
+  -- cleared the ceiling on while the document was a draft
+  -- (proposal_service_terms_studio_rw, 00412:318), or a studio default rate
+  -- card with no default ceiling beside it — and lays it out as parts so the
+  -- room can show it. Refusing here would lock that studio out of the
+  -- composer altogether, with a sentence about a part it has not been shown
+  -- yet. The room's readiness panel names the missing ceiling the moment the
+  -- rail renders, and send / sign / the paper door each refuse to let the
+  -- document leave draft — which is where the harm was: an uncapped hourly
+  -- agreement that seeded, and then SENT. The save door does not ask it
+  -- either, for the same reason this one does not: a draft is allowed to be
+  -- unfinished (see upsert_agreement_parts).
+  RETURN jsonb_build_object(
+    'proposalId', p_proposal_id,
+    'materialized', true,
+    'partCount', 9,
+    'parts', COALESCE((
+      SELECT jsonb_agg(to_jsonb(ap) ORDER BY ap.position, ap.id)
+      FROM public.proposal_agreement_parts ap WHERE ap.proposal_id = p_proposal_id
+    ), '[]'::jsonb)
+  );
+END;
+$$;
+REVOKE ALL ON FUNCTION public.materialize_standard_parts(uuid)
+  FROM PUBLIC, anon, service_role;
+GRANT EXECUTE ON FUNCTION public.materialize_standard_parts(uuid)
+  TO authenticated;
+
 -- ── postconditions ─────────────────────────────────────────────────────────
 DO $postcondition$
 DECLARE
@@ -1752,6 +2139,8 @@ DECLARE
     'public._project_agreement_terms(uuid,jsonb,jsonb,boolean)'::regprocedure);
   v_upsert     text := pg_get_functiondef(
     'public.upsert_agreement_parts(uuid,jsonb,text)'::regprocedure);
+  v_seed       text := pg_get_functiondef(
+    'public.materialize_standard_parts(uuid)'::regprocedure);
   v_aac        text;
 BEGIN
   -- ── (a) the column exists on both halves, bounded to the four values ──────
@@ -1963,6 +2352,55 @@ BEGIN
       AND policyname = 'Users can update own profile'),
     '00618: HT-35''s opt-out is written through "Users can update own profile" '
     'and no new policy — that policy must still exist';
+
+  -- ── (h) the seed carries the binding, from BOTH its sources ─────────────
+  -- Without delta 1 the composer un-binds a bound card on the round trip
+  -- through the room; without delta 2 every new agreement starts from the
+  -- studio's free-text labels, which is defect #2 arriving by the default path
+  -- a studio actually configures.
+  ASSERT v_seed ~ '''rosterRole'', r\.roster_role',
+    '00618: materialize_standard_parts must project the proposal''s own '
+    'roster_role into the rate-card part (delta 1)';
+  ASSERT v_seed ~ 'd\.value->>''rosterRole''',
+    '00618: and must carry the STUDIO default card''s binding through (delta 2)';
+  ASSERT v_seed !~ 'v_rate_card := COALESCE\(v_defaults\.rate_card',
+    '00618: the studio-default arm must be the projected one, not 00575''s '
+    'pass-the-whole-array arm — that arm cannot admit only the four values';
+  -- 00575's own invariants, re-asserted on the grafted body (§0.4).
+  ASSERT v_seed ~ 'SET document_kind = ''design_services''',
+    '00618: B-7''s legacy widen was lost from the seed';
+  ASSERT v_seed ~ 'COALESCE\(v_terms\.furnishings_deposit_percent, v_defaults\.deposit_percent\)',
+    '00618: R3-5''s deposit rule was lost from the seed';
+  ASSERT v_seed ~ 'COALESCE\(v_terms\.billing_cadence, v_defaults\.cadence, ''monthly''\)',
+    '00618: R28''s amended cadence fallback was lost from the seed';
+  ASSERT v_seed ~ '''cents'', v_terms\.retainer_amount_cents',
+    '00618: R28''s unwritten retainer was lost from the seed';
+  ASSERT v_seed ~ 'v_existing > 0',
+    '00618: the seed''s idempotent early return was lost — two tabs opening the '
+    'room would double-seed';
+  ASSERT v_seed ~ '''effectiveAt'', r\.effective_at',
+    '00618: B-9''s effective date was lost from the seed';
+  ASSERT (SELECT prosecdef FROM pg_proc
+          WHERE oid = 'public.materialize_standard_parts(uuid)'::regprocedure),
+    '00618: the seed stays SECURITY DEFINER (00575)';
+  ASSERT has_function_privilege('authenticated',
+    'public.materialize_standard_parts(uuid)', 'EXECUTE'),
+    '00618: the seed is the composer''s own door and stays granted to authenticated';
+  ASSERT NOT has_function_privilege('anon',
+    'public.materialize_standard_parts(uuid)', 'EXECUTE'),
+    '00618: and stays revoked from anon';
+
+  -- ── (i) the studio default cards carry only the four values ─────────────
+  ASSERT NOT EXISTS (
+    SELECT 1
+    FROM public.studio_agreement_defaults AS d
+    CROSS JOIN LATERAL jsonb_array_elements(d.rate_card) AS e(value)
+    WHERE jsonb_typeof(e.value) = 'object'
+      AND e.value->>'rosterRole' IS NOT NULL
+      AND e.value->>'rosterRole' NOT IN
+        ('lead_designer', 'support_designer', 'bookkeeper', 'vendor')),
+    '00618: a studio default rate card carries a binding outside the four — '
+    'the seed would hand the composer a card upsert_agreement_parts refuses';
 
   RAISE NOTICE '00618 postconditions passed.';
 END

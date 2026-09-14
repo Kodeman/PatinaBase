@@ -105,9 +105,36 @@ export const PATINA_STANDARD_AGREEMENT_PARTS = [
   { partKey: 'patina.terms',       kind: 'clause',   variant: null,          defaultTitle: 'Terms',              required: true  },
 ] as const;
 
+/**
+ * HT-4 (RULED 2026-09-11) — the roster roles a rate row may BIND to: the
+ * billable subset of `project_team_members.role` (00084:164-165). `'client'`
+ * is a roster role and is deliberately not one of them — a signed rate card
+ * may not price the homeowner's own hours.
+ *
+ * Declared here because three surfaces write the same binding: the composer's
+ * rate-card part, the studio's Agreement-defaults rate card, and the
+ * `roster_role` column both rate tables carry (00618).
+ */
+export type RosterRateRole =
+  | 'lead_designer'
+  | 'support_designer'
+  | 'bookkeeper'
+  | 'vendor';
+
+/** One row of a rate card, wherever it is written. The label is what the
+ *  client reads; `rosterRole` is what prices the hour. Absent on a card
+ *  written before the binding existed — the server still prices those by
+ *  their label (00618's legacy leg). */
+export interface RateCardRow {
+  roleName: string;
+  hourlyRateCents: number;
+  sortOrder: number;
+  rosterRole?: RosterRateRole;
+}
+
 export interface StudioAgreementDefaults {
   studioId: string;
-  rateCard: { roleName: string; hourlyRateCents: number; sortOrder: number }[];
+  rateCard: RateCardRow[];
   depositPercent: number | null;
   cadence: 'monthly' | 'biweekly' | 'milestone';
   retainerCreditRule: 'credited' | 'non_refundable' | 'replenishing';

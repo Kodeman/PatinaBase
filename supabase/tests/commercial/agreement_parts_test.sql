@@ -2640,4 +2640,129 @@ BEGIN
   RAISE NOTICE 'PASS 39: the paper signature door opens for a composed flat fee, and all four doors ask one question (M4)';
 END $$;
 
+-- ═══════════════════════════════════════════════════════════════════════════
+-- (40) HT-4 — THE SEED CARRIES THE BINDING, FROM BOTH ITS SOURCES.
+--
+-- The picker binds the card the designer composes; materialize_standard_parts
+-- is what LAYS THAT CARD DOWN. Two sources, two ways to lose the binding:
+--
+--   (a) the proposal's OWN rates. Without 'rosterRole' in the projection the
+--       composer re-opens a bound card as unbound, the designer picks again,
+--       and the DELETE-then-INSERT save writes roster_role NULL — the binding
+--       is lost on a round trip through the room it was made in.
+--   (b) the STUDIO's default card, which is what seeds a brand-new agreement.
+--       This is the path a studio actually configures on the Account page, and
+--       a seed that dropped the binding handed every new document the stranding
+--       defect back: two labels, neither normalize-matching, signed, and every
+--       hour on the project priced 'none' for ever.
+--
+-- And the studio arm admits only the four roster roles: a card carrying
+-- 'client' (a project_team_members.role value, deliberately not a rate role)
+-- reaches the part as the unchosen state rather than as a card
+-- upsert_agreement_parts will refuse.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+SELECT pg_temp.assume_user('a5000000-0000-4000-8000-000000000001');
+SELECT pg_temp.mint_agreement('a5300000-0000-4000-8000-000000000022', 'The bound rate card');
+
+DO $$
+DECLARE v_parts jsonb; v_bound text; v_stored text;
+BEGIN
+  PERFORM public.materialize_standard_parts('a5300000-0000-4000-8000-000000000022');
+
+  -- The room binds the card and saves it.
+  SELECT jsonb_agg(
+    CASE WHEN ap.part_key = 'patina.role_rates'
+      THEN jsonb_build_object(
+        'kind', ap.kind, 'variant', ap.variant, 'partKey', ap.part_key,
+        'title', ap.title, 'required', ap.required,
+        'clientVisible', ap.client_visible,
+        'payload', jsonb_build_object('roles', jsonb_build_array(
+          jsonb_build_object(
+            'roleName', 'Principal designer', 'hourlyRateCents', 26000,
+            'sortOrder', 0, 'rosterRole', 'lead_designer',
+            'effectiveAt', '2026-01-01T00:00:00+00:00')))) 
+      ELSE jsonb_build_object(
+        'kind', ap.kind, 'variant', ap.variant, 'partKey', ap.part_key,
+        'title', ap.title, 'payload', ap.payload,
+        'required', ap.required, 'clientVisible', ap.client_visible)
+    END ORDER BY ap.position) INTO v_parts
+  FROM public.proposal_agreement_parts ap
+  WHERE ap.proposal_id = 'a5300000-0000-4000-8000-000000000022';
+
+  PERFORM public.upsert_agreement_parts('a5300000-0000-4000-8000-000000000022', v_parts);
+
+  SELECT r.roster_role INTO v_stored FROM public.proposal_service_rates r
+  WHERE r.proposal_id = 'a5300000-0000-4000-8000-000000000022';
+  ASSERT v_stored = 'lead_designer',
+    format('HT-4: the parts door must store the binding, got %L', v_stored);
+
+  -- And the room is opened again: discard, re-seed from what the document says.
+  PERFORM public.discard_agreement_parts('a5300000-0000-4000-8000-000000000022');
+  PERFORM public.materialize_standard_parts('a5300000-0000-4000-8000-000000000022');
+
+  SELECT ap.payload->'roles'->0->>'rosterRole' INTO v_bound
+  FROM public.proposal_agreement_parts ap
+  WHERE ap.proposal_id = 'a5300000-0000-4000-8000-000000000022'
+    AND ap.part_key = 'patina.role_rates';
+  ASSERT v_bound = 'lead_designer',
+    format('HT-4 (a): the seed must carry the proposal''s own binding back into '
+           'the part, got %L — the room un-binds the card it bound', v_bound);
+
+  RAISE NOTICE 'PASS 40a: a bound rate card survives the round trip through the room (HT-4)';
+END $$;
+
+-- (b) The studio's default card — the path a new agreement actually starts on.
+
+UPDATE public.studio_agreement_defaults
+SET rate_card = jsonb_build_array(
+      jsonb_build_object('roleName', 'Principal designer',
+        'hourlyRateCents', 26000, 'sortOrder', 0, 'rosterRole', 'lead_designer'),
+      jsonb_build_object('roleName', 'Associate',
+        'hourlyRateCents', 11000, 'sortOrder', 1),
+      jsonb_build_object('roleName', 'The homeowner',
+        'hourlyRateCents', 9900, 'sortOrder', 2, 'rosterRole', 'client'))
+WHERE studio_id = 'a5100000-0000-4000-8000-000000000001';
+
+SELECT pg_temp.assume_user('a5000000-0000-4000-8000-000000000001');
+
+INSERT INTO public.proposals (
+  id, designer_id, designer_client_id, client_id, title, description,
+  total_amount, status, valid_until, document_kind
+) VALUES (
+  'a5300000-0000-4000-8000-000000000023',
+  'a5000000-0000-4000-8000-000000000001',
+  'a5200000-0000-4000-8000-000000000001', 'a5000000-0000-4000-8000-000000000004',
+  'The agreement that starts from the studio''s own card', 'No terms row yet.',
+  0, 'draft', DATE '2027-06-01', 'design_services');
+
+DO $$
+DECLARE v_roles jsonb;
+BEGIN
+  PERFORM public.materialize_standard_parts('a5300000-0000-4000-8000-000000000023');
+
+  SELECT ap.payload->'roles' INTO v_roles
+  FROM public.proposal_agreement_parts ap
+  WHERE ap.proposal_id = 'a5300000-0000-4000-8000-000000000023'
+    AND ap.part_key = 'patina.role_rates';
+
+  ASSERT jsonb_array_length(v_roles) = 3,
+    format('HT-4 (b): the studio''s three default rows must all seed, got %s',
+           v_roles::text);
+  ASSERT v_roles->0->>'rosterRole' = 'lead_designer',
+    format('HT-4 (b): the studio''s binding must reach the new agreement, got %L',
+           v_roles->0->>'rosterRole');
+  ASSERT (v_roles->0->>'hourlyRateCents')::bigint = 26000
+     AND v_roles->0->>'roleName' = 'Principal designer',
+    format('HT-4 (b): the label and the rate ride beside it, got %s', v_roles->0);
+  ASSERT jsonb_typeof(v_roles->1->'rosterRole') = 'null',
+    format('HT-4 (b): an unbound default row seeds as the unchosen state, got %s',
+           v_roles->1);
+  ASSERT jsonb_typeof(v_roles->2->'rosterRole') = 'null',
+    format('HT-4 (b): ''client'' is not a rate role and must not seed as one, '
+           'got %s', v_roles->2);
+
+  RAISE NOTICE 'PASS 40b: a new agreement starts from the studio''s card WITH its binding (HT-4)';
+END $$;
+
 ROLLBACK;
