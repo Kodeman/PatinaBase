@@ -116,6 +116,11 @@ export function mergeConsequenceSentence(
     `${mergedName}’s ${moves} move onto ` +
     `${survivorName}, and ${mergedName}’s own number and address travel with them. ` +
     ruleStays +
+    // r5 B-1 — the thirteen typed facts travel too, COALESCEd, so the sheet
+    // states the rule the studio's choice of survivor actually decides.
+    `Everything else ${mergedName} holds — the verdict, the trades, the notes ` +
+    `and the payee facts — travels the same way, and where both cards say ` +
+    `something ${survivorName}’s own words stand. ` +
     `Consent stays with the number, not with the card, so nobody’s yes or no changes. ` +
     `${mergedName}’s paper moves onto ${survivorName} too; where ` +
     `${survivorName} already holds the same paper, still in force, the older one is marked superseded. ` +
@@ -127,6 +132,58 @@ interface FieldRow {
   label: string;
   a: string;
   b: string;
+}
+
+/**
+ * r5 B-1 — THE FACTS THAT TRAVEL, AND THE ONES A SURVIVOR OVERRIDES.
+ *
+ * The table compared nine fields and none of the thirteen typed facts a card
+ * carries was among them — verdict, trades, specialties, notes, warranty, and
+ * the whole Payee region (legal name, DBA, remit-to, retainage, tax id, W-9).
+ * 00629 now carries every one onto the survivor, COALESCEd, so the survivor's
+ * own value wins where it has one — which makes WHICH CARD SURVIVES the lever
+ * that decides which of two typed values the room keeps. PR-o calls that
+ * choice "the studio knows which card carries the real history", and the
+ * studio cannot know it off a table that does not print these.
+ *
+ * Rendered only where at least one card holds the fact, so the ordinary
+ * duplicate — two thin cards sharing a phone — still shows nine rows.
+ */
+function carriedRows(
+  a: StudioContact | null | undefined,
+  b: StudioContact | null | undefined,
+): FieldRow[] {
+  const text = (value: string | null | undefined) =>
+    (value ?? "").trim() || null;
+  const list = (value: readonly string[] | null | undefined) =>
+    value && value.length > 0 ? value.join(", ") : null;
+  const bps = (value: number | null | undefined) =>
+    value == null ? null : `${(value / 100).toFixed(2).replace(/\.00$/, "")}%`;
+  const taxId = (value: string | null | undefined) =>
+    text(value) ? `••• ${String(value).trim()}` : null;
+
+  const fields: Array<[string, (card: StudioContact) => string | null]> = [
+    ["Verdict", (card) => text(card.studio_verdict)],
+    ["Trades", (card) => list(card.trades)],
+    ["Specialties", (card) => list(card.specialties)],
+    ["Notes", (card) => text(card.notes)],
+    ["Legal name", (card) => text(card.legal_name)],
+    ["Trading as", (card) => text(card.dba_name)],
+    ["Remit-to", (card) => text(card.remit_to)],
+    ["Retainage", (card) => bps(card.retainage_bps)],
+    ["Tax ID", (card) => taxId(card.tax_id_last4)],
+    ["W-9 on file", (card) => formatLongDate(card.w9_on_file_at)],
+    ["Warranty until", (card) => formatLongDate(card.warranty_until)],
+  ];
+
+  const rows: FieldRow[] = [];
+  for (const [label, read] of fields) {
+    const left = a ? read(a) : null;
+    const right = b ? read(b) : null;
+    if (left === null && right === null) continue;
+    rows.push({ label, a: left ?? "—", b: right ?? "—" });
+  }
+  return rows;
 }
 
 export function CompareMergeSheet({
@@ -237,6 +294,7 @@ export function CompareMergeSheet({
       { label: "Papers on file", a: a.paper, b: b.paper },
       { label: "Seats on jobs", a: a.seats, b: b.seats },
       { label: "In the book since", a: a.since, b: b.since },
+      ...carriedRows(left, right),
     ];
     // `channelLine` and `seatCount` close over the same four queries the deps
     // below name, so listing them separately would only re-run the same work.
@@ -270,8 +328,14 @@ export function CompareMergeSheet({
         matched_on: matchedOn,
         survivor_flipped: survivorId !== preferredSurvivorId(left, right),
       });
+      // r5 B-1 — "carries everything <merged> held" was false: the RPC moved
+      // two columns of fifteen and the room said so in its own status voice.
+      // 00629 now carries every typed fact across, COALESCEd, so the true
+      // sentence is the one that names the survivor's own words as the ones
+      // that stand where both cards spoke.
       onMerged?.(
-        `Two cards are now one. ${survivorName} carries everything ${mergedName} held.`,
+        `Two cards are now one. ${survivorName} carries what ${mergedName} held, ` +
+          `and where both cards said something, ${survivorName}’s own words stand.`,
         survivorId,
       );
       onClose();
@@ -305,6 +369,18 @@ export function CompareMergeSheet({
         <span className={`mt-0.5 block ${LABEL}`}>
           {chosen ? "Keeps the card" : "Keep this one instead"}
         </span>
+        {/* r5 M-4 — the column head said only "Keeps the card", so a studio
+            could pick a card it had PUT AWAY and take the whole identity out
+            of the rolodex read. 00629 refuses that merge by name; this says so
+            before the press, on the column it is true of. */}
+        {card?.archived_at ? (
+          <span
+            data-survivor-archived={id ?? undefined}
+            className={`mt-0.5 block ${LABEL} text-[var(--terracotta-ink)]`}
+          >
+            Put away
+          </span>
+        ) : null}
       </button>
     );
   };

@@ -16865,6 +16865,12 @@ END $g$;
 
 -- 00630_compliance_expiry_sweep.sql
 DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.clear_compliance_notices_on_date_change() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00630_compliance_expiry_sweep.sql
+DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.sweep_compliance_expiries() FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
@@ -16920,6 +16926,18 @@ END $g$;
 -- 00632_client_households.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.add_household_member(uuid, uuid, text, uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00632_client_households.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.set_household_threshold(uuid, integer) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00632_client_households.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.set_household_threshold(uuid, integer) TO authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 

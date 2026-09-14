@@ -1903,7 +1903,7 @@ export function useResolvedContactId(contactId: string | null | undefined) {
   });
 }
 
-/** `merge_studio_contacts()`'s ten named refusals, as sentences. */
+/** `merge_studio_contacts()`'s eleven named refusals, as sentences. */
 const MERGE_REFUSAL_SENTENCES: Record<string, string> = {
   merge_contact_not_found: 'One of these cards is no longer in the book.',
   merge_same_card: 'That is one card, not two.',
@@ -1920,6 +1920,10 @@ const MERGE_REFUSAL_SENTENCES: Record<string, string> = {
     'These two cards name two different Patina accounts, so they are two people. Take the account off one of them first, or leave them as two.',
   merge_contact_rule_conflict:
     'The card being folded in says contact is blocked or routed elsewhere, and the card you are keeping says something else. Settle one rule on the card you are keeping, then merge.',
+  // r5 M-4 — the survivor is a card the studio put away, so the merge would
+  // take the whole identity out of the rolodex read.
+  merge_survivor_archived:
+    'The card you chose to keep has been put away. Put it back on the shelf first, or keep the other card instead.',
 };
 
 /** Render a merge refusal as a sentence; anything else comes back as itself. */

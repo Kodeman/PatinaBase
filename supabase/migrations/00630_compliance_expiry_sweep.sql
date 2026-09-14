@@ -10,21 +10,30 @@
 -- (compliance_state). Nothing announces. F-11's COI lapsed 2026-03-31 between
 -- the Lindqvist kitchen and the Okonkwo residence, and the first time anybody
 -- would learn it is the day a draw is assembled. This file is the announcement:
--- one notice per (document, state) as a paper crosses into `lapses_soon` and
--- again as it crosses into `lapsed`, plus one in-app notification per
--- owner/admin of the holding studio.
+-- one notice per (document, state, expires_on) as a paper crosses into
+-- `lapses_soon` and again as it crosses into `lapsed`, plus one in-app
+-- notification per owner/admin of the holding studio.
 --
 -- LINEAGE: 00300 (groom_agent_tasks — the advisory-lock / job_runs shape) →
 -- 00574:1565-1699 (invoice-checkout-attempts-expire, the shipped copy of that
 -- shape this file is asked to reuse) → 00623 (studio_compliance_documents,
 -- compliance_state) → 00630.
 --
--- ── ONE NOTICE PER (DOCUMENT, STATE) ──────────────────────────────────────
+-- ── ONE NOTICE PER (DOCUMENT, STATE, EXPIRES_ON) ──────────────────────────
 -- The table's unique index IS the idempotency rule, not a nicety: the sweep
 -- runs nightly and a paper stays lapsed for as long as it stays on file, so
 -- without it the studio would be told the same thing every morning until
 -- somebody uploaded a renewal. A paper that crosses `lapses_soon` and later
 -- `lapsed` gets exactly two notices, in that order, and never a third.
+--
+-- The DATE is the third column of that key, and a genuine change to
+-- expires_on clears that document's notices outright (r5 M-3, two halves —
+-- see the index and the trigger below). expires_on is freely editable by any
+-- active studio member, and a key of (document, state) that nothing ever
+-- cleared was permanent: correcting a mistyped date, extending the same row
+-- instead of recording a renewal, or moving the date out of the window and
+-- back spent that document's notice forever and the studio was never told
+-- again.
 --
 -- The in-app notification is written ONLY when the notice row was actually
 -- inserted (ON CONFLICT DO NOTHING ... RETURNING), so the two can never
@@ -127,8 +136,30 @@ CREATE TABLE IF NOT EXISTS public.studio_compliance_notices (
                     REFERENCES public.studio_compliance_documents(id) ON DELETE CASCADE,
 
   state           text NOT NULL,
+
+  -- THE DATE THE NOTICE WAS ABOUT (r5 M-3). Part of the idempotency key, not
+  -- decoration: see the index below.
+  expires_on      date NOT NULL,
+
   noticed_at      timestamptz NOT NULL DEFAULT now()
 );
+
+-- Idempotent for a database that already carries the pre-r5 shape.
+ALTER TABLE public.studio_compliance_notices
+  ADD COLUMN IF NOT EXISTS expires_on date;
+
+UPDATE public.studio_compliance_notices n
+   SET expires_on = COALESCE(d.expires_on, n.noticed_at::date)
+  FROM public.studio_compliance_documents d
+ WHERE d.id = n.document_id
+   AND n.expires_on IS NULL;
+
+-- No row can survive that UPDATE with a NULL: document_id is NOT NULL and
+-- carries a foreign key, so every notice joins a document, and the COALESCE
+-- has a second leg. This raises rather than deleting if that ever stops
+-- being true.
+ALTER TABLE public.studio_compliance_notices
+  ALTER COLUMN expires_on SET NOT NULL;
 
 ALTER TABLE public.studio_compliance_notices
   DROP CONSTRAINT IF EXISTS studio_compliance_notices_state_check;
@@ -137,21 +168,52 @@ ALTER TABLE public.studio_compliance_notices
     state IN ('lapses_soon', 'lapsed')
   );
 
--- THE IDEMPOTENCY RULE. One notice per (document, state), forever.
-CREATE UNIQUE INDEX IF NOT EXISTS idx_studio_compliance_notices_doc_state
-  ON public.studio_compliance_notices(document_id, state);
+-- THE IDEMPOTENCY RULE. One notice per (document, state, THE DATE IT WAS
+-- ABOUT) — r5 M-3.
+--
+-- It was (document, state), which is permanent, and nothing ever clears a
+-- notice row, while studio_compliance_documents.expires_on is freely editable
+-- by any active studio member (studio_compliance_documents_member_update). So
+-- the ordinary act of correcting a mistyped date — or extending the same row
+-- instead of recording a renewal — permanently SPENT that document's notice.
+-- Measured: the sweep writes the lapses_soon notice; expires_on moves to
+-- CURRENT_DATE + 400 (state `current`); it moves back to CURRENT_DATE + 5
+-- (state `lapses_soon` again); the sweep returns {"notices":0,"notified":0}
+-- and the studio is never told. Direction §8 P2's promise — "a lapse
+-- announces itself before it blocks a draw" — failed for every document whose
+-- date had crossed the boundary twice.
+--
+-- The date is the right third column because it is what the notice SAYS: the
+-- message reads "… lapses 31 Mar 2026", so a different date is a different
+-- sentence and has never been told. A nightly rerun against an unchanged
+-- document still writes nothing, which is the whole of the original rule.
+-- Keyed rather than cleared on edit, so the table stays what its own COMMENT
+-- says it is: an append-only record of what the studio has been told.
+DROP INDEX IF EXISTS public.idx_studio_compliance_notices_doc_state;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_studio_compliance_notices_doc_state_date
+  ON public.studio_compliance_notices(document_id, state, expires_on);
 
 CREATE INDEX IF NOT EXISTS idx_studio_compliance_notices_org
   ON public.studio_compliance_notices(organization_id, noticed_at DESC);
 
 COMMENT ON TABLE public.studio_compliance_notices IS
   'What the studio has ALREADY been told about a compliance paper''s expiry '
-  '(direction §8 P2). One row per (document, state), enforced by a unique '
-  'index — the sweep runs nightly and a lapsed paper stays lapsed, so without '
-  'it the studio would hear the same sentence every morning. A paper that '
+  '(direction §8 P2). One row per (document, state, expires_on), enforced by '
+  'a unique index — the sweep runs nightly and a lapsed paper stays lapsed, '
+  'so without it the studio would hear the same sentence every morning. The '
+  'DATE is in the key because a corrected or extended expires_on is a '
+  'different sentence the studio has never heard, and the pair (document, '
+  'state) alone spent a document''s notice forever the first time anybody '
+  'edited its date across the boundary (r5 M-3). A paper that '
   'crosses lapses_soon and later lapsed earns exactly two rows. Written ONLY '
   'by sweep_compliance_expiries(); there is no INSERT, UPDATE or DELETE '
   'policy for authenticated and no such grant (00630).';
+
+COMMENT ON COLUMN public.studio_compliance_notices.expires_on IS
+  'The document''s expiry AS IT STOOD when this notice was written — the date '
+  'the notice''s own sentence names. Third column of the idempotency key, so '
+  'a corrected or extended date earns its own announcement instead of being '
+  'silenced by a notice about a date that no longer exists (r5 M-3).';
 
 COMMENT ON COLUMN public.studio_compliance_notices.state IS
   'lapses_soon (inside compliance_document_state()''s 30-day window) or '
@@ -172,6 +234,58 @@ REVOKE ALL ON TABLE public.studio_compliance_notices
 GRANT SELECT ON TABLE public.studio_compliance_notices TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.studio_compliance_notices
   TO service_role;
+
+-- ── AND A MOVED DATE UNSPENDS THE NOTICE (r5 M-3, second half) ────────────
+-- The key above is necessary and not sufficient. It answers the ordinary
+-- correction — a mistyped 2026 for 2025, a renewal recorded by extending the
+-- same row — because a different date is a different sentence. It does NOT
+-- answer the measured repro, which moves the date OUT of the window
+-- (CURRENT_DATE + 400, state `current`) and then back to the SAME value: the
+-- key matches the notice already on file and the sweep stays silent over a
+-- document that has crossed the boundary twice.
+--
+-- So a genuine change to expires_on clears that document's notices outright.
+-- The two halves answer different halves of the defect and neither is
+-- redundant: the trigger unspends what a change made stale, the key keeps the
+-- row honest about which date it was about. Nothing the studio was actually
+-- TOLD is lost — the notification_log rows are the record of what was said
+-- and are untouched; this table is the sweep's idempotency ledger.
+--
+-- SECURITY DEFINER because the writer is an ordinary studio member
+-- (studio_compliance_documents_member_update) and `authenticated` holds no
+-- DELETE on studio_compliance_notices, deliberately. Scoped to the one
+-- document's own rows and nothing else.
+CREATE OR REPLACE FUNCTION public.clear_compliance_notices_on_date_change()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+BEGIN
+  DELETE FROM public.studio_compliance_notices n WHERE n.document_id = NEW.id;
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.clear_compliance_notices_on_date_change()
+  FROM PUBLIC, anon, authenticated;
+
+COMMENT ON FUNCTION public.clear_compliance_notices_on_date_change() IS
+  'AFTER UPDATE OF expires_on on studio_compliance_documents, when the date '
+  'actually changed: drops that document''s studio_compliance_notices rows so '
+  'the nightly sweep announces the new date. Without it a document whose date '
+  'crossed the lapses_soon boundary twice was never announced again, because '
+  'nothing ever cleared a notice and expires_on is freely editable by any '
+  'active studio member (r5 M-3). SECURITY DEFINER: the editor is an ordinary '
+  'member and `authenticated` holds no DELETE on the notices table (00630).';
+
+DROP TRIGGER IF EXISTS clear_compliance_notices_on_date_change_trg
+  ON public.studio_compliance_documents;
+CREATE TRIGGER clear_compliance_notices_on_date_change_trg
+  AFTER UPDATE OF expires_on ON public.studio_compliance_documents
+  FOR EACH ROW
+  WHEN (OLD.expires_on IS DISTINCT FROM NEW.expires_on)
+  EXECUTE FUNCTION public.clear_compliance_notices_on_date_change();
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- 3. sweep_compliance_expiries — 00574's shape, one job_runs row per run
@@ -261,10 +375,10 @@ BEGIN
       CONTINUE WHEN v_doc.state NOT IN ('lapses_soon', 'lapsed');
 
       INSERT INTO public.studio_compliance_notices
-        (organization_id, document_id, state)
+        (organization_id, document_id, state, expires_on)
       VALUES
-        (v_doc.organization_id, v_doc.id, v_doc.state)
-      ON CONFLICT (document_id, state) DO NOTHING
+        (v_doc.organization_id, v_doc.id, v_doc.state, v_doc.expires_on)
+      ON CONFLICT (document_id, state, expires_on) DO NOTHING
       RETURNING id INTO v_notice_id;
 
       -- Already told. The nightly rerun stops here, and no notification is
@@ -384,11 +498,15 @@ COMMENT ON FUNCTION public.sweep_compliance_expiries() IS
   'Nightly pg_cron sweep (00630, direction §8 P2): every dated, gating, '
   'non-superseded compliance paper inside compliance_document_state()''s '
   '30-day window or past its date writes ONE studio_compliance_notices row '
-  'per (document, state) and one in_app notification_log row per owner/admin '
-  'of the holding studio. The unique index is the idempotency rule, and the '
+  'per (document, state, expires_on) and one in_app notification_log row per '
+  'owner/admin of the holding studio. The unique index is the idempotency '
+  'rule, and the '
   'notification is written only where the notice row actually landed, so the '
-  'studio is told twice in a paper''s life — once as it enters lapses_soon '
-  'and once as it lapses — and never again. Advisory xact lock, one job_runs '
+  'studio is told twice for any one date — once as it enters lapses_soon '
+  'and once as it lapses — and never again. A date the studio CORRECTS or '
+  'EXTENDS is a different sentence, so it announces again rather than being '
+  'silenced by a notice about a date that no longer exists (r5 M-3). '
+  'Advisory xact lock, one job_runs '
   'row per invocation, skipped on contention: 00574:1565-1699''s shape. '
   'service_role only; no authenticated grant — this is a job, not an act '
   '(00630).';
@@ -419,7 +537,7 @@ SELECT cron.schedule(
 -- documentation; a stack without pg_cron must not fail the migration over a
 -- sentence.
 DO $$ BEGIN
-  EXECUTE $C$COMMENT ON EXTENSION pg_cron IS 'pg_cron schedules: see cron.job for the authoritative registry. Everyone on the Job (00630): compliance-document-expiry-sweep nightly at 06:00 UTC -> public.sweep_compliance_expiries(), writing one studio_compliance_notices row per (document, state) as a gating compliance paper enters lapses_soon or lapses, plus one in_app notification_log row per owner/admin of the holding studio; history in job_runs. The Invoice, Standing Alone (00574): invoice-checkout-attempts-expire at 17 past every hour -> public.expire_stale_invoice_checkout_attempts(), expiring claimed/session_created Checkout attempts older than 24h (never processing), history in job_runs. The Decision, Delivered (00572): decision-reminders-hourly on the hour -> the decision-reminders edge function, replacing 00092''s decision-reminders-daily at 09:00 UTC so the per-recipient not-before-8am-local gate has an hour to release into; notification-digest-hourly at 20 past -> the notification-digest edge function, replacing 00278''s notification-digest-daily at 15:00 UTC for the same reason (the summary owes the same 8am-local, never-Sunday promise as the letter); client-push-window-release every 15 minutes -> public.release_due_client_pushes(200), dispatching push envelopes held outside 8am-8pm local; decision-first-notice-retry-sweep every 30 minutes -> public.sweep_decision_first_notices(100), re-inviting decision-first-notice for a published approval that never got its letter. Studio onboarding (00553): expire-stale-workspace-invites-daily at 07:40 UTC. Rendered Room v2 (00491): dispatch-scan-modal-sweep every 5 minutes. Rendered Room v2 (00501): expire-stale-upload-intents-daily at 07:15 UTC. Room View, Agent OS, BOH, Field Site Request, Mood Board, invoice/decision reminders, and earlier schedules are unchanged (see prior registry text / cron.job).'$C$;
+  EXECUTE $C$COMMENT ON EXTENSION pg_cron IS 'pg_cron schedules: see cron.job for the authoritative registry. Everyone on the Job (00630): compliance-document-expiry-sweep nightly at 06:00 UTC -> public.sweep_compliance_expiries(), writing one studio_compliance_notices row per (document, state, expires_on) as a gating compliance paper enters lapses_soon or lapses, plus one in_app notification_log row per owner/admin of the holding studio; history in job_runs. The Invoice, Standing Alone (00574): invoice-checkout-attempts-expire at 17 past every hour -> public.expire_stale_invoice_checkout_attempts(), expiring claimed/session_created Checkout attempts older than 24h (never processing), history in job_runs. The Decision, Delivered (00572): decision-reminders-hourly on the hour -> the decision-reminders edge function, replacing 00092''s decision-reminders-daily at 09:00 UTC so the per-recipient not-before-8am-local gate has an hour to release into; notification-digest-hourly at 20 past -> the notification-digest edge function, replacing 00278''s notification-digest-daily at 15:00 UTC for the same reason (the summary owes the same 8am-local, never-Sunday promise as the letter); client-push-window-release every 15 minutes -> public.release_due_client_pushes(200), dispatching push envelopes held outside 8am-8pm local; decision-first-notice-retry-sweep every 30 minutes -> public.sweep_decision_first_notices(100), re-inviting decision-first-notice for a published approval that never got its letter. Studio onboarding (00553): expire-stale-workspace-invites-daily at 07:40 UTC. Rendered Room v2 (00491): dispatch-scan-modal-sweep every 5 minutes. Rendered Room v2 (00501): expire-stale-upload-intents-daily at 07:15 UTC. Room View, Agent OS, BOH, Field Site Request, Mood Board, invoice/decision reminders, and earlier schedules are unchanged (see prior registry text / cron.job).'$C$;
 EXCEPTION
   WHEN insufficient_privilege THEN NULL;
   WHEN undefined_object THEN NULL;

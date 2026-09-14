@@ -1,0 +1,29 @@
+{
+  "closeContact": {
+    "id": "f43a1c1f-2808-426f-b323-fca3ce9c863b",
+    "full_name": "QA R5 Close Seat is5ix"
+  },
+  "closeSeatId": "b0227aa3-4793-433d-8cdd-d9661f4d2277",
+  "archiveContact": {
+    "id": "af9d9b00-af84-47a4-9911-c7ef31769b1a",
+    "full_name": "QA R5 Archive Door is5kg"
+  },
+  "closeConfirmSentence": "– Close QA R5 Close Seat is5ix’s seat? The seat stays on the job with the day it closed, and everything it carries stays with it.",
+  "closedSeatRow": {
+    "id": "b0227aa3-4793-433d-8cdd-d9661f4d2277",
+    "off_job_at": "2026-09-14",
+    "off_job_reason": "QA R5 probe: role no longer needed on this job.",
+    "stage": "off_job"
+  },
+  "archiveBtnAriaDisabled": null,
+  "archivedRow": {
+    "id": "af9d9b00-af84-47a4-9911-c7ef31769b1a",
+    "archived_at": "2026-09-14T00:43:53.786637+00:00"
+  },
+  "archivedSentenceOnReload": "This card was put away 14 September 2026. It stays out of the book until it is brought back.",
+  "restoredRow": {
+    "id": "af9d9b00-af84-47a4-9911-c7ef31769b1a",
+    "archived_at": null
+  },
+  "cleanedUp": true
+}

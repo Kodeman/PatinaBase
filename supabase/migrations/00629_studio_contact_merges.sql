@@ -958,6 +958,29 @@ BEGIN
                    || '. Merge into that card instead.';
   END IF;
 
+  -- ── THE CARD BEING KEPT MAY NOT BE ONE THE STUDIO PUT AWAY (r5 M-4) ─────
+  -- archived_at and merged_into are two different absences and the RPC read
+  -- only one of them. PR-o pre-picks the OLDER card, which is exactly the card
+  -- a studio archives, and directoryDuplicatePairs() buckets an archived row
+  -- beside a live one — so the room's own pre-pick walked the studio into
+  -- folding a live identity onto a put-away card. Measured: the merge was
+  -- permitted, the survivor stayed archived, and every channel, document,
+  -- seat, designation, agreement token and login landed on a card
+  -- useStudioContacts(..., { includeArchived: false }) does not return —
+  -- which is what directory-view.tsx reads for a firm's payee-marker signer
+  -- and for a routed rule's email and office phone.
+  --
+  -- Refused by name rather than restored silently: restore_studio_contact()
+  -- is the studio's own act, it is one press away on the card, and a merge
+  -- may not undo a putting-away nobody asked it to undo. The MERGED card's
+  -- archived_at is deliberately not read — folding a put-away duplicate into
+  -- a live card is the ordinary tidy, and it is what this room is for.
+  IF v_survivor.archived_at IS NOT NULL THEN
+    RAISE EXCEPTION 'merge_survivor_archived'
+      USING HINT = 'The card you chose to keep has been put away. Put it back '
+                   'on the shelf first, or keep the other card instead.';
+  END IF;
+
   -- crm-model §4's one exception, and nothing else.
   IF v_survivor.entity_kind IS DISTINCT FROM v_merged.entity_kind THEN
     IF v_merged.entity_kind = 'company'
@@ -987,7 +1010,8 @@ BEGIN
                    'off one of them first, or leave them as two people.';
   END IF;
 
-  -- ── A BLOCK MAY NOT VANISH IN A MERGE (r4 B-2) ──────────────────────────
+  -- ── A RECORDED REFUSAL MAY NOT VANISH IN A MERGE (r4 B-2, WIDENED r5 M-2)
+  --
   -- One rule row per subject (idx_studio_contact_rules_subject), so the two
   -- cards' rules cannot both survive on the survivor — and the repoint below
   -- is conditional, so the absorbed card's rule stays behind wherever the
@@ -1005,6 +1029,33 @@ BEGIN
   -- cards are still live and still openable at that moment. Where the
   -- survivor's own rule ALSO blocks, nothing is lost by keeping it, and the
   -- merge proceeds.
+  --
+  -- r5 M-2 — THE TEST IS SUBSUMPTION, NOT HARD-BLOCKEDNESS. r4 stated the gate
+  -- as contact_rule_blocks_contact(), which is R-BL's formula, and R-BL rules
+  -- what earns a terracotta leading rule on a face — it does not rule that a
+  -- ONE-CHANNEL refusal may be dropped. Measured: a survivor allowing
+  -- {email,mobile} absorbed a duplicate forbidding {sms,mobile} with the
+  -- reason "Never text. Never ring the mobile."; the merge was permitted,
+  -- contact_rule_summary() on the survivor read "Use: email, mobile.", and
+  -- the refusal sat on a card people_directory emits no row for. The room
+  -- then affirmatively told the studio to ring the mobile of a human the
+  -- studio recorded as never-ring-the-mobile. F-27 Ray Thao and F-11 Dana
+  -- Kowalski are the fixture rows this reaches.
+  --
+  -- So the gate is now: does the SURVIVOR's rule already say everything the
+  -- absorbed card's rule says? Two legs, both about facts that vanish:
+  --
+  --   * every channel the absorbed rule forbids is forbidden by the
+  --     survivor's too (channels_forbidden <@), and
+  --   * a route the absorbed rule names is the same route the survivor's
+  --     rule names — "write Rosa instead" is not carried by a survivor that
+  --     merely forbids everything and says nothing about Rosa.
+  --
+  -- channels_ALLOWED is deliberately not in the test: an allowance the
+  -- survivor lacks closes nothing, and contact_rule_summary() reduces
+  -- worst-first over what is forbidden. Same refusal token and same sentence
+  -- r4 already ships, because the studio's act is the same one: settle the
+  -- rule on the card you are keeping, then merge.
   SELECT * INTO v_merged_rule
     FROM public.studio_contact_rules r
    WHERE r.subject_type = v_merged.entity_kind AND r.subject_id = p_merged;
@@ -1014,11 +1065,13 @@ BEGIN
 
   IF v_merged_rule.id IS NOT NULL
      AND v_survivor_rule.id IS NOT NULL
-     AND public.contact_rule_blocks_contact(
-           v_merged_rule.channels_forbidden, v_merged_rule.route_to_person_id)
-     AND NOT public.contact_rule_blocks_contact(
-           v_survivor_rule.channels_forbidden,
-           v_survivor_rule.route_to_person_id) THEN
+     AND NOT (
+       COALESCE(v_merged_rule.channels_forbidden, '{}'::text[])
+         <@ COALESCE(v_survivor_rule.channels_forbidden, '{}'::text[])
+       AND (v_merged_rule.route_to_person_id IS NULL
+            OR v_survivor_rule.route_to_person_id
+                 IS NOT DISTINCT FROM v_merged_rule.route_to_person_id)
+     ) THEN
     RAISE EXCEPTION 'merge_contact_rule_conflict'
       USING HINT = 'The card being folded in says contact is blocked or '
                    'routed elsewhere, and the card you are keeping says '
@@ -1113,6 +1166,69 @@ BEGIN
      WHERE id = p_survivor;
   END IF;
 
+  -- ── AND EVERY OTHER TYPED FACT ON THE ABSORBED CARD (r5 B-1) ────────────
+  -- The two statements above carried the login and the address, and nothing
+  -- else, so thirteen columns the studio had typed stayed on a card that
+  -- afterwards emits no people_directory row (§6), no picker entry
+  -- (use-studio-contacts.ts filters merged_into) and no ?person= / ?firm=
+  -- target (people-room.tsx resolves both FORWARD onto the survivor). The
+  -- data was not deleted from the table; it was unreachable from the room,
+  -- which is r4 B-1's own standard applied to the rest of the row.
+  --
+  -- Measured, on the merge PR-o pre-picks by default — the OLDER, blanker
+  -- card survives: studio_verdict, remit_to, retainage_bps, tax_id_last4,
+  -- legal_name, dba_name, w9_on_file_at, warranty_until, trades, specialties,
+  -- notes and company_kind all read blank on the surviving Directory row
+  -- afterwards, and three faces then said so out loud: the room announced
+  -- "<survivor> carries everything <merged> held", the company card's Payee
+  -- region — the one region direction §1 line 5 makes this card the sole
+  -- writer of — printed "No remit-to on file." over a remit-to the studio had
+  -- typed, and the Verdict region printed "No verdict recorded." over the
+  -- studio's own verdict. BOTH entity kinds reach this: the QA walk measured
+  -- it on a person-to-person merge (notes, verdict, specialties,
+  -- warranty_until), so the statement below sits in the shared path, above
+  -- the v_cross branch, and is the only place any of these columns moves.
+  --
+  -- COALESCE, EXACTLY AS profile_id AND email ALREADY ARE. The survivor's own
+  -- value wins; none of these is identity-bearing, so none can conflict
+  -- destructively, and the sheet now prints every one of them side by side
+  -- before the press so the choice of survivor is not made blind.
+  --
+  --   * the VERDICT AND ITS DATE travel as a pair, keyed on the verdict: a
+  --     verdict with somebody else's date, or a date with no verdict, is a
+  --     worse fact than none.
+  --   * TRADES and SPECIALTIES are NOT NULL arrays, so there is no NULL to
+  --     COALESCE and "empty" is the absent state. They are UNIONED rather
+  --     than picked: one firm carded twice does both trades, and a union is
+  --     the only shape under which the announcer's sentence is true of them.
+  --     The survivor's own order is kept and only the unseen values append.
+  --   * company_kind is carried unconditionally. Only the company card reads
+  --     it (company-card.tsx:144/511/641), so on the sole-proprietor fold it
+  --     reaches a person card that never prints it — carrying it costs
+  --     nothing and dropping it would lose the firm's kind on the one fold
+  --     where the firm and the person are the same body.
+  UPDATE public.studio_contacts s
+     SET studio_verdict    = COALESCE(s.studio_verdict,    v_merged.studio_verdict),
+         studio_verdict_at = CASE WHEN s.studio_verdict IS NULL
+                                  THEN COALESCE(s.studio_verdict_at, v_merged.studio_verdict_at)
+                                  ELSE s.studio_verdict_at END,
+         legal_name        = COALESCE(s.legal_name,        v_merged.legal_name),
+         dba_name          = COALESCE(s.dba_name,          v_merged.dba_name),
+         company_kind      = COALESCE(s.company_kind,      v_merged.company_kind),
+         remit_to          = COALESCE(s.remit_to,          v_merged.remit_to),
+         retainage_bps     = COALESCE(s.retainage_bps,     v_merged.retainage_bps),
+         tax_id_last4      = COALESCE(s.tax_id_last4,      v_merged.tax_id_last4),
+         w9_on_file_at     = COALESCE(s.w9_on_file_at,     v_merged.w9_on_file_at),
+         warranty_until    = COALESCE(s.warranty_until,    v_merged.warranty_until),
+         notes             = COALESCE(s.notes,             v_merged.notes),
+         trades            = s.trades
+                             || ARRAY(SELECT unnest(v_merged.trades)
+                                       EXCEPT SELECT unnest(s.trades)),
+         specialties       = s.specialties
+                             || ARRAY(SELECT unnest(v_merged.specialties)
+                                       EXCEPT SELECT unnest(s.specialties))
+   WHERE s.id = p_survivor;
+
   -- ── affiliations ────────────────────────────────────────────────────────
   IF v_cross THEN
     -- The firm IS the person now. An affiliation of a person at themselves is
@@ -1152,9 +1268,12 @@ BEGIN
   -- ── contact rules: the survivor's wins; the merged's is kept as history
   --    on the merged card unless the survivor has none ─────────────────────
   -- One row per subject, so only one of the two can stand on the survivor.
-  -- The rule left behind is never a BLOCK: the gate above refuses the merge
-  -- where the absorbed card blocks and the survivor's rule does not (r4 B-2),
-  -- so this repoint can stay conditional without losing a refusal.
+  -- The rule left behind says nothing the survivor's rule does not already
+  -- say: the gate above refuses the merge unless the absorbed card's
+  -- forbidden channels and its route are both carried by the survivor's own
+  -- rule (r4 B-2, widened r5 M-2), so this repoint can stay conditional
+  -- without losing a refusal. What is left behind is the reason text and the
+  -- contact hours, which forbid nothing.
   UPDATE public.studio_contact_rules r
      SET subject_id   = p_survivor,
          subject_type = v_survivor.entity_kind
@@ -1496,6 +1615,14 @@ COMMENT ON FUNCTION public.merge_studio_contacts(uuid, uuid, text) IS
   'and the absorbed card''s LOGIN and email address onto the survivor where '
   'the survivor has none, because people_directory reads both off the '
   'survivor''s own columns and PR-o pre-picks the older card (r4 B-1). '
+  'EVERY OTHER TYPED FACT TRAVELS THE SAME WAY (r5 B-1): studio_verdict with '
+  'its date, legal_name, dba_name, company_kind, remit_to, retainage_bps, '
+  'tax_id_last4, w9_on_file_at, warranty_until and notes are COALESCEd onto '
+  'the survivor (its own value wins, none of them is identity-bearing), and '
+  'trades and specialties are UNIONed because they are NOT NULL arrays with '
+  'no NULL to coalesce. Unmoved, they stayed on a card the room cannot open '
+  'and the company card printed "No remit-to on file." and "No verdict '
+  'recorded." over facts the studio had typed. '
   'COMPLIANCE PAPER '
   'MOVES, WHOLE: every absorbed document arrives on the survivor and '
   'compliance_state()''s worst-first reckoning settles the word, with the '
@@ -1510,10 +1637,13 @@ COMMENT ON FUNCTION public.merge_studio_contacts(uuid, uuid, text) IS
   'number with no write (crm-model §4, R-AY). Refuses a firm into a person '
   'unless the person is_sole_proprietor, and a person into a firm always '
   '(merge_kind_mismatch); refuses two cards naming two DIFFERENT Patina '
-  'accounts (merge_two_logins); refuses a merge that would leave a BLOCKING '
-  'contact rule behind on the absorbed card while the survivor carries a '
-  'permissive one (merge_contact_rule_conflict, R-BL''s formula through '
-  'contact_rule_blocks_contact()). Neither card is deleted or archived: the merged one '
+  'accounts (merge_two_logins); refuses a merge that would leave a recorded '
+  'contact refusal behind on the absorbed card — any forbidden channel or '
+  'route the survivor''s own rule does not already carry, not only R-BL''s '
+  'hard block (merge_contact_rule_conflict, widened r5 M-2); and refuses a '
+  'survivor the studio has PUT AWAY, because a merge onto an archived card '
+  'takes the whole identity out of the rolodex read '
+  '(merge_survivor_archived, r5 M-4). Neither card is deleted or archived: the merged one '
   'takes merged_into and stays resolvable through resolve_merged_contact() '
   '(00629).';
 
