@@ -22,11 +22,16 @@ import base from './playwright.config';
  *   PLAYWRIGHT_SUPABASE_URL                  default: the base's 54321 stack
  *   PLAYWRIGHT_SUPABASE_ANON_KEY             required with the URL
  *   PLAYWRIGHT_SUPABASE_SERVICE_ROLE_KEY     required with the URL
+ *   NEXT_PUBLIC_FLAG_OVERRIDES               merged OVER the base's three
+ *                                            (P2-M3); `studio-workspaces:true`
+ *                                            is what puts the STUDIO tab and
+ *                                            its rate card on the Account sheet
  *
  * Example (hour tracking's own stack, project_id "patina-hours"):
  *   PLAYWRIGHT_DESIGNER_PORT=3100 \
  *   PLAYWRIGHT_SUPABASE_URL=http://127.0.0.1:54421 \
  *   PLAYWRIGHT_SUPABASE_ANON_KEY=… PLAYWRIGHT_SUPABASE_SERVICE_ROLE_KEY=… \
+ *   NEXT_PUBLIC_FLAG_OVERRIDES=studio-workspaces:true,agreement-parts:true \
  *   NEXT_PUBLIC_DESIGNER_PORTAL_DATA_MODE=live \
  *   pnpm --filter @patina/designer-portal test:e2e -- \
  *     --config playwright.hours.config.ts e2e/document/hours.spec.ts
@@ -72,6 +77,48 @@ const stackOverride: Record<string, string> = process.env.PLAYWRIGHT_SUPABASE_UR
 
 const baseWebServer = Array.isArray(base.webServer) ? base.webServer[0] : base.webServer;
 
+/**
+ * P2-M3 — the flags a caller asks for actually reach the server this file
+ * starts.
+ *
+ * Playwright merges `webServer.env` OVER process.env, and this config spread
+ * only `baseWebServer.env` and `stackOverride` — neither of which carries a
+ * flag key — so the BASE config's hardcoded
+ * `NEXT_PUBLIC_FLAG_OVERRIDES='procurement-workspace-pilot:true,the-document-
+ * pilot:true,client-invite-letter:true'` won every run through this file, and
+ * an exported `NEXT_PUBLIC_FLAG_OVERRIDES=studio-workspaces:true` was silently
+ * discarded. The consequence was not cosmetic: with `studio-workspaces` OFF the
+ * Account sheet renders no STUDIO tab at all and /desk?account=studio is
+ * reconciled back to Profile, so HT-3's per-member rate card and HT-4's role
+ * picker had ZERO e2e coverage, and any claim of the form "flags forced on
+ * through NEXT_PUBLIC_FLAG_OVERRIDES" made through this config described the
+ * flag-OFF surface.
+ *
+ * The base's three flags are kept as the default and the caller's pairs are
+ * merged over them key by key — dropping the base's set would take
+ * `the-document-pilot` out from under every spec that reaches a Document route.
+ */
+function mergeFlagOverrides(...lists: Array<string | undefined>): string {
+  const flags = new Map<string, string>();
+  for (const list of lists) {
+    for (const pair of (list ?? '').split(',')) {
+      const trimmed = pair.trim();
+      if (!trimmed) continue;
+      const at = trimmed.indexOf(':');
+      if (at < 1) continue;
+      flags.set(trimmed.slice(0, at).trim(), trimmed.slice(at + 1).trim());
+    }
+  }
+  return [...flags].map(([name, value]) => `${name}:${value}`).join(',');
+}
+
+const flagOverride: Record<string, string> = {
+  NEXT_PUBLIC_FLAG_OVERRIDES: mergeFlagOverrides(
+    baseWebServer?.env?.NEXT_PUBLIC_FLAG_OVERRIDES,
+    process.env.NEXT_PUBLIC_FLAG_OVERRIDES,
+  ),
+};
+
 export default defineConfig({
   ...base,
   use: { ...base.use, baseURL: BASE_URL },
@@ -93,6 +140,8 @@ export default defineConfig({
     // `pnpm dev` pins `-p 3000`; the port has to come through next directly.
     command: `pnpm run sync-pdf-worker && pnpm exec next dev --webpack -p ${PORT}`,
     url: BASE_URL,
-    env: { ...baseWebServer?.env, ...stackOverride },
+    // `flagOverride` comes LAST: it is the only one of the three that the
+    // caller's own environment can move (P2-M3).
+    env: { ...baseWebServer?.env, ...stackOverride, ...flagOverride },
   },
 });

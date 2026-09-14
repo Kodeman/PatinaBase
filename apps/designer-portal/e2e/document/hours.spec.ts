@@ -201,3 +201,66 @@ test('the bare t key opens the same form (W3)', async ({
   });
   await page.keyboard.press('Escape');
 });
+
+/**
+ * P2-M3 — the studio rate card, which had NO e2e coverage at all before this
+ * case, because `playwright.hours.config.ts` could not carry a flag: Playwright
+ * merges `webServer.env` over process.env, so the base config's
+ * `NEXT_PUBLIC_FLAG_OVERRIDES` literal won every run and `studio-workspaces`
+ * was OFF. With it off the Account sheet renders no STUDIO tab and
+ * /desk?account=studio is reconciled back to Profile in silence, so HT-3's
+ * per-member rate card and HT-4's role picker were never opened by any spec.
+ *
+ * The flags are the run's, not the file's, so the case SKIPS rather than
+ * silently passing against the flag-off surface.
+ */
+const FLAG_OVERRIDES = process.env.NEXT_PUBLIC_FLAG_OVERRIDES ?? '';
+const flagOn = (name: string) =>
+  FLAG_OVERRIDES.split(',').some(
+    (pair) => pair.trim() === `${name}:true`,
+  );
+
+test('the studio rate card stands on the Account sheet (HT-3/HT-4)', async ({
+  authenticatedPage: page,
+}) => {
+  test.skip(
+    !flagOn('studio-workspaces'),
+    'the STUDIO tab is gated on `studio-workspaces`; run this suite with ' +
+      'NEXT_PUBLIC_FLAG_OVERRIDES=studio-workspaces:true,agreement-parts:true',
+  );
+
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto('/desk?account=studio', { waitUntil: 'domcontentloaded' });
+  await declineDeskWalkthrough(page);
+
+  const sheet = page.getByRole('dialog', { name: 'Account' });
+  await expect(sheet).toBeVisible({ timeout: COLD });
+
+  // The tab exists AND the doorway landed on it — with the flag off the page
+  // silently reconciles to Profile, which is the failure this pins.
+  // `exact` matters: S-1's own switch reads "STUDIO 1 OF 2 · SWITCH" and would
+  // otherwise make this a strict-mode collision with the tab.
+  await expect(
+    sheet.getByRole('button', { name: 'Studio', exact: true }),
+  ).toHaveAttribute('aria-current', 'page', { timeout: COLD });
+
+  // HT-3 — a rate per member: what prices an hour when no signed agreement
+  // names one. Gated on `studio-workspaces` alone.
+  await expect(
+    sheet.getByRole('heading', { name: 'Studio rates' }),
+  ).toBeVisible({ timeout: COLD });
+
+  // HT-4 — the rate card's ROLE picker sits inside the agreement-defaults card,
+  // which needs the second flag as well.
+  if (flagOn('agreement-parts')) {
+    await expect(
+      sheet.getByRole('heading', { name: 'Agreement defaults' }),
+    ).toBeVisible({ timeout: COLD });
+    await expect(sheet.getByText('Rate card', { exact: true })).toBeVisible();
+    // `+ Add a role`, not `Default role 1`: a studio whose card is still empty
+    // renders no picker row, and the door is what HT-4 added.
+    await expect(
+      sheet.getByRole('button', { name: '+ Add a role' }),
+    ).toBeVisible();
+  }
+});
