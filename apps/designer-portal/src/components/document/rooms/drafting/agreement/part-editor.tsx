@@ -419,6 +419,19 @@ function ListEditor({ payload, onChange, readOnly }: EditorProps) {
  * a role already on the card is not offered twice and the act is spent once all
  * four are named — two cards for one role is the same stranding by a second
  * door, and `upsert_agreement_parts` refuses it anyway.
+ *
+ * W7-R4-01 — and every row can be REMOVED, in the grammar `ListEditor` above
+ * already uses. The binding made the absence load-bearing: `send` is held while
+ * any row on the card names no roster role, `+ Add a role` is spent at four, and
+ * a card that arrived carrying five or more rows (the studio-defaults card and
+ * any in-flight draft were both uncapped before this wave) therefore had at
+ * least one row that could never be bound and no act that could take it off the
+ * card. The blocker sentence was true and unanswerable.
+ *
+ * W7-R4-13 — a picked role also rewrites `roleName` to the canonical label, and
+ * `upsert_agreement_parts` refuses two rows with the same NAME. So an option
+ * whose label collides with a legacy row's own label is offered disabled too,
+ * rather than saving into a refusal about a name she never typed.
  */
 function RateCardEditor({ payload, onChange, readOnly }: EditorProps) {
   const roles = readRoles(payload);
@@ -427,11 +440,20 @@ function RateCardEditor({ payload, onChange, readOnly }: EditorProps) {
     roles.flatMap((role) => (role.rosterRole ? [role.rosterRole] : [])),
   );
   const nextFree = ROSTER_RATE_ROLES.find((role) => !taken.has(role.value));
+  /** W7-R4-13 — the labels already spoken for, by row index. */
+  const labelAt = roles.map((role) => role.roleName.trim().toLowerCase());
+  const labelTakenElsewhere = (index: number, label: string) =>
+    labelAt.some(
+      (name, rowIndex) => rowIndex !== index && name === label.toLowerCase(),
+    );
 
   return (
     <div className="space-y-2">
       {roles.map((role, index) => (
-        <div key={index} className="grid grid-cols-[minmax(0,1fr)_140px] gap-3">
+        <div
+          key={index}
+          className="grid grid-cols-[minmax(0,1fr)_140px_auto] items-center gap-3"
+        >
           <Select
             aria-label={`Role ${index + 1}`}
             disabled={readOnly}
@@ -462,7 +484,9 @@ function RateCardEditor({ payload, onChange, readOnly }: EditorProps) {
                 key={option.value}
                 value={option.value}
                 disabled={
-                  taken.has(option.value) && role.rosterRole !== option.value
+                  (taken.has(option.value) &&
+                    role.rosterRole !== option.value) ||
+                  labelTakenElsewhere(index, option.label)
                 }
               >
                 {option.label}
@@ -485,6 +509,17 @@ function RateCardEditor({ payload, onChange, readOnly }: EditorProps) {
             }
             placeholder="$ / hour"
           />
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-label={`Remove role ${index + 1}`}
+            disabled={readOnly}
+            onClick={() =>
+              write(roles.filter((_, rowIndex) => rowIndex !== index))
+            }
+          >
+            Remove
+          </Button>
         </div>
       ))}
       <Button

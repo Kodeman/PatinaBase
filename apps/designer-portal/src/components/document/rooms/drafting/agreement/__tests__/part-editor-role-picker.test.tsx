@@ -145,4 +145,95 @@ describe("the rate card's role picker (HT-4)", () => {
     );
     expect(lead?.disabled).toBe(true);
   });
+
+  it("does not offer a role whose LABEL a legacy row already carries (W7-R4-13)", () => {
+    // The legacy row is unbound — `taken` is empty — but picking "Bookkeeper"
+    // on the second row would rewrite its roleName to "Bookkeeper" as well, and
+    // `upsert_agreement_parts` refuses two rows with the same NAME
+    // ("the rate card names Bookkeeper twice", 00618). A refusal about a name
+    // she never typed, one surface after the pick.
+    renderCard([
+      { roleName: "Bookkeeper", hourlyRateCents: 9_000, sortOrder: 0 },
+      { roleName: "", hourlyRateCents: 0, sortOrder: 1 },
+    ]);
+    const second = screen.getByLabelText("Role 2") as HTMLSelectElement;
+    const bookkeeper = Array.from(second.options).find(
+      (option) => option.value === "bookkeeper",
+    );
+    expect(bookkeeper?.disabled).toBe(true);
+    // Every other role is still hers to pick — the collision is one label, not
+    // a lock on the card.
+    const lead = Array.from(second.options).find(
+      (option) => option.value === "lead_designer",
+    );
+    expect(lead?.disabled).toBe(false);
+  });
+
+  it("still lets a legacy row bind to the role its own label already names", () => {
+    renderCard([{ roleName: "Bookkeeper", hourlyRateCents: 9_000, sortOrder: 0 }]);
+    const only = screen.getByLabelText("Role 1") as HTMLSelectElement;
+    const bookkeeper = Array.from(only.options).find(
+      (option) => option.value === "bookkeeper",
+    );
+    expect(bookkeeper?.disabled).toBe(false);
+  });
+
+  it("removes a row, which is the only way out of a card carrying five (W7-R4-01)", () => {
+    // `UNBOUND_ROLE_BLOCKER` holds `send` while any row names no roster role,
+    // the enum has four values and `+ Add a role` is spent at four — so a card
+    // that ARRIVED with five rows had one that could never be bound and,
+    // before this act, nothing in the room that could take it off.
+    const onChange = renderCard([
+      { roleName: "Lead designer", rosterRole: "lead_designer", hourlyRateCents: 26_000, sortOrder: 0 },
+      { roleName: "Support designer", rosterRole: "support_designer", hourlyRateCents: 11_000, sortOrder: 1 },
+      { roleName: "Bookkeeper", rosterRole: "bookkeeper", hourlyRateCents: 9_000, sortOrder: 2 },
+      { roleName: "Vendor", rosterRole: "vendor", hourlyRateCents: 8_000, sortOrder: 3 },
+      { roleName: "Principal designer", hourlyRateCents: 22_500, sortOrder: 4 },
+    ]);
+
+    expect(screen.getByText("+ Add a role").closest("button")).toBeDisabled();
+    expect(screen.getByLabelText("Role 5")).toHaveValue("");
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove role 5" }));
+
+    const written = onChange.mock.calls[0][0] as { roles: unknown[] };
+    expect(written.roles).toHaveLength(4);
+    expect(written.roles).not.toContainEqual(
+      expect.objectContaining({ roleName: "Principal designer" }),
+    );
+  });
+
+  it("offers a Remove on every row, in the grammar the list editor already uses", () => {
+    renderCard([
+      { roleName: "Lead designer", rosterRole: "lead_designer", hourlyRateCents: 1, sortOrder: 0 },
+      { roleName: "Vendor", rosterRole: "vendor", hourlyRateCents: 1, sortOrder: 1 },
+    ]);
+    expect(screen.getAllByRole("button", { name: /^Remove role/ })).toHaveLength(
+      2,
+    );
+  });
+
+  it("takes the last row off the card rather than stranding a one-row blocker", () => {
+    const onChange = renderCard([
+      { roleName: "Principal designer", hourlyRateCents: 22_500, sortOrder: 0 },
+    ]);
+    fireEvent.click(screen.getByRole("button", { name: "Remove role 1" }));
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({ roles: [] }),
+    );
+  });
+
+  it("offers no Remove while the card is read-only", () => {
+    render(
+      <PartEditor
+        part={rateCard([
+          { roleName: "Vendor", rosterRole: "vendor", hourlyRateCents: 1, sortOrder: 0 },
+        ])}
+        onChange={jest.fn()}
+        readOnly
+        libraryOn={false}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Remove role 1" })).toBeDisabled();
+  });
 });

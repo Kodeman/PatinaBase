@@ -443,12 +443,6 @@ export const ROSTER_RATE_ROLES: readonly {
 
 export type { RosterRateRole };
 
-export function rosterRoleLabel(value: RosterRateRole): string {
-  return (
-    ROSTER_RATE_ROLES.find((role) => role.value === value)?.label ?? value
-  );
-}
-
 function readRosterRole(value: unknown): RosterRateRole | undefined {
   return ROSTER_RATE_ROLES.some((role) => role.value === value)
     ? (value as RosterRateRole)

@@ -354,6 +354,60 @@ describe("Account · Studio · Agreement defaults", () => {
     expect(screen.getByLabelText("Default role 4")).toHaveValue("vendor");
   });
 
+  it("saves at most four rates, because a fifth can never be bound (W7-R4-01)", async () => {
+    // The enum has four values, one rate per role, and this card was uncapped
+    // before this wave — so a row beyond the fourth is one no picker can bind.
+    // `materialize_standard_parts` seeds EVERY row onto each new agreement,
+    // where an unbound row holds the send. Trimmed at the save so the inflow
+    // stops; the composer's own per-row Remove repairs a card already written.
+    agreementDefaultsRow = {
+      ...agreementDefaultsRow,
+      rateCard: [
+        { roleName: "Lead designer", rosterRole: "lead_designer", hourlyRateCents: 26_000, sortOrder: 0 },
+        { roleName: "Support designer", rosterRole: "support_designer", hourlyRateCents: 11_000, sortOrder: 1 },
+        { roleName: "Bookkeeper", rosterRole: "bookkeeper", hourlyRateCents: 9_000, sortOrder: 2 },
+        { roleName: "Vendor", rosterRole: "vendor", hourlyRateCents: 8_000, sortOrder: 3 },
+        { roleName: "Principal designer", hourlyRateCents: 22_500, sortOrder: 4 },
+      ],
+    };
+    render(<AccountStudioPage />);
+    fireEvent.click(saveButton());
+
+    await waitFor(() =>
+      expect(mockUpdateAgreementDefaults).toHaveBeenCalledTimes(1),
+    );
+    const saved = mockUpdateAgreementDefaults.mock.calls[0][0].rateCard;
+    expect(saved).toHaveLength(4);
+    expect(saved).not.toContainEqual(
+      expect.objectContaining({ roleName: "Principal designer" }),
+    );
+    // And the card reads dirty on arrival, so the Save that performs the trim
+    // is actually offered rather than greyed out beside the fifth row.
+    expect(saveButton()).not.toBeDisabled();
+  });
+
+  it("does not offer a role whose LABEL a legacy row already carries (W7-R4-13)", () => {
+    agreementDefaultsRow = {
+      ...agreementDefaultsRow,
+      rateCard: [
+        { roleName: "Bookkeeper", hourlyRateCents: 9_000, sortOrder: 0 },
+      ],
+    };
+    render(<AccountStudioPage />);
+    fireEvent.click(screen.getByRole("button", { name: "+ Add a role" }));
+    // Picking "Bookkeeper" on row 2 would rewrite its name to "Bookkeeper"
+    // too, and `upsert_agreement_parts` refuses two rows with the same name —
+    // a refusal about a name she never typed, one surface later.
+    const second = screen.getByLabelText(
+      "Default role 2",
+    ) as HTMLSelectElement;
+    expect(
+      Array.from(second.options).find(
+        (option) => option.value === "bookkeeper",
+      )?.disabled,
+    ).toBe(true);
+  });
+
   it("is not on the page at all with the flag off", () => {
     agreementPartsOn = false;
     render(<AccountStudioPage />);

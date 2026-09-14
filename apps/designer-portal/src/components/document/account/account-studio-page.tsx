@@ -114,14 +114,24 @@ function agreementPercentInput(value: string): number | null {
  * send until somebody does.
  */
 function rateCardForSave(rows: RateCardRow[]): RateCardRow[] {
-  return rows
-    .filter((role) => role.roleName.trim())
-    .map((role, sortOrder) => ({
-      roleName: role.roleName.trim(),
-      hourlyRateCents: role.hourlyRateCents,
-      sortOrder,
-      ...(role.rosterRole ? { rosterRole: role.rosterRole } : {}),
-    }));
+  return (
+    rows
+      .filter((role) => role.roleName.trim())
+      // W7-R4-01 — at most one rate per roster role, so a card of more than
+      // four rows carries at least one that can never be bound. `+ Add a role`
+      // is spent at four, but this card was uncapped before this wave and
+      // `materialize_standard_parts` seeds EVERY row of it onto each new
+      // agreement — where an unbound row holds the send with no act in the
+      // composer that could take it off. Trimmed here so the inflow stops;
+      // the composer's own per-row Remove repairs a card already written.
+      .slice(0, ROSTER_RATE_ROLES.length)
+      .map((role, sortOrder) => ({
+        roleName: role.roleName.trim(),
+        hourlyRateCents: role.hourlyRateCents,
+        sortOrder,
+        ...(role.rosterRole ? { rosterRole: role.rosterRole } : {}),
+      }))
+  );
 }
 
 const agreementDollars = (cents: number) => (cents / 100).toString();
@@ -644,6 +654,18 @@ export function AccountStudioPage() {
   const agreementNextFreeRole = ROSTER_RATE_ROLES.find(
     (role) => !agreementRolesTaken.has(role.value),
   );
+  // W7-R4-13 — picking a role also rewrites the row's client-facing label to
+  // the canonical one, and `upsert_agreement_parts` refuses two rows with the
+  // same NAME. A legacy row still carrying "Bookkeeper" as free text would
+  // therefore turn a neighbouring pick into a refusal about a name the studio
+  // never typed, one surface later. Not offered instead.
+  const agreementLabelsAt = agreementForm.rateCard.map((role) =>
+    role.roleName.trim().toLowerCase(),
+  );
+  const agreementLabelTakenElsewhere = (index: number, label: string) =>
+    agreementLabelsAt.some(
+      (name, rowIndex) => rowIndex !== index && name === label.toLowerCase(),
+    );
   const agreementDefaultsDirty =
     !!agreementDefaults &&
     (JSON.stringify(agreementFormRateCard) !==
@@ -1157,8 +1179,12 @@ export function AccountStudioPage() {
                             key={option.value}
                             value={option.value}
                             disabled={
-                              agreementRolesTaken.has(option.value) &&
-                              role.rosterRole !== option.value
+                              (agreementRolesTaken.has(option.value) &&
+                                role.rosterRole !== option.value) ||
+                              agreementLabelTakenElsewhere(
+                                index,
+                                option.label,
+                              )
                             }
                           >
                             {option.label}
