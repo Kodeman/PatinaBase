@@ -13,6 +13,7 @@ import {
   householdEmptySentence,
   householdMemberConsequence,
   householdThresholdSentence,
+  parseThresholdEntry,
 } from "../household-band";
 
 const addMemberMutate = jest.fn();
@@ -74,7 +75,7 @@ const props = {
 };
 
 beforeEach(() => {
-    clientSideHasAuthority = false;
+  clientSideHasAuthority = false;
   addMemberMutate.mockReset().mockResolvedValue("seat-1");
   setThresholdMutate.mockReset().mockResolvedValue({ id: "house-1" });
   createHouseholdMutate.mockReset().mockResolvedValue({ id: "house-1" });
@@ -262,9 +263,7 @@ describe("HouseholdBand", () => {
       ),
     ).toBeInTheDocument();
     expect(
-      screen.queryByText(
-        /there is nowhere to record who else may sign/,
-      ),
+      screen.queryByText(/there is nowhere to record who else may sign/),
     ).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Open a household" }),
@@ -313,5 +312,129 @@ describe("householdEmptySentence (QA-1)", () => {
     expect(householdEmptySentence(true)).toBe(
       "No household is on file for this client yet, so what each of them may sign is recorded seat by seat rather than in one place.",
     );
+  });
+});
+
+/**
+ * r6 — A MONEY FIELD MAY NOT REVOKE AUTHORITY BY ACCIDENT (R-BO).
+ *
+ * Since the round-5 fix `set_household_threshold()` CLOSES every open money
+ * grant the household sourced when the figure arrives NULL, so the editor's
+ * old `Number.isFinite(dollars) ? … : null` turned an empty field, an `abc`
+ * or a slipped `2.5.0` into the end of Chidi Okonkwo's signing authority —
+ * and then announced "The change-order figure is on the record." over a band
+ * re-rendering "No change-order figure is on file for this household."
+ */
+describe("parseThresholdEntry", () => {
+  it("reads a figure, with or without the studio's own punctuation", () => {
+    expect(parseThresholdEntry("5000")).toBe(500000);
+    expect(parseThresholdEntry("$2,500")).toBe(250000);
+    expect(parseThresholdEntry("2500.50")).toBe(250050);
+  });
+
+  it("refuses what is not a figure rather than reading it as nothing", () => {
+    expect(parseThresholdEntry("")).toBeNull();
+    expect(parseThresholdEntry("   ")).toBeNull();
+    expect(parseThresholdEntry("abc")).toBeNull();
+    expect(parseThresholdEntry("2.5.0")).toBeNull();
+    expect(parseThresholdEntry("-500")).toBeNull();
+  });
+});
+
+describe("the change-order figure, as an act", () => {
+  it("refuses an unparsable entry and writes nothing", async () => {
+    render(<HouseholdBand {...props} />);
+    fireEvent.click(screen.getByRole("button", { name: "Set the figure" }));
+    fireEvent.change(screen.getByLabelText("Over what figure"), {
+      target: { value: "2.5.0" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Write the figure" }));
+    expect(
+      await screen.findByText(/Write the change-order figure in dollars/),
+    ).toBeInTheDocument();
+    expect(setThresholdMutate).not.toHaveBeenCalled();
+  });
+
+  it("refuses an empty field rather than taking the figure away", async () => {
+    render(<HouseholdBand {...props} />);
+    fireEvent.click(screen.getByRole("button", { name: "Set the figure" }));
+    fireEvent.change(screen.getByLabelText("Over what figure"), {
+      target: { value: "" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Write the figure" }));
+    expect(
+      await screen.findByText(/Write the change-order figure in dollars/),
+    ).toBeInTheDocument();
+    expect(setThresholdMutate).not.toHaveBeenCalled();
+  });
+
+  it("says what writing the figure will do to the members' grants", () => {
+    render(<HouseholdBand {...props} />);
+    fireEvent.click(screen.getByRole("button", { name: "Set the figure" }));
+    fireEvent.change(screen.getByLabelText("Over what figure"), {
+      target: { value: "5000" },
+    });
+    expect(
+      screen.getByText(
+        /Every household member who already signs money from this figure moves to \$5,000, on every job\./,
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("announces the sentence the band itself prints, never the opposite", async () => {
+    const onAnnounce = jest.fn();
+    render(<HouseholdBand {...props} onAnnounce={onAnnounce} />);
+    fireEvent.click(screen.getByRole("button", { name: "Set the figure" }));
+    fireEvent.change(screen.getByLabelText("Over what figure"), {
+      target: { value: "5000" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Write the figure" }));
+    await waitFor(() => expect(onAnnounce).toHaveBeenCalled());
+    expect(onAnnounce).toHaveBeenCalledWith(
+      "Change orders over $5,000 need a signature from the household.",
+    );
+  });
+
+  it("makes taking the figure away its own two-step act (R-BO)", async () => {
+    const onAnnounce = jest.fn();
+    render(<HouseholdBand {...props} onAnnounce={onAnnounce} />);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Take the figure away" }),
+    );
+    expect(setThresholdMutate).not.toHaveBeenCalled();
+    expect(
+      screen.getByText(
+        /every household member's money grant of \$2,500 closes today, on every job\./,
+      ),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Take it away" }));
+    await waitFor(() => expect(setThresholdMutate).toHaveBeenCalled());
+    expect(setThresholdMutate).toHaveBeenCalledWith({
+      id: "house-1",
+      coThresholdCents: null,
+    });
+    expect(onAnnounce).toHaveBeenCalledWith(
+      "No change-order figure is on file for this household.",
+    );
+  });
+
+  it("offers no way to take away a figure that is not on file", () => {
+    household = {
+      ...(household as Record<string, unknown>),
+      co_threshold_cents: null,
+    };
+    render(<HouseholdBand {...props} />);
+    expect(
+      screen.queryByRole("button", { name: "Take the figure away" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("PR-n — holds taking it away for a plain member too", () => {
+    memberRole = "member";
+    render(<HouseholdBand {...props} />);
+    const act = screen.getByRole("button", { name: "Take the figure away" });
+    expect(act).toHaveAttribute("aria-disabled", "true");
+    fireEvent.click(act);
+    expect(setThresholdMutate).not.toHaveBeenCalled();
   });
 });
