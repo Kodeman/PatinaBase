@@ -2188,3 +2188,13 @@ export type {
   StudioHoursRollupRow,
   ProjectHoursTotal,
 } from "./use-time-tracking";
+
+// HT-35 — the automatic timer's disclosure and its per-member opt-out.
+export {
+  useTimeAutostartPreference,
+  useSetTimeAutostartOptOut,
+  useMarkTimeAutostartDisclosed,
+  fetchTimeAutostartPreference,
+  timeAutostartKeys,
+} from "./use-time-autostart";
+export type { TimeAutostartPreference } from "./use-time-autostart";

@@ -282,6 +282,9 @@ describe("the composed room with agreement-library off", () => {
               roleName: "Principal designer",
               hourlyRateCents: 25000,
               sortOrder: 0,
+              // HT-4 — a bound card. Unbound, the rail marks the row "needs
+              // attention" and readiness holds the send (00618).
+              rosterRole: "lead_designer",
             },
           ],
         },

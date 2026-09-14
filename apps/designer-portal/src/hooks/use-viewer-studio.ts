@@ -66,3 +66,38 @@ export function useViewerStudio(): ViewerStudio {
     isSettled: organizations !== undefined || isError === true,
   };
 }
+
+/**
+ * W4 (HT-15) — the studio an INTERNAL hour belongs to.
+ *
+ * Not `useViewerStudio().studio`: that one is deliberately owner/admin-only,
+ * because standing over a studio's hours is an admin act. Logging your OWN
+ * admin time is not — `internal_time_own_insert` (00612) admits any ACTIVE,
+ * non-guest member of the studio, and `useOrganizations` already reads only
+ * active memberships. A member with no design studio has no internal door and
+ * the surfaces say so by not offering one.
+ *
+ * Ordered by name then id for the same reason `useViewerStudio` orders: an
+ * unordered PostgREST read would key a member's admin hours on a different
+ * studio between two page loads.
+ */
+export function useInternalTimeStudio(): {
+  studio: ViewerOrganization | null;
+  isSettled: boolean;
+} {
+  const { data: organizations, isError } = useOrganizations();
+  const studio = useMemo(() => {
+    const candidates = (organizations ?? []).filter(
+      (org) => org.type === 'design_studio' && org.membership?.role !== 'guest',
+    );
+    candidates.sort(
+      (a, b) =>
+        (a.name ?? '').localeCompare(b.name ?? '') || a.id.localeCompare(b.id),
+    );
+    return candidates[0] ?? null;
+  }, [organizations]);
+  return {
+    studio,
+    isSettled: organizations !== undefined || isError === true,
+  };
+}

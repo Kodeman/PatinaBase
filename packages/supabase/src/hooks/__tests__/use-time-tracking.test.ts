@@ -28,7 +28,12 @@ vi.mock('@tanstack/react-query', () => ({
 }));
 
 // Import AFTER mocks.
-import { useStampProjectPricingStudio } from '../use-time-tracking';
+import {
+  useCreateTimeEntry,
+  useDeleteTimeEntry,
+  useStampProjectPricingStudio,
+  useUpdateTimeEntry,
+} from '../use-time-tracking';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -82,5 +87,63 @@ describe('useStampProjectPricingStudio', () => {
     expect(keys).toContainEqual(['document-hours-week']);
     expect(keys).toContainEqual(['projects']);
     expect(keys).toContainEqual(['time']);
+  });
+});
+
+/**
+ * W4 (HT-15) / W7-R4-07 — the hour that belongs to no document still belongs to
+ * the studio's reads.
+ *
+ * All three mutations guarded their invalidation on `if (projectId)`, so a
+ * studio hour logged through the ⌘K verb (which closes on success and refetches
+ * nothing of its own) left the scope lens, the studio rollup, the CSV/statement
+ * export and the Hours week showing the totals from before it. The Hours add
+ * row hid the defect by refetching its own three queries by hand.
+ */
+describe('an internal hour invalidates the studio reads (W7-R4-07)', () => {
+  const STUDIO_KEYS = [
+    ['time'],
+    ['desk-contents-unbilled-time'],
+    ['document-hours-week'],
+  ];
+
+  it('createTimeEntry: a project-less write still refreshes them', () => {
+    const mutation = useCreateTimeEntry() as unknown as {
+      onSuccess: (data: unknown, input: unknown) => void;
+    };
+    mutation.onSuccess({}, { projectId: null, studioId: 'studio-1' });
+    expect(invalidatedKeys()).toEqual(expect.arrayContaining(STUDIO_KEYS));
+  });
+
+  it('updateTimeEntry: and so does an edit to one', () => {
+    const mutation = useUpdateTimeEntry() as unknown as {
+      onSuccess: (data: unknown, input: unknown) => void;
+    };
+    mutation.onSuccess({}, { projectId: null });
+    expect(invalidatedKeys()).toEqual(expect.arrayContaining(STUDIO_KEYS));
+  });
+
+  it('deleteTimeEntry: and so does taking one back', () => {
+    const mutation = useDeleteTimeEntry() as unknown as {
+      onSuccess: (data: unknown, input: unknown) => void;
+    };
+    mutation.onSuccess(undefined, { projectId: null });
+    expect(invalidatedKeys()).toEqual(expect.arrayContaining(STUDIO_KEYS));
+  });
+
+  it('a PROJECT hour refreshes the studio reads as well as its own four', () => {
+    const mutation = useCreateTimeEntry() as unknown as {
+      onSuccess: (data: unknown, input: unknown) => void;
+    };
+    mutation.onSuccess({}, { projectId: 'project-1' });
+    expect(invalidatedKeys()).toEqual(
+      expect.arrayContaining([
+        ...STUDIO_KEYS,
+        ['projects', 'project-1', 'time-entries'],
+        ['projects', 'project-1', 'time-tracking'],
+        ['projects', 'project-1', 'unbilled-time'],
+        ['projects', 'project-1', 'key-metrics'],
+      ]),
+    );
   });
 });

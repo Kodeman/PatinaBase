@@ -36,9 +36,11 @@ import {
   type MemberRole,
   type OrganizationMemberWithProfile,
 } from '@patina/supabase';
+import type { RateCardRow, RosterRateRole } from '@patina/types';
 import { useAuth } from '@/hooks/use-auth';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { Select, StatusBadge, type StatusTone } from '@/components/ui/controls';
+import { ROSTER_RATE_ROLES } from '../rooms/drafting/agreement/part-kinds';
 import { monogramOf } from '@/lib/document/account-identity';
 import { clampInvitableRole, friendlyInviteError, isInviteExpired } from '@/lib/document/invite-status';
 import { StudioInviteModal } from './studio-invite-modal';
@@ -82,7 +84,7 @@ const AGREEMENT_CREDIT_RULES = [
 ] as const;
 
 type AgreementDefaultsForm = {
-  rateCard: { roleName: string; hourlyRateCents: number; sortOrder: number }[];
+  rateCard: RateCardRow[];
   depositPercent: string;
   cadence: 'monthly' | 'biweekly' | 'milestone';
   retainerCreditRule: 'credited' | 'non_refundable' | 'replenishing';
@@ -98,6 +100,38 @@ function agreementPercentInput(value: string): number | null {
   const parsed = Number(trimmed);
   if (!Number.isFinite(parsed)) return null;
   return Math.min(100, Math.max(0, Math.round(parsed)));
+}
+
+/**
+ * What the save writes, and what the dirty check compares against — one
+ * mapper, because two copies of it drifted apart the moment `rosterRole`
+ * arrived and a card that carried a binding read permanently dirty.
+ *
+ * HT-4 — the binding rides with the label. `materialize_standard_parts`
+ * (00618) seeds a new agreement's rate card from this array, and a row with no
+ * `rosterRole` reaches the composer as the unchosen state: the server prices it
+ * by its label until somebody picks, and the room's readiness panel holds the
+ * send until somebody does.
+ */
+function rateCardForSave(rows: RateCardRow[]): RateCardRow[] {
+  return (
+    rows
+      .filter((role) => role.roleName.trim())
+      // W7-R4-01 — at most one rate per roster role, so a card of more than
+      // four rows carries at least one that can never be bound. `+ Add a role`
+      // is spent at four, but this card was uncapped before this wave and
+      // `materialize_standard_parts` seeds EVERY row of it onto each new
+      // agreement — where an unbound row holds the send with no act in the
+      // composer that could take it off. Trimmed here so the inflow stops;
+      // the composer's own per-row Remove repairs a card already written.
+      .slice(0, ROSTER_RATE_ROLES.length)
+      .map((role, sortOrder) => ({
+        roleName: role.roleName.trim(),
+        hourlyRateCents: role.hourlyRateCents,
+        sortOrder,
+        ...(role.rosterRole ? { rosterRole: role.rosterRole } : {}),
+      }))
+  );
 }
 
 const agreementDollars = (cents: number) => (cents / 100).toString();
@@ -432,13 +466,7 @@ export function AccountStudioPage() {
 
   const handleSaveAgreementDefaults = () => {
     if (!studio || updateAgreementDefaults.isPending) return;
-    const rateCard = agreementForm.rateCard
-      .filter((role) => role.roleName.trim())
-      .map((role, sortOrder) => ({
-        roleName: role.roleName.trim(),
-        hourlyRateCents: role.hourlyRateCents,
-        sortOrder,
-      }));
+    const rateCard = rateCardForSave(agreementForm.rateCard);
     const depositPercent = agreementPercentInput(agreementForm.depositPercent);
     const defaultExclusions = agreementForm.defaultExclusions
       .split('\n')
@@ -613,13 +641,31 @@ export function AccountStudioPage() {
   const agreementDepositPercent = agreementPercentInput(
     agreementForm.depositPercent,
   );
-  const agreementFormRateCard = agreementForm.rateCard
-    .filter((role) => role.roleName.trim())
-    .map((role, sortOrder) => ({
-      roleName: role.roleName.trim(),
-      hourlyRateCents: role.hourlyRateCents,
-      sortOrder,
-    }));
+  const agreementFormRateCard = rateCardForSave(agreementForm.rateCard);
+  // HT-4 — one rate per roster role. Two rates for the same role leave the
+  // resolver choosing between them, and `upsert_agreement_parts` refuses the
+  // seeded card outright ("the rate card prices lead_designer twice", 00618),
+  // so the act that would create the second one is spent instead of offered.
+  const agreementRolesTaken = new Set<RosterRateRole>(
+    agreementForm.rateCard.flatMap((role) =>
+      role.rosterRole ? [role.rosterRole] : [],
+    ),
+  );
+  const agreementNextFreeRole = ROSTER_RATE_ROLES.find(
+    (role) => !agreementRolesTaken.has(role.value),
+  );
+  // W7-R4-13 — picking a role also rewrites the row's client-facing label to
+  // the canonical one, and `upsert_agreement_parts` refuses two rows with the
+  // same NAME. A legacy row still carrying "Bookkeeper" as free text would
+  // therefore turn a neighbouring pick into a refusal about a name the studio
+  // never typed, one surface later. Not offered instead.
+  const agreementLabelsAt = agreementForm.rateCard.map((role) =>
+    role.roleName.trim().toLowerCase(),
+  );
+  const agreementLabelTakenElsewhere = (index: number, label: string) =>
+    agreementLabelsAt.some(
+      (name, rowIndex) => rowIndex !== index && name === label.toLowerCase(),
+    );
   const agreementDefaultsDirty =
     !!agreementDefaults &&
     (JSON.stringify(agreementFormRateCard) !==
@@ -1101,24 +1147,58 @@ export function AccountStudioPage() {
                   {agreementForm.rateCard.map((role, index) => (
                     <div
                       key={index}
-                      className="grid grid-cols-[minmax(0,1fr)_120px_auto] items-center gap-2"
+                      /* W7-R6-01 — mirrors the composer's picker fix
+                         (part-editor.tsx, W7-R5-01): below `sm` (the same
+                         line doc-sheet already changes its own padding on)
+                         the picker takes the whole first line and the rate
+                         and Remove share the second, so the closed picker
+                         keeps the full ~308px fold measure instead of a
+                         120px column that clipped four of its five labels. */
+                      className="grid grid-cols-[120px_minmax(0,1fr)] items-center gap-2 sm:grid-cols-[minmax(0,1fr)_120px_auto]"
                     >
-                      <input
+                      <Select
+                        wrapperClassName="col-span-2 sm:col-span-1"
                         aria-label={`Default role ${index + 1}`}
-                        value={role.roleName}
-                        onChange={(e) =>
+                        value={role.rosterRole ?? ''}
+                        onChange={(e) => {
+                          const picked = ROSTER_RATE_ROLES.find(
+                            (option) => option.value === e.target.value,
+                          );
+                          if (!picked) return;
                           setAgreementForm((form) => ({
                             ...form,
                             rateCard: form.rateCard.map((row, rowIndex) =>
                               rowIndex === index
-                                ? { ...row, roleName: e.target.value }
+                                ? {
+                                    ...row,
+                                    rosterRole: picked.value,
+                                    roleName: picked.label,
+                                  }
                                 : row,
                             ),
-                          }))
-                        }
-                        placeholder="Principal designer"
-                        className={FIELD}
-                      />
+                          }));
+                        }}
+                      >
+                        <option value="" disabled>
+                          {role.roleName.trim() || 'Choose a role'}
+                        </option>
+                        {ROSTER_RATE_ROLES.map((option) => (
+                          <option
+                            key={option.value}
+                            value={option.value}
+                            disabled={
+                              (agreementRolesTaken.has(option.value) &&
+                                role.rosterRole !== option.value) ||
+                              agreementLabelTakenElsewhere(
+                                index,
+                                option.label,
+                              )
+                            }
+                          >
+                            {option.label}
+                          </option>
+                        ))}
+                      </Select>
                       <input
                         aria-label={`Default role ${index + 1} hourly rate`}
                         inputMode="decimal"
@@ -1151,7 +1231,7 @@ export function AccountStudioPage() {
                             ),
                           }))
                         }
-                        className="text-[12px] text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]"
+                        className="justify-self-end text-[12px] text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]"
                       >
                         Remove
                       </button>
@@ -1160,23 +1240,32 @@ export function AccountStudioPage() {
                 </div>
                 <button
                   type="button"
-                  onClick={() =>
+                  disabled={!agreementNextFreeRole}
+                  onClick={() => {
+                    if (!agreementNextFreeRole) return;
                     setAgreementForm((form) => ({
                       ...form,
                       rateCard: [
                         ...form.rateCard,
                         {
-                          roleName: '',
+                          roleName: agreementNextFreeRole.label,
+                          rosterRole: agreementNextFreeRole.value,
                           hourlyRateCents: 0,
                           sortOrder: form.rateCard.length,
                         },
                       ],
-                    }))
-                  }
-                  className="mt-2 text-[12px] text-[var(--color-clay-ink)]"
+                    }));
+                  }}
+                  className="mt-2 text-[12px] text-[var(--color-clay-ink)] disabled:opacity-50"
                 >
                   + Add a role
                 </button>
+                <p className={HELP}>
+                  Each rate prices the hours its roster role logs. A rate you
+                  have not bound yet keeps its old label, and the agreement it
+                  seeds asks for the role — and for a rate above zero — before
+                  it can be sent.
+                </p>
               </div>
 
               <div className="mb-4">

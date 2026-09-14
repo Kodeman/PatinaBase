@@ -13737,6 +13737,8 @@ export type Database = {
           sms_opt_in: boolean
           state: string | null
           stripe_customer_id: string | null
+          time_autostart_disclosed_at: string | null
+          time_autostart_opt_out: boolean
           total_engagement_score: number | null
           updated_at: string
           verified_at: string | null
@@ -13777,6 +13779,8 @@ export type Database = {
           sms_opt_in?: boolean
           state?: string | null
           stripe_customer_id?: string | null
+          time_autostart_disclosed_at?: string | null
+          time_autostart_opt_out?: boolean
           total_engagement_score?: number | null
           updated_at?: string
           verified_at?: string | null
@@ -13817,6 +13821,8 @@ export type Database = {
           sms_opt_in?: boolean
           state?: string | null
           stripe_customer_id?: string | null
+          time_autostart_disclosed_at?: string | null
+          time_autostart_opt_out?: boolean
           total_engagement_score?: number | null
           updated_at?: string
           verified_at?: string | null
@@ -14127,6 +14133,7 @@ export type Database = {
           hourly_rate_cents: number
           id: string
           role_name: string
+          roster_role: string | null
           source_rate_id: string
           version: number
         }
@@ -14136,6 +14143,7 @@ export type Database = {
           hourly_rate_cents: number
           id?: string
           role_name: string
+          roster_role?: string | null
           source_rate_id: string
           version: number
         }
@@ -14145,6 +14153,7 @@ export type Database = {
           hourly_rate_cents?: number
           id?: string
           role_name?: string
+          roster_role?: string | null
           source_rate_id?: string
           version?: number
         }
@@ -19523,6 +19532,7 @@ export type Database = {
           id: string
           proposal_id: string
           role_name: string
+          roster_role: string | null
           sort_order: number
           version: number
         }
@@ -19533,6 +19543,7 @@ export type Database = {
           id?: string
           proposal_id: string
           role_name: string
+          roster_role?: string | null
           sort_order?: number
           version?: number
         }
@@ -19543,6 +19554,7 @@ export type Database = {
           id?: string
           proposal_id?: string
           role_name?: string
+          roster_role?: string | null
           sort_order?: number
           version?: number
         }

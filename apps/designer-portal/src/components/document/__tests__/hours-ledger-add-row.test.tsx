@@ -127,7 +127,42 @@ const ymd = (d: Date) =>
     d.getDate(),
   ).padStart(2, '0')}`;
 
+/**
+ * The clock is PINNED for this suite. `startedAtFromDateValue`
+ * (`time-capture.tsx`) keeps the current time-of-day and moves only the date,
+ * and `next/jest` loads the app's `.env`, which pins `TZ=America/Chicago`. On a
+ * real clock after 19:00 CDT the constructed instant crosses UTC midnight and
+ * `toISOString()` reports the NEXT day, so the date assertions below failed for
+ * five hours a night and passed the rest — the same UTC-midnight trap
+ * `supabase/tests/KNOWN_FAILURES.md` records for `direct_order_attribution_test.sql`.
+ * 12:00 UTC is the safest pin: every zone from UTC-11 to UTC+11 reads it as the
+ * same calendar day, so the fixture dates below hold wherever this runs.
+ * Only `Date` is faked; every timer stays real so React Query and
+ * `waitFor` behave exactly as they do under the real clock.
+ */
+const PINNED_NOW = new Date('2026-09-13T12:00:00.000Z');
+const FAKE_DATE_ONLY = {
+  now: PINNED_NOW,
+  doNotFake: [
+    'cancelAnimationFrame',
+    'cancelIdleCallback',
+    'clearImmediate',
+    'clearInterval',
+    'clearTimeout',
+    'hrtime',
+    'nextTick',
+    'performance',
+    'queueMicrotask',
+    'requestAnimationFrame',
+    'requestIdleCallback',
+    'setImmediate',
+    'setInterval',
+    'setTimeout',
+  ],
+} as const;
+
 beforeEach(() => {
+  jest.useFakeTimers(FAKE_DATE_ONLY);
   mockCreate.mockReset();
   mockCreate.mockResolvedValue({
     id: 'written',
@@ -143,6 +178,10 @@ beforeEach(() => {
   hoursMemberScopePending.userId = null;
   hoursMemberScopePending.name = null;
   mockAuthority = { data: null, isLoading: false, isError: false };
+});
+
+afterEach(() => {
+  jest.useRealTimers();
 });
 
 describe('the Hours add row', () => {
@@ -174,7 +213,8 @@ describe('the Hours add row', () => {
     await waitFor(() =>
       expect(
         screen.getByLabelText('Project').querySelectorAll('option'),
-      ).toHaveLength(2),
+        // "Document…" · "Studio time — no document" (HT-15) · the one project.
+      ).toHaveLength(3),
     );
     fireEvent.change(screen.getByLabelText('Project'), {
       target: { value: 'project-1' },
@@ -208,7 +248,8 @@ describe('the Hours add row', () => {
     await waitFor(() =>
       expect(
         screen.getByLabelText('Project').querySelectorAll('option'),
-      ).toHaveLength(2),
+        // "Document…" · "Studio time — no document" (HT-15) · the one project.
+      ).toHaveLength(3),
     );
     fireEvent.change(screen.getByLabelText('Project'), {
       target: { value: 'project-1' },
@@ -230,7 +271,8 @@ describe('the Hours add row', () => {
     await waitFor(() =>
       expect(
         screen.getByLabelText('Project').querySelectorAll('option'),
-      ).toHaveLength(2),
+        // "Document…" · "Studio time — no document" (HT-15) · the one project.
+      ).toHaveLength(3),
     );
     fireEvent.change(screen.getByLabelText('Project'), {
       target: { value: 'project-1' },
@@ -258,7 +300,8 @@ describe('the Hours add row', () => {
     await waitFor(() =>
       expect(
         screen.getByLabelText('Project').querySelectorAll('option'),
-      ).toHaveLength(2),
+        // "Document…" · "Studio time — no document" (HT-15) · the one project.
+      ).toHaveLength(3),
     );
     fireEvent.change(screen.getByLabelText('Minutes'), {
       target: { value: '30' },
@@ -353,7 +396,8 @@ describe('the Hours add row', () => {
     await waitFor(() =>
       expect(
         screen.getByLabelText('Project').querySelectorAll('option'),
-      ).toHaveLength(2),
+        // "Document…" · "Studio time — no document" (HT-15) · the one project.
+      ).toHaveLength(3),
     );
     fireEvent.change(screen.getByLabelText('Project'), {
       target: { value: 'project-1' },
@@ -383,4 +427,137 @@ describe('the Hours add row', () => {
       screen.getByRole('combobox', { name: 'Which role priced this hour' }),
     ).toBeInTheDocument();
   });
+
+  // ── W4 · HT-15 — the hour that belongs to no document ────────────────────
+  it('offers the studio door and writes it with no project, no rate and no billable (HT-15)', async () => {
+    renderLedger();
+    await waitFor(() =>
+      expect(
+        screen.getByLabelText('Project').querySelectorAll('option'),
+      ).toHaveLength(3),
+    );
+
+    fireEvent.change(screen.getByLabelText('Project'), {
+      target: { value: '__internal__' },
+    });
+    fireEvent.change(screen.getByLabelText('Minutes'), {
+      target: { value: '45' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+
+    await waitFor(() => expect(mockCreate).toHaveBeenCalledTimes(1));
+    expect(mockCreate.mock.calls[0][0]).toEqual(
+      expect.objectContaining({
+        projectId: null,
+        studioId: 'studio-1',
+        billable: false,
+        rateRole: null,
+        source: 'internal',
+      }),
+    );
+  });
+
+  it('says the answer rather than asking it \u2014 the billable pill is held for a studio hour (HT-15)', async () => {
+    renderLedger();
+    await waitFor(() =>
+      expect(
+        screen.getByLabelText('Project').querySelectorAll('option'),
+      ).toHaveLength(3),
+    );
+    fireEvent.change(screen.getByLabelText('Project'), {
+      target: { value: '__internal__' },
+    });
+
+    const pill = screen.getByRole('button', {
+      name: /Non-billable \u2014 press to make billable/,
+    });
+    expect(pill).toBeDisabled();
+    expect((pill.closest('div') as HTMLElement).textContent).toContain(
+      'studio time belongs to no client',
+    );
+  });
+
+  it('renders a logged studio hour in its own group, with no document and no rate (HT-15/REP-5)', async () => {
+    weekRows = [
+      {
+        id: 'entry-internal',
+        project_id: null,
+        project: null,
+        user_id: 'me',
+        started_at: new Date().toISOString(),
+        duration_minutes: 45,
+        billable: false,
+        billing_state: 'nonbillable',
+        hourly_rate_cents: null,
+        rated_amount_cents: null,
+        rate_source: 'none',
+        rate_role: null,
+        activity: 'admin',
+        source: 'internal',
+        invoice_id: null,
+        created_at: new Date().toISOString(),
+      },
+    ];
+    renderLedger();
+
+    await waitFor(() =>
+      expect(screen.getByText('\u2014 internal \u2014')).toBeInTheDocument(),
+    );
+    expect(screen.getByText('Studio time')).toBeInTheDocument();
+    expect(
+      screen.getByText(/no document \u00b7 non-billable/),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/rate pending/)).not.toBeInTheDocument();
+  });
+
+  /**
+   * W7-R4-12 — the ledger printed only three of 00595's nine source values and
+   * fell back to the RAW ENUM for the rest, so an internal hour read
+   * `internal`, a ⌘K hour `command_bar` and a Field hour `field_manual`: three
+   * database words in the designer's own ledger, one of them on a row this
+   * program introduced.
+   */
+  it.each([
+    ['internal', 'typed', true],
+    ['command_bar', 'typed', false],
+    ['field_manual', 'from the field', false],
+    ['field_visit', 'from a visit', false],
+    ['timer_auto', 'in hand', false],
+  ])(
+    'says how a %s hour was captured in words, never the enum',
+    async (source, label, internal) => {
+      weekRows = [
+        {
+          id: `entry-${source}`,
+          project_id: internal ? null : 'project-1',
+          project: internal ? null : { id: 'project-1', name: 'Ellsworth' },
+          user_id: 'me',
+          started_at: new Date().toISOString(),
+          duration_minutes: 45,
+          billable: false,
+          billing_state: 'nonbillable',
+          hourly_rate_cents: null,
+          rated_amount_cents: null,
+          rate_source: 'none',
+          rate_role: null,
+          activity: 'admin',
+          source,
+          invoice_id: null,
+          created_at: new Date().toISOString(),
+        },
+      ];
+      renderLedger();
+
+      await waitFor(() =>
+        expect(screen.getByText(new RegExp(label))).toBeInTheDocument(),
+      );
+      // Read the ROW, not the page: the internal group's own `— internal —`
+      // rule legitimately carries the word, and it is a heading, not a source.
+      const row = screen
+        .getByText(internal ? 'Studio time' : 'Ellsworth')
+        .closest('li') as HTMLElement;
+      expect(row.textContent).toMatch(new RegExp(label));
+      expect(row.textContent).not.toMatch(new RegExp(`\\b${source}\\b`));
+    },
+  );
 });

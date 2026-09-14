@@ -63,7 +63,10 @@ import { DocumentAction, DocumentActionGroup } from "./document-action";
 import { ProjectAuthorityBandForProject } from "./commercial/project-authority-band";
 import { PendingTimeAuthorizationBand } from "./pending-time-authorization-band";
 import { useProjectBillingAuthority } from "@/hooks/use-commercial-documents";
-import { useViewerStudio } from "@/hooks/use-viewer-studio";
+import {
+  useInternalTimeStudio,
+  useViewerStudio,
+} from "@/hooks/use-viewer-studio";
 import {
   isInvoiceEligibleTimeEntry,
   timeBillingStateLabel,
@@ -95,13 +98,41 @@ type AnyRecord = any;
 
 const getSupabase = () => createBrowserClient() as AnyRecord;
 
+/**
+ * How the hour was captured, in the ledger's own register (W7-R4-12).
+ *
+ * 00595 bought the whole nine-value vocabulary at once and the portal printed
+ * three of them, falling back to the RAW ENUM for the rest: an internal hour
+ * read `internal`, a ⌘K hour `command_bar`, a Field hour `field_manual` — and
+ * the first of those is a row this program introduced. Every value 00595
+ * carries is named here, including the two with no writer yet, so a door added
+ * later cannot put a database word in front of a designer.
+ */
 const SOURCE_LABEL: Record<string, string> = {
   timer_auto: "in hand",
   timer_manual: "timer",
   manual_entry: "typed",
+  // The ⌘K verb and the internal door are both hand-typed hours; what
+  // distinguishes them is said elsewhere on the row ("no document ·
+  // non-billable"), not twice.
+  command_bar: "typed",
+  internal: "typed",
+  field_visit: "from a visit",
+  field_manual: "from the field",
+  widget: "widget",
+  intent: "shortcut",
 };
 
 const TERRACOTTA_INK = "var(--color-terracotta-ink)";
+
+/**
+ * W4 (HT-15) — the add row's "no document" value. Not a project id and never
+ * sent as one: `log_time` writes `project_id NULL` with the member's studio
+ * stamped beside it. A sentinel "Internal" project was the rejected
+ * alternative — it would pollute every project list, roster, board and invoice
+ * path.
+ */
+const INTERNAL_PROJECT = "__internal__";
 
 /** HT-8 — the four scopes of one sheet. No page, no tab bar, no leaderboard. */
 export type HoursScope = "mine" | "member" | "project" | "studio";
@@ -475,12 +506,21 @@ export function HoursLedger({
     setAddDate(isoDateValue(weekOffset === 0 ? new Date() : weekStart));
   }, [weekOffset, weekStart]);
 
-  const addIntent = useBillableIntent(addProject || null);
+  // HT-15 — an hour the studio worked on nothing a client is billed for. The
+  // billable pill and the role chip belong to a project; here they say the
+  // answer rather than ask for it, because 00610's CHECK refuses a billable
+  // project-less row outright.
+  const addInternal = addProject === INTERNAL_PROJECT;
+  const addNamedProject = addInternal ? "" : addProject;
+  const { studio: internalStudio } = useInternalTimeStudio();
+
+  const addIntent = useBillableIntent(addNamedProject || null);
   // HT-11 — billable is STATED. A hand that touches the pill keeps its answer
   // even if the authority read for that document settles a second later; the
   // `addSeededFor` guard alone could not protect it, because it is only written
   // when the read settles (W3-R4-M1).
-  const addBillableStated = Boolean(addProject) && addStatedFor === addProject;
+  const addBillableStated =
+    Boolean(addNamedProject) && addStatedFor === addProject;
   const stateAddBillable = (next: boolean) => {
     setAddStatedFor(addProject);
     setAddBillable(next);
@@ -490,12 +530,20 @@ export function HoursLedger({
   }, [addProject]);
   const addSeededFor = useRef<string | null>(null);
   useEffect(() => {
-    if (!addProject || !addIntent.isSettled) return;
+    if (!addNamedProject || !addIntent.isSettled) return;
     if (addBillableStated) return;
-    if (addSeededFor.current === addProject) return;
-    addSeededFor.current = addProject;
+    if (addSeededFor.current === addNamedProject) return;
+    addSeededFor.current = addNamedProject;
     setAddBillable(addIntent.billable);
-  }, [addProject, addIntent.isSettled, addIntent.billable, addBillableStated]);
+  }, [
+    addNamedProject,
+    addIntent.isSettled,
+    addIntent.billable,
+    addBillableStated,
+  ]);
+  useEffect(() => {
+    if (addInternal) setAddBillable(false);
+  }, [addInternal]);
 
   const parsedAdd = parseInt(addMinutes, 10);
   // A cleared date field is not "today" — it is an unanswered question, and
@@ -504,12 +552,14 @@ export function HoursLedger({
   // settles is written `billable = false` whatever the agreement says, under a
   // pill that reads like a settled answer (W3-R4-M1). Her own statement counts
   // as an answer, so a failed read does not strand the row.
-  const addValid =
-    addProject &&
-    (addIntent.isSettled || addBillableStated) &&
-    isDayValue(addDate) &&
-    Number.isFinite(parsedAdd) &&
-    parsedAdd >= 1;
+  const addValid = Boolean(
+    (addInternal
+      ? Boolean(internalStudio)
+      : addProject && (addIntent.isSettled || addBillableStated)) &&
+      isDayValue(addDate) &&
+      Number.isFinite(parsedAdd) &&
+      parsedAdd >= 1,
+  );
 
   const batchAdd = async () => {
     if (!addValid || addBusy) return;
@@ -518,19 +568,20 @@ export function HoursLedger({
     const startedMs = Date.now();
     try {
       const written = await createEntry.mutateAsync({
-        projectId: addProject,
+        projectId: addInternal ? null : addProject,
+        studioId: addInternal ? (internalStudio?.id ?? null) : null,
         durationMinutes: parsedAdd,
         startedAt: startedAtFromDateValue(addDate),
         activity: addActivity || null,
-        billable: addBillable,
-        rateRole: addRateRole,
-        source: "manual_entry",
+        billable: addInternal ? false : addBillable,
+        rateRole: addInternal ? null : addRateRole,
+        source: addInternal ? "internal" : "manual_entry",
       });
       // HT-27 — the capture instrument, read off what the server actually
       // stored rather than what the form asked for (the rate is the server's).
       documentEvents.time.entryLogged({
         surface: "hours_ledger",
-        source: "manual_entry",
+        source: addInternal ? "internal" : "manual_entry",
         activity: written.activity ?? null,
         billable: written.billable,
         rate_source: written.rate_source ?? null,
@@ -1167,23 +1218,54 @@ export function HoursLedger({
                 )}
               </span>
             </p>
+            {/* HT-15 / REP-5 — the studio's own hours stand in their own group
+                and are never folded in among a client's, which is the same rule
+                the studio rollup's `— internal —` band keeps. */}
             <ul>
-              {rows.map((e) => (
-                <EntryRow
-                  key={e.id}
-                  entry={e}
-                  unbilled={unbilledById.get(e.id)}
-                  viewerStudioId={viewerStudio?.id ?? null}
-                  viewerIsOwnerOrAdmin={viewerIsOwnerOrAdmin}
-                  onCommit={commit}
-                  onOpenAuthority={setLensProjectId}
-                  onDeleted={() => {
-                    void refetch();
-                    void refetchUnbilled();
-                  }}
-                />
-              ))}
+              {rows
+                .filter((e) => e.project_id != null)
+                .map((e) => (
+                  <EntryRow
+                    key={e.id}
+                    entry={e}
+                    unbilled={unbilledById.get(e.id)}
+                    viewerStudioId={viewerStudio?.id ?? null}
+                    viewerIsOwnerOrAdmin={viewerIsOwnerOrAdmin}
+                    onCommit={commit}
+                    onOpenAuthority={setLensProjectId}
+                    onDeleted={() => {
+                      void refetch();
+                      void refetchUnbilled();
+                    }}
+                  />
+                ))}
             </ul>
+            {rows.some((e) => e.project_id == null) && (
+              <>
+                <p className="mt-2 font-mono text-[11px] uppercase tracking-[0.07em] text-[var(--color-aged-oak)]">
+                  — internal —
+                </p>
+                <ul>
+                  {rows
+                    .filter((e) => e.project_id == null)
+                    .map((e) => (
+                      <EntryRow
+                        key={e.id}
+                        entry={e}
+                        unbilled={undefined}
+                        viewerStudioId={viewerStudio?.id ?? null}
+                        viewerIsOwnerOrAdmin={viewerIsOwnerOrAdmin}
+                        onCommit={commit}
+                        onOpenAuthority={setLensProjectId}
+                        onDeleted={() => {
+                          void refetch();
+                          void refetchUnbilled();
+                        }}
+                      />
+                    ))}
+                </ul>
+              </>
+            )}
           </section>
         ))}
 
@@ -1208,6 +1290,13 @@ export function HoursLedger({
               onChange={(e) => setAddProject(e.target.value)}
             >
               <option value="">Document…</option>
+              {/* HT-15 — the studio's own hours, without a client's house to
+                  misattribute them to. */}
+              {internalStudio && (
+                <option value={INTERNAL_PROJECT}>
+                  Studio time — no document
+                </option>
+              )}
               {(projects ?? [])
                 .filter((project) => project.status === "active")
                 .map((p) => (
@@ -1271,19 +1360,21 @@ export function HoursLedger({
           false fact. The written rows carry the real readout. */}
           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
             <BillablePill
-              value={addBillable}
+              value={addInternal ? false : addBillable}
               onChange={stateAddBillable}
               reason={
-                addIntent.isSettled || addIntent.unreadable
-                  ? addIntent.sentence
-                  : null
+                addInternal
+                  ? "Non-billable — studio time belongs to no client"
+                  : addIntent.isSettled || addIntent.unreadable
+                    ? addIntent.sentence
+                    : null
               }
-              disabled={addBusy}
+              disabled={addBusy || addInternal}
               surfaceKey="hours"
               regionKey="batch-entry"
             />
             <RateRoleChip
-              projectId={addProject || null}
+              projectId={addNamedProject || null}
               value={addRateRole}
               onChange={setAddRateRole}
               disabled={addBusy}
@@ -1729,7 +1820,12 @@ function ScopeEntryRow({
           </p>
           <p className="t-head text-[var(--color-aged-oak)]">
             {[
-              row.project_name ?? "Project",
+              // HT-15 — an internal hour has no document, and saying "Project"
+              // over a studio's own hour is the misattribution nullable
+              // project_id exists to end.
+              row.project_id == null
+                ? "Studio time"
+                : (row.project_name ?? "Project"),
               row.day,
               row.activity ?? "activity not set",
               provenance.kind === "rated"
@@ -1839,12 +1935,17 @@ function EntryRow({
   const [confirming, setConfirming] = useState(false);
   const [rowNote, setRowNote] = useState<string | null>(null);
   const billed = Boolean(e.invoice_id);
-  const authority = useProjectBillingAuthority(e.project_id);
+  // HT-15 — an hour with no document. It has no project name, no rate, no
+  // authority and no repair: 00613 short-circuits it to nonbillable with
+  // `rate_source = 'none'` before the project ladder is ever read, so the row
+  // prints what it is instead of a rate-pending alarm nobody can answer.
+  const internal = e.project_id == null;
+  const authority = useProjectBillingAuthority(internal ? null : e.project_id);
   const provenance = timeRateProvenance(e, authority.data);
   const billingLabel = timeBillingStateLabel(e);
   const amountCents = e.rated_amount_cents ?? unbilled?.amount_cents ?? 0;
   const pricingStudioId = (e.project?.studio_id as string | null) ?? null;
-  const ratePending = provenance.kind === "pending";
+  const ratePending = provenance.kind === "pending" && !internal;
   // HT-27's segmentation: the origin commercial document's kind IS what the
   // classifier means by a design-services project (`_is_design_services_project`,
   // 00578:2584). No origin document = a non-services project, measured.
@@ -1898,21 +1999,25 @@ function EntryRow({
       <div className="grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-3">
         <div className="min-w-0">
           <p className="t-body-sm text-[var(--color-charcoal)]">
-            {e.project?.name ?? "Project"}
+            {internal ? "Studio time" : (e.project?.name ?? "Project")}
           </p>
           <p className="t-head text-[var(--color-aged-oak)]">
             {[
-              e.phase_key,
+              internal ? null : e.phase_key,
               SOURCE_LABEL[e.source] ?? e.source,
               // HT-26 — the rate and where it came from, and never a blank:
               // "rate pending" is a fact, an empty cell is three different
               // facts wearing the same face.
-              provenance.kind === "rated"
-                ? `${provenance.label} · ${fmtUsd(provenance.hourlyRateCents)}/hr${provenance.version ? ` · v${provenance.version}` : ""}`
-                : provenance.label,
+              // HT-15 — an internal hour has no rate and never had one; a
+              // "rate pending" here would be an alarm with no answer.
+              internal
+                ? "no document · non-billable"
+                : provenance.kind === "rated"
+                  ? `${provenance.label} · ${fmtUsd(provenance.hourlyRateCents)}/hr${provenance.version ? ` · v${provenance.version}` : ""}`
+                  : provenance.label,
               // New rows use the server-rated snapshot; legacy rows retain
               // the project_unbilled_time amount alias.
-              amountCents > 0 ? fmtUsd(amountCents) : null,
+              internal || amountCents <= 0 ? null : fmtUsd(amountCents),
               // HT-13 — an hour remembered a month late says so, in the row's
               // own ink. A derived word, no column, no colour (HT-40).
               isBackdatedEntry(e) ? "backdated" : null,
@@ -1923,19 +2028,21 @@ function EntryRow({
           {/* HT-11/HT-41 — billable is stated on the row that carries it, and
               (only for a member holding more than one seat) which role priced
               it. A billed entry is history: the pill is held. */}
-          <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-            <BillablePill
-              value={e.billable === true}
-              onChange={(next) => onCommit(e, { billable: next })}
-              disabled={billed}
-              surfaceKey="hours"
-              regionKey="time-entry-actions"
-            />
-            <RateRoleMark
-              projectId={e.project_id as string}
-              role={(e.rate_role as TimeRateRole | null) ?? null}
-            />
-          </span>
+          {!internal && (
+            <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+              <BillablePill
+                value={e.billable === true}
+                onChange={(next) => onCommit(e, { billable: next })}
+                disabled={billed}
+                surfaceKey="hours"
+                regionKey="time-entry-actions"
+              />
+              <RateRoleMark
+                projectId={e.project_id as string}
+                role={(e.rate_role as TimeRateRole | null) ?? null}
+              />
+            </span>
+          )}
         </div>
         <select
           aria-label="Activity"
@@ -1964,7 +2071,7 @@ function EntryRow({
               onCommit(e, { duration_minutes: v });
           }}
         />
-        {e.billing_state === "pending_authorization" && !billed ? (
+        {!internal && e.billing_state === "pending_authorization" && !billed ? (
           <button
             type="button"
             aria-label={`Review billing authority for ${e.project?.name ?? "this document"}`}

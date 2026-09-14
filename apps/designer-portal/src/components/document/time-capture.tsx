@@ -279,9 +279,25 @@ export function isDayValue(value: string): boolean {
 }
 
 /**
- * A `yyyy-mm-dd` from a date field, as the instant to store. The clock is kept
- * from `now` so an hour logged for today still lands at the hour it was
- * logged; a backdated one lands at the same time of day on the day named.
+ * A `yyyy-mm-dd` from a date field, as the instant to store.
+ *
+ * HT-13-a (RULED 2026-09-13, resolving W7-R3-02): an entry logged with a DATE
+ * and no time — the Hours add row, the ⌘K verb, the Field sheet when backdated
+ * — is filed at **12:00 UTC of the named day**. The ledger's `day` stays
+ * UTC-derived (`(started_at AT TIME ZONE 'UTC')::date`) and no studio timezone
+ * column is added by this program; noon UTC is what makes those two agree,
+ * because it is the same calendar day in every studio timezone between UTC−11
+ * and UTC+11.
+ *
+ * The shape this replaces carried the member's LOCAL time of day onto the day
+ * she named, so an hour named `2026-09-01` at 19:30 CDT was stored
+ * `2026-09-02T00:30Z` — her own Hours list said Sep 1 and the scope lens, the
+ * CSV and the statement said Sep 2, for five hours every night. Do not restore
+ * the local clock here: the day she NAMED is the half that must not move, and
+ * the time of day inside it is a fact a date field never collected.
+ *
+ * An unreadable value still falls back to `now` — the callers gate on
+ * `isDayValue` first, so that branch is a floor, not a path.
  */
 export function startedAtFromDateValue(
   value: string,
@@ -291,7 +307,5 @@ export function startedAtFromDateValue(
   if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) {
     return now.toISOString();
   }
-  const at = new Date(now);
-  at.setFullYear(y, m - 1, d);
-  return at.toISOString();
+  return new Date(Date.UTC(y, m - 1, d, 12, 0, 0, 0)).toISOString();
 }
