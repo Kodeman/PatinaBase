@@ -52,7 +52,7 @@ import {
   type SeatBidOutcome,
   type StudioContactRule,
 } from '@patina/supabase';
-import { isFieldPartyKind, partyKindOwesPaper } from '@patina/types';
+import { getSeatStageLabel, isFieldPartyKind, partyKindOwesPaper } from '@patina/types';
 import {
   MINT_FALLBACK_SENTENCE,
   authorityPhrase,
@@ -433,11 +433,36 @@ export function RosterRow({
     { bidOutcome: bid?.bidOutcome ?? null, stage: row.stage ?? null },
     bidDraft.outcome || null,
   );
-  const bidSentence = !bidDraft.outcome
-    ? 'The outcome is what moves them out of the bidding band. Nothing else on this row does.'
+  /**
+   * THE FOURTH PRESS the select offers — CLEARING a recorded outcome (code
+   * review r9 MAJOR-1).
+   *
+   * "Nothing recorded yet" is the select's first option and `openBidEditor`
+   * seeds the draft from the seat's existing outcome, so on a seat that
+   * carries one, clearing it is a single click. The write DROPS `bid_outcome`
+   * (`useSetPartyBid`'s `!== undefined` guard is true for null) and writes NO
+   * stage (`writesStage` needs an outcome), so the seat keeps the band the
+   * erased outcome put it in — and r8's sentence beside the press still
+   * described recording one. The room has no other writer of that fact, so
+   * the sentence names what is being taken away, in the picker's own words,
+   * and the band that will not move with it.
+   */
+  const clearedOutcome =
+    !bidWrite.outcome && bidWrite.moved ? (bid?.bidOutcome ?? null) : null;
+  const heldStageLabel = getSeatStageLabel(row.stage);
+  const bidSentence = !bidWrite.outcome
+    ? clearedOutcome
+      ? `Clearing the outcome takes ${SEAT_BID_OUTCOME_ACTS[clearedOutcome]} off ${
+          row.name
+        }’s record. ${
+          heldStageLabel
+            ? `The seat stays at ${heldStageLabel}.`
+            : 'The seat stays where it is.'
+        }`
+      : 'The outcome is what moves them out of the bidding band. Nothing else on this row does.'
     : bidWrite.stage
       ? `Recording this moves ${row.name} to ${
-          SEAT_BID_OUTCOME_LABELS[bidDraft.outcome]
+          SEAT_BID_OUTCOME_LABELS[bidWrite.outcome]
         }. A bidder who did not win never reads as crew.`
       : bidWrite.moved
         ? 'This seat is past the bidding, so its stage stays where it is. Recording this writes what came back, and nothing else.'

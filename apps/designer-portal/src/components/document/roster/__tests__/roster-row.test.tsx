@@ -1111,6 +1111,69 @@ describe('RosterRow — the Bidding band', () => {
     ).toBeInTheDocument();
   });
 
+  /**
+   * r9 MAJOR-1 — THE FOURTH PRESS. "Nothing recorded yet" is the select's
+   * first option and the editor seeds the draft from the seat's own outcome,
+   * so clearing a recorded one is a single click. The write DROPS
+   * `bid_outcome` and writes no stage, and r8's sentence still described
+   * recording one.
+   */
+  it('says what clearing a recorded outcome takes away, and what stays', async () => {
+    render(
+      <RosterRow
+        row={bidSeat({ stage: 'awarded' })}
+        band="later"
+        expanded
+        onToggle={jest.fn()}
+        bid={{ ...BID, bidOutcome: 'selected' }}
+        bidPeople={PEOPLE}
+      />,
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Change what came back' }),
+    );
+    fireEvent.change(screen.getByLabelText('How it came back'), {
+      target: { value: '' },
+    });
+    const sentence = document.querySelector('[data-bid-editor]')?.textContent ?? '';
+    expect(sentence).not.toMatch(/moves them out of the bidding band/);
+    expect(
+      screen.getByText(
+        'Clearing the outcome takes Selected off Rivera Finishes\u2019s record. The seat stays at Awarded.',
+      ),
+    ).toBeInTheDocument();
+
+    // and the press does exactly that: the outcome goes, the stage does not move
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'Write the bid' })[0],
+    );
+    await waitFor(() => expect(setBidMutate).toHaveBeenCalled());
+    expect(setBidMutate.mock.calls[0][0].patch.bidOutcome).toBeNull();
+    expect(setBidMutate.mock.calls[0][0].previous).toEqual({
+      bidOutcome: 'selected',
+      stage: 'awarded',
+    });
+  });
+
+  it('keeps the bidding-band sentence where no outcome was ever recorded', () => {
+    render(
+      <RosterRow
+        row={bidSeat()}
+        band="bidding"
+        expanded
+        onToggle={jest.fn()}
+        bid={NO_BID}
+        bidPeople={PEOPLE}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Write the bid' }));
+    expect(
+      screen.getByText(
+        'The outcome is what moves them out of the bidding band. Nothing else on this row does.',
+      ),
+    ).toBeInTheDocument();
+  });
+
   it('names only PEOPLE as the estimator (00631’s guard)', () => {
     render(
       <RosterRow
