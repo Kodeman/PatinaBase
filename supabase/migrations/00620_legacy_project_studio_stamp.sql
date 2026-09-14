@@ -30,6 +30,20 @@
 -- one → it; else NULL. No rate-existence, seat-date, org-age, member-count,
 -- ordering or project-authorship key, and nothing about the member being priced.
 --
+-- MS-12 (integration round 2) — AND THE SAME DESIGNER-DOMAIN GATE. The shared body
+-- is the TIER rule; it is not the whole of what the INSERT path asks. Since MS-02,
+-- 00603/00615's `set_project_studio_id_owned` asks
+-- `public.has_designer_domain_role(NEW.designer_id)` FIRST — 00511's own condition
+-- for auto-deriving a studio for a lead at all — and only then reads the tiers. This
+-- file called `designer_tier_pricing_studio` directly and so skipped that question,
+-- which put the two paths in disagreement by construction on exactly the population
+-- this migration exists for. The gate is now asked here too, in the statement, in the
+-- three per-key counters and in postcondition (a). Recorded as HT-3-g AMENDED (c) in
+-- artifacts/hour-tracking-2026-09-11/rulings.md, and
+-- artifacts/hour-tracking-2026-09-11/build/ms-05-strata-legacy-stamp-preflight.sql
+-- carries the same gate so MS-05's pre-push read and this statement report the same
+-- rows.
+--
 -- W2-R12-01 (MAJOR, measured 1/1 through RLS in two statement forms with a negative
 -- control in an identical fixture): THE OWNED TIER OF THIS ONE STATEMENT IS KEYED ON
 -- THE PROJECT AUTHOR'S OWN STUDIO STANDING. HT-3-g(1) removed the read-time
@@ -428,6 +442,10 @@ DECLARE
   v_left_ambiguous   integer := 0;
   v_left_roster      integer := 0;
   v_left_author      integer := 0;
+  -- MS-12: rows left because their LEAD holds no designer-domain role, which is
+  -- the gate the INSERT path has asked since MS-02. Counted separately so the
+  -- ship reads the cost of the gate rather than discovering it as a shortfall.
+  v_left_non_designer integer := 0;
   v_entries_before    bigint := 0;
   v_entries_after     bigint := 0;
   v_rate_sum_before   bigint := 0;
@@ -466,6 +484,32 @@ BEGIN
     CROSS JOIN LATERAL public.designer_tier_pricing_studio(project.designer_id) AS answer
     WHERE project.studio_id IS NULL
       AND project.designer_id IS NOT NULL
+      -- MS-12 (integration round 2): THE SAME DESIGNER-DOMAIN GATE THE INSERT PATH
+      -- ASKS. MS-02's repair put `public.has_designer_domain_role(NEW.designer_id)`
+      -- in front of the tier rule in 00603/00615's INSERT stamp — 00511's own
+      -- condition for auto-deriving a studio at all. This file called
+      -- `designer_tier_pricing_studio` directly, and that helper asks only
+      -- organizations.type/status and organization_members.role/status; it knows
+      -- nothing about a designer-domain role. The two paths therefore disagreed BY
+      -- CONSTRUCTION on the same population. Measured with a negative control in one
+      -- rolled-back transaction: for a lead with has_designer_domain_role = false,
+      -- designer_tier_pricing_studio answered e7000000-…-0001 / 'employer'; an INSERT
+      -- under 00603's repaired gate left studio_id NULL, while this statement stamped
+      -- it. The stamped studio is the key for time_entries_owner_admin_{read,update,
+      -- delete}, project_hours_total's third leg, 00604's ledger studio_id and the
+      -- audit row's organization_id — so the legacy population would have handed
+      -- those to a studio 00511 decided was not theirs, on the EMPLOYER tier, which
+      -- on a legacy book is the common shape rather than the exotic one.
+      --
+      -- The gate goes in rather than the disagreement being written down, because
+      -- the two directions are not symmetric: gating stamps strictly FEWER rows, and
+      -- a row left NULL prices 'none' ("rate pending") and can still be stamped by
+      -- hand under HT-3-g(3), while a row stamped wrongly is a read+write grant to
+      -- the wrong studio that 00606's bound (b) then makes final. Recorded in
+      -- rulings.md as HT-3-g AMENDED (c); ms-05-strata-legacy-stamp-preflight.sql
+      -- carries the same gate so the numbers the operator reads before the push are
+      -- the numbers this statement writes.
+      AND public.has_designer_domain_role(project.designer_id)
   ),
   stamped AS (
     UPDATE public.projects AS project
@@ -494,11 +538,21 @@ BEGIN
   -- each number is a fact about the end state rather than about the plan. Mutually
   -- exclusive by construction, in this order: the tier answered nothing at all; the
   -- ROSTER key left it; the AUTHOR key left it (the roster key having passed).
+  -- MS-12: rows whose lead is not designer-domain never reach the tier rule at
+  -- all, so they are counted FIRST and excluded from the three tier keys below —
+  -- otherwise the same row would be reported twice under two different reasons.
+  SELECT count(*) INTO v_left_non_designer
+  FROM public.projects AS project
+  WHERE project.studio_id IS NULL
+    AND project.designer_id IS NOT NULL
+    AND NOT public.has_designer_domain_role(project.designer_id);
+
   SELECT count(*) INTO v_left_ambiguous
   FROM public.projects AS project
   CROSS JOIN LATERAL public.designer_tier_pricing_studio(project.designer_id) AS answer
   WHERE project.studio_id IS NULL
     AND project.designer_id IS NOT NULL
+    AND public.has_designer_domain_role(project.designer_id)
     AND answer.studio_id IS NULL;
 
   SELECT count(*) INTO v_left_roster
@@ -506,6 +560,7 @@ BEGIN
   CROSS JOIN LATERAL public.designer_tier_pricing_studio(project.designer_id) AS answer
   WHERE project.studio_id IS NULL
     AND project.designer_id IS NOT NULL
+    AND public.has_designer_domain_role(project.designer_id)
     AND answer.tier = 'owned'
     AND public.project_roster_books_elsewhere(
           project.id, project.designer_id, answer.studio_id);
@@ -515,6 +570,7 @@ BEGIN
   CROSS JOIN LATERAL public.designer_tier_pricing_studio(project.designer_id) AS answer
   WHERE project.studio_id IS NULL
     AND project.designer_id IS NOT NULL
+    AND public.has_designer_domain_role(project.designer_id)
     AND answer.tier = 'owned'
     AND NOT public.project_roster_books_elsewhere(
               project.id, project.designer_id, answer.studio_id)
@@ -537,22 +593,25 @@ BEGIN
                'tier answered, but another studio''s people are on the project''s '
                'roster, HT-3-g AMENDED (a)); % left by W2-R12-01''s AUTHOR key (the '
                'OWNED tier answered and the roster was clear, but the project''s '
-               'AUTHOR stands in another studio — the fifth HT-3-g cost note). Any '
-               'remainder is a row with no lead designer, which this migration never '
-               'considers.',
+               'AUTHOR stands in another studio — the fifth HT-3-g cost note); % '
+               'whose LEAD holds no designer-domain role, which the INSERT path has '
+               'refused to guess a studio for since MS-02 and this file now refuses '
+               'too (MS-12). Any remainder is a row with no lead designer, which this '
+               'migration never considers.',
                v_null_before, v_stamped, v_null_after,
                v_stamped_employer, v_stamped_owned,
-               v_left_ambiguous, v_left_roster, v_left_author;
+               v_left_ambiguous, v_left_roster, v_left_author, v_left_non_designer;
 
   ASSERT v_stamped = v_stamped_employer + v_stamped_owned,
     '00620: every stamped row was written by one of HT-3-b''s two tiers and the '
     'NOTICE must account for all of them — ' || v_stamped || ' stamped against '
     || v_stamped_employer || ' employer + ' || v_stamped_owned || ' owned';
-  ASSERT v_null_after >= v_left_ambiguous + v_left_roster + v_left_author,
+  ASSERT v_null_after >= v_left_ambiguous + v_left_roster + v_left_author
+                         + v_left_non_designer,
     '00620: the per-key counts partition a SUBSET of the rows left NULL (the '
     'remainder being rows with no lead designer), so their sum can never exceed it — '
     || v_null_after || ' left against ' || v_left_ambiguous || ' + ' || v_left_roster
-    || ' + ' || v_left_author;
+    || ' + ' || v_left_author || ' + ' || v_left_non_designer;
   ASSERT v_null_after = v_null_before - v_stamped,
     '00620: every project this migration stopped leaving NULL is one it stamped — '
     'a different arithmetic means something else wrote the column inside this '
@@ -581,6 +640,10 @@ BEGIN
     CROSS JOIN LATERAL public.designer_tier_pricing_studio(project.designer_id) AS answer
     WHERE project.studio_id IS NULL
       AND project.designer_id IS NOT NULL
+      -- MS-12: the same gate the statement applies. A lead with no designer-domain
+      -- role is a row this file is DELIBERATELY unwilling to stamp, so asserting the
+      -- ungated form here would fail the ship over the gate's own cost.
+      AND public.has_designer_domain_role(project.designer_id)
       AND answer.studio_id IS NOT NULL
       AND (
         answer.tier = 'employer'
@@ -590,7 +653,8 @@ BEGIN
                     project.id, project.designer_id, answer.studio_id)
         )
       )
-  ), '00620: every NULL-studio project whose designer''s tier ANSWERS, whose AUTHOR '
+  ), '00620: every NULL-studio project whose LEAD holds a designer-domain role, whose '
+     'tier ANSWERS, whose AUTHOR '
      'stands in no other studio and whose ROSTER answers to no other studio must have '
      'been stamped — one left behind means the UPDATE''s predicate and this assertion '
      'disagree, and it would price ''none'' for ever with no act available to its own '
