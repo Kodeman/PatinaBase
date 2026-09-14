@@ -119,9 +119,21 @@ export function mergeConsequenceSentence(
     ruleStays +
     // r5 B-1 — the thirteen typed facts travel too, COALESCEd, so the sheet
     // states the rule the studio's choice of survivor actually decides.
-    `Everything else ${mergedName} holds — the verdict, the trades, the notes ` +
+    //
+    // r11 BLOCKING-1 — AND THE THREE THAT DO NOT REDUCE THAT WAY. 00629's §5
+    // UNIONs `trades` and `specialties` and ORs `is_sole_proprietor`
+    // (:1717-1724), so the sentence's "the survivor's own words stand" was a
+    // wrong fact about three of the fifteen rows the table prints — measured
+    // live: survivor `electrical`, folded card `plumbing`, survivor after the
+    // merge `{electrical, plumbing}`, neither column, and the flip PR-o offers
+    // changed nothing about it. The clause is split rather than softened: a
+    // studio flipping the survivor to control a value needs to know which
+    // values that lever actually decides.
+    `Everything else ${mergedName} holds — the verdict, the notes ` +
     `and the payee facts — travels the same way, and where both cards say ` +
     `something ${survivorName}’s own words stand. ` +
+    `The trades and specialties on both cards are kept together, and a card ` +
+    `recorded as a sole proprietor keeps that either way. ` +
     `Consent stays with the number, not with the card, so nobody’s yes or no changes. ` +
     `${mergedName}’s paper moves onto ${survivorName} too; where ` +
     `${survivorName} already holds the same paper, still in force, the older one is marked superseded. ` +
@@ -133,6 +145,14 @@ interface FieldRow {
   label: string;
   a: string;
   b: string;
+  /**
+   * r11 BLOCKING-1 — the clause a row earns when the merge does NOT pick
+   * between the two columns. `trades` and `specialties` are UNIONed and
+   * `is_sole_proprietor` is OR'd (00629:1717-1724), so printing them as a
+   * plain two-column comparison under "the survivor's own words stand" told
+   * the studio the survivor pick decides a value it does not decide.
+   */
+  kept?: string;
 }
 
 /**
@@ -172,6 +192,15 @@ export function carriedRows(
     id: string | null | undefined,
     names: ReadonlyMap<string, string>,
   ) => (id ? (names.get(id) ?? "On file") : null);
+
+  // The rows 00629 reduces by KEEPING BOTH rather than by picking one
+  // (r11 BLOCKING-1). The clause rides the row, so the table says it wherever
+  // the row prints, in the same words as the consequence sentence.
+  const keptTogether: Record<string, string> = {
+    Trades: "both kept",
+    Specialties: "both kept",
+    "Sole proprietor": "yes on either card stands",
+  };
 
   const fields: Array<[string, (card: StudioContact) => string | null]> = [
     ["Verdict", (card) => text(card.studio_verdict)],
@@ -213,7 +242,12 @@ export function carriedRows(
     const left = a ? read(a) : null;
     const right = b ? read(b) : null;
     if (left === null && right === null) continue;
-    rows.push({ label, a: left ?? "—", b: right ?? "—" });
+    rows.push({
+      label,
+      a: left ?? "—",
+      b: right ?? "—",
+      ...(keptTogether[label] ? { kept: keptTogether[label] } : {}),
+    });
   }
   return rows;
 }
@@ -399,9 +433,12 @@ export function CompareMergeSheet({
       // 00629 now carries every typed fact across, COALESCEd, so the true
       // sentence is the one that names the survivor's own words as the ones
       // that stand where both cards spoke.
+      // r11 BLOCKING-1 — the announcement carries the same split the
+      // consequence sentence does; the two may not disagree about the write.
       onMerged?.(
         `Two cards are now one. ${survivorName} carries what ${mergedName} held, ` +
-          `and where both cards said something, ${survivorName}’s own words stand.`,
+          `and where both cards said something, ${survivorName}’s own words stand — ` +
+          `except the trades and specialties, which are kept together.`,
         survivorId,
       );
       onClose();
@@ -484,7 +521,17 @@ export function CompareMergeSheet({
               data-compare-field={row.label}
               className="grid grid-cols-[9rem_1fr_1fr] gap-3 border-b border-[var(--hairline-strong)] py-2"
             >
-              <dt className={`${LABEL} self-center`}>{row.label}</dt>
+              <dt className={`${LABEL} self-center`}>
+                {row.label}
+                {row.kept && (
+                  <span
+                    data-compare-kept
+                    className="mt-0.5 block normal-case tracking-normal text-[var(--ink-subtle)]"
+                  >
+                    {row.kept}
+                  </span>
+                )}
+              </dt>
               <dd className="t-body-sm m-0 break-words text-[var(--ink)]">
                 {row.a}
               </dd>

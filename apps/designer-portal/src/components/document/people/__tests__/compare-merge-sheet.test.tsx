@@ -106,6 +106,19 @@ describe("mergeConsequenceSentence", () => {
       "Chidi Okonkwo",
     );
     expect(sentence).toContain("seats, channels, contact rule and firm designations");
+    // r11 BLOCKING-1 — the three facts 00629 does NOT reduce by picking one.
+    // The old sentence swept `trades` into "the survivor's own words stand",
+    // which the UNION at 00629:1717-1724 makes false.
+    expect(sentence).toContain(
+      "The trades and specialties on both cards are kept together",
+    );
+    expect(sentence).toContain(
+      "a card recorded as a sole proprietor keeps that either way",
+    );
+    expect(sentence).toContain(
+      "the verdict, the notes and the payee facts \u2014 travels the same way",
+    );
+    expect(sentence).not.toContain("the verdict, the trades, the notes");
     expect(sentence).toContain(
       "Consent stays with the number, not with the card",
     );
@@ -365,10 +378,38 @@ describe("CompareMergeSheet", () => {
     // studio's own choice of survivor decides.
     expect(onMerged.mock.calls[0][0]).toBe(
       "Two cards are now one. Adaeze Okonkwo carries what Chidi Okonkwo held, " +
-        "and where both cards said something, Adaeze Okonkwo\u2019s own words stand.",
+        "and where both cards said something, Adaeze Okonkwo\u2019s own words stand \u2014 " +
+        "except the trades and specialties, which are kept together.",
     );
     expect(onMerged.mock.calls[0][1]).toBe("card-adaeze");
     expect(props.onClose).toHaveBeenCalled();
+  });
+
+  /**
+   * r11 BLOCKING-1 — `trades`, `specialties` and `is_sole_proprietor` are
+   * UNIONed / OR'd by the RPC, so the two-column table may not imply a pick
+   * the survivor flip does not make.
+   */
+  it("marks the rows the merge keeps together rather than picks", () => {
+    cards["card-adaeze"] = { ...OLDER, trades: ["electrical"] };
+    cards["card-chidi"] = {
+      ...NEWER,
+      trades: ["plumbing"],
+      specialties: ["millwork"],
+      is_sole_proprietor: true,
+    };
+    render(<CompareMergeSheet {...props} />);
+    for (const label of ["Trades", "Specialties", "Sole proprietor"]) {
+      const row = document.querySelector(`[data-compare-field="${label}"]`);
+      expect(row?.querySelector("[data-compare-kept]")).not.toBeNull();
+    }
+    expect(
+      document.querySelector('[data-compare-field="Trades"] [data-compare-kept]')
+        ?.textContent,
+    ).toBe("both kept");
+    expect(
+      document.querySelector('[data-compare-field="Notes"] [data-compare-kept]'),
+    ).toBeNull();
   });
 
   it("prints a refusal as an alert and stays open", async () => {

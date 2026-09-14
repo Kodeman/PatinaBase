@@ -1,0 +1,17 @@
+{
+  "mergeRow": {
+    "survivor_id": "b66faf56-42a7-40fe-9cce-a195864ee098",
+    "merged_id": "d1ada438-986e-445b-9c4e-ac7b19ddea9b",
+    "matched_on": "phone"
+  },
+  "survivorAfter": {
+    "id": "b66faf56-42a7-40fe-9cce-a195864ee098",
+    "full_name": "Wren QA11 xg0ue",
+    "trades": [
+      "electrical",
+      "plumbing"
+    ],
+    "is_sole_proprietor": false
+  },
+  "expectedSurvivorPick": "electrical (older card's own word, per the sentence)"
+}

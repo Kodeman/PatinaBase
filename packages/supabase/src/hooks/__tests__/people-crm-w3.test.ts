@@ -173,14 +173,34 @@ describe("merge_studio_contacts (PR-o)", () => {
     expect(asMergeError(new Error("merge_survivor_archived"))).toMatch(
       /put it back on the shelf first/i,
     );
+    // r11 MAJOR-2 — a seat on a job that records no studio. 00624's guard used
+    // to abort the merge with its own raw token, which asMergeError had no
+    // sentence for, so a schema word landed in the sheet's alert paragraph.
+    expect(
+      asMergeError(new Error("merge_seat_on_studioless_project")),
+    ).toMatch(/records no studio/);
+    // and where the RPC names the job in `details`, the sentence names it too
+    expect(
+      asMergeError({
+        message: "merge_seat_on_studioless_project",
+        details: "Okonkwo residence",
+      }),
+    ).toBe(
+      "One of these cards holds a seat on Okonkwo residence, which records no studio, " +
+        "so the seat cannot be moved. Record that job\u2019s studio first, then merge.",
+    );
     // and no refusal reaches a face as its own token
     for (const token of [
       "merge_two_logins",
       "merge_contact_rule_conflict",
       "merge_kind_mismatch",
       "merge_survivor_archived",
+      "merge_seat_on_studioless_project",
     ]) {
       expect(asMergeError(new Error(token))).not.toContain(token);
+      expect(
+        asMergeError({ message: token, details: "Okonkwo residence" }),
+      ).not.toContain(token);
     }
   });
 

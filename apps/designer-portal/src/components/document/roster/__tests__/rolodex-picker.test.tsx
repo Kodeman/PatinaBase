@@ -760,6 +760,60 @@ describe('RolodexPicker — bring forward', () => {
     await waitFor(() => expect(props.onClose).toHaveBeenCalled());
   });
 
+  /**
+   * r11 QA MAJOR-1 — the pre-check used to abort the WHOLE batch as soon as one
+   * ticked card was already seated, before the mutation ran at all. Leah's own
+   * task 5 names four people who are all already on the Okonkwo residence in
+   * the shipped seed, so the literal acceptance walk wrote zero seats.
+   */
+  it('adds the rest when one ticked card is already on the sheet', async () => {
+    useStudioContacts.mockReturnValue({ data: [ROSA, PETE], isLoading: false });
+    useProjectRoster.mockReturnValue({
+      data: [
+        {
+          roster_id: 'party-1',
+          source: 'party',
+          project_id: 'proj-1',
+          kind: 'sub',
+          display_name: 'Rosa Martínez',
+          company_name: 'Martínez Tile Works',
+          email: 'rosa@martineztile.co',
+          phone: '(513) 555-0148',
+          trade: 'tile',
+          job_title: null,
+          staff_role: null,
+          studio_contact_id: 'contact-1',
+          profile_id: null,
+          show_to_client: false,
+          has_active_field_link: false,
+          sms_consent_status: 'not_asked',
+          updated_at: null,
+        } satisfies ProjectRosterRow,
+      ],
+      refetch: refetchRoster,
+    });
+    bringForwardMutate.mockResolvedValue({
+      added: [{ studioContactId: 'contact-2', seatId: 's2', name: 'Pete Rusk' }],
+      refused: [],
+    });
+    render(<RolodexPicker {...props} />);
+    fireEvent.click(screen.getByRole('checkbox', { name: /Rosa Martínez/ }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /Pete Rusk/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add two to the roster' }));
+    await waitFor(() => expect(bringForwardMutate).toHaveBeenCalled());
+    // only the pick that could go on was sent
+    expect(bringForwardMutate.mock.calls[0][0].picks).toEqual([
+      expect.objectContaining({ studioContactId: 'contact-2' }),
+    ]);
+    // and the sheet says both halves
+    expect(
+      await screen.findByText(
+        /Pete Rusk went on the call sheet\. Rosa Martínez is already on the call sheet\./,
+      ),
+    ).toBeInTheDocument();
+    expect(props.onClose).not.toHaveBeenCalled();
+  });
+
   it('refuses the whole pick when somebody is already on the sheet', async () => {
     useProjectRoster.mockReturnValue({
       data: [

@@ -131,6 +131,7 @@ DECLARE
   v_zero           integer;
   v_several        integer;
   v_with_seats     integer;
+  v_stamped_seats  integer;
   v_role_delta     integer;
 BEGIN
   SELECT count(*) INTO v_remaining
@@ -161,6 +162,17 @@ BEGIN
      AND EXISTS (SELECT 1 FROM public.project_parties pp
                   WHERE pp.project_id = p.id);
 
+  -- r11 MAJOR-2's blast radius, beside R-BD's own count: the STAMPED seats on
+  -- those jobs. Every one of them is a card that cannot be merged until the
+  -- job records a studio, because 00629 refuses the fold by name
+  -- (merge_seat_on_studioless_project) rather than letting 00624's guard abort
+  -- it mid-transaction.
+  SELECT count(*) INTO v_stamped_seats
+    FROM public.project_parties pp
+    JOIN public.projects p ON p.id = pp.project_id
+   WHERE p.studio_id IS NULL
+     AND pp.studio_contact_id IS NOT NULL;
+
   -- The delta between this file's predicate and set_project_studio_id()'s:
   -- projects stamped here whose designer holds no `designer` domain role.
   SELECT count(*) INTO v_role_delta
@@ -169,8 +181,8 @@ BEGIN
      AND p.designer_id IS NOT NULL
      AND NOT public.has_designer_domain_role(p.designer_id);
 
-  RAISE NOTICE '00628 R-BD backfill: % project(s) still studio_id IS NULL (% with no active design-studio membership, % with several); % of those carry seats (R-BI); % stamped project(s) have a designer with no designer domain role',
-    v_remaining, v_zero, v_several, v_with_seats, v_role_delta;
+  RAISE NOTICE '00628 R-BD backfill: % project(s) still studio_id IS NULL (% with no active design-studio membership, % with several); % of those carry seats (R-BI), carrying % seat(s) stamped with a rolodex card (r11 MAJOR-2: each one a pair the room cannot merge); % stamped project(s) have a designer with no designer domain role',
+    v_remaining, v_zero, v_several, v_with_seats, v_stamped_seats, v_role_delta;
 END $$;
 
 COMMENT ON COLUMN public.projects.studio_id IS

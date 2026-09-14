@@ -48,6 +48,7 @@ jest.mock('@patina/supabase', () => ({
   useSendPartySms: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useChannelConsent: () => ({ data: { verdict: null, record: null } }),
   useComplianceDocuments: () => ({ data: [] }),
+  useComplianceDocumentsFor: () => ({ data: [] }),
   fieldLinkUrl: (t: string) => t,
   AUTHORITY_SCOPE_LABELS: {},
   COMPLIANCE_DOC_TYPE_LABELS: {},

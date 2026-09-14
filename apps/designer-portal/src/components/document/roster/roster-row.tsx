@@ -37,7 +37,7 @@ import {
   seatDeleteRefusal,
   useChannelConsent,
   useCloseProjectPartySeat,
-  useComplianceDocuments,
+  useComplianceDocumentsFor,
   useCreateFieldLink,
   useComplianceNotices,
   useRemoveProjectParty,
@@ -50,6 +50,7 @@ import {
   type ProjectPartyAuthority,
   type SeatBid,
   type SeatBidOutcome,
+  type StudioComplianceDocument,
   type StudioContactRule,
 } from '@patina/supabase';
 import { getSeatStageLabel, isFieldPartyKind, partyKindOwesPaper } from '@patina/types';
@@ -257,11 +258,30 @@ export function RosterRow({
   );
 
   // The held clause needs the paper itself — which document lapsed, and when.
-  // Only a LAPSED firm is read; every other row costs no query.
+  // Only a LAPSED row is read; every other row costs no query.
+  //
+  // BOTH HOLDERS, because the WORD reduces over both (r11 MAJOR-1). The row's
+  // paper word is identity_paper_state(studio_contact_id, COALESCE(seat's
+  // firm, card's firm)) — R-BA / R-BJ, 00626:919-978, :2169 — so it already
+  // speaks for the person's OWN certificates as well as their firm's. Reading
+  // the firm's holder id alone left a sole proprietor seated with no firm card
+  // printing `Lapsed` with the query disabled and no sentence at all beside
+  // it, and a person-held lapse under a firm card naming the firm's paper
+  // instead of theirs. PR-h names this row in particular. Same shape r10
+  // MAJOR-2 fixed on the picker's mini row.
   const paperNeedsWords = row.paper === 'lapsed' || row.paper === 'lapses_soon';
-  const { data: heldPaper } = useComplianceDocuments(
-    paperNeedsWords && row.companyId ? { holderId: row.companyId } : undefined,
+  const paperHolderIds = useMemo(
+    () =>
+      paperNeedsWords
+        ? [row.companyId, row.personId].filter((id): id is string => !!id)
+        : [],
+    [paperNeedsWords, row.companyId, row.personId],
   );
+  const { data: heldPaper } = useComplianceDocumentsFor(paperHolderIds);
+  /** The holder a clause names: the person for their own paper, the firm for
+   *  the firm's (r10 MAJOR-2's own resolver, on this surface). */
+  const paperHolderName = (doc: StudioComplianceDocument) =>
+    doc.holder_id === row.personId ? row.name : (row.companyName ?? row.name);
   // 00630 — the nightly sweep's own record. A paper word says where the
   // certificate stands; a notice says the studio has already been told, and
   // that is the sentence the row prints for paper that has not lapsed yet.
@@ -288,8 +308,8 @@ export function RosterRow({
   const lapsesSoonClause =
     row.paper === 'lapses_soon'
       ? noticedPaperClause(
-          [row.companyId],
-          row.companyName,
+          [row.companyId, row.personId],
+          paperHolderName,
           heldPaper,
           noticeIndex,
           COMPLIANCE_DOC_TYPE_LABELS,
@@ -297,7 +317,7 @@ export function RosterRow({
       : null;
 
   const held = blocking
-    ? heldClause(row.companyName, {
+    ? heldClause(paperHolderName(blocking), {
         // CR8-1: the row's sentence takes the plain noun ("insurance"), never
         // the company card's Type column head ("COI, general liability").
         docLabel: heldClausePaperNoun(

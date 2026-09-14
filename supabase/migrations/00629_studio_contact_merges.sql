@@ -1214,6 +1214,8 @@ DECLARE
   -- The two cards' contact rules, read before anything moves (r4 B-2).
   v_survivor_rule public.studio_contact_rules%ROWTYPE;
   v_merged_rule   public.studio_contact_rules%ROWTYPE;
+  -- The job a seat repoint cannot be checked against (r11 MAJOR-2).
+  v_studioless    text;
 BEGIN
   IF p_survivor IS NULL OR p_merged IS NULL THEN
     RAISE EXCEPTION 'merge_contact_not_found'
@@ -1404,6 +1406,41 @@ BEGIN
                    'routed elsewhere, and the card you are keeping says '
                    'something else. Settle one rule on the card you are '
                    'keeping, then merge.';
+  END IF;
+
+  -- ── A SEAT ON A JOB THAT RECORDS NO STUDIO (r11 MAJOR-2) ────────────────
+  -- §"seats" below repoints studio_contact_id, and the v_cross / company
+  -- branches move company_id and warranty_contact_person_id — every one of
+  -- them a column in assert_project_party_cards_trg's list. That guard's own
+  -- R-BD leg refuses the write outright while project_tenant_org() answers
+  -- NULL (00624), so ONE seat on a studio-less job aborted the whole merge
+  -- mid-transaction with the raw token party_card_project_has_no_studio on
+  -- the merge sheet — a schema word on a face (SPEC §7, §5.7 #8), naming no
+  -- act, over a pair the room could then never fold: the duplicate band goes
+  -- on offering "Compare them?" and nothing in the People room stamps a
+  -- project's studio_id. The population is R-BI's legacy rows (a stamped seat
+  -- on a studio_id IS NULL project), 0 locally and counted on Strata by
+  -- 00628's NOTICE before the chain.
+  --
+  -- Refused BY NAME and BEFORE the first write, the way merge_survivor_
+  -- archived and merge_two_logins are, with the job named in DETAIL so the
+  -- sheet can say which one. Same resolver as the trigger, in the same
+  -- caller's session, so the pre-check and the guard cannot disagree.
+  SELECT pj.name INTO v_studioless
+    FROM public.project_parties pp
+    JOIN public.projects pj ON pj.id = pp.project_id
+   WHERE (pp.studio_contact_id           = p_merged
+          OR pp.company_id               = p_merged
+          OR pp.warranty_contact_person_id = p_merged)
+     AND public.project_tenant_org(pp.project_id) IS NULL
+   ORDER BY pj.name, pj.id
+   LIMIT 1;
+  IF v_studioless IS NOT NULL THEN
+    RAISE EXCEPTION 'merge_seat_on_studioless_project'
+      USING DETAIL = v_studioless,
+            HINT   = 'One of these cards holds a seat on a job that records '
+                     'no studio, so the seat cannot be moved. Record that '
+                     'job''s studio first, then merge.';
   END IF;
 
   -- ── channels: union, duplicates by kind + value REDUCED then dropped ────
@@ -1696,8 +1733,25 @@ BEGIN
                                   ELSE s.studio_verdict_at END,
          legal_name        = COALESCE(s.legal_name,        v_merged.legal_name),
          dba_name          = COALESCE(s.dba_name,          v_merged.dba_name),
-         company_name      = COALESCE(NULLIF(btrim(s.company_name), ''),
-                                      v_merged.company_name),
+         -- r11 MAJOR-1 — AND ONLY WHERE THE SURVIVOR CAN RESOLVE NO FIRM AT
+         -- ALL. people_directory's CONTACTS branch reads
+         -- COALESCE(NULLIF(btrim(sc.company_name),''), firm.company_name,
+         -- firm.full_name) — the free text FIRST (QA-1, w2 r5) — so carrying
+         -- the absorbed card's snapshot onto a survivor whose own company_id
+         -- still names a firm card put two disagreeing firm facts on one row,
+         -- and the worse-sourced one won the face. Measured: the survivor's
+         -- meta.company_name went from the firm card's own name to the
+         -- absorbed card's 'Northgate Elec (old typo)' with company_id
+         -- unchanged. usePromoteToStudioContact() stamps company_name from the
+         -- seat on every promotion, so the population is the ordinary
+         -- duplicate. company_id = p_merged is the sole-proprietor fold's own
+         -- shape (the pointer names the card being folded, and the branch
+         -- below keeps it there), which is r9 B-2's whole need.
+         company_name      = COALESCE(
+                               NULLIF(btrim(s.company_name), ''),
+                               CASE WHEN s.company_id IS NULL
+                                      OR s.company_id = p_merged
+                                    THEN v_merged.company_name END),
          company_kind      = COALESCE(s.company_kind,      v_merged.company_kind),
          remit_to          = COALESCE(s.remit_to,          v_merged.remit_to),
          retainage_bps     = COALESCE(s.retainage_bps,     v_merged.retainage_bps),
