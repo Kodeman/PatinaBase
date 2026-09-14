@@ -126,8 +126,7 @@ export function noticedPaperClause(
   });
   const { doc, notice } = candidates[0];
   return expiryNoticeClause({
-    holderName:
-      typeof holderName === "function" ? holderName(doc) : holderName,
+    holderName: typeof holderName === "function" ? holderName(doc) : holderName,
     paperNoun: noticePaperNoun(
       doc.doc_type,
       docTypeLabels[doc.doc_type] ?? doc.doc_label ?? doc.doc_type,

@@ -202,7 +202,9 @@ describe("noticedPaperClause", () => {
       new Map([["doc-1", notice("doc-1", "lapses_soon")]]),
       LABELS,
     );
-    expect(firm).toBe("Northgate Electric’s insurance lapses on 6 October 2026.");
+    expect(firm).toBe(
+      "Northgate Electric’s insurance lapses on 6 October 2026.",
+    );
   });
 
   it("answers nothing where there is no holder to ask about", () => {
