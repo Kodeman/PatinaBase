@@ -1891,6 +1891,201 @@ BEGIN
   END IF;
 END $$;
 
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 8. the r4 review's four merge findings, pinned
+--
+--   B-1  the absorbed card's LOGIN and address travel; two different logins
+--        refuse by name.
+--   B-2  a merge that would leave a BLOCKING contact rule behind on the
+--        absorbed card refuses by name; two blocks, or a one-channel rule,
+--        still merge (R-BL).
+--   M-1  the sole-proprietor fold moves a supersede CHAIN in the same order
+--        the same-kind branch does — heads first, lineage behind them.
+--   M-3  the live agreement link and the lien waiver repoint onto the
+--        survivor; a SENT agreement's frozen contact_id does not abort it.
+--
+-- Its own f9a… id space, so nothing above is disturbed.
+-- ═══════════════════════════════════════════════════════════════════════════
+INSERT INTO public.studio_contacts
+  (id, organization_id, entity_kind, contact_kind, full_name, company_name,
+   email, profile_id, is_sole_proprietor, created_by, created_at) VALUES
+  -- B-1: the older card survives and holds neither login nor address
+  ('f9a00000-0000-4000-8000-00000000000a','f9000000-0000-4000-8000-00000000000a','person','client_rep','R4 Chidi Old',   NULL, NULL,                  NULL,                                   false,'a0000000-0000-0000-0000-000000000004','2024-01-01'),
+  ('f9a00000-0000-4000-8000-00000000000b','f9000000-0000-4000-8000-00000000000a','person','client_rep','R4 Chidi New',   NULL, 'chidi.r4@test.invalid','a0000000-0000-0000-0000-000000000003',false,'a0000000-0000-0000-0000-000000000004','2025-01-01'),
+  -- B-1 negative control: two different logins
+  ('f9a00000-0000-4000-8000-00000000001a','f9000000-0000-4000-8000-00000000000a','person','sub','R4 Login A', NULL, NULL,'a0000000-0000-0000-0000-000000000003',false,'a0000000-0000-0000-0000-000000000004','2024-02-01'),
+  ('f9a00000-0000-4000-8000-00000000001b','f9000000-0000-4000-8000-00000000000a','person','sub','R4 Login B', NULL, NULL,'a0000000-0000-0000-0000-000000000004',false,'a0000000-0000-0000-0000-000000000004','2025-02-01'),
+  -- B-2: a permissive survivor and a blocking duplicate, plus the route target
+  ('f9a00000-0000-4000-8000-00000000002a','f9000000-0000-4000-8000-00000000000a','person','sub','R4 Frank Survivor', NULL,NULL,NULL,false,'a0000000-0000-0000-0000-000000000004','2024-03-01'),
+  ('f9a00000-0000-4000-8000-00000000002b','f9000000-0000-4000-8000-00000000000a','person','sub','R4 Frank Duplicate',NULL,NULL,NULL,false,'a0000000-0000-0000-0000-000000000004','2025-03-01'),
+  ('f9a00000-0000-4000-8000-00000000002c','f9000000-0000-4000-8000-00000000000a','person','sub','R4 Rosa',           NULL,NULL,NULL,false,'a0000000-0000-0000-0000-000000000004','2024-03-01'),
+  -- B-2 control: never-text is not a block (R-BL, F-27 Ray Thao)
+  ('f9a00000-0000-4000-8000-00000000003a','f9000000-0000-4000-8000-00000000000a','person','sub','R4 Ray Survivor', NULL,NULL,NULL,false,'a0000000-0000-0000-0000-000000000004','2024-04-01'),
+  ('f9a00000-0000-4000-8000-00000000003b','f9000000-0000-4000-8000-00000000000a','person','sub','R4 Ray Duplicate',NULL,NULL,NULL,false,'a0000000-0000-0000-0000-000000000004','2025-04-01'),
+  -- M-1: the sole proprietor and their one-man firm
+  ('f9a00000-0000-4000-8000-00000000004a','f9000000-0000-4000-8000-00000000000a','person','sub','R4 Dana Owner-Operator',NULL,NULL,NULL,true,'a0000000-0000-0000-0000-000000000004','2024-05-01'),
+  ('f9a00000-0000-4000-8000-00000000004b','f9000000-0000-4000-8000-00000000000a','company','sub',NULL,'R4 Kowalski Electric',NULL,NULL,false,'a0000000-0000-0000-0000-000000000004','2024-05-01'),
+  -- M-3: one firm carded twice, the newer one carrying the paperwork
+  ('f9a00000-0000-4000-8000-00000000005a','f9000000-0000-4000-8000-00000000000a','company','sub',NULL,'R4 Ostrom Builders',    NULL,NULL,false,'a0000000-0000-0000-0000-000000000004','2024-06-01'),
+  ('f9a00000-0000-4000-8000-00000000005b','f9000000-0000-4000-8000-00000000000a','company','sub',NULL,'R4 Ostrom Builders LLC',NULL,NULL,false,'a0000000-0000-0000-0000-000000000004','2025-06-01');
+
+INSERT INTO public.studio_contact_rules
+  (subject_type, subject_id, channels_allowed, channels_forbidden, route_to_person_id, set_by) VALUES
+  ('person','f9a00000-0000-4000-8000-00000000002a', ARRAY['email','mobile'], '{}', NULL, 'a0000000-0000-0000-0000-000000000004'),
+  ('person','f9a00000-0000-4000-8000-00000000002b', '{}', ARRAY['sms','mobile','office','email'],
+   'f9a00000-0000-4000-8000-00000000002c', 'a0000000-0000-0000-0000-000000000004'),
+  ('person','f9a00000-0000-4000-8000-00000000003a', ARRAY['email'], '{}', NULL, 'a0000000-0000-0000-0000-000000000004'),
+  ('person','f9a00000-0000-4000-8000-00000000003b', ARRAY['email','office'], ARRAY['sms'], NULL, 'a0000000-0000-0000-0000-000000000004');
+
+-- M-1's chain, written the way a book writes one: the original, its renewal
+-- retiring it, then the renewal's renewal. Two retired rows behind one head.
+INSERT INTO public.studio_compliance_documents
+  (id, organization_id, holder_type, holder_id, doc_type, issued_on, expires_on, blocks) VALUES
+  ('f9a10000-0000-4000-8000-000000000001','f9000000-0000-4000-8000-00000000000a','company',
+   'f9a00000-0000-4000-8000-00000000004b','coi_gl','2023-01-01', CURRENT_DATE + 400, ARRAY['site_access']);
+INSERT INTO public.studio_compliance_documents
+  (id, organization_id, holder_type, holder_id, doc_type, issued_on, expires_on, blocks) VALUES
+  ('f9a10000-0000-4000-8000-000000000002','f9000000-0000-4000-8000-00000000000a','company',
+   'f9a00000-0000-4000-8000-00000000004b','coi_gl','2024-01-01', CURRENT_DATE + 800, ARRAY['site_access']);
+UPDATE public.studio_compliance_documents SET superseded_by = 'f9a10000-0000-4000-8000-000000000002'
+ WHERE id = 'f9a10000-0000-4000-8000-000000000001';
+INSERT INTO public.studio_compliance_documents
+  (id, organization_id, holder_type, holder_id, doc_type, issued_on, expires_on, blocks) VALUES
+  ('f9a10000-0000-4000-8000-000000000003','f9000000-0000-4000-8000-00000000000a','company',
+   'f9a00000-0000-4000-8000-00000000004b','coi_gl','2025-01-01', CURRENT_DATE + 1200, ARRAY['site_access']);
+UPDATE public.studio_compliance_documents SET superseded_by = 'f9a10000-0000-4000-8000-000000000003'
+ WHERE id = 'f9a10000-0000-4000-8000-000000000002';
+
+-- M-3's paperwork: one draft agreement, one SENT agreement, and the live link
+-- token on the sent one.
+INSERT INTO public.studio_trade_agreements
+  (id, project_id, studio_id, contact_id, contact_display_name, title, scope, price_cents, state, created_by) VALUES
+  ('f9a20000-0000-4000-8000-000000000001','f9300000-0000-4000-8000-00000000000a','f9000000-0000-4000-8000-00000000000a',
+   'f9a00000-0000-4000-8000-00000000005b','R4 Ostrom Builders LLC','Framing','Frame the addition',500000,'draft',
+   'a0000000-0000-0000-0000-000000000004'),
+  ('f9a20000-0000-4000-8000-000000000002','f9300000-0000-4000-8000-00000000000a','f9000000-0000-4000-8000-00000000000a',
+   'f9a00000-0000-4000-8000-00000000005b','R4 Ostrom Builders LLC','Siding','Side the addition',300000,'sent',
+   'a0000000-0000-0000-0000-000000000004');
+INSERT INTO public.studio_trade_agreement_tokens
+  (id, agreement_id, contact_id, token_hash, status, created_by) VALUES
+  ('f9a20000-0000-4000-8000-00000000000a','f9a20000-0000-4000-8000-000000000002',
+   'f9a00000-0000-4000-8000-00000000005b', repeat('c', 64), 'active',
+   'a0000000-0000-0000-0000-000000000004');
+
+DO $$
+DECLARE
+  v_state text;
+  v_row   record;
+  n       integer;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+
+  -- ── B-1 ────────────────────────────────────────────────────────────────
+  SELECT reach_state INTO v_state FROM public.people_directory
+   WHERE person_id = 'f9a00000-0000-4000-8000-00000000000b';
+  IF v_state IS DISTINCT FROM 'account' THEN
+    RAISE EXCEPTION 'BLOCK 8 FAIL: the fixture card with a login did not read account (%)', v_state;
+  END IF;
+
+  PERFORM public.merge_studio_contacts(
+    'f9a00000-0000-4000-8000-00000000000a','f9a00000-0000-4000-8000-00000000000b','phone');
+
+  SELECT reach_state, email, profile_id INTO v_row FROM public.people_directory
+   WHERE person_id = 'f9a00000-0000-4000-8000-00000000000a';
+  IF v_row.reach_state IS DISTINCT FROM 'account' THEN
+    RAISE EXCEPTION 'BLOCK 8 FAIL (r4 B-1): the merge subtracted the account — the row reads %', v_row.reach_state;
+  END IF;
+  IF v_row.profile_id IS DISTINCT FROM 'a0000000-0000-0000-0000-000000000003' THEN
+    RAISE EXCEPTION 'BLOCK 8 FAIL (r4 B-1): the login did not travel (%)', v_row.profile_id;
+  END IF;
+  IF v_row.email IS DISTINCT FROM 'chidi.r4@test.invalid' THEN
+    RAISE EXCEPTION 'BLOCK 8 FAIL (r4 B-1): the address did not travel (%)', v_row.email;
+  END IF;
+  SELECT count(*) INTO n FROM public.people_directory
+   WHERE person_id = 'f9a00000-0000-4000-8000-00000000000b';
+  IF n <> 0 THEN
+    RAISE EXCEPTION 'BLOCK 8 FAIL: the absorbed card still emits a Directory row';
+  END IF;
+
+  BEGIN
+    PERFORM public.merge_studio_contacts(
+      'f9a00000-0000-4000-8000-00000000001a','f9a00000-0000-4000-8000-00000000001b','manual');
+    RAISE EXCEPTION 'BLOCK 8 FAIL (r4 B-1): two different logins merged';
+  EXCEPTION WHEN sqlstate 'P0001' THEN
+    IF SQLERRM <> 'merge_two_logins' THEN RAISE; END IF;
+  END;
+
+  -- ── B-2 ────────────────────────────────────────────────────────────────
+  BEGIN
+    PERFORM public.merge_studio_contacts(
+      'f9a00000-0000-4000-8000-00000000002a','f9a00000-0000-4000-8000-00000000002b','phone');
+    RAISE EXCEPTION 'BLOCK 8 FAIL (r4 B-2): a do-not-contact block was left on the absorbed card';
+  EXCEPTION WHEN sqlstate 'P0001' THEN
+    IF SQLERRM <> 'merge_contact_rule_conflict' THEN RAISE; END IF;
+  END;
+
+  IF public.contact_rule_summary('person','f9a00000-0000-4000-8000-00000000002b')
+       NOT LIKE '%Write R4 Rosa instead.%' THEN
+    RAISE EXCEPTION 'BLOCK 8 FAIL (r4 B-2): the refused merge moved the rule anyway';
+  END IF;
+
+  -- both cards block: nothing is lost, so the merge stands
+  PERFORM pg_temp.reset_role();
+  UPDATE public.studio_contact_rules
+     SET channels_forbidden = ARRAY['sms','mobile','office','email']
+   WHERE subject_id = 'f9a00000-0000-4000-8000-00000000002a';
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  PERFORM public.merge_studio_contacts(
+    'f9a00000-0000-4000-8000-00000000002a','f9a00000-0000-4000-8000-00000000002b','phone');
+
+  -- R-BL: "never text" with email and office open is not a block
+  PERFORM public.merge_studio_contacts(
+    'f9a00000-0000-4000-8000-00000000003a','f9a00000-0000-4000-8000-00000000003b','phone');
+
+  -- ── M-1 ────────────────────────────────────────────────────────────────
+  PERFORM public.merge_studio_contacts(
+    'f9a00000-0000-4000-8000-00000000004a','f9a00000-0000-4000-8000-00000000004b','company_name');
+  SELECT count(*) INTO n FROM public.studio_compliance_documents
+   WHERE id IN ('f9a10000-0000-4000-8000-000000000001','f9a10000-0000-4000-8000-000000000002',
+                'f9a10000-0000-4000-8000-000000000003')
+     AND holder_id = 'f9a00000-0000-4000-8000-00000000004a'
+     AND holder_type = 'person';
+  IF n <> 3 THEN
+    RAISE EXCEPTION 'BLOCK 8 FAIL (r4 M-1): % of 3 certificates reached the sole proprietor', n;
+  END IF;
+
+  -- ── M-3 ────────────────────────────────────────────────────────────────
+  PERFORM public.merge_studio_contacts(
+    'f9a00000-0000-4000-8000-00000000005a','f9a00000-0000-4000-8000-00000000005b','company_name');
+  PERFORM pg_temp.reset_role();
+  SELECT count(*) INTO n FROM public.studio_trade_agreement_tokens
+   WHERE id = 'f9a20000-0000-4000-8000-00000000000a'
+     AND contact_id = 'f9a00000-0000-4000-8000-00000000005a';
+  IF n <> 1 THEN
+    RAISE EXCEPTION 'BLOCK 8 FAIL (r4 M-3): the live agreement link did not repoint onto the survivor';
+  END IF;
+  SELECT count(*) INTO n FROM public.studio_trade_agreements
+   WHERE id = 'f9a20000-0000-4000-8000-000000000001'
+     AND contact_id = 'f9a00000-0000-4000-8000-00000000005a';
+  IF n <> 1 THEN
+    RAISE EXCEPTION 'BLOCK 8 FAIL (r4 M-3): the DRAFT agreement did not repoint';
+  END IF;
+  SELECT count(*) INTO n FROM public.studio_trade_agreements
+   WHERE id = 'f9a20000-0000-4000-8000-000000000002'
+     AND contact_id = 'f9a00000-0000-4000-8000-00000000005b';
+  IF n <> 1 THEN
+    RAISE EXCEPTION 'BLOCK 8 FAIL (r4 M-3): the SENT agreement''s frozen contact_id moved';
+  END IF;
+
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  SELECT count(*) INTO n FROM public.access_grants_trade_agreement_links()
+   WHERE subject_id = 'f9a00000-0000-4000-8000-00000000005a';
+  IF n <> 1 THEN
+    RAISE EXCEPTION 'BLOCK 8 FAIL (r4 M-3): the company card''s agreement_link grant does not key on the survivor';
+  END IF;
+  PERFORM pg_temp.reset_role();
+END $$;
+
 DO $$ BEGIN RAISE NOTICE 'W3 SQL suite: all blocks passed'; END $$;
 
 ROLLBACK;

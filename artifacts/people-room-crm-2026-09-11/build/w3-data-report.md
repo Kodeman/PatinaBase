@@ -141,6 +141,14 @@ The 30-day window is now stated in **two** places: `compliance_state()` (00623) 
 | `bid_valid_until` | `date` | `>= bid_due_at` when both are set |
 | `bid_quoted_by_person_id` | `uuid` → `studio_contacts` ON DELETE SET NULL | `assert_party_bid_quoted_by()` |
 | `bid_amount_cents` | `integer` | `>= 0` |
+| `bid_asked_at` | `date` | — |
+| `bid_quoted_at` | `date` | — |
+| `bid_selected_at` | `date` | — |
+
+EIGHT columns, not five — `00631:53-62` (corrected, r4 M-2: the three dated
+columns R-R's roster line reads, "Quoted 2 October 2026. Selected 9 October
+2026.", were missing from this table and from both halves of the backfill
+table below while the backfill writes two of them).
 
 Plus `idx_project_parties_bid (project_id, bid_outcome) WHERE bid_outcome IS NOT NULL` — the Bidding band's read.
 
@@ -158,6 +166,8 @@ Sources: `trade_rfq_requests` (party_id, status draft|sent|responded|closed) and
 | `bid_outcome = 'asked'` | `trade_rfq_requests.status = 'sent'` with no bid row |
 | `bid_outcome = 'quoted'` | `trade_rfq_requests.status = 'responded'` with no bid row |
 | `bid_amount_cents` | the `trade_scope_bids` row that decided the outcome |
+| `bid_asked_at` | `trade_rfq_requests.sent_at::date` |
+| `bid_quoted_at` | `trade_rfq_requests.responded_at`, else the earliest `quoted` bid's `noted_at` — never a `selected` row's, which is the day the NUMBER arrived (r2 B2-3) |
 
 **Not written, and why:**
 
@@ -165,6 +175,7 @@ Sources: `trade_rfq_requests` (party_id, status draft|sent|responded|closed) and
 - `bid_valid_until` — no source. Nothing records how long a number holds.
 - `bid_quoted_by_person_id` — no source. `trade_scope_bids` names a **party** (a seat), not the estimator at the firm.
 - `status = 'draft'` — never sent; there is no bid.
+- `bid_selected_at` — **not backfilled at all** (r2 B2-3). A `selected` bid row's `noted_at` is the day the number arrived, not the day the studio chose it, so the roster row would have printed "Quoted 9 Oct 2026. Selected 9 Oct 2026." over a record that says one thing.
 - `status = 'closed'` — **ambiguous, left NULL**. A closed request may have been declined, gone unanswered, been withdrawn, or been tidied away after the award. The column has four words for those and the record carries none of them.
 
 Guarded `WHERE pp.bid_outcome IS NULL`, so a rerun cannot overwrite an outcome a studio moved by hand.
@@ -299,7 +310,13 @@ Repaired by narrowing the predicate to `role NOT IN ('contact', 'team')` — the
 
 ### The finding that is owed, not fixed
 
-**`people_directory`'s TEAM branch is gated on `is_studio_comember(designer)` alone.** A co-member of the designer of record through a *second* studio reads the working studio's teammate names and the project id from it. No consent word, no money, no site access, no seat row — those all took the tenant leg in W1b. Whether the TEAM leg should take one too is a product ruling this wave has no brief for, and 00626's banner marks that branch as deliberately carried forward unchanged. **Reported for Fable, not changed.**
+### The finding that WAS fixed, corrected on the record (r4 M-2)
+
+**`people_directory`'s TEAM branch was gated on `is_studio_comember(designer)` alone, and W3 gave it the tenant leg.** A co-member of the designer of record through a *second* studio read the working studio's teammate names, their `job_title` / `staff_role` and the project id from it. No consent word, no money, no site access, no seat row — those all took the tenant leg in W1b.
+
+This section, §10.1 below, and 00629's own §6 banner each said the change had been **deferred**, and a code-only diff of the 00626 and 00629 view bodies returns **two** deltas, not one: the CONTACTS branch's `AND sc.merged_into IS NULL`, and a full tenant leg on the TEAM branch at `00629:1758-1768`. The narrowing shipped in this wave. It is stated here as **a change made, not a question parked**: `AND ( is_active_studio_member(project_tenant_org(tm.project_id)) OR pj.designer_id = auth.uid() OR pj.lead_designer_id = auth.uid() OR pj.created_by = auth.uid() )`, written exactly as every other branch writes it (R-BD).
+
+**What Fable still owes a word on** is only whether that narrowing is the product answer — it changes who reads a studio's teammate names — not whether it is in the build. It is.
 
 ---
 
@@ -370,10 +387,10 @@ Trigger functions (no grant to anyone; `REVOKE ALL FROM PUBLIC, anon, authentica
 
 ## 10. Not done, and owed
 
-1. **The TEAM-branch tenant leg** (§7). A ruling, not a defect fix. Owed to Fable.
+1. **The TEAM-branch tenant leg** (§7) — **MADE, not owed** (corrected r4 M-2). The narrowing is in `00629`'s view body; what is owed to Fable is a ruling on whether narrowing who reads teammate names is the product answer, with the change already on the file.
 2. **The 30-day window is stated twice** (§2). `compliance_state()` and `compliance_document_state()` must move together. A later wave could collapse them; doing it here would re-open a function W1b reviewed ten times.
 3. **`bid_due_at` and `bid_valid_until` are empty everywhere** after the backfill, by design (§3). The Bidding band's "Due 5 Oct 2026" only prints once a studio types it or a future RFQ rail records it.
-4. **No portal surface** was built for any of this. W3 is the data layer only: no hooks, no components, no `@patina/types` additions. The merge sheet (direction §8 P2 "Compare & merge"), the travel-list picker (SPEC §5.7, R-BM), the Bidding band's dates and the household editor are owed to the W4 portal wave.
+4. **No portal surface** was built *by this migration lane*. W3's data lane is migrations only: no hooks, no components, no `@patina/types` additions. Corrected (r4 M-2): the merge sheet (direction §8 P2 "Compare & merge") and the travel-list picker are **not** owed to W4 — R-BM rules the bring-forward travel list **W3 scope**, and both shipped in this wave's portal lane (`components/document/people/compare-merge-sheet.tsx`, `components/document/roster/travel-list-pane.tsx:44-56` beside `rolodex-picker.tsx`'s multi-select and "Put back"). The Bidding band's dates and the household editor shipped in the same lane. What is genuinely owed to W4 is what the wave's own build sheet names, not this list.
 5. **The Strata numbers for R-BD are unmeasured.** Locally 5 studio-less projects, all ambiguous, none carrying seats. 00628's NOTICE prints the real counts at deploy; the W7 preflight is owed them beside 00624's own preflight SELECT.
 6. **`sweep_compliance_expiries()` has never run against the seeded book outside a rolled-back transaction.** §2's table is what it *would* say, computed read-only through `compliance_document_state()`.
 7. **The cron registry COMMENT is the only exception-swallowing block in 00630**, exactly as in 00574: the `EXISTS` guard on `cron.unschedule` and the bare `SELECT cron.schedule(...)` are unwrapped, so a stack that cannot schedule the sweep fails the migration rather than applying it with the nightly job silently absent. The SQL test asserts `cron.job` carries `compliance-document-expiry-sweep` at `0 6 * * *`; the deploy should re-check it on Strata.

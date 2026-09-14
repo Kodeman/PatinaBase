@@ -58,6 +58,8 @@ jest.mock('@patina/supabase', () => ({
   // CR-1: the promote band resolves the studio from the SEAT's project
   // (project_recorded_studio), never from the membership list.
   useProjectRecordedStudio: () => ({ data: 'org-1' }),
+  // PR-o — the deep-link's forward resolver (00629). Nothing here deep-links.
+  useResolvedContactId: () => ({ data: null }),
   isFieldRosterRole: (role: string | null | undefined) =>
     !!role && ['gc', 'sub', 'installer', 'receiver'].includes(role),
 }));

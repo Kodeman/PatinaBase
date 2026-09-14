@@ -161,6 +161,21 @@ describe("merge_studio_contacts (PR-o)", () => {
     expect(asMergeError(new Error("merge_already_merged"))).toMatch(
       /already been folded/,
     );
+    // r4 B-1 / B-2 — the two facts a merge may not silently drop.
+    expect(asMergeError(new Error("merge_two_logins"))).toMatch(
+      /two different Patina accounts/,
+    );
+    expect(asMergeError(new Error("merge_contact_rule_conflict"))).toMatch(
+      /blocked or routed elsewhere/,
+    );
+    // and no refusal reaches a face as its own token
+    for (const token of [
+      "merge_two_logins",
+      "merge_contact_rule_conflict",
+      "merge_kind_mismatch",
+    ]) {
+      expect(asMergeError(new Error(token))).not.toContain(token);
+    }
   });
 
   it("fans out to every key a card’s facts are read through", () => {

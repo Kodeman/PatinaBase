@@ -33342,6 +33342,10 @@ export type Database = {
         }
         Returns: string
       }
+      contact_rule_blocks_contact: {
+        Args: { p_channels_forbidden: string[]; p_route_to_person_id: string }
+        Returns: boolean
+      }
       contact_rule_summary: {
         Args: { p_subject_id: string; p_subject_type: string }
         Returns: string

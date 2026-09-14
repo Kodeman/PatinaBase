@@ -1866,7 +1866,44 @@ export const studioContactMergeKeys = {
     ['studio-contact-merges', organizationId ?? null] as const,
 };
 
-/** `merge_studio_contacts()`'s eight named refusals, as sentences. */
+export const resolvedContactKeys = {
+  all: ['resolved-studio-contact'] as const,
+  one: (contactId: string | null | undefined) =>
+    ['resolved-studio-contact', contactId ?? null] as const,
+};
+
+/**
+ * AN OLD ID, MAPPED FORWARD (`resolve_merged_contact`, 00629, PR-o).
+ *
+ * PR-o's "both ids stay resolvable" needs a reader, and until the r4 review
+ * the repo had none: the merge sheet promised "an old link still opens this
+ * person" while `people_directory` folds a merged card away and every list
+ * read here filters `merged_into`, so a bookmarked or emailed
+ * `/people?person=<old id>` opened nothing at all — no card, no error, no
+ * redirect (r4 B-3, reproduced live against a fresh reset).
+ *
+ * Returns the id the card resolves to TODAY: itself while it is live, the
+ * survivor once it has been folded, and `null` when the id names no card this
+ * caller may read (the RPC is SECURITY INVOKER, so studio_contacts' own
+ * member-only SELECT policy is the whole access rule).
+ */
+export function useResolvedContactId(contactId: string | null | undefined) {
+  return useQuery({
+    queryKey: resolvedContactKeys.one(contactId),
+    enabled: !!contactId,
+    queryFn: async (): Promise<string | null> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase.rpc('resolve_merged_contact', {
+        p_contact_id: contactId,
+      });
+      if (error) throw error;
+      return (data as string | null) ?? null;
+    },
+  });
+}
+
+/** `merge_studio_contacts()`'s ten named refusals, as sentences. */
 const MERGE_REFUSAL_SENTENCES: Record<string, string> = {
   merge_contact_not_found: 'One of these cards is no longer in the book.',
   merge_same_card: 'That is one card, not two.',
@@ -1878,6 +1915,11 @@ const MERGE_REFUSAL_SENTENCES: Record<string, string> = {
     'The card you chose to keep has itself been folded into another one. Open that one instead.',
   merge_kind_mismatch:
     'A firm and a person are different kinds of card. A firm folds into a person only where the person is recorded as a sole proprietor.',
+  // r4 B-1 / B-2 — the two refusals a merge makes about facts it may not drop.
+  merge_two_logins:
+    'These two cards name two different Patina accounts, so they are two people. Take the account off one of them first, or leave them as two.',
+  merge_contact_rule_conflict:
+    'The card being folded in says contact is blocked or routed elsewhere, and the card you are keeping says something else. Settle one rule on the card you are keeping, then merge.',
 };
 
 /** Render a merge refusal as a sentence; anything else comes back as itself. */

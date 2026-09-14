@@ -69,6 +69,11 @@ jest.mock('@patina/supabase', () => ({
   // The three words at the pick come from the directory, keyed on the rolodex
   // card (v4). One read for the page of hits.
   usePeopleDirectory: () => ({ data: directoryRows }),
+  // R-Q's job clause at the pick: the record names the job it was recorded
+  // on, and the picker resolves the name off this read (r4 code MAJOR-1).
+  useProjects: () => ({
+    data: [{ id: 'project-lindqvist', name: 'Lindqvist kitchen' }],
+  }),
   // CR-5: the RULE ROW is what the mini row's clause is composed from —
   // `contact_rule_summary` is the mechanical list in schema words and must not
   // reach a face.
@@ -484,12 +489,32 @@ describe('RolodexPicker — bring forward', () => {
     );
   });
 
-  it('carries the refusal onto the row itself (direction §5.2 Birth rule)', () => {
+  it('carries the refusal onto the row itself, in the ruled wording (R-Q, direction §5.2 Birth rule)', () => {
+    // `inbound_sms` is what studio_channel_consent's CHECK admits — the value
+    // a real inbound STOP writes. The old fixture said `inbound_stop`, which
+    // the constraint can never produce, so the assertion passed over a
+    // composer that printed "Opted out to the studio" (r4 code MAJOR-1).
     consentRecords = [
       {
         channel_value: '+15135550148',
-        opt_out_source: 'inbound_stop',
+        opt_out_source: 'inbound_sms',
         opt_out_at: '2025-12-03',
+        origin_project_id: 'project-lindqvist',
+      },
+    ];
+    render(<RolodexPicker {...props} />);
+    expect(
+      document.querySelector('[data-carried-consent]')?.textContent,
+    ).toBe('Opted out by text, 3 Dec 2025, on the Lindqvist kitchen.');
+  });
+
+  it('names no job where the record names none', () => {
+    consentRecords = [
+      {
+        channel_value: '+15135550148',
+        opt_out_source: 'inbound_sms',
+        opt_out_at: '2025-12-03',
+        origin_project_id: null,
       },
     ];
     render(<RolodexPicker {...props} />);
