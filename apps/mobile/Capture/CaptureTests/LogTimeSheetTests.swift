@@ -172,6 +172,48 @@ struct LogTimeSheetTests {
         #expect(draft.canStepUp == false)
     }
 
+    // MARK: the span grows backwards, never forward (W6-R3-07 / R3-m1)
+
+    /// With no open visit there is nothing to observe, so the sheet anchors the
+    /// END at the moment it opened. Stepping up used to hold `startedAt` still
+    /// and walk the implied end forward — at the 12-hour bound, ~11.5 hours into
+    /// the future, filed as a real hour because nothing stores a span end.
+    @Test func steppingWithNoOpenVisitMovesTheStartBackAndNeverTheEndForward() {
+        var draft = FieldLogTimeDraft(visit: CaptureVisitState.none, now: now)
+        #expect(draft.startedAt == now.addingTimeInterval(-30 * 60))
+
+        for _ in 0..<200 { draft.step(by: FieldLogTimeDraft.stepMinutes) }
+        #expect(draft.durationMinutes == FieldLogTimeDraft.maximumMinutes)
+        #expect(draft.startedAt
+                == now.addingTimeInterval(-Double(FieldLogTimeDraft.maximumMinutes) * 60))
+        // The end is exactly where it was, at every step.
+        #expect(draft.startedAt.addingTimeInterval(Double(draft.durationMinutes) * 60)
+                == now)
+    }
+
+    /// An ACTIVE visit's start is an observed fact. The stepper lengthens the
+    /// span from it — moving it would falsify when she arrived.
+    @Test func anActiveVisitsObservedStartIsNeverMovedByTheStepper() {
+        let visit = openVisit(startedAt: now.addingTimeInterval(-30 * 60),
+                              lastActivityAt: now.addingTimeInterval(-10 * 60))
+        var draft = FieldLogTimeDraft(visit: state(visit, now: now), now: now)
+        let observed = draft.startedAt
+        draft.step(by: FieldLogTimeDraft.stepMinutes)
+        #expect(draft.startedAt == observed)
+        #expect(draft.durationMinutes == 45)
+    }
+
+    /// Naming a day by hand drops the anchor: her answer wins, and the stepper
+    /// stops walking the date around underneath her.
+    @Test func namingADayByHandDropsTheEndAnchor() {
+        var draft = FieldLogTimeDraft(visit: CaptureVisitState.none, now: now)
+        let named = now.addingTimeInterval(-3 * 86_400)
+        draft.setStartedAt(named)
+        draft.step(by: FieldLogTimeDraft.stepMinutes)
+        #expect(draft.startedAt == named)
+        #expect(draft.durationMinutes == 45)
+    }
+
     /// The bound still holds for anything that DOES reach it: an install day
     /// opened at 06:00 and worked through, with Hours tapped at 20:00, is
     /// active by every rule `visitState` has — and still cannot offer more than
@@ -290,11 +332,32 @@ struct LogTimeSheetTests {
     /// HT-26 — "rate pending" is printed rather than left blank, because a blank
     /// made "legitimately non-billable" and "this hire has no rate" identical.
     @Test func anUnresolvedRateSaysSoRatherThanGoingBlank() {
-        #expect(FieldHoursWeek.worthLabel(hourRow(rateSource: "none")) == "Rate pending")
+        #expect(FieldHoursWeek.worthLabel(
+            hourRow(rateSource: "none", hourlyRateCents: nil)) == "Rate pending")
         #expect(FieldHoursWeek.worthLabel(hourRow(billable: false)) == "Not billable")
         #expect(FieldHoursWeek.worthLabel(hourRow(billingState: "pending_authorization"))
                 == "Awaiting authorization")
         #expect(FieldHoursWeek.worthLabel(hourRow()) == "Billable")
+    }
+
+    /// R3-m2 — a NULL `rate_source` is a pre-00600 row, and it is NOT 'none'.
+    /// P-4 backfills nothing, so on Strata today EVERY row is NULL and most of
+    /// them carry a real legacy rate. The rate decides, the way the desk's own
+    /// `timeRateProvenance` decides; before this both shapes read "Billable".
+    @Test func aLegacyRowIsJudgedOnItsRateAndNotOnANullSource() {
+        // Priced legacy row: a rate is a rate, whoever recorded it.
+        #expect(FieldHoursWeek.worthLabel(
+            hourRow(billingState: "authorized", rateSource: nil,
+                    hourlyRateCents: 15_000)) == "Billable")
+        #expect(FieldHoursWeek.worthLabel(
+            hourRow(billingState: "pending_authorization", rateSource: nil,
+                    hourlyRateCents: 15_000)) == "Awaiting authorization")
+        // Unpriced legacy row: nobody ever looked, which is not the same fact
+        // as "the resolver looked and found no card" ('none' → "Rate pending").
+        #expect(FieldHoursWeek.worthLabel(
+            hourRow(rateSource: nil, hourlyRateCents: nil)) == "Rate not recorded")
+        #expect(FieldHoursWeek.worthLabel(
+            hourRow(rateSource: nil, hourlyRateCents: 0)) == "Rate not recorded")
     }
 
     /// HT-24 — an hour with no activity says so, and never becomes "Design".
@@ -308,10 +371,11 @@ struct LogTimeSheetTests {
                          activity: FieldTimeActivity? = .travel,
                          billable: Bool = true,
                          billingState: String? = "authorized",
-                         rateSource: String? = "authority") -> FieldHourRow {
+                         rateSource: String? = "authority",
+                         hourlyRateCents: Int? = 15_000) -> FieldHourRow {
         FieldHourRow(id: UUID(), startedAt: startedAt ?? now,
                      projectName: "Maple St", minutes: minutes, activity: activity,
                      billable: billable, billingState: billingState,
-                     rateSource: rateSource)
+                     rateSource: rateSource, hourlyRateCents: hourlyRateCents)
     }
 }

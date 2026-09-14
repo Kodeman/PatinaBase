@@ -84,17 +84,22 @@ public enum WorkFixtures {
                          startedAt: now.addingTimeInterval(-3 * 3_600),
                          projectName: "Ashford Residence — Living + Dining",
                          minutes: 45, activity: .travel, billable: true,
-                         billingState: "authorized", rateSource: "authority"),
+                         billingState: "authorized", rateSource: "authority",
+                         hourlyRateCents: 18_000),
             FieldHourRow(id: UUID(uuidString: "f1000000-0000-4000-8000-000000000002")!,
                          startedAt: now.addingTimeInterval(-5 * 3_600),
                          projectName: "Ashford Residence — Living + Dining",
+                         // R3-m2 — an unpriced hour carries no rate, and that is
+                         // what makes "Rate pending" the honest label for it.
                          minutes: 90, activity: .siteVisit, billable: true,
-                         billingState: "pending_authorization", rateSource: "none"),
+                         billingState: "pending_authorization", rateSource: "none",
+                         hourlyRateCents: nil),
             FieldHourRow(id: UUID(uuidString: "f1000000-0000-4000-8000-000000000003")!,
                          startedAt: now.addingTimeInterval(-26 * 3_600),
                          projectName: "Whitfield Loft",
                          minutes: 30, activity: nil, billable: false,
-                         billingState: "authorized", rateSource: "studio_member")
+                         billingState: "authorized", rateSource: "studio_member",
+                         hourlyRateCents: 12_500)
         ]
     }
 

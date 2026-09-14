@@ -36,8 +36,13 @@ struct SupabaseFieldHoursService: FieldHoursService {
 
         let rows: [HourRow] = try await client
             .from("project_time_entries")
+            // R3-m2 — `hourly_rate_cents` is here because `rate_source` alone
+            // cannot tell a priced legacy row (NULL source, real rate) from an
+            // unpriced one (NULL source, no rate). `FieldHoursWeek.worthLabel`
+            // keys on the rate first, the way the desk's own provenance does.
             .select("id, started_at, duration_minutes, activity, billable, "
-                + "billing_state, rate_source, project:projects(name)")
+                + "billing_state, rate_source, hourly_rate_cents, "
+                + "project:projects(name)")
             .eq("user_id", value: userID)
             .gte("started_at", value: ISO8601DateFormatter().string(from: since))
             // A running desk timer has no duration and is not hers to report
@@ -103,6 +108,7 @@ private struct HourRow: Decodable {
     let billable: Bool?
     let billingState: String?
     let rateSource: String?
+    let hourlyRateCents: Int?
     let project: ProjectNameRow?
 
     struct ProjectNameRow: Decodable { let name: String? }
@@ -115,6 +121,7 @@ private struct HourRow: Decodable {
         case billable
         case billingState = "billing_state"
         case rateSource = "rate_source"
+        case hourlyRateCents = "hourly_rate_cents"
         case project
     }
 
@@ -134,7 +141,8 @@ private struct HourRow: Decodable {
             activity: activity.flatMap(FieldTimeActivity.init(rawValue:)),
             billable: billable ?? false,
             billingState: billingState,
-            rateSource: rateSource)
+            rateSource: rateSource,
+            hourlyRateCents: hourlyRateCents)
     }
 }
 

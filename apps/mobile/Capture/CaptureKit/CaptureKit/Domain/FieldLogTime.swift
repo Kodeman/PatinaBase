@@ -68,9 +68,23 @@ public enum FieldRateRole: String, CaseIterable, Equatable, Sendable {
 public struct FieldLogTimeDraft: Equatable, Sendable {
     public var projectID: String?
     public var projectName: String?
-    /// HT-13 — any date. The server bounds it at "until the entry is invoiced"
-    /// (guard_invoiced_time_entry, 00177:51-84), so nothing here has to.
-    public var startedAt: Date
+    /// HT-13 — any PAST date. The server freezes it once invoiced
+    /// (guard_invoiced_time_entry, 00177:51-84) and, since R3-m1, refuses an
+    /// instant more than 26 hours ahead of now (00608).
+    ///
+    /// `private(set)` because the stepper owns it whenever `endAnchor` is set:
+    /// name a day by hand through `setStartedAt(_:)`, which drops the anchor.
+    public private(set) var startedAt: Date
+    /// W6-R3-07 — when the sheet opened with NO active visit there was nothing
+    /// to anchor the span to, so the default was `now − 30m` and `step(by:)`
+    /// grew `durationMinutes` alone: the START stayed put and the implied END
+    /// walked forward, up to ~11.5 hours into the future at the stepper's bound.
+    /// Nothing stores or checks a span end, so that hour was simply filed.
+    ///
+    /// So the un-anchored draft anchors its END at the moment the sheet opened,
+    /// and every duration change moves the START back instead. An active visit
+    /// sets this to nil: its `startedAt` is an OBSERVED fact and must not move.
+    public private(set) var endAnchor: Date?
     /// Never nil, never below `minimumMinutes`, never above `maximumMinutes`.
     public private(set) var durationMinutes: Int
     public var activity: FieldTimeActivity
@@ -100,10 +114,12 @@ public struct FieldLogTimeDraft: Equatable, Sendable {
                 activity: FieldTimeActivity = .travel,
                 billable: Bool = true,
                 notes: String = "",
-                rateRole: FieldRateRole? = nil) {
+                rateRole: FieldRateRole? = nil,
+                endAnchor: Date? = nil) {
         self.projectID = projectID
         self.projectName = projectName
         self.startedAt = startedAt
+        self.endAnchor = endAnchor
         self.durationMinutes = Self.clamp(durationMinutes)
         self.activity = activity
         self.billable = billable
@@ -133,10 +149,13 @@ public struct FieldLogTimeDraft: Equatable, Sendable {
     /// house — and the last capture is exactly the wrong end of it.
     public init(visit state: CaptureVisitState, now: Date) {
         guard case .active(let visit) = state, visit.isVisit else {
+            // W6-R3-07: the span ENDS now and grows backwards. There is no
+            // visit to observe, so `now` is the only end this sheet can know.
             self.init(
                 startedAt: now.addingTimeInterval(-Double(Self.defaultMinutes) * 60),
                 durationMinutes: Self.defaultMinutes,
-                activity: .travel)
+                activity: .travel,
+                endAnchor: now)
             return
         }
         self.init(
@@ -156,11 +175,24 @@ public struct FieldLogTimeDraft: Equatable, Sendable {
     }
 
     public mutating func step(by minutes: Int) {
-        durationMinutes = Self.clamp(durationMinutes + minutes)
+        setDuration(durationMinutes + minutes)
     }
 
     public mutating func setDuration(_ minutes: Int) {
         durationMinutes = Self.clamp(minutes)
+        // W6-R3-07. An un-anchored draft keeps its END where the sheet found it
+        // and walks the START back; a visit-anchored one leaves `startedAt`
+        // exactly where the visit says it was.
+        if let endAnchor {
+            startedAt = endAnchor.addingTimeInterval(-Double(durationMinutes) * 60)
+        }
+    }
+
+    /// HT-13 — the day she names by hand, which drops the end anchor: a chosen
+    /// day is her answer, and the stepper has no business walking it around.
+    public mutating func setStartedAt(_ date: Date) {
+        startedAt = date
+        endAnchor = nil
     }
 
     public var canStepDown: Bool { durationMinutes > Self.minimumMinutes }

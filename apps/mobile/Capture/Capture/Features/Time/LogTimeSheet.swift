@@ -228,7 +228,12 @@ struct LogTimeSheet: View {
                 .accessibilityHint("Picks the day this hour belongs to.")
 
                 if isPickingDay {
-                    DatePicker("Day", selection: $draft.startedAt,
+                    // `startedAt` is private(set) on the draft (W6-R3-07): the
+                    // stepper owns it while an end anchor stands, and naming a
+                    // day by hand is what drops that anchor.
+                    DatePicker("Day",
+                               selection: Binding(get: { draft.startedAt },
+                                                  set: { draft.setStartedAt($0) }),
                                in: ...Date(), displayedComponents: .date)
                         .datePickerStyle(.graphical)
                         .labelsHidden()
