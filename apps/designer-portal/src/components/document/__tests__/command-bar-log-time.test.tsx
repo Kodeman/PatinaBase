@@ -36,7 +36,12 @@ jest.mock('@patina/supabase', () => ({
   usePeopleDirectory: () => ({ data: undefined }),
   useRecentBoards: () => ({ data: [] }),
   useTimeCaptureProjects: () => ({ data: captureProjects }),
-  useMyRateRoles: () => ({ data: mockMyRateRoles }),
+  // `enabled: Boolean(projectId)` in the real hook, so a door that names no
+  // document (the internal one) gets `undefined`, not a roster. Honoured here
+  // rather than returning the roster unconditionally: an infidelious mock is
+  // how a surface passes a test it does not actually satisfy.
+  useMyRateRoles: (projectId: string | null) =>
+    projectId ? { data: mockMyRateRoles } : { data: undefined },
   useCreateTimeEntry: () => ({ mutateAsync: mockCreate, isPending: false }),
   // HT-15 — the studio an internal hour belongs to, read through
   // `useInternalTimeStudio`. `mockStudios` is what the member belongs to.
@@ -44,8 +49,20 @@ jest.mock('@patina/supabase', () => ({
 }));
 
 /** The viewer's studios. Empty by default, so the cases below measure the
- *  document form exactly as W3 shipped it; the internal-door case seats her. */
+ *  document form exactly as W3 shipped it; the internal-door cases seat her. */
 let mockStudios: Array<Record<string, unknown>> = [];
+
+/** One design studio she is an ordinary active member of — `internal_time_own_insert`
+ *  (00612) admits any active non-guest member, which is why the internal door is
+ *  NOT gated on `useViewerStudio`'s owner/admin test. */
+const MEMBER_OF_ONE_STUDIO = [
+  {
+    id: 'studio-1',
+    name: 'Middlewest',
+    type: 'design_studio',
+    membership: { role: 'member' },
+  },
+];
 
 /** The authority read, as an answer the test can leave in flight or fail. */
 let mockAuthority: {
@@ -151,6 +168,7 @@ const FAKE_DATE_ONLY = {
 beforeEach(() => {
   jest.useFakeTimers(FAKE_DATE_ONLY);
   mockHeldProjectId = null;
+  mockStudios = [];
   mockMyRateRoles = [];
   mockCreate.mockReset();
   mockCreate.mockResolvedValue({
@@ -441,6 +459,145 @@ describe('⌘K · Log time', () => {
     // Nothing is in hand this time, so the picker stands empty — not on
     // whatever house was filed against a moment ago.
     expect(screen.getByRole('combobox', { name: 'Document' })).toHaveValue('');
+  });
+
+  /**
+   * W4 · HT-15 — the ⌘K door's internal half, which three review rounds found
+   * asserted by a comment and by nothing else: `mockStudios` was declared empty
+   * and never reassigned, so every case above measured a member who belongs to
+   * no design studio and the option under test was never once rendered.
+   */
+  describe('the studio door — an hour on nothing a client is billed for', () => {
+    it('offers "Studio time — no document" to a member of a design studio, and to nobody else', () => {
+      const none = render(<Tree />);
+      act(() => openPalette());
+      fireEvent.click(screen.getByRole('option', { name: /Log time/ }));
+      expect(
+        screen.queryByRole('option', { name: 'Studio time — no document' }),
+      ).not.toBeInTheDocument();
+      none.unmount();
+
+      mockStudios = MEMBER_OF_ONE_STUDIO;
+      render(<Tree />);
+      act(() => openPalette());
+      fireEvent.click(screen.getByRole('option', { name: /Log time/ }));
+      expect(
+        screen.getByRole('option', { name: 'Studio time — no document' }),
+      ).toBeInTheDocument();
+    });
+
+    it("writes project_id null, the member's studio, source='internal' and never billable", async () => {
+      mockStudios = MEMBER_OF_ONE_STUDIO;
+      mockCreate.mockResolvedValue({
+        id: 'entry-internal',
+        project_id: null,
+        duration_minutes: 30,
+        billable: false,
+        activity: 'admin',
+        rate_source: 'none',
+        rate_role: null,
+      });
+      render(<Tree />);
+      act(() => openPalette());
+      fireEvent.click(screen.getByRole('option', { name: /Log time/ }));
+
+      fireEvent.change(screen.getByRole('combobox', { name: 'Document' }), {
+        target: { value: '__internal__' },
+      });
+      fireEvent.change(screen.getByRole('spinbutton', { name: 'Minutes' }), {
+        target: { value: '30' },
+      });
+      fireEvent.change(screen.getByLabelText('Date'), {
+        target: { value: '2026-09-01' },
+      });
+      fireEvent.change(screen.getByRole('combobox', { name: 'Activity' }), {
+        target: { value: 'admin' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Log it' }));
+
+      await waitFor(() => expect(mockCreate).toHaveBeenCalledTimes(1));
+      expect(mockCreate.mock.calls[0][0]).toEqual(
+        expect.objectContaining({
+          projectId: null,
+          studioId: 'studio-1',
+          durationMinutes: 30,
+          activity: 'admin',
+          source: 'internal',
+          billable: false,
+          rateRole: null,
+        }),
+      );
+      // HT-13-a — a date-only hour is filed at noon UTC of the day she named,
+      // so the ledger's UTC day is that day in every studio timezone.
+      expect(mockCreate.mock.calls[0][0].startedAt).toBe(
+        '2026-09-01T12:00:00.000Z',
+      );
+      expect(mockEntryLogged).toHaveBeenCalledWith(
+        expect.objectContaining({ surface: 'command_bar', source: 'internal' }),
+      );
+    });
+
+    it('says the answer rather than asking it — the pill is stood down and the reason printed', () => {
+      mockStudios = MEMBER_OF_ONE_STUDIO;
+      render(<Tree />);
+      act(() => openPalette());
+      fireEvent.click(screen.getByRole('option', { name: /Log time/ }));
+      fireEvent.change(screen.getByRole('combobox', { name: 'Document' }), {
+        target: { value: '__internal__' },
+      });
+
+      // 00610's CHECK refuses a billable project-less row, so a control that
+      // ASKED would be offering an answer the server cannot take.
+      expect(
+        screen.getByRole('button', {
+          name: /Non-billable — press to make billable/,
+        }),
+      ).toBeDisabled();
+      expect(
+        screen.getByText(
+          'Non-billable — studio time belongs to no client',
+        ),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          /Studio time — non-billable, and out of every document/,
+        ),
+      ).toBeInTheDocument();
+    });
+
+    it('asks for no roster seat and offers no role chip on an hour that has no rate card', () => {
+      mockStudios = MEMBER_OF_ONE_STUDIO;
+      mockMyRateRoles = ['support_designer', 'bookkeeper'];
+      render(<Tree />);
+      act(() => openPalette());
+      fireEvent.click(screen.getByRole('option', { name: /Log time/ }));
+      fireEvent.change(screen.getByRole('combobox', { name: 'Document' }), {
+        target: { value: '__internal__' },
+      });
+
+      expect(
+        screen.queryByRole('combobox', { name: 'Which role priced this hour' }),
+      ).not.toBeInTheDocument();
+      expect(screen.queryByText(/seats you as a/)).not.toBeInTheDocument();
+    });
+
+    it('logs without waiting on an authority read it will never make', async () => {
+      // The document path holds `Log it` until the authority read settles. An
+      // internal hour names no document, so there is nothing to read and
+      // nothing to wait for — a form that waited here would never enable.
+      mockStudios = MEMBER_OF_ONE_STUDIO;
+      mockAuthority = { data: null, isLoading: true, isError: false };
+      render(<Tree />);
+      act(() => openPalette());
+      fireEvent.click(screen.getByRole('option', { name: /Log time/ }));
+      fireEvent.change(screen.getByRole('combobox', { name: 'Document' }), {
+        target: { value: '__internal__' },
+      });
+      fireEvent.change(screen.getByRole('spinbutton', { name: 'Minutes' }), {
+        target: { value: '15' },
+      });
+      expect(screen.getByRole('button', { name: 'Log it' })).toBeEnabled();
+    });
   });
 
   it('shows the role chip only for a member holding more than one seat (HT-41)', () => {
