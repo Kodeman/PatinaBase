@@ -68,6 +68,36 @@ jest.mock('@patina/supabase', () => ({
     withdrawn: 'Off the job',
   },
   // MAJOR-1 / MAJOR-7: the bid follows its COLUMNS, not the band.
+  // r8 BLOCKING-1: the face reads the same answer the write does.
+  bidStageOutcome: (
+    previous: { bidOutcome: string | null; stage: string | null },
+    next: string | null | undefined,
+  ) => {
+    const stages: Record<string, string> = {
+      asked: 'invited',
+      quoted: 'bidding',
+      selected: 'awarded',
+      declined: 'declined',
+      no_response: 'no_response',
+      withdrawn: 'off_job',
+    };
+    const outcome = next ?? null;
+    const moved = outcome !== (previous.bidOutcome ?? null);
+    const pastTheBid = [
+      'mobilized',
+      'active',
+      'closeout',
+      'warranty',
+      'retired',
+    ].includes(previous.stage ?? '');
+    const writes = !!outcome && moved && (!pastTheBid || outcome === 'withdrawn');
+    return {
+      outcome,
+      moved,
+      pastTheBid,
+      stage: writes ? stages[outcome as string] : null,
+    };
+  },
   seatCarriesBid: (bid: Record<string, unknown> | null | undefined) =>
     !!bid &&
     [
@@ -708,7 +738,7 @@ describe('RosterRow — unfolded', () => {
  * band. The dates print at both widths, folded or not (C28).
  */
 describe('RosterRow — the Bidding band', () => {
-  const bidSeat = () =>
+  const bidSeat = (over: Partial<CallSheetRow> = {}) =>
     seatRow({
       key: 'seat:seat-rivera',
       seatId: 'seat-rivera',
@@ -717,6 +747,7 @@ describe('RosterRow — the Bidding band', () => {
       trade: 'paint',
       stage: 'no_response',
       meta: 'Sub · paint',
+      ...over,
     });
 
   const BID = {
@@ -986,6 +1017,96 @@ describe('RosterRow — the Bidding band', () => {
     expect(
       screen.getByText(
         'Recording this moves Rivera Finishes to Declined. A bidder who did not win never reads as crew.',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  /**
+   * r8 BLOCKING-1 — the sentence promised a move on two presses that make
+   * none. `useSetPartyBid` writes `stage` only when the outcome CHANGED and
+   * the seat is not already past the bid, and `bidNote` never prints the
+   * outcome word, so a false promise left no readable trace either.
+   */
+  it('claims no move on an ordinary correction, where none is written', () => {
+    render(
+      <RosterRow
+        // the seat as it stands: on site, with an outcome already recorded
+        row={bidSeat({ stage: 'active' })}
+        band="this_week"
+        expanded
+        onToggle={jest.fn()}
+        bid={{ ...BID, bidOutcome: 'selected' }}
+        bidPeople={PEOPLE}
+      />,
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Change what came back' }),
+    );
+    // the editor seeds the draft from the seat's own outcome, so the studio
+    // correcting "Who priced it" re-sends it unchanged
+    expect(
+      (screen.getByLabelText('How it came back') as HTMLSelectElement).value,
+    ).toBe('selected');
+    fireEvent.change(screen.getByLabelText('Who priced it'), {
+      target: { value: 'card-tom' },
+    });
+    const sentence = document.querySelector('[data-bid-editor]')?.textContent ?? '';
+    expect(sentence).not.toMatch(/moves Rivera Finishes to/);
+    expect(
+      screen.getByText(
+        'The outcome is unchanged, so nothing moves. This records the dates and who priced it.',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('says the stage stays where it is on a seat already past the bidding', () => {
+    render(
+      <RosterRow
+        row={bidSeat({ stage: 'active' })}
+        band="this_week"
+        expanded
+        onToggle={jest.fn()}
+        bid={{ ...BID, bidOutcome: 'selected' }}
+        bidPeople={PEOPLE}
+      />,
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Change what came back' }),
+    );
+    fireEvent.change(screen.getByLabelText('How it came back'), {
+      target: { value: 'declined' },
+    });
+    const sentence = document.querySelector('[data-bid-editor]')?.textContent ?? '';
+    expect(sentence).not.toMatch(/moves Rivera Finishes to/);
+    expect(sentence).not.toMatch(/never reads as crew/);
+    expect(
+      screen.getByText(
+        'This seat is past the bidding, so its stage stays where it is. Recording this writes what came back, and nothing else.',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('still promises the move where the write makes one', () => {
+    render(
+      <RosterRow
+        // withdrawn reaches past the bid, so the seat does move
+        row={bidSeat({ stage: 'active' })}
+        band="this_week"
+        expanded
+        onToggle={jest.fn()}
+        bid={{ ...BID, bidOutcome: 'selected' }}
+        bidPeople={PEOPLE}
+      />,
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Change what came back' }),
+    );
+    fireEvent.change(screen.getByLabelText('How it came back'), {
+      target: { value: 'withdrawn' },
+    });
+    expect(
+      screen.getByText(
+        'Recording this moves Rivera Finishes to Off the job. A bidder who did not win never reads as crew.',
       ),
     ).toBeInTheDocument();
   });

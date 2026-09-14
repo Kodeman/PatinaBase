@@ -11,6 +11,12 @@ repeat pick arrives carrying its consent and its paper, a bid answer moves the b
 crew bands, the household's change-order figure has a home, and closing a seat is a dated act on
 every surface that offers one.
 
+**Carried forward against the shipped files after the r8 round (code review r8 MAJOR-1).** This
+report was first written before the r2–r7 review rounds and described faces the code no longer had:
+§2's merge consequence sentence and refusal count, §4's field list and stage rule, §5's household
+door, §7's notice clause, and §1/§9's test and gate numbers. Every one of them now names what the
+files print, measured this round; the same carry-forward r7 M-4 asked of `w3-data-report.md`.
+
 ---
 
 ## 1. Files
@@ -54,12 +60,13 @@ every surface that offers one.
 
 ### Tests
 
-New: `people-crm-w3.test.ts` (17, vitest) · `bring-forward.test.ts` (14) ·
-`compliance-notice.test.ts` (8) · `travel-list-pane.test.tsx` (5) ·
-`compare-merge-sheet.test.tsx` (10) · `household-band.test.tsx` (12) ·
+New, as they stand after the r2–r8 review rounds (measured this round):
+`people-crm-w3.test.ts` (29, vitest) · `bring-forward.test.ts` (15) ·
+`compliance-notice.test.ts` (9) · `travel-list-pane.test.tsx` (5) ·
+`compare-merge-sheet.test.tsx` (15) · `household-band.test.tsx` (29) ·
 `close-seat-act.test.tsx` (6) · `archive-card-door.test.tsx` (8).
 
-Extended: `rolodex-picker.test.tsx` (15 → 28), `roster-row.test.tsx` (26 → 35).
+Extended: `rolodex-picker.test.tsx` (15 → 35), `roster-row.test.tsx` (26 → 40).
 
 Playwright, chromium-pinned, under `e2e/people/`: `bring-forward.spec.ts`, `merge.spec.ts`.
 **Not run** (the brief's own instruction; no dev server, no port taken).
@@ -79,8 +86,13 @@ job is still naming the collision.
 
 **The sheet** (`data-compare-merge-sheet`, its own DocSheet, never a control inside Reach & access):
 
-- Nine fields, two columns: Name · What they are · Firm · Mobile · Email · Contact rule ·
-  Papers on file · Seats on jobs · In the book since.
+- Nine fields always, two columns: Name · What they are · Firm · Mobile · Email · Contact rule ·
+  Papers on file · Seats on jobs · In the book since — plus, wherever either card actually holds
+  one, the typed facts the merge will reduce (r5 B-1 / R-BN: Verdict, Trades, Specialties, Notes,
+  Legal name, Trading as, Remit-to, Retainage, Tax ID, W-9 on file, Warranty until, Sole
+  proprietor, and the three designations — Paperwork contact, Signer, Site contact, added by r7 B-1
+  and resolved to names, never ids: fifteen in all). The sheet shows both values wherever a reduction
+  will pick one.
 - **PR-o**: the survivor is pre-picked as the **older** card (`preferredSurvivorId`, ties broken on
   the id so the pick is stable across refetches) and both column heads are `aria-pressed` buttons,
   so the studio flips it. The pre-pick is taken once and never re-taken, so a refetch cannot undo a
@@ -88,17 +100,32 @@ job is still naming the collision.
 - The evidence is a named select — the studio's words, never the column token
   (`MERGE_MATCHED_ON_LABELS`), defaulted to `phone` because the band's own detection is crm-model
   §4 rule 2.
-- The consequence sentence names what moves and what does not:
-  > "Chidi Okonkwo's seats, channels, contact rule, paper and firm designations move onto Adaeze
-  > Okonkwo. Consent stays with the number, not with the card, so nobody's yes or no changes. Chidi
-  > Okonkwo's card is kept as a record of the merge, and both ways of reaching this person still
-  > work."
+- The consequence sentence names what moves and what does not. It branches on whether the
+  survivor already carries a contact rule (r4 B-2: one rule row per subject, so the survivor's own
+  rule wins and the folded card keeps its own as history), and its closing clause is about the ID,
+  which is what the merge record actually guarantees — "both ways of reaching this person still
+  work" was a promise about NUMBERS the RPC did not keep, and r3/MAJOR-4 replaced it. With no rule
+  on the survivor it reads (`mergeConsequenceSentence`, `compare-merge-sheet.tsx`):
+  > "Chidi Okonkwo's seats, channels, contact rule and firm designations move onto Adaeze Okonkwo,
+  > and Chidi Okonkwo's own number and address travel with them. Everything else Chidi Okonkwo
+  > holds — the verdict, the trades, the notes and the payee facts — travels the same way, and
+  > where both cards say something Adaeze Okonkwo's own words stand. Consent stays with the number,
+  > not with the card, so nobody's yes or no changes. Chidi Okonkwo's paper moves onto Adaeze
+  > Okonkwo too; where Adaeze Okonkwo already holds the same paper, still in force, the older one
+  > is marked superseded. Chidi Okonkwo's card is kept as a record of the merge, so an old link
+  > still opens this person."
+
+  Where the survivor has a rule, "contact rule" drops out of the first clause and a sixth clause is
+  inserted: "Adaeze Okonkwo's own contact rule stands, and Chidi Okonkwo's stays on the folded card
+  as a record."
 - Terminal act: "Merge into &lt;survivor&gt;". Afterwards the Directory folds the merged card away
   (00629's `people_directory` v5 skips `merged_into IS NOT NULL`), the survivor's card opens, and
   the Room's `role="status"` line says "Two cards are now one. &lt;survivor&gt; carries everything
   &lt;merged&gt; held."
-- Each of `merge_studio_contacts()`'s eight refusals renders as a sentence (`asMergeError`), never
-  a Postgres string.
+- Each of `merge_studio_contacts()`'s **eleven** refusals renders as a sentence (`asMergeError`),
+  never a Postgres string (`MERGE_REFUSAL_SENTENCES`, `use-studio-contacts.ts`): the original eight
+  plus `merge_two_logins` and `merge_contact_rule_conflict` (r4 B-1 / B-2) and
+  `merge_survivor_archived` (r5 M-4).
 
 **`useMergeStudioContacts` invalidates** `studio-contacts`, `studio-contact-merges`,
 `people-directory`, `people-directory-seats`, `studio-contact-channels`, `studio-contact-rules`,
@@ -164,18 +191,35 @@ per row.
   Holds until 4 November 2026. Priced by Tom Marrow." Only the columns that hold something speak —
   00631 refused to parse a due date out of free-text timeline prose, so an empty date prints
   nothing rather than a number the record does not make.
-- **The editor** (`data-bid-editor`, Bidding band only): the answer was owed · how it came back ·
-  the number holds until · who priced it.
-- **The outcome IS the stage.** `useSetPartyBid` writes `stage` beside `bid_outcome` through
-  `SEAT_BID_OUTCOME_STAGE`, and `rosterBandFor` then keeps a losing bidder out of every crew band:
-  `declined` → Declined and `no_response` → No response both stay in Bidding, `withdrawn` → `off_job`
-  goes to Done (and is dated, so a Done row is never undated), and only `selected` → `awarded` bands
-  by window. Writing "they declined" without moving the stage would leave a losing bidder sitting
-  in a crew band, which is the one thing §3.4 asks this band to prevent.
+- **The editor** (`data-bid-editor`), offered on any seat that CARRIES a bid in any band, not the
+  Bidding band alone (MAJOR-7 — "Selected" and "They withdrew" were one-way doors otherwise).
+  **Seven fields**: the studio asked · the answer was owed · how it came back · the number came
+  back · the studio chose them · the number holds until · who priced it. The three dated events
+  came in with 00631 (r1 M-6, SPEC §5.4 #9 / R-R); each is a record of what happened and none is
+  derived from the outcome.
+- **The outcome IS the stage, where the press is a transition.** `useSetPartyBid` writes `stage`
+  beside `bid_outcome` through `SEAT_BID_OUTCOME_STAGE`, and `rosterBandFor` then keeps a losing
+  bidder out of every crew band: `declined` → Declined and `no_response` → No response both stay in
+  Bidding, `withdrawn` → `off_job` goes to Done (and is dated, so a Done row is never undated), and
+  only `selected` → `awarded` bands by window. Writing "they declined" without moving the stage
+  would leave a losing bidder sitting in a crew band, which is the one thing §3.4 asks this band to
+  prevent.
+
+  **Two guards on that write, and the face reads them too.** r7 BLOCKING-1: a correction is not a
+  transition, so `stage` moves only when the outcome actually CHANGED (the editor seeds the draft
+  from the seat's existing outcome, so every ordinary correction re-sends it unchanged) and only
+  when the seat is not already past the bid — `mobilized`, `active`, `closeout`, `warranty`,
+  `retired` — with `withdrawn` the one outcome that reaches past them. r8 BLOCKING-1 moved both
+  predicates into `bidStageOutcome(previous, next)`, which the editor's consequence sentence reads
+  as well, so the face can no longer promise a move the write does not make. Three sentences, one
+  per thing the press can do: "Recording this moves &lt;name&gt; to &lt;Outcome&gt;. A bidder who
+  did not win never reads as crew." · "This seat is past the bidding, so its stage stays where it
+  is. Recording this writes what came back, and nothing else." · "The outcome is unchanged, so
+  nothing moves. This records the dates and who priced it."
 - The outcomes read as **acts** on the face ("They declined", "No response"), never as the column's
   tokens. A test sweeps for `no_response` / `off_job` / `bid_outcome` in the DOM.
 - "Who priced it" offers **person cards only** — 00631's `assert_party_bid_quoted_by()` refuses a
-  firm — and each of its four refusals renders as a sentence (`asBidError`).
+  firm — and each of `asBidError`'s six refusals renders as a sentence.
 
 ---
 
@@ -211,7 +255,12 @@ a job gets a seat"). `designerClientId` is still resolved the shipped way
 household when one exists; NULL there is a fact, not a failure.
 
 On the seeded Okonkwo residence the band therefore prints "No household is on file for this client…"
-with **Open a household** beside it, which is the honest state of the seed. Probed end to end in a
+with **Open a household** beside it, which is the honest state of the seed. **The door is gated on
+the overlap read being able to find what it opens** (r3 MAJOR-2): on a job whose client side
+carries neither a card nor a `designer_clients` row, `Open a household` renders `aria-disabled`
+(never `disabled`) with the reason always on the face beside it — "Seat the client on this job
+first, then open the household." — because a household minted with no member the overlap read can
+reach would be invisible the moment the sheet closed. Probed end to end in a
 rolled-back transaction: creating the household, `add_household_member` for Chidi's card reuses his
 existing seat and writes `money` and `change_order` grants at `250000`, and the overlap read finds
 the household afterwards.
@@ -256,10 +305,12 @@ line, before any sweep has run, and the clause must not claim the studio was tol
 so the clause prints **only where `studio_compliance_notices` holds a row for that document**.
 `lapsed` outranks `lapses_soon` for one holder; then the soonest date.
 
-The wording spells out direction §3.8's own paper word: "Northgate Electric's insurance **lapses in
-30 days**, on 6 October 2026." / "…lapsed 31 March 2026." The noun comes from
-`heldClausePaperNoun` — the existing map, not a second one — so the same certificate is never named
-two ways on one screen.
+The wording spells out direction §3.8's own paper word: "Northgate Electric's insurance **lapses on
+6 October 2026**." / "…lapsed 31 March 2026." The interval was taken out on purpose (M2R-1 — "an
+interval beside a date is arithmetic, and arithmetic on a face has to be right"): the date is the
+fact the record holds, and the days remaining is a subtraction that goes stale between the sweep
+and the read. The noun comes from `heldClausePaperNoun` — the existing map, not a second one — so
+the same certificate is never named two ways on one screen.
 
 `sweep_compliance_expiries()` was run once against the local database (`{"notices": 3, "scanned": 3,
 "notified": 6}`), which is what W3's data report §10 item 6 said was owed: it had never run outside a
@@ -291,8 +342,10 @@ Three acts added to `people-events.ts`, each the shape of one act, none an engag
 | `pnpm --filter @patina/designer-portal type-check` | clean |
 | `pnpm --filter @patina/admin-portal build` | **exit 0**, full route table printed (the strictest gate, after the shared `@patina/supabase` edits) |
 | `npx turbo build --filter=@patina/types --filter=@patina/supabase` | 2 successful (`@patina/supabase` ships source, not a dist — nothing to stale) |
-| `cd apps/designer-portal && npx jest` | **592 suites, 7613 tests, all green** |
-| `cd packages/supabase && npx vitest run` | **105 files, 1323 passed, 12 skipped** |
+| `cd apps/designer-portal && npx jest` | **593 suites, 7656 tests, 1 snapshot, all green** (re-measured after the r8 round) |
+| `cd packages/supabase && npx vitest run` | **105 files, 1335 passed, 12 skipped** (re-measured after the r8 round) |
+| `cd packages/supabase && npx vitest run src/hooks/__tests__/people-crm-w3.test.ts` | **29 passed** |
+| `psql … supabase/tests/people/w3_merge_sweep_household_test.sql` | rc=0 — "W3 SQL suite: all blocks passed" (block 11c added in the r8 round) |
 | `npx eslint src/components/document/{roster,people} src/lib/document/{bring-forward,compliance-notice}.ts src/lib/analytics/people-events.ts` | **0 errors**, 4 warnings, all pre-existing kinds in files this wave did not touch |
 | e2e type-check (`tsc` over `e2e/**`) | 0 errors in `bring-forward.spec.ts` and `merge.spec.ts` (the rest of `e2e/` carries pre-existing missing-`@types/node` noise) |
 

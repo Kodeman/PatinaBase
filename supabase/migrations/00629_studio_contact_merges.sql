@@ -656,11 +656,26 @@ COMMENT ON FUNCTION public.link_rolodex_card_to_parties() IS
 --
 -- Every one of these six legs guards an ACT: pointing a paper at its renewal.
 -- Re-running them over an unchanged edge adds nothing, because R-BF already
--- re-reckons both facts at READ time — compliance_state()'s transitive walk
--- drops a row from the count only while a reachable successor is still IN
--- FORCE and still carries its gates, so a chain whose head has since lapsed,
--- shed a gate or changed type is already counted against the card whatever the
--- trigger said when the edge was written. The FOUR STRUCTURAL legs — holder
+-- re-reckons at READ time every fact an ordinary member edit can move —
+-- compliance_state()'s transitive walk drops a row from the count only while a
+-- reachable successor is still IN FORCE, still carries the root's GATES and is
+-- still the SAME PAPER, so a chain whose head has since lapsed, shed a gate or
+-- been retyped is already counted against the card whatever the trigger said
+-- when the edge was written.
+--
+-- The doc_type third of that sentence was ASPIRATIONAL until W3 round-8 B-1:
+-- the reader carried the in-force and gates legs (r9/r10) and nothing
+-- re-reckoned the paper, so retyping a renewal laundered the lapse it retired
+-- and the card read `current` with no in-force certificate on file. The leg is
+-- now in both reckonings (00623's compliance_state(), 00630's
+-- compliance_document_state()), and the sentence above is measured rather than
+-- assumed. The three legs NOT re-reckoned at read time judge the SHAPE of the
+-- edge rather than the state of the successor — a successor dated when the row
+-- is dated, dated no earlier than the row it retires, and standing at the head
+-- of its own chain. Each is written by CHANGING superseded_by, which is exactly
+-- what v_retiring names, and the one edit that would outrun the reader
+-- (clearing a dated successor's date) is refused outright by
+-- studio_compliance_documents_dated_expiry_check. The FOUR STRUCTURAL legs — holder
 -- exists, holder kind, holder studio, and the successor being held for the
 -- SAME CARD in the SAME studio — still run on every write, so the r1 MAJOR-4 /
 -- r2 MAJOR-1 / r3 MAJOR-1 laundering doors stay shut: each of those is written
@@ -1923,14 +1938,38 @@ BEGIN
   -- merged person as its paperwork contact, signer or site contact would
   -- print a name the Directory no longer carries a row for. Only a person
   -- card may hold a designation (assert_studio_contact_designations).
+  --
+  -- NULLIF, FOR THE SURVIVOR'S OWN CARD (W3 round-8 M-1). "Other cards"
+  -- includes the SURVIVOR, and a bare `= p_survivor` wrote S.signer_person_id
+  -- = S there, which assert_studio_contact_designations() (00592/R-AP) refuses
+  -- with designated_person_is_self — the whole merge lost, with a raw schema
+  -- token naming nothing the studio did. r7 B-1 is what made it reachable:
+  -- before it, only company-card.tsx wrote these three and it opens firm cards
+  -- only, so no person card could hold one; the COALESCE at §5's contact-facts
+  -- reduction now lands a folded firm's paperwork contact and signer on a
+  -- PERSON survivor in a sole-proprietor fold, and folding that designated
+  -- person into the same survivor a moment later hit this statement. There is
+  -- no repair in the room either: person-profile.tsx neither reads nor writes
+  -- these columns, so the studio could not clear the pointer that was refusing
+  -- the merge and the pair could never be folded — r6 M-1's closed loop.
+  --
+  -- The fold ANSWERS the designation rather than carrying it: after the merge
+  -- the designated person IS the survivor, and a person is not their own
+  -- signer, so the pointer is DROPPED exactly where it would become a self
+  -- reference and carried everywhere else. The same idiom §5 uses three
+  -- hundred lines above, for the same reason. R-BN holds: nothing is deleted,
+  -- because §5's COALESCE only ever writes these three ONTO the survivor and
+  -- never moves them off the folded card, which keeps its own copy.
   IF v_survivor.entity_kind = 'person' THEN
     UPDATE public.studio_contacts
-       SET paperwork_contact_person_id = p_survivor
+       SET paperwork_contact_person_id = NULLIF(p_survivor, id)
      WHERE paperwork_contact_person_id = p_merged;
     UPDATE public.studio_contacts
-       SET signer_person_id = p_survivor WHERE signer_person_id = p_merged;
+       SET signer_person_id = NULLIF(p_survivor, id)
+     WHERE signer_person_id = p_merged;
     UPDATE public.studio_contacts
-       SET site_contact_person_id = p_survivor WHERE site_contact_person_id = p_merged;
+       SET site_contact_person_id = NULLIF(p_survivor, id)
+     WHERE site_contact_person_id = p_merged;
   END IF;
 
   -- ── seats ───────────────────────────────────────────────────────────────

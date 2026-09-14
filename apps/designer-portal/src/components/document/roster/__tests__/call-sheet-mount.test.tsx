@@ -89,6 +89,36 @@ jest.mock('@patina/supabase', () => ({
     withdrawn: 'Off the job',
   },
   // MAJOR-1 / MAJOR-7: the bid follows its COLUMNS, not the band.
+  // r8 BLOCKING-1: the face reads the same answer the write does.
+  bidStageOutcome: (
+    previous: { bidOutcome: string | null; stage: string | null },
+    next: string | null | undefined,
+  ) => {
+    const stages: Record<string, string> = {
+      asked: 'invited',
+      quoted: 'bidding',
+      selected: 'awarded',
+      declined: 'declined',
+      no_response: 'no_response',
+      withdrawn: 'off_job',
+    };
+    const outcome = next ?? null;
+    const moved = outcome !== (previous.bidOutcome ?? null);
+    const pastTheBid = [
+      'mobilized',
+      'active',
+      'closeout',
+      'warranty',
+      'retired',
+    ].includes(previous.stage ?? '');
+    const writes = !!outcome && moved && (!pastTheBid || outcome === 'withdrawn');
+    return {
+      outcome,
+      moved,
+      pastTheBid,
+      stage: writes ? stages[outcome as string] : null,
+    };
+  },
   seatCarriesBid: (bid: Record<string, unknown> | null | undefined) =>
     !!bid &&
     [

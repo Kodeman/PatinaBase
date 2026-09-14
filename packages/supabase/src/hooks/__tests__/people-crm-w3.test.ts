@@ -86,6 +86,7 @@ import {
   seatCarriesBid,
   useBringForward,
   useSetPartyBid,
+  bidStageOutcome,
 } from "../use-coordination";
 import {
   asMergeError,
@@ -273,6 +274,50 @@ describe("the Bidding band writes a stage with its outcome", () => {
     const patch = updated[0]?.payload ?? {};
     expect(patch.stage).toBe("off_job");
     expect(patch.off_job_at).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  /**
+   * r8 BLOCKING-1 — the face and the write now read ONE answer. The editor's
+   * consequence sentence used to promise a move on every press, including the
+   * two that write no stage at all.
+   */
+  it("answers the face the same way it answers the write", () => {
+    // an ordinary correction: the editor re-sends the seat's own outcome
+    expect(
+      bidStageOutcome({ bidOutcome: "selected", stage: "active" }, "selected"),
+    ).toEqual({
+      outcome: "selected",
+      moved: false,
+      pastTheBid: true,
+      stage: null,
+    });
+    // a losing answer on a seat that is already working
+    expect(
+      bidStageOutcome({ bidOutcome: "selected", stage: "active" }, "declined"),
+    ).toEqual({
+      outcome: "declined",
+      moved: true,
+      pastTheBid: true,
+      stage: null,
+    });
+    // the same answer on a seat still in the bidding
+    expect(
+      bidStageOutcome({ bidOutcome: "quoted", stage: "bidding" }, "declined"),
+    ).toEqual({
+      outcome: "declined",
+      moved: true,
+      pastTheBid: false,
+      stage: "declined",
+    });
+    // "They withdrew" reaches past the bid
+    expect(
+      bidStageOutcome({ bidOutcome: "selected", stage: "active" }, "withdrawn")
+        .stage,
+    ).toBe("off_job");
+    // nothing selected is nothing written
+    expect(
+      bidStageOutcome({ bidOutcome: null, stage: "bidding" }, null).stage,
+    ).toBeNull();
   });
 
   it("renders 00631’s guards as sentences", () => {
