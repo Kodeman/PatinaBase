@@ -2425,6 +2425,225 @@ BEGIN
   END IF;
 END $$;
 
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 10. the r6 review's five merge findings, pinned (R-BN)
+--
+-- "A merge never deletes a typed fact." Every one of these was measured on
+-- the OLDER card surviving, which is PR-o's own pre-pick:
+--   B-1  a duplicate channel row is an address plus six typed facts; the blind
+--        dedupe DELETE destroyed a recorded unsubscribe and the room then
+--        offered the address as live
+--   M-1  a rule routing at the other card of the pair aborted the merge with
+--        rule_route_is_self, and the repair the refusal named was itself
+--        refused — a closed loop
+--   M-2  the affiliation collision DELETE dropped the role, the three
+--        designations and the true start date
+--   M-3  the sole-proprietor fold deleted EVERY person's affiliation at the
+--        folded firm and blanked their legacy firm pointer
+--   M-4  is_sole_proprietor and vendor_id were the two typed facts r5 B-1's
+--        own list still left behind
+-- ═══════════════════════════════════════════════════════════════════════════
+INSERT INTO public.studio_contacts
+  (id, organization_id, entity_kind, contact_kind, full_name, created_by, created_at) VALUES
+  ('f9e00000-0000-4000-8000-000000000001','f9000000-0000-4000-8000-00000000000a','person','sub','R6 B1 Older','a0000000-0000-0000-0000-000000000004','2024-01-01'),
+  ('f9e00000-0000-4000-8000-000000000002','f9000000-0000-4000-8000-00000000000a','person','sub','R6 B1 Newer','a0000000-0000-0000-0000-000000000004','2026-01-01'),
+  ('f9e00000-0000-4000-8000-000000000003','f9000000-0000-4000-8000-00000000000a','person','sub','R6 A Survivor','a0000000-0000-0000-0000-000000000004','2024-01-01'),
+  ('f9e00000-0000-4000-8000-000000000004','f9000000-0000-4000-8000-00000000000a','person','sub','R6 A Absorbed','a0000000-0000-0000-0000-000000000004','2026-01-01'),
+  ('f9e00000-0000-4000-8000-000000000005','f9000000-0000-4000-8000-00000000000a','person','sub','R6 C Survivor','a0000000-0000-0000-0000-000000000004','2024-01-01'),
+  ('f9e00000-0000-4000-8000-000000000006','f9000000-0000-4000-8000-00000000000a','person','sub','R6 C Absorbed','a0000000-0000-0000-0000-000000000004','2026-01-01'),
+  ('f9e00000-0000-4000-8000-000000000007','f9000000-0000-4000-8000-00000000000a','person','sub','R6 D Survivor','a0000000-0000-0000-0000-000000000004','2024-01-01'),
+  ('f9e00000-0000-4000-8000-000000000008','f9000000-0000-4000-8000-00000000000a','person','sub','R6 D Absorbed','a0000000-0000-0000-0000-000000000004','2026-01-01'),
+  ('f9e00000-0000-4000-8000-000000000009','f9000000-0000-4000-8000-00000000000a','person','sub','R6 N Survivor','a0000000-0000-0000-0000-000000000004','2024-01-01'),
+  ('f9e00000-0000-4000-8000-00000000000a','f9000000-0000-4000-8000-00000000000a','person','sub','R6 N Absorbed','a0000000-0000-0000-0000-000000000004','2026-01-01'),
+  ('f9e00000-0000-4000-8000-00000000000b','f9000000-0000-4000-8000-00000000000a','person','sub','R6 I Older','a0000000-0000-0000-0000-000000000004','2024-01-01'),
+  ('f9e00000-0000-4000-8000-00000000000c','f9000000-0000-4000-8000-00000000000a','person','sub','R6 I Newer','a0000000-0000-0000-0000-000000000004','2026-01-01'),
+  ('f9e00000-0000-4000-8000-00000000000e','f9000000-0000-4000-8000-00000000000a','person','sub','R6 J Owner','a0000000-0000-0000-0000-000000000004','2024-01-01'),
+  ('f9e00000-0000-4000-8000-00000000000f','f9000000-0000-4000-8000-00000000000a','person','sub','R6 J Bookkeeper','a0000000-0000-0000-0000-000000000004','2024-01-01'),
+  ('f9e00000-0000-4000-8000-000000000011','f9000000-0000-4000-8000-00000000000a','person','sub','R6 E Older','a0000000-0000-0000-0000-000000000004','2024-01-01'),
+  ('f9e00000-0000-4000-8000-000000000012','f9000000-0000-4000-8000-00000000000a','person','sub','R6 E Newer','a0000000-0000-0000-0000-000000000004','2026-01-01');
+
+INSERT INTO public.studio_contacts
+  (id, organization_id, entity_kind, contact_kind, company_name, company_kind, created_by, created_at) VALUES
+  ('f9e00000-0000-4000-8000-00000000000d','f9000000-0000-4000-8000-00000000000a','company','sub','R6 I Firm','sub','a0000000-0000-0000-0000-000000000004','2024-01-01'),
+  ('f9e00000-0000-4000-8000-000000000010','f9000000-0000-4000-8000-00000000000a','company','sub','R6 J Firm','sub','a0000000-0000-0000-0000-000000000004','2024-01-01');
+
+UPDATE public.studio_contacts SET is_sole_proprietor = true
+ WHERE id IN ('f9e00000-0000-4000-8000-00000000000e','f9e00000-0000-4000-8000-000000000012');
+UPDATE public.studio_contacts SET vendor_id = '11111111-1111-1111-1111-111111111105'
+ WHERE id = 'f9e00000-0000-4000-8000-000000000012';
+
+-- B-1's pair: the survivor's row says active and blank; the absorbed row
+-- carries the studio's own refusal, its date, verified, preferred and a label.
+INSERT INTO public.studio_contact_channels
+  (owner_type, owner_id, channel_kind, value, status, status_at, verified, verified_at, preferred, label) VALUES
+  ('person','f9e00000-0000-4000-8000-000000000001','email','r6dana@example.invalid','active',      NULL,        false, NULL,        false, NULL),
+  ('person','f9e00000-0000-4000-8000-000000000002','email','r6dana@example.invalid','unsubscribed','2025-12-03', true,'2025-11-01', true, 'Shop address');
+
+INSERT INTO public.studio_contact_rules
+  (subject_type, subject_id, channels_forbidden, route_to_person_id, reason, set_by) VALUES
+  ('person','f9e00000-0000-4000-8000-000000000004', ARRAY['sms','email'], 'f9e00000-0000-4000-8000-000000000003','This card is the old one.','a0000000-0000-0000-0000-000000000004'),
+  ('person','f9e00000-0000-4000-8000-000000000005', ARRAY['sms'],         'f9e00000-0000-4000-8000-000000000006','Write the other one.',     'a0000000-0000-0000-0000-000000000004'),
+  ('person','f9e00000-0000-4000-8000-000000000008', ARRAY['sms'],         'f9e00000-0000-4000-8000-000000000007','This card is the old one.','a0000000-0000-0000-0000-000000000004'),
+  ('person','f9e00000-0000-4000-8000-000000000007', ARRAY['sms','email'], NULL,                                  'Never text, never email.', 'a0000000-0000-0000-0000-000000000004'),
+  ('person','f9e00000-0000-4000-8000-00000000000a', ARRAY['office'],      NULL,                                  'Never ring the office.',   'a0000000-0000-0000-0000-000000000004'),
+  ('person','f9e00000-0000-4000-8000-000000000009', ARRAY['sms'],         NULL,                                  'Never text.',              'a0000000-0000-0000-0000-000000000004');
+
+INSERT INTO public.studio_person_affiliations
+  (person_id, company_id, role_at_firm, is_paperwork_contact, is_signer, holds_trade_license, from_date) VALUES
+  ('f9e00000-0000-4000-8000-00000000000b','f9e00000-0000-4000-8000-00000000000d', NULL,       false,false,false,'2024-01-01'),
+  ('f9e00000-0000-4000-8000-00000000000c','f9e00000-0000-4000-8000-00000000000d','Foreman',    true, true, true, '2019-03-01'),
+  ('f9e00000-0000-4000-8000-00000000000e','f9e00000-0000-4000-8000-000000000010','Owner',      true, true, true, '2018-01-01'),
+  ('f9e00000-0000-4000-8000-00000000000f','f9e00000-0000-4000-8000-000000000010','Bookkeeper', false,false,false,'2021-01-01');
+
+DO $$
+DECLARE
+  c  public.studio_contact_channels%ROWTYPE;
+  a  public.studio_person_affiliations%ROWTYPE;
+  sc public.studio_contacts%ROWTYPE;
+  r  public.studio_contact_rules%ROWTYPE;
+  n  integer;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+
+  -- ── B-1 · the duplicate channel row reduces worst-first, then goes ──────
+  PERFORM public.merge_studio_contacts(
+    'f9e00000-0000-4000-8000-000000000001','f9e00000-0000-4000-8000-000000000002','email');
+  SELECT * INTO c FROM public.studio_contact_channels
+   WHERE owner_id = 'f9e00000-0000-4000-8000-000000000001' AND channel_kind = 'email'
+     AND value = 'r6dana@example.invalid';
+  IF c.status <> 'unsubscribed' THEN
+    RAISE EXCEPTION 'BLOCK 10 FAIL (r6 B-1): the recorded refusal reads % after the fold', c.status;
+  END IF;
+  IF c.status_at::date <> DATE '2025-12-03' THEN
+    RAISE EXCEPTION 'BLOCK 10 FAIL (r6 B-1): the refusal lost its date (%)', c.status_at;
+  END IF;
+  IF NOT c.verified OR c.verified_at::date <> DATE '2025-11-01' THEN
+    RAISE EXCEPTION 'BLOCK 10 FAIL (r6 B-1): verified/verified_at did not travel';
+  END IF;
+  IF NOT c.preferred THEN
+    RAISE EXCEPTION 'BLOCK 10 FAIL (r6 B-1): preferred did not travel';
+  END IF;
+  IF c.label <> 'Shop address' THEN
+    RAISE EXCEPTION 'BLOCK 10 FAIL (r6 B-1): the label did not travel (%)', c.label;
+  END IF;
+  SELECT count(*) INTO n FROM public.studio_contact_channels
+   WHERE owner_id = 'f9e00000-0000-4000-8000-000000000002';
+  IF n <> 0 THEN
+    RAISE EXCEPTION 'BLOCK 10 FAIL (r6 B-1): % rows left on the folded card', n;
+  END IF;
+
+  -- ── M-1 · a route at the other card of the pair merges, all three ways ──
+  PERFORM public.merge_studio_contacts(
+    'f9e00000-0000-4000-8000-000000000003','f9e00000-0000-4000-8000-000000000004','phone');
+  SELECT * INTO r FROM public.studio_contact_rules
+   WHERE subject_type = 'person' AND subject_id = 'f9e00000-0000-4000-8000-000000000003';
+  IF r.id IS NULL THEN
+    RAISE EXCEPTION 'BLOCK 10 FAIL (r6 M-1 A): the absorbed rule did not travel';
+  END IF;
+  IF r.route_to_person_id IS NOT NULL THEN
+    RAISE EXCEPTION 'BLOCK 10 FAIL (r6 M-1 A): the fold wrote a self-route';
+  END IF;
+  IF NOT (ARRAY['sms','email']::text[] <@ r.channels_forbidden) THEN
+    RAISE EXCEPTION 'BLOCK 10 FAIL (r6 M-1 A): the refusal did not travel with the rule';
+  END IF;
+
+  PERFORM public.merge_studio_contacts(
+    'f9e00000-0000-4000-8000-000000000005','f9e00000-0000-4000-8000-000000000006','phone');
+  SELECT * INTO r FROM public.studio_contact_rules
+   WHERE subject_type = 'person' AND subject_id = 'f9e00000-0000-4000-8000-000000000005';
+  IF r.route_to_person_id IS NOT NULL THEN
+    RAISE EXCEPTION 'BLOCK 10 FAIL (r6 M-1 C): the survivor still routes at the card it absorbed';
+  END IF;
+
+  PERFORM public.merge_studio_contacts(
+    'f9e00000-0000-4000-8000-000000000007','f9e00000-0000-4000-8000-000000000008','phone');
+  SELECT * INTO r FROM public.studio_contact_rules
+   WHERE subject_type = 'person' AND subject_id = 'f9e00000-0000-4000-8000-000000000007';
+  IF r.route_to_person_id IS NOT NULL THEN
+    RAISE EXCEPTION 'BLOCK 10 FAIL (r6 M-1 D): the survivor''s own rule was left routing somewhere';
+  END IF;
+
+  -- and the gate still bites where a refusal really would be lost
+  BEGIN
+    PERFORM public.merge_studio_contacts(
+      'f9e00000-0000-4000-8000-000000000009','f9e00000-0000-4000-8000-00000000000a','phone');
+    RAISE EXCEPTION 'BLOCK 10 FAIL (r6 M-1 control): an unsubsumed refusal was merged away';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM NOT LIKE '%merge_contact_rule_conflict%' THEN
+      RAISE EXCEPTION 'BLOCK 10 FAIL (r6 M-1 control): refused by the wrong name — %', SQLERRM;
+    END IF;
+  END;
+
+  -- ── M-2 · the affiliation collision reduces ─────────────────────────────
+  PERFORM public.merge_studio_contacts(
+    'f9e00000-0000-4000-8000-00000000000b','f9e00000-0000-4000-8000-00000000000c','phone');
+  SELECT * INTO a FROM public.studio_person_affiliations
+   WHERE person_id = 'f9e00000-0000-4000-8000-00000000000b'
+     AND company_id = 'f9e00000-0000-4000-8000-00000000000d';
+  IF a.role_at_firm IS DISTINCT FROM 'Foreman' THEN
+    RAISE EXCEPTION 'BLOCK 10 FAIL (r6 M-2): the crew line lost the role (%)', a.role_at_firm;
+  END IF;
+  IF NOT (a.is_paperwork_contact AND a.is_signer AND a.holds_trade_license) THEN
+    RAISE EXCEPTION 'BLOCK 10 FAIL (r6 M-2): the three designations did not OR up';
+  END IF;
+  IF a.from_date <> DATE '2019-03-01' THEN
+    RAISE EXCEPTION 'BLOCK 10 FAIL (r6 M-2): "since" reads % rather than the earlier true start', a.from_date;
+  END IF;
+
+  -- ── M-3 · the fold closes the rest of the crew, and keeps their firm ────
+  PERFORM public.merge_studio_contacts(
+    'f9e00000-0000-4000-8000-00000000000e','f9e00000-0000-4000-8000-000000000010','company_name');
+  SELECT * INTO a FROM public.studio_person_affiliations
+   WHERE person_id = 'f9e00000-0000-4000-8000-00000000000f'
+     AND company_id = 'f9e00000-0000-4000-8000-000000000010';
+  IF a.id IS NULL THEN
+    RAISE EXCEPTION 'BLOCK 10 FAIL (r6 M-3): the bookkeeper''s affiliation was deleted';
+  END IF;
+  IF a.to_date IS NULL THEN
+    RAISE EXCEPTION 'BLOCK 10 FAIL (r6 M-3): the affiliation was left open past the fold';
+  END IF;
+  IF a.role_at_firm <> 'Bookkeeper' THEN
+    RAISE EXCEPTION 'BLOCK 10 FAIL (r6 M-3): the role did not survive the close';
+  END IF;
+  SELECT * INTO sc FROM public.studio_contacts
+   WHERE id = 'f9e00000-0000-4000-8000-00000000000f';
+  IF sc.company_id IS DISTINCT FROM 'f9e00000-0000-4000-8000-000000000010'::uuid THEN
+    RAISE EXCEPTION 'BLOCK 10 FAIL (r6 M-3): the legacy firm pointer was blanked (%)', sc.company_id;
+  END IF;
+  SELECT count(*) INTO n FROM public.studio_person_affiliations
+   WHERE company_id = 'f9e00000-0000-4000-8000-000000000010'
+     AND person_id  = 'f9e00000-0000-4000-8000-00000000000e';
+  IF n <> 0 THEN
+    RAISE EXCEPTION 'BLOCK 10 FAIL (r6 M-3): the self-affiliation survived the fold';
+  END IF;
+  SELECT count(*) INTO n FROM public.people_directory
+   WHERE person_id = 'f9e00000-0000-4000-8000-00000000000f'
+     AND meta->>'company_name' = 'R6 J Firm';
+  IF n <> 1 THEN
+    RAISE EXCEPTION 'BLOCK 10 FAIL (r6 M-3): the Directory row no longer names the firm';
+  END IF;
+
+  -- ── M-4 · is_sole_proprietor and vendor_id travel ───────────────────────
+  PERFORM public.merge_studio_contacts(
+    'f9e00000-0000-4000-8000-000000000011','f9e00000-0000-4000-8000-000000000012','phone');
+  SELECT * INTO sc FROM public.studio_contacts
+   WHERE id = 'f9e00000-0000-4000-8000-000000000011';
+  IF NOT sc.is_sole_proprietor THEN
+    RAISE EXCEPTION 'BLOCK 10 FAIL (r6 M-4): is_sole_proprietor did not travel';
+  END IF;
+  IF sc.vendor_id IS DISTINCT FROM '11111111-1111-1111-1111-111111111105'::uuid THEN
+    RAISE EXCEPTION 'BLOCK 10 FAIL (r6 M-4): vendor_id did not travel (%)', sc.vendor_id;
+  END IF;
+  SELECT * INTO sc FROM public.studio_contacts
+   WHERE id = 'f9e00000-0000-4000-8000-000000000012';
+  IF sc.vendor_id IS NOT NULL THEN
+    RAISE EXCEPTION 'BLOCK 10 FAIL (r6 M-4): the folded card still holds the vendor pointer';
+  END IF;
+
+  PERFORM pg_temp.reset_role();
+  RAISE NOTICE '10. the r6 review''s five merge findings (B-1, M-1, M-2, M-3, M-4) — R-BN: passed';
+END $$;
+
 DO $$ BEGIN RAISE NOTICE 'W3 SQL suite: all blocks passed'; END $$;
 
 ROLLBACK;

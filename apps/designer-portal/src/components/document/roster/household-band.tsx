@@ -68,10 +68,60 @@ export function householdThresholdSentence(
  * there is no household object holding it. The second wording says so out
  * loud instead of denying what the reader can see.
  */
-export function householdEmptySentence(clientSideHasAuthority: boolean): string {
+export function householdEmptySentence(
+  clientSideHasAuthority: boolean,
+): string {
   return clientSideHasAuthority
     ? "No household is on file for this client yet, so what each of them may sign is recorded seat by seat rather than in one place."
     : "No household is on file for this client, so there is nowhere to record who else may sign.";
+}
+
+/**
+ * The figure, read off the field, in cents — or null when what is typed is
+ * not a figure at all (r6, R-BO).
+ *
+ * The editor used to read `figure.replace(/[^0-9.]/g, "")` and hand
+ * `Number.isFinite(dollars) ? … : null` straight to the RPC. Since the round-5
+ * fix NULL is not a no-op: `set_household_threshold()` (00632 §4) CLOSES every
+ * open money grant the household sourced, so an empty field, an `abc` or a
+ * slipped `2.5.0` ended Chidi Okonkwo's signing authority on the job with no
+ * refusal and no confirm. A money field may not revoke authority by accident,
+ * so an entry that is not a figure is refused and the previous value stands;
+ * taking the figure away is its own named act below.
+ */
+export function parseThresholdEntry(entry: string): number | null {
+  const cleaned = entry.replace(/[$,\s]/g, "");
+  if (!/^\d+(\.\d{1,2})?$/.test(cleaned)) return null;
+  const dollars = Number(cleaned);
+  if (!Number.isFinite(dollars)) return null;
+  return Math.round(dollars * 100);
+}
+
+/** The refusal, in the room's words rather than a validation token. */
+export const HOUSEHOLD_FIGURE_REFUSAL =
+  "Write the change-order figure in dollars — 2500, or 2,500. To take the figure away, use “Take the figure away”.";
+
+/**
+ * What writing this figure will do, said before it is pressed.
+ *
+ * The figure editor was the one act in this wave with no consequence sentence
+ * at all, and it is the act that moves other people's signing authority.
+ */
+export function householdThresholdConsequence(cents: number | null): string {
+  const money = formatMoneyFromCents(cents);
+  if (!money) {
+    return "Nothing is written until this reads as a figure in dollars. The figure on file stands until then.";
+  }
+  return `Change orders over ${money} will need a signature from the household. Every household member who already signs money from this figure moves to ${money}, on every job. Nothing is sent to them.`;
+}
+
+/** And what taking it away will do — the two-step act's own sentence. */
+export function householdThresholdClearConsequence(
+  cents: number | null | undefined,
+): string {
+  const money = formatMoneyFromCents(cents);
+  const from = money ? ` of ${money}` : "";
+  return `Taking the figure away ends the signing authority it gave: every household member's money grant${from} closes today, on every job. The record of it stays. Nothing is sent to them.`;
 }
 
 /**
@@ -160,6 +210,7 @@ export function HouseholdBand({
   const [personId, setPersonId] = useState("");
   const [role, setRole] = useState<HouseholdMemberRole>("client_rep");
   const [editingFigure, setEditingFigure] = useState(false);
+  const [clearing, setClearing] = useState(false);
   const [figure, setFigure] = useState("");
   const [error, setError] = useState<string | null>(null);
 
@@ -193,9 +244,7 @@ export function HouseholdBand({
     // whole reason for existing). The job's designer and studio are not.
     if (!resolved?.designerId || !organizationId) return;
     if (!householdWouldBeFindable) {
-      setError(
-        "Seat the client on this job first, then open the household.",
-      );
+      setError("Seat the client on this job first, then open the household.");
       return;
     }
     const orgId = organizationId;
@@ -223,19 +272,46 @@ export function HouseholdBand({
   const saveFigure = async () => {
     if (!household) return;
     setError(null);
-    const digits = figure.replace(/[^0-9.]/g, "");
-    const dollars = digits ? Number(digits) : NaN;
+    const cents = parseThresholdEntry(figure);
+    if (cents === null) {
+      // Refused, not written. The previous figure — and the grants it
+      // authorises — stand.
+      setError(HOUSEHOLD_FIGURE_REFUSAL);
+      return;
+    }
     try {
       await setThreshold.mutateAsync({
         id: household.id,
-        coThresholdCents: Number.isFinite(dollars)
-          ? Math.round(dollars * 100)
-          : null,
+        coThresholdCents: cents,
       });
       setEditingFigure(false);
-      onAnnounce?.("The change-order figure is on the record.");
+      // The announcement is the sentence the band itself now prints, so the
+      // role="status" line and `data-household-threshold` cannot say two
+      // different things about one household on one screen.
+      onAnnounce?.(householdThresholdSentence(cents));
     } catch (e) {
       setError(writeErrorMessage(e, "Could not write the figure."));
+    }
+  };
+
+  /**
+   * Taking the figure away is its own two-step act (R-BO). It is not a blank
+   * field: it CLOSES every open money grant the household sourced, so it is
+   * named, its consequence is printed, and it is pressed twice.
+   */
+  const clearFigure = async () => {
+    if (!household) return;
+    setError(null);
+    try {
+      await setThreshold.mutateAsync({
+        id: household.id,
+        coThresholdCents: null,
+      });
+      setClearing(false);
+      setEditingFigure(false);
+      onAnnounce?.(householdThresholdSentence(null));
+    } catch (e) {
+      setError(writeErrorMessage(e, "Could not take the figure away."));
     }
   };
 
@@ -286,14 +362,16 @@ export function HouseholdBand({
             Open a household
           </button>
         )}
-        {resolved?.designerId && organizationId && !householdWouldBeFindable && (
-          <p
-            id="household-needs-a-seat"
-            className="mt-1 text-[0.7rem] text-[var(--color-aged-oak)]"
-          >
-            Seat the client on this job first, then open the household.
-          </p>
-        )}
+        {resolved?.designerId &&
+          organizationId &&
+          !householdWouldBeFindable && (
+            <p
+              id="household-needs-a-seat"
+              className="mt-1 text-[0.7rem] text-[var(--color-aged-oak)]"
+            >
+              Seat the client on this job first, then open the household.
+            </p>
+          )}
         {error && (
           <p
             role="alert"
@@ -327,6 +405,12 @@ export function HouseholdBand({
             inputMode="decimal"
             className={FIELD}
           />
+          <p
+            data-household-threshold-consequence
+            className="mt-2 text-[0.72rem] leading-relaxed text-[var(--color-aged-oak)]"
+          >
+            {householdThresholdConsequence(parseThresholdEntry(figure))}
+          </p>
           <DocumentActionRow
             surfaceKey="call-sheet"
             regionKey="household-threshold"
@@ -346,6 +430,38 @@ export function HouseholdBand({
               actionKey="cancel-household-threshold"
               variant="tertiary"
               onClick={() => setEditingFigure(false)}
+            >
+              Leave it
+            </DocumentAction>
+          </DocumentActionRow>
+        </div>
+      ) : clearing ? (
+        <div data-household-clearing className="mt-1.5">
+          <p
+            data-household-threshold-consequence
+            className="text-[0.72rem] leading-relaxed text-[var(--color-aged-oak)]"
+          >
+            {householdThresholdClearConsequence(household.co_threshold_cents)}
+          </p>
+          <DocumentActionRow
+            surfaceKey="call-sheet"
+            regionKey="household-threshold-clear"
+            className="mt-2"
+            aria-label="Take the change-order figure away"
+          >
+            <DocumentAction
+              actionKey="clear-household-threshold"
+              variant="primary"
+              onClick={() => void clearFigure()}
+              loading={setThreshold.isPending}
+              loadingLabel="Taking it away…"
+            >
+              Take it away
+            </DocumentAction>
+            <DocumentAction
+              actionKey="cancel-household-threshold-clear"
+              variant="tertiary"
+              onClick={() => setClearing(false)}
             >
               Leave it
             </DocumentAction>
@@ -382,6 +498,33 @@ export function HouseholdBand({
           >
             Set the figure
           </button>
+          {household.co_threshold_cents != null && (
+            <button
+              type="button"
+              data-clear-household-threshold
+              aria-disabled={!isPrincipal}
+              aria-describedby={
+                !isPrincipal ? "household-figure-held" : undefined
+              }
+              onClick={() => {
+                if (!isPrincipal) {
+                  setError(
+                    "A change-order figure is the principal’s to take away. Ask an owner or an admin of the studio.",
+                  );
+                  return;
+                }
+                setError(null);
+                setClearing(true);
+              }}
+              className={`da-score-hover inline-flex min-h-11 items-center font-mono text-[11px] uppercase tracking-[0.1em] ${
+                isPrincipal
+                  ? "text-[var(--color-aged-oak)] hover:text-[var(--color-mocha)]"
+                  : "text-[var(--color-aged-oak)]"
+              }`}
+            >
+              Take the figure away
+            </button>
+          )}
           <button
             type="button"
             data-add-household-member

@@ -174,6 +174,11 @@ function carriedRows(
     ["Tax ID", (card) => taxId(card.tax_id_last4)],
     ["W-9 on file", (card) => formatLongDate(card.w9_on_file_at)],
     ["Warranty until", (card) => formatLongDate(card.warranty_until)],
+    // r6 M-4 — the fold now carries is_sole_proprietor, and it is a printed
+    // line, the document list and the whole Paper region on the person card
+    // (person-profile.tsx:381/:423/:577). A fact the merge decides belongs in
+    // the table the studio decides it from (R-BN).
+    ["Sole proprietor", (card) => (card.is_sole_proprietor ? "Yes" : null)],
   ];
 
   const rows: FieldRow[] = [];

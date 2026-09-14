@@ -44,9 +44,13 @@
 -- exactly one condition: merged is a COMPANY, survivor is a PERSON, and the
 -- survivor already carries is_sole_proprietor. Every other cross-kind pair is
 -- refused (merge_kind_mismatch). In that one permitted case the firm IS the
--- person, so the firm's affiliations are dropped rather than repointed — an
--- affiliation of a person AT THEMSELVES is what
--- studio_person_affiliations_distinct_cards_check already refuses — and the
+-- person, so the firm's affiliation AT THE SURVIVOR is dropped rather than
+-- repointed — an affiliation of a person at themselves is what
+-- studio_person_affiliations_distinct_cards_check already refuses. Every
+-- OTHER person's affiliation at that firm is CLOSED with to_date, not erased,
+-- and their legacy company_id pointer stands (r6 M-3, R-BN): a sole
+-- proprietor who really has crew is a fact the studio recorded, and the crew
+-- must not lose their firm's name off their Directory row. And the
 -- documents and channels it held move across with their holder/owner kind
 -- rewritten to `person`, because assert_compliance_holder() and
 -- assert_channel_owner_kind() each hold that word to the card's own
@@ -1063,12 +1067,25 @@ BEGIN
     FROM public.studio_contact_rules r
    WHERE r.subject_type = v_survivor.entity_kind AND r.subject_id = p_survivor;
 
+  --
+  -- r6 M-1 — A ROUTE AT THE SURVIVOR IS SUBSUMED BY THE FOLD ITSELF.
+  -- "This card is the old one — write the other one instead" is the single
+  -- most natural thing a studio records about a duplicate it has not yet
+  -- merged, and the gate above called it a conflict: the room refused the
+  -- merge, named the repair ("settle one rule on the card you are keeping"),
+  -- and assert_studio_contact_rule_route() then refused that repair by name
+  -- (rule_route_is_self) because the route would point the survivor at
+  -- itself. A closed loop with no act in the room that could merge the pair.
+  -- The route is not lost by merging — it is ANSWERED by it: after the fold
+  -- the two cards are one, so "write the survivor instead" is satisfied, and
+  -- the repoint below drops the route rather than writing a self-route.
   IF v_merged_rule.id IS NOT NULL
      AND v_survivor_rule.id IS NOT NULL
      AND NOT (
        COALESCE(v_merged_rule.channels_forbidden, '{}'::text[])
          <@ COALESCE(v_survivor_rule.channels_forbidden, '{}'::text[])
        AND (v_merged_rule.route_to_person_id IS NULL
+            OR v_merged_rule.route_to_person_id = p_survivor
             OR v_survivor_rule.route_to_person_id
                  IS NOT DISTINCT FROM v_merged_rule.route_to_person_id)
      ) THEN
@@ -1079,7 +1096,86 @@ BEGIN
                    'keeping, then merge.';
   END IF;
 
-  -- ── channels: union, exact duplicates by kind + value dropped ───────────
+  -- ── channels: union, duplicates by kind + value REDUCED then dropped ────
+  --
+  -- r6 B-1 — A DUPLICATE ROW IS A DUPLICATE ADDRESS PLUS SIX TYPED FACTS.
+  -- The union used to open with a blind DELETE of the absorbed card's row
+  -- wherever (channel_kind, value) matched the survivor's. "Exact duplicate"
+  -- is true of the VALUE and of nothing else on that row:
+  -- studio_contact_channels also carries status, status_at, verified,
+  -- verified_at, preferred and label, every one of them typed by the studio
+  -- through the Reach editor's own act (save-channel-status), and all six
+  -- were destroyed — not stranded on an unreachable card, gone from the
+  -- table.
+  --
+  -- It fired on the commonest merge there is. crm-model §4 rules 2 and 3
+  -- match on a shared phone or a shared email and direction §3.1's duplicate
+  -- band is literally "These two cards share a phone.", so both cards carry a
+  -- row with the same (kind, value) BY CONSTRUCTION; PR-o then pre-picks the
+  -- OLDER, blanker card. Measured: a survivor reading `active` absorbed a row
+  -- reading `unsubscribed 2025-12-03`, verified, preferred, label "Shop
+  -- address"; afterwards the survivor read active / unverified / not
+  -- preferred / no label and NOTHING was left on the folded card.
+  -- heldChannelReason() had printed "They unsubscribed, 3 December 2025.
+  -- Calls still reach them." with direction §5.4's held treatment; after the
+  -- merge `held` was false and the Reach region offered the address as live.
+  -- A recorded refusal vanishing in a merge is the class r4 B-2 and r5 M-2
+  -- closed one table over — this is the same harm on the one refusal the
+  -- email rail reads in P3.
+  --
+  -- So the row REDUCES onto the survivor before it goes (R-BN), the posture
+  -- compliance_state() and identity_paper_state() already take for paper:
+  --
+  --   * status WORST-FIRST, carrying its own status_at. The ranking is
+  --     unsubscribed > dead > bounced > active: a recorded refusal outranks
+  --     every technical failure because the cost of a missed refusal is a
+  --     compliance violation and the cost of a missed bounce is a bounce
+  --     (C30). status_at travels with the status that wins — a held date
+  --     belonging to some other verdict is a worse fact than no date.
+  --   * verified and preferred are OR'd; verified_at follows the verified
+  --     that wins, as the verdict/date pair above does.
+  --   * label COALESCEs, the survivor's own words first, like every other
+  --     scalar this RPC carries.
+  --
+  -- idx_studio_contact_channels_owner_kind_value is UNIQUE on
+  -- (owner_id, channel_kind, value), so at most one absorbed row answers each
+  -- surviving row and the correlated subquery below cannot be ambiguous.
+  UPDATE public.studio_contact_channels s
+     SET status      = CASE WHEN u.merged_rank > u.survivor_rank
+                            THEN u.merged_status ELSE s.status END,
+         status_at   = CASE WHEN u.merged_rank > u.survivor_rank
+                            THEN u.merged_status_at ELSE s.status_at END,
+         verified    = s.verified OR u.merged_verified,
+         verified_at = CASE WHEN s.verified          THEN s.verified_at
+                            WHEN u.merged_verified   THEN u.merged_verified_at
+                            ELSE s.verified_at END,
+         preferred   = s.preferred OR u.merged_preferred,
+         label       = COALESCE(s.label, u.merged_label)
+    FROM (
+      SELECT sv.id AS survivor_channel_id,
+             CASE sv.status WHEN 'unsubscribed' THEN 4
+                            WHEN 'dead'         THEN 3
+                            WHEN 'bounced'      THEN 2
+                            ELSE 1 END AS survivor_rank,
+             CASE mc.status WHEN 'unsubscribed' THEN 4
+                            WHEN 'dead'         THEN 3
+                            WHEN 'bounced'      THEN 2
+                            ELSE 1 END AS merged_rank,
+             mc.status      AS merged_status,
+             mc.status_at   AS merged_status_at,
+             mc.verified    AS merged_verified,
+             mc.verified_at AS merged_verified_at,
+             mc.preferred   AS merged_preferred,
+             mc.label       AS merged_label
+        FROM public.studio_contact_channels sv
+        JOIN public.studio_contact_channels mc
+          ON mc.owner_id     = p_merged
+         AND mc.channel_kind = sv.channel_kind
+         AND mc.value        = sv.value
+       WHERE sv.owner_id = p_survivor
+    ) u
+   WHERE s.id = u.survivor_channel_id;
+
   DELETE FROM public.studio_contact_channels m
    WHERE m.owner_id = p_merged
      AND EXISTS (
@@ -1166,6 +1262,23 @@ BEGIN
      WHERE id = p_survivor;
   END IF;
 
+  -- ── AND THE VENDOR THE CARD STANDS FOR (r6 M-4) ─────────────────────────
+  -- vendor_id is the makers-band fallback directoryBandOf() reads
+  -- (people-derivation.ts:1221), so a fold that dropped it moved an identity
+  -- to a different Directory chip. It cannot ride in the COALESCE statement
+  -- below: idx_studio_contacts_org_vendor is UNIQUE on (organization_id,
+  -- vendor_id) where vendor_id IS NOT NULL and both cards are in one studio,
+  -- so the pointer is taken OFF the folded card in the same breath it lands
+  -- on the survivor. The survivor's own vendor wins where it has one, exactly
+  -- as profile_id and email do, and the folded card keeps nothing it needs:
+  -- it emits no Directory row and resolves forward.
+  IF v_survivor.vendor_id IS NULL AND v_merged.vendor_id IS NOT NULL THEN
+    UPDATE public.studio_contacts SET vendor_id = NULL  WHERE id = p_merged;
+    UPDATE public.studio_contacts
+       SET vendor_id = v_merged.vendor_id
+     WHERE id = p_survivor;
+  END IF;
+
   -- ── AND EVERY OTHER TYPED FACT ON THE ABSORBED CARD (r5 B-1) ────────────
   -- The two statements above carried the login and the address, and nothing
   -- else, so thirteen columns the studio had typed stayed on a card that
@@ -1202,6 +1315,25 @@ BEGIN
   --     than picked: one firm carded twice does both trades, and a union is
   --     the only shape under which the announcer's sentence is true of them.
   --     The survivor's own order is kept and only the unseen values append.
+  --   * IS_SOLE_PROPRIETOR and VENDOR_ID are the last two of this class
+  --     (r6 M-4). Neither is identity-bearing and neither can conflict
+  --     destructively, so both belong in this statement and neither was in
+  --     it. is_sole_proprietor is read by person-profile.tsx:381 as
+  --     `soleProprietor`: it prints the literal line "Sole proprietor", it
+  --     selects which documents the card shows (own + the firm's) and it
+  --     gates the whole Paper region — F-11 Dana Kowalski is the fixture's
+  --     sole proprietor, and PR-o's older pre-pick read `false` afterwards,
+  --     so the fold silently took a region off a card. vendor_id is
+  --     directoryBandOf()'s makers fallback (people-derivation.ts:1221), so
+  --     losing it moves an identity to a different Directory chip.
+  --     is_sole_proprietor is NOT NULL, so it takes the trades/specialties
+  --     treatment (OR) rather than a COALESCE, and it rides in this
+  --     statement. vendor_id does NOT: idx_studio_contacts_org_vendor is
+  --     UNIQUE on (organization_id, vendor_id) where vendor_id IS NOT NULL,
+  --     so writing it onto the survivor while the folded card still holds it
+  --     is a constraint violation. It moves in its own guarded block above,
+  --     beside the login and the address, which is the same COALESCE by
+  --     another shape.
   --   * company_kind is carried unconditionally. Only the company card reads
   --     it (company-card.tsx:144/511/641), so on the sole-proprietor fold it
   --     reaches a person card that never prints it — carrying it costs
@@ -1221,6 +1353,8 @@ BEGIN
          w9_on_file_at     = COALESCE(s.w9_on_file_at,     v_merged.w9_on_file_at),
          warranty_until    = COALESCE(s.warranty_until,    v_merged.warranty_until),
          notes             = COALESCE(s.notes,             v_merged.notes),
+         is_sole_proprietor = s.is_sole_proprietor
+                              OR COALESCE(v_merged.is_sole_proprietor, false),
          trades            = s.trades
                              || ARRAY(SELECT unnest(v_merged.trades)
                                        EXCEPT SELECT unnest(s.trades)),
@@ -1230,15 +1364,75 @@ BEGIN
    WHERE s.id = p_survivor;
 
   -- ── affiliations ────────────────────────────────────────────────────────
+  --
+  -- r6 M-2 / M-3 — AN AFFILIATION ROW IS A KEY PLUS FIVE TYPED FACTS, AND
+  -- THE FOLD OF A FIRM IS NOT THE FOLD OF ITS CREW.
+  --
+  -- Both collision DELETEs below used to drop the absorbed card's OPEN row
+  -- whenever the survivor already held one for the same pair, as though the
+  -- row were nothing but (person_id, company_id). It also carries
+  -- role_at_firm, is_paperwork_contact, is_signer, holds_trade_license and
+  -- from_date — the crew line's own words (company-card.tsx:186-201 builds
+  -- "Foreman · paperwork contact · signer · holds the trade licence" out of
+  -- exactly those) and the person card's "since" (person-profile.tsx:348-354).
+  -- PR-o pre-picks the OLDER card, which is the one usually carrying the
+  -- blank affiliation. Measured: older row role NULL / from 2024-01-01
+  -- absorbed newer "Foreman", paperwork, signer, licence, from 2019-03-01;
+  -- afterwards the single surviving row read role NULL, three booleans false,
+  -- from_date 2024-01-01 — four words off the crew line and a "since 2024"
+  -- the studio never typed. So the row REDUCES first (R-BN): role COALESCEs,
+  -- the three designations are OR'd, from_date takes the LEAST of the two
+  -- (the earlier start is the true one), and only then does the duplicate go.
   IF v_cross THEN
-    -- The firm IS the person now. An affiliation of a person at themselves is
+    -- The firm IS the person now. An affiliation of a person AT THEMSELVES is
     -- what studio_person_affiliations_distinct_cards_check refuses, and a
-    -- person card can never be a company_id, so these rows are dropped rather
-    -- than repointed. sync_studio_contact_company_pointer() recomputes every
-    -- affected person's legacy company_id pointer as they go.
-    DELETE FROM public.studio_person_affiliations WHERE company_id = p_merged;
-    UPDATE public.studio_contacts SET company_id = NULL WHERE company_id = p_merged;
+    -- person card can never be a company_id, so THAT row is dropped rather
+    -- than repointed.
+    --
+    -- IT IS THE ONLY ONE. The statement here used to read
+    -- `DELETE … WHERE company_id = p_merged` with no person leg, so every
+    -- OTHER carded human affiliated with the folded firm lost their role,
+    -- their designations and their start date, and the blanket
+    -- `SET company_id = NULL` beside it took their legacy firm pointer too.
+    -- Measured: J Bookkeeper (role Bookkeeper, since 2021) came out of a fold
+    -- of their own firm with company_id NULL and zero affiliations, so
+    -- people_directory's company_name COALESCE (§6) missed and direction §1
+    -- line 2's "Northgate Electric · electrical" degraded to the bare kind
+    -- word — QA-1 (w2 r5) reached through a different door — with no crew
+    -- line on the surviving PERSON card to put them back on.
+    --
+    -- A sole proprietor who really has crew is a fact the studio recorded, so
+    -- the crew's rows are CLOSED rather than erased: to_date stamps the day
+    -- the firm stopped being a firm, the role and the designations stay
+    -- readable, and the legacy pointer keeps naming the folded card, which
+    -- still exists and still resolves forward. The forward pointer sync is
+    -- stood down for exactly that write (00592's own
+    -- patina.suppress_affiliation_sync flag) so closing the row cannot null
+    -- the pointer R-BN says must stand.
+    DELETE FROM public.studio_person_affiliations
+     WHERE company_id = p_merged AND person_id = p_survivor;
+
+    PERFORM set_config('patina.suppress_affiliation_sync', '1', true);
+    UPDATE public.studio_person_affiliations
+       SET to_date = GREATEST(COALESCE(from_date, CURRENT_DATE), CURRENT_DATE)
+     WHERE company_id = p_merged
+       AND to_date IS NULL;
+    PERFORM set_config('patina.suppress_affiliation_sync', '', true);
   ELSIF v_survivor.entity_kind = 'person' THEN
+    UPDATE public.studio_person_affiliations s
+       SET role_at_firm         = COALESCE(s.role_at_firm, a.role_at_firm),
+           is_paperwork_contact = s.is_paperwork_contact OR a.is_paperwork_contact,
+           is_signer            = s.is_signer            OR a.is_signer,
+           holds_trade_license  = s.holds_trade_license  OR a.holds_trade_license,
+           from_date            = LEAST(COALESCE(s.from_date, a.from_date),
+                                        COALESCE(a.from_date, s.from_date))
+      FROM public.studio_person_affiliations a
+     WHERE a.person_id  = p_merged
+       AND a.to_date IS NULL
+       AND s.person_id  = p_survivor
+       AND s.company_id = a.company_id
+       AND s.to_date IS NULL;
+
     DELETE FROM public.studio_person_affiliations a
      WHERE a.person_id = p_merged
        AND a.to_date IS NULL
@@ -1249,6 +1443,22 @@ BEGIN
     UPDATE public.studio_person_affiliations
        SET person_id = p_survivor WHERE person_id = p_merged;
   ELSE
+    -- The mirror image, and the same reduction: two firm cards each holding
+    -- an open row for the same human.
+    UPDATE public.studio_person_affiliations s
+       SET role_at_firm         = COALESCE(s.role_at_firm, a.role_at_firm),
+           is_paperwork_contact = s.is_paperwork_contact OR a.is_paperwork_contact,
+           is_signer            = s.is_signer            OR a.is_signer,
+           holds_trade_license  = s.holds_trade_license  OR a.holds_trade_license,
+           from_date            = LEAST(COALESCE(s.from_date, a.from_date),
+                                        COALESCE(a.from_date, s.from_date))
+      FROM public.studio_person_affiliations a
+     WHERE a.company_id = p_merged
+       AND a.to_date IS NULL
+       AND s.company_id = p_survivor
+       AND s.person_id  = a.person_id
+       AND s.to_date IS NULL;
+
     DELETE FROM public.studio_person_affiliations a
      WHERE a.company_id = p_merged
        AND a.to_date IS NULL
@@ -1274,6 +1484,42 @@ BEGIN
   -- rule (r4 B-2, widened r5 M-2), so this repoint can stay conditional
   -- without losing a refusal. What is left behind is the reason text and the
   -- contact hours, which forbid nothing.
+  --
+  -- r6 M-1 — A ROUTE AT THE OTHER CARD IS DROPPED, NEVER WRITTEN AS A SELF-
+  -- ROUTE. assert_studio_contact_rule_route() raises rule_route_is_self on
+  -- route_to_person_id = subject_id ("write themselves instead is not a
+  -- route"), and its trigger fires on UPDATE OF route_to_person_id,
+  -- subject_id, subject_type — both of the columns these two statements
+  -- write. Measured, on the most ordinary duplicate there is: the absorbed
+  -- card's rule saying "this card is the old one, write the other one
+  -- instead" aborted the whole merge with a raw schema token naming nothing
+  -- the studio did, and the survivor's rule routing at the absorbed card did
+  -- the same. With rules on BOTH cards it was a closed loop — refused
+  -- merge_contact_rule_conflict, the refusal naming a repair the database
+  -- then refused rule_route_is_self — and no act in the room could merge the
+  -- pair.
+  --
+  -- The fold ANSWERS the route, so the route goes and the rest of the rule
+  -- (its forbidden channels, its reason, its hours) travels intact. Two
+  -- statements, one per direction, both before the repoints they protect.
+  -- Only where the rule is actually travelling (the same NOT EXISTS the
+  -- repoint below carries): a rule that stays on the folded card keeps its
+  -- route as the record of what the studio wrote.
+  UPDATE public.studio_contact_rules r
+     SET route_to_person_id = NULL
+   WHERE r.subject_type      = v_merged.entity_kind
+     AND r.subject_id        = p_merged
+     AND r.route_to_person_id = p_survivor
+     AND NOT EXISTS (SELECT 1 FROM public.studio_contact_rules s
+                      WHERE s.subject_type = v_survivor.entity_kind
+                        AND s.subject_id   = p_survivor);
+
+  UPDATE public.studio_contact_rules r
+     SET route_to_person_id = NULL
+   WHERE r.subject_type      = v_survivor.entity_kind
+     AND r.subject_id        = p_survivor
+     AND r.route_to_person_id = p_merged;
+
   UPDATE public.studio_contact_rules r
      SET subject_id   = p_survivor,
          subject_type = v_survivor.entity_kind
@@ -1285,10 +1531,15 @@ BEGIN
 
   -- A rule that ROUTES to the merged card now routes to the survivor. Only a
   -- person card may be a route target (assert_studio_contact_rule_route), so
-  -- this can only arise where both cards are people.
+  -- this can only arise where both cards are people. The survivor's own rule
+  -- is excluded: its route at the folded card was already nulled above, and
+  -- repointing it would write the self-route this RPC exists not to write.
   IF v_survivor.entity_kind = 'person' THEN
-    UPDATE public.studio_contact_rules
-       SET route_to_person_id = p_survivor WHERE route_to_person_id = p_merged;
+    UPDATE public.studio_contact_rules r
+       SET route_to_person_id = p_survivor
+     WHERE r.route_to_person_id = p_merged
+       AND NOT (r.subject_type = v_survivor.entity_kind
+                AND r.subject_id = p_survivor);
   END IF;
 
   -- ── compliance documents ────────────────────────────────────────────────
@@ -1601,12 +1852,20 @@ COMMENT ON FUNCTION public.merge_studio_contacts(uuid, uuid, text) IS
   'survivor''s id (direction §7 P2, §3.1''s duplicate band, PR-o). Gated on '
   'is_active_studio_member() of the cards'' shared studio — SECURITY DEFINER '
   'bypasses the table''s RLS, so the member test is stated in the body. '
-  'Repoints, in order: typed channels (union, exact duplicates by '
-  'channel_kind + value dropped, PLUS the absorbed card''s own phone_e164 and '
+  'Repoints, in order: typed channels (union; a duplicate by channel_kind + '
+  'value REDUCES onto the surviving row before it goes — status worst-first '
+  'with its own status_at, verified and preferred OR''d, label COALESCEd — '
+  'because a duplicate row is a duplicate address plus six typed facts and '
+  'the blind DELETE destroyed a recorded unsubscribe on the commonest merge '
+  'there is, r6 B-1 / R-BN; PLUS the absorbed card''s own phone_e164 and '
   'email minted as channel rows on the survivor so the legacy columns join '
-  'the union too — r3 W3-R3-4), affiliations, contact rules (the '
+  'the union too — r3 W3-R3-4), affiliations (a collision REDUCES too: '
+  'role_at_firm COALESCEd, the three designations OR''d, from_date LEAST — '
+  'r6 M-2), contact rules (the '
   'survivor''s wins; the merged card keeps its own as history unless the '
-  'survivor has none), the route_to pointer, the three designations other '
+  'survivor has none), the route_to pointer (a route at the OTHER card of '
+  'the pair is DROPPED rather than written as a self-route, which '
+  'assert_studio_contact_rule_route() refuses — r6 M-1), the three designations other '
   'cards hold, every seat''s studio_contact_id / company_id / '
   'warranty_contact_person_id / bid_quoted_by_person_id (00631), and the '
   'household''s member array and primary pointer (00632), the trade '
@@ -1618,9 +1877,12 @@ COMMENT ON FUNCTION public.merge_studio_contacts(uuid, uuid, text) IS
   'EVERY OTHER TYPED FACT TRAVELS THE SAME WAY (r5 B-1): studio_verdict with '
   'its date, legal_name, dba_name, company_kind, remit_to, retainage_bps, '
   'tax_id_last4, w9_on_file_at, warranty_until and notes are COALESCEd onto '
-  'the survivor (its own value wins, none of them is identity-bearing), and '
-  'trades and specialties are UNIONed because they are NOT NULL arrays with '
-  'no NULL to coalesce. Unmoved, they stayed on a card the room cannot open '
+  'the survivor (its own value wins, none of them is identity-bearing), '
+  'trades, specialties and is_sole_proprietor are UNIONed / OR''d because '
+  'they are NOT NULL with no NULL to coalesce, and vendor_id moves in its '
+  'own guarded pair of statements because '
+  'idx_studio_contacts_org_vendor is UNIQUE per studio (r6 M-4). '
+  'Unmoved, they stayed on a card the room cannot open '
   'and the company card printed "No remit-to on file." and "No verdict '
   'recorded." over facts the studio had typed. '
   'COMPLIANCE PAPER '
@@ -1634,7 +1896,12 @@ COMMENT ON FUNCTION public.merge_studio_contacts(uuid, uuid, text) IS
   'CONSENT IS UNTOUCHED: '
   'studio_channel_consent is keyed on (organization_id, channel_kind, '
   'channel_value) and never on a card, so a number''s verdict follows the '
-  'number with no write (crm-model §4, R-AY). Refuses a firm into a person '
+  'number with no write (crm-model §4, R-AY). '
+  'In the sole-proprietor fold every OTHER person''s affiliation at the '
+  'folded firm is CLOSED with to_date, never deleted, and their legacy '
+  'company_id pointer stands, so the crew keep their firm''s name on their '
+  'own Directory rows (r6 M-3, R-BN). '
+  'Refuses a firm into a person '
   'unless the person is_sole_proprietor, and a person into a firm always '
   '(merge_kind_mismatch); refuses two cards naming two DIFFERENT Patina '
   'accounts (merge_two_logins); refuses a merge that would leave a recorded '
