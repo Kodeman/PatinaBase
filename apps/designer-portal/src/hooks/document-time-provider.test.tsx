@@ -712,6 +712,44 @@ describe('DocumentTimeProvider — HT-35, the clock she was told about', () => {
     expect(markDisclosedMutate).toHaveBeenCalledTimes(1);
   });
 
+  it('stops asserting the automatic clock the moment she declines it, and offers her the manual one instead', async () => {
+    // She follows the sentence's own instruction. The Account sheet is an
+    // always-mounted overlay in the (document) layout, not a route, so the
+    // document is still held and the band is still latched when the preference
+    // comes back opted out.
+    autostartPreference = { optedOut: false, disclosedAt: null };
+    markDisclosedMutate.mockImplementation(() => {
+      autostartPreference = {
+        optedOut: false,
+        disclosedAt: '2026-09-13T12:00:00.000Z',
+      };
+    });
+    const { result, rerender } = renderHook(() => useDocumentTime(), { wrapper });
+    act(() => {
+      result.current.hold({ projectId: 'project-a', projectName: 'A', phaseKey: null });
+    });
+    await waitFor(() =>
+      expect(screen.getByText(/Patina keeps the time for you/)).toBeInTheDocument(),
+    );
+
+    act(() => {
+      autostartPreference = {
+        optedOut: true,
+        disclosedAt: '2026-09-13T12:00:00.000Z',
+      };
+      rerender();
+    });
+
+    expect(
+      screen.queryByText(/Patina keeps the time for you/),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText('The clock is yours to start on this document.'))
+      .toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Start the clock' }),
+    ).toBeInTheDocument();
+  });
+
   it('does not follow her onto the next document if she never dismissed it', async () => {
     autostartPreference = { optedOut: false, disclosedAt: null };
     markDisclosedMutate.mockImplementation(() => {

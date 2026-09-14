@@ -282,6 +282,18 @@ export function isDayValue(value: string): boolean {
  * A `yyyy-mm-dd` from a date field, as the instant to store. The clock is kept
  * from `now` so an hour logged for today still lands at the hour it was
  * logged; a backdated one lands at the same time of day on the day named.
+ *
+ * KNOWN, UNRULED (W7-R3-02): the date this moves is the member's LOCAL one and
+ * the time of day is her local time of day, so an hour named `2026-09-01` at
+ * 19:30 CDT is stored `2026-09-02T00:30Z`. `public.time_entry_ledger` derives
+ * its `day` as `(started_at AT TIME ZONE 'UTC')::date`, so from 19:00 CDT
+ * (17:00 PDT) onward her own Hours list (local grouping) and the scope lens,
+ * the CSV and the statement (the view's `day`) name two different days for the
+ * same hour. Neither the zone nor the fix is this program's to pick — which
+ * zone the ledger's day belongs to is an owed ruling (the studio's, almost
+ * certainly; then either `AT TIME ZONE` a studio timezone or a stored date
+ * column beside the instant). Do not "tidy" this helper into UTC on its own:
+ * that would move the day she NAMED, which is the half that is already right.
  */
 export function startedAtFromDateValue(
   value: string,

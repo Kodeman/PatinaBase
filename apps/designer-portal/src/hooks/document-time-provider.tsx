@@ -793,17 +793,26 @@ function AutostartBand({
   const [dismissed, setDismissed] = useState(false);
   const stamped = useRef(false);
   /**
-   * Latched the instant the sentence goes up, and let go only by her own hand
-   * or by her leaving the document. The stamp is written on render (above),
-   * and the mutation invalidates the preference query, so `disclosedAt` turns
-   * non-null one round trip later — without this latch the single showing
-   * HT-35 allows would be spent on a flash nobody could read, and `Understood`
-   * would never be reachable.
+   * Latched the instant the sentence goes up, and let go only by her own hand,
+   * by her leaving the document, or by her doing the very thing the sentence
+   * invites. The stamp is written on render (above), and the mutation
+   * invalidates the preference query, so `disclosedAt` turns non-null one
+   * round trip later — without this latch the single showing HT-35 allows
+   * would be spent on a flash nobody could read, and `Understood` would never
+   * be reachable.
    */
   const [latched, setLatched] = useState(false);
   const undisclosed = held && settled && !optedOut && disclosedAt === null;
+  /**
+   * `!optedOut` is load-bearing, not belt-and-braces. The profile is an
+   * always-mounted overlay in this layout, not a route, so she unticks the box
+   * with the document still held and the band still latched: without this the
+   * sentence would go on asserting the behaviour she just declined, and —
+   * because this branch returns before the fallback below — it would also
+   * swallow the one-tap start HT-35 makes the opt-out fall back to.
+   */
   const showDisclosure =
-    held && !dismissed && (latched || (undisclosed && !stamped.current));
+    held && !dismissed && !optedOut && (latched || (undisclosed && !stamped.current));
 
   useEffect(() => {
     if (!undisclosed || stamped.current) return;
@@ -813,11 +822,13 @@ function AutostartBand({
     documentEvents.time.autostartDisclosed({ surface: 'document' });
   }, [undisclosed, onDisclose]);
 
-  /** She closed the document without dismissing: she has been told, and the
-   *  sentence does not follow her onto the next one. */
+  /** She closed the document without dismissing, or she declined the clock the
+   *  sentence describes: she has been told, and the sentence does not follow
+   *  her onto the next document — nor back onto this one if she changes her
+   *  mind, since the stamp is already on her profile. */
   useEffect(() => {
-    if (latched && !held) setLatched(false);
-  }, [latched, held]);
+    if (latched && (!held || optedOut)) setLatched(false);
+  }, [latched, held, optedOut]);
 
   if (showDisclosure) {
     return (
