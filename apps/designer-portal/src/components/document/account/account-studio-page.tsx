@@ -1147,9 +1147,17 @@ export function AccountStudioPage() {
                   {agreementForm.rateCard.map((role, index) => (
                     <div
                       key={index}
-                      className="grid grid-cols-[minmax(0,1fr)_120px_auto] items-center gap-2"
+                      /* W7-R6-01 — mirrors the composer's picker fix
+                         (part-editor.tsx, W7-R5-01): below `sm` (the same
+                         line doc-sheet already changes its own padding on)
+                         the picker takes the whole first line and the rate
+                         and Remove share the second, so the closed picker
+                         keeps the full ~308px fold measure instead of a
+                         120px column that clipped four of its five labels. */
+                      className="grid grid-cols-[120px_minmax(0,1fr)] items-center gap-2 sm:grid-cols-[minmax(0,1fr)_120px_auto]"
                     >
                       <Select
+                        wrapperClassName="col-span-2 sm:col-span-1"
                         aria-label={`Default role ${index + 1}`}
                         value={role.rosterRole ?? ''}
                         onChange={(e) => {
@@ -1223,7 +1231,7 @@ export function AccountStudioPage() {
                             ),
                           }))
                         }
-                        className="text-[12px] text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]"
+                        className="justify-self-end text-[12px] text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]"
                       >
                         Remove
                       </button>

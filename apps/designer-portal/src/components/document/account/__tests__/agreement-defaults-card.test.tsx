@@ -431,4 +431,34 @@ describe("Account · Studio · Agreement defaults", () => {
     expect(screen.getByLabelText("Card fee (%)")).toBeInTheDocument();
     expect(screen.getByLabelText("Remit checks to")).toBeInTheDocument();
   });
+
+  // W7-R6-01 — below `sm` the row stacks the picker onto its own line and
+  // spans it across both grid columns, mirroring the composer's fix for the
+  // same defect class (part-editor.tsx, W7-R5-01). At 390px against a real
+  // dev server the row measured ~289px end to end and the closed picker
+  // filled it, against a 120px column / 68.5px text box before the fix —
+  // this test pins the wrapper classes those measurements depend on so a
+  // regression back to the single-row `grid-cols-[minmax(0,1fr)_120px_auto]`
+  // shape fails here instead of only under a real viewport.
+  it("stacks the picker onto its own line below sm and spans it across both columns (W7-R6-01)", () => {
+    render(<AccountStudioPage />);
+    const select = screen.getByLabelText("Default role 1");
+    // Select renders `<span wrapperClassName><select/></span>` — the wrapper
+    // is the immediate parent, and the grid row is the wrapper's parent.
+    const wrapperSpan = select.parentElement as HTMLElement;
+    const rowDiv = wrapperSpan.parentElement as HTMLElement;
+
+    expect(wrapperSpan.tagName).toBe("SPAN");
+    expect(wrapperSpan.className).toContain("col-span-2");
+    expect(wrapperSpan.className).toContain("sm:col-span-1");
+
+    expect(rowDiv.className).toContain("grid-cols-[120px_minmax(0,1fr)]");
+    expect(rowDiv.className).toContain(
+      "sm:grid-cols-[minmax(0,1fr)_120px_auto]",
+    );
+    // Sanity: not the pre-fix single-row shape (no `sm:` prefix on it).
+    expect(rowDiv.className).not.toBe(
+      "grid grid-cols-[minmax(0,1fr)_120px_auto] items-center gap-2",
+    );
+  });
 });
