@@ -320,6 +320,36 @@ describe("the Bidding band writes a stage with its outcome", () => {
     ).toBeNull();
   });
 
+  /**
+   * r9 MAJOR-1 — CLEARING a recorded outcome is the fourth press the select
+   * offers. The write drops `bid_outcome` and writes NO stage, so the seat
+   * keeps the band the erased outcome put it in — and that is what the face
+   * beside the press must say.
+   */
+  it("says a cleared outcome moves the seat nowhere", () => {
+    expect(
+      bidStageOutcome({ bidOutcome: "selected", stage: "awarded" }, null),
+    ).toEqual({
+      outcome: null,
+      moved: true,
+      pastTheBid: false,
+      stage: null,
+    });
+    // the same clear on a seat already working: still no stage write
+    expect(
+      bidStageOutcome({ bidOutcome: "selected", stage: "active" }, null),
+    ).toEqual({
+      outcome: null,
+      moved: true,
+      pastTheBid: true,
+      stage: null,
+    });
+    // the already-empty case is NOT a clear, and the face must not say it is
+    expect(
+      bidStageOutcome({ bidOutcome: null, stage: "bidding" }, null).moved,
+    ).toBe(false);
+  });
+
   it("renders 00631’s guards as sentences", () => {
     expect(asBidError(new Error("party_bid_quoted_by_not_a_person"))).toMatch(
       /A firm cannot price a job/,

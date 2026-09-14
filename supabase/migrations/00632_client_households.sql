@@ -316,6 +316,7 @@ DECLARE
   v_card     public.studio_contacts%ROWTYPE;
   v_seat_id  uuid;
   v_recorded uuid;
+  v_grant    public.project_party_authority%ROWTYPE;
 BEGIN
   IF p_role IS NULL OR p_role NOT IN ('client', 'client_rep') THEN
     RAISE EXCEPTION 'household_role_invalid'
@@ -399,15 +400,48 @@ BEGIN
                      'authority (PR-n).';
     END IF;
 
-    INSERT INTO public.project_party_authority
-      (engagement_id, scope, threshold_cents, source_clause, granted_by)
-    VALUES
-      (v_seat_id, 'money', v_h.co_threshold_cents,
-       'client_households.co_threshold_cents', auth.uid())
-    ON CONFLICT (engagement_id, scope) WHERE effective_to IS NULL
-    DO UPDATE SET threshold_cents = EXCLUDED.threshold_cents,
-                  source_clause   = EXCLUDED.source_clause,
-                  updated_at      = now();
+    -- r9 M-1 — A GRANT THE HOUSEHOLD DID NOT SOURCE IS NOT THE HOUSEHOLD'S
+    -- TO REWRITE. The ON CONFLICT arbiter here is the partial unique index
+    -- (engagement_id, scope) WHERE effective_to IS NULL — "the seat's OPEN
+    -- money grant", whatever wrote it — and this RPC deliberately REUSES an
+    -- existing (project_id, studio_contact_id, party_kind) seat two
+    -- statements above. So the ordinary act (seat Chidi as `client_rep` from
+    -- the agreement, R-J's "Confirm from the agreement"; then add him to the
+    -- household) rewrote the agreement's $10,000 in place as the household's
+    -- $2,500 and re-stamped its clause, with nothing closed and no record
+    -- that the agreement's figure ever stood — the Call Sheet's client-side
+    -- row then printing "Signs money to $2,500." over an agreement that says
+    -- otherwise, and, run the other way, over-authorising an approval nobody
+    -- granted (00624's own COMMENT names exactly that failure, and PR-n puts
+    -- it under the principal).
+    --
+    -- set_household_threshold() already takes the opposite rule on the same
+    -- column — it moves only grants WHERE source_clause =
+    -- 'client_households.co_threshold_cents', because "a grant the studio
+    -- re-sourced by hand is NOT the household's to move" — so the two halves
+    -- of one feature disagreed about who owns a seat's money authority.
+    -- They agree now: the open row is read first, a foreign clause is left
+    -- exactly as the studio wrote it, and only the household's own grant
+    -- moves.
+    SELECT * INTO v_grant
+      FROM public.project_party_authority
+     WHERE engagement_id = v_seat_id
+       AND scope         = 'money'
+       AND effective_to IS NULL
+     LIMIT 1;
+
+    IF NOT FOUND THEN
+      INSERT INTO public.project_party_authority
+        (engagement_id, scope, threshold_cents, source_clause, granted_by)
+      VALUES
+        (v_seat_id, 'money', v_h.co_threshold_cents,
+         'client_households.co_threshold_cents', auth.uid());
+    ELSIF v_grant.source_clause = 'client_households.co_threshold_cents' THEN
+      UPDATE public.project_party_authority
+         SET threshold_cents = v_h.co_threshold_cents,
+             granted_by      = COALESCE(auth.uid(), granted_by)
+       WHERE id = v_grant.id;
+    END IF;
   END IF;
 
   RETURN v_seat_id;
@@ -423,10 +457,14 @@ COMMENT ON FUNCTION public.add_household_member(uuid, uuid, text, uuid) IS
   'PR-c in one act: adds a PERSON card to a household''s members and, when a '
   'project is named, opens (or finds) that member''s seat on the job as '
   '`client` or `client_rep`, returning the seat id. When the household '
-  'carries co_threshold_cents AND the role is `client_rep`, it also writes '
-  'that seat''s open `money` authority row — PR-c pairs the figure with the '
+  'carries co_threshold_cents AND the role is `client_rep`, it also opens '
+  'that seat''s `money` authority row — PR-c pairs the figure with the '
   'member who signs (F-05), never with the member who decides finishes '
-  '(F-04) — and refuses the whole act unless the caller is an owner or '
+  '(F-04). A seat already carrying an OPEN money grant the household did not '
+  'source (its own clause from the agreement) keeps it untouched, which is '
+  'the rule set_household_threshold() makes on the same column (r9 M-1); '
+  'only the household''s own grant moves. It refuses the whole act unless '
+  'the caller is an owner or '
   'an admin of the studio the PROJECT RECORDS (PR-n, the same resolver '
   'project_party_authority''s policies use). A silent under-grant is the '
   'failure 00624 names, so this raises rather than skipping. Gated on '

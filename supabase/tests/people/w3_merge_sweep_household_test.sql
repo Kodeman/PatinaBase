@@ -3025,6 +3025,315 @@ BEGIN
   RAISE NOTICE '11c. r8 B-1 — retyping a renewal no longer launders the lapse: passed';
 END $$;
 
+-- ═══════════════════════════════════════════════════════════════════════════
+-- BLOCK 11d — r9 B-1: the nightly notice names the PAPER'S OWN HOLDER
+-- ═══════════════════════════════════════════════════════════════════════════
+-- The sweep's holder_name COALESCEd studio_contacts.company_name FIRST
+-- whatever the holder's kind was. On a PERSON card that column is 00417's
+-- typed-by-hand FIRM snapshot — the same one people_directory reads as the
+-- person's firm, and the one usePromoteToStudioContact() stamps from the seat
+-- on every promotion — so a master licence the PERSON holds, which is the
+-- reason holder_type = 'person' exists at all, was announced as the FIRM's:
+-- "Northgate Electric's paper has lapsed", over a firm holding no lapse, with
+-- a deep link that opens a person. The name now keys on holder_type, as the
+-- deep link already did.
+INSERT INTO public.studio_contacts
+  (id, organization_id, entity_kind, contact_kind, full_name, company_name, created_by, created_at) VALUES
+  ('f9f10000-0000-4000-8000-000000000031','f9000000-0000-4000-8000-00000000000a','person','sub',
+   'Marco Holder','R9 Holder Firm','a0000000-0000-0000-0000-000000000004','2024-01-01');
+
+INSERT INTO public.studio_contacts
+  (id, organization_id, entity_kind, contact_kind, company_name, company_kind, created_by, created_at) VALUES
+  ('f9f10000-0000-4000-8000-000000000032','f9000000-0000-4000-8000-00000000000a','company','sub',
+   'R9 Firm Holder Co','sub','a0000000-0000-0000-0000-000000000004','2024-01-01');
+
+INSERT INTO public.studio_compliance_documents
+  (id, organization_id, holder_type, holder_id, doc_type, blocks, issued_on, expires_on) VALUES
+  -- the PERSON's own master licence
+  ('f9f50000-0000-4000-8000-000000000031','f9000000-0000-4000-8000-00000000000a','person',
+   'f9f10000-0000-4000-8000-000000000031','license', ARRAY['site_access']::text[],
+   CURRENT_DATE - 400, CURRENT_DATE - 3),
+  -- the negative control: a FIRM's own certificate, which must still name the firm
+  ('f9f50000-0000-4000-8000-000000000032','f9000000-0000-4000-8000-00000000000a','company',
+   'f9f10000-0000-4000-8000-000000000032','coi_gl', ARRAY['draw']::text[],
+   CURRENT_DATE - 400, CURRENT_DATE - 4);
+
+DO $$
+DECLARE
+  v_name text;
+  v_subj text;
+  v_msg  text;
+  v_link text;
+BEGIN
+  PERFORM public.sweep_compliance_expiries();
+
+  SELECT DISTINCT metadata->>'holder_name', metadata->>'subject',
+         metadata->>'message', metadata->>'deep_link'
+    INTO v_name, v_subj, v_msg, v_link
+    FROM public.notification_log
+   WHERE type = 'compliance_document_expiry'
+     AND (metadata->>'document_id') = 'f9f50000-0000-4000-8000-000000000031';
+  IF v_name IS NULL THEN
+    RAISE EXCEPTION 'BLOCK 11d FAIL (r9 B-1): the person''s lapsed licence was never announced';
+  END IF;
+  IF v_name <> 'Marco Holder' THEN
+    RAISE EXCEPTION 'BLOCK 11d FAIL (r9 B-1): the notice names % for a paper the person holds', v_name;
+  END IF;
+  IF v_subj <> 'Marco Holder''s paper has lapsed' THEN
+    RAISE EXCEPTION 'BLOCK 11d FAIL (r9 B-1): the subject reads %', v_subj;
+  END IF;
+  IF v_msg NOT LIKE '%for Marco Holder lapsed%' THEN
+    RAISE EXCEPTION 'BLOCK 11d FAIL (r9 B-1): the message reads %', v_msg;
+  END IF;
+  IF v_link <> '/people?person=f9f10000-0000-4000-8000-000000000031' THEN
+    RAISE EXCEPTION 'BLOCK 11d FAIL (r9 B-1): the deep link reads %', v_link;
+  END IF;
+
+  -- the control: a FIRM's own paper still names the firm
+  SELECT DISTINCT metadata->>'holder_name', metadata->>'deep_link'
+    INTO v_name, v_link
+    FROM public.notification_log
+   WHERE type = 'compliance_document_expiry'
+     AND (metadata->>'document_id') = 'f9f50000-0000-4000-8000-000000000032';
+  IF v_name <> 'R9 Firm Holder Co' THEN
+    RAISE EXCEPTION 'BLOCK 11d FAIL (r9 B-1 control): a firm''s own paper is announced as %', v_name;
+  END IF;
+  IF v_link <> '/people?firm=f9f10000-0000-4000-8000-000000000032' THEN
+    RAISE EXCEPTION 'BLOCK 11d FAIL (r9 B-1 control): the firm''s deep link reads %', v_link;
+  END IF;
+
+  RAISE NOTICE '11d. r9 B-1 — the nightly notice names the paper''s own holder: passed';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- BLOCK 11e — r9 B-2: the sole-proprietor fold keeps the FIRM'S OWN NAME on
+--                     the surviving identity
+-- ═══════════════════════════════════════════════════════════════════════════
+-- r6 M-3 fixed the CREW's half of this — their affiliations close with to_date
+-- and their legacy company_id is deliberately left naming the folded card, so
+-- people_directory's company_name COALESCE still resolves the firm. The
+-- SURVIVOR's half was not fixed, by two independent routes: the "every other
+-- typed fact" COALESCE carried thirteen columns and the three designations but
+-- not company_name, which is where a firm card's NAME lives; and the cross-kind
+-- affiliation DELETE ran OUTSIDE the patina.suppress_affiliation_sync window,
+-- so the AFTER trigger re-derived the pointer over zero open affiliations and
+-- landed NULL. The Directory identity line, the person card's R1 line and the
+-- bring-forward mini row all lost the firm half while the SEATS kept their
+-- free-text snapshot and the Call Sheet went on printing it. R-BN: a merge
+-- never deletes a typed fact.
+INSERT INTO public.studio_contacts
+  (id, organization_id, entity_kind, contact_kind, full_name, created_by, created_at) VALUES
+  ('f9f20000-0000-4000-8000-000000000041','f9000000-0000-4000-8000-00000000000a','person','sub',
+   'R9 Owner Operator','a0000000-0000-0000-0000-000000000004','2024-01-01'),
+  ('f9f20000-0000-4000-8000-000000000042','f9000000-0000-4000-8000-00000000000a','person','sub',
+   'R9 Crew Member','a0000000-0000-0000-0000-000000000004','2024-01-01'),
+  ('f9f20000-0000-4000-8000-000000000044','f9000000-0000-4000-8000-00000000000a','person','sub',
+   'R9 Named Survivor','a0000000-0000-0000-0000-000000000004','2024-01-01');
+
+INSERT INTO public.studio_contacts
+  (id, organization_id, entity_kind, contact_kind, company_name, company_kind, created_by, created_at) VALUES
+  ('f9f20000-0000-4000-8000-000000000043','f9000000-0000-4000-8000-00000000000a','company','sub',
+   'R9 Owner Operator Electric','sub','a0000000-0000-0000-0000-000000000004','2024-01-01'),
+  ('f9f20000-0000-4000-8000-000000000045','f9000000-0000-4000-8000-00000000000a','company','sub',
+   'R9 Second Firm','sub','a0000000-0000-0000-0000-000000000004','2024-01-01');
+
+UPDATE public.studio_contacts SET is_sole_proprietor = true
+ WHERE id IN ('f9f20000-0000-4000-8000-000000000041','f9f20000-0000-4000-8000-000000000044');
+
+-- The proprietor works at their own firm; a third party is on the crew.
+INSERT INTO public.studio_person_affiliations
+  (person_id, company_id, role_at_firm, from_date) VALUES
+  ('f9f20000-0000-4000-8000-000000000041','f9f20000-0000-4000-8000-000000000043','Owner','2025-01-01'),
+  ('f9f20000-0000-4000-8000-000000000042','f9f20000-0000-4000-8000-000000000043','Foreman','2021-01-01');
+
+DO $$
+DECLARE
+  sc   public.studio_contacts%ROWTYPE;
+  a    public.studio_person_affiliations%ROWTYPE;
+  v_on text;
+  n    integer;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+
+  -- the fixture reproduces: the Directory row names the firm before the fold
+  SELECT meta->>'company_name' INTO v_on FROM public.people_directory
+   WHERE person_id = 'f9f20000-0000-4000-8000-000000000041';
+  IF v_on IS DISTINCT FROM 'R9 Owner Operator Electric' THEN
+    RAISE EXCEPTION 'BLOCK 11e FAIL (r9 B-2): the fixture no longer reproduces — the row reads % before the fold', v_on;
+  END IF;
+
+  PERFORM public.merge_studio_contacts(
+    'f9f20000-0000-4000-8000-000000000041','f9f20000-0000-4000-8000-000000000043','manual');
+
+  -- 1. the survivor's own card carries the firm's name AND still points at it
+  SELECT * INTO sc FROM public.studio_contacts
+   WHERE id = 'f9f20000-0000-4000-8000-000000000041';
+  IF sc.company_name IS DISTINCT FROM 'R9 Owner Operator Electric' THEN
+    RAISE EXCEPTION 'BLOCK 11e FAIL (r9 B-2): the survivor''s company_name reads % after the fold', sc.company_name;
+  END IF;
+  IF sc.company_id IS DISTINCT FROM 'f9f20000-0000-4000-8000-000000000043' THEN
+    RAISE EXCEPTION 'BLOCK 11e FAIL (r9 B-2): the survivor''s pointer reads % after the fold', sc.company_id;
+  END IF;
+  IF sc.full_name IS DISTINCT FROM 'R9 Owner Operator' THEN
+    RAISE EXCEPTION 'BLOCK 11e FAIL (r9 B-2): the survivor lost its own name (%)', sc.full_name;
+  END IF;
+
+  -- 2. the Directory identity line still names both halves (direction §3.1)
+  SELECT display_name, meta->>'company_name' INTO sc.full_name, v_on
+    FROM public.people_directory
+   WHERE person_id = 'f9f20000-0000-4000-8000-000000000041';
+  IF sc.full_name <> 'R9 Owner Operator' OR v_on IS DISTINCT FROM 'R9 Owner Operator Electric' THEN
+    RAISE EXCEPTION 'BLOCK 11e FAIL (r9 B-2): the Directory row reads % / %', sc.full_name, v_on;
+  END IF;
+
+  -- 3. r6 M-3 still holds: the crew's row is CLOSED, not erased, and their
+  --    legacy pointer still names the folded card
+  SELECT * INTO a FROM public.studio_person_affiliations
+   WHERE person_id = 'f9f20000-0000-4000-8000-000000000042'
+     AND company_id = 'f9f20000-0000-4000-8000-000000000043';
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'BLOCK 11e FAIL (r9 B-2 / r6 M-3): the crew''s affiliation was deleted';
+  END IF;
+  IF a.to_date IS NULL OR a.role_at_firm <> 'Foreman' THEN
+    RAISE EXCEPTION 'BLOCK 11e FAIL (r9 B-2 / r6 M-3): the crew''s row reads to_date=% role=%',
+      a.to_date, a.role_at_firm;
+  END IF;
+  SELECT company_id INTO sc.company_id FROM public.studio_contacts
+   WHERE id = 'f9f20000-0000-4000-8000-000000000042';
+  IF sc.company_id IS DISTINCT FROM 'f9f20000-0000-4000-8000-000000000043' THEN
+    RAISE EXCEPTION 'BLOCK 11e FAIL (r9 B-2 / r6 M-3): the crew''s pointer reads %', sc.company_id;
+  END IF;
+
+  -- 4. the proprietor is not affiliated with themselves
+  SELECT count(*) INTO n FROM public.studio_person_affiliations
+   WHERE person_id = 'f9f20000-0000-4000-8000-000000000041'
+     AND company_id = 'f9f20000-0000-4000-8000-000000000041';
+  IF n <> 0 THEN
+    RAISE EXCEPTION 'BLOCK 11e FAIL (r9 B-2): the survivor is affiliated with themselves';
+  END IF;
+
+  -- 5. NEGATIVE CONTROL — a survivor carrying its OWN name keeps it. The
+  --    COALESCE must not overwrite a typed fact with the folded card's.
+  UPDATE public.studio_contacts SET company_name = 'R9 Survivor Own Firm'
+   WHERE id = 'f9f20000-0000-4000-8000-000000000044';
+  PERFORM public.merge_studio_contacts(
+    'f9f20000-0000-4000-8000-000000000044','f9f20000-0000-4000-8000-000000000045','manual');
+  SELECT company_name INTO v_on FROM public.studio_contacts
+   WHERE id = 'f9f20000-0000-4000-8000-000000000044';
+  IF v_on <> 'R9 Survivor Own Firm' THEN
+    RAISE EXCEPTION 'BLOCK 11e FAIL (r9 B-2 control): the survivor''s own name was overwritten with %', v_on;
+  END IF;
+
+  PERFORM pg_temp.reset_role();
+  RAISE NOTICE '11e. r9 B-2 — the sole-proprietor fold keeps the firm''s own name: passed';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- BLOCK 11f — r9 M-1: add_household_member() may not rewrite a grant the
+--                     household did not source
+-- ═══════════════════════════════════════════════════════════════════════════
+-- The ON CONFLICT arbiter was the partial unique index (engagement_id, scope)
+-- WHERE effective_to IS NULL — "the seat's OPEN money grant", whatever wrote
+-- it — and the RPC deliberately REUSES an existing seat. So the ordinary act
+-- (seat the rep from the agreement, then add them to the household) rewrote
+-- the agreement's figure in place and re-stamped its clause, with nothing
+-- closed and no record that the agreement's grant ever stood. Its own sibling
+-- set_household_threshold() moves only grants the household SOURCES, and says
+-- so in words. The two halves agree now.
+INSERT INTO public.studio_contacts
+  (id, organization_id, entity_kind, contact_kind, full_name, created_by, created_at) VALUES
+  ('f9f30000-0000-4000-8000-000000000051','f9000000-0000-4000-8000-00000000000a','person','client_rep',
+   'R9 Agreement Rep','a0000000-0000-0000-0000-000000000004','2025-01-01'),
+  ('f9f30000-0000-4000-8000-000000000052','f9000000-0000-4000-8000-00000000000a','person','client_rep',
+   'R9 Household Rep','a0000000-0000-0000-0000-000000000004','2025-01-01');
+
+INSERT INTO public.client_households
+  (id, organization_id, designer_id, display_name, co_threshold_cents, created_by) VALUES
+  ('f9f30000-0000-4000-8000-000000000053','f9000000-0000-4000-8000-00000000000a',
+   'a0000000-0000-0000-0000-000000000004','R9 household', 250000,
+   'a0000000-0000-0000-0000-000000000004');
+
+-- The agreement's own seat and its own grant, written before the household
+-- ever names the person (R-J's "Confirm from the agreement").
+INSERT INTO public.project_parties
+  (id, project_id, party_kind, display_name, studio_contact_id, created_by) VALUES
+  ('f9f30000-0000-4000-8000-000000000054','f9300000-0000-4000-8000-00000000000a','client_rep',
+   'R9 Agreement Rep','f9f30000-0000-4000-8000-000000000051','a0000000-0000-0000-0000-000000000004');
+
+INSERT INTO public.project_party_authority
+  (id, engagement_id, scope, threshold_cents, source_clause, granted_by) VALUES
+  ('f9f30000-0000-4000-8000-000000000055','f9f30000-0000-4000-8000-000000000054','money',
+   1000000,'Agreement clause 7','a0000000-0000-0000-0000-000000000004');
+
+DO $$
+DECLARE
+  v_seat  uuid;
+  v_thr   integer;
+  v_src   text;
+  v_to    date;
+  n       integer;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+
+  -- the act: add the already-seated rep to the household
+  v_seat := public.add_household_member(
+    'f9f30000-0000-4000-8000-000000000053','f9f30000-0000-4000-8000-000000000051',
+    'client_rep','f9300000-0000-4000-8000-00000000000a');
+  IF v_seat <> 'f9f30000-0000-4000-8000-000000000054' THEN
+    RAISE EXCEPTION 'BLOCK 11f FAIL (r9 M-1): the fixture no longer reproduces — a second seat % was opened', v_seat;
+  END IF;
+
+  SELECT threshold_cents, source_clause, effective_to INTO v_thr, v_src, v_to
+    FROM public.project_party_authority WHERE id = 'f9f30000-0000-4000-8000-000000000055';
+  IF v_thr <> 1000000 THEN
+    RAISE EXCEPTION 'BLOCK 11f FAIL (r9 M-1): the agreement''s figure reads % cents', v_thr;
+  END IF;
+  IF v_src <> 'Agreement clause 7' THEN
+    RAISE EXCEPTION 'BLOCK 11f FAIL (r9 M-1): the agreement''s clause was re-stamped as %', v_src;
+  END IF;
+  IF v_to IS NOT NULL THEN
+    RAISE EXCEPTION 'BLOCK 11f FAIL (r9 M-1): the agreement''s grant was closed (%)', v_to;
+  END IF;
+  SELECT count(*) INTO n FROM public.project_party_authority
+   WHERE engagement_id = 'f9f30000-0000-4000-8000-000000000054'
+     AND scope = 'money' AND effective_to IS NULL;
+  IF n <> 1 THEN
+    RAISE EXCEPTION 'BLOCK 11f FAIL (r9 M-1): the seat holds % open money grants', n;
+  END IF;
+
+  -- CONTROL A — a seat with NO standing grant still gets the household's
+  v_seat := public.add_household_member(
+    'f9f30000-0000-4000-8000-000000000053','f9f30000-0000-4000-8000-000000000052',
+    'client_rep','f9300000-0000-4000-8000-00000000000a');
+  SELECT threshold_cents, source_clause INTO v_thr, v_src
+    FROM public.project_party_authority
+   WHERE engagement_id = v_seat AND scope = 'money' AND effective_to IS NULL;
+  IF v_thr <> 250000 OR v_src <> 'client_households.co_threshold_cents' THEN
+    RAISE EXCEPTION 'BLOCK 11f FAIL (r9 M-1 control A): the household opened % cents / %', v_thr, v_src;
+  END IF;
+
+  -- CONTROL B — the household's OWN grant still moves with its figure
+  UPDATE public.client_households SET co_threshold_cents = 500000
+   WHERE id = 'f9f30000-0000-4000-8000-000000000053';
+  PERFORM public.add_household_member(
+    'f9f30000-0000-4000-8000-000000000053','f9f30000-0000-4000-8000-000000000052',
+    'client_rep','f9300000-0000-4000-8000-00000000000a');
+  SELECT threshold_cents, source_clause INTO v_thr, v_src
+    FROM public.project_party_authority
+   WHERE engagement_id = v_seat AND scope = 'money' AND effective_to IS NULL;
+  IF v_thr <> 500000 OR v_src <> 'client_households.co_threshold_cents' THEN
+    RAISE EXCEPTION 'BLOCK 11f FAIL (r9 M-1 control B): the household''s own grant reads % cents / %', v_thr, v_src;
+  END IF;
+  SELECT count(*) INTO n FROM public.project_party_authority
+   WHERE engagement_id = v_seat AND scope = 'money' AND effective_to IS NULL;
+  IF n <> 1 THEN
+    RAISE EXCEPTION 'BLOCK 11f FAIL (r9 M-1 control B): the seat holds % open money grants', n;
+  END IF;
+
+  PERFORM pg_temp.reset_role();
+  RAISE NOTICE '11f. r9 M-1 — a grant the household did not source stands: passed';
+END $$;
+
 DO $$ BEGIN RAISE NOTICE 'W3 SQL suite: all blocks passed'; END $$;
 
 ROLLBACK;

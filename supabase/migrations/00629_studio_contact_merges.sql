@@ -46,8 +46,14 @@
 -- refused (merge_kind_mismatch). In that one permitted case the firm IS the
 -- person, so the firm's affiliation AT THE SURVIVOR is dropped rather than
 -- repointed — an affiliation of a person at themselves is what
--- studio_person_affiliations_distinct_cards_check already refuses. Every
--- OTHER person's affiliation at that firm is CLOSED with to_date, not erased,
+-- studio_person_affiliations_distinct_cards_check already refuses — and that
+-- DELETE runs inside the same patina.suppress_affiliation_sync window as the
+-- crew's close, so the survivor's own legacy company_id keeps naming the
+-- folded firm rather than being re-derived to NULL over zero open rows. The
+-- survivor also CARRIES the firm's company_name forward, because that column
+-- is where a firm card's name lives and nothing else on a person card holds
+-- it (r9 B-2). Every OTHER person's affiliation at that firm is CLOSED with
+-- to_date, not erased,
 -- and their legacy company_id pointer stands (r6 M-3, R-BN): a sole
 -- proprietor who really has crew is a fact the studio recorded, and the crew
 -- must not lose their firm's name off their Directory row. And the
@@ -918,9 +924,10 @@ COMMENT ON FUNCTION public.contact_rule_blocks_contact(text[], uuid) IS
 -- ═══════════════════════════════════════════════════════════════════════════
 -- Migrations review r7 M-2.
 --
--- §5's sole-proprietor fold deliberately leaves the folded firm's CREW
--- pointing at the folded card: their affiliations are CLOSED with `to_date`
--- under `patina.suppress_affiliation_sync`, and the legacy
+-- §5's sole-proprietor fold deliberately leaves the folded firm's CREW —
+-- and, since r9 B-2, the SURVIVOR — pointing at the folded card: their
+-- affiliations are CLOSED with `to_date` (the survivor's self-affiliation is
+-- DELETEd) under `patina.suppress_affiliation_sync`, and the legacy
 -- studio_contacts.company_id keeps naming the folded firm so
 -- people_directory's company_name COALESCE still resolves the firm's name
 -- (r6 M-3; R-BN — a merge never deletes a typed fact).
@@ -1528,6 +1535,19 @@ BEGIN
   --     is a constraint violation. It moves in its own guarded block above,
   --     beside the login and the address, which is the same COALESCE by
   --     another shape.
+  --   * company_name is the LAST of this class to be named (r9 B-2), and the
+  --     one the sole-proprietor fold could least afford to drop: a firm
+  --     card's NAME lives there (a company row's full_name is never set, §6
+  --     says so), so folding Northgate Electric into Dana Kowalski left her
+  --     surviving card carrying neither the name nor — see the DELETE below —
+  --     a pointer to it, and the Directory identity line, the person card's
+  --     R1 line and the bring-forward mini row all lost the firm half while
+  --     her SEATS kept their free-text snapshot and the Call Sheet went on
+  --     printing it. One screen named the firm, the other did not. NULLIF
+  --     over btrim because 00417 lets the column hold '' as well as NULL; a
+  --     survivor with its own name keeps it (display_name is
+  --     COALESCE(full_name, company_name), so a person survivor's own name
+  --     still wins the display).
   --   * company_kind is carried unconditionally. Only the company card reads
   --     it (company-card.tsx:144/511/641), so on the sole-proprietor fold it
   --     reaches a person card that never prints it — carrying it costs
@@ -1567,6 +1587,8 @@ BEGIN
                                   ELSE s.studio_verdict_at END,
          legal_name        = COALESCE(s.legal_name,        v_merged.legal_name),
          dba_name          = COALESCE(s.dba_name,          v_merged.dba_name),
+         company_name      = COALESCE(NULLIF(btrim(s.company_name), ''),
+                                      v_merged.company_name),
          company_kind      = COALESCE(s.company_kind,      v_merged.company_kind),
          remit_to          = COALESCE(s.remit_to,          v_merged.remit_to),
          retainage_bps     = COALESCE(s.retainage_bps,     v_merged.retainage_bps),
@@ -1639,10 +1661,19 @@ BEGIN
     -- stood down for exactly that write (00592's own
     -- patina.suppress_affiliation_sync flag) so closing the row cannot null
     -- the pointer R-BN says must stand.
+    -- r9 B-2 — THE SURVIVOR'S POINTER IS INSIDE THE SAME WINDOW AS THE
+    -- CREW'S. This DELETE used to run OUTSIDE it, and
+    -- sync_studio_contact_company_pointer_trg is AFTER INSERT OR DELETE OR
+    -- UPDATE: the survivor's company_id was re-derived over zero open
+    -- affiliations and landed NULL, so the one card the fold was about lost
+    -- the pointer that names the folded firm — while every OTHER human on
+    -- that crew kept theirs. Suppressed, it keeps naming the folded card,
+    -- which still exists and still resolves forward, exactly as the crew's
+    -- does.
+    PERFORM set_config('patina.suppress_affiliation_sync', '1', true);
     DELETE FROM public.studio_person_affiliations
      WHERE company_id = p_merged AND person_id = p_survivor;
 
-    PERFORM set_config('patina.suppress_affiliation_sync', '1', true);
     UPDATE public.studio_person_affiliations
        SET to_date = GREATEST(COALESCE(from_date, CURRENT_DATE), CURRENT_DATE)
      WHERE company_id = p_merged

@@ -356,9 +356,23 @@ BEGIN
              d.doc_label,
              d.expires_on,
              public.compliance_document_state(d.id) AS state,
-             COALESCE(NULLIF(btrim(sc.company_name), ''),
-                      NULLIF(btrim(sc.full_name), ''),
-                      'this card')                  AS holder_name
+             -- THE PAPER'S OWN HOLDER, NOT THEIR FIRM (migrations review r9
+             -- B-1, reproduced locally). studio_contacts.company_name on a
+             -- PERSON card is 00417's typed-by-hand FIRM snapshot — the same
+             -- column people_directory reads as the person's firm (00629 §6) —
+             -- and usePromoteToStudioContact() stamps it from the seat on every
+             -- promotion. Asking company_name first whatever the kind is wrote
+             -- "Northgate Electric's paper has lapsed" over a master licence
+             -- Marco Feliz holds himself, with a deep link to Marco. The name
+             -- keys on holder_type, exactly as v_link below does.
+             CASE WHEN d.holder_type = 'company'
+                  THEN COALESCE(NULLIF(btrim(sc.company_name), ''),
+                                NULLIF(btrim(sc.full_name), ''),
+                                'this card')
+                  ELSE COALESCE(NULLIF(btrim(sc.full_name), ''),
+                                NULLIF(btrim(sc.company_name), ''),
+                                'this card')
+             END                                    AS holder_name
         FROM public.studio_compliance_documents d
         JOIN public.studio_contacts sc ON sc.id = d.holder_id
        WHERE d.expires_on IS NOT NULL
