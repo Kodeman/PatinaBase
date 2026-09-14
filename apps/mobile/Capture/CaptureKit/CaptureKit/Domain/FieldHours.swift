@@ -27,12 +27,21 @@ public struct FieldHourRow: Identifiable, Equatable, Sendable {
     /// `project_time_entries.billing_state` — 'authorized' /
     /// 'pending_authorization' (00412).
     public let billingState: String?
-    /// `rate_source` (00600) — 'authority' / 'studio_member' / 'none'.
+    /// `rate_source` (00600) — 'authority' / 'studio_member' / 'none', and NIL
+    /// for every row written before 00600. NULL is not 'none': P-4 backfills
+    /// nothing, so on Strata today every row is NULL and most of them carry a
+    /// real legacy `hourly_rate_cents`.
     public let rateSource: String?
+    /// `hourly_rate_cents` (00177) — the snapshot that priced the hour, nil or
+    /// 0 where nothing did. R3-m2: without it this phone cannot tell a legacy
+    /// row that IS priced from one that was never priced, and printed
+    /// "Billable" over both.
+    public let hourlyRateCents: Int?
 
     public init(id: UUID, startedAt: Date, projectName: String?, minutes: Int,
                 activity: FieldTimeActivity?, billable: Bool,
-                billingState: String?, rateSource: String?) {
+                billingState: String?, rateSource: String?,
+                hourlyRateCents: Int? = nil) {
         self.id = id
         self.startedAt = startedAt
         self.projectName = projectName
@@ -41,6 +50,7 @@ public struct FieldHourRow: Identifiable, Equatable, Sendable {
         self.billable = billable
         self.billingState = billingState
         self.rateSource = rateSource
+        self.hourlyRateCents = hourlyRateCents
     }
 }
 
@@ -93,11 +103,29 @@ public enum FieldHoursWeek {
     /// What the hour is worth, in words she can act on. HT-26: "rate pending" is
     /// printed rather than left blank, because a blank made "legitimately
     /// non-billable" and "this hire has no rate" look identical.
+    ///
+    /// R3-m2 (integration round 3) — this mirrors the desk's `timeRateProvenance`
+    /// (`authority-hours.ts`), which keys on the RATE VALUE first, not on
+    /// `rate_source`. A NULL `rate_source` is a pre-00600 row of unknown
+    /// provenance, and it is not the same fact as `'none'`:
+    ///
+    ///   · a rate, whatever the source   → "Billable" / "Awaiting authorization"
+    ///   · `rate_source = 'none'`        → "Rate pending"   (the resolver looked
+    ///                                      and found no card)
+    ///   · NULL source and no rate       → "Rate not recorded"  (nobody ever
+    ///                                      looked; a legacy row)
+    ///
+    /// Before this, a NULL-source row fell straight through to "Billable" — a
+    /// promise of money on an hour nothing had priced.
     public static func worthLabel(_ row: FieldHourRow) -> String {
         guard row.billable else { return "Not billable" }
+        let priced = (row.hourlyRateCents ?? 0) > 0
+        if priced {
+            if row.billingState == "pending_authorization" { return "Awaiting authorization" }
+            return "Billable"
+        }
         if row.rateSource == "none" { return "Rate pending" }
-        if row.billingState == "pending_authorization" { return "Awaiting authorization" }
-        return "Billable"
+        return "Rate not recorded"
     }
 
     /// "Drive" / "Activity not set" — HT-24, never a silent "Design".
