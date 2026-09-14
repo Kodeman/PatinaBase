@@ -1061,6 +1061,11 @@ REVOKE ALL ON FUNCTION public.guard_studio_member_rate_insert()
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- HT-3-g(1) at the INSERT stamp — ONE of the rule's two remaining homes.
+-- MS-02 (integration round 1): this body also carries 00603's designer-domain
+-- gate — the tier rule binds only a lead who holds a designer-domain role, which
+-- is 00511's own condition for auto-deriving a studio. 00603 added it; this file
+-- is the head body and so must not drop it. See the guard for the measurement.
+--
 -- Lineage (set_project_studio_id_owned): 00602 → 00603 → 00615. 00603:190-262's
 -- body — it is the grep winner
 -- (`CREATE OR REPLACE FUNCTION[^(]*set_project_studio_id_owned` over
@@ -1104,6 +1109,29 @@ DECLARE
     COALESCE(current_setting('app.project_studio_id_named', true), '1') <> '0';
 BEGIN
   IF NEW.designer_id IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  -- MS-02 (integration round 1), carried from 00603: the tier rule binds only a
+  -- lead who holds a DESIGNER-DOMAIN role — 00511's own condition, verbatim
+  -- (`public.has_designer_domain_role`, 00511:2266, which 00511's own derivation
+  -- and 00563:234/:265 both ask). Without it this stamp applied HT-3-b to every
+  -- INSERT carrying any non-NULL designer_id and stamped a studio where
+  -- set_project_studio_id deliberately refuses to guess one. Measured with a
+  -- negative control on the isolated stack: a super_admin (domain 'admin')
+  -- holding an ADMIN seat in one active design_studio inserted a project with
+  -- studio_id unnamed and came back stamped; with
+  -- zzz_set_project_studio_id_owned_trg disabled in the same transaction, NULL —
+  -- which is what supabase/tests/edge_api/public_rpc_authorization_contract_test
+  -- .sql:161-171 pins ('00511 must not auto-derive a studio for a non-designer
+  -- lead') and what broke that whole file 362 lines before W2's own 'Team can
+  -- view their project time entries' coverage at :533-546. Stamping such a lead's
+  -- studio also hands that studio's owner/admin read+write on the project's hours
+  -- (time_entries_owner_admin_*), project_hours_total's third leg, 00604's ledger
+  -- studio_id and the audit row's organization_id — all keyed on a column 00511
+  -- decided was not theirs. The contract assertion was not moved and not
+  -- allowlisted.
+  IF NOT public.has_designer_domain_role(NEW.designer_id) THEN
     RETURN NEW;
   END IF;
 
@@ -1228,6 +1256,13 @@ BEGIN
   -- supabase/tests/billing/legacy_project_studio_stamp_test.sql and (e), (w), (x),
   -- (y), (z) of supabase/tests/rls/time_entry_studio_stamp_test.sql measure the
   -- behaviour.
+
+  -- ── MS-02: the stamp binds only a designer-domain lead ────────────────────
+  ASSERT v_stamp LIKE '%has_designer_domain_role(new.designer_id)%',
+    '00615: the stamp must ask public.has_designer_domain_role(NEW.designer_id) '
+    'before any tier is read (MS-02, carried from 00603). Without it HT-3-b stamps '
+    'a studio for a lead 00511''s set_project_studio_id deliberately refuses to '
+    'guess one for, and public_rpc_authorization_contract_test.sql:161-171 fails';
 
   -- ── HT-3-g(1): NO BODY THAT PRICES AN HOUR DERIVES A STUDIO ───────────────
   -- The two hour-pricing bodies are the resolver (which returns the number) and

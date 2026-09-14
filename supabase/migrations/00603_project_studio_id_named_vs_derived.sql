@@ -133,8 +133,18 @@
 -- number when the project's designer holds no employer seat, and, on the
 -- activation path, even when the designer holds one.
 --
+-- ── MS-02 (integration round 1): ONLY A DESIGNER-DOMAIN LEAD ───────────────
+-- The tier rule now asks `public.has_designer_domain_role(NEW.designer_id)`
+-- first — 00511's own condition for auto-deriving a studio. Without it this file
+-- stamped a studio for any lead at all, including one 00511's
+-- `set_project_studio_id` deliberately leaves NULL, and broke
+-- supabase/tests/edge_api/public_rpc_authorization_contract_test.sql:161-171 at
+-- its 11th statement, 362 lines before W2's own 'Team can view their project
+-- time entries' coverage in the same file. The measurement and the consequences
+-- are on the guard itself, below. The contract assertion was not moved.
+--
 -- Lineage: `set_project_studio_id_owned` 00602 → 00603 (body grafted from 00602
--- verbatim, one arm added). `record_project_studio_id_named` is new. Nothing else
+-- verbatim, one arm added, plus the MS-02 designer-domain gate). `record_project_studio_id_named` is new. Nothing else
 -- is redefined — in particular NOT `set_project_studio_id` (head 00563) and NOT
 -- `activate_proposal_as_project` (head 00579).
 --
@@ -209,6 +219,29 @@ BEGIN
     RETURN NEW;
   END IF;
 
+  -- MS-01/MS-02 (integration round 1): the tier rule binds only a lead who holds
+  -- a DESIGNER-DOMAIN role — 00511's own condition, verbatim
+  -- (`public.has_designer_domain_role(NEW.designer_id)`, 00511:2266, used at
+  -- 00511's own derivation and again at 00563:234 and 00563:265). Without it this
+  -- file applied HT-3-b to every INSERT carrying any non-NULL designer_id and so
+  -- stamped a studio where set_project_studio_id deliberately refuses to guess
+  -- one. Measured with a negative control on the isolated stack: a super_admin
+  -- (domain 'admin') holding an ADMIN seat in one active design_studio inserted a
+  -- project with studio_id unnamed and came back stamped
+  -- c9990000-…-0010; with zzz_set_project_studio_id_owned_trg disabled in the
+  -- same transaction, NULL — which is what
+  -- supabase/tests/edge_api/public_rpc_authorization_contract_test.sql:161-171
+  -- pins ('00511 must not auto-derive a studio for a non-designer lead') and what
+  -- broke that whole file 362 lines before W2's own 'Team can view their project
+  -- time entries' coverage at :533-546. Stamping such a lead's studio also hands
+  -- that studio's owner/admin read+write on the project's hours
+  -- (time_entries_owner_admin_*), project_hours_total's third leg, 00604's ledger
+  -- studio_id and the audit row's organization_id — all keyed on a column 00511
+  -- decided was not theirs. The assertion was NOT moved and NOT allowlisted.
+  IF NOT public.has_designer_domain_role(NEW.designer_id) THEN
+    RETURN NEW;
+  END IF;
+
   -- HT-3-c arm (a): a studio the caller NAMED is final, even when she owns it.
   IF NEW.studio_id IS NOT NULL AND v_caller_named THEN
     RETURN NEW;
@@ -272,7 +305,9 @@ REVOKE ALL ON FUNCTION public.set_project_studio_id_owned()
   FROM PUBLIC, anon, authenticated, service_role;
 
 COMMENT ON FUNCTION public.set_project_studio_id_owned() IS
-  'HT-3-a + HT-3-b + HT-3-c: on INSERT, stamp the lead designer''s one EMPLOYER '
+  'HT-3-a + HT-3-b + HT-3-c: on INSERT, and ONLY for a lead who holds a '
+  'designer-domain role (00511''s own condition — a non-designer lead is never '
+  'auto-derived a studio), stamp the lead designer''s one EMPLOYER '
   'studio (active, non-guest seat with role <> ''owner'' in an active '
   'design_studio) or, if she has no employer seat at all AND no rule filled the '
   'column, her one OWNED studio. A studio the CALLER named is left alone '
@@ -365,6 +400,13 @@ BEGIN
        !~ 'NEW\.studio_id IS NOT NULL AND v_caller_named[\s\S]{0,80}RETURN NEW'
   THEN
     RAISE EXCEPTION '00603: a studio the CALLER named must end the function before any tier is read (HT-3-c arm (a), case (ac))';
+  END IF;
+
+  -- ── MS-02: the tier rule binds only a designer-domain lead ───────────────
+  IF pg_get_functiondef('public.set_project_studio_id_owned()'::regprocedure)
+       !~ 'has_designer_domain_role\(NEW\.designer_id\)'
+  THEN
+    RAISE EXCEPTION '00603: the stamp must ask public.has_designer_domain_role(NEW.designer_id) before any tier is read — without it HT-3-b stamps a studio for a lead 00511 deliberately refuses to guess one for (MS-02)';
   END IF;
 
   -- ── HT-3-b: the same two tiers 00599's step 2 applies, in the same order ──

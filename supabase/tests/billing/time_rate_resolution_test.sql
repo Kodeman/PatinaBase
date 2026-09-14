@@ -334,6 +334,36 @@ END;
 $$ LANGUAGE plpgsql;
 GRANT EXECUTE ON FUNCTION pg_temp.reset_role() TO PUBLIC;
 
+-- ─── MS-02 (integration round 1): a project LEAD holds a designer-domain role ─
+-- `set_project_studio_id_owned` now asks
+-- `public.has_designer_domain_role(NEW.designer_id)` before applying HT-3-b's
+-- tiers — 00511:2266's own condition, the one 00563:234/:265 already ask, and the
+-- one public_rpc_authorization_contract_test.sql:161-171 pins. This file used to
+-- model a designer with `is_designer` ALONE, so under the repaired stamp every
+-- project it creates stayed studio_id NULL and cases (a) onward measured an
+-- unpriced hour. The grants below make each lead production-shaped.
+--
+-- TWO FORMS, because the grant is not inert: `sync_is_designer_from_role` flips
+-- profiles.is_designer, which fires 00295's `provision_studio_on_designer` — and
+-- that provisions a workspace ONLY for a user who holds no membership at all.
+--   · Where the lead is already seated, a plain INSERT is enough: 00295 early-exits
+--     and her tiers are untouched.
+--   · Where the case's whole point is an EMPTY tier (a designer who is in no studio
+--     at all), the workspace would FILL that tier and the case would stop measuring
+--     what it names. `pg_temp.grant_designer_role_no_workspace` grants the role with
+--     00295's trigger held off for exactly that statement, so the fixture keeps the
+--     standing it describes.
+CREATE OR REPLACE FUNCTION pg_temp.grant_designer_role_no_workspace(p_user_id UUID)
+RETURNS VOID AS $$
+BEGIN
+  ALTER TABLE public.profiles DISABLE TRIGGER provision_studio_on_designer;
+  INSERT INTO public.user_roles (user_id, role_id)
+  SELECT p_user_id, id FROM public.roles WHERE name = 'studio_designer'
+  ON CONFLICT DO NOTHING;
+  ALTER TABLE public.profiles ENABLE TRIGGER provision_studio_on_designer;
+END;
+$$ LANGUAGE plpgsql;
+
 -- ─── fixtures (as postgres: the guards return early for this role) ─────────
 INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, instance_id, aud, role)
 VALUES
@@ -368,6 +398,19 @@ VALUES
   -- designer leg under test would never be exercised. The stranger (…004) is in
   -- NO organization at all.
   ('b1100000-0000-4000-8000-0000000000c5', 'b1100000-0000-4000-8000-000000000005', 'b1100000-0000-4000-8000-0000000000a1', 'member', 'active', NOW());
+
+-- MS-02 (integration round 1) — the two project LEADS hold a designer-domain
+-- role, which is what production gives them: set_project_studio_id (00511:2266 →
+-- 00563:234/:265) already refuses to derive a studio for a lead without one, and
+-- set_project_studio_id_owned now asks the same question before applying HT-3-b's
+-- tiers. Without these grants every project below stayed studio_id NULL and cases
+-- (a)-(h) silently measured an unpriced hour. Granted AFTER the seats above, so
+-- 00295's early exit leaves neither of them owning an extra workspace — the same
+-- ordering the (aa)/(ae) fixtures further down rely on and narrate.
+INSERT INTO public.user_roles (user_id, role_id)
+SELECT 'b1100000-0000-4000-8000-000000000001', id FROM public.roles WHERE name = 'studio_owner';
+INSERT INTO public.user_roles (user_id, role_id)
+SELECT 'b1100000-0000-4000-8000-000000000005', id FROM public.roles WHERE name = 'studio_designer';
 
 -- P1 plain (non-services) · P2 services, no card for the hire's role ·
 -- P3 services, cards named for both of the two-hat member's roles.
@@ -1089,6 +1132,19 @@ ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name, is_designer = fal
 UPDATE public.profiles SET is_designer = true
  WHERE id = 'b1100000-0000-4000-8000-000000000006';
 
+-- MS-02 (integration round 1) — and the designer-domain ROLE grant that goes with
+-- the flip in production. `set_project_studio_id_owned` now asks
+-- `public.has_designer_domain_role(NEW.designer_id)` before applying HT-3-b's
+-- tiers, which is 00511:2266's own condition and the one 00563:234/:265 already
+-- ask; a fixture that models a designer with `is_designer` ALONE left every
+-- project below stamped with NULL. Placed AFTER the flip on purpose: 00295 has
+-- already provisioned her workspace, so the grant re-fires it into its early exit
+-- and she gains no second studio. Repeated at each flip in this file, with this
+-- note only here.
+INSERT INTO public.user_roles (user_id, role_id)
+SELECT 'b1100000-0000-4000-8000-000000000006', id FROM public.roles WHERE name = 'studio_designer'
+ON CONFLICT DO NOTHING;
+
 -- …and then the studio that actually pays her, which she owns.
 INSERT INTO public.organizations (id, type, name, slug, status)
 VALUES ('b1100000-0000-4000-8000-0000000000a2', 'design_studio', 'Paying Studio', 'rate-paying-studio-test', 'active');
@@ -1332,6 +1388,12 @@ ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name, is_designer = fal
 UPDATE public.profiles SET is_designer = true
  WHERE id = 'b1100000-0000-4000-8000-000000000007';
 
+-- MS-02: the designer-domain role that goes with the flip (see the note at the
+-- first flip in this file).
+INSERT INTO public.user_roles (user_id, role_id)
+SELECT 'b1100000-0000-4000-8000-000000000007', id FROM public.roles WHERE name = 'studio_designer'
+ON CONFLICT DO NOTHING;
+
 -- …and only then does she join the studio that employs her — as a plain member.
 INSERT INTO public.organization_members (id, user_id, organization_id, role, status, joined_at)
 VALUES ('b1100000-0000-4000-8000-0000000000c7', 'b1100000-0000-4000-8000-000000000007',
@@ -1561,6 +1623,12 @@ ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name, is_designer = fal
 UPDATE public.profiles SET is_designer = true
  WHERE id = 'b1100000-0000-4000-8000-000000000008';
 
+-- MS-02: the designer-domain role that goes with the flip (see the note at the
+-- first flip in this file).
+INSERT INTO public.user_roles (user_id, role_id)
+SELECT 'b1100000-0000-4000-8000-000000000008', id FROM public.roles WHERE name = 'studio_designer'
+ON CONFLICT DO NOTHING;
+
 -- …and only then does she join the studio that employs her, as a plain member.
 INSERT INTO public.organization_members (id, user_id, organization_id, role, status, joined_at)
 VALUES ('b1100000-0000-4000-8000-0000000000c8', 'b1100000-0000-4000-8000-000000000008',
@@ -1670,6 +1738,12 @@ ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name, is_designer = fal
 
 UPDATE public.profiles SET is_designer = true
  WHERE id = 'b1100000-0000-4000-8000-00000000000a';
+
+-- MS-02: the designer-domain role that goes with the flip (see the note at the
+-- first flip in this file).
+INSERT INTO public.user_roles (user_id, role_id)
+SELECT 'b1100000-0000-4000-8000-00000000000a', id FROM public.roles WHERE name = 'studio_designer'
+ON CONFLICT DO NOTHING;
 
 -- She joins the multi-member studio that never prices her.
 INSERT INTO public.organization_members (id, user_id, organization_id, role, status, joined_at)
@@ -1818,6 +1892,12 @@ ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name, is_designer = fal
 UPDATE public.profiles SET is_designer = true
  WHERE id = 'b1100000-0000-4000-8000-000000005001';
 
+-- MS-02: the designer-domain role that goes with the flip (see the note at the
+-- first flip in this file).
+INSERT INTO public.user_roles (user_id, role_id)
+SELECT 'b1100000-0000-4000-8000-000000005001', id FROM public.roles WHERE name = 'studio_designer'
+ON CONFLICT DO NOTHING;
+
 INSERT INTO public.organization_members (id, user_id, organization_id, role, status, joined_at)
 VALUES ('b1100000-0000-4000-8000-0000000050c1', 'b1100000-0000-4000-8000-000000005001',
         'b1100000-0000-4000-8000-0000000000a1', 'member', 'active', NOW());
@@ -1957,6 +2037,12 @@ ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name, is_designer = fal
 
 UPDATE public.profiles SET is_designer = true
  WHERE id = 'b1100000-0000-4000-8000-000000005003';
+
+-- MS-02: the designer-domain role that goes with the flip (see the note at the
+-- first flip in this file).
+INSERT INTO public.user_roles (user_id, role_id)
+SELECT 'b1100000-0000-4000-8000-000000005003', id FROM public.roles WHERE name = 'studio_designer'
+ON CONFLICT DO NOTHING;
 
 INSERT INTO public.organization_members (id, user_id, organization_id, role, status, joined_at)
 VALUES ('b1100000-0000-4000-8000-0000000050c3', 'b1100000-0000-4000-8000-000000005003',
@@ -2173,6 +2259,12 @@ ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name, is_designer = fal
 UPDATE public.profiles SET is_designer = true
  WHERE id = 'b1100000-0000-4000-8000-000000005006';
 
+-- MS-02: the designer-domain role that goes with the flip (see the note at the
+-- first flip in this file).
+INSERT INTO public.user_roles (user_id, role_id)
+SELECT 'b1100000-0000-4000-8000-000000005006', id FROM public.roles WHERE name = 'studio_designer'
+ON CONFLICT DO NOTHING;
+
 INSERT INTO public.organizations (id, type, name, slug, status)
 VALUES ('b1100000-0000-4000-8000-0000000050a3', 'design_studio', 'R5 Real Studio', 'r5-real-studio', 'active');
 
@@ -2380,6 +2472,15 @@ ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name, is_designer = fal
 UPDATE public.profiles SET is_designer = true
  WHERE id IN ('b1100000-0000-4000-8000-000000006001', 'b1100000-0000-4000-8000-000000006002');
 
+-- MS-02: the designer-domain role that goes with the flip (see the note at the
+-- first flip in this file).
+INSERT INTO public.user_roles (user_id, role_id)
+SELECT 'b1100000-0000-4000-8000-000000006001', id FROM public.roles WHERE name = 'studio_designer'
+ON CONFLICT DO NOTHING;
+INSERT INTO public.user_roles (user_id, role_id)
+SELECT 'b1100000-0000-4000-8000-000000006002', id FROM public.roles WHERE name = 'studio_designer'
+ON CONFLICT DO NOTHING;
+
 -- The studio that really employs her, two years old, with its own owner.
 INSERT INTO public.organizations (id, type, name, slug, status, created_at, updated_at)
 VALUES ('b1100000-0000-4000-8000-0000000060a1', 'design_studio', 'R6 Employing Studio',
@@ -2391,6 +2492,13 @@ VALUES
    'b1100000-0000-4000-8000-0000000060a1', 'owner',  'active', NOW() - INTERVAL '2 years'),
   ('b1100000-0000-4000-8000-0000000060c1', 'b1100000-0000-4000-8000-000000006001',
    'b1100000-0000-4000-8000-0000000060a1', 'member', 'active', NOW() - INTERVAL '1 year');
+
+-- MS-02: the employing studio's OWNER is a project lead below (Employer House), so
+-- he holds a designer-domain role too. Granted AFTER his seat, so 00295's early
+-- exit gives him no extra workspace and the tiers below are untouched.
+INSERT INTO public.user_roles (user_id, role_id)
+SELECT 'b1100000-0000-4000-8000-000000006003', id FROM public.roles WHERE name = 'studio_owner'
+ON CONFLICT DO NOTHING;
 
 -- The employing studio's own project (its owner is the lead designer, so 00602
 -- stamps the studio) and the subject's own project.
@@ -2594,10 +2702,9 @@ BEGIN
 
   -- (x5) The repair, in the wronged party's own hand (HT-3-g(3)).
   -- 00563's fail-closed check (00563:352-362) asks the LEAD DESIGNER for the
-  -- designer DOMAIN role, and this fixture never granted one because nothing in it
-  -- used to write projects.studio_id AFTER insert. The stamp does, so she is given
-  -- the grant the product gives her. It is not a pricing key and moves nothing
-  -- above: her seats, her rates and the three projects' columns are already settled.
+  -- designer DOMAIN role. MS-02 now grants it at the flip above (the INSERT stamp
+  -- asks the same question), so this statement is a no-op kept for the record: it
+  -- is not a pricing key and moves nothing above.
   INSERT INTO public.user_roles (user_id, role_id)
   SELECT 'b1100000-0000-4000-8000-000000006001', id FROM public.roles
    WHERE name = 'studio_designer'
@@ -2684,6 +2791,18 @@ VALUES
   ('b1100000-0000-4000-8000-0000000080c3', 'b1100000-0000-4000-8000-000000008003',
    'b1100000-0000-4000-8000-0000000080a1', 'member', 'active', NOW());
 
+-- MS-02: the three leads below hold the designer-domain role the stamp now asks
+-- for. 8001 and 8003 are already seated, so 00295 early-exits for them; 8002 is
+-- the case's "designer who owns no studio", and a workspace would give her an
+-- OWNED tier of one and stamp the very project y2 requires to stay NULL.
+INSERT INTO public.user_roles (user_id, role_id)
+SELECT 'b1100000-0000-4000-8000-000000008001', id FROM public.roles WHERE name = 'studio_owner'
+ON CONFLICT DO NOTHING;
+INSERT INTO public.user_roles (user_id, role_id)
+SELECT 'b1100000-0000-4000-8000-000000008003', id FROM public.roles WHERE name = 'studio_designer'
+ON CONFLICT DO NOTHING;
+SELECT pg_temp.grant_designer_role_no_workspace('b1100000-0000-4000-8000-000000008002');
+
 INSERT INTO public.projects (id, name, designer_id, created_by)
 VALUES
   ('b1100000-0000-4000-8000-0000000080e1', 'R8 Owner House',   'b1100000-0000-4000-8000-000000008001', 'b1100000-0000-4000-8000-000000008001'),
@@ -2722,12 +2841,32 @@ BEGIN
 
   -- P-4: the stamp is INSERT-only. An existing project is never re-pointed, which is
   -- also what lets the cases above clear a stamp to exercise step 2.
-  UPDATE public.projects SET studio_id = NULL
-   WHERE id = 'b1100000-0000-4000-8000-0000000080e1';
-  ASSERT (SELECT studio_id FROM public.projects
-           WHERE id = 'b1100000-0000-4000-8000-0000000080e1') IS NULL,
-    'FAIL y4 (P-4): the stamp must not fire on UPDATE — an existing project''s studio is history, '
-    'not something this program rewrites';
+  --
+  -- MS-02 (integration round 1) moved this from behaviour to the CATALOG, and the
+  -- reason is worth stating. The old form cleared 80e1's studio_id and asserted the
+  -- column stayed NULL. That only held because the fixture's lead held no
+  -- designer-domain role: `set_project_studio_id` (00511 → 00563) DOES fire on
+  -- UPDATE and re-derives a NULL studio_id for a designer-domain lead in exactly
+  -- one studio. Now that this file's leads are production-shaped (they hold the
+  -- role the stamp asks for), the clear is refilled by 00511's own trigger — which
+  -- is 00511's behaviour and not this program's, and which the old assertion would
+  -- have blamed on 00602. The event mask is the honest statement of "INSERT only",
+  -- and it is the same assertion 00603's own postcondition makes.
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM pg_trigger
+    WHERE tgrelid = 'public.projects'::regclass
+      AND tgname = 'zzz_set_project_studio_id_owned_trg'
+      AND (tgtype & 16) <> 0          -- 16 = UPDATE
+  ), 'FAIL y4 (P-4): the stamp must not fire on UPDATE — an existing project''s studio is history, '
+     'not something this program rewrites';
+  ASSERT EXISTS (
+    SELECT 1 FROM pg_trigger
+    WHERE tgrelid = 'public.projects'::regclass
+      AND tgname = 'zzz_set_project_studio_id_owned_trg'
+      AND (tgtype & 4) <> 0           -- 4 = INSERT
+      AND (tgtype & 1) <> 0           -- 1 = ROW
+      AND (tgtype & 2) <> 0           -- 2 = BEFORE
+  ), 'FAIL y4b: the stamp must be BEFORE INSERT FOR EACH ROW';
 
   -- The ordering that keeps 00563's fail-closed refusals reachable, read from
   -- pg_trigger rather than compared as two literals (W1-R7-07).
@@ -4649,6 +4788,18 @@ UPDATE public.profiles SET is_designer = true
  WHERE id IN ('b1300000-0000-4000-8000-000000000001',
               'b1300000-0000-4000-8000-000000000002',
               'b1300000-0000-4000-8000-000000000003');
+
+-- MS-02: the designer-domain role that goes with the flip (see the note at the
+-- first flip in this file).
+INSERT INTO public.user_roles (user_id, role_id)
+SELECT 'b1300000-0000-4000-8000-000000000001', id FROM public.roles WHERE name = 'studio_designer'
+ON CONFLICT DO NOTHING;
+INSERT INTO public.user_roles (user_id, role_id)
+SELECT 'b1300000-0000-4000-8000-000000000002', id FROM public.roles WHERE name = 'studio_designer'
+ON CONFLICT DO NOTHING;
+INSERT INTO public.user_roles (user_id, role_id)
+SELECT 'b1300000-0000-4000-8000-000000000003', id FROM public.roles WHERE name = 'studio_designer'
+ON CONFLICT DO NOTHING;
 
 INSERT INTO public.projects (id, name, designer_id, created_by)
 VALUES
