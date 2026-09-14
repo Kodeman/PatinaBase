@@ -168,11 +168,16 @@ describe("merge_studio_contacts (PR-o)", () => {
     expect(asMergeError(new Error("merge_contact_rule_conflict"))).toMatch(
       /blocked or routed elsewhere/,
     );
+    // r5 M-4 — the survivor is a card the studio put away.
+    expect(asMergeError(new Error("merge_survivor_archived"))).toMatch(
+      /put it back on the shelf first/i,
+    );
     // and no refusal reaches a face as its own token
     for (const token of [
       "merge_two_logins",
       "merge_contact_rule_conflict",
       "merge_kind_mismatch",
+      "merge_survivor_archived",
     ]) {
       expect(asMergeError(new Error(token))).not.toContain(token);
     }

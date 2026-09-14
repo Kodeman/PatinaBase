@@ -376,10 +376,22 @@ export function useCreateClientHousehold() {
 /**
  * PR-n — the change-order figure, and who may write it.
  *
- * The UPDATE's WITH CHECK refuses any row leaving with a non-null
- * `co_threshold_cents` unless the caller is an owner or an admin of the
- * studio. The refusal arrives as an RLS rejection; it is rendered as the
- * principal sentence rather than a Postgres string.
+ * r5 M-1 — AND THE SEATS THE FIGURE ALREADY AUTHORISED. This was a bare
+ * `.update({ co_threshold_cents })` on `client_households`, and
+ * `add_household_member()` writes a `client_rep` seat's open `money` grant
+ * from that same figure with `source_clause =
+ * 'client_households.co_threshold_cents'`. Nothing re-wrote the grant, and the
+ * band's member flow is an ADD, so a household whose member was already seated
+ * had no repair act at all: raise the household to $5,000 and one Call Sheet
+ * screen printed "Change orders over $5,000 need a signature from the
+ * household." beside that seat's "Signs money to $2,500.", with the seat's own
+ * source_clause naming the household as the source of a figure it no longer
+ * held.
+ *
+ * So the write goes through `set_household_threshold()`, which moves the
+ * figure and the grants it sourced in one transaction, refuses by name where
+ * PR-n's standing is missing on either, and closes those grants where the
+ * figure is taken away.
  */
 export function useSetHouseholdThreshold() {
   const queryClient = useQueryClient();
@@ -389,17 +401,15 @@ export function useSetHouseholdThreshold() {
     ): Promise<ClientHousehold> => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
-      const { data, error } = await supabase
-        .from("client_households")
-        .update({ co_threshold_cents: input.coThresholdCents })
-        .eq("id", input.id)
-        .select("*")
-        .maybeSingle();
+      const { data, error } = await supabase.rpc("set_household_threshold", {
+        p_household_id: input.id,
+        p_threshold_cents: input.coThresholdCents,
+      });
       if (error) throw new Error(asHouseholdError(error));
       if (!data) {
-        // Zero rows back from an UPDATE the caller can SELECT is the WITH
-        // CHECK refusing the figure, not a missing row.
-        throw new Error(HOUSEHOLD_REFUSAL_SENTENCES.household_grant_forbidden);
+        throw new Error(
+          HOUSEHOLD_REFUSAL_SENTENCES.household_threshold_forbidden,
+        );
       }
       return data as ClientHousehold;
     },
@@ -411,6 +421,12 @@ export function useSetHouseholdThreshold() {
       void queryClient.invalidateQueries({
         queryKey: ["client-households", "project"],
       });
+      // The grants moved with the figure, so every reader of a seat's
+      // authority is stale — the roster row's "Signs money to …" phrase, the
+      // Call Sheet's seat lines, and the band's own clientSideHasAuthority.
+      void queryClient.invalidateQueries({ queryKey: partyAuthorityKeys.all });
+      void queryClient.invalidateQueries({ queryKey: peopleSeatKeys.all });
+      void queryClient.invalidateQueries({ queryKey: peopleKeys.all });
     },
   });
 }

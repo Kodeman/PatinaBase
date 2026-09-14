@@ -25038,6 +25038,7 @@ export type Database = {
       studio_compliance_notices: {
         Row: {
           document_id: string
+          expires_on: string
           id: string
           noticed_at: string
           organization_id: string
@@ -25045,6 +25046,7 @@ export type Database = {
         }
         Insert: {
           document_id: string
+          expires_on: string
           id?: string
           noticed_at?: string
           organization_id: string
@@ -25052,6 +25054,7 @@ export type Database = {
         }
         Update: {
           document_id?: string
+          expires_on?: string
           id?: string
           noticed_at?: string
           organization_id?: string
@@ -37149,6 +37152,27 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "feedback"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      set_household_threshold: {
+        Args: { p_household_id: string; p_threshold_cents: number }
+        Returns: {
+          co_threshold_cents: number | null
+          created_at: string
+          created_by: string | null
+          designer_id: string
+          display_name: string
+          id: string
+          member_person_ids: string[]
+          organization_id: string
+          primary_member_person_id: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "client_households"
           isOneToOne: true
           isSetofReturn: false
         }

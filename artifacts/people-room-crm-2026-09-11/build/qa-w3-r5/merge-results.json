@@ -1,0 +1,24 @@
+{
+  "olderId": "f941e6ef-b03d-46f9-8658-920795abac88",
+  "newerId": "b48b48f9-e2a4-4a49-b384-f83a1d788a38",
+  "bandText": "These two cards share a phone. W. Ashby QAR5 ic6l1 Wren Ashby QAR5 ic6l1 COMPARE THESE TWO",
+  "survivorPrePicked": "true",
+  "survivorAfterFlip": "true",
+  "survivorAfterFlipBack": "true",
+  "consequenceSentence": "W. Ashby QAR5 ic6l1’s seats, channels, contact rule and firm designations move onto Wren Ashby QAR5 ic6l1, and W. Ashby QAR5 ic6l1’s own number and address travel with them. Consent stays with the number, not with the card, so nobody’s yes or no changes. W. Ashby QAR5 ic6l1’s paper moves onto Wren Ashby QAR5 ic6l1 too; where Wren Ashby QAR5 ic6l1 already holds the same paper, still in force, the older one is marked superseded. W. Ashby QAR5 ic6l1’s card is kept as a record of the merge, so an old link still opens this person.",
+  "announcer": "Two cards are now one. Wren Ashby QAR5 ic6l1 carries everything W. Ashby QAR5 ic6l1 held.",
+  "mergeRow": {
+    "survivor_id": "f941e6ef-b03d-46f9-8658-920795abac88",
+    "merged_id": "b48b48f9-e2a4-4a49-b384-f83a1d788a38",
+    "matched_on": "phone"
+  },
+  "mergedCard": {
+    "id": "b48b48f9-e2a4-4a49-b384-f83a1d788a38",
+    "merged_into": "f941e6ef-b03d-46f9-8658-920795abac88",
+    "archived_at": null
+  },
+  "resolved": "f941e6ef-b03d-46f9-8658-920795abac88",
+  "resolveErr": null,
+  "deepLinkUrlAfter": "http://localhost:3000/people?person=f941e6ef-b03d-46f9-8658-920795abac88",
+  "cleanedUp": true
+}

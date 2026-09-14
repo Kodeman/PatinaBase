@@ -159,6 +159,82 @@ describe("CompareMergeSheet", () => {
     expect(screen.getByText("chidi@okonkwo.example")).toBeInTheDocument();
   });
 
+  /**
+   * r5 B-1 — the studio's choice of survivor decides which of two typed
+   * values the room keeps (00629 COALESCEs the survivor's own over the
+   * absorbed card's), and the table printed none of them. It prints them now,
+   * and only where a card actually holds one — the nine rows above are still
+   * the whole table for two thin duplicate cards.
+   */
+  it("prints the typed facts a merge decides, where either card holds one", () => {
+    cards["card-chidi"] = {
+      ...NEWER,
+      studio_verdict: "Good crew. Slow to send paper.",
+      trades: ["framing"],
+      specialties: ["millwork"],
+      notes: "Ask for Pete, not the office.",
+      legal_name: "Ostrom Builders LLC",
+      dba_name: "Ostrom",
+      remit_to: "PO Box 44, Minneapolis MN",
+      retainage_bps: 1000,
+      tax_id_last4: "4417",
+      w9_on_file_at: "2026-08-15",
+      warranty_until: "2027-09-14",
+    };
+    render(<CompareMergeSheet {...props} />);
+    const fields = Array.from(
+      document.querySelectorAll("[data-compare-field]"),
+    ).map((el) => el.getAttribute("data-compare-field"));
+    expect(fields).toEqual([
+      "Name",
+      "What they are",
+      "Firm",
+      "Mobile",
+      "Email",
+      "Contact rule",
+      "Papers on file",
+      "Seats on jobs",
+      "In the book since",
+      "Verdict",
+      "Trades",
+      "Specialties",
+      "Notes",
+      "Legal name",
+      "Trading as",
+      "Remit-to",
+      "Retainage",
+      "Tax ID",
+      "W-9 on file",
+      "Warranty until",
+    ]);
+    expect(
+      screen.getByText("Good crew. Slow to send paper."),
+    ).toBeInTheDocument();
+    expect(screen.getByText("PO Box 44, Minneapolis MN")).toBeInTheDocument();
+    expect(screen.getByText("10%")).toBeInTheDocument();
+    expect(screen.getByText("14 September 2027")).toBeInTheDocument();
+  });
+
+  /**
+   * r5 M-4 — 00629 refuses a merge onto a card the studio put away, because
+   * every channel, document, seat and login would land where the rolodex read
+   * (`includeArchived: false`) cannot reach them. The column head said only
+   * "Keeps the card", so the studio could not see it coming.
+   */
+  it("marks a column whose card has been put away", () => {
+    cards["card-adaeze"] = {
+      ...OLDER,
+      archived_at: "2026-05-01T00:00:00.000Z",
+    };
+    render(<CompareMergeSheet {...props} />);
+    expect(
+      document.querySelector("[data-survivor-archived=\"card-adaeze\"]"),
+    ).not.toBeNull();
+    expect(
+      document.querySelector("[data-survivor-archived=\"card-chidi\"]"),
+    ).toBeNull();
+  });
+
   it("pre-picks the older card and lets the studio flip it (PR-o)", () => {
     render(<CompareMergeSheet {...props} />);
     const older = document.querySelector(
@@ -229,8 +305,13 @@ describe("CompareMergeSheet", () => {
       screen.getByRole("button", { name: "Merge into Adaeze Okonkwo" }),
     );
     await waitFor(() => expect(onMerged).toHaveBeenCalled());
+    // r5 B-1 — "carries everything" was a false fact on a face: the RPC moved
+    // profile_id and email and dropped the other thirteen typed columns. 00629
+    // carries them all now, COALESCEd, so the sentence names the rule the
+    // studio's own choice of survivor decides.
     expect(onMerged.mock.calls[0][0]).toBe(
-      "Two cards are now one. Adaeze Okonkwo carries everything Chidi Okonkwo held.",
+      "Two cards are now one. Adaeze Okonkwo carries what Chidi Okonkwo held, " +
+        "and where both cards said something, Adaeze Okonkwo\u2019s own words stand.",
     );
     expect(onMerged.mock.calls[0][1]).toBe("card-adaeze");
     expect(props.onClose).toHaveBeenCalled();

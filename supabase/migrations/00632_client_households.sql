@@ -434,3 +434,157 @@ COMMENT ON FUNCTION public.add_household_member(uuid, uuid, text, uuid) IS
   'is_studio_comember(designer_id) in the body, because SECURITY DEFINER '
   'bypasses the table''s RLS. Returns NULL when no project is named: the '
   'membership alone was the act (00632).';
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 4. set_household_threshold — the figure, AND the seats it already authorised
+-- ═══════════════════════════════════════════════════════════════════════════
+-- r5 M-1. add_household_member() writes the seat's open `money` row from
+-- co_threshold_cents and stamps `source_clause =
+-- 'client_households.co_threshold_cents'` on it. Nothing ever re-wrote it, and
+-- the only writer of the figure was a bare PostgREST update
+-- (useSetHouseholdThreshold) with no propagation. The band's "Set the figure"
+-- act is the room's one door onto it, and the member flow is an ADD, so a
+-- household whose member is already seated had no repair act at all.
+--
+-- Measured: the grant is written at 250000; the owner raises the household to
+-- 500000; the grant still reads 250000. On ONE Call Sheet screen the band then
+-- prints "Change orders over $5,000 need a signature from the household."
+-- while the client_rep's seat line prints "Signs money to $2,500." off
+-- project_party_authority — and that seat's source_clause names the household
+-- as the source of a figure the household no longer holds. It is the exact
+-- harm household-band.tsx's own banner already names ("two simultaneously-
+-- rendered, directly contradictory facts about the same household on one
+-- screen, with no act between them"), landing on the one fact PR-c and PR-n
+-- put under the principal.
+--
+-- So the figure is written through here, and the seats it sourced move with
+-- it. WHICH SEATS: every open `money` row whose source_clause still names the
+-- household, on a `client_rep` seat held by one of this household's members.
+-- A grant the studio re-sourced by hand (its own clause from the agreement)
+-- is NOT the household's to move, and the plain `client` seat never carried
+-- the figure in the first place (PR-c splits the spouses on exactly this).
+--
+-- PR-n TWICE, and refusing rather than skipping both times: once on the
+-- household's own org for the figure (the same narrowing
+-- client_households_studio_update's WITH CHECK and
+-- assert_household_threshold_principal() make), and once per seat on the
+-- studio the PROJECT RECORDS, which is the resolver
+-- project_party_authority's own policies use. A silent under- or over-grant
+-- is the failure 00624's COMMENT names, so a caller who may move the figure
+-- but not one of its grants gets the whole act refused.
+--
+-- ERASING THE FIGURE CLOSES THOSE GRANTS. NULL co_threshold_cents means the
+-- household names no figure; a money grant with a NULL threshold_cents reads
+-- "Signs money." with no cap (00624), so mirroring the NULL onto the seat
+-- would WIDEN unlimited signing authority out of an act that took a limit
+-- away. Leaving 250000 standing is the drift this fix exists to close. The
+-- third option is 00624's own shape for ending a delegation — "Delegations
+-- end (CS5-24). A delegation during travel is a row, not an edit" — so the
+-- row is closed with effective_to, the record of it stays, and PR-n's
+-- "the principal's to set, and the principal's to take away" is what the
+-- studio was already told.
+CREATE OR REPLACE FUNCTION public.set_household_threshold(
+  p_household_id    uuid,
+  p_threshold_cents integer
+)
+RETURNS public.client_households
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+DECLARE
+  v_h        public.client_households%ROWTYPE;
+  v_seat     record;
+  v_recorded uuid;
+BEGIN
+  SELECT * INTO v_h FROM public.client_households
+   WHERE id = p_household_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'household_not_found';
+  END IF;
+
+  -- SECURITY DEFINER bypasses the table's RLS, so both legs of the SELECT
+  -- policy are stated here or they are not stated at all.
+  IF NOT (public.is_active_studio_member(v_h.organization_id)
+          AND public.is_studio_comember(v_h.designer_id)) THEN
+    RAISE EXCEPTION 'household_not_found';
+  END IF;
+
+  IF NOT public.is_org_admin_or_owner(v_h.organization_id) THEN
+    RAISE EXCEPTION 'household_threshold_forbidden'
+      USING HINT = 'A change-order figure is the principal''s to set, and '
+                   'the principal''s to take away (PR-n).';
+  END IF;
+
+  -- Every open money grant this household is the stated source of. Read
+  -- BEFORE the figure moves, so the predicate is about the seats the OLD
+  -- figure authorised.
+  FOR v_seat IN
+    SELECT pa.id AS authority_id, pp.id AS seat_id
+      FROM public.project_parties pp
+      JOIN public.project_party_authority pa
+        ON pa.engagement_id = pp.id
+       AND pa.scope         = 'money'
+       AND pa.effective_to IS NULL
+     WHERE pp.party_kind        = 'client_rep'
+       AND pp.studio_contact_id = ANY (v_h.member_person_ids)
+       AND pa.source_clause     = 'client_households.co_threshold_cents'
+     ORDER BY pp.id
+  LOOP
+    v_recorded := public.project_party_recorded_studio(v_seat.seat_id);
+    IF v_recorded IS NULL THEN
+      RAISE EXCEPTION 'household_grant_project_has_no_studio'
+        USING HINT = 'One of this household''s seats is on a job that records '
+                     'no studio, so PR-n''s owner/admin narrowing on its money '
+                     'grant cannot be resolved. Give that job a studio first '
+                     '(R-BD).';
+    END IF;
+    IF NOT public.is_org_admin_or_owner(v_recorded) THEN
+      RAISE EXCEPTION 'household_grant_forbidden'
+        USING HINT = 'Only an owner or an admin of the studio may move a '
+                     'money authority (PR-n).';
+    END IF;
+
+    IF p_threshold_cents IS NULL THEN
+      UPDATE public.project_party_authority
+         SET effective_to = GREATEST(effective_from, CURRENT_DATE)
+       WHERE id = v_seat.authority_id;
+    ELSE
+      UPDATE public.project_party_authority
+         SET threshold_cents = p_threshold_cents,
+             granted_by      = COALESCE(auth.uid(), granted_by)
+       WHERE id = v_seat.authority_id;
+    END IF;
+  END LOOP;
+
+  UPDATE public.client_households
+     SET co_threshold_cents = p_threshold_cents
+   WHERE id = p_household_id
+  RETURNING * INTO v_h;
+
+  RETURN v_h;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.set_household_threshold(uuid, integer)
+  FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.set_household_threshold(uuid, integer)
+  TO authenticated, service_role;
+
+COMMENT ON FUNCTION public.set_household_threshold(uuid, integer) IS
+  'Writes client_households.co_threshold_cents AND moves every open `money` '
+  'grant the household is the stated source of — the `client_rep` seats of '
+  'its own members carrying source_clause = '
+  '''client_households.co_threshold_cents'' (r5 M-1). Without it the figure '
+  'and the seats it had already authorised drifted apart, and one Call Sheet '
+  'screen printed "Change orders over $5,000 need a signature from the '
+  'household." beside "Signs money to $2,500." with no act between them. A '
+  'grant the studio re-sourced by hand is left alone; the plain `client` '
+  'seat never carried the figure (PR-c). Gated on is_active_studio_member() '
+  'AND is_studio_comember() for the household and is_org_admin_or_owner() '
+  'for the figure (PR-n), then again per seat on the studio the PROJECT '
+  'records — refusing the whole act rather than half-moving the grants. '
+  'Erasing the figure CLOSES those grants with effective_to (00624''s own '
+  'shape for ending a delegation): a NULL threshold on a money grant reads '
+  '"Signs money." with no cap, so mirroring the NULL would widen authority '
+  'out of an act that took a limit away. Returns the household row (00632).';

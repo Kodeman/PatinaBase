@@ -1,0 +1,59 @@
+{
+  "tempPerson": {
+    "id": "1b1ac0a2-1b67-4c0a-b220-efbd2441b213",
+    "full_name": "QA R5 Household Member ilxns"
+  },
+  "tempPersonErr": null,
+  "thresholdBefore": "Change orders over $2,500 need a signature from the household.",
+  "thresholdAfter": "Change orders over $2,500 need a signature from the household.",
+  "roleDefaultPressed": "true",
+  "householdConsequence": "QA R5 Household Member ilxns joins the household and takes a seat on the Okonkwo residence. They may sign money to $2,500. Nothing is sent to them.",
+  "newHouseholdSeat": {
+    "id": "56c64d90-5a04-42c3-93d0-0129cd8c3e3d",
+    "display_name": "QA R5 Household Member ilxns",
+    "studio_contact_id": "1b1ac0a2-1b67-4c0a-b220-efbd2441b213",
+    "party_kind": "client_rep"
+  },
+  "grantsWritten": [
+    {
+      "scope": "money",
+      "threshold_cents": 250000,
+      "source_clause": "client_households.co_threshold_cents"
+    }
+  ],
+  "householdsAfter": [
+    {
+      "id": "2d942d3b-4bb0-4068-98ba-2ad990c1af38",
+      "organization_id": "b0000000-0000-0000-0000-000000000001",
+      "designer_id": "a0000000-0000-0000-0000-000000000004",
+      "display_name": "Okonkwo residence household",
+      "member_person_ids": [
+        "d0e10000-0000-0000-0000-000000000004",
+        "d0e10000-0000-0000-0000-000000000005",
+        "1b1ac0a2-1b67-4c0a-b220-efbd2441b213"
+      ],
+      "primary_member_person_id": "1b1ac0a2-1b67-4c0a-b220-efbd2441b213",
+      "co_threshold_cents": 250000,
+      "created_by": null,
+      "created_at": "2026-09-14T00:35:34.036686+00:00",
+      "updated_at": "2026-09-14T00:39:00.095695+00:00"
+    }
+  ],
+  "bidBefore": {
+    "bid_outcome": "no_response",
+    "stage": "no_response",
+    "bid_due_at": "2026-10-05",
+    "bid_asked_at": "2026-09-28"
+  },
+  "bidNoteBeforeSave": "Recording this moves Rivera Finishes to Declined. A bidder who did not win never reads as crew.",
+  "bidAfter": {
+    "bid_outcome": "declined",
+    "stage": "declined",
+    "bid_due_at": "2026-10-05",
+    "bid_asked_at": "2026-09-28"
+  },
+  "bidReverted": {
+    "bid_outcome": "no_response",
+    "stage": "no_response"
+  }
+}

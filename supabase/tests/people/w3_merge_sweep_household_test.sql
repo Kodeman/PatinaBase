@@ -1186,9 +1186,19 @@ BEGIN
 END $$;
 
 -- ── the SECOND state earns its own notice ─────────────────────────────────
+-- The date move here stands in for THE CLOCK, not for a studio edit: a paper
+-- crosses lapses_soon → lapsed because time passes, and CURRENT_DATE cannot be
+-- moved inside one transaction. r5 M-3's trigger unspends a document's notices
+-- whenever a MEMBER changes the date, which is the correct answer to a
+-- correction and the wrong stand-in for a clock — so it is held off for this
+-- one statement. The studio-edit case is block 9's, measured there in full.
+ALTER TABLE public.studio_compliance_documents
+  DISABLE TRIGGER clear_compliance_notices_on_date_change_trg;
 UPDATE public.studio_compliance_documents
    SET expires_on = CURRENT_DATE - 1
  WHERE id = 'f9400000-0000-4000-8000-00000000010b';
+ALTER TABLE public.studio_compliance_documents
+  ENABLE TRIGGER clear_compliance_notices_on_date_change_trg;
 
 DO $$
 DECLARE
@@ -1896,9 +1906,11 @@ END $$;
 --
 --   B-1  the absorbed card's LOGIN and address travel; two different logins
 --        refuse by name.
---   B-2  a merge that would leave a BLOCKING contact rule behind on the
---        absorbed card refuses by name; two blocks, or a one-channel rule,
---        still merge (R-BL).
+--   B-2  a merge that would leave a recorded contact refusal behind on the
+--        absorbed card refuses by name. WIDENED r5 M-2: the test is
+--        subsumption, not R-BL's hard block, so a one-channel refusal and an
+--        unmatched route both refuse, and only a survivor whose own rule
+--        already says everything the absorbed rule says merges.
 --   M-1  the sole-proprietor fold moves a supersede CHAIN in the same order
 --        the same-kind branch does — heads first, lineage behind them.
 --   M-3  the live agreement link and the lien waiver repoint onto the
@@ -2029,16 +2041,56 @@ BEGIN
     RAISE EXCEPTION 'BLOCK 8 FAIL (r4 B-2): the refused merge moved the rule anyway';
   END IF;
 
-  -- both cards block: nothing is lost, so the merge stands
+  -- r5 M-2: the survivor forbidding all four is STILL not enough, because
+  -- the absorbed rule also names a route ("write Rosa instead") the survivor
+  -- does not carry. The refusal is about what the survivor's clause would
+  -- stop saying, not about how terracotta the absorbed one is.
   PERFORM pg_temp.reset_role();
   UPDATE public.studio_contact_rules
      SET channels_forbidden = ARRAY['sms','mobile','office','email']
    WHERE subject_id = 'f9a00000-0000-4000-8000-00000000002a';
   PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  BEGIN
+    PERFORM public.merge_studio_contacts(
+      'f9a00000-0000-4000-8000-00000000002a','f9a00000-0000-4000-8000-00000000002b','phone');
+    RAISE EXCEPTION 'BLOCK 8 FAIL (r5 M-2): the route to R4 Rosa was dropped';
+  EXCEPTION WHEN sqlstate 'P0001' THEN
+    IF SQLERRM <> 'merge_contact_rule_conflict' THEN RAISE; END IF;
+  END;
+
+  -- the survivor now says everything the absorbed card says, route included:
+  -- nothing is lost by keeping it, and the merge stands.
+  PERFORM pg_temp.reset_role();
+  UPDATE public.studio_contact_rules
+     SET route_to_person_id = 'f9a00000-0000-4000-8000-00000000002c'
+   WHERE subject_id = 'f9a00000-0000-4000-8000-00000000002a';
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
   PERFORM public.merge_studio_contacts(
     'f9a00000-0000-4000-8000-00000000002a','f9a00000-0000-4000-8000-00000000002b','phone');
 
-  -- R-BL: "never text" with email and office open is not a block
+  -- r5 M-2 — "never text" with email and office open is NOT a hard block
+  -- (R-BL still), and is still a refusal the merge may not drop: R-BL rules
+  -- what earns a terracotta leading rule on a face, not what may vanish.
+  -- F-27 Ray Thao's shape.
+  BEGIN
+    PERFORM public.merge_studio_contacts(
+      'f9a00000-0000-4000-8000-00000000003a','f9a00000-0000-4000-8000-00000000003b','phone');
+    RAISE EXCEPTION 'BLOCK 8 FAIL (r5 M-2): a one-channel refusal was left on the folded card';
+  EXCEPTION WHEN sqlstate 'P0001' THEN
+    IF SQLERRM <> 'merge_contact_rule_conflict' THEN RAISE; END IF;
+  END;
+
+  IF public.contact_rule_summary('person','f9a00000-0000-4000-8000-00000000003a')
+       LIKE '%Never%' THEN
+    RAISE EXCEPTION 'BLOCK 8 FAIL (r5 M-2): the refused merge moved the rule anyway';
+  END IF;
+
+  -- subsumed: the survivor already forbids sms, so the merge stands.
+  PERFORM pg_temp.reset_role();
+  UPDATE public.studio_contact_rules
+     SET channels_forbidden = ARRAY['sms']
+   WHERE subject_id = 'f9a00000-0000-4000-8000-00000000003a';
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
   PERFORM public.merge_studio_contacts(
     'f9a00000-0000-4000-8000-00000000003a','f9a00000-0000-4000-8000-00000000003b','phone');
 
@@ -2084,6 +2136,293 @@ BEGIN
     RAISE EXCEPTION 'BLOCK 8 FAIL (r4 M-3): the company card''s agreement_link grant does not key on the survivor';
   END IF;
   PERFORM pg_temp.reset_role();
+END $$;
+
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 9. the r5 review's five findings, pinned
+--
+--   B-1  every typed fact on the absorbed card reaches the survivor, on BOTH
+--        entity kinds (the firm fold AND the person fold), COALESCEd.
+--   M-1  set_household_threshold() moves the figure AND the grants the
+--        household is the stated source of; a hand-sourced grant stands;
+--        erasing the figure closes them.
+--   M-2  pinned in block 8 above (the subsumption gate).
+--   M-3  a corrected expiry announces again.
+--   M-4  a merge whose SURVIVOR was put away refuses by name.
+--
+-- Its own f9b… id space.
+-- ═══════════════════════════════════════════════════════════════════════════
+INSERT INTO public.studio_contacts
+  (id, organization_id, entity_kind, contact_kind, full_name, company_name,
+   company_kind, created_by, created_at) VALUES
+  -- B-1 firm fold: the OLDER blank card PR-o pre-picks, and the newer one
+  -- carrying everything the studio actually typed.
+  ('f9b00000-0000-4000-8000-00000000001a','f9000000-0000-4000-8000-00000000000a','company','sub',NULL,'R5 Ostrom Blank', NULL,'a0000000-0000-0000-0000-000000000004','2024-01-01'),
+  ('f9b00000-0000-4000-8000-00000000001b','f9000000-0000-4000-8000-00000000000a','company','sub',NULL,'R5 Ostrom Typed', NULL,'a0000000-0000-0000-0000-000000000004','2025-01-01'),
+  -- B-1 person fold (the QA walk's own shape: notes, verdict, specialties,
+  -- warranty on a PERSON card)
+  ('f9b00000-0000-4000-8000-00000000002a','f9000000-0000-4000-8000-00000000000a','person','sub','R5 Wren Older',NULL,NULL,'a0000000-0000-0000-0000-000000000004','2024-02-01'),
+  ('f9b00000-0000-4000-8000-00000000002b','f9000000-0000-4000-8000-00000000000a','person','sub','R5 Wren Newer',NULL,NULL,'a0000000-0000-0000-0000-000000000004','2025-02-01'),
+  -- M-4: a card the studio put away, beside a live duplicate
+  ('f9b00000-0000-4000-8000-00000000003a','f9000000-0000-4000-8000-00000000000a','person','sub','R5 Put Away',  NULL,NULL,'a0000000-0000-0000-0000-000000000004','2024-03-01'),
+  ('f9b00000-0000-4000-8000-00000000003b','f9000000-0000-4000-8000-00000000000a','person','sub','R5 Still Live',NULL,NULL,'a0000000-0000-0000-0000-000000000004','2025-03-01'),
+  -- M-3: the holder of a document whose date the studio corrects
+  ('f9b00000-0000-4000-8000-00000000004a','f9000000-0000-4000-8000-00000000000a','company','sub',NULL,'R5 Date Corrector',NULL,'a0000000-0000-0000-0000-000000000004','2024-04-01');
+
+UPDATE public.studio_contacts
+   SET studio_verdict    = 'Good crew. Slow to send paper.',
+       studio_verdict_at = '2026-02-01T00:00:00Z',
+       legal_name        = 'R5 Ostrom Builders LLC',
+       dba_name          = 'R5 Ostrom',
+       company_kind      = 'sub',
+       remit_to          = 'PO Box 44, Minneapolis MN',
+       retainage_bps     = 1000,
+       tax_id_last4      = '4417',
+       w9_on_file_at     = '2026-08-15',
+       warranty_until    = '2027-09-14',
+       notes             = 'Ask for Pete, not the office.',
+       trades            = ARRAY['framing'],
+       specialties       = ARRAY['millwork']
+ WHERE id = 'f9b00000-0000-4000-8000-00000000001b';
+
+-- the survivor holds two of the thirteen itself, so the COALESCE rule is
+-- measured in both directions in one act.
+UPDATE public.studio_contacts
+   SET notes  = 'The survivor''s own note.',
+       trades = ARRAY['siding']
+ WHERE id = 'f9b00000-0000-4000-8000-00000000001a';
+
+UPDATE public.studio_contacts
+   SET studio_verdict = 'Excellent. Always on time.',
+       notes          = 'Owner-operator. Repeat sub.',
+       specialties    = ARRAY['electrical'],
+       warranty_until = '2027-06-01'
+ WHERE id = 'f9b00000-0000-4000-8000-00000000002b';
+
+UPDATE public.studio_contacts SET archived_at = now()
+ WHERE id = 'f9b00000-0000-4000-8000-00000000003a';
+
+INSERT INTO public.studio_compliance_documents
+  (id, organization_id, holder_type, holder_id, doc_type, blocks, issued_on, expires_on) VALUES
+  ('f9b10000-0000-4000-8000-000000000001','f9000000-0000-4000-8000-00000000000a','company',
+   'f9b00000-0000-4000-8000-00000000004a','coi_gl', ARRAY['site_access']::text[],
+   CURRENT_DATE - 300, CURRENT_DATE + 5);
+
+DO $$
+DECLARE
+  v_card public.studio_contacts%ROWTYPE;
+  n      integer;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+
+  -- ── B-1 · the FIRM fold ─────────────────────────────────────────────────
+  PERFORM public.merge_studio_contacts(
+    'f9b00000-0000-4000-8000-00000000001a','f9b00000-0000-4000-8000-00000000001b','company_name');
+  SELECT * INTO v_card FROM public.studio_contacts
+   WHERE id = 'f9b00000-0000-4000-8000-00000000001a';
+
+  IF v_card.studio_verdict IS DISTINCT FROM 'Good crew. Slow to send paper.'
+     OR v_card.studio_verdict_at IS NULL THEN
+    RAISE EXCEPTION 'BLOCK 9 FAIL (r5 B-1): the verdict and its date did not travel (%, %)',
+      v_card.studio_verdict, v_card.studio_verdict_at;
+  END IF;
+  IF v_card.remit_to IS DISTINCT FROM 'PO Box 44, Minneapolis MN'
+     OR v_card.retainage_bps IS DISTINCT FROM 1000
+     OR btrim(v_card.tax_id_last4) IS DISTINCT FROM '4417' THEN
+    RAISE EXCEPTION 'BLOCK 9 FAIL (r5 B-1): the payee facts did not travel (%, %, %)',
+      v_card.remit_to, v_card.retainage_bps, v_card.tax_id_last4;
+  END IF;
+  IF v_card.legal_name IS DISTINCT FROM 'R5 Ostrom Builders LLC'
+     OR v_card.dba_name IS DISTINCT FROM 'R5 Ostrom'
+     OR v_card.company_kind IS DISTINCT FROM 'sub'
+     OR v_card.w9_on_file_at IS DISTINCT FROM DATE '2026-08-15'
+     OR v_card.warranty_until IS DISTINCT FROM DATE '2027-09-14' THEN
+    RAISE EXCEPTION 'BLOCK 9 FAIL (r5 B-1): a named firm fact did not travel';
+  END IF;
+  -- the survivor's own value WINS where it has one (COALESCE, never overwrite)
+  IF v_card.notes IS DISTINCT FROM 'The survivor''s own note.' THEN
+    RAISE EXCEPTION 'BLOCK 9 FAIL (r5 B-1): the merge overwrote the survivor''s own note (%)',
+      v_card.notes;
+  END IF;
+  -- the two NOT NULL arrays are UNIONED, so neither card's is lost
+  IF NOT (v_card.trades @> ARRAY['siding','framing']
+          AND cardinality(v_card.trades) = 2) THEN
+    RAISE EXCEPTION 'BLOCK 9 FAIL (r5 B-1): trades did not union (%)', v_card.trades;
+  END IF;
+  IF v_card.specialties IS DISTINCT FROM ARRAY['millwork'] THEN
+    RAISE EXCEPTION 'BLOCK 9 FAIL (r5 B-1): specialties did not travel (%)', v_card.specialties;
+  END IF;
+  -- and the Directory row the room actually reads carries them
+  SELECT count(*) INTO n FROM public.people_directory
+   WHERE person_id = 'f9b00000-0000-4000-8000-00000000001a';
+  IF n <> 1 THEN
+    RAISE EXCEPTION 'BLOCK 9 FAIL (r5 B-1): the survivor emits % Directory rows', n;
+  END IF;
+
+  -- ── B-1 · the PERSON fold (the QA walk's own shape) ─────────────────────
+  PERFORM public.merge_studio_contacts(
+    'f9b00000-0000-4000-8000-00000000002a','f9b00000-0000-4000-8000-00000000002b','phone');
+  SELECT * INTO v_card FROM public.studio_contacts
+   WHERE id = 'f9b00000-0000-4000-8000-00000000002a';
+  IF v_card.studio_verdict IS DISTINCT FROM 'Excellent. Always on time.'
+     OR v_card.notes IS DISTINCT FROM 'Owner-operator. Repeat sub.'
+     OR v_card.specialties IS DISTINCT FROM ARRAY['electrical']
+     OR v_card.warranty_until IS DISTINCT FROM DATE '2027-06-01' THEN
+    RAISE EXCEPTION 'BLOCK 9 FAIL (r5 B-1): a person-to-person merge dropped a typed fact';
+  END IF;
+
+  -- ── M-4 · a survivor the studio put away ────────────────────────────────
+  BEGIN
+    PERFORM public.merge_studio_contacts(
+      'f9b00000-0000-4000-8000-00000000003a','f9b00000-0000-4000-8000-00000000003b','phone');
+    RAISE EXCEPTION 'BLOCK 9 FAIL (r5 M-4): a merge onto a put-away card was permitted';
+  EXCEPTION WHEN sqlstate 'P0001' THEN
+    IF SQLERRM <> 'merge_survivor_archived' THEN RAISE; END IF;
+  END;
+  -- the other direction is the ordinary tidy, and stands
+  PERFORM public.merge_studio_contacts(
+    'f9b00000-0000-4000-8000-00000000003b','f9b00000-0000-4000-8000-00000000003a','phone');
+  PERFORM pg_temp.reset_role();
+END $$;
+
+-- ── M-1 · the figure, and the grants it already wrote ─────────────────────
+-- Block 3 seated f9100000…000f as `client_rep` on the job and wrote its open
+-- money grant at 250000 from household f9600000…000a.
+DO $$
+DECLARE
+  v_seat uuid;
+  v_thr  integer;
+  v_src  text;
+  v_to   date;
+  n      integer;
+BEGIN
+  SELECT pp.id INTO v_seat FROM public.project_parties pp
+   WHERE pp.project_id        = 'f9300000-0000-4000-8000-00000000000a'
+     AND pp.studio_contact_id = 'f9100000-0000-4000-8000-00000000000f'
+     AND pp.party_kind        = 'client_rep';
+  IF v_seat IS NULL THEN
+    RAISE EXCEPTION 'BLOCK 9 FAIL (r5 M-1): block 3''s client_rep seat is missing';
+  END IF;
+  SELECT threshold_cents, source_clause INTO v_thr, v_src
+    FROM public.project_party_authority
+   WHERE engagement_id = v_seat AND scope = 'money' AND effective_to IS NULL;
+  IF v_thr <> 250000 OR v_src <> 'client_households.co_threshold_cents' THEN
+    RAISE EXCEPTION 'BLOCK 9 FAIL (r5 M-1): the seat''s grant reads % / %', v_thr, v_src;
+  END IF;
+
+  -- PR-n: a plain member may not move the figure
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000003');
+  BEGIN
+    PERFORM public.set_household_threshold('f9600000-0000-4000-8000-00000000000a', 500000);
+    PERFORM pg_temp.reset_role();
+    RAISE EXCEPTION 'BLOCK 9 FAIL (r5 M-1): a plain member moved the figure';
+  EXCEPTION WHEN OTHERS THEN
+    PERFORM pg_temp.reset_role();
+    IF SQLERRM NOT LIKE '%household_threshold_forbidden%' THEN
+      RAISE EXCEPTION 'BLOCK 9 FAIL (r5 M-1): expected household_threshold_forbidden, got %', SQLERRM;
+    END IF;
+  END;
+
+  -- the owner raises it, and the seat moves with it
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  PERFORM public.set_household_threshold('f9600000-0000-4000-8000-00000000000a', 500000);
+  PERFORM pg_temp.reset_role();
+
+  SELECT co_threshold_cents INTO v_thr FROM public.client_households
+   WHERE id = 'f9600000-0000-4000-8000-00000000000a';
+  IF v_thr <> 500000 THEN
+    RAISE EXCEPTION 'BLOCK 9 FAIL (r5 M-1): the household reads %', v_thr;
+  END IF;
+  SELECT threshold_cents INTO v_thr FROM public.project_party_authority
+   WHERE engagement_id = v_seat AND scope = 'money' AND effective_to IS NULL;
+  IF v_thr <> 500000 THEN
+    RAISE EXCEPTION 'BLOCK 9 FAIL (r5 M-1): the seat''s money grant still reads %', v_thr;
+  END IF;
+
+  -- a grant the studio re-sourced by hand is NOT the household's to move
+  UPDATE public.project_party_authority
+     SET source_clause = 'The agreement, clause 9.'
+   WHERE engagement_id = v_seat AND scope = 'money' AND effective_to IS NULL;
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  PERFORM public.set_household_threshold('f9600000-0000-4000-8000-00000000000a', 750000);
+  PERFORM pg_temp.reset_role();
+  SELECT threshold_cents INTO v_thr FROM public.project_party_authority
+   WHERE engagement_id = v_seat AND scope = 'money' AND effective_to IS NULL;
+  IF v_thr <> 500000 THEN
+    RAISE EXCEPTION 'BLOCK 9 FAIL (r5 M-1): a hand-sourced grant was moved by the household (%)', v_thr;
+  END IF;
+
+  -- erasing the figure CLOSES the grants the household sourced, rather than
+  -- leaving a stale cap or widening to no cap at all
+  UPDATE public.project_party_authority
+     SET source_clause = 'client_households.co_threshold_cents'
+   WHERE engagement_id = v_seat AND scope = 'money' AND effective_to IS NULL;
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  PERFORM public.set_household_threshold('f9600000-0000-4000-8000-00000000000a', NULL);
+  PERFORM pg_temp.reset_role();
+  SELECT count(*) INTO n FROM public.project_party_authority
+   WHERE engagement_id = v_seat AND scope = 'money' AND effective_to IS NULL;
+  IF n <> 0 THEN
+    RAISE EXCEPTION 'BLOCK 9 FAIL (r5 M-1): erasing the figure left % open money grants', n;
+  END IF;
+  SELECT effective_to INTO v_to FROM public.project_party_authority
+   WHERE engagement_id = v_seat AND scope = 'money';
+  IF v_to IS NULL THEN
+    RAISE EXCEPTION 'BLOCK 9 FAIL (r5 M-1): the closed grant carries no end date';
+  END IF;
+END $$;
+
+-- ── M-3 · a corrected expiry announces again ──────────────────────────────
+DO $$
+DECLARE
+  n integer;
+  w text;
+  d date;
+BEGIN
+  PERFORM public.sweep_compliance_expiries();
+  SELECT count(*) INTO n FROM public.studio_compliance_notices
+   WHERE document_id = 'f9b10000-0000-4000-8000-000000000001';
+  IF n <> 1 THEN
+    RAISE EXCEPTION 'BLOCK 9 FAIL (r5 M-3): the first sweep wrote % notices', n;
+  END IF;
+
+  -- the studio corrects the date OUT of the window …
+  UPDATE public.studio_compliance_documents SET expires_on = CURRENT_DATE + 400
+   WHERE id = 'f9b10000-0000-4000-8000-000000000001';
+  w := public.compliance_document_state('f9b10000-0000-4000-8000-000000000001');
+  IF w <> 'current' THEN
+    RAISE EXCEPTION 'BLOCK 9 FAIL (r5 M-3): the corrected paper reads %', w;
+  END IF;
+  SELECT count(*) INTO n FROM public.studio_compliance_notices
+   WHERE document_id = 'f9b10000-0000-4000-8000-000000000001';
+  IF n <> 0 THEN
+    RAISE EXCEPTION 'BLOCK 9 FAIL (r5 M-3): a moved date left % stale notices', n;
+  END IF;
+
+  -- … and back in, to the SAME date it was first told about
+  UPDATE public.studio_compliance_documents SET expires_on = CURRENT_DATE + 5
+   WHERE id = 'f9b10000-0000-4000-8000-000000000001';
+  PERFORM public.sweep_compliance_expiries();
+  SELECT count(*) INTO n FROM public.studio_compliance_notices
+   WHERE document_id = 'f9b10000-0000-4000-8000-000000000001' AND state = 'lapses_soon';
+  IF n <> 1 THEN
+    RAISE EXCEPTION 'BLOCK 9 FAIL (r5 M-3): the studio was told % times about the restored date', n;
+  END IF;
+  SELECT expires_on INTO d FROM public.studio_compliance_notices
+   WHERE document_id = 'f9b10000-0000-4000-8000-000000000001';
+  IF d <> CURRENT_DATE + 5 THEN
+    RAISE EXCEPTION 'BLOCK 9 FAIL (r5 M-3): the notice does not record the date it was about (%)', d;
+  END IF;
+
+  -- and an UNCHANGED document is still swept silently, which is the whole of
+  -- the original idempotency rule
+  PERFORM public.sweep_compliance_expiries();
+  SELECT count(*) INTO n FROM public.studio_compliance_notices
+   WHERE document_id = 'f9b10000-0000-4000-8000-000000000001';
+  IF n <> 1 THEN
+    RAISE EXCEPTION 'BLOCK 9 FAIL (r5 M-3): a rerun wrote a second notice (% rows)', n;
+  END IF;
 END $$;
 
 DO $$ BEGIN RAISE NOTICE 'W3 SQL suite: all blocks passed'; END $$;
