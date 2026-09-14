@@ -55,26 +55,28 @@ describe("buildTimeLineDraft", () => {
   });
 
   it("fix round 1 (finding B1) — description stays generic even when every entry agrees on one member_name; the dated sub-table is unaffected", () => {
-    const draft = buildTimeLineDraft([
-      {
-        id: "a",
-        duration_minutes: 60,
-        amount_cents: 14_500,
-        member_name: "Maria Alvarez",
-        started_at: "2026-09-03T14:00:00Z",
-        resolved_rate_cents: 14_500,
-      },
-      {
-        id: "b",
-        duration_minutes: 30,
-        amount_cents: 7_250,
-        member_name: "Maria Alvarez",
-        started_at: "2026-09-05T09:00:00Z",
-        resolved_rate_cents: 14_500,
-      },
-    ],
-    // HT-13-b — named, so the machine's own zone cannot move the assertion.
-    "America/Chicago");
+    const draft = buildTimeLineDraft(
+      [
+        {
+          id: "a",
+          duration_minutes: 60,
+          amount_cents: 14_500,
+          member_name: "Maria Alvarez",
+          started_at: "2026-09-03T14:00:00Z",
+          resolved_rate_cents: 14_500,
+        },
+        {
+          id: "b",
+          duration_minutes: 30,
+          amount_cents: 7_250,
+          member_name: "Maria Alvarez",
+          started_at: "2026-09-05T09:00:00Z",
+          resolved_rate_cents: 14_500,
+        },
+      ],
+      // HT-13-b — named, so the machine's own zone cannot move the assertion.
+      "America/Chicago",
+    );
     expect(draft!.description).toBe("Design services — 1h 30m (2 entries)");
     expect(draft!.description).not.toMatch(/Maria|Alvarez/);
     // Dated sub-table: date · minutes · rate, oldest first, no name.
