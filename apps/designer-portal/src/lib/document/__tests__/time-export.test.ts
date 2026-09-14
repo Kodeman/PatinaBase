@@ -98,10 +98,39 @@ describe("buildTimeExportCsv", () => {
     // The ledger's LEFT JOIN to profiles means an author outside the
     // caller's own profiles RLS still produces a row — just with a NULL
     // name — rather than being silently dropped.
+    //
+    // R3-m1 — and it is NAMED. A blank first cell was an unattributable money
+    // row in the accountant's file, and an invited teammate who has not set a
+    // display name is the ordinary production shape for it. "Unnamed member"
+    // is the word the on-screen rollup has always used (00607).
     const csv = buildTimeExportCsv([row({ member_name: null })]);
     const [, dataLine] = csv.trimEnd().split("\r\n");
     expect(dataLine).toBeDefined();
-    expect(dataLine.split(",")[0]).toBe('""');
+    expect(dataLine.split(",")[0]).toBe('"Unnamed member"');
+  });
+
+  // ── HT-13-b — the Date column is the exporting viewer's calendar day ──────
+  it("Date takes the caller-supplied local_date, not the ledger's UTC day", () => {
+    // The measured shape: an hour the timer filed at 21:34 CDT on the 13th is
+    // 2026-09-14 in UTC. Before HT-13-b the accountant's file said the 14th
+    // while the designer's own sheet said the 13th.
+    const csv = buildTimeExportCsv([
+      row({
+        started_at: "2026-09-14T02:34:00Z",
+        day: "2026-09-14",
+        local_date: "2026-09-13",
+      }),
+    ]);
+    const [, dataLine] = csv.trimEnd().split("\r\n");
+    expect(dataLine.split(",")[1]).toBe('"2026-09-13"');
+  });
+
+  it("Date falls back to the ledger's day when no local_date was supplied", () => {
+    // A fallback, not a path: the Hours sheet always supplies one. It exists so
+    // a future caller that forgets gets a date rather than an empty cell.
+    const csv = buildTimeExportCsv([row({ day: "2026-09-14" })]);
+    const [, dataLine] = csv.trimEnd().split("\r\n");
+    expect(dataLine.split(",")[1]).toBe('"2026-09-14"');
   });
 
   it("billable/invoiced render as Yes/No, and rate/amount as plain decimal dollars", () => {

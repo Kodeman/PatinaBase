@@ -36465,6 +36465,7 @@ export type Database = {
           p_group_by?: string
           p_project_id?: string
           p_studio_id: string
+          p_timezone?: string
           p_to: string
           p_user_id?: string
         }

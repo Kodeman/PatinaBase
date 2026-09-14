@@ -2167,7 +2167,6 @@ export type {
   InvoiceEligibleTimeEntry,
   StudioPeriod,
   ProjectTimeEntry,
-  TimeEntryFilters,
   UnbilledTimeRow,
   UnbilledTimeSummary,
   StudioUnbilledTimeRow,

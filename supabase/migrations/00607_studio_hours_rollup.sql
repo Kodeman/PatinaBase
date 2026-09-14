@@ -62,11 +62,28 @@
 -- started_at < p_to` — which is exactly `.gte('started_at', weekStart).lt(
 -- 'started_at', weekEnd)` in the portal. A NULL bound is still unbounded.
 --
--- WHAT THIS DOES NOT CLOSE, stated rather than discovered later: the `day` and
--- `iso_week` BUCKET LABELS are still 00604's UTC derivation, so inside a now-
--- correct window an evening entry is labelled under the next UTC day. That is a
--- labelling question, not an omission or a money figure, and moving it needs the
--- studio-timezone ruling HT-13-a declined. Recorded as P2-n1 in rulings.md.
+-- ── HT-13-b (RULED 2026-09-14, integration round 3): THE LABELS TAKE A ZONE ─
+-- Round 2 left the `day` and `iso_week` BUCKET LABELS on 00604's UTC
+-- derivation and recorded it as P2-n1's residual. Measured in the browser at
+-- round 3 (R3-M2): inside a now-correct window, one hour filed Sun 13 Sep
+-- 21:34 CDT read `13 SEPTEMBER` under `mine` and `2026-09-14` under
+-- `the studio`, `BY DAY` listed a day the displayed week does not contain, and
+-- the CSV's Date column carried the UTC date. Two lenses of one sheet printed
+-- two dates for one hour.
+--
+-- HT-13-b resolves it WITHOUT reopening HT-13-a: the label takes the CALLER's
+-- zone as an ARGUMENT (an IANA name), never a stored studio column. `p_timezone
+-- text DEFAULT 'UTC'` is appended to the signature — last, and defaulted, so
+-- every existing positional caller is unchanged — and the `day` / `iso_week`
+-- buckets are cut on `(started_at AT TIME ZONE p_timezone)`, not on 00604's UTC
+-- columns. The portal passes `Intl.DateTimeFormat().resolvedOptions().timeZone`.
+-- The WINDOW is untouched: it was already the row's own instant (P2-B1), and an
+-- instant range needs no zone.
+--
+-- `time_entry_ledger.day` stays UTC (HT-13-a's basis, and 00599's): the view is
+-- a fact table, and the portal derives every DISPLAYED date from `started_at`
+-- in the browser's zone instead. The CSV Date column and the client folio's
+-- dated sub-table follow the same rule.
 --
 -- Lineage: NEW functions. Nothing is redefined. (The DROP below is not a
 -- redefinition either: it removes the `(uuid, date, date, text, uuid, uuid)`
@@ -84,6 +101,11 @@ BEGIN;
 -- two rollups differing only in bound type is the exact ambiguity a caller
 -- passing a bare '2026-09-07' string would resolve by accident.
 DROP FUNCTION IF EXISTS public.studio_hours_rollup(uuid, date, date, text, uuid, uuid);
+-- HT-13-b: and the six-argument instant form this same file created before
+-- round 3. `p_timezone` is DEFAULTed, so leaving the old one standing would
+-- make every six-argument call ambiguous rather than resolving it to the new
+-- body. Dropped for the same reason the `date` overload above was.
+DROP FUNCTION IF EXISTS public.studio_hours_rollup(uuid, timestamptz, timestamptz, text, uuid, uuid);
 
 CREATE OR REPLACE FUNCTION public.studio_hours_rollup(
   p_studio_id  uuid,
@@ -91,7 +113,9 @@ CREATE OR REPLACE FUNCTION public.studio_hours_rollup(
   p_to         timestamptz,          -- EXCLUSIVE instant (P2-B1)
   p_group_by   text DEFAULT 'member',   -- 'member' | 'project' | 'day' | 'iso_week' | 'activity'
   p_user_id    uuid DEFAULT NULL,       -- the member scope
-  p_project_id uuid DEFAULT NULL        -- the project scope
+  p_project_id uuid DEFAULT NULL,       -- the project scope
+  p_timezone   text DEFAULT 'UTC'       -- HT-13-b: the CALLER's IANA zone, for
+                                        -- the day / iso_week LABELS only
 )
 RETURNS TABLE (
   bucket_key       text,
@@ -109,7 +133,21 @@ STABLE
 SECURITY INVOKER                        -- HT-38. RLS is the scope.
 SET search_path = public, pg_temp
 AS $$
+DECLARE
+  v_zone text := COALESCE(NULLIF(btrim(p_timezone), ''), 'UTC');
 BEGIN
+  -- HT-13-b. An unreadable zone name is a caller bug, and it is said here — in
+  -- this function's own voice, once — rather than surfacing from inside the
+  -- query as a bare `time zone "X" not recognized`. The probe is a cast rather
+  -- than a scan of pg_timezone_names, which rebuilds the whole tz database per
+  -- call.
+  BEGIN
+    PERFORM now() AT TIME ZONE v_zone;
+  EXCEPTION WHEN OTHERS THEN
+    RAISE EXCEPTION 'studio_hours_rollup: p_timezone must be an IANA time zone name (got %)', v_zone
+      USING ERRCODE = 'invalid_parameter_value';
+  END;
+
   -- Validated against the five literals, and raises otherwise. plpgsql rather
   -- than LANGUAGE sql for exactly this reason (plan-v2 §3 asks for both, and a
   -- SQL body cannot raise): there is still NO dynamic SQL below — the bucket is a
@@ -148,15 +186,18 @@ BEGIN
       CASE p_group_by
         WHEN 'member'   THEN scoped.user_id::text
         WHEN 'project'  THEN COALESCE(scoped.project_id::text, 'internal')
-        WHEN 'day'      THEN to_char(scoped.day, 'YYYY-MM-DD')
-        WHEN 'iso_week' THEN scoped.iso_week
+        -- HT-13-b: the LABEL is cut in the caller's zone, never on 00604's
+        -- UTC `day` / `iso_week` columns. Those stay the fact view's basis;
+        -- this is what a person reads.
+        WHEN 'day'      THEN to_char((scoped.started_at AT TIME ZONE v_zone)::date, 'YYYY-MM-DD')
+        WHEN 'iso_week' THEN to_char(scoped.started_at AT TIME ZONE v_zone, 'IYYY-"W"IW')
         WHEN 'activity' THEN COALESCE(scoped.activity, 'unset')
       END AS bucket_key,
       CASE p_group_by
         WHEN 'member'   THEN COALESCE(scoped.member_name, 'Unnamed member')
         WHEN 'project'  THEN COALESCE(scoped.project_name, 'Internal')
-        WHEN 'day'      THEN to_char(scoped.day, 'YYYY-MM-DD')
-        WHEN 'iso_week' THEN scoped.iso_week
+        WHEN 'day'      THEN to_char((scoped.started_at AT TIME ZONE v_zone)::date, 'YYYY-MM-DD')
+        WHEN 'iso_week' THEN to_char(scoped.started_at AT TIME ZONE v_zone, 'IYYY-"W"IW')
         -- HT-24: print "activity not set" honestly; never a blank.
         WHEN 'activity' THEN COALESCE(scoped.activity, 'activity not set')
       END AS bucket_label,
@@ -204,18 +245,21 @@ BEGIN
 END;
 $$;
 
-REVOKE EXECUTE ON FUNCTION public.studio_hours_rollup(uuid, timestamptz, timestamptz, text, uuid, uuid)
+REVOKE EXECUTE ON FUNCTION public.studio_hours_rollup(uuid, timestamptz, timestamptz, text, uuid, uuid, text)
   FROM PUBLIC, anon;
-GRANT  EXECUTE ON FUNCTION public.studio_hours_rollup(uuid, timestamptz, timestamptz, text, uuid, uuid)
+GRANT  EXECUTE ON FUNCTION public.studio_hours_rollup(uuid, timestamptz, timestamptz, text, uuid, uuid, text)
   TO authenticated;
 
-COMMENT ON FUNCTION public.studio_hours_rollup(uuid, timestamptz, timestamptz, text, uuid, uuid) IS
+COMMENT ON FUNCTION public.studio_hours_rollup(uuid, timestamptz, timestamptz, text, uuid, uuid, text) IS
   'HT-37 + HT-38: the studio scope''s aggregate, SECURITY INVOKER — RLS on '
   'project_time_entries (as narrowed by 00606) is the scope, so a plain member '
   'passing a colleague''s p_user_id gets nothing of his. Return shape frozen at '
   'buckets, minutes and money: NO notes column, ever (HT-36). Running timers are '
   'excluded — a total never counts an unfinished hour. p_group_by is validated '
-  'against five literals and raises otherwise; no dynamic SQL.';
+  'against five literals and raises otherwise; no dynamic SQL. p_timezone '
+  '(HT-13-b) is the CALLER''s IANA zone and cuts the day / iso_week LABELS '
+  'only — the window is an instant range and needs none, and no studio '
+  'timezone column exists (HT-13-a stands).';
 
 -- ── HT-10-a: the project total a narrowed member may still have ─────────────
 CREATE OR REPLACE FUNCTION public.project_hours_total(p_project_id uuid)
@@ -316,7 +360,7 @@ BEGIN
     FROM pg_proc AS routine
     CROSS JOIN LATERAL unnest(COALESCE(routine.proargnames, ARRAY[]::text[])) AS arg(arg_name)
     WHERE routine.oid IN (
-        to_regprocedure('public.studio_hours_rollup(uuid,timestamptz,timestamptz,text,uuid,uuid)'),
+        to_regprocedure('public.studio_hours_rollup(uuid,timestamptz,timestamptz,text,uuid,uuid,text)'),
         to_regprocedure('public.project_hours_total(uuid)')
       )
       AND lower(arg.arg_name) LIKE '%note%'
@@ -324,7 +368,7 @@ BEGIN
 
   -- (b) HT-38: INVOKER for the studio rollup, DEFINER for the project total.
   ASSERT NOT (SELECT prosecdef FROM pg_proc
-    WHERE oid = to_regprocedure('public.studio_hours_rollup(uuid,timestamptz,timestamptz,text,uuid,uuid)')),
+    WHERE oid = to_regprocedure('public.studio_hours_rollup(uuid,timestamptz,timestamptz,text,uuid,uuid,text)')),
     '00607: studio_hours_rollup MUST be SECURITY INVOKER (HT-38) — a DEFINER '
     'rollup hands every caller the studio and its assert cannot be written';
   ASSERT (SELECT prosecdef FROM pg_proc
@@ -348,20 +392,20 @@ BEGIN
   ASSERT (
     SELECT prosrc LIKE '%''member'', ''project'', ''day'', ''iso_week'', ''activity''%'
     FROM pg_proc
-    WHERE oid = to_regprocedure('public.studio_hours_rollup(uuid,timestamptz,timestamptz,text,uuid,uuid)')
+    WHERE oid = to_regprocedure('public.studio_hours_rollup(uuid,timestamptz,timestamptz,text,uuid,uuid,text)')
   ), '00607: p_group_by must be validated against exactly the five ruled literals';
   ASSERT (
     SELECT prosrc NOT LIKE '%EXECUTE format%' AND prosrc NOT LIKE '%EXECUTE ''%'
     FROM pg_proc
-    WHERE oid = to_regprocedure('public.studio_hours_rollup(uuid,timestamptz,timestamptz,text,uuid,uuid)')
+    WHERE oid = to_regprocedure('public.studio_hours_rollup(uuid,timestamptz,timestamptz,text,uuid,uuid,text)')
   ), '00607: no dynamic SQL in the rollup';
 
   -- (e) grants, both directions (post-flip rule).
   ASSERT NOT has_function_privilege('anon',
-    'public.studio_hours_rollup(uuid,timestamptz,timestamptz,text,uuid,uuid)', 'EXECUTE'),
+    'public.studio_hours_rollup(uuid,timestamptz,timestamptz,text,uuid,uuid,text)', 'EXECUTE'),
     '00607: anon must not execute studio_hours_rollup';
   ASSERT has_function_privilege('authenticated',
-    'public.studio_hours_rollup(uuid,timestamptz,timestamptz,text,uuid,uuid)', 'EXECUTE'),
+    'public.studio_hours_rollup(uuid,timestamptz,timestamptz,text,uuid,uuid,text)', 'EXECUTE'),
     '00607: authenticated must execute studio_hours_rollup';
   ASSERT NOT has_function_privilege('anon',
     'public.project_hours_total(uuid)', 'EXECUTE'),
@@ -372,13 +416,14 @@ BEGIN
 
   -- (f) the signature is the plan's, argument for argument.
   SELECT pg_get_function_identity_arguments(
-    to_regprocedure('public.studio_hours_rollup(uuid,timestamptz,timestamptz,text,uuid,uuid)')
+    to_regprocedure('public.studio_hours_rollup(uuid,timestamptz,timestamptz,text,uuid,uuid,text)')
   ) INTO v_args;
   ASSERT v_args = 'p_studio_id uuid, p_from timestamp with time zone, '
                   'p_to timestamp with time zone, p_group_by text, '
-                  'p_user_id uuid, p_project_id uuid',
+                  'p_user_id uuid, p_project_id uuid, p_timezone text',
     '00607: studio_hours_rollup''s signature drifted from plan-v2 §3 as amended '
-    'by P2-B1 (the window is an instant range, not a date range); got ' || v_args;
+    'by P2-B1 (the window is an instant range, not a date range) and HT-13-b '
+    '(the labels take the caller''s zone); got ' || v_args;
 
   -- (h) P2-B1: the window is the row's own instant. A `ledger.day` comparison
   --     here is the defect itself — a UTC question asked of the viewer's local
@@ -388,14 +433,14 @@ BEGIN
     SELECT prosrc LIKE '%ledger.started_at >= p_from%'
        AND prosrc LIKE '%ledger.started_at <  p_to%'
     FROM pg_proc
-    WHERE oid = to_regprocedure('public.studio_hours_rollup(uuid,timestamptz,timestamptz,text,uuid,uuid)')
+    WHERE oid = to_regprocedure('public.studio_hours_rollup(uuid,timestamptz,timestamptz,text,uuid,uuid,text)')
   ), '00607: the rollup window must compare ledger.started_at against the '
      'instant bounds (P2-B1), p_from inclusive and p_to exclusive — the same '
      'range the Hours sheet''s `mine` read uses';
   ASSERT (
     SELECT prosrc NOT LIKE '%ledger.day >=%' AND prosrc NOT LIKE '%ledger.day <=%'
     FROM pg_proc
-    WHERE oid = to_regprocedure('public.studio_hours_rollup(uuid,timestamptz,timestamptz,text,uuid,uuid)')
+    WHERE oid = to_regprocedure('public.studio_hours_rollup(uuid,timestamptz,timestamptz,text,uuid,uuid,text)')
   ), '00607: ledger.day is a UTC BUCKET LABEL, never the window (P2-B1)';
 
   -- (i) P2-B1: and no `date` overload survives beside it.
@@ -403,6 +448,29 @@ BEGIN
     '00607: the (uuid, date, date, text, uuid, uuid) rollup must not exist '
     'alongside the instant one — two bounds types is an ambiguity a caller '
     'passing a bare date string resolves by accident (P2-B1)';
+  ASSERT to_regprocedure('public.studio_hours_rollup(uuid,timestamptz,timestamptz,text,uuid,uuid)') IS NULL,
+    '00607: the six-argument instant rollup must not exist alongside the '
+    'seven-argument one — p_timezone is DEFAULTed, so a surviving six-argument '
+    'form makes every six-argument call ambiguous (HT-13-b)';
+
+  -- (j) HT-13-b: the day / iso_week LABELS are cut in the caller's zone, and
+  --     never on 00604's UTC columns. A `scoped.day` or `scoped.iso_week` in
+  --     the CASE is the defect R3-M2 measured: two lenses of one sheet printing
+  --     two dates for one hour, and a seven-day week listing an eighth day.
+  ASSERT (
+    SELECT prosrc LIKE '%(scoped.started_at AT TIME ZONE v_zone)::date%'
+       AND prosrc LIKE '%to_char(scoped.started_at AT TIME ZONE v_zone,%'
+    FROM pg_proc
+    WHERE oid = to_regprocedure('public.studio_hours_rollup(uuid,timestamptz,timestamptz,text,uuid,uuid,text)')
+  ), '00607: the day and iso_week buckets must be cut on '
+     '(started_at AT TIME ZONE p_timezone) (HT-13-b)';
+  ASSERT (
+    SELECT prosrc NOT LIKE '%THEN to_char(scoped.day,%'
+       AND prosrc NOT LIKE '%THEN scoped.iso_week%'
+    FROM pg_proc
+    WHERE oid = to_regprocedure('public.studio_hours_rollup(uuid,timestamptz,timestamptz,text,uuid,uuid,text)')
+  ), '00607: 00604''s UTC day / iso_week columns are the fact view''s basis, '
+     'never a printed label (HT-13-b)';
 
   -- (g) W2-R2-01: the standing assert's third leg is the PRICING studio, and it
   --     reads organization_members through nothing but that one call. A leg that

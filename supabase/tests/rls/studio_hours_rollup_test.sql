@@ -34,6 +34,12 @@
 --       total (W0's source = 'internal'; W4's project-less row is already in the
 --       filter).
 --   (i) a RUNNING timer is in no total — an unfinished hour is not money.
+--   (j) HT-13-b — the `day` and `iso_week` LABELS are cut in the CALLER's zone,
+--       passed as `p_timezone`. The default is 'UTC'; an unreadable name raises
+--       invalid_parameter_value; and 00604's UTC `day` column is never the
+--       label. Before this, one hour read `13 SEPTEMBER` under `mine` and
+--       `2026-09-14` under `the studio`, and a seven-day week listed an eighth
+--       day (R3-M2, measured in the browser).
 --
 -- How to run:
 --   psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 \
@@ -194,7 +200,7 @@ BEGIN
     FROM pg_proc AS routine
     CROSS JOIN LATERAL unnest(COALESCE(routine.proargnames, ARRAY[]::text[])) AS arg(arg_name)
     WHERE routine.oid IN (
-        to_regprocedure('public.studio_hours_rollup(uuid,timestamptz,timestamptz,text,uuid,uuid)'),
+        to_regprocedure('public.studio_hours_rollup(uuid,timestamptz,timestamptz,text,uuid,uuid,text)'),
         to_regprocedure('public.project_hours_total(uuid)')
       )
       AND lower(arg.arg_name) LIKE '%note%'
@@ -202,7 +208,7 @@ BEGIN
      'asserted on the TYPE, not on rows, so a filter cannot satisfy it';
 
   ASSERT NOT (SELECT prosecdef FROM pg_proc
-    WHERE oid = to_regprocedure('public.studio_hours_rollup(uuid,timestamptz,timestamptz,text,uuid,uuid)')),
+    WHERE oid = to_regprocedure('public.studio_hours_rollup(uuid,timestamptz,timestamptz,text,uuid,uuid,text)')),
     'FAIL a2 (HT-38): the studio rollup must be SECURITY INVOKER — the per-role '
     'cases below measure RLS, and a DEFINER rollup would make them all pass '
     'vacuously';
@@ -479,6 +485,105 @@ BEGIN
     || COALESCE(v_total::text, 'NULL');
 
   RAISE NOTICE 'studio_hours_rollup: case (i) passed.';
+END
+$$;
+
+-- ─── (j) HT-13-b — the day/week labels take the caller's zone ──────────────
+DO $$
+DECLARE
+  -- Yesterday at 02:00 UTC: always in the past, and always a DIFFERENT calendar
+  -- date in any zone west of UTC-2 — which is every North American studio zone.
+  v_instant  timestamptz :=
+    (date_trunc('day', (now() AT TIME ZONE 'UTC')) + interval '2 hours')
+      AT TIME ZONE 'UTC' - interval '1 day';
+  v_utc_day      text;
+  v_local_day    text;
+  v_default_key  text;
+  v_utc_key      text;
+  v_chicago_key  text;
+  v_utc_week     text;
+  v_chicago_week text;
+  v_raised       boolean := false;
+BEGIN
+  v_utc_day   := to_char((v_instant AT TIME ZONE 'UTC')::date, 'YYYY-MM-DD');
+  v_local_day := to_char((v_instant AT TIME ZONE 'America/Chicago')::date, 'YYYY-MM-DD');
+
+  ASSERT v_utc_day <> v_local_day,
+    'FAIL j0 (precondition): the fixture instant must straddle the UTC day '
+    'boundary, or this case proves nothing; utc=' || v_utc_day
+    || ' chicago=' || v_local_day;
+
+  PERFORM pg_temp.assume_user('c6070000-0000-4000-8000-000000000003');
+  INSERT INTO project_time_entries
+    (id, project_id, user_id, started_at, duration_minutes, billable, source, activity)
+  VALUES
+    ('c6070000-0000-4000-8000-0000000000b7', 'c6070000-0000-4000-8000-0000000000e1',
+     'c6070000-0000-4000-8000-000000000003', v_instant, 90, true, 'timer_auto', 'design');
+  PERFORM pg_temp.reset_role();
+
+  PERFORM pg_temp.assume_user('c6070000-0000-4000-8000-000000000001');
+
+  -- No zone named: the server's own default, which is UTC.
+  SELECT bucket_key INTO v_default_key FROM public.studio_hours_rollup(
+    'c6070000-0000-4000-8000-0000000000a1',
+    v_instant - interval '1 hour', v_instant + interval '1 hour', 'day');
+
+  SELECT bucket_key INTO v_utc_key FROM public.studio_hours_rollup(
+    'c6070000-0000-4000-8000-0000000000a1',
+    v_instant - interval '1 hour', v_instant + interval '1 hour', 'day',
+    NULL, NULL, 'UTC');
+
+  SELECT bucket_key INTO v_chicago_key FROM public.studio_hours_rollup(
+    'c6070000-0000-4000-8000-0000000000a1',
+    v_instant - interval '1 hour', v_instant + interval '1 hour', 'day',
+    NULL, NULL, 'America/Chicago');
+
+  SELECT bucket_key INTO v_utc_week FROM public.studio_hours_rollup(
+    'c6070000-0000-4000-8000-0000000000a1',
+    v_instant - interval '1 hour', v_instant + interval '1 hour', 'iso_week',
+    NULL, NULL, 'UTC');
+
+  SELECT bucket_key INTO v_chicago_week FROM public.studio_hours_rollup(
+    'c6070000-0000-4000-8000-0000000000a1',
+    v_instant - interval '1 hour', v_instant + interval '1 hour', 'iso_week',
+    NULL, NULL, 'America/Chicago');
+
+  BEGIN
+    PERFORM public.studio_hours_rollup(
+      'c6070000-0000-4000-8000-0000000000a1',
+      v_instant - interval '1 hour', v_instant + interval '1 hour', 'day',
+      NULL, NULL, 'Mars/Olympus_Mons');
+  EXCEPTION WHEN invalid_parameter_value THEN
+    v_raised := true;
+  END;
+
+  PERFORM pg_temp.reset_role();
+
+  ASSERT v_default_key = v_utc_day,
+    'FAIL j1: p_timezone defaults to UTC, so an omitted zone must label the '
+    'hour exactly as 00604''s day column does; got '
+    || COALESCE(v_default_key, 'NULL') || ' expected ' || v_utc_day;
+  ASSERT v_utc_key = v_utc_day,
+    'FAIL j2: p_timezone => UTC must label the hour on the UTC day; got '
+    || COALESCE(v_utc_key, 'NULL');
+  ASSERT v_chicago_key = v_local_day,
+    'FAIL j3 (HT-13-b): the day LABEL is cut in the caller''s zone — an evening '
+    'hour west of UTC belongs to the day she worked it, not to the next UTC '
+    'day; got ' || COALESCE(v_chicago_key, 'NULL') || ' expected ' || v_local_day;
+  ASSERT v_utc_week
+       = to_char(v_instant AT TIME ZONE 'UTC', 'IYYY-"W"IW'),
+    'FAIL j4: the iso_week label follows the same zone as the day label; got '
+    || COALESCE(v_utc_week, 'NULL');
+  ASSERT v_chicago_week
+       = to_char(v_instant AT TIME ZONE 'America/Chicago', 'IYYY-"W"IW'),
+    'FAIL j5 (HT-13-b): the iso_week label is cut in the caller''s zone too — '
+    'the week an hour is billed in must not depend on the server''s; got '
+    || COALESCE(v_chicago_week, 'NULL');
+  ASSERT v_raised,
+    'FAIL j6: an unreadable zone name must raise invalid_parameter_value in the '
+    'rollup''s own voice, not surface as a bare "time zone not recognized"';
+
+  RAISE NOTICE 'studio_hours_rollup: case (j) passed.';
 END
 $$;
 

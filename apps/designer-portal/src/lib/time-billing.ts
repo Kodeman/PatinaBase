@@ -35,6 +35,8 @@
 export { formatMinutesAsHours as formatHoursLabel } from "@patina/shared";
 import { formatMinutesAsHours as formatHoursLabel } from "@patina/shared";
 
+import { localDateOf, viewerTimeZone } from "./document/time-derivation";
+
 /** Minutes → decimal hours rounded to 0.1 (for metric blocks). */
 export function minutesToHours(minutes: number): number {
   return Math.round(((minutes || 0) / 60) * 10) / 10;
@@ -99,6 +101,11 @@ export interface TimeLineDraft {
  *  output, which is what the client and the printed copy see. */
 export function buildTimeLineDraft(
   entries: TimeLineEntryInput[],
+  /** HT-13-b — the zone the folio's dates are cut in. Defaults to the composing
+   *  studio viewer's own, which is the only zone this value can honestly carry:
+   *  the client portal renders the persisted string verbatim. Named explicitly
+   *  by tests so a machine's own zone cannot make them vacuous. */
+  timeZone: string = viewerTimeZone(),
 ): TimeLineDraft | null {
   if (entries.length === 0) return null;
   const totalMinutes = entries.reduce(
@@ -117,7 +124,15 @@ export function buildTimeLineDraft(
       Boolean(e.started_at),
     )
     .map((e) => ({
-      date: e.started_at.slice(0, 10),
+      // HT-13-b (R3-m3) — the homeowner's folio carries the day the studio's
+      // viewer reads at compose time, derived from the instant in her own zone.
+      // `.slice(0, 10)` took the UTC calendar date off a timestamptz PostgREST
+      // returns in UTC, so an hour the timer filed at 21:34 CDT on the 13th was
+      // BILLED TO THE CLIENT as the 14th. The value is persisted into the
+      // line's `metadata.attribution` and the client portal renders it
+      // verbatim, so it must be right here — there is no second chance at
+      // render.
+      date: localDateOf(e.started_at, timeZone) || e.started_at.slice(0, 10),
       minutes: e.duration_minutes || 0,
       rateCents: e.resolved_rate_cents ?? 0,
     }))

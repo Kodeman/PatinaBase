@@ -15,6 +15,11 @@
 --       refuses to move it. "Any date, until the entry is invoiced."
 --   (e) log_time never opens a running slot (§0.11): a NULL or non-positive
 --       duration raises rather than taking the desk's one clock.
+--   (f) R3-m1 / W7-R5-07 — forward is BOUNDED. An hour is a record of work
+--       already done; a `+400d` started_at was written and authorized before
+--       this. The bound is 26 hours, because HT-13-a files a date-only entry at
+--       12:00 UTC of the NAMED day and a member in UTC+14 naming her own today
+--       legitimately writes an instant that far ahead.
 --
 -- Sequential, not threaded: two psql sessions cannot be driven from one
 -- script, so (b) asserts the door's OWN contract — call it twice in a row and
@@ -206,8 +211,9 @@ DECLARE
 BEGIN
   PERFORM pg_temp.assume_user('a7200000-0000-4000-8000-000000000001');
 
-  -- Any date. 400 days back is accepted with no bound and no warning: the
-  -- ruling puts the only limit on the INVOICED side.
+  -- Any PAST date. 400 days back is accepted with no bound and no warning: the
+  -- ruling puts the only backward limit on the INVOICED side. (Forward is
+  -- bounded — case (f).)
   v_old := public.log_time(
     'a7200000-0000-4000-8000-0000000000c1',
     'a7200000-0000-4000-8000-0000000000e1',
@@ -278,6 +284,65 @@ BEGIN
     'FAIL e3: no running row may survive this file';
 
   RAISE NOTICE 'time_log_rpc: case (e) passed.';
+END
+$$;
+
+-- ─── (f) R3-m1 / W7-R5-07 — an hour cannot be logged in the future ─────────
+DO $$
+DECLARE
+  v_far_raised  BOOLEAN := false;
+  v_day_raised  BOOLEAN := false;
+  v_noon        public.project_time_entries;
+  v_state       text;
+BEGIN
+  PERFORM pg_temp.assume_user('a7200000-0000-4000-8000-000000000001');
+
+  -- The measured defect: +400 days wrote and read `authorized`.
+  BEGIN
+    PERFORM public.log_time(
+      'a7200000-0000-4000-8000-0000000000f1',
+      'a7200000-0000-4000-8000-0000000000e1',
+      NOW() + INTERVAL '400 days', 60, 'design', true);
+  EXCEPTION WHEN invalid_parameter_value THEN
+    v_far_raised := true;
+  END;
+
+  -- And the near edge: tomorrow is still the future.
+  BEGIN
+    PERFORM public.log_time(
+      'a7200000-0000-4000-8000-0000000000f2',
+      'a7200000-0000-4000-8000-0000000000e1',
+      NOW() + INTERVAL '3 days', 60, 'design', true);
+  EXCEPTION WHEN invalid_parameter_value THEN
+    v_day_raised := true;
+  END;
+
+  -- The band HT-13-a needs is INSIDE the bound: a member in UTC+14 naming her
+  -- own today writes noon UTC of a day that can be up to 26 hours ahead, and
+  -- that is an honest hour, not a future one.
+  v_noon := public.log_time(
+    'a7200000-0000-4000-8000-0000000000f3',
+    'a7200000-0000-4000-8000-0000000000e1',
+    NOW() + INTERVAL '25 hours', 60, 'design', true);
+
+  PERFORM pg_temp.reset_role();
+
+  ASSERT v_far_raised,
+    'FAIL f1: log_time must refuse a started_at 400 days in the future '
+    '(R3-m1 / W7-R5-07) — before this it was written and authorized';
+  ASSERT v_day_raised,
+    'FAIL f2: log_time must refuse a started_at three days ahead';
+  ASSERT v_noon.id IS NOT NULL,
+    'FAIL f3: the 26-hour band HT-13-a''s noon-UTC convention needs must still '
+    'be accepted — bounding tighter refuses honest hours in UTC+14';
+
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM project_time_entries
+     WHERE id IN ('a7200000-0000-4000-8000-0000000000f1',
+                  'a7200000-0000-4000-8000-0000000000f2')),
+    'FAIL f4: a refused filing must leave no row behind';
+
+  RAISE NOTICE 'time_log_rpc: case (f) passed.';
   RAISE NOTICE 'All time_log_rpc assertions passed.';
 END
 $$;

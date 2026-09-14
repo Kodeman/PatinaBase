@@ -7,6 +7,10 @@
  * escaping copy the proven `supabase/functions/qbo-export/index.ts` blob
  * pattern (the AP-side precedent; there is no AR/labour twin before this).
  *
+ * HT-13-b — the Date column is the EXPORTING viewer's calendar day, supplied
+ * per row as `local_date` by the caller (which knows the zone); this module
+ * falls back to the ledger's UTC `day` only when nothing supplied one.
+ *
  * Column order (fixed — a spreadsheet's first row is a contract):
  *   Member, Date, Project, Client, Activity, Billable, Duration (min), Rate,
  *   Rate Source, Rate Role, Amount, Billing State, Invoiced, Invoice #
@@ -35,6 +39,15 @@ export interface TimeExportRow extends TimeEntryLedgerRow {
   client_name?: string | null;
   /** The invoice's human number — not a ledger column; see above. */
   invoice_number?: string | null;
+  /**
+   * HT-13-b — the calendar day this hour was worked in the EXPORTING viewer's
+   * zone, derived from `started_at` by the caller (which is where the zone is
+   * known). `row.day` is the fact view's UTC bucket and is NOT what a
+   * bookkeeper's Date column may carry: west of UTC an evening hour was filed
+   * under tomorrow, on a file that reconciles against a week. Absent falls back
+   * to `row.day` rather than blanking the cell.
+   */
+  local_date?: string | null;
 }
 
 const CSV_HEADER = [
@@ -117,8 +130,13 @@ function isRatePending(row: TimeExportRow): boolean {
 function csvRow(row: TimeExportRow): string {
   const ratePending = isRatePending(row);
   return [
-    csvField(row.member_name ?? ""),
-    csvField(row.day),
+    // R3-m1 — an invited teammate who has not set a display name is the
+    // ordinary production shape, and the blank cell it produced was an
+    // unattributable money row in the accountant's file. The on-screen rollup
+    // has always said "Unnamed member" for exactly this row (00607); the file
+    // now says the same word.
+    csvField(row.member_name ?? "Unnamed member"),
+    csvField(row.local_date ?? row.day),
     csvField(row.project_name ?? ""),
     csvField(row.client_name ?? ""),
     csvField(row.activity ?? ""),

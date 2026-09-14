@@ -147,17 +147,13 @@ export interface ProjectTimeEntry {
   profile?: { full_name: string | null } | null;
 }
 
-export interface TimeEntryFilters {
-  userId?: string;
-  phaseKey?: string;
-  billable?: boolean;
-  /** true = only invoiced, false = only un-invoiced, undefined = all */
-  invoiced?: boolean;
-  /** ISO timestamp lower bound on started_at (inclusive) */
-  from?: string;
-  /** ISO timestamp upper bound on started_at (inclusive) */
-  to?: string;
-}
+// N-15 (integration round 3) — `TimeEntryFilters` is DELETED, not corrected.
+// It had zero consumers anywhere in the repo and documented `to` as an
+// INCLUSIVE upper bound on started_at, where the only window this program
+// implements is exclusive (`.lt('started_at', to)`, P2-B1). A hand writing the
+// next caller against the package's exported type would have built an inclusive
+// window and counted the boundary hour in two adjacent weeks.
+// `TimeEntryLedgerParams` below is the live shape and says so.
 
 export interface UnbilledTimeRow {
   id: string;
@@ -901,7 +897,11 @@ export interface TimeEntryLedgerRow {
   phase_key: string | null;
   task_id: string | null;
   started_at: string;
-  /** UTC buckets, matching the resolver's own date basis. */
+  /**
+   * UTC buckets, matching the resolver's own date basis (00599) — a FACT, and
+   * HT-13-b rules it is never what a person is shown. Derive a displayed date
+   * from `started_at` in the viewer's zone instead.
+   */
   day: string;
   iso_week: string;
   month: string;
@@ -994,6 +994,14 @@ export interface StudioHoursRollupParams {
   userId?: string | null;
   /** The project scope. */
   projectId?: string | null;
+  /**
+   * HT-13-b — the CALLER's IANA zone (`America/Chicago`), which is what the
+   * `day` and `iso_week` bucket LABELS are cut in. Omitted means the server's
+   * `'UTC'` default; the Hours sheet passes
+   * `Intl.DateTimeFormat().resolvedOptions().timeZone`. The WINDOW is an
+   * instant range and needs no zone (P2-B1).
+   */
+  timeZone?: string | null;
 }
 
 /** A bucket of public.studio_hours_rollup (00607). Never carries notes (HT-36). */
@@ -1015,7 +1023,15 @@ export interface StudioHoursRollupRow {
  * hour.
  */
 export function useStudioHoursRollup(params: StudioHoursRollupParams) {
-  const { studioId, from, to, groupBy = 'member', userId = null, projectId = null } = params;
+  const {
+    studioId,
+    from,
+    to,
+    groupBy = 'member',
+    userId = null,
+    projectId = null,
+    timeZone = null,
+  } = params;
 
   return useQuery({
     queryKey: timeKeys.studioRollup(params),
@@ -1029,6 +1045,9 @@ export function useStudioHoursRollup(params: StudioHoursRollupParams) {
         p_group_by: groupBy,
         p_user_id: userId,
         p_project_id: projectId,
+        // HT-13-b. A null here is the server's 'UTC' default, which is what a
+        // caller that never learned its own zone should get.
+        p_timezone: timeZone,
       });
       if (error) throw error;
       return (data ?? []) as StudioHoursRollupRow[];

@@ -26,12 +26,34 @@
 -- default. This is the server half of deleting that default in
 -- packages/supabase/src/hooks/use-time-tracking.ts.
 --
--- HT-13 — backdating needs NO DDL. p_started_at is any timestamp the caller
--- names; "until the entry is invoiced" is already enforced by
+-- HT-13 — backdating needs NO DDL. p_started_at is any PAST timestamp the
+-- caller names; "until the entry is invoiced" is already enforced by
 -- guard_invoiced_time_entry (00177:51-84, §0.12), which freezes started_at once
 -- invoice_id is set. The "backdated" mark (> 30 days between created_at and
 -- started_at) is DERIVED on the row from the two timestamps that already exist
 -- — no column, and 00609 stays deliberately unused.
+--
+-- ── R3-m1 / W7-R5-07 (integration round 3): FORWARD IS BOUNDED ─────────────
+-- "Any timestamp" was literal: `project_time_entries` carries nine CHECK
+-- constraints and none of them mentions `started_at`, so a `+400d` filing was
+-- written and authorized (measured at round 3). An hour is a record of work
+-- already done; a future one is a typo, a bad clock or a clumsy date picker,
+-- and it lands in a studio's week, its CSV and its statement.
+--
+-- The bound is FORWARD only, and it is deliberately loose, because HT-13-a
+-- files a date-only entry at 12:00 UTC of the NAMED day: a member in UTC+14
+-- naming her own today, just after local midnight, legitimately writes an
+-- instant up to 26 hours ahead of `now()`. So 26 hours is the band — the widest
+-- the noon-UTC convention can honestly produce — and anything past it raises.
+-- Backdating stays unbounded in the other direction; that is what HT-13 is for.
+--
+-- The bound is on the START, not on the span end, and that is a decision rather
+-- than an oversight. W6-R3-07 (Patina Field's stepper with no open visit
+-- lengthening a span whose implied END walks forward) is closed where it is
+-- caused — `FieldLogTimeDraft` now anchors the END and moves the START back —
+-- because a server bound on `p_started_at + duration` would have to admit the
+-- 26-hour band PLUS a legitimate long span and would then refuse honest hours
+-- at the edge while still admitting the ones it was written for.
 --
 -- W4 (00610) — p_project_id may be NULL. The internal-time door is the same
 -- door: project_time_entries_internal_scope_ck already requires a project-less
@@ -93,6 +115,14 @@ BEGIN
     RAISE EXCEPTION 'log_time: p_duration_minutes must be a positive number of minutes';
   END IF;
 
+  -- R3-m1 / W7-R5-07. See the banner: forward only, 26 hours, because HT-13-a
+  -- files a named day at noon UTC and the furthest-east studio zone (UTC+14)
+  -- legitimately produces an instant that far ahead of now().
+  IF COALESCE(p_started_at, now()) > now() + interval '26 hours' THEN
+    RAISE EXCEPTION 'log_time: an hour cannot be logged in the future — % is beyond today', p_started_at
+      USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+
   INSERT INTO public.project_time_entries (
     id, project_id, user_id, started_at, duration_minutes,
     activity, billable, notes, phase_key, task_id, source, rate_role, studio_id
@@ -133,7 +163,9 @@ GRANT  EXECUTE ON FUNCTION public.log_time(uuid,uuid,timestamptz,integer,text,bo
 COMMENT ON FUNCTION public.log_time(uuid,uuid,timestamptz,integer,text,boolean,text,text,uuid,text,text,uuid) IS
   'Replay-safe capture of one completed hour under a caller-minted id (00608). '
   'SECURITY INVOKER — RLS decides. p_billable NULL raises (HT-11); '
-  'p_started_at is any date (HT-13, bounded only by guard_invoiced_time_entry); '
+  'p_started_at is any PAST date (HT-13; frozen once invoiced by '
+  'guard_invoiced_time_entry, and bounded forward at now() + 26h — the widest '
+  'instant HT-13-a''s noon-UTC convention can honestly produce, R3-m1); '
   'p_project_id NULL is internal time (00610). Never opens a running slot.';
 
 -- ── start_timer — the one slot, taken atomically, both rows returned ───────
@@ -260,6 +292,9 @@ BEGIN
   END IF;
   IF v_def !~ 'p_billable IS NULL' THEN
     RAISE EXCEPTION '00608: log_time must raise on a missing billable (HT-11)';
+  END IF;
+  IF v_def !~ 'interval ''26 hours''' THEN
+    RAISE EXCEPTION '00608: log_time must refuse a future started_at (R3-m1 / W7-R5-07)';
   END IF;
 
   v_def := pg_get_functiondef('public.start_timer(uuid,text,boolean,text,uuid)'::regprocedure);

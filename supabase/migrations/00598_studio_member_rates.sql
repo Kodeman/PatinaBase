@@ -347,7 +347,29 @@ DROP POLICY IF EXISTS studio_member_rates_admin_update ON public.studio_member_r
 CREATE POLICY studio_member_rates_admin_update ON public.studio_member_rates
   FOR UPDATE TO authenticated
   USING (public.is_org_admin_or_owner(studio_id))
-  WITH CHECK (public.is_org_admin_or_owner(studio_id));
+  WITH CHECK (
+    public.is_org_admin_or_owner(studio_id)
+    -- MS-10 (integration round 3): the INSERT policy has carried the subject
+    -- guard since W1-R1-09 — a rate row must name an ACTIVE, non-guest member
+    -- of the studio it belongs to — and the UPDATE policy did not. The
+    -- asymmetry was never an exploit (guard_studio_member_rate_history freezes
+    -- studio_id and user_id on the open row, and the resolver prices off
+    -- projects.studio_id regardless), but a WITH CHECK that admits a row shape
+    -- its sibling INSERT refuses is a door waiting for the freeze to be
+    -- loosened. Mirrored here rather than argued about again.
+    --
+    -- USING is deliberately NOT narrowed: an admin must still be able to reach
+    -- the row of a member who has since left, and close_prior_studio_member_rate
+    -- is SECURITY DEFINER (owner, RLS not forced) so the ladder is untouched
+    -- either way.
+    AND EXISTS (
+      SELECT 1 FROM public.organization_members AS subject
+      WHERE subject.organization_id = studio_member_rates.studio_id
+        AND subject.user_id = studio_member_rates.user_id
+        AND subject.status = 'active'
+        AND subject.role <> 'guest'
+    )
+  );
 
 -- No DELETE policy. History is a fact.
 

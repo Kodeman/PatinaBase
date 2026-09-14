@@ -123,6 +123,12 @@ COMMENT ON COLUMN public.project_time_entries.updated_by IS
 CREATE OR REPLACE FUNCTION public.stamp_time_entry_updated_by()
 RETURNS trigger
 LANGUAGE plpgsql
+-- N-02 / N-13 (integration round 3): every other trigger function this program
+-- adds pins its search_path and is closed to anon; this one did neither. No
+-- exploit was found — it is SECURITY INVOKER, its body reads only auth.uid(),
+-- and a direct call raises "trigger functions can only be called as triggers" —
+-- but the quality bar is the quality bar, and it survived three review rounds.
+SET search_path = public, pg_temp
 AS $$
 BEGIN
   -- Only a real actor stamps. A NULL auth.uid() is a migration / cron /
@@ -134,11 +140,21 @@ BEGIN
 END;
 $$;
 
+-- A trigger function needs no EXECUTE at fire time (Postgres checks the
+-- privilege at CREATE TRIGGER) — the same REVOKE audit_time_entry_change()
+-- below takes, and 00597's and 00603's precedent in this program. anon in
+-- particular has no reason to reach it: no anon-reachable path writes a time
+-- entry (N-02 / N-13).
+REVOKE ALL ON FUNCTION public.stamp_time_entry_updated_by()
+  FROM PUBLIC, anon, authenticated, service_role;
+
 COMMENT ON FUNCTION public.stamp_time_entry_updated_by() IS
   'HT-23: stamps project_time_entries.updated_by with auth.uid() on every '
   'UPDATE by a real actor. INVOKER — it writes only NEW and reads only '
   'auth.uid(). Named to fire LAST among the BEFORE UPDATE triggers, after '
-  '00412/00601''s guard and classifier family have had their say.';
+  '00412/00601''s guard and classifier family have had their say. search_path '
+  'is pinned and EXECUTE is revoked from every role (N-02 / N-13): a trigger '
+  'function needs neither.';
 
 DROP TRIGGER IF EXISTS zzz_stamp_time_entry_updated_by_trg ON public.project_time_entries;
 CREATE TRIGGER zzz_stamp_time_entry_updated_by_trg

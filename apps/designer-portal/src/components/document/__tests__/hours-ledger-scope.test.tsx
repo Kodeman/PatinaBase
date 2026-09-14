@@ -35,6 +35,7 @@ import {
   hoursMemberScopePending,
   openHoursForMember,
 } from '@/lib/document/open-hours-scope';
+import { localDateOf } from '@/lib/document/time-derivation';
 
 type Role = 'owner' | 'admin' | 'member';
 let viewerRole: Role = 'owner';
@@ -549,6 +550,41 @@ describe('the Hours scope lens', () => {
       projectId: null,
       userId: null,
     });
+  });
+
+  // ── HT-13-b — day labels are cut in the CALLER's zone ────────────────────
+  it('hands the rollup the viewer\'s own IANA zone (HT-13-b)', () => {
+    renderLedger();
+    fireEvent.click(screen.getByRole('button', { name: 'the studio' }));
+
+    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    expect(zone).toBeTruthy();
+    // Not an ISO offset and not 'local': the server buckets with
+    // `AT TIME ZONE p_timezone`, which only accepts a zone NAME.
+    expect(rollupCalls.at(-1)).toMatchObject({ timeZone: zone });
+  });
+
+  it('prints each scoped entry\'s day from its instant, never the ledger\'s UTC day column (HT-13-b / R3-M2)', () => {
+    // The fact view's `day` is deliberately impossible here: if the row still
+    // printed that column, this date would appear on the page. It is the UTC
+    // bucket, and west of UTC an evening hour carries tomorrow's.
+    ledgerRows = [
+      {
+        ...LEDGER_ROW,
+        started_at: '2026-09-14T02:34:00.000Z',
+        day: '2999-01-01',
+        iso_week: '2999-W01',
+      },
+    ];
+    renderLedger();
+    fireEvent.click(screen.getByRole('button', { name: 'the studio' }));
+    fireEvent.click(screen.getByRole('button', { name: 'The entries' }));
+
+    expect(screen.queryByText(/2999-01-01/)).not.toBeInTheDocument();
+    // And what it DOES print is the instant read in the viewer's own zone.
+    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const expected = localDateOf('2026-09-14T02:34:00.000Z', zone);
+    expect(screen.getByText(new RegExp(expected))).toBeInTheDocument();
   });
 
   it('opens the member scope from the person, aggregate first, notes behind an act (HT-36)', async () => {

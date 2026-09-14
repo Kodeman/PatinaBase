@@ -15746,6 +15746,12 @@ END $g$;
 
 -- 00605_time_entry_admin_write_and_trace.sql
 DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.stamp_time_entry_updated_by() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00605_time_entry_admin_write_and_trace.sql
+DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.audit_time_entry_change() FROM PUBLIC, anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
@@ -15764,13 +15770,13 @@ END $g$;
 
 -- 00607_studio_hours_rollup.sql
 DO $g$ BEGIN
-  REVOKE EXECUTE ON FUNCTION public.studio_hours_rollup(uuid, timestamptz, timestamptz, text, uuid, uuid) FROM PUBLIC, anon;
+  REVOKE EXECUTE ON FUNCTION public.studio_hours_rollup(uuid, timestamptz, timestamptz, text, uuid, uuid, text) FROM PUBLIC, anon;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
 -- 00607_studio_hours_rollup.sql
 DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.studio_hours_rollup(uuid, timestamptz, timestamptz, text, uuid, uuid) TO authenticated;
+  GRANT EXECUTE ON FUNCTION public.studio_hours_rollup(uuid, timestamptz, timestamptz, text, uuid, uuid, text) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 

@@ -51,7 +51,12 @@ import {
   timeExportFilename,
   type TimeExportRow,
 } from "@/lib/document/time-export";
-import { ACTIVITIES, fmtMinutes } from "@/lib/document/time-derivation";
+import {
+  ACTIVITIES,
+  fmtMinutes,
+  localDateOf,
+  viewerTimeZone,
+} from "@/lib/document/time-derivation";
 import { fmtDay, fmtUsd } from "@/lib/document/format";
 import { LedgerFrontMatter } from "./ledger-front-matter";
 import { hoursUtilization } from "@/lib/document/ledger-summary";
@@ -155,7 +160,9 @@ const GROUP_BY: ReadonlyArray<[TimeHoursGroupBy, string]> = [
 const ADD_FIELD_CLASS =
   "min-h-11 w-full min-w-0 rounded-[4px] border border-[var(--color-pearl)] bg-white px-2 py-1.5 t-meta text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none";
 
-/** Local calendar date, not a UTC shift of it — the rollup takes dates. */
+/** Local calendar date, not a UTC shift of it. NOT a query bound: since P2-B1
+ *  the rollup and the fact view both take INSTANTS, and this survives for the
+ *  export filename and the analytics `period` string alone. */
 const isoDate = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
     d.getDate(),
@@ -687,6 +694,10 @@ export function HoursLedger({
   // the entries toggle, the CSV and the statement while `mine` still showed it.
   const fromInstant = weekStart.toISOString();
   const toInstant = weekEnd.toISOString();
+  // HT-13-b — the zone the day and week LABELS are cut in, all the way down:
+  // the rollup's buckets server-side, and every date this sheet prints. Read
+  // once per render rather than per row.
+  const timeZone = viewerTimeZone();
   // The week's own calendar dates — the export filename and the analytics
   // period string, never a query bound.
   const fromDate = isoDate(weekStart);
@@ -740,6 +751,10 @@ export function HoursLedger({
     () =>
       (studioExport.data ?? []).map((r) => ({
         ...r,
+        // HT-13-b — the bookkeeper's Date column is the viewer's calendar day,
+        // not the row's UTC bucket. Derived here, where the zone is known, so
+        // the pure builder stays pure.
+        local_date: localDateOf(r.started_at, timeZone),
         client_name: r.project_id
           ? (clientNameByProjectId.get(r.project_id) ?? null)
           : null,
@@ -1106,6 +1121,7 @@ export function HoursLedger({
               onGroupBy={setGroupBy}
               from={fromInstant}
               to={toInstant}
+              timeZone={timeZone}
               weekLabel={weekLabel}
             />
           ) : lensProjectId && lensPricingStudioId === null ? (
@@ -1134,6 +1150,7 @@ export function HoursLedger({
             onGroupBy={setGroupBy}
             from={fromInstant}
             to={toInstant}
+            timeZone={timeZone}
             weekLabel={weekLabel}
           />
         ))}
@@ -1168,6 +1185,7 @@ export function HoursLedger({
                 projectId={scope === "project" ? lensProjectId : null}
                 from={fromInstant}
                 to={toInstant}
+                timeZone={timeZone}
                 studioNames={studioNames}
               />
             </div>
@@ -1388,11 +1406,14 @@ export function HoursLedger({
               value={addMinutes}
               onChange={(e) => setAddMinutes(e.target.value)}
             />
-            {/* HT-13 — the day the hour was worked. Any date; the entry lands on
-            `started_at`, not on `created_at`. */}
+            {/* HT-13 — the day the hour was worked. Any PAST date; the entry
+            lands on `started_at`, not on `created_at`. R3-m1: `max` is today,
+            because an hour is a record of work already done — `log_time`
+            refuses a future instant and the door should not offer one. */}
             <input
               type="date"
               aria-label="Date"
+              max={isoDate(new Date())}
               className={ADD_FIELD_CLASS}
               value={addDate}
               onChange={(e) => setAddDate(e.target.value)}
@@ -1559,6 +1580,7 @@ function ScopeRollup({
   onGroupBy,
   from,
   to,
+  timeZone,
   weekLabel,
 }: {
   scope: HoursScope;
@@ -1579,6 +1601,10 @@ function ScopeRollup({
   onGroupBy: (groupBy: TimeHoursGroupBy) => void;
   from: string;
   to: string;
+  /** HT-13-b — the viewer's IANA zone, which `by day` and `by week` are cut in.
+   *  Without it the server defaults to UTC and a seven-day week lists an eighth
+   *  day west of UTC (R3-M2, measured). */
+  timeZone: string;
   weekLabel: string;
 }) {
   const rollup = useStudioHoursRollup({
@@ -1588,6 +1614,7 @@ function ScopeRollup({
     groupBy,
     userId: memberId,
     projectId,
+    timeZone,
   });
   const rows = rollup.data ?? [];
   const totalMinutes = rows.reduce((sum, row) => sum + row.total_minutes, 0);
@@ -1824,6 +1851,7 @@ function ScopeEntries({
   projectId,
   from,
   to,
+  timeZone,
   studioNames,
 }: {
   studioId: string | null;
@@ -1831,6 +1859,8 @@ function ScopeEntries({
   projectId: string | null;
   from: string;
   to: string;
+  /** HT-13-b — the zone each row's date is printed in. */
+  timeZone: string;
   studioNames: Map<string, string>;
 }) {
   const ledger = useTimeEntryLedger({
@@ -1870,7 +1900,12 @@ function ScopeEntries({
   return (
     <ul className="mt-2">
       {rows.map((row) => (
-        <ScopeEntryRow key={row.id} row={row} studioNames={studioNames} />
+        <ScopeEntryRow
+          key={row.id}
+          row={row}
+          timeZone={timeZone}
+          studioNames={studioNames}
+        />
       ))}
     </ul>
   );
@@ -1881,9 +1916,11 @@ function ScopeEntries({
  *  made where the hour lives, not in an aggregate. */
 function ScopeEntryRow({
   row,
+  timeZone,
   studioNames,
 }: {
   row: TimeEntryLedgerRow;
+  timeZone: string;
   studioNames: Map<string, string>;
 }) {
   const [showNote, setShowNote] = useState(false);
@@ -1936,7 +1973,11 @@ function ScopeEntryRow({
               row.project_id == null
                 ? "Studio time"
                 : (row.project_name ?? "Project"),
-              row.day,
+              // HT-13-b — the day this hour was worked in the VIEWER's zone,
+              // derived from the instant. `row.day` is the fact view's UTC
+              // bucket: printing it here made one sheet say `13 SEPTEMBER`
+              // under `mine` and `2026-09-14` here, for the same hour (R3-M2).
+              localDateOf(row.started_at, timeZone),
               row.activity ?? "activity not set",
               provenance.kind === "rated"
                 ? `${provenance.label} · ${fmtUsd(provenance.hourlyRateCents)}/hr`

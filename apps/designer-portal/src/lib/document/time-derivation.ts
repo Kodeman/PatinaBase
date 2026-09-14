@@ -190,3 +190,62 @@ export function todayStartISO(now: Date): string {
   d.setHours(0, 0, 0, 0);
   return d.toISOString();
 }
+
+// ── HT-13-b — day labels are cut in the CALLER's zone ────────────────────────
+//
+// RULED 2026-09-14 (integration round 3, resolving R3-M2/R3-m3): every day and
+// week label a person reads is derived in the viewer's own timezone, passed to
+// the server as an IANA name. `time_entry_ledger.day` stays UTC — it is the
+// fact view's basis, and 00599's — so the portal derives what it PRINTS from
+// `started_at` instead of reading that column.
+//
+// Measured before this: one hour filed Sun 13 Sep 21:34 CDT read `13 SEPTEMBER`
+// under `mine` and `2026-09-14` under `the studio`, `BY DAY` listed a day the
+// displayed week does not contain, the CSV's Date column carried the UTC date,
+// and the homeowner's folio billed the hour under the 14th.
+
+/** The viewer's own IANA zone, for `studio_hours_rollup`'s `p_timezone`.
+ *  `'UTC'` where the runtime cannot answer — the server's own default, so a
+ *  fallback changes nothing rather than shifting a label sideways. */
+export function viewerTimeZone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  } catch {
+    return 'UTC';
+  }
+}
+
+/**
+ * The calendar date (`YYYY-MM-DD`) an instant falls on IN a named zone —
+ * never `.slice(0, 10)` on a UTC ISO string, which is the same bug in a
+ * shorter spelling.
+ *
+ * An unparseable instant returns '' rather than a confident wrong date, and an
+ * unusable zone falls back to the UTC date rather than throwing in a render.
+ */
+export function localDateOf(
+  instant: string | Date | null | undefined,
+  timeZone: string = viewerTimeZone(),
+): string {
+  if (!instant) return '';
+  const at = instant instanceof Date ? instant : new Date(instant);
+  if (Number.isNaN(at.getTime())) return '';
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(at);
+    const part = (type: string) =>
+      parts.find((p) => p.type === type)?.value ?? '';
+    const year = part('year');
+    const month = part('month');
+    const day = part('day');
+    if (year && month && day) return `${year}-${month}-${day}`;
+  } catch {
+    // An invalid zone name (a stale profile value, a spoofed header) is not
+    // worth a blank screen.
+  }
+  return at.toISOString().slice(0, 10);
+}

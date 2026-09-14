@@ -72,7 +72,9 @@ describe("buildTimeLineDraft", () => {
         started_at: "2026-09-05T09:00:00Z",
         resolved_rate_cents: 14_500,
       },
-    ]);
+    ],
+    // HT-13-b — named, so the machine's own zone cannot move the assertion.
+    "America/Chicago");
     expect(draft!.description).toBe("Design services — 1h 30m (2 entries)");
     expect(draft!.description).not.toMatch(/Maria|Alvarez/);
     // Dated sub-table: date · minutes · rate, oldest first, no name.
@@ -98,6 +100,72 @@ describe("buildTimeLineDraft", () => {
       },
     ]);
     expect(draft!.description).toBe("Design services — 2h (2 entries)");
+  });
+
+  // ── HT-13-b (R3-m3) — the homeowner's folio dates the hour as the studio
+  //     read it, never as UTC sliced off the ISO string ─────────────────────
+  it("HT-13-b — a late-evening hour west of UTC is dated the day it was worked", () => {
+    // 21:34 CDT on the 13th is 02:34Z on the 14th. `.slice(0, 10)` billed the
+    // client for the 14th; the designer's own sheet said the 13th.
+    const draft = buildTimeLineDraft(
+      [
+        {
+          id: "a",
+          duration_minutes: 90,
+          amount_cents: 18_000,
+          started_at: "2026-09-14T02:34:00Z",
+          resolved_rate_cents: 12_000,
+        },
+      ],
+      "America/Chicago",
+    );
+    expect(draft!.dateRows).toEqual([
+      { date: "2026-09-13", minutes: 90, rateCents: 12_000 },
+    ]);
+  });
+
+  it("HT-13-b — an early-morning hour east of UTC is dated forward for the same reason", () => {
+    // 08:30 JST on the 14th is 23:30Z on the 13th. The rule is symmetric: the
+    // folio carries the studio viewer's calendar day, not the server's.
+    const draft = buildTimeLineDraft(
+      [
+        {
+          id: "a",
+          duration_minutes: 60,
+          amount_cents: 12_000,
+          started_at: "2026-09-13T23:30:00Z",
+          resolved_rate_cents: 12_000,
+        },
+      ],
+      "Asia/Tokyo",
+    );
+    expect(draft!.dateRows[0].date).toBe("2026-09-14");
+  });
+
+  it("HT-13-b — the sub-table stays sorted by the LOCAL date it now carries", () => {
+    const draft = buildTimeLineDraft(
+      [
+        {
+          id: "b",
+          duration_minutes: 60,
+          amount_cents: 12_000,
+          started_at: "2026-09-14T02:34:00Z", // Sun 13 Sep, 21:34 CDT
+          resolved_rate_cents: 12_000,
+        },
+        {
+          id: "a",
+          duration_minutes: 30,
+          amount_cents: 6_000,
+          started_at: "2026-09-12T16:00:00Z", // Sat 12 Sep, 11:00 CDT
+          resolved_rate_cents: 12_000,
+        },
+      ],
+      "America/Chicago",
+    );
+    expect(draft!.dateRows.map((r) => r.date)).toEqual([
+      "2026-09-12",
+      "2026-09-13",
+    ]);
   });
 
   it("uses singular phrasing for one entry", () => {

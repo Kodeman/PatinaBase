@@ -91,7 +91,11 @@ fi
 
 PGURL="${PGURL:-postgresql://postgres:postgres@${HOST}:${PORT}/postgres}"
 
-LOG_DIR="$(mktemp -d 2>/dev/null || mktemp -d -t run-sql-tests)"
+# MS-09 / R3-m4 — a TMPDIR-rooted template. A bare `mktemp -d` resolves to
+# /var/folders/..., which a sandboxed agent session cannot write: three
+# reviewers in three rounds hit `mkdtemp failed ... Operation not permitted`
+# and hand-rolled the loop instead of running this script.
+LOG_DIR="$(mktemp -d "${TMPDIR:-/tmp}/run-sql-tests.XXXXXX")"
 trap 'rm -rf "${LOG_DIR}"' EXIT
 
 # ---------------------------------------------------------------------------
