@@ -72,6 +72,10 @@ jest.mock('@patina/supabase', () => ({
   createBrowserClient: () => makeClient(),
   isInvoiceEligibleTimeEntry: () => false,
   filterProjectUnbilledEntries: () => [],
+  // MS-11 — the sheet's own unbilled read splits rate-pending hours out of
+  // the balance with this predicate; the real one is `rate_source === 'none'`.
+  isRatePendingTimeEntry: (row: { rate_source?: string | null }) =>
+    row?.rate_source === 'none',
   useCreateTimeEntry: () => ({ mutateAsync: mockCreate, isPending: false }),
   useUpdateTimeEntry: () => ({ mutate: jest.fn() }),
   useDeleteTimeEntry: () => ({ mutateAsync: jest.fn(), isPending: false }),

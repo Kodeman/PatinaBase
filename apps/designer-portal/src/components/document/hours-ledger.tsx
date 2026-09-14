@@ -31,6 +31,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   createBrowserClient,
   filterProjectUnbilledEntries,
+  isRatePendingTimeEntry,
   useClients,
   useCreateTimeEntry,
   useDeleteTimeEntry,
@@ -382,20 +383,50 @@ export function HoursLedger({
   // R77 — the all-time unbilled balance (00177 view: billable, completed,
   // unclaimed, view-resolved rates). A balance, not a flow — it deliberately
   // ignores the shown week; the lens scopes it like everything else.
-  const { data: unbilledRows, refetch: refetchUnbilled } = useQuery({
+  //
+  // MS-11 (integration round 2) — this read is the band's OWN, not
+  // `useStudioUnbilledTime`'s, so MS-01's repair had to be made here too:
+  //   · `rate_source` is selected, and an hour NOTHING priced
+  //     (`rate_source = 'none'`) is held out of the balance. Without it the
+  //     band counted a rate-pending hour's MINUTES at $0.00 and printed
+  //     "UNBILLED · ALL TIME $0.00 · 2H 00M", and `billingTargetRows` carried
+  //     its id into a composer where nothing was tickable — `claim_time_entries`
+  //     refuses it server-side, so no money moved, but the act was a dead end
+  //     under a primary button. The held-back hours are counted, not hidden:
+  //     the band says how many are waiting on a rate.
+  //   · `user_id = me` (n7-02). The band renders ONLY in the `mine` scope, and
+  //     project_unbilled_time is security_invoker — so for an owner or admin,
+  //     whose RLS reads the whole studio, this printed the studio's balance
+  //     under the word "mine". The week read above is already `.eq('user_id',
+  //     me)`; this is the same scope, on the same sheet.
+  const { data: unbilledAllRows, refetch: refetchUnbilled } = useQuery({
     queryKey: ["document-hours-unbilled", lensProjectId],
     queryFn: async () => {
-      let query = getSupabase()
+      const supabase = getSupabase();
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData?.user?.id) return [];
+      let query = supabase
         .from("project_unbilled_time")
         .select(
-          "id, project_id, duration_minutes, amount_cents, authority_rate_id, billing_state",
-        );
+          "id, project_id, user_id, duration_minutes, amount_cents, authority_rate_id, billing_state, rate_source",
+        )
+        .eq("user_id", userData.user.id);
       if (lensProjectId) query = query.eq("project_id", lensProjectId);
       const { data, error } = await query;
       if (error) throw error;
       return (data ?? []) as AnyRecord[];
     },
   });
+  // The balance, the document count and the composer's prefill are all the
+  // PRICED set; the pending set is kept so the band can name what is waiting.
+  const unbilledRows = useMemo(
+    () => (unbilledAllRows ?? []).filter((row) => !isRatePendingTimeEntry(row)),
+    [unbilledAllRows],
+  );
+  const ratePendingUnbilled = useMemo(
+    () => (unbilledAllRows ?? []).filter((row) => isRatePendingTimeEntry(row)),
+    [unbilledAllRows],
+  );
 
   const {
     data: pendingAuthorizationRows,
@@ -417,26 +448,34 @@ export function HoursLedger({
     },
   });
 
+  // Built from ALL rows, priced and pending alike: this map only supplies a
+  // per-line amount fallback, and a pending line's amount is 0 either way —
+  // dropping it here would change nothing but the reader's confidence.
   const unbilledById = useMemo(() => {
     const map = new Map<string, UnbilledInfo>();
-    for (const row of unbilledRows ?? [])
+    for (const row of unbilledAllRows ?? [])
       map.set(row.id, {
         amount_cents: row.rated_amount_cents ?? row.amount_cents ?? 0,
         project_id: row.project_id,
         authority_rate_id: row.authority_rate_id ?? null,
       });
     return map;
-  }, [unbilledRows]);
-  const unbilledMinutes = (unbilledRows ?? []).reduce(
+  }, [unbilledAllRows]);
+  const unbilledMinutes = unbilledRows.reduce(
     (s, r) => s + (r.duration_minutes ?? 0),
     0,
   );
-  const unbilledCents = (unbilledRows ?? []).reduce(
+  const unbilledCents = unbilledRows.reduce(
     (s, r) => s + (r.rated_amount_cents ?? r.amount_cents ?? 0),
     0,
   );
+  // HT-26 — hours nothing priced, named rather than folded into the figure.
+  const ratePendingMinutes = ratePendingUnbilled.reduce(
+    (s, r) => s + (r.duration_minutes ?? 0),
+    0,
+  );
   const unbilledProjects = useMemo(
-    () => [...new Set((unbilledRows ?? []).map((r) => r.project_id as string))],
+    () => [...new Set(unbilledRows.map((r) => r.project_id as string))],
     [unbilledRows],
   );
   const [billingProjectId, setBillingProjectId] = useState(
@@ -452,10 +491,7 @@ export function HoursLedger({
   const billingTargetRows = useMemo(
     () =>
       billingTargetProjectId
-        ? filterProjectUnbilledEntries(
-            unbilledRows ?? [],
-            billingTargetProjectId,
-          )
+        ? filterProjectUnbilledEntries(unbilledRows, billingTargetProjectId)
         : [],
     [billingTargetProjectId, unbilledRows],
   );
@@ -642,7 +678,17 @@ export function HoursLedger({
       ? "this week"
       : `week of ${weekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
 
-  // The shown week, as the dates the rollup and the fact view bucket by.
+  // P2-B1 — the shown week as the INSTANT range the rollup and the fact view
+  // now take: the viewer's local Monday 00:00 INCLUSIVE to the next Monday
+  // 00:00 EXCLUSIVE, which is exactly the bounds the `mine` read above uses.
+  // Passing the calendar dates instead asked a UTC question of a local week:
+  // an hour the timer filed on Sunday evening west of UTC fell into the NEXT
+  // UTC day, left the week entirely, and was omitted from the studio rollup,
+  // the entries toggle, the CSV and the statement while `mine` still showed it.
+  const fromInstant = weekStart.toISOString();
+  const toInstant = weekEnd.toISOString();
+  // The week's own calendar dates — the export filename and the analytics
+  // period string, never a query bound.
   const fromDate = isoDate(weekStart);
   const toDate = isoDate(new Date(weekEnd.getTime() - 86_400_000));
 
@@ -651,8 +697,8 @@ export function HoursLedger({
   // rather than a lift, since the toggle's rows are not always mounted.
   const studioExport = useTimeEntryLedger({
     studioId: scope === "studio" ? (viewerStudio?.id ?? null) : null,
-    from: fromDate,
-    to: toDate,
+    from: fromInstant,
+    to: toInstant,
     includeRunning: false,
   });
   const studioExportInvoiceIds = useMemo(
@@ -1058,8 +1104,8 @@ export function HoursLedger({
               projectId={lensProjectId}
               groupBy={groupBy}
               onGroupBy={setGroupBy}
-              from={fromDate}
-              to={toDate}
+              from={fromInstant}
+              to={toInstant}
               weekLabel={weekLabel}
             />
           ) : lensProjectId && lensPricingStudioId === null ? (
@@ -1086,8 +1132,8 @@ export function HoursLedger({
             projectId={null}
             groupBy={groupBy}
             onGroupBy={setGroupBy}
-            from={fromDate}
-            to={toDate}
+            from={fromInstant}
+            to={toInstant}
             weekLabel={weekLabel}
           />
         ))}
@@ -1120,8 +1166,8 @@ export function HoursLedger({
                 }
                 memberId={scope === "member" ? (memberScope?.id ?? null) : null}
                 projectId={scope === "project" ? lensProjectId : null}
-                from={fromDate}
-                to={toDate}
+                from={fromInstant}
+                to={toInstant}
                 studioNames={studioNames}
               />
             </div>
@@ -1138,16 +1184,28 @@ export function HoursLedger({
           document's own unbilled rows-with-total, but only listed beneath it —
           the entries act there lists the WEEK's ledger rows, a different set —
           so it is hidden rather than captioned into a half-truth.) */}
-      {scope === "mine" && unbilledMinutes > 0 && (
+      {scope === "mine" && (unbilledMinutes > 0 || ratePendingMinutes > 0) && (
         <div className="-mt-2 mb-4 flex flex-wrap items-baseline gap-2 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
           <span className="text-[var(--color-clay-ink)]">
             unbilled · all time
           </span>
-          <span className="text-[var(--color-charcoal)]">
-            {fmtUsd(unbilledCents)} · {fmtMinutes(unbilledMinutes)}
-          </span>
+          {/* MS-11 — a studio whose whole balance is unpriced has a band with
+              no money in it at all, rather than "$0.00 · 2H 00M", which read as
+              two hours worth nothing. */}
+          {unbilledMinutes > 0 && (
+            <span className="text-[var(--color-charcoal)]">
+              {fmtUsd(unbilledCents)} · {fmtMinutes(unbilledMinutes)}
+            </span>
+          )}
           {unbilledProjects.length > 1 && (
             <span>· {unbilledProjects.length} documents</span>
+          )}
+          {/* MS-11 — the hours held back because nothing priced them. Held out
+              of the figure and out of "Bill it", but said aloud: this is the
+              studio's cue to fill the rate card, and silence here read as
+              hours that had simply vanished. */}
+          {ratePendingMinutes > 0 && (
+            <span>· {fmtMinutes(ratePendingMinutes)} awaiting a rate</span>
           )}
           {!lensProjectId && unbilledProjects.length > 1 && (
             <select
@@ -1200,7 +1258,9 @@ export function HoursLedger({
           teaching state. A designer with history keeps the quiet week lines. */}
       {scope === "mine" &&
         days.length === 0 &&
-        (weekOffset === 0 && unbilledMinutes === 0 ? (
+        (weekOffset === 0 &&
+        unbilledMinutes === 0 &&
+        ratePendingMinutes === 0 ? (
           <div className="py-4">
             <p className="font-heading text-[15px] italic text-[var(--color-charcoal)]">
               No hours logged yet
