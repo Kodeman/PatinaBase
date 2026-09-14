@@ -75,6 +75,15 @@ export function useTimeAutostartPreference() {
     optedOut: query.data?.optedOut === true,
     disclosedAt: query.data?.disclosedAt ?? null,
     isSettled: query.isSuccess || query.isError,
+    /**
+     * The stamp is KNOWN — the read actually returned, rather than settling by
+     * failing (W7-R4-09). `disclosedAt` is null in both cases and they mean
+     * opposite things: one says "never disclosed", the other says "we could not
+     * find out". HT-35 allows the sentence once in a working life, so only the
+     * first may spend it; a caller that reads a failed fetch as "not disclosed"
+     * re-serves the one-time disclosure on every failing load.
+     */
+    disclosureRead: query.isSuccess,
   };
 }
 
@@ -110,6 +119,13 @@ export function useSetTimeAutostartOptOut() {
 export function useMarkTimeAutostartDisclosed() {
   const queryClient = useQueryClient();
   return useMutation({
+    /**
+     * W7-R4-09 — the write half of exactly-once. A stamp that never lands
+     * leaves the column NULL while the band stands and is dismissed, so the
+     * sentence comes back on the next load. Retried, because the failure this
+     * actually meets is a dropped round trip rather than a refusal.
+     */
+    retry: 2,
     mutationFn: async () => {
       const supabase = getSupabase();
       const { data: userData } = await supabase.auth.getUser();

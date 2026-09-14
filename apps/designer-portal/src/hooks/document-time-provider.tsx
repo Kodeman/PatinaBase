@@ -266,6 +266,13 @@ export function DocumentTimeProvider({ children }: { children: React.ReactNode }
         queryKey: timeAutostartKeys.preference,
         queryFn: fetchTimeAutostartPreference,
         staleTime: 5 * 60_000,
+        // W7-R4-11 — no retry ladder in front of the clock. The portal's
+        // QueryClient defaults to 3 retries at 1-2-4s; on a preference that
+        // fails closed to "she did not decline" those seven seconds buy
+        // nothing and are spent before the first hour of the session is
+        // recorded. The five-minute staleTime means the answer is read once
+        // per session and every hold after that is a cache hit.
+        retry: false,
       });
       return pref?.optedOut === true;
     } catch {
@@ -446,6 +453,11 @@ export function DocumentTimeProvider({ children }: { children: React.ReactNode }
     (doc: HeldDocument) => {
       heldRef.current = doc;
       setHeld(doc);
+      // W7-R4-11 — the preference read STARTS here, outside the serialised
+      // lane, so its round trip overlaps the queue drain instead of standing
+      // in front of D11's pick-up-is-start. It never rejects (it fails closed
+      // to `false`), so holding the promise across the enqueue is safe.
+      const declined = autostartDeclined();
       enqueue(async () => {
         if (heldRef.current?.projectId !== doc.projectId) return; // superseded
         const timer = await fetchRunning();
@@ -459,7 +471,7 @@ export function DocumentTimeProvider({ children }: { children: React.ReactNode }
         // under her thumb. Awaited rather than read off a render, so the first
         // document of a session cannot open a timer she has already turned off
         // while the preference is still in flight.
-        if (await autostartDeclined()) return;
+        if (await declined) return;
         if (heldRef.current?.projectId !== doc.projectId) return;
         const billable = await automaticBillableIntent(doc.projectId);
         if (heldRef.current?.projectId !== doc.projectId) return;
@@ -540,9 +552,17 @@ export function DocumentTimeProvider({ children }: { children: React.ReactNode }
     if (!doc) return;
     pausedRef.current = null;
     setPausedFor(null);
+    // Same read, same place, for the same reason as `hold` (W7-R4-11).
+    const declined = autostartDeclined();
     enqueue(async () => {
       const timer = await fetchRunning();
       if (timer) return;
+      // HT-35 (W7-R4-10) — resume opens a `timer_auto` row exactly as hold
+      // does, so it owes the same question. Reachable without it: a member who
+      // declined auto-start starts the clock by hand, holds it with the
+      // colophon's pause act, and resume hands her back the automatic timer
+      // she turned off. Her way back is the fallback band's one tap.
+      if (await declined) return;
       const billable = await automaticBillableIntent(doc.projectId);
       if (heldRef.current?.projectId !== doc.projectId) return;
       const taken = await api.current.startTimer
@@ -563,7 +583,14 @@ export function DocumentTimeProvider({ children }: { children: React.ReactNode }
       }
       await qc.invalidateQueries({ queryKey: queryKeys.time.runningTimer() });
     });
-  }, [enqueue, fetchRunning, automaticBillableIntent, offerFromServerStop, qc]);
+  }, [
+    enqueue,
+    fetchRunning,
+    automaticBillableIntent,
+    autostartDeclined,
+    offerFromServerStop,
+    qc,
+  ]);
 
   /**
    * HT-35 — the one-tap manual start the opt-out falls back to. The SAME clock
@@ -750,6 +777,7 @@ export function DocumentTimeProvider({ children }: { children: React.ReactNode }
         optedOut={autostartOptedOut}
         disclosedAt={autostart.disclosedAt}
         settled={autostart.isSettled}
+        stampKnown={autostart.disclosureRead}
         onDisclose={() => markDisclosed.mutate()}
         onStart={startManually}
       />
@@ -779,6 +807,7 @@ function AutostartBand({
   optedOut,
   disclosedAt,
   settled,
+  stampKnown,
   onDisclose,
   onStart,
 }: {
@@ -787,6 +816,8 @@ function AutostartBand({
   optedOut: boolean;
   disclosedAt: string | null;
   settled: boolean;
+  /** W7-R4-09 — the preference read ANSWERED, rather than settling by failing. */
+  stampKnown: boolean;
   onDisclose: () => void;
   onStart: () => void;
 }) {
@@ -802,7 +833,16 @@ function AutostartBand({
    * be reachable.
    */
   const [latched, setLatched] = useState(false);
-  const undisclosed = held && settled && !optedOut && disclosedAt === null;
+  /**
+   * W7-R4-09 — `stampKnown`, not `settled`. A failed read settles too, and
+   * falls back to `disclosedAt: null`, which reads identically to a member who
+   * has genuinely never been told. HT-35 spends the sentence once in a working
+   * life; a read that learned nothing may not spend it, and may not stamp a
+   * profile it could not read either. The fallback band below keeps `settled`,
+   * because it is gated on `optedOut` — which fails closed to false — and a
+   * member who cannot be read is simply left on the shipped auto-start.
+   */
+  const undisclosed = held && stampKnown && !optedOut && disclosedAt === null;
   /**
    * `!optedOut` is load-bearing, not belt-and-braces. The profile is an
    * always-mounted overlay in this layout, not a route, so she unticks the box

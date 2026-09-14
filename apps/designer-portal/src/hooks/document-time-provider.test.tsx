@@ -73,10 +73,15 @@ jest.mock('@patina/supabase', () => ({
   timeAutostartKeys: { preference: ['time-autostart-preference'] },
   fetchTimeAutostartPreference: async () => autostartPreference,
   useTimeAutostartPreference: () => ({
-    preference: autostartPreference,
-    optedOut: autostartPreference.optedOut,
-    disclosedAt: autostartPreference.disclosedAt,
+    preference: autostartReadFailed ? null : autostartPreference,
+    // W7-R4-09 — the hook's own fail-safes, reproduced: a read that FAILED
+    // settles, falls back to "not opted out", and knows nothing about the
+    // stamp. `disclosureRead` is the difference between "never disclosed" and
+    // "could not find out".
+    optedOut: autostartReadFailed ? false : autostartPreference.optedOut,
+    disclosedAt: autostartReadFailed ? null : autostartPreference.disclosedAt,
     isSettled: true,
+    disclosureRead: !autostartReadFailed,
   }),
   useMarkTimeAutostartDisclosed: () => ({ mutate: markDisclosedMutate }),
 }));
@@ -88,6 +93,8 @@ let autostartPreference: { optedOut: boolean; disclosedAt: string | null } = {
   disclosedAt: '2026-01-01T00:00:00.000Z',
 };
 const markDisclosedMutate = jest.fn();
+/** HT-35 — the preference read FAILED. Settled, but with no answer in it. */
+let autostartReadFailed = false;
 
 /** What the stop payload actually carried, per call — W3 asserts two fields
  *  on it that the close-out used to leave implicit. */
@@ -595,6 +602,7 @@ describe('DocumentTimeProvider — HT-35, the clock she was told about', () => {
     stopTimerMutateAsync.mockClear();
     markDisclosedMutate.mockReset();
     autostartDisclosedCalls.length = 0;
+    autostartReadFailed = false;
     autostartPreference = {
       optedOut: false,
       disclosedAt: '2026-01-01T00:00:00.000Z',
@@ -805,5 +813,92 @@ describe('DocumentTimeProvider — HT-35, the clock she was told about', () => {
       screen.queryByText(/Patina keeps the time for you/),
     ).not.toBeInTheDocument();
     expect(markDisclosedMutate).not.toHaveBeenCalled();
+  });
+
+  it('does not re-serve the one-time sentence on a read that FAILED (W7-R4-09)', async () => {
+    // A failed read settles and falls back to `{ optedOut: false,
+    // disclosedAt: null }` — which is byte-for-byte what a member who has
+    // genuinely never been told looks like. Reading the failure as "never
+    // disclosed" spends HT-35's once on every failing load, and stamps a
+    // profile the browser could not read.
+    autostartReadFailed = true;
+    const { result } = renderHook(() => useDocumentTime(), { wrapper });
+    act(() => {
+      result.current.hold({ projectId: 'project-a', projectName: 'A', phaseKey: null });
+    });
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(
+      screen.queryByText(/Patina keeps the time for you/),
+    ).not.toBeInTheDocument();
+    expect(markDisclosedMutate).not.toHaveBeenCalled();
+    expect(autostartDisclosedCalls).toEqual([]);
+  });
+
+  it('still opens the clock a failed read cannot speak for (W7-R4-09)', async () => {
+    // The other half of failing closed: the sentence is withheld, the CLOCK is
+    // not. A read that could not answer leaves auto-start exactly as it ships.
+    autostartReadFailed = true;
+    const { result } = renderHook(() => useDocumentTime(), { wrapper });
+    act(() => {
+      result.current.hold({ projectId: 'project-a', projectName: 'A', phaseKey: null });
+    });
+    await waitFor(() => expect(startTimerMutateAsync).toHaveBeenCalledTimes(1));
+    expect(
+      screen.queryByText('The clock is yours to start on this document.'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('does not hand back the automatic clock on resume to a member who declined it (W7-R4-10)', async () => {
+    // Reachable: she declined auto-start, started the clock by hand from the
+    // fallback band, then held it with the colophon's pause act. Before this,
+    // `resume` opened a fresh `timer_auto` row with no question asked — the
+    // preference honoured at one door and ignored at the next.
+    autostartPreference = { optedOut: true, disclosedAt: '2026-01-01T00:00:00.000Z' };
+    const { result } = renderHook(() => useDocumentTime(), { wrapper });
+    act(() => {
+      result.current.hold({ projectId: 'project-a', projectName: 'A', phaseKey: null });
+    });
+    await waitFor(() => expect(result.current.autostartOptedOut).toBe(true));
+
+    act(() => {
+      result.current.startManually();
+    });
+    await waitFor(() => expect(startTimerMutateAsync).toHaveBeenCalledTimes(1));
+    act(() => {
+      result.current.pause();
+    });
+    await waitFor(() => expect(stopTimerMutateAsync).toHaveBeenCalledTimes(1));
+    startTimerMutateAsync.mockClear();
+
+    act(() => {
+      result.current.resume();
+    });
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(startTimerMutateAsync).not.toHaveBeenCalled();
+    // And she is not left without one — the same one tap is back on the page.
+    await waitFor(() =>
+      expect(screen.getByText('Start the clock')).toBeInTheDocument(),
+    );
+  });
+
+  it('resumes for a member who never declined it', async () => {
+    const { result } = renderHook(() => useDocumentTime(), { wrapper });
+    act(() => {
+      result.current.hold({ projectId: 'project-a', projectName: 'A', phaseKey: null });
+    });
+    await waitFor(() => expect(startTimerMutateAsync).toHaveBeenCalledTimes(1));
+    act(() => {
+      result.current.pause();
+    });
+    await waitFor(() => expect(stopTimerMutateAsync).toHaveBeenCalledTimes(1));
+    startTimerMutateAsync.mockClear();
+
+    act(() => {
+      result.current.resume();
+    });
+    await waitFor(() => expect(startTimerMutateAsync).toHaveBeenCalledTimes(1));
+    expect(startTimerMutateAsync.mock.calls[0][0]).toEqual(
+      expect.objectContaining({ projectId: 'project-a', source: 'timer_auto' }),
+    );
   });
 });
