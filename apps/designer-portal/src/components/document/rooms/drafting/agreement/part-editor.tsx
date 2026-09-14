@@ -452,9 +452,16 @@ function RateCardEditor({ payload, onChange, readOnly }: EditorProps) {
       {roles.map((role, index) => (
         <div
           key={index}
-          className="grid grid-cols-[minmax(0,1fr)_140px_auto] items-center gap-3"
+          /* W7-R5-01 — three controls fit on one line only where the galley is
+             wide enough to pay for them. Below 768px (`galley.css`'s own
+             breakpoint, where the fold measures 308px) the picker takes the
+             whole first line and the rate and `Remove` share the second: at
+             140px + `Remove` beside it the picker fell to a 6px text box and
+             printed none of the four role names. */
+          className="grid grid-cols-[140px_minmax(0,1fr)] items-center gap-3 md:grid-cols-[minmax(0,1fr)_140px_auto]"
         >
           <Select
+            wrapperClassName="col-span-2 md:col-span-1"
             aria-label={`Role ${index + 1}`}
             disabled={readOnly}
             value={role.rosterRole ?? ""}
@@ -512,6 +519,7 @@ function RateCardEditor({ payload, onChange, readOnly }: EditorProps) {
           <Button
             variant="ghost"
             size="sm"
+            className="justify-self-end"
             aria-label={`Remove role ${index + 1}`}
             disabled={readOnly}
             onClick={() =>
