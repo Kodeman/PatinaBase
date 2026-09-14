@@ -2136,6 +2136,7 @@ export type {
 } from "./use-studio-member-rates";
 export {
   isInvoiceEligibleTimeEntry,
+  isRatePendingTimeEntry,
   studioPeriodStartISO,
   filterProjectUnbilledEntries,
   fetchTimeSummary,

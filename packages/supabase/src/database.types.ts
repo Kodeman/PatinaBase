@@ -28323,6 +28323,8 @@ export type Database = {
           notes: string | null
           phase_key: string | null
           project_id: string | null
+          rate_role: string | null
+          rate_source: string | null
           resolved_rate_cents: number | null
           started_at: string | null
           task_id: string | null

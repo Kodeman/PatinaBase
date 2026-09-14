@@ -15894,6 +15894,18 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00617_rate_pending_never_invoiced.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.claim_time_entries(uuid, uuid[]) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00617_rate_pending_never_invoiced.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.claim_time_entries(uuid, uuid[]) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 00618_authority_rate_role_binding.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public._project_agreement_terms(uuid, jsonb, jsonb, boolean) FROM PUBLIC, anon, authenticated, service_role;

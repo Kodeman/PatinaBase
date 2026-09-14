@@ -3,6 +3,7 @@ import { act, renderHook } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   filterProjectUnbilledEntries,
+  isRatePendingTimeEntry,
   useCreateTimeEntry,
   useStartTimer,
   useStopTimer,
@@ -264,5 +265,20 @@ describe("project unbilled selection", () => {
     expect(filterProjectUnbilledEntries(rows, "winky-loft")).toEqual([
       expect.objectContaining({ id: "winky-eligible", project_id: "winky-loft" }),
     ]);
+  });
+
+  // MS-01 — an hour NOTHING priced. It is billable, un-invoiced, has a duration
+  // and, on a non-services project, is billing_state 'authorized', so every
+  // eligibility test above admits it while the rate and the amount are NULL and
+  // the view COALESCEs both to 0. `useUnbilledTime` holds these out of `entries`
+  // so no surface can tick them; `claim_time_entries` (00617) refuses them too.
+  it("calls an hour nothing priced rate-pending, and only that hour", () => {
+    expect(isRatePendingTimeEntry({ rate_source: "none" })).toBe(true);
+    // A pre-00600 legacy row carries a real snapshot and is NOT pending.
+    expect(isRatePendingTimeEntry({ rate_source: null })).toBe(false);
+    expect(isRatePendingTimeEntry({})).toBe(false);
+    expect(isRatePendingTimeEntry({ rate_source: "studio_member" })).toBe(false);
+    expect(isRatePendingTimeEntry({ rate_source: "authority" })).toBe(false);
+    expect(isRatePendingTimeEntry({ rate_source: "profile_default" })).toBe(false);
   });
 });

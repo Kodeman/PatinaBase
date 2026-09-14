@@ -174,10 +174,44 @@ export interface UnbilledTimeRow {
   authority_rate_id?: string | null;
   billing_state?: TimeBillingState | null;
   rated_amount_cents?: number | null;
+  /**
+   * MS-01 — the view carries the provenance now (00596). Without it the composer
+   * could not tell a genuinely $0.00 hour from an hour NOTHING priced.
+   */
+  rate_source?: TimeRateSource | null;
+  rate_role?: TimeRateRole | null;
+}
+
+/**
+ * MS-01 — an hour NOTHING priced. `rate_source = 'none'` is the resolver saying
+ * no rate card, no signed authority and no default answered for this member on
+ * this document; the row is still `billable` and, on a non-services project,
+ * still `billing_state = 'authorized'`, so every other eligibility test admits
+ * it while `hourly_rate_cents` and `rated_amount_cents` are NULL and
+ * project_unbilled_time COALESCEs both to 0. Such a row must print HT-26's
+ * "rate pending" and must never be tickable on an invoice: once claimed, the
+ * 00177 invoiced lock freezes a $0.00 line. A NULL `rate_source` is a pre-00600
+ * legacy row carrying a real snapshot and is NOT pending — the same line
+ * `timeRateProvenance` and the CSV export draw.
+ * `claim_time_entries` (00595) refuses these server-side as well.
+ */
+export function isRatePendingTimeEntry(entry: {
+  rate_source?: TimeRateSource | null;
+}): boolean {
+  return entry.rate_source === 'none';
 }
 
 export interface UnbilledTimeSummary {
+  /** Priced, invoice-eligible rows — the only ones a composer may tick. */
   entries: UnbilledTimeRow[];
+  /**
+   * MS-01 — invoice-eligible in every other respect, but NOTHING PRICED them
+   * (`rate_source = 'none'`). Held out of `entries` so no surface can tick or
+   * sweep them onto an invoice, and returned separately so the composer can
+   * show the studio what to repair instead of silently dropping the hour.
+   */
+  ratePendingEntries: UnbilledTimeRow[];
+  /** Over `entries` only — what this document can actually bill. */
   totalMinutes: number;
   totalAmountCents: number;
 }
@@ -257,7 +291,7 @@ export function useUnbilledTime(projectId: string | null) {
       // pending cap/retainer time and explicit nonbillable time must never be
       // selectable even if a stale view briefly returns them. Null preserves
       // compatibility with entries created before billing authorities existed.
-      const entries = filterProjectUnbilledEntries(
+      const eligible = filterProjectUnbilledEntries(
         (data ?? []) as UnbilledTimeRow[],
         projectId,
       )
@@ -269,8 +303,15 @@ export function useUnbilledTime(projectId: string | null) {
             entry.resolved_rate_cents ?? 0,
           amount_cents: entry.rated_amount_cents ?? entry.amount_cents ?? 0,
         }));
+      // MS-01 — the split is here, not in the component, so EVERY caller of this
+      // hook gets a tickable set that cannot carry an unpriced hour. The rows are
+      // not dropped: `ratePendingEntries` is what the composer prints as HT-26's
+      // "rate pending", which is also the studio's cue to fill the rate card.
+      const entries = eligible.filter((e) => !isRatePendingTimeEntry(e));
+      const ratePendingEntries = eligible.filter(isRatePendingTimeEntry);
       return {
         entries,
+        ratePendingEntries,
         totalMinutes: entries.reduce((sum, e) => sum + (e.duration_minutes || 0), 0),
         totalAmountCents: entries.reduce((sum, e) => sum + (e.amount_cents || 0), 0),
       };
@@ -284,14 +325,17 @@ export interface StudioUnbilledTimeRow {
   id: string;
   project_id: string;
   billing_state?: TimeBillingState | null;
+  /** MS-01 — an unpriced hour is not "hours to bill". */
+  rate_source?: TimeRateSource | null;
 }
 
 /**
  * HT-29 — every unbilled, invoice-eligible hour this caller can read, across
  * every document, with no project filter: RLS is the scope and this hook names
- * none. Three columns only, because the Desk's line is an act or nothing (R95
+ * none. Four columns only, because the Desk's line is an act or nothing (R95
  * keeps counts and metrics off that index) — never a money total, and never
- * `notes` (HT-36).
+ * `notes` (HT-36). The fourth is `rate_source`, which is not a metric: it is
+ * what tells an hour that can be billed from an hour nothing priced (MS-01).
  */
 export function useStudioUnbilledTime() {
   return useQuery({
@@ -300,14 +344,21 @@ export function useStudioUnbilledTime() {
       const supabase = getSupabase();
       const { data, error } = await supabase
         .from('project_unbilled_time')
-        .select('id, project_id, billing_state');
+        .select('id, project_id, billing_state, rate_source');
       if (error) throw error;
-      return ((data ?? []) as StudioUnbilledTimeRow[]).filter((row) =>
-        isInvoiceEligibleTimeEntry({
-          billable: true,
-          invoice_id: null,
-          billing_state: row.billing_state,
-        }),
+      return ((data ?? []) as StudioUnbilledTimeRow[]).filter(
+        (row) =>
+          isInvoiceEligibleTimeEntry({
+            billable: true,
+            invoice_id: null,
+            billing_state: row.billing_state,
+          }) &&
+          // MS-01 — a studio whose only unbilled hours are unpriced is not owed
+          // an "hours to bill →" act on the Desk, and the ids this read feeds
+          // into the composer (hours-ledger's `billingTargetRows`) must not
+          // carry one either: `claim_time_entries` would refuse it and the
+          // composer would delete the draft it had just created.
+          !isRatePendingTimeEntry(row),
       );
     },
   });

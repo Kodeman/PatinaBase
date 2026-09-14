@@ -35,6 +35,7 @@
  * composer's own: ad-hoc lines, tax, terms, memo, totals, one Draft act.
  */
 
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   useCreateDraftInvoice,
@@ -228,6 +229,21 @@ export function InvoiceComposer({
   const unbilledEntries = useMemo(
     () =>
       (unbilledTime?.entries ?? []).map((entry) => ({
+        ...entry,
+        member_name: memberNames.get(entry.user_id) ?? null,
+      })),
+    [unbilledTime, memberNames],
+  );
+  // MS-01 — hours that are unbilled and authorized but that NOTHING PRICED
+  // (rate_source = 'none'). `useUnbilledTime` holds them out of `entries`, so
+  // they cannot be ticked, cannot be swept in by "tick all" and cannot be seeded
+  // from the ledger's hand-off; `claim_time_entries` refuses them too. They are
+  // still shown — printing HT-26's "rate pending" is what tells the studio the
+  // rate card is the repair, where silently dropping the hour would have read as
+  // the hour going missing.
+  const ratePendingEntries = useMemo(
+    () =>
+      (unbilledTime?.ratePendingEntries ?? []).map((entry) => ({
         ...entry,
         member_name: memberNames.get(entry.user_id) ?? null,
       })),
@@ -667,10 +683,67 @@ export function InvoiceComposer({
                       to the draft · voiding releases them
                     </p>
                   </>
-                ) : (
+                ) : ratePendingEntries.length === 0 ? (
                   <p className="py-1 text-[11px] italic text-[var(--text-muted)]">
                     No unbilled hours on this document.
                   </p>
+                ) : null}
+
+                {/* MS-01 / HT-26 — an hour nothing priced prints "rate pending",
+                    not "$0.00/h · $0.00", and cannot be ticked. Invoicing one
+                    would freeze a zero-dollar line under the 00177 invoiced
+                    lock. The repair is the studio's rate card. */}
+                {!timeLoading && ratePendingEntries.length > 0 && (
+                  <>
+                    {ratePendingEntries.map((entry) => (
+                      <div
+                        key={entry.id}
+                        className={`${ROW} opacity-60`}
+                        data-rate-pending="true"
+                      >
+                        <input
+                          type="checkbox"
+                          className={CHECK}
+                          checked={false}
+                          disabled
+                          readOnly
+                          aria-label="This hour has no rate yet and cannot be invoiced"
+                        />
+                        <span className="min-w-0 flex-1 truncate text-[11.5px] text-[var(--color-charcoal)]">
+                          {entry.member_name && (
+                            <span className="mr-1.5 text-[var(--color-clay-ink)]">
+                              {entry.member_name} ·
+                            </span>
+                          )}
+                          {fmtDay(entry.started_at)}
+                          {entry.notes && (
+                            <span className="ml-1.5 text-[var(--text-muted)]">
+                              {entry.notes}
+                            </span>
+                          )}
+                        </span>
+                        <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                          {formatHoursLabel(entry.duration_minutes)} · rate
+                          pending
+                        </span>
+                        <span className="font-mono text-[11px] text-[var(--text-muted)]">
+                          rate pending
+                        </span>
+                      </div>
+                    ))}
+                    <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                      {ratePendingEntries.length === 1
+                        ? "one hour has no rate yet"
+                        : `${ratePendingEntries.length} hours have no rate yet`}{" "}
+                      · they cannot be invoiced until the studio prices them ·{" "}
+                      <Link
+                        href="/desk?account=studio"
+                        className="underline decoration-dotted underline-offset-4 hover:text-[var(--color-charcoal)]"
+                      >
+                        set the studio rate →
+                      </Link>
+                    </p>
+                  </>
                 )}
               </div>
 

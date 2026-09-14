@@ -16,6 +16,11 @@
 --   (c) an invoiced row cannot be re-claimed to a SECOND invoice.
 --   (d) a RUNNING timer (duration_minutes IS NULL) is never claimed — claiming
 --       one would wedge the member's single running-timer slot for good.
+--   (e) an hour NOTHING PRICED (rate_source = 'none') is never claimed — MS-01.
+--       It is billable, un-invoiced, has a duration and is 'authorized', so every
+--       other predicate admits it; only the rate provenance keeps it out. The
+--       composer refuses it too (HT-3-a), but this is the backstop no caller can
+--       do by hand — and without it the 00177 invoiced lock froze a $0.00 line.
 --
 -- How to run:
 --   psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 \
@@ -38,10 +43,30 @@ VALUES
   ('a7100000-0000-4000-8000-000000000002', 'claim-client@test.invalid',   'Claim Client',   false, NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO projects (id, name, designer_id, created_by, client_id)
+-- MS-01 — the entries below must actually be PRICED, because
+-- claim_time_entries (00617) now refuses rate_source = 'none'. Before this studio
+-- and rate card existed, every fixture row resolved 'none' and cases (a)-(c)
+-- were silently measuring an unpriced hour. A studio the caller NAMES is left
+-- alone by set_project_studio_id_owned (HT-3-c arm (a)).
+INSERT INTO organizations (id, type, name, slug, status)
+VALUES ('a7100000-0000-4000-8000-0000000000c1', 'design_studio',
+        'Claim Studio', 'claim-studio-a7100000', 'active');
+
+INSERT INTO organization_members (user_id, organization_id, role, status, joined_at)
+VALUES ('a7100000-0000-4000-8000-000000000001',
+        'a7100000-0000-4000-8000-0000000000c1', 'owner', 'active', NOW());
+
+INSERT INTO projects (id, name, designer_id, created_by, client_id, studio_id)
 VALUES ('a7100000-0000-4000-8000-0000000000e1', 'Claim House',
         'a7100000-0000-4000-8000-000000000001', 'a7100000-0000-4000-8000-000000000001',
-        'a7100000-0000-4000-8000-000000000002');
+        'a7100000-0000-4000-8000-000000000002',
+        'a7100000-0000-4000-8000-0000000000c1');
+
+-- The designer is priced by her studio; the client profile below is NOT, which is
+-- what case (e) needs.
+INSERT INTO studio_member_rates (studio_id, user_id, hourly_rate_cents, effective_from)
+VALUES ('a7100000-0000-4000-8000-0000000000c1',
+        'a7100000-0000-4000-8000-000000000001', 20000, DATE '2020-01-01');
 
 -- Two draft invoices on the same project: the one being composed, and a rival.
 INSERT INTO invoices (id, project_id, designer_id, client_id, status, currency, memo)
@@ -215,6 +240,61 @@ BEGIN
     'FAIL d2: a running timer must be left unstamped — invoicing it wedges the member''s timer slot';
 
   RAISE NOTICE 'time_claim_atomicity: case (d) passed.';
+END
+$$;
+
+-- ─── (e) an hour NOTHING PRICED is never claimed (MS-01) ───────────────────
+-- The client profile holds no studio_member_rates row, so 00601's non-services
+-- branch stamps hourly_rate_cents NULL / rate_source 'none' while leaving the row
+-- billable and billing_state 'authorized'. project_unbilled_time COALESCEd both
+-- to 0 and the composer offered it as "$0.00/h · $0.00"; once claimed, the 00177
+-- invoiced lock froze that zero.
+DO $$
+DECLARE
+  v_count    INTEGER;
+  v_state    TEXT;
+  v_billable BOOLEAN;
+  v_source   TEXT;
+  v_rate     INTEGER;
+BEGIN
+  INSERT INTO project_time_entries (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('a7100000-0000-4000-8000-0000000000b5', 'a7100000-0000-4000-8000-0000000000e1',
+          'a7100000-0000-4000-8000-000000000002', NOW() - INTERVAL '4 hours', 60, true, 'manual_entry');
+
+  -- Preconditions: the ONLY thing that can exclude this row is its rate provenance.
+  SELECT billing_state, billable, rate_source, hourly_rate_cents
+    INTO v_state, v_billable, v_source, v_rate
+  FROM project_time_entries WHERE id = 'a7100000-0000-4000-8000-0000000000b5';
+  ASSERT v_billable, 'FAIL e0a: the unpriced fixture must be billable';
+  ASSERT v_state IS NULL OR v_state = 'authorized',
+    'FAIL e0b: the unpriced fixture must pass the billing_state clause, got ' || COALESCE(v_state, 'NULL');
+  ASSERT v_source = 'none',
+    'FAIL e0c: the unpriced fixture must resolve rate_source ''none'', got ' || COALESCE(v_source, 'NULL');
+  ASSERT v_rate IS NULL,
+    'FAIL e0d: an unpriced hour carries no rate, got ' || COALESCE(v_rate::text, 'NULL');
+
+  -- And it IS offered by the view — which is exactly why the composer needs the
+  -- provenance column 00617 adds, and why the server needs this backstop.
+  ASSERT EXISTS (
+    SELECT 1 FROM public.project_unbilled_time
+     WHERE id = 'a7100000-0000-4000-8000-0000000000b5' AND rate_source = 'none'
+  ), 'FAIL e0e: project_unbilled_time must still SHOW the unpriced hour, carrying rate_source';
+
+  PERFORM pg_temp.assume_user('a7100000-0000-4000-8000-000000000001');
+  SELECT count(*) INTO v_count
+  FROM public.claim_time_entries(
+    'a7100000-0000-4000-8000-0000000000a3',
+    ARRAY['a7100000-0000-4000-8000-0000000000b5']::uuid[]
+  );
+  PERFORM pg_temp.reset_role();
+
+  ASSERT v_count = 0,
+    'FAIL e1: an hour nothing priced must never be claimed, got ' || v_count;
+  ASSERT (SELECT invoice_id IS NULL FROM project_time_entries
+           WHERE id = 'a7100000-0000-4000-8000-0000000000b5'),
+    'FAIL e2: an unpriced hour must be left unstamped — invoicing it freezes a $0.00 line under the 00177 lock';
+
+  RAISE NOTICE 'time_claim_atomicity: case (e) passed.';
   RAISE NOTICE 'All time_claim_atomicity assertions passed.';
 END
 $$;
