@@ -288,9 +288,17 @@ export function HoursLedger({
   // than from the first row of an unordered membership read — a viewer with two
   // studios was otherwise keyed on a different one between loads, and the studio
   // scope named none of them.
+  // S-1 — and WHICH of them, when she owns two. `candidates`/`selectStudio` make
+  // the studio named in the rollup caption a door rather than a silent pick: an
+  // owner of two studios read 'THE STUDIO · LEAH HARTWELL · 0 min / Nothing
+  // logged in this window' over hours that belonged to the other one, with no way
+  // to reach it. The same choice keys the member scope, the internal-hour studio
+  // and the studio the stamp door offers to name.
   const {
     organizations: orgs,
     studio: viewerStudio,
+    candidates: viewerStudioCandidates,
+    selectStudio: selectViewerStudio,
     isOwnerOrAdmin: viewerIsOwnerOrAdmin,
     isSettled: standingKnown,
   } = useViewerStudio();
@@ -1067,6 +1075,12 @@ export function HoursLedger({
             // Whose week this is, named: a viewer with two studios reads one of
             // them, and "the studio · this week" said which of them it was not.
             studioName={viewerStudio.name}
+            // S-1 — and the name is the door to the other one.
+            studioChoices={viewerStudioCandidates.map((org) => ({
+              id: org.id,
+              name: org.name ?? "Untitled studio",
+            }))}
+            onChooseStudio={selectViewerStudio}
             memberId={scope === "member" ? (memberScope?.id ?? null) : null}
             memberName={memberScope?.name ?? null}
             projectId={null}
@@ -1476,6 +1490,8 @@ function ScopeRollup({
   scope,
   studioId,
   studioName = null,
+  studioChoices = [],
+  onChooseStudio,
   memberId,
   memberName,
   projectId,
@@ -1489,6 +1505,13 @@ function ScopeRollup({
   studioId: string;
   /** The studio this total belongs to, named — never left to be inferred. */
   studioName?: string | null;
+  /**
+   * S-1 — every studio this viewer answers for, ordered. Two or more turns the
+   * name into a Scored-Ink word that cycles them and says which of how many
+   * this is; one or none leaves the caption exactly as it reads today.
+   */
+  studioChoices?: Array<{ id: string; name: string }>;
+  onChooseStudio?: (studioId: string) => void;
   memberId: string | null;
   memberName: string | null;
   projectId: string | null;
@@ -1526,7 +1549,34 @@ function ScopeRollup({
         {scope === "member"
           ? (memberName ?? SCOPE_CAPTION.member)
           : SCOPE_CAPTION[scope]}
-        {studioName ? ` · ${studioName}` : ""} · {weekLabel}
+        {studioName ? (
+          studioChoices.length > 1 && onChooseStudio ? (
+            <>
+              {" · "}
+              <button
+                type="button"
+                onClick={() => {
+                  const at = studioChoices.findIndex((c) => c.id === studioId);
+                  const next =
+                    studioChoices[(at + 1) % studioChoices.length] ??
+                    studioChoices[0];
+                  if (next) onChooseStudio(next.id);
+                }}
+                className="min-h-11 inline-flex items-center text-[var(--color-clay-ink)] underline decoration-dotted underline-offset-4 hover:text-[var(--color-charcoal)]"
+                title="Answer for your other studio"
+              >
+                {studioName} ({studioChoices.findIndex((c) => c.id === studioId) +
+                  1}{" "}
+                of {studioChoices.length})
+              </button>
+            </>
+          ) : (
+            ` · ${studioName}`
+          )
+        ) : (
+          ""
+        )}{" "}
+        · {weekLabel}
       </p>
       {/* A studio's money is never summed from rows that have not arrived, and
           never from rows that were REFUSED: an unread rollup used to print

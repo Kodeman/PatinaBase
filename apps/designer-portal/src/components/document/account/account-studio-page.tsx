@@ -38,6 +38,7 @@ import {
 } from '@patina/supabase';
 import type { RateCardRow, RosterRateRole } from '@patina/types';
 import { useAuth } from '@/hooks/use-auth';
+import { useAccountStudio } from '@/hooks/use-viewer-studio';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { Select, StatusBadge, type StatusTone } from '@/components/ui/controls';
 import { ROSTER_RATE_ROLES } from '../rooms/drafting/agreement/part-kinds';
@@ -207,13 +208,24 @@ export function AccountStudioPage() {
   const [seedReviewOpen, setSeedReviewOpen] = useState(false);
   const [skipSeedError, setSkipSeedError] = useState<string | null>(null);
 
-  // Prefer a design_studio membership; fall back to the first org of any
-  // type (mirrors account-identity.ts's activeStudio resolution, but keeps
-  // the full org row this page needs for management).
-  const studio = useMemo(
-    () => orgs?.find((o) => o.type === 'design_studio') ?? orgs?.[0] ?? null,
-    [orgs],
-  );
+  // S-2 — ONE studio identity across the three surfaces this program touches.
+  // This page used to resolve its own studio as
+  // `orgs?.find(o => o.type === 'design_studio') ?? orgs?.[0]` — an unordered
+  // PostgREST read with no `.order()` anywhere, on the page that carries HT-3's
+  // "Studio rates" card, the only per-member rate door in the product. Measured
+  // on the default seed: the section listed only 'Leah Hartwell · owner' while
+  // the member logging the priced hours belongs to 'Local Dev Studio', so the
+  // owner had no door to price the person doing the priced work and the rate she
+  // could type was written against a studio that prices nothing. `useAccountStudio`
+  // returns the same owner/admin answer the Hours lens and the internal-hour
+  // studio follow (and the same viewer-chosen one when she answers for two),
+  // falling back — ordered — to this page's original resolution for a plain
+  // member, who chooses nothing and is simply looking at the studio she is in.
+  const {
+    studio,
+    candidates: studioCandidates,
+    selectStudio,
+  } = useAccountStudio();
 
   const { data: members } = useOrganizationMembers(studio?.id ?? '');
   const { data: projects } = useProjects();
@@ -772,6 +784,29 @@ export function AccountStudioPage() {
               <p className="mt-0.5 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
                 {studio.slug}
               </p>
+              {/* S-1/S-2 — an owner of two studios gets a door to the other, and
+                  the Hours lens, the internal-hour studio and the rate card
+                  below all follow the same choice. Silent, this page showed one
+                  studio's roster while the priced hours belonged to the other. */}
+              {studioCandidates.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const at = studioCandidates.findIndex(
+                      (c) => c.id === studio.id,
+                    );
+                    const next =
+                      studioCandidates[(at + 1) % studioCandidates.length] ??
+                      studioCandidates[0];
+                    if (next) selectStudio(next.id);
+                  }}
+                  className="mt-1 min-h-11 inline-flex items-center font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)] underline decoration-dotted underline-offset-4 hover:text-[var(--color-charcoal)]"
+                >
+                  studio{' '}
+                  {studioCandidates.findIndex((c) => c.id === studio.id) + 1} of{' '}
+                  {studioCandidates.length} · switch
+                </button>
+              )}
             </div>
             {canManage && (
               <DocumentAction
