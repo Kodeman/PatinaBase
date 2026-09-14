@@ -31,6 +31,22 @@
 -- supabase/tests/commercial/design_services_authority_test.sql all read it.
 -- Column list, order and types are unchanged so CREATE OR REPLACE VIEW holds.
 --
+-- ⚠ MS-14 (integration round 2) — THAT SENTENCE IS TRUE ONLY ON A FIRST RUN, AND
+-- ONLY UP TO 00617. This body stops at `billing_state`; 00617 appends
+-- `rate_source` and `rate_role` to the same view, and Postgres refuses a
+-- CREATE OR REPLACE VIEW that REMOVES columns ("ERROR: cannot drop columns from
+-- view"). So re-running 00596 alone against a stack that has already applied
+-- 00617 FAILS. This file cannot name those columns — project_time_entries.
+-- rate_source does not exist until 00600 — so the property is lost rather than
+-- fixable here, and it is NOT a ship hazard: one `supabase db push
+-- --include-all` applies in version order, 00596 before 00617, and every replay
+-- preserves that order. THE VIEW'S LIVE COLUMN LIST IS 00617'S, not this file's.
+-- Do NOT "fix" this by adding the two columns here (they do not exist at this
+-- number) and do NOT add a DROP VIEW (dependents). A hand re-deriving the view
+-- from this body must read 00617 as well. Mirrored in
+-- artifacts/hour-tracking-2026-09-11/build/ship-checklist.md beside the
+-- migration list.
+--
 -- P-4: no backfill. Existing rows keep their stored amounts; this file changes
 -- only what the view reports.
 --
