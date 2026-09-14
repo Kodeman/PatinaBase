@@ -53,8 +53,13 @@
 -- 1. compliance_document_state — 00623's reckoning, for ONE paper
 -- ═══════════════════════════════════════════════════════════════════════════
 -- COUPLED TO compliance_state() (00623). Both carry R-BF's transitive
--- supersession walk with its depth cap, both gate on cardinality(blocks) > 0,
--- and both state the 30-day window. compliance_state() reduces worst-first
+-- supersession walk with its depth cap, both hold a retirement to a successor
+-- that is IN FORCE, carries the root's gates and IS THE SAME PAPER (the
+-- doc_type leg, W3 round-8 B-1 — without it, retyping an honest renewal as a
+-- w9 answered `superseded` here and the sweep CONTINUEd past a lapse that is
+-- still on file, so "a lapse announces itself before it blocks a draw" was
+-- switched off for that document forever), both gate on
+-- cardinality(blocks) > 0, and both state the 30-day window. compliance_state() reduces worst-first
 -- over a HOLDER's papers; this answers for one paper, which is what a notice
 -- is about. THE 30-DAY WINDOW NOW LIVES IN TWO PLACES — if one moves the
 -- other must move with it, and w3-data-report.md §2 says so.
@@ -73,7 +78,7 @@ STABLE
 SET search_path TO 'public'
 AS $$
   WITH RECURSIVE me AS (
-    SELECT d.id, d.blocks, d.expires_on, d.superseded_by
+    SELECT d.id, d.blocks, d.expires_on, d.superseded_by, d.doc_type
       FROM public.studio_compliance_documents d
      WHERE d.id = p_document_id
   ),
@@ -92,6 +97,7 @@ AS $$
       CROSS JOIN me m
      WHERE (s.expires_on IS NULL OR s.expires_on >= CURRENT_DATE)
        AND m.blocks <@ s.blocks
+       AND s.doc_type = m.doc_type          -- W3 r8 B-1, the same leg 00623 carries
      LIMIT 1
   )
   SELECT CASE
@@ -114,7 +120,9 @@ COMMENT ON FUNCTION public.compliance_document_state(uuid) IS
   'lapses_soon | lapsed. compliance_state() (00623) reduced worst-first over '
   'a holder''s papers; this is the same reckoning for one row, which is what '
   'a notice is about — R-BF''s transitive supersession walk with its depth '
-  'cap, the cardinality(blocks) > 0 gate (CS2 §4, "a date with no gate '
+  'cap and its three retirement legs (the successor in force, carrying the '
+  'root''s gates, and the SAME doc_type — W3 round-8 B-1), the '
+  'cardinality(blocks) > 0 gate (CS2 §4, "a date with no gate '
   'changes nothing") and the same 30-day window. THE WINDOW IS NOW STATED IN '
   'TWO PLACES; move both together. `held` covers 00623''s undated paper (a '
   'W-9 cannot lapse) and paper carrying no gate. SECURITY INVOKER, so the '

@@ -30,6 +30,7 @@ import {
   ALL_SEAT_BID_OUTCOMES,
   SEAT_BID_OUTCOME_ACTS,
   SEAT_BID_OUTCOME_LABELS,
+  bidStageOutcome,
   seatCarriesBid,
   fieldLinkUrl,
   indexComplianceNotices,
@@ -415,6 +416,32 @@ export function RosterRow({
     });
     setEditingBid(true);
   };
+
+  /**
+   * THE CONSEQUENCE SENTENCE, read off the same answer the write uses
+   * (code review r8 BLOCKING-1).
+   *
+   * `useSetPartyBid` writes `stage` only when the outcome CHANGED and the seat
+   * is not already past the bid — so on an ordinary correction (the editor
+   * seeds the draft from the seat's existing outcome) and on a declined /
+   * no-response answer recorded against a seat that is mobilized, on site,
+   * closing out or under warranty, nothing moves. The old single sentence
+   * claimed a move on both, and `bidNote` never prints the outcome word, so
+   * the studio had no way to read what the press had actually done.
+   */
+  const bidWrite = bidStageOutcome(
+    { bidOutcome: bid?.bidOutcome ?? null, stage: row.stage ?? null },
+    bidDraft.outcome || null,
+  );
+  const bidSentence = !bidDraft.outcome
+    ? 'The outcome is what moves them out of the bidding band. Nothing else on this row does.'
+    : bidWrite.stage
+      ? `Recording this moves ${row.name} to ${
+          SEAT_BID_OUTCOME_LABELS[bidDraft.outcome]
+        }. A bidder who did not win never reads as crew.`
+      : bidWrite.moved
+        ? 'This seat is past the bidding, so its stage stays where it is. Recording this writes what came back, and nothing else.'
+        : 'The outcome is unchanged, so nothing moves. This records the dates and who priced it.';
 
   const saveBid = async () => {
     setBidError(null);
@@ -849,12 +876,16 @@ export function RosterRow({
                       {/* MAJOR-3: the sentence names the DESTINATION, so the
                           state map answers it — SEAT_BID_OUTCOME_ACTS are acts
                           ("They declined") and read as "…moves Northgate
-                          Electric to they declined." in this frame. */}
-                      {bidDraft.outcome
-                        ? `Recording this moves ${row.name} to ${
-                            SEAT_BID_OUTCOME_LABELS[bidDraft.outcome]
-                          }. A bidder who did not win never reads as crew.`
-                        : 'The outcome is what moves them out of the bidding band. Nothing else on this row does.'}
+                          Electric to they declined." in this frame.
+
+                          r8 BLOCKING-1: and it promises a move only where the
+                          write makes one. `bidStageOutcome` is the SAME
+                          reckoning `useSetPartyBid` writes from, so the three
+                          branches below are the three things the press can
+                          actually do: move the seat, record a correction that
+                          moves nothing, or record what came back on a seat
+                          that is already past the bid. */}
+                      {bidSentence}
                     </p>
                     <DocumentActionRow
                       surfaceKey="call-sheet"

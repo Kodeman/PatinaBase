@@ -2645,7 +2645,8 @@ BEGIN
 END $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- 11. the r7 review's three migration findings (B-1, M-1, M-2)
+-- 11. the r7 review's three migration findings (B-1, M-1, M-2), plus the r8
+--     review's M-1 (the survivor's own designation naming the folded card)
 -- ═══════════════════════════════════════════════════════════════════════════
 --   B-1  a firm merge dropped the folded card's OWN three designations —
 --        paperwork_contact_person_id, signer_person_id, site_contact_person_id
@@ -2777,6 +2778,35 @@ BEGIN
     RAISE EXCEPTION 'BLOCK 11 FAIL (r7 B-1): the fold wrote a self-designation (%)', sc.site_contact_person_id;
   END IF;
 
+  -- ── r8 M-1 · and the SURVIVOR's own designation naming the folded card ──
+  -- The second act the room offers on the pair r7 B-1 just created: the fold
+  -- above landed the firm's paperwork contact (R7 Paperwork Hand) on the
+  -- PERSON card R7 Sole Prop, and that hand turns out to be the owner-operator
+  -- carded twice. The three repoint statements below §5 include the survivor
+  -- among the "other cards", so a bare `= p_survivor` wrote S.paperwork = S
+  -- and assert_studio_contact_designations() (R-AP) lost the whole merge to
+  -- `designated_person_is_self` — with no editor in the room able to clear it
+  -- (only company-card.tsx writes these three, and the survivor is a person
+  -- card). NULLIF drops exactly the self reference and carries every other.
+  PERFORM public.merge_studio_contacts(
+    'f9f00000-0000-4000-8000-000000000006','f9f00000-0000-4000-8000-000000000003','manual');
+  SELECT * INTO sc FROM public.studio_contacts
+   WHERE id = 'f9f00000-0000-4000-8000-000000000006';
+  IF sc.paperwork_contact_person_id IS NOT NULL THEN
+    RAISE EXCEPTION 'BLOCK 11 FAIL (r8 M-1): the merge wrote a self-designation on the survivor (%)', sc.paperwork_contact_person_id;
+  END IF;
+  -- every OTHER card still repoints — the drop is scoped to the survivor
+  SELECT * INTO sc FROM public.studio_contacts
+   WHERE id = 'f9f00000-0000-4000-8000-000000000001';
+  IF sc.paperwork_contact_person_id IS DISTINCT FROM 'f9f00000-0000-4000-8000-000000000006'::uuid THEN
+    RAISE EXCEPTION 'BLOCK 11 FAIL (r8 M-1): a third card''s designation did not repoint (%)', sc.paperwork_contact_person_id;
+  END IF;
+  -- and the merge really happened: the folded id resolves forward (PR-o)
+  IF public.resolve_merged_contact('f9f00000-0000-4000-8000-000000000003')
+     IS DISTINCT FROM 'f9f00000-0000-4000-8000-000000000006'::uuid THEN
+    RAISE EXCEPTION 'BLOCK 11 FAIL (r8 M-1): the folded id does not resolve to the survivor';
+  END IF;
+
   -- ── M-2 · one ordinary card save after the fold re-derives nothing ──────
   -- The crew member came out of the fold with the legacy pointer naming the
   -- folded card and their affiliation CLOSED (r6 M-3). The shipped editor
@@ -2849,7 +2879,7 @@ BEGIN
   END IF;
 
   PERFORM pg_temp.reset_role();
-  RAISE NOTICE '11. the r7 review''s three migration findings (B-1, M-1, M-2): passed';
+  RAISE NOTICE '11. the r7 review''s three migration findings (B-1, M-1, M-2) and r8 M-1: passed';
 END $$;
 
 -- ── M-1 negative control · the laundering doors are still shut ────────────
@@ -2912,6 +2942,87 @@ BEGIN
 
   PERFORM pg_temp.reset_role();
   RAISE NOTICE '11b. r7 M-1 negative control — the four legs still judge the ACT: passed';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- BLOCK 11c — r8 B-1: retyping a renewal may not launder the lapse it retires
+-- ═══════════════════════════════════════════════════════════════════════════
+-- compliance_successor_wrong_type holds an edge to ONE paper at the moment the
+-- edge is written, and the trigger judges a row against its own successor and
+-- never against its predecessors — so editing the SUCCESSOR's doc_type was
+-- judged by nothing at all, and studio_compliance_documents_member_update lets
+-- any active member do it in one PATCH. Two ordinary writes then left a firm
+-- card reading `current` with no in-force general-liability certificate on
+-- file (PR-h's exact harm), the roster row without its held clause, and
+-- compliance_document_state() answering `superseded`, which makes
+-- sweep_compliance_expiries() CONTINUE past the lapse forever. The doc_type
+-- leg now rides both reckonings (00623, 00630).
+INSERT INTO public.studio_contacts
+  (id, organization_id, entity_kind, contact_kind, company_name, company_kind, created_by, created_at) VALUES
+  ('f9f00000-0000-4000-8000-000000000021','f9000000-0000-4000-8000-00000000000a','company','sub',
+   'R8 Retype Firm','sub','a0000000-0000-0000-0000-000000000004','2024-01-01');
+
+INSERT INTO public.studio_compliance_documents
+  (id, organization_id, holder_type, holder_id, doc_type, blocks, issued_on, expires_on) VALUES
+  -- the lapse
+  ('f9f40000-0000-4000-8000-000000000021','f9000000-0000-4000-8000-00000000000a','company',
+   'f9f00000-0000-4000-8000-000000000021','coi_gl', ARRAY['site_access','draw']::text[],
+   CURRENT_DATE - 400, CURRENT_DATE - 40),
+  -- the honest renewal
+  ('f9f40000-0000-4000-8000-000000000022','f9000000-0000-4000-8000-00000000000a','company',
+   'f9f00000-0000-4000-8000-000000000021','coi_gl', ARRAY['site_access','draw']::text[],
+   CURRENT_DATE - 30,  CURRENT_DATE + 300);
+
+DO $$
+DECLARE
+  w text;
+  d text;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+
+  w := public.compliance_state('f9f00000-0000-4000-8000-000000000021');
+  IF w <> 'lapsed' THEN
+    RAISE EXCEPTION 'BLOCK 11c FAIL (r8 B-1): the firm reads % before the supersede', w;
+  END IF;
+
+  -- write 1 — legitimate: the lapse names its renewal
+  UPDATE public.studio_compliance_documents
+     SET superseded_by = 'f9f40000-0000-4000-8000-000000000022'
+   WHERE id = 'f9f40000-0000-4000-8000-000000000021';
+  w := public.compliance_state('f9f00000-0000-4000-8000-000000000021');
+  IF w <> 'current' THEN
+    RAISE EXCEPTION 'BLOCK 11c FAIL (r8 B-1): an honest supersede reads % not current', w;
+  END IF;
+
+  -- write 2 — the laundering door: retype the RENEWAL
+  UPDATE public.studio_compliance_documents
+     SET doc_type = 'w9'
+   WHERE id = 'f9f40000-0000-4000-8000-000000000022';
+  w := public.compliance_state('f9f00000-0000-4000-8000-000000000021');
+  IF w <> 'lapsed' THEN
+    RAISE EXCEPTION 'BLOCK 11c FAIL (r8 B-1): the firm reads % over a lapsed certificate with no cover on file', w;
+  END IF;
+  d := public.compliance_document_state('f9f40000-0000-4000-8000-000000000021');
+  IF d <> 'lapsed' THEN
+    RAISE EXCEPTION 'BLOCK 11c FAIL (r8 B-1): the lapse reads % — the sweep would skip it forever', d;
+  END IF;
+
+  -- negative control: put the paper back and the chain retires again, so the
+  -- leg reads the type rather than refusing every supersede
+  UPDATE public.studio_compliance_documents
+     SET doc_type = 'coi_gl'
+   WHERE id = 'f9f40000-0000-4000-8000-000000000022';
+  w := public.compliance_state('f9f00000-0000-4000-8000-000000000021');
+  IF w <> 'current' THEN
+    RAISE EXCEPTION 'BLOCK 11c FAIL (r8 B-1 control): a legitimate chain reads %', w;
+  END IF;
+  d := public.compliance_document_state('f9f40000-0000-4000-8000-000000000021');
+  IF d <> 'superseded' THEN
+    RAISE EXCEPTION 'BLOCK 11c FAIL (r8 B-1 control): a legitimately retired row reads %', d;
+  END IF;
+
+  PERFORM pg_temp.reset_role();
+  RAISE NOTICE '11c. r8 B-1 — retyping a renewal no longer launders the lapse: passed';
 END $$;
 
 DO $$ BEGIN RAISE NOTICE 'W3 SQL suite: all blocks passed'; END $$;

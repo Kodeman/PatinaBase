@@ -2358,6 +2358,54 @@ const SEAT_STAGES_PAST_THE_BID: readonly string[] = [
   'retired',
 ];
 
+/** What a bid save would do to the seat's STAGE, read before the press. */
+export interface BidStageOutcome {
+  /** The outcome the save carries, or null when none is selected. */
+  outcome: SeatBidOutcome | null;
+  /** Did the outcome CHANGE against the seat as it stands? */
+  moved: boolean;
+  /** Is the seat already past the bidding lifecycle (and not withdrawing)? */
+  pastTheBid: boolean;
+  /** The stage the save will write, or null when it writes none. */
+  stage: string | null;
+}
+
+/**
+ * ONE ANSWER, read by the write and by the face (code review r8 BLOCKING-1).
+ *
+ * `useSetPartyBid` moves the stage under two conditions the bid editor's
+ * consequence sentence knew nothing about, so the sentence promised a move on
+ * two reachable presses that make none: every ordinary correction (the editor
+ * seeds `outcome` from the seat's existing one, so fixing "Who priced it"
+ * re-sends it unchanged and nothing moves), and recording "They declined" or
+ * "No response" on a seat that is already mobilized, on site, closing out or
+ * under warranty — where the stage deliberately stays put. The face said "A
+ * bidder who did not win never reads as crew." while the row stayed in its
+ * crew band, and `bidNote` prints no outcome word, so the press left no
+ * readable trace at all.
+ *
+ * The predicates now live here, once, and `roster-row.tsx` branches its
+ * sentence on the same object the mutation writes from.
+ */
+export function bidStageOutcome(
+  previous: { bidOutcome: SeatBidOutcome | null; stage: string | null },
+  next: SeatBidOutcome | null | undefined,
+): BidStageOutcome {
+  const outcome = next ?? null;
+  const moved = outcome !== (previous.bidOutcome ?? null);
+  const pastTheBid = SEAT_STAGES_PAST_THE_BID.includes(previous.stage ?? '');
+  // "They withdrew" is the one outcome that legitimately reaches past the bid:
+  // a seat that left the job left it, whatever stage it had reached.
+  const writesStage =
+    !!outcome && moved && (!pastTheBid || outcome === 'withdrawn');
+  return {
+    outcome,
+    moved,
+    pastTheBid,
+    stage: writesStage ? SEAT_BID_OUTCOME_STAGE[outcome] : null,
+  };
+}
+
 export const partyBidKeys = {
   all: ['project-party-bids'] as const,
   list: (projectId: string | null | undefined) =>
@@ -2448,6 +2496,11 @@ export function useProjectPartyBids(projectId: string | null | undefined) {
  * `rosterWindowClause` prints in the Done band). Two guards, both keyed on the
  * seat as it stood before the save: the outcome must have CHANGED, and the
  * stage it would write may not regress a seat that is already past the bid.
+ *
+ * r8 BLOCKING-1 — both guards now live in `bidStageOutcome()`, which the bid
+ * editor's consequence sentence reads too. The face was still promising "A
+ * bidder who did not win never reads as crew." on the two presses that write
+ * no stage at all.
  */
 export function useSetPartyBid() {
   const queryClient = useQueryClient();
@@ -2474,27 +2527,21 @@ export function useSetPartyBid() {
         dbPatch.bid_selected_at = patch.bidSelectedAt || null;
       if (patch.bidOutcome !== undefined) {
         dbPatch.bid_outcome = patch.bidOutcome ?? null;
-        const moved = (patch.bidOutcome ?? null) !== (previous.bidOutcome ?? null);
-        if (patch.bidOutcome && moved) {
-          const nextStage = SEAT_BID_OUTCOME_STAGE[patch.bidOutcome];
-          const pastTheBid = SEAT_STAGES_PAST_THE_BID.includes(
-            previous.stage ?? '',
-          );
-          // A seat that is mobilized, on site, closing out or under warranty
-          // is past the bidding lifecycle: an outcome correction records what
-          // came back, it does not send the crew home. "They withdrew" is the
-          // one outcome that does.
-          if (!pastTheBid || patch.bidOutcome === 'withdrawn') {
-            dbPatch.stage = nextStage;
-          }
-          // "They withdrew" is a seat leaving the job, and every other door
-          // that closes a seat dates it. A Done row with no date reads as a
-          // row somebody forgot — but the date is stamped on the TRANSITION
-          // into `withdrawn` only, so a later correction on that row leaves
-          // the day the seat actually left the job alone.
-          if (patch.bidOutcome === 'withdrawn') {
-            dbPatch.off_job_at = new Date().toISOString().slice(0, 10);
-          }
+        // r8 BLOCKING-1: the same reckoning the editor's consequence sentence
+        // reads, so the face and the write can never disagree about whether
+        // this press moves the seat. A seat that is mobilized, on site,
+        // closing out or under warranty is past the bidding lifecycle: an
+        // outcome correction records what came back, it does not send the crew
+        // home.
+        const written = bidStageOutcome(previous, patch.bidOutcome ?? null);
+        if (written.stage) dbPatch.stage = written.stage;
+        // "They withdrew" is a seat leaving the job, and every other door
+        // that closes a seat dates it. A Done row with no date reads as a
+        // row somebody forgot — but the date is stamped on the TRANSITION
+        // into `withdrawn` only, so a later correction on that row leaves
+        // the day the seat actually left the job alone.
+        if (patch.bidOutcome === 'withdrawn' && written.moved) {
+          dbPatch.off_job_at = new Date().toISOString().slice(0, 10);
         }
       }
       const { data, error } = await supabase

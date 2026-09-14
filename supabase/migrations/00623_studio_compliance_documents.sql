@@ -626,21 +626,42 @@ GRANT ALL ON public.studio_compliance_documents TO service_role;
 -- case stays closed: a successor that is back-dated and then de-gated earns
 -- nothing at hop 1 and has no successor of its own at hop 2, so the retired
 -- lapse is still counted and the word is still `lapsed`.
+--
+-- AND THE SUCCESSOR MUST STILL BE THE SAME PAPER (W3 round-8 B-1). r9 and r10
+-- moved two of assert_compliance_holder()'s three time-varying supersede legs
+-- into the reader — in force, and carrying the root's gates — and left the
+-- third, doc_type, asserted only at the instant the edge is written. The
+-- trigger judges a row against its OWN successor and never against the rows
+-- pointing AT it, so editing the SUCCESSOR's doc_type is judged by nothing at
+-- all, and studio_compliance_documents_member_update lets any active studio
+-- member do it in one PATCH. Measured on a seeded book: a firm holding a
+-- lapsed gating coi_gl and its honest in-force renewal reads `lapsed`; point
+-- the lapse at the renewal (legitimate, the word is correctly `current`), then
+-- retype the RENEWAL as a w9 — and the card still read `current` while no
+-- in-force general-liability certificate was on file at all. That is r1
+-- MAJOR-4 / r2 MAJOR-1 / r3 MAJOR-1's laundering door, reached through the one
+-- leg those three fixes did not carry into the reader, and it is PR-h's exact
+-- harm: a designer mobilises an uninsured sub from the Call Sheet. So the
+-- retirement now also asks that the successor IS the paper it retires. It
+-- cannot reject a legitimate chain, because compliance_successor_wrong_type
+-- holds every edge to one paper at write time; the root's doc_type rides the
+-- recursion beside its blocks.
 CREATE OR REPLACE FUNCTION public.compliance_state(p_holder_id uuid)
 RETURNS text
 LANGUAGE sql
 STABLE
 SET search_path TO 'public'
 AS $$
-  WITH RECURSIVE chain(root, root_blocks, succ, depth) AS (
+  WITH RECURSIVE chain(root, root_blocks, root_doc_type, succ, depth) AS (
     -- every retired row of this card, and the first hop of its chain
-    SELECT d.id, d.blocks, d.superseded_by, 0
+    SELECT d.id, d.blocks, d.doc_type, d.superseded_by, 0
       FROM public.studio_compliance_documents d
      WHERE d.holder_id = p_holder_id
        AND d.superseded_by IS NOT NULL
     UNION ALL
-    -- … then the next hop, carrying the ROOT's gates forward unchanged
-    SELECT c.root, c.root_blocks, s.superseded_by, c.depth + 1
+    -- … then the next hop, carrying the ROOT's gates AND the ROOT's paper
+    -- forward unchanged
+    SELECT c.root, c.root_blocks, c.root_doc_type, s.superseded_by, c.depth + 1
       FROM chain c
       JOIN public.studio_compliance_documents s ON s.id = c.succ
      WHERE c.depth < 64                        -- the head-of-chain guard makes
@@ -648,12 +669,14 @@ AS $$
                                                -- caps a chain written before it
   retired AS (
     -- a row leaves the reckoning while ANY reachable successor still earns
-    -- the retirement: in force, and carrying at least the root's gates
+    -- the retirement: in force, carrying at least the root's gates, and the
+    -- SAME PAPER the root is (W3 r8 B-1 — the doc_type leg)
     SELECT DISTINCT c.root
       FROM chain c
       JOIN public.studio_compliance_documents s ON s.id = c.succ
      WHERE (s.expires_on IS NULL OR s.expires_on >= CURRENT_DATE)
        AND c.root_blocks <@ s.blocks
+       AND s.doc_type = c.root_doc_type
   )
   SELECT CASE
            WHEN count(*) = 0 THEN 'not_on_file'
@@ -698,8 +721,13 @@ COMMENT ON FUNCTION public.compliance_state(uuid) IS
   're-entered a one-hop reckoning and the card read `lapsed` over C, an '
   'in-force non-superseded gating coi_gl — from the calendar alone, with no '
   'write and no audit line (w1b final review r10 MAJOR-1). A row leaves the '
-  'count while ANY REACHABLE successor is in force and carries that row''s '
-  'gates; the head-of-chain write guard keeps the pointer acyclic and the '
+  'count while ANY REACHABLE successor is in force, carries that row''s '
+  'gates, and IS THE SAME PAPER — the doc_type leg, moved into the reader for '
+  'the same reason as the other two: the trigger judges a row against its own '
+  'successor and never against its predecessors, so retyping an honest '
+  'renewal as a w9 left the card reading current with no in-force certificate '
+  'on file and the nightly sweep skipping the lapse forever (W3 round-8 B-1). '
+  'The head-of-chain write guard keeps the pointer acyclic and the '
   'depth cap covers chains written before it. SECURITY INVOKER — the table''s '
   'member-only RLS is the access rule, so a caller outside the studio reads '
   'not_on_file rather than another studio''s word (00623).';
