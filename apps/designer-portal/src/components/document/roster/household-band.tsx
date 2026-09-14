@@ -22,6 +22,7 @@
 
 import { useMemo, useState } from "react";
 import {
+  HOUSEHOLD_GRANT_SOURCE_CLAUSE,
   HOUSEHOLD_MEMBER_ROLE_LABELS,
   useAddHouseholdMember,
   useCreateClientHousehold,
@@ -29,6 +30,7 @@ import {
   useProjectHousehold,
   useSetHouseholdThreshold,
   useStudioContacts,
+  type ClientSideMoneyGrant,
   type HouseholdMemberRole,
 } from "@patina/supabase";
 import { formatMoneyFromCents } from "../people/people-format";
@@ -166,14 +168,44 @@ export function householdMemberConsequence(
    * money clause comes off the sentence: a promise no press can keep.
    */
   canGrant = true,
+  /**
+   * r10 BLOCKING-1 — THE SEAT'S OWN OPEN MONEY GRANT, WHERE IT HAS ONE.
+   *
+   * r9 M-1 taught `add_household_member()` to leave an open money grant alone
+   * when its `source_clause` is not the household's (00632:425-444), which is
+   * the ordinary path R-J draws: seat the rep from the agreement ("Confirm
+   * from the agreement"), then add them to the household. The face was not
+   * taught the same rule, so it promised "They may sign money to $5,000."
+   * while the write left $2,500 standing and the Call Sheet row two elements
+   * above went on printing "Signs money to $2,500." — a wrong fact about
+   * money authority, in one press. `householdThresholdConsequence` above
+   * already makes exactly this distinction ("every household member who
+   * ALREADY SIGNS MONEY FROM THIS FIGURE"); this is the half that was left
+   * behind.
+   */
+  standingGrant: Pick<
+    ClientSideMoneyGrant,
+    "thresholdCents" | "sourceClause"
+  > | null = null,
 ): string {
   const job = (projectName ?? "").trim();
   const where = job ? ` on the ${job}` : "";
   const money = formatMoneyFromCents(thresholdCents);
-  const grant =
-    role === "client_rep" && money && canGrant
-      ? ` They may sign money to ${money}.`
-      : "";
+  const householdWouldGrant = role === "client_rep" && !!money && canGrant;
+  let grant = "";
+  if (householdWouldGrant) {
+    const foreign =
+      !!standingGrant &&
+      standingGrant.sourceClause !== HOUSEHOLD_GRANT_SOURCE_CLAUSE;
+    if (foreign) {
+      const standing = formatMoneyFromCents(standingGrant.thresholdCents);
+      grant = standing
+        ? ` ${name} already signs money to ${standing}${where}, recorded outside the household, and that figure stands.`
+        : ` ${name} already signs money${where}, recorded outside the household with no figure on it, and that stands.`;
+    } else {
+      grant = ` They may sign money to ${money}.`;
+    }
+  }
   return `${name} joins the household and takes a seat${where}.${grant} Nothing is sent to them.`;
 }
 
@@ -256,6 +288,21 @@ export function HouseholdBand({
 
   const chosenName =
     candidates.find((c) => c.id === personId)?.name ?? "This person";
+
+  /**
+   * The open money grant the chosen person's seat already carries, if any
+   * (r10 BLOCKING-1). Keyed on the pair `add_household_member()` reuses a seat
+   * by — the card and the role — because adding somebody as `client_rep` when
+   * their only seat is a plain `client` one opens a NEW seat, which carries no
+   * grant at all.
+   */
+  const standingGrantForChoice = useMemo(
+    () =>
+      (resolved?.clientSideMoneyGrants ?? []).find(
+        (grant) => grant.personId === personId && grant.partyKind === role,
+      ) ?? null,
+    [resolved?.clientSideMoneyGrants, personId, role],
+  );
 
   /**
    * r7 MAJOR-3 — PR-n, stated before the press rather than after the refusal.
@@ -645,6 +692,7 @@ export function HouseholdBand({
               projectName,
               household.co_threshold_cents,
               !addHeld,
+              standingGrantForChoice,
             )}
           </p>
 

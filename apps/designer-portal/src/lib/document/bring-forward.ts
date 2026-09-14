@@ -65,7 +65,9 @@ export function pickerHistoryLine(
 }
 
 /**
- * SPEC §5.7 #3 — "4 of 5 from the Lindqvist kitchen selected".
+ * SPEC §5.7 #3 — "4 of 6 from the Lindqvist kitchen selected" (R-BP: the pool
+ * is whatever the studio's book holds for that prior job, which on the seed is
+ * six).
  *
  * The job is named only when every row on offer came from the SAME prior job;
  * a mixed page of hits says "4 of 5 selected", because naming one of several

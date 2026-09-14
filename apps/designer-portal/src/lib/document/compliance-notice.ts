@@ -85,10 +85,23 @@ export function expiryNoticeClause(input: ExpiryNoticeClauseInput): string {
  * not spoken about, and this sentence is the sweep's sentence. Where a holder
  * carries several noticed papers the worst one speaks — `lapsed` outranks
  * `lapses_soon`, then the soonest date.
+ *
+ * `holderName` MAY BE A RESOLVER (r10 MAJOR-2). A caller that asks about two
+ * holders at once — a person's own card and their firm, which is what R-BA's
+ * paper word reduces over — cannot name them both with one string, and naming
+ * the firm for a licence the PERSON holds is r9 B-1 over again, on a face this
+ * time. 00630:368-375 already branches the notification's holder name on
+ * `holder_type`; a caller passing a function gets the same branch here. A
+ * plain string still works and still means "this is the holder", which is what
+ * the company card and the roster row each have.
  */
 export function noticedPaperClause(
   holderIds: readonly (string | null | undefined)[],
-  holderName: string | null | undefined,
+  holderName:
+    | string
+    | null
+    | undefined
+    | ((doc: StudioComplianceDocument) => string | null | undefined),
   documents: readonly StudioComplianceDocument[] | undefined,
   notices: ReadonlyMap<string, ComplianceNotice>,
   docTypeLabels: Record<string, string>,
@@ -113,7 +126,8 @@ export function noticedPaperClause(
   });
   const { doc, notice } = candidates[0];
   return expiryNoticeClause({
-    holderName,
+    holderName:
+      typeof holderName === "function" ? holderName(doc) : holderName,
     paperNoun: noticePaperNoun(
       doc.doc_type,
       docTypeLabels[doc.doc_type] ?? doc.doc_label ?? doc.doc_type,

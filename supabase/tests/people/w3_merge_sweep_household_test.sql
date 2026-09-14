@@ -3334,6 +3334,143 @@ BEGIN
   RAISE NOTICE '11f. r9 M-1 — a grant the household did not source stands: passed';
 END $$;
 
+-- ═══════════════════════════════════════════════════════════════════════════
+-- BLOCK 11g — r10 BLOCKING-1: the sole-proprietor fold keeps the FIRM'S PAPER
+--                             readable for everyone else on that crew
+-- ═══════════════════════════════════════════════════════════════════════════
+-- The fold moves every document off the folded FIRM onto the surviving person
+-- and deliberately leaves the CREW pointing at the folded card (11e above,
+-- r6 M-3, R-BN). identity_paper_state(card, firm) asked compliance_state() of
+-- exactly the two ids handed to it, so the crew's Directory row and their seat
+-- line both fell from `lapsed` to `not_on_file` over a certificate that filed,
+-- lapsed and gates site_access — beside a row still printing the firm's name.
+-- 00629 §4f resolves both holders through resolve_merged_contact() first.
+INSERT INTO public.studio_contacts
+  (id, organization_id, entity_kind, contact_kind, full_name, created_by, created_at) VALUES
+  ('f9f40000-0000-4000-8000-000000000061','f9000000-0000-4000-8000-00000000000a','person','sub',
+   'R10 Owner Operator','a0000000-0000-0000-0000-000000000004','2024-01-01'),
+  ('f9f40000-0000-4000-8000-000000000062','f9000000-0000-4000-8000-00000000000a','person','sub',
+   'R10 Crew Member','a0000000-0000-0000-0000-000000000004','2024-01-01'),
+  ('f9f40000-0000-4000-8000-000000000065','f9000000-0000-4000-8000-00000000000a','person','sub',
+   'R10 Firm Crew','a0000000-0000-0000-0000-000000000004','2024-01-01');
+
+INSERT INTO public.studio_contacts
+  (id, organization_id, entity_kind, contact_kind, company_name, company_kind, created_by, created_at) VALUES
+  ('f9f40000-0000-4000-8000-000000000063','f9000000-0000-4000-8000-00000000000a','company','sub',
+   'R10 Owner Operator Electric','sub','a0000000-0000-0000-0000-000000000004','2024-01-01'),
+  ('f9f40000-0000-4000-8000-000000000066','f9000000-0000-4000-8000-00000000000a','company','sub',
+   'R10 Absorbed Firm','sub','a0000000-0000-0000-0000-000000000004','2024-01-01'),
+  ('f9f40000-0000-4000-8000-000000000067','f9000000-0000-4000-8000-00000000000a','company','sub',
+   'R10 Surviving Firm','sub','a0000000-0000-0000-0000-000000000004','2024-01-01');
+
+UPDATE public.studio_contacts SET is_sole_proprietor = true
+ WHERE id = 'f9f40000-0000-4000-8000-000000000061';
+
+INSERT INTO public.studio_person_affiliations
+  (person_id, company_id, role_at_firm, from_date) VALUES
+  ('f9f40000-0000-4000-8000-000000000061','f9f40000-0000-4000-8000-000000000063','Owner','2025-01-01'),
+  ('f9f40000-0000-4000-8000-000000000062','f9f40000-0000-4000-8000-000000000063','Foreman','2021-01-01'),
+  ('f9f40000-0000-4000-8000-000000000065','f9f40000-0000-4000-8000-000000000066','Foreman','2021-01-01');
+
+-- The one certificate: lapsed, dated, and gating the door PR-h names.
+INSERT INTO public.studio_compliance_documents
+  (id, organization_id, holder_type, holder_id, doc_type, blocks, issued_on, expires_on) VALUES
+  ('f9f40000-0000-4000-8000-000000000064','f9000000-0000-4000-8000-00000000000a','company',
+   'f9f40000-0000-4000-8000-000000000063','coi_gl',
+   ARRAY['site_access','payment','draw']::text[],'2024-01-01','2026-03-31'),
+  ('f9f40000-0000-4000-8000-000000000068','f9000000-0000-4000-8000-00000000000a','company',
+   'f9f40000-0000-4000-8000-000000000066','coi_gl',
+   ARRAY['site_access','payment','draw']::text[],'2024-01-01','2026-03-31');
+
+-- Each crew member holds a seat, stamped with their card and their firm, so
+-- the seat line is measured and not only the identity row.
+INSERT INTO public.project_parties
+  (id, project_id, party_kind, display_name, studio_contact_id, company_id, company_name, stage, created_by) VALUES
+  ('f9f40000-0000-4000-8000-000000000069','f9300000-0000-4000-8000-00000000000a','sub','R10 Crew Member',
+   'f9f40000-0000-4000-8000-000000000062','f9f40000-0000-4000-8000-000000000063',
+   'R10 Owner Operator Electric','active','a0000000-0000-0000-0000-000000000004'),
+  ('f9f40000-0000-4000-8000-00000000006a','f9300000-0000-4000-8000-00000000000a','sub','R10 Firm Crew',
+   'f9f40000-0000-4000-8000-000000000065','f9f40000-0000-4000-8000-000000000066',
+   'R10 Absorbed Firm','active','a0000000-0000-0000-0000-000000000004');
+
+DO $$
+DECLARE
+  v_word text;
+  v_seat text;
+  v_firm text;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+
+  -- the fixture reproduces: crew row and crew seat both read the firm's lapse
+  SELECT paper_state INTO v_word FROM public.people_directory
+   WHERE person_id = 'f9f40000-0000-4000-8000-000000000062';
+  SELECT paper_state INTO v_seat FROM public.people_directory_seats
+   WHERE seat_id = 'f9f40000-0000-4000-8000-000000000069';
+  IF v_word IS DISTINCT FROM 'lapsed' OR v_seat IS DISTINCT FROM 'lapsed' THEN
+    RAISE EXCEPTION 'BLOCK 11g FAIL (r10 BLOCKING-1): the fixture no longer reproduces — row % / seat % before the fold',
+      v_word, v_seat;
+  END IF;
+
+  PERFORM public.merge_studio_contacts(
+    'f9f40000-0000-4000-8000-000000000061','f9f40000-0000-4000-8000-000000000063','manual');
+
+  -- 1. the crew member's Directory row still reads the paper that moved
+  SELECT paper_state, meta->>'company_name' INTO v_word, v_firm
+    FROM public.people_directory
+   WHERE person_id = 'f9f40000-0000-4000-8000-000000000062';
+  IF v_word IS DISTINCT FROM 'lapsed' THEN
+    RAISE EXCEPTION 'BLOCK 11g FAIL (r10 BLOCKING-1): the crew''s Directory paper word reads % after the fold', v_word;
+  END IF;
+  -- and it still NAMES the firm, which is what makes the wrong word a lie
+  IF v_firm IS DISTINCT FROM 'R10 Owner Operator Electric' THEN
+    RAISE EXCEPTION 'BLOCK 11g FAIL (r10 BLOCKING-1 / r6 M-3): the crew''s row names % after the fold', v_firm;
+  END IF;
+
+  -- 2. and so does their seat line (R-BJ's COALESCE, through the nulled
+  --    seat pointer and back to the card's)
+  SELECT paper_state INTO v_seat FROM public.people_directory_seats
+   WHERE seat_id = 'f9f40000-0000-4000-8000-000000000069';
+  IF v_seat IS DISTINCT FROM 'lapsed' THEN
+    RAISE EXCEPTION 'BLOCK 11g FAIL (r10 BLOCKING-1): the crew''s seat line reads % after the fold', v_seat;
+  END IF;
+
+  -- 3. the survivor is unchanged — the paper is theirs now
+  SELECT paper_state INTO v_word FROM public.people_directory
+   WHERE person_id = 'f9f40000-0000-4000-8000-000000000061';
+  IF v_word IS DISTINCT FROM 'lapsed' THEN
+    RAISE EXCEPTION 'BLOCK 11g FAIL (r10 BLOCKING-1): the survivor reads % after the fold', v_word;
+  END IF;
+
+  -- 4. NEGATIVE CONTROL — the firm-into-firm merge, which repoints company_id
+  --    outright and was never the defect. It must read `lapsed` for the same
+  --    crew member before and after, with no help from §4f.
+  SELECT paper_state INTO v_word FROM public.people_directory
+   WHERE person_id = 'f9f40000-0000-4000-8000-000000000065';
+  IF v_word IS DISTINCT FROM 'lapsed' THEN
+    RAISE EXCEPTION 'BLOCK 11g FAIL (r10 control): the firm-crew fixture reads % before the merge', v_word;
+  END IF;
+  PERFORM public.merge_studio_contacts(
+    'f9f40000-0000-4000-8000-000000000067','f9f40000-0000-4000-8000-000000000066','manual');
+  SELECT paper_state INTO v_word FROM public.people_directory
+   WHERE person_id = 'f9f40000-0000-4000-8000-000000000065';
+  SELECT paper_state INTO v_seat FROM public.people_directory_seats
+   WHERE seat_id = 'f9f40000-0000-4000-8000-00000000006a';
+  IF v_word IS DISTINCT FROM 'lapsed' OR v_seat IS DISTINCT FROM 'lapsed' THEN
+    RAISE EXCEPTION 'BLOCK 11g FAIL (r10 control): the firm-into-firm merge reads row % / seat %', v_word, v_seat;
+  END IF;
+
+  -- 5. NEGATIVE CONTROL — a live card with no paper at all still reads
+  --    not_on_file: resolving an unmerged id returns the id itself.
+  SELECT public.identity_paper_state(
+           'f9100000-0000-4000-8000-00000000000d', NULL) INTO v_word;
+  IF v_word IS DISTINCT FROM 'not_on_file' THEN
+    RAISE EXCEPTION 'BLOCK 11g FAIL (r10 control): an unmerged paperless card reads %', v_word;
+  END IF;
+
+  PERFORM pg_temp.reset_role();
+  RAISE NOTICE '11g. r10 BLOCKING-1 — the folded firm''s paper stays readable for its crew: passed';
+END $$;
+
 DO $$ BEGIN RAISE NOTICE 'W3 SQL suite: all blocks passed'; END $$;
 
 ROLLBACK;

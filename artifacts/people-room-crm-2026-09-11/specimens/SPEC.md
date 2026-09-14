@@ -590,13 +590,25 @@ Acceptance (identical facts both widths):
 |---|---|
 | 1 | State bar button reads "Bring forward"; role="status" announces "Bring forward" |
 | 2 | The Okonkwo Call Sheet head remains visible behind/above; the picker is a DocSheet region titled "From the rolodex" with the eyebrow "OKONKWO RESIDENCE". The site-access summary line "Key held by Ngozi Eze. Luis Ochoa controls the gate. Changed 16 Oct 2026." prints under the Call Sheet heading, at both widths (R-U) |
-| 3 | Search field with the value "Lindqvist" and the line "4 of 5 from the Lindqvist kitchen selected" |
-| 4 | Five mini rows in this order, each with a checkbox (drawn per §8 #5, no tick glyph), the 34px circle, name, firm and trade, one history line, and its words: <br>a. Dana Kowalski · Northgate Electric · electrical · selected · history "Worked 1 prior project, Lindqvist kitchen, closed 2025" · paper word "Lapsed" · reach "Field link" · consent "Texting". <br>b. Pete Rusk · Rusk Mechanical · plumbing · selected · same history line · consent "Opted out" with the line "Opted out by text 3 Dec 2025, on the Lindqvist kitchen." · reach "On paper". <br>c. Ingrid Halvorsen · Halvorsen Cabinet Works · cabinetry · selected · same history line · rule clause "Email only. No cell for work." · consent "Not asked" · reach "On paper". <br>d. Claire Bissett · Stonehaven Tile Gallery · tile & stone · selected · line "Saved twice, one firm." · reach "On paper". <br>e. Ben Ostrom · Ostrom Builders · general contracting · not selected · same history line · reach "On paper". No verdict on any row (PR-i) |
+| 3 | Search field with the value "Lindqvist" and the line "4 of 6 from the Lindqvist kitchen selected" |
+| 4 | Six mini rows in this order, each with a checkbox (drawn per §8 #5, no tick glyph), the 34px circle, name, firm and trade, one history line, and its words: <br>a. Dana Kowalski · Northgate Electric · electrical · selected · history "Worked 1 prior project, Lindqvist kitchen, closed 2025" · paper word "Lapsed" · reach "Field link" · consent "Texting". <br>b. Pete Rusk · Rusk Mechanical · plumbing · selected · same history line · consent "Opted out" with the line "Opted out by text 3 Dec 2025, on the Lindqvist kitchen." · reach "On paper". <br>c. Ingrid Halvorsen · Halvorsen Cabinet Works · cabinetry · selected · same history line · rule clause "Email only. No cell for work." · consent "Not asked" · reach "On paper". <br>d. Claire Bissett · Stonehaven Tile Gallery · tile & stone · selected · line "Saved twice, one firm." · reach "On paper". <br>e. Ben Ostrom · Ostrom Builders · general contracting · not selected · same history line · reach "On paper". <br>f. Erin Sato · Marrow & Sons · project management · not selected · same history line · reach "Field link". No verdict on any row (PR-i) |
 | 5 | A pane beside the list (1440) or below it (390) headed "What travels": identity · typed channels · contact rule · consent by channel value · document expiries · one history line. Then "What stays behind": 2025 pricing · 2025 project notes · show to client |
 | 6 | The act row comes first, at both widths: terminal act label "Add four to the roster"; secondary act "Put back". Both checkboxes (row 4) and "Put back" are live — never `aria-disabled`, never the `disabled` attribute — and both acts are reachable by Tab; aria-live announces nothing on load |
 | 7 | Consequence sentence directly under the act row, at both widths, exactly: "Adds four seats to the Okonkwo residence. Pete Rusk arrives opted out of texting. Northgate Electric's insurance lapsed 31 Mar 2026." |
 | 8 | Forbidden here as everywhere: schema words, caveats, any name outside §3 |
 | 9 | 390: full width, rows stacked, pane after the list, the act and its sentence in flow |
+
+**R-BP (W3 r10 F1, 2026-09-14).** Rows 3 and 4 read "five" until the shipped
+room was walked against the shipped seed: the studio's book holds SIX people
+who worked the Lindqvist kitchen, because F-28 gave Erin Sato a second seat on
+that job — added later, to exercise `people_directory_seats`. The pool is
+whatever the book holds for the prior job, so she is listed and left unticked,
+and no exclusion rule is invented to hide her. The shipped room,
+`e2e/people/bring-forward.spec.ts` and both specimen plates print, pin and draw
+six. Erin Sato is F-08 in §3's own fixture, so §5.7 #8 ("no name outside §3")
+still holds; nothing else about the state changed — four are ticked, the act
+still reads "Add four to the roster", and the consequence sentence is
+unchanged.
 
 ### 5.8 Shared sentences and clauses
 

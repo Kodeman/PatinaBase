@@ -56,7 +56,10 @@
 -- to_date, not erased,
 -- and their legacy company_id pointer stands (r6 M-3, R-BN): a sole
 -- proprietor who really has crew is a fact the studio recorded, and the crew
--- must not lose their firm's name off their Directory row. And the
+-- must not lose their firm's name off their Directory row — and §4f re-issues
+-- identity_paper_state() so that standing pointer resolves FORWARD for paper
+-- too, or the crew would keep the folded firm's name beside `Not on file`
+-- over a certificate that filed and lapsed (r10 BLOCKING-1). And the
 -- documents and channels it held move across with their holder/owner kind
 -- rewritten to `person`, because assert_compliance_holder() and
 -- assert_channel_owner_kind() each hold that word to the card's own
@@ -1079,6 +1082,112 @@ COMMENT ON FUNCTION public.sync_person_affiliation_from_pointer() IS
   'crew affiliations are not re-derived by the next ordinary card save).';
 
 -- ═══════════════════════════════════════════════════════════════════════════
+-- 4f. identity_paper_state RESOLVES ITS TWO HOLDERS FORWARD
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Migrations review r10 BLOCKING-1.
+--
+-- §5's sole-proprietor fold moves every compliance document off the folded
+-- FIRM onto the surviving person — correctly, the firm IS the person — and
+-- §4e above keeps the folded firm's CREW pointing at the folded card: their
+-- affiliations close with `to_date` and their legacy
+-- studio_contacts.company_id goes on naming it, so their Directory row keeps
+-- printing the firm's NAME (r6 M-3, R-BN: a merge never deletes a typed fact).
+--
+-- Nothing resolved that pointer forward for PAPER. identity_paper_state(card,
+-- firm) (00626:949) asks compliance_state() of exactly the two ids it is
+-- handed, and the folded firm now holds nothing — so every OTHER human on that
+-- crew read their firm's certificate as `not_on_file`.
+--
+-- Measured on a fresh reset, rolled back
+-- (artifacts/…/build/probe52-r10-soleprop-crew-seat.sql): a firm `coi_gl`
+-- lapsed 2026-03-31 gating {site_access, payment, draw}; the fold took Joe
+-- Crew's people_directory row from `lapsed` to `not_on_file` and his
+-- people_directory_seats line with it, while both went on printing `Northgate
+-- Probe Electric`. One row, two disagreeing facts, about the certificate that
+-- decides whether a body gets on site: PR-h's own stated failure mode ("a
+-- designer mobilises an uninsured sub from the Call Sheet"), SPEC §5.4 #7's
+-- held clause gone, and `Not on file` printed over a firm that filed and
+-- lapsed — the inversion R-K / C13 exists to prevent.
+--
+-- THE POINTER STANDS (R-BN), SO THE RESOLUTION BELONGS IN THE READER — and in
+-- the ONE reader rather than its three call sites (§6's CONTACTS branch, the
+-- party branch beside it, and people_directory_seats' COALESCE(seat's firm,
+-- card's firm) at 00626:2169), because R-BA is "one formula serves every
+-- reader" and three copies is three places for it to drift.
+--
+-- COALESCE(resolve_merged_contact(id), id), not the bare call: §3 is SECURITY
+-- INVOKER and answers NULL for a card the caller may not read, and a holder
+-- that cannot be resolved must fall back to the id it was handed rather than
+-- drop out of the reduction. A live id resolves to itself, so every unmerged
+-- call returns exactly today's answer.
+--
+-- The seat half needs no second rule. §5 nulls project_parties.company_id for
+-- every seat naming the folded firm — not only the proprietor's own — because
+-- party_company_not_a_company (00624) refuses a PERSON card in that column and
+-- the survivor is a person; 00626's COALESCE then falls back to the crew
+-- card's own pointer, which is the folded firm, which this function now
+-- resolves. The seat's company_name snapshot is untouched, so the Call Sheet
+-- row goes on printing the firm's name beside the word.
+--
+-- Grafted from 00626:949-972, the latest body
+-- (`grep -rln "CREATE OR REPLACE FUNCTION[^(]*identity_paper_state"` answers
+-- 00626 alone). The worst-first order, the de-duplication leg, the ACL and the
+-- search_path pin are 00626's; only the two ids handed to compliance_state()
+-- changed.
+CREATE OR REPLACE FUNCTION public.identity_paper_state(
+  p_card_id    uuid,
+  p_company_id uuid
+)
+RETURNS text
+LANGUAGE sql
+STABLE
+SET search_path TO 'public'
+AS $$
+  WITH holder AS (
+    SELECT COALESCE(public.resolve_merged_contact(p_card_id), p_card_id)
+             AS card_id,
+           COALESCE(public.resolve_merged_contact(p_company_id), p_company_id)
+             AS company_id
+  ),
+  words AS (
+    SELECT public.compliance_state(h.card_id) AS w
+      FROM holder h
+     WHERE h.card_id IS NOT NULL
+    UNION ALL
+    SELECT public.compliance_state(h.company_id) AS w
+      FROM holder h
+     WHERE h.company_id IS NOT NULL
+       AND h.company_id IS DISTINCT FROM h.card_id
+  )
+  SELECT CASE
+           WHEN EXISTS (SELECT 1 FROM words WHERE w = 'lapsed')      THEN 'lapsed'
+           WHEN EXISTS (SELECT 1 FROM words WHERE w = 'lapses_soon') THEN 'lapses_soon'
+           WHEN EXISTS (SELECT 1 FROM words WHERE w = 'current')     THEN 'current'
+           ELSE 'not_on_file'
+         END;
+$$;
+
+-- 00626's ACL is restated: a re-issued function keeps it, and stating it is
+-- cheaper than trusting that.
+REVOKE ALL ON FUNCTION public.identity_paper_state(uuid, uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.identity_paper_state(uuid, uuid)
+  TO authenticated, service_role;
+
+COMMENT ON FUNCTION public.identity_paper_state(uuid, uuid) IS
+  'direction §3.8''s paper word for one IDENTITY rather than for one holder '
+  'card: compliance_state() over the person''s OWN card and over their firm, '
+  'reduced worst-first — lapsed, else lapses_soon, else current, else '
+  'not_on_file when neither holder has any paper at all, because no paper is a '
+  'different fact from a lapse (C21/R-K) and a person holding nothing '
+  'personally must not drag their firm''s word down (00626, R-BA). BOTH ids '
+  'are resolved through resolve_merged_contact() first, so a crew member whose '
+  'legacy pointer still names a firm that was folded into its sole proprietor '
+  '— the state §4e and R-BN deliberately leave them in — reads the paper that '
+  'moved with the fold instead of not_on_file (00629 r10 BLOCKING-1). '
+  'Unmerged ids resolve to themselves; an id the caller may not read falls '
+  'back to itself rather than dropping out of the reduction.';
+
+-- ═══════════════════════════════════════════════════════════════════════════
 -- 5. merge_studio_contacts — one transaction, one act
 -- ═══════════════════════════════════════════════════════════════════════════
 CREATE OR REPLACE FUNCTION public.merge_studio_contacts(
@@ -2012,6 +2121,17 @@ BEGIN
     -- No person card may be a seat's company_id (00624's
     -- party_company_not_a_company). The firm is the person, and the seat's
     -- own studio_contact_id now says so.
+    --
+    -- THIS NULLS EVERY SEAT NAMING THE FOLDED FIRM, not only the proprietor's
+    -- own — a crew seat included — and there is no legal alternative: the
+    -- survivor is a PERSON card and the CHECK above refuses one here. It costs
+    -- the crew seat nothing. company_name is a free-text snapshot the merge
+    -- never writes, so the Call Sheet row goes on printing the firm's name;
+    -- and people_directory_seats reads
+    -- identity_paper_state(card, COALESCE(seat's firm, card's firm))
+    -- (00626:2169, R-BJ), so a nulled seat falls back to the crew card's own
+    -- pointer — still the folded firm, as §4e and R-BN require — which §4f now
+    -- resolves forward to the survivor for paper (r10 BLOCKING-1).
     UPDATE public.project_parties SET company_id = NULL WHERE company_id = p_merged;
     UPDATE public.project_parties
        SET warranty_contact_person_id = p_survivor

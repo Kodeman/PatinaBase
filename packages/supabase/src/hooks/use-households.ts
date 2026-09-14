@@ -167,6 +167,29 @@ export function useClientHousehold(id: string | null | undefined) {
 }
 
 /**
+ * The clause `add_household_member()` and `set_household_threshold()` stamp on
+ * a money grant they opened, and the one they will both leave alone when they
+ * find it on somebody else's (00632 §4, r9 M-1).
+ */
+export const HOUSEHOLD_GRANT_SOURCE_CLAUSE =
+  "client_households.co_threshold_cents";
+
+/**
+ * A client-side seat's OPEN money grant, as the band needs to read it before
+ * it promises anything (r10 BLOCKING-1).
+ */
+export interface ClientSideMoneyGrant {
+  /** The seat the grant hangs off. */
+  engagementId: string;
+  /** The card seated there — how the band finds the person it is about. */
+  personId: string | null;
+  /** The seat's kind, because a seat is reused per (card, kind). */
+  partyKind: string;
+  thresholdCents: number | null;
+  sourceClause: string | null;
+}
+
+/**
  * The household this job's client side belongs to (PR-c).
  *
  * THE SEAT IS THE LINK, not a column on the project. `projects` carries no
@@ -210,6 +233,17 @@ export function useProjectHousehold(projectId: string | null | undefined) {
        * band says something else when this is true.
        */
       clientSideHasAuthority: boolean;
+      /**
+       * Every OPEN money grant on this job's client side, keyed by the card
+       * and the seat kind the RPC reuses (r10 BLOCKING-1). The band's add
+       * sentence promised "They may sign money to $X." off the household's
+       * figure alone, while `add_household_member()` deliberately leaves a
+       * grant it did not source exactly as the studio wrote it — so the band
+       * promised $5,000 over a Call Sheet row two elements above still
+       * printing "Signs money to $2,500." The face reads what the write will
+       * really do.
+       */
+      clientSideMoneyGrants: ClientSideMoneyGrant[];
     }> => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
@@ -237,14 +271,23 @@ export function useProjectHousehold(projectId: string | null | undefined) {
 
       const { data: seats, error: seatsError } = await supabase
         .from("project_parties")
-        .select("id, studio_contact_id, party_kind")
+        .select("id, studio_contact_id, party_kind, created_at")
         .eq("project_id", projectId)
         .in("party_kind", ["client", "client_rep"]);
       if (seatsError) throw seatsError;
-      const seatRows = (seats ?? []) as Array<{
-        id: string;
-        studio_contact_id: string | null;
-      }>;
+      const seatRows = (
+        (seats ?? []) as Array<{
+          id: string;
+          studio_contact_id: string | null;
+          party_kind: string;
+          created_at: string | null;
+        }>
+      )
+        // `add_household_member()` reuses the EARLIEST seat for a
+        // (project, card, kind) — `ORDER BY pp.created_at LIMIT 1` (00632
+        // §4) — so the grant the band must read is that seat's.
+        .slice()
+        .sort((a, b) => (a.created_at ?? "").localeCompare(b.created_at ?? ""));
       const memberCardIds = [
         ...new Set(
           seatRows
@@ -254,16 +297,47 @@ export function useProjectHousehold(projectId: string | null | undefined) {
       ];
 
       let clientSideHasAuthority = false;
+      const clientSideMoneyGrants: ClientSideMoneyGrant[] = [];
       const seatIds = seatRows.map((seat) => seat.id).filter(Boolean);
       if (seatIds.length > 0) {
+        // One read, two answers (r10 BLOCKING-1): whether the client side
+        // carries ANY recorded authority — QA-1's sentence — and what each
+        // client-side seat's open MONEY grant says, which is what decides
+        // whether the add act may promise the household's figure. Same
+        // request, two more columns.
         const { data: grants, error: grantError } = await supabase
           .from("project_party_authority")
-          .select("id")
+          .select("id, engagement_id, scope, threshold_cents, source_clause")
           .in("engagement_id", seatIds)
-          .is("effective_to", null)
-          .limit(1);
+          .is("effective_to", null);
         if (grantError) throw grantError;
-        clientSideHasAuthority = ((grants ?? []) as unknown[]).length > 0;
+        const grantRows = (grants ?? []) as Array<{
+          engagement_id: string;
+          scope: string;
+          threshold_cents: number | null;
+          source_clause: string | null;
+        }>;
+        clientSideHasAuthority = grantRows.length > 0;
+        const seatById = new Map(seatRows.map((seat) => [seat.id, seat]));
+        for (const grant of grantRows) {
+          if (grant.scope !== "money") continue;
+          const seat = seatById.get(grant.engagement_id);
+          if (!seat) continue;
+          // The earliest seat wins, because that is the one the RPC reuses.
+          const already = clientSideMoneyGrants.some(
+            (g) =>
+              g.personId === seat.studio_contact_id &&
+              g.partyKind === seat.party_kind,
+          );
+          if (already) continue;
+          clientSideMoneyGrants.push({
+            engagementId: grant.engagement_id,
+            personId: seat.studio_contact_id,
+            partyKind: seat.party_kind,
+            thresholdCents: grant.threshold_cents,
+            sourceClause: grant.source_clause,
+          });
+        }
       }
 
       // The pointer the client record already carries, read before the seats
@@ -290,6 +364,7 @@ export function useProjectHousehold(projectId: string | null | undefined) {
               designerId,
               memberCardIds,
               clientSideHasAuthority,
+              clientSideMoneyGrants,
             };
           }
         }
@@ -302,6 +377,7 @@ export function useProjectHousehold(projectId: string | null | undefined) {
           designerId,
           memberCardIds,
           clientSideHasAuthority,
+          clientSideMoneyGrants,
         };
       }
 
@@ -317,6 +393,7 @@ export function useProjectHousehold(projectId: string | null | undefined) {
         designerId,
         memberCardIds,
         clientSideHasAuthority,
+        clientSideMoneyGrants,
       };
     },
   });

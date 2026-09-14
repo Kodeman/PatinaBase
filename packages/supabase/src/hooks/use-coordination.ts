@@ -2412,9 +2412,21 @@ export const partyBidKeys = {
     ['project-party-bids', projectId ?? null] as const,
 };
 
-/** 00631's own refusals, as sentences. */
+/**
+ * 00631's own refusals, as sentences.
+ *
+ * r10 MAJOR-1 — EVERY KEY IS A TOKEN THE DATABASE ACTUALLY RAISES. The
+ * date-order key read `project_parties_bid_valid_until_check`, a constraint
+ * that does not exist: 00631:86-88 mints it as
+ * `project_parties_bid_window_check`, and the live catalog agrees. So the one
+ * refusal the seven-field editor can raise from two of its own date inputs
+ * matched nothing here, fell through to the raw PostgREST string, and
+ * `writeErrorMessage`'s schema-word guard correctly suppressed it — leaving
+ * "Could not write the bid." with no field named. The suite was green on a
+ * string the database never emits.
+ */
 const BID_REFUSAL_SENTENCES: Record<string, string> = {
-  project_parties_bid_valid_until_check:
+  project_parties_bid_window_check:
     'A number cannot stop holding before the day it was owed.',
   party_bid_quoted_by_project_has_no_studio:
     'This job is not attached to a studio yet, so there is no book to name an estimator from.',

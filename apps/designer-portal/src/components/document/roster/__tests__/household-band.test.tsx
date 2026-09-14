@@ -26,12 +26,15 @@ let designerClientId: string | null = "client-1";
 let designerId: string | null = "designer-1";
 let memberRole = "member";
 let clientSideHasAuthority = false;
+/** r10 BLOCKING-1 — the open money grants the client side already carries. */
+let clientSideMoneyGrants: Array<Record<string, unknown>> = [];
 
 jest.mock("@patina/supabase", () => ({
   HOUSEHOLD_MEMBER_ROLE_LABELS: {
     client: "decides the work",
     client_rep: "signs for the household",
   },
+  HOUSEHOLD_GRANT_SOURCE_CLAUSE: "client_households.co_threshold_cents",
   useProjectHousehold: () => ({
     data: {
       household,
@@ -39,6 +42,7 @@ jest.mock("@patina/supabase", () => ({
       designerId,
       memberCardIds: ["card-adaeze"],
       clientSideHasAuthority,
+      clientSideMoneyGrants,
     },
   }),
   useOrganizations: () => ({
@@ -78,6 +82,7 @@ const props = {
 
 beforeEach(() => {
   clientSideHasAuthority = false;
+  clientSideMoneyGrants = [];
   addMemberMutate.mockReset().mockResolvedValue("seat-1");
   setThresholdMutate.mockReset().mockResolvedValue({ id: "house-1" });
   createHouseholdMutate.mockReset().mockResolvedValue({ id: "house-1" });
@@ -159,6 +164,78 @@ describe("householdMemberConsequence", () => {
       "Chidi Okonkwo joins the household and takes a seat on the Okonkwo residence. Nothing is sent to them.",
     );
   });
+
+  /**
+   * r10 BLOCKING-1 — the sentence may not promise a figure the RPC will not
+   * write. `add_household_member()` leaves an open money grant alone when its
+   * `source_clause` is not the household's (00632:425-444, r9 M-1), so the
+   * band says what actually happens.
+   */
+  it("says the standing figure stands where the household did not source it", () => {
+    expect(
+      householdMemberConsequence(
+        "Chidi Okonkwo",
+        "client_rep",
+        "Okonkwo residence",
+        500000,
+        true,
+        {
+          thresholdCents: 250000,
+          sourceClause: "Owner agreement, Exhibit B §4.2",
+        },
+      ),
+    ).toBe(
+      "Chidi Okonkwo joins the household and takes a seat on the Okonkwo residence. Chidi Okonkwo already signs money to $2,500 on the Okonkwo residence, recorded outside the household, and that figure stands. Nothing is sent to them.",
+    );
+  });
+
+  it("names the standing grant even where it carries no figure", () => {
+    expect(
+      householdMemberConsequence(
+        "Chidi Okonkwo",
+        "client_rep",
+        "Okonkwo residence",
+        500000,
+        true,
+        { thresholdCents: null, sourceClause: "Owner agreement" },
+      ),
+    ).toBe(
+      "Chidi Okonkwo joins the household and takes a seat on the Okonkwo residence. Chidi Okonkwo already signs money on the Okonkwo residence, recorded outside the household with no figure on it, and that stands. Nothing is sent to them.",
+    );
+  });
+
+  it("keeps today's clause where the household sourced the grant it will move", () => {
+    expect(
+      householdMemberConsequence(
+        "Chidi Okonkwo",
+        "client_rep",
+        "Okonkwo residence",
+        500000,
+        true,
+        {
+          thresholdCents: 250000,
+          sourceClause: "client_households.co_threshold_cents",
+        },
+      ),
+    ).toBe(
+      "Chidi Okonkwo joins the household and takes a seat on the Okonkwo residence. They may sign money to $5,000. Nothing is sent to them.",
+    );
+  });
+
+  it("keeps today's clause where the seat carries no open money grant", () => {
+    expect(
+      householdMemberConsequence(
+        "Chidi Okonkwo",
+        "client_rep",
+        "Okonkwo residence",
+        500000,
+        true,
+        null,
+      ),
+    ).toBe(
+      "Chidi Okonkwo joins the household and takes a seat on the Okonkwo residence. They may sign money to $5,000. Nothing is sent to them.",
+    );
+  });
 });
 
 describe("householdAddIsHeld (PR-n)", () => {
@@ -210,6 +287,47 @@ describe("HouseholdBand", () => {
       role: "client_rep",
       projectId: "proj-okonkwo",
     });
+  });
+
+  /**
+   * r10 BLOCKING-1, wired: the band reads the CHOSEN person's own open money
+   * grant, keyed on the (card, role) pair `add_household_member()` reuses a
+   * seat by.
+   */
+  it("prints the standing figure where the household did not source it", () => {
+    clientSideMoneyGrants = [
+      {
+        engagementId: "seat-chidi",
+        personId: "card-chidi",
+        partyKind: "client_rep",
+        thresholdCents: 250000,
+        sourceClause: "Owner agreement, Exhibit B §4.2",
+      },
+    ];
+    render(<HouseholdBand {...props} />);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Add a household member" }),
+    );
+    fireEvent.change(screen.getByLabelText("Who else is in this household"), {
+      target: { value: "card-chidi" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "signs for the household" }),
+    );
+    expect(
+      document.querySelector("[data-household-consequence]")?.textContent,
+    ).toContain(
+      "Chidi Okonkwo already signs money to $2,500 on the Okonkwo residence, recorded outside the household, and that figure stands.",
+    );
+
+    // and the OTHER member, who carries no grant of her own, still reads the
+    // household's promise
+    fireEvent.change(screen.getByLabelText("Who else is in this household"), {
+      target: { value: "card-adaeze" },
+    });
+    expect(
+      document.querySelector("[data-household-consequence]")?.textContent,
+    ).toContain("They may sign money to $2,500.");
   });
 
   it("names no schema word on the face (C5, SPEC §8 #3)", () => {
