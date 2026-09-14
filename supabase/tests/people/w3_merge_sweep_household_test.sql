@@ -3471,6 +3471,215 @@ BEGIN
   RAISE NOTICE '11g. r10 BLOCKING-1 — the folded firm''s paper stays readable for its crew: passed';
 END $$;
 
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- BLOCK 11h — r11 MAJOR-1: a person-to-person merge does not let the absorbed
+--                          card's FREE-TEXT firm outrank the survivor's own
+--                          firm card
+-- ═══════════════════════════════════════════════════════════════════════════
+-- people_directory's CONTACTS branch resolves a carded human's firm as
+-- COALESCE(NULLIF(btrim(sc.company_name),''), firm.company_name,
+-- firm.full_name) — the free text FIRST (QA-1, w2 r5). §5's company_name leg
+-- (r9 B-2) sat in the shared path, so an ordinary duplicate fold carried the
+-- absorbed card's typed-by-hand snapshot onto a survivor whose own company_id
+-- still names a firm card, and the snapshot then won the face: measured, the
+-- survivor's meta.company_name went from the firm card's own name to
+-- 'R11 Northgate Elec (old typo)' with company_id unchanged. One row, two
+-- disagreeing facts about which firm the human works for.
+INSERT INTO public.studio_contacts
+  (id, organization_id, entity_kind, contact_kind, full_name, company_name, created_by, created_at) VALUES
+  ('f9f50000-0000-4000-8000-000000000071','f9000000-0000-4000-8000-00000000000a','person','sub',
+   'R11 Probe Human', NULL,'a0000000-0000-0000-0000-000000000004','2025-01-01'),
+  ('f9f50000-0000-4000-8000-000000000072','f9000000-0000-4000-8000-00000000000a','person','sub',
+   'R11 Probe Human','R11 Northgate Elec (old typo)','a0000000-0000-0000-0000-000000000004','2026-01-01'),
+  -- the control pair: NEITHER card can resolve a firm, so R-BN's carry stands
+  ('f9f50000-0000-4000-8000-000000000074','f9000000-0000-4000-8000-00000000000a','person','sub',
+   'R11 Firmless Human', NULL,'a0000000-0000-0000-0000-000000000004','2025-01-01'),
+  ('f9f50000-0000-4000-8000-000000000075','f9000000-0000-4000-8000-00000000000a','person','sub',
+   'R11 Firmless Human','R11 Orphan Firm Text','a0000000-0000-0000-0000-000000000004','2026-01-01');
+
+INSERT INTO public.studio_contacts
+  (id, organization_id, entity_kind, contact_kind, company_name, company_kind, created_by) VALUES
+  ('f9f50000-0000-4000-8000-000000000073','f9000000-0000-4000-8000-00000000000a','company','sub',
+   'R11 Northgate Probe Electric','sub','a0000000-0000-0000-0000-000000000004');
+
+-- The survivor's pointer, written the way the room writes it: an open
+-- affiliation, which sync_studio_contact_company_pointer() mirrors onto
+-- studio_contacts.company_id (R-AI).
+INSERT INTO public.studio_person_affiliations
+  (person_id, company_id, role_at_firm, from_date) VALUES
+  ('f9f50000-0000-4000-8000-000000000071','f9f50000-0000-4000-8000-000000000073','Foreman','2024-01-01');
+
+DO $$
+DECLARE
+  v_name text;
+  v_meta text;
+  v_ptr  uuid;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+
+  -- the fixture reproduces: the Directory row names the FIRM CARD before
+  SELECT meta->>'company_name' INTO v_meta FROM public.people_directory
+   WHERE person_id = 'f9f50000-0000-4000-8000-000000000071';
+  IF v_meta IS DISTINCT FROM 'R11 Northgate Probe Electric' THEN
+    RAISE EXCEPTION 'BLOCK 11h FAIL (r11 MAJOR-1): the fixture no longer reproduces — the row reads % before the merge', v_meta;
+  END IF;
+
+  PERFORM public.merge_studio_contacts(
+    'f9f50000-0000-4000-8000-000000000071','f9f50000-0000-4000-8000-000000000072','manual');
+
+  -- 1. the face still names the firm the survivor's own pointer names
+  SELECT meta->>'company_name' INTO v_meta FROM public.people_directory
+   WHERE person_id = 'f9f50000-0000-4000-8000-000000000071';
+  IF v_meta IS DISTINCT FROM 'R11 Northgate Probe Electric' THEN
+    RAISE EXCEPTION 'BLOCK 11h FAIL (r11 MAJOR-1): the survivor''s Directory row reads % after the merge', v_meta;
+  END IF;
+
+  -- 2. and the two facts agree: the snapshot was not written at all
+  SELECT company_name, company_id INTO v_name, v_ptr FROM public.studio_contacts
+   WHERE id = 'f9f50000-0000-4000-8000-000000000071';
+  IF NULLIF(btrim(COALESCE(v_name, '')), '') IS NOT NULL THEN
+    RAISE EXCEPTION 'BLOCK 11h FAIL (r11 MAJOR-1): the survivor carries the snapshot %', v_name;
+  END IF;
+  IF v_ptr IS DISTINCT FROM 'f9f50000-0000-4000-8000-000000000073' THEN
+    RAISE EXCEPTION 'BLOCK 11h FAIL (r11 MAJOR-1): the survivor''s pointer reads %', v_ptr;
+  END IF;
+
+  -- 3. R-BN is not weakened: the absorbed card keeps its own typed fact, and
+  --    it still resolves forward
+  SELECT company_name INTO v_name FROM public.studio_contacts
+   WHERE id = 'f9f50000-0000-4000-8000-000000000072';
+  IF v_name IS DISTINCT FROM 'R11 Northgate Elec (old typo)' THEN
+    RAISE EXCEPTION 'BLOCK 11h FAIL (R-BN): the absorbed card''s own name reads %', v_name;
+  END IF;
+
+  -- 4. POSITIVE CONTROL — where the survivor can resolve NO firm at all, the
+  --    absorbed card's name still travels (r9 B-2's need, stated generally)
+  PERFORM public.merge_studio_contacts(
+    'f9f50000-0000-4000-8000-000000000074','f9f50000-0000-4000-8000-000000000075','manual');
+  SELECT meta->>'company_name' INTO v_meta FROM public.people_directory
+   WHERE person_id = 'f9f50000-0000-4000-8000-000000000074';
+  IF v_meta IS DISTINCT FROM 'R11 Orphan Firm Text' THEN
+    RAISE EXCEPTION 'BLOCK 11h FAIL (r11 MAJOR-1 control): a firmless survivor reads % after the merge', v_meta;
+  END IF;
+
+  PERFORM pg_temp.reset_role();
+  RAISE NOTICE '11h. r11 MAJOR-1 — a carried snapshot cannot outrank the survivor''s own firm card: passed';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- BLOCK 11i — r11 MAJOR-2: a seat on a job that records no studio is refused
+--                          BY NAME, before the first write
+-- ═══════════════════════════════════════════════════════════════════════════
+-- §"seats" repoints studio_contact_id, which fires
+-- assert_project_party_cards_trg; its R-BD leg refuses the write outright
+-- while project_tenant_org() answers NULL (00624). One such seat therefore
+-- aborted the whole merge with the raw token party_card_project_has_no_studio
+-- on the merge sheet, and the pair could never be folded. The RPC now
+-- pre-checks its own seat set and refuses by name, with the job in DETAIL.
+--
+-- The fixture is R-BI's legacy shape: a stamped seat on a studio_id IS NULL
+-- project. Both triggers are staged around, for the reason block 6 gives —
+-- neither row can be written through the guards that now exist.
+ALTER TABLE public.projects DISABLE TRIGGER set_project_studio_id;
+INSERT INTO public.projects
+  (id, name, designer_id, studio_id, status, created_by, client_visibility_tier) VALUES
+  ('f9300000-0000-4000-8000-0000000000b3','W3 studioless legacy job',
+   'a0000000-0000-0000-0000-000000000007', NULL,'active',
+   'a0000000-0000-0000-0000-000000000007','full');
+ALTER TABLE public.projects ENABLE TRIGGER set_project_studio_id;
+
+INSERT INTO public.studio_contacts
+  (id, organization_id, entity_kind, contact_kind, full_name, phone, created_by, created_at) VALUES
+  ('f9f50000-0000-4000-8000-000000000081','f9000000-0000-4000-8000-00000000000a','person','sub',
+   'R11 Legacy Seat Human','(612) 555-0921','a0000000-0000-0000-0000-000000000004','2025-01-01'),
+  ('f9f50000-0000-4000-8000-000000000082','f9000000-0000-4000-8000-00000000000a','person','sub',
+   'R11 Legacy Seat Human','(612) 555-0921','a0000000-0000-0000-0000-000000000004','2026-01-01');
+
+ALTER TABLE public.project_parties DISABLE TRIGGER assert_project_party_cards_trg;
+INSERT INTO public.project_parties
+  (id, project_id, party_kind, display_name, studio_contact_id, created_by) VALUES
+  ('f9f50000-0000-4000-8000-000000000083','f9300000-0000-4000-8000-0000000000b3','sub',
+   'R11 Legacy Seat Human','f9f50000-0000-4000-8000-000000000082',
+   'a0000000-0000-0000-0000-000000000004');
+ALTER TABLE public.project_parties ENABLE TRIGGER assert_project_party_cards_trg;
+
+DO $$
+DECLARE
+  v_detail text;
+  v_id     uuid;
+  n        integer;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+
+  -- the fixture reproduces: this caller resolves no tenant for that job
+  IF public.project_tenant_org('f9300000-0000-4000-8000-0000000000b3') IS NOT NULL THEN
+    PERFORM pg_temp.reset_role();
+    RAISE EXCEPTION 'BLOCK 11i FAIL (r11 MAJOR-2): the fixture no longer reproduces — the job resolves a tenant';
+  END IF;
+
+  BEGIN
+    PERFORM public.merge_studio_contacts(
+      'f9f50000-0000-4000-8000-000000000081','f9f50000-0000-4000-8000-000000000082','phone');
+    PERFORM pg_temp.reset_role();
+    RAISE EXCEPTION 'BLOCK 11i FAIL (r11 MAJOR-2): the merge went through over a studio-less seat';
+  EXCEPTION WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS v_detail = PG_EXCEPTION_DETAIL;
+    IF SQLERRM LIKE '%party_card_project_has_no_studio%' THEN
+      PERFORM pg_temp.reset_role();
+      RAISE EXCEPTION 'BLOCK 11i FAIL (r11 MAJOR-2): the guard''s raw token reached the caller: %', SQLERRM;
+    END IF;
+    IF SQLERRM NOT LIKE '%merge_seat_on_studioless_project%' THEN
+      PERFORM pg_temp.reset_role();
+      RAISE EXCEPTION 'BLOCK 11i FAIL (r11 MAJOR-2): expected merge_seat_on_studioless_project, got %', SQLERRM;
+    END IF;
+    -- the sheet can name the job, because "record that job's studio" is an act
+    -- nobody can take without knowing which job
+    IF v_detail IS DISTINCT FROM 'W3 studioless legacy job' THEN
+      PERFORM pg_temp.reset_role();
+      RAISE EXCEPTION 'BLOCK 11i FAIL (r11 MAJOR-2): the refusal names the job as %', v_detail;
+    END IF;
+  END;
+
+  -- nothing moved: the refusal is BEFORE the first write
+  SELECT count(*) INTO n FROM public.studio_contacts
+   WHERE id = 'f9f50000-0000-4000-8000-000000000082' AND merged_into IS NULL;
+  IF n <> 1 THEN
+    PERFORM pg_temp.reset_role();
+    RAISE EXCEPTION 'BLOCK 11i FAIL (r11 MAJOR-2): the absorbed card was folded anyway';
+  END IF;
+
+  PERFORM pg_temp.reset_role();
+END $$;
+
+-- CONTROL — the repair R-BD's backfill performs makes the same pair mergeable.
+ALTER TABLE public.projects DISABLE TRIGGER set_project_studio_id;
+UPDATE public.projects SET studio_id = 'f9000000-0000-4000-8000-00000000000a'
+ WHERE id = 'f9300000-0000-4000-8000-0000000000b3';
+ALTER TABLE public.projects ENABLE TRIGGER set_project_studio_id;
+
+DO $$
+DECLARE
+  v_id uuid;
+  v_card uuid;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  v_id := public.merge_studio_contacts(
+    'f9f50000-0000-4000-8000-000000000081','f9f50000-0000-4000-8000-000000000082','phone');
+  IF v_id IS DISTINCT FROM 'f9f50000-0000-4000-8000-000000000081' THEN
+    RAISE EXCEPTION 'BLOCK 11i FAIL (r11 MAJOR-2 control): the merge returned %', v_id;
+  END IF;
+  -- read the seat as postgres: the job belongs to another studio's designer,
+  -- so project_parties' own RLS answers this caller nothing about it
+  PERFORM pg_temp.reset_role();
+  SELECT studio_contact_id INTO v_card FROM public.project_parties
+   WHERE id = 'f9f50000-0000-4000-8000-000000000083';
+  IF v_card IS DISTINCT FROM 'f9f50000-0000-4000-8000-000000000081' THEN
+    RAISE EXCEPTION 'BLOCK 11i FAIL (r11 MAJOR-2 control): the seat reads % after the merge', v_card;
+  END IF;
+  RAISE NOTICE '11i. r11 MAJOR-2 — a studio-less seat is refused by name, and the repair unblocks the fold: passed';
+END $$;
+
 DO $$ BEGIN RAISE NOTICE 'W3 SQL suite: all blocks passed'; END $$;
 
 ROLLBACK;

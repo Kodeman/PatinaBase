@@ -1903,7 +1903,7 @@ export function useResolvedContactId(contactId: string | null | undefined) {
   });
 }
 
-/** `merge_studio_contacts()`'s eleven named refusals, as sentences. */
+/** `merge_studio_contacts()`'s twelve named refusals, as sentences. */
 const MERGE_REFUSAL_SENTENCES: Record<string, string> = {
   merge_contact_not_found: 'One of these cards is no longer in the book.',
   merge_same_card: 'That is one card, not two.',
@@ -1924,14 +1924,36 @@ const MERGE_REFUSAL_SENTENCES: Record<string, string> = {
   // take the whole identity out of the rolodex read.
   merge_survivor_archived:
     'The card you chose to keep has been put away. Put it back on the shelf first, or keep the other card instead.',
+  // r11 MAJOR-2 — a seat on a job that records no studio. 00624's guard used
+  // to abort the merge mid-transaction with its own raw token, which is a
+  // schema word on a face naming no act (SPEC §7); 00629 refuses by name and
+  // before the first write, with the job in `details`.
+  merge_seat_on_studioless_project:
+    'One of these cards holds a seat on a job that records no studio, so the seat cannot be moved. Record that job’s studio first, then merge.',
 };
 
-/** Render a merge refusal as a sentence; anything else comes back as itself. */
+/**
+ * Render a merge refusal as a sentence; anything else comes back as itself.
+ *
+ * `details` is read for the one refusal that can NAME the thing standing in
+ * the way — the job with no studio — because "record that job's studio first"
+ * is an act the studio cannot take without knowing which job (r11 MAJOR-2).
+ */
 export function asMergeError(error: unknown): string {
   const message =
     typeof error === 'object' && error !== null && 'message' in error
       ? String((error as { message?: unknown }).message ?? '')
       : String(error ?? '');
+  const detail =
+    typeof error === 'object' && error !== null && 'details' in error
+      ? String((error as { details?: unknown }).details ?? '').trim()
+      : '';
+  if (message.includes('merge_seat_on_studioless_project') && detail) {
+    return (
+      `One of these cards holds a seat on ${detail}, which records no studio, ` +
+      `so the seat cannot be moved. Record that job’s studio first, then merge.`
+    );
+  }
   for (const [code, sentence] of Object.entries(MERGE_REFUSAL_SENTENCES)) {
     if (message.includes(code)) return sentence;
   }

@@ -36,6 +36,11 @@ jest.mock('@patina/supabase', () => ({
   useSendPartySms: () => ({ mutateAsync: sendSmsMutate, isPending: false }),
   useChannelConsent: () => ({ data: consentResolution }),
   useComplianceDocuments: () => ({ data: complianceDocs }),
+  // r11 MAJOR-1 — the row reads BOTH holders (the person's own card and their
+  // firm), because that is what the paper WORD reduces over.
+  useComplianceDocumentsFor: (ids: string[]) => ({
+    data: ids.length > 0 ? complianceDocs : [],
+  }),
   // W3/P2 — the Bidding band's facts and the nightly expiry notice.
   useSetPartyBid: () => ({ mutateAsync: setBidMutate, isPending: false }),
   useComplianceNotices: () => ({ data: complianceNotices }),
@@ -1242,5 +1247,92 @@ describe('RosterRow — the expiry notice', () => {
       <RosterRow row={soonSeat()} band="this_week" expanded={false} onToggle={jest.fn()} />,
     );
     expect(document.querySelector('[data-expiry-notice]')).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * r11 MAJOR-1 — THE ROW'S SENTENCES READ THE SAME HOLDERS THE WORD DOES.
+ *
+ * `people_directory_seats.paper_state` is
+ * identity_paper_state(studio_contact_id, COALESCE(seat's firm, card's firm))
+ * (R-BA / R-BJ), so the word reduces worst-first over the person's OWN
+ * documents and their firm's. The row's clauses read only `row.companyId`, so
+ * a sole proprietor seated with no firm card printed `Lapsed` with no sentence
+ * at all, and a person-held lapse under a firm card named the firm's paper.
+ * Not reachable on the shipped fixture (its one person-held document expires
+ * 2029-05-01 and carries no notice), which is why it is pinned here.
+ */
+describe('RosterRow — a person-held paper', () => {
+  it('prints the held clause for a sole proprietor with no firm card', () => {
+    complianceDocs = [
+      {
+        id: 'doc-own',
+        holder_id: 'card-dana',
+        doc_type: 'license',
+        doc_label: null,
+        expires_on: '2026-03-31',
+        blocks: ['site_access'],
+        superseded_by: null,
+      },
+    ];
+    const { container } = ul(
+      <RosterRow
+        row={seatRow({ companyId: null, companyName: null })}
+        band="this_week"
+        expanded={false}
+        onToggle={jest.fn()}
+      />,
+    );
+    expect(container.querySelector('[data-held-clause]')).toHaveTextContent(
+      'Site access held. Dana Kowalski’s licence lapsed 31 March 2026.',
+    );
+  });
+
+  it('names the PERSON, not the firm, when the lapsed paper is their own', () => {
+    complianceDocs = [
+      {
+        id: 'doc-own',
+        holder_id: 'card-dana',
+        doc_type: 'license',
+        doc_label: null,
+        expires_on: '2026-03-31',
+        blocks: ['site_access'],
+        superseded_by: null,
+      },
+    ];
+    const { container } = ul(
+      <RosterRow row={seatRow()} band="this_week" expanded={false} onToggle={jest.fn()} />,
+    );
+    const clause = container.querySelector('[data-held-clause]');
+    expect(clause?.textContent).toContain('Dana Kowalski’s licence');
+    expect(clause?.textContent).not.toContain('Northgate Electric');
+  });
+
+  it('prints the expiry notice for a person-held paper, named to the person', () => {
+    complianceNotices = [
+      { id: 'n-own', document_id: 'doc-own', state: 'lapses_soon', noticed_at: '2026-09-13' },
+    ];
+    complianceDocs = [
+      {
+        id: 'doc-own',
+        holder_id: 'card-dana',
+        doc_type: 'license',
+        doc_label: null,
+        expires_on: '2026-10-06',
+        blocks: ['site_access'],
+        superseded_by: null,
+      },
+    ];
+    render(
+      <RosterRow
+        row={seatRow({ paper: 'lapses_soon', companyId: null, companyName: null })}
+        band="this_week"
+        expanded={false}
+        onToggle={jest.fn()}
+      />,
+    );
+    expect(document.querySelector('[data-expiry-notice]')?.textContent).toBe(
+      'Dana Kowalski’s licence lapses on 6 October 2026.',
+    );
   });
 });

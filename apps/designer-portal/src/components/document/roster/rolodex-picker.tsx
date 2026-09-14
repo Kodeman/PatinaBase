@@ -661,7 +661,22 @@ export function RolodexPicker({
     const rows = picked
       .map((id) => cardById.get(id))
       .filter((c): c is StudioContact => !!c);
-    const already = rows.filter((c) =>
+    /**
+     * r11 QA MAJOR-1 — ONE SEATED PICK COST THE WHOLE BATCH.
+     *
+     * This pre-check refused every ticked card the moment ANY one of them was
+     * already on this sheet, before `bringForward.mutateAsync` was called at
+     * all. Leah's own task 5 names four people who are all already seated on
+     * the Okonkwo residence in the shipped fixture, so performing it exactly
+     * as SPEC §5.7 and direction §6 describe it wrote ZERO seats — measured
+     * twice on fresh resets. The RPC path's own refusals are per pick
+     * (`useBringForward` inserts one at a time and returns `refused`), and the
+     * room report states that rule out loud: "One pick refused does not cost
+     * the others." The client-side check now reads the same way — the seated
+     * rows drop out of the batch, the rest go on, and the sentence says which
+     * did not.
+     */
+    const seated = rows.filter((c) =>
       rosterHasIdentity(rosterRows ?? [], {
         display_name: contactName(c),
         email: c.email,
@@ -670,15 +685,18 @@ export function RolodexPicker({
         studio_contact_id: c.id,
       }),
     );
-    if (already.length > 0) {
-      setError(
-        `${already.map((c) => contactName(c)).join(', ')} ${
-          already.length === 1 ? 'is' : 'are'
-        } already on the call sheet.`,
-      );
+    const seatedSentence =
+      seated.length > 0
+        ? `${seated.map((c) => contactName(c)).join(', ')} ${
+            seated.length === 1 ? 'is' : 'are'
+          } already on the call sheet.`
+        : '';
+    const fresh = rows.filter((c) => !seated.includes(c));
+    if (fresh.length === 0) {
+      setError(seatedSentence);
       return;
     }
-    const picks: BringForwardPick[] = rows.map((c) => ({
+    const picks: BringForwardPick[] = fresh.map((c) => ({
       studioContactId: c.id,
       partyKind: toPartyKind(c.contact_kind),
       displayName: contactName(c),
@@ -702,7 +720,7 @@ export function RolodexPicker({
         carried_opt_out: pickedFacts.some((row) => row.consent === 'opted_out'),
       });
       void refetchRoster();
-      if (result.refused.length > 0) {
+      if (result.refused.length > 0 || seated.length > 0) {
         // M2R-3: `reason` is the untranslated PostgREST message `useBringForward`
         // copied off the error, so a constraint name, a relation name or an RLS
         // string landed on the face under SPEC §8 #3's own prohibition. Every
@@ -710,15 +728,30 @@ export function RolodexPicker({
         // `writeErrorMessage`; the wave's terminal act is the one that skipped
         // it. The refusal object is shaped like the rejection the translator
         // reads, so the 00624/00629 bare tokens answer in words.
+        const refusedSentence =
+          result.refused.length > 0
+            ? `${result.refused
+                .map((row) => row.name)
+                .join(', ')} did not go on the call sheet. ${writeErrorMessage(
+                { message: result.refused[0].reason },
+                'The studio’s book refused the seat.',
+              )}`
+            : '';
+        const addedSentence =
+          result.added.length > 0
+            ? `${result.added.length === 1 ? result.added[0].name : `${result.added.length} people`} went on the call sheet. `
+            : '';
         setError(
-          `${result.refused
-            .map((row) => row.name)
-            .join(', ')} did not go on the call sheet. ${writeErrorMessage(
-            { message: result.refused[0].reason },
-            'The studio’s book refused the seat.',
-          )}`,
+          `${addedSentence}${[seatedSentence, refusedSentence]
+            .filter(Boolean)
+            .join(' ')}`,
         );
-        setPicked(result.refused.map((row) => row.studioContactId));
+        // The rows that did not go on stay ticked, and only those: a seat that
+        // landed must not be offered again.
+        setPicked([
+          ...seated.map((c) => c.id),
+          ...result.refused.map((row) => row.studioContactId),
+        ]);
         return;
       }
       finish(
