@@ -294,7 +294,11 @@ COMMENT ON COLUMN public.profiles.time_autostart_disclosed_at IS
   'sentence is not re-served on a second browser.';
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- (3) _project_agreement_terms — head 00575:2249, ONE delta
+-- (3) _project_agreement_terms — head 00575:2249, the roster role carried
+--     and CHECKED. Two deltas: the enum rides the projection, and the two
+--     questions upsert_agreement_parts asks at the composer's door are
+--     asked here too, because upsert_design_services_draft reaches this
+--     body with caller-supplied rates without passing that door.
 -- ═══════════════════════════════════════════════════════════════════════════
 CREATE OR REPLACE FUNCTION public._project_agreement_terms(
   p_proposal_id uuid,
@@ -309,6 +313,8 @@ SET search_path = public, pg_temp
 AS $$
 DECLARE
   v_rate jsonb;
+  v_roster_role text;
+  v_roster_roles text[] := ARRAY[]::text[];
   v_current_version integer := COALESCE((p_terms->>'currentRateVersion')::integer, 1);
 BEGIN
   INSERT INTO public.proposal_service_terms (
@@ -352,6 +358,30 @@ BEGIN
   DELETE FROM public.proposal_service_rates WHERE proposal_id = p_proposal_id;
   FOR v_rate IN SELECT value FROM jsonb_array_elements(COALESCE(p_rates, '[]'::jsonb))
   LOOP
+    -- 00618 (HT-4, W7-R4-15). The SECOND door onto proposal_service_rates.
+    -- `upsert_agreement_parts` asks these two questions at the composer's door;
+    -- `upsert_design_services_draft` still calls THIS function with rates the
+    -- caller supplied, so without them a draft written through that door could
+    -- seat a roster role the roster does not carry (bounded only by the column
+    -- CHECK, which speaks 23514 rather than a sentence) or price one role
+    -- twice — and two cards for one role is the exact stranding HT-4 exists to
+    -- close, arriving by a door the composer never sees.
+    v_roster_role := NULLIF(btrim(COALESCE(v_rate->>'rosterRole', '')), '');
+    IF v_roster_role IS NOT NULL
+       AND v_roster_role NOT IN
+           ('lead_designer', 'support_designer', 'bookkeeper', 'vendor') THEN
+      RAISE EXCEPTION '% is not a role the studio roster carries',
+        btrim(COALESCE(v_rate->>'roleName', v_roster_role))
+        USING ERRCODE = 'check_violation';
+    END IF;
+    IF v_roster_role IS NOT NULL AND v_roster_role = ANY (v_roster_roles) THEN
+      RAISE EXCEPTION 'the rate card prices % twice', v_roster_role
+        USING ERRCODE = 'check_violation';
+    END IF;
+    IF v_roster_role IS NOT NULL THEN
+      v_roster_roles := v_roster_roles || v_roster_role;
+    END IF;
+
     INSERT INTO public.proposal_service_rates (
       proposal_id, version, role_name, hourly_rate_cents, sort_order, effective_at,
       roster_role
@@ -365,7 +395,7 @@ BEGIN
       -- 00618 (HT-4). THE ONE DELTA. The picker's enum rides the same jsonb the
       -- label rides; an absent or empty rosterRole stays NULL and the row is a
       -- legacy label-only card, which the resolver still matches by name.
-      NULLIF(btrim(COALESCE(v_rate->>'rosterRole', '')), '')
+      v_roster_role
     );
   END LOOP;
 END;
