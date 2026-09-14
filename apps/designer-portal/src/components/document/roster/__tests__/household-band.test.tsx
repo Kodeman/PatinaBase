@@ -11,6 +11,8 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import {
   HouseholdBand,
   householdEmptySentence,
+  HOUSEHOLD_ADD_HELD_REASON,
+  householdAddIsHeld,
   householdMemberConsequence,
   householdThresholdSentence,
   parseThresholdEntry,
@@ -136,6 +138,38 @@ describe("householdMemberConsequence", () => {
     ).toBe(
       "Adaeze Okonkwo joins the household and takes a seat on the Okonkwo residence. Nothing is sent to them.",
     );
+  });
+
+  /**
+   * r7 MAJOR-3 — the sentence promised the grant the act could not write.
+   * `add_household_member()` refuses the WHOLE act with
+   * `household_grant_forbidden` for a non-principal whenever the household
+   * carries a figure and the role is `client_rep`.
+   */
+  it("drops the money clause where the caller may not write the grant", () => {
+    expect(
+      householdMemberConsequence(
+        "Chidi Okonkwo",
+        "client_rep",
+        "Okonkwo residence",
+        250000,
+        false,
+      ),
+    ).toBe(
+      "Chidi Okonkwo joins the household and takes a seat on the Okonkwo residence. Nothing is sent to them.",
+    );
+  });
+});
+
+describe("householdAddIsHeld (PR-n)", () => {
+  it("holds only the act the database actually refuses", () => {
+    expect(householdAddIsHeld(false, 250000, "client_rep")).toBe(true);
+    // the plain client role mints no grant
+    expect(householdAddIsHeld(false, 250000, "client")).toBe(false);
+    // no figure, no grant
+    expect(householdAddIsHeld(false, null, "client_rep")).toBe(false);
+    // and the principal may always write it
+    expect(householdAddIsHeld(true, 250000, "client_rep")).toBe(false);
   });
 });
 
@@ -427,6 +461,37 @@ describe("the change-order figure, as an act", () => {
     expect(
       screen.queryByRole("button", { name: "Take the figure away" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("PR-n — holds Add to the household for a plain member (r7 MAJOR-3)", () => {
+    memberRole = "member";
+    render(<HouseholdBand {...props} />);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Add a household member" }),
+    );
+    const act = screen.getByRole("button", { name: "Add to the household" });
+    expect(act).toHaveAttribute("aria-disabled", "true");
+    expect(act).toHaveAttribute("aria-describedby", "household-grant-held");
+    expect(screen.getByText(HOUSEHOLD_ADD_HELD_REASON)).toBeInTheDocument();
+    // and the sentence beside it no longer promises the grant
+    expect(
+      screen.getByText(
+        "This person joins the household and takes a seat on the Okonkwo residence. Nothing is sent to them.",
+      ),
+    ).toBeInTheDocument();
+    fireEvent.click(act);
+    expect(addMemberMutate).not.toHaveBeenCalled();
+  });
+
+  it("leaves the act live for the role that mints no grant", () => {
+    memberRole = "member";
+    render(<HouseholdBand {...props} />);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Add a household member" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "decides the work" }));
+    const act = screen.getByRole("button", { name: "Add to the household" });
+    expect(act).not.toHaveAttribute("aria-disabled");
   });
 
   it("PR-n — holds taking it away for a plain member too", () => {

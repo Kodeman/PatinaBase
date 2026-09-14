@@ -16,11 +16,11 @@ W3 mints **00628–00633**.
 | `00628_project_studio_id_backfill.sql` | R-BD / R-BI — the legacy studio-less projects, and the `project_consent_org()` enumeration |
 | `00629_studio_contact_merges.sql` | PR-o — `merged_into`, `studio_contact_merges`, `merge_studio_contacts()`, `resolve_merged_contact()`, the merged-card seat guard, `people_directory` v5, and the archive/restore door |
 | `00630_compliance_expiry_sweep.sql` | direction §8 P2 — `compliance_document_state()`, `studio_compliance_notices`, `sweep_compliance_expiries()`, nightly pg_cron at 06:00 UTC |
-| `00631_project_party_bids.sql` | direction §3.4 / R-R — the five bid columns, the quoting-person guard, the `trade_rfq` backfill |
+| `00631_project_party_bids.sql` | direction §3.4 / R-R — the **eight** bid columns (r4 M-2; §3 has the list), the quoting-person guard, the `trade_rfq` backfill |
 | `00632_client_households.sql` | PR-c / CRM-19 — `client_households`, `designer_clients.household_id`, `add_household_member()` |
 | `00633_decision_court_widened.sql` | fixture §3 / G-13 — `client_decisions.court` gains architect, engineer, inspector, lender |
 
-New SQL suite: `supabase/tests/people/w3_merge_sweep_household_test.sql` (989 lines, one transaction, ROLLBACKed, 7 blocks).
+New SQL suite: `supabase/tests/people/w3_merge_sweep_household_test.sql` (one transaction, ROLLBACKed). Grown by the review rounds: **12 blocks** as of r7 — block 10 pins r6's five merge findings (R-BN) and block 11 + its negative control pin r7's B-1 and M-1.
 
 ---
 
@@ -32,7 +32,7 @@ New SQL suite: `supabase/tests/people/w3_merge_sweep_household_test.sql` (989 li
 |---|---|
 | `studio_contacts.merged_into` | `uuid` nullable self-FK, `ON DELETE SET NULL`, CHECK `merged_into <> id`, partial index where NOT NULL |
 | `studio_contact_merges` | `id, organization_id, survivor_id, merged_id, matched_on, merged_by, merged_at`; CHECK `matched_on IN (profile, phone, email, company_name, manual)`; CHECK `survivor_id <> merged_id`; three indexes |
-| RLS | SELECT + INSERT for `is_active_studio_member(organization_id)`; **no UPDATE and no DELETE policy, and no such grant** — append-only |
+| RLS | **SELECT only** for `is_active_studio_member(organization_id)` (r3 W3-R3-5, `00629:331`): the member INSERT policy is DROPped and `authenticated` is granted `SELECT` alone (`00629:333-334`). Measured: a member's direct INSERT answers `permission denied for table studio_contact_merges`. No INSERT, UPDATE or DELETE policy and no such grant — the SECURITY DEFINER RPC is the only writer, and the lineage is append-only |
 | `resolve_merged_contact(uuid) → uuid` | SECURITY **INVOKER**, recursive walk, depth cap 16 |
 | `merge_studio_contacts(uuid, uuid, text) → uuid` | SECURITY DEFINER, `search_path = public`, active-member gated in the body |
 | `assert_party_card_not_merged()` + `assert_party_card_not_merged_trg` | BEFORE INSERT OR UPDATE OF `studio_contact_id, company_id` on `project_parties` |
@@ -42,17 +42,17 @@ New SQL suite: `supabase/tests/people/w3_merge_sweep_household_test.sql` (989 li
 
 ### `merge_studio_contacts(p_survivor, p_merged, p_matched_on)` — what one transaction does
 
-Refusals, in order: `merge_contact_not_found` · `merge_same_card` · `merge_matched_on_invalid` · `merge_other_studio` · `merge_not_a_member` · `merge_already_merged` · `merge_survivor_already_merged` · `merge_kind_mismatch`.
+Refusals, in order: `merge_contact_not_found` · `merge_same_card` · `merge_matched_on_invalid` · `merge_other_studio` · `merge_not_a_member` · `merge_already_merged` · `merge_survivor_already_merged` · `merge_survivor_archived` (r5 M-4, `00629:983`) · `merge_kind_mismatch` · `merge_two_logins` (r4 B-1, `00629:1011`) · `merge_contact_rule_conflict` (r4 B-2 / r5 M-2, `00629:1092`). Eleven, not eight: the last three were all review findings and all three are pinned by the SQL suite.
 
 Both cards are locked `FOR UPDATE` in id order (`least`/`greatest`), so two members merging the same pair from opposite directions cannot deadlock.
 
 Repointed, in this order:
 
-1. **Channels** — exact duplicates by `(channel_kind, value)` deleted from the merged card first, the rest repointed with `owner_type` rewritten to the survivor's `entity_kind` (`assert_channel_owner_kind()` holds that word).
-2. **Affiliations** — person merge: open collisions on `(person_id, company_id)` deleted, then `person_id` repointed. Company merge: same on `company_id`, plus a belt-and-braces repoint of any stranded legacy `studio_contacts.company_id`. Cross-kind: every affiliation naming the merged firm is **deleted** (the firm is now the person; `studio_person_affiliations_distinct_cards_check` forbids a person at themselves). 00592's `sync_studio_contact_company_pointer()` keeps `company_id` true throughout — asserted by the test.
+1. **Channels** — a collision on `(channel_kind, value)` **REDUCES onto the survivor first** and only then is the absorbed row deleted (r6 B-1, `00629:1143-1185`): status worst-first (`unsubscribed > dead > bounced > active`) carrying its own `status_at`, `verified` / `verified_at` and `preferred` OR'd, `label` COALESCEd. The earlier blind DELETE destroyed a recorded unsubscribe and the room then offered the address as live, which is exactly what R-BN forbids. The rest are repointed with `owner_type` rewritten to the survivor's `entity_kind` (`assert_channel_owner_kind()` holds that word).
+2. **Affiliations** — an open collision **REDUCES before the duplicate goes** (r6 M-2, `00629:1422-1434` and its company-side mirror `:1448-1460`): `role_at_firm` COALESCEd, `is_paperwork_contact` / `is_signer` / `holds_trade_license` OR'd, `from_date` the LEAST of the two. Person merge: reduce, delete the duplicate, repoint `person_id`. Company merge: the same on `company_id`, plus a belt-and-braces repoint of any stranded legacy `studio_contacts.company_id`. Cross-kind (the sole-proprietor fold): only the person's affiliation **at themselves** is deleted (`studio_person_affiliations_distinct_cards_check` forbids it); every OTHER person's affiliation at the folded firm is **CLOSED with `to_date`**, keeping its role and designations readable, and their legacy `company_id` is deliberately left naming the folded card under `patina.suppress_affiliation_sync` so `people_directory`'s `company_name` COALESCE still resolves the firm (r6 M-3, `00629:1412-1420`). 00592's `sync_studio_contact_company_pointer()` keeps `company_id` true throughout — asserted by the test. **r7 M-2:** `sync_person_affiliation_from_pointer()` now stands down for a pointer naming a merged-away card, so the shipped card editor cannot re-derive a fresh open affiliation over the one the fold closed.
 3. **Contact rules** — the merged card's rule is repointed **only when the survivor has none**; otherwise it stays on the merged card as history, which is also what the `(subject_type, subject_id)` unique index requires. `route_to_person_id` is repointed separately (person survivors only — a firm cannot be a route target).
 4. **Compliance documents** — `holder_id` and `holder_type` both moved.
-5. **Designations** — `paperwork_contact_person_id`, `signer_person_id`, `site_contact_person_id` on every other card. **Not in the brief's list**; added because leaving them would leave a firm card printing a name the Directory no longer emits a row for. Named here rather than done quietly.
+5. **Designations** — two halves. (a) `paperwork_contact_person_id`, `signer_person_id`, `site_contact_person_id` on every OTHER card are repointed off the merged PERSON (`00629:1710-1718`). **Not in the brief's list**; added because leaving them would leave a firm card printing a name the Directory no longer emits a row for. (b) **r7 B-1:** the folded card's OWN three travel onto the survivor in the COALESCE statement (`00629:1342-1364`), because nothing carried them and the merge sheet said in words that they moved — the Directory firm row's payee marker reads `signer_person_id` (not the affiliation's `is_signer`, which the merge already carried) and "Chase the renewal" passes `paperwork_contact_person_id` into the queued task with no fallback, so both went blank. `NULLIF(..., s.id)` drops the one value that cannot land — the sole-proprietor fold where the folded firm named the surviving person as its own site contact, which `assert_studio_contact_designations()` refuses as `designated_person_is_self`. R-BN: the folded card keeps its own copy either way.
 6. **Seats** — `project_parties.studio_contact_id` (the v4 identity key), then `company_id` (company survivor) or `warranty_contact_person_id` (person survivor); in the cross-kind case `company_id` is set NULL, because 00624 refuses a person card there (`party_company_not_a_company`).
 7. **The pointer** — `merged_into` set, and the chain **flattened**: any card already pointing at the merged one is repointed at the survivor, so `resolve_merged_contact()` normally answers in one hop.
 8. **The record** — one `studio_contact_merges` row, `merged_by = auth.uid()`.
@@ -80,9 +80,10 @@ The merged card is **not deleted and not archived**. `merged_into` is its tombst
 | Object | Shape |
 |---|---|
 | `compliance_document_state(uuid) → text` | `superseded \| held \| current \| lapses_soon \| lapsed`, SECURITY INVOKER, R-BF's transitive supersession walk with a depth cap of 64 |
-| `studio_compliance_notices` | `id, organization_id, document_id, state, noticed_at`; CHECK `state IN (lapses_soon, lapsed)`; **UNIQUE (document_id, state)** |
+| `studio_compliance_notices` | `id, organization_id, document_id, state, **expires_on NOT NULL**, noticed_at`; CHECK `state IN (lapses_soon, lapsed)`; **UNIQUE (document_id, state, expires_on)** (r5 M-3, `00630:142`, `:193-194`) |
 | RLS | SELECT for `is_active_studio_member(organization_id)`. **No INSERT/UPDATE/DELETE policy and no such grant for `authenticated`** — the sweep is the only writer |
 | `sweep_compliance_expiries() → jsonb` | SECURITY DEFINER, `service_role` EXECUTE only (no `authenticated` grant — this is a job, not an act) |
+| `clear_compliance_notices_on_date_change()` + `_trg` | AFTER UPDATE OF `expires_on` on `studio_compliance_documents` WHEN the date actually changed; SECURITY DEFINER, no grant to `authenticated`. Drops that document's notice rows so the sweep announces the new date (r5 M-3, `00630:258-288`) |
 | cron | `compliance-document-expiry-sweep`, `0 6 * * *`, guarded unschedule, body `SELECT public.sweep_compliance_expiries();` — schema-qualified, `pg_cron` registry COMMENT extended |
 
 ### The shape, per 00574
@@ -93,9 +94,11 @@ Advisory xact lock `hashtext('job:compliance-document-expiry-sweep')` → a `ski
 
 `expires_on IS NOT NULL AND cardinality(blocks) > 0 AND expires_on <= CURRENT_DATE + 30`, then `compliance_document_state()` must read `lapses_soon` or `lapsed`. That is `compliance_state()`'s own rule (CS2 §4, PR-h: "a date with no gate changes nothing"), one row at a time. Undated paper is `held` and cannot lapse; paper carrying no gate is `held` too. A notice for paper the room prints no word for would be a promise on a face.
 
-### One notice per (document, state)
+### One notice per (document, state, THE DATE IT WAS ABOUT)
 
 The unique index is the idempotency rule, not a nicety: a lapsed paper stays lapsed, and without it the studio would hear the same sentence every morning. The notification is written **only where the notice row actually landed** (`ON CONFLICT DO NOTHING ... RETURNING`), so the two records can never disagree about how many times a studio was told. A paper that crosses `lapses_soon` and later `lapsed` earns exactly two notices — asserted.
+
+**The key carries `expires_on` (r5 M-3).** It was `(document_id, state)`, which is permanent, while `studio_compliance_documents.expires_on` is freely editable by any active studio member — so correcting a mistyped date permanently SPENT that document's notice and the studio was never told again. The date is the right third column because it is what the notice SAYS ("… lapses 31 Mar 2026"), so a different date is a different sentence. `clear_compliance_notices_on_date_change()` (`00630:258-288`) drops that document's notice rows whenever the date actually moves, so the new date is announced rather than silently swallowed by the old key.
 
 ### The notification shape (found, not invented)
 
@@ -194,6 +197,8 @@ Guarded `WHERE pp.bid_outcome IS NULL`, so a rerun cannot overwrite an outcome a
 | `designer_clients.household_id` | `uuid` → `client_households` ON DELETE SET NULL, partial index |
 | `assert_client_household_members()` | BEFORE INSERT/UPDATE OF `member_person_ids, primary_member_person_id, organization_id` |
 | `add_household_member(uuid, uuid, text, uuid) → uuid` | SECURITY DEFINER; returns the seat id, or NULL when no project is named |
+| `assert_household_threshold_principal()` + `_trg` | BEFORE UPDATE OF `co_threshold_cents`; PR-n read over a CHANGE, so ERASING the figure is refused too (`household_threshold_forbidden`). The UPDATE policy's WITH CHECK can only see the new row (r1 M-4, `00632:182-218`) |
+| `set_household_threshold(uuid, integer) → client_households` | SECURITY DEFINER. Writes the figure AND moves every open `money` grant the household is the stated source of, so the figure and the seats it authorised cannot drift apart; clearing it CLOSES those grants with `effective_to` rather than leaving them standing (r5 M-1, `00632:486-567`) |
 
 `member_person_ids` is an array, not a join table — direction §7's own shape, and the posture `project_party_authority.copy_to` already takes. An array cannot carry an FK, so the trigger holds every id to a **live, unmerged PERSON card in the household's own studio** (`household_member_not_a_live_person_card`) and the primary member to one of them (`household_primary_not_a_member`).
 
@@ -306,9 +311,7 @@ Repaired by stating the **rule** instead of the date: the expectation is now der
 
 Reproduced with **00626's own view body** restored over W3's, so it is not the `merged_into` filter.
 
-Repaired by narrowing the predicate to `role NOT IN ('contact', 'team')` — the party branch the assertion names — with the finding written into the test in full.
-
-### The finding that is owed, not fixed
+Repaired **first** by narrowing the predicate to `role NOT IN ('contact', 'team')` — and **reverted to `role <> 'contact'` in r7 (M-3)**. The narrowing was written under a comment saying the TEAM branch's gate was still `is_studio_comember(designer)` alone and that the leak was REPORTED rather than changed; §7's own correction below records that the tenant leg SHIPPED in the same wave (`00629:2376-2380`), so both halves of that comment had stopped being true and a cross-tenant visibility narrowing was left with no assertion anywhere. Measured with the original predicate against the shipped view: **0 rows**, and 0 `team` rows anywhere for that caller. The assertion is back, and the test's comment now describes what the file does.
 
 ### The finding that WAS fixed, corrected on the record (r4 M-2)
 
@@ -327,7 +330,7 @@ This section, §10.1 below, and 00629's own §6 banner each said the change had 
 | `pnpm --dir … supabase:reset` (migrations + all seeds incl. `people_crm_dev.sql`) | clean; head = `00633` |
 | `supabase/tests/people/w1a_identity_channels_consent_test.sql` | **All W1a assertions passed.** |
 | `supabase/tests/people/w1b_compliance_authority_directory_test.sql` | **All W1b assertions passed.** (26 blocks) |
-| `supabase/tests/people/w3_merge_sweep_household_test.sql` | **W3 SQL suite: all blocks passed** (7 blocks) |
+| `supabase/tests/people/w3_merge_sweep_household_test.sql` | **W3 SQL suite: all blocks passed** (12 blocks as of r7) |
 | `SUPABASE_DB_URL=… pnpm db:generate` | `packages/supabase/src/database.types.ts`: **301 insertions, 0 deletions** |
 | `pnpm --filter @patina/supabase type-check` | clean |
 | `pnpm --filter designer-portal type-check` | clean |
@@ -336,8 +339,8 @@ This section, §10.1 below, and 00629's own §6 banner each said the change had 
 ### The generated-types diff, in full
 
 New tables: `client_households`, `studio_compliance_notices`, `studio_contact_merges`.
-New functions: `add_household_member`, `archive_studio_contact`, `compliance_document_state`, `merge_studio_contacts`, `resolve_merged_contact`, `restore_studio_contact`, `sweep_compliance_expiries`.
-New columns: `studio_contacts.merged_into`; `project_parties.bid_due_at / bid_outcome / bid_valid_until / bid_quoted_by_person_id / bid_amount_cents`; `designer_clients.household_id`.
+New functions: `add_household_member`, `set_household_threshold` (r5 M-1), `archive_studio_contact`, `compliance_document_state`, `merge_studio_contacts`, `resolve_merged_contact`, `restore_studio_contact`, `sweep_compliance_expiries`.
+New columns: `studio_contacts.merged_into`; `project_parties.bid_due_at / bid_outcome / bid_valid_until / bid_quoted_by_person_id / bid_amount_cents / bid_asked_at / bid_quoted_at / bid_selected_at` (**eight**, r4 M-2); `studio_compliance_notices.expires_on` (r5 M-3); `designer_clients.household_id`.
 New FK entries: `studio_contacts_merged_into_fkey`, `project_parties_bid_quoted_by_person_id_fkey`, `designer_clients_household_id_fkey`.
 **Nothing removed, nothing retyped.**
 
@@ -378,10 +381,18 @@ public.add_household_member(p_household_id uuid, p_person_id uuid,
   RETURNS uuid                      -- the seat id, or NULL when no project
   SECURITY DEFINER · search_path=public · EXECUTE: authenticated, service_role
   REVOKE ALL FROM PUBLIC, anon
+
+public.set_household_threshold(p_household_id uuid, p_threshold_cents integer)
+  RETURNS public.client_households  -- r5 M-1: the figure AND the grants it sources
+  SECURITY DEFINER · search_path=public · EXECUTE: authenticated, service_role
+  REVOKE ALL FROM PUBLIC, anon
 ```
 
 Trigger functions (no grant to anyone; `REVOKE ALL FROM PUBLIC, anon, authenticated`):
-`assert_party_card_not_merged()`, `assert_party_bid_quoted_by()`, `assert_client_household_members()`.
+`assert_party_card_not_merged()`, `assert_party_bid_quoted_by()`,
+`assert_client_household_members()`, `assert_household_threshold_principal()`
+(r1 M-4, 00632), `clear_compliance_notices_on_date_change()` (r5 M-3, 00630),
+`sync_person_affiliation_from_pointer()` (00592, amended by r7 M-2).
 
 ---
 

@@ -2407,29 +2407,27 @@ BEGIN
   IF n <> 0 THEN
     RAISE EXCEPTION '13g a co-member of another tenant read % of the seeded studio''s seat rows', n;
   END IF;
-  -- the party branch of the Directory, same rule
+  -- the party branch of the Directory, AND the team branch beside it
   --
-  -- NARROWED TO WHAT THIS ASSERTION NAMES (W3, 2026-09-13). The predicate was
-  -- `role <> 'contact'`, which also swept the TEAM branch. W2 round 1
-  -- (5a4e7f650) added project_team_members rows to people_crm_dev.sql —
-  -- people_directory's TEAM branch had held zero rows for this seed until
-  -- then — so from that commit on this line returned 2 rows: 'Leah Hartwell'
-  -- and 'Studio Manager', names only, from the branch 00626 carries VERBATIM
-  -- from 00594:1389-1429 and which r5/r6's tenant work deliberately did not
-  -- touch. Reproduced with 00626's own view body, so it is not W3's doing.
-  -- The TEAM branch's gate is is_studio_comember(designer) alone and it
-  -- leaks a teammate's NAME and project id — no consent word, no money, no
-  -- site access — to a co-member of the designer through a second studio.
-  -- Whether that leg takes a tenant conjunct is a product ruling this wave
-  -- has no brief for, so it is REPORTED (w3-data-report.md §7) rather than
-  -- silently changed, and this line is narrowed to the branch its own message
-  -- names.
+  -- RESTORED TO `role <> 'contact'` (W3 r7 M-3). This line was narrowed to
+  -- `role NOT IN ('contact', 'team')` mid-wave, under a comment saying the
+  -- TEAM branch's gate was still is_studio_comember(designer) alone and that
+  -- the leak of a teammate's NAME and project id was REPORTED rather than
+  -- changed. Both halves stopped being true in the same wave: 00629's TEAM
+  -- branch now takes R-BD's tenant conjunct
+  -- (is_active_studio_member(project_tenant_org(tm.project_id)), or the
+  -- caller standing on the project themselves), and w3-data-report.md records
+  -- the correction as MADE. The narrowing therefore left a cross-tenant
+  -- visibility fix with no assertion anywhere — the leg could be reverted and
+  -- all three suites would stay green. Measured with the original predicate
+  -- against the shipped view: 0 rows, and 0 `team` rows anywhere for this
+  -- caller.
   SELECT count(*) INTO n FROM public.people_directory
-   WHERE role NOT IN ('contact', 'team')
+   WHERE role <> 'contact'
      AND project_id IN ('d0e00000-0000-0000-0000-00000000000a',
                         'd0e00000-0000-0000-0000-00000000000b');
   IF n <> 0 THEN
-    RAISE EXCEPTION '13h a co-member of another tenant read % party-branch Directory row(s) whose consent word they cannot source', n;
+    RAISE EXCEPTION '13h a co-member of another tenant read % party- or team-branch Directory row(s) whose consent word they cannot source', n;
   END IF;
   -- and the rolodex, which was already tenant-scoped, is unchanged
   SELECT count(*) INTO n FROM public.studio_contacts

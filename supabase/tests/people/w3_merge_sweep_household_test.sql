@@ -2644,6 +2644,276 @@ BEGIN
   RAISE NOTICE '10. the r6 review''s five merge findings (B-1, M-1, M-2, M-3, M-4) — R-BN: passed';
 END $$;
 
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 11. the r7 review's three migration findings (B-1, M-1, M-2)
+-- ═══════════════════════════════════════════════════════════════════════════
+--   B-1  a firm merge dropped the folded card's OWN three designations —
+--        paperwork_contact_person_id, signer_person_id, site_contact_person_id
+--        — while the merge sheet promised "firm designations move onto
+--        <survivor>", the Directory firm row's payee marker (which reads
+--        signer_person_id, not the affiliation's is_signer) went blank, and
+--        "Chase the renewal" was drafted with no recipient
+--   M-2  the sole-proprietor fold leaves the crew's legacy company_id naming
+--        the folded card with zero OPEN affiliations, and the shipped card
+--        editor's next ordinary save silently re-derived a fresh one with the
+--        role and the start date at their defaults
+--   M-1  compliance_successor_not_later and compliance_successor_drops_a_gate
+--        were never gated on v_retiring, so an ordinary permitted edit to a
+--        renewal left an existing supersede edge failing a leg nothing
+--        re-checks — until the merge's holder-move re-judged it and lost the
+--        whole transaction to a raw schema token
+-- ═══════════════════════════════════════════════════════════════════════════
+INSERT INTO public.studio_contacts
+  (id, organization_id, entity_kind, contact_kind, full_name, created_by, created_at) VALUES
+  ('f9f00000-0000-4000-8000-000000000003','f9000000-0000-4000-8000-00000000000a','person','sub','R7 Paperwork Hand','a0000000-0000-0000-0000-000000000004','2024-01-01'),
+  ('f9f00000-0000-4000-8000-000000000004','f9000000-0000-4000-8000-00000000000a','person','sub','R7 Signer Hand','a0000000-0000-0000-0000-000000000004','2024-01-01'),
+  ('f9f00000-0000-4000-8000-000000000005','f9000000-0000-4000-8000-00000000000a','person','sub','R7 Site Hand','a0000000-0000-0000-0000-000000000004','2024-01-01'),
+  ('f9f00000-0000-4000-8000-000000000006','f9000000-0000-4000-8000-00000000000a','person','sub','R7 Sole Prop','a0000000-0000-0000-0000-000000000004','2024-01-01'),
+  ('f9f00000-0000-4000-8000-000000000008','f9000000-0000-4000-8000-00000000000a','person','sub','R7 Crew','a0000000-0000-0000-0000-000000000004','2024-01-01');
+
+INSERT INTO public.studio_contacts
+  (id, organization_id, entity_kind, contact_kind, company_name, company_kind, created_by, created_at) VALUES
+  ('f9f00000-0000-4000-8000-000000000001','f9000000-0000-4000-8000-00000000000a','company','sub','R7 Marrow & Sons','sub','a0000000-0000-0000-0000-000000000004','2024-01-01'),
+  ('f9f00000-0000-4000-8000-000000000002','f9000000-0000-4000-8000-00000000000a','company','sub','R7 Marrow and Sons LLC','sub','a0000000-0000-0000-0000-000000000004','2026-01-01'),
+  ('f9f00000-0000-4000-8000-000000000007','f9000000-0000-4000-8000-00000000000a','company','sub','R7 Sole Prop Firm','sub','a0000000-0000-0000-0000-000000000004','2026-01-01'),
+  ('f9f00000-0000-4000-8000-000000000011','f9000000-0000-4000-8000-00000000000a','company','sub','R7 Gate Survivor','sub','a0000000-0000-0000-0000-000000000004','2024-01-01'),
+  ('f9f00000-0000-4000-8000-000000000012','f9000000-0000-4000-8000-00000000000a','company','sub','R7 Gate Absorbed','sub','a0000000-0000-0000-0000-000000000004','2026-01-01'),
+  ('f9f00000-0000-4000-8000-000000000013','f9000000-0000-4000-8000-00000000000a','company','sub','R7 Date Survivor','sub','a0000000-0000-0000-0000-000000000004','2024-01-01'),
+  ('f9f00000-0000-4000-8000-000000000014','f9000000-0000-4000-8000-00000000000a','company','sub','R7 Date Absorbed','sub','a0000000-0000-0000-0000-000000000004','2026-01-01');
+
+UPDATE public.studio_contacts SET is_sole_proprietor = true
+ WHERE id = 'f9f00000-0000-4000-8000-000000000006';
+
+-- The NEWER firm card is the one the studio typed the three designations on,
+-- and PR-o pre-picks the OLDER one to survive — which is exactly the shape
+-- that lost all three.
+UPDATE public.studio_contacts
+   SET paperwork_contact_person_id = 'f9f00000-0000-4000-8000-000000000003',
+       signer_person_id            = 'f9f00000-0000-4000-8000-000000000004',
+       site_contact_person_id      = 'f9f00000-0000-4000-8000-000000000005'
+ WHERE id = 'f9f00000-0000-4000-8000-000000000002';
+
+-- The sole-proprietor fold's own edge: the firm names the SURVIVING PERSON as
+-- its own site contact, which assert_studio_contact_designations() refuses as
+-- designated_person_is_self the moment it lands on that person's card. The
+-- carry drops exactly that value (NULLIF) and carries the other one.
+UPDATE public.studio_contacts
+   SET paperwork_contact_person_id = 'f9f00000-0000-4000-8000-000000000003',
+       site_contact_person_id      = 'f9f00000-0000-4000-8000-000000000006'
+ WHERE id = 'f9f00000-0000-4000-8000-000000000007';
+
+-- The fold's crew: R-AI keeps the legacy pointer in step with the open
+-- affiliation, so inserting the row derives studio_contacts.company_id.
+INSERT INTO public.studio_person_affiliations
+  (person_id, company_id, role_at_firm, is_paperwork_contact, is_signer, holds_trade_license, from_date) VALUES
+  ('f9f00000-0000-4000-8000-000000000006','f9f00000-0000-4000-8000-000000000007','Owner',      true, true, true, '2018-01-01'),
+  ('f9f00000-0000-4000-8000-000000000008','f9f00000-0000-4000-8000-000000000007','Bookkeeper', false,false,false,'2021-01-01');
+
+-- M-1's two pairs. Each absorbed firm holds a renewal chain: a predecessor
+-- pointing at a head that is in force and carries its gates at the moment the
+-- edge is written — so the edge is legitimate — and the head is then EDITED,
+-- which is a permitted member write that re-checks nothing.
+INSERT INTO public.studio_compliance_documents
+  (id, organization_id, holder_type, holder_id, doc_type, blocks, issued_on, expires_on) VALUES
+  -- gate variant: predecessor gates {site_access,draw}; head gates both too
+  ('f9f40000-0000-4000-8000-000000000001','f9000000-0000-4000-8000-00000000000a','company',
+   'f9f00000-0000-4000-8000-000000000012','coi_gl', ARRAY['site_access','draw']::text[],
+   CURRENT_DATE - 800, CURRENT_DATE - 10),
+  ('f9f40000-0000-4000-8000-000000000002','f9000000-0000-4000-8000-00000000000a','company',
+   'f9f00000-0000-4000-8000-000000000012','coi_gl', ARRAY['site_access','draw']::text[],
+   CURRENT_DATE - 30,  CURRENT_DATE + 400),
+  -- date variant: predecessor runs to +100; head runs to +400
+  ('f9f40000-0000-4000-8000-000000000003','f9000000-0000-4000-8000-00000000000a','company',
+   'f9f00000-0000-4000-8000-000000000014','coi_gl', ARRAY['site_access']::text[],
+   CURRENT_DATE - 400, CURRENT_DATE + 100),
+  ('f9f40000-0000-4000-8000-000000000004','f9000000-0000-4000-8000-00000000000a','company',
+   'f9f00000-0000-4000-8000-000000000014','coi_gl', ARRAY['site_access']::text[],
+   CURRENT_DATE - 30,  CURRENT_DATE + 400);
+
+UPDATE public.studio_compliance_documents
+   SET superseded_by = 'f9f40000-0000-4000-8000-000000000002'
+ WHERE id = 'f9f40000-0000-4000-8000-000000000001';
+UPDATE public.studio_compliance_documents
+   SET superseded_by = 'f9f40000-0000-4000-8000-000000000004'
+ WHERE id = 'f9f40000-0000-4000-8000-000000000003';
+
+DO $$
+DECLARE
+  sc public.studio_contacts%ROWTYPE;
+  n  integer;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+
+  -- ── B-1 · the folded firm's own three designations travel ───────────────
+  PERFORM public.merge_studio_contacts(
+    'f9f00000-0000-4000-8000-000000000001','f9f00000-0000-4000-8000-000000000002','company_name');
+  SELECT * INTO sc FROM public.studio_contacts
+   WHERE id = 'f9f00000-0000-4000-8000-000000000001';
+  IF sc.paperwork_contact_person_id IS DISTINCT FROM 'f9f00000-0000-4000-8000-000000000003'::uuid THEN
+    RAISE EXCEPTION 'BLOCK 11 FAIL (r7 B-1): paperwork_contact_person_id did not travel (%)', sc.paperwork_contact_person_id;
+  END IF;
+  IF sc.signer_person_id IS DISTINCT FROM 'f9f00000-0000-4000-8000-000000000004'::uuid THEN
+    RAISE EXCEPTION 'BLOCK 11 FAIL (r7 B-1): signer_person_id did not travel (%)', sc.signer_person_id;
+  END IF;
+  IF sc.site_contact_person_id IS DISTINCT FROM 'f9f00000-0000-4000-8000-000000000005'::uuid THEN
+    RAISE EXCEPTION 'BLOCK 11 FAIL (r7 B-1): site_contact_person_id did not travel (%)', sc.site_contact_person_id;
+  END IF;
+  -- R-BN: carried, never deleted — the folded card keeps its own copy
+  SELECT * INTO sc FROM public.studio_contacts
+   WHERE id = 'f9f00000-0000-4000-8000-000000000002';
+  IF sc.signer_person_id IS DISTINCT FROM 'f9f00000-0000-4000-8000-000000000004'::uuid THEN
+    RAISE EXCEPTION 'BLOCK 11 FAIL (r7 B-1): the fold deleted the folded card''s own designation';
+  END IF;
+
+  -- ── B-1 · and the sole-proprietor fold does not name a person themselves ─
+  PERFORM public.merge_studio_contacts(
+    'f9f00000-0000-4000-8000-000000000006','f9f00000-0000-4000-8000-000000000007','company_name');
+  SELECT * INTO sc FROM public.studio_contacts
+   WHERE id = 'f9f00000-0000-4000-8000-000000000006';
+  IF sc.paperwork_contact_person_id IS DISTINCT FROM 'f9f00000-0000-4000-8000-000000000003'::uuid THEN
+    RAISE EXCEPTION 'BLOCK 11 FAIL (r7 B-1): the fold dropped the firm''s paperwork contact (%)', sc.paperwork_contact_person_id;
+  END IF;
+  IF sc.site_contact_person_id IS NOT NULL THEN
+    RAISE EXCEPTION 'BLOCK 11 FAIL (r7 B-1): the fold wrote a self-designation (%)', sc.site_contact_person_id;
+  END IF;
+
+  -- ── M-2 · one ordinary card save after the fold re-derives nothing ──────
+  -- The crew member came out of the fold with the legacy pointer naming the
+  -- folded card and their affiliation CLOSED (r6 M-3). The shipped editor
+  -- names company_id in the SET list on EVERY save, and `UPDATE OF col` fires
+  -- whether or not the value changed.
+  SELECT count(*) INTO n FROM public.studio_person_affiliations
+   WHERE person_id = 'f9f00000-0000-4000-8000-000000000008' AND to_date IS NULL;
+  IF n <> 0 THEN
+    RAISE EXCEPTION 'BLOCK 11 FAIL (r6 M-3): the fold left % open affiliation(s) on the crew', n;
+  END IF;
+  UPDATE public.studio_contacts
+     SET full_name = 'R7 Crew', company_id = company_id
+   WHERE id = 'f9f00000-0000-4000-8000-000000000008';
+  SELECT count(*) INTO n FROM public.studio_person_affiliations
+   WHERE person_id = 'f9f00000-0000-4000-8000-000000000008' AND to_date IS NULL;
+  IF n <> 0 THEN
+    RAISE EXCEPTION 'BLOCK 11 FAIL (r7 M-2): an ordinary card save re-derived % affiliation(s) the fold closed', n;
+  END IF;
+  SELECT count(*) INTO n FROM public.studio_person_affiliations
+   WHERE person_id = 'f9f00000-0000-4000-8000-000000000008'
+     AND role_at_firm = 'Bookkeeper' AND from_date = DATE '2021-01-01';
+  IF n <> 1 THEN
+    RAISE EXCEPTION 'BLOCK 11 FAIL (r7 M-2): the typed role and start date did not survive the re-save';
+  END IF;
+  SELECT * INTO sc FROM public.studio_contacts
+   WHERE id = 'f9f00000-0000-4000-8000-000000000008';
+  IF sc.company_id IS DISTINCT FROM 'f9f00000-0000-4000-8000-000000000007'::uuid THEN
+    RAISE EXCEPTION 'BLOCK 11 FAIL (r7 M-2): the legacy firm pointer moved (%)', sc.company_id;
+  END IF;
+
+  -- Negative control: the stand-down is scoped to a MERGED card. A pointer at
+  -- a live firm with no open affiliation still derives one, which is R-AI.
+  UPDATE public.studio_contacts
+     SET company_id = 'f9f00000-0000-4000-8000-000000000001'
+   WHERE id = 'f9f00000-0000-4000-8000-000000000008';
+  SELECT count(*) INTO n FROM public.studio_person_affiliations
+   WHERE person_id = 'f9f00000-0000-4000-8000-000000000008'
+     AND company_id = 'f9f00000-0000-4000-8000-000000000001'
+     AND to_date IS NULL;
+  IF n <> 1 THEN
+    RAISE EXCEPTION 'BLOCK 11 FAIL (r7 M-2): a pointer at a LIVE firm stopped deriving its affiliation';
+  END IF;
+
+  -- ── M-1 · an ordinary edit to a renewal, then an ordinary merge ─────────
+  -- Shrinking the renewal's gates is a permitted member write: the row's own
+  -- superseded_by is null, so no successor leg is asked about it at all.
+  UPDATE public.studio_compliance_documents
+     SET blocks = ARRAY['site_access']::text[]
+   WHERE id = 'f9f40000-0000-4000-8000-000000000002';
+  PERFORM public.merge_studio_contacts(
+    'f9f00000-0000-4000-8000-000000000011','f9f00000-0000-4000-8000-000000000012','company_name');
+  SELECT count(*) INTO n FROM public.studio_compliance_documents
+   WHERE id IN ('f9f40000-0000-4000-8000-000000000001','f9f40000-0000-4000-8000-000000000002')
+     AND holder_id = 'f9f00000-0000-4000-8000-000000000011';
+  IF n <> 2 THEN
+    RAISE EXCEPTION 'BLOCK 11 FAIL (r7 M-1): % of the 2 chain rows moved after a gate edit', n;
+  END IF;
+
+  -- and the same, reached by correcting the renewal's DATE earlier
+  UPDATE public.studio_compliance_documents
+     SET expires_on = CURRENT_DATE + 50
+   WHERE id = 'f9f40000-0000-4000-8000-000000000004';
+  PERFORM public.merge_studio_contacts(
+    'f9f00000-0000-4000-8000-000000000013','f9f00000-0000-4000-8000-000000000014','company_name');
+  SELECT count(*) INTO n FROM public.studio_compliance_documents
+   WHERE id IN ('f9f40000-0000-4000-8000-000000000003','f9f40000-0000-4000-8000-000000000004')
+     AND holder_id = 'f9f00000-0000-4000-8000-000000000013';
+  IF n <> 2 THEN
+    RAISE EXCEPTION 'BLOCK 11 FAIL (r7 M-1): % of the 2 chain rows moved after a date edit', n;
+  END IF;
+
+  PERFORM pg_temp.reset_role();
+  RAISE NOTICE '11. the r7 review''s three migration findings (B-1, M-1, M-2): passed';
+END $$;
+
+-- ── M-1 negative control · the laundering doors are still shut ────────────
+-- The four legs are gated on v_retiring, not removed. WRITING a supersede edge
+-- that drops a gate, pulls the cover earlier, changes the paper's type or
+-- retires a dated row with an undated one is still refused by name — r1
+-- MAJOR-4 / r2 MAJOR-1 / r3 MAJOR-1 stay closed.
+INSERT INTO public.studio_compliance_documents
+  (id, organization_id, holder_type, holder_id, doc_type, blocks, issued_on, expires_on) VALUES
+  ('f9f40000-0000-4000-8000-000000000011','f9000000-0000-4000-8000-00000000000a','company',
+   'f9f00000-0000-4000-8000-000000000011','coi_gl', ARRAY['site_access','draw']::text[],
+   CURRENT_DATE - 900, CURRENT_DATE - 500),
+  ('f9f40000-0000-4000-8000-000000000012','f9000000-0000-4000-8000-00000000000a','company',
+   'f9f00000-0000-4000-8000-000000000011','coi_gl', ARRAY['site_access','draw']::text[],
+   CURRENT_DATE - 900, CURRENT_DATE - 600),
+  ('f9f40000-0000-4000-8000-000000000013','f9000000-0000-4000-8000-00000000000a','company',
+   'f9f00000-0000-4000-8000-000000000011','w9',     ARRAY[]::text[],
+   CURRENT_DATE - 900, NULL);
+
+DO $$
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+
+  BEGIN
+    -- the renewal on the survivor now gates {site_access} only
+    UPDATE public.studio_compliance_documents
+       SET superseded_by = 'f9f40000-0000-4000-8000-000000000002'
+     WHERE id = 'f9f40000-0000-4000-8000-000000000011';
+    RAISE EXCEPTION 'BLOCK 11 FAIL (r7 M-1): a gate-dropping supersede was accepted';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM NOT LIKE '%compliance_successor_drops_a_gate%' THEN
+      RAISE EXCEPTION 'BLOCK 11 FAIL (r7 M-1): expected compliance_successor_drops_a_gate, got %', SQLERRM;
+    END IF;
+  END;
+
+  BEGIN
+    -- a successor whose own cover ends BEFORE the row it would retire
+    UPDATE public.studio_compliance_documents
+       SET superseded_by = 'f9f40000-0000-4000-8000-000000000012'
+     WHERE id = 'f9f40000-0000-4000-8000-000000000011';
+    RAISE EXCEPTION 'BLOCK 11 FAIL (r7 M-1): an earlier-ending supersede was accepted';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM NOT LIKE '%compliance_successor_not_later%' THEN
+      RAISE EXCEPTION 'BLOCK 11 FAIL (r7 M-1): expected compliance_successor_not_later, got %', SQLERRM;
+    END IF;
+  END;
+
+  BEGIN
+    -- a W-9 does not renew a certificate
+    UPDATE public.studio_compliance_documents
+       SET superseded_by = 'f9f40000-0000-4000-8000-000000000013'
+     WHERE id = 'f9f40000-0000-4000-8000-000000000011';
+    RAISE EXCEPTION 'BLOCK 11 FAIL (r7 M-1): a wrong-type supersede was accepted';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM NOT LIKE '%compliance_successor_wrong_type%'
+       AND SQLERRM NOT LIKE '%compliance_successor_undated%' THEN
+      RAISE EXCEPTION 'BLOCK 11 FAIL (r7 M-1): expected a wrong-type/undated refusal, got %', SQLERRM;
+    END IF;
+  END;
+
+  PERFORM pg_temp.reset_role();
+  RAISE NOTICE '11b. r7 M-1 negative control — the four legs still judge the ACT: passed';
+END $$;
+
 DO $$ BEGIN RAISE NOTICE 'W3 SQL suite: all blocks passed'; END $$;
 
 ROLLBACK;
