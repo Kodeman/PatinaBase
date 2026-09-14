@@ -27,6 +27,10 @@
 --       studio — the 00555:3024-3026 hazard under security_invoker.
 --   (e) the UTC bucket basis (day / iso_week / month), matching 00599's own
 --       date basis so one hour never lands in two weeks.
+--   (f) HT-13-a (RULED 2026-09-13) — an hour logged with a DATE and no time is
+--       filed at 12:00 UTC of the named day, so the ledger's UTC-derived `day`
+--       equals the day the member named, in every studio timezone from UTC−11
+--       to UTC+11.
 --
 -- How to run:
 --   psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 \
@@ -172,6 +176,14 @@ BEGIN
   VALUES ('c6040000-0000-4000-8000-0000000000b5', 'c6040000-0000-4000-8000-0000000000e1',
           'c6040000-0000-4000-8000-000000000003',
           '2026-03-07T10:00:00Z', NULL, true, 'timer_auto');
+  -- f: HT-13-a — an hour logged with a DATE and no time. The portal files it at
+  -- 12:00 UTC of the day the member named (`startedAtFromDateValue`); this row
+  -- is that instant, so case (f) below can measure whether the ledger's day
+  -- comes back as the day she named.
+  INSERT INTO project_time_entries (id, project_id, user_id, started_at, duration_minutes, billable, source)
+  VALUES ('c6040000-0000-4000-8000-0000000000b6', 'c6040000-0000-4000-8000-0000000000e1',
+          'c6040000-0000-4000-8000-000000000003',
+          '2026-03-08T12:00:00Z', 45, true, 'command_bar');
   PERFORM pg_temp.reset_role();
 END
 $$;
@@ -392,6 +404,47 @@ BEGIN
     'FAIL e3: the month bucket is YYYY-MM; got ' || COALESCE(v_month, 'NULL');
 
   RAISE NOTICE 'time_entry_ledger: case (e) passed.';
+END
+$$;
+
+-- ─── (f) HT-13-a — a date-only hour lands on the day she named ─────────────
+-- RULED 2026-09-13 (resolving W7-R3-02). An entry logged with a DATE and no
+-- time is filed at 12:00 UTC of the named day. The ledger's `day` stays
+-- UTC-derived and no studio timezone column is added; noon UTC is what makes
+-- the two agree, because it is the SAME calendar day in every studio timezone
+-- between UTC−11 and UTC+11. The shape this replaced carried the member's local
+-- time of day onto the day she named, so from 19:00 CDT onward her own Hours
+-- list and the scope lens / CSV / statement named two different days for one
+-- hour.
+DO $$
+DECLARE
+  v_day    date;
+  v_west   date;
+  v_east   date;
+BEGIN
+  SELECT day INTO v_day FROM public.time_entry_ledger
+   WHERE id = 'c6040000-0000-4000-8000-0000000000b6';
+  ASSERT v_day = DATE '2026-03-08',
+    'FAIL f1 (HT-13-a): a noon-UTC entry must bucket to the day the member '
+    'named; got ' || COALESCE(v_day::text, 'NULL');
+
+  -- And the same instant read as a LOCAL calendar day at both edges of the
+  -- ruled band. If either of these ever disagrees with f1, the ruling''s own
+  -- premise has moved and the day column needs a zone, not a nudge.
+  SELECT (started_at AT TIME ZONE 'Pacific/Midway')::date   -- UTC−11
+    INTO v_west FROM public.project_time_entries
+   WHERE id = 'c6040000-0000-4000-8000-0000000000b6';
+  SELECT (started_at AT TIME ZONE 'Pacific/Noumea')::date   -- UTC+11
+    INTO v_east FROM public.project_time_entries
+   WHERE id = 'c6040000-0000-4000-8000-0000000000b6';
+  ASSERT v_west = DATE '2026-03-08',
+    'FAIL f2 (HT-13-a): UTC−11 must read the same calendar day; got '
+    || COALESCE(v_west::text, 'NULL');
+  ASSERT v_east = DATE '2026-03-08',
+    'FAIL f3 (HT-13-a): UTC+11 must read the same calendar day; got '
+    || COALESCE(v_east::text, 'NULL');
+
+  RAISE NOTICE 'time_entry_ledger: case (f) passed — the day she named is the day the ledger reports.';
 END
 $$;
 
