@@ -1229,7 +1229,8 @@ export function AccountStudioPage() {
                 <p className={HELP}>
                   Each rate prices the hours its roster role logs. A rate you
                   have not bound yet keeps its old label, and the agreement it
-                  seeds asks for the role before it can be sent.
+                  seeds asks for the role — and for a rate above zero — before
+                  it can be sent.
                 </p>
               </div>
 

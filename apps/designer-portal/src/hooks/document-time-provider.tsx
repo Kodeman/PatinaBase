@@ -791,15 +791,33 @@ function AutostartBand({
   onStart: () => void;
 }) {
   const [dismissed, setDismissed] = useState(false);
-  const showDisclosure =
-    held && settled && !optedOut && disclosedAt === null && !dismissed;
   const stamped = useRef(false);
+  /**
+   * Latched the instant the sentence goes up, and let go only by her own hand
+   * or by her leaving the document. The stamp is written on render (above),
+   * and the mutation invalidates the preference query, so `disclosedAt` turns
+   * non-null one round trip later — without this latch the single showing
+   * HT-35 allows would be spent on a flash nobody could read, and `Understood`
+   * would never be reachable.
+   */
+  const [latched, setLatched] = useState(false);
+  const undisclosed = held && settled && !optedOut && disclosedAt === null;
+  const showDisclosure =
+    held && !dismissed && (latched || (undisclosed && !stamped.current));
+
   useEffect(() => {
-    if (!showDisclosure || stamped.current) return;
+    if (!undisclosed || stamped.current) return;
     stamped.current = true;
+    setLatched(true);
     onDisclose();
     documentEvents.time.autostartDisclosed({ surface: 'document' });
-  }, [showDisclosure, onDisclose]);
+  }, [undisclosed, onDisclose]);
+
+  /** She closed the document without dismissing: she has been told, and the
+   *  sentence does not follow her onto the next one. */
+  useEffect(() => {
+    if (latched && !held) setLatched(false);
+  }, [latched, held]);
 
   if (showDisclosure) {
     return (

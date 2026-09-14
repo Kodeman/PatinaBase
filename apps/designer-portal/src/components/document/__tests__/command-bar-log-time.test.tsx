@@ -114,7 +114,42 @@ function openPalette() {
   fireEvent.keyDown(window, { key: 'k', metaKey: true });
 }
 
+/**
+ * The clock is PINNED for this suite. `startedAtFromDateValue`
+ * (`time-capture.tsx`) keeps the current time-of-day and moves only the date,
+ * and `next/jest` loads the app's `.env`, which pins `TZ=America/Chicago`. On a
+ * real clock after 19:00 CDT the constructed instant crosses UTC midnight and
+ * `toISOString()` reports the NEXT day, so the date assertions below failed for
+ * five hours a night and passed the rest — the same UTC-midnight trap
+ * `supabase/tests/KNOWN_FAILURES.md` records for `direct_order_attribution_test.sql`.
+ * 12:00 UTC is the safest pin: every zone from UTC-11 to UTC+11 reads it as the
+ * same calendar day, so the fixture dates below hold wherever this runs.
+ * Only `Date` is faked; every timer stays real so React Query and
+ * `waitFor` behave exactly as they do under the real clock.
+ */
+const PINNED_NOW = new Date('2026-09-13T12:00:00.000Z');
+const FAKE_DATE_ONLY = {
+  now: PINNED_NOW,
+  doNotFake: [
+    'cancelAnimationFrame',
+    'cancelIdleCallback',
+    'clearImmediate',
+    'clearInterval',
+    'clearTimeout',
+    'hrtime',
+    'nextTick',
+    'performance',
+    'queueMicrotask',
+    'requestAnimationFrame',
+    'requestIdleCallback',
+    'setImmediate',
+    'setInterval',
+    'setTimeout',
+  ],
+} as const;
+
 beforeEach(() => {
+  jest.useFakeTimers(FAKE_DATE_ONLY);
   mockHeldProjectId = null;
   mockMyRateRoles = [];
   mockCreate.mockReset();
@@ -131,6 +166,10 @@ beforeEach(() => {
   mockPathname.mockReturnValue('/desk');
   mockAuthority = { data: null, isLoading: false, isError: false };
   window.localStorage.clear();
+});
+
+afterEach(() => {
+  jest.useRealTimers();
 });
 
 describe('⌘K · Log time', () => {

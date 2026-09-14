@@ -18,7 +18,7 @@
  * report-back for why (no live browser/Supabase session available to this
  * lane) and what remains unconfirmed.
  */
-import { act, renderHook, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, renderHook, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { DocumentTimeProvider, useDocumentTime } from './document-time-provider';
@@ -593,7 +593,7 @@ describe('DocumentTimeProvider — HT-35, the clock she was told about', () => {
     concurrentIncumbent = null;
     startTimerMutateAsync.mockClear();
     stopTimerMutateAsync.mockClear();
-    markDisclosedMutate.mockClear();
+    markDisclosedMutate.mockReset();
     autostartDisclosedCalls.length = 0;
     autostartPreference = {
       optedOut: false,
@@ -669,6 +669,82 @@ describe('DocumentTimeProvider — HT-35, the clock she was told about', () => {
     );
     expect(markDisclosedMutate).toHaveBeenCalledTimes(1);
     expect(autostartDisclosedCalls).toEqual([{ surface: 'document' }]);
+  });
+
+  it('holds the sentence up while its own stamp round-trips back', async () => {
+    autostartPreference = { optedOut: false, disclosedAt: null };
+    // The real `useMarkTimeAutostartDisclosed` invalidates the preference
+    // query, so the stamp it just wrote comes straight back as a non-null
+    // `disclosed_at`. Before the latch that round trip unmounted the band on
+    // the very next render: "once and never again", with the once spent on a
+    // flash nobody could read and `Understood` never reachable.
+    markDisclosedMutate.mockImplementation(() => {
+      autostartPreference = {
+        optedOut: false,
+        disclosedAt: '2026-09-13T12:00:00.000Z',
+      };
+    });
+    const { result, rerender } = renderHook(() => useDocumentTime(), { wrapper });
+    act(() => {
+      result.current.hold({ projectId: 'project-a', projectName: 'A', phaseKey: null });
+    });
+    await waitFor(() =>
+      expect(screen.getByText(/Patina keeps the time for you/)).toBeInTheDocument(),
+    );
+    expect(markDisclosedMutate).toHaveBeenCalledTimes(1);
+
+    // The stamp has landed and the preference now reads disclosed. The
+    // sentence stays until she says so.
+    act(() => {
+      rerender();
+    });
+    expect(
+      screen.getByText(/Patina keeps the time for you/),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Understood' }));
+    await waitFor(() =>
+      expect(
+        screen.queryByText(/Patina keeps the time for you/),
+      ).not.toBeInTheDocument(),
+    );
+    // Her hand took it down, and the profile carries exactly one stamp.
+    expect(markDisclosedMutate).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not follow her onto the next document if she never dismissed it', async () => {
+    autostartPreference = { optedOut: false, disclosedAt: null };
+    markDisclosedMutate.mockImplementation(() => {
+      autostartPreference = {
+        optedOut: false,
+        disclosedAt: '2026-09-13T12:00:00.000Z',
+      };
+    });
+    const { result } = renderHook(() => useDocumentTime(), { wrapper });
+    act(() => {
+      result.current.hold({ projectId: 'project-a', projectName: 'A', phaseKey: null });
+    });
+    await waitFor(() =>
+      expect(screen.getByText(/Patina keeps the time for you/)).toBeInTheDocument(),
+    );
+
+    act(() => {
+      result.current.release();
+    });
+    await waitFor(() =>
+      expect(
+        screen.queryByText(/Patina keeps the time for you/),
+      ).not.toBeInTheDocument(),
+    );
+
+    act(() => {
+      result.current.hold({ projectId: 'project-b', projectName: 'B', phaseKey: null });
+    });
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(
+      screen.queryByText(/Patina keeps the time for you/),
+    ).not.toBeInTheDocument();
+    expect(markDisclosedMutate).toHaveBeenCalledTimes(1);
   });
 
   it('and never again once the stamp is on her profile', async () => {

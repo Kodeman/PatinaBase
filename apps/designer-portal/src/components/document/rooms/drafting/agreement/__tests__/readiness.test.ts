@@ -457,6 +457,62 @@ describe("assessAgreementReadiness — the conditional facet rules", () => {
     expect(assess(parts).ready).toBe(true);
   });
 
+  // W7-R2-03 — `+ Add a role` seeds a fully-named, BOUND row at $0/hr. Before
+  // the enum binding, the seed's EMPTY name was the guard; now every other
+  // check passes it, and a countersigned $0 rate prices that roster role's
+  // every hour at rate_source='authority' for nothing, unrepairably.
+  it("blocks a seeded $0 role standing beside a priced one", () => {
+    const parts = [
+      ...nine().filter((p) => p.partKey !== "patina.role_rates"),
+      roleRates([
+        {
+          roleName: "Principal designer",
+          hourlyRateCents: 26_000,
+          sortOrder: 0,
+          rosterRole: "lead_designer",
+        },
+        {
+          roleName: "Associate",
+          hourlyRateCents: 0,
+          sortOrder: 1,
+          rosterRole: "support_designer",
+        },
+      ]),
+    ];
+    expect(messages(parts)).toContain(
+      "Every role on the rate card needs an hourly rate above zero.",
+    );
+    expect(assess(parts).ready).toBe(false);
+  });
+
+  // R-7 already answers a card with NO priced role; it must not be doubled.
+  it("says the $0 sentence only where R-7 is silent", () => {
+    const parts = [
+      ...nine().filter((p) => p.partKey !== "patina.role_rates"),
+      roleRates([
+        {
+          roleName: "Principal designer",
+          hourlyRateCents: 0,
+          sortOrder: 0,
+          rosterRole: "lead_designer",
+        },
+      ]),
+    ];
+    expect(messages(parts)).toContain(
+      "Add at least one role with an hourly rate.",
+    );
+    expect(messages(parts)).not.toContain(
+      "Every role on the rate card needs an hourly rate above zero.",
+    );
+    expect(assess(parts).ready).toBe(false);
+  });
+
+  it("says nothing about rates when every role carries one", () => {
+    expect(messages(nine())).not.toContain(
+      "Every role on the rate card needs an hourly rate above zero.",
+    );
+  });
+
   it("R-8: blocks a negative retainer", () => {
     const parts = [
       ...nine().filter((p) => p.partKey !== "patina.retainer"),
