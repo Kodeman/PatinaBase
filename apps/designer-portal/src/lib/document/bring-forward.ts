@@ -9,7 +9,6 @@
  * tested without a database and both widths print the same bytes.
  */
 
-import { rosterShortDate } from "./roster-derivation";
 
 /** Small counts read as words on a face; past twelve, a numeral is honest. */
 const NUMBER_WORDS = [
@@ -141,22 +140,17 @@ export function bringForwardConsequence(
 }
 
 /**
- * R-Q / direction §5.2's Birth rule, at the moment of the pick: a seat on an
- * opted-out number is born reading the refusal it inherits, never "Not asked".
+ * R-Q / direction §5.2's Birth rule, at the moment of the pick, is composed by
+ * `components/document/people/consent-sentence.ts` — the ONE composer — and
+ * not here.
  *
- * "Opted out by text, 3 Dec 2025, on the Lindqvist kitchen."
+ * `carriedConsentNotice` used to live at this spot and branched on
+ * `optOutSource === "inbound_stop"`, a value `studio_channel_consent`'s own
+ * CHECK can never produce (verbal | written | web_form | inbound_sms | other),
+ * so the "by text" branch was dead code and a real inbound STOP read "Opted
+ * out to the studio" on the picker while the Directory row, the collapsed
+ * roster row (R-T) and the person card read "Opted out by text, 3 Dec 2025, on
+ * the Lindqvist kitchen." off the SAME record. R-Q fixes one wording
+ * everywhere; a second composer beside the first can only disagree with it
+ * (r4 code MAJOR-1 / QA finding 1, F-12 Pete Rusk).
  */
-export function carriedConsentNotice(record: {
-  optOutSource?: string | null;
-  optOutAt?: string | null;
-  originProjectName?: string | null;
-}): string | null {
-  const when = rosterShortDate(record.optOutAt);
-  if (!when) return null;
-  const how =
-    record.optOutSource === "inbound_stop" ? "by text" : "to the studio";
-  const where = record.originProjectName
-    ? `, on the ${record.originProjectName}`
-    : "";
-  return `Opted out ${how}, ${when}${where}.`;
-}

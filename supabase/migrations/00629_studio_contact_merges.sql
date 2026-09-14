@@ -21,7 +21,9 @@
 -- assert_studio_contact_identity_stable) → 00594 (studio_channel_consent,
 -- keyed on the channel VALUE) → 00623 (compliance documents) → 00624 (the
 -- seat's card pointers) → 00626 (people_directory v4, one row per identity) →
--- 00629.
+-- 00629. Sideways: 00578 (agreement_draw_lien_waivers.contact_id) and 00579
+-- (studio_trade_agreements / _tokens.contact_id) are repointed here too, the
+-- three FK columns into studio_contacts no other repoint reaches (r4 M-3).
 --
 -- ── WHAT CONSENT DOES, AND DOES NOT, DO HERE ──────────────────────────────
 -- Nothing. studio_channel_consent is keyed on (organization_id, channel_kind,
@@ -831,6 +833,47 @@ END;
 $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════
+-- 4d. contact_rule_blocks_contact — R-BL's hard block, as one predicate
+-- ═══════════════════════════════════════════════════════════════════════════
+-- R-BL (Fable, 2026-09-13): a rule is a HARD BLOCK when it forbids EVERY
+-- direct channel (do-not-contact) or routes contact to another person — never
+-- when it merely closes one direct channel while another stays open. F-15
+-- Frank Bauer blocks; F-27 Ray Thao (never text, email and phone open) and
+-- F-11 Dana Kowalski (text only, the email is dead) do not.
+--
+-- The four direct channels are the portal's own list
+-- (lib/document/contact-rule.ts DIRECT_CONTACT_CHANNELS): `dispatch`,
+-- `after_hours` and `ap_email` are a FIRM's lines and `portal_311` is a
+-- municipal scheduling portal, so a rule bars nothing left by naming them.
+-- One formula, stated here because the merge now refuses on it (r4 B-2) and a
+-- second reading of "blocks" is how the two faces disagreed in the first place.
+CREATE OR REPLACE FUNCTION public.contact_rule_blocks_contact(
+  p_channels_forbidden text[],
+  p_route_to_person_id uuid
+)
+RETURNS boolean
+LANGUAGE sql
+IMMUTABLE
+SET search_path TO 'public'
+AS $$
+  SELECT p_route_to_person_id IS NOT NULL
+      OR ARRAY['sms', 'mobile', 'office', 'email']
+           <@ COALESCE(p_channels_forbidden, '{}'::text[]);
+$$;
+
+REVOKE ALL ON FUNCTION public.contact_rule_blocks_contact(text[], uuid)
+  FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.contact_rule_blocks_contact(text[], uuid)
+  TO authenticated, service_role;
+
+COMMENT ON FUNCTION public.contact_rule_blocks_contact(text[], uuid) IS
+  'R-BL''s hard block as one predicate over a studio_contact_rules row: every '
+  'direct channel forbidden (sms, mobile, office, email), or contact routed '
+  'to another person. The portal''s contactRuleIsHardBlock() is the same '
+  'formula; merge_studio_contacts() refuses on it so a recorded block cannot '
+  'vanish into an absorbed card (00629 r4 B-2).';
+
+-- ═══════════════════════════════════════════════════════════════════════════
 -- 5. merge_studio_contacts — one transaction, one act
 -- ═══════════════════════════════════════════════════════════════════════════
 CREATE OR REPLACE FUNCTION public.merge_studio_contacts(
@@ -854,6 +897,9 @@ DECLARE
   -- captured before the first statement makes the predicate false (r2 B2-2).
   v_heads    uuid[];
   v_succs    uuid[];
+  -- The two cards' contact rules, read before anything moves (r4 B-2).
+  v_survivor_rule public.studio_contact_rules%ROWTYPE;
+  v_merged_rule   public.studio_contact_rules%ROWTYPE;
 BEGIN
   IF p_survivor IS NULL OR p_merged IS NULL THEN
     RAISE EXCEPTION 'merge_contact_not_found'
@@ -926,6 +972,60 @@ BEGIN
     END IF;
   END IF;
 
+  -- ── TWO LOGINS ARE TWO HUMANS (r4 B-1) ──────────────────────────────────
+  -- profile_id is crm-model §4 rule 1's PROOF-strength key: two cards naming
+  -- two DIFFERENT logins are not one person carded twice, they are two people
+  -- the studio believes share a number. Folding them would strand one account
+  -- on a card that emits no Directory row. The studio rules on it: unlink one
+  -- login, or do not merge.
+  IF v_survivor.profile_id IS NOT NULL
+     AND v_merged.profile_id IS NOT NULL
+     AND v_survivor.profile_id IS DISTINCT FROM v_merged.profile_id THEN
+    RAISE EXCEPTION 'merge_two_logins'
+      USING HINT = 'These two cards name two different Patina accounts. One '
+                   'card, one login (crm-model §4 rule 1) — take the account '
+                   'off one of them first, or leave them as two people.';
+  END IF;
+
+  -- ── A BLOCK MAY NOT VANISH IN A MERGE (r4 B-2) ──────────────────────────
+  -- One rule row per subject (idx_studio_contact_rules_subject), so the two
+  -- cards' rules cannot both survive on the survivor — and the repoint below
+  -- is conditional, so the absorbed card's rule stays behind wherever the
+  -- survivor already carries one. Where the absorbed rule BLOCKS (R-BL: every
+  -- direct channel forbidden, or contact routed to another person) and the
+  -- survivor's does not, that silence turned "do not contact, write Rosa
+  -- instead" into "Use: email, mobile" on the Directory row, the roster row,
+  -- the person card and the company card's crew line at once — Leah task 4's
+  -- acceptance criterion inverted, and C30's class of harm: the cost of a
+  -- missed refusal is a compliance violation, so it may not hide.
+  --
+  -- The RPC takes three arguments and none of them is a field choice, so
+  -- there is no face on which the studio could pick. It refuses instead, by
+  -- name, and the studio settles the rule on the surviving card first — both
+  -- cards are still live and still openable at that moment. Where the
+  -- survivor's own rule ALSO blocks, nothing is lost by keeping it, and the
+  -- merge proceeds.
+  SELECT * INTO v_merged_rule
+    FROM public.studio_contact_rules r
+   WHERE r.subject_type = v_merged.entity_kind AND r.subject_id = p_merged;
+  SELECT * INTO v_survivor_rule
+    FROM public.studio_contact_rules r
+   WHERE r.subject_type = v_survivor.entity_kind AND r.subject_id = p_survivor;
+
+  IF v_merged_rule.id IS NOT NULL
+     AND v_survivor_rule.id IS NOT NULL
+     AND public.contact_rule_blocks_contact(
+           v_merged_rule.channels_forbidden, v_merged_rule.route_to_person_id)
+     AND NOT public.contact_rule_blocks_contact(
+           v_survivor_rule.channels_forbidden,
+           v_survivor_rule.route_to_person_id) THEN
+    RAISE EXCEPTION 'merge_contact_rule_conflict'
+      USING HINT = 'The card being folded in says contact is blocked or '
+                   'routed elsewhere, and the card you are keeping says '
+                   'something else. Settle one rule on the card you are '
+                   'keeping, then merge.';
+  END IF;
+
   -- ── channels: union, exact duplicates by kind + value dropped ───────────
   DELETE FROM public.studio_contact_channels m
    WHERE m.owner_id = p_merged
@@ -983,6 +1083,36 @@ BEGIN
    WHERE s.v IS NOT NULL
   ON CONFLICT (owner_id, channel_kind, value) DO NOTHING;
 
+  -- ── THE LOGIN, AND THE ADDRESS THE DIRECTORY ROW READS (r4 B-1) ─────────
+  -- people_directory's CONTACTS branch reads `sc.profile_id` and `sc.email`
+  -- off the SURVIVOR's own columns — reach_state_for_identity()'s first leg is
+  -- "profile_id IS NOT NULL THEN 'account'" — and PR-o pre-picks the OLDER
+  -- card, which is exactly the card that predates the account. Unmoved, a
+  -- merge read `On paper` over a human who is signed in to Patina and blanked
+  -- the row's address: the login was not deleted, but the only card carrying
+  -- it emitted no Directory row, no picker entry and no ?person= target.
+  -- Direction §3.8 makes Account a reach word the studio acts on and PR-k
+  -- makes an account additive — a merge may not subtract one.
+  --
+  -- COALESCE, never overwrite: the survivor's own login and address stand
+  -- wherever it has them, and the two-logins case was refused above. The
+  -- number is deliberately NOT carried here — it already travels as a channel
+  -- row above, and writing phone/phone_e164 would fire
+  -- link_rolodex_card_to_parties() mid-merge, which is a seat claim and not
+  -- this statement's business.
+  IF v_survivor.profile_id IS NULL AND v_merged.profile_id IS NOT NULL THEN
+    UPDATE public.studio_contacts
+       SET profile_id = v_merged.profile_id
+     WHERE id = p_survivor;
+  END IF;
+
+  IF NULLIF(btrim(COALESCE(v_survivor.email, '')), '') IS NULL
+     AND NULLIF(btrim(COALESCE(v_merged.email, '')), '') IS NOT NULL THEN
+    UPDATE public.studio_contacts
+       SET email = v_merged.email
+     WHERE id = p_survivor;
+  END IF;
+
   -- ── affiliations ────────────────────────────────────────────────────────
   IF v_cross THEN
     -- The firm IS the person now. An affiliation of a person at themselves is
@@ -1021,6 +1151,10 @@ BEGIN
 
   -- ── contact rules: the survivor's wins; the merged's is kept as history
   --    on the merged card unless the survivor has none ─────────────────────
+  -- One row per subject, so only one of the two can stand on the survivor.
+  -- The rule left behind is never a BLOCK: the gate above refuses the merge
+  -- where the absorbed card blocks and the survivor's rule does not (r4 B-2),
+  -- so this repoint can stay conditional without losing a refusal.
   UPDATE public.studio_contact_rules r
      SET subject_id   = p_survivor,
          subject_type = v_survivor.entity_kind
@@ -1160,13 +1294,42 @@ BEGIN
     -- person, declared so by is_sole_proprietor, R-BA already reduces one
     -- paper word over the person AND their firm, and leaving the certificates
     -- on the folded firm card would read `Not on file` over a sole proprietor
-    -- who is insured. One blanket move, in one statement, because holder_type
-    -- changes with it and assert_compliance_holder() holds holder_type to the
-    -- card's entity_kind.
-    UPDATE public.studio_compliance_documents
+    -- who is insured. Everything moves, and holder_type moves with it because
+    -- assert_compliance_holder() holds holder_type to the card's entity_kind.
+    --
+    -- IN THE SAME ORDER AS THE SAME-KIND BRANCH (r4 M-1). This used to be ONE
+    -- unordered UPDATE, and assert_compliance_holder()'s STRUCTURAL leg
+    -- compliance_successor_other_holder always runs — v_retiring suppresses
+    -- only the two time-varying legs — so a retired row reached before its own
+    -- successor found superseded_by naming a document still held by the firm,
+    -- and the fold aborted with a schema token naming nothing the studio did.
+    -- Measured deterministic on a sole proprietor with one renewed COI; the
+    -- identical construction passed on other runs, which is worse: it passes a
+    -- suite and fails on a real book. F-11 Dana Kowalski — owner-operator,
+    -- sole proprietor, the fixture's only lapsed-then-renewed certificate — is
+    -- the motivating pair.
+    --
+    -- So: the heads first, carrying nothing (a NULL superseded_by is asked no
+    -- successor question at all), then the lineage behind each one
+    -- outermost-first, each row's own successor already on the survivor when
+    -- the trigger reads it. Same depth cap, same reason.
+    UPDATE public.studio_compliance_documents d
        SET holder_id   = p_survivor,
            holder_type = v_survivor.entity_kind
-     WHERE holder_id = p_merged;
+     WHERE d.holder_id = p_merged
+       AND d.superseded_by IS NULL;
+
+    FOR i IN 1..16 LOOP
+      UPDATE public.studio_compliance_documents d
+         SET holder_id   = p_survivor,
+             holder_type = v_survivor.entity_kind
+       WHERE d.holder_id = p_merged
+         AND d.superseded_by IS NOT NULL
+         AND EXISTS (SELECT 1 FROM public.studio_compliance_documents s
+                      WHERE s.id = d.superseded_by
+                        AND s.holder_id = p_survivor);
+      EXIT WHEN NOT FOUND;
+    END LOOP;
   END IF;
 
   -- ── the three designations other cards hold ─────────────────────────────
@@ -1226,6 +1389,36 @@ BEGIN
        SET bid_quoted_by_person_id = p_survivor
      WHERE bid_quoted_by_person_id = p_merged;
   END IF;
+
+  -- ── the trade agreement's own card pointers (r4 M-3) ────────────────────
+  -- Three FK columns into studio_contacts that no repoint above reaches, and
+  -- one of them keys a LIVE DOOR. access_grants_trade_agreement_links()
+  -- (00627:199) publishes an agreement link as
+  -- `subject_type = 'contact', subject_id = studio_trade_agreement_tokens
+  -- .contact_id`, and the company card hands ReachAccess exactly one subject
+  -- id — the survivor's (company-card.tsx CR7-2, direction §5.1's company
+  -- variant: firm-scoped tokens only, and agreement_link is the one tier keyed
+  -- on a firm). Unrepointed, the survivor's card listed none of the absorbed
+  -- firm's live links and the card that did key them emits no Directory row:
+  -- the People room's Revoke could no longer close a door that is still open.
+  --
+  -- The TOKEN and the WAIVER move. The AGREEMENT ITSELF moves only while it is
+  -- a draft: guard_trade_agreement_authored() (00579:240-270) freezes
+  -- contact_id the moment the agreement leaves 'draft', because the sent paper
+  -- records who it was sent to and the signature's fingerprint is computed
+  -- over those essentials. A sent agreement therefore keeps naming the
+  -- absorbed card — which resolves forward through resolve_merged_contact()
+  -- and still answers studio_contact_org() for the link reader's gate, so
+  -- nothing is stranded by it. Repointing it instead would abort every merge
+  -- of a firm that has ever sent an agreement, with a refusal in the
+  -- agreements room's voice on a face in the People room.
+  UPDATE public.studio_trade_agreement_tokens
+     SET contact_id = p_survivor WHERE contact_id = p_merged;
+  UPDATE public.agreement_draw_lien_waivers
+     SET contact_id = p_survivor WHERE contact_id = p_merged;
+  UPDATE public.studio_trade_agreements
+     SET contact_id = p_survivor
+   WHERE contact_id = p_merged AND state = 'draft';
 
   -- ── the household (00632) ───────────────────────────────────────────────
   -- A household is an ARRAY of person cards plus a primary pointer, held by
@@ -1297,7 +1490,13 @@ COMMENT ON FUNCTION public.merge_studio_contacts(uuid, uuid, text) IS
   'survivor has none), the route_to pointer, the three designations other '
   'cards hold, every seat''s studio_contact_id / company_id / '
   'warranty_contact_person_id / bid_quoted_by_person_id (00631), and the '
-  'household''s member array and primary pointer (00632). COMPLIANCE PAPER '
+  'household''s member array and primary pointer (00632), the trade '
+  'agreement''s live link token and lien-waiver card pointers (a SENT '
+  'agreement''s own contact_id stays frozen where 00579 froze it — r4 M-3), '
+  'and the absorbed card''s LOGIN and email address onto the survivor where '
+  'the survivor has none, because people_directory reads both off the '
+  'survivor''s own columns and PR-o pre-picks the older card (r4 B-1). '
+  'COMPLIANCE PAPER '
   'MOVES, WHOLE: every absorbed document arrives on the survivor and '
   'compliance_state()''s worst-first reckoning settles the word, with the '
   'supersede edge written where the survivor already holds the same paper in '
@@ -1310,15 +1509,30 @@ COMMENT ON FUNCTION public.merge_studio_contacts(uuid, uuid, text) IS
   'channel_value) and never on a card, so a number''s verdict follows the '
   'number with no write (crm-model §4, R-AY). Refuses a firm into a person '
   'unless the person is_sole_proprietor, and a person into a firm always '
-  '(merge_kind_mismatch). Neither card is deleted or archived: the merged one '
+  '(merge_kind_mismatch); refuses two cards naming two DIFFERENT Patina '
+  'accounts (merge_two_logins); refuses a merge that would leave a BLOCKING '
+  'contact rule behind on the absorbed card while the survivor carries a '
+  'permissive one (merge_contact_rule_conflict, R-BL''s formula through '
+  'contact_rule_blocks_contact()). Neither card is deleted or archived: the merged one '
   'takes merged_into and stays resolvable through resolve_merged_contact() '
   '(00629).';
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- 6. people_directory v5 — the same view, with merged cards folded away
 -- ═══════════════════════════════════════════════════════════════════════════
--- Grafted from 00626:1388-1909 verbatim, with ONE line added to the CONTACTS
--- branch's WHERE. Every branch, every predicate, every appended column and the
+-- Grafted from 00626:1388-1909 with TWO deltas, and nothing else (r4 M-2 —
+-- the banner used to claim one, and a code-only diff of the two bodies returns
+-- both):
+--
+--   1. the CONTACTS branch's WHERE gains `AND sc.merged_into IS NULL`, so a
+--      card that was merged away emits no identity row of its own.
+--   2. the TEAM branch's WHERE gains the tenant leg every other branch already
+--      carried (r1 M-7, R-BD) — is_active_studio_member(project_tenant_org())
+--      or the caller standing on the project themselves. This is a
+--      NARROWING of who reads a studio's teammate names, job titles, staff
+--      roles and project ids, made in this wave and reported as made.
+--
+-- Every other branch, every other predicate, every appended column and the
 -- column order are 00626's byte for byte — CREATE OR REPLACE VIEW cannot
 -- reorder or retype a column, and nothing here means to.
 CREATE OR REPLACE VIEW public.people_directory

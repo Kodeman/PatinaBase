@@ -9,10 +9,10 @@ import {
   bringForwardActLabel,
   bringForwardConsequence,
   bringForwardSelectionLine,
-  carriedConsentNotice,
   countInWords,
   pickerHistoryLine,
 } from "../bring-forward";
+import { consentSentence } from "@/components/document/people/consent-sentence";
 
 describe("pickerHistoryLine (PR-i)", () => {
   it("says the year the job CLOSED when the record knows it", () => {
@@ -139,27 +139,55 @@ describe("bringForwardConsequence (SPEC §5.7 #7)", () => {
   });
 });
 
-describe("carriedConsentNotice (direction §5.2 Birth rule, F-12)", () => {
-  it("carries the refusal forward with its date and its job", () => {
+describe("the refusal the pick carries (R-Q, direction §5.2 Birth rule, F-12)", () => {
+  /**
+   * The picker composes this with `consentSentence`, the ONE composer (R-Q),
+   * over the record's REAL `opt_out_source` — `studio_channel_consent`'s CHECK
+   * admits verbal | written | web_form | inbound_sms | other and nothing else.
+   * The two tests that stood here asserted against `"inbound_stop"` and
+   * `"studio_recorded"`, neither of which the constraint can produce, so both
+   * passed vacuously over the picker's own wrong wording (r4 code MAJOR-1).
+   */
+  it("says HOW the refusal arrived, and on which job", () => {
     expect(
-      carriedConsentNotice({
-        optOutSource: "inbound_stop",
+      consentSentence({
+        status: "opted_out",
+        optOutSource: "inbound_sms",
         optOutAt: "2025-12-03",
-        originProjectName: "Lindqvist kitchen",
+        projectName: "Lindqvist kitchen",
       }),
     ).toBe("Opted out by text, 3 Dec 2025, on the Lindqvist kitchen.");
   });
 
+  it("reads every source the record can actually hold", () => {
+    const at = "2025-12-03";
+    expect(
+      consentSentence({ status: "opted_out", optOutSource: "verbal", optOutAt: at }),
+    ).toBe("Opted out in person, 3 Dec 2025.");
+    expect(
+      consentSentence({ status: "opted_out", optOutSource: "written", optOutAt: at }),
+    ).toBe("Opted out in writing, 3 Dec 2025.");
+    expect(
+      consentSentence({ status: "opted_out", optOutSource: "web_form", optOutAt: at }),
+    ).toBe("Opted out on a form, 3 Dec 2025.");
+    expect(
+      consentSentence({ status: "opted_out", optOutSource: "other", optOutAt: at }),
+    ).toBe("Opted out, 3 Dec 2025.");
+  });
+
   it("names no job where the record names none", () => {
     expect(
-      carriedConsentNotice({
-        optOutSource: "studio_recorded",
+      consentSentence({
+        status: "opted_out",
+        optOutSource: "inbound_sms",
         optOutAt: "2025-12-03",
       }),
-    ).toBe("Opted out to the studio, 3 Dec 2025.");
+    ).toBe("Opted out by text, 3 Dec 2025.");
   });
 
   it("says nothing at all where there is no date to stand on", () => {
-    expect(carriedConsentNotice({ optOutAt: null })).toBeNull();
+    expect(
+      consentSentence({ status: "opted_out", optOutSource: "inbound_sms", optOutAt: null }),
+    ).toBeNull();
   });
 });

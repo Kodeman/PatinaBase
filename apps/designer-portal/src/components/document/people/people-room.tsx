@@ -12,11 +12,12 @@
  * to the filtered roster. Tracks B–D fill their view slots (see ./views, ./types).
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   usePeopleDirectory,
   useOrganizations,
+  useResolvedContactId,
   isFieldRosterRole,
   type PartyRole,
 } from "@patina/supabase";
@@ -111,6 +112,24 @@ export function PeopleRoom() {
   const [highlightPersonId, setHighlightPersonId] = useState<string | null>(
     null,
   );
+  /**
+   * PR-o — BOTH IDS STAY RESOLVABLE, and the address is where that promise is
+   * kept (r4 B-3 / QA finding 3). A card that was folded into another one
+   * emits no `people_directory` row, so `?person=<old id>` and `?firm=<old
+   * id>` found nothing in `all` and the Room opened a bare, unfiltered list —
+   * no card, no error, no redirect — while the merge sheet's own consequence
+   * sentence told the studio "an old link still opens this person".
+   * `resolve_merged_contact()` is what maps the old id forward; nothing in the
+   * repo called it. This holds the unmatched id while that one RPC answers.
+   */
+  const [deepLinkUnresolved, setDeepLinkUnresolved] = useState<{
+    kind: "person" | "firm";
+    id: string;
+    role: PartyRole | null;
+  } | null>(null);
+  const { data: deepLinkSurvivorId } = useResolvedContactId(
+    deepLinkUnresolved?.id ?? null,
+  );
 
   useMobilePrimaryAction({
     actionKey: "add-person",
@@ -189,6 +208,25 @@ export function PeopleRoom() {
   // stay: they name what is on screen, so they keep their share/refresh
   // semantics exactly as they were.
   const deepLinkHandledRef = useRef(false);
+
+  /** One opening, whichever id the address named — the link's own, or the
+   *  survivor it resolves to. */
+  const openDirectoryPerson = useCallback((id: string, role: PartyRole) => {
+    setView("directory");
+    if (isFieldRosterRole(role)) {
+      setOpenParty({ id, role });
+      return;
+    }
+    // Land the chip a click from that row would have left pressed, so
+    // backing out of the card shows it in context, not under Everyone.
+    setChip(directoryChipFromParam(role));
+    setHighlightPersonId(id);
+    window.setTimeout(() => {
+      setHighlightPersonId((h) => (h === id ? null : h));
+    }, 2200);
+    setOpenPerson({ id, role });
+  }, []);
+
   useEffect(() => {
     if (deepLinkHandledRef.current) return;
     const params = new URLSearchParams(window.location.search);
@@ -234,30 +272,27 @@ export function PeopleRoom() {
       if (!resolved) {
         // No role in the URL, and the roster hasn't resolved this person yet
         // — wait for `all` rather than dropping the deep-link. Once it has
-        // loaded and there's still no match, give up quietly.
-        if (all) deepLinkHandledRef.current = true;
+        // loaded and there is still no match, the id may name a card that was
+        // MERGED AWAY (PR-o keeps it resolvable, and the merge sheet promises
+        // the old link still opens the person), so ask
+        // resolve_merged_contact() before giving up.
+        if (all) {
+          deepLinkHandledRef.current = true;
+          setDeepLinkUnresolved({ kind: "person", id: person, role: urlRole });
+        }
         return;
       }
       deepLinkHandledRef.current = true;
-      setView("directory");
-      if (isFieldRosterRole(resolved)) {
-        setOpenParty({ id: person, role: resolved });
-      } else {
-        // Land the chip a click from that row would have left pressed, so
-        // backing out of the card shows it in context, not under Everyone.
-        setChip(directoryChipFromParam(resolved));
-        setHighlightPersonId(person);
-        window.setTimeout(() => {
-          setHighlightPersonId((h) => (h === person ? null : h));
-        }, 2200);
-        setOpenPerson({ id: person, role: resolved });
-      }
+      openDirectoryPerson(person, resolved);
     } else if (firm) {
       // `?firm=` names a company card by its own rolodex id — the same shape
       // `?person=` names a person card with, since v4 keys both on the card.
+      // Same wait, and the same forward resolution (PR-o).
+      if (!all) return;
       deepLinkHandledRef.current = true;
       setView("directory");
-      setOpenFirm(firm);
+      if (all.some((p) => p.person_id === firm)) setOpenFirm(firm);
+      else setDeepLinkUnresolved({ kind: "firm", id: firm, role: null });
     } else if (thread) {
       deepLinkHandledRef.current = true;
       setPendingThreadId(thread);
@@ -289,7 +324,33 @@ export function PeopleRoom() {
       else if (roleParam) setView("directory");
       // PR-j — `role`, `view`, `scope` and `trade` stay. Nothing is stripped.
     }
-  }, [all, router]);
+  }, [all, router, openDirectoryPerson]);
+
+  /**
+   * …and the second half of PR-o's promise: the id the address named was NOT
+   * in the book, so `resolve_merged_contact()` was asked what it resolves to
+   * TODAY. A survivor that IS in the book opens exactly as the link's own id
+   * would have. Anything else — the RPC answering the same id (a live card
+   * this room does not list), a null (no card this member may read), or a
+   * survivor the directory does not carry — leaves the Directory standing, as
+   * it did before.
+   */
+  useEffect(() => {
+    if (!deepLinkUnresolved || !deepLinkSurvivorId || !all) return;
+    if (deepLinkSurvivorId === deepLinkUnresolved.id) return;
+    const row = all.find((p) => p.person_id === deepLinkSurvivorId);
+    if (!row) return;
+    setView("directory");
+    if (deepLinkUnresolved.kind === "firm") {
+      setOpenFirm(deepLinkSurvivorId);
+    } else {
+      openDirectoryPerson(
+        deepLinkSurvivorId,
+        deepLinkUnresolved.role ?? row.role,
+      );
+    }
+    setDeepLinkUnresolved(null);
+  }, [all, deepLinkUnresolved, deepLinkSurvivorId, openDirectoryPerson]);
 
   // PR-j — THE ADDRESS NAMES WHAT IS ON SCREEN. `?role`, `?view`, `?scope` and
   // `?trade` are kept and kept CURRENT, so a narrowed room can be shared,

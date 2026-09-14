@@ -95,10 +95,27 @@ export function preferredSurvivorId(
 export function mergeConsequenceSentence(
   survivorName: string,
   mergedName: string,
+  /**
+   * r4 B-2 — DOES THE CONTACT RULE ACTUALLY MOVE? Only where the survivor
+   * carries none: one rule row per subject, so the survivor's own rule wins
+   * and the absorbed card keeps its own as history. The sentence said the rule
+   * moved either way, which was a wrong fact on a face whenever the survivor
+   * already had one. (A merge that would leave a BLOCKING rule behind is
+   * refused outright by `merge_contact_rule_conflict`, so the clause below is
+   * never omitted over a do-not-contact or a route.)
+   */
+  survivorHasRule = false,
 ): string {
+  const moves = survivorHasRule
+    ? "seats, channels and firm designations"
+    : "seats, channels, contact rule and firm designations";
+  const ruleStays = survivorHasRule
+    ? `${survivorName}’s own contact rule stands, and ${mergedName}’s stays on the folded card as a record. `
+    : "";
   return (
-    `${mergedName}’s seats, channels, contact rule and firm designations move onto ` +
+    `${mergedName}’s ${moves} move onto ` +
     `${survivorName}, and ${mergedName}’s own number and address travel with them. ` +
+    ruleStays +
     `Consent stays with the number, not with the card, so nobody’s yes or no changes. ` +
     `${mergedName}’s paper moves onto ${survivorName} too; where ` +
     `${survivorName} already holds the same paper, still in force, the older one is marked superseded. ` +
@@ -358,7 +375,11 @@ export function CompareMergeSheet({
           data-merge-consequence
           className="t-body-sm mt-4 text-[var(--ink-subtle)]"
         >
-          {mergeConsequenceSentence(survivorName, mergedName)}
+          {mergeConsequenceSentence(
+            survivorName,
+            mergedName,
+            !!(survivorId && ruleIndex.get(survivorId)),
+          )}
         </p>
 
         <DocumentActionRow

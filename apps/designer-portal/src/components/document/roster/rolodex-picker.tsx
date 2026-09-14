@@ -47,6 +47,7 @@ import {
   useOrganizations,
   useProjectRecordedStudio,
   useProjectRoster,
+  useProjects,
   usePeopleDirectory,
   useStudioContactHistory,
   useStudioContacts,
@@ -60,7 +61,6 @@ import {
   bringForwardActLabel,
   bringForwardConsequence,
   bringForwardSelectionLine,
-  carriedConsentNotice,
   pickerHistoryLine,
   type BringForwardRowFacts,
 } from '@/lib/document/bring-forward';
@@ -76,6 +76,7 @@ import {
   contactRuleIsHardBlock,
   indexContactRules,
 } from '@/lib/document/contact-rule';
+import { consentSentence } from '../people/consent-sentence';
 import { DocSheet } from '../overlays/doc-sheet';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
 import { TradeChipRow } from '../people/directory/trade-chip-row';
@@ -338,6 +339,27 @@ export function RolodexPicker({
   const consentByValue = useMemo(
     () => new Map((consentRecords ?? []).map((r) => [r.channel_value, r])),
     [consentRecords],
+  );
+  /**
+   * R-Q's job clause, at the pick (r4 code MAJOR-1 / QA finding 1). The record
+   * carries `origin_project_id` — the job the refusal was recorded on — and
+   * the mini row hardcoded `null` in its place, so ", on the Lindqvist
+   * kitchen" could never print here while the Directory row, the roster row
+   * and the person card all printed it off the same record. Same read the
+   * roster row already makes (`useProjects`, roster-row.tsx).
+   */
+  const { data: projectsForOrigin } = useProjects();
+  const projectNameById = useMemo(
+    () =>
+      new Map(
+        (
+          (projectsForOrigin ?? []) as Array<{
+            id: string;
+            name?: string | null;
+          }>
+        ).map((p) => [p.id, p.name ?? null] as const),
+      ),
+    [projectsForOrigin],
   );
   const firmIds = useMemo(
     () =>
@@ -772,10 +794,14 @@ export function RolodexPicker({
                 // reads it before the seat exists.
                 const carried =
                   words?.consent_status === 'opted_out'
-                    ? carriedConsentNotice({
+                    ? consentSentence({
+                        status: 'opted_out',
                         optOutSource: record?.opt_out_source,
                         optOutAt: record?.opt_out_at,
-                        originProjectName: null,
+                        projectName: record?.origin_project_id
+                          ? (projectNameById.get(record.origin_project_id) ??
+                            null)
+                          : null,
                       })
                     : null;
                 const paperClause = paperClauseFor(c);

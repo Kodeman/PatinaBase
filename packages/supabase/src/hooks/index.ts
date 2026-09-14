@@ -2208,6 +2208,8 @@ export {
   studioContactMergeKeys,
   useStudioContactMerges,
   useMergeStudioContacts,
+  resolvedContactKeys,
+  useResolvedContactId,
   complianceNoticeKeys,
   useComplianceNotices,
   indexComplianceNotices,

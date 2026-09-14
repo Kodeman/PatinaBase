@@ -16,6 +16,8 @@ const mockReplace = jest.fn();
 /** CR9-1 — the seat the stubbed person card hands back to the Room. */
 const seatToOpen: { current: Record<string, unknown> } = { current: {} };
 const mockPush = jest.fn();
+/** What resolve_merged_contact() answers; null means "itself". */
+const mergedSurvivor: { current: string | null } = { current: null };
 jest.mock("next/navigation", () => ({
   useRouter: () => ({ push: mockPush, replace: mockReplace }),
 }));
@@ -54,6 +56,14 @@ jest.mock("@patina/supabase", () => ({
   // CR-1: the promote band resolves the studio from the SEAT's project
   // (project_recorded_studio), never from the membership list.
   useProjectRecordedStudio: () => ({ data: "org-1" }),
+  /**
+   * PR-o — `resolve_merged_contact()`, the forward map for an id that names a
+   * card folded into another one (r4 B-3). `mergedSurvivor` is what the RPC
+   * answers for whichever id the address handed it.
+   */
+  useResolvedContactId: (id: string | null) => ({
+    data: id ? (mergedSurvivor.current ?? id) : null,
+  }),
   isFieldRosterRole: (role: string | null | undefined) =>
     !!role && ["gc", "sub", "installer", "receiver"].includes(role),
 }));
@@ -135,6 +145,7 @@ beforeEach(() => {
   mockReplace.mockClear();
   mockPush.mockClear();
   seatToOpen.current = {};
+  mergedSurvivor.current = null;
   goTo("");
 });
 
@@ -187,6 +198,46 @@ describe("the address", () => {
       "data-firm",
       "firm-northgate",
     );
+  });
+
+  /**
+   * r4 B-3 / QA finding 3 — PR-o: BOTH IDS STAY RESOLVABLE, and the merge
+   * sheet says so on its face ("an old link still opens this person"). A
+   * merged-away card emits no directory row, so these two ids are absent from
+   * the book and only `resolve_merged_contact()` can answer them.
+   */
+  it("?person=<a merged card's id> opens the survivor's card", async () => {
+    mergedSurvivor.current = "card-dana";
+    goTo("?person=card-folded-away");
+    render(<PeopleRoom />);
+    await waitFor(() =>
+      expect(screen.getByTestId("person-card")).toHaveAttribute(
+        "data-person",
+        "card-dana",
+      ),
+    );
+  });
+
+  it("?firm=<a merged card's id> opens the surviving firm's card", async () => {
+    mergedSurvivor.current = "firm-northgate";
+    goTo("?firm=firm-folded-away");
+    render(<PeopleRoom />);
+    await waitFor(() =>
+      expect(screen.getByTestId("company-card")).toHaveAttribute(
+        "data-firm",
+        "firm-northgate",
+      ),
+    );
+  });
+
+  it("leaves the Directory standing where the id resolves to nothing the room carries", async () => {
+    mergedSurvivor.current = "card-not-in-the-book";
+    goTo("?person=card-folded-away");
+    render(<PeopleRoom />);
+    await waitFor(() =>
+      expect(screen.getByTestId("directory-view")).toBeInTheDocument(),
+    );
+    expect(screen.queryByTestId("person-card")).toBeNull();
   });
 
   /**

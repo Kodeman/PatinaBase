@@ -119,6 +119,23 @@ describe("mergeConsequenceSentence", () => {
     expect(sentence).toContain("an old link still opens this person");
     expect(sentence).not.toContain("both ways of reaching this person still work");
   });
+
+  // r4 B-2 — one rule row per subject, so the absorbed card's rule moves only
+  // where the survivor carries none. The sentence said it moved either way.
+  it("says the rule moves only where the survivor has none", () => {
+    const withRule = mergeConsequenceSentence(
+      "Adaeze Okonkwo",
+      "Chidi Okonkwo",
+      true,
+    );
+    expect(withRule).toContain("seats, channels and firm designations");
+    expect(withRule).not.toContain(
+      "seats, channels, contact rule and firm designations",
+    );
+    expect(withRule).toContain(
+      "Adaeze Okonkwo’s own contact rule stands, and Chidi Okonkwo’s stays on the folded card as a record.",
+    );
+  });
 });
 
 describe("CompareMergeSheet", () => {
