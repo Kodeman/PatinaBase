@@ -56,6 +56,10 @@ const timeKeys = {
     ['document-hours-project-studio', projectId] as const,
   entryNote: (entryId: string) => ['document-hours-entry-note', entryId] as const,
   studioUnbilled: () => ['desk-contents-unbilled-time'] as const,
+  /** The Hours sheet's own week read (`hours-ledger.tsx:239`), keyed
+   *  `['document-hours-week', weekOffset, lensProjectId]`. Mirrored here as a
+   *  PREFIX so one invalidation reaches every week and every lens. */
+  weekEntries: () => ['document-hours-week'] as const,
 };
 
 // ── Billing state (the server's verdict on an hour) ──
@@ -204,6 +208,22 @@ function invalidateProjectTime(queryClient: QueryClient, projectId: string) {
   queryClient.invalidateQueries({ queryKey: timeKeys.timeTracking(projectId) });
   queryClient.invalidateQueries({ queryKey: timeKeys.unbilledTime(projectId) });
   queryClient.invalidateQueries({ queryKey: timeKeys.keyMetrics(projectId) });
+  invalidateStudioTime(queryClient);
+}
+
+/**
+ * The reads an hour reaches whatever document it names — and the ONLY ones an
+ * internal hour reaches, because it names none (W4/HT-15, W7-R4-07).
+ *
+ * Before this existed the three mutations simply skipped invalidation on a
+ * project-less write, so a studio hour logged through the ⌘K verb left a
+ * standing scope lens, the studio rollup, the CSV/statement export and the
+ * Hours week showing the totals from before it. The Hours add row hid the
+ * defect by refetching its own three queries by hand; the ⌘K sheet closes on
+ * success and refetches nothing.
+ */
+function invalidateStudioTime(queryClient: QueryClient) {
+  // W2's ledger, studio rollup and project total all sit under 'time'.
   queryClient.invalidateQueries({ queryKey: timeKeys.all });
   // The Desk's one act-bearing line reads its own cross-project key, which sits
   // outside `timeKeys.all` because it predates the module's 'time' family. With
@@ -211,6 +231,9 @@ function invalidateProjectTime(queryClient: QueryClient, projectId: string) {
   // being offered "hours to bill →" and the click handed the composer entry ids
   // an invoice already claimed.
   queryClient.invalidateQueries({ queryKey: timeKeys.studioUnbilled() });
+  // The Hours sheet's week read, where an internal hour appears in the
+  // `— internal —` group.
+  queryClient.invalidateQueries({ queryKey: timeKeys.weekEntries() });
 }
 
 // ── Queries ──
@@ -498,11 +521,12 @@ export function useCreateTimeEntry(options?: { errorSurface?: 'inline' }) {
       if (error) throw error;
       return (Array.isArray(data) ? data[0] : data) as ProjectTimeEntry;
     },
-    // An internal hour belongs to no project cache. The studio-scoped reads it
-    // DOES belong to (`time_entry_ledger`, `studio_hours_rollup`) are keyed on
-    // their own params and refetched by their callers.
+    // An internal hour belongs to no project cache — but it does belong to the
+    // studio-scoped reads, and they are not refetched by their callers on
+    // every door (W7-R4-07).
     onSuccess: (_, { projectId }) => {
       if (projectId) invalidateProjectTime(queryClient, projectId);
+      else invalidateStudioTime(queryClient);
     },
   });
 }
@@ -543,6 +567,7 @@ export function useUpdateTimeEntry(options?: { errorSurface?: 'inline' }) {
     },
     onSuccess: (_, { projectId }) => {
       if (projectId) invalidateProjectTime(queryClient, projectId);
+      else invalidateStudioTime(queryClient);
     },
   });
 }
@@ -559,9 +584,11 @@ export function useDeleteTimeEntry(options?: { errorSurface?: 'inline' }) {
       const { error } = await supabase.from('project_time_entries').delete().eq('id', id);
       if (error) throw error;
     },
-    // W4 (HT-15) — an internal hour has no project cache to invalidate.
+    // W4 (HT-15) — an internal hour has no project cache to invalidate, and the
+    // studio-scoped reads it DOES sit in still have to hear about it.
     onSuccess: (_, { projectId }) => {
       if (projectId) invalidateProjectTime(queryClient, projectId);
+      else invalidateStudioTime(queryClient);
     },
   });
 }

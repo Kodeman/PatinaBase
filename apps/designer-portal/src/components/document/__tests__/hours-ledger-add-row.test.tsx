@@ -509,4 +509,55 @@ describe('the Hours add row', () => {
     ).toBeInTheDocument();
     expect(screen.queryByText(/rate pending/)).not.toBeInTheDocument();
   });
+
+  /**
+   * W7-R4-12 — the ledger printed only three of 00595's nine source values and
+   * fell back to the RAW ENUM for the rest, so an internal hour read
+   * `internal`, a ⌘K hour `command_bar` and a Field hour `field_manual`: three
+   * database words in the designer's own ledger, one of them on a row this
+   * program introduced.
+   */
+  it.each([
+    ['internal', 'typed', true],
+    ['command_bar', 'typed', false],
+    ['field_manual', 'from the field', false],
+    ['field_visit', 'from a visit', false],
+    ['timer_auto', 'in hand', false],
+  ])(
+    'says how a %s hour was captured in words, never the enum',
+    async (source, label, internal) => {
+      weekRows = [
+        {
+          id: `entry-${source}`,
+          project_id: internal ? null : 'project-1',
+          project: internal ? null : { id: 'project-1', name: 'Ellsworth' },
+          user_id: 'me',
+          started_at: new Date().toISOString(),
+          duration_minutes: 45,
+          billable: false,
+          billing_state: 'nonbillable',
+          hourly_rate_cents: null,
+          rated_amount_cents: null,
+          rate_source: 'none',
+          rate_role: null,
+          activity: 'admin',
+          source,
+          invoice_id: null,
+          created_at: new Date().toISOString(),
+        },
+      ];
+      renderLedger();
+
+      await waitFor(() =>
+        expect(screen.getByText(new RegExp(label))).toBeInTheDocument(),
+      );
+      // Read the ROW, not the page: the internal group's own `— internal —`
+      // rule legitimately carries the word, and it is a heading, not a source.
+      const row = screen
+        .getByText(internal ? 'Studio time' : 'Ellsworth')
+        .closest('li') as HTMLElement;
+      expect(row.textContent).toMatch(new RegExp(label));
+      expect(row.textContent).not.toMatch(new RegExp(`\\b${source}\\b`));
+    },
+  );
 });

@@ -98,10 +98,29 @@ type AnyRecord = any;
 
 const getSupabase = () => createBrowserClient() as AnyRecord;
 
+/**
+ * How the hour was captured, in the ledger's own register (W7-R4-12).
+ *
+ * 00595 bought the whole nine-value vocabulary at once and the portal printed
+ * three of them, falling back to the RAW ENUM for the rest: an internal hour
+ * read `internal`, a ⌘K hour `command_bar`, a Field hour `field_manual` — and
+ * the first of those is a row this program introduced. Every value 00595
+ * carries is named here, including the two with no writer yet, so a door added
+ * later cannot put a database word in front of a designer.
+ */
 const SOURCE_LABEL: Record<string, string> = {
   timer_auto: "in hand",
   timer_manual: "timer",
   manual_entry: "typed",
+  // The ⌘K verb and the internal door are both hand-typed hours; what
+  // distinguishes them is said elsewhere on the row ("no document ·
+  // non-billable"), not twice.
+  command_bar: "typed",
+  internal: "typed",
+  field_visit: "from a visit",
+  field_manual: "from the field",
+  widget: "widget",
+  intent: "shortcut",
 };
 
 const TERRACOTTA_INK = "var(--color-terracotta-ink)";
