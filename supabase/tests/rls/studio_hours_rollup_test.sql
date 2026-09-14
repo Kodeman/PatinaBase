@@ -194,7 +194,7 @@ BEGIN
     FROM pg_proc AS routine
     CROSS JOIN LATERAL unnest(COALESCE(routine.proargnames, ARRAY[]::text[])) AS arg(arg_name)
     WHERE routine.oid IN (
-        to_regprocedure('public.studio_hours_rollup(uuid,date,date,text,uuid,uuid)'),
+        to_regprocedure('public.studio_hours_rollup(uuid,timestamptz,timestamptz,text,uuid,uuid)'),
         to_regprocedure('public.project_hours_total(uuid)')
       )
       AND lower(arg.arg_name) LIKE '%note%'
@@ -202,7 +202,7 @@ BEGIN
      'asserted on the TYPE, not on rows, so a filter cannot satisfy it';
 
   ASSERT NOT (SELECT prosecdef FROM pg_proc
-    WHERE oid = to_regprocedure('public.studio_hours_rollup(uuid,date,date,text,uuid,uuid)')),
+    WHERE oid = to_regprocedure('public.studio_hours_rollup(uuid,timestamptz,timestamptz,text,uuid,uuid)')),
     'FAIL a2 (HT-38): the studio rollup must be SECURITY INVOKER — the per-role '
     'cases below measure RLS, and a DEFINER rollup would make them all pass '
     'vacuously';

@@ -39,7 +39,39 @@
 -- Both functions here return totals; the rows come from 00604's view in the same
 -- sheet.
 --
--- Lineage: NEW functions. Nothing is redefined.
+-- ── P2-B1 / P2-n1 (integration round 2): THE WINDOW IS AN INSTANT RANGE ────
+-- `p_from` / `p_to` were `date`, and the CTE below filtered 00604's
+-- `ledger.day` — which is `(started_at AT TIME ZONE 'UTC')::date`. The Hours
+-- sheet's week, its `mine` read and its CSV window are the viewer's LOCAL
+-- Monday-to-Monday (weekRange() / isoDate() in hours-ledger.tsx), so the sheet
+-- asked two different questions under one caption. Measured on this program's
+-- stack from a CDT machine (UTC-5): two 90-minute entries filed by the timer at
+-- 21:34 and 22:34 on Sunday 13 Sep 2026 read `TODAY 3H 00M / WEEK 3H 00M` under
+-- `mine`, while studio_hours_rollup(studio,'2026-09-07','2026-09-13','member')
+-- returned 0 rows and the same call over '2026-09-13'..'2026-09-19' returned
+-- 180 min / 36000 cents. For any zone west of UTC there is a nightly band in
+-- which the UTC day is tomorrow's: on the last day of the week the hour leaves
+-- the week entirely, and the week's CSV and statement omit it.
+--
+-- HT-13-a closes this for DATE-ONLY entries (filed at noon UTC by
+-- startedAtFromDateValue) and declined a studio timezone; the TIMER stores the
+-- real instant and is the program's flagship capture door. So the smallest fix
+-- that keeps the timer's real time of day is taken here: the window is the same
+-- INSTANT range `mine` already uses. `p_from` and `p_to` are `timestamptz`,
+-- `p_from` INCLUSIVE and `p_to` EXCLUSIVE — `started_at >= p_from AND
+-- started_at < p_to` — which is exactly `.gte('started_at', weekStart).lt(
+-- 'started_at', weekEnd)` in the portal. A NULL bound is still unbounded.
+--
+-- WHAT THIS DOES NOT CLOSE, stated rather than discovered later: the `day` and
+-- `iso_week` BUCKET LABELS are still 00604's UTC derivation, so inside a now-
+-- correct window an evening entry is labelled under the next UTC day. That is a
+-- labelling question, not an omission or a money figure, and moving it needs the
+-- studio-timezone ruling HT-13-a declined. Recorded as P2-n1 in rulings.md.
+--
+-- Lineage: NEW functions. Nothing is redefined. (The DROP below is not a
+-- redefinition either: it removes the `(uuid, date, date, text, uuid, uuid)`
+-- overload this same file created before round 2, so a stack that already
+-- applied it does not keep two rollups.)
 -- P-4: no row is touched.
 --
 -- Adds GRANT/REVOKE → supabase/seed/00-legacy-grants.sql is regenerated
@@ -48,10 +80,15 @@
 
 BEGIN;
 
+-- P2-B1: the `date` window is gone. Dropped rather than left as an overload —
+-- two rollups differing only in bound type is the exact ambiguity a caller
+-- passing a bare '2026-09-07' string would resolve by accident.
+DROP FUNCTION IF EXISTS public.studio_hours_rollup(uuid, date, date, text, uuid, uuid);
+
 CREATE OR REPLACE FUNCTION public.studio_hours_rollup(
   p_studio_id  uuid,
-  p_from       date,
-  p_to         date,
+  p_from       timestamptz,          -- INCLUSIVE instant (P2-B1)
+  p_to         timestamptz,          -- EXCLUSIVE instant (P2-B1)
   p_group_by   text DEFAULT 'member',   -- 'member' | 'project' | 'day' | 'iso_week' | 'activity'
   p_user_id    uuid DEFAULT NULL,       -- the member scope
   p_project_id uuid DEFAULT NULL        -- the project scope
@@ -87,12 +124,18 @@ BEGIN
   WITH scoped AS (
     -- A NULL p_studio_id matches nothing (studio_id = NULL is never true), so a
     -- caller who has not chosen a studio gets an empty answer rather than an
-    -- error. A NULL date bound is unbounded on that side.
+    -- error. A NULL bound is unbounded on that side.
+    --
+    -- P2-B1: the window is the ROW'S OWN INSTANT, never 00604's UTC `day`
+    -- bucket — `p_from` inclusive, `p_to` exclusive, which is the range the
+    -- sheet's `mine` read already uses. Filtering `ledger.day` here asked a UTC
+    -- question of a local week and dropped every evening hour west of UTC on the
+    -- week's last day.
     SELECT ledger.*
     FROM public.time_entry_ledger AS ledger
     WHERE ledger.studio_id = p_studio_id
-      AND (p_from IS NULL OR ledger.day >= p_from)
-      AND (p_to   IS NULL OR ledger.day <= p_to)
+      AND (p_from IS NULL OR ledger.started_at >= p_from)
+      AND (p_to   IS NULL OR ledger.started_at <  p_to)
       -- A running timer has no duration yet: a total never counts an hour that
       -- has not finished. The running row is the desk's business (HT-7), and the
       -- sheet shows it as a row, never as money.
@@ -161,12 +204,12 @@ BEGIN
 END;
 $$;
 
-REVOKE EXECUTE ON FUNCTION public.studio_hours_rollup(uuid, date, date, text, uuid, uuid)
+REVOKE EXECUTE ON FUNCTION public.studio_hours_rollup(uuid, timestamptz, timestamptz, text, uuid, uuid)
   FROM PUBLIC, anon;
-GRANT  EXECUTE ON FUNCTION public.studio_hours_rollup(uuid, date, date, text, uuid, uuid)
+GRANT  EXECUTE ON FUNCTION public.studio_hours_rollup(uuid, timestamptz, timestamptz, text, uuid, uuid)
   TO authenticated;
 
-COMMENT ON FUNCTION public.studio_hours_rollup(uuid, date, date, text, uuid, uuid) IS
+COMMENT ON FUNCTION public.studio_hours_rollup(uuid, timestamptz, timestamptz, text, uuid, uuid) IS
   'HT-37 + HT-38: the studio scope''s aggregate, SECURITY INVOKER — RLS on '
   'project_time_entries (as narrowed by 00606) is the scope, so a plain member '
   'passing a colleague''s p_user_id gets nothing of his. Return shape frozen at '
@@ -273,7 +316,7 @@ BEGIN
     FROM pg_proc AS routine
     CROSS JOIN LATERAL unnest(COALESCE(routine.proargnames, ARRAY[]::text[])) AS arg(arg_name)
     WHERE routine.oid IN (
-        to_regprocedure('public.studio_hours_rollup(uuid,date,date,text,uuid,uuid)'),
+        to_regprocedure('public.studio_hours_rollup(uuid,timestamptz,timestamptz,text,uuid,uuid)'),
         to_regprocedure('public.project_hours_total(uuid)')
       )
       AND lower(arg.arg_name) LIKE '%note%'
@@ -281,7 +324,7 @@ BEGIN
 
   -- (b) HT-38: INVOKER for the studio rollup, DEFINER for the project total.
   ASSERT NOT (SELECT prosecdef FROM pg_proc
-    WHERE oid = to_regprocedure('public.studio_hours_rollup(uuid,date,date,text,uuid,uuid)')),
+    WHERE oid = to_regprocedure('public.studio_hours_rollup(uuid,timestamptz,timestamptz,text,uuid,uuid)')),
     '00607: studio_hours_rollup MUST be SECURITY INVOKER (HT-38) — a DEFINER '
     'rollup hands every caller the studio and its assert cannot be written';
   ASSERT (SELECT prosecdef FROM pg_proc
@@ -305,20 +348,20 @@ BEGIN
   ASSERT (
     SELECT prosrc LIKE '%''member'', ''project'', ''day'', ''iso_week'', ''activity''%'
     FROM pg_proc
-    WHERE oid = to_regprocedure('public.studio_hours_rollup(uuid,date,date,text,uuid,uuid)')
+    WHERE oid = to_regprocedure('public.studio_hours_rollup(uuid,timestamptz,timestamptz,text,uuid,uuid)')
   ), '00607: p_group_by must be validated against exactly the five ruled literals';
   ASSERT (
     SELECT prosrc NOT LIKE '%EXECUTE format%' AND prosrc NOT LIKE '%EXECUTE ''%'
     FROM pg_proc
-    WHERE oid = to_regprocedure('public.studio_hours_rollup(uuid,date,date,text,uuid,uuid)')
+    WHERE oid = to_regprocedure('public.studio_hours_rollup(uuid,timestamptz,timestamptz,text,uuid,uuid)')
   ), '00607: no dynamic SQL in the rollup';
 
   -- (e) grants, both directions (post-flip rule).
   ASSERT NOT has_function_privilege('anon',
-    'public.studio_hours_rollup(uuid,date,date,text,uuid,uuid)', 'EXECUTE'),
+    'public.studio_hours_rollup(uuid,timestamptz,timestamptz,text,uuid,uuid)', 'EXECUTE'),
     '00607: anon must not execute studio_hours_rollup';
   ASSERT has_function_privilege('authenticated',
-    'public.studio_hours_rollup(uuid,date,date,text,uuid,uuid)', 'EXECUTE'),
+    'public.studio_hours_rollup(uuid,timestamptz,timestamptz,text,uuid,uuid)', 'EXECUTE'),
     '00607: authenticated must execute studio_hours_rollup';
   ASSERT NOT has_function_privilege('anon',
     'public.project_hours_total(uuid)', 'EXECUTE'),
@@ -329,11 +372,37 @@ BEGIN
 
   -- (f) the signature is the plan's, argument for argument.
   SELECT pg_get_function_identity_arguments(
-    to_regprocedure('public.studio_hours_rollup(uuid,date,date,text,uuid,uuid)')
+    to_regprocedure('public.studio_hours_rollup(uuid,timestamptz,timestamptz,text,uuid,uuid)')
   ) INTO v_args;
-  ASSERT v_args = 'p_studio_id uuid, p_from date, p_to date, p_group_by text, '
+  ASSERT v_args = 'p_studio_id uuid, p_from timestamp with time zone, '
+                  'p_to timestamp with time zone, p_group_by text, '
                   'p_user_id uuid, p_project_id uuid',
-    '00607: studio_hours_rollup''s signature drifted from plan-v2 §3; got ' || v_args;
+    '00607: studio_hours_rollup''s signature drifted from plan-v2 §3 as amended '
+    'by P2-B1 (the window is an instant range, not a date range); got ' || v_args;
+
+  -- (h) P2-B1: the window is the row's own instant. A `ledger.day` comparison
+  --     here is the defect itself — a UTC question asked of the viewer's local
+  --     week, which drops every evening hour west of UTC on the week's last day
+  --     and omits it from the week's CSV and statement.
+  ASSERT (
+    SELECT prosrc LIKE '%ledger.started_at >= p_from%'
+       AND prosrc LIKE '%ledger.started_at <  p_to%'
+    FROM pg_proc
+    WHERE oid = to_regprocedure('public.studio_hours_rollup(uuid,timestamptz,timestamptz,text,uuid,uuid)')
+  ), '00607: the rollup window must compare ledger.started_at against the '
+     'instant bounds (P2-B1), p_from inclusive and p_to exclusive — the same '
+     'range the Hours sheet''s `mine` read uses';
+  ASSERT (
+    SELECT prosrc NOT LIKE '%ledger.day >=%' AND prosrc NOT LIKE '%ledger.day <=%'
+    FROM pg_proc
+    WHERE oid = to_regprocedure('public.studio_hours_rollup(uuid,timestamptz,timestamptz,text,uuid,uuid)')
+  ), '00607: ledger.day is a UTC BUCKET LABEL, never the window (P2-B1)';
+
+  -- (i) P2-B1: and no `date` overload survives beside it.
+  ASSERT to_regprocedure('public.studio_hours_rollup(uuid,date,date,text,uuid,uuid)') IS NULL,
+    '00607: the (uuid, date, date, text, uuid, uuid) rollup must not exist '
+    'alongside the instant one — two bounds types is an ambiguity a caller '
+    'passing a bare date string resolves by accident (P2-B1)';
 
   -- (g) W2-R2-01: the standing assert's third leg is the PRICING studio, and it
   --     reads organization_members through nothing but that one call. A leg that

@@ -1173,7 +1173,7 @@ BEGIN
   --     internal_minutes FILTER already carries 00607's project_id IS NULL leg,
   --     and its studio filter reads the view column (d) just widened.
   SELECT prosrc INTO v_rollup FROM pg_proc
-   WHERE oid = to_regprocedure('public.studio_hours_rollup(uuid,date,date,text,uuid,uuid)');
+   WHERE oid = to_regprocedure('public.studio_hours_rollup(uuid,timestamptz,timestamptz,text,uuid,uuid)');
   ASSERT v_rollup LIKE '%ledger.studio_id = p_studio_id%',
     '00613: the rollup must still scope on ledger.studio_id — the internal hour '
     'reaches it through the view, not through a second filter';
@@ -1181,7 +1181,7 @@ BEGIN
     '00613: 00607''s internal_minutes FILTER must still carry the project_id IS '
     'NULL leg — it stops being a fail-safe and starts being the arithmetic';
   ASSERT NOT (SELECT prosecdef FROM pg_proc
-    WHERE oid = to_regprocedure('public.studio_hours_rollup(uuid,date,date,text,uuid,uuid)')),
+    WHERE oid = to_regprocedure('public.studio_hours_rollup(uuid,timestamptz,timestamptz,text,uuid,uuid)')),
     '00613: studio_hours_rollup must stay SECURITY INVOKER (HT-38, §0.9)';
 
   -- (f) the margins exclude the project-less hour, and nothing else moved.

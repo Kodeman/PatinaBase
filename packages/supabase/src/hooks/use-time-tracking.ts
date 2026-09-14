@@ -929,7 +929,13 @@ export interface TimeEntryLedgerParams {
   userId?: string | null;
   /** The project scope. */
   projectId?: string | null;
-  /** Inclusive ISO date bounds on the UTC day bucket. */
+  /**
+   * P2-B1 — the window is an INSTANT range on `started_at`, not 00604's UTC
+   * `day` bucket: `from` INCLUSIVE, `to` EXCLUSIVE, both ISO timestamps. The
+   * caller's week is its own local Monday-to-Monday; filtering the UTC day
+   * bucket asked a different question of it and dropped every evening hour
+   * west of UTC on the week's last day.
+   */
   from?: string | null;
   to?: string | null;
   /** Running timers are included by default — the sheet shows them as rows. */
@@ -957,8 +963,10 @@ export function useTimeEntryLedger(params: TimeEntryLedgerParams = {}) {
       if (studioId) query = query.eq('studio_id', studioId);
       if (userId) query = query.eq('user_id', userId);
       if (projectId) query = query.eq('project_id', projectId);
-      if (from) query = query.gte('day', from);
-      if (to) query = query.lte('day', to);
+      // P2-B1: the row's own instant, `to` exclusive — the same range the
+      // Hours sheet's `mine` read uses. Never `day`, which is UTC.
+      if (from) query = query.gte('started_at', from);
+      if (to) query = query.lt('started_at', to);
       if (!includeRunning) query = query.eq('is_running', false);
       if (limit) query = query.limit(limit);
 
@@ -974,7 +982,11 @@ export type TimeHoursGroupBy = 'member' | 'project' | 'day' | 'iso_week' | 'acti
 
 export interface StudioHoursRollupParams {
   studioId: string | null;
-  /** Inclusive ISO date bounds. */
+  /**
+   * P2-B1 — ISO INSTANTS, `from` inclusive and `to` exclusive. 00607 compares
+   * them against `started_at`; a bare calendar date here would be read as UTC
+   * midnight and shift the window by the caller's own offset.
+   */
   from: string;
   to: string;
   groupBy?: TimeHoursGroupBy;

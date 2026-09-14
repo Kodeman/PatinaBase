@@ -15764,13 +15764,13 @@ END $g$;
 
 -- 00607_studio_hours_rollup.sql
 DO $g$ BEGIN
-  REVOKE EXECUTE ON FUNCTION public.studio_hours_rollup(uuid, date, date, text, uuid, uuid) FROM PUBLIC, anon;
+  REVOKE EXECUTE ON FUNCTION public.studio_hours_rollup(uuid, timestamptz, timestamptz, text, uuid, uuid) FROM PUBLIC, anon;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
 -- 00607_studio_hours_rollup.sql
 DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.studio_hours_rollup(uuid, date, date, text, uuid, uuid) TO authenticated;
+  GRANT EXECUTE ON FUNCTION public.studio_hours_rollup(uuid, timestamptz, timestamptz, text, uuid, uuid) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
