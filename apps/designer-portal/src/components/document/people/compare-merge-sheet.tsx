@@ -28,6 +28,7 @@ import {
   useMergeStudioContacts,
   usePeopleSeats,
   useStudioContact,
+  useStudioContacts,
   useStudioContactChannelsFor,
   type MergeMatchedOn,
   type StudioContact,
@@ -149,9 +150,15 @@ interface FieldRow {
  * Rendered only where at least one card holds the fact, so the ordinary
  * duplicate — two thin cards sharing a phone — still shows nine rows.
  */
-function carriedRows(
+export function carriedRows(
   a: StudioContact | null | undefined,
   b: StudioContact | null | undefined,
+  /**
+   * r7 B-1 — the three designations are stored as person-card ids, and the
+   * sheet may not print an id. The book the two cards live in resolves them,
+   * exactly as `company-card.tsx` resolves the same three.
+   */
+  namesById: ReadonlyMap<string, string> = new Map(),
 ): FieldRow[] {
   const text = (value: string | null | undefined) =>
     (value ?? "").trim() || null;
@@ -161,6 +168,10 @@ function carriedRows(
     value == null ? null : `${(value / 100).toFixed(2).replace(/\.00$/, "")}%`;
   const taxId = (value: string | null | undefined) =>
     text(value) ? `••• ${String(value).trim()}` : null;
+  const person = (
+    id: string | null | undefined,
+    names: ReadonlyMap<string, string>,
+  ) => (id ? (names.get(id) ?? "On file") : null);
 
   const fields: Array<[string, (card: StudioContact) => string | null]> = [
     ["Verdict", (card) => text(card.studio_verdict)],
@@ -179,6 +190,22 @@ function carriedRows(
     // (person-profile.tsx:381/:423/:577). A fact the merge decides belongs in
     // the table the studio decides it from (R-BN).
     ["Sole proprietor", (card) => (card.is_sole_proprietor ? "Yes" : null)],
+    // r7 B-1 — THE THREE DESIGNATIONS THE CARD ITSELF HOLDS.
+    //
+    // 00629's COALESCE statement now carries them onto the survivor, so which
+    // card survives decides which of two paperwork contacts, signers or site
+    // contacts the room keeps — and the sheet's own consequence sentence says
+    // out loud that "firm designations move onto <survivor>". A fact the merge
+    // decides belongs in the table the studio decides it from (R-BN). The
+    // Directory firm row's payee marker reads `signer_person_id` directly, and
+    // "Chase the renewal" reads `paperwork_contact_person_id` directly, so a
+    // blank one is a blank face.
+    [
+      "Paperwork contact",
+      (card) => person(card.paperwork_contact_person_id, namesById),
+    ],
+    ["Signer", (card) => person(card.signer_person_id, namesById)],
+    ["Site contact", (card) => person(card.site_contact_person_id, namesById)],
   ];
 
   const rows: FieldRow[] = [];
@@ -244,6 +271,39 @@ export function CompareMergeSheet({
   );
   const { data: seats } = usePeopleSeats(open ? { all: true } : undefined);
 
+  /**
+   * THE BOOK THE TWO CARDS LIVE IN — one read, two jobs (r7 MAJOR-1, r7 B-1).
+   *
+   * The FIRM row used to read `card.company_name`, which on a PERSON row is
+   * 00417's typed-by-hand snapshot that nothing since the affiliation model
+   * (00592) populates: measured, every carded human with a firm carries NULL
+   * there while their firm's own card holds the name. `people_directory`'s
+   * contact branch COALESCEs `sc.company_name → firm.company_name →
+   * firm.full_name`, so the Directory row, the person-card header and this
+   * wave's own picker all print "Northgate Electric" where this sheet printed
+   * "—" — the same mark the table uses for "not read". The sheet whose whole
+   * job is to show what each card holds before one folds may not assert an
+   * absence the record contradicts.
+   *
+   * The same read resolves the three designation ids to names, exactly as
+   * `company-card.tsx` does, and it is the same query key that card uses, so
+   * React Query serves both from one fetch.
+   */
+  const bookOrgId = left?.organization_id ?? right?.organization_id ?? null;
+  const { data: book } = useStudioContacts(open ? bookOrgId : null, {
+    includeArchived: true,
+  });
+  const namesById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const c of book ?? []) map.set(c.id, mergeCardName(c));
+    return map;
+  }, [book]);
+  const firmNameOf = (card: StudioContact | null | undefined): string => {
+    if (!card) return "—";
+    const resolved = card.company_id ? namesById.get(card.company_id) : null;
+    return resolved ?? (card.company_name?.trim() || "—");
+  };
+
   const seatCount = (cardId: string | null) =>
     cardId
       ? (seats ?? []).filter((seat) => seat.studio_contact_id === cardId).length
@@ -268,7 +328,7 @@ export function CompareMergeSheet({
       kind: card?.contact_kind
         ? getPartyKindLabel(card.contact_kind) || card.contact_kind
         : "—",
-      firm: card?.company_name ?? "—",
+      firm: firmNameOf(card),
       mobile:
         channelLine(id, ["mobile"]) !== "—"
           ? channelLine(id, ["mobile"])
@@ -299,7 +359,7 @@ export function CompareMergeSheet({
       { label: "Papers on file", a: a.paper, b: b.paper },
       { label: "Seats on jobs", a: a.seats, b: b.seats },
       { label: "In the book since", a: a.since, b: b.since },
-      ...carriedRows(left, right),
+      ...carriedRows(left, right, namesById),
     ];
     // `channelLine` and `seatCount` close over the same four queries the deps
     // below name, so listing them separately would only re-run the same work.
@@ -314,6 +374,7 @@ export function CompareMergeSheet({
     leftPaper,
     rightPaper,
     seats,
+    namesById,
   ]);
 
   const survivor = survivorId === rightId ? right : left;

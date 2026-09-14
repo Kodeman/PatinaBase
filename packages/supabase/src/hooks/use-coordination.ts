@@ -2324,7 +2324,39 @@ export interface SetPartyBidInput {
   id: string;
   projectId: string;
   patch: Partial<Omit<SeatBid, 'seatId'>>;
+  /**
+   * THE SEAT AS IT STANDS BEFORE THE SAVE — required, because the hook cannot
+   * otherwise tell a TRANSITION (the studio records an outcome) from a
+   * RE-SAVE (the studio corrects the estimator on a seat whose outcome has not
+   * moved), and those two writes must not do the same thing to `stage` and
+   * `off_job_at` (r7 BLOCKING-1).
+   */
+  previous: {
+    bidOutcome: SeatBidOutcome | null;
+    stage: string | null;
+  };
 }
+
+/**
+ * THE STAGES A SEAT REACHES BY WORKING, not by an outcome being recorded.
+ *
+ * `SEAT_BID_OUTCOME_STAGE` maps `selected -> awarded`, and the editor is
+ * offered on any seat carrying a bid — including one that has since been
+ * mobilized and is on site. Re-applying the outcome's stage there writes
+ * `awarded` over `active`, and `SEAT_STAGE_TO_WORD` / `SEAT_STAGE_WORD_PIGMENTS`
+ * then flip the person card's and the Directory's seat line from "On the job"
+ * (current) to "Awarded" (pending) for a crew that is on site.
+ *
+ * `withdrawn` is the one outcome that legitimately reaches past these: a seat
+ * that left the job left it, whatever stage it had reached.
+ */
+const SEAT_STAGES_PAST_THE_BID: readonly string[] = [
+  'mobilized',
+  'active',
+  'closeout',
+  'warranty',
+  'retired',
+];
 
 export const partyBidKeys = {
   all: ['project-party-bids'] as const,
@@ -2405,11 +2437,22 @@ export function useProjectPartyBids(projectId: string | null | undefined) {
  * The outcome IS the stage word (SEAT_BID_OUTCOME_STAGE): writing "they
  * declined" without moving the stage would leave a losing bidder sitting in a
  * crew band, which is the one thing §3.4 asks the Bidding band to prevent.
+ *
+ * r7 BLOCKING-1 — BUT ONLY WHEN THE OUTCOME ACTUALLY MOVED. `saveBid` always
+ * sends `bidOutcome`, seeded from the row's EXISTING outcome, and the editor
+ * is offered on any seat carrying a bid — so correcting "Who priced it" or
+ * "The number holds until" on an awarded seat that has since gone to work
+ * re-applied `stage = 'awarded'` over `mobilized` / `active` / `closeout` /
+ * `warranty`, and re-saving a Done row weeks later re-stamped `off_job_at`
+ * with today, moving the recorded day the seat left the job (which
+ * `rosterWindowClause` prints in the Done band). Two guards, both keyed on the
+ * seat as it stood before the save: the outcome must have CHANGED, and the
+ * stage it would write may not regress a seat that is already past the bid.
  */
 export function useSetPartyBid() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, patch }: SetPartyBidInput): Promise<ProjectParty> => {
+    mutationFn: async ({ id, patch, previous }: SetPartyBidInput): Promise<ProjectParty> => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
       const dbPatch: Record<string, unknown> = {};
@@ -2431,11 +2474,24 @@ export function useSetPartyBid() {
         dbPatch.bid_selected_at = patch.bidSelectedAt || null;
       if (patch.bidOutcome !== undefined) {
         dbPatch.bid_outcome = patch.bidOutcome ?? null;
-        if (patch.bidOutcome) {
-          dbPatch.stage = SEAT_BID_OUTCOME_STAGE[patch.bidOutcome];
+        const moved = (patch.bidOutcome ?? null) !== (previous.bidOutcome ?? null);
+        if (patch.bidOutcome && moved) {
+          const nextStage = SEAT_BID_OUTCOME_STAGE[patch.bidOutcome];
+          const pastTheBid = SEAT_STAGES_PAST_THE_BID.includes(
+            previous.stage ?? '',
+          );
+          // A seat that is mobilized, on site, closing out or under warranty
+          // is past the bidding lifecycle: an outcome correction records what
+          // came back, it does not send the crew home. "They withdrew" is the
+          // one outcome that does.
+          if (!pastTheBid || patch.bidOutcome === 'withdrawn') {
+            dbPatch.stage = nextStage;
+          }
           // "They withdrew" is a seat leaving the job, and every other door
           // that closes a seat dates it. A Done row with no date reads as a
-          // row somebody forgot.
+          // row somebody forgot — but the date is stamped on the TRANSITION
+          // into `withdrawn` only, so a later correction on that row leaves
+          // the day the seat actually left the job alone.
           if (patch.bidOutcome === 'withdrawn') {
             dbPatch.off_job_at = new Date().toISOString().slice(0, 10);
           }

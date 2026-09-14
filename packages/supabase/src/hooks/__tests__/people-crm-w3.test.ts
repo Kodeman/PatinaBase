@@ -213,6 +213,7 @@ describe("the Bidding band writes a stage with its outcome", () => {
       id: "seat-1",
       projectId: "proj-1",
       patch: { bidOutcome: "withdrawn" },
+      previous: { bidOutcome: "selected", stage: "awarded" },
     });
     const patch = updated[0]?.payload ?? {};
     expect(patch.bid_outcome).toBe("withdrawn");
@@ -225,8 +226,53 @@ describe("the Bidding band writes a stage with its outcome", () => {
       id: "seat-1",
       projectId: "proj-1",
       patch: { bidDueAt: "2026-10-05" },
+      previous: { bidOutcome: "selected", stage: "awarded" },
     });
     expect(updated[0]?.payload).toEqual({ bid_due_at: "2026-10-05" });
+  });
+
+  /**
+   * r7 BLOCKING-1 — the editor is offered on any seat carrying a bid, and
+   * `saveBid` always re-sends the outcome it was seeded with. A correction is
+   * not a transition.
+   */
+  it("writes no stage and no date when the outcome did not move", async () => {
+    await mutationFnOf(useSetPartyBid())({
+      id: "seat-1",
+      projectId: "proj-1",
+      patch: { bidOutcome: "withdrawn", bidQuotedByPersonId: "person-1" },
+      previous: { bidOutcome: "withdrawn", stage: "off_job" },
+    });
+    const patch = updated[0]?.payload ?? {};
+    expect(patch.bid_outcome).toBe("withdrawn");
+    expect(patch.stage).toBeUndefined();
+    expect(patch.off_job_at).toBeUndefined();
+  });
+
+  it("never regresses a seat that is already past the bid", async () => {
+    await mutationFnOf(useSetPartyBid())({
+      id: "seat-1",
+      projectId: "proj-1",
+      patch: { bidOutcome: "selected" },
+      previous: { bidOutcome: "quoted", stage: "active" },
+    });
+    const patch = updated[0]?.payload ?? {};
+    expect(patch.bid_outcome).toBe("selected");
+    // `awarded` over `active` flips the seat line from "On the job" to
+    // "Awarded" for a crew that is on site.
+    expect(patch.stage).toBeUndefined();
+  });
+
+  it("still takes a crew off the job when they withdraw", async () => {
+    await mutationFnOf(useSetPartyBid())({
+      id: "seat-1",
+      projectId: "proj-1",
+      patch: { bidOutcome: "withdrawn" },
+      previous: { bidOutcome: "selected", stage: "active" },
+    });
+    const patch = updated[0]?.payload ?? {};
+    expect(patch.stage).toBe("off_job");
+    expect(patch.off_job_at).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 
   it("renders 00631’s guards as sentences", () => {

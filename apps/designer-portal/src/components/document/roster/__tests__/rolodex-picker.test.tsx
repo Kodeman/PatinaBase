@@ -609,6 +609,66 @@ describe('RolodexPicker — bring forward', () => {
     expect(consequence).not.toContain('Rosa Martínez’s insurance');
   });
 
+  /**
+   * r7 MAJOR-2 — the trade chip filtered on `specialties` while the mini row
+   * printed the FIRM's `trades[]`, so pressing the trade the row itself named
+   * emptied the sheet: "– No one by that name in the rolodex." over a book
+   * holding nine subs.
+   */
+  it('finds a card by the trade its FIRM carries, which is the trade the row prints', () => {
+    const DANA: StudioContact = {
+      ...ROSA,
+      id: 'contact-dana',
+      full_name: 'Dana Kowalski',
+      company_name: null,
+      company_id: 'firm-northgate',
+      specialties: [],
+    };
+    const NORTHGATE = {
+      ...ROSA,
+      id: 'firm-northgate',
+      entity_kind: 'company' as const,
+      contact_kind: 'sub',
+      full_name: null,
+      company_name: 'Northgate Electric',
+      company_id: null,
+      specialties: [],
+      trades: ['electrical'],
+    } as unknown as StudioContact;
+    useStudioContacts.mockReturnValue({
+      data: [DANA, NORTHGATE],
+      isLoading: false,
+    });
+    directoryRows = [
+      {
+        person_id: 'contact-dana',
+        reach_state: 'on_paper',
+        consent_status: 'not_asked',
+        paper_state: 'not_on_file',
+        contact_rule_summary: null,
+        meta: {
+          company_id: 'firm-northgate',
+          company_name: 'Northgate Electric',
+        },
+      },
+    ];
+    render(<RolodexPicker {...props} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Subcontractor' }));
+    // what the row prints, before any trade is chosen
+    expect(
+      document.querySelector('[data-party-mini-meta]')?.textContent,
+    ).toBe('Subcontractor · Northgate Electric · Electrical');
+
+    fireEvent.click(screen.getByRole('button', { name: 'electrical' }));
+    expect(
+      screen.getByRole('checkbox', { name: /Dana Kowalski/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText('– No one by that name in the rolodex.'),
+    ).not.toBeInTheDocument();
+  });
+
   it('seats every ticked row in ONE confirm, carrying the card', async () => {
     useStudioContacts.mockReturnValue({ data: [ROSA, PETE], isLoading: false });
     bringForwardMutate.mockResolvedValue({

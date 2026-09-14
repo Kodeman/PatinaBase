@@ -95,6 +95,31 @@ const HISTORY_PAGE = 40;
 const HISTORY_SCAN = 200;
 
 /**
+ * EVERY TRADE A CARD ANSWERS TO, in one place, so the trade chip and the mini
+ * row can never disagree (r7 MAJOR-2).
+ *
+ * Own card first, then the FIRM's own card, then the legacy vendor column — a
+ * `sub` / `gc` / `installer` card's trade is PR-f's widened `trades[]` and on
+ * the local book it lives on the firm, while a `vendor` card really does keep
+ * its trade in `specialties`, which is what the last leg preserves. The list
+ * is the SET a chip may match; `tradeFor` prints its first member.
+ */
+function tradesOfCard(
+  contact: StudioContact,
+  firmCardById: ReadonlyMap<string, StudioContact>,
+): string[] {
+  const own = (contact.trades ?? []).filter((t): t is string => !!t?.trim());
+  if (own.length > 0) return own;
+  const firmId = contact.company_id ?? null;
+  const firm = firmId ? firmCardById.get(firmId) : undefined;
+  const firmTrades = (firm?.trades ?? []).filter(
+    (t): t is string => !!t?.trim(),
+  );
+  if (firmTrades.length > 0) return firmTrades;
+  return (contact.specialties ?? []).filter((t): t is string => !!t?.trim());
+}
+
+/**
  * The picker's default kind vocabulary. Every PartyKind the party CHECK admits
  * EXCEPT 'client': a project's client is set when the project is opened, not
  * picked out of a trade rolodex.
@@ -277,14 +302,30 @@ export function RolodexPicker({
   const { data: contactRules } = useContactRules();
   const ruleIndex = useMemo(() => indexContactRules(contactRules), [contactRules]);
 
-  /** The cards whose history the search may read. Capped, like the page. */
+  /**
+   * The cards whose history the search may read. Capped, like the page.
+   *
+   * r7 MAJOR-2 — THE CHIP FILTERS THROUGH THE SAME RESOLVER THE ROW PRINTS.
+   *
+   * This narrowed on `specialties`, which is 00417's VENDOR-specialty column,
+   * while the mini row below prints `tradeFor` — own `trades[]`, then the FIRM
+   * card's `trades[]`, then the legacy `specialties[]`. Measured: Dana
+   * Kowalski carries `trades {}` / `specialties {}` with `company_id` naming
+   * Northgate Electric, whose card carries `trades {electrical}`. So the row
+   * printed "SUBCONTRACTOR · NORTHGATE ELECTRIC · ELECTRICAL" and pressing
+   * Subcontractor + Electrical returned zero hits — "– No one by that name in
+   * the rolodex." over a book holding nine subs. Before this wave the row
+   * printed `specialties[0]`, which was empty and therefore AGREED with the
+   * filter; the wave taught the row to read the firm's trade and left the
+   * filter behind, so the picker denied a fact it printed.
+   */
   const scanned = useMemo(() => {
     let rows = contacts ?? [];
     if (trade !== 'all') {
-      rows = rows.filter((c) => (c.specialties ?? []).includes(trade));
+      rows = rows.filter((c) => tradesOfCard(c, firmCardById).includes(trade));
     }
     return rows.slice(0, HISTORY_SCAN);
-  }, [contacts, trade]);
+  }, [contacts, trade, firmCardById]);
 
   // MAJOR-5: a PRIOR job is one that is not this one. The picker lists cards
   // already seated here (it refuses them at the press, not in the list), so an
@@ -477,15 +518,8 @@ export function RolodexPicker({
    * Own card first, then the firm's own card, then the legacy vendor column,
    * so the vendor case keeps the answer it already had.
    */
-  const tradeFor = (contact: StudioContact): string | null => {
-    const own = contact.trades?.find((t) => t?.trim());
-    if (own) return own;
-    const firmId = contact.company_id ?? null;
-    const firm = firmId ? firmCardById.get(firmId) : undefined;
-    const firmTrade = firm?.trades?.find((t) => t?.trim());
-    if (firmTrade) return firmTrade;
-    return contact.specialties?.find((s) => s?.trim()) ?? null;
-  };
+  const tradeFor = (contact: StudioContact): string | null =>
+    tradesOfCard(contact, firmCardById)[0] ?? null;
 
   const paperClauseFor = (contact: StudioContact) =>
     noticedPaperClause(

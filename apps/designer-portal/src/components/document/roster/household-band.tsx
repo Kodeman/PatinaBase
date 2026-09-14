@@ -97,6 +97,13 @@ export function parseThresholdEntry(entry: string): number | null {
   return Math.round(dollars * 100);
 }
 
+/**
+ * PR-n's standing reason on the one act that mints a money grant (r7 MAJOR-3).
+ * The same voice as `household-figure-held` beside the two figure acts.
+ */
+export const HOUSEHOLD_ADD_HELD_REASON =
+  "Adding someone who signs for the household is the principal’s to do while a change-order figure stands. An owner or an admin of the studio can write it — or add them as “decides the work” instead.";
+
 /** The refusal, in the room's words rather than a validation token. */
 export const HOUSEHOLD_FIGURE_REFUSAL =
   "Write the change-order figure in dollars — 2500, or 2,500. To take the figure away, use “Take the figure away”.";
@@ -147,13 +154,42 @@ export function householdMemberConsequence(
   role: HouseholdMemberRole,
   projectName: string | null | undefined,
   thresholdCents: number | null | undefined,
+  /**
+   * r7 MAJOR-3 (PR-n) — is this caller the principal?
+   *
+   * `add_household_member()` raises `household_grant_forbidden` for the WHOLE
+   * act — the membership and the seat roll back with the grant — whenever the
+   * household carries a figure and the role is `client_rep`, and `client_rep`
+   * is this band's default role. So for a plain studio member every press
+   * failed, beside a sentence promising the very grant the database was about
+   * to refuse. The act is held with the standing reason in that state, and the
+   * money clause comes off the sentence: a promise no press can keep.
+   */
+  canGrant = true,
 ): string {
   const job = (projectName ?? "").trim();
   const where = job ? ` on the ${job}` : "";
   const money = formatMoneyFromCents(thresholdCents);
   const grant =
-    role === "client_rep" && money ? ` They may sign money to ${money}.` : "";
+    role === "client_rep" && money && canGrant
+      ? ` They may sign money to ${money}.`
+      : "";
   return `${name} joins the household and takes a seat${where}.${grant} Nothing is sent to them.`;
+}
+
+/**
+ * THE ONE STATE IN WHICH "Add to the household" CANNOT BE PRESSED (PR-n).
+ *
+ * Mirrors `add_household_member()`'s own grant leg (00632:395-400): a figure on
+ * the household, the `client_rep` role, and a caller who is not an owner or an
+ * admin of the studio.
+ */
+export function householdAddIsHeld(
+  isPrincipal: boolean,
+  thresholdCents: number | null | undefined,
+  role: HouseholdMemberRole,
+): boolean {
+  return !isPrincipal && thresholdCents != null && role === "client_rep";
 }
 
 export function HouseholdBand({
@@ -220,6 +256,15 @@ export function HouseholdBand({
 
   const chosenName =
     candidates.find((c) => c.id === personId)?.name ?? "This person";
+
+  /**
+   * r7 MAJOR-3 — PR-n, stated before the press rather than after the refusal.
+   */
+  const addHeld = householdAddIsHeld(
+    isPrincipal,
+    household?.co_threshold_cents ?? null,
+    role,
+  );
 
   /**
    * MAJOR-2 (code review r3) — the act may not mint a household the band
@@ -599,8 +644,19 @@ export function HouseholdBand({
               role,
               projectName,
               household.co_threshold_cents,
+              !addHeld,
             )}
           </p>
+
+          {/* The reason stands beside the act whether or not it is pressed. */}
+          {addHeld && (
+            <p
+              id="household-grant-held"
+              className="mt-1 text-[0.7rem] text-[var(--color-aged-oak)]"
+            >
+              {HOUSEHOLD_ADD_HELD_REASON}
+            </p>
+          )}
 
           <DocumentActionRow
             surfaceKey="call-sheet"
@@ -612,7 +668,10 @@ export function HouseholdBand({
               actionKey="add-household-member"
               variant="primary"
               onClick={() => void save()}
-              disabled={!personId || addMember.isPending}
+              disabled={addHeld || !personId || addMember.isPending}
+              held={addHeld}
+              aria-describedby={addHeld ? "household-grant-held" : undefined}
+              onHeldActivate={() => setError(HOUSEHOLD_ADD_HELD_REASON)}
               loading={addMember.isPending}
               loadingLabel="Adding…"
             >

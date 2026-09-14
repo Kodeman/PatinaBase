@@ -621,6 +621,26 @@ COMMENT ON FUNCTION public.link_rolodex_card_to_parties() IS
 --                                            calendar, with nobody writing
 --                                            anything at all.
 --
+-- r7 M-1 — AND FOUR MORE ARE EDIT-VARYING, WHICH IS THE SAME DEFECT BY A
+-- SECOND CLOCK. The trigger judges a row against ITS OWN successor and never
+-- against its predecessors, while `expires_on`, `blocks` and `doc_type` are
+-- all freely editable by any active studio member
+-- (studio_compliance_documents_member_update). So an ordinary, permitted edit
+-- to a RENEWAL leaves an existing supersede edge failing a leg that nothing
+-- re-checks — until merge_studio_contacts()'s holder-move statement re-judges
+-- it and loses the whole transaction. Measured, each reached by two ordinary
+-- member writes on a seeded firm pair:
+--
+--   shrink a renewal's blocks to {site_access}, then merge
+--     -> ERROR compliance_successor_drops_a_gate
+--   correct a renewal's expires_on earlier, then merge
+--     -> ERROR compliance_successor_not_later
+--
+-- compliance_successor_wrong_type and compliance_successor_undated are the
+-- same shape (edit the successor's doc_type, or clear its date). All four now
+-- take v_retiring, exactly as the two time-varying legs beside them do, and
+-- for the same reason.
+--
 -- So the ordinary firm merge — an absorbed card that has renewed its COI once,
 -- a survivor holding a current one — aborted outright: §5's compliance block
 -- moves the absorbed head, then walks the retired rows behind it, and the
@@ -634,21 +654,21 @@ COMMENT ON FUNCTION public.link_rolodex_card_to_parties() IS
 -- compliance_successor_already_lapsed instead, which is the commoner shape
 -- still (a firm card is folded away precisely because its paper stopped).
 --
--- The two legs guard an ACT: pointing a paper at its renewal. Re-running them
--- over an unchanged edge adds nothing, because R-BF already re-reckons both
--- facts at READ time — compliance_state()'s transitive walk drops a row from
--- the count only while a reachable successor is still IN FORCE and still
--- carries its gates, so a chain whose head has since lapsed is already counted
--- against the card whatever the trigger said when the edge was written. The
--- five STRUCTURAL legs — holder exists, holder kind, holder studio, successor
--- held for the SAME CARD, same doc_type, dates, gates — still run on every
--- write, so the r1 MAJOR-4 / r2 MAJOR-1 / r3 MAJOR-1 laundering doors stay
--- shut: each of those is written by CHANGING superseded_by, which is exactly
--- what v_retiring names.
+-- Every one of these six legs guards an ACT: pointing a paper at its renewal.
+-- Re-running them over an unchanged edge adds nothing, because R-BF already
+-- re-reckons both facts at READ time — compliance_state()'s transitive walk
+-- drops a row from the count only while a reachable successor is still IN
+-- FORCE and still carries its gates, so a chain whose head has since lapsed,
+-- shed a gate or changed type is already counted against the card whatever the
+-- trigger said when the edge was written. The FOUR STRUCTURAL legs — holder
+-- exists, holder kind, holder studio, and the successor being held for the
+-- SAME CARD in the SAME studio — still run on every write, so the r1 MAJOR-4 /
+-- r2 MAJOR-1 / r3 MAJOR-1 laundering doors stay shut: each of those is written
+-- by CHANGING superseded_by, which is exactly what v_retiring names.
 --
 -- Grafted from 00623:293-471 verbatim — same signature, same SECURITY DEFINER
 -- and search_path, same seven legs in the same order, every HINT byte for byte
--- — plus one boolean and two IF conditions. The trigger itself (00623) is not
+-- — plus one boolean and six IF conditions. The trigger itself (00623) is not
 -- re-issued: it already fires on the same seven columns.
 CREATE OR REPLACE FUNCTION public.assert_compliance_holder()
 RETURNS TRIGGER
@@ -711,13 +731,14 @@ BEGIN
     -- file (w1b final review r1 MAJOR-4). compliance_state() excludes every
     -- superseded row, so the successor must be the SAME paper, covering at
     -- least as long as the row it retires.
-    IF v_succ_type IS DISTINCT FROM NEW.doc_type THEN
+    IF v_retiring AND v_succ_type IS DISTINCT FROM NEW.doc_type THEN
       RAISE EXCEPTION 'compliance_successor_wrong_type'
         USING HINT = 'A renewal is the same paper: superseded_by must name a '
                      'document of the same doc_type. A W-9 does not renew a '
                      'COI, and pointing one at the other would hide a lapse.';
     END IF;
-    IF v_succ_expires IS NOT NULL
+    IF v_retiring
+       AND v_succ_expires IS NOT NULL
        AND NEW.expires_on IS NOT NULL
        AND v_succ_expires < NEW.expires_on THEN
       RAISE EXCEPTION 'compliance_successor_not_later'
@@ -749,7 +770,7 @@ BEGIN
     -- row can never read `lapsed` — compliance_state() counts only
     -- expires_on IS NOT NULL — so retiring one with another undated paper
     -- hides nothing and stays legitimate.)
-    IF NEW.expires_on IS NOT NULL AND v_succ_expires IS NULL THEN
+    IF v_retiring AND NEW.expires_on IS NOT NULL AND v_succ_expires IS NULL THEN
       RAISE EXCEPTION 'compliance_successor_undated'
         USING HINT = 'A DATED paper may only be retired by a dated one: this '
                      'row carries an expires_on, so its renewal must carry '
@@ -820,7 +841,7 @@ BEGIN
                      'its own, prints `current` over a firm with no cover.';
     END IF;
 
-    IF NOT (NEW.blocks <@ v_succ_blocks) THEN
+    IF v_retiring AND NOT (NEW.blocks <@ v_succ_blocks) THEN
       RAISE EXCEPTION 'compliance_successor_drops_a_gate'
         USING HINT = 'A renewal carries at least the gates of the paper it '
                      'retires: superseded_by must name a document whose '
@@ -876,6 +897,164 @@ COMMENT ON FUNCTION public.contact_rule_blocks_contact(text[], uuid) IS
   'to another person. The portal''s contactRuleIsHardBlock() is the same '
   'formula; merge_studio_contacts() refuses on it so a recorded block cannot '
   'vanish into an absorbed card (00629 r4 B-2).';
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 4e. A POINTER AT A FOLDED FIRM IS NOT DRIFT THE EDITOR MAY REPAIR
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Migrations review r7 M-2.
+--
+-- §5's sole-proprietor fold deliberately leaves the folded firm's CREW
+-- pointing at the folded card: their affiliations are CLOSED with `to_date`
+-- under `patina.suppress_affiliation_sync`, and the legacy
+-- studio_contacts.company_id keeps naming the folded firm so
+-- people_directory's company_name COALESCE still resolves the firm's name
+-- (r6 M-3; R-BN — a merge never deletes a typed fact).
+--
+-- That leaves those rows in the one state sync_person_affiliation_from_pointer()
+-- (00592, R-AI) reads as drift to repair: pointer set, ZERO open affiliations.
+-- Its trigger is AFTER INSERT OR UPDATE OF company_id, and Postgres fires
+-- `UPDATE OF col` whenever the column is NAMED in the SET list, changed or not
+-- — which is every save of the shipped card editor
+-- (use-studio-contacts.ts:202, :234, which writes the whole row). So the
+-- function's ELSE branch opened a FRESH affiliation, from_date = CURRENT_DATE,
+-- role and the three designations at their defaults.
+--
+-- Measured, on a folded sole proprietor's bookkeeper:
+--
+--   after the fold   role Bookkeeper · paperwork t · licence t · from 2021-01-01 · to <fold day>
+--   one re-save      + role NULL · paperwork f · licence f · from <today> · to (null)   <- NEW OPEN ROW
+--
+-- person-profile.tsx prints the OPEN affiliation's role and "since", so one
+-- ordinary card save turned "Bookkeeper, since 2021" into a bare "since 2026"
+-- — r6 M-2's exact harm one act later, with no crew line on the surviving
+-- PERSON card to put it back. The typed row survives as history, so this is a
+-- reader disagreeing with the record rather than data loss.
+--
+-- The function already stands down for two older malformations it refuses to
+-- mirror — a cross-studio pointer, and a pointer naming a person card or the
+-- row itself. A pointer naming a card that was MERGED AWAY is a third, and it
+-- is stated in the same place and the same shape. The pointer stands, as R-BN
+-- requires; the editor simply stops re-deriving an affiliation the merge
+-- deliberately closed.
+--
+-- Grafted from 00592:580-666 verbatim — same signature, same SECURITY DEFINER
+-- and search_path, same branches in the same order, every comment byte for
+-- byte — plus one disjunct and its note. It is re-issued HERE rather than
+-- edited in 00592 because the disjunct reads studio_contacts.merged_into,
+-- which section 1 of this file is the migration that adds: the 00592 body must
+-- stay runnable on every write between the two files. The trigger itself
+-- (00592) is not re-issued: it already fires on the same column.
+
+CREATE OR REPLACE FUNCTION public.sync_person_affiliation_from_pointer()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+DECLARE
+  v_open     uuid;
+  v_rederive boolean := false;
+BEGIN
+  IF NEW.entity_kind IS DISTINCT FROM 'person' THEN
+    RETURN NULL;
+  END IF;
+
+  -- What the affiliations already say — the same pick the pointer trigger
+  -- makes, so "they already agree" means the same thing on both sides.
+  SELECT spa.company_id INTO v_open
+    FROM public.studio_person_affiliations spa
+   WHERE spa.person_id = NEW.id
+     AND spa.to_date IS NULL
+   ORDER BY spa.from_date DESC NULLS LAST, spa.created_at DESC
+   LIMIT 1;
+
+  IF v_open IS NOT DISTINCT FROM NEW.company_id THEN
+    RETURN NULL;   -- nothing to bind; usually this is the pointer trigger's own write
+  END IF;
+
+  PERFORM set_config('patina.suppress_affiliation_sync', '1', true);
+
+  IF NEW.company_id IS NULL THEN
+    -- The designer cleared the firm: the affiliation THE POINTER NAMED ends
+    -- today. Only that one (r5 M5-3, ruling R-AO) — a sibling the pointer was
+    -- not naming is a standing fact about a different firm and is not the
+    -- designer's to end from this card's firm field.
+    --
+    -- OLD.company_id NULL with an open affiliation standing is a pointer that
+    -- had already drifted from the fact; nothing was named, so nothing closes
+    -- and the re-derive below simply lets the pointer catch up.
+    IF TG_OP = 'UPDATE' AND OLD.company_id IS NOT NULL THEN
+      UPDATE public.studio_person_affiliations spa
+         SET to_date = GREATEST(CURRENT_DATE, COALESCE(spa.from_date, CURRENT_DATE))
+       WHERE spa.person_id = NEW.id
+         AND spa.to_date IS NULL
+         AND spa.company_id = OLD.company_id;
+    END IF;
+    -- A surviving sibling IS the person's open affiliation now, so the pointer
+    -- is re-derived onto it rather than left NULL beside a standing fact.
+    v_rederive := true;
+  ELSIF public.studio_contact_org(NEW.company_id) IS DISTINCT FROM NEW.organization_id THEN
+    -- A cross-studio pointer is left exactly as the backfill and the RLS
+    -- WITH CHECK leave it: for a human. Opening the affiliation here would
+    -- write a row the policy itself refuses.
+    NULL;
+  ELSIF NEW.company_id = NEW.id
+     OR (SELECT sc.entity_kind FROM public.studio_contacts sc
+          WHERE sc.id = NEW.company_id) IS DISTINCT FROM 'company'
+     OR (SELECT sc.merged_into FROM public.studio_contacts sc
+          WHERE sc.id = NEW.company_id) IS NOT NULL THEN
+    -- 00417's studio_contacts_company_link_check permits the legacy pointer to
+    -- name a person card, or the card itself. Opening the affiliation would
+    -- raise out of assert_affiliation_card_kinds() and take the whole
+    -- studio_contacts write down with it, so this half stands down for the
+    -- same reason it stands down for a cross-studio pointer: the malformation
+    -- is older than this file and is left visible, not mirrored.
+    --
+    -- A THIRD POINTER THIS FUNCTION MAY NOT MIRROR (00629, r7 M-2): one naming
+    -- a card that was MERGED AWAY.
+    NULL;
+  ELSE
+    -- Open the affiliation the pointer names, dated today so it outranks any
+    -- NULL-dated row the fold left — and OPEN IT ONLY. Siblings stand (r5
+    -- M5-3, ruling R-AO): the model is N persons x N firms (crm-model §1 E4),
+    -- the sole proprietor who also crews for a GC holds two open affiliations,
+    -- and this trigger fires on the column the SHIPPED card editor writes on
+    -- every save (use-studio-contacts.ts:202, :234). Closing the others here
+    -- meant a designer picking the other firm in today's editor silently ended
+    -- a standing affiliation and struck the person off that firm's crew list
+    -- (R-W). The pointer holds one — the most recently begun — and the room
+    -- reads the affiliations for the rest.
+    INSERT INTO public.studio_person_affiliations (person_id, company_id, from_date, to_date)
+    VALUES (NEW.id, NEW.company_id, CURRENT_DATE, NULL)
+    ON CONFLICT (person_id, company_id) WHERE to_date IS NULL DO NOTHING;
+  END IF;
+
+  PERFORM set_config('patina.suppress_affiliation_sync', '', true);
+
+  -- Outside the suppression window on purpose: this is the ordinary pointer
+  -- derivation, and its studio_contacts write re-enters this function only to
+  -- find pointer and open affiliation already agreeing (the early return
+  -- above), so it terminates in one hop.
+  IF v_rederive THEN
+    PERFORM public._sync_person_company_pointer(NEW.id);
+  END IF;
+
+  RETURN NULL;
+END;
+$$;
+
+-- 00592's REVOKE is restated: a re-issued function keeps its ACL, and stating
+-- it is cheaper than trusting that.
+REVOKE ALL ON FUNCTION public.sync_person_affiliation_from_pointer()
+  FROM PUBLIC, anon, authenticated;
+
+COMMENT ON FUNCTION public.sync_person_affiliation_from_pointer() IS
+  'AFTER INSERT OR UPDATE OF company_id on studio_contacts: keeps the open '
+  'studio_person_affiliations row in step with the legacy firm pointer '
+  '(00592, R-AI/R-AO). Stands down for three pointers it may not mirror — '
+  'cross-studio, naming a person card or the row itself, and naming a card '
+  'that was MERGED AWAY (00629 r7 M-2, so the sole-proprietor fold''s closed '
+  'crew affiliations are not re-derived by the next ordinary card save).';
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- 5. merge_studio_contacts — one transaction, one act
@@ -1339,6 +1518,33 @@ BEGIN
   --     reaches a person card that never prints it — carrying it costs
   --     nothing and dropping it would lose the firm's kind on the one fold
   --     where the firm and the person are the same body.
+  --   * THE THREE DESIGNATIONS THE FOLDED CARD ITSELF HOLDS (r7 B-1) are the
+  --     last three of this class. The repoint below (§"the three designations
+  --     other cards hold") moves the designations OTHER cards hold naming the
+  --     merged PERSON; nothing carried the merged FIRM's own three, so a
+  --     firm-to-firm merge left paperwork_contact_person_id, signer_person_id
+  --     and site_contact_person_id on a card that afterwards emits no
+  --     people_directory row. Measured on the PR-o default (the older, blanker
+  --     card survives): all three read NULL on the survivor, so the Directory
+  --     firm row's payee marker (directory-view.tsx reads signer_person_id,
+  --     NOT the affiliation's is_signer that this merge does carry) went blank
+  --     over a signer the studio typed, the company card's three designation
+  --     rows came back empty, and "Chase the renewal" — which passes
+  --     card.paperwork_contact_person_id straight into the queued task with no
+  --     affiliation fallback — was drafted with no recipient. The merge sheet
+  --     had promised the opposite in words ("…'s seats, channels and firm
+  --     designations move onto <survivor>").
+  --
+  --     They are person-card pointers inside ONE studio and
+  --     assert_studio_contact_designations() (00592/R-AP) already holds each
+  --     to a person card in the same organization_id that is not the row
+  --     itself, so none can conflict destructively — but the self leg is
+  --     reachable on the SOLE-PROPRIETOR FOLD, where the survivor is the
+  --     person the folded firm named as its own site contact. NULLIF drops
+  --     exactly that value and carries the rest: a person is not their own
+  --     site contact, and designated_person_is_self would otherwise abort the
+  --     whole merge. R-BN keeps the folded card's own copy standing either
+  --     way, so nothing is deleted by the drop.
   UPDATE public.studio_contacts s
      SET studio_verdict    = COALESCE(s.studio_verdict,    v_merged.studio_verdict),
          studio_verdict_at = CASE WHEN s.studio_verdict IS NULL
@@ -1353,6 +1559,15 @@ BEGIN
          w9_on_file_at     = COALESCE(s.w9_on_file_at,     v_merged.w9_on_file_at),
          warranty_until    = COALESCE(s.warranty_until,    v_merged.warranty_until),
          notes             = COALESCE(s.notes,             v_merged.notes),
+         paperwork_contact_person_id =
+           COALESCE(s.paperwork_contact_person_id,
+                    NULLIF(v_merged.paperwork_contact_person_id, s.id)),
+         signer_person_id  =
+           COALESCE(s.signer_person_id,
+                    NULLIF(v_merged.signer_person_id, s.id)),
+         site_contact_person_id =
+           COALESCE(s.site_contact_person_id,
+                    NULLIF(v_merged.site_contact_person_id, s.id)),
          is_sole_proprietor = s.is_sole_proprietor
                               OR COALESCE(v_merged.is_sole_proprietor, false),
          trades            = s.trades
@@ -1670,7 +1885,8 @@ BEGIN
     -- IN THE SAME ORDER AS THE SAME-KIND BRANCH (r4 M-1). This used to be ONE
     -- unordered UPDATE, and assert_compliance_holder()'s STRUCTURAL leg
     -- compliance_successor_other_holder always runs — v_retiring suppresses
-    -- only the two time-varying legs — so a retired row reached before its own
+    -- only the six legs that judge the ACT of retiring a paper — so a retired
+    -- row reached before its own
     -- successor found superseded_by naming a document still held by the firm,
     -- and the fold aborted with a schema token naming nothing the studio did.
     -- Measured deterministic on a sole proprietor with one renewed COI; the

@@ -858,6 +858,35 @@ describe('RosterRow — the Bidding band', () => {
     expect(document.querySelector('[data-bid-editor]')).toBeInTheDocument();
   });
 
+  /**
+   * r7 MAJOR-4 — a refusal is an ALERT. It used to go through the row's polite
+   * `role="status"` announcer, the same voice that says the bid was written.
+   */
+  it('prints a refused bid in the row’s own alert line, not the announcer', async () => {
+    const onAnnounce = jest.fn();
+    setBidMutate.mockRejectedValueOnce(
+      new Error('party_bid_quoted_by_not_a_person'),
+    );
+    render(
+      <RosterRow
+        row={bidSeat()}
+        band="bidding"
+        expanded
+        onToggle={jest.fn()}
+        bid={NO_BID}
+        bidPeople={PEOPLE}
+        onAnnounce={onAnnounce}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Write the bid' }));
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'Write the bid' })[0],
+    );
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(/price the work/);
+    expect(onAnnounce).not.toHaveBeenCalled();
+  });
+
   it('writes every fact, and moves the stage with the outcome', async () => {
     render(
       <RosterRow
@@ -892,6 +921,9 @@ describe('RosterRow — the Bidding band', () => {
     expect(setBidMutate).toHaveBeenCalledWith({
       id: 'seat-rivera',
       projectId: 'okonkwo',
+      // r7 BLOCKING-1: the seat as it stood, so the hook can tell recording an
+      // outcome from correcting a field on a seat whose outcome has not moved.
+      previous: { bidOutcome: null, stage: 'no_response' },
       patch: {
         bidAskedAt: '2026-09-28',
         bidDueAt: '2026-10-05',

@@ -208,6 +208,18 @@ export function RosterRow({
 
   /** The Bidding band's own editing state (direction §3.4). */
   const [editingBid, setEditingBid] = useState(false);
+  /**
+   * r7 MAJOR-4 — A REFUSAL IS AN ALERT, NOT A STATUS.
+   *
+   * The bid refusal used to go through `setNote`, which is the row's polite
+   * `role="status"` announcer — the same voice that says "The bid is written
+   * on <name>'s seat." So a screen-reader user was told the write FAILED in
+   * the voice that tells them it succeeded, and a later status change could
+   * swallow it. Every other refusal in this wave is a `role="alert"`
+   * (rolodex-picker, household-band, compare-merge-sheet, archive-card-door,
+   * close-seat-act), which is the idiom CR11-10 settled.
+   */
+  const [bidError, setBidError] = useState<string | null>(null);
   const [bidDraft, setBidDraft] = useState<{
     askedAt: string;
     dueAt: string;
@@ -391,6 +403,7 @@ export function RosterRow({
   const hasBid = seatCarriesBid(bid);
 
   const openBidEditor = () => {
+    setBidError(null);
     setBidDraft({
       askedAt: bid?.bidAskedAt ?? '',
       dueAt: bid?.bidDueAt ?? '',
@@ -404,10 +417,19 @@ export function RosterRow({
   };
 
   const saveBid = async () => {
+    setBidError(null);
     try {
       await setBid.mutateAsync({
         id: seatId,
         projectId,
+        // r7 BLOCKING-1: the seat as it stands, so the hook can tell recording
+        // an outcome from correcting a field on a seat whose outcome has not
+        // moved. `openBidEditor` seeds the draft from this same outcome, so
+        // every ordinary correction re-sends it unchanged.
+        previous: {
+          bidOutcome: bid?.bidOutcome ?? null,
+          stage: row.stage ?? null,
+        },
         patch: {
           bidAskedAt: bidDraft.askedAt || null,
           bidDueAt: bidDraft.dueAt || null,
@@ -434,8 +456,9 @@ export function RosterRow({
       setNote(`The bid is written on ${row.name}\u2019s seat.`);
     } catch (e) {
       // MAJOR-3: the bid editor UPDATEs project_parties, so 00624's and
-      // 00631's bare card tokens answer here too.
-      setNote(writeErrorMessage(e, 'Could not write the bid.'));
+      // 00631's bare card tokens answer here too. r7 MAJOR-4: into the row's
+      // own alert line, never the status announcer.
+      setBidError(writeErrorMessage(e, 'Could not write the bid.'));
     }
   };
 
@@ -856,6 +879,15 @@ export function RosterRow({
                         Leave it
                       </DocumentAction>
                     </DocumentActionRow>
+                    {bidError && (
+                      <p
+                        role="alert"
+                        data-bid-error
+                        className="mt-1.5 text-[0.72rem] text-[var(--color-terracotta-ink)]"
+                      >
+                        {bidError}
+                      </p>
+                    )}
                   </>
                 )}
               </div>

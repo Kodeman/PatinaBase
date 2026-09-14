@@ -19,6 +19,9 @@ const cards: Record<string, unknown> = {};
 
 jest.mock("@patina/supabase", () => ({
   useStudioContact: (id: string | null) => ({ data: id ? cards[id] : null }),
+  // r7 MAJOR-1 / B-1: the sheet resolves the firm and the three designation
+  // ids through the book, the way the Directory and the picker do.
+  useStudioContacts: () => ({ data: Object.values(cards) }),
   useStudioContactChannelsFor: () => ({ data: [] }),
   useContactRules: () => ({ data: [] }),
   useComplianceDocuments: () => ({ data: [] }),
@@ -296,6 +299,57 @@ describe("CompareMergeSheet", () => {
       mergedId: "card-adaeze",
       matchedOn: "phone",
     });
+  });
+
+  /**
+   * r7 MAJOR-1 — `studio_contacts.company_name` on a PERSON row is 00417's
+   * typed-by-hand snapshot and nothing since the affiliation model populates
+   * it, so the sheet printed "—" (its own mark for "not read") where the
+   * Directory, the person-card header and the picker all print the firm.
+   */
+  it("resolves the Firm the way the Directory and the picker do", () => {
+    cards["card-adaeze"] = {
+      ...OLDER,
+      company_name: null,
+      company_id: "firm-northgate",
+    };
+    cards["firm-northgate"] = {
+      ...OLDER,
+      id: "firm-northgate",
+      entity_kind: "company",
+      full_name: null,
+      company_name: "Northgate Electric",
+      company_id: null,
+    };
+    render(<CompareMergeSheet {...props} />);
+    const firm = document.querySelector('[data-compare-field="Firm"]');
+    expect(firm?.textContent).toContain("Northgate Electric");
+  });
+
+  /**
+   * r7 B-1 — 00629 now carries the folded card's own three designations onto
+   * the survivor, and the consequence sentence has always said so out loud.
+   * R-BN: the sheet shows both values wherever a reduction will pick one.
+   */
+  it("prints the three firm designations, resolved to names", () => {
+    cards["card-chidi"] = {
+      ...NEWER,
+      paperwork_contact_person_id: "card-tom",
+      signer_person_id: "card-tom",
+      site_contact_person_id: null,
+    };
+    cards["card-tom"] = { ...OLDER, id: "card-tom", full_name: "Tom Marrow" };
+    render(<CompareMergeSheet {...props} />);
+    const fields = Array.from(
+      document.querySelectorAll("[data-compare-field]"),
+    ).map((el) => el.getAttribute("data-compare-field"));
+    expect(fields).toContain("Paperwork contact");
+    expect(fields).toContain("Signer");
+    // nobody holds a site contact, so the row stays off the table
+    expect(fields).not.toContain("Site contact");
+    expect(
+      document.querySelector('[data-compare-field="Signer"]')?.textContent,
+    ).toContain("Tom Marrow");
   });
 
   it("announces the survivor and closes when the merge lands", async () => {
