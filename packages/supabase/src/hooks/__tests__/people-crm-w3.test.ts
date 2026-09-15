@@ -561,6 +561,100 @@ describe("useComplianceDocumentsFor applies the retirement rule (M2R-7)", () => 
     ).toEqual(["new", "old-2", "dead"]);
   });
 
+  it("does not retire a lapse whose successor was RETYPED (r12 MAJOR-1)", () => {
+    // 00623's retired CTE asks three questions — in force, carries the root's
+    // gates, and `s.doc_type = c.root_doc_type` (W3 r8 B-1). The supersede
+    // trigger judges a row against its own successor and never against the
+    // rows pointing at it, so retyping the SUCCESSOR is judged by nothing and
+    // any active studio member may do it in one PATCH. The reducer asked only
+    // the first two, so the browser dropped a lapsed gating certificate the
+    // database still counts as `lapsed`.
+    const today = "2026-09-13";
+    const rows = [
+      {
+        id: "lapsed-coi",
+        holder_id: "firm-1",
+        doc_type: "coi_gl",
+        expires_on: "2026-03-31",
+        blocks: ["site_access"],
+        superseded_by: "retyped",
+      },
+      {
+        // in force, carries the gates — and is no longer the same paper
+        id: "retyped",
+        holder_id: "firm-1",
+        doc_type: "w9",
+        expires_on: "2027-03-31",
+        blocks: ["site_access"],
+        superseded_by: null,
+      },
+    ] as Any;
+    expect(
+      retainedComplianceDocuments(rows, today).map((d: Any) => d.id),
+    ).toEqual(["lapsed-coi", "retyped"]);
+  });
+
+  it("still retires it when the successor is the same paper (control)", () => {
+    const today = "2026-09-13";
+    const rows = [
+      {
+        id: "lapsed-coi",
+        holder_id: "firm-1",
+        doc_type: "coi_gl",
+        expires_on: "2026-03-31",
+        blocks: ["site_access"],
+        superseded_by: "renewal",
+      },
+      {
+        id: "renewal",
+        holder_id: "firm-1",
+        doc_type: "coi_gl",
+        expires_on: "2027-03-31",
+        blocks: ["site_access"],
+        superseded_by: null,
+      },
+    ] as Any;
+    expect(
+      retainedComplianceDocuments(rows, today).map((d: Any) => d.id),
+    ).toEqual(["renewal"]);
+  });
+
+  it("carries the ROOT's doc_type down the chain, as the SQL recursion does", () => {
+    // 00623 carries `c.root_doc_type` forward unchanged at every hop, so a
+    // retyped middle link does not end the walk: hop 2 is still judged against
+    // the root's own paper and still retires it.
+    const today = "2026-09-13";
+    const rows = [
+      {
+        id: "root",
+        holder_id: "firm-1",
+        doc_type: "coi_gl",
+        expires_on: "2026-03-31",
+        blocks: ["site_access"],
+        superseded_by: "middle",
+      },
+      {
+        id: "middle",
+        holder_id: "firm-1",
+        doc_type: "w9",
+        expires_on: "2027-03-31",
+        blocks: ["site_access"],
+        superseded_by: "head",
+      },
+      {
+        id: "head",
+        holder_id: "firm-1",
+        doc_type: "coi_gl",
+        expires_on: "2027-06-30",
+        blocks: ["site_access"],
+        superseded_by: null,
+      },
+    ] as Any;
+    expect(
+      retainedComplianceDocuments(rows, today).map((d: Any) => d.id),
+    ).toEqual(["middle", "head"]);
+  });
+
   it("is wired into the multi-holder hook", async () => {
     const hook = useComplianceDocumentsFor(["firm-1"]) as unknown as {
       queryFn: () => Promise<unknown>;

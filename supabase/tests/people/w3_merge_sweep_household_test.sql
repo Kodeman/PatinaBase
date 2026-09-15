@@ -1901,6 +1901,208 @@ BEGIN
   END IF;
 END $$;
 
+-- ── 7d. THE BACKFILL MAY NOT MOVE project_parties.updated_at ──────────────
+-- migrations review r12 MAJOR-1. 7b pins 00631's MAPPING; this pins its
+-- COLLATERAL. `set_updated_at_project_parties` is a BEFORE UPDATE FOR EACH ROW
+-- trigger whose body sets NEW.updated_at := now() unconditionally, so an
+-- unbracketed bulk rewrite stamps every backfilled seat with the deploy
+-- instant — and updated_at is the tie-break people_directory's PARTY branch
+-- ranks one identity's seats by, the value it emits as last_touch_at, and the
+-- order people_directory_seats' first_value(pp.id) names person_id by
+-- (00626 §4, 00629 §"people_directory"). 00624:800-806 owes every future bulk
+-- rewrite the same two ALTERs; 00631 now carries them.
+--
+-- Unreachable on a reset for the same reason block 6 and 7b are: migrations
+-- run before seeds, so trade_rfq_requests is empty when 00631 executes and the
+-- statement touches 0 rows. This block stages the seats itself and runs the
+-- statement BOTH ways — unbracketed (the mechanism, trapped and rolled back)
+-- and in the shipped bracketed form. It guards the MECHANISM: if the two
+-- readers ever stop ranking an identity's seats by updated_at, 7d-b fails and
+-- 00631's brackets have to be re-argued. This is w1b block 21's shape.
+INSERT INTO public.projects
+  (id, name, designer_id, studio_id, status, created_by, client_visibility_tier) VALUES
+  ('f9300000-0000-4000-8000-0000000000c1','W3 r12 live job',
+   'a0000000-0000-0000-0000-000000000004','f9000000-0000-4000-8000-00000000000a','active',
+   'a0000000-0000-0000-0000-000000000004','full');
+
+-- One UNCARDED identity on a phone no card in this studio carries: a bid seat
+-- on the job the RFQ rail names, 400 days quiet, and a seat on the live job,
+-- 10 days quiet.
+INSERT INTO public.project_parties
+  (id, project_id, party_kind, display_name, phone_e164, created_by, updated_at) VALUES
+  ('f9500000-0000-4000-8000-00000000030a','f9300000-0000-4000-8000-00000000000a','sub',
+   'R12 Bidder','+16125559988','a0000000-0000-0000-0000-000000000004', now() - interval '400 days'),
+  ('f9500000-0000-4000-8000-00000000030b','f9300000-0000-4000-8000-0000000000c1','sub',
+   'R12 Bidder','+16125559988','a0000000-0000-0000-0000-000000000004', now() - interval '10 days');
+
+-- the RFQ row that puts the OLD seat inside the backfill's reach
+INSERT INTO public.trade_rfq_requests (proposal_id, party_id, status, sent_at, responded_at) VALUES
+  ('f9600000-0000-4000-8000-00000000000a','f9500000-0000-4000-8000-00000000030a','sent',
+   CURRENT_DATE - 400, NULL);
+
+DO $$
+DECLARE
+  win_person  uuid; win_project  uuid; win_touch timestamptz;
+  now_person  uuid; now_project  uuid; now_touch timestamptz;
+  v_outcome   text;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  SELECT person_id, project_id, last_touch_at
+    INTO win_person, win_project, win_touch
+    FROM public.people_directory WHERE display_name = 'R12 Bidder';
+  PERFORM pg_temp.reset_role();
+
+  IF win_person IS DISTINCT FROM 'f9500000-0000-4000-8000-00000000030b'::uuid THEN
+    RAISE EXCEPTION
+      'BLOCK 7d FAIL (7d-a): the LIVE seat should be the Directory winner before the backfill, got %',
+      win_person;
+  END IF;
+
+  -- (b) the mechanism, in a trapped sub-block so the table is untouched after
+  BEGIN
+    WITH strongest_bid AS (
+      SELECT DISTINCT ON (b.party_id) b.party_id, b.status, b.amount_cents
+      FROM public.trade_scope_bids b
+      ORDER BY b.party_id,
+               CASE b.status WHEN 'selected' THEN 0 WHEN 'quoted' THEN 1 ELSE 2 END,
+               b.noted_at DESC, b.id
+    ),
+    quoted_bid AS (
+      SELECT DISTINCT ON (b.party_id) b.party_id, b.noted_at
+      FROM public.trade_scope_bids b
+      WHERE b.status = 'quoted'
+      ORDER BY b.party_id, b.noted_at, b.id
+    ),
+    latest_rfq AS (
+      SELECT DISTINCT ON (r.party_id) r.party_id, r.status, r.sent_at, r.responded_at
+      FROM public.trade_rfq_requests r
+      ORDER BY r.party_id, r.created_at DESC, r.id
+    ),
+    mapped AS (
+      SELECT
+        COALESCE(sb.party_id, lr.party_id) AS party_id,
+        CASE
+          WHEN sb.status = 'selected'  THEN 'selected'
+          WHEN sb.status = 'quoted'    THEN 'quoted'
+          WHEN sb.status = 'withdrawn' THEN 'withdrawn'
+          WHEN lr.status = 'sent'      THEN 'asked'
+          WHEN lr.status = 'responded' THEN 'quoted'
+          ELSE NULL
+        END                              AS outcome,
+        sb.amount_cents                  AS amount_cents,
+        lr.sent_at::date                 AS asked_at,
+        COALESCE(lr.responded_at, qb.noted_at)::date AS quoted_at
+      FROM strongest_bid sb
+      FULL OUTER JOIN latest_rfq lr ON lr.party_id = sb.party_id
+      LEFT JOIN quoted_bid qb ON qb.party_id = COALESCE(sb.party_id, lr.party_id)
+    )
+    UPDATE public.project_parties pp
+       SET bid_outcome      = m.outcome,
+           bid_amount_cents = COALESCE(pp.bid_amount_cents, m.amount_cents),
+           bid_asked_at     = COALESCE(pp.bid_asked_at,  m.asked_at),
+           bid_quoted_at    = COALESCE(pp.bid_quoted_at, m.quoted_at)
+      FROM mapped m
+     WHERE pp.id = m.party_id
+       AND m.outcome IS NOT NULL
+       AND pp.bid_outcome IS NULL;
+
+    PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+    SELECT person_id INTO now_person
+      FROM public.people_directory WHERE display_name = 'R12 Bidder';
+    PERFORM pg_temp.reset_role();
+
+    IF now_person IS DISTINCT FROM 'f9500000-0000-4000-8000-00000000030a'::uuid THEN
+      RAISE EXCEPTION
+        'BLOCK 7d FAIL (7d-b): the UNBRACKETED backfill no longer flips the winner onto the old bid seat (got %) — '
+        'the identity tie-break has changed and 00631''s brackets must be re-argued', now_person;
+    END IF;
+    RAISE EXCEPTION 'w3_7d_rollback_control';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM <> 'w3_7d_rollback_control' THEN RAISE; END IF;
+  END;
+
+  -- (c) the shipped form: 00631's own two ALTERs around the same statement
+  EXECUTE 'ALTER TABLE public.project_parties DISABLE TRIGGER set_updated_at_project_parties';
+  WITH strongest_bid AS (
+    SELECT DISTINCT ON (b.party_id) b.party_id, b.status, b.amount_cents
+    FROM public.trade_scope_bids b
+    ORDER BY b.party_id,
+             CASE b.status WHEN 'selected' THEN 0 WHEN 'quoted' THEN 1 ELSE 2 END,
+             b.noted_at DESC, b.id
+  ),
+  quoted_bid AS (
+    SELECT DISTINCT ON (b.party_id) b.party_id, b.noted_at
+    FROM public.trade_scope_bids b
+    WHERE b.status = 'quoted'
+    ORDER BY b.party_id, b.noted_at, b.id
+  ),
+  latest_rfq AS (
+    SELECT DISTINCT ON (r.party_id) r.party_id, r.status, r.sent_at, r.responded_at
+    FROM public.trade_rfq_requests r
+    ORDER BY r.party_id, r.created_at DESC, r.id
+  ),
+  mapped AS (
+    SELECT
+      COALESCE(sb.party_id, lr.party_id) AS party_id,
+      CASE
+        WHEN sb.status = 'selected'  THEN 'selected'
+        WHEN sb.status = 'quoted'    THEN 'quoted'
+        WHEN sb.status = 'withdrawn' THEN 'withdrawn'
+        WHEN lr.status = 'sent'      THEN 'asked'
+        WHEN lr.status = 'responded' THEN 'quoted'
+        ELSE NULL
+      END                              AS outcome,
+      sb.amount_cents                  AS amount_cents,
+      lr.sent_at::date                 AS asked_at,
+      COALESCE(lr.responded_at, qb.noted_at)::date AS quoted_at
+    FROM strongest_bid sb
+    FULL OUTER JOIN latest_rfq lr ON lr.party_id = sb.party_id
+    LEFT JOIN quoted_bid qb ON qb.party_id = COALESCE(sb.party_id, lr.party_id)
+  )
+  UPDATE public.project_parties pp
+     SET bid_outcome      = m.outcome,
+         bid_amount_cents = COALESCE(pp.bid_amount_cents, m.amount_cents),
+         bid_asked_at     = COALESCE(pp.bid_asked_at,  m.asked_at),
+         bid_quoted_at    = COALESCE(pp.bid_quoted_at, m.quoted_at)
+    FROM mapped m
+   WHERE pp.id = m.party_id
+     AND m.outcome IS NOT NULL
+     AND pp.bid_outcome IS NULL;
+  EXECUTE 'ALTER TABLE public.project_parties ENABLE TRIGGER set_updated_at_project_parties';
+
+  -- the bracketed statement must still WRITE the bid
+  SELECT bid_outcome INTO v_outcome FROM public.project_parties
+   WHERE id = 'f9500000-0000-4000-8000-00000000030a';
+  IF v_outcome IS DISTINCT FROM 'asked' THEN
+    RAISE EXCEPTION 'BLOCK 7d FAIL (7d-c): the bracketed backfill must still map the outcome; the seat reads %',
+      v_outcome;
+  END IF;
+
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  SELECT person_id, project_id, last_touch_at
+    INTO now_person, now_project, now_touch
+    FROM public.people_directory WHERE display_name = 'R12 Bidder';
+  PERFORM pg_temp.reset_role();
+
+  IF now_person IS DISTINCT FROM win_person
+     OR now_project IS DISTINCT FROM win_project
+     OR now_touch IS DISTINCT FROM win_touch THEN
+    RAISE EXCEPTION
+      'BLOCK 7d FAIL (7d-d): the bracketed backfill moved the Directory row: person %->%, project %->%, last_touch %->%',
+      win_person, now_person, win_project, now_project, win_touch, now_touch;
+  END IF;
+
+  -- and the column itself: the bid seat is still 400 days quiet
+  IF (SELECT now() - updated_at FROM public.project_parties
+       WHERE id = 'f9500000-0000-4000-8000-00000000030a') < interval '399 days' THEN
+    RAISE EXCEPTION 'BLOCK 7d FAIL (7d-e): the bid seat had its updated_at stamped by the backfill (now %)',
+      (SELECT updated_at FROM public.project_parties
+        WHERE id = 'f9500000-0000-4000-8000-00000000030a');
+  END IF;
+
+  RAISE NOTICE '7d. 00631''s bid backfill: the UNBRACKETED statement flips an uncarded bidder''s Directory row onto the old bid seat — person_id, project_id and last_touch_at all follow updated_at — and the shipped bracketed form maps the outcome while moving none of the three (r12 MAJOR-1): passed';
+END $$;
+
 -- ═══════════════════════════════════════════════════════════════════════════
 -- 8. the r4 review's four merge findings, pinned
 --
@@ -3678,6 +3880,207 @@ BEGIN
     RAISE EXCEPTION 'BLOCK 11i FAIL (r11 MAJOR-2 control): the seat reads % after the merge', v_card;
   END IF;
   RAISE NOTICE '11i. r11 MAJOR-2 — a studio-less seat is refused by name, and the repair unblocks the fold: passed';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- BLOCK 11j — r12 MAJOR-2: the pre-check must ask the SAME question as the
+--                          guard leg it stands in for
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 11i above stages designer_id = a0…0007, a user who holds no membership in
+-- the caller's studio, so project_tenant_org() answers NULL there and the
+-- fixture can only ever reach assert_project_party_cards()' FIRST leg. That
+-- guard raises party_card_project_has_no_studio from TWO legs (00624):
+--
+--   leg 1  project_tenant_org(NEW.project_id)      IS NULL
+--   leg 2  project_recorded_studio(NEW.project_id) IS NULL,
+--          reached whenever NEW.studio_contact_id IS NOT NULL
+--
+-- project_tenant_org() is COALESCE(p.studio_id, the CALLER's own shared-studio
+-- membership); project_recorded_studio() is p.studio_id alone. So on R-BI's
+-- legacy population the two DISAGREE for every caller who shares an active
+-- design studio with the job's designer — the ordinary studio member folding
+-- duplicates in their own room, the commoner half of the population. r11's
+-- pre-check asked only leg 1's resolver, found no row on this shape, and the
+-- seat repoint raised the raw schema token onto the merge sheet after all.
+--
+-- This block stages that shape: the studio-less job's designer is a0…0003, a
+-- plain ACTIVE member of the caller's own studio. Block 11i's control (a
+-- designer who shares nothing) is left exactly as it was.
+ALTER TABLE public.projects DISABLE TRIGGER set_project_studio_id;
+INSERT INTO public.projects
+  (id, name, designer_id, studio_id, status, created_by, client_visibility_tier) VALUES
+  ('f9300000-0000-4000-8000-0000000000b4','W3 co-member studioless job',
+   'a0000000-0000-0000-0000-000000000003', NULL,'active',
+   'a0000000-0000-0000-0000-000000000003','full');
+ALTER TABLE public.projects ENABLE TRIGGER set_project_studio_id;
+
+INSERT INTO public.studio_contacts
+  (id, organization_id, entity_kind, contact_kind, full_name, phone, created_by, created_at) VALUES
+  ('f9f50000-0000-4000-8000-000000000084','f9000000-0000-4000-8000-00000000000a','person','sub',
+   'R12 Co-member Seat Human','(612) 555-0931','a0000000-0000-0000-0000-000000000004','2025-01-01'),
+  ('f9f50000-0000-4000-8000-000000000085','f9000000-0000-4000-8000-00000000000a','person','sub',
+   'R12 Co-member Seat Human','(612) 555-0931','a0000000-0000-0000-0000-000000000004','2026-01-01');
+
+ALTER TABLE public.project_parties DISABLE TRIGGER assert_project_party_cards_trg;
+INSERT INTO public.project_parties
+  (id, project_id, party_kind, display_name, studio_contact_id, created_by) VALUES
+  ('f9f50000-0000-4000-8000-000000000086','f9300000-0000-4000-8000-0000000000b4','sub',
+   'R12 Co-member Seat Human','f9f50000-0000-4000-8000-000000000085',
+   'a0000000-0000-0000-0000-000000000004');
+ALTER TABLE public.project_parties ENABLE TRIGGER assert_project_party_cards_trg;
+
+DO $$
+DECLARE
+  v_detail   text;
+  v_tenant   uuid;
+  v_recorded uuid;
+  n          integer;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+
+  -- the fixture reproduces ONLY while the two resolvers disagree: a tenant the
+  -- caller's own membership supplies, and no studio on the record
+  v_tenant   := public.project_tenant_org('f9300000-0000-4000-8000-0000000000b4');
+  v_recorded := public.project_recorded_studio('f9300000-0000-4000-8000-0000000000b4');
+  IF v_tenant IS NULL THEN
+    PERFORM pg_temp.reset_role();
+    RAISE EXCEPTION
+      'BLOCK 11j FAIL (r12 MAJOR-2): the fixture no longer reproduces — project_tenant_org answers NULL, which is 11i''s shape, not this one';
+  END IF;
+  IF v_recorded IS NOT NULL THEN
+    PERFORM pg_temp.reset_role();
+    RAISE EXCEPTION
+      'BLOCK 11j FAIL (r12 MAJOR-2): the fixture no longer reproduces — the job records studio %', v_recorded;
+  END IF;
+
+  BEGIN
+    PERFORM public.merge_studio_contacts(
+      'f9f50000-0000-4000-8000-000000000084','f9f50000-0000-4000-8000-000000000085','phone');
+    PERFORM pg_temp.reset_role();
+    RAISE EXCEPTION 'BLOCK 11j FAIL (r12 MAJOR-2): the merge went through over a studio-less seat';
+  EXCEPTION WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS v_detail = PG_EXCEPTION_DETAIL;
+    IF SQLERRM LIKE '%party_card_project_has_no_studio%' THEN
+      PERFORM pg_temp.reset_role();
+      RAISE EXCEPTION
+        'BLOCK 11j FAIL (r12 MAJOR-2): the guard''s SECOND leg still reaches the caller as a raw token: %',
+        SQLERRM;
+    END IF;
+    IF SQLERRM NOT LIKE '%merge_seat_on_studioless_project%' THEN
+      PERFORM pg_temp.reset_role();
+      RAISE EXCEPTION 'BLOCK 11j FAIL (r12 MAJOR-2): expected merge_seat_on_studioless_project, got %', SQLERRM;
+    END IF;
+    IF v_detail IS DISTINCT FROM 'W3 co-member studioless job' THEN
+      PERFORM pg_temp.reset_role();
+      RAISE EXCEPTION 'BLOCK 11j FAIL (r12 MAJOR-2): the refusal names the job as %', v_detail;
+    END IF;
+  END;
+
+  -- nothing moved: the refusal is BEFORE the first write
+  SELECT count(*) INTO n FROM public.studio_contacts
+   WHERE id = 'f9f50000-0000-4000-8000-000000000085' AND merged_into IS NULL;
+  IF n <> 1 THEN
+    PERFORM pg_temp.reset_role();
+    RAISE EXCEPTION 'BLOCK 11j FAIL (r12 MAJOR-2): the absorbed card was folded anyway';
+  END IF;
+
+  PERFORM pg_temp.reset_role();
+END $$;
+
+-- CONTROL — the same repair unblocks the same fold, and a studio-less seat
+-- carrying NO card (the company/warranty branch's own population) is NOT
+-- refused by the widened pre-check: the guard's second leg cannot reach it.
+ALTER TABLE public.projects DISABLE TRIGGER set_project_studio_id;
+UPDATE public.projects SET studio_id = 'f9000000-0000-4000-8000-00000000000a'
+ WHERE id = 'f9300000-0000-4000-8000-0000000000b4';
+ALTER TABLE public.projects ENABLE TRIGGER set_project_studio_id;
+
+DO $$
+DECLARE
+  v_id   uuid;
+  v_card uuid;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  v_id := public.merge_studio_contacts(
+    'f9f50000-0000-4000-8000-000000000084','f9f50000-0000-4000-8000-000000000085','phone');
+  IF v_id IS DISTINCT FROM 'f9f50000-0000-4000-8000-000000000084' THEN
+    PERFORM pg_temp.reset_role();
+    RAISE EXCEPTION 'BLOCK 11j FAIL (r12 MAJOR-2 control): the merge returned %', v_id;
+  END IF;
+  PERFORM pg_temp.reset_role();
+  SELECT studio_contact_id INTO v_card FROM public.project_parties
+   WHERE id = 'f9f50000-0000-4000-8000-000000000086';
+  IF v_card IS DISTINCT FROM 'f9f50000-0000-4000-8000-000000000084' THEN
+    RAISE EXCEPTION 'BLOCK 11j FAIL (r12 MAJOR-2 control): the seat reads % after the merge', v_card;
+  END IF;
+  RAISE NOTICE '11j. r12 MAJOR-2 — a studio-less seat whose job''s designer is a CO-MEMBER of the caller''s studio is refused by name too, and the repair unblocks the fold: passed';
+END $$;
+
+-- ── 11k. the widening is a widening, not a blanket ────────────────────────
+-- The company_id / warranty_contact_person_id branch keeps asking
+-- project_tenant_org(), because that is the leg the guard uses for those two
+-- columns. A firm pointer on a studio-less seat CARRYING NO CARD therefore
+-- still folds: refusing it would cost the room a merge it can make, which is
+-- the cost the per-column predicate exists to avoid.
+ALTER TABLE public.projects DISABLE TRIGGER set_project_studio_id;
+INSERT INTO public.projects
+  (id, name, designer_id, studio_id, status, created_by, client_visibility_tier) VALUES
+  ('f9300000-0000-4000-8000-0000000000b5','W3 co-member firm-pointer job',
+   'a0000000-0000-0000-0000-000000000003', NULL,'active',
+   'a0000000-0000-0000-0000-000000000003','full');
+ALTER TABLE public.projects ENABLE TRIGGER set_project_studio_id;
+
+-- The two firm cards live in the studio project_tenant_org() actually
+-- resolves for this job — b0…0001, the design studio a0…0003 and a0…0004 are
+-- both active members of (owner/admin preferred, lowest id). That IS the
+-- co-member leg: the guard will check the survivor against it, so the cards
+-- have to be in it for the fold to be legal at all. The DO block below asserts
+-- the resolution rather than assuming it.
+INSERT INTO public.studio_contacts
+  (id, organization_id, entity_kind, contact_kind, company_name, company_kind, created_by, created_at) VALUES
+  ('f9f50000-0000-4000-8000-000000000087','b0000000-0000-0000-0000-000000000001','company','sub',
+   'R12 Firm Pointer Co','sub','a0000000-0000-0000-0000-000000000004','2025-01-01'),
+  ('f9f50000-0000-4000-8000-000000000088','b0000000-0000-0000-0000-000000000001','company','sub',
+   'R12 Firm Pointer Co','sub','a0000000-0000-0000-0000-000000000004','2026-01-01');
+
+ALTER TABLE public.project_parties DISABLE TRIGGER assert_project_party_cards_trg;
+INSERT INTO public.project_parties
+  (id, project_id, party_kind, display_name, company_id, created_by) VALUES
+  ('f9f50000-0000-4000-8000-000000000089','f9300000-0000-4000-8000-0000000000b5','sub',
+   'R12 Firm Pointer Crew','f9f50000-0000-4000-8000-000000000088',
+   'a0000000-0000-0000-0000-000000000004');
+ALTER TABLE public.project_parties ENABLE TRIGGER assert_project_party_cards_trg;
+
+DO $$
+DECLARE
+  v_id   uuid;
+  v_firm uuid;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  IF public.project_recorded_studio('f9300000-0000-4000-8000-0000000000b5') IS NOT NULL THEN
+    PERFORM pg_temp.reset_role();
+    RAISE EXCEPTION 'BLOCK 11k FAIL: the fixture no longer reproduces — the job records a studio';
+  END IF;
+  IF public.project_tenant_org('f9300000-0000-4000-8000-0000000000b5')
+       IS DISTINCT FROM 'b0000000-0000-0000-0000-000000000001'::uuid THEN
+    PERFORM pg_temp.reset_role();
+    RAISE EXCEPTION
+      'BLOCK 11k FAIL: the fixture no longer reproduces — the co-member leg resolves %, and the firm cards are in b0…0001',
+      public.project_tenant_org('f9300000-0000-4000-8000-0000000000b5');
+  END IF;
+  v_id := public.merge_studio_contacts(
+    'f9f50000-0000-4000-8000-000000000087','f9f50000-0000-4000-8000-000000000088','company_name');
+  IF v_id IS DISTINCT FROM 'f9f50000-0000-4000-8000-000000000087' THEN
+    PERFORM pg_temp.reset_role();
+    RAISE EXCEPTION 'BLOCK 11k FAIL: the merge returned %', v_id;
+  END IF;
+  PERFORM pg_temp.reset_role();
+  SELECT company_id INTO v_firm FROM public.project_parties
+   WHERE id = 'f9f50000-0000-4000-8000-000000000089';
+  IF v_firm IS DISTINCT FROM 'f9f50000-0000-4000-8000-000000000087' THEN
+    RAISE EXCEPTION 'BLOCK 11k FAIL: the seat''s firm pointer reads % after the merge', v_firm;
+  END IF;
+  RAISE NOTICE '11k. r12 MAJOR-2 — a card-less studio-less seat''s FIRM pointer still folds: the pre-check widened one column, not all three: passed';
 END $$;
 
 DO $$ BEGIN RAISE NOTICE 'W3 SQL suite: all blocks passed'; END $$;

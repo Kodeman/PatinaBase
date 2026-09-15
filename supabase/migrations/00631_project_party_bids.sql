@@ -304,6 +304,36 @@ CREATE TRIGGER assert_party_bid_quoted_by_trg
 --
 -- GUARDED: `WHERE pp.bid_outcome IS NULL`, so a rerun cannot overwrite an
 -- outcome a studio moved by hand — 00624's own posture on the stage backfill.
+
+-- ── project_parties.updated_at MUST NOT MOVE HERE (r12 MAJOR-1) ───────────
+-- 00624:800-806 states the obligation this statement owes: "Any future
+-- migration that rewrites a project_parties column in bulk owes the same two
+-- lines." This is that migration, and it rewrites four columns on every seat
+-- the RFQ rail names.
+--
+-- set_updated_at_project_parties is a BEFORE UPDATE FOR EACH ROW trigger whose
+-- body (update_updated_at_column) sets NEW.updated_at := now() unconditionally,
+-- so without the brackets every backfilled seat takes updated_at = the deploy
+-- instant. updated_at is not bookkeeping on this table: it is the tie-break
+-- people_directory's PARTY branch ranks one identity's seats by (00629's
+-- DISTINCT ON … pp.updated_at DESC, pp.id), the value that branch emits as
+-- last_touch_at, and the same order people_directory_seats' first_value(pp.id)
+-- window uses to name person_id (00626 §4). Stamped here, an old bid seat wins
+-- the DISTINCT ON outright over the live job's seat: measured on a fresh reset
+-- (rolled back) with one uncarded identity holding two seats, the Directory row
+-- moved from the live job to the 400-day-old bid job, person_id moved with it,
+-- and last_touch_at read the write instant.
+--
+-- `SET … , updated_at = pp.updated_at` does NOT work — update_updated_at_column()
+-- overwrites NEW after the SET list is evaluated (00624's own note).
+--
+-- Local resets cannot see it: `supabase db reset` runs every migration before
+-- any seed, so trade_rfq_requests and trade_scope_bids are empty here and the
+-- statement touches 0 rows. Its only real execution is the deploy — which is
+-- why the NOTICE below prints the seat count, and why the pin lives in the SQL
+-- suite (w3 block 12, w1b block 21's shape) on seats it stages itself.
+ALTER TABLE public.project_parties DISABLE TRIGGER set_updated_at_project_parties;
+
 WITH strongest_bid AS (
   SELECT DISTINCT ON (b.party_id)
     b.party_id,
@@ -371,6 +401,8 @@ UPDATE public.project_parties pp
    AND m.outcome IS NOT NULL
    AND pp.bid_outcome IS NULL;
 
+ALTER TABLE public.project_parties ENABLE TRIGGER set_updated_at_project_parties;
+
 DO $$
 DECLARE
   v_total integer;
@@ -384,6 +416,10 @@ BEGIN
             FROM public.project_parties
            WHERE bid_outcome IS NOT NULL
            GROUP BY 1) x;
-  RAISE NOTICE '00631 bid backfill: % seat(s) carry a bid_outcome (%)',
+  -- The four bid columns are added by THIS file, so every seat carrying a
+  -- bid_outcome now is a seat this backfill wrote: v_total is the affected-seat
+  -- count the deploy record wants beside 00628's numbers (r12 MAJOR-1).
+  RAISE NOTICE '00631 bid backfill: % seat(s) written by this statement (%) — '
+               'updated_at deliberately NOT moved on any of them',
     v_total, COALESCE(v_by, 'none');
 END $$;
