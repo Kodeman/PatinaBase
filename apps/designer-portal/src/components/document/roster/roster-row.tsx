@@ -44,6 +44,9 @@ import {
   useSendPartySms,
   useSetPartyBid,
   useUpdateProjectParty,
+  useTouches,
+  inboundDecisionSentence,
+  lastInboundDecision,
   useOrganizations,
   seatCloseIsHeldForMoney,
   AUTHORITY_SCOPE_LABELS,
@@ -91,6 +94,7 @@ import {
 import { PlainFact, StateWord } from '../people/state-word';
 import { TelLink } from '../people/tel-link';
 import { DocumentAction, DocumentActionRow } from '../document-action';
+import { SeatWindowBand } from './seat-window-band';
 
 const META =
   'font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]';
@@ -375,6 +379,26 @@ export function RosterRow({
   const noticeIndex = useMemo(
     () => indexComplianceNotices(expiryNotices),
     [expiryNotices],
+  );
+  /**
+   * CRM-22 ON THE ROW — "an inbound approval is matched to a phone and never
+   * to an approver, so a 'go ahead' from someone with no money authority reads
+   * the same as a signature".
+   *
+   * `sms-inbound` files a decision against the SEAT and stamps the authority
+   * check beside it (00635), and this is where the studio reads it back. Only
+   * an OPEN row asks: the sheet carries thirty rows and closed ones cost
+   * nothing, the same rule `wantsRecord` above already applies to consent.
+   */
+  const { data: seatTouches } = useTouches({
+    subjectIds: expanded && isSeat ? [seatId] : [],
+    direction: 'in',
+    decisionsOnly: true,
+    limit: 1,
+  });
+  const inboundDecision = useMemo(
+    () => inboundDecisionSentence(lastInboundDecision(seatTouches)),
+    [seatTouches],
   );
   const blocking = (heldPaper ?? []).find(
     (doc) =>
@@ -874,6 +898,32 @@ export function RosterRow({
               >
                 {consentLine}
               </p>
+            )}
+
+            {/* CRM-22 — the last decision that came IN on this seat, and
+                whether the person who sent it had the standing to send it.
+                PLAIN TEXT, never a state word: an authority check is a fact
+                about a message, not a state of the seat (direction §3.8). */}
+            {inboundDecision && (
+              <p
+                data-inbound-decision
+                className="mt-1.5 text-[0.74rem] text-[var(--color-charcoal)]"
+              >
+                {inboundDecision}
+              </p>
+            )}
+
+            {/* Direction §7 P3 — the engagement window, and the notice that it
+                moved (CRM-23). A closing row is not the place to reschedule. */}
+            {isSeat && !closing && (
+              <SeatWindowBand
+                seatId={seatId}
+                projectId={projectId}
+                name={row.name}
+                onSiteFrom={row.onSiteFrom}
+                onSiteTo={row.onSiteTo}
+                onWritten={setNote}
+              />
             )}
 
             {/* THE BIDDING BAND'S OWN FACTS (direction §3.4). A price nobody

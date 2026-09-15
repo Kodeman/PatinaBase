@@ -43,6 +43,20 @@ export interface ComplianceSendOptions {
   /** Fail closed when suppression/rate policy storage cannot be read. Durable
    * sends should enable this; legacy direct callers retain prior behavior. */
   failClosedPolicyReads?: boolean;
+  /**
+   * THE STUDIO THIS LETTER IS FROM (W4 r1 B-2).
+   *
+   * The same address sits on several studios' cards — that is normal, and the
+   * uniqueness index is per owner, not per tenant. Without a tenant here the
+   * out touch was filed against whichever studio happened to hold the
+   * worst-status copy of the address, so studio A's letter wrote a
+   * studio_touches row into studio B's room, readable by B's members. A caller
+   * that cannot name its studio writes NO touch and NO channel ref — the
+   * R-AW posture for an unattributable record. The address's STATUS verdict is
+   * unchanged and stays address-wide (D-6): a dead mailbox is dead for
+   * everyone.
+   */
+  organizationId?: string | null;
 }
 
 export interface ComplianceSendResult {
@@ -85,11 +99,26 @@ export type EmailSuppressionCheckResult =
  * before it sends, and what the Directory row prints.
  */
 export interface ContactChannelResolution {
+  /** The row whose status decided the verdict. The recipient's unsubscribe
+   *  door hangs off it, because unsubscribing is about the ADDRESS. */
   id: string;
   ownerType: "person" | "company";
   ownerId: string;
   value: string;
+  /** Worst status across every card carrying the address, any studio (D-6). */
   status: "active" | "bounced" | "unsubscribed" | "dead";
+  /**
+   * The SENDING studio's own row for this address, when the caller named a
+   * studio (`organizationId`) and that studio carries the address. NULL
+   * otherwise — and NULL is a refusal to file: no out touch, no deliverability
+   * ref. It is the only row a record may name, because a touch is a claim
+   * about who wrote to whom, made inside one studio's book (W4 r1 B-2).
+   */
+  studioRow: {
+    id: string;
+    ownerType: "person" | "company";
+    ownerId: string;
+  } | null;
 }
 
 /** Worst-first, the paper-word discipline: one dead row settles the address. */
@@ -119,12 +148,13 @@ export function channelRefusesSend(status: string): boolean {
 export async function resolveContactChannel(
   supabase: SupabaseClient,
   to: string,
+  organizationId?: string | null,
 ): Promise<ContactChannelResolution | null> {
   const value = to.trim().toLowerCase();
   if (!value) return null;
   const { data, error } = await supabase
     .from("studio_contact_channels")
-    .select("id, owner_type, owner_id, value, status")
+    .select("id, owner_type, owner_id, organization_id, value, status")
     .eq("value", value)
     .in("channel_kind", ["email", "ap_email"]);
   if (error) {
@@ -135,21 +165,38 @@ export async function resolveContactChannel(
     id: string;
     owner_type: string;
     owner_id: string;
+    organization_id: string | null;
     value: string;
     status: string;
   }>;
   if (rows.length === 0) return null;
-  const worst = rows.reduce((a, b) =>
-    (CHANNEL_STATUS_RANK[b.status] ?? 0) > (CHANNEL_STATUS_RANK[a.status] ?? 0)
-      ? b
-      : a
-  );
+  const worstOf = (candidates: typeof rows) =>
+    candidates.reduce((a, b) =>
+      (CHANNEL_STATUS_RANK[b.status] ?? 0) > (CHANNEL_STATUS_RANK[a.status] ?? 0)
+        ? b
+        : a
+    );
+  // The verdict is address-wide (D-6) …
+  const worst = worstOf(rows);
+  // … the SUBJECT of any record is not. Only the sending studio's own row may
+  // be written about, and only when the caller named that studio (B-2).
+  const ownRows = organizationId
+    ? rows.filter((row) => row.organization_id === organizationId)
+    : [];
+  const own = ownRows.length > 0 ? worstOf(ownRows) : null;
   return {
     id: worst.id,
     ownerType: worst.owner_type === "company" ? "company" : "person",
     ownerId: worst.owner_id,
     value: worst.value,
     status: worst.status as ContactChannelResolution["status"],
+    studioRow: own
+      ? {
+        id: own.id,
+        ownerType: own.owner_type === "company" ? "company" : "person",
+        ownerId: own.owner_id,
+      }
+      : null,
   };
 }
 
@@ -358,7 +405,11 @@ export async function prepareCompliantEmail(
   // account path is unchanged and costs no extra round trip.
   const channel = options.userId
     ? undefined
-    : (await resolveContactChannel(supabase, options.to)) ?? undefined;
+    : (await resolveContactChannel(
+      supabase,
+      options.to,
+      options.organizationId,
+    )) ?? undefined;
   if (channel && channelRefusesSend(channel.status)) {
     return { state: "suppressed", reason: `channel_${channel.status}`, channel };
   }
@@ -563,9 +614,12 @@ export async function sendCompliantEmail(
   // it was addressed to — the deliverability ref. Without it the row was never
   // written, so the provider_id never landed, so resend-webhook could never
   // match the bounce back to the address that bounced.
+  // The ref names a row in the SENDING studio's own book or it names nothing
+  // (B-2): a bounce is written back by ADDRESS (resend-webhook/channel-status),
+  // so an unattributable letter loses its log row, never its write-back.
   const ref = options.ref ??
-    (prepared.channel
-      ? { type: "studio_contact_channel", id: prepared.channel.id }
+    (prepared.channel?.studioRow
+      ? { type: "studio_contact_channel", id: prepared.channel.studioRow.id }
       : undefined);
   const shouldLog = !options.skipLog &&
     Boolean(options.userId || ref);
@@ -644,10 +698,11 @@ export async function sendCompliantEmail(
   // can read it on. Only the account-less channel path has one — an account
   // holder's letter is about a person the rolodex may not carry at all.
   // Best-effort: a touch is a record of the send, never a condition of it.
-  if (result.state === "delivered" && prepared.channel) {
+  // The subject is the sending studio's own card, or there is no touch (B-2).
+  if (result.state === "delivered" && prepared.channel?.studioRow) {
     const { error: touchError } = await supabase.rpc("record_touch", {
-      p_subject_type: prepared.channel.ownerType,
-      p_subject_id: prepared.channel.ownerId,
+      p_subject_type: prepared.channel.studioRow.ownerType,
+      p_subject_id: prepared.channel.studioRow.ownerId,
       p_channel_kind: "email",
       p_direction: "out",
       p_message_ref: logId ?? null,

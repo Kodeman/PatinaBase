@@ -8,12 +8,30 @@
  * in place. Telling people appends to `told_refs` and stamps the change; a
  * change to the way in clears the list, because telling the crew about the OLD
  * lockbox is not telling them about this one.
+ *
+ * CRM-23 (direction §7 P3) — AND IT WRITES THE NOTICE. `told_refs` is the
+ * CARD's own list, which is what Patina Field reads back (`w5-build-report.md`
+ * §3) and which the next change to the way in clears. The notice is the
+ * studio's DURABLE record that a fact changed and who was told, on
+ * `studio_touches`, which nothing clears. Two records of two different things,
+ * written in one press.
+ *
+ * THE CARD IS WRITTEN FIRST. The list is what the phone on the site reads; if
+ * the notice then fails, the band says exactly that and offers the press
+ * again, rather than pretending the names never landed.
  */
 
 import { useId, useState } from 'react';
-import { useLogSiteAccessTold } from '@patina/supabase';
+import {
+  asNoticeError,
+  useLogSiteAccessTold,
+  useRecordNotice,
+} from '@patina/supabase';
 import { peopleEvents } from '@/lib/analytics/people-events';
 import { DocumentAction, DocumentActionRow } from '../document-action';
+
+/** What the record says changed when the card names nothing more precise. */
+export const DEFAULT_NOTICE_FACT = 'The way in changed.';
 
 export interface NoticeLogSeat {
   seatId: string;
@@ -25,6 +43,7 @@ export function NoticeLog({
   seats,
   told,
   panelId,
+  fact = DEFAULT_NOTICE_FACT,
 }: {
   projectId: string;
   /** Everyone on the job who could be told. */
@@ -32,12 +51,17 @@ export function NoticeLog({
   /** Seat ids already logged against this change. */
   told: string[];
   panelId: string;
+  /** CRM-23 — the fact that changed, in the studio's own words. The card
+   *  passes the sentence it is already printing, so the record and the face
+   *  say the same thing. */
+  fact?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [picked, setPicked] = useState<string[]>([]);
   const heldId = useId();
   const [note, setNote] = useState<string | null>(null);
   const logTold = useLogSiteAccessTold();
+  const recordNotice = useRecordNotice();
 
   const untold = seats.filter((seat) => !told.includes(seat.seatId));
 
@@ -115,16 +139,31 @@ export function NoticeLog({
                 onClick={() =>
                   void logTold
                     .mutateAsync({ projectId, seatIds: picked })
-                    .then(() => {
+                    .then(async () => {
                       peopleEvents.siteAccessChanged({
                         region: 'told',
                         told_count: picked.length,
                       });
-                      setNote(
+                      const landed =
                         picked.length === 1
                           ? 'One more name is on the notice.'
-                          : `${picked.length} more names are on the notice.`,
-                      );
+                          : `${picked.length} more names are on the notice.`;
+                      try {
+                        // CRM-23's durable half. `record_notice` resolves this
+                        // job's studio itself and drops any ref that does not
+                        // resolve, so what it stores and what it reads back
+                        // can never disagree about who was told.
+                        await recordNotice.mutateAsync({
+                          projectId,
+                          what: fact,
+                          told: picked,
+                        });
+                        setNote(landed);
+                      } catch (e: unknown) {
+                        setNote(
+                          `${landed} The record of the change did not save — ${asNoticeError(e)}`,
+                        );
+                      }
                       setPicked([]);
                       setOpen(false);
                     })
@@ -135,9 +174,13 @@ export function NoticeLog({
                     )
                 }
                 held={picked.length === 0}
-                disabled={picked.length === 0 || logTold.isPending}
+                disabled={
+                  picked.length === 0 ||
+                  logTold.isPending ||
+                  recordNotice.isPending
+                }
                 aria-describedby={picked.length === 0 ? heldId : undefined}
-                loading={logTold.isPending}
+                loading={logTold.isPending || recordNotice.isPending}
                 loadingLabel="Writing…"
               >
                 Save this note

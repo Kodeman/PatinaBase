@@ -140,6 +140,13 @@ export async function middleware(req: NextRequest) {
   // and would have produced `callbackUrl=/pay`.
   const isPayPage =
     req.nextUrl.pathname === '/pay' || req.nextUrl.pathname.startsWith('/pay/');
+  // /paperwork/[token] is the same login-less pattern for a firm's paperwork
+  // contact sending the studio its compliance paper (PR-a, VISION V10, 00637):
+  // the token is resolved server-side via resolve_paperwork_link() — a
+  // subcontractor's office manager uploading a COI has no Patina account and
+  // never will. The token is keyed to (organization_id, company_id), so it
+  // reaches one firm's paper at one studio and nothing else.
+  const isPaperworkPage = req.nextUrl.pathname.startsWith('/paperwork/');
   // /piece/[id] is the public face of a shared piece (SP-03). A homeowner texts
   // the link to her husband, who has no Patina account and may never have one;
   // redirecting him to /auth/signin is the same dead end the share already was.
@@ -159,7 +166,8 @@ export async function middleware(req: NextRequest) {
   // link's sheet list. force-dynamic + meta tags govern Next and crawlers that
   // read the document — these headers govern everything in between.
   //
-  // S8: this covers ALL SEVEN bearer prefixes, not just /plans. The others
+  // S8: this covers EVERY bearer prefix (eight of them since /paperwork joined
+  // the family), not just /plans. The others
   // have carried neither header since they shipped — /share, /rfq, /trade,
   // /evidence and /field are the same kind of address as /plans, and /pay is
   // the one that reaches a till. Widening it costs nothing and closes the gap.
@@ -172,7 +180,8 @@ export async function middleware(req: NextRequest) {
     isFieldPage ||
     isRfqPage ||
     isTradePage ||
-    isEvidencePage
+    isEvidencePage ||
+    isPaperworkPage
   ) {
     res.headers.set('Cache-Control', 'private, no-store, max-age=0');
     res.headers.set('X-Robots-Tag', 'noindex, nofollow');
@@ -192,6 +201,7 @@ export async function middleware(req: NextRequest) {
     isEvidencePage ||
     isPlansPage ||
     isPayPage ||
+    isPaperworkPage ||
     isPiecePage ||
     isUnsubscribeOutcomePage;
   const isApiRoute = req.nextUrl.pathname.startsWith('/api');

@@ -23,6 +23,9 @@ const setBidMutate = jest.fn();
 let projectsData: unknown[] = [];
 /** The caller's standing in the studio holding this sheet's book (r21). */
 let studioOrgs: unknown[] = [{ id: 'studio-1', membership: { role: 'owner' } }];
+/** W4/P3 — CRM-22's inbound decisions and CRM-23's notice write. */
+let seatTouches: unknown[] = [];
+const recordNoticeMutate = jest.fn();
 
 /** QA-R13-1: the row resolves the job a consent record NAMES, so the sheet's
  *  own project name is never substituted into R-Q's sentence. */
@@ -31,6 +34,46 @@ jest.mock('@/hooks/use-projects', () => ({
 }));
 
 jest.mock('@patina/supabase', () => ({
+  // ── W4/P3 — E13 touches, CRM-23 notices, the paperwork door, the queue ──
+  useTouches: (f: { subjectIds?: readonly string[] }) => ({
+    // The hook is disabled with no subject, and the row only asks when open.
+    data: (f?.subjectIds ?? []).length > 0 ? seatTouches : [],
+  }),
+  useLastTouch: () => ({ data: null }),
+  useRecordNotice: () => ({ mutateAsync: recordNoticeMutate, isPending: false }),
+  asNoticeError: (e: unknown) =>
+    e instanceof Error ? e.message : String(e ?? ''),
+  lastInboundDecision: (
+    rows: ReadonlyArray<{ direction: string; decision_class: string }> | null | undefined,
+  ) =>
+    (rows ?? []).find(
+      (r) => r.direction === 'in' && r.decision_class !== 'none',
+    ) ?? null,
+  inboundDecisionSentence: (t: { decision_class: string; authority_check: string } | null) =>
+    t
+      ? `A ${t.decision_class} decision came in.${
+          t.authority_check === 'failed_no_authority'
+            ? ' Received, not authority.'
+            : ''
+        }`
+      : null,
+  touchSentence: () => 'Last touch 12 Sep 2026, by text.',
+  NO_TOUCH_SENTENCE: 'No contact on the record yet.',
+  useInboundDocuments: () => ({ data: [] }),
+  useConfirmInboundDocument: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useRejectInboundDocument: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  inboundQueueHeading: (n: number) =>
+    `${n} document${n === 1 ? '' : 's'} waiting for your check`,
+  inboundDocumentLine: (
+    d: { doc_type: string },
+    firm: string,
+  ) => `${d.doc_type}, uploaded by ${firm}.`,
+  usePaperworkLinks: () => ({ data: [] }),
+  useMintPaperworkLink: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useRevokePaperworkLink: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  paperworkLinkUrl: (t: string) => `https://client.patina.cloud/paperwork/${t}`,
+  thirtyDaysOut: () => '2026-10-15',
+  firmEngagementWindowEnd: () => null,
   useOrganizations: () => ({ data: studioOrgs }),
   // r21 MAJOR-1 / major-2 (R-BS) — PR-n standing, read before the press.
   // 00634 refuses the close of a seat carrying an OPEN money or
@@ -210,6 +253,8 @@ beforeEach(() => {
   consentResolution = { verdict: null, record: null };
   complianceDocs = [];
   studioOrgs = [{ id: 'studio-1', membership: { role: 'owner' } }];
+  seatTouches = [];
+  recordNoticeMutate.mockReset().mockResolvedValue({ id: 'touch-1' });
 });
 
 describe('RosterRow — folded', () => {
@@ -1663,5 +1708,83 @@ describe('RosterRow — Close this seat is gated on PR-n (r21)', () => {
     expect(alert).toHaveTextContent('owner or an admin');
     expect(alert.textContent).not.toContain('seat_close');
     expect(onAnnounce).not.toHaveBeenCalled();
+  });
+});
+
+/* ── W4/P3 — CRM-22 on the row, and the window's own notice ───────────────── */
+
+describe('RosterRow — the last inbound decision (CRM-22)', () => {
+  const DECISION = {
+    id: 't1',
+    direction: 'in',
+    decision_class: 'money',
+    authority_check: 'failed_no_authority',
+    occurred_at: '2026-09-12T10:00:00Z',
+    channel_kind: 'sms',
+  };
+
+  it('asks nothing while the row is folded', () => {
+    seatTouches = [DECISION];
+    const { container } = ul(
+      <RosterRow row={seatRow()} band="this_week" expanded={false} onToggle={jest.fn()} />,
+    );
+    expect(container.querySelector('[data-inbound-decision]')).toBeNull();
+  });
+
+  it('prints the verdict as PLAIN TEXT on the unfold', () => {
+    seatTouches = [DECISION];
+    const { container } = ul(
+      <RosterRow row={seatRow()} band="this_week" expanded onToggle={jest.fn()} />,
+    );
+    const line = container.querySelector('[data-inbound-decision]');
+    expect(line).toHaveTextContent('Received, not authority.');
+    // Never a state word: the row's StateWord elements carry their own dot.
+    expect(line?.querySelector('[data-state-word]')).toBeNull();
+  });
+
+  it('prints nothing where no inbound message ever decided anything', () => {
+    seatTouches = [];
+    const { container } = ul(
+      <RosterRow row={seatRow()} band="this_week" expanded onToggle={jest.fn()} />,
+    );
+    expect(container.querySelector('[data-inbound-decision]')).toBeNull();
+  });
+});
+
+describe('RosterRow — the window band (direction §7 P3)', () => {
+  it('offers the act on a seat, on the unfold', () => {
+    const { container } = ul(
+      <RosterRow row={seatRow()} band="this_week" expanded onToggle={jest.fn()} />,
+    );
+    expect(container.querySelector('[data-edit-window="seat-dana"]')).not.toBeNull();
+  });
+
+  it('writes the window and the notice in one act', async () => {
+    ul(<RosterRow row={seatRow()} band="this_week" expanded onToggle={jest.fn()} />);
+    fireEvent.click(screen.getByText('Change the window'));
+    fireEvent.change(screen.getByLabelText('Last day on site'), {
+      target: { value: '2027-09-01' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Write the window/ }));
+    await waitFor(() =>
+      expect(updateMutate).toHaveBeenCalledWith({
+        id: 'seat-dana',
+        projectId: 'okonkwo',
+        patch: { onSiteFrom: '2026-10-12', onSiteTo: '2027-09-01' },
+      }),
+    );
+    await waitFor(() =>
+      expect(recordNoticeMutate).toHaveBeenCalledWith(
+        expect.objectContaining({ projectId: 'okonkwo', told: [] }),
+      ),
+    );
+  });
+
+  it('is not offered while the seat is being closed', () => {
+    const { container } = ul(
+      <RosterRow row={seatRow()} band="this_week" expanded onToggle={jest.fn()} />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Close this seat/ }));
+    expect(container.querySelector('[data-edit-window="seat-dana"]')).toBeNull();
   });
 });

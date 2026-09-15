@@ -31,6 +31,9 @@ describe('AppChrome', () => {
     // by someone with no session.
     '/piece/9c1f0a24-1f2b-4b7e-9a3e-0f2d8a6c5b41',
     '/evidence/abc123',
+    // PR-a / VISION V10: the firm's compliance upload door, opened by a
+    // subcontractor's paperwork contact with no account.
+    `/paperwork/${'a'.repeat(64)}`,
     // The one-click unsubscribe outcome page: the recipient clicking it out of
     // an email more often than not has no session at all.
     '/preferences/unsubscribe',

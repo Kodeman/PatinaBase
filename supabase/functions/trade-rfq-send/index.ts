@@ -182,6 +182,7 @@ const deps: TradeRfqSendDeps = {
       studioLogoUrl: identity?.logoUrl ?? undefined,
       designerName: profile?.full_name?.trim() || studioName,
       designerEmail: profile?.email ?? null,
+      studioId: identity?.studioId ?? null,
     };
   },
 
@@ -217,6 +218,7 @@ const deps: TradeRfqSendDeps = {
       notificationType: "trade_rfq",
       templateId: "trade-rfq",
       metadata: opts.metadata,
+      organizationId: opts.organizationId ?? undefined,
     });
     return {
       success: result.success,

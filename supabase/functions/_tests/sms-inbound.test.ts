@@ -242,6 +242,173 @@ Deno.test("a numbered menu reply applies mark_done", async () => {
   assert(res.twiml.includes("2 left"));
 });
 
+// ── W4 round-1 review: the touch, and what it says about authority ──────────
+
+/** One conversation on a coordination menu, with the touch RPC recorded. */
+function coordinationScenario(opts: {
+  courtPartyId?: string | null;
+  authority?: Array<Record<string, unknown>>;
+}) {
+  const now = new Date("2026-07-08T18:00:00Z");
+  const touches: Array<Record<string, unknown>> = [];
+  const fake = createFakeSupabase(
+    baseSeed({
+      project_parties: [
+        { id: "p1", phone_e164: "+15551110099", project_id: "proj1", party_kind: "sub", sms_consent_status: "granted" },
+        { id: "p2", phone_e164: "+15551110098", project_id: "proj1", party_kind: "client", sms_consent_status: "granted" },
+      ],
+      client_decisions: [
+        {
+          id: "dec1",
+          project_id: "proj1",
+          coordination_kind: "selection",
+          court_party_id: opts.courtPartyId ?? null,
+        },
+      ],
+      project_party_authority: opts.authority ?? [],
+      sms_conversations: [
+        {
+          id: "convC", twilio_number: TO, phone_e164: "+15551110099", state: "idle",
+          active_project_id: "proj1", party_id: "p1",
+          state_context: {
+            menu: [{ n: 1, kind: "coordination", id: "dec1", project_id: "proj1" }],
+            menu_created_at: now.toISOString(),
+          },
+        },
+      ],
+    }),
+    {
+      apply_field_effect: () => ({ data: { summary_text: "Done.", remaining_count: 0 }, error: null }),
+      record_touch: (args) => { touches.push(args); return { data: "touch1", error: null }; },
+    },
+  );
+  return { fake, touches, now };
+}
+
+// M-1. court_party_id is an OPTIONAL pointer at one seat, and every
+// coordination item on the seeded book carries none. Reading "no named court"
+// as a wrong sender filled the one index built to surface real failures with
+// false accusations.
+Deno.test("a coordination item with no named court is judged by the sender's own authority, not called an unknown sender", async () => {
+  const { fake, touches, now } = coordinationScenario({
+    authority: [
+      { id: "auth1", engagement_id: "p1", scope: "selections", prepares_only: false, effective_from: null, effective_to: null },
+    ],
+  });
+  await processInbound(
+    params({ From: "+15551110099", Body: "DONE 1", MessageSid: "SMcourt1" }),
+    { supabase: fake as never, getEnv: NO_POSTHOG, now },
+  );
+  assertEquals(touches.length, 1);
+  assertEquals(touches[0].p_decision_class, "selection");
+  assertEquals(touches[0].p_authority_check, "passed");
+});
+
+Deno.test("a coordination item whose court names ANOTHER seat is still failed_unknown_sender", async () => {
+  const { fake, touches, now } = coordinationScenario({
+    courtPartyId: "p2",
+    authority: [
+      { id: "auth1", engagement_id: "p1", scope: "selections", prepares_only: false, effective_from: null, effective_to: null },
+    ],
+  });
+  await processInbound(
+    params({ From: "+15551110099", Body: "DONE 1", MessageSid: "SMcourt2" }),
+    { supabase: fake as never, getEnv: NO_POSTHOG, now },
+  );
+  assertEquals(touches.length, 1);
+  assertEquals(touches[0].p_authority_check, "failed_unknown_sender");
+});
+
+// M-4. Three branches attributed a message to a seat and wrote no touch. A
+// STOP is the most consequential message a seat sends.
+Deno.test("an inbound STOP files an in touch against the seat that sent it", async () => {
+  const touches: Array<Record<string, unknown>> = [];
+  const fake = createFakeSupabase(
+    baseSeed({
+      project_parties: [
+        { id: "p1", phone_e164: "+15551110097", project_id: "proj1", party_kind: "sub", sms_consent_status: "granted" },
+      ],
+      sms_conversations: [
+        {
+          id: "convS", twilio_number: TO, phone_e164: "+15551110097", state: "idle",
+          active_project_id: "proj1", party_id: "p1", state_context: {},
+        },
+      ],
+    }),
+    { record_touch: (args) => { touches.push(args); return { data: "touch1", error: null }; } },
+  );
+  const res = await processInbound(
+    params({ From: "+15551110097", Body: "STOP", MessageSid: "SMstoptouch" }),
+    { supabase: fake as never, getEnv: NO_POSTHOG },
+  );
+  assertEquals(res.disposition, "opted_out");
+  assertEquals(touches.length, 1);
+  assertEquals(touches[0].p_subject_type, "engagement");
+  assertEquals(touches[0].p_subject_id, "p1");
+  assertEquals(touches[0].p_channel_kind, "sms");
+  assertEquals(touches[0].p_direction, "in");
+  assertEquals(touches[0].p_authority_check, "n/a");
+});
+
+Deno.test("HELP files an in touch, and so does a project-chooser pick", async () => {
+  const helpTouches: Array<Record<string, unknown>> = [];
+  const helpFake = createFakeSupabase(
+    baseSeed({
+      project_parties: [
+        { id: "p1", phone_e164: "+15551110096", project_id: "proj1", party_kind: "sub", sms_consent_status: "granted" },
+      ],
+      sms_conversations: [
+        {
+          id: "convH", twilio_number: TO, phone_e164: "+15551110096", state: "idle",
+          active_project_id: "proj1", party_id: "p1", state_context: {},
+        },
+      ],
+    }),
+    { record_touch: (args) => { helpTouches.push(args); return { data: "touch1", error: null }; } },
+  );
+  await processInbound(
+    params({ From: "+15551110096", Body: "HELP", MessageSid: "SMhelp" }),
+    { supabase: helpFake as never, getEnv: NO_POSTHOG },
+  );
+  assertEquals(helpTouches.length, 1);
+  assertEquals(helpTouches[0].p_subject_id, "p1");
+
+  const pickTouches: Array<Record<string, unknown>> = [];
+  const pickFake = createFakeSupabase(
+    baseSeed({
+      projects: [
+        { id: "proj1", name: "Maple St", designer_id: "dz1", studio_id: "org-alpha" },
+        { id: "proj2", name: "Beta job", designer_id: "dz1", studio_id: "org-alpha" },
+      ],
+      project_parties: [
+        { id: "p1", phone_e164: "+15551110095", project_id: "proj1", party_kind: "sub", sms_consent_status: "granted" },
+        { id: "p2", phone_e164: "+15551110095", project_id: "proj2", party_kind: "sub", sms_consent_status: "granted" },
+      ],
+      sms_conversations: [
+        {
+          id: "convP", twilio_number: TO, phone_e164: "+15551110095",
+          state: "awaiting_project_choice", active_project_id: null, party_id: null,
+          state_context: {
+            chooser: [
+              { n: 1, project_id: "proj1", party_id: "p1" },
+              { n: 2, project_id: "proj2", party_id: "p2" },
+            ],
+          },
+        },
+      ],
+    }),
+    { record_touch: (args) => { pickTouches.push(args); return { data: "touch1", error: null }; } },
+  );
+  const res = await processInbound(
+    params({ From: "+15551110095", Body: "2", MessageSid: "SMpick" }),
+    { supabase: pickFake as never, getEnv: NO_POSTHOG },
+  );
+  assertEquals(res.disposition, "project_chosen");
+  assertEquals(pickTouches.length, 1);
+  assertEquals(pickTouches[0].p_subject_id, "p2");
+  assertEquals(pickTouches[0].p_direction, "in");
+});
+
 // ── LLM confidence gate ──────────────────────────────────────────────────────
 function llmScenario(confidence: number) {
   const rpcCalls: Array<Record<string, unknown>> = [];

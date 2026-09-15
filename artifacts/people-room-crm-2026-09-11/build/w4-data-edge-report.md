@@ -77,8 +77,10 @@ Changed shared modules — **every importer must redeploy in W7** (§8 lists all
 ## 4. CRM-29: what the hardening costs, in full
 
 The store is now a hash, so **no address can be re-emitted by anyone, Patina included**. Every
-place that used to re-read the token had to change, and each change is a behaviour change on a
-live money rail:
+place that re-reads the token had to change, and each change is a behaviour change on a live
+money rail. **This list was incomplete when it was written** (round-1 review B-1 / QA-B2): two
+shipped readers were missed and are re-headed in `00638_pay_link_readers_reheaded.sql` — they are
+the last two rows of the table:
 
 | Path | Before | Now |
 |---|---|---|
@@ -87,6 +89,8 @@ live money rail:
 | `resolve_invoice_return_nonce` | read the bound link's token | **rotates** it: the same link row (same id, Stripe customer, payer email — F2 still holds) is re-addressed and the raw value returned once to the holder who just came back from Checkout. Now VOLATILE |
 | `create-checkout-session` | called `ensureInvoiceLinkUrl` for a boolean | calls the new `invoice_link_is_live` — minting for a boolean would have revoked the payer's own address mid-payment |
 | `resolve_invoice_link` / `_for_checkout` | matched the plaintext | match `token_hash`, and an expired link dies into the same silence a revoked one does |
+| `issue_agreement_draw_invoice` (00578 → **00638**) | `SELECT link.token` after the issue trigger fired | **mints**: `ensure_invoice_link(v_invoice_id)` inside the issuing transaction returns the raw value once. Nobody holds the address it revokes — it was written three statements earlier in this same transaction. The client-portal sign route's deposit offer carries a live `/pay/<token>` again |
+| `get_client_commercial_document_bundle` (00578 → **00638**) | `SELECT link.token` in the depositOffer | **carries no address**: `payToken` is `NULL::text`. It is STABLE and read on every page load, so it may not call the revoking minter. The door gate's reload path points at the deposit letter in the homeowner's own letterbox (`/?invoice=<id>`) instead, and `adaptDesignBuildDepositOffer` no longer requires a token for the offer to exist |
 
 **Backfill:** every link already live got a full 30 days **from the migration**, not from its own
 `created_at`. Dating a shipped link from creation would have killed, at deploy, every pay address
@@ -108,8 +112,10 @@ both surfaces already draw a "no link" state, and the folio's copy reads *"this 
 link yet. Resend the invoice to try again"*, which is now the literal truth. But the designer's
 only route to a copyable address is `Regenerate`, and `useRegenerateInvoiceLink`'s `onSuccess`
 invalidates the query straight after writing the fresh token into the cache — so the address
-disappears on the refetch. **That one-line hook change (drop the invalidate, or teach the hook
-that a null token means "live, address not stored") is owed before ship.**
+disappears on the refetch. **DONE in round 1 (M-5): the invalidate is dropped; the mint is the
+authority on the address and the cache keeps what it minted.** The client letterbox's
+`/pay/<token>` href still reads `get_invoice_link` and still draws its "no link" state — no
+finding named it, and it is recorded here so the next round can rule on it.
 
 ## 5. Gates
 
@@ -203,11 +209,23 @@ decision-resolved-notify  invoice-check-intent      proposal-nudge            st
 
 ## 9. Owed, and not done
 
-- **The folio / letterbox hook change** (§4, last paragraph). One line, owed before ship.
+- **The folio hook change** (§4, last paragraph) — DONE in round 1 (M-5). The client letterbox's
+  `/pay/<token>` href is still fed by `get_invoice_link` and still draws its "no link" state; no
+  round-1 finding named it, so it is left standing and recorded.
 - **The `/paperwork/[token]` page** (spec §3) and the company card's inbound-queue band
   (spec §6) — portal work, W6.
 - **`flushDeferredMessages` writes no out touch.** The brief named `sendPartySms`; the flush is a
   second send path and was left alone rather than widened unasked.
+- **`proposal-send` writes no out touch either.** It calls `prepareCompliantEmail` +
+  `sendPreparedResendRequest` directly, so the channel refusal gate runs but
+  `sendCompliantEmail`'s touch and channel-ref logging do not (round-1 review minor 11). Named
+  here so §2's claim is not read wider than it is.
+- **Three sms-inbound branches that attributed a message to a seat and wrote no touch** — the
+  inbound STOP, HELP, and the project-chooser pick — were closed in round 1 (M-4). An inbound
+  STOP is recorded as a contact as well as a consent act; nothing is excluded.
+- **A letter that cannot name its studio writes no out touch and no channel ref** (round-1 B-2,
+  the R-AW posture). All five account-less senders name theirs — `invoice-send`, `po-send`,
+  `quote-request-send`, `trade-rfq-send`, `trade-agreement-send`.
 - **A message from a phone that resolves to no seat writes no touch** (D-3/D-13). It is already
   marked `needs_review`, which is where it is visible.
 - **Patina Field's site-access screen** builds its change log from the card's own

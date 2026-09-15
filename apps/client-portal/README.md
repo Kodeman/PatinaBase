@@ -76,7 +76,13 @@ Untouched by the retirement — these were never part of the header's route
 tree:
 
 - `/auth/*` — sign-in, magic link, and session handling.
-- `/share/[token]` and other token-bearing links a studio hands out.
+- `/share/[token]` and other token-bearing links a studio hands out:
+  `/share`, `/field`, `/rfq`, `/trade`, `/evidence`, `/plans`, `/pay`, and
+  `/paperwork/[token]` — the trade-side compliance upload door (PR-a, VISION
+  V10, 00637), where a firm's paperwork contact reads what paper the studio
+  holds for the firm and sends what is owed. Each is resolved server-side by
+  its own RPC, carries no nav, and is neither a homeowner surface nor part of
+  the header's route tree.
 - `/preferences/unsubscribe` — made **public** as part of this cutover (it
   was bouncing signed-out recipients). It never unsubscribes anyone on a GET:
   a public GET that mutates is taken by link scanners, mail proxies and

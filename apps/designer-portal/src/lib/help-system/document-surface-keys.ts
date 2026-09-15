@@ -44,10 +44,32 @@ export const DOCUMENT_SURFACE_KEYS = {
   // /library/[id] (the Piece), a person party open, the Desk field rollup.
   libraryPiece:    'designer-portal/document/library/piece',
   peoplePerson:    'designer-portal/document/people/person',
+  // W4 (People room CRM, 2026-09-11) — the company card's own key.
+  peopleFirm:      'designer-portal/document/people/firm',
+  // W4 round 1 (review MAJOR-5) — the twelve keys the People room's help
+  // documents are authored against, mirroring the canonical additions of the
+  // same round. Additive; no document _id changes.
+  peopleWordReach:      'designer-portal/document/people/word/reach',
+  peopleWordConsent:    'designer-portal/document/people/word/consent',
+  peopleWordPaper:      'designer-portal/document/people/word/paper',
+  peopleContactRule:    'designer-portal/document/people/contact-rule',
+  peopleLens:           'designer-portal/document/people/lens',
+  peopleChips:          'designer-portal/document/people/chips',
+  peoplePersonConsent:     'designer-portal/document/people/person/consent',
+  peoplePersonAccessGrant: 'designer-portal/document/people/person/access-grant',
+  peoplePersonAuthority:   'designer-portal/document/people/person/authority',
+  peopleFirmDesignations:  'designer-portal/document/people/firm/designations',
+  peopleFirmPaper:         'designer-portal/document/people/firm/paper',
   deskField:       'designer-portal/document/desk/field',
   // Wave 3 — the Call Sheet's own key (distinct from `coordination`, which
   // court-bar.tsx already owns for the ball-in-court help panel).
   callSheet:       'designer-portal/document/call-sheet',
+  // W4 (People room CRM) — the site access card and the bring-forward
+  // picker, mirroring the canonical registry additions of the same wave.
+  callSheetSiteAccess:   'designer-portal/document/call-sheet/site-access',
+  callSheetBringForward: 'designer-portal/document/call-sheet/bring-forward',
+  // "Log who was told" — the notice itself (W4 r1 MAJOR-5).
+  callSheetSiteAccessTold: 'designer-portal/document/call-sheet/site-access/told',
   // /doc/[id]/plans — the Plan Room (the current set, the light table, the
   // drawing log, the issue ceremony).
   plans:           'designer-portal/document/plans',

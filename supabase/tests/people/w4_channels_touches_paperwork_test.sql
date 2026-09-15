@@ -650,6 +650,249 @@ BEGIN
   RAISE NOTICE '8. spec §8 — v_access_grants carries the paperwork link as its twelfth tier, with its end date, its revoke and its reason, and no credential: passed';
 END $$;
 
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 9. ROUND-1 REVIEW FIXES — paper nobody checked is not paper the studio
+--    holds, the confirm answers all four of R-AZ's legs, and the pay link's
+--    end date reaches the ledger (QA-B1 / MAJOR-2, M-3, M-2, MAJOR-1)
+-- ═══════════════════════════════════════════════════════════════════════════
+DO $$
+DECLARE
+  v_firm     uuid := 'fa200000-0000-4000-8000-00000000000c';
+  v_pending  uuid := 'fa700000-0000-4000-8000-00000000000d';
+  v_typed    uuid := 'fa700000-0000-4000-8000-00000000000e';
+BEGIN
+  INSERT INTO public.studio_contacts
+    (id, organization_id, entity_kind, contact_kind, company_name, company_kind, created_by)
+  VALUES (v_firm, 'fa000000-0000-4000-8000-00000000000a', 'company', 'sub',
+          'Paper Word Test Co', 'sub', 'a0000000-0000-0000-0000-000000000004');
+
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  IF public.compliance_state(v_firm) <> 'not_on_file' THEN
+    RAISE EXCEPTION 'BLOCK 9 FAIL (a): a firm holding nothing does not read not_on_file';
+  END IF;
+  PERFORM pg_temp.reset_role();
+
+  -- (b) THE PENDING CASE. An in-force, GATING certificate arrives through the
+  -- door and nobody has opened it: the studio holds nothing yet, and
+  -- site_access may not read as satisfied on it.
+  INSERT INTO public.studio_compliance_documents
+    (id, organization_id, holder_type, holder_id, doc_type, blocks,
+     expires_on, source, inbound)
+  VALUES (v_pending, 'fa000000-0000-4000-8000-00000000000a', 'company', v_firm,
+          'coi_gl', ARRAY['site_access']::text[], CURRENT_DATE + 365,
+          'field_link', true);
+
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  IF public.compliance_state(v_firm) <> 'not_on_file' THEN
+    RAISE EXCEPTION 'BLOCK 9 FAIL (b): an unchecked upload moved the firm''s paper word to %',
+      public.compliance_state(v_firm);
+  END IF;
+  -- and the fold every Directory row, seat line and roster row reads follows it
+  IF public.identity_paper_state('fa100000-0000-4000-8000-00000000000a', v_firm)
+       <> 'not_on_file' THEN
+    RAISE EXCEPTION 'BLOCK 9 FAIL (b2): identity_paper_state counted the unchecked upload';
+  END IF;
+  PERFORM pg_temp.reset_role();
+
+  -- (c) THE REJECTED CASE, named in its own right: a document the studio has
+  -- explicitly REFUSED is not held either, and the leg that says so is written
+  -- separately so a later edit cannot reopen this half alone.
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000003');
+  PERFORM public.reject_inbound_document(v_pending, 'The certificate names another firm.');
+  PERFORM pg_temp.reset_role();
+
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  IF public.compliance_state(v_firm) <> 'not_on_file' THEN
+    RAISE EXCEPTION 'BLOCK 9 FAIL (c): a REFUSED document still reads as the firm''s current paper (%)',
+      public.compliance_state(v_firm);
+  END IF;
+  PERFORM pg_temp.reset_role();
+
+  -- (d) The studio's own record is held the moment it is typed: the studio
+  -- saying so IS the check, and useRecordComplianceDocument stamps no
+  -- verified_at.
+  INSERT INTO public.studio_compliance_documents
+    (id, organization_id, holder_type, holder_id, doc_type, source, inbound)
+  VALUES (v_typed, 'fa000000-0000-4000-8000-00000000000a', 'company', v_firm,
+          'w9', 'studio', false);
+
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  IF public.compliance_state(v_firm) <> 'current' THEN
+    RAISE EXCEPTION 'BLOCK 9 FAIL (d): the studio''s own record stopped counting (%)',
+      public.compliance_state(v_firm);
+  END IF;
+  PERFORM pg_temp.reset_role();
+
+  RAISE NOTICE '9. QA-B1 / MAJOR-2 — an unchecked upload and a refused one are both absent from the firm''s paper word, on the card and through identity_paper_state, while the studio''s own record still counts: passed';
+END $$;
+
+-- ── the firm's own page says "Received" only about paper the firm sent ─────
+DO $$
+DECLARE
+  v_firm  uuid := 'fa200000-0000-4000-8000-00000000000c';
+  v_token text;
+  v_docs  jsonb;
+  v_row   jsonb;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  SELECT m.token INTO v_token
+    FROM public.mint_paperwork_link(v_firm, now() + interval '30 days') m;
+  PERFORM pg_temp.reset_role();
+
+  v_docs := (public.resolve_paperwork_link(v_token, false))->'documents';
+  SELECT d INTO v_row FROM jsonb_array_elements(v_docs) d
+   WHERE d->>'doc_type' = 'w9';
+  IF v_row IS NULL THEN
+    RAISE EXCEPTION 'BLOCK 9b FAIL (a): the firm''s page does not carry the paper the studio holds';
+  END IF;
+  IF (v_row->>'awaiting_check')::boolean THEN
+    RAISE EXCEPTION 'BLOCK 9b FAIL (b): the firm is told its own studio''s record "was received"';
+  END IF;
+
+  -- an inbound one, and only that one, is awaiting the studio's check
+  PERFORM public.record_inbound_compliance_document(
+    v_token, 'coi_gl', NULL, 'GL-55', 'Western National Test',
+    CURRENT_DATE, CURRENT_DATE + 200,
+    'fa000000-0000-4000-8000-00000000000a/' || v_firm::text || '/'
+      || gen_random_uuid()::text || '/coi.pdf');
+
+  v_docs := (public.resolve_paperwork_link(v_token, false))->'documents';
+  SELECT d INTO v_row FROM jsonb_array_elements(v_docs) d
+   WHERE d->>'doc_type' = 'coi_gl';
+  IF v_row IS NULL OR NOT (v_row->>'awaiting_check')::boolean THEN
+    RAISE EXCEPTION 'BLOCK 9b FAIL (c): the paper the firm just sent is not marked received';
+  END IF;
+
+  RAISE NOTICE '9b. MAJOR-1 — awaiting_check is the firm''s own upload, never the paper the studio typed itself: passed';
+END $$;
+
+-- ── the confirm answers all four of R-AZ's time-varying legs ──────────────
+DO $$
+DECLARE
+  v_firm     uuid := 'fa200000-0000-4000-8000-00000000000d';
+  v_long     uuid := 'fa700000-0000-4000-8000-000000000010';
+  v_shorter  uuid := 'fa700000-0000-4000-8000-000000000011';
+  v_undated  uuid := 'fa700000-0000-4000-8000-000000000012';
+  v_lapsed   uuid := 'fa700000-0000-4000-8000-000000000013';
+  v_state    text;
+BEGIN
+  INSERT INTO public.studio_contacts
+    (id, organization_id, entity_kind, contact_kind, company_name, company_kind, created_by)
+  VALUES (v_firm, 'fa000000-0000-4000-8000-00000000000a', 'company', 'sub',
+          'Confirm Legs Test Co', 'sub', 'a0000000-0000-0000-0000-000000000004');
+
+  -- (a) A SHORTER-DATED REPLACEMENT — the firm changes carrier mid-term. The
+  -- trigger's compliance_successor_not_later was not pre-checked at all, so
+  -- the confirm died on a constraint name and the pending row could never be
+  -- confirmed, only refused (M-3).
+  INSERT INTO public.studio_compliance_documents
+    (id, organization_id, holder_type, holder_id, doc_type, blocks, expires_on,
+     verified_by, verified_at)
+  VALUES (v_long, 'fa000000-0000-4000-8000-00000000000a', 'company', v_firm,
+          'coi_gl', ARRAY['site_access']::text[], CURRENT_DATE + 400,
+          'a0000000-0000-0000-0000-000000000004', now() - interval '1 day');
+  INSERT INTO public.studio_compliance_documents
+    (id, organization_id, holder_type, holder_id, doc_type, blocks, expires_on,
+     source, inbound)
+  VALUES (v_shorter, 'fa000000-0000-4000-8000-00000000000a', 'company', v_firm,
+          'coi_gl', ARRAY['site_access']::text[], CURRENT_DATE + 120,
+          'field_link', true);
+
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000003');
+  BEGIN
+    PERFORM public.confirm_inbound_document(v_shorter);
+    PERFORM pg_temp.reset_role();
+    RAISE EXCEPTION 'BLOCK 9c FAIL (a): a shorter-dated successor retired a longer one';
+  EXCEPTION
+    WHEN check_violation THEN
+      IF SQLERRM NOT LIKE '%compliance_confirm_ends_sooner%' THEN
+        RAISE EXCEPTION 'BLOCK 9c FAIL (a2): the refusal was %, not the pre-check''s sentence', SQLERRM;
+      END IF;
+  END;
+  PERFORM pg_temp.reset_role();
+
+  -- (b) A DATED PAPER OVER AN UNDATED ONE, with its date already passed. The
+  -- lapsed leg only ran when the OLD row carried a date, so this one reached
+  -- 00623's trigger too.
+  INSERT INTO public.studio_compliance_documents
+    (id, organization_id, holder_type, holder_id, doc_type, verified_by, verified_at)
+  VALUES (v_undated, 'fa000000-0000-4000-8000-00000000000a', 'company', v_firm,
+          'w9', 'a0000000-0000-0000-0000-000000000004', now() - interval '1 day');
+  INSERT INTO public.studio_compliance_documents
+    (id, organization_id, holder_type, holder_id, doc_type, expires_on, source, inbound)
+  VALUES (v_lapsed, 'fa000000-0000-4000-8000-00000000000a', 'company', v_firm,
+          'w9', CURRENT_DATE - 5, 'field_link', true);
+
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000003');
+  BEGIN
+    PERFORM public.confirm_inbound_document(v_lapsed);
+    PERFORM pg_temp.reset_role();
+    RAISE EXCEPTION 'BLOCK 9c FAIL (b): a lapsed paper retired the undated one on file';
+  EXCEPTION
+    WHEN check_violation THEN
+      IF SQLERRM NOT LIKE '%compliance_confirm_already_lapsed%' THEN
+        RAISE EXCEPTION 'BLOCK 9c FAIL (b2): the refusal was %, not the pre-check''s sentence', SQLERRM;
+      END IF;
+  END;
+  PERFORM pg_temp.reset_role();
+
+  -- neither refusal stamped anything, and the paper on file is untouched
+  IF EXISTS (SELECT 1 FROM public.studio_compliance_documents
+              WHERE id IN (v_shorter, v_lapsed) AND verified_at IS NOT NULL)
+     OR EXISTS (SELECT 1 FROM public.studio_compliance_documents
+                 WHERE id IN (v_long, v_undated) AND superseded_by IS NOT NULL) THEN
+    RAISE EXCEPTION 'BLOCK 9c FAIL (c): a refused confirm still wrote';
+  END IF;
+
+  -- and an honest renewal still lands
+  UPDATE public.studio_compliance_documents
+     SET expires_on = CURRENT_DATE + 500 WHERE id = v_shorter;
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000003');
+  PERFORM public.confirm_inbound_document(v_shorter);
+  PERFORM pg_temp.reset_role();
+  IF NOT EXISTS (SELECT 1 FROM public.studio_compliance_documents
+                  WHERE id = v_long AND superseded_by = v_shorter) THEN
+    RAISE EXCEPTION 'BLOCK 9c FAIL (d): an honest renewal was not confirmed';
+  END IF;
+
+  RAISE NOTICE '9c. M-3 — the confirm answers all four supersede legs with a sentence of its own: a shorter-dated successor and a lapsed one are refused before anything is stamped, and an honest renewal still lands: passed';
+END $$;
+
+-- ── E9 reads the pay link's own end date ───────────────────────────────────
+DO $$
+DECLARE
+  v_invoice uuid := 'b0000000-0000-0000-0000-00000000e142';   -- seeded, status 'sent'
+  v_token   text;
+  v_row     record;
+  v_link    public.invoice_links%ROWTYPE;
+BEGIN
+  -- The seeded invoice's project records no studio (R-BD's legacy population),
+  -- and this tier is gated on the record, so the invoice is given this test
+  -- studio for the width of the transaction. What is under test is the
+  -- BRANCH'S COLUMN, not its gate — w1b's suite owns the gate.
+  UPDATE public.projects SET studio_id = 'fa000000-0000-4000-8000-00000000000a'
+   WHERE id = (SELECT project_id FROM public.invoices WHERE id = v_invoice);
+
+  v_token := public.ensure_invoice_link(v_invoice);
+  SELECT * INTO v_link FROM public.invoice_links
+   WHERE invoice_id = v_invoice AND status = 'active';
+
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  SELECT * INTO v_row FROM public.v_access_grants
+   WHERE tier = 'invoice_pay' AND subject_id = v_link.id;
+  PERFORM pg_temp.reset_role();
+
+  IF v_row.grant_id IS NULL THEN
+    RAISE EXCEPTION 'BLOCK 9d FAIL (a): the pay link is not in the grants ledger for its own studio';
+  END IF;
+  IF v_row.expires_at IS DISTINCT FROM v_link.expires_at THEN
+    RAISE EXCEPTION 'BLOCK 9d FAIL (b): E9 says the pay door ends % while the record says %',
+      v_row.expires_at, v_link.expires_at;
+  END IF;
+
+  RAISE NOTICE '9d. M-2 — the invoice_pay tier carries the link''s own 30-day end date, not NULL: passed';
+END $$;
+
 DO $$ BEGIN RAISE NOTICE 'W4 SQL suite: all blocks passed'; END $$;
 
 ROLLBACK;

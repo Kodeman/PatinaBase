@@ -1392,13 +1392,17 @@ export function useRegenerateInvoiceLink(options?: { errorSurface?: 'inline' }) 
       return { token: data, status: 'active' };
     },
     onSuccess: (link, { invoiceId }) => {
-      // Both writes are deliberate: setQueryData echoes the new token at once,
-      // so the folio cannot copy the dead one during the refetch (React Query
-      // serves the previous value while a query is invalidated but in flight);
-      // the invalidate then re-reads get_invoice_link, which stays the
-      // authority on status.
+      // THE MINT IS THE ONLY AUTHORITY ON THE ADDRESS (W4 r1 M-5).
+      //
+      // setQueryData echoes the freshly minted token so the folio can copy it.
+      // The invalidate that used to follow re-read `get_invoice_link`, which
+      // since 00636 answers `token: NULL` for every invoice (the column is
+      // frozen; only a producer can emit a raw value) — so the refetch parsed
+      // to null and the address the designer had just minted disappeared from
+      // under the Copy control. The one remaining route to a copyable pay
+      // address destroyed what it produced. No invalidate: the cached value is
+      // the address, and the next mint replaces it.
       queryClient.setQueryData(['invoice-link', invoiceId], link);
-      void queryClient.invalidateQueries({ queryKey: ['invoice-link', invoiceId] });
     },
   });
 }

@@ -20,8 +20,74 @@ const chaseMutate = jest.fn();
 
 /** CR-10: the History region's first job and project count read these. */
 const seatsData: { current: unknown[] } = { current: [] };
+/** W4/P3 — the inbound queue on the Paper region, and E13 on History. */
+const inboundData: { current: unknown[] } = { current: [] };
+const lastTouch: { current: unknown } = { current: null };
 
 jest.mock("@patina/supabase", () => ({
+  // ── W4/P3 — E13 touches, CRM-23 notices, the paperwork door, the queue ──
+  useTouches: () => ({ data: [] }),
+  useLastTouch: () => ({ data: lastTouch.current }),
+  useRecordNotice: () => ({
+    mutateAsync: async () => ({
+      id: 'touch-1',
+      what: 'x',
+      recorded_at: '2026-09-15T00:00:00Z',
+      recorded_by: null,
+      told_names: [],
+    }),
+    isPending: false,
+  }),
+  asNoticeError: (e: unknown) =>
+    e instanceof Error ? e.message : String(e ?? ''),
+  lastInboundDecision: (
+    rows: ReadonlyArray<{ direction: string; decision_class: string }> | null | undefined,
+  ) =>
+    (rows ?? []).find(
+      (r) => r.direction === 'in' && r.decision_class !== 'none',
+    ) ?? null,
+  inboundDecisionSentence: (t: { decision_class: string; authority_check: string } | null) =>
+    t
+      ? `A ${t.decision_class} decision came in.${
+          t.authority_check === 'failed_no_authority'
+            ? ' Received, not authority.'
+            : ''
+        }`
+      : null,
+  touchSentence: () => 'Last touch 12 Sep 2026, by text.',
+  NO_TOUCH_SENTENCE: 'No contact on the record yet.',
+  useInboundDocuments: () => ({ data: inboundData.current }),
+  useConfirmInboundDocument: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useRejectInboundDocument: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  inboundQueueHeading: (n: number) =>
+    `${n} document${n === 1 ? '' : 's'} waiting for your check`,
+  inboundDocumentLine: (
+    d: { doc_type: string },
+    firm: string,
+  ) => `${d.doc_type}, uploaded by ${firm}.`,
+  usePaperworkLinks: () => ({ data: [] }),
+  useMintPaperworkLink: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useRevokePaperworkLink: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  paperworkLinkUrl: (t: string) => `https://client.patina.cloud/paperwork/${t}`,
+  thirtyDaysOut: () => '2026-10-15',
+  firmEngagementWindowEnd: (
+    seats: ReadonlyArray<{
+      company_id: string | null;
+      off_job_at?: string | null;
+      on_site_to: string | null;
+      warranty_until: string | null;
+    }>,
+    companyId: string,
+  ) => {
+    let latest: string | null = null;
+    for (const seat of seats) {
+      if (seat.company_id !== companyId || seat.off_job_at) continue;
+      for (const day of [seat.on_site_to, seat.warranty_until]) {
+        if (day && (!latest || day > latest)) latest = day;
+      }
+    }
+    return latest;
+  },
   useStudioContact: () => ({ data: cardData.current }),
   // W3/P2 — 00630's nightly notices behind the Paper region's sentence.
   useComplianceNotices: () => ({ data: [] }),
@@ -137,6 +203,8 @@ function renderCard(over: Record<string, unknown> = {}) {
 beforeEach(() => {
   chaseMutate.mockClear();
   seatsData.current = [];
+  inboundData.current = [];
+  lastTouch.current = null;
   docsData.current = [
     {
       id: "doc-1",
@@ -455,5 +523,115 @@ describe("CR3-11 — the card announces through the Room, not beside it", () => 
   it("mounts no live region of its own", () => {
     renderCard();
     expect(screen.queryAllByRole("status")).toHaveLength(0);
+  });
+});
+
+
+/* ── W4/P3 — the paperwork door and what it fills (spec §6, R-AD, E13) ────── */
+
+describe("the Paper region's inbound queue", () => {
+  it("prints nothing where no paper is waiting", () => {
+    const { container } = render(<div />);
+    container.remove();
+    renderCard();
+    expect(document.querySelector("[data-inbound-queue]")).toBeNull();
+  });
+
+  it("stands INSIDE the Paper region, above the table", () => {
+    inboundData.current = [
+      {
+        id: "doc-2",
+        holder_id: "firm-northgate",
+        doc_type: "coi_gl",
+        doc_label: null,
+        created_at: "2026-10-12T10:00:00Z",
+      },
+    ];
+    renderCard();
+    const paper = document.querySelector("[data-company-paper]")!;
+    expect(paper.querySelector("[data-inbound-queue]")).not.toBeNull();
+    expect(
+      screen.getByText("1 document waiting for your check"),
+    ).toBeInTheDocument();
+  });
+
+  it("prints on a firm that never owed paper, because it ARRIVED", () => {
+    // R-A / C13 keeps the paper WORD off a lender; a document the firm
+    // actually sent through the studio's own door is a different fact.
+    cardData.current = {
+      ...(cardData.current as Record<string, unknown>),
+      contact_kind: "lender",
+      company_kind: "lender",
+    };
+    inboundData.current = [
+      {
+        id: "doc-2",
+        holder_id: "firm-northgate",
+        doc_type: "coi_gl",
+        doc_label: null,
+        created_at: "2026-10-12T10:00:00Z",
+      },
+    ];
+    renderCard();
+    expect(
+      screen.getByText("1 document waiting for your check"),
+    ).toBeInTheDocument();
+  });
+});
+
+describe("Mint a paperwork link on the Paper act row", () => {
+  it("stands beside Record a document and Chase the renewal", () => {
+    renderCard();
+    expect(screen.getByText("Mint a paperwork link")).toBeInTheDocument();
+  });
+
+  it("names the firm's own window, read off the same seats the card holds", () => {
+    seatsData.current = [
+      {
+        seat_id: "seat-dana",
+        person_id: "card-dana",
+        studio_contact_id: "card-dana",
+        company_id: "firm-northgate",
+        project_id: "okonkwo",
+        project_name: "Okonkwo residence",
+        stage: "active",
+        on_site_from: "2026-10-12",
+        on_site_to: "2027-08-13",
+        warranty_until: null,
+        off_job_at: null,
+      },
+    ];
+    renderCard();
+    fireEvent.click(screen.getByText("Mint a paperwork link"));
+    expect(
+      screen.getByText(
+        "– The door can end with this firm's work here, 13 August 2027.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("offers no door to a firm whose card the studio never asked paper of", () => {
+    cardData.current = {
+      ...(cardData.current as Record<string, unknown>),
+      contact_kind: "lender",
+      company_kind: "lender",
+    };
+    renderCard();
+    expect(screen.queryByText("Mint a paperwork link")).toBeNull();
+  });
+});
+
+describe("the History region reads E13", () => {
+  it("says its own sentence where no contact is on the record (R-V)", () => {
+    renderCard();
+    expect(screen.getByText("No contact on the record yet.")).toBeInTheDocument();
+  });
+
+  it("prints the record's sentence where a touch exists", () => {
+    lastTouch.current = { id: "t1" };
+    renderCard();
+    expect(
+      screen.getByText("Last touch 12 Sep 2026, by text."),
+    ).toBeInTheDocument();
   });
 });

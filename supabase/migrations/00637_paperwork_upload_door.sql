@@ -54,7 +54,11 @@
 -- reject_inbound_document, paperwork_link_rate_limit_hit — all NEW (verified
 --   grep -rln "CREATE OR REPLACE FUNCTION[^(]*<name>" supabase/migrations/*.sql
 -- empty at 00636 for each). v_access_grants: 00627 → this file (00627's body
--- verbatim plus a twelfth branch, spec §8).
+-- verbatim plus a twelfth branch, spec §8). compliance_state: 00623 → this
+-- file (00623's body verbatim, two predicates added to its counting SELECT —
+-- W4 round-1 review QA-B1 / MAJOR-2, section 1b). access_grants_invoice_links:
+-- 00627 → this file (00627's body verbatim, one column changed — W4 round-1
+-- review M-2, section 9b).
 --
 -- Adds GRANT/REVOKE → regenerate seed/00-legacy-grants.sql after this
 -- migration (python3 scripts/generate-legacy-grants.py).
@@ -98,6 +102,107 @@ COMMENT ON COLUMN public.studio_compliance_documents.rejection_reason IS
 CREATE INDEX IF NOT EXISTS idx_studio_compliance_documents_pending
   ON public.studio_compliance_documents (organization_id, holder_id, created_at DESC)
   WHERE inbound = true AND verified_at IS NULL AND rejected_at IS NULL;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 1b. compliance_state — paper nobody has checked is not paper the studio
+--     holds (W4 round-1 review QA-B1 / MAJOR-2)
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 00623's body verbatim (grep -rln "CREATE OR REPLACE FUNCTION[^(]*compliance_state"
+-- supabase/migrations/*.sql | sort | tail -1 → 00623), with two predicates
+-- added to the counting SELECT. It is re-headed HERE rather than edited there
+-- because `rejected_at` is section 1's column, three statements above, and a
+-- SQL function body is parsed at creation.
+--
+-- WHAT WAS WRONG. The count took every non-superseded row with no reference to
+-- verified_at or rejected_at, and this file's own door (section 8) INSERTs an
+-- inbound document `verified_at NULL, superseded_by NULL`. So on a firm
+-- holding no paper of that type the word went `not_on_file → current` the
+-- instant the trade uploaded — before any studio member opened it — and stayed
+-- `current` after a member had explicitly REFUSED it (reproduced live in
+-- round-1 QA: the company card's Paper table, the Directory row, the seat
+-- line, every roster row, and the firm's own /paperwork/<token> page all read
+-- the refused licence as held). For a doc_type carrying real gates that is
+-- site_access, payment or draw reading as satisfied on a document the studio
+-- never verified and had said no to.
+--
+-- BOTH LEGS ARE NAMED. `rejected_at IS NULL` is redundant today — a refused row
+-- is always inbound and unverified — and it is written anyway, so that a later
+-- edit to the inbound leg cannot quietly reopen the refused half. A document
+-- the STUDIO recorded itself (`inbound = false`) is held the moment it is
+-- typed, as it always was: the studio saying so IS the check, and
+-- useRecordComplianceDocument never stamps verified_at.
+--
+-- identity_paper_state() (00626 → 00629) folds this function over the card and
+-- its firm, so the whole Directory, every seat line and every roster row follow
+-- from this one edit. `retainedComplianceDocuments` in @patina/supabase carries
+-- the same rule to the browser's own list.
+CREATE OR REPLACE FUNCTION public.compliance_state(p_holder_id uuid)
+RETURNS text
+LANGUAGE sql
+STABLE
+SET search_path TO 'public'
+AS $$
+  WITH RECURSIVE chain(root, root_blocks, root_doc_type, succ, depth) AS (
+    -- every retired row of this card, and the first hop of its chain
+    SELECT d.id, d.blocks, d.doc_type, d.superseded_by, 0
+      FROM public.studio_compliance_documents d
+     WHERE d.holder_id = p_holder_id
+       AND d.superseded_by IS NOT NULL
+    UNION ALL
+    -- … then the next hop, carrying the ROOT's gates AND the ROOT's paper
+    -- forward unchanged
+    SELECT c.root, c.root_blocks, c.root_doc_type, s.superseded_by, c.depth + 1
+      FROM chain c
+      JOIN public.studio_compliance_documents s ON s.id = c.succ
+     WHERE c.depth < 64                        -- the head-of-chain guard makes
+  ),                                           -- superseded_by acyclic; this
+                                               -- caps a chain written before it
+  retired AS (
+    -- a row leaves the reckoning while ANY reachable successor still earns
+    -- the retirement: in force, carrying at least the root's gates, and the
+    -- SAME PAPER the root is (W3 r8 B-1 — the doc_type leg)
+    SELECT DISTINCT c.root
+      FROM chain c
+      JOIN public.studio_compliance_documents s ON s.id = c.succ
+     WHERE (s.expires_on IS NULL OR s.expires_on >= CURRENT_DATE)
+       AND c.root_blocks <@ s.blocks
+       AND s.doc_type = c.root_doc_type
+  )
+  SELECT CASE
+           WHEN count(*) = 0 THEN 'not_on_file'
+           WHEN count(*) FILTER (
+                  WHERE cardinality(d.blocks) > 0
+                    AND d.expires_on IS NOT NULL
+                    AND d.expires_on < CURRENT_DATE) > 0 THEN 'lapsed'
+           WHEN count(*) FILTER (
+                  WHERE cardinality(d.blocks) > 0
+                    AND d.expires_on IS NOT NULL
+                    AND d.expires_on <= CURRENT_DATE + 30) > 0 THEN 'lapses_soon'
+           ELSE 'current'
+         END
+    FROM public.studio_compliance_documents d
+   WHERE d.holder_id = p_holder_id
+     -- PAPER NOBODY CHECKED IS NOT PAPER THE STUDIO HOLDS (W4 r1 QA-B1 /
+     -- MAJOR-2, the two legs below).
+     AND d.rejected_at IS NULL
+     AND NOT (d.inbound AND d.verified_at IS NULL)
+     AND (d.superseded_by IS NULL
+          OR d.id NOT IN (SELECT root FROM retired));
+$$;
+
+REVOKE ALL ON FUNCTION public.compliance_state(uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.compliance_state(uuid) TO authenticated, service_role;
+
+COMMENT ON FUNCTION public.compliance_state(uuid) IS
+  'The paper word for one rolodex card: current | lapses_soon | lapsed | '
+  'not_on_file (direction §3.8), over its non-superseded documents. Since '
+  '00637 it counts only paper the studio HOLDS: an inbound upload waiting for '
+  'a check, and a refused one, are not held, and the inbound queue band is '
+  'where a pending upload is read. Worst-first; only paper with a non-empty '
+  'blocks[] can move the word off current; undated paper is held and cannot '
+  'lapse; NO paper at all is not_on_file. A superseded row leaves the '
+  'reckoning only while a reachable successor is in force, carries its gates '
+  'and is the same doc_type (00623''s recursive walk, kept verbatim).';
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- 2. paperwork_link_tokens (spec §2)
@@ -516,7 +621,16 @@ BEGIN
                  WHEN doc.expires_on < CURRENT_DATE THEN 'lapsed'
                  WHEN doc.expires_on <= CURRENT_DATE + 30 THEN 'lapses_soon'
                  ELSE 'current' END,
-               'awaiting_check', doc.verified_at IS NULL AND doc.rejected_at IS NULL
+               -- ONLY PAPER THE FIRM SENT IS "RECEIVED" (W4 r1 MAJOR-1).
+               -- The studio's own "Record a document" act writes
+               -- `source='studio', inbound=false` and never stamps
+               -- verified_at, so without the inbound leg this said
+               -- awaiting_check over every paper the STUDIO typed — and the
+               -- firm's own page answered "Received. <Studio> will confirm
+               -- it." about paper the firm never sent (measured: five seeded
+               -- company cards carry exactly such a W-9).
+               'awaiting_check',
+                 doc.inbound AND doc.verified_at IS NULL AND doc.rejected_at IS NULL
              ) AS d
         FROM public.studio_compliance_documents doc
        WHERE doc.holder_id = v_row.company_id
@@ -713,17 +827,47 @@ BEGIN
    LIMIT 1;
 
   -- R-AZ, checked BEFORE anything is stamped. 00623's guard refuses a
-  -- successor that is not dated, in force, and carrying the retired paper's
-  -- gates; letting it fire mid-function would roll the confirm back with a
-  -- constraint name on the face. The studio gets a sentence instead, and the
-  -- paper the firm sent stays pending until a dated one replaces it.
-  IF v_old IS NOT NULL AND v_old_expires IS NOT NULL THEN
-    IF v_doc.expires_on IS NULL OR v_doc.expires_on < CURRENT_DATE THEN
+  -- successor that is not dated, in force, not shorter-dated, and carrying the
+  -- retired paper's gates; letting it fire mid-function would roll the confirm
+  -- back with a constraint name on the face. The studio gets a sentence
+  -- instead, and the paper the firm sent stays pending until a dated one
+  -- replaces it.
+  --
+  -- ALL FOUR TIME-VARYING LEGS ARE ANSWERED HERE (W4 r1 M-3). Two of them were
+  -- nested under `v_old_expires IS NOT NULL` and a third was not checked at
+  -- all, so two ordinary inputs walked past the sentence and died on the
+  -- trigger — a replacement COI ending sooner than the one on file
+  -- (compliance_successor_not_later), and a dated paper replacing an UNDATED
+  -- one with a date already passed (compliance_successor_already_lapsed, whose
+  -- trigger leg keys on the successor's own date and not on the retired row's).
+  -- Both left the pending row confirmable by nobody, only refusable, which is
+  -- the outcome D-8 says this pre-check exists to prevent.
+  IF v_old IS NOT NULL THEN
+    -- A DATED paper may only be retired by a dated one (compliance_successor_undated).
+    IF v_old_expires IS NOT NULL AND v_doc.expires_on IS NULL THEN
       RAISE EXCEPTION 'compliance_confirm_needs_a_live_date'
         USING HINT = 'This paper retires a dated one, so it needs its own '
                      'expiry, and that date has to be ahead.',
               ERRCODE = 'check_violation';
     END IF;
+    -- The successor must still be in force, whatever the retired paper's own
+    -- datedness (compliance_successor_already_lapsed).
+    IF v_doc.expires_on IS NOT NULL AND v_doc.expires_on < CURRENT_DATE THEN
+      RAISE EXCEPTION 'compliance_confirm_already_lapsed'
+        USING HINT = 'This paper has already lapsed, so it cannot retire the '
+                     'paper on file.',
+              ERRCODE = 'check_violation';
+    END IF;
+    -- A renewal covers at least as long as the paper it retires
+    -- (compliance_successor_not_later).
+    IF v_old_expires IS NOT NULL
+       AND v_doc.expires_on IS NOT NULL
+       AND v_doc.expires_on < v_old_expires THEN
+      RAISE EXCEPTION 'compliance_confirm_ends_sooner'
+        USING HINT = 'This paper ends before the one it would retire.',
+              ERRCODE = 'check_violation';
+    END IF;
+    -- And it carries at least the gates it retires (compliance_successor_drops_a_gate).
     IF NOT (v_old_blocks <@ v_doc.blocks) THEN
       RAISE EXCEPTION 'compliance_confirm_drops_a_gate'
         USING HINT = 'The paper it retires blocks more than this one does.',
@@ -753,9 +897,10 @@ COMMENT ON FUNCTION public.confirm_inbound_document(uuid) IS
   'Spec §6 Confirm: stamps verified_by/verified_at on a pending inbound '
   'document and, only then, points the previously verified paper of the same '
   'type at it (spec §5.5). Nothing is deleted. Studio members only; '
-  'idempotent; refuses a document already rejected. R-AZ is checked BEFORE the '
-  'stamp so a successor that is undated, lapsed, or carries fewer gates than '
-  'the paper it would retire earns a sentence rather than a constraint name '
+  'idempotent; refuses a document already rejected. ALL FOUR of R-AZ''s '
+  'time-varying legs are checked BEFORE the stamp — undated, lapsed, '
+  'shorter-dated, or carrying fewer gates than the paper it would retire — so '
+  'each earns a sentence rather than a constraint name from 00623''s trigger '
   '(00637).';
 
 CREATE OR REPLACE FUNCTION public.reject_inbound_document(
@@ -835,6 +980,68 @@ COMMENT ON FUNCTION public.reject_inbound_document(uuid, text) IS
   'awaiting_review, keyed idempotently on the document so a double-tap drafts '
   'one chase (acceptance 7). The row is never deleted. Studio members only '
   '(00637).';
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 9b. access_grants_invoice_links — the pay link's door has an end date now
+--     (W4 round-1 review M-2)
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 00627's body verbatim (grep -rln "CREATE OR REPLACE FUNCTION[^(]*access_grants_invoice_links"
+-- supabase/migrations/*.sql | sort | tail -1 → 00627), one column changed:
+-- NULL::timestamptz → il.expires_at. Re-headed HERE rather than edited there
+-- because invoice_links.expires_at is 00636's column, and a SQL function body
+-- is parsed at creation.
+--
+-- 00636 gave every pay link a 30-day expiry two files ago in this same wave.
+-- E9 is the one ledger that answers what is open on a person and when it ends
+-- (CS2-14), and its invoice_pay tier went on reporting no end date at all —
+-- while the paperwork tier three branches below carried its own expires_at
+-- correctly, so the same view disagreed with itself about the same kind of
+-- fact. No test caught it: invoice_links is empty on a fresh local reset.
+CREATE OR REPLACE FUNCTION public.access_grants_invoice_links()
+RETURNS TABLE (
+  grant_id text, tier text, subject_type text, subject_id uuid,
+  scope_type text, scope_id uuid, granted_by uuid, granted_at timestamptz,
+  expires_at timestamptz, last_used_at timestamptz, revoked_at timestamptz,
+  revoke_reason text
+)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+  SELECT
+    'invoice_pay:' || il.id::text, 'invoice_pay', 'link', il.id,
+    'invoice', il.invoice_id, il.created_by, il.created_at,
+    il.expires_at, il.last_viewed_at, il.revoked_at,
+    CASE WHEN il.status = 'closed' THEN 'closed' END
+  FROM public.invoice_links il
+  JOIN public.invoices inv ON inv.id = il.invoice_id
+  WHERE public.is_design_studio_comember(inv.designer_id)
+    AND (CASE
+           WHEN inv.studio_id IS NOT NULL
+             THEN public.is_active_studio_member(inv.studio_id)
+           WHEN inv.project_id IS NOT NULL
+             THEN public.is_active_studio_member(
+                    public.project_recorded_studio(inv.project_id))
+           ELSE true
+         END);
+$$;
+
+REVOKE ALL ON FUNCTION public.access_grants_invoice_links() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.access_grants_invoice_links()
+  TO authenticated, service_role;
+
+COMMENT ON FUNCTION public.access_grants_invoice_links() IS
+  'v_access_grants'' invoice_pay branch (00627''s body, re-headed in 00637). '
+  'invoice_links has RLS enabled and ZERO policies (00574), so it stays closed '
+  'to authenticated and this definer reader is the WHOLE access rule: the '
+  'invoice''s own studio, else the studio its project RECORDS, else the '
+  'design-studio predicate for a studio invoice that names neither, AND '
+  'is_design_studio_comember(designer_id) beside it. It never selects the '
+  'token column — grant_id is the row uuid, and since 00636 the column holds '
+  'nothing but NULL anyway. expires_at is the link''s own 30-day end date '
+  '(00636): a door with an end may not read as endless on the ledger that '
+  'answers when doors end (W4 r1 M-2).';
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- 10. v_access_grants — the twelfth door (spec §8)
@@ -959,9 +1166,10 @@ JOIN public.site_requests sr ON sr.id = sra.request_id
 
 UNION ALL
 
--- 9 · Invoice pay link. 00574 stores the token in PLAINTEXT and gives the row
---     no expiry; the definer reader returns the row's uuid and never the
---     token (00574:63-89).
+-- 9 · Invoice pay link. Since 00636 the row stores sha256(token) and carries
+--     its own 30-day expires_at; the definer reader returns the row's uuid,
+--     never a credential, and the tier's expires_at is the link's own
+--     (00636 §2, access_grants_invoice_links 00627).
 SELECT * FROM public.access_grants_invoice_links()
 
 UNION ALL
