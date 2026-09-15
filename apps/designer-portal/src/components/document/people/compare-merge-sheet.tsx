@@ -106,13 +106,36 @@ export function mergeConsequenceSentence(
    * never omitted over a do-not-contact or a route.)
    */
   survivorHasRule = false,
+  /**
+   * r13 MAJOR-2 / r13 QA MAJOR-1 — AND DOES THE FOLDED CARD HAVE ONE TO MOVE?
+   * The branch above asked only about the survivor, so the sentence made two
+   * claims the record does not support. With the survivor holding a rule and
+   * the folded card holding none — the ORDINARY duplicate, since PR-o
+   * pre-picks the older, established card and the fresh duplicate carries
+   * nothing — the sheet printed "No contact rule on file." in the folded
+   * card's own column and, three elements below, "…and <folded>'s stays on
+   * the folded card as a record." With NEITHER card holding one, "contact
+   * rule" was still listed among the facts that move (reproduced live, r13 QA:
+   * `build/qa-w3-r13/merge-consequence-r13.txt`).
+   * `merge_contact_rule_conflict` covers neither: 00629 refuses only a folded
+   * rule that blocks or routes against a survivor saying something else, so a
+   * folded card with no rule merges cleanly.
+   *
+   * So the clause branches on the PAIR, the discipline r11 BLOCKING-1 already
+   * applied to trades, specialties and sole proprietor in this same sentence.
+   */
+  mergedHasRule = false,
 ): string {
-  const moves = survivorHasRule
-    ? "seats, channels and firm designations"
-    : "seats, channels, contact rule and firm designations";
-  const ruleStays = survivorHasRule
-    ? `${survivorName}’s own contact rule stands, and ${mergedName}’s stays on the folded card as a record. `
-    : "";
+  // The rule MOVES only where the folded card has one and the survivor does
+  // not; it STAYS BEHIND only where both cards hold one.
+  const ruleMoves = mergedHasRule && !survivorHasRule;
+  const moves = ruleMoves
+    ? "seats, channels, contact rule and firm designations"
+    : "seats, channels and firm designations";
+  const ruleStays =
+    survivorHasRule && mergedHasRule
+      ? `${survivorName}’s own contact rule stands, and ${mergedName}’s stays on the folded card as a record. `
+      : "";
   return (
     `${mergedName}’s ${moves} move onto ` +
     `${survivorName}, and ${mergedName}’s own number and address travel with them. ` +
@@ -568,6 +591,7 @@ export function CompareMergeSheet({
             survivorName,
             mergedName,
             !!(survivorId && ruleIndex.get(survivorId)),
+            !!(mergedId && ruleIndex.get(mergedId)),
           )}
         </p>
 

@@ -171,9 +171,14 @@ export function RosterRow({
    * each row its own — never one query per row.
    */
   bid?: SeatBid | null;
-  /** The studio's person cards, for "who priced it" (00631 requires a PERSON
-   *  card in the job's own studio). */
-  bidPeople?: ReadonlyArray<{ id: string; name: string }>;
+  /**
+   * The studio's person cards, for "who priced it" (00631 requires a PERSON
+   * card in the job's own studio). ARCHIVED cards are included and flagged
+   * (r13 MAJOR-1): the recorded estimator's NAME resolves against the whole
+   * book, so putting their card away never erases "Priced by …" off a face
+   * the seat still names — only the offered picks are archived-excluded.
+   */
+  bidPeople?: ReadonlyArray<{ id: string; name: string; archived?: boolean }>;
 }) {
   const isSeat = row.source === 'seat';
   // One predicate, one clause, wherever a rule is shown (R-S).
@@ -403,16 +408,34 @@ export function RosterRow({
   const windowClause = rosterWindowClause(row, band);
 
   // R-R / C28 — the bid history prints at BOTH widths on a row that has one.
-  const quotedByName =
-    (bidPeople ?? []).find((p) => p.id === bid?.bidQuotedByPersonId)?.name ?? null;
+  //
+  // r13 MAJOR-1 — resolved against the WHOLE book, archived cards included, so
+  // a put-away estimator keeps their name on the face and earns a clause
+  // saying where their card went, rather than the clause vanishing over a
+  // record that still names them.
+  const quotedBy =
+    (bidPeople ?? []).find((p) => p.id === bid?.bidQuotedByPersonId) ?? null;
   const bidLine = bidNote({
     askedAt: bid?.bidAskedAt,
     dueAt: bid?.bidDueAt,
     quotedAt: bid?.bidQuotedAt,
     selectedAt: bid?.bidSelectedAt,
     validUntil: bid?.bidValidUntil,
-    quotedByName,
+    quotedByName: quotedBy?.name ?? null,
+    quotedByArchived: !!quotedBy?.archived,
   });
+  /**
+   * The picks the editor offers: live cards only, plus the recorded estimator
+   * where their card has been put away — a controlled <select> whose value
+   * names no <option> renders at `selectedIndex = -1`, which is a blank face
+   * over a record that names somebody.
+   */
+  const bidPeopleOptions = (bidPeople ?? []).filter(
+    (p) =>
+      !p.archived ||
+      p.id === bid?.bidQuotedByPersonId ||
+      p.id === bidDraft.quotedBy,
+  );
   /**
    * MAJOR-7 — the editor follows the BID, not the band.
    *
@@ -909,9 +932,11 @@ export function RosterRow({
                           className="min-h-11 border-0 border-b border-[var(--color-pearl)] bg-transparent py-2 text-[0.8rem] text-[var(--color-charcoal)] outline-none focus:border-[var(--color-clay)]"
                         >
                           <option value="">Nobody named</option>
-                          {(bidPeople ?? []).map((person) => (
+                          {bidPeopleOptions.map((person) => (
                             <option key={person.id} value={person.id}>
-                              {person.name}
+                              {person.archived
+                                ? `${person.name} (card put away)`
+                                : person.name}
                             </option>
                           ))}
                         </select>

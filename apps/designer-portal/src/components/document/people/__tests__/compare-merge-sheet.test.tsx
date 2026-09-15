@@ -105,7 +105,11 @@ describe("mergeConsequenceSentence", () => {
       "Adaeze Okonkwo",
       "Chidi Okonkwo",
     );
-    expect(sentence).toContain("seats, channels, contact rule and firm designations");
+    // r13 — with NEITHER card carrying a rule there is no rule to move, so
+    // the moves-list may not name one (reproduced live in r13 QA over a fresh
+    // fixture pair: `build/qa-w3-r13/merge-consequence-r13.txt`).
+    expect(sentence).toContain("seats, channels and firm designations");
+    expect(sentence).not.toContain("contact rule");
     // r11 BLOCKING-1 — the three facts 00629 does NOT reduce by picking one.
     // The old sentence swept `trades` into "the survivor's own words stand",
     // which the UNION at 00629:1717-1724 makes false.
@@ -143,6 +147,7 @@ describe("mergeConsequenceSentence", () => {
       "Adaeze Okonkwo",
       "Chidi Okonkwo",
       true,
+      true,
     );
     expect(withRule).toContain("seats, channels and firm designations");
     expect(withRule).not.toContain(
@@ -151,6 +156,47 @@ describe("mergeConsequenceSentence", () => {
     expect(withRule).toContain(
       "Adaeze Okonkwo’s own contact rule stands, and Chidi Okonkwo’s stays on the folded card as a record.",
     );
+  });
+
+  /**
+   * r13 MAJOR-2 / r13 QA MAJOR-1 — the branch asked only about the SURVIVOR,
+   * so the sentence made two claims the record does not support. The ordinary
+   * duplicate is the failing case: PR-o pre-picks the older, established card,
+   * which is the one likely to carry a rule, while the fresh duplicate carries
+   * none.
+   */
+  it("branches on the PAIR, not on the survivor alone", () => {
+    // survivor holds a rule, the folded card holds none: nothing moves, and
+    // nothing stays behind on the folded card either
+    const foldedHasNone = mergeConsequenceSentence(
+      "Adaeze Okonkwo",
+      "Chidi Okonkwo",
+      true,
+      false,
+    );
+    expect(foldedHasNone).toContain("seats, channels and firm designations");
+    expect(foldedHasNone).not.toContain("contact rule");
+
+    // neither card holds one: the mirror case, same answer
+    const neither = mergeConsequenceSentence(
+      "Adaeze Okonkwo",
+      "Chidi Okonkwo",
+      false,
+      false,
+    );
+    expect(neither).not.toContain("contact rule");
+
+    // and the one case where the rule really does travel
+    const itMoves = mergeConsequenceSentence(
+      "Adaeze Okonkwo",
+      "Chidi Okonkwo",
+      false,
+      true,
+    );
+    expect(itMoves).toContain(
+      "seats, channels, contact rule and firm designations",
+    );
+    expect(itMoves).not.toContain("stays on the folded card as a record");
   });
 });
 

@@ -2,7 +2,8 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
-import type { ProjectParty } from './use-coordination';
+import { partyBidKeys, type ProjectParty } from './use-coordination';
+import { clientHouseholdKeys } from './use-households';
 import { peopleKeys, peopleSeatKeys } from './use-people';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1919,7 +1920,7 @@ export function useResolvedContactId(contactId: string | null | undefined) {
   });
 }
 
-/** `merge_studio_contacts()`'s twelve named refusals, as sentences. */
+/** `merge_studio_contacts()`'s thirteen named refusals, as sentences. */
 const MERGE_REFUSAL_SENTENCES: Record<string, string> = {
   merge_contact_not_found: 'One of these cards is no longer in the book.',
   merge_same_card: 'That is one card, not two.',
@@ -1946,6 +1947,13 @@ const MERGE_REFUSAL_SENTENCES: Record<string, string> = {
   // before the first write, with the job in `details`.
   merge_seat_on_studioless_project:
     'One of these cards holds a seat on a job that records no studio, so the seat cannot be moved. Record that job’s studio first, then merge.',
+  // r13 MAJOR-1 — the SAME guard's third door. Both resolvers answer, and
+  // simply name a studio the card is not in: the legacy seat stamped with
+  // another studio's card that 00624's guard refuses on every write but
+  // cannot undo. 00629 refuses it by name, before the first write, with the
+  // job in `details`.
+  merge_seat_card_other_studio:
+    'One of these cards holds a seat on a job in another studio’s book, so the seat cannot be moved. Ask that studio to take the card off the seat, then merge.',
 };
 
 /**
@@ -1970,8 +1978,28 @@ export function asMergeError(error: unknown): string {
       `so the seat cannot be moved. Record that job’s studio first, then merge.`
     );
   }
+  if (message.includes('merge_seat_card_other_studio') && detail) {
+    return (
+      `One of these cards holds a seat on ${detail}, a job in another ` +
+      `studio’s book, so the seat cannot be moved. Ask that studio to take ` +
+      `the card off the seat, then merge.`
+    );
+  }
   for (const [code, sentence] of Object.entries(MERGE_REFUSAL_SENTENCES)) {
     if (message.includes(code)) return sentence;
+  }
+  // r13 MAJOR-1 — AND NO SCHEMA WORD REACHES THE SHEET, whatever raises it.
+  // `merge_studio_contacts()` runs eleven other guards' triggers inside its
+  // one transaction, and each of those raises its own bare token
+  // (`party_studio_contact_other_studio`, `designated_person_is_self`,
+  // `household_member_not_a_live_person_card`, …). Every one of them used to
+  // fall through to `return message` and print itself in the sheet's
+  // `role="alert"` paragraph — a schema word on a face, naming no act
+  // (SPEC §7). A bare snake_case token is never a sentence, so it is
+  // answered with one; anything with whitespace is already prose (a Postgres
+  // message, a network error) and is returned as it came.
+  if (/^[a-z][a-z0-9_]*$/.test(message.trim())) {
+    return 'The merge did not go through, and nothing was changed.';
   }
   return message || 'The merge did not go through.';
 }
@@ -2035,6 +2063,21 @@ export function useMergeStudioContacts() {
       // which identity every roster row belongs to.
       void queryClient.invalidateQueries({ queryKey: ['project-parties'] });
       void queryClient.invalidateQueries({ queryKey: ['project-roster'] });
+      // r13 MAJOR-3 — THE TWO ROOTS THIS WAVE ITSELF MINTED. 00629 repoints
+      // `project_parties.bid_quoted_by_person_id` and rewrites
+      // `client_households.member_person_ids` / `primary_member_person_id`,
+      // and neither read hangs off `['project-parties']`. The portal's
+      // QueryClient runs `staleTime` five minutes with
+      // `refetchOnWindowFocus: false`, so a Call Sheet opened shortly before a
+      // merge kept the FOLDED estimator's id while the rolodex it resolves
+      // names against refetched without it — the blank "Priced by" face, out
+      // of a cache rather than an archive. The household band kept stale
+      // membership over the same window.
+      void queryClient.invalidateQueries({ queryKey: partyBidKeys.all });
+      void queryClient.invalidateQueries({ queryKey: clientHouseholdKeys.all });
+      // And the forward map itself: `resolve_merged_contact()` answers
+      // differently for both ids the moment the fold lands (PR-o).
+      void queryClient.invalidateQueries({ queryKey: resolvedContactKeys.all });
     },
   });
 }

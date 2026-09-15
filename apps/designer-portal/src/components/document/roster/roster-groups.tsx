@@ -75,6 +75,27 @@ export function RosterGroups({
   const { data: contacts } = useStudioContacts(consentOrg ?? null, {
     includeArchived: false,
   });
+  /**
+   * r13 MAJOR-1 — A NAME THE RECORD STILL HOLDS, off a book that still has it.
+   *
+   * `bid_quoted_by_person_id` (00631) names the estimator who priced the work,
+   * and W3 shipped the standing "Put this card away" door on every person card
+   * in the same wave. Resolved against the archived-EXCLUDED rolodex, putting
+   * an estimator's card away — the canonical reason to use that door — dropped
+   * "Priced by Tom Marrow." off every Call Sheet row that records them, with
+   * nothing said, while the seat still names them; and left the bid editor's
+   * "Who priced it" select at `selectedIndex = -1`, blank. Two faces asserting
+   * nobody priced the job over a record that names one.
+   *
+   * So the NAME resolves against a book that includes archived cards — the
+   * shape `compare-merge-sheet.tsx` already uses so designation ids resolve —
+   * and the archived card is MARKED on the face rather than dropped. The
+   * SELECTABLE options stay archived-excluded: a put-away card is not a fresh
+   * pick.
+   */
+  const { data: contactsWithArchived } = useStudioContacts(consentOrg ?? null, {
+    includeArchived: true,
+  });
   const peopleById = useMemo(() => {
     const index = new Map<
       string,
@@ -118,14 +139,22 @@ export function RosterGroups({
   // predates them, so the Bidding band's dates cannot come off the projection.
   const { data: bids } = useProjectPartyBids(projectId ?? null);
 
-  /** The person cards a bid may name as the estimator (00631's guard). */
+  /**
+   * The person cards a bid may name as the estimator (00631's guard), archived
+   * ones included and marked. `roster-row.tsx` offers only the unarchived ones
+   * as picks and resolves the recorded id against the whole book (r13 MAJOR-1).
+   */
   const bidPeople = useMemo(
     () =>
-      (contacts ?? [])
+      (contactsWithArchived ?? [])
         .filter((c) => c.entity_kind === 'person' && !!c.full_name)
-        .map((c) => ({ id: c.id, name: c.full_name as string }))
+        .map((c) => ({
+          id: c.id,
+          name: c.full_name as string,
+          archived: !!c.archived_at,
+        }))
         .sort((a, b) => a.name.localeCompare(b.name)),
-    [contacts],
+    [contactsWithArchived],
   );
 
   const ruleFor = (row: CallSheetRow) =>

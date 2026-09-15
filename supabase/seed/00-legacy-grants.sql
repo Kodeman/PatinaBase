@@ -16484,6 +16484,12 @@ END $g$;
 
 -- 00629_studio_contact_merges.sql
 DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.project_parties_touch_updated_at() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00629_studio_contact_merges.sql
+DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.merge_studio_contacts(uuid, uuid, text) FROM PUBLIC, anon;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;

@@ -189,6 +189,39 @@ describe("merge_studio_contacts (PR-o)", () => {
       "One of these cards holds a seat on Okonkwo residence, which records no studio, " +
         "so the seat cannot be moved. Record that job\u2019s studio first, then merge.",
     );
+    // r13 MAJOR-1 — the SAME guard's third door, refused by name now
+    expect(asMergeError(new Error("merge_seat_card_other_studio"))).toMatch(
+      /another studio\u2019s book/,
+    );
+    expect(
+      asMergeError({
+        message: "merge_seat_card_other_studio",
+        details: "Okonkwo residence",
+      }),
+    ).toBe(
+      "One of these cards holds a seat on Okonkwo residence, a job in another " +
+        "studio\u2019s book, so the seat cannot be moved. Ask that studio to take " +
+        "the card off the seat, then merge.",
+    );
+    // r13 MAJOR-1 — and no guard token reaches a face, named or not. Every
+    // trigger the merge fires raises its own bare schema word, and they all
+    // used to fall through to `return message` into the sheet's alert
+    // paragraph.
+    for (const token of [
+      "party_studio_contact_other_studio",
+      "party_company_other_studio",
+      "party_warranty_contact_other_studio",
+      "designated_person_is_self",
+      "household_member_not_a_live_person_card",
+    ]) {
+      const rendered = asMergeError(new Error(token));
+      expect(rendered).not.toContain(token);
+      expect(rendered).toBe("The merge did not go through, and nothing was changed.");
+    }
+    // prose still comes back as prose
+    expect(asMergeError(new Error("network request failed"))).toBe(
+      "network request failed",
+    );
     // and no refusal reaches a face as its own token
     for (const token of [
       "merge_two_logins",
@@ -196,6 +229,7 @@ describe("merge_studio_contacts (PR-o)", () => {
       "merge_kind_mismatch",
       "merge_survivor_archived",
       "merge_seat_on_studioless_project",
+      "merge_seat_card_other_studio",
     ]) {
       expect(asMergeError(new Error(token))).not.toContain(token);
       expect(
@@ -214,9 +248,23 @@ describe("merge_studio_contacts (PR-o)", () => {
       "people-directory-seats",
       "project-parties",
       "project-roster",
+      // r13 MAJOR-3 — the two roots THIS WAVE minted and 00629 writes through:
+      // `bid_quoted_by_person_id` (read by `['project-party-bids']`, a
+      // different root from `['project-parties']`) and
+      // `client_households.member_person_ids`. With `staleTime` at five
+      // minutes and `refetchOnWindowFocus: false`, an open Call Sheet kept the
+      // folded estimator's id while the rolodex beside it refetched without
+      // him — the blank "Priced by" face out of a cache.
+      "project-party-bids",
+      "client-households",
+      // and the forward map both ids resolve through (PR-o)
+      "resolved-studio-contact",
     ]) {
       expect(roots).toContain(root);
     }
+    // the keys are the exported factories, not hand-typed literals
+    expect(roots).toContain(partyBidKeys.all[0]);
+    expect(roots).toContain(clientHouseholdKeys.all[0]);
   });
 });
 
