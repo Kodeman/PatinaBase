@@ -272,3 +272,49 @@ Every other §1 count re-measured **unchanged** and correct: `bring-forward` 17 
 | migration numbering | nothing minted; `00634` amended in place, still above `00627` and outside the reserved `00595–00620` |
 
 No prod. No server started. No port taken. No `.env.local` created.
+
+---
+
+## Re-verification pass (same round, second dispatch, 2026-09-15)
+
+This round was dispatched a second time. Nothing was re-fixed: every one of the eight findings
+was already closed at `bc251d5a9` (committed and pushed; `origin/build/people-room-crm-2026-09-11`
+`0 0` against HEAD). Each fix was re-read at HEAD and each gate re-run from scratch rather than
+taken from the table above.
+
+### The eight findings, re-read at HEAD
+
+| Finding | Re-read at HEAD |
+|---|---|
+| r21-MAJOR-1 · r21-major-2 | `write-error.ts:86,89` carry both tokens ahead of the schema-word guard; `use-coordination.ts:868,870` carry `SEAT_CLOSE_REFUSAL_SENTENCES`; `asSeatCloseError` / `seatCloseIsHeldForMoney` / `SEAT_CLOSE_MONEY_HELD_REASON` exported; `close-seat-act.tsx` and `roster-row.tsx` both hold the act and route their catch through `writeErrorMessage`. `grep` for either token over `apps`/`packages` now returns 16 hits — mapper, sentences and pins — where r21 measured zero |
+| r21-MAJOR-2 | `00634:238-246` — the trigger's `WHEN` carries `AND NOT (COALESCE(NEW.bid_outcome,'') = 'withdrawn' AND COALESCE(OLD.bid_outcome,'') <> 'withdrawn')`, both legs COALESCE-first |
+| r21-major-1 | `use-coordination.ts:977-978` (close) and `:2844-2845` (bid) both invalidate `partyAuthorityKeys.all` and call `invalidateClientHouseholds` |
+| r21-major-3 | `seatClosedByHand` at `:2505`, folded into `pastTheBid` at `:2598` |
+| r21-major-4 | the R-BR clearing branch at `:2775-2779` reads `&& !seatClosedByHand(previous)` |
+| r21-MAJOR-3 | `w3-data-report.md` §0 reads "The seven migrations / W3 mints 00628–00634"; `00634`, `source_household_id` and `2767` all present |
+| r21-major-5 | `w3-room-report.md` §1 reads `people-crm-w3.test.ts` **66**, `roster-row.test.tsx` 26 → **56**; §9 reads 594/7705, 106/1376, 66, **13f last**, each with its round |
+
+### Gates re-run this pass (local only; no prod, no server, no port, nothing minted)
+
+| Gate | Result |
+|---|---|
+| `pnpm --dir … supabase:reset` | rc=0 — "Finished supabase db reset on branch main." |
+| `people/w1a_identity_channels_consent_test.sql` | "All W1a assertions passed." |
+| `people/w1b_compliance_authority_directory_test.sql` | "All W1b assertions passed." |
+| `people/w3_merge_sweep_household_test.sql` | "W3 SQL suite: all blocks passed", **13f last** — `13f` reports "00634 is clamped to the hand-close act: a plain member records a withdrawal on a money-bearing seat with no refusal and the grant stands open" |
+| `SUPABASE_DB_URL=… pnpm db:generate` | **no diff** on `packages/supabase/src/database.types.ts` |
+| `python3 scripts/generate-legacy-grants.py` | **no diff** — "baseline + 2767 replayed statements" |
+| `pnpm --filter @patina/supabase type-check` | rc=0 |
+| `pnpm --filter @patina/designer-portal type-check` | rc=0 |
+| `pnpm --filter @patina/admin-portal build` | rc=0, full route table printed |
+| `cd apps/designer-portal && npx jest` | **594 suites, 7705 tests, 1 snapshot, all green** |
+| `cd packages/supabase && npx vitest run` | **106 files, 1376 passed, 12 skipped** |
+| per-file: `roster-row.test.tsx` · `close-seat-act.test.tsx` · `people-crm-w3.test.ts` | **56** · **9** · **66** — the three figures §1/§9 now state |
+| migration numbering | `ls supabase/migrations \| tail` still ends at `00634`; nothing minted, nothing in the reserved `00595`–`00620` |
+
+Every figure the r21 tables claim was reproduced exactly. No defect found in the fix; no edit made
+to product code, migrations or tests on this pass.
+
+**Open, not this round's to close:** `artifacts/people-room-crm-2026-09-11/rulings.md` carries
+**R-BS** as an UNCOMMITTED working-tree edit (the orchestrator's own file). It is the ruling this
+round was written against and is not staged by this lane.
