@@ -1963,16 +1963,26 @@ const MERGE_REFUSAL_SENTENCES: Record<string, string> = {
   // names the repair the room already offers.
   merge_seat_collision:
     'Both cards hold an open seat of the same kind on the same job, and one person cannot hold the job twice. Close one of these two seats first, then merge.',
+  // r22 MAJOR-1 — the same refusal asked of the GRANT. R-BS clamps 00634's
+  // end-authority trigger off the withdrawal path, so "They withdrew" dates a
+  // seat and leaves its money grant OPEN; the open-seats-only gate above
+  // cannot see that seat, and the fold left one human holding two live
+  // figures on one job. The repair is still the room's own "Close this seat",
+  // which ends what the seat carried.
+  merge_seat_authority_collision:
+    'One of these two seats has left the job but still signs for something, so folding the cards would leave one person holding two standing grants on the same job. Close the seat that is still open — closing a seat ends what it signed for — then merge.',
 };
 
 /**
  * Render a merge refusal as a sentence; anything else comes back as itself.
  *
- * `details` is read for the three refusals that can NAME the thing standing in
- * the way — the job with no studio, the job in another studio's book, and the
- * job where both cards hold an open seat of the same kind — because "record
+ * `details` is read for the four refusals that can NAME the thing standing in
+ * the way — the job with no studio, the job in another studio's book, the job
+ * where both cards hold an open seat of the same kind, and the job where one
+ * of the two has left but still carries a standing grant — because "record
  * that job's studio first" / "close one of these two seats first" is an act
- * the studio cannot take without knowing which job (r11 MAJOR-2, r18 MAJOR-1).
+ * the studio cannot take without knowing which job (r11 MAJOR-2, r18 MAJOR-1,
+ * r22 MAJOR-1).
  */
 export function asMergeError(error: unknown): string {
   const message =
@@ -1997,6 +2007,19 @@ export function asMergeError(error: unknown): string {
     return (
       `Both cards hold an open ${seat} on ${job}, and one person cannot hold ` +
       `the job twice. Close one of these two seats first, then merge.`
+    );
+  }
+  // DETAIL is the same '<job> · <party_kind>' shape, and for the same reason:
+  // "close the seat that is still open" is an act the studio cannot take
+  // without knowing which job and which kind (r22 MAJOR-1).
+  if (message.includes('merge_seat_authority_collision') && detail) {
+    const [job, kind] = detail.split(' · ');
+    const seat = kind ? `${getPartyKindLabel(kind)} seat` : 'seat';
+    return (
+      `One of these two ${seat}s on ${job} has left the job but still signs ` +
+      `for something, so folding the cards would leave one person holding two ` +
+      `standing grants on the same job. Close the seat that is still open — ` +
+      `closing a seat ends what it signed for — then merge.`
     );
   }
   if (message.includes('merge_seat_card_other_studio') && detail) {

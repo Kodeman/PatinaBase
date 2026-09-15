@@ -234,6 +234,26 @@ describe("merge_studio_contacts (PR-o)", () => {
         "person cannot hold the job twice. Close one of these two seats " +
         "first, then merge.",
     );
+    // r22 MAJOR-1 — the same refusal asked of the GRANT. R-BS clamps 00634's
+    // end-authority trigger off the withdrawal path, so a seat dated by "They
+    // withdrew" keeps its open money grant and the open-seats-only gate above
+    // cannot see it. The fourth name carries the same '<job> · <kind>' DETAIL,
+    // because "close the seat that is still open" needs both.
+    expect(asMergeError(new Error("merge_seat_authority_collision"))).toMatch(
+      /Close the seat that is still open/,
+    );
+    expect(
+      asMergeError({
+        message: "merge_seat_authority_collision",
+        details: "Okonkwo residence · sub",
+      }),
+    ).toBe(
+      "One of these two Subcontractor seats on Okonkwo residence has left the job but " +
+        "still signs for something, so folding the cards would leave one " +
+        "person holding two standing grants on the same job. Close the seat " +
+        "that is still open — closing a seat ends what it signed for — " +
+        "then merge.",
+    );
     // r13 MAJOR-1 — and no guard token reaches a face, named or not. Every
     // trigger the merge fires raises its own bare schema word, and they all
     // used to fall through to `return message` into the sheet's alert

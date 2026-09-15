@@ -229,6 +229,16 @@ COMMENT ON FUNCTION public.end_party_authority_at_seat_close() IS
   '(seat_close_authority_forbidden / seat_close_money_authority_forbidden) so '
   'no closed seat can ever carry an open grant.';
 
+-- AND WHAT THE CLAMP OWES 00629 (r22 MAJOR-1). This file was written to make
+-- `merge_seat_collision`'s OPEN-SEATS-ONLY carve-out true, and the clamp takes
+-- one population back out of it: a seat dated by a recorded withdrawal keeps
+-- its open grants, so `off_job_at IS NOT NULL` no longer implies "its grant
+-- was ended at the close" and that predicate stopped seeing a live second
+-- money fact. 00629 now asks the premise directly, in a fourth pre-check
+-- beside the third (`merge_seat_authority_collision`): a seat is live to the
+-- merge where it has not left the job OR still carries a grant with
+-- `effective_to` NULL. Changing this WHEN clause means reading that gate.
+--
 -- The WHEN clause is the whole of the clamp (r21 MAJOR-2 / R-BS): the close,
 -- and never the statement that records a withdrawal. Both legs are written
 -- COALESCE-first because a NULL `bid_outcome` in a bare `=` would make the
