@@ -1875,7 +1875,7 @@
 			};
 			name = Release;
 		};
-		A0531064B011134692D89AABAECA7D1D /* Debug */ = {
+		A92E829BFF12BCBD809C04DD2559D527 /* Release */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 4B6826371A60DDDA411A77F01CC3E554 /* BuildSettings.xcconfig */;
 			buildSettings = {
@@ -1884,9 +1884,9 @@
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGN_ENTITLEMENTS = Capture/Capture.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_TEAM = VP22LXHT7L;
-				ENABLE_TESTABILITY = YES;
+				ENABLE_TESTABILITY = NO;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Capture/Info.plist;
@@ -1916,8 +1916,9 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
 			};
-			name = Debug;
+			name = Release;
 		};
 		D686928EF7D979F2CEC05E6C1B3A70DD /* Release */ = {
 			isa = XCBuildConfiguration;
@@ -1973,7 +1974,7 @@
 			};
 			name = Release;
 		};
-		EC24F0B346EC3811EC1C8B853E15CAD2 /* Release */ = {
+		EE9D0C5FFBE491FC757D1E5951994E8D /* Debug */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 4B6826371A60DDDA411A77F01CC3E554 /* BuildSettings.xcconfig */;
 			buildSettings = {
@@ -1982,9 +1983,9 @@
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGN_ENTITLEMENTS = Capture/Capture.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_TEAM = VP22LXHT7L;
-				ENABLE_TESTABILITY = NO;
+				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Capture/Info.plist;
@@ -2014,9 +2015,8 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				VALIDATE_PRODUCT = YES;
 			};
-			name = Release;
+			name = Debug;
 		};
 		F936CFFFE25B4E0DD1F254AEA3E7C505 /* Debug */ = {
 			isa = XCBuildConfiguration;
@@ -2112,8 +2112,8 @@
 		D5F5FE0C6B500A855CDA70BE5770E9FC /* Build configuration list for PBXNativeTarget "Capture" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				EC24F0B346EC3811EC1C8B853E15CAD2 /* Release */,
-				A0531064B011134692D89AABAECA7D1D /* Debug */,
+				A92E829BFF12BCBD809C04DD2559D527 /* Release */,
+				EE9D0C5FFBE491FC757D1E5951994E8D /* Debug */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
