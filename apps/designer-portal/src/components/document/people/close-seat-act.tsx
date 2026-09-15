@@ -29,9 +29,16 @@
  * minutes after it is made.
  */
 
-import { useState } from "react";
-import { useCloseProjectPartySeat } from "@patina/supabase";
+import { useMemo, useState } from "react";
+import {
+  SEAT_CLOSE_MONEY_HELD_REASON,
+  seatCloseIsHeldForMoney,
+  useCloseProjectPartySeat,
+  useOrganizations,
+  usePartyAuthority,
+} from "@patina/supabase";
 import { peopleEvents } from "@/lib/analytics/people-events";
+import { writeErrorMessage } from "@/lib/document/write-error";
 import { DocumentAction, DocumentActionRow } from "../document-action";
 
 const LABEL =
@@ -48,6 +55,7 @@ export function closeSeatConfirmSentence(name: string): string {
 export function CloseSeatAct({
   seatId,
   projectId,
+  organizationId,
   name,
   stage,
   onClosed,
@@ -55,6 +63,13 @@ export function CloseSeatAct({
 }: {
   seatId: string;
   projectId: string | null;
+  /**
+   * The studio whose book this seat's card sits in — PR-n's standing is read
+   * against it (r21 MAJOR-1 / major-2, R-BS). Absent, the act is never held
+   * for money: a card with no resolved studio can state no standing, and
+   * stating one it cannot read would be a guess on a face.
+   */
+  organizationId?: string | null;
   name: string;
   /** The stage the seat was in, for the act's own record. */
   stage?: string | null;
@@ -65,24 +80,58 @@ export function CloseSeatAct({
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
   const closeSeat = useCloseProjectPartySeat();
+  /**
+   * r21 MAJOR-1 / major-2 — THE PR-n STANDING, READ BEFORE THE PRESS.
+   *
+   * 00634 refuses the close of a seat carrying an open money or draw-certify
+   * grant to anyone who is not an owner or an admin of the recorded studio,
+   * and this act offered it live and unqualified, then printed the bare token
+   * `seat_close_money_authority_forbidden` in its alert. The grants are keyed
+   * on the seat, so `SeatFacts` one element up has already read them and this
+   * costs no second query.
+   */
+  const { data: authority } = usePartyAuthority(seatId);
+  const { data: orgs } = useOrganizations();
+  const isPrincipal = useMemo(() => {
+    if (!organizationId) return false;
+    const role = (orgs ?? []).find((o) => o.id === organizationId)?.membership
+      ?.role;
+    return role === "owner" || role === "admin";
+  }, [orgs, organizationId]);
+  const heldForMoney = seatCloseIsHeldForMoney(authority, isPrincipal);
   const fieldId = `close-seat-${seatId}`;
+  const heldId = `close-seat-held-${seatId}`;
 
   if (!confirming) {
     return (
-      <DocumentActionRow
-        surfaceKey="people-room"
-        regionKey="person-card-seat"
-        className={className}
-        aria-label={`Close ${name}'s seat`}
-      >
-        <DocumentAction
-          actionKey="close-seat"
-          variant="tertiary"
-          onClick={() => setConfirming(true)}
+      <div className={className}>
+        <DocumentActionRow
+          surfaceKey="people-room"
+          regionKey="person-card-seat"
+          aria-label={`Close ${name}'s seat`}
         >
-          Close this seat
-        </DocumentAction>
-      </DocumentActionRow>
+          <DocumentAction
+            actionKey="close-seat"
+            variant="tertiary"
+            disabled={heldForMoney}
+            held={heldForMoney}
+            aria-describedby={heldForMoney ? heldId : undefined}
+            onClick={() => setConfirming(true)}
+          >
+            Close this seat
+          </DocumentAction>
+        </DocumentActionRow>
+        {/* A held act carries a VISIBLE reason (direction §5.5, SPEC §7 #4) —
+            the shape household-band.tsx already ships for the same PR-n rule. */}
+        {heldForMoney && (
+          <p
+            id={heldId}
+            className="mt-1 text-[0.7rem] text-[var(--ink-subtle)]"
+          >
+            {SEAT_CLOSE_MONEY_HELD_REASON}
+          </p>
+        )}
+      </div>
     );
   }
 
@@ -124,9 +173,10 @@ export function CloseSeatAct({
                 onClosed?.(`${name}’s seat is closed.`);
               })
               .catch((e: unknown) =>
-                setError(
-                  e instanceof Error ? e.message : "Could not close the seat.",
-                ),
+                // r21 major-2 — never the bare token. A PostgREST rejection
+                // extends Error, so `e.message` printed
+                // `seat_close_money_authority_forbidden` on this alert.
+                setError(writeErrorMessage(e, "Could not close the seat.")),
               )
           }
           loading={closeSeat.isPending}

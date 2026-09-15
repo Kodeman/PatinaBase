@@ -848,6 +848,67 @@ export interface CloseProjectPartySeatInput {
 }
 
 /**
+ * 00634's OWN REFUSALS, AS SENTENCES (r21 MAJOR-1 / r21 major-2, R-BS).
+ *
+ * `00634:151` and `:157` raise two BARE TOKENS with no SQLSTATE, so PostgREST
+ * hands them back as `message` — and `@supabase/postgrest-js` declares
+ * `PostgrestError extends Error`, so every `e instanceof Error ? e.message`
+ * catch in the room printed the token itself on the face:
+ * `seat_close_money_authority_forbidden`, in the Call Sheet's status line and
+ * in the person card's alert. `writeErrorMessage`'s schema-word guard matches
+ * none of them (no `duplicate key`, no `constraint`, no `relation `), so the
+ * Bidding band's path returned the raw string too.
+ *
+ * These are the twelfth and thirteenth translations in the same family as
+ * CR-3's three, and they say the same thing `household-band.tsx` already says
+ * in words one region away: a money delegation is the principal's to take
+ * away.
+ */
+export const SEAT_CLOSE_REFUSAL_SENTENCES: Record<string, string> = {
+  seat_close_money_authority_forbidden:
+    'This seat signs for money, and ending that is the principal’s. Ask an owner or an admin of the studio to close it.',
+  seat_close_authority_forbidden:
+    'This seat’s standing grant is recorded in another studio’s book, so closing it is theirs to do. Ask that studio.',
+};
+
+export function asSeatCloseError(error: unknown): string {
+  const message =
+    typeof error === 'object' && error !== null && 'message' in error
+      ? String((error as { message?: unknown }).message ?? '')
+      : String(error ?? '');
+  for (const [token, sentence] of Object.entries(SEAT_CLOSE_REFUSAL_SENTENCES)) {
+    if (message.includes(token)) return sentence;
+  }
+  return message || 'Could not close the seat.';
+}
+
+/**
+ * THE ONE STATE IN WHICH "Close this seat" CANNOT BE PRESSED FOR MONEY (PR-n).
+ *
+ * Mirrors `end_party_authority_at_seat_close()`'s own second leg
+ * (00634:156-160): an OPEN grant in one of PR-n's two scopes on the seat, and
+ * a caller who is not an owner or an admin of the studio. `effective_to IS
+ * NULL` is the trigger's own predicate — a grant already ended gates nothing.
+ *
+ * Read BEFORE the press, the shape `householdAddIsHeld` already ships, so the
+ * studio reads the reason where the act is rather than after the database has
+ * refused it.
+ */
+export function seatCloseIsHeldForMoney(
+  authority: ReadonlyArray<{ scope: string; effective_to: string | null }> | null | undefined,
+  isPrincipal: boolean,
+): boolean {
+  if (isPrincipal) return false;
+  return (authority ?? []).some(
+    (grant) => grant.effective_to == null && isAdminOnlyAuthorityScope(grant.scope),
+  );
+}
+
+/** The sentence beside that held act, on both close surfaces. */
+export const SEAT_CLOSE_MONEY_HELD_REASON =
+  'This seat signs for money. Closing it ends that, and ending it is the principal’s. An owner or an admin of the studio can close this seat.';
+
+/**
  * CLOSE THIS SEAT — the act that replaces Remove (CRM-13, direction §1 line 8).
  * A dated `off_job_at` with a reason, and the seat stays on the book: the
  * consent, the bid history, the waivers and the lineage all survive, and the
@@ -891,7 +952,11 @@ export function useCloseProjectPartySeat() {
         .eq('id', input.id)
         .select()
         .single();
-      if (error) throw error;
+      // r21 major-2 — NEVER THE BARE POSTGREST OBJECT. 00634's two refusals
+      // are bare tokens on an object whose prototype chain says `Error`, so
+      // both faces printed the token. The hook is where every future caller
+      // reaches the translation.
+      if (error) throw new Error(asSeatCloseError(error));
       return data as ProjectParty;
     },
     onSuccess: (_data, input) => {
@@ -899,6 +964,17 @@ export function useCloseProjectPartySeat() {
       void queryClient.invalidateQueries({ queryKey: ['project-roster', input.projectId] });
       void queryClient.invalidateQueries({ queryKey: peopleKeys.all });
       void queryClient.invalidateQueries({ queryKey: peopleSeatKeys.all });
+      // r21 major-1 — AND THE GRANTS 00634 JUST ENDED (R-BS).
+      // The close ends every open delegation the seat carried
+      // (00634:163-167), and none of the five roots above is a prefix of
+      // `partyAuthorityKeys.all` — which `projectAuthorityKeys.project` nests
+      // under. With `staleTime` five minutes and `refetchOnWindowFocus` false
+      // the Call Sheet went on printing "Signs money to $2,500." in the
+      // present tense over a grant the same transaction closed, while the
+      // household band two elements down — which IS invalidated — refetched
+      // and dropped the clause. `useSetHouseholdThreshold` already invalidates
+      // this root for exactly this reason (use-households.ts:623).
+      void queryClient.invalidateQueries({ queryKey: partyAuthorityKeys.all });
       invalidateClientHouseholds(queryClient);
     },
   });
@@ -2395,7 +2471,47 @@ export interface SetPartyBidInput {
      * seat's own value.
      */
     offJobAt?: string | null;
+    /**
+     * THE SENTENCE THE STUDIO TYPED WHEN IT CLOSED THE SEAT BY HAND, if one
+     * stands (r21 major-3 / major-4).
+     *
+     * It is the one signal that tells `off_job_at` written by "Close this
+     * seat" from `off_job_at` written by the withdrawal: the withdrawal stamps
+     * the DATE and never a reason. Without it a hand-closed seat looked
+     * exactly like a withdrawn one, so recording any other outcome on it put
+     * the person back in a crew band beside their own closing clause, and one
+     * more press NULLed the studio's own words.
+     */
+    offJobReason?: string | null;
   };
+}
+
+/**
+ * DID THE STUDIO'S OWN HAND CLOSE THIS SEAT, or did a recorded withdrawal?
+ *
+ * `off_job_at` has two writers and they mean different things. "Close this
+ * seat" writes `stage`, `off_job_at` and the studio's own `off_job_reason`;
+ * "They withdrew" writes the date alone, on the transition, and R-BR rules
+ * that correcting the outcome away from `withdrawn` takes that date back.
+ *
+ * A seat is HAND-CLOSED when it carries a date and either
+ *
+ *   * its recorded outcome is not `withdrawn` — so no withdrawal can have
+ *     written the date; or
+ *   * a reason stands beside it, which the withdrawal never writes.
+ *
+ * Everything else is the withdrawal's own record and stays inside R-BR.
+ */
+export function seatClosedByHand(previous: {
+  bidOutcome: SeatBidOutcome | null;
+  offJobAt?: string | null;
+  offJobReason?: string | null;
+}): boolean {
+  if (!previous.offJobAt) return false;
+  return (
+    (previous.bidOutcome ?? null) !== 'withdrawn' ||
+    !!(previous.offJobReason ?? '').trim()
+  );
 }
 
 /**
@@ -2449,12 +2565,37 @@ export interface BidStageOutcome {
  * sentence on the same object the mutation writes from.
  */
 export function bidStageOutcome(
-  previous: { bidOutcome: SeatBidOutcome | null; stage: string | null },
+  previous: {
+    bidOutcome: SeatBidOutcome | null;
+    stage: string | null;
+    offJobAt?: string | null;
+    offJobReason?: string | null;
+  },
   next: SeatBidOutcome | null | undefined,
 ): BidStageOutcome {
   const outcome = next ?? null;
   const moved = outcome !== (previous.bidOutcome ?? null);
-  const pastTheBid = SEAT_STAGES_PAST_THE_BID.includes(previous.stage ?? '');
+  /**
+   * r21 major-3 — AND A SEAT THE STUDIO CLOSED BY HAND IS PAST THE BID TOO.
+   *
+   * `off_job` is deliberately absent from the list above so `withdrawn` can
+   * reach past it, and neither r18's guard on the clearing branch nor r19's
+   * guard on the stamp constrains THIS predicate. The bid editor is offered on
+   * a hand-closed seat ("Change what came back", roster-row.tsx:831,844), so
+   * recording "Selected" on a seat closed with the reason "Picked another
+   * electrician" wrote stage `awarded` and left `off_job_at` and the reason
+   * standing: the row printed the word Awarded beside its own "Off the job
+   * 10 Sep 2026. Picked another electrician.", the person card listed it as a
+   * LIVE seat and offered Close this seat on it while the Call Sheet HELD that
+   * act on the same seat, and `useProjectHousehold`'s open-seat filter went on
+   * counting it closed. Four readers, one seat, two answers.
+   *
+   * Recording an outcome on a closed seat records WHAT CAME BACK. Putting a
+   * seat back on the job stays its own named act (00634:59-64).
+   */
+  const pastTheBid =
+    SEAT_STAGES_PAST_THE_BID.includes(previous.stage ?? '') ||
+    seatClosedByHand(previous);
   // "They withdrew" is the one outcome that legitimately reaches past the bid:
   // a seat that left the job left it, whatever stage it had reached.
   const writesStage =
@@ -2631,7 +2772,11 @@ export function useSetPartyBid() {
         // record; this branch may only WRITE one, never move one.
         if (patch.bidOutcome === 'withdrawn' && written.moved && !previous.offJobAt) {
           dbPatch.off_job_at = new Date().toISOString().slice(0, 10);
-        } else if (written.stage && previous.bidOutcome === 'withdrawn') {
+        } else if (
+          written.stage &&
+          previous.bidOutcome === 'withdrawn' &&
+          !seatClosedByHand(previous)
+        ) {
           // R-BR (r17) — AND A SEAT BACK IN THE BIDDING IS NOT A SEAT THAT
           // LEFT THE JOB. The stamp above was one-way: nothing in the repo
           // ever cleared `off_job_at`, and `off_job` is not in
@@ -2660,6 +2805,17 @@ export function useSetPartyBid() {
           // consequence sentence beside the press promises only the move to
           // Declined. Reopening a hand-closed seat, if the room wants it, is
           // its own named act with its own consequence sentence.
+          //
+          // AND THE HAND-CLOSED POPULATION IS NAMED HERE TOO (r21 major-4).
+          // r18 gated this branch on the seat leaving `withdrawn`, which
+          // presupposes the withdrawal is what dated it — and r19's
+          // `!previous.offJobAt` guard above made that untrue: recording "They
+          // withdrew" on a seat the studio had already closed by hand writes
+          // NO date, so three presses (close with a reason → "They withdrew" →
+          // "They quoted") reached this branch and NULLed a sentence nothing
+          // else in the room holds a copy of. `seatClosedByHand` reads the
+          // reason the withdrawal never writes, so this branch clears only
+          // what the withdrawal itself put there — R-BR's own scope.
           dbPatch.off_job_at = null;
           dbPatch.off_job_reason = null;
         }
@@ -2679,6 +2835,14 @@ export function useSetPartyBid() {
       void queryClient.invalidateQueries({ queryKey: ['project-roster', input.projectId] });
       void queryClient.invalidateQueries({ queryKey: peopleKeys.all });
       void queryClient.invalidateQueries({ queryKey: peopleSeatKeys.all });
+      // r21 major-1 / minor-5 (R-BS) — THIS DOOR MOVES `off_job_at` TOO.
+      // Recording "They withdrew" closes the seat and correcting it away from
+      // `withdrawn` re-opens it, so every reader of a seat's openness has to
+      // be told: the authority root the Call Sheet's `authorityPhrase` reads,
+      // and the household keys `useProjectHousehold`'s open-seat filter reads.
+      // This was the seventh seat writer and the only one that told neither.
+      void queryClient.invalidateQueries({ queryKey: partyAuthorityKeys.all });
+      invalidateClientHouseholds(queryClient);
     },
   });
 }

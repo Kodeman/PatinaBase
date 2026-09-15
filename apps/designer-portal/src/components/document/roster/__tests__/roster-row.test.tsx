@@ -21,6 +21,8 @@ let complianceDocs: unknown[] = [];
 let complianceNotices: unknown[] = [];
 const setBidMutate = jest.fn();
 let projectsData: unknown[] = [];
+/** The caller's standing in the studio holding this sheet's book (r21). */
+let studioOrgs: unknown[] = [{ id: 'studio-1', membership: { role: 'owner' } }];
 
 /** QA-R13-1: the row resolves the job a consent record NAMES, so the sheet's
  *  own project name is never substituted into R-Q's sentence. */
@@ -29,6 +31,20 @@ jest.mock('@/hooks/use-projects', () => ({
 }));
 
 jest.mock('@patina/supabase', () => ({
+  useOrganizations: () => ({ data: studioOrgs }),
+  // r21 MAJOR-1 / major-2 (R-BS) — PR-n standing, read before the press.
+  // 00634 refuses the close of a seat carrying an OPEN money or
+  // draw-certify grant to anyone who is not an owner or an admin.
+  seatCloseIsHeldForMoney: (
+    authority: ReadonlyArray<{ scope: string; effective_to: string | null }> | null | undefined,
+    isPrincipal: boolean,
+  ) =>
+    !isPrincipal &&
+    (authority ?? []).some(
+      (g) => g.effective_to == null && ['money', 'draw_certify'].includes(g.scope),
+    ),
+  SEAT_CLOSE_MONEY_HELD_REASON:
+    'This seat signs for money. Closing it ends that, and ending it is the principal’s. An owner or an admin of the studio can close this seat.',
   useUpdateProjectParty: () => ({ mutateAsync: updateMutate, isPending: false }),
   useCloseProjectPartySeat: () => ({ mutateAsync: closeMutate, isPending: false }),
   useRemoveProjectParty: () => ({ mutateAsync: removeMutate, isPending: false }),
@@ -193,6 +209,7 @@ beforeEach(() => {
   sendSmsMutate.mockReset().mockResolvedValue({});
   consentResolution = { verdict: null, record: null };
   complianceDocs = [];
+  studioOrgs = [{ id: 'studio-1', membership: { role: 'owner' } }];
 });
 
 describe('RosterRow — folded', () => {
@@ -1144,7 +1161,14 @@ describe('RosterRow — the Bidding band', () => {
       // outcome from correcting a field on a seat whose outcome has not moved.
       // r19 major-1: and the date it already carries, so "They withdrew" can
       // write one where none stands without moving one that does.
-      previous: { bidOutcome: null, stage: 'no_response', offJobAt: null },
+      // r21 major-3/major-4: and the REASON beside it, the one signal that
+      // tells a hand-close from a withdrawal.
+      previous: {
+        bidOutcome: null,
+        stage: 'no_response',
+        offJobAt: null,
+        offJobReason: null,
+      },
       patch: {
         bidAskedAt: '2026-09-28',
         bidDueAt: '2026-10-05',
@@ -1346,6 +1370,7 @@ describe('RosterRow — the Bidding band', () => {
       bidOutcome: 'selected',
       stage: 'awarded',
       offJobAt: null,
+      offJobReason: null,
     });
   });
 
@@ -1523,5 +1548,120 @@ describe('RosterRow — a person-held paper', () => {
     expect(document.querySelector('[data-expiry-notice]')?.textContent).toBe(
       'Dana Kowalski’s licence lapses on 6 October 2026.',
     );
+  });
+});
+
+/**
+ * r21 MAJOR-1 / major-2 (R-BS) — 00634 made "Close this seat" a GATED act with
+ * two named refusals, and the Call Sheet knew neither word: it offered the act
+ * live to the caller the database would refuse, then routed the bare token
+ * into `setNote` — the polite `role="status"` announcer, not an alert.
+ */
+describe('RosterRow — Close this seat is gated on PR-n (r21)', () => {
+  const moneySeat = () =>
+    ul(
+      <RosterRow
+        row={seatRow()}
+        band="this_week"
+        expanded
+        onToggle={jest.fn()}
+        consentOrg="studio-1"
+        authority={
+          [
+            {
+              id: 'g-1',
+              engagement_id: 'seat-dana',
+              scope: 'money',
+              threshold_cents: 250000,
+              prepares_only: false,
+              copy_to: [],
+              source_clause: 'agreement §4',
+              granted_by: null,
+              effective_from: '2026-01-01',
+              effective_to: null,
+              created_at: '2026-01-01',
+              updated_at: '2026-01-01',
+            },
+          ] as never
+        }
+      />,
+    );
+
+  it('holds the act, with a visible reason, for a caller who is not the principal', () => {
+    studioOrgs = [{ id: 'studio-1', membership: { role: 'member' } }];
+    moneySeat();
+    const close = screen.getByRole('button', { name: /Close this seat/ });
+    expect(close).toHaveAttribute('aria-disabled', 'true');
+    const reason = document.getElementById(
+      close.getAttribute('aria-describedby') as string,
+    );
+    expect(reason).toHaveTextContent('An owner or an admin of the studio can close this seat.');
+    fireEvent.click(close);
+    expect(screen.queryByLabelText('Why it closed')).not.toBeInTheDocument();
+    expect(closeMutate).not.toHaveBeenCalled();
+  });
+
+  it('offers it to the principal on the same seat', () => {
+    studioOrgs = [{ id: 'studio-1', membership: { role: 'admin' } }];
+    moneySeat();
+    expect(
+      screen.getByRole('button', { name: /Close this seat/ }),
+    ).not.toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('never holds a seat whose grant is outside PR-n\'s two scopes', () => {
+    studioOrgs = [{ id: 'studio-1', membership: { role: 'member' } }];
+    ul(
+      <RosterRow
+        row={seatRow()}
+        band="this_week"
+        expanded
+        onToggle={jest.fn()}
+        consentOrg="studio-1"
+        authority={
+          [
+            {
+              id: 'g-2',
+              engagement_id: 'seat-dana',
+              scope: 'schedule',
+              threshold_cents: null,
+              prepares_only: false,
+              copy_to: [],
+              source_clause: null,
+              granted_by: null,
+              effective_from: '2026-01-01',
+              effective_to: null,
+              created_at: '2026-01-01',
+              updated_at: '2026-01-01',
+            },
+          ] as never
+        }
+      />,
+    );
+    expect(
+      screen.getByRole('button', { name: /Close this seat/ }),
+    ).not.toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('says a refused close in words, in an alert, never in the status line', async () => {
+    closeMutate.mockRejectedValue(
+      new Error('seat_close_money_authority_forbidden'),
+    );
+    const onAnnounce = jest.fn();
+    ul(
+      <RosterRow
+        row={seatRow()}
+        band="this_week"
+        expanded
+        onToggle={jest.fn()}
+        onAnnounce={onAnnounce}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Close this seat/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Close the seat/ }));
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('owner or an admin');
+    expect(alert.textContent).not.toContain('seat_close');
+    expect(onAnnounce).not.toHaveBeenCalled();
   });
 });

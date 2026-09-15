@@ -35,6 +35,19 @@ jest.mock('@patina/supabase', () => {
   const BID = ['prospect', 'invited', 'bidding', 'declined', 'no_response'];
   const DONE = ['closeout', 'warranty', 'off_job', 'retired'];
   return {
+    // r21 MAJOR-1 / major-2 (R-BS) — PR-n standing, read before the press.
+    // 00634 refuses the close of a seat carrying an OPEN money or
+    // draw-certify grant to anyone who is not an owner or an admin.
+    seatCloseIsHeldForMoney: (
+      authority: ReadonlyArray<{ scope: string; effective_to: string | null }> | null | undefined,
+      isPrincipal: boolean,
+    ) =>
+      !isPrincipal &&
+      (authority ?? []).some(
+        (g) => g.effective_to == null && ['money', 'draw_certify'].includes(g.scope),
+      ),
+    SEAT_CLOSE_MONEY_HELD_REASON:
+      'This seat signs for money. Closing it ends that, and ending it is the principal’s. An owner or an admin of the studio can close this seat.',
     useProjectRoster: (...args: unknown[]) => useProjectRoster(...args),
     usePeopleSeats: (...args: unknown[]) => usePeopleSeats(...args),
     useProjectV2: (...args: unknown[]) => useProjectV2(...args),

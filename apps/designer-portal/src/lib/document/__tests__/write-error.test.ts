@@ -64,3 +64,40 @@ describe("writeErrorMessage", () => {
     expect(writeErrorMessage({ message: "" }, "fallback")).toBe("fallback");
   });
 });
+
+/**
+ * r21 MAJOR-1 / major-2 (R-BS) — 00634's two seat-close refusals. They are
+ * BARE TOKENS with no SQLSTATE, so the schema-word guard matches none of them
+ * and `return raw` printed `seat_close_money_authority_forbidden` on three
+ * faces. One press gets there: "They withdrew" in the Bidding band, or "Close
+ * the seat", taken by a member who is not an owner or admin.
+ */
+describe("writeErrorMessage — 00634's seat-close refusals", () => {
+  it("says the PR-n rule, and never the token", () => {
+    const said = writeErrorMessage(
+      { message: "seat_close_money_authority_forbidden" },
+      "Could not close the seat.",
+    );
+    expect(said).toContain("owner or an admin");
+    expect(said).not.toContain("seat_close");
+  });
+
+  it("names the other studio's book rather than the token", () => {
+    const said = writeErrorMessage(
+      { message: "seat_close_authority_forbidden" },
+      "Could not close the seat.",
+    );
+    expect(said).toContain("another studio");
+    expect(said).not.toContain("forbidden");
+  });
+
+  it("reads a PostgREST rejection that is an Error, which is what postgrest-js throws", () => {
+    const err = Object.assign(
+      new Error("seat_close_money_authority_forbidden"),
+      { code: "P0001" },
+    );
+    expect(
+      writeErrorMessage(err, "Could not close the seat."),
+    ).toContain("owner or an admin");
+  });
+});

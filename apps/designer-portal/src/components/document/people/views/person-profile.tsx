@@ -560,6 +560,7 @@ export function PersonProfile({
                 <CloseSeatAct
                   seatId={seat.seat_id}
                   projectId={seat.project_id}
+                  organizationId={cardOrgId}
                   name={person?.display_name ?? seat.display_name ?? "This person"}
                   stage={seat.stage}
                   onClosed={(message) => notify(message)}

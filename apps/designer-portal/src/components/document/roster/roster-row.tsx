@@ -44,8 +44,11 @@ import {
   useSendPartySms,
   useSetPartyBid,
   useUpdateProjectParty,
+  useOrganizations,
+  seatCloseIsHeldForMoney,
   AUTHORITY_SCOPE_LABELS,
   COMPLIANCE_DOC_TYPE_LABELS,
+  SEAT_CLOSE_MONEY_HELD_REASON,
   SEAT_DELETE_REFUSAL_SENTENCES,
   type ProjectPartyAuthority,
   type SeatBid,
@@ -238,10 +241,45 @@ export function RosterRow({
     .filter(Boolean)
     .join(' ');
 
+  /**
+   * r21 MAJOR-1 / major-2 (R-BS) — THE PR-n STANDING, READ BEFORE THE PRESS.
+   *
+   * 00634 made "Close this seat" a GATED act: a seat carrying an open money or
+   * draw-certify grant may only be closed by an owner or an admin of the
+   * studio, because closing it ends that grant and PR-n reserves the taking
+   * away to the principal. The act was offered live and unqualified to the
+   * caller the database would refuse, and the refusal arrived as a bare schema
+   * token. `household-band.tsx` already states this same rule in words before
+   * the press (`isPrincipal`, :328); this is that shape, on this surface.
+   */
+  const { data: orgsForStanding } = useOrganizations();
+  const isPrincipal = useMemo(() => {
+    if (!consentOrg) return false;
+    const role = (orgsForStanding ?? []).find((o) => o.id === consentOrg)
+      ?.membership?.role;
+    return role === 'owner' || role === 'admin';
+  }, [orgsForStanding, consentOrg]);
+  const closeHeldForMoney =
+    isSeat && !seatAlreadyClosed && seatCloseIsHeldForMoney(authority, isPrincipal);
+  const closeHeld = seatAlreadyClosed || closeHeldForMoney;
+  const closeHeldSentence = seatAlreadyClosed
+    ? closedHeldSentence
+    : SEAT_CLOSE_MONEY_HELD_REASON;
+
   const [composing, setComposing] = useState(false);
   const [body, setBody] = useState('');
   const [closing, setClosing] = useState(false);
   const [reason, setReason] = useState('');
+  /**
+   * r21 major-2 — A REFUSED CLOSE IS AN ALERT, NOT A STATUS.
+   *
+   * The catch printed `e.message` — the bare token — into `setNote`, the
+   * row's polite `role="status"` announcer: a screen-reader user was told the
+   * close FAILED in the voice that tells them it succeeded, and a later status
+   * could swallow it. Same rule r7 MAJOR-4 settled for the bid editor
+   * (:258-269), same translator every other door in the wave uses.
+   */
+  const [closeError, setCloseError] = useState<string | null>(null);
   const [noteText, setNoteText] = useState<string | null>(null);
   /**
    * CR11-10: the note prints as paper and speaks through the surface's one
@@ -513,7 +551,16 @@ export function RosterRow({
    * the studio had no way to read what the press had actually done.
    */
   const bidWrite = bidStageOutcome(
-    { bidOutcome: bid?.bidOutcome ?? null, stage: row.stage ?? null },
+    {
+      bidOutcome: bid?.bidOutcome ?? null,
+      stage: row.stage ?? null,
+      // r21 major-3: the face reads the SAME predicate the write does, so a
+      // seat the studio closed by hand is past the bid on both sides and the
+      // consequence sentence never promises a band move the write will not
+      // make.
+      offJobAt: row.offJobAt ?? null,
+      offJobReason: row.offJobReason ?? null,
+    },
     bidDraft.outcome || null,
   );
   /**
@@ -568,6 +615,11 @@ export function RosterRow({
           // stands. "They withdrew" dates a seat that has no date; it never
           // moves one the studio's own "Close this seat" already wrote.
           offJobAt: row.offJobAt ?? null,
+          // r21 major-3 / major-4: and the sentence the studio typed when it
+          // closed the seat by hand, which is the one signal that tells a
+          // hand-close from a withdrawal. Without it the clearing branch NULLs
+          // words nothing else in the room holds a copy of.
+          offJobReason: row.offJobReason ?? null,
         },
         patch: {
           bidAskedAt: bidDraft.askedAt || null,
@@ -1074,7 +1126,8 @@ export function RosterRow({
                   <DocumentAction
                     actionKey="confirm-close-seat"
                     variant="danger"
-                    onClick={() =>
+                    onClick={() => {
+                      setCloseError(null);
                       void closeSeat
                         .mutateAsync({ id: seatId, projectId, reason })
                         .then(() => {
@@ -1086,11 +1139,13 @@ export function RosterRow({
                           setNote(`${row.name}'s seat is closed.`);
                         })
                         .catch((e: unknown) =>
-                          setNote(
-                            e instanceof Error ? e.message : 'Could not close the seat.',
+                          // r21 major-2: 00634's two refusals said in words,
+                          // in the row's own alert line.
+                          setCloseError(
+                            writeErrorMessage(e, 'Could not close the seat.'),
                           ),
-                        )
-                    }
+                        );
+                    }}
                     loading={closeSeat.isPending}
                     loadingLabel="Closing…"
                   >
@@ -1139,6 +1194,15 @@ export function RosterRow({
                 {refusal && (
                   <p id={refusalId} className="mt-1.5 text-[0.72rem] text-[var(--color-aged-oak)]">
                     {SEAT_DELETE_REFUSAL_SENTENCES[refusal]}
+                  </p>
+                )}
+                {closeError && (
+                  <p
+                    role="alert"
+                    data-close-seat-error
+                    className="mt-1.5 text-[0.72rem] text-[var(--color-terracotta-ink)]"
+                  >
+                    {closeError}
                   </p>
                 )}
               </div>
@@ -1204,12 +1268,12 @@ export function RosterRow({
                       setReason(row.offJobReason ?? '');
                       setClosing(true);
                     }}
-                    disabled={seatAlreadyClosed}
-                    held={seatAlreadyClosed}
+                    disabled={closeHeld}
+                    held={closeHeld}
                     aria-describedby={
-                      seatAlreadyClosed ? `${panelId}-close-held` : undefined
+                      closeHeld ? `${panelId}-close-held` : undefined
                     }
-                    onHeldActivate={() => setNote(closedHeldSentence)}
+                    onHeldActivate={() => setNote(closeHeldSentence)}
                     className="ml-auto"
                   >
                     Close this seat
@@ -1219,13 +1283,15 @@ export function RosterRow({
             )}
 
             {/* r20 major-1 — a held act carries a VISIBLE reason (direction
-                §5.5, SPEC §7 #4), the way the Text act two regions up does. */}
-            {seatAlreadyClosed && (
+                §5.5, SPEC §7 #4), the way the Text act two regions up does.
+                r21 major-2 — and the second reason it is held is PR-n: a seat
+                that signs for money is the principal's to close. */}
+            {closeHeld && (
               <p
                 id={`${panelId}-close-held`}
                 className="mt-1 text-[0.7rem] text-[var(--color-aged-oak)]"
               >
-                {closedHeldSentence}
+                {closeHeldSentence}
               </p>
             )}
 
