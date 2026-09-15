@@ -35,16 +35,25 @@ export const inboundDocumentKeys = {
 /**
  * 00637's named refusals, said in words.
  *
- * R-AZ's two — a successor that is undated or lapsed, and a successor that
- * drops a gate the retired paper held — are the ones a studio will actually
- * meet: the firm renews a certificate and leaves the expiry blank. Both are
- * raised as bare tokens with a HINT, so without this map the studio reads
- * `compliance_confirm_drops_a_gate` on the card.
+ * R-AZ's four confirm legs — a successor with no end date, one that has
+ * already lapsed, one that ends sooner than the paper it retires, and one that
+ * drops a gate the retired paper held — are all ordinary firm behaviour: a
+ * renewal for a shorter term, a dated certificate that lapsed in the post.
+ * Every one is raised as a bare token with a HINT, and `inbound-queue-band`
+ * prints this function's answer in a `role="alert"` region, so a token missing
+ * from this map is announced aloud to the studio as the whole explanation
+ * (W4 r2 MAJOR-1). All six tokens 00637 can raise are named here.
  */
 const INBOUND_REFUSAL_SENTENCES: Record<string, string> = {
   compliance_confirm_needs_a_live_date:
     'This paper retires a dated one, so it needs its own end date, and that ' +
     'date has to be ahead. Ask the firm for the dates before you confirm it.',
+  compliance_confirm_already_lapsed:
+    'This paper has already lapsed, so it cannot retire the paper on file. ' +
+    'Ask the firm for a current one.',
+  compliance_confirm_ends_sooner:
+    'This paper ends before the one it would retire. Ask the firm for a ' +
+    'renewal that runs at least as long.',
   compliance_confirm_drops_a_gate:
     'The paper this would retire blocks more than this one does. Confirming ' +
     'it would quietly open a gate the studio had shut.',

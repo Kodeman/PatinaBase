@@ -152,23 +152,41 @@ export async function resolveContactChannel(
 ): Promise<ContactChannelResolution | null> {
   const value = to.trim().toLowerCase();
   if (!value) return null;
+  // The studio is NOT a column here: `studio_contact_channels` hangs off the
+  // owning card and 00593's RLS reads the org through `studio_contact_org(
+  // owner_id)`. Selecting a flat `organization_id` raised 42703 on every call,
+  // the catch below swallowed it, and the whole suppression gate answered
+  // "no channel on file" for every recipient (W4 r2 BLOCKING W4R2-1). The
+  // embed walks `studio_contact_channels_owner_id_fkey` to the card instead.
   const { data, error } = await supabase
     .from("studio_contact_channels")
-    .select("id, owner_type, owner_id, organization_id, value, status")
+    .select(
+      "id, owner_type, owner_id, value, status, studio_contacts!inner(organization_id)",
+    )
     .eq("value", value)
     .in("channel_kind", ["email", "ap_email"]);
   if (error) {
     console.error("send-email: contact-channel lookup unavailable", error);
     return null;
   }
-  const rows = (data ?? []) as Array<{
+  const rows = ((data ?? []) as Array<{
     id: string;
     owner_type: string;
     owner_id: string;
-    organization_id: string | null;
     value: string;
     status: string;
-  }>;
+    // PostgREST answers a many-to-one embed with an object; a hand-rolled test
+    // double or an older PostgREST may hand back a one-element array.
+    studio_contacts?:
+      | { organization_id: string | null }
+      | Array<{ organization_id: string | null }>
+      | null;
+  }>).map((row) => {
+    const card = Array.isArray(row.studio_contacts)
+      ? row.studio_contacts[0] ?? null
+      : row.studio_contacts ?? null;
+    return { ...row, organization_id: card?.organization_id ?? null };
+  });
   if (rows.length === 0) return null;
   const worstOf = (candidates: typeof rows) =>
     candidates.reduce((a, b) =>

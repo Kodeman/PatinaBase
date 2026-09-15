@@ -212,8 +212,21 @@ export async function handleResendEvent(
     .single();
 
   if (!logEntry) {
-    // Not found — might be a non-tracked email (e.g. auth emails)
+    // Not found — might be a non-tracked email (e.g. auth emails).
+    //
+    // A LETTER'S ATTRIBUTION AND AN ADDRESS'S DELIVERABILITY ARE TWO DIFFERENT
+    // QUESTIONS (W4 r2 MAJOR-3). W4 r1's B-2 narrowed the notification_log ref
+    // to the SENDING studio's own card, which is right for the touch — a record
+    // is one studio's claim — but it means a letter from a sender that passes
+    // no explicit ref (po-send, quote-request-send, trade-rfq-send,
+    // trade-agreement-send) writes no log row at all when the sending studio's
+    // book does not carry the address. Returning here without asking would drop
+    // that letter's bounce or complaint on the floor, leaving the address
+    // `active` on EVERY studio's card — and that first bounce, arriving on
+    // studio A's letter, is exactly the one that was going to tell studio B.
+    // D-6: a dead mailbox is dead for everyone, whoever's letter found out.
     console.warn(`No notification_log entry for email_id: ${emailId}`);
+    await writeChannelStatus(supabase, event, null, new Date().toISOString());
     return { matched: false };
   }
 

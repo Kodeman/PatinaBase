@@ -39,10 +39,23 @@ const STUDIO_B = "22222222-2222-4222-8222-222222222222";
 const B_CHANNEL_ID = "66666666-6666-4666-8666-666666666666";
 const B_OWNER_ID = "77777777-7777-4777-8777-777777777777";
 
+/**
+ * The fixture shape, which is NOT the wire shape.
+ *
+ * `studio_contact_channels` has NO `organization_id` column — the studio hangs
+ * off the OWNING CARD (`owner_id -> studio_contacts.organization_id`), which is
+ * also how 00593's RLS reads it. An earlier version of this double carried a
+ * flat `organization_id` that the real table does not have, so 15 green tests
+ * sat on top of a query that raised 42703 against the real database on every
+ * call (W4 r2 BLOCKING W4R2-1). The double now projects the fixture into the
+ * shape PostgREST actually answers with, and `CHANNEL_COLUMNS` below pins the
+ * real column list so a flat select can never go green again.
+ */
 interface ChannelRow {
   id: string;
   owner_type: string;
   owner_id: string;
+  /** Fixture convenience: projected onto the embedded card by the double. */
   organization_id?: string | null;
   value: string;
   status: string;
@@ -50,11 +63,32 @@ interface ChannelRow {
   status_at?: string | null;
 }
 
+/** Every column `\d public.studio_contact_channels` actually has (00593). */
+const CHANNEL_COLUMNS = new Set([
+  "id",
+  "owner_type",
+  "owner_id",
+  "channel_kind",
+  "value",
+  "label",
+  "sms_capable",
+  "verified",
+  "verified_at",
+  "preferred",
+  "status",
+  "status_at",
+  "created_by",
+  "created_at",
+  "updated_at",
+]);
+
 interface Recorded {
   logs: Array<Record<string, unknown>>;
   updates: Array<Record<string, unknown>>;
   rpcs: Array<{ name: string; args: Record<string, unknown> }>;
   lookups: Array<Record<string, string>>;
+  /** Every `select(...)` string the resolver sent to the channel table. */
+  selects: string[];
 }
 
 /** The narrow surface send-email.ts touches, with the channel table in it. */
@@ -69,7 +103,8 @@ function emailClient(rows: ChannelRow[], recorded: Recorded) {
         // address-wide verdict).
         const eqs: Record<string, string> = {};
         const q = {
-          select() {
+          select(cols?: string) {
+            if (cols) recorded.selects.push(cols);
             return q;
           },
           eq(col: string, v: string) {
@@ -84,9 +119,18 @@ function emailClient(rows: ChannelRow[], recorded: Recorded) {
           then(resolve: (r: { data: unknown; error: unknown }) => unknown) {
             recorded.lookups.push({ ...eqs });
             return Promise.resolve(resolve({
-              data: rows.filter((r) =>
-                r.value === value && kinds.includes(r.channel_kind)
-              ),
+              data: rows
+                .filter((r) =>
+                  r.value === value && kinds.includes(r.channel_kind)
+                )
+                // The wire shape: the studio arrives on the EMBEDDED card, not
+                // as a column of this table (W4 r2 BLOCKING W4R2-1).
+                .map(({ organization_id, ...rest }) => ({
+                  ...rest,
+                  studio_contacts: {
+                    organization_id: organization_id ?? null,
+                  },
+                })),
               error: null,
             }));
           },
@@ -139,7 +183,7 @@ function emailClient(rows: ChannelRow[], recorded: Recorded) {
 }
 
 function blank(): Recorded {
-  return { logs: [], updates: [], rpcs: [], lookups: [] };
+  return { logs: [], updates: [], rpcs: [], lookups: [], selects: [] };
 }
 
 const liveRow: ChannelRow = {
@@ -163,6 +207,39 @@ const otherStudioRow: ChannelRow = {
   status: "active",
   channel_kind: "email",
 };
+
+Deno.test("the channel lookup names only columns the real table has, and takes the studio from the owning card", async () => {
+  const recorded = blank();
+  const client = emailClient([liveRow], recorded);
+  const resolved = await resolveContactChannel(
+    client,
+    "dana@kowalskitile.test",
+    STUDIO_A,
+  );
+  // The studio arrived through the embed, not a column of this table.
+  assertEquals(resolved?.studioRow?.id, CHANNEL_ID);
+  assertEquals(recorded.selects.length, 1);
+  const parts = recorded.selects[0].split(",").map((p) => p.trim());
+  const embeds = parts.filter((p) => p.includes("("));
+  const plain = parts.filter((p) => !p.includes("("));
+  for (const col of plain) {
+    assert(
+      CHANNEL_COLUMNS.has(col),
+      `studio_contact_channels has no column "${col}" — this select would ` +
+        `raise 42703 against the real database (W4 r2 BLOCKING W4R2-1)`,
+    );
+  }
+  assertEquals(embeds, ["studio_contacts!inner(organization_id)"]);
+});
+
+Deno.test("an address on no card at all still resolves to null, not a throw", async () => {
+  const recorded = blank();
+  const client = emailClient([], recorded);
+  assertEquals(
+    await resolveContactChannel(client, "nobody@example.test", STUDIO_A),
+    null,
+  );
+});
 
 Deno.test("worst status wins when one address sits on several cards", async () => {
   const recorded = blank();

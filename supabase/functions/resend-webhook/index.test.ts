@@ -30,6 +30,8 @@ interface Recorded {
 function stubClient(
   logRow: Record<string, unknown> | null,
   bounceCount = 0,
+  /** Typed email channels carrying the event's address (CRM-12). */
+  channelRows: Array<{ id: string; status: string }> = [],
 ) {
   const updates: Recorded[] = [];
 
@@ -51,7 +53,12 @@ function stubClient(
         return chain(table, next);
       },
       then: (resolve: (v: unknown) => void) =>
-        resolve({ data: null, error: null }),
+        resolve({
+          data: !patch && table === "studio_contact_channels"
+            ? channelRows
+            : null,
+          error: null,
+        }),
     };
     return node;
   }
@@ -83,6 +90,64 @@ Deno.test("an email_id with no notification_log row is reported unmatched", asyn
     data: { email_id: "missing" },
   });
   assertEquals(outcome, { matched: false });
+  assertEquals(updates.length, 0);
+});
+
+// W4 r2 MAJOR-3. B-2 narrowed the notification_log ref to the SENDING studio's
+// own card, so a letter from po-send / quote-request-send / trade-rfq-send /
+// trade-agreement-send (none of which pass an explicit ref) writes NO log row
+// when that studio's book does not carry the address. The letter's attribution
+// is gone; the address's deliverability must not be. D-6: a dead mailbox is
+// dead for everyone, whoever's letter found out.
+Deno.test("an UNMATCHED hard bounce still kills the address on every card", async () => {
+  const { client, updates } = stubClient(null, 0, [
+    { id: "chan-a", status: "active" },
+    { id: "chan-b", status: "active" },
+  ]);
+  const outcome = await handleResendEvent(client as never, {
+    type: "email.bounced",
+    data: {
+      email_id: "untracked",
+      to: ["dana@kowalskitile.test"],
+      bounce: { type: "Permanent" },
+    },
+  });
+  // Still unmatched: no log row exists to stamp.
+  assertEquals(outcome, { matched: false });
+  const channelWrites = updates.filter(
+    (u) => u.table === "studio_contact_channels",
+  );
+  assertEquals(channelWrites.length, 1);
+  assertEquals(channelWrites[0].patch.status, "dead");
+  assert(typeof channelWrites[0].patch.status_at === "string");
+  assertEquals(channelWrites[0].guard, ["chan-a", "chan-b"]);
+  // Nothing was written to notification_log — there was no row.
+  assertEquals(logUpdates(updates).length, 0);
+});
+
+Deno.test("an UNMATCHED complaint unsubscribes the address", async () => {
+  const { client, updates } = stubClient(null, 0, [
+    { id: "chan-a", status: "active" },
+  ]);
+  await handleResendEvent(client as never, {
+    type: "email.complained",
+    data: { email_id: "untracked", to: ["dana@kowalskitile.test"] },
+  });
+  const channelWrites = updates.filter(
+    (u) => u.table === "studio_contact_channels",
+  );
+  assertEquals(channelWrites.length, 1);
+  assertEquals(channelWrites[0].patch.status, "unsubscribed");
+});
+
+Deno.test("an UNMATCHED event that is neither a bounce nor a complaint writes nothing", async () => {
+  const { client, updates } = stubClient(null, 0, [
+    { id: "chan-a", status: "active" },
+  ]);
+  await handleResendEvent(client as never, {
+    type: "email.opened",
+    data: { email_id: "untracked", to: ["dana@kowalskitile.test"] },
+  });
   assertEquals(updates.length, 0);
 });
 

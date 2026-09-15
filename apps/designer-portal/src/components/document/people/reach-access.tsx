@@ -29,6 +29,7 @@ import {
   ALL_CONTACT_CHANNEL_STATUSES,
   COMPANY_CHANNEL_KINDS,
   CONTACT_CHANNEL_KIND_LABELS,
+  FIRM_SCOPED_ACCESS_GRANT_TIERS,
   PERSON_CHANNEL_KINDS,
   isContactChannelHeld,
   useAccessGrants,
@@ -44,6 +45,7 @@ import {
   useStudioContactChannels,
   useUpdateStudioContactChannel,
   fieldLinkUrl,
+  type AccessGrantTier,
   type ContactChannelKind,
   type ContactChannelStatus,
   type ContactRuleChannel,
@@ -794,12 +796,23 @@ export function ReachAccess({
    * engagement-keyed door cannot match; this holds that promise at the render
    * too, so no reach word and no Revoke of a person's own door can ever reach
    * a page SPEC §5.3 #9 bars them from.
+   *
+   * Filtered by TIER, not by `subject_type`. This read `subject_type ===
+   * "contact"` — true of `agreement_link`, the only firm-scoped tier when it
+   * was written, and false of W4's `paperwork_link`, which stamps
+   * `subject_type = 'company'` (00637 branch 12). A live paperwork door was
+   * therefore dropped before it reached the list, and its Revoke was reachable
+   * from no surface at all (W4 r2 MAJOR W4R2-2).
    */
   const shownGrants = useMemo(
     () =>
       isPerson
         ? grants
-        : (grants ?? []).filter((grant) => grant.subject_type === "contact"),
+        : (grants ?? []).filter((grant) =>
+            FIRM_SCOPED_ACCESS_GRANT_TIERS.includes(
+              grant.tier as AccessGrantTier,
+            ),
+          ),
     [grants, isPerson],
   );
   const setRule = useSetContactRule();

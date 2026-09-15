@@ -41,7 +41,7 @@ function context(documents: PaperworkDocument[]): PaperworkContext {
 }
 
 function renderSheet(documents: PaperworkDocument[]) {
-  render(
+  return render(
     <PaperworkSheet
       token={'a'.repeat(64)}
       studioName="Local Dev Studio"
@@ -109,21 +109,56 @@ describe('PaperworkSheet', () => {
       screen.getByText('Received. Local Dev Studio will confirm it.'),
     ).toBeInTheDocument();
     expect(screen.queryByTestId('form-W-9')).not.toBeInTheDocument();
+    // Paper that ARRIVED before this visit is not announced: nothing happened.
+    expect(screen.getByRole('status')).toHaveTextContent('');
   });
 
   it('swaps a sent form for the receipt sentence', async () => {
     const user = userEvent.setup();
-    renderSheet([]);
+    const { container } = renderSheet([]);
 
     expect(screen.getByTestId('form-W-9')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Send W-9' }));
 
     expect(screen.queryByTestId('form-W-9')).not.toBeInTheDocument();
     expect(
-      screen.getByText('Received. Local Dev Studio will confirm it.'),
-    ).toBeInTheDocument();
+      container.querySelector('[data-paperwork-receipt="w9"]'),
+    ).toHaveTextContent('Received. Local Dev Studio will confirm it.');
     // The other two owed papers are untouched by one send.
     expect(screen.getByTestId('form-Licence')).toBeInTheDocument();
+  });
+
+  // W4 r2 MAJOR-5. The send unmounts the form and the focused submit button
+  // with it. Without a live region the page's ONE act had no outcome a screen
+  // reader could hear, and focus fell to document.body.
+  it('says the receipt into a polite live region and keeps the reader in place', async () => {
+    const user = userEvent.setup();
+    const { container } = renderSheet([]);
+
+    const region = screen.getByRole('status');
+    expect(region).toHaveAttribute('aria-live', 'polite');
+    // Nothing is announced before the act.
+    expect(region).toHaveTextContent('');
+
+    await user.click(screen.getByRole('button', { name: 'Send W-9' }));
+
+    expect(region).toHaveTextContent('Received. Local Dev Studio will confirm it.');
+    const receipt = container.querySelector('[data-paperwork-receipt="w9"]');
+    expect(receipt).toHaveAttribute('tabindex', '-1');
+    expect(document.activeElement).toBe(receipt);
+    expect(document.activeElement).not.toBe(document.body);
+  });
+
+  it('announces only the row that was sent, and moves focus to that row', async () => {
+    const user = userEvent.setup();
+    const { container } = renderSheet([]);
+
+    await user.click(screen.getByRole('button', { name: 'Send Licence' }));
+
+    expect(document.activeElement).toBe(
+      container.querySelector('[data-paperwork-receipt="license"]'),
+    );
+    expect(container.querySelector('[data-paperwork-receipt="w9"]')).toBeNull();
   });
 
   it('marks a waiver upload only', async () => {

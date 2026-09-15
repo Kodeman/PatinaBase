@@ -111,6 +111,16 @@ export function thirtyDaysOut(now: Date = new Date()): string {
  *
  * Returns null where nothing is open, which is exactly R-AD's case: the studio
  * has to choose.
+ *
+ * A DAY THAT HAS PASSED IS NOT A WINDOW. `mint_paperwork_link` keeps only days
+ * whose end-of-day is still ahead (`v_window_end + interval '1 day' > now()`,
+ * 00637:470-475) and otherwise raises `paperwork_link_window_required`. Without
+ * the same test here, a firm holding an open seat whose `on_site_to` has passed
+ * — the ordinary state of a crew nobody stamped off the job — made the band
+ * print "The door can end with this firm's work here, 1 March 2026", pre-select
+ * that radio, and then meet the RPC's "This firm has no open engagement here"
+ * on its own default choice (W4 r2 MAJOR-2). Matching the RPC's predicate makes
+ * such a firm read NO_ENGAGEMENT_SENTENCE and default to thirty days.
  */
 export function firmEngagementWindowEnd(
   seats: ReadonlyArray<{
@@ -120,13 +130,17 @@ export function firmEngagementWindowEnd(
     warranty_until: string | null;
   }>,
   companyId: string,
+  now: Date = new Date(),
 ): string | null {
+  const today = now.toISOString().slice(0, 10);
   let latest: string | null = null;
   for (const seat of seats) {
     if (seat.company_id !== companyId) continue;
     if (seat.off_job_at) continue;
     for (const day of [seat.on_site_to, seat.warranty_until]) {
-      if (day && (!latest || day > latest)) latest = day;
+      // `>= today`, not `> today`: the RPC's `day + 1 day > now()` keeps a
+      // window ending TODAY, and the two must agree exactly.
+      if (day && day >= today && (!latest || day > latest)) latest = day;
     }
   }
   return latest;

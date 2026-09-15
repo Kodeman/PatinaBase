@@ -402,8 +402,11 @@ export function CompanyCard({
    * borrow from and the studio says the day out loud.
    */
   const firmWindowEnd = useMemo(
-    () => firmEngagementWindowEnd(allSeats ?? [], firmId),
-    [allSeats, firmId],
+    // `today` is passed so a window that has already closed is not offered as
+    // one — the RPC refuses it and the band would contradict itself on its own
+    // default choice (W4 r2 MAJOR-2).
+    () => firmEngagementWindowEnd(allSeats ?? [], firmId, today),
+    [allSeats, firmId, today],
   );
 
   /** SPEC §5.3 #8 / CR-10 — the first job and its year, off the same seats. */

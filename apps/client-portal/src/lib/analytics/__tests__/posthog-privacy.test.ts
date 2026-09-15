@@ -18,6 +18,19 @@ const evidenceToken = 'c'.repeat(64);
 const plansToken = 'd'.repeat(64);
 const payToken = 'e'.repeat(64);
 const tradeToken = 'f'.repeat(64);
+const paperworkToken = '0123456789abcdef'.repeat(4);
+/** Every guest prefix in this portal that carries a 64-hex bearer. A new one
+ *  added to middleware.ts and app-chrome.tsx without the redactor is exactly
+ *  how W4 shipped `/paperwork` in the clear (W4 r2 BLOCKING-1). */
+const HEX_BEARER_PREFIXES = [
+  'share',
+  'rfq',
+  'evidence',
+  'plans',
+  'pay',
+  'trade',
+  'paperwork',
+] as const;
 const initMock = (posthog as unknown as { init: jest.Mock }).init;
 
 describe('PostHog Field bearer privacy boundary', () => {
@@ -249,4 +262,61 @@ describe('PostHog Field bearer privacy boundary', () => {
     );
     expect(event.properties?.action_key).toBe('trade_agreement_sign');
   });
+
+  // W4 r2 BLOCKING-1. The paperwork link is the THIRD live capability on this
+  // portal: whoever holds the URL can read the firm's whole compliance position
+  // and POST documents into the studio's `compliance-documents` bucket until the
+  // door's chosen end date. W4 registered `/paperwork` in middleware.ts and
+  // app-chrome.tsx and missed this redactor, so the raw token rode every
+  // $pageview and autocapture event into PostHog.
+  it('redacts paperwork-door bearers from pageview, referrer, autocapture, and nested values', () => {
+    const event = sanitizePostHogEvent({
+      event: '$autocapture',
+      properties: {
+        $current_url: `https://client.patina.cloud/paperwork/${paperworkToken}?from=email`,
+        $referrer: `/paperwork/${paperworkToken}`,
+        $elements: [{
+          tag_name: 'button',
+          attributes: {
+            href: `/paperwork/${paperworkToken}`,
+            'data-source': JSON.stringify({
+              returnTo: `/paperwork/${paperworkToken}`,
+            }),
+          },
+        }],
+        already_redacted: '/paperwork/[redacted]',
+      },
+    });
+
+    const serialized = JSON.stringify(event);
+    expect(serialized).not.toContain(paperworkToken);
+    expect(
+      serialized.match(/\/paperwork\/\[redacted\]/g)?.length,
+    ).toBeGreaterThanOrEqual(4);
+    expect(event.properties?.already_redacted).toBe('/paperwork/[redacted]');
+  });
+
+  it('redacts the paperwork token out of a $pageview, the one event this page always fires', () => {
+    const event = sanitizePostHogEvent({
+      event: '$pageview',
+      properties: { $current_url: `/paperwork/${paperworkToken}` },
+    });
+    expect(event.properties?.$current_url).toBe('/paperwork/[redacted]');
+  });
+
+  // The registry itself, so a NEW guest prefix cannot be added to the portal
+  // without a matching case here.
+  it.each(HEX_BEARER_PREFIXES)(
+    'redacts a 64-hex bearer under /%s',
+    (prefix) => {
+      const bearer = '9'.repeat(64);
+      const event = sanitizePostHogEvent({
+        event: '$pageview',
+        properties: { $current_url: `https://client.patina.cloud/${prefix}/${bearer}` },
+      });
+      expect(event.properties?.$current_url).toBe(
+        `https://client.patina.cloud/${prefix}/[redacted]`,
+      );
+    },
+  );
 });

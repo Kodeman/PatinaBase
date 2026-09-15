@@ -2,9 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-import { useInvoiceLink, type Invoice } from '@patina/supabase';
+import { type Invoice } from '@patina/supabase';
 import { formatCurrency, invoiceBalanceCents } from '@patina/shared';
-import { invoiceLinkPath } from '@patina/utils';
 
 import { ScoredAction } from '@/components/threshold/instruments/scored-action';
 
@@ -123,12 +122,29 @@ export function Letterbox({
   const invoice = namedRow ? toInvoiceModel(namedRow) : soonestDue;
   const due = invoice ? formatDue(invoice.dueDate) : null;
 
-  // The letter's own address (00574 · K1) — the whole invoice on one page, and
-  // the till on it. Additive here: the settle-in-place below stays until W3b.
-  // `/pay/[token]` is a route of this very portal, so the root-relative path is
-  // the whole address: correct on the server and the client alike, with no
-  // origin to read and nothing to reconcile at hydration.
-  const { data: invoiceLink } = useInvoiceLink(invoice?.id ?? null);
+  /**
+   * THE TERMINAL ACT OPENS THE LETTER, NOT AN ADDRESS (W4 r2 MAJOR-3).
+   *
+   * This read `useInvoiceLink(invoice.id)` and gated both the consequence
+   * sentence and the terminal `Pay $X` act on the answer. Since 00636 froze
+   * `invoice_links.token` at NULL and `get_invoice_link` returns NULL for it
+   * unconditionally, `parseInvoiceLink` rejected every answer — so the act and
+   * its sentence were gone from the household's own house page for EVERY
+   * invoice, with nothing said. A shipped, ruled act cannot disappear quietly.
+   *
+   * The address itself may not be re-emitted: only a producer can mint one, and
+   * `ensure_invoice_link` REVOKES the standing link on the way, so a page-load
+   * mint would silently kill the `/pay/<token>` address the client already has
+   * in her email. This surface is a stable read, so it does not mint.
+   *
+   * So the act does what this surface can honestly do: it opens the letter,
+   * where `Settlement` — the settle-in-place till — already stands. The same
+   * move `door-gate.tsx` took for the deposit offer in W4 r1 B-1: name the
+   * letter, not a token. The emailed `/pay/<token>` sheet is untouched and
+   * still the ruled pay surface (K1).
+   */
+  const balanceCents = invoice?.balanceCents ?? 0;
+  const payHere = invoice !== null && balanceCents > 0 && !open;
 
   // The return from the till. A return that names an order belongs to the road,
   // not to the letterbox — and a return naming a letter this house is not
@@ -287,14 +303,14 @@ export function Letterbox({
             {due ? `, due ${due}` : ''}.
           </p>
 
-          {invoiceLink && (
+          {payHere && (
             <p data-testid="letterbox-consequence" className="consequence mt-3.5">
               This opens payment. Nothing is charged until you choose how to pay.
             </p>
           )}
 
           <div className="mt-3 flex flex-wrap items-baseline gap-x-4">
-            {invoiceLink && (
+            {payHere && (
               <ScoredAction
                 actionKey="invoice_open_link"
                 regionKey="letterbox"
@@ -302,11 +318,11 @@ export function Letterbox({
                 // Money moves here, so the act takes the terminal tier and
                 // carries the figure it is for. H4 defines the variant.
                 variant="terminal"
-                href={invoiceLinkPath(invoiceLink.token)}
-                // Never warmed by scrolling past: a prefetch that ever renders
-                // would record a view and spend the pay page's rate-limit
-                // budget on a letter nobody opened.
-                prefetch={false}
+                aria-controls="letterbox-letter"
+                onClick={() => {
+                  setOpen(true);
+                  revealReturnAnchor(slot.current);
+                }}
               >
                 {`Pay ${formatCurrency(invoice.balanceCents)}`}
               </ScoredAction>

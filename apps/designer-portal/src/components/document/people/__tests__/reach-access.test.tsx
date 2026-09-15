@@ -65,8 +65,13 @@ jest.mock("@patina/supabase", () => ({
   COMPANY_CHANNEL_KINDS: ["office", "dispatch", "ap_email"],
   useCreateFieldLink: () => ({ mutate: mintLink, isPending: false }),
   useRevokeAccessGrant: () => ({ mutate: jest.fn(), isPending: false }),
+  // W4 r2 W4R2-2 — the REAL firm-scoped tier list, so a new firm-scoped tier
+  // cannot be added to the package and silently dropped at this render again.
+  FIRM_SCOPED_ACCESS_GRANT_TIERS: jest.requireActual("@patina/supabase")
+    .FIRM_SCOPED_ACCESS_GRANT_TIERS,
   isAccessGrantRevokable: (tier: string) =>
-    tier === "field_link" || tier === "project_review",
+    tier === "field_link" || tier === "project_review" ||
+    tier === "paperwork_link",
   // CR5-2: the row asks the routing table what a revoke actually closes and
   // whether the RPC demands a reason.
   accessGrantRevokeRoute: (tier: string) =>
@@ -81,7 +86,14 @@ jest.mock("@patina/supabase", () => ({
             revokesWholeScope: true,
             keySegment: 1,
           }
-        : null,
+        : tier === "paperwork_link"
+          ? {
+              rpc: "revoke_paperwork_link",
+              idArg: "p_token_id",
+              reasonArg: "p_reason",
+              keySegment: 1,
+            }
+          : null,
   ACCESS_GRANT_NOT_REVOKABLE_SENTENCE:
     "This door is closed somewhere else in Patina, not from here.",
   ACCESS_GRANT_TIER_LABELS: {
@@ -89,11 +101,13 @@ jest.mock("@patina/supabase", () => ({
     project_review: "Review access",
     // CR7-2 — the one tier keyed on a FIRM (`subject_type = 'contact'`).
     agreement_link: "Agreement link",
+    paperwork_link: "Paperwork link",
   },
   ACCESS_GRANT_TIER_OPENS: {
     field_link: "the Call Sheet and the site access card",
     project_review: "one review edition",
     agreement_link: "one trade agreement",
+    paperwork_link: "one firm's paperwork, to send it in",
   },
   CONTACT_CHANNEL_KIND_LABELS: {
     mobile: "Mobile",
@@ -1026,6 +1040,40 @@ describe("CR7-2 — a firm's card reads firm-scoped tokens only", () => {
     grantsData.current = [crewFieldLink];
     renderReach();
     expect(screen.getByText(/Field link/)).toBeInTheDocument();
+  });
+
+  // W4 r2 MAJOR W4R2-2. The filter was `subject_type === "contact"`, written
+  // when `agreement_link` was the only firm-scoped tier. W4's paperwork door
+  // stamps `subject_type = 'company'` (00637 branch 12), so a LIVE grant was
+  // dropped at render and `revoke_paperwork_link` became unreachable from every
+  // surface in the build. The filter now names the tiers, not the subject type.
+  const firmPaperworkLink = {
+    ...crewFieldLink,
+    grant_id: "paperwork_link:tok-pw",
+    tier: "paperwork_link",
+    subject_type: "company",
+    subject_id: "card-northgate",
+    scope_type: "organization",
+    scope_id: "org-1",
+    expires_at: "2026-10-15T23:59:59+00:00",
+  };
+
+  it("prints a LIVE paperwork door on the firm's card, with its Revoke", () => {
+    grantsData.current = [firmPaperworkLink];
+    renderReach({ cardKind: "company", personName: "Northgate Electric" });
+    expect(screen.queryByText(NO_GRANT_SENTENCE)).not.toBeInTheDocument();
+    expect(screen.getByText(/Paperwork link/)).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Revoke/ }),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps both firm-scoped tiers on the same card", () => {
+    grantsData.current = [firmAgreementLink, firmPaperworkLink, crewFieldLink];
+    renderReach({ cardKind: "company", personName: "Northgate Electric" });
+    expect(screen.getByText(/Agreement link/)).toBeInTheDocument();
+    expect(screen.getByText(/Paperwork link/)).toBeInTheDocument();
+    expect(screen.queryByText(/Field link/)).not.toBeInTheDocument();
   });
 });
 
