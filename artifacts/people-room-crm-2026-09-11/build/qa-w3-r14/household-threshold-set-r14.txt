@@ -1,0 +1,4 @@
+Before: "No change-order figure is on file for this household."
+Consequence while typing 2500: "Change orders over $2,500 will need a signature from the household. Every household member who already signs money from this figure moves to $2,500, on every job. Nothing is sent to them."
+After write: "Change orders over $2,500 need a signature from the household."
+DB: client_households.co_threshold_cents = 250000
