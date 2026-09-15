@@ -2125,3 +2125,76 @@ export type {
   EmailDeliveryStatus,
   EmailDeliveryRow,
 } from "./use-email-delivery";
+export {
+  studioMemberRateKeys,
+  useStudioMemberRates,
+  useSetStudioMemberRate,
+} from "./use-studio-member-rates";
+export type {
+  StudioMemberRate,
+  SetStudioMemberRateInput,
+} from "./use-studio-member-rates";
+export {
+  isInvoiceEligibleTimeEntry,
+  isRatePendingTimeEntry,
+  studioPeriodStartISO,
+  filterProjectUnbilledEntries,
+  fetchTimeSummary,
+  useUnbilledTime,
+  useStudioUnbilledTime,
+  useCreateTimeEntry,
+  useUpdateTimeEntry,
+  useDeleteTimeEntry,
+  useRunningTimer,
+  useStartTimer,
+  useStopTimer,
+  useTimeCaptureProjects,
+  useMyRateRoles,
+  useDiscardTimer,
+  useClaimTimeEntries,
+  useTimeEntryLedger,
+  useStudioHoursRollup,
+  useProjectHoursTotal,
+  useProjectPricingStudio,
+  useTimeEntryNote,
+  useStampProjectPricingStudio,
+  useUpdatePhaseEstimates,
+} from "./use-time-tracking";
+export type {
+  TimeBillingState,
+  TimeRateSource,
+  TimeRateRole,
+  InvoiceEligibleTimeEntry,
+  StudioPeriod,
+  ProjectTimeEntry,
+  UnbilledTimeRow,
+  UnbilledTimeSummary,
+  StudioUnbilledTimeRow,
+  TimePhaseSummary,
+  ProjectTimeSummary,
+  CreateTimeEntryInput,
+  UpdateTimeEntryInput,
+  RunningTimer,
+  StartTimerInput,
+  StartTimerResult,
+  StopTimerInput,
+  TimeEntrySource,
+  TimeCaptureProject,
+  ClaimTimeEntriesInput,
+  TimeEntryLedgerRow,
+  TimeEntryLedgerParams,
+  TimeHoursGroupBy,
+  StudioHoursRollupParams,
+  StudioHoursRollupRow,
+  ProjectHoursTotal,
+} from "./use-time-tracking";
+
+// HT-35 — the automatic timer's disclosure and its per-member opt-out.
+export {
+  useTimeAutostartPreference,
+  useSetTimeAutostartOptOut,
+  useMarkTimeAutostartDisclosed,
+  fetchTimeAutostartPreference,
+  timeAutostartKeys,
+} from "./use-time-autostart";
+export type { TimeAutostartPreference } from "./use-time-autostart";

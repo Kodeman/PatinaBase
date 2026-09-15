@@ -15630,6 +15630,330 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00595_time_entry_claim_and_source.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.claim_time_entries(uuid, uuid[]) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00595_time_entry_claim_and_source.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.claim_time_entries(uuid, uuid[]) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00597_time_entry_auto_roster.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.time_entry_auto_roster() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00598_studio_member_rates.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_studio_member_rate_insert() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00598_studio_member_rates.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.close_prior_studio_member_rate() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00598_studio_member_rates.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_studio_member_rate_history() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00598_studio_member_rates.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.studio_member_rates FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00598_studio_member_rates.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE ON TABLE public.studio_member_rates TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00598_studio_member_rates.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.studio_member_rates TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00599_resolve_time_rate_cents.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.resolve_time_rate_cents(uuid, uuid, timestamptz, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00600_time_entry_rate_provenance.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_commercial_time_entry_derived_fields() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00601_classifier_rate_resolver.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.classify_project_time_entry_authority() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00602_projects_studio_id_on_insert.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.set_project_studio_id_owned() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00603_project_studio_id_named_vs_derived.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.record_project_studio_id_named() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00603_project_studio_id_named_vs_derived.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.set_project_studio_id_owned() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00604_time_entry_ledger_view.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.project_pricing_studio_id(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00604_time_entry_ledger_view.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.project_pricing_studio_id(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00604_time_entry_ledger_view.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.time_entry_ledger FROM anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00604_time_entry_ledger_view.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.time_entry_ledger TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00605_time_entry_admin_write_and_trace.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.stamp_time_entry_updated_by() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00605_time_entry_admin_write_and_trace.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.audit_time_entry_change() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00606_time_entries_studio_read_narrow.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.stamp_project_pricing_studio(uuid, uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00606_time_entries_studio_read_narrow.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.stamp_project_pricing_studio(uuid, uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00607_studio_hours_rollup.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.studio_hours_rollup(uuid, timestamptz, timestamptz, text, uuid, uuid, text) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00607_studio_hours_rollup.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.studio_hours_rollup(uuid, timestamptz, timestamptz, text, uuid, uuid, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00607_studio_hours_rollup.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.project_hours_total(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00607_studio_hours_rollup.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.project_hours_total(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00608_log_time_and_start_timer.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.log_time(uuid,uuid,timestamptz,integer,text,boolean,text,text,uuid,text,text,uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00608_log_time_and_start_timer.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.log_time(uuid,uuid,timestamptz,integer,text,boolean,text,text,uuid,text,text,uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00608_log_time_and_start_timer.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.start_timer(uuid,text,boolean,text,uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00608_log_time_and_start_timer.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.start_timer(uuid,text,boolean,text,uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00611_time_entry_studio_id_guard.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_time_entry_studio_id() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00613_classifier_internal_short_circuit.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.classify_project_time_entry_authority() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00613_classifier_internal_short_circuit.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.time_entry_ledger FROM anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00613_classifier_internal_short_circuit.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.time_entry_ledger TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00613_classifier_internal_short_circuit.sql
+DO $g$ BEGIN
+  grant select on public.margin_items to authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00613_classifier_internal_short_circuit.sql
+DO $g$ BEGIN
+  grant select on public.margin_items to service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00613_classifier_internal_short_circuit.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.audit_time_entry_change() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00615_self_authored_rate_requires_ownership.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.designer_tier_pricing_studio(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00615_self_authored_rate_requires_ownership.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.resolve_time_rate_cents(uuid, uuid, timestamptz, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00615_self_authored_rate_requires_ownership.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_studio_member_rate_history() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00615_self_authored_rate_requires_ownership.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_studio_member_rate_insert() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00615_self_authored_rate_requires_ownership.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.set_project_studio_id_owned() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00615_self_authored_rate_requires_ownership.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.project_pricing_studio_id(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00615_self_authored_rate_requires_ownership.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.project_pricing_studio_id(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00617_rate_pending_never_invoiced.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.claim_time_entries(uuid, uuid[]) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00617_rate_pending_never_invoiced.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.claim_time_entries(uuid, uuid[]) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00618_authority_rate_role_binding.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._project_agreement_terms(uuid, jsonb, jsonb, boolean) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00618_authority_rate_role_binding.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.resolve_time_rate_cents(uuid, uuid, timestamptz, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00618_authority_rate_role_binding.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.classify_project_time_entry_authority() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00618_authority_rate_role_binding.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.materialize_standard_parts(uuid) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00618_authority_rate_role_binding.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.materialize_standard_parts(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00620_legacy_project_studio_stamp.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.project_author_books_elsewhere(uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00620_legacy_project_studio_stamp.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.project_roster_books_elsewhere(uuid, uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 20260910152111_create_contact_messages.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON TABLE public.contact_messages FROM PUBLIC, anon, authenticated, service_role;

@@ -4,6 +4,7 @@ import {
   isInvoiceEligibleTimeEntry,
   timeBillingStateLabel,
   timeRateProvenance,
+  timeRateRoleLabel,
 } from "../authority-hours";
 
 const AUTHORITY: ProjectBillingAuthority = {
@@ -123,23 +124,85 @@ describe("studio rate provenance", () => {
       {
         authority_rate_id: "rate-secret-id",
         hourly_rate_cents: 18_500,
+        rate_source: "authority",
+        rate_role: "lead_designer",
       },
       AUTHORITY,
     );
 
     expect(provenance).toEqual({
-      role: "Principal designer",
+      kind: "rated",
+      label: "Principal designer",
       hourlyRateCents: 18_500,
       version: 3,
+      rateSource: "authority",
+      rateRole: "lead_designer",
     });
     expect(JSON.stringify(provenance)).not.toContain("secret-id");
   });
 
   it("keeps legacy rates readable when no authority exists", () => {
     expect(timeRateProvenance({ hourly_rate_cents: 12_500 }, null)).toEqual({
-      role: "Legacy rate",
+      kind: "rated",
+      label: "Legacy rate",
       hourlyRateCents: 12_500,
       version: null,
+      rateSource: null,
+      rateRole: null,
     });
+  });
+
+  it("names the studio rate card as the leg that priced the hour", () => {
+    expect(
+      timeRateProvenance(
+        { hourly_rate_cents: 15_000, rate_source: "studio_member" },
+        null,
+      ),
+    ).toMatchObject({ kind: "rated", label: "Studio rate" });
+  });
+
+  // HT-26 — the whole point of the discriminated result: three different facts
+  // used to render as the same blank cell.
+  it("never returns null, and says 'rate pending' where the resolver found no card", () => {
+    const pending = timeRateProvenance(
+      { hourly_rate_cents: null, rate_source: "none", billable: true },
+      null,
+    );
+
+    expect(pending).not.toBeNull();
+    expect(pending).toEqual({
+      kind: "pending",
+      label: "rate pending",
+      rateRole: null,
+    });
+  });
+
+  it("distinguishes a legitimately non-billable hour from an unpriced one", () => {
+    expect(
+      timeRateProvenance(
+        { hourly_rate_cents: null, billable: false, rate_source: "none" },
+        null,
+      ),
+    ).toEqual({ kind: "nonbillable", label: "not billable", rateRole: null });
+
+    expect(
+      timeRateProvenance({ hourly_rate_cents: null, billable: true }, null),
+    ).toEqual({
+      kind: "unrecorded",
+      label: "rate not recorded",
+      rateRole: null,
+    });
+  });
+
+  it("carries the role the member picked through every arm (HT-41)", () => {
+    expect(
+      timeRateProvenance(
+        { hourly_rate_cents: null, rate_source: "none", rate_role: "bookkeeper" },
+        null,
+      ),
+    ).toMatchObject({ kind: "pending", rateRole: "bookkeeper" });
+
+    expect(timeRateRoleLabel("support_designer")).toBe("support designer");
+    expect(timeRateRoleLabel(null)).toBeNull();
   });
 });

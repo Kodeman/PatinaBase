@@ -12,6 +12,7 @@
 import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import {
   createBrowserClient,
+  fetchTimeSummary,
   invalidateProjectWorkflow,
 } from '@patina/supabase';
 import { mockData } from '@/data/mock-designer-data';
@@ -20,7 +21,6 @@ import { withMockData } from '@/lib/mock-data';
 import { queryKeys } from '@/lib/react-query';
 import { projectEvents } from '@/lib/analytics/events';
 import { normalizePhaseSlug } from '@/types/project-ui';
-import { fetchTimeSummary } from '@/hooks/use-time-tracking';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const isUuid = (id: string) => UUID_RE.test(id);

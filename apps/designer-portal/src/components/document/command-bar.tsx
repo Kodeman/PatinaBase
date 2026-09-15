@@ -47,6 +47,7 @@ import {
 } from './overlays/active-dialog';
 import { openFeedbackSheet } from './feedback/open-feedback';
 import { openHelp } from '@/lib/help-system/open-help';
+import { openLogTime } from './log-time-sheet';
 import { openKeys } from './overlays/keys-sheet';
 import { THE_WORDS_HREF } from '@/lib/help-system/keys-reference';
 import { HELP_EVENTS, safeCapture } from '@/lib/help-system/help-events';
@@ -482,6 +483,12 @@ export function CommandBar() {
           return () => openDraftProposalPicker();
         case 'draw-invoice':
           return () => openInvoiceComposer();
+        // W3 — the one verb that is NOT gated on a document in hand. The
+        // "Draw an invoice · <household>" row above appears only with one
+        // open, which is exactly when the auto-timer is already running and
+        // no form is wanted.
+        case 'log-time':
+          return () => openLogTime();
         case 'add-maker':
           return () => router.push('/people?add=maker');
         case 'the-post':

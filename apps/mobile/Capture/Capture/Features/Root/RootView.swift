@@ -228,10 +228,16 @@ struct RootView: View {
         container.analytics.event("field.companion_opened", [
             "realm": coordinator.activeRealm.rawValue
         ])
+        // HT-18 — the second action the EXPANDED state has always had room for.
+        // Invariant V / MOB-11 keeps the collapsed strip at exactly one action
+        // and that slot is the visit spine's, so this is the only place on the
+        // companion an hour can be reached from.
         container.companion.send(.communicate(.init(
             title: content.hint,
             detail: detail,
-            primaryAction: destination
+            primaryAction: destination,
+            secondaryAction: .init(id: FieldCompanionActionID.logTime.rawValue,
+                                   label: "Log an hour", role: .secondary)
         )))
     }
 
@@ -244,6 +250,8 @@ struct RootView: View {
             coordinator.switchRealm(.camera)
         case FieldCompanionActionID.openVisit.rawValue:
             coordinator.present(.visit)
+        case FieldCompanionActionID.logTime.rawValue:
+            coordinator.present(.logTime)
         case FieldCompanionActionID.endVisit.rawValue:
             // Site 3 of 4 (spec §14) — the one reachable from every non-camera
             // screen via the collapsed Companion strip, and the one it's
@@ -430,6 +438,13 @@ struct RootView: View {
               reconciliationToken == token,
               container.session.ownerIdentity == owner else { return }
         await container.visitCloseOutboxDrainer?.resume()
+        guard !Task.isCancelled,
+              reconciliationToken == token,
+              container.session.ownerIdentity == owner else { return }
+        // W6 — the hours LogTimeSheet queued on a road with no signal. Same
+        // once-per-owner-per-launch pass its visit-close sibling gets; the
+        // sheet also kicks its own drainer on the tap.
+        await container.timeEntryOutboxDrainer?.resume()
         guard !Task.isCancelled,
               reconciliationToken == token,
               container.session.ownerIdentity == owner else { return }

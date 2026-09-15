@@ -167,12 +167,13 @@ struct FieldVisitCloseRecordTests {
             userID: UUID(),
             startedAt: now,
             durationMinutes: 0,
+            billable: true,
             notes: nil)
         #expect(request.durationMinutes == 1)
 
         let negative = TimeEntryWriteRequest(
             id: UUID(), projectID: UUID(), userID: UUID(),
-            startedAt: now, durationMinutes: -7, notes: nil)
+            startedAt: now, durationMinutes: -7, billable: true, notes: nil)
         #expect(negative.durationMinutes == 1)
     }
 
@@ -198,6 +199,13 @@ struct FieldVisitCloseRecordTests {
     /// guarantee `field_visit`/`site_visit` on the wire, and a test that supplies
     /// them and then asserts them exercises nothing.
     ///
+    /// The KEYS moved in W6: the close stopped being a PostgREST table insert
+    /// and became `log_time(…)` (00608), whose arguments are `p_`-prefixed. The
+    /// reason is replay — ON CONFLICT (id) DO NOTHING plus a read-back of the
+    /// row already standing under the client-minted id, which a plain insert
+    /// cannot express. `billable` is now stated rather than defaulted (HT-11):
+    /// `log_time` RAISES on a missing one.
+    ///
     /// The bare `JSONEncoder` is deliberate and sufficient HERE. Production
     /// encodes through `PostgrestClient.Configuration.jsonEncoder`, which
     /// differs from this one on exactly one thing — its ISO8601 date strategy —
@@ -213,18 +221,33 @@ struct FieldVisitCloseRecordTests {
             userID: UUID(uuidString: r.ownerUserID)!,
             startedAt: r.startedAt,
             durationMinutes: r.durationMinutes,
+            billable: r.billable,
             notes: "Maple St · Living, Dining")
 
         let data = try JSONEncoder().encode(request)
         let json = try #require(
             JSONSerialization.jsonObject(with: data) as? [String: Any])
 
-        #expect(json["source"] as? String == "field_visit")
-        #expect(json["activity"] as? String == "site_visit")
-        #expect((json["duration_minutes"] as? Int ?? 0) > 0)
-        #expect(json["notes"] as? String == "Maple St · Living, Dining")
-        #expect(json["project_id"] as? String == r.projectID.uppercased()
-                || json["project_id"] as? String == r.projectID)
+        #expect(json["p_source"] as? String == "field_visit")
+        #expect(json["p_activity"] as? String == "site_visit")
+        #expect((json["p_duration_minutes"] as? Int ?? 0) > 0)
+        #expect(json["p_billable"] as? Bool == true)
+        #expect(json["p_notes"] as? String == "Maple St · Living, Dining")
+        #expect(json["p_project_id"] as? String == r.projectID.uppercased()
+                || json["p_project_id"] as? String == r.projectID)
+    }
+
+    /// HT-11 — the close now STATES whether the visit is the client's hour, and
+    /// the record is what carries her answer to the drainer.
+    @Test func theCloseCarriesTheBillableAnswerSheGave() {
+        let billable = FieldVisitCloseRecord(
+            visitID: UUID(), timeEntryID: UUID(), projectID: "p", ownerUserID: "u",
+            startedAt: now, endedAt: now, durationMinutes: 30)
+        let notBillable = FieldVisitCloseRecord(
+            visitID: UUID(), timeEntryID: UUID(), projectID: "p", ownerUserID: "u",
+            startedAt: now, endedAt: now, durationMinutes: 30, billable: false)
+        #expect(billable.billable)
+        #expect(notBillable.billable == false)
     }
 }
 

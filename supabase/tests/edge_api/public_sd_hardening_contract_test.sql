@@ -1970,10 +1970,30 @@ VALUES
     -- SECURITY DEFINER flag, ACL, the issue_invoice_for_actor call and the
     -- 'commercialDocumentId' anchor are all unchanged, so every other contract
     -- in this file still holds.
+    --
+    -- HT-4 (00619, the hour-tracking program) carries the rate-role binding onto
+    -- the signed snapshot: `roster_role` is added to the ONE
+    -- `INSERT INTO public.project_billing_authority_rates` inside the
+    -- client_signed branch, so a card the studio bound to a roster role is still
+    -- bound to it once the agreement is executed instead of collapsing back to
+    -- the normalized-label match HT-4 deletes (00578's hash was
+    -- 3ca87ae1f02130749ae7886ab8b3f44d0ed700906c5ff2dbd28ab83a7f099d0e). The
+    -- body is 00578:6011-6641 extracted by line range with that one column added
+    -- and nothing else touched. It takes NO NEW LOCK — the INSERT sits inside the
+    -- client_signed branch, after every lock this function already holds — so the
+    -- authority-lock-order contract below is untouched; the
+    -- `app_private.issue_invoice_for_actor( v_retainer_invoice_id, current_date,
+    -- v_actor )` call site and the 'commercialDocumentId' metadata anchor keep
+    -- their exact text, so the caller contract holds too; and the signature,
+    -- arguments string, result type, proconfig, SECURITY DEFINER flag and ACL
+    -- (still no nonowner ACL row) are all unchanged, so every other contract this
+    -- file pins about the function still holds. Rows materialized before 00619
+    -- keep roster_role NULL and 00618's legacy label leg prices them exactly as
+    -- it did yesterday (P-4).
     'public._countersign_design_services_agreement_impl(uuid,text,jsonb)',
     'p_proposal_id uuid, p_signer_name text, p_disclosed_impact jsonb DEFAULT NULL::jsonb',
     'jsonb', ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    '3ca87ae1f02130749ae7886ab8b3f44d0ed700906c5ff2dbd28ab83a7f099d0e'
+    '33af21f76ae82453a95a5cbbf8908d07e9cc4df02e09f82dc69dcd2a5786dc6a'
   ),
   (
     'public._execute_furnishings_authorization_on_paper_authorized(uuid,text,date,uuid,uuid,jsonb)',

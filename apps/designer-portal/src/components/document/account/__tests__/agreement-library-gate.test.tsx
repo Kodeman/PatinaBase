@@ -32,6 +32,9 @@ jest.mock("@/hooks/use-feature-flag", () => ({
 }));
 
 jest.mock("@patina/supabase", () => ({
+  // HT-3's Studio rates section reads the dated rows and writes on blur.
+  useStudioMemberRates: () => ({ data: [] }),
+  useSetStudioMemberRate: () => ({ mutate: jest.fn(), isPending: false }),
   useStudioAgreementDefaults: () => ({ data: null }),
   useUpdateStudioAgreementDefaults: () => ({
     mutate: jest.fn(),

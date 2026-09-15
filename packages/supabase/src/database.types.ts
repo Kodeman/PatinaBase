@@ -13737,10 +13737,13 @@ export type Database = {
           sms_opt_in: boolean
           state: string | null
           stripe_customer_id: string | null
+          time_autostart_disclosed_at: string | null
+          time_autostart_opt_out: boolean
           total_engagement_score: number | null
           updated_at: string
           verified_at: string | null
           website: string | null
+          weekly_hours_reminder_opt_in: boolean
           zip: string | null
         }
         Insert: {
@@ -13776,10 +13779,13 @@ export type Database = {
           sms_opt_in?: boolean
           state?: string | null
           stripe_customer_id?: string | null
+          time_autostart_disclosed_at?: string | null
+          time_autostart_opt_out?: boolean
           total_engagement_score?: number | null
           updated_at?: string
           verified_at?: string | null
           website?: string | null
+          weekly_hours_reminder_opt_in?: boolean
           zip?: string | null
         }
         Update: {
@@ -13815,10 +13821,13 @@ export type Database = {
           sms_opt_in?: boolean
           state?: string | null
           stripe_customer_id?: string | null
+          time_autostart_disclosed_at?: string | null
+          time_autostart_opt_out?: boolean
           total_engagement_score?: number | null
           updated_at?: string
           verified_at?: string | null
           website?: string | null
+          weekly_hours_reminder_opt_in?: boolean
           zip?: string | null
         }
         Relationships: []
@@ -14124,6 +14133,7 @@ export type Database = {
           hourly_rate_cents: number
           id: string
           role_name: string
+          roster_role: string | null
           source_rate_id: string
           version: number
         }
@@ -14133,6 +14143,7 @@ export type Database = {
           hourly_rate_cents: number
           id?: string
           role_name: string
+          roster_role?: string | null
           source_rate_id: string
           version: number
         }
@@ -14142,6 +14153,7 @@ export type Database = {
           hourly_rate_cents?: number
           id?: string
           role_name?: string
+          roster_role?: string | null
           source_rate_id?: string
           version?: number
         }
@@ -17603,13 +17615,17 @@ export type Database = {
           invoice_id: string | null
           notes: string | null
           phase_key: string | null
-          project_id: string
+          project_id: string | null
+          rate_role: string | null
+          rate_source: string | null
           rated_amount_cents: number | null
           raw_seconds: number | null
           source: string
           started_at: string
+          studio_id: string | null
           task_id: string | null
           updated_at: string
+          updated_by: string | null
           user_id: string
         }
         Insert: {
@@ -17626,13 +17642,17 @@ export type Database = {
           invoice_id?: string | null
           notes?: string | null
           phase_key?: string | null
-          project_id: string
+          project_id?: string | null
+          rate_role?: string | null
+          rate_source?: string | null
           rated_amount_cents?: number | null
           raw_seconds?: number | null
           source?: string
           started_at?: string
+          studio_id?: string | null
           task_id?: string | null
           updated_at?: string
+          updated_by?: string | null
           user_id: string
         }
         Update: {
@@ -17649,13 +17669,17 @@ export type Database = {
           invoice_id?: string | null
           notes?: string | null
           phase_key?: string | null
-          project_id?: string
+          project_id?: string | null
+          rate_role?: string | null
+          rate_source?: string | null
           rated_amount_cents?: number | null
           raw_seconds?: number | null
           source?: string
           started_at?: string
+          studio_id?: string | null
           task_id?: string | null
           updated_at?: string
+          updated_by?: string | null
           user_id?: string
         }
         Relationships: [
@@ -17695,6 +17719,27 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "project_time_entries_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "admin_studio_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_time_entries_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_time_entries_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "v_studios"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "project_time_entries_task_id_fkey"
             columns: ["task_id"]
             isOneToOne: false
@@ -17714,6 +17759,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "task_blocked_state"
             referencedColumns: ["waiting_on_task_id"]
+          },
+          {
+            foreignKeyName: "project_time_entries_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_time_entries_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "project_time_entries_user_id_fkey"
@@ -19473,6 +19532,7 @@ export type Database = {
           id: string
           proposal_id: string
           role_name: string
+          roster_role: string | null
           sort_order: number
           version: number
         }
@@ -19483,6 +19543,7 @@ export type Database = {
           id?: string
           proposal_id: string
           role_name: string
+          roster_role?: string | null
           sort_order?: number
           version?: number
         }
@@ -19493,6 +19554,7 @@ export type Database = {
           id?: string
           proposal_id?: string
           role_name?: string
+          roster_role?: string | null
           sort_order?: number
           version?: number
         }
@@ -24590,6 +24652,109 @@ export type Database = {
           },
         ]
       }
+      studio_member_rates: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          effective_from: string
+          effective_to: string | null
+          hourly_rate_cents: number
+          id: string
+          original_created_by: string | null
+          studio_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          effective_from?: string
+          effective_to?: string | null
+          hourly_rate_cents: number
+          id?: string
+          original_created_by?: string | null
+          studio_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          effective_from?: string
+          effective_to?: string | null
+          hourly_rate_cents?: number
+          id?: string
+          original_created_by?: string | null
+          studio_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "studio_member_rates_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_member_rates_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_member_rates_original_created_by_fkey"
+            columns: ["original_created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_member_rates_original_created_by_fkey"
+            columns: ["original_created_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_member_rates_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "admin_studio_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_member_rates_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_member_rates_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "v_studios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_member_rates_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_member_rates_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       studio_trade_agreement_signatures: {
         Row: {
           agreement_id: string
@@ -28158,6 +28323,8 @@ export type Database = {
           notes: string | null
           phase_key: string | null
           project_id: string | null
+          rate_role: string | null
+          rate_source: string | null
           resolved_rate_cents: number | null
           started_at: string | null
           task_id: string | null
@@ -28823,6 +28990,109 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      time_entry_ledger: {
+        Row: {
+          activity: string | null
+          amount_cents: number | null
+          authority_rate_id: string | null
+          billable: boolean | null
+          billing_authority_id: string | null
+          billing_state: string | null
+          created_at: string | null
+          day: string | null
+          duration_minutes: number | null
+          id: string | null
+          invoice_id: string | null
+          is_running: boolean | null
+          iso_week: string | null
+          member_name: string | null
+          month: string | null
+          phase_key: string | null
+          project_id: string | null
+          project_name: string | null
+          rate_role: string | null
+          rate_source: string | null
+          resolved_rate_cents: number | null
+          source: string | null
+          started_at: string | null
+          studio_id: string | null
+          task_id: string | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_time_entries_invoice"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_time_entries_authority_rate_id_fkey"
+            columns: ["authority_rate_id"]
+            isOneToOne: false
+            referencedRelation: "project_billing_authority_rates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_time_entries_billing_authority_id_fkey"
+            columns: ["billing_authority_id"]
+            isOneToOne: false
+            referencedRelation: "project_billing_authorities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_time_entries_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "project_time_entries_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_time_entries_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "project_tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_time_entries_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "task_blocked_state"
+            referencedColumns: ["task_id"]
+          },
+          {
+            foreignKeyName: "project_time_entries_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "task_blocked_state"
+            referencedColumns: ["waiting_on_task_id"]
+          },
+          {
+            foreignKeyName: "project_time_entries_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_time_entries_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
             referencedColumns: ["id"]
           },
         ]
@@ -31814,6 +32084,10 @@ export type Database = {
         Returns: Json
       }
       claim_quiz_session: { Args: { p_session_key: string }; Returns: Json }
+      claim_time_entries: {
+        Args: { p_entry_ids: string[]; p_invoice_id: string }
+        Returns: string[]
+      }
       client_invitation_status: {
         Args: { p_designer_client_id: string }
         Returns: {
@@ -32527,6 +32801,13 @@ export type Database = {
           p_designer_id: string
         }
         Returns: Json
+      }
+      designer_tier_pricing_studio: {
+        Args: { p_designer_id: string }
+        Returns: {
+          studio_id: string
+          tier: string
+        }[]
       }
       discard_agreement_parts: {
         Args: { p_proposal_id: string }
@@ -33926,6 +34207,55 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      log_time: {
+        Args: {
+          p_activity?: string
+          p_billable?: boolean
+          p_duration_minutes: number
+          p_entry_id: string
+          p_notes?: string
+          p_phase_key?: string
+          p_project_id: string
+          p_rate_role?: string
+          p_source?: string
+          p_started_at: string
+          p_studio_id?: string
+          p_task_id?: string
+        }
+        Returns: {
+          activity: string | null
+          authority_rate_id: string | null
+          billable: boolean
+          billing_authority_id: string | null
+          billing_state: string
+          created_at: string
+          duration_minutes: number | null
+          hourly_rate_cents: number | null
+          id: string
+          idle_seconds: number | null
+          invoice_id: string | null
+          notes: string | null
+          phase_key: string | null
+          project_id: string | null
+          rate_role: string | null
+          rate_source: string | null
+          rated_amount_cents: number | null
+          raw_seconds: number | null
+          source: string
+          started_at: string
+          studio_id: string | null
+          task_id: string | null
+          updated_at: string
+          updated_by: string | null
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "project_time_entries"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       mark_capture_upload_complete: {
         Args: { p_capture_id: string }
         Returns: undefined
@@ -34273,8 +34603,32 @@ export type Database = {
         Args: { quiz_answers: Json; timings?: Json }
         Returns: Json
       }
+      project_author_books_elsewhere: {
+        Args: { p_created_by: string; p_studio_id: string }
+        Returns: boolean
+      }
+      project_hours_total: {
+        Args: { p_project_id: string }
+        Returns: {
+          amount_cents: number
+          billable_minutes: number
+          minutes: number
+        }[]
+      }
       project_note_enclosures_ok: {
         Args: { p_enclosures: Json }
+        Returns: boolean
+      }
+      project_pricing_studio_id: {
+        Args: { p_project_id: string }
+        Returns: string
+      }
+      project_roster_books_elsewhere: {
+        Args: {
+          p_designer_id: string
+          p_project_id: string
+          p_studio_id: string
+        }
         Returns: boolean
       }
       promote_batch_to_studio: { Args: { p_items: Json }; Returns: string[] }
@@ -35041,6 +35395,19 @@ export type Database = {
           source: string
           studio_id: string
           website: string
+        }[]
+      }
+      resolve_time_rate_cents: {
+        Args: {
+          p_at: string
+          p_project_id: string
+          p_rate_role?: string
+          p_user_id: string
+        }
+        Returns: {
+          cents: number
+          role: string
+          source: string
         }[]
       }
       resolve_trade_agreement_link: { Args: { p_token: string }; Returns: Json }
@@ -36045,7 +36412,24 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      stamp_project_pricing_studio: {
+        Args: { p_project_id: string; p_studio_id: string }
+        Returns: string
+      }
       start_purchase_order_change: { Args: { p_request: Json }; Returns: Json }
+      start_timer: {
+        Args: {
+          p_billable?: boolean
+          p_phase_key?: string
+          p_project_id: string
+          p_source?: string
+          p_task_id?: string
+        }
+        Returns: {
+          started: Database["public"]["Tables"]["project_time_entries"]["Row"]
+          stopped: Database["public"]["Tables"]["project_time_entries"]["Row"]
+        }[]
+      }
       stripe_balance_tx_ingest: {
         Args: { p_cursor: string; p_txns: Json }
         Returns: Json
@@ -36074,6 +36458,28 @@ export type Database = {
       studio_has_live_license_attestation: {
         Args: { p_studio_id: string }
         Returns: boolean
+      }
+      studio_hours_rollup: {
+        Args: {
+          p_from: string
+          p_group_by?: string
+          p_project_id?: string
+          p_studio_id: string
+          p_timezone?: string
+          p_to: string
+          p_user_id?: string
+        }
+        Returns: {
+          billable_cents: number
+          billable_minutes: number
+          bucket_key: string
+          bucket_label: string
+          entry_count: number
+          internal_minutes: number
+          member_id: string
+          member_name: string
+          total_minutes: number
+        }[]
       }
       submit_board_share_reaction: {
         Args: {

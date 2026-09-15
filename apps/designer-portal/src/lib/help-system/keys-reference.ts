@@ -86,6 +86,13 @@ export function buildKeysReference(): KeysSection[] {
           label: 'This page',
           where: 'Anywhere you are not typing, and nothing is open in front.',
         },
+        {
+          // Bound in components/document/log-time-shortcut.tsx (W3). A bare
+          // key, not a `g` chord: `g` `t` is already The Post.
+          keys: ['T'],
+          label: 'Log time',
+          where: 'Anywhere you are not typing. Opens the form, nothing in hand.',
+        },
       ],
     },
     {

@@ -21,7 +21,7 @@
  * renders that role, so this one check covers all of them, not only ⌘K.
  */
 
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ALL_STUDIO_SURFACES, type StudioSurface } from '@/lib/document/registry';
 import { openPost } from './overlays/post-sheet';
@@ -64,10 +64,20 @@ export function anOverlayIsOpen(): boolean {
   return document.querySelector('[role="dialog"]') !== null;
 }
 
+/** Timestamp of the last unconsumed `g` — null when no chord is armed. Module
+ *  scope, not component state, because a SECOND bare-key binding has to know
+ *  the chord is mid-flight: `g` then `t` is The Post, and a `t` listener that
+ *  could not see the armed `g` would open its own surface on top of it. */
+const chordArm: { at: number | null } = { at: null };
+
+/** True while a `g` is waiting for its second key. Read by every bare-key
+ *  binding outside the chord family (LogTimeShortcut). */
+export function chordIsArmed(now: number = Date.now()): boolean {
+  return chordArm.at !== null && now - chordArm.at <= CHORD_WINDOW_MS;
+}
+
 export function RegistryShortcuts() {
   const router = useRouter();
-  // Timestamp of the last unconsumed `g` — null when no chord is armed.
-  const armedAt = useRef<number | null>(null);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -77,12 +87,12 @@ export function RegistryShortcuts() {
 
       const key = e.key.toLowerCase();
       const now = Date.now();
-      const armed = armedAt.current !== null && now - armedAt.current <= CHORD_WINDOW_MS;
+      const armed = chordIsArmed(now);
 
       if (armed) {
         // The chord is consumed either way — a non-matching second key
         // cancels it rather than leaving it armed for a later keypress.
-        armedAt.current = null;
+        chordArm.at = null;
         const surface = CHORDED.get(key);
         if (!surface) return;
         e.preventDefault();
@@ -104,7 +114,7 @@ export function RegistryShortcuts() {
         return;
       }
 
-      if (key === 'g') armedAt.current = now;
+      if (key === 'g') chordArm.at = now;
     };
 
     window.addEventListener('keydown', onKeyDown);

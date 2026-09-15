@@ -51,6 +51,15 @@ public struct FieldCompanionAction: Equatable, Identifiable, Sendable {
 public enum FieldCompanionActionID: String, CaseIterable, Sendable {
     case openVisit = "visit.open"
     case endVisit = "visit.end"
+    /// HT-18 — an hour that is not a visit, reachable with nothing in hand.
+    ///
+    /// ⚠ EXPANDED STATE ONLY. MOB-11 / Invariant V is binding: the COLLAPSED
+    /// strip carries exactly one action and that slot is the visit spine's
+    /// ("Start a visit" / "End visit"). `FieldCompanionCollapsedPresentation`
+    /// holds a single optional `action` and `FieldTodayBand.companionHint`
+    /// fills it; nothing here may take that slot. This id is offered as the
+    /// expanded sheet's SECONDARY action, beside the realm switch.
+    case logTime = "time.log"
 }
 
 public struct FieldCompanionCollapsedPresentation: Equatable, Sendable {

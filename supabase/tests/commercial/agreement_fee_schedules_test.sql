@@ -1100,7 +1100,13 @@ BEGIN
       jsonb_build_object('kind', 'schedule', 'variant', 'rate_card',
                          'partKey', 'patina.role_rates', 'title', 'Role rates',
                          'payload', jsonb_build_object('roles', jsonb_build_array(
+                           -- HT-4 (00618/00619): the label the client reads is
+                           -- "Principal designer" — the shipped default that can
+                           -- never normalize-match `lead_designer` — and the
+                           -- BINDING rides beside it, through the parts door,
+                           -- the projection and the countersign snapshot.
                            jsonb_build_object('roleName', 'Principal designer',
+                                              'rosterRole', 'lead_designer',
                                               'hourlyRateCents', 22500, 'sortOrder', 0)))),
       jsonb_build_object('kind', 'schedule', 'variant', 'ceiling',
                          'partKey', 'patina.ceiling', 'title', 'Ceiling',
@@ -1110,6 +1116,31 @@ BEGIN
                          'clientVisible', false,
                          'payload', jsonb_build_object('cents', 800000))),
     'A fee the studio kept to itself');
+
+  -- HT-4 (00618) — a value outside the four is refused at the door, in the
+  -- room's own words, while this proposal is still a draft the door will open.
+  v_refused := false;
+  BEGIN
+    PERFORM public.upsert_agreement_parts(
+      'a7300000-0000-4000-8000-00000000000a',
+      jsonb_build_array(
+        jsonb_build_object('kind', 'schedule', 'variant', 'rate_card',
+                           'partKey', 'patina.role_rates', 'title', 'Role rates',
+                           'payload', jsonb_build_object('roles', jsonb_build_array(
+                             jsonb_build_object('roleName', 'The client',
+                                                'rosterRole', 'client',
+                                                'hourlyRateCents', 1000,
+                                                'sortOrder', 0))))),
+      'a role the roster does not carry');
+  EXCEPTION WHEN OTHERS THEN
+    v_refused := true;
+    ASSERT SQLERRM LIKE '%not a role the studio roster carries%',
+      format('00618: the door must refuse an unbound value in its own words, got %L',
+             SQLERRM);
+  END;
+  ASSERT v_refused,
+    '00618: ''client'' IS a project_team_members.role value and is deliberately '
+    'not one of the four — a signed rate card may not price the homeowner''s hours';
 
   SELECT * INTO v_terms FROM public.proposal_service_terms
   WHERE proposal_id = 'a7300000-0000-4000-8000-00000000000a';
@@ -1160,6 +1191,35 @@ BEGIN
   WHERE proposal_id = 'a7300000-0000-4000-8000-00000000000a';
   ASSERT v_rates = 1,
     format('a visible rate card still projects its roles, got %s', v_rates);
+
+  -- ── HT-4 (00618 · 00619) — the role binding survives the whole rail ──────
+  ASSERT (SELECT roster_role FROM public.proposal_service_rates
+           WHERE proposal_id = 'a7300000-0000-4000-8000-00000000000a')
+         = 'lead_designer',
+    format('00618: the parts door and _project_agreement_terms must carry '
+           'rosterRole onto the projected rate, got %L',
+           (SELECT roster_role FROM public.proposal_service_rates
+             WHERE proposal_id = 'a7300000-0000-4000-8000-00000000000a'));
+  ASSERT (SELECT role_name FROM public.proposal_service_rates
+           WHERE proposal_id = 'a7300000-0000-4000-8000-00000000000a')
+         = 'Principal designer',
+    'and the label the client reads is untouched by the binding — that is the '
+    'whole point of two columns';
+  ASSERT (SELECT count(*) FROM public.project_billing_authority_rates
+           WHERE billing_authority_id = v_authority.id
+             AND roster_role = 'lead_designer'
+             AND role_name = 'Principal designer') = 1,
+    '00619: countersign must carry roster_role onto the immutable snapshot. '
+    'Without it every card the resolver reads after execution is a label again, '
+    'and "Principal designer" is exactly the label that strands the hour';
+  ASSERT NOT EXISTS (
+    SELECT 1
+    FROM public.project_billing_authority_rates AS snapshot
+    JOIN public.proposal_service_rates AS source ON source.id = snapshot.source_rate_id
+    WHERE snapshot.billing_authority_id = v_authority.id
+      AND snapshot.roster_role IS DISTINCT FROM source.roster_role),
+    '00619: and it is CARRIED from the source row, never re-derived from the '
+    'label — every snapshot row must equal the rate it froze';
 
   -- ── The other half: hide the only fee and the paper names none.
   PERFORM pg_temp.assume_user('a7000000-0000-4000-8000-000000000001');
