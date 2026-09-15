@@ -233,9 +233,7 @@ describe("useProjectHousehold and the closed seat (r16 MAJOR-1)", () => {
       "household-lindqvist",
     );
     // a card standing in two households: the overlap resolver names one
-    const householdRead = recorded.find(
-      (r) => r.table === "client_households",
-    );
+    const householdRead = recorded.find((r) => r.table === "client_households");
     expect(householdRead?.orders.map((o) => o.column)).toEqual([
       "created_at",
       "id",
