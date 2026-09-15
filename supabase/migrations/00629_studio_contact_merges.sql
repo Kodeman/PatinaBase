@@ -1643,15 +1643,27 @@ BEGIN
 
   -- ── channels: union, duplicates by kind + value REDUCED then dropped ────
   --
-  -- r6 B-1 — A DUPLICATE ROW IS A DUPLICATE ADDRESS PLUS SIX TYPED FACTS.
-  -- The union used to open with a blind DELETE of the absorbed card's row
-  -- wherever (channel_kind, value) matched the survivor's. "Exact duplicate"
-  -- is true of the VALUE and of nothing else on that row:
+  -- r6 B-1 / r14 B-1 — A DUPLICATE ROW IS A DUPLICATE ADDRESS PLUS SEVEN
+  -- TYPED FACTS. The union used to open with a blind DELETE of the absorbed
+  -- card's row wherever (channel_kind, value) matched the survivor's. "Exact
+  -- duplicate" is true of the VALUE and of nothing else on that row:
   -- studio_contact_channels also carries status, status_at, verified,
-  -- verified_at, preferred and label, every one of them typed by the studio
-  -- through the Reach editor's own act (save-channel-status), and all six
-  -- were destroyed — not stranded on an unreachable card, gone from the
-  -- table.
+  -- verified_at, preferred, label and sms_capable, every one of them typed by
+  -- the studio through the Reach editor's own acts (save-channel-status and
+  -- "This line takes texts"), and all seven were destroyed — not stranded on
+  -- an unreachable card, gone from the table.
+  --
+  -- r14 B-1 named the seventh, which r6's own fix left out: sms_capable is
+  -- NOT NULL boolean and is not derivable from the row — channel_kind is
+  -- 'mobile' on a backfilled card whether or not the number is a cell, and
+  -- 00593's banner says it "STAYS AT ITS false DEFAULT UNLESS THERE IS
+  -- EVIDENCE". W2 gave it its one writer, the "This line takes texts" act
+  -- (reach-access.tsx -> useUpdateStudioContactChannel). Losing it flipped
+  -- the survivor's Reach row back to "Patina has not been told this line
+  -- takes texts, so nothing about texting can be written down on it yet."
+  -- over a line the studio had confirmed, and took the whole consent-recording
+  -- band with it — including PR-m's manual opt-out, which R-AY makes the only
+  -- place a verbal STOP can live.
   --
   -- It fired on the commonest merge there is. crm-model §4 rules 2 and 3
   -- match on a shared phone or a shared email and direction §3.1's duplicate
@@ -1677,8 +1689,11 @@ BEGIN
   --     compliance violation and the cost of a missed bounce is a bounce
   --     (C30). status_at travels with the status that wins — a held date
   --     belonging to some other verdict is a worse fact than no date.
-  --   * verified and preferred are OR'd; verified_at follows the verified
-  --     that wins, as the verdict/date pair above does.
+  --   * verified, preferred and sms_capable are OR'd; verified_at follows
+  --     the verified that wins, as the verdict/date pair above does.
+  --     sms_capable takes the same shape as preferred and for the same
+  --     reason: one card was told the line takes texts, so the studio's book
+  --     was told, and a fold may not unlearn it.
   --   * label COALESCEs, the survivor's own words first, like every other
   --     scalar this RPC carries.
   --
@@ -1695,6 +1710,7 @@ BEGIN
                             WHEN u.merged_verified   THEN u.merged_verified_at
                             ELSE s.verified_at END,
          preferred   = s.preferred OR u.merged_preferred,
+         sms_capable = s.sms_capable OR u.merged_sms_capable,
          label       = COALESCE(s.label, u.merged_label)
     FROM (
       SELECT sv.id AS survivor_channel_id,
@@ -1710,8 +1726,9 @@ BEGIN
              mc.status_at   AS merged_status_at,
              mc.verified    AS merged_verified,
              mc.verified_at AS merged_verified_at,
-             mc.preferred   AS merged_preferred,
-             mc.label       AS merged_label
+             mc.preferred    AS merged_preferred,
+             mc.sms_capable  AS merged_sms_capable,
+             mc.label        AS merged_label
         FROM public.studio_contact_channels sv
         JOIN public.studio_contact_channels mc
           ON mc.owner_id     = p_merged
