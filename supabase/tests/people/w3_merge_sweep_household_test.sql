@@ -5278,6 +5278,180 @@ BEGIN
   RAISE NOTICE '13d. r18 MAJOR-1 / r19 MAJOR-1 — a fold that would leave one human holding two open seats of one kind on one job is refused by name and writes nothing; the room''s own "Close this seat" lifts it AND ends the money that seat carried (00634), so the repair the HINT names cannot leave two live figures on one job; a closed seat refuses nothing: passed';
 END $$;
 
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 13e. r20 BLOCKING-1 — WHO MAY FIRE 00634's TRIGGER
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 13d closes its seats as `postgres` (auth.uid() IS NULL), which is 00634's own
+-- internal-caller carve-out, so nothing in the suite asked who may take the act
+-- for real. The first draft of 00634 was SECURITY DEFINER with no gate in the
+-- body, and the table that FIRES it (project_parties_studio_update, 00584:895-903)
+-- carries only `is_studio_comember(designer_id)` — no tenant leg, no PR-n leg —
+-- while the table it WRITES (project_party_authority_studio_update, 00624:1017-1041)
+-- carries both. So the close was a door around the money policy:
+--
+--   (a) a plain `member` of the recorded studio, refused a direct UPDATE of a
+--       money grant by RLS, ended that same grant by closing the seat; and
+--   (b) a plain `member` of a SECOND studio the same designer works for — who
+--       cannot even SELECT the grant — ended another studio's money record.
+--
+-- 00634 now states the gate in its own body and REFUSES THE CLOSE rather than
+-- ending the grant silently, so the invariant the file exists for ("no closed
+-- seat carries an open grant") holds in every path. Four controls: the refusal
+-- by name in both populations, the record untouched in both, the owner's own
+-- close still landing, and the gate staying NARROW — a plain member still
+-- closes a seat whose only grant is outside PR-n's two scopes.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+-- the designer's SECOND studio: a0…0005 is a member of it and of nothing in
+-- W3 Test Studio, so is_studio_comember(designer) is true for them while
+-- is_active_studio_member(the recorded studio) is false — w1b r5 MAJOR-3's
+-- exact population.
+INSERT INTO public.organizations (id, type, name, slug, status) VALUES
+  ('f9000000-0000-4000-8000-00000000000c', 'design_studio', 'W3 Side Studio', 'w3-studio-c', 'active')
+ON CONFLICT (id) DO NOTHING;
+INSERT INTO public.organization_members (user_id, organization_id, role, status, joined_at) VALUES
+  ('a0000000-0000-0000-0000-000000000004', 'f9000000-0000-4000-8000-00000000000c', 'owner',  'active', now()),
+  ('a0000000-0000-0000-0000-000000000005', 'f9000000-0000-4000-8000-00000000000c', 'member', 'active', now())
+ON CONFLICT (user_id, organization_id) DO UPDATE SET role = EXCLUDED.role, status = 'active';
+
+INSERT INTO public.studio_contacts
+  (id, organization_id, entity_kind, contact_kind, full_name, phone, phone_e164, created_by) VALUES
+  ('f9100000-0000-4000-8000-0000000000e1','f9000000-0000-4000-8000-00000000000a','person','client',
+   'R20 Money Rep','(612) 555-0930','+16125550930','a0000000-0000-0000-0000-000000000004'),
+  ('f9100000-0000-4000-8000-0000000000e2','f9000000-0000-4000-8000-00000000000a','person','sub',
+   'R20 Schedule Hand','(612) 555-0931','+16125550931','a0000000-0000-0000-0000-000000000004');
+
+-- the seat the principal's figure sits on, and one carrying a grant OUTSIDE
+-- PR-n's two scopes
+INSERT INTO public.project_parties
+  (id, project_id, party_kind, display_name, studio_contact_id, created_by) VALUES
+  ('f9500000-0000-4000-8000-0000000000e1','f9300000-0000-4000-8000-00000000000a',
+   'client_rep','R20 Money Rep','f9100000-0000-4000-8000-0000000000e1',
+   'a0000000-0000-0000-0000-000000000004'),
+  ('f9500000-0000-4000-8000-0000000000e2','f9300000-0000-4000-8000-00000000000a',
+   'sub','R20 Schedule Hand','f9100000-0000-4000-8000-0000000000e2',
+   'a0000000-0000-0000-0000-000000000004');
+INSERT INTO public.project_party_authority
+  (engagement_id, scope, threshold_cents, source_clause, granted_by) VALUES
+  ('f9500000-0000-4000-8000-0000000000e1','money',1000000,'agreement §4',
+   'a0000000-0000-0000-0000-000000000004'),
+  ('f9500000-0000-4000-8000-0000000000e2','schedule',NULL,'agreement §4',
+   'a0000000-0000-0000-0000-000000000004');
+
+DO $$
+DECLARE
+  v_msg      text;
+  v_ended_on date;
+  v_off      date;
+  n          integer;
+BEGIN
+  -- ── (a) a plain member of the RECORDED studio ───────────────────────────
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000003');
+  UPDATE public.project_party_authority SET effective_to = CURRENT_DATE
+   WHERE engagement_id = 'f9500000-0000-4000-8000-0000000000e1' AND scope = 'money';
+  GET DIAGNOSTICS n = ROW_COUNT;
+  IF n <> 0 THEN
+    RAISE EXCEPTION
+      'BLOCK 13e FAIL (13e-a): a plain member ENDED the money grant directly (% row(s)) — 00624''s PR-n leg is gone', n;
+  END IF;
+
+  BEGIN
+    UPDATE public.project_parties
+       SET stage = 'off_job', off_job_at = CURRENT_DATE,
+           off_job_reason = 'A plain member tried to close it.'
+     WHERE id = 'f9500000-0000-4000-8000-0000000000e1';
+    RAISE EXCEPTION
+      'BLOCK 13e FAIL (13e-b): a plain member of the recorded studio closed a seat carrying an open money grant';
+  EXCEPTION WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS v_msg = MESSAGE_TEXT;
+    IF v_msg LIKE 'BLOCK 13e FAIL%' THEN RAISE; END IF;
+    IF v_msg <> 'seat_close_money_authority_forbidden' THEN
+      RAISE EXCEPTION 'BLOCK 13e FAIL (13e-c): the close was refused as %, not seat_close_money_authority_forbidden', v_msg;
+    END IF;
+  END;
+  PERFORM pg_temp.reset_role();
+
+  SELECT pa.effective_to, pp.off_job_at INTO v_ended_on, v_off
+    FROM public.project_party_authority pa
+    JOIN public.project_parties pp ON pp.id = pa.engagement_id
+   WHERE pa.engagement_id = 'f9500000-0000-4000-8000-0000000000e1' AND pa.scope = 'money';
+  IF v_ended_on IS NOT NULL OR v_off IS NOT NULL THEN
+    RAISE EXCEPTION
+      'BLOCK 13e FAIL (13e-d): the refusal still moved the record (effective_to %, off_job_at %)', v_ended_on, v_off;
+  END IF;
+
+  -- ── (b) a plain member of the designer's SECOND studio ──────────────────
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000005');
+  IF public.is_active_studio_member('f9000000-0000-4000-8000-00000000000a')
+     OR NOT public.is_studio_comember('a0000000-0000-0000-0000-000000000004') THEN
+    RAISE EXCEPTION
+      'BLOCK 13e FAIL (13e-e): the cross-tenant fixture does not stage w1b r5 MAJOR-3''s population';
+  END IF;
+  SELECT count(*) INTO n FROM public.project_party_authority
+   WHERE engagement_id = 'f9500000-0000-4000-8000-0000000000e1';
+  IF n <> 0 THEN
+    RAISE EXCEPTION
+      'BLOCK 13e FAIL (13e-f): the outside-studio member can SELECT % authority row(s) — 00624''s tenant leg is gone', n;
+  END IF;
+
+  BEGIN
+    UPDATE public.project_parties
+       SET stage = 'off_job', off_job_at = CURRENT_DATE,
+           off_job_reason = 'Another studio''s member tried to close it.'
+     WHERE id = 'f9500000-0000-4000-8000-0000000000e1';
+    RAISE EXCEPTION
+      'BLOCK 13e FAIL (13e-g): a member of the designer''s OTHER studio closed a seat in this studio''s book';
+  EXCEPTION WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS v_msg = MESSAGE_TEXT;
+    IF v_msg LIKE 'BLOCK 13e FAIL%' THEN RAISE; END IF;
+    IF v_msg <> 'seat_close_authority_forbidden' THEN
+      RAISE EXCEPTION 'BLOCK 13e FAIL (13e-h): the cross-tenant close was refused as %, not seat_close_authority_forbidden', v_msg;
+    END IF;
+  END;
+  PERFORM pg_temp.reset_role();
+
+  SELECT pa.effective_to, pp.off_job_at INTO v_ended_on, v_off
+    FROM public.project_party_authority pa
+    JOIN public.project_parties pp ON pp.id = pa.engagement_id
+   WHERE pa.engagement_id = 'f9500000-0000-4000-8000-0000000000e1' AND pa.scope = 'money';
+  IF v_ended_on IS NOT NULL OR v_off IS NOT NULL THEN
+    RAISE EXCEPTION
+      'BLOCK 13e FAIL (13e-i): the cross-tenant refusal still moved the record (effective_to %, off_job_at %)', v_ended_on, v_off;
+  END IF;
+
+  -- ── the gate is NARROW: a plain member still closes a seat whose only
+  --    grant is outside PR-n's two scopes, and 00634 still ends it ─────────
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000003');
+  UPDATE public.project_parties
+     SET stage = 'off_job', off_job_at = CURRENT_DATE,
+         off_job_reason = 'The schedule hand finished.'
+   WHERE id = 'f9500000-0000-4000-8000-0000000000e2';
+  PERFORM pg_temp.reset_role();
+  SELECT effective_to INTO v_ended_on FROM public.project_party_authority
+   WHERE engagement_id = 'f9500000-0000-4000-8000-0000000000e2' AND scope = 'schedule';
+  IF v_ended_on IS DISTINCT FROM CURRENT_DATE THEN
+    RAISE EXCEPTION
+      'BLOCK 13e FAIL (13e-j): a plain member''s close of a non-money seat left the grant ending % — the gate is wider than PR-n', v_ended_on;
+  END IF;
+
+  -- ── and the principal's own close still lands ───────────────────────────
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  UPDATE public.project_parties
+     SET stage = 'off_job', off_job_at = CURRENT_DATE,
+         off_job_reason = 'The owner closed it.'
+   WHERE id = 'f9500000-0000-4000-8000-0000000000e1';
+  PERFORM pg_temp.reset_role();
+  SELECT threshold_cents, effective_to INTO n, v_ended_on
+    FROM public.project_party_authority
+   WHERE engagement_id = 'f9500000-0000-4000-8000-0000000000e1' AND scope = 'money';
+  IF n <> 1000000 OR v_ended_on IS DISTINCT FROM CURRENT_DATE THEN
+    RAISE EXCEPTION
+      'BLOCK 13e FAIL (13e-k): the owner''s close left the grant reading % ending %, not 1000000 ending today', n, v_ended_on;
+  END IF;
+
+  RAISE NOTICE '13e. r20 BLOCKING-1 — 00634''s trigger states its own gate: a plain member of the recorded studio and a member of the designer''s second studio are both REFUSED the close of a seat carrying an open money grant, by name, with the record untouched; a non-money grant still ends at a plain member''s close and the principal''s close still lands: passed';
+END $$;
+
 DO $$ BEGIN RAISE NOTICE 'W3 SQL suite: all blocks passed'; END $$;
 
 ROLLBACK;

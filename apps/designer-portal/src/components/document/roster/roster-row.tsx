@@ -207,6 +207,37 @@ export function RosterRow({
   const seatId = row.seatId ?? '';
   const projectId = row.projectId ?? '';
 
+  /**
+   * r20 major-1 / QA blocking-2 — CLOSE THIS SEAT IS FOR A SEAT STILL ON THE JOB.
+   *
+   * The act was gated on `isSeat` alone, so a row already in the Done band —
+   * carrying a recorded `off_job_at` and the studio's own `off_job_reason` —
+   * still offered it, and taking it overwrote the recorded day with today and
+   * blanked the sentence (the row's `reason` state starts at '' and was never
+   * seeded, so `useCloseProjectPartySeat` wrote NULL). No audit row and no
+   * second copy held the originals. The confirm sentence — "The seat stays on
+   * the job with the day it closed" — was a wrong fact in that state.
+   *
+   * The person card's `CloseSeatAct` was already right: `person-profile.tsx`
+   * only renders it over `liveSeats`. This is the Call Sheet's half of the two
+   * copies §6 of the room report calls hand-kept in step. Held rather than
+   * hidden, so the reason stays readable where the act would be (direction
+   * §5.5), and the reason field is seeded from the record so a correction can
+   * never silently blank a recorded sentence.
+   */
+  const closedOnText = rosterShortDate(row.offJobAt);
+  const closedReasonText = (row.offJobReason ?? '').trim();
+  const seatAlreadyClosed = isSeat && (!!row.offJobAt || row.stage === 'off_job');
+  const closedHeldSentence = [
+    closedOnText
+      ? `This seat left the job on ${closedOnText}.`
+      : 'This seat has already left the job.',
+    closedReasonText ? `The reason on file reads “${closedReasonText}”.` : '',
+    'Closing it again would write over that day. Putting a seat back on the job is its own act.',
+  ]
+    .filter(Boolean)
+    .join(' ');
+
   const [composing, setComposing] = useState(false);
   const [body, setBody] = useState('');
   const [closing, setClosing] = useState(false);
@@ -1166,13 +1197,36 @@ export function RosterRow({
                   <DocumentAction
                     actionKey="close-seat"
                     variant="danger"
-                    onClick={() => setClosing(true)}
+                    onClick={() => {
+                      // r20 major-1 — the field opens on the record, never
+                      // empty, so a correction restates the sentence rather
+                      // than blanking it.
+                      setReason(row.offJobReason ?? '');
+                      setClosing(true);
+                    }}
+                    disabled={seatAlreadyClosed}
+                    held={seatAlreadyClosed}
+                    aria-describedby={
+                      seatAlreadyClosed ? `${panelId}-close-held` : undefined
+                    }
+                    onHeldActivate={() => setNote(closedHeldSentence)}
                     className="ml-auto"
                   >
                     Close this seat
                   </DocumentAction>
                 )}
               </DocumentActionRow>
+            )}
+
+            {/* r20 major-1 — a held act carries a VISIBLE reason (direction
+                §5.5, SPEC §7 #4), the way the Text act two regions up does. */}
+            {seatAlreadyClosed && (
+              <p
+                id={`${panelId}-close-held`}
+                className="mt-1 text-[0.7rem] text-[var(--color-aged-oak)]"
+              >
+                {closedHeldSentence}
+              </p>
             )}
 
             {/* CR-7: direction §5.5 and SPEC §7 #4 ask a gated act for

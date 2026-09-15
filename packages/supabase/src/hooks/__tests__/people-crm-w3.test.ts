@@ -20,6 +20,9 @@ const isFilters: Array<{ table: string; column: string; value: Any }> = [];
 const updated: Array<{ table: string; payload: Any }> = [];
 const rpcCalls: Array<{ name: string; args: Any }> = [];
 const rpcError: { current: { message: string } | null } = { current: null };
+/** What a single-row read comes back with — the seat `useCloseProjectPartySeat`
+ *  looks at before it writes (r20 major-1). */
+const standingRow: { current: Any } = { current: { id: "row-1" } };
 const insertError: { current: { message: string } | null } = { current: null };
 const invalidated: Any[] = [];
 
@@ -34,7 +37,7 @@ function builderFor(table: string): Any {
   builder.in = vi.fn(() => Promise.resolve({ data: [], error: null }));
   builder.order = vi.fn(() => Promise.resolve({ data: [], error: null }));
   builder.maybeSingle = vi.fn(() =>
-    Promise.resolve({ data: { id: "row-1" }, error: null }),
+    Promise.resolve({ data: standingRow.current, error: null }),
   );
   builder.single = vi.fn(() =>
     insertError.current
@@ -126,6 +129,7 @@ beforeEach(() => {
   invalidated.length = 0;
   rpcError.current = null;
   insertError.current = null;
+  standingRow.current = { id: "row-1" };
 });
 
 describe("merge_studio_contacts (PR-o)", () => {
@@ -861,6 +865,60 @@ describe("every seat and authority write reaches the household band", () => {
       expect(roots).toContain(clientHouseholdKeys.all[0]);
     });
   }
+});
+
+describe("useCloseProjectPartySeat — the day a seat left is written once (r20)", () => {
+  it("writes today and the studio's reason on a seat still on the job", async () => {
+    await mutationFnOf(useCloseProjectPartySeat())({
+      id: "seat-1",
+      projectId: "p",
+      reason: "  The slab program went to Stonehaven.  ",
+    });
+    const write = updated.find((u) => u.table === "project_parties");
+    expect(write?.payload).toEqual({
+      stage: "off_job",
+      off_job_at: new Date().toISOString().slice(0, 10),
+      off_job_reason: "The slab program went to Stonehaven.",
+    });
+  });
+
+  it("keeps the recorded day and the recorded reason when the seat has already left", async () => {
+    standingRow.current = {
+      id: "seat-1",
+      off_job_at: "2026-08-20",
+      off_job_reason: "Picked another HVAC sub.",
+    };
+    await mutationFnOf(useCloseProjectPartySeat())({
+      id: "seat-1",
+      projectId: "p",
+      reason: "",
+    });
+    const write = updated.find((u) => u.table === "project_parties");
+    expect(write?.payload).toEqual({
+      stage: "off_job",
+      off_job_at: "2026-08-20",
+      off_job_reason: "Picked another HVAC sub.",
+    });
+  });
+
+  it("lets a correction restate the sentence without moving the day", async () => {
+    standingRow.current = {
+      id: "seat-1",
+      off_job_at: "2026-08-20",
+      off_job_reason: "Picked another HVAC sub.",
+    };
+    await mutationFnOf(useCloseProjectPartySeat())({
+      id: "seat-1",
+      projectId: "p",
+      reason: "Picked another HVAC sub — Northgate took it.",
+    });
+    const write = updated.find((u) => u.table === "project_parties");
+    expect(write?.payload).toEqual({
+      stage: "off_job",
+      off_job_at: "2026-08-20",
+      off_job_reason: "Picked another HVAC sub — Northgate took it.",
+    });
+  });
 });
 
 describe("the keys", () => {

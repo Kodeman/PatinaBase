@@ -570,6 +570,54 @@ describe('RosterRow — unfolded', () => {
     expect(removeMutate).not.toHaveBeenCalled();
   });
 
+  /**
+   * r20 major-1 / QA blocking-2 — the act was gated on `isSeat` alone, so a
+   * Done-band seat carrying a recorded `off_job_at` and `off_job_reason` still
+   * offered it, and taking it overwrote the day with today and nulled the
+   * sentence. The person card's `CloseSeatAct` was already filtered to live
+   * seats; this is the Call Sheet's half of the two copies.
+   */
+  it('holds Close this seat once the seat has already left the job, and says why', () => {
+    ul(
+      <RosterRow
+        row={seatRow({
+          stage: 'off_job',
+          offJobAt: '2026-09-10',
+          offJobReason: 'Picked another electrician.',
+        })}
+        band="done"
+        expanded
+        onToggle={jest.fn()}
+      />,
+    );
+    const close = screen.getByRole('button', { name: /Close this seat/ });
+    expect(close).toHaveAttribute('aria-disabled', 'true');
+    const describedBy = close.getAttribute('aria-describedby');
+    const reason = document.getElementById(describedBy as string);
+    expect(reason).toHaveTextContent('This seat left the job on 10 Sep 2026.');
+    expect(reason).toHaveTextContent('Picked another electrician.');
+    fireEvent.click(close);
+    expect(screen.queryByLabelText('Why it closed')).not.toBeInTheDocument();
+    expect(closeMutate).not.toHaveBeenCalled();
+  });
+
+  /** The field opens on the record, so a correction restates the sentence
+   *  rather than blanking it. */
+  it('seeds the reason field from the seat\'s recorded reason', () => {
+    ul(
+      <RosterRow
+        row={seatRow({ offJobReason: 'Picked another electrician.' })}
+        band="this_week"
+        expanded
+        onToggle={jest.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Close this seat/ }));
+    expect(screen.getByLabelText('Why it closed')).toHaveValue(
+      'Picked another electrician.',
+    );
+  });
+
   it('holds the hard delete while the seat carries a record, and says why', () => {
     open();
     fireEvent.click(screen.getByRole('button', { name: /Close this seat/ }));
