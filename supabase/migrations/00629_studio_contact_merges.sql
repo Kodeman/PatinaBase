@@ -1695,6 +1695,19 @@ BEGIN
   -- — and refusing over a row the studio has already retired would cost the
   -- room a fold it can make, and would name a repair that had already been
   -- taken.
+  --
+  -- r19 MAJOR-1 — "ITS GRANT WAS ENDED AT THE CLOSE" IS A RULE 00634 MAKES,
+  -- and until 00634 nothing did. `useCloseProjectPartySeat` writes `stage`,
+  -- `off_job_at` and `off_job_reason` and nothing else, so the repair this
+  -- refusal's own HINT names left the closed seat's money grant OPEN, the fold
+  -- then went through, and the survivor came out holding two client_rep seats
+  -- on one job with two open money grants at two different figures — the exact
+  -- state the paragraph above describes, reached by following the refusal's
+  -- own instruction. `end_party_authority_at_seat_close_trg` (00634) ends every
+  -- open grant on the day the seat closes, GREATEST(effective_from,
+  -- off_job_at), which is 00632:713-716's own formula. The carve-out stands as
+  -- written BECAUSE of that trigger; do not widen this predicate without
+  -- reading it.
   SELECT pj.name, pm.party_kind
     INTO v_collision_job, v_collision_kind
     FROM public.project_parties pm

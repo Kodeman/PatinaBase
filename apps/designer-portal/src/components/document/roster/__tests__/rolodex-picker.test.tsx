@@ -487,6 +487,25 @@ describe('RolodexPicker — bring forward', () => {
     expect(bringForwardMutate).not.toHaveBeenCalled();
   });
 
+  /**
+   * QA r19 MAJOR-1 — SPEC §5.7 #2: "the picker is a DocSheet region titled
+   * 'From the rolodex' with the eyebrow 'OKONKWO RESIDENCE'". `projectName`
+   * reached this component and was spent only on the consequence sentence and
+   * the consent clauses, so the sheet's own head named no job at either width,
+   * and the only "Okonkwo" in the sheet was a person's surname.
+   */
+  it('names the job in the sheet head, at both widths (SPEC §5.7 #2)', () => {
+    render(<RolodexPicker {...props} projectName="Okonkwo residence" />);
+    const page = document.querySelector('[data-doc-sheet-page-label]');
+    expect(page).toHaveTextContent('Okonkwo residence');
+    // the head's own title line carries both, and the page segment is not
+    // hidden below the `sm` breakpoint
+    expect(
+      document.querySelector('[data-doc-sheet-title-line]')?.textContent,
+    ).toContain('Okonkwo residence');
+    expect(page).not.toHaveClass('hidden');
+  });
+
   it('says who arrives opted out, in the consequence sentence (SPEC §5.7 #7)', () => {
     render(<RolodexPicker {...props} projectName="Okonkwo residence" />);
     fireEvent.click(screen.getByRole('checkbox', { name: /Rosa Martínez/ }));

@@ -846,7 +846,19 @@ export function RolodexPicker({
   };
 
   return (
-    <DocSheet open={open} onClose={onClose} title="From the rolodex" icon={UserPlus}>
+    /* QA r19 MAJOR-1 — SPEC §5.7 #2's eyebrow. The picker is "a DocSheet
+       region titled 'From the rolodex' with the eyebrow 'OKONKWO RESIDENCE'";
+       `projectName` arrived here from the Call Sheet and was spent only on the
+       consequence sentence and the consent clauses, so the sheet's own head
+       named no job at either width. The head's title line is already
+       `uppercase`, so the name is passed as the studio spells it. */
+    <DocSheet
+      open={open}
+      onClose={onClose}
+      title="From the rolodex"
+      pageLabel={projectName ?? undefined}
+      icon={UserPlus}
+    >
       <input
         ref={searchRef}
         type="search"

@@ -533,6 +533,10 @@ export function RosterRow({
         previous: {
           bidOutcome: bid?.bidOutcome ?? null,
           stage: row.stage ?? null,
+          // r19 major-1: the day this seat already left the job, if one
+          // stands. "They withdrew" dates a seat that has no date; it never
+          // moves one the studio's own "Close this seat" already wrote.
+          offJobAt: row.offJobAt ?? null,
         },
         patch: {
           bidAskedAt: bidDraft.askedAt || null,

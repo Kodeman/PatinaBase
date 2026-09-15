@@ -5004,6 +5004,19 @@ END $$;
 -- dropping the other. Four assertions: the refusal writes nothing; the repair
 -- the HINT names lifts it; the shape is reachable with no household in it; and
 -- a seat the studio already CLOSED does not refuse a fold the room can make.
+--
+-- r19 MAJOR-1 — AND THE REPAIR THE HINT NAMES IS PINNED FOR WHAT IT LEAVES.
+-- "Close one of these two seats first, then merge." used to leave the closed
+-- seat's money grant OPEN — useCloseProjectPartySeat writes stage, off_job_at
+-- and off_job_reason and nothing else — so the fold then produced the very
+-- state the refusal exists to prevent: one human, one job, two client_rep
+-- seats, "Signs money to $10,000." beside "Signs money to $2,500.", both
+-- grants open. 13d-n could not see it, because it scopes the count to
+-- `pp.off_job_at IS NULL`. 00634 ends a seat's open grants on the day it
+-- closes; 13d-o/p pin that, 13d-r re-counts WITHOUT the off_job_at scope,
+-- 13d-s pins that the retired figure is ended and not deleted (R-BN), and
+-- 13d-q does the same for the symmetric case where the SURVIVOR's seat is the
+-- closed one.
 -- ═══════════════════════════════════════════════════════════════════════════
 INSERT INTO public.studio_contacts
   (id, organization_id, entity_kind, contact_kind, full_name, phone, phone_e164, created_by) VALUES
@@ -5048,14 +5061,21 @@ INSERT INTO public.project_parties
    'sub','R18 Trade Twin B','f9100000-0000-4000-8000-0000000000d4',
    'a0000000-0000-0000-0000-000000000004');
 
--- the control pair: the survivor's seat of that kind is one the studio CLOSED
+-- the control pair: the survivor's seat of that kind is one the studio CLOSES.
+-- r19 MAJOR-1 — SEATED OPEN, CARRYING MONEY, AND CLOSED BY THE ROOM'S OWN ACT
+-- inside the block below, not born closed: the symmetric case the review names
+-- ("where the SURVIVOR's seat is the closed one") is only staged honestly if
+-- the seat carries a money grant and reaches `off_job` the way the room takes
+-- it — the three columns `useCloseProjectPartySeat` writes.
 INSERT INTO public.project_parties
-  (id, project_id, party_kind, display_name, studio_contact_id, created_by,
-   stage, off_job_at, off_job_reason) VALUES
+  (id, project_id, party_kind, display_name, studio_contact_id, created_by) VALUES
   ('f9500000-0000-4000-8000-0000000000d5','f9300000-0000-4000-8000-00000000000a',
    'installer','R18 Closed Twin A','f9100000-0000-4000-8000-0000000000d5',
-   'a0000000-0000-0000-0000-000000000004','off_job', CURRENT_DATE - 30,
-   'Finished last spring.');
+   'a0000000-0000-0000-0000-000000000004');
+INSERT INTO public.project_party_authority
+  (engagement_id, scope, threshold_cents, source_clause, granted_by, effective_from) VALUES
+  ('f9500000-0000-4000-8000-0000000000d5','money',400000,'agreement §4',
+   'a0000000-0000-0000-0000-000000000004', CURRENT_DATE - 90);
 INSERT INTO public.project_parties
   (id, project_id, party_kind, display_name, studio_contact_id, created_by) VALUES
   ('f9500000-0000-4000-8000-0000000000d6','f9300000-0000-4000-8000-00000000000a',
@@ -5069,6 +5089,7 @@ DECLARE
   v_detail   text;
   v_hint     text;
   v_survivor uuid;
+  v_ended_on date;
   n          integer;
 BEGIN
   PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
@@ -5152,6 +5173,30 @@ BEGIN
   -- closed seat states no second live money fact — rosterWindowClause prints
   -- "Off the job …" beside it wherever it is banded (r15 MAJOR-1) — and
   -- refusing over it would name a repair the studio had already taken.
+  --
+  -- r19 MAJOR-1 — AND "STATES NO SECOND LIVE MONEY FACT" IS NOW A RULE
+  -- SOMETHING MAKES. The survivor's installer seat is closed here by the three
+  -- columns the room's "Close this seat" writes, and 00634's
+  -- end_party_authority_at_seat_close_trg ends the $4,000 it carried on the day
+  -- it closed. Asserted at 13d-o before the control fold is attempted.
+  UPDATE public.project_parties
+     SET stage = 'off_job', off_job_at = CURRENT_DATE - 30,
+         off_job_reason = 'Finished last spring.'
+   WHERE id = 'f9500000-0000-4000-8000-0000000000d5';
+  SELECT count(*) INTO n FROM public.project_party_authority
+   WHERE engagement_id = 'f9500000-0000-4000-8000-0000000000d5'
+     AND scope = 'money' AND effective_to IS NULL;
+  IF n <> 0 THEN
+    RAISE EXCEPTION
+      'BLOCK 13d FAIL (13d-o): closing the seat left % open money grant(s) on it, not 0 — 00629''s OPEN-SEATS-ONLY carve-out states a rule nothing makes', n;
+  END IF;
+  SELECT effective_to INTO v_ended_on FROM public.project_party_authority
+   WHERE engagement_id = 'f9500000-0000-4000-8000-0000000000d5' AND scope = 'money';
+  IF v_ended_on <> CURRENT_DATE - 30 THEN
+    RAISE EXCEPTION
+      'BLOCK 13d FAIL (13d-p): the grant ended on %, not the day the seat left the job', v_ended_on;
+  END IF;
+
   PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
   v_survivor := public.merge_studio_contacts(
     'f9100000-0000-4000-8000-0000000000d5','f9100000-0000-4000-8000-0000000000d6','phone');
@@ -5164,6 +5209,20 @@ BEGIN
      AND off_job_at IS NULL;
   IF n <> 1 THEN
     RAISE EXCEPTION 'BLOCK 13d FAIL (13d-l): the control fold left % open seat(s), not 1', n;
+  END IF;
+  -- r19 MAJOR-1, the symmetric case — the survivor now holds BOTH installer
+  -- seats, one closed and one open, and the count is taken over EVERY seat on
+  -- the job, closed included. The pre-r19 state left the closed seat's $4,000
+  -- standing open here and the Call Sheet printed it beside the open seat's
+  -- row for one human on one job.
+  SELECT count(*) INTO n FROM public.project_parties pp
+    JOIN public.project_party_authority pa
+      ON pa.engagement_id = pp.id AND pa.scope = 'money' AND pa.effective_to IS NULL
+   WHERE pp.studio_contact_id = 'f9100000-0000-4000-8000-0000000000d5'
+     AND pp.project_id = 'f9300000-0000-4000-8000-00000000000a';
+  IF n <> 0 THEN
+    RAISE EXCEPTION
+      'BLOCK 13d FAIL (13d-q): after the control fold the survivor holds % open money grant(s) on that job counting CLOSED seats, not 0', n;
   END IF;
 
   -- ── and the repair the HINT names lifts the gate on the first pair ──────
@@ -5188,7 +5247,35 @@ BEGIN
       'BLOCK 13d FAIL (13d-n): the survivor holds % open money grant(s) on an OPEN seat, not 1', n;
   END IF;
 
-  RAISE NOTICE '13d. r18 MAJOR-1 — a fold that would leave one human holding two open seats of one kind on one job is refused by name, writes nothing, and the room''s own "Close this seat" lifts it; a closed seat refuses nothing: passed';
+  -- ── r19 MAJOR-1 — THE SAME COUNT, WITHOUT THE `off_job_at IS NULL` SCOPE ─
+  -- 13d-n above counts open money grants on an OPEN seat, and that predicate
+  -- is exactly why no gate saw r19's state: the second open grant sat on the
+  -- CLOSED seat, outside the scope by construction. This is the same count
+  -- over every seat the survivor holds on that job, closed included — the
+  -- assertion the review asks for by name. Before 00634 it read 2: the
+  -- agreement's $10,000 on the open seat and the household's $2,500 standing
+  -- open on the seat the studio had just retired to take the HINT's repair,
+  -- and the Call Sheet printed both, present tense, for one human on one job.
+  SELECT count(*) INTO n FROM public.project_parties pp
+    JOIN public.project_party_authority pa
+      ON pa.engagement_id = pp.id AND pa.scope = 'money' AND pa.effective_to IS NULL
+   WHERE pp.studio_contact_id = 'f9100000-0000-4000-8000-0000000000d1'
+     AND pp.project_id = 'f9300000-0000-4000-8000-00000000000a';
+  IF n <> 1 THEN
+    RAISE EXCEPTION
+      'BLOCK 13d FAIL (13d-r): after the repair and the fold the survivor holds % open money grant(s) on that job counting CLOSED seats, not 1', n;
+  END IF;
+  -- and the retired figure is still on the book, ended on the day the seat was
+  -- (R-BN: a merge never deletes a typed fact; only its openness ends)
+  SELECT threshold_cents, effective_to INTO n, v_ended_on
+    FROM public.project_party_authority
+   WHERE engagement_id = v_seat_two AND scope = 'money';
+  IF n <> 250000 OR v_ended_on <> CURRENT_DATE THEN
+    RAISE EXCEPTION
+      'BLOCK 13d FAIL (13d-s): the closed seat''s grant reads % ending %, not 250000 ending the day it closed', n, v_ended_on;
+  END IF;
+
+  RAISE NOTICE '13d. r18 MAJOR-1 / r19 MAJOR-1 — a fold that would leave one human holding two open seats of one kind on one job is refused by name and writes nothing; the room''s own "Close this seat" lifts it AND ends the money that seat carried (00634), so the repair the HINT names cannot leave two live figures on one job; a closed seat refuses nothing: passed';
 END $$;
 
 DO $$ BEGIN RAISE NOTICE 'W3 SQL suite: all blocks passed'; END $$;

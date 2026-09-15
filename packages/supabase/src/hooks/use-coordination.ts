@@ -2363,6 +2363,16 @@ export interface SetPartyBidInput {
   previous: {
     bidOutcome: SeatBidOutcome | null;
     stage: string | null;
+    /**
+     * THE DAY THE SEAT ALREADY LEFT THE JOB, if one stands (r19 major-1).
+     * `off_job_at` is written by three doors and read as a fact by four
+     * readers; the one thing none of them can do is recover it once it is
+     * overwritten. Optional so an older call site cannot silently lose the
+     * guard's meaning — absent reads as "no date stands", which is the
+     * pre-r19 behaviour, and `roster-row.tsx` (the only caller) passes the
+     * seat's own value.
+     */
+    offJobAt?: string | null;
   };
 }
 
@@ -2581,7 +2591,23 @@ export function useSetPartyBid() {
         // row somebody forgot — but the date is stamped on the TRANSITION
         // into `withdrawn` only, so a later correction on that row leaves
         // the day the seat actually left the job alone.
-        if (patch.bidOutcome === 'withdrawn' && written.moved) {
+        //
+        // AND ONLY ONTO A SEAT THAT IS NOT ALREADY DATED (r19 major-1).
+        // r18 BLOCKING-1 narrowed the CLEARING branch below and left this one
+        // as it was, on the same population: a seat the studio closed BY HAND
+        // ("Close this seat" — stage='off_job', off_job_at='2026-09-10',
+        // off_job_reason='Picked another electrician') still carries its bid,
+        // so `seatCarriesBid` keeps the editor on the row ("Change what came
+        // back"). A week later the studio records what actually happened —
+        // "They withdrew" — `previous.bidOutcome` is 'quoted', `written.moved`
+        // is true, and the stamp REWROTE `off_job_at` to today.
+        // `rosterWindowClause` then printed "Off the job 17 Sep 2026." beside
+        // the studio's own untouched reason, a week later than the record, and
+        // nothing anywhere held the original date: no audit row, no second
+        // copy, and the consequence sentence beside the press promises only
+        // the move to Off the job. A date the room already holds is the
+        // record; this branch may only WRITE one, never move one.
+        if (patch.bidOutcome === 'withdrawn' && written.moved && !previous.offJobAt) {
           dbPatch.off_job_at = new Date().toISOString().slice(0, 10);
         } else if (written.stage && previous.bidOutcome === 'withdrawn') {
           // R-BR (r17) — AND A SEAT BACK IN THE BIDDING IS NOT A SEAT THAT
