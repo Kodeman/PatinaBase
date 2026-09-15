@@ -893,6 +893,170 @@ BEGIN
   RAISE NOTICE '9d. M-2 — the invoice_pay tier carries the link''s own 30-day end date, not NULL: passed';
 END $$;
 
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 10. A FIRM MERGE CARRIES THE PAPERWORK DOOR (W4 r3 MAJOR-3, 00629 amended)
+--
+-- The studio folds a duplicate firm card away. Before this fix the token stayed
+-- on the absorbed card while §4e moved the documents to the survivor, so the
+-- firm's own live page read `documents: []`, its next upload landed on a card
+-- the survivor's queue never reads, and minting the survivor's own door left
+-- two live doors for one firm identity (R-AF).
+--
+-- resolve_paperwork_link and record_inbound_compliance_document are
+-- service-only (00637:651, :776) — the firm's browser holds no DB access — so
+-- every call to them here is made with the role reset, exactly as block 5
+-- does.
+-- ═══════════════════════════════════════════════════════════════════════════
+INSERT INTO public.studio_contacts
+  (id, organization_id, entity_kind, contact_kind, company_name, company_kind, created_by) VALUES
+  ('fa2b0000-0000-4000-8000-000000000001','fa000000-0000-4000-8000-00000000000a','company','sub','Northgate Electric (dup)','sub','a0000000-0000-0000-0000-000000000004'),
+  ('fa2b0000-0000-4000-8000-000000000002','fa000000-0000-4000-8000-00000000000a','company','sub','Northgate Electric LLC','sub','a0000000-0000-0000-0000-000000000004');
+
+DO $$
+DECLARE
+  v_dup      uuid := 'fa2b0000-0000-4000-8000-000000000001';  -- absorbed
+  v_survivor uuid := 'fa2b0000-0000-4000-8000-000000000002';
+  v_token    text;
+  v_page     jsonb;
+  v_live     int;
+BEGIN
+  -- The paper the studio holds, on the duplicate — the card a studio merges
+  -- away is the card the door was minted on, because PR-o pre-picks the older.
+  INSERT INTO public.studio_compliance_documents
+    (organization_id, holder_type, holder_id, doc_type, issued_on, expires_on,
+     blocks, verified_at, created_by)
+  VALUES ('fa000000-0000-4000-8000-00000000000a','company', v_dup, 'coi_gl',
+          CURRENT_DATE - 30, CURRENT_DATE + 300, ARRAY['site_access']::text[],
+          now(), 'a0000000-0000-0000-0000-000000000004');
+
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  SELECT m.token INTO v_token
+    FROM public.mint_paperwork_link(v_dup, now() + interval '60 days') m;
+  PERFORM pg_temp.reset_role();
+
+  IF jsonb_array_length((public.resolve_paperwork_link(v_token))->'documents') = 0 THEN
+    RAISE EXCEPTION 'BLOCK 10 FAIL (a): the firm''s page held no paper before the merge';
+  END IF;
+
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  PERFORM public.merge_studio_contacts(v_survivor, v_dup, 'company_name');
+  PERFORM pg_temp.reset_role();
+
+  -- 1. the token names the SURVIVOR, and is still live
+  IF NOT EXISTS (
+    SELECT 1 FROM public.paperwork_link_tokens
+     WHERE token_hash = encode(extensions.digest(v_token, 'sha256'), 'hex')
+       AND company_id = v_survivor
+       AND organization_id = 'fa000000-0000-4000-8000-00000000000a'
+       AND status = 'active'
+  ) THEN
+    RAISE EXCEPTION 'BLOCK 10 FAIL (b): the live door still names the card the studio folded away';
+  END IF;
+
+  -- 2. the firm's own page still lists the paper that moved with it
+  v_page := public.resolve_paperwork_link(v_token);
+  IF v_page IS NULL OR jsonb_array_length(v_page->'documents') = 0 THEN
+    RAISE EXCEPTION 'BLOCK 10 FAIL (c): the firm is told the studio holds none of its paper';
+  END IF;
+  IF v_page->>'company_name' <> 'Northgate Electric LLC' THEN
+    RAISE EXCEPTION 'BLOCK 10 FAIL (d): the door names % after the fold', v_page->>'company_name';
+  END IF;
+
+  -- 3. an upload through that same live link lands on the SURVIVOR's queue
+  PERFORM public.record_inbound_compliance_document(
+    p_token     => v_token,
+    p_doc_type  => 'w9',
+    p_file_path => 'compliance-documents/w9-after-merge.pdf');
+
+  IF NOT EXISTS (
+    SELECT 1 FROM public.studio_compliance_documents
+     WHERE holder_id = v_survivor AND inbound IS TRUE
+       AND verified_at IS NULL AND rejected_at IS NULL
+  ) THEN
+    RAISE EXCEPTION 'BLOCK 10 FAIL (e): the firm''s upload landed where the survivor''s band never looks';
+  END IF;
+  IF EXISTS (SELECT 1 FROM public.studio_compliance_documents WHERE holder_id = v_dup) THEN
+    RAISE EXCEPTION 'BLOCK 10 FAIL (f): paper is still held by the absorbed card';
+  END IF;
+
+  -- 4. R-AF: exactly one live door for the firm identity
+  SELECT count(*) INTO v_live FROM public.paperwork_link_tokens
+   WHERE company_id IN (v_dup, v_survivor) AND status = 'active';
+  IF v_live <> 1 THEN
+    RAISE EXCEPTION 'BLOCK 10 FAIL (g): % live doors for one firm identity', v_live;
+  END IF;
+
+  RAISE NOTICE '10. W4 r3 MAJOR-3 — a firm merge carries the paperwork door: the token names the survivor, the firm''s page still lists its paper, its next upload lands on the survivor''s queue, and one door stays live: passed';
+END $$;
+
+-- ── the survivor already holds a door, and the sole-proprietor fold ────────
+DO $$
+DECLARE
+  v_dup      uuid := 'fa2b0000-0000-4000-8000-000000000003';
+  v_survivor uuid := 'fa2b0000-0000-4000-8000-000000000004';
+  v_person   uuid := 'fa1b0000-0000-4000-8000-000000000001';
+  v_firm     uuid := 'fa2b0000-0000-4000-8000-000000000005';
+  v_dup_tok  text;
+  v_surv_tok text;
+  v_firm_tok text;
+  v_live     int;
+  v_reason   text;
+BEGIN
+  INSERT INTO public.studio_contacts
+    (id, organization_id, entity_kind, contact_kind, company_name, company_kind, created_by) VALUES
+    (v_dup,'fa000000-0000-4000-8000-00000000000a','company','sub','Bauer Tile (dup)','sub','a0000000-0000-0000-0000-000000000004'),
+    (v_survivor,'fa000000-0000-4000-8000-00000000000a','company','sub','Bauer Tile Co','sub','a0000000-0000-0000-0000-000000000004'),
+    (v_firm,'fa000000-0000-4000-8000-00000000000a','company','sub','Kowalski Tile','sub','a0000000-0000-0000-0000-000000000004');
+  INSERT INTO public.studio_contacts
+    (id, organization_id, entity_kind, contact_kind, full_name, is_sole_proprietor, created_by) VALUES
+    (v_person,'fa000000-0000-4000-8000-00000000000a','person','sub','Dana Kowalski', true,'a0000000-0000-0000-0000-000000000004');
+
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  SELECT m.token INTO v_dup_tok
+    FROM public.mint_paperwork_link(v_dup, now() + interval '60 days') m;
+  SELECT m.token INTO v_surv_tok
+    FROM public.mint_paperwork_link(v_survivor, now() + interval '60 days') m;
+
+  -- BOTH cards hold a live door. R-AF says the survivor keeps exactly one.
+  PERFORM public.merge_studio_contacts(v_survivor, v_dup, 'company_name');
+
+  SELECT count(*) INTO v_live FROM public.paperwork_link_tokens
+   WHERE company_id = v_survivor AND status = 'active';
+  IF v_live <> 1 THEN
+    RAISE EXCEPTION 'BLOCK 10b FAIL (a): % live doors on the survivor', v_live;
+  END IF;
+
+  SELECT t.revoke_reason INTO v_reason FROM public.paperwork_link_tokens t
+   WHERE t.token_hash = encode(extensions.digest(v_dup_tok, 'sha256'), 'hex');
+  IF v_reason IS DISTINCT FROM 'The firm was merged into another card.' THEN
+    RAISE EXCEPTION 'BLOCK 10b FAIL (b): the closed door gives the reason %', COALESCE(v_reason, '<null>');
+  END IF;
+
+  -- The sole-proprietor fold: the firm IS the person, and a paperwork link is
+  -- a firm's door and never a person's — so it is closed, not repointed, and
+  -- the fold itself still lands rather than aborting on a schema token.
+  SELECT m.token INTO v_firm_tok
+    FROM public.mint_paperwork_link(v_firm, now() + interval '60 days') m;
+  PERFORM public.merge_studio_contacts(v_person, v_firm, 'company_name');
+  IF EXISTS (SELECT 1 FROM public.paperwork_link_tokens
+              WHERE company_id = v_firm AND status = 'active') THEN
+    RAISE EXCEPTION 'BLOCK 10b FAIL (c): a folded sole proprietor''s firm still holds a live door';
+  END IF;
+  PERFORM pg_temp.reset_role();
+
+  IF public.resolve_paperwork_link(v_dup_tok) IS NOT NULL THEN
+    RAISE EXCEPTION 'BLOCK 10b FAIL (d): the absorbed card''s address is still a live door';
+  END IF;
+  IF public.resolve_paperwork_link(v_surv_tok) IS NULL THEN
+    RAISE EXCEPTION 'BLOCK 10b FAIL (e): the survivor''s own door was closed by the fold';
+  END IF;
+  IF public.resolve_paperwork_link(v_firm_tok) IS NOT NULL THEN
+    RAISE EXCEPTION 'BLOCK 10b FAIL (f): the folded firm''s address still answers';
+  END IF;
+
+  RAISE NOTICE '10b. R-AF across a fold — the survivor keeps exactly one live door with the absorbed one closed by reason, and a sole-proprietor fold closes the firm''s door rather than aborting: passed';
+END $$;
+
 DO $$ BEGIN RAISE NOTICE 'W4 SQL suite: all blocks passed'; END $$;
 
 ROLLBACK;

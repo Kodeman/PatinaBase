@@ -419,17 +419,39 @@ export async function prepareCompliantEmail(
   // CRM-12. A recipient with no Patina account is not "unsuppressible": the
   // typed channel the address sits on carries the verdict, and a dead or
   // unsubscribed one refuses the send exactly as profiles.email_suppressed
-  // does for an account holder. Looked up only when there is no userId, so the
-  // account path is unchanged and costs no extra round trip.
-  const channel = options.userId
-    ? undefined
-    : (await resolveContactChannel(
-      supabase,
-      options.to,
-      options.organizationId,
-    )) ?? undefined;
+  // does for an account holder.
+  //
+  // THE GATE ASKS THE ADDRESS, ACCOUNT OR NO ACCOUNT (W4 r3 MAJOR-1). This
+  // used to be `options.userId ? undefined : await resolveContactChannel(…)`,
+  // so the whole D-4/D-6 verdict was skipped on every userId-bearing rail
+  // (invoice-send, client-invite, notification-dispatch). The reachable
+  // sequence is the one D-6 exists for: an account-less letter hard-bounces,
+  // writeChannelStatus marks EVERY row on the address `dead` while
+  // handleBounce leaves profiles.email_suppressed alone (the log row's
+  // user_id is NULL), and the next letter to the same mailbox — this time
+  // carrying a userId — read email_suppressed=false and sent to a dead
+  // mailbox. Same for `unsubscribed`: the Directory row said stopped while
+  // D-4's own sentence ("one click stops the studio emailing that address at
+  // all, invoices included") was false on that branch. Measured on the clean
+  // seed: designer@patina.dev is both a studio_contact_channels value and a
+  // profiles.email.
+  const channel = (await resolveContactChannel(
+    supabase,
+    options.to,
+    options.organizationId,
+  )) ?? undefined;
+  // …but the RECORD stays where it was. An account holder's letter is about a
+  // person the rolodex may not carry at all, so the deliverability ref, the
+  // out touch and the channel unsubscribe door remain the account-less path's
+  // (B-2, E13). Widening the gate is not a licence to file a studio touch
+  // about every account holder whose address happens to sit on a card.
+  const recordChannel = options.userId ? undefined : channel;
   if (channel && channelRefusesSend(channel.status)) {
-    return { state: "suppressed", reason: `channel_${channel.status}`, channel };
+    return {
+      state: "suppressed",
+      reason: `channel_${channel.status}`,
+      channel: recordChannel,
+    };
   }
 
   if (options.userId) {
@@ -485,11 +507,11 @@ export async function prepareCompliantEmail(
       options.unsubscribeBaseUrl || DEFAULT_BASE_URL,
     );
     Object.assign(headers, buildUnsubscribeHeaders(unsubscribeUrl));
-  } else if (channel) {
+  } else if (recordChannel) {
     // Every category, for the reason generateChannelUnsubscribeUrl states: it
     // is the only door this recipient has.
     const unsubscribeUrl = await generateChannelUnsubscribeUrl(
-      channel.id,
+      recordChannel.id,
       options.notificationType ?? "all_studio_mail",
       options.unsubscribeBaseUrl || DEFAULT_BASE_URL,
     );
@@ -521,7 +543,7 @@ export async function prepareCompliantEmail(
 
   return {
     state: "ready",
-    channel,
+    channel: recordChannel,
     request: {
       body: JSON.stringify(payload),
       from,

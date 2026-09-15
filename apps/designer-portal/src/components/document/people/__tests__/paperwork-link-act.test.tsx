@@ -123,20 +123,55 @@ describe("the paperwork mint act", () => {
     ).toBeChecked();
   });
 
-  it("hands the RPC no date when the firm's own window is chosen", async () => {
+  // W4 r3 MAJOR-4 — the band sends the day it SHOWED, so the RPC never
+  // re-derives. `mint_paperwork_link` scopes its own derivation with
+  // `project_tenant_org(pp.project_id) = v_org`, which this face cannot carry,
+  // and `people_directory_seats` admits seats on studio-less projects through
+  // its designer-of-record legs — so the two reckonings could disagree and the
+  // press met "This firm has no open engagement here" under a line naming the
+  // date.
+  it("sends the very day it offered when the firm's own window is chosen", async () => {
     renderAct("2026-11-21");
     fireEvent.click(screen.getByText("Mint a paperwork link"));
+    expect(
+      screen.getByLabelText("Ends with the job — 21 November 2026"),
+    ).toBeChecked();
     fireEvent.click(screen.getByText("Open the door"));
     await waitFor(() =>
       expect(mintMutate).toHaveBeenCalledWith({
         companyId: "firm-twin-cities",
-        expiresAt: null,
+        expiresAt: "2026-11-21T23:59:59Z",
       }),
     );
     expect(grantMinted).toHaveBeenCalledWith({
       tier: "paperwork_link",
       expiry_source: "engagement_window",
     });
+  });
+
+  // W4 r3 (QA) MAJOR-1 — before and after must name ONE day. `expires_at` is
+  // stored as an exclusive boundary, so the old slice printed the next day.
+  it("reports the same closing day the band offered, not the day after", async () => {
+    mintMutate.mockResolvedValue({
+      id: "tok-1",
+      token: "rawtoken",
+      // What `mint_paperwork_link` stores for a whole-day window: midnight at
+      // the head of the following day.
+      expires_at: "2027-02-09T00:00:00+00:00",
+    });
+    renderAct("2027-02-08");
+    fireEvent.click(screen.getByText("Mint a paperwork link"));
+    expect(
+      screen.getByLabelText("Ends with the job — 8 February 2027"),
+    ).toBeChecked();
+    fireEvent.click(screen.getByText("Open the door"));
+    expect(
+      await screen.findByText(
+        "This address is shown once. Twin Cities Drywall can send their " +
+          "paper here until 8 February 2027.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/9 February 2027/)).toBeNull();
   });
 
   it("sends the thirty-day DAY the studio picked, not a running clock", async () => {

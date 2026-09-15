@@ -1565,3 +1565,147 @@ Deno.test("a rule read that FAILS refuses the send rather than falling through",
   assert(!res.sent, "a rule that cannot be read is not a rule that is absent");
   assertEquals(res.reason, "contact_rule_forbids_sms");
 });
+
+// ── E13 on the flush path (W4 r3 MAJOR-5) ───────────────────────────────────
+// field-daily/core.ts:193 calls flushDeferredMessages on every run, so a digest
+// deferred past 8pm by quiet hours — the normal shape of the field rail — is
+// the rail's MOST ordinary send. It wrote no touch, so the card's derived
+// "Last touch" showed the previous contact: the room saying the studio has not
+// reached someone it reached this morning.
+
+Deno.test("flush: every flushed row writes one out touch, and a skipped or suppressed one writes none", async () => {
+  const now = new Date("2026-07-08T18:00:00Z"); // ~1pm Chicago — not quiet
+  const deferred = (
+    id: string,
+    partyId: string | null,
+    extra: Record<string, unknown> = {},
+  ) => ({
+    id,
+    direction: "outbound",
+    twilio_status: "deferred",
+    body: "hello",
+    conversation_id: "conv1",
+    party_id: partyId,
+    template_key: "sms_daily_digest",
+    created_at: new Date(now.getTime() - 60 * 60 * 1000).toISOString(),
+    ...extra,
+  });
+  const touches: Array<Record<string, unknown>> = [];
+  const fake = createFakeSupabase({
+    sms_conversations: [
+      { id: "conv1", twilio_number: "+15550000000", phone_e164: "+15551230001" },
+      { id: "conv2", twilio_number: "+15550000000", phone_e164: "+15551230002" },
+      { id: "conv3", twilio_number: "+15550000000", phone_e164: "+15551230003" },
+    ],
+    sms_messages: [
+      deferred("m1", "p1"),                       // flushes
+      deferred("m2", "p2", { conversation_id: "conv2" }), // suppressed: refused
+      // A phone-only INVITE: it goes (the invite gate owns `pending`/no
+      // record), and it names no seat, so there is no subject to file a touch
+      // against — exactly sendPartySms's own rule.
+      deferred("m3", null, {
+        conversation_id: "conv3",
+        template_key: "sms_optin_invite",
+      }),
+      // Stale beyond the 24h TTL: expired, never sent.
+      deferred("m4", "p1", {
+        created_at: new Date(now.getTime() - 48 * 60 * 60 * 1000).toISOString(),
+      }),
+    ],
+    project_parties: [
+      { id: "p1", phone_e164: "+15551230001", project_id: "proj1" },
+      { id: "p2", phone_e164: "+15551230002", project_id: "proj1" },
+    ],
+    projects: ORG_ALPHA_PROJECTS,
+    studio_channel_consent: [
+      {
+        organization_id: "org-alpha",
+        channel_kind: "sms",
+        channel_value: "+15551230001",
+        status: "granted",
+      },
+      {
+        organization_id: "org-alpha",
+        channel_kind: "sms",
+        channel_value: "+15551230002",
+        status: "opted_out",
+      },
+    ],
+  }, {
+    record_touch: (args) => {
+      touches.push(args);
+      return { data: "touch-1", error: null };
+    },
+  });
+
+  const result = await flushDeferredMessages(fake as never, {
+    getEnv: envOf({
+      SMS_DEV_MODE: "dry_run",
+      TWILIO_FROM_NUMBER: "+15550000000",
+    }),
+    now,
+  });
+
+  assertEquals(result.flushed, 2);
+  assertEquals(result.suppressed, 1);
+  assertEquals(result.expired, 1);
+
+  // ONE touch, for the ONE flushed row that names a seat. The phone-only row
+  // has no subject to file against; the refused and expired rows never went.
+  assertEquals(touches.length, 1);
+  assertEquals(touches[0].p_subject_type, "engagement");
+  assertEquals(touches[0].p_subject_id, "p1");
+  assertEquals(touches[0].p_channel_kind, "sms");
+  assertEquals(touches[0].p_direction, "out");
+  assertEquals(touches[0].p_actor_ref, "sms-dispatch-flush");
+  assertEquals(touches[0].p_message_ref, "m1");
+  assertEquals(touches[0].p_occurred_at, now.toISOString());
+});
+
+Deno.test("flush: a touch the database refuses never fails the send", async () => {
+  const now = new Date("2026-07-08T18:00:00Z");
+  const fake = createFakeSupabase({
+    sms_conversations: [
+      { id: "conv1", twilio_number: "+15550000000", phone_e164: "+15551230001" },
+    ],
+    sms_messages: [
+      {
+        id: "m1",
+        direction: "outbound",
+        twilio_status: "deferred",
+        body: "hello",
+        conversation_id: "conv1",
+        party_id: "p1",
+        template_key: "sms_daily_digest",
+        created_at: new Date(now.getTime() - 60 * 60 * 1000).toISOString(),
+      },
+    ],
+    project_parties: [
+      { id: "p1", phone_e164: "+15551230001", project_id: "proj1" },
+    ],
+    projects: ORG_ALPHA_PROJECTS,
+    studio_channel_consent: [{
+      organization_id: "org-alpha",
+      channel_kind: "sms",
+      channel_value: "+15551230001",
+      status: "granted",
+    }],
+  }, {
+    record_touch: () => ({ data: null, error: { message: "denied" } }),
+  });
+
+  const result = await flushDeferredMessages(fake as never, {
+    getEnv: envOf({
+      SMS_DEV_MODE: "dry_run",
+      TWILIO_FROM_NUMBER: "+15550000000",
+    }),
+    now,
+  });
+  // A record of the send, never a gate on it.
+  assertEquals(result.flushed, 1);
+  assertEquals(
+    ((fake._data.sms_messages ?? [])[0] as { twilio_status: string })
+      .twilio_status,
+    "dry_run",
+  );
+});

@@ -33,8 +33,12 @@ jest.mock("@patina/supabase", () => ({
   }),
   inboundQueueHeading: (n: number) =>
     `${n} document${n === 1 ? "" : "s"} waiting for your check`,
-  inboundDocumentLine: (d: { doc_type: string }, firm: string) =>
-    `${d.doc_type}, uploaded 12 Sep 2026 by ${firm}.`,
+  // The REAL line, for the same reason asInboundDocumentError is real: a stub
+  // that printed `doc_type` could not see that `other_named` was losing the
+  // firm's own name for its paper on the one face where Confirm and Reject
+  // are pressed (W4 r3 MAJOR-1).
+  inboundDocumentLine: jest.requireActual("@patina/supabase")
+    .inboundDocumentLine,
 }));
 
 const DOC = {
@@ -77,7 +81,9 @@ describe("the inbound queue band", () => {
       screen.getByText("1 document waiting for your check"),
     ).toBeInTheDocument();
     expect(
-      screen.getByText("coi_gl, uploaded 12 Sep 2026 by Northgate Electric."),
+      screen.getByText(
+        "COI, general liability, uploaded 12 Sep 2026 by Northgate Electric.",
+      ),
     ).toBeInTheDocument();
   });
 
@@ -99,7 +105,8 @@ describe("the inbound queue band", () => {
     );
     await waitFor(() =>
       expect(announce).toHaveBeenCalledWith(
-        "coi_gl, uploaded 12 Sep 2026 by Northgate Electric is confirmed.",
+        "COI, general liability, uploaded 12 Sep 2026 by Northgate " +
+          "Electric is confirmed.",
       ),
     );
   });
@@ -138,6 +145,34 @@ describe("the inbound queue band", () => {
         ),
       ),
     );
+  });
+
+  // W4 r3 MAJOR-1 — the one face where Confirm (which retires the paper on
+  // file and opens its gate) and Reject (which files a refusal the firm reads)
+  // are taken must name the paper the way the firm named it.
+  it("names an other_named document by the firm's own name, never 'Other'", async () => {
+    pending.current = [
+      {
+        ...DOC,
+        doc_type: "other_named",
+        doc_label: "Master service agreement",
+      },
+    ];
+    renderBand();
+    expect(
+      screen.getByText(
+        "Master service agreement, uploaded 12 Sep 2026 by Northgate Electric.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/^Other, uploaded/)).toBeNull();
+    // The act row's accessible name carries the same words, so a screen
+    // reader is not asked to confirm "Other" either.
+    expect(
+      screen.getByLabelText(
+        "Check Master service agreement, uploaded 12 Sep 2026 by " +
+          "Northgate Electric.",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("says R-AZ's refusal in the row's own alert, never as a status", async () => {

@@ -56,6 +56,45 @@ describe('the seat window band', () => {
     expect(screen.getByLabelText('Last day on site')).toHaveValue('2026-10-01');
   });
 
+  // W4 r3 MAJOR-2 — the trigger keeps its place (SPEC §7 #5, the shape
+  // notice-log.tsx and roster-row.tsx already hold), so pressing it never
+  // unmounts the element under the caret and drops a keyboard user at the top
+  // of a thirty-row Call Sheet. The panel is always in the DOM, so
+  // aria-controls resolves.
+  it('keeps the trigger, and its aria-controls names a panel that exists', () => {
+    const { container } = renderBand();
+    const trigger = screen.getByText('Change the window').closest('button')!;
+    const panelId = trigger.getAttribute('aria-controls')!;
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    expect(container.querySelector(`#${CSS.escape(panelId)}`)).not.toBeNull();
+
+    trigger.focus();
+    fireEvent.click(trigger);
+
+    // The SAME node is still mounted and still focused.
+    expect(screen.getByText('Change the window').closest('button')).toBe(trigger);
+    expect(document.activeElement).toBe(trigger);
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    expect(container.querySelector(`#${CSS.escape(panelId)}`)).not.toBeNull();
+    expect(document.activeElement).not.toBe(document.body);
+  });
+
+  it('survives a save with focus intact, and the panel closes rather than vanishes', async () => {
+    const { container } = renderBand();
+    openBand();
+    const save = screen.getByText('Write the window').closest('button')!;
+    save.focus();
+    fireEvent.click(save);
+    await waitFor(() => expect(written).toHaveBeenCalled());
+
+    const trigger = screen.getByText('Change the window').closest('button')!;
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    const panelId = trigger.getAttribute('aria-controls')!;
+    const panel = container.querySelector(`#${CSS.escape(panelId)}`)!;
+    expect(panel).not.toBeNull();
+    expect(panel).toHaveAttribute('hidden');
+  });
+
   it('writes the window and THEN the notice, in that order', async () => {
     const order: string[] = [];
     updateMutate.mockImplementation(async () => {

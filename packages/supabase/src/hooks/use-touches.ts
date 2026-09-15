@@ -146,7 +146,15 @@ const MONTHS_SHORT = [
   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
 ];
 
-/** `12 Sep 2026` from an ISO timestamp or a `YYYY-MM-DD` day. */
+/**
+ * `12 Sep 2026` from a `YYYY-MM-DD` DAY.
+ *
+ * A `date` column carries no zone — the seat line, the roster row and the
+ * compliance table all read one — so the spelling is the string's own and
+ * there is nothing to convert. NEVER give this an ISO TIMESTAMP: the slice
+ * would print the UTC calendar day. `touchInstantDay` is that case's function,
+ * and the two are kept apart so they cannot be confused again (W4 r3 MAJOR-4).
+ */
 export function touchDay(value: string | null | undefined): string {
   if (!value) return '';
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
@@ -157,8 +165,64 @@ export function touchDay(value: string | null | undefined): string {
   return `${Number(day)} ${name} ${year}`;
 }
 
+/**
+ * THE STUDIO'S OWN CLOCK. `FIELD_TZ` in the SMS rail (`_shared/sms.ts:796`,
+ * `site-request-dispatch/index.ts:87`), which is what decides quiet hours and
+ * therefore when the field rail actually speaks.
+ */
+export const STUDIO_TIME_ZONE = 'America/Chicago';
+
+let studioDayParts: Intl.DateTimeFormat | null | undefined;
+function studioDayFormatter(): Intl.DateTimeFormat | null {
+  if (studioDayParts !== undefined) return studioDayParts;
+  try {
+    studioDayParts = new Intl.DateTimeFormat('en-US', {
+      timeZone: STUDIO_TIME_ZONE,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+  } catch {
+    // A runtime without the zone data is a runtime that cannot answer the
+    // question; the UTC slice is then the honest fallback rather than a throw.
+    studioDayParts = null;
+  }
+  return studioDayParts;
+}
+
+/**
+ * `12 Sep 2026` from a `timestamptz`, ON THE STUDIO'S CALENDAR (W4 r3 MAJOR-4).
+ *
+ * `studio_touches.occurred_at` and `studio_compliance_documents.created_at`
+ * are timestamptz and PostgREST answers them in UTC. Slicing that string
+ * printed the UTC day, so a text sent at 9:30pm CDT on 11 Sep read "12 Sep" —
+ * a reader disagreeing with the record about the day the studio reached
+ * someone, on everything after 7pm, which is most of the field rail's evening
+ * traffic.
+ *
+ * A bare `YYYY-MM-DD` is handed straight to `touchDay`: `new Date('2026-09-12')`
+ * is UTC midnight, which in Chicago is the 11th, so converting a zoneless day
+ * would invent the very error this exists to remove.
+ */
+export function touchInstantDay(value: string | null | undefined): string {
+  if (!value) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return touchDay(value);
+  const at = new Date(value);
+  if (Number.isNaN(at.getTime())) return touchDay(value);
+  const formatter = studioDayFormatter();
+  if (!formatter) return touchDay(value);
+  const parts = formatter.formatToParts(at);
+  const year = parts.find((part) => part.type === 'year')?.value;
+  const month = parts.find((part) => part.type === 'month')?.value;
+  const day = parts.find((part) => part.type === 'day')?.value;
+  if (!year || !month || !day) return touchDay(value);
+  const name = MONTHS_SHORT[Number(month) - 1];
+  if (!name) return '';
+  return `${Number(day)} ${name} ${year}`;
+}
+
 function touchDate(occurredAt: string | null | undefined): string {
-  return touchDay(occurredAt);
+  return touchInstantDay(occurredAt);
 }
 
 /** The sentence a card's History region prints where the record has one. */

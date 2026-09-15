@@ -33,7 +33,7 @@ import {
 } from "@patina/supabase";
 import { peopleEvents } from "@/lib/analytics/people-events";
 import { DocumentAction, DocumentActionRow } from "../document-action";
-import { formatLongDate } from "./people-format";
+import { formatLongDate, lastOpenDay } from "./people-format";
 
 const LABEL =
   "font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--ink-subtle)]";
@@ -57,11 +57,21 @@ export function paperworkReplaceSentence(firmName: string): string {
   return `${firmName} already holds a live paperwork link. Opening a new one closes it.`;
 }
 
+/**
+ * THE SAME DAY THE BAND OFFERED (W4 r3 MAJOR-1).
+ *
+ * `expires_at` is stored as an EXCLUSIVE boundary, so slicing its date
+ * component printed the day AFTER the one the studio chose: the band offered
+ * "Ends with the job — 8 February 2027", she pressed Open the door, and this
+ * sentence — and the durable Access grants row beside it — answered "9
+ * February 2027". Two disagreeing dates for one door, with nothing on the face
+ * to say which was right. `lastOpenDay` is the one reckoning both now read.
+ */
 export function paperworkMintedSentence(
   firmName: string,
   expiresAt: string | null,
 ): string {
-  const date = formatLongDate(expiresAt?.slice(0, 10) ?? null);
+  const date = formatLongDate(expiresAt ? lastOpenDay(expiresAt) : null);
   return date
     ? `This address is shown once. ${firmName} can send their paper here until ${date}.`
     : `This address is shown once. ${firmName} can send their paper here.`;
@@ -99,10 +109,31 @@ export function PaperworkLinkAct({
     (link) => link.status === "active" && Date.parse(link.expires_at) > now.getTime(),
   );
 
-  /** R-AD — what the studio named, sent as a whole-day end. NULL hands the RPC
-   *  the firm's own window, which is the only branch that names no date. */
+  /**
+   * R-AD — what the studio named, sent as a whole-day end. EVERY BRANCH NAMES
+   * ITS DAY, including "ends with the job" (W4 r3 MAJOR-4).
+   *
+   * This branch used to send NULL and let `mint_paperwork_link` re-derive the
+   * window. The RPC's derivation carries a third predicate this face cannot
+   * (`project_tenant_org(pp.project_id) = v_org`, 00637:459-463), while
+   * `people_directory_seats` admits seats on projects with `studio_id IS NULL`
+   * through its designer-of-record legs (R-BD / R-BI's legacy population). So
+   * the band could print "The door can end with this firm's work here, <date>",
+   * pre-select that radio, and meet `paperwork_link_window_required` — whose
+   * own sentence ("This firm has no open engagement here") contradicts the
+   * line directly above it.
+   *
+   * Sending the day the face actually showed closes both halves at once: the
+   * RPC never re-derives, so the two reckonings cannot diverge, and the stored
+   * `expires_at` is the chosen day's own end rather than an exclusive midnight
+   * the post-mint sentence then had to guess its way back from.
+   */
   const chosenDay =
-    choice === "window" ? null : choice === "thirty" ? thirty : namedDay.trim();
+    choice === "window"
+      ? windowEnd
+      : choice === "thirty"
+        ? thirty
+        : namedDay.trim();
   const namedDayMissing = choice === "named" && !chosenDay;
 
   const openTheDoor = () => {

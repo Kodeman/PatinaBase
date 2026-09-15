@@ -944,6 +944,28 @@ describe("the pure parts", () => {
     );
   });
 
+  /**
+   * W4 r3 (QA) MAJOR-1 — the paperwork door stores the same exclusive whole-day
+   * boundary the field link does (`v_window_end::timestamptz + interval '1
+   * day'`, 00637:470-475), so the durable Access grants row read one day later
+   * than the mint band's own "Ends with the job — 8 February 2027".
+   */
+  it("the paperwork door's end date is the day the studio chose, not the day after", () => {
+    expect(
+      grantEndsSentence("2027-02-09T00:00:00+00:00", NOW, "paperwork_link"),
+    ).toBe("Ends 8 February 2027.");
+    // A caller-supplied end-of-day still names its own day — one rule, both
+    // branches of the mint.
+    expect(
+      grantEndsSentence("2027-02-08T23:59:59Z", NOW, "paperwork_link"),
+    ).toBe("Ends 8 February 2027.");
+    // …and it keeps the paperwork tier's own wording, never the field link's
+    // "renews when they use it": a door onto paper does not renew on use.
+    expect(
+      grantEndsSentence("2027-02-09T00:00:00Z", NOW, "paperwork_link"),
+    ).not.toContain("Renews");
+  });
+
   it("a refusal reads as a refusal, with the date it was made", () => {
     expect(
       consentSentence({

@@ -9,7 +9,7 @@ import {
   type ComplianceDocType,
   type StudioComplianceDocument,
 } from './use-studio-contacts';
-import { touchDay } from './use-touches';
+import { touchInstantDay } from './use-touches';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // THE INBOUND QUEUE — paper the FIRM sent, waiting for the studio's check
@@ -86,16 +86,31 @@ export function inboundQueueHeading(count: number): string {
   return `${count} document${count === 1 ? '' : 's'} waiting for your check`;
 }
 
-/** "COI, general liability, uploaded 12 Sep 2026 by Twin Cities Drywall." */
+/**
+ * "COI, general liability, uploaded 12 Sep 2026 by Twin Cities Drywall."
+ *
+ * `other_named` IS THE FIRM'S OWN NAME FOR ITS PAPER (W4 r3 MAJOR-1). The map
+ * answers 'Other' for it, which is truthy, so the `?? doc.doc_label` fallback
+ * below was unreachable and this line printed "Other" — on the one face where
+ * Confirm (which retires the paper on file and opens its gate) and Reject
+ * (which files a refusal the firm reads) are taken. The company card's Paper
+ * table (`compliance-table.tsx:40-47`) and the firm's own `/paperwork` page
+ * (`paperwork-model.ts:110-115`) both special-case it, so the same card named
+ * the paper twice.
+ */
 export function inboundDocumentLine(
   doc: Pick<StudioComplianceDocument, 'doc_type' | 'doc_label' | 'created_at'>,
   firmName: string,
 ): string {
   const label =
-    COMPLIANCE_DOC_TYPE_LABELS[doc.doc_type as ComplianceDocType] ??
-    doc.doc_label ??
-    doc.doc_type;
-  const date = touchDay(doc.created_at);
+    doc.doc_type === 'other_named'
+      ? doc.doc_label?.trim() || 'Other'
+      : (COMPLIANCE_DOC_TYPE_LABELS[doc.doc_type as ComplianceDocType] ??
+        doc.doc_label ??
+        doc.doc_type);
+  // `created_at` is timestamptz: the studio's calendar day, never the UTC
+  // slice, or an evening upload reads as tomorrow's (W4 r3 MAJOR-4).
+  const date = touchInstantDay(doc.created_at);
   return date
     ? `${label}, uploaded ${date} by ${firmName}.`
     : `${label}, uploaded by ${firmName}.`;

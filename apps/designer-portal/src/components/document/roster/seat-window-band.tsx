@@ -137,108 +137,116 @@ export function SeatWindowBand({
     }
   };
 
-  if (!open) {
-    return (
-      <div className="mt-3 border-t border-[var(--color-pearl)] pt-2.5">
-        <button
-          type="button"
-          data-edit-window={seatId}
-          onClick={() => setOpen(true)}
-          aria-expanded={false}
-          aria-controls={bandId}
-          className="da-score-hover inline-flex min-h-11 items-center font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)] hover:text-[var(--color-mocha)]"
-        >
-          {onSiteFrom || onSiteTo ? 'Change the window' : 'Set the window'}
-        </button>
-      </div>
-    );
-  }
-
+  // THE TRIGGER STAYS, AND THE PANEL IS ALWAYS IN THE DOM (W4 r3 MAJOR-2).
+  //
+  // The collapsed branch used to RETURN the trigger alone, carrying
+  // `aria-controls={bandId}` at an id nothing in the document had — a dangling
+  // IDREF — and on press the whole branch was replaced by the band, so the
+  // button under the caret was unmounted and focus fell to `document.body`: a
+  // keyboard user on a thirty-row Call Sheet was returned to the top of the
+  // page. Saving did it again (`setOpen(false)` while focus sat on "Write the
+  // window"). Both siblings in this folder do it the other way, and
+  // `roster-row.tsx:14` states it as the room's rule (SPEC §7 #5): the trigger
+  // keeps its place with `aria-expanded`, and the panel is an always-present
+  // `<div id={panelId} hidden={!open}>`.
   return (
-    <div
-      id={bandId}
-      data-seat-window-band={seatId}
-      className="mt-3 border-t border-[var(--color-pearl)] pt-2.5"
-    >
-      <div className="flex flex-wrap gap-x-6 gap-y-2">
-        <div>
-          <label className={`mb-1 block ${META}`} htmlFor={`${bandId}-from`}>
-            First day on site
-          </label>
-          <input
-            id={`${bandId}-from`}
-            type="date"
-            value={from}
-            onChange={(e) => setFrom(e.target.value)}
-            className={FIELD}
-          />
-        </div>
-        <div>
-          <label className={`mb-1 block ${META}`} htmlFor={`${bandId}-to`}>
-            Last day on site
-          </label>
-          <input
-            id={`${bandId}-to`}
-            type="date"
-            value={to}
-            onChange={(e) => setTo(e.target.value)}
-            className={FIELD}
-          />
-        </div>
-      </div>
-
-      <label className="mt-2 flex min-h-11 items-center gap-2 text-[0.8rem] text-[var(--color-charcoal)]">
-        <input
-          type="checkbox"
-          checked={toldThem}
-          onChange={(e) => setToldThem(e.target.checked)}
-        />
-        {`${name} has been told`}
-      </label>
-
-      <p className="mt-1 text-[0.7rem] text-[var(--color-aged-oak)]">
-        {WINDOW_CONSEQUENCE_SENTENCE}
-      </p>
-
-      <DocumentActionRow
-        surfaceKey="call-sheet"
-        regionKey="roster-row-window"
-        className="mt-2"
-        aria-label={`Change ${name}'s window`}
+    <div className="mt-3 border-t border-[var(--color-pearl)] pt-2.5">
+      <button
+        type="button"
+        data-edit-window={seatId}
+        onClick={() => setOpen((was) => !was)}
+        aria-expanded={open}
+        aria-controls={bandId}
+        className="da-score-hover inline-flex min-h-11 items-center font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)] hover:text-[var(--color-mocha)]"
       >
-        <DocumentAction
-          actionKey="save-seat-window"
-          variant="primary"
-          loading={updateParty.isPending || recordNotice.isPending}
-          loadingLabel="Writing…"
-          onClick={() => void save()}
-        >
-          Write the window
-        </DocumentAction>
-        <DocumentAction
-          actionKey="cancel-seat-window"
-          variant="tertiary"
-          onClick={() => setOpen(false)}
-        >
-          Leave it
-        </DocumentAction>
-      </DocumentActionRow>
+        {onSiteFrom || onSiteTo ? 'Change the window' : 'Set the window'}
+      </button>
 
-      {(onSiteFrom || onSiteTo) && (
-        <p className="mt-1 text-[0.7rem] text-[var(--color-aged-oak)]">
-          {`It reads ${seatWindowText(onSiteFrom, onSiteTo) || rosterShortDate(onSiteFrom)} now.`}
-        </p>
-      )}
+      <div id={bandId} hidden={!open} data-seat-window-band={seatId}>
+        {open && (
+          <div className="mt-2.5">
+            <div className="flex flex-wrap gap-x-6 gap-y-2">
+              <div>
+                <label className={`mb-1 block ${META}`} htmlFor={`${bandId}-from`}>
+                  First day on site
+                </label>
+                <input
+                  id={`${bandId}-from`}
+                  type="date"
+                  value={from}
+                  onChange={(e) => setFrom(e.target.value)}
+                  className={FIELD}
+                />
+              </div>
+              <div>
+                <label className={`mb-1 block ${META}`} htmlFor={`${bandId}-to`}>
+                  Last day on site
+                </label>
+                <input
+                  id={`${bandId}-to`}
+                  type="date"
+                  value={to}
+                  onChange={(e) => setTo(e.target.value)}
+                  className={FIELD}
+                />
+              </div>
+            </div>
 
-      {error && (
-        <p
-          role="alert"
-          data-seat-window-error
-          className="mt-1.5 text-[0.72rem] text-[var(--color-terracotta-ink)]"
-        >
-          {error}
-        </p>
-      )}
+            <label className="mt-2 flex min-h-11 items-center gap-2 text-[0.8rem] text-[var(--color-charcoal)]">
+              <input
+                type="checkbox"
+                checked={toldThem}
+                onChange={(e) => setToldThem(e.target.checked)}
+              />
+              {`${name} has been told`}
+            </label>
+
+            <p className="mt-1 text-[0.7rem] text-[var(--color-aged-oak)]">
+              {WINDOW_CONSEQUENCE_SENTENCE}
+            </p>
+
+            <DocumentActionRow
+              surfaceKey="call-sheet"
+              regionKey="roster-row-window"
+              className="mt-2"
+              aria-label={`Change ${name}'s window`}
+            >
+              <DocumentAction
+                actionKey="save-seat-window"
+                variant="primary"
+                loading={updateParty.isPending || recordNotice.isPending}
+                loadingLabel="Writing…"
+                onClick={() => void save()}
+              >
+                Write the window
+              </DocumentAction>
+              <DocumentAction
+                actionKey="cancel-seat-window"
+                variant="tertiary"
+                onClick={() => setOpen(false)}
+              >
+                Leave it
+              </DocumentAction>
+            </DocumentActionRow>
+
+            {(onSiteFrom || onSiteTo) && (
+              <p className="mt-1 text-[0.7rem] text-[var(--color-aged-oak)]">
+                {`It reads ${seatWindowText(onSiteFrom, onSiteTo) || rosterShortDate(onSiteFrom)} now.`}
+              </p>
+            )}
+
+            {error && (
+              <p
+                role="alert"
+                data-seat-window-error
+                className="mt-1.5 text-[0.72rem] text-[var(--color-terracotta-ink)]"
+              >
+                {error}
+              </p>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
