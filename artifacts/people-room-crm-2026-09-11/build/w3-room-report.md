@@ -11,6 +11,36 @@ repeat pick arrives carrying its consent and its paper, a bid answer moves the b
 crew bands, the household's change-order figure has a home, and closing a seat is a dated act on
 every surface that offers one.
 
+**Re-measured at HEAD `96fcc861b` in the r24 fix round** (code review r24 major-1, the EIGHTH filing
+of this defect). What r24 took: §3 row 3's pick count, which still read the pre-R-BP figure of five,
+and §5's writer count, which still enumerated the six writers this list was written over at r15 and
+omitted the seventh added at r21. Both are now measured, not re-read.
+
+**How to re-measure this file — run all three, over the WHOLE file, before the next round signs it
+off.** The eight filings of this defect (r7 M-4, r8 MAJOR-1, r15 MAJOR-3, r19 major-2, r20 major-2,
+r21 major-5, r23 major-1, r24 major-1) are all the same shape: a section re-measured in one round
+goes stale in the next, because the re-measurement was taken section by section rather than over
+the file. Each numeric claim below has exactly one command that settles it.
+
+```bash
+# §3 row 3 — the bring-forward pick count (the "N of M" the face prints on the seed).
+# M = hits.length for needle 'lindqvist' on the Okonkwo residence (the open job is excluded
+# from the prior-job rollup by useStudioContactHistory's excludeProjectId).
+psql postgresql://postgres:postgres@127.0.0.1:54322/postgres -f \
+  artifacts/people-room-crm-2026-09-11/build/probe-r24-a-bring-forward-pool.sql
+#   → 6 rows (Ben Ostrom, Claire Bissett, Dana Kowalski, Erin Sato, Ingrid Halvorsen, Pete Rusk),
+#     every one matched on the prior job, none on name/firm/e-mail/trade.
+
+# §5 — the writers that call invalidateClientHouseholds (the household-invalidation contract).
+grep -n "invalidateClientHouseholds(queryClient)" packages/supabase/src/hooks/use-coordination.ts
+#   → 7 call sites: 588 useAddProjectParty · 755 useUpdateProjectParty · 978 useCloseProjectPartySeat
+#     · 1126 useRemoveProjectParty · 2101 useSetPartyAuthority · 2845 useSetPartyBid
+#     · 2956 useBringForward.
+
+# §1 `### Changed` — the files this branch actually changes under the portal and the data layer.
+git diff --stat 3d65f81e4..HEAD -- apps/designer-portal/src packages/supabase/src
+```
+
 **Re-measured at HEAD in the r23 fix round** (code review r23 major-1, the SEVENTH filing of this
 defect after r7 M-4, r8 MAJOR-1, r15 MAJOR-3, r19 major-2, r20 major-2 and r21 major-5). What r23
 took again: §2's refusal count and enumeration, and §1's `### Changed` table, which was short by
@@ -196,7 +226,7 @@ keep.
 
 | # | What landed |
 |---|---|
-| 3 | `data-pick-count` reads "4 of 5 from the Lindqvist kitchen selected". The job is named only when every hit on the page shares one prior job — naming one of several would be a claim about the other rows |
+| 3 | `data-pick-count` reads "4 of 6 from the Lindqvist kitchen selected" — **six**, per R-BP: the pool is whatever the studio's book holds for the prior job, and on the dev seed 'Lindqvist' returns six (Ben Ostrom, Claire Bissett, Dana Kowalski, Erin Sato, Ingrid Halvorsen, Pete Rusk), Erin Sato listed but not selected. SPEC §5.7 #3 is amended from five to six by that ruling; `bring-forward.ts:68-69` and `bring-forward.test.ts:60` both say six. The job is named only when every hit on the page shares one prior job — naming one of several would be a claim about the other rows |
 | 4 | Every mini row carries a **checkbox** (square mark, no tick glyph, §8 #5), the 34px circle, the name, firm and trade, the history line, and its three words |
 | 5 | `TravelListPane` — "What travels": identity · typed channels · contact rule · consent by channel value · document expiries · one history line. "What stays behind": prior pricing · prior project notes · show to client. Beside the list at width, after it when it wraps |
 | 6 | The act row comes first — "Add four to the roster" (`bringForwardActLabel`, counted in words) and "Put back". Both live, neither `aria-disabled` |
@@ -348,10 +378,13 @@ authority it still prints.
 `project_parties` and `project_party_authority`, and no seat or authority mutation invalidated its
 key — so with `staleTime` at five minutes the door could stay held over a client row two elements
 above, and the add sentence could promise the household's figure over a foreign grant
-`add_household_member()` deliberately leaves standing. All six writers
+`add_household_member()` deliberately leaves standing. All **seven** writers
 (`useAddProjectParty`, `useUpdateProjectParty`, `useCloseProjectPartySeat`, `useRemoveProjectParty`,
-`useSetPartyAuthority`, `useBringForward`) now call one `invalidateClientHouseholds` helper, pinned
-by test.
+`useSetPartyAuthority`, `useSetPartyBid`, `useBringForward`) now call one
+`invalidateClientHouseholds` helper, pinned by test. `useSetPartyBid` is the seventh — R-BS names it
+beside `useCloseProjectPartySeat`, because recording "They withdrew" moves `off_job_at` and so moves
+`useProjectHousehold`'s open-seat filter; it was added in the r21 round and this list, written at
+r15, went on enumerating six.
 
 ---
 
