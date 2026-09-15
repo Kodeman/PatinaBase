@@ -1921,7 +1921,7 @@ export function useResolvedContactId(contactId: string | null | undefined) {
   });
 }
 
-/** `merge_studio_contacts()`'s fourteen named refusals, as sentences. */
+/** `merge_studio_contacts()`'s fifteen named refusals, as sentences. */
 const MERGE_REFUSAL_SENTENCES: Record<string, string> = {
   merge_contact_not_found: 'One of these cards is no longer in the book.',
   merge_same_card: 'That is one card, not two.',
@@ -1967,10 +1967,18 @@ const MERGE_REFUSAL_SENTENCES: Record<string, string> = {
   // end-authority trigger off the withdrawal path, so "They withdrew" dates a
   // seat and leaves its money grant OPEN; the open-seats-only gate above
   // cannot see that seat, and the fold left one human holding two live
-  // figures on one job. The repair is still the room's own "Close this seat",
-  // which ends what the seat carried.
+  // figures on one job.
+  //
+  // r23 MAJOR-1 — AND THE SEAT TO ACT ON IS THE ONE THAT LEFT, not the one
+  // still working. This sentence used to say "close the seat that is still
+  // open", which was measured to lift the gate by taking a live sub off the
+  // job while the standing grant it complained of stayed open. The pair
+  // reaching this refusal is never two open seats (merge_seat_collision
+  // catches those first), so the act is always the dated seat's: put it back
+  // in the bidding (R-BR clears its off-job date), then close it by hand,
+  // which fires 00634 and ends what it carried.
   merge_seat_authority_collision:
-    'One of these two seats has left the job but still signs for something, so folding the cards would leave one person holding two standing grants on the same job. Close the seat that is still open — closing a seat ends what it signed for — then merge.',
+    'One of these two seats has left the job but still signs for something, so folding the cards would leave one person holding two standing grants on the same job. Put the seat that left back in the bidding, then close it by hand — closing a seat ends what it signed for — and merge.',
 };
 
 /**
@@ -1982,7 +1990,9 @@ const MERGE_REFUSAL_SENTENCES: Record<string, string> = {
  * of the two has left but still carries a standing grant — because "record
  * that job's studio first" / "close one of these two seats first" is an act
  * the studio cannot take without knowing which job (r11 MAJOR-2, r18 MAJOR-1,
- * r22 MAJOR-1).
+ * r22 MAJOR-1). The fourth's DETAIL carries a third word, naming which of the
+ * two cards holds the seat that left, because that seat is the only one the
+ * repair may be taken on (r23 MAJOR-1).
  */
 export function asMergeError(error: unknown): string {
   const message =
@@ -2009,17 +2019,36 @@ export function asMergeError(error: unknown): string {
       `the job twice. Close one of these two seats first, then merge.`
     );
   }
-  // DETAIL is the same '<job> · <party_kind>' shape, and for the same reason:
-  // "close the seat that is still open" is an act the studio cannot take
-  // without knowing which job and which kind (r22 MAJOR-1).
+  // DETAIL is '<job> · <party_kind> · <merged|survivor|both>', and the third
+  // word is there because the act is ONE seat's: r23 MAJOR-1 measured that
+  // acting on the other one lifts the gate and leaves the standing grant
+  // standing, and a studio looking at two cards cannot otherwise tell which
+  // seat left the job (r22 MAJOR-1, r23 MAJOR-1).
   if (message.includes('merge_seat_authority_collision') && detail) {
-    const [job, kind] = detail.split(' · ');
+    const [job, kind, side] = detail.split(' · ');
     const seat = kind ? `${getPartyKindLabel(kind)} seat` : 'seat';
+    if (side === 'both') {
+      return (
+        `Both of these ${seat}s on ${job} have left the job and both still ` +
+        `sign for something, so folding the cards would leave one person ` +
+        `holding two standing grants on the same job. Put one of them back ` +
+        `in the bidding, then close it by hand — closing a seat ends what it ` +
+        `signed for — and merge.`
+      );
+    }
+    const whose =
+      side === 'survivor'
+        ? 'the card you are keeping'
+        : side === 'merged'
+          ? 'the card you are folding in'
+          : null;
     return (
       `One of these two ${seat}s on ${job} has left the job but still signs ` +
       `for something, so folding the cards would leave one person holding two ` +
-      `standing grants on the same job. Close the seat that is still open — ` +
-      `closing a seat ends what it signed for — then merge.`
+      `standing grants on the same job. Put ${
+        whose ? `the seat on ${whose}` : 'the seat that left'
+      } back in the bidding, then close it by hand — closing a seat ends what ` +
+      `it signed for — and merge.`
     );
   }
   if (message.includes('merge_seat_card_other_studio') && detail) {

@@ -237,22 +237,47 @@ describe("merge_studio_contacts (PR-o)", () => {
     // r22 MAJOR-1 — the same refusal asked of the GRANT. R-BS clamps 00634's
     // end-authority trigger off the withdrawal path, so a seat dated by "They
     // withdrew" keeps its open money grant and the open-seats-only gate above
-    // cannot see it. The fourth name carries the same '<job> · <kind>' DETAIL,
-    // because "close the seat that is still open" needs both.
+    // cannot see it.
+    //
+    // r23 MAJOR-1 — AND THE ACT IS THE DATED SEAT'S, never the live one's:
+    // closing the seat that is still open was measured to lift the gate while
+    // leaving the standing grant standing. DETAIL carries a third word naming
+    // which card holds the seat that left, so the sentence can point at it.
     expect(asMergeError(new Error("merge_seat_authority_collision"))).toMatch(
+      /Put the seat that left back in the bidding/,
+    );
+    expect(asMergeError(new Error("merge_seat_authority_collision"))).not.toMatch(
       /Close the seat that is still open/,
     );
     expect(
       asMergeError({
         message: "merge_seat_authority_collision",
-        details: "Okonkwo residence · sub",
+        details: "Okonkwo residence · sub · merged",
       }),
     ).toBe(
       "One of these two Subcontractor seats on Okonkwo residence has left the job but " +
         "still signs for something, so folding the cards would leave one " +
-        "person holding two standing grants on the same job. Close the seat " +
-        "that is still open — closing a seat ends what it signed for — " +
-        "then merge.",
+        "person holding two standing grants on the same job. Put the seat on " +
+        "the card you are folding in back in the bidding, then close it by " +
+        "hand — closing a seat ends what it signed for — and merge.",
+    );
+    expect(
+      asMergeError({
+        message: "merge_seat_authority_collision",
+        details: "Okonkwo residence · sub · survivor",
+      }),
+    ).toContain("Put the seat on the card you are keeping back in the bidding");
+    expect(
+      asMergeError({
+        message: "merge_seat_authority_collision",
+        details: "Okonkwo residence · sub · both",
+      }),
+    ).toBe(
+      "Both of these Subcontractor seats on Okonkwo residence have left the " +
+        "job and both still sign for something, so folding the cards would " +
+        "leave one person holding two standing grants on the same job. Put " +
+        "one of them back in the bidding, then close it by hand — closing a " +
+        "seat ends what it signed for — and merge.",
     );
     // r13 MAJOR-1 — and no guard token reaches a face, named or not. Every
     // trigger the merge fires raises its own bare schema word, and they all

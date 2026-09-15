@@ -5320,12 +5320,24 @@ BEGIN
   -- pre-check asks the premise itself.
   --
   -- 13d-t: the clamp really does leave the grant open (the state, not the gate)
-  -- 13d-u: the fold is refused BY NAME, with the job and the kind, and a HINT
-  --        naming a repair the room can take
+  -- 13d-u: the fold is refused BY NAME, with the job, the kind and WHICH card
+  --        holds the seat that left, and a HINT naming a repair the room can
+  --        take ON THAT SEAT (r23 MAJOR-1)
   -- 13d-v: the refusal writes nothing
-  -- 13d-w: the repair the HINT names lifts it, and ends what that seat carried
-  -- 13d-x: after the fold ONE live figure stands on the job, counting closed
-  --        seats, and the other is ended and not deleted (R-BN)
+  -- 13d-w: the repair the HINT names — the dated seat back in the bidding
+  --        (R-BR), then closed by hand — lifts it and ends what THAT seat
+  --        carried, with the live crew seat left on the job
+  -- 13d-x: after the fold ONE live figure stands on the job, on a seat that is
+  --        still open, and the other is ended and not deleted (R-BN)
+  --
+  -- r23 MAJOR-1 — WHY THE REPAIR WALKED HERE CHANGED. The first draft of this
+  -- block took the refusal's own first sentence, "Close the seat that is still
+  -- open", and closed the LIVE crew seat: the fold then landed and the
+  -- survivor came out holding no open seat on the job while still signing for
+  -- $2,500 on the seat that had left it — the gate lifted, the standing grant
+  -- it complained of untouched, and a working sub taken off the job. The pair
+  -- reaching this refusal is never two open seats (merge_seat_collision raises
+  -- first), so the act is always the DATED seat's.
   PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
   UPDATE public.project_parties
      SET bid_outcome = 'withdrawn', stage = 'off_job', off_job_at = CURRENT_DATE
@@ -5356,11 +5368,19 @@ BEGIN
     END IF;
   END;
   PERFORM pg_temp.reset_role();
-  IF v_detail <> 'W3 test job · sub' THEN
-    RAISE EXCEPTION 'BLOCK 13d FAIL (13d-u3): DETAIL read "%", not the job and the kind', v_detail;
+  -- the third word is the merged card's, because the seat the Bidding band
+  -- dated is the one card d8 holds (r23 MAJOR-1)
+  IF v_detail <> 'W3 test job · sub · merged' THEN
+    RAISE EXCEPTION 'BLOCK 13d FAIL (13d-u3): DETAIL read "%", not the job, the kind and the card holding the seat that left', v_detail;
   END IF;
-  IF v_hint NOT LIKE '%Close the seat that is still open%' THEN
-    RAISE EXCEPTION 'BLOCK 13d FAIL (13d-u4): the HINT names no repair ("%")', v_hint;
+  IF v_hint NOT LIKE '%Put THAT seat back in the bidding, then close it by hand%' THEN
+    RAISE EXCEPTION 'BLOCK 13d FAIL (13d-u4): the HINT names no repair the room can take ("%")', v_hint;
+  END IF;
+  -- and it never PRESCRIBES the act that lifts the gate without ending the
+  -- grant (the warning clause reads "Closing the seat that is still open ends
+  -- only what that one carried", which is not the imperative)
+  IF v_hint LIKE '%Close the seat that is still open%' THEN
+    RAISE EXCEPTION 'BLOCK 13d FAIL (13d-u5): the HINT still sends the studio at the live seat ("%")', v_hint;
   END IF;
 
   SELECT count(*) INTO n FROM public.studio_contacts
@@ -5380,20 +5400,45 @@ BEGIN
     RAISE EXCEPTION 'BLOCK 13d FAIL (13d-v3): the seat repoint ran anyway (% seats on the survivor)', n;
   END IF;
 
-  -- the repair, taken by the principal the way the room takes it: "Close this
-  -- seat" on the one that is still open, which fires 00634 and ends the
-  -- $10,000 it carried
+  -- the repair the HINT names, taken by the principal the way the room takes
+  -- it, and ON THE SEAT THAT LEFT (r23 MAJOR-1): the Bidding band's own
+  -- correction puts seat d8 back (R-BR clears off_job_at and off_job_reason),
+  -- then "Close this seat" on it fires 00634 and ends the $2,500 it carried.
+  -- The live crew seat d7 stays on the job with its $10,000 standing.
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  UPDATE public.project_parties
+     SET bid_outcome = 'quoted', stage = 'bidding',
+         off_job_at = NULL, off_job_reason = NULL
+   WHERE id = 'f9500000-0000-4000-8000-0000000000d8';
+  PERFORM pg_temp.reset_role();
+  -- R-BR put it back with the delegation it still carried, untouched
+  SELECT count(*) INTO n FROM public.project_party_authority
+   WHERE engagement_id = 'f9500000-0000-4000-8000-0000000000d8' AND effective_to IS NULL;
+  IF n <> 1 THEN
+    RAISE EXCEPTION
+      'BLOCK 13d FAIL (13d-w0): the correction back into the bidding left % open grant(s) on the seat, not 1', n;
+  END IF;
   PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
   UPDATE public.project_parties
      SET stage = 'off_job', off_job_at = CURRENT_DATE,
          off_job_reason = 'The same person was already bidding under the other card.'
-   WHERE id = 'f9500000-0000-4000-8000-0000000000d7';
+   WHERE id = 'f9500000-0000-4000-8000-0000000000d8';
   PERFORM pg_temp.reset_role();
   SELECT count(*) INTO n FROM public.project_party_authority
-   WHERE engagement_id = 'f9500000-0000-4000-8000-0000000000d7' AND effective_to IS NULL;
+   WHERE engagement_id = 'f9500000-0000-4000-8000-0000000000d8' AND effective_to IS NULL;
   IF n <> 0 THEN
     RAISE EXCEPTION
-      'BLOCK 13d FAIL (13d-w1): the hand close left % open grant(s) on the seat, not 0', n;
+      'BLOCK 13d FAIL (13d-w1): the hand close left % open grant(s) on the seat that left, not 0', n;
+  END IF;
+  -- and the working sub is still on the job, still signing
+  SELECT count(*) INTO n FROM public.project_parties pp
+    JOIN public.project_party_authority pa
+      ON pa.engagement_id = pp.id AND pa.effective_to IS NULL
+   WHERE pp.id = 'f9500000-0000-4000-8000-0000000000d7'
+     AND pp.off_job_at IS NULL;
+  IF n <> 1 THEN
+    RAISE EXCEPTION
+      'BLOCK 13d FAIL (13d-w1b): the repair did not leave the live seat open and signing (% row(s)) — the destructive reading is back', n;
   END IF;
   PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
   v_survivor := public.merge_studio_contacts(
@@ -5412,15 +5457,34 @@ BEGIN
     RAISE EXCEPTION
       'BLOCK 13d FAIL (13d-x1): after the repair and the fold the survivor holds % open money grant(s) on that job counting CLOSED seats, not 1', n;
   END IF;
+  -- and it stands on a seat that is still ON the job, which is the whole of
+  -- what the sentence was changed for (r23 MAJOR-1)
+  SELECT count(*) INTO n FROM public.project_parties pp
+    JOIN public.project_party_authority pa
+      ON pa.engagement_id = pp.id AND pa.scope = 'money' AND pa.effective_to IS NULL
+   WHERE pp.studio_contact_id = 'f9100000-0000-4000-8000-0000000000d7'
+     AND pp.project_id = 'f9300000-0000-4000-8000-00000000000a'
+     AND pp.off_job_at IS NULL;
+  IF n <> 1 THEN
+    RAISE EXCEPTION
+      'BLOCK 13d FAIL (13d-x1b): the surviving live figure sits on % open seat(s), not 1 — the identity signs for money on a job it no longer holds a seat on', n;
+  END IF;
+  SELECT threshold_cents, effective_to INTO n, v_ended_on
+    FROM public.project_party_authority
+   WHERE engagement_id = 'f9500000-0000-4000-8000-0000000000d8' AND scope = 'money';
+  IF n <> 250000 OR v_ended_on <> CURRENT_DATE THEN
+    RAISE EXCEPTION
+      'BLOCK 13d FAIL (13d-x2): the retired figure reads % ending %, not 250000 ending the day the seat closed', n, v_ended_on;
+  END IF;
   SELECT threshold_cents, effective_to INTO n, v_ended_on
     FROM public.project_party_authority
    WHERE engagement_id = 'f9500000-0000-4000-8000-0000000000d7' AND scope = 'money';
-  IF n <> 1000000 OR v_ended_on <> CURRENT_DATE THEN
+  IF n <> 1000000 OR v_ended_on IS NOT NULL THEN
     RAISE EXCEPTION
-      'BLOCK 13d FAIL (13d-x2): the retired figure reads % ending %, not 1000000 ending the day the seat closed', n, v_ended_on;
+      'BLOCK 13d FAIL (13d-x3): the live seat''s figure reads % ending %, not 1000000 still open', n, v_ended_on;
   END IF;
 
-  RAISE NOTICE '13d. r18 MAJOR-1 / r19 MAJOR-1 / r22 MAJOR-1 — a fold that would leave one human holding two open seats of one kind on one job is refused by name and writes nothing; the room''s own "Close this seat" lifts it AND ends the money that seat carried (00634), so the repair the HINT names cannot leave two live figures on one job; a seat dated by a recorded withdrawal keeps its open grant (R-BS) and is refused by a fourth name, merge_seat_authority_collision, until the still-open seat is closed; a closed seat carrying nothing refuses nothing: passed';
+  RAISE NOTICE '13d. r18 MAJOR-1 / r19 MAJOR-1 / r22 MAJOR-1 / r23 MAJOR-1 — a fold that would leave one human holding two open seats of one kind on one job is refused by name and writes nothing; the room''s own "Close this seat" lifts it AND ends the money that seat carried (00634), so the repair the HINT names cannot leave two live figures on one job; a seat dated by a recorded withdrawal keeps its open grant (R-BS) and is refused by a fourth name, merge_seat_authority_collision, whose DETAIL names WHICH card holds the seat that left and whose repair is taken on THAT seat — back in the bidding (R-BR), then closed by hand — leaving the live crew seat on the job and one live figure standing on it; a closed seat carrying nothing refuses nothing: passed';
 END $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════

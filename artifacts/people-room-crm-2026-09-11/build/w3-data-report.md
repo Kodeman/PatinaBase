@@ -16,11 +16,19 @@ W3 mints **00628–00634**.
 > database on 2026-09-15 after the r21 fixes landed; the round is stated beside each
 > figure that a later round can move. Earlier rounds described this as a six-migration
 > wave and never named `00634` — the file that gates money on a seat close.
+>
+> **§0's `00629` row and §1's refusal list re-measured again at HEAD in the r23 fix round**
+> (r23 MAJOR-2). r22 added a FOURTH seat pre-check and this report did not know it existed:
+> it still said fourteen names over sixteen sites and its enumeration stopped at
+> `merge_seat_collision`, so a reader of the record would have shipped believing a
+> withdrawal-dated seat carrying a grant folds freely. Counted from
+> `merge_studio_contacts()`'s own body: **seventeen `RAISE EXCEPTION` sites over fifteen
+> distinct tokens**.
 
 | Migration | Intent |
 |---|---|
 | `00628_project_studio_id_backfill.sql` | R-BD / R-BI — the legacy studio-less projects, and the `project_consent_org()` enumeration |
-| `00629_studio_contact_merges.sql` | PR-o — `merged_into`, `studio_contact_merges`, `merge_studio_contacts()`, `resolve_merged_contact()`, the merged-card seat guard, `people_directory` v5, and the archive/restore door |
+| `00629_studio_contact_merges.sql` | PR-o — `merged_into`, `studio_contact_merges`, `merge_studio_contacts()`, `resolve_merged_contact()`, the merged-card seat guard, the FOURTH seat pre-check that asks the collision question of the GRANT rather than of the seat's openness (`merge_seat_authority_collision`, r22 MAJOR-1; its repair named on the dated seat, r23 MAJOR-1), `people_directory` v5, and the archive/restore door |
 | `00630_compliance_expiry_sweep.sql` | direction §8 P2 — `compliance_document_state()`, `studio_compliance_notices`, `sweep_compliance_expiries()`, nightly pg_cron at 06:00 UTC |
 | `00631_project_party_bids.sql` | direction §3.4 / R-R — the **eight** bid columns (r4 M-2; §3 has the list), the quoting-person guard, the `trade_rfq` backfill |
 | `00632_client_households.sql` | PR-c / CRM-19 — `client_households`, `designer_clients.household_id`, `add_household_member()` |
@@ -49,7 +57,7 @@ New SQL suite: `supabase/tests/people/w3_merge_sweep_household_test.sql` (one tr
 
 ### `merge_studio_contacts(p_survivor, p_merged, p_matched_on)` — what one transaction does
 
-Refusals, in order: `merge_contact_not_found` · `merge_same_card` · `merge_matched_on_invalid` · `merge_other_studio` · `merge_not_a_member` · `merge_already_merged` · `merge_survivor_already_merged` · `merge_survivor_archived` (r5 M-4, `00629:983`) · `merge_kind_mismatch` · `merge_two_logins` (r4 B-1, `00629:1011`) · `merge_contact_rule_conflict` (r4 B-2 / r5 M-2, `00629:1092`) · `merge_seat_on_studioless_project` · `merge_seat_card_other_studio` · `merge_seat_collision`. **Fourteen distinct tokens, not eight and not eleven** (re-measured at HEAD, r21: sixteen `RAISE EXCEPTION` sites over fourteen names — `merge_seat_collision` is raised from more than one branch). The last six were all review findings and all are pinned by the SQL suite.
+Refusals, in order: `merge_contact_not_found` · `merge_same_card` · `merge_matched_on_invalid` · `merge_other_studio` · `merge_not_a_member` · `merge_already_merged` · `merge_survivor_already_merged` · `merge_survivor_archived` (r5 M-4, `00629:983`) · `merge_kind_mismatch` · `merge_two_logins` (r4 B-1, `00629:1011`) · `merge_contact_rule_conflict` (r4 B-2 / r5 M-2, `00629:1092`) · `merge_seat_on_studioless_project` · `merge_seat_card_other_studio` · `merge_seat_collision` · `merge_seat_authority_collision` (r22 MAJOR-1). **Fifteen distinct tokens, not eight and not eleven and not fourteen** (re-measured at HEAD, r23: **seventeen** `RAISE EXCEPTION` sites over **fifteen** names — the one raised from more than one branch is `merge_contact_not_found`, three times; `merge_seat_collision` is raised once). The last seven were all review findings and all are pinned by the SQL suite.
 
 Both cards are locked `FOR UPDATE` in id order (`least`/`greatest`), so two members merging the same pair from opposite directions cannot deadlock.
 
@@ -77,6 +85,14 @@ The merged card is **not deleted and not archived**. `merged_into` is its tombst
 ### The seat guard (not in the brief, and why it is here)
 
 `party_identity_key()`'s first leg is `studio_contact_id`, and the CONTACTS branch now skips merged cards, so a seat stamped with a merged id would belong to **no** Directory row at all (the party branch is `studio_contact_id IS NULL`). `merge_studio_contacts()` repoints every seat it finds; the trigger catches the later write that carries a stale id — exactly what a portal holding a cached picker list does. A separate trigger rather than a graft of `assert_project_party_cards()` (176 lines of unrelated tenancy reasoning); two triggers on one event fire in name order with no interaction.
+
+### The fourth seat pre-check, and the premise R-BS took away (r22 MAJOR-1, r23 MAJOR-1)
+
+The third pre-check (`merge_seat_collision`) refuses a fold that would leave one human holding two **OPEN** seats of one `party_kind` on one job, because each seat carries its own open `project_party_authority` grant and the Call Sheet would then print the same person twice at two signing figures. Its open-seats-only carve-out rests on one sentence — a dated seat's *"grant was ended at the close"* — which is a rule **00634** makes and which **R-BS** then clamped to the hand-close act: a seat dated by the Bidding band's "They withdrew" keeps its open grants, by design, because a withdrawal is the bidder's act on the record and ending a delegation is the principal's (PR-n). So `off_job_at IS NOT NULL` stopped implying it, and the fold landed through the one door neither gate could see (measured, `build/probe-r22-a-…`: one press of "They withdrew", the fold landed, the survivor held both `sub` seats with **both** money grants open at $2,500 and $10,000).
+
+A **fourth** pre-check therefore asks the premise itself: a seat is *live to the merge* where `off_job_at IS NULL` **OR** an open grant (`effective_to IS NULL`, **any scope**, which is 00634's own reach) still stands on it. A pair of same-kind seats on one job that are both live is refused **`merge_seat_authority_collision`** before the first write, `DETAIL = '<job> · <party_kind> · <merged|survivor|both>'`. The third check is left byte for byte as it was, so the plainer shape keeps the plainer sentence; the fourth is a strict superset of it.
+
+The pair that reaches the fourth check is never two open seats — the third raises first on exactly that join — so at least one of the two has left the job, and a seat that has left qualifies here only through the open grant. That makes the repair **the dated seat's and not the live one's**: put it back in the bidding (R-BR clears `off_job_at` and `off_job_reason`), then close it by hand so 00634 ends what it carried. The refusal's first draft named the other act ("Close the seat that is still open") and r23 MAJOR-1 measured where that leads: the gate lifts, a working sub comes off the job, and the surviving identity signs for $2,500 on a seat it no longer holds. Block `13d` now walks the named repair end to end and asserts the live seat is still open and still signing afterwards.
 
 ---
 
@@ -367,6 +383,9 @@ public.merge_studio_contacts(p_survivor uuid, p_merged uuid, p_matched_on text)
   RETURNS uuid                      -- the survivor's id
   SECURITY DEFINER · search_path=public · EXECUTE: authenticated, service_role
   REVOKE ALL FROM PUBLIC, anon
+  -- 15 named refusals over 17 RAISE EXCEPTION sites (§1, re-measured r23);
+  -- four carry a DETAIL the face reads, the fourth of them naming the job, the
+  -- kind AND which card holds the seat that left (merge_seat_authority_collision)
 
 public.resolve_merged_contact(p_contact_id uuid)
   RETURNS uuid
@@ -434,4 +453,5 @@ Both were absent from this list through twenty rounds (r21 MAJOR-3).
 4. **No portal surface** was built *by this migration lane*. W3's data lane is migrations only: no hooks, no components, no `@patina/types` additions. Corrected (r4 M-2): the merge sheet (direction §8 P2 "Compare & merge") and the travel-list picker are **not** owed to W4 — R-BM rules the bring-forward travel list **W3 scope**, and both shipped in this wave's portal lane (`components/document/people/compare-merge-sheet.tsx`, `components/document/roster/travel-list-pane.tsx:44-56` beside `rolodex-picker.tsx`'s multi-select and "Put back"). The Bidding band's dates and the household editor shipped in the same lane. What is genuinely owed to W4 is what the wave's own build sheet names, not this list.
 5. **The Strata numbers for R-BD are unmeasured.** Locally 5 studio-less projects, all ambiguous, none carrying seats. 00628's NOTICE prints the real counts at deploy; the W7 preflight is owed them beside 00624's own preflight SELECT.
 6. **`sweep_compliance_expiries()` HAS now been run against the seeded book** (corrected r21 MAJOR-3 — this item claimed the opposite through twenty rounds). Review round 20's `probe-r20-c` ran it, and it was re-measured at HEAD on 2026-09-15: the first call answers `{"scanned":3,"notices":3,"notified":6}` and an immediate second call answers `{"scanned":3,"notices":0,"notified":0}`, leaving 3 notice rows — so §2's table is a MEASURED result, not a projection, and the sweep is idempotent within one run window. It has still never been left committed on a local book outside a review probe, which is the only part of this item that stands.
-7. **The cron registry COMMENT is the only exception-swallowing block in 00630**, exactly as in 00574: the `EXISTS` guard on `cron.unschedule` and the bare `SELECT cron.schedule(...)` are unwrapped, so a stack that cannot schedule the sweep fails the migration rather than applying it with the nightly job silently absent. The SQL test asserts `cron.job` carries `compliance-document-expiry-sweep` at `0 6 * * *`; the deploy should re-check it on Strata.
+7. **The refusal count is the number a later round must re-measure first** (r23 MAJOR-2, the third filing of this class after r19 MAJOR-2 and r21 MAJOR-3). `merge_studio_contacts()` has gained a refusal in three separate review rounds and this report stated a stale count each time. Counted at HEAD in r23: **seventeen `RAISE EXCEPTION` sites, fifteen distinct tokens**, the map in `use-studio-contacts.ts` holding the same fifteen. `grep -oE "RAISE EXCEPTION 'merge_[a-z_]+'" supabase/migrations/00629_studio_contact_merges.sql | sort -u | wc -l` is the whole measurement.
+8. **The cron registry COMMENT is the only exception-swallowing block in 00630**, exactly as in 00574: the `EXISTS` guard on `cron.unschedule` and the bare `SELECT cron.schedule(...)` are unwrapped, so a stack that cannot schedule the sweep fails the migration rather than applying it with the nightly job silently absent. The SQL test asserts `cron.job` carries `compliance-document-expiry-sweep` at `0 6 * * *`; the deploy should re-check it on Strata.

@@ -121,6 +121,26 @@ function tradesOfCard(
 }
 
 /**
+ * THE FIRM'S OWN NAME, resolved once (F1, and r23 major-2).
+ *
+ * `studio_contacts.company_name` on a PERSON row is 00417's typed-by-hand
+ * snapshot and nothing since the affiliation model (00592) populates it — on
+ * the local book all 22 carded humans with a `company_id` carry NULL there.
+ * The resolved answer lives on the directory row's `meta.company_name` join,
+ * which `directoryFirmOf` reads. Module scope because BOTH the mini row and
+ * the free-text search need the same answer, and r23 major-2 filed them
+ * disagreeing: the row printed "· MARROW & SONS ·" while typing "Marrow"
+ * returned nothing.
+ */
+function resolveFirmName(
+  contact: StudioContact,
+  row: PeopleDirectoryRow | undefined,
+): string | null {
+  const resolved = row ? directoryFirmOf(row).name : null;
+  return resolved ?? (contact.company_name?.trim() || null);
+}
+
+/**
  * The picker's default kind vocabulary. Every PartyKind the party CHECK admits
  * EXCEPT 'client': a project's client is set when the project is opened, not
  * picked out of a trade rolodex.
@@ -265,8 +285,10 @@ export function RolodexPicker({
    * THE BOOK, UNFILTERED BY NAME — because SPEC §5.7 #3 searches a prior JOB
    * ("Lindqvist"), not a person, and a job name lives on nobody's card. The
    * kind chip still narrows server-side; the search runs in memory over the
-   * name, the firm, the email AND the prior job the history line already
-   * names. No new cost: the picker's own opening state is this same read.
+   * name, the RESOLVED firm, the trades, the email AND the prior job the
+   * history line already names — every word the row beside it prints, which is
+   * what r23 major-2 found it was not doing. No new cost: the picker's own
+   * opening state is this same read.
    */
   const { data: contacts } = useStudioContacts(open ? organizationId : null, {
     kind,
@@ -336,6 +358,24 @@ export function RolodexPicker({
     { excludeProjectId: projectId },
   );
 
+  /**
+   * r23 major-2 — THE SEARCH READS WHAT THE ROW PRINTS.
+   *
+   * It read `c.company_name` and no trade at all, while the mini row two
+   * elements away prints `firmNameFor(c)` and `tradeFor(c)` — both resolved.
+   * Measured on the local book: all 22 carded humans with a `company_id` carry
+   * NULL `company_name`, so the firm term was empty for every one of them, and
+   * the e-mail domain masked it only where a card has an e-mail — "Marrow"
+   * missed Luis Ochoa and "Cedar" missed Joe Wozniak, both of whose rows print
+   * the firm. Typing `electrical` returned nothing against this input's own
+   * placeholder, "a name, a company, a trade…". Same shape as r7 MAJOR-2,
+   * which fixed the trade CHIP and left the free-text search on the legacy
+   * columns; W3's F1 put the resolved firm on the face, so the contradiction
+   * is this wave's.
+   *
+   * The legacy column stays a fallback term for a book that really did type a
+   * firm name by hand (`resolveFirmName`'s own last leg).
+   */
   const hits = useMemo(() => {
     const needle = search.trim().toLowerCase();
     if (!needle) return scanned.slice(0, HISTORY_PAGE);
@@ -343,7 +383,9 @@ export function RolodexPicker({
       .filter((c) =>
         [
           c.full_name,
+          resolveFirmName(c, wordsByCard.get(c.id)),
           c.company_name,
+          ...tradesOfCard(c, firmCardById),
           c.email,
           // EVERY prior job, not just the latest one (QA-3 / MAJOR-6). A
           // repeat sub who has been seated since is the population this sheet
@@ -354,7 +396,7 @@ export function RolodexPicker({
           .some((field) => field.toLowerCase().includes(needle)),
       )
       .slice(0, HISTORY_PAGE);
-  }, [scanned, search, history]);
+  }, [scanned, search, history, wordsByCard, firmCardById]);
   const { data: rosterRows, refetch: refetchRoster } = useProjectRoster(
     open ? projectId : null,
   );
@@ -511,11 +553,8 @@ export function RolodexPicker({
    * one lookup away and no new query is issued. The legacy column stays the
    * fallback for a book that really did type a firm name by hand.
    */
-  const firmNameFor = (contact: StudioContact): string | null => {
-    const row = wordsByCard.get(contact.id);
-    const resolved = row ? directoryFirmOf(row).name : null;
-    return resolved ?? (contact.company_name?.trim() || null);
-  };
+  const firmNameFor = (contact: StudioContact): string | null =>
+    resolveFirmName(contact, wordsByCard.get(contact.id));
 
   /**
    * QA r3 finding 1 — THE TRADE, resolved the way F1 resolved the firm.
